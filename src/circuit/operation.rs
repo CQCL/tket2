@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use lazy_static::lazy_static;
-use symengine::Expression;
-pub(crate) type Param = Expression;
+// use symengine::Expression;
+pub(crate) type Param = String;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum WireType {
@@ -21,6 +21,9 @@ pub trait Op {
     fn get_params(&self) -> Vec<Param>;
 }
 
+pub(crate) type OpPtr = Box<dyn Op>;
+
+#[derive(Clone)]
 pub enum GateOp {
     H,
     CX,
@@ -65,6 +68,7 @@ impl Op for GateOp {
                 ONEQBSIG.clone()
             }
             GateOp::CX | GateOp::ZZMax | GateOp::ZZPhase(..) => TWOQBSIG.clone(),
+            GateOp::Measure => Signature::Linear(vec![WireType::Quantum, WireType::Classical]),
             _ => panic!("Gate signature unknwon."),
         }
     }

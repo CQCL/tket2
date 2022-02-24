@@ -1,10 +1,14 @@
+use petgraph::visit::EdgeRef;
+use petgraph::EdgeDirection;
+
 use crate::circuit_json::Operation;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 
 use super::dag::{Edge, EdgeProperties, Port, Vertex, VertexProperties, DAG};
-use super::operation::{GateOp, Op, Param, Signature, WireType};
+use super::operation::{GateOp, Op, OpPtr, Param, Signature, WireType};
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum UnitID {
     Qubit { name: String, index: Vec<u32> },
     Bit { name: String, index: Vec<u32> },
@@ -19,21 +23,29 @@ impl UnitID {
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Debug)]
 struct BoundaryElement {
     uid: UnitID,
     inv: Vertex,
     outv: Vertex,
 }
-pub struct Circuit<'a> {
-    dag: DAG<'a>,
-    name: Option<String>,
-    phase: Param,
+pub struct Circuit {
+    dag: DAG,
+    pub name: Option<String>,
+    pub phase: Param,
     boundary: HashSet<BoundaryElement>,
 }
 
-impl<'a> Circuit<'a> {
-    fn get_out(&self, uid: &UnitID) -> Result<Vertex, String> {
+impl Circuit {
+    pub fn new() -> Self {
+        Self {
+            dag: DAG::new(),
+            name: None,
+            phase: "0".into(),
+            boundary: HashSet::new(),
+        }
+    }
+    pub fn get_out(&self, uid: &UnitID) -> Result<Vertex, String> {
         self.boundary
             .iter()
             .find(|boundel| boundel.uid == *uid)
@@ -41,7 +53,7 @@ impl<'a> Circuit<'a> {
             .map(|b| b.outv)
     }
 
-    fn rewire(&mut self, new_vert: Vertex, preds: Vec<Edge>) -> Result<(), String> {
+    pub fn rewire(&mut self, new_vert: Vertex, preds: Vec<Edge>) -> Result<(), String> {
         let mut bin: Vec<Edge> = vec![];
         let vert_op_sig = match self
             .dag
@@ -113,14 +125,18 @@ impl<'a> Circuit<'a> {
         }
         Ok(())
     }
-    fn add_unitid(&mut self, uid: UnitID) {
-        let inv = self.dag.add_node(VertexProperties::new(&GateOp::Input));
-        let outv = self.dag.add_node(VertexProperties::new(&GateOp::Output));
+    pub fn add_unitid(&mut self, uid: UnitID) {
+        let inv = self
+            .dag
+            .add_node(VertexProperties::new(Box::new(GateOp::Input)));
+        let outv = self
+            .dag
+            .add_node(VertexProperties::new(Box::new(GateOp::Output)));
 
         self.add_edge((inv, 0), (outv, 0), uid.get_type());
         self.boundary.insert(BoundaryElement { uid, inv, outv });
     }
-    fn add_edge(
+    pub fn add_edge(
         &mut self,
         source: (Vertex, Port),
         target: (Vertex, Port),
@@ -130,12 +146,49 @@ impl<'a> Circuit<'a> {
         self.dag
             .add_edge(source.0, target.0, EdgeProperties { edge_type, ports })
     }
-    fn add_op(
+
+    pub fn add_vertex(&mut self, op: OpPtr, _opgroup: Option<String>) -> Vertex {
+        let weight = VertexProperties::new(op);
+        self.dag.add_node(weight)
+    }
+    pub fn add_op(
         &mut self,
-        op: Operation,
+        op: OpPtr,
         args: &Vec<UnitID>,
         opgroup: Option<String>,
-    ) -> Result<&Vertex, String> {
-        todo!()
+    ) -> Result<Vertex, String> {
+        let sig = match op.signature() {
+            Signature::Linear(sig) => sig,
+            Signature::NonLinear(_, _) => return Err("Only linear ops supported.".to_string()),
+        };
+        assert!(sig.len() == args.len());
+
+        let new_vert = self.add_vertex(op, opgroup);
+        let preds: Result<Vec<Edge>, String> = args
+            .iter()
+            .map(|uid| -> Result<Edge, String> {
+                Ok(self
+                    .dag
+                    .edges_directed(self.get_out(uid)?, EdgeDirection::Incoming)
+                    .next()
+                    .ok_or("No outgoing edges".to_string())?
+                    .id())
+            })
+            .collect();
+        let preds = preds?;
+        // let mut wire_arg_set = HashSet::new();
+        // for (arg, sig) in args.iter().zip(sig) {
+        //     if sig != WireType::Bool {
+        //         if wire_arg_set.contains(arg) {
+        //             return Err(format!("Multiple operation arguments reference {arg:?}"));
+        //         }
+        //         wire_arg_set.insert(arg);
+        //     }
+
+        //     let out_v = self.get_out(arg)?;
+        //     let pred_out_e = self.dag.edges_directed(a, dir)
+        // }
+        self.rewire(new_vert, preds)?;
+        Ok(new_vert)
     }
 }

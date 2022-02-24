@@ -1,5 +1,5 @@
-use serde::{Deserialize,  Serialize};
 use crate::optype::OpType;
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct Register(pub String, pub Vec<i64>);

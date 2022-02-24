@@ -1,3 +1,3 @@
-mod operation;
+pub mod circuit;
 mod dag;
-mod circuit;
+pub mod operation;
