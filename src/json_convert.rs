@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::circuit::circuit::{Circuit, UnitID};
 use crate::circuit::operation::{GateOp, OpPtr, Signature, WireType};
 use crate::circuit_json::{Operation, Register, SerialCircuit};
@@ -19,7 +21,7 @@ fn to_bit(reg: Register) -> UnitID {
 
 impl Operation {
     fn to_op(self) -> OpPtr {
-        Box::new(match self.op_type {
+        Rc::new(match self.op_type {
             OpType::Input => GateOp::Input,
             OpType::Output => GateOp::Output,
             OpType::Create => todo!(),
@@ -149,5 +151,28 @@ impl From<SerialCircuit> for Circuit {
         }
         // TODO implicit perm
         circ
+    }
+}
+
+impl From<UnitID> for Register {
+    fn from(uid: UnitID) -> Self {
+        match uid {
+            UnitID::Qubit { name, index } | UnitID::Bit { name, index } => {
+                Register(name, index.into_iter().map(|i| i as i64).collect())
+            }
+        }
+    }
+}
+
+impl From<GateOp> for Operation {
+    fn from(_: GateOp) -> Self {
+        todo!()
+    }
+}
+
+impl From<Circuit> for SerialCircuit {
+    fn from(circ: Circuit) -> Self {
+
+        todo!()
     }
 }

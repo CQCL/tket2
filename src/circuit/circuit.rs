@@ -1,12 +1,13 @@
-use petgraph::visit::EdgeRef;
-use petgraph::EdgeDirection;
+use daggy::petgraph::visit::{EdgeRef, IntoEdgesDirected};
+use daggy::petgraph::EdgeDirection;
+use daggy::NodeIndex;
 
-use crate::circuit_json::Operation;
-use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
 use std::hash::Hash;
+use std::rc::Rc;
 
 use super::dag::{Edge, EdgeProperties, Port, Vertex, VertexProperties, DAG};
-use super::operation::{GateOp, Op, OpPtr, Param, Signature, WireType};
+use super::operation::{GateOp, OpPtr, Param, Signature, WireType};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum UnitID {
@@ -23,17 +24,34 @@ impl UnitID {
     }
 }
 
+// address of internal memory model
+pub type UIDRef = usize;
+
 #[derive(PartialEq, Eq, Hash, Debug)]
 struct BoundaryElement {
     uid: UnitID,
     inv: Vertex,
     outv: Vertex,
 }
+
+pub struct CycleInGraph();
+impl Debug for CycleInGraph {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CycleInGraph: Cycle detected or created in graph. Not a DAG.")
+            .finish()
+    }
+}
+
+impl From<CycleInGraph> for String {
+    fn from(c: CycleInGraph) -> Self {
+        format!("{c:?}")
+    }
+}
 pub struct Circuit {
     dag: DAG,
     pub name: Option<String>,
     pub phase: Param,
-    boundary: HashSet<BoundaryElement>,
+    boundary: Vec<BoundaryElement>,
 }
 
 impl Circuit {
@@ -42,7 +60,7 @@ impl Circuit {
             dag: DAG::new(),
             name: None,
             phase: "0".into(),
-            boundary: HashSet::new(),
+            boundary: vec![],
         }
     }
     pub fn get_out(&self, uid: &UnitID) -> Result<Vertex, String> {
@@ -79,19 +97,18 @@ impl Circuit {
                 .dag
                 .edge_endpoints(pred)
                 .ok_or("Edge not found.".to_string())?;
-            match (
-                &vert_sig_type,
-                &self.dag.edge_weight(pred).unwrap().edge_type,
-            ) {
+            match (&vert_sig_type, &edgeprops.edge_type) {
                 (WireType::Bool, WireType::Classical) => {
-                    self.dag.add_edge(
-                        old_v1,
-                        new_vert,
-                        EdgeProperties {
-                            edge_type: WireType::Bool,
-                            ports: edgeprops.ports,
-                        },
-                    );
+                    self.dag
+                        .add_edge(
+                            old_v1,
+                            new_vert,
+                            EdgeProperties {
+                                edge_type: WireType::Bool,
+                                ..edgeprops
+                            },
+                        )
+                        .map_err(|_| CycleInGraph())?;
                 }
                 (WireType::Bool, _) => {
                     return Err(
@@ -99,22 +116,27 @@ impl Circuit {
                     )
                 }
                 (x, y) if x == y => {
-                    self.dag.add_edge(
-                        old_v1,
-                        new_vert,
-                        EdgeProperties {
-                            edge_type: x.clone(),
-                            ports: (edgeprops.ports.0, i as Port),
-                        },
-                    );
-                    self.dag.add_edge(
-                        new_vert,
-                        old_v2,
-                        EdgeProperties {
-                            edge_type: x.clone(),
-                            ports: (i as Port, edgeprops.ports.1),
-                        },
-                    );
+                    self.dag
+                        .add_edge(
+                            old_v1,
+                            new_vert,
+                            EdgeProperties {
+                                ports: (edgeprops.ports.0, i as Port),
+                                ..edgeprops.clone()
+                            },
+                        )
+                        .map_err(|_| CycleInGraph())?;
+
+                    self.dag
+                        .add_edge(
+                            new_vert,
+                            old_v2,
+                            EdgeProperties {
+                                ports: (i as Port, edgeprops.ports.1),
+                                ..edgeprops
+                            },
+                        )
+                        .map_err(|_| CycleInGraph())?;
                     bin.push(pred);
                 }
                 _ => return Err("Cannot rewire; Changing type of edge.".to_string()),
@@ -128,23 +150,35 @@ impl Circuit {
     pub fn add_unitid(&mut self, uid: UnitID) {
         let inv = self
             .dag
-            .add_node(VertexProperties::new(Box::new(GateOp::Input)));
+            .add_node(VertexProperties::new(Rc::new(GateOp::Input)));
         let outv = self
             .dag
-            .add_node(VertexProperties::new(Box::new(GateOp::Output)));
+            .add_node(VertexProperties::new(Rc::new(GateOp::Output)));
 
-        self.add_edge((inv, 0), (outv, 0), uid.get_type());
-        self.boundary.insert(BoundaryElement { uid, inv, outv });
+        let edge_type = uid.get_type();
+        self.boundary.push(BoundaryElement { uid, inv, outv });
+        self.add_edge((inv, 0), (outv, 0), edge_type, self.boundary.len() - 1)
+            .unwrap(); // should be cycle free so unwrap
     }
     pub fn add_edge(
         &mut self,
         source: (Vertex, Port),
         target: (Vertex, Port),
         edge_type: WireType,
-    ) -> Edge {
+        uid_ref: UIDRef,
+    ) -> Result<Edge, CycleInGraph> {
         let ports = (source.1, target.1);
         self.dag
-            .add_edge(source.0, target.0, EdgeProperties { edge_type, ports })
+            .add_edge(
+                source.0,
+                target.0,
+                EdgeProperties {
+                    edge_type,
+                    uid_ref,
+                    ports,
+                },
+            )
+            .map_err(|_| CycleInGraph())
     }
 
     pub fn add_vertex(&mut self, op: OpPtr, _opgroup: Option<String>) -> Vertex {
@@ -171,7 +205,7 @@ impl Circuit {
                     .dag
                     .edges_directed(self.get_out(uid)?, EdgeDirection::Incoming)
                     .next()
-                    .ok_or("No outgoing edges".to_string())?
+                    .ok_or("No incoming edges".to_string())?
                     .id())
             })
             .collect();
@@ -190,5 +224,84 @@ impl Circuit {
         // }
         self.rewire(new_vert, preds)?;
         Ok(new_vert)
+    }
+
+    fn to_commands(&self) -> CommandIter {
+        CommandIter::new(self)
+        // let topo_nodes =
+        //     daggy::petgraph::algo::toposort(&self.dag, None).map_err(|_| CycleInGraph())?;
+        // // Ok(CommandIter{nodesNodeIndex))
+        // todo!()
+    }
+
+    fn qubits(&self) -> Vec<UnitID> {
+        self.boundary
+            .iter()
+            .filter_map(|bel| match bel.uid {
+                UnitID::Qubit { .. } => Some(bel.uid.clone()),
+                UnitID::Bit { .. } => None,
+            })
+            .collect()
+    }
+
+    fn bits(&self) -> Vec<UnitID> {
+        self.boundary
+            .iter()
+            .filter_map(|bel| match bel.uid {
+                UnitID::Bit { .. } => Some(bel.uid.clone()),
+                UnitID::Qubit { .. } => None,
+            })
+            .collect()
+    }
+}
+
+struct Command {
+    op: OpPtr,
+    args: Vec<UnitID>,
+    opgroup: Option<String>,
+}
+
+struct CommandIter<'a> {
+    nodes: Vec<NodeIndex>,
+    current_node: usize,
+    circ: &'a Circuit,
+}
+
+impl<'a> CommandIter<'a> {
+    fn new(circ: &'a Circuit) -> Self {
+        Self {
+            nodes: daggy::petgraph::algo::toposort(&circ.dag, None)
+                .map_err(|_| CycleInGraph())
+                .unwrap(),
+            current_node: 0,
+            circ,
+        }
+    }
+}
+
+impl<'a> Iterator for CommandIter<'a> {
+    type Item = Command;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.current_node += 1;
+        if self.current_node == self.nodes.len() {
+            None
+        } else {
+            let node = self.nodes[self.current_node];
+            let VertexProperties { op, opgroup } =
+                self.circ.dag.node_weight(node).expect("Node not found");
+            let args = self
+                .circ
+                .dag
+                .edges_directed(node, EdgeDirection::Incoming)
+                .map(|e| self.circ.boundary[e.weight().uid_ref].uid.clone())
+                .collect();
+            // let op = &*op.clone();
+            Some(Command {
+                op: op.clone(),
+                args,
+                opgroup: opgroup.clone(),
+            })
+        }
     }
 }

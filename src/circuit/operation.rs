@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::rc::Rc;
+
 use lazy_static::lazy_static;
 // use symengine::Expression;
 pub(crate) type Param = String;
@@ -16,12 +18,32 @@ pub enum Signature {
     NonLinear(Vec<WireType>, Vec<WireType>),
 }
 pub trait Op {
+    // pub trait Op: OpClone {
     fn signature(&self) -> Signature;
 
     fn get_params(&self) -> Vec<Param>;
 }
 
-pub(crate) type OpPtr = Box<dyn Op>;
+pub(crate) type OpPtr = Rc<dyn Op>;
+
+// pub trait OpClone {
+//     fn clone_box(&self) -> OpPtr;
+// }
+
+// impl<T> OpClone for T
+// where
+//     T: 'static + Op + Clone,
+// {
+//     fn clone_box(&self) -> OpPtr {
+//         Box::new(self.clone())
+//     }
+// }
+
+// impl Clone for OpPtr {
+//     fn clone(&self) -> OpPtr {
+//         self.clone_box()
+//     }
+// }
 
 #[derive(Clone)]
 pub enum GateOp {

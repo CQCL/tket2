@@ -13,6 +13,6 @@ mod tests {
         let p: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
         assert_eq!(p.commands.len(), 4);
 
-        let circ: Circuit = p.into();
+        let _circ: Circuit = p.into();
     }
 }
