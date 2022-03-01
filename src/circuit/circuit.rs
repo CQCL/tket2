@@ -226,7 +226,7 @@ impl Circuit {
         Ok(new_vert)
     }
 
-    fn to_commands(&self) -> CommandIter {
+    pub fn to_commands(&self) -> CommandIter {
         CommandIter::new(self)
         // let topo_nodes =
         //     daggy::petgraph::algo::toposort(&self.dag, None).map_err(|_| CycleInGraph())?;
@@ -234,34 +234,28 @@ impl Circuit {
         // todo!()
     }
 
-    fn qubits(&self) -> Vec<UnitID> {
-        self.boundary
-            .iter()
-            .filter_map(|bel| match bel.uid {
-                UnitID::Qubit { .. } => Some(bel.uid.clone()),
-                UnitID::Bit { .. } => None,
-            })
-            .collect()
+    pub fn qubits(&self) -> impl Iterator<Item = UnitID> + '_ {
+        self.boundary.iter().filter_map(|bel| match bel.uid {
+            UnitID::Qubit { .. } => Some(bel.uid.clone()),
+            UnitID::Bit { .. } => None,
+        })
     }
 
-    fn bits(&self) -> Vec<UnitID> {
-        self.boundary
-            .iter()
-            .filter_map(|bel| match bel.uid {
-                UnitID::Bit { .. } => Some(bel.uid.clone()),
-                UnitID::Qubit { .. } => None,
-            })
-            .collect()
+    pub fn bits(&self) -> impl Iterator<Item = UnitID> + '_ {
+        self.boundary.iter().filter_map(|bel| match bel.uid {
+            UnitID::Bit { .. } => Some(bel.uid.clone()),
+            UnitID::Qubit { .. } => None,
+        })
     }
 }
 
-struct Command {
-    op: OpPtr,
-    args: Vec<UnitID>,
-    opgroup: Option<String>,
+pub struct Command {
+    pub op: OpPtr,
+    pub args: Vec<UnitID>,
+    pub opgroup: Option<String>,
 }
 
-struct CommandIter<'a> {
+pub struct CommandIter<'a> {
     nodes: Vec<NodeIndex>,
     current_node: usize,
     circ: &'a Circuit,
@@ -290,13 +284,19 @@ impl<'a> Iterator for CommandIter<'a> {
             let node = self.nodes[self.current_node];
             let VertexProperties { op, opgroup } =
                 self.circ.dag.node_weight(node).expect("Node not found");
-            let args = self
+            let mut port_args: Vec<_> = self
                 .circ
                 .dag
                 .edges_directed(node, EdgeDirection::Incoming)
-                .map(|e| self.circ.boundary[e.weight().uid_ref].uid.clone())
+                .map(|e| {
+                    (
+                        e.weight().ports.1,
+                        self.circ.boundary[e.weight().uid_ref].uid.clone(),
+                    )
+                })
                 .collect();
-            // let op = &*op.clone();
+            port_args.sort_unstable_by_key(|p| p.0);
+            let args = port_args.into_iter().map(|(_, uid)| uid).collect();
             Some(Command {
                 op: op.clone(),
                 args,

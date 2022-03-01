@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::circuit::circuit::{Circuit, UnitID};
 use crate::circuit::operation::{GateOp, OpPtr, Signature, WireType};
-use crate::circuit_json::{Operation, Register, SerialCircuit};
+use crate::circuit_json::{Operation, Permutation, Register, SerialCircuit};
 use crate::optype::OpType;
 
 fn to_qubit(reg: Register) -> UnitID {
@@ -146,7 +146,6 @@ impl From<SerialCircuit> for Circuit {
                     WireType::Classical | WireType::Bool => to_bit(reg),
                 })
                 .collect();
-            dbg!(&args);
             circ.add_op(op, &args, com.opgroup).unwrap();
         }
         // TODO implicit perm
@@ -164,15 +163,37 @@ impl From<UnitID> for Register {
     }
 }
 
-impl From<GateOp> for Operation {
-    fn from(_: GateOp) -> Self {
-        todo!()
-    }
-}
-
 impl From<Circuit> for SerialCircuit {
     fn from(circ: Circuit) -> Self {
+        let commands = circ
+            .to_commands()
+            .filter_map(|com| {
+                let op = com.op.to_serialized();
+                match op.op_type {
+                    OpType::Input | OpType::Output => None,
+                    _ => Some(crate::circuit_json::Command {
+                        op,
+                        args: com.args.into_iter().map(Into::into).collect(),
+                        opgroup: com.opgroup,
+                    }),
+                }
+            })
+            .collect();
 
-        todo!()
+        let qubits: Vec<Register> = circ.qubits().map(Into::into).collect();
+        let implicit_permutation = qubits
+            .iter()
+            .map(|q| Permutation(q.clone(), q.clone()))
+            .collect();
+        let bits = circ.bits().map(Into::into).collect();
+
+        SerialCircuit {
+            commands,
+            name: circ.name,
+            phase: circ.phase,
+            qubits,
+            bits,
+            implicit_permutation,
+        }
     }
 }

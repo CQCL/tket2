@@ -3,6 +3,8 @@
 use std::rc::Rc;
 
 use lazy_static::lazy_static;
+
+use crate::{circuit_json::Operation, optype::OpType};
 // use symengine::Expression;
 pub(crate) type Param = String;
 
@@ -22,28 +24,11 @@ pub trait Op {
     fn signature(&self) -> Signature;
 
     fn get_params(&self) -> Vec<Param>;
+
+    fn to_serialized(&self) -> Operation;
 }
 
 pub(crate) type OpPtr = Rc<dyn Op>;
-
-// pub trait OpClone {
-//     fn clone_box(&self) -> OpPtr;
-// }
-
-// impl<T> OpClone for T
-// where
-//     T: 'static + Op + Clone,
-// {
-//     fn clone_box(&self) -> OpPtr {
-//         Box::new(self.clone())
-//     }
-// }
-
-// impl Clone for OpPtr {
-//     fn clone(&self) -> OpPtr {
-//         self.clone_box()
-//     }
-// }
 
 #[derive(Clone)]
 pub enum GateOp {
@@ -97,6 +82,43 @@ impl Op for GateOp {
 
     fn get_params(&self) -> Vec<Param> {
         todo!()
+    }
+
+    fn to_serialized(&self) -> Operation {
+        let (op_type, params) = match self {
+            GateOp::H => (OpType::H, vec![]),
+            GateOp::CX => (OpType::CX, vec![]),
+            GateOp::ZZMax => (OpType::ZZMax, vec![]),
+            GateOp::Reset => (OpType::Reset, vec![]),
+            GateOp::Input => (OpType::Input, vec![]),
+            GateOp::Output => (OpType::Output, vec![]),
+            GateOp::Rx(p) => (OpType::Rx, vec![p]),
+            GateOp::Ry(p) => (OpType::Ry, vec![p]),
+            GateOp::Rz(p) => (OpType::Rz, vec![p]),
+            GateOp::ZZPhase(p1, p2) => (OpType::ZZPhase, vec![p1, p2]),
+            GateOp::Measure => (OpType::Measure, vec![]),
+        };
+        // let signature = match self.signature() {
+        //     Signature::Linear(sig) => sig.iter().map(|wt| match wt {
+        //         WireType::Quantum => todo!(),
+        //         WireType::Classical => todo!(),
+        //         WireType::Bool => todo!(),
+        //     }),
+        //     Signature::NonLinear(_, _) => panic!(),
+        // }
+        let params = if params.is_empty() {
+            None
+        } else {
+            Some(params.iter().map(|&s| s.clone()).collect())
+        };
+        Operation {
+            op_type,
+            params,
+            signature: None,
+            op_box: None,
+            n_qb: None,
+            conditional: None,
+        }
     }
 }
 
