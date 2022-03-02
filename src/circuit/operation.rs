@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::rc::Rc;
+use std::{cmp::max, rc::Rc};
 
 use lazy_static::lazy_static;
 
@@ -18,6 +18,15 @@ pub enum WireType {
 pub enum Signature {
     Linear(Vec<WireType>),
     NonLinear(Vec<WireType>, Vec<WireType>),
+}
+
+impl Signature {
+    pub fn len(&self) -> usize {
+        match self {
+            Signature::Linear(s) => s.len(),
+            Signature::NonLinear(s1, s2) => max(s1.len(), s2.len()),
+        }
+    }
 }
 pub trait Op {
     // pub trait Op: OpClone {

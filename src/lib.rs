@@ -1,11 +1,15 @@
 mod circuit;
 mod circuit_json;
+mod graph;
 mod json_convert;
 mod optype;
 
 #[cfg(test)]
 mod tests {
-    use crate::{circuit::circuit::Circuit, circuit_json::{self, SerialCircuit}};
+    use crate::{
+        circuit::circuit::Circuit,
+        circuit_json::{self, SerialCircuit},
+    };
     #[test]
     fn read_json() {
         // let expr = symengine::Expression::new("a + b + 3");
@@ -16,6 +20,8 @@ mod tests {
         let circ: Circuit = ser.clone().into();
 
         let _reser: SerialCircuit = circ.into();
+
+        assert_eq!(&ser, &_reser);
         // ser and reser cannot be compared because they will be different up to
         // topsort ordering of parallel commands
     }
