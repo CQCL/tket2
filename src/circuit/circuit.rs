@@ -255,14 +255,14 @@ pub struct Command {
     pub opgroup: Option<String>,
 }
 
-pub struct CommandIter<'a> {
+pub struct CommandIter<'circ> {
     nodes: Vec<NodeIndex>,
     current_node: usize,
-    circ: &'a Circuit,
+    circ: &'circ Circuit,
 }
 
-impl<'a> CommandIter<'a> {
-    fn new(circ: &'a Circuit) -> Self {
+impl<'circ> CommandIter<'circ> {
+    fn new(circ: &'circ Circuit) -> Self {
         Self {
             nodes: daggy::petgraph::algo::toposort(&circ.dag, None)
                 .map_err(|_| CycleInGraph())
@@ -273,7 +273,7 @@ impl<'a> CommandIter<'a> {
     }
 }
 
-impl<'a> Iterator for CommandIter<'a> {
+impl<'circ> Iterator for CommandIter<'circ> {
     type Item = Command;
 
     fn next(&mut self) -> Option<Self::Item> {
