@@ -1,18 +1,14 @@
 #![allow(dead_code)]
 
-use super::{
-    circuit::UidIndex,
-    operation::{OpPtr, WireType},
-};
-// use daggy::
+use super::{circuit::UidIndex, operation::Op};
 
 pub struct VertexProperties {
-    pub op: OpPtr,
+    pub op: Op,
     pub opgroup: Option<String>,
 }
 
 impl VertexProperties {
-    pub fn new(op: OpPtr) -> Self {
+    pub fn new(op: Op) -> Self {
         Self { op, opgroup: None }
     }
 }

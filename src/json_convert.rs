@@ -1,7 +1,5 @@
-use std::rc::Rc;
-
 use crate::circuit::circuit::{Circuit, UnitID};
-use crate::circuit::operation::{GateOp, OpPtr, Signature, WireType};
+use crate::circuit::operation::{Op, Signature, WireType};
 use crate::circuit_json::{Operation, Permutation, Register, SerialCircuit};
 use crate::optype::OpType;
 
@@ -19,11 +17,11 @@ fn to_bit(reg: Register) -> UnitID {
     }
 }
 
-impl Operation {
-    fn to_op(self) -> OpPtr {
-        Rc::new(match self.op_type {
-            OpType::Input => GateOp::Input,
-            OpType::Output => GateOp::Output,
+impl From<Operation> for Op {
+    fn from(serial_op: Operation) -> Self {
+        match serial_op.op_type {
+            OpType::Input => Op::Input,
+            OpType::Output => Op::Output,
             OpType::Create => todo!(),
             OpType::Discard => todo!(),
             OpType::ClInput => todo!(),
@@ -51,7 +49,7 @@ impl Operation {
             OpType::Vdg => todo!(),
             OpType::SX => todo!(),
             OpType::SXdg => todo!(),
-            OpType::H => GateOp::H,
+            OpType::H => Op::H,
             OpType::Rx => todo!(),
             OpType::Ry => todo!(),
             OpType::Rz => todo!(),
@@ -59,7 +57,7 @@ impl Operation {
             OpType::U2 => todo!(),
             OpType::U1 => todo!(),
             OpType::TK1 => todo!(),
-            OpType::CX => GateOp::CX,
+            OpType::CX => Op::CX,
             OpType::CY => todo!(),
             OpType::CZ => todo!(),
             OpType::CH => todo!(),
@@ -78,14 +76,14 @@ impl Operation {
             OpType::CSWAP => todo!(),
             OpType::BRIDGE => todo!(),
             OpType::noop => todo!(),
-            OpType::Measure => GateOp::Measure,
+            OpType::Measure => Op::Measure,
             OpType::Collapse => todo!(),
             OpType::Reset => todo!(),
             OpType::ECR => todo!(),
             OpType::ISWAP => todo!(),
             OpType::PhasedX => todo!(),
             OpType::NPhasedX => todo!(),
-            OpType::ZZMax => GateOp::ZZMax,
+            OpType::ZZMax => Op::ZZMax,
             OpType::XXPhase => todo!(),
             OpType::YYPhase => todo!(),
             OpType::ZZPhase => todo!(),
@@ -112,7 +110,7 @@ impl Operation {
             OpType::ProjectorAssertionBox => todo!(),
             OpType::StabiliserAssertionBox => todo!(),
             OpType::UnitaryTableauBox => todo!(),
-        })
+        }
     }
 }
 
@@ -132,7 +130,7 @@ impl From<SerialCircuit> for Circuit {
         }
 
         for com in serialcirc.commands {
-            let op = com.op.to_op();
+            let op: Op = com.op.into();
             let args = com
                 .args
                 .into_iter()

@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{cmp::max, rc::Rc};
+use std::cmp::max;
 
 use lazy_static::lazy_static;
 
@@ -28,19 +28,9 @@ impl Signature {
         }
     }
 }
-pub trait Op {
-    // pub trait Op: OpClone {
-    fn signature(&self) -> Signature;
-
-    fn get_params(&self) -> Vec<Param>;
-
-    fn to_serialized(&self) -> Operation;
-}
-
-pub(crate) type OpPtr = Rc<dyn Op>;
 
 #[derive(Clone)]
-pub enum GateOp {
+pub enum Op {
     H,
     CX,
     ZZMax,
@@ -52,9 +42,17 @@ pub enum GateOp {
     Rz(Param),
     ZZPhase(Param, Param),
     Measure,
+    Barrier,
 }
 
-impl GateOp {
+lazy_static! {
+    static ref ONEQBSIG: Signature = Signature::Linear(vec![WireType::Quantum]);
+}
+lazy_static! {
+    static ref TWOQBSIG: Signature = Signature::Linear(vec![WireType::Quantum, WireType::Quantum]);
+}
+
+impl Op {
     fn is_one_qb_gate(&self) -> bool {
         match self.signature() {
             Signature::Linear(v) => matches!(&v[..], &[WireType::Quantum]),
@@ -68,44 +66,34 @@ impl GateOp {
             _ => false,
         }
     }
-}
 
-lazy_static! {
-    static ref ONEQBSIG: Signature = Signature::Linear(vec![WireType::Quantum]);
-}
-lazy_static! {
-    static ref TWOQBSIG: Signature = Signature::Linear(vec![WireType::Quantum, WireType::Quantum]);
-}
-
-impl Op for GateOp {
-    fn signature(&self) -> Signature {
+    pub fn signature(&self) -> Signature {
         match self {
-            GateOp::H | GateOp::Reset | GateOp::Rx(_) | GateOp::Ry(_) | GateOp::Rz(_) => {
-                ONEQBSIG.clone()
-            }
-            GateOp::CX | GateOp::ZZMax | GateOp::ZZPhase(..) => TWOQBSIG.clone(),
-            GateOp::Measure => Signature::Linear(vec![WireType::Quantum, WireType::Classical]),
+            Op::H | Op::Reset | Op::Rx(_) | Op::Ry(_) | Op::Rz(_) => ONEQBSIG.clone(),
+            Op::CX | Op::ZZMax | Op::ZZPhase(..) => TWOQBSIG.clone(),
+            Op::Measure => Signature::Linear(vec![WireType::Quantum, WireType::Classical]),
             _ => panic!("Gate signature unknwon."),
         }
     }
 
-    fn get_params(&self) -> Vec<Param> {
+    pub fn get_params(&self) -> Vec<Param> {
         todo!()
     }
 
-    fn to_serialized(&self) -> Operation {
+    pub fn to_serialized(&self) -> Operation {
         let (op_type, params) = match self {
-            GateOp::H => (OpType::H, vec![]),
-            GateOp::CX => (OpType::CX, vec![]),
-            GateOp::ZZMax => (OpType::ZZMax, vec![]),
-            GateOp::Reset => (OpType::Reset, vec![]),
-            GateOp::Input => (OpType::Input, vec![]),
-            GateOp::Output => (OpType::Output, vec![]),
-            GateOp::Rx(p) => (OpType::Rx, vec![p]),
-            GateOp::Ry(p) => (OpType::Ry, vec![p]),
-            GateOp::Rz(p) => (OpType::Rz, vec![p]),
-            GateOp::ZZPhase(p1, p2) => (OpType::ZZPhase, vec![p1, p2]),
-            GateOp::Measure => (OpType::Measure, vec![]),
+            Op::H => (OpType::H, vec![]),
+            Op::CX => (OpType::CX, vec![]),
+            Op::ZZMax => (OpType::ZZMax, vec![]),
+            Op::Reset => (OpType::Reset, vec![]),
+            Op::Input => (OpType::Input, vec![]),
+            Op::Output => (OpType::Output, vec![]),
+            Op::Rx(p) => (OpType::Rx, vec![p]),
+            Op::Ry(p) => (OpType::Ry, vec![p]),
+            Op::Rz(p) => (OpType::Rz, vec![p]),
+            Op::ZZPhase(p1, p2) => (OpType::ZZPhase, vec![p1, p2]),
+            Op::Measure => (OpType::Measure, vec![]),
+            Op::Barrier => (OpType::Barrier, vec![]),
         };
         // let signature = match self.signature() {
         //     Signature::Linear(sig) => sig.iter().map(|wt| match wt {
@@ -129,14 +117,4 @@ impl Op for GateOp {
             conditional: None,
         }
     }
-}
-
-pub enum MetaOp {
-    Barrier,
-}
-
-pub enum ClassicalOp {
-    And,
-    Xor,
-    Or,
 }

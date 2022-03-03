@@ -4,12 +4,11 @@
 
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::rc::Rc;
 
 use crate::graph::graph::{IndexType, NodePort};
 
 use super::dag::{Edge, EdgeProperties, Vertex, VertexProperties, DAG};
-use super::operation::{GateOp, OpPtr, Param, Signature, WireType};
+use super::operation::{Op, Param, Signature, WireType};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum UnitID {
@@ -97,9 +96,9 @@ impl Circuit {
         self.boundary
             .outputs
             .iter()
-            .find(|out_v| {
+            .find(|&&out_v| {
                 self.dag
-                    .edge_weight(*self.dag.incoming_edges(**out_v).next().unwrap())
+                    .edge_weight(*self.dag.incoming_edges(out_v).next().unwrap())
                     .unwrap()
                     .uid_ref
                     .index()
@@ -179,30 +178,22 @@ impl Circuit {
     pub fn add_unitid(&mut self, uid: UnitID) {
         let inv = self
             .dag
-            .add_node_with_capacity(1, VertexProperties::new(Rc::new(GateOp::Input)));
+            .add_node_with_capacity(1, VertexProperties::new(Op::Input));
         let outv = self
             .dag
-            .add_node_with_capacity(1, VertexProperties::new(Rc::new(GateOp::Output)));
+            .add_node_with_capacity(1, VertexProperties::new(Op::Output));
 
-        let edge_type = uid.get_type();
         self.boundary.inputs.push(inv);
         self.boundary.outputs.push(outv);
         self.uids.push(uid);
         self.add_edge(
             (inv, 0).into(),
             (outv, 0).into(),
-            edge_type,
             UidIndex::new(self.uids.len() - 1),
         );
         // .unwrap(); // should be cycle free so unwrap
     }
-    pub fn add_edge(
-        &mut self,
-        source: NodePort,
-        target: NodePort,
-        edge_type: WireType,
-        uid_ref: UidIndex,
-    ) -> Edge {
+    pub fn add_edge(&mut self, source: NodePort, target: NodePort, uid_ref: UidIndex) -> Edge {
         // let ports = (source.1, target.1);
         self.dag.add_edge(
             source,
@@ -215,14 +206,14 @@ impl Circuit {
         // .map_err(|_| CycleInGraph())
     }
 
-    pub fn add_vertex(&mut self, op: OpPtr, _opgroup: Option<String>) -> Vertex {
+    pub fn add_vertex(&mut self, op: Op, _opgroup: Option<String>) -> Vertex {
         let siglen = op.signature().len();
         let weight = VertexProperties::new(op);
         self.dag.add_node_with_capacity(siglen, weight)
     }
     pub fn add_op(
         &mut self,
-        op: OpPtr,
+        op: Op,
         args: &Vec<UnitID>,
         opgroup: Option<String>,
     ) -> Result<Vertex, String> {
@@ -284,7 +275,7 @@ impl Circuit {
 }
 
 pub struct Command {
-    pub op: OpPtr,
+    pub op: Op,
     pub args: Vec<UnitID>,
     pub opgroup: Option<String>,
 }
