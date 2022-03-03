@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::rc::Rc;
 
-use crate::graph::graph::NodePort;
+use crate::graph::graph::{IndexType, NodePort};
 
 use super::dag::{Edge, EdgeProperties, Vertex, VertexProperties, DAG};
 use super::operation::{GateOp, OpPtr, Param, Signature, WireType};
@@ -27,13 +27,31 @@ impl UnitID {
 }
 
 // address of internal memory model
-pub type UIDRef = usize;
+#[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
+pub struct UidIndex(u32);
 
-#[derive(PartialEq, Eq, Hash, Debug)]
-struct BoundaryElement {
-    uid: UnitID,
-    inv: Vertex,
-    outv: Vertex,
+impl IndexType for UidIndex {
+    fn index(&self) -> usize {
+        self.0 as usize
+    }
+    fn new(x: usize) -> Self {
+        Self(x as u32)
+    }
+    fn max() -> Self {
+        Self(u32::MAX)
+    }
+}
+
+// #[derive(PartialEq, Eq, Hash, Debug)]
+// struct BoundaryElement {
+//     uid: UnitID,
+//     inv: Vertex,
+//     outv: Vertex,
+// }
+
+struct Boundary {
+    pub inputs: Vec<Vertex>,
+    pub outputs: Vec<Vertex>,
 }
 
 pub struct CycleInGraph();
@@ -53,7 +71,8 @@ pub struct Circuit {
     dag: DAG,
     pub name: Option<String>,
     pub phase: Param,
-    boundary: Vec<BoundaryElement>,
+    boundary: Boundary,
+    uids: Vec<UnitID>,
 }
 
 impl Circuit {
@@ -62,15 +81,32 @@ impl Circuit {
             dag: DAG::new(),
             name: None,
             phase: "0".into(),
-            boundary: vec![],
+            boundary: Boundary {
+                inputs: vec![],
+                outputs: vec![],
+            },
+            uids: vec![],
         }
     }
     pub fn get_out(&self, uid: &UnitID) -> Result<Vertex, String> {
-        self.boundary
+        let uix = self
+            .uids
             .iter()
-            .find(|boundel| boundel.uid == *uid)
-            .ok_or("UnitID not found in boundary.".to_string())
-            .map(|b| b.outv)
+            .position(|u| u == uid)
+            .ok_or("UnitID not found in boundary.".to_string())?;
+        self.boundary
+            .outputs
+            .iter()
+            .find(|out_v| {
+                self.dag
+                    .edge_weight(*self.dag.incoming_edges(**out_v).next().unwrap())
+                    .unwrap()
+                    .uid_ref
+                    .index()
+                    == uix
+            })
+            .map(|n| *n)
+            .ok_or("No output node has incoming edges from UnitID.".to_string())
     }
 
     pub fn rewire(&mut self, new_vert: Vertex, preds: Vec<Edge>) -> Result<(), String> {
@@ -99,7 +135,10 @@ impl Circuit {
                 .dag
                 .edge_endpoints(pred)
                 .ok_or("Edge not found.".to_string())?;
-            match (&vert_sig_type, &edgeprops.edge_type) {
+            match (
+                &vert_sig_type,
+                &self.uids[edgeprops.uid_ref.index()].get_type(),
+            ) {
                 // (WireType::Bool, WireType::Classical) => {
 
                 //     self.dag
@@ -146,12 +185,14 @@ impl Circuit {
             .add_node_with_capacity(1, VertexProperties::new(Rc::new(GateOp::Output)));
 
         let edge_type = uid.get_type();
-        self.boundary.push(BoundaryElement { uid, inv, outv });
+        self.boundary.inputs.push(inv);
+        self.boundary.outputs.push(outv);
+        self.uids.push(uid);
         self.add_edge(
             (inv, 0).into(),
             (outv, 0).into(),
             edge_type,
-            self.boundary.len() - 1,
+            UidIndex::new(self.uids.len() - 1),
         );
         // .unwrap(); // should be cycle free so unwrap
     }
@@ -160,14 +201,13 @@ impl Circuit {
         source: NodePort,
         target: NodePort,
         edge_type: WireType,
-        uid_ref: UIDRef,
+        uid_ref: UidIndex,
     ) -> Edge {
         // let ports = (source.1, target.1);
         self.dag.add_edge(
             source,
             target,
             EdgeProperties {
-                edge_type,
                 uid_ref,
                 // ports,
             },
@@ -229,15 +269,15 @@ impl Circuit {
     }
 
     pub fn qubits(&self) -> impl Iterator<Item = UnitID> + '_ {
-        self.boundary.iter().filter_map(|bel| match bel.uid {
-            UnitID::Qubit { .. } => Some(bel.uid.clone()),
+        self.uids.iter().filter_map(|uid| match uid {
+            UnitID::Qubit { .. } => Some(uid.clone()),
             UnitID::Bit { .. } => None,
         })
     }
 
     pub fn bits(&self) -> impl Iterator<Item = UnitID> + '_ {
-        self.boundary.iter().filter_map(|bel| match bel.uid {
-            UnitID::Bit { .. } => Some(bel.uid.clone()),
+        self.uids.iter().filter_map(|uid| match uid {
+            UnitID::Bit { .. } => Some(uid.clone()),
             UnitID::Qubit { .. } => None,
         })
     }
@@ -325,9 +365,7 @@ impl<'circ> Iterator for CommandIter<'circ> {
                 .dag
                 .incoming_edges(node)
                 .map(|e| {
-                    self.circ.boundary[self.circ.dag.edge_weight(*e).unwrap().uid_ref]
-                        .uid
-                        .clone()
+                    self.circ.uids[self.circ.dag.edge_weight(*e).unwrap().uid_ref.index()].clone()
                 })
                 .collect();
             Some(Command {

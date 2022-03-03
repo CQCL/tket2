@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use super::{
-    circuit::UIDRef,
+    circuit::UidIndex,
     operation::{OpPtr, WireType},
 };
 // use daggy::
@@ -19,8 +19,8 @@ impl VertexProperties {
 
 #[derive(Clone)]
 pub struct EdgeProperties {
-    pub edge_type: WireType,
-    pub uid_ref: UIDRef,
+    // pub edge_type: WireType,
+    pub uid_ref: UidIndex,
     // pub ports: (Port, Port),
 }
 
