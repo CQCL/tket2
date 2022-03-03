@@ -116,18 +116,17 @@ impl From<Operation> for Op {
 
 impl From<SerialCircuit> for Circuit {
     fn from(serialcirc: SerialCircuit) -> Self {
-        let mut circ = Self::new();
+        let uids: Vec<_> = serialcirc
+            .qubits
+            .into_iter()
+            .map(to_qubit)
+            .chain(serialcirc.bits.into_iter().map(to_bit))
+            .collect();
+
+        let mut circ = Circuit::with_uids(uids);
 
         circ.name = serialcirc.name;
         circ.phase = serialcirc.phase;
-
-        for qb in serialcirc.qubits {
-            circ.add_unitid(to_qubit(qb));
-        }
-
-        for bit in serialcirc.bits {
-            circ.add_unitid(to_bit(bit));
-        }
 
         for com in serialcirc.commands {
             let op: Op = com.op.into();

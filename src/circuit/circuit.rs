@@ -83,6 +83,25 @@ impl Circuit {
             uids: vec![],
         }
     }
+
+    pub fn with_uids(uids: Vec<UnitID>) -> Self {
+        let n_uids = uids.len();
+        let mut slf = Self {
+            dag: DAG::with_capacity(n_uids * 2, n_uids),
+            name: None,
+            phase: "0".into(),
+            boundary: Boundary {
+                inputs: Vec::with_capacity(n_uids),
+                outputs: Vec::with_capacity(n_uids),
+            },
+            uids: vec![],
+        };
+
+        for uid in uids {
+            slf.add_unitid(uid);
+        }
+        slf
+    }
     pub fn get_out(&self, uid: &UnitID) -> Result<Vertex, String> {
         let uix = self
             .uids

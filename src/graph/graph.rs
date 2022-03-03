@@ -264,9 +264,13 @@ impl<N: Clone, E: Clone, Ix: IndexType> Clone for Graph<N, E, Ix> {
 
 impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
     pub fn new() -> Self {
+        Self::with_capacity(0, 0)
+    }
+
+    pub fn with_capacity(nodes: usize, edges: usize) -> Self {
         Self {
-            nodes: Vec::new(),
-            edges: Vec::new(),
+            nodes: Vec::with_capacity(nodes),
+            edges: Vec::with_capacity(edges),
             node_count: 0,
             edge_count: 0,
             free_node: NodeIndex::end(),
