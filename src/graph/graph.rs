@@ -168,11 +168,23 @@ impl PortIndex {
     }
 }
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
-pub struct NodePort<Ix = DefaultIx>(NodeIndex<Ix>, PortIndex);
+pub struct NodePort<Ix = DefaultIx> {
+    node: NodeIndex<Ix>,
+    port: PortIndex,
+}
+
+impl<Ix> NodePort<Ix> {
+    pub fn new(node: NodeIndex<Ix>, port: PortIndex) -> Self {
+        Self { node, port }
+    }
+}
 
 impl<Ix, Px: Into<u8>> From<(NodeIndex<Ix>, Px)> for NodePort<Ix> {
-    fn from((n, p): (NodeIndex<Ix>, Px)) -> Self {
-        Self(n, PortIndex(p.into()))
+    fn from((node, p): (NodeIndex<Ix>, Px)) -> Self {
+        Self {
+            node,
+            port: PortIndex(p.into()),
+        }
     }
 }
 
@@ -194,7 +206,7 @@ pub struct Edge<E, Ix = DefaultIx> {
     // / Next edge in outgoing and incoming edge lists.
     // next: [EdgeIndex<Ix>; 2],
     /// Start and End node index
-    node: [NodePort<Ix>; 2],
+    node_ports: [NodePort<Ix>; 2],
 }
 
 pub struct Graph<N, E, Ix = DefaultIx> {
@@ -280,14 +292,14 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             let edge = &mut self.edges[edge_idx.index()];
             let _old = replace(&mut edge.weight, Some(weight));
             debug_assert!(_old.is_none());
-            self.free_edge = edge.node[0].0._into_edge();
-            edge.node = [a, b];
+            self.free_edge = edge.node_ports[0].node._into_edge();
+            edge.node_ports = [a, b];
         } else {
             edge_idx = EdgeIndex::new(self.edges.len());
             assert!(<Ix as IndexType>::max().index() == !0 || EdgeIndex::end() != edge_idx);
             let new_edge = Edge {
                 weight: Some(weight),
-                node: [a, b],
+                node_ports: [a, b],
             };
             self.edges.push(new_edge);
         }
@@ -302,11 +314,11 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             }
         };
 
-        let node_a = self.nodes.get_mut(a.0.index()).expect("Node not found.");
-        wire_up_port(a.1, &mut node_a.outgoing);
+        let node_a = self.nodes.get_mut(a.node.index()).expect("Node not found.");
+        wire_up_port(a.port, &mut node_a.outgoing);
 
-        let node_b = self.nodes.get_mut(b.0.index()).expect("Node not found.");
-        wire_up_port(b.1, &mut node_b.incoming);
+        let node_b = self.nodes.get_mut(b.node.index()).expect("Node not found.");
+        wire_up_port(b.port, &mut node_b.incoming);
 
         self.edge_count += 1;
         edge_idx
@@ -365,15 +377,39 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             Some(x) if x.weight.is_none() => return None,
             _ => (),
         };
-        // if !is_edge {
-        //     return None;
-        // }
+
+        let edge = &mut self.edges[e.index()];
+
+        let clear_up_port = |port: PortIndex, port_array: &mut Vec<_>| {
+            let port = port.index();
+            if let Some(e) = port_array.get_mut(port) {
+                if *e != EdgeIndex::end() {
+                    *e = EdgeIndex::end();
+                }
+            }
+        };
+
+        let (n1, p1) = match edge.node_ports[0] {
+            NodePort { node, port } => (
+                self.nodes.get_mut(node.index()).expect("Node not found."),
+                port,
+            ),
+        };
+        clear_up_port(p1, &mut n1.outgoing);
+
+        let (n2, p2) = match edge.node_ports[1] {
+            NodePort { node, port } => (
+                self.nodes.get_mut(node.index()).expect("Node not found."),
+                port,
+            ),
+        };
+
+        clear_up_port(p2, &mut n2.incoming);
 
         // Clear the edge and put it in the free list
-        let edge = &mut self.edges[e.index()];
-        edge.node = [
-            NodePort(self.free_edge._into_node(), PortIndex::end()),
-            NodePort(NodeIndex::end(), PortIndex::end()),
+        edge.node_ports = [
+            NodePort::new(self.free_edge._into_node(), PortIndex::end()),
+            NodePort::new(NodeIndex::end(), PortIndex::end()),
         ];
         self.free_edge = e;
         self.edge_count -= 1;
@@ -389,7 +425,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
     }
 
     pub fn edge_endpoints(&self, e: EdgeIndex<Ix>) -> Option<(NodePort<Ix>, NodePort<Ix>)> {
-        let [a, b] = self.edges.get(e.index())?.node;
+        let [a, b] = self.edges.get(e.index())?.node_ports;
         Some((a, b))
     }
 

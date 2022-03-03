@@ -119,6 +119,7 @@ impl Circuit {
                 //     )
                 // }
                 (x, y) if x == y => {
+                    self.dag.remove_edge(pred);
                     self.dag
                         .add_edge(old_v1, (new_vert, i as u8).into(), edgeprops.clone());
                     // .map_err(|_| CycleInGraph())?;
@@ -127,7 +128,6 @@ impl Circuit {
                         .add_edge((new_vert, i as u8).into(), old_v2, edgeprops);
                     // .map_err(|_| CycleInGraph())?;
                     // bin.push(pred);
-                    self.dag.remove_edge(pred);
                 }
                 _ => return Err("Cannot rewire; Changing type of edge.".to_string()),
             }
