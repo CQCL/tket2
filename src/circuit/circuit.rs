@@ -94,7 +94,7 @@ impl Circuit {
                 inputs: Vec::with_capacity(n_uids),
                 outputs: Vec::with_capacity(n_uids),
             },
-            uids: vec![],
+            uids: Vec::with_capacity(n_uids),
         };
 
         for uid in uids {

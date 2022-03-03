@@ -114,6 +114,42 @@ impl From<Operation> for Op {
     }
 }
 
+impl From<Op> for Operation {
+    fn from(op: Op) -> Self {
+        let (op_type, params) = match op {
+            Op::H => (OpType::H, vec![]),
+            Op::CX => (OpType::CX, vec![]),
+            Op::ZZMax => (OpType::ZZMax, vec![]),
+            Op::Reset => (OpType::Reset, vec![]),
+            Op::Input => (OpType::Input, vec![]),
+            Op::Output => (OpType::Output, vec![]),
+            Op::Rx(p) => (OpType::Rx, vec![p]),
+            Op::Ry(p) => (OpType::Ry, vec![p]),
+            Op::Rz(p) => (OpType::Rz, vec![p]),
+            Op::ZZPhase(p1, p2) => (OpType::ZZPhase, vec![p1, p2]),
+            Op::Measure => (OpType::Measure, vec![]),
+            Op::Barrier => (OpType::Barrier, vec![]),
+        };
+        // let signature = match self.signature() {
+        //     Signature::Linear(sig) => sig.iter().map(|wt| match wt {
+        //         WireType::Quantum => todo!(),
+        //         WireType::Classical => todo!(),
+        //         WireType::Bool => todo!(),
+        //     }),
+        //     Signature::NonLinear(_, _) => panic!(),
+        // }
+        let params = (!params.is_empty()).then(|| params);
+        Operation {
+            op_type,
+            params,
+            signature: None,
+            op_box: None,
+            n_qb: None,
+            conditional: None,
+        }
+    }
+}
+
 impl From<SerialCircuit> for Circuit {
     fn from(serialcirc: SerialCircuit) -> Self {
         let uids: Vec<_> = serialcirc
@@ -165,7 +201,7 @@ impl From<Circuit> for SerialCircuit {
         let commands = circ
             .to_commands()
             .filter_map(|com| {
-                let op = com.op.to_serialized();
+                let op: Operation = com.op.into();
                 match op.op_type {
                     OpType::Input | OpType::Output => None,
                     _ => Some(crate::circuit_json::Command {

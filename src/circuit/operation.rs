@@ -4,7 +4,6 @@ use std::cmp::max;
 
 use lazy_static::lazy_static;
 
-use crate::{circuit_json::Operation, optype::OpType};
 // use symengine::Expression;
 pub(crate) type Param = String;
 
@@ -78,43 +77,5 @@ impl Op {
 
     pub fn get_params(&self) -> Vec<Param> {
         todo!()
-    }
-
-    pub fn to_serialized(&self) -> Operation {
-        let (op_type, params) = match self {
-            Op::H => (OpType::H, vec![]),
-            Op::CX => (OpType::CX, vec![]),
-            Op::ZZMax => (OpType::ZZMax, vec![]),
-            Op::Reset => (OpType::Reset, vec![]),
-            Op::Input => (OpType::Input, vec![]),
-            Op::Output => (OpType::Output, vec![]),
-            Op::Rx(p) => (OpType::Rx, vec![p]),
-            Op::Ry(p) => (OpType::Ry, vec![p]),
-            Op::Rz(p) => (OpType::Rz, vec![p]),
-            Op::ZZPhase(p1, p2) => (OpType::ZZPhase, vec![p1, p2]),
-            Op::Measure => (OpType::Measure, vec![]),
-            Op::Barrier => (OpType::Barrier, vec![]),
-        };
-        // let signature = match self.signature() {
-        //     Signature::Linear(sig) => sig.iter().map(|wt| match wt {
-        //         WireType::Quantum => todo!(),
-        //         WireType::Classical => todo!(),
-        //         WireType::Bool => todo!(),
-        //     }),
-        //     Signature::NonLinear(_, _) => panic!(),
-        // }
-        let params = if params.is_empty() {
-            None
-        } else {
-            Some(params.iter().map(|&s| s.clone()).collect())
-        };
-        Operation {
-            op_type,
-            params,
-            signature: None,
-            op_box: None,
-            n_qb: None,
-            conditional: None,
-        }
     }
 }
