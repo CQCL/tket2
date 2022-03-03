@@ -7,7 +7,7 @@ use std::hash::Hash;
 
 use crate::graph::graph::{IndexType, NodePort};
 
-use super::dag::{Edge, EdgeProperties, Vertex, VertexProperties, DAG};
+use super::dag::{Edge, EdgeProperties, TopSorter, Vertex, VertexProperties, DAG};
 use super::operation::{Op, Param, Signature, WireType};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -41,13 +41,7 @@ impl IndexType for UidIndex {
     }
 }
 
-// #[derive(PartialEq, Eq, Hash, Debug)]
-// struct BoundaryElement {
-//     uid: UnitID,
-//     inv: Vertex,
-//     outv: Vertex,
-// }
-
+#[derive(Clone)]
 struct Boundary {
     pub inputs: Vec<Vertex>,
     pub outputs: Vec<Vertex>,
@@ -66,6 +60,8 @@ impl From<CycleInGraph> for String {
         format!("{c:?}")
     }
 }
+
+#[derive(Clone)]
 pub struct Circuit {
     dag: DAG,
     pub name: Option<String>,
@@ -281,46 +277,14 @@ pub struct Command {
 }
 
 pub struct CommandIter<'circ> {
-    nodes: Vec<Vertex>,
-    current_node: usize,
+    nodes: TopSorter<'circ>,
     circ: &'circ Circuit,
 }
 
 impl<'circ> CommandIter<'circ> {
-    // fn toposort(circ: &'a Circuit) -> Vec<NodeIndex> {
-    //     let dag = circ.dag.clone();
-    //     let mut sorted = vec![];
-
-    //     let mut slice: BTreeSet<NodeIndex> =
-    //         BTreeSet::from_iter(circ.boundary.iter().map(|BoundaryElement { inv, .. }| {
-    //             circ.dag
-    //                 .edge_endpoints(
-    //                     circ.dag
-    //                         .edges_directed(*inv, EdgeDirection::Incoming)
-    //                         .next()
-    //                         .unwrap()
-    //                         .id(),
-    //                 )
-    //                 .unwrap()
-    //                 .1
-    //         }));
-
-    //     let mut bin = BTreeSet::new();
-    //     while let Some(n) = slice.iter().next() {
-    //         bin.insert(n);
-
-    //         sorted.push(*n);
-
-    //     }
-    //     sorted
-    // }
     fn new(circ: &'circ Circuit) -> Self {
         Self {
-            // nodes: daggy::petgraph::algo::toposort(&circ.dag, None)
-            //     .map_err(|_| CycleInGraph())
-            //     .unwrap(),
-            nodes: circ.dag.nodes().collect(),
-            current_node: 0,
+            nodes: TopSorter::new(&circ.dag, circ.boundary.inputs.iter().cloned().collect()),
             circ,
         }
     }
@@ -330,26 +294,9 @@ impl<'circ> Iterator for CommandIter<'circ> {
     type Item = Command;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.current_node += 1;
-        if self.current_node == self.nodes.len() {
-            None
-        } else {
-            let node = self.nodes[self.current_node];
+        self.nodes.next().map(|node| {
             let VertexProperties { op, opgroup } =
                 self.circ.dag.node_weight(node).expect("Node not found");
-            // let mut port_args: Vec<_> = self
-            //     .circ
-            //     .dag
-            //     .edges_directed(node, EdgeDirection::Incoming)
-            //     .map(|e| {
-            //         (
-            //             e.weight().ports.1,
-            //             self.circ.boundary[e.weight().uid_ref].uid.clone(),
-            //         )
-            //     })
-            //     .collect();
-            // port_args.sort_unstable_by_key(|p| p.0);
-            // let args = port_args.into_iter().map(|(_, uid)| uid).collect();
 
             let args = self
                 .circ
@@ -359,11 +306,11 @@ impl<'circ> Iterator for CommandIter<'circ> {
                     self.circ.uids[self.circ.dag.edge_weight(*e).unwrap().uid_ref.index()].clone()
                 })
                 .collect();
-            Some(Command {
+            Command {
                 op: op.clone(),
                 args,
                 opgroup: opgroup.clone(),
-            })
-        }
+            }
+        })
     }
 }

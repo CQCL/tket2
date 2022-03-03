@@ -169,8 +169,8 @@ impl PortIndex {
 }
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
 pub struct NodePort<Ix = DefaultIx> {
-    node: NodeIndex<Ix>,
-    port: PortIndex,
+    pub node: NodeIndex<Ix>,
+    pub port: PortIndex,
 }
 
 impl<Ix> NodePort<Ix> {
@@ -198,6 +198,16 @@ pub struct Node<N, Ix = DefaultIx> {
     outgoing: Vec<EdgeIndex<Ix>>,
 }
 
+impl<N: Clone, Ix: IndexType> Clone for Node<N, Ix> {
+    fn clone(&self) -> Self {
+        Self {
+            weight: self.weight.clone(),
+            incoming: self.incoming.clone(),
+            outgoing: self.outgoing.clone(),
+        }
+    }
+}
+
 /// The graph's edge type.
 #[derive(Debug)]
 pub struct Edge<E, Ix = DefaultIx> {
@@ -207,6 +217,15 @@ pub struct Edge<E, Ix = DefaultIx> {
     // next: [EdgeIndex<Ix>; 2],
     /// Start and End node index
     node_ports: [NodePort<Ix>; 2],
+}
+
+impl<E: Clone, Ix: IndexType> Clone for Edge<E, Ix> {
+    fn clone(&self) -> Self {
+        Self {
+            weight: self.weight.clone(),
+            node_ports: self.node_ports.clone(),
+        }
+    }
 }
 
 pub struct Graph<N, E, Ix = DefaultIx> {
@@ -228,6 +247,19 @@ pub struct Graph<N, E, Ix = DefaultIx> {
     // the forward reference.
     free_node: NodeIndex<Ix>,
     free_edge: EdgeIndex<Ix>,
+}
+
+impl<N: Clone, E: Clone, Ix: IndexType> Clone for Graph<N, E, Ix> {
+    fn clone(&self) -> Self {
+        Self {
+            nodes: self.nodes.clone(),
+            edges: self.edges.clone(),
+            node_count: self.node_count.clone(),
+            edge_count: self.edge_count.clone(),
+            free_node: self.free_node.clone(),
+            free_edge: self.free_edge.clone(),
+        }
+    }
 }
 
 impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
@@ -444,5 +476,12 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             .iter()
             .enumerate()
             .filter_map(|(i, n)| n.weight.as_ref().map(|_| NodeIndex::new(i)))
+    }
+
+    pub fn edges(&self) -> impl Iterator<Item = EdgeIndex<Ix>> + '_ {
+        self.edges
+            .iter()
+            .enumerate()
+            .filter_map(|(i, n)| n.weight.as_ref().map(|_| EdgeIndex::new(i)))
     }
 }
