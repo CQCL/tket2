@@ -105,8 +105,8 @@ impl Circuit {
             .ok_or("Output node has no incoming edges from UnitID.".to_string())
     }
 
-    pub fn rewire(&mut self, new_vert: Vertex, preds: Vec<Edge>) -> Result<(), String> {
-        // let mut bin: Vec<Edge> = vec![];
+    pub fn insert(&mut self, new_vert: Vertex, edges: Vec<Edge>) -> Result<(), String> {
+        // called rewire in TKET-1
         let vert_op_sig = match self
             .dag
             .node_weight(new_vert)
@@ -120,16 +120,16 @@ impl Circuit {
             }
         };
 
-        for (i, (pred, vert_sig_type)) in preds.into_iter().zip(vert_op_sig).enumerate() {
+        for (i, (edge, vert_sig_type)) in edges.into_iter().zip(vert_op_sig).enumerate() {
             let edgeprops = self
                 .dag
-                .edge_weight(pred)
+                .edge_weight(edge)
                 .ok_or("Edge not found.".to_string())?
                 .clone();
 
             let (old_v1, old_v2) = self
                 .dag
-                .edge_endpoints(pred)
+                .edge_endpoints(edge)
                 .ok_or("Edge not found.".to_string())?;
             match (
                 &vert_sig_type,
@@ -154,7 +154,7 @@ impl Circuit {
                 //     )
                 // }
                 (x, y) if x == y => {
-                    self.dag.remove_edge(pred);
+                    self.dag.remove_edge(edge);
                     self.dag
                         .add_edge(old_v1, (new_vert, i as u8).into(), edgeprops.clone());
                     // .map_err(|_| CycleInGraph())?;
@@ -209,7 +209,7 @@ impl Circuit {
         assert!(sig.len() == args.len());
 
         let new_vert = self.add_vertex(op);
-        let preds = args
+        let insertion_edges = args
             .iter()
             .map(|uid| self.get_out(uid))
             .collect::<Result<Vec<Edge>, String>>()?;
@@ -225,7 +225,7 @@ impl Circuit {
         //     let out_v = self.get_out(arg)?;
         //     let pred_out_e = self.dag.edges_directed(a, dir)
         // }
-        self.rewire(new_vert, preds)?;
+        self.insert(new_vert, insertion_edges)?;
         Ok(new_vert)
     }
 
