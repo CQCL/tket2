@@ -28,7 +28,7 @@ impl Signature {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Op {
     H,
     CX,
@@ -39,7 +39,8 @@ pub enum Op {
     Rx(Param),
     Ry(Param),
     Rz(Param),
-    ZZPhase(Param, Param),
+    ZZPhase(Param),
+    PhasedX(Param, Param),
     Measure,
     Barrier,
 }
@@ -51,6 +52,9 @@ lazy_static! {
     static ref TWOQBSIG: Signature = Signature::Linear(vec![WireType::Quantum, WireType::Quantum]);
 }
 
+fn neg_param(p: Param) -> Param {
+    Param::new("0") - p
+}
 impl Op {
     fn is_one_qb_gate(&self) -> bool {
         match self.signature() {
@@ -77,5 +81,19 @@ impl Op {
 
     pub fn get_params(&self) -> Vec<Param> {
         todo!()
+    }
+    pub fn dagger(&self) -> Option<Self> {
+        Some(match self {
+            Op::H => Op::H,
+            Op::CX => Op::CX,
+            Op::ZZMax => Op::ZZPhase(Param::new("-0.5")),
+
+            Op::Rx(p) => Op::Rx(neg_param(p.to_owned())),
+            Op::Ry(p) => Op::Ry(neg_param(p.to_owned())),
+            Op::Rz(p) => Op::Rz(neg_param(p.to_owned())),
+            Op::ZZPhase(p) => Op::ZZPhase(neg_param(p.to_owned())),
+            Op::PhasedX(p1, p2) => Op::PhasedX(neg_param(p1.to_owned()), p2.to_owned()),
+            _ => return None,
+        })
     }
 }

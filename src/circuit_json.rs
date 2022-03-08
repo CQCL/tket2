@@ -1,4 +1,4 @@
-use crate::{optype::OpType, circuit::operation::Param};
+use crate::{circuit::operation::Param, optype::OpType};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]

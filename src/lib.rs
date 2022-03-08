@@ -7,7 +7,10 @@ mod optype;
 #[cfg(test)]
 mod tests {
     use crate::{
-        circuit::{circuit::Circuit, operation::Param},
+        circuit::{
+            circuit::Circuit,
+            operation::{Op, Param},
+        },
         circuit_json::{self, SerialCircuit},
     };
     #[test]
@@ -30,5 +33,16 @@ mod tests {
     fn test_param() {
         assert_eq!(Param::new("3") + Param::new("x"), Param::new("3 + x"));
         assert_eq!(Param::new("0") - Param::new("0.1"), Param::new("-0.1"));
+    }
+
+    #[test]
+    fn test_dagger() {
+        assert_eq!(Op::H.dagger().unwrap(), Op::H);
+        assert_eq!(Op::CX.dagger().unwrap(), Op::CX);
+        assert_eq!(Op::Rx(0.1.into()).dagger().unwrap(), Op::Rx((-0.1).into()));
+        assert_eq!(
+            Op::Rz(Param::new("x")).dagger().unwrap(),
+            Op::Rz(Param::new("-x"))
+        );
     }
 }

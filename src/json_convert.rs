@@ -129,7 +129,8 @@ impl From<Op> for Operation {
             Op::Rx(p) => (OpType::Rx, vec![p]),
             Op::Ry(p) => (OpType::Ry, vec![p]),
             Op::Rz(p) => (OpType::Rz, vec![p]),
-            Op::ZZPhase(p1, p2) => (OpType::ZZPhase, vec![p1, p2]),
+            Op::ZZPhase(p) => (OpType::ZZPhase, vec![p]),
+            Op::PhasedX(p1, p2) => (OpType::PhasedX, vec![p1, p2]),
             Op::Measure => (OpType::Measure, vec![]),
             Op::Barrier => (OpType::Barrier, vec![]),
         };
