@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use super::{circuit::UidIndex, operation::Op};
+use super::operation::{Op, WireType};
 
 #[derive(Clone)]
 pub struct VertexProperties {
@@ -15,9 +15,7 @@ impl VertexProperties {
 
 #[derive(Clone)]
 pub struct EdgeProperties {
-    // pub edge_type: WireType,
-    pub uid_ref: UidIndex,
-    // pub ports: (Port, Port),
+    pub edge_type: WireType,
 }
 
 // pub(crate) type DAG = StableDag<VertexProperties, EdgeProperties>;

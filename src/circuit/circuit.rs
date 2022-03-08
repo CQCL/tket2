@@ -2,10 +2,11 @@
 // use daggy::petgraph::EdgeDirection;
 // use daggy::NodeIndex;
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use crate::graph::graph::{IndexType, NodePort};
+use crate::graph::graph::{NodePort, PortIndex};
 
 use super::dag::{Edge, EdgeProperties, TopSorter, Vertex, VertexProperties, DAG};
 use super::operation::{Op, Param, Signature, WireType};
@@ -22,22 +23,6 @@ impl UnitID {
             Self::Qubit { .. } => WireType::Quantum,
             Self::Bit { .. } => WireType::Classical,
         }
-    }
-}
-
-// address of internal memory model
-#[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
-pub struct UidIndex(u32);
-
-impl IndexType for UidIndex {
-    fn index(&self) -> usize {
-        self.0 as usize
-    }
-    fn new(x: usize) -> Self {
-        Self(x as u32)
-    }
-    fn max() -> Self {
-        Self(u32::MAX)
     }
 }
 
@@ -92,18 +77,19 @@ impl Circuit {
         }
         slf
     }
-    pub fn get_out(&self, uid: &UnitID) -> Result<Edge, String> {
-        let uix = self
-            .uids
-            .iter()
-            .position(|u| u == uid)
-            .ok_or("UnitID not found in boundary.".to_string())?;
-        self.dag
-            .incoming_edges(self.boundary.output)
-            .find(|&&e| self.dag.edge_weight(e).unwrap().uid_ref.index() == uix)
-            .map(|n| *n)
-            .ok_or("Output node has no incoming edges from UnitID.".to_string())
-    }
+    // pub fn get_out(&self, uid: &UnitID) -> Result<Edge, String> {
+    //     let uix = UidIndex::new(
+    //         self.uids
+    //             .iter()
+    //             .position(|u| u == uid)
+    //             .ok_or("UnitID not found in boundary.".to_string())?,
+    //     );
+    //     self.dag
+    //         .incoming_edges(self.boundary.output)
+    //         .find(|&&e| self.dag.edge_weight(e).unwrap().uid_ref == uix)
+    //         .map(|n| *n)
+    //         .ok_or("Output node has no incoming edges from UnitID.".to_string())
+    // }
 
     pub fn insert(&mut self, new_vert: Vertex, edges: Vec<Edge>) -> Result<(), String> {
         // called rewire in TKET-1
@@ -131,10 +117,7 @@ impl Circuit {
                 .dag
                 .edge_endpoints(edge)
                 .ok_or("Edge not found.".to_string())?;
-            match (
-                &vert_sig_type,
-                &self.uids[edgeprops.uid_ref.index()].get_type(),
-            ) {
+            match (&vert_sig_type, &edgeprops.edge_type) {
                 // (WireType::Bool, WireType::Classical) => {
 
                 //     self.dag
@@ -178,18 +161,18 @@ impl Circuit {
         self.add_edge(
             (self.boundary.input, inlen as u8).into(),
             (self.boundary.output, outlen as u8).into(),
-            UidIndex::new(self.uids.len()),
+            uid.get_type(),
         );
         self.uids.push(uid);
         // .unwrap(); // should be cycle free so unwrap
     }
-    pub fn add_edge(&mut self, source: NodePort, target: NodePort, uid_ref: UidIndex) -> Edge {
+    pub fn add_edge(&mut self, source: NodePort, target: NodePort, edge_type: WireType) -> Edge {
         // let ports = (source.1, target.1);
         self.dag.add_edge(
             source,
             target,
             EdgeProperties {
-                uid_ref,
+                edge_type,
                 // ports,
             },
         )
@@ -201,7 +184,8 @@ impl Circuit {
         let weight = VertexProperties::new(op);
         self.dag.add_node_with_capacity(siglen, weight)
     }
-    pub fn add_op(&mut self, op: Op, args: &Vec<UnitID>) -> Result<Vertex, String> {
+    pub fn append_op(&mut self, op: Op, args: &Vec<PortIndex>) -> Result<Vertex, String> {
+        // akin to add-op in TKET-1
         let sig = match op.signature() {
             Signature::Linear(sig) => sig,
             Signature::NonLinear(_, _) => return Err("Only linear ops supported.".to_string()),
@@ -211,8 +195,12 @@ impl Circuit {
         let new_vert = self.add_vertex(op);
         let insertion_edges = args
             .iter()
-            .map(|uid| self.get_out(uid))
-            .collect::<Result<Vec<Edge>, String>>()?;
+            .map(|port| {
+                self.dag
+                    .in_edge_at_port(NodePort::new(self.boundary.output, *port))
+            })
+            .collect::<Option<Vec<Edge>>>()
+            .ok_or("Invalid output ports".to_string())?;
         // let mut wire_arg_set = HashSet::new();
         // for (arg, sig) in args.iter().zip(sig) {
         //     if sig != WireType::Bool {
@@ -246,6 +234,10 @@ impl Circuit {
             UnitID::Qubit { .. } => None,
         })
     }
+
+    pub fn unitids(&self) -> impl Iterator<Item = &UnitID> + '_ {
+        self.uids.iter()
+    }
 }
 
 pub struct Command {
@@ -256,12 +248,19 @@ pub struct Command {
 pub struct CommandIter<'circ> {
     nodes: TopSorter<'circ>,
     circ: &'circ Circuit,
+    frontier: HashMap<Edge, &'circ UnitID>,
 }
 
 impl<'circ> CommandIter<'circ> {
     fn new(circ: &'circ Circuit) -> Self {
         Self {
             nodes: TopSorter::new(&circ.dag, [circ.boundary.input].into()),
+            frontier: circ
+                .dag
+                .outgoing_edges(circ.boundary.input)
+                .enumerate()
+                .map(|(i, e)| (e.clone(), circ.uids.get(i).unwrap()))
+                .collect(),
             circ,
         }
     }
@@ -273,15 +272,19 @@ impl<'circ> Iterator for CommandIter<'circ> {
     fn next(&mut self) -> Option<Self::Item> {
         self.nodes.next().map(|node| {
             let VertexProperties { op } = self.circ.dag.node_weight(node).expect("Node not found");
-
             let args = self
                 .circ
                 .dag
                 .incoming_edges(node)
-                .map(|e| {
-                    self.circ.uids[self.circ.dag.edge_weight(*e).unwrap().uid_ref.index()].clone()
+                .zip(self.circ.dag.outgoing_edges(node))
+                .map(|(in_e, out_e)| {
+                    let uid = self.frontier.remove(in_e).expect("edge not in frontier");
+                    self.frontier.insert(*out_e, uid);
+
+                    uid.clone()
                 })
                 .collect();
+
             Command {
                 op: op.clone(),
                 args,

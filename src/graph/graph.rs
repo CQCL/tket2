@@ -64,20 +64,20 @@ impl IndexType for u32 {
 //     }
 // }
 
-// unsafe impl IndexType for u8 {
-//     #[inline(always)]
-//     fn new(x: usize) -> Self {
-//         x as u8
-//     }
-//     #[inline(always)]
-//     fn index(&self) -> usize {
-//         *self as usize
-//     }
-//     #[inline(always)]
-//     fn max() -> Self {
-//         ::std::u8::MAX
-//     }
-// }
+impl IndexType for u8 {
+    #[inline(always)]
+    fn new(x: usize) -> Self {
+        x as u8
+    }
+    #[inline(always)]
+    fn index(&self) -> usize {
+        *self as usize
+    }
+    #[inline(always)]
+    fn max() -> Self {
+        ::std::u8::MAX
+    }
+}
 
 /// Node identifier.
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
@@ -154,17 +154,22 @@ impl<Ix: IndexType> From<Ix> for EdgeIndex<Ix> {
 }
 
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
-pub struct PortIndex(u8);
+pub struct PortIndex<Ix = u8>(Ix);
 
-impl PortIndex {
+impl<Ix: IndexType> PortIndex<Ix> {
+    #[inline]
+    pub fn new(x: usize) -> Self {
+        PortIndex(IndexType::new(x))
+    }
+
     #[inline]
     pub fn index(&self) -> usize {
-        self.0 as usize
+        self.0.index()
     }
 
     #[inline]
     pub fn end() -> Self {
-        PortIndex(u8::MAX)
+        PortIndex(IndexType::max())
     }
 }
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
@@ -479,6 +484,20 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         let node = self.get_node(n);
 
         (node.incoming.len(), node.outgoing.len())
+    }
+
+    pub fn in_edge_at_port(&self, np: NodePort<Ix>) -> Option<EdgeIndex<Ix>> {
+        self.get_node(np.node)
+            .incoming
+            .get(np.port.index())
+            .map(|e| *e)
+    }
+
+    pub fn out_edge_at_port(&self, np: NodePort<Ix>) -> Option<EdgeIndex<Ix>> {
+        self.get_node(np.node)
+            .outgoing
+            .get(np.port.index())
+            .map(|e| *e)
     }
 
     pub fn nodes(&self) -> impl Iterator<Item = NodeIndex<Ix>> + '_ {

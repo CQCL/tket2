@@ -1,6 +1,9 @@
+use std::collections::HashMap;
+
 use crate::circuit::circuit::{Circuit, UnitID};
 use crate::circuit::operation::{Op, Signature, WireType};
 use crate::circuit_json::{Operation, Permutation, Register, SerialCircuit};
+use crate::graph::graph::PortIndex;
 use crate::optype::OpType;
 
 fn to_qubit(reg: Register) -> UnitID {
@@ -164,6 +167,11 @@ impl From<SerialCircuit> for Circuit {
         circ.name = serialcirc.name;
         circ.phase = serialcirc.phase;
 
+        let frontier: HashMap<UnitID, PortIndex> = circ
+            .unitids()
+            .enumerate()
+            .map(|(i, uid)| (uid.clone(), PortIndex::new(i)))
+            .collect();
         for com in serialcirc.commands {
             let op: Op = com.op.into();
             let args = com
@@ -178,8 +186,9 @@ impl From<SerialCircuit> for Circuit {
                     WireType::Quantum => to_qubit(reg),
                     WireType::Classical | WireType::Bool => to_bit(reg),
                 })
+                .map(|uid| frontier[&uid])
                 .collect();
-            circ.add_op(op, &args).unwrap();
+            circ.append_op(op, &args).unwrap();
         }
         // TODO implicit perm
         circ
