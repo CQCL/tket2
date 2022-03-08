@@ -179,7 +179,7 @@ impl From<SerialCircuit> for Circuit {
                     WireType::Classical | WireType::Bool => to_bit(reg),
                 })
                 .collect();
-            circ.add_op(op, &args, com.opgroup).unwrap();
+            circ.add_op(op, &args).unwrap();
         }
         // TODO implicit perm
         circ
@@ -207,7 +207,7 @@ impl From<Circuit> for SerialCircuit {
                     _ => Some(crate::circuit_json::Command {
                         op,
                         args: com.args.into_iter().map(Into::into).collect(),
-                        opgroup: com.opgroup,
+                        opgroup: None,
                     }),
                 }
             })

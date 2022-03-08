@@ -5,12 +5,11 @@ use super::{circuit::UidIndex, operation::Op};
 #[derive(Clone)]
 pub struct VertexProperties {
     pub op: Op,
-    pub opgroup: Option<String>,
 }
 
 impl VertexProperties {
     pub fn new(op: Op) -> Self {
-        Self { op, opgroup: None }
+        Self { op }
     }
 }
 

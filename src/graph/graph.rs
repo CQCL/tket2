@@ -464,15 +464,21 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         let [a, b] = self.edges.get(e.index())?.node_ports;
         Some((a, b))
     }
-
+    fn get_node(&self, n: NodeIndex<Ix>) -> &Node<N, Ix> {
+        self.nodes.get(n.index()).expect("Node not found")
+    }
     pub fn incoming_edges(&self, n: NodeIndex<Ix>) -> impl Iterator<Item = &EdgeIndex<Ix>> {
-        let node = self.nodes.get(n.index()).expect("Node not found");
-        node.incoming.iter()
+        self.get_node(n).incoming.iter()
     }
 
     pub fn outgoing_edges(&self, n: NodeIndex<Ix>) -> impl Iterator<Item = &EdgeIndex<Ix>> {
-        let node = self.nodes.get(n.index()).expect("Node not found");
-        node.outgoing.iter()
+        self.get_node(n).outgoing.iter()
+    }
+
+    pub fn node_boundary_size(&self, n: NodeIndex<Ix>) -> (usize, usize) {
+        let node = self.get_node(n);
+
+        (node.incoming.len(), node.outgoing.len())
     }
 
     pub fn nodes(&self) -> impl Iterator<Item = NodeIndex<Ix>> + '_ {

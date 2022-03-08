@@ -43,8 +43,8 @@ impl IndexType for UidIndex {
 
 #[derive(Clone)]
 struct Boundary {
-    pub inputs: Vec<Vertex>,
-    pub outputs: Vec<Vertex>,
+    pub input: Vertex,
+    pub output: Vertex,
 }
 
 pub struct CycleInGraph();
@@ -72,55 +72,37 @@ pub struct Circuit {
 
 impl Circuit {
     pub fn new() -> Self {
-        Self {
-            dag: DAG::new(),
-            name: None,
-            phase: "0".into(),
-            boundary: Boundary {
-                inputs: vec![],
-                outputs: vec![],
-            },
-            uids: vec![],
-        }
+        Self::with_uids(vec![])
     }
 
     pub fn with_uids(uids: Vec<UnitID>) -> Self {
         let n_uids = uids.len();
+        let mut dag = DAG::with_capacity(2, n_uids);
+        let input = dag.add_node(VertexProperties::new(Op::Input));
+        let output = dag.add_node(VertexProperties::new(Op::Output));
         let mut slf = Self {
-            dag: DAG::with_capacity(n_uids * 2, n_uids),
+            dag,
             name: None,
             phase: "0".into(),
-            boundary: Boundary {
-                inputs: Vec::with_capacity(n_uids),
-                outputs: Vec::with_capacity(n_uids),
-            },
+            boundary: Boundary { input, output },
             uids: Vec::with_capacity(n_uids),
         };
-
         for uid in uids {
             slf.add_unitid(uid);
         }
         slf
     }
-    pub fn get_out(&self, uid: &UnitID) -> Result<Vertex, String> {
+    pub fn get_out(&self, uid: &UnitID) -> Result<Edge, String> {
         let uix = self
             .uids
             .iter()
             .position(|u| u == uid)
             .ok_or("UnitID not found in boundary.".to_string())?;
-        self.boundary
-            .outputs
-            .iter()
-            .find(|&&out_v| {
-                self.dag
-                    .edge_weight(*self.dag.incoming_edges(out_v).next().unwrap())
-                    .unwrap()
-                    .uid_ref
-                    .index()
-                    == uix
-            })
+        self.dag
+            .incoming_edges(self.boundary.output)
+            .find(|&&e| self.dag.edge_weight(e).unwrap().uid_ref.index() == uix)
             .map(|n| *n)
-            .ok_or("No output node has incoming edges from UnitID.".to_string())
+            .ok_or("Output node has no incoming edges from UnitID.".to_string())
     }
 
     pub fn rewire(&mut self, new_vert: Vertex, preds: Vec<Edge>) -> Result<(), String> {
@@ -191,21 +173,14 @@ impl Circuit {
         Ok(())
     }
     pub fn add_unitid(&mut self, uid: UnitID) {
-        let inv = self
-            .dag
-            .add_node_with_capacity(1, VertexProperties::new(Op::Input));
-        let outv = self
-            .dag
-            .add_node_with_capacity(1, VertexProperties::new(Op::Output));
-
-        self.boundary.inputs.push(inv);
-        self.boundary.outputs.push(outv);
-        self.uids.push(uid);
+        let (_, inlen) = self.dag.node_boundary_size(self.boundary.input);
+        let (outlen, _) = self.dag.node_boundary_size(self.boundary.output);
         self.add_edge(
-            (inv, 0).into(),
-            (outv, 0).into(),
-            UidIndex::new(self.uids.len() - 1),
+            (self.boundary.input, inlen as u8).into(),
+            (self.boundary.output, outlen as u8).into(),
+            UidIndex::new(self.uids.len()),
         );
+        self.uids.push(uid);
         // .unwrap(); // should be cycle free so unwrap
     }
     pub fn add_edge(&mut self, source: NodePort, target: NodePort, uid_ref: UidIndex) -> Edge {
@@ -221,35 +196,23 @@ impl Circuit {
         // .map_err(|_| CycleInGraph())
     }
 
-    pub fn add_vertex(&mut self, op: Op, _opgroup: Option<String>) -> Vertex {
+    pub fn add_vertex(&mut self, op: Op) -> Vertex {
         let siglen = op.signature().len();
         let weight = VertexProperties::new(op);
         self.dag.add_node_with_capacity(siglen, weight)
     }
-    pub fn add_op(
-        &mut self,
-        op: Op,
-        args: &Vec<UnitID>,
-        opgroup: Option<String>,
-    ) -> Result<Vertex, String> {
+    pub fn add_op(&mut self, op: Op, args: &Vec<UnitID>) -> Result<Vertex, String> {
         let sig = match op.signature() {
             Signature::Linear(sig) => sig,
             Signature::NonLinear(_, _) => return Err("Only linear ops supported.".to_string()),
         };
         assert!(sig.len() == args.len());
 
-        let new_vert = self.add_vertex(op, opgroup);
-        let preds: Result<Vec<Edge>, String> = args
+        let new_vert = self.add_vertex(op);
+        let preds = args
             .iter()
-            .map(|uid| -> Result<Edge, String> {
-                Ok(*self
-                    .dag
-                    .incoming_edges(self.get_out(uid)?)
-                    .next()
-                    .ok_or("No incoming edges".to_string())?)
-            })
-            .collect();
-        let preds = preds?;
+            .map(|uid| self.get_out(uid))
+            .collect::<Result<Vec<Edge>, String>>()?;
         // let mut wire_arg_set = HashSet::new();
         // for (arg, sig) in args.iter().zip(sig) {
         //     if sig != WireType::Bool {
@@ -268,10 +231,6 @@ impl Circuit {
 
     pub fn to_commands(&self) -> CommandIter {
         CommandIter::new(self)
-        // let topo_nodes =
-        //     daggy::petgraph::algo::toposort(&self.dag, None).map_err(|_| CycleInGraph())?;
-        // // Ok(CommandIter{nodesNodeIndex))
-        // todo!()
     }
 
     pub fn qubits(&self) -> impl Iterator<Item = UnitID> + '_ {
@@ -292,7 +251,6 @@ impl Circuit {
 pub struct Command {
     pub op: Op,
     pub args: Vec<UnitID>,
-    pub opgroup: Option<String>,
 }
 
 pub struct CommandIter<'circ> {
@@ -303,7 +261,7 @@ pub struct CommandIter<'circ> {
 impl<'circ> CommandIter<'circ> {
     fn new(circ: &'circ Circuit) -> Self {
         Self {
-            nodes: TopSorter::new(&circ.dag, circ.boundary.inputs.iter().cloned().collect()),
+            nodes: TopSorter::new(&circ.dag, [circ.boundary.input].into()),
             circ,
         }
     }
@@ -314,8 +272,7 @@ impl<'circ> Iterator for CommandIter<'circ> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.nodes.next().map(|node| {
-            let VertexProperties { op, opgroup } =
-                self.circ.dag.node_weight(node).expect("Node not found");
+            let VertexProperties { op } = self.circ.dag.node_weight(node).expect("Node not found");
 
             let args = self
                 .circ
@@ -328,7 +285,6 @@ impl<'circ> Iterator for CommandIter<'circ> {
             Command {
                 op: op.clone(),
                 args,
-                opgroup: opgroup.clone(),
             }
         })
     }
