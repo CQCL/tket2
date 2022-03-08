@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 
-use std::cmp::max;
-
 use lazy_static::lazy_static;
+use std::cmp::max;
+use symengine::Expression;
 
 // use symengine::Expression;
-pub(crate) type Param = String;
+pub(crate) type Param = Expression;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum WireType {

@@ -68,7 +68,7 @@ impl Circuit {
         let mut slf = Self {
             dag,
             name: None,
-            phase: "0".into(),
+            phase: (0 as u64).into(),
             boundary: Boundary { input, output },
             uids: Vec::with_capacity(n_uids),
         };
@@ -77,19 +77,6 @@ impl Circuit {
         }
         slf
     }
-    // pub fn get_out(&self, uid: &UnitID) -> Result<Edge, String> {
-    //     let uix = UidIndex::new(
-    //         self.uids
-    //             .iter()
-    //             .position(|u| u == uid)
-    //             .ok_or("UnitID not found in boundary.".to_string())?,
-    //     );
-    //     self.dag
-    //         .incoming_edges(self.boundary.output)
-    //         .find(|&&e| self.dag.edge_weight(e).unwrap().uid_ref == uix)
-    //         .map(|n| *n)
-    //         .ok_or("Output node has no incoming edges from UnitID.".to_string())
-    // }
 
     pub fn insert(&mut self, new_vert: Vertex, edges: Vec<Edge>) -> Result<(), String> {
         // called rewire in TKET-1
@@ -272,6 +259,7 @@ impl<'circ> Iterator for CommandIter<'circ> {
     fn next(&mut self) -> Option<Self::Item> {
         self.nodes.next().map(|node| {
             let VertexProperties { op } = self.circ.dag.node_weight(node).expect("Node not found");
+            // assumes linarity
             let args = self
                 .circ
                 .dag
@@ -280,7 +268,6 @@ impl<'circ> Iterator for CommandIter<'circ> {
                 .map(|(in_e, out_e)| {
                     let uid = self.frontier.remove(in_e).expect("edge not in frontier");
                     self.frontier.insert(*out_e, uid);
-
                     uid.clone()
                 })
                 .collect();

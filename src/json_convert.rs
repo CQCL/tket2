@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::circuit::circuit::{Circuit, UnitID};
-use crate::circuit::operation::{Op, Signature, WireType};
+use crate::circuit::operation::{Op, Param, Signature, WireType};
 use crate::circuit_json::{Operation, Permutation, Register, SerialCircuit};
 use crate::graph::graph::PortIndex;
 use crate::optype::OpType;
@@ -144,6 +144,7 @@ impl From<Op> for Operation {
         let params = (!params.is_empty()).then(|| params);
         Operation {
             op_type,
+            // params: params.map(|ps| ps.iter().map(|e| e.as_str().to_string()).collect()),
             params,
             signature: None,
             op_box: None,
@@ -165,6 +166,7 @@ impl From<SerialCircuit> for Circuit {
         let mut circ = Circuit::with_uids(uids);
 
         circ.name = serialcirc.name;
+        // circ.phase = Param::new(serialcirc.phase);
         circ.phase = serialcirc.phase;
 
         let frontier: HashMap<UnitID, PortIndex> = circ

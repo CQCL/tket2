@@ -1,4 +1,4 @@
-use crate::optype::OpType;
+use crate::{optype::OpType, circuit::operation::Param};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -79,7 +79,7 @@ pub struct Operation {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub n_qb: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub params: Option<Vec<String>>,
+    pub params: Option<Vec<Param>>,
     #[serde(rename = "box")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub op_box: Option<OpBox>,
@@ -106,7 +106,7 @@ pub struct SerialCircuit {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     // Symengine Expr
-    pub phase: String,
+    pub phase: Param,
     pub commands: Vec<Command>,
     pub qubits: Vec<Register>,
     pub bits: Vec<Register>,

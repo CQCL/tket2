@@ -7,7 +7,7 @@ mod optype;
 #[cfg(test)]
 mod tests {
     use crate::{
-        circuit::circuit::Circuit,
+        circuit::{circuit::Circuit, operation::Param},
         circuit_json::{self, SerialCircuit},
     };
     #[test]
@@ -24,5 +24,11 @@ mod tests {
         assert_eq!(&ser, &_reser);
         // ser and reser cannot be compared because they will be different up to
         // topsort ordering of parallel commands
+    }
+
+    #[test]
+    fn test_param() {
+        assert_eq!(Param::new("3") + Param::new("x"), Param::new("3 + x"));
+        assert_eq!(Param::new("0") - Param::new("0.1"), Param::new("-0.1"));
     }
 }
