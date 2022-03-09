@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::circuit::circuit::{Circuit, UnitID};
-use crate::circuit::operation::{Op, Param, Signature, WireType};
+use crate::circuit::operation::{Op, Signature, WireType};
 use crate::circuit_json::{Operation, Permutation, Register, SerialCircuit};
 use crate::graph::graph::PortIndex;
 use crate::optype::OpType;

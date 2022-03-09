@@ -1,6 +1,6 @@
 use std::collections::{HashSet, VecDeque};
 
-use super::graph::{DefaultIx, EdgeIndex, Graph, IndexType, NodeIndex, NodePort};
+use super::graph::{DefaultIx, Direction, EdgeIndex, Graph, IndexType, NodeIndex, NodePort};
 
 /*
 Implementation of Kahn's algorithm
@@ -35,12 +35,12 @@ impl<'graph, N, E, Ix: IndexType> Iterator for TopSortWalker<'graph, N, E, Ix> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(n) = self.candidate_nodes.pop_front() {
-            for e in self.g.outgoing_edges(n) {
+            for e in self.g.node_edges(n, Direction::Outoging) {
                 let (_, NodePort { node: m, .. }) = self.g.edge_endpoints(*e).unwrap();
                 self.remaining_edges.remove(e);
                 if self
                     .g
-                    .incoming_edges(m)
+                    .node_edges(m, Direction::Incoming)
                     .filter(|&e2| self.remaining_edges.contains(e2))
                     .next()
                     .is_none()

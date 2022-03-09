@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use crate::graph::graph::{NodePort, PortIndex};
+use crate::graph::graph::{Direction, NodePort, PortIndex};
 
 use super::dag::{Edge, EdgeProperties, TopSorter, Vertex, VertexProperties, DAG};
 use super::operation::{Op, Param, Signature, WireType};
@@ -177,14 +177,16 @@ impl Circuit {
             Signature::Linear(sig) => sig,
             Signature::NonLinear(_, _) => return Err("Only linear ops supported.".to_string()),
         };
-        assert!(sig.len() == args.len());
+        assert_eq!(sig.len(), args.len());
 
         let new_vert = self.add_vertex(op);
         let insertion_edges = args
             .iter()
             .map(|port| {
-                self.dag
-                    .in_edge_at_port(NodePort::new(self.boundary.output, *port))
+                self.dag.edge_at_port(
+                    NodePort::new(self.boundary.output, *port),
+                    Direction::Incoming,
+                )
             })
             .collect::<Option<Vec<Edge>>>()
             .ok_or("Invalid output ports".to_string())?;
@@ -244,7 +246,7 @@ impl<'circ> CommandIter<'circ> {
             nodes: TopSorter::new(&circ.dag, [circ.boundary.input].into()),
             frontier: circ
                 .dag
-                .outgoing_edges(circ.boundary.input)
+                .node_edges(circ.boundary.input, Direction::Outoging)
                 .enumerate()
                 .map(|(i, e)| (e.clone(), circ.uids.get(i).unwrap()))
                 .collect(),
@@ -263,8 +265,8 @@ impl<'circ> Iterator for CommandIter<'circ> {
             let args = self
                 .circ
                 .dag
-                .incoming_edges(node)
-                .zip(self.circ.dag.outgoing_edges(node))
+                .node_edges(node, Direction::Incoming)
+                .zip(self.circ.dag.node_edges(node, Direction::Outoging))
                 .map(|(in_e, out_e)| {
                     let uid = self.frontier.remove(in_e).expect("edge not in frontier");
                     self.frontier.insert(*out_e, uid);

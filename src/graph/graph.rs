@@ -233,6 +233,11 @@ impl<E: Clone, Ix: IndexType> Clone for Edge<E, Ix> {
     }
 }
 
+pub enum Direction {
+    Incoming,
+    Outoging,
+}
+
 pub struct Graph<N, E, Ix = DefaultIx> {
     nodes: Vec<Node<N, Ix>>,
     edges: Vec<Edge<E, Ix>>,
@@ -472,12 +477,17 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
     fn get_node(&self, n: NodeIndex<Ix>) -> &Node<N, Ix> {
         self.nodes.get(n.index()).expect("Node not found")
     }
-    pub fn incoming_edges(&self, n: NodeIndex<Ix>) -> impl Iterator<Item = &EdgeIndex<Ix>> {
-        self.get_node(n).incoming.iter()
-    }
-
-    pub fn outgoing_edges(&self, n: NodeIndex<Ix>) -> impl Iterator<Item = &EdgeIndex<Ix>> {
-        self.get_node(n).outgoing.iter()
+    pub fn node_edges(
+        &self,
+        n: NodeIndex<Ix>,
+        direction: Direction,
+    ) -> impl Iterator<Item = &EdgeIndex<Ix>> {
+        let node = self.get_node(n);
+        (match direction {
+            Direction::Incoming => &node.incoming,
+            Direction::Outoging => &node.outgoing,
+        })
+        .iter()
     }
 
     pub fn node_boundary_size(&self, n: NodeIndex<Ix>) -> (usize, usize) {
@@ -486,18 +496,14 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         (node.incoming.len(), node.outgoing.len())
     }
 
-    pub fn in_edge_at_port(&self, np: NodePort<Ix>) -> Option<EdgeIndex<Ix>> {
-        self.get_node(np.node)
-            .incoming
-            .get(np.port.index())
-            .map(|e| *e)
-    }
-
-    pub fn out_edge_at_port(&self, np: NodePort<Ix>) -> Option<EdgeIndex<Ix>> {
-        self.get_node(np.node)
-            .outgoing
-            .get(np.port.index())
-            .map(|e| *e)
+    pub fn edge_at_port(&self, np: NodePort<Ix>, direction: Direction) -> Option<EdgeIndex<Ix>> {
+        let node = self.get_node(np.node);
+        (match direction {
+            Direction::Incoming => &node.incoming,
+            Direction::Outoging => &node.outgoing,
+        })
+        .get(np.port.index())
+        .map(|e| *e)
     }
 
     pub fn nodes(&self) -> impl Iterator<Item = NodeIndex<Ix>> + '_ {
