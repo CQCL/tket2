@@ -9,7 +9,8 @@ mod tests {
     use crate::{
         circuit::{
             circuit::Circuit,
-            operation::{Op, Param},
+            operation::Param,
+            operation::{equiv_0, Op},
         },
         circuit_json::{self, SerialCircuit},
     };
@@ -25,6 +26,14 @@ mod tests {
         let _reser: SerialCircuit = circ.into();
 
         assert_eq!(&ser, &_reser);
+
+        assert!(equiv_0(&Param::new("0"), 4));
+        assert!(equiv_0(&Param::new("4.0"), 4));
+        assert!(equiv_0(&Param::new("8.0"), 4));
+        assert!(!equiv_0(&Param::new("2.0"), 4));
+        assert!(equiv_0(&Param::new("2.0"), 2));
+        assert!(!equiv_0(&Param::new("0.5"), 2));
+        // assert!(equiv_0(Param::new("0"), 4));
         // ser and reser cannot be compared because they will be different up to
         // topsort ordering of parallel commands
     }
@@ -33,6 +42,10 @@ mod tests {
     fn test_param() {
         assert_eq!(Param::new("3") + Param::new("x"), Param::new("3 + x"));
         assert_eq!(Param::new("0") - Param::new("0.1"), Param::new("-0.1"));
+        assert_eq!(Param::new("0.1").neg(), Param::new("-0.1"));
+
+        assert!(Param::new("x").eval().is_none());
+        assert_eq!(Param::new("2.0 + 2.0/4").eval(), Some(2.5));
     }
 
     #[test]
