@@ -39,6 +39,7 @@ pub enum Op {
     Rx(Param),
     Ry(Param),
     Rz(Param),
+    TK1(Param, Param, Param),
     ZZPhase(Param),
     PhasedX(Param, Param),
     Measure,
@@ -52,8 +53,8 @@ lazy_static! {
     static ref TWOQBSIG: Signature = Signature::Linear(vec![WireType::Quantum, WireType::Quantum]);
 }
 
-fn neg_param(p: Param) -> Param {
-    Param::new("0") - p
+fn neg_param(p: &Param) -> Param {
+    Param::new("0") - p.to_owned()
 }
 impl Op {
     fn is_one_qb_gate(&self) -> bool {
@@ -72,7 +73,13 @@ impl Op {
 
     pub fn signature(&self) -> Signature {
         match self {
-            Op::H | Op::Reset | Op::Rx(_) | Op::Ry(_) | Op::Rz(_) => ONEQBSIG.clone(),
+            Op::H
+            | Op::Reset
+            | Op::Rx(_)
+            | Op::Ry(_)
+            | Op::Rz(_)
+            | Op::TK1(..)
+            | Op::PhasedX(..) => ONEQBSIG.clone(),
             Op::CX | Op::ZZMax | Op::ZZPhase(..) => TWOQBSIG.clone(),
             Op::Measure => Signature::Linear(vec![WireType::Quantum, WireType::Classical]),
             _ => panic!("Gate signature unknwon."),
@@ -87,13 +94,15 @@ impl Op {
             Op::H => Op::H,
             Op::CX => Op::CX,
             Op::ZZMax => Op::ZZPhase(Param::new("-0.5")),
-
-            Op::Rx(p) => Op::Rx(neg_param(p.to_owned())),
-            Op::Ry(p) => Op::Ry(neg_param(p.to_owned())),
-            Op::Rz(p) => Op::Rz(neg_param(p.to_owned())),
-            Op::ZZPhase(p) => Op::ZZPhase(neg_param(p.to_owned())),
-            Op::PhasedX(p1, p2) => Op::PhasedX(neg_param(p1.to_owned()), p2.to_owned()),
+            Op::TK1(a, b, c) => Op::TK1(neg_param(c), neg_param(b), neg_param(a)),
+            Op::Rx(p) => Op::Rx(neg_param(p)),
+            Op::Ry(p) => Op::Ry(neg_param(p)),
+            Op::Rz(p) => Op::Rz(neg_param(p)),
+            Op::ZZPhase(p) => Op::ZZPhase(neg_param(p)),
+            Op::PhasedX(p1, p2) => Op::PhasedX(neg_param(p1), p2.to_owned()),
             _ => return None,
         })
     }
+
+    // pub fn is_identity(&self) ->
 }
