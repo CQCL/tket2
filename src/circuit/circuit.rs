@@ -1,7 +1,3 @@
-// use daggy::petgraph::visit::{EdgeRef, IntoEdgesDirected};
-// use daggy::petgraph::EdgeDirection;
-// use daggy::NodeIndex;
-
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -78,7 +74,7 @@ impl Circuit {
         slf
     }
 
-    pub fn insert(&mut self, new_vert: Vertex, edges: Vec<Edge>) -> Result<(), String> {
+    pub fn rewire(&mut self, new_vert: Vertex, edges: Vec<Edge>) -> Result<(), String> {
         // called rewire in TKET-1
         let vert_op_sig = match self
             .dag
@@ -142,6 +138,7 @@ impl Circuit {
         // }
         Ok(())
     }
+
     pub fn add_unitid(&mut self, uid: UnitID) {
         let (_, inlen) = self.dag.node_boundary_size(self.boundary.input);
         let (outlen, _) = self.dag.node_boundary_size(self.boundary.output);
@@ -202,7 +199,7 @@ impl Circuit {
         //     let out_v = self.get_out(arg)?;
         //     let pred_out_e = self.dag.edges_directed(a, dir)
         // }
-        self.insert(new_vert, insertion_edges)?;
+        self.rewire(new_vert, insertion_edges)?;
         Ok(new_vert)
     }
 

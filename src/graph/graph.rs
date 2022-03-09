@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::hash::Hash;
 use std::mem::replace;
@@ -195,7 +196,7 @@ impl<Ix, Px: Into<u8>> From<(NodeIndex<Ix>, Px)> for NodePort<Ix> {
 
 /// The graph's node type.
 #[derive(Debug)]
-pub struct Node<N, Ix = DefaultIx> {
+pub(super) struct Node<N, Ix = DefaultIx> {
     /// Associated node data.
     pub weight: Option<N>,
 
@@ -215,13 +216,13 @@ impl<N: Clone, Ix: IndexType> Clone for Node<N, Ix> {
 
 /// The graph's edge type.
 #[derive(Debug)]
-pub struct Edge<E, Ix = DefaultIx> {
+pub(super) struct Edge<E, Ix = DefaultIx> {
     /// Associated edge data.
     pub weight: Option<E>,
     // / Next edge in outgoing and incoming edge lists.
     // next: [EdgeIndex<Ix>; 2],
     /// Start and End node index
-    node_ports: [NodePort<Ix>; 2],
+    pub(super) node_ports: [NodePort<Ix>; 2],
 }
 
 impl<E: Clone, Ix: IndexType> Clone for Edge<E, Ix> {
@@ -239,8 +240,8 @@ pub enum Direction {
 }
 
 pub struct Graph<N, E, Ix = DefaultIx> {
-    nodes: Vec<Node<N, Ix>>,
-    edges: Vec<Edge<E, Ix>>,
+    pub(super) nodes: Vec<Node<N, Ix>>,
+    pub(super) edges: Vec<Edge<E, Ix>>,
     node_count: usize,
     edge_count: usize,
 
@@ -384,7 +385,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         // for port_array in [&, &node.outgoing] {
         for e in remove_edges {
             let ret = self.remove_edge(e);
-            debug_assert!(ret.is_some());
+            // debug_assert!(ret.is_some());
             let _ = ret;
         }
         // }
@@ -513,10 +514,72 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             .filter_map(|(i, n)| n.weight.as_ref().map(|_| NodeIndex::new(i)))
     }
 
+    pub fn node_count(&self) -> usize {
+        self.node_count
+    }
+
+    pub fn edge_count(&self) -> usize {
+        self.edge_count
+    }
+
     pub fn edges(&self) -> impl Iterator<Item = EdgeIndex<Ix>> + '_ {
         self.edges
             .iter()
             .enumerate()
             .filter_map(|(i, n)| n.weight.as_ref().map(|_| EdgeIndex::new(i)))
+    }
+
+    pub fn next_edge(&self, e: &EdgeIndex<Ix>) -> Option<EdgeIndex<Ix>> {
+        let NodePort { node, port } = self.edges[e.index()].node_ports[1];
+        if node == NodeIndex::end() {
+            return None;
+        }
+        if let Some(e) = self.nodes[node.index()].outgoing.get(port.index()) {
+            if *e != EdgeIndex::end() {
+                Some(*e)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn insert_graph(
+        &mut self,
+        other: Self,
+    ) -> (
+        HashMap<NodeIndex<Ix>, NodeIndex<Ix>>,
+        HashMap<EdgeIndex<Ix>, EdgeIndex<Ix>>,
+    ) {
+        let node_map: HashMap<NodeIndex<Ix>, NodeIndex<Ix>> = other
+            .nodes
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, n)| {
+                n.weight
+                    .map(|weight| (NodeIndex::new(i), self.add_node(weight)))
+            })
+            .collect();
+
+        let edge_map: HashMap<EdgeIndex<Ix>, EdgeIndex<Ix>> = other
+            .edges
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, e)| {
+                e.weight.map(|weight| {
+                    let [np1, np2] = e.node_ports;
+                    (
+                        EdgeIndex::new(i),
+                        self.add_edge(
+                            NodePort::new(node_map[&np1.node], np1.port),
+                            NodePort::new(node_map[&np2.node], np2.port),
+                            weight,
+                        ),
+                    )
+                })
+            })
+            .collect();
+        (node_map, edge_map)
     }
 }

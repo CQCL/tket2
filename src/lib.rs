@@ -3,7 +3,7 @@ mod circuit_json;
 mod graph;
 mod json_convert;
 mod optype;
-
+mod passes;
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -58,4 +58,5 @@ mod tests {
             Op::Rz(Param::new("-x"))
         );
     }
+
 }
