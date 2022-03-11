@@ -2,7 +2,7 @@
 
 use super::operation::{Op, WireType};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct VertexProperties {
     pub op: Op,
 }

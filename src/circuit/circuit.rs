@@ -44,7 +44,7 @@ impl From<CycleInGraph> for String {
 
 #[derive(Clone)]
 pub struct Circuit {
-    dag: DAG,
+    pub(crate) dag: DAG,
     pub name: Option<String>,
     pub phase: Param,
     boundary: Boundary,
@@ -96,7 +96,7 @@ impl Circuit {
                 .ok_or("Edge not found.".to_string())?
                 .clone();
 
-            let (old_v1, old_v2) = self
+            let [old_v1, old_v2] = self
                 .dag
                 .edge_endpoints(edge)
                 .ok_or("Edge not found.".to_string())?;

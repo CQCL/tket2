@@ -1,1 +1,1 @@
-mod redundancy;
+pub mod redundancy;

@@ -149,14 +149,14 @@ impl<N: Default, E, Ix: IndexType> Graph<N, E, Ix> {
         let left_nodeports = cut
             .in_edges
             .iter()
-            .map(|e| self.edge_endpoints(*e).map(|(x, _)| x))
+            .map(|e| self.edge_endpoints(*e).map(|x| x[0]))
             .collect::<Option<Vec<NodePort<Ix>>>>()
             .ok_or("Invalid edge at cut in_edges")?;
 
         let right_nodeports = cut
             .out_edges
             .iter()
-            .map(|e| self.edge_endpoints(*e).map(|(_, x)| x))
+            .map(|e| self.edge_endpoints(*e).map(|x| x[1]))
             .collect::<Option<Vec<NodePort<Ix>>>>()
             .ok_or("Invalid edge at cut out_edges")?;
 
@@ -166,14 +166,14 @@ impl<N: Default, E, Ix: IndexType> Graph<N, E, Ix> {
         // rewire replacement I/O edges from their entry/exit nodes to the
         // appropriate nodeports in self
         for (e, np) in new_in_edges.into_iter().zip(left_nodeports) {
-            let (_, target) = self.edge_endpoints(e).unwrap();
+            let [_, target] = self.edge_endpoints(e).unwrap();
             let weight = self.remove_edge(e).unwrap();
 
             self.add_edge(np, target, weight);
         }
 
         for (e, np) in new_out_edges.into_iter().zip(right_nodeports) {
-            let (source, _) = self.edge_endpoints(e).unwrap();
+            let [source, _] = self.edge_endpoints(e).unwrap();
             let weight = self.remove_edge(e).unwrap();
 
             self.add_edge(source, np, weight);

@@ -1,3 +1,3 @@
 pub mod circuit;
-mod dag;
+pub(crate) mod dag;
 pub mod operation;

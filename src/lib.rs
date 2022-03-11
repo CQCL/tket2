@@ -1,9 +1,10 @@
-mod circuit;
-mod circuit_json;
+pub mod circuit;
+pub mod circuit_json;
 mod graph;
-mod json_convert;
+pub mod json_convert;
 mod optype;
-mod passes;
+pub mod passes;
+
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -24,7 +25,6 @@ mod tests {
         let circ: Circuit = ser.clone().into();
 
         let _reser: SerialCircuit = circ.into();
-
         assert_eq!(&ser, &_reser);
 
         assert!(equiv_0(&Param::new("0"), 4));
@@ -58,5 +58,4 @@ mod tests {
             Op::Rz(Param::new("-x"))
         );
     }
-
 }

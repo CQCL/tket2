@@ -43,7 +43,7 @@ impl<'graph, N, E, Ix: IndexType> Iterator for TopSortWalker<'graph, N, E, Ix> {
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(n) = self.candidate_nodes.pop_front() {
             for e in self.g.node_edges(n, Direction::Outgoing) {
-                let (_, NodePort { node: m, .. }) = self.g.edge_endpoints(*e).unwrap();
+                let [_, NodePort { node: m, .. }] = self.g.edge_endpoints(*e).unwrap();
                 self.remaining_edges.remove(e);
                 if self
                     .g

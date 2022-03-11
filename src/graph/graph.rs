@@ -298,7 +298,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             let _old = replace(&mut node_slot.weight, Some(weight));
             debug_assert!(_old.is_none());
 
-            let previous_node = node_slot.incoming[1];
+            let previous_node = node_slot.incoming[0];
             let next_node = node_slot.outgoing[0];
 
             node_slot.incoming = Vec::with_capacity(capacity);
@@ -477,9 +477,8 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         self.edges.get(e.index())?.weight.as_ref()
     }
 
-    pub fn edge_endpoints(&self, e: EdgeIndex<Ix>) -> Option<(NodePort<Ix>, NodePort<Ix>)> {
-        let [a, b] = self.edges.get(e.index())?.node_ports;
-        Some((a, b))
+    pub fn edge_endpoints(&self, e: EdgeIndex<Ix>) -> Option<[NodePort<Ix>; 2]> {
+        Some(self.edges.get(e.index())?.node_ports)
     }
     fn get_node(&self, n: NodeIndex<Ix>) -> &Node<N, Ix> {
         self.nodes.get(n.index()).expect("Node not found")

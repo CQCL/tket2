@@ -150,6 +150,7 @@ impl Op {
                     None
                 }
             }
+            Op::Noop => Some(0.0),
             _ => None,
         }
     }
