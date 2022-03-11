@@ -1,9 +1,7 @@
-use std::{
-    collections::{HashSet, VecDeque},
-    fmt::Debug,
+use super::{
+    graph::{Direction, EdgeIndex, Graph, IndexType, NodeIndex, NodePort, PortIndex},
+    toposort::TopSortWalker,
 };
-
-use super::graph::{EdgeIndex, Graph, IndexType, NodePort};
 
 pub struct Cut<Ix> {
     pub in_edges: Vec<EdgeIndex<Ix>>,
@@ -21,49 +19,59 @@ impl<Ix> Cut<Ix> {
 
 pub struct BoundedGraph<N, E, Ix> {
     pub graph: Graph<N, E, Ix>,
-    pub in_edges: Vec<EdgeIndex<Ix>>,
-    pub out_edges: Vec<EdgeIndex<Ix>>,
+    pub entry: NodeIndex<Ix>,
+    pub exit: NodeIndex<Ix>,
 }
 
 impl<N, E, Ix> BoundedGraph<N, E, Ix> {
-    pub fn new(
-        graph: Graph<N, E, Ix>,
-        in_edges: Vec<EdgeIndex<Ix>>,
-        out_edges: Vec<EdgeIndex<Ix>>,
-    ) -> Self {
-        Self {
-            graph,
-            in_edges,
-            out_edges,
-        }
+    pub fn new(graph: Graph<N, E, Ix>, entry: NodeIndex<Ix>, exit: NodeIndex<Ix>) -> Self {
+        Self { graph, entry, exit }
     }
 }
 
-impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
-    pub fn remove_subgraph(&mut self, cut: Cut<Ix>) {
-        // remove existing subgraph
-        let out_edges: HashSet<_> = cut.out_edges.iter().collect();
-        let mut candidate_edges: VecDeque<_> = cut.in_edges.into();
+impl<N: Default, E, Ix: IndexType> Graph<N, E, Ix> {
+    /// Remove provided edges, replace with edges to new placeholder entry and
+    /// exit nodes, and return references to those nodes.
+    fn make_cut(&mut self, cut: Cut<Ix>) -> (NodeIndex<Ix>, NodeIndex<Ix>) {
+        let entry = self.add_node_with_capacity(cut.in_edges.len(), N::default());
+        let exit = self.add_node_with_capacity(cut.out_edges.len(), N::default());
 
-        while let Some(e) = candidate_edges.pop_front() {
-            if let Some(next_e) = self.next_edge(&e) {
-                if !out_edges.contains(&next_e) {
-                    candidate_edges.push_back(next_e);
-                }
-            }
-
-            self.remove_node(self.edges[e.index()].node_ports[1].node);
+        for (i, e) in cut.in_edges.into_iter().enumerate() {
+            let target = self.edges[e.index()].node_ports[1];
+            let weight = self.remove_edge(e).expect("Invalid edge.");
+            self.add_edge(NodePort::new(entry, PortIndex::new(i)), target, weight);
         }
+
+        for (i, e) in cut.out_edges.into_iter().enumerate() {
+            let source = self.edges[e.index()].node_ports[0];
+            let weight = self.remove_edge(e).expect("Invalid edge.");
+            self.add_edge(source, NodePort::new(exit, PortIndex::new(i)), weight);
+        }
+
+        (entry, exit)
     }
 
-    fn add_edges(&mut self, edges: Vec<(NodePort<Ix>, NodePort<Ix>, E)>) -> Vec<EdgeIndex<Ix>> {
-        edges
+    /**
+    Remove subgraph formed by cut and remove weights of nodes inside cut in
+    TopoSort order
+    */
+    pub fn remove_subgraph(&mut self, cut: Cut<Ix>) -> Vec<Option<N>> {
+        let (entry, exit) = self.make_cut(cut);
+        let removed_nodes: Vec<_> = TopSortWalker::new(self, [entry].into()).collect();
+        removed_nodes
             .into_iter()
-            .map(|(a, b, weight)| self.add_edge(a, b, weight))
+            .filter_map(|node| {
+                let weight = self.remove_node(node);
+                if [entry, exit].contains(&node) {
+                    None
+                } else {
+                    Some(weight)
+                }
+            })
             .collect()
     }
 
-    fn merge_edges(
+    fn merge_edgelists(
         &mut self,
         left_edges: &Vec<EdgeIndex<Ix>>,
         right_edges: &Vec<EdgeIndex<Ix>>,
@@ -71,170 +79,111 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         left_edges
             .iter()
             .zip(right_edges.iter())
-            .map(|(e_l, e_r)| -> Result<(NodePort<Ix>, NodePort<Ix>), &str> {
-                // let left_edge = ;
-                // let weight = left_edge.weight.take().ok_or("Left edge invalid.")?;
-                Ok((
-                    self.edges
-                        .get(e_l.index())
-                        .ok_or("Edge not found")?
-                        .node_ports[0],
-                    self.edges
-                        .get(e_r.index())
-                        .ok_or("Edge not found")?
-                        .node_ports[1],
-                    // weight,
-                ))
-            })
+            .map(|(e_l, e_r)| self.redirect_edges(*e_l, *e_r))
             .collect()
     }
 
-    pub fn replace_with_identity(&mut self, cut: Cut<Ix>) -> Result<Vec<EdgeIndex<Ix>>, &str>
-    where
-        E: Debug,
-    {
+    fn redirect_edges(
+        &self,
+        first: EdgeIndex<Ix>,
+        second: EdgeIndex<Ix>,
+    ) -> Result<(NodePort<Ix>, NodePort<Ix>), &'static str> {
+        Ok((
+            self.edges
+                .get(first.index())
+                .ok_or("Edge not found")?
+                .node_ports[0],
+            self.edges
+                .get(second.index())
+                .ok_or("Edge not found")?
+                .node_ports[1],
+        ))
+    }
+    pub fn replace_with_identity(
+        &mut self,
+        cut: Cut<Ix>,
+        new_weights: Vec<E>,
+    ) -> Result<Vec<EdgeIndex<Ix>>, &str> {
         if cut.in_edges.len() != cut.out_edges.len() {
             return Err("Boundary size mismatch.");
         }
 
-        let new_edges = self.merge_edges(&cut.in_edges, &cut.out_edges)?;
-        // dbg!(&new_edges);
-        let new_edges = new_edges
-            .iter()
-            .zip(cut.out_edges.iter().map(|e| self.remove_edge(*e).unwrap()))
-            .map(|((l, r), w)| (*l, *r, w))
-            .collect();
+        let new_edges = self.merge_edgelists(&cut.in_edges, &cut.out_edges)?;
+
         self.remove_subgraph(cut);
 
-        let out = Ok(self.add_edges(new_edges));
-        out
+        Ok(new_edges
+            .into_iter()
+            .zip(new_weights)
+            .map(|((a, b), weight)| self.add_edge(a, b, weight))
+            .collect())
     }
+
     pub fn replace_subgraph(
         &mut self,
         cut: Cut<Ix>,
-        mut replacement: BoundedGraph<N, E, Ix>,
-    ) -> Result<Cut<Ix>, &str> {
-        if cut.in_edges.len() != replacement.in_edges.len()
-            || cut.out_edges.len() != replacement.out_edges.len()
-        {
+        replacement: BoundedGraph<N, E, Ix>,
+    ) -> Result<Vec<Option<N>>, &str> {
+        // get all the entry and exit edges in replacement graph
+        let new_in_edges: Vec<_> = replacement
+            .graph
+            .node_edges(replacement.entry, Direction::Outgoing)
+            .cloned()
+            .collect();
+        let new_out_edges: Vec<_> = replacement
+            .graph
+            .node_edges(replacement.exit, Direction::Incoming)
+            .cloned()
+            .collect();
+        if cut.in_edges.len() != new_in_edges.len() || cut.out_edges.len() != new_out_edges.len() {
             return Err("Boundary size mismatch.");
         }
 
-        let (_, edge_map) = self.insert_graph(replacement.graph);
+        // insert new graph and update edge references accordingly
+        let (node_map, edge_map) = self.insert_graph(replacement.graph);
+        let new_in_edges: Vec<_> = new_in_edges.into_iter().map(|e| edge_map[&e]).collect();
+        let new_out_edges: Vec<_> = new_out_edges.into_iter().map(|e| edge_map[&e]).collect();
 
-        replacement.in_edges = replacement
+        // get references to nodeports that need wiring up in self before
+        // removing cut
+        let left_nodeports = cut
             .in_edges
-            .into_iter()
-            .map(|e| edge_map[&e])
-            .collect();
-        replacement.out_edges = replacement
+            .iter()
+            .map(|e| self.edge_endpoints(*e).map(|(x, _)| x))
+            .collect::<Option<Vec<NodePort<Ix>>>>()
+            .ok_or("Invalid edge at cut in_edges")?;
+
+        let right_nodeports = cut
             .out_edges
-            .into_iter()
-            .map(|e| edge_map[&e])
-            .collect();
-
-        // let mut find_new_edges = |left_edges: &Vec<EdgeIndex<Ix>>,
-        //                           right_edges: &Vec<EdgeIndex<Ix>>|
-        //  -> Result<Vec<(NodePort<Ix>, NodePort<Ix>, E)>, &str> {
-        //     left_edges
-        //         .iter()
-        //         .zip(right_edges.iter())
-        //         .map(
-        //             |(e_l, e_r)| -> Result<(NodePort<Ix>, NodePort<Ix>, E), &str> {
-        //                 let left_edge = self.edges.get_mut(e_l.index()).ok_or("Edge not found")?;
-        //                 let weight = left_edge.weight.take().ok_or("Left edge invalid.")?;
-        //                 Ok((
-        //                     left_edge.node_ports[0],
-        //                     self.edges
-        //                         .get(e_r.index())
-        //                         .ok_or("Edge not found")?
-        //                         .node_ports[1],
-        //                     weight,
-        //                 ))
-        //             },
-        //         )
-        //         .collect()
-        // };
-        let new_in_edges = self.merge_edges(&cut.in_edges, &replacement.in_edges)?;
-        let new_out_edges = self.merge_edges(&replacement.out_edges, &cut.out_edges)?;
-
-        let new_in_edges = new_in_edges
             .iter()
-            .zip(
-                replacement
-                    .in_edges
-                    .iter()
-                    .map(|e| self.remove_edge(*e).unwrap()),
-            )
-            .map(|((l, r), w)| (*l, *r, w))
-            .collect();
+            .map(|e| self.edge_endpoints(*e).map(|(_, x)| x))
+            .collect::<Option<Vec<NodePort<Ix>>>>()
+            .ok_or("Invalid edge at cut out_edges")?;
 
-        let new_out_edges = new_out_edges
-            .iter()
-            .zip(
-                replacement
-                    .out_edges
-                    .iter()
-                    .map(|e| self.remove_edge(*e).unwrap()),
-            )
-            .map(|((l, r), w)| (*l, *r, w))
-            .collect();
-        // let new_in_edges = cut
-        //     .in_edges
-        //     .iter()
-        //     .zip(replacement.in_edges.iter())
-        //     .map(
-        //         |(e1, e2)| -> Result<(NodePort<Ix>, NodePort<Ix>, E), &str> {
-        //             let e2 = edge_map[e2];
-        //             let self_edge = self.edges.get_mut(e1.index()).ok_or("Edge not found")?;
-        //             let weight = self_edge.weight.take().ok_or("Incoming edge invalid.")?;
-        //             Ok((
-        //                 self_edge.node_ports[0],
-        //                 self.edges
-        //                     .get(e2.index())
-        //                     .ok_or("Edge not found")?
-        //                     .node_ports[1],
-        //                 weight,
-        //             ))
-        //         },
-        //     )
-        //     .collect::<Result<Vec<(NodePort<Ix>, NodePort<Ix>, E)>, &str>>()?;
+        // remove according to cut (including the cut edges themselves)
+        let removed_node_weights = self.remove_subgraph(cut);
 
-        // let new_out_edges = cut
-        //     .out_edges
-        //     .iter()
-        //     .zip(replacement.out_edges.iter())
-        //     .map(
-        //         |(e1, e2)| -> Result<(NodePort<Ix>, NodePort<Ix>, E), &str> {
-        //             let e2 = edge_map[e2];
-        //             let self_edge = self.edges.get_mut(e1.index()).ok_or("Edge not found")?;
-        //             let weight = self_edge.weight.take().ok_or("Incoming edge invalid.")?;
-        //             let target_port = self_edge.node_ports[1];
-        //             Ok((
-        //                 self.edges
-        //                     .get(e2.index())
-        //                     .ok_or("Edge not found")?
-        //                     .node_ports[0],
-        //                 target_port,
-        //                 weight,
-        //             ))
-        //         },
-        //     )
-        //     .collect::<Result<Vec<(NodePort<Ix>, NodePort<Ix>, E)>, &str>>()?;
+        // rewire replacement I/O edges from their entry/exit nodes to the
+        // appropriate nodeports in self
+        for (e, np) in new_in_edges.into_iter().zip(left_nodeports) {
+            let (_, target) = self.edge_endpoints(e).unwrap();
+            let weight = self.remove_edge(e).unwrap();
 
-        // remove existing subgraph
-        self.remove_subgraph(cut);
+            self.add_edge(np, target, weight);
+        }
 
-        // let mut add_edges = |edges: Vec<(NodePort<Ix>, NodePort<Ix>, E)>| -> Vec<EdgeIndex<Ix>> {
-        //     edges
-        //         .into_iter()
-        //         .map(|(a, b, weight)| self.add_edge(a, b, weight))
-        //         .collect()
-        // };
+        for (e, np) in new_out_edges.into_iter().zip(right_nodeports) {
+            let (source, _) = self.edge_endpoints(e).unwrap();
+            let weight = self.remove_edge(e).unwrap();
 
-        Ok(Cut::new(
-            self.add_edges(new_in_edges),
-            self.add_edges(new_out_edges),
-        ))
+            self.add_edge(source, np, weight);
+        }
+
+        // all edges from entry/exit should already have been removed, these
+        // nodes are safe to delete
+
+        self.remove_node(node_map[&replacement.entry]);
+        self.remove_node(node_map[&replacement.exit]);
+        Ok(removed_node_weights)
     }
 }

@@ -17,6 +17,7 @@ pub struct TopSortWalker<'graph, N, E, Ix = DefaultIx> {
     g: &'graph Graph<N, E, Ix>,
     remaining_edges: HashSet<EdgeIndex<Ix>>,
     candidate_nodes: VecDeque<NodeIndex<Ix>>,
+    cyclicity_check: bool,
 }
 
 impl<'graph, N, E, Ix: IndexType> TopSortWalker<'graph, N, E, Ix> {
@@ -26,7 +27,13 @@ impl<'graph, N, E, Ix: IndexType> TopSortWalker<'graph, N, E, Ix> {
             g,
             candidate_nodes,
             remaining_edges,
+            cyclicity_check: false,
         }
+    }
+
+    pub fn with_cyclicity_check(mut self) -> Self {
+        self.cyclicity_check = true;
+        self
     }
 }
 
@@ -35,7 +42,7 @@ impl<'graph, N, E, Ix: IndexType> Iterator for TopSortWalker<'graph, N, E, Ix> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(n) = self.candidate_nodes.pop_front() {
-            for e in self.g.node_edges(n, Direction::Outoging) {
+            for e in self.g.node_edges(n, Direction::Outgoing) {
                 let (_, NodePort { node: m, .. }) = self.g.edge_endpoints(*e).unwrap();
                 self.remaining_edges.remove(e);
                 if self
@@ -51,7 +58,7 @@ impl<'graph, N, E, Ix: IndexType> Iterator for TopSortWalker<'graph, N, E, Ix> {
 
             Some(n)
         } else {
-            if !self.remaining_edges.is_empty() {
+            if self.cyclicity_check && !self.remaining_edges.is_empty() {
                 panic!("Edges remaining, graph may contain cycle.");
             }
             None

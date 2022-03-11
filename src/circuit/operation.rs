@@ -36,6 +36,7 @@ pub enum Op {
     Reset,
     Input,
     Output,
+    Noop,
     Rx(Param),
     Ry(Param),
     Rz(Param),
@@ -46,6 +47,11 @@ pub enum Op {
     Barrier,
 }
 
+impl Default for Op {
+    fn default() -> Self {
+        Self::Noop
+    }
+}
 lazy_static! {
     static ref ONEQBSIG: Signature = Signature::Linear(vec![WireType::Quantum]);
 }

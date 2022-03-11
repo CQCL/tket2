@@ -236,7 +236,7 @@ impl<E: Clone, Ix: IndexType> Clone for Edge<E, Ix> {
 
 pub enum Direction {
     Incoming,
-    Outoging,
+    Outgoing,
 }
 
 pub struct Graph<N, E, Ix = DefaultIx> {
@@ -290,6 +290,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
     }
 
     pub fn add_node_with_capacity(&mut self, capacity: usize, weight: N) -> NodeIndex<Ix> {
+        // CAUTION can initialise "empty" nodes, only use for temporary nodes with None
         if self.free_node != NodeIndex::end() {
             let node_idx = self.free_node;
             let node_slot = &mut self.nodes[node_idx.index()];
@@ -401,7 +402,12 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         }
         // node_slot.incoming[0] =
         if self.free_node != NodeIndex::end() {
-            self.nodes[self.free_node.index()].incoming[0] = a._into_edge();
+            let free_node_slot = self.nodes.get_mut(self.free_node.index())?;
+            if let Some(e) = free_node_slot.incoming.get_mut(0) {
+                *e = a._into_edge();
+            } else {
+                free_node_slot.incoming.push(a._into_edge());
+            }
         }
         self.free_node = a;
         self.node_count -= 1;
@@ -486,7 +492,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         let node = self.get_node(n);
         (match direction {
             Direction::Incoming => &node.incoming,
-            Direction::Outoging => &node.outgoing,
+            Direction::Outgoing => &node.outgoing,
         })
         .iter()
     }
@@ -501,7 +507,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         let node = self.get_node(np.node);
         (match direction {
             Direction::Incoming => &node.incoming,
-            Direction::Outoging => &node.outgoing,
+            Direction::Outgoing => &node.outgoing,
         })
         .get(np.port.index())
         .map(|e| *e)

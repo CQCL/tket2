@@ -240,10 +240,10 @@ pub struct CommandIter<'circ> {
 impl<'circ> CommandIter<'circ> {
     fn new(circ: &'circ Circuit) -> Self {
         Self {
-            nodes: TopSorter::new(&circ.dag, [circ.boundary.input].into()),
+            nodes: TopSorter::new(&circ.dag, [circ.boundary.input].into()).with_cyclicity_check(),
             frontier: circ
                 .dag
-                .node_edges(circ.boundary.input, Direction::Outoging)
+                .node_edges(circ.boundary.input, Direction::Outgoing)
                 .enumerate()
                 .map(|(i, e)| (e.clone(), circ.uids.get(i).unwrap()))
                 .collect(),
@@ -263,7 +263,7 @@ impl<'circ> Iterator for CommandIter<'circ> {
                 .circ
                 .dag
                 .node_edges(node, Direction::Incoming)
-                .zip(self.circ.dag.node_edges(node, Direction::Outoging))
+                .zip(self.circ.dag.node_edges(node, Direction::Outgoing))
                 .map(|(in_e, out_e)| {
                     let uid = self.frontier.remove(in_e).expect("edge not in frontier");
                     self.frontier.insert(*out_e, uid);

@@ -84,7 +84,7 @@ impl From<Operation> for Op {
                 OpType::SWAP => todo!(),
                 OpType::CSWAP => todo!(),
                 OpType::BRIDGE => todo!(),
-                OpType::noop => todo!(),
+                OpType::noop => Op::Noop,
                 OpType::Measure => Op::Measure,
                 OpType::Collapse => todo!(),
                 OpType::Reset => todo!(),
@@ -142,6 +142,7 @@ impl From<Op> for Operation {
             Op::PhasedX(p1, p2) => (OpType::PhasedX, vec![p1, p2]),
             Op::Measure => (OpType::Measure, vec![]),
             Op::Barrier => (OpType::Barrier, vec![]),
+            Op::Noop => (OpType::noop, vec![]),
         };
         // let signature = match self.signature() {
         //     Signature::Linear(sig) => sig.iter().map(|wt| match wt {
