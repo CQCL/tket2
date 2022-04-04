@@ -226,6 +226,7 @@ impl Circuit {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Command {
     pub op: Op,
     pub args: Vec<UnitID>,
