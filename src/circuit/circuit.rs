@@ -5,12 +5,13 @@ use std::hash::Hash;
 use crate::graph::graph::{Direction, NodePort, PortIndex};
 
 use super::dag::{Edge, EdgeProperties, TopSorter, Vertex, VertexProperties, DAG};
-use super::operation::{Op, Param, Signature, WireType};
+use super::operation::{Op, Param, WireType};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum UnitID {
     Qubit { name: String, index: Vec<u32> },
     Bit { name: String, index: Vec<u32> },
+    F64(String),
 }
 
 impl UnitID {
@@ -18,6 +19,7 @@ impl UnitID {
         match self {
             Self::Qubit { .. } => WireType::Qubit,
             Self::Bit { .. } => WireType::LinearBit,
+            Self::F64(_) => WireType::F64,
         }
     }
 }
@@ -69,7 +71,7 @@ impl Circuit {
             uids: Vec::with_capacity(n_uids),
         };
         for uid in uids {
-            slf.add_unitid(uid);
+            slf.add_linear_unitid(uid);
         }
         slf
     }
@@ -137,7 +139,7 @@ impl Circuit {
         Ok(())
     }
 
-    pub fn add_unitid(&mut self, uid: UnitID) {
+    pub fn add_linear_unitid(&mut self, uid: UnitID) {
         let (_, inlen) = self.dag.node_boundary_size(self.boundary.input);
         let (outlen, _) = self.dag.node_boundary_size(self.boundary.output);
         self.add_edge(
@@ -146,7 +148,10 @@ impl Circuit {
             uid.get_type(),
         );
         self.uids.push(uid);
-        // .unwrap(); // should be cycle free so unwrap
+    }
+
+    pub fn add_unitid(&mut self, uid: UnitID) {
+        self.uids.push(uid);
     }
     pub fn add_edge(&mut self, source: NodePort, target: NodePort, edge_type: WireType) -> Edge {
         // let ports = (source.1, target.1);
@@ -208,19 +213,23 @@ impl Circuit {
     pub fn qubits(&self) -> impl Iterator<Item = UnitID> + '_ {
         self.uids.iter().filter_map(|uid| match uid {
             UnitID::Qubit { .. } => Some(uid.clone()),
-            UnitID::Bit { .. } => None,
+            UnitID::Bit { .. } | UnitID::F64(_) => None,
         })
     }
 
     pub fn bits(&self) -> impl Iterator<Item = UnitID> + '_ {
         self.uids.iter().filter_map(|uid| match uid {
             UnitID::Bit { .. } => Some(uid.clone()),
-            UnitID::Qubit { .. } => None,
+            UnitID::Qubit { .. } | UnitID::F64(_) => None,
         })
     }
 
     pub fn unitids(&self) -> impl Iterator<Item = &UnitID> + '_ {
         self.uids.iter()
+    }
+
+    pub fn boundary(&self) -> [Vertex; 2] {
+        [self.boundary.input, self.boundary.output]
     }
 }
 

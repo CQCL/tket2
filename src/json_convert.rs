@@ -143,6 +143,7 @@ impl From<Op> for Operation {
             Op::Measure => (OpType::Measure, vec![]),
             Op::Barrier => (OpType::Barrier, vec![]),
             Op::Noop => (OpType::noop, vec![]),
+            Op::FAdd => panic!("Not supported by TKET-1: {:?}", op),
         };
         // let signature = match self.signature() {
         //     Signature::Linear(sig) => sig.iter().map(|wt| match wt {
@@ -215,6 +216,7 @@ impl From<UnitID> for Register {
             UnitID::Qubit { name, index } | UnitID::Bit { name, index } => {
                 Register(name, index.into_iter().map(|i| i as i64).collect())
             }
+            _ => panic!("Not supported: {:?}", uid),
         }
     }
 }

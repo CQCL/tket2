@@ -32,6 +32,13 @@ impl Signature {
         }
     }
 
+    pub fn new_nonlinear(inputs: Vec<WireType>, outputs: Vec<WireType>) -> Self {
+        Self {
+            linear: vec![],
+            nonlinear: [inputs, outputs],
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.linear.len() + max(self.nonlinear[0].len(), self.nonlinear[1].len())
     }
@@ -58,6 +65,7 @@ pub enum Op {
     PhasedX(Param, Param),
     Measure,
     Barrier,
+    FAdd,
 }
 
 impl Default for Op {
@@ -114,6 +122,9 @@ impl Op {
             | Op::PhasedX(..) => ONEQBSIG.clone(),
             Op::CX | Op::ZZMax | Op::ZZPhase(..) => TWOQBSIG.clone(),
             Op::Measure => Signature::new_linear(vec![WireType::Qubit, WireType::LinearBit]),
+            Op::FAdd => {
+                Signature::new_nonlinear(vec![WireType::F64, WireType::F64], vec![WireType::F64])
+            }
             _ => panic!("Gate signature unknwon."),
         }
     }

@@ -9,11 +9,12 @@ pub mod passes;
 mod tests {
     use crate::{
         circuit::{
-            circuit::Circuit,
-            operation::Param,
+            circuit::{Circuit, UnitID},
             operation::{equiv_0, Op},
+            operation::{Param, WireType},
         },
         circuit_json::{self, SerialCircuit},
+        graph::graph::{NodePort, PortIndex},
     };
     #[test]
     fn read_json() {
@@ -27,13 +28,6 @@ mod tests {
         let _reser: SerialCircuit = circ.into();
         assert_eq!(&ser, &_reser);
 
-        assert!(equiv_0(&Param::new("0"), 4));
-        assert!(equiv_0(&Param::new("4.0"), 4));
-        assert!(equiv_0(&Param::new("8.0"), 4));
-        assert!(!equiv_0(&Param::new("2.0"), 4));
-        assert!(equiv_0(&Param::new("2.0"), 2));
-        assert!(!equiv_0(&Param::new("0.5"), 2));
-        // assert!(equiv_0(Param::new("0"), 4));
         // ser and reser cannot be compared because they will be different up to
         // topsort ordering of parallel commands
     }
@@ -46,6 +40,12 @@ mod tests {
 
         assert!(Param::new("x").eval().is_none());
         assert_eq!(Param::new("2.0 + 2.0/4").eval(), Some(2.5));
+        assert!(equiv_0(&Param::new("0"), 4));
+        assert!(equiv_0(&Param::new("4.0"), 4));
+        assert!(equiv_0(&Param::new("8.0"), 4));
+        assert!(!equiv_0(&Param::new("2.0"), 4));
+        assert!(equiv_0(&Param::new("2.0"), 2));
+        assert!(!equiv_0(&Param::new("0.5"), 2));
     }
 
     #[test]
@@ -56,6 +56,34 @@ mod tests {
         assert_eq!(
             Op::Rz(Param::new("x")).dagger().unwrap(),
             Op::Rz(Param::new("-x"))
+        );
+    }
+
+    #[test]
+    fn test_fadd() {
+        let mut circ = Circuit::new();
+
+        circ.add_unitid(UnitID::F64("a".into()));
+        circ.add_unitid(UnitID::F64("b".into()));
+        let [input, output] = circ.boundary();
+
+        let fadd = circ.add_vertex(Op::FAdd);
+        circ.add_edge(
+            NodePort::new(input, PortIndex::new(0)),
+            NodePort::new(fadd, PortIndex::new(0)),
+            WireType::F64,
+        );
+
+        circ.add_edge(
+            NodePort::new(input, PortIndex::new(1)),
+            NodePort::new(fadd, PortIndex::new(1)),
+            WireType::F64,
+        );
+
+        circ.add_edge(
+            NodePort::new(fadd, PortIndex::new(0)),
+            NodePort::new(output, PortIndex::new(0)),
+            WireType::F64,
         );
     }
 }
