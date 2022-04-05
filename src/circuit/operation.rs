@@ -7,24 +7,37 @@ use symengine::Expression;
 // use symengine::Expression;
 pub(crate) type Param = Expression;
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum WireType {
-    Quantum,
-    Classical,
+    Qubit,
+    LinearBit,
     Bool,
+    I32,
+    F64,
 }
 #[derive(Clone)]
-pub enum Signature {
-    Linear(Vec<WireType>),
-    NonLinear(Vec<WireType>, Vec<WireType>),
+pub struct Signature {
+    pub linear: Vec<WireType>,
+    pub nonlinear: [Vec<WireType>; 2],
 }
 
 impl Signature {
-    pub fn len(&self) -> usize {
-        match self {
-            Signature::Linear(s) => s.len(),
-            Signature::NonLinear(s1, s2) => max(s1.len(), s2.len()),
+    pub fn new(linear: Vec<WireType>, nonlinear: [Vec<WireType>; 2]) -> Self {
+        Self { linear, nonlinear }
+    }
+    pub fn new_linear(linear: Vec<WireType>) -> Self {
+        Self {
+            linear,
+            nonlinear: [vec![], vec![]],
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.linear.len() + max(self.nonlinear[0].len(), self.nonlinear[1].len())
+    }
+
+    pub fn purely_linear(&self) -> bool {
+        self.nonlinear[0].is_empty() && self.nonlinear[1].is_empty()
     }
 }
 
@@ -53,10 +66,10 @@ impl Default for Op {
     }
 }
 lazy_static! {
-    static ref ONEQBSIG: Signature = Signature::Linear(vec![WireType::Quantum]);
+    static ref ONEQBSIG: Signature = Signature::new_linear(vec![WireType::Qubit]);
 }
 lazy_static! {
-    static ref TWOQBSIG: Signature = Signature::Linear(vec![WireType::Quantum, WireType::Quantum]);
+    static ref TWOQBSIG: Signature = Signature::new_linear(vec![WireType::Qubit, WireType::Qubit]);
 }
 
 pub fn approx_eq(x: f64, y: f64, modulo: u32, tol: f64) -> bool {
@@ -80,17 +93,14 @@ pub fn equiv_0(p: &Param, modulo: u32) -> bool {
 
 impl Op {
     fn is_one_qb_gate(&self) -> bool {
-        match self.signature() {
-            Signature::Linear(v) => matches!(&v[..], &[WireType::Quantum]),
-            _ => false,
-        }
+        matches!(&self.signature().linear[..], &[WireType::Qubit])
     }
 
     fn is_two_qb_gate(&self) -> bool {
-        match self.signature() {
-            Signature::Linear(v) => matches!(&v[..], &[WireType::Quantum, WireType::Quantum]),
-            _ => false,
-        }
+        matches!(
+            &self.signature().linear[..],
+            &[WireType::Qubit, WireType::Qubit]
+        )
     }
 
     pub fn signature(&self) -> Signature {
@@ -103,7 +113,7 @@ impl Op {
             | Op::TK1(..)
             | Op::PhasedX(..) => ONEQBSIG.clone(),
             Op::CX | Op::ZZMax | Op::ZZPhase(..) => TWOQBSIG.clone(),
-            Op::Measure => Signature::Linear(vec![WireType::Quantum, WireType::Classical]),
+            Op::Measure => Signature::new_linear(vec![WireType::Qubit, WireType::LinearBit]),
             _ => panic!("Gate signature unknwon."),
         }
     }

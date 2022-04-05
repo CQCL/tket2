@@ -16,8 +16,8 @@ pub enum UnitID {
 impl UnitID {
     pub fn get_type(&self) -> WireType {
         match self {
-            Self::Qubit { .. } => WireType::Quantum,
-            Self::Bit { .. } => WireType::Classical,
+            Self::Qubit { .. } => WireType::Qubit,
+            Self::Bit { .. } => WireType::LinearBit,
         }
     }
 }
@@ -83,10 +83,8 @@ impl Circuit {
             .op
             .signature()
         {
-            Signature::Linear(sig) => sig,
-            Signature::NonLinear(..) => {
-                return Err("Nonlinear sigs not supported by rewire.".into())
-            }
+            x if x.purely_linear() => x.linear,
+            _ => return Err("Nonlinear sigs not supported by rewire.".into()),
         };
 
         for (i, (edge, vert_sig_type)) in edges.into_iter().zip(vert_op_sig).enumerate() {
@@ -171,8 +169,8 @@ impl Circuit {
     pub fn append_op(&mut self, op: Op, args: &Vec<PortIndex>) -> Result<Vertex, String> {
         // akin to add-op in TKET-1
         let sig = match op.signature() {
-            Signature::Linear(sig) => sig,
-            Signature::NonLinear(_, _) => return Err("Only linear ops supported.".to_string()),
+            x if x.purely_linear() => x.linear,
+            _ => return Err("Only linear ops supported.".to_string()),
         };
         assert_eq!(sig.len(), args.len());
 

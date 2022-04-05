@@ -190,14 +190,15 @@ impl From<SerialCircuit> for Circuit {
             let args = com
                 .args
                 .into_iter()
-                .zip(if let Signature::Linear(sig) = op.signature() {
-                    sig
+                .zip(if let Signature { linear, .. } = op.signature() {
+                    linear
                 } else {
                     panic!()
                 })
                 .map(|(reg, wiretype)| match wiretype {
-                    WireType::Quantum => to_qubit(reg),
-                    WireType::Classical | WireType::Bool => to_bit(reg),
+                    WireType::Qubit => to_qubit(reg),
+                    WireType::LinearBit | WireType::Bool => to_bit(reg),
+                    _ => panic!("Unsupported wiretype {:?}", wiretype),
                 })
                 .map(|uid| frontier[&uid])
                 .collect();
