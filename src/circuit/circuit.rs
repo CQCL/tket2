@@ -237,7 +237,7 @@ impl Circuit {
     /// up to the user to make sure the remaining N-1 edges are connected to something
     pub fn copy_edge(&mut self, e: Edge, copies: u32) -> Result<Vertex, String> {
         let edge_type = match self.dag.edge_weight(e) {
-            Some(EdgeProperties { edge_type, .. }) => edge_type.clone(),
+            Some(EdgeProperties { edge_type, .. }) => edge_type,
             _ => return Err("Edge not found".into()),
         };
 
@@ -245,14 +245,16 @@ impl Circuit {
             WireType::Qubit | WireType::LinearBit => {
                 return Err("Cannot copy qubit or LinearBit wires.".into())
             }
-            WireType::Bool => Op::NCopyBool(copies),
-            WireType::I32 => Op::NCopyI32(copies),
-            WireType::F64 => Op::NCopyF64(copies),
+            WireType::Bool => Op::CopyBool(copies),
+            WireType::I32 => Op::CopyI32(copies),
+            WireType::F64 => Op::CopyF64(copies),
         };
         let copy_node = self.add_vertex(copy_op);
         let [s, t] = self.dag.edge_endpoints(e).unwrap();
+        let edge_type = self.dag.remove_edge(e).unwrap().edge_type;
         self.add_edge(s, (copy_node, 0).into(), edge_type.clone());
         self.add_edge((copy_node, 0).into(), t, edge_type);
+
         Ok(copy_node)
     }
 }

@@ -14,8 +14,10 @@ mod tests {
             operation::{Param, WireType},
         },
         circuit_json::{self, SerialCircuit},
+        graph::dot::dot_string,
         graph::graph::{NodePort, PortIndex},
     };
+
     #[test]
     fn read_json() {
         // let expr = symengine::Expression::new("a + b + 3");
@@ -24,7 +26,6 @@ mod tests {
         assert_eq!(ser.commands.len(), 4);
 
         let circ: Circuit = ser.clone().into();
-
         let _reser: SerialCircuit = circ.into();
         assert_eq!(&ser, &_reser);
 
@@ -114,5 +115,6 @@ mod tests {
             NodePort::new(output, PortIndex::new(0)),
             WireType::F64,
         );
+        println!("{}", dot_string(&circ.dag));
     }
 }

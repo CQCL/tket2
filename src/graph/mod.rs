@@ -1,6 +1,7 @@
 pub mod graph;
 pub mod substitute;
 pub mod toposort;
+pub mod dot;
 
 #[cfg(test)]
 mod tests {
