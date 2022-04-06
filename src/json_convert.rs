@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::circuit::circuit::{Circuit, UnitID};
-use crate::circuit::operation::{Op, Signature, WireType};
+use crate::circuit::operation::{Op, WireType};
 use crate::circuit_json::{Operation, Permutation, Register, SerialCircuit};
 use crate::graph::graph::PortIndex;
 use crate::optype::OpType;
@@ -143,7 +143,7 @@ impl From<Op> for Operation {
             Op::Measure => (OpType::Measure, vec![]),
             Op::Barrier => (OpType::Barrier, vec![]),
             Op::Noop => (OpType::noop, vec![]),
-            Op::FAdd => panic!("Not supported by TKET-1: {:?}", op),
+            _ => panic!("Not supported by Serialized TKET-1: {:?}", op),
         };
         // let signature = match self.signature() {
         //     Signature::Linear(sig) => sig.iter().map(|wt| match wt {
@@ -191,11 +191,7 @@ impl From<SerialCircuit> for Circuit {
             let args = com
                 .args
                 .into_iter()
-                .zip(if let Signature { linear, .. } = op.signature() {
-                    linear
-                } else {
-                    panic!()
-                })
+                .zip(op.signature().linear)
                 .map(|(reg, wiretype)| match wiretype {
                     WireType::Qubit => to_qubit(reg),
                     WireType::LinearBit | WireType::Bool => to_bit(reg),

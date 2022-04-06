@@ -86,4 +86,33 @@ mod tests {
             WireType::F64,
         );
     }
+
+    #[test]
+    fn test_copy() {
+        let mut circ = Circuit::new();
+
+        circ.add_unitid(UnitID::F64("a".into()));
+        let [input, output] = circ.boundary();
+
+        let fadd = circ.add_vertex(Op::FAdd);
+        let e = circ.add_edge(
+            NodePort::new(input, PortIndex::new(0)),
+            NodePort::new(fadd, PortIndex::new(0)),
+            WireType::F64,
+        );
+
+        let copy = circ.copy_edge(e, 2).unwrap();
+
+        circ.add_edge(
+            NodePort::new(copy, PortIndex::new(1)),
+            NodePort::new(fadd, PortIndex::new(1)),
+            WireType::F64,
+        );
+
+        circ.add_edge(
+            NodePort::new(fadd, PortIndex::new(0)),
+            NodePort::new(output, PortIndex::new(0)),
+            WireType::F64,
+        );
+    }
 }

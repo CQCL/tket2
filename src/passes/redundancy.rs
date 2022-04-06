@@ -49,7 +49,8 @@ pub fn remove_redundancies(mut circ: Circuit) -> Circuit {
 
             circ.phase = circ.phase + Param::from(phase);
             let new_weights = get_weights(dag, &preds);
-            dag.replace_with_identity(Cut::new(preds, succs), new_weights);
+            dag.replace_with_identity(Cut::new(preds, succs), new_weights)
+                .unwrap();
             continue;
         }
 
@@ -81,7 +82,8 @@ pub fn remove_redundancies(mut circ: Circuit) -> Circuit {
             let new_weights = get_weights(dag, &preds);
 
             add_neighbours(dag, &preds, &succs, &mut candidate_nodes);
-            dag.replace_with_identity(Cut::new(preds, succs), new_weights);
+            dag.replace_with_identity(Cut::new(preds, succs), new_weights)
+                .unwrap();
             continue;
         }
     }

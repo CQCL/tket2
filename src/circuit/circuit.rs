@@ -231,6 +231,30 @@ impl Circuit {
     pub fn boundary(&self) -> [Vertex; 2] {
         [self.boundary.input, self.boundary.output]
     }
+
+    /// send an edge in to a copy vertex and return a reference to that vertex
+    /// the existing target of the edge will be the only target of the copy node
+    /// up to the user to make sure the remaining N-1 edges are connected to something
+    pub fn copy_edge(&mut self, e: Edge, copies: u32) -> Result<Vertex, String> {
+        let edge_type = match self.dag.edge_weight(e) {
+            Some(EdgeProperties { edge_type, .. }) => edge_type.clone(),
+            _ => return Err("Edge not found".into()),
+        };
+
+        let copy_op = match edge_type {
+            WireType::Qubit | WireType::LinearBit => {
+                return Err("Cannot copy qubit or LinearBit wires.".into())
+            }
+            WireType::Bool => Op::NCopyBool(copies),
+            WireType::I32 => Op::NCopyI32(copies),
+            WireType::F64 => Op::NCopyF64(copies),
+        };
+        let copy_node = self.add_vertex(copy_op);
+        let [s, t] = self.dag.edge_endpoints(e).unwrap();
+        self.add_edge(s, (copy_node, 0).into(), edge_type.clone());
+        self.add_edge((copy_node, 0).into(), t, edge_type);
+        Ok(copy_node)
+    }
 }
 
 #[derive(Debug, PartialEq)]

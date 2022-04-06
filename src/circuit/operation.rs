@@ -66,6 +66,9 @@ pub enum Op {
     Measure,
     Barrier,
     FAdd,
+    NCopyF64(u32),
+    NCopyBool(u32),
+    NCopyI32(u32),
 }
 
 impl Default for Op {
@@ -124,6 +127,15 @@ impl Op {
             Op::Measure => Signature::new_linear(vec![WireType::Qubit, WireType::LinearBit]),
             Op::FAdd => {
                 Signature::new_nonlinear(vec![WireType::F64, WireType::F64], vec![WireType::F64])
+            }
+            Op::NCopyBool(N) => {
+                Signature::new_nonlinear(vec![WireType::Bool], vec![WireType::Bool; *N as usize])
+            }
+            Op::NCopyF64(N) => {
+                Signature::new_nonlinear(vec![WireType::F64], vec![WireType::F64; *N as usize])
+            }
+            Op::NCopyI32(N) => {
+                Signature::new_nonlinear(vec![WireType::I32], vec![WireType::I32; *N as usize])
             }
             _ => panic!("Gate signature unknwon."),
         }
