@@ -1,8 +1,7 @@
 pub mod circuit;
-pub mod circuit_json;
 mod graph;
-pub mod json_convert;
-mod optype;
+
+pub mod json;
 pub mod passes;
 
 #[cfg(test)]
@@ -10,13 +9,33 @@ mod tests {
     use crate::{
         circuit::{
             circuit::{Circuit, UnitID},
+            dag::Vertex,
             operation::{equiv_0, Op},
             operation::{Param, WireType},
         },
-        circuit_json::{self, SerialCircuit},
         graph::dot::dot_string,
-        graph::graph::{NodePort, PortIndex},
+        graph::graph::{Direction, NodePort, PortIndex},
+        json::circuit_json::{self, SerialCircuit},
     };
+    fn eval_const(circ: &Circuit, n: Vertex) -> Vec<Option<Op>> {
+        let op = &circ.dag.node_weight(n).unwrap().op;
+        let mut inputs = circ
+            .dag
+            .neighbours(n, Direction::Incoming)
+            .map(|np| eval_const(circ, np.node).remove(np.port.index()));
+
+        let failed_return = vec![None; circ.dag.node_edges(n, Direction::Outgoing).count()];
+
+        match op {
+            Op::ConstF64(_) => vec![Some(op.clone())],
+            Op::CopyF64(n) => vec![inputs.next().expect("Input missing"); *n as usize],
+            Op::FAdd => match &inputs.take(2).collect::<Vec<_>>()[..] {
+                [Some(Op::ConstF64(x)), Some(Op::ConstF64(y))] => vec![Some(Op::ConstF64(x + y))],
+                _ => failed_return,
+            },
+            _ => failed_return,
+        }
+    }
 
     #[test]
     fn read_json() {
@@ -116,5 +135,36 @@ mod tests {
             WireType::F64,
         );
         println!("{}", dot_string(&circ.dag));
+    }
+
+    #[test]
+    fn test_eval() {
+        let mut circ = Circuit::new();
+
+        let [_, output] = circ.boundary();
+
+        let fadd = circ.add_vertex(Op::FAdd);
+        let one = circ.add_vertex(Op::ConstF64(0.5));
+        let two = circ.add_vertex(Op::ConstF64(1.5));
+        let _e1 = circ.add_edge(
+            NodePort::new(one, PortIndex::new(0)),
+            NodePort::new(fadd, PortIndex::new(0)),
+            WireType::F64,
+        );
+        let _e2 = circ.add_edge(
+            NodePort::new(two, PortIndex::new(0)),
+            NodePort::new(fadd, PortIndex::new(1)),
+            WireType::F64,
+        );
+
+        let _out = circ.add_edge(
+            NodePort::new(fadd, PortIndex::new(0)),
+            NodePort::new(output, PortIndex::new(0)),
+            WireType::F64,
+        );
+        assert!(match &eval_const(&circ, fadd)[..] {
+            [Some(Op::ConstF64(x))] => *x == 2.0,
+            _ => false,
+        })
     }
 }

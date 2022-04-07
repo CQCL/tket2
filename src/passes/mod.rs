@@ -6,7 +6,7 @@ mod tests {
 
     use crate::{
         circuit::circuit::Circuit,
-        circuit_json::{self, SerialCircuit},
+        json::circuit_json::{self, SerialCircuit}, graph::dot::dot_string,
     };
 
     use super::redundancy::remove_redundancies;
@@ -19,8 +19,10 @@ mod tests {
         let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
 
         let circ: Circuit = ser.clone().into();
-
+        println!("{}", dot_string(&circ.dag));
+        
         let circ2 = remove_redundancies(circ);
+
         let _reser: SerialCircuit = circ2.into();
 
         assert_eq!(_reser.commands.len(), 0);

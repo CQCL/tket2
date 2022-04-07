@@ -1,13 +1,16 @@
+pub mod dot;
 pub mod graph;
 pub mod substitute;
 pub mod toposort;
-pub mod dot;
 
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
-    use crate::graph::substitute::{BoundedGraph, Cut};
+    use crate::graph::{
+        graph::Direction,
+        substitute::{BoundedGraph, Cut},
+    };
 
     use super::graph::Graph;
 
@@ -25,28 +28,27 @@ mod tests {
 
         assert_eq!(g.node_count(), 3);
         assert_eq!(g.edge_count(), 3);
+        for direction in [Direction::Incoming, Direction::Outgoing] {
+            let mut new_g = g.clone();
+            let rem_nodes = new_g.remove_subgraph_directed(Cut::new(vec![e1], vec![e2]), direction);
 
-        let rem_nodes = g.remove_subgraph(Cut::new(vec![e1], vec![e2]));
+            assert_eq!(rem_nodes, vec![Some(1)]);
 
-        assert_eq!(rem_nodes, vec![Some(1)]);
+            let correct_weights: HashSet<_> = HashSet::from_iter([0, 2].into_iter());
+            assert_eq!(
+                HashSet::from_iter(new_g.nodes().map(|n| *g.node_weight(n).unwrap())),
+                correct_weights
+            );
 
-        let correct_weights: HashSet<_> = HashSet::from_iter([0, 2].into_iter());
-        assert_eq!(
-            HashSet::from_iter(g.nodes().map(|n| *g.node_weight(n).unwrap())),
-            correct_weights
-        );
+            let correct_weights: HashSet<_> = HashSet::from_iter([5].into_iter());
+            assert_eq!(
+                HashSet::from_iter(new_g.edges().map(|e| *g.edge_weight(e).unwrap())),
+                correct_weights
+            );
 
-        let correct_weights: HashSet<_> = HashSet::from_iter([5].into_iter());
-        assert_eq!(
-            HashSet::from_iter(g.edges().map(|e| *g.edge_weight(e).unwrap())),
-            correct_weights
-        );
-        dbg!(g
-            .nodes()
-            .map(|n| *g.node_weight(n).unwrap())
-            .collect::<Vec<_>>());
-        assert_eq!(g.edge_count(), 1);
-        assert_eq!(g.node_count(), 2);
+            assert_eq!(new_g.edge_count(), 1);
+            assert_eq!(new_g.node_count(), 2);
+        }
     }
 
     #[test]

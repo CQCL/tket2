@@ -66,9 +66,15 @@ pub enum Op {
     Measure,
     Barrier,
     FAdd,
+    FNeg,
     CopyF64(u32),
     CopyBool(u32),
     CopyI32(u32),
+    ConstF64(f64),
+    ConstBool(bool),
+    ConstI32(i32),
+    RxF64,
+    RzF64,
 }
 
 impl Default for Op {
@@ -128,6 +134,7 @@ impl Op {
             Op::FAdd => {
                 Signature::new_nonlinear(vec![WireType::F64, WireType::F64], vec![WireType::F64])
             }
+            Op::FNeg => Signature::new_nonlinear(vec![WireType::F64], vec![WireType::F64]),
             Op::CopyBool(n) => {
                 Signature::new_nonlinear(vec![WireType::Bool], vec![WireType::Bool; *n as usize])
             }
@@ -136,6 +143,12 @@ impl Op {
             }
             Op::CopyI32(n) => {
                 Signature::new_nonlinear(vec![WireType::I32], vec![WireType::I32; *n as usize])
+            }
+            Op::ConstBool(_) => Signature::new_nonlinear(vec![], vec![WireType::Bool]),
+            Op::ConstF64(_) => Signature::new_nonlinear(vec![], vec![WireType::F64]),
+            Op::ConstI32(_) => Signature::new_nonlinear(vec![], vec![WireType::I32]),
+            Op::RxF64 | Op::RzF64 => {
+                Signature::new(vec![WireType::Qubit], [vec![WireType::F64], vec![]])
             }
             _ => panic!("Gate signature unknwon."),
         }

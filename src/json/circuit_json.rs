@@ -1,4 +1,4 @@
-use crate::{circuit::operation::Param, optype::OpType};
+use crate::{circuit::operation::Param, json::optype::OpType};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]

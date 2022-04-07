@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 use tket_rs::circuit::circuit::Circuit;
-use tket_rs::circuit_json;
+use tket_rs::json::circuit_json;
 
 #[pyfunction]
 fn remove_redundancies(s: String) -> PyResult<String> {

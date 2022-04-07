@@ -18,6 +18,7 @@ pub struct TopSortWalker<'graph, N, E, Ix = DefaultIx> {
     remaining_edges: HashSet<EdgeIndex<Ix>>,
     candidate_nodes: VecDeque<NodeIndex<Ix>>,
     cyclicity_check: bool,
+    reversed: bool,
 }
 
 impl<'graph, N, E, Ix: IndexType> TopSortWalker<'graph, N, E, Ix> {
@@ -28,11 +29,17 @@ impl<'graph, N, E, Ix: IndexType> TopSortWalker<'graph, N, E, Ix> {
             candidate_nodes,
             remaining_edges,
             cyclicity_check: false,
+            reversed: false,
         }
     }
 
     pub fn with_cyclicity_check(mut self) -> Self {
         self.cyclicity_check = true;
+        self
+    }
+
+    pub fn reversed(mut self) -> Self {
+        self.reversed = true;
         self
     }
 }
@@ -41,13 +48,19 @@ impl<'graph, N, E, Ix: IndexType> Iterator for TopSortWalker<'graph, N, E, Ix> {
     type Item = NodeIndex<Ix>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let (forward, backward, edge_end) = if self.reversed {
+            (Direction::Incoming, Direction::Outgoing, 0)
+        } else {
+            (Direction::Outgoing, Direction::Incoming, 1)
+        };
+
         if let Some(n) = self.candidate_nodes.pop_front() {
-            for e in self.g.node_edges(n, Direction::Outgoing) {
-                let [_, NodePort { node: m, .. }] = self.g.edge_endpoints(*e).unwrap();
+            for e in self.g.node_edges(n, forward) {
+                let m = self.g.edge_endpoints(*e).unwrap()[edge_end].node;
                 self.remaining_edges.remove(e);
                 if self
                     .g
-                    .node_edges(m, Direction::Incoming)
+                    .node_edges(m, backward)
                     .filter(|&e2| self.remaining_edges.contains(e2))
                     .next()
                     .is_none()

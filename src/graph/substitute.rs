@@ -55,9 +55,13 @@ impl<N: Default, E, Ix: IndexType> Graph<N, E, Ix> {
     Remove subgraph formed by cut and remove weights of nodes inside cut in
     TopoSort order
     */
-    pub fn remove_subgraph(&mut self, cut: Cut<Ix>) -> Vec<Option<N>> {
+    pub fn remove_subgraph_directed(&mut self, cut: Cut<Ix>, direction: Direction) -> Vec<Option<N>> {
         let (entry, exit) = self.make_cut(cut);
-        let removed_nodes: Vec<_> = TopSortWalker::new(self, [entry].into()).collect();
+        let walker = match direction {
+            Direction::Incoming => TopSortWalker::new(self, [exit].into()).reversed(),
+            Direction::Outgoing => TopSortWalker::new(self, [entry].into()),
+        };
+        let removed_nodes: Vec<_> = walker.collect();
         removed_nodes
             .into_iter()
             .filter_map(|node| {
@@ -69,6 +73,10 @@ impl<N: Default, E, Ix: IndexType> Graph<N, E, Ix> {
                 }
             })
             .collect()
+    }
+
+    pub fn remove_subgraph(&mut self, cut: Cut<Ix>) -> Vec<Option<N>> {
+        self.remove_subgraph_directed(cut, Direction::Outgoing)
     }
 
     fn merge_edgelists(
