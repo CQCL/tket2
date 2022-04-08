@@ -245,9 +245,10 @@ impl Circuit {
             WireType::Qubit | WireType::LinearBit => {
                 return Err("Cannot copy qubit or LinearBit wires.".into())
             }
-            WireType::Bool => Op::CopyBool(copies),
-            WireType::I32 => Op::CopyI32(copies),
-            WireType::F64 => Op::CopyF64(copies),
+            _ => Op::Copy {
+                n_copies: copies,
+                typ: edge_type.clone(),
+            },
         };
         let copy_node = self.add_vertex(copy_op);
         let [s, t] = self.dag.edge_endpoints(e).unwrap();

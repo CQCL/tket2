@@ -10,7 +10,7 @@ mod tests {
         circuit::{
             circuit::{Circuit, UnitID},
             dag::Vertex,
-            operation::{equiv_0, Op},
+            operation::{equiv_0, ConstValue, Op},
             operation::{Param, WireType},
         },
         graph::dot::dot_string,
@@ -27,10 +27,15 @@ mod tests {
         let failed_return = vec![None; circ.dag.node_edges(n, Direction::Outgoing).count()];
 
         match op {
-            Op::ConstF64(_) => vec![Some(op.clone())],
-            Op::CopyF64(n) => vec![inputs.next().expect("Input missing"); *n as usize],
+            Op::Const(ConstValue::F64(_)) => vec![Some(op.clone())],
+            Op::Copy {
+                n_copies,
+                typ: WireType::F64,
+            } => vec![inputs.next().expect("Input missing"); *n_copies as usize],
             Op::FAdd => match &inputs.take(2).collect::<Vec<_>>()[..] {
-                [Some(Op::ConstF64(x)), Some(Op::ConstF64(y))] => vec![Some(Op::ConstF64(x + y))],
+                [Some(Op::Const(ConstValue::F64(x))), Some(Op::Const(ConstValue::F64(y)))] => {
+                    vec![Some(Op::Const(ConstValue::F64(x + y)))]
+                }
                 _ => failed_return,
             },
             _ => failed_return,
@@ -144,8 +149,8 @@ mod tests {
         let [_, output] = circ.boundary();
 
         let fadd = circ.add_vertex(Op::FAdd);
-        let one = circ.add_vertex(Op::ConstF64(0.5));
-        let two = circ.add_vertex(Op::ConstF64(1.5));
+        let one = circ.add_vertex(Op::Const(ConstValue::F64(0.5)));
+        let two = circ.add_vertex(Op::Const(ConstValue::F64(1.5)));
         let _e1 = circ.add_edge(
             NodePort::new(one, PortIndex::new(0)),
             NodePort::new(fadd, PortIndex::new(0)),
@@ -163,7 +168,7 @@ mod tests {
             WireType::F64,
         );
         assert!(match &eval_const(&circ, fadd)[..] {
-            [Some(Op::ConstF64(x))] => *x == 2.0,
+            [Some(Op::Const(ConstValue::F64(x)))] => *x == 2.0,
             _ => false,
         })
     }

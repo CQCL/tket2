@@ -49,6 +49,13 @@ impl Signature {
 }
 
 #[derive(Clone, PartialEq, Debug)]
+pub enum ConstValue {
+    Bool(bool),
+    I32(i32),
+    F64(f64),
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub enum Op {
     H,
     CX,
@@ -67,12 +74,8 @@ pub enum Op {
     Barrier,
     FAdd,
     FNeg,
-    CopyF64(u32),
-    CopyBool(u32),
-    CopyI32(u32),
-    ConstF64(f64),
-    ConstBool(bool),
-    ConstI32(i32),
+    Copy { n_copies: u32, typ: WireType },
+    Const(ConstValue),
     RxF64,
     RzF64,
 }
@@ -135,18 +138,15 @@ impl Op {
                 Signature::new_nonlinear(vec![WireType::F64, WireType::F64], vec![WireType::F64])
             }
             Op::FNeg => Signature::new_nonlinear(vec![WireType::F64], vec![WireType::F64]),
-            Op::CopyBool(n) => {
-                Signature::new_nonlinear(vec![WireType::Bool], vec![WireType::Bool; *n as usize])
+            Op::Copy { n_copies, typ } => {
+                let typ = typ.clone();
+                Signature::new_nonlinear(vec![typ.clone()], vec![typ; *n_copies as usize])
             }
-            Op::CopyF64(n) => {
-                Signature::new_nonlinear(vec![WireType::F64], vec![WireType::F64; *n as usize])
-            }
-            Op::CopyI32(n) => {
-                Signature::new_nonlinear(vec![WireType::I32], vec![WireType::I32; *n as usize])
-            }
-            Op::ConstBool(_) => Signature::new_nonlinear(vec![], vec![WireType::Bool]),
-            Op::ConstF64(_) => Signature::new_nonlinear(vec![], vec![WireType::F64]),
-            Op::ConstI32(_) => Signature::new_nonlinear(vec![], vec![WireType::I32]),
+            Op::Const(x) => match x {
+                ConstValue::Bool(_) => Signature::new_nonlinear(vec![], vec![WireType::Bool]),
+                ConstValue::F64(_) => Signature::new_nonlinear(vec![], vec![WireType::F64]),
+                ConstValue::I32(_) => Signature::new_nonlinear(vec![], vec![WireType::I32]),
+            },
             Op::RxF64 | Op::RzF64 => {
                 Signature::new(vec![WireType::Qubit], [vec![WireType::F64], vec![]])
             }
