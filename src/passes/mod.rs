@@ -5,8 +5,12 @@ mod tests {
     use symengine::Expression;
 
     use crate::{
-        circuit::circuit::Circuit,
-        json::circuit_json::{self, SerialCircuit}, graph::dot::dot_string,
+        circuit::{
+            circuit::{Circuit, UnitID},
+            operation::{Op, Param},
+        },
+        graph::{dot::dot_string, graph::PortIndex},
+        json::circuit_json::{self, SerialCircuit},
     };
 
     use super::redundancy::remove_redundancies;
@@ -15,13 +19,33 @@ mod tests {
     fn test_remove_redundancies() {
         // circuit with only redundant gates; identity unitary
         //[Rz(a) q[0];, Rz(-a) q[0];, CX q[0], q[1];, CX q[0], q[1];, Rx(2) q[1];]
-        let circ_s = r#"{"bits": [], "commands": [{"args": [["q", [0]]], "op": {"params": ["a"], "type": "Rz"}}, {"args": [["q", [0]]], "op": {"params": ["-a"], "type": "Rz"}}, {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}, {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}, {"args": [["q", [1]]], "op": {"params": ["2.0"], "type": "Rx"}}], "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]], "phase": "0.0", "qubits": [["q", [0]], ["q", [1]]]}"#;
-        let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
+        let qubits = vec![
+            UnitID::Qubit {
+                name: "q".into(),
+                index: vec![0],
+            },
+            UnitID::Qubit {
+                name: "q".into(),
+                index: vec![0],
+            },
+        ];
+        let mut circ = Circuit::with_uids(qubits);
 
-        let circ: Circuit = ser.clone().into();
+        circ.append_op(Op::Rz(Param::new("a")), &vec![PortIndex::new(0)])
+            .unwrap();
+        circ.append_op(Op::Rz(Param::new("-a")), &vec![PortIndex::new(0)])
+            .unwrap();
+        circ.append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
+            .unwrap();
+        circ.append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
+            .unwrap();
+        circ.append_op(Op::Rx(Param::new("2.0")), &vec![PortIndex::new(1)])
+            .unwrap();
+
         println!("{}", dot_string(&circ.dag));
-        
+
         let circ2 = remove_redundancies(circ);
+        println!("{}", dot_string(&circ2.dag));
 
         let _reser: SerialCircuit = circ2.into();
 

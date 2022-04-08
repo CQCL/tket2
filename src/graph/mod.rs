@@ -30,7 +30,7 @@ mod tests {
         assert_eq!(g.edge_count(), 3);
         for direction in [Direction::Incoming, Direction::Outgoing] {
             let mut new_g = g.clone();
-            let rem_nodes = new_g.remove_subgraph_directed(Cut::new(vec![e1], vec![e2]), direction);
+            let rem_nodes = new_g.remove_subgraph_directed(Cut::new(vec![n1], vec![n1]), direction);
 
             assert_eq!(rem_nodes, vec![Some(1)]);
 
@@ -66,7 +66,7 @@ mod tests {
         assert_eq!(g.node_count(), 3);
         assert_eq!(g.edge_count(), 3);
 
-        g.replace_with_identity(Cut::new(vec![e1], vec![e2]), vec![6])
+        g.replace_with_identity(Cut::new(vec![n1], vec![n1]), vec![6])
             .unwrap();
 
         let correct_weights: HashSet<_> = HashSet::from_iter([0, 2].into_iter());
@@ -138,7 +138,7 @@ mod tests {
 
         let rem_nodes = g
             .replace_subgraph(
-                Cut::new(vec![e1], vec![e2]),
+                Cut::new(vec![n1], vec![n1]),
                 BoundedGraph::new(g2, g20, g22),
             )
             .unwrap();
