@@ -55,6 +55,16 @@ pub enum ConstValue {
     F64(f64),
 }
 
+impl ConstValue {
+    pub fn get_type(&self) -> WireType {
+        match self {
+            Self::Bool(_) => WireType::Bool,
+            Self::I32(_) => WireType::I32,
+            Self::F64(_) => WireType::F64,
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub enum Op {
     H,
@@ -121,6 +131,14 @@ impl Op {
             &self.signature().linear[..],
             &[WireType::Qubit, WireType::Qubit]
         )
+    }
+
+    pub fn is_pure_classical(&self) -> bool {
+        todo!();
+        match self {
+            Self::Copy { .. } | Self::Const(_) | Self::FAdd => true,
+            _ => false,
+        }
     }
 
     pub fn signature(&self) -> Signature {

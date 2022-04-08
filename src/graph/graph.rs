@@ -495,7 +495,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             Direction::Outgoing => &node.outgoing,
         })
         .iter()
-        .filter(|e| self.edge_weight(**e).is_some())
+        .filter(|e| **e != EdgeIndex::end())
     }
 
     pub fn neighbours(

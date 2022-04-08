@@ -1,6 +1,6 @@
 use std::collections::{HashSet, VecDeque};
 
-use super::graph::{DefaultIx, Direction, EdgeIndex, Graph, IndexType, NodeIndex, NodePort};
+use super::graph::{DefaultIx, Direction, EdgeIndex, Graph, IndexType, NodeIndex};
 
 /*
 Implementation of Kahn's algorithm

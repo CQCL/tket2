@@ -9,38 +9,14 @@ mod tests {
     use crate::{
         circuit::{
             circuit::{Circuit, UnitID},
-            dag::Vertex,
             operation::{equiv_0, ConstValue, Op},
             operation::{Param, WireType},
         },
         graph::dot::dot_string,
-        graph::graph::{Direction, NodePort, PortIndex},
+        graph::graph::{NodePort, PortIndex},
         json::circuit_json::{self, SerialCircuit},
+        passes::classical::find_const_ops,
     };
-    fn eval_const(circ: &Circuit, n: Vertex) -> Vec<Option<Op>> {
-        let op = &circ.dag.node_weight(n).unwrap().op;
-        let mut inputs = circ
-            .dag
-            .neighbours(n, Direction::Incoming)
-            .map(|np| eval_const(circ, np.node).remove(np.port.index()));
-
-        let failed_return = vec![None; circ.dag.node_edges(n, Direction::Outgoing).count()];
-
-        match op {
-            Op::Const(ConstValue::F64(_)) => vec![Some(op.clone())],
-            Op::Copy {
-                n_copies,
-                typ: WireType::F64,
-            } => vec![inputs.next().expect("Input missing"); *n_copies as usize],
-            Op::FAdd => match &inputs.take(2).collect::<Vec<_>>()[..] {
-                [Some(Op::Const(ConstValue::F64(x))), Some(Op::Const(ConstValue::F64(y)))] => {
-                    vec![Some(Op::Const(ConstValue::F64(x + y)))]
-                }
-                _ => failed_return,
-            },
-            _ => failed_return,
-        }
-    }
 
     #[test]
     fn read_json() {
@@ -143,7 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn test_eval() {
+    fn test_const_fold() {
         let mut circ = Circuit::new();
 
         let [_, output] = circ.boundary();
@@ -167,9 +143,24 @@ mod tests {
             NodePort::new(output, PortIndex::new(0)),
             WireType::F64,
         );
-        assert!(match &eval_const(&circ, fadd)[..] {
-            [Some(Op::Const(ConstValue::F64(x)))] => *x == 2.0,
-            _ => false,
-        })
+
+        let rewrite = find_const_ops(&circ).next().unwrap();
+
+        circ.dag.apply_rewrite(rewrite).unwrap();
+
+        // println!("{}", dot_string(&circ.dag));
+        assert_eq!(circ.dag.node_count(), 3);
+        assert_eq!(circ.dag.edge_count(), 1);
+        let mut nodeit = circ.dag.nodes();
+        // skip input and output
+        nodeit.next();
+        nodeit.next();
+
+        assert_eq!(
+            &circ.dag.node_weight(nodeit.next().unwrap()).unwrap().op,
+            &Op::Const(ConstValue::F64(2.0))
+        );
+
+        // TODO test repeated application, negation, !copy!
     }
 }

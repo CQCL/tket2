@@ -1,3 +1,4 @@
+pub mod classical;
 pub mod redundancy;
 
 #[cfg(test)]
@@ -10,7 +11,7 @@ mod tests {
             operation::{Op, Param},
         },
         graph::{dot::dot_string, graph::PortIndex},
-        json::circuit_json::{self, SerialCircuit},
+        json::circuit_json::SerialCircuit,
     };
 
     use super::redundancy::remove_redundancies;

@@ -1,5 +1,5 @@
 use super::{
-    graph::{Direction, EdgeIndex, Graph, IndexType, NodeIndex, NodePort, PortIndex},
+    graph::{DefaultIx, Direction, EdgeIndex, Graph, IndexType, NodeIndex, NodePort, PortIndex},
     toposort::TopSortWalker,
 };
 
@@ -26,6 +26,16 @@ pub struct BoundedGraph<N, E, Ix> {
 impl<N, E, Ix> BoundedGraph<N, E, Ix> {
     pub fn new(graph: Graph<N, E, Ix>, entry: NodeIndex<Ix>, exit: NodeIndex<Ix>) -> Self {
         Self { graph, entry, exit }
+    }
+}
+pub struct Rewrite<N, E, Ix = DefaultIx> {
+    pub cut: Cut<Ix>,
+    pub replacement: BoundedGraph<N, E, Ix>,
+}
+
+impl<N, E, Ix> Rewrite<N, E, Ix> {
+    pub fn new(cut: Cut<Ix>, replacement: BoundedGraph<N, E, Ix>) -> Self {
+        Self { cut, replacement }
     }
 }
 
@@ -213,5 +223,10 @@ impl<N: Default, E, Ix: IndexType> Graph<N, E, Ix> {
         self.remove_node(node_map[&replacement.entry]);
         self.remove_node(node_map[&replacement.exit]);
         Ok(removed_node_weights)
+    }
+
+    pub fn apply_rewrite(&mut self, rewrite: Rewrite<N, E, Ix>) -> Result<(), String> {
+        self.replace_subgraph(rewrite.cut, rewrite.replacement)?;
+        Ok(())
     }
 }
