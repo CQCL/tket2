@@ -1,5 +1,5 @@
 use super::{
-    graph::{DefaultIx, Direction, EdgeIndex, Graph, IndexType, NodeIndex, NodePort, PortIndex},
+    graph::{DefaultIx, Direction, EdgeIndex, Graph, IndexType, NodeIndex, NodePort},
     toposort::TopSortWalker,
 };
 

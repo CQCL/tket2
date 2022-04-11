@@ -143,8 +143,8 @@ impl Circuit {
         let (_, inlen) = self.dag.node_boundary_size(self.boundary.input);
         let (outlen, _) = self.dag.node_boundary_size(self.boundary.output);
         self.add_edge(
-            (self.boundary.input, inlen as u8).into(),
-            (self.boundary.output, outlen as u8).into(),
+            (self.boundary.input, inlen as u8),
+            (self.boundary.output, outlen as u8),
             uid.get_type(),
         );
         self.uids.push(uid);
@@ -153,7 +153,12 @@ impl Circuit {
     pub fn add_unitid(&mut self, uid: UnitID) {
         self.uids.push(uid);
     }
-    pub fn add_edge(&mut self, source: NodePort, target: NodePort, edge_type: WireType) -> Edge {
+    pub fn add_edge<T: Into<NodePort>>(
+        &mut self,
+        source: T,
+        target: T,
+        edge_type: WireType,
+    ) -> Edge {
         // let ports = (source.1, target.1);
         self.dag.add_edge(
             source,

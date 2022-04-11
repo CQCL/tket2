@@ -15,7 +15,7 @@ mod tests {
         graph::dot::dot_string,
         graph::graph::{NodePort, PortIndex},
         json::circuit_json::{self, SerialCircuit},
-        passes::classical::find_const_ops,
+        passes::classical::{const_fold_exhaustive, find_const_ops},
     };
 
     #[test]
@@ -69,23 +69,11 @@ mod tests {
         let [input, output] = circ.boundary();
 
         let fadd = circ.add_vertex(Op::FAdd);
-        circ.add_edge(
-            NodePort::new(input, PortIndex::new(0)),
-            NodePort::new(fadd, PortIndex::new(0)),
-            WireType::F64,
-        );
+        circ.add_edge((input, 0), (fadd, 0), WireType::F64);
 
-        circ.add_edge(
-            NodePort::new(input, PortIndex::new(1)),
-            NodePort::new(fadd, PortIndex::new(1)),
-            WireType::F64,
-        );
+        circ.add_edge((input, 1), (fadd, 1), WireType::F64);
 
-        circ.add_edge(
-            NodePort::new(fadd, PortIndex::new(0)),
-            NodePort::new(output, PortIndex::new(0)),
-            WireType::F64,
-        );
+        circ.add_edge((fadd, 0), (output, 0), WireType::F64);
     }
 
     #[test]
@@ -127,22 +115,10 @@ mod tests {
         let fadd = circ.add_vertex(Op::FAdd);
         let one = circ.add_vertex(Op::Const(ConstValue::F64(0.5)));
         let two = circ.add_vertex(Op::Const(ConstValue::F64(1.5)));
-        let _e1 = circ.add_edge(
-            NodePort::new(one, PortIndex::new(0)),
-            NodePort::new(fadd, PortIndex::new(0)),
-            WireType::F64,
-        );
-        let _e2 = circ.add_edge(
-            NodePort::new(two, PortIndex::new(0)),
-            NodePort::new(fadd, PortIndex::new(1)),
-            WireType::F64,
-        );
+        let _e1 = circ.add_edge((one, 0), (fadd, 0), WireType::F64);
+        let _e2 = circ.add_edge((two, 0), (fadd, 1), WireType::F64);
 
-        let _out = circ.add_edge(
-            NodePort::new(fadd, PortIndex::new(0)),
-            NodePort::new(output, PortIndex::new(0)),
-            WireType::F64,
-        );
+        let _out = circ.add_edge((fadd, 0), (output, 0), WireType::F64);
 
         let rewrite = find_const_ops(&circ).next().unwrap();
 
@@ -184,78 +160,37 @@ mod tests {
         });
 
         let rx = circ.add_vertex(Op::RxF64);
-        circ.add_edge(
-            NodePort::new(input, PortIndex::new(0)),
-            NodePort::new(rx, PortIndex::new(0)),
-            WireType::Qubit,
-        );
+        circ.add_edge((input, 0), (rx, 0), WireType::Qubit);
 
         let point5 = circ.add_vertex(Op::Const(ConstValue::F64(0.5)));
         let two = circ.add_vertex(Op::Const(ConstValue::F64(2.0)));
         let eight = circ.add_vertex(Op::Const(ConstValue::F64(8.0)));
 
-        circ.add_edge(
-            NodePort::new(two, PortIndex::new(0)),
-            NodePort::new(neg, PortIndex::new(0)),
-            WireType::F64,
-        );
+        circ.add_edge((two, 0), (neg, 0), WireType::F64);
 
-        circ.add_edge(
-            NodePort::new(neg, PortIndex::new(0)),
-            NodePort::new(fadd1, PortIndex::new(0)),
-            WireType::F64,
-        );
+        circ.add_edge((neg, 0), (fadd1, 0), WireType::F64);
 
-        circ.add_edge(
-            NodePort::new(eight, PortIndex::new(0)),
-            NodePort::new(fadd1, PortIndex::new(1)),
-            WireType::F64,
-        );
+        circ.add_edge((eight, 0), (fadd1, 1), WireType::F64);
 
-        circ.add_edge(
-            NodePort::new(point5, PortIndex::new(0)),
-            NodePort::new(copy, PortIndex::new(0)),
-            WireType::F64,
-        );
+        circ.add_edge((point5, 0), (copy, 0), WireType::F64);
 
-        circ.add_edge(
-            NodePort::new(copy, PortIndex::new(0)),
-            NodePort::new(fadd3, PortIndex::new(0)),
-            WireType::F64,
-        );
-        circ.add_edge(
-            NodePort::new(copy, PortIndex::new(1)),
-            NodePort::new(fadd2, PortIndex::new(0)),
-            WireType::F64,
-        );
+        circ.add_edge((copy, 0), (fadd3, 0), WireType::F64);
+        circ.add_edge((copy, 1), (fadd2, 0), WireType::F64);
 
-        circ.add_edge(
-            NodePort::new(fadd1, PortIndex::new(0)),
-            NodePort::new(fadd2, PortIndex::new(1)),
-            WireType::F64,
-        );
+        circ.add_edge((fadd1, 0), (fadd2, 1), WireType::F64);
 
-        circ.add_edge(
-            NodePort::new(fadd2, PortIndex::new(0)),
-            NodePort::new(fadd3, PortIndex::new(1)),
-            WireType::F64,
-        );
+        circ.add_edge((fadd2, 0), (fadd3, 1), WireType::F64);
 
-        circ.add_edge(
-            NodePort::new(fadd3, PortIndex::new(0)),
-            NodePort::new(rx, PortIndex::new(1)),
-            WireType::F64,
-        );
+        circ.add_edge((fadd3, 0), (rx, 1), WireType::F64);
 
-        circ.add_edge(
-            NodePort::new(rx, PortIndex::new(0)),
-            NodePort::new(output, PortIndex::new(0)),
-            WireType::Qubit,
-        );
+        circ.add_edge((rx, 0), (output, 0), WireType::Qubit);
 
         assert_eq!(circ.dag.node_count(), 11);
         assert_eq!(circ.dag.edge_count(), 11);
 
+        // println!("{}", dot_string(&circ.dag));
+
+        let orig_circ = circ.clone();
         let rewrites: Vec<_> = find_const_ops(&circ).collect();
 
         assert_eq!(rewrites.len(), 2);
@@ -305,16 +240,27 @@ mod tests {
                 .unwrap();
         }
 
-        assert_eq!(circ.dag.node_count(), 4);
-        assert_eq!(circ.dag.edge_count(), 3);
-        let mut nodeit = circ.dag.nodes();
-        // skip input and output
-        nodeit.next();
-        nodeit.next();
+        // the above should replicate doing it all in one go
+        let (circ2, success) = const_fold_exhaustive(orig_circ).unwrap();
 
-        assert_eq!(
-            &circ.dag.node_weight(nodeit.next().unwrap()).unwrap().op,
-            &Op::Const(ConstValue::F64(7.0))
-        );
+        assert!(success);
+
+        let (circ, success) = const_fold_exhaustive(circ).unwrap();
+
+        assert!(!success);
+
+        for c in [circ, circ2] {
+            assert_eq!(c.dag.node_count(), 4);
+            assert_eq!(c.dag.edge_count(), 3);
+            let mut nodeit = c.dag.nodes();
+            // skip input and output
+            nodeit.next();
+            nodeit.next();
+
+            assert_eq!(
+                &c.dag.node_weight(nodeit.next().unwrap()).unwrap().op,
+                &Op::Const(ConstValue::F64(7.0))
+            );
+        }
     }
 }

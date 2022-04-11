@@ -5,7 +5,7 @@ use crate::{
         operation::{ConstValue, Op},
     },
     graph::{
-        graph::{Direction, NodePort, PortIndex},
+        graph::Direction,
         substitute::{BoundedGraph, Cut},
     },
 };
@@ -67,11 +67,7 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
             for (i, cv) in cvs.into_iter().enumerate() {
                 let edge_type = cv.get_type();
                 let cv_node = replace.add_vertex(Op::Const(cv));
-                replace.add_edge(
-                    NodePort::new(cv_node, PortIndex::new(0)),
-                    NodePort::new(out, PortIndex::new(i)),
-                    edge_type,
-                );
+                replace.add_edge((cv_node, 0), (out, i as u8), edge_type);
             }
             Some(CircuitRewrite::new(
                 Cut::new(parents, vec![n]),
@@ -83,4 +79,25 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
             ))
         })
     }
+}
+
+/// Repeatedly apply all available constant folding rewrites until no more are found.
+///
+/// # Errors
+///
+/// This function will return an error if rewrite application fails.
+pub fn const_fold_exhaustive(mut circ: Circuit) -> Result<(Circuit, bool), String> {
+    let mut success = false;
+    loop {
+        let rewrites: Vec<_> = find_const_ops(&circ).collect();
+        if rewrites.is_empty() {
+            break;
+        }
+        success = true;
+        for rewrite in rewrites {
+            circ.dag.apply_rewrite(rewrite)?;
+        }
+    }
+
+    Ok((circ, success))
 }
