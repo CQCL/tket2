@@ -38,5 +38,3 @@ pub(crate) type TopSorter<'a> =
     crate::graph::toposort::TopSortWalker<'a, VertexProperties, EdgeProperties>;
 pub(crate) type Vertex = crate::graph::graph::NodeIndex;
 pub(crate) type Edge = crate::graph::graph::EdgeIndex;
-pub(crate) type CircuitRewrite =
-    crate::graph::substitute::Rewrite<VertexProperties, EdgeProperties>;

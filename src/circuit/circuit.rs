@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use crate::graph::graph::{Direction, NodePort, PortIndex};
+use crate::graph::graph::{DefaultIx, Direction, NodePort, PortIndex};
+use crate::graph::substitute::{BoundedGraph, Cut};
 
 use super::dag::{Edge, EdgeProperties, TopSorter, Vertex, VertexProperties, DAG};
 use super::operation::{Op, Param, WireType};
@@ -263,6 +264,12 @@ impl Circuit {
 
         Ok(copy_node)
     }
+
+    pub fn apply_rewrite(&mut self, rewrite: CircuitRewrite) -> Result<(), String> {
+        self.dag.apply_rewrite(rewrite.graph_rewrite)?;
+        self.phase = self.phase.clone() + rewrite.phase;
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -316,5 +323,36 @@ impl<'circ> Iterator for CommandIter<'circ> {
                 args,
             }
         })
+    }
+}
+
+pub(crate) type CircDagRewrite =
+    crate::graph::substitute::Rewrite<VertexProperties, EdgeProperties>;
+pub struct CircuitRewrite {
+    pub graph_rewrite: CircDagRewrite,
+    pub phase: Param,
+}
+
+impl CircuitRewrite {
+    pub fn new(
+        cut: Cut<DefaultIx>,
+        replacement: BoundedGraph<VertexProperties, EdgeProperties, DefaultIx>,
+        phase: Param,
+    ) -> Self {
+        Self {
+            graph_rewrite: CircDagRewrite { cut, replacement },
+            phase,
+        }
+    }
+}
+
+impl From<Circuit> for BoundedGraph<VertexProperties, EdgeProperties, DefaultIx> {
+    fn from(c: Circuit) -> Self {
+        let [entry, exit] = c.boundary();
+        Self {
+            graph: c.dag,
+            entry,
+            exit,
+        }
     }
 }

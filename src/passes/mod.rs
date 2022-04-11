@@ -1,5 +1,32 @@
 pub mod classical;
 pub mod redundancy;
+pub mod squash;
+
+use crate::circuit::circuit::{Circuit, CircuitRewrite};
+
+/// Repeatedly apply all available rewrites reported by finder closure until no more are found.
+///
+/// # Errors
+///
+/// This function will return an error if rewrite application fails.
+pub fn apply_exhaustive<F>(mut circ: Circuit, finder: F) -> Result<(Circuit, bool), String>
+where
+    F: Fn(&Circuit) -> Vec<CircuitRewrite>,
+{
+    let mut success = false;
+    loop {
+        let rewrites = finder(&circ);
+        if rewrites.is_empty() {
+            break;
+        }
+        success = true;
+        for rewrite in rewrites {
+            circ.apply_rewrite(rewrite)?;
+        }
+    }
+
+    Ok((circ, success))
+}
 
 #[cfg(test)]
 mod tests {

@@ -1,7 +1,7 @@
 use crate::{
     circuit::{
-        circuit::Circuit,
-        dag::{CircuitRewrite, Vertex},
+        circuit::{Circuit, CircuitRewrite},
+        dag::Vertex,
         operation::{ConstValue, Op},
     },
     graph::{
@@ -10,9 +10,7 @@ use crate::{
     },
 };
 
-pub fn find_const_ops<'c>(
-    circ: &'c Circuit,
-) -> ClRewriteIter<'c, impl Iterator<Item = Vertex> + 'c> {
+pub fn find_const_ops<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
     ClRewriteIter {
         circ,
         vertex_it: circ.dag.nodes(),
@@ -54,16 +52,36 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
                     [ConstValue::F64(x), ConstValue::F64(y)] => vec![ConstValue::F64(x + y)],
                     _ => return None,
                 },
+                Op::FMul=> match &inputs[..2] {
+                    [ConstValue::F64(x), ConstValue::F64(y)] => vec![ConstValue::F64(x * y)],
+                    _ => return None,
+                },
                 Op::FNeg => match inputs[0] {
                     ConstValue::F64(x) => vec![ConstValue::F64(-x)],
                     _ => return None,
                 },
+
+                // Op::Sin => match inputs[0] {
+                //     ConstValue::F64(x) => vec![ConstValue::F64(x.sin())],
+                //     _ => return None,
+                // },
+                // Op::Cos => match inputs[0] {
+                //     ConstValue::F64(x) => vec![ConstValue::F64(x.cos())],
+                //     _ => return None,
+                // },
                 Op::Copy { n_copies, .. } => vec![inputs[0].clone(); *n_copies as usize],
+                Op::ToRotation => match &inputs[..4] {
+                    [ConstValue::F64(angle), ConstValue::F64(x), ConstValue::F64(y), ConstValue::F64(z)] => {
+                        let p = -angle*std::f64::consts::PI/2.0; let s = p.sin(); 
+                        vec![ConstValue::Quat64(cgmath::Quaternion::new(p.cos(), s*x, s*y, s*z))]
+                    }
+                    _ => return None
+                },
                 _ => panic!("Op {:?} should not have made it to this point.", op),
             };
 
             let mut replace = Circuit::new();
-            let [inp, out] = replace.boundary();
+            let [_, out] = replace.boundary();
             for (i, cv) in cvs.into_iter().enumerate() {
                 let edge_type = cv.get_type();
                 let cv_node = replace.add_vertex(Op::Const(cv));
@@ -71,33 +89,9 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
             }
             Some(CircuitRewrite::new(
                 Cut::new(parents, vec![n]),
-                BoundedGraph {
-                    graph: replace.dag,
-                    entry: inp,
-                    exit: out,
-                },
+                replace.into(),
+                0.0.into(),
             ))
         })
     }
-}
-
-/// Repeatedly apply all available constant folding rewrites until no more are found.
-///
-/// # Errors
-///
-/// This function will return an error if rewrite application fails.
-pub fn const_fold_exhaustive(mut circ: Circuit) -> Result<(Circuit, bool), String> {
-    let mut success = false;
-    loop {
-        let rewrites: Vec<_> = find_const_ops(&circ).collect();
-        if rewrites.is_empty() {
-            break;
-        }
-        success = true;
-        for rewrite in rewrites {
-            circ.dag.apply_rewrite(rewrite)?;
-        }
-    }
-
-    Ok((circ, success))
 }

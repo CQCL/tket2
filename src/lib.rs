@@ -15,7 +15,7 @@ mod tests {
         graph::dot::dot_string,
         graph::graph::{NodePort, PortIndex},
         json::circuit_json::{self, SerialCircuit},
-        passes::classical::{const_fold_exhaustive, find_const_ops},
+        passes::{apply_exhaustive, classical::find_const_ops, squash::find_singleq_rotations},
     };
 
     #[test]
@@ -122,7 +122,7 @@ mod tests {
 
         let rewrite = find_const_ops(&circ).next().unwrap();
 
-        circ.dag.apply_rewrite(rewrite).unwrap();
+        circ.apply_rewrite(rewrite).unwrap();
 
         // println!("{}", dot_string(&circ.dag));
         assert_eq!(circ.dag.node_count(), 3);
@@ -196,7 +196,7 @@ mod tests {
         assert_eq!(rewrites.len(), 2);
 
         for rewrite in rewrites {
-            circ.dag.apply_rewrite(rewrite).unwrap();
+            circ.apply_rewrite(rewrite).unwrap();
         }
 
         assert_eq!(circ.dag.node_count(), 10);
@@ -235,17 +235,19 @@ mod tests {
 
             assert_eq!(rewrites.len(), 1);
 
-            circ.dag
-                .apply_rewrite(rewrites.into_iter().next().unwrap())
+            circ.apply_rewrite(rewrites.into_iter().next().unwrap())
                 .unwrap();
         }
 
+        let constant_folder =
+            |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
+
         // the above should replicate doing it all in one go
-        let (circ2, success) = const_fold_exhaustive(orig_circ).unwrap();
+        let (circ2, success) = constant_folder(orig_circ);
 
         assert!(success);
 
-        let (circ, success) = const_fold_exhaustive(circ).unwrap();
+        let (circ, success) = constant_folder(circ);
 
         assert!(!success);
 
@@ -262,5 +264,34 @@ mod tests {
                 &Op::Const(ConstValue::F64(7.0))
             );
         }
+    }
+
+    #[test]
+    fn test_rotation_replace() {
+        let mut circ = Circuit::new();
+        circ.add_unitid(UnitID::Qubit {
+            name: "q".into(),
+            index: vec![0],
+        });
+        let [input, output] = circ.boundary();
+
+        let point5 = circ.add_vertex(Op::Const(ConstValue::F64(0.5)));
+        let rx = circ.add_vertex(Op::RxF64);
+        circ.add_edge((input, 0), (rx, 0), WireType::Qubit);
+        circ.add_edge((point5, 0), (rx, 1), WireType::F64);
+        circ.add_edge((rx, 0), (output, 0), WireType::Qubit);
+
+        let rot_replacer =
+            |circuit| apply_exhaustive(circuit, |c| find_singleq_rotations(c).collect()).unwrap();
+        let (circ2, success) = rot_replacer(circ);
+
+        assert!(success);
+
+        let constant_folder =
+            |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
+        let (circ2, success) = constant_folder(circ2);
+        assert!(success);
+
+        println!("{}", dot_string(&circ2.dag));
     }
 }
