@@ -29,10 +29,10 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
     fn next(&mut self) -> Option<Self::Item> {
         self.vertex_it.find_map(|n| {
             let op = &self.circ.dag.node_weight(n).unwrap().op;
-            match op {
-                Op::FAdd | Op::FNeg | Op::Copy { .. } => (),
-                _ => return None,
-            };
+            if !op.is_pure_classical() || matches!(op, Op::Const(_)) {
+                return None;
+            }
+
             let parents: Vec<_> = self
                 .circ
                 .dag

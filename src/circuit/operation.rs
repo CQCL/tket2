@@ -134,11 +134,10 @@ impl Op {
     }
 
     pub fn is_pure_classical(&self) -> bool {
-        todo!();
-        match self {
-            Self::Copy { .. } | Self::Const(_) | Self::FAdd => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            Self::Copy { .. } | Self::Const(_) | Self::FAdd | Self::FNeg
+        )
     }
 
     pub fn signature(&self) -> Signature {

@@ -22,8 +22,8 @@ mod tests {
         let n1 = g.add_node(1);
         let n2 = g.add_node(2);
 
-        let e1 = g.add_edge((n0, 0), (n1, 0), 3);
-        let e2 = g.add_edge((n1, 0), (n2, 0), 4);
+        let _e1 = g.add_edge((n0, 0), (n1, 0), 3);
+        let _e2 = g.add_edge((n1, 0), (n2, 0), 4);
         let _e3 = g.add_edge((n0, 1), (n2, 1), 5);
 
         assert_eq!(g.node_count(), 3);
@@ -59,8 +59,8 @@ mod tests {
         let n1 = g.add_node(1);
         let n2 = g.add_node(2);
 
-        let e1 = g.add_edge((n0, 0), (n1, 0), 3);
-        let e2 = g.add_edge((n1, 0), (n2, 0), 4);
+        let _e1 = g.add_edge((n0, 0), (n1, 0), 3);
+        let _e2 = g.add_edge((n1, 0), (n2, 0), 4);
         let _e3 = g.add_edge((n0, 1), (n2, 1), 5);
 
         assert_eq!(g.node_count(), 3);
@@ -121,8 +121,8 @@ mod tests {
         let n1 = g.add_node(1);
         let n2 = g.add_node(2);
 
-        let e1 = g.add_edge((n0, 0), (n1, 0), -1);
-        let e2 = g.add_edge((n1, 0), (n2, 0), -2);
+        let _e1 = g.add_edge((n0, 0), (n1, 0), -1);
+        let _e2 = g.add_edge((n1, 0), (n2, 0), -2);
         let _e3 = g.add_edge((n0, 1), (n2, 1), -3);
 
         let mut g2 = Graph::<i8, i8, u8>::with_capacity(2, 1);
