@@ -236,8 +236,8 @@ impl<E: Clone, Ix: IndexType> Clone for Edge<E, Ix> {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Direction {
-    Incoming,
-    Outgoing,
+    Incoming = 0,
+    Outgoing = 1,
 }
 
 pub struct Graph<N, E, Ix = DefaultIx> {
@@ -504,7 +504,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         direction: Direction,
     ) -> impl Iterator<Item = NodePort<Ix>> + '_ {
         self.node_edges(n, direction)
-            .map(|e| self.edge_endpoints(*e).unwrap()[0])
+            .map(move |e| self.edge_endpoints(*e).unwrap()[direction as usize])
     }
 
     pub fn node_boundary_size(&self, n: NodeIndex<Ix>) -> (usize, usize) {

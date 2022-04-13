@@ -15,7 +15,11 @@ mod tests {
         graph::dot::dot_string,
         graph::graph::{NodePort, PortIndex},
         json::circuit_json::{self, SerialCircuit},
-        passes::{apply_exhaustive, classical::find_const_ops, squash::find_singleq_rotations},
+        passes::{
+            apply_exhaustive,
+            classical::{constant_fold_strat, find_const_ops},
+            squash::find_singleq_rotations,
+        },
     };
 
     #[test]
@@ -191,6 +195,7 @@ mod tests {
         // println!("{}", dot_string(&circ.dag));
 
         let orig_circ = circ.clone();
+        let mut orig_circ2 = circ.clone();
         let rewrites: Vec<_> = find_const_ops(&circ).collect();
 
         assert_eq!(rewrites.len(), 2);
@@ -245,6 +250,7 @@ mod tests {
         // the above should replicate doing it all in one go
         let (circ2, success) = constant_folder(orig_circ);
 
+        assert!(constant_fold_strat(&mut orig_circ2).unwrap());
         assert!(success);
 
         let (circ, success) = constant_folder(circ);

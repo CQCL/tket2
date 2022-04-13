@@ -48,15 +48,15 @@ impl<'graph, N, E, Ix: IndexType> Iterator for TopSortWalker<'graph, N, E, Ix> {
     type Item = NodeIndex<Ix>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (forward, backward, edge_end) = if self.reversed {
-            (Direction::Incoming, Direction::Outgoing, 0)
+        let (forward, backward) = if self.reversed {
+            (Direction::Incoming, Direction::Outgoing)
         } else {
-            (Direction::Outgoing, Direction::Incoming, 1)
+            (Direction::Outgoing, Direction::Incoming)
         };
 
         if let Some(n) = self.candidate_nodes.pop_front() {
             for e in self.g.node_edges(n, forward) {
-                let m = self.g.edge_endpoints(*e).unwrap()[edge_end].node;
+                let m = self.g.edge_endpoints(*e).unwrap()[forward as usize].node;
                 self.remaining_edges.remove(e);
                 if self
                     .g

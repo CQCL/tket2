@@ -6,7 +6,7 @@ use crate::{
     },
     graph::{
         graph::Direction,
-        substitute::{BoundedGraph, Cut},
+        substitute::Cut,
     },
 };
 
@@ -16,7 +16,31 @@ pub fn find_const_ops<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewr
         vertex_it: circ.dag.nodes(),
     }
 }
-pub struct ClRewriteIter<'c, I: Iterator<Item = Vertex>> {
+
+pub fn constant_fold_strat(circ: &mut Circuit) -> Result<bool, String> {
+    let mut success = false;
+    let mut nodes: Vec<_> = circ.dag.nodes().collect();
+    loop {
+        let rewrites: Vec<_> =  (ClRewriteIter {circ, vertex_it: nodes.into_iter()}).collect();
+        if rewrites.is_empty(){
+            break
+        }
+        success = true;
+        nodes = vec![];
+        for rewrite in rewrites {
+            for n in rewrite.graph_rewrite.cut.out_nodes.iter() {
+                for child in circ.dag.neighbours(*n, Direction::Outgoing){
+                    nodes.push(child.node);
+                }
+
+            }
+            circ.apply_rewrite(rewrite)?;
+        }
+    }
+
+    Ok(success)
+}
+struct ClRewriteIter<'c, I: Iterator<Item = Vertex>> {
     circ: &'c Circuit,
     vertex_it: I,
 }

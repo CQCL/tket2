@@ -4,7 +4,7 @@ use crate::{
         dag::Vertex,
         operation::{ConstValue, Op, WireType},
     },
-    graph::{graph::NodePort, substitute::Cut},
+    graph::substitute::Cut,
 };
 
 pub fn find_singleq_rotations<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
@@ -59,6 +59,13 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for RotationRewriteIter<'circ, 
                     let x = replace.add_vertex(Op::Const(ConstValue::F64(1.0)));
                     let y = replace.add_vertex(Op::Const(ConstValue::F64(0.0)));
                     let z = replace.add_vertex(Op::Const(ConstValue::F64(0.0)));
+                    [(inp, 1), (x, 0), (y, 0), (z, 0)]
+                }
+                Op::RzF64 => {
+                    // replace.add_edge((inp, 1), (make_quat, 0), WireType::F64);
+                    let x = replace.add_vertex(Op::Const(ConstValue::F64(0.0)));
+                    let y = replace.add_vertex(Op::Const(ConstValue::F64(0.0)));
+                    let z = replace.add_vertex(Op::Const(ConstValue::F64(1.0)));
                     [(inp, 1), (x, 0), (y, 0), (z, 0)]
                 }
 
