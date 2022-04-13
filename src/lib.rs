@@ -250,14 +250,15 @@ mod tests {
         // the above should replicate doing it all in one go
         let (circ2, success) = constant_folder(orig_circ);
 
-        assert!(constant_fold_strat(&mut orig_circ2).unwrap());
         assert!(success);
 
         let (circ, success) = constant_folder(circ);
 
         assert!(!success);
 
-        for c in [circ, circ2] {
+        assert!(constant_fold_strat(&mut orig_circ2).unwrap());
+
+        for c in [circ, circ2, orig_circ2] {
             assert_eq!(c.dag.node_count(), 4);
             assert_eq!(c.dag.edge_count(), 3);
             let mut nodeit = c.dag.nodes();
