@@ -107,7 +107,7 @@ mod tests {
             NodePort::new(output, PortIndex::new(0)),
             WireType::F64,
         );
-        println!("{}", dot_string(&circ.dag));
+        // println!("{}", dot_string(&circ.dag));
     }
 
     #[test]

@@ -598,4 +598,62 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             .collect();
         (node_map, edge_map)
     }
+
+    /**
+    Remove all invalid nodes and edges. Update internal references.
+    INVALIDATES EXTERNAL NODE AND EDGE REFERENCES
+    */
+    pub fn remove_invalid(self) -> Self {
+        // TODO optimise
+        let (old_indices, mut new_nodes): (Vec<_>, Vec<_>) = self
+            .nodes
+            .into_iter()
+            .enumerate()
+            .filter(|(_, x)| x.weight.is_some())
+            .unzip();
+
+        let index_map: HashMap<_, _> = old_indices
+            .into_iter()
+            .enumerate()
+            .map(|(a, b)| (b, a))
+            .collect();
+
+        let (old_edge_indices, new_edges): (Vec<_>, Vec<_>) = self
+            .edges
+            .into_iter()
+            .enumerate()
+            .filter(|(_, x)| x.weight.is_some())
+            .map(|(i, mut e)| {
+                for np in e.node_ports.iter_mut() {
+                    np.node = NodeIndex::new(index_map[&np.node.index()]);
+                }
+                (i, e)
+            })
+            .unzip();
+
+        let edge_index_map: HashMap<_, _> = old_edge_indices
+            .into_iter()
+            .enumerate()
+            .map(|(a, b)| (b, a))
+            .collect();
+
+        for node in new_nodes.iter_mut() {
+            for lst in [&mut node.incoming, &mut node.outgoing] {
+                for e in lst.iter_mut() {
+                    if *e != EdgeIndex::end() {
+                        *e = EdgeIndex::new(edge_index_map[&e.index()]);
+                    }
+                }
+            }
+        }
+
+        Self {
+            node_count: new_nodes.len(),
+            nodes: new_nodes,
+            edge_count: new_edges.len(),
+            edges: new_edges,
+            free_node: NodeIndex::end(),
+            free_edge: EdgeIndex::end(),
+        }
+    }
 }

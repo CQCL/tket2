@@ -37,7 +37,7 @@ mod tests {
             circuit::{Circuit, UnitID},
             operation::{Op, Param},
         },
-        graph::{dot::dot_string, graph::PortIndex},
+        graph::graph::PortIndex,
         json::circuit_json::SerialCircuit,
     };
 
@@ -70,10 +70,7 @@ mod tests {
         circ.append_op(Op::Rx(Param::new("2.0")), &vec![PortIndex::new(1)])
             .unwrap();
 
-        println!("{}", dot_string(&circ.dag));
-
         let circ2 = remove_redundancies(circ);
-        println!("{}", dot_string(&circ2.dag));
 
         let _reser: SerialCircuit = circ2.into();
 
