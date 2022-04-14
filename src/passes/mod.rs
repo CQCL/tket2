@@ -28,6 +28,28 @@ where
     Ok((circ, success))
 }
 
+/// Repeatedly apply first reported rewrite
+///
+/// # Errors
+///
+/// This function will return an error if rewrite application fails.
+pub fn apply_greedy<F>(mut circ: Circuit, finder: F) -> Result<(Circuit, bool), String>
+where
+    F: Fn(&Circuit) -> Option<CircuitRewrite>,
+{
+    let mut success = false;
+    loop {
+        if let Some(rewrite) = finder(&circ) {
+            success = true;
+            circ.apply_rewrite(rewrite)?;
+        } else {
+            break;
+        }
+    }
+
+    Ok((circ, success))
+}
+
 #[cfg(test)]
 mod tests {
     use symengine::Expression;

@@ -4,10 +4,7 @@ use crate::{
         dag::Vertex,
         operation::{ConstValue, Op},
     },
-    graph::{
-        graph::Direction,
-        substitute::Cut,
-    },
+    graph::{graph::Direction, substitute::BoundedSubgraph},
 };
 
 pub fn find_const_ops<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
@@ -21,18 +18,22 @@ pub fn constant_fold_strat(circ: &mut Circuit) -> Result<bool, String> {
     let mut success = false;
     let mut nodes: Vec<_> = circ.dag.nodes().collect();
     loop {
-        let rewrites: Vec<_> =  (ClRewriteIter {circ, vertex_it: nodes.into_iter()}).collect();
-        if rewrites.is_empty(){
-            break
+        let rewrites: Vec<_> = (ClRewriteIter {
+            circ,
+            vertex_it: nodes.into_iter(),
+        })
+        .collect();
+        if rewrites.is_empty() {
+            break;
         }
         success = true;
         nodes = vec![];
         for rewrite in rewrites {
-            for n in rewrite.graph_rewrite.cut.out_nodes.iter() {
-                for child in circ.dag.neighbours(*n, Direction::Outgoing){
-                    nodes.push(child.node);
-                }
-
+            for child in rewrite.graph_rewrite.subg.edges[1]
+                .iter()
+                .map(|e| circ.dag.edge_endpoints(*e).unwrap()[1].node)
+            {
+                nodes.push(child);
             }
             circ.apply_rewrite(rewrite)?;
         }
@@ -96,10 +97,14 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
                 Op::Copy { n_copies, .. } => vec![inputs[0].clone(); *n_copies as usize],
                 Op::ToRotation => match &inputs[..4] {
                     [ConstValue::F64(angle), ConstValue::F64(x), ConstValue::F64(y), ConstValue::F64(z)] => {
-                        let p = -angle*std::f64::consts::PI/2.0; let s = p.sin(); 
+                        let p = -angle*std::f64::consts::PI/2.0; let s = p.sin();
                         vec![ConstValue::Quat64(cgmath::Quaternion::new(p.cos(), s*x, s*y, s*z))]
                     }
                     _ => return None
+                },
+                Op::QuatMul=> match &inputs[..2] {
+                    [ConstValue::Quat64(x), ConstValue::Quat64(y)] => vec![ConstValue::Quat64(x * y)],
+                    _ => return None,
                 },
                 _ => panic!("Op {:?} should not have made it to this point.", op),
             };
@@ -111,8 +116,9 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
                 let cv_node = replace.add_vertex(Op::Const(cv));
                 replace.add_edge((cv_node, 0), (out, i as u8), edge_type);
             }
+            let subgraph = BoundedSubgraph::new(parents.into_iter().chain([n].into_iter()).into(), [vec![], self.circ.dag.node_edges(n, Direction::Outgoing).copied().collect()]);
             Some(CircuitRewrite::new(
-                Cut::new(parents, vec![n]),
+                subgraph,
                 replace.into(),
                 0.0.into(),
             ))

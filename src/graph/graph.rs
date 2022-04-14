@@ -603,7 +603,13 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
     Remove all invalid nodes and edges. Update internal references.
     INVALIDATES EXTERNAL NODE AND EDGE REFERENCES
     */
-    pub fn remove_invalid(self) -> Self {
+    pub fn remove_invalid(
+        mut self,
+    ) -> (
+        Self,
+        HashMap<NodeIndex<Ix>, NodeIndex<Ix>>,
+        HashMap<EdgeIndex<Ix>, EdgeIndex<Ix>>,
+    ) {
         // TODO optimise
         let (old_indices, mut new_nodes): (Vec<_>, Vec<_>) = self
             .nodes
@@ -615,7 +621,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         let index_map: HashMap<_, _> = old_indices
             .into_iter()
             .enumerate()
-            .map(|(a, b)| (b, a))
+            .map(|(a, b)| (NodeIndex::new(b), NodeIndex::new(a)))
             .collect();
 
         let (old_edge_indices, new_edges): (Vec<_>, Vec<_>) = self
@@ -625,7 +631,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             .filter(|(_, x)| x.weight.is_some())
             .map(|(i, mut e)| {
                 for np in e.node_ports.iter_mut() {
-                    np.node = NodeIndex::new(index_map[&np.node.index()]);
+                    np.node = index_map[&np.node];
                 }
                 (i, e)
             })
@@ -634,26 +640,26 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         let edge_index_map: HashMap<_, _> = old_edge_indices
             .into_iter()
             .enumerate()
-            .map(|(a, b)| (b, a))
+            .map(|(a, b)| (EdgeIndex::new(b), EdgeIndex::new(a)))
             .collect();
 
         for node in new_nodes.iter_mut() {
             for lst in [&mut node.incoming, &mut node.outgoing] {
                 for e in lst.iter_mut() {
                     if *e != EdgeIndex::end() {
-                        *e = EdgeIndex::new(edge_index_map[&e.index()]);
+                        *e = edge_index_map[&e];
                     }
                 }
             }
         }
 
-        Self {
-            node_count: new_nodes.len(),
-            nodes: new_nodes,
-            edge_count: new_edges.len(),
-            edges: new_edges,
-            free_node: NodeIndex::end(),
-            free_edge: EdgeIndex::end(),
-        }
+        self.node_count = new_nodes.len();
+        self.nodes = new_nodes;
+        self.edge_count = new_edges.len();
+        self.edges = new_edges;
+        self.free_node = NodeIndex::end();
+        self.free_edge = EdgeIndex::end();
+
+        (self, index_map, edge_index_map)
     }
 }

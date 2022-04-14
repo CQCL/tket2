@@ -1,85 +1,123 @@
-use super::{
-    graph::{DefaultIx, Direction, EdgeIndex, Graph, IndexType, NodeIndex, NodePort},
-    toposort::TopSortWalker,
-};
+use super::graph::{DefaultIx, Direction, EdgeIndex, Graph, IndexType, NodeIndex, NodePort};
+use std::collections::HashSet;
+use std::hash::Hash;
 
-pub struct Cut<Ix> {
-    pub in_nodes: Vec<NodeIndex<Ix>>,
-    pub out_nodes: Vec<NodeIndex<Ix>>,
+pub trait HashIx: Eq + Hash + IndexType {}
+impl<T: Eq + Hash + IndexType> HashIx for T {}
+
+pub struct SubgraphRef<HashIx> {
+    pub nodes: HashSet<NodeIndex<HashIx>>,
 }
 
-impl<Ix> Cut<Ix> {
-    pub fn new(in_nodes: Vec<NodeIndex<Ix>>, out_nodes: Vec<NodeIndex<Ix>>) -> Self {
+impl<Ix: HashIx> SubgraphRef<Ix> {
+    pub fn new(nodes: HashSet<NodeIndex<Ix>>) -> Self {
+        Self { nodes }
+    }
+}
+
+impl<Ix: HashIx, T: Iterator<Item = NodeIndex<Ix>>> From<T> for SubgraphRef<Ix> {
+    fn from(it: T) -> Self {
         Self {
-            in_nodes,
-            out_nodes,
+            nodes: HashSet::from_iter(it),
         }
     }
 }
 
-pub struct BoundedGraph<N, E, Ix> {
+pub struct BoundedSubgraph<Ix: HashIx> {
+    pub subg: SubgraphRef<Ix>,
+    pub edges: [Vec<EdgeIndex<Ix>>; 2],
+}
+
+impl<Ix: HashIx> BoundedSubgraph<Ix> {
+    pub fn new(subg: SubgraphRef<Ix>, edges: [Vec<EdgeIndex<Ix>>; 2]) -> Self {
+        Self { subg, edges }
+    }
+
+    pub fn from_node<N, E>(graph: &Graph<N, E, Ix>, node: NodeIndex<Ix>) -> Self {
+        Self {
+            subg: [node].into_iter().into(),
+            edges: [
+                graph
+                    .node_edges(node, Direction::Incoming)
+                    .copied()
+                    .collect(),
+                graph
+                    .node_edges(node, Direction::Outgoing)
+                    .copied()
+                    .collect(),
+            ],
+        }
+    }
+}
+
+pub struct ClosedGraph<N, E, Ix> {
     pub graph: Graph<N, E, Ix>,
     pub entry: NodeIndex<Ix>,
     pub exit: NodeIndex<Ix>,
 }
 
-impl<N, E, Ix> BoundedGraph<N, E, Ix> {
+impl<N, E, Ix> ClosedGraph<N, E, Ix> {
     pub fn new(graph: Graph<N, E, Ix>, entry: NodeIndex<Ix>, exit: NodeIndex<Ix>) -> Self {
         Self { graph, entry, exit }
     }
 }
-pub struct Rewrite<N, E, Ix = DefaultIx> {
-    pub cut: Cut<Ix>,
-    pub replacement: BoundedGraph<N, E, Ix>,
+pub struct Rewrite<N, E, Ix: HashIx = DefaultIx> {
+    pub subg: BoundedSubgraph<Ix>,
+    pub replacement: ClosedGraph<N, E, Ix>,
 }
 
-impl<N, E, Ix> Rewrite<N, E, Ix> {
-    pub fn new(cut: Cut<Ix>, replacement: BoundedGraph<N, E, Ix>) -> Self {
-        Self { cut, replacement }
+impl<N, E, Ix: HashIx> Rewrite<N, E, Ix> {
+    pub fn new(subg: BoundedSubgraph<Ix>, replacement: ClosedGraph<N, E, Ix>) -> Self {
+        Self { subg, replacement }
     }
 }
 
-impl<N: Default, E, Ix: IndexType> Graph<N, E, Ix> {
-    /// Remove all edges going in and out of the cut
-    fn make_cut(&mut self, cut: &Cut<Ix>) {
-        for edgevec in self.cut_boundary(cut) {
+impl<N: Default, E, Ix: HashIx> Graph<N, E, Ix> {
+    /// Remove all edges going in and out of the subgraph
+    fn make_cuts(&mut self, subg: &BoundedSubgraph<Ix>) {
+        for edgevec in &subg.edges {
             for e in edgevec {
-                self.remove_edge(e).expect("Invalid edge.");
+                self.remove_edge(*e).expect("Invalid edge.");
             }
         }
-        // for (i, e) in cut.in_nodes.into_iter().enumerate() {
+        // for (i, e) in subg.in_nodes.into_iter().enumerate() {
         //     let target = self.edges[e.index()].node_ports[1];
         //     let weight = self.remove_edge(e).expect("Invalid edge.");
         //     self.add_edge(NodePort::new(entry, PortIndex::new(i)), target, weight);
         // }
 
-        // for (i, e) in cut.out_nodes.into_iter().enumerate() {
+        // for (i, e) in subg.out_nodes.into_iter().enumerate() {
         //     let source = self.edges[e.index()].node_ports[0];
         //     let weight = self.remove_edge(e).expect("Invalid edge.");
         //     self.add_edge(source, NodePort::new(exit, PortIndex::new(i)), weight);
         // }
     }
+    // fn remove_subgraph_directed(&mut self, subg: BoundedSubgraph<Ix>) -> Vec<Option<N>> {
+    //     self.make_cuts(&subg);
+    //     // match direction {
+    //         //     Direction::Incoming => TopSortWalker::new(self, subg.out_nodes.into()).reversed(),
+    //         //     Direction::Outgoing => TopSortWalker::new(self, subg.in_nodes.into()),
+    //         // }
+    //         // .collect::<Vec<_>>()
+    //         subg.subg
+    //         .nodes
+    //         .into_iter()
+    //         .map(|n| self.remove_node(n))
+    //         .collect()
+    //         // let removed_nodes: Vec<_> = walker.collect();
+    //         // walker
+    //     }
 
     /**
-    Remove subgraph formed by cut and remove weights of nodes inside cut in
-    TopoSort order
+    Remove subgraph formed by subg and remove weights of nodes inside subg
     */
-    fn remove_subgraph_directed(&mut self, cut: Cut<Ix>, direction: Direction) -> Vec<Option<N>> {
-        self.make_cut(&cut);
-        match direction {
-            Direction::Incoming => TopSortWalker::new(self, cut.out_nodes.into()).reversed(),
-            Direction::Outgoing => TopSortWalker::new(self, cut.in_nodes.into()),
-        }
-        .collect::<Vec<_>>()
-        .iter()
-        .map(|n| self.remove_node(*n))
-        .collect()
-        // let removed_nodes: Vec<_> = walker.collect();
-        // walker
-    }
-
-    pub fn remove_subgraph(&mut self, cut: Cut<Ix>) -> Vec<Option<N>> {
-        self.remove_subgraph_directed(cut, Direction::Outgoing)
+    pub fn remove_subgraph(&mut self, subg: BoundedSubgraph<Ix>) -> Vec<Option<N>> {
+        self.make_cuts(&subg);
+        subg.subg
+            .nodes
+            .into_iter()
+            .map(|n| self.remove_node(n))
+            .collect()
     }
 
     fn merge_edgelists(
@@ -111,38 +149,36 @@ impl<N: Default, E, Ix: IndexType> Graph<N, E, Ix> {
         ))
     }
 
-    fn cut_boundary(&self, cut: &Cut<Ix>) -> [Vec<EdgeIndex<Ix>>; 2] {
-        [
-            (&cut.in_nodes, Direction::Incoming),
-            (&cut.out_nodes, Direction::Outgoing),
-        ]
-        .into_iter()
-        .map(|(nodes, dir)| {
-            nodes
-                .iter()
-                .map(|n| self.node_edges(*n, dir).cloned())
-                .flatten()
-                .collect()
-        })
-        .collect::<Vec<_>>()
-        .try_into()
-        .unwrap()
-    }
+    // fn cut_boundary(&self, subg: &BoundedSubgraph<Ix>) -> [Vec<EdgeIndex<Ix>>; 2] {
+    //     [
+    //         (&subg.in_nodes, Direction::Incoming),
+    //         (&subg.out_nodes, Direction::Outgoing),
+    //     ]
+    //     .into_iter()
+    //     .map(|(nodes, dir)| {
+    //         nodes
+    //             .iter()
+    //             .map(|n| self.node_edges(*n, dir).cloned())
+    //             .flatten()
+    //             .collect()
+    //     })
+    //     .collect::<Vec<_>>()
+    //     .try_into()
+    //     .unwrap()
+    // }
 
     fn replace_with_identity(
         &mut self,
-        cut: Cut<Ix>,
+        subg: BoundedSubgraph<Ix>,
         new_weights: Vec<E>,
     ) -> Result<Vec<EdgeIndex<Ix>>, &str> {
-        let [incoming_edges, outgoing_edges] = self.cut_boundary(&cut);
-
-        if cut.in_nodes.len() != cut.out_nodes.len() {
+        if subg.edges[0].len() != subg.edges[1].len() {
             return Err("Boundary size mismatch.");
         }
 
-        let new_edges = self.merge_edgelists(&incoming_edges, &outgoing_edges)?;
+        let new_edges = self.merge_edgelists(&subg.edges[0], &subg.edges[1])?;
 
-        self.remove_subgraph(cut);
+        self.remove_subgraph(subg);
 
         Ok(new_edges
             .into_iter()
@@ -153,8 +189,8 @@ impl<N: Default, E, Ix: IndexType> Graph<N, E, Ix> {
 
     fn replace_subgraph(
         &mut self,
-        cut: Cut<Ix>,
-        replacement: BoundedGraph<N, E, Ix>,
+        subg: BoundedSubgraph<Ix>,
+        replacement: ClosedGraph<N, E, Ix>,
     ) -> Result<Vec<Option<N>>, &str> {
         // get all the entry and exit edges in replacement graph
         let new_in_edges: Vec<_> = replacement
@@ -168,7 +204,7 @@ impl<N: Default, E, Ix: IndexType> Graph<N, E, Ix> {
             .cloned()
             .collect();
 
-        let [incoming_edges, outgoing_edges] = self.cut_boundary(&cut);
+        let [incoming_edges, outgoing_edges] = &subg.edges;
 
         if incoming_edges.len() != new_in_edges.len() || outgoing_edges.len() != new_out_edges.len()
         {
@@ -179,24 +215,25 @@ impl<N: Default, E, Ix: IndexType> Graph<N, E, Ix> {
         let (node_map, edge_map) = self.insert_graph(replacement.graph);
         let new_in_edges: Vec<_> = new_in_edges.into_iter().map(|e| edge_map[&e]).collect();
         let new_out_edges: Vec<_> = new_out_edges.into_iter().map(|e| edge_map[&e]).collect();
-
         // get references to nodeports that need wiring up in self before
-        // removing cut
+        // removing subg
         let left_nodeports = incoming_edges
             .iter()
             .map(|e| self.edge_endpoints(*e).map(|x| x[0]))
             .collect::<Option<Vec<NodePort<Ix>>>>()
-            .ok_or("Invalid edge at cut in_edges")?;
+            .ok_or("Invalid edge at subg in_edges")?;
 
         let right_nodeports = outgoing_edges
             .iter()
             .map(|e| self.edge_endpoints(*e).map(|x| x[1]))
             .collect::<Option<Vec<NodePort<Ix>>>>()
-            .ok_or("Invalid edge at cut out_edges")?;
+            .ok_or("Invalid edge at subg out_edges")?;
 
-        // remove according to cut (including the cut edges themselves)
-        let removed_node_weights = self.remove_subgraph(cut);
+        // remove according to subg (including the subg edges themselves)
+        // dbg!(&new_in_edges);
+        // println!("{}", crate::graph::dot::dot_string(&self));
 
+        let removed_node_weights = self.remove_subgraph(subg);
         // rewire replacement I/O edges from their entry/exit nodes to the
         // appropriate nodeports in self
         for (e, np) in new_in_edges.into_iter().zip(left_nodeports) {
@@ -222,7 +259,7 @@ impl<N: Default, E, Ix: IndexType> Graph<N, E, Ix> {
     }
 
     pub fn apply_rewrite(&mut self, rewrite: Rewrite<N, E, Ix>) -> Result<(), String> {
-        self.replace_subgraph(rewrite.cut, rewrite.replacement)?;
+        self.replace_subgraph(rewrite.subg, rewrite.replacement)?;
         Ok(())
     }
 }
@@ -231,10 +268,7 @@ impl<N: Default, E, Ix: IndexType> Graph<N, E, Ix> {
 mod tests {
     use std::collections::HashSet;
 
-    use crate::graph::{
-        graph::Direction,
-        substitute::{BoundedGraph, Cut},
-    };
+    use crate::graph::substitute::{BoundedSubgraph, ClosedGraph};
 
     use super::Graph;
 
@@ -246,33 +280,34 @@ mod tests {
         let n1 = g.add_node(1);
         let n2 = g.add_node(2);
 
-        let _e1 = g.add_edge((n0, 0), (n1, 0), 3);
-        let _e2 = g.add_edge((n1, 0), (n2, 0), 4);
+        let e1 = g.add_edge((n0, 0), (n1, 0), 3);
+        let e2 = g.add_edge((n1, 0), (n2, 0), 4);
         let _e3 = g.add_edge((n0, 1), (n2, 1), 5);
 
         assert_eq!(g.node_count(), 3);
         assert_eq!(g.edge_count(), 3);
-        for direction in [Direction::Incoming, Direction::Outgoing] {
-            let mut new_g = g.clone();
-            let rem_nodes = new_g.remove_subgraph_directed(Cut::new(vec![n1], vec![n1]), direction);
+        let mut new_g = g.clone();
+        let rem_nodes = new_g.remove_subgraph(BoundedSubgraph::new(
+            [n1].into_iter().into(),
+            [vec![e1], vec![e2]],
+        ));
 
-            assert_eq!(rem_nodes, vec![Some(1)]);
+        assert_eq!(rem_nodes, vec![Some(1)]);
 
-            let correct_weights: HashSet<_> = HashSet::from_iter([0, 2].into_iter());
-            assert_eq!(
-                HashSet::from_iter(new_g.nodes().map(|n| *g.node_weight(n).unwrap())),
-                correct_weights
-            );
+        let correct_weights: HashSet<_> = HashSet::from_iter([0, 2].into_iter());
+        assert_eq!(
+            HashSet::from_iter(new_g.nodes().map(|n| *g.node_weight(n).unwrap())),
+            correct_weights
+        );
 
-            let correct_weights: HashSet<_> = HashSet::from_iter([5].into_iter());
-            assert_eq!(
-                HashSet::from_iter(new_g.edges().map(|e| *g.edge_weight(e).unwrap())),
-                correct_weights
-            );
+        let correct_weights: HashSet<_> = HashSet::from_iter([5].into_iter());
+        assert_eq!(
+            HashSet::from_iter(new_g.edges().map(|e| *g.edge_weight(e).unwrap())),
+            correct_weights
+        );
 
-            assert_eq!(new_g.edge_count(), 1);
-            assert_eq!(new_g.node_count(), 2);
-        }
+        assert_eq!(new_g.edge_count(), 1);
+        assert_eq!(new_g.node_count(), 2);
     }
 
     #[test]
@@ -283,15 +318,18 @@ mod tests {
         let n1 = g.add_node(1);
         let n2 = g.add_node(2);
 
-        let _e1 = g.add_edge((n0, 0), (n1, 0), 3);
-        let _e2 = g.add_edge((n1, 0), (n2, 0), 4);
+        let e1 = g.add_edge((n0, 0), (n1, 0), 3);
+        let e2 = g.add_edge((n1, 0), (n2, 0), 4);
         let _e3 = g.add_edge((n0, 1), (n2, 1), 5);
 
         assert_eq!(g.node_count(), 3);
         assert_eq!(g.edge_count(), 3);
 
-        g.replace_with_identity(Cut::new(vec![n1], vec![n1]), vec![6])
-            .unwrap();
+        g.replace_with_identity(
+            BoundedSubgraph::new([n1].into_iter().into(), [vec![e1], vec![e2]]),
+            vec![6],
+        )
+        .unwrap();
 
         let correct_weights: HashSet<_> = HashSet::from_iter([0, 2].into_iter());
         assert_eq!(
@@ -345,8 +383,8 @@ mod tests {
         let n1 = g.add_node(1);
         let n2 = g.add_node(2);
 
-        let _e1 = g.add_edge((n0, 0), (n1, 0), -1);
-        let _e2 = g.add_edge((n1, 0), (n2, 0), -2);
+        let e1 = g.add_edge((n0, 0), (n1, 0), -1);
+        let e2 = g.add_edge((n1, 0), (n2, 0), -2);
         let _e3 = g.add_edge((n0, 1), (n2, 1), -3);
 
         let mut g2 = Graph::<i8, i8, u8>::with_capacity(2, 1);
@@ -362,8 +400,8 @@ mod tests {
 
         let rem_nodes = g
             .replace_subgraph(
-                Cut::new(vec![n1], vec![n1]),
-                BoundedGraph::new(g2, g20, g22),
+                BoundedSubgraph::new([n1].into_iter().into(), [vec![e1], vec![e2]]),
+                ClosedGraph::new(g2, g20, g22),
             )
             .unwrap();
 

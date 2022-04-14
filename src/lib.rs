@@ -16,9 +16,9 @@ mod tests {
         graph::graph::{NodePort, PortIndex},
         json::circuit_json::{self, SerialCircuit},
         passes::{
-            apply_exhaustive,
+            apply_exhaustive, apply_greedy,
             classical::{constant_fold_strat, find_const_ops},
-            squash::find_singleq_rotations,
+            squash::{find_singleq_rotations, SquashFindIter},
         },
     };
 
@@ -259,17 +259,22 @@ mod tests {
         assert!(constant_fold_strat(&mut orig_circ2).unwrap());
 
         for c in [circ, circ2, orig_circ2] {
+            let c = c.remove_invalid();
             assert_eq!(c.dag.node_count(), 4);
             assert_eq!(c.dag.edge_count(), 3);
-            let mut nodeit = c.dag.nodes();
-            // skip input and output
-            nodeit.next();
-            nodeit.next();
+            let const_val = c
+                .dag
+                .nodes()
+                .find_map(|n| {
+                    if let Op::Const(x) = &c.dag.node_weight(n).unwrap().op {
+                        Some(x)
+                    } else {
+                        None
+                    }
+                })
+                .unwrap();
 
-            assert_eq!(
-                &c.dag.node_weight(nodeit.next().unwrap()).unwrap().op,
-                &Op::Const(ConstValue::F64(7.0))
-            );
+            assert_eq!(const_val, &ConstValue::F64(7.0));
         }
     }
 
@@ -296,9 +301,47 @@ mod tests {
 
         let constant_folder =
             |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
-        let (circ2, success) = constant_folder(circ2);
+        let (_circ2, success) = constant_folder(circ2);
         assert!(success);
 
+        // println!("{}", dot_string(&circ2.dag));
+    }
+
+    #[test]
+    fn test_squash() {
+        let mut circ = Circuit::new();
+        circ.add_unitid(UnitID::Qubit {
+            name: "q".into(),
+            index: vec![0],
+        });
+        let [input, output] = circ.boundary();
+
+        let point5 = circ.add_vertex(Op::Const(ConstValue::F64(0.5)));
+        let point2 = circ.add_vertex(Op::Const(ConstValue::F64(0.2)));
+        let rx = circ.add_vertex(Op::RxF64);
+        let rz = circ.add_vertex(Op::RzF64);
+        circ.add_edge((input, 0), (rx, 0), WireType::Qubit);
+        circ.add_edge((point5, 0), (rx, 1), WireType::F64);
+        circ.add_edge((rx, 0), (rz, 0), WireType::Qubit);
+        circ.add_edge((point2, 0), (rz, 1), WireType::F64);
+        circ.add_edge((rz, 0), (output, 0), WireType::Qubit);
+        // println!("{}", dot_string(&circ.dag));
+
+        let rot_replacer =
+            |circuit| apply_greedy(circuit, |c| find_singleq_rotations(c).next()).unwrap();
+        let (circ2, success) = rot_replacer(circ);
+
+        assert!(success);
+
+        let squasher = |circuit| apply_greedy(circuit, |c| SquashFindIter::new(c).next()).unwrap();
+
+        let (circ2, success) = squasher(circ2);
+        assert!(success);
+
+        let constant_folder =
+            |circuit| apply_greedy(circuit, |c| find_const_ops(c).next()).unwrap();
+        let (circ2, success) = constant_folder(circ2);
+        assert!(success);
         println!("{}", dot_string(&circ2.dag));
     }
 }

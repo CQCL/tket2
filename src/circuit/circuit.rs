@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use crate::graph::graph::{DefaultIx, Direction, NodePort, PortIndex};
-use crate::graph::substitute::{BoundedGraph, Cut};
+use crate::graph::substitute::{BoundedSubgraph, ClosedGraph};
 
 use super::dag::{Edge, EdgeProperties, TopSorter, Vertex, VertexProperties, DAG};
 use super::operation::{Op, Param, WireType};
@@ -271,6 +271,15 @@ impl Circuit {
         self.phase = self.phase.clone() + rewrite.phase;
         Ok(())
     }
+    pub fn remove_invalid(mut self) -> Self {
+        let (g, node_map, _) = self.dag.remove_invalid();
+        self.dag = g;
+        self.boundary = Boundary {
+            input: node_map[&self.boundary.input],
+            output: node_map[&self.boundary.output],
+        };
+        self
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -336,18 +345,18 @@ pub struct CircuitRewrite {
 
 impl CircuitRewrite {
     pub fn new(
-        cut: Cut<DefaultIx>,
-        replacement: BoundedGraph<VertexProperties, EdgeProperties, DefaultIx>,
+        subg: BoundedSubgraph<DefaultIx>,
+        replacement: ClosedGraph<VertexProperties, EdgeProperties, DefaultIx>,
         phase: Param,
     ) -> Self {
         Self {
-            graph_rewrite: CircDagRewrite { cut, replacement },
+            graph_rewrite: CircDagRewrite { subg, replacement },
             phase,
         }
     }
 }
 
-impl From<Circuit> for BoundedGraph<VertexProperties, EdgeProperties, DefaultIx> {
+impl From<Circuit> for ClosedGraph<VertexProperties, EdgeProperties, DefaultIx> {
     fn from(c: Circuit) -> Self {
         let [entry, exit] = c.boundary();
         Self {

@@ -5,9 +5,12 @@ pub mod toposort;
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
 
-    use crate::graph::dot::dot_string;
+    use crate::graph::{
+        dot::dot_string,
+        graph::{EdgeIndex, NodeIndex},
+    };
 
     use super::graph::Graph;
 
@@ -67,12 +70,28 @@ mod tests {
         assert_eq!(g.nodes.len(), 3);
         assert_eq!(g.edges.len(), 3);
 
-        let g = g.remove_invalid();
+        let (g, nodemap, edgemap) = g.remove_invalid();
 
         assert_eq!(g.node_count(), 2);
         assert_eq!(g.edge_count(), 1);
         assert_eq!(g.nodes.len(), 2);
         assert_eq!(g.edges.len(), 1);
+
+        assert_eq!(
+            nodemap,
+            HashMap::from_iter(
+                [
+                    (NodeIndex::new(0), NodeIndex::new(0)),
+                    (NodeIndex::new(2), NodeIndex::new(1))
+                ]
+                .into_iter()
+            )
+        );
+
+        assert_eq!(
+            edgemap,
+            HashMap::from_iter([(EdgeIndex::new(2), EdgeIndex::new(0)),].into_iter())
+        );
 
         // TODO some better test of validity (check graph correctness conditions)
         let _s = dot_string(&g);

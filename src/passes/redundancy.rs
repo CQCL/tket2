@@ -4,7 +4,7 @@ use crate::circuit::circuit::{Circuit, CircuitRewrite};
 use crate::circuit::dag::{Edge, EdgeProperties, Vertex, VertexProperties, DAG};
 use crate::circuit::operation::{Op, Param};
 use crate::graph::graph::{Direction, EdgeIndex};
-use crate::graph::substitute::Cut;
+use crate::graph::substitute::BoundedSubgraph;
 
 fn get_boundary(dag: &DAG, node: Vertex, direction: Direction) -> Vec<Edge> {
     dag.node_edges(node, direction).cloned().collect()
@@ -61,7 +61,7 @@ pub fn remove_redundancies(mut circ: Circuit) -> Circuit {
 
             let new_weights = get_weights(&circ.dag, &preds);
             circ.apply_rewrite(CircuitRewrite::new(
-                Cut::new(vec![candidate], vec![candidate]),
+                BoundedSubgraph::from_node(&circ.dag, candidate),
                 identity(new_weights).into(),
                 Param::from(phase),
             ))
@@ -98,7 +98,7 @@ pub fn remove_redundancies(mut circ: Circuit) -> Circuit {
             let new_weights = get_weights(&circ.dag, &preds);
             add_neighbours(&circ.dag, &preds, &succs, &mut candidate_nodes);
             circ.apply_rewrite(CircuitRewrite::new(
-                Cut::new(vec![candidate], vec![kid]),
+                BoundedSubgraph::new([candidate, kid].into_iter().into(), [preds, succs]),
                 identity(new_weights).into(),
                 Param::from(0.0),
             ))
