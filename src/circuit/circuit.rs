@@ -86,7 +86,7 @@ impl Circuit {
             .op
             .signature()
         {
-            x if x.purely_linear() => x.linear,
+            Some(x) if x.purely_linear() => x.linear,
             _ => return Err("Nonlinear sigs not supported by rewire.".into()),
         };
 
@@ -173,14 +173,15 @@ impl Circuit {
     }
 
     pub fn add_vertex(&mut self, op: Op) -> Vertex {
-        let siglen = op.signature().len();
+        let capacity = op.signature().map_or(0, |sig| sig.len());
         let weight = VertexProperties::new(op);
-        self.dag.add_node_with_capacity(siglen, weight)
+        self.dag.add_node_with_capacity(capacity, weight)
     }
+
     pub fn append_op(&mut self, op: Op, args: &Vec<PortIndex>) -> Result<Vertex, String> {
         // akin to add-op in TKET-1
         let sig = match op.signature() {
-            x if x.purely_linear() => x.linear,
+            Some(x) if x.purely_linear() => x.linear,
             _ => return Err("Only linear ops supported.".to_string()),
         };
         assert_eq!(sig.len(), args.len());

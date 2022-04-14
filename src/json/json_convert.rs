@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::circuit::circuit::{Circuit, UnitID};
 use crate::circuit::operation::{Op, WireType};
-use crate::json::circuit_json::{Operation, Permutation, Register, SerialCircuit};
 use crate::graph::graph::PortIndex;
+use crate::json::circuit_json::{Operation, Permutation, Register, SerialCircuit};
 use crate::json::optype::OpType;
 
 fn to_qubit(reg: Register) -> UnitID {
@@ -191,7 +191,7 @@ impl From<SerialCircuit> for Circuit {
             let args = com
                 .args
                 .into_iter()
-                .zip(op.signature().linear)
+                .zip(op.signature().expect("No signature for op").linear)
                 .map(|(reg, wiretype)| match wiretype {
                     WireType::Qubit => to_qubit(reg),
                     WireType::LinearBit | WireType::Bool => to_bit(reg),

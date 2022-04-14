@@ -7,7 +7,7 @@ use cgmath::Quaternion;
 use symengine::Expression;
 pub(crate) type Param = Expression;
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum WireType {
     Qubit,
     LinearBit,
@@ -46,6 +46,15 @@ impl Signature {
 
     pub fn purely_linear(&self) -> bool {
         self.nonlinear[0].is_empty() && self.nonlinear[1].is_empty()
+    }
+
+    pub fn purely_classical(&self) -> bool {
+        !self
+            .linear
+            .iter()
+            .chain(self.nonlinear[0].iter())
+            .chain(self.nonlinear[1].iter())
+            .any(|typ| matches!(typ, WireType::Qubit))
     }
 }
 
@@ -88,6 +97,7 @@ pub enum Op {
     FAdd,
     FMul,
     FNeg,
+    QuatMul,
     // Sin,
     // Cos,
     Copy { n_copies: u32, typ: WireType },
@@ -129,38 +139,28 @@ pub fn equiv_0(p: &Param, modulo: u32) -> bool {
     }
 }
 
+fn binary_op(typ: WireType) -> Signature {
+    Signature::new_nonlinear(vec![typ, typ], vec![typ])
+}
+
 impl Op {
     pub fn is_one_qb_gate(&self) -> bool {
-        match self {
-            Op::Input | Op::Output => false,
-            _ => matches!(&self.signature().linear[..], &[WireType::Qubit]),
-        }
+        self.signature()
+            .map_or(false, |sig| matches!(&sig.linear[..], &[WireType::Qubit]))
     }
 
     pub fn is_two_qb_gate(&self) -> bool {
-        match self {
-            Op::Input | Op::Output => false,
-            _ => matches!(
-                &self.signature().linear[..],
-                &[WireType::Qubit, WireType::Qubit]
-            ),
-        }
+        self.signature().map_or(false, |sig| {
+            matches!(&sig.linear[..], &[WireType::Qubit, WireType::Qubit])
+        })
     }
 
     pub fn is_pure_classical(&self) -> bool {
-        matches!(
-            self,
-            Self::Copy { .. }
-                | Self::Const(_)
-                | Self::FAdd
-                | Self::FNeg
-                | Self::ToRotation
-                | Self::FMul
-        )
+        self.signature().map_or(false, |x| x.purely_classical())
     }
 
-    pub fn signature(&self) -> Signature {
-        match self {
+    pub fn signature(&self) -> Option<Signature> {
+        Some(match self {
             Op::H
             | Op::Reset
             | Op::Rx(_)
@@ -170,9 +170,8 @@ impl Op {
             | Op::PhasedX(..) => ONEQBSIG.clone(),
             Op::CX | Op::ZZMax | Op::ZZPhase(..) => TWOQBSIG.clone(),
             Op::Measure => Signature::new_linear(vec![WireType::Qubit, WireType::LinearBit]),
-            Op::FAdd | Op::FMul => {
-                Signature::new_nonlinear(vec![WireType::F64, WireType::F64], vec![WireType::F64])
-            }
+            Op::FAdd | Op::FMul => binary_op(WireType::F64),
+            Op::QuatMul => binary_op(WireType::Quat64),
             Op::FNeg => Signature::new_nonlinear(vec![WireType::F64], vec![WireType::F64]),
             Op::Copy { n_copies, typ } => {
                 let typ = typ.clone();
@@ -188,8 +187,8 @@ impl Op {
                 vec![WireType::F64, WireType::F64, WireType::F64, WireType::F64],
                 vec![WireType::Quat64],
             ),
-            _ => panic!("Gate signature unknwon. {:?}", self),
-        }
+            _ => return None,
+        })
     }
 
     pub fn get_params(&self) -> Vec<Param> {
