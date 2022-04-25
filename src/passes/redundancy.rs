@@ -29,7 +29,9 @@ fn identity(edge_weights: Vec<EdgeProperties>) -> Circuit {
     let mut circ = Circuit::new();
     let [i, o] = circ.boundary();
     for (p, w) in edge_weights.into_iter().enumerate() {
-        circ.add_edge((i, p as u8), (o, p as u8), w.edge_type);
+        let noop = circ.add_vertex(Op::Noop);
+        circ.add_edge((i, p as u8), (noop, 0), w.edge_type);
+        circ.add_edge((noop, 0), (o, p as u8), w.edge_type);
     }
 
     circ
@@ -51,22 +53,22 @@ pub fn remove_redundancies(mut circ: Circuit) -> Circuit {
             },
         };
 
-        if let Some(phase) = op.identity_up_to_phase() {
-            let preds: Vec<_> = get_boundary(&circ.dag, candidate, Direction::Incoming);
-            let succs: Vec<_> = get_boundary(&circ.dag, candidate, Direction::Outgoing);
+        if !matches!(op, Op::Noop) {
+            if let Some(phase) = op.identity_up_to_phase() {
+                let preds: Vec<_> = get_boundary(&circ.dag, candidate, Direction::Incoming);
+                let succs: Vec<_> = get_boundary(&circ.dag, candidate, Direction::Outgoing);
 
-            add_neighbours(&circ.dag, &preds, &succs, &mut candidate_nodes);
+                add_neighbours(&circ.dag, &preds, &succs, &mut candidate_nodes);
 
-            // circ.phase = circ.phase + Param::from(phase);
-
-            let new_weights = get_weights(&circ.dag, &preds);
-            circ.apply_rewrite(CircuitRewrite::new(
-                BoundedSubgraph::from_node(&circ.dag, candidate),
-                identity(new_weights).into(),
-                Param::from(phase),
-            ))
-            .unwrap();
-            continue;
+                let new_weights = get_weights(&circ.dag, &preds);
+                circ.apply_rewrite(CircuitRewrite::new(
+                    BoundedSubgraph::from_node(&circ.dag, candidate),
+                    identity(new_weights).into(),
+                    Param::from(phase),
+                ))
+                .unwrap();
+                continue;
+            }
         }
 
         let kids: HashSet<_> = circ
@@ -95,6 +97,7 @@ pub fn remove_redundancies(mut circ: Circuit) -> Circuit {
 
             let preds: Vec<_> = get_boundary(&circ.dag, candidate, Direction::Incoming);
             let succs: Vec<_> = get_boundary(&circ.dag, kid, Direction::Outgoing);
+
             let new_weights = get_weights(&circ.dag, &preds);
             add_neighbours(&circ.dag, &preds, &succs, &mut candidate_nodes);
             circ.apply_rewrite(CircuitRewrite::new(
@@ -107,5 +110,5 @@ pub fn remove_redundancies(mut circ: Circuit) -> Circuit {
         }
     }
 
-    circ
+    circ.remove_noop()
 }

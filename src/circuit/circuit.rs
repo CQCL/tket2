@@ -123,11 +123,10 @@ impl Circuit {
                 (x, y) if x == y => {
                     self.dag.remove_edge(edge);
                     self.dag
-                        .add_edge(old_v1, (new_vert, i as u8).into(), edgeprops.clone());
+                        .add_edge(old_v1, (new_vert, i as u8), edgeprops.clone());
                     // .map_err(|_| CycleInGraph())?;
 
-                    self.dag
-                        .add_edge((new_vert, i as u8).into(), old_v2, edgeprops);
+                    self.dag.add_edge((new_vert, i as u8), old_v2, edgeprops);
                     // .map_err(|_| CycleInGraph())?;
                     // bin.push(pred);
                 }
@@ -280,6 +279,37 @@ impl Circuit {
         };
         self
     }
+
+    pub fn remove_noop(mut self) -> Self {
+        let noop_nodes: Vec<_> = self
+            .dag
+            .nodes()
+            .filter(|n| matches!(self.dag.node_weight(*n).unwrap().op, Op::Noop))
+            .collect();
+        for nod in noop_nodes {
+            let source = self
+                .dag
+                .neighbours(nod, Direction::Incoming)
+                .next()
+                .unwrap();
+            let target = self
+                .dag
+                .neighbours(nod, Direction::Outgoing)
+                .next()
+                .unwrap();
+
+            self.dag.remove_node(nod);
+            self.dag.add_edge(
+                source,
+                target,
+                EdgeProperties {
+                    edge_type: WireType::Qubit,
+                },
+            );
+        }
+
+        self
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -357,12 +387,35 @@ impl CircuitRewrite {
 }
 
 impl From<Circuit> for ClosedGraph<VertexProperties, EdgeProperties, DefaultIx> {
-    fn from(c: Circuit) -> Self {
+    fn from(mut c: Circuit) -> Self {
         let [entry, exit] = c.boundary();
+        let in_ports = c.dag.neighbours(entry, Direction::Outgoing).collect();
+        let out_ports = c.dag.neighbours(exit, Direction::Incoming).collect();
+
+        c.dag.remove_node(entry);
+        c.dag.remove_node(exit);
         Self {
+            in_ports,
+            out_ports,
             graph: c.dag,
-            entry,
-            exit,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::circuit::operation::{Op, WireType};
+
+    use super::Circuit;
+
+    #[test]
+    fn test_add_identity() {
+        let mut circ = Circuit::new();
+        let [i, o] = circ.boundary();
+        for p in 0..2 {
+            let noop = circ.add_vertex(Op::Noop);
+            circ.add_edge((i, p), (noop, 0), WireType::Qubit);
+            circ.add_edge((noop, 0), (o, p), WireType::Qubit);
         }
     }
 }

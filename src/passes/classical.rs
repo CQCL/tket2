@@ -116,7 +116,13 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
                 let cv_node = replace.add_vertex(Op::Const(cv));
                 replace.add_edge((cv_node, 0), (out, i as u8), edge_type);
             }
-            let subgraph = BoundedSubgraph::new(parents.into_iter().chain([n].into_iter()).into(), [vec![], self.circ.dag.node_edges(n, Direction::Outgoing).copied().collect()]);
+            let subgraph = BoundedSubgraph::new(
+                parents
+                        .into_iter()
+                        .chain([n].into_iter())
+                        .into(),
+                [vec![], self.circ.dag.node_edges(n, Direction::Outgoing).copied().collect()]
+            );
             Some(CircuitRewrite::new(
                 subgraph,
                 replace.into(),

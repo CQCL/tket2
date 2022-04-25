@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fmt;
+use std::fmt::{self, Debug};
 use std::hash::Hash;
 use std::mem::replace;
 
@@ -234,10 +234,16 @@ impl<E: Clone, Ix: IndexType> Clone for Edge<E, Ix> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum Direction {
     Incoming = 0,
     Outgoing = 1,
+}
+
+impl Default for Direction {
+    fn default() -> Self {
+        Direction::Incoming
+    }
 }
 
 pub struct Graph<N, E, Ix = DefaultIx> {
@@ -274,6 +280,19 @@ impl<N: Clone, E: Clone, Ix: IndexType> Clone for Graph<N, E, Ix> {
     }
 }
 
+impl<N: Debug, E: Debug, Ix: IndexType> Debug for Graph<N, E, Ix> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Graph")
+            .field("nodes", &self.nodes)
+            .field("edges", &self.edges)
+            .field("node_count", &self.node_count)
+            .field("edge_count", &self.edge_count)
+            .field("free_node", &self.free_node)
+            .field("free_edge", &self.free_edge)
+            .finish()
+    }
+}
+
 impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
     pub fn new() -> Self {
         Self::with_capacity(0, 0)
@@ -291,7 +310,6 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
     }
 
     pub fn add_node_with_capacity(&mut self, capacity: usize, weight: N) -> NodeIndex<Ix> {
-        // CAUTION can initialise "empty" nodes, only use for temporary nodes with None
         if self.free_node != NodeIndex::end() {
             let node_idx = self.free_node;
             let node_slot = &mut self.nodes[node_idx.index()];
@@ -331,7 +349,12 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         self.add_node_with_capacity(0, weight)
     }
 
-    pub fn add_edge<T: Into<NodePort<Ix>>>(&mut self, a: T, b: T, weight: E) -> EdgeIndex<Ix> {
+    pub fn add_edge<T: Into<NodePort<Ix>>, S: Into<NodePort<Ix>>>(
+        &mut self,
+        a: T,
+        b: S,
+        weight: E,
+    ) -> EdgeIndex<Ix> {
         let a = a.into();
         let b = b.into();
         let edge_idx;
@@ -345,7 +368,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             edge.node_ports = [a, b];
         } else {
             edge_idx = EdgeIndex::new(self.edges.len());
-            assert!(<Ix as IndexType>::max().index() == !0 || EdgeIndex::end() != edge_idx);
+            debug_assert!(<Ix as IndexType>::max().index() == !0 || EdgeIndex::end() != edge_idx);
             let new_edge = Edge {
                 weight: Some(weight),
                 node_ports: [a, b],
@@ -358,7 +381,10 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             if let Some(e) = port_array.get_mut(port) {
                 *e = edge_idx;
             } else {
-                debug_assert!(port == port_array.len());
+                // TODO figure out if this poses any danger
+                while port > port_array.len() {
+                    port_array.push(EdgeIndex::end());
+                }
                 port_array.push(edge_idx);
             }
         };
@@ -371,6 +397,49 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
 
         self.edge_count += 1;
         edge_idx
+    }
+
+    pub(super) fn update_edge<T: Into<NodePort<Ix>>, S: Into<NodePort<Ix>>>(
+        &mut self,
+        e: EdgeIndex<Ix>,
+        a: T,
+        b: S,
+    ) {
+        let a = a.into();
+        let b = b.into();
+
+        let wire_up_port = |port: PortIndex, port_array: &mut Vec<_>| {
+            let port = port.index();
+            if let Some(port_e) = port_array.get_mut(port) {
+                *port_e = e;
+            } else {
+                debug_assert!(port == port_array.len());
+                port_array.push(e);
+            }
+        };
+
+        let edge = &mut self.edges[e.index()];
+
+        let old_source = self
+            .nodes
+            .get_mut(edge.node_ports[0].node.index())
+            .expect("Node not found.");
+
+        old_source.outgoing[edge.node_ports[0].port.index()] = EdgeIndex::end();
+
+        let old_target = self
+            .nodes
+            .get_mut(edge.node_ports[1].node.index())
+            .expect("Node not found.");
+        old_target.incoming[edge.node_ports[1].port.index()] = EdgeIndex::end();
+
+        let node_a = self.nodes.get_mut(a.node.index()).expect("Node not found.");
+        wire_up_port(a.port, &mut node_a.outgoing);
+
+        let node_b = self.nodes.get_mut(b.node.index()).expect("Node not found.");
+        wire_up_port(b.port, &mut node_b.incoming);
+
+        edge.node_ports = [a, b];
     }
 
     pub fn remove_node(&mut self, a: NodeIndex<Ix>) -> Option<N> {
@@ -400,6 +469,11 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             *e = self.free_node._into_edge();
         } else {
             node_slot.outgoing.push(self.free_node._into_edge());
+        }
+        if let Some(e) = node_slot.incoming.get_mut(0) {
+            *e = EdgeIndex::end();
+        } else {
+            node_slot.incoming.push(EdgeIndex::end());
         }
         // node_slot.incoming[0] =
         if self.free_node != NodeIndex::end() {
@@ -452,7 +526,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         clear_up_port(p1, &mut n1.outgoing);
 
         let (n2, p2) = match edge.node_ports[1] {
-            NodePort { node, port } => (
+            NodePort { node, port} => (
                 self.nodes.get_mut(node.index()).expect("Node not found."),
                 port,
             ),
@@ -546,7 +620,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
     }
 
     pub fn next_edge(&self, e: &EdgeIndex<Ix>) -> Option<EdgeIndex<Ix>> {
-        let NodePort { node, port } = self.edges[e.index()].node_ports[1];
+        let NodePort { node, port, .. } = self.edges[e.index()].node_ports[1];
         if node == NodeIndex::end() {
             return None;
         }
@@ -584,15 +658,10 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             .enumerate()
             .filter_map(|(i, e)| {
                 e.weight.map(|weight| {
-                    let [np1, np2] = e.node_ports;
-                    (
-                        EdgeIndex::new(i),
-                        self.add_edge(
-                            NodePort::new(node_map[&np1.node], np1.port),
-                            NodePort::new(node_map[&np2.node], np2.port),
-                            weight,
-                        ),
-                    )
+                    let [mut np1, mut np2] = e.node_ports;
+                    np1.node = node_map[&np1.node];
+                    np2.node = node_map[&np2.node];
+                    (EdgeIndex::new(i), self.add_edge(np1, np2, weight))
                 })
             })
             .collect();
@@ -661,5 +730,56 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         self.free_edge = EdgeIndex::end();
 
         (self, index_map, edge_index_map)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::graph::graph::Direction;
+
+    use super::Graph;
+
+    #[test]
+    fn test_update_edge() {
+        let mut g = Graph::<u8, i8, u8>::with_capacity(3, 2);
+
+        let n0 = g.add_node(0);
+        let n1 = g.add_node(1);
+        let n2 = g.add_node(2);
+
+        let e0 = g.add_edge((n0, 0), (n1, 0), -3);
+        let e1 = g.add_edge((n1, 0), (n2, 0), -4);
+        let e2 = g.add_edge((n0, 1), (n2, 1), -5);
+        let n3 = g.add_node(3);
+        g.update_edge(e0, (n0, 0), (n3, 0));
+        g.update_edge(e1, (n3, 0), (n2, 0));
+
+        assert_eq!(g.remove_node(n1), Some(1));
+
+        assert_eq!(g.node_count(), 3);
+        assert_eq!(g.edge_count(), 3);
+
+        assert_eq!(g.edge_weight(e0), Some(&-3));
+        assert_eq!(g.edge_weight(e1), Some(&-4));
+
+        assert_eq!(g.edge_endpoints(e0), Some([(n0, 0).into(), (n3, 0).into()]));
+        assert_eq!(g.edge_endpoints(e1), Some([(n3, 0).into(), (n2, 0).into()]));
+
+        assert_eq!(
+            g.node_edges(n0, Direction::Outgoing).collect::<Vec<_>>(),
+            vec![&e0, &e2]
+        );
+        assert_eq!(
+            g.node_edges(n2, Direction::Incoming).collect::<Vec<_>>(),
+            vec![&e1, &e2]
+        );
+        assert_eq!(
+            g.node_edges(n3, Direction::Incoming).collect::<Vec<_>>(),
+            vec![&e0]
+        );
+        assert_eq!(
+            g.node_edges(n3, Direction::Outgoing).collect::<Vec<_>>(),
+            vec![&e1]
+        );
     }
 }

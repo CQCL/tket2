@@ -161,6 +161,7 @@ impl Op {
 
     pub fn signature(&self) -> Option<Signature> {
         Some(match self {
+            Op::Noop => ONEQBSIG.clone(),
             Op::H
             | Op::Reset
             | Op::Rx(_)
@@ -196,6 +197,7 @@ impl Op {
     }
     pub fn dagger(&self) -> Option<Self> {
         Some(match self {
+            Op::Noop => Op::Noop,
             Op::H => Op::H,
             Op::CX => Op::CX,
             Op::ZZMax => Op::ZZPhase(Param::new("-0.5")),

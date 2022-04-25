@@ -13,7 +13,6 @@ mod tests {
             operation::{Param, WireType},
         },
         graph::dot::dot_string,
-        graph::graph::{NodePort, PortIndex},
         json::circuit_json::{self, SerialCircuit},
         passes::{
             apply_exhaustive, apply_greedy,
@@ -88,25 +87,13 @@ mod tests {
         let [input, output] = circ.boundary();
 
         let fadd = circ.add_vertex(Op::FAdd);
-        let e = circ.add_edge(
-            NodePort::new(input, PortIndex::new(0)),
-            NodePort::new(fadd, PortIndex::new(0)),
-            WireType::F64,
-        );
+        let e = circ.add_edge((input, 0), (fadd, 0), WireType::F64);
 
         let copy = circ.copy_edge(e, 2).unwrap();
 
-        circ.add_edge(
-            NodePort::new(copy, PortIndex::new(1)),
-            NodePort::new(fadd, PortIndex::new(1)),
-            WireType::F64,
-        );
+        circ.add_edge((copy, 1), (fadd, 1), WireType::F64);
 
-        circ.add_edge(
-            NodePort::new(fadd, PortIndex::new(0)),
-            NodePort::new(output, PortIndex::new(0)),
-            WireType::F64,
-        );
+        circ.add_edge((fadd, 0), (output, 0), WireType::F64);
         // println!("{}", dot_string(&circ.dag));
     }
 
