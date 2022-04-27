@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use crate::graph::graph::{DefaultIx, Direction, NodePort, PortIndex};
-use crate::graph::substitute::{BoundedSubgraph, ClosedGraph};
+use crate::graph::substitute::{BoundedSubgraph, OpenGraph};
 
 use super::dag::{Edge, EdgeProperties, TopSorter, Vertex, VertexProperties, DAG};
 use super::operation::{Op, Param, WireType};
@@ -368,6 +368,7 @@ impl<'circ> Iterator for CommandIter<'circ> {
 
 pub(crate) type CircDagRewrite =
     crate::graph::substitute::Rewrite<VertexProperties, EdgeProperties>;
+#[derive(Debug)]
 pub struct CircuitRewrite {
     pub graph_rewrite: CircDagRewrite,
     pub phase: Param,
@@ -376,7 +377,7 @@ pub struct CircuitRewrite {
 impl CircuitRewrite {
     pub fn new(
         subg: BoundedSubgraph<DefaultIx>,
-        replacement: ClosedGraph<VertexProperties, EdgeProperties, DefaultIx>,
+        replacement: OpenGraph<VertexProperties, EdgeProperties, DefaultIx>,
         phase: Param,
     ) -> Self {
         Self {
@@ -386,7 +387,7 @@ impl CircuitRewrite {
     }
 }
 
-impl From<Circuit> for ClosedGraph<VertexProperties, EdgeProperties, DefaultIx> {
+impl From<Circuit> for OpenGraph<VertexProperties, EdgeProperties, DefaultIx> {
     fn from(mut c: Circuit) -> Self {
         let [entry, exit] = c.boundary();
         let in_ports = c.dag.neighbours(entry, Direction::Outgoing).collect();

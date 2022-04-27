@@ -6,6 +6,7 @@ use std::hash::Hash;
 pub trait HashIx: Eq + Hash + IndexType {}
 impl<T: Eq + Hash + IndexType> HashIx for T {}
 
+#[derive(Debug)]
 pub struct SubgraphRef<HashIx> {
     pub nodes: HashSet<NodeIndex<HashIx>>,
 }
@@ -24,6 +25,7 @@ impl<Ix: HashIx, T: Iterator<Item = NodeIndex<Ix>>> From<T> for SubgraphRef<Ix> 
     }
 }
 
+#[derive(Debug)]
 pub struct BoundedSubgraph<Ix: HashIx> {
     pub subg: SubgraphRef<Ix>,
     pub edges: [Vec<EdgeIndex<Ix>>; 2],
@@ -51,13 +53,13 @@ impl<Ix: HashIx> BoundedSubgraph<Ix> {
     }
 }
 
-pub struct ClosedGraph<N, E, Ix> {
+pub struct OpenGraph<N, E, Ix> {
     pub graph: Graph<N, E, Ix>,
     pub in_ports: Vec<NodePort<Ix>>,
     pub out_ports: Vec<NodePort<Ix>>,
 }
 
-impl<N, E, Ix> ClosedGraph<N, E, Ix> {
+impl<N, E, Ix> OpenGraph<N, E, Ix> {
     pub fn new(
         graph: Graph<N, E, Ix>,
         in_ports: Vec<NodePort<Ix>>,
@@ -71,7 +73,7 @@ impl<N, E, Ix> ClosedGraph<N, E, Ix> {
     }
 }
 
-impl<N: Debug, E: Debug, Ix: IndexType> Debug for ClosedGraph<N, E, Ix> {
+impl<N: Debug, E: Debug, Ix: IndexType> Debug for OpenGraph<N, E, Ix> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ClosedGraph")
             .field("graph", &self.graph)
@@ -81,13 +83,14 @@ impl<N: Debug, E: Debug, Ix: IndexType> Debug for ClosedGraph<N, E, Ix> {
     }
 }
 
+#[derive(Debug)]
 pub struct Rewrite<N, E, Ix: HashIx = DefaultIx> {
     pub subg: BoundedSubgraph<Ix>,
-    pub replacement: ClosedGraph<N, E, Ix>,
+    pub replacement: OpenGraph<N, E, Ix>,
 }
 
 impl<N, E, Ix: HashIx> Rewrite<N, E, Ix> {
-    pub fn new(subg: BoundedSubgraph<Ix>, replacement: ClosedGraph<N, E, Ix>) -> Self {
+    pub fn new(subg: BoundedSubgraph<Ix>, replacement: OpenGraph<N, E, Ix>) -> Self {
         Self { subg, replacement }
     }
 }
@@ -107,7 +110,7 @@ impl<N: Default + Debug + Display, E: Debug + Display, Ix: HashIx> Graph<N, E, I
     fn replace_subgraph(
         &mut self,
         subg: BoundedSubgraph<Ix>,
-        replacement: ClosedGraph<N, E, Ix>,
+        replacement: OpenGraph<N, E, Ix>,
     ) -> Result<Vec<Option<N>>, &str> {
         let [incoming_edges, outgoing_edges] = &subg.edges;
 
@@ -144,7 +147,7 @@ impl<N: Default + Debug + Display, E: Debug + Display, Ix: HashIx> Graph<N, E, I
 mod tests {
     use std::collections::HashSet;
 
-    use crate::graph::substitute::{BoundedSubgraph, ClosedGraph};
+    use crate::graph::substitute::{BoundedSubgraph, OpenGraph};
 
     use super::Graph;
 
@@ -238,7 +241,7 @@ mod tests {
         let rem_nodes = g
             .replace_subgraph(
                 BoundedSubgraph::new([n1].into_iter().into(), [vec![e1], vec![e2]]),
-                ClosedGraph::new(g2, vec![(g2n, 0).into()], vec![(g2n, 0).into()]),
+                OpenGraph::new(g2, vec![(g2n, 0).into()], vec![(g2n, 0).into()]),
             )
             .unwrap();
 

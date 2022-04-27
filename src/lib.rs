@@ -315,20 +315,20 @@ mod tests {
         // println!("{}", dot_string(&circ.dag));
 
         let rot_replacer =
-            |circuit| apply_greedy(circuit, |c| find_singleq_rotations(c).next()).unwrap();
+            |circuit| apply_exhaustive(circuit, |c| find_singleq_rotations(c).collect()).unwrap();
         let (circ2, success) = rot_replacer(circ);
 
         assert!(success);
-
-        let squasher = |circuit| apply_greedy(circuit, |c| SquashFindIter::new(c).next()).unwrap();
+        let squasher = |circuit| apply_exhaustive(circuit, |c| SquashFindIter::new(c).collect()).unwrap();
 
         let (circ2, success) = squasher(circ2);
         assert!(success);
 
         let constant_folder =
-            |circuit| apply_greedy(circuit, |c| find_const_ops(c).next()).unwrap();
-        let (circ2, success) = constant_folder(circ2);
+            |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
+        let (_circ2, success) = constant_folder(circ2);
         assert!(success);
-        println!("{}", dot_string(&circ2.dag));
+
+        // TODO verify behaviour at each step
     }
 }

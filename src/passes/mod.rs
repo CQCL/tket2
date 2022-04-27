@@ -15,6 +15,9 @@ where
 {
     let mut success = false;
     loop {
+        // assuming all the returned rewrites are non-overlapping
+        // or filter to make them non-overlapping
+        // then in theory, they can all be applied in parallel
         let rewrites = finder(&circ);
         if rewrites.is_empty() {
             break;

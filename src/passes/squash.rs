@@ -167,13 +167,14 @@ impl<'circ> Iterator for SquashFindIter<'circ> {
                 break;
             }
         }
+        self.current_edge = *self
+            .circ
+            .dag
+            .node_edges(rot_nodes[rot_nodes.len() - 1], self.direction)
+            .next()
+            .expect("single qubit op should have a successor");
+
         if rot_nodes.len() < 2 {
-            self.current_edge = *self
-                .circ
-                .dag
-                .node_edges(current_node, self.direction)
-                .next()
-                .expect("single qubit op should have a successor");
             return self.next();
         }
 
