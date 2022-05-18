@@ -63,8 +63,8 @@ mod tests {
             operation::{Op, Param},
         },
         graph::graph::PortIndex,
-        json::circuit_json::SerialCircuit,
     };
+    use tket_json_rs::circuit_json::SerialCircuit;
 
     use super::redundancy::remove_redundancies;
 
@@ -97,7 +97,7 @@ mod tests {
 
         let circ2 = remove_redundancies(circ);
 
-        let _reser: SerialCircuit = circ2.into();
+        let _reser: SerialCircuit<Param> = circ2.into();
 
         assert_eq!(_reser.commands.len(), 0);
         // Rx(2pi) introduces a phase

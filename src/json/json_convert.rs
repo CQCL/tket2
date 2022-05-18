@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use crate::circuit::circuit::{Circuit, UnitID};
-use crate::circuit::operation::{Op, WireType};
+use crate::circuit::operation::{Op, Param, WireType};
 use crate::graph::graph::PortIndex;
-use crate::json::circuit_json::{Operation, Permutation, Register, SerialCircuit};
-use crate::json::optype::OpType;
+use tket_json_rs::circuit_json::{Command, Operation, Permutation, Register, SerialCircuit};
+use tket_json_rs::optype::OpType;
 
 fn to_qubit(reg: Register) -> UnitID {
     UnitID::Qubit {
@@ -20,8 +20,8 @@ fn to_bit(reg: Register) -> UnitID {
     }
 }
 
-impl From<Operation> for Op {
-    fn from(serial_op: Operation) -> Self {
+impl From<Operation<Param>> for Op {
+    fn from(serial_op: Operation<Param>) -> Self {
         let params = serial_op.params;
         if let Some(mut params) = params {
             match serial_op.op_type {
@@ -125,7 +125,7 @@ impl From<Operation> for Op {
     }
 }
 
-impl From<Op> for Operation {
+impl From<Op> for Operation<Param> {
     fn from(op: Op) -> Self {
         let (op_type, params) = match op {
             Op::H => (OpType::H, vec![]),
@@ -166,8 +166,8 @@ impl From<Op> for Operation {
     }
 }
 
-impl From<SerialCircuit> for Circuit {
-    fn from(serialcirc: SerialCircuit) -> Self {
+impl From<SerialCircuit<Param>> for Circuit {
+    fn from(serialcirc: SerialCircuit<Param>) -> Self {
         let uids: Vec<_> = serialcirc
             .qubits
             .into_iter()
@@ -217,15 +217,15 @@ impl From<UnitID> for Register {
     }
 }
 
-impl From<Circuit> for SerialCircuit {
+impl From<Circuit> for SerialCircuit<Param> {
     fn from(circ: Circuit) -> Self {
         let commands = circ
             .to_commands()
             .filter_map(|com| {
-                let op: Operation = com.op.into();
+                let op: Operation<Param> = com.op.into();
                 match op.op_type {
                     OpType::Input | OpType::Output => None,
-                    _ => Some(crate::json::circuit_json::Command {
+                    _ => Some(Command {
                         op,
                         args: com.args.into_iter().map(Into::into).collect(),
                         opgroup: None,

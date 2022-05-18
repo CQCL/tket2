@@ -13,23 +13,23 @@ mod tests {
             operation::{Param, WireType},
         },
         graph::dot::dot_string,
-        json::circuit_json::{self, SerialCircuit},
         passes::{
             apply_exhaustive, apply_greedy,
             classical::{constant_fold_strat, find_const_ops},
             squash::{find_singleq_rotations, SquashFindIter},
         },
     };
+    use tket_json_rs::circuit_json::{self, SerialCircuit};
 
     #[test]
     fn read_json() {
         // let expr = symengine::Expression::new("a + b + 3");
         let circ_s = r#"{"bits": [["c", [0]], ["c", [1]]], "commands": [{"args": [["q", [0]]], "op": {"type": "H"}}, {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}, {"args": [["q", [0]], ["c", [0]]], "op": {"type": "Measure"}}, {"args": [["q", [1]], ["c", [1]]], "op": {"type": "Measure"}}], "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]], "phase": "0.0", "qubits": [["q", [0]], ["q", [1]]]}"#;
-        let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
+        let ser: circuit_json::SerialCircuit<Param> = serde_json::from_str(circ_s).unwrap();
         assert_eq!(ser.commands.len(), 4);
 
         let circ: Circuit = ser.clone().into();
-        let _reser: SerialCircuit = circ.into();
+        let _reser: SerialCircuit<Param> = circ.into();
         assert_eq!(&ser, &_reser);
 
         // ser and reser cannot be compared because they will be different up to
@@ -319,7 +319,8 @@ mod tests {
         let (circ2, success) = rot_replacer(circ);
 
         assert!(success);
-        let squasher = |circuit| apply_exhaustive(circuit, |c| SquashFindIter::new(c).collect()).unwrap();
+        let squasher =
+            |circuit| apply_exhaustive(circuit, |c| SquashFindIter::new(c).collect()).unwrap();
 
         let (circ2, success) = squasher(circ2);
         assert!(success);
