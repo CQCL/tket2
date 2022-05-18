@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use crate::circuit::circuit::{Circuit, UnitID};
-use crate::circuit::operation::{Op, Signature, WireType};
-use crate::circuit_json::{Operation, Permutation, Register, SerialCircuit};
+use crate::circuit::operation::{Op, Param, WireType};
 use crate::graph::graph::PortIndex;
-use crate::optype::OpType;
+use tket_json_rs::circuit_json::{Command, Operation, Permutation, Register, SerialCircuit};
+use tket_json_rs::optype::OpType;
 
 fn to_qubit(reg: Register) -> UnitID {
     UnitID::Qubit {
@@ -20,8 +20,8 @@ fn to_bit(reg: Register) -> UnitID {
     }
 }
 
-impl From<Operation> for Op {
-    fn from(serial_op: Operation) -> Self {
+impl From<Operation<Param>> for Op {
+    fn from(serial_op: Operation<Param>) -> Self {
         let params = serial_op.params;
         if let Some(mut params) = params {
             match serial_op.op_type {
@@ -125,7 +125,7 @@ impl From<Operation> for Op {
     }
 }
 
-impl From<Op> for Operation {
+impl From<Op> for Operation<Param> {
     fn from(op: Op) -> Self {
         let (op_type, params) = match op {
             Op::H => (OpType::H, vec![]),
@@ -143,6 +143,7 @@ impl From<Op> for Operation {
             Op::Measure => (OpType::Measure, vec![]),
             Op::Barrier => (OpType::Barrier, vec![]),
             Op::Noop => (OpType::noop, vec![]),
+            _ => panic!("Not supported by Serialized TKET-1: {:?}", op),
         };
         // let signature = match self.signature() {
         //     Signature::Linear(sig) => sig.iter().map(|wt| match wt {
@@ -165,8 +166,8 @@ impl From<Op> for Operation {
     }
 }
 
-impl From<SerialCircuit> for Circuit {
-    fn from(serialcirc: SerialCircuit) -> Self {
+impl From<SerialCircuit<Param>> for Circuit {
+    fn from(serialcirc: SerialCircuit<Param>) -> Self {
         let uids: Vec<_> = serialcirc
             .qubits
             .into_iter()
@@ -190,14 +191,11 @@ impl From<SerialCircuit> for Circuit {
             let args = com
                 .args
                 .into_iter()
-                .zip(if let Signature::Linear(sig) = op.signature() {
-                    sig
-                } else {
-                    panic!()
-                })
+                .zip(op.signature().expect("No signature for op").linear)
                 .map(|(reg, wiretype)| match wiretype {
-                    WireType::Quantum => to_qubit(reg),
-                    WireType::Classical | WireType::Bool => to_bit(reg),
+                    WireType::Qubit => to_qubit(reg),
+                    WireType::LinearBit | WireType::Bool => to_bit(reg),
+                    _ => panic!("Unsupported wiretype {:?}", wiretype),
                 })
                 .map(|uid| frontier[&uid])
                 .collect();
@@ -214,19 +212,20 @@ impl From<UnitID> for Register {
             UnitID::Qubit { name, index } | UnitID::Bit { name, index } => {
                 Register(name, index.into_iter().map(|i| i as i64).collect())
             }
+            _ => panic!("Not supported: {:?}", uid),
         }
     }
 }
 
-impl From<Circuit> for SerialCircuit {
+impl From<Circuit> for SerialCircuit<Param> {
     fn from(circ: Circuit) -> Self {
         let commands = circ
             .to_commands()
             .filter_map(|com| {
-                let op: Operation = com.op.into();
+                let op: Operation<Param> = com.op.into();
                 match op.op_type {
                     OpType::Input | OpType::Output => None,
-                    _ => Some(crate::circuit_json::Command {
+                    _ => Some(Command {
                         op,
                         args: com.args.into_iter().map(Into::into).collect(),
                         opgroup: None,

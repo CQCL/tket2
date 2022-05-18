@@ -2,22 +2,25 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use crate::graph::graph::{Direction, NodePort, PortIndex};
+use crate::graph::graph::{DefaultIx, Direction, NodePort, PortIndex};
+use crate::graph::substitute::{BoundedSubgraph, OpenGraph};
 
 use super::dag::{Edge, EdgeProperties, TopSorter, Vertex, VertexProperties, DAG};
-use super::operation::{Op, Param, Signature, WireType};
+use super::operation::{Op, Param, WireType};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum UnitID {
     Qubit { name: String, index: Vec<u32> },
     Bit { name: String, index: Vec<u32> },
+    F64(String),
 }
 
 impl UnitID {
     pub fn get_type(&self) -> WireType {
         match self {
-            Self::Qubit { .. } => WireType::Quantum,
-            Self::Bit { .. } => WireType::Classical,
+            Self::Qubit { .. } => WireType::Qubit,
+            Self::Bit { .. } => WireType::LinearBit,
+            Self::F64(_) => WireType::F64,
         }
     }
 }
@@ -69,7 +72,7 @@ impl Circuit {
             uids: Vec::with_capacity(n_uids),
         };
         for uid in uids {
-            slf.add_unitid(uid);
+            slf.add_linear_unitid(uid);
         }
         slf
     }
@@ -83,10 +86,8 @@ impl Circuit {
             .op
             .signature()
         {
-            Signature::Linear(sig) => sig,
-            Signature::NonLinear(..) => {
-                return Err("Nonlinear sigs not supported by rewire.".into())
-            }
+            Some(x) if x.purely_linear() => x.linear,
+            _ => return Err("Nonlinear sigs not supported by rewire.".into()),
         };
 
         for (i, (edge, vert_sig_type)) in edges.into_iter().zip(vert_op_sig).enumerate() {
@@ -122,11 +123,10 @@ impl Circuit {
                 (x, y) if x == y => {
                     self.dag.remove_edge(edge);
                     self.dag
-                        .add_edge(old_v1, (new_vert, i as u8).into(), edgeprops.clone());
+                        .add_edge(old_v1, (new_vert, i as u8), edgeprops.clone());
                     // .map_err(|_| CycleInGraph())?;
 
-                    self.dag
-                        .add_edge((new_vert, i as u8).into(), old_v2, edgeprops);
+                    self.dag.add_edge((new_vert, i as u8), old_v2, edgeprops);
                     // .map_err(|_| CycleInGraph())?;
                     // bin.push(pred);
                 }
@@ -139,18 +139,26 @@ impl Circuit {
         Ok(())
     }
 
-    pub fn add_unitid(&mut self, uid: UnitID) {
+    pub fn add_linear_unitid(&mut self, uid: UnitID) {
         let (_, inlen) = self.dag.node_boundary_size(self.boundary.input);
         let (outlen, _) = self.dag.node_boundary_size(self.boundary.output);
         self.add_edge(
-            (self.boundary.input, inlen as u8).into(),
-            (self.boundary.output, outlen as u8).into(),
+            (self.boundary.input, inlen as u8),
+            (self.boundary.output, outlen as u8),
             uid.get_type(),
         );
         self.uids.push(uid);
-        // .unwrap(); // should be cycle free so unwrap
     }
-    pub fn add_edge(&mut self, source: NodePort, target: NodePort, edge_type: WireType) -> Edge {
+
+    pub fn add_unitid(&mut self, uid: UnitID) {
+        self.uids.push(uid);
+    }
+    pub fn add_edge<T: Into<NodePort>>(
+        &mut self,
+        source: T,
+        target: T,
+        edge_type: WireType,
+    ) -> Edge {
         // let ports = (source.1, target.1);
         self.dag.add_edge(
             source,
@@ -164,15 +172,16 @@ impl Circuit {
     }
 
     pub fn add_vertex(&mut self, op: Op) -> Vertex {
-        let siglen = op.signature().len();
+        let capacity = op.signature().map_or(0, |sig| sig.len());
         let weight = VertexProperties::new(op);
-        self.dag.add_node_with_capacity(siglen, weight)
+        self.dag.add_node_with_capacity(capacity, weight)
     }
+
     pub fn append_op(&mut self, op: Op, args: &Vec<PortIndex>) -> Result<Vertex, String> {
         // akin to add-op in TKET-1
         let sig = match op.signature() {
-            Signature::Linear(sig) => sig,
-            Signature::NonLinear(_, _) => return Err("Only linear ops supported.".to_string()),
+            Some(x) if x.purely_linear() => x.linear,
+            _ => return Err("Only linear ops supported.".to_string()),
         };
         assert_eq!(sig.len(), args.len());
 
@@ -210,19 +219,96 @@ impl Circuit {
     pub fn qubits(&self) -> impl Iterator<Item = UnitID> + '_ {
         self.uids.iter().filter_map(|uid| match uid {
             UnitID::Qubit { .. } => Some(uid.clone()),
-            UnitID::Bit { .. } => None,
+            UnitID::Bit { .. } | UnitID::F64(_) => None,
         })
     }
 
     pub fn bits(&self) -> impl Iterator<Item = UnitID> + '_ {
         self.uids.iter().filter_map(|uid| match uid {
             UnitID::Bit { .. } => Some(uid.clone()),
-            UnitID::Qubit { .. } => None,
+            UnitID::Qubit { .. } | UnitID::F64(_) => None,
         })
     }
 
     pub fn unitids(&self) -> impl Iterator<Item = &UnitID> + '_ {
         self.uids.iter()
+    }
+
+    pub fn boundary(&self) -> [Vertex; 2] {
+        [self.boundary.input, self.boundary.output]
+    }
+
+    /// send an edge in to a copy vertex and return a reference to that vertex
+    /// the existing target of the edge will be the only target of the copy node
+    /// up to the user to make sure the remaining N-1 edges are connected to something
+    pub fn copy_edge(&mut self, e: Edge, copies: u32) -> Result<Vertex, String> {
+        let edge_type = match self.dag.edge_weight(e) {
+            Some(EdgeProperties { edge_type, .. }) => edge_type,
+            _ => return Err("Edge not found".into()),
+        };
+
+        let copy_op = match edge_type {
+            WireType::Qubit | WireType::LinearBit => {
+                return Err("Cannot copy qubit or LinearBit wires.".into())
+            }
+            _ => Op::Copy {
+                n_copies: copies,
+                typ: edge_type.clone(),
+            },
+        };
+        let copy_node = self.add_vertex(copy_op);
+        let [s, t] = self.dag.edge_endpoints(e).unwrap();
+        let edge_type = self.dag.remove_edge(e).unwrap().edge_type;
+        self.add_edge(s, (copy_node, 0).into(), edge_type.clone());
+        self.add_edge((copy_node, 0).into(), t, edge_type);
+
+        Ok(copy_node)
+    }
+
+    pub fn apply_rewrite(&mut self, rewrite: CircuitRewrite) -> Result<(), String> {
+        self.dag.apply_rewrite(rewrite.graph_rewrite)?;
+        self.phase = self.phase.clone() + rewrite.phase;
+        Ok(())
+    }
+    pub fn remove_invalid(mut self) -> Self {
+        let (g, node_map, _) = self.dag.remove_invalid();
+        self.dag = g;
+        self.boundary = Boundary {
+            input: node_map[&self.boundary.input],
+            output: node_map[&self.boundary.output],
+        };
+        self
+    }
+
+    pub fn remove_noop(mut self) -> Self {
+        let noop_nodes: Vec<_> = self
+            .dag
+            .nodes()
+            .filter(|n| matches!(self.dag.node_weight(*n).unwrap().op, Op::Noop))
+            .collect();
+        for nod in noop_nodes {
+            let source = self
+                .dag
+                .neighbours(nod, Direction::Incoming)
+                .next()
+                .unwrap();
+            let target = self
+                .dag
+                .neighbours(nod, Direction::Outgoing)
+                .next()
+                .unwrap();
+
+            self.dag.remove_node(nod);
+            self.dag.add_edge(
+                source,
+                target,
+                EdgeProperties {
+                    edge_type: WireType::Qubit,
+                },
+            );
+        }
+
+        self
     }
 }
 
@@ -277,5 +363,60 @@ impl<'circ> Iterator for CommandIter<'circ> {
                 args,
             }
         })
+    }
+}
+
+pub(crate) type CircDagRewrite =
+    crate::graph::substitute::Rewrite<VertexProperties, EdgeProperties>;
+#[derive(Debug)]
+pub struct CircuitRewrite {
+    pub graph_rewrite: CircDagRewrite,
+    pub phase: Param,
+}
+
+impl CircuitRewrite {
+    pub fn new(
+        subg: BoundedSubgraph<DefaultIx>,
+        replacement: OpenGraph<VertexProperties, EdgeProperties, DefaultIx>,
+        phase: Param,
+    ) -> Self {
+        Self {
+            graph_rewrite: CircDagRewrite { subg, replacement },
+            phase,
+        }
+    }
+}
+
+impl From<Circuit> for OpenGraph<VertexProperties, EdgeProperties, DefaultIx> {
+    fn from(mut c: Circuit) -> Self {
+        let [entry, exit] = c.boundary();
+        let in_ports = c.dag.neighbours(entry, Direction::Outgoing).collect();
+        let out_ports = c.dag.neighbours(exit, Direction::Incoming).collect();
+
+        c.dag.remove_node(entry);
+        c.dag.remove_node(exit);
+        Self {
+            in_ports,
+            out_ports,
+            graph: c.dag,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::circuit::operation::{Op, WireType};
+
+    use super::Circuit;
+
+    #[test]
+    fn test_add_identity() {
+        let mut circ = Circuit::new();
+        let [i, o] = circ.boundary();
+        for p in 0..2 {
+            let noop = circ.add_vertex(Op::Noop);
+            circ.add_edge((i, p), (noop, 0), WireType::Qubit);
+            circ.add_edge((noop, 0), (o, p), WireType::Qubit);
+        }
     }
 }

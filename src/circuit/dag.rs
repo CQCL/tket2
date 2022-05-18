@@ -1,10 +1,18 @@
 #![allow(dead_code)]
 
+use std::fmt::Display;
+
 use super::operation::{Op, WireType};
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct VertexProperties {
     pub op: Op,
+}
+
+impl Display for VertexProperties {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.op)
+    }
 }
 
 impl VertexProperties {
@@ -13,9 +21,15 @@ impl VertexProperties {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EdgeProperties {
     pub edge_type: WireType,
+}
+
+impl Display for EdgeProperties {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.edge_type)
+    }
 }
 
 // pub(crate) type DAG = StableDag<VertexProperties, EdgeProperties>;

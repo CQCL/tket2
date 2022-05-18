@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
-use crate::circuit::circuit::Circuit;
+use crate::circuit::circuit::{Circuit, CircuitRewrite};
 use crate::circuit::dag::{Edge, EdgeProperties, Vertex, VertexProperties, DAG};
 use crate::circuit::operation::{Op, Param};
 use crate::graph::graph::{Direction, EdgeIndex};
-use crate::graph::substitute::Cut;
+use crate::graph::substitute::BoundedSubgraph;
 
 fn get_boundary(dag: &DAG, node: Vertex, direction: Direction) -> Vec<Edge> {
     dag.node_edges(node, direction).cloned().collect()
@@ -24,16 +24,28 @@ fn add_neighbours(dag: &DAG, preds: &Vec<Edge>, succs: &Vec<Edge>, set: &mut Has
     }
 }
 
+// assumes no wire swaps
+fn identity(edge_weights: Vec<EdgeProperties>) -> Circuit {
+    let mut circ = Circuit::new();
+    let [i, o] = circ.boundary();
+    for (p, w) in edge_weights.into_iter().enumerate() {
+        let noop = circ.add_vertex(Op::Noop);
+        circ.add_edge((i, p as u8), (noop, 0), w.edge_type);
+        circ.add_edge((noop, 0), (o, p as u8), w.edge_type);
+    }
+
+    circ
+}
+
 // A version of the redundancy removal in TKET but with only identity and dagger removal
 pub fn remove_redundancies(mut circ: Circuit) -> Circuit {
-    let dag = &mut circ.dag;
-    let mut candidate_nodes: HashSet<_> = dag.nodes().collect();
+    let mut candidate_nodes: HashSet<_> = circ.dag.nodes().collect();
 
     while !candidate_nodes.is_empty() {
         let candidate = candidate_nodes
             .take(&candidate_nodes.iter().next().cloned().unwrap())
             .unwrap();
-        let op = match dag.node_weight(candidate) {
+        let op = match circ.dag.node_weight(candidate) {
             None => continue,
             Some(VertexProperties { op }) => match op {
                 Op::Input | Op::Output => continue,
@@ -41,22 +53,29 @@ pub fn remove_redundancies(mut circ: Circuit) -> Circuit {
             },
         };
 
-        if let Some(phase) = op.identity_up_to_phase() {
-            let preds: Vec<_> = get_boundary(dag, candidate, Direction::Incoming);
-            let succs: Vec<_> = get_boundary(dag, candidate, Direction::Outgoing);
+        if !matches!(op, Op::Noop) {
+            if let Some(phase) = op.identity_up_to_phase() {
+                let preds: Vec<_> = get_boundary(&circ.dag, candidate, Direction::Incoming);
+                let succs: Vec<_> = get_boundary(&circ.dag, candidate, Direction::Outgoing);
 
-            add_neighbours(dag, &preds, &succs, &mut candidate_nodes);
+                add_neighbours(&circ.dag, &preds, &succs, &mut candidate_nodes);
 
-            circ.phase = circ.phase + Param::from(phase);
-            let new_weights = get_weights(dag, &preds);
-            dag.replace_with_identity(Cut::new(preds, succs), new_weights);
-            continue;
+                let new_weights = get_weights(&circ.dag, &preds);
+                circ.apply_rewrite(CircuitRewrite::new(
+                    BoundedSubgraph::from_node(&circ.dag, candidate),
+                    identity(new_weights).into(),
+                    Param::from(phase),
+                ))
+                .unwrap();
+                continue;
+            }
         }
 
-        let kids: HashSet<_> = dag
+        let kids: HashSet<_> = circ
+            .dag
             .node_edges(candidate, Direction::Outgoing)
             .filter_map(|e| {
-                let [start, end] = dag.edge_endpoints(*e).unwrap();
+                let [start, end] = circ.dag.edge_endpoints(*e).unwrap();
                 if start.port == end.port {
                     Some(end.node)
                 } else {
@@ -71,20 +90,25 @@ pub fn remove_redundancies(mut circ: Circuit) -> Circuit {
 
         let kid = *kids.iter().next().unwrap();
 
-        if let Some(dagged) = dag.node_weight(kid).unwrap().op.dagger() {
+        if let Some(dagged) = circ.dag.node_weight(kid).unwrap().op.dagger() {
             if op != &dagged {
                 continue;
             }
 
-            let preds: Vec<_> = get_boundary(dag, candidate, Direction::Incoming);
-            let succs: Vec<_> = get_boundary(dag, kid, Direction::Outgoing);
-            let new_weights = get_weights(dag, &preds);
+            let preds: Vec<_> = get_boundary(&circ.dag, candidate, Direction::Incoming);
+            let succs: Vec<_> = get_boundary(&circ.dag, kid, Direction::Outgoing);
 
-            add_neighbours(dag, &preds, &succs, &mut candidate_nodes);
-            dag.replace_with_identity(Cut::new(preds, succs), new_weights);
+            let new_weights = get_weights(&circ.dag, &preds);
+            add_neighbours(&circ.dag, &preds, &succs, &mut candidate_nodes);
+            circ.apply_rewrite(CircuitRewrite::new(
+                BoundedSubgraph::new([candidate, kid].into_iter().into(), [preds, succs]),
+                identity(new_weights).into(),
+                Param::from(0.0),
+            ))
+            .unwrap();
             continue;
         }
     }
 
-    circ
+    circ.remove_noop()
 }

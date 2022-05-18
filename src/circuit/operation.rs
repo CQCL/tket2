@@ -3,27 +3,76 @@
 use lazy_static::lazy_static;
 use std::cmp::max;
 
+use cgmath::Quaternion;
 use symengine::Expression;
-// use symengine::Expression;
 pub(crate) type Param = Expression;
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum WireType {
-    Quantum,
-    Classical,
+    Qubit,
+    LinearBit,
     Bool,
+    I32,
+    F64,
+    Quat64,
 }
 #[derive(Clone)]
-pub enum Signature {
-    Linear(Vec<WireType>),
-    NonLinear(Vec<WireType>, Vec<WireType>),
+pub struct Signature {
+    pub linear: Vec<WireType>,
+    pub nonlinear: [Vec<WireType>; 2],
 }
 
 impl Signature {
+    pub fn new(linear: Vec<WireType>, nonlinear: [Vec<WireType>; 2]) -> Self {
+        Self { linear, nonlinear }
+    }
+    pub fn new_linear(linear: Vec<WireType>) -> Self {
+        Self {
+            linear,
+            nonlinear: [vec![], vec![]],
+        }
+    }
+
+    pub fn new_nonlinear(inputs: Vec<WireType>, outputs: Vec<WireType>) -> Self {
+        Self {
+            linear: vec![],
+            nonlinear: [inputs, outputs],
+        }
+    }
+
     pub fn len(&self) -> usize {
+        self.linear.len() + max(self.nonlinear[0].len(), self.nonlinear[1].len())
+    }
+
+    pub fn purely_linear(&self) -> bool {
+        self.nonlinear[0].is_empty() && self.nonlinear[1].is_empty()
+    }
+
+    pub fn purely_classical(&self) -> bool {
+        !self
+            .linear
+            .iter()
+            .chain(self.nonlinear[0].iter())
+            .chain(self.nonlinear[1].iter())
+            .any(|typ| matches!(typ, WireType::Qubit))
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub enum ConstValue {
+    Bool(bool),
+    I32(i32),
+    F64(f64),
+    Quat64(Quaternion<f64>),
+}
+
+impl ConstValue {
+    pub fn get_type(&self) -> WireType {
         match self {
-            Signature::Linear(s) => s.len(),
-            Signature::NonLinear(s1, s2) => max(s1.len(), s2.len()),
+            Self::Bool(_) => WireType::Bool,
+            Self::I32(_) => WireType::I32,
+            Self::F64(_) => WireType::F64,
+            Self::Quat64(_) => WireType::Quat64,
         }
     }
 }
@@ -45,6 +94,18 @@ pub enum Op {
     PhasedX(Param, Param),
     Measure,
     Barrier,
+    FAdd,
+    FMul,
+    FNeg,
+    QuatMul,
+    // Sin,
+    // Cos,
+    Copy { n_copies: u32, typ: WireType },
+    Const(ConstValue),
+    RxF64,
+    RzF64,
+    Rotation,
+    ToRotation,
 }
 
 impl Default for Op {
@@ -53,10 +114,10 @@ impl Default for Op {
     }
 }
 lazy_static! {
-    static ref ONEQBSIG: Signature = Signature::Linear(vec![WireType::Quantum]);
+    static ref ONEQBSIG: Signature = Signature::new_linear(vec![WireType::Qubit]);
 }
 lazy_static! {
-    static ref TWOQBSIG: Signature = Signature::Linear(vec![WireType::Quantum, WireType::Quantum]);
+    static ref TWOQBSIG: Signature = Signature::new_linear(vec![WireType::Qubit, WireType::Qubit]);
 }
 
 pub fn approx_eq(x: f64, y: f64, modulo: u32, tol: f64) -> bool {
@@ -78,23 +139,29 @@ pub fn equiv_0(p: &Param, modulo: u32) -> bool {
     }
 }
 
+fn binary_op(typ: WireType) -> Signature {
+    Signature::new_nonlinear(vec![typ, typ], vec![typ])
+}
+
 impl Op {
-    fn is_one_qb_gate(&self) -> bool {
-        match self.signature() {
-            Signature::Linear(v) => matches!(&v[..], &[WireType::Quantum]),
-            _ => false,
-        }
+    pub fn is_one_qb_gate(&self) -> bool {
+        self.signature()
+            .map_or(false, |sig| matches!(&sig.linear[..], &[WireType::Qubit]))
     }
 
-    fn is_two_qb_gate(&self) -> bool {
-        match self.signature() {
-            Signature::Linear(v) => matches!(&v[..], &[WireType::Quantum, WireType::Quantum]),
-            _ => false,
-        }
+    pub fn is_two_qb_gate(&self) -> bool {
+        self.signature().map_or(false, |sig| {
+            matches!(&sig.linear[..], &[WireType::Qubit, WireType::Qubit])
+        })
     }
 
-    pub fn signature(&self) -> Signature {
-        match self {
+    pub fn is_pure_classical(&self) -> bool {
+        self.signature().map_or(false, |x| x.purely_classical())
+    }
+
+    pub fn signature(&self) -> Option<Signature> {
+        Some(match self {
+            Op::Noop => ONEQBSIG.clone(),
             Op::H
             | Op::Reset
             | Op::Rx(_)
@@ -103,9 +170,26 @@ impl Op {
             | Op::TK1(..)
             | Op::PhasedX(..) => ONEQBSIG.clone(),
             Op::CX | Op::ZZMax | Op::ZZPhase(..) => TWOQBSIG.clone(),
-            Op::Measure => Signature::Linear(vec![WireType::Quantum, WireType::Classical]),
-            _ => panic!("Gate signature unknwon."),
-        }
+            Op::Measure => Signature::new_linear(vec![WireType::Qubit, WireType::LinearBit]),
+            Op::FAdd | Op::FMul => binary_op(WireType::F64),
+            Op::QuatMul => binary_op(WireType::Quat64),
+            Op::FNeg => Signature::new_nonlinear(vec![WireType::F64], vec![WireType::F64]),
+            Op::Copy { n_copies, typ } => {
+                let typ = typ.clone();
+                Signature::new_nonlinear(vec![typ.clone()], vec![typ; *n_copies as usize])
+            }
+            Op::Const(x) => Signature::new_nonlinear(vec![], vec![x.get_type()]),
+
+            Op::RxF64 | Op::RzF64 => {
+                Signature::new(vec![WireType::Qubit], [vec![WireType::F64], vec![]])
+            }
+            Op::Rotation => Signature::new(vec![WireType::Qubit], [vec![WireType::Quat64], vec![]]),
+            Op::ToRotation => Signature::new_nonlinear(
+                vec![WireType::F64, WireType::F64, WireType::F64, WireType::F64],
+                vec![WireType::Quat64],
+            ),
+            _ => return None,
+        })
     }
 
     pub fn get_params(&self) -> Vec<Param> {
@@ -113,6 +197,7 @@ impl Op {
     }
     pub fn dagger(&self) -> Option<Self> {
         Some(match self {
+            Op::Noop => Op::Noop,
             Op::H => Op::H,
             Op::CX => Op::CX,
             Op::ZZMax => Op::ZZPhase(Param::new("-0.5")),
