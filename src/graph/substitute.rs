@@ -75,7 +75,7 @@ impl<N, E, Ix> OpenGraph<N, E, Ix> {
 
 impl<N: Debug, E: Debug, Ix: IndexType> Debug for OpenGraph<N, E, Ix> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ClosedGraph")
+        f.debug_struct("OpenGraph")
             .field("graph", &self.graph)
             .field("in_ports", &self.in_ports)
             .field("out_ports", &self.out_ports)
