@@ -4,7 +4,7 @@ use std::fmt::Display;
 
 use super::operation::{Op, WireType};
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PartialEq)]
 pub struct VertexProperties {
     pub op: Op,
 }
@@ -21,7 +21,7 @@ impl VertexProperties {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct EdgeProperties {
     pub edge_type: WireType,
 }
