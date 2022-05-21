@@ -81,7 +81,7 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for RotationRewriteIter<'circ, 
             Some(CircuitRewrite::new(
                 BoundedSubgraph::from_node(&self.circ.dag, n),
                 replace.into(),
-                0.0.into(),
+                "0.0".into(),
             ))
         })
     }
@@ -215,7 +215,7 @@ impl<'circ> Iterator for SquashFindIter<'circ> {
                 BoundedSubgraph::new(rot_nodes.into_iter().into(), [in_edges, out_edges]),
                 replace.into(),
             ),
-            phase: Param::from(0.0),
+            phase: "0.0".into(),
         })
     }
 }

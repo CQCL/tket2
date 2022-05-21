@@ -126,7 +126,7 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
             Some(CircuitRewrite::new(
                 subgraph,
                 replace.into(),
-                0.0.into(),
+                "0".into(),
             ))
         })
     }

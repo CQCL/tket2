@@ -67,7 +67,7 @@ impl Circuit {
         let mut slf = Self {
             dag,
             name: None,
-            phase: (0 as u64).into(),
+            phase: "0.0".into(),
             boundary: Boundary { input, output },
             uids: Vec::with_capacity(n_uids),
         };
@@ -267,7 +267,7 @@ impl Circuit {
 
     pub fn apply_rewrite(&mut self, rewrite: CircuitRewrite) -> Result<(), String> {
         self.dag.apply_rewrite(rewrite.graph_rewrite)?;
-        self.phase = self.phase.clone() + rewrite.phase;
+        // self.phase = self.phase.clone() + rewrite.phase;
         Ok(())
     }
     pub fn remove_invalid(mut self) -> Self {
