@@ -4,8 +4,7 @@ use lazy_static::lazy_static;
 use std::cmp::max;
 
 use cgmath::Quaternion;
-use symengine::Expression;
-pub(crate) type Param = Expression;
+pub(crate) type Param = String;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum WireType {
@@ -131,13 +130,13 @@ pub fn approx_eq(x: f64, y: f64, modulo: u32, tol: f64) -> bool {
     r < tol || r > modulo - tol
 }
 
-pub fn equiv_0(p: &Param, modulo: u32) -> bool {
-    if let Some(x) = p.eval() {
-        approx_eq(x, 0.0, modulo, 1e-11)
-    } else {
-        false
-    }
-}
+// pub fn equiv_0(p: &Param, modulo: u32) -> bool {
+//     if let Some(x) = p.eval() {
+//         approx_eq(x, 0.0, modulo, 1e-11)
+//     } else {
+//         false
+//     }
+// }
 
 fn binary_op(typ: WireType) -> Signature {
     Signature::new_nonlinear(vec![typ, typ], vec![typ])
@@ -195,48 +194,48 @@ impl Op {
     pub fn get_params(&self) -> Vec<Param> {
         todo!()
     }
-    pub fn dagger(&self) -> Option<Self> {
-        Some(match self {
-            Op::Noop => Op::Noop,
-            Op::H => Op::H,
-            Op::CX => Op::CX,
-            Op::ZZMax => Op::ZZPhase(Param::new("-0.5")),
-            Op::TK1(a, b, c) => Op::TK1(c.neg(), b.neg(), a.neg()),
-            Op::Rx(p) => Op::Rx(p.neg()),
-            Op::Ry(p) => Op::Ry(p.neg()),
-            Op::Rz(p) => Op::Rz(p.neg()),
-            Op::ZZPhase(p) => Op::ZZPhase(p.neg()),
-            Op::PhasedX(p1, p2) => Op::PhasedX(p1.neg(), p2.to_owned()),
-            _ => return None,
-        })
-    }
+    // pub fn dagger(&self) -> Option<Self> {
+    //     Some(match self {
+    //         Op::Noop => Op::Noop,
+    //         Op::H => Op::H,
+    //         Op::CX => Op::CX,
+    //         Op::ZZMax => Op::ZZPhase(Param::new("-0.5")),
+    //         Op::TK1(a, b, c) => Op::TK1(c.neg(), b.neg(), a.neg()),
+    //         Op::Rx(p) => Op::Rx(p.neg()),
+    //         Op::Ry(p) => Op::Ry(p.neg()),
+    //         Op::Rz(p) => Op::Rz(p.neg()),
+    //         Op::ZZPhase(p) => Op::ZZPhase(p.neg()),
+    //         Op::PhasedX(p1, p2) => Op::PhasedX(p1.neg(), p2.to_owned()),
+    //         _ => return None,
+    //     })
+    // }
 
-    pub fn identity_up_to_phase(&self) -> Option<f64> {
-        let two: Param = 2.0.into();
-        match self {
-            Op::Rx(p) | Op::Ry(p) | Op::Rz(p) | Op::ZZPhase(p) | Op::PhasedX(p, _) => {
-                if equiv_0(p, 4) {
-                    Some(0.0)
-                } else if equiv_0(&(p + two), 2) {
-                    Some(1.0)
-                } else {
-                    None
-                }
-            }
-            Op::TK1(a, b, c) => {
-                let s = a + c;
-                if equiv_0(&s, 2) && equiv_0(b, 2) {
-                    Some(if equiv_0(&s, 4) ^ equiv_0(b, 4) {
-                        1.0
-                    } else {
-                        0.0
-                    })
-                } else {
-                    None
-                }
-            }
-            Op::Noop => Some(0.0),
-            _ => None,
-        }
-    }
+    // pub fn identity_up_to_phase(&self) -> Option<f64> {
+    //     let two: Param = 2.0.into();
+    //     match self {
+    //         Op::Rx(p) | Op::Ry(p) | Op::Rz(p) | Op::ZZPhase(p) | Op::PhasedX(p, _) => {
+    //             if equiv_0(p, 4) {
+    //                 Some(0.0)
+    //             } else if equiv_0(&(p + two), 2) {
+    //                 Some(1.0)
+    //             } else {
+    //                 None
+    //             }
+    //         }
+    //         Op::TK1(a, b, c) => {
+    //             let s = a + c;
+    //             if equiv_0(&s, 2) && equiv_0(b, 2) {
+    //                 Some(if equiv_0(&s, 4) ^ equiv_0(b, 4) {
+    //                     1.0
+    //                 } else {
+    //                     0.0
+    //                 })
+    //             } else {
+    //                 None
+    //             }
+    //         }
+    //         Op::Noop => Some(0.0),
+    //         _ => None,
+    //     }
+    // }
 }

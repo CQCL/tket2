@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 
-use crate::{
-    circuit::operation::Op,
-    graph::graph::{Direction, EdgeIndex, Graph, IndexType, NodeIndex},
-};
-
+use crate::graph::graph::{Direction, EdgeIndex, Graph, IndexType, NodeIndex};
+use rayon::prelude::*;
 struct MatchFail();
 
 struct PatternMatcher<'g: 'p, 'p, N, E, Ix: IndexType> {
@@ -31,11 +28,11 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
         &self,
         pattern_node: NodeIndex<Ix>,
         target_node: NodeIndex<Ix>,
-        node_comp: &impl Fn(&N, &N) -> bool,
+        node_comp: &impl Fn(&'p N, &'g N) -> bool,
     ) -> Result<(), MatchFail> {
         match (
-            self.target.node_weight(target_node),
             self.pattern.node_weight(pattern_node),
+            self.target.node_weight(target_node),
         ) {
             (Some(x), Some(y)) if node_comp(x, y) => Ok(()),
             _ => Err(MatchFail()),
@@ -80,7 +77,7 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
         target_node: NodeIndex<Ix>,
         start_edge: EdgeIndex<Ix>,
         match_map: &mut Match<Ix>,
-        node_comp: &impl Fn(&N, &N) -> bool,
+        node_comp: &impl Fn(&'p N, &'g N) -> bool,
     ) -> Result<(), MatchFail> {
         let err = Err(MatchFail());
         self.node_match(pattern_node, target_node, node_comp)?;
@@ -152,42 +149,55 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
     }
     fn find_matches(
         &'g self,
-        node_comp: impl Fn(&N, &N) -> bool + 'g,
+        node_comp: impl Fn(&'p N, &'g N) -> bool + 'g,
     ) -> impl Iterator<Item = Match<Ix>> + 'g {
         let (start, start_edge) = self.start_pattern_node_edge();
-
-        self.target
-            .nodes()
-            // .filter(move |t_n| )
-            .filter_map(move |candidate| {
-                if self.node_match(start, candidate, &node_comp).is_err() {
-                    return None;
-                }
-                let mut bijection = Match::new();
-                self.match_from(start, candidate, start_edge, &mut bijection, &node_comp)
-                    .ok()
-                    .map(|()| bijection)
-            })
+        self.target.nodes().filter_map(move |candidate| {
+            if self.node_match(start, candidate, &node_comp).is_err() {
+                return None;
+            }
+            let mut bijection = Match::new();
+            self.match_from(start, candidate, start_edge, &mut bijection, &node_comp)
+                .ok()
+                .map(|()| bijection)
+        })
     }
 }
 
-struct MatchIter<Ix, I: Iterator<Item = NodeIndex<Ix>>, F> {
-    nodes: I,
-    node_comp: F,
-    start_node: NodeIndex<Ix>,
-    start_edge: EdgeIndex<Ix>,
+impl<'g, 'p, N, E, Ix> PatternMatcher<'g, 'p, N, E, Ix>
+where
+    N: PartialEq + Send + Sync,
+    E: PartialEq + Send + Sync,
+    Ix: IndexType + Send + Sync,
+{
+    fn find_par_matches(
+        &'g self,
+        node_comp: impl Fn(&'p N, &'g N) -> bool + 'g + Send + Sync,
+    ) -> impl ParallelIterator<Item = Match<Ix>> + 'g {
+        let (start, start_edge) = self.start_pattern_node_edge();
+        let candidates: Vec<_> = self
+            .target
+            .nodes()
+            .filter(|n| self.node_match(start, *n, &node_comp).is_ok())
+            .collect();
+        candidates.into_par_iter().filter_map(move |candidate| {
+            let mut bijection = Match::new();
+            self.match_from(start, candidate, start_edge, &mut bijection, &node_comp)
+                .ok()
+                .map(|()| bijection)
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use rayon::iter::ParallelIterator;
     use rstest::{fixture, rstest};
 
     use super::{Match, PatternMatcher};
     use crate::circuit::circuit::{Circuit, UnitID};
     use crate::circuit::operation::{Op, WireType};
-    use crate::graph::dot::dot_string;
     use crate::graph::graph::{IndexType, NodeIndex, PortIndex};
-
     #[fixture]
     fn simple_circ() -> Circuit {
         let mut circ1 = Circuit::new();
@@ -276,8 +286,40 @@ mod tests {
         assert_eq!(matches[1], match_maker([(2, 3)]));
     }
 
-    #[test]
-    fn test_cx_ladder() {
+    #[fixture]
+    fn cx_h_pattern() -> Circuit {
+        // a CNOT surrounded by hadamards
+        let qubits = vec![
+            UnitID::Qubit {
+                name: "q".into(),
+                index: vec![0],
+            },
+            UnitID::Qubit {
+                name: "q".into(),
+                index: vec![1],
+            },
+        ];
+        let mut pattern_circ = Circuit::with_uids(qubits);
+        pattern_circ
+            .append_op(Op::H, &vec![PortIndex::new(0)])
+            .unwrap();
+        pattern_circ
+            .append_op(Op::H, &vec![PortIndex::new(1)])
+            .unwrap();
+        pattern_circ
+            .append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
+            .unwrap();
+        pattern_circ
+            .append_op(Op::H, &vec![PortIndex::new(0)])
+            .unwrap();
+        pattern_circ
+            .append_op(Op::H, &vec![PortIndex::new(1)])
+            .unwrap();
+
+        pattern_circ
+    }
+    #[rstest]
+    fn test_cx_sequence(cx_h_pattern: Circuit) {
         let qubits = vec![
             UnitID::Qubit {
                 name: "q".into(),
@@ -323,26 +365,9 @@ mod tests {
             .append_op(Op::H, &vec![PortIndex::new(1)])
             .unwrap();
 
-        let mut pattern_circ = Circuit::with_uids(qubits);
-        pattern_circ
-            .append_op(Op::H, &vec![PortIndex::new(0)])
-            .unwrap();
-        pattern_circ
-            .append_op(Op::H, &vec![PortIndex::new(1)])
-            .unwrap();
-        pattern_circ
-            .append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
-            .unwrap();
-        pattern_circ
-            .append_op(Op::H, &vec![PortIndex::new(0)])
-            .unwrap();
-        pattern_circ
-            .append_op(Op::H, &vec![PortIndex::new(1)])
-            .unwrap();
+        let pattern_boundary = cx_h_pattern.boundary().clone();
 
-        let pattern_boundary = pattern_circ.boundary().clone();
-
-        let matcher = PatternMatcher::new(&target_circ.dag, &pattern_circ.dag, pattern_boundary);
+        let matcher = PatternMatcher::new(&target_circ.dag, &cx_h_pattern.dag, pattern_boundary);
 
         let matches: Vec<_> = matcher
             .find_matches(|op1, op2| match (&op1.op, &op2.op) {
@@ -365,6 +390,117 @@ mod tests {
         assert_eq!(
             matches[2],
             match_maker([(2, 9), (3, 8), (4, 10), (5, 12), (6, 11)])
+        );
+    }
+
+    #[rstest]
+    fn test_cx_ladder(cx_h_pattern: Circuit) {
+        let qubits = vec![
+            UnitID::Qubit {
+                name: "q".into(),
+                index: vec![0],
+            },
+            UnitID::Qubit {
+                name: "q".into(),
+                index: vec![1],
+            },
+            UnitID::Qubit {
+                name: "q".into(),
+                index: vec![3],
+            },
+        ];
+
+        // use Noop and H, allow matches between either
+        let mut target_circ = Circuit::with_uids(qubits.clone());
+        let h_0_0 = target_circ
+            .append_op(Op::Noop, &vec![PortIndex::new(0)])
+            .unwrap();
+        let h_1_0 = target_circ
+            .append_op(Op::H, &vec![PortIndex::new(1)])
+            .unwrap();
+        let cx_0 = target_circ
+            .append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
+            .unwrap();
+        let h_0_1 = target_circ
+            .append_op(Op::H, &vec![PortIndex::new(0)])
+            .unwrap();
+        let h_1_1 = target_circ
+            .append_op(Op::Noop, &vec![PortIndex::new(1)])
+            .unwrap();
+        let h_2_0 = target_circ
+            .append_op(Op::H, &vec![PortIndex::new(2)])
+            .unwrap();
+        let cx_1 = target_circ
+            .append_op(Op::CX, &vec![PortIndex::new(2), PortIndex::new(1)])
+            .unwrap();
+        let h_1_2 = target_circ
+            .append_op(Op::H, &vec![PortIndex::new(1)])
+            .unwrap();
+        let h_2_1 = target_circ
+            .append_op(Op::H, &vec![PortIndex::new(2)])
+            .unwrap();
+        let cx_2 = target_circ
+            .append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
+            .unwrap();
+        let h_0_2 = target_circ
+            .append_op(Op::H, &vec![PortIndex::new(0)])
+            .unwrap();
+        let h_1_3 = target_circ
+            .append_op(Op::Noop, &vec![PortIndex::new(1)])
+            .unwrap();
+
+        // use crate::graph::dot::dot_string;
+        // println!("{}", dot_string(&target_circ.dag));
+
+        let pattern_boundary = cx_h_pattern.boundary().clone();
+
+        let matcher = PatternMatcher::new(&target_circ.dag, &cx_h_pattern.dag, pattern_boundary);
+        let matches_seq: Vec<_> = matcher
+            .find_par_matches(|op1, op2| match (&op1.op, &op2.op) {
+                (x, y) if x == y => true,
+                (Op::H, Op::Noop) | (Op::Noop, Op::H) => true,
+                _ => false,
+            })
+            .collect();
+        let matches: Vec<_> = matcher
+            .find_matches(|op1, op2| match (&op1.op, &op2.op) {
+                (x, y) if x == y => true,
+                (Op::H, Op::Noop) | (Op::Noop, Op::H) => true,
+                _ => false,
+            })
+            .collect();
+        assert_eq!(matches_seq, matches);
+        assert_eq!(matches.len(), 3);
+        assert_eq!(
+            matches[0],
+            match_maker([
+                (2, h_0_0.index()),
+                (3, h_1_0.index()),
+                (4, cx_0.index()),
+                (5, h_0_1.index()),
+                (6, h_1_1.index())
+            ])
+        );
+        // flipped match
+        assert_eq!(
+            matches[1],
+            match_maker([
+                (2, h_0_1.index()),
+                (3, h_1_2.index()),
+                (4, cx_2.index()),
+                (5, h_0_2.index()),
+                (6, h_1_3.index())
+            ])
+        );
+        assert_eq!(
+            matches[2],
+            match_maker([
+                (2, h_2_0.index()),
+                (3, h_1_1.index()),
+                (4, cx_1.index()),
+                (5, h_2_1.index()),
+                (6, h_1_2.index())
+            ])
         );
     }
 }

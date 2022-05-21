@@ -526,7 +526,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         clear_up_port(p1, &mut n1.outgoing);
 
         let (n2, p2) = match edge.node_ports[1] {
-            NodePort { node, port} => (
+            NodePort { node, port } => (
                 self.nodes.get_mut(node.index()).expect("Node not found."),
                 port,
             ),
