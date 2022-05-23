@@ -310,6 +310,10 @@ impl Circuit {
 
         self
     }
+
+    pub fn dag_ref(&self) -> &DAG {
+        &self.dag
+    }
 }
 
 #[derive(Debug, PartialEq)]
