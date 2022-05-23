@@ -24,17 +24,20 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
         }
     }
 
+    pub fn node_equality(&self, pattern_idx: NodeIndex<Ix>, target_node: &'g N) -> bool {
+        let pattern_node = self.pattern.node_weight(pattern_idx).unwrap();
+
+        pattern_node == target_node
+    }
+
     fn node_match(
         &self,
         pattern_node: NodeIndex<Ix>,
         target_node: NodeIndex<Ix>,
-        node_comp: &impl Fn(&'p N, &'g N) -> bool,
+        node_comp: &impl Fn(NodeIndex<Ix>, &'g N) -> bool,
     ) -> Result<(), MatchFail> {
-        match (
-            self.pattern.node_weight(pattern_node),
-            self.target.node_weight(target_node),
-        ) {
-            (Some(x), Some(y)) if node_comp(x, y) => Ok(()),
+        match self.target.node_weight(target_node) {
+            Some(y) if node_comp(pattern_node, y) => Ok(()),
             _ => Err(MatchFail()),
         }
     }
@@ -77,7 +80,7 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
         target_node: NodeIndex<Ix>,
         start_edge: EdgeIndex<Ix>,
         match_map: &mut Match<Ix>,
-        node_comp: &impl Fn(&'p N, &'g N) -> bool,
+        node_comp: &impl Fn(NodeIndex<Ix>, &'g N) -> bool,
     ) -> Result<(), MatchFail> {
         let err = Err(MatchFail());
         self.node_match(pattern_node, target_node, node_comp)?;
@@ -144,7 +147,7 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
         pattern_node: NodeIndex<Ix>,
         target_node: NodeIndex<Ix>,
         start_edge: EdgeIndex<Ix>,
-        node_comp: &impl Fn(&'p N, &'g N) -> bool,
+        node_comp: &impl Fn(NodeIndex<Ix>, &'g N) -> bool,
     ) -> Result<Match<Ix>, MatchFail> {
         let err = Err(MatchFail());
         let mut match_map = Match::new();
@@ -222,7 +225,7 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
     }
     pub fn find_matches_recurse(
         &'g self,
-        node_comp: impl Fn(&'p N, &'g N) -> bool + 'g,
+        node_comp: impl Fn(NodeIndex<Ix>, &'g N) -> bool + 'g,
     ) -> impl Iterator<Item = Match<Ix>> + 'g {
         let (start, start_edge) = self.start_pattern_node_edge();
         self.target.nodes().filter_map(move |candidate| {
@@ -238,7 +241,7 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
 
     pub fn find_matches(
         &'g self,
-        node_comp: impl Fn(&'p N, &'g N) -> bool + 'g,
+        node_comp: impl Fn(NodeIndex<Ix>, &'g N) -> bool + 'g,
     ) -> impl Iterator<Item = Match<Ix>> + 'g {
         let (start, start_edge) = self.start_pattern_node_edge();
         self.target.nodes().filter_map(move |candidate| {
@@ -259,7 +262,7 @@ where
 {
     pub fn find_par_matches(
         &'g self,
-        node_comp: impl Fn(&'p N, &'g N) -> bool + 'g + Send + Sync,
+        node_comp: impl Fn(NodeIndex<Ix>, &'g N) -> bool + 'g + Send + Sync,
     ) -> impl ParallelIterator<Item = Match<Ix>> + 'g {
         let (start, start_edge) = self.start_pattern_node_edge();
         let candidates: Vec<_> = self
@@ -324,10 +327,14 @@ mod tests {
         let dag2 = simple_isomorphic_circ.dag;
         let matcher = PatternMatcher::new(&dag1, &dag2, pattern_boundary);
         for (n1, n2) in dag1.nodes().zip(dag2.nodes()) {
-            assert!(matcher.node_match(n1, n2, &PartialEq::eq).is_ok());
+            assert!(matcher
+                .node_match(n1, n2, &|x, y| matcher.node_equality(x, y))
+                .is_ok());
         }
 
-        assert!(matcher.node_match(i, o, &PartialEq::eq).is_err());
+        assert!(matcher
+            .node_match(i, o, &|x, y| matcher.node_equality(x, y))
+            .is_err());
     }
 
     #[rstest]
@@ -364,7 +371,9 @@ mod tests {
         let matcher =
             PatternMatcher::new(&simple_circ.dag, &noop_pattern_circ.dag, pattern_boundary);
 
-        let matches: Vec<_> = matcher.find_matches(PartialEq::eq).collect();
+        let matches: Vec<_> = matcher
+            .find_matches(&|x, y| matcher.node_equality(x, y))
+            .collect();
 
         // match noop to two noops in target
         assert_eq!(matches[0], match_maker([(2, 2)]));
@@ -455,9 +464,9 @@ mod tests {
         let matcher = PatternMatcher::new(&target_circ.dag, &cx_h_pattern.dag, pattern_boundary);
 
         let matches: Vec<_> = matcher
-            .find_matches(|op1, op2| match (&op1.op, &op2.op) {
-                (Op::H, Op::H) => true,
-                (Op::CX, Op::CX) => true,
+            .find_matches(|pattern_idx, op2| match (pattern_idx.index(), &op2.op) {
+                (2 | 3 | 5 | 6, Op::H) => true,
+                (4, Op::CX) => true,
                 _ => false,
             })
             .collect();
@@ -541,17 +550,23 @@ mod tests {
 
         let matcher = PatternMatcher::new(&target_circ.dag, &cx_h_pattern.dag, pattern_boundary);
         let matches_seq: Vec<_> = matcher
-            .find_par_matches(|op1, op2| match (&op1.op, &op2.op) {
-                (x, y) if x == y => true,
-                (Op::H, Op::Noop) | (Op::Noop, Op::H) => true,
-                _ => false,
+            .find_par_matches(|op1, op2| {
+                let op1 = cx_h_pattern.dag.node_weight(op1).unwrap();
+                match (&op1.op, &op2.op) {
+                    (x, y) if x == y => true,
+                    (Op::H, Op::Noop) | (Op::Noop, Op::H) => true,
+                    _ => false,
+                }
             })
             .collect();
         let matches: Vec<_> = matcher
-            .find_matches(|op1, op2| match (&op1.op, &op2.op) {
-                (x, y) if x == y => true,
-                (Op::H, Op::Noop) | (Op::Noop, Op::H) => true,
-                _ => false,
+            .find_matches(|op1, op2| {
+                let op1 = cx_h_pattern.dag.node_weight(op1).unwrap();
+                match (&op1.op, &op2.op) {
+                    (x, y) if x == y => true,
+                    (Op::H, Op::Noop) | (Op::Noop, Op::H) => true,
+                    _ => false,
+                }
             })
             .collect();
         assert_eq!(matches_seq, matches);

@@ -67,13 +67,17 @@ fn pattern_match_bench_par(c: &mut Criterion) {
 
         group.bench_function(BenchmarkId::new("Sequential", i), |b| {
             b.iter(|| {
-                let ms = pmatcher.find_matches(PartialEq::eq).collect::<Vec<_>>();
+                let ms = pmatcher
+                    .find_matches(|x, y| pmatcher.node_equality(x, y))
+                    .collect::<Vec<_>>();
                 assert_eq!(ms.len(), i)
             })
         });
         group.bench_function(BenchmarkId::new("Paralllel", i), |b| {
             b.iter(|| {
-                let ms = pmatcher.find_par_matches(PartialEq::eq).collect::<Vec<_>>();
+                let ms = pmatcher
+                    .find_par_matches(|x, y| pmatcher.node_equality(x, y))
+                    .collect::<Vec<_>>();
                 assert_eq!(ms.len(), i)
             })
         });
@@ -137,14 +141,16 @@ fn pattern_match_bench_recurse(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("Recursive", i), |b| {
             b.iter(|| {
                 let ms = pmatcher
-                    .find_matches_recurse(PartialEq::eq)
+                    .find_matches_recurse(|x, y| pmatcher.node_equality(x, y))
                     .collect::<Vec<_>>();
                 assert_eq!(ms.len(), 1)
             })
         });
         group.bench_function(BenchmarkId::new("Iterative", i), |b| {
             b.iter(|| {
-                let ms = pmatcher.find_matches(PartialEq::eq).collect::<Vec<_>>();
+                let ms = pmatcher
+                    .find_matches(|x, y| pmatcher.node_equality(x, y))
+                    .collect::<Vec<_>>();
                 assert_eq!(ms.len(), 1)
             })
         });
