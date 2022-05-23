@@ -4,7 +4,7 @@ use crate::graph::graph::{Direction, EdgeIndex, Graph, IndexType, NodeIndex};
 use rayon::prelude::*;
 struct MatchFail();
 
-struct PatternMatcher<'g: 'p, 'p, N, E, Ix: IndexType> {
+pub struct PatternMatcher<'g: 'p, 'p, N, E, Ix: IndexType> {
     target: &'g Graph<N, E, Ix>,
     pattern: &'p Graph<N, E, Ix>,
     pattern_boundary: [NodeIndex<Ix>; 2],
@@ -12,7 +12,7 @@ struct PatternMatcher<'g: 'p, 'p, N, E, Ix: IndexType> {
 type Match<Ix> = HashMap<NodeIndex<Ix>, NodeIndex<Ix>>;
 
 impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N, E, Ix> {
-    fn new(
+    pub fn new(
         target: &'g Graph<N, E, Ix>,
         pattern: &'p Graph<N, E, Ix>,
         pattern_boundary: [NodeIndex<Ix>; 2],
@@ -147,7 +147,7 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
 
         (self.pattern.edge_endpoints(*e).unwrap()[1].node, *e)
     }
-    fn find_matches(
+    pub fn find_matches(
         &'g self,
         node_comp: impl Fn(&'p N, &'g N) -> bool + 'g,
     ) -> impl Iterator<Item = Match<Ix>> + 'g {
@@ -170,7 +170,7 @@ where
     E: PartialEq + Send + Sync,
     Ix: IndexType + Send + Sync,
 {
-    fn find_par_matches(
+    pub fn find_par_matches(
         &'g self,
         node_comp: impl Fn(&'p N, &'g N) -> bool + 'g + Send + Sync,
     ) -> impl ParallelIterator<Item = Match<Ix>> + 'g {

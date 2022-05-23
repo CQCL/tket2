@@ -1,5 +1,5 @@
 pub mod circuit;
-mod graph;
+pub mod graph;
 
 pub mod json;
 pub mod passes;
@@ -12,9 +12,8 @@ mod tests {
             operation::{ConstValue, Op},
             operation::{Param, WireType},
         },
-        graph::dot::dot_string,
         passes::{
-            apply_exhaustive, apply_greedy,
+            apply_exhaustive,
             classical::{constant_fold_strat, find_const_ops},
             squash::{find_singleq_rotations, SquashFindIter},
         },
@@ -290,6 +289,7 @@ mod tests {
             |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
         let (_circ2, success) = constant_folder(circ2);
         assert!(success);
+        // use crate::graph::dot::dot_string,
 
         // println!("{}", dot_string(&circ2.dag));
     }
