@@ -89,14 +89,16 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
         if p_edges.len() != t_edges.len() {
             return err;
         }
-        // circle the edges of both nodes starting at the start edge
-        for (e_p, e_t) in p_edges
+        let mut eiter = p_edges
             .iter()
             .zip(t_edges.iter())
             .cycle()
-            .skip_while(|(p, _): &(&EdgeIndex<Ix>, _)| **p != start_edge)
-            .take(p_edges.len())
-        {
+            .skip_while(|(p, _): &(&EdgeIndex<Ix>, _)| **p != start_edge);
+
+        // TODO verify that it is valid to skip edge_start
+        eiter.next();
+        // circle the edges of both nodes starting at the start edge
+        for (e_p, e_t) in eiter.take(p_edges.len()-1) {
             self.edge_match(*e_p, *e_t)?;
 
             let [e_p_source, e_p_target] = self.pattern.edge_endpoints(*e_p).ok_or(MatchFail())?;
