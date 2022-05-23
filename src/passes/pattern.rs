@@ -71,7 +71,7 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
             .collect()
     }
 
-    fn match_from(
+    fn match_from_recurse(
         &self,
         pattern_node: NodeIndex<Ix>,
         target_node: NodeIndex<Ix>,
@@ -98,7 +98,7 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
         // TODO verify that it is valid to skip edge_start
         eiter.next();
         // circle the edges of both nodes starting at the start edge
-        for (e_p, e_t) in eiter.take(p_edges.len()-1) {
+        for (e_p, e_t) in eiter.take(p_edges.len() - 1) {
             self.edge_match(*e_p, *e_t)?;
 
             let [e_p_source, e_p_target] = self.pattern.edge_endpoints(*e_p).ok_or(MatchFail())?;
@@ -127,7 +127,7 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
                     return err;
                 }
             }
-            self.match_from(
+            self.match_from_recurse(
                 next_pattern_node,
                 next_target_node,
                 *e_p,
@@ -137,6 +137,77 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
         }
 
         Ok(())
+    }
+
+    fn match_from(
+        &self,
+        pattern_node: NodeIndex<Ix>,
+        target_node: NodeIndex<Ix>,
+        start_edge: EdgeIndex<Ix>,
+        node_comp: &impl Fn(&'p N, &'g N) -> bool,
+    ) -> Result<Match<Ix>, MatchFail> {
+        let err = Err(MatchFail());
+        let mut match_map = Match::new();
+
+        let mut visit_stack: Vec<_> = vec![(pattern_node, target_node, start_edge)];
+
+        while !visit_stack.is_empty() {
+            let (curr_p, curr_t, curr_e) = visit_stack.pop().unwrap();
+
+            self.node_match(curr_p, curr_t, node_comp)?;
+            match_map.insert(curr_p, curr_t);
+
+            let p_edges = Self::cycle_node_edges(self.pattern, curr_p);
+            let t_edges = Self::cycle_node_edges(self.target, curr_t);
+
+            if p_edges.len() != t_edges.len() {
+                return err;
+            }
+            let mut eiter = p_edges
+                .iter()
+                .zip(t_edges.iter())
+                .cycle()
+                .skip_while(|(p, _): &(&EdgeIndex<Ix>, _)| **p != curr_e);
+
+            // TODO verify that it is valid to skip edge_start
+            eiter.next();
+
+            // circle the edges of both nodes starting at the start edge
+            for (e_p, e_t) in eiter.take(p_edges.len() - 1) {
+                self.edge_match(*e_p, *e_t)?;
+
+                let [e_p_source, e_p_target] =
+                    self.pattern.edge_endpoints(*e_p).ok_or(MatchFail())?;
+                if e_p_source.node == self.pattern_boundary[0]
+                    || e_p_target.node == self.pattern_boundary[1]
+                {
+                    continue;
+                }
+
+                let (next_pattern_node, next_target_node) = if e_p_source.node == curr_p {
+                    (
+                        e_p_target.node,
+                        self.target.edge_endpoints(*e_t).ok_or(MatchFail())?[1].node,
+                    )
+                } else {
+                    (
+                        e_p_source.node,
+                        self.target.edge_endpoints(*e_t).ok_or(MatchFail())?[0].node,
+                    )
+                };
+
+                if let Some(matched_node) = match_map.get(&next_pattern_node) {
+                    if *matched_node == next_target_node {
+                        continue;
+                    } else {
+                        return err;
+                    }
+                }
+                visit_stack.push((next_pattern_node, next_target_node, *e_p));
+            }
+        }
+
+        Ok(match_map)
     }
 
     fn start_pattern_node_edge(&self) -> (NodeIndex<Ix>, EdgeIndex<Ix>) {
@@ -149,7 +220,7 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
 
         (self.pattern.edge_endpoints(*e).unwrap()[1].node, *e)
     }
-    pub fn find_matches(
+    pub fn find_matches_recurse(
         &'g self,
         node_comp: impl Fn(&'p N, &'g N) -> bool + 'g,
     ) -> impl Iterator<Item = Match<Ix>> + 'g {
@@ -159,9 +230,23 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType> PatternMatcher<'g, 'p, N
                 return None;
             }
             let mut bijection = Match::new();
-            self.match_from(start, candidate, start_edge, &mut bijection, &node_comp)
+            self.match_from_recurse(start, candidate, start_edge, &mut bijection, &node_comp)
                 .ok()
                 .map(|()| bijection)
+        })
+    }
+
+    pub fn find_matches(
+        &'g self,
+        node_comp: impl Fn(&'p N, &'g N) -> bool + 'g,
+    ) -> impl Iterator<Item = Match<Ix>> + 'g {
+        let (start, start_edge) = self.start_pattern_node_edge();
+        self.target.nodes().filter_map(move |candidate| {
+            if self.node_match(start, candidate, &node_comp).is_err() {
+                return None;
+            }
+            self.match_from(start, candidate, start_edge, &node_comp)
+                .ok()
         })
     }
 }
@@ -183,10 +268,8 @@ where
             .filter(|n| self.node_match(start, *n, &node_comp).is_ok())
             .collect();
         candidates.into_par_iter().filter_map(move |candidate| {
-            let mut bijection = Match::new();
-            self.match_from(start, candidate, start_edge, &mut bijection, &node_comp)
+            self.match_from(start, candidate, start_edge, &node_comp)
                 .ok()
-                .map(|()| bijection)
         })
     }
 }
