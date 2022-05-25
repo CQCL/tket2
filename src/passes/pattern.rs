@@ -117,7 +117,9 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType, F: Fn(NodeIndex<Ix>, &N)
             .cycle()
             .skip_while(|(p, _): &(&EdgeIndex<Ix>, _)| **p != start_edge);
 
-        // TODO verify that it is valid to skip edge_start
+        // TODO verify that it is valid to skip edge_start (it's not at the start)
+        // WARNING THIS IS PROPERLY HANDLED IN THE match_from, either fix or
+        // remove this recursive version
         eiter.next();
         // circle the edges of both nodes starting at the start edge
         for (e_p, e_t) in eiter.take(p_edges.len() - 1) {
@@ -183,13 +185,18 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType, F: Fn(NodeIndex<Ix>, &N)
                 .iter()
                 .zip(t_edges.iter())
                 .cycle()
-                .skip_while(|(p, _): &(&EdgeIndex<Ix>, _)| **p != curr_e);
+                .skip_while(|(p, _): &(&EdgeIndex<Ix>, _)| **p != curr_e)
+                .take(p_edges.len());
 
-            // TODO verify that it is valid to skip edge_start
-            eiter.next();
+            if curr_p != pattern_node {
+                // optimisation, apart from in the case of the entry to the
+                // pattern, the first edge in the iterator is the incoming edge
+                // and the destination node has been checked
+                eiter.next();
+            }
 
             // circle the edges of both nodes starting at the start edge
-            for (e_p, e_t) in eiter.take(p_edges.len() - 1) {
+            for (e_p, e_t) in eiter {
                 self.edge_match(*e_p, *e_t)?;
 
                 let [e_p_source, e_p_target] =
