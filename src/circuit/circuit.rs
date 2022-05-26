@@ -54,6 +54,12 @@ pub struct Circuit {
     uids: Vec<UnitID>,
 }
 
+impl Default for Circuit {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Circuit {
     pub fn new() -> Self {
         Self::with_uids(vec![])

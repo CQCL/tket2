@@ -7,7 +7,7 @@ use tket_rs::{
     },
     graph::graph::PortIndex,
     passes::{
-        pattern::{node_equality, FixedStructPattern, PatternMatcher},
+        pattern::{node_equality, PatternMatcher},
         CircFixedStructPattern,
     },
 };
@@ -39,7 +39,6 @@ fn pattern_match_bench_par(c: &mut Criterion) {
     pattern_circ
         .append_op(Op::H, &vec![PortIndex::new(1)])
         .unwrap();
-    let pattern_boundary = pattern_circ.boundary();
 
     let mut target_circ = Circuit::with_uids(qubits);
     target_circ
