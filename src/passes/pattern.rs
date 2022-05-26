@@ -8,18 +8,14 @@ struct MatchFail();
 A pattern for the pattern matcher with a fixed graph structure but arbitrary comparison at nodes.
  */
 #[derive(Clone)]
-pub struct FixedStructPattern<'p, N, E, Ix, F> {
-    pub graph: &'p Graph<N, E, Ix>,
+pub struct FixedStructPattern<N, E, Ix: IndexType, F> {
+    pub graph: Graph<N, E, Ix>,
     pub boundary: [NodeIndex<Ix>; 2],
     pub node_comp_closure: F,
 }
 
-impl<'p, N, E, Ix, F> FixedStructPattern<'p, N, E, Ix, F> {
-    pub fn new(
-        graph: &'p Graph<N, E, Ix>,
-        boundary: [NodeIndex<Ix>; 2],
-        node_comp_closure: F,
-    ) -> Self {
+impl<N, E, Ix: IndexType, F> FixedStructPattern<N, E, Ix, F> {
+    pub fn new(graph: Graph<N, E, Ix>, boundary: [NodeIndex<Ix>; 2], node_comp_closure: F) -> Self {
         Self {
             graph,
             boundary,
@@ -27,37 +23,45 @@ impl<'p, N, E, Ix, F> FixedStructPattern<'p, N, E, Ix, F> {
         }
     }
 }
-pub fn node_equality<N: PartialEq, E, Ix: IndexType>(
-    pattern_graph: &Graph<N, E, Ix>,
-) -> impl Fn(NodeIndex<Ix>, &N) -> bool + '_ {
-    |pattern_idx: NodeIndex<_>, target_node: &N| {
+
+pub trait NodeCompClosure<N, E, Ix>: Fn(&Graph<N, E, Ix>, NodeIndex<Ix>, &N) -> bool {}
+
+impl<N, E, Ix, T> NodeCompClosure<N, E, Ix> for T where
+    T: Fn(&Graph<N, E, Ix>, NodeIndex<Ix>, &N) -> bool
+{
+}
+
+pub fn node_equality<N: PartialEq, E, Ix: IndexType>() -> impl NodeCompClosure<N, E, Ix> {
+    |pattern_graph: &Graph<N, E, Ix>, pattern_idx: NodeIndex<_>, target_node: &N| {
         let pattern_node = pattern_graph.node_weight(pattern_idx).unwrap();
         pattern_node == target_node
     }
 }
-type Match<Ix> = HashMap<NodeIndex<Ix>, NodeIndex<Ix>>;
-pub struct PatternMatcher<'g: 'p, 'p, N, E, Ix, F> {
-    pattern: FixedStructPattern<'p, N, E, Ix, F>,
+pub type Match<Ix> = HashMap<NodeIndex<Ix>, NodeIndex<Ix>>;
+
+pub struct PatternMatcher<'g, N, E, Ix: IndexType, F> {
+    pattern: FixedStructPattern<N, E, Ix, F>,
     target: &'g Graph<N, E, Ix>,
 }
 
-impl<'g, 'p, N, E, Ix, F> PatternMatcher<'g, 'p, N, E, Ix, F> {
-    pub fn new(pattern: FixedStructPattern<'p, N, E, Ix, F>, target: &'g Graph<N, E, Ix>) -> Self {
+impl<'g, N, E, Ix: IndexType, F> PatternMatcher<'g, N, E, Ix, F> {
+    pub fn new(pattern: FixedStructPattern<N, E, Ix, F>, target: &'g Graph<N, E, Ix>) -> Self {
         Self { pattern, target }
     }
 }
 
-impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType, F: Fn(NodeIndex<Ix>, &N) -> bool>
-    PatternMatcher<'g, 'p, N, E, Ix, F>
+impl<'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N, E, Ix>>
+    PatternMatcher<'g, N, E, Ix, F>
 {
     fn node_match(
         &self,
         pattern_node: NodeIndex<Ix>,
         target_node: NodeIndex<Ix>,
-        // node_comp: &impl Fn(NodeIndex<Ix>, &'g N) -> bool,
     ) -> Result<(), MatchFail> {
         match self.target.node_weight(target_node) {
-            Some(y) if (self.pattern.node_comp_closure)(pattern_node, y) => Ok(()),
+            Some(y) if (self.pattern.node_comp_closure)(&self.pattern.graph, pattern_node, y) => {
+                Ok(())
+            }
             _ => Err(MatchFail()),
         }
     }
@@ -94,69 +98,69 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType, F: Fn(NodeIndex<Ix>, &N)
             .collect()
     }
 
-    fn match_from_recurse(
-        &self,
-        pattern_node: NodeIndex<Ix>,
-        target_node: NodeIndex<Ix>,
-        start_edge: EdgeIndex<Ix>,
-        match_map: &mut Match<Ix>,
-    ) -> Result<(), MatchFail> {
-        let err = Err(MatchFail());
-        self.node_match(pattern_node, target_node)?;
-        match_map.insert(pattern_node, target_node);
+    // fn match_from_recurse(
+    //     &self,
+    //     pattern_node: NodeIndex<Ix>,
+    //     target_node: NodeIndex<Ix>,
+    //     start_edge: EdgeIndex<Ix>,
+    //     match_map: &mut Match<Ix>,
+    // ) -> Result<(), MatchFail> {
+    //     let err = Err(MatchFail());
+    //     self.node_match(pattern_node, target_node)?;
+    //     match_map.insert(pattern_node, target_node);
 
-        let p_edges = Self::cycle_node_edges(self.pattern.graph, pattern_node);
-        let t_edges = Self::cycle_node_edges(self.target, target_node);
+    //     let p_edges = Self::cycle_node_edges(&self.pattern.graph, pattern_node);
+    //     let t_edges = Self::cycle_node_edges(self.target, target_node);
 
-        if p_edges.len() != t_edges.len() {
-            return err;
-        }
-        let mut eiter = p_edges
-            .iter()
-            .zip(t_edges.iter())
-            .cycle()
-            .skip_while(|(p, _): &(&EdgeIndex<Ix>, _)| **p != start_edge);
+    //     if p_edges.len() != t_edges.len() {
+    //         return err;
+    //     }
+    //     let mut eiter = p_edges
+    //         .iter()
+    //         .zip(t_edges.iter())
+    //         .cycle()
+    //         .skip_while(|(p, _): &(&EdgeIndex<Ix>, _)| **p != start_edge);
 
-        // TODO verify that it is valid to skip edge_start (it's not at the start)
-        // WARNING THIS IS PROPERLY HANDLED IN THE match_from, either fix or
-        // remove this recursive version
-        eiter.next();
-        // circle the edges of both nodes starting at the start edge
-        for (e_p, e_t) in eiter.take(p_edges.len() - 1) {
-            self.edge_match(*e_p, *e_t)?;
+    //     // TODO verify that it is valid to skip edge_start (it's not at the start)
+    //     // WARNING THIS IS PROPERLY HANDLED IN THE match_from, either fix or
+    //     // remove this recursive version
+    //     eiter.next();
+    //     // circle the edges of both nodes starting at the start edge
+    //     for (e_p, e_t) in eiter.take(p_edges.len() - 1) {
+    //         self.edge_match(*e_p, *e_t)?;
 
-            let [e_p_source, e_p_target] =
-                self.pattern.graph.edge_endpoints(*e_p).ok_or(MatchFail())?;
-            if e_p_source.node == self.pattern.boundary[0]
-                || e_p_target.node == self.pattern.boundary[1]
-            {
-                continue;
-            }
+    //         let [e_p_source, e_p_target] =
+    //             self.pattern.graph.edge_endpoints(*e_p).ok_or(MatchFail())?;
+    //         if e_p_source.node == self.pattern.boundary[0]
+    //             || e_p_target.node == self.pattern.boundary[1]
+    //         {
+    //             continue;
+    //         }
 
-            let (next_pattern_node, next_target_node) = if e_p_source.node == pattern_node {
-                (
-                    e_p_target.node,
-                    self.target.edge_endpoints(*e_t).ok_or(MatchFail())?[1].node,
-                )
-            } else {
-                (
-                    e_p_source.node,
-                    self.target.edge_endpoints(*e_t).ok_or(MatchFail())?[0].node,
-                )
-            };
+    //         let (next_pattern_node, next_target_node) = if e_p_source.node == pattern_node {
+    //             (
+    //                 e_p_target.node,
+    //                 self.target.edge_endpoints(*e_t).ok_or(MatchFail())?[1].node,
+    //             )
+    //         } else {
+    //             (
+    //                 e_p_source.node,
+    //                 self.target.edge_endpoints(*e_t).ok_or(MatchFail())?[0].node,
+    //             )
+    //         };
 
-            if let Some(matched_node) = match_map.get(&next_pattern_node) {
-                if *matched_node == next_target_node {
-                    continue;
-                } else {
-                    return err;
-                }
-            }
-            self.match_from_recurse(next_pattern_node, next_target_node, *e_p, match_map)?;
-        }
+    //         if let Some(matched_node) = match_map.get(&next_pattern_node) {
+    //             if *matched_node == next_target_node {
+    //                 continue;
+    //             } else {
+    //                 return err;
+    //             }
+    //         }
+    //         self.match_from_recurse(next_pattern_node, next_target_node, *e_p, match_map)?;
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     fn match_from(
         &self,
@@ -175,7 +179,7 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType, F: Fn(NodeIndex<Ix>, &N)
             self.node_match(curr_p, curr_t)?;
             match_map.insert(curr_p, curr_t);
 
-            let p_edges = Self::cycle_node_edges(self.pattern.graph, curr_p);
+            let p_edges = Self::cycle_node_edges(&self.pattern.graph, curr_p);
             let t_edges = Self::cycle_node_edges(self.target, curr_t);
 
             if p_edges.len() != t_edges.len() {
@@ -245,36 +249,37 @@ impl<'g, 'p, N: PartialEq, E: PartialEq, Ix: IndexType, F: Fn(NodeIndex<Ix>, &N)
         (self.pattern.graph.edge_endpoints(*e).unwrap()[1].node, *e)
     }
 
-    pub fn find_matches_recurse(&'g self) -> impl Iterator<Item = Match<Ix>> + 'g {
-        let (start, start_edge) = self.start_pattern_node_edge();
-        self.target.nodes().filter_map(move |candidate| {
-            if self.node_match(start, candidate).is_err() {
-                return None;
-            }
-            let mut bijection = Match::new();
-            self.match_from_recurse(start, candidate, start_edge, &mut bijection)
-                .ok()
-                .map(|()| bijection)
-        })
-    }
+    // pub fn find_matches_recurse(&'g self) -> impl Iterator<Item = Match<Ix>> + 'g {
+    //     let (start, start_edge) = self.start_pattern_node_edge();
+    //     self.target.nodes().filter_map(move |candidate| {
+    //         if self.node_match(start, candidate).is_err() {
+    //             return None;
+    //         }
+    //         let mut bijection = Match::new();
+    //         self.match_from_recurse(start, candidate, start_edge, &mut bijection)
+    //             .ok()
+    //             .map(|()| bijection)
+    //     })
+    // }
 
-    pub fn find_matches(&'g self) -> impl Iterator<Item = Match<Ix>> + 'g {
+    pub fn find_matches(&'g self) -> impl Iterator<Item = Match<Ix>> + '_ {
         let (start, start_edge) = self.start_pattern_node_edge();
         self.target.nodes().filter_map(move |candidate| {
             if self.node_match(start, candidate).is_err() {
-                return None;
+                None
+            } else {
+                self.match_from(start, candidate, start_edge).ok()
             }
-            self.match_from(start, candidate, start_edge).ok()
         })
     }
 }
 
-impl<'g, 'p, N, E, Ix, F> PatternMatcher<'g, 'p, N, E, Ix, F>
+impl<'g, N, E, Ix, F> PatternMatcher<'g, N, E, Ix, F>
 where
     N: PartialEq + Send + Sync,
     E: PartialEq + Send + Sync,
     Ix: IndexType + Send + Sync,
-    F: Fn(NodeIndex<Ix>, &N) -> bool + Sync + Send,
+    F: NodeCompClosure<N, E, Ix> + Sync + Send,
 {
     pub fn find_par_matches(&'g self) -> impl ParallelIterator<Item = Match<Ix>> + 'g {
         let (start, start_edge) = self.start_pattern_node_edge();
@@ -296,7 +301,7 @@ mod tests {
 
     use super::{node_equality, FixedStructPattern, Match, PatternMatcher};
     use crate::circuit::circuit::{Circuit, UnitID};
-    use crate::circuit::dag::VertexProperties;
+    use crate::circuit::dag::{VertexProperties, DAG};
     use crate::circuit::operation::{Op, WireType};
     use crate::graph::graph::{IndexType, NodeIndex, PortIndex};
     #[fixture]
@@ -338,9 +343,9 @@ mod tests {
         let pattern_boundary = simple_isomorphic_circ.boundary().clone();
         let dag1 = simple_circ.dag;
         let dag2 = simple_isomorphic_circ.dag;
-        let pattern = FixedStructPattern::new(&dag2, pattern_boundary, node_equality(&dag2));
+        let pattern = FixedStructPattern::new(dag2, pattern_boundary, node_equality());
         let matcher = PatternMatcher::new(pattern, &dag1);
-        for (n1, n2) in dag1.nodes().zip(dag2.nodes()) {
+        for (n1, n2) in dag1.nodes().zip(matcher.pattern.graph.nodes()) {
             assert!(matcher.node_match(n1, n2).is_ok());
         }
 
@@ -355,10 +360,10 @@ mod tests {
         let dag1 = simple_circ.dag.clone();
         let dag2 = simple_circ.dag;
 
-        let pattern = FixedStructPattern::new(&dag2, pattern_boundary, node_equality(&dag2));
+        let pattern = FixedStructPattern::new(dag2, pattern_boundary, node_equality());
 
         let matcher = PatternMatcher::new(pattern, &dag1);
-        for (e1, e2) in dag1.edges().zip(dag2.edges()) {
+        for (e1, e2) in dag1.edges().zip(matcher.pattern.graph.edges()) {
             assert!(matcher.edge_match(e1, e2).is_ok());
         }
 
@@ -380,11 +385,9 @@ mod tests {
         simple_circ.add_edge((xop, 0), (o, 3), WireType::Qubit);
 
         let pattern_boundary = noop_pattern_circ.boundary().clone();
-        let pattern = FixedStructPattern::new(
-            &noop_pattern_circ.dag,
-            pattern_boundary,
-            node_equality(&noop_pattern_circ.dag),
-        );
+        let pattern =
+            FixedStructPattern::new(noop_pattern_circ.dag, pattern_boundary, node_equality());
+
         let matcher = PatternMatcher::new(pattern, &simple_circ.dag);
 
         let matches: Vec<_> = matcher.find_matches().collect();
@@ -476,10 +479,12 @@ mod tests {
         let pattern_boundary = cx_h_pattern.boundary().clone();
 
         let pattern = FixedStructPattern::new(
-            &cx_h_pattern.dag,
+            cx_h_pattern.dag,
             pattern_boundary,
-            |pattern_idx: NodeIndex<_>, op2: &VertexProperties| match (pattern_idx.index(), &op2.op)
-            {
+            |_: &DAG, pattern_idx: NodeIndex<_>, op2: &VertexProperties| match (
+                pattern_idx.index(),
+                &op2.op,
+            ) {
                 (2 | 3 | 5 | 6, Op::H) => true,
                 (4, Op::CX) => true,
                 _ => false,
@@ -565,8 +570,8 @@ mod tests {
         // println!("{}", dot_string(&target_circ.dag));
 
         let pattern_boundary = cx_h_pattern.boundary().clone();
-        let asym_match = |op1, op2: &crate::circuit::dag::VertexProperties| {
-            let op1 = cx_h_pattern.dag.node_weight(op1).unwrap();
+        let asym_match = |dag: &DAG, op1, op2: &crate::circuit::dag::VertexProperties| {
+            let op1 = dag.node_weight(op1).unwrap();
             match (&op1.op, &op2.op) {
                 (x, y) if x == y => true,
                 (Op::H, Op::Noop) | (Op::Noop, Op::H) => true,
@@ -574,7 +579,7 @@ mod tests {
             }
         };
 
-        let pattern = FixedStructPattern::new(&cx_h_pattern.dag, pattern_boundary, asym_match);
+        let pattern = FixedStructPattern::new(cx_h_pattern.dag, pattern_boundary, asym_match);
         let matcher = PatternMatcher::new(pattern, &target_circ.dag);
         let matches_seq: Vec<_> = matcher.find_par_matches().collect();
         let matches: Vec<_> = matcher.find_matches().collect();
