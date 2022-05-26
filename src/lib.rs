@@ -15,7 +15,7 @@ mod tests {
         passes::{
             apply_exhaustive,
             classical::{constant_fold_strat, find_const_ops},
-            squash::{find_singleq_rotations, SquashFindIter},
+            squash::{find_singleq_rotations, find_singleq_rotations_pattern, SquashFindIter},
         },
     };
     use tket_json_rs::circuit_json::{self, SerialCircuit};
@@ -279,8 +279,12 @@ mod tests {
         circ.add_edge((point5, 0), (rx, 1), WireType::F64);
         circ.add_edge((rx, 0), (output, 0), WireType::Qubit);
 
-        let rot_replacer =
-            |circuit| apply_exhaustive(circuit, |c| find_singleq_rotations(c).collect()).unwrap();
+        // let rot_replacer =
+        // |circuit| apply_exhaustive(circuit, |c| find_singleq_rotations(c).collect()).unwrap();
+
+        let rot_replacer = |circuit| {
+            apply_exhaustive(circuit, |c| find_singleq_rotations_pattern(c).collect()).unwrap()
+        };
         let (circ2, success) = rot_replacer(circ);
 
         assert!(success);
@@ -289,9 +293,8 @@ mod tests {
             |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
         let (_circ2, success) = constant_folder(circ2);
         assert!(success);
-        // use crate::graph::dot::dot_string,
-
-        // println!("{}", dot_string(&circ2.dag));
+        // use crate::graph::dot::dot_string;
+        // println!("{}", dot_string(&_circ2.dag));
     }
 
     #[test]

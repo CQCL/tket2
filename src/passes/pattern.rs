@@ -31,7 +31,7 @@ impl<N, E, Ix, T> NodeCompClosure<N, E, Ix> for T where
 {
 }
 
-pub fn node_equality<N: PartialEq, E, Ix: IndexType>() -> impl NodeCompClosure<N, E, Ix> {
+pub fn node_equality<N: PartialEq, E, Ix: IndexType>() -> impl NodeCompClosure<N, E, Ix> + Clone {
     |pattern_graph: &Graph<N, E, Ix>, pattern_idx: NodeIndex<_>, target_node: &N| {
         let pattern_node = pattern_graph.node_weight(pattern_idx).unwrap();
         pattern_node == target_node
@@ -39,6 +39,7 @@ pub fn node_equality<N: PartialEq, E, Ix: IndexType>() -> impl NodeCompClosure<N
 }
 pub type Match<Ix> = HashMap<NodeIndex<Ix>, NodeIndex<Ix>>;
 
+#[derive(Clone)]
 pub struct PatternMatcher<'g, N, E, Ix: IndexType, F> {
     pattern: FixedStructPattern<N, E, Ix, F>,
     target: &'g Graph<N, E, Ix>,
@@ -50,7 +51,7 @@ impl<'g, N, E, Ix: IndexType, F> PatternMatcher<'g, N, E, Ix, F> {
     }
 }
 
-impl<'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N, E, Ix>>
+impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N, E, Ix> + 'f>
     PatternMatcher<'g, N, E, Ix, F>
 {
     fn node_match(
@@ -262,7 +263,18 @@ impl<'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N, E, Ix>
     //     })
     // }
 
-    pub fn find_matches(&'g self) -> impl Iterator<Item = Match<Ix>> + '_ {
+    pub fn find_matches(&'g self) -> impl Iterator<Item = Match<Ix>> + 'g {
+        let (start, start_edge) = self.start_pattern_node_edge();
+        self.target.nodes().filter_map(move |candidate| {
+            if self.node_match(start, candidate).is_err() {
+                None
+            } else {
+                self.match_from(start, candidate, start_edge).ok()
+            }
+        })
+    }
+
+    pub fn into_matches(self) -> impl Iterator<Item = Match<Ix>> + 'g {
         let (start, start_edge) = self.start_pattern_node_edge();
         self.target.nodes().filter_map(move |candidate| {
             if self.node_match(start, candidate).is_err() {
