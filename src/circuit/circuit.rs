@@ -5,7 +5,7 @@ use std::hash::Hash;
 use crate::graph::graph::{DefaultIx, Direction, NodePort, PortIndex};
 use crate::graph::substitute::{BoundedSubgraph, OpenGraph};
 
-use super::dag::{Edge, EdgeProperties, TopSorter, Vertex, VertexProperties, DAG};
+use super::dag::{Edge, EdgeProperties, TopSorter, Vertex, VertexProperties, Dag};
 use super::operation::{Op, Param, WireType};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -47,7 +47,7 @@ impl From<CycleInGraph> for String {
 
 #[derive(Clone)]
 pub struct Circuit {
-    pub(crate) dag: DAG,
+    pub(crate) dag: Dag,
     pub name: Option<String>,
     pub phase: Param,
     boundary: Boundary,
@@ -67,7 +67,7 @@ impl Circuit {
 
     pub fn with_uids(uids: Vec<UnitID>) -> Self {
         let n_uids = uids.len();
-        let mut dag = DAG::with_capacity(2, n_uids);
+        let mut dag = Dag::with_capacity(2, n_uids);
         let input = dag.add_node(VertexProperties::new(Op::Input));
         let output = dag.add_node(VertexProperties::new(Op::Output));
         let mut slf = Self {
@@ -88,7 +88,7 @@ impl Circuit {
         let vert_op_sig = match self
             .dag
             .node_weight(new_vert)
-            .ok_or("Vertex not found.".to_string())?
+            .ok_or_else(||"Vertex not found.".to_string())?
             .op
             .signature()
         {
@@ -100,13 +100,13 @@ impl Circuit {
             let edgeprops = self
                 .dag
                 .edge_weight(edge)
-                .ok_or("Edge not found.".to_string())?
+                .ok_or_else(|| "Edge not found.".to_string())?
                 .clone();
 
             let [old_v1, old_v2] = self
                 .dag
                 .edge_endpoints(edge)
-                .ok_or("Edge not found.".to_string())?;
+                .ok_or_else(||"Edge not found.".to_string())?;
             match (&vert_sig_type, &edgeprops.edge_type) {
                 // (WireType::Bool, WireType::Classical) => {
 
@@ -201,7 +201,7 @@ impl Circuit {
                 )
             })
             .collect::<Option<Vec<Edge>>>()
-            .ok_or("Invalid output ports".to_string())?;
+            .ok_or_else(|| "Invalid output ports".to_string())?;
         // let mut wire_arg_set = HashSet::new();
         // for (arg, sig) in args.iter().zip(sig) {
         //     if sig != WireType::Bool {
@@ -259,13 +259,13 @@ impl Circuit {
             }
             _ => Op::Copy {
                 n_copies: copies,
-                typ: edge_type.clone(),
+                typ: *edge_type,
             },
         };
         let copy_node = self.add_vertex(copy_op);
         let [s, t] = self.dag.edge_endpoints(e).unwrap();
         let edge_type = self.dag.remove_edge(e).unwrap().edge_type;
-        self.add_edge(s, (copy_node, 0).into(), edge_type.clone());
+        self.add_edge(s, (copy_node, 0).into(), edge_type);
         self.add_edge((copy_node, 0).into(), t, edge_type);
 
         Ok(copy_node)
@@ -317,7 +317,7 @@ impl Circuit {
         self
     }
 
-    pub fn dag_ref(&self) -> &DAG {
+    pub fn dag_ref(&self) -> &Dag {
         &self.dag
     }
 }
@@ -342,7 +342,7 @@ impl<'circ> CommandIter<'circ> {
                 .dag
                 .node_edges(circ.boundary.input, Direction::Outgoing)
                 .enumerate()
-                .map(|(i, e)| (e.clone(), circ.uids.get(i).unwrap()))
+                .map(|(i, e)| (*e, circ.uids.get(i).unwrap()))
                 .collect(),
             circ,
         }

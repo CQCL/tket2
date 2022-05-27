@@ -54,13 +54,9 @@ where
     F: Fn(&Circuit) -> Option<CircuitRewrite>,
 {
     let mut success = false;
-    loop {
-        if let Some(rewrite) = finder(&circ) {
-            success = true;
-            circ.apply_rewrite(rewrite)?;
-        } else {
-            break;
-        }
+    while let Some(rewrite) = finder(&circ) {
+        success |= true;
+        circ.apply_rewrite(rewrite)?;
     }
 
     Ok((circ, success))
@@ -120,7 +116,7 @@ where
                     .unwrap()
             })
             .collect();
-        let subg = BoundedSubgraph::new(pmatch.values().cloned().into(), [in_edges, out_edges]);
+        let subg = BoundedSubgraph::new(pmatch.values().copied().into(), [in_edges, out_edges]);
 
         let (newcirc, phase) = (rewrite_closure)(pmatch);
 

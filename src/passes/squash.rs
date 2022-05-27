@@ -1,7 +1,7 @@
 use crate::{
     circuit::{
         circuit::{Circuit, CircuitRewrite, UnitID},
-        dag::{Edge, Vertex, VertexProperties, DAG},
+        dag::{Edge, Vertex, VertexProperties, Dag},
         operation::{ConstValue, Op, WireType},
     },
     graph::{
@@ -75,7 +75,7 @@ pub fn find_singleq_rotations_pattern<'c>(
     pattern_circ.add_edge((rx, 0), (output, 0), WireType::Qubit);
 
     let nod_comp =
-        |_: &DAG, _: NodeIndex, vert: &VertexProperties| !matches!(vert.op, Op::Rotation);
+        |_: &Dag, _: NodeIndex, vert: &VertexProperties| !matches!(vert.op, Op::Rotation);
 
     let pattern = CircFixedStructPattern::from_circ(pattern_circ, nod_comp);
 

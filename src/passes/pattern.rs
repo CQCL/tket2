@@ -95,7 +95,7 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
     fn cycle_node_edges(g: &Graph<N, E, Ix>, n: NodeIndex<Ix>) -> Vec<EdgeIndex<Ix>> {
         g.node_edges(n, Direction::Incoming)
             .chain(g.node_edges(n, Direction::Outgoing))
-            .cloned()
+            .copied()
             .collect()
     }
 
@@ -313,7 +313,7 @@ mod tests {
 
     use super::{node_equality, FixedStructPattern, Match, PatternMatcher};
     use crate::circuit::circuit::{Circuit, UnitID};
-    use crate::circuit::dag::{VertexProperties, DAG};
+    use crate::circuit::dag::{VertexProperties, Dag};
     use crate::circuit::operation::{Op, WireType};
     use crate::graph::graph::{IndexType, NodeIndex, PortIndex};
     #[fixture]
@@ -352,7 +352,7 @@ mod tests {
     #[rstest]
     fn test_node_match(simple_circ: Circuit, simple_isomorphic_circ: Circuit) {
         let [i, o] = simple_circ.boundary();
-        let pattern_boundary = simple_isomorphic_circ.boundary().clone();
+        let pattern_boundary = simple_isomorphic_circ.boundary();
         let dag1 = simple_circ.dag;
         let dag2 = simple_isomorphic_circ.dag;
         let pattern = FixedStructPattern::new(dag2, pattern_boundary, node_equality());
@@ -367,7 +367,7 @@ mod tests {
     #[rstest]
     fn test_edge_match(simple_circ: Circuit) {
         let fedges: Vec<_> = simple_circ.dag.edges().collect();
-        let pattern_boundary = simple_circ.boundary().clone();
+        let pattern_boundary = simple_circ.boundary();
 
         let dag1 = simple_circ.dag.clone();
         let dag2 = simple_circ.dag;
@@ -385,7 +385,7 @@ mod tests {
     fn match_maker<Ix: IndexType>(it: impl IntoIterator<Item = (usize, usize)>) -> Match<Ix> {
         Match::from_iter(
             it.into_iter()
-                .map(|(i, j)| (NodeIndex::new(i.into()), NodeIndex::new(j.into()))),
+                .map(|(i, j)| (NodeIndex::new(i), NodeIndex::new(j))),
         )
     }
 
@@ -396,7 +396,7 @@ mod tests {
         simple_circ.add_edge((i, 3), (xop, 0), WireType::Qubit);
         simple_circ.add_edge((xop, 0), (o, 3), WireType::Qubit);
 
-        let pattern_boundary = noop_pattern_circ.boundary().clone();
+        let pattern_boundary = noop_pattern_circ.boundary();
         let pattern =
             FixedStructPattern::new(noop_pattern_circ.dag, pattern_boundary, node_equality());
 
@@ -453,7 +453,7 @@ mod tests {
                 index: vec![1],
             },
         ];
-        let mut target_circ = Circuit::with_uids(qubits.clone());
+        let mut target_circ = Circuit::with_uids(qubits);
         target_circ
             .append_op(Op::H, &vec![PortIndex::new(0)])
             .unwrap();
@@ -488,12 +488,12 @@ mod tests {
             .append_op(Op::H, &vec![PortIndex::new(1)])
             .unwrap();
 
-        let pattern_boundary = cx_h_pattern.boundary().clone();
+        let pattern_boundary = cx_h_pattern.boundary();
 
         let pattern = FixedStructPattern::new(
             cx_h_pattern.dag,
             pattern_boundary,
-            |_: &DAG, pattern_idx: NodeIndex<_>, op2: &VertexProperties| match (
+            |_: &Dag, pattern_idx: NodeIndex<_>, op2: &VertexProperties| match (
                 pattern_idx.index(),
                 &op2.op,
             ) {
@@ -540,7 +540,7 @@ mod tests {
         ];
 
         // use Noop and H, allow matches between either
-        let mut target_circ = Circuit::with_uids(qubits.clone());
+        let mut target_circ = Circuit::with_uids(qubits);
         let h_0_0 = target_circ
             .append_op(Op::Noop, &vec![PortIndex::new(0)])
             .unwrap();
@@ -581,8 +581,8 @@ mod tests {
         // use crate::graph::dot::dot_string;
         // println!("{}", dot_string(&target_circ.dag));
 
-        let pattern_boundary = cx_h_pattern.boundary().clone();
-        let asym_match = |dag: &DAG, op1, op2: &crate::circuit::dag::VertexProperties| {
+        let pattern_boundary = cx_h_pattern.boundary();
+        let asym_match = |dag: &Dag, op1, op2: &crate::circuit::dag::VertexProperties| {
             let op1 = dag.node_weight(op1).unwrap();
             match (&op1.op, &op2.op) {
                 (x, y) if x == y => true,

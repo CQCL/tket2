@@ -43,6 +43,10 @@ impl Signature {
         self.linear.len() + max(self.nonlinear[0].len(), self.nonlinear[1].len())
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.linear.is_empty() && self.nonlinear[0].is_empty() && self.nonlinear[1].is_empty()
+    }
+
     pub fn purely_linear(&self) -> bool {
         self.nonlinear[0].is_empty() && self.nonlinear[1].is_empty()
     }
@@ -120,7 +124,7 @@ lazy_static! {
 }
 
 pub fn approx_eq(x: f64, y: f64, modulo: u32, tol: f64) -> bool {
-    let modulo = modulo as f64;
+    let modulo = f64::from(modulo);
     let x = (x - y) / modulo;
 
     let x = x - x.floor();
@@ -174,8 +178,7 @@ impl Op {
             Op::QuatMul => binary_op(WireType::Quat64),
             Op::FNeg => Signature::new_nonlinear(vec![WireType::F64], vec![WireType::F64]),
             Op::Copy { n_copies, typ } => {
-                let typ = typ.clone();
-                Signature::new_nonlinear(vec![typ.clone()], vec![typ; *n_copies as usize])
+                Signature::new_nonlinear(vec![*typ], vec![*typ; *n_copies as usize])
             }
             Op::Const(x) => Signature::new_nonlinear(vec![], vec![x.get_type()]),
 
