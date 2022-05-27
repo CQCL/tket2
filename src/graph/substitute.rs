@@ -124,12 +124,12 @@ impl<N: Default + Debug + Display, E: Debug + Display, Ix: HashIx> Graph<N, E, I
         // insert new graph and update edge references accordingly
         let (node_map, _) = self.insert_graph(replacement.graph);
 
-        for (e, mut np) in incoming_edges.into_iter().zip(replacement.in_ports) {
+        for (e, mut np) in incoming_edges.iter().zip(replacement.in_ports) {
             let [source, _] = self.edge_endpoints(*e).expect("missing edge.");
             np.node = node_map[&np.node];
             self.update_edge(*e, source, np);
         }
-        for (e, mut np) in outgoing_edges.into_iter().zip(replacement.out_ports) {
+        for (e, mut np) in outgoing_edges.iter().zip(replacement.out_ports) {
             let [_, target] = self.edge_endpoints(*e).expect("missing edge.");
             np.node = node_map[&np.node];
             self.update_edge(*e, np, target);

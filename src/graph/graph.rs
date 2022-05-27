@@ -229,7 +229,7 @@ impl<E: Clone, Ix: IndexType> Clone for Edge<E, Ix> {
     fn clone(&self) -> Self {
         Self {
             weight: self.weight.clone(),
-            node_ports: self.node_ports.clone(),
+            node_ports: self.node_ports,
         }
     }
 }
@@ -245,6 +245,9 @@ impl Default for Direction {
         Direction::Incoming
     }
 }
+
+type NodeMap<Ix> = HashMap<NodeIndex<Ix>, NodeIndex<Ix>>;
+type EdgeMap<Ix> = HashMap<EdgeIndex<Ix>, EdgeIndex<Ix>>;
 
 pub struct Graph<N, E, Ix = DefaultIx> {
     pub(super) nodes: Vec<Node<N, Ix>>,
@@ -272,10 +275,10 @@ impl<N: Clone, E: Clone, Ix: IndexType> Clone for Graph<N, E, Ix> {
         Self {
             nodes: self.nodes.clone(),
             edges: self.edges.clone(),
-            node_count: self.node_count.clone(),
-            edge_count: self.edge_count.clone(),
-            free_node: self.free_node.clone(),
-            free_edge: self.free_edge.clone(),
+            node_count: self.node_count,
+            edge_count: self.edge_count,
+            free_node: self.free_node,
+            free_edge: self.free_edge,
         }
     }
 }
@@ -290,6 +293,12 @@ impl<N: Debug, E: Debug, Ix: IndexType> Debug for Graph<N, E, Ix> {
             .field("free_node", &self.free_node)
             .field("free_edge", &self.free_edge)
             .finish()
+    }
+}
+
+impl<N, E, Ix: IndexType> Default for Graph<N, E, Ix> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -450,7 +459,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             .incoming
             .iter()
             .chain(&node.outgoing)
-            .cloned()
+            .copied()
             .filter(|e| *e != EdgeIndex::end())
             .collect();
         // for port_array in [&, &node.outgoing] {
@@ -517,20 +526,19 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             }
         };
 
-        let (n1, p1) = match edge.node_ports[0] {
-            NodePort { node, port } => (
-                self.nodes.get_mut(node.index()).expect("Node not found."),
-                port,
-            ),
-        };
+        let NodePort { node, port } = edge.node_ports[0];
+        let (n1, p1) = (
+            self.nodes.get_mut(node.index()).expect("Node not found."),
+            port,
+        );
         clear_up_port(p1, &mut n1.outgoing);
 
-        let (n2, p2) = match edge.node_ports[1] {
-            NodePort { node, port } => (
-                self.nodes.get_mut(node.index()).expect("Node not found."),
-                port,
-            ),
-        };
+        let NodePort { node, port } = edge.node_ports[1];
+
+        let (n2, p2) = (
+            self.nodes.get_mut(node.index()).expect("Node not found."),
+            port,
+        );
 
         clear_up_port(p2, &mut n2.incoming);
 
@@ -594,7 +602,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             Direction::Outgoing => &node.outgoing,
         })
         .get(np.port.index())
-        .map(|e| *e)
+        .copied()
     }
 
     pub fn nodes(&self) -> impl Iterator<Item = NodeIndex<Ix>> + '_ {
@@ -635,13 +643,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         }
     }
 
-    pub fn insert_graph(
-        &mut self,
-        other: Self,
-    ) -> (
-        HashMap<NodeIndex<Ix>, NodeIndex<Ix>>,
-        HashMap<EdgeIndex<Ix>, EdgeIndex<Ix>>,
-    ) {
+    pub fn insert_graph(&mut self, other: Self) -> (NodeMap<Ix>, EdgeMap<Ix>) {
         let node_map: HashMap<NodeIndex<Ix>, NodeIndex<Ix>> = other
             .nodes
             .into_iter()
@@ -672,13 +674,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
     Remove all invalid nodes and edges. Update internal references.
     INVALIDATES EXTERNAL NODE AND EDGE REFERENCES
     */
-    pub fn remove_invalid(
-        mut self,
-    ) -> (
-        Self,
-        HashMap<NodeIndex<Ix>, NodeIndex<Ix>>,
-        HashMap<EdgeIndex<Ix>, EdgeIndex<Ix>>,
-    ) {
+    pub fn remove_invalid(mut self) -> (Self, NodeMap<Ix>, EdgeMap<Ix>) {
         // TODO optimise
         let (old_indices, mut new_nodes): (Vec<_>, Vec<_>) = self
             .nodes
@@ -699,7 +695,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             .enumerate()
             .filter(|(_, x)| x.weight.is_some())
             .map(|(i, mut e)| {
-                for np in e.node_ports.iter_mut() {
+                for np in &mut e.node_ports {
                     np.node = index_map[&np.node];
                 }
                 (i, e)
@@ -712,11 +708,11 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             .map(|(a, b)| (EdgeIndex::new(b), EdgeIndex::new(a)))
             .collect();
 
-        for node in new_nodes.iter_mut() {
+        for node in &mut new_nodes {
             for lst in [&mut node.incoming, &mut node.outgoing] {
                 for e in lst.iter_mut() {
                     if *e != EdgeIndex::end() {
-                        *e = edge_index_map[&e];
+                        *e = edge_index_map[e];
                     }
                 }
             }

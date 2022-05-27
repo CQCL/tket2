@@ -210,7 +210,7 @@ impl From<UnitID> for Register {
     fn from(uid: UnitID) -> Self {
         match uid {
             UnitID::Qubit { name, index } | UnitID::Bit { name, index } => {
-                Register(name, index.into_iter().map(|i| i as i64).collect())
+                Register(name, index.into_iter().map(i64::from).collect())
             }
             _ => panic!("Not supported: {:?}", uid),
         }

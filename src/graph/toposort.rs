@@ -58,12 +58,10 @@ impl<'graph, N, E, Ix: IndexType> Iterator for TopSortWalker<'graph, N, E, Ix> {
             for e in self.g.node_edges(n, forward) {
                 let m = self.g.edge_endpoints(*e).unwrap()[forward as usize].node;
                 self.remaining_edges.remove(e);
-                if self
+                if !self
                     .g
                     .node_edges(m, backward)
-                    .filter(|&e2| self.remaining_edges.contains(e2))
-                    .next()
-                    .is_none()
+                    .any(|e2| self.remaining_edges.contains(e2))
                 {
                     self.candidate_nodes.push_back(m);
                 }
@@ -71,9 +69,7 @@ impl<'graph, N, E, Ix: IndexType> Iterator for TopSortWalker<'graph, N, E, Ix> {
 
             Some(n)
         } else {
-            if self.cyclicity_check && !self.remaining_edges.is_empty() {
-                panic!("Edges remaining, graph may contain cycle.");
-            }
+            assert!(!(self.cyclicity_check && !self.remaining_edges.is_empty()), "Edges remaining, graph may contain cycle.");
             None
         }
     }

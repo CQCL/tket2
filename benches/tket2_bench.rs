@@ -67,14 +67,14 @@ fn pattern_match_bench_par(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("Sequential", i), |b| {
             b.iter(|| {
                 let ms = pmatcher.find_matches().collect::<Vec<_>>();
-                assert_eq!(ms.len(), i)
-            })
+                assert_eq!(ms.len(), i);
+            });
         });
         group.bench_function(BenchmarkId::new("Paralllel", i), |b| {
             b.iter(|| {
                 let ms = pmatcher.find_par_matches().collect::<Vec<_>>();
-                assert_eq!(ms.len(), i)
-            })
+                assert_eq!(ms.len(), i);
+            });
         });
     }
     group.finish();
