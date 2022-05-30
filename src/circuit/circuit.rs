@@ -6,7 +6,7 @@ use crate::graph::graph::{DefaultIx, Direction, NodePort, PortIndex};
 use crate::graph::substitute::{BoundedSubgraph, OpenGraph};
 
 use super::dag::{Dag, Edge, EdgeProperties, TopSorter, Vertex, VertexProperties};
-use super::operation::{Op, Param, WireType};
+use super::operation::{ConstValue, Op, Param, WireType};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum UnitID {
@@ -159,6 +159,29 @@ impl Circuit {
     pub fn add_unitid(&mut self, uid: UnitID) {
         self.uids.push(uid);
     }
+
+    pub fn bind_input<P: Into<PortIndex>>(
+        &mut self,
+        in_port: P,
+        val: ConstValue,
+    ) -> Result<Vertex, String> {
+        let e = self
+            .dag
+            .edge_at_port(
+                NodePort::new(self.boundary.input, in_port.into()),
+                Direction::Outgoing,
+            )
+            .ok_or_else(|| "No such input".to_string())?;
+        let [_, target] = self.dag.edge_endpoints(e).unwrap();
+        let existing_typ = self.dag.remove_edge(e).unwrap().edge_type;
+        if val.get_type() != existing_typ {
+            return Err("Edge type of input does not match type of provided value.".into());
+        }
+        let cons = self.add_vertex(Op::Const(val));
+        self.add_edge((cons, 0).into(), target, existing_typ);
+        Ok(cons)
+    }
+
     pub fn add_edge<T: Into<NodePort>>(
         &mut self,
         source: T,
@@ -415,7 +438,10 @@ impl From<Circuit> for OpenGraph<VertexProperties, EdgeProperties, DefaultIx> {
 
 #[cfg(test)]
 mod tests {
-    use crate::circuit::operation::{Op, WireType};
+    use crate::{
+        circuit::operation::{ConstValue, Op, WireType},
+        graph::graph::{Direction, PortIndex},
+    };
 
     use super::Circuit;
 
@@ -428,5 +454,39 @@ mod tests {
             circ.add_edge((i, p), (noop, 0), WireType::Qubit);
             circ.add_edge((noop, 0), (o, p), WireType::Qubit);
         }
+    }
+
+    #[test]
+    fn test_bind_value() {
+        let mut circ = Circuit::new();
+        let [i, o] = circ.boundary();
+        let add = circ.add_vertex(Op::FAdd);
+
+        circ.add_edge((i, 0), (add, 0), WireType::F64);
+        circ.add_edge((i, 1), (add, 1), WireType::F64);
+        circ.add_edge((add, 0), (o, 0), WireType::F64);
+
+        assert_eq!(circ.dag.edge_count(), 3);
+        assert_eq!(circ.dag.node_count(), 3);
+        assert_eq!(circ.dag.node_edges(i, Direction::Outgoing).count(), 2);
+        circ.bind_input(PortIndex::new(0), ConstValue::F64(1.0))
+            .unwrap();
+        circ.bind_input(PortIndex::new(1), ConstValue::F64(2.0))
+            .unwrap();
+
+        assert_eq!(circ.dag.edge_count(), 3);
+        assert_eq!(circ.dag.node_count(), 5);
+        assert_eq!(circ.dag.node_edges(i, Direction::Outgoing).count(), 0);
+
+        let mut neis = circ.dag.neighbours(add, Direction::Incoming);
+
+        assert_eq!(
+            circ.dag.node_weight(neis.next().unwrap().node).unwrap().op,
+            Op::Const(ConstValue::F64(1.0))
+        );
+        assert_eq!(
+            circ.dag.node_weight(neis.next().unwrap().node).unwrap().op,
+            Op::Const(ConstValue::F64(2.0))
+        );
     }
 }
