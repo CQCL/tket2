@@ -12,6 +12,7 @@ mod tests {
             operation::WireType,
             operation::{ConstValue, Op},
         },
+        graph::graph::PortIndex,
         passes::{
             apply_exhaustive,
             classical::{constant_fold_strat, find_const_ops},
@@ -306,14 +307,12 @@ mod tests {
         });
         let [input, output] = circ.boundary();
 
-        let point5 = circ.add_vertex(Op::Const(ConstValue::F64(0.5)));
-        let point2 = circ.add_vertex(Op::Const(ConstValue::F64(0.2)));
         let rx = circ.add_vertex(Op::RxF64);
         let rz = circ.add_vertex(Op::RzF64);
         circ.add_edge((input, 0), (rx, 0), WireType::Qubit);
-        circ.add_edge((point5, 0), (rx, 1), WireType::F64);
+        circ.add_edge((input, 1), (rx, 1), WireType::F64);
         circ.add_edge((rx, 0), (rz, 0), WireType::Qubit);
-        circ.add_edge((point2, 0), (rz, 1), WireType::F64);
+        circ.add_edge((input, 2), (rz, 1), WireType::F64);
         circ.add_edge((rz, 0), (output, 0), WireType::Qubit);
         // println!("{}", dot_string(&circ.dag));
 
@@ -326,9 +325,15 @@ mod tests {
         // |circuit| apply_exhaustive(circuit, |c| SquashFindIter::new(c).collect()).unwrap();
         let squasher =
             |circuit| apply_exhaustive(circuit, |c| squash_pattern(c).collect()).unwrap();
-        let (circ2, success) = squasher(circ2);
+        let (mut circ2, success) = squasher(circ2);
         assert!(success);
 
+        circ2
+            .bind_input(PortIndex::new(1), ConstValue::F64(0.5))
+            .unwrap();
+        circ2
+            .bind_input(PortIndex::new(2), ConstValue::F64(0.2))
+            .unwrap();
         let constant_folder =
             |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
         let (_circ2, success) = constant_folder(circ2);
@@ -336,7 +341,7 @@ mod tests {
 
         // let _circ2 = _circ2.remove_invalid();
         // use crate::graph::dot::dot_string;
-        // println!("{}", dot_string(&_circ2.dag));
+        // println!("{}", dot_string(&circ2.dag));
         // TODO verify behaviour at each step
     }
 }
