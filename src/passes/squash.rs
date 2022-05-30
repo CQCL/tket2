@@ -10,7 +10,10 @@ use crate::{
     },
 };
 
-use super::{pattern::Match, pattern_rewriter, CircFixedStructPattern};
+use super::{
+    pattern::{node_equality, Match},
+    pattern_rewriter, CircFixedStructPattern,
+};
 
 pub fn find_singleq_rotations<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
     RotationRewriteIter {
@@ -89,6 +92,37 @@ pub fn find_singleq_rotations_pattern<'c>(
     pattern_rewriter(pattern, circ, rewriter)
 }
 
+// Pairwise squashing using pattern matching
+pub fn squash_pattern<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
+    let mut pattern_circ = Circuit::new();
+    let [input, output] = pattern_circ.boundary();
+
+    let r1 = pattern_circ.add_vertex(Op::Rotation);
+    let r2 = pattern_circ.add_vertex(Op::Rotation);
+    pattern_circ.add_edge((input, 0), (r1, 0), WireType::Qubit);
+    pattern_circ.add_edge((input, 1), (r1, 1), WireType::Quat64);
+    pattern_circ.add_edge((r1, 0), (r2, 0), WireType::Qubit);
+    pattern_circ.add_edge((input, 2), (r2, 1), WireType::Quat64);
+    pattern_circ.add_edge((r2, 0), (output, 0), WireType::Qubit);
+
+    let pattern = CircFixedStructPattern::from_circ(pattern_circ, node_equality());
+
+    let mut replace_circ = Circuit::new();
+
+    let [input, output] = replace_circ.boundary();
+
+    let r1 = replace_circ.add_vertex(Op::Rotation);
+    let mul = replace_circ.add_vertex(Op::QuatMul);
+    replace_circ.add_edge((input, 0), (r1, 0), WireType::Qubit);
+    replace_circ.add_edge((input, 1), (mul, 0), WireType::Quat64);
+    replace_circ.add_edge((input, 2), (mul, 1), WireType::Quat64);
+    replace_circ.add_edge((mul, 0), (r1, 1), WireType::Quat64);
+    replace_circ.add_edge((r1, 0), (output, 0), WireType::Qubit);
+    let rewriter = move |_: Match<DefaultIx>| (replace_circ.clone(), 0.0);
+
+    pattern_rewriter(pattern, circ, rewriter)
+}
+
 fn rotation_replacement(op: &Op) -> (Circuit, Param) {
     let mut replace = Circuit::new();
     let [inp, out] = replace.boundary();
@@ -121,6 +155,8 @@ fn rotation_replacement(op: &Op) -> (Circuit, Param) {
     (replace, 0.0)
 }
 
+// Find strings of rotation and use cacading quaternion multiplications to
+// squash them
 pub struct SquashFindIter<'c> {
     circ: &'c Circuit,
     current_edge: Edge,

@@ -15,7 +15,7 @@ mod tests {
         passes::{
             apply_exhaustive,
             classical::{constant_fold_strat, find_const_ops},
-            squash::{find_singleq_rotations, find_singleq_rotations_pattern, SquashFindIter},
+            squash::{find_singleq_rotations, find_singleq_rotations_pattern, squash_pattern},
         },
     };
     use tket_json_rs::circuit_json::{self, SerialCircuit};
@@ -322,9 +322,10 @@ mod tests {
         let (circ2, success) = rot_replacer(circ);
 
         assert!(success);
+        // let squasher =
+        // |circuit| apply_exhaustive(circuit, |c| SquashFindIter::new(c).collect()).unwrap();
         let squasher =
-            |circuit| apply_exhaustive(circuit, |c| SquashFindIter::new(c).collect()).unwrap();
-
+            |circuit| apply_exhaustive(circuit, |c| squash_pattern(c).collect()).unwrap();
         let (circ2, success) = squasher(circ2);
         assert!(success);
 
@@ -333,6 +334,9 @@ mod tests {
         let (_circ2, success) = constant_folder(circ2);
         assert!(success);
 
+        // let _circ2 = _circ2.remove_invalid();
+        // use crate::graph::dot::dot_string;
+        // println!("{}", dot_string(&_circ2.dag));
         // TODO verify behaviour at each step
     }
 }
