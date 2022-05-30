@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use std::cmp::max;
 
 use cgmath::Quaternion;
-pub(crate) type Param = String;
+pub(crate) type Param = f64;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum WireType {

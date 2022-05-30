@@ -313,7 +313,7 @@ mod tests {
 
     use super::{node_equality, FixedStructPattern, Match, PatternMatcher};
     use crate::circuit::circuit::{Circuit, UnitID};
-    use crate::circuit::dag::{VertexProperties, Dag};
+    use crate::circuit::dag::{Dag, VertexProperties};
     use crate::circuit::operation::{Op, WireType};
     use crate::graph::graph::{IndexType, NodeIndex, PortIndex};
     #[fixture]

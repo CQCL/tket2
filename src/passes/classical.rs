@@ -97,7 +97,8 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
                 Op::Copy { n_copies, .. } => vec![inputs[0].clone(); *n_copies as usize],
                 Op::ToRotation => match &inputs[..4] {
                     [ConstValue::F64(angle), ConstValue::F64(x), ConstValue::F64(y), ConstValue::F64(z)] => {
-                        let p = -angle*std::f64::consts::PI/2.0; let s = p.sin();
+                        let p = -angle*std::f64::consts::PI/2.0;
+                        let s = p.sin();
                         vec![ConstValue::Quat64(cgmath::Quaternion::new(p.cos(), s*x, s*y, s*z))]
                     }
                     _ => return None
@@ -126,7 +127,7 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
             Some(CircuitRewrite::new(
                 subgraph,
                 replace.into(),
-                "0".into(),
+                0.0,
             ))
         })
     }

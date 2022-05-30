@@ -69,7 +69,10 @@ impl<'graph, N, E, Ix: IndexType> Iterator for TopSortWalker<'graph, N, E, Ix> {
 
             Some(n)
         } else {
-            assert!(!(self.cyclicity_check && !self.remaining_edges.is_empty()), "Edges remaining, graph may contain cycle.");
+            assert!(
+                (!self.cyclicity_check || self.remaining_edges.is_empty()),
+                "Edges remaining, graph may contain cycle."
+            );
             None
         }
     }

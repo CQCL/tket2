@@ -1,7 +1,6 @@
-#[allow(clippy::module_inception)]
-
-pub mod graph;
 pub mod dot;
+#[allow(clippy::module_inception)]
+pub mod graph;
 pub mod substitute;
 pub mod toposort;
 

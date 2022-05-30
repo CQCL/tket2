@@ -1,8 +1,8 @@
 use crate::{
     circuit::{
         circuit::{Circuit, CircuitRewrite, UnitID},
-        dag::{Edge, Vertex, VertexProperties, Dag},
-        operation::{ConstValue, Op, WireType},
+        dag::{Dag, Edge, Vertex, VertexProperties},
+        operation::{ConstValue, Op, Param, WireType},
     },
     graph::{
         graph::{DefaultIx, Direction, EdgeIndex, NodeIndex},
@@ -49,11 +49,11 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for RotationRewriteIter<'circ, 
             if !op.is_one_qb_gate() || matches!(op, Op::Rotation) {
                 return None;
             }
-            let replace = rotation_replacement(op);
+            let (replace, phase) = rotation_replacement(op);
             Some(CircuitRewrite::new(
                 BoundedSubgraph::from_node(&self.circ.dag, n),
                 replace.into(),
-                "0.0".into(),
+                phase,
             ))
         })
     }
@@ -83,13 +83,13 @@ pub fn find_singleq_rotations_pattern<'c>(
         let nid = mat.values().next().unwrap(); // there's only 1 node to match
         let op = &circ.dag.node_weight(*nid).unwrap().op;
 
-        (rotation_replacement(op), "0.0".to_string())
+        rotation_replacement(op)
     };
 
     pattern_rewriter(pattern, circ, rewriter)
 }
 
-fn rotation_replacement(op: &Op) -> Circuit {
+fn rotation_replacement(op: &Op) -> (Circuit, Param) {
     let mut replace = Circuit::new();
     let [inp, out] = replace.boundary();
     let make_quat = replace.add_vertex(Op::ToRotation);
@@ -118,7 +118,7 @@ fn rotation_replacement(op: &Op) -> Circuit {
         replace.add_edge(source, (make_quat, port_index as u8), WireType::F64);
     }
     replace.add_edge((rot, 0), (out, 0), WireType::Qubit);
-    replace
+    (replace, 0.0)
 }
 
 pub struct SquashFindIter<'c> {
@@ -249,7 +249,7 @@ impl<'circ> Iterator for SquashFindIter<'circ> {
                 BoundedSubgraph::new(rot_nodes.into_iter().into(), [in_edges, out_edges]),
                 replace.into(),
             ),
-            phase: "0.0".into(),
+            phase: 0.0,
         })
     }
 }

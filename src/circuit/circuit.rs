@@ -5,7 +5,7 @@ use std::hash::Hash;
 use crate::graph::graph::{DefaultIx, Direction, NodePort, PortIndex};
 use crate::graph::substitute::{BoundedSubgraph, OpenGraph};
 
-use super::dag::{Edge, EdgeProperties, TopSorter, Vertex, VertexProperties, Dag};
+use super::dag::{Dag, Edge, EdgeProperties, TopSorter, Vertex, VertexProperties};
 use super::operation::{Op, Param, WireType};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -73,7 +73,7 @@ impl Circuit {
         let mut slf = Self {
             dag,
             name: None,
-            phase: "0.0".into(),
+            phase: 0.0,
             boundary: Boundary { input, output },
             uids: Vec::with_capacity(n_uids),
         };
@@ -88,7 +88,7 @@ impl Circuit {
         let vert_op_sig = match self
             .dag
             .node_weight(new_vert)
-            .ok_or_else(||"Vertex not found.".to_string())?
+            .ok_or_else(|| "Vertex not found.".to_string())?
             .op
             .signature()
         {
@@ -106,7 +106,7 @@ impl Circuit {
             let [old_v1, old_v2] = self
                 .dag
                 .edge_endpoints(edge)
-                .ok_or_else(||"Edge not found.".to_string())?;
+                .ok_or_else(|| "Edge not found.".to_string())?;
             match (&vert_sig_type, &edgeprops.edge_type) {
                 // (WireType::Bool, WireType::Classical) => {
 
@@ -273,7 +273,7 @@ impl Circuit {
 
     pub fn apply_rewrite(&mut self, rewrite: CircuitRewrite) -> Result<(), String> {
         self.dag.apply_rewrite(rewrite.graph_rewrite)?;
-        // self.phase = self.phase.clone() + rewrite.phase;
+        self.phase += rewrite.phase;
         Ok(())
     }
     pub fn remove_invalid(mut self) -> Self {

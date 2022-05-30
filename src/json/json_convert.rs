@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-
 use crate::circuit::circuit::{Circuit, UnitID};
-use crate::circuit::operation::{Op, Param, WireType};
+use crate::circuit::operation::{Op, WireType};
 use crate::graph::graph::PortIndex;
+use std::collections::HashMap;
+use std::str::FromStr;
 use tket_json_rs::circuit_json::{Command, Operation, Permutation, Register, SerialCircuit};
 use tket_json_rs::optype::OpType;
 
@@ -20,17 +20,26 @@ fn to_bit(reg: Register) -> UnitID {
     }
 }
 
-impl From<Operation<Param>> for Op {
-    fn from(serial_op: Operation<Param>) -> Self {
+impl<P: ToString> From<Operation<P>> for Op {
+    fn from(serial_op: Operation<P>) -> Self {
         let params = serial_op.params;
-        if let Some(mut params) = params {
+        if let Some(params) = params {
+            let mut f64_params = params
+                .into_iter()
+                .map(|x| f64::from_str(&x.to_string()[..]).unwrap());
             match serial_op.op_type {
-                OpType::Rx => Op::Rx(params.remove(0)),
-                OpType::Ry => Op::Ry(params.remove(0)),
-                OpType::Rz => Op::Rz(params.remove(0)),
-                OpType::ZZPhase => Op::ZZPhase(params.remove(0)),
-                OpType::PhasedX => Op::PhasedX(params.remove(0), params.remove(0)),
-                OpType::TK1 => Op::TK1(params.remove(0), params.remove(0), params.remove(0)),
+                OpType::Rx => Op::Rx(f64_params.next().unwrap()),
+                OpType::Ry => Op::Ry(f64_params.next().unwrap()),
+                OpType::Rz => Op::Rz(f64_params.next().unwrap()),
+                OpType::ZZPhase => Op::ZZPhase(f64_params.next().unwrap()),
+                OpType::PhasedX => {
+                    Op::PhasedX(f64_params.next().unwrap(), f64_params.next().unwrap())
+                }
+                OpType::TK1 => Op::TK1(
+                    f64_params.next().unwrap(),
+                    f64_params.next().unwrap(),
+                    f64_params.next().unwrap(),
+                ),
 
                 _ => panic!("Parameters for unparametrised op."),
             }
@@ -125,7 +134,7 @@ impl From<Operation<Param>> for Op {
     }
 }
 
-impl From<Op> for Operation<Param> {
+impl<P: From<String>> From<Op> for Operation<P> {
     fn from(op: Op) -> Self {
         let (op_type, params) = match op {
             Op::H => (OpType::H, vec![]),
@@ -153,7 +162,8 @@ impl From<Op> for Operation<Param> {
         //     }),
         //     Signature::NonLinear(_, _) => panic!(),
         // }
-        let params = (!params.is_empty()).then(|| params);
+        let params = (!params.is_empty())
+            .then(|| params.into_iter().map(|p| p.to_string().into()).collect());
         Operation {
             op_type,
             // params: params.map(|ps| ps.iter().map(|e| e.as_str().to_string()).collect()),
@@ -166,8 +176,8 @@ impl From<Op> for Operation<Param> {
     }
 }
 
-impl From<SerialCircuit<Param>> for Circuit {
-    fn from(serialcirc: SerialCircuit<Param>) -> Self {
+impl<P: ToString> From<SerialCircuit<P>> for Circuit {
+    fn from(serialcirc: SerialCircuit<P>) -> Self {
         let uids: Vec<_> = serialcirc
             .qubits
             .into_iter()
@@ -179,7 +189,7 @@ impl From<SerialCircuit<Param>> for Circuit {
 
         circ.name = serialcirc.name;
         // circ.phase = Param::new(serialcirc.phase);
-        circ.phase = serialcirc.phase;
+        circ.phase = f64::from_str(&serialcirc.phase.to_string()[..]).unwrap();
 
         let frontier: HashMap<UnitID, PortIndex> = circ
             .unitids()
@@ -217,12 +227,12 @@ impl From<UnitID> for Register {
     }
 }
 
-impl From<Circuit> for SerialCircuit<Param> {
+impl<P: From<String>> From<Circuit> for SerialCircuit<P> {
     fn from(circ: Circuit) -> Self {
         let commands = circ
             .to_commands()
             .filter_map(|com| {
-                let op: Operation<Param> = com.op.into();
+                let op: Operation<P> = com.op.into();
                 match op.op_type {
                     OpType::Input | OpType::Output => None,
                     _ => Some(Command {
@@ -244,7 +254,7 @@ impl From<Circuit> for SerialCircuit<Param> {
         SerialCircuit {
             commands,
             name: circ.name,
-            phase: circ.phase,
+            phase: circ.phase.to_string().into(),
             qubits,
             bits,
             implicit_permutation,
