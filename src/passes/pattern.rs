@@ -92,11 +92,12 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
         Ok(())
     }
 
-    fn cycle_node_edges(g: &Graph<N, E, Ix>, n: NodeIndex<Ix>) -> Vec<EdgeIndex<Ix>> {
+    fn all_node_edges(
+        g: &Graph<N, E, Ix>,
+        n: NodeIndex<Ix>,
+    ) -> impl Iterator<Item = &EdgeIndex<Ix>> {
         g.node_edges(n, Direction::Incoming)
             .chain(g.node_edges(n, Direction::Outgoing))
-            .copied()
-            .collect()
     }
 
     // fn match_from_recurse(
@@ -180,28 +181,23 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
             self.node_match(curr_p, curr_t)?;
             match_map.insert(curr_p, curr_t);
 
-            let p_edges = Self::cycle_node_edges(&self.pattern.graph, curr_p);
-            let t_edges = Self::cycle_node_edges(self.target, curr_t);
+            let mut p_edges = Self::all_node_edges(&self.pattern.graph, curr_p);
+            let mut t_edges = Self::all_node_edges(self.target, curr_t);
 
-            if p_edges.len() != t_edges.len() {
-                return err;
-            }
-            let mut eiter = p_edges
-                .iter()
-                .zip(t_edges.iter())
-                .cycle()
-                .skip_while(|(p, _): &(&EdgeIndex<Ix>, _)| **p != curr_e)
-                .take(p_edges.len());
-
-            if curr_p != pattern_node {
+            // iterate over edges of both nodes
+            loop {
+                let (e_p, e_t) = match (p_edges.next(), t_edges.next()) {
+                    (None, None) => break,
+                    // mismatched boundary sizes
+                    (None, Some(_)) | (Some(_), None) => return err,
+                    (Some(e_p), Some(e_t)) => (e_p, e_t),
+                };
                 // optimisation, apart from in the case of the entry to the
                 // pattern, the first edge in the iterator is the incoming edge
                 // and the destination node has been checked
-                eiter.next();
-            }
-
-            // circle the edges of both nodes starting at the start edge
-            for (e_p, e_t) in eiter {
+                if *e_p == curr_e && curr_p != pattern_node {
+                    continue;
+                }
                 self.edge_match(*e_p, *e_t)?;
 
                 let [e_p_source, e_p_target] =
