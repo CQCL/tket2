@@ -108,8 +108,8 @@ impl Circuit {
     }
 
     pub fn add_linear_unitid(&mut self, uid: UnitID) {
-        let (_, inlen) = self.dag.node_boundary_size(self.boundary.input);
-        let (outlen, _) = self.dag.node_boundary_size(self.boundary.output);
+        let [_, inlen] = self.dag.node_boundary_size(self.boundary.input);
+        let [outlen, _] = self.dag.node_boundary_size(self.boundary.output);
         self.tup_add_edge(
             (self.boundary.input, inlen as u8),
             (self.boundary.output, outlen as u8),
@@ -392,7 +392,7 @@ impl<'circ> CommandIter<'circ> {
                 &circ.dag,
                 circ.dag
                     .node_indices()
-                    .filter(|n| circ.dag.node_boundary_size(*n).0 == 0)
+                    .filter(|n| circ.dag.node_boundary_size(*n)[0] == 0)
                     .collect(),
             )
             .with_cyclicity_check(),

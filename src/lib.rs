@@ -3,6 +3,7 @@ pub mod graph;
 
 pub mod json;
 pub mod passes;
+pub mod validate;
 
 #[cfg(test)]
 mod tests {
@@ -21,6 +22,7 @@ mod tests {
                 squash_pattern,
             },
         },
+        validate::check_soundness,
     };
     use tket_json_rs::circuit_json::{self, SerialCircuit};
 
@@ -32,6 +34,8 @@ mod tests {
         assert_eq!(ser.commands.len(), 4);
 
         let circ: Circuit = ser.clone().into();
+        check_soundness(&circ).unwrap();
+
         let _reser: SerialCircuit = circ.into();
         assert_eq!(&ser, &_reser);
 
@@ -109,10 +113,10 @@ mod tests {
         let fadd = circ.add_vertex(Op::AngleAdd);
         let one = circ.add_vertex(Op::Const(ConstValue::f64_angle(0.5)));
         let two = circ.add_vertex(Op::Const(ConstValue::f64_angle(1.5)));
-        let _e1 = circ.tup_add_edge((one, 0), (fadd, 0), WireType::F64);
-        let _e2 = circ.tup_add_edge((two, 0), (fadd, 1), WireType::F64);
+        let _e1 = circ.tup_add_edge((one, 0), (fadd, 0), WireType::Angle);
+        let _e2 = circ.tup_add_edge((two, 0), (fadd, 1), WireType::Angle);
 
-        let _out = circ.tup_add_edge((fadd, 0), (output, 0), WireType::F64);
+        let _out = circ.tup_add_edge((fadd, 0), (output, 0), WireType::Angle);
 
         let rewrite = find_const_ops(&circ).next().unwrap();
 
@@ -130,6 +134,8 @@ mod tests {
             &nodeit.next().unwrap().op,
             &Op::Const(ConstValue::f64_angle(2.0))
         );
+
+        check_soundness(&circ).unwrap();
     }
 
     #[test]
@@ -319,12 +325,15 @@ mod tests {
             |circuit| apply_exhaustive(circuit, |c| find_singleq_rotations(c).collect()).unwrap();
         let (circ2, success) = rot_replacer(circ);
 
+        check_soundness(&circ2).unwrap();
         assert!(success);
         // let squasher =
         // |circuit| apply_exhaustive(circuit, |c| SquashFindIter::new(c).collect()).unwrap();
         let squasher = |circuit| apply_greedy(circuit, |c| squash_pattern(c).next()).unwrap();
         let (mut circ2, success) = squasher(circ2);
+
         assert!(success);
+        check_soundness(&circ2).unwrap();
 
         circ2
             .bind_input(PortIndex::new(1), ConstValue::f64_angle(0.5))
@@ -337,8 +346,10 @@ mod tests {
         // println!("{}", dot_string(&circ2.dag));
         let constant_folder =
             |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
-        let (_circ2, success) = constant_folder(circ2);
+        let (circ2, success) = constant_folder(circ2);
+
         assert!(success);
+        check_soundness(&circ2).unwrap();
 
         // let _circ2 = _circ2.remove_invalid();
         // use crate::graph::dot::dot_string;

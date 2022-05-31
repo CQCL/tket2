@@ -250,7 +250,7 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
             .graph
             .node_indices()
             .max_by_key(|n| {
-                let (i, o) = self.pattern.graph.node_boundary_size(*n);
+                let [i, o] = self.pattern.graph.node_boundary_size(*n);
                 i + o
             })
             .unwrap()

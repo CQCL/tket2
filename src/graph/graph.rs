@@ -619,10 +619,10 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             .map(move |e| self.edge_endpoints(*e).unwrap()[direction as usize])
     }
 
-    pub fn node_boundary_size(&self, n: NodeIndex<Ix>) -> (usize, usize) {
+    pub fn node_boundary_size(&self, n: NodeIndex<Ix>) -> [usize; 2] {
         let node = self.get_node(n);
 
-        (node.incoming.len(), node.outgoing.len())
+        [node.incoming.len(), node.outgoing.len()]
     }
 
     pub fn edge_at_port(&self, np: NodePort<Ix>, direction: Direction) -> Option<EdgeIndex<Ix>> {
