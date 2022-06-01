@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::graph::graph::{Direction, EdgeIndex, Graph, IndexType, NodeIndex};
 use rayon::prelude::*;
@@ -37,7 +37,7 @@ pub fn node_equality<N: PartialEq, E, Ix: IndexType>() -> impl NodeCompClosure<N
         pattern_node == target_node
     }
 }
-pub type Match<Ix> = HashMap<NodeIndex<Ix>, NodeIndex<Ix>>;
+pub type Match<Ix> = BTreeMap<NodeIndex<Ix>, NodeIndex<Ix>>;
 
 #[derive(Clone)]
 pub struct PatternMatcher<'g, N, E, Ix: IndexType, F> {
