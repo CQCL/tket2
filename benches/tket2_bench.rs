@@ -49,7 +49,7 @@ fn pattern_match_bench_par(c: &mut Criterion) {
         .unwrap();
 
     let mut group = c.benchmark_group("PatternMatch");
-    for i in (100..2000).step_by(100) {
+    for i in (100..1000).step_by(100) {
         for _ in 0..100 {
             target_circ
                 .append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
@@ -70,12 +70,12 @@ fn pattern_match_bench_par(c: &mut Criterion) {
                 assert_eq!(ms.len(), i);
             });
         });
-        group.bench_function(BenchmarkId::new("Paralllel", i), |b| {
-            b.iter(|| {
-                let ms = pmatcher.find_par_matches().collect::<Vec<_>>();
-                assert_eq!(ms.len(), i);
-            });
-        });
+        // group.bench_function(BenchmarkId::new("Paralllel", i), |b| {
+        //     b.iter(|| {
+        //         let ms = pmatcher.find_par_matches().collect::<Vec<_>>();
+        //         assert_eq!(ms.len(), i);
+        //     });
+        // });
     }
     group.finish();
 }
