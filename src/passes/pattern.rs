@@ -166,14 +166,18 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
 
     fn match_from(
         &self,
-        pattern_node: NodeIndex<Ix>,
-        target_node: NodeIndex<Ix>,
-        start_edge: EdgeIndex<Ix>,
+        pattern_start_node: NodeIndex<Ix>,
+        target_start_node: NodeIndex<Ix>,
     ) -> Result<Match<Ix>, MatchFail> {
         let err = Err(MatchFail());
         let mut match_map = Match::new();
-
-        let mut visit_stack: Vec<_> = vec![(pattern_node, target_node, start_edge)];
+        let start_edge = *self
+            .pattern
+            .graph
+            .node_edges(pattern_start_node, Direction::Incoming)
+            .next()
+            .ok_or(MatchFail())?;
+        let mut visit_stack: Vec<_> = vec![(pattern_start_node, target_start_node, start_edge)];
 
         while !visit_stack.is_empty() {
             let (curr_p, curr_t, curr_e) = visit_stack.pop().unwrap();
@@ -195,7 +199,7 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
                 // optimisation, apart from in the case of the entry to the
                 // pattern, the first edge in the iterator is the incoming edge
                 // and the destination node has been checked
-                if *e_p == curr_e && curr_p != pattern_node {
+                if *e_p == curr_e && curr_p != pattern_start_node {
                     continue;
                 }
                 self.edge_match(*e_p, *e_t)?;
@@ -234,16 +238,18 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
         Ok(match_map)
     }
 
-    fn start_pattern_node_edge(&self) -> (NodeIndex<Ix>, EdgeIndex<Ix>) {
-        // TODO better first pick
-        let e = self
-            .pattern
-            .graph
-            .node_edges(self.pattern.boundary[0], Direction::Outgoing)
-            .next()
-            .unwrap();
+    fn start_pattern_node_edge(&self) -> NodeIndex<Ix> {
+        // as a heuristic starts in the highest degree node of the pattern
+        // alternatives could be: rarest label, ...?
 
-        (self.pattern.graph.edge_endpoints(*e).unwrap()[1].node, *e)
+        self.pattern
+            .graph
+            .nodes()
+            .max_by_key(|n| {
+                let (i, o) = self.pattern.graph.node_boundary_size(*n);
+                i + o
+            })
+            .unwrap()
     }
 
     // pub fn find_matches_recurse(&'g self) -> impl Iterator<Item = Match<Ix>> + 'g {
@@ -260,23 +266,23 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
     // }
 
     pub fn find_matches(&'g self) -> impl Iterator<Item = Match<Ix>> + 'g {
-        let (start, start_edge) = self.start_pattern_node_edge();
+        let start = self.start_pattern_node_edge();
         self.target.nodes().filter_map(move |candidate| {
             if self.node_match(start, candidate).is_err() {
                 None
             } else {
-                self.match_from(start, candidate, start_edge).ok()
+                self.match_from(start, candidate).ok()
             }
         })
     }
 
     pub fn into_matches(self) -> impl Iterator<Item = Match<Ix>> + 'g {
-        let (start, start_edge) = self.start_pattern_node_edge();
+        let start = self.start_pattern_node_edge();
         self.target.nodes().filter_map(move |candidate| {
             if self.node_match(start, candidate).is_err() {
                 None
             } else {
-                self.match_from(start, candidate, start_edge).ok()
+                self.match_from(start, candidate).ok()
             }
         })
     }
@@ -290,7 +296,7 @@ where
     F: NodeCompClosure<N, E, Ix> + Sync + Send,
 {
     pub fn find_par_matches(&'g self) -> impl ParallelIterator<Item = Match<Ix>> + 'g {
-        let (start, start_edge) = self.start_pattern_node_edge();
+        let start = self.start_pattern_node_edge();
         let candidates: Vec<_> = self
             .target
             .nodes()
@@ -298,7 +304,7 @@ where
             .collect();
         candidates
             .into_par_iter()
-            .filter_map(move |candidate| self.match_from(start, candidate, start_edge).ok())
+            .filter_map(move |candidate| self.match_from(start, candidate).ok())
     }
 }
 
@@ -605,7 +611,7 @@ mod tests {
         );
         // flipped match
         assert_eq!(
-            matches[1],
+            matches[2],
             match_maker([
                 (2, h_0_1.index()),
                 (3, h_1_2.index()),
@@ -615,7 +621,7 @@ mod tests {
             ])
         );
         assert_eq!(
-            matches[2],
+            matches[1],
             match_maker([
                 (2, h_2_0.index()),
                 (3, h_1_1.index()),
