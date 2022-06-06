@@ -1,18 +1,17 @@
 use pyo3::prelude::*;
+use pythonize::{depythonize, pythonize};
+use tket_json_rs::circuit_json::SerialCircuit;
 use tket_rs::circuit::circuit::Circuit;
-use tket_rs::json::circuit_json;
 
 #[pyfunction]
-fn remove_redundancies(s: String) -> PyResult<String> {
-    let ser: circuit_json::SerialCircuit = serde_json::from_str(&s).unwrap();
+fn remove_redundancies(c: Py<PyAny>) -> PyResult<Py<PyAny>> {
+    let ser: SerialCircuit = Python::with_gil(|py| depythonize(c.as_ref(py)))?;
 
     let circ: Circuit = ser.clone().into();
 
-    let circ = tket_rs::passes::redundancy::remove_redundancies(circ);
-
-    let reser: circuit_json::SerialCircuit = circ.into();
-
-    Ok(serde_json::to_string(&reser).unwrap())
+    let (circ, _) = tket_rs::passes::squash::cx_cancel_pass(circ);
+    let reser: SerialCircuit = circ.into();
+    Ok(Python::with_gil(|py| pythonize(py, &reser).unwrap()))
 }
 
 /// A Python module implemented in Rust.

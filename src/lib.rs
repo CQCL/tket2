@@ -14,9 +14,12 @@ mod tests {
         },
         graph::graph::PortIndex,
         passes::{
-            apply_exhaustive,
+            apply_exhaustive, apply_greedy,
             classical::{constant_fold_strat, find_const_ops},
-            squash::{find_singleq_rotations, find_singleq_rotations_pattern, squash_pattern}, apply_greedy,
+            squash::{
+                cx_cancel_pass, find_singleq_rotations, find_singleq_rotations_pattern,
+                squash_pattern,
+            },
         },
     };
     use tket_json_rs::circuit_json::{self, SerialCircuit};
@@ -323,8 +326,7 @@ mod tests {
         assert!(success);
         // let squasher =
         // |circuit| apply_exhaustive(circuit, |c| SquashFindIter::new(c).collect()).unwrap();
-        let squasher =
-            |circuit| apply_greedy(circuit, |c| squash_pattern(c).next()).unwrap();
+        let squasher = |circuit| apply_greedy(circuit, |c| squash_pattern(c).next()).unwrap();
         let (mut circ2, success) = squasher(circ2);
         assert!(success);
 
@@ -343,5 +345,29 @@ mod tests {
         // use crate::graph::dot::dot_string;
         // println!("{}", dot_string(&circ2.dag));
         // TODO verify behaviour at each step
+    }
+
+    #[test]
+    fn test_cx_cancel() {
+        let qubits = vec![
+            UnitID::Qubit {
+                name: "q".into(),
+                index: vec![0],
+            },
+            UnitID::Qubit {
+                name: "q".into(),
+                index: vec![1],
+            },
+        ];
+        let mut circ = Circuit::with_uids(qubits);
+        circ.append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
+            .unwrap();
+        circ.append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
+            .unwrap();
+
+        let (circ, success) = cx_cancel_pass(circ);
+        assert!(success);
+
+        assert_eq!(circ.dag.node_count(), 2);
     }
 }

@@ -5,9 +5,10 @@ use crate::{
         operation::{ConstValue, Op, Param, WireType},
     },
     graph::{
-        graph::{DefaultIx, Direction, EdgeIndex, NodeIndex},
+        graph::{DefaultIx, Direction, EdgeIndex, NodeIndex, PortIndex},
         substitute::{BoundedSubgraph, Rewrite},
     },
+    passes::{apply_exhaustive, apply_greedy, classical::find_const_ops},
 };
 
 use super::{
@@ -288,4 +289,60 @@ impl<'circ> Iterator for SquashFindIter<'circ> {
             phase: 0.0,
         })
     }
+}
+
+pub fn squash_pass(circ: Circuit) -> (Circuit, bool) {
+    let mut overall_suc = false;
+    let rot_replacer =
+        |circuit| apply_exhaustive(circuit, |c| find_singleq_rotations(c).collect()).unwrap();
+    let (circ, success) = rot_replacer(circ);
+
+    overall_suc |= success;
+
+    let squasher = |circuit| apply_greedy(circuit, |c| squash_pattern(c).next()).unwrap();
+    let (circ, success) = squasher(circ);
+    overall_suc |= success;
+
+    let constant_folder =
+        |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
+    let (circ, success) = constant_folder(circ);
+
+    overall_suc |= success;
+
+    (circ, overall_suc)
+}
+
+fn cx_pattern<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
+    let qubits = vec![
+        UnitID::Qubit {
+            name: "q".into(),
+            index: vec![0],
+        },
+        UnitID::Qubit {
+            name: "q".into(),
+            index: vec![1],
+        },
+    ];
+    let mut replace_c = Circuit::with_uids(qubits.clone());
+    replace_c
+        .append_op(Op::Noop, &vec![PortIndex::new(0)])
+        .unwrap();
+    replace_c
+        .append_op(Op::Noop, &vec![PortIndex::new(1)])
+        .unwrap();
+    let mut pattern_c = Circuit::with_uids(qubits);
+    pattern_c
+        .append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
+        .unwrap();
+    pattern_c
+        .append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
+        .unwrap();
+    let pattern = CircFixedStructPattern::from_circ(pattern_c, node_equality());
+    pattern_rewriter(pattern, circ, move |_| (replace_c.clone(), 0.0))
+}
+
+pub fn cx_cancel_pass(circ: Circuit) -> (Circuit, bool) {
+    let (circ, suc) = apply_greedy(circ, |c| cx_pattern(c).next()).unwrap();
+    let circ = circ.remove_noop();
+    (circ, suc)
 }
