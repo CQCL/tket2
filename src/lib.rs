@@ -16,7 +16,7 @@ mod tests {
         passes::{
             apply_exhaustive,
             classical::{constant_fold_strat, find_const_ops},
-            squash::{find_singleq_rotations, find_singleq_rotations_pattern, squash_pattern},
+            squash::{find_singleq_rotations, find_singleq_rotations_pattern, squash_pattern}, apply_greedy,
         },
     };
     use tket_json_rs::circuit_json::{self, SerialCircuit};
@@ -324,7 +324,7 @@ mod tests {
         // let squasher =
         // |circuit| apply_exhaustive(circuit, |c| SquashFindIter::new(c).collect()).unwrap();
         let squasher =
-            |circuit| apply_exhaustive(circuit, |c| squash_pattern(c).collect()).unwrap();
+            |circuit| apply_greedy(circuit, |c| squash_pattern(c).next()).unwrap();
         let (mut circ2, success) = squasher(circ2);
         assert!(success);
 
