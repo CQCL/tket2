@@ -93,7 +93,7 @@ impl<P: ToString> From<Operation<P>> for Op {
                 OpType::SWAP => todo!(),
                 OpType::CSWAP => todo!(),
                 OpType::BRIDGE => todo!(),
-                OpType::noop => Op::Noop,
+                OpType::noop => Op::Noop(WireType::Qubit),
                 OpType::Measure => Op::Measure,
                 OpType::Collapse => todo!(),
                 OpType::Reset => todo!(),
@@ -151,7 +151,7 @@ impl<P: From<String>> From<Op> for Operation<P> {
             Op::PhasedX(p1, p2) => (OpType::PhasedX, vec![p1, p2]),
             Op::Measure => (OpType::Measure, vec![]),
             Op::Barrier => (OpType::Barrier, vec![]),
-            Op::Noop => (OpType::noop, vec![]),
+            Op::Noop(WireType::Qubit) => (OpType::noop, vec![]),
             _ => panic!("Not supported by Serialized TKET-1: {:?}", op),
         };
         // let signature = match self.signature() {

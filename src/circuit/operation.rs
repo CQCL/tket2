@@ -88,7 +88,7 @@ pub enum Op {
     Reset,
     Input,
     Output,
-    Noop,
+    Noop(WireType),
     Rx(Param),
     Ry(Param),
     Rz(Param),
@@ -113,7 +113,7 @@ pub enum Op {
 
 impl Default for Op {
     fn default() -> Self {
-        Self::Noop
+        Self::Noop(WireType::Qubit)
     }
 }
 lazy_static! {
@@ -164,7 +164,7 @@ impl Op {
 
     pub fn signature(&self) -> Option<Signature> {
         Some(match self {
-            Op::Noop => ONEQBSIG.clone(),
+            Op::Noop(typ) => Signature::new_linear(vec![*typ]),
             Op::H
             | Op::Reset
             | Op::Rx(_)

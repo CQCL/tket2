@@ -325,10 +325,10 @@ fn cx_pattern<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '
     ];
     let mut replace_c = Circuit::with_uids(qubits.clone());
     replace_c
-        .append_op(Op::Noop, &vec![PortIndex::new(0)])
+        .append_op(Op::Noop(WireType::Qubit), &vec![PortIndex::new(0)])
         .unwrap();
     replace_c
-        .append_op(Op::Noop, &vec![PortIndex::new(1)])
+        .append_op(Op::Noop(WireType::Qubit), &vec![PortIndex::new(1)])
         .unwrap();
     let mut pattern_c = Circuit::with_uids(qubits);
     pattern_c

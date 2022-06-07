@@ -323,7 +323,7 @@ mod tests {
         let mut circ1 = Circuit::new();
         let [i, o] = circ1.boundary();
         for p in 0..2 {
-            let noop = circ1.add_vertex(Op::Noop);
+            let noop = circ1.add_vertex(Op::Noop(WireType::Qubit));
             circ1.add_edge((i, p), (noop, 0), WireType::Qubit);
             circ1.add_edge((noop, 0), (o, p), WireType::Qubit);
         }
@@ -334,7 +334,7 @@ mod tests {
         let mut circ1 = Circuit::new();
         let [i, o] = circ1.boundary();
         for p in (0..2).rev() {
-            let noop = circ1.add_vertex(Op::Noop);
+            let noop = circ1.add_vertex(Op::Noop(WireType::Qubit));
             circ1.add_edge((noop, 0), (o, p), WireType::Qubit);
             circ1.add_edge((i, p), (noop, 0), WireType::Qubit);
         }
@@ -345,7 +345,7 @@ mod tests {
     fn noop_pattern_circ() -> Circuit {
         let mut circ1 = Circuit::new();
         let [i, o] = circ1.boundary();
-        let noop = circ1.add_vertex(Op::Noop);
+        let noop = circ1.add_vertex(Op::Noop(WireType::Qubit));
         circ1.add_edge((i, 0), (noop, 0), WireType::Qubit);
         circ1.add_edge((noop, 0), (o, 0), WireType::Qubit);
         circ1
@@ -544,7 +544,7 @@ mod tests {
         // use Noop and H, allow matches between either
         let mut target_circ = Circuit::with_uids(qubits);
         let h_0_0 = target_circ
-            .append_op(Op::Noop, &vec![PortIndex::new(0)])
+            .append_op(Op::Noop(WireType::Qubit), &vec![PortIndex::new(0)])
             .unwrap();
         let h_1_0 = target_circ
             .append_op(Op::H, &vec![PortIndex::new(1)])
@@ -556,7 +556,7 @@ mod tests {
             .append_op(Op::H, &vec![PortIndex::new(0)])
             .unwrap();
         let h_1_1 = target_circ
-            .append_op(Op::Noop, &vec![PortIndex::new(1)])
+            .append_op(Op::Noop(WireType::Qubit), &vec![PortIndex::new(1)])
             .unwrap();
         let h_2_0 = target_circ
             .append_op(Op::H, &vec![PortIndex::new(2)])
@@ -577,7 +577,7 @@ mod tests {
             .append_op(Op::H, &vec![PortIndex::new(0)])
             .unwrap();
         let h_1_3 = target_circ
-            .append_op(Op::Noop, &vec![PortIndex::new(1)])
+            .append_op(Op::Noop(WireType::Qubit), &vec![PortIndex::new(1)])
             .unwrap();
 
         // use crate::graph::dot::dot_string;
@@ -588,7 +588,7 @@ mod tests {
             let op1 = dag.node_weight(op1).unwrap();
             match (&op1.op, &op2.op) {
                 (x, y) if x == y => true,
-                (Op::H, Op::Noop) | (Op::Noop, Op::H) => true,
+                (Op::H, Op::Noop(WireType::Qubit)) | (Op::Noop(WireType::Qubit), Op::H) => true,
                 _ => false,
             }
         };

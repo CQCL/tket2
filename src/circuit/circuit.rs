@@ -313,7 +313,7 @@ impl Circuit {
         let noop_nodes: Vec<_> = self
             .dag
             .nodes()
-            .filter(|n| matches!(self.dag.node_weight(*n).unwrap().op, Op::Noop))
+            .filter(|n| matches!(self.dag.node_weight(*n).unwrap().op, Op::Noop(_)))
             .collect();
         for nod in noop_nodes {
             let source = self
@@ -450,7 +450,7 @@ mod tests {
         let mut circ = Circuit::new();
         let [i, o] = circ.boundary();
         for p in 0..2 {
-            let noop = circ.add_vertex(Op::Noop);
+            let noop = circ.add_vertex(Op::Noop(WireType::Qubit));
             circ.add_edge((i, p), (noop, 0), WireType::Qubit);
             circ.add_edge((noop, 0), (o, p), WireType::Qubit);
         }
