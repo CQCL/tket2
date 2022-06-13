@@ -89,20 +89,12 @@ pub enum Op {
     Input,
     Output,
     Noop(WireType),
-    Rx(Param),
-    Ry(Param),
-    Rz(Param),
-    TK1(Param, Param, Param),
-    ZZPhase(Param),
-    PhasedX(Param, Param),
     Measure,
     Barrier,
     FAdd,
     FMul,
     FNeg,
     QuatMul,
-    // Sin,
-    // Cos,
     Copy { n_copies: u32, typ: WireType },
     Const(ConstValue),
     RxF64,
@@ -134,14 +126,6 @@ pub fn approx_eq(x: f64, y: f64, modulo: u32, tol: f64) -> bool {
     r < tol || r > modulo - tol
 }
 
-// pub fn equiv_0(p: &Param, modulo: u32) -> bool {
-//     if let Some(x) = p.eval() {
-//         approx_eq(x, 0.0, modulo, 1e-11)
-//     } else {
-//         false
-//     }
-// }
-
 fn binary_op(typ: WireType) -> Signature {
     Signature::new_nonlinear(vec![typ, typ], vec![typ])
 }
@@ -165,14 +149,8 @@ impl Op {
     pub fn signature(&self) -> Option<Signature> {
         Some(match self {
             Op::Noop(typ) => Signature::new_linear(vec![*typ]),
-            Op::H
-            | Op::Reset
-            | Op::Rx(_)
-            | Op::Ry(_)
-            | Op::Rz(_)
-            | Op::TK1(..)
-            | Op::PhasedX(..) => ONEQBSIG.clone(),
-            Op::CX | Op::ZZMax | Op::ZZPhase(..) => TWOQBSIG.clone(),
+            Op::H | Op::Reset => ONEQBSIG.clone(),
+            Op::CX | Op::ZZMax => TWOQBSIG.clone(),
             Op::Measure => Signature::new_linear(vec![WireType::Qubit, WireType::LinearBit]),
             Op::FAdd | Op::FMul => binary_op(WireType::F64),
             Op::QuatMul => binary_op(WireType::Quat64),

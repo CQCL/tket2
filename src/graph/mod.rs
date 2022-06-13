@@ -37,13 +37,13 @@ mod tests {
 
         let correct_weights: HashSet<_> = HashSet::from_iter([0, 1, 2, 3, 4].into_iter());
         assert_eq!(
-            HashSet::from_iter(g.nodes().map(|n| *g.node_weight(n).unwrap())),
+            HashSet::from_iter(g.node_weights().copied()),
             correct_weights
         );
 
         let correct_weights: HashSet<_> = HashSet::from_iter([-1, -2, -3].into_iter());
         assert_eq!(
-            HashSet::from_iter(g.edges().map(|e| *g.edge_weight(e).unwrap())),
+            HashSet::from_iter(g.edge_weights().copied()),
             correct_weights
         );
     }

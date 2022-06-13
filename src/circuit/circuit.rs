@@ -51,7 +51,7 @@ pub struct Circuit {
     pub name: Option<String>,
     pub phase: Param,
     boundary: Boundary,
-    uids: Vec<UnitID>,
+    pub(crate) uids: Vec<UnitID>,
 }
 
 impl Default for Circuit {
@@ -83,65 +83,23 @@ impl Circuit {
         slf
     }
 
-    pub fn rewire(&mut self, new_vert: Vertex, edges: Vec<Edge>) -> Result<(), String> {
-        // called rewire in TKET-1
-        let vert_op_sig = match self
+    pub fn insert_at_edge(
+        &mut self,
+        vert: Vertex,
+        edge: Edge,
+        ports: [PortIndex; 2],
+    ) -> Result<(), String> {
+        let [s, t] = self
             .dag
-            .node_weight(new_vert)
-            .ok_or_else(|| "Vertex not found.".to_string())?
-            .op
-            .signature()
-        {
-            Some(x) if x.purely_linear() => x.linear,
-            _ => return Err("Nonlinear sigs not supported by rewire.".into()),
-        };
+            .edge_endpoints(edge)
+            .ok_or_else(|| "Edge not found.".to_string())?;
+        self.dag.update_edge(edge, s, NodePort::new(vert, ports[0]));
 
-        for (i, (edge, vert_sig_type)) in edges.into_iter().zip(vert_op_sig).enumerate() {
-            let edgeprops = self
-                .dag
-                .edge_weight(edge)
-                .ok_or_else(|| "Edge not found.".to_string())?
-                .clone();
-
-            let [old_v1, old_v2] = self
-                .dag
-                .edge_endpoints(edge)
-                .ok_or_else(|| "Edge not found.".to_string())?;
-            match (&vert_sig_type, &edgeprops.edge_type) {
-                // (WireType::Bool, WireType::Classical) => {
-
-                //     self.dag
-                //         .add_edge(
-                //             old_v1,
-                //             new_vert,
-                //             EdgeProperties {
-                //                 edge_type: WireType::Bool,
-                //                 ..edgeprops
-                //             },
-                //         )
-                //         .map_err(|_| CycleInGraph())?;
-                // }
-                // (WireType::Bool, _) => {
-                //     return Err(
-                //         "Cannot rewire; Boolean needs a classical value to read from.".to_string(),
-                //     )
-                // }
-                (x, y) if x == y => {
-                    self.dag.remove_edge(edge);
-                    self.dag
-                        .add_edge(old_v1, (new_vert, i as u8), edgeprops.clone());
-                    // .map_err(|_| CycleInGraph())?;
-
-                    self.dag.add_edge((new_vert, i as u8), old_v2, edgeprops);
-                    // .map_err(|_| CycleInGraph())?;
-                    // bin.push(pred);
-                }
-                _ => return Err("Cannot rewire; Changing type of edge.".to_string()),
-            }
-        }
-        // for e in bin {
-        //     self.dag.remove_edge(e);
-        // }
+        self.add_edge(
+            NodePort::new(vert, ports[1]),
+            t,
+            self.dag.edge_weight(edge).unwrap().edge_type,
+        );
         Ok(())
     }
 
@@ -156,8 +114,9 @@ impl Circuit {
         self.uids.push(uid);
     }
 
-    pub fn add_unitid(&mut self, uid: UnitID) {
+    pub fn add_unitid(&mut self, uid: UnitID) -> NodePort {
         self.uids.push(uid);
+        (self.boundary.input, (self.uids.len() - 1) as u8).into()
     }
 
     pub fn bind_input<P: Into<PortIndex>>(
@@ -208,11 +167,6 @@ impl Circuit {
 
     pub fn append_op(&mut self, op: Op, args: &Vec<PortIndex>) -> Result<Vertex, String> {
         // akin to add-op in TKET-1
-        let sig = match op.signature() {
-            Some(x) if x.purely_linear() => x.linear,
-            _ => return Err("Only linear ops supported.".to_string()),
-        };
-        assert_eq!(sig.len(), args.len());
 
         let new_vert = self.add_vertex(op);
         let insertion_edges = args
@@ -225,19 +179,11 @@ impl Circuit {
             })
             .collect::<Option<Vec<Edge>>>()
             .ok_or_else(|| "Invalid output ports".to_string())?;
-        // let mut wire_arg_set = HashSet::new();
-        // for (arg, sig) in args.iter().zip(sig) {
-        //     if sig != WireType::Bool {
-        //         if wire_arg_set.contains(arg) {
-        //             return Err(format!("Multiple operation arguments reference {arg:?}"));
-        //         }
-        //         wire_arg_set.insert(arg);
-        //     }
+        for (p, e) in insertion_edges.into_iter().enumerate() {
+            let p = PortIndex::new(p);
+            self.insert_at_edge(new_vert, e, [p; 2])?;
+        }
 
-        //     let out_v = self.get_out(arg)?;
-        //     let pred_out_e = self.dag.edges_directed(a, dir)
-        // }
-        self.rewire(new_vert, insertion_edges)?;
         Ok(new_vert)
     }
 
@@ -313,9 +259,15 @@ impl Circuit {
         let noop_nodes: Vec<_> = self
             .dag
             .nodes()
-            .filter(|n| matches!(self.dag.node_weight(*n).unwrap().op, Op::Noop(_)))
+            .filter_map(|n| {
+                if let Op::Noop(wt) = self.dag.node_weight(n).unwrap().op {
+                    Some((wt, n))
+                } else {
+                    None
+                }
+            })
             .collect();
-        for nod in noop_nodes {
+        for (edge_type, nod) in noop_nodes {
             let source = self
                 .dag
                 .neighbours(nod, Direction::Incoming)
@@ -326,15 +278,9 @@ impl Circuit {
                 .neighbours(nod, Direction::Outgoing)
                 .next()
                 .unwrap();
-
             self.dag.remove_node(nod);
-            self.dag.add_edge(
-                source,
-                target,
-                EdgeProperties {
-                    edge_type: WireType::Qubit,
-                },
-            );
+            self.dag
+                .add_edge(source, target, EdgeProperties { edge_type });
         }
 
         self
@@ -346,8 +292,9 @@ impl Circuit {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Command {
-    pub op: Op,
+pub struct Command<'c> {
+    pub vertex: Vertex,
+    pub op: &'c Op,
     pub args: Vec<UnitID>,
 }
 
@@ -360,7 +307,14 @@ pub struct CommandIter<'circ> {
 impl<'circ> CommandIter<'circ> {
     fn new(circ: &'circ Circuit) -> Self {
         Self {
-            nodes: TopSorter::new(&circ.dag, [circ.boundary.input].into()).with_cyclicity_check(),
+            nodes: TopSorter::new(
+                &circ.dag,
+                circ.dag
+                    .nodes()
+                    .filter(|n| circ.dag.node_boundary_size(*n).0 == 0)
+                    .collect(),
+            )
+            .with_cyclicity_check(),
             frontier: circ
                 .dag
                 .node_edges(circ.boundary.input, Direction::Outgoing)
@@ -373,7 +327,7 @@ impl<'circ> CommandIter<'circ> {
 }
 
 impl<'circ> Iterator for CommandIter<'circ> {
-    type Item = Command;
+    type Item = Command<'circ>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.nodes.next().map(|node| {
@@ -392,7 +346,8 @@ impl<'circ> Iterator for CommandIter<'circ> {
                 .collect();
 
             Command {
-                op: op.clone(),
+                vertex: node,
+                op,
                 args,
             }
         })

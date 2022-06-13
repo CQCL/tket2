@@ -121,15 +121,12 @@ mod tests {
         // println!("{}", dot_string(&circ.dag));
         assert_eq!(circ.dag.node_count(), 3);
         assert_eq!(circ.dag.edge_count(), 1);
-        let mut nodeit = circ.dag.nodes();
+        let mut nodeit = circ.dag.node_weights();
         // skip input and output
         nodeit.next();
         nodeit.next();
 
-        assert_eq!(
-            &circ.dag.node_weight(nodeit.next().unwrap()).unwrap().op,
-            &Op::Const(ConstValue::F64(2.0))
-        );
+        assert_eq!(&nodeit.next().unwrap().op, &Op::Const(ConstValue::F64(2.0)));
     }
 
     #[test]
@@ -199,27 +196,24 @@ mod tests {
 
         assert_eq!(
             circ.dag
-                .nodes()
-                .map(|a| &circ.dag.node_weight(a).unwrap().op)
-                .filter(|op| matches!(op, Op::Const(_)))
+                .node_weights()
+                .filter(|v| matches!(v.op, Op::Const(_)))
                 .count(),
             4
         );
 
         assert_eq!(
             circ.dag
-                .nodes()
-                .map(|a| &circ.dag.node_weight(a).unwrap().op)
-                .filter(|op| matches!(op, Op::FNeg))
+                .node_weights()
+                .filter(|op| matches!(op.op, Op::FNeg))
                 .count(),
             0
         );
 
         assert_eq!(
             circ.dag
-                .nodes()
-                .map(|a| &circ.dag.node_weight(a).unwrap().op)
-                .filter(|op| matches!(op, Op::FAdd))
+                .node_weights()
+                .filter(|op| matches!(op.op, Op::FAdd))
                 .count(),
             3
         );
@@ -254,9 +248,9 @@ mod tests {
             assert_eq!(c.dag.edge_count(), 3);
             let const_val = c
                 .dag
-                .nodes()
-                .find_map(|n| {
-                    if let Op::Const(x) = &c.dag.node_weight(n).unwrap().op {
+                .node_weights()
+                .find_map(|v| {
+                    if let Op::Const(x) = &v.op {
                         Some(x)
                     } else {
                         None

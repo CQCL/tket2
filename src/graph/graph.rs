@@ -408,7 +408,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         edge_idx
     }
 
-    pub(super) fn update_edge<T: Into<NodePort<Ix>>, S: Into<NodePort<Ix>>>(
+    pub(crate) fn update_edge<T: Into<NodePort<Ix>>, S: Into<NodePort<Ix>>>(
         &mut self,
         e: EdgeIndex<Ix>,
         a: T,
@@ -612,6 +612,10 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             .filter_map(|(i, n)| n.weight.as_ref().map(|_| NodeIndex::new(i)))
     }
 
+    pub fn node_weights(&self) -> impl Iterator<Item = &N> + '_ {
+        self.nodes.iter().filter_map(|n| n.weight.as_ref())
+    }
+
     pub fn node_count(&self) -> usize {
         self.node_count
     }
@@ -625,6 +629,10 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             .iter()
             .enumerate()
             .filter_map(|(i, n)| n.weight.as_ref().map(|_| EdgeIndex::new(i)))
+    }
+
+    pub fn edge_weights(&self) -> impl Iterator<Item = &E> + '_ {
+        self.edges.iter().filter_map(|e| e.weight.as_ref())
     }
 
     pub fn next_edge(&self, e: &EdgeIndex<Ix>) -> Option<EdgeIndex<Ix>> {
