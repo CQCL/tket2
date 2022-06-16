@@ -150,7 +150,12 @@ fn rotation_replacement(op: &Op) -> (Circuit, Param) {
         _ => panic!("Op {:?} should not have made it to this point.", op),
     };
     for (port_index, source) in incoming_ports.into_iter().enumerate() {
-        replace.add_edge(source, (make_quat, port_index as u8), WireType::F64);
+        let edge_type = if port_index == 0 {
+            WireType::Angle
+        } else {
+            WireType::F64
+        };
+        replace.add_edge(source, (make_quat, port_index as u8), edge_type);
     }
     replace.add_edge((rot, 0), (out, 0), WireType::Qubit);
     (replace, 0.0)
@@ -325,17 +330,17 @@ fn cx_pattern<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '
     ];
     let mut replace_c = Circuit::with_uids(qubits.clone());
     replace_c
-        .append_op(Op::Noop(WireType::Qubit), &vec![PortIndex::new(0)])
+        .append_op(Op::Noop(WireType::Qubit), &[PortIndex::new(0)])
         .unwrap();
     replace_c
-        .append_op(Op::Noop(WireType::Qubit), &vec![PortIndex::new(1)])
+        .append_op(Op::Noop(WireType::Qubit), &[PortIndex::new(1)])
         .unwrap();
     let mut pattern_c = Circuit::with_uids(qubits);
     pattern_c
-        .append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
+        .append_op(Op::CX, &[PortIndex::new(0), PortIndex::new(1)])
         .unwrap();
     pattern_c
-        .append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
+        .append_op(Op::CX, &[PortIndex::new(0), PortIndex::new(1)])
         .unwrap();
     let pattern = CircFixedStructPattern::from_circ(pattern_c, node_equality());
     pattern_rewriter(pattern, circ, move |_| (replace_c.clone(), 0.0))

@@ -1,9 +1,14 @@
 #![allow(dead_code)]
 
 use lazy_static::lazy_static;
-use std::cmp::max;
+use std::{
+    cmp::max,
+    ops::{Add, Div, Mul, Neg, Sub},
+};
 
-use cgmath::Quaternion;
+use cgmath::{num_traits::ToPrimitive, Quaternion};
+use num_rational::Rational64;
+
 pub(crate) type Param = f64;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -14,6 +19,7 @@ pub enum WireType {
     I32,
     F64,
     Quat64,
+    Angle,
 }
 #[derive(Clone)]
 pub struct Signature {
@@ -61,11 +67,139 @@ impl Signature {
     }
 }
 
+// angle is contained value * pi in radians
+#[derive(Clone, PartialEq, Debug, Copy)]
+pub enum AngleValue {
+    F64(f64),
+    Rational(Rational64),
+}
+
+impl AngleValue {
+    fn binary_op<F: FnOnce(f64, f64) -> f64, G: FnOnce(Rational64, Rational64) -> Rational64>(
+        self,
+        rhs: Self,
+        opf: F,
+        opr: G,
+    ) -> Self {
+        match (self, rhs) {
+            (AngleValue::F64(x), AngleValue::F64(y)) => AngleValue::F64(opf(x, y)),
+            (AngleValue::F64(x), AngleValue::Rational(y))
+            | (AngleValue::Rational(y), AngleValue::F64(x)) => {
+                AngleValue::F64(opf(x, y.to_f64().unwrap()))
+            }
+            (AngleValue::Rational(x), AngleValue::Rational(y)) => AngleValue::Rational(opr(x, y)),
+        }
+    }
+
+    fn unary_op<F: FnOnce(f64) -> f64, G: FnOnce(Rational64) -> Rational64>(
+        self,
+        opf: F,
+        opr: G,
+    ) -> Self {
+        match self {
+            AngleValue::F64(x) => AngleValue::F64(opf(x)),
+            AngleValue::Rational(x) => AngleValue::Rational(opr(x)),
+        }
+    }
+
+    pub fn to_f64(&self) -> f64 {
+        match self {
+            AngleValue::F64(x) => *x,
+            AngleValue::Rational(x) => x.to_f64().expect("Floating point conversion error."),
+        }
+    }
+
+    pub fn radians(&self) -> f64 {
+        self.to_f64() * std::f64::consts::PI
+    }
+}
+
+impl Add for AngleValue {
+    type Output = AngleValue;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        self.binary_op(rhs, |x, y| x + y, |x, y| x + y)
+    }
+}
+
+impl Sub for AngleValue {
+    type Output = AngleValue;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.binary_op(rhs, |x, y| x - y, |x, y| x - y)
+    }
+}
+
+impl Mul for AngleValue {
+    type Output = AngleValue;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        self.binary_op(rhs, |x, y| x * y, |x, y| x * y)
+    }
+}
+
+impl Div for AngleValue {
+    type Output = AngleValue;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        self.binary_op(rhs, |x, y| x / y, |x, y| x / y)
+    }
+}
+
+impl Neg for AngleValue {
+    type Output = AngleValue;
+
+    fn neg(self) -> Self::Output {
+        self.unary_op(|x| -x, |x| -x)
+    }
+}
+
+impl Add for &AngleValue {
+    type Output = AngleValue;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        self.binary_op(*rhs, |x, y| x + y, |x, y| x + y)
+    }
+}
+
+impl Sub for &AngleValue {
+    type Output = AngleValue;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.binary_op(*rhs, |x, y| x - y, |x, y| x - y)
+    }
+}
+
+impl Mul for &AngleValue {
+    type Output = AngleValue;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        self.binary_op(*rhs, |x, y| x * y, |x, y| x * y)
+    }
+}
+
+impl Div for &AngleValue {
+    type Output = AngleValue;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        self.binary_op(*rhs, |x, y| x / y, |x, y| x / y)
+    }
+}
+
+impl Neg for &AngleValue {
+    type Output = AngleValue;
+
+    fn neg(self) -> Self::Output {
+        self.unary_op(|x| -x, |x| -x)
+    }
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub enum ConstValue {
     Bool(bool),
     I32(i32),
     F64(f64),
+    Angle(AngleValue),
     Quat64(Quaternion<f64>),
 }
 
@@ -75,8 +209,13 @@ impl ConstValue {
             Self::Bool(_) => WireType::Bool,
             Self::I32(_) => WireType::I32,
             Self::F64(_) => WireType::F64,
+            Self::Angle(_) => WireType::Angle,
             Self::Quat64(_) => WireType::Quat64,
         }
+    }
+
+    pub fn f64_angle(val: f64) -> Self {
+        Self::Angle(AngleValue::F64(val))
     }
 }
 
@@ -91,9 +230,9 @@ pub enum Op {
     Noop(WireType),
     Measure,
     Barrier,
-    FAdd,
-    FMul,
-    FNeg,
+    AngleAdd,
+    AngleMul,
+    AngleNeg,
     QuatMul,
     Copy { n_copies: u32, typ: WireType },
     Const(ConstValue),
@@ -152,9 +291,9 @@ impl Op {
             Op::H | Op::Reset => ONEQBSIG.clone(),
             Op::CX | Op::ZZMax => TWOQBSIG.clone(),
             Op::Measure => Signature::new_linear(vec![WireType::Qubit, WireType::LinearBit]),
-            Op::FAdd | Op::FMul => binary_op(WireType::F64),
+            Op::AngleAdd | Op::AngleMul => binary_op(WireType::F64),
             Op::QuatMul => binary_op(WireType::Quat64),
-            Op::FNeg => Signature::new_nonlinear(vec![WireType::F64], vec![WireType::F64]),
+            Op::AngleNeg => Signature::new_nonlinear(vec![WireType::F64], vec![WireType::F64]),
             Op::Copy { n_copies, typ } => {
                 Signature::new_nonlinear(vec![*typ], vec![*typ; *n_copies as usize])
             }
@@ -165,7 +304,7 @@ impl Op {
             }
             Op::Rotation => Signature::new(vec![WireType::Qubit], [vec![WireType::Quat64], vec![]]),
             Op::ToRotation => Signature::new_nonlinear(
-                vec![WireType::F64, WireType::F64, WireType::F64, WireType::F64],
+                vec![WireType::Angle, WireType::F64, WireType::F64, WireType::F64],
                 vec![WireType::Quat64],
             ),
             _ => return None,

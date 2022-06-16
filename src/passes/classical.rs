@@ -73,16 +73,16 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
             let inputs = inputs?;
 
             let cvs = match op {
-                Op::FAdd => match &inputs[..2] {
-                    [ConstValue::F64(x), ConstValue::F64(y)] => vec![ConstValue::F64(x + y)],
+                Op::AngleAdd => match &inputs[..2] {
+                    [ConstValue::Angle(x), ConstValue::Angle(y)] => vec![ConstValue::Angle(x + y)],
                     _ => return None,
                 },
-                Op::FMul=> match &inputs[..2] {
-                    [ConstValue::F64(x), ConstValue::F64(y)] => vec![ConstValue::F64(x * y)],
+                Op::AngleMul=> match &inputs[..2] {
+                    [ConstValue::Angle(x), ConstValue::Angle(y)] => vec![ConstValue::Angle(x * y)],
                     _ => return None,
                 },
-                Op::FNeg => match inputs[0] {
-                    ConstValue::F64(x) => vec![ConstValue::F64(-x)],
+                Op::AngleNeg => match inputs[0] {
+                    ConstValue::Angle(x) => vec![ConstValue::Angle(-x)],
                     _ => return None,
                 },
 
@@ -96,8 +96,8 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
                 // },
                 Op::Copy { n_copies, .. } => vec![inputs[0].clone(); *n_copies as usize],
                 Op::ToRotation => match &inputs[..4] {
-                    [ConstValue::F64(angle), ConstValue::F64(x), ConstValue::F64(y), ConstValue::F64(z)] => {
-                        let p = -angle*std::f64::consts::PI/2.0;
+                    [ConstValue::Angle(angle), ConstValue::F64(x), ConstValue::F64(y), ConstValue::F64(z)] => {
+                        let p = -angle.radians()/2.0;
                         let s = p.sin();
                         vec![ConstValue::Quat64(cgmath::Quaternion::new(p.cos(), s*x, s*y, s*z))]
                     }

@@ -197,7 +197,7 @@ impl<P: ToString> From<SerialCircuit<P>> for Circuit {
             .collect();
         for com in serialcirc.commands {
             let op: Op = com.op.op_type.into();
-            let args = com
+            let args: Vec<_> = com
                 .args
                 .into_iter()
                 .zip(op.signature().expect("No signature for op").linear)
@@ -210,16 +210,15 @@ impl<P: ToString> From<SerialCircuit<P>> for Circuit {
                 .collect();
 
             // assumes the linear wires are always the first ones
-            let v = circ.append_op(op, &args).unwrap();
+            let v = circ.append_op(op, &args[..]).unwrap();
             if let Some(params) = com.op.params {
                 for (i, p) in params.into_iter().enumerate() {
                     let p_str = p.to_string();
                     let param_source = if let Ok(f) = f64::from_str(&p_str[..]) {
-                        let con = circ.add_vertex(Op::Const(ConstValue::F64(f)));
+                        let con = circ.add_vertex(Op::Const(ConstValue::f64_angle(f)));
                         (con, 0).into()
                     } else {
-                        let np = circ.add_unitid(UnitID::F64(p_str));
-                        np
+                        circ.add_unitid(UnitID::F64(p_str))
                     };
                     circ.add_edge(
                         param_source,
@@ -265,10 +264,10 @@ impl<P: From<String> + std::fmt::Debug> From<Circuit> for SerialCircuit<P> {
                             .expect("Expected predecessor node.")
                             .op;
                         Some(match pred {
-                            Op::Const(ConstValue::F64(p)) => vec![p.to_string()],
+                            Op::Const(ConstValue::Angle(p)) => vec![p.to_f64().to_string()],
                             Op::Input => match &circ.uids[pred_np.port.index()] {
                                 UnitID::F64(s) => vec![s.clone()],
-                                _ => panic!("Must be an F64 input"),
+                                _ => panic!("Must be an Angle input"),
                             },
                             _ => panic!("Only constant or simple string param inputs supported."),
                         })

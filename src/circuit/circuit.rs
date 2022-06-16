@@ -13,6 +13,7 @@ pub enum UnitID {
     Qubit { name: String, index: Vec<u32> },
     Bit { name: String, index: Vec<u32> },
     F64(String),
+    Angle(String),
 }
 
 impl UnitID {
@@ -21,6 +22,7 @@ impl UnitID {
             Self::Qubit { .. } => WireType::Qubit,
             Self::Bit { .. } => WireType::LinearBit,
             Self::F64(_) => WireType::F64,
+            Self::Angle(_) => WireType::Angle,
         }
     }
 }
@@ -165,7 +167,7 @@ impl Circuit {
         self.dag.add_node_with_capacity(capacity, weight)
     }
 
-    pub fn append_op(&mut self, op: Op, args: &Vec<PortIndex>) -> Result<Vertex, String> {
+    pub fn append_op(&mut self, op: Op, args: &[PortIndex]) -> Result<Vertex, String> {
         // akin to add-op in TKET-1
 
         let new_vert = self.add_vertex(op);
@@ -194,14 +196,14 @@ impl Circuit {
     pub fn qubits(&self) -> impl Iterator<Item = UnitID> + '_ {
         self.uids.iter().filter_map(|uid| match uid {
             UnitID::Qubit { .. } => Some(uid.clone()),
-            UnitID::Bit { .. } | UnitID::F64(_) => None,
+            UnitID::Bit { .. } | UnitID::F64(_) | UnitID::Angle(_) => None,
         })
     }
 
     pub fn bits(&self) -> impl Iterator<Item = UnitID> + '_ {
         self.uids.iter().filter_map(|uid| match uid {
             UnitID::Bit { .. } => Some(uid.clone()),
-            UnitID::Qubit { .. } | UnitID::F64(_) => None,
+            UnitID::Qubit { .. } | UnitID::F64(_) | UnitID::Angle(_) => None,
         })
     }
 
@@ -415,7 +417,7 @@ mod tests {
     fn test_bind_value() {
         let mut circ = Circuit::new();
         let [i, o] = circ.boundary();
-        let add = circ.add_vertex(Op::FAdd);
+        let add = circ.add_vertex(Op::AngleAdd);
 
         circ.add_edge((i, 0), (add, 0), WireType::F64);
         circ.add_edge((i, 1), (add, 1), WireType::F64);

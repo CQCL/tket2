@@ -10,6 +10,7 @@ edition = "2021"
 # daggy = {version = "^0.8", features = ["stable_dag"]}
 lazy_static = "1.4.0"
 cgmath = "0.18.0"
+num-rational = "0.4"
 tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs.git" }
 rayon = "1.5"
 
