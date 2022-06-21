@@ -7,6 +7,8 @@ use crate::graph::substitute::{BoundedSubgraph, OpenGraph};
 
 use super::dag::{Dag, Edge, EdgeProperties, TopSorter, Vertex, VertexProperties};
 use super::operation::{ConstValue, Op, Param, WireType};
+#[cfg(feature = "pyo3")]
+use pyo3::prelude::*;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum UnitID {
@@ -47,6 +49,7 @@ impl From<CycleInGraph> for String {
     }
 }
 
+#[cfg_attr(feature = "pyo3", pyclass(name = "RsCircuit"))]
 #[derive(Clone)]
 pub struct Circuit {
     pub(crate) dag: Dag,
@@ -358,7 +361,9 @@ impl<'circ> Iterator for CommandIter<'circ> {
 
 pub(crate) type CircDagRewrite =
     crate::graph::substitute::Rewrite<VertexProperties, EdgeProperties>;
-#[derive(Debug)]
+
+#[cfg_attr(feature = "pyo3", pyclass)]
+#[derive(Debug, Clone)]
 pub struct CircuitRewrite {
     pub graph_rewrite: CircDagRewrite,
     pub phase: Param,

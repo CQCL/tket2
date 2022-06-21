@@ -196,7 +196,7 @@ impl<Ix, Px: Into<u8>> From<(NodeIndex<Ix>, Px)> for NodePort<Ix> {
 
 /// The graph's node type.
 #[derive(Debug)]
-pub(super) struct Node<N, Ix = DefaultIx> {
+pub(crate) struct Node<N, Ix = DefaultIx> {
     /// Associated node data.
     pub weight: Option<N>,
 
@@ -250,7 +250,7 @@ type NodeMap<Ix> = HashMap<NodeIndex<Ix>, NodeIndex<Ix>>;
 type EdgeMap<Ix> = HashMap<EdgeIndex<Ix>, EdgeIndex<Ix>>;
 
 pub struct Graph<N, E, Ix = DefaultIx> {
-    pub(super) nodes: Vec<Node<N, Ix>>,
+    pub(crate) nodes: Vec<Node<N, Ix>>,
     pub(super) edges: Vec<Edge<E, Ix>>,
     node_count: usize,
     edge_count: usize,

@@ -8,9 +8,12 @@ use std::{
 
 use cgmath::{num_traits::ToPrimitive, Quaternion};
 use num_rational::Rational64;
+#[cfg(feature = "pyo3")]
+use pyo3::prelude::*;
 
 pub(crate) type Param = f64;
 
+#[cfg_attr(feature = "pyo3", pyclass)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum WireType {
     Qubit,

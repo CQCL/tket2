@@ -1,22 +1,25 @@
 use pyo3::prelude::*;
-use pythonize::{depythonize, pythonize};
-use tket_json_rs::circuit_json::SerialCircuit;
 use tket_rs::circuit::circuit::Circuit;
+use tket_rs::circuit::operation::WireType;
+use tket_rs::circuit::py_circuit::PyOp;
+
+fn _wrap_tket_conversion<F: FnOnce(Circuit) -> Circuit>(
+    f: F,
+) -> impl FnOnce(Py<PyAny>) -> PyResult<Py<PyAny>> {
+    |c: Py<PyAny>| (f)(Circuit::_from_tket1_circ(c)).to_tket1_circ()
+}
 
 #[pyfunction]
 fn remove_redundancies(c: Py<PyAny>) -> PyResult<Py<PyAny>> {
-    let ser: SerialCircuit = Python::with_gil(|py| depythonize(c.as_ref(py)))?;
-
-    let circ: Circuit = ser.clone().into();
-
-    let (circ, _) = tket_rs::passes::squash::cx_cancel_pass(circ);
-    let reser: SerialCircuit = circ.into();
-    Ok(Python::with_gil(|py| pythonize(py, &reser).unwrap()))
+    _wrap_tket_conversion(|circ| tket_rs::passes::squash::cx_cancel_pass(circ).0)(c)
 }
 
 /// A Python module implemented in Rust.
 #[pymodule]
 fn pyrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(remove_redundancies, m)?)?;
+    m.add_class::<Circuit>()?;
+    m.add_class::<PyOp>()?;
+    m.add_class::<WireType>()?;
     Ok(())
 }

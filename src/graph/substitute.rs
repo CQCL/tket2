@@ -6,7 +6,7 @@ use std::hash::Hash;
 pub trait HashIx: Eq + Hash + IndexType {}
 impl<T: Eq + Hash + IndexType> HashIx for T {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SubgraphRef<HashIx> {
     pub nodes: HashSet<NodeIndex<HashIx>>,
 }
@@ -25,7 +25,7 @@ impl<Ix: HashIx, T: Iterator<Item = NodeIndex<Ix>>> From<T> for SubgraphRef<Ix> 
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BoundedSubgraph<Ix: HashIx> {
     pub subg: SubgraphRef<Ix>,
     pub edges: [Vec<EdgeIndex<Ix>>; 2],
@@ -53,13 +53,14 @@ impl<Ix: HashIx> BoundedSubgraph<Ix> {
     }
 }
 
-pub struct OpenGraph<N, E, Ix> {
+#[derive(Clone)]
+pub struct OpenGraph<N, E, Ix: IndexType> {
     pub graph: Graph<N, E, Ix>,
     pub in_ports: Vec<NodePort<Ix>>,
     pub out_ports: Vec<NodePort<Ix>>,
 }
 
-impl<N, E, Ix> OpenGraph<N, E, Ix> {
+impl<N, E, Ix: IndexType> OpenGraph<N, E, Ix> {
     pub fn new(
         graph: Graph<N, E, Ix>,
         in_ports: Vec<NodePort<Ix>>,
@@ -83,7 +84,7 @@ impl<N: Debug, E: Debug, Ix: IndexType> Debug for OpenGraph<N, E, Ix> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Rewrite<N, E, Ix: HashIx = DefaultIx> {
     pub subg: BoundedSubgraph<Ix>,
     pub replacement: OpenGraph<N, E, Ix>,
