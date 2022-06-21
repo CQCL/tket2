@@ -75,11 +75,11 @@ mod tests {
         let [input, output] = circ.boundary();
 
         let fadd = circ.add_vertex(Op::AngleAdd);
-        circ.add_edge((input, 0), (fadd, 0), WireType::F64);
+        circ.tup_add_edge((input, 0), (fadd, 0), WireType::F64);
 
-        circ.add_edge((input, 1), (fadd, 1), WireType::F64);
+        circ.tup_add_edge((input, 1), (fadd, 1), WireType::F64);
 
-        circ.add_edge((fadd, 0), (output, 0), WireType::F64);
+        circ.tup_add_edge((fadd, 0), (output, 0), WireType::F64);
     }
 
     #[test]
@@ -90,13 +90,13 @@ mod tests {
         let [input, output] = circ.boundary();
 
         let fadd = circ.add_vertex(Op::AngleAdd);
-        let e = circ.add_edge((input, 0), (fadd, 0), WireType::F64);
+        let e = circ.tup_add_edge((input, 0), (fadd, 0), WireType::F64);
 
         let copy = circ.copy_edge(e, 2).unwrap();
 
-        circ.add_edge((copy, 1), (fadd, 1), WireType::F64);
+        circ.tup_add_edge((copy, 1), (fadd, 1), WireType::F64);
 
-        circ.add_edge((fadd, 0), (output, 0), WireType::F64);
+        circ.tup_add_edge((fadd, 0), (output, 0), WireType::F64);
         // println!("{}", dot_string(&circ.dag));
     }
 
@@ -109,10 +109,10 @@ mod tests {
         let fadd = circ.add_vertex(Op::AngleAdd);
         let one = circ.add_vertex(Op::Const(ConstValue::f64_angle(0.5)));
         let two = circ.add_vertex(Op::Const(ConstValue::f64_angle(1.5)));
-        let _e1 = circ.add_edge((one, 0), (fadd, 0), WireType::F64);
-        let _e2 = circ.add_edge((two, 0), (fadd, 1), WireType::F64);
+        let _e1 = circ.tup_add_edge((one, 0), (fadd, 0), WireType::F64);
+        let _e2 = circ.tup_add_edge((two, 0), (fadd, 1), WireType::F64);
 
-        let _out = circ.add_edge((fadd, 0), (output, 0), WireType::F64);
+        let _out = circ.tup_add_edge((fadd, 0), (output, 0), WireType::F64);
 
         let rewrite = find_const_ops(&circ).next().unwrap();
 
@@ -154,30 +154,30 @@ mod tests {
         });
 
         let rx = circ.add_vertex(Op::RxF64);
-        circ.add_edge((input, 0), (rx, 0), WireType::Qubit);
+        circ.tup_add_edge((input, 0), (rx, 0), WireType::Qubit);
 
         let point5 = circ.add_vertex(Op::Const(ConstValue::f64_angle(0.5)));
         let two = circ.add_vertex(Op::Const(ConstValue::f64_angle(2.0)));
         let eight = circ.add_vertex(Op::Const(ConstValue::f64_angle(8.0)));
 
-        circ.add_edge((two, 0), (neg, 0), WireType::F64);
+        circ.tup_add_edge((two, 0), (neg, 0), WireType::F64);
 
-        circ.add_edge((neg, 0), (fadd1, 0), WireType::F64);
+        circ.tup_add_edge((neg, 0), (fadd1, 0), WireType::F64);
 
-        circ.add_edge((eight, 0), (fadd1, 1), WireType::F64);
+        circ.tup_add_edge((eight, 0), (fadd1, 1), WireType::F64);
 
-        circ.add_edge((point5, 0), (copy, 0), WireType::F64);
+        circ.tup_add_edge((point5, 0), (copy, 0), WireType::F64);
 
-        circ.add_edge((copy, 0), (fadd3, 0), WireType::F64);
-        circ.add_edge((copy, 1), (fadd2, 0), WireType::F64);
+        circ.tup_add_edge((copy, 0), (fadd3, 0), WireType::F64);
+        circ.tup_add_edge((copy, 1), (fadd2, 0), WireType::F64);
 
-        circ.add_edge((fadd1, 0), (fadd2, 1), WireType::F64);
+        circ.tup_add_edge((fadd1, 0), (fadd2, 1), WireType::F64);
 
-        circ.add_edge((fadd2, 0), (fadd3, 1), WireType::F64);
+        circ.tup_add_edge((fadd2, 0), (fadd3, 1), WireType::F64);
 
-        circ.add_edge((fadd3, 0), (rx, 1), WireType::F64);
+        circ.tup_add_edge((fadd3, 0), (rx, 1), WireType::F64);
 
-        circ.add_edge((rx, 0), (output, 0), WireType::Qubit);
+        circ.tup_add_edge((rx, 0), (output, 0), WireType::Qubit);
 
         assert_eq!(circ.dag.node_count(), 11);
         assert_eq!(circ.dag.edge_count(), 11);
@@ -276,9 +276,9 @@ mod tests {
 
         let point5 = circ.add_vertex(Op::Const(ConstValue::f64_angle(0.5)));
         let rx = circ.add_vertex(Op::RxF64);
-        circ.add_edge((input, 0), (rx, 0), WireType::Qubit);
-        circ.add_edge((point5, 0), (rx, 1), WireType::F64);
-        circ.add_edge((rx, 0), (output, 0), WireType::Qubit);
+        circ.tup_add_edge((input, 0), (rx, 0), WireType::Qubit);
+        circ.tup_add_edge((point5, 0), (rx, 1), WireType::F64);
+        circ.tup_add_edge((rx, 0), (output, 0), WireType::Qubit);
 
         // let rot_replacer =
         // |circuit| apply_exhaustive(circuit, |c| find_singleq_rotations(c).collect()).unwrap();
@@ -309,11 +309,11 @@ mod tests {
 
         let rx = circ.add_vertex(Op::RxF64);
         let rz = circ.add_vertex(Op::RzF64);
-        circ.add_edge((input, 0), (rx, 0), WireType::Qubit);
-        circ.add_edge((input, 1), (rx, 1), WireType::Angle);
-        circ.add_edge((rx, 0), (rz, 0), WireType::Qubit);
-        circ.add_edge((input, 2), (rz, 1), WireType::Angle);
-        circ.add_edge((rz, 0), (output, 0), WireType::Qubit);
+        circ.tup_add_edge((input, 0), (rx, 0), WireType::Qubit);
+        circ.tup_add_edge((input, 1), (rx, 1), WireType::Angle);
+        circ.tup_add_edge((rx, 0), (rz, 0), WireType::Qubit);
+        circ.tup_add_edge((input, 2), (rz, 1), WireType::Angle);
+        circ.tup_add_edge((rz, 0), (output, 0), WireType::Qubit);
 
         let rot_replacer =
             |circuit| apply_exhaustive(circuit, |c| find_singleq_rotations(c).collect()).unwrap();

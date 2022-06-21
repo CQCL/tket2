@@ -83,6 +83,7 @@ impl IndexType for u8 {
 /// Node identifier.
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
 pub struct NodeIndex<Ix = DefaultIx>(Ix);
+
 impl<Ix: IndexType> NodeIndex<Ix> {
     #[inline]
     pub fn new(x: usize) -> Self {

@@ -1,7 +1,7 @@
-use crate::graph::graph::NodeIndex;
+use crate::graph::graph::{EdgeIndex, IndexType, NodeIndex, NodePort, PortIndex};
 
 use super::{
-    circuit::{Circuit, CircuitRewrite, UnitID},
+    circuit::Circuit,
     operation::{Op, WireType},
 };
 use crate::graph::dot::dot_string;
@@ -85,42 +85,80 @@ impl From<Op> for PyOp {
     }
 }
 
+impl<Ix: IndexType> IntoPy<PyObject> for NodeIndex<Ix> {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        self.index().into_py(py)
+    }
+}
+
+impl<'source, Ix: IndexType> FromPyObject<'source> for NodeIndex<Ix> {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        Ok(NodeIndex::new(ob.extract()?))
+    }
+}
+
+impl<Ix: IndexType> IntoPy<PyObject> for EdgeIndex<Ix> {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        self.index().into_py(py)
+    }
+}
+
+impl<'source, Ix: IndexType> FromPyObject<'source> for EdgeIndex<Ix> {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        Ok(EdgeIndex::new(ob.extract()?))
+    }
+}
+
+impl<Ix: IndexType> IntoPy<PyObject> for NodePort<Ix> {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        (self.node.into_py(py), self.port.into_py(py)).into_py(py)
+    }
+}
+
+impl<'source, Ix: IndexType> FromPyObject<'source> for NodePort<Ix> {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let pair: (NodeIndex<Ix>, PortIndex) = ob.extract()?;
+        Ok(NodePort::new(pair.0, pair.1))
+    }
+}
+
+impl IntoPy<PyObject> for PortIndex {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        self.index().into_py(py)
+    }
+}
+
+impl<'source> FromPyObject<'source> for PortIndex {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        Ok(PortIndex::new(ob.extract()?))
+    }
+}
+
+impl IntoPy<PyObject> for Op {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        let pyop: PyOp = self.into();
+        pyop.into_py(py)
+    }
+}
+
+impl<'source> FromPyObject<'source> for Op {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let pyop: PyOp = ob.extract()?;
+
+        Ok(pyop.into())
+    }
+}
+
 #[pymethods]
 impl Circuit {
     #[new]
     pub fn py_new() -> Self {
         Self::new()
     }
-    pub fn py_apply_rewrite(&mut self, rewrite: CircuitRewrite) {
-        self.dag.apply_rewrite(rewrite.graph_rewrite).unwrap();
-        self.phase += rewrite.phase;
-    }
-
-    pub fn py_add_vertex(&mut self, op: PyOp) -> usize {
-        self.add_vertex(op.into()).index()
-    }
-
-    pub fn py_add_qid(&mut self, s: &str) -> (usize, usize) {
-        let np = self.add_unitid(UnitID::Qubit {
-            name: s.to_string(),
-            index: vec![],
-        });
-        (np.node.index(), np.port.index())
-    }
-
-    pub fn py_add_edge(
-        &mut self,
-        source: (usize, u8),
-        target: (usize, u8),
-        edge_type: WireType,
-    ) -> usize {
-        self.add_edge(
-            (NodeIndex::new(source.0), source.1),
-            (NodeIndex::new(target.0), target.1),
-            edge_type,
-        )
-        .index()
-    }
+    // pub fn py_apply_rewrite(&mut self, rewrite: CircuitRewrite) {
+    //     self.dag.apply_rewrite(rewrite.graph_rewrite).unwrap();
+    //     self.phase += rewrite.phase;
+    // }
 
     pub fn py_boundary(&self) -> [usize; 2] {
         let [i, o] = self.boundary();
@@ -135,10 +173,8 @@ impl Circuit {
         }
     }
 
-    pub fn node_weight(&self, n: usize) -> Option<PyOp> {
-        self.dag
-            .node_weight(NodeIndex::new(n))
-            .map(|vp| vp.op.clone().into())
+    pub fn node_weight(&self, n: NodeIndex) -> Option<Op> {
+        self.dag.node_weight(n).map(|vp| vp.op.clone())
     }
 
     pub fn dot_string(&self) -> String {

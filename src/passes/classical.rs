@@ -115,7 +115,7 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
             for (i, cv) in cvs.into_iter().enumerate() {
                 let edge_type = cv.get_type();
                 let cv_node = replace.add_vertex(Op::Const(cv));
-                replace.add_edge((cv_node, 0), (out, i as u8), edge_type);
+                replace.tup_add_edge((cv_node, 0), (out, i as u8), edge_type);
             }
             let subgraph = BoundedSubgraph::new(
                 parents

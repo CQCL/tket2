@@ -324,8 +324,8 @@ mod tests {
         let [i, o] = circ1.boundary();
         for p in 0..2 {
             let noop = circ1.add_vertex(Op::Noop(WireType::Qubit));
-            circ1.add_edge((i, p), (noop, 0), WireType::Qubit);
-            circ1.add_edge((noop, 0), (o, p), WireType::Qubit);
+            circ1.tup_add_edge((i, p), (noop, 0), WireType::Qubit);
+            circ1.tup_add_edge((noop, 0), (o, p), WireType::Qubit);
         }
         circ1
     }
@@ -335,8 +335,8 @@ mod tests {
         let [i, o] = circ1.boundary();
         for p in (0..2).rev() {
             let noop = circ1.add_vertex(Op::Noop(WireType::Qubit));
-            circ1.add_edge((noop, 0), (o, p), WireType::Qubit);
-            circ1.add_edge((i, p), (noop, 0), WireType::Qubit);
+            circ1.tup_add_edge((noop, 0), (o, p), WireType::Qubit);
+            circ1.tup_add_edge((i, p), (noop, 0), WireType::Qubit);
         }
         circ1
     }
@@ -346,8 +346,8 @@ mod tests {
         let mut circ1 = Circuit::new();
         let [i, o] = circ1.boundary();
         let noop = circ1.add_vertex(Op::Noop(WireType::Qubit));
-        circ1.add_edge((i, 0), (noop, 0), WireType::Qubit);
-        circ1.add_edge((noop, 0), (o, 0), WireType::Qubit);
+        circ1.tup_add_edge((i, 0), (noop, 0), WireType::Qubit);
+        circ1.tup_add_edge((noop, 0), (o, 0), WireType::Qubit);
         circ1
     }
 
@@ -395,8 +395,8 @@ mod tests {
     fn test_pattern(mut simple_circ: Circuit, noop_pattern_circ: Circuit) {
         let xop = simple_circ.add_vertex(Op::H);
         let [i, o] = simple_circ.boundary();
-        simple_circ.add_edge((i, 3), (xop, 0), WireType::Qubit);
-        simple_circ.add_edge((xop, 0), (o, 3), WireType::Qubit);
+        simple_circ.tup_add_edge((i, 3), (xop, 0), WireType::Qubit);
+        simple_circ.tup_add_edge((xop, 0), (o, 3), WireType::Qubit);
 
         let pattern_boundary = noop_pattern_circ.boundary();
         let pattern =

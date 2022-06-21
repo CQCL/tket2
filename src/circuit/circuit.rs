@@ -10,6 +10,7 @@ use super::operation::{ConstValue, Op, Param, WireType};
 #[cfg(feature = "pyo3")]
 use pyo3::prelude::*;
 
+#[cfg_attr(feature = "pyo3", derive(FromPyObject))]
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum UnitID {
     Qubit { name: String, index: Vec<u32> },
@@ -64,7 +65,35 @@ impl Default for Circuit {
         Self::new()
     }
 }
+#[cfg_attr(feature = "pyo3", pymethods)]
+impl Circuit {
+    pub fn add_vertex(&mut self, op: Op) -> Vertex {
+        let capacity = op.signature().map_or(0, |sig| sig.len());
+        let weight = VertexProperties::new(op);
+        self.dag.add_node_with_capacity(capacity, weight)
+    }
 
+    pub fn add_edge(&mut self, source: NodePort, target: NodePort, edge_type: WireType) -> Edge {
+        self.dag
+            .add_edge(source, target, EdgeProperties { edge_type })
+    }
+
+    pub fn add_unitid(&mut self, uid: UnitID) -> NodePort {
+        self.uids.push(uid);
+        (self.boundary.input, (self.uids.len() - 1) as u8).into()
+    }
+
+    pub fn add_linear_unitid(&mut self, uid: UnitID) {
+        let (_, inlen) = self.dag.node_boundary_size(self.boundary.input);
+        let (outlen, _) = self.dag.node_boundary_size(self.boundary.output);
+        self.tup_add_edge(
+            (self.boundary.input, inlen as u8),
+            (self.boundary.output, outlen as u8),
+            uid.get_type(),
+        );
+        self.uids.push(uid);
+    }
+}
 impl Circuit {
     pub fn new() -> Self {
         Self::with_uids(vec![])
@@ -100,28 +129,12 @@ impl Circuit {
             .ok_or_else(|| "Edge not found.".to_string())?;
         self.dag.update_edge(edge, s, NodePort::new(vert, ports[0]));
 
-        self.add_edge(
+        self.tup_add_edge(
             NodePort::new(vert, ports[1]),
             t,
             self.dag.edge_weight(edge).unwrap().edge_type,
         );
         Ok(())
-    }
-
-    pub fn add_linear_unitid(&mut self, uid: UnitID) {
-        let (_, inlen) = self.dag.node_boundary_size(self.boundary.input);
-        let (outlen, _) = self.dag.node_boundary_size(self.boundary.output);
-        self.add_edge(
-            (self.boundary.input, inlen as u8),
-            (self.boundary.output, outlen as u8),
-            uid.get_type(),
-        );
-        self.uids.push(uid);
-    }
-
-    pub fn add_unitid(&mut self, uid: UnitID) -> NodePort {
-        self.uids.push(uid);
-        (self.boundary.input, (self.uids.len() - 1) as u8).into()
     }
 
     pub fn bind_input<P: Into<PortIndex>>(
@@ -142,32 +155,17 @@ impl Circuit {
             return Err("Edge type of input does not match type of provided value.".into());
         }
         let cons = self.add_vertex(Op::Const(val));
-        self.add_edge((cons, 0).into(), target, existing_typ);
+        self.tup_add_edge((cons, 0).into(), target, existing_typ);
         Ok(cons)
     }
 
-    pub fn add_edge<T: Into<NodePort>>(
+    pub fn tup_add_edge<T: Into<NodePort>>(
         &mut self,
         source: T,
         target: T,
         edge_type: WireType,
     ) -> Edge {
-        // let ports = (source.1, target.1);
-        self.dag.add_edge(
-            source,
-            target,
-            EdgeProperties {
-                edge_type,
-                // ports,
-            },
-        )
-        // .map_err(|_| CycleInGraph())
-    }
-
-    pub fn add_vertex(&mut self, op: Op) -> Vertex {
-        let capacity = op.signature().map_or(0, |sig| sig.len());
-        let weight = VertexProperties::new(op);
-        self.dag.add_node_with_capacity(capacity, weight)
+        self.add_edge(source.into(), target.into(), edge_type)
     }
 
     pub fn append_op(&mut self, op: Op, args: &[PortIndex]) -> Result<Vertex, String> {
@@ -239,8 +237,8 @@ impl Circuit {
         let copy_node = self.add_vertex(copy_op);
         let [s, t] = self.dag.edge_endpoints(e).unwrap();
         let edge_type = self.dag.remove_edge(e).unwrap().edge_type;
-        self.add_edge(s, (copy_node, 0).into(), edge_type);
-        self.add_edge((copy_node, 0).into(), t, edge_type);
+        self.tup_add_edge(s, (copy_node, 0).into(), edge_type);
+        self.tup_add_edge((copy_node, 0).into(), t, edge_type);
 
         Ok(copy_node)
     }
@@ -413,8 +411,8 @@ mod tests {
         let [i, o] = circ.boundary();
         for p in 0..2 {
             let noop = circ.add_vertex(Op::Noop(WireType::Qubit));
-            circ.add_edge((i, p), (noop, 0), WireType::Qubit);
-            circ.add_edge((noop, 0), (o, p), WireType::Qubit);
+            circ.tup_add_edge((i, p), (noop, 0), WireType::Qubit);
+            circ.tup_add_edge((noop, 0), (o, p), WireType::Qubit);
         }
     }
 
@@ -424,9 +422,9 @@ mod tests {
         let [i, o] = circ.boundary();
         let add = circ.add_vertex(Op::AngleAdd);
 
-        circ.add_edge((i, 0), (add, 0), WireType::F64);
-        circ.add_edge((i, 1), (add, 1), WireType::F64);
-        circ.add_edge((add, 0), (o, 0), WireType::F64);
+        circ.tup_add_edge((i, 0), (add, 0), WireType::F64);
+        circ.tup_add_edge((i, 1), (add, 1), WireType::F64);
+        circ.tup_add_edge((add, 0), (o, 0), WireType::F64);
 
         assert_eq!(circ.dag.edge_count(), 3);
         assert_eq!(circ.dag.node_count(), 3);

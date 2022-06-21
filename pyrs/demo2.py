@@ -1,14 +1,21 @@
+from dataclasses import dataclass
 from pyrs import RsCircuit, WireType, Op
 from pytket import Circuit
 
 
+@dataclass
+class Qubit:
+    name: str
+    index: list[int]
+
+
 def simple_rs():
     c = RsCircuit()
-    c.py_add_qid("q")
+    c.add_unitid(Qubit("q", [0]))
     i, o = c.py_boundary()
-    v = c.py_add_vertex(Op.H)
-    c.py_add_edge((i, 0), (v, 0), WireType.Qubit)
-    c.py_add_edge((v, 0), (o, 0), WireType.Qubit)
+    v = c.add_vertex(Op.H)
+    c.add_edge((i, 0), (v, 0), WireType.Qubit)
+    c.add_edge((v, 0), (o, 0), WireType.Qubit)
     return c
 
 

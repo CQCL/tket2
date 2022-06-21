@@ -220,7 +220,7 @@ impl<P: ToString> From<SerialCircuit<P>> for Circuit {
                     } else {
                         circ.add_unitid(UnitID::F64(p_str))
                     };
-                    circ.add_edge(
+                    circ.tup_add_edge(
                         param_source,
                         (v, (args.len() + i) as u8).into(),
                         WireType::F64,

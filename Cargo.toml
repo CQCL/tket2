@@ -13,7 +13,7 @@ cgmath = "0.18.0"
 num-rational = "0.4"
 tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs.git" }
 rayon = "1.5"
-pyo3 = {version = "0.16.1", optional = true}
+pyo3 = {version = "0.16.5", optional = true, features = ["multiple-pymethods"]}
 pythonize ={version = "0.16.0", optional = true}
 
 [features]
