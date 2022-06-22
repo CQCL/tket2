@@ -49,6 +49,10 @@ impl<'g, N, E, Ix: IndexType, F> PatternMatcher<'g, N, E, Ix, F> {
     pub fn new(pattern: FixedStructPattern<N, E, Ix, F>, target: &'g Graph<N, E, Ix>) -> Self {
         Self { pattern, target }
     }
+
+    pub fn set_target(&mut self, target: &'g Graph<N, E, Ix>) {
+        self.target = target
+    }
 }
 
 impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N, E, Ix> + 'f>

@@ -10,7 +10,7 @@ use super::{
     dag::{EdgeProperties, VertexProperties},
     operation::{Op, Param, WireType},
 };
-use pyo3::{prelude::*, types::PyType};
+use pyo3::{exceptions::PyNotImplementedError, prelude::*, pyclass::CompareOp, types::PyType};
 use pythonize::{depythonize, pythonize};
 
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -211,6 +211,14 @@ impl Circuit {
                 .call_method1("from_dict", (dict,))?
                 .into())
         })
+    }
+
+    fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
+        match op {
+            CompareOp::Eq => Ok(self == other),
+            CompareOp::Ne => Ok(self != other),
+            _ => Err(PyNotImplementedError::new_err("Unsupported comparison.")),
+        }
     }
 }
 #[pyclass]

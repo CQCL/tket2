@@ -216,6 +216,14 @@ impl<N: Clone, Ix: IndexType> Clone for Node<N, Ix> {
     }
 }
 
+impl<N: PartialEq, Ix: IndexType> PartialEq for &Node<N, Ix> {
+    fn eq(&self, other: &Self) -> bool {
+        self.weight == other.weight
+            && self.incoming == other.incoming
+            && self.outgoing == other.outgoing
+    }
+}
+
 /// The graph's edge type.
 #[derive(Debug)]
 pub(super) struct Edge<E, Ix = DefaultIx> {
@@ -233,6 +241,12 @@ impl<E: Clone, Ix: IndexType> Clone for Edge<E, Ix> {
             weight: self.weight.clone(),
             node_ports: self.node_ports,
         }
+    }
+}
+
+impl<E: PartialEq, Ix: IndexType> PartialEq for &Edge<E, Ix> {
+    fn eq(&self, other: &Self) -> bool {
+        self.weight == other.weight && self.node_ports == other.node_ports
     }
 }
 
@@ -295,6 +309,17 @@ impl<N: Debug, E: Debug, Ix: IndexType> Debug for Graph<N, E, Ix> {
             .field("free_node", &self.free_node)
             .field("free_edge", &self.free_edge)
             .finish()
+    }
+}
+
+impl<E: PartialEq, N: PartialEq, Ix: IndexType> PartialEq for Graph<N, E, Ix> {
+    fn eq(&self, other: &Self) -> bool {
+        self.nodes.iter().eq(other.nodes.iter())
+            && self.edges.iter().eq(other.edges.iter())
+            && self.node_count == other.node_count
+            && self.edge_count == other.edge_count
+            && self.free_node == other.free_node
+            && self.free_edge == other.free_edge
     }
 }
 

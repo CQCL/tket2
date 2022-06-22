@@ -31,7 +31,7 @@ impl UnitID {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct Boundary {
     pub input: Vertex,
     pub output: Vertex,
@@ -52,7 +52,7 @@ impl From<CycleInGraph> for String {
 }
 
 #[cfg_attr(feature = "pyo3", pyclass(name = "RsCircuit"))]
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Circuit {
     pub(crate) dag: Dag,
     pub name: Option<String>,

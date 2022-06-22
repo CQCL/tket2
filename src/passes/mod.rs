@@ -83,8 +83,9 @@ where
     F: NodeCompClosure<VertexProperties, EdgeProperties, DefaultIx> + Clone + 'f,
     G: Fn(Match<DefaultIx>) -> (Circuit, Param) + 'g,
 {
-    let matcher = PatternMatcher::new(pattern.clone(), circ.dag_ref());
-
+    // TODO when applying rewrites greedily, all of this construction needs to
+    // every time a match is found. Find a way to update the target of the match
+    // and restart matching without doing all this again.
     let in_ports: Vec<_> = pattern
         .graph
         .neighbours(pattern.boundary[0], Direction::Outgoing)
@@ -93,6 +94,8 @@ where
         .graph
         .neighbours(pattern.boundary[1], Direction::Incoming)
         .collect();
+    let matcher = PatternMatcher::new(pattern, circ.dag_ref());
+
     matcher.into_matches().map(move |pmatch| {
         let in_edges: Vec<_> = in_ports
             .iter()
