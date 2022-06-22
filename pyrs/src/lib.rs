@@ -8,7 +8,7 @@ use tket_rs::passes::{apply_greedy, pattern_rewriter, CircFixedStructPattern};
 fn _wrap_tket_conversion<F: FnOnce(Circuit) -> Circuit>(
     f: F,
 ) -> impl FnOnce(Py<PyAny>) -> PyResult<Py<PyAny>> {
-    |c: Py<PyAny>| (f)(Circuit::_from_tket1_circ(c)).to_tket1_circ()
+    |c: Py<PyAny>| (f)(Circuit::_from_tket1(c)).to_tket1()
 }
 
 #[pyfunction]
@@ -21,6 +21,7 @@ fn greedy_rewrite(circ: Circuit, pattern: Circuit, rewrite_fn: Py<PyAny>) -> Cir
     assert!(Python::with_gil(|py| rewrite_fn.as_ref(py).is_callable()));
 
     apply_greedy(circ, |c| {
+        // todo allow spec of node comp closure too
         let pattern = CircFixedStructPattern::from_circ(pattern.clone(), node_equality());
         pattern_rewriter(pattern, c, |m| {
             let outc: Circuit = Python::with_gil(|py| {

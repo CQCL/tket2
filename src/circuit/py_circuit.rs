@@ -171,6 +171,7 @@ impl Circuit {
     //     self.phase += rewrite.phase;
     // }
 
+    #[pyo3(name = "boundary")]
     pub fn py_boundary(&self) -> [usize; 2] {
         let [i, o] = self.boundary();
         [i.index(), o.index()]
@@ -187,7 +188,7 @@ impl Circuit {
         )
     }
 
-    pub fn _from_tket1_circ(c: Py<PyAny>) -> Self {
+    pub fn _from_tket1(c: Py<PyAny>) -> Self {
         let ser: SerialCircuit =
             Python::with_gil(|py| depythonize(c.call_method0(py, "to_dict").unwrap().as_ref(py)))
                 .unwrap();
@@ -196,11 +197,11 @@ impl Circuit {
     }
 
     #[classmethod]
-    pub fn from_tket1_circ(_cls: &PyType, c: Py<PyAny>) -> Self {
-        Self::_from_tket1_circ(c)
+    pub fn from_tket1(_cls: &PyType, c: Py<PyAny>) -> Self {
+        Self::_from_tket1(c)
     }
 
-    pub fn to_tket1_circ(&self) -> PyResult<Py<PyAny>> {
+    pub fn to_tket1(&self) -> PyResult<Py<PyAny>> {
         let reser: SerialCircuit = self.clone().into();
         Python::with_gil(|py| {
             let dict = pythonize(py, &reser).unwrap();
@@ -220,6 +221,12 @@ impl Circuit {
             _ => Err(PyNotImplementedError::new_err("Unsupported comparison.")),
         }
     }
+
+    pub fn defrag(&mut self) {
+        let c = self.clone().remove_invalid();
+
+        *self = c;
+    }
 }
 #[pyclass]
 pub struct NodeIterator(std::vec::IntoIter<NodeIndex>);
@@ -234,7 +241,7 @@ impl NodeIterator {
     }
 }
 
-#[pyclass]
+#[pyclass(name = "Subgraph")]
 #[derive(Clone)]
 pub struct PySubgraph(BoundedSubgraph<DefaultIx>);
 
@@ -253,7 +260,7 @@ impl PySubgraph {
     }
 }
 
-#[pyclass]
+#[pyclass(name = "OpenCircuit")]
 #[derive(Clone)]
 pub struct PyOpenCircuit(OpenGraph<VertexProperties, EdgeProperties, DefaultIx>);
 
@@ -267,7 +274,7 @@ impl PyOpenCircuit {
 #[pymethods]
 impl CircuitRewrite {
     #[new]
-    pub fn py_new(subg: PySubgraph, replacement: PyOpenCircuit, phase: Param) -> Self {
-        Self::new(subg.0, replacement.0, phase)
+    pub fn py_new(subg: PySubgraph, replacement: Circuit, phase: Param) -> Self {
+        Self::new(subg.0, replacement.into(), phase)
     }
 }

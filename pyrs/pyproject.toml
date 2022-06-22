@@ -10,4 +10,4 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = ["pytket~=1.0"]
+dependencies = ["pytket~=1.0", "pytest~=7.1"]
