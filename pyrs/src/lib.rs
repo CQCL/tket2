@@ -1,7 +1,9 @@
 use pyo3::prelude::*;
 use tket_rs::circuit::circuit::{Circuit, CircuitRewrite};
-use tket_rs::circuit::operation::WireType;
+use tket_rs::circuit::dag::VertexProperties;
+use tket_rs::circuit::operation::{Op, WireType};
 use tket_rs::circuit::py_circuit::{PyOp, PyOpenCircuit, PySubgraph};
+use tket_rs::graph::graph::NodeIndex;
 use tket_rs::passes::pattern::node_equality;
 use tket_rs::passes::{apply_greedy, pattern_rewriter, CircFixedStructPattern};
 
@@ -17,23 +19,57 @@ fn remove_redundancies(c: Py<PyAny>) -> PyResult<Py<PyAny>> {
 }
 
 #[pyfunction]
-fn greedy_rewrite(circ: Circuit, pattern: Circuit, rewrite_fn: Py<PyAny>) -> Circuit {
+fn greedy_rewrite(
+    circ: Circuit,
+    pattern: Circuit,
+    rewrite_fn: Py<PyAny>,
+    node_match_fn: Option<Py<PyAny>>,
+) -> Circuit {
     assert!(Python::with_gil(|py| rewrite_fn.as_ref(py).is_callable()));
 
-    apply_greedy(circ, |c| {
-        // todo allow spec of node comp closure too
-        let pattern = CircFixedStructPattern::from_circ(pattern.clone(), node_equality());
-        pattern_rewriter(pattern, c, |m| {
-            let outc: Circuit = Python::with_gil(|py| {
-                let pd = m.into_py(py);
-                rewrite_fn.call1(py, (pd,)).unwrap().extract(py).unwrap()
-            });
-            (outc, 0.0)
+    // gotta be a better way to do this....
+    if let Some(node_match_fn) = node_match_fn {
+        apply_greedy(circ, |c| {
+            // todo allow spec of node comp closure too
+            let pattern = CircFixedStructPattern::from_circ(
+                pattern.clone(),
+                |_: &_, n: NodeIndex, op: &VertexProperties| {
+                    Python::with_gil(|py| {
+                        node_match_fn
+                            .call1(py, (n, op.op.clone()))
+                            .unwrap()
+                            .extract(py)
+                            .unwrap()
+                    })
+                },
+            );
+            pattern_rewriter(pattern, c, |m| {
+                let outc: Circuit = Python::with_gil(|py| {
+                    let pd = m.into_py(py);
+                    rewrite_fn.call1(py, (pd,)).unwrap().extract(py).unwrap()
+                });
+                (outc, 0.0)
+            })
+            .next()
         })
-        .next()
-    })
-    .unwrap()
-    .0
+        .unwrap()
+        .0
+    } else {
+        apply_greedy(circ, |c| {
+            // todo allow spec of node comp closure too
+            let pattern = CircFixedStructPattern::from_circ(pattern.clone(), node_equality());
+            pattern_rewriter(pattern, c, |m| {
+                let outc: Circuit = Python::with_gil(|py| {
+                    let pd = m.into_py(py);
+                    rewrite_fn.call1(py, (pd,)).unwrap().extract(py).unwrap()
+                });
+                (outc, 0.0)
+            })
+            .next()
+        })
+        .unwrap()
+        .0
+    }
 }
 /// A Python module implemented in Rust.
 #[pymodule]

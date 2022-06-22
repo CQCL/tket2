@@ -64,13 +64,18 @@ def noop_circ() -> RsCircuit:
 def test_pattern_rewriter(cx_circ, noop_circ):
     c = Circuit(2).H(0).CX(0, 1)
     rc = RsCircuit.from_tket1(c)
-    c = greedy_rewrite(rc, cx_circ, lambda x: noop_circ)
+
+    c1 = greedy_rewrite(rc, cx_circ, lambda x: noop_circ)
+
+    c2 = greedy_rewrite(
+        rc, cx_circ, lambda x: noop_circ, lambda ni, op: op == cx_circ.node_op(ni)
+    )
 
     correct = Circuit(2).H(0)
     correct.add_gate(OpType.noop, [1])
     correct.add_gate(OpType.noop, [0])
-
-    assert c.to_tket1().get_commands() == correct.get_commands()
+    for c in (c1, c2):
+        assert c.to_tket1().get_commands() == correct.get_commands()
 
 
 def test_equality():
