@@ -5,7 +5,7 @@ pub mod squash;
 
 use crate::{
     circuit::{
-        circuit::{Circuit, CircuitRewrite},
+        circuit::{Circuit, CircuitError, CircuitRewrite},
         dag::{EdgeProperties, VertexProperties},
         operation::Param,
     },
@@ -22,7 +22,7 @@ use self::pattern::{FixedStructPattern, Match, NodeCompClosure, PatternMatcher};
 /// # Errors
 ///
 /// This function will return an error if rewrite application fails.
-pub fn apply_exhaustive<F>(mut circ: Circuit, finder: F) -> Result<(Circuit, bool), String>
+pub fn apply_exhaustive<F>(mut circ: Circuit, finder: F) -> Result<(Circuit, bool), CircuitError>
 where
     F: Fn(&Circuit) -> Vec<CircuitRewrite>,
 {
@@ -49,7 +49,7 @@ where
 /// # Errors
 ///
 /// This function will return an error if rewrite application fails.
-pub fn apply_greedy<F>(mut circ: Circuit, finder: F) -> Result<(Circuit, bool), String>
+pub fn apply_greedy<F>(mut circ: Circuit, finder: F) -> Result<(Circuit, bool), CircuitError>
 where
     F: Fn(&Circuit) -> Option<CircuitRewrite>,
 {

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::hash::Hash;
 use std::mem::replace;
+use std::{iter, slice};
 
 /// Trait for the unsigned integer type used for node and edge indices.
 ///
@@ -606,11 +607,11 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         .copied()
     }
 
-    pub fn nodes(&self) -> impl Iterator<Item = NodeIndex<Ix>> + '_ {
-        self.nodes
-            .iter()
-            .enumerate()
-            .filter_map(|(i, n)| n.weight.as_ref().map(|_| NodeIndex::new(i)))
+    /// Return an iterator over the node indices of the graph
+    pub fn node_indices(&self) -> NodeIndices<N, Ix> {
+        NodeIndices {
+            iter: self.nodes.iter().enumerate(),
+        }
     }
 
     pub fn node_weights(&self) -> impl Iterator<Item = &N> + '_ {
@@ -625,7 +626,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         self.edge_count
     }
 
-    pub fn edges(&self) -> impl Iterator<Item = EdgeIndex<Ix>> + '_ {
+    pub fn edge_indices(&self) -> impl Iterator<Item = EdgeIndex<Ix>> + '_ {
         self.edges
             .iter()
             .enumerate()
@@ -786,5 +787,29 @@ mod tests {
             g.node_edges(n3, Direction::Outgoing).collect::<Vec<_>>(),
             vec![&e1]
         );
+    }
+}
+
+/// Iterator over the node indices of a graph.
+#[derive(Debug, Clone)]
+pub struct NodeIndices<'a, N: 'a, Ix: 'a = DefaultIx> {
+    iter: iter::Enumerate<slice::Iter<'a, Node<N, Ix>>>,
+}
+
+impl<'a, N, Ix: IndexType> Iterator for NodeIndices<'a, N, Ix> {
+    type Item = NodeIndex<Ix>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.find_map(|(i, node)| {
+            if node.weight.is_some() {
+                Some(NodeIndex::new(i))
+            } else {
+                None
+            }
+        })
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (_, upper) = self.iter.size_hint();
+        (0, upper)
     }
 }

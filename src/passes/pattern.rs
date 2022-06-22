@@ -244,7 +244,7 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
 
         self.pattern
             .graph
-            .nodes()
+            .node_indices()
             .max_by_key(|n| {
                 let (i, o) = self.pattern.graph.node_boundary_size(*n);
                 i + o
@@ -267,7 +267,7 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
 
     pub fn find_matches(&'g self) -> impl Iterator<Item = Match<Ix>> + 'g {
         let start = self.start_pattern_node_edge();
-        self.target.nodes().filter_map(move |candidate| {
+        self.target.node_indices().filter_map(move |candidate| {
             if self.node_match(start, candidate).is_err() {
                 None
             } else {
@@ -278,7 +278,7 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
 
     pub fn into_matches(self) -> impl Iterator<Item = Match<Ix>> + 'g {
         let start = self.start_pattern_node_edge();
-        self.target.nodes().filter_map(move |candidate| {
+        self.target.node_indices().filter_map(move |candidate| {
             if self.node_match(start, candidate).is_err() {
                 None
             } else {
@@ -299,7 +299,7 @@ where
         let start = self.start_pattern_node_edge();
         let candidates: Vec<_> = self
             .target
-            .nodes()
+            .node_indices()
             .filter(|n| self.node_match(start, *n).is_ok())
             .collect();
         candidates
@@ -359,7 +359,10 @@ mod tests {
         let dag2 = simple_isomorphic_circ.dag;
         let pattern = FixedStructPattern::new(dag2, pattern_boundary, node_equality());
         let matcher = PatternMatcher::new(pattern, &dag1);
-        for (n1, n2) in dag1.nodes().zip(matcher.pattern.graph.nodes()) {
+        for (n1, n2) in dag1
+            .node_indices()
+            .zip(matcher.pattern.graph.node_indices())
+        {
             assert!(matcher.node_match(n1, n2).is_ok());
         }
 
@@ -368,7 +371,7 @@ mod tests {
 
     #[rstest]
     fn test_edge_match(simple_circ: Circuit) {
-        let fedges: Vec<_> = simple_circ.dag.edges().collect();
+        let fedges: Vec<_> = simple_circ.dag.edge_indices().collect();
         let pattern_boundary = simple_circ.boundary();
 
         let dag1 = simple_circ.dag.clone();
@@ -377,7 +380,10 @@ mod tests {
         let pattern = FixedStructPattern::new(dag2, pattern_boundary, node_equality());
 
         let matcher = PatternMatcher::new(pattern, &dag1);
-        for (e1, e2) in dag1.edges().zip(matcher.pattern.graph.edges()) {
+        for (e1, e2) in dag1
+            .edge_indices()
+            .zip(matcher.pattern.graph.edge_indices())
+        {
             assert!(matcher.edge_match(e1, e2).is_ok());
         }
 

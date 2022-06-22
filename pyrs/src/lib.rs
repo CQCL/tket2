@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
-use tket_rs::circuit::circuit::Circuit;
+use tket_rs::circuit::circuit::{Circuit, CircuitRewrite};
 use tket_rs::circuit::operation::WireType;
-use tket_rs::circuit::py_circuit::PyOp;
+use tket_rs::circuit::py_circuit::{PyOp, PyOpenCircuit, PySubgraph};
 
 fn _wrap_tket_conversion<F: FnOnce(Circuit) -> Circuit>(
     f: F,
@@ -21,5 +21,8 @@ fn pyrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Circuit>()?;
     m.add_class::<PyOp>()?;
     m.add_class::<WireType>()?;
+    m.add_class::<PyOpenCircuit>()?;
+    m.add_class::<PySubgraph>()?;
+    m.add_class::<CircuitRewrite>()?;
     Ok(())
 }

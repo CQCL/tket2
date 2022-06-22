@@ -1,6 +1,6 @@
 use crate::{
     circuit::{
-        circuit::{Circuit, CircuitRewrite},
+        circuit::{Circuit, CircuitError, CircuitRewrite},
         dag::Vertex,
         operation::{ConstValue, Op},
     },
@@ -10,13 +10,13 @@ use crate::{
 pub fn find_const_ops<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
     ClRewriteIter {
         circ,
-        vertex_it: circ.dag.nodes(),
+        vertex_it: circ.dag.node_indices(),
     }
 }
 
-pub fn constant_fold_strat(circ: &mut Circuit) -> Result<bool, String> {
+pub fn constant_fold_strat(circ: &mut Circuit) -> Result<bool, CircuitError> {
     let mut success = false;
-    let mut nodes: Vec<_> = circ.dag.nodes().collect();
+    let mut nodes: Vec<_> = circ.dag.node_indices().collect();
     loop {
         let rewrites: Vec<_> = (ClRewriteIter {
             circ,

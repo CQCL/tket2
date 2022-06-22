@@ -23,7 +23,7 @@ pub struct TopSortWalker<'graph, N, E, Ix = DefaultIx> {
 
 impl<'graph, N, E, Ix: IndexType> TopSortWalker<'graph, N, E, Ix> {
     pub fn new(g: &'graph Graph<N, E, Ix>, candidate_nodes: VecDeque<NodeIndex<Ix>>) -> Self {
-        let remaining_edges = g.edges().collect();
+        let remaining_edges = g.edge_indices().collect();
         Self {
             g,
             candidate_nodes,

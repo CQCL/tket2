@@ -7,12 +7,12 @@ pub fn dot_string<N: Display, E: Display, Ix: IndexType>(graph: &Graph<N, E, Ix>
 
     s.push_str("digraph {\n");
 
-    for n in graph.nodes() {
+    for n in graph.node_indices() {
         let node = graph.node_weight(n).unwrap();
         s.push_str(&format!("{} [label=\"{:}\"]\n", n.index(), node)[..]);
     }
 
-    for e in graph.edges() {
+    for e in graph.edge_indices() {
         let [a, b] = graph.edge_endpoints(e).unwrap();
         let edge = graph.edge_weight(e).unwrap();
         s.push_str(

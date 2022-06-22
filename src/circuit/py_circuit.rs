@@ -1,10 +1,15 @@
-use crate::graph::graph::{EdgeIndex, IndexType, NodeIndex, NodePort, PortIndex};
+use std::collections::HashSet;
+
+use crate::graph::{
+    graph::{DefaultIx, EdgeIndex, IndexType, NodeIndex, NodePort, PortIndex},
+    substitute::{BoundedSubgraph, OpenGraph, SubgraphRef},
+};
 
 use super::{
-    circuit::Circuit,
-    operation::{Op, WireType},
+    circuit::{Circuit, CircuitError, CircuitRewrite},
+    dag::{EdgeProperties, VertexProperties},
+    operation::{Op, Param, WireType},
 };
-use crate::graph::dot::dot_string;
 use pyo3::{prelude::*, types::PyType};
 use pythonize::{depythonize, pythonize};
 
@@ -149,6 +154,12 @@ impl<'source> FromPyObject<'source> for Op {
     }
 }
 
+impl std::convert::From<CircuitError> for PyErr {
+    fn from(s: CircuitError) -> Self {
+        pyo3::exceptions::PyRuntimeError::new_err(s.0)
+    }
+}
+
 #[pymethods]
 impl Circuit {
     #[new]
@@ -168,17 +179,12 @@ impl Circuit {
     pub fn nodes(&self) -> NodeIterator {
         // TODO find a way to do this without the collect
         // or just return the Vec
-        NodeIterator {
-            inner: self.dag.nodes().collect::<Vec<NodeIndex>>().into_iter(),
-        }
-    }
-
-    pub fn node_weight(&self, n: NodeIndex) -> Option<Op> {
-        self.dag.node_weight(n).map(|vp| vp.op.clone())
-    }
-
-    pub fn dot_string(&self) -> String {
-        dot_string(self.dag_ref())
+        NodeIterator(
+            self.dag
+                .node_indices()
+                .collect::<Vec<NodeIndex>>()
+                .into_iter(),
+        )
     }
 
     pub fn _from_tket1_circ(c: Py<PyAny>) -> Self {
@@ -208,17 +214,52 @@ impl Circuit {
     }
 }
 #[pyclass]
-pub struct NodeIterator {
-    inner: std::vec::IntoIter<NodeIndex>,
-}
-
+pub struct NodeIterator(std::vec::IntoIter<NodeIndex>);
 #[pymethods]
 impl NodeIterator {
     fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
         slf
     }
 
-    fn __next__(mut slf: PyRefMut<'_, Self>) -> Option<usize> {
-        slf.inner.next().map(|n| n.index())
+    fn __next__(mut slf: PyRefMut<'_, Self>) -> Option<NodeIndex> {
+        slf.0.next()
+    }
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub struct PySubgraph(BoundedSubgraph<DefaultIx>);
+
+#[pymethods]
+impl PySubgraph {
+    #[new]
+    pub fn new(
+        subg_nodes: HashSet<NodeIndex>,
+        in_edges: Vec<EdgeIndex>,
+        out_edges: Vec<EdgeIndex>,
+    ) -> Self {
+        Self(BoundedSubgraph::new(
+            SubgraphRef::new(subg_nodes),
+            [in_edges, out_edges],
+        ))
+    }
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub struct PyOpenCircuit(OpenGraph<VertexProperties, EdgeProperties, DefaultIx>);
+
+#[pymethods]
+impl PyOpenCircuit {
+    #[new]
+    pub fn new(circ: Circuit) -> Self {
+        Self(circ.into())
+    }
+}
+#[pymethods]
+impl CircuitRewrite {
+    #[new]
+    pub fn py_new(subg: PySubgraph, replacement: PyOpenCircuit, phase: Param) -> Self {
+        Self::new(subg.0, replacement.0, phase)
     }
 }

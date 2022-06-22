@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::error::Error;
+use std::fmt::{Debug, Display};
 use std::hash::Hash;
 
 use crate::graph::graph::{DefaultIx, Direction, NodePort, PortIndex};
@@ -65,6 +66,29 @@ impl Default for Circuit {
         Self::new()
     }
 }
+
+#[derive(Debug)]
+pub struct CircuitError(pub String);
+
+impl Display for CircuitError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("CircuitError {}", self.0))
+    }
+}
+impl Error for CircuitError {}
+
+impl From<String> for CircuitError {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl From<&str> for CircuitError {
+    fn from(s: &str) -> Self {
+        s.to_string().into()
+    }
+}
+
 #[cfg_attr(feature = "pyo3", pymethods)]
 impl Circuit {
     pub fn add_vertex(&mut self, op: Op) -> Vertex {
@@ -93,6 +117,43 @@ impl Circuit {
         );
         self.uids.push(uid);
     }
+
+    pub fn node_op(&self, n: Vertex) -> Option<Op> {
+        self.dag.node_weight(n).map(|vp| vp.op.clone())
+    }
+
+    pub fn edge_type(&self, e: Edge) -> Option<WireType> {
+        self.dag.edge_weight(e).map(|ep| ep.edge_type)
+    }
+    pub fn dot_string(&self) -> String {
+        crate::graph::dot::dot_string(self.dag_ref())
+    }
+
+    pub fn apply_rewrite(&mut self, rewrite: CircuitRewrite) -> Result<(), CircuitError> {
+        self.dag.apply_rewrite(rewrite.graph_rewrite)?;
+        self.phase += rewrite.phase;
+        Ok(())
+    }
+
+    pub fn insert_at_edge(
+        &mut self,
+        vert: Vertex,
+        edge: Edge,
+        ports: [PortIndex; 2],
+    ) -> Result<(), CircuitError> {
+        let [s, t] = self
+            .dag
+            .edge_endpoints(edge)
+            .ok_or_else(|| "Edge not found.".to_string())?;
+        self.dag.update_edge(edge, s, NodePort::new(vert, ports[0]));
+
+        self.tup_add_edge(
+            NodePort::new(vert, ports[1]),
+            t,
+            self.dag.edge_weight(edge).unwrap().edge_type,
+        );
+        Ok(())
+    }
 }
 impl Circuit {
     pub fn new() -> Self {
@@ -117,31 +178,11 @@ impl Circuit {
         slf
     }
 
-    pub fn insert_at_edge(
-        &mut self,
-        vert: Vertex,
-        edge: Edge,
-        ports: [PortIndex; 2],
-    ) -> Result<(), String> {
-        let [s, t] = self
-            .dag
-            .edge_endpoints(edge)
-            .ok_or_else(|| "Edge not found.".to_string())?;
-        self.dag.update_edge(edge, s, NodePort::new(vert, ports[0]));
-
-        self.tup_add_edge(
-            NodePort::new(vert, ports[1]),
-            t,
-            self.dag.edge_weight(edge).unwrap().edge_type,
-        );
-        Ok(())
-    }
-
     pub fn bind_input<P: Into<PortIndex>>(
         &mut self,
         in_port: P,
         val: ConstValue,
-    ) -> Result<Vertex, String> {
+    ) -> Result<Vertex, CircuitError> {
         let e = self
             .dag
             .edge_at_port(
@@ -168,7 +209,7 @@ impl Circuit {
         self.add_edge(source.into(), target.into(), edge_type)
     }
 
-    pub fn append_op(&mut self, op: Op, args: &[PortIndex]) -> Result<Vertex, String> {
+    pub fn append_op(&mut self, op: Op, args: &[PortIndex]) -> Result<Vertex, CircuitError> {
         // akin to add-op in TKET-1
 
         let new_vert = self.add_vertex(op);
@@ -243,11 +284,11 @@ impl Circuit {
         Ok(copy_node)
     }
 
-    pub fn apply_rewrite(&mut self, rewrite: CircuitRewrite) -> Result<(), String> {
-        self.dag.apply_rewrite(rewrite.graph_rewrite)?;
-        self.phase += rewrite.phase;
-        Ok(())
-    }
+    // pub fn apply_rewrite(&mut self, rewrite: CircuitRewrite) -> Result<(), String> {
+    //     self.dag.apply_rewrite(rewrite.graph_rewrite)?;
+    //     self.phase += rewrite.phase;
+    //     Ok(())
+    // }
     pub fn remove_invalid(mut self) -> Self {
         let (g, node_map, _) = self.dag.remove_invalid();
         self.dag = g;
@@ -261,7 +302,7 @@ impl Circuit {
     pub fn remove_noop(mut self) -> Self {
         let noop_nodes: Vec<_> = self
             .dag
-            .nodes()
+            .node_indices()
             .filter_map(|n| {
                 if let Op::Noop(wt) = self.dag.node_weight(n).unwrap().op {
                     Some((wt, n))
@@ -313,7 +354,7 @@ impl<'circ> CommandIter<'circ> {
             nodes: TopSorter::new(
                 &circ.dag,
                 circ.dag
-                    .nodes()
+                    .node_indices()
                     .filter(|n| circ.dag.node_boundary_size(*n).0 == 0)
                     .collect(),
             )

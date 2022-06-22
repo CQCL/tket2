@@ -19,7 +19,7 @@ use super::{
 pub fn find_singleq_rotations<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
     RotationRewriteIter {
         circ,
-        vertex_it: circ.dag.nodes(),
+        vertex_it: circ.dag.node_indices(),
     }
 }
 pub struct RotationRewriteIter<'c, I: Iterator<Item = Vertex>> {
