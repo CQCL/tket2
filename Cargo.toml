@@ -13,6 +13,9 @@ num-rational = "0.4"
 tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs.git", features = [
     "tket2ops",
 ] }
+# tket-json-rs = {path = "../tket-json-rs", features = [
+#     "tket2ops",
+# ] }
 rayon = "1.5"
 pyo3 = { version = "0.16.5", optional = true, features = [
     "multiple-pymethods",

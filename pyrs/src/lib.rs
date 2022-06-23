@@ -3,7 +3,7 @@ use tket_json_rs::optype::OpType;
 use tket_rs::circuit::circuit::{Circuit, CircuitRewrite};
 use tket_rs::circuit::dag::VertexProperties;
 use tket_rs::circuit::operation::WireType;
-use tket_rs::circuit::py_circuit::{PyOpenCircuit, PySubgraph};
+use tket_rs::circuit::py_circuit::{PyRewriteIter, PySubgraph};
 use tket_rs::graph::graph::{Direction, NodeIndex};
 use tket_rs::passes::pattern::node_equality;
 use tket_rs::passes::{apply_greedy, pattern_rewriter, CircFixedStructPattern};
@@ -20,7 +20,7 @@ fn remove_redundancies(c: Py<PyAny>) -> PyResult<Py<PyAny>> {
 }
 
 #[pyfunction]
-fn greedy_rewrite(
+fn greedy_pattern_rewrite(
     circ: Circuit,
     pattern: Circuit,
     rewrite_fn: Py<PyAny>,
@@ -72,15 +72,26 @@ fn greedy_rewrite(
         .0
     }
 }
+
+#[pyfunction]
+fn greedy_iter_rewrite(circ: Circuit, it_closure: Py<PyAny>) -> Circuit {
+    Python::with_gil(|py| {
+        apply_greedy(circ, |c| {
+            PyRewriteIter::new(it_closure.call1(py, (c.clone(),)).unwrap(), py).next()
+        })
+        .unwrap()
+        .0
+    })
+}
 /// A Python module implemented in Rust.
 #[pymodule]
 fn pyrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(remove_redundancies, m)?)?;
-    m.add_function(wrap_pyfunction!(greedy_rewrite, m)?)?;
+    m.add_function(wrap_pyfunction!(greedy_pattern_rewrite, m)?)?;
+    m.add_function(wrap_pyfunction!(greedy_iter_rewrite, m)?)?;
     m.add_class::<Circuit>()?;
     m.add_class::<OpType>()?;
     m.add_class::<WireType>()?;
-    m.add_class::<PyOpenCircuit>()?;
     m.add_class::<PySubgraph>()?;
     m.add_class::<CircuitRewrite>()?;
     m.add_class::<Direction>()?;

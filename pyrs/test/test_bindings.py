@@ -1,3 +1,7 @@
+from typing import Callable, Iterable
+import time
+from functools import wraps
+
 import pytest
 from pyrs import (
     RsCircuit,
@@ -5,9 +9,10 @@ from pyrs import (
     RsOpType,
     Subgraph,
     CircuitRewrite,
-    greedy_rewrite,
+    greedy_pattern_rewrite,
     remove_redundancies,
     Direction,
+    greedy_iter_rewrite,
 )
 
 from pytket import Circuit, OpType, Qubit
@@ -51,30 +56,77 @@ def cx_circ() -> RsCircuit:
     return RsCircuit.from_tket1(Circuit(2).CX(0, 1).CX(0, 1))
 
 
-@pytest.fixture()
-def noop_circ() -> RsCircuit:
+def _noop_circ() -> RsCircuit:
     c = Circuit(2)
     c.add_gate(OpType.noop, [0])
     c.add_gate(OpType.noop, [1])
     return RsCircuit.from_tket1(c)
 
 
-def test_pattern_rewriter(cx_circ, noop_circ):
+@pytest.fixture()
+def noop_circ() -> RsCircuit:
+    return _noop_circ()
+
+
+def timed(f: Callable):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        out = f(*args, **kwargs)
+        print(time.time() - start)
+        return out
+
+    return wrapper
+
+
+def cx_pair_searcher(circ: RsCircuit) -> Iterable[CircuitRewrite]:
+    for nid in circ.node_indices():
+        if circ.node_op(nid) != RsOpType.CX:
+            continue
+        sucs = circ.node_edges(nid, Direction.Outgoing)
+
+        if len(sucs) != 2:
+            continue
+
+        source0, target0 = circ.edge_endpoints(sucs[0])
+        source1, target1 = circ.edge_endpoints(sucs[1])
+        if target0[0] != target1[0]:
+            # same node
+            continue
+        next_nid = target0[0]
+        if circ.node_op(next_nid) != RsOpType.CX:
+            continue
+
+        # check ports match
+        if source0[1] == target0[1] and source1[1] == target1[1]:
+            in_edges = circ.node_edges(nid, Direction.Incoming)
+            out_edges = circ.node_edges(next_nid, Direction.Outgoing)
+            yield CircuitRewrite(
+                Subgraph({nid, next_nid}, in_edges, out_edges), _noop_circ(), 0.0
+            )
+
+
+def test_cx_rewriters(cx_circ, noop_circ):
     c = Circuit(2).H(0).CX(1, 0).CX(1, 0)
     rc = RsCircuit.from_tket1(c)
     assert rc.node_edges(3, Direction.Incoming) == [1, 2]
     assert rc.neighbours(4, Direction.Outgoing) == [(1, 1), (1, 0)]
 
-    c1 = greedy_rewrite(rc, cx_circ, lambda x: noop_circ)
+    # each one of these ways of applying this rewrite should take longer than
+    # the one before
 
-    c2 = greedy_rewrite(
+    c1 = timed(greedy_pattern_rewrite)(rc, cx_circ, lambda x: noop_circ)
+
+    c2 = timed(greedy_pattern_rewrite)(
         rc, cx_circ, lambda x: noop_circ, lambda ni, op: op == cx_circ.node_op(ni)
     )
+
+    c3 = timed(greedy_iter_rewrite)(rc, cx_pair_searcher)
 
     correct = Circuit(2).H(0)
     correct.add_gate(OpType.noop, [1])
     correct.add_gate(OpType.noop, [0])
-    for c in (c1, c2):
+    for c in (c1, c2, c3):
         assert c.to_tket1().get_commands() == correct.get_commands()
 
 

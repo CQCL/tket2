@@ -2,15 +2,19 @@ use std::collections::HashSet;
 
 use crate::graph::{
     graph::{DefaultIx, EdgeIndex, IndexType, NodeIndex, NodePort, PortIndex},
-    substitute::{BoundedSubgraph, OpenGraph, SubgraphRef},
+    substitute::{BoundedSubgraph, SubgraphRef},
 };
 
 use super::{
     circuit::{Circuit, CircuitError, CircuitRewrite},
-    dag::{EdgeProperties, VertexProperties},
     operation::{Op, Param},
 };
-use pyo3::{exceptions::PyNotImplementedError, prelude::*, pyclass::CompareOp, types::PyType};
+use pyo3::{
+    exceptions::{PyNotImplementedError, PyStopIteration},
+    prelude::*,
+    pyclass::CompareOp,
+    types::PyType,
+};
 
 use tket_json_rs::{circuit_json::SerialCircuit, optype::OpType};
 
@@ -107,7 +111,7 @@ impl Circuit {
         [i.index(), o.index()]
     }
 
-    pub fn nodes(&self) -> NodeIterator {
+    pub fn node_indices(&self) -> NodeIterator {
         // TODO find a way to do this without the collect
         // or just return the Vec
         NodeIterator(
@@ -146,6 +150,12 @@ impl Circuit {
 
         *self = c;
     }
+
+    pub fn remove_noops(&mut self) {
+        let c = self.clone().remove_noop();
+
+        *self = c;
+    }
 }
 #[pyclass]
 pub struct NodeIterator(std::vec::IntoIter<NodeIndex>);
@@ -179,21 +189,41 @@ impl PySubgraph {
     }
 }
 
-#[pyclass(name = "OpenCircuit")]
-#[derive(Clone)]
-pub struct PyOpenCircuit(OpenGraph<VertexProperties, EdgeProperties, DefaultIx>);
-
-#[pymethods]
-impl PyOpenCircuit {
-    #[new]
-    pub fn new(circ: Circuit) -> Self {
-        Self(circ.into())
-    }
-}
 #[pymethods]
 impl CircuitRewrite {
     #[new]
     pub fn py_new(subg: PySubgraph, replacement: Circuit, phase: Param) -> Self {
         Self::new(subg.0, replacement.into(), phase)
+    }
+}
+
+pub struct PyRewriteIter<'py> {
+    inner: Py<PyAny>,
+    py: Python<'py>,
+}
+
+impl<'py> PyRewriteIter<'py> {
+    pub fn new(inner: Py<PyAny>, py: Python<'py>) -> Self {
+        Self { inner, py }
+    }
+}
+
+impl<'py> Iterator for PyRewriteIter<'py> {
+    type Item = CircuitRewrite;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.inner.call_method0(self.py, "__next__") {
+            Ok(cr) => Some(
+                cr.extract(self.py)
+                    .expect("Iterator didn't return a CircuitRewrite."),
+            ),
+            Err(err) => {
+                if err.is_instance_of::<PyStopIteration>(self.py) {
+                    None
+                } else {
+                    panic!("{}", err);
+                }
+            }
+        }
     }
 }
