@@ -74,7 +74,7 @@ impl From<OpType> for Op {
             OpType::noop => Op::Noop(WireType::Qubit),
             OpType::Measure => Op::Measure,
             OpType::Collapse => todo!(),
-            OpType::Reset => todo!(),
+            OpType::Reset => Op::Reset,
             OpType::ECR => todo!(),
             OpType::ISWAP => todo!(),
             OpType::PhasedX => todo!(),
@@ -110,7 +110,15 @@ impl From<OpType> for Op {
             OpType::Ry => todo!(),
             OpType::Rz => Op::RzF64,
             OpType::TK1 => todo!(),
-            _ => panic!("Unknown optype."),
+            OpType::AngleAdd => Op::AngleAdd,
+            OpType::AngleMul => Op::AngleMul,
+            OpType::AngleNeg => Op::AngleNeg,
+            OpType::QuatMul => Op::QuatMul,
+            OpType::RxF64 => Op::RxF64,
+            OpType::RzF64 => Op::RzF64,
+            OpType::Rotation => Op::Rotation,
+            OpType::ToRotation => Op::ToRotation,
+            _ => panic!("Not directly convertible to Op: {:?}", serial_op),
         }
     }
     // }
@@ -170,6 +178,14 @@ impl From<&Op> for OpType {
             Op::RxF64 => OpType::Rx,
             Op::RzF64 => OpType::Rz,
             Op::Noop(WireType::Qubit) => OpType::noop,
+            Op::AngleAdd => OpType::AngleAdd,
+            Op::AngleMul => OpType::AngleMul,
+            Op::AngleNeg => OpType::AngleNeg,
+            Op::QuatMul => OpType::QuatMul,
+            Op::Rotation => OpType::Rotation,
+            Op::ToRotation => OpType::ToRotation,
+            Op::Copy { .. } => OpType::Copy,
+            Op::Const(_) => OpType::Const,
             _ => panic!("Not supported by Serialized TKET-1: {:?}", op),
         }
     }

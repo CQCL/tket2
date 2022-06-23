@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pyrs import (
     RsCircuit,
     WireType,
-    Op,
+    RsOpType,
     Subgraph,
     CircuitRewrite,
     greedy_rewrite,
@@ -40,8 +40,8 @@ def test_conversion():
 
 def test_apply_rewrite():
 
-    c = simple_rs(Op.H)
-    c2 = simple_rs(Op.Reset)
+    c = simple_rs(RsOpType.H)
+    c2 = simple_rs(RsOpType.Reset)
 
     c.apply_rewrite(CircuitRewrite(Subgraph({2}, [0], [1]), c2, 0.0))
     c.defrag()  # needed for exact equality check
@@ -50,7 +50,7 @@ def test_apply_rewrite():
 
 @pytest.fixture()
 def cx_circ() -> RsCircuit:
-    return RsCircuit.from_tket1(Circuit(2).CX(0, 1))
+    return RsCircuit.from_tket1(Circuit(2).CX(0, 1).CX(0, 1))
 
 
 @pytest.fixture()
@@ -62,7 +62,7 @@ def noop_circ() -> RsCircuit:
 
 
 def test_pattern_rewriter(cx_circ, noop_circ):
-    c = Circuit(2).H(0).CX(0, 1)
+    c = Circuit(2).H(0).CX(1, 0).CX(1, 0)
     rc = RsCircuit.from_tket1(c)
 
     c1 = greedy_rewrite(rc, cx_circ, lambda x: noop_circ)
@@ -81,6 +81,7 @@ def test_pattern_rewriter(cx_circ, noop_circ):
 def test_equality():
     bell_circ = lambda: RsCircuit.from_tket1(Circuit(2).H(0).CX(0, 1))
     assert bell_circ() == bell_circ()
+    assert bell_circ() != RsCircuit.from_tket1(Circuit(2).H(0))
 
 
 def test_auto_convert():

@@ -1,8 +1,9 @@
 use pyo3::prelude::*;
+use tket_json_rs::optype::OpType;
 use tket_rs::circuit::circuit::{Circuit, CircuitRewrite};
 use tket_rs::circuit::dag::VertexProperties;
-use tket_rs::circuit::operation::{Op, WireType};
-use tket_rs::circuit::py_circuit::{PyOp, PyOpenCircuit, PySubgraph};
+use tket_rs::circuit::operation::WireType;
+use tket_rs::circuit::py_circuit::{PyOpenCircuit, PySubgraph};
 use tket_rs::graph::graph::NodeIndex;
 use tket_rs::passes::pattern::node_equality;
 use tket_rs::passes::{apply_greedy, pattern_rewriter, CircFixedStructPattern};
@@ -36,7 +37,7 @@ fn greedy_rewrite(
                 |_: &_, n: NodeIndex, op: &VertexProperties| {
                     Python::with_gil(|py| {
                         node_match_fn
-                            .call1(py, (n, op.op.clone()))
+                            .call1(py, (n, &op.op))
                             .unwrap()
                             .extract(py)
                             .unwrap()
@@ -77,7 +78,7 @@ fn pyrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(remove_redundancies, m)?)?;
     m.add_function(wrap_pyfunction!(greedy_rewrite, m)?)?;
     m.add_class::<Circuit>()?;
-    m.add_class::<PyOp>()?;
+    m.add_class::<OpType>()?;
     m.add_class::<WireType>()?;
     m.add_class::<PyOpenCircuit>()?;
     m.add_class::<PySubgraph>()?;

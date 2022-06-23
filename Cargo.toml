@@ -10,20 +10,22 @@ edition = "2021"
 lazy_static = "1.4.0"
 cgmath = "0.18.0"
 num-rational = "0.4"
-tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs.git" }
+tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs.git", features = [
+    "tket2ops",
+] }
 rayon = "1.5"
-pyo3 = {version = "0.16.5", optional = true, features = ["multiple-pymethods"]}
-pythonize ={version = "0.16.0", optional = true}
+pyo3 = { version = "0.16.5", optional = true, features = [
+    "multiple-pymethods",
+] }
 
 [features]
-# default = ["pyo3"]
-pyo3 = ["dep:pyo3", "dep:pythonize"]
+pyo3 = ["dep:pyo3", "tket-json-rs/pyo3", "tket-json-rs/tket2ops"]
 
 [dev-dependencies]
 rstest = "0.12.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-criterion = {version="0.3", features = ["html_reports"]}
+criterion = { version = "0.3", features = ["html_reports"] }
 
 
 [[bench]]
@@ -32,6 +34,4 @@ harness = false
 
 [workspace]
 
-members = [
-    "pyrs",
-]
+members = ["pyrs"]

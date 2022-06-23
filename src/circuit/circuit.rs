@@ -118,8 +118,8 @@ impl Circuit {
         self.uids.push(uid);
     }
 
-    pub fn node_op(&self, n: Vertex) -> Option<Op> {
-        self.dag.node_weight(n).map(|vp| vp.op.clone())
+    pub fn node_op(&self, n: Vertex) -> Option<&Op> {
+        self.dag.node_weight(n).map(|vp| &vp.op)
     }
 
     pub fn edge_type(&self, e: Edge) -> Option<WireType> {
