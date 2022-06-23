@@ -4,7 +4,7 @@ use tket_rs::circuit::circuit::{Circuit, CircuitRewrite};
 use tket_rs::circuit::dag::VertexProperties;
 use tket_rs::circuit::operation::WireType;
 use tket_rs::circuit::py_circuit::{PyOpenCircuit, PySubgraph};
-use tket_rs::graph::graph::NodeIndex;
+use tket_rs::graph::graph::{Direction, NodeIndex};
 use tket_rs::passes::pattern::node_equality;
 use tket_rs::passes::{apply_greedy, pattern_rewriter, CircFixedStructPattern};
 
@@ -83,5 +83,7 @@ fn pyrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyOpenCircuit>()?;
     m.add_class::<PySubgraph>()?;
     m.add_class::<CircuitRewrite>()?;
+    m.add_class::<Direction>()?;
+
     Ok(())
 }

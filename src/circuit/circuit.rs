@@ -14,7 +14,7 @@ use pyo3::prelude::*;
 #[cfg_attr(feature = "pyo3", derive(FromPyObject))]
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum UnitID {
-    Qubit { name: String, index: Vec<u32> },
+    Qubit { reg_name: String, index: Vec<u32> },
     Bit { name: String, index: Vec<u32> },
     F64(String),
     Angle(String),
@@ -153,6 +153,30 @@ impl Circuit {
             self.dag.edge_weight(edge).unwrap().edge_type,
         );
         Ok(())
+    }
+
+    pub fn remove_node(&mut self, n: Vertex) -> Option<Op> {
+        self.dag.remove_node(n).map(|v| v.op)
+    }
+
+    pub fn remove_edge(&mut self, e: Edge) -> Option<WireType> {
+        self.dag.remove_edge(e).map(|ep| ep.edge_type)
+    }
+
+    pub fn edge_endpoints(&self, e: Edge) -> Option<(NodePort, NodePort)> {
+        self.dag.edge_endpoints(e).map(|[e1, e2]| (e1, e2))
+    }
+
+    pub fn edge_at_port(&self, np: NodePort, direction: Direction) -> Option<Edge> {
+        self.dag.edge_at_port(np, direction)
+    }
+
+    pub fn node_edges(&self, n: Vertex, direction: Direction) -> Vec<Edge> {
+        self.dag.node_edges(n, direction).copied().collect()
+    }
+
+    pub fn neighbours(&self, n: Vertex, direction: Direction) -> Vec<NodePort> {
+        self.dag.neighbours(n, direction).collect()
     }
 }
 impl Circuit {

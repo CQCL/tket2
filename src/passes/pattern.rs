@@ -426,11 +426,11 @@ mod tests {
         // a CNOT surrounded by hadamards
         let qubits = vec![
             UnitID::Qubit {
-                name: "q".into(),
+                reg_name: "q".into(),
                 index: vec![0],
             },
             UnitID::Qubit {
-                name: "q".into(),
+                reg_name: "q".into(),
                 index: vec![1],
             },
         ];
@@ -457,11 +457,11 @@ mod tests {
     fn test_cx_sequence(cx_h_pattern: Circuit) {
         let qubits = vec![
             UnitID::Qubit {
-                name: "q".into(),
+                reg_name: "q".into(),
                 index: vec![0],
             },
             UnitID::Qubit {
-                name: "q".into(),
+                reg_name: "q".into(),
                 index: vec![1],
             },
         ];
@@ -538,15 +538,15 @@ mod tests {
     fn test_cx_ladder(cx_h_pattern: Circuit) {
         let qubits = vec![
             UnitID::Qubit {
-                name: "q".into(),
+                reg_name: "q".into(),
                 index: vec![0],
             },
             UnitID::Qubit {
-                name: "q".into(),
+                reg_name: "q".into(),
                 index: vec![1],
             },
             UnitID::Qubit {
-                name: "q".into(),
+                reg_name: "q".into(),
                 index: vec![3],
             },
         ];

@@ -1,3 +1,5 @@
+#[cfg(feature = "pyo3")]
+use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::hash::Hash;
@@ -250,6 +252,7 @@ impl<E: PartialEq, Ix: IndexType> PartialEq for &Edge<E, Ix> {
     }
 }
 
+#[cfg_attr(feature = "pyo3", pyclass)]
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum Direction {
     Incoming = 0,

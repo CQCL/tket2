@@ -15,11 +15,11 @@ use tket_rs::{
 fn pattern_match_bench_par(c: &mut Criterion) {
     let qubits = vec![
         UnitID::Qubit {
-            name: "q".into(),
+            reg_name: "q".into(),
             index: vec![0],
         },
         UnitID::Qubit {
-            name: "q".into(),
+            reg_name: "q".into(),
             index: vec![1],
         },
     ];

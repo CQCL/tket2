@@ -1,5 +1,4 @@
 import pytest
-from dataclasses import dataclass
 from pyrs import (
     RsCircuit,
     WireType,
@@ -8,15 +7,10 @@ from pyrs import (
     CircuitRewrite,
     greedy_rewrite,
     remove_redundancies,
+    Direction,
 )
 
-from pytket import Circuit, OpType
-
-
-@dataclass
-class Qubit:
-    name: str
-    index: list[int]
+from pytket import Circuit, OpType, Qubit
 
 
 def simple_rs(op):
@@ -41,11 +35,15 @@ def test_conversion():
 def test_apply_rewrite():
 
     c = simple_rs(RsOpType.H)
+    assert c.edge_endpoints(0) == ((0, 0), (2, 0))
+    assert c.edge_at_port((2, 0), Direction.Outgoing) == 1
     c2 = simple_rs(RsOpType.Reset)
 
     c.apply_rewrite(CircuitRewrite(Subgraph({2}, [0], [1]), c2, 0.0))
     c.defrag()  # needed for exact equality check
     assert c == c2
+    assert c.remove_node(2) == RsOpType.Reset
+    assert c.remove_node(2) == None
 
 
 @pytest.fixture()
@@ -64,6 +62,8 @@ def noop_circ() -> RsCircuit:
 def test_pattern_rewriter(cx_circ, noop_circ):
     c = Circuit(2).H(0).CX(1, 0).CX(1, 0)
     rc = RsCircuit.from_tket1(c)
+    assert rc.node_edges(3, Direction.Incoming) == [1, 2]
+    assert rc.neighbours(4, Direction.Outgoing) == [(1, 1), (1, 0)]
 
     c1 = greedy_rewrite(rc, cx_circ, lambda x: noop_circ)
 

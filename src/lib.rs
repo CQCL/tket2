@@ -136,7 +136,7 @@ mod tests {
     fn test_const_fold_less_simple() {
         let mut circ = Circuit::new();
         circ.add_unitid(UnitID::Qubit {
-            name: "q".into(),
+            reg_name: "q".into(),
             index: vec![0],
         });
 
@@ -269,7 +269,7 @@ mod tests {
     fn test_rotation_replace() {
         let mut circ = Circuit::new();
         circ.add_unitid(UnitID::Qubit {
-            name: "q".into(),
+            reg_name: "q".into(),
             index: vec![0],
         });
         let [input, output] = circ.boundary();
@@ -302,7 +302,7 @@ mod tests {
     fn test_squash() {
         let mut circ = Circuit::new();
         circ.add_unitid(UnitID::Qubit {
-            name: "q".into(),
+            reg_name: "q".into(),
             index: vec![0],
         });
         let [input, output] = circ.boundary();
@@ -350,11 +350,11 @@ mod tests {
     fn test_cx_cancel() {
         let qubits = vec![
             UnitID::Qubit {
-                name: "q".into(),
+                reg_name: "q".into(),
                 index: vec![0],
             },
             UnitID::Qubit {
-                name: "q".into(),
+                reg_name: "q".into(),
                 index: vec![1],
             },
         ];

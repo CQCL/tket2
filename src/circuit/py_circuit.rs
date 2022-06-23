@@ -70,6 +70,12 @@ impl IntoPy<PyObject> for &Op {
     }
 }
 
+impl IntoPy<PyObject> for Op {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        (&self).into_py(py)
+    }
+}
+
 impl<'source> FromPyObject<'source> for Op {
     fn extract(ob: &'source PyAny) -> PyResult<Self> {
         let pyop: OpType = ob.extract()?;

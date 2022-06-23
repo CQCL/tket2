@@ -68,7 +68,7 @@ pub fn find_singleq_rotations_pattern<'c>(
 ) -> impl Iterator<Item = CircuitRewrite> + '_ {
     let mut pattern_circ = Circuit::new();
     pattern_circ.add_unitid(UnitID::Qubit {
-        name: "q".into(),
+        reg_name: "q".into(),
         index: vec![0],
     });
     let [input, output] = pattern_circ.boundary();
@@ -320,11 +320,11 @@ pub fn squash_pass(circ: Circuit) -> (Circuit, bool) {
 fn cx_pattern<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
     let qubits = vec![
         UnitID::Qubit {
-            name: "q".into(),
+            reg_name: "q".into(),
             index: vec![0],
         },
         UnitID::Qubit {
-            name: "q".into(),
+            reg_name: "q".into(),
             index: vec![1],
         },
     ];

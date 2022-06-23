@@ -8,7 +8,7 @@ use tket_json_rs::optype::OpType;
 
 fn to_qubit(reg: Register) -> UnitID {
     UnitID::Qubit {
-        name: reg.0,
+        reg_name: reg.0,
         index: reg.1.into_iter().map(|i| i as u32).collect(),
     }
 }
@@ -253,7 +253,11 @@ impl<P: ToString> From<SerialCircuit<P>> for Circuit {
 impl From<UnitID> for Register {
     fn from(uid: UnitID) -> Self {
         match uid {
-            UnitID::Qubit { name, index } | UnitID::Bit { name, index } => {
+            UnitID::Qubit {
+                reg_name: name,
+                index,
+            }
+            | UnitID::Bit { name, index } => {
                 Register(name, index.into_iter().map(i64::from).collect())
             }
             _ => panic!("Not supported: {:?}", uid),
