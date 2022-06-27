@@ -95,6 +95,9 @@ fn pyrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<PySubgraph>()?;
     m.add_class::<CircuitRewrite>()?;
     m.add_class::<Direction>()?;
+    m.add_class::<tket_rs::circuit::operation::Rational>()?;
+    m.add_class::<tket_rs::circuit::operation::Quat>()?;
+    m.add_class::<tket_rs::circuit::py_circuit::Angle>()?;
 
     Ok(())
 }

@@ -13,6 +13,9 @@ from pyrs import (
     remove_redundancies,
     Direction,
     greedy_iter_rewrite,
+    Rational,
+    Quaternion,
+    Angle,
 )
 
 from pytket import Circuit, OpType, Qubit
@@ -142,3 +145,18 @@ def test_auto_convert():
     correct = Circuit(2).Rx(2, 1)
 
     assert c2 == correct
+
+
+def test_const():
+    rat = Rational(1, 2)
+    quat = Quaternion([0.1, 0.2, 0.3, 0.4])
+    ang1 = Angle.rational(rat)
+    ang2 = Angle.float(2.3)
+
+    c = RsCircuit()
+    for const in (True, 2, 4.5, quat, ang1, ang2):
+        v = c.add_const(const)
+        assert c.get_const(v) == const
+
+    assert c.get_const(0) == c.get_const(1) == None
+    pass

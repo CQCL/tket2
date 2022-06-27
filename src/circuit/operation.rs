@@ -6,7 +6,7 @@ use std::{
     ops::{Add, Div, Mul, Neg, Sub},
 };
 
-use cgmath::{num_traits::ToPrimitive, Quaternion};
+use cgmath::num_traits::ToPrimitive;
 use num_rational::Rational64;
 #[cfg(feature = "pyo3")]
 use pyo3::prelude::*;
@@ -70,11 +70,20 @@ impl Signature {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "pyo3", pyclass(name = "Rational"))]
+pub struct Rational(pub Rational64);
+
+impl From<Rational64> for Rational {
+    fn from(r: Rational64) -> Self {
+        Self(r)
+    }
+}
 // angle is contained value * pi in radians
 #[derive(Clone, PartialEq, Debug, Copy)]
 pub enum AngleValue {
     F64(f64),
-    Rational(Rational64),
+    Rational(Rational),
 }
 
 impl AngleValue {
@@ -88,9 +97,11 @@ impl AngleValue {
             (AngleValue::F64(x), AngleValue::F64(y)) => AngleValue::F64(opf(x, y)),
             (AngleValue::F64(x), AngleValue::Rational(y))
             | (AngleValue::Rational(y), AngleValue::F64(x)) => {
-                AngleValue::F64(opf(x, y.to_f64().unwrap()))
+                AngleValue::F64(opf(x, y.0.to_f64().unwrap()))
             }
-            (AngleValue::Rational(x), AngleValue::Rational(y)) => AngleValue::Rational(opr(x, y)),
+            (AngleValue::Rational(x), AngleValue::Rational(y)) => {
+                AngleValue::Rational(Rational(opr(x.0, y.0)))
+            }
         }
     }
 
@@ -101,14 +112,14 @@ impl AngleValue {
     ) -> Self {
         match self {
             AngleValue::F64(x) => AngleValue::F64(opf(x)),
-            AngleValue::Rational(x) => AngleValue::Rational(opr(x)),
+            AngleValue::Rational(x) => AngleValue::Rational(Rational(opr(x.0))),
         }
     }
 
     pub fn to_f64(&self) -> f64 {
         match self {
             AngleValue::F64(x) => *x,
-            AngleValue::Rational(x) => x.to_f64().expect("Floating point conversion error."),
+            AngleValue::Rational(x) => x.0.to_f64().expect("Floating point conversion error."),
         }
     }
 
@@ -197,13 +208,24 @@ impl Neg for &AngleValue {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "pyo3", pyclass(name = "Quaternion"))]
+pub struct Quat(pub cgmath::Quaternion<f64>);
+
+impl From<cgmath::Quaternion<f64>> for Quat {
+    fn from(q: cgmath::Quaternion<f64>) -> Self {
+        Self(q)
+    }
+}
+
+#[cfg_attr(feature = "pyo3", derive(FromPyObject))]
 #[derive(Clone, PartialEq, Debug)]
 pub enum ConstValue {
     Bool(bool),
     I32(i32),
     F64(f64),
     Angle(AngleValue),
-    Quat64(Quaternion<f64>),
+    Quat64(Quat),
 }
 
 impl ConstValue {

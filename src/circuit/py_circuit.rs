@@ -1,16 +1,20 @@
 use std::collections::HashSet;
 
-use crate::graph::{
-    graph::{DefaultIx, EdgeIndex, IndexType, NodeIndex, NodePort, PortIndex},
-    substitute::{BoundedSubgraph, SubgraphRef},
+use crate::{
+    circuit::operation::{Quat, Rational},
+    graph::{
+        graph::{DefaultIx, EdgeIndex, IndexType, NodeIndex, NodePort, PortIndex},
+        substitute::{BoundedSubgraph, SubgraphRef},
+    },
 };
 
 use super::{
     circuit::{Circuit, CircuitError, CircuitRewrite},
-    operation::{Op, Param},
+    operation::{AngleValue, ConstValue, Op, Param},
 };
+use cgmath::num_traits::CheckedDiv;
 use pyo3::{
-    exceptions::{PyNotImplementedError, PyStopIteration},
+    exceptions::{PyNotImplementedError, PyStopIteration, PyZeroDivisionError},
     prelude::*,
     pyclass::CompareOp,
     types::PyType,
@@ -224,6 +228,168 @@ impl<'py> Iterator for PyRewriteIter<'py> {
                     panic!("{}", err);
                 }
             }
+        }
+    }
+}
+
+#[pymethods]
+impl Rational {
+    #[new]
+    pub fn new(num: i64, denom: i64) -> Self {
+        Self(num_rational::Rational64::new(num, denom))
+    }
+
+    fn num_denom(&self) -> (i64, i64) {
+        (*self.0.numer(), *self.0.denom())
+    }
+
+    fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
+        match op {
+            CompareOp::Lt => Ok(self.0 < other.0),
+            CompareOp::Le => Ok(self.0 <= other.0),
+            CompareOp::Eq => Ok(self.0 == other.0),
+            CompareOp::Ne => Ok(self.0 != other.0),
+            CompareOp::Gt => Ok(self.0 > other.0),
+            CompareOp::Ge => Ok(self.0 >= other.0),
+        }
+    }
+
+    fn __add__(&self, other: &Self) -> Self {
+        Self(self.0 + other.0)
+    }
+
+    fn __sub__(&self, other: &Self) -> Self {
+        Self(self.0 - other.0)
+    }
+
+    fn __mul__(&self, other: &Self) -> Self {
+        Self(self.0 * other.0)
+    }
+
+    fn __truediv__(&self, other: &Self) -> PyResult<Self> {
+        match self.0.checked_div(&other.0) {
+            Some(i) => Ok(Self(i)),
+            None => Err(PyZeroDivisionError::new_err("division by zero")),
+        }
+    }
+
+    fn __floordiv__(&self, other: &Self) -> PyResult<Self> {
+        match self.0.checked_div(&other.0) {
+            Some(i) => Ok(Self(i)),
+            None => Err(PyZeroDivisionError::new_err("division by zero")),
+        }
+    }
+}
+
+#[pymethods]
+impl Quat {
+    #[new]
+    pub fn new(vec: [f64; 4]) -> Self {
+        let [w, x, y, z] = vec;
+        Self(cgmath::Quaternion::new(w, x, y, z))
+    }
+
+    fn components(&self) -> [f64; 4] {
+        let v = self.0.v;
+        [self.0.s, v[0], v[1], v[2]]
+    }
+
+    fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
+        match op {
+            CompareOp::Eq => Ok(self.0 == other.0),
+            CompareOp::Ne => Ok(self.0 != other.0),
+            _ => Err(PyNotImplementedError::new_err("Unsupported comparison.")),
+        }
+    }
+
+    fn __add__(&self, other: &Self) -> Self {
+        Self(self.0 + other.0)
+    }
+
+    fn __sub__(&self, other: &Self) -> Self {
+        Self(self.0 - other.0)
+    }
+
+    fn __mul__(&self, other: &Self) -> Self {
+        Self(self.0 * other.0)
+    }
+
+    fn __truediv__(&self, other: f64) -> PyResult<Self> {
+        Ok(Self(self.0 / other))
+    }
+}
+
+#[pyclass]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Angle {
+    float: Option<f64>,
+    rational: Option<Rational>,
+}
+
+#[pymethods]
+impl Angle {
+    #[classmethod]
+    fn float(_cls: &PyType, f: f64) -> Self {
+        Self {
+            float: Some(f),
+            rational: None,
+        }
+    }
+
+    #[classmethod]
+    fn rational(_cls: &PyType, r: Rational) -> Self {
+        Self {
+            float: None,
+            rational: Some(r),
+        }
+    }
+
+    fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
+        match op {
+            CompareOp::Eq => Ok(self == other),
+            CompareOp::Ne => Ok(self != other),
+            _ => Err(PyNotImplementedError::new_err("Unsupported comparison.")),
+        }
+    }
+}
+
+impl IntoPy<PyObject> for AngleValue {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        match self {
+            AngleValue::F64(f) => Angle {
+                float: Some(f),
+                rational: None,
+            },
+            AngleValue::Rational(r) => Angle {
+                rational: Some(r),
+                float: None,
+            },
+        }
+        .into_py(py)
+    }
+}
+
+impl<'source> FromPyObject<'source> for AngleValue {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let angle: Angle = ob.extract()?;
+        match (angle.float, angle.rational) {
+            (None, None) => Err(pyo3::exceptions::PyValueError::new_err(
+                "Empty angle invalid.",
+            )),
+            (_, Some(r)) => Ok(AngleValue::Rational(r)),
+            (Some(f), _) => Ok(AngleValue::F64(f)),
+        }
+    }
+}
+
+impl IntoPy<PyObject> for &ConstValue {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        match self {
+            ConstValue::Bool(x) => x.into_py(py),
+            ConstValue::I32(x) => x.into_py(py),
+            ConstValue::F64(x) => x.into_py(py),
+            ConstValue::Angle(x) => x.into_py(py),
+            ConstValue::Quat64(x) => x.into_py(py),
         }
     }
 }

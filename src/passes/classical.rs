@@ -2,7 +2,7 @@ use crate::{
     circuit::{
         circuit::{Circuit, CircuitError, CircuitRewrite},
         dag::Vertex,
-        operation::{ConstValue, Op},
+        operation::{ConstValue, Op, Quat},
     },
     graph::{graph::Direction, substitute::BoundedSubgraph},
 };
@@ -99,12 +99,12 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
                     [ConstValue::Angle(angle), ConstValue::F64(x), ConstValue::F64(y), ConstValue::F64(z)] => {
                         let p = -angle.radians()/2.0;
                         let s = p.sin();
-                        vec![ConstValue::Quat64(cgmath::Quaternion::new(p.cos(), s*x, s*y, s*z))]
+                        vec![ConstValue::Quat64(Quat(cgmath::Quaternion::new(p.cos(), s*x, s*y, s*z)))]
                     }
                     _ => return None
                 },
                 Op::QuatMul=> match &inputs[..2] {
-                    [ConstValue::Quat64(x), ConstValue::Quat64(y)] => vec![ConstValue::Quat64(x * y)],
+                    [ConstValue::Quat64(x), ConstValue::Quat64(y)] => vec![ConstValue::Quat64(Quat(x.0 * y.0))],
                     _ => return None,
                 },
                 _ => panic!("Op {:?} should not have made it to this point.", op),

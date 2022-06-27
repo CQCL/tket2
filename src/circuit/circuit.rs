@@ -178,6 +178,19 @@ impl Circuit {
     pub fn neighbours(&self, n: Vertex, direction: Direction) -> Vec<NodePort> {
         self.dag.neighbours(n, direction).collect()
     }
+
+    pub fn add_const(&mut self, c: ConstValue) -> Vertex {
+        self.add_vertex(Op::Const(c))
+    }
+
+    pub fn get_const(&self, n: Vertex) -> Option<&ConstValue> {
+        self.node_op(n)
+            .map(|op| match op {
+                Op::Const(c) => Some(c),
+                _ => return None,
+            })
+            .flatten()
+    }
 }
 impl Circuit {
     pub fn new() -> Self {
