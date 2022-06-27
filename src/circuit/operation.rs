@@ -316,16 +316,16 @@ impl Op {
             Op::H | Op::Reset => ONEQBSIG.clone(),
             Op::CX | Op::ZZMax => TWOQBSIG.clone(),
             Op::Measure => Signature::new_linear(vec![WireType::Qubit, WireType::LinearBit]),
-            Op::AngleAdd | Op::AngleMul => binary_op(WireType::F64),
+            Op::AngleAdd | Op::AngleMul => binary_op(WireType::Angle),
             Op::QuatMul => binary_op(WireType::Quat64),
-            Op::AngleNeg => Signature::new_nonlinear(vec![WireType::F64], vec![WireType::F64]),
+            Op::AngleNeg => Signature::new_nonlinear(vec![WireType::Angle], vec![WireType::Angle]),
             Op::Copy { n_copies, typ } => {
                 Signature::new_nonlinear(vec![*typ], vec![*typ; *n_copies as usize])
             }
             Op::Const(x) => Signature::new_nonlinear(vec![], vec![x.get_type()]),
 
             Op::RxF64 | Op::RzF64 => {
-                Signature::new(vec![WireType::Qubit], [vec![WireType::F64], vec![]])
+                Signature::new(vec![WireType::Qubit], [vec![WireType::Angle], vec![]])
             }
             Op::Rotation => Signature::new(vec![WireType::Qubit], [vec![WireType::Quat64], vec![]]),
             Op::ToRotation => Signature::new_nonlinear(

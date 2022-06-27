@@ -75,7 +75,7 @@ pub fn find_singleq_rotations_pattern<'c>(
 
     let rx = pattern_circ.add_vertex(Op::RxF64);
     pattern_circ.tup_add_edge((input, 0), (rx, 0), WireType::Qubit);
-    pattern_circ.tup_add_edge((input, 1), (rx, 1), WireType::F64);
+    pattern_circ.tup_add_edge((input, 1), (rx, 1), WireType::Angle);
     pattern_circ.tup_add_edge((rx, 0), (output, 0), WireType::Qubit);
 
     let nod_comp =

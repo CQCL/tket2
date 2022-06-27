@@ -42,6 +42,10 @@ impl<'graph, N, E, Ix: IndexType> TopSortWalker<'graph, N, E, Ix> {
         self.reversed = true;
         self
     }
+
+    pub fn edges_remaining(&self) -> &HashSet<EdgeIndex<Ix>> {
+        &self.remaining_edges
+    }
 }
 
 impl<'graph, N, E, Ix: IndexType> Iterator for TopSortWalker<'graph, N, E, Ix> {

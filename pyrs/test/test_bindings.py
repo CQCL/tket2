@@ -16,6 +16,7 @@ from pyrs import (
     Rational,
     Quaternion,
     Angle,
+    check_soundness,
 )
 
 from pytket import Circuit, OpType, Qubit
@@ -28,7 +29,7 @@ def simple_rs(op):
     v = c.add_vertex(op)
     c.add_edge((i, 0), (v, 0), WireType.Qubit)
     c.add_edge((v, 0), (o, 0), WireType.Qubit)
-
+    check_soundness(c)
     return c
 
 
@@ -114,7 +115,7 @@ def test_cx_rewriters(cx_circ, noop_circ):
     rc = RsCircuit.from_tket1(c)
     assert rc.node_edges(3, Direction.Incoming) == [1, 2]
     assert rc.neighbours(4, Direction.Outgoing) == [(1, 1), (1, 0)]
-
+    check_soundness(rc)
     # each one of these ways of applying this rewrite should take longer than
     # the one before
 
@@ -130,6 +131,7 @@ def test_cx_rewriters(cx_circ, noop_circ):
     correct.add_gate(OpType.noop, [1])
     correct.add_gate(OpType.noop, [0])
     for c in (c1, c2, c3):
+        check_soundness(c)
         assert c.to_tket1().get_commands() == correct.get_commands()
 
 

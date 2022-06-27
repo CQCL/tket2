@@ -1,3 +1,5 @@
+use pyo3::create_exception;
+use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use tket_json_rs::optype::OpType;
 use tket_rs::circuit::circuit::{Circuit, CircuitRewrite};
@@ -17,6 +19,13 @@ fn _wrap_tket_conversion<F: FnOnce(Circuit) -> Circuit>(
 #[pyfunction]
 fn remove_redundancies(c: Py<PyAny>) -> PyResult<Py<PyAny>> {
     _wrap_tket_conversion(|circ| tket_rs::passes::squash::cx_cancel_pass(circ).0)(c)
+}
+
+create_exception!(pyrs, PyValidateError, PyException);
+
+#[pyfunction]
+fn check_soundness(circ: Circuit) -> PyResult<()> {
+    tket_rs::validate::check_soundness(&circ).map_err(|e| PyValidateError::new_err(e.to_string()))
 }
 
 #[pyfunction]
@@ -89,6 +98,7 @@ fn pyrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(remove_redundancies, m)?)?;
     m.add_function(wrap_pyfunction!(greedy_pattern_rewrite, m)?)?;
     m.add_function(wrap_pyfunction!(greedy_iter_rewrite, m)?)?;
+    m.add_function(wrap_pyfunction!(check_soundness, m)?)?;
     m.add_class::<Circuit>()?;
     m.add_class::<OpType>()?;
     m.add_class::<WireType>()?;
@@ -98,6 +108,6 @@ fn pyrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<tket_rs::circuit::operation::Rational>()?;
     m.add_class::<tket_rs::circuit::operation::Quat>()?;
     m.add_class::<tket_rs::circuit::py_circuit::Angle>()?;
-
+    m.add("ValidateError", _py.get_type::<PyValidateError>())?;
     Ok(())
 }

@@ -117,6 +117,7 @@ mod tests {
         let _e2 = circ.tup_add_edge((two, 0), (fadd, 1), WireType::Angle);
 
         let _out = circ.tup_add_edge((fadd, 0), (output, 0), WireType::Angle);
+        check_soundness(&circ).unwrap();
 
         let rewrite = find_const_ops(&circ).next().unwrap();
 
@@ -156,7 +157,7 @@ mod tests {
         let neg = circ.add_vertex(Op::AngleNeg);
         let copy = circ.add_vertex(Op::Copy {
             n_copies: 2,
-            typ: WireType::F64,
+            typ: WireType::Angle,
         });
 
         let rx = circ.add_vertex(Op::RxF64);
@@ -166,29 +167,28 @@ mod tests {
         let two = circ.add_vertex(Op::Const(ConstValue::f64_angle(2.0)));
         let eight = circ.add_vertex(Op::Const(ConstValue::f64_angle(8.0)));
 
-        circ.tup_add_edge((two, 0), (neg, 0), WireType::F64);
+        circ.tup_add_edge((two, 0), (neg, 0), WireType::Angle);
 
-        circ.tup_add_edge((neg, 0), (fadd1, 0), WireType::F64);
+        circ.tup_add_edge((neg, 0), (fadd1, 0), WireType::Angle);
 
-        circ.tup_add_edge((eight, 0), (fadd1, 1), WireType::F64);
+        circ.tup_add_edge((eight, 0), (fadd1, 1), WireType::Angle);
 
-        circ.tup_add_edge((point5, 0), (copy, 0), WireType::F64);
+        circ.tup_add_edge((point5, 0), (copy, 0), WireType::Angle);
 
-        circ.tup_add_edge((copy, 0), (fadd3, 0), WireType::F64);
-        circ.tup_add_edge((copy, 1), (fadd2, 0), WireType::F64);
+        circ.tup_add_edge((copy, 0), (fadd3, 0), WireType::Angle);
+        circ.tup_add_edge((copy, 1), (fadd2, 0), WireType::Angle);
 
-        circ.tup_add_edge((fadd1, 0), (fadd2, 1), WireType::F64);
+        circ.tup_add_edge((fadd1, 0), (fadd2, 1), WireType::Angle);
 
-        circ.tup_add_edge((fadd2, 0), (fadd3, 1), WireType::F64);
+        circ.tup_add_edge((fadd2, 0), (fadd3, 1), WireType::Angle);
 
-        circ.tup_add_edge((fadd3, 0), (rx, 1), WireType::F64);
+        circ.tup_add_edge((fadd3, 0), (rx, 1), WireType::Angle);
 
         circ.tup_add_edge((rx, 0), (output, 0), WireType::Qubit);
 
         assert_eq!(circ.dag.node_count(), 11);
         assert_eq!(circ.dag.edge_count(), 11);
-
-        // println!("{}", dot_string(&circ.dag));
+        check_soundness(&circ).unwrap();
 
         let orig_circ = circ.clone();
         let mut orig_circ2 = circ.clone();
@@ -199,6 +199,7 @@ mod tests {
         for rewrite in rewrites {
             circ.apply_rewrite(rewrite).unwrap();
         }
+        check_soundness(&circ).unwrap();
 
         assert_eq!(circ.dag.node_count(), 10);
         assert_eq!(circ.dag.edge_count(), 9);
@@ -236,16 +237,19 @@ mod tests {
             circ.apply_rewrite(rewrites.into_iter().next().unwrap())
                 .unwrap();
         }
+        check_soundness(&circ).unwrap();
 
         let constant_folder =
             |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
 
         // the above should replicate doing it all in one go
         let (circ2, success) = constant_folder(orig_circ);
+        check_soundness(&circ2).unwrap();
 
         assert!(success);
 
         let (circ, success) = constant_folder(circ);
+        check_soundness(&circ).unwrap();
 
         assert!(!success);
 
@@ -283,8 +287,9 @@ mod tests {
         let point5 = circ.add_vertex(Op::Const(ConstValue::f64_angle(0.5)));
         let rx = circ.add_vertex(Op::RxF64);
         circ.tup_add_edge((input, 0), (rx, 0), WireType::Qubit);
-        circ.tup_add_edge((point5, 0), (rx, 1), WireType::F64);
+        circ.tup_add_edge((point5, 0), (rx, 1), WireType::Angle);
         circ.tup_add_edge((rx, 0), (output, 0), WireType::Qubit);
+        check_soundness(&circ).unwrap();
 
         // let rot_replacer =
         // |circuit| apply_exhaustive(circuit, |c| find_singleq_rotations(c).collect()).unwrap();
@@ -293,12 +298,14 @@ mod tests {
             apply_exhaustive(circuit, |c| find_singleq_rotations_pattern(c).collect()).unwrap()
         };
         let (circ2, success) = rot_replacer(circ);
+        check_soundness(&circ2).unwrap();
 
         assert!(success);
 
         let constant_folder =
             |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
-        let (_circ2, success) = constant_folder(circ2);
+        let (circ2, success) = constant_folder(circ2);
+        check_soundness(&circ2).unwrap();
         assert!(success);
         // use crate::graph::dot::dot_string;
         // println!("{}", dot_string(&_circ2.dag));
@@ -320,6 +327,7 @@ mod tests {
         circ.tup_add_edge((rx, 0), (rz, 0), WireType::Qubit);
         circ.tup_add_edge((input, 2), (rz, 1), WireType::Angle);
         circ.tup_add_edge((rz, 0), (output, 0), WireType::Qubit);
+        check_soundness(&circ).unwrap();
 
         let rot_replacer =
             |circuit| apply_exhaustive(circuit, |c| find_singleq_rotations(c).collect()).unwrap();
@@ -374,9 +382,11 @@ mod tests {
             .unwrap();
         circ.append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
             .unwrap();
+        check_soundness(&circ).unwrap();
 
         let (circ, success) = cx_cancel_pass(circ);
         assert!(success);
+        check_soundness(&circ).unwrap();
 
         assert_eq!(circ.dag.node_count(), 2);
     }

@@ -624,7 +624,9 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
 
         [node.incoming.len(), node.outgoing.len()]
     }
-
+    // pub(crate) fn incoming_ports(&self, n: NodeIndex<Ix>) -> &[EdgeIndex<Ix>] {
+    //     &self.get_node(n).incoming[..]
+    // }
     pub fn edge_at_port(&self, np: NodePort<Ix>, direction: Direction) -> Option<EdgeIndex<Ix>> {
         let node = self.get_node(np.node);
         (match direction {
