@@ -184,12 +184,10 @@ impl Circuit {
     }
 
     pub fn get_const(&self, n: Vertex) -> Option<&ConstValue> {
-        self.node_op(n)
-            .map(|op| match op {
-                Op::Const(c) => Some(c),
-                _ => return None,
-            })
-            .flatten()
+        self.node_op(n).and_then(|op| match op {
+            Op::Const(c) => Some(c),
+            _ => None,
+        })
     }
 }
 impl Circuit {
