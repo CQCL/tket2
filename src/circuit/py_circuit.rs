@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crate::{
     circuit::operation::{Quat, Rational},
     graph::{
-        graph::{DefaultIx, EdgeIndex, IndexType, NodeIndex, NodePort, PortIndex},
+        graph::{EdgeIndex, NodeIndex, NodePort, PortIndex},
         substitute::{BoundedSubgraph, SubgraphRef},
     },
 };
@@ -17,20 +17,19 @@ use pyo3::{
     exceptions::{PyNotImplementedError, PyStopIteration, PyZeroDivisionError},
     prelude::*,
     pyclass::CompareOp,
-    types::PyType,
+    types::{PyInt, PyType},
 };
 
 use tket_json_rs::{circuit_json::SerialCircuit, optype::OpType};
 
+impl From<PyInt> for NodeIndex {
+    fn from(x: PyInt) -> Self {
+        Self::new(x.extract().unwrap())
+    }
+}
 impl IntoPy<PyObject> for NodeIndex {
     fn into_py(self, py: Python<'_>) -> PyObject {
         self.index().into_py(py)
-    }
-}
-
-impl<'source> FromPyObject<'source> for NodeIndex {
-    fn extract(ob: &'source PyAny) -> PyResult<Self> {
-        Ok(NodeIndex::new(ob.extract()?))
     }
 }
 
@@ -40,34 +39,38 @@ impl IntoPy<PyObject> for EdgeIndex {
     }
 }
 
-impl<'source> FromPyObject<'source> for EdgeIndex {
-    fn extract(ob: &'source PyAny) -> PyResult<Self> {
-        Ok(EdgeIndex::new(ob.extract()?))
+#[pymethods]
+impl NodePort {
+    #[new]
+    fn py_new(n: NodeIndex, p: usize) -> Self {
+        Self::new(n, PortIndex::new(p))
     }
-}
 
-impl IntoPy<PyObject> for NodePort {
-    fn into_py(self, py: Python<'_>) -> PyObject {
-        (self.node.into_py(py), self.port.into_py(py)).into_py(py)
+    #[getter]
+    fn node(&self) -> NodeIndex {
+        self.node
     }
-}
 
-impl<'source> FromPyObject<'source> for NodePort {
-    fn extract(ob: &'source PyAny) -> PyResult<Self> {
-        let pair: (NodeIndex, PortIndex) = ob.extract()?;
-        Ok(NodePort::new(pair.0, pair.1))
+    #[getter]
+    fn port(&self) -> PortIndex {
+        self.port
+    }
+
+    fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
+        match op {
+            CompareOp::Lt => Ok(self < other),
+            CompareOp::Le => Ok(self <= other),
+            CompareOp::Eq => Ok(self == other),
+            CompareOp::Ne => Ok(self != other),
+            CompareOp::Gt => Ok(self > other),
+            CompareOp::Ge => Ok(self >= other),
+        }
     }
 }
 
 impl IntoPy<PyObject> for PortIndex {
     fn into_py(self, py: Python<'_>) -> PyObject {
         self.index().into_py(py)
-    }
-}
-
-impl<'source> FromPyObject<'source> for PortIndex {
-    fn extract(ob: &'source PyAny) -> PyResult<Self> {
-        Ok(PortIndex::new(ob.extract()?))
     }
 }
 
@@ -104,15 +107,11 @@ impl Circuit {
     pub fn py_new() -> Self {
         Self::new()
     }
-    // pub fn py_apply_rewrite(&mut self, rewrite: CircuitRewrite) {
-    //     self.dag.apply_rewrite(rewrite.graph_rewrite).unwrap();
-    //     self.phase += rewrite.phase;
-    // }
 
     #[pyo3(name = "boundary")]
-    pub fn py_boundary(&self) -> [usize; 2] {
+    pub fn py_boundary(&self) -> (NodeIndex, NodeIndex) {
         let [i, o] = self.boundary();
-        [i.index(), o.index()]
+        (i, o)
     }
 
     pub fn node_indices(&self) -> NodeIterator {

@@ -84,6 +84,8 @@ impl IndexType for u8 {
 }
 
 /// Node identifier.
+// #[cfg_attr(feature = "pyo3", pyclass)]
+#[cfg_attr(feature = "pyo3", derive(FromPyObject))]
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
 pub struct NodeIndex(DefaultIx);
 
@@ -126,6 +128,8 @@ impl From<DefaultIx> for NodeIndex {
     }
 }
 /// Edge identifier.
+// #[cfg_attr(feature = "pyo3", pyclass)]
+#[cfg_attr(feature = "pyo3", derive(FromPyObject))]
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
 pub struct EdgeIndex(DefaultIx);
 
@@ -158,6 +162,7 @@ impl From<DefaultIx> for EdgeIndex {
     }
 }
 
+#[cfg_attr(feature = "pyo3", derive(FromPyObject))]
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
 pub struct PortIndex(u8);
 
@@ -177,6 +182,8 @@ impl PortIndex {
         PortIndex(IndexType::max())
     }
 }
+
+#[cfg_attr(feature = "pyo3", pyclass)]
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
 pub struct NodePort {
     pub node: NodeIndex,

@@ -17,6 +17,7 @@ from pyrs import (
     Quaternion,
     Angle,
     check_soundness,
+    NodePort,
 )
 
 from pytket import Circuit, OpType, Qubit
@@ -27,8 +28,8 @@ def simple_rs(op):
     c.add_unitid(Qubit("q", [0]))
     i, o = c.boundary()
     v = c.add_vertex(op)
-    c.add_edge((i, 0), (v, 0), WireType.Qubit)
-    c.add_edge((v, 0), (o, 0), WireType.Qubit)
+    c.add_edge(NodePort(i, 0), NodePort(v, 0), WireType.Qubit)
+    c.add_edge(NodePort(v, 0), NodePort(o, 0), WireType.Qubit)
     check_soundness(c)
     return c
 
@@ -44,8 +45,11 @@ def test_conversion():
 def test_apply_rewrite():
 
     c = simple_rs(RsOpType.H)
-    assert c.edge_endpoints(0) == ((0, 0), (2, 0))
-    assert c.edge_at_port((2, 0), Direction.Outgoing) == 1
+    assert c.edge_endpoints(0) == (
+        NodePort(0, 0),
+        NodePort(2, 0),
+    )
+    assert c.edge_at_port(NodePort(2, 0), Direction.Outgoing) == 1
     c2 = simple_rs(RsOpType.Reset)
 
     c.apply_rewrite(CircuitRewrite(Subgraph({2}, [0], [1]), c2, 0.0))
@@ -94,15 +98,15 @@ def cx_pair_searcher(circ: RsCircuit) -> Iterable[CircuitRewrite]:
 
         source0, target0 = circ.edge_endpoints(sucs[0])
         source1, target1 = circ.edge_endpoints(sucs[1])
-        if target0[0] != target1[0]:
+        if target0.node != target1.node:
             # same node
             continue
-        next_nid = target0[0]
+        next_nid = target0.node
         if circ.node_op(next_nid) != RsOpType.CX:
             continue
 
         # check ports match
-        if source0[1] == target0[1] and source1[1] == target1[1]:
+        if source0.port == target0.port and source1.port == target1.port:
             in_edges = circ.node_edges(nid, Direction.Incoming)
             out_edges = circ.node_edges(next_nid, Direction.Outgoing)
             yield CircuitRewrite(
@@ -114,7 +118,10 @@ def test_cx_rewriters(cx_circ, noop_circ):
     c = Circuit(2).H(0).CX(1, 0).CX(1, 0)
     rc = RsCircuit.from_tket1(c)
     assert rc.node_edges(3, Direction.Incoming) == [1, 2]
-    assert rc.neighbours(4, Direction.Outgoing) == [(1, 1), (1, 0)]
+    assert rc.neighbours(4, Direction.Outgoing) == [
+        NodePort(1, 1),
+        NodePort(1, 0),
+    ]
     check_soundness(rc)
     # each one of these ways of applying this rewrite should take longer than
     # the one before

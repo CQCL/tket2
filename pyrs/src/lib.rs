@@ -100,6 +100,7 @@ fn pyrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(greedy_iter_rewrite, m)?)?;
     m.add_function(wrap_pyfunction!(check_soundness, m)?)?;
     m.add_class::<Circuit>()?;
+    m.add_class::<tket_rs::graph::graph::NodePort>()?;
     m.add_class::<OpType>()?;
     m.add_class::<WireType>()?;
     m.add_class::<PySubgraph>()?;

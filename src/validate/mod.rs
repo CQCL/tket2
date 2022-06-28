@@ -65,7 +65,6 @@ pub fn check_soundness(circ: &Circuit) -> Result<(), ValidateError> {
             .collect(),
     );
     for nid in topwalk.by_ref() {
-        dbg!(circ.node_op(nid));
         nodes_visited += 1;
         for dir in DIRS {
             for e in circ.dag.node_edges(nid, dir) {
