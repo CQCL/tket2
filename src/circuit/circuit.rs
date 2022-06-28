@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 
-use crate::graph::graph::{DefaultIx, Direction, NodePort, PortIndex};
+use crate::graph::graph::{Direction, NodePort, PortIndex};
 use crate::graph::substitute::{BoundedSubgraph, OpenGraph};
 
 use super::dag::{Dag, Edge, EdgeProperties, TopSorter, Vertex, VertexProperties};
@@ -445,8 +445,8 @@ pub struct CircuitRewrite {
 
 impl CircuitRewrite {
     pub fn new(
-        subg: BoundedSubgraph<DefaultIx>,
-        replacement: OpenGraph<VertexProperties, EdgeProperties, DefaultIx>,
+        subg: BoundedSubgraph,
+        replacement: OpenGraph<VertexProperties, EdgeProperties>,
         phase: Param,
     ) -> Self {
         Self {
@@ -456,7 +456,7 @@ impl CircuitRewrite {
     }
 }
 
-impl From<Circuit> for OpenGraph<VertexProperties, EdgeProperties, DefaultIx> {
+impl From<Circuit> for OpenGraph<VertexProperties, EdgeProperties> {
     fn from(mut c: Circuit) -> Self {
         let [entry, exit] = c.boundary();
         let in_ports = c.dag.neighbours(entry, Direction::Outgoing).collect();

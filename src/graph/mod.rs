@@ -17,7 +17,7 @@ mod tests {
 
     #[test]
     fn test_insert_graph() {
-        let mut g = Graph::<i8, i8, u8>::with_capacity(3, 2);
+        let mut g = Graph::<i8, i8>::with_capacity(3, 2);
 
         let n0 = g.add_node(0);
         let n1 = g.add_node(1);
@@ -26,7 +26,7 @@ mod tests {
         let _e1 = g.add_edge((n0, 0), (n1, 0), -1);
         let _e2 = g.add_edge((n1, 0), (n2, 0), -2);
 
-        let mut g2 = Graph::<i8, i8, u8>::with_capacity(2, 1);
+        let mut g2 = Graph::<i8, i8>::with_capacity(2, 1);
 
         let g20 = g2.add_node(3);
         let g21 = g2.add_node(4);
@@ -50,7 +50,7 @@ mod tests {
 
     #[test]
     fn test_remove_invalid() {
-        let mut g = Graph::<u8, u8, u8>::with_capacity(3, 2);
+        let mut g = Graph::<u8, u8>::with_capacity(3, 2);
 
         let n0 = g.add_node(0);
         let n1 = g.add_node(1);

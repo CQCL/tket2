@@ -10,7 +10,7 @@ use crate::{
         operation::Param,
     },
     graph::{
-        graph::{DefaultIx, Direction, NodePort},
+        graph::{Direction, NodePort},
         substitute::BoundedSubgraph,
     },
 };
@@ -62,8 +62,7 @@ where
     Ok((circ, success))
 }
 
-pub type CircFixedStructPattern<F> =
-    FixedStructPattern<VertexProperties, EdgeProperties, DefaultIx, F>;
+pub type CircFixedStructPattern<F> = FixedStructPattern<VertexProperties, EdgeProperties, F>;
 
 impl<'p, F> CircFixedStructPattern<F> {
     pub fn from_circ(pattern_circ: Circuit, node_comp_closure: F) -> Self {
@@ -80,8 +79,8 @@ pub fn pattern_rewriter<'a, 'f: 'a, 'g: 'a, F, G>(
     rewrite_closure: G,
 ) -> impl Iterator<Item = CircuitRewrite> + 'a
 where
-    F: NodeCompClosure<VertexProperties, EdgeProperties, DefaultIx> + Clone + 'f,
-    G: Fn(Match<DefaultIx>) -> (Circuit, Param) + 'g,
+    F: NodeCompClosure<VertexProperties, EdgeProperties> + Clone + 'f,
+    G: Fn(Match) -> (Circuit, Param) + 'g,
 {
     // TODO when applying rewrites greedily, all of this construction needs to
     // every time a match is found. Find a way to update the target of the match

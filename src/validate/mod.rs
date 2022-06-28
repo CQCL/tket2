@@ -48,7 +48,7 @@ pub fn check_soundness(circ: &Circuit) -> Result<(), ValidateError> {
             .zip(
                 circ.dag
                     .edge_endpoints(e)
-                    .ok_or_else(|| ValidateError::EdgeMissing(e))?,
+                    .ok_or(ValidateError::EdgeMissing(e))?,
             )
             .zip(DIRS.iter().rev())
         {
@@ -74,13 +74,13 @@ pub fn check_soundness(circ: &Circuit) -> Result<(), ValidateError> {
                 let edgepoints = circ
                     .dag
                     .edge_endpoints(*e)
-                    .ok_or_else(|| ValidateError::EdgeMissing(*e))?;
+                    .ok_or(ValidateError::EdgeMissing(*e))?;
 
                 let np = edgepoints[1 - dir as usize];
                 circ.dag
                     .edge_at_port(np, dir)
                     .and_then(|ep| (ep == *e).then(|| ()))
-                    .ok_or_else(|| ValidateError::PortMismatch(*e, np, dir))?;
+                    .ok_or(ValidateError::PortMismatch(*e, np, dir))?;
             }
         }
 

@@ -5,7 +5,7 @@ use crate::{
         operation::{ConstValue, Op, Param, WireType},
     },
     graph::{
-        graph::{DefaultIx, Direction, EdgeIndex, NodeIndex, PortIndex},
+        graph::{Direction, EdgeIndex, NodeIndex, PortIndex},
         substitute::{BoundedSubgraph, Rewrite},
     },
     passes::{apply_exhaustive, apply_greedy, classical::find_const_ops},
@@ -83,7 +83,7 @@ pub fn find_singleq_rotations_pattern<'c>(
 
     let pattern = CircFixedStructPattern::from_circ(pattern_circ, nod_comp);
 
-    let rewriter = |mat: Match<DefaultIx>| {
+    let rewriter = |mat: Match| {
         let nid = mat.values().next().unwrap(); // there's only 1 node to match
         let op = &circ.dag.node_weight(*nid).unwrap().op;
 
@@ -119,7 +119,7 @@ pub fn squash_pattern<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewr
     replace_circ.tup_add_edge((input, 2), (mul, 1), WireType::Quat64);
     replace_circ.tup_add_edge((mul, 0), (r1, 1), WireType::Quat64);
     replace_circ.tup_add_edge((r1, 0), (output, 0), WireType::Qubit);
-    let rewriter = move |_: Match<DefaultIx>| (replace_circ.clone(), 0.0);
+    let rewriter = move |_: Match| (replace_circ.clone(), 0.0);
 
     pattern_rewriter(pattern, circ, rewriter)
 }

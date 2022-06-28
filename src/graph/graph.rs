@@ -85,9 +85,9 @@ impl IndexType for u8 {
 
 /// Node identifier.
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
-pub struct NodeIndex<Ix = DefaultIx>(Ix);
+pub struct NodeIndex(DefaultIx);
 
-impl<Ix: IndexType> NodeIndex<Ix> {
+impl NodeIndex {
     #[inline]
     pub fn new(x: usize) -> Self {
         NodeIndex(IndexType::new(x))
@@ -103,12 +103,12 @@ impl<Ix: IndexType> NodeIndex<Ix> {
         NodeIndex(IndexType::max())
     }
 
-    fn _into_edge(self) -> EdgeIndex<Ix> {
+    fn _into_edge(self) -> EdgeIndex {
         EdgeIndex(self.0)
     }
 }
 
-impl<Ix: IndexType> IndexType for NodeIndex<Ix> {
+impl IndexType for NodeIndex {
     fn index(&self) -> usize {
         self.0.index()
     }
@@ -116,20 +116,20 @@ impl<Ix: IndexType> IndexType for NodeIndex<Ix> {
         NodeIndex::new(x)
     }
     fn max() -> Self {
-        NodeIndex(<Ix as IndexType>::max())
+        NodeIndex(<DefaultIx as IndexType>::max())
     }
 }
 
-impl<Ix: IndexType> From<Ix> for NodeIndex<Ix> {
-    fn from(ix: Ix) -> Self {
+impl From<DefaultIx> for NodeIndex {
+    fn from(ix: DefaultIx) -> Self {
         NodeIndex(ix)
     }
 }
 /// Edge identifier.
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
-pub struct EdgeIndex<Ix = DefaultIx>(Ix);
+pub struct EdgeIndex(DefaultIx);
 
-impl<Ix: IndexType> EdgeIndex<Ix> {
+impl EdgeIndex {
     #[inline]
     pub fn new(x: usize) -> Self {
         EdgeIndex(IndexType::new(x))
@@ -147,21 +147,21 @@ impl<Ix: IndexType> EdgeIndex<Ix> {
         EdgeIndex(IndexType::max())
     }
 
-    fn _into_node(self) -> NodeIndex<Ix> {
+    fn _into_node(self) -> NodeIndex {
         NodeIndex(self.0)
     }
 }
 
-impl<Ix: IndexType> From<Ix> for EdgeIndex<Ix> {
-    fn from(ix: Ix) -> Self {
+impl From<DefaultIx> for EdgeIndex {
+    fn from(ix: DefaultIx) -> Self {
         EdgeIndex(ix)
     }
 }
 
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
-pub struct PortIndex<Ix = u8>(Ix);
+pub struct PortIndex(u8);
 
-impl<Ix: IndexType> PortIndex<Ix> {
+impl PortIndex {
     #[inline]
     pub fn new(x: usize) -> Self {
         PortIndex(IndexType::new(x))
@@ -178,19 +178,19 @@ impl<Ix: IndexType> PortIndex<Ix> {
     }
 }
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
-pub struct NodePort<Ix = DefaultIx> {
-    pub node: NodeIndex<Ix>,
+pub struct NodePort {
+    pub node: NodeIndex,
     pub port: PortIndex,
 }
 
-impl<Ix> NodePort<Ix> {
-    pub fn new(node: NodeIndex<Ix>, port: PortIndex) -> Self {
+impl NodePort {
+    pub fn new(node: NodeIndex, port: PortIndex) -> Self {
         Self { node, port }
     }
 }
 
-impl<Ix, Px: Into<u8>> From<(NodeIndex<Ix>, Px)> for NodePort<Ix> {
-    fn from((node, p): (NodeIndex<Ix>, Px)) -> Self {
+impl<Px: Into<u8>> From<(NodeIndex, Px)> for NodePort {
+    fn from((node, p): (NodeIndex, Px)) -> Self {
         Self {
             node,
             port: PortIndex(p.into()),
@@ -200,15 +200,15 @@ impl<Ix, Px: Into<u8>> From<(NodeIndex<Ix>, Px)> for NodePort<Ix> {
 
 /// The graph's node type.
 #[derive(Debug)]
-pub(crate) struct Node<N, Ix = DefaultIx> {
+pub(crate) struct Node<N> {
     /// Associated node data.
     pub weight: Option<N>,
 
-    incoming: Vec<EdgeIndex<Ix>>,
-    outgoing: Vec<EdgeIndex<Ix>>,
+    incoming: Vec<EdgeIndex>,
+    outgoing: Vec<EdgeIndex>,
 }
 
-impl<N: Clone, Ix: IndexType> Clone for Node<N, Ix> {
+impl<N: Clone> Clone for Node<N> {
     fn clone(&self) -> Self {
         Self {
             weight: self.weight.clone(),
@@ -218,7 +218,7 @@ impl<N: Clone, Ix: IndexType> Clone for Node<N, Ix> {
     }
 }
 
-impl<N: PartialEq, Ix: IndexType> PartialEq for &Node<N, Ix> {
+impl<N: PartialEq> PartialEq for &Node<N> {
     fn eq(&self, other: &Self) -> bool {
         self.weight == other.weight
             && self.incoming == other.incoming
@@ -228,16 +228,16 @@ impl<N: PartialEq, Ix: IndexType> PartialEq for &Node<N, Ix> {
 
 /// The graph's edge type.
 #[derive(Debug)]
-pub(super) struct Edge<E, Ix = DefaultIx> {
+pub(super) struct Edge<E> {
     /// Associated edge data.
     pub weight: Option<E>,
     // / Next edge in outgoing and incoming edge lists.
-    // next: [EdgeIndex<Ix>; 2],
+    // next: [EdgeIndex; 2],
     /// Start and End node index
-    pub(super) node_ports: [NodePort<Ix>; 2],
+    pub(super) node_ports: [NodePort; 2],
 }
 
-impl<E: Clone, Ix: IndexType> Clone for Edge<E, Ix> {
+impl<E: Clone> Clone for Edge<E> {
     fn clone(&self) -> Self {
         Self {
             weight: self.weight.clone(),
@@ -246,7 +246,7 @@ impl<E: Clone, Ix: IndexType> Clone for Edge<E, Ix> {
     }
 }
 
-impl<E: PartialEq, Ix: IndexType> PartialEq for &Edge<E, Ix> {
+impl<E: PartialEq> PartialEq for &Edge<E> {
     fn eq(&self, other: &Self) -> bool {
         self.weight == other.weight && self.node_ports == other.node_ports
     }
@@ -265,12 +265,12 @@ impl Default for Direction {
     }
 }
 
-type NodeMap<Ix> = HashMap<NodeIndex<Ix>, NodeIndex<Ix>>;
-type EdgeMap<Ix> = HashMap<EdgeIndex<Ix>, EdgeIndex<Ix>>;
+type NodeMap = HashMap<NodeIndex, NodeIndex>;
+type EdgeMap = HashMap<EdgeIndex, EdgeIndex>;
 
-pub struct Graph<N, E, Ix = DefaultIx> {
-    pub(crate) nodes: Vec<Node<N, Ix>>,
-    pub(super) edges: Vec<Edge<E, Ix>>,
+pub struct Graph<N, E> {
+    pub(crate) nodes: Vec<Node<N>>,
+    pub(super) edges: Vec<Edge<E>>,
     node_count: usize,
     edge_count: usize,
 
@@ -285,11 +285,11 @@ pub struct Graph<N, E, Ix = DefaultIx> {
     // free_edge, if not EdgeIndex::end(), points to a free edge.
     // The edges only form a singly linked list using Edge.next[0] to store
     // the forward reference.
-    free_node: NodeIndex<Ix>,
-    free_edge: EdgeIndex<Ix>,
+    free_node: NodeIndex,
+    free_edge: EdgeIndex,
 }
 
-impl<N: Clone, E: Clone, Ix: IndexType> Clone for Graph<N, E, Ix> {
+impl<N: Clone, E: Clone> Clone for Graph<N, E> {
     fn clone(&self) -> Self {
         Self {
             nodes: self.nodes.clone(),
@@ -302,7 +302,7 @@ impl<N: Clone, E: Clone, Ix: IndexType> Clone for Graph<N, E, Ix> {
     }
 }
 
-impl<N: Debug, E: Debug, Ix: IndexType> Debug for Graph<N, E, Ix> {
+impl<N: Debug, E: Debug> Debug for Graph<N, E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Graph")
             .field("nodes", &self.nodes)
@@ -315,7 +315,7 @@ impl<N: Debug, E: Debug, Ix: IndexType> Debug for Graph<N, E, Ix> {
     }
 }
 
-impl<E: PartialEq, N: PartialEq, Ix: IndexType> PartialEq for Graph<N, E, Ix> {
+impl<E: PartialEq, N: PartialEq> PartialEq for Graph<N, E> {
     fn eq(&self, other: &Self) -> bool {
         self.nodes.iter().eq(other.nodes.iter())
             && self.edges.iter().eq(other.edges.iter())
@@ -326,13 +326,13 @@ impl<E: PartialEq, N: PartialEq, Ix: IndexType> PartialEq for Graph<N, E, Ix> {
     }
 }
 
-impl<N, E, Ix: IndexType> Default for Graph<N, E, Ix> {
+impl<N, E> Default for Graph<N, E> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
+impl<N, E> Graph<N, E> {
     pub fn new() -> Self {
         Self::with_capacity(0, 0)
     }
@@ -348,7 +348,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         }
     }
 
-    pub fn add_node_with_capacity(&mut self, capacity: usize, weight: N) -> NodeIndex<Ix> {
+    pub fn add_node_with_capacity(&mut self, capacity: usize, weight: N) -> NodeIndex {
         if self.free_node != NodeIndex::end() {
             let node_idx = self.free_node;
             let node_slot = &mut self.nodes[node_idx.index()];
@@ -384,16 +384,16 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         }
     }
 
-    pub fn add_node(&mut self, weight: N) -> NodeIndex<Ix> {
+    pub fn add_node(&mut self, weight: N) -> NodeIndex {
         self.add_node_with_capacity(0, weight)
     }
 
-    pub fn add_edge<T: Into<NodePort<Ix>>, S: Into<NodePort<Ix>>>(
+    pub fn add_edge<T: Into<NodePort>, S: Into<NodePort>>(
         &mut self,
         a: T,
         b: S,
         weight: E,
-    ) -> EdgeIndex<Ix> {
+    ) -> EdgeIndex {
         let a = a.into();
         let b = b.into();
         let edge_idx;
@@ -407,7 +407,9 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             edge.node_ports = [a, b];
         } else {
             edge_idx = EdgeIndex::new(self.edges.len());
-            debug_assert!(<Ix as IndexType>::max().index() == !0 || EdgeIndex::end() != edge_idx);
+            debug_assert!(
+                <DefaultIx as IndexType>::max().index() == !0 || EdgeIndex::end() != edge_idx
+            );
             let new_edge = Edge {
                 weight: Some(weight),
                 node_ports: [a, b],
@@ -438,9 +440,9 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         edge_idx
     }
 
-    pub(crate) fn update_edge<T: Into<NodePort<Ix>>, S: Into<NodePort<Ix>>>(
+    pub(crate) fn update_edge<T: Into<NodePort>, S: Into<NodePort>>(
         &mut self,
-        e: EdgeIndex<Ix>,
+        e: EdgeIndex,
         a: T,
         b: S,
     ) {
@@ -481,7 +483,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         edge.node_ports = [a, b];
     }
 
-    pub fn remove_node(&mut self, a: NodeIndex<Ix>) -> Option<N> {
+    pub fn remove_node(&mut self, a: NodeIndex) -> Option<N> {
         let node_weight = self.nodes.get_mut(a.index())?.weight.take()?;
 
         let node = &self.nodes[a.index()];
@@ -535,7 +537,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
     ///
     /// Computes in **O(e')** time, where **e'** is the number of edges
     /// connected to the same endpoints as `e`.
-    pub fn remove_edge(&mut self, e: EdgeIndex<Ix>) -> Option<E> {
+    pub fn remove_edge(&mut self, e: EdgeIndex) -> Option<E> {
         // every edge is part of two lists,
         // outgoing and incoming edges.
         // Remove it from both
@@ -582,25 +584,25 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         edge.weight.take()
     }
 
-    pub fn node_weight(&self, a: NodeIndex<Ix>) -> Option<&N> {
+    pub fn node_weight(&self, a: NodeIndex) -> Option<&N> {
         self.nodes.get(a.index())?.weight.as_ref()
     }
 
-    pub fn edge_weight(&self, e: EdgeIndex<Ix>) -> Option<&E> {
+    pub fn edge_weight(&self, e: EdgeIndex) -> Option<&E> {
         self.edges.get(e.index())?.weight.as_ref()
     }
 
-    pub fn edge_endpoints(&self, e: EdgeIndex<Ix>) -> Option<[NodePort<Ix>; 2]> {
+    pub fn edge_endpoints(&self, e: EdgeIndex) -> Option<[NodePort; 2]> {
         Some(self.edges.get(e.index())?.node_ports)
     }
-    fn get_node(&self, n: NodeIndex<Ix>) -> &Node<N, Ix> {
+    fn get_node(&self, n: NodeIndex) -> &Node<N> {
         self.nodes.get(n.index()).expect("Node not found")
     }
     pub fn node_edges(
         &self,
-        n: NodeIndex<Ix>,
+        n: NodeIndex,
         direction: Direction,
-    ) -> impl Iterator<Item = &EdgeIndex<Ix>> {
+    ) -> impl Iterator<Item = &EdgeIndex> {
         let node = self.get_node(n);
         (match direction {
             Direction::Incoming => &node.incoming,
@@ -612,22 +614,22 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
 
     pub fn neighbours(
         &self,
-        n: NodeIndex<Ix>,
+        n: NodeIndex,
         direction: Direction,
-    ) -> impl Iterator<Item = NodePort<Ix>> + '_ {
+    ) -> impl Iterator<Item = NodePort> + '_ {
         self.node_edges(n, direction)
             .map(move |e| self.edge_endpoints(*e).unwrap()[direction as usize])
     }
 
-    pub fn node_boundary_size(&self, n: NodeIndex<Ix>) -> [usize; 2] {
+    pub fn node_boundary_size(&self, n: NodeIndex) -> [usize; 2] {
         let node = self.get_node(n);
 
         [node.incoming.len(), node.outgoing.len()]
     }
-    // pub(crate) fn incoming_ports(&self, n: NodeIndex<Ix>) -> &[EdgeIndex<Ix>] {
+    // pub(crate) fn incoming_ports(&self, n: NodeIndex) -> &[EdgeIndex] {
     //     &self.get_node(n).incoming[..]
     // }
-    pub fn edge_at_port(&self, np: NodePort<Ix>, direction: Direction) -> Option<EdgeIndex<Ix>> {
+    pub fn edge_at_port(&self, np: NodePort, direction: Direction) -> Option<EdgeIndex> {
         let node = self.get_node(np.node);
         (match direction {
             Direction::Incoming => &node.incoming,
@@ -638,7 +640,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
     }
 
     /// Return an iterator over the node indices of the graph
-    pub fn node_indices(&self) -> NodeIndices<N, Ix> {
+    pub fn node_indices(&self) -> NodeIndices<N> {
         NodeIndices {
             iter: self.nodes.iter().enumerate(),
         }
@@ -656,7 +658,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         self.edge_count
     }
 
-    pub fn edge_indices(&self) -> impl Iterator<Item = EdgeIndex<Ix>> + '_ {
+    pub fn edge_indices(&self) -> impl Iterator<Item = EdgeIndex> + '_ {
         self.edges
             .iter()
             .enumerate()
@@ -667,7 +669,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         self.edges.iter().filter_map(|e| e.weight.as_ref())
     }
 
-    pub fn next_edge(&self, e: &EdgeIndex<Ix>) -> Option<EdgeIndex<Ix>> {
+    pub fn next_edge(&self, e: &EdgeIndex) -> Option<EdgeIndex> {
         let NodePort { node, port, .. } = self.edges[e.index()].node_ports[1];
         if node == NodeIndex::end() {
             return None;
@@ -683,8 +685,8 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
         }
     }
 
-    pub fn insert_graph(&mut self, other: Self) -> (NodeMap<Ix>, EdgeMap<Ix>) {
-        let node_map: HashMap<NodeIndex<Ix>, NodeIndex<Ix>> = other
+    pub fn insert_graph(&mut self, other: Self) -> (NodeMap, EdgeMap) {
+        let node_map: HashMap<NodeIndex, NodeIndex> = other
             .nodes
             .into_iter()
             .enumerate()
@@ -694,7 +696,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
             })
             .collect();
 
-        let edge_map: HashMap<EdgeIndex<Ix>, EdgeIndex<Ix>> = other
+        let edge_map: HashMap<EdgeIndex, EdgeIndex> = other
             .edges
             .into_iter()
             .enumerate()
@@ -714,7 +716,7 @@ impl<N, E, Ix: IndexType> Graph<N, E, Ix> {
     Remove all invalid nodes and edges. Update internal references.
     INVALIDATES EXTERNAL NODE AND EDGE REFERENCES
     */
-    pub fn remove_invalid(mut self) -> (Self, NodeMap<Ix>, EdgeMap<Ix>) {
+    pub fn remove_invalid(mut self) -> (Self, NodeMap, EdgeMap) {
         // TODO optimise
         let (old_indices, mut new_nodes): (Vec<_>, Vec<_>) = self
             .nodes
@@ -777,7 +779,7 @@ mod tests {
 
     #[test]
     fn test_update_edge() {
-        let mut g = Graph::<u8, i8, u8>::with_capacity(3, 2);
+        let mut g = Graph::<u8, i8>::with_capacity(3, 2);
 
         let n0 = g.add_node(0);
         let n1 = g.add_node(1);
@@ -822,12 +824,12 @@ mod tests {
 
 /// Iterator over the node indices of a graph.
 #[derive(Debug, Clone)]
-pub struct NodeIndices<'a, N: 'a, Ix: 'a = DefaultIx> {
-    iter: iter::Enumerate<slice::Iter<'a, Node<N, Ix>>>,
+pub struct NodeIndices<'a, N: 'a> {
+    iter: iter::Enumerate<slice::Iter<'a, Node<N>>>,
 }
 
-impl<'a, N, Ix: IndexType> Iterator for NodeIndices<'a, N, Ix> {
-    type Item = NodeIndex<Ix>;
+impl<'a, N> Iterator for NodeIndices<'a, N> {
+    type Item = NodeIndex;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.find_map(|(i, node)| {

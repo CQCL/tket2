@@ -1,4 +1,4 @@
-use super::graph::{DefaultIx, Direction, EdgeIndex, Graph, IndexType, NodeIndex, NodePort};
+use super::graph::{Direction, EdgeIndex, Graph, IndexType, NodeIndex, NodePort};
 use std::collections::HashSet;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
@@ -7,17 +7,17 @@ pub trait HashIx: Eq + Hash + IndexType {}
 impl<T: Eq + Hash + IndexType> HashIx for T {}
 
 #[derive(Debug, Clone)]
-pub struct SubgraphRef<HashIx> {
-    pub nodes: HashSet<NodeIndex<HashIx>>,
+pub struct SubgraphRef {
+    pub nodes: HashSet<NodeIndex>,
 }
 
-impl<Ix: HashIx> SubgraphRef<Ix> {
-    pub fn new(nodes: HashSet<NodeIndex<Ix>>) -> Self {
+impl SubgraphRef {
+    pub fn new(nodes: HashSet<NodeIndex>) -> Self {
         Self { nodes }
     }
 }
 
-impl<Ix: HashIx, T: Iterator<Item = NodeIndex<Ix>>> From<T> for SubgraphRef<Ix> {
+impl<T: Iterator<Item = NodeIndex>> From<T> for SubgraphRef {
     fn from(it: T) -> Self {
         Self {
             nodes: HashSet::from_iter(it),
@@ -26,17 +26,17 @@ impl<Ix: HashIx, T: Iterator<Item = NodeIndex<Ix>>> From<T> for SubgraphRef<Ix> 
 }
 
 #[derive(Debug, Clone)]
-pub struct BoundedSubgraph<Ix: HashIx> {
-    pub subg: SubgraphRef<Ix>,
-    pub edges: [Vec<EdgeIndex<Ix>>; 2],
+pub struct BoundedSubgraph {
+    pub subg: SubgraphRef,
+    pub edges: [Vec<EdgeIndex>; 2],
 }
 
-impl<Ix: HashIx> BoundedSubgraph<Ix> {
-    pub fn new(subg: SubgraphRef<Ix>, edges: [Vec<EdgeIndex<Ix>>; 2]) -> Self {
+impl BoundedSubgraph {
+    pub fn new(subg: SubgraphRef, edges: [Vec<EdgeIndex>; 2]) -> Self {
         Self { subg, edges }
     }
 
-    pub fn from_node<N, E>(graph: &Graph<N, E, Ix>, node: NodeIndex<Ix>) -> Self {
+    pub fn from_node<N, E>(graph: &Graph<N, E>, node: NodeIndex) -> Self {
         Self {
             subg: [node].into_iter().into(),
             edges: [
@@ -54,18 +54,14 @@ impl<Ix: HashIx> BoundedSubgraph<Ix> {
 }
 
 #[derive(Clone)]
-pub struct OpenGraph<N, E, Ix: IndexType> {
-    pub graph: Graph<N, E, Ix>,
-    pub in_ports: Vec<NodePort<Ix>>,
-    pub out_ports: Vec<NodePort<Ix>>,
+pub struct OpenGraph<N, E> {
+    pub graph: Graph<N, E>,
+    pub in_ports: Vec<NodePort>,
+    pub out_ports: Vec<NodePort>,
 }
 
-impl<N, E, Ix: IndexType> OpenGraph<N, E, Ix> {
-    pub fn new(
-        graph: Graph<N, E, Ix>,
-        in_ports: Vec<NodePort<Ix>>,
-        out_ports: Vec<NodePort<Ix>>,
-    ) -> Self {
+impl<N, E> OpenGraph<N, E> {
+    pub fn new(graph: Graph<N, E>, in_ports: Vec<NodePort>, out_ports: Vec<NodePort>) -> Self {
         Self {
             graph,
             in_ports,
@@ -74,7 +70,7 @@ impl<N, E, Ix: IndexType> OpenGraph<N, E, Ix> {
     }
 }
 
-impl<N: Debug, E: Debug, Ix: IndexType> Debug for OpenGraph<N, E, Ix> {
+impl<N: Debug, E: Debug> Debug for OpenGraph<N, E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OpenGraph")
             .field("graph", &self.graph)
@@ -85,22 +81,22 @@ impl<N: Debug, E: Debug, Ix: IndexType> Debug for OpenGraph<N, E, Ix> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Rewrite<N, E, Ix: HashIx = DefaultIx> {
-    pub subg: BoundedSubgraph<Ix>,
-    pub replacement: OpenGraph<N, E, Ix>,
+pub struct Rewrite<N, E> {
+    pub subg: BoundedSubgraph,
+    pub replacement: OpenGraph<N, E>,
 }
 
-impl<N, E, Ix: HashIx> Rewrite<N, E, Ix> {
-    pub fn new(subg: BoundedSubgraph<Ix>, replacement: OpenGraph<N, E, Ix>) -> Self {
+impl<N, E> Rewrite<N, E> {
+    pub fn new(subg: BoundedSubgraph, replacement: OpenGraph<N, E>) -> Self {
         Self { subg, replacement }
     }
 }
 
-impl<N: Default + Debug + Display, E: Debug + Display, Ix: HashIx> Graph<N, E, Ix> {
+impl<N: Default + Debug + Display, E: Debug + Display> Graph<N, E> {
     /**
     Remove subgraph formed by subg and return weights of nodes inside subg
     */
-    fn remove_subgraph(&mut self, subg: BoundedSubgraph<Ix>) -> Vec<Option<N>> {
+    fn remove_subgraph(&mut self, subg: BoundedSubgraph) -> Vec<Option<N>> {
         subg.subg
             .nodes
             .into_iter()
@@ -110,8 +106,8 @@ impl<N: Default + Debug + Display, E: Debug + Display, Ix: HashIx> Graph<N, E, I
 
     fn replace_subgraph(
         &mut self,
-        subg: BoundedSubgraph<Ix>,
-        replacement: OpenGraph<N, E, Ix>,
+        subg: BoundedSubgraph,
+        replacement: OpenGraph<N, E>,
     ) -> Result<Vec<Option<N>>, &str> {
         if subg.subg.nodes.is_empty() {
             return Err("Cannot replace empty subgraph.");
@@ -141,7 +137,7 @@ impl<N: Default + Debug + Display, E: Debug + Display, Ix: HashIx> Graph<N, E, I
         Ok(self.remove_subgraph(subg))
     }
 
-    pub fn apply_rewrite(&mut self, rewrite: Rewrite<N, E, Ix>) -> Result<(), String> {
+    pub fn apply_rewrite(&mut self, rewrite: Rewrite<N, E>) -> Result<(), String> {
         self.replace_subgraph(rewrite.subg, rewrite.replacement)?;
         Ok(())
     }
@@ -157,7 +153,7 @@ mod tests {
 
     #[test]
     fn test_remove_subgraph() {
-        let mut g = Graph::<u8, u8, u8>::with_capacity(3, 2);
+        let mut g = Graph::<u8, u8>::with_capacity(3, 2);
 
         let n0 = g.add_node(0);
         let n1 = g.add_node(1);
@@ -195,7 +191,7 @@ mod tests {
 
     #[test]
     fn test_insert_graph() {
-        let mut g = Graph::<i8, i8, u8>::with_capacity(3, 2);
+        let mut g = Graph::<i8, i8>::with_capacity(3, 2);
 
         let n0 = g.add_node(0);
         let n1 = g.add_node(1);
@@ -204,7 +200,7 @@ mod tests {
         let _e1 = g.add_edge((n0, 0), (n1, 0), -1);
         let _e2 = g.add_edge((n1, 0), (n2, 0), -2);
 
-        let mut g2 = Graph::<i8, i8, u8>::with_capacity(2, 1);
+        let mut g2 = Graph::<i8, i8>::with_capacity(2, 1);
 
         let g20 = g2.add_node(3);
         let g21 = g2.add_node(4);
@@ -228,7 +224,7 @@ mod tests {
 
     #[test]
     fn test_replace_subgraph() {
-        let mut g = Graph::<i8, i8, u8>::with_capacity(3, 2);
+        let mut g = Graph::<i8, i8>::with_capacity(3, 2);
 
         let n0 = g.add_node(0);
         let n1 = g.add_node(1);
@@ -238,7 +234,7 @@ mod tests {
         let e2 = g.add_edge((n1, 0), (n2, 0), -2);
         let _e3 = g.add_edge((n0, 1), (n2, 1), -3);
 
-        let mut g2 = Graph::<i8, i8, u8>::with_capacity(2, 1);
+        let mut g2 = Graph::<i8, i8>::with_capacity(2, 1);
         // node to be inserted
         let g2n = g2.add_node(4);
 

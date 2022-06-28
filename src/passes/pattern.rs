@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::graph::graph::{Direction, EdgeIndex, Graph, IndexType, NodeIndex};
+use crate::graph::graph::{Direction, EdgeIndex, Graph, NodeIndex};
 use rayon::prelude::*;
 struct MatchFail();
 
@@ -8,14 +8,14 @@ struct MatchFail();
 A pattern for the pattern matcher with a fixed graph structure but arbitrary comparison at nodes.
  */
 #[derive(Clone)]
-pub struct FixedStructPattern<N, E, Ix: IndexType, F> {
-    pub graph: Graph<N, E, Ix>,
-    pub boundary: [NodeIndex<Ix>; 2],
+pub struct FixedStructPattern<N, E, F> {
+    pub graph: Graph<N, E>,
+    pub boundary: [NodeIndex; 2],
     pub node_comp_closure: F,
 }
 
-impl<N, E, Ix: IndexType, F> FixedStructPattern<N, E, Ix, F> {
-    pub fn new(graph: Graph<N, E, Ix>, boundary: [NodeIndex<Ix>; 2], node_comp_closure: F) -> Self {
+impl<N, E, F> FixedStructPattern<N, E, F> {
+    pub fn new(graph: Graph<N, E>, boundary: [NodeIndex; 2], node_comp_closure: F) -> Self {
         Self {
             graph,
             boundary,
@@ -24,45 +24,38 @@ impl<N, E, Ix: IndexType, F> FixedStructPattern<N, E, Ix, F> {
     }
 }
 
-pub trait NodeCompClosure<N, E, Ix>: Fn(&Graph<N, E, Ix>, NodeIndex<Ix>, &N) -> bool {}
+pub trait NodeCompClosure<N, E>: Fn(&Graph<N, E>, NodeIndex, &N) -> bool {}
 
-impl<N, E, Ix, T> NodeCompClosure<N, E, Ix> for T where
-    T: Fn(&Graph<N, E, Ix>, NodeIndex<Ix>, &N) -> bool
-{
-}
+impl<N, E, T> NodeCompClosure<N, E> for T where T: Fn(&Graph<N, E>, NodeIndex, &N) -> bool {}
 
-pub fn node_equality<N: PartialEq, E, Ix: IndexType>() -> impl NodeCompClosure<N, E, Ix> + Clone {
-    |pattern_graph: &Graph<N, E, Ix>, pattern_idx: NodeIndex<_>, target_node: &N| {
+pub fn node_equality<N: PartialEq, E>() -> impl NodeCompClosure<N, E> + Clone {
+    |pattern_graph: &Graph<N, E>, pattern_idx: NodeIndex, target_node: &N| {
         let pattern_node = pattern_graph.node_weight(pattern_idx).unwrap();
         pattern_node == target_node
     }
 }
-pub type Match<Ix> = BTreeMap<NodeIndex<Ix>, NodeIndex<Ix>>;
+pub type Match = BTreeMap<NodeIndex, NodeIndex>;
 
 #[derive(Clone)]
-pub struct PatternMatcher<'g, N, E, Ix: IndexType, F> {
-    pattern: FixedStructPattern<N, E, Ix, F>,
-    target: &'g Graph<N, E, Ix>,
+pub struct PatternMatcher<'g, N, E, F> {
+    pattern: FixedStructPattern<N, E, F>,
+    target: &'g Graph<N, E>,
 }
 
-impl<'g, N, E, Ix: IndexType, F> PatternMatcher<'g, N, E, Ix, F> {
-    pub fn new(pattern: FixedStructPattern<N, E, Ix, F>, target: &'g Graph<N, E, Ix>) -> Self {
+impl<'g, N, E, F> PatternMatcher<'g, N, E, F> {
+    pub fn new(pattern: FixedStructPattern<N, E, F>, target: &'g Graph<N, E>) -> Self {
         Self { pattern, target }
     }
 
-    pub fn set_target(&mut self, target: &'g Graph<N, E, Ix>) {
+    pub fn set_target(&mut self, target: &'g Graph<N, E>) {
         self.target = target
     }
 }
 
-impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N, E, Ix> + 'f>
-    PatternMatcher<'g, N, E, Ix, F>
+impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, F: NodeCompClosure<N, E> + 'f>
+    PatternMatcher<'g, N, E, F>
 {
-    fn node_match(
-        &self,
-        pattern_node: NodeIndex<Ix>,
-        target_node: NodeIndex<Ix>,
-    ) -> Result<(), MatchFail> {
+    fn node_match(&self, pattern_node: NodeIndex, target_node: NodeIndex) -> Result<(), MatchFail> {
         match self.target.node_weight(target_node) {
             Some(y) if (self.pattern.node_comp_closure)(&self.pattern.graph, pattern_node, y) => {
                 Ok(())
@@ -71,11 +64,7 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
         }
     }
 
-    fn edge_match(
-        &self,
-        pattern_edge: EdgeIndex<Ix>,
-        target_edge: EdgeIndex<Ix>,
-    ) -> Result<(), MatchFail> {
+    fn edge_match(&self, pattern_edge: EdgeIndex, target_edge: EdgeIndex) -> Result<(), MatchFail> {
         let err = Err(MatchFail());
         if self.target.edge_weight(target_edge) != self.pattern.graph.edge_weight(pattern_edge) {
             return err;
@@ -96,19 +85,16 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
         Ok(())
     }
 
-    fn all_node_edges(
-        g: &Graph<N, E, Ix>,
-        n: NodeIndex<Ix>,
-    ) -> impl Iterator<Item = &EdgeIndex<Ix>> {
+    fn all_node_edges(g: &Graph<N, E>, n: NodeIndex) -> impl Iterator<Item = &EdgeIndex> {
         g.node_edges(n, Direction::Incoming)
             .chain(g.node_edges(n, Direction::Outgoing))
     }
 
     // fn match_from_recurse(
     //     &self,
-    //     pattern_node: NodeIndex<Ix>,
-    //     target_node: NodeIndex<Ix>,
-    //     start_edge: EdgeIndex<Ix>,
+    //     pattern_node: NodeIndex,
+    //     target_node: NodeIndex,
+    //     start_edge: EdgeIndex,
     //     match_map: &mut Match<Ix>,
     // ) -> Result<(), MatchFail> {
     //     let err = Err(MatchFail());
@@ -125,7 +111,7 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
     //         .iter()
     //         .zip(t_edges.iter())
     //         .cycle()
-    //         .skip_while(|(p, _): &(&EdgeIndex<Ix>, _)| **p != start_edge);
+    //         .skip_while(|(p, _): &(&EdgeIndex, _)| **p != start_edge);
 
     //     // TODO verify that it is valid to skip edge_start (it's not at the start)
     //     // WARNING THIS IS PROPERLY HANDLED IN THE match_from, either fix or
@@ -170,9 +156,9 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
 
     fn match_from(
         &self,
-        pattern_start_node: NodeIndex<Ix>,
-        target_start_node: NodeIndex<Ix>,
-    ) -> Result<Match<Ix>, MatchFail> {
+        pattern_start_node: NodeIndex,
+        target_start_node: NodeIndex,
+    ) -> Result<Match, MatchFail> {
         let err = Err(MatchFail());
         let mut match_map = Match::new();
         let start_edge = *self
@@ -242,7 +228,7 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
         Ok(match_map)
     }
 
-    fn start_pattern_node_edge(&self) -> NodeIndex<Ix> {
+    fn start_pattern_node_edge(&self) -> NodeIndex {
         // as a heuristic starts in the highest degree node of the pattern
         // alternatives could be: rarest label, ...?
 
@@ -272,7 +258,7 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
     //     })
     // }
 
-    pub fn find_matches(&'g self) -> impl Iterator<Item = Match<Ix>> + 'g {
+    pub fn find_matches(&'g self) -> impl Iterator<Item = Match> + 'g {
         let start = self.start_pattern_node_edge();
         self.target.node_indices().filter_map(move |candidate| {
             if self.node_match(start, candidate).is_err() {
@@ -283,7 +269,7 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
         })
     }
 
-    pub fn into_matches(self) -> impl Iterator<Item = Match<Ix>> + 'g {
+    pub fn into_matches(self) -> impl Iterator<Item = Match> + 'g {
         let start = self.start_pattern_node_edge();
         self.target.node_indices().filter_map(move |candidate| {
             if self.node_match(start, candidate).is_err() {
@@ -295,14 +281,13 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, Ix: IndexType, F: NodeCompClosure<N
     }
 }
 
-impl<'g, N, E, Ix, F> PatternMatcher<'g, N, E, Ix, F>
+impl<'g, N, E, F> PatternMatcher<'g, N, E, F>
 where
     N: PartialEq + Send + Sync,
     E: PartialEq + Send + Sync,
-    Ix: IndexType + Send + Sync,
-    F: NodeCompClosure<N, E, Ix> + Sync + Send,
+    F: NodeCompClosure<N, E> + Sync + Send,
 {
-    pub fn find_par_matches(&'g self) -> impl ParallelIterator<Item = Match<Ix>> + 'g {
+    pub fn find_par_matches(&'g self) -> impl ParallelIterator<Item = Match> + 'g {
         let start = self.start_pattern_node_edge();
         let candidates: Vec<_> = self
             .target
@@ -324,7 +309,7 @@ mod tests {
     use crate::circuit::circuit::{Circuit, UnitID};
     use crate::circuit::dag::{Dag, VertexProperties};
     use crate::circuit::operation::{Op, WireType};
-    use crate::graph::graph::{IndexType, NodeIndex, PortIndex};
+    use crate::graph::graph::{NodeIndex, PortIndex};
     #[fixture]
     fn simple_circ() -> Circuit {
         let mut circ1 = Circuit::new();
@@ -397,7 +382,7 @@ mod tests {
         assert!(matcher.edge_match(fedges[0], fedges[3]).is_err());
     }
 
-    fn match_maker<Ix: IndexType>(it: impl IntoIterator<Item = (usize, usize)>) -> Match<Ix> {
+    fn match_maker(it: impl IntoIterator<Item = (usize, usize)>) -> Match {
         Match::from_iter(
             it.into_iter()
                 .map(|(i, j)| (NodeIndex::new(i), NodeIndex::new(j))),
@@ -508,7 +493,7 @@ mod tests {
         let pattern = FixedStructPattern::new(
             cx_h_pattern.dag,
             pattern_boundary,
-            |_: &Dag, pattern_idx: NodeIndex<_>, op2: &VertexProperties| match (
+            |_: &Dag, pattern_idx: NodeIndex, op2: &VertexProperties| match (
                 pattern_idx.index(),
                 &op2.op,
             ) {

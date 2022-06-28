@@ -1,8 +1,8 @@
 use std::fmt::Display;
 
-use super::graph::{Graph, IndexType};
+use super::graph::Graph;
 
-pub fn dot_string<N: Display, E: Display, Ix: IndexType>(graph: &Graph<N, E, Ix>) -> String {
+pub fn dot_string<N: Display, E: Display>(graph: &Graph<N, E>) -> String {
     let mut s = String::new();
 
     s.push_str("digraph {\n");

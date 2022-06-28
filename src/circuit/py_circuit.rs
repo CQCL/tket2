@@ -22,39 +22,39 @@ use pyo3::{
 
 use tket_json_rs::{circuit_json::SerialCircuit, optype::OpType};
 
-impl<Ix: IndexType> IntoPy<PyObject> for NodeIndex<Ix> {
+impl IntoPy<PyObject> for NodeIndex {
     fn into_py(self, py: Python<'_>) -> PyObject {
         self.index().into_py(py)
     }
 }
 
-impl<'source, Ix: IndexType> FromPyObject<'source> for NodeIndex<Ix> {
+impl<'source> FromPyObject<'source> for NodeIndex {
     fn extract(ob: &'source PyAny) -> PyResult<Self> {
         Ok(NodeIndex::new(ob.extract()?))
     }
 }
 
-impl<Ix: IndexType> IntoPy<PyObject> for EdgeIndex<Ix> {
+impl IntoPy<PyObject> for EdgeIndex {
     fn into_py(self, py: Python<'_>) -> PyObject {
         self.index().into_py(py)
     }
 }
 
-impl<'source, Ix: IndexType> FromPyObject<'source> for EdgeIndex<Ix> {
+impl<'source> FromPyObject<'source> for EdgeIndex {
     fn extract(ob: &'source PyAny) -> PyResult<Self> {
         Ok(EdgeIndex::new(ob.extract()?))
     }
 }
 
-impl<Ix: IndexType> IntoPy<PyObject> for NodePort<Ix> {
+impl IntoPy<PyObject> for NodePort {
     fn into_py(self, py: Python<'_>) -> PyObject {
         (self.node.into_py(py), self.port.into_py(py)).into_py(py)
     }
 }
 
-impl<'source, Ix: IndexType> FromPyObject<'source> for NodePort<Ix> {
+impl<'source> FromPyObject<'source> for NodePort {
     fn extract(ob: &'source PyAny) -> PyResult<Self> {
-        let pair: (NodeIndex<Ix>, PortIndex) = ob.extract()?;
+        let pair: (NodeIndex, PortIndex) = ob.extract()?;
         Ok(NodePort::new(pair.0, pair.1))
     }
 }
@@ -176,7 +176,7 @@ impl NodeIterator {
 
 #[pyclass(name = "Subgraph")]
 #[derive(Clone)]
-pub struct PySubgraph(BoundedSubgraph<DefaultIx>);
+pub struct PySubgraph(BoundedSubgraph);
 
 #[pymethods]
 impl PySubgraph {

@@ -1,6 +1,6 @@
 use std::collections::{HashSet, VecDeque};
 
-use super::graph::{DefaultIx, Direction, EdgeIndex, Graph, IndexType, NodeIndex};
+use super::graph::{Direction, EdgeIndex, Graph, NodeIndex};
 
 /*
 Implementation of Kahn's algorithm
@@ -13,16 +13,16 @@ A VecDeque is used for the node list to produce a canonical ordering,
  as successors of nodes already have a canonical ordering due to ports.
 
  */
-pub struct TopSortWalker<'graph, N, E, Ix = DefaultIx> {
-    g: &'graph Graph<N, E, Ix>,
-    remaining_edges: HashSet<EdgeIndex<Ix>>,
-    candidate_nodes: VecDeque<NodeIndex<Ix>>,
+pub struct TopSortWalker<'graph, N, E> {
+    g: &'graph Graph<N, E>,
+    remaining_edges: HashSet<EdgeIndex>,
+    candidate_nodes: VecDeque<NodeIndex>,
     cyclicity_check: bool,
     reversed: bool,
 }
 
-impl<'graph, N, E, Ix: IndexType> TopSortWalker<'graph, N, E, Ix> {
-    pub fn new(g: &'graph Graph<N, E, Ix>, candidate_nodes: VecDeque<NodeIndex<Ix>>) -> Self {
+impl<'graph, N, E> TopSortWalker<'graph, N, E> {
+    pub fn new(g: &'graph Graph<N, E>, candidate_nodes: VecDeque<NodeIndex>) -> Self {
         let remaining_edges = g.edge_indices().collect();
         Self {
             g,
@@ -43,13 +43,13 @@ impl<'graph, N, E, Ix: IndexType> TopSortWalker<'graph, N, E, Ix> {
         self
     }
 
-    pub fn edges_remaining(&self) -> &HashSet<EdgeIndex<Ix>> {
+    pub fn edges_remaining(&self) -> &HashSet<EdgeIndex> {
         &self.remaining_edges
     }
 }
 
-impl<'graph, N, E, Ix: IndexType> Iterator for TopSortWalker<'graph, N, E, Ix> {
-    type Item = NodeIndex<Ix>;
+impl<'graph, N, E> Iterator for TopSortWalker<'graph, N, E> {
+    type Item = NodeIndex;
 
     fn next(&mut self) -> Option<Self::Item> {
         let (forward, backward) = if self.reversed {
