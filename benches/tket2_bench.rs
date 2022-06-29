@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use rayon::iter::ParallelIterator;
-use tket_rs::{
+use tket2::{
     circuit::{
         circuit::{Circuit, UnitID},
         operation::{AngleValue, ConstValue, Op, WireType},
