@@ -5,6 +5,14 @@ pub mod json;
 pub mod passes;
 pub mod validate;
 
+#[cfg(feature = "tkcxx")]
+use tket_rs::tket::OpType;
+
+#[cfg(feature = "tkcxx")]
+fn bound() {
+    let q = OpType::Input;
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
