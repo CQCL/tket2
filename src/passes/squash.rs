@@ -146,7 +146,7 @@ fn rotation_replacement(op: &Op) -> (Circuit, Param) {
             let z = replace.add_vertex(Op::Const(ConstValue::F64(1.0)));
             [(inp, 1), (x, 0), (y, 0), (z, 0)]
         }
-
+        // TODO add TK1
         _ => panic!("Op {:?} should not have made it to this point.", op),
     };
     for (port_index, source) in incoming_ports.into_iter().enumerate() {
