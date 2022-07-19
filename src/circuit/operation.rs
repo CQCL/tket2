@@ -244,7 +244,36 @@ impl ConstValue {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Debug)]
+pub struct ToCircuitFail();
+pub trait CustomOp: Send + Sync + std::fmt::Debug + CustomBoxClone {
+    fn signature(&self) -> Option<Signature>;
+
+    fn to_circuit(&self) -> Result<super::circuit::Circuit, ToCircuitFail>;
+}
+
+pub trait CustomBoxClone {
+    fn clone_box(&self) -> Box<dyn CustomOp>;
+
+    // fn partial_cmp(&self, rhs)
+}
+
+impl<T> CustomBoxClone for T
+where
+    T: 'static + CustomOp + Clone,
+{
+    fn clone_box(&self) -> Box<dyn CustomOp> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Box<dyn CustomOp> {
+    fn clone(&self) -> Box<dyn CustomOp> {
+        self.clone_box()
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum Op {
     H,
     CX,
@@ -263,8 +292,32 @@ pub enum Op {
     Const(ConstValue),
     RxF64,
     RzF64,
+    TK1,
     Rotation,
     ToRotation,
+    Custom(Box<dyn CustomOp>),
+}
+
+impl PartialEq for Op {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Noop(l0), Self::Noop(r0)) => l0 == r0,
+            (
+                Self::Copy {
+                    n_copies: l_n_copies,
+                    typ: l_typ,
+                },
+                Self::Copy {
+                    n_copies: r_n_copies,
+                    typ: r_typ,
+                },
+            ) => l_n_copies == r_n_copies && l_typ == r_typ,
+            (Self::Const(l0), Self::Const(r0)) => l0 == r0,
+            // for now no two custom ops are the same...
+            (Self::Custom(_), Self::Custom(_)) => false,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
 }
 
 impl Default for Op {
@@ -327,11 +380,13 @@ impl Op {
             Op::RxF64 | Op::RzF64 => {
                 Signature::new(vec![WireType::Qubit], [vec![WireType::Angle], vec![]])
             }
+            Op::TK1 => Signature::new(vec![WireType::Qubit], [vec![WireType::Angle; 3], vec![]]),
             Op::Rotation => Signature::new(vec![WireType::Qubit], [vec![WireType::Quat64], vec![]]),
             Op::ToRotation => Signature::new_nonlinear(
                 vec![WireType::Angle, WireType::F64, WireType::F64, WireType::F64],
                 vec![WireType::Quat64],
             ),
+            Op::Custom(x) => x.signature()?,
             _ => return None,
         })
     }

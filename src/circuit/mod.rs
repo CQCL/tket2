@@ -5,3 +5,6 @@ pub mod operation;
 
 #[cfg(feature = "pyo3")]
 pub mod py_circuit;
+
+#[cfg(feature = "tkcxx")]
+pub mod unitarybox;

@@ -109,7 +109,7 @@ impl From<OpType> for Op {
             OpType::Rx => Op::RxF64,
             OpType::Ry => todo!(),
             OpType::Rz => Op::RzF64,
-            OpType::TK1 => todo!(),
+            OpType::TK1 => Op::TK1,
             OpType::AngleAdd => Op::AngleAdd,
             OpType::AngleMul => Op::AngleMul,
             OpType::AngleNeg => Op::AngleNeg,
@@ -177,6 +177,7 @@ impl From<&Op> for OpType {
             Op::Barrier => OpType::Barrier,
             Op::RxF64 => OpType::Rx,
             Op::RzF64 => OpType::Rz,
+            Op::TK1 => OpType::TK1,
             Op::Noop(WireType::Qubit) => OpType::noop,
             Op::AngleAdd => OpType::AngleAdd,
             Op::AngleMul => OpType::AngleMul,
@@ -234,12 +235,12 @@ impl<P: ToString> From<SerialCircuit<P>> for Circuit {
                         let con = circ.add_vertex(Op::Const(ConstValue::f64_angle(f)));
                         (con, 0).into()
                     } else {
-                        circ.add_unitid(UnitID::F64(p_str))
+                        circ.add_unitid(UnitID::Angle(p_str))
                     };
                     circ.tup_add_edge(
                         param_source,
                         (v, (args.len() + i) as u8).into(),
-                        WireType::F64,
+                        WireType::Angle,
                     );
                 }
             };
@@ -272,26 +273,8 @@ impl<P: From<String> + std::fmt::Debug> From<Circuit> for SerialCircuit<P> {
             .filter_map(|com| {
                 let params = match com.op {
                     Op::Input | Op::Output | Op::Const(_) => return None,
-                    Op::RzF64 | Op::RxF64 => {
-                        let angle_edge = circ
-                            .dag
-                            .edge_at_port((com.vertex, 1).into(), Direction::Incoming)
-                            .expect("Expected an angle wire.");
-                        let pred_np = circ.dag.edge_endpoints(angle_edge).unwrap()[0];
-                        let pred = &circ
-                            .dag
-                            .node_weight(pred_np.node)
-                            .expect("Expected predecessor node.")
-                            .op;
-                        Some(match pred {
-                            Op::Const(ConstValue::Angle(p)) => vec![p.to_f64().to_string()],
-                            Op::Input => match &circ.uids[pred_np.port.index()] {
-                                UnitID::F64(s) => vec![s.clone()],
-                                _ => panic!("Must be an Angle input"),
-                            },
-                            _ => panic!("Only constant or simple string param inputs supported."),
-                        })
-                    }
+                    Op::RzF64 | Op::RxF64 => param_strings(&circ, &com, 1),
+                    Op::TK1 => param_strings(&circ, &com, 3),
                     _ => None,
                 };
                 let params: Option<Vec<P>> =
@@ -327,4 +310,35 @@ impl<P: From<String> + std::fmt::Debug> From<Circuit> for SerialCircuit<P> {
             implicit_permutation,
         }
     }
+}
+
+fn param_strings(
+    circ: &Circuit,
+    com: &crate::circuit::circuit::Command,
+    num: u32,
+) -> Option<Vec<String>> {
+    Some(
+        (0..num)
+            .map(|i| {
+                let angle_edge = circ
+                    .dag
+                    .edge_at_port((com.vertex, 1 + i as u8).into(), Direction::Incoming)
+                    .expect("Expected an angle wire.");
+                let pred_np = circ.dag.edge_endpoints(angle_edge).unwrap()[0];
+                let pred = &circ
+                    .dag
+                    .node_weight(pred_np.node)
+                    .expect("Expected predecessor node.")
+                    .op;
+                match pred {
+                    Op::Const(ConstValue::Angle(p)) => p.to_f64().to_string(),
+                    Op::Input => match &circ.uids[pred_np.port.index()] {
+                        UnitID::Angle(s) => s.clone(),
+                        _ => panic!("Must be an Angle input"),
+                    },
+                    _ => panic!("Only constant or simple string param inputs supported."),
+                }
+            })
+            .collect(),
+    )
 }
