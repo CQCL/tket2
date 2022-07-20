@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Callable, Iterable
 import time
 from functools import wraps
@@ -18,6 +19,9 @@ from pyrs import (
     Angle,
     check_soundness,
     NodePort,
+    CustomOp,
+    Signature,
+    decompose_custom_pass,
 )
 
 from pytket import Circuit, OpType, Qubit
@@ -169,3 +173,42 @@ def test_const():
 
     assert c.get_const(0) == c.get_const(1) == None
     pass
+
+
+@dataclass
+class CustomBridge:
+    flip: bool
+
+    def signature(self) -> Signature:
+        return Signature([WireType.Qubit] * 3, ([], []))
+
+    def to_circuit(self) -> RsCircuit:
+        c = RsCircuit()
+
+        for i in range(3):
+            c.add_linear_unitid(Qubit("q", [i]))
+
+        if self.flip:
+            c.append(RsOpType.CX, [1, 2])
+            c.append(RsOpType.CX, [0, 1])
+            c.append(RsOpType.CX, [1, 2])
+            c.append(RsOpType.CX, [0, 1])
+        else:
+            c.append(RsOpType.CX, [0, 1])
+            c.append(RsOpType.CX, [1, 2])
+            c.append(RsOpType.CX, [0, 1])
+            c.append(RsOpType.CX, [1, 2])
+        return c
+
+
+@pytest.mark.parametrize("flip", (True, False))
+def test_custom(flip):
+    c = RsCircuit()
+    for i in range(3):
+        c.add_linear_unitid(Qubit("q", [i]))
+    op = CustomOp(CustomBridge(flip))
+    c.append(op, [0, 1, 2])
+    c, success = decompose_custom_pass(c)
+    check_soundness(c)
+    assert success
+    assert c.node_count() == 6

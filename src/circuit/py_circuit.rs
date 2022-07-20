@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     circuit::{Circuit, CircuitError, CircuitRewrite},
-    operation::{AngleValue, ConstValue, Op, Param},
+    operation::{AngleValue, ConstValue, CustomOp, Op, Param, Signature, WireType},
 };
 use cgmath::num_traits::CheckedDiv;
 use pyo3::{
@@ -21,6 +21,8 @@ use pyo3::{
 };
 
 use tket_json_rs::{circuit_json::SerialCircuit, optype::OpType};
+
+use super::operation::ToCircuitFail;
 
 impl From<PyInt> for NodeIndex {
     fn from(x: PyInt) -> Self {
@@ -74,10 +76,20 @@ impl IntoPy<PyObject> for PortIndex {
     }
 }
 
+#[derive(FromPyObject)]
+enum SpecialOp<'a> {
+    Custom(&'a PyAny), // This extraction never fails
+}
+
 impl IntoPy<PyObject> for &Op {
     fn into_py(self, py: Python<'_>) -> PyObject {
-        let pyop: OpType = self.into();
-        pyop.into_py(py)
+        let convert: Result<OpType, _> = self.try_into();
+        if let Ok(pyop) = convert {
+            pyop.into_py(py)
+        } else {
+            // TODO add conversions for complex ops
+            panic!("No known conversion from Op: {:?}", self);
+        }
     }
 }
 
@@ -89,9 +101,14 @@ impl IntoPy<PyObject> for Op {
 
 impl<'source> FromPyObject<'source> for Op {
     fn extract(ob: &'source PyAny) -> PyResult<Self> {
-        let pyop: OpType = ob.extract()?;
+        let pyop: PyResult<OpType> = ob.extract();
 
-        Ok(pyop.into())
+        if let Ok(pyop) = pyop {
+            Ok(pyop.into())
+        } else {
+            let pycustom: PyCustom = ob.extract()?;
+            Ok(Op::Custom(Box::new(pycustom)))
+        }
     }
 }
 
@@ -159,7 +176,12 @@ impl Circuit {
 
         *self = c;
     }
+
+    pub fn append(&mut self, op: Op, args: Vec<PortIndex>) -> NodeIndex {
+        self.append_op(op, &args).unwrap()
+    }
 }
+
 #[pyclass]
 pub struct NodeIterator(std::vec::IntoIter<NodeIndex>);
 #[pymethods]
@@ -390,5 +412,51 @@ impl IntoPy<PyObject> for &ConstValue {
             ConstValue::Angle(x) => x.into_py(py),
             ConstValue::Quat64(x) => x.into_py(py),
         }
+    }
+}
+
+#[pymethods]
+impl Signature {
+    #[new]
+    pub fn py_new(linear: Vec<WireType>, nonlinear: [Vec<WireType>; 2]) -> Self {
+        Self { linear, nonlinear }
+    }
+}
+
+#[pyclass(name = "CustomOp")]
+#[derive(Debug, Clone)]
+pub struct PyCustom(PyObject);
+
+impl CustomOp for PyCustom {
+    fn signature(&self) -> Option<Signature> {
+        Python::with_gil(|py| {
+            Some(
+                self.0
+                    .as_ref(py)
+                    .call_method0("signature")
+                    .unwrap()
+                    .extract()
+                    .unwrap(),
+            )
+        })
+    }
+
+    fn to_circuit(&self) -> Result<Circuit, ToCircuitFail> {
+        Python::with_gil(|py| {
+            self.0
+                .as_ref(py)
+                .call_method0("to_circuit")
+                .unwrap()
+                .extract()
+                .map_err(|_| ToCircuitFail)
+        })
+    }
+}
+
+#[pymethods]
+impl PyCustom {
+    #[new]
+    fn new(c: Py<PyAny>) -> Self {
+        Self(c)
     }
 }

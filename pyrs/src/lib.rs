@@ -96,6 +96,7 @@ fn greedy_iter_rewrite(circ: Circuit, it_closure: Py<PyAny>) -> Circuit {
 #[pymodule]
 fn pyrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(remove_redundancies, m)?)?;
+    m.add_function(wrap_pyfunction!(tket2::passes::decompose_custom_pass, m)?)?;
     m.add_function(wrap_pyfunction!(greedy_pattern_rewrite, m)?)?;
     m.add_function(wrap_pyfunction!(greedy_iter_rewrite, m)?)?;
     m.add_function(wrap_pyfunction!(check_soundness, m)?)?;
@@ -106,6 +107,8 @@ fn pyrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<PySubgraph>()?;
     m.add_class::<CircuitRewrite>()?;
     m.add_class::<Direction>()?;
+    m.add_class::<tket2::circuit::py_circuit::PyCustom>()?;
+    m.add_class::<tket2::circuit::operation::Signature>()?;
     m.add_class::<tket2::circuit::operation::Rational>()?;
     m.add_class::<tket2::circuit::operation::Quat>()?;
     m.add_class::<tket2::circuit::py_circuit::Angle>()?;

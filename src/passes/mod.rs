@@ -5,12 +5,12 @@ pub mod squash;
 
 use crate::{
     circuit::{
-        circuit::{Circuit, CircuitError, CircuitRewrite, UnitID},
-        dag::{Dag, EdgeProperties, VertexProperties},
-        operation::{Op, Param, WireType},
+        circuit::{Circuit, CircuitError, CircuitRewrite},
+        dag::{EdgeProperties, VertexProperties},
+        operation::{Op, Param},
     },
     graph::{
-        graph::{Direction, NodeIndex, NodePort},
+        graph::{Direction, NodePort},
         substitute::BoundedSubgraph,
     },
 };
@@ -238,35 +238,24 @@ where
 // }
 
 pub fn decompose_custom<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
-    let mut pattern_circ = Circuit::new();
-    pattern_circ.add_unitid(UnitID::Qubit {
-        reg_name: "q".into(),
-        index: vec![0],
-    });
-    let [input, output] = pattern_circ.boundary();
-
-    let h = pattern_circ.add_vertex(Op::H); // H is just placeholder for Custom
-    pattern_circ.tup_add_edge((input, 0), (h, 0), WireType::Qubit);
-    pattern_circ.tup_add_edge((h, 0), (output, 0), WireType::Qubit);
-
-    let nod_comp =
-        |_: &Dag, _: NodeIndex, vert: &VertexProperties| matches!(vert.op, Op::Custom(_));
-
-    let pattern = CircFixedStructPattern::from_circ(pattern_circ, nod_comp);
-
-    let rewriter = |mat: Match| {
-        let nid = mat.values().next().unwrap(); // there's only 1 node to match
-        let op = &circ.dag.node_weight(*nid).unwrap().op;
-        // TODO check returned circuit has no CustomOp, otherwise potentially infinite replacement?
-        match op {
-            Op::Custom(x) => (x.to_circuit().unwrap(), 0.0),
-            _ => panic!("Unexpected op."),
+    circ.dag.node_indices().filter_map(|n| {
+        let op = &circ.dag.node_weight(n).unwrap().op;
+        if let Op::Custom(x) = op {
+            Some(CircuitRewrite::new(
+                BoundedSubgraph::from_node(&circ.dag, n),
+                x.to_circuit().expect("Circuit generation failed.").into(),
+                0.0,
+            ))
+        } else {
+            None
         }
-    };
-
-    pattern_rewriter(pattern, circ, rewriter)
+    })
 }
 
+#[cfg(feature = "pyo3")]
+use pyo3::prelude::pyfunction;
+
+#[cfg_attr(feature = "pyo3", pyfunction)]
 pub fn decompose_custom_pass(circ: Circuit) -> (Circuit, bool) {
     let (circ, suc) = apply_exhaustive(circ, |c| decompose_custom(c).collect()).unwrap();
     let circ = circ.remove_noop();

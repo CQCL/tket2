@@ -124,8 +124,11 @@ impl From<OpType> for Op {
     // }
 }
 
-impl From<&Op> for OpType {
-    fn from(op: &Op) -> Self {
+#[derive(Debug)]
+pub struct OpConvertError;
+
+impl TryFrom<&Op> for OpType {
+    fn try_from(op: &Op) -> Result<Self, Self::Error> {
         // let (op_type, params) = match op {
         //     Op::H => (OpType::H, vec![]),
         //     Op::CX => (OpType::CX, vec![]),
@@ -166,7 +169,7 @@ impl From<&Op> for OpType {
         //     conditional: None,
         // }
 
-        match op {
+        Ok(match op {
             Op::H => OpType::H,
             Op::CX => OpType::CX,
             Op::ZZMax => OpType::ZZMax,
@@ -187,9 +190,11 @@ impl From<&Op> for OpType {
             Op::ToRotation => OpType::ToRotation,
             Op::Copy { .. } => OpType::Copy,
             Op::Const(_) => OpType::Const,
-            _ => panic!("Not supported by Serialized TKET-1: {:?}", op),
-        }
+            _ => return Err(OpConvertError),
+        })
     }
+
+    type Error = OpConvertError;
 }
 
 impl<P: ToString> From<SerialCircuit<P>> for Circuit {
@@ -281,7 +286,7 @@ impl<P: From<String> + std::fmt::Debug> From<Circuit> for SerialCircuit<P> {
                     params.map(|params| params.into_iter().map(|p| p.into()).collect());
                 Some(Command {
                     op: Operation {
-                        op_type: com.op.into(),
+                        op_type: com.op.try_into().unwrap(),
                         n_qb: None,
                         params,
                         op_box: None,

@@ -189,6 +189,14 @@ impl Circuit {
             _ => None,
         })
     }
+
+    pub fn node_count(&self) -> usize {
+        self.dag.node_count()
+    }
+
+    pub fn edge_count(&self) -> usize {
+        self.dag.edge_count()
+    }
 }
 impl Circuit {
     pub fn new() -> Self {
