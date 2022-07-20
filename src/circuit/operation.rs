@@ -8,6 +8,7 @@ use std::{
 
 use cgmath::num_traits::ToPrimitive;
 use num_rational::Rational64;
+
 #[cfg(feature = "pyo3")]
 use pyo3::prelude::*;
 
@@ -24,30 +25,16 @@ pub enum WireType {
     Quat64,
     Angle,
 }
+
+#[cfg_attr(feature = "pyo3", pyclass)]
 #[derive(Clone)]
 pub struct Signature {
     pub linear: Vec<WireType>,
     pub nonlinear: [Vec<WireType>; 2],
 }
 
+#[cfg_attr(feature = "pyo3", pymethods)]
 impl Signature {
-    pub fn new(linear: Vec<WireType>, nonlinear: [Vec<WireType>; 2]) -> Self {
-        Self { linear, nonlinear }
-    }
-    pub fn new_linear(linear: Vec<WireType>) -> Self {
-        Self {
-            linear,
-            nonlinear: [vec![], vec![]],
-        }
-    }
-
-    pub fn new_nonlinear(inputs: Vec<WireType>, outputs: Vec<WireType>) -> Self {
-        Self {
-            linear: vec![],
-            nonlinear: [inputs, outputs],
-        }
-    }
-
     pub fn len(&self) -> usize {
         self.linear.len() + max(self.nonlinear[0].len(), self.nonlinear[1].len())
     }
@@ -67,6 +54,26 @@ impl Signature {
             .chain(self.nonlinear[0].iter())
             .chain(self.nonlinear[1].iter())
             .any(|typ| matches!(typ, WireType::Qubit))
+    }
+}
+
+impl Signature {
+    pub fn new(linear: Vec<WireType>, nonlinear: [Vec<WireType>; 2]) -> Self {
+        Self { linear, nonlinear }
+    }
+
+    pub fn new_linear(linear: Vec<WireType>) -> Self {
+        Self {
+            linear,
+            nonlinear: [vec![], vec![]],
+        }
+    }
+
+    pub fn new_nonlinear(inputs: Vec<WireType>, outputs: Vec<WireType>) -> Self {
+        Self {
+            linear: vec![],
+            nonlinear: [inputs, outputs],
+        }
     }
 }
 
@@ -245,7 +252,7 @@ impl ConstValue {
 }
 
 #[derive(Debug)]
-pub struct ToCircuitFail();
+pub struct ToCircuitFail;
 pub trait CustomOp: Send + Sync + std::fmt::Debug + CustomBoxClone {
     fn signature(&self) -> Option<Signature>;
 
