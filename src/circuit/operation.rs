@@ -2,11 +2,13 @@
 
 use lazy_static::lazy_static;
 use std::{
+    any::Any,
     cmp::max,
     ops::{Add, Div, Mul, Neg, Sub},
 };
 
 use cgmath::num_traits::ToPrimitive;
+use downcast_rs::{impl_downcast, Downcast};
 use num_rational::Rational64;
 
 #[cfg(feature = "pyo3")]
@@ -253,11 +255,15 @@ impl ConstValue {
 
 #[derive(Debug)]
 pub struct ToCircuitFail;
-pub trait CustomOp: Send + Sync + std::fmt::Debug + CustomBoxClone {
+pub trait CustomOp: Send + Sync + std::fmt::Debug + CustomBoxClone + Any + Downcast {
     fn signature(&self) -> Option<Signature>;
 
     fn to_circuit(&self) -> Result<super::circuit::Circuit, ToCircuitFail>;
+
+    // fn as_any(&self) -> &dyn Any;
 }
+
+impl_downcast!(CustomOp);
 
 pub trait CustomBoxClone {
     fn clone_box(&self) -> Box<dyn CustomOp>;
@@ -278,6 +284,31 @@ impl Clone for Box<dyn CustomOp> {
     fn clone(&self) -> Box<dyn CustomOp> {
         self.clone_box()
     }
+}
+
+fn _deref_pair<'a, 'b, T: CustomOp>(
+    a: &'a dyn CustomOp,
+    b: &'b dyn CustomOp,
+) -> (Option<&'a T>, Option<&'b T>) {
+    (a.downcast_ref::<T>(), b.downcast_ref::<T>())
+}
+
+/// Attempt to downcast pairs to known custom types in turn and call their
+/// equality methods (if implemented)
+#[allow(unused_variables)]
+fn custom_eq(x: &dyn CustomOp, y: &dyn CustomOp) -> bool {
+    #[cfg(feature = "tkcxx")]
+    if let (Some(x), Some(y)) = _deref_pair::<super::unitarybox::SU2>(x, y) {
+        return x == y;
+    } else {
+    }
+
+    #[cfg(feature = "pyo3")]
+    if let (Some(x), Some(y)) = _deref_pair::<super::py_circuit::PyCustom>(x, y) {
+        return x == y;
+    } else {
+    }
+    false
 }
 
 #[derive(Clone, Debug)]
@@ -320,8 +351,7 @@ impl PartialEq for Op {
                 },
             ) => l_n_copies == r_n_copies && l_typ == r_typ,
             (Self::Const(l0), Self::Const(r0)) => l0 == r0,
-            // for now no two custom ops are the same...
-            (Self::Custom(_), Self::Custom(_)) => false,
+            (Self::Custom(x), Self::Custom(y)) => custom_eq(&**x, &**y),
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
     }

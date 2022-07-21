@@ -460,3 +460,30 @@ impl PyCustom {
         Self(c)
     }
 }
+
+impl PartialEq for PyCustom {
+    fn eq(&self, other: &Self) -> bool {
+        Python::with_gil(|py| {
+            self.0
+                .call_method1(py, "__eq__", (&other.0,))
+                .unwrap()
+                .extract(py)
+                .unwrap()
+        })
+    }
+}
+
+// Simple demo of dynamic downcasting to count pycustom ops
+#[pyfunction]
+pub fn count_pycustom(c: &Circuit) -> usize {
+    c.dag_ref()
+        .node_weights()
+        .filter(|o| {
+            if let Op::Custom(x) = &o.op {
+                return x.downcast_ref::<PyCustom>().is_some();
+            }
+
+            false
+        })
+        .count()
+}

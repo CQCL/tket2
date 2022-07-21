@@ -5,7 +5,7 @@ use num_complex::Complex;
 use tket_json_rs::circuit_json;
 use tket_rs::make_box;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SU2(pub [[Complex<f64>; 2]; 2]);
 
 impl CustomOp for SU2 {
