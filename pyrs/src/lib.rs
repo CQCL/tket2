@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 use tket2::circuit::circuit::{Circuit, CircuitRewrite};
 use tket2::circuit::dag::VertexProperties;
 use tket2::circuit::operation::WireType;
-use tket2::circuit::py_circuit::{PyRewriteIter, PySubgraph};
+use tket2::circuit::py_circuit::{count_pycustom, PyRewriteIter, PySubgraph};
 use tket2::graph::graph::{Direction, NodeIndex};
 use tket2::passes::pattern::node_equality;
 use tket2::passes::{apply_greedy, pattern_rewriter, CircFixedStructPattern};
@@ -97,6 +97,7 @@ fn greedy_iter_rewrite(circ: Circuit, it_closure: Py<PyAny>) -> Circuit {
 fn pyrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(remove_redundancies, m)?)?;
     m.add_function(wrap_pyfunction!(tket2::passes::decompose_custom_pass, m)?)?;
+    m.add_function(wrap_pyfunction!(count_pycustom, m)?)?;
     m.add_function(wrap_pyfunction!(greedy_pattern_rewrite, m)?)?;
     m.add_function(wrap_pyfunction!(greedy_iter_rewrite, m)?)?;
     m.add_function(wrap_pyfunction!(check_soundness, m)?)?;

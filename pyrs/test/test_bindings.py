@@ -4,7 +4,7 @@ import time
 from functools import wraps
 
 import pytest
-from pyrs import (
+from pyrs.pyrs import (
     RsCircuit,
     WireType,
     RsOpType,
@@ -22,7 +22,9 @@ from pyrs import (
     CustomOp,
     Signature,
     decompose_custom_pass,
+    count_pycustom,
 )
+from pyrs.custom_base import CustomOpBase
 
 from pytket import Circuit, OpType, Qubit
 
@@ -176,7 +178,7 @@ def test_const():
 
 
 @dataclass
-class CustomBridge:
+class CustomBridge(CustomOpBase):
     flip: bool
 
     def signature(self) -> Signature:
@@ -208,7 +210,10 @@ def test_custom(flip):
         c.add_linear_unitid(Qubit("q", [i]))
     op = CustomOp(CustomBridge(flip))
     c.append(op, [0, 1, 2])
+    assert count_pycustom(c) == 1
+
     c, success = decompose_custom_pass(c)
     check_soundness(c)
     assert success
     assert c.node_count() == 6
+    assert count_pycustom(c) == 0
