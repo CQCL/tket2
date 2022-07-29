@@ -425,7 +425,7 @@ impl Signature {
 
 #[pyclass(name = "CustomOp")]
 #[derive(Debug, Clone)]
-pub struct PyCustom(PyObject);
+pub struct PyCustom(pub PyObject);
 
 impl CustomOp for PyCustom {
     fn signature(&self) -> Option<Signature> {

@@ -476,3 +476,67 @@ impl Op {
     //     }
     // }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "pyo3")]
+    fn py_int(i: i32) -> Op {
+        use crate::circuit::py_circuit::PyCustom;
+        Op::Custom(Box::new(PyCustom(Python::with_gil(|py| i.into_py(py)))))
+    }
+
+    #[cfg(feature = "tkcxx")]
+    fn unitary_x() -> Op {
+        use num_complex::Complex;
+
+        use crate::circuit::unitarybox::SU2;
+
+        Op::Custom(Box::new(SU2([
+            [Complex::new(0.0, 0.0), Complex::new(1.0, 0.0)],
+            [Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)],
+        ])))
+    }
+
+    #[cfg(feature = "tkcxx")]
+    fn unitary_z() -> Op {
+        use num_complex::Complex;
+
+        use crate::circuit::unitarybox::SU2;
+
+        Op::Custom(Box::new(SU2([
+            [Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)],
+            [Complex::new(0.0, 0.0), Complex::new(-1.0, 0.0)],
+        ])))
+    }
+    #[test]
+    fn equality() {
+        #[cfg(feature = "pyo3")]
+        pyo3::prepare_freethreaded_python();
+        let ops = [
+            Op::Input,
+            Op::Output,
+            #[cfg(feature = "pyo3")]
+            py_int(123),
+            #[cfg(feature = "pyo3")]
+            py_int(321),
+            #[cfg(feature = "tkcxx")]
+            unitary_x(),
+            #[cfg(feature = "tkcxx")]
+            unitary_z(),
+            Op::Copy {
+                n_copies: 3,
+                typ: WireType::Qubit,
+            },
+        ];
+
+        for o in &ops {
+            assert_eq!(o, &o.clone());
+        }
+
+        for window in ops.windows(2) {
+            assert!(window[0] != window[1]);
+        }
+    }
+}
