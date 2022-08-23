@@ -60,12 +60,12 @@ impl<'graph, N, E> Iterator for TopSortWalker<'graph, N, E> {
 
         if let Some(n) = self.candidate_nodes.pop_front() {
             for e in self.g.node_edges(n, forward) {
-                let m = self.g.edge_endpoints(*e).unwrap()[forward as usize].node;
-                self.remaining_edges.remove(e);
+                let m = self.g.edge_endpoint(e, forward).unwrap();
+                self.remaining_edges.remove(&e);
                 if !self
                     .g
                     .node_edges(m, backward)
-                    .any(|e2| self.remaining_edges.contains(e2))
+                    .any(|e2| self.remaining_edges.contains(&e2))
                 {
                     self.candidate_nodes.push_back(m);
                 }
