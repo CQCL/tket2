@@ -278,6 +278,11 @@ impl Circuit {
         CommandIter::new(self)
     }
 
+    pub fn commands_with_unitid(&self, unitid: UnitID) -> impl Iterator<Item = Command> {
+        self.to_commands()
+            .filter(move |cmd| cmd.args.contains(&unitid))
+    }
+
     pub fn qubits(&self) -> impl Iterator<Item = UnitID> + '_ {
         self.uids.iter().filter_map(|uid| match uid {
             UnitID::Qubit { .. } => Some(uid.clone()),
