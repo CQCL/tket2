@@ -1,0 +1,3 @@
+[submodule "ext/symengine.rs"]
+	path = ext/symengine.rs
+	url = git@github.com:podo-os/symengine.rs.git
