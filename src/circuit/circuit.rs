@@ -125,13 +125,12 @@ impl Circuit {
 
     pub fn add_linear_unitid(&mut self, uid: UnitID) {
         let ie = self.add_edge(uid.get_type());
-        let oe = self.add_edge(uid.get_type());
 
         self.dag
-            .connect_first(self.boundary.input, ie, Direction::Outgoing)
+            .connect_last(self.boundary.input, ie, Direction::Outgoing)
             .unwrap();
         self.dag
-            .connect_first(self.boundary.output, oe, Direction::Incoming)
+            .connect_last(self.boundary.output, ie, Direction::Incoming)
             .unwrap();
         // let [_, inlen] = self.dag.node_boundary_size(self.boundary.input);
         // let [outlen, _] = self.dag.node_boundary_size(self.boundary.output);
@@ -197,6 +196,13 @@ impl Circuit {
 
     pub fn edge_at_port(&self, n: Vertex, port: usize, direction: Direction) -> Option<Edge> {
         self.dag.node_edges(n, direction).nth(port)
+    }
+
+    pub fn port_of_edge(&self, n: Vertex, edge: Edge, direction: Direction) -> Option<usize> {
+        self.dag
+            .node_edges(n, direction)
+            .enumerate()
+            .find_map(|(i, oe)| (oe == edge).then(|| i))
     }
 
     pub fn node_edges(&self, n: Vertex, direction: Direction) -> Vec<Edge> {
@@ -309,21 +315,25 @@ impl Circuit {
             .ok_or_else(|| ConnectError::UnknownEdge)?;
 
         let mut incoming = vec![];
-        let mut outgoing = vec![];
-        for (p, e) in insertion_edges.into_iter().enumerate() {
+        // let mut outgoing = vec![];
+        for e in insertion_edges.iter() {
             let e_type = self
                 .dag
-                .edge_weight(e)
+                .edge_weight(*e)
                 .expect("Edge should be there.")
                 .edge_type;
-
-            incoming.push(self.add_edge(e_type));
-            outgoing.push(self.add_edge(e_type));
+            let in_e = self.add_edge(e_type);
+            self.dag.replace_connection(*e, in_e, Direction::Outgoing);
+            // let prev = self.dag.edge_endpoint(*e, Direction::Outgoing).unwrap();
+            // self.dag.connect_after(prev, in_e, Direction::Outgoing, *e);
+            // self.dag.disconnect(*e, Direction::Outgoing);
+            incoming.push(in_e);
+            // outgoing.push(self.add_edge(e_type));
             // let p = PortIndex::new(p);
             // self.insert_at_edge(new_vert, e, [p; 2])?;
         }
         self.dag
-            .add_node_with_edges(VertexProperties { op }, incoming, outgoing)
+            .add_node_with_edges(VertexProperties { op }, incoming, insertion_edges)
 
         // Ok(new_vert)
     }

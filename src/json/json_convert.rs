@@ -1,6 +1,6 @@
 use crate::circuit::circuit::{Circuit, UnitID};
 use crate::circuit::operation::{ConstValue, Op, WireType};
-use crate::graph::graph::{Direction, PortIndex};
+use crate::graph::graph::Direction;
 use std::collections::HashMap;
 use std::str::FromStr;
 use tket_json_rs::circuit_json::{Command, Operation, Permutation, Register, SerialCircuit};
@@ -212,10 +212,10 @@ impl<P: ToString> From<SerialCircuit<P>> for Circuit {
         // circ.phase = Param::new(serialcirc.phase);
         circ.phase = f64::from_str(&serialcirc.phase.to_string()[..]).unwrap();
 
-        let frontier: HashMap<UnitID, PortIndex> = circ
+        let frontier: HashMap<UnitID, usize> = circ
             .unitids()
             .enumerate()
-            .map(|(i, uid)| (uid.clone(), PortIndex::new(i)))
+            .map(|(i, uid)| (uid.clone(), i))
             .collect();
         for com in serialcirc.commands {
             let op: Op = com.op.op_type.into();
@@ -234,19 +234,27 @@ impl<P: ToString> From<SerialCircuit<P>> for Circuit {
             // assumes the linear wires are always the first ones
             let v = circ.append_op(op, &args[..]).unwrap();
             if let Some(params) = com.op.params {
+                let mut prev = circ.dag.node_edges(v, Direction::Incoming).last();
                 for (i, p) in params.into_iter().enumerate() {
                     let p_str = p.to_string();
                     let param_source = if let Ok(f) = f64::from_str(&p_str[..]) {
-                        let con = circ.add_vertex(Op::Const(ConstValue::f64_angle(f)));
-                        (con, 0).into()
+                        let e = circ.add_edge(WireType::Angle);
+                        let con = circ.add_vertex_with_edges(
+                            Op::Const(ConstValue::f64_angle(f)),
+                            vec![],
+                            vec![e],
+                        );
+                        e
                     } else {
                         circ.add_unitid(UnitID::Angle(p_str))
                     };
-                    circ.tup_add_edge(
-                        param_source,
-                        (v, (args.len() + i) as u8).into(),
-                        WireType::Angle,
-                    );
+                    circ.dag.connect(v, param_source, Direction::Incoming, prev);
+                    prev = Some(param_source);
+                    // circ.tup_add_edge(
+                    //     param_source,
+                    //     (v, (args.len() + i) as u8).into(),
+                    //     WireType::Angle,
+                    // );
                 }
             };
         }
@@ -326,18 +334,23 @@ fn param_strings(
         (0..num)
             .map(|i| {
                 let angle_edge = circ
-                    .dag
-                    .edge_at_port((com.vertex, 1 + i as u8).into(), Direction::Incoming)
+                    .edge_at_port(com.vertex, 1 + i as usize, Direction::Incoming)
                     .expect("Expected an angle wire.");
-                let pred_np = circ.dag.edge_endpoints(angle_edge).unwrap()[0];
+                let pred_n = circ
+                    .dag
+                    .edge_endpoint(angle_edge, Direction::Outgoing)
+                    .unwrap();
                 let pred = &circ
                     .dag
-                    .node_weight(pred_np.node)
+                    .node_weight(pred_n)
                     .expect("Expected predecessor node.")
                     .op;
                 match pred {
                     Op::Const(ConstValue::Angle(p)) => p.to_f64().to_string(),
-                    Op::Input => match &circ.uids[pred_np.port.index()] {
+                    Op::Input => match &circ.uids[circ
+                        .port_of_edge(pred_n, angle_edge, Direction::Outgoing)
+                        .unwrap()]
+                    {
                         UnitID::Angle(s) => s.clone(),
                         _ => panic!("Must be an Angle input"),
                     },
