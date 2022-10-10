@@ -12,9 +12,15 @@ pub fn dot_string<N: Display, E: Display>(graph: &Graph<N, E>) -> String {
         s.push_str(&format!("{} [label=\"{:}\"]\n", n.index(), node)[..]);
     }
 
-    // TODO: Needs to handle dangling edges
-
     for e in graph.edge_indices() {
+        // TODO: Needs to handle dangling edges
+        if let (Some(a), Some(b)) = (
+            graph.edge_endpoint(e, Direction::Outgoing),
+            graph.edge_endpoint(e, Direction::Incoming),
+        ) {
+        } else {
+            continue;
+        }
         let a = graph.edge_endpoint(e, Direction::Outgoing).unwrap();
         let b = graph.edge_endpoint(e, Direction::Incoming).unwrap();
 

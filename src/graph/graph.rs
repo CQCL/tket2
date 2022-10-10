@@ -527,6 +527,16 @@ impl<N, E> Graph<N, E> {
         Ok(())
     }
 
+    pub fn connect_last(
+        &mut self,
+        node: NodeIndex,
+        edge: EdgeIndex,
+        direction: Direction,
+    ) -> Result<(), ConnectError> {
+        let edge_prev = self.node_edges(node, direction).last();
+        self.connect(node, edge, direction, edge_prev)
+    }
+
     fn edge_prev(&self, edge_index: EdgeIndex, direction: Direction) -> Option<EdgeIndex> {
         let node_index = self.edge_endpoint(edge_index, direction)?;
 
@@ -578,6 +588,22 @@ impl<N, E> Graph<N, E> {
             Some(prev) => self.edges[prev.index()].next[direction.index()] = next,
             None => self.nodes[node.index()].edges[direction.index()] = next,
         }
+    }
+
+    pub fn replace_connection(
+        &mut self,
+        prev: EdgeIndex,
+        new: EdgeIndex,
+        direction: Direction,
+    ) -> Result<(), ConnectError> {
+        let n = self
+            .edge_endpoint(prev, direction)
+            .ok_or(ConnectError::UnknownEdge)?;
+
+        self.connect_after(n, new, direction, prev)?;
+
+        self.disconnect(prev, direction);
+        Ok(())
     }
 
     /// A reference to the weight of the node with a given index.
