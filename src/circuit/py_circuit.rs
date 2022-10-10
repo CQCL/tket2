@@ -4,7 +4,7 @@ use crate::{
     circuit::operation::{Quat, Rational},
     graph::{
         graph::{EdgeIndex, NodeIndex, NodePort, PortIndex},
-        substitute::{BoundedSubgraph, SubgraphRef},
+        substitute::{BoundedSubgraph, RewriteError, SubgraphRef},
     },
 };
 
@@ -115,6 +115,12 @@ impl<'source> FromPyObject<'source> for Op {
 impl std::convert::From<CircuitError> for PyErr {
     fn from(s: CircuitError) -> Self {
         pyo3::exceptions::PyRuntimeError::new_err(s.0)
+    }
+}
+
+impl std::convert::From<RewriteError> for PyErr {
+    fn from(s: RewriteError) -> Self {
+        pyo3::exceptions::PyRuntimeError::new_err(s.to_string())
     }
 }
 

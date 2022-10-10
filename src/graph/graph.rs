@@ -176,6 +176,13 @@ impl Direction {
     pub fn index(self) -> usize {
         self as usize
     }
+
+    pub fn reverse(self) -> Direction {
+        match self {
+            Direction::Incoming => Direction::Outgoing,
+            Direction::Outgoing => Direction::Incoming,
+        }
+    }
 }
 
 /// Incoming and outgoing.

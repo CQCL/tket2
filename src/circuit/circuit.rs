@@ -3,8 +3,8 @@ use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 
-use crate::graph::graph::{Direction, NodePort, PortIndex};
-use crate::graph::substitute::{BoundedSubgraph, OpenGraph};
+use crate::graph::graph::{ConnectError, Direction};
+use crate::graph::substitute::{BoundedSubgraph, OpenGraph, RewriteError};
 
 use super::dag::{Dag, Edge, EdgeProperties, TopSorter, Vertex, VertexProperties};
 use super::operation::{ConstValue, Op, Param, WireType};
@@ -92,29 +92,54 @@ impl From<&str> for CircuitError {
 #[cfg_attr(feature = "pyo3", pymethods)]
 impl Circuit {
     pub fn add_vertex(&mut self, op: Op) -> Vertex {
-        let capacity = op.signature().map_or(0, |sig| sig.len());
+        // let capacity = op.signature().map_or(0, |sig| sig.len());
         let weight = VertexProperties::new(op);
-        self.dag.add_node_with_capacity(capacity, weight)
+        self.dag.add_node(weight)
     }
-
-    pub fn add_edge(&mut self, source: NodePort, target: NodePort, edge_type: WireType) -> Edge {
+    pub fn add_vertex_with_edges(
+        &mut self,
+        op: Op,
+        incoming: Vec<Edge>,
+        outgoing: Vec<Edge>,
+    ) -> Vertex {
+        let weight = VertexProperties::new(op);
         self.dag
-            .add_edge(source, target, EdgeProperties { edge_type })
+            .add_node_with_edges(weight, incoming, outgoing)
+            .unwrap()
+    }
+    pub fn add_edge(&mut self, edge_type: WireType) -> Edge {
+        self.dag.add_edge(EdgeProperties { edge_type })
     }
 
-    pub fn add_unitid(&mut self, uid: UnitID) -> NodePort {
+    pub fn add_unitid(&mut self, uid: UnitID) -> Edge {
+        let e = self.add_edge(uid.get_type());
         self.uids.push(uid);
-        (self.boundary.input, (self.uids.len() - 1) as u8).into()
+
+        // TODO check if connect first is ok
+        self.dag
+            .connect_first(self.boundary.input, e, Direction::Outgoing)
+            .unwrap();
+        e
+        // (self.boundary.input, (self.uids.len() - 1) as u8).into()
     }
 
     pub fn add_linear_unitid(&mut self, uid: UnitID) {
-        let [_, inlen] = self.dag.node_boundary_size(self.boundary.input);
-        let [outlen, _] = self.dag.node_boundary_size(self.boundary.output);
-        self.tup_add_edge(
-            (self.boundary.input, inlen as u8),
-            (self.boundary.output, outlen as u8),
-            uid.get_type(),
-        );
+        let ie = self.add_edge(uid.get_type());
+        let oe = self.add_edge(uid.get_type());
+
+        self.dag
+            .connect_first(self.boundary.input, ie, Direction::Outgoing)
+            .unwrap();
+        self.dag
+            .connect_first(self.boundary.output, oe, Direction::Incoming)
+            .unwrap();
+        // let [_, inlen] = self.dag.node_boundary_size(self.boundary.input);
+        // let [outlen, _] = self.dag.node_boundary_size(self.boundary.output);
+        // self.tup_add_edge(
+        //     (self.boundary.input, inlen as u8),
+        //     (self.boundary.output, outlen as u8),
+        //     uid.get_type(),
+        // );
         self.uids.push(uid);
     }
 
@@ -129,31 +154,31 @@ impl Circuit {
         crate::graph::dot::dot_string(self.dag_ref())
     }
 
-    pub fn apply_rewrite(&mut self, rewrite: CircuitRewrite) -> Result<(), CircuitError> {
+    pub fn apply_rewrite(&mut self, rewrite: CircuitRewrite) -> Result<(), RewriteError> {
         self.dag.apply_rewrite(rewrite.graph_rewrite)?;
         self.phase += rewrite.phase;
         Ok(())
     }
 
-    pub fn insert_at_edge(
-        &mut self,
-        vert: Vertex,
-        edge: Edge,
-        ports: [PortIndex; 2],
-    ) -> Result<(), CircuitError> {
-        let [s, t] = self
-            .dag
-            .edge_endpoints(edge)
-            .ok_or_else(|| "Edge not found.".to_string())?;
-        self.dag.update_edge(edge, s, NodePort::new(vert, ports[0]));
+    // pub fn insert_at_edge(
+    //     &mut self,
+    //     vert: Vertex,
+    //     edge: Edge,
+    //     ports: [PortIndex; 2],
+    // ) -> Result<(), CircuitError> {
+    //     let [s, t] = self
+    //         .dag
+    //         .edge_endpoints(edge)
+    //         .ok_or_else(|| "Edge not found.".to_string())?;
+    //     self.dag.update_edge(edge, s, NodePort::new(vert, ports[0]));
 
-        self.tup_add_edge(
-            NodePort::new(vert, ports[1]),
-            t,
-            self.dag.edge_weight(edge).unwrap().edge_type,
-        );
-        Ok(())
-    }
+    //     self.tup_add_edge(
+    //         NodePort::new(vert, ports[1]),
+    //         t,
+    //         self.dag.edge_weight(edge).unwrap().edge_type,
+    //     );
+    //     Ok(())
+    // }
 
     pub fn remove_node(&mut self, n: Vertex) -> Option<Op> {
         self.dag.remove_node(n).map(|v| v.op)
@@ -163,20 +188,26 @@ impl Circuit {
         self.dag.remove_edge(e).map(|ep| ep.edge_type)
     }
 
-    pub fn edge_endpoints(&self, e: Edge) -> Option<(NodePort, NodePort)> {
-        self.dag.edge_endpoints(e).map(|[e1, e2]| (e1, e2))
+    pub fn edge_endpoints(&self, e: Edge) -> Option<(Vertex, Vertex)> {
+        let s = self.dag.edge_endpoint(e, Direction::Outgoing)?;
+        let t = self.dag.edge_endpoint(e, Direction::Incoming)?;
+        // self.dag.edge_endpoints(e).map(|[e1, e2]| (e1, e2))
+        Some((s, t))
     }
 
-    pub fn edge_at_port(&self, np: NodePort, direction: Direction) -> Option<Edge> {
-        self.dag.edge_at_port(np, direction)
+    pub fn edge_at_port(&self, n: Vertex, port: usize, direction: Direction) -> Option<Edge> {
+        self.dag.node_edges(n, direction).nth(port)
     }
 
     pub fn node_edges(&self, n: Vertex, direction: Direction) -> Vec<Edge> {
-        self.dag.node_edges(n, direction).copied().collect()
+        self.dag.node_edges(n, direction).collect()
     }
 
-    pub fn neighbours(&self, n: Vertex, direction: Direction) -> Vec<NodePort> {
-        self.dag.neighbours(n, direction).collect()
+    pub fn neighbours(&self, n: Vertex, direction: Direction) -> Vec<Vertex> {
+        self.dag
+            .node_edges(n, direction)
+            .map(|e| self.dag.edge_endpoint(e, direction.reverse()).unwrap())
+            .collect()
     }
 
     pub fn add_const(&mut self, c: ConstValue) -> Vertex {
@@ -196,6 +227,22 @@ impl Circuit {
 
     pub fn edge_count(&self) -> usize {
         self.dag.edge_count()
+    }
+
+    pub fn new_input(&mut self, edge_type: WireType) -> Edge {
+        let e = self.add_edge(edge_type);
+        self.dag
+            .connect_first(self.boundary.input, e, Direction::Outgoing)
+            .unwrap();
+        e
+    }
+
+    pub fn new_output(&mut self, edge_type: WireType) -> Edge {
+        let e = self.add_edge(edge_type);
+        self.dag
+            .connect_first(self.boundary.output, e, Direction::Incoming)
+            .unwrap();
+        e
     }
 }
 impl Circuit {
@@ -221,57 +268,64 @@ impl Circuit {
         slf
     }
 
-    pub fn bind_input<P: Into<PortIndex>>(
-        &mut self,
-        in_port: P,
-        val: ConstValue,
-    ) -> Result<Vertex, CircuitError> {
+    pub fn bind_input(&mut self, in_port: usize, val: ConstValue) -> Result<Vertex, CircuitError> {
         let e = self
-            .dag
-            .edge_at_port(
-                NodePort::new(self.boundary.input, in_port.into()),
-                Direction::Outgoing,
-            )
+            .edge_at_port(self.boundary.input, in_port, Direction::Outgoing)
             .ok_or_else(|| "No such input".to_string())?;
-        let [_, target] = self.dag.edge_endpoints(e).unwrap();
-        let existing_typ = self.dag.remove_edge(e).unwrap().edge_type;
-        if val.get_type() != existing_typ {
+        // let target = self.dag.edge_endpoint(e, Direction::Incoming);
+        // let [_, target] = self.dag.edge_endpoints(e).unwrap();
+        // let existing_typ = self.dag.remove_edge(e).unwrap().edge_type;
+        if val.get_type() != self.edge_type(e).unwrap() {
             return Err("Edge type of input does not match type of provided value.".into());
         }
-        let cons = self.add_vertex(Op::Const(val));
-        self.tup_add_edge((cons, 0).into(), target, existing_typ);
-        Ok(cons)
+        self.dag.disconnect(e, Direction::Outgoing);
+        // let oes = vec![self.add_edge(existing_typ)];
+        Ok(self.add_vertex_with_edges(Op::Const(val), vec![], vec![e]))
+        // self.tup_add_edge((cons, 0).into(), target, existing_typ);
+        // Ok(cons)
     }
 
-    pub fn tup_add_edge<T: Into<NodePort>>(
-        &mut self,
-        source: T,
-        target: T,
-        edge_type: WireType,
-    ) -> Edge {
-        self.add_edge(source.into(), target.into(), edge_type)
-    }
+    // pub fn tup_add_edge<T: Into<NodePort>>(
+    //     &mut self,
+    //     source: T,
+    //     target: T,
+    //     edge_type: WireType,
+    // ) -> Edge {
+    //     self.add_edge(source.into(), target.into(), edge_type)
+    // }
 
-    pub fn append_op(&mut self, op: Op, args: &[PortIndex]) -> Result<Vertex, CircuitError> {
+    pub fn append_op(&mut self, op: Op, args: &[usize]) -> Result<Vertex, ConnectError> {
         // akin to add-op in TKET-1
 
-        let new_vert = self.add_vertex(op);
+        // let new_vert = self.add_vertex(op);
+        let out_edges: Vec<_> = self
+            .dag
+            .node_edges(self.boundary.output, Direction::Incoming)
+            .collect();
         let insertion_edges = args
             .iter()
-            .map(|port| {
-                self.dag.edge_at_port(
-                    NodePort::new(self.boundary.output, *port),
-                    Direction::Incoming,
-                )
-            })
+            .map(|port| out_edges.get(*port).map(|x| *x))
             .collect::<Option<Vec<Edge>>>()
-            .ok_or_else(|| "Invalid output ports".to_string())?;
-        for (p, e) in insertion_edges.into_iter().enumerate() {
-            let p = PortIndex::new(p);
-            self.insert_at_edge(new_vert, e, [p; 2])?;
-        }
+            .ok_or_else(|| ConnectError::UnknownEdge)?;
 
-        Ok(new_vert)
+        let mut incoming = vec![];
+        let mut outgoing = vec![];
+        for (p, e) in insertion_edges.into_iter().enumerate() {
+            let e_type = self
+                .dag
+                .edge_weight(e)
+                .expect("Edge should be there.")
+                .edge_type;
+
+            incoming.push(self.add_edge(e_type));
+            outgoing.push(self.add_edge(e_type));
+            // let p = PortIndex::new(p);
+            // self.insert_at_edge(new_vert, e, [p; 2])?;
+        }
+        self.dag
+            .add_node_with_edges(VertexProperties { op }, incoming, outgoing)
+
+        // Ok(new_vert)
     }
 
     pub fn to_commands(&self) -> CommandIter {
@@ -305,12 +359,11 @@ impl Circuit {
         [self.boundary.input, self.boundary.output]
     }
 
-    /// send an edge in to a copy vertex and return a reference to that vertex
-    /// the existing target of the edge will be the only target of the copy node
-    /// up to the user to make sure the remaining N-1 edges are connected to something
-    pub fn copy_edge(&mut self, e: Edge, copies: u32) -> Result<Vertex, String> {
+    /// send an edge in to a copy vertex and return
+    /// the N-1 new edges (with the first being connected to the existing target)
+    pub fn copy_edge(&mut self, e: Edge, copies: u32) -> Result<Vec<Edge>, String> {
         let edge_type = match self.dag.edge_weight(e) {
-            Some(EdgeProperties { edge_type, .. }) => edge_type,
+            Some(EdgeProperties { edge_type, .. }) => *edge_type,
             _ => return Err("Edge not found".into()),
         };
 
@@ -320,16 +373,25 @@ impl Circuit {
             }
             _ => Op::Copy {
                 n_copies: copies,
-                typ: *edge_type,
+                typ: edge_type,
             },
         };
-        let copy_node = self.add_vertex(copy_op);
-        let [s, t] = self.dag.edge_endpoints(e).unwrap();
-        let edge_type = self.dag.remove_edge(e).unwrap().edge_type;
-        self.tup_add_edge(s, (copy_node, 0).into(), edge_type);
-        self.tup_add_edge((copy_node, 0).into(), t, edge_type);
 
-        Ok(copy_node)
+        let copy_es: Vec<_> = (0..copies).map(|_| self.add_edge(edge_type)).collect();
+        // let copy_node = self.add_vertex(copy_op);
+        let (s, t) = self.edge_endpoints(e).unwrap();
+        self.dag
+            .connect_after(t, copy_es[0], Direction::Incoming, e)
+            .unwrap();
+        self.dag.disconnect(e, Direction::Incoming);
+        // let edge_type = self.dag.remove_edge(e).unwrap().edge_type;
+        // self.tup_add_edge(s, (copy_node, 0).into(), edge_type);
+        // self.tup_add_edge((copy_node, 0).into(), t, edge_type);
+
+        // Ok(copy_node)
+        self.add_vertex_with_edges(copy_op, vec![e], copy_es.clone());
+
+        Ok(copy_es)
     }
 
     // pub fn apply_rewrite(&mut self, rewrite: CircuitRewrite) -> Result<(), String> {
@@ -338,8 +400,7 @@ impl Circuit {
     //     Ok(())
     // }
     pub fn remove_invalid(mut self) -> Self {
-        let (g, node_map, _) = self.dag.remove_invalid();
-        self.dag = g;
+        let (node_map, _) = self.dag.compact();
         self.boundary = Boundary {
             input: node_map[&self.boundary.input],
             output: node_map[&self.boundary.output],
@@ -360,19 +421,36 @@ impl Circuit {
             })
             .collect();
         for (edge_type, nod) in noop_nodes {
-            let source = self
+            let ie = self
                 .dag
-                .neighbours(nod, Direction::Incoming)
+                .node_edges(nod, Direction::Incoming)
                 .next()
                 .unwrap();
-            let target = self
+            let oe = self
                 .dag
-                .neighbours(nod, Direction::Outgoing)
+                .node_edges(nod, Direction::Outgoing)
                 .next()
                 .unwrap();
-            self.dag.remove_node(nod);
+
+            let target = self.dag.edge_endpoint(oe, Direction::Incoming).unwrap();
+
             self.dag
-                .add_edge(source, target, EdgeProperties { edge_type });
+                .connect_after(target, ie, Direction::Incoming, oe)
+                .unwrap();
+            self.dag.remove_edge(oe);
+            self.dag.remove_node(nod);
+            // let source = self
+            //     .dag
+            //     .neighbours(nod, Direction::Incoming)
+            //     .next()
+            //     .unwrap();
+            // let target = self
+            //     .dag
+            //     .neighbours(nod, Direction::Outgoing)
+            //     .next()
+            //     .unwrap();
+            // self.dag
+            //     .add_edge(source, target, EdgeProperties { edge_type });
         }
 
         self
@@ -403,7 +481,7 @@ impl<'circ> CommandIter<'circ> {
                 &circ.dag,
                 circ.dag
                     .node_indices()
-                    .filter(|n| circ.dag.node_boundary_size(*n)[0] == 0)
+                    .filter(|n| circ.dag.node_edges(*n, Direction::Incoming).count() == 0)
                     .collect(),
             )
             .with_cyclicity_check(),
@@ -411,7 +489,7 @@ impl<'circ> CommandIter<'circ> {
                 .dag
                 .node_edges(circ.boundary.input, Direction::Outgoing)
                 .enumerate()
-                .map(|(i, e)| (*e, circ.uids.get(i).unwrap()))
+                .map(|(i, e)| (e, circ.uids.get(i).unwrap()))
                 .collect(),
             circ,
         }
@@ -431,8 +509,8 @@ impl<'circ> Iterator for CommandIter<'circ> {
                 .node_edges(node, Direction::Incoming)
                 .zip(self.circ.dag.node_edges(node, Direction::Outgoing))
                 .map(|(in_e, out_e)| {
-                    let uid = self.frontier.remove(in_e).expect("edge not in frontier");
-                    self.frontier.insert(*out_e, uid);
+                    let uid = self.frontier.remove(&in_e).expect("edge not in frontier");
+                    self.frontier.insert(out_e, uid);
                     uid.clone()
                 })
                 .collect();
@@ -472,14 +550,13 @@ impl CircuitRewrite {
 impl From<Circuit> for OpenGraph<VertexProperties, EdgeProperties> {
     fn from(mut c: Circuit) -> Self {
         let [entry, exit] = c.boundary();
-        let in_ports = c.dag.neighbours(entry, Direction::Outgoing).collect();
-        let out_ports = c.dag.neighbours(exit, Direction::Incoming).collect();
+        let in_ports = c.dag.node_edges(entry, Direction::Outgoing).collect();
+        let out_ports = c.dag.node_edges(exit, Direction::Incoming).collect();
 
         c.dag.remove_node(entry);
         c.dag.remove_node(exit);
         Self {
-            in_ports,
-            out_ports,
+            ports: [in_ports, out_ports],
             graph: c.dag,
         }
     }
@@ -489,7 +566,7 @@ impl From<Circuit> for OpenGraph<VertexProperties, EdgeProperties> {
 mod tests {
     use crate::{
         circuit::operation::{ConstValue, Op, WireType},
-        graph::graph::{Direction, PortIndex},
+        graph::graph::Direction,
     };
 
     use super::Circuit;
@@ -497,44 +574,66 @@ mod tests {
     #[test]
     fn test_add_identity() {
         let mut circ = Circuit::new();
-        let [i, o] = circ.boundary();
+        // let [i, o] = circ.boundary();
         for p in 0..2 {
-            let noop = circ.add_vertex(Op::Noop(WireType::Qubit));
-            circ.tup_add_edge((i, p), (noop, 0), WireType::Qubit);
-            circ.tup_add_edge((noop, 0), (o, p), WireType::Qubit);
+            let ie = circ.new_input(WireType::Qubit);
+            let oe = circ.new_output(WireType::Qubit);
+            let noop = circ.add_vertex_with_edges(Op::Noop(WireType::Qubit), vec![ie], vec![oe]);
+            // circ.dag.connect_first(i, ie, Direction::Outgoing);
+            // circ.dag.connect_first(o, oe, Direction::Incoming);
+            // circ.tup_add_edge((i, p), (noop, 0), WireType::Qubit);
+            // circ.tup_add_edge((noop, 0), (o, p), WireType::Qubit);
         }
     }
 
     #[test]
     fn test_bind_value() {
         let mut circ = Circuit::new();
-        let [i, o] = circ.boundary();
-        let add = circ.add_vertex(Op::AngleAdd);
+        // let [i, o] = circ.boundary();
 
-        circ.tup_add_edge((i, 0), (add, 0), WireType::F64);
-        circ.tup_add_edge((i, 1), (add, 1), WireType::F64);
-        circ.tup_add_edge((add, 0), (o, 0), WireType::F64);
+        let i1 = circ.new_input(WireType::F64);
+        let i0 = circ.new_input(WireType::F64);
+
+        let o = circ.new_output(WireType::F64);
+        let add = circ.add_vertex_with_edges(Op::AngleAdd, vec![i0, i1], vec![o]);
+
+        // circ.tup_add_edge((i, 0), (add, 0), WireType::F64);
+        // circ.tup_add_edge((i, 1), (add, 1), WireType::F64);
+        // circ.tup_add_edge((add, 0), (o, 0), WireType::F64);
 
         assert_eq!(circ.dag.edge_count(), 3);
         assert_eq!(circ.dag.node_count(), 3);
-        assert_eq!(circ.dag.node_edges(i, Direction::Outgoing).count(), 2);
-        circ.bind_input(PortIndex::new(0), ConstValue::F64(1.0))
-            .unwrap();
-        circ.bind_input(PortIndex::new(1), ConstValue::F64(2.0))
-            .unwrap();
+        assert_eq!(
+            circ.dag
+                .node_edges(circ.boundary.input, Direction::Outgoing)
+                .count(),
+            2
+        );
+
+        // println!("{}", circ.dag.node_edges(circ.boundary.output, Direction::Incoming).count());
+        // println!("{:?}", circ.edge_at_port(circ.boundary.input, 1, Direction::Outgoing));
+
+        circ.bind_input(0, ConstValue::F64(1.0)).unwrap();
+        circ.bind_input(0, ConstValue::F64(2.0)).unwrap();
+        println!("{}", circ.dot_string());
 
         assert_eq!(circ.dag.edge_count(), 3);
         assert_eq!(circ.dag.node_count(), 5);
-        assert_eq!(circ.dag.node_edges(i, Direction::Outgoing).count(), 0);
+        assert_eq!(
+            circ.dag
+                .node_edges(circ.boundary.input, Direction::Outgoing)
+                .count(),
+            0
+        );
 
-        let mut neis = circ.dag.neighbours(add, Direction::Incoming);
+        let neis = circ.neighbours(add, Direction::Incoming);
 
         assert_eq!(
-            circ.dag.node_weight(neis.next().unwrap().node).unwrap().op,
+            circ.dag.node_weight(neis[0]).unwrap().op,
             Op::Const(ConstValue::F64(1.0))
         );
         assert_eq!(
-            circ.dag.node_weight(neis.next().unwrap().node).unwrap().op,
+            circ.dag.node_weight(neis[1]).unwrap().op,
             Op::Const(ConstValue::F64(2.0))
         );
     }
