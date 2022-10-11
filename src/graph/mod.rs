@@ -7,7 +7,6 @@ pub mod toposort;
 #[cfg(test)]
 mod tests {
     use std::collections::{BTreeMap, HashSet};
-    use std::error::Error;
 
     use crate::graph::{
         dot::dot_string,
@@ -23,15 +22,15 @@ mod tests {
         let e1 = g.add_edge(-1);
         let e2 = g.add_edge(-2);
 
-        let n0 = g.add_node_with_edges(0, [], [e1]).unwrap();
-        let n1 = g.add_node_with_edges(1, [e1], [e2]).unwrap();
-        let n2 = g.add_node_with_edges(2, [e2], []).unwrap();
+        let _n0 = g.add_node_with_edges(0, [], [e1]).unwrap();
+        let _n1 = g.add_node_with_edges(1, [e1], [e2]).unwrap();
+        let _n2 = g.add_node_with_edges(2, [e2], []).unwrap();
 
         let mut g2 = Graph::<i8, i8>::with_capacity(2, 1);
 
         let e3 = g2.add_edge(-3); //(g20, 0), (g21, 0), -3);
-        let n3 = g2.add_node_with_edges(3, [], [e3]);
-        let n4 = g2.add_node_with_edges(4, [e3], []);
+        let _n3 = g2.add_node_with_edges(3, [], [e3]);
+        let _n4 = g2.add_node_with_edges(4, [e3], []);
 
         g.insert_graph(g2);
 
@@ -56,9 +55,9 @@ mod tests {
         let e2 = g.add_edge(-2);
         let e3 = g.add_edge(-3);
 
-        let n0 = g.add_node_with_edges(0, [], [e1, e3]).unwrap();
+        let _n0 = g.add_node_with_edges(0, [], [e1, e3]).unwrap();
         let n1 = g.add_node_with_edges(1, [e1], [e2]).unwrap();
-        let n2 = g.add_node_with_edges(2, [e2, e3], []).unwrap();
+        let _n2 = g.add_node_with_edges(2, [e2, e3], []).unwrap();
 
         assert_eq!(g.node_count(), 3);
         assert_eq!(g.edge_count(), 3);

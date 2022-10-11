@@ -191,7 +191,7 @@ pub const DIRECTIONS: [Direction; 2] = [Direction::Incoming, Direction::Outgoing
 type NodeMap = BTreeMap<NodeIndex, NodeIndex>;
 type EdgeMap = BTreeMap<EdgeIndex, EdgeIndex>;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Graph<N, E> {
     nodes: Vec<Node<N>>,
     edges: Vec<Edge<E>>,
@@ -438,10 +438,10 @@ impl<N, E> Graph<N, E> {
     ) -> Result<(), ConnectError> {
         if !self.has_node(node) {
             return Err(ConnectError::UnknownNode);
-        } else if !self.has_edge(edge) {
+        } else if !self.has_edge(edge) | !self.has_edge(edge_prev) {
             return Err(ConnectError::UnknownEdge);
-        } else if !self.has_edge(edge_prev) {
-            return Err(ConnectError::UnknownEdge);
+        // } else if !self.has_edge(edge_prev) {
+        //     return Err(ConnectError::UnknownEdge);
         } else if self.edges[edge_prev.index()].nodes[direction.index()] != node {
             return Err(ConnectError::NodeMismatch);
         } else if self.edges[edge.index()].nodes[direction.index()] != NodeIndex::end() {
@@ -899,9 +899,7 @@ impl<N, E> Graph<N, E> {
     /// assert!(graph.node_edges(n1, Direction::Incoming).eq([e1]));
     /// ```
     pub fn merge_edges(&mut self, from: EdgeIndex, into: EdgeIndex) -> Result<E, MergeEdgesError> {
-        if !self.has_edge(from) {
-            return Err(MergeEdgesError::UnknownEdge);
-        } else if !self.has_edge(into) {
+        if !self.has_edge(from) | !self.has_edge(into) {
             return Err(MergeEdgesError::UnknownEdge);
         }
 

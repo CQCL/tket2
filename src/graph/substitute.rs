@@ -1,7 +1,6 @@
 use super::graph::{Direction, EdgeIndex, Graph, NodeIndex, DIRECTIONS};
 use std::collections::{BTreeSet, HashSet};
 use std::fmt::{Debug, Display};
-use std::hash::Hash;
 use thiserror::Error;
 
 #[derive(Debug, Clone)]
@@ -139,7 +138,7 @@ impl<N: Default + Debug + Display, E: Debug + Display> Graph<N, E> {
             let ports = &replacement.ports[direction.index()];
 
             for (edge, port) in edges.iter().zip(ports) {
-                let port = edge_map[&port];
+                let port = edge_map[port];
 
                 // TODO: There should be a check to make sure this can not fail
                 // before we merge the first edge to avoid leaving the graph in an

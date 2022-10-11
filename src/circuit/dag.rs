@@ -21,7 +21,7 @@ impl VertexProperties {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EdgeProperties {
     pub edge_type: WireType,
 }

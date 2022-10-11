@@ -235,11 +235,11 @@ impl<P: ToString> From<SerialCircuit<P>> for Circuit {
             let v = circ.append_op(op, &args[..]).unwrap();
             if let Some(params) = com.op.params {
                 let mut prev = circ.dag.node_edges(v, Direction::Incoming).last();
-                for (i, p) in params.into_iter().enumerate() {
+                for p in params.into_iter() {
                     let p_str = p.to_string();
                     let param_source = if let Ok(f) = f64::from_str(&p_str[..]) {
                         let e = circ.add_edge(WireType::Angle);
-                        let con = circ.add_vertex_with_edges(
+                        circ.add_vertex_with_edges(
                             Op::Const(ConstValue::f64_angle(f)),
                             vec![],
                             vec![e],
@@ -248,7 +248,9 @@ impl<P: ToString> From<SerialCircuit<P>> for Circuit {
                     } else {
                         circ.add_unitid(UnitID::Angle(p_str))
                     };
-                    circ.dag.connect(v, param_source, Direction::Incoming, prev);
+                    circ.dag
+                        .connect(v, param_source, Direction::Incoming, prev)
+                        .unwrap();
                     prev = Some(param_source);
                     // circ.tup_add_edge(
                     //     param_source,
