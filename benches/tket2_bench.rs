@@ -193,20 +193,20 @@ fn squash_bench(c: &mut Criterion) {
                         circ.add_vertex(Op::Const(ConstValue::Angle(AngleValue::F64(0.5))));
                     let point2 =
                         circ.add_vertex(Op::Const(ConstValue::Angle(AngleValue::F64(0.2))));
-                    circ.tup_add_edge(i1, (rx, 0), WireType::Qubit);
-                    circ.tup_add_edge((rx, 0), (rz, 0), WireType::Qubit);
-                    circ.tup_add_edge((rz, 0), (cx, 0), WireType::Qubit);
-                    circ.tup_add_edge(i2, (cx, 1), WireType::Qubit);
-                    circ.tup_add_edge((point5, 0), (rx, 1), WireType::Angle);
-                    circ.tup_add_edge((point2, 0), (rz, 1), WireType::Angle);
+                    circ.add_insert_edge(i1, (rx, 0), WireType::Qubit);
+                    circ.add_insert_edge((rx, 0), (rz, 0), WireType::Qubit);
+                    circ.add_insert_edge((rz, 0), (cx, 0), WireType::Qubit);
+                    circ.add_insert_edge(i2, (cx, 1), WireType::Qubit);
+                    circ.add_insert_edge((point5, 0), (rx, 1), WireType::Angle);
+                    circ.add_insert_edge((point2, 0), (rz, 1), WireType::Angle);
 
-                    circ.tup_add_edge((cx, 0), (output, layer), WireType::Qubit);
+                    circ.add_insert_edge((cx, 0), (output, layer), WireType::Qubit);
 
                     i1 = (cx, 1);
                     i2 = (input, layer + 2);
                 }
 
-                circ.tup_add_edge(i1, (output, size), WireType::Qubit);
+                circ.add_insert_edge(i1, (output, size), WireType::Qubit);
 
                 let rot_replacer = |circuit| {
                     apply_exhaustive(circuit, |c| find_singleq_rotations(c).collect()).unwrap()

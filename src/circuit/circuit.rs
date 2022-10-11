@@ -291,14 +291,19 @@ impl Circuit {
         // Ok(cons)
     }
 
-    // pub fn tup_add_edge<T: Into<NodePort>>(
-    //     &mut self,
-    //     source: T,
-    //     target: T,
-    //     edge_type: WireType,
-    // ) -> Edge {
-    //     self.add_edge(source.into(), target.into(), edge_type)
-    // }
+    pub fn add_insert_edge(
+        &mut self,
+        source: (Vertex, usize),
+        target: (Vertex, usize),
+        edge_type: WireType,
+    ) -> Result<Edge, ConnectError> {
+        let e = self.add_edge(edge_type);
+        self.dag
+            .insert_edge(source.0, e, Direction::Outgoing, source.1)?;
+        self.dag
+            .insert_edge(target.0, e, Direction::Incoming, target.1)?;
+        Ok(e)
+    }
 
     pub fn append_op(&mut self, op: Op, args: &[usize]) -> Result<Vertex, ConnectError> {
         // akin to add-op in TKET-1
@@ -387,13 +392,13 @@ impl Circuit {
             },
         };
 
-        let copy_es: Vec<_> = (0..copies).map(|_| self.add_edge(edge_type)).collect();
+        let mut copy_es: Vec<_> = (0..copies).map(|_| self.add_edge(edge_type)).collect();
         // let copy_node = self.add_vertex(copy_op);
         let (s, t) = self.edge_endpoints(e).unwrap();
         self.dag
-            .connect_after(t, copy_es[0], Direction::Incoming, e)
+            .replace_connection(e, copy_es[0], Direction::Incoming)
             .unwrap();
-        self.dag.disconnect(e, Direction::Incoming);
+        // self.dag.disconnect(e, Direction::Incoming);
         // let edge_type = self.dag.remove_edge(e).unwrap().edge_type;
         // self.tup_add_edge(s, (copy_node, 0).into(), edge_type);
         // self.tup_add_edge((copy_node, 0).into(), t, edge_type);
@@ -401,6 +406,7 @@ impl Circuit {
         // Ok(copy_node)
         self.add_vertex_with_edges(copy_op, vec![e], copy_es.clone());
 
+        copy_es.remove(0);
         Ok(copy_es)
     }
 

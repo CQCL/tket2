@@ -606,6 +606,40 @@ impl<N, E> Graph<N, E> {
         Ok(())
     }
 
+    /// Connect edge to node, inserting to connection list at specified index.
+    ///
+    /// This operation takes time linear in index.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use tket2::graph::graph::{Graph, Direction};
+    /// let mut graph = Graph::<i8, i8>::new();
+    ///
+    /// let e1 = graph.add_edge(-1);
+    /// let e2 = graph.add_edge(-2);
+    /// let n0 = graph.add_node_with_edges(0, [e1], []).unwrap();
+    ///
+    /// graph.insert_edge(n0, e2, Direction::Incoming, 1);
+    /// assert!(graph.node_edges(n0, Direction::Incoming).eq([e1, e2]));
+    ///
+    /// ```
+    pub fn insert_edge(
+        &mut self,
+        node: NodeIndex,
+        edge: EdgeIndex,
+        direction: Direction,
+        index: usize,
+    ) -> Result<(), ConnectError> {
+        let edge_prev = if index == 0 {
+            None
+        } else {
+            self.node_edges(node, direction).nth(index - 1)
+        };
+
+        self.connect(node, edge, direction, edge_prev)
+    }
+
     /// A reference to the weight of the node with a given index.
     pub fn node_weight(&self, a: NodeIndex) -> Option<&N> {
         self.nodes.get(a.index())?.weight.as_ref()
