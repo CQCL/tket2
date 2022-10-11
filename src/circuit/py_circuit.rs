@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crate::{
     circuit::operation::{Quat, Rational},
     graph::{
-        graph::{EdgeIndex, NodeIndex, NodePort, PortIndex},
+        graph::{EdgeIndex, NodeIndex},
         substitute::{BoundedSubgraph, RewriteError, SubgraphRef},
     },
 };
@@ -41,40 +41,40 @@ impl IntoPy<PyObject> for EdgeIndex {
     }
 }
 
-#[pymethods]
-impl NodePort {
-    #[new]
-    fn py_new(n: NodeIndex, p: usize) -> Self {
-        Self::new(n, PortIndex::new(p))
-    }
+// #[pymethods]
+// impl NodePort {
+//     #[new]
+//     fn py_new(n: NodeIndex, p: usize) -> Self {
+//         Self::new(n, PortIndex::new(p))
+//     }
 
-    #[getter]
-    fn node(&self) -> NodeIndex {
-        self.node
-    }
+//     #[getter]
+//     fn node(&self) -> NodeIndex {
+//         self.node
+//     }
 
-    #[getter]
-    fn port(&self) -> PortIndex {
-        self.port
-    }
+//     #[getter]
+//     fn port(&self) -> PortIndex {
+//         self.port
+//     }
 
-    fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
-        match op {
-            CompareOp::Lt => Ok(self < other),
-            CompareOp::Le => Ok(self <= other),
-            CompareOp::Eq => Ok(self == other),
-            CompareOp::Ne => Ok(self != other),
-            CompareOp::Gt => Ok(self > other),
-            CompareOp::Ge => Ok(self >= other),
-        }
-    }
-}
+//     fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
+//         match op {
+//             CompareOp::Lt => Ok(self < other),
+//             CompareOp::Le => Ok(self <= other),
+//             CompareOp::Eq => Ok(self == other),
+//             CompareOp::Ne => Ok(self != other),
+//             CompareOp::Gt => Ok(self > other),
+//             CompareOp::Ge => Ok(self >= other),
+//         }
+//     }
+// }
 
-impl IntoPy<PyObject> for PortIndex {
-    fn into_py(self, py: Python<'_>) -> PyObject {
-        self.index().into_py(py)
-    }
-}
+// impl IntoPy<PyObject> for PortIndex {
+//     fn into_py(self, py: Python<'_>) -> PyObject {
+//         self.index().into_py(py)
+//     }
+// }
 
 #[derive(FromPyObject)]
 enum SpecialOp<'a> {
@@ -183,7 +183,7 @@ impl Circuit {
         *self = c;
     }
 
-    pub fn append(&mut self, op: Op, args: Vec<PortIndex>) -> NodeIndex {
+    pub fn append(&mut self, op: Op, args: Vec<usize>) -> NodeIndex {
         self.append_op(op, &args).unwrap()
     }
 }

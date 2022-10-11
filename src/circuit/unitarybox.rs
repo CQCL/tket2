@@ -38,7 +38,6 @@ mod tests {
             circuit::{Circuit, UnitID},
             operation::{AngleValue, ConstValue, Op},
         },
-        graph::graph::PortIndex,
         passes::decompose_custom_pass,
         validate::check_soundness,
     };
@@ -53,8 +52,7 @@ mod tests {
             [Complex::new(0.0, 0.0), Complex::new(1.0, 0.0)],
             [Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)],
         ]);
-        circ.append_op(Op::Custom(Box::new(x_su2)), &vec![PortIndex::new(0)])
-            .unwrap();
+        circ.append_op(Op::Custom(Box::new(x_su2)), &[0]).unwrap();
         check_soundness(&circ).unwrap();
 
         let (circ, success) = decompose_custom_pass(circ);

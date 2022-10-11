@@ -12,10 +12,18 @@ mod tests {
     use crate::{
         circuit::{
             circuit::{Circuit, UnitID},
-            operation::Op,
             operation::WireType,
+            operation::{ConstValue, Op},
         },
         graph::graph::Direction,
+        passes::{
+            apply_exhaustive, apply_greedy,
+            classical::find_const_ops,
+            squash::{
+                cx_cancel_pass, find_singleq_rotations, find_singleq_rotations_pattern,
+                squash_pattern,
+            },
+        },
         validate::check_soundness,
     };
     use tket_json_rs::circuit_json::{self, SerialCircuit};
@@ -92,40 +100,43 @@ mod tests {
         Ok(())
     }
 
-    // #[test]
-    // fn test_const_fold_simple() {
-    //     let mut circ = Circuit::new();
+    #[test]
+    fn test_const_fold_simple() -> Result<(), Box<dyn Error>> {
+        let mut circ = Circuit::new();
 
-    //     let [_, output] = circ.boundary();
+        let [_, output] = circ.boundary();
 
-    //     let fadd = circ.add_vertex(Op::AngleAdd);
-    //     let one = circ.add_vertex(Op::Const(ConstValue::f64_angle(0.5)));
-    //     let two = circ.add_vertex(Op::Const(ConstValue::f64_angle(1.5)));
-    //     let _e1 = circ.tup_add_edge((one, 0), (fadd, 0), WireType::Angle);
-    //     let _e2 = circ.tup_add_edge((two, 0), (fadd, 1), WireType::Angle);
+        let fadd = circ.add_vertex(Op::AngleAdd);
+        let one = circ.add_vertex(Op::Const(ConstValue::f64_angle(0.5)));
+        let two = circ.add_vertex(Op::Const(ConstValue::f64_angle(1.5)));
+        let _e1 = circ.add_insert_edge((one, 0), (fadd, 0), WireType::Angle)?;
+        let _e2 = circ.add_insert_edge((two, 0), (fadd, 1), WireType::Angle)?;
 
-    //     let _out = circ.tup_add_edge((fadd, 0), (output, 0), WireType::Angle);
-    //     check_soundness(&circ).unwrap();
+        let _out = circ.add_insert_edge((fadd, 0), (output, 0), WireType::Angle)?;
+        check_soundness(&circ).unwrap();
 
-    //     let rewrite = find_const_ops(&circ).next().unwrap();
+        let rewrite = find_const_ops(&circ).next().unwrap();
+        println!("{:#?}", rewrite);
 
-    //     circ.apply_rewrite(rewrite).unwrap();
+        circ.apply_rewrite(rewrite).unwrap();
+        println!("{}", circ.dot_string());
 
-    //     // println!("{}", dot_string(&circ.dag));
-    //     assert_eq!(circ.dag.node_count(), 3);
-    //     assert_eq!(circ.dag.edge_count(), 1);
-    //     let mut nodeit = circ.dag.node_weights();
-    //     // skip input and output
-    //     nodeit.next();
-    //     nodeit.next();
+        // println!("{}", dot_string(&circ.dag));
+        assert_eq!(circ.dag.node_count(), 3);
+        assert_eq!(circ.dag.edge_count(), 1);
+        let mut nodeit = circ.dag.node_weights();
+        // skip input and output
+        nodeit.next();
+        nodeit.next();
 
-    //     assert_eq!(
-    //         &nodeit.next().unwrap().op,
-    //         &Op::Const(ConstValue::f64_angle(2.0))
-    //     );
+        assert_eq!(
+            &nodeit.next().unwrap().op,
+            &Op::Const(ConstValue::f64_angle(2.0))
+        );
 
-    //     check_soundness(&circ).unwrap();
-    // }
+        check_soundness(&circ).unwrap();
+        Ok(())
+    }
 
     //     #[test]
     //     fn test_const_fold_less_simple() {
@@ -263,119 +274,126 @@ mod tests {
     //         }
     //     }
 
-    //     #[test]
-    //     fn test_rotation_replace() {
-    //         let mut circ = Circuit::new();
-    //         circ.add_unitid(UnitID::Qubit {
-    //             reg_name: "q".into(),
-    //             index: vec![0],
-    //         });
-    //         let [input, output] = circ.boundary();
+    #[test]
+    fn test_rotation_replace() {
+        let mut circ = Circuit::new();
+        // circ.add_unitid(UnitID::Qubit {
+        //     reg_name: "q".into(),
+        //     index: vec![0],
+        // });
+        let [input, output] = circ.boundary();
 
-    //         let point5 = circ.add_vertex(Op::Const(ConstValue::f64_angle(0.5)));
-    //         let rx = circ.add_vertex(Op::RxF64);
-    //         circ.tup_add_edge((input, 0), (rx, 0), WireType::Qubit);
-    //         circ.tup_add_edge((point5, 0), (rx, 1), WireType::Angle);
-    //         circ.tup_add_edge((rx, 0), (output, 0), WireType::Qubit);
-    //         check_soundness(&circ).unwrap();
+        let point5 = circ.add_vertex(Op::Const(ConstValue::f64_angle(0.5)));
+        let rx = circ.add_vertex(Op::RxF64);
+        circ.add_insert_edge((input, 0), (rx, 0), WireType::Qubit)
+            .unwrap();
+        circ.add_insert_edge((point5, 0), (rx, 1), WireType::Angle)
+            .unwrap();
+        circ.add_insert_edge((rx, 0), (output, 0), WireType::Qubit)
+            .unwrap();
 
-    //         // let rot_replacer =
-    //         // |circuit| apply_exhaustive(circuit, |c| find_singleq_rotations(c).collect()).unwrap();
+        check_soundness(&circ).unwrap();
 
-    //         let rot_replacer = |circuit| {
-    //             apply_exhaustive(circuit, |c| find_singleq_rotations_pattern(c).collect()).unwrap()
-    //         };
-    //         let (circ2, success) = rot_replacer(circ);
-    //         check_soundness(&circ2).unwrap();
+        // let rot_replacer =
+        // |circuit| apply_exhaustive(circuit, |c| find_singleq_rotations(c).collect()).unwrap();
 
-    //         assert!(success);
+        let rot_replacer = |circuit| {
+            apply_exhaustive(circuit, |c| find_singleq_rotations_pattern(c).collect()).unwrap()
+        };
+        let (circ2, success) = rot_replacer(circ);
+        println!("{}", circ2.dot_string());
+        check_soundness(&circ2).unwrap();
 
-    //         let constant_folder =
-    //             |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
-    //         let (circ2, success) = constant_folder(circ2);
-    //         check_soundness(&circ2).unwrap();
-    //         assert!(success);
-    //         // use crate::graph::dot::dot_string;
-    //         // println!("{}", dot_string(&_circ2.dag));
-    //     }
+        assert!(success);
 
-    //     #[test]
-    //     fn test_squash() {
-    //         let mut circ = Circuit::new();
-    //         circ.add_unitid(UnitID::Qubit {
-    //             reg_name: "q".into(),
-    //             index: vec![0],
-    //         });
-    //         let [input, output] = circ.boundary();
+        let constant_folder =
+            |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
+        let (circ2, success) = constant_folder(circ2);
+        check_soundness(&circ2).unwrap();
+        assert!(success);
+        // use crate::graph::dot::dot_string;
+        // println!("{}", dot_string(&_circ2.dag));
+    }
 
-    //         let rx = circ.add_vertex(Op::RxF64);
-    //         let rz = circ.add_vertex(Op::RzF64);
-    //         circ.tup_add_edge((input, 0), (rx, 0), WireType::Qubit);
-    //         circ.tup_add_edge((input, 1), (rx, 1), WireType::Angle);
-    //         circ.tup_add_edge((rx, 0), (rz, 0), WireType::Qubit);
-    //         circ.tup_add_edge((input, 2), (rz, 1), WireType::Angle);
-    //         circ.tup_add_edge((rz, 0), (output, 0), WireType::Qubit);
-    //         check_soundness(&circ).unwrap();
+    #[test]
+    fn test_squash() {
+        let mut circ = Circuit::new();
+        // circ.add_unitid(UnitID::Qubit {
+        //     reg_name: "q".into(),
+        //     index: vec![0],
+        // });
+        let [input, output] = circ.boundary();
 
-    //         let rot_replacer =
-    //             |circuit| apply_exhaustive(circuit, |c| find_singleq_rotations(c).collect()).unwrap();
-    //         let (circ2, success) = rot_replacer(circ);
+        let rx = circ.add_vertex(Op::RxF64);
+        let rz = circ.add_vertex(Op::RzF64);
+        circ.add_insert_edge((input, 0), (rx, 0), WireType::Qubit)
+            .unwrap();
+        circ.add_insert_edge((input, 1), (rx, 1), WireType::Angle)
+            .unwrap();
+        circ.add_insert_edge((rx, 0), (rz, 0), WireType::Qubit)
+            .unwrap();
+        circ.add_insert_edge((input, 2), (rz, 1), WireType::Angle)
+            .unwrap();
+        circ.add_insert_edge((rz, 0), (output, 0), WireType::Qubit)
+            .unwrap();
+        check_soundness(&circ).unwrap();
 
-    //         check_soundness(&circ2).unwrap();
-    //         assert!(success);
-    //         // let squasher =
-    //         // |circuit| apply_exhaustive(circuit, |c| SquashFindIter::new(c).collect()).unwrap();
-    //         let squasher = |circuit| apply_greedy(circuit, |c| squash_pattern(c).next()).unwrap();
-    //         let (mut circ2, success) = squasher(circ2);
+        let rot_replacer =
+            |circuit| apply_exhaustive(circuit, |c| find_singleq_rotations(c).collect()).unwrap();
+        let (circ2, success) = rot_replacer(circ);
+        println!("{}", circ2.dot_string());
 
-    //         assert!(success);
-    //         check_soundness(&circ2).unwrap();
+        check_soundness(&circ2).unwrap();
+        assert!(success);
+        // let squasher =
+        // |circuit| apply_exhaustive(circuit, |c| SquashFindIter::new(c).collect()).unwrap();
+        let squasher = |circuit| apply_greedy(circuit, |c| squash_pattern(c).next()).unwrap();
+        let (mut circ2, success) = squasher(circ2);
 
-    //         circ2
-    //             .bind_input(PortIndex::new(1), ConstValue::f64_angle(0.5))
-    //             .unwrap();
-    //         circ2
-    //             .bind_input(PortIndex::new(2), ConstValue::f64_angle(0.2))
-    //             .unwrap();
+        assert!(success);
+        check_soundness(&circ2).unwrap();
 
-    //         // use crate::graph::dot::dot_string;
-    //         // println!("{}", dot_string(&circ2.dag));
-    //         let constant_folder =
-    //             |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
-    //         let (circ2, success) = constant_folder(circ2);
+        circ2.bind_input(1, ConstValue::f64_angle(0.5)).unwrap();
+        circ2.bind_input(2, ConstValue::f64_angle(0.2)).unwrap();
 
-    //         assert!(success);
-    //         check_soundness(&circ2).unwrap();
+        // use crate::graph::dot::dot_string;
+        // println!("{}", dot_string(&circ2.dag));
+        let constant_folder =
+            |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
+        let (circ2, success) = constant_folder(circ2);
 
-    //         // let _circ2 = _circ2.remove_invalid();
-    //         // use crate::graph::dot::dot_string;
-    //         // println!("{}", dot_string(&_circ2.dag));
-    //         // TODO verify behaviour at each step
-    //     }
+        assert!(success);
+        check_soundness(&circ2).unwrap();
 
-    //     #[test]
-    //     fn test_cx_cancel() {
-    //         let qubits = vec![
-    //             UnitID::Qubit {
-    //                 reg_name: "q".into(),
-    //                 index: vec![0],
-    //             },
-    //             UnitID::Qubit {
-    //                 reg_name: "q".into(),
-    //                 index: vec![1],
-    //             },
-    //         ];
-    //         let mut circ = Circuit::with_uids(qubits);
-    //         circ.append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
-    //             .unwrap();
-    //         circ.append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
-    //             .unwrap();
-    //         check_soundness(&circ).unwrap();
+        // let _circ2 = _circ2.remove_invalid();
+        // use crate::graph::dot::dot_string;
+        // println!("{}", dot_string(&_circ2.dag));
+        // TODO verify behaviour at each step
+    }
 
-    //         let (circ, success) = cx_cancel_pass(circ);
-    //         assert!(success);
-    //         check_soundness(&circ).unwrap();
+    #[test]
+    fn test_cx_cancel() {
+        let qubits = vec![
+            UnitID::Qubit {
+                reg_name: "q".into(),
+                index: vec![0],
+            },
+            UnitID::Qubit {
+                reg_name: "q".into(),
+                index: vec![1],
+            },
+        ];
+        let mut circ = Circuit::with_uids(qubits);
+        circ.append_op(Op::CX, &[0, 1]).unwrap();
+        circ.append_op(Op::CX, &[0, 1]).unwrap();
+        check_soundness(&circ).unwrap();
 
-    //         assert_eq!(circ.dag.node_count(), 2);
-    //     }
+        println!("{}", circ.dot_string());
+        let (circ, success) = cx_cancel_pass(circ);
+        assert!(success);
+
+        check_soundness(&circ).unwrap();
+
+        assert_eq!(circ.dag.node_count(), 2);
+    }
 }
