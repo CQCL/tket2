@@ -5,8 +5,8 @@ use crate::{
         operation::{ConstValue, Op, Param, WireType},
     },
     graph::{
-        graph::{Direction, EdgeIndex, NodeIndex, PortIndex},
-        substitute::{BoundedSubgraph, Rewrite},
+        graph::{Direction, EdgeIndex, NodeIndex},
+        substitute::{BoundedSubgraph, Rewrite, SubgraphRef},
     },
     passes::{apply_exhaustive, apply_greedy, classical::find_const_ops},
 };
@@ -16,7 +16,7 @@ use super::{
     pattern_rewriter, CircFixedStructPattern,
 };
 
-pub fn find_singleq_rotations<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
+pub fn find_singleq_rotations(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
     RotationRewriteIter {
         circ,
         vertex_it: circ.dag.node_indices(),
@@ -63,9 +63,7 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for RotationRewriteIter<'circ, 
     }
 }
 
-pub fn find_singleq_rotations_pattern<'c>(
-    circ: &'c Circuit,
-) -> impl Iterator<Item = CircuitRewrite> + '_ {
+pub fn find_singleq_rotations_pattern(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
     let mut pattern_circ = Circuit::new();
     pattern_circ.add_unitid(UnitID::Qubit {
         reg_name: "q".into(),
@@ -74,9 +72,15 @@ pub fn find_singleq_rotations_pattern<'c>(
     let [input, output] = pattern_circ.boundary();
 
     let rx = pattern_circ.add_vertex(Op::RxF64);
-    pattern_circ.tup_add_edge((input, 0), (rx, 0), WireType::Qubit);
-    pattern_circ.tup_add_edge((input, 1), (rx, 1), WireType::Angle);
-    pattern_circ.tup_add_edge((rx, 0), (output, 0), WireType::Qubit);
+    pattern_circ
+        .add_insert_edge((input, 0), (rx, 0), WireType::Qubit)
+        .unwrap();
+    pattern_circ
+        .add_insert_edge((input, 1), (rx, 1), WireType::Angle)
+        .unwrap();
+    pattern_circ
+        .add_insert_edge((rx, 0), (output, 0), WireType::Qubit)
+        .unwrap();
 
     let nod_comp =
         |_: &Dag, _: NodeIndex, vert: &VertexProperties| !matches!(vert.op, Op::Rotation);
@@ -94,17 +98,27 @@ pub fn find_singleq_rotations_pattern<'c>(
 }
 
 // Pairwise squashing using pattern matching
-pub fn squash_pattern<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
+pub fn squash_pattern(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
     let mut pattern_circ = Circuit::new();
     let [input, output] = pattern_circ.boundary();
 
     let r1 = pattern_circ.add_vertex(Op::Rotation);
     let r2 = pattern_circ.add_vertex(Op::Rotation);
-    pattern_circ.tup_add_edge((input, 0), (r1, 0), WireType::Qubit);
-    pattern_circ.tup_add_edge((input, 1), (r1, 1), WireType::Quat64);
-    pattern_circ.tup_add_edge((r1, 0), (r2, 0), WireType::Qubit);
-    pattern_circ.tup_add_edge((input, 2), (r2, 1), WireType::Quat64);
-    pattern_circ.tup_add_edge((r2, 0), (output, 0), WireType::Qubit);
+    pattern_circ
+        .add_insert_edge((input, 0), (r1, 0), WireType::Qubit)
+        .unwrap();
+    pattern_circ
+        .add_insert_edge((input, 1), (r1, 1), WireType::Quat64)
+        .unwrap();
+    pattern_circ
+        .add_insert_edge((r1, 0), (r2, 0), WireType::Qubit)
+        .unwrap();
+    pattern_circ
+        .add_insert_edge((input, 2), (r2, 1), WireType::Quat64)
+        .unwrap();
+    pattern_circ
+        .add_insert_edge((r2, 0), (output, 0), WireType::Qubit)
+        .unwrap();
 
     let pattern = CircFixedStructPattern::from_circ(pattern_circ, node_equality());
 
@@ -114,11 +128,21 @@ pub fn squash_pattern<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewr
 
     let r1 = replace_circ.add_vertex(Op::Rotation);
     let mul = replace_circ.add_vertex(Op::QuatMul);
-    replace_circ.tup_add_edge((input, 0), (r1, 0), WireType::Qubit);
-    replace_circ.tup_add_edge((input, 1), (mul, 0), WireType::Quat64);
-    replace_circ.tup_add_edge((input, 2), (mul, 1), WireType::Quat64);
-    replace_circ.tup_add_edge((mul, 0), (r1, 1), WireType::Quat64);
-    replace_circ.tup_add_edge((r1, 0), (output, 0), WireType::Qubit);
+    replace_circ
+        .add_insert_edge((input, 0), (r1, 0), WireType::Qubit)
+        .unwrap();
+    replace_circ
+        .add_insert_edge((input, 1), (mul, 0), WireType::Quat64)
+        .unwrap();
+    replace_circ
+        .add_insert_edge((input, 2), (mul, 1), WireType::Quat64)
+        .unwrap();
+    replace_circ
+        .add_insert_edge((mul, 0), (r1, 1), WireType::Quat64)
+        .unwrap();
+    replace_circ
+        .add_insert_edge((r1, 0), (output, 0), WireType::Qubit)
+        .unwrap();
     let rewriter = move |_: Match| (replace_circ.clone(), 0.0);
 
     pattern_rewriter(pattern, circ, rewriter)
@@ -126,38 +150,67 @@ pub fn squash_pattern<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewr
 
 fn rotation_replacement(op: &Op) -> (Circuit, Param) {
     let mut replace = Circuit::new();
-    let [inp, out] = replace.boundary();
-    let make_quat = replace.add_vertex(Op::ToRotation);
-    let rot = replace.add_vertex(Op::Rotation);
-    replace.tup_add_edge((inp, 0), (rot, 0), WireType::Qubit);
-    replace.tup_add_edge((make_quat, 0), (rot, 1), WireType::Quat64);
-    let incoming_ports = match op {
-        Op::RxF64 => {
-            // replace.add_edge((inp, 1), (make_quat, 0), WireType::F64);
-            let x = replace.add_vertex(Op::Const(ConstValue::F64(1.0)));
-            let y = replace.add_vertex(Op::Const(ConstValue::F64(0.0)));
-            let z = replace.add_vertex(Op::Const(ConstValue::F64(0.0)));
-            [(inp, 1), (x, 0), (y, 0), (z, 0)]
-        }
-        Op::RzF64 => {
-            // replace.add_edge((inp, 1), (make_quat, 0), WireType::F64);
-            let x = replace.add_vertex(Op::Const(ConstValue::F64(0.0)));
-            let y = replace.add_vertex(Op::Const(ConstValue::F64(0.0)));
-            let z = replace.add_vertex(Op::Const(ConstValue::F64(1.0)));
-            [(inp, 1), (x, 0), (y, 0), (z, 0)]
-        }
+
+    // let [inp, out] = replace.boundary();
+
+    // let make_quat = replace.add_vertex(Op::ToRotation);
+    // let rot = replace.add_vertex(Op::Rotation);
+    let in_angle = replace.new_input(WireType::Angle);
+    let in_qubit = replace.new_input(WireType::Qubit);
+    let out_qubit = replace.new_output(WireType::Qubit);
+
+    let quat_edge = replace.add_edge(WireType::Quat64);
+
+    let const_edges: Vec<_> = (0..3).map(|_| replace.add_edge(WireType::F64)).collect();
+    // rot_edges[0].push(in_qubit);
+    // replace
+    // .add_insert_edge((inp, 0), (rot, 0), WireType::Qubit)
+    // .unwrap();
+    // replace
+    //     .add_insert_edge((make_quat, 0), (rot, 1), WireType::Quat64)
+    //     .unwrap();
+    let const_vals = match op {
+        Op::RxF64 => [1.0, 0.0, 0.0],
+        // replace.add_edge((inp, 1), (make_quat, 0), WireType::F64);
+
+        // replace.add_vertex_with_edges(Op::Const(ConstValue::F64(1.0)));
+        // replace.add_vertex_with_edges(Op::Const(ConstValue::F64(0.0)));
+        // replace.add_vertex_with_edges(Op::Const(ConstValue::F64(0.0)));
+        // }
+        Op::RzF64 => [0.0, 0.0, 1.0],
+        // {
+        //     // replace.add_edge((inp, 1), (make_quat, 0), WireType::F64);
+        //     let x = replace.add_vertex_with_edges(Op::Const(ConstValue::F64(0.0)));
+        //     let y = replace.add_vertex_with_edges(Op::Const(ConstValue::F64(0.0)));
+        //     let z = replace.add_vertex(Op::Const(ConstValue::F64(1.0)));
+        //     [inp, x, y, z]
+        // }
         // TODO add TK1
         _ => panic!("Op {:?} should not have made it to this point.", op),
     };
-    for (port_index, source) in incoming_ports.into_iter().enumerate() {
-        let edge_type = if port_index == 0 {
-            WireType::Angle
-        } else {
-            WireType::F64
-        };
-        replace.tup_add_edge(source, (make_quat, port_index as u8), edge_type);
+    for (val, e) in const_vals.iter().zip(const_edges.iter()) {
+        replace.add_vertex_with_edges(Op::Const(ConstValue::F64(*val)), vec![], vec![*e]);
     }
-    replace.tup_add_edge((rot, 0), (out, 0), WireType::Qubit);
+    replace.add_vertex_with_edges(
+        Op::ToRotation,
+        vec![in_angle, const_edges[0], const_edges[1], const_edges[2]],
+        vec![quat_edge],
+    );
+
+    replace.add_vertex_with_edges(Op::Rotation, vec![in_qubit, quat_edge], vec![out_qubit]);
+    // for (port_index, source) in incoming_ports.into_iter().enumerate() {
+    //     let edge_type = if port_index == 0 {
+    //         WireType::Angle
+    //     } else {
+    //         WireType::F64
+    //     };
+    //     replace
+    //         .add_insert_edge(source, (make_quat, port_index), edge_type)
+    //         .unwrap();
+    // }
+    // replace
+    //     .add_insert_edge((rot, 0), (out, 0), WireType::Qubit)
+    //     .unwrap();
     (replace, 0.0)
 }
 
@@ -176,8 +229,7 @@ impl<'c> SquashFindIter<'c> {
         let qubit_edges: Vec<_> = circ
             .dag
             .node_edges(circ.boundary()[0], Direction::Outgoing)
-            .filter(|e| circ.dag.edge_weight(**e).unwrap().edge_type == WireType::Qubit)
-            .copied()
+            .filter(|e| circ.dag.edge_weight(*e).unwrap().edge_type == WireType::Qubit)
             .collect();
         Self {
             circ,
@@ -197,9 +249,8 @@ impl<'circ> Iterator for SquashFindIter<'circ> {
             let target_node = self
                 .circ
                 .dag
-                .edge_endpoints(self.current_edge)
-                .expect("edge not found.")[self.direction as usize]
-                .node;
+                .edge_endpoint(self.current_edge, self.direction)
+                .expect("edge not found.");
 
             let target_op = &self
                 .circ
@@ -235,15 +286,15 @@ impl<'circ> Iterator for SquashFindIter<'circ> {
                 .dag
                 .neighbours(current_node, self.direction)
                 .next()
-                .expect("single qubit op should have a successor")
-                .node;
+                .expect("single qubit op should have a successor");
+            // .node;
             if let &Op::Rotation = &self.circ.dag.node_weight(kid).expect("node not found").op {
                 current_node = kid;
             } else {
                 break;
             }
         }
-        self.current_edge = *self
+        self.current_edge = self
             .circ
             .dag
             .node_edges(rot_nodes[rot_nodes.len() - 1], self.direction)
@@ -257,16 +308,19 @@ impl<'circ> Iterator for SquashFindIter<'circ> {
         let mut replace = Circuit::new();
         let [i, o] = replace.boundary();
         let rot = replace.add_vertex(Op::Rotation);
-        replace.tup_add_edge((i, 0), (rot, 0), WireType::Qubit);
-        replace.tup_add_edge((rot, 0), (o, 0), WireType::Qubit);
+        replace
+            .add_insert_edge((i, 0), (rot, 0), WireType::Qubit)
+            .unwrap();
+        replace
+            .add_insert_edge((rot, 0), (o, 0), WireType::Qubit)
+            .unwrap();
 
         let mut in_edges: Vec<EdgeIndex> = self
             .circ
             .dag
             .node_edges(rot_nodes[0], Direction::Incoming)
-            .copied()
             .collect();
-        let out_edges = vec![*self
+        let out_edges = vec![self
             .circ
             .dag
             .node_edges(rot_nodes[rot_nodes.len() - 1], Direction::Outgoing)
@@ -281,14 +335,23 @@ impl<'circ> Iterator for SquashFindIter<'circ> {
             in_edges.extend(new_edges);
 
             let mul = replace.add_vertex(Op::QuatMul);
-            replace.tup_add_edge(accum_port, (mul, 0), WireType::Quat64);
-            replace.tup_add_edge((i, node_i as u8 + 2), (mul, 1), WireType::Quat64);
+            replace
+                .add_insert_edge(accum_port, (mul, 0), WireType::Quat64)
+                .unwrap();
+            replace
+                .add_insert_edge((i, node_i + 2), (mul, 1), WireType::Quat64)
+                .unwrap();
             accum_port = (mul, 0);
         }
-        replace.tup_add_edge(accum_port, (rot, 1), WireType::Quat64);
+        replace
+            .add_insert_edge(accum_port, (rot, 1), WireType::Quat64)
+            .unwrap();
         Some(CircuitRewrite {
             graph_rewrite: Rewrite::new(
-                BoundedSubgraph::new(rot_nodes.into_iter().into(), [in_edges, out_edges]),
+                BoundedSubgraph::new(
+                    SubgraphRef::from_iter(rot_nodes.into_iter()),
+                    [in_edges, out_edges],
+                ),
                 replace.into(),
             ),
             phase: 0.0,
@@ -317,7 +380,7 @@ pub fn squash_pass(circ: Circuit) -> (Circuit, bool) {
     (circ, overall_suc)
 }
 
-fn cx_pattern<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
+fn cx_pattern(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
     let qubits = vec![
         UnitID::Qubit {
             reg_name: "q".into(),
@@ -330,18 +393,14 @@ fn cx_pattern<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '
     ];
     let mut replace_c = Circuit::with_uids(qubits.clone());
     replace_c
-        .append_op(Op::Noop(WireType::Qubit), &[PortIndex::new(0)])
+        .append_op(Op::Noop(WireType::Qubit), &[0])
         .unwrap();
     replace_c
-        .append_op(Op::Noop(WireType::Qubit), &[PortIndex::new(1)])
+        .append_op(Op::Noop(WireType::Qubit), &[1])
         .unwrap();
     let mut pattern_c = Circuit::with_uids(qubits);
-    pattern_c
-        .append_op(Op::CX, &[PortIndex::new(0), PortIndex::new(1)])
-        .unwrap();
-    pattern_c
-        .append_op(Op::CX, &[PortIndex::new(0), PortIndex::new(1)])
-        .unwrap();
+    pattern_c.append_op(Op::CX, &[0, 1]).unwrap();
+    pattern_c.append_op(Op::CX, &[0, 1]).unwrap();
     let pattern = CircFixedStructPattern::from_circ(pattern_c, node_equality());
     pattern_rewriter(pattern, circ, move |_| (replace_c.clone(), 0.0))
 }

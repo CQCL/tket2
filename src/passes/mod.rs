@@ -1,7 +1,7 @@
 pub mod classical;
 // pub mod redundancy;
 pub mod pattern;
-// pub mod squash;
+pub mod squash;
 
 use crate::{
     circuit::{
@@ -88,13 +88,13 @@ where
     let ports: [Vec<_>; 2] = DIRECTIONS.map(|direction| {
         pattern
             .graph
-            .node_edges(pattern.boundary[direction.index()], direction.reverse())
-            .map(|e| {
-                pattern
-                    .graph
-                    .edge_endpoint(e, direction)
-                    .expect("dangling edge")
-            })
+            .neighbours(pattern.boundary[direction.index()], direction.reverse())
+            // .map(|e| {
+            //     pattern
+            //         .graph
+            //         .edge_endpoint(e, direction)
+            //         .expect("dangling edge")
+            // })
             .enumerate()
             .collect()
     });
