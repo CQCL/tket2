@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::graph::{Direction, Graph};
+use super::graph::{Graph, DIRECTIONS};
 
 pub fn dot_string<N: Display, E: Display>(graph: &Graph<N, E>) -> String {
     let mut s = String::new();
@@ -12,44 +12,45 @@ pub fn dot_string<N: Display, E: Display>(graph: &Graph<N, E>) -> String {
         s.push_str(&format!("{} [label=\"{:}\"]\n", n.index(), node)[..]);
     }
 
+    let mut dangle_node_index = 0;
     for e in graph.edge_indices() {
-        // TODO: Needs to handle dangling edges
-        if let (Some(a), Some(b)) = (
-            graph.edge_endpoint(e, Direction::Outgoing),
-            graph.edge_endpoint(e, Direction::Incoming),
-        ) {
-        } else {
-            continue;
-        }
-        let a = graph.edge_endpoint(e, Direction::Outgoing).unwrap();
-        let b = graph.edge_endpoint(e, Direction::Incoming).unwrap();
-
-        let edge = graph.edge_weight(e).unwrap();
-        s.push_str(
-            &format!(
-                "{} -> {} [label=\"({}, {}); {}\"]\n",
-                a.index(),
-                b.index(),
-                graph
-                    .node_edges(a, Direction::Outgoing)
-                    .enumerate()
-                    .find(|(_, oe)| *oe == e)
-                    .unwrap()
-                    .0,
-                graph
-                    .node_edges(b, Direction::Incoming)
-                    .enumerate()
-                    .find(|(_, oe)| *oe == e)
-                    .unwrap()
-                    .0,
-                // 0,
-                // 0,
-                // b.port.index(),
-                edge,
-            )[..],
-        );
+        add_edge_str(graph, e, &mut s, &mut dangle_node_index);
     }
 
     s.push_str("}\n");
     s
+}
+
+fn add_edge_str<N: Display, E: Display>(
+    graph: &Graph<N, E>,
+    e: super::graph::EdgeIndex,
+    dot_s: &mut String,
+    node_count: &mut usize,
+) {
+    let [(b, bp), (a, ap)] = DIRECTIONS.map(|dir| {
+        if let Some(n) = graph.edge_endpoint(e, dir) {
+            (
+                format!("{}", n.index()),
+                format!(
+                    "{}",
+                    graph
+                        .node_edges(n, dir)
+                        .enumerate()
+                        .find(|(_, oe)| *oe == e)
+                        .unwrap()
+                        .0
+                ),
+            )
+        } else {
+            *node_count += 1;
+            let node_id = format!("_{}", *node_count - 1);
+            dot_s.push_str(&format!("{} [shape=point label=\"\"]\n", &node_id)[..]);
+
+            (node_id, "".into())
+        }
+    });
+
+    let edge = graph.edge_weight(e).unwrap();
+    let edge_s = format!("{} -> {} [label=\"({}, {}); {}\"]\n", a, b, ap, bp, edge);
+    dot_s.push_str(&edge_s[..])
 }
