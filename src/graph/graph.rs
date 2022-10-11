@@ -682,6 +682,16 @@ impl<N, E> Graph<N, E> {
         }
     }
 
+    // Iterate over connected nodes.
+    pub fn neighbours(
+        &self,
+        n: NodeIndex,
+        direction: Direction,
+    ) -> impl Iterator<Item = NodeIndex> + '_ {
+        self.node_edges(n, direction)
+            .filter_map(move |e| self.edge_endpoint(e, direction.reverse()))
+    }
+
     /// Iterator over the node indices of the graph.
     ///
     /// # Example
