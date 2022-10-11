@@ -7,10 +7,15 @@ pub mod json;
 
 #[cfg(test)]
 mod tests {
-    use crate::circuit::{
-        circuit::{Circuit, UnitID},
-        operation::WireType,
-        operation::{ConstValue, Op},
+    use std::error::Error;
+
+    use crate::{
+        circuit::{
+            circuit::{Circuit, UnitID},
+            operation::WireType,
+            operation::{ConstValue, Op},
+        },
+        graph::graph::Direction,
     };
     use tket_json_rs::circuit_json::{self, SerialCircuit};
 
@@ -59,39 +64,32 @@ mod tests {
     //     );
     // }
 
-    // #[test]
-    // fn test_fadd() {
-    //     let mut circ = Circuit::new();
+    #[test]
+    fn test_fadd() {
+        let mut circ = Circuit::new();
 
-    //     // circ.add_unitid(UnitID::F64("a".into()));
-    //     // circ.add_unitid(UnitID::F64("b".into()));
-    //     // let [input, output] = circ.boundary();
+        let i1 = circ.new_input(WireType::F64);
+        let i0 = circ.new_input(WireType::F64);
+        let o = circ.new_output(WireType::F64);
+        let fadd = circ.add_vertex_with_edges(Op::AngleAdd, vec![i0, i1], vec![o]);
+    }
 
-    //     let fadd = circ.add_vertex(Op::AngleAdd);
-    //     circ.tup_add_edge((input, 0), (fadd, 0), WireType::F64);
+    #[test]
+    fn test_copy() -> Result<(), Box<dyn Error>> {
+        let mut circ = Circuit::new();
 
-    //     circ.tup_add_edge((input, 1), (fadd, 1), WireType::F64);
+        let i = circ.add_unitid(UnitID::F64("a".into()));
+        let o = circ.new_output(WireType::F64);
 
-    //     circ.tup_add_edge((fadd, 0), (output, 0), WireType::F64);
-    // }
+        let fadd = circ.add_vertex_with_edges(Op::AngleAdd, vec![i], vec![o]);
 
-    //     #[test]
-    //     fn test_copy() {
-    //         let mut circ = Circuit::new();
+        let copy_e = circ.copy_edge(i, 2).unwrap()[0];
 
-    //         circ.add_unitid(UnitID::F64("a".into()));
-    //         let [input, output] = circ.boundary();
+        circ.dag.insert_edge(fadd, copy_e, Direction::Incoming, 1)?;
+        // println!("{}", circ.dot_string());
 
-    //         let fadd = circ.add_vertex(Op::AngleAdd);
-    //         let e = circ.tup_add_edge((input, 0), (fadd, 0), WireType::F64);
-
-    //         let copy = circ.copy_edge(e, 2).unwrap();
-
-    //         circ.tup_add_edge((copy, 1), (fadd, 1), WireType::F64);
-
-    //         circ.tup_add_edge((fadd, 0), (output, 0), WireType::F64);
-    //         // println!("{}", dot_string(&circ.dag));
-    //     }
+        Ok(())
+    }
 
     //     #[test]
     //     fn test_const_fold_simple() {
