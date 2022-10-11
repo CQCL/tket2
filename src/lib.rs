@@ -3,7 +3,7 @@ pub mod graph;
 
 pub mod json;
 // pub mod passes;
-// pub mod validate;
+pub mod validate;
 
 #[cfg(test)]
 mod tests {
@@ -12,10 +12,11 @@ mod tests {
     use crate::{
         circuit::{
             circuit::{Circuit, UnitID},
+            operation::Op,
             operation::WireType,
-            operation::{ConstValue, Op},
         },
         graph::graph::Direction,
+        validate::check_soundness,
     };
     use tket_json_rs::circuit_json::{self, SerialCircuit};
 
@@ -28,7 +29,7 @@ mod tests {
 
         let circ: Circuit = ser.clone().into();
 
-        // check_soundness(&circ).unwrap();
+        check_soundness(&circ).unwrap();
 
         let _reser: SerialCircuit = circ.into();
         assert_eq!(&ser, &_reser);
@@ -71,7 +72,7 @@ mod tests {
         let i1 = circ.new_input(WireType::F64);
         let i0 = circ.new_input(WireType::F64);
         let o = circ.new_output(WireType::F64);
-        let fadd = circ.add_vertex_with_edges(Op::AngleAdd, vec![i0, i1], vec![o]);
+        let _fadd = circ.add_vertex_with_edges(Op::AngleAdd, vec![i0, i1], vec![o]);
     }
 
     #[test]
@@ -91,40 +92,40 @@ mod tests {
         Ok(())
     }
 
-    //     #[test]
-    //     fn test_const_fold_simple() {
-    //         let mut circ = Circuit::new();
+    // #[test]
+    // fn test_const_fold_simple() {
+    //     let mut circ = Circuit::new();
 
-    //         let [_, output] = circ.boundary();
+    //     let [_, output] = circ.boundary();
 
-    //         let fadd = circ.add_vertex(Op::AngleAdd);
-    //         let one = circ.add_vertex(Op::Const(ConstValue::f64_angle(0.5)));
-    //         let two = circ.add_vertex(Op::Const(ConstValue::f64_angle(1.5)));
-    //         let _e1 = circ.tup_add_edge((one, 0), (fadd, 0), WireType::Angle);
-    //         let _e2 = circ.tup_add_edge((two, 0), (fadd, 1), WireType::Angle);
+    //     let fadd = circ.add_vertex(Op::AngleAdd);
+    //     let one = circ.add_vertex(Op::Const(ConstValue::f64_angle(0.5)));
+    //     let two = circ.add_vertex(Op::Const(ConstValue::f64_angle(1.5)));
+    //     let _e1 = circ.tup_add_edge((one, 0), (fadd, 0), WireType::Angle);
+    //     let _e2 = circ.tup_add_edge((two, 0), (fadd, 1), WireType::Angle);
 
-    //         let _out = circ.tup_add_edge((fadd, 0), (output, 0), WireType::Angle);
-    //         check_soundness(&circ).unwrap();
+    //     let _out = circ.tup_add_edge((fadd, 0), (output, 0), WireType::Angle);
+    //     check_soundness(&circ).unwrap();
 
-    //         let rewrite = find_const_ops(&circ).next().unwrap();
+    //     let rewrite = find_const_ops(&circ).next().unwrap();
 
-    //         circ.apply_rewrite(rewrite).unwrap();
+    //     circ.apply_rewrite(rewrite).unwrap();
 
-    //         // println!("{}", dot_string(&circ.dag));
-    //         assert_eq!(circ.dag.node_count(), 3);
-    //         assert_eq!(circ.dag.edge_count(), 1);
-    //         let mut nodeit = circ.dag.node_weights();
-    //         // skip input and output
-    //         nodeit.next();
-    //         nodeit.next();
+    //     // println!("{}", dot_string(&circ.dag));
+    //     assert_eq!(circ.dag.node_count(), 3);
+    //     assert_eq!(circ.dag.edge_count(), 1);
+    //     let mut nodeit = circ.dag.node_weights();
+    //     // skip input and output
+    //     nodeit.next();
+    //     nodeit.next();
 
-    //         assert_eq!(
-    //             &nodeit.next().unwrap().op,
-    //             &Op::Const(ConstValue::f64_angle(2.0))
-    //         );
+    //     assert_eq!(
+    //         &nodeit.next().unwrap().op,
+    //         &Op::Const(ConstValue::f64_angle(2.0))
+    //     );
 
-    //         check_soundness(&circ).unwrap();
-    //     }
+    //     check_soundness(&circ).unwrap();
+    // }
 
     //     #[test]
     //     fn test_const_fold_less_simple() {
