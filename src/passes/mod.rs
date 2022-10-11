@@ -1,17 +1,17 @@
-pub mod classical;
+// pub mod classical;
 // pub mod redundancy;
 pub mod pattern;
-pub mod squash;
+// pub mod squash;
 
 use crate::{
     circuit::{
-        circuit::{Circuit, CircuitError, CircuitRewrite},
+        circuit::{Circuit, CircuitRewrite},
         dag::{EdgeProperties, VertexProperties},
         operation::{Op, Param},
     },
     graph::{
-        graph::{Direction, NodePort},
-        substitute::BoundedSubgraph,
+        graph::DIRECTIONS,
+        substitute::{BoundedSubgraph, RewriteError, SubgraphRef},
     },
 };
 
@@ -22,7 +22,7 @@ use self::pattern::{FixedStructPattern, Match, NodeCompClosure, PatternMatcher};
 /// # Errors
 ///
 /// This function will return an error if rewrite application fails.
-pub fn apply_exhaustive<F>(mut circ: Circuit, finder: F) -> Result<(Circuit, bool), CircuitError>
+pub fn apply_exhaustive<F>(mut circ: Circuit, finder: F) -> Result<(Circuit, bool), RewriteError>
 where
     F: Fn(&Circuit) -> Vec<CircuitRewrite>,
 {
@@ -49,7 +49,7 @@ where
 /// # Errors
 ///
 /// This function will return an error if rewrite application fails.
-pub fn apply_greedy<F>(mut circ: Circuit, finder: F) -> Result<(Circuit, bool), CircuitError>
+pub fn apply_greedy<F>(mut circ: Circuit, finder: F) -> Result<(Circuit, bool), RewriteError>
 where
     F: Fn(&Circuit) -> Option<CircuitRewrite>,
 {
@@ -85,40 +85,64 @@ where
     // TODO when applying rewrites greedily, all of this construction needs to
     // every time a match is found. Find a way to update the target of the match
     // and restart matching without doing all this again.
-    let in_ports: Vec<_> = pattern
-        .graph
-        .neighbours(pattern.boundary[0], Direction::Outgoing)
-        .collect();
-    let out_ports: Vec<_> = pattern
-        .graph
-        .neighbours(pattern.boundary[1], Direction::Incoming)
-        .collect();
+    let ports: [Vec<_>; 2] = DIRECTIONS.map(|direction| {
+        pattern
+            .graph
+            .node_edges(pattern.boundary[direction.index()], direction.reverse())
+            .map(|e| {
+                pattern
+                    .graph
+                    .edge_endpoint(e, direction)
+                    .expect("dangling edge")
+            })
+            .enumerate()
+            .collect()
+    });
+    // let in_ports: Vec<_> = pattern
+    //     .graph
+    //     .neighbours(pattern.boundary[0], Direction::Outgoing)
+    //     .collect();
+    // let out_ports: Vec<_> = pattern
+    //     .graph
+    //     .neighbours(pattern.boundary[1], Direction::Incoming)
+    //     .collect();
     let matcher = PatternMatcher::new(pattern, circ.dag_ref());
 
     matcher.into_matches().map(move |pmatch| {
-        let in_edges: Vec<_> = in_ports
-            .iter()
-            .map(|np| {
-                circ.dag
-                    .edge_at_port(
-                        NodePort::new(*pmatch.get(&np.node).unwrap(), np.port),
-                        Direction::Incoming,
-                    )
-                    .unwrap()
-            })
-            .collect();
-        let out_edges: Vec<_> = out_ports
-            .iter()
-            .map(|np| {
-                circ.dag
-                    .edge_at_port(
-                        NodePort::new(*pmatch.get(&np.node).unwrap(), np.port),
-                        Direction::Outgoing,
-                    )
-                    .unwrap()
-            })
-            .collect();
-        let subg = BoundedSubgraph::new(pmatch.values().copied().into(), [in_edges, out_edges]);
+        let edges = DIRECTIONS.map(|direction| {
+            ports[direction.index()]
+                .iter()
+                .map(|(p, n)| {
+                    let mapped_n = *pmatch.get(n).unwrap();
+
+                    circ.edge_at_port(mapped_n, *p, direction)
+                        .expect("Missing edge")
+                })
+                .collect()
+        });
+        // let in_edges: Vec<_> = in_ports
+        //     .iter()
+        //     .map(|np| {
+        //         circ.dag
+        //             .edge_at_port(
+        //                 NodePort::new(*pmatch.get(&np.node).unwrap(), np.port),
+        //                 Direction::Incoming,
+        //             )
+        //             .unwrap()
+        //     })
+        //     .collect();
+        // let out_edges: Vec<_> = out_ports
+        //     .iter()
+        //     .map(|np| {
+        //         circ.dag
+        //             .edge_at_port(
+        //                 NodePort::new(*pmatch.get(&np.node).unwrap(), np.port),
+        //                 Direction::Outgoing,
+        //             )
+        //             .unwrap()
+        //     })
+        // .collect();
+        let subg = BoundedSubgraph::new(SubgraphRef::from_iter(pmatch.values().copied()), edges);
 
         let (newcirc, phase) = (rewrite_closure)(pmatch);
 
