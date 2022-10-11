@@ -79,7 +79,7 @@ impl Signature {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "pyo3", pyclass(name = "Rational"))]
 pub struct Rational(pub Rational64);
 

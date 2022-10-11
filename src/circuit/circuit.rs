@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 
-use crate::graph::graph::{ConnectError, Direction};
+use crate::graph::graph::{ConnectError, Direction, DIRECTIONS};
 use crate::graph::substitute::{BoundedSubgraph, OpenGraph, RewriteError};
 
 use super::dag::{Dag, Edge, EdgeProperties, TopSorter, Vertex, VertexProperties};
@@ -202,11 +202,15 @@ impl Circuit {
         self.dag
             .node_edges(n, direction)
             .enumerate()
-            .find_map(|(i, oe)| (oe == edge).then(|| i))
+            .find_map(|(i, oe)| (oe == edge).then_some(i))
     }
 
     pub fn node_edges(&self, n: Vertex, direction: Direction) -> Vec<Edge> {
         self.dag.node_edges(n, direction).collect()
+    }
+
+    pub fn node_boundary_size(&self, n: Vertex) -> [usize; 2] {
+        DIRECTIONS.map(|direction| self.dag.node_edges(n, direction).count())
     }
 
     pub fn neighbours(&self, n: Vertex, direction: Direction) -> Vec<Vertex> {
@@ -315,9 +319,9 @@ impl Circuit {
             .collect();
         let insertion_edges = args
             .iter()
-            .map(|port| out_edges.get(*port).map(|x| *x))
+            .map(|port| out_edges.get(*port).copied())
             .collect::<Option<Vec<Edge>>>()
-            .ok_or_else(|| ConnectError::UnknownEdge)?;
+            .ok_or(ConnectError::UnknownEdge)?;
 
         let mut incoming = vec![];
         // let mut outgoing = vec![];
@@ -328,7 +332,7 @@ impl Circuit {
                 .expect("Edge should be there.")
                 .edge_type;
             let in_e = self.add_edge(e_type);
-            self.dag.replace_connection(*e, in_e, Direction::Outgoing);
+            self.dag.replace_connection(*e, in_e, Direction::Outgoing)?;
             // let prev = self.dag.edge_endpoint(*e, Direction::Outgoing).unwrap();
             // self.dag.connect_after(prev, in_e, Direction::Outgoing, *e);
             // self.dag.disconnect(*e, Direction::Outgoing);
@@ -394,7 +398,6 @@ impl Circuit {
 
         let mut copy_es: Vec<_> = (0..copies).map(|_| self.add_edge(edge_type)).collect();
         // let copy_node = self.add_vertex(copy_op);
-        let (s, t) = self.edge_endpoints(e).unwrap();
         self.dag
             .replace_connection(e, copy_es[0], Direction::Incoming)
             .unwrap();
@@ -428,15 +431,9 @@ impl Circuit {
         let noop_nodes: Vec<_> = self
             .dag
             .node_indices()
-            .filter_map(|n| {
-                if let Op::Noop(wt) = self.dag.node_weight(n).unwrap().op {
-                    Some((wt, n))
-                } else {
-                    None
-                }
-            })
+            .filter(|n| matches!(self.dag.node_weight(*n).unwrap().op, Op::Noop(_)))
             .collect();
-        for (edge_type, nod) in noop_nodes {
+        for nod in noop_nodes {
             let ie = self
                 .dag
                 .node_edges(nod, Direction::Incoming)
@@ -591,10 +588,10 @@ mod tests {
     fn test_add_identity() {
         let mut circ = Circuit::new();
         // let [i, o] = circ.boundary();
-        for p in 0..2 {
+        for _ in 0..2 {
             let ie = circ.new_input(WireType::Qubit);
             let oe = circ.new_output(WireType::Qubit);
-            let noop = circ.add_vertex_with_edges(Op::Noop(WireType::Qubit), vec![ie], vec![oe]);
+            let _noop = circ.add_vertex_with_edges(Op::Noop(WireType::Qubit), vec![ie], vec![oe]);
             // circ.dag.connect_first(i, ie, Direction::Outgoing);
             // circ.dag.connect_first(o, oe, Direction::Incoming);
             // circ.tup_add_edge((i, p), (noop, 0), WireType::Qubit);
