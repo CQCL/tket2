@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::graph::graph::{Direction, EdgeIndex, Graph, NodeIndex};
+use crate::graph::graph::{Direction, EdgeIndex, Graph, NodeIndex, DIRECTIONS};
 use rayon::prelude::*;
 struct MatchFail();
 
@@ -69,23 +69,29 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, F: NodeCompClosure<N, E> + 'f>
         if self.target.edge_weight(target_edge) != self.pattern.graph.edge_weight(pattern_edge) {
             return err;
         }
-        match (
-            self.target.edge_endpoints(target_edge),
-            self.pattern.graph.edge_endpoints(pattern_edge),
-        ) {
-            (None, None) => (),
-            (Some([ts, tt]), Some([ps, pt])) => {
-                let [i, o] = self.pattern.boundary;
-                if (ps.node != i && ps.port != ts.port) || (pt.node != o && pt.port != tt.port) {
-                    return err;
-                }
-            }
+        match DIRECTIONS.map(|direction| {
+            (
+                self.target.edge_endpoint(target_edge, direction),
+                self.pattern.graph.edge_endpoint(pattern_edge, direction),
+            )
+        }) {
+            [(None, None), (None, None)] => (),
+            [(Some(_ts), Some(_tt)), (Some(_ps), Some(_pt))] => (),
+            // {
+            // let [i, o] = self.pattern.bounda ry;
+            // // if (ps.node != i && ps.port != ts.port) || (pt.node != o && pt.port != tt.port) {
+            // // return err;
+            // // }
+            // if (ps != i) || (pt != o) {
+            //     return err;
+            // }
+            // }
             _ => return err,
         }
         Ok(())
     }
 
-    fn all_node_edges(g: &Graph<N, E>, n: NodeIndex) -> impl Iterator<Item = &EdgeIndex> {
+    fn all_node_edges(g: &Graph<N, E>, n: NodeIndex) -> impl Iterator<Item = EdgeIndex> + '_ {
         g.node_edges(n, Direction::Incoming)
             .chain(g.node_edges(n, Direction::Outgoing))
     }
@@ -161,7 +167,7 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, F: NodeCompClosure<N, E> + 'f>
     ) -> Result<Match, MatchFail> {
         let err = Err(MatchFail());
         let mut match_map = Match::new();
-        let start_edge = *self
+        let start_edge = self
             .pattern
             .graph
             .node_edges(pattern_start_node, Direction::Incoming)
@@ -189,28 +195,33 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, F: NodeCompClosure<N, E> + 'f>
                 // optimisation, apart from in the case of the entry to the
                 // pattern, the first edge in the iterator is the incoming edge
                 // and the destination node has been checked
-                if *e_p == curr_e && curr_p != pattern_start_node {
+                if e_p == curr_e && curr_p != pattern_start_node {
                     continue;
                 }
-                self.edge_match(*e_p, *e_t)?;
+                self.edge_match(e_p, e_t)?;
 
-                let [e_p_source, e_p_target] =
-                    self.pattern.graph.edge_endpoints(*e_p).ok_or(MatchFail())?;
-                if e_p_source.node == self.pattern.boundary[0]
-                    || e_p_target.node == self.pattern.boundary[1]
+                let [e_p_source, e_p_target] = DIRECTIONS
+                    .map(|direction| self.pattern.graph.edge_endpoint(e_p, direction.reverse()));
+                let e_p_source = e_p_source.ok_or(MatchFail())?;
+                let e_p_target = e_p_target.ok_or(MatchFail())?;
+                if e_p_source == self.pattern.boundary[0] || e_p_target == self.pattern.boundary[1]
                 {
                     continue;
                 }
 
-                let (next_pattern_node, next_target_node) = if e_p_source.node == curr_p {
+                let (next_pattern_node, next_target_node) = if e_p_source == curr_p {
                     (
-                        e_p_target.node,
-                        self.target.edge_endpoints(*e_t).ok_or(MatchFail())?[1].node,
+                        e_p_target,
+                        self.target
+                            .edge_endpoint(e_t, Direction::Incoming)
+                            .ok_or(MatchFail())?,
                     )
                 } else {
                     (
-                        e_p_source.node,
-                        self.target.edge_endpoints(*e_t).ok_or(MatchFail())?[0].node,
+                        e_p_source,
+                        self.target
+                            .edge_endpoint(e_t, Direction::Outgoing)
+                            .ok_or(MatchFail())?,
                     )
                 };
 
@@ -221,7 +232,7 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, F: NodeCompClosure<N, E> + 'f>
                         return err;
                     }
                 }
-                visit_stack.push((next_pattern_node, next_target_node, *e_p));
+                visit_stack.push((next_pattern_node, next_target_node, e_p));
             }
         }
 
@@ -236,9 +247,8 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, F: NodeCompClosure<N, E> + 'f>
             .graph
             .node_indices()
             .max_by_key(|n| {
-                self.pattern
-                    .graph
-                    .node_boundary_size(*n)
+                DIRECTIONS
+                    .map(|d| self.pattern.graph.node_edges(*n, d).count())
                     .iter()
                     .sum::<usize>()
             })
@@ -309,37 +319,53 @@ mod tests {
     use crate::circuit::circuit::{Circuit, UnitID};
     use crate::circuit::dag::{Dag, VertexProperties};
     use crate::circuit::operation::{Op, WireType};
-    use crate::graph::graph::{NodeIndex, PortIndex};
+    use crate::graph::graph::NodeIndex;
+
     #[fixture]
     fn simple_circ() -> Circuit {
         let mut circ1 = Circuit::new();
-        let [i, o] = circ1.boundary();
-        for p in 0..2 {
-            let noop = circ1.add_vertex(Op::Noop(WireType::Qubit));
-            circ1.tup_add_edge((i, p), (noop, 0), WireType::Qubit);
-            circ1.tup_add_edge((noop, 0), (o, p), WireType::Qubit);
+        // let [i, o] = circ1.boundary();
+        for _ in 0..2 {
+            let i = circ1.new_input(WireType::Qubit);
+            let o = circ1.new_output(WireType::Qubit);
+            let _noop = circ1.add_vertex_with_edges(Op::Noop(WireType::Qubit), vec![i], vec![o]);
+            // circ1.tup_add_edge((i, p), (noop, 0), WireType::Qubit);
+            // circ1.tup_add_edge((noop, 0), (o, p), WireType::Qubit);
         }
         circ1
     }
     #[fixture]
     fn simple_isomorphic_circ() -> Circuit {
         let mut circ1 = Circuit::new();
-        let [i, o] = circ1.boundary();
-        for p in (0..2).rev() {
-            let noop = circ1.add_vertex(Op::Noop(WireType::Qubit));
-            circ1.tup_add_edge((noop, 0), (o, p), WireType::Qubit);
-            circ1.tup_add_edge((i, p), (noop, 0), WireType::Qubit);
-        }
+        // let [i, o] = circ1.boundary();
+        let o0 = circ1.new_output(WireType::Qubit);
+        let i0 = circ1.new_input(WireType::Qubit);
+
+        let o1 = circ1.new_output(WireType::Qubit);
+        let i1 = circ1.new_input(WireType::Qubit);
+
+        circ1.add_vertex_with_edges(Op::Noop(WireType::Qubit), vec![i1], vec![o1]);
+        circ1.add_vertex_with_edges(Op::Noop(WireType::Qubit), vec![i0], vec![o0]);
+        // for p in (0..2).rev() {
+
+        //     // let noop = circ1.add_vertex(Op::Noop(WireType::Qubit));
+        //     // circ1.tup_add_edge((noop, 0), (o, p), WireType::Qubit);
+        //     // circ1.tup_add_edge((i, p), (noop, 0), WireType::Qubit);
+        // }
         circ1
     }
 
     #[fixture]
     fn noop_pattern_circ() -> Circuit {
         let mut circ1 = Circuit::new();
-        let [i, o] = circ1.boundary();
-        let noop = circ1.add_vertex(Op::Noop(WireType::Qubit));
-        circ1.tup_add_edge((i, 0), (noop, 0), WireType::Qubit);
-        circ1.tup_add_edge((noop, 0), (o, 0), WireType::Qubit);
+        let i = circ1.new_input(WireType::Qubit);
+        let o = circ1.new_output(WireType::Qubit);
+        let _noop = circ1.add_vertex_with_edges(Op::Noop(WireType::Qubit), vec![i], vec![o]);
+
+        // let [i, o] = circ1.boundary();
+        // let noop = circ1.add_vertex(Op::Noop(WireType::Qubit));
+        // circ1.tup_add_edge((i, 0), (noop, 0), WireType::Qubit);
+        // circ1.tup_add_edge((noop, 0), (o, 0), WireType::Qubit);
         circ1
     }
 
@@ -366,12 +392,12 @@ mod tests {
         let fedges: Vec<_> = simple_circ.dag.edge_indices().collect();
         let pattern_boundary = simple_circ.boundary();
 
-        let dag1 = simple_circ.dag.clone();
+        let mut dag1 = simple_circ.dag.clone();
         let dag2 = simple_circ.dag;
 
         let pattern = FixedStructPattern::new(dag2, pattern_boundary, node_equality());
 
-        let matcher = PatternMatcher::new(pattern, &dag1);
+        let matcher = PatternMatcher::new(pattern.clone(), &dag1);
         for (e1, e2) in dag1
             .edge_indices()
             .zip(matcher.pattern.graph.edge_indices())
@@ -379,7 +405,12 @@ mod tests {
             assert!(matcher.edge_match(e1, e2).is_ok());
         }
 
-        assert!(matcher.edge_match(fedges[0], fedges[3]).is_err());
+        dag1.remove_node(pattern_boundary[0]);
+        let matcher = PatternMatcher::new(pattern, &dag1);
+
+        assert!(matcher
+            .edge_match(fedges[0], dag1.edge_indices().next().unwrap())
+            .is_err());
     }
 
     fn match_maker(it: impl IntoIterator<Item = (usize, usize)>) -> Match {
@@ -391,10 +422,12 @@ mod tests {
 
     #[rstest]
     fn test_pattern(mut simple_circ: Circuit, noop_pattern_circ: Circuit) {
-        let xop = simple_circ.add_vertex(Op::H);
-        let [i, o] = simple_circ.boundary();
-        simple_circ.tup_add_edge((i, 3), (xop, 0), WireType::Qubit);
-        simple_circ.tup_add_edge((xop, 0), (o, 3), WireType::Qubit);
+        let i = simple_circ.new_input(WireType::Qubit);
+        let o = simple_circ.new_output(WireType::Qubit);
+        let _xop = simple_circ.add_vertex_with_edges(Op::H, vec![i], vec![o]);
+        // let [i, o] = simple_circ.boundary();
+        // simple_circ.tup_add_edge((i, 3), (xop, 0), WireType::Qubit);
+        // simple_circ.tup_add_edge((xop, 0), (o, 3), WireType::Qubit);
 
         let pattern_boundary = noop_pattern_circ.boundary();
         let pattern =
@@ -423,21 +456,11 @@ mod tests {
             },
         ];
         let mut pattern_circ = Circuit::with_uids(qubits);
-        pattern_circ
-            .append_op(Op::H, &vec![PortIndex::new(0)])
-            .unwrap();
-        pattern_circ
-            .append_op(Op::H, &vec![PortIndex::new(1)])
-            .unwrap();
-        pattern_circ
-            .append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
-            .unwrap();
-        pattern_circ
-            .append_op(Op::H, &vec![PortIndex::new(0)])
-            .unwrap();
-        pattern_circ
-            .append_op(Op::H, &vec![PortIndex::new(1)])
-            .unwrap();
+        pattern_circ.append_op(Op::H, &[0]).unwrap();
+        pattern_circ.append_op(Op::H, &[1]).unwrap();
+        pattern_circ.append_op(Op::CX, &[0, 1]).unwrap();
+        pattern_circ.append_op(Op::H, &[0]).unwrap();
+        pattern_circ.append_op(Op::H, &[1]).unwrap();
 
         pattern_circ
     }
@@ -454,52 +477,28 @@ mod tests {
             },
         ];
         let mut target_circ = Circuit::with_uids(qubits);
-        target_circ
-            .append_op(Op::H, &vec![PortIndex::new(0)])
-            .unwrap();
-        target_circ
-            .append_op(Op::H, &vec![PortIndex::new(1)])
-            .unwrap();
-        target_circ
-            .append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
-            .unwrap();
-        target_circ
-            .append_op(Op::H, &vec![PortIndex::new(0)])
-            .unwrap();
-        target_circ
-            .append_op(Op::H, &vec![PortIndex::new(1)])
-            .unwrap();
-        target_circ
-            .append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
-            .unwrap();
-        target_circ
-            .append_op(Op::H, &vec![PortIndex::new(0)])
-            .unwrap();
-        target_circ
-            .append_op(Op::H, &vec![PortIndex::new(1)])
-            .unwrap();
-        target_circ
-            .append_op(Op::CX, &vec![PortIndex::new(1), PortIndex::new(0)])
-            .unwrap();
-        target_circ
-            .append_op(Op::H, &vec![PortIndex::new(0)])
-            .unwrap();
-        target_circ
-            .append_op(Op::H, &vec![PortIndex::new(1)])
-            .unwrap();
+        target_circ.append_op(Op::H, &[0]).unwrap();
+        target_circ.append_op(Op::H, &[1]).unwrap();
+        target_circ.append_op(Op::CX, &[0, 1]).unwrap();
+        target_circ.append_op(Op::H, &[0]).unwrap();
+        target_circ.append_op(Op::H, &[1]).unwrap();
+        target_circ.append_op(Op::CX, &[0, 1]).unwrap();
+        target_circ.append_op(Op::H, &[0]).unwrap();
+        target_circ.append_op(Op::H, &[1]).unwrap();
+        target_circ.append_op(Op::CX, &[1, 0]).unwrap();
+        target_circ.append_op(Op::H, &[0]).unwrap();
+        target_circ.append_op(Op::H, &[1]).unwrap();
 
         let pattern_boundary = cx_h_pattern.boundary();
 
         let pattern = FixedStructPattern::new(
             cx_h_pattern.dag,
             pattern_boundary,
-            |_: &Dag, pattern_idx: NodeIndex, op2: &VertexProperties| match (
-                pattern_idx.index(),
-                &op2.op,
-            ) {
-                (2 | 3 | 5 | 6, Op::H) => true,
-                (4, Op::CX) => true,
-                _ => false,
+            |_: &Dag, pattern_idx: NodeIndex, op2: &VertexProperties| {
+                matches!(
+                    (pattern_idx.index(), &op2.op,),
+                    (2 | 3 | 5 | 6, Op::H) | (4, Op::CX)
+                )
             },
         );
         let matcher = PatternMatcher::new(pattern, &target_circ.dag);
@@ -542,40 +541,22 @@ mod tests {
         // use Noop and H, allow matches between either
         let mut target_circ = Circuit::with_uids(qubits);
         let h_0_0 = target_circ
-            .append_op(Op::Noop(WireType::Qubit), &vec![PortIndex::new(0)])
+            .append_op(Op::Noop(WireType::Qubit), &[0])
             .unwrap();
-        let h_1_0 = target_circ
-            .append_op(Op::H, &vec![PortIndex::new(1)])
-            .unwrap();
-        let cx_0 = target_circ
-            .append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
-            .unwrap();
-        let h_0_1 = target_circ
-            .append_op(Op::H, &vec![PortIndex::new(0)])
-            .unwrap();
+        let h_1_0 = target_circ.append_op(Op::H, &[1]).unwrap();
+        let cx_0 = target_circ.append_op(Op::CX, &[0, 1]).unwrap();
+        let h_0_1 = target_circ.append_op(Op::H, &[0]).unwrap();
         let h_1_1 = target_circ
-            .append_op(Op::Noop(WireType::Qubit), &vec![PortIndex::new(1)])
+            .append_op(Op::Noop(WireType::Qubit), &[1])
             .unwrap();
-        let h_2_0 = target_circ
-            .append_op(Op::H, &vec![PortIndex::new(2)])
-            .unwrap();
-        let cx_1 = target_circ
-            .append_op(Op::CX, &vec![PortIndex::new(2), PortIndex::new(1)])
-            .unwrap();
-        let h_1_2 = target_circ
-            .append_op(Op::H, &vec![PortIndex::new(1)])
-            .unwrap();
-        let h_2_1 = target_circ
-            .append_op(Op::H, &vec![PortIndex::new(2)])
-            .unwrap();
-        let cx_2 = target_circ
-            .append_op(Op::CX, &vec![PortIndex::new(0), PortIndex::new(1)])
-            .unwrap();
-        let h_0_2 = target_circ
-            .append_op(Op::H, &vec![PortIndex::new(0)])
-            .unwrap();
+        let h_2_0 = target_circ.append_op(Op::H, &[2]).unwrap();
+        let cx_1 = target_circ.append_op(Op::CX, &[2, 1]).unwrap();
+        let h_1_2 = target_circ.append_op(Op::H, &[1]).unwrap();
+        let h_2_1 = target_circ.append_op(Op::H, &[2]).unwrap();
+        let cx_2 = target_circ.append_op(Op::CX, &[0, 1]).unwrap();
+        let h_0_2 = target_circ.append_op(Op::H, &[0]).unwrap();
         let h_1_3 = target_circ
-            .append_op(Op::Noop(WireType::Qubit), &vec![PortIndex::new(1)])
+            .append_op(Op::Noop(WireType::Qubit), &[1])
             .unwrap();
 
         // use crate::graph::dot::dot_string;
