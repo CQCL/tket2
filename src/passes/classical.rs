@@ -1,20 +1,23 @@
 use crate::{
     circuit::{
-        circuit::{Circuit, CircuitError, CircuitRewrite},
+        circuit::{Circuit, CircuitRewrite},
         dag::Vertex,
         operation::{ConstValue, Op, Quat},
     },
-    graph::{graph::Direction, substitute::BoundedSubgraph},
+    graph::{
+        graph::Direction,
+        substitute::{BoundedSubgraph, RewriteError, SubgraphRef},
+    },
 };
 
-pub fn find_const_ops<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
+pub fn find_const_ops(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
     ClRewriteIter {
         circ,
         vertex_it: circ.dag.node_indices(),
     }
 }
 
-pub fn constant_fold_strat(circ: &mut Circuit) -> Result<bool, CircuitError> {
+pub fn constant_fold_strat(circ: &mut Circuit) -> Result<bool, RewriteError> {
     let mut success = false;
     let mut nodes: Vec<_> = circ.dag.node_indices().collect();
     loop {
@@ -31,7 +34,7 @@ pub fn constant_fold_strat(circ: &mut Circuit) -> Result<bool, CircuitError> {
         for rewrite in rewrites {
             for child in rewrite.graph_rewrite.subg.edges[1]
                 .iter()
-                .map(|e| circ.dag.edge_endpoints(*e).unwrap()[1].node)
+                .map(|e| circ.dag.edge_endpoint(*e, Direction::Incoming).unwrap())
             {
                 nodes.push(child);
             }
@@ -60,7 +63,6 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
                 .circ
                 .dag
                 .neighbours(n, Direction::Incoming)
-                .map(|np| np.node)
                 .collect();
 
             let inputs: Option<Vec<_>> = parents
@@ -111,18 +113,19 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
             };
 
             let mut replace = Circuit::new();
-            let [_, out] = replace.boundary();
-            for (i, cv) in cvs.into_iter().enumerate() {
-                let edge_type = cv.get_type();
-                let cv_node = replace.add_vertex(Op::Const(cv));
-                replace.tup_add_edge((cv_node, 0), (out, i as u8), edge_type);
+            for cv in cvs.into_iter() {
+                // let edge_type = cv.get_type();
+                let e = replace.new_output(cv.get_type());
+                replace.add_vertex_with_edges(Op::Const(cv), vec![], vec![e]);
+
+                // replace.tup_add_edge((cv_node, 0), (out, i as u8), edge_type);
             }
             let subgraph = BoundedSubgraph::new(
-                parents
+                SubgraphRef::from_iter(parents
                         .into_iter()
                         .chain([n].into_iter())
-                        .into(),
-                [vec![], self.circ.dag.node_edges(n, Direction::Outgoing).copied().collect()]
+                        ),
+                [vec![], self.circ.dag.node_edges(n, Direction::Outgoing).collect()]
             );
             Some(CircuitRewrite::new(
                 subgraph,

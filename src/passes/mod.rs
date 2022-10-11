@@ -1,4 +1,4 @@
-// pub mod classical;
+pub mod classical;
 // pub mod redundancy;
 pub mod pattern;
 // pub mod squash;
@@ -64,7 +64,7 @@ where
 
 pub type CircFixedStructPattern<F> = FixedStructPattern<VertexProperties, EdgeProperties, F>;
 
-impl<'p, F> CircFixedStructPattern<F> {
+impl<F> CircFixedStructPattern<F> {
     pub fn from_circ(pattern_circ: Circuit, node_comp_closure: F) -> Self {
         Self {
             boundary: pattern_circ.boundary(),
@@ -261,7 +261,7 @@ where
 //     }
 // }
 
-pub fn decompose_custom<'c>(circ: &'c Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
+pub fn decompose_custom(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
     circ.dag.node_indices().filter_map(|n| {
         let op = &circ.dag.node_weight(n).unwrap().op;
         if let Op::Custom(x) = op {
