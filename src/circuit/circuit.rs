@@ -446,6 +446,7 @@ impl Circuit {
                 .unwrap();
 
             let target = self.dag.edge_endpoint(oe, Direction::Incoming).unwrap();
+            self.dag.disconnect(ie, Direction::Incoming);
 
             self.dag
                 .connect_after(target, ie, Direction::Incoming, oe)

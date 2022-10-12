@@ -88,14 +88,27 @@ where
     let ports: [Vec<_>; 2] = DIRECTIONS.map(|direction| {
         pattern
             .graph
-            .neighbours(pattern.boundary[direction.index()], direction.reverse())
+            .node_edges(pattern.boundary[direction.index()], direction.reverse())
+            .map(|e| {
+                let target = pattern
+                    .graph
+                    .edge_endpoint(e, direction)
+                    .expect("missing edge");
+                let port = pattern
+                    .graph
+                    .node_edges(target, direction)
+                    .enumerate()
+                    .find_map(|(i, e2)| (e == e2).then_some(i))
+                    .expect("missing edge");
+
+                (port, target)
+            })
             // .map(|e| {
             //     pattern
             //         .graph
             //         .edge_endpoint(e, direction)
             //         .expect("dangling edge")
             // })
-            .enumerate()
             .collect()
     });
     // let in_ports: Vec<_> = pattern

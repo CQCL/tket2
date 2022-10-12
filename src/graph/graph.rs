@@ -781,6 +781,7 @@ impl<N, E> Graph<N, E> {
             .filter_map(|(index, node)| {
                 let new_index = self.add_node(node.weight?);
                 let old_index = NodeIndex::new(index);
+                self.nodes[new_index.index()].edges = node.edges;
                 Some((old_index, new_index))
             })
             .collect();
@@ -792,6 +793,8 @@ impl<N, E> Graph<N, E> {
             .filter_map(|(index, edge)| {
                 let new_index = self.add_edge(edge.weight?);
                 let old_index = EdgeIndex::new(index);
+                self.edges[new_index.index()].nodes = edge.nodes;
+                self.edges[new_index.index()].next = edge.next;
                 Some((old_index, new_index))
             })
             .collect();
@@ -932,6 +935,7 @@ impl<N, E> Graph<N, E> {
                 continue;
             }
 
+            self.edges[into.index()].nodes[direction.index()] = from_node;
             self.edges[into.index()].next[direction.index()] = from_next;
 
             match from_prev {

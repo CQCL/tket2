@@ -65,22 +65,11 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for RotationRewriteIter<'circ, 
 
 pub fn find_singleq_rotations_pattern(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
     let mut pattern_circ = Circuit::new();
-    pattern_circ.add_unitid(UnitID::Qubit {
-        reg_name: "q".into(),
-        index: vec![0],
-    });
-    let [input, output] = pattern_circ.boundary();
 
-    let rx = pattern_circ.add_vertex(Op::RxF64);
-    pattern_circ
-        .add_insert_edge((input, 0), (rx, 0), WireType::Qubit)
-        .unwrap();
-    pattern_circ
-        .add_insert_edge((input, 1), (rx, 1), WireType::Angle)
-        .unwrap();
-    pattern_circ
-        .add_insert_edge((rx, 0), (output, 0), WireType::Qubit)
-        .unwrap();
+    let an = pattern_circ.new_input(WireType::Angle);
+    let qi = pattern_circ.new_input(WireType::Qubit);
+    let qo = pattern_circ.new_output(WireType::Qubit);
+    pattern_circ.add_vertex_with_edges(Op::RxF64, vec![qi, an], vec![qo]);
 
     let nod_comp =
         |_: &Dag, _: NodeIndex, vert: &VertexProperties| !matches!(vert.op, Op::Rotation);
