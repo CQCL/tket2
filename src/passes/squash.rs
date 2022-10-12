@@ -100,49 +100,33 @@ pub fn find_singleq_rotations_pattern(circ: &Circuit) -> impl Iterator<Item = Ci
 // Pairwise squashing using pattern matching
 pub fn squash_pattern(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
     let mut pattern_circ = Circuit::new();
-    let [input, output] = pattern_circ.boundary();
 
-    let r1 = pattern_circ.add_vertex(Op::Rotation);
-    let r2 = pattern_circ.add_vertex(Op::Rotation);
-    pattern_circ
-        .add_insert_edge((input, 0), (r1, 0), WireType::Qubit)
-        .unwrap();
-    pattern_circ
-        .add_insert_edge((input, 1), (r1, 1), WireType::Quat64)
-        .unwrap();
-    pattern_circ
-        .add_insert_edge((r1, 0), (r2, 0), WireType::Qubit)
-        .unwrap();
-    pattern_circ
-        .add_insert_edge((input, 2), (r2, 1), WireType::Quat64)
-        .unwrap();
-    pattern_circ
-        .add_insert_edge((r2, 0), (output, 0), WireType::Qubit)
-        .unwrap();
+    let quat2 = pattern_circ.new_input(WireType::Quat64);
+    let quat1 = pattern_circ.new_input(WireType::Quat64);
+    let qi = pattern_circ.new_input(WireType::Qubit);
+
+    let qo = pattern_circ.new_output(WireType::Qubit);
+
+    let q_int = pattern_circ.add_edge(WireType::Qubit);
+
+    pattern_circ.add_vertex_with_edges(Op::Rotation, vec![qi, quat1], vec![q_int]);
+    pattern_circ.add_vertex_with_edges(Op::Rotation, vec![q_int, quat2], vec![qo]);
 
     let pattern = CircFixedStructPattern::from_circ(pattern_circ, node_equality());
 
     let mut replace_circ = Circuit::new();
 
-    let [input, output] = replace_circ.boundary();
+    let quat2 = replace_circ.new_input(WireType::Quat64);
+    let quat1 = replace_circ.new_input(WireType::Quat64);
+    let qi = replace_circ.new_input(WireType::Qubit);
 
-    let r1 = replace_circ.add_vertex(Op::Rotation);
-    let mul = replace_circ.add_vertex(Op::QuatMul);
-    replace_circ
-        .add_insert_edge((input, 0), (r1, 0), WireType::Qubit)
-        .unwrap();
-    replace_circ
-        .add_insert_edge((input, 1), (mul, 0), WireType::Quat64)
-        .unwrap();
-    replace_circ
-        .add_insert_edge((input, 2), (mul, 1), WireType::Quat64)
-        .unwrap();
-    replace_circ
-        .add_insert_edge((mul, 0), (r1, 1), WireType::Quat64)
-        .unwrap();
-    replace_circ
-        .add_insert_edge((r1, 0), (output, 0), WireType::Qubit)
-        .unwrap();
+    let qo = replace_circ.new_output(WireType::Qubit);
+
+    let quat_res = replace_circ.add_edge(WireType::Quat64);
+
+    replace_circ.add_vertex_with_edges(Op::QuatMul, vec![quat1, quat2], vec![quat_res]);
+    replace_circ.add_vertex_with_edges(Op::Rotation, vec![qi, quat_res], vec![qo]);
+
     let rewriter = move |_: Match| (replace_circ.clone(), 0.0);
 
     pattern_rewriter(pattern, circ, rewriter)
