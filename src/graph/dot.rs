@@ -8,7 +8,7 @@ pub fn dot_string<N: Display, E: Display>(graph: &Graph<N, E>) -> String {
     s.push_str("digraph {\n");
 
     for n in graph.node_indices() {
-        let node = graph.node_weight(n).unwrap();
+        let node = graph.node_weight(n).expect("missing node");
         s.push_str(&format!("{} [label=\"{:}\"]\n", n.index(), node)[..]);
     }
 
@@ -37,7 +37,7 @@ fn add_edge_str<N: Display, E: Display>(
                         .node_edges(n, dir)
                         .enumerate()
                         .find(|(_, oe)| *oe == e)
-                        .unwrap()
+                        .expect("missing edge")
                         .0
                 ),
             )
@@ -50,7 +50,7 @@ fn add_edge_str<N: Display, E: Display>(
         }
     });
 
-    let edge = graph.edge_weight(e).unwrap();
+    let edge = graph.edge_weight(e).expect("missing edge");
     let edge_s = format!("{} -> {} [label=\"({}, {}); {}\"]\n", a, b, ap, bp, edge);
     dot_s.push_str(&edge_s[..])
 }
