@@ -82,13 +82,8 @@ impl<N, E> Rewrite<N, E> {
 impl<N: Default + Debug + Display, E: Debug + Display> Graph<N, E> {
     /// Remove subgraph formed by subg and return weights of nodes inside subg
     fn remove_subgraph(&mut self, subgraph: &BoundedSubgraph) -> Vec<Option<N>> {
-        let boundary_edges: BTreeSet<_> = {
-            let mut boundary_edges = BTreeSet::new();
-            boundary_edges.extend(subgraph.edges[0].iter().copied());
-            boundary_edges.extend(subgraph.edges[1].iter().copied());
-            boundary_edges
-        };
-
+        let boundary_edges =
+            BTreeSet::from_iter(subgraph.edges.iter().flat_map(|x| x.iter().copied()));
         subgraph
             .subgraph
             .nodes

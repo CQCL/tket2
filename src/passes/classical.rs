@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use crate::{
     circuit::{
         circuit::{Circuit, CircuitRewrite},
@@ -19,25 +21,24 @@ pub fn find_const_ops(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + 
 
 pub fn constant_fold_strat(circ: &mut Circuit) -> Result<bool, RewriteError> {
     let mut success = false;
-    let mut nodes: Vec<_> = circ.dag.node_indices().collect();
+    let mut nodes: BTreeSet<_> = circ.dag.node_indices().collect();
     loop {
         let rewrites: Vec<_> = (ClRewriteIter {
             circ,
-            vertex_it: nodes.into_iter(),
+            vertex_it: nodes.iter().copied(),
         })
         .collect();
         if rewrites.is_empty() {
             break;
         }
         success = true;
-        nodes = vec![];
+        nodes.clear();
         for rewrite in rewrites {
-            for child in rewrite.graph_rewrite.subg.edges[1]
-                .iter()
-                .map(|e| circ.dag.edge_endpoint(*e, Direction::Incoming).unwrap())
-            {
-                nodes.push(child);
-            }
+            nodes.extend(
+                rewrite.graph_rewrite.subg.edges[1]
+                    .iter()
+                    .map(|e| circ.dag.edge_endpoint(*e, Direction::Incoming).unwrap()),
+            );
             circ.apply_rewrite(rewrite)?;
         }
     }
