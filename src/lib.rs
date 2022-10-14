@@ -119,7 +119,7 @@ mod tests {
         // println!("{:#?}", rewrite);
 
         circ.apply_rewrite(rewrite).unwrap();
-        println!("{}", circ.dot_string());
+        // println!("{}", circ.dot_string());
 
         // println!("{}", dot_string(&circ.dag));
         assert_eq!(circ.dag.node_count(), 3);
@@ -257,7 +257,7 @@ mod tests {
 
         assert!(!success);
 
-        println!("{}", orig_circ2.dot_string());
+        // println!("{}", orig_circ2.dot_string());
 
         assert!(constant_fold_strat(&mut orig_circ2).unwrap());
 
@@ -304,7 +304,7 @@ mod tests {
             apply_exhaustive(circuit, |c| find_singleq_rotations_pattern(c).collect()).unwrap()
         };
         let (circ2, success) = rot_replacer(circ);
-        println!("{}", circ2.dot_string());
+        // println!("{}", circ2.dot_string());
         check_soundness(&circ2).unwrap();
 
         assert!(success);
@@ -344,7 +344,7 @@ mod tests {
         // |circuit| apply_exhaustive(circuit, |c| SquashFindIter::new(c).collect()).unwrap();
         let squasher = |circuit| apply_greedy(circuit, |c| squash_pattern(c).next()).unwrap();
         let (mut circ2, success) = squasher(circ2);
-        println!("{}", circ2.dot_string());
+        // println!("{}", circ2.dot_string());
 
         assert!(success);
         check_soundness(&circ2).unwrap();
