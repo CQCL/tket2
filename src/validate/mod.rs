@@ -256,7 +256,7 @@ mod tests {
             Err(ValidateError::DanglingEdge(edges[2]))
         );
 
-        let mut c3 = bell_circ.clone();
+        let mut c3 = bell_circ;
         c3.dag.remove_node(nodes[3]);
         println!("{}", c3.dot_string());
 
