@@ -18,7 +18,6 @@ from pyrs.pyrs import (
     Quaternion,
     Angle,
     check_soundness,
-    NodePort,
     CustomOp,
     Signature,
     decompose_custom_pass,
@@ -31,11 +30,11 @@ from pytket import Circuit, OpType, Qubit
 
 def simple_rs(op):
     c = RsCircuit()
-    c.add_unitid(Qubit("q", [0]))
-    i, o = c.boundary()
-    v = c.add_vertex(op)
-    c.add_edge(NodePort(i, 0), NodePort(v, 0), WireType.Qubit)
-    c.add_edge(NodePort(v, 0), NodePort(o, 0), WireType.Qubit)
+    v = c.add_vertex_with_edges(
+        op,
+        [c.new_input(WireType.Qubit)],
+        [c.new_output(WireType.Qubit)],
+    )
     check_soundness(c)
     return c
 
@@ -51,15 +50,14 @@ def test_conversion():
 def test_apply_rewrite():
 
     c = simple_rs(RsOpType.H)
-    assert c.edge_endpoints(0) == (
-        NodePort(0, 0),
-        NodePort(2, 0),
-    )
-    assert c.edge_at_port(NodePort(2, 0), Direction.Outgoing) == 1
+    assert c.edge_endpoints(0) == (0, 2)
+    assert c.edge_at_port(2, 0, Direction.Outgoing) == 1
     c2 = simple_rs(RsOpType.Reset)
 
     c.apply_rewrite(CircuitRewrite(Subgraph({2}, [0], [1]), c2, 0.0))
     c.defrag()  # needed for exact equality check
+    print(c.dot_string())
+    print(c2.dot_string())
     assert c == c2
     assert c.remove_node(2) == RsOpType.Reset
     assert c.remove_node(2) == None
@@ -102,17 +100,22 @@ def cx_pair_searcher(circ: RsCircuit) -> Iterable[CircuitRewrite]:
         if len(sucs) != 2:
             continue
 
-        source0, target0 = circ.edge_endpoints(sucs[0])
-        source1, target1 = circ.edge_endpoints(sucs[1])
-        if target0.node != target1.node:
+        _, target0 = circ.edge_endpoints(sucs[0])
+        _, target1 = circ.edge_endpoints(sucs[1])
+        if target0 != target1:
             # same node
             continue
-        next_nid = target0.node
+        next_nid = target0
         if circ.node_op(next_nid) != RsOpType.CX:
             continue
 
+        s0p = circ.port_of_edge(nid, sucs[0], Direction.Outgoing)
+        t0p = circ.port_of_edge(next_nid, sucs[0], Direction.Incoming)
+
+        s1p = circ.port_of_edge(nid, sucs[1], Direction.Outgoing)
+        t1p = circ.port_of_edge(next_nid, sucs[1], Direction.Incoming)
         # check ports match
-        if source0.port == target0.port and source1.port == target1.port:
+        if s0p == t0p and s1p == t1p:
             in_edges = circ.node_edges(nid, Direction.Incoming)
             out_edges = circ.node_edges(next_nid, Direction.Outgoing)
             yield CircuitRewrite(
@@ -123,11 +126,8 @@ def cx_pair_searcher(circ: RsCircuit) -> Iterable[CircuitRewrite]:
 def test_cx_rewriters(cx_circ, noop_circ):
     c = Circuit(2).H(0).CX(1, 0).CX(1, 0)
     rc = RsCircuit.from_tket1(c)
-    assert rc.node_edges(3, Direction.Incoming) == [1, 2]
-    assert rc.neighbours(4, Direction.Outgoing) == [
-        NodePort(1, 1),
-        NodePort(1, 0),
-    ]
+    assert rc.node_edges(3, Direction.Incoming) == [3, 4]
+    assert rc.neighbours(4, Direction.Outgoing) == [1, 1]
     check_soundness(rc)
     # each one of these ways of applying this rewrite should take longer than
     # the one before

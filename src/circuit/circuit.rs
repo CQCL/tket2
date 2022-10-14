@@ -96,6 +96,21 @@ impl Circuit {
         let weight = VertexProperties::new(op);
         self.dag.add_node(weight)
     }
+
+    pub fn add_insert_edge(
+        &mut self,
+        source: (Vertex, usize),
+        target: (Vertex, usize),
+        edge_type: WireType,
+    ) -> Result<Edge, ConnectError> {
+        let e = self.add_edge(edge_type);
+        self.dag
+            .insert_edge(source.0, e, Direction::Outgoing, source.1)?;
+        self.dag
+            .insert_edge(target.0, e, Direction::Incoming, target.1)?;
+        Ok(e)
+    }
+
     pub fn add_vertex_with_edges(
         &mut self,
         op: Op,
@@ -293,20 +308,6 @@ impl Circuit {
         Ok(self.add_vertex_with_edges(Op::Const(val), vec![], vec![e]))
         // self.tup_add_edge((cons, 0).into(), target, existing_typ);
         // Ok(cons)
-    }
-
-    pub fn add_insert_edge(
-        &mut self,
-        source: (Vertex, usize),
-        target: (Vertex, usize),
-        edge_type: WireType,
-    ) -> Result<Edge, ConnectError> {
-        let e = self.add_edge(edge_type);
-        self.dag
-            .insert_edge(source.0, e, Direction::Outgoing, source.1)?;
-        self.dag
-            .insert_edge(target.0, e, Direction::Incoming, target.1)?;
-        Ok(e)
     }
 
     pub fn append_op(&mut self, op: Op, args: &[usize]) -> Result<Vertex, ConnectError> {

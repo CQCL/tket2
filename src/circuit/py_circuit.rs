@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crate::{
     circuit::operation::{Quat, Rational},
     graph::{
-        graph::{EdgeIndex, NodeIndex},
+        graph::{ConnectError, EdgeIndex, NodeIndex},
         substitute::{BoundedSubgraph, RewriteError, SubgraphRef},
     },
 };
@@ -40,41 +40,6 @@ impl IntoPy<PyObject> for EdgeIndex {
         self.index().into_py(py)
     }
 }
-
-// #[pymethods]
-// impl NodePort {
-//     #[new]
-//     fn py_new(n: NodeIndex, p: usize) -> Self {
-//         Self::new(n, PortIndex::new(p))
-//     }
-
-//     #[getter]
-//     fn node(&self) -> NodeIndex {
-//         self.node
-//     }
-
-//     #[getter]
-//     fn port(&self) -> PortIndex {
-//         self.port
-//     }
-
-//     fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
-//         match op {
-//             CompareOp::Lt => Ok(self < other),
-//             CompareOp::Le => Ok(self <= other),
-//             CompareOp::Eq => Ok(self == other),
-//             CompareOp::Ne => Ok(self != other),
-//             CompareOp::Gt => Ok(self > other),
-//             CompareOp::Ge => Ok(self >= other),
-//         }
-//     }
-// }
-
-// impl IntoPy<PyObject> for PortIndex {
-//     fn into_py(self, py: Python<'_>) -> PyObject {
-//         self.index().into_py(py)
-//     }
-// }
 
 #[derive(FromPyObject)]
 enum SpecialOp<'a> {
@@ -120,6 +85,12 @@ impl std::convert::From<CircuitError> for PyErr {
 
 impl std::convert::From<RewriteError> for PyErr {
     fn from(s: RewriteError) -> Self {
+        pyo3::exceptions::PyRuntimeError::new_err(s.to_string())
+    }
+}
+
+impl std::convert::From<ConnectError> for PyErr {
+    fn from(s: ConnectError) -> Self {
         pyo3::exceptions::PyRuntimeError::new_err(s.to_string())
     }
 }

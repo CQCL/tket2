@@ -871,7 +871,8 @@ impl<N, E> Graph<N, E> {
                 false
             }
         });
-
+        self.free_node = NodeIndex::end();
+        self.free_edge = EdgeIndex::end();
         (node_map, edge_map)
     }
 
