@@ -1,28 +1,17 @@
 use std::collections::BTreeMap;
 
-use crate::graph::graph::{Direction, EdgeIndex, Graph, NodeIndex};
-use rayon::prelude::*;
-struct MatchFail();
+use crate::{
+    circuit::{
+        circuit::{Circuit, CircuitRewrite},
+        dag::{EdgeProperties, VertexProperties}, operation::Param,
+    },
+    graph::{
+        graph::{Direction, NodeIndex, NodePort, Graph, EdgeIndex},
+        substitute::BoundedSubgraph,
+    },
+};
 
-/*
-A pattern for the pattern matcher with a fixed graph structure but arbitrary comparison at nodes.
- */
-#[derive(Clone)]
-pub struct FixedStructPattern<N, E, F> {
-    pub graph: Graph<N, E>,
-    pub boundary: [NodeIndex; 2],
-    pub node_comp_closure: F,
-}
-
-impl<N, E, F> FixedStructPattern<N, E, F> {
-    pub fn new(graph: Graph<N, E>, boundary: [NodeIndex; 2], node_comp_closure: F) -> Self {
-        Self {
-            graph,
-            boundary,
-            node_comp_closure,
-        }
-    }
-}
+use super::{MatchFail, PatternMatcher, PatternRewriter, StructRewriter};
 
 pub trait NodeCompClosure<N, E>: Fn(&Graph<N, E>, NodeIndex, &N) -> bool {}
 
@@ -34,16 +23,37 @@ pub fn node_equality<N: PartialEq, E>() -> impl NodeCompClosure<N, E> + Clone {
         pattern_node == target_node
     }
 }
-pub type Match = BTreeMap<NodeIndex, NodeIndex>;
+
+/*
+A pattern for the pattern matcher with a fixed graph structure but arbitrary comparison at nodes.
+ */
+#[derive(Clone)]
+pub struct FixedPattern<N, E, F> {
+    pub graph: Graph<N, E>,
+    pub boundary: [NodeIndex; 2],
+    pub node_comp_closure: F,
+}
+
+impl<N, E, F> FixedPattern<N, E, F> {
+    pub fn new(graph: Graph<N, E>, boundary: [NodeIndex; 2], node_comp_closure: F) -> Self {
+        Self {
+            graph,
+            boundary,
+            node_comp_closure,
+        }
+    }
+}
+
+pub type CircFixedPattern<F> = FixedPattern<VertexProperties, EdgeProperties, F>;
 
 #[derive(Clone)]
-pub struct PatternMatcher<'g, N, E, F> {
-    pattern: FixedStructPattern<N, E, F>,
+pub struct FixedPatternMatcher<'g, N, E, F> {
+    pattern: FixedPattern<N, E, F>,
     target: &'g Graph<N, E>,
 }
 
-impl<'g, N, E, F> PatternMatcher<'g, N, E, F> {
-    pub fn new(pattern: FixedStructPattern<N, E, F>, target: &'g Graph<N, E>) -> Self {
+impl<'g, N, E, F> FixedPatternMatcher<'g, N, E, F> {
+    pub fn new(pattern: FixedPattern<N, E, F>, target: &'g Graph<N, E>) -> Self {
         Self { pattern, target }
     }
 
@@ -52,8 +62,100 @@ impl<'g, N, E, F> PatternMatcher<'g, N, E, F> {
     }
 }
 
+impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, F: NodeCompClosure<N, E> + 'f> PatternMatcher<'g>
+    for FixedPatternMatcher<'g, N, E, F>
+{
+    type Match = FixedPatternMatch;
+
+    fn find_matches(&self) -> Box<dyn Iterator<Item = FixedPatternMatch>> {
+        let start = self.start_pattern_node_edge();
+        Box::new(self.target.node_indices().filter_map(move |candidate| {
+            if self.node_match(start, candidate).is_err() {
+                None
+            } else {
+                self.match_from(start, candidate).ok()
+            }
+        }))
+    }
+
+    fn into_matches(self) -> Box<dyn Iterator<Item = FixedPatternMatch>> {
+        let start = self.start_pattern_node_edge();
+        Box::new(self.target.node_indices().filter_map(move |candidate| {
+            if self.node_match(start, candidate).is_err() {
+                None
+            } else {
+                self.match_from(start, candidate).ok()
+            }
+        }))
+    }
+}
+
+pub type FixedPatternMatch = BTreeMap<NodeIndex, NodeIndex>;
+
+impl<'p, F> CircFixedPattern<F> {
+    pub fn from_circ(pattern_circ: Circuit, node_comp_closure: F) -> Self {
+        Self {
+            boundary: pattern_circ.boundary(),
+            graph: pattern_circ.dag,
+            node_comp_closure,
+        }
+    }
+
+    pub fn rewriter<'a, 'g: 'a, G>(
+        &self,
+        circ: &'a Circuit,
+        rewrite_closure: G,
+    ) -> impl PatternRewriter + 'a
+    where
+        G: Fn(FixedPatternMatch) -> (Circuit, Param) + 'g,
+    {
+        // TODO when applying rewrites greedily, all of this construction needs to
+        // every time a match is found. Find a way to update the target of the match
+        // and restart matching without doing all this again.
+        let in_ports: Vec<_> = self
+            .graph
+            .neighbours(self.boundary[0], Direction::Outgoing)
+            .collect();
+        let out_ports: Vec<_> = self
+            .graph
+            .neighbours(self.boundary[1], Direction::Incoming)
+            .collect();
+
+        let matcher = FixedPatternMatcher::new(self, circ.dag_ref());
+        StructRewriter::new(matcher, move |pmatch| {
+            let in_edges: Vec<_> = in_ports
+                .iter()
+                .map(|np| {
+                    circ.dag
+                        .edge_at_port(
+                            NodePort::new(*pmatch.get(&np.node).unwrap(), np.port),
+                            Direction::Incoming,
+                        )
+                        .unwrap()
+                })
+                .collect();
+            let out_edges: Vec<_> = out_ports
+                .iter()
+                .map(|np| {
+                    circ.dag
+                        .edge_at_port(
+                            NodePort::new(*pmatch.get(&np.node).unwrap(), np.port),
+                            Direction::Outgoing,
+                        )
+                        .unwrap()
+                })
+                .collect();
+            let subg = BoundedSubgraph::new(pmatch.values().copied().into(), [in_edges, out_edges]);
+
+            let (newcirc, phase) = (rewrite_closure)(pmatch);
+
+            CircuitRewrite::new(subg, newcirc.into(), phase)
+        })
+    }
+}
+
 impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, F: NodeCompClosure<N, E> + 'f>
-    PatternMatcher<'g, N, E, F>
+    FixedPatternMatcher<'g, N, E, F>
 {
     fn node_match(&self, pattern_node: NodeIndex, target_node: NodeIndex) -> Result<(), MatchFail> {
         match self.target.node_weight(target_node) {
@@ -158,9 +260,9 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, F: NodeCompClosure<N, E> + 'f>
         &self,
         pattern_start_node: NodeIndex,
         target_start_node: NodeIndex,
-    ) -> Result<Match, MatchFail> {
+    ) -> Result<FixedPatternMatch, MatchFail> {
         let err = Err(MatchFail());
-        let mut match_map = Match::new();
+        let mut match_map = FixedPatternMatch::new();
         let start_edge = *self
             .pattern
             .graph
@@ -257,37 +359,15 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, F: NodeCompClosure<N, E> + 'f>
     //             .map(|()| bijection)
     //     })
     // }
-
-    pub fn find_matches(&'g self) -> impl Iterator<Item = Match> + 'g {
-        let start = self.start_pattern_node_edge();
-        self.target.node_indices().filter_map(move |candidate| {
-            if self.node_match(start, candidate).is_err() {
-                None
-            } else {
-                self.match_from(start, candidate).ok()
-            }
-        })
-    }
-
-    pub fn into_matches(self) -> impl Iterator<Item = Match> + 'g {
-        let start = self.start_pattern_node_edge();
-        self.target.node_indices().filter_map(move |candidate| {
-            if self.node_match(start, candidate).is_err() {
-                None
-            } else {
-                self.match_from(start, candidate).ok()
-            }
-        })
-    }
 }
 
-impl<'g, N, E, F> PatternMatcher<'g, N, E, F>
+/*impl<'g, N, E, F> PatternMatcherPar<'g> for FixedPatternMatcher<'g, N, E, F>
 where
     N: PartialEq + Send + Sync,
     E: PartialEq + Send + Sync,
-    F: NodeCompClosure<N, E> + Sync + Send,
+    F: NodeCompClosure<N, E> + Sync + Send + 'g,
 {
-    pub fn find_par_matches(&'g self) -> impl ParallelIterator<Item = Match> + 'g {
+    fn find_par_matches(&self) -> Box<dyn ParallelIterator<Item = Match>> {
         let start = self.start_pattern_node_edge();
         let candidates: Vec<_> = self
             .target
@@ -296,20 +376,21 @@ where
             .collect();
         candidates
             .into_par_iter()
-            .filter_map(move |candidate| self.match_from(start, candidate).ok())
+            .filter_map(move |candidate| self.match_from(start, candidate).ok());
     }
-}
+}*/
 
 #[cfg(test)]
 mod tests {
     use rayon::iter::ParallelIterator;
     use rstest::{fixture, rstest};
 
-    use super::{node_equality, FixedStructPattern, Match, PatternMatcher};
+    use super::{node_equality, FixedStructPattern, FixedPatternMatch};
     use crate::circuit::circuit::{Circuit, UnitID};
     use crate::circuit::dag::{Dag, VertexProperties};
     use crate::circuit::operation::{Op, WireType};
     use crate::graph::graph::{NodeIndex, PortIndex};
+    use super::super::PatternMatcher;
     #[fixture]
     fn simple_circ() -> Circuit {
         let mut circ1 = Circuit::new();
@@ -382,8 +463,8 @@ mod tests {
         assert!(matcher.edge_match(fedges[0], fedges[3]).is_err());
     }
 
-    fn match_maker(it: impl IntoIterator<Item = (usize, usize)>) -> Match {
-        Match::from_iter(
+    fn match_maker(it: impl IntoIterator<Item = (usize, usize)>) -> FixedPatternMatch {
+        FixedPatternMatch::from_iter(
             it.into_iter()
                 .map(|(i, j)| (NodeIndex::new(i), NodeIndex::new(j))),
         )

@@ -1,21 +1,17 @@
 pub mod classical;
 // pub mod redundancy;
-pub mod pattern;
 pub mod squash;
+pub mod patterns;
 
 use crate::{
     circuit::{
         circuit::{Circuit, CircuitError, CircuitRewrite},
-        dag::{EdgeProperties, VertexProperties},
-        operation::{Op, Param},
+        operation::Op,
     },
     graph::{
-        graph::{Direction, NodePort},
         substitute::BoundedSubgraph,
     },
 };
-
-use self::pattern::{FixedStructPattern, Match, NodeCompClosure, PatternMatcher};
 
 /// Repeatedly apply all available rewrites reported by finder closure until no more are found.
 ///
@@ -60,70 +56,6 @@ where
     }
 
     Ok((circ, success))
-}
-
-pub type CircFixedStructPattern<F> = FixedStructPattern<VertexProperties, EdgeProperties, F>;
-
-impl<'p, F> CircFixedStructPattern<F> {
-    pub fn from_circ(pattern_circ: Circuit, node_comp_closure: F) -> Self {
-        Self {
-            boundary: pattern_circ.boundary(),
-            graph: pattern_circ.dag,
-            node_comp_closure,
-        }
-    }
-}
-pub fn pattern_rewriter<'a, 'f: 'a, 'g: 'a, F, G>(
-    pattern: CircFixedStructPattern<F>,
-    circ: &'a Circuit,
-    rewrite_closure: G,
-) -> impl Iterator<Item = CircuitRewrite> + 'a
-where
-    F: NodeCompClosure<VertexProperties, EdgeProperties> + Clone + 'f,
-    G: Fn(Match) -> (Circuit, Param) + 'g,
-{
-    // TODO when applying rewrites greedily, all of this construction needs to
-    // every time a match is found. Find a way to update the target of the match
-    // and restart matching without doing all this again.
-    let in_ports: Vec<_> = pattern
-        .graph
-        .neighbours(pattern.boundary[0], Direction::Outgoing)
-        .collect();
-    let out_ports: Vec<_> = pattern
-        .graph
-        .neighbours(pattern.boundary[1], Direction::Incoming)
-        .collect();
-    let matcher = PatternMatcher::new(pattern, circ.dag_ref());
-
-    matcher.into_matches().map(move |pmatch| {
-        let in_edges: Vec<_> = in_ports
-            .iter()
-            .map(|np| {
-                circ.dag
-                    .edge_at_port(
-                        NodePort::new(*pmatch.get(&np.node).unwrap(), np.port),
-                        Direction::Incoming,
-                    )
-                    .unwrap()
-            })
-            .collect();
-        let out_edges: Vec<_> = out_ports
-            .iter()
-            .map(|np| {
-                circ.dag
-                    .edge_at_port(
-                        NodePort::new(*pmatch.get(&np.node).unwrap(), np.port),
-                        Direction::Outgoing,
-                    )
-                    .unwrap()
-            })
-            .collect();
-        let subg = BoundedSubgraph::new(pmatch.values().copied().into(), [in_edges, out_edges]);
-
-        let (newcirc, phase) = (rewrite_closure)(pmatch);
-
-        CircuitRewrite::new(subg, newcirc.into(), phase)
-    })
 }
 
 // pub struct PatternRewrites<'p, I, F> {
