@@ -3,19 +3,17 @@ pub mod classical;
 pub mod pattern;
 pub mod squash;
 
-use crate::{
-    circuit::{
-        circuit::{Circuit, CircuitRewrite},
-        dag::{EdgeProperties, VertexProperties},
-        operation::{Op, Param},
-    },
-    graph::{
-        graph::DIRECTIONS,
-        substitute::{BoundedSubgraph, RewriteError, SubgraphRef},
-    },
+use crate::circuit::{
+    circuit::{Circuit, CircuitRewrite},
+    dag::{EdgeProperties, VertexProperties},
+    operation::{Op, Param},
 };
 
 use self::pattern::{FixedStructPattern, Match, NodeCompClosure, PatternMatcher};
+use portgraph::{
+    graph::DIRECTIONS,
+    substitute::{BoundedSubgraph, RewriteError, SubgraphRef},
+};
 
 /// Repeatedly apply all available rewrites reported by finder closure until no more are found.
 ///

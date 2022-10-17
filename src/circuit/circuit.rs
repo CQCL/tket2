@@ -3,8 +3,8 @@ use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 
-use crate::graph::graph::{ConnectError, Direction, DIRECTIONS};
-use crate::graph::substitute::{BoundedSubgraph, OpenGraph, RewriteError};
+use portgraph::graph::{ConnectError, Direction, DIRECTIONS};
+use portgraph::substitute::{BoundedSubgraph, OpenGraph, RewriteError};
 
 use super::dag::{Dag, Edge, EdgeProperties, TopSorter, Vertex, VertexProperties};
 use super::operation::{ConstValue, Op, Param, WireType};
@@ -165,7 +165,7 @@ impl Circuit {
         self.dag.edge_weight(e).map(|ep| ep.edge_type)
     }
     pub fn dot_string(&self) -> String {
-        crate::graph::dot::dot_string(self.dag_ref())
+        portgraph::dot::dot_string(self.dag_ref())
     }
 
     pub fn apply_rewrite(&mut self, rewrite: CircuitRewrite) -> Result<(), RewriteError> {
@@ -539,8 +539,7 @@ impl<'circ> Iterator for CommandIter<'circ> {
     }
 }
 
-pub(crate) type CircDagRewrite =
-    crate::graph::substitute::Rewrite<VertexProperties, EdgeProperties>;
+pub(crate) type CircDagRewrite = portgraph::substitute::Rewrite<VertexProperties, EdgeProperties>;
 
 #[cfg_attr(feature = "pyo3", pyclass)]
 #[derive(Debug, Clone)]
@@ -579,10 +578,8 @@ impl From<Circuit> for OpenGraph<VertexProperties, EdgeProperties> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        circuit::operation::{ConstValue, Op, WireType},
-        graph::graph::Direction,
-    };
+    use crate::circuit::operation::{ConstValue, Op, WireType};
+    use portgraph::graph::Direction;
 
     use super::Circuit;
 

@@ -164,7 +164,7 @@ mod tests {
     use std::collections::HashSet;
     use std::error::Error;
 
-    use crate::graph::substitute::{BoundedSubgraph, OpenGraph};
+    use crate::substitute::{BoundedSubgraph, OpenGraph};
 
     use super::Graph;
 

@@ -266,7 +266,7 @@ impl<N, E> Graph<N, E> {
     /// # Example
     ///
     /// ```
-    /// # use tket2::graph::graph::{Graph, Direction};
+    /// # use portgraph::graph::{Graph, Direction};
     /// let mut graph = Graph::<i8, i8>::new();
     ///
     /// let e1 = graph.add_edge(-1);
@@ -322,7 +322,7 @@ impl<N, E> Graph<N, E> {
     /// # Example
     ///
     /// ```
-    /// # use tket2::graph::graph::{Graph, Direction};
+    /// # use portgraph::graph::{Graph, Direction};
     /// let mut graph = Graph::<i8, i8>::new();
     ///
     /// let e1 = graph.add_edge(-1);
@@ -365,7 +365,7 @@ impl<N, E> Graph<N, E> {
     /// # Example
     ///
     /// ```
-    /// # use tket2::graph::graph::{Graph, Direction};
+    /// # use portgraph::graph::{Graph, Direction};
     /// let mut graph = Graph::<i8, i8>::new();
     ///
     /// let e1 = graph.add_edge(-1);
@@ -417,7 +417,7 @@ impl<N, E> Graph<N, E> {
     /// # Example
     ///
     /// ```
-    /// # use tket2::graph::graph::{Graph, Direction};
+    /// # use portgraph::graph::{Graph, Direction};
     /// let mut graph = Graph::<i8, i8>::new();
     ///
     /// let e1 = graph.add_edge(-1);
@@ -463,7 +463,7 @@ impl<N, E> Graph<N, E> {
     /// # Example
     ///
     /// ```
-    /// # use tket2::graph::graph::{Graph, Direction};
+    /// # use portgraph::graph::{Graph, Direction};
     /// let mut graph = Graph::<i8, i8>::new();
     ///
     /// let e1 = graph.add_edge(-1);
@@ -555,7 +555,7 @@ impl<N, E> Graph<N, E> {
     /// # Example
     ///
     /// ```
-    /// # use tket2::graph::graph::{Graph, Direction};
+    /// # use portgraph::graph::{Graph, Direction};
     /// let mut graph = Graph::<i8, i8>::new();
     ///
     /// let e1 = graph.add_edge(-1);
@@ -613,7 +613,7 @@ impl<N, E> Graph<N, E> {
     /// # Example
     ///
     /// ```
-    /// # use tket2::graph::graph::{Graph, Direction};
+    /// # use portgraph::graph::{Graph, Direction};
     /// let mut graph = Graph::<i8, i8>::new();
     ///
     /// let e1 = graph.add_edge(-1);
@@ -697,7 +697,7 @@ impl<N, E> Graph<N, E> {
     /// # Example
     ///
     /// ```
-    /// # use tket2::graph::graph::{Graph, Direction};
+    /// # use portgraph::graph::{Graph, Direction};
     /// let mut graph = Graph::<i8, i8>::new();
     ///
     /// let n0 = graph.add_node(0);
@@ -720,7 +720,7 @@ impl<N, E> Graph<N, E> {
     /// # Example
     ///
     /// ```
-    /// # use tket2::graph::graph::{Graph, Direction};
+    /// # use portgraph::graph::{Graph, Direction};
     /// let mut graph = Graph::<i8, i8>::new();
     ///
     /// let e1 = graph.add_edge(-1);
@@ -823,7 +823,7 @@ impl<N, E> Graph<N, E> {
     /// # Example
     ///
     /// ```
-    /// # use tket2::graph::graph::{Graph, Direction};
+    /// # use portgraph::graph::{Graph, Direction};
     /// # use std::collections::BTreeMap;
     /// let mut graph = Graph::<i8, i8>::new();
     ///
@@ -899,7 +899,7 @@ impl<N, E> Graph<N, E> {
     /// # Example
     ///
     /// ```
-    /// # use tket2::graph::graph::{Graph, Direction};
+    /// # use portgraph::graph::{Graph, Direction};
     /// let mut graph = Graph::<i8, i8>::new();
     ///
     /// let e1 = graph.add_edge(-1);

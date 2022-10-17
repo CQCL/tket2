@@ -26,9 +26,16 @@ thiserror = "1.0.28"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 downcast-rs = "1.2.0"
+portgraph = { path = "ext/portgraph" }
+
 
 [features]
-pyo3 = ["dep:pyo3", "tket-json-rs/pyo3", "tket-json-rs/tket2ops"]
+pyo3 = [
+    "dep:pyo3",
+    "tket-json-rs/pyo3",
+    "tket-json-rs/tket2ops",
+    "portgraph/pyo3",
+]
 tkcxx = ["dep:tket-rs", "dep:num-complex"]
 
 [dev-dependencies]
@@ -42,4 +49,4 @@ harness = false
 
 [workspace]
 
-members = ["pyrs"]
+members = ["pyrs", "ext/portgraph"]

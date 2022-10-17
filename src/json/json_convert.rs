@@ -1,6 +1,6 @@
 use crate::circuit::circuit::{Circuit, UnitID};
 use crate::circuit::operation::{ConstValue, Op, WireType};
-use crate::graph::graph::Direction;
+use portgraph::graph::Direction;
 use std::collections::HashMap;
 use std::str::FromStr;
 use tket_json_rs::circuit_json::{Command, Operation, Permutation, Register, SerialCircuit};

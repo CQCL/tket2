@@ -1,15 +1,13 @@
 use std::collections::BTreeSet;
 
-use crate::{
-    circuit::{
-        circuit::{Circuit, CircuitRewrite},
-        dag::Vertex,
-        operation::{ConstValue, Op, Quat},
-    },
-    graph::{
-        graph::Direction,
-        substitute::{BoundedSubgraph, RewriteError, SubgraphRef},
-    },
+use crate::circuit::{
+    circuit::{Circuit, CircuitRewrite},
+    dag::Vertex,
+    operation::{ConstValue, Op, Quat},
+};
+use portgraph::{
+    graph::Direction,
+    substitute::{BoundedSubgraph, RewriteError, SubgraphRef},
 };
 
 pub fn find_const_ops(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {

@@ -2,14 +2,12 @@ use std::collections::BTreeSet;
 
 use thiserror::Error;
 
-use crate::{
-    circuit::{
-        circuit::Circuit,
-        dag::{Edge, TopSorter, Vertex},
-        operation::{Op, WireType},
-    },
-    graph::graph::{Direction, DIRECTIONS},
+use crate::circuit::{
+    circuit::Circuit,
+    dag::{Edge, TopSorter, Vertex},
+    operation::{Op, WireType},
 };
+use portgraph::graph::{Direction, DIRECTIONS};
 
 #[derive(Debug, Error, PartialEq)]
 pub enum ValidateError<'a> {

@@ -1,5 +1,4 @@
 pub mod circuit;
-pub mod graph;
 
 pub mod json;
 pub mod passes;
@@ -15,7 +14,6 @@ mod tests {
             operation::WireType,
             operation::{ConstValue, Op},
         },
-        graph::graph::Direction,
         passes::{
             apply_exhaustive, apply_greedy,
             classical::{constant_fold_strat, find_const_ops},
@@ -26,6 +24,7 @@ mod tests {
         },
         validate::check_soundness,
     };
+    use portgraph::graph::Direction;
     use tket_json_rs::circuit_json::{self, SerialCircuit};
 
     #[test]
@@ -314,7 +313,7 @@ mod tests {
         let (circ2, success) = constant_folder(circ2);
         check_soundness(&circ2).unwrap();
         assert!(success);
-        // use crate::graph::dot::dot_string;
+        // use portgraph::dot::dot_string;
         // println!("{}", dot_string(&_circ2.dag));
     }
 
@@ -352,7 +351,7 @@ mod tests {
         circ2.bind_input(1, ConstValue::f64_angle(0.5)).unwrap();
         circ2.bind_input(1, ConstValue::f64_angle(0.2)).unwrap();
 
-        // use crate::graph::dot::dot_string;
+        // use portgraph::dot::dot_string;
         // println!("{}", dot_string(&circ2.dag));
         let constant_folder =
             |circuit| apply_exhaustive(circuit, |c| find_const_ops(c).collect()).unwrap();
@@ -362,7 +361,7 @@ mod tests {
         check_soundness(&circ2).unwrap();
 
         // let _circ2 = _circ2.remove_invalid();
-        // use crate::graph::dot::dot_string;
+        // use portgraph::dot::dot_string;
         // println!("{}", dot_string(&_circ2.dag));
         // TODO verify behaviour at each step
     }

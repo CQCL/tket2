@@ -1,3 +1,4 @@
+use portgraph::graph::{Direction, NodeIndex};
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
@@ -5,7 +6,6 @@ use tket2::circuit::circuit::{Circuit, CircuitRewrite};
 use tket2::circuit::dag::VertexProperties;
 use tket2::circuit::operation::WireType;
 use tket2::circuit::py_circuit::{count_pycustom, PyRewriteIter, PySubgraph};
-use tket2::graph::graph::{Direction, NodeIndex};
 use tket2::passes::pattern::node_equality;
 use tket2::passes::{apply_greedy, pattern_rewriter, CircFixedStructPattern};
 use tket_json_rs::optype::OpType;

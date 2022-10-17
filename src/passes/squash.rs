@@ -4,16 +4,16 @@ use crate::{
         dag::{Dag, Edge, Vertex, VertexProperties},
         operation::{ConstValue, Op, Param, WireType},
     },
-    graph::{
-        graph::{Direction, EdgeIndex, NodeIndex},
-        substitute::{BoundedSubgraph, Rewrite, SubgraphRef},
-    },
     passes::{apply_exhaustive, apply_greedy, classical::find_const_ops},
 };
 
 use super::{
     pattern::{node_equality, Match},
     pattern_rewriter, CircFixedStructPattern,
+};
+use portgraph::{
+    graph::{Direction, EdgeIndex, NodeIndex},
+    substitute::{BoundedSubgraph, Rewrite, SubgraphRef},
 };
 
 pub fn find_singleq_rotations(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {

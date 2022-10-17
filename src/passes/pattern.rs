@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::graph::graph::{Direction, EdgeIndex, Graph, NodeIndex, DIRECTIONS};
+use portgraph::graph::{Direction, EdgeIndex, Graph, NodeIndex, DIRECTIONS};
 use rayon::prelude::*;
 struct MatchFail();
 
@@ -319,7 +319,7 @@ mod tests {
     use crate::circuit::circuit::{Circuit, UnitID};
     use crate::circuit::dag::{Dag, VertexProperties};
     use crate::circuit::operation::{Op, WireType};
-    use crate::graph::graph::NodeIndex;
+    use portgraph::graph::NodeIndex;
 
     #[fixture]
     fn simple_circ() -> Circuit {
@@ -559,7 +559,7 @@ mod tests {
             .append_op(Op::Noop(WireType::Qubit), &[1])
             .unwrap();
 
-        // use crate::graph::dot::dot_string;
+        // use portgraph::dot::dot_string;
         // println!("{}", dot_string(&target_circ.dag));
 
         let pattern_boundary = cx_h_pattern.boundary();

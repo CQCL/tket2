@@ -4,11 +4,14 @@ pub mod graph;
 pub mod substitute;
 pub mod toposort;
 
+#[cfg(feature = "pyo3")]
+pub mod py_graph;
+
 #[cfg(test)]
 mod tests {
     use std::collections::{BTreeMap, HashSet};
 
-    use crate::graph::{
+    use crate::{
         dot::dot_string,
         graph::{EdgeIndex, NodeIndex},
     };

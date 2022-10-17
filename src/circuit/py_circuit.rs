@@ -1,12 +1,8 @@
 use std::collections::HashSet;
 
-use crate::{
-    circuit::operation::{Quat, Rational},
-    graph::{
-        graph::{ConnectError, EdgeIndex, NodeIndex},
-        substitute::{BoundedSubgraph, RewriteError, SubgraphRef},
-    },
-};
+use crate::circuit::operation::{Quat, Rational};
+use portgraph::graph::{EdgeIndex, NodeIndex};
+use portgraph::substitute::{BoundedSubgraph, SubgraphRef};
 
 use super::{
     circuit::{Circuit, CircuitError, CircuitRewrite},
@@ -17,29 +13,12 @@ use pyo3::{
     exceptions::{PyNotImplementedError, PyStopIteration, PyZeroDivisionError},
     prelude::*,
     pyclass::CompareOp,
-    types::{PyInt, PyType},
+    types::PyType,
 };
 
 use tket_json_rs::{circuit_json::SerialCircuit, optype::OpType};
 
 use super::operation::ToCircuitFail;
-
-impl From<PyInt> for NodeIndex {
-    fn from(x: PyInt) -> Self {
-        Self::new(x.extract().unwrap())
-    }
-}
-impl IntoPy<PyObject> for NodeIndex {
-    fn into_py(self, py: Python<'_>) -> PyObject {
-        self.index().into_py(py)
-    }
-}
-
-impl IntoPy<PyObject> for EdgeIndex {
-    fn into_py(self, py: Python<'_>) -> PyObject {
-        self.index().into_py(py)
-    }
-}
 
 #[derive(FromPyObject)]
 enum SpecialOp<'a> {
@@ -80,18 +59,6 @@ impl<'source> FromPyObject<'source> for Op {
 impl std::convert::From<CircuitError> for PyErr {
     fn from(s: CircuitError) -> Self {
         pyo3::exceptions::PyRuntimeError::new_err(s.0)
-    }
-}
-
-impl std::convert::From<RewriteError> for PyErr {
-    fn from(s: RewriteError) -> Self {
-        pyo3::exceptions::PyRuntimeError::new_err(s.to_string())
-    }
-}
-
-impl std::convert::From<ConnectError> for PyErr {
-    fn from(s: ConnectError) -> Self {
-        pyo3::exceptions::PyRuntimeError::new_err(s.to_string())
     }
 }
 

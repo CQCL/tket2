@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use crate::circuit::circuit::{Circuit, CircuitRewrite};
 use crate::circuit::dag::{Edge, EdgeProperties, Vertex, VertexProperties, DAG};
 use crate::circuit::operation::{Op, Param};
-use crate::graph::graph::{Direction, EdgeIndex};
-use crate::graph::substitute::BoundedSubgraph;
+use portgraph::graph::{Direction, EdgeIndex};
+use portgraph::substitute::BoundedSubgraph;
 
 fn get_boundary(dag: &DAG, node: Vertex, direction: Direction) -> Vec<Edge> {
     dag.node_edges(node, direction).cloned().collect()

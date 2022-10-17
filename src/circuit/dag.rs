@@ -33,8 +33,8 @@ impl Display for EdgeProperties {
 }
 
 // pub(crate) type DAG = StableDag<VertexProperties, EdgeProperties>;
-pub(crate) type Dag = crate::graph::graph::Graph<VertexProperties, EdgeProperties>;
+pub(crate) type Dag = portgraph::graph::Graph<VertexProperties, EdgeProperties>;
 pub(crate) type TopSorter<'a> =
-    crate::graph::toposort::TopSortWalker<'a, VertexProperties, EdgeProperties>;
-pub(crate) type Vertex = crate::graph::graph::NodeIndex;
-pub(crate) type Edge = crate::graph::graph::EdgeIndex;
+    portgraph::toposort::TopSortWalker<'a, VertexProperties, EdgeProperties>;
+pub(crate) type Vertex = portgraph::graph::NodeIndex;
+pub(crate) type Edge = portgraph::graph::EdgeIndex;
