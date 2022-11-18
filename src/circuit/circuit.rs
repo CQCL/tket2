@@ -130,12 +130,10 @@ impl Circuit {
         let e = self.add_edge(uid.get_type());
         self.uids.push(uid);
 
-        // TODO check if connect first is ok
         self.dag
-            .connect_first(self.boundary.input, e, Direction::Outgoing)
+            .connect_last(self.boundary.input, e, Direction::Outgoing)
             .unwrap();
         e
-        // (self.boundary.input, (self.uids.len() - 1) as u8).into()
     }
 
     pub fn add_linear_unitid(&mut self, uid: UnitID) {
@@ -581,7 +579,7 @@ mod tests {
     use crate::circuit::operation::{ConstValue, Op, WireType};
     use portgraph::graph::Direction;
 
-    use super::Circuit;
+    use super::{Circuit, UnitID};
 
     #[test]
     fn test_add_identity() {
@@ -648,5 +646,29 @@ mod tests {
             circ.dag.node_weight(neis[1]).unwrap().op,
             Op::Const(ConstValue::F64(2.0))
         );
+    }
+
+    #[test]
+    fn test_add_uid() {
+        let q0 = UnitID::Qubit {
+            reg_name: "q".into(),
+            index: vec![0],
+        };
+        let a = UnitID::Angle("a".into());
+
+        // An empty circuit with UnitIDs [q0, a]
+        let mut c = Circuit::new();
+        c.add_linear_unitid(q0.clone());
+        c.add_unitid(a.clone());
+
+        // Make sure UnitIDs and edges are stored in right order
+        assert_eq!(c.uids, vec![q0.clone(), a.clone()]);
+        assert_eq!(
+            c.node_edges(c.boundary.input, Direction::Outgoing)
+                .into_iter()
+                .map(|e| c.edge_type(e).unwrap())
+                .collect::<Vec<_>>(),
+            vec![WireType::Qubit, WireType::Angle]
+        )
     }
 }
