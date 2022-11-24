@@ -1,5 +1,6 @@
 #[allow(clippy::module_inception)]
 pub mod circuit;
+pub mod convex;
 pub mod dag;
 pub mod operation;
 

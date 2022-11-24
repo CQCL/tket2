@@ -6,6 +6,7 @@ use std::hash::Hash;
 use portgraph::graph::{ConnectError, Direction, DIRECTIONS};
 use portgraph::substitute::{BoundedSubgraph, OpenGraph, RewriteError};
 
+use super::convex::ConvexMemoization;
 use super::dag::{Dag, Edge, EdgeProperties, TopSorter, Vertex, VertexProperties};
 use super::operation::{ConstValue, Op, Param, WireType};
 #[cfg(feature = "pyo3")]
@@ -373,6 +374,14 @@ impl Circuit {
         self.uids.iter()
     }
 
+    pub fn linear_unitids(&self) -> impl Iterator<Item = &UnitID> + '_ {
+        // Assume the n first UnitIDs are linear
+        let n_lin_uids = self
+            .node_edges(self.boundary.input, Direction::Outgoing)
+            .len();
+        self.uids[..n_lin_uids].iter()
+    }
+
     pub fn boundary(&self) -> [Vertex; 2] {
         [self.boundary.input, self.boundary.output]
     }
@@ -471,6 +480,16 @@ impl Circuit {
 
     pub fn dag_ref(&self) -> &Dag {
         &self.dag
+    }
+
+    // Whether `subg` is convex in `self`
+    //
+    // This is always linear in the number of nodes in `self`. If multiple convexity
+    // queries are made, it is recommended to use `ConvexMemoization` directly to only
+    // precompute the causal structure once.
+    pub fn is_convex(&self, subg: &BoundedSubgraph) -> bool {
+        let mem = ConvexMemoization::memoize(&self);
+        mem.is_convex_subgraph(subg)
     }
 }
 
@@ -577,7 +596,7 @@ impl From<Circuit> for OpenGraph<VertexProperties, EdgeProperties> {
 #[cfg(test)]
 mod tests {
     use crate::circuit::operation::{ConstValue, Op, WireType};
-    use portgraph::graph::Direction;
+    use portgraph::{graph::Direction, substitute::BoundedSubgraph};
 
     use super::{Circuit, UnitID};
 
@@ -670,5 +689,38 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![WireType::Qubit, WireType::Angle]
         )
+    }
+
+    #[test]
+    fn test_convex() {
+        let q0 = UnitID::Qubit {
+            reg_name: "q".into(),
+            index: vec![0],
+        };
+        let q1 = UnitID::Qubit {
+            reg_name: "q".into(),
+            index: vec![1],
+        };
+        let q2 = UnitID::Qubit {
+            reg_name: "q".into(),
+            index: vec![2],
+        };
+        let mut c = Circuit::with_uids(vec![q0, q1, q2]);
+        let n1 = c.append_op(Op::CX, &[0, 1]).unwrap();
+        c.append_op(Op::CX, &[0, 2]).unwrap();
+        c.append_op(Op::CX, &[0, 2]).unwrap();
+        let n2 = c.append_op(Op::CX, &[1, 2]).unwrap();
+        let n3 = c.append_op(Op::CX, &[0, 2]).unwrap();
+
+        let subg = BoundedSubgraph::from_node(&c.dag, n2);
+        assert!(c.is_convex(&subg));
+        let subg = BoundedSubgraph::new(
+            portgraph::substitute::SubgraphRef {
+                nodes: [n1, n2, n3].into(),
+            },
+            // Technically shouldn't leave edges empty, but here we don't care
+            [vec![], vec![]],
+        );
+        assert!(!c.is_convex(&subg));
     }
 }
