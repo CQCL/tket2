@@ -576,8 +576,8 @@ impl From<Circuit> for OpenGraph<VertexProperties, EdgeProperties> {
 
 #[cfg(test)]
 mod tests {
-    use crate::circuit::operation::{ConstValue, Op, WireType};
-    use portgraph::graph::Direction;
+    use crate::circuit::{operation::{ConstValue, Op, WireType}, circuit::CircuitRewrite};
+    use portgraph::{graph::Direction, substitute::{Rewrite, BoundedSubgraph, SubgraphRef}};
 
     use super::{Circuit, UnitID};
 
@@ -670,5 +670,35 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![WireType::Qubit, WireType::Angle]
         )
+    }
+
+    #[test]
+    fn test_sub() {
+        let q0 = UnitID::Qubit {
+            reg_name: "q".into(),
+            index: vec![0],
+        };
+        let q1 = UnitID::Qubit {
+            reg_name: "q".into(),
+            index: vec![1],
+        };
+        let qbs = vec![q0, q1];
+        let mut circ = Circuit::with_uids(qbs.clone());
+        let cx = circ.append_op(Op::CX, &[0, 1]).unwrap();
+        let replacement = Circuit::with_uids(qbs.clone()).into();
+        let rewrite = CircuitRewrite {
+            graph_rewrite: Rewrite::new(
+                BoundedSubgraph {
+                    subgraph: SubgraphRef::new([cx].iter().cloned().collect()),
+                    edges: [
+                        circ.node_edges(cx, Direction::Incoming).into(),
+                        circ.node_edges(cx, Direction::Outgoing).into(),
+                    ],
+                },
+                replacement
+            ),
+            phase: 0.,
+        };
+        assert!(circ.apply_rewrite(rewrite).is_ok());
     }
 }
