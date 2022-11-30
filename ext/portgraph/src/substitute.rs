@@ -126,19 +126,19 @@ impl<N: Default + Debug + Display, E: Debug + Display> Graph<N, E> {
         let removed = self.remove_subgraph(&subgraph);
 
         // insert new graph and update edge references accordingly
-        let (_, edge_map) = self.insert_graph(replacement.graph);
+        let (_, mut edge_map) = self.insert_graph(replacement.graph);
 
         for direction in DIRECTIONS {
             let edges = &subgraph.edges[direction.index()];
             let ports = &replacement.ports[direction.index()];
 
             for (edge, port) in edges.iter().zip(ports) {
-                let port = edge_map[port];
-
                 // TODO: There should be a check to make sure this can not fail
                 // before we merge the first edge to avoid leaving the graph in an
                 // invalid state.
-                self.merge_edges(port, *edge).unwrap();
+                self.merge_edges(edge_map[port], *edge).unwrap();
+                // Update edge_map to point to new merged edge
+                edge_map.get_mut(port).map(|e| *e = *edge);
             }
         }
 
