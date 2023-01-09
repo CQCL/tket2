@@ -48,7 +48,7 @@ impl<'source> FromPyObject<'source> for Op {
         let pyop: PyResult<OpType> = ob.extract();
 
         if let Ok(pyop) = pyop {
-            Ok(pyop.into())
+            Ok(pyop.try_into().unwrap())
         } else {
             let pycustom: PyCustom = ob.extract()?;
             Ok(Op::Custom(Box::new(pycustom)))

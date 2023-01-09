@@ -273,7 +273,7 @@ pub trait CustomBoxClone {
 
 impl<T> CustomBoxClone for T
 where
-    T: 'static + CustomOp + Clone,
+    T: CustomOp + Clone,
 {
     fn clone_box(&self) -> Box<dyn CustomOp> {
         Box::new(self.clone())
