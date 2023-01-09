@@ -28,6 +28,26 @@ mod tests {
     use tket_json_rs::circuit_json::{self, SerialCircuit};
 
     #[test]
+    fn llvm_test() -> Result<(), Box<dyn Error>> {
+        use inkwell::context::Context;
+        use inkwell::module::Module;
+        use std::path::Path;
+
+        let path = Path::new("qir_ex.bc");
+        let context = Context::create();
+        let module = Module::parse_bitcode_from_path(path, &context)?;
+        // dbg!(module.get_last_function());
+        let f = module.get_first_function().unwrap();
+        dbg!(f.get_basic_blocks()[0]
+            .get_first_instruction()
+            .unwrap()
+            .get_next_instruction()
+            .unwrap());
+
+        Ok(())
+    }
+
+    #[test]
     fn read_json() {
         // let expr = symengine::Expression::new("a + b + 3");
         let circ_s = r#"{"bits": [["c", [0]], ["c", [1]]], "commands": [{"args": [["q", [0]]], "op": {"type": "H"}}, {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}, {"args": [["q", [0]], ["c", [0]]], "op": {"type": "Measure"}}, {"args": [["q", [1]], ["c", [1]]], "op": {"type": "Measure"}}], "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]], "phase": "0", "qubits": [["q", [0]], ["q", [1]]]}"#;
