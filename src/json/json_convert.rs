@@ -20,94 +20,95 @@ fn to_bit(reg: Register) -> UnitID {
     }
 }
 
-impl From<OpType> for Op {
-    fn from(serial_op: OpType) -> Self {
-        match serial_op {
+impl TryFrom<OpType> for Op {
+    type Error = OpConvertError;
+    fn try_from(serial_op: OpType) -> Result<Self, Self::Error> {
+        Ok(match serial_op {
             OpType::Input => Op::Input,
             OpType::Output => Op::Output,
-            OpType::Create => todo!(),
-            OpType::Discard => todo!(),
-            OpType::ClInput => todo!(),
-            OpType::ClOutput => todo!(),
-            OpType::Barrier => todo!(),
-            OpType::Label => todo!(),
-            OpType::Branch => todo!(),
-            OpType::Goto => todo!(),
-            OpType::Stop => todo!(),
-            OpType::ClassicalTransform => todo!(),
-            OpType::SetBits => todo!(),
-            OpType::CopyBits => todo!(),
-            OpType::RangePredicate => todo!(),
-            OpType::ExplicitPredicate => todo!(),
-            OpType::ExplicitModifier => todo!(),
-            OpType::MultiBit => todo!(),
-            OpType::Z => todo!(),
-            OpType::X => todo!(),
-            OpType::Y => todo!(),
-            OpType::S => todo!(),
-            OpType::Sdg => todo!(),
-            OpType::T => todo!(),
-            OpType::Tdg => todo!(),
-            OpType::V => todo!(),
-            OpType::Vdg => todo!(),
-            OpType::SX => todo!(),
-            OpType::SXdg => todo!(),
+            // OpType::Create => todo!(),
+            // OpType::Discard => todo!(),
+            // OpType::ClInput => todo!(),
+            // OpType::ClOutput => todo!(),
+            // OpType::Barrier => todo!(),
+            // OpType::Label => todo!(),
+            // OpType::Branch => todo!(),
+            // OpType::Goto => todo!(),
+            // OpType::Stop => todo!(),
+            // OpType::ClassicalTransform => todo!(),
+            // OpType::SetBits => todo!(),
+            // OpType::CopyBits => todo!(),
+            // OpType::RangePredicate => todo!(),
+            // OpType::ExplicitPredicate => todo!(),
+            // OpType::ExplicitModifier => todo!(),
+            // OpType::MultiBit => todo!(),
+            // OpType::Z => todo!(),
+            // OpType::X => todo!(),
+            // OpType::Y => todo!(),
+            // OpType::S => todo!(),
+            // OpType::Sdg => todo!(),
+            // OpType::T => todo!(),
+            // OpType::Tdg => todo!(),
+            // OpType::V => todo!(),
+            // OpType::Vdg => todo!(),
+            // OpType::SX => todo!(),
+            // OpType::SXdg => todo!(),
             OpType::H => Op::H,
             OpType::CX => Op::CX,
-            OpType::CY => todo!(),
-            OpType::CZ => todo!(),
-            OpType::CH => todo!(),
-            OpType::CV => todo!(),
-            OpType::CVdg => todo!(),
-            OpType::CSX => todo!(),
-            OpType::CSXdg => todo!(),
-            OpType::CRz => todo!(),
-            OpType::CRx => todo!(),
-            OpType::CRy => todo!(),
-            OpType::CU1 => todo!(),
-            OpType::CU3 => todo!(),
-            OpType::PhaseGadget => todo!(),
-            OpType::CCX => todo!(),
-            OpType::SWAP => todo!(),
-            OpType::CSWAP => todo!(),
-            OpType::BRIDGE => todo!(),
+            // OpType::CY => todo!(),
+            // OpType::CZ => todo!(),
+            // OpType::CH => todo!(),
+            // OpType::CV => todo!(),
+            // OpType::CVdg => todo!(),
+            // OpType::CSX => todo!(),
+            // OpType::CSXdg => todo!(),
+            // OpType::CRz => todo!(),
+            // OpType::CRx => todo!(),
+            // OpType::CRy => todo!(),
+            // OpType::CU1 => todo!(),
+            // OpType::CU3 => todo!(),
+            // OpType::PhaseGadget => todo!(),
+            // OpType::CCX => todo!(),
+            // OpType::SWAP => todo!(),
+            // OpType::CSWAP => todo!(),
+            // OpType::BRIDGE => todo!(),
             OpType::noop => Op::Noop(WireType::Qubit),
             OpType::Measure => Op::Measure,
-            OpType::Collapse => todo!(),
+            // OpType::Collapse => todo!(),
             OpType::Reset => Op::Reset,
-            OpType::ECR => todo!(),
-            OpType::ISWAP => todo!(),
-            OpType::PhasedX => todo!(),
-            OpType::NPhasedX => todo!(),
+            // OpType::ECR => todo!(),
+            // OpType::ISWAP => todo!(),
+            // OpType::PhasedX => todo!(),
+            // OpType::NPhasedX => todo!(),
             OpType::ZZMax => Op::ZZMax,
-            OpType::XXPhase => todo!(),
-            OpType::YYPhase => todo!(),
-            OpType::ZZPhase => todo!(),
-            OpType::XXPhase3 => todo!(),
-            OpType::ESWAP => todo!(),
-            OpType::FSim => todo!(),
-            OpType::Sycamore => todo!(),
-            OpType::ISWAPMax => todo!(),
-            OpType::PhasedISWAP => todo!(),
-            OpType::CnRy => todo!(),
-            OpType::CnX => todo!(),
-            OpType::CircBox => todo!(),
-            OpType::Unitary1qBox => todo!(),
-            OpType::Unitary2qBox => todo!(),
-            OpType::Unitary3qBox => todo!(),
-            OpType::ExpBox => todo!(),
-            OpType::PauliExpBox => todo!(),
-            OpType::CliffBox => todo!(),
-            OpType::CustomGate => todo!(),
-            OpType::PhasePolyBox => todo!(),
-            OpType::QControlBox => todo!(),
-            OpType::ClassicalExpBox => todo!(),
-            OpType::Conditional => todo!(),
-            OpType::ProjectorAssertionBox => todo!(),
-            OpType::StabiliserAssertionBox => todo!(),
-            OpType::UnitaryTableauBox => todo!(),
+            // OpType::XXPhase => todo!(),
+            // OpType::YYPhase => todo!(),
+            // OpType::ZZPhase => todo!(),
+            // OpType::XXPhase3 => todo!(),
+            // OpType::ESWAP => todo!(),
+            // OpType::FSim => todo!(),
+            // OpType::Sycamore => todo!(),
+            // OpType::ISWAPMax => todo!(),
+            // OpType::PhasedISWAP => todo!(),
+            // OpType::CnRy => todo!(),R
+            // OpType::CnX => todo!(),
+            // OpType::CircBox => todo!(),
+            // OpType::Unitary1qBox => todo!(),
+            // OpType::Unitary2qBox => todo!(),
+            // OpType::Unitary3qBox => todo!(),
+            // OpType::ExpBox => todo!(),
+            // OpType::PauliExpBox => todo!(),
+            // OpType::CliffBox => todo!(),
+            // OpType::CustomGate => todo!(),
+            // OpType::PhasePolyBox => todo!(),
+            // OpType::QControlBox => todo!(),
+            // OpType::ClassicalExpBox => todo!(),
+            // OpType::Conditional => todo!(),
+            // OpType::ProjectorAssertionBox => todo!(),
+            // OpType::StabiliserAssertionBox => todo!(),
+            // OpType::UnitaryTableauBox => todo!(),
             OpType::Rx => Op::RxF64,
-            OpType::Ry => todo!(),
+            // OpType::Ry => todo!(),
             OpType::Rz => Op::RzF64,
             OpType::TK1 => Op::TK1,
             OpType::AngleAdd => Op::AngleAdd,
@@ -118,9 +119,10 @@ impl From<OpType> for Op {
             OpType::RzF64 => Op::RzF64,
             OpType::Rotation => Op::Rotation,
             OpType::ToRotation => Op::ToRotation,
-            _ => panic!("Not directly convertible to Op: {:?}", serial_op),
-        }
+            _ => return Err(OpConvertError),
+        })
     }
+
     // }
 }
 
@@ -190,6 +192,13 @@ impl TryFrom<&Op> for OpType {
             Op::ToRotation => OpType::ToRotation,
             Op::Copy { .. } => OpType::Copy,
             Op::Const(_) => OpType::Const,
+            Op::Custom(cbox) => {
+                if let Some(tk1op) = cbox.downcast_ref::<Operation>() {
+                    tk1op.op_type.clone()
+                } else {
+                    return Err(OpConvertError);
+                }
+            }
             _ => return Err(OpConvertError),
         })
     }
@@ -197,7 +206,7 @@ impl TryFrom<&Op> for OpType {
     type Error = OpConvertError;
 }
 
-impl<P: ToString> From<SerialCircuit<P>> for Circuit {
+impl<P: Into<String> + Clone + std::fmt::Display> From<SerialCircuit<P>> for Circuit {
     fn from(serialcirc: SerialCircuit<P>) -> Self {
         let uids: Vec<_> = serialcirc
             .qubits
@@ -210,7 +219,7 @@ impl<P: ToString> From<SerialCircuit<P>> for Circuit {
 
         circ.name = serialcirc.name;
         // circ.phase = Param::new(serialcirc.phase);
-        circ.phase = f64::from_str(&serialcirc.phase.to_string()[..]).unwrap();
+        circ.phase = f64::from_str(&serialcirc.phase.clone().into()[..]).unwrap();
 
         let frontier: HashMap<UnitID, usize> = circ
             .unitids()
@@ -218,22 +227,29 @@ impl<P: ToString> From<SerialCircuit<P>> for Circuit {
             .map(|(i, uid)| (uid.clone(), i))
             .collect();
         for com in serialcirc.commands {
-            let op: Op = com.op.op_type.into();
+            let ps = com.op.params.clone();
+            let op: Op = com
+                .op
+                .op_type
+                .clone()
+                .try_into()
+                .unwrap_or(Op::Custom(Box::new(map_op(com.op))));
             let args: Vec<_> = com
                 .args
                 .into_iter()
-                .zip(op.signature().expect("No signature for op").linear)
-                .map(|(reg, wiretype)| match wiretype {
-                    WireType::Qubit => to_qubit(reg),
-                    WireType::LinearBit | WireType::Bool => to_bit(reg),
-                    _ => panic!("Unsupported wiretype {:?}", wiretype),
+                .map(|reg| {
+                    // relies on TKET1 constraint that all registers have
+                    // unique names
+                    *frontier
+                        .get(&to_qubit(reg.clone()))
+                        .or_else(|| frontier.get(&to_bit(reg)))
+                        .expect("Reg not found.")
                 })
-                .map(|uid| frontier[&uid])
                 .collect();
 
             // assumes the linear wires are always the first ones
             let v = circ.append_op(op, &args[..]).unwrap();
-            if let Some(params) = com.op.params {
+            if let Some(params) = ps {
                 let mut prev = circ.dag.node_edges(v, Direction::Incoming).last();
                 for p in params.into_iter() {
                     let p_str = p.to_string();
@@ -281,7 +297,7 @@ impl From<UnitID> for Register {
     }
 }
 
-impl<P: From<String> + std::fmt::Debug> From<Circuit> for SerialCircuit<P> {
+impl<P: From<String> + std::fmt::Debug + Clone + Send + Sync> From<Circuit> for SerialCircuit<P> {
     fn from(circ: Circuit) -> Self {
         let commands = circ
             .to_commands()
@@ -292,17 +308,21 @@ impl<P: From<String> + std::fmt::Debug> From<Circuit> for SerialCircuit<P> {
                     Op::TK1 => param_strings(&circ, &com, 3),
                     _ => None,
                 };
-                let params: Option<Vec<P>> =
-                    params.map(|params| params.into_iter().map(|p| p.into()).collect());
+                let tk1op = if let Op::Custom(cbox) = com.op {
+                    cbox.downcast_ref::<Operation>().cloned()
+                } else {
+                    None
+                };
+
                 Some(Command {
-                    op: Operation {
+                    op: map_op(tk1op.unwrap_or_else(|| Operation {
                         op_type: com.op.try_into().unwrap(),
                         n_qb: None,
                         params,
                         op_box: None,
                         signature: None,
                         conditional: None,
-                    },
+                    })),
                     args: com.args.into_iter().map(Into::into).collect(),
                     opgroup: None,
                 })
@@ -324,6 +344,19 @@ impl<P: From<String> + std::fmt::Debug> From<Circuit> for SerialCircuit<P> {
             bits,
             implicit_permutation,
         }
+    }
+}
+
+fn map_op<P, T: Into<P>>(op: Operation<T>) -> Operation<P> {
+    Operation {
+        op_type: op.op_type,
+        n_qb: op.n_qb,
+        params: op
+            .params
+            .map(|params| params.into_iter().map(|p| p.into()).collect()),
+        op_box: op.op_box,
+        signature: op.signature,
+        conditional: op.conditional,
     }
 }
 

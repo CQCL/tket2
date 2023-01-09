@@ -45,6 +45,24 @@ mod tests {
         // topsort ordering of parallel commands
     }
 
+    #[test]
+    fn read_json_unkwown_op() {
+        // test ops that are not native to tket-2 are correctly captured as
+        // custom and output
+
+        let circ_s = r#"{"bits": [], "commands": [{"args": [["q", [0]], ["q", [1]], ["q", [2]]], "op": {"type": "CSWAP"}}], "created_qubits": [], "discarded_qubits": [], "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]], [["q", [2]], ["q", [2]]]], "phase": "0", "qubits": [["q", [0]], ["q", [1]], ["q", [2]]]}"#;
+        let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
+        assert_eq!(ser.commands.len(), 1);
+
+        let circ: Circuit = ser.clone().into();
+        let mut coms = circ.to_commands();
+        coms.next(); // skip input
+        let com = coms.next().unwrap();
+        assert!(matches!(com.op, &Op::Custom(_)));
+
+        let _reser: SerialCircuit = circ.into();
+        assert_eq!(&ser, &_reser);
+    }
     // #[test]
     // fn test_param() {
     //     assert_eq!(Param::new("3") + Param::new("x"), Param::new("3 + x"));

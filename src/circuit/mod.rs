@@ -8,3 +8,5 @@ pub mod py_circuit;
 
 #[cfg(feature = "tkcxx")]
 pub mod unitarybox;
+
+mod tk1ops;
