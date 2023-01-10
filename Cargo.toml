@@ -27,15 +27,11 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 downcast-rs = "1.2.0"
 portgraph = { path = "ext/portgraph" }
+priority-queue = "1.3.0"
 
 
 [features]
-pyo3 = [
-    "dep:pyo3",
-    "tket-json-rs/pyo3",
-    "tket-json-rs/tket2ops",
-    "portgraph/pyo3",
-]
+pyo3 = ["dep:pyo3", "tket-json-rs/pyo3", "tket-json-rs/tket2ops", "portgraph/pyo3"]
 tkcxx = ["dep:tket-rs", "dep:num-complex"]
 
 [dev-dependencies]
