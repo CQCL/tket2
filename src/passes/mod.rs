@@ -2,6 +2,7 @@ pub mod classical;
 // pub mod redundancy;
 pub mod pattern;
 pub mod squash;
+pub mod taso;
 
 use crate::circuit::{
     circuit::{Circuit, CircuitRewrite},
