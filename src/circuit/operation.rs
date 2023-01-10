@@ -297,6 +297,11 @@ fn _deref_pair<'a, 'b, T: CustomOp>(
 /// equality methods (if implemented)
 #[allow(unused_variables)]
 fn custom_eq(x: &dyn CustomOp, y: &dyn CustomOp) -> bool {
+    if let (Some(x), Some(y)) = _deref_pair::<tket_json_rs::circuit_json::Operation>(x, y) {
+        return x == y;
+    } else {
+    }
+
     #[cfg(feature = "tkcxx")]
     if let (Some(x), Some(y)) = _deref_pair::<super::unitarybox::SU2>(x, y) {
         return x == y;
