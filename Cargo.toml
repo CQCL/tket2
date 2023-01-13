@@ -28,15 +28,12 @@ serde_json = "1.0"
 downcast-rs = "1.2.0"
 portgraph = { path = "ext/portgraph" }
 inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm12-0"] }
+llvm-ir = { version="0.8.1", features=["llvm-12"] }
+quantraption = { version = "0.1.0", path = "../quantraption-proto/quantraption" }
 
 
 [features]
-pyo3 = [
-    "dep:pyo3",
-    "tket-json-rs/pyo3",
-    "tket-json-rs/tket2ops",
-    "portgraph/pyo3",
-]
+pyo3 = ["dep:pyo3", "tket-json-rs/pyo3", "tket-json-rs/tket2ops", "portgraph/pyo3"]
 tkcxx = ["dep:tket-rs", "dep:num-complex"]
 
 [dev-dependencies]

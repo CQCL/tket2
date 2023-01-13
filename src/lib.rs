@@ -38,12 +38,17 @@ mod tests {
         let module = Module::parse_bitcode_from_path(path, &context)?;
         // dbg!(module.get_last_function());
         let f = module.get_first_function().unwrap();
-        dbg!(f.get_basic_blocks()[0]
-            .get_first_instruction()
-            .unwrap()
-            .get_next_instruction()
-            .unwrap());
+        // dbg!(f.get_basic_blocks()[0]
+        //     .get_first_instruction()
+        //     .unwrap()
+        //     .get_next_instruction()
+        //     .unwrap());
 
+        use llvm_ir::Module as IRMOD;
+        use quantraption::qir_to_ast::translate;
+        let module = IRMOD::from_bc_path("qir_ex.bc")?;
+        // dbg!(&module.functions[0].function_attributes);
+        dbg!(translate(module));
         Ok(())
     }
 
