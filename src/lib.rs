@@ -1,5 +1,6 @@
 pub mod circuit;
 
+pub mod ast_circ;
 pub mod json;
 pub mod passes;
 pub mod validate;
@@ -26,31 +27,6 @@ mod tests {
     };
     use portgraph::graph::Direction;
     use tket_json_rs::circuit_json::{self, SerialCircuit};
-
-    #[test]
-    fn llvm_test() -> Result<(), Box<dyn Error>> {
-        use inkwell::context::Context;
-        use inkwell::module::Module;
-        use std::path::Path;
-
-        let path = Path::new("qir_ex.bc");
-        let context = Context::create();
-        let module = Module::parse_bitcode_from_path(path, &context)?;
-        // dbg!(module.get_last_function());
-        let f = module.get_first_function().unwrap();
-        // dbg!(f.get_basic_blocks()[0]
-        //     .get_first_instruction()
-        //     .unwrap()
-        //     .get_next_instruction()
-        //     .unwrap());
-
-        use llvm_ir::Module as IRMOD;
-        use quantraption::qir_to_ast::translate;
-        let module = IRMOD::from_bc_path("qir_ex.bc")?;
-        // dbg!(&module.functions[0].function_attributes);
-        dbg!(translate(module));
-        Ok(())
-    }
 
     #[test]
     fn read_json() {

@@ -16,6 +16,7 @@ use pyo3::prelude::*;
 pub enum UnitID {
     Qubit { reg_name: String, index: Vec<u32> },
     Bit { name: String, index: Vec<u32> },
+    I64(String),
     F64(String),
     Angle(String),
 }
@@ -27,6 +28,21 @@ impl UnitID {
             Self::Bit { .. } => WireType::LinearBit,
             Self::F64(_) => WireType::F64,
             Self::Angle(_) => WireType::Angle,
+            Self::I64(_) => WireType::I64,
+        }
+    }
+
+    pub fn new_q(i: u32) -> Self {
+        Self::Qubit {
+            reg_name: "q".into(),
+            index: vec![i],
+        }
+    }
+
+    pub fn new_b(i: u32) -> Self {
+        Self::Bit {
+            name: "q".into(),
+            index: vec![i],
         }
     }
 }
@@ -358,14 +374,14 @@ impl Circuit {
     pub fn qubits(&self) -> impl Iterator<Item = UnitID> + '_ {
         self.uids.iter().filter_map(|uid| match uid {
             UnitID::Qubit { .. } => Some(uid.clone()),
-            UnitID::Bit { .. } | UnitID::F64(_) | UnitID::Angle(_) => None,
+            UnitID::Bit { .. } | UnitID::F64(_) | UnitID::Angle(_) | UnitID::I64(_) => None,
         })
     }
 
     pub fn bits(&self) -> impl Iterator<Item = UnitID> + '_ {
         self.uids.iter().filter_map(|uid| match uid {
             UnitID::Bit { .. } => Some(uid.clone()),
-            UnitID::Qubit { .. } | UnitID::F64(_) | UnitID::Angle(_) => None,
+            UnitID::Qubit { .. } | UnitID::F64(_) | UnitID::Angle(_) | UnitID::I64(_) => None,
         })
     }
 

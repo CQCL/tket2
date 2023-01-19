@@ -27,9 +27,10 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 downcast-rs = "1.2.0"
 portgraph = { path = "ext/portgraph" }
-inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm12-0"] }
-llvm-ir = { version="0.8.1", features=["llvm-12"] }
+# inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm12-0"] }
+# llvm-ir = { version="0.8.1", features=["llvm-12"] }
 quantraption = { version = "0.1.0", path = "../quantraption-proto/quantraption" }
+either = "1.8.0"
 
 
 [features]

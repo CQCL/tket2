@@ -22,7 +22,7 @@ pub enum WireType {
     Qubit,
     LinearBit,
     Bool,
-    I32,
+    I64,
     F64,
     Quat64,
     Angle,
@@ -231,7 +231,7 @@ impl From<cgmath::Quaternion<f64>> for Quat {
 #[derive(Clone, PartialEq, Debug)]
 pub enum ConstValue {
     Bool(bool),
-    I32(i32),
+    I64(i64),
     F64(f64),
     Angle(AngleValue),
     Quat64(Quat),
@@ -241,7 +241,7 @@ impl ConstValue {
     pub fn get_type(&self) -> WireType {
         match self {
             Self::Bool(_) => WireType::Bool,
-            Self::I32(_) => WireType::I32,
+            Self::I64(_) => WireType::I64,
             Self::F64(_) => WireType::F64,
             Self::Angle(_) => WireType::Angle,
             Self::Quat64(_) => WireType::Quat64,
@@ -319,6 +319,11 @@ fn custom_eq(x: &dyn CustomOp, y: &dyn CustomOp) -> bool {
 #[derive(Clone, Debug)]
 pub enum Op {
     H,
+    T,
+    S,
+    X,
+    Tadj,
+    Sadj,
     CX,
     ZZMax,
     Reset,
@@ -326,6 +331,7 @@ pub enum Op {
     Output,
     Noop(WireType),
     Measure,
+    ReadResult,
     Barrier,
     AngleAdd,
     AngleMul,
@@ -338,6 +344,7 @@ pub enum Op {
     TK1,
     Rotation,
     ToRotation,
+    Xor,
     Custom(Box<dyn CustomOp>),
 }
 
@@ -408,7 +415,7 @@ impl Op {
     pub fn signature(&self) -> Option<Signature> {
         Some(match self {
             Op::Noop(typ) => Signature::new_linear(vec![*typ]),
-            Op::H | Op::Reset => ONEQBSIG.clone(),
+            Op::H | Op::Reset | Op::T | Op::S | Op::Tadj | Op::Sadj | Op::X => ONEQBSIG.clone(),
             Op::CX | Op::ZZMax => TWOQBSIG.clone(),
             Op::Measure => Signature::new_linear(vec![WireType::Qubit, WireType::LinearBit]),
             Op::AngleAdd | Op::AngleMul => binary_op(WireType::Angle),
@@ -429,6 +436,13 @@ impl Op {
                 vec![WireType::Quat64],
             ),
             Op::Custom(x) => x.signature()?,
+            Op::Xor => Signature::new_nonlinear(
+                vec![WireType::I64, WireType::I64],
+                vec![WireType::I64, WireType::I64],
+            ),
+            Op::ReadResult => {
+                Signature::new(vec![WireType::LinearBit], [vec![], vec![WireType::I64]])
+            }
             _ => return None,
         })
     }

@@ -351,7 +351,7 @@ impl IntoPy<PyObject> for &ConstValue {
     fn into_py(self, py: Python<'_>) -> PyObject {
         match self {
             ConstValue::Bool(x) => x.into_py(py),
-            ConstValue::I32(x) => x.into_py(py),
+            ConstValue::I64(x) => x.into_py(py),
             ConstValue::F64(x) => x.into_py(py),
             ConstValue::Angle(x) => x.into_py(py),
             ConstValue::Quat64(x) => x.into_py(py),
