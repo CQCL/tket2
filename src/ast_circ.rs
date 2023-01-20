@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use portgraph::graph::Direction;
 use quantraption::ast::{
     Arg, BasicBlock, BitWidth, FuncKind, Instr, Op, Phi, QuantumGateFunc, QubitId, RTFunc, Reg,
     ResultId, Term,
@@ -31,7 +32,6 @@ impl CustomOp for FuncKind {
 // Encapsulate a basic block as a circuit with some extra data
 pub struct CircBlock {
     circ: Circuit,
-    argboundary: [Vec<Arg>; 2],
     invars: HashMap<Var, Edge>,
     phis: Vec<Phi>,
     term: Term,
@@ -232,7 +232,6 @@ impl TryFrom<BasicBlock> for CircBlock {
 
         let mut cblock = Self {
             circ: Circuit::new(),
-            argboundary: [vec![], vec![]],
             phis: vec![],
             invars: HashMap::new(),
             term,
@@ -243,6 +242,19 @@ impl TryFrom<BasicBlock> for CircBlock {
             cblock.load_instr(inst)?;
         }
 
+        let out_edges: Vec<_> = cblock.invars.values().copied().collect();
+
+        cblock
+            .circ
+            .dag
+            .connect_many(
+                cblock.circ.boundary()[1],
+                out_edges,
+                Direction::Incoming,
+                None,
+            )
+            .map_err(|_| ())?;
+
         Ok(cblock)
     }
 }
@@ -250,12 +262,14 @@ impl TryFrom<BasicBlock> for CircBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::validate::check_soundness;
     use quantraption::ast::AST;
     #[test]
     fn test_roundtrip() {
         let ast = AST::read_path("qir_ex.bc").unwrap();
         let AST::Func(f) = &ast;
         let cb: CircBlock = f[0].clone().try_into().unwrap();
+        check_soundness(&cb.circ).unwrap();
         println!("{}", cb.circ.dot_string());
         ast.write_bitcode_to_path("dump.bc", "test_roundtrip");
     }
