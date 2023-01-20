@@ -258,7 +258,9 @@ pub struct ToCircuitFail;
 pub trait CustomOp: Send + Sync + std::fmt::Debug + CustomBoxClone + Any + Downcast {
     fn signature(&self) -> Option<Signature>;
 
-    fn to_circuit(&self) -> Result<super::circuit::Circuit, ToCircuitFail>;
+    fn to_circuit(&self) -> Result<super::circuit::Circuit, ToCircuitFail> {
+        Err(ToCircuitFail)
+    }
 
     // fn as_any(&self) -> &dyn Any;
 }
@@ -331,7 +333,6 @@ pub enum Op {
     Output,
     Noop(WireType),
     Measure,
-    ReadResult,
     Barrier,
     AngleAdd,
     AngleMul,
@@ -440,9 +441,6 @@ impl Op {
                 vec![WireType::I64, WireType::I64],
                 vec![WireType::I64, WireType::I64],
             ),
-            Op::ReadResult => {
-                Signature::new(vec![WireType::LinearBit], [vec![], vec![WireType::I64]])
-            }
             _ => return None,
         })
     }

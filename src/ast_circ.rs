@@ -1,17 +1,32 @@
 use std::collections::HashMap;
 
-use either::Either;
-use portgraph::graph::Direction;
 use quantraption::ast::{
-    Arg, BasicBlock, BitWidth, FuncKind, Instr, Op, Phi, QuantumGateFunc, QubitId, Reg, ResultId,
-    Term, AST,
+    Arg, BasicBlock, BitWidth, FuncKind, Instr, Op, Phi, QuantumGateFunc, QubitId, RTFunc, Reg,
+    ResultId, Term,
 };
 
 use crate::circuit::{
     circuit::{Circuit, UnitID},
     dag::Edge,
-    operation::{ConstValue, Op as CircOp, Signature, WireType},
+    operation::{ConstValue, CustomOp, Op as CircOp, Signature, WireType},
 };
+
+impl CustomOp for FuncKind {
+    fn signature(&self) -> Option<Signature> {
+        use FuncKind::CFunc as C;
+        use FuncKind::QFunc as Q;
+        use QuantumGateFunc::*;
+        use RTFunc::*;
+
+        Some(match self {
+            Q(ReadResult) => {
+                Signature::new(vec![WireType::LinearBit], [vec![], vec![WireType::I64]])
+            }
+            Q(_) => panic!("should be converted to native op"),
+            C(_) => todo!(),
+        })
+    }
+}
 
 // Encapsulate a basic block as a circuit with some extra data
 pub struct CircBlock {
@@ -102,8 +117,8 @@ impl CircBlock {
 
         dbg!(&op);
         let o = match op {
-            Op::Call(FuncKind::QFunc(qf), args) => {
-                let (cop, args) = map_op(qf, args);
+            Op::Call(fk, args) => {
+                let (cop, args) = map_op(fk, args);
                 let in_edges = self.get_args(&args);
                 let sig = cop.signature().expect("signature missing.");
                 let outs = add_out_edges(&mut self.circ, &sig);
@@ -161,30 +176,34 @@ fn add_out_edges(c: &mut Circuit, sig: &Signature) -> Vec<Edge> {
         .map(|wt| c.add_edge(*wt))
         .collect()
 }
-fn map_op(gate: QuantumGateFunc, mut args: Vec<Arg>) -> (CircOp, Vec<Arg>) {
+
+fn map_op(fk: FuncKind, mut args: Vec<Arg>) -> (CircOp, Vec<Arg>) {
     // map ast quantum op, and permute arguments as necessary
     use CircOp::*;
     use QuantumGateFunc as Q;
-    let cop = match gate {
-        Q::H => H,
-        Q::T => T,
-        Q::S => S,
-        Q::Cnot => CX,
-        Q::Tadj => Tadj,
-        Q::Sadj => Sadj,
-        Q::Cz => todo!(),
-        Q::X => X,
-        Q::Y => todo!(),
-        Q::Z => todo!(),
-        Q::Rx => RxF64,
-        Q::Ry => todo!(),
-        Q::Rz => RzF64,
-        Q::ZZ => ZZMax,
-        Q::Rzz => todo!(),
-        Q::Rxxyyzz => todo!(),
-        Q::Mz => Measure,
-        Q::Reset => Reset,
-        Q::ReadResult => ReadResult,
+    let cop = match &fk {
+        FuncKind::QFunc(gate) => match gate {
+            Q::H => H,
+            Q::T => T,
+            Q::S => S,
+            Q::Cnot => CX,
+            Q::Tadj => Tadj,
+            Q::Sadj => Sadj,
+            Q::Cz => todo!(),
+            Q::X => X,
+            Q::Y => todo!(),
+            Q::Z => todo!(),
+            Q::Rx => RxF64,
+            Q::Ry => todo!(),
+            Q::Rz => RzF64,
+            Q::ZZ => ZZMax,
+            Q::Rzz => todo!(),
+            Q::Rxxyyzz => todo!(),
+            Q::Mz => Measure,
+            Q::Reset => Reset,
+            Q::ReadResult => Custom(Box::new(fk)),
+        },
+        FuncKind::CFunc(_) => todo!(),
     };
 
     let args = match cop {
@@ -231,7 +250,7 @@ impl TryFrom<BasicBlock> for CircBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    use quantraption::ast::AST;
     #[test]
     fn test_roundtrip() {
         let ast = AST::read_path("qir_ex.bc").unwrap();
