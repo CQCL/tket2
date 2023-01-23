@@ -89,8 +89,5 @@ mod tests {
             edgemap,
             BTreeMap::from_iter([(EdgeIndex::new(2), EdgeIndex::new(0)),])
         );
-
-        // TODO some better test of validity (check graph correctness conditions)
-        let _s = dot_string(&g);
     }
 }

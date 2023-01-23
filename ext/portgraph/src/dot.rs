@@ -2,7 +2,12 @@ use std::fmt::Display;
 
 use super::graph::{Graph, DIRECTIONS};
 
-pub fn dot_string<N: Display, E: Display>(graph: &Graph<N, E>) -> String {
+pub trait DotEdge {
+    fn style(&self) -> String {
+        "None".to_string()
+    }
+}
+pub fn dot_string<N: Display, E: Display + DotEdge>(graph: &Graph<N, E>) -> String {
     let mut s = String::new();
 
     s.push_str("digraph {\n");
@@ -21,7 +26,7 @@ pub fn dot_string<N: Display, E: Display>(graph: &Graph<N, E>) -> String {
     s
 }
 
-fn add_edge_str<N: Display, E: Display>(
+fn add_edge_str<N: Display, E: Display + DotEdge>(
     graph: &Graph<N, E>,
     e: super::graph::EdgeIndex,
     dot_s: &mut String,
@@ -51,6 +56,10 @@ fn add_edge_str<N: Display, E: Display>(
     });
 
     let edge = graph.edge_weight(e).expect("missing edge");
-    let edge_s = format!("{} -> {} [label=\"({}, {}); {}\"]\n", a, b, ap, bp, edge);
+    let style = edge.style();
+    let edge_s = format!(
+        "{} -> {} [label=\"({}, {}); {}\", style={}]\n",
+        a, b, ap, bp, edge, style
+    );
     dot_s.push_str(&edge_s[..])
 }

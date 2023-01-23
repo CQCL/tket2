@@ -26,6 +26,11 @@ pub enum WireType {
     F64,
     Quat64,
     Angle,
+    /*
+    TODO should control edges be part of signatures or can they be added to
+    any node?
+    */
+    Control,
 }
 
 #[cfg_attr(feature = "pyo3", pyclass)]
@@ -310,6 +315,10 @@ fn custom_eq(x: &dyn CustomOp, y: &dyn CustomOp) -> bool {
     } else {
     }
 
+    if let (Some(x), Some(y)) = _deref_pair::<quantraption::ast::FuncKind>(x, y) {
+        return x == y;
+    } else {
+    }
     #[cfg(feature = "pyo3")]
     if let (Some(x), Some(y)) = _deref_pair::<super::py_circuit::PyCustom>(x, y) {
         return x == y;
@@ -324,6 +333,8 @@ pub enum Op {
     T,
     S,
     X,
+    Y,
+    Z,
     Tadj,
     Sadj,
     CX,
@@ -346,6 +357,7 @@ pub enum Op {
     Rotation,
     ToRotation,
     Xor,
+    Select,
     Custom(Box<dyn CustomOp>),
 }
 
@@ -416,7 +428,9 @@ impl Op {
     pub fn signature(&self) -> Option<Signature> {
         Some(match self {
             Op::Noop(typ) => Signature::new_linear(vec![*typ]),
-            Op::H | Op::Reset | Op::T | Op::S | Op::Tadj | Op::Sadj | Op::X => ONEQBSIG.clone(),
+            Op::H | Op::Reset | Op::T | Op::S | Op::Tadj | Op::Sadj | Op::X | Op::Y | Op::Z => {
+                ONEQBSIG.clone()
+            }
             Op::CX | Op::ZZMax => TWOQBSIG.clone(),
             Op::Measure => Signature::new_linear(vec![WireType::Qubit, WireType::LinearBit]),
             Op::AngleAdd | Op::AngleMul => binary_op(WireType::Angle),
@@ -437,9 +451,12 @@ impl Op {
                 vec![WireType::Quat64],
             ),
             Op::Custom(x) => x.signature()?,
-            Op::Xor => Signature::new_nonlinear(
-                vec![WireType::I64, WireType::I64],
-                vec![WireType::I64, WireType::I64],
+            Op::Xor => {
+                Signature::new_nonlinear(vec![WireType::I64, WireType::I64], vec![WireType::I64])
+            }
+            Op::Select => Signature::new_nonlinear(
+                vec![WireType::Bool, WireType::I64, WireType::I64],
+                vec![WireType::I64],
             ),
             _ => return None,
         })

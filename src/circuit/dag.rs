@@ -2,6 +2,8 @@
 
 use std::fmt::Display;
 
+use portgraph::dot::DotEdge;
+
 use super::operation::{Op, WireType};
 
 #[derive(Clone, Default, Debug, PartialEq)]
@@ -29,6 +31,16 @@ pub struct EdgeProperties {
 impl Display for EdgeProperties {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.edge_type)
+    }
+}
+
+impl DotEdge for EdgeProperties {
+    fn style(&self) -> String {
+        if let WireType::Control = self.edge_type {
+            "dashed".into()
+        } else {
+            "None".into()
+        }
     }
 }
 
