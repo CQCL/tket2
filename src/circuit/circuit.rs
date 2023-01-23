@@ -17,6 +17,7 @@ pub enum UnitID {
     Qubit { reg_name: String, index: Vec<u32> },
     Bit { name: String, index: Vec<u32> },
     I64(String),
+    Bool(String),
     F64(String),
     Angle(String),
 }
@@ -29,6 +30,7 @@ impl UnitID {
             Self::F64(_) => WireType::F64,
             Self::Angle(_) => WireType::Angle,
             Self::I64(_) => WireType::I64,
+            Self::Bool(_) => WireType::Bool,
         }
     }
 
@@ -374,14 +376,22 @@ impl Circuit {
     pub fn qubits(&self) -> impl Iterator<Item = UnitID> + '_ {
         self.uids.iter().filter_map(|uid| match uid {
             UnitID::Qubit { .. } => Some(uid.clone()),
-            UnitID::Bit { .. } | UnitID::F64(_) | UnitID::Angle(_) | UnitID::I64(_) => None,
+            UnitID::Bit { .. }
+            | UnitID::F64(_)
+            | UnitID::Angle(_)
+            | UnitID::I64(_)
+            | UnitID::Bool(_) => None,
         })
     }
 
     pub fn bits(&self) -> impl Iterator<Item = UnitID> + '_ {
         self.uids.iter().filter_map(|uid| match uid {
             UnitID::Bit { .. } => Some(uid.clone()),
-            UnitID::Qubit { .. } | UnitID::F64(_) | UnitID::Angle(_) | UnitID::I64(_) => None,
+            UnitID::Qubit { .. }
+            | UnitID::F64(_)
+            | UnitID::Angle(_)
+            | UnitID::I64(_)
+            | UnitID::Bool(_) => None,
         })
     }
 

@@ -17,7 +17,7 @@ use pyo3::prelude::*;
 pub(crate) type Param = f64;
 
 #[cfg_attr(feature = "pyo3", pyclass)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub enum WireType {
     Qubit,
     LinearBit,
@@ -81,6 +81,14 @@ impl Signature {
             linear: vec![],
             nonlinear: [inputs, outputs],
         }
+    }
+
+    pub fn inputs(&self) -> impl Iterator<Item = &WireType> {
+        self.linear.iter().chain(self.nonlinear[0].iter())
+    }
+
+    pub fn outputs(&self) -> impl Iterator<Item = &WireType> {
+        self.linear.iter().chain(self.nonlinear[1].iter())
     }
 }
 
@@ -357,7 +365,7 @@ pub enum Op {
     Rotation,
     ToRotation,
     Xor,
-    Select,
+    Select(WireType),
     Custom(Box<dyn CustomOp>),
 }
 
@@ -452,12 +460,9 @@ impl Op {
             ),
             Op::Custom(x) => x.signature()?,
             Op::Xor => {
-                Signature::new_nonlinear(vec![WireType::I64, WireType::I64], vec![WireType::I64])
+                Signature::new_nonlinear(vec![WireType::Bool, WireType::Bool], vec![WireType::Bool])
             }
-            Op::Select => Signature::new_nonlinear(
-                vec![WireType::Bool, WireType::I64, WireType::I64],
-                vec![WireType::I64],
-            ),
+            Op::Select(wt) => Signature::new_nonlinear(vec![WireType::Bool, *wt, *wt], vec![*wt]),
             _ => return None,
         })
     }
