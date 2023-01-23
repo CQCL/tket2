@@ -8,7 +8,7 @@ use quantraption::ast::{
 
 use crate::circuit::{
     circuit::{Circuit, UnitID},
-    dag::Edge,
+    dag::{Edge, TopSorter},
     operation::{AngleValue, ConstValue, CustomOp, Op as CircOp, Signature, WireType},
 };
 
@@ -39,7 +39,7 @@ impl CustomOp for FuncKind {
 pub struct CircBlock {
     circ: Circuit,
     invars: HashMap<Var, Edge>,
-    phis: Vec<Phi>,
+    phis: Vec<(Reg, Phi)>,
     term: Term,
     name: String,
 }
@@ -103,18 +103,7 @@ impl CircBlock {
             // Arg::QId(qid) => Var::Qubit(qid.clone()),
             // Arg::Result(rid) => Var::Result(rid.clone()),
             FuncInput::Const(c) => {
-                let cv = match c {
-                    quantraption::ast::Const::Int {
-                        value,
-                        bits: BitWidth::I64,
-                        // TODO watch out for problems caused by this cast
-                    } => ConstValue::I64(*value as i64),
-                    quantraption::ast::Const::Int {
-                        value,
-                        bits: BitWidth::I1,
-                    } => ConstValue::Bool(*value > 0),
-                    quantraption::ast::Const::F64(f) => ConstValue::Angle(AngleValue::F64(*f)),
-                };
+                let cv: ConstValue = c.into();
                 let e = self.circ.add_edge(cv.get_type());
                 self.circ
                     .add_vertex_with_edges(CircOp::Const(cv), vec![], vec![e]);
@@ -186,7 +175,7 @@ impl CircBlock {
             Op::Or(_, _) => todo!(),
             Op::And(_, _) => todo!(),
             Op::Phi(phi) => {
-                self.phis.push(phi);
+                self.phis.push((dest.expect("phi must be assigned"), phi));
                 return Ok(());
             }
         };
@@ -226,6 +215,41 @@ impl CircBlock {
     }
 }
 
+impl From<&Const> for ConstValue {
+    fn from(c: &Const) -> Self {
+        match c {
+            quantraption::ast::Const::Int {
+                value,
+                bits: BitWidth::I64,
+                // TODO watch out for problems caused by this cast
+            } => ConstValue::I64(*value as i64),
+            quantraption::ast::Const::Int {
+                value,
+                bits: BitWidth::I1,
+            } => ConstValue::Bool(*value > 0),
+            quantraption::ast::Const::F64(f) => ConstValue::Angle(AngleValue::F64(*f)),
+        }
+    }
+}
+
+impl From<&ConstValue> for Const {
+    fn from(cv: &ConstValue) -> Self {
+        match cv {
+            ConstValue::Bool(b) => Const::Int {
+                value: *b as u64,
+                bits: BitWidth::I1,
+            },
+            ConstValue::I64(i) => Const::Int {
+                value: *i as u64,
+                bits: BitWidth::I64,
+            },
+            ConstValue::F64(f) => Const::F64(*f),
+            ConstValue::Angle(a) => Const::F64(a.to_f64()),
+            ConstValue::Quat64(_) => panic!("Can't convert quaternion."),
+        }
+    }
+}
+
 // fn arg_to_finput( arg: Arg) -> FuncInput {
 //     match arg {
 //         Arg::ConstVal(c) => FuncInput::Left(c),
@@ -233,13 +257,30 @@ impl CircBlock {
 //     }
 // }
 
-fn arg_to_var(arg: Arg) -> Option<Var> {
-    Some(match arg {
-        Arg::Register(r) => Var::Reg(r),
-        Arg::QId(qid) => Var::Qubit(qid),
-        Arg::Result(rid) => Var::Result(rid),
-        Arg::ConstVal(_) => return None,
-    })
+impl TryFrom<Arg> for Var {
+    type Error = ();
+
+    fn try_from(arg: Arg) -> Result<Self, Self::Error> {
+        Ok(match arg {
+            Arg::Register(r) => Var::Reg(r),
+            Arg::QId(qid) => Var::Qubit(qid),
+            Arg::Result(rid) => Var::Result(rid),
+            Arg::ConstVal(_) => return Err(()),
+        })
+    }
+}
+
+impl TryInto<Arg> for Var {
+    type Error = ();
+
+    fn try_into(self) -> Result<Arg, Self::Error> {
+        Ok(match self {
+            Var::Qubit(qid) => Arg::QId(qid),
+            Var::Result(rid) => Arg::Result(rid),
+            Var::Reg(r) => Arg::Register(r),
+            Var::Control => return Err(()),
+        })
+    }
 }
 fn add_out_edges(c: &mut Circuit, sig: &Signature) -> Vec<Edge> {
     sig.linear
@@ -268,7 +309,7 @@ impl From<Arg> for FuncInput {
     fn from(value: Arg) -> Self {
         match value {
             Arg::ConstVal(c) => FuncInput::Const(c),
-            _ => FuncInput::Var(arg_to_var(value).unwrap()),
+            _ => FuncInput::Var(value.try_into().unwrap()),
         }
     }
 }
@@ -337,6 +378,8 @@ impl TryFrom<BasicBlock> for CircBlock {
             term,
             name,
         };
+        // let c_e = cblock.circ.add_unitid(UnitID::Bool("__CONTROL".into()));
+        cblock.circ.uids.push(UnitID::Bool("__CONTROL".into()));
         let c_e = cblock.circ.new_input(WireType::Control);
         cblock.invars.insert(Var::Control, c_e);
 
@@ -367,6 +410,93 @@ impl TryFrom<BasicBlock> for CircBlock {
     }
 }
 
+impl TryFrom<CircBlock> for BasicBlock {
+    type Error = ();
+
+    fn try_from(cblock: CircBlock) -> Result<Self, Self::Error> {
+        let CircBlock {
+            circ,
+            invars,
+            phis,
+            term,
+            name,
+        } = cblock;
+        let mut instrs = phis
+            .into_iter()
+            .map(|(r, p)| Instr::Assign(r, Op::Phi(p)))
+            .collect();
+
+        let mut argmap: HashMap<Edge, Arg> = HashMap::new();
+        dbg!(&invars);
+        for nid in TopSorter::new(
+            &circ.dag,
+            circ.dag
+                .node_indices()
+                .filter(|n| circ.dag.node_edges(*n, Direction::Incoming).count() == 0)
+                .collect(),
+        ) {
+            dbg!(circ.node_op(nid));
+            let inargs: Vec<_> = circ
+                .node_edges(nid, Direction::Incoming)
+                .into_iter()
+                .map(|e| get_arg(e, &argmap, &invars, &circ))
+                .collect();
+            dbg!(inargs);
+        }
+
+        Ok(Self { term, name, instrs })
+    }
+}
+
+fn get_arg(
+    e: Edge,
+    argmap: &HashMap<Edge, Arg>,
+    invars: &HashMap<Var, Edge>,
+    circ: &Circuit,
+) -> Arg {
+    if let Some(a) = argmap.get(&e) {
+        return a.clone();
+    }
+    if let Some(a) = invars
+        .iter()
+        .find_map(|(v, ve)| (*ve == e).then(|| v.clone().try_into().ok()).flatten())
+    {
+        return a;
+    }
+    let (src, _) = circ.edge_endpoints(e).expect("missing edge.");
+    let srcop = circ.node_op(src).expect("src node missing.");
+    dbg!(e, srcop);
+    match srcop {
+        CircOp::Const(c) => Arg::ConstVal(c.into()),
+        CircOp::Copy { .. } => get_arg(
+            circ.node_edges(src, Direction::Incoming)[0],
+            argmap,
+            invars,
+            circ,
+        ),
+        CircOp::Input => {
+            let port = circ.port_of_edge(src, e, Direction::Outgoing).unwrap();
+            match &circ.uids[port] {
+                UnitID::Qubit { index, .. } => Arg::QId(QubitId {
+                    index: index[0] as u64,
+                }),
+                UnitID::Bit { index, .. } => Arg::Result(ResultId {
+                    index: index[0] as u64,
+                }),
+                UnitID::I64(r) => Arg::Register(Reg {
+                    reg_name: r.clone(),
+                    reg_type: BitWidth::I64,
+                }),
+                UnitID::Bool(r) => Arg::Register(Reg {
+                    reg_name: r.clone(),
+                    reg_type: BitWidth::I1,
+                }),
+                _ => panic!("invalid input type."),
+            }
+        }
+        _ => panic!("what do I do with this edge."),
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -380,6 +510,7 @@ mod tests {
             let cb: CircBlock = b.clone().try_into().unwrap();
             println!("{}", cb.circ.dot_string());
             check_soundness(&cb.circ).unwrap();
+            let b: BasicBlock = cb.try_into().unwrap();
         }
         ast.write_bitcode_to_path("dump.bc", "test_roundtrip");
     }
