@@ -33,6 +33,14 @@ impl<'graph, N, E> TopSortWalker<'graph, N, E> {
         }
     }
 
+    pub fn new_zero_input(g: &'graph Graph<N, E>) -> Self {
+        Self::new(
+            g,
+            g.node_indices()
+                .filter(|n| g.node_edges(*n, Direction::Incoming).count() == 0)
+                .collect(),
+        )
+    }
     pub fn with_cyclicity_check(mut self) -> Self {
         self.cyclicity_check = true;
         self

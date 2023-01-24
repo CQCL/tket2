@@ -181,8 +181,6 @@ impl CircBlock {
         };
 
         if let Some(reg) = dest {
-            let e = o.expect("missing output edge.");
-            let wt = self.circ.edge_type(e).expect("edge type missing.");
             self.update_var(Var::Reg(reg), o.expect("missing output edge"));
         }
         Ok(())
@@ -207,9 +205,9 @@ impl CircBlock {
         }
         let remaining_outs: Vec<&Edge> = outiter.collect();
         assert!(sig.nonlinear[1].len() < 2, "not multi output function.");
-        match &remaining_outs[..] {
-            &[e] => Some(*e),
-            &[] => None,
+        match remaining_outs[..] {
+            [e] => Some(*e),
+            [] => None,
             _ => panic!("unexpected num of outs remaining."),
         }
     }
@@ -352,7 +350,10 @@ fn map_op(fk: FuncKind, mut args: Vec<Arg>) -> (CircOp, Vec<FuncInput>) {
     };
 
     let args = match cop {
-        RxF64 | RzF64 => vec![args.pop().unwrap(), args.pop().unwrap()],
+        RxF64 | RzF64 => {
+            args.reverse();
+            args
+        }
 
         _ => args,
     };
@@ -378,7 +379,6 @@ impl TryFrom<BasicBlock> for CircBlock {
             term,
             name,
         };
-        // let c_e = cblock.circ.add_unitid(UnitID::Bool("__CONTROL".into()));
         cblock.circ.uids.push(UnitID::Bool("__CONTROL".into()));
         let c_e = cblock.circ.new_input(WireType::Control);
         cblock.invars.insert(Var::Control, c_e);
@@ -403,8 +403,7 @@ impl TryFrom<BasicBlock> for CircBlock {
                 Direction::Incoming,
                 None,
             )
-            .unwrap();
-        // .map_err(|_| ())?;
+            .map_err(|_| ())?;
 
         Ok(cblock)
     }
@@ -421,51 +420,111 @@ impl TryFrom<CircBlock> for BasicBlock {
             term,
             name,
         } = cblock;
-        let mut instrs = phis
+        let mut instrs: Vec<_> = phis
             .into_iter()
             .map(|(r, p)| Instr::Assign(r, Op::Phi(p)))
             .collect();
 
         let mut argmap: HashMap<Edge, Arg> = HashMap::new();
-        dbg!(&invars);
-        for nid in TopSorter::new(
-            &circ.dag,
-            circ.dag
-                .node_indices()
-                .filter(|n| circ.dag.node_edges(*n, Direction::Incoming).count() == 0)
-                .collect(),
-        ) {
-            dbg!(circ.node_op(nid));
-            let inargs: Vec<_> = circ
-                .node_edges(nid, Direction::Incoming)
-                .into_iter()
-                .map(|e| get_arg(e, &argmap, &invars, &circ))
+        for nid in TopSorter::new_zero_input(circ.dag_ref()) {
+            let op = circ.node_op(nid).expect("missing op.");
+
+            if matches!(
+                op,
+                CircOp::Input
+                    | CircOp::Output
+                    | CircOp::Noop(_)
+                    | CircOp::Const(_)
+                    | CircOp::Copy { .. }
+            ) {
+                continue;
+            }
+            let sig = op.signature().expect("signature missing.");
+
+            let mut inedges = circ.node_edges(nid, Direction::Incoming);
+            let mut linlength = sig.linear.len();
+            if linlength > 0 && sig.linear.get(0) == Some(&WireType::Control) {
+                inedges.remove(0);
+                // TODO nasty, make nicer
+                linlength -= 1;
+            }
+            let inargs: Vec<_> = inedges
+                .iter()
+                .map(|e| get_arg(*e, &mut argmap, &invars, &circ))
                 .collect();
-            dbg!(inargs);
+            let astop = get_op(op, inargs);
+            let mut outedges = circ.node_edges(nid, Direction::Outgoing);
+            if linlength > 0 && sig.linear[0] == WireType::Control {
+                outedges.remove(0);
+            }
+            let nonlin_out = sig.nonlinear[1].len();
+
+            for (ine, oute) in inedges.iter().take(linlength).zip(outedges.iter()) {
+                if Some(WireType::Control) == circ.edge_type(*ine) {
+                    continue;
+                }
+                let arg = argmap.remove(ine).expect("incoming linear edge not found.");
+                argmap.insert(*oute, arg);
+            }
+
+            let instr = match nonlin_out {
+                0 => Instr::NoAssign(astop),
+                1 => {
+                    let e = outedges[outedges.len() - 1];
+                    let dest = get_edge_arg(&invars, e);
+                    if let Some(Arg::Register(r)) = dest {
+                        Instr::Assign(r, astop)
+                    } else {
+                        panic!("destination arg not register.");
+                    }
+                }
+                _ => panic!("More than 1 nonlinear output invalid."),
+            };
+
+            instrs.push(instr);
         }
 
         Ok(Self { term, name, instrs })
     }
 }
 
+fn vec_arr<const N: usize, T>(mut v: Vec<T>) -> [T; N] {
+    [0; N].map(|i| v.remove(i))
+}
+
+fn get_op(op: &CircOp, inargs: Vec<Arg>) -> Op {
+    match op {
+        CircOp::Xor => {
+            let [a, b] = vec_arr(inargs);
+            Op::Xor(a, b)
+        }
+        CircOp::Select(..) => {
+            let [a, b, c] = vec_arr(inargs);
+            Op::Select(a, b, c)
+        }
+
+        _ => {
+            let (fk, args) = map_op_rev(op.clone(), inargs);
+            Op::Call(fk, args)
+        }
+    }
+}
+
 fn get_arg(
     e: Edge,
-    argmap: &HashMap<Edge, Arg>,
+    argmap: &mut HashMap<Edge, Arg>,
     invars: &HashMap<Var, Edge>,
     circ: &Circuit,
 ) -> Arg {
     if let Some(a) = argmap.get(&e) {
         return a.clone();
     }
-    if let Some(a) = invars
-        .iter()
-        .find_map(|(v, ve)| (*ve == e).then(|| v.clone().try_into().ok()).flatten())
-    {
-        return a;
+    if let Some(value) = get_edge_arg(invars, e) {
+        return value;
     }
     let (src, _) = circ.edge_endpoints(e).expect("missing edge.");
     let srcop = circ.node_op(src).expect("src node missing.");
-    dbg!(e, srcop);
+    // dbg!(e, srcop);
     match srcop {
         CircOp::Const(c) => Arg::ConstVal(c.into()),
         CircOp::Copy { .. } => get_arg(
@@ -475,8 +534,9 @@ fn get_arg(
             circ,
         ),
         CircOp::Input => {
+            // input to basic block, convert arg from unitID
             let port = circ.port_of_edge(src, e, Direction::Outgoing).unwrap();
-            match &circ.uids[port] {
+            let arg = match &circ.uids[port] {
                 UnitID::Qubit { index, .. } => Arg::QId(QubitId {
                     index: index[0] as u64,
                 }),
@@ -492,11 +552,64 @@ fn get_arg(
                     reg_type: BitWidth::I1,
                 }),
                 _ => panic!("invalid input type."),
-            }
+            };
+
+            argmap.insert(e, arg.clone());
+            arg
         }
         _ => panic!("what do I do with this edge."),
     }
 }
+
+fn get_edge_arg(invars: &HashMap<Var, Edge>, e: Edge) -> Option<Arg> {
+    invars
+        .iter()
+        .find_map(|(v, ve)| (*ve == e).then(|| v.clone().try_into().ok()).flatten())
+}
+
+fn map_op_rev(op: CircOp, mut args: Vec<Arg>) -> (FuncKind, Vec<Arg>) {
+    use CircOp::*;
+    use QuantumGateFunc as Q;
+
+    match &op {
+        CircOp::RzF64 | CircOp::RxF64 => args.reverse(),
+        _ => (),
+    };
+    let fk = if let Custom(custom) = op {
+        *(custom).downcast::<FuncKind>().expect("Unknown custom op.")
+    } else {
+        FuncKind::QFunc(match op {
+            H => Q::H,
+            T => Q::T,
+            S => Q::S,
+            X => Q::X,
+            Y => Q::Y,
+            Z => Q::Z,
+            Tadj => Q::Tadj,
+            Sadj => Q::Sadj,
+            CX => Q::Cnot,
+            ZZMax => Q::ZZ,
+            Reset => Q::Reset,
+            Measure => Q::Mz,
+            RxF64 => Q::Rx,
+            RzF64 => Q::Rz,
+            Barrier => todo!(),
+            AngleAdd => todo!(),
+            AngleMul => todo!(),
+            AngleNeg => todo!(),
+            QuatMul => todo!(),
+            TK1 => todo!(),
+            Rotation => todo!(),
+            ToRotation => todo!(),
+            Custom(_) | Select(_) | Xor | Copy { .. } | Const(_) | Output | Input | Noop(_) => {
+                unreachable!("Should be skipped over at op level.")
+            }
+        })
+    };
+
+    (fk, args)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -506,12 +619,28 @@ mod tests {
     fn test_roundtrip() {
         let ast = AST::read_path("qir_ex.bc").unwrap();
         let AST::Func(f) = &ast;
-        for b in f {
-            let cb: CircBlock = b.clone().try_into().unwrap();
-            println!("{}", cb.circ.dot_string());
-            check_soundness(&cb.circ).unwrap();
-            let b: BasicBlock = cb.try_into().unwrap();
+        // use std::fs;
+
+        // fs::write("ast_before.txt", format!("{:#?}", &ast)).unwrap();
+        // dbg!(&ast);
+        let ast_new = AST::Func(
+            f.iter()
+                .map(|b| {
+                    let cb: CircBlock = b.clone().try_into().unwrap();
+                    // println!("{}", cb.circ.dot_string());
+                    check_soundness(&cb.circ).unwrap();
+                    cb.try_into().unwrap()
+                })
+                .collect(),
+        );
+        let AST::Func(f_new) = &ast_new;
+        for (b1, b2) in f.iter().zip(f_new.iter()) {
+            assert_eq!(b1.name, b2.name);
+            assert_eq!(b1.term, b2.term);
+            assert_eq!(b1.instrs.len(), b2.instrs.len());
         }
-        ast.write_bitcode_to_path("dump.bc", "test_roundtrip");
+        // fs::write("ast_after.txt", format!("{:#?}", &ast)).unwrap();
+
+        ast.print_to_path("dump_rt.ll", "mod");
     }
 }
