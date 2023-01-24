@@ -5,6 +5,7 @@ use quantraption::ast::{
     Arg, BasicBlock, BitWidth, Const, FuncKind, Instr, Op, Phi, QuantumGateFunc, QubitId, RTFunc,
     Reg, ResultId, Term,
 };
+use tket_json_rs::{circuit_json::Operation, optype::OpType};
 
 use crate::circuit::{
     circuit::{Circuit, UnitID},
@@ -332,9 +333,9 @@ fn map_op(fk: FuncKind, mut args: Vec<Arg>) -> (CircOp, Vec<FuncInput>) {
             Q::Cnot => CX,
             Q::Tadj => Tadj,
             Q::Sadj => Sadj,
-            Q::Cz => todo!(),
+            Q::Cz => Custom(Box::new(Operation::from_optype(OpType::CZ))),
             Q::X => X,
-            Q::Y => todo!(),
+            Q::Y => Y,
             Q::Z => Z,
             Q::Rx => RxF64,
             Q::Ry => todo!(),
@@ -576,7 +577,17 @@ fn map_op_rev(op: CircOp, mut args: Vec<Arg>) -> (FuncKind, Vec<Arg>) {
         _ => (),
     };
     let fk = if let Custom(custom) = op {
-        *(custom).downcast::<FuncKind>().expect("Unknown custom op.")
+        if custom.downcast_ref::<FuncKind>().is_some() {
+            *custom.downcast::<FuncKind>().unwrap()
+        } else if custom.downcast_ref::<Operation>().is_some() {
+            let tk1op = custom.downcast::<Operation>().unwrap();
+            FuncKind::QFunc(match tk1op.op_type {
+                OpType::CZ => Q::Cz,
+                _ => panic!("uknown TKET1 operation."),
+            })
+        } else {
+            panic!("unknown custom op.")
+        }
     } else {
         FuncKind::QFunc(match op {
             H => Q::H,
