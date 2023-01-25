@@ -1,3 +1,4 @@
+use super::{pattern::node_equality, pattern_rewriter, CircFixedStructPattern};
 use crate::circuit::{circuit::Circuit, operation::Op};
 use portgraph::{
     graph::{Direction, NodeIndex},
@@ -5,14 +6,135 @@ use portgraph::{
 };
 use priority_queue::PriorityQueue;
 use rayon::prelude::*;
+use std::sync::mpsc;
+use std::thread;
 use std::{
     collections::{HashMap, HashSet},
     sync::Mutex,
 };
 
-use super::{pattern::node_equality, pattern_rewriter, CircFixedStructPattern};
-
 type Transformation = (Circuit, Circuit);
+
+pub fn taso_mpsc<C>(
+    circ: Circuit,
+    transforms: Vec<Transformation>,
+    gamma: f64,
+    cost: C,
+    _timeout: i64,
+    max_threads: usize,
+) -> Circuit
+where
+    C: Fn(&Circuit) -> usize + Send + Sync,
+{
+    // bound the numebr of threads, chunk up the patterns in to each thread
+    let n_threads = std::cmp::min(max_threads, transforms.len());
+
+    let (t_main, r_main) = mpsc::channel();
+    let tra_patterns = transforms
+        .into_iter()
+        .map(|(c1, c2)| (CircFixedStructPattern::from_circ(c1, node_equality()), c2));
+
+    let mut chunks: Vec<Vec<_>> = (0..n_threads).map(|_| vec![]).collect();
+
+    for (count, p) in tra_patterns.enumerate() {
+        chunks[count % n_threads].push((count, p));
+    }
+
+    let _rev_cost = move |x: &HashCirc| usize::MAX - cost(&x.0);
+
+    let mut pq = PriorityQueue::new();
+    let hc = HashCirc(circ);
+    let mut cbest = hc.clone();
+    let cin_cost = _rev_cost(&hc);
+    let mut cbest_cost = cin_cost;
+    let mut dseen: HashSet<usize> = HashSet::from_iter([circuit_hash(&hc.0)]);
+    pq.push(hc, cin_cost);
+
+    // each thread scans for rewrites using all the patterns in its chunk, and
+    // sends rewritten circuits back to main
+    let (joins, thread_ts): (Vec<_>, Vec<_>) = chunks
+        .into_iter()
+        .enumerate()
+        .map(|(i, patterns)| {
+            // channel for sending circuits to each thread
+            let (t_this, r_this) = mpsc::channel();
+            let tn = t_main.clone();
+            let jn = thread::spawn(move || loop {
+                let hc: HashCirc = match r_this.recv().unwrap() {
+                    Some(hc) => hc,
+                    // main has signalled that this thread won't receive any
+                    // more circuits
+                    None => {
+                        break;
+                    }
+                };
+                println!("thread {i} got one");
+                for (pattern_i, (pattern, c2)) in &patterns {
+                    pattern_rewriter(pattern.clone(), &hc.0, |_| (c2.clone(), 0.0)).for_each(
+                        |rewrite| {
+                            let mut newc = hc.0.clone();
+                            newc.apply_rewrite(rewrite).expect("rewrite failure");
+                            tn.send(Some(newc)).unwrap();
+                            println!("thread {i} sent one back from pattern {pattern_i}");
+                        },
+                    );
+                }
+                // no more circuits will be generated, tell main this thread is
+                // done with this circuit
+                tn.send(None).unwrap();
+            });
+
+            (jn, t_this)
+        })
+        .unzip();
+
+    while let Some((hc, priority)) = pq.pop() {
+        println!("\npopped one of size {}", &hc.0.node_count());
+        if priority > cbest_cost {
+            // TODO here is where a optimal data-sharing copy would be handy
+
+            cbest = hc.clone();
+            cbest_cost = priority;
+        }
+
+        // send the popped circuit to each thread
+        for thread_t in &thread_ts {
+            thread_t.send(Some(hc.clone())).unwrap();
+        }
+        let mut done_tracker = 0;
+        for received in &r_main {
+            let newc = match received {
+                Some(newc) => newc,
+                None => {
+                    done_tracker += 1;
+                    if done_tracker == n_threads {
+                        // all threads have said they are done with this circuit
+                        break;
+                    } else {
+                        continue;
+                    }
+                }
+            };
+            println!("Main got one");
+            let newchash = circuit_hash(&newc);
+            if dseen.contains(&newchash) {
+                continue;
+            }
+            let newhc = HashCirc(newc);
+            let newcost = _rev_cost(&newhc);
+            if gamma * (newcost as f64) > (cbest_cost as f64) {
+                pq.push(newhc, newcost);
+                dseen.insert(newchash);
+            }
+        }
+    }
+    for (join, tx) in joins.into_iter().zip(thread_ts.into_iter()) {
+        // tell all the threads we're done and join the threads
+        tx.send(None).unwrap();
+        join.join().unwrap();
+    }
+    cbest.0
+}
 
 pub fn taso<C>(
     circ: Circuit,
@@ -305,23 +427,26 @@ mod tests {
         circ.append_op(Op::H, &[1]).unwrap();
         circ.append_op(Op::H, &[0]).unwrap();
 
-        let cout = taso(
-            circ.clone(),
-            vec![(two_h, oneqb_id), (cx_left, cx_right)],
-            1.2,
-            Circuit::node_count,
-            10,
-        );
-        let cout = cout.remove_noop();
+        // duplicate patterns to test multithreading
+        let patterns = vec![
+            (two_h.clone(), oneqb_id.clone()),
+            (cx_left.clone(), cx_right.clone()),
+            (two_h, oneqb_id),
+            (cx_left, cx_right),
+        ];
+        for f in [taso, |c, ps, g, cst, tmo| taso_mpsc(c, ps, g, cst, tmo, 2)] {
+            let cout = f(circ.clone(), patterns.clone(), 1.2, Circuit::node_count, 10);
+            let cout = cout.remove_noop();
 
-        let mut correct = Circuit::with_uids(four_qbs);
-        correct.append_op(Op::H, &[0]).unwrap();
-        correct.append_op(Op::H, &[3]).unwrap();
-        correct.append_op(Op::CX, &[3, 2]).unwrap();
-        correct.append_op(Op::CX, &[2, 1]).unwrap();
-        correct.append_op(Op::CX, &[1, 0]).unwrap();
+            let mut correct = Circuit::with_uids(four_qbs.clone());
+            correct.append_op(Op::H, &[0]).unwrap();
+            correct.append_op(Op::H, &[3]).unwrap();
+            correct.append_op(Op::CX, &[3, 2]).unwrap();
+            correct.append_op(Op::CX, &[2, 1]).unwrap();
+            correct.append_op(Op::CX, &[1, 0]).unwrap();
 
-        assert_ne!(circuit_hash(&circ), circuit_hash(&cout));
-        assert_eq!(circuit_hash(&correct), circuit_hash(&cout));
+            assert_ne!(circuit_hash(&circ), circuit_hash(&cout));
+            assert_eq!(circuit_hash(&correct), circuit_hash(&cout));
+        }
     }
 }
