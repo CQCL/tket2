@@ -1,12 +1,14 @@
-use std::collections::{HashMap, HashSet};
-
+use crate::circuit::{circuit::Circuit, operation::Op};
 use portgraph::{
     graph::{Direction, NodeIndex},
     toposort::TopSortWalker,
 };
-
-use crate::circuit::{circuit::Circuit, operation::Op};
 use priority_queue::PriorityQueue;
+use rayon::prelude::*;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Mutex,
+};
 
 use super::{pattern::node_equality, pattern_rewriter, CircFixedStructPattern};
 
@@ -20,7 +22,7 @@ pub fn taso<C>(
     _timeout: i64,
 ) -> Circuit
 where
-    C: Fn(&Circuit) -> usize,
+    C: Fn(&Circuit) -> usize + Send + Sync,
 {
     // TODO timeout
     let tra_patterns: Vec<_> = transforms
@@ -35,32 +37,55 @@ where
     let mut cbest = hc.clone();
     let cin_cost = _rev_cost(&hc);
     let mut cbest_cost = cin_cost;
-    let mut dseen: HashSet<usize> = HashSet::from_iter([circuit_hash(&hc.0)]);
-
+    let dseen: Mutex<HashSet<usize>> = Mutex::new(HashSet::from_iter([circuit_hash(&hc.0)]));
     pq.push(hc, cin_cost);
+
     while let Some((hc, priority)) = pq.pop() {
         if priority > cbest_cost {
+            // TODO here is where a optimal data-sharing copy would be handy
+
             cbest = hc.clone();
             cbest_cost = priority;
         }
-
-        for (pattern, c2) in tra_patterns.iter() {
-            for rewrite in pattern_rewriter(pattern.clone(), &hc.0, |_| (c2.clone(), 0.0)) {
-                // TODO here is where a optimal data-sharing copy would be handy
+        let pq = Mutex::new(&mut pq);
+        tra_patterns.par_iter().for_each(|(pattern, c2)| {
+            pattern_rewriter(pattern.clone(), &hc.0, |_| (c2.clone(), 0.0)).for_each(|rewrite| {
                 let mut newc = hc.0.clone();
                 newc.apply_rewrite(rewrite).expect("rewrite failure");
                 let newchash = circuit_hash(&newc);
+                let mut dseen = dseen.lock().unwrap();
                 if dseen.contains(&newchash) {
-                    continue;
+                    return;
                 }
                 let newhc = HashCirc(newc);
                 let newcost = _rev_cost(&newhc);
                 if gamma * (newcost as f64) > (cbest_cost as f64) {
+                    let mut pq = pq.lock().unwrap();
                     pq.push(newhc, newcost);
                     dseen.insert(newchash);
                 }
-            }
-        }
+            });
+        })
+
+        // non-parallel implementation:
+
+        // for (pattern, c2) in tra_patterns.iter() {
+        //     for rewrite in pattern_rewriter(pattern.clone(), &hc.0, |_| (c2.clone(), 0.0)) {
+        //         // TODO here is where a optimal data-sharing copy would be handy
+        //         let mut newc = hc.0.clone();
+        //         newc.apply_rewrite(rewrite).expect("rewrite failure");
+        //         let newchash = circuit_hash(&newc);
+        //         if dseen.contains(&newchash) {
+        //             continue;
+        //         }
+        //         let newhc = HashCirc(newc);
+        //         let newcost = _rev_cost(&newhc);
+        //         if gamma * (newcost as f64) > (cbest_cost as f64) {
+        //             pq.push(newhc, newcost);
+        //             dseen.insert(newchash);
+        //         }
+        //     }
+        // }
     }
     cbest.0
 }
@@ -284,7 +309,7 @@ mod tests {
             circ.clone(),
             vec![(two_h, oneqb_id), (cx_left, cx_right)],
             1.2,
-            |c| c.node_count(),
+            Circuit::node_count,
             10,
         );
         let cout = cout.remove_noop();
