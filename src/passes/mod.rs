@@ -3,6 +3,7 @@ pub mod classical;
 pub mod pattern;
 pub mod squash;
 pub mod taso;
+use rayon::prelude::*;
 
 use crate::circuit::{
     circuit::{Circuit, CircuitRewrite},
@@ -12,7 +13,7 @@ use crate::circuit::{
 
 use self::pattern::{FixedStructPattern, Match, NodeCompClosure, PatternMatcher};
 use portgraph::{
-    graph::DIRECTIONS,
+    graph::{NodeIndex, DIRECTIONS},
     substitute::{BoundedSubgraph, RewriteError, SubgraphRef},
 };
 
@@ -78,38 +79,13 @@ pub fn pattern_rewriter<'a, 'f: 'a, 'g: 'a, F, G>(
     rewrite_closure: G,
 ) -> impl Iterator<Item = CircuitRewrite> + 'a
 where
-    F: NodeCompClosure<VertexProperties, EdgeProperties> + Clone + 'f,
+    F: NodeCompClosure<VertexProperties, EdgeProperties> + Clone + 'f + Send + Sync,
     G: Fn(Match) -> (Circuit, Param) + 'g,
 {
     // TODO when applying rewrites greedily, all of this construction needs to
     // every time a match is found. Find a way to update the target of the match
     // and restart matching without doing all this again.
-    let ports: [Vec<_>; 2] = DIRECTIONS.map(|direction| {
-        pattern
-            .graph
-            .node_edges(pattern.boundary[direction.index()], direction.reverse())
-            .map(|e| {
-                let target = pattern
-                    .graph
-                    .edge_endpoint(e, direction)
-                    .expect("missing edge");
-                let port = pattern
-                    .graph
-                    .node_edges(target, direction)
-                    .enumerate()
-                    .find_map(|(i, e2)| (e == e2).then_some(i))
-                    .expect("missing edge");
-
-                (port, target)
-            })
-            // .map(|e| {
-            //     pattern
-            //         .graph
-            //         .edge_endpoint(e, direction)
-            //         .expect("dangling edge")
-            // })
-            .collect()
-    });
+    let ports = pattern_ports(&pattern);
     // let in_ports: Vec<_> = pattern
     //     .graph
     //     .neighbours(pattern.boundary[0], Direction::Outgoing)
@@ -120,7 +96,20 @@ where
     //     .collect();
     let matcher = PatternMatcher::new(pattern, circ.dag_ref());
 
-    matcher.into_matches().map(move |pmatch| {
+    matcher
+        .into_matches()
+        .map(match_to_rewrite(ports, circ, rewrite_closure))
+}
+
+fn match_to_rewrite<'a, 'g: 'a, G>(
+    ports: [Vec<(usize, NodeIndex)>; 2],
+    circ: &'a Circuit,
+    rewrite_closure: G,
+) -> impl Fn(Match) -> CircuitRewrite + 'a
+where
+    G: Fn(Match) -> (Circuit, Param) + 'g,
+{
+    move |pmatch: Match| {
         let edges = DIRECTIONS.map(|direction| {
             ports[direction.index()]
                 .iter()
@@ -159,6 +148,66 @@ where
         let (newcirc, phase) = (rewrite_closure)(pmatch);
 
         CircuitRewrite::new(subg, newcirc.into(), phase)
+    }
+}
+
+pub fn pattern_rewriter_parallel<'a, 'f: 'a, 'g: 'a, F, G>(
+    pattern: CircFixedStructPattern<F>,
+    circ: &'a Circuit,
+    rewrite_closure: G,
+) -> impl ParallelIterator<Item = CircuitRewrite> + 'a
+where
+    F: NodeCompClosure<VertexProperties, EdgeProperties> + Clone + 'f + Send + Sync,
+    G: Fn(Match) -> (Circuit, Param) + 'g + Send + Sync,
+{
+    // TODO when applying rewrites greedily, all of this construction needs to
+    // every time a match is found. Find a way to update the target of the match
+    // and restart matching without doing all this again.
+    let ports = pattern_ports(&pattern);
+    // let in_ports: Vec<_> = pattern
+    //     .graph
+    //     .neighbours(pattern.boundary[0], Direction::Outgoing)
+    //     .collect();
+    // let out_ports: Vec<_> = pattern
+    //     .graph
+    //     .neighbours(pattern.boundary[1], Direction::Incoming)
+    //     .collect();
+    let matcher = PatternMatcher::new(pattern, circ.dag_ref());
+
+    matcher
+        .into_par_matches()
+        .map(match_to_rewrite(ports, circ, rewrite_closure))
+}
+
+fn pattern_ports<'f, F>(pattern: &CircFixedStructPattern<F>) -> [Vec<(usize, NodeIndex)>; 2]
+where
+    F: NodeCompClosure<VertexProperties, EdgeProperties> + Clone + 'f + Send + Sync,
+{
+    DIRECTIONS.map(|direction| {
+        pattern
+            .graph
+            .node_edges(pattern.boundary[direction.index()], direction.reverse())
+            .map(|e| {
+                let target = pattern
+                    .graph
+                    .edge_endpoint(e, direction)
+                    .expect("missing edge");
+                let port = pattern
+                    .graph
+                    .node_edges(target, direction)
+                    .enumerate()
+                    .find_map(|(i, e2)| (e == e2).then_some(i))
+                    .expect("missing edge");
+
+                (port, target)
+            })
+            // .map(|e| {
+            //     pattern
+            //         .graph
+            //         .edge_endpoint(e, direction)
+            //         .expect("dangling edge")
+            // })
+            .collect()
     })
 }
 

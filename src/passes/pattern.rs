@@ -291,21 +291,30 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, F: NodeCompClosure<N, E> + 'f>
     }
 }
 
-impl<'g, N, E, F> PatternMatcher<'g, N, E, F>
+impl<'f: 'g, 'g, N, E, F> PatternMatcher<'g, N, E, F>
 where
     N: PartialEq + Send + Sync,
     E: PartialEq + Send + Sync,
-    F: NodeCompClosure<N, E> + Sync + Send,
+    F: NodeCompClosure<N, E> + Sync + Send + 'f,
 {
     pub fn find_par_matches(&'g self) -> impl ParallelIterator<Item = Match> + 'g {
         let start = self.start_pattern_node_edge();
-        let candidates: Vec<_> = self
+        self.candidates(start)
+            .filter_map(move |candidate| self.match_from(start, candidate).ok())
+    }
+
+    fn candidates(&'g self, start: NodeIndex) -> impl ParallelIterator<Item = NodeIndex> {
+        let v: Vec<_> = self
             .target
             .node_indices()
             .filter(|n| self.node_match(start, *n).is_ok())
             .collect();
-        candidates
-            .into_par_iter()
+        v.into_par_iter()
+    }
+
+    pub fn into_par_matches(self) -> impl ParallelIterator<Item = Match> + 'g {
+        let start = self.start_pattern_node_edge();
+        self.candidates(start)
             .filter_map(move |candidate| self.match_from(start, candidate).ok())
     }
 }
