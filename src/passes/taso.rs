@@ -11,6 +11,8 @@ use std::{collections::HashMap, sync::Arc};
 
 type Transformation = (Circuit, Circuit);
 
+pub mod qtz_circuit;
+
 // TODO refactor so both implementations share more code
 pub fn taso_mpsc<C>(
     circ: Circuit,
