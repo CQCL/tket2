@@ -5,9 +5,12 @@ use portgraph::{
     toposort::TopSortWalker,
 };
 use priority_queue::PriorityQueue;
-use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::thread;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 type Transformation = (Circuit, Circuit);
 
@@ -56,29 +59,30 @@ where
             // channel for sending circuits to each thread
             let (t_this, r_this) = mpsc::channel();
             let tn = t_main.clone();
-            let jn = thread::spawn(move || loop {
-                let hc: HashCirc = match r_this.recv().unwrap() {
-                    Some(hc) => hc,
-                    // main has signalled that this thread won't receive any
-                    // more circuits
-                    None => {
-                        break;
+            let jn = thread::spawn(move || {
+                for received in r_this {
+                    let hc: Arc<HashCirc> = if let Some(hc) = received {
+                        hc
+                    } else {
+                        // main has signalled no more circuits will be sent
+                        return;
+                    };
+                    println!("thread {i} got one");
+                    for (pattern_i, (pattern, c2)) in &patterns {
+                        pattern_rewriter(pattern.clone(), &hc.0, |_| (c2.clone(), 0.0)).for_each(
+                            |rewrite| {
+                                // TODO here is where a optimal data-sharing copy would be handy
+                                let mut newc = hc.0.clone();
+                                newc.apply_rewrite(rewrite).expect("rewrite failure");
+                                tn.send(Some(newc)).unwrap();
+                                println!("thread {i} sent one back from pattern {pattern_i}");
+                            },
+                        );
                     }
-                };
-                println!("thread {i} got one");
-                for (pattern_i, (pattern, c2)) in &patterns {
-                    pattern_rewriter(pattern.clone(), &hc.0, |_| (c2.clone(), 0.0)).for_each(
-                        |rewrite| {
-                            let mut newc = hc.0.clone();
-                            newc.apply_rewrite(rewrite).expect("rewrite failure");
-                            tn.send(Some(newc)).unwrap();
-                            println!("thread {i} sent one back from pattern {pattern_i}");
-                        },
-                    );
+                    // no more circuits will be generated, tell main this thread is
+                    // done with this circuit
+                    tn.send(None).unwrap();
                 }
-                // no more circuits will be generated, tell main this thread is
-                // done with this circuit
-                tn.send(None).unwrap();
             });
 
             (jn, t_this)
@@ -88,28 +92,25 @@ where
     while let Some((hc, priority)) = pq.pop() {
         println!("\npopped one of size {}", &hc.0.node_count());
         if priority > cbest_cost {
-            // TODO here is where a optimal data-sharing copy would be handy
-
             cbest = hc.clone();
             cbest_cost = priority;
         }
-
+        let hc = Arc::new(hc);
         // send the popped circuit to each thread
         for thread_t in &thread_ts {
             thread_t.send(Some(hc.clone())).unwrap();
         }
         let mut done_tracker = 0;
         for received in &r_main {
-            let newc = match received {
-                Some(newc) => newc,
-                None => {
-                    done_tracker += 1;
-                    if done_tracker == n_threads {
-                        // all threads have said they are done with this circuit
-                        break;
-                    } else {
-                        continue;
-                    }
+            let newc = if let Some(newc) = received {
+                newc
+            } else {
+                done_tracker += 1;
+                if done_tracker == n_threads {
+                    // all threads have said they are done with this circuit
+                    break;
+                } else {
+                    continue;
                 }
             };
             println!("Main got one");
@@ -162,8 +163,6 @@ where
 
     while let Some((hc, priority)) = pq.pop() {
         if priority > cbest_cost {
-            // TODO here is where a optimal data-sharing copy would be handy
-
             cbest = hc.clone();
             cbest_cost = priority;
         }
