@@ -1,5 +1,8 @@
 use super::{pattern::node_equality, pattern_rewriter, CircFixedStructPattern};
-use crate::circuit::{circuit::Circuit, operation::Op};
+use crate::circuit::{
+    circuit::{Circuit, CircuitRewrite},
+    operation::Op,
+};
 use portgraph::{
     graph::{Direction, NodeIndex},
     toposort::TopSortWalker,
@@ -9,14 +12,46 @@ use std::sync::mpsc;
 use std::thread;
 use std::{collections::HashMap, sync::Arc};
 
-type Transformation = (Circuit, Circuit);
+mod qtz_circuit;
 
-pub mod qtz_circuit;
+#[derive(Clone)]
+pub struct RepCircSet {
+    rep_circ: Circuit,
+    others: Vec<Circuit>,
+}
 
+// fn from_paths(reps: &str, all: &str) -> Self {
+//     Self {
+//         rep_circs: qtz_circuit::load_representative_set(reps),
+//         all_circs: qtz_circuit::load_ecc_set(all),
+//     }
+// }
 // TODO refactor so both implementations share more code
+
+impl RepCircSet {
+    fn to_rewrites<'s, 'a: 's>(
+        &'s self,
+        base_circ: &'a Circuit,
+    ) -> impl Iterator<Item = CircuitRewrite> + 's {
+        let patterns = self.others.iter().map(|c2| {
+            (
+                CircFixedStructPattern::from_circ(self.rep_circ.clone(), node_equality()),
+                c2,
+            )
+        });
+        let patterns = patterns.chain(self.others.iter().map(|c2| {
+            (
+                CircFixedStructPattern::from_circ(c2.clone(), node_equality()),
+                &self.rep_circ,
+            )
+        }));
+        patterns
+            .flat_map(|(pattern, c2)| pattern_rewriter(pattern, base_circ, |_| (c2.clone(), 0.0)))
+    }
+}
 pub fn taso_mpsc<C>(
     circ: Circuit,
-    transforms: Vec<Transformation>,
+    repset: Vec<RepCircSet>,
     gamma: f64,
     cost: C,
     _timeout: i64,
@@ -26,16 +61,14 @@ where
     C: Fn(&Circuit) -> usize + Send + Sync,
 {
     // bound the numebr of threads, chunk up the patterns in to each thread
-    let n_threads = std::cmp::min(max_threads, transforms.len());
+    let n_threads = std::cmp::min(max_threads, repset.len());
 
     let (t_main, r_main) = mpsc::channel();
-    let tra_patterns = transforms
-        .into_iter()
-        .map(|(c1, c2)| (CircFixedStructPattern::from_circ(c1, node_equality()), c2));
+
 
     let mut chunks: Vec<Vec<_>> = (0..n_threads).map(|_| vec![]).collect();
 
-    for (count, p) in tra_patterns.enumerate() {
+    for (count, p) in repset.into_iter().enumerate() {
         chunks[count % n_threads].push((count, p));
     }
 
@@ -56,7 +89,7 @@ where
     let (joins, thread_ts): (Vec<_>, Vec<_>) = chunks
         .into_iter()
         .enumerate()
-        .map(|(i, patterns)| {
+        .map(|(i, repsets)| {
             // channel for sending circuits to each thread
             let (t_this, r_this) = mpsc::channel();
             let tn = t_main.clone();
@@ -69,15 +102,14 @@ where
                         return;
                     };
                     println!("thread {i} got one");
-                    for (pattern_i, (pattern, c2)) in &patterns {
-                        pattern_rewriter(pattern.clone(), &sent_circ, |_| (c2.clone(), 0.0))
-                            .for_each(|rewrite| {
-                                // TODO here is where a optimal data-sharing copy would be handy
-                                let mut newc = sent_circ.as_ref().clone();
-                                newc.apply_rewrite(rewrite).expect("rewrite failure");
-                                tn.send(Some(newc)).unwrap();
-                                println!("thread {i} sent one back from pattern {pattern_i}");
-                            });
+                    for (set_i, rcs) in &repsets {
+                        for rewrite in rcs.to_rewrites(&sent_circ) {
+                            // TODO here is where a optimal data-sharing copy would be handy
+                            let mut newc = sent_circ.as_ref().clone();
+                            newc.apply_rewrite(rewrite).expect("rewrite failure");
+                            tn.send(Some(newc)).unwrap();
+                            println!("thread {i} sent one back from set {set_i}");
+                        }
                     }
                     // no more circuits will be generated, tell main this thread is
                     // done with this circuit
@@ -140,7 +172,7 @@ where
 
 pub fn taso<C>(
     circ: Circuit,
-    transforms: Vec<Transformation>,
+    repset: Vec<RepCircSet>,
     gamma: f64,
     cost: C,
     _timeout: i64,
@@ -149,10 +181,6 @@ where
     C: Fn(&Circuit) -> usize + Send + Sync,
 {
     // TODO timeout
-    let tra_patterns: Vec<_> = transforms
-        .into_iter()
-        .map(|(c1, c2)| (CircFixedStructPattern::from_circ(c1, node_equality()), c2))
-        .collect();
 
     let _rev_cost = |x: &Circuit| usize::MAX - cost(x);
 
@@ -200,8 +228,8 @@ where
 
         // non-parallel implementation:
 
-        for (pattern, c2) in tra_patterns.iter() {
-            for rewrite in pattern_rewriter(pattern.clone(), &seen_circ, |_| (c2.clone(), 0.0)) {
+        for rp in repset.iter() {
+            for rewrite in rp.to_rewrites(&seen_circ) {
                 // TODO here is where a optimal data-sharing copy would be handy
                 let mut newc = seen_circ.clone();
                 newc.apply_rewrite(rewrite).expect("rewrite failure");
@@ -306,7 +334,6 @@ mod tests {
     };
 
     use super::*;
-
     #[test]
     fn test_simple_hash() {
         let mut circ1 = Circuit::new();
@@ -420,15 +447,19 @@ mod tests {
         circ.append_op(Op::H, &[1]).unwrap();
         circ.append_op(Op::H, &[0]).unwrap();
 
-        // duplicate patterns to test multithreading
-        let patterns = vec![
-            (two_h.clone(), oneqb_id.clone()),
-            (cx_left.clone(), cx_right.clone()),
-            (two_h, oneqb_id),
-            (cx_left, cx_right),
+        let repsets = vec![
+            RepCircSet {
+                rep_circ: oneqb_id,
+                others: vec![two_h],
+            },
+            RepCircSet {
+                rep_circ: cx_left,
+                others: vec![cx_right],
+            },
         ];
+
         for f in [taso, |c, ps, g, cst, tmo| taso_mpsc(c, ps, g, cst, tmo, 2)] {
-            let cout = f(circ.clone(), patterns.clone(), 1.2, Circuit::node_count, 10);
+            let cout = f(circ.clone(), repsets.clone(), 1.2, Circuit::node_count, 10);
             let cout = cout.remove_noop();
 
             let mut correct = Circuit::with_uids(four_qbs.clone());

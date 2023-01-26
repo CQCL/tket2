@@ -105,7 +105,7 @@ impl From<RepCirc> for Circuit {
     }
 }
 
-pub(crate) fn load_representative_set(path: &str) -> HashMap<String, Circuit> {
+pub(super) fn load_representative_set(path: &str) -> HashMap<String, Circuit> {
     let jsons = std::fs::read_to_string(path).unwrap();
     // read_rep_json(&jsons).unwrap();
     let st: Vec<RepCircData> = serde_json::from_str(&jsons).unwrap();
@@ -114,7 +114,7 @@ pub(crate) fn load_representative_set(path: &str) -> HashMap<String, Circuit> {
         .collect()
 }
 
-pub(crate) fn load_ecc_set(path: &str) -> HashMap<String, Vec<Circuit>> {
+pub(super) fn load_ecc_set(path: &str) -> HashMap<String, Vec<Circuit>> {
     let jsons = std::fs::read_to_string(path).unwrap();
     let (_, ecc_map): (Vec<()>, HashMap<String, Vec<RepCircData>>) =
         serde_json::from_str(&jsons).unwrap();
