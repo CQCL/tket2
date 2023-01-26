@@ -7,10 +7,7 @@ use portgraph::{
 use priority_queue::PriorityQueue;
 use std::sync::mpsc;
 use std::thread;
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 type Transformation = (Circuit, Circuit);
 
@@ -40,15 +37,17 @@ where
         chunks[count % n_threads].push((count, p));
     }
 
-    let _rev_cost = move |x: &HashCirc| usize::MAX - cost(&x.0);
+    let _rev_cost = |x: &Circuit| usize::MAX - cost(x);
 
     let mut pq = PriorityQueue::new();
-    let hc = HashCirc(circ);
-    let mut cbest = hc.clone();
-    let cin_cost = _rev_cost(&hc);
+    let mut cbest = circ.clone();
+    let cin_cost = _rev_cost(&circ);
     let mut cbest_cost = cin_cost;
-    let mut dseen: HashSet<usize> = HashSet::from_iter([circuit_hash(&hc.0)]);
-    pq.push(hc, cin_cost);
+    let chash = circuit_hash(&circ);
+    // map of seen circuits, if the circuit has been popped from the queue,
+    // holds None
+    let mut dseen: HashMap<usize, Option<Circuit>> = HashMap::from_iter([(chash, Some(circ))]);
+    pq.push(chash, cin_cost);
 
     // each thread scans for rewrites using all the patterns in its chunk, and
     // sends rewritten circuits back to main
@@ -61,7 +60,7 @@ where
             let tn = t_main.clone();
             let jn = thread::spawn(move || {
                 for received in r_this {
-                    let hc: Arc<HashCirc> = if let Some(hc) = received {
+                    let sent_circ: Arc<Circuit> = if let Some(hc) = received {
                         hc
                     } else {
                         // main has signalled no more circuits will be sent
@@ -69,15 +68,14 @@ where
                     };
                     println!("thread {i} got one");
                     for (pattern_i, (pattern, c2)) in &patterns {
-                        pattern_rewriter(pattern.clone(), &hc.0, |_| (c2.clone(), 0.0)).for_each(
-                            |rewrite| {
+                        pattern_rewriter(pattern.clone(), &sent_circ, |_| (c2.clone(), 0.0))
+                            .for_each(|rewrite| {
                                 // TODO here is where a optimal data-sharing copy would be handy
-                                let mut newc = hc.0.clone();
+                                let mut newc = sent_circ.as_ref().clone();
                                 newc.apply_rewrite(rewrite).expect("rewrite failure");
                                 tn.send(Some(newc)).unwrap();
                                 println!("thread {i} sent one back from pattern {pattern_i}");
-                            },
-                        );
+                            });
                     }
                     // no more circuits will be generated, tell main this thread is
                     // done with this circuit
@@ -90,15 +88,20 @@ where
         .unzip();
 
     while let Some((hc, priority)) = pq.pop() {
-        println!("\npopped one of size {}", &hc.0.node_count());
+        let seen_circ = dseen
+            .insert(hc, None)
+            .flatten()
+            .expect("seen circ missing.");
+        println!("\npopped one of size {}", &seen_circ.node_count());
+
         if priority > cbest_cost {
-            cbest = hc.clone();
+            cbest = seen_circ.clone();
             cbest_cost = priority;
         }
-        let hc = Arc::new(hc);
+        let seen_circ = Arc::new(seen_circ);
         // send the popped circuit to each thread
         for thread_t in &thread_ts {
-            thread_t.send(Some(hc.clone())).unwrap();
+            thread_t.send(Some(seen_circ.clone())).unwrap();
         }
         let mut done_tracker = 0;
         for received in &r_main {
@@ -115,14 +118,13 @@ where
             };
             println!("Main got one");
             let newchash = circuit_hash(&newc);
-            if dseen.contains(&newchash) {
+            if dseen.contains_key(&newchash) {
                 continue;
             }
-            let newhc = HashCirc(newc);
-            let newcost = _rev_cost(&newhc);
+            let newcost = _rev_cost(&newc);
             if gamma * (newcost as f64) > (cbest_cost as f64) {
-                pq.push(newhc, newcost);
-                dseen.insert(newchash);
+                pq.push(newchash, newcost);
+                dseen.insert(newchash, Some(newc));
             }
         }
     }
@@ -131,7 +133,7 @@ where
         tx.send(None).unwrap();
         join.join().unwrap();
     }
-    cbest.0
+    cbest
 }
 
 pub fn taso<C>(
@@ -150,20 +152,26 @@ where
         .map(|(c1, c2)| (CircFixedStructPattern::from_circ(c1, node_equality()), c2))
         .collect();
 
-    let _rev_cost = |x: &HashCirc| usize::MAX - cost(&x.0);
+    let _rev_cost = |x: &Circuit| usize::MAX - cost(x);
 
     let mut pq = PriorityQueue::new();
-    let hc = HashCirc(circ);
-    let mut cbest = hc.clone();
-    let cin_cost = _rev_cost(&hc);
+    let mut cbest = circ.clone();
+    let cin_cost = _rev_cost(&circ);
     let mut cbest_cost = cin_cost;
-    // let dseen: Mutex<HashSet<usize>> = Mutex::new(HashSet::from_iter([circuit_hash(&hc.0)]));
-    let mut dseen: HashSet<usize> = HashSet::from_iter([circuit_hash(&hc.0)]);
-    pq.push(hc, cin_cost);
+    let chash = circuit_hash(&circ);
+    // map of seen circuits, if the circuit has been popped from the queue,
+    // holds None
+    let mut dseen: HashMap<usize, Option<Circuit>> = HashMap::from_iter([(chash, Some(circ))]);
+    pq.push(chash, cin_cost);
 
     while let Some((hc, priority)) = pq.pop() {
+        // remove circuit from map and replace with None
+        let seen_circ = dseen
+            .insert(hc, None)
+            .flatten()
+            .expect("seen circ missing.");
         if priority > cbest_cost {
-            cbest = hc.clone();
+            cbest = seen_circ.clone();
             cbest_cost = priority;
         }
         // par_iter implementation
@@ -191,24 +199,23 @@ where
         // non-parallel implementation:
 
         for (pattern, c2) in tra_patterns.iter() {
-            for rewrite in pattern_rewriter(pattern.clone(), &hc.0, |_| (c2.clone(), 0.0)) {
+            for rewrite in pattern_rewriter(pattern.clone(), &seen_circ, |_| (c2.clone(), 0.0)) {
                 // TODO here is where a optimal data-sharing copy would be handy
-                let mut newc = hc.0.clone();
+                let mut newc = seen_circ.clone();
                 newc.apply_rewrite(rewrite).expect("rewrite failure");
                 let newchash = circuit_hash(&newc);
-                if dseen.contains(&newchash) {
+                if dseen.contains_key(&newchash) {
                     continue;
                 }
-                let newhc = HashCirc(newc);
-                let newcost = _rev_cost(&newhc);
+                let newcost = _rev_cost(&newc);
                 if gamma * (newcost as f64) > (cbest_cost as f64) {
-                    pq.push(newhc, newcost);
-                    dseen.insert(newchash);
+                    pq.push(newchash, newcost);
+                    dseen.insert(newchash, Some(newc));
                 }
             }
         }
     }
-    cbest.0
+    cbest
 }
 
 fn op_hash(op: &Op) -> Option<usize> {
@@ -287,21 +294,6 @@ fn circuit_hash(circ: &Circuit) -> usize {
     }
 
     total
-}
-
-#[derive(Clone)]
-struct HashCirc(pub Circuit);
-impl PartialEq for HashCirc {
-    fn eq(&self, other: &Self) -> bool {
-        circuit_hash(&self.0) == circuit_hash(&other.0)
-    }
-}
-
-impl Eq for HashCirc {}
-impl std::hash::Hash for HashCirc {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        circuit_hash(&self.0).hash(state);
-    }
 }
 
 #[cfg(test)]
