@@ -45,14 +45,14 @@ impl BoundedSubgraph {
 #[derive(Clone)]
 pub struct OpenGraph<N, E> {
     pub graph: Graph<N, E>,
-    pub ports: [Vec<EdgeIndex>; 2],
+    pub dangling: [Vec<EdgeIndex>; 2],
 }
 
 impl<N, E> OpenGraph<N, E> {
     pub fn new(graph: Graph<N, E>, in_ports: Vec<EdgeIndex>, out_ports: Vec<EdgeIndex>) -> Self {
         Self {
             graph,
-            ports: [in_ports, out_ports],
+            dangling: [in_ports, out_ports],
         }
     }
 }
@@ -61,8 +61,8 @@ impl<N: Debug, E: Debug> Debug for OpenGraph<N, E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OpenGraph")
             .field("graph", &self.graph)
-            .field("in_ports", &self.ports[0])
-            .field("out_ports", &self.ports[1])
+            .field("in_edges", &self.dangling[0])
+            .field("out_edges", &self.dangling[1])
             .finish()
     }
 }
@@ -116,7 +116,7 @@ impl<N: Default + Debug + Display, E: Debug + Display> Graph<N, E> {
         // TODO type check.
         for direction in DIRECTIONS {
             let edges = &subgraph.edges[direction.index()];
-            let ports = &replacement.ports[direction.index()];
+            let ports = &replacement.dangling[direction.index()];
 
             if edges.len() != ports.len() {
                 return Err(RewriteError::BoundarySize);
@@ -129,16 +129,16 @@ impl<N: Default + Debug + Display, E: Debug + Display> Graph<N, E> {
         let (_, mut edge_map) = self.insert_graph(replacement.graph);
 
         for direction in DIRECTIONS {
-            let edges = &subgraph.edges[direction.index()];
-            let ports = &replacement.ports[direction.index()];
+            let subg_edges = &subgraph.edges[direction.index()];
+            let repl_edges = &replacement.dangling[direction.index()];
 
-            for (edge, port) in edges.iter().zip(ports) {
+            for (sub_edge, repl_edge) in subg_edges.iter().zip(repl_edges) {
                 // TODO: There should be a check to make sure this can not fail
                 // before we merge the first edge to avoid leaving the graph in an
                 // invalid state.
-                self.merge_edges(edge_map[port], *edge).unwrap();
+                self.merge_edges(edge_map[repl_edge], *sub_edge).unwrap();
                 // Update edge_map to point to new merged edge
-                edge_map.get_mut(port).map(|e| *e = *edge);
+                edge_map.get_mut(repl_edge).map(|e| *e = *sub_edge);
             }
         }
 

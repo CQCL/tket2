@@ -568,7 +568,7 @@ impl From<Circuit> for OpenGraph<VertexProperties, EdgeProperties> {
         c.dag.remove_node(entry);
         c.dag.remove_node(exit);
         Self {
-            ports: [in_ports, out_ports],
+            dangling: [in_ports, out_ports],
             graph: c.dag,
         }
     }
@@ -576,8 +576,14 @@ impl From<Circuit> for OpenGraph<VertexProperties, EdgeProperties> {
 
 #[cfg(test)]
 mod tests {
-    use crate::circuit::{operation::{ConstValue, Op, WireType}, circuit::CircuitRewrite};
-    use portgraph::{graph::Direction, substitute::{Rewrite, BoundedSubgraph, SubgraphRef}};
+    use crate::circuit::{
+        circuit::CircuitRewrite,
+        operation::{ConstValue, Op, WireType},
+    };
+    use portgraph::{
+        graph::Direction,
+        substitute::{BoundedSubgraph, Rewrite, SubgraphRef},
+    };
 
     use super::{Circuit, UnitID};
 
@@ -695,7 +701,7 @@ mod tests {
                         circ.node_edges(cx, Direction::Outgoing).into(),
                     ],
                 },
-                replacement
+                replacement,
             ),
             phase: 0.,
         };
