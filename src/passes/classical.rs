@@ -108,7 +108,7 @@ impl<'circ, I: Iterator<Item = Vertex>> Iterator for ClRewriteIter<'circ, I> {
                     [ConstValue::Quat64(x), ConstValue::Quat64(y)] => vec![ConstValue::Quat64(Quat(x.0 * y.0))],
                     _ => return None,
                 },
-                _ => panic!("Op {:?} should not have made it to this point.", op),
+                _ => panic!("Op {op:?} should not have made it to this point."),
             };
 
             let mut replace = Circuit::new();

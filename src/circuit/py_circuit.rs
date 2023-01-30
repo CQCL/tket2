@@ -32,7 +32,7 @@ impl IntoPy<PyObject> for &Op {
             pyop.into_py(py)
         } else {
             // TODO add conversions for complex ops
-            panic!("No known conversion from Op: {:?}", self);
+            panic!("No known conversion from Op: {self:?}");
         }
     }
 }

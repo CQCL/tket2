@@ -292,7 +292,7 @@ impl From<UnitID> for Register {
             | UnitID::Bit { name, index } => {
                 Register(name, index.into_iter().map(i64::from).collect())
             }
-            _ => panic!("Not supported: {:?}", uid),
+            _ => panic!("Not supported: {uid:?}"),
         }
     }
 }
