@@ -426,49 +426,6 @@ impl Circuit {
         self
     }
 
-    pub fn remove_noop(mut self) -> Self {
-        let noop_nodes: Vec<_> = self
-            .dag
-            .node_indices()
-            .filter(|n| matches!(self.dag.node_weight(*n).unwrap().op, Op::Noop(_)))
-            .collect();
-        for nod in noop_nodes {
-            let ie = self
-                .dag
-                .node_edges(nod, Direction::Incoming)
-                .next()
-                .unwrap();
-            let oe = self
-                .dag
-                .node_edges(nod, Direction::Outgoing)
-                .next()
-                .unwrap();
-
-            let target = self.dag.edge_endpoint(oe, Direction::Incoming).unwrap();
-            self.dag.disconnect(ie, Direction::Incoming);
-
-            self.dag
-                .connect_after(target, ie, Direction::Incoming, oe)
-                .unwrap();
-            self.dag.remove_edge(oe);
-            self.dag.remove_node(nod);
-            // let source = self
-            //     .dag
-            //     .neighbours(nod, Direction::Incoming)
-            //     .next()
-            //     .unwrap();
-            // let target = self
-            //     .dag
-            //     .neighbours(nod, Direction::Outgoing)
-            //     .next()
-            //     .unwrap();
-            // self.dag
-            //     .add_edge(source, target, EdgeProperties { edge_type });
-        }
-
-        self
-    }
-
     pub fn dag_ref(&self) -> &Dag {
         &self.dag
     }
@@ -679,7 +636,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sub() {
+    fn test_sub_empty() {
         let q0 = UnitID::Qubit {
             reg_name: "q".into(),
             index: vec![0],

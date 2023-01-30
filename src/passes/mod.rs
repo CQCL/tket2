@@ -293,6 +293,5 @@ use pyo3::prelude::pyfunction;
 #[cfg_attr(feature = "pyo3", pyfunction)]
 pub fn decompose_custom_pass(circ: Circuit) -> (Circuit, bool) {
     let (circ, suc) = apply_exhaustive(circ, |c| decompose_custom(c).collect()).unwrap();
-    let circ = circ.remove_noop();
     (circ, suc)
 }

@@ -115,12 +115,6 @@ impl Circuit {
         *self = c;
     }
 
-    pub fn remove_noops(&mut self) {
-        let c = self.clone().remove_noop();
-
-        *self = c;
-    }
-
     pub fn append(&mut self, op: Op, args: Vec<usize>) -> NodeIndex {
         self.append_op(op, &args).unwrap()
     }

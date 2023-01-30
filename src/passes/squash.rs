@@ -364,13 +364,8 @@ fn cx_pattern(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
             index: vec![1],
         },
     ];
-    let mut replace_c = Circuit::with_uids(qubits.clone());
-    replace_c
-        .append_op(Op::Noop(WireType::Qubit), &[0])
-        .unwrap();
-    replace_c
-        .append_op(Op::Noop(WireType::Qubit), &[1])
-        .unwrap();
+    let replace_c = Circuit::with_uids(qubits.clone());
+
     let mut pattern_c = Circuit::with_uids(qubits);
     pattern_c.append_op(Op::CX, &[0, 1]).unwrap();
     pattern_c.append_op(Op::CX, &[0, 1]).unwrap();
@@ -380,6 +375,5 @@ fn cx_pattern(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
 
 pub fn cx_cancel_pass(circ: Circuit) -> (Circuit, bool) {
     let (circ, suc) = apply_greedy(circ, |c| cx_pattern(c).next()).unwrap();
-    let circ = circ.remove_noop();
     (circ, suc)
 }

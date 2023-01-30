@@ -30,8 +30,7 @@ fn identity(edge_weights: Vec<EdgeProperties>) -> Circuit {
     let [i, o] = circ.boundary();
     for (p, w) in edge_weights.into_iter().enumerate() {
         let noop = circ.add_vertex(Op::Noop);
-        circ.add_edge((i, p as u8), (noop, 0), w.edge_type);
-        circ.add_edge((noop, 0), (o, p as u8), w.edge_type);
+        circ.add_edge((i, p as u8), (o, p as u8), w.edge_type);
     }
 
     circ
@@ -109,6 +108,4 @@ pub fn remove_redundancies(mut circ: Circuit) -> Circuit {
             continue;
         }
     }
-
-    circ.remove_noop()
 }
