@@ -668,7 +668,7 @@ mod tests {
         c.add_unitid(a.clone());
 
         // Make sure UnitIDs and edges are stored in right order
-        assert_eq!(c.uids, vec![q0.clone(), a.clone()]);
+        assert_eq!(c.uids, vec![q0, a]);
         assert_eq!(
             c.node_edges(c.boundary.input, Direction::Outgoing)
                 .into_iter()
@@ -691,14 +691,14 @@ mod tests {
         let qbs = vec![q0, q1];
         let mut circ = Circuit::with_uids(qbs.clone());
         let cx = circ.append_op(Op::CX, &[0, 1]).unwrap();
-        let replacement = Circuit::with_uids(qbs.clone()).into();
+        let replacement = Circuit::with_uids(qbs).into();
         let rewrite = CircuitRewrite {
             graph_rewrite: Rewrite::new(
                 BoundedSubgraph {
                     subgraph: SubgraphRef::new([cx].iter().cloned().collect()),
                     edges: [
-                        circ.node_edges(cx, Direction::Incoming).into(),
-                        circ.node_edges(cx, Direction::Outgoing).into(),
+                        circ.node_edges(cx, Direction::Incoming),
+                        circ.node_edges(cx, Direction::Outgoing),
                     ],
                 },
                 replacement,

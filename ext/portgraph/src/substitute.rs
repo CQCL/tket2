@@ -138,7 +138,9 @@ impl<N: Default + Debug + Display, E: Debug + Display> Graph<N, E> {
                 // invalid state.
                 self.merge_edges(edge_map[repl_edge], *sub_edge).unwrap();
                 // Update edge_map to point to new merged edge
-                edge_map.get_mut(repl_edge).map(|e| *e = *sub_edge);
+                if let Some(e) = edge_map.get_mut(repl_edge) {
+                    *e = *sub_edge;
+                }
             }
         }
 
