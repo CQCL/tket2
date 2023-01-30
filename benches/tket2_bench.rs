@@ -94,37 +94,37 @@ fn pattern_match_bench_par(c: &mut Criterion) {
 //     ];
 //     let mut pattern_circ = Circuit::with_uids(qubits.clone());
 //     pattern_circ
-//         .append_op(Op::H, &vec![0])
+//         .append_op(Op::H, &[0])
 //         .unwrap();
 //     pattern_circ
-//         .append_op(Op::H, &vec![1])
+//         .append_op(Op::H, &[1])
 //         .unwrap();
 //     pattern_circ
 //         .append_op(Op::CX, &vec![0, 1])
 //         .unwrap();
 //     pattern_circ
-//         .append_op(Op::H, &vec![0])
+//         .append_op(Op::H, &[0])
 //         .unwrap();
 //     pattern_circ
-//         .append_op(Op::H, &vec![1])
+//         .append_op(Op::H, &[1])
 //         .unwrap();
 //     let pattern_boundary = pattern_circ.boundary();
 
 //     let mut target_circ = Circuit::with_uids(qubits);
 //     target_circ
-//         .append_op(Op::H, &vec![0])
+//         .append_op(Op::H, &[0])
 //         .unwrap();
 //     target_circ
-//         .append_op(Op::H, &vec![1])
+//         .append_op(Op::H, &[1])
 //         .unwrap();
 //     target_circ
 //         .append_op(Op::CX, &vec![0, 1])
 //         .unwrap();
 //     target_circ
-//         .append_op(Op::H, &vec![0])
+//         .append_op(Op::H, &[0])
 //         .unwrap();
 //     target_circ
-//         .append_op(Op::H, &vec![1])
+//         .append_op(Op::H, &[1])
 //         .unwrap();
 //     let mut group = c.benchmark_group("PatternMatch");
 //     for i in (100..1000).step_by(100) {
@@ -133,20 +133,20 @@ fn pattern_match_bench_par(c: &mut Criterion) {
 //                 .append_op(Op::CX, &vec![0, 1])
 //                 .unwrap();
 //             target_circ
-//                 .append_op(Op::H, &vec![0])
+//                 .append_op(Op::H, &[0])
 //                 .unwrap();
 //             target_circ
-//                 .append_op(Op::H, &vec![1])
+//                 .append_op(Op::H, &[1])
 //                 .unwrap();
 
 //             pattern_circ
 //                 .append_op(Op::CX, &vec![0, 1])
 //                 .unwrap();
 //             pattern_circ
-//                 .append_op(Op::H, &vec![0])
+//                 .append_op(Op::H, &[0])
 //                 .unwrap();
 //             pattern_circ
-//                 .append_op(Op::H, &vec![1])
+//                 .append_op(Op::H, &[1])
 //                 .unwrap();
 //         }
 
