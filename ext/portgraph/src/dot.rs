@@ -51,6 +51,6 @@ fn add_edge_str<N: Display, E: Display>(
     });
 
     let edge = graph.edge_weight(e).expect("missing edge");
-    let edge_s = format!("{} -> {} [label=\"({}, {}); {}\"]\n", a, b, ap, bp, edge);
+    let edge_s = format!("{a} -> {b} [label=\"({ap}, {bp}); {edge}\"]\n");
     dot_s.push_str(&edge_s[..])
 }

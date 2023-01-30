@@ -159,7 +159,7 @@ fn rotation_replacement(op: &Op) -> (Circuit, Param) {
         //     [inp, x, y, z]
         // }
         // TODO add TK1
-        _ => panic!("Op {:?} should not have made it to this point.", op),
+        _ => panic!("Op {op:?} should not have made it to this point."),
     };
     for (val, e) in const_vals.iter().zip(const_edges.iter()) {
         replace.add_vertex_with_edges(Op::Const(ConstValue::F64(*val)), vec![], vec![*e]);
