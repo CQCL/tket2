@@ -3,7 +3,7 @@ pub mod classical;
 pub mod pattern;
 pub mod squash;
 pub mod taso;
-use rayon::prelude::*;
+// use rayon::prelude::*;
 
 use crate::circuit::{
     circuit::{Circuit, CircuitRewrite},
@@ -16,6 +16,11 @@ use portgraph::{
     graph::{NodeIndex, DIRECTIONS},
     substitute::{BoundedSubgraph, RewriteError, SubgraphRef},
 };
+
+pub trait RewriteGenerator<'s, T: Iterator<Item = CircuitRewrite> + 's> {
+    fn rewrites<'a: 's>(&'s self, base_circ: &'a Circuit) -> T;
+    fn into_rewrites(self, base_circ: &'s Circuit) -> T;
+}
 
 /// Repeatedly apply all available rewrites reported by finder closure until no more are found.
 ///
@@ -73,111 +78,220 @@ impl<F> CircFixedStructPattern<F> {
         }
     }
 }
-pub fn pattern_rewriter<'a, 'f: 'a, 'g: 'a, F, G>(
-    pattern: CircFixedStructPattern<F>,
-    circ: &'a Circuit,
-    rewrite_closure: G,
-) -> impl Iterator<Item = CircuitRewrite> + 'a
-where
-    F: NodeCompClosure<VertexProperties, EdgeProperties> + Clone + 'f + Send + Sync,
-    G: Fn(Match) -> (Circuit, Param) + 'g,
-{
-    // TODO when applying rewrites greedily, all of this construction needs to
-    // every time a match is found. Find a way to update the target of the match
-    // and restart matching without doing all this again.
-    let ports = pattern_ports(&pattern);
-    // let in_ports: Vec<_> = pattern
-    //     .graph
-    //     .neighbours(pattern.boundary[0], Direction::Outgoing)
-    //     .collect();
-    // let out_ports: Vec<_> = pattern
-    //     .graph
-    //     .neighbours(pattern.boundary[1], Direction::Incoming)
-    //     .collect();
-    let matcher = PatternMatcher::new(pattern, circ.dag_ref());
 
-    matcher
-        .into_matches()
-        .map(match_to_rewrite(ports, circ, rewrite_closure))
+pub struct PatternRewriter<F, G> {
+    pattern: CircFixedStructPattern<F>,
+    rewrite_closure: G,
 }
 
-fn match_to_rewrite<'a, 'g: 'a, G>(
-    ports: [Vec<(usize, NodeIndex)>; 2],
-    circ: &'a Circuit,
-    rewrite_closure: G,
-) -> impl Fn(Match) -> CircuitRewrite + 'a
+impl<F, G> PatternRewriter<F, G> {
+    pub fn new(pattern: CircFixedStructPattern<F>, rewrite_closure: G) -> Self {
+        Self {
+            pattern,
+            rewrite_closure,
+        }
+    }
+}
+
+impl<'s, 'f: 's, F, G> RewriteGenerator<'s, CircRewriteIter<'s, F, G>> for PatternRewriter<F, G>
 where
-    G: Fn(Match) -> (Circuit, Param) + 'g,
+    F: NodeCompClosure<VertexProperties, EdgeProperties> + Clone + Send + Sync + 'f,
+    G: Fn(Match) -> (Circuit, Param) + 's + Clone,
 {
-    move |pmatch: Match| {
+    fn into_rewrites(self, base_circ: &'s Circuit) -> CircRewriteIter<'s, F, G> {
+        let ports = pattern_ports(&self.pattern);
+        let matcher = PatternMatcher::new(self.pattern, base_circ.dag_ref());
+
+        RewriteIter {
+            match_iter: matcher.into_iter(),
+            ports,
+            rewrite_closure: self.rewrite_closure,
+            circ: base_circ,
+        }
+    }
+
+    fn rewrites<'a: 's>(&'s self, base_circ: &'a Circuit) -> CircRewriteIter<'s, F, G> {
+        let ports = pattern_ports(&self.pattern);
+        let matcher = PatternMatcher::new(self.pattern.clone(), base_circ.dag_ref());
+
+        RewriteIter {
+            match_iter: matcher.into_iter(),
+            ports,
+            rewrite_closure: self.rewrite_closure.clone(),
+            circ: base_circ,
+        }
+    }
+}
+
+pub type CircRewriteIter<'a, F, G> = RewriteIter<'a, VertexProperties, EdgeProperties, F, G>;
+
+// pub fn pattern_rewriter<'a, 'f: 'a, 'g: 'a, F, G>(
+//     pattern: CircFixedStructPattern<F>,
+//     circ: &'a Circuit,
+//     rewrite_closure: G,
+// ) -> RewriteIter<'a, VertexProperties, EdgeProperties, F, G>
+// where
+//     F: NodeCompClosure<VertexProperties, EdgeProperties> + Clone + 'f + Send + Sync,
+//     G: Fn(Match) -> (Circuit, Param) + 'g,
+// {
+//     let pr = PatternRewriter {
+//         pattern,
+//         rewrite_closure,
+//     };
+//     pr.rewrites(circ)
+// }
+// pub fn pattern_rewriter<'a, 'f: 'a, 'g: 'a, F, G>(
+//     pattern: CircFixedStructPattern<F>,
+//     circ: &'a Circuit,
+//     rewrite_closure: G,
+// ) -> impl Iterator<Item = CircuitRewrite> + 'a
+// where
+//     F: NodeCompClosure<VertexProperties, EdgeProperties> + Clone + 'f + Send + Sync,
+//     G: Fn(Match) -> (Circuit, Param) + 'g,
+// {
+//     // TODO when applying rewrites greedily, all of this construction needs to
+//     // every time a match is found. Find a way to update the target of the match
+//     // and restart matching without doing all this again.
+//     let ports = pattern_ports(&pattern);
+//     // let in_ports: Vec<_> = pattern
+//     //     .graph
+//     //     .neighbours(pattern.boundary[0], Direction::Outgoing)
+//     //     .collect();
+//     // let out_ports: Vec<_> = pattern
+//     //     .graph
+//     //     .neighbours(pattern.boundary[1], Direction::Incoming)
+//     //     .collect();
+//     let matcher = PatternMatcher::new(pattern, circ.dag_ref());
+
+//     // matcher
+//     // .into_iter()
+//     // .map(match_to_rewrite(ports, circ, rewrite_closure))
+
+//     RewriteIter {
+//         match_iter: matcher.into_iter(),
+//         ports,
+//         rewrite_closure: &rewrite_closure,
+//         circ,
+//     }
+// }
+
+pub struct RewriteIter<'a, N, E, F, G> {
+    match_iter: pattern::PatternMatchIter<'a, N, E, F>,
+    ports: [Vec<(usize, NodeIndex)>; 2],
+    rewrite_closure: G,
+    circ: &'a Circuit,
+}
+
+impl<'a, N, E, F, G> Iterator for RewriteIter<'a, N, E, F, G>
+where
+    N: PartialEq,
+    E: PartialEq,
+    F: NodeCompClosure<N, E>,
+    G: Fn(Match) -> (Circuit, Param),
+{
+    type Item = CircuitRewrite;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let pmatch = self.match_iter.next()?;
+
         let edges = DIRECTIONS.map(|direction| {
-            ports[direction.index()]
+            self.ports[direction.index()]
                 .iter()
                 .map(|(p, n)| {
                     let mapped_n = *pmatch.get(n).unwrap();
 
-                    circ.edge_at_port(mapped_n, *p, direction)
+                    self.circ
+                        .edge_at_port(mapped_n, *p, direction)
                         .expect("Missing edge")
                 })
                 .collect()
         });
-        // let in_edges: Vec<_> = in_ports
-        //     .iter()
-        //     .map(|np| {
-        //         circ.dag
-        //             .edge_at_port(
-        //                 NodePort::new(*pmatch.get(&np.node).unwrap(), np.port),
-        //                 Direction::Incoming,
-        //             )
-        //             .unwrap()
-        //     })
-        //     .collect();
-        // let out_edges: Vec<_> = out_ports
-        //     .iter()
-        //     .map(|np| {
-        //         circ.dag
-        //             .edge_at_port(
-        //                 NodePort::new(*pmatch.get(&np.node).unwrap(), np.port),
-        //                 Direction::Outgoing,
-        //             )
-        //             .unwrap()
-        //     })
-        // .collect();
+
         let subg = BoundedSubgraph::new(SubgraphRef::from_iter(pmatch.values().copied()), edges);
 
-        let (newcirc, phase) = (rewrite_closure)(pmatch);
+        let (newcirc, phase) = (self.rewrite_closure)(pmatch);
 
-        CircuitRewrite::new(subg, newcirc.into(), phase)
+        Some(CircuitRewrite::new(subg, newcirc.into(), phase))
     }
 }
 
-pub fn pattern_rewriter_parallel<'a, 'f: 'a, 'g: 'a, F, G>(
-    pattern: CircFixedStructPattern<F>,
-    circ: &'a Circuit,
-    rewrite_closure: G,
-) -> impl ParallelIterator<Item = CircuitRewrite> + 'a
-where
-    F: NodeCompClosure<VertexProperties, EdgeProperties> + Clone + 'f + Send + Sync,
-    G: Fn(Match) -> (Circuit, Param) + 'g + Send + Sync,
-{
-    // TODO when applying rewrites greedily, all of this construction needs to
-    // every time a match is found. Find a way to update the target of the match
-    // and restart matching without doing all this again.
-    let ports = pattern_ports(&pattern);
-    // let in_ports: Vec<_> = pattern
-    //     .graph
-    //     .neighbours(pattern.boundary[0], Direction::Outgoing)
-    //     .collect();
-    // let out_ports: Vec<_> = pattern
-    //     .graph
-    //     .neighbours(pattern.boundary[1], Direction::Incoming)
-    //     .collect();
-    let matcher = PatternMatcher::new(pattern, circ.dag_ref());
+// fn match_to_rewrite<'a, 'g: 'a, G>(
+//     ports: [Vec<(usize, NodeIndex)>; 2],
+//     circ: &'a Circuit,
+//     rewrite_closure: G,
+// ) -> impl Fn(Match) -> CircuitRewrite + 'a
+// where
+//     G: Fn(Match) -> (Circuit, Param) + 'g,
+// {
+//     move |pmatch: Match| {
+//         let edges = DIRECTIONS.map(|direction| {
+//             ports[direction.index()]
+//                 .iter()
+//                 .map(|(p, n)| {
+//                     let mapped_n = *pmatch.get(n).unwrap();
 
-    matcher
-        .into_par_matches()
-        .map(match_to_rewrite(ports, circ, rewrite_closure))
-}
+//                     circ.edge_at_port(mapped_n, *p, direction)
+//                         .expect("Missing edge")
+//                 })
+//                 .collect()
+//         });
+//         // let in_edges: Vec<_> = in_ports
+//         //     .iter()
+//         //     .map(|np| {
+//         //         circ.dag
+//         //             .edge_at_port(
+//         //                 NodePort::new(*pmatch.get(&np.node).unwrap(), np.port),
+//         //                 Direction::Incoming,
+//         //             )
+//         //             .unwrap()
+//         //     })
+//         //     .collect();
+//         // let out_edges: Vec<_> = out_ports
+//         //     .iter()
+//         //     .map(|np| {
+//         //         circ.dag
+//         //             .edge_at_port(
+//         //                 NodePort::new(*pmatch.get(&np.node).unwrap(), np.port),
+//         //                 Direction::Outgoing,
+//         //             )
+//         //             .unwrap()
+//         //     })
+//         // .collect();
+//         let subg = BoundedSubgraph::new(SubgraphRef::from_iter(pmatch.values().copied()), edges);
+
+//         let (newcirc, phase) = (rewrite_closure)(pmatch);
+
+//         CircuitRewrite::new(subg, newcirc.into(), phase)
+//     }
+// }
+
+// pub fn pattern_rewriter_parallel<'a, 'f: 'a, 'g: 'a, F, G>(
+//     pattern: CircFixedStructPattern<F>,
+//     circ: &'a Circuit,
+//     rewrite_closure: G,
+// ) -> impl ParallelIterator<Item = CircuitRewrite> + 'a
+// where
+//     F: NodeCompClosure<VertexProperties, EdgeProperties> + Clone + 'f + Send + Sync,
+//     G: Fn(Match) -> (Circuit, Param) + 'g + Send + Sync,
+// {
+//     // TODO when applying rewrites greedily, all of this construction needs to
+//     // every time a match is found. Find a way to update the target of the match
+//     // and restart matching without doing all this again.
+//     let ports = pattern_ports(&pattern);
+//     // let in_ports: Vec<_> = pattern
+//     //     .graph
+//     //     .neighbours(pattern.boundary[0], Direction::Outgoing)
+//     //     .collect();
+//     // let out_ports: Vec<_> = pattern
+//     //     .graph
+//     //     .neighbours(pattern.boundary[1], Direction::Incoming)
+//     //     .collect();
+//     let matcher = PatternMatcher::new(pattern, circ.dag_ref());
+
+//     matcher
+//         .into_par_matches()
+//         .map(match_to_rewrite(ports, circ, rewrite_closure))
+// }
 
 fn pattern_ports<'f, F>(pattern: &CircFixedStructPattern<F>) -> [Vec<(usize, NodeIndex)>; 2]
 where

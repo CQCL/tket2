@@ -1,4 +1,4 @@
-use super::{pattern::node_equality, pattern_rewriter, CircFixedStructPattern};
+use super::{pattern::node_equality, CircFixedStructPattern, PatternRewriter, RewriteGenerator};
 use crate::circuit::{
     circuit::{Circuit, CircuitRewrite},
     operation::Op,
@@ -97,11 +97,13 @@ impl RepCircSet {
             )
         }));
         patterns.flat_map(|(pattern, c2, blanks)| {
-            pattern_rewriter(pattern, base_circ, move |_| {
+            PatternRewriter::new(pattern, move |_| {
                 let mut replacement = c2.clone();
                 Self::remove_blanks(&mut replacement, Some(blanks));
                 (replacement, 0.0)
             })
+            .into_rewrites(base_circ)
+            // pattern_rewriter(pattern, base_circ, )
         })
     }
 }

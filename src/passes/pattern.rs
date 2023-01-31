@@ -278,16 +278,49 @@ impl<'f: 'g, 'g, N: PartialEq, E: PartialEq, F: NodeCompClosure<N, E> + 'f>
             }
         })
     }
+}
 
-    pub fn into_matches(self) -> impl Iterator<Item = Match> + 'g {
-        let start = self.start_pattern_node_edge();
-        self.target.node_indices().filter_map(move |candidate| {
-            if self.node_match(start, candidate).is_err() {
+pub struct PatternMatchIter<'g, N, E, F> {
+    matcher: PatternMatcher<'g, N, E, F>,
+    node_indices: portgraph::graph::NodeIndices<'g, N>,
+    start: NodeIndex,
+}
+
+impl<'g, N, E, F> Iterator for PatternMatchIter<'g, N, E, F>
+where
+    N: PartialEq,
+    E: PartialEq,
+    F: NodeCompClosure<N, E>,
+{
+    type Item = Match;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.node_indices.find_map(|candidate| {
+            if self.matcher.node_match(self.start, candidate).is_err() {
                 None
             } else {
-                self.match_from(start, candidate).ok()
+                self.matcher.match_from(self.start, candidate).ok()
             }
         })
+    }
+}
+
+impl<'g, N, E, F> IntoIterator for PatternMatcher<'g, N, E, F>
+where
+    N: PartialEq,
+    E: PartialEq,
+    F: NodeCompClosure<N, E> + 'g,
+{
+    type Item = Match;
+
+    type IntoIter = PatternMatchIter<'g, N, E, F>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        PatternMatchIter {
+            node_indices: self.target.node_indices(),
+            start: self.start_pattern_node_edge(),
+            matcher: self,
+        }
     }
 }
 

@@ -6,8 +6,8 @@ use tket2::circuit::circuit::{Circuit, CircuitRewrite};
 use tket2::circuit::dag::VertexProperties;
 use tket2::circuit::operation::WireType;
 use tket2::circuit::py_circuit::{count_pycustom, PyRewriteIter, PySubgraph};
-use tket2::passes::pattern::node_equality;
-use tket2::passes::{apply_greedy, pattern_rewriter, CircFixedStructPattern};
+use tket2::passes::pattern::{node_equality, Match};
+use tket2::passes::{apply_greedy, CircFixedStructPattern, PatternRewriter, RewriteGenerator};
 use tket_json_rs::optype::OpType;
 
 fn _wrap_tket_conversion<F: FnOnce(Circuit) -> Circuit>(
@@ -53,13 +53,14 @@ fn greedy_pattern_rewrite(
                     })
                 },
             );
-            pattern_rewriter(pattern, c, |m| {
+            PatternRewriter::new(pattern, |m: Match| {
                 let outc: Circuit = Python::with_gil(|py| {
                     let pd = m.into_py(py);
                     rewrite_fn.call1(py, (pd,)).unwrap().extract(py).unwrap()
                 });
                 (outc, 0.0)
             })
+            .into_rewrites(c)
             .next()
         })
         .unwrap()
@@ -68,13 +69,14 @@ fn greedy_pattern_rewrite(
         apply_greedy(circ, |c| {
             // todo allow spec of node comp closure too
             let pattern = CircFixedStructPattern::from_circ(pattern.clone(), node_equality());
-            pattern_rewriter(pattern, c, |m| {
+            PatternRewriter::new(pattern, |m: Match| {
                 let outc: Circuit = Python::with_gil(|py| {
                     let pd = m.into_py(py);
                     rewrite_fn.call1(py, (pd,)).unwrap().extract(py).unwrap()
                 });
                 (outc, 0.0)
             })
+            .into_rewrites(c)
             .next()
         })
         .unwrap()
