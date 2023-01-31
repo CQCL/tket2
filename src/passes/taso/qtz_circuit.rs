@@ -45,19 +45,28 @@ fn map_op(opstr: &str) -> Op {
     }
 }
 
-fn map_wt(wirestr: &str) -> WireType {
-    if wirestr.starts_with('Q') {
+fn map_wt(wirestr: &str) -> (WireType, usize) {
+    let wt = if wirestr.starts_with('Q') {
         WireType::Qubit
     } else if wirestr.starts_with('P') {
         WireType::Angle
     } else {
         panic!("unknown op {wirestr}");
-    }
+    };
+
+    (wt, wirestr[1..].parse().unwrap())
 }
-impl From<RepCirc> for Circuit {
-    fn from(rc: RepCirc) -> Self {
+impl From<RepCircData> for Circuit {
+    fn from(RepCircData { circ: rc, meta }: RepCircData) -> Self {
         let mut circ = Circuit::new();
-        let mut wire_map: HashMap<String, Edge> = HashMap::new();
+        let mut param_wire_map: Vec<Edge> = (0..meta.n_input_param)
+            .map(|_| circ.new_input(WireType::Angle))
+            .collect();
+        param_wire_map.reverse();
+        let mut qubit_wire_map: Vec<Edge> = (0..meta.n_qb)
+            .map(|_| circ.new_input(WireType::Qubit))
+            .collect();
+        qubit_wire_map.reverse(); // inputs added to front of edge list first
         for RepCircOp {
             opstr,
             outputs,
@@ -69,12 +78,11 @@ impl From<RepCirc> for Circuit {
             let incoming: Vec<_> = inputs
                 .into_iter()
                 .map(|is| {
-                    if let Some(e) = wire_map.get(&is) {
-                        *e
-                    } else {
-                        let e = circ.new_input(map_wt(&is));
-                        wire_map.insert(is, e);
-                        e
+                    let (wt, idx) = map_wt(&is);
+                    match wt {
+                        WireType::Qubit => qubit_wire_map[idx],
+                        WireType::Angle => param_wire_map[idx],
+                        _ => panic!("unexpected wire type."),
                     }
                 })
                 .collect();
@@ -82,9 +90,11 @@ impl From<RepCirc> for Circuit {
             let outgoing: Vec<_> = outputs
                 .into_iter()
                 .map(|os| {
-                    let e = circ.add_edge(map_wt(&os));
+                    let (wt, idx) = map_wt(&os);
+                    assert_eq!(wt, WireType::Qubit, "only qubits expected as output");
+                    let e = circ.add_edge(wt);
 
-                    wire_map.insert(os, e);
+                    qubit_wire_map[idx] = e;
                     e
                 })
                 .collect();
@@ -92,26 +102,17 @@ impl From<RepCirc> for Circuit {
             circ.add_vertex_with_edges(op, incoming, outgoing);
         }
 
-        let outputs: Vec<_> = wire_map
-            .into_values()
-            .filter(|e| circ.edge_endpoints(*e).is_none())
-            .collect();
-
         circ.dag
-            .connect_many(circ.boundary()[1], outputs, Direction::Incoming, None)
+            .connect_many(
+                circ.boundary()[1],
+                qubit_wire_map,
+                Direction::Incoming,
+                None,
+            )
             .unwrap();
 
         circ
     }
-}
-
-pub(super) fn load_representative_set(path: &str) -> HashMap<String, Circuit> {
-    let jsons = std::fs::read_to_string(path).unwrap();
-    // read_rep_json(&jsons).unwrap();
-    let st: Vec<RepCircData> = serde_json::from_str(&jsons).unwrap();
-    st.into_iter()
-        .map(|RepCircData { mut meta, circ }| (meta.id.remove(0), circ.into()))
-        .collect()
 }
 
 pub(super) fn load_ecc_set(path: &str) -> HashMap<String, Vec<Circuit>> {
@@ -123,8 +124,7 @@ pub(super) fn load_ecc_set(path: &str) -> HashMap<String, Vec<Circuit>> {
         .into_values()
         .map(|datmap| {
             let id = datmap[0].meta.id[0].clone();
-            let circs = datmap.into_iter().map(|rcd| rcd.circ.into()).collect();
-
+            let circs = datmap.into_iter().map(|rcd| rcd.into()).collect();
             (id, circs)
         })
         .collect()
@@ -135,16 +135,25 @@ mod tests {
     use crate::validate::check_soundness;
 
     use super::*;
+    // fn load_representative_set(path: &str) -> HashMap<String, Circuit> {
+    //     let jsons = std::fs::read_to_string(path).unwrap();
+    //     // read_rep_json(&jsons).unwrap();
+    //     let st: Vec<RepCircData> = serde_json::from_str(&jsons).unwrap();
+    //     st.into_iter()
+    //         .map(|mut rcd| (rcd.meta.id.remove(0), rcd.into()))
+    //         .collect()
+    // }
 
-    #[test]
-    fn test_read_rep() {
-        let rep_map: HashMap<String, Circuit> =
-            load_representative_set("../../ext/quartz/h_rz_cxrepresentative_set.json");
+    // #[test]
+    // fn test_read_rep() {
+    //     let rep_map: HashMap<String, Circuit> =
+    //         load_representative_set("../../ext/quartz/h_rz_cxrepresentative_set.json");
 
-        for c in rep_map.values() {
-            check_soundness(c).unwrap();
-        }
-    }
+    //     for c in rep_map.values() {
+    //         println!("{}", c.dot_string());
+    //         check_soundness(c).unwrap();
+    //     }
+    // }
 
     #[test]
     fn test_read_complete() {

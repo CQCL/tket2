@@ -20,35 +20,92 @@ pub struct RepCircSet {
     others: Vec<Circuit>,
 }
 
-// fn from_paths(reps: &str, all: &str) -> Self {
-//     Self {
-//         rep_circs: qtz_circuit::load_representative_set(reps),
-//         all_circs: qtz_circuit::load_ecc_set(all),
-//     }
-// }
 // TODO refactor so both implementations share more code
 
+pub fn rep_sets_from_path(path: &str) -> Vec<RepCircSet> {
+    let all_circs = qtz_circuit::load_ecc_set(path);
+
+    all_circs
+        .into_values()
+        .map(|mut all| {
+            // TODO is the rep circ always the first??
+            let rep_circ = all.remove(0);
+
+            RepCircSet {
+                rep_circ,
+                others: all,
+            }
+        })
+        .collect()
+}
+
 impl RepCircSet {
+    // remove blank wires (up to an optional target or all) and report how many there were
+    fn remove_blanks(circ: &mut Circuit, target: Option<usize>) -> usize {
+        let mut blankedges: Vec<_> = circ
+            .node_edges(circ.boundary()[0], Direction::Outgoing)
+            .into_iter()
+            .filter(|e| circ.edge_endpoints(*e).unwrap().1 == circ.boundary()[1])
+            .collect();
+        let nblank = blankedges.len();
+        if let Some(target) = target {
+            assert!(nblank >= target, "not enough blank wires to reach target.");
+            blankedges.drain(target..).for_each(drop);
+        }
+        for e in blankedges {
+            circ.remove_edge(e);
+        }
+
+        nblank
+    }
+
     fn to_rewrites<'s, 'a: 's>(
         &'s self,
         base_circ: &'a Circuit,
     ) -> impl Iterator<Item = CircuitRewrite> + 's {
+        /*
+        generates rewrites from all circuits in set to representative circuit
+        and reverse rewrites (chained)
+
+        assumes all circuits in set have same boundary
+
+
+        for pattern matching, removes blank wires (Input -> Output edges) in pattern
+        and tries to remove the *same number* of blank wires from the
+        replacement
+
+        (Therefore replacing blank wires with non-blank wires is not a supported operation,
+        but the opposite is)
+        */
+        let mut rep = self.rep_circ.clone();
+        let rep_blanks = Self::remove_blanks(&mut rep, None);
         let patterns = self.others.iter().map(|c2| {
+            let mut c2 = c2.clone();
+            let blanks = Self::remove_blanks(&mut c2, None);
             (
-                CircFixedStructPattern::from_circ(self.rep_circ.clone(), node_equality()),
-                c2,
+                CircFixedStructPattern::from_circ(c2, node_equality()),
+                &self.rep_circ,
+                blanks,
             )
         });
-        let patterns = patterns.chain(self.others.iter().map(|c2| {
+
+        let patterns = patterns.chain(self.others.iter().map(move |c2| {
             (
-                CircFixedStructPattern::from_circ(c2.clone(), node_equality()),
-                &self.rep_circ,
+                CircFixedStructPattern::from_circ(rep.clone(), node_equality()),
+                c2,
+                rep_blanks,
             )
         }));
-        patterns
-            .flat_map(|(pattern, c2)| pattern_rewriter(pattern, base_circ, |_| (c2.clone(), 0.0)))
+        patterns.flat_map(|(pattern, c2, blanks)| {
+            pattern_rewriter(pattern, base_circ, move |_| {
+                let mut replacement = c2.clone();
+                Self::remove_blanks(&mut replacement, Some(blanks));
+                (replacement, 0.0)
+            })
+        })
     }
 }
+
 pub fn taso_mpsc<C>(
     circ: Circuit,
     repset: Vec<RepCircSet>,
@@ -60,11 +117,10 @@ pub fn taso_mpsc<C>(
 where
     C: Fn(&Circuit) -> usize + Send + Sync,
 {
-    // bound the numebr of threads, chunk up the patterns in to each thread
+    // bound the number of threads, chunk up the patterns in to each thread
     let n_threads = std::cmp::min(max_threads, repset.len());
 
     let (t_main, r_main) = mpsc::channel();
-
 
     let mut chunks: Vec<Vec<_>> = (0..n_threads).map(|_| vec![]).collect();
 
@@ -107,6 +163,7 @@ where
                             // TODO here is where a optimal data-sharing copy would be handy
                             let mut newc = sent_circ.as_ref().clone();
                             newc.apply_rewrite(rewrite).expect("rewrite failure");
+
                             tn.send(Some(newc)).unwrap();
                             println!("thread {i} sent one back from set {set_i}");
                         }
@@ -279,7 +336,7 @@ fn op_hash(op: &Op) -> Option<usize> {
 fn circuit_hash(circ: &Circuit) -> usize {
     // adapted from Quartz (Apache 2.0)
     // https://github.com/quantum-compiler/quartz/blob/2e13eb7ffb3c5c5fe96cf5b4246f4fd7512e111e/src/quartz/tasograph/tasograph.cpp#L410
-    let mut total = 0;
+    let mut total: usize = 0;
 
     let mut hash_vals: HashMap<NodeIndex, usize> = HashMap::new();
     let [i, _] = circ.boundary();
@@ -320,7 +377,7 @@ fn circuit_hash(circ: &Circuit) -> usize {
             myhash = myhash.wrapping_add(edgehash);
         }
         hash_vals.insert(nid, myhash);
-        total += myhash;
+        total = total.wrapping_add(myhash);
     }
 
     total
@@ -388,19 +445,33 @@ mod tests {
     fn test_taso_small() {
         // Figure 6 from Quartz paper https://arxiv.org/pdf/2204.09033.pdf
 
-        let mut two_h = Circuit::with_uids(vec![UnitID::Qubit {
-            reg_name: "q".into(),
-            index: vec![0],
-        }]);
+        let repsets = small_repset();
+
+        test_taso(repsets);
+    }
+
+    fn test_taso(repsets: Vec<RepCircSet>) {
+        let circ = sample_circ();
+        let mut correct = Circuit::with_uids(n_qbs(4));
+        correct.append_op(Op::H, &[0]).unwrap();
+        correct.append_op(Op::H, &[3]).unwrap();
+        correct.append_op(Op::CX, &[3, 2]).unwrap();
+        correct.append_op(Op::CX, &[2, 1]).unwrap();
+        correct.append_op(Op::CX, &[1, 0]).unwrap();
+        for f in [taso, |c, ps, g, cst, tmo| taso_mpsc(c, ps, g, cst, tmo, 4)] {
+            let cout = f(circ.clone(), repsets.clone(), 1.2, Circuit::node_count, 10);
+
+            assert_ne!(circuit_hash(&circ), circuit_hash(&cout));
+            assert_eq!(circuit_hash(&correct), circuit_hash(&cout));
+        }
+    }
+
+    fn small_repset() -> Vec<RepCircSet> {
+        let mut two_h = Circuit::with_uids(n_qbs(1));
         two_h.append_op(Op::H, &[0]).unwrap();
         two_h.append_op(Op::H, &[0]).unwrap();
 
-        let mut oneqb_id = Circuit::with_uids(vec![UnitID::Qubit {
-            reg_name: "q".into(),
-            index: vec![0],
-        }]);
-
-        oneqb_id.append_op(Op::Noop(WireType::Qubit), &[0]).unwrap();
+        let oneqb_id = Circuit::with_uids(n_qbs(1));
 
         let mut cx_left = Circuit::with_uids(vec![
             UnitID::Qubit {
@@ -430,23 +501,6 @@ mod tests {
         cx_right.append_op(Op::H, &[1]).unwrap();
         cx_right.append_op(Op::CX, &[1, 0]).unwrap();
 
-        let four_qbs: Vec<UnitID> = (0..4)
-            .map(|i| UnitID::Qubit {
-                reg_name: "q".into(),
-                index: vec![i],
-            })
-            .collect();
-        let mut circ = Circuit::with_uids(four_qbs.clone());
-        circ.append_op(Op::H, &[1]).unwrap();
-        circ.append_op(Op::H, &[2]).unwrap();
-        circ.append_op(Op::CX, &[2, 3]).unwrap();
-        circ.append_op(Op::H, &[3]).unwrap();
-        circ.append_op(Op::CX, &[1, 2]).unwrap();
-        circ.append_op(Op::H, &[2]).unwrap();
-        circ.append_op(Op::CX, &[0, 1]).unwrap();
-        circ.append_op(Op::H, &[1]).unwrap();
-        circ.append_op(Op::H, &[0]).unwrap();
-
         let repsets = vec![
             RepCircSet {
                 rep_circ: oneqb_id,
@@ -457,20 +511,35 @@ mod tests {
                 others: vec![cx_right],
             },
         ];
+        repsets
+    }
 
-        for f in [taso, |c, ps, g, cst, tmo| taso_mpsc(c, ps, g, cst, tmo, 2)] {
-            let cout = f(circ.clone(), repsets.clone(), 1.2, Circuit::node_count, 10);
-            let cout = cout.remove_noop();
+    fn n_qbs(n: u32) -> Vec<UnitID> {
+        (0..n)
+            .map(|i| UnitID::Qubit {
+                reg_name: "q".into(),
+                index: vec![i],
+            })
+            .collect()
+    }
 
-            let mut correct = Circuit::with_uids(four_qbs.clone());
-            correct.append_op(Op::H, &[0]).unwrap();
-            correct.append_op(Op::H, &[3]).unwrap();
-            correct.append_op(Op::CX, &[3, 2]).unwrap();
-            correct.append_op(Op::CX, &[2, 1]).unwrap();
-            correct.append_op(Op::CX, &[1, 0]).unwrap();
+    fn sample_circ() -> Circuit {
+        let mut circ = Circuit::with_uids(n_qbs(4));
+        circ.append_op(Op::H, &[1]).unwrap();
+        circ.append_op(Op::H, &[2]).unwrap();
+        circ.append_op(Op::CX, &[2, 3]).unwrap();
+        circ.append_op(Op::H, &[3]).unwrap();
+        circ.append_op(Op::CX, &[1, 2]).unwrap();
+        circ.append_op(Op::H, &[2]).unwrap();
+        circ.append_op(Op::CX, &[0, 1]).unwrap();
+        circ.append_op(Op::H, &[1]).unwrap();
+        circ.append_op(Op::H, &[0]).unwrap();
+        circ
+    }
 
-            assert_ne!(circuit_hash(&circ), circuit_hash(&cout));
-            assert_eq!(circuit_hash(&correct), circuit_hash(&cout));
-        }
+    #[test]
+    fn test_taso_big() {
+        let repsets = rep_sets_from_path("test_files/h_rz_cxcomplete_ECC_set.json");
+        test_taso(repsets);
     }
 }
