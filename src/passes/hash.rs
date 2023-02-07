@@ -1,7 +1,7 @@
 //use super::{pattern::node_equality, CircFixedStructPattern};
-use crate::circuit::{circuit::Circuit, operation::Op};
+use crate::circuit::{circuit::Circuit, dag::Dag, operation::Op};
 use portgraph::{
-    graph::{Direction, EdgeIndex, NodeIndex},
+    graph::{Direction, NodeIndex},
     toposort::TopSortWalker,
 };
 use std::collections::{HashMap, VecDeque};
@@ -35,16 +35,10 @@ fn op_hash(op: &Op) -> Option<usize> {
     })
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PermHash {
     hash_val: usize,
     output_order: Vec<usize>,
-}
-
-// Hash result for a node that is a source (has no inputs) in the graph
-enum SourceHash {
-    InputNode(Vec<PermHash>), // a hash for each *output*
-    Constant(PermHash),
 }
 
 fn combine_non_assoc(ph: &PermHash, portnum: usize) -> PermHash {
@@ -54,23 +48,87 @@ fn combine_non_assoc(ph: &PermHash, portnum: usize) -> PermHash {
     }
 }
 
+fn hash_node(dag: &Dag, n: NodeIndex, edge_hashes: impl IntoIterator<Item = PermHash>) -> PermHash {
+    let op_hash =
+        op_hash(&dag.node_weight(n).expect("No weight for node").op).expect("Unhashable op");
+
+    let (edge_hashes, edge_outords): (Vec<usize>, Vec<Vec<usize>>) = edge_hashes
+        .into_iter()
+        .enumerate()
+        .map(|(near_portnum, far_end_hash)| combine_non_assoc(&far_end_hash, near_portnum))
+        .map(|ph| (ph.hash_val, ph.output_order))
+        .unzip();
+    PermHash {
+        hash_val: edge_hashes
+            .iter()
+            // Edge combining function here. Of course the arithmetic gets chained, so for three edges we'll have 3(3a + 5b) + 5c == 9a + 15b + 5c
+            .fold(op_hash, |nh, eh| (3 * nh) + (5 * eh)),
+        output_order: edge_outords.into_iter().flatten().collect(),
+    }
+}
+
+// TODO take an iterator of edge classes rather than just a number
+fn hash_ports(node_hash: PermHash, edges: usize) -> Vec<PermHash> {
+    (0..edges)
+        .map(|i| combine_non_assoc(&node_hash, i))
+        .collect()
+}
+
 pub fn invariant_hash(circ: &Circuit) -> Vec<PermHash> {
-    let initial_nodes: VecDeque<NodeIndex> = circ
+    // Firstly compute "forwards" (depending on inputs) hashes of parts
+    // of the graph that do not depend upon the graph input.
+    let mut fwd_hashes: HashMap<NodeIndex, Vec<PermHash>> = HashMap::new();
+    let source_nodes = circ
+        .dag
+        .node_indices()
+        .filter(|n| circ.dag.node_edges(*n, Direction::Incoming).all(|_| false))
+        .collect();
+    for n in TopSortWalker::new(&circ.dag, source_nodes) {
+        // Note, could make this more efficient using a worklist rather than topsort,
+        // as topsort continues traversal over the entire graph whereas we could tell when to stop.
+        if circ.dag.node_weight(n).unwrap().op == Op::Input {
+            continue;
+        }
+        if !circ.dag.node_edges(n, Direction::Incoming).all(|e| {
+            fwd_hashes.contains_key(&circ.dag.edge_endpoint(e, Direction::Incoming).unwrap())
+        }) {
+            continue;
+        }
+        let node_hash = hash_node(
+            &circ.dag,
+            n,
+            circ.dag.node_edges(n, Direction::Incoming).map(|e| {
+                let in_node = circ.dag.edge_endpoint(e, Direction::Incoming).unwrap();
+                fwd_hashes.get(&in_node).unwrap()
+                    [circ.port_of_edge(in_node, e, Direction::Outgoing).unwrap()]
+                .clone()
+            }),
+        );
+        fwd_hashes.insert(
+            n,
+            hash_ports(
+                node_hash,
+                circ.dag.node_edges(n, Direction::Outgoing).count(),
+            ),
+        );
+    }
+    // Now hash rest of circuit backwards, from output back to input
+    let output_nodes: VecDeque<NodeIndex> = circ
         .dag
         .node_indices()
         .filter(|n| circ.dag.node_edges(*n, Direction::Outgoing).all(|_| false))
         .collect();
     assert!(
-        initial_nodes.len() == 1
-            && circ.dag.node_weight(initial_nodes[0]).map(|v| v.op.clone()) == Some(Op::Output)
+        output_nodes.len() == 1
+            && circ.dag.node_weight(output_nodes[0]).map(|v| v.op.clone()) == Some(Op::Output)
     );
     // hash per input for nodes with inputs
-    let mut input_hashes: HashMap<NodeIndex, Vec<PermHash>> = HashMap::new();
-    input_hashes.insert(
-        /*key*/ initial_nodes[0],
-        /*value*/
+    let mut node_hashes: HashMap<NodeIndex, Vec<PermHash>> = HashMap::new();
+    let mut input_hash = None;
+    node_hashes.insert(
+        output_nodes[0],
         circ.dag
-            .node_edges(initial_nodes[0], Direction::Incoming)
+            .node_edges(output_nodes[0], Direction::Incoming)
             .enumerate()
             .map(|(i, _)| PermHash {
                 hash_val: 6,
@@ -78,71 +136,42 @@ pub fn invariant_hash(circ: &Circuit) -> Vec<PermHash> {
             })
             .collect(),
     );
-    let mut source_hashes: HashMap<NodeIndex, SourceHash> = HashMap::new();
-    for n in TopSortWalker::new(&circ.dag, initial_nodes).reversed() {
-        let edge_targets: Vec<PermHash> = circ
-            .dag
-            .node_edges(n, Direction::Outgoing)
-            .enumerate()
-            .map(|(source_port, e)| {
-                let target = circ.dag.edge_endpoint(e, Direction::Incoming).unwrap();
-                let target_port = circ.port_of_edge(target, e, Direction::Incoming).unwrap();
-                let ph = &input_hashes.get(&target).expect("Edge target not found")[target_port];
-                // TODO where output ports are equivalent, use same source_port
-                combine_non_assoc(ph, source_port)
-            })
-            .collect();
+    for n in TopSortWalker::new(&circ.dag, output_nodes).reversed() {
+        // Again, could possibly make this a bit more efficient using a worklist,
+        // but the major part of that saving would probably be achieved by returning early
+        if fwd_hashes.contains_key(&n) {
+            continue;
+        }
+        let edge_targets = circ.dag.node_edges(n, Direction::Outgoing).map(|e| {
+            let target = circ.dag.edge_endpoint(e, Direction::Incoming).unwrap();
+            let target_port = circ.port_of_edge(target, e, Direction::Incoming).unwrap();
+            node_hashes.get(&target).expect("Edge target not found")[target_port].clone()
+            // TODO where output ports are equivalent, use same source_port
+        });
         if circ.dag.node_weight(n).unwrap().op == Op::Input {
-            source_hashes.insert(n, SourceHash::InputNode(edge_targets));
+            // we could just return here, but we'll continue as a sanity check
+            assert!(input_hash.is_none());
+            input_hash = Some(edge_targets.collect());
         } else {
-            let op_hash = op_hash(&circ.dag.node_weight(n).expect("No weight for node").op)
-                .expect("Unhashable op");
+            // Also include fwd_hashes of any *incoming* edge
+            let in_edges = circ.dag.node_edges(n, Direction::Incoming).flat_map(|e| {
+                let src_node = circ.dag.edge_endpoint(e, Direction::Outgoing).unwrap();
+                fwd_hashes.get(&src_node).map(|v| {
+                    v[circ.port_of_edge(src_node, e, Direction::Outgoing).unwrap()].clone()
+                })
+            });
+            let node_hash = hash_node(&circ.dag, n, edge_targets.chain(in_edges));
 
-            let node_hash = {
-                let (edge_hashes, edge_outputs): (Vec<usize>, Vec<Vec<usize>>) = edge_targets
-                    .into_iter()
-                    .map(|p| (p.hash_val, p.output_order))
-                    .unzip();
-                PermHash {
-                    // Edge combining function here. Of course the arithmetic gets chained, so for three edges we'll have 3(3a + 5b) + 5c == 9a + 15b + 5c
-                    hash_val: edge_hashes
-                        .into_iter()
-                        .fold(op_hash, |a, b| (a * 3) + (5 * b)),
-                    output_order: edge_outputs.into_iter().flatten().collect(),
-                }
-            };
-            let in_edges: Vec<EdgeIndex> = circ.dag.node_edges(n, Direction::Incoming).collect();
-            if in_edges.len() == 0 {
-                source_hashes.insert(n, SourceHash::Constant(node_hash));
-            } else {
-                input_hashes.insert(
-                    n,
-                    in_edges
-                        .iter()
-                        .enumerate()
-                        // TODO where input ports are equivalent, use same target_port
-                        .map(|(target_port, _)| combine_non_assoc(&node_hash, target_port))
-                        .collect(),
-                );
-            }
+            node_hashes.insert(
+                n,
+                hash_ports(
+                    node_hash,
+                    circ.dag.node_edges(n, Direction::Incoming).count(),
+                ),
+            );
         }
     }
-    let mut input_node = None;
-    let mut all_constants_hash = 0;
-    for (_, nh) in source_hashes {
-        match nh {
-            SourceHash::InputNode(outs) => {
-                assert!(input_node.is_none());
-                input_node = Some(outs)
-            }
-            SourceHash::Constant(ph) => all_constants_hash ^= ph.hash_val, // (must?) ignore output order
-        }
-    }
-    input_node
-        .unwrap()
-        .iter()
-        .map(|ph| combine_non_assoc(ph, all_constants_hash))
-        .collect()
+    input_hash.unwrap()
 }
 
 pub fn circuit_hash(circ: &Circuit) -> usize {
