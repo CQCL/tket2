@@ -42,12 +42,20 @@ where
             break;
         }
         success = true;
-        for rewrite in rewrites {
-            circ.apply_rewrite(rewrite)?;
-        }
+        apply_all(&mut circ, rewrites)?;
     }
 
     Ok((circ, success))
+}
+
+pub fn apply_all(
+    circ: &mut Circuit,
+    rewrites: impl IntoIterator<Item = CircuitRewrite>,
+) -> Result<(), RewriteError> {
+    for rewrite in rewrites {
+        circ.apply_rewrite(rewrite)?;
+    }
+    Ok(())
 }
 
 /// Repeatedly apply first reported rewrite
