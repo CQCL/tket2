@@ -81,6 +81,25 @@ fn hash_ports(node_hash: PermHash, edges: usize) -> Vec<PermHash> {
         .collect()
 }
 
+fn edge_hashes(
+    circ: &Circuit,
+    node_hashes: &HashMap<NodeIndex, Vec<PermHash>>,
+    n: NodeIndex,
+    d: Direction,
+) -> Vec<PermHash> {
+    circ.dag
+        .node_edges(n, d)
+        .map(|e| {
+            assert!(circ.dag.edge_endpoint(e, d) == Some(n));
+            let far_end = circ.dag.edge_endpoint(e, d.reverse()).unwrap();
+            node_hashes.get(&far_end).expect("Edge target not found")
+                [circ.port_of_edge(far_end, e, d.reverse()).unwrap()]
+            .clone()
+            // TODO where ports are equivalent, use same port "number" (change number -> port-class/key)
+        })
+        .collect()
+}
+
 // Hash, returning the hash of each input and enough information
 // to reconstruct the circuit from another with the same invariant_hash
 pub fn invariant_hash_perm(circ: &Circuit) -> Vec<PermHash> {
@@ -106,12 +125,7 @@ pub fn invariant_hash_perm(circ: &Circuit) -> Vec<PermHash> {
         let node_hash = hash_node(
             &circ.dag,
             n,
-            circ.dag.node_edges(n, Direction::Incoming).map(|e| {
-                let in_node = circ.dag.edge_endpoint(e, Direction::Incoming).unwrap();
-                fwd_hashes.get(&in_node).unwrap()
-                    [circ.port_of_edge(in_node, e, Direction::Outgoing).unwrap()]
-                .clone()
-            }),
+            edge_hashes(&circ, &fwd_hashes, n, Direction::Incoming),
         );
         fwd_hashes.insert(
             n,
@@ -156,16 +170,11 @@ pub fn invariant_hash_perm(circ: &Circuit) -> Vec<PermHash> {
             assert!(op == Op::Output);
             continue;
         }
-        let edge_targets = circ.dag.node_edges(n, Direction::Outgoing).map(|e| {
-            let target = circ.dag.edge_endpoint(e, Direction::Incoming).unwrap();
-            let target_port = circ.port_of_edge(target, e, Direction::Incoming).unwrap();
-            node_hashes.get(&target).expect("Edge target not found")[target_port].clone()
-            // TODO where output ports are equivalent, use same source_port
-        });
+        let out_edges = edge_hashes(circ, &node_hashes, n, Direction::Outgoing);
         if op == Op::Input {
             // we could just return here, but we'll continue as a sanity check
             assert!(input_hash.is_none());
-            input_hash = Some(edge_targets.collect());
+            input_hash = Some(out_edges);
         } else {
             // Also include fwd_hashes of any *incoming* edge
             let in_edges = circ.dag.node_edges(n, Direction::Incoming).flat_map(|e| {
@@ -174,7 +183,7 @@ pub fn invariant_hash_perm(circ: &Circuit) -> Vec<PermHash> {
                     v[circ.port_of_edge(src_node, e, Direction::Outgoing).unwrap()].clone()
                 })
             });
-            let node_hash = hash_node(&circ.dag, n, edge_targets.chain(in_edges));
+            let node_hash = hash_node(&circ.dag, n, out_edges.into_iter().chain(in_edges));
 
             node_hashes.insert(
                 n,
