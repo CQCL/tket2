@@ -1,5 +1,7 @@
+use crate::graph::ConnectError;
+
 use super::graph::{Direction, EdgeIndex, Graph, NodeIndex, DIRECTIONS};
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::{Debug, Display};
 use thiserror::Error;
 
@@ -79,7 +81,22 @@ impl<N, E> Rewrite<N, E> {
     }
 }
 
-impl<N: Default + Debug + Display, E: Debug + Display> Graph<N, E> {
+impl<N: Default + Debug + Display, E: Debug + Display + Clone> Graph<N, E> {
+    fn break_edge(&mut self, edge: EdgeIndex) -> Result<[EdgeIndex; 2], RewriteError> {
+        let wt = self
+            .edge_weight(edge)
+            .ok_or(RewriteError::EdgeMissing)?
+            .clone();
+        let newes = DIRECTIONS.map(|direction| {
+            let new_e = self.add_edge(wt.clone());
+            self.replace_connection(edge, new_e, direction)
+                .map_err(RewriteError::Connect)
+                .unwrap();
+            new_e
+        });
+        self.remove_edge(edge);
+        Ok(newes)
+    }
     /// Remove subgraph formed by subg and return weights of nodes inside subg
     fn remove_subgraph(&mut self, subgraph: &BoundedSubgraph) -> Vec<Option<N>> {
         let boundary_edges =
@@ -109,9 +126,9 @@ impl<N: Default + Debug + Display, E: Debug + Display> Graph<N, E> {
         subgraph: BoundedSubgraph,
         replacement: OpenGraph<N, E>,
     ) -> Result<Vec<Option<N>>, RewriteError> {
-        if subgraph.subgraph.nodes.is_empty() {
-            return Err(RewriteError::EmptySubgraph);
-        }
+        // if subgraph.subgraph.nodes.is_empty() {
+        //     return Err(RewriteError::EmptySubgraph);
+        // }
 
         // TODO type check.
         for direction in DIRECTIONS {
@@ -124,22 +141,38 @@ impl<N: Default + Debug + Display, E: Debug + Display> Graph<N, E> {
         }
 
         let removed = self.remove_subgraph(&subgraph);
-
         // insert new graph and update edge references accordingly
         let (_, mut edge_map) = self.insert_graph(replacement.graph);
+
+        // edges in the subgraph may be split in to two edges if they are remain
+        // connected at both ends
+        let mut updated_subg_edges: BTreeMap<EdgeIndex, [EdgeIndex; 2]> = BTreeMap::new();
 
         for direction in DIRECTIONS {
             let subg_edges = &subgraph.edges[direction.index()];
             let repl_edges = &replacement.dangling[direction.index()];
 
             for (sub_edge, repl_edge) in subg_edges.iter().zip(repl_edges) {
+                let sub_edge = updated_subg_edges
+                    .get(sub_edge)
+                    .unwrap_or(&[*sub_edge, *sub_edge])[direction.index()];
+                let from = edge_map[repl_edge];
                 // TODO: There should be a check to make sure this can not fail
                 // before we merge the first edge to avoid leaving the graph in an
                 // invalid state.
-                self.merge_edges(edge_map[repl_edge], *sub_edge).unwrap();
+                if self.merge_edges(from, sub_edge).is_err() {
+                    // if sub_edge is still connected at both ends, break in to two
+                    let mut newes = self.break_edge(sub_edge)?;
+                    // new edges need to be reversed to align with subgraph.edges
+                    newes.reverse();
+                    updated_subg_edges.insert(sub_edge, newes);
+                    // assumes the other edge in newes will be fully connected
+                    // later - graph could be left in invalid state if not
+                    self.merge_edges(from, newes[direction.index()]).unwrap();
+                }
                 // Update edge_map to point to new merged edge
                 if let Some(e) = edge_map.get_mut(repl_edge) {
-                    *e = *sub_edge;
+                    *e = sub_edge;
                 }
             }
         }
@@ -155,10 +188,12 @@ impl<N: Default + Debug + Display, E: Debug + Display> Graph<N, E> {
 
 #[derive(Debug, Error)]
 pub enum RewriteError {
-    #[error("cannot replace empty subgraph")]
-    EmptySubgraph,
     #[error("boundary size mismatch")]
     BoundarySize,
+    #[error("Edge missing")]
+    EdgeMissing,
+    #[error("Connect Error")]
+    Connect(ConnectError),
 }
 
 #[cfg(test)]
