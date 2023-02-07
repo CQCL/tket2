@@ -49,13 +49,6 @@ pub struct PermHash {
     output_order: Vec<usize>,
 }
 
-fn combine_non_assoc(ph: &PermHash, portnum: usize) -> PermHash {
-    PermHash {
-        hash_val: ph.hash_val.wrapping_mul(portnum.wrapping_add(1)),
-        output_order: ph.output_order.clone(),
-    }
-}
-
 fn hash_node(dag: &Dag, n: NodeIndex, edge_hashes: impl IntoIterator<Item = PermHash>) -> PermHash {
     let op_hash = invariant_op_hash(&dag.node_weight(n).expect("No weight for node").op);
 
@@ -77,7 +70,10 @@ fn hash_node(dag: &Dag, n: NodeIndex, edge_hashes: impl IntoIterator<Item = Perm
 // TODO take an iterator of edge classes rather than just a number
 fn hash_ports(node_hash: PermHash, edges: usize) -> Vec<PermHash> {
     (0..edges)
-        .map(|i| combine_non_assoc(&node_hash, i))
+        .map(|i| PermHash {
+            hash_val: node_hash.hash_val.wrapping_mul(i.wrapping_add(1)),
+            output_order: node_hash.output_order.clone(),
+        })
         .collect()
 }
 
