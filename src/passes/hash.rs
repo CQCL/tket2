@@ -51,7 +51,7 @@ pub struct PermHash {
 
 fn combine_non_assoc(ph: &PermHash, portnum: usize) -> PermHash {
     PermHash {
-        hash_val: ph.hash_val * (portnum + 1),
+        hash_val: ph.hash_val.wrapping_mul(portnum.wrapping_add(1)),
         output_order: ph.output_order.clone(),
     }
 }
@@ -69,7 +69,9 @@ fn hash_node(dag: &Dag, n: NodeIndex, edge_hashes: impl IntoIterator<Item = Perm
         hash_val: edge_hashes
             .iter()
             // Edge combining function here. Of course the arithmetic gets chained, so for three edges we'll have 3(3a + 5b) + 5c == 9a + 15b + 5c
-            .fold(op_hash, |nh, eh| (3 * nh) + (5 * eh)),
+            .fold(op_hash, |nh, eh| {
+                nh.wrapping_mul(3).wrapping_add(eh.wrapping_mul(5))
+            }),
         output_order: edge_outords.into_iter().flatten().collect(),
     }
 }
