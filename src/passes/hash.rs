@@ -61,8 +61,6 @@ fn hash_node(dag: &Dag, n: NodeIndex, edge_hashes: impl IntoIterator<Item = Perm
 
     let (edge_hashes, edge_outords): (Vec<usize>, Vec<Vec<usize>>) = edge_hashes
         .into_iter()
-        .enumerate()
-        .map(|(near_portnum, far_end_hash)| combine_non_assoc(&far_end_hash, near_portnum))
         .map(|ph| (ph.hash_val, ph.output_order))
         .unzip();
     PermHash {
