@@ -1,5 +1,6 @@
 pub mod classical;
 // pub mod redundancy;
+pub mod mcts;
 pub mod pattern;
 pub mod squash;
 pub mod taso;
