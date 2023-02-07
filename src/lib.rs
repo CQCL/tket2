@@ -2,6 +2,7 @@ pub mod circuit;
 
 pub mod json;
 pub mod passes;
+mod utils;
 pub mod validate;
 
 #[cfg(test)]

@@ -387,9 +387,12 @@ fn circuit_hash(circ: &Circuit) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use crate::circuit::{
-        circuit::UnitID,
-        operation::{ConstValue, WireType},
+    use crate::{
+        circuit::{
+            circuit::UnitID,
+            operation::{ConstValue, WireType},
+        },
+        utils::n_qbs,
     };
 
     use super::*;
@@ -514,15 +517,6 @@ mod tests {
             },
         ];
         repsets
-    }
-
-    fn n_qbs(n: u32) -> Vec<UnitID> {
-        (0..n)
-            .map(|i| UnitID::Qubit {
-                reg_name: "q".into(),
-                index: vec![i],
-            })
-            .collect()
     }
 
     fn sample_circ() -> Circuit {
