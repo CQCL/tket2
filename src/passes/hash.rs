@@ -6,15 +6,14 @@ use portgraph::{
 };
 use std::collections::{HashMap, VecDeque};
 
-fn op_hash(op: &Op) -> Option<usize> {
-    Some(match op {
+fn op_hash(op: &Op) -> usize {
+    match op {
         Op::H => 1,
         Op::CX => 2,
         Op::ZZMax => 3,
         Op::Reset => 4,
-        // These shouldn't happen in the normal course of hashing
-        // Op::Input => 5,
-        // Op::Output => 6,
+        Op::Input => 5,
+        Op::Output => 6,
         Op::Noop(_) => 7,
         Op::Measure => 8,
         Op::Barrier => 9,
@@ -31,8 +30,17 @@ fn op_hash(op: &Op) -> Option<usize> {
         // should Const of different values be hash different?
         Op::Const(_) => 19,
         // Op::Custom(_) => todo!(),
-        _ => return None,
-    })
+        _ => panic!("Unhashable op {:?}", op),
+    }
+}
+
+fn invariant_op_hash(op: &Op) -> usize {
+    match op {
+        // These shouldn't happen in the normal course of hashing
+        Op::Input => panic!("SHouldn't hash input"),
+        Op::Output => panic!("Shouldn't hash output"),
+        _ => op_hash(op),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -49,8 +57,7 @@ fn combine_non_assoc(ph: &PermHash, portnum: usize) -> PermHash {
 }
 
 fn hash_node(dag: &Dag, n: NodeIndex, edge_hashes: impl IntoIterator<Item = PermHash>) -> PermHash {
-    let op_hash =
-        op_hash(&dag.node_weight(n).expect("No weight for node").op).expect("Unhashable op");
+    let op_hash = invariant_op_hash(&dag.node_weight(n).expect("No weight for node").op);
 
     let (edge_hashes, edge_outords): (Vec<usize>, Vec<Vec<usize>>) = edge_hashes
         .into_iter()
@@ -74,7 +81,9 @@ fn hash_ports(node_hash: PermHash, edges: usize) -> Vec<PermHash> {
         .collect()
 }
 
-pub fn invariant_hash(circ: &Circuit) -> Vec<PermHash> {
+// Hash, returning the hash of each input and enough information
+// to reconstruct the circuit from another with the same invariant_hash
+pub fn invariant_hash_perm(circ: &Circuit) -> Vec<PermHash> {
     // Firstly compute "forwards" (depending on inputs) hashes of parts
     // of the graph that do not depend upon the graph input.
     let mut fwd_hashes: HashMap<NodeIndex, Vec<PermHash>> = HashMap::new();
@@ -131,7 +140,7 @@ pub fn invariant_hash(circ: &Circuit) -> Vec<PermHash> {
             .node_edges(output_nodes[0], Direction::Incoming)
             .enumerate()
             .map(|(i, _)| PermHash {
-                hash_val: 6,
+                hash_val: op_hash(&Op::Output),
                 output_order: [i].to_vec(),
             })
             .collect(),
@@ -142,13 +151,18 @@ pub fn invariant_hash(circ: &Circuit) -> Vec<PermHash> {
         if fwd_hashes.contains_key(&n) {
             continue;
         }
+        let op = circ.dag.node_weight(n).unwrap().op.clone();
+        if node_hashes.contains_key(&n) {
+            assert!(op == Op::Output);
+            continue;
+        }
         let edge_targets = circ.dag.node_edges(n, Direction::Outgoing).map(|e| {
             let target = circ.dag.edge_endpoint(e, Direction::Incoming).unwrap();
             let target_port = circ.port_of_edge(target, e, Direction::Incoming).unwrap();
             node_hashes.get(&target).expect("Edge target not found")[target_port].clone()
             // TODO where output ports are equivalent, use same source_port
         });
-        if circ.dag.node_weight(n).unwrap().op == Op::Input {
+        if op == Op::Input {
             // we could just return here, but we'll continue as a sanity check
             assert!(input_hash.is_none());
             input_hash = Some(edge_targets.collect());
@@ -174,13 +188,20 @@ pub fn invariant_hash(circ: &Circuit) -> Vec<PermHash> {
     input_hash.unwrap()
 }
 
+pub fn invariant_hash(circ: &Circuit) -> usize {
+    // Combine associatively and ignore output ordering
+    invariant_hash_perm(circ)
+        .into_iter()
+        .fold(0, |u, ph| u ^ ph.hash_val)
+}
+
 pub fn circuit_hash(circ: &Circuit) -> usize {
     let mut total: usize = 0;
 
     let mut hash_vals: HashMap<NodeIndex, usize> = HashMap::new();
     let [i, _] = circ.boundary();
 
-    let _ophash = |o| 17 * 13 + op_hash(o).expect("unhashable op");
+    let _ophash = |o| 17 * 13 + op_hash(o);
     hash_vals.insert(i, _ophash(&Op::Input));
 
     let initial_nodes = circ
@@ -224,14 +245,11 @@ pub fn circuit_hash(circ: &Circuit) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use crate::circuit::{
-        circuit::UnitID,
-        operation::{ConstValue, WireType},
-    };
+    use crate::circuit::operation::{ConstValue, WireType};
 
     use super::*;
-    #[test]
-    fn test_simple_hash() {
+
+    fn hash_tests(hash_fn: impl Fn(&Circuit) -> usize) {
         let mut circ1 = Circuit::new();
         let [input, output] = circ1.boundary();
 
@@ -260,7 +278,7 @@ mod tests {
         circ.add_insert_edge((point5, 0), (rx, 1), WireType::Angle)
             .unwrap();
 
-        assert_eq!(circuit_hash(&circ), circuit_hash(&circ1));
+        assert_eq!(hash_fn(&circ), hash_fn(&circ1));
 
         let mut circ = Circuit::new();
         let [input, output] = circ.boundary();
@@ -274,6 +292,16 @@ mod tests {
         circ.add_insert_edge((rx, 0), (output, 0), WireType::Qubit)
             .unwrap();
 
-        assert_ne!(circuit_hash(&circ), circuit_hash(&circ1));
+        assert_ne!(hash_fn(&circ), hash_fn(&circ1));
+    }
+
+    #[test]
+    fn simple_hash_test() {
+        hash_tests(circuit_hash);
+    }
+
+    #[test]
+    fn invariant_hash_test() {
+        hash_tests(invariant_hash);
     }
 }
