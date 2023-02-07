@@ -4,7 +4,7 @@ use portgraph::{
     graph::{Direction, NodeIndex},
     toposort::TopSortWalker,
 };
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 fn op_hash(op: &Op) -> usize {
     match op {
@@ -193,6 +193,124 @@ pub fn invariant_hash_perm(circ: &Circuit) -> Vec<PermHash> {
     input_hash.unwrap()
 }
 
+pub fn reinstate_permutation(
+    circ: &Circuit,
+    desired: &Vec<PermHash>,
+) -> Result<Circuit, &'static str> {
+    let current_h = invariant_hash_perm(circ);
+    if current_h.len() != desired.len() {
+        return Err("Wrong number of inputs");
+    }
+    let max_output = current_h
+        .iter()
+        .flat_map(|ph| ph.output_order.clone())
+        .max();
+    if max_output != desired.iter().flat_map(|ph| ph.output_order.clone()).max() {
+        return Err("Wrong number of outputs");
+    }
+    let max_output = max_output.expect("No outputs?!") + 1; //make exclusive
+    let current_hvl: Vec<_> = current_h
+        .iter()
+        .map(|ph| (ph.hash_val, ph.output_order.len()))
+        .collect();
+    let desired_hvl: Vec<(usize, usize)> = desired
+        .iter()
+        .map(|ph| (ph.hash_val, ph.output_order.len()))
+        .collect();
+    {
+        let mut ch = current_hvl.clone();
+        ch.sort();
+        let mut dh = desired_hvl.clone();
+        dh.sort();
+        if ch != dh {
+            return Err("Not a permutation");
+        }
+    }
+    if desired_hvl.iter().cloned().collect::<HashSet<_>>().len() != desired_hvl.len() {
+        // TODO of course a circuit might *want* to treat several inputs identically!
+        // And then there are hash collisions, from which it is now too late to recover.
+        // We could try every permutation of inputs (that satisfies equality of hash_val + #outputs)
+        // and take any that succeeds (some input permutations may fail to find a valid output permutation).
+        // If there is more than one, we should probably then check the circuits are actually identical
+        // (because they treated several inputs the same way) and fail if not (==> not enough info in the
+        // hash to distinguish between multiple permutations).
+        return Err("Ambiguous, several inputs have same hash");
+    }
+    let current_to_desired_input: Vec<usize> = {
+        let hvl_to_desired: HashMap<(usize, usize), usize> =
+            HashMap::from_iter(desired_hvl.into_iter().enumerate().map(|(i, hvl)| (hvl, i)));
+        current_hvl
+            .iter()
+            .map(|hvl| hvl_to_desired.get(hvl).unwrap())
+            .cloned()
+            .collect()
+    };
+    // Try to build output map (substitution).
+    // Fail if a current output has to be >1 different output in the desired circuit.
+    let mut current_to_desired_output: Vec<Option<usize>> = (0..max_output).map(|_| None).collect();
+    for (i, c_input) in current_h.iter().enumerate() {
+        let d_input = current_to_desired_input[i];
+        for (c_output, d_output) in c_input
+            .output_order
+            .iter()
+            .zip(desired[d_input].output_order.iter())
+        {
+            match current_to_desired_output[*c_output] {
+                None => current_to_desired_output[*c_output] = Some(*d_output),
+                Some(d) => {
+                    if d != *d_output {
+                        return Err("Conflicting outputs");
+                    }
+                }
+            };
+        }
+    }
+    let current_to_desired_output: Vec<usize> = current_to_desired_output
+        .into_iter()
+        .map(|o| o.unwrap())
+        .collect();
+    // Finally, copy the circuit and permute inputs+outputs
+    let mut res = circ.clone();
+    let [i, o] = res.boundary();
+    for e in res.node_edges(i, Direction::Outgoing) {
+        res.remove_edge(e).unwrap();
+    }
+    for e in res.node_edges(o, Direction::Incoming) {
+        res.remove_edge(e).unwrap();
+    }
+    // Node indices are the same in both circuits
+    for in_idx in 0..current_h.len() {
+        let e = circ.node_edges(i, Direction::Outgoing)[current_to_desired_input[in_idx]];
+        let (_, target) = circ.edge_endpoints(e).unwrap();
+        res.add_insert_edge(
+            (i, in_idx),
+            (
+                target,
+                circ.port_of_edge(target, e, Direction::Incoming).unwrap(),
+            ),
+            circ.edge_type(e).unwrap(),
+        )
+        .unwrap();
+    }
+    for out_idx in 0..max_output {
+        let e = circ.node_edges(o, Direction::Incoming)[current_to_desired_output[out_idx]];
+        let (source, _) = circ.edge_endpoints(e).unwrap();
+        if source == i {
+            continue;
+        }; // Will have been added by previous loop
+        res.add_insert_edge(
+            (
+                source,
+                circ.port_of_edge(source, e, Direction::Outgoing).unwrap(),
+            ),
+            (o, out_idx),
+            circ.edge_type(e).unwrap(),
+        )
+        .unwrap();
+    }
+    Ok(res)
+}
+
 pub fn invariant_hash(circ: &Circuit) -> usize {
     // Combine associatively and ignore output ordering
     invariant_hash_perm(circ)
@@ -344,5 +462,15 @@ mod tests {
         assert_eq!(circs.len(), 4);
         assert_eq!(count_distinct_hashes(&circs, circuit_hash), 4);
         assert_eq!(count_distinct_hashes(&circs, invariant_hash), 1);
+
+        for (_i, circ) in circs.iter().enumerate() {
+            let h = invariant_hash_perm(&circ);
+            for (_j, circ2) in circs.iter().enumerate() {
+                let reconstituted = reinstate_permutation(circ2, &h).unwrap();
+                // Circuit equality requires same ordering of edge(indices), etc. so we don't have that
+                // But, we know from above that the different circuits have different circuit_hash's, so:
+                assert_eq!(circuit_hash(circ), circuit_hash(&reconstituted));
+            }
+        }
     }
 }
