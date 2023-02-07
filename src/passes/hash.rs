@@ -239,7 +239,8 @@ pub fn circuit_hash(circ: &Circuit) -> usize {
                     .expect("edge not found."),
             );
 
-            myhash = myhash.wrapping_add(edgehash);
+            // ALAN multiply to distinguish different inputs (each multiplied by 3^^different n)
+            myhash = myhash.wrapping_mul(3).wrapping_add(edgehash);
         }
         hash_vals.insert(nid, myhash);
         total = total.wrapping_add(myhash);
@@ -250,9 +251,9 @@ pub fn circuit_hash(circ: &Circuit) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use crate::circuit::operation::{ConstValue, WireType};
-
     use super::*;
+    use crate::circuit::operation::{ConstValue, WireType};
+    use std::collections::HashSet;
 
     fn hash_tests(hash_fn: impl Fn(&Circuit) -> usize) {
         let mut circ1 = Circuit::new();
@@ -308,5 +309,40 @@ mod tests {
     #[test]
     fn invariant_hash_test() {
         hash_tests(invariant_hash);
+    }
+
+    fn count_distinct_hashes(circs: &Vec<Circuit>, hash_fn: impl Fn(&Circuit) -> usize) -> usize {
+        circs.iter().map(hash_fn).collect::<HashSet<_>>().len()
+    }
+
+    #[test]
+    fn test_perm_hash() {
+        let mut circs = Vec::new();
+        for rotate_input in [0, 1] {
+            for rotate_output in [0, 1] {
+                // rotate one input, propagate the other
+                let mut circ = Circuit::new();
+                let [input, output] = circ.boundary();
+
+                let point5 = circ.add_vertex(Op::Const(ConstValue::f64_angle(0.5)));
+                let rx = circ.add_vertex(Op::RzF64);
+                circ.add_insert_edge((input, rotate_input), (rx, 0), WireType::Qubit)
+                    .unwrap();
+                circ.add_insert_edge((point5, 0), (rx, 1), WireType::Angle)
+                    .unwrap();
+                circ.add_insert_edge((rx, 0), (output, rotate_output), WireType::Qubit)
+                    .unwrap();
+                circ.add_insert_edge(
+                    (input, 1 - rotate_input),
+                    (output, 1 - rotate_output),
+                    WireType::Qubit,
+                )
+                .unwrap();
+                circs.push(circ);
+            }
+        }
+        assert_eq!(circs.len(), 4);
+        assert_eq!(count_distinct_hashes(&circs, circuit_hash), 4);
+        assert_eq!(count_distinct_hashes(&circs, invariant_hash), 1);
     }
 }
