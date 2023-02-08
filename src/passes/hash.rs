@@ -297,16 +297,10 @@ pub fn reinstate_permutation(
         let (source, _) = circ.edge_endpoints(e).unwrap();
         if source == i {
             continue;
-        }; // Will have been added by previous loop
-        res.add_insert_edge(
-            (
-                source,
-                circ.port_of_edge(source, e, Direction::Outgoing).unwrap(),
-            ),
-            (o, out_idx),
-            circ.edge_type(e).unwrap(),
-        )
-        .unwrap();
+        }; // Edges from input added by previous loop
+        let src_idx = circ.port_of_edge(source, e, Direction::Outgoing).unwrap();
+        res.add_insert_edge((source, src_idx), (o, out_idx), circ.edge_type(e).unwrap())
+            .unwrap();
     }
     Ok(res)
 }
