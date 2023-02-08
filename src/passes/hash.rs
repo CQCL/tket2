@@ -245,28 +245,27 @@ pub fn reinstate_permutation(
     };
     // Try to build output map (substitution).
     // Fail if a current output has to be >1 different output in the desired circuit.
-    let mut current_to_desired_output: Vec<Option<usize>> = (0..max_output).map(|_| None).collect();
-    for (i, c_input) in current_h.iter().enumerate() {
-        let d_input = current_to_desired_input[i];
-        for (c_output, d_output) in c_input
-            .output_order
-            .iter()
-            .zip(desired[d_input].output_order.iter())
-        {
-            match current_to_desired_output[*c_output] {
-                None => current_to_desired_output[*c_output] = Some(*d_output),
-                Some(d) => {
-                    if d != *d_output {
-                        return Err("Conflicting outputs");
+    let current_to_desired_output: Vec<usize> = {
+        let mut builder: Vec<Option<usize>> = (0..max_output).map(|_| None).collect();
+        for (i, c_input) in current_h.iter().enumerate() {
+            let d_input = current_to_desired_input[i];
+            for (c_output, d_output) in c_input
+                .output_order
+                .iter()
+                .zip(desired[d_input].output_order.iter())
+            {
+                match builder[*c_output] {
+                    None => builder[*c_output] = Some(*d_output),
+                    Some(d) => {
+                        if d != *d_output {
+                            return Err("Conflicting outputs");
+                        }
                     }
-                }
-            };
+                };
+            }
         }
-    }
-    let current_to_desired_output: Vec<usize> = current_to_desired_output
-        .into_iter()
-        .map(|o| o.unwrap())
-        .collect();
+        builder.into_iter().map(|o| o.unwrap()).collect()
+    };
     // Finally, copy the circuit and permute inputs+outputs
     let mut res = circ.clone();
     let [i, o] = res.boundary();
