@@ -6,6 +6,8 @@ use portgraph::{
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 
+use super::outputs_table::{OutputsId, OutputsTable};
+
 fn op_hash(op: &Op) -> usize {
     match op {
         Op::H => 1,
@@ -46,43 +48,78 @@ fn invariant_op_hash(op: &Op) -> usize {
 #[derive(Debug, Clone)]
 pub struct PermHash {
     hash_val: usize,
-    output_order: Vec<usize>,
+    outputs_reached: Vec<usize>, // Excluding previously-seen outputs for this input or preceding inputs
 }
 
-fn hash_node(dag: &Dag, n: NodeIndex, edge_hashes: impl IntoIterator<Item = PermHash>) -> PermHash {
+// Hash, returning the hash of each input and enough information
+// to reconstruct the circuit from another with the same invariant_hash
+pub fn invariant_hash_perm(circ: &Circuit) -> Vec<PermHash> {
+    let [_, o] = circ.boundary();
+    let num_outputs = circ.node_edges(o, Direction::Incoming).len();
+    let mut ot = OutputsTable::new(num_outputs);
+    let with_dup_outputs = invariant_hash_perm2(&mut ot, circ);
+    let mut seen_outputs = HashSet::new();
+    with_dup_outputs
+        .iter()
+        .map(|(hash_val, oid)| {
+            let mut outputs_reached = Vec::new();
+            if let Some(oid) = oid {
+                ot.onto_seq_deduped(*oid, &mut seen_outputs, &mut outputs_reached);
+            }
+            PermHash {
+                hash_val: *hash_val,
+                outputs_reached,
+            }
+        })
+        .collect()
+}
+
+pub fn invariant_hash(circ: &Circuit) -> usize {
+    // Combine associatively and ignore output ordering
+    invariant_hash_perm(circ)
+        .into_iter()
+        .fold(0, |u, ph| u ^ ph.hash_val)
+}
+
+type HashWDupOutputs = (usize, Option<OutputsId>);
+
+fn hash_node(
+    dag: &Dag,
+    ot: &mut OutputsTable,
+    n: NodeIndex,
+    edge_hashes: impl IntoIterator<Item = HashWDupOutputs>,
+) -> HashWDupOutputs {
     let op_hash = invariant_op_hash(&dag.node_weight(n).expect("No weight for node").op);
 
-    let (edge_hashes, edge_outords): (Vec<usize>, Vec<Vec<usize>>) = edge_hashes
-        .into_iter()
-        .map(|ph| (ph.hash_val, ph.output_order))
-        .unzip();
-    PermHash {
-        hash_val: edge_hashes
+    let (edge_hashes, edge_outps): (Vec<usize>, Vec<Option<OutputsId>>) =
+        edge_hashes.into_iter().unzip();
+    (
+        edge_hashes
             .iter()
             // Edge combining function here. Of course the arithmetic gets chained, so for three edges we'll have 3(3a + 5b) + 5c == 9a + 15b + 5c
             .fold(op_hash, |nh, eh| {
                 nh.wrapping_mul(3).wrapping_add(eh.wrapping_mul(5))
             }),
-        output_order: edge_outords.into_iter().flatten().collect(),
-    }
+        edge_outps
+            .into_iter()
+            .fold(None, |a, b| ot.opt_sequence(a, b)),
+    )
 }
 
 // TODO take an iterator of edge classes rather than just a number
-fn hash_ports(node_hash: PermHash, edges: usize) -> Vec<PermHash> {
+fn hash_ports(node_hash: HashWDupOutputs, edges: usize) -> Vec<HashWDupOutputs> {
+    let (hv, outs) = node_hash;
     (0..edges)
-        .map(|i| PermHash {
-            hash_val: node_hash.hash_val.wrapping_mul(i.wrapping_add(1)),
-            output_order: node_hash.output_order.clone(),
-        })
+        .map(|i| (hv.wrapping_mul(i.wrapping_add(1)), outs))
         .collect()
 }
 
 fn edge_hashes(
     circ: &Circuit,
-    node_hashes: &HashMap<NodeIndex, Vec<PermHash>>,
+    node_hashes: &HashMap<NodeIndex, Vec<HashWDupOutputs>>,
     n: NodeIndex,
     d: Direction,
-) -> Vec<PermHash> {
+) -> Vec<HashWDupOutputs> {
     circ.dag
         .node_edges(n, d)
         .map(|e| {
@@ -96,12 +133,10 @@ fn edge_hashes(
         .collect()
 }
 
-// Hash, returning the hash of each input and enough information
-// to reconstruct the circuit from another with the same invariant_hash
-pub fn invariant_hash_perm(circ: &Circuit) -> Vec<PermHash> {
+fn invariant_hash_perm2(ot: &mut OutputsTable, circ: &Circuit) -> Vec<HashWDupOutputs> {
     // Firstly compute "forwards" (depending on inputs) hashes of parts
     // of the graph that do not depend upon the graph input.
-    let mut fwd_hashes: HashMap<NodeIndex, Vec<PermHash>> = HashMap::new();
+    let mut fwd_hashes: HashMap<NodeIndex, Vec<HashWDupOutputs>> = HashMap::new();
     let source_nodes = circ
         .dag
         .node_indices()
@@ -113,13 +148,16 @@ pub fn invariant_hash_perm(circ: &Circuit) -> Vec<PermHash> {
         if circ.dag.node_weight(n).unwrap().op == Op::Input {
             continue;
         }
+
         if !circ.dag.node_edges(n, Direction::Incoming).all(|e| {
             fwd_hashes.contains_key(&circ.dag.edge_endpoint(e, Direction::Incoming).unwrap())
         }) {
             continue;
         }
+        assert_ne!(circ.dag.node_weight(n).unwrap().op, Op::Output);
         let node_hash = hash_node(
             &circ.dag,
+            ot,
             n,
             edge_hashes(&circ, &fwd_hashes, n, Direction::Incoming),
         );
@@ -142,17 +180,15 @@ pub fn invariant_hash_perm(circ: &Circuit) -> Vec<PermHash> {
             && circ.dag.node_weight(output_nodes[0]).map(|v| v.op.clone()) == Some(Op::Output)
     );
     // hash per input for nodes with inputs
-    let mut node_hashes: HashMap<NodeIndex, Vec<PermHash>> = HashMap::new();
+    // ALAN can this be Vec<(usize, OutputsId)> ? It's only for things that reach outputs?
+    let mut node_hashes: HashMap<NodeIndex, Vec<HashWDupOutputs>> = HashMap::new();
     let mut input_hash = None;
     node_hashes.insert(
         output_nodes[0],
         circ.dag
             .node_edges(output_nodes[0], Direction::Incoming)
             .enumerate()
-            .map(|(i, _)| PermHash {
-                hash_val: op_hash(&Op::Output),
-                output_order: [i].to_vec(),
-            })
+            .map(|(i, _)| (op_hash(&Op::Output), Some(ot.for_graph_output(i))))
             .collect(),
     );
     for n in TopSortWalker::new(&circ.dag, output_nodes).reversed() {
@@ -175,11 +211,17 @@ pub fn invariant_hash_perm(circ: &Circuit) -> Vec<PermHash> {
             // Also include fwd_hashes of any *incoming* edge
             let in_edges = circ.dag.node_edges(n, Direction::Incoming).flat_map(|e| {
                 let src_node = circ.dag.edge_endpoint(e, Direction::Outgoing).unwrap();
-                fwd_hashes.get(&src_node).map(|v| {
+                let r = fwd_hashes.get(&src_node).map(|v| {
                     v[circ.port_of_edge(src_node, e, Direction::Outgoing).unwrap()].clone()
-                })
+                });
+                if let Some((_, Some(_))) = r {
+                    // This should never happen, because we didn't take account of such edges
+                    // when building fwd_hashes :-( - that's a TODO.
+                    panic!("Edge not dependent on inputs reaches output");
+                }
+                r
             });
-            let node_hash = hash_node(&circ.dag, n, out_edges.into_iter().chain(in_edges));
+            let node_hash = hash_node(&circ.dag, ot, n, out_edges.into_iter().chain(in_edges));
 
             node_hashes.insert(
                 n,
@@ -197,35 +239,39 @@ pub fn reinstate_permutation(
     circ: &Circuit,
     desired: &Vec<PermHash>,
 ) -> Result<Circuit, &'static str> {
-    let current_h = invariant_hash_perm(circ);
+    let num_outputs = desired
+        .iter()
+        .flat_map(|ph| ph.outputs_reached.clone())
+        .max()
+        .unwrap()
+        + 1; // make exclusive
+    let mut outputs_table = OutputsTable::new(num_outputs);
+    let current_h = invariant_hash_perm2(&mut outputs_table, circ);
     if current_h.len() != desired.len() {
         return Err("Wrong number of inputs");
     }
-    let max_output = current_h
-        .iter()
-        .flat_map(|ph| ph.output_order.clone())
-        .max();
-    if max_output != desired.iter().flat_map(|ph| ph.output_order.clone()).max() {
+    if num_outputs
+        != current_h
+            .iter()
+            .flat_map(|(_, oid)| *oid)
+            .flat_map(|id| outputs_table.to_seq_deduped(id))
+            .max()
+            .unwrap()
+            + 1
+    {
         return Err("Wrong number of outputs");
     }
-    let max_output = max_output.expect("No outputs?!") + 1; //make exclusive
     let current_to_desired_input: Vec<usize> = {
         // Distinguish inputs by hash-val of each input and also the number of paths to the output
-        let current_hvl: Vec<_> = current_h
-            .iter()
-            .map(|ph| (ph.hash_val, ph.output_order.len()))
-            .collect();
-        let desired_hvl: Vec<(usize, usize)> = desired
-            .iter()
-            .map(|ph| (ph.hash_val, ph.output_order.len()))
-            .collect();
+        let current_hvs: Vec<usize> = current_h.iter().map(|(hv, _)| *hv).collect();
+        let desired_hvs: Vec<usize> = desired.iter().map(|ph| ph.hash_val).collect();
         // Sanity checks
-        let dh_s = desired_hvl.iter().cloned().collect::<HashSet<_>>();
-        let ch_s = current_hvl.iter().cloned().collect::<HashSet<_>>();
+        let dh_s = desired_hvs.iter().cloned().collect::<HashSet<_>>();
+        let ch_s = current_hvs.iter().cloned().collect::<HashSet<_>>();
         if dh_s != ch_s {
             return Err("Not a permutation");
         }
-        if dh_s.len() != desired_hvl.len() {
+        if dh_s.len() != desired_hvs.len() {
             // TODO of course a circuit might *want* to treat several inputs identically!
             // And then there are hash collisions, from which it is now too late to recover.
             // We could try every permutation of inputs (that satisfies equality of hash_val + #outputs)
@@ -235,27 +281,28 @@ pub fn reinstate_permutation(
             // hash to distinguish between multiple permutations).
             return Err("Ambiguous, several inputs have same hash");
         }
-        let hvl_to_desired: HashMap<(usize, usize), usize> =
-            HashMap::from_iter(desired_hvl.into_iter().enumerate().map(|(i, hvl)| (hvl, i)));
-        current_hvl
+        let hv_to_desired: HashMap<usize, usize> =
+            HashMap::from_iter(desired_hvs.into_iter().enumerate().map(|(i, hv)| (hv, i)));
+        current_hvs
             .iter()
-            .map(|hvl| hvl_to_desired.get(hvl).unwrap())
-            .cloned()
+            .map(|hv| *hv_to_desired.get(hv).unwrap())
             .collect()
     };
     // Try to build output map (substitution).
     // Fail if a current output has to be >1 different output in the desired circuit.
     let current_to_desired_output: Vec<usize> = {
-        let mut builder: Vec<Option<usize>> = (0..max_output).map(|_| None).collect();
-        for (i, c_input) in current_h.iter().enumerate() {
-            let d_input = current_to_desired_input[i];
-            for (c_output, d_output) in c_input
-                .output_order
-                .iter()
-                .zip(desired[d_input].output_order.iter())
-            {
-                match builder[*c_output] {
-                    None => builder[*c_output] = Some(*d_output),
+        let mut mapping: Vec<Option<usize>> = (0..num_outputs).map(|_| None).collect();
+        let mut c_outs_seen = HashSet::new();
+        for (i, (_, c_out_id)) in current_h.iter().enumerate() {
+            let d_outs = &desired[current_to_desired_input[i]].outputs_reached;
+            let mut c_outs = Vec::new();
+            if let Some(id) = c_out_id {
+                outputs_table.onto_seq_deduped(*id, &mut c_outs_seen, &mut c_outs);
+            }
+            assert_eq!(c_outs.len(), d_outs.len());
+            for (c_output, d_output) in c_outs.iter().zip(d_outs.iter()) {
+                match mapping[*c_output] {
+                    None => mapping[*c_output] = Some(*d_output),
                     Some(d) => {
                         if d != *d_output {
                             return Err("Conflicting outputs");
@@ -264,7 +311,7 @@ pub fn reinstate_permutation(
                 };
             }
         }
-        builder.into_iter().map(|o| o.unwrap()).collect()
+        mapping.into_iter().map(|o| o.unwrap()).collect()
     };
     // Finally, copy the circuit and permute inputs+outputs
     let mut res = circ.clone();
@@ -289,7 +336,7 @@ pub fn reinstate_permutation(
         )
         .unwrap();
     }
-    for out_idx in 0..max_output {
+    for out_idx in 0..num_outputs {
         let e = circ.node_edges(o, Direction::Incoming)[current_to_desired_output[out_idx]];
         let (source, _) = circ.edge_endpoints(e).unwrap();
         if source == i {
@@ -300,13 +347,6 @@ pub fn reinstate_permutation(
             .unwrap();
     }
     Ok(res)
-}
-
-pub fn invariant_hash(circ: &Circuit) -> usize {
-    // Combine associatively and ignore output ordering
-    invariant_hash_perm(circ)
-        .into_iter()
-        .fold(0, |u, ph| u ^ ph.hash_val)
 }
 
 pub fn circuit_hash(circ: &Circuit) -> usize {
