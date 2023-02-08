@@ -76,82 +76,66 @@ impl NodeState {
     }
 }
 
-trait Children {
-    fn children(&self) -> &Vec<MCTree>;
-}
-
 enum NodeStateEnum {
     Root(Box<NodeState>),
     Child(Box<(CircuitRewrite, Option<NodeState>)>),
 }
 
-struct MCTree {
+struct MCTNode {
     state: NodeStateEnum,
-    children: Vec<MCTree>,
     visits: u64,
     reward: f64,
     val: f64,
 }
 
-struct TreeWalker<'n>(Vec<&'n MCTree>);
-
-impl<'n> Iterator for TreeWalker<'n> {
-    type Item = &'n MCTree;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(n) = self.0.pop() {
-            self.0.extend(&n.children);
-            Some(n)
-        } else {
-            None
-        }
-    }
-}
-
-impl<'n> TreeWalker<'n> {
-    fn new(tree: &'n MCTree) -> Self {
-        Self(tree.children.iter().collect())
-    }
-}
-
-impl MCTree {
-    fn is_leaf(&self) -> bool {
-        self.children.is_empty()
-    }
-}
+type MCTree = petgraph::graph::DiGraph<MCTNode, ()>;
 
 struct Mcts {
-    root: MCTree,
+    graph: MCTree,
+    root: NodeIndex,
     arc: Architecture,
     distances: Distances,
     visit_weight: f64,
 }
 
-fn select_criteria(b: &MCTree, parent_visits: u64, visit_weight: f64) -> f64 {
+fn select_criteria(b: &MCTNode, parent_visits: u64, visit_weight: f64) -> f64 {
     b.reward + b.val + visit_weight * ((parent_visits as f64).ln() / (b.visits as f64)).sqrt()
 }
 impl Mcts {
-    fn select(&mut self) {
-        self.root.visits += 1;
-        let mut path = vec![];
-        let mut s = &mut self.root;
+    fn node(&self, n: NodeIndex) -> &MCTNode {
+        self.graph.node_weight(n).expect("Node not found")
+    }
+    fn node_mut(&mut self, n: NodeIndex) -> &mut MCTNode {
+        self.graph.node_weight_mut(n).expect("Node not found")
+    }
 
-        while !s.is_leaf() {
-            let visits = s.visits;
+    fn is_leaf(&self, n: NodeIndex) -> bool {
+        self.graph.edges(n).next().is_none()
+    }
+    fn select(&mut self) -> NodeIndex {
+        // let mut path = vec![];
+        let mut s = self.root;
+
+        self.node_mut(s).visits += 1;
+        while self.is_leaf(s) {
+            let visits = self.node(s).visits;
             let weight = self.visit_weight;
-            let best_child_index = (0..s.children.len())
+            let best_child_index = self
+                .graph
+                .neighbors(s)
                 .max_by(|a, b| {
-                    let a = &s.children[*a];
-                    let b = &s.children[*b];
+                    let a = self.node(*a);
+                    let b = self.node(*b);
                     select_criteria(a, visits, weight)
                         .partial_cmp(&select_criteria(b, visits, weight))
                         .unwrap()
                 })
                 .unwrap();
-            s = s.children.get_mut(best_child_index).unwrap();
-            s.visits += 1;
-            path.push(best_child_index);
+
+            self.node_mut(best_child_index).visits += 1;
+            s = best_child_index;
         }
+        s
     }
 }
 #[cfg(test)]
