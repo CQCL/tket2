@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::circuit::circuit::UnitID;
 
 pub(crate) fn n_qbs(n: u32) -> Vec<UnitID> {
@@ -9,7 +11,6 @@ pub(crate) fn n_qbs(n: u32) -> Vec<UnitID> {
         .collect()
 }
 
-#[allow(dead_code)]
 pub(crate) fn print_circ(c: &crate::circuit::circuit::Circuit) {
     println!("{}", c.dot_string());
 }
