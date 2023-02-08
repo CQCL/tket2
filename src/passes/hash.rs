@@ -40,7 +40,7 @@ fn invariant_op_hash(op: &Op) -> usize {
     match op {
         // These shouldn't happen in the normal course of hashing
         Op::Input => panic!("SHouldn't hash input"),
-        Op::Output => panic!("Shouldn't hash output"),
+        //Op::Output => panic!("Shouldn't hash output"), // could in theory happen during forward pass
         _ => op_hash(op),
     }
 }
@@ -144,7 +144,6 @@ fn invariant_hash_perm2(ot: &mut OutputsTable, circ: &Circuit) -> Vec<HashWDupOu
         }) {
             continue;
         }
-        assert_ne!(circ.dag.node_weight(n).unwrap().op, Op::Output);
         let node_hash = hash_node(
             &circ.dag,
             n,
@@ -171,6 +170,14 @@ fn invariant_hash_perm2(ot: &mut OutputsTable, circ: &Circuit) -> Vec<HashWDupOu
     // hash per input for nodes with inputs
     let mut node_hashes: HashMap<NodeIndex, Vec<HashWDupOutputs>> = HashMap::new();
     let mut input_hash = None;
+
+    // If no output depends on any input, then our hash value - "what happens to the inputs" -
+    // should presumably be, "all the inputs get discarded".
+    // But (for now) we ignore constant outputs, so fail if there's nothing else to hash.
+    assert!(!fwd_hashes.contains_key(&output_nodes[0]));
+    // TODO We should inspect the edges incoming to the output node, and if any of those edges
+    // are from nodes in fwd_hashes (== constant parts of the output), we should include those
+    // in the hash value - i.e. return a Vec<usize> alongside the Vec<PermHash>.
     node_hashes.insert(
         output_nodes[0],
         circ.dag
