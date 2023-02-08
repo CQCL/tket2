@@ -1,6 +1,7 @@
 pub mod classical;
 // pub mod redundancy;
 pub mod hash;
+mod outputs_table;
 pub mod pattern;
 pub mod squash;
 
