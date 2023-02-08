@@ -209,34 +209,32 @@ pub fn reinstate_permutation(
         return Err("Wrong number of outputs");
     }
     let max_output = max_output.expect("No outputs?!") + 1; //make exclusive
-    let current_hvl: Vec<_> = current_h
-        .iter()
-        .map(|ph| (ph.hash_val, ph.output_order.len()))
-        .collect();
-    let desired_hvl: Vec<(usize, usize)> = desired
-        .iter()
-        .map(|ph| (ph.hash_val, ph.output_order.len()))
-        .collect();
-    {
-        let mut ch = current_hvl.clone();
-        ch.sort();
-        let mut dh = desired_hvl.clone();
-        dh.sort();
-        if ch != dh {
+    let current_to_desired_input: Vec<usize> = {
+        // Distinguish inputs by hash-val of each input and also the number of paths to the output
+        let current_hvl: Vec<_> = current_h
+            .iter()
+            .map(|ph| (ph.hash_val, ph.output_order.len()))
+            .collect();
+        let desired_hvl: Vec<(usize, usize)> = desired
+            .iter()
+            .map(|ph| (ph.hash_val, ph.output_order.len()))
+            .collect();
+        // Sanity checks
+        let dh_s = desired_hvl.iter().cloned().collect::<HashSet<_>>();
+        let ch_s = current_hvl.iter().cloned().collect::<HashSet<_>>();
+        if dh_s != ch_s {
             return Err("Not a permutation");
         }
-    }
-    if desired_hvl.iter().cloned().collect::<HashSet<_>>().len() != desired_hvl.len() {
-        // TODO of course a circuit might *want* to treat several inputs identically!
-        // And then there are hash collisions, from which it is now too late to recover.
-        // We could try every permutation of inputs (that satisfies equality of hash_val + #outputs)
-        // and take any that succeeds (some input permutations may fail to find a valid output permutation).
-        // If there is more than one, we should probably then check the circuits are actually identical
-        // (because they treated several inputs the same way) and fail if not (==> not enough info in the
-        // hash to distinguish between multiple permutations).
-        return Err("Ambiguous, several inputs have same hash");
-    }
-    let current_to_desired_input: Vec<usize> = {
+        if dh_s.len() != desired_hvl.len() {
+            // TODO of course a circuit might *want* to treat several inputs identically!
+            // And then there are hash collisions, from which it is now too late to recover.
+            // We could try every permutation of inputs (that satisfies equality of hash_val + #outputs)
+            // and take any that succeeds (some input permutations may fail to find a valid output permutation).
+            // If there is more than one, we should probably then check the circuits are actually identical
+            // (because they treated several inputs the same way) and fail if not (==> not enough info in the
+            // hash to distinguish between multiple permutations).
+            return Err("Ambiguous, several inputs have same hash");
+        }
         let hvl_to_desired: HashMap<(usize, usize), usize> =
             HashMap::from_iter(desired_hvl.into_iter().enumerate().map(|(i, hvl)| (hvl, i)));
         current_hvl
