@@ -63,9 +63,9 @@ pub fn invariant_hash_perm(circ: &Circuit) -> Vec<PermHash> {
         .iter()
         .map(|(hash_val, oid)| {
             let mut outputs_reached = Vec::new();
-            if let Some(oid) = oid {
-                ot.onto_seq_deduped(*oid, &mut seen_outputs, &mut outputs_reached);
-            }
+            //if let Some(oid) = oid {
+            ot.onto_seq_deduped(*oid, &mut seen_outputs, &mut outputs_reached);
+            //}
             PermHash {
                 hash_val: *hash_val,
                 outputs_reached,
@@ -81,45 +81,35 @@ pub fn invariant_hash(circ: &Circuit) -> usize {
         .fold(0, |u, ph| u ^ ph.hash_val)
 }
 
-type HashWDupOutputs = (usize, Option<OutputsId>);
+type HashWDupOutputs = (usize, OutputsId);
 
-fn hash_node(
-    dag: &Dag,
-    ot: &mut OutputsTable,
-    n: NodeIndex,
-    edge_hashes: impl IntoIterator<Item = HashWDupOutputs>,
-) -> HashWDupOutputs {
+fn hash_node(dag: &Dag, n: NodeIndex, edge_hashes: impl IntoIterator<Item = usize>) -> usize {
     let op_hash = invariant_op_hash(&dag.node_weight(n).expect("No weight for node").op);
 
-    let (edge_hashes, edge_outps): (Vec<usize>, Vec<Option<OutputsId>>) =
-        edge_hashes.into_iter().unzip();
-    (
-        edge_hashes
-            .iter()
-            // Edge combining function here. Of course the arithmetic gets chained, so for three edges we'll have 3(3a + 5b) + 5c == 9a + 15b + 5c
-            .fold(op_hash, |nh, eh| {
-                nh.wrapping_mul(3).wrapping_add(eh.wrapping_mul(5))
-            }),
-        edge_outps
-            .into_iter()
-            .fold(None, |a, b| ot.opt_sequence(a, b)),
-    )
+    edge_hashes
+        .into_iter()
+        // Edge combining function here. Of course the arithmetic gets chained, so for three edges we'll have 3(3a + 5b) + 5c == 9a + 15b + 5c
+        .fold(op_hash, |nh, eh| {
+            nh.wrapping_mul(3).wrapping_add(eh.wrapping_mul(5))
+        })
 }
 
 // TODO take an iterator of edge classes rather than just a number
-fn hash_ports(node_hash: HashWDupOutputs, edges: usize) -> Vec<HashWDupOutputs> {
-    let (hv, outs) = node_hash;
+fn hash_for_ports(node_hash: usize, edges: usize) -> Vec<usize> {
     (0..edges)
-        .map(|i| (hv.wrapping_mul(i.wrapping_add(1)), outs))
+        .map(|i| node_hash.wrapping_mul(i.wrapping_add(1)))
         .collect()
 }
 
-fn edge_hashes(
+fn extract_edge_hashes<T>(
     circ: &Circuit,
-    node_hashes: &HashMap<NodeIndex, Vec<HashWDupOutputs>>,
+    node_hashes: &HashMap<NodeIndex, Vec<T>>,
     n: NodeIndex,
     d: Direction,
-) -> Vec<HashWDupOutputs> {
+) -> Vec<T>
+where
+    T: Clone,
+{
     circ.dag
         .node_edges(n, d)
         .map(|e| {
@@ -136,7 +126,7 @@ fn edge_hashes(
 fn invariant_hash_perm2(ot: &mut OutputsTable, circ: &Circuit) -> Vec<HashWDupOutputs> {
     // Firstly compute "forwards" (depending on inputs) hashes of parts
     // of the graph that do not depend upon the graph input.
-    let mut fwd_hashes: HashMap<NodeIndex, Vec<HashWDupOutputs>> = HashMap::new();
+    let mut fwd_hashes: HashMap<NodeIndex, Vec<usize>> = HashMap::new();
     let source_nodes = circ
         .dag
         .node_indices()
@@ -157,13 +147,12 @@ fn invariant_hash_perm2(ot: &mut OutputsTable, circ: &Circuit) -> Vec<HashWDupOu
         assert_ne!(circ.dag.node_weight(n).unwrap().op, Op::Output);
         let node_hash = hash_node(
             &circ.dag,
-            ot,
             n,
-            edge_hashes(&circ, &fwd_hashes, n, Direction::Incoming),
+            extract_edge_hashes(&circ, &fwd_hashes, n, Direction::Incoming),
         );
         fwd_hashes.insert(
             n,
-            hash_ports(
+            hash_for_ports(
                 node_hash,
                 circ.dag.node_edges(n, Direction::Outgoing).count(),
             ),
@@ -180,7 +169,6 @@ fn invariant_hash_perm2(ot: &mut OutputsTable, circ: &Circuit) -> Vec<HashWDupOu
             && circ.dag.node_weight(output_nodes[0]).map(|v| v.op.clone()) == Some(Op::Output)
     );
     // hash per input for nodes with inputs
-    // ALAN can this be Vec<(usize, OutputsId)> ? It's only for things that reach outputs?
     let mut node_hashes: HashMap<NodeIndex, Vec<HashWDupOutputs>> = HashMap::new();
     let mut input_hash = None;
     node_hashes.insert(
@@ -188,7 +176,7 @@ fn invariant_hash_perm2(ot: &mut OutputsTable, circ: &Circuit) -> Vec<HashWDupOu
         circ.dag
             .node_edges(output_nodes[0], Direction::Incoming)
             .enumerate()
-            .map(|(i, _)| (op_hash(&Op::Output), Some(ot.for_graph_output(i))))
+            .map(|(i, _)| (op_hash(&Op::Output), ot.for_graph_output(i)))
             .collect(),
     );
     for n in TopSortWalker::new(&circ.dag, output_nodes).reversed() {
@@ -202,33 +190,34 @@ fn invariant_hash_perm2(ot: &mut OutputsTable, circ: &Circuit) -> Vec<HashWDupOu
             assert!(op == Op::Output);
             continue;
         }
-        let out_edges = edge_hashes(circ, &node_hashes, n, Direction::Outgoing);
+        let out_edges = extract_edge_hashes(circ, &node_hashes, n, Direction::Outgoing);
         if op == Op::Input {
             // we could just return here, but we'll continue as a sanity check
             assert!(input_hash.is_none());
             input_hash = Some(out_edges);
         } else {
-            // Also include fwd_hashes of any *incoming* edge
+            // Hash node, also include fwd_hashes of any *incoming* edge
             let in_edges = circ.dag.node_edges(n, Direction::Incoming).flat_map(|e| {
                 let src_node = circ.dag.edge_endpoint(e, Direction::Outgoing).unwrap();
-                let r = fwd_hashes.get(&src_node).map(|v| {
-                    v[circ.port_of_edge(src_node, e, Direction::Outgoing).unwrap()].clone()
-                });
-                if let Some((_, Some(_))) = r {
-                    // This should never happen, because we didn't take account of such edges
-                    // when building fwd_hashes :-( - that's a TODO.
-                    panic!("Edge not dependent on inputs reaches output");
-                }
-                r
+                fwd_hashes
+                    .get(&src_node)
+                    .map(|v| v[circ.port_of_edge(src_node, e, Direction::Outgoing).unwrap()])
             });
-            let node_hash = hash_node(&circ.dag, ot, n, out_edges.into_iter().chain(in_edges));
+            let all_edges = out_edges.iter().map(|(hv, _)| *hv).chain(in_edges);
+            let node_hash = hash_node(&circ.dag, n, all_edges);
+            let mut outps_reached = out_edges.into_iter().map(|(_, oid)| oid);
+            let first = outps_reached.next().unwrap();
+            let oid = outps_reached.fold(first, |a, b| ot.sequence(a, b));
 
             node_hashes.insert(
                 n,
-                hash_ports(
+                hash_for_ports(
                     node_hash,
                     circ.dag.node_edges(n, Direction::Incoming).count(),
-                ),
+                )
+                .into_iter()
+                .map(|hv| (hv, oid))
+                .collect(),
             );
         }
     }
@@ -253,8 +242,7 @@ pub fn reinstate_permutation(
     if num_outputs
         != current_h
             .iter()
-            .flat_map(|(_, oid)| *oid)
-            .flat_map(|id| outputs_table.to_seq_deduped(id))
+            .flat_map(|(_, oid)| outputs_table.to_seq_deduped(*oid))
             .max()
             .unwrap()
             + 1
@@ -296,9 +284,8 @@ pub fn reinstate_permutation(
         for (i, (_, c_out_id)) in current_h.iter().enumerate() {
             let d_outs = &desired[current_to_desired_input[i]].outputs_reached;
             let mut c_outs = Vec::new();
-            if let Some(id) = c_out_id {
-                outputs_table.onto_seq_deduped(*id, &mut c_outs_seen, &mut c_outs);
-            }
+            outputs_table.onto_seq_deduped(*c_out_id, &mut c_outs_seen, &mut c_outs);
+
             assert_eq!(c_outs.len(), d_outs.len());
             for (c_output, d_output) in c_outs.iter().zip(d_outs.iter()) {
                 match mapping[*c_output] {

@@ -29,20 +29,6 @@ impl OutputsTable {
         OutputsId(graph_output)
     }
 
-    pub fn opt_sequence(
-        &mut self,
-        fst: Option<OutputsId>,
-        snd: Option<OutputsId>,
-    ) -> Option<OutputsId> {
-        match fst {
-            None => snd,
-            Some(f) => match snd {
-                None => fst,
-                Some(s) => Some(self.sequence(f, s)),
-            },
-        }
-    }
-
     pub fn sequence(&mut self, fst: OutputsId, snd: OutputsId) -> OutputsId {
         match self.seq_map.get(&(fst, snd)) {
             Some(x) => *x,
