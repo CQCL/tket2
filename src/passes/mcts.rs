@@ -214,6 +214,70 @@ struct Mcts {
     visit_weight: f64,
 }
 
+struct LayerIter<'c> {
+    frontier: HashSet<Edge>,
+    circ: &'c Circuit,
+}
+
+impl<'c> Iterator for LayerIter<'c> {
+    type Item = HashSet<Vertex>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut out = HashSet::new();
+
+        let mut newfront: HashSet<_> = self
+            .frontier
+            .iter()
+            .map(|e| {
+                let mut e = *e;
+                loop {
+                    let (_, tgt) = self.circ.edge_endpoints(e).expect("edge missing");
+                    let op = self.circ.node_op(tgt).expect("nodemissing");
+
+                    // two qb gate with parameter inputs will fail here, compare
+                    // edge types directly
+                    if op.is_two_qb_gate() {
+                        out.insert(tgt);
+                        break e;
+                    } else if matches!(op, Op::Output) {
+                        break e;
+                    } else {
+                        e = next_edge(self.circ, tgt, e);
+                    }
+                }
+            })
+            .collect();
+
+        let out: HashSet<_> = out
+            .into_iter()
+            .filter(|tgt| {
+                let ins = self
+                    .circ
+                    .node_edges(*tgt, portgraph::graph::Direction::Incoming);
+                ins.iter().all(|e| newfront.contains(e))
+            })
+            .collect();
+
+        for tgt in &out {
+            let outs = self
+                .circ
+                .node_edges(*tgt, portgraph::graph::Direction::Outgoing);
+
+            let ins = self
+                .circ
+                .node_edges(*tgt, portgraph::graph::Direction::Incoming);
+            for ine in ins {
+                newfront.remove(&ine);
+            }
+            for oute in outs {
+                newfront.insert(oute);
+            }
+        }
+
+        self.frontier = newfront;
+        (!out.is_empty()).then_some(out)
+    }
+}
 fn select_criteria(b: &MCTNode, parent_visits: u64, visit_weight: f64) -> f64 {
     b.reward + b.val + visit_weight * ((parent_visits as f64).ln() / (b.visits as f64)).sqrt()
 }
@@ -560,12 +624,33 @@ mod tests {
     }
 
     #[test]
-    fn test_trivial_expand() {
+    fn test_first_expand() {
         let mut mcts = simple_mcts();
 
         let s = mcts.select();
 
         let expanded = mcts.expand(s);
         assert_eq!(expanded.len(), 2);
+    }
+
+    #[test]
+    fn test_twoqb_layers() {
+        let mut circ = Circuit::with_uids(n_qbs(3));
+        // TODO add RzF64 + ZZphase gate
+        circ.append_op(Op::H, &[0]).unwrap();
+        circ.append_op(Op::H, &[0]).unwrap();
+        let cx1 = circ.append_op(Op::CX, &[0, 1]).unwrap();
+        let cx2 = circ.append_op(Op::CX, &[1, 2]).unwrap();
+        circ.append_op(Op::H, &[2]).unwrap();
+
+        let frontier = circ.node_edges(circ.boundary()[0], Direction::Outgoing);
+        let layers: Vec<_> = LayerIter {
+            frontier: frontier.into_iter().collect(),
+            circ: &circ,
+        }
+        .collect();
+
+        let cor_layers = vec![HashSet::from_iter([cx1]), HashSet::from_iter([cx2])];
+        assert_eq!(layers, cor_layers);
     }
 }
