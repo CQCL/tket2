@@ -87,15 +87,13 @@ impl<N: Default + Debug + Display, E: Debug + Display + Clone> Graph<N, E> {
             .edge_weight(edge)
             .ok_or(RewriteError::EdgeMissing)?
             .clone();
-        let newes = DIRECTIONS.map(|direction| {
-            let new_e = self.add_edge(wt.clone());
-            self.replace_connection(edge, new_e, direction)
-                .map_err(RewriteError::Connect)
-                .unwrap();
-            new_e
-        });
-        self.remove_edge(edge);
-        Ok(newes)
+
+        let new_e = self.add_edge(wt);
+        self.replace_connection(edge, new_e, Direction::Incoming)
+            .map_err(RewriteError::Connect)
+            .unwrap();
+
+        Ok([edge, new_e])
     }
     /// Remove subgraph formed by subg and return weights of nodes inside subg
     fn remove_subgraph(&mut self, subgraph: &BoundedSubgraph) -> Vec<Option<N>> {
@@ -144,8 +142,9 @@ impl<N: Default + Debug + Display, E: Debug + Display + Clone> Graph<N, E> {
         // insert new graph and update edge references accordingly
         let (_, mut edge_map) = self.insert_graph(replacement.graph);
 
-        // edges in the subgraph may be split in to two edges if they are remain
+        // edges in the subgraph may be split in to two edges if they remain
         // connected at both ends
+        // this breaks the guarantee that interface edges are always left unchanged
         let mut updated_subg_edges: BTreeMap<EdgeIndex, [EdgeIndex; 2]> = BTreeMap::new();
 
         for direction in DIRECTIONS {
@@ -162,9 +161,8 @@ impl<N: Default + Debug + Display, E: Debug + Display + Clone> Graph<N, E> {
                 // invalid state.
                 if self.merge_edges(from, sub_edge).is_err() {
                     // if sub_edge is still connected at both ends, break in to two
-                    let mut newes = self.break_edge(sub_edge)?;
-                    // new edges need to be reversed to align with subgraph.edges
-                    newes.reverse();
+                    let newes = self.break_edge(sub_edge)?;
+
                     updated_subg_edges.insert(sub_edge, newes);
                     // assumes the other edge in newes will be fully connected
                     // later - graph could be left in invalid state if not
