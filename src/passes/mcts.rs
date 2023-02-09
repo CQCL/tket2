@@ -6,7 +6,7 @@ use crate::circuit::operation::{Op, WireType};
 use petgraph::algo::{floyd_warshall, NegativeCycle};
 use petgraph::graph::{NodeIndex, UnGraph};
 use portgraph::substitute::{BoundedSubgraph, SubgraphRef};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct QAddr(pub u32);
@@ -113,7 +113,8 @@ impl NodeState {
         let mut circ = self.circ.clone();
         circ.apply_rewrite(rw).expect("rewrite failure");
         let mut mapping = move_update(&circ, self.mapping.clone(), &mve, true);
-        advance_frontier(&self.circ, arc, &mut mapping);
+
+        advance_frontier(&circ, arc, &mut mapping);
 
         Self { circ, mapping }
     }
@@ -141,6 +142,17 @@ impl NodeState {
             mapping = update_layer_mapping(&self.circ, &layer, mapping);
         }
         total
+    }
+
+    fn solved(&self) -> bool {
+        self.mapping.left_values().all(|e| {
+            matches!(
+                self.circ
+                    .node_op(self.circ.edge_endpoints(*e).unwrap().1)
+                    .unwrap(),
+                Op::Output
+            )
+        })
     }
 }
 
@@ -234,6 +246,12 @@ struct MCTNode {
     val: f64,
 }
 
+impl MCTNode {
+    fn score(&self) -> f64 {
+        self.reward + self.val
+    }
+}
+
 type MCTree = petgraph::graph::DiGraph<MCTNode, ()>;
 
 struct Mcts {
@@ -244,6 +262,7 @@ struct Mcts {
     visit_weight: f64,
     simulate_layers: usize,
     discount: f64,
+    num_backprop: u32,
 }
 
 struct TwoqbLayerIter<'c> {
@@ -382,7 +401,7 @@ fn update_layer_mapping(circ: &Circuit, layer: &HashSet<Vertex>, mut mapping: Ma
 }
 
 fn select_criteria(b: &MCTNode, parent_visits: u64, visit_weight: f64) -> f64 {
-    b.reward + b.val + visit_weight * ((parent_visits as f64).ln() / (b.visits as f64)).sqrt()
+    b.score() + visit_weight * ((parent_visits as f64).ln() / (b.visits as f64)).sqrt()
 }
 impl Mcts {
     fn new(circ: Circuit, arc: Architecture, visit_weight: f64) -> Self {
@@ -406,6 +425,7 @@ impl Mcts {
             visit_weight,
             simulate_layers: 4,
             discount: 0.7,
+            num_backprop: 20,
         }
     }
 
@@ -414,6 +434,13 @@ impl Mcts {
     }
     fn node_mut(&mut self, n: NodeIndex) -> &mut MCTNode {
         self.graph.node_weight_mut(n).expect("Node not found")
+    }
+
+    fn get_root_state(&self) -> &NodeState {
+        match &self.node(self.root).state {
+            NodeStateEnum::Root(x) => x,
+            NodeStateEnum::Child(_, _) => panic!("not root!"),
+        }
     }
 
     fn parent(&self, n: NodeIndex) -> NodeIndex {
@@ -575,15 +602,83 @@ impl Mcts {
             panic!("ill formed tree");
         };
         let val = parstate.sim_heuristic(mve, &self.distances, self.simulate_layers, self.discount);
-        dbg!(val);
         self.node_mut(s).val = val;
     }
 
-    // fn backpropagate(&mut self, mut s: NodeIndex) {
-    //     while s != self.root {
-    //         let parent = self.parent(s);
-    //     }
-    // }
+    fn backpropagate(&mut self, mut s: NodeIndex) {
+        while s != self.root {
+            let parent = self.parent(s);
+            let curr_n = self.node(s);
+            let val = std::cmp::max_by(
+                self.node(parent).val,
+                self.discount * curr_n.score(),
+                compare_f64,
+            );
+            self.node_mut(parent).val = val;
+            s = parent;
+        }
+    }
+
+    fn decide(&mut self) {
+        let best_child = self
+            .graph
+            .neighbors(self.root)
+            .max_by(|a, b| compare_f64(&self.node(*a).score(), &self.node(*b).score()));
+        let best_child = best_child.expect("no children");
+        self.set_state(best_child);
+        let childn = self.node_mut(best_child);
+        make_root(&mut childn.state);
+
+        keep_branch(&mut self.graph, self.root, best_child);
+        self.root = best_child;
+    }
+
+    fn solve(&mut self) -> MCTNode {
+        while !self.get_root_state().solved() {
+            for _ in 0..self.num_backprop {
+                let s = self.select();
+                self.expand(s);
+                self.simulate(s);
+                self.backpropagate(s);
+            }
+            self.decide();
+        }
+        self.graph.remove_node(self.root).unwrap()
+    }
+}
+
+fn make_root(state_en: &mut NodeStateEnum) {
+    match state_en {
+        NodeStateEnum::Root(_) => (),
+        NodeStateEnum::Child(_, x) if x.is_some() => {
+            *state_en = NodeStateEnum::Root(x.take().unwrap())
+        }
+        _ => panic!("State must be calculated first."),
+    };
+}
+
+fn compare_f64(a: &f64, b: &f64) -> std::cmp::Ordering {
+    a.partial_cmp(b).unwrap()
+}
+
+// removes all nodes except the tree with keep_branch_root as root and returns
+// the weight of the root
+fn keep_branch<T>(
+    tree: &mut petgraph::graph::DiGraph<T, ()>,
+    root: NodeIndex,
+    keep_branch_root: NodeIndex,
+) -> T {
+    let mut queue: VecDeque<_> = tree
+        .neighbors(root)
+        .filter(|n| *n != keep_branch_root)
+        .collect();
+
+    while let Some(next) = queue.pop_front() {
+        queue.extend(tree.neighbors(next));
+
+        tree.remove_node(next);
+    }
+    tree.remove_node(root).unwrap()
 }
 
 fn mapping_from_circ(circ: &Circuit) -> Mapping {
@@ -670,13 +765,19 @@ mod tests {
         let i = c.boundary()[0];
         let edges = c.node_edges(i, Direction::Outgoing);
 
-        let subg = BoundedSubgraph::new(SubgraphRef::new(HashSet::new()), [edges.clone(), edges]);
+        let subg = BoundedSubgraph::new(
+            SubgraphRef::new(HashSet::new()),
+            [edges.clone(), edges.clone()],
+        );
 
         let rw = CircuitRewrite::new(subg, swap_circ().into(), 0.0);
 
         c.apply_rewrite(rw).unwrap();
         assert_eq!(c.node_count(), 3);
         check_soundness(&c).unwrap();
+        // make sure incoming edges weren't deleted
+        c.edge_endpoints(edges[0]).unwrap();
+        c.edge_endpoints(edges[1]).unwrap();
     }
 
     fn simple_circ() -> Circuit {
@@ -863,14 +964,60 @@ mod tests {
     }
 
     #[test]
-    fn test_first_sim() {
+    fn test_calc_state() {
+        let mcts = simple_mcts();
+        let NodeState { circ, .. } = mcts
+            .get_root_state()
+            .child_state(Move::Swap([QAddr(1), QAddr(2)]), &mcts.arc);
+
+        check_soundness(&circ).unwrap();
+    }
+
+    #[test]
+    fn test_first_sim_backprop_decide() {
         let mut mcts = simple_mcts();
 
         let s = mcts.select();
 
         let expanded = mcts.expand(s);
         assert_eq!(expanded.len(), 2);
-
-        mcts.simulate(expanded[0]);
+        let child = expanded[0];
+        mcts.simulate(child);
+        mcts.backpropagate(child);
+        mcts.decide();
     }
+
+    #[test]
+    fn test_prune() {
+        let mut g = petgraph::graph::DiGraph::<(), ()>::new();
+
+        let root = g.add_node(());
+
+        let mut child = root;
+
+        for _ in 0..3 {
+            let childx = g.add_node(());
+            g.add_edge(root, childx, ());
+
+            let childx1 = g.add_node(());
+            g.add_edge(childx, childx1, ());
+
+            let childx2 = g.add_node(());
+            g.add_edge(childx, childx2, ());
+
+            child = childx;
+        }
+
+        assert_eq!(g.node_count(), 10);
+
+        keep_branch(&mut g, root, child);
+        assert_eq!(g.node_count(), 3);
+    }
+
+    // #[test]
+    // fn test_simple_solve() {
+    //     let mut mcts = simple_mcts();
+
+    //     let res = mcts.solve();
+    // }
 }
