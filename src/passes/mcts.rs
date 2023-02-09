@@ -69,6 +69,7 @@ impl NodeState {
             0.0,
         )
     }
+
     fn all_moves(&self, arc: &Architecture) -> impl Iterator<Item = Move> {
         let frontier_physicals: HashSet<_> = self
             .mapping
@@ -116,14 +117,43 @@ impl NodeState {
 
         Self { circ, mapping }
     }
+
+    fn sim_heuristic(
+        &self,
+        mve: &Move,
+        dists: &Distances,
+        n_layers: usize,
+        layer_discount: f64,
+    ) -> f64 {
+        let mut total = 0.0;
+        let mut discount = layer_discount;
+
+        let layiter = TwoqbLayerIter {
+            frontier: self.mapping.left_values().cloned().collect(),
+            circ: &self.circ,
+        };
+        let mut mapping = self.mapping.clone();
+
+        for layer in layiter.take(n_layers) {
+            total +=
+                (layer_dist_change(&self.circ, &layer, &mapping, dists, mve) as f64) * discount;
+            discount *= layer_discount;
+            mapping = update_layer_mapping(&self.circ, &layer, mapping);
+        }
+        total
+    }
 }
 
-fn next_edge(circ: &Circuit, n: Vertex, e: Edge) -> Edge {
+fn next_edge(circ: &Circuit, n: Vertex, e: Edge) -> (Edge, Vertex) {
     let port = circ
         .port_of_edge(n, e, portgraph::graph::Direction::Incoming)
         .unwrap();
-    circ.edge_at_port(n, port, portgraph::graph::Direction::Outgoing)
-        .expect("Node doesn't have edge at equivalent port.")
+    let e = circ
+        .edge_at_port(n, port, portgraph::graph::Direction::Outgoing)
+        .expect("Node doesn't have edge at equivalent port.");
+
+    let (_, tgt) = circ.edge_endpoints(e).unwrap();
+    (e, tgt)
 }
 
 fn move_update(circ: &Circuit, mut mapping: Mapping, mve: &Move, swap_inserted: bool) -> Mapping {
@@ -133,7 +163,7 @@ fn move_update(circ: &Circuit, mut mapping: Mapping, mve: &Move, swap_inserted: 
 
     let outes = if swap_inserted {
         let (_, swap_node) = circ.edge_endpoints(es[0]).expect("edge not in circuit");
-        es.map(|e| next_edge(circ, swap_node, e))
+        es.map(|e| next_edge(circ, swap_node, e).0)
     } else {
         es
     };
@@ -212,14 +242,16 @@ struct Mcts {
     arc: Architecture,
     distances: Distances,
     visit_weight: f64,
+    simulate_layers: usize,
+    discount: f64,
 }
 
-struct LayerIter<'c> {
+struct TwoqbLayerIter<'c> {
     frontier: HashSet<Edge>,
     circ: &'c Circuit,
 }
 
-impl<'c> Iterator for LayerIter<'c> {
+impl<'c> Iterator for TwoqbLayerIter<'c> {
     type Item = HashSet<Vertex>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -242,7 +274,7 @@ impl<'c> Iterator for LayerIter<'c> {
                     } else if matches!(op, Op::Output) {
                         break e;
                     } else {
-                        e = next_edge(self.circ, tgt, e);
+                        e = next_edge(self.circ, tgt, e).0;
                     }
                 }
             })
@@ -278,6 +310,77 @@ impl<'c> Iterator for LayerIter<'c> {
         (!out.is_empty()).then_some(out)
     }
 }
+
+fn layer_dist_change(
+    circ: &Circuit,
+    layer: &HashSet<Vertex>,
+    mapping: &Mapping,
+    dists: &Distances,
+    mve: &Move,
+) -> i64 {
+    let Move::Swap(swap_qs) = mve;
+
+    let relevant_qs: Vec<[QAddr; 2]> = layer
+        .iter()
+        .filter_map(|n| {
+            let ins = circ.node_edges(*n, portgraph::graph::Direction::Incoming);
+            let ins_qs: Vec<_> = ins
+                .into_iter()
+                .map(|e| mapping.get_by_left(&e).expect("Edge missing in map"))
+                .cloned()
+                .collect();
+
+            ins_qs
+                .iter()
+                .any(|q| swap_qs.contains(q))
+                .then_some((&ins_qs[..2]).try_into().expect("Should be two qubits."))
+        })
+        .collect();
+    let dist =
+        |q1: QAddr, q2: QAddr| *dists.get(&(q1.into(), q2.into())).expect("dist missing") as i64;
+    let [sq1, sq2] = swap_qs;
+    relevant_qs
+        .into_iter()
+        .map(|rel_qs| match rel_qs {
+            // TODO make this nicer
+            [lq, rq] if &lq == sq1 => dist(*sq1, rq) - dist(*sq2, rq),
+            [lq, rq] if &rq == sq1 => dist(*sq1, lq) - dist(*sq2, lq),
+            [lq, rq] if &lq == sq2 => dist(*sq2, rq) - dist(*sq1, lq),
+            [lq, rq] if &rq == sq2 => dist(*sq2, lq) - dist(*sq1, lq),
+            _ => panic!("all qubits should have something do with the swap."),
+        })
+        .sum()
+}
+
+fn update_layer_mapping(circ: &Circuit, layer: &HashSet<Vertex>, mut mapping: Mapping) -> Mapping {
+    for tgt in layer {
+        let ins = circ.node_edges(*tgt, portgraph::graph::Direction::Incoming);
+        let out = circ.node_edges(*tgt, portgraph::graph::Direction::Outgoing);
+        for (ine, oute) in ins.into_iter().zip(out.into_iter()) {
+            let mut edge_tgt = circ.edge_endpoints(oute).unwrap().1;
+            let mut edge = oute;
+            while {
+                let op = circ.node_op(edge_tgt).unwrap();
+                !(op.is_two_qb_gate() || matches!(op, Op::Output))
+            } {
+                (edge, edge_tgt) = next_edge(circ, edge_tgt, edge);
+            }
+            let (_, q) = mapping.remove_by_left(&ine).expect("missing in map");
+            mapping.insert(edge, q);
+        }
+        // for (i, o) in ins.into_iter().zip(out.into_iter()) {
+        // }
+
+        // if circ.node_op(tgt).expect("op missing").is_two_qb_gate() {
+        //     break;
+        // }
+        // TODO fragile, expects only 1 and 2qb gates
+        // tgt = circ.edge_endpoints(o1).expect("edge missing").1;
+    }
+
+    mapping
+}
+
 fn select_criteria(b: &MCTNode, parent_visits: u64, visit_weight: f64) -> f64 {
     b.reward + b.val + visit_weight * ((parent_visits as f64).ln() / (b.visits as f64)).sqrt()
 }
@@ -285,7 +388,8 @@ impl Mcts {
     fn new(circ: Circuit, arc: Architecture, visit_weight: f64) -> Self {
         let distances = distances(&arc).expect("distance calculation failed.");
         // let's use unit ids to get the initial mapping
-        let mapping = mapping_from_circ(&circ);
+        let mut mapping = mapping_from_circ(&circ);
+        advance_frontier(&circ, &arc, &mut mapping);
         let mut graph = MCTree::new();
         let root_state = MCTNode {
             state: NodeStateEnum::Root(Box::new(NodeState { circ, mapping })),
@@ -300,6 +404,8 @@ impl Mcts {
             arc,
             distances,
             visit_weight,
+            simulate_layers: 4,
+            discount: 0.7,
         }
     }
 
@@ -452,9 +558,35 @@ impl Mcts {
             })
             .collect()
     }
+
+    fn simulate(&mut self, s: NodeIndex) {
+        if s == self.root {
+            return;
+        }
+        let parent = self.parent(s);
+
+        self.set_state(parent);
+        let parstate = self.get_state(parent).expect("pls work");
+
+        let child_node = self.node(s);
+        let mve = if let NodeStateEnum::Child(mve, _) = &child_node.state {
+            mve
+        } else {
+            panic!("ill formed tree");
+        };
+        let val = parstate.sim_heuristic(mve, &self.distances, self.simulate_layers, self.discount);
+        dbg!(val);
+        self.node_mut(s).val = val;
+    }
+
+    // fn backpropagate(&mut self, mut s: NodeIndex) {
+    //     while s != self.root {
+    //         let parent = self.parent(s);
+    //     }
+    // }
 }
 
-fn mapping_from_circ(circ: &Circuit) -> bimap::BiHashMap<portgraph::graph::EdgeIndex, QAddr> {
+fn mapping_from_circ(circ: &Circuit) -> Mapping {
     circ.unitids()
         .zip(
             circ.node_edges(circ.boundary()[0], portgraph::graph::Direction::Outgoing)
@@ -608,8 +740,9 @@ mod tests {
     }
 
     fn simple_mcts() -> Mcts {
-        let circ = simple_circ();
-
+        let mut circ = Circuit::with_uids(n_qbs(3));
+        circ.append_op(Op::CX, &[0, 2]).unwrap();
+        circ.append_op(Op::CX, &[1, 2]).unwrap();
         let arc = simple_arc();
 
         Mcts::new(circ, arc, 0.8)
@@ -644,7 +777,7 @@ mod tests {
         circ.append_op(Op::H, &[2]).unwrap();
 
         let frontier = circ.node_edges(circ.boundary()[0], Direction::Outgoing);
-        let layers: Vec<_> = LayerIter {
+        let layers: Vec<_> = TwoqbLayerIter {
             frontier: frontier.into_iter().collect(),
             circ: &circ,
         }
@@ -652,5 +785,92 @@ mod tests {
 
         let cor_layers = vec![HashSet::from_iter([cx1]), HashSet::from_iter([cx2])];
         assert_eq!(layers, cor_layers);
+    }
+
+    #[test]
+    fn test_dist_heuristic() {
+        let mut circ = Circuit::with_uids(n_qbs(4));
+        let cx1 = circ.append_op(Op::CX, &[1, 3]).unwrap();
+        let cx2 = circ.append_op(Op::CX, &[2, 0]).unwrap();
+        circ.append_op(Op::H, &[2]).unwrap();
+        let arc = simple_arc();
+        let dists = distances(&arc).unwrap();
+        let frontier = circ.node_edges(circ.boundary()[0], Direction::Outgoing);
+        let mapping = Mapping::from_iter([
+            (frontier[0], QAddr(0)),
+            (frontier[1], QAddr(3)),
+            (frontier[2], QAddr(2)),
+            (frontier[3], QAddr(1)),
+        ]);
+
+        let mve = Move::Swap([QAddr(0), QAddr(1)]);
+
+        let layer = HashSet::from_iter([cx1, cx2]);
+
+        let d_change = layer_dist_change(&circ, &layer, &mapping, &dists, &mve);
+
+        assert_eq!(d_change, 1);
+
+        let d_change = layer_dist_change(
+            &circ,
+            &layer,
+            &mapping,
+            &dists,
+            &Move::Swap([QAddr(0), QAddr(3)]),
+        );
+        assert_eq!(d_change, 0);
+
+        let d_change = layer_dist_change(
+            &circ,
+            &layer,
+            &mapping,
+            &dists,
+            &Move::Swap([QAddr(4), QAddr(3)]),
+        );
+        assert_eq!(d_change, 0);
+    }
+
+    #[test]
+    fn test_sim_heuristic() {
+        let mut circ = Circuit::with_uids(n_qbs(4));
+        circ.append_op(Op::CX, &[1, 3]).unwrap();
+
+        circ.append_op(Op::CX, &[2, 0]).unwrap();
+        circ.append_op(Op::CX, &[2, 1]).unwrap();
+        circ.append_op(Op::H, &[0]).unwrap();
+        circ.append_op(Op::CX, &[2, 0]).unwrap();
+        circ.append_op(Op::H, &[2]).unwrap();
+
+        circ.append_op(Op::CX, &[3, 1]).unwrap();
+        circ.append_op(Op::CX, &[1, 3]).unwrap();
+
+        let arc = simple_arc();
+        let dists = distances(&arc).unwrap();
+        let frontier = circ.node_edges(circ.boundary()[0], Direction::Outgoing);
+
+        let mapping = Mapping::from_iter([
+            (frontier[0], QAddr(0)),
+            (frontier[1], QAddr(3)),
+            (frontier[2], QAddr(2)),
+            (frontier[3], QAddr(1)),
+        ]);
+
+        let ns = NodeState { circ, mapping };
+
+        let val = ns.sim_heuristic(&Move::Swap([QAddr(2), QAddr(1)]), &dists, 3, 0.5);
+
+        assert_eq!(val, 0.375);
+    }
+
+    #[test]
+    fn test_first_sim() {
+        let mut mcts = simple_mcts();
+
+        let s = mcts.select();
+
+        let expanded = mcts.expand(s);
+        assert_eq!(expanded.len(), 2);
+
+        mcts.simulate(expanded[0]);
     }
 }
