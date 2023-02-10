@@ -39,6 +39,7 @@ fn op_hash(op: &Op) -> usize {
 
 fn invariant_op_hash(op: &Op) -> usize {
     match op {
+        Op::Copy {..} => 20, // Fine to hash, but we cannot treat as commutative
         // These shouldn't happen in the normal course of hashing
         Op::Input => panic!("SHouldn't hash input"),
         //Op::Output => panic!("Shouldn't hash output"), // could in theory happen during forward pass
@@ -87,13 +88,18 @@ fn hash_node(dag: &Dag, n: NodeIndex, edge_hashes: impl IntoIterator<Item = usiz
 
     edge_hashes
         .into_iter()
-        // Edge combining function here. Of course the arithmetic gets chained, so for three edges we'll have 3(3a + 5b) + 5c == 9a + 15b + 5c
+        // Edge combining function here. Of course the arithmetic gets chained,
+        // so for three edges we'll have 3(3a + 5b) + 5c == 9a + 15b + 5c.
+        // If we allow commutative ops (i.e. edges hashed incorporating an edge "class" rather than position)
+        // then this will have to change. But we have no way to reconstruct the desired permutation if we do that.
+
         .fold(op_hash, |nh, eh| {
             nh.wrapping_mul(3).wrapping_add(eh.wrapping_mul(5))
         })
 }
 
-// TODO take an iterator of edge classes rather than just a number
+// We would love to take an iterator over edge classes and allow some edges to be the same,
+// but we have no way to reconstruct the desired permutation if we do that.
 fn hash_for_ports(node_hash: usize, edges: usize) -> Vec<usize> {
     (0..edges)
         .map(|i| node_hash.wrapping_mul(i.wrapping_add(1)))
