@@ -662,14 +662,25 @@ fn mapping_from_circ(circ: &Circuit) -> Mapping {
 
 fn uid_to_qddr(uid: &crate::circuit::circuit::UnitID) -> QAddr {
     match uid {
-        crate::circuit::circuit::UnitID::Qubit { reg_name, index } if reg_name == "q" => {
-            QAddr(index[0])
-        }
-        _ => panic!("gotta be a 'q' qubit for mapping."),
+        UnitID::Qubit { index, .. } => QAddr(index[0]),
+        _ => panic!("gotta be a qubit for mapping."),
     }
 }
 
-fn check_mapped(circ: &Circuit, arc: &Architecture) -> Result<(), &'static str> {
+pub fn route_mcts(circ: Circuit, arc: Architecture) -> Circuit {
+    let mut mcts = Mcts::new(circ, arc, 0.7);
+    let res = mcts.solve();
+    if let NodeStateEnum::Root(s) = res.state {
+        s.circ
+    } else {
+        panic!("unexpected child state.")
+    }
+}
+
+pub fn arc_from_edges(edges: impl IntoIterator<Item = (u32, u32)>) -> Architecture {
+    Architecture::from_edges(edges)
+}
+pub fn check_mapped(circ: &Circuit, arc: &Architecture) -> Result<(), &'static str> {
     // TODO assumes qubit index refers to architecture address
     for com in circ.to_commands() {
         let qs: Vec<_> = com

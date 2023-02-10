@@ -29,6 +29,12 @@ fn check_soundness(circ: Circuit) -> PyResult<()> {
 }
 
 #[pyfunction]
+fn route_mcts(circ: Circuit, edges: Vec<(u32, u32)>) -> Circuit {
+    let arc = tket2::passes::mcts::arc_from_edges(edges);
+    tket2::passes::mcts::route_mcts(circ, arc)
+}
+
+#[pyfunction]
 fn greedy_pattern_rewrite(
     circ: Circuit,
     pattern: Circuit,
@@ -103,6 +109,7 @@ fn pyrs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(greedy_pattern_rewrite, m)?)?;
     m.add_function(wrap_pyfunction!(greedy_iter_rewrite, m)?)?;
     m.add_function(wrap_pyfunction!(check_soundness, m)?)?;
+    m.add_function(wrap_pyfunction!(route_mcts, m)?)?;
     m.add_class::<Circuit>()?;
     m.add_class::<OpType>()?;
     m.add_class::<WireType>()?;

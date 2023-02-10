@@ -22,10 +22,13 @@ from pyrs.pyrs import (
     Signature,
     decompose_custom_pass,
     count_pycustom,
+    route_mcts,
 )
 from pyrs.custom_base import CustomOpBase
 
 from pytket import Circuit, OpType, Qubit
+from pytket.architecture import Architecture
+from pytket.passes import NaivePlacementPass
 
 
 def simple_rs(op):
@@ -217,3 +220,22 @@ def test_custom(flip):
     assert success
     assert c.node_count() == 6
     assert count_pycustom(c) == 0
+
+
+def test_mcts():
+
+    edges = [(0, 1), (0, 3), (1, 2), (1, 3), (1, 4), (2, 4), (3, 4)]
+    arc = Architecture(edges)
+    c = Circuit(3).CX(0, 2).CX(2, 1)
+    NaivePlacementPass(arc).apply(c)
+
+    assert not c.valid_connectivity(arc, False, False)
+
+    rc = RsCircuit.from_tket1(c)
+
+    rc2 = route_mcts(rc, edges)
+
+    c2 = rc2.to_tket1()
+    # c2.rename_units({Qubit(i): Qubit("node", i) for i in range(3)})
+
+    assert c2.valid_connectivity(arc, False, False)
