@@ -79,8 +79,10 @@ impl NodeState {
         }
         qddr_pairs.into_iter().map(|mve| {
             let mve = Move::Swap(mve);
-            let mut mapping = move_update(&self.circ, self.mapping.clone(), &mve, false);
-            (mve, advance_frontier(&self.circ, arc, &mut mapping) as f64)
+            let mut mapping = move_update(self.mapping.clone(), &mve);
+
+            let reward = advance_frontier(&self.circ, arc, &mut mapping) as f64;
+            (mve, reward)
         })
         // // TODO bridges and more
     }
@@ -89,7 +91,7 @@ impl NodeState {
         let rw = self.gen_rewrite(mve.clone());
         let mut circ = self.circ.clone();
         circ.apply_rewrite(rw).expect("rewrite failure");
-        let mut mapping = move_update(&circ, self.mapping.clone(), &mve, true);
+        let mut mapping = move_update_after_swap(&circ, self.mapping.clone(), &mve);
 
         advance_frontier(&circ, arc, &mut mapping);
         Self { circ, mapping }
@@ -144,17 +146,24 @@ fn next_edge(circ: &Circuit, n: Vertex, e: Edge) -> (Edge, Vertex) {
     (e, tgt)
 }
 
-fn move_update(circ: &Circuit, mut mapping: Mapping, mve: &Move, swap_inserted: bool) -> Mapping {
+fn move_update(mut mapping: Mapping, mve: &Move) -> Mapping {
     let Move::Swap(qs) = mve;
 
     let es = qs.map(|q| mapping.remove_by_right(&q).expect("missing in map").0);
 
-    let outes = if swap_inserted {
-        let (_, swap_node) = circ.edge_endpoints(es[0]).expect("edge not in circuit");
-        es.map(|e| next_edge(circ, swap_node, e).0)
-    } else {
-        es
-    };
+    mapping.insert(es[0], qs[1]);
+    mapping.insert(es[1], qs[0]);
+
+    mapping
+}
+
+fn move_update_after_swap(circ: &Circuit, mut mapping: Mapping, mve: &Move) -> Mapping {
+    let Move::Swap(qs) = mve;
+
+    let es = qs.map(|q| mapping.remove_by_right(&q).expect("missing in map").0);
+
+    let (_, swap_node) = circ.edge_endpoints(es[0]).expect("edge not in circuit");
+    let outes = es.map(|e| next_edge(circ, swap_node, e).0);
 
     mapping.insert(outes[1], qs[1]);
     mapping.insert(outes[0], qs[0]);

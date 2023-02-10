@@ -172,16 +172,11 @@ impl Mcts {
             .expect("state should be set by this point.");
         let child_states: Vec<_> = state
             .all_moves(&self.arc)
-            .map(|(mve, reward)| {
-                // let mut mapping = move_update(&state.circ, state.mapping.clone(), &mve, false);
-                // let reward = advance_frontier(&state.circ, &self.arc, &mut mapping) as f64;
-
-                MCTNode {
-                    state: NodeStateEnum::Child(Box::new(mve), None),
-                    visits: 0,
-                    val: 0.0,
-                    reward,
-                }
+            .map(|(mve, reward)| MCTNode {
+                state: NodeStateEnum::Child(Box::new(mve), None),
+                visits: 0,
+                val: 0.0,
+                reward,
             })
             .collect();
 
@@ -253,6 +248,7 @@ impl Mcts {
                 self.backpropagate(s);
             }
             self.decide();
+            // TODO fallback if it gets stuck
         }
         self.graph.remove_node(self.root).unwrap()
     }
