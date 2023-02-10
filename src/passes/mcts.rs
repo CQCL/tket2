@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::circuit::circuit::{Circuit, CircuitRewrite, UnitID};
 use crate::circuit::dag::{Edge, Vertex};
 use crate::circuit::operation::{Op, WireType};
@@ -100,11 +98,6 @@ impl NodeState {
         }
         qddr_pairs.into_iter().map(Move::Swap)
         // // TODO bridges and more
-    }
-
-    fn all_rewrites(&self, arc: &Architecture) -> impl Iterator<Item = CircuitRewrite> + '_ {
-        self.all_moves(arc).map(|mve| self.gen_rewrite(mve))
-        // .collect()
     }
 
     fn child_state(&self, mve: Move, arc: &Architecture) -> Self {
@@ -261,7 +254,6 @@ struct Mcts {
     simulate_layers: usize,
     discount: f64,
     num_backprop: u32,
-    count: u32,
 }
 
 struct TwoqbLayerIter<'c> {
@@ -425,7 +417,6 @@ impl Mcts {
             simulate_layers: 4,
             discount: 0.7,
             num_backprop: 20,
-            count: 0,
         }
     }
 
@@ -583,13 +574,14 @@ impl Mcts {
             .graph
             .neighbors(self.root)
             .max_by(|a, b| compare_f64(&self.node(*a).score(), &self.node(*b).score()));
-        let best_child = best_child.expect("no children");
-        self.set_state(best_child);
-        let childn = self.node_mut(best_child);
-        make_root(&mut childn.state);
+        if let Some(best_child) = best_child {
+            self.set_state(best_child);
+            let childn = self.node_mut(best_child);
+            make_root(&mut childn.state);
 
-        let best_child = keep_branch(&mut self.graph, best_child);
-        self.root = best_child;
+            let best_child = keep_branch(&mut self.graph, best_child);
+            self.root = best_child;
+        }
     }
 
     fn solve(&mut self) -> MCTNode {
@@ -656,7 +648,9 @@ fn mapping_from_circ(circ: &Circuit) -> Mapping {
             circ.node_edges(circ.boundary()[0], portgraph::graph::Direction::Outgoing)
                 .into_iter(),
         )
-        .map(|(uid, in_e)| (in_e, uid_to_qddr(uid)))
+        .filter_map(|(uid, in_e)| {
+            matches!(uid, UnitID::Qubit { .. }).then(|| (in_e, uid_to_qddr(uid)))
+        })
         .collect()
 }
 
@@ -686,11 +680,11 @@ pub fn check_mapped(circ: &Circuit, arc: &Architecture) -> Result<(), &'static s
         let qs: Vec<_> = com
             .args
             .into_iter()
-            .map(|q| {
+            .filter_map(|q| {
                 if let UnitID::Qubit { index, .. } = q {
-                    index[0]
+                    Some(index[0])
                 } else {
-                    panic!();
+                    None
                 }
             })
             .collect();
@@ -1032,5 +1026,34 @@ mod tests {
         } else {
             panic!();
         }
+    }
+
+    #[test]
+    fn test_measure_solve() {
+        let mut uids = n_qbs(4);
+        uids.push(UnitID::Bit {
+            name: "c".into(),
+            index: vec![0],
+        });
+        let mut circ = Circuit::with_uids(uids);
+        circ.append_op(Op::CX, &[1, 3]).unwrap();
+
+        circ.append_op(Op::CX, &[2, 0]).unwrap();
+        circ.append_op(Op::CX, &[2, 1]).unwrap();
+        circ.append_op(Op::H, &[0]).unwrap();
+        circ.append_op(Op::CX, &[2, 0]).unwrap();
+        circ.append_op(Op::H, &[2]).unwrap();
+        circ.append_op(Op::Measure, &[0, 4]).unwrap();
+        circ.append_op(Op::CX, &[3, 1]).unwrap();
+        circ.append_op(Op::CX, &[1, 3]).unwrap();
+
+        let arc = simple_arc();
+
+        let outc = route_mcts(circ, arc.clone());
+
+        check_mapped(&outc, &arc).unwrap();
+        check_soundness(&outc).unwrap();
+
+        crate::utils::print_circ(&outc);
     }
 }
