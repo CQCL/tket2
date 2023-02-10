@@ -396,7 +396,10 @@ pub fn circuit_hash(circ: &Circuit) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::circuit::operation::{ConstValue, WireType};
+    use crate::{
+        circuit::operation::{AngleValue, ConstValue, WireType},
+        validate::check_soundness,
+    };
     use std::collections::HashSet;
 
     fn hash_tests(hash_fn: impl Fn(&Circuit) -> usize) {
@@ -498,5 +501,47 @@ mod tests {
                 assert_eq!(circuit_hash(circ), circuit_hash(&reconstituted));
             }
         }
+    }
+
+    #[test]
+    fn test_perm_hash_fwd_pass() {
+        let circ = {
+            let mut circ = Circuit::new();
+            let [i, o] = circ.boundary();
+            let c = circ.add_const(ConstValue::Angle(AngleValue::F64(0.5)));
+            let rx = circ.add_vertex(Op::RxF64);
+            circ.add_insert_edge((i, 0), (rx, 0), WireType::Qubit)
+                .unwrap();
+            circ.add_insert_edge((c, 0), (rx, 1), WireType::Angle)
+                .unwrap();
+            circ.add_insert_edge((rx, 0), (o, 0), WireType::Qubit)
+                .unwrap();
+            circ
+        };
+        check_soundness(&circ).unwrap();
+
+        let circ2 = {
+            let mut circ = Circuit::new();
+            let [i, o] = circ.boundary();
+            // Additional operations not dependent upon input
+            // (of course these could be constant-propagated!)
+            let c_a = circ.add_const(ConstValue::Angle(AngleValue::F64(0.5)));
+            let c_f = circ.add_const(ConstValue::Angle(AngleValue::F64(2.0)));
+            let ang = circ.add_vertex(Op::AngleMul);
+            circ.add_insert_edge((c_a, 0), (ang, 0), WireType::Angle)
+                .unwrap();
+            circ.add_insert_edge((c_f, 0), (ang, 1), WireType::Angle)
+                .unwrap();
+            let rx = circ.add_vertex(Op::RxF64);
+            circ.add_insert_edge((i, 0), (rx, 0), WireType::Qubit)
+                .unwrap();
+            circ.add_insert_edge((ang, 0), (rx, 1), WireType::Angle)
+                .unwrap();
+            circ.add_insert_edge((rx, 0), (o, 0), WireType::Qubit)
+                .unwrap();
+            circ
+        };
+        check_soundness(&circ2).unwrap();
+        assert_ne!(invariant_hash(&circ), invariant_hash(&circ2));
     }
 }
