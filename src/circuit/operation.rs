@@ -318,6 +318,7 @@ fn custom_eq(x: &dyn CustomOp, y: &dyn CustomOp) -> bool {
 pub enum Op {
     H,
     CX,
+    CZ,
     ZZMax,
     Reset,
     Input,
@@ -408,7 +409,7 @@ impl Op {
         Some(match self {
             Op::Noop(typ) => Signature::new_linear(vec![*typ]),
             Op::H | Op::Reset => ONEQBSIG.clone(),
-            Op::CX | Op::ZZMax | Op::Swap => TWOQBSIG.clone(),
+            Op::CX | Op::ZZMax | Op::Swap | Op::CZ => TWOQBSIG.clone(),
             Op::Measure => Signature::new_linear(vec![WireType::Qubit, WireType::LinearBit]),
             Op::AngleAdd | Op::AngleMul => binary_op(WireType::Angle),
             Op::QuatMul => binary_op(WireType::Quat64),

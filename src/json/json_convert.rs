@@ -56,7 +56,7 @@ impl TryFrom<OpType> for Op {
             OpType::H => Op::H,
             OpType::CX => Op::CX,
             // OpType::CY => todo!(),
-            // OpType::CZ => todo!(),
+            OpType::CZ => Op::CZ,
             // OpType::CH => todo!(),
             // OpType::CV => todo!(),
             // OpType::CVdg => todo!(),
@@ -174,6 +174,7 @@ impl TryFrom<&Op> for OpType {
         Ok(match op {
             Op::H => OpType::H,
             Op::CX => OpType::CX,
+            Op::CZ => OpType::CZ,
             Op::ZZMax => OpType::ZZMax,
             Op::Swap => OpType::SWAP,
             Op::Reset => OpType::Reset,
