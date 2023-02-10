@@ -148,9 +148,8 @@ fn invariant_hash_perm2(ot: &mut OutputsTable, circ: &Circuit) -> Vec<HashWDupOu
         if n == input {
             continue;
         }
-
         if !circ.dag.node_edges(n, Direction::Incoming).all(|e| {
-            fwd_hashes.contains_key(&circ.dag.edge_endpoint(e, Direction::Incoming).unwrap())
+            fwd_hashes.contains_key(&circ.dag.edge_endpoint(e, Direction::Outgoing).unwrap())
         }) {
             continue;
         }
@@ -173,12 +172,14 @@ fn invariant_hash_perm2(ot: &mut OutputsTable, circ: &Circuit) -> Vec<HashWDupOu
     let mut input_hash = None;
 
     // If no output depends on any input, then our hash value - "what happens to the inputs" -
-    // should presumably be, "all the inputs get discarded".
-    // But (for now) we ignore constant outputs, so fail if there's nothing else to hash.
-    assert!(!fwd_hashes.contains_key(&output));
+    // just says that "all the inputs get discarded".
+    if fwd_hashes.contains_key(&output) {
+        return Vec::new();
+    }
     // TODO We should inspect the edges incoming to the output node, and if any of those edges
-    // are from nodes in fwd_hashes (== constant parts of the output), we should include those
-    // in the hash value - i.e. return a Vec<usize> alongside the Vec<PermHash>.
+    // are from nodes in fwd_hashes (== constant parts of the output), which would be all of them
+    // in the above case - then we should include those in the hash value,
+    // i.e. return a Vec<usize> alongside the Vec<PermHash>.
     node_hashes.insert(
         output,
         circ.dag
