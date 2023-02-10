@@ -132,10 +132,11 @@ fn invariant_hash_perm2(ot: &mut OutputsTable, circ: &Circuit) -> Vec<HashWDupOu
         .node_indices()
         .filter(|n| circ.dag.node_edges(*n, Direction::Incoming).all(|_| false))
         .collect();
+    let [input, output] = circ.boundary();
     for n in TopSortWalker::new(&circ.dag, source_nodes) {
         // Note, could make this more efficient using a worklist rather than topsort,
         // as topsort continues traversal over the entire graph whereas we could tell when to stop.
-        if circ.dag.node_weight(n).unwrap().op == Op::Input {
+        if n == input {
             continue;
         }
 
@@ -158,15 +159,6 @@ fn invariant_hash_perm2(ot: &mut OutputsTable, circ: &Circuit) -> Vec<HashWDupOu
         );
     }
     // Now hash rest of circuit backwards, from output back to input
-    let output_nodes: VecDeque<NodeIndex> = circ
-        .dag
-        .node_indices()
-        .filter(|n| circ.dag.node_edges(*n, Direction::Outgoing).all(|_| false))
-        .collect();
-    assert!(
-        output_nodes.len() == 1
-            && circ.dag.node_weight(output_nodes[0]).map(|v| v.op.clone()) == Some(Op::Output)
-    );
     // hash per input for nodes with inputs
     let mut node_hashes: HashMap<NodeIndex, Vec<HashWDupOutputs>> = HashMap::new();
     let mut input_hash = None;
@@ -174,19 +166,20 @@ fn invariant_hash_perm2(ot: &mut OutputsTable, circ: &Circuit) -> Vec<HashWDupOu
     // If no output depends on any input, then our hash value - "what happens to the inputs" -
     // should presumably be, "all the inputs get discarded".
     // But (for now) we ignore constant outputs, so fail if there's nothing else to hash.
-    assert!(!fwd_hashes.contains_key(&output_nodes[0]));
+    assert!(!fwd_hashes.contains_key(&output));
     // TODO We should inspect the edges incoming to the output node, and if any of those edges
     // are from nodes in fwd_hashes (== constant parts of the output), we should include those
     // in the hash value - i.e. return a Vec<usize> alongside the Vec<PermHash>.
     node_hashes.insert(
-        output_nodes[0],
+        output,
         circ.dag
-            .node_edges(output_nodes[0], Direction::Incoming)
+            .node_edges(output, Direction::Incoming)
             .enumerate()
+            // All output ports have same hash (for invariance), but record which one was reached
             .map(|(i, _)| (op_hash(&Op::Output), ot.for_graph_output(i)))
             .collect(),
     );
-    for n in TopSortWalker::new(&circ.dag, output_nodes).reversed() {
+    for n in TopSortWalker::new(&circ.dag, VecDeque::from([output])).reversed() {
         // Again, could possibly make this a bit more efficient using a worklist,
         // but the major part of that saving would probably be achieved by returning early
         if fwd_hashes.contains_key(&n) {
