@@ -48,7 +48,7 @@ fn invariant_op_hash(op: &Op) -> usize {
 #[derive(Debug, Clone)]
 pub struct PermHash {
     hash_val: usize,
-    outputs_reached: Vec<usize>, // Excluding previously-seen outputs for this input or preceding inputs
+    new_outputs_reached: Vec<usize>, // Excluding previously-seen outputs for this input or preceding inputs
 }
 
 // Hash, returning the hash of each input and enough information
@@ -62,13 +62,11 @@ pub fn invariant_hash_perm(circ: &Circuit) -> Vec<PermHash> {
     with_dup_outputs
         .iter()
         .map(|(hash_val, oid)| {
-            let mut outputs_reached = Vec::new();
-            //if let Some(oid) = oid {
-            ot.onto_seq_deduped(*oid, &mut seen_outputs, &mut outputs_reached);
-            //}
+            let mut new_outputs_reached = Vec::new();
+            ot.onto_seq_deduped(*oid, &mut seen_outputs, &mut new_outputs_reached);
             PermHash {
                 hash_val: *hash_val,
-                outputs_reached,
+                new_outputs_reached,
             }
         })
         .collect()
@@ -123,6 +121,16 @@ where
         .collect()
 }
 
+/// Hash, returning the hash of each output, and (in form compressed using <ot>) enough
+/// information to distinguish between all permutations of this circuit given the
+/// invariant_hash_perm's of each permutation.
+/// TODO ideally rather than hashing each input to `usize` here, we should use some
+/// collision-free representation (perhaps arbitrary-precision arithmetic) and then
+/// truncate down only so far as can be done without introducing any false/extra equalities
+/// between the hash values of each input.
+/// TODO(2): also, we don't need to return repeated elements *within* the list of outputs reached
+/// for the same input; we merely need to be able to construct the list of new_outputs_reached
+/// for *every* permutation, which only involves removing more dups once the permutation is known.
 fn invariant_hash_perm2(ot: &mut OutputsTable, circ: &Circuit) -> Vec<HashWDupOutputs> {
     // Firstly compute "forwards" (depending on inputs) hashes of parts
     // of the graph that do not depend upon the graph input.
@@ -230,7 +238,7 @@ pub fn reinstate_permutation(
 ) -> Result<Circuit, &'static str> {
     let num_outputs = desired
         .iter()
-        .flat_map(|ph| ph.outputs_reached.clone())
+        .flat_map(|ph| ph.new_outputs_reached.clone())
         .max()
         .unwrap()
         + 1; // make exclusive
@@ -282,7 +290,7 @@ pub fn reinstate_permutation(
         let mut mapping: Vec<Option<usize>> = (0..num_outputs).map(|_| None).collect();
         let mut c_outs_seen = HashSet::new();
         for (i, (_, c_out_id)) in current_h.iter().enumerate() {
-            let d_outs = &desired[current_to_desired_input[i]].outputs_reached;
+            let d_outs = &desired[current_to_desired_input[i]].new_outputs_reached;
             let mut c_outs = Vec::new();
             outputs_table.onto_seq_deduped(*c_out_id, &mut c_outs_seen, &mut c_outs);
 

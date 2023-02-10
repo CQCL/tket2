@@ -10,7 +10,15 @@ enum Outputs {
 }
 
 /// Represents a sequence of graph-outputs ("output1, output2, output1, output3")
-/// efficiently via flyweight pattern
+/// efficiently via pseudo-flyweight pattern.
+/// This is not a full flyweight (multiple entries may represent the same sequence,
+/// so long as that sequence was formed by concatenaing different subsequences in each case).
+/// That would be fine (but more complicated). This suffices to avoid pathologically bad
+/// cases of Vec's and cons-lists, where although
+/// [5], [4,5], [3,4,5], [2,3,4,5], [1,2,3,4,5] can be represented using only 5 cons cells,
+/// [1], [1,2], [1,2,3], [1,2,3,4], [1,2,3,4,5] requires 15 cons cells (O(n^2)).
+/// Note further (if implementing a full flyweight!) that we don't actually need to store
+/// elements repeated within each list.
 pub(crate) struct OutputsTable {
     table: Vec<Outputs>,
     seq_map: HashMap<(OutputsId, OutputsId), OutputsId>,
