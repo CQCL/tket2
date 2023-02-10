@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::circuit::circuit::{Circuit, CircuitRewrite};
+use crate::circuit::circuit::{Circuit, CircuitRewrite, UnitID};
 use crate::circuit::dag::{Edge, Vertex};
 use crate::circuit::operation::{Op, WireType};
 use petgraph::algo::{floyd_warshall, NegativeCycle};
@@ -28,7 +28,6 @@ fn distances(arc: &Architecture) -> Result<Distances, NegativeCycle> {
 #[derive(Clone)]
 struct NodeState {
     circ: Circuit,
-    // frontier: Vec<Edge>,
     mapping: Mapping,
 }
 
@@ -115,7 +114,6 @@ impl NodeState {
         let mut mapping = move_update(&circ, self.mapping.clone(), &mve, true);
 
         advance_frontier(&circ, arc, &mut mapping);
-
         Self { circ, mapping }
     }
 
@@ -180,8 +178,8 @@ fn move_update(circ: &Circuit, mut mapping: Mapping, mve: &Move, swap_inserted: 
         es
     };
 
-    mapping.insert(outes[1], qs[0]);
-    mapping.insert(outes[0], qs[1]);
+    mapping.insert(outes[1], qs[1]);
+    mapping.insert(outes[0], qs[0]);
 
     mapping
 }
@@ -263,6 +261,7 @@ struct Mcts {
     simulate_layers: usize,
     discount: f64,
     num_backprop: u32,
+    count: u32,
 }
 
 struct TwoqbLayerIter<'c> {
@@ -426,6 +425,7 @@ impl Mcts {
             simulate_layers: 4,
             discount: 0.7,
             num_backprop: 20,
+            count: 0,
         }
     }
 
@@ -484,17 +484,6 @@ impl Mcts {
         if let NodeStateEnum::Child(_, nsopt) = &self.node(n).state {
             if nsopt.is_none() {
                 calc_parent = true;
-                // let mve = *mve.clone();
-                // let parstate = self.get_or_set_state(self.parent(n));
-                // // let mut c = parstate.circ.clone();
-                // // c.apply_rewrite(mve).expect("Rewrite failed");
-
-                // let ns = Box::new(NodeState {
-                //     circ: c,
-                //     frontier: todo!(),
-                //     mapping: todo!(),
-                // });
-                // *nsopt = Some(ns);
             }
         };
 
@@ -514,38 +503,6 @@ impl Mcts {
                 *nsopt = Some(Box::new(child));
             }
         };
-
-        // self.get_state(n).unwrap()
-
-        // match &self.node(n).state {
-        //     NodeStateEnum::Child(rw, nsopt) => {
-        //         if let Some(ns) = nsopt {
-        //             return ns;
-        //         } else {
-        //             let rw = *rw.clone();
-        //             let parstate = self.get_state(self.parent(n));
-        //             let mut c = parstate.circ.clone();
-        //             c.apply_rewrite(rw).expect("Rewrite failed");
-
-        //             let ns = Box::new(NodeState {
-        //                 circ: c,
-        //                 frontier: todo!(),
-        //                 mapping: todo!(),
-        //             });
-
-        //             match &self.node_mut(n).state {
-        //                 NodeStateEnum::Root(_) => unreachable!("should have returned above."),
-        //                 NodeStateEnum::Child(_, nsopt) => {
-        //                     *nsopt = Some(ns);
-
-        //                     return &ns;
-        //                 }
-        //             }
-
-        //         }
-        //     }
-        //     NodeStateEnum::Root(ns) => return ns,
-        // };
     }
 
     fn get_state(&self, n: NodeIndex) -> Option<&NodeState> {
@@ -554,6 +511,7 @@ impl Mcts {
             _ => None,
         }
     }
+
     fn expand(&mut self, s: NodeIndex) -> Vec<NodeIndex> {
         // hack, avoids having to deal with a mut reference
         self.set_state(s);
@@ -566,6 +524,7 @@ impl Mcts {
             .map(|mve| {
                 let mut mapping = move_update(&state.circ, state.mapping.clone(), &mve, false);
                 let reward = advance_frontier(&state.circ, &self.arc, &mut mapping) as f64;
+
                 MCTNode {
                     state: NodeStateEnum::Child(Box::new(mve), None),
                     visits: 0,
@@ -629,7 +588,7 @@ impl Mcts {
         let childn = self.node_mut(best_child);
         make_root(&mut childn.state);
 
-        keep_branch(&mut self.graph, self.root, best_child);
+        let best_child = keep_branch(&mut self.graph, best_child);
         self.root = best_child;
     }
 
@@ -665,20 +624,30 @@ fn compare_f64(a: &f64, b: &f64) -> std::cmp::Ordering {
 // the weight of the root
 fn keep_branch<T>(
     tree: &mut petgraph::graph::DiGraph<T, ()>,
-    root: NodeIndex,
     keep_branch_root: NodeIndex,
-) -> T {
-    let mut queue: VecDeque<_> = tree
-        .neighbors(root)
-        .filter(|n| *n != keep_branch_root)
-        .collect();
+) -> NodeIndex {
+    let mut queue = VecDeque::new();
 
+    queue.push_back(keep_branch_root);
+
+    // TODO extra allocation could be avoided with stablegraph - benchmark
+    let mut keep_nodes = HashSet::new();
     while let Some(next) = queue.pop_front() {
         queue.extend(tree.neighbors(next));
-
-        tree.remove_node(next);
+        keep_nodes.insert(next);
     }
-    tree.remove_node(root).unwrap()
+
+    tree.retain_nodes(|_, n| keep_nodes.contains(&n));
+    tree.shrink_to_fit();
+
+    // find new root, should hopefully be near the start
+    tree.node_indices()
+        .find(|n| {
+            tree.edges_directed(*n, petgraph::Direction::Incoming)
+                .next()
+                .is_none()
+        })
+        .unwrap()
 }
 
 fn mapping_from_circ(circ: &Circuit) -> Mapping {
@@ -698,6 +667,32 @@ fn uid_to_qddr(uid: &crate::circuit::circuit::UnitID) -> QAddr {
         }
         _ => panic!("gotta be a 'q' qubit for mapping."),
     }
+}
+
+fn check_mapped(circ: &Circuit, arc: &Architecture) -> Result<(), &'static str> {
+    // TODO assumes qubit index refers to architecture address
+    for com in circ.to_commands() {
+        let qs: Vec<_> = com
+            .args
+            .into_iter()
+            .map(|q| {
+                if let UnitID::Qubit { index, .. } = q {
+                    index[0]
+                } else {
+                    panic!();
+                }
+            })
+            .collect();
+
+        if qs.len() != 2 {
+            continue;
+        }
+        if !arc.contains_edge(qs[0].into(), qs[1].into()) {
+            return Err("Invalid two qubit gate for architecture.");
+        }
+    }
+
+    Ok(())
 }
 #[cfg(test)]
 mod tests {
@@ -843,7 +838,7 @@ mod tests {
     fn simple_mcts() -> Mcts {
         let mut circ = Circuit::with_uids(n_qbs(3));
         circ.append_op(Op::CX, &[0, 2]).unwrap();
-        circ.append_op(Op::CX, &[1, 2]).unwrap();
+        circ.append_op(Op::ZZMax, &[1, 2]).unwrap();
         let arc = simple_arc();
 
         Mcts::new(circ, arc, 0.8)
@@ -1010,14 +1005,21 @@ mod tests {
 
         assert_eq!(g.node_count(), 10);
 
-        keep_branch(&mut g, root, child);
+        keep_branch(&mut g, child);
         assert_eq!(g.node_count(), 3);
     }
 
-    // #[test]
-    // fn test_simple_solve() {
-    //     let mut mcts = simple_mcts();
+    #[test]
+    fn test_simple_solve() {
+        let mut mcts = simple_mcts();
 
-    //     let res = mcts.solve();
-    // }
+        let res = mcts.solve();
+        if let NodeStateEnum::Root(s) = res.state {
+            let circ = s.circ;
+            check_soundness(&circ).unwrap();
+            check_mapped(&circ, &mcts.arc).unwrap();
+        } else {
+            panic!();
+        }
+    }
 }
