@@ -27,6 +27,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 downcast-rs = "1.2.0"
 portgraph = { path = "ext/portgraph" }
+itertools = "0.10.5"
 
 
 [features]

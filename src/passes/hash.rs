@@ -1,5 +1,6 @@
 //use super::{pattern::node_equality, CircFixedStructPattern};
 use crate::circuit::{circuit::Circuit, dag::Dag, operation::Op};
+use itertools::Itertools;
 use portgraph::{
     graph::{Direction, NodeIndex},
     toposort::TopSortWalker,
@@ -261,27 +262,39 @@ pub fn reinstate_permutation(
         // Distinguish inputs by hash-val of each input and also the number of paths to the output
         let current_hvs: Vec<usize> = current_h.iter().map(|(hv, _)| *hv).collect();
         let desired_hvs: Vec<usize> = desired.iter().map(|ph| ph.hash_val).collect();
-        // Sanity checks
-        let dh_s = desired_hvs.iter().cloned().collect::<HashSet<_>>();
-        let ch_s = current_hvs.iter().cloned().collect::<HashSet<_>>();
-        if dh_s != ch_s {
-            return Err("Not a permutation");
+        {
+            // Sanity checks
+            let mut dh_s = desired_hvs.clone();
+            dh_s.sort();
+            let mut ch_s = current_hvs.clone();
+            ch_s.sort();
+            if ch_s != dh_s {
+                return Err("Not a permutation");
+            }
+
+            if current_hvs.iter().cloned().collect::<HashSet<_>>().len() != current_hvs.len() {
+                // Repeated hashval. We'll just assume the circuit treats several inputs identically,
+                // and take an arbitrary one of those permutations. If the identical hashvals result
+                // from collisions, we'll only generate the correct permutation IF WE ARE LUCKY.
+                // Thus (TODO), we need invariant_hash_perm(2) to compute hashvals using a collision-free
+                // mechanism (perhaps arbitrary-precision arithmetic) and truncate only as far as
+                // doesn't introduce false equalities. (invariant_hash can still truncate arbitrarily).
+                println!("WARNING! ambiguous, several inputs have same hash, may reconstruct wrong circuit if the identical hashes result from collisions");
+            }
         }
-        if dh_s.len() != desired_hvs.len() {
-            // TODO of course a circuit might *want* to treat several inputs identically!
-            // And then there are hash collisions, from which it is now too late to recover.
-            // We could try every permutation of inputs (that satisfies equality of hash_val + #outputs)
-            // and take any that succeeds (some input permutations may fail to find a valid output permutation).
-            // If there is more than one, we should probably then check the circuits are actually identical
-            // (because they treated several inputs the same way) and fail if not (==> not enough info in the
-            // hash to distinguish between multiple permutations).
-            return Err("Ambiguous, several inputs have same hash");
+        let mut hv_and_desired_posns: Vec<(usize, usize)> = desired_hvs
+            .into_iter()
+            .enumerate()
+            .map(|(idx, hv)| (hv, idx))
+            .collect();
+        hv_and_desired_posns.sort(); // as group_by works only on consecutive elements
+        let mut hv_to_desired: HashMap<usize, Vec<usize>> = HashMap::new();
+        for (k, group) in &hv_and_desired_posns.iter().group_by(|(hv, _idx)| *hv) {
+            hv_to_desired.insert(k, group.map(|(_hv, idx)| *idx).collect::<Vec<usize>>());
         }
-        let hv_to_desired: HashMap<usize, usize> =
-            HashMap::from_iter(desired_hvs.into_iter().enumerate().map(|(i, hv)| (hv, i)));
         current_hvs
             .iter()
-            .map(|hv| *hv_to_desired.get(hv).unwrap())
+            .map(|hv| hv_to_desired.get_mut(hv).unwrap().pop().unwrap())
             .collect()
     };
     // Try to build output map (substitution).
