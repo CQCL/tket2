@@ -88,10 +88,7 @@ impl Mcts {
     }
 
     fn get_root_state(&self) -> &NodeState {
-        match &self.node(self.root).state {
-            NodeStateEnum::Root(x) => x,
-            NodeStateEnum::Child(_, _) => panic!("not root!"),
-        }
+        self.node(self.root).state.expect_root("not root!")
     }
 
     fn parent(&self, n: NodeIndex) -> NodeIndex {
@@ -104,8 +101,8 @@ impl Mcts {
     fn is_leaf(&self, n: NodeIndex) -> bool {
         self.graph.edges(n).next().is_none()
     }
+
     pub(super) fn select(&mut self) -> NodeIndex {
-        // let mut path = vec![];
         let mut s = self.root;
 
         self.node_mut(s).visits += 1;
@@ -125,6 +122,7 @@ impl Mcts {
                 .unwrap();
 
             self.node_mut(best_child_index).visits += 1;
+            // dbg!(self.node(best_child_index).state);
             s = best_child_index;
         }
         s
@@ -142,11 +140,8 @@ impl Mcts {
             let parent = self.parent(n);
             self.set_state(parent);
             let parstate = self.get_state(parent).unwrap();
-            let mve = if let NodeStateEnum::Child(mve, _) = &self.node(n).state {
-                *mve.clone()
-            } else {
-                panic!();
-            };
+            let mve = self.node(n).state.expect_child("").0.clone();
+
             let child = parstate.child_state(mve, &self.arc);
 
             // // TODO make this caching optional
@@ -201,11 +196,7 @@ impl Mcts {
         let parstate = self.get_state(parent).expect("pls work");
 
         let child_node = self.node(s);
-        let mve = if let NodeStateEnum::Child(mve, _) = &child_node.state {
-            mve
-        } else {
-            panic!("ill formed tree");
-        };
+        let mve = child_node.state.expect_child("ill formed tree").0;
         let val = parstate.sim_heuristic(mve, &self.distances, self.simulate_layers, self.discount);
         self.node_mut(s).val = val;
     }
@@ -373,13 +364,14 @@ mod tests {
         let mut mcts = simple_mcts();
 
         let res = mcts.solve();
-        if let NodeStateEnum::Root(s) = res.state {
-            let circ = s.circ;
-            check_soundness(&circ).unwrap();
-            check_mapped(&circ, &mcts.arc).unwrap();
-        } else {
-            panic!();
-        }
+        let s = res.state.expect_root("");
+        let circ = &s.circ;
+        check_soundness(circ).unwrap();
+        check_mapped(circ, &mcts.arc).unwrap();
+        // if let NodeStateEnum::Root(s) = res.state {
+        // } else {
+        //     panic!();
+        // }
     }
 
     #[test]

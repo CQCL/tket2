@@ -246,6 +246,20 @@ impl NodeStateEnum {
             NodeStateEnum::Child(_, s) => s.map(|s| *s),
         }
     }
+
+    pub(super) fn expect_root(&self, msg: &'static str) -> &NodeState {
+        match self {
+            NodeStateEnum::Root(s) => s,
+            NodeStateEnum::Child(_, _) => panic!("{}", msg),
+        }
+    }
+
+    pub(super) fn expect_child(&self, msg: &'static str) -> (&Move, &Option<Box<NodeState>>) {
+        match self {
+            NodeStateEnum::Child(mve, state_opt) => (mve, state_opt),
+            NodeStateEnum::Root(_) => panic!("{}", msg),
+        }
+    }
 }
 
 struct TwoqbLayerIter<'c> {
