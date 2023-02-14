@@ -3,7 +3,7 @@ mod nodestate;
 
 use crate::circuit::circuit::{Circuit, UnitID};
 use crate::circuit::dag::Edge;
-use petgraph::algo::{floyd_warshall, NegativeCycle};
+use petgraph::algo::{self, floyd_warshall, NegativeCycle};
 use petgraph::graph::{NodeIndex, UnGraph};
 
 use std::collections::HashMap;
@@ -19,6 +19,12 @@ impl From<QAddr> for NodeIndex<u32> {
     }
 }
 
+impl From<&QAddr> for NodeIndex<u32> {
+    fn from(val: &QAddr) -> Self {
+        (*val).into()
+    }
+}
+
 type Architecture = UnGraph<(), ()>;
 type Distances = HashMap<(NodeIndex, NodeIndex), u32>;
 type Mapping = bimap::BiMap<Edge, QAddr>;
@@ -27,7 +33,31 @@ fn distances(arc: &Architecture) -> Result<Distances, NegativeCycle> {
     floyd_warshall(arc, |_| 1)
 }
 
-#[derive(Clone, Debug)]
+fn shortest_path<F>(
+    arc: &Architecture,
+    start: NodeIndex,
+    end: NodeIndex,
+    valid_check: F,
+) -> Option<Vec<NodeIndex>>
+where
+    F: Fn(NodeIndex) -> bool,
+{
+    // let mut arc = arc.clone();
+    let mut arc: petgraph::stable_graph::StableUnGraph<_, _> = arc.clone().into();
+    // arc.retain_nodes(|_, n| mapping.contains_right(&QAddr(n.index() as u32)));
+    arc.retain_nodes(|_, n| valid_check(n));
+
+    algo::astar(
+        &arc,
+        start,        // start
+        |n| n == end, // is_goal
+        |_| 0,        // edge_cost
+        |_| 0,        // estimate_cost
+    )
+    .map(|x| x.1)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Move {
     Swap([QAddr; 2]),
 }
@@ -69,6 +99,9 @@ pub fn check_mapped(circ: &Circuit, arc: &Architecture) -> Result<(), &'static s
 }
 #[cfg(test)]
 mod tests {
+    use serde::Deserialize;
+    use tket_json_rs::circuit_json;
+
     use crate::{circuit::operation::Op, utils::n_qbs, validate::check_soundness};
 
     use super::*;
@@ -129,6 +162,14 @@ mod tests {
     }
 
     #[test]
+    fn test_shortest_path() {
+        let g = simple_arc();
+
+        let path = shortest_path(&g, 0.into(), 2.into(), |_| true);
+        assert_eq!(path, Some(vec![0.into(), 1.into(), 2.into()]))
+    }
+
+    #[test]
     fn test_measure_solve() {
         let mut uids = n_qbs(4);
         uids.push(UnitID::Bit {
@@ -153,5 +194,33 @@ mod tests {
 
         check_mapped(&outc, &arc).unwrap();
         check_soundness(&outc).unwrap();
+    }
+
+    #[test]
+    fn test_json_example() {
+        use std::fs;
+
+        use serde_json;
+
+        #[derive(Deserialize)]
+        struct RouteData {
+            circ: circuit_json::SerialCircuit,
+            edges: Vec<(u32, u32)>,
+        }
+        let contents = fs::read_to_string("test_files/mcts_test.json")
+            .expect("Should have been able to read the file");
+
+        let RouteData { circ, edges } = serde_json::from_str(&contents).unwrap();
+
+        let arc = Architecture::from_edges(edges);
+
+        let circ: Circuit = circ.into();
+        // crate::utils::print_circ(&circ);
+        let outc = route_mcts(circ, arc.clone());
+        check_soundness(&outc).unwrap();
+
+        check_mapped(&outc, &arc).unwrap();
+        // dbg!(outc.node_count());
+        // crate::utils::print_circ(&outc);
     }
 }

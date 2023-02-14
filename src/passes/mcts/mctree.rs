@@ -16,6 +16,15 @@ impl MCTNode {
     fn score(&self) -> f64 {
         self.reward + self.val
     }
+
+    fn new(state: NodeStateEnum, reward: f64) -> Self {
+        Self {
+            state,
+            reward,
+            visits: 0,
+            val: 0.0,
+        }
+    }
 }
 
 type MCTree = petgraph::graph::DiGraph<MCTNode, ()>;
@@ -59,14 +68,10 @@ impl Mcts {
         let distances = distances(&arc).expect("distance calculation failed.");
         // let's use unit ids to get the initial mapping
         let mapping = mapping_from_circ(&circ);
+        // contract architecture to only placed nodes
         let mut graph = MCTree::new();
         let root_state = NodeStateEnum::root_state(circ, &arc, mapping);
-        let root_node = MCTNode {
-            state: root_state,
-            visits: 0,
-            reward: 0.0,
-            val: 0.0,
-        };
+        let root_node = MCTNode::new(root_state, 0.0);
         let root = graph.add_node(root_node);
         Self {
             graph,
@@ -167,23 +172,20 @@ impl Mcts {
             .expect("state should be set by this point.");
         let child_states: Vec<_> = state
             .all_moves(&self.arc)
-            .map(|(mve, reward)| MCTNode {
-                state: NodeStateEnum::Child(Box::new(mve), None),
-                visits: 0,
-                val: 0.0,
-                reward,
-            })
+            .map(|(mve, reward)| MCTNode::new(NodeStateEnum::Child(Box::new(mve), None), reward))
             .collect();
 
         child_states
             .into_iter()
-            .map(|child| {
-                let child_node = self.graph.add_node(child);
-
-                self.graph.add_edge(s, child_node, ());
-                child_node
-            })
+            .map(|child| self.add_child(child, s))
             .collect()
+    }
+
+    fn add_child(&mut self, child_node: MCTNode, parent: NodeIndex) -> NodeIndex {
+        let child_node = self.graph.add_node(child_node);
+
+        self.graph.add_edge(parent, child_node, ());
+        child_node
     }
 
     pub(super) fn simulate(&mut self, s: NodeIndex) {
@@ -231,6 +233,7 @@ impl Mcts {
     }
 
     pub(super) fn solve(&mut self) -> MCTNode {
+        let mut num_0_decides = 0;
         while !self.get_root_state().solved() {
             for _ in 0..self.num_backprop {
                 let s = self.select();
@@ -238,10 +241,33 @@ impl Mcts {
                 self.simulate(s);
                 self.backpropagate(s);
             }
+            // let (cached, not): (Vec<_>, Vec<_>) = self.graph.node_indices().partition(|n| *n == self.root || self.node(*n).state.expect_child("msg").1.is_some());
+            // dbg!(cached.len(), not.len());
             self.decide();
+            if self.node(self.root).reward == 0.0 {
+                num_0_decides += 1;
+            } else {
+                num_0_decides = 0;
+            }
+            if num_0_decides == self.arc.node_count() {
+                self.unlock();
+                num_0_decides = 0;
+            }
             // TODO fallback if it gets stuck
         }
+
         self.graph.remove_node(self.root).unwrap()
+    }
+
+    fn unlock(&mut self) {
+        let unblocked = self
+            .get_root_state()
+            .unlock_state(&self.arc, &self.distances);
+        let mctnode = MCTNode::new(NodeStateEnum::Root(Box::new(unblocked)), 0.0);
+
+        let newroot = self.add_child(mctnode, self.root);
+        let newroot = keep_branch(&mut self.graph, newroot);
+        self.root = newroot;
     }
 }
 

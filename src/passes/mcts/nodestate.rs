@@ -1,6 +1,7 @@
 use crate::circuit::circuit::{Circuit, CircuitRewrite};
 use crate::circuit::dag::{Edge, Vertex};
 use crate::circuit::operation::{Op, WireType};
+use crate::passes::mcts::shortest_path;
 use portgraph::substitute::{BoundedSubgraph, SubgraphRef};
 use std::collections::HashSet;
 
@@ -72,6 +73,16 @@ impl NodeState {
                 let n_addr = QAddr(n.index() as u32);
                 if self.mapping.contains_right(&n_addr) {
                     let mut p = [qddr, n_addr];
+                    let srcs = p.map(|qad| {
+                        self.circ
+                            .edge_endpoints(*self.mapping.get_by_right(&qad).unwrap())
+                            .unwrap()
+                            .0
+                    });
+                    if srcs[0] == srcs[1] && self.circ.node_op(srcs[0]) == Some(&Op::Swap) {
+                        // skip swapping back
+                        continue;
+                    }
                     p.sort();
                     qddr_pairs.insert(p);
                 }
@@ -93,8 +104,64 @@ impl NodeState {
         circ.apply_rewrite(rw).expect("rewrite failure");
         let mut mapping = move_update_after_swap(&circ, self.mapping.clone(), &mve);
 
-        advance_frontier(&circ, arc, &mut mapping);
+        let _rwd = advance_frontier(&circ, arc, &mut mapping);
         Self { circ, mapping }
+    }
+
+    pub(super) fn unlock_state(&self, arc: &Architecture, dists: &Distances) -> Self {
+        let mut seen = HashSet::new();
+        let mut qbad_pairs: Vec<_> = self
+            .mapping
+            .iter()
+            .filter_map(|(e, q)| {
+                let target = self.circ.edge_endpoints(*e).unwrap().1;
+                if !seen.insert(target) {
+                    return None;
+                }
+                self.circ
+                    .node_op(target)
+                    .unwrap()
+                    .is_two_qb_gate()
+                    .then(|| {
+                        self.mapping
+                            .get_by_left(
+                                &self
+                                    .circ
+                                    .node_edges(target, portgraph::graph::Direction::Incoming)
+                                    .into_iter()
+                                    .find(|ein| *ein != *e)
+                                    .unwrap(),
+                            )
+                            .map(|other_q| [*q, *other_q])
+                    })
+                    .flatten()
+                // .map(|qad| (e, qad))
+            })
+            .collect();
+
+        qbad_pairs.sort_by_key(|[q1, q2]| dists.get(&(q1.into(), q2.into())));
+
+        for min_dist_qbs in qbad_pairs {
+            if let Some(shortest_path) =
+                shortest_path(arc, min_dist_qbs[0].into(), min_dist_qbs[1].into(), |n| {
+                    self.mapping.contains_right(&QAddr(n.index() as u32))
+                })
+            {
+                if shortest_path.len() < 2 {
+                    panic!("no valid path");
+                }
+
+                let mut state = self.clone();
+                for p in shortest_path.windows(2) {
+                    let mve = Move::Swap([QAddr(p[0].index() as u32), QAddr(p[1].index() as u32)]);
+                    state = state.child_state(mve, arc);
+                }
+                return state;
+            } else {
+                continue;
+            }
+        }
+        panic!("no unlock found.");
     }
 
     pub(super) fn sim_heuristic(
