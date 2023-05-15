@@ -28,6 +28,7 @@ serde_json = "1.0"
 downcast-rs = "1.2.0"
 portgraph = { path = "ext/portgraph" }
 priority-queue = "1.3.0"
+quantinuum-hugr = { version = "0.1.0", path = "../hugr" }
 
 
 [features]

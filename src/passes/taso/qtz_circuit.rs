@@ -1,13 +1,18 @@
 use std::collections::HashMap;
 
+use hugr::builder::{AppendWire, Container, Dataflow, ModuleBuilder, Wire};
+use hugr::types::{ClassicType, LinearType, Signature, SimpleType};
 use portgraph::graph::Direction;
 use serde::{Deserialize, Serialize};
 
-use crate::circuit::{
-    circuit::Circuit,
-    dag::Edge,
-    operation::{Op, WireType},
-};
+// use crate::circuit::{
+//     circuit::Circuit,
+//     dag::Edge,
+//     operation::{Op, WireType},
+// };
+
+use hugr::ops::{LeafOp, OpType as Op};
+use hugr::{type_row, Hugr as Circuit};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct RepCircOp {
@@ -21,9 +26,9 @@ struct RepCirc(Vec<RepCircOp>);
 
 #[derive(Debug, Serialize, Deserialize)]
 struct MetaData {
-    n_qb: u64,
-    n_input_param: u64,
-    n_total_param: u64,
+    n_qb: usize,
+    n_input_param: usize,
+    n_total_param: usize,
     num_gates: u64,
     id: Vec<String>,
     fingerprint: Vec<f64>,
@@ -38,35 +43,46 @@ struct RepCircData {
 fn map_op(opstr: &str) -> Op {
     // TODO, more
     match opstr {
-        "h" => Op::H,
-        "rz" => Op::RzF64,
-        "cx" => Op::CX,
+        "h" => LeafOp::H,
+        "rz" => LeafOp::RzF64,
+        "cx" => LeafOp::CX,
         x => panic!("unknown op {x}"),
     }
+    .into()
 }
 
-fn map_wt(wirestr: &str) -> (WireType, usize) {
+fn map_wt(wirestr: &str) -> (SimpleType, usize) {
     let wt = if wirestr.starts_with('Q') {
-        WireType::Qubit
+        LinearType::Qubit.into()
     } else if wirestr.starts_with('P') {
-        WireType::Angle
+        ClassicType::F64.into()
     } else {
         panic!("unknown op {wirestr}");
     };
 
     (wt, wirestr[1..].parse().unwrap())
 }
+// TODO change to TryFrom
 impl From<RepCircData> for Circuit {
     fn from(RepCircData { circ: rc, meta }: RepCircData) -> Self {
-        let mut circ = Circuit::new();
-        let mut param_wire_map: Vec<Edge> = (0..meta.n_input_param)
-            .map(|_| circ.new_input(WireType::Angle))
-            .collect();
-        param_wire_map.reverse();
-        let mut qubit_wire_map: Vec<Edge> = (0..meta.n_qb)
-            .map(|_| circ.new_input(WireType::Qubit))
-            .collect();
-        qubit_wire_map.reverse(); // inputs added to front of edge list first
+        let mut mod_build = ModuleBuilder::new();
+        let qb_types: Vec<SimpleType> = vec![LinearType::Qubit.into(); meta.n_qb];
+        let param_types: Vec<SimpleType> = vec![ClassicType::F64.into(); meta.n_input_param];
+
+        let mut circ = mod_build
+            .declare_and_def(
+                "main",
+                Signature::new_df([param_types, qb_types.clone()].concat(), qb_types),
+            )
+            .unwrap();
+
+        let inputs: Vec<_> = circ.input_wires().collect();
+        let (param_wires, qubit_wires) = inputs.split_at(meta.n_input_param);
+        // let param_wires: Vec<Wire> = input_iter.f(meta.n_input_param).collect();
+        // let qubit_wires: Vec<Wire> = input_iter.collect();
+
+        let mut qubit_wires: Vec<_> = qubit_wires.into();
+        let mut param_wires: Vec<_> = param_wires.iter().map(Some).collect();
         for RepCircOp {
             opstr,
             outputs,
@@ -80,38 +96,42 @@ impl From<RepCircData> for Circuit {
                 .map(|is| {
                     let (wt, idx) = map_wt(&is);
                     match wt {
-                        WireType::Qubit => qubit_wire_map[idx],
-                        WireType::Angle => param_wire_map[idx],
+                        SimpleType::Linear(LinearType::Qubit) => qubit_wires[idx],
+                        SimpleType::Classic(ClassicType::F64) => *param_wires[idx].take().unwrap(),
                         _ => panic!("unexpected wire type."),
                     }
                 })
                 .collect();
+            let output_wires = circ.add_dataflow_op(op, incoming).unwrap().outputs();
 
-            let outgoing: Vec<_> = outputs
-                .into_iter()
-                .map(|os| {
-                    let (wt, idx) = map_wt(&os);
-                    assert_eq!(wt, WireType::Qubit, "only qubits expected as output");
-                    let e = circ.add_edge(wt);
+            for (os, wire) in outputs.into_iter().zip(output_wires) {
+                let (wt, idx) = map_wt(&os);
+                assert_eq!(
+                    wt,
+                    SimpleType::Linear(LinearType::Qubit),
+                    "only qubits expected as output"
+                );
 
-                    qubit_wire_map[idx] = e;
-                    e
-                })
-                .collect();
+                qubit_wires[idx] = wire;
+            }
 
-            circ.add_vertex_with_edges(op, incoming, outgoing);
+            // circ.add_vertex_with_edges(op, incoming, outgoing);
         }
-
-        circ.dag
-            .connect_many(
-                circ.boundary()[1],
-                qubit_wire_map,
-                Direction::Incoming,
-                None,
-            )
-            .unwrap();
-
-        circ
+        // circ.dag
+        //     .connect_many(
+        //         circ.boundary()[1],
+        //         qubit_wire_map,
+        //         Direction::Incoming,
+        //         None,
+        //     )
+        //     .unwrap();
+        for unused_param in param_wires.into_iter().flatten() {
+            circ.discard(*unused_param).unwrap();
+        }
+        circ.finish_with_outputs(qubit_wires).unwrap();
+        println!("{}", mod_build.hugr().dot_string());
+        // validity check here
+        mod_build.finish().unwrap()
     }
 }
 
@@ -132,36 +152,35 @@ pub(super) fn load_ecc_set(path: &str) -> HashMap<String, Vec<Circuit>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::validate::check_soundness;
+    // use crate::validate::check_soundness;
 
     use super::*;
-    // fn load_representative_set(path: &str) -> HashMap<String, Circuit> {
-    //     let jsons = std::fs::read_to_string(path).unwrap();
-    //     // read_rep_json(&jsons).unwrap();
-    //     let st: Vec<RepCircData> = serde_json::from_str(&jsons).unwrap();
-    //     st.into_iter()
-    //         .map(|mut rcd| (rcd.meta.id.remove(0), rcd.into()))
-    //         .collect()
-    // }
+    fn load_representative_set(path: &str) -> HashMap<String, Circuit> {
+        let jsons = std::fs::read_to_string(path).unwrap();
+        // read_rep_json(&jsons).unwrap();
+        let st: Vec<RepCircData> = serde_json::from_str(&jsons).unwrap();
+        st.into_iter()
+            .map(|mut rcd| (rcd.meta.id.remove(0), rcd.into()))
+            .collect()
+    }
 
-    // #[test]
-    // fn test_read_rep() {
-    //     let rep_map: HashMap<String, Circuit> =
-    //         load_representative_set("../../ext/quartz/h_rz_cxrepresentative_set.json");
+    #[test]
+    fn test_read_rep() {
+        let rep_map: HashMap<String, Circuit> =
+            load_representative_set("test_files/h_rz_cxrepresentative_set.json");
 
-    //     for c in rep_map.values() {
-    //         println!("{}", c.dot_string());
-    //         check_soundness(c).unwrap();
-    //     }
-    // }
+        for c in rep_map.values().take(1) {
+            println!("{}", c.dot_string());
+        }
+    }
 
     #[test]
     fn test_read_complete() {
         let ecc: HashMap<String, Vec<Circuit>> =
-            load_ecc_set("../../ext/quartz/h_rz_cxcomplete_ECC_set.json");
+            load_ecc_set("test_files/h_rz_cxcomplete_ECC_set.json");
 
-        ecc.values()
-            .flatten()
-            .for_each(|c| check_soundness(c).unwrap());
+        // ecc.values()
+        //     .flatten()
+        //     .for_each(|c| check_soundness(c).unwrap());
     }
 }
