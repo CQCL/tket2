@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use hugr::builder::{AppendWire, Container, Dataflow, ModuleBuilder, Wire};
+use hugr::builder::{AppendWire, Container, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::types::{ClassicType, LinearType, Signature, SimpleType};
 use portgraph::graph::Direction;
 use serde::{Deserialize, Serialize};
@@ -65,16 +65,10 @@ fn map_wt(wirestr: &str) -> (SimpleType, usize) {
 // TODO change to TryFrom
 impl From<RepCircData> for Circuit {
     fn from(RepCircData { circ: rc, meta }: RepCircData) -> Self {
-        let mut mod_build = ModuleBuilder::new();
         let qb_types: Vec<SimpleType> = vec![LinearType::Qubit.into(); meta.n_qb];
         let param_types: Vec<SimpleType> = vec![ClassicType::F64.into(); meta.n_input_param];
+        let mut circ = DFGBuilder::new([param_types, qb_types.clone()].concat(), qb_types).unwrap();
 
-        let mut circ = mod_build
-            .declare_and_def(
-                "main",
-                Signature::new_df([param_types, qb_types.clone()].concat(), qb_types),
-            )
-            .unwrap();
 
         let inputs: Vec<_> = circ.input_wires().collect();
         let (param_wires, qubit_wires) = inputs.split_at(meta.n_input_param);
@@ -125,13 +119,7 @@ impl From<RepCircData> for Circuit {
         //         None,
         //     )
         //     .unwrap();
-        for unused_param in param_wires.into_iter().flatten() {
-            circ.discard(*unused_param).unwrap();
-        }
-        circ.finish_with_outputs(qubit_wires).unwrap();
-        println!("{}", mod_build.hugr().dot_string());
-        // validity check here
-        mod_build.finish().unwrap()
+        circ.finish_hugr_with_outputs(qubit_wires).unwrap()
     }
 }
 
