@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 // };
 
 use hugr::ops::{LeafOp, OpType as Op};
-use hugr::{type_row, Hugr as Circuit};
+use hugr::Hugr as Circuit;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct RepCircOp {
@@ -68,7 +68,6 @@ impl From<RepCircData> for Circuit {
         let qb_types: Vec<SimpleType> = vec![LinearType::Qubit.into(); meta.n_qb];
         let param_types: Vec<SimpleType> = vec![ClassicType::F64.into(); meta.n_input_param];
         let mut circ = DFGBuilder::new([param_types, qb_types.clone()].concat(), qb_types).unwrap();
-
 
         let inputs: Vec<_> = circ.input_wires().collect();
         let (param_wires, qubit_wires) = inputs.split_at(meta.n_input_param);
