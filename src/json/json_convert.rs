@@ -1,4 +1,4 @@
-use hugr::builder::{AppendWire, DFGBuilder, Dataflow, DataflowHugr};
+use hugr::builder::{AppendWire, DFGBuilder, Dataflow, DataflowHugr, Container};
 use hugr::ops::{self, constant::ConstValue, LeafOp};
 use hugr::ops::{CustomOp, OpaqueOp};
 use hugr::resource::ResourceSet;
@@ -119,7 +119,7 @@ impl TryFrom<OpType> for HugrOp {
             // OpType::UnitaryTableauBox => todo!(),
             // OpType::Rx => Op::RxF64,
             // OpType::Ry => todo!(),
-            // OpType::Rz => Op::RzF64,
+            OpType::Rz => LeafOp::RzF64.into(),
             // OpType::TK1 => Op::TK1,
             // OpType::AngleAdd => Op::AngleAdd,
             // OpType::AngleMul => Op::AngleMul,
@@ -239,8 +239,6 @@ pub fn load_serial(serialcirc: SerialCircuit) -> Circuit {
     // let mut circ = Circuit::with_uids(uids);
 
     let mut dfg = DFGBuilder::new(sig.input, sig.output).unwrap();
-    let wires = dfg.input_wires().collect();
-    let mut circ = dfg.as_circuit(wires);
 
     // circ.name = serialcirc.name;
     // circ.phase = Param::new(serialcirc.phase);
@@ -253,17 +251,35 @@ pub fn load_serial(serialcirc: SerialCircuit) -> Circuit {
     //     .enumerate()
     //     .map(|(i, uid)| (uid.clone(), i))
     //     .collect();
+    let param_wires: HashMap<String, Wire> = serialcirc
+        .commands
+        .iter()
+        .map(|com| com.op.params.clone().unwrap_or_default().into_iter())
+        .flatten()
+        .map(|p| {
+            if let Ok(f) = f64::from_str(&p[..]) {
+                (p, dfg.add_load_const(ConstValue::F64(f)).unwrap())
+            } else {
+                // need to be able to add floating point inputs to the
+                // signature ahead of time
+                todo!()
+                // circ.add_unitid(UnitID::Angle(p_str))
+            }
+        })
+        .collect();
 
+    let wires = dfg.input_wires().collect();
+    let mut circ = dfg.as_circuit(wires);
     for com in serialcirc.commands {
-        let ps = com.op.params.clone();
-        let HugrOp(op) = com.op.op_type.clone().try_into().unwrap_or(HugrOp(
+        let Command { op, args, .. } = com;
+        let params = op.params.clone();
+        let HugrOp(op) = op.op_type.clone().try_into().unwrap_or(HugrOp(
             LeafOp::CustomOp {
-                custom: map_op(com.op, com.args.clone()),
+                custom: map_op(op, args.clone()),
             }
             .into(),
         ));
-        let args: Vec<_> = com
-            .args
+        let args: Vec<_> = args
             .into_iter()
             .map(|reg| {
                 // relies on TKET1 constraint that all registers have
@@ -272,30 +288,10 @@ pub fn load_serial(serialcirc: SerialCircuit) -> Circuit {
             })
             .collect();
 
-        let params = ps.unwrap_or_default();
         let param_wires: Vec<Wire> = params
-            .into_iter()
-            .map(|p| {
-                let p_str = p.to_string();
-
-                if let Ok(f) = f64::from_str(&p_str[..]) {
-                    let empty: [AppendWire; 0] = [];
-                    circ.append_with_outputs(ops::Const(ConstValue::F64(f)), empty)
-                        .unwrap()[0]
-                    // let e = circ.add_edge(WireType::Angle);
-                    // circ.add_vertex_with_edges(
-                    //     Op::Const(ConstValue::f64_angle(f)),
-                    //     vec![],
-                    //     vec![e],
-                    // );
-                    // e
-                } else {
-                    // need to be able to add floating point inputs to the
-                    // signature ahead of time
-                    todo!()
-                    // circ.add_unitid(UnitID::Angle(p_str))
-                }
-            })
+            .unwrap_or_default()
+            .iter()
+            .map(|p| *param_wires.get(p).unwrap())
             .collect();
 
         // if let Some(params) = ps {
@@ -332,12 +328,11 @@ pub fn load_serial(serialcirc: SerialCircuit) -> Circuit {
             .into_iter()
             .map(AppendWire::I)
             .chain(param_wires.into_iter().map(AppendWire::W));
-        let v = circ.append_and_consume(op, append_wires).unwrap();
+        circ.append_and_consume(op, append_wires).unwrap();
     }
     // TODO implicit perm
 
     let wires = circ.finish();
-
     dfg.finish_hugr_with_outputs(wires).unwrap()
 }
 // }
