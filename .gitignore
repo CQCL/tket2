@@ -1,3 +1,8 @@
 /target
 Cargo.lock
 pyrs/target/
+
+# Devenv
+.devenv*
+devenv.local.nix
+
