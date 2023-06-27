@@ -1,15 +1,15 @@
+use std::collections::HashMap;
+use std::str::FromStr;
+
 use hugr::builder::{AppendWire, DFGBuilder, Dataflow, DataflowHugr};
-use hugr::ops::{self, constant::ConstValue, LeafOp};
-use hugr::ops::{CustomOp, OpaqueOp};
+use hugr::ops::constant::ConstValue;
+use hugr::ops::{self, CustomOp, LeafOp, OpaqueOp};
 use hugr::resource::ResourceSet;
 use hugr::types::{ClassicType, LinearType, Signature, SimpleType};
 use hugr::{Hugr as Circuit, Wire};
 // use hugr::hugr:
 // use crate::circuit::operation::{ConstValue, Op, WireType};
-
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::str::FromStr;
 use tket_json_rs::circuit_json::{Command, Operation, Register, SerialCircuit};
 use tket_json_rs::optype::OpType;
 

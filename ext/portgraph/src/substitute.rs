@@ -1,9 +1,10 @@
-use crate::graph::ConnectError;
-
-use super::graph::{Direction, EdgeIndex, Graph, NodeIndex, DIRECTIONS};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::{Debug, Display};
+
 use thiserror::Error;
+
+use super::graph::{Direction, EdgeIndex, Graph, NodeIndex, DIRECTIONS};
+use crate::graph::ConnectError;
 
 #[derive(Debug, Clone)]
 pub struct SubgraphRef {
@@ -201,9 +202,8 @@ mod tests {
     use std::collections::HashSet;
     use std::error::Error;
 
-    use crate::substitute::{BoundedSubgraph, OpenGraph};
-
     use super::Graph;
+    use crate::substitute::{BoundedSubgraph, OpenGraph};
 
     #[test]
     fn test_remove_subgraph() -> Result<(), Box<dyn Error>> {

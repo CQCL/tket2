@@ -1,10 +1,11 @@
-#[cfg(feature = "pyo3")]
-use pyo3::prelude::*;
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug};
 use std::hash::Hash;
 use std::iter::FusedIterator;
 use std::{iter, slice};
+
+#[cfg(feature = "pyo3")]
+use pyo3::prelude::*;
 use thiserror::Error;
 
 /// The default integer type for graph indices.

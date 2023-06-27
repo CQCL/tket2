@@ -1,18 +1,15 @@
 use std::collections::HashMap;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
-use hugr::types::{ClassicType, LinearType, SimpleType};
-
-use serde::{Deserialize, Serialize};
-
 // use crate::circuit::{
 //     circuit::Circuit,
 //     dag::Edge,
 //     operation::{Op, WireType},
 // };
-
 use hugr::ops::{LeafOp, OpType as Op};
+use hugr::types::{ClassicType, LinearType, SimpleType};
 use hugr::Hugr as Circuit;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct RepCircOp {
