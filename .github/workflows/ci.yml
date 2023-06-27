@@ -1,0 +1,87 @@
+name: Continuous integration
+
+on:
+  push:
+    branches:
+      - main 
+      - hugr
+  pull_request:
+    branches:
+      - main
+      - hugr
+  workflow_dispatch: {}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUSTFLAGS: "--cfg=ci_run"
+  MIRIFLAGS: '-Zmiri-permissive-provenance' # Required due to warnings in bitvec 1.0.1
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v0
+      - name: Check formatting
+        run: cargo fmt -- --check
+      - name: Run clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Build docs
+        run: cargo doc --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: "-Dwarnings"
+
+  benches:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v0
+      - name: Build benchmarks with no features
+        run: cargo bench --verbose --no-run --no-default-features
+      - name: Build benchmarks with all features
+        run: cargo bench --verbose --no-run --all-features
+
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          #- rust: 1.70.0  # Update once MSRV != stable
+          - rust: stable
+            cache: true
+          - rust: beta
+            cache: true
+          - rust: nightly
+            cache: true
+
+    steps:
+      - uses: actions/checkout@v3
+      - id: toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+      - name: Configure default rust toolchain
+        run: rustup override set ${{steps.toolchain.outputs.name}}
+      - uses: Swatinem/rust-cache@v2
+        if: ${{ matrix.cache }}
+        with:
+          prefix-key: v0-rust-${{ matrix.rust }}
+      - name: Build with no features
+        run: cargo build --verbose --no-default-features
+      - name: Build with all features
+        run: cargo build --verbose --all-features
+      - name: Tests with no features
+        run: cargo test --verbose --no-default-features
+      - name: Tests with all features
+        run: cargo test --verbose --all-features
