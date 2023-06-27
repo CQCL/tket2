@@ -1,4 +1,4 @@
-use hugr::builder::{AppendWire, Container, DFGBuilder, Dataflow, DataflowHugr};
+use hugr::builder::{AppendWire, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::ops::{self, constant::ConstValue, LeafOp};
 use hugr::ops::{CustomOp, OpaqueOp};
 use hugr::resource::ResourceSet;
@@ -6,11 +6,11 @@ use hugr::types::{ClassicType, LinearType, Signature, SimpleType};
 use hugr::{Hugr as Circuit, Wire};
 // use hugr::hugr:
 // use crate::circuit::operation::{ConstValue, Op, WireType};
-use portgraph::graph::Direction;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
-use tket_json_rs::circuit_json::{Command, Operation, Permutation, Register, SerialCircuit};
+use tket_json_rs::circuit_json::{Command, Operation, Register, SerialCircuit};
 use tket_json_rs::optype::OpType;
 
 const QB: SimpleType = SimpleType::Linear(LinearType::Qubit);
@@ -254,8 +254,7 @@ pub fn load_serial(serialcirc: SerialCircuit) -> Circuit {
     let param_wires: HashMap<String, Wire> = serialcirc
         .commands
         .iter()
-        .map(|com| com.op.params.clone().unwrap_or_default().into_iter())
-        .flatten()
+        .flat_map(|com| com.op.params.clone().unwrap_or_default().into_iter())
         .map(|p| {
             if let Ok(f) = f64::from_str(&p[..]) {
                 (p, dfg.add_load_const(ConstValue::F64(f)).unwrap())
@@ -421,7 +420,7 @@ impl CustomOp for TK1Op {
                 .signature
                 .as_ref()
                 .expect("custom op needs a signature")
-                .into_iter()
+                .iter()
                 .map(|s| match &s[..] {
                     "Q" => QB,
                     "B" => BIT,

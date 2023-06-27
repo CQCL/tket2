@@ -160,16 +160,11 @@ impl<E> Edge<E> {
 }
 
 #[cfg_attr(feature = "pyo3", pyclass)]
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
 pub enum Direction {
+    #[default]
     Incoming = 0,
     Outgoing = 1,
-}
-
-impl Default for Direction {
-    fn default() -> Self {
-        Direction::Incoming
-    }
 }
 
 impl Direction {

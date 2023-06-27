@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use hugr::builder::{AppendWire, Container, DFGBuilder, Dataflow, DataflowHugr};
-use hugr::types::{ClassicType, LinearType, Signature, SimpleType};
-use portgraph::graph::Direction;
+use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
+use hugr::types::{ClassicType, LinearType, SimpleType};
+
 use serde::{Deserialize, Serialize};
 
 // use crate::circuit::{
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn test_read_complete() {
-        let ecc: HashMap<String, Vec<Circuit>> =
+        let _ecc: HashMap<String, Vec<Circuit>> =
             load_ecc_set("test_files/h_rz_cxcomplete_ECC_set.json");
 
         // ecc.values()
