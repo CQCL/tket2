@@ -125,8 +125,6 @@ pub mod taso;
 
 // pub type CircRewriteIter<'a, F, G> = RewriteIter<'a, VertexProperties, EdgeProperties, F, G>;
 
-
-
 // pub fn decompose_custom(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
 //     circ.dag.node_indices().filter_map(|n| {
 //         let op = &circ.dag.node_weight(n).unwrap().op;

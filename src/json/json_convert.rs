@@ -1,4 +1,4 @@
-use hugr::builder::{AppendWire, DFGBuilder, Dataflow, DataflowHugr, Container};
+use hugr::builder::{AppendWire, Container, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::ops::{self, constant::ConstValue, LeafOp};
 use hugr::ops::{CustomOp, OpaqueOp};
 use hugr::resource::ResourceSet;

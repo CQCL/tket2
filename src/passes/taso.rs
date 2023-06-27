@@ -1,4 +1,7 @@
-use hugr::{ops::{OpType, LeafOp}, Hugr};
+use hugr::{
+    ops::{LeafOp, OpType},
+    Hugr,
+};
 // use super::{pattern::node_equality, CircFixedStructPattern, PatternRewriter, RewriteGenerator};
 // use crate::circuit::{
 //     circuit::{Circuit, CircuitRewrite},
