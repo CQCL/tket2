@@ -11,17 +11,12 @@ lazy_static = "1.4.0"
 cgmath = "0.18.0"
 num-rational = "0.4"
 num-complex = { version = "0.4", optional = true }
-tket-json-rs = { git = "ssh://git@github.com/CQCL/tket-json-rs.git", features = [
-    "tket2ops",
-] }
-# tket-json-rs = {path = "../tket-json-rs", features = [
-#     "tket2ops",
-# ] }
+tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs", features = ["tket2ops"] }
 rayon = "1.5"
 pyo3 = { version = "0.16.5", optional = true, features = [
     "multiple-pymethods",
 ] }
-tket-rs = { optional = true, git = "ssh://git@github.com/CQCL-DEV/tket-rs.git" }
+#tket-rs = { optional = true, git = "ssh://git@github.com/CQCL-DEV/tket-rs.git" }
 thiserror = "1.0.28"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -35,7 +30,7 @@ typetag = "0.2.8"
 
 [features]
 pyo3 = ["dep:pyo3", "tket-json-rs/pyo3", "tket-json-rs/tket2ops", "portgraph/pyo3"]
-tkcxx = ["dep:tket-rs", "dep:num-complex"]
+#tkcxx = ["dep:tket-rs", "dep:num-complex"]
 
 [dev-dependencies]
 rstest = "0.12.0"
