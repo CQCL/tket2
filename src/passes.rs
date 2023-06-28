@@ -1,3 +1,5 @@
+//! Optimisation passes for circuits.
+
 // pub mod classical;
 // pub mod redundancy;
 // pub mod pattern;

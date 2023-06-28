@@ -1,3 +1,6 @@
+//! Conversion definitions between Hugr operations and the serializable TKET
+//! operations defined by `tket-json-rs`.
+
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -136,6 +139,7 @@ impl TryFrom<OpType> for HugrOp {
     // }
 }
 
+/// Error type for conversion between `Op` and `OpType`.
 #[derive(Debug)]
 pub struct OpConvertError;
 
@@ -217,6 +221,8 @@ pub struct OpConvertError;
 // }
 
 // impl<P: Into<String> + Clone + std::fmt::Display> From<SerialCircuit<P>> for Circuit {
+
+/// Load a serializable circuit into a `Circuit`.
 pub fn load_serial(serialcirc: SerialCircuit) -> Circuit {
     let n_qbs = serialcirc.qubits.len();
     let n_bits = serialcirc.bits.len();

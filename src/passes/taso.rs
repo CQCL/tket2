@@ -1,3 +1,6 @@
+//! TASO optimiser.
+#![allow(missing_docs)]
+
 use hugr::Hugr;
 // use super::{pattern::node_equality, CircFixedStructPattern, PatternRewriter, RewriteGenerator};
 // use crate::circuit::{
