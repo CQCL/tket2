@@ -13,7 +13,7 @@ num-rational = "0.4"
 num-complex = { version = "0.4", optional = true }
 tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs", features = ["tket2ops"] }
 rayon = "1.5"
-pyo3 = { version = "0.16.5", optional = true, features = [
+pyo3 = { version = "0.19.0", optional = true, features = [
     "multiple-pymethods",
 ] }
 #tket-rs = { optional = true, git = "ssh://git@github.com/CQCL-DEV/tket-rs.git" }
@@ -21,7 +21,7 @@ thiserror = "1.0.28"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 downcast-rs = "1.2.0"
-portgraph = { path = "ext/portgraph" }
+portgraph = "0.7.0"
 priority-queue = "1.3.0"
 quantinuum-hugr = { version = "0.1.0", git="https://github.com/CQCL-DEV/hugr", branch="opaque-new" }
 smol_str = "0.2.0"
@@ -43,4 +43,4 @@ criterion = { version = "0.3", features = ["html_reports"] }
 
 [workspace]
 
-members = ["pyrs", "ext/portgraph"]
+members = ["pyrs"]
