@@ -18,3 +18,4 @@ tket-json-rs = { git = "ssh://git@github.com/CQCL/tket-json-rs.git", features = 
     "pyo3",
 ] }
 # tket-json-rs = { path = "../../tket-json-rs", features = ["pyo3"]}
+quantinuum-hugr = { version = "0.1.0", git="https://github.com/CQCL-DEV/hugr", branch="opaque-new" }

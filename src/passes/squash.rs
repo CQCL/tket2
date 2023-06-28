@@ -9,7 +9,7 @@ use crate::{
 
 use super::{
     pattern::{node_equality, Match},
-    pattern_rewriter, CircFixedStructPattern,
+    CircFixedStructPattern, PatternRewriter, RewriteGenerator,
 };
 use portgraph::{
     graph::{Direction, EdgeIndex, NodeIndex},
@@ -83,7 +83,7 @@ pub fn find_singleq_rotations_pattern(circ: &Circuit) -> impl Iterator<Item = Ci
         rotation_replacement(op)
     };
 
-    pattern_rewriter(pattern, circ, rewriter)
+    PatternRewriter::new(pattern, rewriter).into_rewrites(circ)
 }
 
 // Pairwise squashing using pattern matching
@@ -118,7 +118,7 @@ pub fn squash_pattern(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + 
 
     let rewriter = move |_: Match| (replace_circ.clone(), 0.0);
 
-    pattern_rewriter(pattern, circ, rewriter)
+    PatternRewriter::new(pattern, rewriter).into_rewrites(circ)
 }
 
 fn rotation_replacement(op: &Op) -> (Circuit, Param) {
@@ -370,7 +370,9 @@ fn cx_pattern(circ: &Circuit) -> impl Iterator<Item = CircuitRewrite> + '_ {
     pattern_c.append_op(Op::CX, &[0, 1]).unwrap();
     pattern_c.append_op(Op::CX, &[0, 1]).unwrap();
     let pattern = CircFixedStructPattern::from_circ(pattern_c, node_equality());
-    pattern_rewriter(pattern, circ, move |_| (replace_c.clone(), 0.0))
+    PatternRewriter::new(pattern, move |_| (replace_c.clone(), 0.0)).into_rewrites(circ)
+
+    // pattern_rewriter(pattern, circ, move |_| (replace_c.clone(), 0.0))
 }
 
 pub fn cx_cancel_pass(circ: Circuit) -> (Circuit, bool) {
