@@ -16,7 +16,7 @@ use crate::{
     },
     validate::check_soundness,
 };
-use portgraph::graph::Direction;
+use portgraph::Direction;
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 
 #[test]

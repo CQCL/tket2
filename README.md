@@ -20,13 +20,6 @@ which in turn will require `conan` installed and the tket remote conan repositor
 
 A brief outline of how the code is currently structured
 
-* `ext/portgraph`: a standalone graph library hosting the graph data structure
-  and rewrite logic
-    - `graph.rs`: core graph data structure and impls.
-    - `substitute.rs`: graph rewriting impls and data structures
-    - `toposort.rs`: topological traversal
-    - `py_graph.rs`: pyo3 bindings
-
 * `benches`: criterion benchmarks, limited, should be added to.
 * `pyrs`: python bindings and tests using pyo3
 * `src/circuit`: Circuit data structure and conversion impls
