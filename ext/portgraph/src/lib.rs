@@ -11,12 +11,9 @@ pub mod py_graph;
 mod tests {
     use std::collections::{BTreeMap, HashSet};
 
-    use crate::{
-        dot::dot_string,
-        graph::{EdgeIndex, NodeIndex},
-    };
-
     use super::graph::Graph;
+    use crate::dot::dot_string;
+    use crate::graph::{EdgeIndex, NodeIndex};
 
     #[test]
     fn test_insert_graph() {

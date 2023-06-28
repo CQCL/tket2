@@ -1,21 +1,14 @@
-use hugr::{ops::{OpType, LeafOp}, Hugr};
+use hugr::Hugr;
 // use super::{pattern::node_equality, CircFixedStructPattern, PatternRewriter, RewriteGenerator};
 // use crate::circuit::{
 //     circuit::{Circuit, CircuitRewrite},
 //     operation::Op,
 // };
-use portgraph::{
-    graph::{Direction, NodeIndex},
-    toposort::TopSortWalker,
-};
-use priority_queue::PriorityQueue;
-use std::sync::mpsc;
-use std::thread;
-use std::{collections::HashMap, sync::Arc};
 
 mod qtz_circuit;
 
 #[derive(Clone)]
+#[allow(unused)] // TODO
 pub struct RepCircSet {
     rep_circ: Hugr,
     others: Vec<Hugr>,

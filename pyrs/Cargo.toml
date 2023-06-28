@@ -14,8 +14,5 @@ tket2 = { path = "../", features = ["pyo3"] }
 portgraph = { path = "../ext/portgraph", features = ["pyo3"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tket-json-rs = { git = "ssh://git@github.com/CQCL/tket-json-rs.git", features = [
-    "pyo3",
-] }
-# tket-json-rs = { path = "../../tket-json-rs", features = ["pyo3"]}
+tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs", features = ["pyo3"] }
 quantinuum-hugr = { version = "0.1.0", git="https://github.com/CQCL-DEV/hugr", branch="opaque-new" }

@@ -1,9 +1,8 @@
-use pyo3::{types::PyInt, IntoPy, PyErr, PyObject, Python};
+use pyo3::types::PyInt;
+use pyo3::{IntoPy, PyErr, PyObject, Python};
 
-use crate::{
-    graph::{ConnectError, EdgeIndex, NodeIndex},
-    substitute::RewriteError,
-};
+use crate::graph::{ConnectError, EdgeIndex, NodeIndex};
+use crate::substitute::RewriteError;
 
 impl From<PyInt> for NodeIndex {
     fn from(x: PyInt) -> Self {
