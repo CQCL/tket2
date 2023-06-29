@@ -449,7 +449,7 @@ fn map_op(mut op: Operation, args: Vec<Register>) -> OpaqueOp {
         resources: ResourceSet::new(),
     };
     let id = op.name();
-    OpaqueOp::new(id, Box::new(op))
+    OpaqueOp::new(id, op)
     // Operation {
     //     op_type: op.op_type,
     //     n_qb: op.n_qb,
