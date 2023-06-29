@@ -55,7 +55,7 @@ impl TryFrom<OpType> for HugrOp {
             // OpType::ExplicitModifier => todo!(),
             // OpType::MultiBit => todo!(),
             // OpType::Z => todo!(),
-            // OpType::X => todo!(),
+            OpType::X => LeafOp::X.into(),
             // OpType::Y => todo!(),
             // OpType::S => todo!(),
             // OpType::Sdg => todo!(),
@@ -84,7 +84,7 @@ impl TryFrom<OpType> for HugrOp {
             // OpType::SWAP => todo!(),
             // OpType::CSWAP => todo!(),
             // OpType::BRIDGE => todo!(),
-            OpType::noop => LeafOp::Noop { ty: QB }.into(),
+            OpType::noop => LeafOp::Noop(QB).into(),
             // TODO TKET1 measure takes a bit as input, HUGR measure does not
             // OpType::Measure => LeafOp::Measure.into(),
             // OpType::Collapse => todo!(),
@@ -264,6 +264,11 @@ pub fn load_serial(serialcirc: SerialCircuit) -> Circuit {
         .map(|p| {
             if let Ok(f) = f64::from_str(&p[..]) {
                 (p, dfg.add_load_const(ConstValue::F64(f)).unwrap())
+            } else if p.split('/').count() == 2 {
+                let (n, d) = p.split_once('/').unwrap();
+                let n = f64::from_str(n).unwrap();
+                let d = f64::from_str(d).unwrap();
+                (p, dfg.add_load_const(ConstValue::F64(n / d)).unwrap())
             } else {
                 // need to be able to add floating point inputs to the
                 // signature ahead of time
@@ -278,12 +283,11 @@ pub fn load_serial(serialcirc: SerialCircuit) -> Circuit {
     for com in serialcirc.commands {
         let Command { op, args, .. } = com;
         let params = op.params.clone();
-        let HugrOp(op) = op.op_type.clone().try_into().unwrap_or(HugrOp(
-            LeafOp::CustomOp {
-                custom: map_op(op, args.clone()),
-            }
-            .into(),
-        ));
+        let HugrOp(op) = op
+            .op_type
+            .clone()
+            .try_into()
+            .unwrap_or(HugrOp(LeafOp::CustomOp(map_op(op, args.clone())).into()));
         let args: Vec<_> = args
             .into_iter()
             .map(|reg| {
