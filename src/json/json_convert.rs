@@ -55,7 +55,7 @@ impl TryFrom<OpType> for HugrOp {
             // OpType::ExplicitModifier => todo!(),
             // OpType::MultiBit => todo!(),
             // OpType::Z => todo!(),
-            // OpType::X => todo!(),
+            OpType::X => LeafOp::X.into(),
             // OpType::Y => todo!(),
             // OpType::S => todo!(),
             // OpType::Sdg => todo!(),
@@ -264,6 +264,11 @@ pub fn load_serial(serialcirc: SerialCircuit) -> Circuit {
         .map(|p| {
             if let Ok(f) = f64::from_str(&p[..]) {
                 (p, dfg.add_load_const(ConstValue::F64(f)).unwrap())
+            } else if p.split('/').count() == 2 {
+                let (n, d) = p.split_once('/').unwrap();
+                let n = f64::from_str(n).unwrap();
+                let d = f64::from_str(d).unwrap();
+                (p, dfg.add_load_const(ConstValue::F64(n / d)).unwrap())
             } else {
                 // need to be able to add floating point inputs to the
                 // signature ahead of time
