@@ -287,7 +287,7 @@ pub fn load_serial(serialcirc: SerialCircuit) -> Circuit {
             .op_type
             .clone()
             .try_into()
-            .unwrap_or(HugrOp(LeafOp::CustomOp(map_op(op, args.clone())).into()));
+            .unwrap_or(HugrOp(LeafOp::CustomOp { custom: map_op(op, args.clone())}.into()));
         let args: Vec<_> = args
             .into_iter()
             .map(|reg| {
