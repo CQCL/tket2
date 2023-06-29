@@ -7,7 +7,7 @@
 //! quantum software developers to take advantage of its state of the art
 //! compilation for many different quantum architectures.
 
-//pub mod circuit;
+pub mod circuit;
 
 pub mod json;
 pub mod passes;
