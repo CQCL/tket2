@@ -283,11 +283,12 @@ pub fn load_serial(serialcirc: SerialCircuit) -> Circuit {
     for com in serialcirc.commands {
         let Command { op, args, .. } = com;
         let params = op.params.clone();
-        let HugrOp(op) = op
-            .op_type
-            .clone()
-            .try_into()
-            .unwrap_or(HugrOp(LeafOp::CustomOp { custom: map_op(op, args.clone())}.into()));
+        let HugrOp(op) = op.op_type.clone().try_into().unwrap_or(HugrOp(
+            LeafOp::CustomOp {
+                custom: map_op(op, args.clone()),
+            }
+            .into(),
+        ));
         let args: Vec<_> = args
             .into_iter()
             .map(|reg| {
