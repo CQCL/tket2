@@ -84,7 +84,7 @@ impl TryFrom<OpType> for HugrOp {
             // OpType::SWAP => todo!(),
             // OpType::CSWAP => todo!(),
             // OpType::BRIDGE => todo!(),
-            OpType::noop => LeafOp::Noop(QB).into(),
+            OpType::noop => LeafOp::Noop { ty: QB }.into(),
             // TODO TKET1 measure takes a bit as input, HUGR measure does not
             // OpType::Measure => LeafOp::Measure.into(),
             // OpType::Collapse => todo!(),
