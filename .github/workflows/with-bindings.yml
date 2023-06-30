@@ -26,7 +26,7 @@ jobs:
           gcc-version: 11
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: v0
+          prefix-key: v0-conan
       - name: Build benchmarks with all features
         run: cargo bench --verbose --no-run --all-features
 
@@ -59,7 +59,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         if: ${{ matrix.cache }}
         with:
-          prefix-key: v0-rust-${{ matrix.rust }}
+          prefix-key: v0-rust-${{ matrix.rust }}-conan
       - name: Build with all features
         run: cargo build --verbose --all-features
       - name: Tests with all features
