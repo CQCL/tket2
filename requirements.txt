@@ -1,2 +1,2 @@
 maturin
-conan
+conan==1.60.1
