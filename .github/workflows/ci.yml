@@ -14,7 +14,7 @@ env:
   CARGO_INCREMENTAL: 0
   RUSTFLAGS: "--cfg=ci_run"
   MIRIFLAGS: '-Zmiri-permissive-provenance' # Required due to warnings in bitvec 1.0.1
-  ALL_FEATURES: "pyo3" # Features to test, ignoring the ones that require c++ bindings
+  FEATURES: "pyo3" # Features to test, ignoring the ones that require c++ bindings
 
 jobs:
   check:
