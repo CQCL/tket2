@@ -1,0 +1,35 @@
+name: Setup conan for TKET bindings
+
+inputs:
+  conan-profile:
+    description: Conan profile file
+    required: true
+  gcc-version:
+    description: Version of the GCC compiler defined in the profile
+    default: 11
+
+outputs: {}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up GCC
+      uses: egor-tensin/setup-gcc@v1
+      with:
+        version: ${{ inputs.gcc-version }}
+        platform: x64
+    - name: Install Conan
+      id: conan
+      uses: turtlebrowser/get-conan@main
+      with:
+        version: 1.60.1
+    - name: Install the conan profile
+      # TODO: support other runners in addition to linux x86_64
+      run: |
+        mkdir -p ~/.conan/profiles/
+        cp ${{ inputs.conan-profile }} ~/.conan/profiles/tket-rs-linux-x86_64
+      shell: bash
+    - name: Setup the conan TKET remote
+      run: conan remote add tket-libs https://quantinuumsw.jfrog.io/artifactory/api/conan/tket1-libs
+      shell: bash
+       
