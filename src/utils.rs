@@ -1,5 +1,11 @@
 //! Utility functions for the library.
 
+use hugr::types::{ClassicType, LinearType, SimpleType};
+
+pub(crate) const QB: SimpleType = SimpleType::Linear(LinearType::Qubit);
+pub(crate) const BIT: SimpleType = SimpleType::Classic(ClassicType::Int(1));
+pub(crate) const F64: SimpleType = SimpleType::Classic(ClassicType::F64);
+
 #[allow(dead_code)]
 // Test only utils
 #[cfg(test)]

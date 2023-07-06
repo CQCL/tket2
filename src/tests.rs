@@ -4,6 +4,7 @@ use hugr::hugr::region::FlatRegionView;
 use hugr::{Hugr, HugrView};
 use tket_json_rs::circuit_json;
 
+use crate::circuit::Circuit;
 use crate::json::json_convert::TKET1Decode;
 
 #[test]
@@ -14,9 +15,9 @@ fn read_json() {
     assert_eq!(ser.commands.len(), 4);
 
     let hugr: Hugr = ser.decode().unwrap();
-    let _circ = FlatRegionView::new(&hugr, hugr.root());
+    let circ = FlatRegionView::new(&hugr, hugr.root());
 
-    //assert_eq!(circ.qubits().len(), 2);
+    assert_eq!(circ.qubits().len(), 2);
 
     //check_soundness(&circ).unwrap();
 
@@ -37,9 +38,9 @@ fn read_json_unknown_op() {
     assert_eq!(ser.commands.len(), 1);
 
     let hugr: Hugr = ser.decode().unwrap();
-    let _circ = FlatRegionView::new(&hugr, hugr.root());
+    let circ = FlatRegionView::new(&hugr, hugr.root());
 
-    //assert_eq!(circ.qubits().len(), 3);
+    assert_eq!(circ.qubits().len(), 3);
 
     //let mut coms = circ.to_commands();
     //coms.next(); // skip input
