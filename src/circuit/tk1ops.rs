@@ -1,14 +1,22 @@
-use super::operation::CustomOp;
-use super::operation::Signature;
-use super::operation::ToCircuitFail;
+//! Implementation of Hugr's CustomOp trait for the TKET1 bindings in `tket-rs`.
+//! 
+//! TODO: This cannot be defined here. Should we do it in `hugr` or in `tket-rs`?
+
+use hugr::ops::CustomOp;
+use hugr::types::Signature;
 use tket_json_rs::circuit_json::Operation;
 
+#[typetag::serde]
 impl CustomOp for Operation {
-    fn signature(&self) -> Option<Signature> {
-        None
+    fn resources(&self) ->  &ResourceSet {
+        todo!()
     }
 
-    fn to_circuit(&self) -> Result<super::circuit::Circuit, super::operation::ToCircuitFail> {
-        Err(ToCircuitFail)
+fn name(&self) -> SmolStr {
+        todo!()
+    }
+
+fn signature(&self) -> Signature {
+        todo!()
     }
 }
