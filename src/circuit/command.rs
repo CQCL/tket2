@@ -5,11 +5,12 @@
 use std::collections::HashMap;
 use std::iter::FusedIterator;
 
+use hugr::hugr::region::Region;
 use hugr::ops::OpTrait;
 pub use hugr::ops::OpType;
 pub use hugr::types::{ClassicType, EdgeKind, LinearType, Signature, SimpleType, TypeRow};
-use hugr::HugrView;
 pub use hugr::{Node, Port, Wire};
+use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
 
 use super::Circuit;
 
@@ -66,11 +67,8 @@ pub struct CommandIterator<'circ, Circ> {
 
 impl<'circ, Circ> CommandIterator<'circ, Circ>
 where
-    Circ: HugrView
-        + petgraph::visit::IntoNeighborsDirected
-        + petgraph::visit::IntoNodeIdentifiers
-        + petgraph::visit::Visitable
-        + petgraph::visit::GraphBase<NodeId = Node>,
+    Circ: Region<'circ>,
+    for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
 {
     /// Create a new iterator over the commands of a circuit.
     pub(super) fn new(circ: &'circ Circ) -> Self {
@@ -131,11 +129,8 @@ where
 
 impl<'circ, Circ> Iterator for CommandIterator<'circ, Circ>
 where
-    Circ: HugrView
-        + petgraph::visit::IntoNeighborsDirected
-        + petgraph::visit::IntoNodeIdentifiers
-        + petgraph::visit::Visitable
-        + petgraph::visit::GraphBase<NodeId = Node>,
+    Circ: Region<'circ>,
+    for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
 {
     type Item = Command<'circ>;
 
@@ -159,13 +154,10 @@ where
     }
 }
 
-impl<Circ> ExactSizeIterator for CommandIterator<'_, Circ>
+impl<'circ, Circ> ExactSizeIterator for CommandIterator<'circ, Circ>
 where
-    Circ: HugrView
-        + petgraph::visit::IntoNeighborsDirected
-        + petgraph::visit::IntoNodeIdentifiers
-        + petgraph::visit::Visitable
-        + petgraph::visit::GraphBase<NodeId = Node>,
+    Circ: Region<'circ>,
+    for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
 {
     #[inline]
     fn len(&self) -> usize {
@@ -173,11 +165,9 @@ where
     }
 }
 
-impl<Circ> FusedIterator for CommandIterator<'_, Circ> where
-    Circ: HugrView
-        + petgraph::visit::IntoNeighborsDirected
-        + petgraph::visit::IntoNodeIdentifiers
-        + petgraph::visit::Visitable
-        + petgraph::visit::GraphBase<NodeId = Node>
+impl<'circ, Circ> FusedIterator for CommandIterator<'circ, Circ>
+where
+    Circ: Region<'circ>,
+    for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
 {
 }

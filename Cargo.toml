@@ -25,7 +25,7 @@ serde_json = "1.0"
 downcast-rs = "1.2.0"
 portgraph = "0.7.0"
 priority-queue = "1.3.0"
-quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", tag = "v0.0.0-alpha.2" }
+quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", tag = "v0.0.0-alpha.3" }
 smol_str = "0.2.0"
 typetag = "0.2.8"
 itertools = "0.11.0"
@@ -36,7 +36,7 @@ pyo3 = ["dep:pyo3", "tket-json-rs/pyo3", "tket-json-rs/tket2ops", "portgraph/pyo
 tkcxx = ["dep:tket-rs", "dep:num-complex"]
 
 [dev-dependencies]
-rstest = "0.17.0"
+rstest = "0.18.1"
 criterion = { version = "0.5.1", features = ["html_reports"] }
 webbrowser = "0.8.10"
 urlencoding = "2.1.2"

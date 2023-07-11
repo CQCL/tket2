@@ -14,11 +14,12 @@ pub mod command;
 use self::command::{Command, CommandIterator, Unit};
 
 use hugr::ops::OpTrait;
-use hugr::HugrView;
 
+pub use hugr::hugr::region::Region;
 pub use hugr::ops::OpType;
 pub use hugr::types::{ClassicType, EdgeKind, LinearType, Signature, SimpleType, TypeRow};
 pub use hugr::{Node, Port, Wire};
+use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
 
 /// An object behaving like a quantum circuit.
 //
@@ -27,16 +28,12 @@ pub use hugr::{Node, Port, Wire};
 // - Vertical slice iterator
 // - Gate count map
 // - Depth
-pub trait Circuit {
+pub trait Circuit<'circ> {
     /// An iterator over the commands in the circuit.
-    type Commands<'a>: Iterator<Item = Command<'a>>
-    where
-        Self: 'a;
+    type Commands: Iterator<Item = Command<'circ>>;
 
     /// An iterator over the commands applied to an unit.
-    type UnitCommands<'a>: Iterator<Item = Command<'a>>
-    where
-        Self: 'a;
+    type UnitCommands: Iterator<Item = Command<'circ>>;
 
     /// Return the name of the circuit
     fn name(&self) -> Option<&str>;
@@ -58,23 +55,19 @@ pub trait Circuit {
     fn follow_linear_port(&self, node: Node, port: Port) -> Option<Port>;
 
     /// Returns all the commands in the circuit, in some topological order.
-    fn commands(&self) -> Self::Commands<'_>;
+    fn commands<'a: 'circ>(&'a self) -> Self::Commands;
 
     /// Returns all the commands applied to the given unit, in order.
-    fn unit_commands(&self) -> Self::UnitCommands<'_>;
+    fn unit_commands<'a: 'circ>(&'a self) -> Self::UnitCommands;
 }
 
-// TODO: Define a Region trait in Hugr that implies all these traits.
-impl<T> Circuit for T
+impl<'circ, T> Circuit<'circ> for T
 where
-    T: HugrView
-        + petgraph::visit::IntoNeighborsDirected
-        + petgraph::visit::IntoNodeIdentifiers
-        + petgraph::visit::Visitable
-        + petgraph::visit::GraphBase<NodeId = Node>,
+    T: 'circ + Region<'circ>,
+    for<'a> &'a T: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
 {
-    type Commands<'a> = CommandIterator<'a, T> where Self: 'a;
-    type UnitCommands<'a> = std::iter::Empty<Command<'a>> where Self: 'a;
+    type Commands = CommandIterator<'circ, T>;
+    type UnitCommands = std::iter::Empty<Command<'circ>>;
 
     #[inline]
     fn name(&self) -> Option<&str> {
@@ -108,12 +101,12 @@ where
         Some(other_port)
     }
 
-    fn commands(&self) -> Self::Commands<'_> {
+    fn commands<'a: 'circ>(&'a self) -> Self::Commands {
         // Traverse the circuit in topological order.
         CommandIterator::new(self)
     }
 
-    fn unit_commands(&self) -> Self::UnitCommands<'_> {
+    fn unit_commands<'a: 'circ>(&'a self) -> Self::UnitCommands {
         // TODO Can we associate linear i/o with the corresponding unit without
         // doing the full toposort?
         todo!()

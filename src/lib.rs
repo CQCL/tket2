@@ -8,7 +8,7 @@
 //! compilation for many different quantum architectures.
 
 pub mod circuit;
-pub mod json;
+//pub mod json;
 pub mod passes;
 
 //mod utils;
