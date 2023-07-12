@@ -1,7 +1,7 @@
 //! Json serialization and deserialization.
 
 mod decoder;
-//mod encoder;
+mod encoder;
 pub mod op;
 
 #[cfg(test)]
@@ -14,18 +14,26 @@ use thiserror::Error;
 use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::optype::OpType as JsonOpType;
 
+use crate::circuit::Circuit;
+
 use self::decoder::JsonDecoder;
+use self::encoder::JsonEncoder;
 
 /// A JSON-serialized TKET1 circuit that can be converted to a [`Hugr`].
 pub trait TKET1Decode: Sized {
     /// The error type for decoding.
     type DecodeError;
+    /// The error type for decoding.
+    type EncodeError;
     /// Convert the serialized circuit to a [`Hugr`].
     fn decode(self) -> Result<Hugr, Self::DecodeError>;
+    /// Convert a [`Hugr`] to a new serialized circuit.
+    fn encode<'circ>(circuit: &'circ impl Circuit<'circ>) -> Result<Self, Self::EncodeError>;
 }
 
 impl TKET1Decode for SerialCircuit {
     type DecodeError = OpConvertError;
+    type EncodeError = OpConvertError;
 
     fn decode(self) -> Result<Hugr, Self::DecodeError> {
         let mut decoder = JsonDecoder::new(&self);
@@ -36,12 +44,25 @@ impl TKET1Decode for SerialCircuit {
             // decoder.add_phase(phase);
         }
 
-        // TODO: Check the implicit permutation in the serialized circuit.
+        // TODO Store the implicit permutation
 
         for com in self.commands {
             decoder.add_command(com);
         }
         Ok(decoder.finish())
+    }
+
+    fn encode<'circ>(circ: &'circ impl Circuit<'circ>) -> Result<Self, Self::EncodeError> {
+        let mut encoder = JsonEncoder::new(circ);
+
+        // TODO Restore the global phase
+
+        // TODO Restore the implicit permutation
+
+        for com in circ.commands() {
+            encoder.add_command(com)?;
+        }
+        Ok(encoder.finish())
     }
 }
 
