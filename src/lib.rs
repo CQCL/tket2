@@ -13,6 +13,3 @@ pub mod passes;
 pub mod resource;
 
 mod utils;
-
-//#[cfg(test)]
-//mod tests;
