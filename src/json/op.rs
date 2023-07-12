@@ -100,6 +100,9 @@ impl JsonOp {
     }
 
     /// Compute the signature of the operation.
+    //
+    // TODO: We are using Hugr's non-liner bits. We should have a custom linear
+    // bit type instead.
     #[inline]
     #[allow(unused)]
     pub fn signature(&self) -> Signature {

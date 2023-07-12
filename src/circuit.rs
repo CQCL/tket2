@@ -11,6 +11,8 @@ pub mod command;
 // TODO: Move TKET1's custom op definition to tket-rs (or hugr?)
 //mod tk1ops;
 
+use crate::utils::QB;
+
 use self::command::{Command, CommandIterator, Unit};
 
 use hugr::ops::OpTrait;
@@ -46,7 +48,7 @@ pub trait Circuit<'circ> {
     fn qubits(&self) -> Vec<Unit> {
         self.units()
             .iter()
-            .filter(|(_, typ)| typ == &LinearType::Qubit.into())
+            .filter(|(_, typ)| typ == &QB)
             .map(|(unit, _)| *unit)
             .collect()
     }
