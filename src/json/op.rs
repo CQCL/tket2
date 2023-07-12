@@ -1,5 +1,10 @@
-//! Conversion definitions between Hugr operations and the serializable TKET
-//! operations defined by `tket-json-rs`.
+//! This module defines the internal `JsonOp` struct wrapping the logic for
+//! going between `tket_json_rs::optype::OpType` and `hugr::ops::OpType`.
+//!
+//! The `JsonOp` tries to homogenize the
+//! `tket_json_rs::circuit_json::Operation`s coming from the encoded TKET1
+//! circuits by ensuring they always define a signature, and computing the
+//! explicit count of qubits and linear bits.
 
 use hugr::ops::custom::ExternalOp;
 use hugr::ops::{LeafOp, OpTrait, OpType};
@@ -15,6 +20,8 @@ use crate::utils::{BIT, F64, QB};
 /// A serialized operation, containing the operation type and all its attributes.
 ///
 /// Wrapper around [`circuit_json::Operation`] with cached number of qubits and bits.
+///
+/// The `Operation` contained by this struct is guaranteed to have a signature.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct JsonOp {
     op: circuit_json::Operation,
