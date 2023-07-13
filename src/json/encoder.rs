@@ -3,11 +3,12 @@
 use std::collections::HashMap;
 
 use hugr::ops::{Const, ConstValue, OpType};
+use hugr::types::SimpleType;
 use hugr::Wire;
 use itertools::{Either, Itertools};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 
-use crate::circuit::command::{Command, Unit};
+use crate::circuit::command::{Command, CircuitUnit};
 use crate::circuit::Circuit;
 use crate::utils::{BIT, QB};
 
@@ -21,10 +22,9 @@ pub(super) struct JsonEncoder {
     name: Option<String>,
     /// The current commands
     commands: Vec<circuit_json::Command>,
-    /// The qubit registers
-    qubits: Vec<circuit_json::Register>,
-    /// The bit registers
-    bits: Vec<circuit_json::Register>,
+    /// The linear units of the circuit, mapped to their TKET1 registers and
+    /// types.
+    units: HashMap<CircuitUnit, (circuit_json::Register, SimpleType)>,
     /// A register of wires with constant values, used to recover TKET1
     /// parameters.
     parameters: HashMap<Wire, String>,
@@ -39,23 +39,24 @@ impl JsonEncoder {
         // TODO We are checking for Hugr's bit. We should change this when the
         // decoding starts using linear bits instead.
         // TODO Through an error on non-recognized unit types, or just ignore?
-        let (qubits, bits) = circ
+        let units = circ
             .units()
-            .iter()
-            .filter(|(_, ty)| ty == &QB || ty == &BIT)
-            .partition_map(|(unit, ty)| {
-                if ty == &QB {
-                    Either::Left(unit_to_qubit_register(*unit).unwrap())
-                } else {
-                    Either::Right(unit_to_bit_register(*unit).unwrap())
+            .into_iter()
+            .filter_map(|(u, ty)| {
+                let CircuitUnit::Linear(index) = u else { return None; };
+                if ty != QB && ty != BIT {
+                    return None;
                 }
-            });
+                let prefix = if ty == QB { "q" } else { "b" };
+                let reg = circuit_json::Register(prefix.to_string(), vec![index as i64]);
+                Some((u, (reg, ty)))
+            })
+            .collect();
 
         Self {
             name,
             commands: vec![],
-            qubits,
-            bits,
+            units,
             parameters: HashMap::new(),
         }
     }
@@ -65,7 +66,11 @@ impl JsonEncoder {
         // Register any output of the command that can be used as a TKET1 parameter.
         self.record_parameters(&command);
 
-        let args = vec![]; // TODO command.inputs.iter().map(|unit| unit.index()).collect();
+        let args = command
+            .inputs
+            .iter()
+            .filter_map(|u| self.units.get(u).map(|(reg, _)| reg.clone()))
+            .collect();
 
         // TODO Restore the opgroup (once the decoding supports it)
         let opgroup = None;
@@ -82,12 +87,19 @@ impl JsonEncoder {
     }
 
     pub fn finish(self) -> SerialCircuit {
+        let (qubits, bits) =
+            self.units
+                .into_iter()
+                .partition_map(|(_unit, (reg, ty))| match ty == QB {
+                    true => Either::Left(reg),
+                    false => Either::Right(reg),
+                });
         SerialCircuit {
             name: self.name,
             phase: "".to_string(),
             commands: self.commands,
-            qubits: self.qubits,
-            bits: self.bits,
+            qubits,
+            bits,
             implicit_permutation: vec![],
         }
     }
@@ -101,8 +113,8 @@ impl JsonEncoder {
             .inputs
             .iter()
             .filter_map(|unit| match unit {
-                Unit::W(wire) => self.parameters.get(wire),
-                Unit::Linear(_) => None,
+                CircuitUnit::Wire(wire) => self.parameters.get(wire),
+                CircuitUnit::Linear(_) => None,
             })
             .collect_vec();
         if inputs.len() != command.inputs.len() {
@@ -124,27 +136,16 @@ impl JsonEncoder {
             }
             _ => {
                 // In the future we may want to support arithmetic operations.
-                // (Just concatenating the inputs, no need for evaluation).
+                // (Just concatenating the inputs and the operation symbol, no
+                // need for evaluation).
                 return;
             }
         };
 
         for unit in &command.outputs {
-            if let Unit::W(wire) = unit {
+            if let CircuitUnit::Wire(wire) = unit {
                 self.parameters.insert(*wire, param.clone());
             }
         }
     }
-}
-
-/// Cast a linear [`Unit`] to a qubit [`circuit_json::Register`].
-fn unit_to_qubit_register(unit: Unit) -> Option<circuit_json::Register> {
-    let Unit::Linear(index) = unit else { return None; };
-    Some(circuit_json::Register("q".to_string(), vec![index as i64]))
-}
-
-/// Cast a linear [`Unit`] to a bit [`circuit_json::Register`].
-fn unit_to_bit_register(unit: Unit) -> Option<circuit_json::Register> {
-    let Unit::Linear(index) = unit else { return None; };
-    Some(circuit_json::Register("b".to_string(), vec![index as i64]))
 }
