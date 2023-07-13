@@ -1,0 +1,238 @@
+//! This module defines the internal `JsonOp` struct wrapping the logic for
+//! going between `tket_json_rs::optype::OpType` and `hugr::ops::OpType`.
+//!
+//! The `JsonOp` tries to homogenize the
+//! `tket_json_rs::circuit_json::Operation`s coming from the encoded TKET1
+//! circuits by ensuring they always define a signature, and computing the
+//! explicit count of qubits and linear bits.
+
+use hugr::ops::custom::ExternalOp;
+use hugr::ops::{LeafOp, OpTrait, OpType};
+use hugr::types::Signature;
+
+use itertools::Itertools;
+use tket_json_rs::circuit_json;
+use tket_json_rs::optype::OpType as JsonOpType;
+
+use super::OpConvertError;
+use crate::utils::{BIT, F64, QB};
+
+/// A serialized operation, containing the operation type and all its attributes.
+///
+/// Wrapper around [`circuit_json::Operation`] with cached number of qubits and bits.
+///
+/// The `Operation` contained by this struct is guaranteed to have a signature.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct JsonOp {
+    op: circuit_json::Operation,
+    num_qubits: usize,
+    num_bits: usize,
+    /// Number of input parameters
+    num_params: usize,
+}
+
+impl JsonOp {
+    /// Create a new `JsonOp` from a `circuit_json::Operation`, computing its
+    /// number of qubits from the signature
+    ///
+    /// Fails if the operation does not define a signature. See
+    /// [`JsonOp::new_from_op`] for a version that generates a signature if none
+    /// is defined.
+    #[allow(unused)]
+    pub fn new(op: circuit_json::Operation) -> Option<Self> {
+        let Some(sig) = &op.signature else { return None; };
+        let input_counts = sig.iter().map(String::as_ref).counts();
+        let num_qubits = input_counts.get("Q").copied().unwrap_or(0);
+        let num_bits = input_counts.get("B").copied().unwrap_or(0);
+        let num_params = op.params.as_ref().map(Vec::len).unwrap_or_default();
+        Some(Self {
+            op,
+            num_qubits,
+            num_bits,
+            num_params,
+        })
+    }
+
+    /// Create a new `JsonOp` from a `circuit_json::Operation`, with the number
+    /// of qubits and bits explicitly specified.
+    ///
+    /// If the operation does not define a signature, one is generated with the
+    /// given amounts.
+    pub fn new_from_op(
+        mut op: circuit_json::Operation,
+        num_qubits: usize,
+        num_bits: usize,
+    ) -> Self {
+        if op.signature.is_none() {
+            op.signature =
+                Some([vec!["Q".into(); num_qubits], vec!["B".into(); num_bits]].concat());
+        }
+        let num_params = op.params.as_ref().map_or(0, Vec::len);
+        Self {
+            op,
+            num_qubits,
+            num_bits,
+            num_params,
+        }
+    }
+
+    /// Create a new `JsonOp` from the optype and the number of parameters.
+    pub fn new_with_counts(
+        json_optype: JsonOpType,
+        num_qubits: usize,
+        num_bits: usize,
+        num_params: usize,
+    ) -> Self {
+        let op = circuit_json::Operation {
+            op_type: json_optype,
+            n_qb: Some(num_qubits as u32),
+            params: None,
+            op_box: None,
+            signature: Some([vec!["Q".into(); num_qubits], vec!["B".into(); num_qubits]].concat()),
+            conditional: None,
+        };
+        Self {
+            op,
+            num_qubits,
+            num_bits,
+            num_params,
+        }
+    }
+
+    /// Compute the signature of the operation.
+    //
+    // TODO: We are using Hugr's non-liner bits. We should have a custom linear
+    // bit type instead.
+    #[inline]
+    #[allow(unused)]
+    pub fn signature(&self) -> Signature {
+        let linear = [vec![QB; self.num_qubits], vec![BIT; self.num_bits]].concat();
+        let params = vec![F64; self.num_params];
+        Signature::new_df([linear.clone(), params].concat(), linear)
+    }
+
+    /// Wraps the op into a Hugr opaque operation
+    fn as_opaque_op(&self) -> ExternalOp {
+        crate::resource::wrap_json_op(self)
+    }
+}
+
+impl From<&JsonOp> for OpType {
+    /// Convert the operation into a HUGR operation.
+    ///
+    /// We only translate operations that have a 1:1 mapping between TKET and HUGR.
+    /// Any other operation is wrapped in an `OpaqueOp`.
+    fn from(json_op: &JsonOp) -> Self {
+        match json_op.op.op_type {
+            JsonOpType::X => LeafOp::X.into(),
+            JsonOpType::H => LeafOp::H.into(),
+            JsonOpType::CX => LeafOp::CX.into(),
+            JsonOpType::noop => LeafOp::Noop { ty: QB }.into(),
+            // TODO TKET1 measure takes a bit as input, HUGR measure does not
+            //JsonOpType::Measure => LeafOp::Measure.into(),
+            JsonOpType::Reset => LeafOp::Reset.into(),
+            JsonOpType::ZZMax => LeafOp::ZZMax.into(),
+            JsonOpType::Rz => LeafOp::RzF64.into(),
+            JsonOpType::RzF64 => LeafOp::RzF64.into(),
+            // TODO TKET1 I/O needs some special handling
+            //JsonOpType::Input => hugr::ops::Input {
+            //    types: json_op.signature().output,
+            //    resources: Default::default(),
+            //}
+            //.into(),
+            //JsonOpType::Output => hugr::ops::Output {
+            //    types: json_op.signature().input,
+            //    resources: Default::default(),
+            //}
+            //.into(),
+            JsonOpType::Z => LeafOp::Z.into(),
+            JsonOpType::Y => LeafOp::Y.into(),
+            JsonOpType::S => LeafOp::S.into(),
+            JsonOpType::Sdg => LeafOp::Sadj.into(),
+            JsonOpType::T => LeafOp::T.into(),
+            JsonOpType::Tdg => LeafOp::Tadj.into(),
+            _ => LeafOp::CustomOp(json_op.as_opaque_op()).into(),
+        }
+    }
+}
+
+impl TryFrom<&OpType> for JsonOp {
+    type Error = OpConvertError;
+
+    fn try_from(op: &OpType) -> Result<Self, Self::Error> {
+        // We only translate operations that have a 1:1 mapping between TKET and HUGR
+        //
+        // Other TKET1 operations are wrapped in an `OpaqueOp`.
+        //
+        // Non-supported Hugr operations throw an error.
+        let err = || OpConvertError::UnsupportedOpSerialization(op.clone());
+
+        if let OpType::LeafOp(LeafOp::CustomOp(_ext)) = op {
+            todo!("Try to extract the tket1 op from ext");
+            //let Some(tk1op) = custom.downcast_ref::<TK1Op>() else {
+            //    return Err(err());
+            //};
+            //let json_op = tk1op.serialized_op.clone();
+            //return JsonOp::new(json_op).ok_or(err());
+        }
+
+        let json_optype: JsonOpType = match op {
+            OpType::LeafOp(leaf) => match leaf {
+                LeafOp::H => JsonOpType::H,
+                LeafOp::CX => JsonOpType::CX,
+                LeafOp::ZZMax => JsonOpType::ZZMax,
+                LeafOp::Reset => JsonOpType::Reset,
+                LeafOp::Measure => JsonOpType::Measure,
+                LeafOp::T => JsonOpType::T,
+                LeafOp::S => JsonOpType::S,
+                LeafOp::X => JsonOpType::X,
+                LeafOp::Y => JsonOpType::Y,
+                LeafOp::Z => JsonOpType::Z,
+                LeafOp::Tadj => JsonOpType::Tdg,
+                LeafOp::Sadj => JsonOpType::Sdg,
+                LeafOp::Noop { .. } => JsonOpType::noop,
+                //LeafOp::RzF64 => JsonOpType::Rz, // The angle in RzF64 comes from a constant input
+                //LeafOp::Xor => todo!(),
+                //LeafOp::MakeTuple { .. } => todo!(),
+                //LeafOp::UnpackTuple { .. } => todo!(),
+                //LeafOp::Tag { .. } => todo!(),
+                //LeafOp::Lift { .. } => todo!(),
+                // CustomOp is handled above
+                _ => return Err(err()),
+            },
+            OpType::Input(_) => JsonOpType::Input,
+            OpType::Output(_) => JsonOpType::Output,
+            //hugr::ops::OpType::FuncDefn(_) => todo!(),
+            //hugr::ops::OpType::FuncDecl(_) => todo!(),
+            //hugr::ops::OpType::Const(_) => todo!(),
+            //hugr::ops::OpType::Call(_) => todo!(),
+            //hugr::ops::OpType::CallIndirect(_) => todo!(),
+            //hugr::ops::OpType::LoadConstant(_) => todo!(),
+            //hugr::ops::OpType::DFG(_) => JsonOpType::CircBox, // TODO: Requires generating the Operation::op_box
+            _ => return Err(err()),
+        };
+
+        let (num_qubits, num_bits, params) =
+            op.signature()
+                .input
+                .iter()
+                .fold((0, 0, 0), |(qs, bs, params), x| {
+                    if *x == QB {
+                        (qs + 1, bs, params)
+                    } else if *x == BIT {
+                        (qs, bs + 1, params)
+                    } else if *x == F64 {
+                        (qs, bs, params + 1)
+                    } else {
+                        (qs, bs, params)
+                    }
+                });
+
+        Ok(JsonOp::new_with_counts(
+            json_optype,
+            num_qubits,
+            num_bits,
+            params,
+        ))
+    }
+}
