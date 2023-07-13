@@ -1,7 +1,9 @@
 //! Intermediate structure for converting encoding [`Circuit`]s into [`SerialCircuit`]s.
 
-use hugr::ops::{OpTag, OpTrait, OpType};
-use hugr::Node;
+use std::collections::HashMap;
+
+use hugr::ops::{Const, ConstValue, OpType};
+use hugr::Wire;
 use itertools::{Either, Itertools};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 
@@ -23,6 +25,9 @@ pub(super) struct JsonEncoder {
     qubits: Vec<circuit_json::Register>,
     /// The bit registers
     bits: Vec<circuit_json::Register>,
+    /// A register of wires with constant values, used to recover TKET1
+    /// parameters.
+    parameters: HashMap<Wire, String>,
 }
 
 impl JsonEncoder {
@@ -51,16 +56,14 @@ impl JsonEncoder {
             commands: vec![],
             qubits,
             bits,
+            parameters: HashMap::new(),
         }
     }
 
     /// Add a circuit command to the serialization.
     pub fn add_command(&mut self, command: Command) -> Result<(), OpConvertError> {
-        // If the command is a constant, store it so we can recover it as
-        // an argument later.
-        if OpTag::Const.is_superset(command.op.tag()) {
-            self.register_const(command.node, command.op);
-        }
+        // Register any output of the command that can be used as a TKET1 parameter.
+        self.record_parameters(&command);
 
         let args = vec![]; // TODO command.inputs.iter().map(|unit| unit.index()).collect();
 
@@ -69,6 +72,9 @@ impl JsonEncoder {
 
         let op: JsonOp = command.op.try_into()?;
         let op: circuit_json::Operation = op.into_operation();
+
+        // TODO: Update op.params. Leave untouched the ones that contain free variables.
+        // (update decoder to ignore them too, but store them in the wrapped op)
 
         let command = circuit_json::Command { op, args, opgroup };
         self.commands.push(command);
@@ -86,8 +92,48 @@ impl JsonEncoder {
         }
     }
 
-    fn register_const(&mut self, _node: Node, _op_type: &OpType) {
-        todo!()
+    /// Record any output of the command that can be used as a TKET1 parameter.
+    ///
+    /// Associates the output wires with the parameter expression.
+    fn record_parameters(&mut self, command: &Command) {
+        // Only consider commands where all inputs are parameters.
+        let inputs = command
+            .inputs
+            .iter()
+            .filter_map(|unit| match unit {
+                Unit::W(wire) => self.parameters.get(wire),
+                Unit::Linear(_) => None,
+            })
+            .collect_vec();
+        if inputs.len() != command.inputs.len() {
+            return;
+        }
+
+        let param = match command.op {
+            OpType::Const(Const(value)) => {
+                // New constant, register it if it can be interpreted as a parameter.
+                match value {
+                    ConstValue::Int { value, .. } => value.to_string(),
+                    ConstValue::F64(value) => value.to_string(),
+                    _ => return,
+                }
+            }
+            OpType::LoadConstant(_op_type) => {
+                // Re-use the parameter from the input.
+                inputs[0].clone()
+            }
+            _ => {
+                // In the future we may want to support arithmetic operations.
+                // (Just concatenating the inputs, no need for evaluation).
+                return;
+            }
+        };
+
+        for unit in &command.outputs {
+            if let Unit::W(wire) = unit {
+                self.parameters.insert(*wire, param.clone());
+            }
+        }
     }
 }
 
