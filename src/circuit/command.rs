@@ -8,7 +8,7 @@ use std::iter::FusedIterator;
 use hugr::hugr::region::Region;
 use hugr::ops::OpTrait;
 pub use hugr::ops::OpType;
-pub use hugr::types::{ClassicType, EdgeKind, LinearType, Signature, SimpleType, TypeRow};
+pub use hugr::types::{ClassicType, EdgeKind, Signature, SimpleType, TypeRow};
 pub use hugr::{Node, Port, Wire};
 use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
 
