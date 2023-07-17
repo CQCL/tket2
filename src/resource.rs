@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 
 use hugr::ops::custom::{ExternalOp, OpaqueOp};
+use hugr::ops::{OpName, OpTrait};
 use hugr::resource::{OpDef, ResourceId, ResourceSet, SignatureError};
 use hugr::types::type_param::{TypeArg, TypeParam};
 use hugr::types::TypeRow;
@@ -49,6 +50,22 @@ pub(crate) fn wrap_json_op(op: &JsonOp) -> ExternalOp {
         Some(sig),
     )
     .into()
+}
+
+/// Extract a json-encoded TKET1 operation from an opaque operation, if
+/// possible.
+pub(crate) fn try_unwrap_json_op(ext: &ExternalOp) -> Option<JsonOp> {
+    // TODO: Is this enough to ensure no OpDef collisions?
+    let resources = ext.signature().output_resources;
+    if ext.name() != JSON_OP_NAME || !resources.contains(&TKET1_RESOURCE_ID) {
+        return None;
+    }
+    let Some(TypeArg::Value(op)) = ext.args().get(0) else {
+        // TODO: Throw an error? We should never get here if the name matches.
+        return None;
+    };
+    let op = serde_yaml::from_value(op.clone()).ok()?;
+    Some(op)
 }
 
 /// Compute the signature of a json-encoded TKET1 operation.

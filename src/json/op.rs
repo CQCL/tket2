@@ -15,6 +15,7 @@ use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as JsonOpType;
 
 use super::{try_param_to_constant, OpConvertError};
+use crate::resource::try_unwrap_json_op;
 use crate::utils::{BIT, F64, QB};
 
 /// A serialized operation, containing the operation type and all its attributes.
@@ -224,9 +225,8 @@ impl TryFrom<&OpType> for JsonOp {
         // Non-supported Hugr operations throw an error.
         let err = || OpConvertError::UnsupportedOpSerialization(op.clone());
 
-        if let OpType::LeafOp(LeafOp::CustomOp(_ext)) = op {
-            todo!()
-            //return try_unwrap_json_op(ext).ok_or_else(err);
+        if let OpType::LeafOp(LeafOp::CustomOp(ext)) = op {
+            return try_unwrap_json_op(ext).ok_or_else(err);
         }
 
         let json_optype: JsonOpType = match op {

@@ -13,13 +13,13 @@ fn read_json() {
     let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), 4);
 
-    let hugr: Hugr = ser.decode().unwrap();
+    let hugr: Hugr = ser.clone().decode().unwrap();
     let circ = FlatRegionView::new(&hugr, hugr.root());
 
     assert_eq!(circ.qubits().len(), 2);
 
-    //let _reser: SerialCircuit = circ.into();
-    //assert_eq!(&ser, &_reser);
+    //let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
+    //assert_eq!(&ser, &reser);
 }
 
 #[test]
