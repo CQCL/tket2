@@ -2,13 +2,13 @@
 
 use hugr::hugr::region::{FlatRegionView, Region};
 use hugr::{Hugr, HugrView};
-use tket_json_rs::circuit_json;
+use tket_json_rs::circuit_json::{self, SerialCircuit};
 
 use crate::circuit::Circuit;
 use crate::json::TKET1Decode;
 
 #[test]
-fn read_json() {
+fn read_json_simple() {
     let circ_s = r#"{"bits": [["c", [0]], ["c", [1]]], "commands": [{"args": [["q", [0]]], "op": {"type": "H"}}, {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}, {"args": [["q", [0]], ["c", [0]]], "op": {"type": "Measure"}}, {"args": [["q", [1]], ["c", [1]]], "op": {"type": "Measure"}}], "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]], "phase": "0", "qubits": [["q", [0]], ["q", [1]]]}"#;
     let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), 4);
@@ -18,7 +18,7 @@ fn read_json() {
 
     assert_eq!(circ.qubits().len(), 2);
 
-    //let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
+    let _reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
     //assert_eq!(&ser, &reser);
 }
 
@@ -31,11 +31,11 @@ fn read_json_unknown_op() {
     let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), 1);
 
-    let hugr: Hugr = ser.decode().unwrap();
+    let hugr: Hugr = ser.clone().decode().unwrap();
     let circ = FlatRegionView::new(&hugr, hugr.root());
 
     assert_eq!(circ.qubits().len(), 3);
 
-    //let _reser: SerialCircuit = circ.into();
-    //assert_eq!(&ser, &_reser);
+    let _reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
+    //assert_eq!(&ser, &reser);
 }

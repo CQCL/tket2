@@ -56,8 +56,10 @@ pub(crate) fn wrap_json_op(op: &JsonOp) -> ExternalOp {
 /// possible.
 pub(crate) fn try_unwrap_json_op(ext: &ExternalOp) -> Option<JsonOp> {
     // TODO: Is this enough to ensure no OpDef collisions?
-    let resources = ext.signature().output_resources;
-    if ext.name() != JSON_OP_NAME || !resources.contains(&TKET1_RESOURCE_ID) {
+    let _resources = ext.signature().output_resources;
+    // TODO: Check `resources.contains(&TKET1_RESOURCE_ID)`
+    // (but the ext op resources are an empty set?)
+    if ext.name() != format!("{TKET1_RESOURCE_ID}.{JSON_OP_NAME}") {
         return None;
     }
     let Some(TypeArg::Value(op)) = ext.args().get(0) else {

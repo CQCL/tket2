@@ -8,7 +8,7 @@ use hugr::Wire;
 use itertools::{Either, Itertools};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 
-use crate::circuit::command::{Command, CircuitUnit};
+use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
 use crate::utils::{BIT, QB};
 
