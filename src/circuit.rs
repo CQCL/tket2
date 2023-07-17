@@ -13,8 +13,9 @@ pub mod command;
 
 use crate::utils::QB;
 
-use self::command::{Command, CommandIterator, Unit};
+use self::command::{Command, CommandIterator};
 
+use hugr::hugr::CircuitUnit;
 use hugr::ops::OpTrait;
 
 pub use hugr::hugr::region::Region;
@@ -41,11 +42,11 @@ pub trait Circuit<'circ> {
     fn name(&self) -> Option<&str>;
 
     /// Get the linear inputs of the circuit and their types.
-    fn units(&self) -> Vec<(Unit, SimpleType)>;
+    fn units(&self) -> Vec<(CircuitUnit, SimpleType)>;
 
     /// Returns the ports corresponding to qubits inputs to the circuit.
     #[inline]
-    fn qubits(&self) -> Vec<Unit> {
+    fn qubits(&self) -> Vec<CircuitUnit> {
         self.units()
             .iter()
             .filter(|(_, typ)| typ == &QB)
@@ -78,7 +79,7 @@ where
     }
 
     #[inline]
-    fn units(&self) -> Vec<(Unit, SimpleType)> {
+    fn units(&self) -> Vec<(CircuitUnit, SimpleType)> {
         let root = self.root();
         let optype = self.get_optype(root);
         optype

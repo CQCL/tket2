@@ -7,38 +7,14 @@ use std::iter::FusedIterator;
 
 use hugr::hugr::region::Region;
 use hugr::ops::OpTrait;
-pub use hugr::ops::OpType;
-pub use hugr::types::{ClassicType, EdgeKind, Signature, SimpleType, TypeRow};
-pub use hugr::{Node, Port, Wire};
 use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
 
 use super::Circuit;
 
-/// Descriptor of a wire in a [`Circuit`]. If it is a qubit or linear bit
-/// originating from the circuit's input, it is described by an index.
-/// Otherwise, it is described by an internal [`Wire`].
-//
-// TODO Better name?
-// TODO Merge this with CircuitBuilder::AppendWire?
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Unit {
-    /// Arbitrary wire.
-    W(Wire),
-    /// Index of a linear element in the [`Circuit`]'s input vector.
-    Linear(usize),
-}
-
-impl From<usize> for Unit {
-    fn from(value: usize) -> Self {
-        Unit::Linear(value)
-    }
-}
-
-impl From<Wire> for Unit {
-    fn from(value: Wire) -> Self {
-        Unit::W(value)
-    }
-}
+pub use hugr::hugr::CircuitUnit;
+pub use hugr::ops::OpType;
+pub use hugr::types::{ClassicType, EdgeKind, Signature, SimpleType, TypeRow};
+pub use hugr::{Node, Port, Wire};
 
 /// An operation applied to specific wires.
 pub struct Command<'circ> {
@@ -47,9 +23,9 @@ pub struct Command<'circ> {
     /// The operation node.
     pub node: Node,
     /// The input units to the operation.
-    pub inputs: Vec<Unit>,
+    pub inputs: Vec<CircuitUnit>,
     /// The output units to the operation.
-    pub outputs: Vec<Unit>,
+    pub outputs: Vec<CircuitUnit>,
 }
 
 /// An iterator over the commands of a circuit.
@@ -61,7 +37,7 @@ pub struct CommandIterator<'circ, Circ> {
     nodes: Vec<Node>,
     /// Current element in `nodes`
     current: usize,
-    /// Last wires for each linear `Unit`
+    /// Last wires for each linear `CircuitUnit`
     wire_unit: HashMap<Wire, usize>,
 }
 
@@ -100,9 +76,9 @@ where
                         if let Some(new_port) = self.circ.follow_linear_port(node, port) {
                             self.wire_unit.insert(Wire::new(node, new_port), unit);
                         }
-                        Some(Unit::Linear(unit))
+                        Some(CircuitUnit::Linear(unit))
                     }
-                    None => Some(Unit::W(wire)),
+                    None => Some(CircuitUnit::Wire(wire)),
                 }
             })
             .collect();
@@ -112,8 +88,8 @@ where
             .map(|port| {
                 let wire = Wire::new(node, port);
                 match self.wire_unit.get(&wire) {
-                    Some(&unit) => Unit::Linear(unit),
-                    None => Unit::W(wire),
+                    Some(&unit) => CircuitUnit::Linear(unit),
+                    None => CircuitUnit::Wire(wire),
                 }
             })
             .collect();
