@@ -96,7 +96,7 @@ impl JsonEncoder {
                 });
         SerialCircuit {
             name: self.name,
-            phase: "".to_string(),
+            phase: "0".to_string(),
             commands: self.commands,
             qubits,
             bits,
