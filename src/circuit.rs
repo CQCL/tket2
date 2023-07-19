@@ -69,7 +69,7 @@ pub trait Circuit<'circ>: HugrView {
     /// Returns the input node to the circuit.
     fn input(&self) -> Node;
 
-    /// Returns the input node to the circuit.
+    /// Returns the output node to the circuit.
     fn output(&self) -> Node;
 }
 
