@@ -14,7 +14,7 @@ use itertools::Itertools;
 use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as JsonOpType;
 
-use super::OpConvertError;
+use super::{try_param_to_constant, OpConvertError};
 use crate::utils::{BIT, F64, QB};
 
 /// A serialized operation, containing the operation type and all its attributes.
@@ -27,7 +27,13 @@ pub(crate) struct JsonOp {
     op: circuit_json::Operation,
     num_qubits: usize,
     num_bits: usize,
-    /// Number of input parameters
+    /// Input corresponding to each parameter in `op.params`.
+    ///
+    /// If the input is `None`, the parameter exposed in the Hugr and is left
+    /// untouched during a decode-encode roundtrip.
+    param_inputs: Vec<Option<usize>>,
+    /// The number of non-None inputs in `param_inputs`, corresponding to the
+    /// F64 inputs to the Hugr operation.
     num_params: usize,
 }
 
@@ -44,13 +50,15 @@ impl JsonOp {
         let input_counts = sig.iter().map(String::as_ref).counts();
         let num_qubits = input_counts.get("Q").copied().unwrap_or(0);
         let num_bits = input_counts.get("B").copied().unwrap_or(0);
-        let num_params = op.params.as_ref().map(Vec::len).unwrap_or_default();
-        Some(Self {
+        let mut op = Self {
             op,
             num_qubits,
             num_bits,
-            num_params,
-        })
+            param_inputs: Vec::new(),
+            num_params: 0,
+        };
+        op.compute_param_fields();
+        Some(op)
     }
 
     /// Create a new `JsonOp` from a `circuit_json::Operation`, with the number
@@ -67,13 +75,15 @@ impl JsonOp {
             op.signature =
                 Some([vec!["Q".into(); num_qubits], vec!["B".into(); num_bits]].concat());
         }
-        let num_params = op.params.as_ref().map_or(0, Vec::len);
-        Self {
+        let mut op = Self {
             op,
             num_qubits,
             num_bits,
-            num_params,
-        }
+            param_inputs: Vec::new(),
+            num_params: 0,
+        };
+        op.compute_param_fields();
+        op
     }
 
     /// Create a new `JsonOp` from the optype and the number of parameters.
@@ -83,18 +93,28 @@ impl JsonOp {
         num_bits: usize,
         num_params: usize,
     ) -> Self {
+        let (params, param_inputs) = if num_params > 0 {
+            let offset = num_qubits + num_bits;
+            (
+                Some(vec!["".into(); num_params]),
+                (offset..offset + num_params).map(Option::Some).collect(),
+            )
+        } else {
+            (None, Vec::new())
+        };
         let op = circuit_json::Operation {
             op_type: json_optype,
             n_qb: Some(num_qubits as u32),
-            params: None,
+            params,
             op_box: None,
-            signature: Some([vec!["Q".into(); num_qubits], vec!["B".into(); num_qubits]].concat()),
+            signature: Some([vec!["Q".into(); num_qubits], vec!["B".into(); num_bits]].concat()),
             conditional: None,
         };
         Self {
             op,
             num_qubits,
             num_bits,
+            param_inputs,
             num_params,
         }
     }
@@ -104,16 +124,53 @@ impl JsonOp {
     // TODO: We are using Hugr's non-liner bits. We should have a custom linear
     // bit type instead.
     #[inline]
-    #[allow(unused)]
     pub fn signature(&self) -> Signature {
         let linear = [vec![QB; self.num_qubits], vec![BIT; self.num_bits]].concat();
         let params = vec![F64; self.num_params];
         Signature::new_df([linear.clone(), params].concat(), linear)
     }
 
+    /// List of parameters in the operation that should be exposed as inputs.
+    #[inline]
+    pub fn param_inputs(&self) -> impl Iterator<Item = &str> {
+        self.param_inputs
+            .iter()
+            .filter_map(|&i| self.op.params.as_ref()?.get(i?).map(String::as_ref))
+    }
+
+    pub fn into_operation(self) -> circuit_json::Operation {
+        self.op
+    }
+
     /// Wraps the op into a Hugr opaque operation
     fn as_opaque_op(&self) -> ExternalOp {
         crate::resource::wrap_json_op(self)
+    }
+
+    /// Compute the `parameter_input` and `num_params` fields by looking for
+    /// parameters in `op.params` that can be mapped to input wires in the Hugr.
+    ///
+    /// Returns the number of parameters that are mapped to inputs.
+    fn compute_param_fields(&mut self) {
+        let Some(params) = self.op.params.as_ref() else {
+            self.param_inputs = vec![None; self.num_params];
+            self.num_params = 0;
+            return;
+        };
+        let mut param_inputs = vec![None; params.len()];
+        let mut next_input = 0;
+        for (i, param) in params.iter().enumerate() {
+            // Only expose an input for the parameter if it is a constant value.
+            //
+            // TODO In the future we may also want inputs for single variables.
+            if try_param_to_constant(param).is_some() {
+                param_inputs[i] = Some(next_input);
+                next_input += 1;
+            }
+        }
+
+        self.num_params = next_input;
+        self.param_inputs = param_inputs;
     }
 }
 
@@ -168,12 +225,8 @@ impl TryFrom<&OpType> for JsonOp {
         let err = || OpConvertError::UnsupportedOpSerialization(op.clone());
 
         if let OpType::LeafOp(LeafOp::CustomOp(_ext)) = op {
-            todo!("Try to extract the tket1 op from ext");
-            //let Some(tk1op) = custom.downcast_ref::<TK1Op>() else {
-            //    return Err(err());
-            //};
-            //let json_op = tk1op.serialized_op.clone();
-            //return JsonOp::new(json_op).ok_or(err());
+            todo!()
+            //return try_unwrap_json_op(ext).ok_or_else(err);
         }
 
         let json_optype: JsonOpType = match op {
@@ -212,27 +265,24 @@ impl TryFrom<&OpType> for JsonOp {
             _ => return Err(err()),
         };
 
-        let (num_qubits, num_bits, params) =
-            op.signature()
-                .input
-                .iter()
-                .fold((0, 0, 0), |(qs, bs, params), x| {
-                    if *x == QB {
-                        (qs + 1, bs, params)
-                    } else if *x == BIT {
-                        (qs, bs + 1, params)
-                    } else if *x == F64 {
-                        (qs, bs, params + 1)
-                    } else {
-                        (qs, bs, params)
-                    }
-                });
+        let mut num_qubits = 0;
+        let mut num_bits = 0;
+        let mut num_params = 0;
+        for ty in op.signature().input.iter() {
+            if *ty == QB {
+                num_qubits += 1;
+            } else if *ty == BIT {
+                num_bits += 1;
+            } else if *ty == F64 {
+                num_params += 1;
+            }
+        }
 
         Ok(JsonOp::new_with_counts(
             json_optype,
             num_qubits,
             num_bits,
-            params,
+            num_params,
         ))
     }
 }
