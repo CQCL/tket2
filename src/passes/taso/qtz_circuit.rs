@@ -7,7 +7,7 @@ use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
 //     operation::{Op, WireType},
 // };
 use hugr::ops::{LeafOp, OpType as Op};
-use hugr::types::{ClassicType, LinearType, SimpleType};
+use hugr::types::{ClassicType, SimpleType};
 use hugr::Hugr as Circuit;
 use serde::{Deserialize, Serialize};
 
@@ -50,7 +50,7 @@ fn map_op(opstr: &str) -> Op {
 
 fn map_wt(wirestr: &str) -> (SimpleType, usize) {
     let wt = if wirestr.starts_with('Q') {
-        LinearType::Qubit.into()
+        SimpleType::Qubit
     } else if wirestr.starts_with('P') {
         ClassicType::F64.into()
     } else {
@@ -62,7 +62,7 @@ fn map_wt(wirestr: &str) -> (SimpleType, usize) {
 // TODO change to TryFrom
 impl From<RepCircData> for Circuit {
     fn from(RepCircData { circ: rc, meta }: RepCircData) -> Self {
-        let qb_types: Vec<SimpleType> = vec![LinearType::Qubit.into(); meta.n_qb];
+        let qb_types: Vec<SimpleType> = vec![SimpleType::Qubit; meta.n_qb];
         let param_types: Vec<SimpleType> = vec![ClassicType::F64.into(); meta.n_input_param];
         let mut circ = DFGBuilder::new([param_types, qb_types.clone()].concat(), qb_types).unwrap();
 
@@ -86,7 +86,7 @@ impl From<RepCircData> for Circuit {
                 .map(|is| {
                     let (wt, idx) = map_wt(&is);
                     match wt {
-                        SimpleType::Linear(LinearType::Qubit) => qubit_wires[idx],
+                        SimpleType::Qubit => qubit_wires[idx],
                         SimpleType::Classic(ClassicType::F64) => *param_wires[idx].take().unwrap(),
                         _ => panic!("unexpected wire type."),
                     }
@@ -96,11 +96,7 @@ impl From<RepCircData> for Circuit {
 
             for (os, wire) in outputs.into_iter().zip(output_wires) {
                 let (wt, idx) = map_wt(&os);
-                assert_eq!(
-                    wt,
-                    SimpleType::Linear(LinearType::Qubit),
-                    "only qubits expected as output"
-                );
+                assert_eq!(wt, SimpleType::Qubit, "only qubits expected as output");
 
                 qubit_wires[idx] = wire;
             }
@@ -137,6 +133,8 @@ pub(super) fn load_ecc_set(path: &str) -> HashMap<String, Vec<Circuit>> {
 #[cfg(test)]
 mod tests {
     // use crate::validate::check_soundness;
+
+    use hugr::HugrView;
 
     use super::*;
     fn load_representative_set(path: &str) -> HashMap<String, Circuit> {

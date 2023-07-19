@@ -13,13 +13,14 @@ pub mod command;
 
 use crate::utils::QB;
 
-use self::command::{Command, CommandIterator, Unit};
+use self::command::{Command, CommandIterator};
 
+use hugr::hugr::CircuitUnit;
 use hugr::ops::OpTrait;
 
 pub use hugr::hugr::region::Region;
 pub use hugr::ops::OpType;
-pub use hugr::types::{ClassicType, EdgeKind, LinearType, Signature, SimpleType, TypeRow};
+pub use hugr::types::{ClassicType, EdgeKind, Signature, SimpleType, TypeRow};
 pub use hugr::{Node, Port, Wire};
 use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
 
@@ -41,11 +42,11 @@ pub trait Circuit<'circ> {
     fn name(&self) -> Option<&str>;
 
     /// Get the linear inputs of the circuit and their types.
-    fn units(&self) -> Vec<(Unit, SimpleType)>;
+    fn units(&self) -> Vec<(CircuitUnit, SimpleType)>;
 
     /// Returns the ports corresponding to qubits inputs to the circuit.
     #[inline]
-    fn qubits(&self) -> Vec<Unit> {
+    fn qubits(&self) -> Vec<CircuitUnit> {
         self.units()
             .iter()
             .filter(|(_, typ)| typ == &QB)
@@ -78,14 +79,14 @@ where
     }
 
     #[inline]
-    fn units(&self) -> Vec<(Unit, SimpleType)> {
+    fn units(&self) -> Vec<(CircuitUnit, SimpleType)> {
         let root = self.root();
         let optype = self.get_optype(root);
         optype
             .signature()
             .input_df_types()
             .iter()
-            .filter(|typ| typ.is_linear())
+            .filter(|typ| !typ.is_classical())
             .enumerate()
             .map(|(i, typ)| (i.into(), typ.clone()))
             .collect()

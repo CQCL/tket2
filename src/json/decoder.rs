@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::mem;
 
-use hugr::builder::{AppendWire, CircuitBuilder, Container, DFGBuilder, Dataflow, DataflowHugr};
+use hugr::builder::{CircuitBuilder, Container, DFGBuilder, Dataflow, DataflowHugr};
+use hugr::hugr::CircuitUnit;
 use hugr::ops::ConstValue;
 use hugr::types::Signature;
 use hugr::{Hugr, Wire};
@@ -98,8 +99,8 @@ impl JsonDecoder {
 
         let append_wires = args
             .into_iter()
-            .map(AppendWire::I)
-            .chain(param_wires.into_iter().map(AppendWire::W));
+            .map(CircuitUnit::Linear)
+            .chain(param_wires.into_iter().map(CircuitUnit::Wire));
 
         self.with_circ_builder(|circ| {
             circ.append_and_consume(&op, append_wires).unwrap();
