@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::iter::FusedIterator;
 
 use hugr::hugr::region::Region;
-use hugr::ops::OpTrait;
+use hugr::ops::{OpTag, OpTrait};
 use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
 
 use super::Circuit;
@@ -48,20 +48,38 @@ where
 {
     /// Create a new iterator over the commands of a circuit.
     pub(super) fn new(circ: &'circ Circ) -> Self {
+        // Initialize the linear units from the input's linear ports.
+        // TODO: Clean this up
+        let input_node_wires = circ
+            .node_outputs(circ.input())
+            .map(|port| Wire::new(circ.input(), port));
+        let wire_unit = input_node_wires
+            .zip(circ.units().iter())
+            .filter_map(|(wire, (unit, _))| match unit {
+                CircuitUnit::Linear(i) => Some((wire, *i)),
+                _ => None,
+            })
+            .collect();
+
         let nodes = petgraph::algo::toposort(circ, None).unwrap();
         Self {
             circ,
             nodes,
             current: 0,
-            wire_unit: HashMap::new(),
+            wire_unit,
         }
     }
 
     /// Process a new node, updating wires in `unit_wires` and returns the
-    /// command for the node.
-    fn process_node(&mut self, node: Node) -> Command<'circ> {
+    /// command for the node if it's not an input or output.
+    fn process_node(&mut self, node: Node) -> Option<Command<'circ>> {
         let optype = self.circ.get_optype(node);
         let sig = optype.signature();
+
+        // The root node is ignored.
+        if node == self.circ.root() {
+            return None;
+        }
 
         // Get the wire corresponding to each input unit.
         // TODO: Add this to HugrView?
@@ -83,6 +101,13 @@ where
             })
             .collect();
 
+        // The units in `self.wire_units` have been updated.
+        // Now we can early return if the node should be ignored.
+        let tag = optype.tag();
+        if tag == OpTag::Input || tag == OpTag::Output {
+            return None;
+        }
+
         let outputs = sig
             .output_ports()
             .map(|port| {
@@ -94,12 +119,12 @@ where
             })
             .collect();
 
-        Command {
+        Some(Command {
             op: optype,
             node,
             inputs,
             outputs,
-        }
+        })
     }
 }
 
@@ -111,33 +136,22 @@ where
     type Item = Command<'circ>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current == self.nodes.len() {
-            return None;
+        loop {
+            if self.current == self.nodes.len() {
+                return None;
+            }
+            let node = self.nodes[self.current];
+            let com = self.process_node(node);
+            self.current += 1;
+            if com.is_some() {
+                return com;
+            }
         }
-        let node = self.nodes[self.current];
-        self.current += 1;
-        Some(self.process_node(node))
-    }
-
-    #[inline]
-    fn count(self) -> usize {
-        self.len()
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.len(), Some(self.len()))
-    }
-}
-
-impl<'circ, Circ> ExactSizeIterator for CommandIterator<'circ, Circ>
-where
-    Circ: Region<'circ>,
-    for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
-{
-    #[inline]
-    fn len(&self) -> usize {
-        self.nodes.len() - self.current
+        (0, Some(self.nodes.len() - self.current))
     }
 }
 
