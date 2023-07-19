@@ -8,9 +8,6 @@ pub mod command;
 //#[cfg(feature = "tkcxx")]
 //pub mod unitarybox;
 
-// TODO: Move TKET1's custom op definition to tket-rs (or hugr?)
-//mod tk1ops;
-
 use crate::utils::QB;
 
 use self::command::{Command, CommandIterator};
