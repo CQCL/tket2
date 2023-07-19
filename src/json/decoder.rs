@@ -41,6 +41,11 @@ impl JsonDecoder {
     pub fn new(serialcirc: &SerialCircuit) -> Self {
         let num_qubits = serialcirc.qubits.len();
         let num_bits = serialcirc.bits.len();
+
+        if num_bits > 0 {
+            unimplemented!("TKET1's linear bits are not supported yet.");
+        }
+
         // Map each (register name, index) pair to an offset in the signature.
         let mut wire_map: HashMap<RegisterHash, usize> =
             HashMap::with_capacity(num_bits + num_qubits);

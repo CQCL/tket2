@@ -57,11 +57,6 @@ impl TKET1Decode for SerialCircuit {
 
     fn encode<'circ>(circ: &'circ impl Circuit<'circ>) -> Result<Self, Self::EncodeError> {
         let mut encoder = JsonEncoder::new(circ);
-
-        // TODO Restore the global phase
-
-        // TODO Restore the implicit permutation
-
         for com in circ.commands() {
             encoder.add_command(com)?;
         }
