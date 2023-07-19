@@ -18,8 +18,8 @@ fn read_json_simple() {
 
     assert_eq!(circ.qubits().len(), 2);
 
-    let _reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
-    //assert_eq!(&ser, &reser);
+    let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
+    compare_serial_circs(&ser, &reser);
 }
 
 #[test]
@@ -28,7 +28,7 @@ fn read_json_unknown_op() {
     // custom and output
 
     let circ_s = r#"{"bits": [], "commands": [{"args": [["q", [0]], ["q", [1]], ["q", [2]]], "op": {"type": "CSWAP"}}], "created_qubits": [], "discarded_qubits": [], "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]], [["q", [2]], ["q", [2]]]], "phase": "0", "qubits": [["q", [0]], ["q", [1]], ["q", [2]]]}"#;
-    let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
+    let ser: SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), 1);
 
     let hugr: Hugr = ser.clone().decode().unwrap();
@@ -36,6 +36,16 @@ fn read_json_unknown_op() {
 
     assert_eq!(circ.qubits().len(), 3);
 
-    let _reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
-    //assert_eq!(&ser, &reser);
+    let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
+    compare_serial_circs(&ser, &reser);
+}
+
+fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
+    assert_eq!(a.name, b.name);
+    assert_eq!(a.phase, b.phase);
+    // TODO: Make sure registers don't get reordered
+    //assert_eq!(a.qubits, b.qubits);
+    //assert_eq!(a.bits, b.bits);
+    assert_eq!(a.implicit_permutation, b.implicit_permutation);
+    // TODO: Implement Hash for Command, and compare the `commands` as sets
 }

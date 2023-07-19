@@ -6,20 +6,24 @@ use hugr::ops::{Const, ConstValue, OpType};
 use hugr::types::SimpleType;
 use hugr::Wire;
 use itertools::{Either, Itertools};
-use tket_json_rs::circuit_json::{self, SerialCircuit};
+use tket_json_rs::circuit_json::{self, Permutation, SerialCircuit};
 
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
 use crate::utils::{BIT, QB};
 
 use super::op::JsonOp;
-use super::OpConvertError;
+use super::{OpConvertError, METADATA_IMPLICIT_PERM, METADATA_PHASE};
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
 #[derive(Debug, PartialEq)]
 pub(super) struct JsonEncoder {
     /// The name of the circuit being encoded.
     name: Option<String>,
+    /// Global phase value. Defaults to "0"
+    phase: String,
+    /// Implicit permutation of output qubits
+    implicit_permutation: Vec<Permutation>,
     /// The current commands
     commands: Vec<circuit_json::Command>,
     /// The linear units of the circuit, mapped to their TKET1 registers and
@@ -53,12 +57,28 @@ impl JsonEncoder {
             })
             .collect();
 
-        Self {
+        let mut encoder = Self {
             name,
+            phase: "0".to_string(),
+            implicit_permutation: vec![],
             commands: vec![],
             units,
             parameters: HashMap::new(),
+        };
+
+        if let Some(meta) = circ.get_metadata(circ.root()).as_object() {
+            if let Some(phase) = meta.get(METADATA_PHASE) {
+                // TODO: Check for invalid encoded metadata
+                encoder.phase = phase.as_str().unwrap().to_string();
+            }
+            if let Some(implicit_perm) = meta.get(METADATA_IMPLICIT_PERM) {
+                // TODO: Check for invalid encoded metadata
+                encoder.implicit_permutation =
+                    serde_json::from_value(implicit_perm.clone()).unwrap();
+            }
         }
+
+        encoder
     }
 
     /// Add a circuit command to the serialization.
@@ -96,11 +116,11 @@ impl JsonEncoder {
                 });
         SerialCircuit {
             name: self.name,
-            phase: "0".to_string(),
+            phase: self.phase,
             commands: self.commands,
             qubits,
             bits,
-            implicit_permutation: vec![],
+            implicit_permutation: self.implicit_permutation,
         }
     }
 

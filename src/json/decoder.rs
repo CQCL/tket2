@@ -15,7 +15,7 @@ use tket_json_rs::circuit_json;
 use tket_json_rs::circuit_json::SerialCircuit;
 
 use super::op::JsonOp;
-use super::try_param_to_constant;
+use super::{try_param_to_constant, METADATA_IMPLICIT_PERM, METADATA_PHASE};
 use crate::utils::{BIT, QB};
 
 /// The state of an in-progress [`DFGBuilder`] being built from a [`SerialCircuit`].
@@ -60,7 +60,14 @@ impl JsonDecoder {
 
         let mut dfg = DFGBuilder::new(sig.input, sig.output).unwrap();
 
-        dfg.set_metadata(json!({"name": serialcirc.name}));
+        // Metadata. The circuit requires "name", and we store other things that
+        // should pass through the serialization roundtrip.
+        let metadata = json!({
+            "name": serialcirc.name,
+            METADATA_PHASE: serialcirc.phase,
+            METADATA_IMPLICIT_PERM: serialcirc.implicit_permutation,
+        });
+        dfg.set_metadata(metadata);
 
         let dangling_wires = dfg.input_wires().collect::<Vec<_>>();
         JsonDecoder {

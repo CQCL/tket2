@@ -19,6 +19,11 @@ use crate::circuit::Circuit;
 use self::decoder::JsonDecoder;
 use self::encoder::JsonEncoder;
 
+/// Prefix used for storing metadata in the hugr nodes.
+pub const METADATA_PREFIX: &str = "TKET1_JSON";
+const METADATA_PHASE: &str = "TKET1_JSON.phase";
+const METADATA_IMPLICIT_PERM: &str = "TKET1_JSON.implicit_permutation";
+
 /// A JSON-serialized TKET1 circuit that can be converted to a [`Hugr`].
 pub trait TKET1Decode: Sized {
     /// The error type for decoding.
@@ -43,8 +48,6 @@ impl TKET1Decode for SerialCircuit {
             // let phase = Param::new(serialcirc.phase);
             // decoder.add_phase(phase);
         }
-
-        // TODO Store the implicit permutation
 
         for com in self.commands {
             decoder.add_command(com);
