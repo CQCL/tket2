@@ -40,19 +40,21 @@ fn read_json_unknown_op() {
     // custom and output
 
     let circ_s = r#"{
-        "bits": [],
+        "phase": "1/2",
+        "bits": [["c", [0]], ["c", [1]]],
+        "qubits": [["q", [0]], ["q", [1]], ["q", [2]]],
         "commands": [
-            {"args": [["q", [0]], ["q", [1]], ["q", [2]]], "op": {"type": "CSWAP"}}
+            {"args": [["q", [0]], ["q", [1]], ["q", [2]]], "op": {"type": "CSWAP"}},
+            {"args": [["q", [1]], ["c", [1]]], "op": {"type": "Measure"}},
+            {"args": [["q", [2]], ["c", [0]]], "op": {"type": "Measure"}}
         ],
         "created_qubits": [],
         "discarded_qubits": [],
-        "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]], [["q", [2]], ["q", [2]]]],
-        "phase": "0",
-        "qubits": [["q", [0]], ["q", [1]], ["q", [2]]]
+        "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]], [["q", [2]], ["q", [2]]]]
     }"#;
 
     let ser: SerialCircuit = serde_json::from_str(circ_s).unwrap();
-    assert_eq!(ser.commands.len(), 1);
+    assert_eq!(ser.commands.len(), 3);
 
     let hugr: Hugr = ser.clone().decode().unwrap();
     let circ = FlatRegionView::new(&hugr, hugr.root());

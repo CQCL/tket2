@@ -16,7 +16,7 @@ use tket_json_rs::optype::OpType as JsonOpType;
 
 use super::{try_param_to_constant, OpConvertError};
 use crate::resource::try_unwrap_json_op;
-use crate::utils::{BIT, F64, QB};
+use crate::utils::{F64, LINEAR_BIT, QB};
 
 /// A serialized operation, containing the operation type and all its attributes.
 ///
@@ -121,12 +121,9 @@ impl JsonOp {
     }
 
     /// Compute the signature of the operation.
-    //
-    // TODO: We are using Hugr's non-liner bits. We should have a custom linear
-    // bit type instead.
     #[inline]
     pub fn signature(&self) -> Signature {
-        let linear = [vec![QB; self.num_qubits], vec![BIT; self.num_bits]].concat();
+        let linear = [vec![QB; self.num_qubits], vec![LINEAR_BIT; self.num_bits]].concat();
         let params = vec![F64; self.num_params];
         Signature::new_df([linear.clone(), params].concat(), linear)
     }
@@ -235,7 +232,7 @@ impl TryFrom<&OpType> for JsonOp {
                 LeafOp::CX => JsonOpType::CX,
                 LeafOp::ZZMax => JsonOpType::ZZMax,
                 LeafOp::Reset => JsonOpType::Reset,
-                LeafOp::Measure => JsonOpType::Measure,
+                //LeafOp::Measure => JsonOpType::Measure,
                 LeafOp::T => JsonOpType::T,
                 LeafOp::S => JsonOpType::S,
                 LeafOp::X => JsonOpType::X,
@@ -253,8 +250,8 @@ impl TryFrom<&OpType> for JsonOp {
                 // CustomOp is handled above
                 _ => return Err(err()),
             },
-            OpType::Input(_) => JsonOpType::Input,
-            OpType::Output(_) => JsonOpType::Output,
+            //OpType::Input(_) => JsonOpType::Input,
+            //OpType::Output(_) => JsonOpType::Output,
             //hugr::ops::OpType::FuncDefn(_) => todo!(),
             //hugr::ops::OpType::FuncDecl(_) => todo!(),
             //hugr::ops::OpType::Const(_) => todo!(),
@@ -271,7 +268,7 @@ impl TryFrom<&OpType> for JsonOp {
         for ty in op.signature().input.iter() {
             if *ty == QB {
                 num_qubits += 1;
-            } else if *ty == BIT {
+            } else if *ty == LINEAR_BIT {
                 num_bits += 1;
             } else if *ty == F64 {
                 num_params += 1;

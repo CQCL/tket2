@@ -3,14 +3,13 @@
 use std::collections::HashMap;
 
 use hugr::ops::{Const, ConstValue, OpType};
-use hugr::types::SimpleType;
 use hugr::Wire;
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 use tket_json_rs::circuit_json::{self, Permutation, SerialCircuit};
 
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
-use crate::utils::{BIT, QB};
+use crate::utils::{LINEAR_BIT, QB};
 
 use super::op::JsonOp;
 use super::{OpConvertError, METADATA_IMPLICIT_PERM, METADATA_PHASE};
@@ -26,9 +25,10 @@ pub(super) struct JsonEncoder {
     implicit_permutation: Vec<Permutation>,
     /// The current commands
     commands: Vec<circuit_json::Command>,
-    /// The linear units of the circuit, mapped to their TKET1 registers and
-    /// types.
-    units: HashMap<CircuitUnit, (circuit_json::Register, SimpleType)>,
+    /// The TKET1 qubit registers associated to each qubit unit of the circuit.
+    qubit_regs: HashMap<CircuitUnit, circuit_json::Register>,
+    /// The TKET1 bit registers associated to each linear bit unit of the circuit.
+    bit_regs: HashMap<CircuitUnit, circuit_json::Register>,
     /// A register of wires with constant values, used to recover TKET1
     /// parameters.
     parameters: HashMap<Wire, String>,
@@ -39,33 +39,35 @@ impl JsonEncoder {
     pub fn new<'circ>(circ: &impl Circuit<'circ>) -> Self {
         let name = circ.name().map(str::to_string);
 
-        // Compute the linear qubit and bit registers
-        // TODO We are checking for Hugr's bit. We should change this when the
-        // decoding starts using linear bits instead.
-        // TODO Through an error on non-recognized unit types, or just ignore?
-        let units = circ
-            .units()
-            .into_iter()
-            .filter_map(|(u, ty)| {
-                let CircuitUnit::Linear(index) = u else { return None; };
-                if ty != QB && ty != BIT {
-                    return None;
-                }
-                let prefix = if ty == QB { "q" } else { "b" };
-                let reg = circuit_json::Register(prefix.to_string(), vec![index as i64]);
-                Some((u, (reg, ty)))
-            })
-            .collect();
+        // Compute the linear qubit and bit registers. Each one have independent
+        // indices starting from zero.
+        //
+        // TODO Throw an error on non-recognized unit types, or just ignore?
+        let mut bit_units = HashMap::new();
+        let mut qubit_units = HashMap::new();
+        for (unit, ty) in circ.units() {
+            if ty == QB {
+                let index = vec![qubit_units.len() as i64];
+                let reg = circuit_json::Register("q".to_string(), index);
+                qubit_units.insert(unit, reg);
+            } else if ty == LINEAR_BIT {
+                let index = vec![bit_units.len() as i64];
+                let reg = circuit_json::Register("c".to_string(), index);
+                bit_units.insert(unit, reg);
+            }
+        }
 
         let mut encoder = Self {
             name,
             phase: "0".to_string(),
             implicit_permutation: vec![],
             commands: vec![],
-            units,
+            qubit_regs: qubit_units,
+            bit_regs: bit_units,
             parameters: HashMap::new(),
         };
 
+        // Encode other parameters stored in the metadata
         if let Some(meta) = circ.get_metadata(circ.root()).as_object() {
             if let Some(phase) = meta.get(METADATA_PHASE) {
                 // TODO: Check for invalid encoded metadata
@@ -89,7 +91,7 @@ impl JsonEncoder {
         let args = command
             .inputs
             .iter()
-            .filter_map(|u| self.units.get(u).map(|(reg, _)| reg.clone()))
+            .filter_map(|&u| self.unit_to_register(u))
             .collect();
 
         // TODO Restore the opgroup (once the decoding supports it)
@@ -107,19 +109,12 @@ impl JsonEncoder {
     }
 
     pub fn finish(self) -> SerialCircuit {
-        let (qubits, bits) =
-            self.units
-                .into_iter()
-                .partition_map(|(_unit, (reg, ty))| match ty == QB {
-                    true => Either::Left(reg),
-                    false => Either::Right(reg),
-                });
         SerialCircuit {
             name: self.name,
             phase: self.phase,
             commands: self.commands,
-            qubits,
-            bits,
+            qubits: self.qubit_regs.into_values().collect_vec(),
+            bits: self.bit_regs.into_values().collect_vec(),
             implicit_permutation: self.implicit_permutation,
         }
     }
@@ -167,5 +162,12 @@ impl JsonEncoder {
                 self.parameters.insert(*wire, param.clone());
             }
         }
+    }
+
+    fn unit_to_register(&self, unit: CircuitUnit) -> Option<circuit_json::Register> {
+        self.qubit_regs
+            .get(&unit)
+            .or_else(|| self.bit_regs.get(&unit))
+            .cloned()
     }
 }
