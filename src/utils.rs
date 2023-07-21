@@ -1,9 +1,11 @@
 //! Utility functions for the library.
 
-use hugr::types::{ClassicType, SimpleType};
+use hugr::types::{ClassicType, CustomType, SimpleType};
+use smol_str::SmolStr;
 
 pub(crate) const QB: SimpleType = SimpleType::Qubit;
-pub(crate) const BIT: SimpleType = SimpleType::Classic(ClassicType::Int(1));
+pub(crate) const LINEAR_BIT: SimpleType =
+    SimpleType::Qpaque(CustomType::new_simple(SmolStr::new_inline("LBit")));
 pub(crate) const F64: SimpleType = SimpleType::Classic(ClassicType::F64);
 
 #[allow(dead_code)]

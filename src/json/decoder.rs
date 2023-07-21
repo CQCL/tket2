@@ -16,7 +16,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 
 use super::op::JsonOp;
 use super::{try_param_to_constant, METADATA_IMPLICIT_PERM, METADATA_PHASE};
-use crate::utils::{BIT, QB};
+use crate::utils::{LINEAR_BIT, QB};
 
 /// The state of an in-progress [`DFGBuilder`] being built from a [`SerialCircuit`].
 ///
@@ -42,10 +42,6 @@ impl JsonDecoder {
         let num_qubits = serialcirc.qubits.len();
         let num_bits = serialcirc.bits.len();
 
-        if num_bits > 0 {
-            unimplemented!("TKET1's linear bits are not supported yet.");
-        }
-
         // Map each (register name, index) pair to an offset in the signature.
         let mut wire_map: HashMap<RegisterHash, usize> =
             HashMap::with_capacity(num_bits + num_qubits);
@@ -61,7 +57,8 @@ impl JsonDecoder {
             }
             wire_map.insert((register, 0).into(), i);
         }
-        let sig = Signature::new_linear([vec![QB; num_qubits], vec![BIT; num_bits]].concat());
+        let sig =
+            Signature::new_linear([vec![QB; num_qubits], vec![LINEAR_BIT; num_bits]].concat());
 
         let mut dfg = DFGBuilder::new(sig.input, sig.output).unwrap();
 
