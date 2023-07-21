@@ -10,7 +10,7 @@ lazy_static = "1.4.0"
 cgmath = "0.18.0"
 num-rational = "0.4"
 num-complex = { version = "0.4", optional = true }
-tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs", features = [
+tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs", rev="619db15d3", features = [
     "tket2ops",
 ] }
 rayon = "1.5"

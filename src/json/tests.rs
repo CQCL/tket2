@@ -66,19 +66,17 @@ fn read_json_unknown_op() {
 }
 
 fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
-    let register_index = |reg: &circuit_json::Register| -> Vec<i64> { reg.1.clone() };
-
     assert_eq!(a.name, b.name);
     assert_eq!(a.phase, b.phase);
 
-    let qubits_a: HashSet<_> = a.qubits.iter().map(register_index).collect();
-    let qubits_b: HashSet<_> = b.qubits.iter().map(register_index).collect();
+    let qubits_a: HashSet<_> = a.qubits.iter().collect();
+    let qubits_b: HashSet<_> = b.qubits.iter().collect();
     assert_eq!(qubits_a, qubits_b);
 
     // TODO: No linear bit support yet, so the reencoded registers will always
     // be empty.
-    let bits_a: HashSet<_> = a.bits.iter().map(register_index).collect();
-    let bits_b: HashSet<_> = b.bits.iter().map(register_index).collect();
+    let bits_a: HashSet<_> = a.bits.iter().collect();
+    let bits_b: HashSet<_> = b.bits.iter().collect();
     assert_eq!(bits_a, bits_b);
 
     assert_eq!(a.implicit_permutation, b.implicit_permutation);
