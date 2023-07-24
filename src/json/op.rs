@@ -270,6 +270,11 @@ impl TryFrom<&OpType> for JsonOp {
             }
         }
 
+        if num_params > 0 {
+            unimplemented!("Native parametric operation encoding is not supported yet.")
+            // TODO: Gather parameter values from the `OpType` to encode in the `JsonOpType`.
+        }
+
         Ok(JsonOp::new_with_counts(
             json_optype,
             num_qubits,
