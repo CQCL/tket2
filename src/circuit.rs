@@ -127,13 +127,11 @@ where
         todo!()
     }
 
-    /// Returns the input node to the circuit.
     #[inline]
     fn input(&self) -> Node {
         return self.children(self.root()).next().unwrap();
     }
 
-    /// Returns the input node to the circuit.
     #[inline]
     fn output(&self) -> Node {
         return self.children(self.root()).nth(1).unwrap();
