@@ -94,15 +94,13 @@ impl JsonOp {
         num_bits: usize,
         num_params: usize,
     ) -> Self {
-        let (params, param_inputs) = if num_params > 0 {
+        let mut params = None;
+        let mut param_inputs = vec![];
+        if num_params > 0 {
             let offset = num_qubits + num_bits;
-            (
-                Some(vec!["".into(); num_params]),
-                (offset..offset + num_params).map(Option::Some).collect(),
-            )
-        } else {
-            (None, Vec::new())
-        };
+            params = Some(vec!["".into(); num_params]);
+            param_inputs = (offset..offset + num_params).map(Option::Some).collect();
+        }
         let op = circuit_json::Operation {
             op_type: json_optype,
             n_qb: Some(num_qubits as u32),
