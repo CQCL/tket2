@@ -30,10 +30,12 @@ typetag = "0.2.8"
 itertools = "0.11.0"
 petgraph = { version = "0.6.3", default-features = false }
 serde_yaml = "0.9.22"
+portmatching = { git = "https://github.com/lmondada/portmatching.git", version = "0.1.0", optional = true, features = ["serde"]}
 
 [features]
 pyo3 = ["dep:pyo3", "tket-json-rs/pyo3", "tket-json-rs/tket2ops", "portgraph/pyo3", "quantinuum-hugr/pyo3"]
 tkcxx = ["dep:tket-rs", "dep:num-complex"]
+portmatching = ["dep:portmatching"]
 
 [dev-dependencies]
 rstest = "0.18.1"
