@@ -17,6 +17,7 @@ use self::command::{Command, CommandIterator};
 
 use hugr::hugr::CircuitUnit;
 use hugr::ops::OpTrait;
+use hugr::HugrView;
 
 pub use hugr::hugr::region::Region;
 pub use hugr::ops::OpType;
@@ -31,7 +32,7 @@ use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
 // - Vertical slice iterator
 // - Gate count map
 // - Depth
-pub trait Circuit<'circ> {
+pub trait Circuit<'circ>: HugrView {
     /// An iterator over the commands in the circuit.
     type Commands: Iterator<Item = Command<'circ>>;
 
@@ -58,10 +59,18 @@ pub trait Circuit<'circ> {
     fn follow_linear_port(&self, node: Node, port: Port) -> Option<Port>;
 
     /// Returns all the commands in the circuit, in some topological order.
+    ///
+    /// Ignores the Input and Output nodes.
     fn commands<'a: 'circ>(&'a self) -> Self::Commands;
 
     /// Returns all the commands applied to the given unit, in order.
     fn unit_commands<'a: 'circ>(&'a self) -> Self::UnitCommands;
+
+    /// Returns the input node to the circuit.
+    fn input(&self) -> Node;
+
+    /// Returns the output node to the circuit.
+    fn output(&self) -> Node;
 }
 
 impl<'circ, T> Circuit<'circ> for T
@@ -100,8 +109,11 @@ where
         // TODO: We assume the linear data uses the same port offsets on both sides of the node.
         // In the future we may want to have a more general mechanism to handle this.
         let other_port = Port::new(port.direction().reverse(), port.index());
-        debug_assert_eq!(optype.port_kind(other_port), optype.port_kind(port));
-        Some(other_port)
+        if optype.port_kind(other_port) == optype.port_kind(port) {
+            Some(other_port)
+        } else {
+            None
+        }
     }
 
     fn commands<'a: 'circ>(&'a self) -> Self::Commands {
@@ -113,5 +125,15 @@ where
         // TODO Can we associate linear i/o with the corresponding unit without
         // doing the full toposort?
         todo!()
+    }
+
+    #[inline]
+    fn input(&self) -> Node {
+        return self.children(self.root()).next().unwrap();
+    }
+
+    #[inline]
+    fn output(&self) -> Node {
+        return self.children(self.root()).nth(1).unwrap();
     }
 }
