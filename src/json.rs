@@ -24,8 +24,8 @@ pub const METADATA_PREFIX: &str = "TKET1_JSON";
 const METADATA_PHASE: &str = "TKET1_JSON.phase";
 const METADATA_IMPLICIT_PERM: &str = "TKET1_JSON.implicit_permutation";
 
-/// A JSON-serialized TKET1 circuit that can be converted to a [`Hugr`].
-pub trait TKET1Decode: Sized {
+/// A JSON-serialized circuit that can be converted to a [`Hugr`].
+pub trait TKETDecode: Sized {
     /// The error type for decoding.
     type DecodeError;
     /// The error type for decoding.
@@ -36,7 +36,7 @@ pub trait TKET1Decode: Sized {
     fn encode<'circ>(circuit: &'circ impl Circuit<'circ>) -> Result<Self, Self::EncodeError>;
 }
 
-impl TKET1Decode for SerialCircuit {
+impl TKETDecode for SerialCircuit {
     type DecodeError = OpConvertError;
     type EncodeError = OpConvertError;
 

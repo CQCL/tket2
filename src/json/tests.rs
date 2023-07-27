@@ -7,7 +7,7 @@ use hugr::{Hugr, HugrView};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 
 use crate::circuit::Circuit;
-use crate::json::TKET1Decode;
+use crate::json::TKETDecode;
 
 #[test]
 fn read_json_simple() {
@@ -73,12 +73,11 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
     let qubits_b: HashSet<_> = b.qubits.iter().collect();
     assert_eq!(qubits_a, qubits_b);
 
-    // TODO: No linear bit support yet, so the reencoded registers will always
-    // be empty.
     let bits_a: HashSet<_> = a.bits.iter().collect();
     let bits_b: HashSet<_> = b.bits.iter().collect();
     assert_eq!(bits_a, bits_b);
 
     assert_eq!(a.implicit_permutation, b.implicit_permutation);
-    // TODO: Implement Hash for Command, and compare the `commands` as sets
+
+    // TODO: Check commands equality (they only implement PartialEq)
 }
