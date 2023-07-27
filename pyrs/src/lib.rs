@@ -1,4 +1,4 @@
-use hugr::Hugr;
+use hugr::{Hugr, HugrView};
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
