@@ -1,7 +1,7 @@
 ## pyrs
 
 This package uses [pyo3](https://pyo3.rs/v0.16.4/) and
-[maturin](https://github.com/PyO3/maturin) to bind tket2proto functionality to
+[maturin](https://github.com/PyO3/maturin) to bind TKET2 functionality to
 python as the `pyrs` package.
 
 Recommended:

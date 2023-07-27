@@ -1,7 +1,10 @@
 //! Pattern matching for circuits
 
-pub mod pattern;
+pub mod matcher;
 mod optype;
+#[cfg(feature = "pyo3")]
+mod pyo3;
 
+pub use matcher::{CircuitMatcher, CircuitPattern};
 use optype::OpType;
 // pub mod matcher;
