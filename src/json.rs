@@ -7,7 +7,7 @@ pub mod op;
 #[cfg(test)]
 mod tests;
 
-use hugr::ops::OpType;
+use hugr::ops::{ConstValue, OpType};
 use hugr::Hugr;
 
 use thiserror::Error;
@@ -54,4 +54,23 @@ pub enum OpConvertError {
     /// The serialized operation is not supported.
     #[error("Cannot serialize operation: {0:?}")]
     UnsupportedOpSerialization(OpType),
+    /// The serialized operation is not supported.
+    #[error("Cannot serialize operation: {0:?}")]
+    NonSerializableInputs(OpType),
+}
+
+/// Try to interpret a TKET1 parameter as a constant value.
+#[inline]
+fn try_param_to_constant(param: &str) -> Option<ConstValue> {
+    if let Ok(f) = param.parse::<f64>() {
+        Some(ConstValue::F64(f))
+    } else if param.split('/').count() == 2 {
+        // TODO: Use the rational types from `Hugr::extensions::rotation`
+        let (n, d) = param.split_once('/').unwrap();
+        let n = n.parse::<f64>().unwrap();
+        let d = d.parse::<f64>().unwrap();
+        Some(ConstValue::F64(n / d))
+    } else {
+        None
+    }
 }

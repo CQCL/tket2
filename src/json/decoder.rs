@@ -7,7 +7,6 @@ use std::mem;
 
 use hugr::builder::{CircuitBuilder, Container, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::hugr::CircuitUnit;
-use hugr::ops::ConstValue;
 use hugr::types::Signature;
 use hugr::{Hugr, Wire};
 
@@ -16,6 +15,7 @@ use tket_json_rs::circuit_json;
 use tket_json_rs::circuit_json::SerialCircuit;
 
 use super::op::JsonOp;
+use super::try_param_to_constant;
 use crate::utils::{BIT, QB};
 
 /// The state of an in-progress [`DFGBuilder`] being built from a [`SerialCircuit`].
@@ -84,8 +84,8 @@ impl JsonDecoder {
     ///
     /// - [`Command`]: circuit_json::Command
     pub fn add_command(&mut self, command: circuit_json::Command) {
+        // TODO Store the command's `opgroup` in the metadata.
         let circuit_json::Command { op, args, .. } = command;
-        let params = op.params.clone().unwrap_or_default();
         let num_qubits = args
             .iter()
             .take_while(|&arg| self.reg_wire(arg, 0) < self.num_qubits)
@@ -95,7 +95,10 @@ impl JsonDecoder {
 
         let args: Vec<_> = args.into_iter().map(|reg| self.reg_wire(&reg, 0)).collect();
 
-        let param_wires: Vec<Wire> = params.iter().map(|p| self.get_param_wire(p)).collect();
+        let param_wires: Vec<Wire> = op
+            .param_inputs()
+            .map(|p| self.create_param_wire(p))
+            .collect();
 
         let append_wires = args
             .into_iter()
@@ -119,18 +122,14 @@ impl JsonDecoder {
     /// If the parameter is a constant, a constant definition is added to the Hugr.
     ///
     /// TODO: If the parameter is a variable, returns the corresponding wire from the input.
-    fn get_param_wire(&mut self, param: &str) -> Wire {
-        if let Ok(f) = param.parse::<f64>() {
-            self.hugr.add_load_const(ConstValue::F64(f)).unwrap()
-        } else if param.split('/').count() == 2 {
-            // TODO: Use the rational types from `Hugr::extensions::rotation`
-            let (n, d) = param.split_once('/').unwrap();
-            let n = n.parse::<f64>().unwrap();
-            let d = d.parse::<f64>().unwrap();
-            self.hugr.add_load_const(ConstValue::F64(n / d)).unwrap()
-        } else {
-            // TODO: Pre-compute variables and add them to the input signature.
-            todo!("Variable parameters not yet supported")
+    fn create_param_wire(&mut self, param: &str) -> Wire {
+        match try_param_to_constant(param) {
+            Some(c) => self.hugr.add_load_const(c).unwrap(),
+            None => {
+                // TODO: If the parameter is just a variable,
+                // return the corresponding wire from the input.
+                todo!("Variable parameters not yet supported")
+            }
         }
     }
 
