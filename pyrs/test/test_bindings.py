@@ -48,7 +48,6 @@ def test_conversion():
 
 
 def test_apply_rewrite():
-
     c = simple_rs(RsOpType.H)
     assert c.edge_endpoints(0) == (0, 2)
     assert c.edge_at_port(2, 0, Direction.Outgoing) == 1
