@@ -28,10 +28,10 @@ pub(crate) struct JsonOp {
     op: circuit_json::Operation,
     num_qubits: usize,
     num_bits: usize,
-    /// Input corresponding to each parameter in `op.params`.
+    /// Node input for each parameter in `op.params`.
     ///
-    /// If the input is `None`, the parameter exposed in the Hugr and is left
-    /// untouched during a decode-encode roundtrip.
+    /// If the input is `None`, the parameter does not use a Hugr port and is
+    /// instead stored purely as metadata for the `Operation`.
     param_inputs: Vec<Option<usize>>,
     /// The number of non-None inputs in `param_inputs`, corresponding to the
     /// F64 inputs to the Hugr operation.
@@ -146,26 +146,21 @@ impl JsonOp {
     /// Compute the `parameter_input` and `num_params` fields by looking for
     /// parameters in `op.params` that can be mapped to input wires in the Hugr.
     ///
-    /// Returns the number of parameters that are mapped to inputs.
+    /// Updates the internal `num_params` and `param_inputs` fields.
     fn compute_param_fields(&mut self) {
         let Some(params) = self.op.params.as_ref() else {
-            self.param_inputs = vec![None; self.num_params];
+            self.param_inputs = vec![];
             self.num_params = 0;
             return;
         };
-        let mut param_inputs = vec![None; params.len()];
-        let mut next_input = 0;
-        for (i, param) in params.iter().enumerate() {
-            // Only expose an input for the parameter if it is a constant value.
-            //
-            // TODO In the future we may also want inputs for single variables.
-            if try_param_to_constant(param).is_some() {
-                param_inputs[i] = Some(next_input);
-                next_input += 1;
-            }
-        }
 
-        self.num_params = next_input;
+        let mut p_input_indices = 0..;
+        let param_inputs = params
+            .iter()
+            .map(|param| try_param_to_constant(param).map(|_| p_input_indices.next().unwrap()))
+            .collect();
+
+        self.num_params = p_input_indices.next().unwrap();
         self.param_inputs = param_inputs;
     }
 }
@@ -264,13 +259,18 @@ impl TryFrom<&OpType> for JsonOp {
         let mut num_bits = 0;
         let mut num_params = 0;
         for ty in op.signature().input.iter() {
-            if *ty == QB {
-                num_qubits += 1;
-            } else if *ty == LINEAR_BIT {
-                num_bits += 1;
-            } else if *ty == F64 {
-                num_params += 1;
+            if ty == &QB {
+                num_qubits += 1
+            } else if ty == &LINEAR_BIT {
+                num_bits += 1
+            } else if ty == &F64 {
+                num_params += 1
             }
+        }
+
+        if num_params > 0 {
+            unimplemented!("Native parametric operation encoding is not supported yet.")
+            // TODO: Gather parameter values from the `OpType` to encode in the `JsonOpType`.
         }
 
         Ok(JsonOp::new_with_counts(
