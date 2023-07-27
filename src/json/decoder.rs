@@ -15,8 +15,8 @@ use tket_json_rs::circuit_json;
 use tket_json_rs::circuit_json::SerialCircuit;
 
 use super::op::JsonOp;
-use super::try_param_to_constant;
-use crate::utils::{BIT, QB};
+use super::{try_param_to_constant, METADATA_IMPLICIT_PERM, METADATA_PHASE};
+use crate::utils::{LINEAR_BIT, QB};
 
 /// The state of an in-progress [`DFGBuilder`] being built from a [`SerialCircuit`].
 ///
@@ -41,6 +41,7 @@ impl JsonDecoder {
     pub fn new(serialcirc: &SerialCircuit) -> Self {
         let num_qubits = serialcirc.qubits.len();
         let num_bits = serialcirc.bits.len();
+
         // Map each (register name, index) pair to an offset in the signature.
         let mut wire_map: HashMap<RegisterHash, usize> =
             HashMap::with_capacity(num_bits + num_qubits);
@@ -56,11 +57,19 @@ impl JsonDecoder {
             }
             wire_map.insert((register, 0).into(), i);
         }
-        let sig = Signature::new_linear([vec![QB; num_qubits], vec![BIT; num_bits]].concat());
+        let sig =
+            Signature::new_linear([vec![QB; num_qubits], vec![LINEAR_BIT; num_bits]].concat());
 
         let mut dfg = DFGBuilder::new(sig.input, sig.output).unwrap();
 
-        dfg.set_metadata(json!({"name": serialcirc.name}));
+        // Metadata. The circuit requires "name", and we store other things that
+        // should pass through the serialization roundtrip.
+        let metadata = json!({
+            "name": serialcirc.name,
+            METADATA_PHASE: serialcirc.phase,
+            METADATA_IMPLICIT_PERM: serialcirc.implicit_permutation,
+        });
+        dfg.set_metadata(metadata);
 
         let dangling_wires = dfg.input_wires().collect::<Vec<_>>();
         JsonDecoder {

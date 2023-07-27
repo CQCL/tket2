@@ -1,7 +1,7 @@
 //! Json serialization and deserialization.
 
 mod decoder;
-//mod encoder;
+mod encoder;
 pub mod op;
 
 #[cfg(test)]
@@ -14,18 +14,31 @@ use thiserror::Error;
 use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::optype::OpType as JsonOpType;
 
-use self::decoder::JsonDecoder;
+use crate::circuit::Circuit;
 
-/// A JSON-serialized TKET1 circuit that can be converted to a [`Hugr`].
-pub trait TKET1Decode: Sized {
+use self::decoder::JsonDecoder;
+use self::encoder::JsonEncoder;
+
+/// Prefix used for storing metadata in the hugr nodes.
+pub const METADATA_PREFIX: &str = "TKET1_JSON";
+const METADATA_PHASE: &str = "TKET1_JSON.phase";
+const METADATA_IMPLICIT_PERM: &str = "TKET1_JSON.implicit_permutation";
+
+/// A JSON-serialized circuit that can be converted to a [`Hugr`].
+pub trait TKETDecode: Sized {
     /// The error type for decoding.
     type DecodeError;
+    /// The error type for decoding.
+    type EncodeError;
     /// Convert the serialized circuit to a [`Hugr`].
     fn decode(self) -> Result<Hugr, Self::DecodeError>;
+    /// Convert a [`Hugr`] to a new serialized circuit.
+    fn encode<'circ>(circuit: &'circ impl Circuit<'circ>) -> Result<Self, Self::EncodeError>;
 }
 
-impl TKET1Decode for SerialCircuit {
+impl TKETDecode for SerialCircuit {
     type DecodeError = OpConvertError;
+    type EncodeError = OpConvertError;
 
     fn decode(self) -> Result<Hugr, Self::DecodeError> {
         let mut decoder = JsonDecoder::new(&self);
@@ -36,12 +49,18 @@ impl TKET1Decode for SerialCircuit {
             // decoder.add_phase(phase);
         }
 
-        // TODO: Check the implicit permutation in the serialized circuit.
-
         for com in self.commands {
             decoder.add_command(com);
         }
         Ok(decoder.finish())
+    }
+
+    fn encode<'circ>(circ: &'circ impl Circuit<'circ>) -> Result<Self, Self::EncodeError> {
+        let mut encoder = JsonEncoder::new(circ);
+        for com in circ.commands() {
+            encoder.add_command(com)?;
+        }
+        Ok(encoder.finish())
     }
 }
 

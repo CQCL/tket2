@@ -2,7 +2,7 @@ use hugr::Hugr;
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
-use tket2::json::TKET1Decode;
+use tket2::json::TKETDecode;
 use tket_json_rs::circuit_json::SerialCircuit;
 
 create_exception!(pyrs, PyValidateError, PyException);

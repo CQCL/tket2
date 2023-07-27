@@ -15,7 +15,8 @@ use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as JsonOpType;
 
 use super::{try_param_to_constant, OpConvertError};
-use crate::utils::{BIT, F64, QB};
+use crate::resource::try_unwrap_json_op;
+use crate::utils::{F64, LINEAR_BIT, QB};
 
 /// A serialized operation, containing the operation type and all its attributes.
 ///
@@ -118,12 +119,9 @@ impl JsonOp {
     }
 
     /// Compute the signature of the operation.
-    //
-    // TODO: We are using Hugr's non-linear bits. We should have a custom linear
-    // bit type instead.
     #[inline]
     pub fn signature(&self) -> Signature {
-        let linear = [vec![QB; self.num_qubits], vec![BIT; self.num_bits]].concat();
+        let linear = [vec![QB; self.num_qubits], vec![LINEAR_BIT; self.num_bits]].concat();
         let params = vec![F64; self.num_params];
         Signature::new_df([linear.clone(), params].concat(), linear)
     }
@@ -217,9 +215,8 @@ impl TryFrom<&OpType> for JsonOp {
         // Non-supported Hugr operations throw an error.
         let err = || OpConvertError::UnsupportedOpSerialization(op.clone());
 
-        if let OpType::LeafOp(LeafOp::CustomOp(_ext)) = op {
-            todo!("Coming in the next PR")
-            //return try_unwrap_json_op(ext).ok_or_else(err);
+        if let OpType::LeafOp(LeafOp::CustomOp(ext)) = op {
+            return try_unwrap_json_op(ext).ok_or_else(err);
         }
 
         let json_optype: JsonOpType = match op {
@@ -228,7 +225,7 @@ impl TryFrom<&OpType> for JsonOp {
                 LeafOp::CX => JsonOpType::CX,
                 LeafOp::ZZMax => JsonOpType::ZZMax,
                 LeafOp::Reset => JsonOpType::Reset,
-                LeafOp::Measure => JsonOpType::Measure,
+                //LeafOp::Measure => JsonOpType::Measure,
                 LeafOp::T => JsonOpType::T,
                 LeafOp::S => JsonOpType::S,
                 LeafOp::X => JsonOpType::X,
@@ -246,8 +243,8 @@ impl TryFrom<&OpType> for JsonOp {
                 // CustomOp is handled above
                 _ => return Err(err()),
             },
-            OpType::Input(_) => JsonOpType::Input,
-            OpType::Output(_) => JsonOpType::Output,
+            //OpType::Input(_) => JsonOpType::Input,
+            //OpType::Output(_) => JsonOpType::Output,
             //hugr::ops::OpType::FuncDefn(_) => todo!(),
             //hugr::ops::OpType::FuncDecl(_) => todo!(),
             //hugr::ops::OpType::Const(_) => todo!(),
@@ -262,11 +259,12 @@ impl TryFrom<&OpType> for JsonOp {
         let mut num_bits = 0;
         let mut num_params = 0;
         for ty in op.signature().input.iter() {
-            match *ty {
-                QB => num_qubits += 1,
-                BIT => num_bits += 1,
-                F64 => num_params += 1,
-                _ => {}
+            if ty == &QB {
+                num_qubits += 1
+            } else if ty == &LINEAR_BIT {
+                num_bits += 1
+            } else if ty == &F64 {
+                num_params += 1
             }
         }
 
