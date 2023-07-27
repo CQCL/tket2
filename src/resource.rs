@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use hugr::ops::custom::{ExternalOp, OpaqueOp};
 use hugr::ops::{OpName, OpTrait};
-use hugr::resource::{OpDef, ResourceId, ResourceSet, SignatureError};
+use hugr::resource::{OpDef, ResourceId, ResourceSet, SignatureError, TypeDef};
 use hugr::types::type_param::{TypeArg, TypeParam};
 use hugr::types::TypeRow;
 use hugr::Resource;
@@ -18,12 +18,23 @@ use super::json::op::JsonOp;
 /// The ID of the TKET1 resource.
 pub const TKET1_RESOURCE_ID: ResourceId = SmolStr::new_inline("TKET1");
 
+/// The name for the linear bit custom type.
+pub const LINEAR_BIT_NAME: SmolStr = SmolStr::new_inline("LBit");
+
 /// The name for opaque TKET1 operations.
 pub const JSON_OP_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Op");
 
 lazy_static! {
     /// The TKET1 resource, containing the opaque TKET1 operations.
     pub static ref TKET1_RESOURCE: Resource = {
+        let mut res = Resource::new(TKET1_RESOURCE_ID);
+
+        let linear_type = TypeDef {
+            name: LINEAR_BIT_NAME,
+            args: vec![],
+        };
+        res.add_type(linear_type);
+
         let json_op = OpDef::new_with_custom_sig(
             JSON_OP_NAME,
             "An opaque TKET1 operation.".into(),
@@ -31,9 +42,8 @@ lazy_static! {
             HashMap::new(),
             json_op_signature,
         );
-
-        let mut res = Resource::new(TKET1_RESOURCE_ID);
         res.add_op(json_op).unwrap();
+
         res
     };
 }
