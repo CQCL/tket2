@@ -1,7 +1,7 @@
 # tket2
 
 [![build_status][]](https://github.com/CQCL-DEV/tket2/actions)
-[![msrv][]](https://github.com/CQCL-DEV/tket2)
+![msrv][]
 
 Version 2 of the TKET compiler.
 
