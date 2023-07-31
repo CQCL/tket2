@@ -22,8 +22,8 @@ impl CircuitPattern {
     #[new]
     pub fn py_from_circuit(circ: PyObject) -> PyResult<CircuitPattern> {
         let ser_c = SerialCircuit::_from_tket1(circ);
-        let hugr: Hugr = ser_c.decode().unwrap();
-        hugr.validate()
+        let hugr: Hugr = ser_c
+            .decode()
             .map_err(|e| PyValidateError::new_err(e.to_string()))?;
         let circ = RegionView::new(&hugr, hugr.root());
         Ok(CircuitPattern::from_circuit(&circ))

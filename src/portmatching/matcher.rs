@@ -2,7 +2,7 @@
 
 use std::fmt::Debug;
 
-use super::OpType;
+use super::MatchOp;
 use hugr::{ops::OpTrait, Node, Port};
 use itertools::Itertools;
 use portmatching::{
@@ -16,7 +16,7 @@ use pyo3::prelude::*;
 use crate::circuit::Circuit;
 
 type PEdge = (Port, Port);
-type PNode = OpType;
+type PNode = MatchOp;
 
 /// A pattern that match a circuit exactly
 #[cfg_attr(feature = "pyo3", pyclass)]
@@ -28,7 +28,7 @@ impl CircuitPattern {
     pub fn from_circuit<'circ, C: Circuit<'circ>>(circuit: &'circ C) -> Self {
         let mut p = Pattern::new();
         for cmd in circuit.commands() {
-            p.require(cmd.node, cmd.op.clone().into());
+            p.require(cmd.node, cmd.op.clone().try_into().unwrap());
             for out_offset in 0..cmd.outputs.len() {
                 let out_offset = Port::new_outgoing(out_offset);
                 for (next_node, in_offset) in circuit.linked_ports(cmd.node, out_offset) {
@@ -139,11 +139,14 @@ fn validate_unweighted_edge<'circ>(
     }
 }
 
-/// Check if an edge `e` is valid in a weighted portgraph `g`.
+/// Check if a node `n` is valid in a weighted portgraph `g`.
 pub(crate) fn validate_weighted_node<'circ>(
     circ: &impl Circuit<'circ>,
 ) -> impl for<'a> Fn(Node, &PNode) -> bool + '_ {
-    move |v, prop| &OpType::from(circ.get_optype(v)) == prop
+    move |v, prop| {
+        let v_weight = MatchOp::try_from(circ.get_optype(v).clone());
+        v_weight.is_ok_and(|w| &w == prop)
+    }
 }
 
 #[cfg(test)]
@@ -162,11 +165,7 @@ mod tests {
 
     fn h_cx() -> Hugr {
         let qb = SimpleType::Qubit;
-        let mut hugr = DFGBuilder::new(
-            vec![qb.clone(); 2],
-            vec![qb; 2],
-        )
-        .unwrap();
+        let mut hugr = DFGBuilder::new(vec![qb.clone(); 2], vec![qb; 2]).unwrap();
         let mut circ = hugr.as_circuit(hugr.input_wires().collect());
         circ.append(LeafOp::CX, [0, 1]).unwrap();
         circ.append(LeafOp::H, [0]).unwrap();

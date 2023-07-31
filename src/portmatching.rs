@@ -6,4 +6,4 @@ mod optype;
 mod pyo3;
 
 pub use matcher::{CircuitMatcher, CircuitPattern};
-use optype::OpType;
+use optype::MatchOp;
