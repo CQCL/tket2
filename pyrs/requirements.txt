@@ -1,1 +1,5 @@
+<<<<<<< HEAD
 maturin
+=======
+# pyrs dependencies
+>>>>>>> main

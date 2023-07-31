@@ -1,8 +1,11 @@
 /target
 Cargo.lock
 pyrs/target/
+.ipynb_checkpoints
 
 # Devenv
 .devenv*
 devenv.local.nix
 
+# direnv
+.direnv

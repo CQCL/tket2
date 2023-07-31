@@ -1,41 +1,27 @@
-# tket2proto
-Prototype development of TKET-2 in rust
+# tket2
 
-You will need rust >= 1.67.
-You will need access to the [tket-json-rs repository](https://github.com/CQCL/tket-json-rs) as that is a git dependency.
+[![build_status][]](https://github.com/CQCL-DEV/tket2/actions)
+![msrv][]
 
-With that in place `cargo build`, `cargo test` should work.
+Version 2 of the TKET compiler.
 
-## Optional features
+  [build_status]: https://github.com/CQCL-DEV/hugr/workflows/Continuous%20integration/badge.svg?branch=main
+  [msrv]: https://img.shields.io/badge/rust-1.70.0%2B-blue.svg
 
-### pyo3
+## Features
+
+- `pyo3`
 This optional feature enables some python bindings via pyo3. See the `pyrs` folder for more.
 
-### cxx
-This enables binding to TKET-1 code using [cxx](https://cxx.rs/). For this you will need access to the [tket-rs](https://github.com/CQCL-DEV/tket-rs) repository,
-which in turn will require `conan` installed and the tket remote conan repository added. See the [TKET readme](https://github.com/CQCL/tket) for more on conan.
+- `tkcxx`
+  This enables binding to TKET-1 code using [cxx](https://cxx.rs/). For this you will to set up an environment with conan. See the [tket-rs README](https://github.com/CQCL-DEV/tket-rs#readme) for more details.
 
+## Developing TKET2
 
-## Code Structure
+See [DEVELOPMENT.md](DEVELOPMENT.md) for instructions on setting up the development environment.
 
-A brief outline of how the code is currently structured
+## License
 
-* `benches`: criterion benchmarks, limited, should be added to.
-* `pyrs`: python bindings and tests using pyo3
-* `src/circuit`: Circuit data structure and conversion impls
-    - `circuit.rs`: core data structure and impls
-    - `dag.rs`: type specialisations for graph
-    - `operation.rs`: Operation enum, constants, WireType, Signature.
-    - `py_circuit.rs`: python bindings and conversions
-    - `tk1ops.rs`: CustomOp implementation for serialised tket1 `Operation`
-    - `unitarybox.rs`: `CustomOp` implementation for a ffi-bound TKET1 SU2 box.
-* `src/json`: Conversion to and from TKET1 serialised JSON format
-* `src/passes`: Compilation passes and associated infrastructure
-    - `classical.rs`: Constant folding pass
-    - `pattern.rs`: Naive lazy fixed pattern matching implementation
-    - `redundancy.rs`: **vestigial** redundancy removal implementation
-    - `squash.rs`: Single qubit rotation squashing, all rotations are converted
-      to quaternion rotations, and the angles constant folded.
-    - `mod.rs`: generic strategies and iterators
-* `src/validate`: simple validity checking for circuits
-* `lib.rs`: integration tests
+This project is licensed under Apache License, Version 2.0 ([LICENSE][] or http://www.apache.org/licenses/LICENSE-2.0).
+
+  [LICENSE]: LICENCE

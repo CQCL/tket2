@@ -1,0 +1,9 @@
+# Use common dependencies
+-r requirements.txt
+
+# Development requirements
+maturin     # Build wheels
+black       # Code formatting
+pytket      # TKET1
+jupyterlab  # For running the examples
+graphviz    # Visualisation of Hugrs in the notebooks
