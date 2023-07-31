@@ -7,4 +7,3 @@ mod pyo3;
 
 pub use matcher::{CircuitMatcher, CircuitPattern};
 use optype::OpType;
-// pub mod matcher;
