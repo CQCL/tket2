@@ -18,6 +18,7 @@ use hugr::HugrView;
 
 pub use hugr::hugr::region::Region;
 pub use hugr::ops::OpType;
+use hugr::types::PrimType;
 pub use hugr::types::{ClassicType, EdgeKind, Signature, SimpleType, TypeRow};
 pub use hugr::{Node, Port, Wire};
 use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
@@ -92,7 +93,7 @@ where
             .signature()
             .input_df_types()
             .iter()
-            .filter(|typ| !typ.is_classical())
+            .filter(|&typ| !typ.tag().is_classical())
             .enumerate()
             .map(|(i, typ)| (i.into(), typ.clone()))
             .collect()

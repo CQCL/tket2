@@ -1,12 +1,12 @@
 //! Utility functions for the library.
 
-use hugr::types::{ClassicType, CustomType, SimpleType};
+use hugr::types::{ClassicType, Container, CustomType, SimpleType};
 
 use crate::resource::LINEAR_BIT_NAME;
 
 pub(crate) const QB: SimpleType = SimpleType::Qubit;
 pub(crate) const LINEAR_BIT: SimpleType =
-    SimpleType::Qpaque(CustomType::new_simple(LINEAR_BIT_NAME));
+    SimpleType::Qontainer(Container::Opaque(CustomType::new_simple(LINEAR_BIT_NAME)));
 pub(crate) const F64: SimpleType = SimpleType::Classic(ClassicType::F64);
 
 #[allow(dead_code)]

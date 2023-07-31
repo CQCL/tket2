@@ -8,7 +8,7 @@ use hugr::ops::custom::{ExternalOp, OpaqueOp};
 use hugr::ops::{OpName, OpTrait};
 use hugr::resource::{OpDef, ResourceId, ResourceSet, SignatureError, TypeDef};
 use hugr::types::type_param::{TypeArg, TypeParam};
-use hugr::types::TypeRow;
+use hugr::types::{Container, CustomType, HashableType, SimpleType, TypeRow, TypeTag};
 use hugr::Resource;
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
@@ -31,14 +31,18 @@ lazy_static! {
 
         let linear_type = TypeDef {
             name: LINEAR_BIT_NAME,
-            args: vec![],
+            params: vec![],
+            description: "A linear bit.".into(),
+            resource: None,
+            tag: TypeTag::Simple.into(),
         };
-        res.add_type(linear_type);
+        res.add_type(linear_type).unwrap();
 
+        let json_op_param = TypeParam::Value(HashableType::Container(Container::Opaque(CustomType::new("TKET1 Json Op", vec![]))));
         let json_op = OpDef::new_with_custom_sig(
             JSON_OP_NAME,
             "An opaque TKET1 operation.".into(),
-            vec![TypeParam::Value],
+            vec![json_op_param],
             HashMap::new(),
             json_op_signature,
         );
@@ -56,7 +60,7 @@ pub(crate) fn wrap_json_op(op: &JsonOp) -> ExternalOp {
         TKET1_RESOURCE_ID,
         JSON_OP_NAME,
         "".into(),
-        vec![TypeArg::Value(op)],
+        vec![TypeArg::CustomValue(op)],
         Some(sig),
     )
     .into()
@@ -72,7 +76,7 @@ pub(crate) fn try_unwrap_json_op(ext: &ExternalOp) -> Option<JsonOp> {
     if ext.name() != format!("{TKET1_RESOURCE_ID}.{JSON_OP_NAME}") {
         return None;
     }
-    let Some(TypeArg::Value(op)) = ext.args().get(0) else {
+    let Some(TypeArg::CustomValue(op)) = ext.args().get(0) else {
         // TODO: Throw an error? We should never get here if the name matches.
         return None;
     };
@@ -81,8 +85,10 @@ pub(crate) fn try_unwrap_json_op(ext: &ExternalOp) -> Option<JsonOp> {
 }
 
 /// Compute the signature of a json-encoded TKET1 operation.
-fn json_op_signature(args: &[TypeArg]) -> Result<(TypeRow, TypeRow, ResourceSet), SignatureError> {
-    let [TypeArg::Value(arg)] = args else {
+fn json_op_signature(
+    args: &[TypeArg],
+) -> Result<(TypeRow<SimpleType>, TypeRow<SimpleType>, ResourceSet), SignatureError> {
+    let [TypeArg::CustomValue(arg)] = args else {
         panic!("Wrong number of arguments");
         // TODO: Add more Signature Errors
         //return Err(SignatureError::WrongNumArgs(1, args.len()));
