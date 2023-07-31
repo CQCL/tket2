@@ -163,8 +163,8 @@ mod tests {
     fn h_cx() -> Hugr {
         let qb = SimpleType::Qubit;
         let mut hugr = DFGBuilder::new(
-            [qb.clone(), qb.clone()].to_vec(),
-            [qb.clone(), qb.clone()].to_vec(),
+            vec![qb.clone(); 2],
+            vec![qb; 2],
         )
         .unwrap();
         let mut circ = hugr.as_circuit(hugr.input_wires().collect());
