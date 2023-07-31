@@ -54,7 +54,7 @@ impl PartialEq for MatchLeafOp {
 
 impl Hash for MatchLeafOp {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        state.write_u8(self.id_unchecked())
+        self.id_unchecked().hash(state)
     }
 }
 
