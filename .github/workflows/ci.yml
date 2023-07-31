@@ -33,7 +33,7 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-targets -- -D warnings
       - name: Build docs
-        run: cargo doc --no-deps --features=$FEATURES
+        run: cargo doc --no-deps --features="$FEATURES"
         env:
           RUSTDOCFLAGS: "-Dwarnings"
 
@@ -49,7 +49,7 @@ jobs:
       - name: Build benchmarks with no features
         run: cargo bench --verbose --no-run --no-default-features
       - name: Build benchmarks with all (non c++) features
-        run: cargo bench --verbose --no-run --features=$FEATURES
+        run: cargo bench --verbose --no-run --features="$FEATURES"
 
   tests:
     runs-on: ubuntu-latest
