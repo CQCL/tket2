@@ -12,7 +12,7 @@ use pyo3::{create_exception, exceptions::PyException, prelude::*, types::PyItera
 use tket_json_rs::circuit_json::SerialCircuit;
 
 use super::{CircuitMatcher, CircuitPattern};
-use crate::json::TKET1Decode;
+use crate::json::TKETDecode;
 
 create_exception!(pyrs, PyValidateError, PyException);
 
