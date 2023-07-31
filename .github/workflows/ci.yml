@@ -14,7 +14,7 @@ env:
   CARGO_INCREMENTAL: 0
   RUSTFLAGS: "--cfg=ci_run"
   MIRIFLAGS: '-Zmiri-permissive-provenance' # Required due to warnings in bitvec 1.0.1
-  FEATURES: "pyo3" # Features to test, ignoring the ones that require c++ bindings
+  FEATURES: "pyo3, portmatching" # Features to test, ignoring the ones that require c++ bindings
 
 jobs:
   check:
@@ -84,3 +84,8 @@ jobs:
         run: cargo test --verbose --no-default-features
       - name: Tests with all (non c++) features
         run: cargo test --verbose --features=$FEATURES
+      - name: Test pyo3 bindings
+        run: cd pyrs
+             pip install -r requirements.txt
+             maturin develop
+             pytest
