@@ -16,6 +16,9 @@ This optional feature enables some python bindings via pyo3. See the `pyrs` fold
 - `tkcxx`
   This enables binding to TKET-1 code using [cxx](https://cxx.rs/). For this you will to set up an environment with conan. See the [tket-rs README](https://github.com/CQCL-DEV/tket-rs#readme) for more details.
 
+- `portmatching`
+  This enables pattern matching using the `portmatching` crate.
+
 ## Developing TKET2
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for instructions on setting up the development environment.
