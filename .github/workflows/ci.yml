@@ -88,5 +88,6 @@ jobs:
         run: |
           pip install -r requirements.txt
           cd pyrs
-          maturin develop
+          maturin build
+          pip install ../target/wheels/*.whl
           pytest
