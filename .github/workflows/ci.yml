@@ -79,13 +79,13 @@ jobs:
       - name: Build with no features
         run: cargo build --verbose --no-default-features
       - name: Build with all (non c++) features
-        run: cargo build --verbose --features=$FEATURES
+        run: cargo build --verbose --features="$FEATURES"
       - name: Tests with no features
         run: cargo test --verbose --no-default-features
       - name: Tests with all (non c++) features
-        run: cargo test --verbose --features=$FEATURES
+        run: cargo test --verbose --features="$FEATURES"
       - name: Test pyo3 bindings
-        run: cd pyrs
-             pip install -r requirements.txt
+        run: pip install -r requirements.txt
+             cd pyrs
              maturin develop
              pytest
