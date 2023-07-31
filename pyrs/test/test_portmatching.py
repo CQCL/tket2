@@ -40,7 +40,7 @@ def test_larger_matching():
     p3 = patterns.CircuitPattern(Circuit(2).CX(0, 1).CX(1, 0))
     p4 = patterns.CircuitPattern(Circuit(3).CX(0, 1).CX(1, 2))
 
-    matcher = patterns.CircuitMatcher(iter([p1, p2]))
+    matcher = patterns.CircuitMatcher(iter([p1, p2, p3, p4]))
 
     # TODO: convexity
     assert len(matcher.find_matches(c)) == 8
