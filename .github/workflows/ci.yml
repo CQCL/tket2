@@ -85,7 +85,8 @@ jobs:
       - name: Tests with all (non c++) features
         run: cargo test --verbose --features="$FEATURES"
       - name: Test pyo3 bindings
-        run: pip install -r requirements.txt
-             cd pyrs
-             maturin develop
-             pytest
+        run: |
+          pip install -r requirements.txt
+          cd pyrs
+          maturin develop
+          pytest
