@@ -13,8 +13,5 @@ fn add_patterns_module(py: Python, parent: &PyModule) -> PyResult<()> {
     m.add_class::<CircuitPattern>()?;
     m.add_class::<CircuitMatcher>()?;
     parent.add_submodule(m)?;
-    // m.add_function(wrap_pyfunction!(check_soundness, m)?)?;
-
-    // m.add("ValidateError", _py.get_type::<PyValidateError>())?;
     Ok(())
 }
