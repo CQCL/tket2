@@ -56,8 +56,8 @@ impl CircuitMatcher {
     #[pyo3(name = "find_matches")]
     pub fn py_find_matches(&self, circ: PyObject) -> PyResult<Vec<HashMap<Node, Node>>> {
         let ser_c = SerialCircuit::_from_tket1(circ);
-        let hugr: Hugr = ser_c.decode().unwrap();
-        hugr.validate()
+        let hugr: Hugr = ser_c
+            .decode()
             .map_err(|e| PyValidateError::new_err(e.to_string()))?;
         let circ = RegionView::new(&hugr, hugr.root());
         let matches = self.find_matches(&circ);
