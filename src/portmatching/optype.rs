@@ -6,9 +6,9 @@
 //! We currently support the minimum set of operations needed
 //! for circuit pattern matching.
 
-use std::{hash::Hash, num::NonZeroU8};
+use std::hash::Hash;
 
-use hugr::ops::{LeafOp, OpType};
+use hugr::ops::{LeafOp, OpName, OpType};
 use smol_str::SmolStr;
 
 /// A subset of LeafOp for pattern matching.
