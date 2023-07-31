@@ -12,4 +12,7 @@ pub mod json;
 pub mod passes;
 pub mod resource;
 
+#[cfg(feature = "portmatching")]
+pub mod portmatching;
+
 mod utils;

@@ -14,7 +14,7 @@ env:
   CARGO_INCREMENTAL: 0
   RUSTFLAGS: "--cfg=ci_run"
   MIRIFLAGS: '-Zmiri-permissive-provenance' # Required due to warnings in bitvec 1.0.1
-  FEATURES: "pyo3" # Features to test, ignoring the ones that require c++ bindings
+  FEATURES: "pyo3, portmatching" # Features to test, ignoring the ones that require c++ bindings
 
 jobs:
   check:
@@ -31,9 +31,9 @@ jobs:
       - name: Check formatting
         run: cargo fmt -- --check
       - name: Run clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets --features="$FEATURES" -- -D warnings
       - name: Build docs
-        run: cargo doc --no-deps --features=$FEATURES
+        run: cargo doc --no-deps --features="$FEATURES"
         env:
           RUSTDOCFLAGS: "-Dwarnings"
 
@@ -49,7 +49,7 @@ jobs:
       - name: Build benchmarks with no features
         run: cargo bench --verbose --no-run --no-default-features
       - name: Build benchmarks with all (non c++) features
-        run: cargo bench --verbose --no-run --features=$FEATURES
+        run: cargo bench --verbose --no-run --features="$FEATURES"
 
   tests:
     runs-on: ubuntu-latest
@@ -79,8 +79,15 @@ jobs:
       - name: Build with no features
         run: cargo build --verbose --no-default-features
       - name: Build with all (non c++) features
-        run: cargo build --verbose --features=$FEATURES
+        run: cargo build --verbose --features="$FEATURES"
       - name: Tests with no features
         run: cargo test --verbose --no-default-features
       - name: Tests with all (non c++) features
-        run: cargo test --verbose --features=$FEATURES
+        run: cargo test --verbose --features="$FEATURES"
+      - name: Test pyo3 bindings
+        run: |
+          pip install -r requirements.txt
+          cd pyrs
+          maturin build
+          pip install ../target/wheels/*.whl
+          pytest
