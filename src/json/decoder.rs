@@ -7,7 +7,8 @@ use std::mem;
 
 use hugr::builder::{CircuitBuilder, Container, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::hugr::CircuitUnit;
-use hugr::types::Signature;
+use hugr::ops::Const;
+use hugr::types::AbstractSignature;
 use hugr::{Hugr, Wire};
 
 use serde_json::json;
@@ -16,7 +17,8 @@ use tket_json_rs::circuit_json::SerialCircuit;
 
 use super::op::JsonOp;
 use super::{try_param_to_constant, METADATA_IMPLICIT_PERM, METADATA_PHASE};
-use crate::utils::{LINEAR_BIT, QB};
+use crate::resource::LINEAR_BIT;
+use crate::utils::QB;
 
 /// The state of an in-progress [`DFGBuilder`] being built from a [`SerialCircuit`].
 ///
@@ -57,8 +59,9 @@ impl JsonDecoder {
             }
             wire_map.insert((register, 0).into(), i);
         }
-        let sig =
-            Signature::new_linear([vec![QB; num_qubits], vec![LINEAR_BIT; num_bits]].concat());
+        let sig = AbstractSignature::new_linear(
+            [vec![QB; num_qubits], vec![LINEAR_BIT.clone(); num_bits]].concat(),
+        );
 
         let mut dfg = DFGBuilder::new(sig.input, sig.output).unwrap();
 
@@ -133,7 +136,12 @@ impl JsonDecoder {
     /// TODO: If the parameter is a variable, returns the corresponding wire from the input.
     fn create_param_wire(&mut self, param: &str) -> Wire {
         match try_param_to_constant(param) {
-            Some(c) => self.hugr.add_load_const(c).unwrap(),
+            Some(c) => {
+                let const_type = hugr::types::ClassicType::F64;
+                assert!(c.check_type(&const_type).is_ok());
+                let const_op = Const::new(c, const_type).unwrap();
+                self.hugr.add_load_const(const_op).unwrap()
+            }
             None => {
                 // TODO: If the parameter is just a variable,
                 // return the corresponding wire from the input.

@@ -2,14 +2,15 @@
 
 use std::collections::HashMap;
 
-use hugr::ops::{Const, ConstValue, OpType};
+use hugr::ops::{ConstValue, OpType};
 use hugr::Wire;
 use itertools::Itertools;
 use tket_json_rs::circuit_json::{self, Permutation, SerialCircuit};
 
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
-use crate::utils::{LINEAR_BIT, QB};
+use crate::resource::LINEAR_BIT;
+use crate::utils::QB;
 
 use super::op::JsonOp;
 use super::{OpConvertError, METADATA_IMPLICIT_PERM, METADATA_PHASE};
@@ -50,7 +51,7 @@ impl JsonEncoder {
                 let index = vec![qubit_units.len() as i64];
                 let reg = circuit_json::Register("q".to_string(), index);
                 qubit_units.insert(unit, reg);
-            } else if ty == LINEAR_BIT {
+            } else if ty == *LINEAR_BIT {
                 let index = vec![bit_units.len() as i64];
                 let reg = circuit_json::Register("c".to_string(), index);
                 bit_units.insert(unit, reg);
@@ -137,10 +138,10 @@ impl JsonEncoder {
         }
 
         let param = match command.op {
-            OpType::Const(Const(value)) => {
+            OpType::Const(const_op) => {
                 // New constant, register it if it can be interpreted as a parameter.
-                match value {
-                    ConstValue::Int { value, .. } => value.to_string(),
+                match const_op.value() {
+                    ConstValue::Int(value) => value.to_string(),
                     ConstValue::F64(value) => value.to_string(),
                     _ => return,
                 }

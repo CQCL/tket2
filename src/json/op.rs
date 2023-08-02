@@ -8,15 +8,16 @@
 
 use hugr::ops::custom::ExternalOp;
 use hugr::ops::{LeafOp, OpTrait, OpType};
-use hugr::types::Signature;
+use hugr::resource::ResourceSet;
+use hugr::types::{AbstractSignature, Signature};
 
 use itertools::Itertools;
 use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as JsonOpType;
 
 use super::{try_param_to_constant, OpConvertError};
-use crate::resource::try_unwrap_json_op;
-use crate::utils::{F64, LINEAR_BIT, QB};
+use crate::resource::{try_unwrap_json_op, LINEAR_BIT, TKET1_RESOURCE_ID};
+use crate::utils::{F64, QB};
 
 /// A serialized operation, containing the operation type and all its attributes.
 ///
@@ -121,9 +122,17 @@ impl JsonOp {
     /// Compute the signature of the operation.
     #[inline]
     pub fn signature(&self) -> Signature {
-        let linear = [vec![QB; self.num_qubits], vec![LINEAR_BIT; self.num_bits]].concat();
+        let linear = [
+            vec![QB; self.num_qubits],
+            vec![LINEAR_BIT.clone(); self.num_bits],
+        ]
+        .concat();
         let params = vec![F64; self.num_params];
-        Signature::new_df([linear.clone(), params].concat(), linear)
+        let signature = AbstractSignature::new_df([linear.clone(), params].concat(), linear);
+        Signature {
+            signature,
+            input_resources: ResourceSet::singleton(&TKET1_RESOURCE_ID),
+        }
     }
 
     /// List of parameters in the operation that should be exposed as inputs.
@@ -261,7 +270,7 @@ impl TryFrom<&OpType> for JsonOp {
         for ty in op.signature().input.iter() {
             if ty == &QB {
                 num_qubits += 1
-            } else if ty == &LINEAR_BIT {
+            } else if *ty == *LINEAR_BIT {
                 num_bits += 1
             } else if ty == &F64 {
                 num_params += 1
