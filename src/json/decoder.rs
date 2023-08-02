@@ -138,7 +138,6 @@ impl JsonDecoder {
         match try_param_to_constant(param) {
             Some(c) => {
                 let const_type = hugr::types::ClassicType::F64;
-                assert!(c.check_type(&const_type).is_ok());
                 let const_op = Const::new(c, const_type).unwrap();
                 self.hugr.add_load_const(const_op).unwrap()
             }

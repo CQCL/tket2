@@ -8,7 +8,7 @@ use hugr::ops::custom::{ExternalOp, OpaqueOp};
 use hugr::ops::OpName;
 use hugr::resource::{OpDef, ResourceId, ResourceSet, SignatureError, TypeDef};
 use hugr::types::type_param::{TypeArg, TypeParam};
-use hugr::types::{Container, CustomType, HashableType, Signature, SimpleType, TypeRow, TypeTag};
+use hugr::types::{Container, CustomType, HashableType, SimpleType, TypeRow, TypeTag};
 use hugr::Resource;
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
@@ -27,12 +27,14 @@ pub const JSON_OP_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Op");
 lazy_static! {
 
     /// The type for linear bits. Part of the TKET1 resource.
-    pub static ref LINEAR_BIT: SimpleType = SimpleType::Qontainer(Container::Opaque(CustomType::new(
-        LINEAR_BIT_NAME,
-        [],
-        TKET1_RESOURCE_ID,
-        TypeTag::Simple,
-    )));
+    pub static ref LINEAR_BIT: SimpleType = {
+        CustomType::new(
+            LINEAR_BIT_NAME,
+            [],
+            TKET1_RESOURCE_ID,
+            TypeTag::Simple,
+        ).into()
+    };
 
     /// The TKET1 resource, containing the opaque TKET1 operations.
     pub static ref TKET1_RESOURCE: Resource = {
@@ -65,6 +67,15 @@ lazy_static! {
 
 /// Create a new opaque operation
 pub(crate) fn wrap_json_op(op: &JsonOp) -> ExternalOp {
+    // TODO: This throws an error
+    //let op = serde_yaml::to_value(op).unwrap();
+    //TKET1_RESOURCE
+    //    .operations()
+    //    .get(&JSON_OP_NAME)
+    //    .unwrap()
+    //    .instantiate_opaque([TypeArg::CustomValue(op)])
+    //    .unwrap()
+    //    .into()
     let sig = op.signature();
     let op = serde_yaml::to_value(op).unwrap();
     OpaqueOp::new(
@@ -98,14 +109,10 @@ fn json_op_signature(
     args: &[TypeArg],
 ) -> Result<(TypeRow<SimpleType>, TypeRow<SimpleType>, ResourceSet), SignatureError> {
     let [TypeArg::CustomValue(arg)] = args else {
+        // This should have already been checked.
         panic!("Wrong number of arguments");
-        // TODO: Add more Signature Errors
-        //return Err(SignatureError::WrongNumArgs(1, args.len()));
     };
     let op: JsonOp = serde_yaml::from_value(arg.clone()).unwrap(); // TODO Errors!
-    let Signature {
-        signature,
-        input_resources,
-    } = op.signature();
-    Ok((signature.input, signature.output, input_resources))
+    let sig = op.signature();
+    Ok((sig.input, sig.output, sig.resource_reqs))
 }

@@ -9,7 +9,7 @@
 use hugr::ops::custom::ExternalOp;
 use hugr::ops::{LeafOp, OpTrait, OpType};
 use hugr::resource::ResourceSet;
-use hugr::types::{AbstractSignature, Signature};
+use hugr::types::AbstractSignature;
 
 use itertools::Itertools;
 use tket_json_rs::circuit_json;
@@ -121,18 +121,15 @@ impl JsonOp {
 
     /// Compute the signature of the operation.
     #[inline]
-    pub fn signature(&self) -> Signature {
+    pub fn signature(&self) -> AbstractSignature {
         let linear = [
             vec![QB; self.num_qubits],
             vec![LINEAR_BIT.clone(); self.num_bits],
         ]
         .concat();
         let params = vec![F64; self.num_params];
-        let signature = AbstractSignature::new_df([linear.clone(), params].concat(), linear);
-        Signature {
-            signature,
-            input_resources: ResourceSet::singleton(&TKET1_RESOURCE_ID),
-        }
+        AbstractSignature::new_df([linear.clone(), params].concat(), linear)
+            .with_resource_delta(&ResourceSet::singleton(&TKET1_RESOURCE_ID))
     }
 
     /// List of parameters in the operation that should be exposed as inputs.
