@@ -151,9 +151,9 @@ pub(crate) fn validate_weighted_node<'circ>(
 
 #[cfg(test)]
 mod tests {
+    use hugr::hugr::hierarchical_views::{DescendantsGraph, HierarchyView};
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
-        hugr::region::{Region, RegionView},
         ops::LeafOp,
         types::SimpleType,
         Hugr, HugrView,
@@ -176,7 +176,7 @@ mod tests {
     #[test]
     fn construct_pattern() {
         let hugr = h_cx();
-        let circ = RegionView::new(&hugr, hugr.root());
+        let circ = DescendantsGraph::new(&hugr, hugr.root());
 
         let mut p = CircuitPattern::from_circuit(&circ);
 
@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn construct_matcher() {
         let hugr = h_cx();
-        let circ = RegionView::new(&hugr, hugr.root());
+        let circ = DescendantsGraph::new(&hugr, hugr.root());
 
         let p = CircuitPattern::from_circuit(&circ);
         let m = CircuitMatcher::from_patterns(vec![p]);

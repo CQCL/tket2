@@ -16,7 +16,7 @@ use hugr::hugr::CircuitUnit;
 use hugr::ops::OpTrait;
 use hugr::HugrView;
 
-pub use hugr::hugr::region::Region;
+pub use hugr::hugr::hierarchical_views::HierarchyView;
 pub use hugr::ops::OpType;
 use hugr::types::PrimType;
 pub use hugr::types::{ClassicType, EdgeKind, Signature, SimpleType, TypeRow};
@@ -73,7 +73,7 @@ pub trait Circuit<'circ>: HugrView {
 
 impl<'circ, T> Circuit<'circ> for T
 where
-    T: 'circ + Region<'circ>,
+    T: 'circ + HierarchyView<'circ>,
     for<'a> &'a T: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
 {
     type Commands = CommandIterator<'circ, T>;

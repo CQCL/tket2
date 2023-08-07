@@ -3,10 +3,8 @@
 use std::{collections::HashMap, fmt};
 
 use derive_more::{From, Into};
-use hugr::{
-    hugr::region::{Region, RegionView},
-    Hugr, HugrView,
-};
+use hugr::hugr::hierarchical_views::{DescendantsGraph, HierarchyView};
+use hugr::{Hugr, HugrView};
 use portmatching::PortMatcher;
 use pyo3::{create_exception, exceptions::PyException, prelude::*, types::PyIterator};
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -25,7 +23,7 @@ impl CircuitPattern {
         let hugr: Hugr = ser_c
             .decode()
             .map_err(|e| PyValidateError::new_err(e.to_string()))?;
-        let circ = RegionView::new(&hugr, hugr.root());
+        let circ = DescendantsGraph::new(&hugr, hugr.root());
         Ok(CircuitPattern::from_circuit(&circ))
     }
 
@@ -59,7 +57,7 @@ impl CircuitMatcher {
         let hugr: Hugr = ser_c
             .decode()
             .map_err(|e| PyValidateError::new_err(e.to_string()))?;
-        let circ = RegionView::new(&hugr, hugr.root());
+        let circ = DescendantsGraph::new(&hugr, hugr.root());
         let matches = self.find_matches(&circ);
         Ok(matches
             .into_iter()
