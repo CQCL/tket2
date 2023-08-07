@@ -6,9 +6,9 @@ use std::collections::HashMap;
 
 use hugr::ops::custom::{ExternalOp, OpaqueOp};
 use hugr::ops::OpName;
-use hugr::resource::{OpDef, ResourceId, ResourceSet, SignatureError, TypeDef};
-use hugr::types::type_param::{TypeArg, TypeParam};
-use hugr::types::{Container, CustomType, HashableType, SimpleType, TypeRow, TypeTag};
+use hugr::resource::{ResourceId, ResourceSet, SignatureError};
+use hugr::types::type_param::{CustomTypeArg, TypeArg, TypeParam};
+use hugr::types::{CustomType, SimpleType, TypeRow, TypeTag};
 use hugr::Resource;
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
@@ -26,42 +26,36 @@ pub const JSON_OP_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Op");
 
 lazy_static! {
 
-    /// The type for linear bits. Part of the TKET1 resource.
-    pub static ref LINEAR_BIT: SimpleType = {
-        CustomType::new(
-            LINEAR_BIT_NAME,
-            [],
-            TKET1_RESOURCE_ID,
-            TypeTag::Simple,
-        ).into()
-    };
+    /// A custom type for the encoded TKET1 operation
+    static ref TKET1_OP_PAYLOAD : CustomType = CustomType::new("TKET1 Json Op", vec![], TKET1_RESOURCE_ID, TypeTag::Simple);
 
     /// The TKET1 resource, containing the opaque TKET1 operations.
     pub static ref TKET1_RESOURCE: Resource = {
         let mut res = Resource::new(TKET1_RESOURCE_ID);
 
-        let linear_type = TypeDef {
-            name: LINEAR_BIT_NAME,
-            params: vec![],
-            description: "A linear bit.".into(),
-            resource: None,
-            tag: TypeTag::Simple.into(),
-        };
-        res.add_type(linear_type).unwrap();
+        res.add_type(LINEAR_BIT_NAME, vec![], "A linear bit.".into(), TypeTag::Simple.into()).unwrap();
 
-        let json_op_param = TypeParam::Value(HashableType::Container(Container::Opaque(
-            CustomType::new("TKET1 Json Op", vec![], TKET1_RESOURCE_ID, TypeTag::Simple),
-        )));
-        let json_op = OpDef::new_with_custom_sig(
+        let json_op_param = TypeParam::Opaque(TKET1_OP_PAYLOAD.clone());
+        res.add_op_custom_sig(
             JSON_OP_NAME,
             "An opaque TKET1 operation.".into(),
             vec![json_op_param],
             HashMap::new(),
+            vec![],
             json_op_signature,
-        );
-        res.add_op(json_op).unwrap();
+        ).unwrap();
 
         res
+    };
+
+    /// The type for linear bits. Part of the TKET1 resource.
+    pub static ref LINEAR_BIT: SimpleType = {
+        TKET1_RESOURCE
+            .get_type(&LINEAR_BIT_NAME)
+            .unwrap()
+            .instantiate_concrete([])
+            .unwrap()
+            .into()
     };
 }
 
@@ -82,7 +76,9 @@ pub(crate) fn wrap_json_op(op: &JsonOp) -> ExternalOp {
         TKET1_RESOURCE_ID,
         JSON_OP_NAME,
         "".into(),
-        vec![TypeArg::CustomValue(op)],
+        vec![TypeArg::Opaque(
+            CustomTypeArg::new(TKET1_OP_PAYLOAD.clone(), op).unwrap(),
+        )],
         Some(sig.into()),
     )
     .into()
@@ -96,11 +92,11 @@ pub(crate) fn try_unwrap_json_op(ext: &ExternalOp) -> Option<JsonOp> {
     if ext.name() != format!("{TKET1_RESOURCE_ID}.{JSON_OP_NAME}") {
         return None;
     }
-    let Some(TypeArg::CustomValue(op)) = ext.args().get(0) else {
+    let Some(TypeArg::Opaque(op)) = ext.args().get(0) else {
         // TODO: Throw an error? We should never get here if the name matches.
         return None;
     };
-    let op = serde_yaml::from_value(op.clone()).ok()?;
+    let op = serde_yaml::from_value(op.value.clone()).ok()?;
     Some(op)
 }
 
@@ -108,11 +104,11 @@ pub(crate) fn try_unwrap_json_op(ext: &ExternalOp) -> Option<JsonOp> {
 fn json_op_signature(
     args: &[TypeArg],
 ) -> Result<(TypeRow<SimpleType>, TypeRow<SimpleType>, ResourceSet), SignatureError> {
-    let [TypeArg::CustomValue(arg)] = args else {
+    let [TypeArg::Opaque(arg)] = args else {
         // This should have already been checked.
         panic!("Wrong number of arguments");
     };
-    let op: JsonOp = serde_yaml::from_value(arg.clone()).unwrap(); // TODO Errors!
+    let op: JsonOp = serde_yaml::from_value(arg.value.clone()).unwrap(); // TODO Errors!
     let sig = op.signature();
     Ok((sig.input, sig.output, sig.resource_reqs))
 }
