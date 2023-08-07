@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use hugr::ops::custom::ExternalOp;
+use hugr::ops::custom::{ExternalOp, OpaqueOp};
 use hugr::ops::OpName;
 use hugr::resource::{ResourceId, ResourceSet, SignatureError};
 use hugr::types::type_param::{CustomTypeArg, TypeArg, TypeParam};
@@ -27,7 +27,7 @@ pub const JSON_OP_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Op");
 lazy_static! {
 
     /// A custom type for the encoded TKET1 operation
-    static ref TKET1_OP_PAYLOAD : CustomType = CustomType::new("TKET1 Json Op", vec![], TKET1_RESOURCE_ID, TypeTag::Simple);
+    static ref TKET1_OP_PAYLOAD : CustomType = CustomType::new("TKET1 Json Op", vec![], TKET1_RESOURCE_ID, TypeTag::Hashable);
 
     /// The TKET1 resource, containing the opaque TKET1 operations.
     pub static ref TKET1_RESOURCE: Resource = {
@@ -35,11 +35,11 @@ lazy_static! {
 
         res.add_type(LINEAR_BIT_NAME, vec![], "A linear bit.".into(), TypeTag::Simple.into()).unwrap();
 
-        let json_op_param = TypeParam::Opaque(TKET1_OP_PAYLOAD.clone());
+        let json_op_payload = TypeParam::Opaque(TKET1_OP_PAYLOAD.clone());
         res.add_op_custom_sig(
             JSON_OP_NAME,
             "An opaque TKET1 operation.".into(),
-            vec![json_op_param],
+            vec![json_op_payload],
             HashMap::new(),
             vec![],
             json_op_signature,
@@ -62,14 +62,25 @@ lazy_static! {
 /// Create a new opaque operation
 pub(crate) fn wrap_json_op(op: &JsonOp) -> ExternalOp {
     // TODO: This throws an error
+    //let op = serde_yaml::to_value(op).unwrap();
+    //let payload = TypeArg::Opaque(CustomTypeArg::new(TKET1_OP_PAYLOAD.clone(), op).unwrap());
+    //TKET1_RESOURCE
+    //    .get_op(&JSON_OP_NAME)
+    //    .unwrap()
+    //    .instantiate_opaque([payload])
+    //    .unwrap()
+    //    .into()
+    let sig = op.signature();
     let op = serde_yaml::to_value(op).unwrap();
     let payload = TypeArg::Opaque(CustomTypeArg::new(TKET1_OP_PAYLOAD.clone(), op).unwrap());
-    TKET1_RESOURCE
-        .get_op(&JSON_OP_NAME)
-        .unwrap()
-        .instantiate_opaque([payload])
-        .unwrap()
-        .into()
+    OpaqueOp::new(
+        TKET1_RESOURCE_ID,
+        JSON_OP_NAME,
+        "".into(),
+        vec![payload],
+        Some(sig.into()),
+    )
+    .into()
 }
 
 /// Extract a json-encoded TKET1 operation from an opaque operation, if
