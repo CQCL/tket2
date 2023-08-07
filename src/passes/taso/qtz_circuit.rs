@@ -7,7 +7,7 @@ use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
 //     operation::{Op, WireType},
 // };
 use hugr::ops::{LeafOp, OpType as Op};
-use hugr::types::{ClassicType, SimpleType};
+use hugr::types::{AbstractSignature, ClassicType, SimpleType};
 use hugr::Hugr as Circuit;
 use serde::{Deserialize, Serialize};
 
@@ -64,7 +64,11 @@ impl From<RepCircData> for Circuit {
     fn from(RepCircData { circ: rc, meta }: RepCircData) -> Self {
         let qb_types: Vec<SimpleType> = vec![SimpleType::Qubit; meta.n_qb];
         let param_types: Vec<SimpleType> = vec![ClassicType::F64.into(); meta.n_input_param];
-        let mut circ = DFGBuilder::new([param_types, qb_types.clone()].concat(), qb_types).unwrap();
+        let mut circ = DFGBuilder::new(AbstractSignature::new_df(
+            [param_types, qb_types.clone()].concat(),
+            qb_types,
+        ))
+        .unwrap();
 
         let inputs: Vec<_> = circ.input_wires().collect();
         let (param_wires, qubit_wires) = inputs.split_at(meta.n_input_param);

@@ -141,7 +141,6 @@ impl JsonEncoder {
             OpType::Const(const_op) => {
                 // New constant, register it if it can be interpreted as a parameter.
                 match const_op.value() {
-                    ConstValue::Int(value) => value.to_string(),
                     ConstValue::F64(value) => value.to_string(),
                     _ => return,
                 }

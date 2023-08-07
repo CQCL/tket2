@@ -63,7 +63,7 @@ impl JsonDecoder {
             [vec![QB; num_qubits], vec![LINEAR_BIT.clone(); num_bits]].concat(),
         );
 
-        let mut dfg = DFGBuilder::new(sig.input, sig.output).unwrap();
+        let mut dfg = DFGBuilder::new(sig).unwrap();
 
         // Metadata. The circuit requires "name", and we store other things that
         // should pass through the serialization roundtrip.
