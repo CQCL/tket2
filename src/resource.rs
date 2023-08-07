@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use hugr::ops::custom::{ExternalOp, OpaqueOp};
+use hugr::ops::custom::ExternalOp;
 use hugr::ops::OpName;
 use hugr::resource::{ResourceId, ResourceSet, SignatureError};
 use hugr::types::type_param::{CustomTypeArg, TypeArg, TypeParam};
@@ -62,26 +62,14 @@ lazy_static! {
 /// Create a new opaque operation
 pub(crate) fn wrap_json_op(op: &JsonOp) -> ExternalOp {
     // TODO: This throws an error
-    //let op = serde_yaml::to_value(op).unwrap();
-    //TKET1_RESOURCE
-    //    .operations()
-    //    .get(&JSON_OP_NAME)
-    //    .unwrap()
-    //    .instantiate_opaque([TypeArg::CustomValue(op)])
-    //    .unwrap()
-    //    .into()
-    let sig = op.signature();
     let op = serde_yaml::to_value(op).unwrap();
-    OpaqueOp::new(
-        TKET1_RESOURCE_ID,
-        JSON_OP_NAME,
-        "".into(),
-        vec![TypeArg::Opaque(
-            CustomTypeArg::new(TKET1_OP_PAYLOAD.clone(), op).unwrap(),
-        )],
-        Some(sig.into()),
-    )
-    .into()
+    let payload = TypeArg::Opaque(CustomTypeArg::new(TKET1_OP_PAYLOAD.clone(), op).unwrap());
+    TKET1_RESOURCE
+        .get_op(&JSON_OP_NAME)
+        .unwrap()
+        .instantiate_opaque([payload])
+        .unwrap()
+        .into()
 }
 
 /// Extract a json-encoded TKET1 operation from an opaque operation, if
