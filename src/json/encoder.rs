@@ -9,7 +9,7 @@ use tket_json_rs::circuit_json::{self, Permutation, SerialCircuit};
 
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
-use crate::resource::LINEAR_BIT;
+use crate::extension::LINEAR_BIT;
 use crate::utils::QB;
 
 use super::op::JsonOp;

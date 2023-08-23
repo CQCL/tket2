@@ -8,7 +8,7 @@ use std::mem;
 use hugr::builder::{CircuitBuilder, Container, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::hugr::CircuitUnit;
 use hugr::ops::Const;
-use hugr::resource::ResourceSet;
+use hugr::extension::ExtensionSet;
 use hugr::types::AbstractSignature;
 use hugr::{Hugr, Wire};
 
@@ -18,7 +18,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 
 use super::op::JsonOp;
 use super::{try_param_to_constant, METADATA_IMPLICIT_PERM, METADATA_PHASE};
-use crate::resource::{LINEAR_BIT, TKET1_RESOURCE_ID};
+use crate::extension::{LINEAR_BIT, TKET1_EXTENSION_ID};
 use crate::utils::QB;
 
 /// The state of an in-progress [`DFGBuilder`] being built from a [`SerialCircuit`].
@@ -63,7 +63,7 @@ impl JsonDecoder {
         let sig = AbstractSignature::new_linear(
             [vec![QB; num_qubits], vec![LINEAR_BIT.clone(); num_bits]].concat(),
         )
-        .with_resource_delta(&ResourceSet::singleton(&TKET1_RESOURCE_ID));
+        .with_extension_delta(&ExtensionSet::singleton(&TKET1_EXTENSION_ID));
 
         let mut dfg = DFGBuilder::new(sig).unwrap();
 

@@ -8,7 +8,7 @@
 
 use hugr::ops::custom::ExternalOp;
 use hugr::ops::{LeafOp, OpTrait, OpType};
-use hugr::resource::ResourceSet;
+use hugr::extension::ExtensionSet;
 use hugr::types::AbstractSignature;
 
 use itertools::Itertools;
@@ -16,7 +16,7 @@ use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as JsonOpType;
 
 use super::{try_param_to_constant, OpConvertError};
-use crate::resource::{try_unwrap_json_op, LINEAR_BIT, TKET1_RESOURCE_ID};
+use crate::extension::{try_unwrap_json_op, LINEAR_BIT, TKET1_EXTENSION_ID};
 use crate::utils::{F64, QB};
 
 /// A serialized operation, containing the operation type and all its attributes.
@@ -129,7 +129,7 @@ impl JsonOp {
         .concat();
         let params = vec![F64; self.num_params];
         AbstractSignature::new_df([linear.clone(), params].concat(), linear)
-            .with_resource_delta(&ResourceSet::singleton(&TKET1_RESOURCE_ID))
+            .with_extension_delta(&ExtensionSet::singleton(&TKET1_EXTENSION_ID))
     }
 
     /// List of parameters in the operation that should be exposed as inputs.
@@ -146,7 +146,7 @@ impl JsonOp {
 
     /// Wraps the op into a Hugr opaque operation
     fn as_opaque_op(&self) -> ExternalOp {
-        crate::resource::wrap_json_op(self)
+        crate::extension::wrap_json_op(self)
     }
 
     /// Compute the `parameter_input` and `num_params` fields by looking for
@@ -191,12 +191,12 @@ impl From<&JsonOp> for OpType {
             // TODO TKET1 I/O needs some special handling
             //JsonOpType::Input => hugr::ops::Input {
             //    types: json_op.signature().output,
-            //    resources: Default::default(),
+            //    extensions: Default::default(),
             //}
             //.into(),
             //JsonOpType::Output => hugr::ops::Output {
             //    types: json_op.signature().input,
-            //    resources: Default::default(),
+            //    extensions: Default::default(),
             //}
             //.into(),
             JsonOpType::Z => LeafOp::Z.into(),
