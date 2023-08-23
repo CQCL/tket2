@@ -152,7 +152,7 @@ pub(crate) fn validate_weighted_node<'circ>(
 #[cfg(test)]
 mod tests {
     use hugr::hugr::hierarchical_views::{DescendantsGraph, HierarchyView};
-    use hugr::types::AbstractSignature;
+    use hugr::types::FunctionType;
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         ops::LeafOp,
@@ -166,7 +166,7 @@ mod tests {
 
     fn h_cx() -> Hugr {
         let qb = Type::Qubit;
-        let mut hugr = DFGBuilder::new(AbstractSignature::new_linear(vec![qb; 2])).unwrap();
+        let mut hugr = DFGBuilder::new(FunctionType::new_linear(vec![qb; 2])).unwrap();
         let mut circ = hugr.as_circuit(hugr.input_wires().collect());
         circ.append(LeafOp::CX, [0, 1]).unwrap();
         circ.append(LeafOp::H, [0]).unwrap();

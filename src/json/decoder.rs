@@ -9,7 +9,7 @@ use hugr::builder::{CircuitBuilder, Container, DFGBuilder, Dataflow, DataflowHug
 use hugr::hugr::CircuitUnit;
 use hugr::ops::Const;
 use hugr::extension::ExtensionSet;
-use hugr::types::AbstractSignature;
+use hugr::types::FunctionType;
 use hugr::{Hugr, Wire};
 
 use serde_json::json;
@@ -60,7 +60,7 @@ impl JsonDecoder {
             }
             wire_map.insert((register, 0).into(), i);
         }
-        let sig = AbstractSignature::new_linear(
+        let sig = FunctionType::new_linear(
             [vec![QB; num_qubits], vec![LINEAR_BIT.clone(); num_bits]].concat(),
         )
         .with_extension_delta(&ExtensionSet::singleton(&TKET1_EXTENSION_ID));

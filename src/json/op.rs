@@ -9,7 +9,7 @@
 use hugr::ops::custom::ExternalOp;
 use hugr::ops::{LeafOp, OpTrait, OpType};
 use hugr::extension::ExtensionSet;
-use hugr::types::AbstractSignature;
+use hugr::types::FunctionType;
 
 use itertools::Itertools;
 use tket_json_rs::circuit_json;
@@ -121,14 +121,14 @@ impl JsonOp {
 
     /// Compute the signature of the operation.
     #[inline]
-    pub fn signature(&self) -> AbstractSignature {
+    pub fn signature(&self) -> FunctionType {
         let linear = [
             vec![QB; self.num_qubits],
             vec![LINEAR_BIT.clone(); self.num_bits],
         ]
         .concat();
         let params = vec![F64; self.num_params];
-        AbstractSignature::new_df([linear.clone(), params].concat(), linear)
+        FunctionType::new_df([linear.clone(), params].concat(), linear)
             .with_extension_delta(&ExtensionSet::singleton(&TKET1_EXTENSION_ID))
     }
 
