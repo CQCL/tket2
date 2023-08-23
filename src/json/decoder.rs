@@ -139,7 +139,7 @@ impl JsonDecoder {
     fn create_param_wire(&mut self, param: &str) -> Wire {
         match try_param_to_constant(param) {
             Some(c) => {
-                let const_type = hugr::types::ClassicType::F64;
+                let const_type = hugr::types::Type::F64;
                 let const_op = Const::new(c, const_type).unwrap();
                 self.hugr.add_load_const(const_op).unwrap()
             }

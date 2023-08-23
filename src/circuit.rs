@@ -19,7 +19,7 @@ use hugr::HugrView;
 pub use hugr::hugr::hierarchical_views::HierarchyView;
 pub use hugr::ops::OpType;
 use hugr::types::PrimType;
-pub use hugr::types::{ClassicType, EdgeKind, Signature, SimpleType, TypeRow};
+pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
 use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
 
@@ -41,7 +41,7 @@ pub trait Circuit<'circ>: HugrView {
     fn name(&self) -> Option<&str>;
 
     /// Get the linear inputs of the circuit and their types.
-    fn units(&self) -> Vec<(CircuitUnit, SimpleType)>;
+    fn units(&self) -> Vec<(CircuitUnit, Type)>;
 
     /// Returns the ports corresponding to qubits inputs to the circuit.
     #[inline]
@@ -86,7 +86,7 @@ where
     }
 
     #[inline]
-    fn units(&self) -> Vec<(CircuitUnit, SimpleType)> {
+    fn units(&self) -> Vec<(CircuitUnit, Type)> {
         let root = self.root();
         let optype = self.get_optype(root);
         optype

@@ -7,7 +7,7 @@ use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
 //     operation::{Op, WireType},
 // };
 use hugr::ops::{LeafOp, OpType as Op};
-use hugr::types::{AbstractSignature, ClassicType, SimpleType};
+use hugr::types::{AbstractSignature, Type};
 use hugr::Hugr as Circuit;
 use serde::{Deserialize, Serialize};
 
@@ -48,11 +48,11 @@ fn map_op(opstr: &str) -> Op {
     .into()
 }
 
-fn map_wt(wirestr: &str) -> (SimpleType, usize) {
+fn map_wt(wirestr: &str) -> (Type, usize) {
     let wt = if wirestr.starts_with('Q') {
-        SimpleType::Qubit
+        Type::Qubit
     } else if wirestr.starts_with('P') {
-        ClassicType::F64.into()
+        Type::F64.into()
     } else {
         panic!("unknown op {wirestr}");
     };
@@ -62,8 +62,8 @@ fn map_wt(wirestr: &str) -> (SimpleType, usize) {
 // TODO change to TryFrom
 impl From<RepCircData> for Circuit {
     fn from(RepCircData { circ: rc, meta }: RepCircData) -> Self {
-        let qb_types: Vec<SimpleType> = vec![SimpleType::Qubit; meta.n_qb];
-        let param_types: Vec<SimpleType> = vec![ClassicType::F64.into(); meta.n_input_param];
+        let qb_types: Vec<Type> = vec![Type::Qubit; meta.n_qb];
+        let param_types: Vec<Type> = vec![Type::F64.into(); meta.n_input_param];
         let mut circ = DFGBuilder::new(AbstractSignature::new_df(
             [param_types, qb_types.clone()].concat(),
             qb_types,
@@ -90,8 +90,8 @@ impl From<RepCircData> for Circuit {
                 .map(|is| {
                     let (wt, idx) = map_wt(&is);
                     match wt {
-                        SimpleType::Qubit => qubit_wires[idx],
-                        SimpleType::Classic(ClassicType::F64) => *param_wires[idx].take().unwrap(),
+                        Type::Qubit => qubit_wires[idx],
+                        Type::Classic(Type::F64) => *param_wires[idx].take().unwrap(),
                         _ => panic!("unexpected wire type."),
                     }
                 })
@@ -100,7 +100,7 @@ impl From<RepCircData> for Circuit {
 
             for (os, wire) in outputs.into_iter().zip(output_wires) {
                 let (wt, idx) = map_wt(&os);
-                assert_eq!(wt, SimpleType::Qubit, "only qubits expected as output");
+                assert_eq!(wt, Type::Qubit, "only qubits expected as output");
 
                 qubit_wires[idx] = wire;
             }

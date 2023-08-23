@@ -4,11 +4,11 @@
 
 use std::collections::HashMap;
 
+use hugr::extension::{ExtensionId, ExtensionSet, SignatureError};
 use hugr::ops::custom::{ExternalOp, OpaqueOp};
 use hugr::ops::OpName;
-use hugr::extension::{ExtensionId, ExtensionSet, SignatureError};
 use hugr::types::type_param::{CustomTypeArg, TypeArg, TypeParam};
-use hugr::types::{CustomType, SimpleType, TypeRow, TypeTag};
+use hugr::types::{CustomType, Type, TypeBound, TypeRow};
 use hugr::Extension;
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
@@ -27,13 +27,13 @@ pub const JSON_OP_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Op");
 lazy_static! {
 
     /// A custom type for the encoded TKET1 operation
-    static ref TKET1_OP_PAYLOAD : CustomType = CustomType::new("TKET1 Json Op", vec![], TKET1_EXTENSION_ID, TypeTag::Hashable);
+    static ref TKET1_OP_PAYLOAD : CustomType = CustomType::new("TKET1 Json Op", vec![], TKET1_EXTENSION_ID, TypeBound::Eq);
 
     /// The TKET1 extension, containing the opaque TKET1 operations.
     pub static ref TKET1_EXTENSION: Extension = {
         let mut res = Extension::new(TKET1_EXTENSION_ID);
 
-        res.add_type(LINEAR_BIT_NAME, vec![], "A linear bit.".into(), TypeTag::Simple.into()).unwrap();
+        res.add_type(LINEAR_BIT_NAME, vec![], "A linear bit.".into(), TypeBound::Any.into()).unwrap();
 
         let json_op_payload = TypeParam::Opaque(TKET1_OP_PAYLOAD.clone());
         res.add_op_custom_sig(
@@ -49,7 +49,7 @@ lazy_static! {
     };
 
     /// The type for linear bits. Part of the TKET1 extension.
-    pub static ref LINEAR_BIT: SimpleType = {
+    pub static ref LINEAR_BIT: Type = {
         TKET1_EXTENSION
             .get_type(&LINEAR_BIT_NAME)
             .unwrap()
@@ -102,7 +102,7 @@ pub(crate) fn try_unwrap_json_op(ext: &ExternalOp) -> Option<JsonOp> {
 /// Compute the signature of a json-encoded TKET1 operation.
 fn json_op_signature(
     args: &[TypeArg],
-) -> Result<(TypeRow<SimpleType>, TypeRow<SimpleType>, ExtensionSet), SignatureError> {
+) -> Result<(TypeRow<Type>, TypeRow<Type>, ExtensionSet), SignatureError> {
     let [TypeArg::Opaque(arg)] = args else {
         // This should have already been checked.
         panic!("Wrong number of arguments");

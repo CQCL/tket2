@@ -156,7 +156,7 @@ mod tests {
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         ops::LeafOp,
-        types::SimpleType,
+        types::Type,
         Hugr, HugrView,
     };
     use itertools::Itertools;
@@ -165,7 +165,7 @@ mod tests {
     use super::{CircuitMatcher, CircuitPattern};
 
     fn h_cx() -> Hugr {
-        let qb = SimpleType::Qubit;
+        let qb = Type::Qubit;
         let mut hugr = DFGBuilder::new(AbstractSignature::new_linear(vec![qb; 2])).unwrap();
         let mut circ = hugr.as_circuit(hugr.input_wires().collect());
         circ.append(LeafOp::CX, [0, 1]).unwrap();
