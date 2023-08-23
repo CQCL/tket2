@@ -1,9 +1,10 @@
 //! Utility functions for the library.
 
-use hugr::types::{ClassicType, SimpleType};
-
-pub(crate) const QB: SimpleType = SimpleType::Qubit;
-pub(crate) const F64: SimpleType = SimpleType::Classic(ClassicType::F64);
+use hugr::extension::prelude::QB_T;
+use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
+use hugr::types::Type;
+pub(crate) const QB: Type = QB_T;
+pub(crate) const F64: Type = FLOAT64_TYPE;
 
 #[allow(dead_code)]
 // Test only utils
