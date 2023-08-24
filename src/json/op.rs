@@ -6,8 +6,8 @@
 //! circuits by ensuring they always define a signature, and computing the
 //! explicit count of qubits and linear bits.
 
-use hugr::extension::ExtensionSet;
 use hugr::extension::prelude::QB_T;
+use hugr::extension::ExtensionSet;
 use hugr::ops::custom::ExternalOp;
 use hugr::ops::{LeafOp, OpTrait, OpType};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
@@ -230,11 +230,13 @@ impl TryFrom<&OpType> for JsonOp {
         let json_optype: JsonOpType = match op {
             OpType::LeafOp(LeafOp::Noop { .. }) => JsonOpType::noop,
             OpType::LeafOp(LeafOp::CustomOp(b)) => match (*b).as_ref() {
-                ExternalOp::Extension(c) => match &c.def().name()[..] {
-                    "H" => JsonOpType::H,
-                    "CX" => JsonOpType::CX,
-                    _ => return Err(err()),
-                },
+                ExternalOp::Extension(c) if c.def().extension() == "quantum" => {
+                    match &c.def().name()[..] {
+                        "H" => JsonOpType::H,
+                        "CX" => JsonOpType::CX,
+                        _ => return Err(err()),
+                    }
+                }
                 _ => return Err(err()),
                 // h_gate() => JsonOpType::H,
                 // cx_gate() => JsonOpType::CX,
