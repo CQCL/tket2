@@ -151,6 +151,7 @@ pub(crate) fn validate_weighted_node<'circ>(
 
 #[cfg(test)]
 mod tests {
+    use hugr::extension::prelude::QB_T;
     use hugr::hugr::views::{DescendantsGraph, HierarchyView};
     use hugr::ops::handle::DfgID;
     use hugr::types::FunctionType;
@@ -161,12 +162,12 @@ mod tests {
     use itertools::Itertools;
     use portmatching::PortMatcher;
 
-    use crate::utils::{cx_gate, h_gate, QB};
+    use crate::utils::{cx_gate, h_gate};
 
     use super::{CircuitMatcher, CircuitPattern};
 
     fn h_cx() -> Hugr {
-        let qb = QB;
+        let qb = QB_T;
         let mut hugr = DFGBuilder::new(FunctionType::new_linear(vec![qb; 2])).unwrap();
         let mut circ = hugr.as_circuit(hugr.input_wires().collect());
         circ.append(cx_gate(), [0, 1]).unwrap();

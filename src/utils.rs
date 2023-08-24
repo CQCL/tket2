@@ -1,12 +1,7 @@
 //! Utility functions for the library.
 
-use hugr::extension::prelude::QB_T;
 use hugr::ops::LeafOp;
-use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::std_extensions::quantum::EXTENSION as QUANTUM;
-use hugr::types::Type;
-pub(crate) const QB: Type = QB_T;
-pub(crate) const F64: Type = FLOAT64_TYPE;
 
 fn get_gate(gate_name: &str) -> LeafOp {
     QUANTUM

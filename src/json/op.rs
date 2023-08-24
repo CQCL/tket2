@@ -7,8 +7,10 @@
 //! explicit count of qubits and linear bits.
 
 use hugr::extension::ExtensionSet;
+use hugr::extension::prelude::QB_T;
 use hugr::ops::custom::ExternalOp;
 use hugr::ops::{LeafOp, OpTrait, OpType};
+use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::types::FunctionType;
 
 use itertools::Itertools;
@@ -17,7 +19,7 @@ use tket_json_rs::optype::OpType as JsonOpType;
 
 use super::{try_param_to_constant, OpConvertError};
 use crate::extension::{try_unwrap_json_op, LINEAR_BIT, TKET1_EXTENSION_ID};
-use crate::utils::{cx_gate, h_gate, F64, QB};
+use crate::utils::{cx_gate, h_gate};
 
 /// A serialized operation, containing the operation type and all its attributes.
 ///
@@ -35,7 +37,7 @@ pub(crate) struct JsonOp {
     /// instead stored purely as metadata for the `Operation`.
     param_inputs: Vec<Option<usize>>,
     /// The number of non-None inputs in `param_inputs`, corresponding to the
-    /// F64 inputs to the Hugr operation.
+    /// FLOAT64_TYPE inputs to the Hugr operation.
     num_params: usize,
 }
 
@@ -123,11 +125,11 @@ impl JsonOp {
     #[inline]
     pub fn signature(&self) -> FunctionType {
         let linear = [
-            vec![QB; self.num_qubits],
+            vec![QB_T; self.num_qubits],
             vec![LINEAR_BIT.clone(); self.num_bits],
         ]
         .concat();
-        let params = vec![F64; self.num_params];
+        let params = vec![FLOAT64_TYPE; self.num_params];
         FunctionType::new([linear.clone(), params].concat(), linear)
             .with_extension_delta(&ExtensionSet::singleton(&TKET1_EXTENSION_ID))
     }
@@ -181,7 +183,7 @@ impl From<&JsonOp> for OpType {
             // JsonOpType::X => LeafOp::X.into(),
             JsonOpType::H => h_gate().into(),
             JsonOpType::CX => cx_gate().into(),
-            JsonOpType::noop => LeafOp::Noop { ty: QB }.into(),
+            JsonOpType::noop => LeafOp::Noop { ty: QB_T }.into(),
             // TODO TKET1 measure takes a bit as input, HUGR measure does not
             //JsonOpType::Measure => LeafOp::Measure.into(),
             // JsonOpType::Reset => LeafOp::Reset.into(),
@@ -270,11 +272,11 @@ impl TryFrom<&OpType> for JsonOp {
         let mut num_bits = 0;
         let mut num_params = 0;
         for ty in op.signature().input.iter() {
-            if ty == &QB {
+            if ty == &QB_T {
                 num_qubits += 1
             } else if *ty == *LINEAR_BIT {
                 num_bits += 1
-            } else if ty == &F64 {
+            } else if ty == &FLOAT64_TYPE {
                 num_params += 1
             }
         }

@@ -8,10 +8,9 @@ pub mod command;
 //#[cfg(feature = "tkcxx")]
 //pub mod unitarybox;
 
-use crate::utils::QB;
-
 use self::command::{Command, CommandIterator};
 
+use hugr::extension::prelude::QB_T;
 use hugr::hugr::CircuitUnit;
 use hugr::ops::OpTrait;
 use hugr::HugrView;
@@ -48,7 +47,7 @@ pub trait Circuit<'circ>: HugrView {
     fn qubits(&self) -> Vec<CircuitUnit> {
         self.units()
             .iter()
-            .filter(|(_, typ)| typ == &QB)
+            .filter(|(_, typ)| typ == &QB_T)
             .map(|(unit, _)| *unit)
             .collect()
     }

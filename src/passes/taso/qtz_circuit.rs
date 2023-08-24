@@ -1,17 +1,19 @@
 use std::collections::HashMap;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
+use hugr::extension::prelude::QB_T;
 // use crate::circuit::{
 //     circuit::Circuit,
 //     dag::Edge,
 //     operation::{Op, WireType},
 // };
 use hugr::ops::OpType as Op;
+use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::types::{FunctionType, Type};
 use hugr::Hugr as Circuit;
 use serde::{Deserialize, Serialize};
 
-use crate::utils::{cx_gate, h_gate, rz_f64, F64, QB};
+use crate::utils::{cx_gate, h_gate, rz_f64};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct RepCircOp {
@@ -52,9 +54,9 @@ fn map_op(opstr: &str) -> Op {
 
 fn map_wt(wirestr: &str) -> (Type, usize) {
     let wt = if wirestr.starts_with('Q') {
-        QB
+        QB_T
     } else if wirestr.starts_with('P') {
-        F64
+        FLOAT64_TYPE
     } else {
         panic!("unknown op {wirestr}");
     };
@@ -64,8 +66,8 @@ fn map_wt(wirestr: &str) -> (Type, usize) {
 // TODO change to TryFrom
 impl From<RepCircData> for Circuit {
     fn from(RepCircData { circ: rc, meta }: RepCircData) -> Self {
-        let qb_types: Vec<Type> = vec![QB; meta.n_qb];
-        let param_types: Vec<Type> = vec![F64; meta.n_input_param];
+        let qb_types: Vec<Type> = vec![QB_T; meta.n_qb];
+        let param_types: Vec<Type> = vec![FLOAT64_TYPE; meta.n_input_param];
         let mut circ = DFGBuilder::new(FunctionType::new(
             [param_types, qb_types.clone()].concat(),
             qb_types,
@@ -91,9 +93,9 @@ impl From<RepCircData> for Circuit {
                 .into_iter()
                 .map(|is| {
                     let (wt, idx) = map_wt(&is);
-                    if wt == QB {
+                    if wt == QB_T {
                         qubit_wires[idx]
-                    } else if wt == F64 {
+                    } else if wt == FLOAT64_TYPE {
                         *param_wires[idx].take().unwrap()
                     } else {
                         panic!("unexpected wire type.")
@@ -104,7 +106,7 @@ impl From<RepCircData> for Circuit {
 
             for (os, wire) in outputs.into_iter().zip(output_wires) {
                 let (wt, idx) = map_wt(&os);
-                assert_eq!(wt, QB, "only qubits expected as output");
+                assert_eq!(wt, QB_T, "only qubits expected as output");
 
                 qubit_wires[idx] = wire;
             }

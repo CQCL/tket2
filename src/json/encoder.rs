@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use downcast_rs::Downcast;
+use hugr::extension::prelude::QB_T;
 use hugr::ops::OpType;
 use hugr::std_extensions::arithmetic::float_types::ConstF64;
 use hugr::values::{PrimValue, Value};
@@ -13,7 +14,6 @@ use tket_json_rs::circuit_json::{self, Permutation, SerialCircuit};
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
 use crate::extension::LINEAR_BIT;
-use crate::utils::QB;
 
 use super::op::JsonOp;
 use super::{OpConvertError, METADATA_IMPLICIT_PERM, METADATA_PHASE};
@@ -50,7 +50,7 @@ impl JsonEncoder {
         let mut bit_units = HashMap::new();
         let mut qubit_units = HashMap::new();
         for (unit, ty) in circ.units() {
-            if ty == QB {
+            if ty == QB_T {
                 let index = vec![qubit_units.len() as i64];
                 let reg = circuit_json::Register("q".to_string(), index);
                 qubit_units.insert(unit, reg);
