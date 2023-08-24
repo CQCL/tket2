@@ -50,7 +50,9 @@ impl JsonOp {
     /// is defined.
     #[allow(unused)]
     pub fn new(op: circuit_json::Operation) -> Option<Self> {
-        let Some(sig) = &op.signature else { return None; };
+        let Some(sig) = &op.signature else {
+            return None;
+        };
         let input_counts = sig.iter().map(String::as_ref).counts();
         let num_qubits = input_counts.get("Q").copied().unwrap_or(0);
         let num_bits = input_counts.get("B").copied().unwrap_or(0);
