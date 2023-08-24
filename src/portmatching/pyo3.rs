@@ -3,7 +3,7 @@
 use std::{collections::HashMap, fmt};
 
 use derive_more::{From, Into};
-use hugr::hugr::hierarchical_views::{DescendantsGraph, HierarchyView};
+use hugr::hugr::views::{DescendantsGraph, HierarchyView};
 use hugr::{Hugr, HugrView};
 use portmatching::PortMatcher;
 use pyo3::{create_exception, exceptions::PyException, prelude::*, types::PyIterator};

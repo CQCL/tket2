@@ -16,7 +16,7 @@ use hugr::hugr::CircuitUnit;
 use hugr::ops::OpTrait;
 use hugr::HugrView;
 
-pub use hugr::hugr::hierarchical_views::HierarchyView;
+pub use hugr::hugr::views::HierarchyView;
 pub use hugr::ops::OpType;
 use hugr::types::PrimType;
 pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};

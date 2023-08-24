@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use hugr::hugr::hierarchical_views::{HierarchyView, SiblingGraph};
+use hugr::hugr::views::{HierarchyView, SiblingGraph};
 use hugr::{Hugr, HugrView};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 

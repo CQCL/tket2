@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::iter::FusedIterator;
 
-use hugr::hugr::hierarchical_views::HierarchyView;
+use hugr::hugr::views::HierarchyView;
 use hugr::ops::{OpTag, OpTrait};
 use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
 

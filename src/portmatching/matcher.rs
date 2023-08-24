@@ -151,7 +151,7 @@ pub(crate) fn validate_weighted_node<'circ>(
 
 #[cfg(test)]
 mod tests {
-    use hugr::hugr::hierarchical_views::{DescendantsGraph, HierarchyView};
+    use hugr::hugr::views::{DescendantsGraph, HierarchyView};
     use hugr::types::FunctionType;
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
