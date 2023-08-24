@@ -11,6 +11,7 @@ use hugr::extension::ExtensionSet;
 use hugr::ops::custom::ExternalOp;
 use hugr::ops::{LeafOp, OpTrait, OpType};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
+use hugr::std_extensions::quantum::EXTENSION_ID as QUANTUM_EXTENSION_ID;
 use hugr::types::FunctionType;
 
 use itertools::Itertools;
@@ -225,40 +226,37 @@ impl TryFrom<&OpType> for JsonOp {
         // Non-supported Hugr operations throw an error.
         let err = || OpConvertError::UnsupportedOpSerialization(op.clone());
 
-        if let OpType::LeafOp(LeafOp::CustomOp(ext)) = op {
-            return try_unwrap_json_op(ext).ok_or_else(err);
-        }
-
         let json_optype: JsonOpType = match op {
             OpType::LeafOp(LeafOp::Noop { .. }) => JsonOpType::noop,
             OpType::LeafOp(LeafOp::CustomOp(b)) => match (*b).as_ref() {
-                ExternalOp::Extension(c) if c.def().extension() == "quantum" => {
+                ExternalOp::Extension(c) if c.def().extension() == &QUANTUM_EXTENSION_ID => {
                     match &c.def().name()[..] {
                         "H" => JsonOpType::H,
                         "CX" => JsonOpType::CX,
                         _ => return Err(err()),
                     }
                 }
-                _ => return Err(err()),
-                // h_gate() => JsonOpType::H,
-                // cx_gate() => JsonOpType::CX,
-                // LeafOp::ZZMax => JsonOpType::ZZMax,
-                // LeafOp::Reset => JsonOpType::Reset,
-                // //LeafOp::Measure => JsonOpType::Measure,
-                // LeafOp::T => JsonOpType::T,
-                // LeafOp::S => JsonOpType::S,
-                // LeafOp::X => JsonOpType::X,
-                // LeafOp::Y => JsonOpType::Y,
-                // LeafOp::Z => JsonOpType::Z,
-                // LeafOp::Tadj => JsonOpType::Tdg,
-                // LeafOp::Sadj => JsonOpType::Sdg,
-                //LeafOp::RzF64 => JsonOpType::Rz, // The angle in RzF64 comes from a constant input
-                //LeafOp::Xor => todo!(),
-                //LeafOp::MakeTuple { .. } => todo!(),
-                //LeafOp::UnpackTuple { .. } => todo!(),
-                //LeafOp::Tag { .. } => todo!(),
-                //LeafOp::Lift { .. } => todo!(),
-                // CustomOp is handled above
+                ext => {
+                    return try_unwrap_json_op(ext).ok_or_else(err);
+                } // h_gate() => JsonOpType::H,
+                  // cx_gate() => JsonOpType::CX,
+                  // LeafOp::ZZMax => JsonOpType::ZZMax,
+                  // LeafOp::Reset => JsonOpType::Reset,
+                  // //LeafOp::Measure => JsonOpType::Measure,
+                  // LeafOp::T => JsonOpType::T,
+                  // LeafOp::S => JsonOpType::S,
+                  // LeafOp::X => JsonOpType::X,
+                  // LeafOp::Y => JsonOpType::Y,
+                  // LeafOp::Z => JsonOpType::Z,
+                  // LeafOp::Tadj => JsonOpType::Tdg,
+                  // LeafOp::Sadj => JsonOpType::Sdg,
+                  //LeafOp::RzF64 => JsonOpType::Rz, // The angle in RzF64 comes from a constant input
+                  //LeafOp::Xor => todo!(),
+                  //LeafOp::MakeTuple { .. } => todo!(),
+                  //LeafOp::UnpackTuple { .. } => todo!(),
+                  //LeafOp::Tag { .. } => todo!(),
+                  //LeafOp::Lift { .. } => todo!(),
+                  // CustomOp is handled above
             },
             //OpType::Input(_) => JsonOpType::Input,
             //OpType::Output(_) => JsonOpType::Output,
