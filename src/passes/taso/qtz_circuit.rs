@@ -6,7 +6,7 @@ use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
 //     dag::Edge,
 //     operation::{Op, WireType},
 // };
-use hugr::ops::{LeafOp, OpType as Op};
+use hugr::ops::OpType as Op;
 use hugr::types::{FunctionType, Type};
 use hugr::Hugr as Circuit;
 use serde::{Deserialize, Serialize};

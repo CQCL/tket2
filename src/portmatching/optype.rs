@@ -8,7 +8,7 @@
 
 use std::hash::Hash;
 
-use hugr::ops::{custom::ExternalOp, LeafOp, OpName, OpType};
+use hugr::ops::{custom::ExternalOp, LeafOp, OpType};
 use smol_str::SmolStr;
 
 /// A subset of LeafOp for pattern matching.

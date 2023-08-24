@@ -23,6 +23,7 @@ pub(crate) fn cx_gate() -> LeafOp {
     get_gate("CX")
 }
 
+#[allow(unused)]
 pub(crate) fn measure() -> LeafOp {
     get_gate("Measure")
 }

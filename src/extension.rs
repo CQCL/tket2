@@ -77,7 +77,7 @@ pub(crate) fn wrap_json_op(op: &JsonOp) -> ExternalOp {
         JSON_OP_NAME,
         "".into(),
         vec![payload],
-        Some(sig.into()),
+        Some(sig),
     )
     .into()
 }

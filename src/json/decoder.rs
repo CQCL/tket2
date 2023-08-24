@@ -6,9 +6,9 @@ use std::hash::{Hash, Hasher};
 use std::mem;
 
 use hugr::builder::{CircuitBuilder, Container, DFGBuilder, Dataflow, DataflowHugr};
+use hugr::extension::ExtensionSet;
 use hugr::hugr::CircuitUnit;
 use hugr::ops::Const;
-use hugr::extension::ExtensionSet;
 use hugr::types::FunctionType;
 use hugr::{Hugr, Wire};
 
