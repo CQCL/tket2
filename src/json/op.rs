@@ -6,9 +6,9 @@
 //! circuits by ensuring they always define a signature, and computing the
 //! explicit count of qubits and linear bits.
 
+use hugr::extension::ExtensionSet;
 use hugr::ops::custom::ExternalOp;
 use hugr::ops::{LeafOp, OpTrait, OpType};
-use hugr::extension::ExtensionSet;
 use hugr::types::FunctionType;
 
 use itertools::Itertools;
@@ -17,7 +17,7 @@ use tket_json_rs::optype::OpType as JsonOpType;
 
 use super::{try_param_to_constant, OpConvertError};
 use crate::extension::{try_unwrap_json_op, LINEAR_BIT, TKET1_EXTENSION_ID};
-use crate::utils::{F64, QB};
+use crate::utils::{cx_gate, h_gate, F64, QB};
 
 /// A serialized operation, containing the operation type and all its attributes.
 ///
@@ -128,7 +128,7 @@ impl JsonOp {
         ]
         .concat();
         let params = vec![F64; self.num_params];
-        FunctionType::new_df([linear.clone(), params].concat(), linear)
+        FunctionType::new([linear.clone(), params].concat(), linear)
             .with_extension_delta(&ExtensionSet::singleton(&TKET1_EXTENSION_ID))
     }
 
@@ -178,16 +178,16 @@ impl From<&JsonOp> for OpType {
     /// Any other operation is wrapped in an `OpaqueOp`.
     fn from(json_op: &JsonOp) -> Self {
         match json_op.op.op_type {
-            JsonOpType::X => LeafOp::X.into(),
-            JsonOpType::H => LeafOp::H.into(),
-            JsonOpType::CX => LeafOp::CX.into(),
+            // JsonOpType::X => LeafOp::X.into(),
+            JsonOpType::H => h_gate().into(),
+            JsonOpType::CX => cx_gate().into(),
             JsonOpType::noop => LeafOp::Noop { ty: QB }.into(),
             // TODO TKET1 measure takes a bit as input, HUGR measure does not
             //JsonOpType::Measure => LeafOp::Measure.into(),
-            JsonOpType::Reset => LeafOp::Reset.into(),
-            JsonOpType::ZZMax => LeafOp::ZZMax.into(),
-            JsonOpType::Rz => LeafOp::RzF64.into(),
-            JsonOpType::RzF64 => LeafOp::RzF64.into(),
+            // JsonOpType::Reset => LeafOp::Reset.into(),
+            // JsonOpType::ZZMax => LeafOp::ZZMax.into(),
+            // JsonOpType::Rz => LeafOp::RzF64.into(),
+            // JsonOpType::RzF64 => LeafOp::RzF64.into(),
             // TODO TKET1 I/O needs some special handling
             //JsonOpType::Input => hugr::ops::Input {
             //    types: json_op.signature().output,
@@ -199,13 +199,13 @@ impl From<&JsonOp> for OpType {
             //    extensions: Default::default(),
             //}
             //.into(),
-            JsonOpType::Z => LeafOp::Z.into(),
-            JsonOpType::Y => LeafOp::Y.into(),
-            JsonOpType::S => LeafOp::S.into(),
-            JsonOpType::Sdg => LeafOp::Sadj.into(),
-            JsonOpType::T => LeafOp::T.into(),
-            JsonOpType::Tdg => LeafOp::Tadj.into(),
-            _ => LeafOp::CustomOp(json_op.as_opaque_op()).into(),
+            // JsonOpType::Z => LeafOp::Z.into(),
+            // JsonOpType::Y => LeafOp::Y.into(),
+            // JsonOpType::S => LeafOp::S.into(),
+            // JsonOpType::Sdg => LeafOp::Sadj.into(),
+            // JsonOpType::T => LeafOp::T.into(),
+            // JsonOpType::Tdg => LeafOp::Tadj.into(),
+            _ => LeafOp::CustomOp(Box::new(json_op.as_opaque_op())).into(),
         }
     }
 }
@@ -226,20 +226,26 @@ impl TryFrom<&OpType> for JsonOp {
         }
 
         let json_optype: JsonOpType = match op {
-            OpType::LeafOp(leaf) => match leaf {
-                LeafOp::H => JsonOpType::H,
-                LeafOp::CX => JsonOpType::CX,
-                LeafOp::ZZMax => JsonOpType::ZZMax,
-                LeafOp::Reset => JsonOpType::Reset,
-                //LeafOp::Measure => JsonOpType::Measure,
-                LeafOp::T => JsonOpType::T,
-                LeafOp::S => JsonOpType::S,
-                LeafOp::X => JsonOpType::X,
-                LeafOp::Y => JsonOpType::Y,
-                LeafOp::Z => JsonOpType::Z,
-                LeafOp::Tadj => JsonOpType::Tdg,
-                LeafOp::Sadj => JsonOpType::Sdg,
-                LeafOp::Noop { .. } => JsonOpType::noop,
+            OpType::LeafOp(LeafOp::Noop { .. }) => JsonOpType::noop,
+            OpType::LeafOp(LeafOp::CustomOp(b)) => match (*b).as_ref() {
+                ExternalOp::Extension(c) => match &c.def().name()[..] {
+                    "H" => JsonOpType::H,
+                    "CX" => JsonOpType::CX,
+                    _ => return Err(err()),
+                },
+                _ => return Err(err()),
+                // h_gate() => JsonOpType::H,
+                // cx_gate() => JsonOpType::CX,
+                // LeafOp::ZZMax => JsonOpType::ZZMax,
+                // LeafOp::Reset => JsonOpType::Reset,
+                // //LeafOp::Measure => JsonOpType::Measure,
+                // LeafOp::T => JsonOpType::T,
+                // LeafOp::S => JsonOpType::S,
+                // LeafOp::X => JsonOpType::X,
+                // LeafOp::Y => JsonOpType::Y,
+                // LeafOp::Z => JsonOpType::Z,
+                // LeafOp::Tadj => JsonOpType::Tdg,
+                // LeafOp::Sadj => JsonOpType::Sdg,
                 //LeafOp::RzF64 => JsonOpType::Rz, // The angle in RzF64 comes from a constant input
                 //LeafOp::Xor => todo!(),
                 //LeafOp::MakeTuple { .. } => todo!(),
@@ -247,7 +253,6 @@ impl TryFrom<&OpType> for JsonOp {
                 //LeafOp::Tag { .. } => todo!(),
                 //LeafOp::Lift { .. } => todo!(),
                 // CustomOp is handled above
-                _ => return Err(err()),
             },
             //OpType::Input(_) => JsonOpType::Input,
             //OpType::Output(_) => JsonOpType::Output,

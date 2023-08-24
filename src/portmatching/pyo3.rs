@@ -4,6 +4,7 @@ use std::{collections::HashMap, fmt};
 
 use derive_more::{From, Into};
 use hugr::hugr::views::{DescendantsGraph, HierarchyView};
+use hugr::ops::handle::DfgID;
 use hugr::{Hugr, HugrView};
 use portmatching::PortMatcher;
 use pyo3::{create_exception, exceptions::PyException, prelude::*, types::PyIterator};
@@ -23,7 +24,7 @@ impl CircuitPattern {
         let hugr: Hugr = ser_c
             .decode()
             .map_err(|e| PyValidateError::new_err(e.to_string()))?;
-        let circ = DescendantsGraph::new(&hugr, hugr.root());
+        let circ: DescendantsGraph<'_, DfgID> = DescendantsGraph::new(&hugr, hugr.root());
         Ok(CircuitPattern::from_circuit(&circ))
     }
 
@@ -57,7 +58,7 @@ impl CircuitMatcher {
         let hugr: Hugr = ser_c
             .decode()
             .map_err(|e| PyValidateError::new_err(e.to_string()))?;
-        let circ = DescendantsGraph::new(&hugr, hugr.root());
+        let circ: DescendantsGraph<'_, DfgID> = DescendantsGraph::new(&hugr, hugr.root());
         let matches = self.find_matches(&circ);
         Ok(matches
             .into_iter()

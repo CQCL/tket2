@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 
 use hugr::hugr::views::{HierarchyView, SiblingGraph};
+use hugr::ops::handle::DfgID;
 use hugr::{Hugr, HugrView};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 
@@ -26,7 +27,7 @@ fn read_json_simple() {
     assert_eq!(ser.commands.len(), 2);
 
     let hugr: Hugr = ser.clone().decode().unwrap();
-    let circ = SiblingGraph::new(&hugr, hugr.root());
+    let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(&hugr, hugr.root());
 
     assert_eq!(circ.qubits().len(), 2);
 
@@ -57,7 +58,7 @@ fn read_json_unknown_op() {
     assert_eq!(ser.commands.len(), 3);
 
     let hugr: Hugr = ser.clone().decode().unwrap();
-    let circ = SiblingGraph::new(&hugr, hugr.root());
+    let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(&hugr, hugr.root());
 
     assert_eq!(circ.qubits().len(), 3);
 

@@ -50,12 +50,11 @@ lazy_static! {
 
     /// The type for linear bits. Part of the TKET1 extension.
     pub static ref LINEAR_BIT: Type = {
-        TKET1_EXTENSION
+        Type::new_extension(TKET1_EXTENSION
             .get_type(&LINEAR_BIT_NAME)
             .unwrap()
             .instantiate_concrete([])
-            .unwrap()
-            .into()
+            .unwrap())
     };
 }
 
@@ -100,9 +99,7 @@ pub(crate) fn try_unwrap_json_op(ext: &ExternalOp) -> Option<JsonOp> {
 }
 
 /// Compute the signature of a json-encoded TKET1 operation.
-fn json_op_signature(
-    args: &[TypeArg],
-) -> Result<(TypeRow<Type>, TypeRow<Type>, ExtensionSet), SignatureError> {
+fn json_op_signature(args: &[TypeArg]) -> Result<(TypeRow, TypeRow, ExtensionSet), SignatureError> {
     let [TypeArg::Opaque(arg)] = args else {
         // This should have already been checked.
         panic!("Wrong number of arguments");

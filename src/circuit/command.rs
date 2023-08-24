@@ -13,7 +13,7 @@ use super::Circuit;
 
 pub use hugr::hugr::CircuitUnit;
 pub use hugr::ops::OpType;
-pub use hugr::types::{Type, EdgeKind, Signature, Type, TypeRow};
+pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
 
 /// An operation applied to specific wires.

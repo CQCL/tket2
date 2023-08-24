@@ -18,7 +18,7 @@ use hugr::HugrView;
 
 pub use hugr::hugr::views::HierarchyView;
 pub use hugr::ops::OpType;
-use hugr::types::PrimType;
+use hugr::types::TypeBound;
 pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
 use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
@@ -91,9 +91,9 @@ where
         let optype = self.get_optype(root);
         optype
             .signature()
-            .input_df_types()
+            .input_types()
             .iter()
-            .filter(|&typ| !typ.tag().is_classical())
+            .filter(|&typ| !TypeBound::Copyable.contains(typ.least_upper_bound()))
             .enumerate()
             .map(|(i, typ)| (i.into(), typ.clone()))
             .collect()

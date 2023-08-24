@@ -8,7 +8,7 @@
 
 use std::hash::Hash;
 
-use hugr::ops::{LeafOp, OpName, OpType};
+use hugr::ops::{custom::ExternalOp, LeafOp, OpName, OpType};
 use smol_str::SmolStr;
 
 /// A subset of LeafOp for pattern matching.
@@ -23,20 +23,24 @@ pub struct MatchLeafOp(LeafOp);
 
 impl MatchLeafOp {
     fn id(&self) -> Option<SmolStr> {
-        match self.0 {
-            LeafOp::H
-            | LeafOp::T
-            | LeafOp::S
-            | LeafOp::X
-            | LeafOp::Y
-            | LeafOp::Z
-            | LeafOp::Tadj
-            | LeafOp::Sadj
-            | LeafOp::CX
-            | LeafOp::ZZMax
-            | LeafOp::Measure
-            | LeafOp::RzF64
-            | LeafOp::Xor => Some(self.0.name()),
+        match &self.0 {
+            // h_gate()
+            // | LeafOp::T
+            // | LeafOp::S
+            // | LeafOp::X
+            // | LeafOp::Y
+            // | LeafOp::Z
+            // | LeafOp::Tadj
+            // | LeafOp::Sadj
+            // | cx_gate()
+            // | LeafOp::ZZMax
+            // | LeafOp::Measure
+            // | LeafOp::RzF64
+            // | LeafOp::Xor => Some(self.0.name()),
+            LeafOp::CustomOp(c) => match (*c).as_ref() {
+                ExternalOp::Extension(e) => Some(e.def().name().clone()),
+                _ => None,
+            },
             _ => None,
         }
     }
