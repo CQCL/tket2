@@ -7,7 +7,9 @@ pub mod op;
 #[cfg(test)]
 mod tests;
 
-use hugr::ops::{ConstValue, OpType};
+use hugr::ops::OpType;
+use hugr::std_extensions::arithmetic::float_types::ConstF64;
+use hugr::values::Value;
 use hugr::Hugr;
 
 use thiserror::Error;
@@ -80,15 +82,15 @@ pub enum OpConvertError {
 
 /// Try to interpret a TKET1 parameter as a constant value.
 #[inline]
-fn try_param_to_constant(param: &str) -> Option<ConstValue> {
+fn try_param_to_constant(param: &str) -> Option<Value> {
     if let Ok(f) = param.parse::<f64>() {
-        Some(ConstValue::F64(f))
+        Some(ConstF64::new(f).into())
     } else if param.split('/').count() == 2 {
         // TODO: Use the rational types from `Hugr::extensions::rotation`
         let (n, d) = param.split_once('/').unwrap();
         let n = n.parse::<f64>().unwrap();
         let d = d.parse::<f64>().unwrap();
-        Some(ConstValue::F64(n / d))
+        Some(ConstF64::new(n / d).into())
     } else {
         None
     }

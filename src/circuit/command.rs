@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::iter::FusedIterator;
 
-use hugr::hugr::region::Region;
+use hugr::hugr::views::HierarchyView;
 use hugr::ops::{OpTag, OpTrait};
 use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
 
@@ -13,7 +13,7 @@ use super::Circuit;
 
 pub use hugr::hugr::CircuitUnit;
 pub use hugr::ops::OpType;
-pub use hugr::types::{ClassicType, EdgeKind, Signature, SimpleType, TypeRow};
+pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
 
 /// An operation applied to specific wires.
@@ -43,7 +43,7 @@ pub struct CommandIterator<'circ, Circ> {
 
 impl<'circ, Circ> CommandIterator<'circ, Circ>
 where
-    Circ: Region<'circ>,
+    Circ: HierarchyView<'circ>,
     for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
 {
     /// Create a new iterator over the commands of a circuit.
@@ -130,7 +130,7 @@ where
 
 impl<'circ, Circ> Iterator for CommandIterator<'circ, Circ>
 where
-    Circ: Region<'circ>,
+    Circ: HierarchyView<'circ>,
     for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
 {
     type Item = Command<'circ>;
@@ -157,7 +157,7 @@ where
 
 impl<'circ, Circ> FusedIterator for CommandIterator<'circ, Circ>
 where
-    Circ: Region<'circ>,
+    Circ: HierarchyView<'circ>,
     for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
 {
 }

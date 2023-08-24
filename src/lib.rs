@@ -8,9 +8,9 @@
 //! compilation for many different quantum architectures.
 
 pub mod circuit;
+pub mod extension;
 pub mod json;
 pub mod passes;
-pub mod resource;
 
 #[cfg(feature = "portmatching")]
 pub mod portmatching;

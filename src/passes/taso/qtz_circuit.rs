@@ -1,15 +1,19 @@
 use std::collections::HashMap;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
+use hugr::extension::prelude::QB_T;
 // use crate::circuit::{
 //     circuit::Circuit,
 //     dag::Edge,
 //     operation::{Op, WireType},
 // };
-use hugr::ops::{LeafOp, OpType as Op};
-use hugr::types::{ClassicType, SimpleType};
+use hugr::ops::OpType as Op;
+use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
+use hugr::types::{FunctionType, Type};
 use hugr::Hugr as Circuit;
 use serde::{Deserialize, Serialize};
+
+use crate::utils::{cx_gate, h_gate, rz_f64};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct RepCircOp {
@@ -40,19 +44,19 @@ struct RepCircData {
 fn map_op(opstr: &str) -> Op {
     // TODO, more
     match opstr {
-        "h" => LeafOp::H,
-        "rz" => LeafOp::RzF64,
-        "cx" => LeafOp::CX,
+        "h" => h_gate(),
+        "rz" => rz_f64(),
+        "cx" => cx_gate(),
         x => panic!("unknown op {x}"),
     }
     .into()
 }
 
-fn map_wt(wirestr: &str) -> (SimpleType, usize) {
+fn map_wt(wirestr: &str) -> (Type, usize) {
     let wt = if wirestr.starts_with('Q') {
-        SimpleType::Qubit
+        QB_T
     } else if wirestr.starts_with('P') {
-        ClassicType::F64.into()
+        FLOAT64_TYPE
     } else {
         panic!("unknown op {wirestr}");
     };
@@ -62,9 +66,13 @@ fn map_wt(wirestr: &str) -> (SimpleType, usize) {
 // TODO change to TryFrom
 impl From<RepCircData> for Circuit {
     fn from(RepCircData { circ: rc, meta }: RepCircData) -> Self {
-        let qb_types: Vec<SimpleType> = vec![SimpleType::Qubit; meta.n_qb];
-        let param_types: Vec<SimpleType> = vec![ClassicType::F64.into(); meta.n_input_param];
-        let mut circ = DFGBuilder::new([param_types, qb_types.clone()].concat(), qb_types).unwrap();
+        let qb_types: Vec<Type> = vec![QB_T; meta.n_qb];
+        let param_types: Vec<Type> = vec![FLOAT64_TYPE; meta.n_input_param];
+        let mut circ = DFGBuilder::new(FunctionType::new(
+            [param_types, qb_types.clone()].concat(),
+            qb_types,
+        ))
+        .unwrap();
 
         let inputs: Vec<_> = circ.input_wires().collect();
         let (param_wires, qubit_wires) = inputs.split_at(meta.n_input_param);
@@ -85,10 +93,12 @@ impl From<RepCircData> for Circuit {
                 .into_iter()
                 .map(|is| {
                     let (wt, idx) = map_wt(&is);
-                    match wt {
-                        SimpleType::Qubit => qubit_wires[idx],
-                        SimpleType::Classic(ClassicType::F64) => *param_wires[idx].take().unwrap(),
-                        _ => panic!("unexpected wire type."),
+                    if wt == QB_T {
+                        qubit_wires[idx]
+                    } else if wt == FLOAT64_TYPE {
+                        *param_wires[idx].take().unwrap()
+                    } else {
+                        panic!("unexpected wire type.")
                     }
                 })
                 .collect();
@@ -96,7 +106,7 @@ impl From<RepCircData> for Circuit {
 
             for (os, wire) in outputs.into_iter().zip(output_wires) {
                 let (wt, idx) = map_wt(&os);
-                assert_eq!(wt, SimpleType::Qubit, "only qubits expected as output");
+                assert_eq!(wt, QB_T, "only qubits expected as output");
 
                 qubit_wires[idx] = wire;
             }

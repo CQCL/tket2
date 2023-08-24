@@ -8,17 +8,17 @@ pub mod command;
 //#[cfg(feature = "tkcxx")]
 //pub mod unitarybox;
 
-use crate::utils::QB;
-
 use self::command::{Command, CommandIterator};
 
+use hugr::extension::prelude::QB_T;
 use hugr::hugr::CircuitUnit;
 use hugr::ops::OpTrait;
 use hugr::HugrView;
 
-pub use hugr::hugr::region::Region;
+pub use hugr::hugr::views::HierarchyView;
 pub use hugr::ops::OpType;
-pub use hugr::types::{ClassicType, EdgeKind, Signature, SimpleType, TypeRow};
+use hugr::types::TypeBound;
+pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
 use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
 
@@ -40,14 +40,14 @@ pub trait Circuit<'circ>: HugrView {
     fn name(&self) -> Option<&str>;
 
     /// Get the linear inputs of the circuit and their types.
-    fn units(&self) -> Vec<(CircuitUnit, SimpleType)>;
+    fn units(&self) -> Vec<(CircuitUnit, Type)>;
 
     /// Returns the ports corresponding to qubits inputs to the circuit.
     #[inline]
     fn qubits(&self) -> Vec<CircuitUnit> {
         self.units()
             .iter()
-            .filter(|(_, typ)| typ == &QB)
+            .filter(|(_, typ)| typ == &QB_T)
             .map(|(unit, _)| *unit)
             .collect()
     }
@@ -72,7 +72,7 @@ pub trait Circuit<'circ>: HugrView {
 
 impl<'circ, T> Circuit<'circ> for T
 where
-    T: 'circ + Region<'circ>,
+    T: 'circ + HierarchyView<'circ>,
     for<'a> &'a T: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
 {
     type Commands = CommandIterator<'circ, T>;
@@ -85,14 +85,14 @@ where
     }
 
     #[inline]
-    fn units(&self) -> Vec<(CircuitUnit, SimpleType)> {
+    fn units(&self) -> Vec<(CircuitUnit, Type)> {
         let root = self.root();
         let optype = self.get_optype(root);
         optype
             .signature()
-            .input_df_types()
+            .input_types()
             .iter()
-            .filter(|typ| !typ.is_classical())
+            .filter(|&typ| !TypeBound::Copyable.contains(typ.least_upper_bound()))
             .enumerate()
             .map(|(i, typ)| (i.into(), typ.clone()))
             .collect()

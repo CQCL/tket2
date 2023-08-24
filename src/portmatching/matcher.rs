@@ -151,24 +151,27 @@ pub(crate) fn validate_weighted_node<'circ>(
 
 #[cfg(test)]
 mod tests {
+    use hugr::extension::prelude::QB_T;
+    use hugr::hugr::views::{DescendantsGraph, HierarchyView};
+    use hugr::ops::handle::DfgID;
+    use hugr::types::FunctionType;
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
-        hugr::region::{Region, RegionView},
-        ops::LeafOp,
-        types::SimpleType,
         Hugr, HugrView,
     };
     use itertools::Itertools;
     use portmatching::PortMatcher;
 
+    use crate::utils::{cx_gate, h_gate};
+
     use super::{CircuitMatcher, CircuitPattern};
 
     fn h_cx() -> Hugr {
-        let qb = SimpleType::Qubit;
-        let mut hugr = DFGBuilder::new(vec![qb.clone(); 2], vec![qb; 2]).unwrap();
+        let qb = QB_T;
+        let mut hugr = DFGBuilder::new(FunctionType::new_linear(vec![qb; 2])).unwrap();
         let mut circ = hugr.as_circuit(hugr.input_wires().collect());
-        circ.append(LeafOp::CX, [0, 1]).unwrap();
-        circ.append(LeafOp::H, [0]).unwrap();
+        circ.append(cx_gate(), [0, 1]).unwrap();
+        circ.append(h_gate(), [0]).unwrap();
         let out_wires = circ.finish();
         hugr.finish_hugr_with_outputs(out_wires).unwrap()
     }
@@ -176,7 +179,7 @@ mod tests {
     #[test]
     fn construct_pattern() {
         let hugr = h_cx();
-        let circ = RegionView::new(&hugr, hugr.root());
+        let circ: DescendantsGraph<'_, DfgID> = DescendantsGraph::new(&hugr, hugr.root());
 
         let mut p = CircuitPattern::from_circuit(&circ);
 
@@ -197,7 +200,7 @@ mod tests {
     #[test]
     fn construct_matcher() {
         let hugr = h_cx();
-        let circ = RegionView::new(&hugr, hugr.root());
+        let circ: DescendantsGraph<'_, DfgID> = DescendantsGraph::new(&hugr, hugr.root());
 
         let p = CircuitPattern::from_circuit(&circ);
         let m = CircuitMatcher::from_patterns(vec![p]);

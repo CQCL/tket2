@@ -26,7 +26,7 @@
 
   languages.rust = {
     enable = true;
-    channel = "stable";
+    channel = "nightly";
     components = [ "rustc" "cargo" "clippy" "rustfmt" "rust-analyzer" ];
   };
 
@@ -37,8 +37,9 @@
     venv.requirements = "-r ${config.env.DEVENV_ROOT}/pyrs/dev-requirements.txt";
   };
 
-  # https://devenv.sh/pre-commit-hooks
-  # pre-commit.hooks.shellcheck = true;
-
-  # See full reference at https://devenv.sh/reference/options/
+  # https://devenv.sh/pre-commit-hooks/
+  pre-commit.hooks.clippy.enable = true;
+  pre-commit.tools.clippy = lib.mkForce config.languages.rust.toolchain.clippy;
+  pre-commit.hooks.rustfmt.enable = true;
+  pre-commit.tools.rustfmt = lib.mkForce config.languages.rust.toolchain.rustfmt;
 }
