@@ -4,7 +4,9 @@
 // pub mod redundancy;
 // pub mod pattern;
 // pub mod squash;
+mod commutation;
 pub mod taso;
+
 // use rayon::prelude::*;
 
 // use crate::circuit::{
