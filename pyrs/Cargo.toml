@@ -9,12 +9,12 @@ name = "pyrs"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.19", features = ["extension-module"] }
 tket2 = { path = "../", features = ["pyo3", "portmatching"] }
-portgraph = { version = "0.8.0", features = ["pyo3"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs", rev="619db15d3", features = [
     "pyo3",
 ] }
-quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "c11f4a6" }
+quantinuum-hugr = { workspace = true }
+portgraph = { workspace = true, features = ["pyo3"] }
+pyo3 = { workspace = true, features = ["extension-module"] }
