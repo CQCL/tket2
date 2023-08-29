@@ -146,7 +146,7 @@ impl CircuitMatcher {
     ) -> Vec<CircuitMatch<'a, 'm, C>> {
         circuit
             .commands()
-            .map(|cmd| &mut self.find_rooted_matches(circuit, cmd.node))
+            .flat_map(|cmd| self.find_rooted_matches(circuit, cmd.node))
             .collect()
     }
 
