@@ -1,6 +1,9 @@
 //! Quantum circuit representation and operations.
 
 pub mod command;
+mod hash;
+
+pub use hash::CircuitHash;
 
 //#[cfg(feature = "pyo3")]
 //pub mod py_circuit;
@@ -64,10 +67,10 @@ pub trait Circuit<'circ>: HugrView {
     /// Returns all the commands in the circuit, in some topological order.
     ///
     /// Ignores the Input and Output nodes.
-    fn commands<'a: 'circ>(&'a self) -> Self::Commands;
+    fn commands(&'circ self) -> Self::Commands;
 
     /// Returns all the commands applied to the given unit, in order.
-    fn unit_commands<'a: 'circ>(&'a self) -> Self::UnitCommands;
+    fn unit_commands(&'circ self) -> Self::UnitCommands;
 
     /// Returns the [`NodeType`] of a command.
     fn command_nodetype(&self, command: &Command) -> &NodeType {
@@ -123,12 +126,12 @@ where
         }
     }
 
-    fn commands<'a: 'circ>(&'a self) -> Self::Commands {
+    fn commands(&'circ self) -> Self::Commands {
         // Traverse the circuit in topological order.
         CommandIterator::new(self)
     }
 
-    fn unit_commands<'a: 'circ>(&'a self) -> Self::UnitCommands {
+    fn unit_commands(&'circ self) -> Self::UnitCommands {
         // TODO Can we associate linear i/o with the corresponding unit without
         // doing the full toposort?
         unimplemented!()
