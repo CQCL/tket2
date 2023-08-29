@@ -16,7 +16,7 @@ use crate::{
     ops::{Pauli, T2Op},
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct Command {
     node: Node,
     qbs: Vec<usize>,
@@ -74,8 +74,13 @@ fn remove_command(
     slice_vec: &mut [Vec<Command>],
     starting_index: usize,
     commute_candidate: Node,
-) -> Command {
-    todo!()
+) -> Option<Command> {
+    for slice in slice_vec[starting_index..].iter_mut() {
+        if let Some(index) = slice.iter().position(|c| c.node == commute_candidate) {
+            return Some(slice.swap_remove(index));
+        }
+    }
+    None
 }
 
 /// Starting from starting_index, work back along slices to check for the
@@ -110,7 +115,8 @@ fn solve(mut h: Hugr) -> Result<Hugr, ()> {
         });
         if let Some((commute_candidate, destination)) = search_for_spot {
             let command: Command =
-                remove_command(&mut slice_vec, slice_index + 1, commute_candidate[1]);
+                remove_command(&mut slice_vec, slice_index + 1, commute_candidate[1])
+                    .expect("command not found.");
 
             slice_vec[destination].push(command);
             let rewrite = gen_rewrite(&h, commute_candidate);
@@ -175,9 +181,8 @@ mod test {
         })
         .unwrap()
     }
-
     #[fixture]
-    // example circuit from original task
+    // example circuit from original task with lower depth
     fn example_cx_better() -> Hugr {
         build_simple_circuit(4, |circ| {
             circ.append(T2Op::CX, [0, 2])?;
@@ -192,8 +197,8 @@ mod test {
     fn test_load_slices_cx(example_cx: Hugr) {
         let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&example_cx, example_cx.root());
         let mut commands: Vec<Command> = circ.commands().map_into().collect();
-
-        let slices = load_slices(circ);
+        let final_command = commands[2].clone();
+        let mut slices = load_slices(circ);
         let correct = vec![
             vec![commands.remove(0)],
             vec![commands.remove(0)],
@@ -201,6 +206,10 @@ mod test {
         ];
 
         assert_eq!(slices, correct);
+
+        let removed_command = remove_command(&mut slices, 0, final_command.node);
+
+        assert_eq!(removed_command, Some(final_command));
     }
 
     #[rstest]
