@@ -105,11 +105,11 @@ impl PyCircuitMatch {
     }
 
     /// Obtain as a [`CircuitMatch`] object.
-    pub fn to_rewrite(&self, repl: PyObject) -> PyResult<CircuitRewrite> {
+    pub fn to_rewrite(&self, replacement: PyObject) -> PyResult<CircuitRewrite> {
         let circ = hugr_as_view(&self.circuit);
         CircuitMatch::try_from_root_match(self.root.0, &self.pattern, &circ)
             .expect("Invalid PyCircuitMatch object")
-            .to_rewrite(pyobj_as_hugr(repl)?)
+            .to_rewrite(pyobj_as_hugr(replacement)?)
             .map_err(|e| PyInvalidReplacement::new_err(e.to_string()))
     }
 }
