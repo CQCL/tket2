@@ -1,4 +1,6 @@
 #![allow(unused)]
+use std::collections::VecDeque;
+
 use hugr::{
     hugr::{
         views::{HierarchyView, SiblingGraph},
@@ -7,12 +9,14 @@ use hugr::{
     ops::handle::DfgID,
     Hugr, HugrView, Node, SimpleReplacement,
 };
+use itertools::Itertools;
 
 use crate::{
     circuit::{command::Command as CircCommand, Circuit},
     ops::{Pauli, T2Op},
 };
 
+#[derive(Debug, PartialEq)]
 struct Command {
     node: Node,
     qbs: Vec<usize>,
@@ -37,8 +41,27 @@ impl<'a> From<CircCommand<'a>> for Command {
 type Slice = Vec<Command>;
 type SliceVec = Vec<Slice>;
 
-fn load_slices<'c>(circ: &impl Circuit<'c>) -> SliceVec {
-    todo!()
+fn load_slices<'c>(circ: &'c impl Circuit<'c>) -> SliceVec {
+    let mut slices = vec![];
+
+    let mut all_commands: VecDeque<Command> = circ.commands().map_into().collect();
+    while !all_commands.is_empty() {
+        let mut qubit_free = vec![true; circ.units().len()];
+
+        let mut cur_slice = vec![];
+        while let Some(command) = all_commands.front() {
+            if command.qbs.iter().all(|i| qubit_free[*i]) {
+                for q in &command.qbs {
+                    qubit_free[*q] = false;
+                }
+                cur_slice.push(all_commands.pop_front().unwrap());
+            } else {
+                break;
+            }
+        }
+        slices.push(cur_slice);
+    }
+    slices
 }
 
 fn gen_rewrite<'c>(circ: &'c impl HugrView, commute_nodes: [Node; 2]) -> SimpleReplacement {
@@ -153,18 +176,57 @@ mod test {
         .unwrap()
     }
 
+    #[fixture]
+    // example circuit from original task
+    fn example_cx_better() -> Hugr {
+        build_simple_circuit(4, |circ| {
+            circ.append(T2Op::CX, [0, 2])?;
+            circ.append(T2Op::CX, [1, 3])?;
+            circ.append(T2Op::CX, [1, 2])?;
+            Ok(())
+        })
+        .unwrap()
+    }
+
     #[rstest]
-    fn test_load_slices(example_cx: Hugr) {
+    fn test_load_slices_cx(example_cx: Hugr) {
         let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&example_cx, example_cx.root());
         let mut commands: Vec<Command> = circ.commands().map_into().collect();
 
         let slices = load_slices(circ);
-
         let correct = vec![
             vec![commands.remove(0)],
-            vec![commands.remove(1)],
-            vec![commands.remove(2)],
+            vec![commands.remove(0)],
+            vec![commands.remove(0)],
         ];
+
+        assert_eq!(slices, correct);
+    }
+
+    #[rstest]
+    fn test_load_slices_cx_better(example_cx_better: Hugr) {
+        let circ: &SiblingGraph<'_, DfgID> =
+            &SiblingGraph::new(&example_cx_better, example_cx_better.root());
+        let mut commands: Vec<Command> = circ.commands().map_into().collect();
+
+        let slices = load_slices(circ);
+        let correct = vec![
+            vec![commands.remove(0), commands.remove(0)],
+            vec![commands.remove(0)],
+        ];
+        assert_eq!(slices, correct);
+    }
+
+    #[rstest]
+    fn test_load_slices_bell(t2_bell_circuit: Hugr) {
+        let circ: &SiblingGraph<'_, DfgID> =
+            &SiblingGraph::new(&t2_bell_circuit, t2_bell_circuit.root());
+        let mut commands: Vec<Command> = circ.commands().map_into().collect();
+
+        let slices = load_slices(circ);
+
+        let correct = vec![vec![commands.remove(0)], vec![commands.remove(0)]];
+        assert_eq!(slices, correct);
     }
 
     #[rstest]
