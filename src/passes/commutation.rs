@@ -1,3 +1,4 @@
+#![allow(unused)]
 use hugr::{
     hugr::views::{HierarchyView, SiblingGraph},
     ops::handle::DfgID,
@@ -25,7 +26,8 @@ fn solve(mut h: Hugr) -> Result<Hugr, ()> {
 
     let mut done = false;
     loop {
-        let Some(current_slice) = slice_vec.get(slice_index) else {
+        // keep going until reaching the end of the circuit
+        let Some(current_slice) = slice_vec.get(slice_index + 1) else {
             break;
         };
         let commute_candidates: Vec<[Node; 2]> = find_candidates(current_slice, &circ);
@@ -35,6 +37,7 @@ fn solve(mut h: Hugr) -> Result<Hugr, ()> {
     Ok(h)
 }
 
+/// Return pairs of nodes, the first in the given slice, which commute.
 fn find_candidates(
     current_slice: &Vec<Command<'_>>,
     circ: &SiblingGraph<'_, DfgID>,
