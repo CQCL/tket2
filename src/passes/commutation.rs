@@ -236,7 +236,7 @@ mod test {
         let slices = load_slices(circ);
         let candidates: Vec<_> = find_candidates(&slices[1], circ).collect();
 
-        let correct: Vec<[Node; 2]> = vec![[nodes[3], nodes[4]]];
+        let correct: Vec<[Node; 2]> = vec![[nodes[4], nodes[5]]];
 
         assert_eq!(candidates, correct);
     }
