@@ -4,11 +4,11 @@
 
 use std::collections::HashMap;
 
-use hugr::extension::{ExtensionId, ExtensionSet, SignatureError};
+use hugr::extension::{ExtensionId, SignatureError};
 use hugr::ops::custom::{ExternalOp, OpaqueOp};
 use hugr::ops::OpName;
 use hugr::types::type_param::{CustomTypeArg, TypeArg, TypeParam};
-use hugr::types::{CustomType, Type, TypeBound, TypeRow};
+use hugr::types::{CustomType, FunctionType, Type, TypeBound};
 use hugr::Extension;
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
@@ -99,12 +99,11 @@ pub(crate) fn try_unwrap_json_op(ext: &ExternalOp) -> Option<JsonOp> {
 }
 
 /// Compute the signature of a json-encoded TKET1 operation.
-fn json_op_signature(args: &[TypeArg]) -> Result<(TypeRow, TypeRow, ExtensionSet), SignatureError> {
+fn json_op_signature(args: &[TypeArg]) -> Result<FunctionType, SignatureError> {
     let [TypeArg::Opaque(arg)] = args else {
         // This should have already been checked.
         panic!("Wrong number of arguments");
     };
     let op: JsonOp = serde_yaml::from_value(arg.value.clone()).unwrap(); // TODO Errors!
-    let sig = op.signature();
-    Ok((sig.input, sig.output, sig.extension_reqs))
+    Ok(op.signature())
 }
