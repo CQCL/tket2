@@ -150,11 +150,10 @@ impl CircuitMatcher {
         &'m self,
         circuit: &'a C,
     ) -> Vec<CircuitMatch<'a, 'm, C>> {
-        let mut matches = Vec::new();
-        for cmd in circuit.commands() {
-            matches.append(&mut self.find_rooted_matches(circuit, cmd.node));
-        }
-        matches
+        circuit
+            .commands()
+            .map(|cmd| &mut self.find_rooted_matches(circuit, cmd.node))
+            .collect()
     }
 
     /// Find all convex pattern matches in a circuit rooted at a given node.
