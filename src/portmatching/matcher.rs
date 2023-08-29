@@ -126,7 +126,8 @@ impl Debug for CircuitMatcher {
 
 impl CircuitMatcher {
     /// Construct a matcher from a set of patterns
-    pub fn from_patterns(patterns: Vec<CircuitPattern>) -> Self {
+    pub fn from_patterns(patterns: impl Into<Vec<CircuitPattern>>) -> Self {
+        let patterns = patterns.into();
         let line_patterns = patterns
             .iter()
             .map(|p| {
