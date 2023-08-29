@@ -70,15 +70,7 @@ impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
             .iter()
             .map(|(n, p)| (map[n], *p))
             .collect_vec();
-        let subgraph = SiblingSubgraph::try_from_boundary_ports(circ, inputs, outputs).map_err(
-            |err| match err {
-                InvalidSubgraph::NotConvex => InvalidCircuitMatch::NotConvex,
-                InvalidSubgraph::EmptySubgraph => InvalidCircuitMatch::EmptyMatch,
-                InvalidSubgraph::NoSharedParent | InvalidSubgraph::InvalidBoundary => {
-                    InvalidCircuitMatch::InvalidSubcircuit
-                }
-            },
-        )?;
+        let subgraph = SiblingSubgraph::try_from_boundary_ports(circ, inputs, outputs)?;
         Ok(Self {
             subgraph,
             pattern,
@@ -97,6 +89,7 @@ impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
 impl<'a, 'p, C: Circuit<'a>> Debug for CircuitMatch<'a, 'p, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CircuitMatch")
+            .field("root", &self.root)
             .field("nodes", &self.subgraph.nodes())
             .finish()
     }
@@ -119,8 +112,9 @@ pub struct CircuitMatcher {
 
 impl Debug for CircuitMatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.automaton.fmt(f)?;
-        Ok(())
+        f.debug_struct("CircuitMatcher")
+            .field("patterns", &self.patterns)
+            .finish()
     }
 }
 
@@ -203,6 +197,18 @@ pub enum InvalidCircuitMatch {
     /// case an error would have been raised earlier on).
     #[error("empty match")]
     EmptyMatch,
+}
+
+impl From<InvalidSubgraph> for InvalidCircuitMatch {
+    fn from(value: InvalidSubgraph) -> Self {
+        match value {
+            InvalidSubgraph::NotConvex => InvalidCircuitMatch::NotConvex,
+            InvalidSubgraph::EmptySubgraph => InvalidCircuitMatch::EmptyMatch,
+            InvalidSubgraph::NoSharedParent | InvalidSubgraph::InvalidBoundary => {
+                InvalidCircuitMatch::InvalidSubcircuit
+            }
+        }
+    }
 }
 
 fn compatible_offsets((_, pout): &(Port, Port), (pin, _): &(Port, Port)) -> bool {
