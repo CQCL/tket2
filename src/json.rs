@@ -7,6 +7,8 @@ pub mod op;
 #[cfg(test)]
 mod tests;
 
+use std::{fs, io};
+
 use hugr::ops::OpType;
 use hugr::std_extensions::arithmetic::float_types::ConstF64;
 use hugr::values::Value;
@@ -78,6 +80,60 @@ pub enum OpConvertError {
     /// The serialized operation is not supported.
     #[error("Cannot serialize operation: {0:?}")]
     NonSerializableInputs(OpType),
+}
+
+/// Load a TKET1 circuit from a JSON file.
+pub fn load_tk1_json_file(path: &str) -> Result<Hugr, TK1LoadError> {
+    let json = fs::read_to_string(path)?;
+    load_tk1_json_str(&json)
+}
+
+/// Load a TKET1 circuit from a JSON string.
+pub fn load_tk1_json_str(json: &str) -> Result<Hugr, TK1LoadError> {
+    let ser: SerialCircuit = serde_json::from_str(json)?;
+    Ok(ser.decode()?)
+}
+
+/// Error type for conversion between `Op` and `OpType`.
+#[derive(Debug, Error)]
+pub enum TK1LoadError {
+    /// The serialized operation is not supported.
+    #[error("unsupported serialized operation: {0:?}")]
+    UnsupportedSerializedOp(JsonOpType),
+    /// The serialized operation is not supported.
+    #[error("cannot serialize operation: {0:?}")]
+    UnsupportedOpSerialization(OpType),
+    /// The serialized operation is not supported.
+    #[error("cannot serialize operation: {0:?}")]
+    NonSerializableInputs(OpType),
+    /// Invalid JSON,
+    #[error("invalid JSON")]
+    InvalidJson,
+    /// File not found.,
+    #[error("unable to load file")]
+    FileLoadError,
+}
+
+impl From<serde_json::Error> for TK1LoadError {
+    fn from(_: serde_json::Error) -> Self {
+        Self::InvalidJson
+    }
+}
+
+impl From<io::Error> for TK1LoadError {
+    fn from(_: io::Error) -> Self {
+        Self::FileLoadError
+    }
+}
+
+impl From<OpConvertError> for TK1LoadError {
+    fn from(value: OpConvertError) -> Self {
+        match value {
+            OpConvertError::UnsupportedSerializedOp(op) => Self::UnsupportedSerializedOp(op),
+            OpConvertError::UnsupportedOpSerialization(op) => Self::UnsupportedOpSerialization(op),
+            OpConvertError::NonSerializableInputs(op) => Self::NonSerializableInputs(op),
+        }
+    }
 }
 
 /// Try to interpret a TKET1 parameter as a constant value.
