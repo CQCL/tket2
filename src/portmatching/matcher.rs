@@ -28,12 +28,15 @@ impl CircuitPattern {
     pub fn from_circuit<'circ, C: Circuit<'circ>>(circuit: &'circ C) -> Self {
         let mut p = Pattern::new();
         for cmd in circuit.commands() {
-            p.require(cmd.node, cmd.op.clone().try_into().unwrap());
-            for out_offset in 0..cmd.outputs.len() {
+            p.require(
+                cmd.node(),
+                circuit.command_optype(&cmd).clone().try_into().unwrap(),
+            );
+            for out_offset in 0..cmd.outputs().len() {
                 let out_offset = Port::new_outgoing(out_offset);
-                for (next_node, in_offset) in circuit.linked_ports(cmd.node, out_offset) {
+                for (next_node, in_offset) in circuit.linked_ports(cmd.node(), out_offset) {
                     if circuit.get_optype(next_node).tag() != hugr::ops::OpTag::Output {
-                        p.add_edge(cmd.node, next_node, (out_offset, in_offset));
+                        p.add_edge(cmd.node(), next_node, (out_offset, in_offset));
                     }
                 }
             }
@@ -121,7 +124,7 @@ impl<'a: 'circ, 'circ, C: Circuit<'circ>> PortMatcher<&'a C, Node, Node> for Cir
     fn find_matches(&self, circuit: &'a C) -> Vec<PatternMatch<PatternID, Node>> {
         let mut matches = Vec::new();
         for cmd in circuit.commands() {
-            matches.append(&mut self.find_rooted_matches(circuit, cmd.node));
+            matches.append(&mut self.find_rooted_matches(circuit, cmd.node()));
         }
         matches
     }

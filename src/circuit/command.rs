@@ -17,15 +17,31 @@ pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
 
 /// An operation applied to specific wires.
-pub struct Command<'circ> {
-    /// The operation.
-    pub op: &'circ OpType,
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Command {
     /// The operation node.
-    pub node: Node,
+    node: Node,
     /// The input units to the operation.
-    pub inputs: Vec<CircuitUnit>,
+    inputs: Vec<CircuitUnit>,
     /// The output units to the operation.
-    pub outputs: Vec<CircuitUnit>,
+    outputs: Vec<CircuitUnit>,
+}
+
+impl Command {
+    /// Returns the node corresponding to this command.
+    pub fn node(&self) -> Node {
+        self.node
+    }
+
+    /// Returns the output units of this command.
+    pub fn outputs(&self) -> &Vec<CircuitUnit> {
+        &self.outputs
+    }
+
+    /// Returns the output units of this command.
+    pub fn inputs(&self) -> &Vec<CircuitUnit> {
+        &self.inputs
+    }
 }
 
 /// An iterator over the commands of a circuit.
@@ -72,7 +88,7 @@ where
 
     /// Process a new node, updating wires in `unit_wires` and returns the
     /// command for the node if it's not an input or output.
-    fn process_node(&mut self, node: Node) -> Option<Command<'circ>> {
+    fn process_node(&mut self, node: Node) -> Option<Command> {
         let optype = self.circ.get_optype(node);
         let sig = optype.signature();
 
@@ -120,7 +136,6 @@ where
             .collect();
 
         Some(Command {
-            op: optype,
             node,
             inputs,
             outputs,
@@ -133,7 +148,7 @@ where
     Circ: HierarchyView<'circ>,
     for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
 {
-    type Item = Command<'circ>;
+    type Item = Command;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
