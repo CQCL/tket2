@@ -14,17 +14,12 @@ tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs", rev="619db15d3", 
     "tket2ops",
 ] }
 rayon = "1.5"
-pyo3 = { version = "0.19.0", optional = true, features = [
-    "multiple-pymethods",
-] }
 tket-rs = { optional = true, git = "https://github.com/CQCL-DEV/tket-rs", rev="bd7e8e04" }
 thiserror = "1.0.28"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 downcast-rs = "1.2.0"
-portgraph = "0.8.0"
 priority-queue = "1.3.0"
-quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", branch = "fix/no-resource-validation" }
 smol_str = "0.2.0"
 typetag = "0.2.8"
 itertools = "0.11.0"
@@ -32,6 +27,11 @@ petgraph = { version = "0.6.3", default-features = false }
 serde_yaml = "0.9.22"
 portmatching = { version = "0.2.0", optional = true, features = ["serde"]}
 derive_more = "0.99.17"
+quantinuum-hugr = { workspace = true }
+portgraph = { workspace = true }
+pyo3 = { workspace = true, optional = true, features = [
+    "multiple-pymethods",
+] }
 
 [features]
 pyo3 = ["dep:pyo3", "tket-json-rs/pyo3", "tket-json-rs/tket2ops", "portgraph/pyo3", "quantinuum-hugr/pyo3"]
@@ -51,3 +51,9 @@ urlencoding = "2.1.2"
 [workspace]
 
 members = ["pyrs"]
+
+[workspace.dependencies]
+
+quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", branch = "fix/no-resource-validation" }
+portgraph = "0.8"
+pyo3 = { version = "0.19" }
