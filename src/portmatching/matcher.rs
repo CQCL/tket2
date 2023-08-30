@@ -284,7 +284,7 @@ mod tests {
         let hugr = h_cx();
         let circ: DescendantsGraph<'_, DfgID> = DescendantsGraph::new(&hugr, hugr.root());
 
-        let p = CircuitPattern::from_circuit(&circ);
+        let p = CircuitPattern::try_from_circuit(&circ).unwrap();
         let m = CircuitMatcher::from_patterns(vec![p]);
 
         let matches = m.find_matches(&circ);

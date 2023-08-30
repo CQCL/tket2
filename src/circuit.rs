@@ -81,6 +81,9 @@ pub trait Circuit<'circ>: HugrView {
     fn command_optype(&self, command: &Command) -> &OpType {
         self.get_optype(command.node())
     }
+
+    /// The number of gates in the circuit.
+    fn num_gates(&self) -> usize;
 }
 
 impl<'circ, T> Circuit<'circ> for T
@@ -145,5 +148,50 @@ where
     #[inline]
     fn output(&self) -> Node {
         return self.children(self.root()).nth(1).unwrap();
+    }
+
+    #[inline]
+    fn num_gates(&self) -> usize {
+        self.children(self.root()).count() - 2
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::OnceLock;
+
+    use hugr::{
+        hugr::views::{DescendantsGraph, HierarchyView},
+        ops::handle::DfgID,
+        Hugr, HugrView,
+    };
+
+    use crate::{circuit::Circuit, json::load_tk1_json_str};
+
+    static CIRC: OnceLock<Hugr> = OnceLock::new();
+
+    fn test_circuit() -> DescendantsGraph<'static, DfgID> {
+        let hugr = CIRC.get_or_init(|| {
+            load_tk1_json_str(
+                r#"{
+                "phase": "0",
+                "bits": [],
+                "qubits": [["q", [0]], ["q", [1]]],
+                "commands": [
+                    {"args": [["q", [0]]], "op": {"type": "H"}},
+                    {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}
+                ],
+                "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
+            }"#,
+            )
+            .unwrap()
+        });
+        DescendantsGraph::new(hugr, hugr.root())
+    }
+
+    #[test]
+    fn test_num_gates() {
+        let circ = test_circuit();
+        assert_eq!(circ.num_gates(), 2);
     }
 }
