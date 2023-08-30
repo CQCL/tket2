@@ -136,16 +136,17 @@ fn solve(mut h: Hugr) -> Result<Hugr, ()> {
         let Some(next_slice) = slice_vec.get(slice_index + 1) else {
             break;
         };
-        let search_for_spot = find_candidates(next_slice, &h).find_map(|(command, other_node)| {
-            let (other_com, source) = find_command(&slice_vec, slice_index + 1, other_node)?;
-            available_slice(&slice_vec, slice_index - 1, &other_com)
-                .map(|dest| ([command, other_com], [source, dest]))
-        });
+        let search_for_spot =
+            find_candidates(&slice_vec[slice_index], &h).find_map(|(command, other_node)| {
+                let (other_com, source) = find_command(&slice_vec, slice_index + 1, other_node)?;
+                available_slice(&slice_vec, slice_index - 1, &other_com)
+                    .map(|dest| ([command, other_com], [source, dest]))
+            });
         if let Some(([com, other_com], [source, destination])) = search_for_spot {
             let n = com.node;
             let n2 = other_com.node;
 
-            slice_vec.get_mut(source).unwrap().remove(&other_com);
+            slice_vec[source].remove(&other_com);
             slice_vec[destination].insert(other_com);
             let rewrite = gen_rewrite(&h, [n, n2]);
             h.apply_rewrite(rewrite).unwrap();
