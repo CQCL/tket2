@@ -106,13 +106,13 @@ fn find_command(
 fn available_slice<'c>(
     slice_vec: &[Slice],
     starting_index: usize,
-    other: Rc<Command>,
+    command: Rc<Command>,
 ) -> Option<usize> {
     let mut slice_index = starting_index;
 
-    let qbs: HashSet<_> = HashSet::from_iter(&other.qbs);
+    let qbs: HashSet<_> = HashSet::from_iter(&command.qbs);
     loop {
-        if other
+        if command
             .qbs
             .iter()
             .any(|q| !slice_vec[slice_index][*q].is_none())
