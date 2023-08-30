@@ -139,7 +139,7 @@ where
 
     #[inline]
     fn num_gates(&self) -> usize {
-        self.nodes().count() - 3
+        self.children(self.root()).count() - 2
     }
 }
 
