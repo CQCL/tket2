@@ -81,7 +81,6 @@ pub trait Circuit<'circ>: HugrView {
 
     /// The number of gates in the circuit.
     fn num_gates(&self) -> usize;
-
 }
 
 impl<'circ, T> Circuit<'circ> for T
