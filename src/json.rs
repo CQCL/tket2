@@ -62,7 +62,8 @@ impl TKETDecode for SerialCircuit {
     fn encode<'circ>(circ: &'circ impl Circuit<'circ>) -> Result<Self, Self::EncodeError> {
         let mut encoder = JsonEncoder::new(circ);
         for com in circ.commands() {
-            encoder.add_command(com)?;
+            let optype = circ.command_optype(&com);
+            encoder.add_command(com, optype)?;
         }
         Ok(encoder.finish())
     }

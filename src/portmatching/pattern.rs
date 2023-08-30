@@ -30,12 +30,13 @@ impl CircuitPattern {
     pub fn from_circuit<'circ, C: Circuit<'circ>>(circuit: &'circ C) -> Self {
         let mut pattern = Pattern::new();
         for cmd in circuit.commands() {
-            pattern.require(cmd.node, cmd.op.clone().try_into().unwrap());
-            for out_offset in 0..cmd.outputs.len() {
+            let op = circuit.command_optype(&cmd).clone();
+            pattern.require(cmd.node(), op.try_into().unwrap());
+            for out_offset in 0..cmd.outputs().len() {
                 let out_offset = Port::new_outgoing(out_offset);
-                for (next_node, in_offset) in circuit.linked_ports(cmd.node, out_offset) {
+                for (next_node, in_offset) in circuit.linked_ports(cmd.node(), out_offset) {
                     if circuit.get_optype(next_node).tag() != hugr::ops::OpTag::Output {
-                        pattern.add_edge(cmd.node, next_node, (out_offset, in_offset));
+                        pattern.add_edge(cmd.node(), next_node, (out_offset, in_offset));
                     }
                 }
             }
@@ -99,7 +100,7 @@ mod tests {
     };
     use itertools::Itertools;
 
-    use crate::utils::{cx_gate, h_gate};
+    use crate::T2Op;
 
     use super::CircuitPattern;
 
@@ -107,8 +108,8 @@ mod tests {
         let qb = QB_T;
         let mut hugr = DFGBuilder::new(FunctionType::new_linear(vec![qb; 2])).unwrap();
         let mut circ = hugr.as_circuit(hugr.input_wires().collect());
-        circ.append(cx_gate(), [0, 1]).unwrap();
-        circ.append(h_gate(), [0]).unwrap();
+        circ.append(T2Op::CX, [0, 1]).unwrap();
+        circ.append(T2Op::H, [0]).unwrap();
         let out_wires = circ.finish();
         hugr.finish_hugr_with_outputs(out_wires).unwrap()
     }

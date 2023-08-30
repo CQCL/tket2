@@ -6,12 +6,12 @@
 //! circuits by ensuring they always define a signature, and computing the
 //! explicit count of qubits and linear bits.
 
+use crate::ops::EXTENSION_ID as QUANTUM_EXTENSION_ID;
 use hugr::extension::prelude::QB_T;
 use hugr::extension::ExtensionSet;
 use hugr::ops::custom::ExternalOp;
 use hugr::ops::{LeafOp, OpTrait, OpType};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
-use hugr::std_extensions::quantum::EXTENSION_ID as QUANTUM_EXTENSION_ID;
 use hugr::types::FunctionType;
 
 use itertools::Itertools;
@@ -20,7 +20,7 @@ use tket_json_rs::optype::OpType as JsonOpType;
 
 use super::{try_param_to_constant, OpConvertError};
 use crate::extension::{try_unwrap_json_op, LINEAR_BIT, TKET1_EXTENSION_ID};
-use crate::utils::{cx_gate, h_gate};
+use crate::T2Op;
 
 /// A serialized operation, containing the operation type and all its attributes.
 ///
@@ -184,8 +184,11 @@ impl From<&JsonOp> for OpType {
     fn from(json_op: &JsonOp) -> Self {
         match json_op.op.op_type {
             // JsonOpType::X => LeafOp::X.into(),
-            JsonOpType::H => h_gate().into(),
-            JsonOpType::CX => cx_gate().into(),
+            JsonOpType::H => T2Op::H.into(),
+            JsonOpType::CX => T2Op::CX.into(),
+            JsonOpType::T => T2Op::T.into(),
+            JsonOpType::Tdg => T2Op::Tdg.into(),
+            JsonOpType::X => T2Op::X.into(),
             JsonOpType::noop => LeafOp::Noop { ty: QB_T }.into(),
             // TODO TKET1 measure takes a bit as input, HUGR measure does not
             //JsonOpType::Measure => LeafOp::Measure.into(),
@@ -239,7 +242,6 @@ impl TryFrom<&OpType> for JsonOp {
                 ext => {
                     return try_unwrap_json_op(ext).ok_or_else(err);
                 } // h_gate() => JsonOpType::H,
-                  // cx_gate() => JsonOpType::CX,
                   // LeafOp::ZZMax => JsonOpType::ZZMax,
                   // LeafOp::Reset => JsonOpType::Reset,
                   // //LeafOp::Measure => JsonOpType::Measure,

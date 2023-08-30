@@ -32,7 +32,6 @@ impl MatchLeafOp {
             // | LeafOp::Z
             // | LeafOp::Tadj
             // | LeafOp::Sadj
-            // | cx_gate()
             // | LeafOp::ZZMax
             // | LeafOp::Measure
             // | LeafOp::RzF64
