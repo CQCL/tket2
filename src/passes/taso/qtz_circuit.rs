@@ -2,15 +2,12 @@ use std::collections::HashMap;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::QB_T;
-// use crate::circuit::{
-//     circuit::Circuit,
-//     dag::Edge,
-//     operation::{Op, WireType},
-// };
+use hugr::hugr::CircuitUnit;
 use hugr::ops::OpType as Op;
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::types::{FunctionType, Type};
 use hugr::Hugr as Circuit;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::utils::{cx_gate, h_gate, rz_f64};
@@ -52,76 +49,52 @@ fn map_op(opstr: &str) -> Op {
     .into()
 }
 
-fn map_wt(wirestr: &str) -> (Type, usize) {
-    let wt = if wirestr.starts_with('Q') {
-        QB_T
-    } else if wirestr.starts_with('P') {
-        FLOAT64_TYPE
-    } else {
-        panic!("unknown op {wirestr}");
-    };
-
-    (wt, wirestr[1..].parse().unwrap())
-}
 // TODO change to TryFrom
 impl From<RepCircData> for Circuit {
     fn from(RepCircData { circ: rc, meta }: RepCircData) -> Self {
         let qb_types: Vec<Type> = vec![QB_T; meta.n_qb];
         let param_types: Vec<Type> = vec![FLOAT64_TYPE; meta.n_input_param];
-        let mut circ = DFGBuilder::new(FunctionType::new(
-            [param_types, qb_types.clone()].concat(),
+        let mut builder = DFGBuilder::new(FunctionType::new(
+            [qb_types.clone(), param_types].concat(),
             qb_types,
         ))
         .unwrap();
 
-        let inputs: Vec<_> = circ.input_wires().collect();
-        let (param_wires, qubit_wires) = inputs.split_at(meta.n_input_param);
-        // let param_wires: Vec<Wire> = input_iter.f(meta.n_input_param).collect();
-        // let qubit_wires: Vec<Wire> = input_iter.collect();
+        // Current map between quartz qubit and parameter identifiers, and
+        // circuit units. Since quartz defines output wires arbitrarily for each
+        // command, these may be altered mid-circuit.
+        let param_wires = builder.input_wires().skip(meta.n_qb);
+        let mut input_units: HashMap<String, CircuitUnit> =
+            HashMap::with_capacity(builder.num_inputs());
+        input_units.extend((0..meta.n_qb).map(|i| (format!("Q{}", i), CircuitUnit::Linear(i))));
+        input_units.extend(
+            param_wires
+                .enumerate()
+                .map(|(i, w)| (format!("P{}", i), CircuitUnit::Wire(w))),
+        );
 
-        let mut qubit_wires: Vec<_> = qubit_wires.into();
-        let mut param_wires: Vec<_> = param_wires.iter().map(Some).collect();
+        let circ_inputs = builder.input_wires().take(meta.n_qb).collect_vec();
+        let mut circ = builder.as_circuit(circ_inputs);
+
         for RepCircOp {
             opstr,
-            outputs,
             inputs,
+            outputs,
         } in rc.0
         {
             let op = map_op(&opstr);
 
-            let incoming: Vec<_> = inputs
-                .into_iter()
-                .map(|is| {
-                    let (wt, idx) = map_wt(&is);
-                    if wt == QB_T {
-                        qubit_wires[idx]
-                    } else if wt == FLOAT64_TYPE {
-                        *param_wires[idx].take().unwrap()
-                    } else {
-                        panic!("unexpected wire type.")
-                    }
-                })
-                .collect();
-            let output_wires = circ.add_dataflow_op(op, incoming).unwrap().outputs();
+            // Translate the quartz inputs into circuit units.
+            let inputs = inputs.iter().map(|inp| *input_units.get(inp).unwrap());
+            let hugr_outputs = circ.append_with_outputs(op, inputs).unwrap();
 
-            for (os, wire) in outputs.into_iter().zip(output_wires) {
-                let (wt, idx) = map_wt(&os);
-                assert_eq!(wt, QB_T, "only qubits expected as output");
-
-                qubit_wires[idx] = wire;
+            for (idx, wire) in outputs.iter().zip(hugr_outputs) {
+                input_units.insert(idx.to_string(), CircuitUnit::Wire(wire));
             }
-
-            // circ.add_vertex_with_edges(op, incoming, outgoing);
         }
-        // circ.dag
-        //     .connect_many(
-        //         circ.boundary()[1],
-        //         qubit_wire_map,
-        //         Direction::Incoming,
-        //         None,
-        //     )
-        //     .unwrap();
-        circ.finish_hugr_with_outputs(qubit_wires).unwrap()
+
+        let circ_outputs = circ.finish();
+        builder.finish_hugr_with_outputs(circ_outputs).unwrap()
     }
 }
 
