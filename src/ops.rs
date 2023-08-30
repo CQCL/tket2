@@ -198,7 +198,7 @@ pub(crate) mod test {
         assert_eq!(EXTENSION.name(), &EXTENSION_ID);
 
         for o in T2Op::all_variants() {
-            assert_eq!(T2Op::try_from_op_def(get_opdef(o.clone()).unwrap()), Ok(o));
+            assert_eq!(T2Op::try_from_op_def(get_opdef(o).unwrap()), Ok(o));
         }
     }
 
