@@ -14,6 +14,7 @@ use crate::json::TKETDecode;
 
 create_exception!(pyrs, PyValidateError, PyException);
 create_exception!(pyrs, PyInvalidReplacement, PyException);
+create_exception!(pyrs, PyInvalidPattern, PyException);
 
 #[pymethods]
 impl CircuitPattern {
@@ -22,7 +23,8 @@ impl CircuitPattern {
     pub fn py_from_circuit(circ: PyObject) -> PyResult<CircuitPattern> {
         let hugr = pyobj_as_hugr(circ)?;
         let circ = hugr_as_view(&hugr);
-        Ok(CircuitPattern::from_circuit(&circ))
+        CircuitPattern::try_from_circuit(&circ)
+            .map_err(|e| PyInvalidPattern::new_err(e.to_string()))
     }
 
     /// A string representation of the pattern.

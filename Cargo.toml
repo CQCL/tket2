@@ -26,7 +26,7 @@ itertools = "0.11.0"
 petgraph = { version = "0.6.3", default-features = false }
 serde_yaml = "0.9.22"
 # portmatching = { version = "0.2.0", optional = true, features = ["serde"]}
-portmatching = { optional = true, git = "https://github.com/lmondada/portmatching", rev = "219f53d" }
+portmatching = { optional = true, git = "https://github.com/lmondada/portmatching", rev = "61ef939" }
 derive_more = "0.99.17"
 quantinuum-hugr = { workspace = true }
 portgraph = { workspace = true }
