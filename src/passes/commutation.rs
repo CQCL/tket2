@@ -10,7 +10,7 @@ use hugr::{
         CircuitUnit,
     },
     ops::handle::DfgID,
-    Hugr, HugrView, Node, SimpleReplacement,
+    Direction, Hugr, HugrView, Node, Port, SimpleReplacement,
 };
 use itertools::Itertools;
 use portgraph::PortOffset;
@@ -18,12 +18,31 @@ use portgraph::PortOffset;
 use crate::{
     circuit::{command::Command as CircCommand, Circuit},
     ops::{Pauli, T2Op},
+    utils::build_simple_circuit,
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct Qb(usize);
+
+impl Qb {
+    fn index(&self) -> usize {
+        self.0
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct Command {
     node: Node,
-    qbs: Vec<usize>,
+    qbs: Vec<Qb>,
+}
+
+impl Command {
+    fn port_of_qb(&self, qb: Qb, direction: Direction) -> Option<Port> {
+        self.qbs
+            .iter()
+            .position(|q| *q == qb)
+            .map(|i| PortOffset::new(direction, i).into())
+    }
 }
 
 impl<'a> From<CircCommand<'a>> for Command {
@@ -35,7 +54,7 @@ impl<'a> From<CircCommand<'a>> for Command {
                 let CircuitUnit::Linear(i) = u else {
                     panic!("not linear unit.")
                 };
-                i
+                Qb(i)
             })
             .collect();
         Self { node, qbs }
@@ -47,13 +66,12 @@ type SliceVec = Vec<Slice>;
 
 fn add_to_slice(slice: &mut Slice, com: Rc<Command>) {
     for q in &com.qbs {
-        slice[*q] = Some(com.clone());
+        slice[q.index()] = Some(com.clone());
     }
 }
 
 fn load_slices<'c>(circ: &'c impl Circuit<'c>) -> SliceVec {
     let mut slices = vec![];
-    let mut cur_index = 0;
     let mut all_commands: VecDeque<Command> = circ.commands().map_into().collect();
 
     let n_qbs = circ.units().len();
@@ -63,12 +81,12 @@ fn load_slices<'c>(circ: &'c impl Circuit<'c>) -> SliceVec {
         let free_slice = command
             .qbs
             .iter()
-            .map(|qb| qubit_free_slice[*qb])
+            .map(|qb| qubit_free_slice[qb.index()])
             .max()
             .unwrap();
 
         for q in &command.qbs {
-            qubit_free_slice[*q] = free_slice + 1;
+            qubit_free_slice[q.index()] = free_slice + 1;
         }
         if free_slice >= slices.len() {
             debug_assert!(free_slice == slices.len());
@@ -80,10 +98,6 @@ fn load_slices<'c>(circ: &'c impl Circuit<'c>) -> SliceVec {
     }
 
     slices
-}
-
-fn gen_rewrite<'c>(circ: &'c impl HugrView, commute_nodes: [Node; 2]) -> SimpleReplacement {
-    todo!()
 }
 
 /// Starting from given index, search the slices for the command for the given
@@ -109,17 +123,16 @@ fn available_slice<'c>(
     slice_vec: &[Slice],
     starting_index: usize,
     command: &Rc<Command>,
-) -> Option<(usize, HashMap<usize, Node>)> {
-    let mut slice_index = starting_index;
+) -> Option<(usize, HashMap<Qb, Node>)> {
     let mut available = None;
-    let mut prev_nodes: HashMap<usize, Node> = HashMap::new();
+    let mut prev_nodes: HashMap<Qb, Node> = HashMap::new();
 
     for slice_index in (0..starting_index + 1).rev() {
         // if all qubit slots are empty here the command can be moved here
         if command
             .qbs
             .iter()
-            .all(|q| slice_vec[slice_index][*q].is_none())
+            .all(|q| slice_vec[slice_index][q.index()].is_none())
         {
             available = Some((slice_index, prev_nodes.clone()));
         } else if slice_index == 0 {
@@ -145,12 +158,12 @@ fn blocked_at_slice(
     command: &Rc<Command>,
     slice: &Slice,
     circ: &impl HugrView,
-) -> (bool, HashMap<usize, Node>) {
+) -> (bool, HashMap<Qb, Node>) {
     // map from qubit to node it is connected to immediately after the free slice.
-    let mut prev_nodes: HashMap<usize, Node> =
+    let mut prev_nodes: HashMap<Qb, Node> =
         HashMap::from_iter(command.qbs.iter().map(|q| (*q, command.node)));
     let blocked = command.qbs.iter().enumerate().any(|(port, q)| {
-        if let Some(other_com) = &slice[*q] {
+        if let Some(other_com) = &slice[q.index()] {
             let Ok(other_op): Result<T2Op, _> = circ.get_optype(other_com.node).clone().try_into()
             else {
                 return true;
@@ -160,16 +173,13 @@ fn blocked_at_slice(
                 return true;
             };
 
+            let port = PortOffset::new_incoming(port).into();
             let Some(pauli) = commutation_on_port(&op.qubit_commutation(), port) else {
                 return true;
             };
             let Some(other_pauli) = commutation_on_port(
                 &other_op.qubit_commutation(),
-                other_com
-                    .qbs
-                    .iter()
-                    .position(|other_q| other_q == q)
-                    .unwrap(),
+                other_com.port_of_qb(*q, Direction::Outgoing).unwrap(),
             ) else {
                 return true;
             };
@@ -187,8 +197,46 @@ fn blocked_at_slice(
     (blocked, prev_nodes)
 }
 
-fn commutation_on_port(comms: &Vec<(usize, Pauli)>, port: usize) -> Option<Pauli> {
-    comms.iter().find_map(|(i, p)| (*i == port).then_some(*p))
+fn commutation_on_port(comms: &Vec<(usize, Pauli)>, port: Port) -> Option<Pauli> {
+    comms
+        .iter()
+        .find_map(|(i, p)| (*i == port.index()).then_some(*p))
+}
+
+fn gen_rewrites(
+    h: &Hugr,
+    previous_nodes: &HashMap<Qb, Node>,
+    command: &Command,
+) -> [SimpleReplacement; 2] {
+    let remove_node = command.node;
+
+    let op = h.get_optype(remove_node).clone();
+
+    let replacement = build_simple_circuit(2, |_circ| Ok(())).unwrap();
+    let replace_io = replacement.get_io(replacement.root()).unwrap();
+    let nu_inp: HashMap<(Node, Port), (Node, Port)> = h
+        .node_inputs(remove_node)
+        .zip(replacement.node_inputs(replace_io[1]))
+        .map(|(remove_p, replace_p)| ((replace_io[1], replace_p), (remove_node, remove_p)))
+        .collect();
+
+    let nu_out: HashMap<(Node, Port), Port> = h
+        .node_outputs(remove_node)
+        .map(|p| h.linked_ports(remove_node, p))
+        .flatten()
+        .zip(replacement.node_inputs(replace_io[1]))
+        .map(|(remove_np, replace_p)| (remove_np, replace_p))
+        .collect();
+
+    let remove = SimpleReplacement::new(
+        h.root(),
+        HashSet::from_iter([remove_node]),
+        replacement,
+        nu_inp,
+        nu_out,
+    );
+
+    todo!()
 }
 
 fn solve(mut h: Hugr) -> Result<Hugr, ()> {
@@ -202,92 +250,37 @@ fn solve(mut h: Hugr) -> Result<Hugr, ()> {
             .unique()
             .cloned()
             .collect();
+
         for command in slice_commands {
-            if let Some((destination, _)) = available_slice(circ, &slice_vec, slice_index, &command)
+            if let Some((destination, previous_nodes)) =
+                available_slice(&h, &slice_vec, slice_index, &command)
             {
                 for q in &command.qbs {
-                    let com = slice_vec[slice_index][*q].take();
-                    slice_vec[destination][*q] = com;
+                    let com = slice_vec[slice_index][q.index()].take();
+                    slice_vec[destination][q.index()] = com;
+                }
+                dbg!(slice_index, destination, &previous_nodes, &command);
+
+                let rewrites: [SimpleReplacement; 2] = gen_rewrites(&h, &previous_nodes, &command);
+                for rw in rewrites {
+                    h.apply_rewrite(rw).unwrap();
                 }
             }
         }
     }
 
-    let mut slice_index: usize = 1;
-
-    loop {
-        // keep going until reaching the end of the circuit
-        let Some(next_slice) = slice_vec.get(slice_index + 1) else {
-            break;
-        };
-        let search_for_spot =
-            find_candidates(&slice_vec[slice_index], &h).find_map(|(command, other_node)| {
-                let (other_com, source) = find_command(&slice_vec, slice_index + 1, other_node)?;
-                available_slice(&h, &slice_vec, slice_index - 1, &other_com)
-                    .map(|(dest, _)| ([command, other_com], [source, dest]))
-            });
-        if let Some(([com, other_com], [source, destination])) = search_for_spot {
-            let n = com.node;
-            let n2 = other_com.node;
-
-            for q in &other_com.qbs {
-                slice_vec[source][*q] = None;
-                slice_vec[destination][*q] = Some(other_com.clone());
-            }
-            let rewrite = gen_rewrite(&h, [n, n2]);
-            h.apply_rewrite(rewrite).unwrap();
-        } else {
-            // no candidates left here, move on
-            slice_index += 1;
-        }
-    }
-
     // TODO remove empty slices and return
+    // and full slices at start?
     Ok(h)
-}
-
-/// Return pairs of command in current slice and subsequent nodes they commute
-/// with (and are connected to).
-fn find_candidates<'a, 'c: 'a>(
-    current_slice: &'a Slice,
-    circ: &'c impl HugrView,
-) -> impl Iterator<Item = (Rc<Command>, Node)> + 'a {
-    current_slice
-        .iter()
-        .flatten()
-        .filter_map(move |command| {
-            let node = command.node;
-            let node_op: T2Op = circ.get_optype(node).clone().try_into().ok()?;
-            let node_comm = node_op.qubit_commutation();
-
-            Some(circ.output_neighbours(node).filter_map(move |other| {
-                let other_op: T2Op = circ.get_optype(other).clone().try_into().ok()?;
-                let other_comm = other_op.qubit_commutation();
-                // if the two ops commute on all the ports that they are
-                // connected by, then they are a valid commutation pair.
-                circ.node_connections(node, other)
-                    .all(|[port, other_port]| {
-                        commutation_on_port(&node_comm, port.index())
-                            .unwrap()
-                            .commutes_with(
-                                commutation_on_port(&other_comm, other_port.index()).unwrap(),
-                            )
-                    })
-                    .then_some((command.clone(), other))
-            }))
-        })
-        .flatten()
-        .unique()
 }
 
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
 
-    use crate::ops::test::{build_simple_circuit, t2_bell_circuit};
-    use hugr::{ops::handle::NodeHandle, Hugr, Port};
+    use crate::ops::test::t2_bell_circuit;
+    use hugr::{Hugr, Port};
     use itertools::Itertools;
-    use portgraph::NodeIndex;
     use rstest::{fixture, rstest};
 
     use super::*;
@@ -311,6 +304,18 @@ mod test {
             circ.append(T2Op::CX, [0, 2])?;
             circ.append(T2Op::CX, [1, 3])?;
             circ.append(T2Op::CX, [1, 2])?;
+            Ok(())
+        })
+        .unwrap()
+    }
+
+    #[fixture]
+    // can't commute anything here
+    fn cant_commute() -> Hugr {
+        build_simple_circuit(3, |circ| {
+            circ.append(T2Op::Z, [1])?;
+            circ.append(T2Op::CX, [0, 1])?;
+            circ.append(T2Op::CX, [2, 1])?;
             Ok(())
         })
         .unwrap()
@@ -354,7 +359,7 @@ mod test {
     fn test_load_slices_cx_better(example_cx_better: Hugr) {
         let circ: &SiblingGraph<'_, DfgID> =
             &SiblingGraph::new(&example_cx_better, example_cx_better.root());
-        let mut commands: Vec<Command> = circ.commands().map_into().collect();
+        let commands: Vec<Command> = circ.commands().map_into().collect();
 
         let slices = load_slices(circ);
         let correct = slice_from_command(&commands, 4, &[&[0, 1], &[2]]);
@@ -366,24 +371,12 @@ mod test {
     fn test_load_slices_bell(t2_bell_circuit: Hugr) {
         let circ: &SiblingGraph<'_, DfgID> =
             &SiblingGraph::new(&t2_bell_circuit, t2_bell_circuit.root());
-        let mut commands: Vec<Command> = circ.commands().map_into().collect();
+        let commands: Vec<Command> = circ.commands().map_into().collect();
 
         let slices = load_slices(circ);
         let correct = slice_from_command(&commands, 2, &[&[0], &[1]]);
 
         assert_eq!(slices, correct);
-    }
-
-    #[rstest]
-    fn test_find_candidates(example_cx: Hugr) {
-        let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&example_cx, example_cx.root());
-        let nodes: Vec<_> = circ.nodes().collect();
-        let slices = load_slices(circ);
-        let candidates: Vec<_> = find_candidates(&slices[1], circ).collect();
-        let correct: Vec<[Node; 2]> = vec![[nodes[4], nodes[5]]];
-        assert!(correct.into_iter().eq(candidates
-            .into_iter()
-            .map(|(command, node)| [command.node, node])))
     }
 
     #[rstest]
@@ -395,12 +388,12 @@ mod test {
         assert_eq!(found, 0);
 
         assert_eq!(
-            *prev_nodes.get(&1).unwrap(),
+            *prev_nodes.get(&Qb(1)).unwrap(),
             slices[1][1].as_ref().unwrap().node
         );
 
         assert_eq!(
-            *prev_nodes.get(&3).unwrap(),
+            *prev_nodes.get(&Qb(3)).unwrap(),
             slices[2][3].as_ref().unwrap().node
         );
     }
@@ -429,18 +422,18 @@ mod test {
         let (found, prev_nodes) =
             available_slice(&example_cx, &slices, 3, slices[4][1].as_ref().unwrap()).unwrap();
         assert_eq!(found, 1);
-        dbg!(&prev_nodes);
         assert_eq!(
-            *prev_nodes.get(&1).unwrap(),
-            dbg!(slices[2][1].as_ref().unwrap()).node
+            *prev_nodes.get(&Qb(1)).unwrap(),
+            slices[2][1].as_ref().unwrap().node
         );
 
         assert_eq!(
-            *prev_nodes.get(&2).unwrap(),
+            *prev_nodes.get(&Qb(2)).unwrap(),
             slices[2][2].as_ref().unwrap().node
         );
         // hadamard can't commute past anything
         assert!(available_slice(&example_cx, &slices, 4, slices[5][1].as_ref().unwrap()).is_none());
+        solve(example_cx).unwrap();
     }
 
     #[rstest]
@@ -454,8 +447,6 @@ mod test {
 
         let nodes: Vec<_> = example_cx.nodes().collect();
         let remove_node = nodes[5];
-
-        let op = example_cx.get_optype(remove_node).clone();
 
         let replacement = build_simple_circuit(2, |_circ| Ok(())).unwrap();
         let replace_io = replacement.get_io(replacement.root()).unwrap();
@@ -483,5 +474,10 @@ mod test {
 
         example_cx.apply_rewrite(rw).unwrap();
         assert_eq!(example_cx.node_count(), 5);
+    }
+
+    #[rstest]
+    fn commutation_example(cant_commute: Hugr) {
+        solve(cant_commute).unwrap();
     }
 }
