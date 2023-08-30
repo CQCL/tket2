@@ -13,6 +13,7 @@ use hugr::{
     Hugr, HugrView, Node, SimpleReplacement,
 };
 use itertools::Itertools;
+use portgraph::PortOffset;
 
 use crate::{
     circuit::{command::Command as CircCommand, Circuit},
@@ -104,33 +105,65 @@ fn find_command(
 /// Starting from starting_index, work back along slices to check for the
 /// earliest slice that can accommodate this command, if any.
 fn available_slice<'c>(
+    circ: &'c impl HugrView,
     slice_vec: &[Slice],
     starting_index: usize,
     command: Rc<Command>,
 ) -> Option<usize> {
     let mut slice_index = starting_index;
+    let mut available = None;
 
-    let qbs: HashSet<_> = HashSet::from_iter(&command.qbs);
-    loop {
+    for slice_index in (0..starting_index + 1).rev() {
+        // if all qubit slots are empty here the command can be moved here
         if command
             .qbs
             .iter()
-            .any(|q| !slice_vec[slice_index][*q].is_none())
+            .all(|q| slice_vec[slice_index][*q].is_none())
         {
-            if slice_index == starting_index {
-                return None;
-            } else {
-                return Some(slice_index + 1);
-            }
+            available = Some(slice_index);
         }
-
-        if slice_index == 0 {
-            return Some(0);
+        // if command commutes with all ports here it can be moved past,
+        // otherwise stop
+        else if slice_index == 0 || commutes_at_slice(&command, &slice_vec[slice_index], circ) {
+            break;
         }
-        slice_index -= 1;
     }
 
-    None
+    available
+}
+
+// check if command would commute through this slice.
+fn commutes_at_slice(command: &Rc<Command>, slice: &Slice, circ: &impl HugrView) -> bool {
+    command.qbs.iter().enumerate().any(|(port, q)| !{
+        if let Some(other_com) = &slice[*q] {
+            let Ok(other_op): Result<T2Op, _> = circ.get_optype(other_com.node).clone().try_into()
+            else {
+                return false;
+            };
+
+            let Ok(op): Result<T2Op, _> = circ.get_optype(command.node).clone().try_into() else {
+                return false;
+            };
+
+            let Some(pauli) = commutation_on_port(&op.qubit_commutation(), port) else {
+                return false;
+            };
+            let Some(other_pauli) = commutation_on_port(
+                &other_op.qubit_commutation(),
+                other_com
+                    .qbs
+                    .iter()
+                    .position(|other_q| other_q == q)
+                    .unwrap(),
+            ) else {
+                return false;
+            };
+
+            pauli.commutes_with(other_pauli)
+        } else {
+            true
+        }
+    })
 }
 
 fn commutation_on_port(comms: &Vec<(usize, Pauli)>, port: usize) -> Option<Pauli> {
@@ -151,7 +184,7 @@ fn solve(mut h: Hugr) -> Result<Hugr, ()> {
         let search_for_spot =
             find_candidates(&slice_vec[slice_index], &h).find_map(|(command, other_node)| {
                 let (other_com, source) = find_command(&slice_vec, slice_index + 1, other_node)?;
-                available_slice(&slice_vec, slice_index - 1, other_com.clone())
+                available_slice(&h, &slice_vec, slice_index - 1, other_com.clone())
                     .map(|dest| ([command, other_com], [source, dest]))
             });
         if let Some(([com, other_com], [source, destination])) = search_for_spot {
@@ -315,7 +348,12 @@ mod test {
     fn test_available_slice(example_cx: Hugr) {
         let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&example_cx, example_cx.root());
         let slices = load_slices(circ);
-        let found = available_slice(&slices, 0, slices[2][1].as_ref().cloned().unwrap());
+        let found = available_slice(
+            &example_cx,
+            &slices,
+            0,
+            slices[2][1].as_ref().cloned().unwrap(),
+        );
         assert_eq!(found, Some(0));
     }
 
@@ -326,8 +364,8 @@ mod test {
             circ.append(T2Op::CX, [1, 2])?;
             circ.append(T2Op::H, [0])?;
             circ.append(T2Op::H, [3])?;
-            circ.append(T2Op::H, [0])?;
-            circ.append(T2Op::H, [3])?;
+            circ.append(T2Op::CX, [0, 1])?;
+            circ.append(T2Op::CX, [2, 3])?;
             circ.append(T2Op::CX, [0, 1])?;
             circ.append(T2Op::CX, [2, 3])?;
             circ.append(T2Op::CX, [2, 1])?;
@@ -338,7 +376,12 @@ mod test {
         // crate::utils::test::viz_dotstr(&example_cx.dot_string());
         let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&example_cx, example_cx.root());
         let slices = load_slices(circ);
-        let found = available_slice(&slices, 2, slices[4][1].as_ref().cloned().unwrap());
+        let found = available_slice(
+            &example_cx,
+            &slices,
+            4,
+            slices[5][1].as_ref().cloned().unwrap(),
+        );
         assert_eq!(found, Some(1));
     }
 
