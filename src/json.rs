@@ -84,8 +84,10 @@ pub enum OpConvertError {
 
 /// Load a TKET1 circuit from a JSON file.
 pub fn load_tk1_json_file(path: &str) -> Result<Hugr, TK1LoadError> {
-    let json = fs::read_to_string(path)?;
-    load_tk1_json_str(&json)
+    let file = fs::File::open(path)?;
+    let reader = io::BufReader::new(file);
+    let ser: SerialCircuit = serde_json::from_reader(reader)?;
+    Ok(ser.decode()?)
 }
 
 /// Load a TKET1 circuit from a JSON string.
