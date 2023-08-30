@@ -33,8 +33,8 @@ pub enum T2Op {
     X,
     Y,
     Z,
-    Tadj,
-    Sadj,
+    Tdg,
+    Sdg,
     ZZMax,
     Measure,
     RzF64,
@@ -80,9 +80,7 @@ impl SimpleOpEnum for T2Op {
         let one_qb_row = type_row![QB_T];
         let two_qb_row = type_row![QB_T, QB_T];
         match self {
-            H | T | S | X | Y | Z | Tadj | Sadj => {
-                FunctionType::new(one_qb_row.clone(), one_qb_row)
-            }
+            H | T | S | X | Y | Z | Tdg | Sdg => FunctionType::new(one_qb_row.clone(), one_qb_row),
             CX | ZZMax => FunctionType::new(two_qb_row.clone(), two_qb_row),
             Measure => FunctionType::new(one_qb_row, type_row![QB_T, BOOL_T]),
             RzF64 => FunctionType::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
@@ -115,7 +113,7 @@ impl T2Op {
 
         match self {
             X => vec![(0, Pauli::X)],
-            T | Z | S | Tadj | Sadj | RzF64 => vec![(0, Pauli::Z)],
+            T | Z | S | Tdg | Sdg | RzF64 => vec![(0, Pauli::Z)],
             CX => vec![(0, Pauli::Z), (1, Pauli::X)],
             ZZMax => vec![(0, Pauli::Z), (1, Pauli::Z)],
             // by default, no commutation
