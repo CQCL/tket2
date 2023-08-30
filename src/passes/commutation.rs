@@ -123,9 +123,9 @@ fn available_slice<'c>(
     slice_vec: &[Slice],
     starting_index: usize,
     command: &Rc<Command>,
-) -> Option<(usize, HashMap<Qb, Node>)> {
+) -> Option<(usize, HashMap<Qb, Rc<Command>>)> {
     let mut available = None;
-    let mut prev_nodes: HashMap<Qb, Node> = HashMap::new();
+    let mut prev_nodes: HashMap<Qb, Rc<Command>> = HashMap::new();
 
     for slice_index in (0..starting_index + 1).rev() {
         // if all qubit slots are empty here the command can be moved here
@@ -158,10 +158,10 @@ fn blocked_at_slice(
     command: &Rc<Command>,
     slice: &Slice,
     circ: &impl HugrView,
-) -> (bool, HashMap<Qb, Node>) {
+) -> (bool, HashMap<Qb, Rc<Command>>) {
     // map from qubit to node it is connected to immediately after the free slice.
-    let mut prev_nodes: HashMap<Qb, Node> =
-        HashMap::from_iter(command.qbs.iter().map(|q| (*q, command.node)));
+    let mut prev_nodes: HashMap<Qb, Rc<Command>> =
+        HashMap::from_iter(command.qbs.iter().map(|q| (*q, command.clone())));
     let blocked = command.qbs.iter().enumerate().any(|(port, q)| {
         if let Some(other_com) = &slice[q.index()] {
             let Ok(other_op): Result<T2Op, _> = circ.get_optype(other_com.node).clone().try_into()
@@ -185,7 +185,7 @@ fn blocked_at_slice(
             };
 
             if pauli.commutes_with(other_pauli) {
-                prev_nodes.insert(*q, other_com.node);
+                prev_nodes.insert(*q, other_com.clone());
                 false
             } else {
                 true
@@ -205,7 +205,7 @@ fn commutation_on_port(comms: &Vec<(usize, Pauli)>, port: Port) -> Option<Pauli>
 
 fn gen_rewrites(
     h: &Hugr,
-    previous_nodes: &HashMap<Qb, Node>,
+    previous_nodes: &HashMap<Qb, Rc<Command>>,
     command: &Command,
 ) -> [SimpleReplacement; 2] {
     let remove_node = command.node;
@@ -236,6 +236,8 @@ fn gen_rewrites(
         nu_out,
     );
 
+    // let next_nodes: HashMap<Qb, Command> = previous_nodes.iter().map(|(qb, node)| {});
+
     todo!()
 }
 
@@ -259,7 +261,6 @@ fn solve(mut h: Hugr) -> Result<Hugr, ()> {
                     let com = slice_vec[slice_index][q.index()].take();
                     slice_vec[destination][q.index()] = com;
                 }
-                dbg!(slice_index, destination, &previous_nodes, &command);
 
                 let rewrites: [SimpleReplacement; 2] = gen_rewrites(&h, &previous_nodes, &command);
                 for rw in rewrites {
@@ -389,12 +390,12 @@ mod test {
 
         assert_eq!(
             *prev_nodes.get(&Qb(1)).unwrap(),
-            slices[1][1].as_ref().unwrap().node
+            slices[1][1].as_ref().unwrap().clone()
         );
 
         assert_eq!(
             *prev_nodes.get(&Qb(3)).unwrap(),
-            slices[2][3].as_ref().unwrap().node
+            slices[2][3].as_ref().unwrap().clone()
         );
     }
 
@@ -424,12 +425,12 @@ mod test {
         assert_eq!(found, 1);
         assert_eq!(
             *prev_nodes.get(&Qb(1)).unwrap(),
-            slices[2][1].as_ref().unwrap().node
+            slices[2][1].as_ref().unwrap().clone()
         );
 
         assert_eq!(
             *prev_nodes.get(&Qb(2)).unwrap(),
-            slices[2][2].as_ref().unwrap().node
+            slices[2][2].as_ref().unwrap().clone()
         );
         // hadamard can't commute past anything
         assert!(available_slice(&example_cx, &slices, 4, slices[5][1].as_ref().unwrap()).is_none());
