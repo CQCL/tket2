@@ -10,7 +10,7 @@ use hugr::Hugr as Circuit;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::utils::{cx_gate, h_gate, rz_f64};
+use crate::T2Op;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct RepCircOp {
@@ -41,9 +41,9 @@ struct RepCircData {
 fn map_op(opstr: &str) -> Op {
     // TODO, more
     match opstr {
-        "h" => h_gate(),
-        "rz" => rz_f64(),
-        "cx" => cx_gate(),
+        "h" => T2Op::H,
+        "rz" => T2Op::RzF64,
+        "cx" => T2Op::CX,
         x => panic!("unknown op {x}"),
     }
     .into()
