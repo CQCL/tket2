@@ -2,8 +2,9 @@
 
 use hugr::{ops::OpTrait, Node, Port};
 use itertools::Itertools;
-use portmatching::{HashMap, Pattern, SinglePatternMatcher};
+use portmatching::{patterns::NoRootFound, HashMap, Pattern, SinglePatternMatcher};
 use std::fmt::Debug;
+use thiserror::Error;
 
 use super::{
     matcher::{validate_unweighted_edge, validate_weighted_node},
@@ -27,7 +28,12 @@ pub struct CircuitPattern {
 
 impl CircuitPattern {
     /// Construct a pattern from a circuit.
-    pub fn from_circuit<'circ, C: Circuit<'circ>>(circuit: &'circ C) -> Self {
+    pub fn try_from_circuit<'circ, C: Circuit<'circ>>(
+        circuit: &'circ C,
+    ) -> Result<Self, InvalidPattern> {
+        if circuit.num_gates() == 0 {
+            return Err(InvalidPattern::EmptyCircuit);
+        }
         let mut pattern = Pattern::new();
         for cmd in circuit.commands() {
             let op = circuit.command_optype(&cmd).clone();
@@ -41,7 +47,7 @@ impl CircuitPattern {
                 }
             }
         }
-        pattern.set_any_root().unwrap();
+        pattern.set_any_root()?;
         let (inp, out) = (circuit.input(), circuit.output());
         let inp_ports = circuit.get_optype(inp).signature().output_ports();
         let out_ports = circuit.get_optype(out).signature().input_ports();
@@ -57,11 +63,11 @@ impl CircuitPattern {
                     .expect("invalid circuit")
             })
             .collect();
-        Self {
+        Ok(Self {
             pattern,
             inputs,
             outputs,
-        }
+        })
     }
 
     /// Compute the map from pattern nodes to circuit nodes in `circ`.
@@ -85,6 +91,23 @@ impl Debug for CircuitPattern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.pattern.fmt(f)?;
         Ok(())
+    }
+}
+
+/// Conversion error from circuit to pattern.
+#[derive(Debug, Error)]
+pub enum InvalidPattern {
+    /// An empty circuit cannot be a pattern.
+    #[error("empty circuit is invalid pattern")]
+    EmptyCircuit,
+    /// Patterns must be connected circuits.
+    #[error("pattern is not connected")]
+    NotConnected,
+}
+
+impl From<NoRootFound> for InvalidPattern {
+    fn from(_: NoRootFound) -> Self {
+        InvalidPattern::NotConnected
     }
 }
 
@@ -119,7 +142,7 @@ mod tests {
         let hugr = h_cx();
         let circ: DescendantsGraph<'_, DfgID> = DescendantsGraph::new(&hugr, hugr.root());
 
-        let p = CircuitPattern::from_circuit(&circ);
+        let p = CircuitPattern::try_from_circuit(&circ).unwrap();
 
         let edges = p
             .pattern
