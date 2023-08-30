@@ -1,6 +1,6 @@
 #![allow(unused)]
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     rc::Rc,
 };
 
@@ -108,10 +108,11 @@ fn available_slice<'c>(
     circ: &'c impl HugrView,
     slice_vec: &[Slice],
     starting_index: usize,
-    command: Rc<Command>,
-) -> Option<usize> {
+    command: &Rc<Command>,
+) -> Option<(usize, HashMap<usize, Node>)> {
     let mut slice_index = starting_index;
     let mut available = None;
+    let mut prev_nodes: HashMap<usize, Node> = HashMap::new();
 
     for slice_index in (0..starting_index + 1).rev() {
         // if all qubit slots are empty here the command can be moved here
@@ -120,33 +121,47 @@ fn available_slice<'c>(
             .iter()
             .all(|q| slice_vec[slice_index][*q].is_none())
         {
-            available = Some(slice_index);
-        }
-        // if command commutes with all ports here it can be moved past,
-        // otherwise stop
-        else if slice_index == 0 || commutes_at_slice(&command, &slice_vec[slice_index], circ) {
+            available = Some((slice_index, prev_nodes.clone()));
+        } else if slice_index == 0 {
             break;
+        } else {
+            // if command commutes with all ports here it can be moved past,
+            // otherwise stop
+            let (blocked, new_prev_nodes) =
+                blocked_at_slice(&command, &slice_vec[slice_index], circ);
+            if blocked {
+                break;
+            } else {
+                prev_nodes.extend(new_prev_nodes);
+            }
         }
     }
 
     available
 }
 
-// check if command would commute through this slice.
-fn commutes_at_slice(command: &Rc<Command>, slice: &Slice, circ: &impl HugrView) -> bool {
-    command.qbs.iter().enumerate().any(|(port, q)| !{
+// check if command wouldn't commute through this slice.
+fn blocked_at_slice(
+    command: &Rc<Command>,
+    slice: &Slice,
+    circ: &impl HugrView,
+) -> (bool, HashMap<usize, Node>) {
+    // map from qubit to node it is connected to immediately after the free slice.
+    let mut prev_nodes: HashMap<usize, Node> =
+        HashMap::from_iter(command.qbs.iter().map(|q| (*q, command.node)));
+    let blocked = command.qbs.iter().enumerate().any(|(port, q)| {
         if let Some(other_com) = &slice[*q] {
             let Ok(other_op): Result<T2Op, _> = circ.get_optype(other_com.node).clone().try_into()
             else {
-                return false;
+                return true;
             };
 
             let Ok(op): Result<T2Op, _> = circ.get_optype(command.node).clone().try_into() else {
-                return false;
+                return true;
             };
 
             let Some(pauli) = commutation_on_port(&op.qubit_commutation(), port) else {
-                return false;
+                return true;
             };
             let Some(other_pauli) = commutation_on_port(
                 &other_op.qubit_commutation(),
@@ -156,14 +171,20 @@ fn commutes_at_slice(command: &Rc<Command>, slice: &Slice, circ: &impl HugrView)
                     .position(|other_q| other_q == q)
                     .unwrap(),
             ) else {
-                return false;
+                return true;
             };
 
-            pauli.commutes_with(other_pauli)
+            if pauli.commutes_with(other_pauli) {
+                prev_nodes.insert(*q, other_com.node);
+                false
+            } else {
+                true
+            }
         } else {
-            true
+            false
         }
-    })
+    });
+    (blocked, prev_nodes)
 }
 
 fn commutation_on_port(comms: &Vec<(usize, Pauli)>, port: usize) -> Option<Pauli> {
@@ -173,6 +194,24 @@ fn commutation_on_port(comms: &Vec<(usize, Pauli)>, port: usize) -> Option<Pauli
 fn solve(mut h: Hugr) -> Result<Hugr, ()> {
     let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&h, h.root());
     let mut slice_vec = load_slices(circ);
+
+    for slice_index in 0..slice_vec.len() {
+        let slice_commands: Vec<_> = slice_vec[slice_index]
+            .iter()
+            .flatten()
+            .unique()
+            .cloned()
+            .collect();
+        for command in slice_commands {
+            if let Some((destination, _)) = available_slice(circ, &slice_vec, slice_index, &command)
+            {
+                for q in &command.qbs {
+                    let com = slice_vec[slice_index][*q].take();
+                    slice_vec[destination][*q] = com;
+                }
+            }
+        }
+    }
 
     let mut slice_index: usize = 1;
 
@@ -184,8 +223,8 @@ fn solve(mut h: Hugr) -> Result<Hugr, ()> {
         let search_for_spot =
             find_candidates(&slice_vec[slice_index], &h).find_map(|(command, other_node)| {
                 let (other_com, source) = find_command(&slice_vec, slice_index + 1, other_node)?;
-                available_slice(&h, &slice_vec, slice_index - 1, other_com.clone())
-                    .map(|dest| ([command, other_com], [source, dest]))
+                available_slice(&h, &slice_vec, slice_index - 1, &other_com)
+                    .map(|(dest, _)| ([command, other_com], [source, dest]))
             });
         if let Some(([com, other_com], [source, destination])) = search_for_spot {
             let n = com.node;
@@ -202,6 +241,8 @@ fn solve(mut h: Hugr) -> Result<Hugr, ()> {
             slice_index += 1;
         }
     }
+
+    // TODO remove empty slices and return
     Ok(h)
 }
 
@@ -244,7 +285,7 @@ mod test {
     use std::collections::HashMap;
 
     use crate::ops::test::{build_simple_circuit, t2_bell_circuit};
-    use hugr::{Hugr, Port};
+    use hugr::{ops::handle::NodeHandle, Hugr, Port};
     use itertools::Itertools;
     use portgraph::NodeIndex;
     use rstest::{fixture, rstest};
@@ -339,7 +380,6 @@ mod test {
         let nodes: Vec<_> = circ.nodes().collect();
         let slices = load_slices(circ);
         let candidates: Vec<_> = find_candidates(&slices[1], circ).collect();
-        dbg!(&candidates);
         let correct: Vec<[Node; 2]> = vec![[nodes[4], nodes[5]]];
         assert!(correct.into_iter().eq(candidates
             .into_iter()
@@ -350,13 +390,19 @@ mod test {
     fn test_available_slice(example_cx: Hugr) {
         let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&example_cx, example_cx.root());
         let slices = load_slices(circ);
-        let found = available_slice(
-            &example_cx,
-            &slices,
-            0,
-            slices[2][1].as_ref().cloned().unwrap(),
+        let (found, prev_nodes) =
+            available_slice(&example_cx, &slices, 1, slices[2][1].as_ref().unwrap()).unwrap();
+        assert_eq!(found, 0);
+
+        assert_eq!(
+            *prev_nodes.get(&1).unwrap(),
+            slices[1][1].as_ref().unwrap().node
         );
-        assert_eq!(found, Some(0));
+
+        assert_eq!(
+            *prev_nodes.get(&3).unwrap(),
+            slices[2][3].as_ref().unwrap().node
+        );
     }
 
     #[test]
@@ -375,16 +421,26 @@ mod test {
             Ok(())
         })
         .unwrap();
-        // crate::utils::test::viz_dotstr(&example_cx.dot_string());
+
         let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&example_cx, example_cx.root());
         let slices = load_slices(circ);
-        let found = available_slice(
-            &example_cx,
-            &slices,
-            4,
-            slices[5][1].as_ref().cloned().unwrap(),
+
+        // can commute final cx to front
+        let (found, prev_nodes) =
+            available_slice(&example_cx, &slices, 3, slices[4][1].as_ref().unwrap()).unwrap();
+        assert_eq!(found, 1);
+        dbg!(&prev_nodes);
+        assert_eq!(
+            *prev_nodes.get(&1).unwrap(),
+            dbg!(slices[2][1].as_ref().unwrap()).node
         );
-        assert_eq!(found, Some(1));
+
+        assert_eq!(
+            *prev_nodes.get(&2).unwrap(),
+            slices[2][2].as_ref().unwrap().node
+        );
+        // hadamard can't commute past anything
+        assert!(available_slice(&example_cx, &slices, 4, slices[5][1].as_ref().unwrap()).is_none());
     }
 
     #[rstest]
