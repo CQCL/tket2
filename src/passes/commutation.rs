@@ -241,8 +241,10 @@ fn find_candidates<'a, 'c: 'a>(
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     use crate::ops::test::{build_simple_circuit, t2_bell_circuit};
-    use hugr::Hugr;
+    use hugr::{Hugr, Port};
     use itertools::Itertools;
     use portgraph::NodeIndex;
     use rstest::{fixture, rstest};
@@ -388,5 +390,42 @@ mod test {
     #[rstest]
     fn commutation_simple_bell(t2_bell_circuit: Hugr) {
         solve(t2_bell_circuit).unwrap();
+    }
+
+    #[rstest]
+    fn test_example_node_removal(mut example_cx: Hugr) {
+        assert_eq!(example_cx.node_count(), 6);
+
+        let nodes: Vec<_> = example_cx.nodes().collect();
+        let remove_node = nodes[5];
+
+        let op = example_cx.get_optype(remove_node).clone();
+
+        let replacement = build_simple_circuit(2, |_circ| Ok(())).unwrap();
+        let replace_io = replacement.get_io(replacement.root()).unwrap();
+        let nu_inp: HashMap<(Node, Port), (Node, Port)> = example_cx
+            .node_inputs(remove_node)
+            .zip(replacement.node_inputs(replace_io[1]))
+            .map(|(remove_p, replace_p)| ((replace_io[1], replace_p), (remove_node, remove_p)))
+            .collect();
+
+        let nu_out: HashMap<(Node, Port), Port> = example_cx
+            .node_outputs(remove_node)
+            .map(|p| example_cx.linked_ports(remove_node, p))
+            .flatten()
+            .zip(replacement.node_inputs(replace_io[1]))
+            .map(|(remove_np, replace_p)| (remove_np, replace_p))
+            .collect();
+
+        let rw = SimpleReplacement::new(
+            example_cx.root(),
+            HashSet::from_iter([nodes[5]]),
+            replacement,
+            nu_inp,
+            nu_out,
+        );
+
+        example_cx.apply_rewrite(rw).unwrap();
+        assert_eq!(example_cx.node_count(), 5);
     }
 }
