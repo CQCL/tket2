@@ -33,6 +33,8 @@ portgraph = { workspace = true }
 pyo3 = { workspace = true, optional = true, features = [
     "multiple-pymethods",
 ] }
+strum_macros = "0.25.2"
+strum = "0.25.0"
 
 [features]
 pyo3 = ["dep:pyo3", "tket-json-rs/pyo3", "tket-json-rs/tket2ops", "portgraph/pyo3", "quantinuum-hugr/pyo3"]

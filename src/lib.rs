@@ -10,7 +10,9 @@
 pub mod circuit;
 pub mod extension;
 pub mod json;
+mod ops;
 pub mod passes;
+pub use ops::{Pauli, T2Op};
 
 #[cfg(feature = "portmatching")]
 pub mod portmatching;

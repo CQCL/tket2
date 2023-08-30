@@ -146,7 +146,7 @@ impl CircuitMatcher {
     ) -> Vec<CircuitMatch<'a, 'm, C>> {
         circuit
             .commands()
-            .flat_map(|cmd| self.find_rooted_matches(circuit, cmd.node))
+            .flat_map(|cmd| self.find_rooted_matches(circuit, cmd.node()))
             .collect()
     }
 
@@ -265,7 +265,7 @@ mod tests {
         Hugr, HugrView,
     };
 
-    use crate::utils::{cx_gate, h_gate};
+    use crate::T2Op;
 
     use super::{CircuitMatcher, CircuitPattern};
 
@@ -273,8 +273,8 @@ mod tests {
         let qb = QB_T;
         let mut hugr = DFGBuilder::new(FunctionType::new_linear(vec![qb; 2])).unwrap();
         let mut circ = hugr.as_circuit(hugr.input_wires().collect());
-        circ.append(cx_gate(), [0, 1]).unwrap();
-        circ.append(h_gate(), [0]).unwrap();
+        circ.append(T2Op::CX, [0, 1]).unwrap();
+        circ.append(T2Op::H, [0]).unwrap();
         let out_wires = circ.finish();
         hugr.finish_hugr_with_outputs(out_wires).unwrap()
     }

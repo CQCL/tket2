@@ -88,12 +88,12 @@ impl JsonEncoder {
     }
 
     /// Add a circuit command to the serialization.
-    pub fn add_command(&mut self, command: Command) -> Result<(), OpConvertError> {
+    pub fn add_command(&mut self, command: Command, optype: &OpType) -> Result<(), OpConvertError> {
         // Register any output of the command that can be used as a TKET1 parameter.
-        self.record_parameters(&command);
+        self.record_parameters(&command, optype);
 
         let args = command
-            .inputs
+            .inputs()
             .iter()
             .filter_map(|&u| self.unit_to_register(u))
             .collect();
@@ -101,7 +101,7 @@ impl JsonEncoder {
         // TODO Restore the opgroup (once the decoding supports it)
         let opgroup = None;
 
-        let op: JsonOp = command.op.try_into()?;
+        let op: JsonOp = optype.try_into()?;
         let op: circuit_json::Operation = op.into_operation();
 
         // TODO: Update op.params. Leave untouched the ones that contain free variables.
@@ -126,21 +126,21 @@ impl JsonEncoder {
     /// Record any output of the command that can be used as a TKET1 parameter.
     ///
     /// Associates the output wires with the parameter expression.
-    fn record_parameters(&mut self, command: &Command) {
+    fn record_parameters(&mut self, command: &Command, optype: &OpType) {
         // Only consider commands where all inputs are parameters.
         let inputs = command
-            .inputs
+            .inputs()
             .iter()
             .filter_map(|unit| match unit {
                 CircuitUnit::Wire(wire) => self.parameters.get(wire),
                 CircuitUnit::Linear(_) => None,
             })
             .collect_vec();
-        if inputs.len() != command.inputs.len() {
+        if inputs.len() != command.inputs().len() {
             return;
         }
 
-        let param = match command.op {
+        let param = match optype {
             OpType::Const(const_op) => {
                 // New constant, register it if it can be interpreted as a parameter.
                 match const_op.value() {
@@ -166,7 +166,7 @@ impl JsonEncoder {
             }
         };
 
-        for unit in &command.outputs {
+        for unit in command.outputs() {
             if let CircuitUnit::Wire(wire) = unit {
                 self.parameters.insert(*wire, param.clone());
             }
