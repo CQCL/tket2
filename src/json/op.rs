@@ -186,6 +186,9 @@ impl From<&JsonOp> for OpType {
             // JsonOpType::X => LeafOp::X.into(),
             JsonOpType::H => T2Op::H.into(),
             JsonOpType::CX => T2Op::CX.into(),
+            JsonOpType::T => T2Op::T.into(),
+            JsonOpType::Tdg => T2Op::Tdg.into(),
+            JsonOpType::X => T2Op::X.into(),
             JsonOpType::noop => LeafOp::Noop { ty: QB_T }.into(),
             // TODO TKET1 measure takes a bit as input, HUGR measure does not
             //JsonOpType::Measure => LeafOp::Measure.into(),
