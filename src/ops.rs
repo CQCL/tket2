@@ -182,12 +182,14 @@ pub(crate) mod test {
     use hugr::{
         builder::{BuildError, CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr},
         extension::{prelude::QB_T, OpDef},
+        hugr::views::{HierarchyView, SiblingGraph},
+        ops::handle::DfgID,
         types::FunctionType,
-        Hugr,
+        Hugr, HugrView,
     };
-    use rstest::fixture;
+    use rstest::{fixture, rstest};
 
-    use crate::ops::SimpleOpEnum;
+    use crate::{circuit::Circuit, ops::SimpleOpEnum};
 
     use super::{T2Op, EXTENSION, EXTENSION_ID};
     fn get_opdef(op: impl SimpleOpEnum) -> Option<&'static Arc<OpDef>> {
@@ -228,5 +230,12 @@ pub(crate) mod test {
         });
 
         h.unwrap()
+    }
+
+    #[rstest]
+    fn check_t2_bell(t2_bell_circuit: Hugr) {
+        let circ: SiblingGraph<'_, DfgID> =
+            SiblingGraph::new(&t2_bell_circuit, t2_bell_circuit.root());
+        assert_eq!(circ.commands().count(), 2);
     }
 }
