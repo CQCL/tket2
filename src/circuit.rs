@@ -11,7 +11,7 @@ pub mod command;
 use self::command::{Command, CommandIterator};
 
 use hugr::extension::prelude::QB_T;
-use hugr::hugr::CircuitUnit;
+use hugr::hugr::{CircuitUnit, NodeType};
 use hugr::ops::OpTrait;
 use hugr::HugrView;
 
@@ -31,10 +31,10 @@ use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
 // - Depth
 pub trait Circuit<'circ>: HugrView {
     /// An iterator over the commands in the circuit.
-    type Commands: Iterator<Item = Command<'circ>>;
+    type Commands: Iterator<Item = Command>;
 
     /// An iterator over the commands applied to an unit.
-    type UnitCommands: Iterator<Item = Command<'circ>>;
+    type UnitCommands: Iterator<Item = Command>;
 
     /// Return the name of the circuit
     fn name(&self) -> Option<&str>;
@@ -42,7 +42,7 @@ pub trait Circuit<'circ>: HugrView {
     /// Get the linear inputs of the circuit and their types.
     fn units(&self) -> Vec<(CircuitUnit, Type)>;
 
-    /// Returns the ports corresponding to qubits inputs to the circuit.
+    /// Returns the units corresponding to qubits inputs to the circuit.
     #[inline]
     fn qubits(&self) -> Vec<CircuitUnit> {
         self.units()
@@ -51,6 +51,12 @@ pub trait Circuit<'circ>: HugrView {
             .map(|(unit, _)| *unit)
             .collect()
     }
+
+    /// Returns the input node to the circuit.
+    fn input(&self) -> Node;
+
+    /// Returns the output node to the circuit.
+    fn output(&self) -> Node;
 
     /// Given a linear port in a node, returns the corresponding port on the other side of the node (if any).
     fn follow_linear_port(&self, node: Node, port: Port) -> Option<Port>;
@@ -63,11 +69,15 @@ pub trait Circuit<'circ>: HugrView {
     /// Returns all the commands applied to the given unit, in order.
     fn unit_commands<'a: 'circ>(&'a self) -> Self::UnitCommands;
 
-    /// Returns the input node to the circuit.
-    fn input(&self) -> Node;
+    /// Returns the [`NodeType`] of a command.
+    fn command_nodetype(&self, command: &Command) -> &NodeType {
+        self.get_nodetype(command.node())
+    }
 
-    /// Returns the output node to the circuit.
-    fn output(&self) -> Node;
+    /// Returns the [`OpType`] of a command.
+    fn command_optype(&self, command: &Command) -> &OpType {
+        self.get_optype(command.node())
+    }
 }
 
 impl<'circ, T> Circuit<'circ> for T
@@ -76,7 +86,7 @@ where
     for<'a> &'a T: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
 {
     type Commands = CommandIterator<'circ, T>;
-    type UnitCommands = std::iter::Empty<Command<'circ>>;
+    type UnitCommands = std::iter::Empty<Command>;
 
     #[inline]
     fn name(&self) -> Option<&str> {
@@ -121,7 +131,7 @@ where
     fn unit_commands<'a: 'circ>(&'a self) -> Self::UnitCommands {
         // TODO Can we associate linear i/o with the corresponding unit without
         // doing the full toposort?
-        todo!()
+        unimplemented!()
     }
 
     #[inline]
