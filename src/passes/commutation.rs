@@ -1,5 +1,8 @@
 #![allow(unused)]
-use std::collections::{HashSet, VecDeque};
+use std::{
+    collections::{HashSet, VecDeque},
+    rc::Rc,
+};
 
 use hugr::{
     hugr::{
@@ -38,8 +41,14 @@ impl<'a> From<CircCommand<'a>> for Command {
     }
 }
 
-type Slice = HashSet<Command>;
+type Slice = Vec<Option<Rc<Command>>>;
 type SliceVec = Vec<Slice>;
+
+fn add_to_slice(slice: &mut Slice, com: Rc<Command>) {
+    for q in &com.qbs {
+        slice[*q] = Some(com.clone());
+    }
+}
 
 fn load_slices<'c>(circ: &'c impl Circuit<'c>) -> SliceVec {
     let mut slices = vec![];
@@ -62,9 +71,11 @@ fn load_slices<'c>(circ: &'c impl Circuit<'c>) -> SliceVec {
         }
         if free_slice >= slices.len() {
             debug_assert!(free_slice == slices.len());
-            slices.push(HashSet::new());
+            slices.push(vec![None; n_qbs]);
         }
-        slices[free_slice].insert(all_commands.pop_front().unwrap());
+        let command = Rc::new(all_commands.pop_front().unwrap());
+        let qbs = command.qbs.clone();
+        add_to_slice(&mut slices[free_slice], command);
     }
 
     slices
@@ -80,10 +91,10 @@ fn find_command(
     slice_vec: &[Slice],
     starting_index: usize,
     node: Node,
-) -> Option<(Command, usize)> {
+) -> Option<(Rc<Command>, usize)> {
     for slice_index in starting_index..slice_vec.len() {
         let slice = slice_vec.get(slice_index).unwrap();
-        if let Some(command) = slice.iter().find(|c| c.node == node) {
+        if let Some(command) = slice.iter().flatten().find(|c| c.node == node) {
             return Some((command.clone(), slice_index));
         }
     }
@@ -91,19 +102,20 @@ fn find_command(
 }
 
 /// Starting from starting_index, work back along slices to check for the
-/// earliest slice that can accommodate this command.
+/// earliest slice that can accommodate this command, if any.
 fn available_slice<'c>(
     slice_vec: &[Slice],
     starting_index: usize,
-    other: &Command,
+    other: Rc<Command>,
 ) -> Option<usize> {
     let mut slice_index = starting_index;
 
     let qbs: HashSet<_> = HashSet::from_iter(&other.qbs);
     loop {
-        if slice_vec[slice_index]
+        if other
+            .qbs
             .iter()
-            .any(|c| !qbs.is_disjoint(&HashSet::from_iter(&c.qbs)))
+            .any(|q| !slice_vec[slice_index][*q].is_none())
         {
             if slice_index == starting_index {
                 return None;
@@ -139,15 +151,17 @@ fn solve(mut h: Hugr) -> Result<Hugr, ()> {
         let search_for_spot =
             find_candidates(&slice_vec[slice_index], &h).find_map(|(command, other_node)| {
                 let (other_com, source) = find_command(&slice_vec, slice_index + 1, other_node)?;
-                available_slice(&slice_vec, slice_index - 1, &other_com)
+                available_slice(&slice_vec, slice_index - 1, other_com.clone())
                     .map(|dest| ([command, other_com], [source, dest]))
             });
         if let Some(([com, other_com], [source, destination])) = search_for_spot {
             let n = com.node;
             let n2 = other_com.node;
 
-            slice_vec[source].remove(&other_com);
-            slice_vec[destination].insert(other_com);
+            for q in &other_com.qbs {
+                slice_vec[source][*q] = None;
+                slice_vec[destination][*q] = Some(other_com.clone());
+            }
             let rewrite = gen_rewrite(&h, [n, n2]);
             h.apply_rewrite(rewrite).unwrap();
         } else {
@@ -159,13 +173,14 @@ fn solve(mut h: Hugr) -> Result<Hugr, ()> {
 }
 
 /// Return pairs of command in current slice and subsequent nodes they commute
-/// with (and are connected to)..
+/// with (and are connected to).
 fn find_candidates<'a, 'c: 'a>(
     current_slice: &'a Slice,
     circ: &'c impl HugrView,
-) -> impl Iterator<Item = (Command, Node)> + 'a {
+) -> impl Iterator<Item = (Rc<Command>, Node)> + 'a {
     current_slice
         .iter()
+        .flatten()
         .filter_map(move |command| {
             let node = command.node;
             let node_op: T2Op = circ.get_optype(node).clone().try_into().ok()?;
@@ -188,6 +203,7 @@ fn find_candidates<'a, 'c: 'a>(
             }))
         })
         .flatten()
+        .unique()
 }
 
 #[cfg(test)]
@@ -224,23 +240,38 @@ mod test {
         .unwrap()
     }
 
+    fn slice_from_command(
+        commands: &Vec<Command>,
+        n_qbs: usize,
+        slice_arr: &[&[usize]],
+    ) -> SliceVec {
+        slice_arr
+            .into_iter()
+            .map(|command_indices| {
+                let mut slice = vec![None; n_qbs];
+                for ind in command_indices.iter() {
+                    let com = commands[*ind].clone();
+                    add_to_slice(&mut slice, Rc::new(com))
+                }
+
+                slice
+            })
+            .collect()
+    }
+
     #[rstest]
     fn test_load_slices_cx(example_cx: Hugr) {
         let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&example_cx, example_cx.root());
-        let mut commands: Vec<Command> = circ.commands().map_into().collect();
+        let commands: Vec<Command> = circ.commands().map_into().collect();
         let final_command = commands[2].clone();
         let mut slices = load_slices(circ);
-        let correct = vec![
-            HashSet::from_iter([commands.remove(0)]),
-            HashSet::from_iter([commands.remove(0)]),
-            HashSet::from_iter([commands.remove(0)]),
-        ];
+        let correct = slice_from_command(&commands, 4, &[&[0], &[1], &[2]]);
 
         assert_eq!(slices, correct);
 
         let found_command = find_command(&mut slices, 0, final_command.node);
 
-        assert_eq!(found_command, Some((final_command, 2)));
+        assert_eq!(found_command, Some((Rc::new(final_command), 2)));
     }
 
     #[rstest]
@@ -250,10 +281,8 @@ mod test {
         let mut commands: Vec<Command> = circ.commands().map_into().collect();
 
         let slices = load_slices(circ);
-        let correct = vec![
-            HashSet::from_iter([commands.remove(0), commands.remove(0)]),
-            HashSet::from_iter([commands.remove(0)]),
-        ];
+        let correct = slice_from_command(&commands, 4, &[&[0, 1], &[2]]);
+
         assert_eq!(slices, correct);
     }
 
@@ -264,11 +293,8 @@ mod test {
         let mut commands: Vec<Command> = circ.commands().map_into().collect();
 
         let slices = load_slices(circ);
+        let correct = slice_from_command(&commands, 2, &[&[0], &[1]]);
 
-        let correct = vec![
-            HashSet::from_iter([commands.remove(0)]),
-            HashSet::from_iter([commands.remove(0)]),
-        ];
         assert_eq!(slices, correct);
     }
 
@@ -278,7 +304,7 @@ mod test {
         let nodes: Vec<_> = circ.nodes().collect();
         let slices = load_slices(circ);
         let candidates: Vec<_> = find_candidates(&slices[1], circ).collect();
-
+        dbg!(&candidates);
         let correct: Vec<[Node; 2]> = vec![[nodes[4], nodes[5]]];
         assert!(correct.into_iter().eq(candidates
             .into_iter()
@@ -289,7 +315,7 @@ mod test {
     fn test_available_slice(example_cx: Hugr) {
         let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&example_cx, example_cx.root());
         let slices = load_slices(circ);
-        let found = available_slice(&slices, 0, slices[2].iter().next().unwrap());
+        let found = available_slice(&slices, 0, slices[2][1].as_ref().cloned().unwrap());
         assert_eq!(found, Some(0));
     }
 
@@ -312,7 +338,7 @@ mod test {
         // crate::utils::test::viz_dotstr(&example_cx.dot_string());
         let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&example_cx, example_cx.root());
         let slices = load_slices(circ);
-        let found = available_slice(&slices, 2, slices[4].iter().next().unwrap());
+        let found = available_slice(&slices, 2, slices[4][1].as_ref().cloned().unwrap());
         assert_eq!(found, Some(1));
     }
 
