@@ -77,8 +77,6 @@ impl HashState {
     }
 
     /// Register the hash for a node.
-    ///
-    /// Panics if the hash of any of its predecessors has not been set.
     fn set_node(&mut self, circ: &impl HugrView, node: Node, hash: u64) {
         let optype = circ.get_optype(node);
         let signature = optype.signature();
@@ -119,7 +117,9 @@ fn hashable_op(op: &OpType) -> impl Hash {
 ///
 /// Uses the hash of the operation and the node hash of its predecessors.
 ///
-/// Panics if the command is a container node, or if it is a parametric CustomOp.
+/// # Panics
+/// - If the command is a container node, or if it is a parametric CustomOp.
+/// - If the hash of any of its predecessors has not been set.
 fn hash_node(circ: &impl HugrView, node: Node, state: &mut HashState) -> u64 {
     let op = circ.get_optype(node);
     let mut hasher = FxHasher64::default();
