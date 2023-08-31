@@ -130,7 +130,7 @@ fn extension() -> Extension {
 }
 
 lazy_static! {
-    static ref EXTENSION: Extension = extension();
+    pub static ref EXTENSION: Extension = extension();
 }
 
 // From implementations could be made generic over SimpleOpEnum
