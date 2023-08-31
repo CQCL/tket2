@@ -16,7 +16,7 @@ use itertools::Itertools;
 use portgraph::PortOffset;
 
 use crate::{
-    circuit::{command::Command as CircCommand, Circuit},
+    circuit::{command::Command, Circuit},
     ops::{Pauli, T2Op},
     utils::build_simple_circuit,
 };
@@ -32,50 +32,57 @@ impl Qb {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct Command {
-    node: Node,
-    qbs: Vec<Qb>,
+impl From<Qb> for CircuitUnit {
+    fn from(qb: Qb) -> Self {
+        CircuitUnit::Linear(qb.index())
+    }
 }
+// #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+// struct Command {
+//     node: Node,
+//     qbs: Vec<Qb>,
+// }
 
 impl Command {
+    fn qubits(&self) -> impl Iterator<Item = Qb> + '_ {
+        // Assumes qubits leave via the same port offset they entered.
+        self.inputs().iter().filter_map(|u| {
+            let CircuitUnit::Linear(i) = u else {
+                return None;
+            };
+            Some(Qb(*i))
+        })
+    }
     fn port_of_qb(&self, qb: Qb, direction: Direction) -> Option<Port> {
-        self.qbs
-            .iter()
-            .position(|q| *q == qb)
+        // Assumes qubits leave via the same port offset they entered.
+
+        self.qubits()
+            .position(|q| q == qb)
             .map(|i| PortOffset::new(direction, i).into())
     }
-
-    fn node(&self) -> Node {
-        self.node
-    }
-
-    fn qbs(&self) -> &[Qb] {
-        &self.qbs
-    }
 }
 
-impl<'a> From<CircCommand<'a>> for Command {
-    fn from(com: CircCommand<'a>) -> Self {
-        let CircCommand { node, inputs, .. } = com;
-        let qbs = inputs
-            .into_iter()
-            .map(|u| {
-                let CircuitUnit::Linear(i) = u else {
-                    panic!("not linear unit.")
-                };
-                Qb(i)
-            })
-            .collect();
-        Self { node, qbs }
-    }
-}
+// impl<'a> From<CircCommand> for Command {
+//     fn from(com: CircCommand<'a>) -> Self {
+//         let CircCommand { node, inputs, .. } = com;
+//         let qbs = inputs
+//             .into_iter()
+//             .map(|u| {
+//                 let CircuitUnit::Linear(i) = u else {
+//                     panic!("not linear unit.")
+//                 };
+//                 Qb(i)
+//             })
+//             .collect();
+//         Self { node, qbs }
+//     }
+// }
 
 type Slice = Vec<Option<Rc<Command>>>;
 type SliceVec = Vec<Slice>;
 
 fn add_to_slice(slice: &mut Slice, com: Rc<Command>) {
-    for q in &com.qbs {
+    for q in com.qubits() {
         slice[q.index()] = Some(com.clone());
     }
 }
@@ -89,13 +96,12 @@ fn load_slices<'c>(circ: &'c impl Circuit<'c>) -> SliceVec {
 
     while let Some(command) = all_commands.front() {
         let free_slice = command
-            .qbs
-            .iter()
+            .qubits()
             .map(|qb| qubit_free_slice[qb.index()])
             .max()
             .unwrap();
 
-        for q in &command.qbs {
+        for q in command.qubits() {
             qubit_free_slice[q.index()] = free_slice + 1;
         }
         if free_slice >= slices.len() {
@@ -123,8 +129,7 @@ fn available_slice(
     for slice_index in (0..starting_index + 1).rev() {
         // if all qubit slots are empty here the command can be moved here
         if command
-            .qbs
-            .iter()
+            .qubits()
             .all(|q| slice_vec[slice_index][q.index()].is_none())
         {
             available = Some((slice_index, prev_nodes.clone()));
@@ -154,15 +159,16 @@ fn blocked_at_slice(
 ) -> (bool, HashMap<Qb, Rc<Command>>) {
     // map from qubit to node it is connected to immediately after the free slice.
     let mut prev_nodes: HashMap<Qb, Rc<Command>> =
-        HashMap::from_iter(command.qbs.iter().map(|q| (*q, command.clone())));
-    let blocked = command.qbs.iter().enumerate().any(|(port, q)| {
+        HashMap::from_iter(command.qubits().map(|q| (q, command.clone())));
+    let blocked = command.qubits().enumerate().any(|(port, q)| {
         if let Some(other_com) = &slice[q.index()] {
-            let Ok(other_op): Result<T2Op, _> = circ.get_optype(other_com.node).clone().try_into()
+            let Ok(other_op): Result<T2Op, _> =
+                circ.get_optype(other_com.node()).clone().try_into()
             else {
                 return true;
             };
 
-            let Ok(op): Result<T2Op, _> = circ.get_optype(command.node).clone().try_into() else {
+            let Ok(op): Result<T2Op, _> = circ.get_optype(command.node()).clone().try_into() else {
                 return true;
             };
 
@@ -172,13 +178,13 @@ fn blocked_at_slice(
             };
             let Some(other_pauli) = commutation_on_port(
                 &other_op.qubit_commutation(),
-                other_com.port_of_qb(*q, Direction::Outgoing).unwrap(),
+                other_com.port_of_qb(q, Direction::Outgoing).unwrap(),
             ) else {
                 return true;
             };
 
             if pauli.commutes_with(other_pauli) {
-                prev_nodes.insert(*q, other_com.clone());
+                prev_nodes.insert(q, other_com.clone());
                 false
             } else {
                 true
@@ -292,9 +298,10 @@ fn gen_rewrite(
     next_commands: HashMap<Qb, Rc<Command>>,
     command: &Command,
 ) -> PullForward {
-    let remove_node = command.node;
+    let remove_node = command.node();
+    let num_qubits = command.qubits().count();
 
-    let replacement = build_simple_circuit(command.qbs.len(), |_circ| Ok(())).unwrap();
+    let replacement = build_simple_circuit(num_qubits, |_circ| Ok(())).unwrap();
     let replace_io = replacement.get_io(replacement.root()).unwrap();
     let nu_inp: HashMap<(Node, Port), (Node, Port)> = h
         .node_inputs(remove_node)
@@ -331,7 +338,7 @@ fn gen_rewrite(
                     .expect("should be linear.")
             } else {
                 (
-                    com.node,
+                    com.node(),
                     com.port_of_qb(q, Direction::Incoming).expect("missing qb"),
                 )
             };
@@ -342,15 +349,14 @@ fn gen_rewrite(
 
     // map from qubits in the original to those in the replacement
     let qb_map: HashMap<Qb, Qb> = command
-        .qbs()
-        .iter()
+        .qubits()
         .enumerate()
-        .map(|(index, q)| (*q, Qb(index)))
+        .map(|(index, q)| (q, Qb(index)))
         .collect();
 
     // replacement circuit containing moved node.
-    let replacement = build_simple_circuit(command.qbs().len(), |circ| {
-        circ.append(h.get_optype(command.node()).clone(), 0..command.qbs().len())?;
+    let replacement = build_simple_circuit(num_qubits, |circ| {
+        circ.append(h.get_optype(command.node()).clone(), 0..num_qubits)?;
         Ok(())
     })
     .unwrap();
@@ -381,7 +387,7 @@ pub fn apply_greedy_commutation(h: &mut Hugr) -> Result<u32, PullForwardError> {
             if let Some((destination, previous_commands)) =
                 available_slice(&h, &slice_vec, slice_index, &command)
             {
-                for q in &command.qbs {
+                for q in command.qubits() {
                     let com = slice_vec[slice_index][q.index()].take();
                     slice_vec[destination][q.index()] = com;
                 }
