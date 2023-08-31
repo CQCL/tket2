@@ -14,7 +14,7 @@ tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs", rev = "619db15d3"
     "tket2ops",
 ] }
 rayon = "1.5"
-# tket-rs = { optional = true, git = "https://github.com/CQCL-DEV/tket-rs", rev = "bd7e8e04" }
+tket-rs = { optional = true, git = "https://github.com/CQCL-DEV/tket-rs", rev = "bd7e8e04" }
 thiserror = "1.0.28"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -43,7 +43,7 @@ pyo3 = [
     "portgraph/pyo3",
     "quantinuum-hugr/pyo3",
 ]
-# tkcxx = ["dep:tket-rs", "dep:num-complex"]
+tkcxx = ["dep:tket-rs", "dep:num-complex"]
 portmatching = ["dep:portmatching"]
 
 [dev-dependencies]

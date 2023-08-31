@@ -5,10 +5,11 @@ pub mod pattern;
 #[cfg(feature = "pyo3")]
 mod pyo3;
 
-pub use matcher::{CircuitMatch, CircuitMatcher, CircuitRewrite, MatchOp};
+pub use matcher::{CircuitMatch, CircuitMatcher, CircuitRewrite};
 pub use pattern::CircuitPattern;
 
 use hugr::Port;
+use matcher::MatchOp;
 
 type PEdge = (Port, Port);
 type PNode = MatchOp;

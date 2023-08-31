@@ -31,7 +31,7 @@ use crate::{circuit::Circuit, T2Op};
 ///
 /// We currently support [`T2Op`] and a the HUGR load constant operation.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum MatchOp {
+pub(crate) enum MatchOp {
     /// A TKET2 operation.
     Op(T2Op),
     /// A HUGR load constant operation.
