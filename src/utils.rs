@@ -2,7 +2,7 @@
 
 use hugr::{
     builder::{BuildError, CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr},
-    extension::prelude::QB_T,
+    extension::{prelude::QB_T, prelude_registry},
     types::FunctionType,
     Hugr,
 };
@@ -22,7 +22,7 @@ pub(crate) fn build_simple_circuit(
     f(&mut circ)?;
 
     let qbs = circ.finish();
-    h.finish_hugr_with_outputs(qbs)
+    h.finish_hugr_with_outputs(qbs, &prelude_registry())
 }
 
 // Test only utils

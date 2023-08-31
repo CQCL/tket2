@@ -396,7 +396,7 @@ pub fn apply_greedy_commutation(h: &mut Hugr) -> Result<u32, PullForwardError> {
 mod test {
     use std::collections::HashMap;
 
-    use crate::ops::test::t2_bell_circuit;
+    use crate::{extension::REGISTRY, ops::test::t2_bell_circuit};
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::QB_T,
@@ -507,7 +507,7 @@ mod test {
             circ.append(T2Op::CX, [0, 1])?;
             circ.append_and_consume(T2Op::RzF64, [CircuitUnit::Linear(0), CircuitUnit::Wire(f)])?;
             let qbs = circ.finish();
-            dfg.finish_hugr_with_outputs(qbs)
+            dfg.finish_hugr_with_outputs(qbs, &REGISTRY)
         };
         build().unwrap()
     }
@@ -661,7 +661,7 @@ mod test {
         let depth_before = depth(&case);
         let move_count = apply_greedy_commutation(&mut case).unwrap();
 
-        case.validate().unwrap();
+        case.validate(&REGISTRY).unwrap();
 
         assert_eq!(
             move_count, expected_moves,

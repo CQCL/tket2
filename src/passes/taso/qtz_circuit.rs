@@ -94,7 +94,9 @@ impl From<RepCircData> for Circuit {
         }
 
         let circ_outputs = circ.finish();
-        builder.finish_hugr_with_outputs(circ_outputs).unwrap()
+        builder
+            .finish_hugr_with_outputs(circ_outputs, &crate::extension::REGISTRY)
+            .unwrap()
     }
 }
 
