@@ -5,12 +5,15 @@ use std::{
 };
 
 use hugr::{
+    builder::{BuildError, DFGBuilder, Dataflow, HugrBuilder},
+    extension::prelude::QB_T,
     hugr::{
         views::{HierarchyView, SiblingGraph},
         CircuitUnit,
     },
     ops::handle::DfgID,
-    Direction, Hugr, HugrView, Node, Port, SimpleReplacement,
+    types::FunctionType,
+    Direction, Hugr, HugrView, Node, Port, SimpleReplacement, Wire,
 };
 use itertools::Itertools;
 use portgraph::PortOffset;
@@ -42,6 +45,14 @@ impl Command {
             .iter()
             .position(|q| *q == qb)
             .map(|i| PortOffset::new(direction, i).into())
+    }
+
+    fn node(&self) -> Node {
+        self.node
+    }
+
+    fn qbs(&self) -> &[Qb] {
+        &self.qbs
     }
 }
 
@@ -205,14 +216,12 @@ fn commutation_on_port(comms: &Vec<(usize, Pauli)>, port: Port) -> Option<Pauli>
 
 fn gen_rewrites(
     h: &Hugr,
-    previous_nodes: &HashMap<Qb, Rc<Command>>,
+    surrounding_commands: [HashSet<Rc<Command>>; 2],
     command: &Command,
 ) -> [SimpleReplacement; 2] {
     let remove_node = command.node;
 
-    let op = h.get_optype(remove_node).clone();
-
-    let replacement = build_simple_circuit(2, |_circ| Ok(())).unwrap();
+    let replacement = build_simple_circuit(command.qbs.len(), |_circ| Ok(())).unwrap();
     let replace_io = replacement.get_io(replacement.root()).unwrap();
     let nu_inp: HashMap<(Node, Port), (Node, Port)> = h
         .node_inputs(remove_node)
@@ -236,11 +245,122 @@ fn gen_rewrites(
         nu_out,
     );
 
-    // let next_nodes: HashMap<Qb, Command> = previous_nodes.iter().map(|(qb, node)| {});
+    let [before, after] = surrounding_commands;
+    let all_commands = [before, HashSet::from([Rc::new(command.clone())]), after];
+    let all_command_qbs: Vec<Qb> = all_commands
+        .iter()
+        .map(|cs| cs.iter())
+        .flatten()
+        .map(|c| &c.qbs)
+        .flatten()
+        .unique()
+        .copied()
+        .collect();
+
+    let find_qb = |q| all_command_qbs.iter().position(|x| *x == q).unwrap();
+    dbg!(&all_command_qbs);
+    let mut nu_inp = HashMap::new();
+    let mut nu_out = HashMap::new();
+
+    let replacement_build: Result<Hugr, BuildError> = (|| {
+        let qb_row = vec![QB_T; all_command_qbs.len()];
+        let mut dfg = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row))?;
+        let mut wires: Vec<Wire> = dfg.input_wires().into_iter().collect();
+        let [before, com, after] = all_commands;
+
+        for com in before {
+            let nod = dfg.add_dataflow_op(
+                h.get_optype(com.node()).clone(),
+                com.qbs().iter().map(|q| wires[find_qb(*q)]),
+            )?;
+            for q in com.qbs() {
+                let index = find_qb(*q);
+                wires[index] = nod.out_wire(index);
+            }
+        }
+        let h = dfg.finish_hugr()?;
+        Ok(h)
+    })();
+    let replacement = replacement_build.unwrap();
+    // let replacement = build_simple_circuit(2, |circ| {
+    //     for com in all_commands.iter().flatten() {
+    //         circ.append(
+    //             h.get_optype(com.node).clone(),
+    //             com.qbs.iter().map(Qb::index),
+    //         )?;
+    //     }
+
+    //     Ok(())
+    // })
+    // .unwrap();
+
+    // let nu_inp =
+
+    let remove = SimpleReplacement::new(
+        h.root(),
+        HashSet::from_iter([remove_node]),
+        replacement,
+        nu_inp,
+        nu_out,
+    );
+
+    // debug_assert_eq!(
+    //     HashSet::<Qb>::from_iter(command.qbs.iter().cloned()),
+    //     HashSet::from_iter((previous_nodes.keys()).cloned())
+    // );
+    // let qb_to_ports: HashMap<Qb, [(Node, Port); 2]> = previous_nodes
+    //     .iter()
+    //     .map(|(qb, com)| {
+    //         let port = com.port_of_qb(*qb, Direction::Incoming).unwrap();
+    //         let source = h.linked_ports(com.node, port).next().unwrap();
+
+    //         (*qb, [source, (com.node, port)])
+    //     })
+    //     .collect();
+
+    // let mut commands: [Vec<Command>; 2] = [vec![], vec![]];
+
+    // for (qb, ports) in qb_to_ports.into_iter() {
+    //     for (com_list, (node, port)) in commands.iter_mut().zip(ports.into_iter()) {
+    //         let com = if let Some(com) = com_list.iter_mut().find(|c| c.node == node) {
+    //             com
+    //         } else {
+    //             com_list.push(Command { node, qbs: vec![] });
+    //             let final_index = com_list.len() - 1;
+    //             com_list.get_mut(final_index).unwrap()
+    //         };
+
+    //         if port.index() >= com.qbs.len() {
+    //             com.qbs.resize(port.index() + 1, Qb(0));
+    //         }
+    //         com.qbs[port.index()] = qb;
+    //     }
+    // }
+
+    // dbg!(commands);
 
     todo!()
 }
 
+fn follow_commands(
+    slice_vec: &[Vec<Option<Rc<Command>>>],
+    destination: usize,
+    previous_commands: &HashMap<Qb, Rc<Command>>,
+) -> HashSet<Rc<Command>> {
+    let mut commands: HashSet<Rc<Command>> = HashSet::new();
+
+    for qb in previous_commands.keys() {
+        for slice_index in (0..destination + 1).rev() {
+            dbg!(slice_index);
+            if let Some(com) = &slice_vec[slice_index][qb.index()] {
+                commands.insert(com.clone());
+                break;
+            }
+        }
+    }
+
+    commands
+}
 fn solve(mut h: Hugr) -> Result<Hugr, ()> {
     let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&h, h.root());
     let mut slice_vec = load_slices(circ);
@@ -254,15 +374,25 @@ fn solve(mut h: Hugr) -> Result<Hugr, ()> {
             .collect();
 
         for command in slice_commands {
-            if let Some((destination, previous_nodes)) =
+            if let Some((destination, previous_commands)) =
                 available_slice(&h, &slice_vec, slice_index, &command)
             {
+                let subsequent_commands: HashSet<Rc<Command>> =
+                    follow_commands(&slice_vec, destination, &previous_commands);
+                dbg!(&previous_commands);
+                dbg!(&subsequent_commands);
                 for q in &command.qbs {
                     let com = slice_vec[slice_index][q.index()].take();
                     slice_vec[destination][q.index()] = com;
                 }
-
-                let rewrites: [SimpleReplacement; 2] = gen_rewrites(&h, &previous_nodes, &command);
+                let rewrites: [SimpleReplacement; 2] = gen_rewrites(
+                    &h,
+                    [
+                        subsequent_commands,
+                        previous_commands.into_values().collect(),
+                    ],
+                    &command,
+                );
                 for rw in rewrites {
                     h.apply_rewrite(rw).unwrap();
                 }
