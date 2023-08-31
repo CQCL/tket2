@@ -176,3 +176,63 @@ where
     for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
 {
 }
+
+#[cfg(test)]
+mod test {
+    use hugr::hugr::views::{HierarchyView, SiblingGraph};
+    use hugr::ops::OpName;
+    use hugr::HugrView;
+
+    use crate::ops::test::build_simple_circuit;
+    use crate::T2Op;
+
+    use super::*;
+
+    #[test]
+    fn iterate_commands() {
+        let hugr = build_simple_circuit(2, |circ| {
+            circ.append(T2Op::H, [0])?;
+            circ.append(T2Op::CX, [0, 1])?;
+            circ.append(T2Op::T, [1])?;
+            Ok(())
+        })
+        .unwrap();
+        let circ: SiblingGraph<'_> = SiblingGraph::new(&hugr, hugr.root());
+
+        assert_eq!(CommandIterator::new(&circ).count(), 3);
+
+        // TODO: Expose the operation names directly in T2Op to clean this up
+        let t2op_name = |op: T2Op| <T2Op as Into<OpType>>::into(op).name();
+
+        let mut commands = CommandIterator::new(&circ);
+
+        let hadamard = commands.next().unwrap();
+        assert_eq!(
+            circ.command_optype(&hadamard).name().as_str(),
+            t2op_name(T2Op::H)
+        );
+        assert_eq!(hadamard.inputs(), &[CircuitUnit::Linear(0)]);
+        assert_eq!(hadamard.outputs(), &[CircuitUnit::Linear(0)]);
+
+        let cx = commands.next().unwrap();
+        assert_eq!(
+            circ.command_optype(&cx).name().as_str(),
+            t2op_name(T2Op::CX)
+        );
+        assert_eq!(
+            cx.inputs(),
+            &[CircuitUnit::Linear(0), CircuitUnit::Linear(1)]
+        );
+        assert_eq!(
+            cx.outputs(),
+            &[CircuitUnit::Linear(0), CircuitUnit::Linear(1)]
+        );
+
+        let t = commands.next().unwrap();
+        assert_eq!(circ.command_optype(&t).name().as_str(), t2op_name(T2Op::T));
+        assert_eq!(t.inputs(), &[CircuitUnit::Linear(1)]);
+        assert_eq!(t.outputs(), &[CircuitUnit::Linear(1)]);
+
+        assert_eq!(commands.next(), None);
+    }
+}
