@@ -12,6 +12,7 @@ use hugr::{
         },
         SiblingSubgraph,
     },
+    ops::OpType,
     Hugr, Node, Port, SimpleReplacement,
 };
 use itertools::Itertools;
@@ -25,6 +26,35 @@ use thiserror::Error;
 use pyo3::prelude::*;
 
 use crate::{circuit::Circuit, T2Op};
+
+/// Matchable operations in a circuit.
+///
+/// We currently support [`T2Op`] and a the HUGR load constant operation.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum MatchOp {
+    /// A TKET2 operation.
+    Op(T2Op),
+    /// A HUGR load constant operation.
+    LoadConstant,
+}
+
+impl From<T2Op> for MatchOp {
+    fn from(op: T2Op) -> Self {
+        Self::Op(op)
+    }
+}
+
+impl TryFrom<OpType> for MatchOp {
+    type Error = &'static str;
+
+    fn try_from(value: OpType) -> Result<Self, Self::Error> {
+        match value {
+            OpType::LeafOp(op) => Ok(Self::Op(op.try_into()?)),
+            OpType::LoadConstant(_) => Ok(Self::LoadConstant),
+            _ => Err("Unsupported op type"),
+        }
+    }
+}
 
 /// A convex pattern match in a circuit.
 #[derive(Clone)]
@@ -232,7 +262,7 @@ pub(crate) fn validate_weighted_node<'circ>(
     circ: &impl Circuit<'circ>,
 ) -> impl for<'a> Fn(Node, &PNode) -> bool + '_ {
     move |v, prop| {
-        let v_weight = T2Op::try_from(circ.get_optype(v).clone());
+        let v_weight = MatchOp::try_from(circ.get_optype(v).clone());
         v_weight.is_ok_and(|w| &w == prop)
     }
 }
