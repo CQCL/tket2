@@ -50,9 +50,12 @@ impl Command {
     }
     fn port_of_qb(&self, qb: Qb, direction: Direction) -> Option<Port> {
         // Assumes qubits leave via the same port offset they entered.
-
-        self.qubits()
-            .position(|q| q == qb)
+        self.inputs()
+            .iter()
+            .position(|cu| {
+                let q_cu: CircuitUnit = qb.into();
+                cu == &q_cu
+            })
             .map(|i| PortOffset::new(direction, i).into())
     }
 }
@@ -139,39 +142,42 @@ fn blocked_at_slice(
     // map from qubit to node it is connected to immediately after the free slice.
     let mut prev_nodes: HashMap<Qb, Rc<Command>> =
         HashMap::from_iter(command.qubits().map(|q| (q, command.clone())));
-    let blocked = command.qubits().enumerate().any(|(port, q)| {
-        if let Some(other_com) = &slice[q.index()] {
-            let Ok(other_op): Result<T2Op, _> =
-                circ.get_optype(other_com.node()).clone().try_into()
-            else {
-                return true;
-            };
+    let blocked = command
+        .qubits()
+        .map(|q| (command.port_of_qb(q, Direction::Incoming).unwrap(), q))
+        .any(|(port, q)| {
+            if let Some(other_com) = &slice[q.index()] {
+                let Ok(other_op): Result<T2Op, _> =
+                    circ.get_optype(other_com.node()).clone().try_into()
+                else {
+                    return true;
+                };
 
-            let Ok(op): Result<T2Op, _> = circ.get_optype(command.node()).clone().try_into() else {
-                return true;
-            };
+                let Ok(op): Result<T2Op, _> = circ.get_optype(command.node()).clone().try_into()
+                else {
+                    return true;
+                };
 
-            let port = PortOffset::new_incoming(port).into();
-            let Some(pauli) = commutation_on_port(&op.qubit_commutation(), port) else {
-                return true;
-            };
-            let Some(other_pauli) = commutation_on_port(
-                &other_op.qubit_commutation(),
-                other_com.port_of_qb(q, Direction::Outgoing).unwrap(),
-            ) else {
-                return true;
-            };
+                let Some(pauli) = commutation_on_port(&op.qubit_commutation(), port) else {
+                    return true;
+                };
+                let Some(other_pauli) = commutation_on_port(
+                    &other_op.qubit_commutation(),
+                    other_com.port_of_qb(q, Direction::Outgoing).unwrap(),
+                ) else {
+                    return true;
+                };
 
-            if pauli.commutes_with(other_pauli) {
-                prev_nodes.insert(q, other_com.clone());
-                false
+                if pauli.commutes_with(other_pauli) {
+                    prev_nodes.insert(q, other_com.clone());
+                    false
+                } else {
+                    true
+                }
             } else {
-                true
+                false
             }
-        } else {
-            false
-        }
-    });
+        });
     (blocked, prev_nodes)
 }
 
