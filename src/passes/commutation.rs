@@ -475,6 +475,19 @@ mod test {
         .unwrap()
     }
 
+    #[fixture]
+    // example circuit from original task with lower depth
+    fn commutes_but_same_depth() -> Hugr {
+        build_simple_circuit(3, |circ| {
+            circ.append(T2Op::H, [1])?;
+            circ.append(T2Op::CX, [0, 1])?;
+            circ.append(T2Op::Z, [0])?;
+            circ.append(T2Op::X, [1])?;
+            Ok(())
+        })
+        .unwrap()
+    }
+
     fn slice_from_command(
         commands: &Vec<Command>,
         n_qbs: usize,
@@ -616,6 +629,7 @@ mod test {
     #[case(cant_commute(), false, 0)]
     #[case(t2_bell_circuit(), false, 0)]
     #[case(single_qb_commute(), true, 1)]
+    #[case(commutes_but_same_depth(), false, 1)]
     fn commutation_example(
         #[case] mut case: Hugr,
         #[case] should_reduce: bool,
