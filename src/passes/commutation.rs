@@ -7,7 +7,7 @@ use hugr::{
     hugr::{
         rewrite::insert_identity::IdentityInsertion,
         views::{HierarchyView, SiblingGraph},
-        CircuitUnit, Rewrite,
+        CircuitUnit, Rewrite, SimpleReplacementError,
     },
     ops::handle::DfgID,
     Direction, Hugr, HugrView, Node, Port, SimpleReplacement,
@@ -101,33 +101,16 @@ fn load_slices<'c>(circ: &'c impl Circuit<'c>) -> SliceVec {
             slices.push(vec![None; n_qbs]);
         }
         let command = Rc::new(all_commands.pop_front().unwrap());
-        let qbs = command.qbs.clone();
         add_to_slice(&mut slices[free_slice], command);
     }
 
     slices
 }
 
-/// Starting from given index, search the slices for the command for the given
-/// node, returning it and the slice at which it was found
-fn find_command(
-    slice_vec: &[Slice],
-    starting_index: usize,
-    node: Node,
-) -> Option<(Rc<Command>, usize)> {
-    for slice_index in starting_index..slice_vec.len() {
-        let slice = slice_vec.get(slice_index).unwrap();
-        if let Some(command) = slice.iter().flatten().find(|c| c.node == node) {
-            return Some((command.clone(), slice_index));
-        }
-    }
-    None
-}
-
 /// Starting from starting_index, work back along slices to check for the
 /// earliest slice that can accommodate this command, if any.
-fn available_slice<'c>(
-    circ: &'c impl HugrView,
+fn available_slice(
+    circ: &impl HugrView,
     slice_vec: &[Slice],
     starting_index: usize,
     command: &Rc<Command>,
@@ -149,7 +132,7 @@ fn available_slice<'c>(
             // if command commutes with all ports here it can be moved past,
             // otherwise stop
             let (blocked, new_prev_nodes) =
-                blocked_at_slice(&command, &slice_vec[slice_index], circ);
+                blocked_at_slice(command, &slice_vec[slice_index], circ);
             if blocked {
                 break;
             } else {
@@ -205,7 +188,7 @@ fn blocked_at_slice(
     (blocked, prev_nodes)
 }
 
-fn commutation_on_port(comms: &Vec<(usize, Pauli)>, port: Port) -> Option<Pauli> {
+fn commutation_on_port(comms: &[(usize, Pauli)], port: Port) -> Option<Pauli> {
     comms
         .iter()
         .find_map(|(i, p)| (*i == port.index()).then_some(*p))
@@ -233,8 +216,7 @@ fn gen_rewrites(
 
     let nu_out: HashMap<(Node, Port), Port> = h
         .node_outputs(remove_node)
-        .map(|p| h.linked_ports(remove_node, p))
-        .flatten()
+        .flat_map(|p| h.linked_ports(remove_node, p))
         .zip(replacement.node_inputs(replace_io[1]))
         .map(|(remove_np, replace_p)| (remove_np, replace_p))
         .collect();
@@ -280,10 +262,7 @@ fn gen_rewrites(
 
     // replacement circuit containing moved node.
     let replacement = build_simple_circuit(command.qbs().len(), |circ| {
-        circ.append(
-            h.get_optype(command.node()).clone(),
-            (0..command.qbs().len()),
-        );
+        circ.append(h.get_optype(command.node()).clone(), 0..command.qbs().len())?;
         Ok(())
     })
     .unwrap();
@@ -339,27 +318,8 @@ fn gen_rewrites(
     }
 }
 
-fn follow_commands(
-    slice_vec: &[Vec<Option<Rc<Command>>>],
-    destination: usize,
-    previous_commands: &HashMap<Qb, Rc<Command>>,
-) -> HashSet<Rc<Command>> {
-    let mut commands: HashSet<Rc<Command>> = HashSet::new();
-
-    for qb in previous_commands.keys() {
-        for slice_index in (0..destination + 1).rev() {
-            if let Some(com) = &slice_vec[slice_index][qb.index()] {
-                commands.insert(com.clone());
-                break;
-            }
-        }
-    }
-
-    commands
-}
-
 /// Pass which greedily commutes operations forwards in order to reduce depth.
-pub fn apply_greedy_commutation(mut h: Hugr) -> Result<Hugr, ()> {
+pub fn apply_greedy_commutation(mut h: Hugr) -> Result<Hugr, SimpleReplacementError> {
     let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&h, h.root());
     let mut slice_vec = load_slices(circ);
 
@@ -382,7 +342,7 @@ pub fn apply_greedy_commutation(mut h: Hugr) -> Result<Hugr, ()> {
                     slice_vec[destination][q.index()] = com;
                 }
                 let rewrite = gen_rewrites(&h, previous_commands, &command);
-                rewrite(&mut h);
+                rewrite(&mut h)?;
             }
         }
     }
@@ -476,7 +436,7 @@ mod test {
         slice_arr: &[&[usize]],
     ) -> SliceVec {
         slice_arr
-            .into_iter()
+            .iter()
             .map(|command_indices| {
                 let mut slice = vec![None; n_qbs];
                 for ind in command_indices.iter() {
@@ -493,15 +453,10 @@ mod test {
     fn test_load_slices_cx(example_cx: Hugr) {
         let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&example_cx, example_cx.root());
         let commands: Vec<Command> = circ.commands().map_into().collect();
-        let final_command = commands[2].clone();
-        let mut slices = load_slices(circ);
+        let slices = load_slices(circ);
         let correct = slice_from_command(&commands, 4, &[&[0], &[1], &[2]]);
 
         assert_eq!(slices, correct);
-
-        let found_command = find_command(&mut slices, 0, final_command.node);
-
-        assert_eq!(found_command, Some((Rc::new(final_command), 2)));
     }
 
     #[rstest]
@@ -587,8 +542,7 @@ mod test {
 
         let nu_out: HashMap<(Node, Port), Port> = example_cx
             .node_outputs(remove_node)
-            .map(|p| example_cx.linked_ports(remove_node, p))
-            .flatten()
+            .flat_map(|p| example_cx.linked_ports(remove_node, p))
             .zip(replacement.node_inputs(replace_io[1]))
             .map(|(remove_np, replace_p)| (remove_np, replace_p))
             .collect();
