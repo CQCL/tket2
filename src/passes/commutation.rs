@@ -286,6 +286,10 @@ fn gen_rewrite(
     let remove_node = command.node();
     let num_qubits = command.qubits().count();
 
+    // identity circuit only works for all linear inputs
+    // TODO instead, add placeholder/discard nodes for all non-linear wires,
+    // keep a map from the other end of those wires to said nodes, and replace
+    // them at the end.
     let replacement = build_simple_circuit(num_qubits, |_circ| Ok(())).unwrap();
     let replace_io = replacement.get_io(replacement.root()).unwrap();
     let nu_inp: HashMap<(Node, Port), (Node, Port)> = h
@@ -393,7 +397,14 @@ mod test {
     use std::collections::HashMap;
 
     use crate::ops::test::t2_bell_circuit;
-    use hugr::{Hugr, Port};
+    use hugr::{
+        builder::{DFGBuilder, Dataflow, DataflowHugr},
+        extension::prelude::QB_T,
+        std_extensions::arithmetic::float_types::FLOAT64_TYPE,
+        type_row,
+        types::FunctionType,
+        Hugr, Port,
+    };
     use itertools::Itertools;
     use rstest::{fixture, rstest};
 
@@ -477,6 +488,28 @@ mod test {
             Ok(())
         })
         .unwrap()
+    }
+
+    #[fixture]
+    // example circuit from original task with lower depth
+    fn non_linear_wires() -> Hugr {
+        let build = || {
+            let mut dfg = DFGBuilder::new(FunctionType::new(
+                type_row![QB_T, QB_T, FLOAT64_TYPE],
+                type_row![QB_T, QB_T],
+            ))?;
+
+            let [q0, q1, f] = dfg.input_wires_arr();
+
+            let mut circ = dfg.as_circuit(vec![q0, q1]);
+
+            circ.append(T2Op::H, [1])?;
+            circ.append(T2Op::CX, [0, 1])?;
+            circ.append_and_consume(T2Op::RzF64, [CircuitUnit::Linear(0), CircuitUnit::Wire(f)])?;
+            let qbs = circ.finish();
+            dfg.finish_hugr_with_outputs(qbs)
+        };
+        build().unwrap()
     }
 
     fn slice_from_command(commands: &[Command], n_qbs: usize, slice_arr: &[&[usize]]) -> SliceVec {
@@ -617,6 +650,8 @@ mod test {
     #[case(t2_bell_circuit(), false, 0)]
     #[case(single_qb_commute(), true, 1)]
     #[case(commutes_but_same_depth(), false, 1)]
+    #[should_panic]
+    #[case::panic(non_linear_wires(), true, 1)]
     fn commutation_example(
         #[case] mut case: Hugr,
         #[case] should_reduce: bool,
