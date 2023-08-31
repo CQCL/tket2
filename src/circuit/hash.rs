@@ -15,7 +15,7 @@ pub trait CircuitHash<'circ>: Circuit<'circ> {
     /// Compute hash of a circuit.
     ///
     /// We compute a hash for each command from its operation and the hash of its
-    /// predecessors. The hash of the circuit corresponds to the sum of all its
+    /// predecessors. The hash of the circuit corresponds to the xor of all its
     /// nodes hashes.
     ///
     /// This hash is independent from the operation traversal order.
@@ -51,15 +51,17 @@ where
             // TODO: Ignore state edges?
             for input in self.node_inputs(node) {
                 // Combine the hash for each subport, ignoring their order.
-                let mut input_hash = 0;
-                for (pred_node, pred_port) in self.linked_ports(node, input) {
-                    let pred_node_hash = hash_vals
-                        .get(&pred_node)
-                        .unwrap_or_else(|| panic!("Missing hash for node {pred_node:?}"));
-                    let mut subport_hasher = DefaultHasher::new();
-                    (pred_node_hash, pred_port, input).hash(&mut subport_hasher);
-                    input_hash ^= subport_hasher.finish();
-                }
+                let input_hash = self
+                    .linked_ports(node, input)
+                    .map(|(pred_node, pred_port)| {
+                        let pred_node_hash = hash_vals
+                            .get(&pred_node)
+                            .unwrap_or_else(|| panic!("Missing hash for node {pred_node:?}"));
+                        let mut subport_hasher = DefaultHasher::new();
+                        (pred_node_hash, pred_port, input).hash(&mut subport_hasher);
+                        subport_hasher.finish()
+                    })
+                    .fold(0, |total, hash| hash ^ total);
                 input_hash.hash(&mut hasher);
             }
             hasher.finish()
