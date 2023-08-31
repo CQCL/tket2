@@ -7,13 +7,13 @@ use fxhash::{FxHashMap, FxHasher64};
 use hugr::hugr::views::HierarchyView;
 use hugr::ops::{LeafOp, OpName, OpTag, OpTrait, OpType};
 use hugr::types::TypeBound;
-use hugr::{Node, Port};
+use hugr::{HugrView, Node, Port};
 use petgraph::visit::{self as pg, Walker};
 
 use super::Circuit;
 
 /// Circuit hashing utilities.
-pub trait CircuitHash<'circ>: Circuit<'circ> {
+pub trait CircuitHash<'circ>: HugrView {
     /// Compute hash of a circuit.
     ///
     /// We compute a hash for each command from its operation and the hash of
@@ -29,7 +29,7 @@ pub trait CircuitHash<'circ>: Circuit<'circ> {
 
 impl<'circ, T> CircuitHash<'circ> for T
 where
-    T: Circuit<'circ> + HierarchyView<'circ>,
+    T: HugrView + HierarchyView<'circ>,
     for<'a> &'a T:
         pg::GraphBase<NodeId = Node> + pg::IntoNeighborsDirected + pg::IntoNodeIdentifiers,
 {
@@ -79,7 +79,7 @@ impl HashState {
     /// Register the hash for a node.
     ///
     /// Panics if the hash of any of its predecessors has not been set.
-    fn set_node<'circ>(&mut self, circ: &impl Circuit<'circ>, node: Node, hash: u64) {
+    fn set_node(&mut self, circ: &impl HugrView, node: Node, hash: u64) {
         let optype = circ.get_optype(node);
         let signature = optype.signature();
         let mut any_nonlinear = false;
@@ -120,7 +120,7 @@ fn hashable_op(op: &OpType) -> impl Hash {
 /// Uses the hash of the operation and the node hash of its predecessors.
 ///
 /// Panics if the command is a container node, or if it is a parametric CustomOp.
-fn hash_node<'circ>(circ: &impl Circuit<'circ>, node: Node, state: &mut HashState) -> u64 {
+fn hash_node(circ: &impl HugrView, node: Node, state: &mut HashState) -> u64 {
     let op = circ.get_optype(node);
     let mut hasher = FxHasher64::default();
 
