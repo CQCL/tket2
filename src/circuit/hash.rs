@@ -48,15 +48,19 @@ where
             let mut hasher = DefaultHasher::new();
             hashable_op(op).hash(&mut hasher);
             // Add each each input neighbour hash, including the connected ports.
-            // Since inputs cannot be multiports the order of neighbours is deterministic.
             // TODO: Ignore state edges?
             for input in self.node_inputs(node) {
+                // Combine the hash for each subport, ignoring their order.
+                let mut input_hash = 0;
                 for (pred_node, pred_port) in self.linked_ports(node, input) {
                     let pred_node_hash = hash_vals
                         .get(&pred_node)
                         .unwrap_or_else(|| panic!("Missing hash for node {pred_node:?}"));
-                    (pred_node_hash, pred_port, input).hash(&mut hasher);
+                    let mut subport_hasher = DefaultHasher::new();
+                    (pred_node_hash, pred_port, input).hash(&mut subport_hasher);
+                    input_hash ^= subport_hasher.finish();
                 }
+                input_hash.hash(&mut hasher);
             }
             hasher.finish()
         };
