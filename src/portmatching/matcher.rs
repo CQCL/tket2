@@ -2,7 +2,7 @@
 
 use std::fmt::Debug;
 
-use super::{CircuitPattern, MatchOp, PEdge, PNode};
+use super::{CircuitPattern, PEdge, PNode};
 use derive_more::{From, Into};
 use hugr::{
     hugr::views::{
@@ -24,7 +24,7 @@ use thiserror::Error;
 #[cfg(feature = "pyo3")]
 use pyo3::prelude::*;
 
-use crate::circuit::Circuit;
+use crate::{circuit::Circuit, T2Op};
 
 /// A convex pattern match in a circuit.
 #[derive(Clone)]
@@ -232,7 +232,7 @@ pub(crate) fn validate_weighted_node<'circ>(
     circ: &impl Circuit<'circ>,
 ) -> impl for<'a> Fn(Node, &PNode) -> bool + '_ {
     move |v, prop| {
-        let v_weight = MatchOp::try_from(circ.get_optype(v).clone());
+        let v_weight = T2Op::try_from(circ.get_optype(v).clone());
         v_weight.is_ok_and(|w| &w == prop)
     }
 }

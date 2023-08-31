@@ -21,7 +21,19 @@ use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_inline("quantum.tket2");
 
 #[derive(
-    Clone, Copy, Debug, Serialize, Deserialize, EnumIter, IntoStaticStr, EnumString, PartialEq,
+    Clone,
+    Copy,
+    Debug,
+    Serialize,
+    Deserialize,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumIter,
+    IntoStaticStr,
+    EnumString,
 )]
 #[allow(missing_docs)]
 /// Simple enum of tket 2 quantum operations.
