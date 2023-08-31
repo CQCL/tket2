@@ -1,11 +1,14 @@
 //! Circuit hashing.
 
 use core::panic;
-use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
-use hugr::ops::{LeafOp, OpName, OpType};
-use hugr::Node;
+use fxhash::{FxHashMap, FxHasher64};
+use hugr::hugr::views::HierarchyView;
+use hugr::ops::{LeafOp, OpName, OpTag, OpTrait, OpType};
+use hugr::types::TypeBound;
+use hugr::{Node, Port};
+use petgraph::visit::{self as pg, Walker};
 
 use super::Circuit;
 
@@ -13,9 +16,9 @@ use super::Circuit;
 pub trait CircuitHash<'circ>: Circuit<'circ> {
     /// Compute hash of a circuit.
     ///
-    /// We compute a hash for each command from its operation and the hash of its
-    /// predecessors. The hash of the circuit corresponds to the xor of all its
-    /// nodes hashes.
+    /// We compute a hash for each command from its operation and the hash of
+    /// its predecessors. The hash of the circuit corresponds to the hash of its
+    /// output node.
     ///
     /// This hash is independent from the operation traversal order.
     ///
@@ -26,62 +29,120 @@ pub trait CircuitHash<'circ>: Circuit<'circ> {
 
 impl<'circ, T> CircuitHash<'circ> for T
 where
-    T: Circuit<'circ>,
+    T: Circuit<'circ> + HierarchyView<'circ>,
+    for<'a> &'a T:
+        pg::GraphBase<NodeId = Node> + pg::IntoNeighborsDirected + pg::IntoNodeIdentifiers,
 {
     fn circuit_hash(&'circ self) -> u64 {
-        let mut hash_vals = HashMap::new();
+        let mut hash_state = HashState::default();
 
-        // FIXME: The name of an operation is not unique enough, as custom ops with
-        // different parameters may share a name.
-        let hashable_op = |op: &OpType| match op {
-            OpType::LeafOp(LeafOp::CustomOp(op)) if !op.args().is_empty() => {
-                panic!("Parametric operation {} cannot be hashed.", op.name())
-            }
-            _ => op.name(),
-        };
-
-        // Add a dummy hash for the input node, not exposed by the command iterator.
-        hash_vals.insert(self.input(), 0);
-
-        let hash_node = |node, op, hash_vals: &HashMap<Node, u64>| -> u64 {
-            let mut hasher = fxhash::FxHasher64::default();
-            hashable_op(op).hash(&mut hasher);
-            // Add each each input neighbour hash, including the connected ports.
-            // TODO: Ignore state edges?
-            for input in self.node_inputs(node) {
-                // Combine the hash for each subport, ignoring their order.
-                let input_hash = self
-                    .linked_ports(node, input)
-                    .map(|(pred_node, pred_port)| {
-                        let pred_node_hash = hash_vals
-                            .get(&pred_node)
-                            .unwrap_or_else(|| panic!("Missing hash for node {pred_node:?}"));
-                        fxhash::hash64(&(pred_node_hash, pred_port, input))
-                    })
-                    .fold(0, |total, hash| hash ^ total);
-                input_hash.hash(&mut hasher);
-            }
-            hasher.finish()
-        };
-
-        for command in self.commands() {
-            let node = command.node();
-            let op = self.command_optype(&command);
-            let hash = hash_node(node, op, &hash_vals);
-            hash_vals.insert(command.node(), hash);
+        for node in pg::Topo::new(self).iter(self).filter(|&n| n != self.root()) {
+            let hash = hash_node(self, node, &mut hash_state);
+            hash_state.set_node(self, node, hash);
         }
 
-        // Add a hash for the output node, based only on it's connections.
-        //
-        // TODO: The hash of this node should contain all the information of the
-        // circuit. We could output this instead of the XOR of all hashes, and
-        // avoid storing all of `hash_vals`.
-        let hash = hash_node(self.output(), self.get_optype(self.output()), &hash_vals);
-        hash_vals.insert(self.output(), hash);
-
-        // Combine all the node hashes in an order-independent operation.
-        hash_vals.into_values().fold(0, |total, hash| hash ^ total)
+        hash_state.get_nonlinear(self.output())
     }
+}
+
+/// Auxiliary data for circuit hashing.
+///
+/// Contains previously computed hashes.
+#[derive(Clone, Default, Debug)]
+struct HashState {
+    /// Computed node hashes for each linear output.
+    ///
+    /// These are removed from the map when consumed.
+    pub linear_hashes: FxHashMap<(Node, Port), u64>,
+    /// Computed node hashes.
+    ///
+    /// Only store hashes for nodes with at least one non-linear output.
+    pub nonlinear_hashes: FxHashMap<Node, u64>,
+}
+
+impl HashState {
+    /// Return the hash for a port.
+    ///
+    /// If the port was linear, it is removed from the map.
+    fn take(&mut self, node: Node, port: Port) -> u64 {
+        if let Some(hash) = self.linear_hashes.remove(&(node, port)) {
+            return hash;
+        }
+        self.get_nonlinear(node)
+    }
+
+    /// Return the hash for a node.
+    fn get_nonlinear(&self, node: Node) -> u64 {
+        *self.nonlinear_hashes.get(&node).unwrap()
+    }
+
+    /// Register the hash for a node.
+    ///
+    /// Panics if the hash of any of its predecessors has not been set.
+    fn set_node<'circ>(&mut self, circ: &impl Circuit<'circ>, node: Node, hash: u64) {
+        let optype = circ.get_optype(node);
+        let signature = optype.signature();
+        let mut any_nonlinear = false;
+        for (port_type, port) in signature
+            .output_types()
+            .iter()
+            .zip(signature.output_ports())
+        {
+            match TypeBound::Copyable.contains(port_type.least_upper_bound()) {
+                true => any_nonlinear = true,
+                false => {
+                    self.linear_hashes.insert((node, port), hash);
+                }
+            }
+        }
+        if any_nonlinear || optype.tag() <= OpTag::Output {
+            self.nonlinear_hashes.insert(node, hash);
+        }
+    }
+}
+
+/// Returns a hashable representation of an operation.
+///
+/// Panics if the operation is a parametric CustomOp
+//
+// TODO: Hash custom op parameters. Also the extension name?
+fn hashable_op(op: &OpType) -> impl Hash {
+    match op {
+        OpType::LeafOp(LeafOp::CustomOp(op)) if !op.args().is_empty() => {
+            panic!("Parametric operation {} cannot be hashed.", op.name())
+        }
+        _ => op.name(),
+    }
+}
+
+/// Compute the hash of a circuit command.
+///
+/// Uses the hash of the operation and the node hash of its predecessors.
+///
+/// Panics if the command is a container node, or if it is a parametric CustomOp.
+fn hash_node<'circ>(circ: &impl Circuit<'circ>, node: Node, state: &mut HashState) -> u64 {
+    let op = circ.get_optype(node);
+    let mut hasher = FxHasher64::default();
+
+    if circ.children(node).count() > 0 {
+        panic!("Cannot hash container node {node:?}.");
+    }
+    hashable_op(op).hash(&mut hasher);
+
+    // Add each each input neighbour hash, including the connected ports.
+    // TODO: Ignore state edges?
+    for input in circ.node_inputs(node) {
+        // Combine the hash for each subport, ignoring their order.
+        let input_hash = circ
+            .linked_ports(node, input)
+            .map(|(pred_node, pred_port)| {
+                let pred_node_hash = state.take(pred_node, pred_port);
+                fxhash::hash64(&(pred_node_hash, pred_port, input))
+            })
+            .fold(0, |total, hash| hash ^ total);
+        input_hash.hash(&mut hasher);
+    }
+    hasher.finish()
 }
 
 #[cfg(test)]
