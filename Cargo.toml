@@ -3,7 +3,10 @@ name = "tket2"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+bench = false
+name = "tket2"
+path = "src/lib.rs"
 
 [dependencies]
 lazy_static = "1.4.0"
@@ -52,9 +55,9 @@ criterion = { version = "0.5.1", features = ["html_reports"] }
 webbrowser = "0.8.10"
 urlencoding = "2.1.2"
 
-#[[bench]]
-#name = "tket2_bench"
-#harness = false
+[[bench]]
+name = "bench_main"
+harness = false
 
 [workspace]
 
