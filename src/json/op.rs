@@ -8,7 +8,7 @@
 
 use crate::ops::EXTENSION_ID as QUANTUM_EXTENSION_ID;
 use hugr::extension::prelude::QB_T;
-use hugr::extension::ExtensionSet;
+
 use hugr::ops::custom::ExternalOp;
 use hugr::ops::{LeafOp, OpTrait, OpType};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
@@ -19,7 +19,7 @@ use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as JsonOpType;
 
 use super::{try_param_to_constant, OpConvertError};
-use crate::extension::{try_unwrap_json_op, LINEAR_BIT, TKET1_EXTENSION_ID};
+use crate::extension::{try_unwrap_json_op, LINEAR_BIT};
 use crate::T2Op;
 
 /// A serialized operation, containing the operation type and all its attributes.
@@ -134,7 +134,7 @@ impl JsonOp {
         .concat();
         let params = vec![FLOAT64_TYPE; self.num_params];
         FunctionType::new([linear.clone(), params].concat(), linear)
-            .with_extension_delta(&ExtensionSet::singleton(&TKET1_EXTENSION_ID))
+        // .with_extension_delta(&ExtensionSet::singleton(&TKET1_EXTENSION_ID))
     }
 
     /// List of parameters in the operation that should be exposed as inputs.

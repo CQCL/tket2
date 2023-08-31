@@ -7,7 +7,7 @@ use std::mem;
 
 use hugr::builder::{CircuitBuilder, Container, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::QB_T;
-use hugr::extension::ExtensionSet;
+
 use hugr::hugr::CircuitUnit;
 use hugr::ops::Const;
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
@@ -20,7 +20,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 
 use super::op::JsonOp;
 use super::{try_param_to_constant, METADATA_IMPLICIT_PERM, METADATA_PHASE};
-use crate::extension::{LINEAR_BIT, TKET1_EXTENSION_ID};
+use crate::extension::LINEAR_BIT;
 
 /// The state of an in-progress [`DFGBuilder`] being built from a [`SerialCircuit`].
 ///
@@ -63,8 +63,8 @@ impl JsonDecoder {
         }
         let sig = FunctionType::new_linear(
             [vec![QB_T; num_qubits], vec![LINEAR_BIT.clone(); num_bits]].concat(),
-        )
-        .with_extension_delta(&ExtensionSet::singleton(&TKET1_EXTENSION_ID));
+        );
+        // .with_extension_delta(&ExtensionSet::singleton(&TKET1_EXTENSION_ID));
 
         let mut dfg = DFGBuilder::new(sig).unwrap();
 

@@ -10,11 +10,11 @@ lazy_static = "1.4.0"
 cgmath = "0.18.0"
 num-rational = "0.4"
 num-complex = { version = "0.4", optional = true }
-tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs", rev="619db15d3", features = [
+tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs", rev = "619db15d3", features = [
     "tket2ops",
 ] }
 rayon = "1.5"
-tket-rs = { optional = true, git = "https://github.com/CQCL-DEV/tket-rs", rev="bd7e8e04" }
+tket-rs = { optional = true, git = "https://github.com/CQCL-DEV/tket-rs", rev = "bd7e8e04" }
 thiserror = "1.0.28"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -30,14 +30,18 @@ portmatching = { optional = true, git = "https://github.com/lmondada/portmatchin
 derive_more = "0.99.17"
 quantinuum-hugr = { workspace = true }
 portgraph = { workspace = true }
-pyo3 = { workspace = true, optional = true, features = [
-    "multiple-pymethods",
-] }
+pyo3 = { workspace = true, optional = true, features = ["multiple-pymethods"] }
 strum_macros = "0.25.2"
 strum = "0.25.0"
 
 [features]
-pyo3 = ["dep:pyo3", "tket-json-rs/pyo3", "tket-json-rs/tket2ops", "portgraph/pyo3", "quantinuum-hugr/pyo3"]
+pyo3 = [
+    "dep:pyo3",
+    "tket-json-rs/pyo3",
+    "tket-json-rs/tket2ops",
+    "portgraph/pyo3",
+    "quantinuum-hugr/pyo3",
+]
 tkcxx = ["dep:tket-rs", "dep:num-complex"]
 portmatching = ["dep:portmatching"]
 
@@ -57,6 +61,6 @@ members = ["pyrs"]
 
 [workspace.dependencies]
 
-quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", branch = "fix/no-resource-validation" }
+quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "730c2d992b41fec19dd20a23200fd02a3542d354" }
 portgraph = "0.8"
 pyo3 = { version = "0.19" }
