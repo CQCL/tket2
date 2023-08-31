@@ -5,7 +5,7 @@ use std::{
 
 use hugr::{
     hugr::{
-        rewrite::insert_identity::IdentityInsertion,
+        rewrite::insert_identity::{IdentityInsertion, IdentityInsertionError},
         views::{HierarchyView, SiblingGraph},
         CircuitUnit, Rewrite, SimpleReplacementError,
     },
@@ -20,6 +20,8 @@ use crate::{
     ops::{Pauli, T2Op},
     utils::build_simple_circuit,
 };
+
+use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct Qb(usize);
@@ -194,16 +196,102 @@ fn commutation_on_port(comms: &[(usize, Pauli)], port: Port) -> Option<Pauli> {
         .find_map(|(i, p)| (*i == port.index()).then_some(*p))
 }
 
-fn gen_rewrites(
+/// Error from a [`PullForward`] operation.
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
+pub enum PullForwardError {
+    // Failure to remove node.
+    #[error("Failed to remove node: {0:?}")]
+    Remove(SimpleReplacementError),
+
+    // Failure to insert noops.
+    #[error("Failed to insert no-ops: {0:?}")]
+    InsertIdentity(#[from] IdentityInsertionError),
+
+    // Failure to replace noops.
+    #[error("Failed to replace no-ops with node: {0:?}")]
+    ReplaceIdentity(SimpleReplacementError),
+}
+
+struct PullForward {
+    replacement: Hugr,
+    remove: SimpleReplacement,
+    inserts: Vec<(Qb, IdentityInsertion)>,
+    qb_map: HashMap<Qb, Qb>,
+}
+
+impl Rewrite for PullForward {
+    type Error = PullForwardError;
+
+    type ApplyResult = ();
+
+    const UNCHANGED_ON_FAILURE: bool = false;
+
+    fn verify(&self, _h: &Hugr) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    fn apply(self, h: &mut Hugr) -> Result<Self::ApplyResult, Self::Error> {
+        let Self {
+            replacement,
+            remove,
+            inserts,
+            qb_map,
+        } = self;
+        h.apply_rewrite(remove).map_err(PullForwardError::Remove)?;
+
+        // add no-ops on all qubit wires in new location
+        let noop_nodes: Result<HashMap<Qb, Node>, _> = inserts
+            .into_iter()
+            .map(|(q, insert)| h.apply_rewrite(insert).map(|res| (q, res)))
+            .collect();
+        let noop_nodes = noop_nodes.map_err(PullForwardError::InsertIdentity)?;
+
+        let mut nu_inp = HashMap::new();
+        let mut nu_out = HashMap::new();
+
+        let replace_io = replacement.get_io(replacement.root()).unwrap();
+
+        for (q, noop_node) in &noop_nodes {
+            let replace_target_port = replacement
+                .linked_ports(
+                    replace_io[0],
+                    PortOffset::new_outgoing(qb_map[q].index()).into(),
+                )
+                .exactly_one()
+                .unwrap();
+
+            let noop_port = h.node_inputs(*noop_node).next().unwrap();
+
+            nu_inp.insert(replace_target_port, (*noop_node, noop_port));
+
+            let noop_target = h
+                .linked_ports(*noop_node, PortOffset::new_outgoing(0).into())
+                .exactly_one()
+                .unwrap();
+
+            let replace_out_port: Port = PortOffset::new_incoming(qb_map[q].index()).into();
+
+            nu_out.insert(noop_target, replace_out_port);
+        }
+
+        let replace = SimpleReplacement::new(
+            h.root(),
+            noop_nodes.into_values().collect(),
+            replacement,
+            nu_inp,
+            nu_out,
+        );
+        h.apply_rewrite(replace)
+            .map_err(PullForwardError::ReplaceIdentity)?;
+        Ok(())
+    }
+}
+
+fn gen_rewrite(
     h: &Hugr,
     next_commands: HashMap<Qb, Rc<Command>>,
     command: &Command,
-) -> impl FnOnce(
-    &mut Hugr,
-) -> Result<
-    <SimpleReplacement as Rewrite>::ApplyResult,
-    <SimpleReplacement as Rewrite>::Error,
-> {
+) -> PullForward {
     let remove_node = command.node;
 
     let replacement = build_simple_circuit(command.qbs.len(), |_circ| Ok(())).unwrap();
@@ -267,60 +355,18 @@ fn gen_rewrites(
     })
     .unwrap();
 
-    move |h| {
-        // remove node in original location
-        h.apply_rewrite(remove)?;
-
-        // add no-ops on all qubit wires in new location
-        let noop_nodes: Result<HashMap<Qb, Node>, _> = inserts
-            .into_iter()
-            .map(|(q, insert)| h.apply_rewrite(insert).map(|res| (q, res)))
-            .collect();
-        let noop_nodes = noop_nodes.expect("Insert noop failed.");
-
-        let mut nu_inp = HashMap::new();
-        let mut nu_out = HashMap::new();
-
-        let replace_io = replacement.get_io(replacement.root()).unwrap();
-        // h.validate().unwrap();
-        // crate::utils::test::viz_dotstr(&h.dot_string());
-        for (q, noop_node) in &noop_nodes {
-            let replace_target_port = replacement
-                .linked_ports(
-                    replace_io[0],
-                    PortOffset::new_outgoing(qb_map[q].index()).into(),
-                )
-                .exactly_one()
-                .unwrap();
-
-            let noop_port = h.node_inputs(*noop_node).next().unwrap();
-
-            nu_inp.insert(replace_target_port, (*noop_node, noop_port));
-
-            let noop_target = h
-                .linked_ports(*noop_node, PortOffset::new_outgoing(0).into())
-                .exactly_one()
-                .unwrap();
-
-            let replace_out_port: Port = PortOffset::new_incoming(qb_map[q].index()).into();
-
-            nu_out.insert(noop_target, replace_out_port);
-        }
-
-        let replace = SimpleReplacement::new(
-            h.root(),
-            noop_nodes.into_values().collect(),
-            replacement,
-            nu_inp,
-            nu_out,
-        );
-        h.apply_rewrite(replace)
+    PullForward {
+        replacement,
+        remove,
+        inserts,
+        qb_map,
     }
 }
 
 /// Pass which greedily commutes operations forwards in order to reduce depth.
-pub fn apply_greedy_commutation(mut h: Hugr) -> Result<Hugr, SimpleReplacementError> {
-    let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&h, h.root());
+pub fn apply_greedy_commutation(h: &mut Hugr) -> Result<u32, PullForwardError> {
+    let mut count = 0;
+    let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(h, h.root());
     let mut slice_vec = load_slices(circ);
 
     for slice_index in 0..slice_vec.len() {
@@ -335,21 +381,20 @@ pub fn apply_greedy_commutation(mut h: Hugr) -> Result<Hugr, SimpleReplacementEr
             if let Some((destination, previous_commands)) =
                 available_slice(&h, &slice_vec, slice_index, &command)
             {
-                // let subsequent_commands: HashSet<Rc<Command>> =
-                //     follow_commands(&slice_vec, destination, &previous_commands);
                 for q in &command.qbs {
                     let com = slice_vec[slice_index][q.index()].take();
                     slice_vec[destination][q.index()] = com;
                 }
-                let rewrite = gen_rewrites(&h, previous_commands, &command);
-                rewrite(&mut h)?;
+                let rewrite = gen_rewrite(h, previous_commands, &command);
+                h.apply_rewrite(rewrite)?;
+                count += 1;
             }
         }
     }
 
     // TODO remove empty slices and return
     // and full slices at start?
-    Ok(h)
+    Ok(count)
 }
 
 #[cfg(test)]
@@ -565,20 +610,28 @@ mod test {
         load_slices(circ).len()
     }
     #[rstest]
-    #[case(example_cx(), true)]
-    #[case(example_cx_better(), false)]
-    #[case(big_example(), true)]
-    #[case(cant_commute(), false)]
-    #[case(t2_bell_circuit(), false)]
-    #[case(single_qb_commute(), true)]
-    fn commutation_example(#[case] case: Hugr, #[case] should_reduce: bool) {
+    #[case(example_cx(), true, 1)]
+    #[case(example_cx_better(), false, 0)]
+    #[case(big_example(), true, 1)]
+    #[case(cant_commute(), false, 0)]
+    #[case(t2_bell_circuit(), false, 0)]
+    #[case(single_qb_commute(), true, 1)]
+    fn commutation_example(
+        #[case] mut case: Hugr,
+        #[case] should_reduce: bool,
+        #[case] expected_moves: u32,
+    ) {
         let node_count = case.node_count();
         let depth_before = depth(&case);
-        let out = apply_greedy_commutation(case).unwrap();
+        let move_count = apply_greedy_commutation(&mut case).unwrap();
 
-        out.validate().unwrap();
+        case.validate().unwrap();
 
-        let depth_after = depth(&out);
+        assert_eq!(
+            move_count, expected_moves,
+            "Number of commutations did not match expected."
+        );
+        let depth_after = depth(&case);
         assert!(
             depth_after <= depth_before,
             "Greedy depth optimisation shouldn't ever increase depth."
@@ -592,7 +645,7 @@ mod test {
         }
 
         assert_eq!(
-            out.node_count(),
+            case.node_count(),
             node_count,
             "depth optimisation should not change the number of nodes."
         )
