@@ -1,7 +1,6 @@
 //! Circuit hashing.
 
 use core::panic;
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
@@ -45,7 +44,7 @@ where
         hash_vals.insert(self.input(), 0);
 
         let hash_node = |node, op, hash_vals: &HashMap<Node, u64>| -> u64 {
-            let mut hasher = DefaultHasher::new();
+            let mut hasher = fxhash::FxHasher64::default();
             hashable_op(op).hash(&mut hasher);
             // Add each each input neighbour hash, including the connected ports.
             // TODO: Ignore state edges?
@@ -57,9 +56,7 @@ where
                         let pred_node_hash = hash_vals
                             .get(&pred_node)
                             .unwrap_or_else(|| panic!("Missing hash for node {pred_node:?}"));
-                        let mut subport_hasher = DefaultHasher::new();
-                        (pred_node_hash, pred_port, input).hash(&mut subport_hasher);
-                        subport_hasher.finish()
+                        fxhash::hash64(&(pred_node_hash, pred_port, input))
                     })
                     .fold(0, |total, hash| hash ^ total);
                 input_hash.hash(&mut hasher);
