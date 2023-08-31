@@ -1,19 +1,16 @@
-#![allow(unused)]
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     rc::Rc,
 };
 
 use hugr::{
-    builder::{BuildError, DFGBuilder, Dataflow, HugrBuilder},
-    extension::prelude::QB_T,
     hugr::{
+        rewrite::insert_identity::IdentityInsertion,
         views::{HierarchyView, SiblingGraph},
         CircuitUnit, Rewrite,
     },
     ops::handle::DfgID,
-    types::FunctionType,
-    Direction, Hugr, HugrView, Node, Port, SimpleReplacement, Wire,
+    Direction, Hugr, HugrView, Node, Port, SimpleReplacement,
 };
 use itertools::Itertools;
 use portgraph::PortOffset;
@@ -250,51 +247,96 @@ fn gen_rewrites(
         nu_out,
     );
 
+    // insert identities at destination which will get replaced.
     let inserts: Vec<_> = next_commands
         .into_iter()
         .map(|(q, com)| {
-            let port = com.port_of_qb(q, Direction::Incoming).expect("missing qb");
+            let (node, port) = if &(*com) == command {
+                // if there were no nodes between destination and original node,
+                // need to connect to original successor.
+                let out_port = com.port_of_qb(q, Direction::Outgoing).expect("missing qb");
+
+                h.linked_ports(com.node(), out_port)
+                    .exactly_one()
+                    .expect("should be linear.")
+            } else {
+                (
+                    com.node,
+                    com.port_of_qb(q, Direction::Incoming).expect("missing qb"),
+                )
+            };
+
+            (q, IdentityInsertion::new(node, port))
         })
         .collect();
 
-    // let [before, after] = surrounding_commands;
+    // map from qubits in the original to those in the replacement
+    let qb_map: HashMap<Qb, Qb> = command
+        .qbs()
+        .iter()
+        .enumerate()
+        .map(|(index, q)| (*q, Qb(index)))
+        .collect();
 
-    // debug_assert_eq!(
-    //     HashSet::<Qb>::from_iter(command.qbs.iter().cloned()),
-    //     HashSet::from_iter((previous_nodes.keys()).cloned())
-    // );
-    // let qb_to_ports: HashMap<Qb, [(Node, Port); 2]> = previous_nodes
-    //     .iter()
-    //     .map(|(qb, com)| {
-    //         let port = com.port_of_qb(*qb, Direction::Incoming).unwrap();
-    //         let source = h.linked_ports(com.node, port).exactly_one().unwrap();
+    // replacement circuit containing moved node.
+    let replacement = build_simple_circuit(command.qbs().len(), |circ| {
+        circ.append(
+            h.get_optype(command.node()).clone(),
+            (0..command.qbs().len()),
+        );
+        Ok(())
+    })
+    .unwrap();
 
-    //         (*qb, [source, (com.node, port)])
-    //     })
-    //     .collect();
+    move |h| {
+        // remove node in original location
+        h.apply_rewrite(remove)?;
 
-    // let mut commands: [Vec<Command>; 2] = [vec![], vec![]];
+        // add no-ops on all qubit wires in new location
+        let noop_nodes: Result<HashMap<Qb, Node>, _> = inserts
+            .into_iter()
+            .map(|(q, insert)| h.apply_rewrite(insert).map(|res| (q, res)))
+            .collect();
+        let noop_nodes = noop_nodes.expect("Insert noop failed.");
 
-    // for (qb, ports) in qb_to_ports.into_iter() {
-    //     for (com_list, (node, port)) in commands.iter_mut().zip(ports.into_iter()) {
-    //         let com = if let Some(com) = com_list.iter_mut().find(|c| c.node == node) {
-    //             com
-    //         } else {
-    //             com_list.push(Command { node, qbs: vec![] });
-    //             let final_index = com_list.len() - 1;
-    //             com_list.get_mut(final_index).unwrap()
-    //         };
+        let mut nu_inp = HashMap::new();
+        let mut nu_out = HashMap::new();
 
-    //         if port.index() >= com.qbs.len() {
-    //             com.qbs.resize(port.index() + 1, Qb(0));
-    //         }
-    //         com.qbs[port.index()] = qb;
-    //     }
-    // }
+        let replace_io = replacement.get_io(replacement.root()).unwrap();
+        // h.validate().unwrap();
+        // crate::utils::test::viz_dotstr(&h.dot_string());
+        for (q, noop_node) in &noop_nodes {
+            let replace_target_port = replacement
+                .linked_ports(
+                    replace_io[0],
+                    PortOffset::new_outgoing(qb_map[q].index()).into(),
+                )
+                .exactly_one()
+                .unwrap();
 
-    // dbg!(commands);
+            let noop_port = h.node_inputs(*noop_node).next().unwrap();
 
-    |_| todo!()
+            nu_inp.insert(replace_target_port, (*noop_node, noop_port));
+
+            let noop_target = h
+                .linked_ports(*noop_node, PortOffset::new_outgoing(0).into())
+                .exactly_one()
+                .unwrap();
+
+            let replace_out_port: Port = PortOffset::new_incoming(qb_map[q].index()).into();
+
+            nu_out.insert(noop_target, replace_out_port);
+        }
+
+        let replace = SimpleReplacement::new(
+            h.root(),
+            noop_nodes.into_values().collect(),
+            replacement,
+            nu_inp,
+            nu_out,
+        );
+        h.apply_rewrite(replace)
+    }
 }
 
 fn follow_commands(
@@ -306,7 +348,6 @@ fn follow_commands(
 
     for qb in previous_commands.keys() {
         for slice_index in (0..destination + 1).rev() {
-            dbg!(slice_index);
             if let Some(com) = &slice_vec[slice_index][qb.index()] {
                 commands.insert(com.clone());
                 break;
@@ -316,7 +357,9 @@ fn follow_commands(
 
     commands
 }
-fn solve(mut h: Hugr) -> Result<Hugr, ()> {
+
+/// Pass which greedily commutes operations forwards in order to reduce depth.
+pub fn apply_greedy_commutation(mut h: Hugr) -> Result<Hugr, ()> {
     let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&h, h.root());
     let mut slice_vec = load_slices(circ);
 
@@ -391,6 +434,37 @@ mod test {
             circ.append(T2Op::Z, [1])?;
             circ.append(T2Op::CX, [0, 1])?;
             circ.append(T2Op::CX, [2, 1])?;
+            Ok(())
+        })
+        .unwrap()
+    }
+
+    #[fixture]
+    // example circuit from original task with lower depth
+    fn big_example() -> Hugr {
+        build_simple_circuit(4, |circ| {
+            circ.append(T2Op::CX, [0, 3])?;
+            circ.append(T2Op::CX, [1, 2])?;
+            circ.append(T2Op::H, [0])?;
+            circ.append(T2Op::H, [3])?;
+            circ.append(T2Op::CX, [0, 1])?;
+            circ.append(T2Op::CX, [2, 3])?;
+            circ.append(T2Op::CX, [0, 1])?;
+            circ.append(T2Op::CX, [2, 3])?;
+            circ.append(T2Op::CX, [2, 1])?;
+            circ.append(T2Op::H, [1])?;
+            Ok(())
+        })
+        .unwrap()
+    }
+
+    #[fixture]
+    // example circuit from original task with lower depth
+    fn single_qb_commute() -> Hugr {
+        build_simple_circuit(3, |circ| {
+            circ.append(T2Op::H, [1])?;
+            circ.append(T2Op::CX, [0, 1])?;
+            circ.append(T2Op::Z, [0])?;
             Ok(())
         })
         .unwrap()
@@ -473,29 +547,15 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_available_slice_bigger() {
-        let example_cx = build_simple_circuit(4, |circ| {
-            circ.append(T2Op::CX, [0, 3])?;
-            circ.append(T2Op::CX, [1, 2])?;
-            circ.append(T2Op::H, [0])?;
-            circ.append(T2Op::H, [3])?;
-            circ.append(T2Op::CX, [0, 1])?;
-            circ.append(T2Op::CX, [2, 3])?;
-            circ.append(T2Op::CX, [0, 1])?;
-            circ.append(T2Op::CX, [2, 3])?;
-            circ.append(T2Op::CX, [2, 1])?;
-            circ.append(T2Op::H, [1])?;
-            Ok(())
-        })
-        .unwrap();
-
-        let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&example_cx, example_cx.root());
+    #[rstest]
+    fn big_test(big_example: Hugr) {
+        let h = big_example;
+        let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&h, h.root());
         let slices = load_slices(circ);
-
+        assert_eq!(slices.len(), 6);
         // can commute final cx to front
         let (found, prev_nodes) =
-            available_slice(&example_cx, &slices, 3, slices[4][1].as_ref().unwrap()).unwrap();
+            available_slice(&h, &slices, 3, slices[4][1].as_ref().unwrap()).unwrap();
         assert_eq!(found, 1);
         assert_eq!(
             *prev_nodes.get(&Qb(1)).unwrap(),
@@ -507,13 +567,7 @@ mod test {
             slices[2][2].as_ref().unwrap().clone()
         );
         // hadamard can't commute past anything
-        assert!(available_slice(&example_cx, &slices, 4, slices[5][1].as_ref().unwrap()).is_none());
-        solve(example_cx).unwrap();
-    }
-
-    #[rstest]
-    fn commutation_simple_bell(t2_bell_circuit: Hugr) {
-        solve(t2_bell_circuit).unwrap();
+        assert!(available_slice(&h, &slices, 4, slices[5][1].as_ref().unwrap()).is_none());
     }
 
     #[rstest]
@@ -551,8 +605,42 @@ mod test {
         assert_eq!(example_cx.node_count(), 5);
     }
 
+    /// Calculate depth by placing commands in slices.
+    fn depth(h: &Hugr) -> usize {
+        let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(h, h.root());
+        load_slices(circ).len()
+    }
     #[rstest]
-    fn commutation_example(cant_commute: Hugr) {
-        solve(cant_commute).unwrap();
+    #[case(example_cx(), true)]
+    #[case(example_cx_better(), false)]
+    #[case(big_example(), true)]
+    #[case(cant_commute(), false)]
+    #[case(t2_bell_circuit(), false)]
+    #[case(single_qb_commute(), true)]
+    fn commutation_example(#[case] case: Hugr, #[case] should_reduce: bool) {
+        let node_count = case.node_count();
+        let depth_before = depth(&case);
+        let out = apply_greedy_commutation(case).unwrap();
+
+        out.validate().unwrap();
+
+        let depth_after = depth(&out);
+        assert!(
+            depth_after <= depth_before,
+            "Greedy depth optimisation shouldn't ever increase depth."
+        );
+
+        if !should_reduce {
+            assert_eq!(
+                depth_after, depth_after,
+                "Depth should not have changed for this case."
+            );
+        }
+
+        assert_eq!(
+            out.node_count(),
+            node_count,
+            "depth optimisation should not change the number of nodes."
+        )
     }
 }

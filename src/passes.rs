@@ -5,6 +5,7 @@
 // pub mod pattern;
 // pub mod squash;
 mod commutation;
+pub use commutation::apply_greedy_commutation;
 pub mod taso;
 
 // use rayon::prelude::*;
