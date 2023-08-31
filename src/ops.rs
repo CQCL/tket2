@@ -130,7 +130,7 @@ fn extension() -> Extension {
 }
 
 lazy_static! {
-    static ref EXTENSION: Extension = extension();
+    pub static ref EXTENSION: Extension = extension();
 }
 
 // From implementations could be made generic over SimpleOpEnum
@@ -216,7 +216,7 @@ pub(crate) mod test {
         f(&mut circ)?;
 
         let qbs = circ.finish();
-        h.finish_hugr_with_outputs(qbs)
+        h.finish_hugr_with_outputs(qbs, &crate::extension::REGISTRY)
     }
 
     #[fixture]

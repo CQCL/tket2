@@ -4,16 +4,18 @@
 
 use std::collections::HashMap;
 
-use hugr::extension::{ExtensionId, SignatureError};
+use super::json::op::JsonOp;
+use crate::ops::EXTENSION as T2EXTENSION;
+use hugr::extension::prelude::PRELUDE;
+use hugr::extension::{ExtensionId, ExtensionRegistry, SignatureError};
 use hugr::ops::custom::{ExternalOp, OpaqueOp};
 use hugr::ops::OpName;
+use hugr::std_extensions::arithmetic::float_types::extension as float_extension;
 use hugr::types::type_param::{CustomTypeArg, TypeArg, TypeParam};
 use hugr::types::{CustomType, FunctionType, Type, TypeBound};
 use hugr::Extension;
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
-
-use super::json::op::JsonOp;
 
 /// The ID of the TKET1 extension.
 pub const TKET1_EXTENSION_ID: ExtensionId = SmolStr::new_inline("TKET1");
@@ -25,39 +27,47 @@ pub const LINEAR_BIT_NAME: SmolStr = SmolStr::new_inline("LBit");
 pub const JSON_OP_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Op");
 
 lazy_static! {
+/// A custom type for the encoded TKET1 operation
+static ref TKET1_OP_PAYLOAD : CustomType = CustomType::new("TKET1 Json Op", vec![], TKET1_EXTENSION_ID, TypeBound::Eq);
 
-    /// A custom type for the encoded TKET1 operation
-    static ref TKET1_OP_PAYLOAD : CustomType = CustomType::new("TKET1 Json Op", vec![], TKET1_EXTENSION_ID, TypeBound::Eq);
+/// The TKET1 extension, containing the opaque TKET1 operations.
+pub static ref TKET1_EXTENSION: Extension = {
+    let mut res = Extension::new(TKET1_EXTENSION_ID);
 
-    /// The TKET1 extension, containing the opaque TKET1 operations.
-    pub static ref TKET1_EXTENSION: Extension = {
-        let mut res = Extension::new(TKET1_EXTENSION_ID);
+    res.add_type(LINEAR_BIT_NAME, vec![], "A linear bit.".into(), TypeBound::Any.into()).unwrap();
 
-        res.add_type(LINEAR_BIT_NAME, vec![], "A linear bit.".into(), TypeBound::Any.into()).unwrap();
+    let json_op_payload = TypeParam::Opaque(TKET1_OP_PAYLOAD.clone());
+    res.add_op_custom_sig(
+        JSON_OP_NAME,
+        "An opaque TKET1 operation.".into(),
+        vec![json_op_payload],
+        HashMap::new(),
+        vec![],
+        json_op_signature,
+    ).unwrap();
 
-        let json_op_payload = TypeParam::Opaque(TKET1_OP_PAYLOAD.clone());
-        res.add_op_custom_sig(
-            JSON_OP_NAME,
-            "An opaque TKET1 operation.".into(),
-            vec![json_op_payload],
-            HashMap::new(),
-            vec![],
-            json_op_signature,
-        ).unwrap();
+    res
+};
 
-        res
+/// The type for linear bits. Part of the TKET1 extension.
+pub static ref LINEAR_BIT: Type = {
+    Type::new_extension(TKET1_EXTENSION
+        .get_type(&LINEAR_BIT_NAME)
+        .unwrap()
+        .instantiate_concrete([])
+        .unwrap())
     };
 
-    /// The type for linear bits. Part of the TKET1 extension.
-    pub static ref LINEAR_BIT: Type = {
-        Type::new_extension(TKET1_EXTENSION
-            .get_type(&LINEAR_BIT_NAME)
-            .unwrap()
-            .instantiate_concrete([])
-            .unwrap())
-    };
+/// Extension registry including the prelude, TKET1 and T2Ops extensions.
+pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::from([
+    TKET1_EXTENSION.clone(),
+    PRELUDE.clone(),
+    T2EXTENSION.clone(),
+    float_extension(),
+]);
+
+
 }
-
 /// Create a new opaque operation
 pub(crate) fn wrap_json_op(op: &JsonOp) -> ExternalOp {
     // TODO: This throws an error
