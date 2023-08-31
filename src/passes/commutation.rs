@@ -37,11 +37,6 @@ impl From<Qb> for CircuitUnit {
         CircuitUnit::Linear(qb.index())
     }
 }
-// #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-// struct Command {
-//     node: Node,
-//     qbs: Vec<Qb>,
-// }
 
 impl Command {
     fn qubits(&self) -> impl Iterator<Item = Qb> + '_ {
@@ -61,22 +56,6 @@ impl Command {
             .map(|i| PortOffset::new(direction, i).into())
     }
 }
-
-// impl<'a> From<CircCommand> for Command {
-//     fn from(com: CircCommand<'a>) -> Self {
-//         let CircCommand { node, inputs, .. } = com;
-//         let qbs = inputs
-//             .into_iter()
-//             .map(|u| {
-//                 let CircuitUnit::Linear(i) = u else {
-//                     panic!("not linear unit.")
-//                 };
-//                 Qb(i)
-//             })
-//             .collect();
-//         Self { node, qbs }
-//     }
-// }
 
 type Slice = Vec<Option<Rc<Command>>>;
 type SliceVec = Vec<Slice>;
@@ -494,11 +473,7 @@ mod test {
         .unwrap()
     }
 
-    fn slice_from_command(
-        commands: &Vec<Command>,
-        n_qbs: usize,
-        slice_arr: &[&[usize]],
-    ) -> SliceVec {
+    fn slice_from_command(commands: &[Command], n_qbs: usize, slice_arr: &[&[usize]]) -> SliceVec {
         slice_arr
             .iter()
             .map(|command_indices| {
@@ -652,14 +627,12 @@ mod test {
             "Number of commutations did not match expected."
         );
         let depth_after = depth(&case);
-        assert!(
-            depth_after <= depth_before,
-            "Greedy depth optimisation shouldn't ever increase depth."
-        );
 
-        if !should_reduce {
+        if should_reduce {
+            assert!(depth_after < depth_before, "Depth should have decreased..");
+        } else {
             assert_eq!(
-                depth_after, depth_after,
+                depth_before, depth_after,
                 "Depth should not have changed for this case."
             );
         }
