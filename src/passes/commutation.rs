@@ -4,21 +4,23 @@ use std::{
 };
 
 use hugr::{
-    builder::DFGBuilder,
+    builder::{BuildError, DFGBuilder, Dataflow, DataflowHugr},
+    extension::prelude::QB_T,
     hugr::{
         rewrite::insert_identity::{IdentityInsertion, IdentityInsertionError},
         views::{HierarchyView, SiblingGraph},
         CircuitUnit, Rewrite, SimpleReplacementError,
     },
     ops::handle::DfgID,
-    types::FunctionType,
-    Direction, Hugr, HugrView, Node, Port, SimpleReplacement,
+    types::{EdgeKind, FunctionType, Type},
+    Direction, Hugr, HugrView, Node, Port, SimpleReplacement, Wire,
 };
 use itertools::Itertools;
 use portgraph::PortOffset;
 
 use crate::{
     circuit::{command::Command, Circuit},
+    extension::REGISTRY,
     ops::{Pauli, T2Op},
     utils::build_simple_circuit,
 };
@@ -40,9 +42,19 @@ impl From<Qb> for CircuitUnit {
     }
 }
 
+impl TryFrom<CircuitUnit> for Qb {
+    type Error = ();
+
+    fn try_from(cu: CircuitUnit) -> Result<Self, Self::Error> {
+        match cu {
+            CircuitUnit::Wire(_) => Err(()),
+            CircuitUnit::Linear(i) => Ok(Qb(i)),
+        }
+    }
+}
+
 impl Command {
     fn qubits(&self) -> impl Iterator<Item = Qb> + '_ {
-        // Assumes qubits leave via the same port offset they entered.
         self.inputs().iter().filter_map(|u| {
             let CircuitUnit::Linear(i) = u else {
                 return None;
@@ -51,7 +63,6 @@ impl Command {
         })
     }
     fn port_of_qb(&self, qb: Qb, direction: Direction) -> Option<Port> {
-        // Assumes qubits leave via the same port offset they entered.
         self.inputs()
             .iter()
             .position(|cu| {
@@ -189,6 +200,77 @@ fn commutation_on_port(comms: &[(usize, Pauli)], port: Port) -> Option<Pauli> {
         .find_map(|(i, p)| (*i == port.index()).then_some(*p))
 }
 
+/// Get the type of a Value [`Wire`]. If not valid port or of Value kind, returns None.
+fn get_wire_type(h: &impl HugrView, wire: Wire) -> Option<Type> {
+    let kind = h.get_optype(wire.node()).port_kind(wire.source());
+
+    if let Some(EdgeKind::Value(typ)) = kind {
+        Some(typ)
+    } else {
+        None
+    }
+}
+/// Produce a new circuit containing only the given command
+fn command_to_circ(
+    h: &impl HugrView,
+    command: &Command,
+) -> Result<(Hugr, HashMap<CircuitUnit, CircuitUnit>), BuildError> {
+    let mut input: Vec<_> = vec![];
+    let mut qubit_count = 0;
+    let input_units = command
+        .inputs()
+        .iter()
+        .enumerate()
+        .map(|(i, cu)| match cu {
+            CircuitUnit::Wire(wire) => {
+                input.push(get_wire_type(h, *wire).expect("Wire not found."));
+                CircuitUnit::Wire(Wire::new(wire.node(), PortOffset::new_outgoing(i).into()))
+            }
+            // ASSUME all linear are qubit.
+            CircuitUnit::Linear(_) => {
+                qubit_count += 1;
+                input.push(QB_T);
+                CircuitUnit::Linear(qubit_count - 1)
+            }
+        })
+        .collect_vec();
+    // ASSUME only qubit outputs
+    let output = vec![QB_T; command.outputs().len()];
+    let mut dfg = DFGBuilder::new(FunctionType::new(input, output))?;
+    let in_node = dfg.input();
+
+    let qbs = input_units
+        .iter()
+        .enumerate()
+        .filter_map(|(offset, cu)| {
+            matches!(cu, &CircuitUnit::Linear(_)).then_some(in_node.out_wire(offset))
+        })
+        .collect();
+
+    let input_units = input_units
+        .into_iter()
+        .map(|cu| match cu {
+            CircuitUnit::Wire(w) => CircuitUnit::Wire(in_node.out_wire(w.source().index())),
+            CircuitUnit::Linear(_) => cu,
+        })
+        .collect_vec();
+    let mut circ = dfg.as_circuit(qbs);
+
+    circ.append_and_consume(h.get_optype(command.node()).clone(), input_units.clone())?;
+    let qbs = circ.finish();
+    let dfg = dfg.finish_hugr_with_outputs(qbs, &REGISTRY)?;
+
+    Ok((
+        dfg,
+        command
+            .inputs()
+            .iter()
+            .cloned()
+            .zip(input_units.into_iter())
+            .collect(),
+    ))
+}
+
 /// Error from a [`PullForward`] operation.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum PullForwardError {
@@ -209,7 +291,7 @@ struct PullForward {
     replacement: Hugr,
     remove: SimpleReplacement,
     inserts: Vec<(Qb, IdentityInsertion)>,
-    qb_map: HashMap<Qb, Qb>,
+    replace_units: HashMap<CircuitUnit, CircuitUnit>,
 }
 
 impl Rewrite for PullForward {
@@ -228,8 +310,18 @@ impl Rewrite for PullForward {
             replacement,
             remove,
             inserts,
-            qb_map,
+            replace_units,
         } = self;
+
+        let qb_map = |q: &Qb| -> Qb {
+            let cu: CircuitUnit = q.clone().into();
+            replace_units
+                .get(&cu)
+                .unwrap()
+                .clone()
+                .try_into()
+                .expect("not a linear CU")
+        };
         h.apply_rewrite(remove).map_err(PullForwardError::Remove)?;
 
         // add no-ops on all qubit wires in new location
@@ -248,7 +340,7 @@ impl Rewrite for PullForward {
             let replace_target_port = replacement
                 .linked_ports(
                     replace_io[0],
-                    PortOffset::new_outgoing(qb_map[q].index()).into(),
+                    PortOffset::new_outgoing(qb_map(q).index()).into(),
                 )
                 .exactly_one()
                 .unwrap();
@@ -262,7 +354,7 @@ impl Rewrite for PullForward {
                 .exactly_one()
                 .unwrap();
 
-            let replace_out_port: Port = PortOffset::new_incoming(qb_map[q].index()).into();
+            let replace_out_port: Port = PortOffset::new_incoming(qb_map(q).index()).into();
 
             nu_out.insert(noop_target, replace_out_port);
         }
@@ -334,43 +426,27 @@ fn gen_rewrite(
         })
         .collect();
 
-    // let build = || {
-    //     let mut dfg = DFGBuilder::new(FunctionType::new(
-    //         type_row![QB_T, QB_T, FLOAT64_TYPE],
-    //         type_row![QB_T, QB_T],
-    //     ))?;
-
-    //     let [q0, q1, f] = dfg.input_wires_arr();
-
-    //     let mut circ = dfg.as_circuit(vec![q0, q1]);
-
-    //     circ.append(T2Op::H, [1])?;
-    //     circ.append(T2Op::CX, [0, 1])?;
-    //     circ.append_and_consume(T2Op::RzF64, [CircuitUnit::Linear(0), CircuitUnit::Wire(f)])?;
-    //     let qbs = circ.finish();
-    //     dfg.finish_hugr_with_outputs(qbs, &REGISTRY)
-    // };
-    // let replacement = build().unwrap();
+    // replacement circuit containing moved node.
+    let (replacement, replace_units) = command_to_circ(h, &command).unwrap();
 
     // map from qubits in the original to those in the replacement
-    let qb_map: HashMap<Qb, Qb> = command
-        .qubits()
-        .enumerate()
-        .map(|(index, q)| (q, Qb(index)))
-        .collect();
+    // let qb_map: HashMap<Qb, Qb> = command
+    //     .qubits()
+    //     .enumerate()
+    //     .map(|(index, q)| (q, Qb(index)))
+    //     .collect();
 
-    // replacement circuit containing moved node.
-    let replacement = build_simple_circuit(num_qubits, |circ| {
-        circ.append(h.get_optype(command.node()).clone(), 0..num_qubits)?;
-        Ok(())
-    })
-    .unwrap();
+    // let replacement = build_simple_circuit(num_qubits, |circ| {
+    //     circ.append(h.get_optype(command.node()).clone(), 0..num_qubits)?;
+    //     Ok(())
+    // })
+    // .unwrap();
 
     PullForward {
         replacement,
         remove,
         inserts,
-        qb_map,
+        replace_units,
     }
 }
 
@@ -707,7 +783,7 @@ mod test {
     #[case(single_qb_commute(), true, 1)]
     #[case(single_qb_commute_2(), true, 2)]
     #[case(commutes_but_same_depth(), false, 1)]
-    #[should_panic]
+    // #[should_panic]
     #[case::panic(non_linear_inputs(), true, 1)]
     #[should_panic]
     #[case::panic(non_linear_in_out(), true, 1)]
