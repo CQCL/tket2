@@ -286,10 +286,6 @@ fn gen_rewrite(
     let remove_node = command.node();
     let num_qubits = command.qubits().count();
 
-    // identity circuit only works for all linear inputs
-    // TODO instead, add placeholder/discard nodes for all non-linear wires,
-    // keep a map from the other end of those wires to said nodes, and replace
-    // them at the end.
     let replacement = build_simple_circuit(num_qubits, |_circ| Ok(())).unwrap();
     let replace_io = replacement.get_io(replacement.root()).unwrap();
     let nu_inp: HashMap<(Node, Port), (Node, Port)> = h
@@ -376,6 +372,10 @@ pub fn apply_greedy_commutation(h: &mut Hugr) -> Result<u32, PullForwardError> {
             if let Some((destination, previous_commands)) =
                 available_slice(&h, &slice_vec, slice_index, &command)
             {
+                debug_assert!(
+                    destination < slice_index,
+                    "Avoid mutating slices we haven't got to yet."
+                );
                 for q in command.qubits() {
                     let com = slice_vec[slice_index][q.index()].take();
                     slice_vec[destination][q.index()] = com;
