@@ -3,16 +3,20 @@ use std::collections::HashMap;
 use hugr::{
     extension::{
         prelude::{BOOL_T, QB_T},
-        ExtensionBuildError, ExtensionId, OpDef,
+        ExtensionBuildError, ExtensionId, OpDef, SignatureError,
     },
     ops::{custom::ExternalOp, LeafOp, OpType},
     std_extensions::arithmetic::float_types::FLOAT64_TYPE,
     type_row,
-    types::FunctionType,
+    types::{
+        type_param::{TypeArg, TypeParam},
+        FunctionType, Type, TypeBound,
+    },
     Extension,
 };
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
+use smol_str::SmolStr;
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
@@ -122,11 +126,34 @@ impl T2Op {
     }
 }
 
+const SINK_OP_ID: SmolStr = SmolStr::new_inline("sink");
 fn extension() -> Extension {
     let mut e = Extension::new(EXTENSION_ID);
     load_all_ops::<T2Op>(&mut e).expect("add fail");
 
+    e.add_op_custom_sig_simple(
+        SINK_OP_ID,
+        "Sink a wire for later replacement.".to_string(),
+        vec![TypeParam::Type(TypeBound::Copyable)],
+        |args: &[TypeArg]| {
+            let TypeArg::Type(t) = args[0].clone() else {
+                panic!("should be checked already.")
+            };
+
+            Ok(FunctionType::new(vec![t], vec![]))
+        },
+    )
+    .unwrap();
     e
+}
+
+/// New sink operation for a given type.
+///
+/// Errors if type is not copyable.
+pub fn sink_op(t: Type) -> Result<LeafOp, SignatureError> {
+    EXTENSION
+        .instantiate_extension_op(&SINK_OP_ID, [TypeArg::Type(t)])
+        .map(|o| o.into())
 }
 
 lazy_static! {
