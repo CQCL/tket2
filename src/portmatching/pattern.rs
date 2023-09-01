@@ -121,7 +121,7 @@ mod tests {
     use hugr::{Hugr, HugrView};
     use itertools::Itertools;
 
-    use crate::ops::test::build_simple_circuit;
+    use crate::utils::build_simple_circuit;
     use crate::T2Op;
 
     use super::*;
