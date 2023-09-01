@@ -113,7 +113,7 @@ impl T2Op {
 
         match self {
             X => vec![(0, Pauli::X)],
-            T | Z | S | Tdg | Sdg | RzF64 => vec![(0, Pauli::Z)],
+            T | Z | S | Tdg | Sdg | RzF64 | Measure => vec![(0, Pauli::Z)],
             CX => vec![(0, Pauli::Z), (1, Pauli::X)],
             ZZMax => vec![(0, Pauli::Z), (1, Pauli::Z)],
             // by default, no commutation

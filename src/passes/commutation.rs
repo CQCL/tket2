@@ -399,7 +399,7 @@ mod test {
     use crate::{extension::REGISTRY, ops::test::t2_bell_circuit};
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
-        extension::prelude::QB_T,
+        extension::prelude::{BOOL_T, QB_T},
         std_extensions::arithmetic::float_types::FLOAT64_TYPE,
         type_row,
         types::FunctionType,
@@ -504,8 +504,8 @@ mod test {
     }
 
     #[fixture]
-    // example circuit from original task with lower depth
-    fn non_linear_wires() -> Hugr {
+    // Gate being commuted has a non-linear input
+    fn non_linear_inputs() -> Hugr {
         let build = || {
             let mut dfg = DFGBuilder::new(FunctionType::new(
                 type_row![QB_T, QB_T, FLOAT64_TYPE],
@@ -521,6 +521,29 @@ mod test {
             circ.append_and_consume(T2Op::RzF64, [CircuitUnit::Linear(0), CircuitUnit::Wire(f)])?;
             let qbs = circ.finish();
             dfg.finish_hugr_with_outputs(qbs, &REGISTRY)
+        };
+        build().unwrap()
+    }
+
+    #[fixture]
+    // Gates being commuted have non-linear outputs
+    fn non_linear_in_out() -> Hugr {
+        let build = || {
+            let mut dfg = DFGBuilder::new(FunctionType::new(
+                type_row![QB_T, QB_T],
+                type_row![QB_T, QB_T, BOOL_T],
+            ))?;
+
+            let [q0, q1] = dfg.input_wires_arr();
+
+            let mut circ = dfg.as_circuit(vec![q0, q1]);
+
+            circ.append(T2Op::H, [1])?;
+            circ.append(T2Op::CX, [0, 1])?;
+            let measured = circ.append_with_outputs(T2Op::Measure, [0])?;
+            let mut outs = circ.finish();
+            outs.extend(measured);
+            dfg.finish_hugr_with_outputs(outs, &REGISTRY)
         };
         build().unwrap()
     }
@@ -665,7 +688,9 @@ mod test {
     #[case(single_qb_commute_2(), true, 2)]
     #[case(commutes_but_same_depth(), false, 1)]
     #[should_panic]
-    #[case::panic(non_linear_wires(), true, 1)]
+    #[case::panic(non_linear_inputs(), true, 1)]
+    #[should_panic]
+    #[case::panic(non_linear_in_out(), true, 1)]
     fn commutation_example(
         #[case] mut case: Hugr,
         #[case] should_reduce: bool,
