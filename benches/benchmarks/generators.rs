@@ -1,6 +1,6 @@
 use hugr::builder::{BuildError, CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::QB_T;
-use hugr::extension::prelude_registry;
+use hugr::extension::PRELUDE_REGISTRY;
 use hugr::types::FunctionType;
 use hugr::Hugr;
 use tket2::T2Op;
@@ -22,7 +22,7 @@ pub fn build_simple_circuit(
     f(&mut circ)?;
 
     let qbs = circ.finish();
-    h.finish_hugr_with_outputs(qbs, &prelude_registry())
+    h.finish_hugr_with_outputs(qbs, &PRELUDE_REGISTRY)
 }
 
 /// Create a circuit with layers of CNOTs.
