@@ -133,12 +133,11 @@ fn available_slice(
         } else {
             // if command commutes with all ports here it can be moved past,
             // otherwise stop
-            let (blocked, new_prev_nodes) =
-                blocked_at_slice(command, &slice_vec[slice_index], circ);
-            if blocked {
-                break;
-            } else {
+            if let Some(new_prev_nodes) = commutes_at_slice(command, &slice_vec[slice_index], circ)
+            {
                 prev_nodes.extend(new_prev_nodes);
+            } else {
+                break;
             }
         }
     }
@@ -146,52 +145,42 @@ fn available_slice(
     available
 }
 
-// check if command wouldn't commute through this slice.
-fn blocked_at_slice(
+// If a command commutes back through this slice return a map from the qubits of
+// the command to the commands in this slice acting on those qubits.
+fn commutes_at_slice(
     command: &Rc<Command>,
     slice: &Slice,
     circ: &impl HugrView,
-) -> (bool, HashMap<Qb, Rc<Command>>) {
+) -> Option<HashMap<Qb, Rc<Command>>> {
     // map from qubit to node it is connected to immediately after the free slice.
     let mut prev_nodes: HashMap<Qb, Rc<Command>> =
         HashMap::from_iter(command.qubits().map(|q| (q, command.clone())));
-    let blocked = command
-        .qubits()
-        .map(|q| (command.port_of_qb(q, Direction::Incoming).unwrap(), q))
-        .any(|(port, q)| {
-            if let Some(other_com) = &slice[q.index()] {
-                let Ok(other_op): Result<T2Op, _> =
-                    circ.get_optype(other_com.node()).clone().try_into()
-                else {
-                    return true;
-                };
 
-                let Ok(op): Result<T2Op, _> = circ.get_optype(command.node()).clone().try_into()
-                else {
-                    return true;
-                };
+    for q in command.qubits() {
+        // if slot is empty, continue checking.
+        let Some(other_com) = &slice[q.index()] else {
+            continue;
+        };
 
-                let Some(pauli) = commutation_on_port(&op.qubit_commutation(), port) else {
-                    return true;
-                };
-                let Some(other_pauli) = commutation_on_port(
-                    &other_op.qubit_commutation(),
-                    other_com.port_of_qb(q, Direction::Outgoing).unwrap(),
-                ) else {
-                    return true;
-                };
+        let port = command.port_of_qb(q, Direction::Incoming)?;
 
-                if pauli.commutes_with(other_pauli) {
-                    prev_nodes.insert(q, other_com.clone());
-                    false
-                } else {
-                    true
-                }
-            } else {
-                false
-            }
-        });
-    (blocked, prev_nodes)
+        let op: T2Op = circ.get_optype(command.node()).clone().try_into().ok()?;
+        let pauli = commutation_on_port(&op.qubit_commutation(), port)?;
+
+        let other_op: T2Op = circ.get_optype(other_com.node()).clone().try_into().ok()?;
+        let other_pauli = commutation_on_port(
+            &other_op.qubit_commutation(),
+            other_com.port_of_qb(q, Direction::Outgoing)?,
+        )?;
+
+        if pauli.commutes_with(other_pauli) {
+            prev_nodes.insert(q, other_com.clone());
+        } else {
+            return None;
+        }
+    }
+
+    Some(prev_nodes)
 }
 
 fn commutation_on_port(comms: &[(usize, Pauli)], port: Port) -> Option<Pauli> {
