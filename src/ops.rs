@@ -21,7 +21,19 @@ use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_inline("quantum.tket2");
 
 #[derive(
-    Clone, Copy, Debug, Serialize, Deserialize, EnumIter, IntoStaticStr, EnumString, PartialEq,
+    Clone,
+    Copy,
+    Debug,
+    Serialize,
+    Deserialize,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumIter,
+    IntoStaticStr,
+    EnumString,
 )]
 #[allow(missing_docs)]
 /// Simple enum of tket 2 quantum operations.
@@ -130,7 +142,7 @@ fn extension() -> Extension {
 }
 
 lazy_static! {
-    static ref EXTENSION: Extension = extension();
+    pub static ref EXTENSION: Extension = extension();
 }
 
 // From implementations could be made generic over SimpleOpEnum
@@ -155,7 +167,15 @@ impl TryFrom<OpType> for T2Op {
 
     fn try_from(op: OpType) -> Result<Self, Self::Error> {
         let leaf: LeafOp = op.try_into().map_err(|_| "not a leaf.")?;
-        match leaf {
+        leaf.try_into()
+    }
+}
+
+impl TryFrom<LeafOp> for T2Op {
+    type Error = &'static str;
+
+    fn try_from(op: LeafOp) -> Result<Self, Self::Error> {
+        match op {
             LeafOp::CustomOp(b) => match *b {
                 ExternalOp::Extension(e) => {
                     Self::try_from_op_def(e.def()).map_err(|_| "not a T2Op")
@@ -166,6 +186,7 @@ impl TryFrom<OpType> for T2Op {
         }
     }
 }
+
 fn load_all_ops<T: SimpleOpEnum>(extension: &mut Extension) -> Result<(), ExtensionBuildError> {
     for op in T::all_variants() {
         op.add_to_extension(extension)?;
@@ -178,16 +199,14 @@ pub(crate) mod test {
     use std::sync::Arc;
 
     use hugr::{
-        builder::{BuildError, CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr},
-        extension::{prelude::QB_T, OpDef},
+        extension::OpDef,
         hugr::views::{HierarchyView, SiblingGraph},
         ops::handle::DfgID,
-        types::FunctionType,
         Hugr, HugrView,
     };
     use rstest::{fixture, rstest};
 
-    use crate::{circuit::Circuit, ops::SimpleOpEnum};
+    use crate::{circuit::Circuit, ops::SimpleOpEnum, utils::build_simple_circuit};
 
     use super::{T2Op, EXTENSION, EXTENSION_ID};
     fn get_opdef(op: impl SimpleOpEnum) -> Option<&'static Arc<OpDef>> {
@@ -200,23 +219,6 @@ pub(crate) mod test {
         for o in T2Op::all_variants() {
             assert_eq!(T2Op::try_from_op_def(get_opdef(o).unwrap()), Ok(o));
         }
-    }
-
-    pub(crate) fn build_simple_circuit(
-        num_qubits: usize,
-        f: impl FnOnce(&mut CircuitBuilder<DFGBuilder<Hugr>>) -> Result<(), BuildError>,
-    ) -> Result<Hugr, BuildError> {
-        let qb_row = vec![QB_T; num_qubits];
-        let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row))?;
-
-        let qbs = h.input_wires();
-
-        let mut circ = h.as_circuit(qbs.into_iter().collect());
-
-        f(&mut circ)?;
-
-        let qbs = circ.finish();
-        h.finish_hugr_with_outputs(qbs)
     }
 
     #[fixture]
