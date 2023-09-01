@@ -41,6 +41,7 @@ fn add_patterns_module(py: Python, parent: &PyModule) -> PyResult<()> {
 fn add_pass_module(py: Python, parent: &PyModule) -> PyResult<()> {
     let m = PyModule::new(py, "passes")?;
     m.add_function(wrap_pyfunction!(greedy_depth_reduce, m)?)?;
+    m.add_class::<tket2::T2Op>()?;
     parent.add_submodule(m)?;
     Ok(())
 }

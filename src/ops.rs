@@ -23,10 +23,13 @@ use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
 
 /// Name of tket 2 extension.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_inline("quantum.tket2");
+#[cfg(feature = "pyo3")]
+use pyo3::prelude::*;
 
 #[derive(
     Clone, Copy, Debug, Serialize, Deserialize, EnumIter, IntoStaticStr, EnumString, PartialEq,
 )]
+#[cfg_attr(feature = "pyo3", pyclass)]
 #[allow(missing_docs)]
 /// Simple enum of tket 2 quantum operations.
 pub enum T2Op {
