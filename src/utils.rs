@@ -8,6 +8,7 @@ use hugr::{
 };
 
 // utility for building simple qubit-only circuits.
+#[allow(unused)]
 pub(crate) fn build_simple_circuit(
     num_qubits: usize,
     f: impl FnOnce(&mut CircuitBuilder<DFGBuilder<Hugr>>) -> Result<(), BuildError>,
