@@ -178,16 +178,14 @@ pub(crate) mod test {
     use std::sync::Arc;
 
     use hugr::{
-        builder::{BuildError, CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr},
-        extension::{prelude::QB_T, OpDef},
+        extension::OpDef,
         hugr::views::{HierarchyView, SiblingGraph},
         ops::handle::DfgID,
-        types::FunctionType,
         Hugr, HugrView,
     };
     use rstest::{fixture, rstest};
 
-    use crate::{circuit::Circuit, ops::SimpleOpEnum};
+    use crate::{circuit::Circuit, ops::SimpleOpEnum, utils::build_simple_circuit};
 
     use super::{T2Op, EXTENSION, EXTENSION_ID};
     fn get_opdef(op: impl SimpleOpEnum) -> Option<&'static Arc<OpDef>> {
@@ -200,23 +198,6 @@ pub(crate) mod test {
         for o in T2Op::all_variants() {
             assert_eq!(T2Op::try_from_op_def(get_opdef(o).unwrap()), Ok(o));
         }
-    }
-
-    pub(crate) fn build_simple_circuit(
-        num_qubits: usize,
-        f: impl FnOnce(&mut CircuitBuilder<DFGBuilder<Hugr>>) -> Result<(), BuildError>,
-    ) -> Result<Hugr, BuildError> {
-        let qb_row = vec![QB_T; num_qubits];
-        let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row))?;
-
-        let qbs = h.input_wires();
-
-        let mut circ = h.as_circuit(qbs.into_iter().collect());
-
-        f(&mut circ)?;
-
-        let qbs = circ.finish();
-        h.finish_hugr_with_outputs(qbs)
     }
 
     #[fixture]

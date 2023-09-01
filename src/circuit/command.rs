@@ -183,7 +183,7 @@ mod test {
     use hugr::ops::OpName;
     use hugr::HugrView;
 
-    use crate::ops::test::build_simple_circuit;
+    use crate::utils::build_simple_circuit;
     use crate::T2Op;
 
     use super::*;
