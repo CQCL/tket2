@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main 
-      - hugr
   workflow_dispatch: {}
 
 env:
