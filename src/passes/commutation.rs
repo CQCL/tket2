@@ -11,7 +11,7 @@ use hugr::{
         views::{HierarchyView, SiblingGraph},
         CircuitUnit, Rewrite, SimpleReplacementError,
     },
-    ops::handle::DfgID,
+    ops::{handle::DfgID, OpName},
     types::{EdgeKind, FunctionType, Type},
     Direction, Hugr, HugrView, Node, Port, SimpleReplacement, Wire,
 };
@@ -233,15 +233,16 @@ fn command_to_circ(h: &impl HugrView, command: &Command) -> Result<(Hugr, Hugr),
 
     let qb_wires: Vec<_> = dfg
         .input_wires()
-        .filter_map(|in_wire| {
-            let t = dfg.get_wire_type(in_wire).unwrap();
-            if t == QB_T {
-                Some(in_wire)
-            } else {
-                dfg.add_dataflow_op(sink_op(t).expect("non-qubit linear wire."), [in_wire])
+        .filter(|in_wire| {
+            let t = dfg.get_wire_type(*in_wire).unwrap();
+            let is_qb = t == QB_T;
+            if !is_qb {
+                // add a temporary sink node for incoming non-linear wires that
+                // will get wired back up to the node after commutation.
+                dfg.add_dataflow_op(sink_op(t).expect("non-qubit linear wire."), [*in_wire])
                     .unwrap();
-                None
             }
+            is_qb
         })
         .collect();
     let first_replace = dfg.finish_hugr_with_outputs(qb_wires, &REGISTRY)?;
@@ -268,8 +269,8 @@ pub enum PullForwardError {
 struct PullForward {
     replacement: Hugr,
     remove: SimpleReplacement,
-    inserts: Vec<(Qb, IdentityInsertion)>,
-    qb_map: HashMap<Qb, Qb>,
+    inserts: Vec<(usize, IdentityInsertion)>,
+    command: Rc<Command>,
 }
 
 impl Rewrite for PullForward {
@@ -288,53 +289,64 @@ impl Rewrite for PullForward {
             replacement,
             remove,
             inserts,
-            qb_map,
+            command,
         } = self;
 
         h.apply_rewrite(remove).map_err(PullForwardError::Remove)?;
 
         // add no-ops on all qubit wires in new location
-        let noop_nodes: Result<HashMap<Qb, Node>, _> = inserts
+        let noop_nodes: Result<HashMap<_, Node>, _> = inserts
             .into_iter()
-            .map(|(q, insert)| h.apply_rewrite(insert).map(|res| (q, res)))
+            .map(|(p, insert)| h.apply_rewrite(insert).map(|res| (p, res)))
             .collect();
-        let noop_nodes = noop_nodes.map_err(PullForwardError::InsertIdentity)?;
+        let mut noop_nodes = noop_nodes.map_err(PullForwardError::InsertIdentity)?;
 
         let mut nu_inp = HashMap::new();
         let mut nu_out = HashMap::new();
 
         let replace_io = replacement.get_io(replacement.root()).unwrap();
-
-        for (q, noop_node) in &noop_nodes {
+        let mut removal = HashSet::new();
+        for (offset, cu) in command.inputs().iter().enumerate() {
+            let p: Port = PortOffset::new_outgoing(offset).into();
             let replace_target_port = replacement
-                .linked_ports(
-                    replace_io[0],
-                    PortOffset::new_outgoing(qb_map[q].index()).into(),
-                )
+                .linked_ports(replace_io[0], p)
                 .exactly_one()
                 .unwrap();
+            match cu {
+                CircuitUnit::Wire(w) => {
+                    let (sink_node, sink_port) =
+                        h.linked_ports(w.node(), w.source()).next().unwrap();
+                    debug_assert!(
+                        h.get_optype(sink_node).name() == "quantum.tket2.sink",
+                        "non qubit input wasn't connected to a sink."
+                    );
 
-            let noop_port = h.node_inputs(*noop_node).next().unwrap();
+                    nu_inp.insert(replace_target_port, (sink_node, sink_port));
+                    removal.insert(sink_node);
+                }
+                CircuitUnit::Linear(_) => {
+                    let noop_node = noop_nodes
+                        .remove(&offset)
+                        .expect("missing entry for qubit wire.");
 
-            nu_inp.insert(replace_target_port, (*noop_node, noop_port));
+                    let noop_port = h.node_inputs(noop_node).next().unwrap();
 
-            let noop_target = h
-                .linked_ports(*noop_node, PortOffset::new_outgoing(0).into())
-                .exactly_one()
-                .unwrap();
+                    nu_inp.insert(replace_target_port, (noop_node, noop_port));
 
-            let replace_out_port: Port = PortOffset::new_incoming(qb_map[q].index()).into();
+                    let noop_target = h
+                        .linked_ports(noop_node, PortOffset::new_outgoing(0).into())
+                        .exactly_one()
+                        .unwrap();
 
-            nu_out.insert(noop_target, replace_out_port);
+                    let replace_out_port: Port = PortOffset::new_incoming(p.index()).into();
+
+                    nu_out.insert(noop_target, replace_out_port);
+                    removal.insert(noop_node);
+                }
+            }
         }
 
-        let replace = SimpleReplacement::new(
-            h.root(),
-            noop_nodes.into_values().collect(),
-            replacement,
-            nu_inp,
-            nu_out,
-        );
+        let replace = SimpleReplacement::new(h.root(), removal, replacement, nu_inp, nu_out);
         h.apply_rewrite(replace)
             .map_err(PullForwardError::ReplaceIdentity)?;
         Ok(())
@@ -344,7 +356,7 @@ impl Rewrite for PullForward {
 fn gen_rewrite(
     h: &Hugr,
     next_commands: HashMap<Qb, Rc<Command>>,
-    command: &Command,
+    command: Rc<Command>,
 ) -> PullForward {
     let remove_node = command.node();
 
@@ -353,8 +365,12 @@ fn gen_rewrite(
     let replace_io = first_replace.get_io(first_replace.root()).unwrap();
     let nu_inp: HashMap<(Node, Port), (Node, Port)> = h
         .node_inputs(remove_node)
-        .zip(first_replace.node_inputs(replace_io[1]))
-        .map(|(remove_p, replace_p)| ((replace_io[1], replace_p), (remove_node, remove_p)))
+        .zip(
+            first_replace
+                .node_outputs(replace_io[0])
+                .flat_map(|out| first_replace.linked_ports(replace_io[0], out)),
+        )
+        .map(|(remove_p, replace_target)| (replace_target, (remove_node, remove_p)))
         .collect();
 
     let nu_out: HashMap<(Node, Port), Port> = h
@@ -376,7 +392,11 @@ fn gen_rewrite(
     let inserts: Vec<_> = next_commands
         .into_iter()
         .map(|(q, com)| {
-            let (node, port) = if &(*com) == command {
+            let replace_out_offset = command
+                .port_of_qb(q, Direction::Outgoing)
+                .expect("missing qb")
+                .index();
+            let (node, port) = if com == command {
                 // if there were no nodes between destination and original node,
                 // need to connect to original successor.
                 let out_port = com.port_of_qb(q, Direction::Outgoing).expect("missing qb");
@@ -391,30 +411,15 @@ fn gen_rewrite(
                 )
             };
 
-            (q, IdentityInsertion::new(node, port))
+            (replace_out_offset, IdentityInsertion::new(node, port))
         })
         .collect();
-
-    // replacement circuit containing moved node.
-
-    // map from qubits in the original to those in the replacement
-    let qb_map: HashMap<Qb, Qb> = command
-        .qubits()
-        .enumerate()
-        .map(|(index, q)| (q, Qb(index)))
-        .collect();
-
-    // let replacement = build_simple_circuit(num_qubits, |circ| {
-    //     circ.append(h.get_optype(command.node()).clone(), 0..num_qubits)?;
-    //     Ok(())
-    // })
-    // .unwrap();
 
     PullForward {
         replacement: second_replace,
         remove,
         inserts,
-        qb_map,
+        command,
     }
 }
 
@@ -444,7 +449,7 @@ pub fn apply_greedy_commutation(h: &mut Hugr) -> Result<u32, PullForwardError> {
                     let com = slice_vec[slice_index][q.index()].take();
                     slice_vec[destination][q.index()] = com;
                 }
-                let rewrite = gen_rewrite(h, previous_commands, &command);
+                let rewrite = gen_rewrite(h, previous_commands, command);
                 h.apply_rewrite(rewrite)?;
                 count += 1;
             }
@@ -591,7 +596,7 @@ mod test {
 
     #[fixture]
     // Gates being commuted have non-linear outputs
-    fn non_linear_in_out() -> Hugr {
+    fn non_linear_outputs() -> Hugr {
         let build = || {
             let mut dfg = DFGBuilder::new(FunctionType::new(
                 type_row![QB_T, QB_T],
@@ -754,7 +759,7 @@ mod test {
     // #[should_panic]
     #[case::panic(non_linear_inputs(), true, 1)]
     #[should_panic]
-    #[case::panic(non_linear_in_out(), true, 1)]
+    #[case::panic(non_linear_outputs(), true, 1)]
     fn commutation_example(
         #[case] mut case: Hugr,
         #[case] should_reduce: bool,
