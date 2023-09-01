@@ -20,7 +20,7 @@ fn to_circ(h: &Hugr) -> DescendantsGraph<'_, DfgID> {
     DescendantsGraph::new(h, h.root())
 }
 
-fn path_as_int(path: &PathBuf) -> usize {
+fn path_as_int(path: &Path) -> usize {
     let stem = path.file_stem().expect("invalid path");
     stem.to_str()
         .expect("not a valid path name")
@@ -38,7 +38,7 @@ fn pattern_match_bench(c: &mut Criterion) {
     group.finish()
 }
 
-fn pattern_match_tk2_bench<'a, M: Measurement>(group: &mut BenchmarkGroup<'a, M>) {
+fn pattern_match_tk2_bench<M: Measurement>(group: &mut BenchmarkGroup<'_, M>) {
     let folder = PathBuf::from(PATTERNS_FOLDER);
     let circuit_file = format!("{}.json", CIRCUIT_FILE);
 
