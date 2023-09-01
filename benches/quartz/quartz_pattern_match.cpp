@@ -5,10 +5,6 @@
 
 using namespace quartz;
 
-// template <class Tp> inline void black_box(Tp const &value) {
-//   asm volatile("" : : "r,m"(value) : "memory");
-// }
-
 Context CTX({GateType::input_qubit, GateType::input_param, GateType::h,
              GateType::cx, GateType::x, GateType::t, GateType::tdg});
 
@@ -31,14 +27,6 @@ std::vector<std::string> get_sorted_qasm_files(const std::string &folder) {
   }
   return qasm_file_names;
 }
-
-// quartz::Context *load_context() {
-//   return new Context({GateType::input_qubit, GateType::input_param,
-//   GateType::h,
-//                GateType::cx, GateType::x, GateType::t, GateType::tdg});
-// }
-
-// void free_context(quartz::Context *context) { delete context; }
 
 Graph *load_graph(const char *file_name) {
   auto graph = Graph::from_qasm_file(&CTX, file_name);
@@ -107,38 +95,3 @@ unsigned pattern_match(const quartz::Graph *const graph,
   }
   return cnt;
 }
-
-// std::vector<double> benchmark(std::shared_ptr<Graph> graph,
-//                               const std::vector<GraphXfer *> &xfers) {
-//   std::vector<double> timings;
-//   for (int i = 200; i <= 4000; i += 200) {
-//     std::cout << i << " patterns..." << std::endl;
-//     timings.push_back(pattern_match(graph, xfers, i));
-//   }
-//   return timings;
-// }
-
-// void save_to_json(std::vector<double> &vec, const std::string &file_name) {
-//   std::ofstream file(file_name);
-//   file << "[";
-//   for (size_t i = 0; i < vec.size(); ++i) {
-//     file << vec[i];
-//     if (i != vec.size() - 1) {
-//       file << ",";
-//     }
-//   }
-//   file << "]";
-//   file.close();
-// }
-
-// int main() {
-//   std::cout << "Benchmarking pattern matching" << std::endl;
-//   auto graph =
-//   load_graph("../experiment/circs/t_tdg_circs/barenco_tof_5.qasm"); auto
-//   xfers =
-//       load_xfers("../../tket2proto/test_files/T_Tdg_H_X_CX_complete_ECC_set");
-//   auto timings = benchmark(graph, xfers);
-//   save_to_json(timings, "pattern_matching.json");
-//   std::cout << "Saved timings to pattern_matching.json" << std::endl;
-//   return 0;
-// }
