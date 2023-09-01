@@ -4,12 +4,14 @@ use std::{
 };
 
 use hugr::{
+    builder::DFGBuilder,
     hugr::{
         rewrite::insert_identity::{IdentityInsertion, IdentityInsertionError},
         views::{HierarchyView, SiblingGraph},
         CircuitUnit, Rewrite, SimpleReplacementError,
     },
     ops::handle::DfgID,
+    types::FunctionType,
     Direction, Hugr, HugrView, Node, Port, SimpleReplacement,
 };
 use itertools::Itertools;
@@ -331,6 +333,24 @@ fn gen_rewrite(
             (q, IdentityInsertion::new(node, port))
         })
         .collect();
+
+    // let build = || {
+    //     let mut dfg = DFGBuilder::new(FunctionType::new(
+    //         type_row![QB_T, QB_T, FLOAT64_TYPE],
+    //         type_row![QB_T, QB_T],
+    //     ))?;
+
+    //     let [q0, q1, f] = dfg.input_wires_arr();
+
+    //     let mut circ = dfg.as_circuit(vec![q0, q1]);
+
+    //     circ.append(T2Op::H, [1])?;
+    //     circ.append(T2Op::CX, [0, 1])?;
+    //     circ.append_and_consume(T2Op::RzF64, [CircuitUnit::Linear(0), CircuitUnit::Wire(f)])?;
+    //     let qbs = circ.finish();
+    //     dfg.finish_hugr_with_outputs(qbs, &REGISTRY)
+    // };
+    // let replacement = build().unwrap();
 
     // map from qubits in the original to those in the replacement
     let qb_map: HashMap<Qb, Qb> = command
