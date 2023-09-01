@@ -447,7 +447,6 @@ mod test {
     }
 
     #[fixture]
-    // example circuit from original task with lower depth
     fn big_example() -> Hugr {
         build_simple_circuit(4, |circ| {
             circ.append(T2Op::CX, [0, 3])?;
@@ -466,7 +465,7 @@ mod test {
     }
 
     #[fixture]
-    // example circuit from original task with lower depth
+    // commute a single qubit gate
     fn single_qb_commute() -> Hugr {
         build_simple_circuit(3, |circ| {
             circ.append(T2Op::H, [1])?;
@@ -476,9 +475,23 @@ mod test {
         })
         .unwrap()
     }
+    #[fixture]
+
+    // commute 2 single qubit gates
+    fn single_qb_commute_2() -> Hugr {
+        build_simple_circuit(4, |circ| {
+            circ.append(T2Op::CX, [1, 2])?;
+            circ.append(T2Op::CX, [1, 0])?;
+            circ.append(T2Op::CX, [3, 2])?;
+            circ.append(T2Op::X, [0])?;
+            circ.append(T2Op::Z, [3])?;
+            Ok(())
+        })
+        .unwrap()
+    }
 
     #[fixture]
-    // example circuit from original task with lower depth
+    // A commutation forward exists but depth doesn't change
     fn commutes_but_same_depth() -> Hugr {
         build_simple_circuit(3, |circ| {
             circ.append(T2Op::H, [1])?;
@@ -649,6 +662,7 @@ mod test {
     #[case(cant_commute(), false, 0)]
     #[case(t2_bell_circuit(), false, 0)]
     #[case(single_qb_commute(), true, 1)]
+    #[case(single_qb_commute_2(), true, 2)]
     #[case(commutes_but_same_depth(), false, 1)]
     #[should_panic]
     #[case::panic(non_linear_wires(), true, 1)]
