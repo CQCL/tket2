@@ -20,7 +20,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 
 use super::op::JsonOp;
 use super::{try_param_to_constant, METADATA_IMPLICIT_PERM, METADATA_PHASE};
-use crate::extension::LINEAR_BIT;
+use crate::extension::{LINEAR_BIT, REGISTRY};
 
 /// The state of an in-progress [`DFGBuilder`] being built from a [`SerialCircuit`].
 ///
@@ -91,7 +91,7 @@ impl JsonDecoder {
     pub fn finish(self) -> Hugr {
         // TODO: Throw validation error?
         self.hugr
-            .finish_hugr_with_outputs(self.dangling_wires)
+            .finish_hugr_with_outputs(self.dangling_wires, &REGISTRY)
             .unwrap()
     }
 

@@ -276,7 +276,8 @@ mod tests {
         circ.append(T2Op::CX, [0, 1]).unwrap();
         circ.append(T2Op::H, [0]).unwrap();
         let out_wires = circ.finish();
-        hugr.finish_hugr_with_outputs(out_wires).unwrap()
+        hugr.finish_hugr_with_outputs(out_wires, &crate::extension::REGISTRY)
+            .unwrap()
     }
 
     #[test]
