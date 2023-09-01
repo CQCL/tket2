@@ -1,154 +1,119 @@
-//use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-//use tket2::{
-//    circuit::{
-//        circuit::{Circuit, UnitID},
-//        operation::{AngleValue, ConstValue, Op, WireType},
-//    },
-//    passes::{
-//        apply_exhaustive,
-//        classical::find_const_ops,
-//        pattern::{node_equality, PatternMatcher},
-//        squash::{find_singleq_rotations, squash_pattern},
-//        CircFixedStructPattern,
-//    },
-//};
-//
-//fn pattern_match_bench_par(c: &mut Criterion) {
-//    let qubits = vec![
-//        UnitID::Qubit {
-//            reg_name: "q".into(),
-//            index: vec![0],
-//        },
-//        UnitID::Qubit {
-//            reg_name: "q".into(),
-//            index: vec![1],
-//        },
-//    ];
-//    let mut pattern_circ = Circuit::with_uids(qubits.clone());
-//    pattern_circ.append_op(Op::H, &[0]).unwrap();
-//    pattern_circ.append_op(Op::H, &[1]).unwrap();
-//    pattern_circ.append_op(Op::CX, &[0, 1]).unwrap();
-//    pattern_circ.append_op(Op::H, &[0]).unwrap();
-//    pattern_circ.append_op(Op::H, &[1]).unwrap();
-//
-//    let mut target_circ = Circuit::with_uids(qubits);
-//    target_circ.append_op(Op::H, &[0]).unwrap();
-//    target_circ.append_op(Op::H, &[1]).unwrap();
-//
-//    let mut group = c.benchmark_group("PatternMatch");
-//    for i in (100..1000).step_by(100) {
-//        for _ in 0..100 {
-//            target_circ.append_op(Op::CX, &[0, 1]).unwrap();
-//            target_circ.append_op(Op::H, &[0]).unwrap();
-//            target_circ.append_op(Op::H, &[1]).unwrap();
-//        }
-//        let pattern = CircFixedStructPattern::from_circ(pattern_circ.clone(), node_equality());
-//        let pmatcher = PatternMatcher::new(pattern, target_circ.dag_ref());
-//
-//        group.bench_function(BenchmarkId::new("Sequential", i), |b| {
-//            b.iter(|| {
-//                let ms = pmatcher.find_matches().collect::<Vec<_>>();
-//                assert_eq!(ms.len(), i);
-//            });
-//        });
-//        // group.bench_function(BenchmarkId::new("Paralllel", i), |b| {
-//        //     b.iter(|| {
-//        //         let ms = pmatcher.find_par_matches().collect::<Vec<_>>();
-//        //         assert_eq!(ms.len(), i);
-//        //     });
-//        // });
-//    }
-//    group.finish();
-//}
+use std::{hint::black_box, path::PathBuf};
 
-// fn pattern_match_bench_recurse(c: &mut Criterion) {
-//     let qubits = vec![
-//         UnitID::Qubit {
-//             name: "q".into(),
-//             index: vec![0],
-//         },
-//         UnitID::Qubit {
-//             name: "q".into(),
-//             index: vec![1],
-//         },
-//     ];
-//     let mut pattern_circ = Circuit::with_uids(qubits.clone());
-//     pattern_circ
-//         .append_op(Op::H, &[0])
-//         .unwrap();
-//     pattern_circ
-//         .append_op(Op::H, &[1])
-//         .unwrap();
-//     pattern_circ
-//         .append_op(Op::CX, &vec![0, 1])
-//         .unwrap();
-//     pattern_circ
-//         .append_op(Op::H, &[0])
-//         .unwrap();
-//     pattern_circ
-//         .append_op(Op::H, &[1])
-//         .unwrap();
-//     let pattern_boundary = pattern_circ.boundary();
+use criterion::{
+    criterion_group, criterion_main, measurement::Measurement, BenchmarkGroup, BenchmarkId,
+    Criterion, SamplingMode
+};
 
-//     let mut target_circ = Circuit::with_uids(qubits);
-//     target_circ
-//         .append_op(Op::H, &[0])
-//         .unwrap();
-//     target_circ
-//         .append_op(Op::H, &[1])
-//         .unwrap();
-//     target_circ
-//         .append_op(Op::CX, &vec![0, 1])
-//         .unwrap();
-//     target_circ
-//         .append_op(Op::H, &[0])
-//         .unwrap();
-//     target_circ
-//         .append_op(Op::H, &[1])
-//         .unwrap();
-//     let mut group = c.benchmark_group("PatternMatch");
-//     for i in (100..1000).step_by(100) {
-//         for _ in 0..100 {
-//             target_circ
-//                 .append_op(Op::CX, &vec![0, 1])
-//                 .unwrap();
-//             target_circ
-//                 .append_op(Op::H, &[0])
-//                 .unwrap();
-//             target_circ
-//                 .append_op(Op::H, &[1])
-//                 .unwrap();
+use hugr::{hugr::views::DescendantsGraph, ops::handle::DfgID, Hugr, HugrView};
+use itertools::Itertools;
+use tket2::{
+    circuit::HierarchyView,
+    json::load_tk1_json_file,
+    portmatching::{CircuitMatcher, CircuitPattern},
+};
 
-//             pattern_circ
-//                 .append_op(Op::CX, &vec![0, 1])
-//                 .unwrap();
-//             pattern_circ
-//                 .append_op(Op::H, &[0])
-//                 .unwrap();
-//             pattern_circ
-//                 .append_op(Op::H, &[1])
-//                 .unwrap();
-//         }
+static PATTERNS_FOLDER: &str = "test_files/T_Tdg_H_X_CX_complete_ECC_set";
+static CIRCUIT_FILE: &str = "test_files/barenco_tof_5";
 
-//         let pattern = CircFixedStructPattern::from_circ(pattern_circ, node_equality());
+fn to_circ(h: &Hugr) -> DescendantsGraph<'_, DfgID> {
+    DescendantsGraph::new(h, h.root())
+}
 
-//         let pmatcher = PatternMatcher::new(pattern, target_circ.dag_ref());
+fn path_as_int(path: &PathBuf) -> usize {
+    let stem = path.file_stem().expect("invalid path");
+    stem.to_str()
+        .expect("not a valid path name")
+        .parse()
+        .expect("file name not a number")
+}
 
-//         group.bench_function(BenchmarkId::new("Recursive", i), |b| {
-//             b.iter(|| {
-//                 let ms = pmatcher.find_matches_recurse().collect::<Vec<_>>();
-//                 assert_eq!(ms.len(), 1)
-//             })
-//         });
-//         group.bench_function(BenchmarkId::new("Iterative", i), |b| {
-//             b.iter(|| {
-//                 let ms = pmatcher.find_matches().collect::<Vec<_>>();
-//                 assert_eq!(ms.len(), 1)
-//             })
-//         });
-//     }
-//     group.finish();
-// }
+fn pattern_match_bench(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Pattern matching");
+    group.sampling_mode(SamplingMode::Flat);
+    group.sample_size(10);
+    pattern_match_tk2_bench(&mut group);
+    #[cfg(feature = "quartz-bench")]
+    pattern_match_quartz_bench(&mut group);
+    group.finish()
+}
+
+fn pattern_match_tk2_bench<'a, M: Measurement>(group: &mut BenchmarkGroup<'a, M>) {
+    let folder = PathBuf::from(PATTERNS_FOLDER);
+    let circuit_file = format!("{}.json", CIRCUIT_FILE);
+
+    let json_files = folder
+        .read_dir()
+        .expect("Failed to read test files")
+        .map(|entry| {
+            let entry = entry.expect("Failed to read directory entry");
+            entry.path()
+        })
+        .filter(|path| path.extension().map_or(false, |ext| ext == "json"))
+        .sorted_by_key(path_as_int);
+
+    println!("Loading patterns...");
+    let all_hugrs = json_files
+        .map(|path| load_tk1_json_file(path.to_str().expect("invalid path")))
+        .collect::<Result<Vec<_>, _>>()
+        .expect("invalid JSON file");
+    let all_circs = all_hugrs.iter().map(to_circ).collect_vec();
+    let all_patterns = all_circs
+        .iter()
+        .map(CircuitPattern::try_from_circuit)
+        .collect::<Result<Vec<_>, _>>()
+        .expect("invalid pattern");
+    println!("Loaded {} patterns", all_patterns.len());
+
+    let target_hugr = load_tk1_json_file(&circuit_file).unwrap();
+    let target_circ = to_circ(&target_hugr);
+    println!("Loaded circuit");
+
+    for n in (200..=2000).step_by(200) {
+        // TODO: store matcher as binary
+        println!("Building matcher for n = {n}...");
+        let matcher = CircuitMatcher::from_patterns(all_patterns[..n].to_vec());
+
+        group.bench_function(BenchmarkId::new("TKET2", n), |b| {
+            b.iter(|| {
+                black_box(matcher.find_matches(&target_circ));
+            })
+        });
+    }
+}
+
+#[cfg(feature = "quartz-bench")]
+#[allow(non_camel_case_types)]
+include!("quartz/bindings.rs");
+
+#[cfg(feature = "quartz-bench")]
+fn pattern_match_quartz_bench<'a, M: Measurement>(group: &mut BenchmarkGroup<'a, M>) {
+    use std::ffi::CString;
+
+    let circuit_file = CString::new(format!("{CIRCUIT_FILE}.qasm")).unwrap();
+    let folder_name = CString::new(PATTERNS_FOLDER).unwrap();
+
+    let graph = unsafe { load_graph(circuit_file.as_ptr()) };
+    let mut n_ops = 0;
+    let ops = unsafe { get_ops(graph, &mut n_ops) };
+
+    let mut n_xfers = 0;
+    let xfers = unsafe { load_xfers(folder_name.as_ptr(), &mut n_xfers) };
+
+    for n in (200..=2000).step_by(200) {
+        group.bench_function(BenchmarkId::new("Quartz", n), |b| {
+            b.iter(|| {
+                unsafe { black_box(pattern_match(graph, ops, n_ops, xfers, n)) };
+            })
+        });
+    }
+
+    unsafe {
+        free_xfers(xfers, n_xfers);
+        free_ops(ops);
+        free_graph(graph);
+    };
+}
 
 //fn squash_bench(c: &mut Criterion) {
 //    let mut group = c.benchmark_group("Squash");
@@ -215,5 +180,5 @@
 //    // check_soundness(&circ2).unwrap();
 //}
 //
-//criterion_group!(benches, squash_bench, pattern_match_bench_par);
-//criterion_main!(benches);
+criterion_group!(benches, /*squash_bench,*/ pattern_match_bench);
+criterion_main!(benches);

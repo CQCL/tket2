@@ -45,6 +45,7 @@ pyo3 = [
 ]
 tkcxx = ["dep:tket-rs", "dep:num-complex"]
 portmatching = ["dep:portmatching"]
+quartz-bench = ["dep:bindgen"]
 
 [dev-dependencies]
 rstest = "0.18.1"
@@ -52,9 +53,12 @@ criterion = { version = "0.5.1", features = ["html_reports"] }
 webbrowser = "0.8.10"
 urlencoding = "2.1.2"
 
-#[[bench]]
-#name = "tket2_bench"
-#harness = false
+[build-dependencies]
+bindgen = { version = "0.66.1", optional = true }
+
+[[bench]]
+name = "tket2_bench"
+harness = false
 
 [workspace]
 
@@ -65,3 +69,7 @@ members = ["pyrs"]
 quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "2b05270" }
 portgraph = "0.8"
 pyo3 = { version = "0.19" }
+
+[[bin]]
+name = "sanitise_patterns_dataset"
+required-features = ["portmatching"]
