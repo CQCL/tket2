@@ -3,6 +3,9 @@ Cargo.lock
 pyrs/target/
 .ipynb_checkpoints
 
+# Generated rust bindings
+benches/quartz/bindings.rs
+
 # Devenv
 .devenv*
 devenv.local.nix
