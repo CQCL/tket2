@@ -60,6 +60,7 @@ impl TryFrom<OpType> for MatchOp {
 #[derive(Clone)]
 pub struct CircuitMatch<'a, 'p, C> {
     subgraph: SiblingSubgraph<'a, C>,
+    #[allow(dead_code)]
     pub(super) pattern: &'p CircuitPattern,
     /// The root of the pattern in the circuit.
     ///
