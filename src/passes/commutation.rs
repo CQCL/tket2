@@ -22,7 +22,7 @@ use crate::{
     circuit::{command::Command, Circuit},
     extension::REGISTRY,
     ops::{Pauli, T2Op},
-    utils::build_simple_circuit,
+    sink_op,
 };
 
 use thiserror::Error;
@@ -211,7 +211,7 @@ fn get_wire_type(h: &impl HugrView, wire: Wire) -> Option<Type> {
     }
 }
 /// Produce a new circuit containing only the given command
-fn command_to_circ(h: &impl HugrView, command: &Command) -> Result<Hugr, BuildError> {
+fn command_to_circ(h: &impl HugrView, command: &Command) -> Result<(Hugr, Hugr), BuildError> {
     let input = command
         .inputs()
         .iter()
@@ -223,12 +223,30 @@ fn command_to_circ(h: &impl HugrView, command: &Command) -> Result<Hugr, BuildEr
         .collect_vec();
     // ASSUME only qubit outputs
     let output = vec![QB_T; command.outputs().len()];
-    let mut dfg = DFGBuilder::new(FunctionType::new(input, output))?;
+
+    let mut dfg = DFGBuilder::new(FunctionType::new(input.clone(), output.clone()))?;
 
     let outs = dfg.add_dataflow_node(h.get_nodetype(command.node()).clone(), dfg.input_wires())?;
-    let dfg = dfg.finish_hugr_with_outputs(outs.outputs(), &REGISTRY)?;
+    let second_replace = dfg.finish_hugr_with_outputs(outs.outputs(), &REGISTRY)?;
 
-    Ok(dfg)
+    let mut dfg = DFGBuilder::new(FunctionType::new(input, output))?;
+
+    let qb_wires: Vec<_> = dfg
+        .input_wires()
+        .filter_map(|in_wire| {
+            let t = dfg.get_wire_type(in_wire).unwrap();
+            if t == QB_T {
+                Some(in_wire)
+            } else {
+                dfg.add_dataflow_op(sink_op(t).expect("non-qubit linear wire."), [in_wire])
+                    .unwrap();
+                None
+            }
+        })
+        .collect();
+    let first_replace = dfg.finish_hugr_with_outputs(qb_wires, &REGISTRY)?;
+
+    Ok((first_replace, second_replace))
 }
 
 /// Error from a [`PullForward`] operation.
@@ -329,27 +347,27 @@ fn gen_rewrite(
     command: &Command,
 ) -> PullForward {
     let remove_node = command.node();
-    let num_qubits = command.qubits().count();
 
-    let replacement = build_simple_circuit(num_qubits, |_circ| Ok(())).unwrap();
-    let replace_io = replacement.get_io(replacement.root()).unwrap();
+    let (first_replace, second_replace) = command_to_circ(h, &command).unwrap();
+
+    let replace_io = first_replace.get_io(first_replace.root()).unwrap();
     let nu_inp: HashMap<(Node, Port), (Node, Port)> = h
         .node_inputs(remove_node)
-        .zip(replacement.node_inputs(replace_io[1]))
+        .zip(first_replace.node_inputs(replace_io[1]))
         .map(|(remove_p, replace_p)| ((replace_io[1], replace_p), (remove_node, remove_p)))
         .collect();
 
     let nu_out: HashMap<(Node, Port), Port> = h
         .node_outputs(remove_node)
         .flat_map(|p| h.linked_ports(remove_node, p))
-        .zip(replacement.node_inputs(replace_io[1]))
+        .zip(first_replace.node_inputs(replace_io[1]))
         .map(|(remove_np, replace_p)| (remove_np, replace_p))
         .collect();
 
     let remove = SimpleReplacement::new(
         h.root(),
         HashSet::from_iter([remove_node]),
-        replacement,
+        first_replace,
         nu_inp,
         nu_out,
     );
@@ -378,7 +396,6 @@ fn gen_rewrite(
         .collect();
 
     // replacement circuit containing moved node.
-    let replacement = command_to_circ(h, &command).unwrap();
 
     // map from qubits in the original to those in the replacement
     let qb_map: HashMap<Qb, Qb> = command
@@ -394,7 +411,7 @@ fn gen_rewrite(
     // .unwrap();
 
     PullForward {
-        replacement,
+        replacement: second_replace,
         remove,
         inserts,
         qb_map,
@@ -443,7 +460,7 @@ pub fn apply_greedy_commutation(h: &mut Hugr) -> Result<u32, PullForwardError> {
 mod test {
     use std::collections::HashMap;
 
-    use crate::{extension::REGISTRY, ops::test::t2_bell_circuit};
+    use crate::{extension::REGISTRY, ops::test::t2_bell_circuit, utils::build_simple_circuit};
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::{BOOL_T, QB_T},
