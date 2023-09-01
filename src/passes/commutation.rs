@@ -495,7 +495,7 @@ mod test {
     #[fixture]
     // can't commute anything here
     fn cant_commute() -> Hugr {
-        build_simple_circuit(3, |circ| {
+        build_simple_circuit(4, |circ| {
             circ.append(T2Op::Z, [1])?;
             circ.append(T2Op::CX, [0, 1])?;
             circ.append(T2Op::CX, [2, 1])?;
