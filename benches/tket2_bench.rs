@@ -2,7 +2,7 @@ use std::{hint::black_box, path::PathBuf};
 
 use criterion::{
     criterion_group, criterion_main, measurement::Measurement, BenchmarkGroup, BenchmarkId,
-    Criterion, SamplingMode
+    Criterion, SamplingMode,
 };
 
 use hugr::{hugr::views::DescendantsGraph, ops::handle::DfgID, Hugr, HugrView};
