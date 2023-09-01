@@ -48,6 +48,9 @@ impl CircuitPattern {
             }
         }
         pattern.set_any_root()?;
+        if !pattern.is_valid() {
+            return Err(InvalidPattern::NotConnected);
+        }
         let (inp, out) = (circuit.input(), circuit.output());
         let inp_ports = circuit.get_optype(inp).signature().output_ports();
         let out_ports = circuit.get_optype(out).signature().input_ports();
@@ -95,7 +98,7 @@ impl Debug for CircuitPattern {
 }
 
 /// Conversion error from circuit to pattern.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum InvalidPattern {
     /// An empty circuit cannot be a pattern.
     #[error("empty circuit is invalid pattern")]
@@ -113,29 +116,23 @@ impl From<NoRootFound> for InvalidPattern {
 
 #[cfg(test)]
 mod tests {
-    use hugr::extension::prelude::QB_T;
-    use hugr::hugr::views::{DescendantsGraph, HierarchyView};
+    use hugr::hugr::views::{DescendantsGraph, HierarchyView, SiblingGraph};
     use hugr::ops::handle::DfgID;
-    use hugr::types::FunctionType;
-    use hugr::{
-        builder::{DFGBuilder, Dataflow, DataflowHugr},
-        Hugr, HugrView,
-    };
+    use hugr::{Hugr, HugrView};
     use itertools::Itertools;
 
+    use crate::utils::build_simple_circuit;
     use crate::T2Op;
 
-    use super::CircuitPattern;
+    use super::*;
 
     fn h_cx() -> Hugr {
-        let qb = QB_T;
-        let mut hugr = DFGBuilder::new(FunctionType::new_linear(vec![qb; 2])).unwrap();
-        let mut circ = hugr.as_circuit(hugr.input_wires().collect());
-        circ.append(T2Op::CX, [0, 1]).unwrap();
-        circ.append(T2Op::H, [0]).unwrap();
-        let out_wires = circ.finish();
-        hugr.finish_hugr_with_outputs(out_wires, &crate::extension::REGISTRY)
-            .unwrap()
+        build_simple_circuit(2, |circ| {
+            circ.append(T2Op::CX, [0, 1])?;
+            circ.append(T2Op::H, [0])?;
+            Ok(())
+        })
+        .unwrap()
     }
 
     #[test]
@@ -157,5 +154,20 @@ mod tests {
             edges.len(),
             1
         )
+    }
+
+    #[test]
+    fn disconnected_pattern() {
+        let hugr = build_simple_circuit(2, |circ| {
+            circ.append(T2Op::X, [0])?;
+            circ.append(T2Op::T, [1])?;
+            Ok(())
+        })
+        .unwrap();
+        let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(&hugr, hugr.root());
+        assert_eq!(
+            CircuitPattern::try_from_circuit(&circ).unwrap_err(),
+            InvalidPattern::NotConnected
+        );
     }
 }

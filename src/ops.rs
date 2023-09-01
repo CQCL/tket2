@@ -27,7 +27,19 @@ pub const EXTENSION_ID: ExtensionId = ExtensionId::new_inline("quantum.tket2");
 use pyo3::prelude::*;
 
 #[derive(
-    Clone, Copy, Debug, Serialize, Deserialize, EnumIter, IntoStaticStr, EnumString, PartialEq,
+    Clone,
+    Copy,
+    Debug,
+    Serialize,
+    Deserialize,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumIter,
+    IntoStaticStr,
+    EnumString,
 )]
 #[cfg_attr(feature = "pyo3", pyclass)]
 #[allow(missing_docs)]
@@ -185,7 +197,15 @@ impl TryFrom<OpType> for T2Op {
 
     fn try_from(op: OpType) -> Result<Self, Self::Error> {
         let leaf: LeafOp = op.try_into().map_err(|_| "not a leaf.")?;
-        match leaf {
+        leaf.try_into()
+    }
+}
+
+impl TryFrom<LeafOp> for T2Op {
+    type Error = &'static str;
+
+    fn try_from(op: LeafOp) -> Result<Self, Self::Error> {
+        match op {
             LeafOp::CustomOp(b) => match *b {
                 ExternalOp::Extension(e) => {
                     Self::try_from_op_def(e.def()).map_err(|_| "not a T2Op")
@@ -196,6 +216,7 @@ impl TryFrom<OpType> for T2Op {
         }
     }
 }
+
 fn load_all_ops<T: SimpleOpEnum>(extension: &mut Extension) -> Result<(), ExtensionBuildError> {
     for op in T::all_variants() {
         op.add_to_extension(extension)?;
