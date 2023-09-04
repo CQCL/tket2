@@ -5,14 +5,13 @@ use std::collections::HashSet;
 use hugr::hugr::views::{HierarchyView, SiblingGraph};
 use hugr::ops::handle::DfgID;
 use hugr::{Hugr, HugrView};
+use rstest::rstest;
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 
 use crate::circuit::Circuit;
 use crate::json::TKETDecode;
 
-#[test]
-fn read_json_simple() {
-    let circ_s = r#"{
+const SIMPLE_JSON: &str = r#"{
         "phase": "0",
         "bits": [],
         "qubits": [["q", [0]], ["q", [1]]],
@@ -23,24 +22,7 @@ fn read_json_simple() {
         "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
     }"#;
 
-    let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
-    assert_eq!(ser.commands.len(), 2);
-
-    let hugr: Hugr = ser.clone().decode().unwrap();
-    let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(&hugr, hugr.root());
-
-    assert_eq!(circ.qubits().len(), 2);
-
-    let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
-    compare_serial_circs(&ser, &reser);
-}
-
-#[test]
-fn read_json_unknown_op() {
-    // test ops that are not native to tket-2 are correctly captured as
-    // custom and output
-
-    let circ_s = r#"{
+const UNKNOWN_OP: &str = r#"{
         "phase": "1/2",
         "bits": [["c", [0]], ["c", [1]]],
         "qubits": [["q", [0]], ["q", [1]], ["q", [2]]],
@@ -54,13 +36,17 @@ fn read_json_unknown_op() {
         "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]], [["q", [2]], ["q", [2]]]]
     }"#;
 
-    let ser: SerialCircuit = serde_json::from_str(circ_s).unwrap();
-    assert_eq!(ser.commands.len(), 3);
+#[rstest]
+#[case::simple(SIMPLE_JSON, 2, 2)]
+#[case::unknown_op(UNKNOWN_OP, 3, 3)]
+fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num_qubits: usize) {
+    let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
+    assert_eq!(ser.commands.len(), num_commands);
 
     let hugr: Hugr = ser.clone().decode().unwrap();
     let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(&hugr, hugr.root());
 
-    assert_eq!(circ.qubits().len(), 3);
+    assert_eq!(circ.qubits().len(), num_qubits);
 
     let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
     compare_serial_circs(&ser, &reser);
