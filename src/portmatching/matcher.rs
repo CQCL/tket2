@@ -7,7 +7,7 @@ use derive_more::{From, Into};
 use hugr::{
     hugr::views::{
         sibling::{
-            InvalidReplacement,
+            ConvexChecker, InvalidReplacement,
             InvalidSubgraph::{self},
         },
         SiblingSubgraph,
@@ -75,8 +75,8 @@ impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
     /// This checks at construction time that the match is convex. This will
     /// have runtime linear in the size of the circuit.
     ///
-    /// TODO: Support passing a pre-computed [`portgraph::algorithms::ConvexChecker`]
-    /// at construction time for faster convexity checking.
+    /// For repeated convexity checking on the same circuit, use
+    /// [`CircuitMatch::try_from_root_match_with_checker`] instead.
     ///
     /// Returns an error if
     ///  - the match is not convex
@@ -87,6 +87,22 @@ impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
         root: Node,
         pattern: &'p CircuitPattern,
         circ: &'a C,
+    ) -> Result<Self, InvalidCircuitMatch> {
+        let mut checker = ConvexChecker::new(circ);
+        Self::try_from_root_match_with_checker(root, pattern, circ, &mut checker)
+    }
+
+    /// Create a pattern match from the image of a pattern root with a checker.
+    ///
+    /// This is the same as [`CircuitMatch::try_from_root_match`] but takes a
+    /// checker object to speed up convexity checking.
+    ///
+    /// See [`CircuitMatch::try_from_root_match`] for more details.
+    pub fn try_from_root_match_with_checker(
+        root: Node,
+        pattern: &'p CircuitPattern,
+        circ: &'a C,
+        checker: &mut ConvexChecker<'a, C>,
     ) -> Result<Self, InvalidCircuitMatch> {
         let map = pattern
             .get_match_map(root, circ)
@@ -101,7 +117,7 @@ impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
             .iter()
             .map(|(n, p)| (map[n], *p))
             .collect_vec();
-        let subgraph = SiblingSubgraph::try_from_boundary_ports(circ, inputs, outputs)?;
+        let subgraph = SiblingSubgraph::try_from_boundary_ports_with_checker(circ, inputs, outputs, checker)?;
         Ok(Self {
             subgraph,
             pattern,
@@ -175,17 +191,19 @@ impl CircuitMatcher {
         &'m self,
         circuit: &'a C,
     ) -> Vec<CircuitMatch<'a, 'm, C>> {
+        let mut checker = ConvexChecker::new(circuit);
         circuit
             .commands()
-            .flat_map(|cmd| self.find_rooted_matches(circuit, cmd.node()))
+            .flat_map(|cmd| self.find_rooted_matches(circuit, cmd.node(), &mut checker))
             .collect()
     }
 
     /// Find all convex pattern matches in a circuit rooted at a given node.
-    pub fn find_rooted_matches<'a, 'm, C: Circuit<'a>>(
+    fn find_rooted_matches<'a, 'm, C: Circuit<'a>>(
         &'m self,
         circ: &'a C,
         root: Node,
+        checker: &mut ConvexChecker<'a, C>,
     ) -> Vec<CircuitMatch<'a, 'm, C>> {
         self.automaton
             .run(
@@ -197,7 +215,10 @@ impl CircuitMatcher {
             )
             .filter_map(|m| {
                 let p = &self.patterns[m.0];
-                handle_match_error(CircuitMatch::try_from_root_match(root, p, circ), root)
+                handle_match_error(
+                    CircuitMatch::try_from_root_match_with_checker(root, p, circ, checker),
+                    root,
+                )
             })
             .collect()
     }
