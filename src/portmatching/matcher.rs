@@ -117,7 +117,8 @@ impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
             .iter()
             .map(|(n, p)| (map[n], *p))
             .collect_vec();
-        let subgraph = SiblingSubgraph::try_from_boundary_ports_with_checker(circ, inputs, outputs, checker)?;
+        let subgraph =
+            SiblingSubgraph::try_from_boundary_ports_with_checker(circ, inputs, outputs, checker)?;
         Ok(Self {
             subgraph,
             pattern,
