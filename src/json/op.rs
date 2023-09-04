@@ -189,6 +189,7 @@ impl From<&JsonOp> for OpType {
             JsonOpType::Tdg => T2Op::Tdg.into(),
             JsonOpType::X => T2Op::X.into(),
             JsonOpType::Rz => T2Op::RzF64.into(),
+            JsonOpType::TK1 => T2Op::TK1.into(),
             JsonOpType::noop => LeafOp::Noop { ty: QB_T }.into(),
             _ => LeafOp::CustomOp(Box::new(json_op.as_opaque_op())).into(),
         }
@@ -214,7 +215,8 @@ impl TryFrom<&OpType> for JsonOp {
                 T2Op::CX => JsonOpType::CX,
                 T2Op::H => JsonOpType::H,
                 T2Op::Measure => JsonOpType::Measure,
-                T2Op::RzF64 => JsonOpType::RzF64,
+                T2Op::RzF64 => JsonOpType::Rz,
+                T2Op::TK1 => JsonOpType::TK1,
                 _ => return Err(err()),
             }
         } else if let LeafOp::CustomOp(b) = leaf {
@@ -235,11 +237,6 @@ impl TryFrom<&OpType> for JsonOp {
             } else if ty == &FLOAT64_TYPE {
                 num_params += 1
             }
-        }
-
-        if num_params > 0 {
-            unimplemented!("Native parametric operation encoding is not supported yet.")
-            // TODO: Gather parameter values from the `OpType` to encode in the `JsonOpType`.
         }
 
         Ok(JsonOp::new_with_counts(

@@ -28,8 +28,7 @@ const UNKNOWN_OP: &str = r#"{
         "qubits": [["q", [0]], ["q", [1]], ["q", [2]]],
         "commands": [
             {"args": [["q", [0]], ["q", [1]], ["q", [2]]], "op": {"type": "CSWAP"}},
-            {"args": [["q", [1]], ["c", [1]]], "op": {"type": "Measure"}},
-            {"args": [["q", [2]], ["c", [0]]], "op": {"type": "Measure"}}
+            {"args": [["q", [1]], ["c", [1]]], "op": {"type": "Measure"}}
         ],
         "created_qubits": [],
         "discarded_qubits": [],
@@ -43,7 +42,8 @@ const PARAMETRIZED: &str = r#"{
         "commands": [
             {"args":[["q",[0]]],"op":{"type":"H"}},
             {"args":[["q",[1]],["q",[0]]],"op":{"type":"CX"}},
-            {"args":[["q",[0]]],"op":{"params":["0.1"],"type":"Rz"}}
+            {"args":[["q",[0]]],"op":{"params":["0.1"],"type":"Rz"}},
+            {"args": [["q", [0]]], "op": {"params": ["0.1", "0.2", "0.3"], "type": "TK1"}}
         ],
         "created_qubits": [],
         "discarded_qubits": [],
@@ -52,8 +52,8 @@ const PARAMETRIZED: &str = r#"{
 
 #[rstest]
 #[case::simple(SIMPLE_JSON, 2, 2)]
-#[case::unknown_op(UNKNOWN_OP, 3, 3)]
-#[case::parametrized(PARAMETRIZED, 3, 2)]
+#[case::unknown_op(UNKNOWN_OP, 2, 3)]
+#[case::parametrized(PARAMETRIZED, 4, 2)]
 fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num_qubits: usize) {
     let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), num_commands);
@@ -81,5 +81,14 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
 
     assert_eq!(a.implicit_permutation, b.implicit_permutation);
 
+    assert_eq!(a.commands.len(), b.commands.len());
+
+    // the below only works if both serial circuits share a topological ordering
+    // of commands.
+    for (a, b) in a.commands.iter().zip(b.commands.iter()) {
+        assert_eq!(a.op.op_type, b.op.op_type);
+        assert_eq!(a.args, b.args);
+        assert_eq!(a.op.params, b.op.params);
+    }
     // TODO: Check commands equality (they only implement PartialEq)
 }

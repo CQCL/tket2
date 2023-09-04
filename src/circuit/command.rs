@@ -8,6 +8,7 @@ use std::iter::FusedIterator;
 use hugr::hugr::views::HierarchyView;
 use hugr::ops::{OpTag, OpTrait};
 use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
+use portgraph::PortOffset;
 
 use super::Circuit;
 
@@ -99,8 +100,14 @@ where
 
         // Get the wire corresponding to each input unit.
         // TODO: Add this to HugrView?
-        let inputs = sig
+        let inputs: Vec<_> = sig
             .input_ports()
+            .chain(
+                // add the static input port
+                optype
+                    .static_input()
+                    .map(|_| PortOffset::new_incoming(sig.input.len()).into()),
+            )
             .filter_map(|port| {
                 let (from, from_port) = self.circ.linked_ports(node, port).next()?;
                 let wire = Wire::new(from, from_port);
@@ -116,7 +123,6 @@ where
                 }
             })
             .collect();
-
         // The units in `self.wire_units` have been updated.
         // Now we can early return if the node should be ignored.
         let tag = optype.tag();
@@ -124,7 +130,7 @@ where
             return None;
         }
 
-        let outputs = sig
+        let mut outputs: Vec<_> = sig
             .output_ports()
             .map(|port| {
                 let wire = Wire::new(node, port);
@@ -134,7 +140,14 @@ where
                 }
             })
             .collect();
-
+        if let OpType::Const(_) = optype {
+            // add the static output port from a const.
+            let offset = outputs.len();
+            outputs.push(CircuitUnit::Wire(Wire::new(
+                node,
+                PortOffset::new_outgoing(offset).into(),
+            )))
+        }
         Some(Command {
             node,
             inputs,
