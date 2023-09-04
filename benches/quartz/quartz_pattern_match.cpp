@@ -1,3 +1,4 @@
+#include <filesystem>
 #include "quartz/context/context.h"
 #include "quartz/parser/qasm_parser.h"
 #include "quartz/tasograph/substitution.h"
