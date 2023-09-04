@@ -224,31 +224,6 @@ impl TryFrom<&OpType> for JsonOp {
             return Err(err());
         };
 
-        // let json_optype: JsonOpType = match leaf {
-        //     LeafOp::Noop { .. } => JsonOpType::noop,
-        //     OpType::LeafOp(l) => match l.clone().try_into() {
-        //         Ok(t2op) => match t2op {
-        //             T2Op::CX => JsonOpType::CX,
-        //             T2Op::H => JsonOpType::H,
-        //             T2Op::Measure => JsonOpType::Measure,
-        //             T2Op::RzF64 => JsonOpType::RzF64,
-        //             _ => {
-        //                 return Err(err());
-        //             }
-        //         },
-
-        //         Err(_) => match l {
-        //             LeafOp::CustomOp(b) => {
-        //                 let ext = (*b).as_ref();
-        //                 return try_unwrap_json_op(ext).ok_or_else(err);
-        //             }
-
-        //             _ => return Err(err()),
-        //         },
-        //     },
-        //     _ => return Err(err()),
-        // };
-
         let mut num_qubits = 0;
         let mut num_bits = 0;
         let mut num_params = 0;
