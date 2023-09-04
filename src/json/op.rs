@@ -215,9 +215,7 @@ impl TryFrom<&OpType> for JsonOp {
                 T2Op::H => JsonOpType::H,
                 T2Op::Measure => JsonOpType::Measure,
                 T2Op::RzF64 => JsonOpType::RzF64,
-                _ => {
-                    return Err(err());
-                }
+                _ => return Err(err()),
             }
         } else if let LeafOp::CustomOp(b) = leaf {
             let ext = (*b).as_ref();

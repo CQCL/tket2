@@ -68,12 +68,15 @@ pub struct NotT2Op;
 
 // this trait could be implemented in Hugr
 trait SimpleOpEnum: Into<&'static str> + FromStr + Copy + IntoEnumIterator {
+    type LoadError: std::error::Error;
+
     fn signature(&self) -> FunctionType;
     fn name(&self) -> &str {
         (*self).into()
     }
-    fn try_from_op_def(op_def: &OpDef) -> Result<Self, NotT2Op> {
-        from_extension_name(op_def.extension(), op_def.name())
+    fn from_extension_name(extension: &str, op_name: &str) -> Result<Self, Self::LoadError>;
+    fn try_from_op_def(op_def: &OpDef) -> Result<Self, Self::LoadError> {
+        Self::from_extension_name(op_def.extension(), op_def.name())
     }
     fn add_to_extension<'e>(
         &self,
@@ -99,6 +102,7 @@ impl Pauli {
     }
 }
 impl SimpleOpEnum for T2Op {
+    type LoadError = NotT2Op;
     fn signature(&self) -> FunctionType {
         use T2Op::*;
         let one_qb_row = type_row![QB_T];
@@ -128,6 +132,13 @@ impl SimpleOpEnum for T2Op {
             vec![],
             move |_: &_| Ok(FunctionType::new(input.clone(), output.clone())),
         )
+    }
+
+    fn from_extension_name(extension: &str, op_name: &str) -> Result<Self, Self::LoadError> {
+        if extension != EXTENSION_ID {
+            return Err(NotT2Op);
+        }
+        Self::from_str(op_name).map_err(|_| NotT2Op)
     }
 }
 
@@ -175,25 +186,24 @@ impl From<T2Op> for OpType {
 }
 
 impl TryFrom<OpType> for T2Op {
-    type Error = &'static str;
+    type Error = NotT2Op;
 
     fn try_from(op: OpType) -> Result<Self, Self::Error> {
-        let leaf: LeafOp = op.try_into().map_err(|_| "not a leaf.")?;
+        let leaf: LeafOp = op.try_into().map_err(|_| NotT2Op)?;
         leaf.try_into()
     }
 }
 
 impl TryFrom<LeafOp> for T2Op {
-    type Error = &'static str;
+    type Error = NotT2Op;
 
     fn try_from(op: LeafOp) -> Result<Self, Self::Error> {
         match op {
             LeafOp::CustomOp(b) => match *b {
                 ExternalOp::Extension(e) => Self::try_from_op_def(e.def()),
                 ExternalOp::Opaque(o) => from_extension_name(o.extension(), o.name()),
-            }
-            .map_err(|_| "not a T2Op"),
-            _ => Err("not a custom."),
+            },
+            _ => Err(NotT2Op),
         }
     }
 }
