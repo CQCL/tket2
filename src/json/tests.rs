@@ -36,9 +36,24 @@ const UNKNOWN_OP: &str = r#"{
         "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]], [["q", [2]], ["q", [2]]]]
     }"#;
 
+const PARAMETRIZED: &str = r#"{
+        "phase": "0.0",
+        "bits": [],
+        "qubits": [["q", [0]], ["q", [1]]],
+        "commands": [
+            {"args":[["q",[0]]],"op":{"type":"H"}},
+            {"args":[["q",[1]],["q",[0]]],"op":{"type":"CX"}},
+            {"args":[["q",[0]]],"op":{"params":["0.1"],"type":"Rz"}}
+        ],
+        "created_qubits": [],
+        "discarded_qubits": [],
+        "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
+    }"#;
+
 #[rstest]
 #[case::simple(SIMPLE_JSON, 2, 2)]
 #[case::unknown_op(UNKNOWN_OP, 3, 3)]
+#[case::parametrized(PARAMETRIZED, 3, 2)]
 fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num_qubits: usize) {
     let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), num_commands);
