@@ -1,8 +1,9 @@
 //! Utility functions for the library.
 
+use hugr::extension::PRELUDE_REGISTRY;
 use hugr::{
     builder::{BuildError, CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr},
-    extension::{prelude::QB_T, prelude_registry},
+    extension::prelude::QB_T,
     types::FunctionType,
     Hugr,
 };
@@ -23,7 +24,7 @@ pub(crate) fn build_simple_circuit(
     f(&mut circ)?;
 
     let qbs = circ.finish();
-    h.finish_hugr_with_outputs(qbs, &prelude_registry())
+    h.finish_hugr_with_outputs(qbs, &PRELUDE_REGISTRY)
 }
 
 // Test only utils
