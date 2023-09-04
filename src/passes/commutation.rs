@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     rc::Rc,
 };
 
@@ -84,12 +84,11 @@ fn add_to_slice(slice: &mut Slice, com: Rc<Command>) {
 
 fn load_slices<'c>(circ: &'c impl Circuit<'c>) -> SliceVec {
     let mut slices = vec![];
-    let mut all_commands: VecDeque<Command> = circ.commands().map_into().collect();
 
     let n_qbs = circ.units().len();
     let mut qubit_free_slice = vec![0; n_qbs];
 
-    while let Some(command) = all_commands.front() {
+    for command in circ.commands().filter(|c| is_slice_op(circ, c.node())) {
         let free_slice = command
             .qubits()
             .map(|qb| qubit_free_slice[qb.index()])
@@ -103,11 +102,17 @@ fn load_slices<'c>(circ: &'c impl Circuit<'c>) -> SliceVec {
             debug_assert!(free_slice == slices.len());
             slices.push(vec![None; n_qbs]);
         }
-        let command = Rc::new(all_commands.pop_front().unwrap());
+        let command = Rc::new(command);
         add_to_slice(&mut slices[free_slice], command);
     }
 
     slices
+}
+
+/// check if node is one we want to put in to a slice.
+fn is_slice_op(h: &impl HugrView, node: Node) -> bool {
+    let op: Result<T2Op, _> = h.get_optype(node).clone().try_into();
+    op.is_ok()
 }
 
 /// Starting from starting_index, work back along slices to check for the
@@ -165,6 +170,8 @@ fn commutes_at_slice(
         let port = command.port_of_qb(q, Direction::Incoming)?;
 
         let op: T2Op = circ.get_optype(command.node()).clone().try_into().ok()?;
+        // TODO: if not t2op, might still have serialized commutation data we
+        // can use.
         let pauli = commutation_on_port(&op.qubit_commutation(), port)?;
 
         let other_op: T2Op = circ.get_optype(other_com.node()).clone().try_into().ok()?;
@@ -745,8 +752,7 @@ mod test {
     #[case(single_qb_commute(), true, 1)]
     #[case(single_qb_commute_2(), true, 2)]
     #[case(commutes_but_same_depth(), false, 1)]
-    // #[should_panic]
-    #[case::panic(non_linear_inputs(), true, 1)]
+    #[case(non_linear_inputs(), true, 1)]
     #[should_panic]
     #[case::panic(non_linear_outputs(), true, 1)]
     fn commutation_example(
