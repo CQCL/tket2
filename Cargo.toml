@@ -65,6 +65,6 @@ members = ["pyrs"]
 
 [workspace.dependencies]
 
-quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "d376eeeee80ac" }
+quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "ea243fb" }
 portgraph = "0.8"
 pyo3 = { version = "0.19" }
