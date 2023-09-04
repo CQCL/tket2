@@ -6,7 +6,6 @@
 //! circuits by ensuring they always define a signature, and computing the
 //! explicit count of qubits and linear bits.
 
-use crate::ops::EXTENSION_ID as QUANTUM_EXTENSION_ID;
 use hugr::extension::prelude::QB_T;
 
 use hugr::ops::custom::ExternalOp;
@@ -189,30 +188,8 @@ impl From<&JsonOp> for OpType {
             JsonOpType::T => T2Op::T.into(),
             JsonOpType::Tdg => T2Op::Tdg.into(),
             JsonOpType::X => T2Op::X.into(),
+            JsonOpType::Rz => T2Op::RzF64.into(),
             JsonOpType::noop => LeafOp::Noop { ty: QB_T }.into(),
-            // TODO TKET1 measure takes a bit as input, HUGR measure does not
-            //JsonOpType::Measure => LeafOp::Measure.into(),
-            // JsonOpType::Reset => LeafOp::Reset.into(),
-            // JsonOpType::ZZMax => LeafOp::ZZMax.into(),
-            // JsonOpType::Rz => LeafOp::RzF64.into(),
-            // JsonOpType::RzF64 => LeafOp::RzF64.into(),
-            // TODO TKET1 I/O needs some special handling
-            //JsonOpType::Input => hugr::ops::Input {
-            //    types: json_op.signature().output,
-            //    extensions: Default::default(),
-            //}
-            //.into(),
-            //JsonOpType::Output => hugr::ops::Output {
-            //    types: json_op.signature().input,
-            //    extensions: Default::default(),
-            //}
-            //.into(),
-            // JsonOpType::Z => LeafOp::Z.into(),
-            // JsonOpType::Y => LeafOp::Y.into(),
-            // JsonOpType::S => LeafOp::S.into(),
-            // JsonOpType::Sdg => LeafOp::Sadj.into(),
-            // JsonOpType::T => LeafOp::T.into(),
-            // JsonOpType::Tdg => LeafOp::Tadj.into(),
             _ => LeafOp::CustomOp(Box::new(json_op.as_opaque_op())).into(),
         }
     }
@@ -222,55 +199,57 @@ impl TryFrom<&OpType> for JsonOp {
     type Error = OpConvertError;
 
     fn try_from(op: &OpType) -> Result<Self, Self::Error> {
-        // We only translate operations that have a 1:1 mapping between TKET and HUGR
+        // We only translate operations that have a 1:1 mapping between TKET and TKET2
         //
         // Other TKET1 operations are wrapped in an `OpaqueOp`.
         //
         // Non-supported Hugr operations throw an error.
         let err = || OpConvertError::UnsupportedOpSerialization(op.clone());
-
-        let json_optype: JsonOpType = match op {
-            OpType::LeafOp(LeafOp::Noop { .. }) => JsonOpType::noop,
-            OpType::LeafOp(LeafOp::CustomOp(b)) => match (*b).as_ref() {
-                ExternalOp::Extension(c) if c.def().extension() == &QUANTUM_EXTENSION_ID => {
-                    match &c.def().name()[..] {
-                        "H" => JsonOpType::H,
-                        "CX" => JsonOpType::CX,
-                        _ => return Err(err()),
-                    }
-                }
-                ext => {
-                    return try_unwrap_json_op(ext).ok_or_else(err);
-                } // h_gate() => JsonOpType::H,
-                  // LeafOp::ZZMax => JsonOpType::ZZMax,
-                  // LeafOp::Reset => JsonOpType::Reset,
-                  // //LeafOp::Measure => JsonOpType::Measure,
-                  // LeafOp::T => JsonOpType::T,
-                  // LeafOp::S => JsonOpType::S,
-                  // LeafOp::X => JsonOpType::X,
-                  // LeafOp::Y => JsonOpType::Y,
-                  // LeafOp::Z => JsonOpType::Z,
-                  // LeafOp::Tadj => JsonOpType::Tdg,
-                  // LeafOp::Sadj => JsonOpType::Sdg,
-                  //LeafOp::RzF64 => JsonOpType::Rz, // The angle in RzF64 comes from a constant input
-                  //LeafOp::Xor => todo!(),
-                  //LeafOp::MakeTuple { .. } => todo!(),
-                  //LeafOp::UnpackTuple { .. } => todo!(),
-                  //LeafOp::Tag { .. } => todo!(),
-                  //LeafOp::Lift { .. } => todo!(),
-                  // CustomOp is handled above
-            },
-            //OpType::Input(_) => JsonOpType::Input,
-            //OpType::Output(_) => JsonOpType::Output,
-            //hugr::ops::OpType::FuncDefn(_) => todo!(),
-            //hugr::ops::OpType::FuncDecl(_) => todo!(),
-            //hugr::ops::OpType::Const(_) => todo!(),
-            //hugr::ops::OpType::Call(_) => todo!(),
-            //hugr::ops::OpType::CallIndirect(_) => todo!(),
-            //hugr::ops::OpType::LoadConstant(_) => todo!(),
-            //hugr::ops::OpType::DFG(_) => JsonOpType::CircBox, // TODO: Requires generating the Operation::op_box
-            _ => return Err(err()),
+        let OpType::LeafOp(leaf) = op else {
+            return Err(err());
         };
+
+        let json_optype = if let Ok(t2op) = leaf.clone().try_into() {
+            match t2op {
+                T2Op::CX => JsonOpType::CX,
+                T2Op::H => JsonOpType::H,
+                T2Op::Measure => JsonOpType::Measure,
+                T2Op::RzF64 => JsonOpType::RzF64,
+                _ => {
+                    return Err(err());
+                }
+            }
+        } else if let LeafOp::CustomOp(b) = leaf {
+            let ext = (*b).as_ref();
+            return try_unwrap_json_op(ext).ok_or_else(err);
+        } else {
+            return Err(err());
+        };
+
+        // let json_optype: JsonOpType = match leaf {
+        //     LeafOp::Noop { .. } => JsonOpType::noop,
+        //     OpType::LeafOp(l) => match l.clone().try_into() {
+        //         Ok(t2op) => match t2op {
+        //             T2Op::CX => JsonOpType::CX,
+        //             T2Op::H => JsonOpType::H,
+        //             T2Op::Measure => JsonOpType::Measure,
+        //             T2Op::RzF64 => JsonOpType::RzF64,
+        //             _ => {
+        //                 return Err(err());
+        //             }
+        //         },
+
+        //         Err(_) => match l {
+        //             LeafOp::CustomOp(b) => {
+        //                 let ext = (*b).as_ref();
+        //                 return try_unwrap_json_op(ext).ok_or_else(err);
+        //             }
+
+        //             _ => return Err(err()),
+        //         },
+        //     },
+        //     _ => return Err(err()),
+        // };
 
         let mut num_qubits = 0;
         let mut num_bits = 0;
