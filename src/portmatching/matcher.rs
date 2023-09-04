@@ -25,7 +25,7 @@ use thiserror::Error;
 #[cfg(feature = "pyo3")]
 use pyo3::prelude::*;
 
-use crate::{circuit::Circuit, T2Op};
+use crate::{circuit::Circuit, ops::NotT2Op, T2Op};
 
 /// Matchable operations in a circuit.
 ///
@@ -45,13 +45,13 @@ impl From<T2Op> for MatchOp {
 }
 
 impl TryFrom<OpType> for MatchOp {
-    type Error = &'static str;
+    type Error = NotT2Op;
 
     fn try_from(value: OpType) -> Result<Self, Self::Error> {
         match value {
             OpType::LeafOp(op) => Ok(Self::Op(op.try_into()?)),
             OpType::LoadConstant(_) => Ok(Self::LoadConstant),
-            _ => Err("Unsupported op type"),
+            _ => Err(NotT2Op),
         }
     }
 }

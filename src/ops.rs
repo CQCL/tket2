@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
+use thiserror::Error;
 
 /// Name of tket 2 extension.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_inline("quantum.tket2");
@@ -61,14 +62,21 @@ pub enum Pauli {
     Z,
 }
 
+#[derive(Debug, Error, PartialEq, Clone, Copy)]
+#[error("Not a T2Op.")]
+pub struct NotT2Op;
+
 // this trait could be implemented in Hugr
 trait SimpleOpEnum: Into<&'static str> + FromStr + Copy + IntoEnumIterator {
+    type LoadError: std::error::Error;
+
     fn signature(&self) -> FunctionType;
     fn name(&self) -> &str {
         (*self).into()
     }
-    fn try_from_op_def(op_def: &OpDef) -> Result<Self, <Self as FromStr>::Err> {
-        Self::from_str(op_def.name())
+    fn from_extension_name(extension: &str, op_name: &str) -> Result<Self, Self::LoadError>;
+    fn try_from_op_def(op_def: &OpDef) -> Result<Self, Self::LoadError> {
+        Self::from_extension_name(op_def.extension(), op_def.name())
     }
     fn add_to_extension<'e>(
         &self,
@@ -80,6 +88,13 @@ trait SimpleOpEnum: Into<&'static str> + FromStr + Copy + IntoEnumIterator {
     }
 }
 
+fn from_extension_name<T: SimpleOpEnum>(extension: &str, op_name: &str) -> Result<T, NotT2Op> {
+    if extension != EXTENSION_ID {
+        return Err(NotT2Op);
+    }
+    T::from_str(op_name).map_err(|_| NotT2Op)
+}
+
 impl Pauli {
     /// Check if this pauli commutes with another.
     pub fn commutes_with(&self, other: Self) -> bool {
@@ -87,6 +102,7 @@ impl Pauli {
     }
 }
 impl SimpleOpEnum for T2Op {
+    type LoadError = NotT2Op;
     fn signature(&self) -> FunctionType {
         use T2Op::*;
         let one_qb_row = type_row![QB_T];
@@ -116,6 +132,13 @@ impl SimpleOpEnum for T2Op {
             vec![],
             move |_: &_| Ok(FunctionType::new(input.clone(), output.clone())),
         )
+    }
+
+    fn from_extension_name(extension: &str, op_name: &str) -> Result<Self, Self::LoadError> {
+        if extension != EXTENSION_ID {
+            return Err(NotT2Op);
+        }
+        Self::from_str(op_name).map_err(|_| NotT2Op)
     }
 }
 
@@ -163,26 +186,24 @@ impl From<T2Op> for OpType {
 }
 
 impl TryFrom<OpType> for T2Op {
-    type Error = &'static str;
+    type Error = NotT2Op;
 
     fn try_from(op: OpType) -> Result<Self, Self::Error> {
-        let leaf: LeafOp = op.try_into().map_err(|_| "not a leaf.")?;
+        let leaf: LeafOp = op.try_into().map_err(|_| NotT2Op)?;
         leaf.try_into()
     }
 }
 
 impl TryFrom<LeafOp> for T2Op {
-    type Error = &'static str;
+    type Error = NotT2Op;
 
     fn try_from(op: LeafOp) -> Result<Self, Self::Error> {
         match op {
             LeafOp::CustomOp(b) => match *b {
-                ExternalOp::Extension(e) => {
-                    Self::try_from_op_def(e.def()).map_err(|_| "not a T2Op")
-                }
-                ExternalOp::Opaque(_) => todo!(),
+                ExternalOp::Extension(e) => Self::try_from_op_def(e.def()),
+                ExternalOp::Opaque(o) => from_extension_name(o.extension(), o.name()),
             },
-            _ => Err("not a custom."),
+            _ => Err(NotT2Op),
         }
     }
 }
