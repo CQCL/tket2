@@ -2,14 +2,13 @@
 
 use std::collections::HashMap;
 
-use downcast_rs::Downcast;
 use hugr::extension::prelude::QB_T;
 use hugr::ops::OpType;
 use hugr::std_extensions::arithmetic::float_types::ConstF64;
 use hugr::values::{PrimValue, Value};
 use hugr::Wire;
-use itertools::Itertools;
-use tket_json_rs::circuit_json::{self, Permutation, SerialCircuit};
+use itertools::{Either, Itertools};
+use tket_json_rs::circuit_json::{self, Permutation, Register, SerialCircuit};
 
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
@@ -92,19 +91,37 @@ impl JsonEncoder {
         // Register any output of the command that can be used as a TKET1 parameter.
         self.record_parameters(&command, optype);
 
-        let args = command
-            .inputs()
-            .iter()
-            .filter_map(|&u| self.unit_to_register(u))
-            .collect();
+        if let OpType::Const(_) | OpType::LoadConstant(_) = optype {
+            return Ok(());
+        }
+        let (args, params): (Vec<Register>, Vec<Wire>) =
+            command
+                .inputs()
+                .iter()
+                .partition_map(|&u| match self.unit_to_register(u) {
+                    Some(r) => Either::Left(r),
+                    None => match u {
+                        CircuitUnit::Wire(w) => Either::Right(w),
+                        CircuitUnit::Linear(_) => {
+                            panic!("No register found for the linear input {u:?}.")
+                        }
+                    },
+                });
 
         // TODO Restore the opgroup (once the decoding supports it)
         let opgroup = None;
-
         let op: JsonOp = optype.try_into()?;
-        let op: circuit_json::Operation = op.into_operation();
-
-        // TODO: Update op.params. Leave untouched the ones that contain free variables.
+        let mut op: circuit_json::Operation = op.into_operation();
+        if !params.is_empty() {
+            op.params = Some(
+                params
+                    .into_iter()
+                    .filter_map(|w| self.parameters.get(&w))
+                    .cloned()
+                    .collect(),
+            )
+        }
+        // TODO: ops that contain free variables.
         // (update decoder to ignore them too, but store them in the wrapped op)
 
         let command = circuit_json::Command { op, args, opgroup };
@@ -144,8 +161,8 @@ impl JsonEncoder {
             OpType::Const(const_op) => {
                 // New constant, register it if it can be interpreted as a parameter.
                 match const_op.value() {
-                    Value::Prim(PrimValue::Extension(v)) => {
-                        if let Some(f) = v.as_any().downcast_ref::<ConstF64>() {
+                    Value::Prim(PrimValue::Extension((v,))) => {
+                        if let Some(f) = v.downcast_ref::<ConstF64>() {
                             f.to_string()
                         } else {
                             return;
