@@ -5,14 +5,13 @@ use std::collections::HashSet;
 use hugr::hugr::views::{HierarchyView, SiblingGraph};
 use hugr::ops::handle::DfgID;
 use hugr::{Hugr, HugrView};
+use rstest::rstest;
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 
 use crate::circuit::Circuit;
 use crate::json::TKETDecode;
 
-#[test]
-fn read_json_simple() {
-    let circ_s = r#"{
+const SIMPLE_JSON: &str = r#"{
         "phase": "0",
         "bits": [],
         "qubits": [["q", [0]], ["q", [1]]],
@@ -23,44 +22,46 @@ fn read_json_simple() {
         "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
     }"#;
 
-    let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
-    assert_eq!(ser.commands.len(), 2);
-
-    let hugr: Hugr = ser.clone().decode().unwrap();
-    let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(&hugr, hugr.root());
-
-    assert_eq!(circ.qubits().len(), 2);
-
-    let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
-    compare_serial_circs(&ser, &reser);
-}
-
-#[test]
-fn read_json_unknown_op() {
-    // test ops that are not native to tket-2 are correctly captured as
-    // custom and output
-
-    let circ_s = r#"{
+const UNKNOWN_OP: &str = r#"{
         "phase": "1/2",
         "bits": [["c", [0]], ["c", [1]]],
         "qubits": [["q", [0]], ["q", [1]], ["q", [2]]],
         "commands": [
             {"args": [["q", [0]], ["q", [1]], ["q", [2]]], "op": {"type": "CSWAP"}},
-            {"args": [["q", [1]], ["c", [1]]], "op": {"type": "Measure"}},
-            {"args": [["q", [2]], ["c", [0]]], "op": {"type": "Measure"}}
+            {"args": [["q", [1]], ["c", [1]]], "op": {"type": "Measure"}}
         ],
         "created_qubits": [],
         "discarded_qubits": [],
         "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]], [["q", [2]], ["q", [2]]]]
     }"#;
 
-    let ser: SerialCircuit = serde_json::from_str(circ_s).unwrap();
-    assert_eq!(ser.commands.len(), 3);
+const PARAMETRIZED: &str = r#"{
+        "phase": "0.0",
+        "bits": [],
+        "qubits": [["q", [0]], ["q", [1]]],
+        "commands": [
+            {"args":[["q",[0]]],"op":{"type":"H"}},
+            {"args":[["q",[1]],["q",[0]]],"op":{"type":"CX"}},
+            {"args":[["q",[0]]],"op":{"params":["0.1"],"type":"Rz"}},
+            {"args": [["q", [0]]], "op": {"params": ["0.1", "0.2", "0.3"], "type": "TK1"}}
+        ],
+        "created_qubits": [],
+        "discarded_qubits": [],
+        "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
+    }"#;
+
+#[rstest]
+#[case::simple(SIMPLE_JSON, 2, 2)]
+#[case::unknown_op(UNKNOWN_OP, 2, 3)]
+#[case::parametrized(PARAMETRIZED, 4, 2)]
+fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num_qubits: usize) {
+    let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
+    assert_eq!(ser.commands.len(), num_commands);
 
     let hugr: Hugr = ser.clone().decode().unwrap();
     let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(&hugr, hugr.root());
 
-    assert_eq!(circ.qubits().len(), 3);
+    assert_eq!(circ.qubits().len(), num_qubits);
 
     let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
     compare_serial_circs(&ser, &reser);
@@ -80,5 +81,14 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
 
     assert_eq!(a.implicit_permutation, b.implicit_permutation);
 
+    assert_eq!(a.commands.len(), b.commands.len());
+
+    // the below only works if both serial circuits share a topological ordering
+    // of commands.
+    for (a, b) in a.commands.iter().zip(b.commands.iter()) {
+        assert_eq!(a.op.op_type, b.op.op_type);
+        assert_eq!(a.args, b.args);
+        assert_eq!(a.op.params, b.op.params);
+    }
     // TODO: Check commands equality (they only implement PartialEq)
 }
