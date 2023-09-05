@@ -51,6 +51,7 @@ pub enum T2Op {
     ZZMax,
     Measure,
     RzF64,
+    TK1,
 }
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, PartialOrd)]
 #[allow(missing_docs)]
@@ -112,6 +113,10 @@ impl SimpleOpEnum for T2Op {
             CX | ZZMax => FunctionType::new(two_qb_row.clone(), two_qb_row),
             Measure => FunctionType::new(one_qb_row, type_row![QB_T, BOOL_T]),
             RzF64 => FunctionType::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
+            TK1 => FunctionType::new(
+                type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE, FLOAT64_TYPE],
+                one_qb_row,
+            ),
         }
     }
 
