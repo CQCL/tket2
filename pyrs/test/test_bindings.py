@@ -1,16 +1,12 @@
 from dataclasses import dataclass
 from pyrs.pyrs import passes
-from pytket import Circuit, OpType
-from pathlib import Path
-from pytket.qasm import circuit_from_qasm
-from pytket.passes.auto_rebase import auto_rebase_pass
-from pytket.utils.stats import gate_counts
+from pytket.circuit import Circuit
+
 
 @dataclass
 class DepthOptimisePass:
     def apply(self, circ: Circuit) -> Circuit:
         (circ, n_moves) = passes.greedy_depth_reduce(circ)
-        print(n_moves)
         # print(n_moves)
         # return n_moves > 0
         return circ
@@ -23,35 +19,8 @@ def test_depth_optimise():
 
     c = DepthOptimisePass().apply(c)
 
-    print(c.get_commands())
     assert c.depth() == 2
 
-
-def test_qasm_files():
-    direc = Path.home() / "tket/tket/pytket/tests/qasm_test_files/"
-
-    files = list(direc.iterdir())
-    for file in files[2:]:
-        try:
-            c = circuit_from_qasm(file)    
-        except Exception as e:
-            continue
-        try:
-
-            auto_rebase_pass({OpType.H, OpType.CX, OpType.Rz}).apply(c)
-        except RuntimeError as e:
-            if "CustomGate" in str(e):
-                continue
-            else:
-                raise e
-        if gate_counts(c).get(OpType.Rz, 0) > 0:
-            continue
-        
-        print(file.name)
-        print(c.depth())
-        c2 = DepthOptimisePass().apply(c)
-
-        print(c2.depth())
 
 # from dataclasses import dataclass
 # from typing import Callable, Iterable
