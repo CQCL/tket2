@@ -55,6 +55,9 @@ pub enum T2Op {
     ZZMax,
     Measure,
     RzF64,
+    RxF64,
+    PhasedX,
+    ZZPhase,
     TK1,
 }
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, PartialOrd)]
@@ -115,8 +118,10 @@ impl SimpleOpEnum for T2Op {
         match self {
             H | T | S | X | Y | Z | Tdg | Sdg => FunctionType::new(one_qb_row.clone(), one_qb_row),
             CX | ZZMax => FunctionType::new(two_qb_row.clone(), two_qb_row),
+            ZZPhase => FunctionType::new(type_row![QB_T, QB_T, FLOAT64_TYPE], two_qb_row),
             Measure => FunctionType::new(one_qb_row, type_row![QB_T, BOOL_T]),
-            RzF64 => FunctionType::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
+            RzF64 | RxF64 => FunctionType::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
+            PhasedX => FunctionType::new(type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE], one_qb_row),
             TK1 => FunctionType::new(
                 type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE, FLOAT64_TYPE],
                 one_qb_row,
@@ -156,10 +161,10 @@ impl T2Op {
         use T2Op::*;
 
         match self {
-            X => vec![(0, Pauli::X)],
+            X | RxF64 => vec![(0, Pauli::X)],
             T | Z | S | Tdg | Sdg | RzF64 | Measure => vec![(0, Pauli::Z)],
             CX => vec![(0, Pauli::Z), (1, Pauli::X)],
-            ZZMax => vec![(0, Pauli::Z), (1, Pauli::Z)],
+            ZZMax | ZZPhase => vec![(0, Pauli::Z), (1, Pauli::Z)],
             // by default, no commutation
             _ => vec![],
         }

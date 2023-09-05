@@ -189,7 +189,11 @@ impl From<&JsonOp> for OpType {
             JsonOpType::Tdg => T2Op::Tdg.into(),
             JsonOpType::X => T2Op::X.into(),
             JsonOpType::Rz => T2Op::RzF64.into(),
+            JsonOpType::Rx => T2Op::RxF64.into(),
             JsonOpType::TK1 => T2Op::TK1.into(),
+            JsonOpType::PhasedX => T2Op::PhasedX.into(),
+            JsonOpType::ZZMax => T2Op::ZZMax.into(),
+            JsonOpType::ZZPhase => T2Op::ZZPhase.into(),
             JsonOpType::noop => LeafOp::Noop { ty: QB_T }.into(),
             _ => LeafOp::CustomOp(Box::new(json_op.as_opaque_op())).into(),
         }
@@ -216,7 +220,11 @@ impl TryFrom<&OpType> for JsonOp {
                 T2Op::H => JsonOpType::H,
                 T2Op::Measure => JsonOpType::Measure,
                 T2Op::RzF64 => JsonOpType::Rz,
+                T2Op::RxF64 => JsonOpType::Rx,
                 T2Op::TK1 => JsonOpType::TK1,
+                T2Op::PhasedX => JsonOpType::PhasedX,
+                T2Op::ZZMax => JsonOpType::ZZMax,
+                T2Op::ZZPhase => JsonOpType::ZZPhase,
                 _ => return Err(err()),
             }
         } else if let LeafOp::CustomOp(b) = leaf {
