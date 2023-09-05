@@ -12,7 +12,7 @@ use tket2::json::load_tk1_json_file;
 use tket2::passes::taso::rep_sets_from_path;
 use tket2::portmatching::{CircuitMatcher, CircuitPattern};
 
-/// Simple program to greet a person
+/// Program to precompile patterns from files into a CircuitMatcher stored as binary file.
 #[derive(Parser, Debug)]
 #[clap(version = "1.0", long_about = None)]
 #[clap(about = "Precompiles patterns from files into a CircuitMatcher stored as binary file.")]
