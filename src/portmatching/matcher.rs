@@ -392,7 +392,7 @@ mod tests {
             })
             .unwrap()
         });
-        DescendantsGraph::new(&circ, circ.root())
+        DescendantsGraph::new(circ, circ.root())
     }
 
     fn cx_xc<'a>() -> DescendantsGraph<'a, DfgID> {
@@ -404,7 +404,7 @@ mod tests {
             })
             .unwrap()
         });
-        DescendantsGraph::new(&circ, circ.root())
+        DescendantsGraph::new(circ, circ.root())
     }
 
     #[test]
