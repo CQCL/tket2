@@ -1,6 +1,11 @@
 //! Pattern and matcher objects for circuit matching
 
-use std::fmt::Debug;
+use std::{
+    fmt::Debug,
+    fs::File,
+    io,
+    path::{Path, PathBuf},
+};
 
 use super::{CircuitPattern, PEdge, PNode};
 use derive_more::{From, Into};
@@ -30,7 +35,9 @@ use crate::{circuit::Circuit, ops::NotT2Op, T2Op};
 /// Matchable operations in a circuit.
 ///
 /// We currently support [`T2Op`] and a the HUGR load constant operation.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub(crate) enum MatchOp {
     /// A TKET2 operation.
     Op(T2Op),
@@ -153,6 +160,7 @@ pub struct CircuitRewrite(SimpleReplacement);
 /// This uses a state automaton internally to match against a set of patterns
 /// simultaneously.
 #[cfg_attr(feature = "pyo3", pyclass)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CircuitMatcher {
     automaton: ScopeAutomaton<PNode, PEdge, Port>,
     patterns: Vec<CircuitPattern>,
@@ -228,6 +236,53 @@ impl CircuitMatcher {
     pub fn get_pattern(&self, id: PatternID) -> Option<&CircuitPattern> {
         self.patterns.get(id.0)
     }
+
+    /// Serialise a matcher into an IO stream.
+    ///
+    /// Precomputed matchers can be serialised as binary and then loaded
+    /// later using [`CircuitMatcher::load_binary_io`].
+    pub fn save_binary_io<W: io::Write>(
+        &self,
+        writer: &mut W,
+    ) -> Result<(), MatcherSerialisationError> {
+        rmp_serde::encode::write(writer, &self)?;
+        Ok(())
+    }
+
+    /// Loads a matcher from an IO stream.
+    ///
+    /// Loads streams as created by [`CircuitMatcher::save_binary_io`].
+    pub fn load_binary_io<R: io::Read>(reader: &mut R) -> Result<Self, MatcherSerialisationError> {
+        let matcher: Self = rmp_serde::decode::from_read(reader)?;
+        Ok(matcher)
+    }
+
+    /// Save a matcher as a binary file.
+    ///
+    /// Precomputed matchers can be saved as binary files and then loaded
+    /// later using [`CircuitMatcher::load_binary`].
+    ///
+    /// The extension of the file name will always be set or amended to be
+    /// `.bin`.
+    ///
+    /// If successful, returns the path to the newly created file.
+    pub fn save_binary(
+        &self,
+        name: impl AsRef<Path>,
+    ) -> Result<PathBuf, MatcherSerialisationError> {
+        let mut file_name = PathBuf::from(name.as_ref());
+        file_name.set_extension("bin");
+        let mut file = File::create(&file_name)?;
+        self.save_binary_io(&mut file)?;
+        Ok(file_name)
+    }
+
+    /// Loads a matcher saved using [`CircuitMatcher::save_binary`].
+    pub fn load_binary(name: impl AsRef<Path>) -> Result<Self, MatcherSerialisationError> {
+        let file = File::open(name)?;
+        let mut reader = std::io::BufReader::new(file);
+        Self::load_binary_io(&mut reader)
+    }
 }
 
 /// Errors that can occur when constructing matches.
@@ -250,6 +305,20 @@ pub enum InvalidCircuitMatch {
     /// case an error would have been raised earlier on).
     #[error("empty match")]
     EmptyMatch,
+}
+
+/// Errors that can occur when (de)serialising a matcher.
+#[derive(Debug, Error)]
+pub enum MatcherSerialisationError {
+    /// An IO error occured
+    #[error("IO error: {0}")]
+    Io(#[from] io::Error),
+    /// An error occured during deserialisation
+    #[error("Deserialisation error: {0}")]
+    Deserialisation(#[from] rmp_serde::decode::Error),
+    /// An error occured during serialisation
+    #[error("Serialisation error: {0}")]
+    Serialisation(#[from] rmp_serde::encode::Error),
 }
 
 impl From<InvalidSubgraph> for InvalidCircuitMatch {
@@ -309,39 +378,73 @@ fn handle_match_error<T>(match_res: Result<T, InvalidCircuitMatch>, root: Node) 
 
 #[cfg(test)]
 mod tests {
-    use hugr::extension::prelude::QB_T;
+    use std::sync::OnceLock;
+
     use hugr::hugr::views::{DescendantsGraph, HierarchyView};
     use hugr::ops::handle::DfgID;
-    use hugr::types::FunctionType;
-    use hugr::{
-        builder::{DFGBuilder, Dataflow, DataflowHugr},
-        Hugr, HugrView,
-    };
+    use hugr::{Hugr, HugrView};
+    use itertools::Itertools;
 
+    use crate::utils::build_simple_circuit;
     use crate::T2Op;
 
     use super::{CircuitMatcher, CircuitPattern};
 
-    fn h_cx() -> Hugr {
-        let qb = QB_T;
-        let mut hugr = DFGBuilder::new(FunctionType::new_linear(vec![qb; 2])).unwrap();
-        let mut circ = hugr.as_circuit(hugr.input_wires().collect());
-        circ.append(T2Op::CX, [0, 1]).unwrap();
-        circ.append(T2Op::H, [0]).unwrap();
-        let out_wires = circ.finish();
-        hugr.finish_hugr_with_outputs(out_wires, &crate::extension::REGISTRY)
+    static H_CX: OnceLock<Hugr> = OnceLock::new();
+    static CX_CX: OnceLock<Hugr> = OnceLock::new();
+
+    fn h_cx<'a>() -> DescendantsGraph<'a, DfgID> {
+        let circ = H_CX.get_or_init(|| {
+            build_simple_circuit(2, |circ| {
+                circ.append(T2Op::CX, [0, 1]).unwrap();
+                circ.append(T2Op::H, [0]).unwrap();
+                Ok(())
+            })
             .unwrap()
+        });
+        DescendantsGraph::new(circ, circ.root())
+    }
+
+    fn cx_xc<'a>() -> DescendantsGraph<'a, DfgID> {
+        let circ = CX_CX.get_or_init(|| {
+            build_simple_circuit(2, |circ| {
+                circ.append(T2Op::CX, [0, 1]).unwrap();
+                circ.append(T2Op::CX, [1, 0]).unwrap();
+                Ok(())
+            })
+            .unwrap()
+        });
+        DescendantsGraph::new(circ, circ.root())
     }
 
     #[test]
     fn construct_matcher() {
-        let hugr = h_cx();
-        let circ: DescendantsGraph<'_, DfgID> = DescendantsGraph::new(&hugr, hugr.root());
+        let circ = h_cx();
 
         let p = CircuitPattern::try_from_circuit(&circ).unwrap();
         let m = CircuitMatcher::from_patterns(vec![p]);
 
         let matches = m.find_matches(&circ);
         assert_eq!(matches.len(), 1);
+    }
+
+    #[test]
+    fn serialise_round_trip() {
+        let circs = [h_cx(), cx_xc()];
+        let patterns = circs
+            .iter()
+            .map(|circ| CircuitPattern::try_from_circuit(circ).unwrap())
+            .collect_vec();
+
+        // Estimate the size of the buffer based on the number of patterns and the size of each pattern
+        let mut buf = Vec::with_capacity(patterns[0].n_edges() + patterns[1].n_edges());
+        let m = CircuitMatcher::from_patterns(patterns);
+        m.save_binary_io(&mut buf).unwrap();
+
+        let m2 = CircuitMatcher::load_binary_io(&mut buf.as_slice()).unwrap();
+        let mut buf2 = Vec::with_capacity(buf.len());
+        m2.save_binary_io(&mut buf2).unwrap();
+
+        assert_eq!(buf, buf2);
     }
 }
