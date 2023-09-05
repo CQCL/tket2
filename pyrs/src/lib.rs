@@ -8,6 +8,31 @@ use tket2::{
 };
 use tket_json_rs::circuit_json::SerialCircuit;
 
+use tket2::extension::REGISTRY;
+use tket2::portmatching::pyo3::PyValidateError;
+
+#[pyfunction]
+fn check_soundness(c: Py<PyAny>) -> PyResult<()> {
+    let ser_c = SerialCircuit::_from_tket1(c);
+    let hugr: hugr::Hugr = ser_c.decode().unwrap();
+    hugr.validate(&REGISTRY)
+        .map_err(|e| PyValidateError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+fn to_hugr_dot(c: Py<PyAny>) -> PyResult<String> {
+    let ser_c = SerialCircuit::_from_tket1(c);
+    let hugr: Hugr = ser_c.decode().unwrap();
+    Ok(hugr.dot_string())
+}
+
+#[pyfunction]
+fn to_hugr(c: Py<PyAny>) -> PyResult<Hugr> {
+    let ser_c = SerialCircuit::_from_tket1(c);
+    let hugr: Hugr = ser_c.decode().unwrap();
+    Ok(hugr)
+}
+
 fn pyerr_string<T: std::fmt::Debug>(e: T) -> PyErr {
     PyErr::new::<PyTypeError, _>(format!("{:?}", e))
 }
@@ -27,6 +52,11 @@ fn greedy_depth_reduce(py_c: PyObject) -> PyResult<(PyObject, u32)> {
 fn pyrs(py: Python, m: &PyModule) -> PyResult<()> {
     add_patterns_module(py, m)?;
     add_pass_module(py, m)?;
+    m.add_function(wrap_pyfunction!(to_hugr_dot, m)?)?;
+    m.add_function(wrap_pyfunction!(to_hugr, m)?)?;
+
+    m.add("ValidateError", py.get_type::<PyValidateError>())?;
+    m.add_function(wrap_pyfunction!(check_soundness, m)?)?;
     Ok(())
 }
 
