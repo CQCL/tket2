@@ -15,7 +15,7 @@ use super::Circuit;
 pub use hugr::hugr::CircuitUnit;
 pub use hugr::ops::OpType;
 pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
-pub use hugr::{Node, Port, Wire};
+pub use hugr::{Direction, Node, Port, Wire};
 
 /// An operation applied to specific wires.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -145,7 +145,7 @@ where
             // add the static output port from a const.
             outputs.push(CircuitUnit::Wire(Wire::new(
                 node,
-                PortOffset::new_outgoing(0).into(),
+                optype.other_port_index(Direction::Outgoing).unwrap(),
             )))
         }
         Some(Command {
