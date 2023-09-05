@@ -270,7 +270,7 @@ impl CircuitMatcher {
         &self,
         name: impl AsRef<Path>,
     ) -> Result<PathBuf, MatcherSerialisationError> {
-        let mut file_name = PathBuf::from(name);
+        let mut file_name = PathBuf::from(name.as_ref());
         file_name.set_extension("bin");
         let mut file = File::create(&file_name)?;
         self.save_binary_io(&mut file)?;
