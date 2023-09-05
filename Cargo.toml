@@ -29,7 +29,9 @@ itertools = "0.11.0"
 petgraph = { version = "0.6.3", default-features = false }
 serde_yaml = "0.9.22"
 # portmatching = { version = "0.2.0", optional = true, features = ["serde"]}
-portmatching = { optional = true, git = "https://github.com/lmondada/portmatching", rev = "f590906" }
+portmatching = { optional = true, git = "https://github.com/lmondada/portmatching", rev = "f590906", features = [
+    "serde",
+] }
 derive_more = "0.99.17"
 quantinuum-hugr = { workspace = true }
 portgraph = { workspace = true }
@@ -37,6 +39,7 @@ pyo3 = { workspace = true, optional = true, features = ["multiple-pymethods"] }
 strum_macros = "0.25.2"
 strum = "0.25.0"
 fxhash = "0.2.1"
+rmp-serde = { version = "1.1.2", optional = true }
 
 [features]
 pyo3 = [
@@ -47,7 +50,7 @@ pyo3 = [
     "quantinuum-hugr/pyo3",
 ]
 tkcxx = ["dep:tket-rs", "dep:num-complex"]
-portmatching = ["dep:portmatching"]
+portmatching = ["dep:portmatching", "dep:rmp-serde"]
 
 [dev-dependencies]
 rstest = "0.18.1"
@@ -65,6 +68,6 @@ members = ["pyrs"]
 
 [workspace.dependencies]
 
-quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "ea243fb" }
-portgraph = "0.8"
+quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "c59fa18" }
+portgraph = { version = "0.8", features = ["serde"] }
 pyo3 = { version = "0.19" }
