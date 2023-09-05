@@ -106,6 +106,7 @@ where
                 // add the static input port
                 optype
                     .static_input()
+                    // TODO query optype for this port once it is available in hugr.
                     .map(|_| PortOffset::new_incoming(sig.input.len()).into()),
             )
             .filter_map(|port| {
@@ -142,10 +143,9 @@ where
             .collect();
         if let OpType::Const(_) = optype {
             // add the static output port from a const.
-            let offset = outputs.len();
             outputs.push(CircuitUnit::Wire(Wire::new(
                 node,
-                optype.other_port().unwrap(),
+                PortOffset::new_outgoing(0).into(),
             )))
         }
         Some(Command {
