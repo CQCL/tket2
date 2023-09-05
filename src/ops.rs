@@ -8,11 +8,15 @@ use hugr::{
     ops::{custom::ExternalOp, LeafOp, OpType},
     std_extensions::arithmetic::float_types::FLOAT64_TYPE,
     type_row,
-    types::FunctionType,
+    types::{
+        type_param::{CustomTypeArg, TypeArg, TypeParam},
+        CustomType, FunctionType, TypeBound,
+    },
     Extension,
 };
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
+use smol_str::SmolStr;
 
 use std::str::FromStr;
 use strum::IntoEnumIterator;
@@ -171,10 +175,80 @@ impl T2Op {
     }
 }
 
+pub const SYM_EXPR_T: CustomType =
+    CustomType::new_simple(SmolStr::new_inline("SymExpr"), EXTENSION_ID, TypeBound::Eq);
+
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct ConstSymExpr(String);
+
+// #[typetag::serde]
+// impl CustomConst for ConstSymExpr {
+//     fn name(&self) -> SmolStr {
+//         format!("sym_expr: {}", &self.0).into()
+//     }
+
+//     fn check_custom_type(&self, typ: &CustomType) -> Result<(), CustomCheckFailure> {
+//         <Self as KnownTypeConst>::check_known_type(&self, typ)
+//     }
+// }
+
+// impl KnownTypeConst for ConstSymExpr {
+//     const TYPE: CustomType = SYM_EXPR_T;
+// }
+const SYM_OP_ID: SmolStr = SmolStr::new_inline("symbolic_float");
+
+/// Initialize a new custom symbolic expression constant op from a string.
+pub fn symolic_constant_op(s: &str) -> OpType {
+    let value: serde_yaml::Value = s.into();
+    let l: LeafOp = EXTENSION
+        .instantiate_extension_op(
+            &SYM_OP_ID,
+            vec![TypeArg::Opaque(
+                CustomTypeArg::new(SYM_EXPR_T, value).unwrap(),
+            )],
+        )
+        .unwrap()
+        .into();
+    l.into()
+}
+
+/// match against a symbolic constant
+pub(crate) fn match_symb_const_op(op: &OpType) -> Option<&str> {
+    if let OpType::LeafOp(LeafOp::CustomOp(e)) = op {
+        match e.as_ref() {
+            ExternalOp::Extension(e)
+                if e.def().name() == &SYM_OP_ID && e.def().extension() == &EXTENSION_ID =>
+            {
+                // TODO also check extension name
+
+                let Some(TypeArg::Opaque(s)) = e.args().get(0) else {
+                    panic!("should be an opaque type arg.")
+                };
+
+                let serde_yaml::Value::String(s) = &s.value else {
+                    panic!("unexpected yaml value.")
+                };
+
+                Some(s)
+            }
+            ExternalOp::Opaque(_) => todo!(),
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
 fn extension() -> Extension {
     let mut e = Extension::new(EXTENSION_ID);
     load_all_ops::<T2Op>(&mut e).expect("add fail");
-
+    e.add_op_custom_sig_simple(
+        SYM_OP_ID,
+        "Store a sympy expression that can be evaluated to a float.".to_string(),
+        vec![TypeParam::Opaque(SYM_EXPR_T)],
+        |_: &[TypeArg]| Ok(FunctionType::new(type_row![], type_row![FLOAT64_TYPE])),
+    )
+    .unwrap();
     e
 }
 
