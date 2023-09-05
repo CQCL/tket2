@@ -19,9 +19,6 @@ This optional feature enables some python bindings via pyo3. See the `pyrs` fold
 - `portmatching`
   This enables pattern matching using the `portmatching` crate.
 
-- `binaries`
-  Used for compiling additional binaries in `src/bin`. Currently this is necessary to run the `CircuitMatcher` pre-compilation tool at `src/bin/compile-matcher.rs`
-
 ## Developing TKET2
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for instructions on setting up the development environment.

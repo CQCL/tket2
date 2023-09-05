@@ -17,6 +17,7 @@ use tket2::portmatching::{CircuitMatcher, CircuitPattern};
 #[clap(version = "1.0", long_about = None)]
 #[clap(about = "Precompiles patterns from files into a CircuitMatcher stored as binary file.")]
 struct CmdLineArgs {
+    // TODO: Differentiate between TK1 input and ECC input
     /// Name of input file/folder
     #[arg(
         short,

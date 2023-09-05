@@ -40,7 +40,6 @@ strum_macros = "0.25.2"
 strum = "0.25.0"
 fxhash = "0.2.1"
 rmp-serde = { version = "1.1.2", optional = true }
-clap = { version = "4.4.2", optional = true, features = ["derive"] }
 
 [features]
 pyo3 = [
@@ -52,7 +51,6 @@ pyo3 = [
 ]
 tkcxx = ["dep:tket-rs", "dep:num-complex"]
 portmatching = ["dep:portmatching", "dep:rmp-serde"]
-binaries = ["dep:clap"]
 
 [dev-dependencies]
 rstest = "0.18.1"
@@ -64,13 +62,9 @@ urlencoding = "2.1.2"
 name = "bench_main"
 harness = false
 
-[[bin]]
-name = "compile-matcher"
-required-features = ["portmatching", "binaries"]
-
 [workspace]
 
-members = ["pyrs"]
+members = ["pyrs", "compile-matcher"]
 
 [workspace.dependencies]
 
