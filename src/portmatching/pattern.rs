@@ -17,7 +17,7 @@ use pyo3::prelude::*;
 
 /// A pattern that match a circuit exactly
 #[cfg_attr(feature = "pyo3", pyclass)]
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CircuitPattern {
     pub(super) pattern: Pattern<Node, PNode, PEdge>,
     /// The input ports

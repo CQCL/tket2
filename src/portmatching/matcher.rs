@@ -160,7 +160,7 @@ pub struct CircuitRewrite(SimpleReplacement);
 /// This uses a state automaton internally to match against a set of patterns
 /// simultaneously.
 #[cfg_attr(feature = "pyo3", pyclass)]
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CircuitMatcher {
     automaton: ScopeAutomaton<PNode, PEdge, Port>,
     patterns: Vec<CircuitPattern>,
