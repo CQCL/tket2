@@ -436,10 +436,9 @@ mod tests {
             .map(|circ| CircuitPattern::try_from_circuit(circ).unwrap())
             .collect_vec();
 
-        let m = CircuitMatcher::from_patterns(patterns);
-
         // Estimate the size of the buffer based on the number of patterns and the size of each pattern
         let mut buf = Vec::with_capacity(patterns[0].n_edges() + patterns[1].n_edges());
+        let m = CircuitMatcher::from_patterns(patterns);
         m.save_binary_io(&mut buf).unwrap();
 
         let m2 = CircuitMatcher::load_binary_io(&mut buf.as_slice()).unwrap();
