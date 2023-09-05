@@ -13,6 +13,7 @@ use tket_json_rs::circuit_json::{self, Permutation, Register, SerialCircuit};
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
 use crate::extension::LINEAR_BIT;
+use crate::ops::match_symb_const_op;
 
 use super::op::JsonOp;
 use super::{OpConvertError, METADATA_IMPLICIT_PERM, METADATA_PHASE};
@@ -89,11 +90,12 @@ impl JsonEncoder {
     /// Add a circuit command to the serialization.
     pub fn add_command(&mut self, command: Command, optype: &OpType) -> Result<(), OpConvertError> {
         // Register any output of the command that can be used as a TKET1 parameter.
-        self.record_parameters(&command, optype);
-
-        if let OpType::Const(_) | OpType::LoadConstant(_) = optype {
+        if self.record_parameters(&command, optype) {
+            // for now all ops that record parameters should be ignored (are
+            // just constants)
             return Ok(());
         }
+
         let (args, params): (Vec<Register>, Vec<Wire>) =
             command
                 .inputs()
@@ -141,9 +143,9 @@ impl JsonEncoder {
     }
 
     /// Record any output of the command that can be used as a TKET1 parameter.
-    ///
+    /// Returns whether parameters were recorded.
     /// Associates the output wires with the parameter expression.
-    fn record_parameters(&mut self, command: &Command, optype: &OpType) {
+    fn record_parameters(&mut self, command: &Command, optype: &OpType) -> bool {
         // Only consider commands where all inputs are parameters.
         let inputs = command
             .inputs()
@@ -154,7 +156,7 @@ impl JsonEncoder {
             })
             .collect_vec();
         if inputs.len() != command.inputs().len() {
-            return;
+            return false;
         }
 
         let param = match optype {
@@ -165,21 +167,28 @@ impl JsonEncoder {
                         if let Some(f) = v.downcast_ref::<ConstF64>() {
                             f.to_string()
                         } else {
-                            return;
+                            return false;
                         }
                     }
-                    _ => return,
+                    _ => return false,
                 }
             }
             OpType::LoadConstant(_op_type) => {
                 // Re-use the parameter from the input.
                 inputs[0].clone()
             }
+            OpType::LeafOp(_) => {
+                if let Some(s) = match_symb_const_op(optype) {
+                    s.to_string()
+                } else {
+                    return false;
+                }
+            }
             _ => {
                 // In the future we may want to support arithmetic operations.
                 // (Just concatenating the inputs and the operation symbol, no
                 // need for evaluation).
-                return;
+                return false;
             }
         };
 
@@ -188,6 +197,7 @@ impl JsonEncoder {
                 self.parameters.insert(*wire, param.clone());
             }
         }
+        true
     }
 
     fn unit_to_register(&self, unit: CircuitUnit) -> Option<circuit_json::Register> {

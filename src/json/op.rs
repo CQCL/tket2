@@ -17,7 +17,7 @@ use itertools::Itertools;
 use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as JsonOpType;
 
-use super::{try_param_to_constant, OpConvertError};
+use super::OpConvertError;
 use crate::extension::{try_unwrap_json_op, LINEAR_BIT};
 use crate::T2Op;
 
@@ -164,14 +164,8 @@ impl JsonOp {
             return;
         };
 
-        let mut p_input_indices = 0..;
-        let param_inputs = params
-            .iter()
-            .map(|param| try_param_to_constant(param).map(|_| p_input_indices.next().unwrap()))
-            .collect();
-
-        self.num_params = p_input_indices.next().unwrap();
-        self.param_inputs = param_inputs;
+        self.num_params = params.len();
+        self.param_inputs = (0..params.len()).map(Some).collect();
     }
 }
 
