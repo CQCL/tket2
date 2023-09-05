@@ -145,7 +145,7 @@ where
             let offset = outputs.len();
             outputs.push(CircuitUnit::Wire(Wire::new(
                 node,
-                PortOffset::new_outgoing(offset).into(),
+                optype.other_port().unwrap(),
             )))
         }
         Some(Command {

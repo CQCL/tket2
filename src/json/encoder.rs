@@ -102,7 +102,9 @@ impl JsonEncoder {
                     Some(r) => Either::Left(r),
                     None => match u {
                         CircuitUnit::Wire(w) => Either::Right(w),
-                        CircuitUnit::Linear(_) => panic!("Should have been a register."),
+                        CircuitUnit::Linear(_) => {
+                            panic!("No register found for the linear input {u:?}.")
+                        }
                     },
                 });
 
