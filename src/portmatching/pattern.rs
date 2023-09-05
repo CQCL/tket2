@@ -17,7 +17,7 @@ use pyo3::prelude::*;
 
 /// A pattern that match a circuit exactly
 #[cfg_attr(feature = "pyo3", pyclass)]
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CircuitPattern {
     pub(super) pattern: Pattern<Node, PNode, PEdge>,
     /// The input ports
@@ -27,6 +27,11 @@ pub struct CircuitPattern {
 }
 
 impl CircuitPattern {
+    /// The number of edges in the pattern.
+    pub fn n_edges(&self) -> usize {
+        self.pattern.n_edges()
+    }
+
     /// Construct a pattern from a circuit.
     pub fn try_from_circuit<'circ, C: Circuit<'circ>>(
         circuit: &'circ C,

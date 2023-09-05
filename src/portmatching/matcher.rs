@@ -1,6 +1,11 @@
 //! Pattern and matcher objects for circuit matching
 
-use std::{fmt::Debug, fs::File, io, path::PathBuf};
+use std::{
+    fmt::Debug,
+    fs::File,
+    io,
+    path::{Path, PathBuf},
+};
 
 use super::{CircuitPattern, PEdge, PNode};
 use derive_more::{From, Into};
@@ -155,7 +160,7 @@ pub struct CircuitRewrite(SimpleReplacement);
 /// This uses a state automaton internally to match against a set of patterns
 /// simultaneously.
 #[cfg_attr(feature = "pyo3", pyclass)]
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CircuitMatcher {
     automaton: ScopeAutomaton<PNode, PEdge, Port>,
     patterns: Vec<CircuitPattern>,
@@ -259,16 +264,21 @@ impl CircuitMatcher {
     ///
     /// The extension of the file name will always be set or amended to be
     /// `.bin`.
-    pub fn save_binary(&self, name: &str) -> Result<(), MatcherSerialisationError> {
+    ///
+    /// If successful, returns the path to the newly created file.
+    pub fn save_binary(
+        &self,
+        name: impl AsRef<Path>,
+    ) -> Result<PathBuf, MatcherSerialisationError> {
         let mut file_name = PathBuf::from(name);
         file_name.set_extension("bin");
-        let mut file = File::create(file_name)?;
+        let mut file = File::create(&file_name)?;
         self.save_binary_io(&mut file)?;
-        Ok(())
+        Ok(file_name)
     }
 
     /// Loads a matcher saved using [`CircuitMatcher::save_binary`].
-    pub fn load_binary(name: &str) -> Result<Self, MatcherSerialisationError> {
+    pub fn load_binary(name: impl AsRef<Path>) -> Result<Self, MatcherSerialisationError> {
         let file = File::open(name)?;
         let mut reader = std::io::BufReader::new(file);
         Self::load_binary_io(&mut reader)
@@ -428,11 +438,12 @@ mod tests {
 
         let m = CircuitMatcher::from_patterns(patterns);
 
-        let mut buf = Vec::new();
+        // Estimate the size of the buffer based on the number of patterns and the size of each pattern
+        let mut buf = Vec::with_capacity(patterns[0].n_edges() + patterns[1].n_edges());
         m.save_binary_io(&mut buf).unwrap();
 
         let m2 = CircuitMatcher::load_binary_io(&mut buf.as_slice()).unwrap();
-        let mut buf2 = Vec::new();
+        let mut buf2 = Vec::with_capacity(buf.len());
         m2.save_binary_io(&mut buf2).unwrap();
 
         assert_eq!(buf, buf2);
