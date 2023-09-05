@@ -16,13 +16,13 @@ then
     exit 1
 fi
 
-if ! cargo clippy --all-targets -- -D warnings
+if ! cargo clippy --all-targets --features="pyo3,portmatching" -- -D warnings
 then
     echo "There are some clippy issues."
     exit 1
 fi
 
-if ! cargo test
+if ! cargo test --features="pyo3,portmatching"
 then
     echo "There are some test issues."
     exit 1
