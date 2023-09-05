@@ -139,16 +139,25 @@ impl From<OpConvertError> for TK1LoadError {
     }
 }
 
+#[inline]
+fn parse_val(n: &str) -> Option<f64> {
+    if n == "pi" {
+        // angles are in multiples of pi
+        Some(1.0)
+    } else {
+        n.parse::<f64>().ok()
+    }
+}
 /// Try to interpret a TKET1 parameter as a constant value.
 #[inline]
 fn try_param_to_constant(param: &str) -> Option<Value> {
-    if let Ok(f) = param.parse::<f64>() {
+    if let Some(f) = parse_val(param) {
         Some(ConstF64::new(f).into())
     } else if param.split('/').count() == 2 {
         // TODO: Use the rational types from `Hugr::extensions::rotation`
         let (n, d) = param.split_once('/').unwrap();
-        let n = n.parse::<f64>().unwrap();
-        let d = d.parse::<f64>().unwrap();
+        let n = parse_val(n)?;
+        let d = parse_val(d)?;
         Some(ConstF64::new(n / d).into())
     } else {
         None
