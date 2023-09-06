@@ -1,6 +1,8 @@
 //! TASO optimiser.
 #![allow(missing_docs)]
 
+use std::path::Path;
+
 use hugr::Hugr;
 // use super::{pattern::node_equality, CircFixedStructPattern, PatternRewriter, RewriteGenerator};
 // use crate::circuit::{
@@ -17,9 +19,31 @@ pub struct RepCircSet {
     others: Vec<Hugr>,
 }
 
+impl RepCircSet {
+    /// The representative circuit of the equivalence class.
+    pub fn rep_circ(&self) -> &Hugr {
+        &self.rep_circ
+    }
+
+    /// The other circuits in the equivalence class.
+    pub fn others(&self) -> &[Hugr] {
+        &self.others
+    }
+
+    /// All circuits in the equivalence class.
+    pub fn circuits(&self) -> impl Iterator<Item = &Hugr> {
+        std::iter::once(&self.rep_circ).chain(self.others.iter())
+    }
+
+    /// Consume into circuits of the equivalence class.
+    pub fn into_circuits(self) -> impl Iterator<Item = Hugr> {
+        std::iter::once(self.rep_circ).chain(self.others)
+    }
+}
+
 // TODO refactor so both implementations share more code
 
-pub fn rep_sets_from_path(path: &str) -> Vec<RepCircSet> {
+pub fn rep_sets_from_path(path: impl AsRef<Path>) -> Vec<RepCircSet> {
     let all_circs = qtz_circuit::load_ecc_set(path);
 
     all_circs

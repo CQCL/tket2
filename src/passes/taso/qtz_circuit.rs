@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::QB_T;
@@ -42,8 +43,15 @@ fn map_op(opstr: &str) -> Op {
     // TODO, more
     match opstr {
         "h" => T2Op::H,
-        "rz" => T2Op::RzF64,
         "cx" => T2Op::CX,
+        "t" => T2Op::T,
+        "s" => T2Op::S,
+        "x" => T2Op::X,
+        "y" => T2Op::Y,
+        "z" => T2Op::Z,
+        "tdg" => T2Op::Tdg,
+        "sdg" => T2Op::Sdg,
+        "rz" => T2Op::RzF64,
         x => panic!("unknown op {x}"),
     }
     .into()
@@ -100,7 +108,7 @@ impl From<RepCircData> for Circuit {
     }
 }
 
-pub(super) fn load_ecc_set(path: &str) -> HashMap<String, Vec<Circuit>> {
+pub(super) fn load_ecc_set(path: impl AsRef<Path>) -> HashMap<String, Vec<Circuit>> {
     let jsons = std::fs::read_to_string(path).unwrap();
     let (_, ecc_map): (Vec<()>, HashMap<String, Vec<RepCircData>>) =
         serde_json::from_str(&jsons).unwrap();
