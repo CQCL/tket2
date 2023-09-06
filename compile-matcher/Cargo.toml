@@ -9,4 +9,4 @@ edition = "2021"
 clap = { version = "4.4.2", features = ["derive"] }
 tket2 = { path = "../", features = ["portmatching"] }
 quantinuum-hugr = { workspace = true }
-itertools = "0.11.0"
+itertools = { workspace = true }
