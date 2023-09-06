@@ -142,12 +142,7 @@ impl From<OpConvertError> for TK1LoadError {
 
 #[inline]
 fn parse_val(n: &str) -> Option<f64> {
-    if n == "pi" {
-        // angles are in multiples of pi
-        Some(1.0)
-    } else {
-        n.parse::<f64>().ok()
-    }
+    n.parse::<f64>().ok()
 }
 /// Try to interpret a TKET1 parameter as a constant value.
 #[inline]
