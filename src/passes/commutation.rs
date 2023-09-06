@@ -215,11 +215,11 @@ impl Rewrite for PullForward {
 
     const UNCHANGED_ON_FAILURE: bool = false;
 
-    fn verify(&self, _h: &Hugr) -> Result<(), Self::Error> {
+    fn verify(&self, _h: &impl HugrView) -> Result<(), Self::Error> {
         unimplemented!()
     }
 
-    fn apply(self, h: &mut Hugr) -> Result<Self::ApplyResult, Self::Error> {
+    fn apply(self, h: &mut impl HugrMut) -> Result<Self::ApplyResult, Self::Error> {
         let Self { command, new_nexts } = self;
 
         let qb_port = |command: &Command, qb, direction| {
@@ -235,10 +235,12 @@ impl Rewrite for PullForward {
             let (src, src_port) = h
                 .linked_ports(command.node(), in_port)
                 .exactly_one()
+                .ok() // PortLinks don't implement Debug
                 .unwrap();
             let (dst, dst_port) = h
                 .linked_ports(command.node(), out_port)
                 .exactly_one()
+                .ok()
                 .unwrap();
 
             let Some(new_neighbour_com) = new_nexts.get(&qb) else {
@@ -257,6 +259,7 @@ impl Rewrite for PullForward {
             let (new_src, new_src_port) = h
                 .linked_ports(new_neighbour_com.node(), new_dst_port)
                 .exactly_one()
+                .ok()
                 .unwrap();
             // disconnect link which we will insert in to.
             h.disconnect(new_neighbour_com.node(), new_dst_port)?;

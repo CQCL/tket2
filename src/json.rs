@@ -7,6 +7,7 @@ pub mod op;
 #[cfg(test)]
 mod tests;
 
+use std::path::Path;
 use std::{fs, io};
 
 use hugr::ops::OpType;
@@ -84,7 +85,7 @@ pub enum OpConvertError {
 }
 
 /// Load a TKET1 circuit from a JSON file.
-pub fn load_tk1_json_file(path: &str) -> Result<Hugr, TK1LoadError> {
+pub fn load_tk1_json_file(path: impl AsRef<Path>) -> Result<Hugr, TK1LoadError> {
     let file = fs::File::open(path)?;
     let reader = io::BufReader::new(file);
     let ser: SerialCircuit = serde_json::from_reader(reader)?;
