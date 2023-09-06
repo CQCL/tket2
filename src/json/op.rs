@@ -17,7 +17,7 @@ use itertools::Itertools;
 use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as JsonOpType;
 
-use super::{try_param_to_constant, OpConvertError};
+use super::OpConvertError;
 use crate::extension::{try_unwrap_json_op, LINEAR_BIT};
 use crate::T2Op;
 
@@ -164,14 +164,8 @@ impl JsonOp {
             return;
         };
 
-        let mut p_input_indices = 0..;
-        let param_inputs = params
-            .iter()
-            .map(|param| try_param_to_constant(param).map(|_| p_input_indices.next().unwrap()))
-            .collect();
-
-        self.num_params = p_input_indices.next().unwrap();
-        self.param_inputs = param_inputs;
+        self.num_params = params.len();
+        self.param_inputs = (0..params.len()).map(Some).collect();
     }
 }
 
@@ -189,7 +183,11 @@ impl From<&JsonOp> for OpType {
             JsonOpType::Tdg => T2Op::Tdg.into(),
             JsonOpType::X => T2Op::X.into(),
             JsonOpType::Rz => T2Op::RzF64.into(),
+            JsonOpType::Rx => T2Op::RxF64.into(),
             JsonOpType::TK1 => T2Op::TK1.into(),
+            JsonOpType::PhasedX => T2Op::PhasedX.into(),
+            JsonOpType::ZZMax => T2Op::ZZMax.into(),
+            JsonOpType::ZZPhase => T2Op::ZZPhase.into(),
             JsonOpType::noop => LeafOp::Noop { ty: QB_T }.into(),
             _ => LeafOp::CustomOp(Box::new(json_op.as_opaque_op())).into(),
         }
@@ -216,7 +214,11 @@ impl TryFrom<&OpType> for JsonOp {
                 T2Op::H => JsonOpType::H,
                 T2Op::Measure => JsonOpType::Measure,
                 T2Op::RzF64 => JsonOpType::Rz,
+                T2Op::RxF64 => JsonOpType::Rx,
                 T2Op::TK1 => JsonOpType::TK1,
+                T2Op::PhasedX => JsonOpType::PhasedX,
+                T2Op::ZZMax => JsonOpType::ZZMax,
+                T2Op::ZZPhase => JsonOpType::ZZPhase,
                 _ => return Err(err()),
             }
         } else if let LeafOp::CustomOp(b) = leaf {

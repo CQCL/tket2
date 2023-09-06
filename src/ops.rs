@@ -8,11 +8,16 @@ use hugr::{
     ops::{custom::ExternalOp, LeafOp, OpType},
     std_extensions::arithmetic::float_types::FLOAT64_TYPE,
     type_row,
-    types::FunctionType,
+    types::{
+        type_param::{CustomTypeArg, TypeArg, TypeParam},
+        CustomType, FunctionType, TypeBound,
+    },
     Extension,
 };
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
+use smol_str::SmolStr;
+
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
@@ -51,6 +56,9 @@ pub enum T2Op {
     ZZMax,
     Measure,
     RzF64,
+    RxF64,
+    PhasedX,
+    ZZPhase,
     TK1,
 }
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, PartialOrd)]
@@ -111,8 +119,10 @@ impl SimpleOpEnum for T2Op {
         match self {
             H | T | S | X | Y | Z | Tdg | Sdg => FunctionType::new(one_qb_row.clone(), one_qb_row),
             CX | ZZMax => FunctionType::new(two_qb_row.clone(), two_qb_row),
+            ZZPhase => FunctionType::new(type_row![QB_T, QB_T, FLOAT64_TYPE], two_qb_row),
             Measure => FunctionType::new(one_qb_row, type_row![QB_T, BOOL_T]),
-            RzF64 => FunctionType::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
+            RzF64 | RxF64 => FunctionType::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
+            PhasedX => FunctionType::new(type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE], one_qb_row),
             TK1 => FunctionType::new(
                 type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE, FLOAT64_TYPE],
                 one_qb_row,
@@ -152,20 +162,74 @@ impl T2Op {
         use T2Op::*;
 
         match self {
-            X => vec![(0, Pauli::X)],
-            T | Z | S | Tdg | Sdg | RzF64 => vec![(0, Pauli::Z)],
+            X | RxF64 => vec![(0, Pauli::X)],
+            T | Z | S | Tdg | Sdg | RzF64 | Measure => vec![(0, Pauli::Z)],
             CX => vec![(0, Pauli::Z), (1, Pauli::X)],
-            ZZMax => vec![(0, Pauli::Z), (1, Pauli::Z)],
+            ZZMax | ZZPhase => vec![(0, Pauli::Z), (1, Pauli::Z)],
             // by default, no commutation
             _ => vec![],
         }
     }
 }
 
+/// The type of the symbolic expression opaque type arg.
+pub const SYM_EXPR_T: CustomType =
+    CustomType::new_simple(SmolStr::new_inline("SymExpr"), EXTENSION_ID, TypeBound::Eq);
+
+const SYM_OP_ID: SmolStr = SmolStr::new_inline("symbolic_float");
+
+/// Initialize a new custom symbolic expression constant op from a string.
+pub fn symbolic_constant_op(s: &str) -> OpType {
+    let value: serde_yaml::Value = s.into();
+    let l: LeafOp = EXTENSION
+        .instantiate_extension_op(
+            &SYM_OP_ID,
+            vec![TypeArg::Opaque(
+                CustomTypeArg::new(SYM_EXPR_T, value).unwrap(),
+            )],
+        )
+        .unwrap()
+        .into();
+    l.into()
+}
+
+/// match against a symbolic constant
+pub(crate) fn match_symb_const_op(op: &OpType) -> Option<&str> {
+    if let OpType::LeafOp(LeafOp::CustomOp(e)) = op {
+        match e.as_ref() {
+            ExternalOp::Extension(e)
+                if e.def().name() == &SYM_OP_ID && e.def().extension() == &EXTENSION_ID =>
+            {
+                // TODO also check extension name
+
+                let Some(TypeArg::Opaque(s)) = e.args().get(0) else {
+                    panic!("should be an opaque type arg.")
+                };
+
+                let serde_yaml::Value::String(s) = &s.value else {
+                    panic!("unexpected yaml value.")
+                };
+
+                Some(s)
+            }
+            ExternalOp::Opaque(_) => todo!(),
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
 fn extension() -> Extension {
     let mut e = Extension::new(EXTENSION_ID);
     load_all_ops::<T2Op>(&mut e).expect("add fail");
-
+    e.add_op_custom_sig_simple(
+        SYM_OP_ID,
+        "Store a sympy expression that can be evaluated to a float.".to_string(),
+        vec![TypeParam::Opaque(SYM_EXPR_T)],
+        |_: &[TypeArg]| Ok(FunctionType::new(type_row![], type_row![FLOAT64_TYPE])),
+    )
+    .unwrap();
     e
 }
 
@@ -213,6 +277,7 @@ impl TryFrom<LeafOp> for T2Op {
     }
 }
 
+/// load all variants of a `SimpleOpEnum` in to an extension as op defs.
 fn load_all_ops<T: SimpleOpEnum>(extension: &mut Extension) -> Result<(), ExtensionBuildError> {
     for op in T::all_variants() {
         op.add_to_extension(extension)?;
