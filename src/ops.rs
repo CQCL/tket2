@@ -172,30 +172,14 @@ impl T2Op {
     }
 }
 
+/// The type of the symbolic expression opaque type arg.
 pub const SYM_EXPR_T: CustomType =
     CustomType::new_simple(SmolStr::new_inline("SymExpr"), EXTENSION_ID, TypeBound::Eq);
 
-// #[derive(Debug, Clone, Serialize, Deserialize)]
-// pub struct ConstSymExpr(String);
-
-// #[typetag::serde]
-// impl CustomConst for ConstSymExpr {
-//     fn name(&self) -> SmolStr {
-//         format!("sym_expr: {}", &self.0).into()
-//     }
-
-//     fn check_custom_type(&self, typ: &CustomType) -> Result<(), CustomCheckFailure> {
-//         <Self as KnownTypeConst>::check_known_type(&self, typ)
-//     }
-// }
-
-// impl KnownTypeConst for ConstSymExpr {
-//     const TYPE: CustomType = SYM_EXPR_T;
-// }
 const SYM_OP_ID: SmolStr = SmolStr::new_inline("symbolic_float");
 
 /// Initialize a new custom symbolic expression constant op from a string.
-pub fn symolic_constant_op(s: &str) -> OpType {
+pub fn symbolic_constant_op(s: &str) -> OpType {
     let value: serde_yaml::Value = s.into();
     let l: LeafOp = EXTENSION
         .instantiate_extension_op(
@@ -293,6 +277,7 @@ impl TryFrom<LeafOp> for T2Op {
     }
 }
 
+/// load all variants of a `SimpleOpEnum` in to an extension as op defs.
 fn load_all_ops<T: SimpleOpEnum>(extension: &mut Extension) -> Result<(), ExtensionBuildError> {
     for op in T::all_variants() {
         op.add_to_extension(extension)?;
