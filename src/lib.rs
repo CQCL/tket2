@@ -12,6 +12,7 @@ pub mod extension;
 pub mod json;
 mod ops;
 pub mod passes;
+pub mod rewrite;
 pub use ops::{Pauli, T2Op};
 
 #[cfg(feature = "portmatching")]

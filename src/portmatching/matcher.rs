@@ -8,7 +8,6 @@ use std::{
 };
 
 use super::{CircuitPattern, PEdge, PNode};
-use derive_more::{From, Into};
 use hugr::{
     hugr::views::{
         sibling::{
@@ -18,7 +17,7 @@ use hugr::{
         SiblingSubgraph,
     },
     ops::OpType,
-    Hugr, Node, Port, SimpleReplacement,
+    Hugr, Node, Port,
 };
 use itertools::Itertools;
 use portmatching::{
@@ -30,7 +29,12 @@ use thiserror::Error;
 #[cfg(feature = "pyo3")]
 use pyo3::prelude::*;
 
-use crate::{circuit::Circuit, ops::NotT2Op, T2Op};
+use crate::{
+    circuit::Circuit,
+    ops::NotT2Op,
+    rewrite::{CircuitRewrite, Subcircuit},
+    T2Op,
+};
 
 /// Matchable operations in a circuit.
 ///
@@ -66,7 +70,7 @@ impl TryFrom<OpType> for MatchOp {
 /// A convex pattern match in a circuit.
 #[derive(Clone)]
 pub struct CircuitMatch<'a, 'p, C> {
-    subgraph: SiblingSubgraph<'a, C>,
+    position: Subcircuit<'a, C>,
     #[allow(dead_code)]
     pub(super) pattern: &'p CircuitPattern,
     /// The root of the pattern in the circuit.
@@ -127,7 +131,7 @@ impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
         let subgraph =
             SiblingSubgraph::try_from_boundary_ports_with_checker(circ, inputs, outputs, checker)?;
         Ok(Self {
-            subgraph,
+            position: subgraph.into(),
             pattern,
             root,
         })
@@ -135,9 +139,7 @@ impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
 
     /// Construct a rewrite to replace `self` with `repl`.
     pub fn to_rewrite(&self, repl: Hugr) -> Result<CircuitRewrite, InvalidReplacement> {
-        self.subgraph
-            .create_simple_replacement(repl)
-            .map(Into::into)
+        CircuitRewrite::try_new(&self.position, repl)
     }
 }
 
@@ -145,15 +147,10 @@ impl<'a, 'p, C: Circuit<'a>> Debug for CircuitMatch<'a, 'p, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CircuitMatch")
             .field("root", &self.root)
-            .field("nodes", &self.subgraph.nodes())
+            .field("nodes", &self.position.subgraph.nodes())
             .finish()
     }
 }
-
-/// A rewrite object for circuit matching.
-#[cfg_attr(feature = "pyo3", pyclass)]
-#[derive(Debug, Clone, From, Into)]
-pub struct CircuitRewrite(SimpleReplacement);
 
 /// A matcher object for fast pattern matching on circuits.
 ///

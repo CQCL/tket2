@@ -9,8 +9,9 @@ use hugr::{Hugr, HugrView};
 use pyo3::{create_exception, exceptions::PyException, prelude::*, types::PyIterator};
 use tket_json_rs::circuit_json::SerialCircuit;
 
-use super::{CircuitMatch, CircuitMatcher, CircuitPattern, CircuitRewrite};
+use super::{CircuitMatch, CircuitMatcher, CircuitPattern};
 use crate::json::TKETDecode;
+use crate::rewrite::CircuitRewrite;
 
 create_exception!(pyrs, PyValidateError, PyException);
 create_exception!(pyrs, PyInvalidReplacement, PyException);
