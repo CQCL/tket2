@@ -43,7 +43,7 @@ const PARAMETRIZED: &str = r#"{
             {"args":[["q",[0]]],"op":{"type":"H"}},
             {"args":[["q",[1]],["q",[0]]],"op":{"type":"CX"}},
             {"args":[["q",[0]]],"op":{"params":["0.1"],"type":"Rz"}},
-            {"args": [["q", [0]]], "op": {"params": ["0.1", "alpha", "0.3"], "type": "TK1"}}
+            {"args": [["q", [0]]], "op": {"params": ["3.141596/pi", "alpha", "0.3"], "type": "TK1"}}
         ],
         "created_qubits": [],
         "discarded_qubits": [],
