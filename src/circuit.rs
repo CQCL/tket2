@@ -144,11 +144,12 @@ mod tests {
         load_tk1_json_str(
             r#"{
             "phase": "0",
-            "bits": [],
+            "bits": [["c", [0]]],
             "qubits": [["q", [0]], ["q", [1]]],
             "commands": [
                 {"args": [["q", [0]]], "op": {"type": "H"}},
-                {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}
+                {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}},
+                {"args": [["q", [1]]], "op": {"type": "X"}}
             ],
             "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
         }"#,
@@ -157,8 +158,21 @@ mod tests {
     }
 
     #[test]
-    fn test_num_gates() {
+    fn test_circuit_properties() {
         let circ = test_circuit();
-        assert_eq!(circ.num_gates(), 2);
+
+        assert_eq!(circ.name(), None);
+        assert_eq!(circ.circuit_signature().input.len(), 3);
+        assert_eq!(circ.circuit_signature().output.len(), 3);
+        assert_eq!(circ.qubit_count(), 2);
+        assert_eq!(circ.num_gates(), 3);
+
+        assert_eq!(circ.units().count(), 3);
+        assert_eq!(circ.nonlinear_units().count(), 0);
+        assert_eq!(circ.linear_units().count(), 3);
+        assert_eq!(circ.qubits().count(), 2);
+
+        assert!(circ.linear_units().all(|(unit, _)| unit.is_linear()));
+        assert!(circ.nonlinear_units().all(|(unit, _)| unit.is_wire()));
     }
 }
