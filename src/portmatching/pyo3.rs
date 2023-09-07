@@ -78,7 +78,7 @@ impl CircuitMatcher {
 ///
 /// A convex pattern match in a circuit, available from Python.
 ///
-/// This object is semantically equivalent to Rust's [`CircuitMatch`] but
+/// This object is semantically equivalent to Rust's [`PatternMatch`] but
 /// stores data differently, and in particular removes the lifetime-bound
 /// references of Rust.
 ///
