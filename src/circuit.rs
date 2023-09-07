@@ -91,7 +91,7 @@ pub trait Circuit: HugrView {
         Units::new(self, UnitType::Linear)
     }
 
-    /// Get the linear input units of the circuit and their types.
+    /// Get the non-linear input units of the circuit and their types.
     #[inline]
     fn nonlinear_units(&self) -> Units<'_>
     where
