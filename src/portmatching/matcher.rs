@@ -69,10 +69,9 @@ impl TryFrom<OpType> for MatchOp {
 
 /// A convex pattern match in a circuit.
 #[derive(Clone)]
-pub struct CircuitMatch<'a, 'p, C> {
+pub struct CircuitMatch<'a, C> {
     position: Subcircuit<'a, C>,
-    #[allow(dead_code)]
-    pub(super) pattern: &'p CircuitPattern,
+    pattern: PatternID,
     /// The root of the pattern in the circuit.
     ///
     /// This is redundant with the subgraph attribute, but is a more concise
@@ -80,7 +79,12 @@ pub struct CircuitMatch<'a, 'p, C> {
     pub(super) root: Node,
 }
 
-impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
+impl<'a, C: Circuit<'a>> CircuitMatch<'a, C> {
+    /// The matcher's pattern ID of the match.
+    pub fn pattern_id(&self) -> PatternID {
+        self.pattern
+    }
+
     /// Create a pattern match from the image of a pattern root.
     ///
     /// This checks at construction time that the match is convex. This will
@@ -96,11 +100,12 @@ impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
     ///  - the subcircuit obtained is not a valid circuit region
     pub fn try_from_root_match(
         root: Node,
-        pattern: &'p CircuitPattern,
+        pattern_id: PatternID,
+        pattern: &CircuitPattern,
         circ: &'a C,
     ) -> Result<Self, InvalidCircuitMatch> {
         let mut checker = ConvexChecker::new(circ);
-        Self::try_from_root_match_with_checker(root, pattern, circ, &mut checker)
+        Self::try_from_root_match_with_checker(root, pattern_id, pattern, circ, &mut checker)
     }
 
     /// Create a pattern match from the image of a pattern root with a checker.
@@ -111,7 +116,8 @@ impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
     /// See [`CircuitMatch::try_from_root_match`] for more details.
     pub fn try_from_root_match_with_checker(
         root: Node,
-        pattern: &'p CircuitPattern,
+        pattern_id: PatternID,
+        pattern: &CircuitPattern,
         circ: &'a C,
         checker: &mut ConvexChecker<'a, C>,
     ) -> Result<Self, InvalidCircuitMatch> {
@@ -132,7 +138,7 @@ impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
             SiblingSubgraph::try_from_boundary_ports_with_checker(circ, inputs, outputs, checker)?;
         Ok(Self {
             position: subgraph.into(),
-            pattern,
+            pattern: pattern_id,
             root,
         })
     }
@@ -143,7 +149,7 @@ impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
     }
 }
 
-impl<'a, 'p, C: Circuit<'a>> Debug for CircuitMatch<'a, 'p, C> {
+impl<'a, C: Circuit<'a>> Debug for CircuitMatch<'a, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CircuitMatch")
             .field("root", &self.root)
@@ -193,10 +199,7 @@ impl CircuitMatcher {
     }
 
     /// Find all convex pattern matches in a circuit.
-    pub fn find_matches<'a, 'm, C: Circuit<'a>>(
-        &'m self,
-        circuit: &'a C,
-    ) -> Vec<CircuitMatch<'a, 'm, C>> {
+    pub fn find_matches<'a, C: Circuit<'a>>(&self, circuit: &'a C) -> Vec<CircuitMatch<'a, C>> {
         let mut checker = ConvexChecker::new(circuit);
         circuit
             .commands()
@@ -205,12 +208,12 @@ impl CircuitMatcher {
     }
 
     /// Find all convex pattern matches in a circuit rooted at a given node.
-    fn find_rooted_matches<'a, 'm, C: Circuit<'a>>(
-        &'m self,
+    fn find_rooted_matches<'a, C: Circuit<'a>>(
+        &self,
         circ: &'a C,
         root: Node,
         checker: &mut ConvexChecker<'a, C>,
-    ) -> Vec<CircuitMatch<'a, 'm, C>> {
+    ) -> Vec<CircuitMatch<'a, C>> {
         self.automaton
             .run(
                 root,
@@ -219,10 +222,12 @@ impl CircuitMatcher {
                 // Check edge exist
                 validate_unweighted_edge(circ),
             )
-            .filter_map(|m| {
-                let p = &self.patterns[m.0];
+            .filter_map(|pattern_id| {
+                let pattern = &self.patterns[pattern_id.0];
                 handle_match_error(
-                    CircuitMatch::try_from_root_match_with_checker(root, p, circ, checker),
+                    CircuitMatch::try_from_root_match_with_checker(
+                        root, pattern_id, pattern, circ, checker,
+                    ),
                     root,
                 )
             })

@@ -6,6 +6,7 @@ use derive_more::{From, Into};
 use hugr::hugr::views::{DescendantsGraph, HierarchyView};
 use hugr::ops::handle::DfgID;
 use hugr::{Hugr, HugrView};
+use portmatching::PatternID;
 use pyo3::{create_exception, exceptions::PyException, prelude::*, types::PyIterator};
 use tket_json_rs::circuit_json::SerialCircuit;
 
@@ -59,7 +60,11 @@ impl CircuitMatcher {
         Ok(self
             .find_matches(&circ)
             .into_iter()
-            .map(|m| PyCircuitMatch::new(m.pattern.clone(), hugr.clone(), Node(m.root)))
+            .map(|m| {
+                let pattern_id = m.pattern_id();
+                let pattern = self.get_pattern(pattern_id).cloned().unwrap();
+                PyCircuitMatch::new(pattern_id, pattern, hugr.clone(), Node(m.root))
+            })
             .collect())
     }
 }
@@ -78,6 +83,8 @@ impl CircuitMatcher {
 pub struct PyCircuitMatch {
     /// The pattern that was matched.
     pub pattern: CircuitPattern,
+    /// The ID of the pattern in the matcher.
+    pub pattern_id: usize,
     /// The circuit that contains the match.
     pub circuit: Hugr,
     /// The root of the pattern within the circuit.
@@ -99,8 +106,9 @@ impl PyCircuitMatch {
 }
 
 impl PyCircuitMatch {
-    pub fn new(pattern: CircuitPattern, circuit: Hugr, root: Node) -> Self {
+    pub fn new(pattern_id: PatternID, pattern: CircuitPattern, circuit: Hugr, root: Node) -> Self {
         Self {
+            pattern_id: pattern_id.0,
             pattern,
             circuit,
             root,
@@ -110,7 +118,7 @@ impl PyCircuitMatch {
     /// Obtain as a [`CircuitMatch`] object.
     pub fn to_rewrite(&self, replacement: PyObject) -> PyResult<CircuitRewrite> {
         let circ = hugr_as_view(&self.circuit);
-        CircuitMatch::try_from_root_match(self.root.0, &self.pattern, &circ)
+        CircuitMatch::try_from_root_match(self.root.0, self.pattern_id.into(), &self.pattern, &circ)
             .expect("Invalid PyCircuitMatch object")
             .to_rewrite(pyobj_as_hugr(replacement)?)
             .map_err(|e| PyInvalidReplacement::new_err(e.to_string()))
