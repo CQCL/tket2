@@ -64,6 +64,7 @@ pub enum T2Op {
     PhasedX,
     ZZPhase,
     AngleAdd,
+    CZ,
     TK1,
 }
 
@@ -129,7 +130,7 @@ impl SimpleOpEnum for T2Op {
         let two_qb_row = type_row![QB_T, QB_T];
         match self {
             H | T | S | X | Y | Z | Tdg | Sdg => FunctionType::new(one_qb_row.clone(), one_qb_row),
-            CX | ZZMax => FunctionType::new(two_qb_row.clone(), two_qb_row),
+            CX | ZZMax | CZ => FunctionType::new(two_qb_row.clone(), two_qb_row),
             ZZPhase => FunctionType::new(type_row![QB_T, QB_T, FLOAT64_TYPE], two_qb_row),
             Measure => FunctionType::new(one_qb_row, type_row![QB_T, BOOL_T]),
             RzF64 | RxF64 => FunctionType::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
@@ -183,7 +184,7 @@ impl T2Op {
             X | RxF64 => vec![(0, Pauli::X)],
             T | Z | S | Tdg | Sdg | RzF64 | Measure => vec![(0, Pauli::Z)],
             CX => vec![(0, Pauli::Z), (1, Pauli::X)],
-            ZZMax | ZZPhase => vec![(0, Pauli::Z), (1, Pauli::Z)],
+            ZZMax | ZZPhase | CZ => vec![(0, Pauli::Z), (1, Pauli::Z)],
             // by default, no commutation
             _ => vec![],
         }
