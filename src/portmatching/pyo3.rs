@@ -94,9 +94,15 @@ pub struct PyPatternMatch {
     pub pattern_id: usize,
     /// The root of the pattern within the circuit.
     pub root: Node,
-    /// The incoming port boundary.
+    /// The input ports of the subcircuit.
+    ///
+    /// This is the incoming boundary of a [`hugr::hugr::views::SiblingSubgraph`].
+    /// The input ports are grouped together if they are connected to the same
+    /// source.
     pub inputs: Vec<Vec<(Node, Port)>>,
-    /// The outgoing port boundary.
+    /// The output ports of the subcircuit.
+    ///
+    /// This is the outgoing boundary of a [`hugr::hugr::views::SiblingSubgraph`].
     pub outputs: Vec<(Node, Port)>,
     /// The node map from pattern to circuit.
     pub node_map: HashMap<Node, Node>,
