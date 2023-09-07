@@ -81,7 +81,9 @@ pub(crate) fn wrap_json_op(op: &JsonOp) -> ExternalOp {
     //    .into()
     let sig = op.signature();
     let op = serde_yaml::to_value(op).unwrap();
-    let payload = TypeArg::Opaque(CustomTypeArg::new(TKET1_OP_PAYLOAD.clone(), op).unwrap());
+    let payload = TypeArg::Opaque {
+        arg: CustomTypeArg::new(TKET1_OP_PAYLOAD.clone(), op).unwrap(),
+    };
     OpaqueOp::new(
         TKET1_EXTENSION_ID,
         JSON_OP_NAME,
@@ -100,17 +102,17 @@ pub(crate) fn try_unwrap_json_op(ext: &ExternalOp) -> Option<JsonOp> {
     if ext.name() != format!("{TKET1_EXTENSION_ID}.{JSON_OP_NAME}") {
         return None;
     }
-    let Some(TypeArg::Opaque(op)) = ext.args().get(0) else {
+    let Some(TypeArg::Opaque { arg }) = ext.args().get(0) else {
         // TODO: Throw an error? We should never get here if the name matches.
         return None;
     };
-    let op = serde_yaml::from_value(op.value.clone()).ok()?;
+    let op = serde_yaml::from_value(arg.value.clone()).ok()?;
     Some(op)
 }
 
 /// Compute the signature of a json-encoded TKET1 operation.
 fn json_op_signature(args: &[TypeArg]) -> Result<FunctionType, SignatureError> {
-    let [TypeArg::Opaque(arg)] = args else {
+    let [TypeArg::Opaque { arg }] = args else {
         // This should have already been checked.
         panic!("Wrong number of arguments");
     };

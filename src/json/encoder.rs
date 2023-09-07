@@ -163,8 +163,10 @@ impl JsonEncoder {
             OpType::Const(const_op) => {
                 // New constant, register it if it can be interpreted as a parameter.
                 match const_op.value() {
-                    Value::Prim(PrimValue::Extension((v,))) => {
-                        if let Some(f) = v.downcast_ref::<ConstF64>() {
+                    Value::Prim {
+                        val: PrimValue::Extension { c: (val,) },
+                    } => {
+                        if let Some(f) = val.downcast_ref::<ConstF64>() {
                             f.to_string()
                         } else {
                             return false;
