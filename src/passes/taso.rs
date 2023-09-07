@@ -46,10 +46,9 @@ impl EqCircClass {
 
     /// The number of circuits in the equivalence class.
     ///
-    /// An ECC always has a representative circuit, so it will be of size at
-    /// least 1.
-    #[allow(clippy::len_without_is_empty)]
-    pub fn len(&self) -> usize {
+    /// An ECC always has a representative circuit, so this method will always
+    /// return an integer strictly greater than 0.
+    pub fn n_circuits(&self) -> usize {
         self.others.len() + 1
     }
 }

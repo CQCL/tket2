@@ -5,12 +5,14 @@ use std::fmt;
 use derive_more::{From, Into};
 use hugr::hugr::views::{DescendantsGraph, HierarchyView};
 use hugr::ops::handle::DfgID;
-use hugr::{Hugr, HugrView};
-use portmatching::PatternID;
+use hugr::{Hugr, HugrView, Port};
+use itertools::Itertools;
+use portmatching::{HashMap, PatternID};
 use pyo3::{create_exception, exceptions::PyException, prelude::*, types::PyIterator};
 use tket_json_rs::circuit_json::SerialCircuit;
 
-use super::{CircuitMatch, CircuitMatcher, CircuitPattern};
+use super::{CircuitMatcher, CircuitPattern, PatternMatch};
+use crate::circuit::Circuit;
 use crate::json::TKETDecode;
 use crate::rewrite::CircuitRewrite;
 
@@ -54,18 +56,21 @@ impl CircuitMatcher {
 
     /// Find all convex matches in a circuit.
     #[pyo3(name = "find_matches")]
-    pub fn py_find_matches(&self, circ: PyObject) -> PyResult<Vec<PyCircuitMatch>> {
+    pub fn py_find_matches(&self, circ: PyObject) -> PyResult<Vec<PyPatternMatch>> {
         let hugr = pyobj_as_hugr(circ)?;
         let circ = hugr_as_view(&hugr);
-        Ok(self
-            .find_matches(&circ)
+        self.find_matches(&circ)
             .into_iter()
             .map(|m| {
                 let pattern_id = m.pattern_id();
-                let pattern = self.get_pattern(pattern_id).cloned().unwrap();
-                PyCircuitMatch::new(pattern_id, pattern, hugr.clone(), Node(m.root))
+                PyPatternMatch::try_from_rust(m, &circ, self).map_err(|e| {
+                    PyInvalidReplacement::new_err(format!(
+                        "Invalid match for pattern {:?}: {}",
+                        pattern_id, e
+                    ))
+                })
             })
-            .collect())
+            .collect()
     }
 }
 
@@ -73,55 +78,100 @@ impl CircuitMatcher {
 ///
 /// A convex pattern match in a circuit, available from Python.
 ///
-/// This object removes the lifetime constraints of its Rust counterpart by
-/// cloning the pattern and circuit data. It is provided for convenience and
-/// not recommended when performance is a key concern.
+/// This object is semantically equivalent to Rust's [`CircuitMatch`] but
+/// stores data differently, and in particular removes the lifetime-bound
+/// references of Rust.
+///
+/// The data is stored in a way that favours a nice user-facing representation
+/// over efficiency. It is provided for convenience and not recommended when
+/// performance is a key concern.
 ///
 /// TODO: can this be a wrapper for a [`CircuitMatch`] instead?
 #[pyclass]
 #[derive(Debug, Clone)]
-pub struct PyCircuitMatch {
-    /// The pattern that was matched.
-    pub pattern: CircuitPattern,
+pub struct PyPatternMatch {
     /// The ID of the pattern in the matcher.
     pub pattern_id: usize,
-    /// The circuit that contains the match.
-    pub circuit: Hugr,
     /// The root of the pattern within the circuit.
     pub root: Node,
+    /// The incoming port boundary.
+    pub inputs: Vec<Vec<(Node, Port)>>,
+    /// The outgoing port boundary.
+    pub outputs: Vec<(Node, Port)>,
+    /// The node map from pattern to circuit.
+    pub node_map: HashMap<Node, Node>,
 }
 
 #[pymethods]
-impl PyCircuitMatch {
+impl PyPatternMatch {
     /// A string representation of the pattern.
     pub fn __repr__(&self) -> String {
-        let circ = hugr_as_view(&self.circuit);
-        format!(
-            "CircuitMatch {:?}",
-            self.pattern
-                .get_match_map(self.root.0, &circ)
-                .expect("Invalid PyCircuitMatch object")
-        )
+        format!("CircuitMatch {:?}", self.node_map)
     }
 }
 
-impl PyCircuitMatch {
-    pub fn new(pattern_id: PatternID, pattern: CircuitPattern, circuit: Hugr, root: Node) -> Self {
-        Self {
+impl PyPatternMatch {
+    /// Construct a [`PyCircuitMatch`] from a [`PatternMatch`].
+    ///
+    /// Requires references to the circuit and pattern to resolve indices
+    /// into these objects.
+    pub fn try_from_rust<'circ, C: Circuit<'circ>>(
+        m: PatternMatch<'circ, C>,
+        circ: &C,
+        matcher: &CircuitMatcher,
+    ) -> PyResult<Self> {
+        let pattern_id = m.pattern_id();
+        let pattern = matcher.get_pattern(pattern_id).unwrap();
+        let root = Node(m.root);
+
+        let node_map: HashMap<Node, Node> = pattern
+            .get_match_map(root.0, circ)
+            .ok_or_else(|| PyInvalidReplacement::new_err("Invalid match"))?
+            .into_iter()
+            .map(|(p, c)| (Node(p), Node(c)))
+            .collect();
+        let inputs = pattern
+            .inputs
+            .iter()
+            .map(|p| {
+                p.iter()
+                    .map(|&(n, p)| (node_map[&Node(n)], p))
+                    .collect_vec()
+            })
+            .collect_vec();
+        let outputs = pattern
+            .outputs
+            .iter()
+            .map(|&(n, p)| (node_map[&Node(n)], p))
+            .collect_vec();
+        Ok(Self {
             pattern_id: pattern_id.0,
-            pattern,
-            circuit,
+            inputs,
+            outputs,
+            node_map,
             root,
-        }
+        })
     }
 
-    /// Obtain as a [`CircuitMatch`] object.
-    pub fn to_rewrite(&self, replacement: PyObject) -> PyResult<CircuitRewrite> {
-        let circ = hugr_as_view(&self.circuit);
-        CircuitMatch::try_from_root_match(self.root.0, self.pattern_id.into(), &self.pattern, &circ)
-            .expect("Invalid PyCircuitMatch object")
-            .to_rewrite(pyobj_as_hugr(replacement)?)
-            .map_err(|e| PyInvalidReplacement::new_err(e.to_string()))
+    pub fn to_rewrite(&self, circ: PyObject, replacement: PyObject) -> PyResult<CircuitRewrite> {
+        let hugr = pyobj_as_hugr(circ)?;
+        let circ = hugr_as_view(&hugr);
+        let inputs = self
+            .inputs
+            .iter()
+            .map(|p| p.iter().map(|&(n, p)| (n.0, p)).collect())
+            .collect();
+        let outputs = self.outputs.iter().map(|&(n, p)| (n.0, p)).collect();
+        PatternMatch::try_from_io(
+            self.root.0,
+            PatternID(self.pattern_id),
+            &circ,
+            inputs,
+            outputs,
+        )
+        .expect("Invalid PyCircuitMatch object")
+        .to_rewrite(pyobj_as_hugr(replacement)?)
+        .map_err(|e| PyInvalidReplacement::new_err(e.to_string()))
     }
 }
 

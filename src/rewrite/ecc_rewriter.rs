@@ -7,7 +7,10 @@
 //! generates rewrites to replace them with other circuits within the same
 //! equivalence class.
 //!
-//! Equivalence classes are generated using Quartz.
+//! Equivalence classes are generated using Quartz
+//! (https://github.com/quantum-compiler/quartz/). The simplest way
+//! to generate such a file is to use the `gen_ecc_set.sh` script at the root
+//! of the Quartz repository.
 
 use derive_more::{From, Into};
 use itertools::Itertools;
@@ -42,7 +45,9 @@ pub struct ECCRewriter {
     matcher: CircuitMatcher,
     /// Targets of some rewrite rules.
     targets: Vec<Hugr>,
-    /// Rewrites, stored as a map from PatternID to TargetIDs.
+    /// Rewrites, stored as a map from the source PatternID to possibly multiple
+    /// target TargetIDs. The usize index of PatternID is used to index into
+    /// the outer vector.
     rewrite_rules: Vec<Vec<TargetID>>,
 }
 
@@ -50,6 +55,10 @@ impl ECCRewriter {
     /// Create a new rewriter from equivalent circuit classes in JSON file.
     ///
     /// This uses the Quartz JSON file format to store equivalent circuit classes.
+    /// Generate such a file using the `gen_ecc_set.sh` script at the root of
+    /// the Quartz repository.
+    ///
+    /// Quartz: https://github.com/quantum-compiler/quartz/.
     pub fn from_eccs_json_file(path: impl AsRef<Path>) -> Self {
         let eccs = load_eccs_json_file(path);
         Self::from_eccs(eccs)
@@ -108,19 +117,19 @@ fn into_targets(rep_sets: Vec<EqCircClass>) -> Vec<Hugr> {
 }
 
 fn get_rewrite_rules(rep_sets: &[EqCircClass]) -> Vec<Vec<TargetID>> {
-    let n_circs = rep_sets.iter().map(|rs| rs.len()).sum::<usize>();
+    let n_circs = rep_sets.iter().map(|rs| rs.n_circuits()).sum::<usize>();
     let mut rewrite_rules = vec![Default::default(); n_circs];
     let mut curr_target = 0;
     for rep_set in rep_sets {
         let rep_ind = curr_target;
-        let other_inds = (curr_target + 1)..(curr_target + rep_set.len());
+        let other_inds = (curr_target + 1)..(curr_target + rep_set.n_circuits());
         // Rewrite rules for representative circuit
         rewrite_rules[rep_ind] = other_inds.clone().map_into().collect();
         // Rewrite rules for other circuits
         for i in other_inds {
             rewrite_rules[i] = vec![rep_ind.into()];
         }
-        curr_target += rep_set.len();
+        curr_target += rep_set.n_circuits();
     }
     rewrite_rules
 }
@@ -129,7 +138,7 @@ fn get_patterns(rep_sets: &[EqCircClass]) -> Vec<Option<CircuitPattern>> {
     let all_hugrs = rep_sets.iter().flat_map(|rs| rs.circuits());
     let all_circs = all_hugrs
         .map(|hugr| SiblingGraph::<DfgID>::new(hugr, hugr.root()))
-        // TODO: collect to vec because of lifetime issues that should not exist
+        // TODO: resolve lifetime issues to avoid collecting to vec
         .collect_vec();
     all_circs
         .iter()
