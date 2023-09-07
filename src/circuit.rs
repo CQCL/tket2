@@ -2,75 +2,124 @@
 
 pub mod command;
 mod hash;
+mod units;
 
+pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
 
-//#[cfg(feature = "pyo3")]
-//pub mod py_circuit;
-
-//#[cfg(feature = "tkcxx")]
-//pub mod unitarybox;
-
-use self::command::{Command, CommandIterator};
-
-use hugr::extension::prelude::QB_T;
-use hugr::hugr::{CircuitUnit, NodeType};
-use hugr::ops::OpTrait;
+use hugr::hugr::NodeType;
 use hugr::HugrView;
 
 pub use hugr::ops::OpType;
-use hugr::types::TypeBound;
+use hugr::types::FunctionType;
 pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
+
+use self::units::{UnitType, Units};
 
 /// An object behaving like a quantum circuit.
 //
 // TODO: More methods:
 // - other_{in,out}puts (for non-linear i/o + const inputs)?
 // - Vertical slice iterator
-// - Gate count map
 // - Depth
 pub trait Circuit: HugrView {
-    /// An iterator over the commands in the circuit.
-    type Commands<'a>: Iterator<Item = Command>
-    where
-        Self: 'a;
-
-    /// An iterator over the commands applied to an unit.
-    type UnitCommands: Iterator<Item = Command>;
-
     /// Return the name of the circuit
-    fn name(&self) -> Option<&str>;
-
-    /// Get the linear inputs of the circuit and their types.
-    fn units(&self) -> Vec<(CircuitUnit, Type)>;
-
-    /// Returns the units corresponding to qubits inputs to the circuit.
     #[inline]
-    fn qubits(&self) -> Vec<CircuitUnit> {
-        self.units()
-            .iter()
-            .filter(|(_, typ)| typ == &QB_T)
-            .map(|(unit, _)| *unit)
-            .collect()
+    fn name(&self) -> Option<&str> {
+        let meta = self.get_metadata(self.root()).as_object()?;
+        meta.get("name")?.as_str()
+    }
+
+    /// Returns the function type of the circuit.
+    ///
+    /// Equivalent to [`HugrView::get_function_type`].
+    #[inline]
+    fn circuit_signature(&self) -> &FunctionType {
+        self.get_function_type()
+            .expect("Circuit has no function type")
     }
 
     /// Returns the input node to the circuit.
-    fn input(&self) -> Node;
+    #[inline]
+    fn input(&self) -> Node {
+        return self
+            .children(self.root())
+            .next()
+            .expect("Circuit has no input node");
+    }
 
     /// Returns the output node to the circuit.
-    fn output(&self) -> Node;
+    #[inline]
+    fn output(&self) -> Node {
+        return self
+            .children(self.root())
+            .nth(1)
+            .expect("Circuit has no output node");
+    }
 
-    /// Given a linear port in a node, returns the corresponding port on the other side of the node (if any).
-    fn follow_linear_port(&self, node: Node, port: Port) -> Option<Port>;
+    /// The number of gates in the circuit.
+    #[inline]
+    fn num_gates(&self) -> usize {
+        self.children(self.root()).count() - 2
+    }
+
+    /// Count the number of qubits in the circuit.
+    #[inline]
+    fn qubit_count(&self) -> usize
+    where
+        Self: Sized,
+    {
+        self.qubits().count()
+    }
+
+    /// Get the input units of the circuit and their types.
+    #[inline]
+    fn units(&self) -> Units<'_>
+    where
+        Self: Sized,
+    {
+        Units::new(self, UnitType::All)
+    }
+
+    /// Get the linear input units of the circuit and their types.
+    #[inline]
+    fn linear_units(&self) -> Units<'_>
+    where
+        Self: Sized,
+    {
+        Units::new(self, UnitType::Linear)
+    }
+
+    /// Get the linear input units of the circuit and their types.
+    #[inline]
+    fn nonlinear_units(&self) -> Units<'_>
+    where
+        Self: Sized,
+    {
+        Units::new(self, UnitType::NonLinear)
+    }
+
+    /// Returns the units corresponding to qubits inputs to the circuit.
+    #[inline]
+    fn qubits(&self) -> Units<'_>
+    where
+        Self: Sized,
+    {
+        Units::new(self, UnitType::Qubits)
+    }
 
     /// Returns all the commands in the circuit, in some topological order.
     ///
     /// Ignores the Input and Output nodes.
-    fn commands(&self) -> Self::Commands<'_>;
-
-    /// Returns all the commands applied to the given unit, in order.
-    fn unit_commands(&self) -> Self::UnitCommands;
+    #[inline]
+    fn commands(&self) -> CommandIterator<'_, Self>
+    where
+        Self: Sized,
+    {
+        // Traverse the circuit in topological order.
+        CommandIterator::new(self)
+    }
 
     /// Returns the [`NodeType`] of a command.
     fn command_nodetype(&self, command: &Command) -> &NodeType {
@@ -81,79 +130,9 @@ pub trait Circuit: HugrView {
     fn command_optype(&self, command: &Command) -> &OpType {
         self.get_optype(command.node())
     }
-
-    /// The number of gates in the circuit.
-    fn num_gates(&self) -> usize;
 }
 
-impl<T> Circuit for T
-where
-    T: HugrView,
-{
-    type Commands<'a> = CommandIterator<'a, T> where Self: 'a;
-    type UnitCommands = std::iter::Empty<Command>;
-
-    #[inline]
-    fn name(&self) -> Option<&str> {
-        let meta = self.get_metadata(self.root()).as_object()?;
-        meta.get("name")?.as_str()
-    }
-
-    #[inline]
-    fn units(&self) -> Vec<(CircuitUnit, Type)> {
-        let root = self.root();
-        let optype = self.get_optype(root);
-        optype
-            .signature()
-            .input_types()
-            .iter()
-            .filter(|&typ| !TypeBound::Copyable.contains(typ.least_upper_bound()))
-            .enumerate()
-            .map(|(i, typ)| (i.into(), typ.clone()))
-            .collect()
-    }
-
-    fn follow_linear_port(&self, node: Node, port: Port) -> Option<Port> {
-        let optype = self.get_optype(node);
-        if !optype.port_kind(port)?.is_linear() {
-            return None;
-        }
-        // TODO: We assume the linear data uses the same port offsets on both sides of the node.
-        // In the future we may want to have a more general mechanism to handle this.
-        let other_port = Port::new(port.direction().reverse(), port.index());
-        if optype.port_kind(other_port) == optype.port_kind(port) {
-            Some(other_port)
-        } else {
-            None
-        }
-    }
-
-    fn commands(&self) -> Self::Commands<'_> {
-        // Traverse the circuit in topological order.
-        CommandIterator::new(self)
-    }
-
-    fn unit_commands(&self) -> Self::UnitCommands {
-        // TODO Can we associate linear i/o with the corresponding unit without
-        // doing the full toposort?
-        unimplemented!()
-    }
-
-    #[inline]
-    fn input(&self) -> Node {
-        return self.children(self.root()).next().unwrap();
-    }
-
-    #[inline]
-    fn output(&self) -> Node {
-        return self.children(self.root()).nth(1).unwrap();
-    }
-
-    #[inline]
-    fn num_gates(&self) -> usize {
-        self.children(self.root()).count() - 2
-    }
-}
+impl<T> Circuit for T where T: HugrView {}
 
 #[cfg(test)]
 mod tests {

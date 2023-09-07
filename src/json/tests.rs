@@ -61,7 +61,7 @@ fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num
     let hugr: Hugr = ser.clone().decode().unwrap();
     let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(&hugr, hugr.root());
 
-    assert_eq!(circ.qubits().len(), num_qubits);
+    assert_eq!(circ.qubit_count(), num_qubits);
 
     let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
     compare_serial_circs(&ser, &reser);
