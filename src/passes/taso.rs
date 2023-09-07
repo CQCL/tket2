@@ -12,14 +12,18 @@ use hugr::Hugr;
 
 mod qtz_circuit;
 
+/// An equivalent circuit class (ECC), with a canonical representative.
 #[derive(Clone)]
-#[allow(unused)] // TODO
-pub struct RepCircSet {
+pub struct EqCircClass {
     rep_circ: Hugr,
     others: Vec<Hugr>,
 }
 
-impl RepCircSet {
+impl EqCircClass {
+    pub fn new(rep_circ: Hugr, others: Vec<Hugr>) -> Self {
+        Self { rep_circ, others }
+    }
+
     /// The representative circuit of the equivalence class.
     pub fn rep_circ(&self) -> &Hugr {
         &self.rep_circ
@@ -39,11 +43,19 @@ impl RepCircSet {
     pub fn into_circuits(self) -> impl Iterator<Item = Hugr> {
         std::iter::once(self.rep_circ).chain(self.others)
     }
+
+    /// The number of circuits in the equivalence class.
+    ///
+    /// An ECC always has a representative circuit, so this method will always
+    /// return an integer strictly greater than 0.
+    pub fn n_circuits(&self) -> usize {
+        self.others.len() + 1
+    }
 }
 
 // TODO refactor so both implementations share more code
 
-pub fn rep_sets_from_path(path: impl AsRef<Path>) -> Vec<RepCircSet> {
+pub fn load_eccs_json_file(path: impl AsRef<Path>) -> Vec<EqCircClass> {
     let all_circs = qtz_circuit::load_ecc_set(path);
 
     all_circs
@@ -52,7 +64,7 @@ pub fn rep_sets_from_path(path: impl AsRef<Path>) -> Vec<RepCircSet> {
             // TODO is the rep circ always the first??
             let rep_circ = all.remove(0);
 
-            RepCircSet {
+            EqCircClass {
                 rep_circ,
                 others: all,
             }

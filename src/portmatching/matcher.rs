@@ -8,7 +8,6 @@ use std::{
 };
 
 use super::{CircuitPattern, PEdge, PNode};
-use derive_more::{From, Into};
 use hugr::{
     hugr::views::{
         sibling::{
@@ -18,7 +17,7 @@ use hugr::{
         SiblingSubgraph,
     },
     ops::OpType,
-    Hugr, Node, Port, SimpleReplacement,
+    Hugr, Node, Port,
 };
 use itertools::Itertools;
 use portmatching::{
@@ -30,7 +29,12 @@ use thiserror::Error;
 #[cfg(feature = "pyo3")]
 use pyo3::prelude::*;
 
-use crate::{circuit::Circuit, ops::NotT2Op, T2Op};
+use crate::{
+    circuit::Circuit,
+    ops::NotT2Op,
+    rewrite::{CircuitRewrite, Subcircuit},
+    T2Op,
+};
 
 /// Matchable operations in a circuit.
 ///
@@ -64,26 +68,33 @@ impl TryFrom<OpType> for MatchOp {
 }
 
 /// A convex pattern match in a circuit.
+///
+/// The pattern is identified by a [`PatternID`] that can be used to retrieve the
+/// pattern from the matcher.
 #[derive(Clone)]
-pub struct CircuitMatch<'a, 'p, C> {
-    subgraph: SiblingSubgraph<'a, C>,
-    #[allow(dead_code)]
-    pub(super) pattern: &'p CircuitPattern,
+pub struct PatternMatch<'a, C> {
+    position: Subcircuit<'a, C>,
+    pattern: PatternID,
     /// The root of the pattern in the circuit.
     ///
-    /// This is redundant with the subgraph attribute, but is a more concise
-    /// representation of the match useful for `PyCircuitMatch` or serialisation.
+    /// This is redundant with the position attribute, but is a more concise
+    /// representation of the match useful for `PyPatternMatch` or serialisation.
     pub(super) root: Node,
 }
 
-impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
+impl<'a, C: Circuit<'a>> PatternMatch<'a, C> {
+    /// The matcher's pattern ID of the match.
+    pub fn pattern_id(&self) -> PatternID {
+        self.pattern
+    }
+
     /// Create a pattern match from the image of a pattern root.
     ///
     /// This checks at construction time that the match is convex. This will
     /// have runtime linear in the size of the circuit.
     ///
     /// For repeated convexity checking on the same circuit, use
-    /// [`CircuitMatch::try_from_root_match_with_checker`] instead.
+    /// [`PatternMatch::try_from_root_match_with_checker`] instead.
     ///
     /// Returns an error if
     ///  - the match is not convex
@@ -92,42 +103,88 @@ impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
     ///  - the subcircuit obtained is not a valid circuit region
     pub fn try_from_root_match(
         root: Node,
-        pattern: &'p CircuitPattern,
+        pattern: PatternID,
         circ: &'a C,
-    ) -> Result<Self, InvalidCircuitMatch> {
+        matcher: &PatternMatcher,
+    ) -> Result<Self, InvalidPatternMatch> {
         let mut checker = ConvexChecker::new(circ);
-        Self::try_from_root_match_with_checker(root, pattern, circ, &mut checker)
+        Self::try_from_root_match_with_checker(root, pattern, circ, matcher, &mut checker)
     }
 
     /// Create a pattern match from the image of a pattern root with a checker.
     ///
-    /// This is the same as [`CircuitMatch::try_from_root_match`] but takes a
+    /// This is the same as [`PatternMatch::try_from_root_match`] but takes a
     /// checker object to speed up convexity checking.
     ///
-    /// See [`CircuitMatch::try_from_root_match`] for more details.
+    /// See [`PatternMatch::try_from_root_match`] for more details.
     pub fn try_from_root_match_with_checker(
         root: Node,
-        pattern: &'p CircuitPattern,
+        pattern: PatternID,
         circ: &'a C,
+        matcher: &PatternMatcher,
         checker: &mut ConvexChecker<'a, C>,
-    ) -> Result<Self, InvalidCircuitMatch> {
-        let map = pattern
+    ) -> Result<Self, InvalidPatternMatch> {
+        let pattern_ref = matcher
+            .get_pattern(pattern)
+            .ok_or(InvalidPatternMatch::MatchNotFound)?;
+        let map = pattern_ref
             .get_match_map(root, circ)
-            .ok_or(InvalidCircuitMatch::MatchNotFound)?;
-        let inputs = pattern
+            .ok_or(InvalidPatternMatch::MatchNotFound)?;
+        let inputs = pattern_ref
             .inputs
             .iter()
             .map(|p| p.iter().map(|(n, p)| (map[n], *p)).collect_vec())
             .collect_vec();
-        let outputs = pattern
+        let outputs = pattern_ref
             .outputs
             .iter()
             .map(|(n, p)| (map[n], *p))
             .collect_vec();
+        Self::try_from_io_with_checker(root, pattern, circ, inputs, outputs, checker)
+    }
+
+    /// Create a pattern match from the subcircuit boundaries.
+    ///
+    /// The position of the match is given by a list of incoming boundary
+    /// ports and outgoing boundary ports. See [`SiblingSubgraph`] for more
+    /// details.
+    ///
+    /// This checks at construction time that the match is convex. This will
+    /// have runtime linear in the size of the circuit.
+    ///
+    /// For repeated convexity checking on the same circuit, use
+    /// [`PatternMatch::try_from_io_with_checker`] instead.
+    pub fn try_from_io(
+        root: Node,
+        pattern: PatternID,
+        circ: &'a C,
+        inputs: Vec<Vec<(Node, Port)>>,
+        outputs: Vec<(Node, Port)>,
+    ) -> Result<Self, InvalidPatternMatch> {
+        let mut checker = ConvexChecker::new(circ);
+        Self::try_from_io_with_checker(root, pattern, circ, inputs, outputs, &mut checker)
+    }
+
+    /// Create a pattern match from the subcircuit boundaries.
+    ///
+    /// The position of the match is given by a list of incoming boundary
+    /// ports and outgoing boundary ports. See [`SiblingSubgraph`] for more
+    /// details.
+    ///
+    /// This checks at construction time that the match is convex. This will
+    /// have runtime linear in the size of the circuit.
+    pub fn try_from_io_with_checker(
+        root: Node,
+        pattern: PatternID,
+        circ: &'a C,
+        inputs: Vec<Vec<(Node, Port)>>,
+        outputs: Vec<(Node, Port)>,
+        checker: &mut ConvexChecker<'a, C>,
+    ) -> Result<Self, InvalidPatternMatch> {
         let subgraph =
             SiblingSubgraph::try_from_boundary_ports_with_checker(circ, inputs, outputs, checker)?;
         Ok(Self {
-            subgraph,
+            position: subgraph.into(),
             pattern,
             root,
         })
@@ -135,25 +192,18 @@ impl<'a, 'p, C: Circuit<'a>> CircuitMatch<'a, 'p, C> {
 
     /// Construct a rewrite to replace `self` with `repl`.
     pub fn to_rewrite(&self, repl: Hugr) -> Result<CircuitRewrite, InvalidReplacement> {
-        self.subgraph
-            .create_simple_replacement(repl)
-            .map(Into::into)
+        CircuitRewrite::try_new(&self.position, repl)
     }
 }
 
-impl<'a, 'p, C: Circuit<'a>> Debug for CircuitMatch<'a, 'p, C> {
+impl<'a, C: Circuit<'a>> Debug for PatternMatch<'a, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CircuitMatch")
+        f.debug_struct("PatternMatch")
             .field("root", &self.root)
-            .field("nodes", &self.subgraph.nodes())
+            .field("nodes", &self.position.subgraph.nodes())
             .finish()
     }
 }
-
-/// A rewrite object for circuit matching.
-#[cfg_attr(feature = "pyo3", pyclass)]
-#[derive(Debug, Clone, From, Into)]
-pub struct CircuitRewrite(SimpleReplacement);
 
 /// A matcher object for fast pattern matching on circuits.
 ///
@@ -161,20 +211,20 @@ pub struct CircuitRewrite(SimpleReplacement);
 /// simultaneously.
 #[cfg_attr(feature = "pyo3", pyclass)]
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub struct CircuitMatcher {
+pub struct PatternMatcher {
     automaton: ScopeAutomaton<PNode, PEdge, Port>,
     patterns: Vec<CircuitPattern>,
 }
 
-impl Debug for CircuitMatcher {
+impl Debug for PatternMatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CircuitMatcher")
+        f.debug_struct("PatternMatcher")
             .field("patterns", &self.patterns)
             .finish()
     }
 }
 
-impl CircuitMatcher {
+impl PatternMatcher {
     /// Construct a matcher from a set of patterns
     pub fn from_patterns(patterns: impl Into<Vec<CircuitPattern>>) -> Self {
         let patterns = patterns.into();
@@ -196,10 +246,7 @@ impl CircuitMatcher {
     }
 
     /// Find all convex pattern matches in a circuit.
-    pub fn find_matches<'a, 'm, C: Circuit<'a>>(
-        &'m self,
-        circuit: &'a C,
-    ) -> Vec<CircuitMatch<'a, 'm, C>> {
+    pub fn find_matches<'a, C: Circuit<'a>>(&self, circuit: &'a C) -> Vec<PatternMatch<'a, C>> {
         let mut checker = ConvexChecker::new(circuit);
         circuit
             .commands()
@@ -208,12 +255,12 @@ impl CircuitMatcher {
     }
 
     /// Find all convex pattern matches in a circuit rooted at a given node.
-    fn find_rooted_matches<'a, 'm, C: Circuit<'a>>(
-        &'m self,
+    fn find_rooted_matches<'a, C: Circuit<'a>>(
+        &self,
         circ: &'a C,
         root: Node,
         checker: &mut ConvexChecker<'a, C>,
-    ) -> Vec<CircuitMatch<'a, 'm, C>> {
+    ) -> Vec<PatternMatch<'a, C>> {
         self.automaton
             .run(
                 root,
@@ -222,10 +269,11 @@ impl CircuitMatcher {
                 // Check edge exist
                 validate_unweighted_edge(circ),
             )
-            .filter_map(|m| {
-                let p = &self.patterns[m.0];
+            .filter_map(|pattern_id| {
                 handle_match_error(
-                    CircuitMatch::try_from_root_match_with_checker(root, p, circ, checker),
+                    PatternMatch::try_from_root_match_with_checker(
+                        root, pattern_id, circ, self, checker,
+                    ),
                     root,
                 )
             })
@@ -237,10 +285,15 @@ impl CircuitMatcher {
         self.patterns.get(id.0)
     }
 
+    /// Get the number of patterns in the matcher.
+    pub fn n_patterns(&self) -> usize {
+        self.patterns.len()
+    }
+
     /// Serialise a matcher into an IO stream.
     ///
     /// Precomputed matchers can be serialised as binary and then loaded
-    /// later using [`CircuitMatcher::load_binary_io`].
+    /// later using [`PatternMatcher::load_binary_io`].
     pub fn save_binary_io<W: io::Write>(
         &self,
         writer: &mut W,
@@ -251,7 +304,7 @@ impl CircuitMatcher {
 
     /// Loads a matcher from an IO stream.
     ///
-    /// Loads streams as created by [`CircuitMatcher::save_binary_io`].
+    /// Loads streams as created by [`PatternMatcher::save_binary_io`].
     pub fn load_binary_io<R: io::Read>(reader: &mut R) -> Result<Self, MatcherSerialisationError> {
         let matcher: Self = rmp_serde::decode::from_read(reader)?;
         Ok(matcher)
@@ -260,7 +313,7 @@ impl CircuitMatcher {
     /// Save a matcher as a binary file.
     ///
     /// Precomputed matchers can be saved as binary files and then loaded
-    /// later using [`CircuitMatcher::load_binary`].
+    /// later using [`PatternMatcher::load_binary`].
     ///
     /// The extension of the file name will always be set or amended to be
     /// `.bin`.
@@ -277,7 +330,7 @@ impl CircuitMatcher {
         Ok(file_name)
     }
 
-    /// Loads a matcher saved using [`CircuitMatcher::save_binary`].
+    /// Loads a matcher saved using [`PatternMatcher::save_binary`].
     pub fn load_binary(name: impl AsRef<Path>) -> Result<Self, MatcherSerialisationError> {
         let file = File::open(name)?;
         let mut reader = std::io::BufReader::new(file);
@@ -287,7 +340,7 @@ impl CircuitMatcher {
 
 /// Errors that can occur when constructing matches.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum InvalidCircuitMatch {
+pub enum InvalidPatternMatch {
     /// The match is not convex.
     #[error("match is not convex")]
     NotConvex,
@@ -321,13 +374,13 @@ pub enum MatcherSerialisationError {
     Serialisation(#[from] rmp_serde::encode::Error),
 }
 
-impl From<InvalidSubgraph> for InvalidCircuitMatch {
+impl From<InvalidSubgraph> for InvalidPatternMatch {
     fn from(value: InvalidSubgraph) -> Self {
         match value {
-            InvalidSubgraph::NotConvex => InvalidCircuitMatch::NotConvex,
-            InvalidSubgraph::EmptySubgraph => InvalidCircuitMatch::EmptyMatch,
+            InvalidSubgraph::NotConvex => InvalidPatternMatch::NotConvex,
+            InvalidSubgraph::EmptySubgraph => InvalidPatternMatch::EmptyMatch,
             InvalidSubgraph::NoSharedParent | InvalidSubgraph::InvalidBoundary => {
-                InvalidCircuitMatch::InvalidSubcircuit
+                InvalidPatternMatch::InvalidSubcircuit
             }
         }
     }
@@ -363,13 +416,13 @@ pub(crate) fn validate_weighted_node<'circ>(
 ///
 /// Benign errors are non-convex matches, which are expected to occur.
 /// Other errors are considered logic errors and should never occur.
-fn handle_match_error<T>(match_res: Result<T, InvalidCircuitMatch>, root: Node) -> Option<T> {
+fn handle_match_error<T>(match_res: Result<T, InvalidPatternMatch>, root: Node) -> Option<T> {
     match_res
         .map_err(|err| match err {
-            InvalidCircuitMatch::NotConvex => InvalidCircuitMatch::NotConvex,
-            InvalidCircuitMatch::MatchNotFound
-            | InvalidCircuitMatch::InvalidSubcircuit
-            | InvalidCircuitMatch::EmptyMatch => {
+            InvalidPatternMatch::NotConvex => InvalidPatternMatch::NotConvex,
+            InvalidPatternMatch::MatchNotFound
+            | InvalidPatternMatch::InvalidSubcircuit
+            | InvalidPatternMatch::EmptyMatch => {
                 panic!("invalid match at root node {root:?}")
             }
         })
@@ -388,7 +441,7 @@ mod tests {
     use crate::utils::build_simple_circuit;
     use crate::T2Op;
 
-    use super::{CircuitMatcher, CircuitPattern};
+    use super::{CircuitPattern, PatternMatcher};
 
     static H_CX: OnceLock<Hugr> = OnceLock::new();
     static CX_CX: OnceLock<Hugr> = OnceLock::new();
@@ -422,7 +475,7 @@ mod tests {
         let circ = h_cx();
 
         let p = CircuitPattern::try_from_circuit(&circ).unwrap();
-        let m = CircuitMatcher::from_patterns(vec![p]);
+        let m = PatternMatcher::from_patterns(vec![p]);
 
         let matches = m.find_matches(&circ);
         assert_eq!(matches.len(), 1);
@@ -438,10 +491,10 @@ mod tests {
 
         // Estimate the size of the buffer based on the number of patterns and the size of each pattern
         let mut buf = Vec::with_capacity(patterns[0].n_edges() + patterns[1].n_edges());
-        let m = CircuitMatcher::from_patterns(patterns);
+        let m = PatternMatcher::from_patterns(patterns);
         m.save_binary_io(&mut buf).unwrap();
 
-        let m2 = CircuitMatcher::load_binary_io(&mut buf.as_slice()).unwrap();
+        let m2 = PatternMatcher::load_binary_io(&mut buf.as_slice()).unwrap();
         let mut buf2 = Vec::with_capacity(buf.len());
         m2.save_binary_io(&mut buf2).unwrap();
 

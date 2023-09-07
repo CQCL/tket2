@@ -10,7 +10,7 @@ def test_simple_matching():
     p1 = patterns.CircuitPattern(Circuit(2).CX(0, 1).H(1))
     p2 = patterns.CircuitPattern(Circuit(2).H(0).CX(1, 0))
 
-    matcher = patterns.CircuitMatcher(iter([p1, p2]))
+    matcher = patterns.PatternMatcher(iter([p1, p2]))
 
     assert len(matcher.find_matches(c)) == 2
 
@@ -18,7 +18,7 @@ def test_simple_matching():
 def test_non_convex_pattern():
     """ two-qubit circuits can't match three-qb ones """
     p1 = patterns.CircuitPattern(Circuit(3).CX(0, 1).CX(1, 2))
-    matcher = patterns.CircuitMatcher(iter([p1]))
+    matcher = patterns.PatternMatcher(iter([p1]))
 
     c = Circuit(2).CX(0, 1).CX(1, 0)
     assert len(matcher.find_matches(c)) == 0
@@ -39,6 +39,6 @@ def test_larger_matching():
     p3 = patterns.CircuitPattern(Circuit(2).CX(0, 1).CX(1, 0))
     p4 = patterns.CircuitPattern(Circuit(3).CX(0, 1).CX(1, 2))
 
-    matcher = patterns.CircuitMatcher(iter([p1, p2, p3, p4]))
+    matcher = patterns.PatternMatcher(iter([p1, p2, p3, p4]))
 
     assert len(matcher.find_matches(c)) == 6
