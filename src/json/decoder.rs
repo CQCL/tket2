@@ -21,6 +21,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use super::op::JsonOp;
 use super::{try_param_to_constant, METADATA_IMPLICIT_PERM, METADATA_PHASE};
 use crate::extension::{LINEAR_BIT, REGISTRY};
+use crate::symbolic_constant_op;
 
 /// The state of an in-progress [`DFGBuilder`] being built from a [`SerialCircuit`].
 ///
@@ -145,9 +146,10 @@ impl JsonDecoder {
                 self.hugr.add_load_const(const_op).unwrap()
             }
             None => {
-                // TODO: If the parameter is just a variable,
-                // return the corresponding wire from the input.
-                todo!("Variable parameters not yet supported")
+                // store string in custom op.
+                let symb_op = symbolic_constant_op(param);
+                let o = self.hugr.add_dataflow_op(symb_op, []).unwrap();
+                o.out_wire(0)
             }
         }
     }
