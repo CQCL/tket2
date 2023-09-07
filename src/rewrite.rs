@@ -1,5 +1,10 @@
 //! Transform circuits using rewrite rules.
 
+#[cfg(feature = "portmatching")]
+pub mod ecc_rewriter;
+#[cfg(feature = "portmatching")]
+pub use ecc_rewriter::ECCRewriter;
+
 use delegate::delegate;
 use derive_more::{From, Into};
 use hugr::{

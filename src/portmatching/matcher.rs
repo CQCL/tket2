@@ -239,6 +239,11 @@ impl CircuitMatcher {
         self.patterns.get(id.0)
     }
 
+    /// Get the number of patterns in the matcher.
+    pub fn n_patterns(&self) -> usize {
+        self.patterns.len()
+    }
+
     /// Serialise a matcher into an IO stream.
     ///
     /// Precomputed matchers can be serialised as binary and then loaded
