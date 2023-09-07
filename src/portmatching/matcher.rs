@@ -77,8 +77,8 @@ pub struct PatternMatch<'a, C> {
     pattern: PatternID,
     /// The root of the pattern in the circuit.
     ///
-    /// This is redundant with the subgraph attribute, but is a more concise
-    /// representation of the match useful for `PyCircuitMatch` or serialisation.
+    /// This is redundant with the position attribute, but is a more concise
+    /// representation of the match useful for `PyPatternMatch` or serialisation.
     pub(super) root: Node,
 }
 
@@ -94,7 +94,7 @@ impl<'a, C: Circuit<'a>> PatternMatch<'a, C> {
     /// have runtime linear in the size of the circuit.
     ///
     /// For repeated convexity checking on the same circuit, use
-    /// [`CircuitMatch::try_from_root_match_with_checker`] instead.
+    /// [`PatternMatch::try_from_root_match_with_checker`] instead.
     ///
     /// Returns an error if
     ///  - the match is not convex
@@ -106,30 +106,30 @@ impl<'a, C: Circuit<'a>> PatternMatch<'a, C> {
         pattern: PatternID,
         circ: &'a C,
         matcher: &CircuitMatcher,
-    ) -> Result<Self, InvalidCircuitMatch> {
+    ) -> Result<Self, InvalidPatternMatch> {
         let mut checker = ConvexChecker::new(circ);
         Self::try_from_root_match_with_checker(root, pattern, circ, matcher, &mut checker)
     }
 
     /// Create a pattern match from the image of a pattern root with a checker.
     ///
-    /// This is the same as [`CircuitMatch::try_from_root_match`] but takes a
+    /// This is the same as [`PatternMatch::try_from_root_match`] but takes a
     /// checker object to speed up convexity checking.
     ///
-    /// See [`CircuitMatch::try_from_root_match`] for more details.
+    /// See [`PatternMatch::try_from_root_match`] for more details.
     pub fn try_from_root_match_with_checker(
         root: Node,
         pattern: PatternID,
         circ: &'a C,
         matcher: &CircuitMatcher,
         checker: &mut ConvexChecker<'a, C>,
-    ) -> Result<Self, InvalidCircuitMatch> {
+    ) -> Result<Self, InvalidPatternMatch> {
         let pattern_ref = matcher
             .get_pattern(pattern)
-            .ok_or(InvalidCircuitMatch::MatchNotFound)?;
+            .ok_or(InvalidPatternMatch::MatchNotFound)?;
         let map = pattern_ref
             .get_match_map(root, circ)
-            .ok_or(InvalidCircuitMatch::MatchNotFound)?;
+            .ok_or(InvalidPatternMatch::MatchNotFound)?;
         let inputs = pattern_ref
             .inputs
             .iter()
@@ -153,14 +153,14 @@ impl<'a, C: Circuit<'a>> PatternMatch<'a, C> {
     /// have runtime linear in the size of the circuit.
     ///
     /// For repeated convexity checking on the same circuit, use
-    /// [`CircuitMatch::try_from_io_with_checker`] instead.
+    /// [`PatternMatch::try_from_io_with_checker`] instead.
     pub fn try_from_io(
         root: Node,
         pattern: PatternID,
         circ: &'a C,
         inputs: Vec<Vec<(Node, Port)>>,
         outputs: Vec<(Node, Port)>,
-    ) -> Result<Self, InvalidCircuitMatch> {
+    ) -> Result<Self, InvalidPatternMatch> {
         let mut checker = ConvexChecker::new(circ);
         Self::try_from_io_with_checker(root, pattern, circ, inputs, outputs, &mut checker)
     }
@@ -180,7 +180,7 @@ impl<'a, C: Circuit<'a>> PatternMatch<'a, C> {
         inputs: Vec<Vec<(Node, Port)>>,
         outputs: Vec<(Node, Port)>,
         checker: &mut ConvexChecker<'a, C>,
-    ) -> Result<Self, InvalidCircuitMatch> {
+    ) -> Result<Self, InvalidPatternMatch> {
         let subgraph =
             SiblingSubgraph::try_from_boundary_ports_with_checker(circ, inputs, outputs, checker)?;
         Ok(Self {
@@ -198,7 +198,7 @@ impl<'a, C: Circuit<'a>> PatternMatch<'a, C> {
 
 impl<'a, C: Circuit<'a>> Debug for PatternMatch<'a, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CircuitMatch")
+        f.debug_struct("PatternMatch")
             .field("root", &self.root)
             .field("nodes", &self.position.subgraph.nodes())
             .finish()
@@ -340,7 +340,7 @@ impl CircuitMatcher {
 
 /// Errors that can occur when constructing matches.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum InvalidCircuitMatch {
+pub enum InvalidPatternMatch {
     /// The match is not convex.
     #[error("match is not convex")]
     NotConvex,
@@ -374,13 +374,13 @@ pub enum MatcherSerialisationError {
     Serialisation(#[from] rmp_serde::encode::Error),
 }
 
-impl From<InvalidSubgraph> for InvalidCircuitMatch {
+impl From<InvalidSubgraph> for InvalidPatternMatch {
     fn from(value: InvalidSubgraph) -> Self {
         match value {
-            InvalidSubgraph::NotConvex => InvalidCircuitMatch::NotConvex,
-            InvalidSubgraph::EmptySubgraph => InvalidCircuitMatch::EmptyMatch,
+            InvalidSubgraph::NotConvex => InvalidPatternMatch::NotConvex,
+            InvalidSubgraph::EmptySubgraph => InvalidPatternMatch::EmptyMatch,
             InvalidSubgraph::NoSharedParent | InvalidSubgraph::InvalidBoundary => {
-                InvalidCircuitMatch::InvalidSubcircuit
+                InvalidPatternMatch::InvalidSubcircuit
             }
         }
     }
@@ -416,13 +416,13 @@ pub(crate) fn validate_weighted_node<'circ>(
 ///
 /// Benign errors are non-convex matches, which are expected to occur.
 /// Other errors are considered logic errors and should never occur.
-fn handle_match_error<T>(match_res: Result<T, InvalidCircuitMatch>, root: Node) -> Option<T> {
+fn handle_match_error<T>(match_res: Result<T, InvalidPatternMatch>, root: Node) -> Option<T> {
     match_res
         .map_err(|err| match err {
-            InvalidCircuitMatch::NotConvex => InvalidCircuitMatch::NotConvex,
-            InvalidCircuitMatch::MatchNotFound
-            | InvalidCircuitMatch::InvalidSubcircuit
-            | InvalidCircuitMatch::EmptyMatch => {
+            InvalidPatternMatch::NotConvex => InvalidPatternMatch::NotConvex,
+            InvalidPatternMatch::MatchNotFound
+            | InvalidPatternMatch::InvalidSubcircuit
+            | InvalidPatternMatch::EmptyMatch => {
                 panic!("invalid match at root node {root:?}")
             }
         })
