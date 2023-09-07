@@ -8,14 +8,14 @@ use hugr::HugrView;
 use itertools::Itertools;
 
 use tket2::json::load_tk1_json_file;
-// Import the CircuitMatcher struct and its methods
-use tket2::passes::taso::rep_sets_from_path;
-use tket2::portmatching::{CircuitMatcher, CircuitPattern};
+// Import the PatternMatcher struct and its methods
+use tket2::passes::taso::load_eccs_json_file;
+use tket2::portmatching::{CircuitPattern, PatternMatcher};
 
-/// Program to precompile patterns from files into a CircuitMatcher stored as binary file.
+/// Program to precompile patterns from files into a PatternMatcher stored as binary file.
 #[derive(Parser, Debug)]
 #[clap(version = "1.0", long_about = None)]
-#[clap(about = "Precompiles patterns from files into a CircuitMatcher stored as binary file.")]
+#[clap(about = "Precompiles patterns from files into a PatternMatcher stored as binary file.")]
 struct CmdLineArgs {
     // TODO: Differentiate between TK1 input and ECC input
     /// Name of input file/folder
@@ -45,7 +45,7 @@ fn main() {
 
     let all_circs = if input_path.is_file() {
         // Input is an ECC file in JSON format
-        let eccs = rep_sets_from_path(input_path);
+        let eccs = load_eccs_json_file(input_path);
         eccs.into_iter()
             .flat_map(|ecc| ecc.into_circuits())
             .collect_vec()
@@ -78,7 +78,7 @@ fn main() {
     } else {
         output_path.to_path_buf()
     };
-    let matcher = CircuitMatcher::from_patterns(patterns);
+    let matcher = PatternMatcher::from_patterns(patterns);
     matcher.save_binary(output_file.to_str().unwrap()).unwrap();
     println!("Written matcher to {:?}", output_file);
 

@@ -6,7 +6,7 @@ pub mod pattern;
 #[allow(missing_docs)]
 pub mod pyo3;
 
-pub use matcher::{CircuitMatch, CircuitMatcher, CircuitRewrite};
+pub use matcher::{PatternMatch, PatternMatcher};
 pub use pattern::CircuitPattern;
 
 use hugr::Port;

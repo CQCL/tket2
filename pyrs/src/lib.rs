@@ -4,7 +4,7 @@ use tket2::{
     circuit::HierarchyView,
     json::TKETDecode,
     passes::apply_greedy_commutation,
-    portmatching::{CircuitMatcher, CircuitPattern},
+    portmatching::{CircuitPattern, PatternMatcher},
 };
 use tket_json_rs::circuit_json::SerialCircuit;
 
@@ -63,7 +63,7 @@ fn pyrs(py: Python, m: &PyModule) -> PyResult<()> {
 fn add_patterns_module(py: Python, parent: &PyModule) -> PyResult<()> {
     let m = PyModule::new(py, "patterns")?;
     m.add_class::<CircuitPattern>()?;
-    m.add_class::<CircuitMatcher>()?;
+    m.add_class::<PatternMatcher>()?;
     parent.add_submodule(m)?;
     Ok(())
 }
