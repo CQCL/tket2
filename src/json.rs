@@ -38,7 +38,7 @@ pub trait TKETDecode: Sized {
     /// Convert the serialized circuit to a [`Hugr`].
     fn decode(self) -> Result<Hugr, Self::DecodeError>;
     /// Convert a [`Hugr`] to a new serialized circuit.
-    fn encode<'circ>(circuit: &'circ impl Circuit<'circ>) -> Result<Self, Self::EncodeError>;
+    fn encode(circuit: &impl Circuit) -> Result<Self, Self::EncodeError>;
 }
 
 impl TKETDecode for SerialCircuit {
@@ -60,7 +60,7 @@ impl TKETDecode for SerialCircuit {
         Ok(decoder.finish())
     }
 
-    fn encode<'circ>(circ: &'circ impl Circuit<'circ>) -> Result<Self, Self::EncodeError> {
+    fn encode(circ: &impl Circuit) -> Result<Self, Self::EncodeError> {
         let mut encoder = JsonEncoder::new(circ);
         for com in circ.commands() {
             let optype = circ.command_optype(&com);

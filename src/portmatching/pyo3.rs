@@ -121,8 +121,8 @@ impl PyPatternMatch {
     ///
     /// Requires references to the circuit and pattern to resolve indices
     /// into these objects.
-    pub fn try_from_rust<'circ, C: Circuit<'circ> + Clone>(
-        m: PatternMatch<'circ, C>,
+    pub fn try_from_rust<C: Circuit + Clone>(
+        m: PatternMatch<C>,
         circ: &C,
         matcher: &PatternMatcher,
     ) -> PyResult<Self> {

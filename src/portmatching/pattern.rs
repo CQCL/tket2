@@ -33,9 +33,7 @@ impl CircuitPattern {
     }
 
     /// Construct a pattern from a circuit.
-    pub fn try_from_circuit<'circ, C: Circuit<'circ>>(
-        circuit: &'circ C,
-    ) -> Result<Self, InvalidPattern> {
+    pub fn try_from_circuit<C: Circuit>(circuit: &C) -> Result<Self, InvalidPattern> {
         if circuit.num_gates() == 0 {
             return Err(InvalidPattern::EmptyCircuit);
         }
@@ -79,11 +77,7 @@ impl CircuitPattern {
     }
 
     /// Compute the map from pattern nodes to circuit nodes in `circ`.
-    pub fn get_match_map<'a, C: Circuit<'a>>(
-        &self,
-        root: Node,
-        circ: &C,
-    ) -> Option<HashMap<Node, Node>> {
+    pub fn get_match_map<C: Circuit>(&self, root: Node, circ: &C) -> Option<HashMap<Node, Node>> {
         let single_matcher = SinglePatternMatcher::from_pattern(self.pattern.clone());
         single_matcher
             .get_match_map(
@@ -121,9 +115,7 @@ impl From<NoRootFound> for InvalidPattern {
 
 #[cfg(test)]
 mod tests {
-    use hugr::hugr::views::{DescendantsGraph, HierarchyView, SiblingGraph};
-    use hugr::ops::handle::DfgID;
-    use hugr::{Hugr, HugrView};
+    use hugr::Hugr;
     use itertools::Itertools;
 
     use crate::utils::build_simple_circuit;
@@ -143,9 +135,8 @@ mod tests {
     #[test]
     fn construct_pattern() {
         let hugr = h_cx();
-        let circ: DescendantsGraph<'_, DfgID> = DescendantsGraph::new(&hugr, hugr.root());
 
-        let p = CircuitPattern::try_from_circuit(&circ).unwrap();
+        let p = CircuitPattern::try_from_circuit(&hugr).unwrap();
 
         let edges = p
             .pattern
@@ -163,13 +154,12 @@ mod tests {
 
     #[test]
     fn disconnected_pattern() {
-        let hugr = build_simple_circuit(2, |circ| {
+        let circ = build_simple_circuit(2, |circ| {
             circ.append(T2Op::X, [0])?;
             circ.append(T2Op::T, [1])?;
             Ok(())
         })
         .unwrap();
-        let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(&hugr, hugr.root());
         assert_eq!(
             CircuitPattern::try_from_circuit(&circ).unwrap_err(),
             InvalidPattern::NotConnected

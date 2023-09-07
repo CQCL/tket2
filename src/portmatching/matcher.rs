@@ -73,7 +73,7 @@ pub struct PatternMatch<'a, C> {
     pub(super) root: Node,
 }
 
-impl<'a, C: Circuit<'a> + Clone> PatternMatch<'a, C> {
+impl<'a, C: Circuit + Clone> PatternMatch<'a, C> {
     /// The matcher's pattern ID of the match.
     pub fn pattern_id(&self) -> PatternID {
         self.pattern
@@ -187,7 +187,7 @@ impl<'a, C: Circuit<'a> + Clone> PatternMatch<'a, C> {
     }
 }
 
-impl<'a, C: Circuit<'a>> Debug for PatternMatch<'a, C> {
+impl<'a, C: Circuit> Debug for PatternMatch<'a, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PatternMatch")
             .field("root", &self.root)
@@ -237,10 +237,7 @@ impl PatternMatcher {
     }
 
     /// Find all convex pattern matches in a circuit.
-    pub fn find_matches<'a, C: Circuit<'a> + Clone>(
-        &self,
-        circuit: &'a C,
-    ) -> Vec<PatternMatch<'a, C>> {
+    pub fn find_matches<'a, C: Circuit + Clone>(&self, circuit: &'a C) -> Vec<PatternMatch<'a, C>> {
         let mut checker = ConvexChecker::new(circuit);
         circuit
             .commands()
@@ -249,7 +246,7 @@ impl PatternMatcher {
     }
 
     /// Find all convex pattern matches in a circuit rooted at a given node.
-    fn find_rooted_matches<'a, C: Circuit<'a> + Clone>(
+    fn find_rooted_matches<'a, C: Circuit + Clone>(
         &self,
         circ: &'a C,
         root: Node,
@@ -385,8 +382,8 @@ fn compatible_offsets((_, pout): &(Port, Port), (pin, _): &(Port, Port)) -> bool
 }
 
 /// Check if an edge `e` is valid in a portgraph `g` without weights.
-pub(crate) fn validate_unweighted_edge<'circ>(
-    circ: &impl Circuit<'circ>,
+pub(crate) fn validate_unweighted_edge(
+    circ: &impl Circuit,
 ) -> impl for<'a> Fn(Node, &'a PEdge) -> Option<Node> + '_ {
     move |src, &(src_port, tgt_port)| {
         let (next_node, _) = circ
@@ -397,8 +394,8 @@ pub(crate) fn validate_unweighted_edge<'circ>(
 }
 
 /// Check if a node `n` is valid in a weighted portgraph `g`.
-pub(crate) fn validate_weighted_node<'circ>(
-    circ: &impl Circuit<'circ>,
+pub(crate) fn validate_weighted_node(
+    circ: &impl Circuit,
 ) -> impl for<'a> Fn(Node, &PNode) -> bool + '_ {
     move |v, prop| {
         let v_weight = MatchOp::try_from(circ.get_optype(v).clone());
@@ -425,11 +422,7 @@ fn handle_match_error<T>(match_res: Result<T, InvalidPatternMatch>, root: Node) 
 
 #[cfg(test)]
 mod tests {
-    use std::sync::OnceLock;
-
-    use hugr::hugr::views::{DescendantsGraph, HierarchyView};
-    use hugr::ops::handle::DfgID;
-    use hugr::{Hugr, HugrView};
+    use hugr::Hugr;
     use itertools::Itertools;
 
     use crate::utils::build_simple_circuit;
@@ -437,31 +430,22 @@ mod tests {
 
     use super::{CircuitPattern, PatternMatcher};
 
-    static H_CX: OnceLock<Hugr> = OnceLock::new();
-    static CX_CX: OnceLock<Hugr> = OnceLock::new();
-
-    fn h_cx<'a>() -> DescendantsGraph<'a, DfgID> {
-        let circ = H_CX.get_or_init(|| {
-            build_simple_circuit(2, |circ| {
-                circ.append(T2Op::CX, [0, 1]).unwrap();
-                circ.append(T2Op::H, [0]).unwrap();
-                Ok(())
-            })
-            .unwrap()
-        });
-        DescendantsGraph::new(circ, circ.root())
+    fn h_cx() -> Hugr {
+        build_simple_circuit(2, |circ| {
+            circ.append(T2Op::CX, [0, 1]).unwrap();
+            circ.append(T2Op::H, [0]).unwrap();
+            Ok(())
+        })
+        .unwrap()
     }
 
-    fn cx_xc<'a>() -> DescendantsGraph<'a, DfgID> {
-        let circ = CX_CX.get_or_init(|| {
-            build_simple_circuit(2, |circ| {
-                circ.append(T2Op::CX, [0, 1]).unwrap();
-                circ.append(T2Op::CX, [1, 0]).unwrap();
-                Ok(())
-            })
-            .unwrap()
-        });
-        DescendantsGraph::new(circ, circ.root())
+    fn cx_xc() -> Hugr {
+        build_simple_circuit(2, |circ| {
+            circ.append(T2Op::CX, [0, 1]).unwrap();
+            circ.append(T2Op::CX, [1, 0]).unwrap();
+            Ok(())
+        })
+        .unwrap()
     }
 
     #[test]

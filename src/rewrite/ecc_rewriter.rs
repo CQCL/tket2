@@ -96,7 +96,7 @@ impl ECCRewriter {
 }
 
 impl Rewriter for ECCRewriter {
-    fn get_rewrites<'a, C: Circuit<'a> + Clone>(&'a self, circ: &'a C) -> Vec<CircuitRewrite> {
+    fn get_rewrites<'a, C: Circuit + Clone>(&'a self, circ: &'a C) -> Vec<CircuitRewrite> {
         let matches = self.matcher.find_matches(circ);
         matches
             .into_iter()

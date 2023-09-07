@@ -289,12 +289,8 @@ pub(crate) mod test {
 
     use std::sync::Arc;
 
-    use hugr::{
-        extension::OpDef,
-        hugr::views::{HierarchyView, SiblingGraph},
-        ops::handle::DfgID,
-        Hugr, HugrView,
-    };
+    use hugr::hugr::views::HierarchyView;
+    use hugr::{extension::OpDef, hugr::views::SiblingGraph, ops::handle::DfgID, Hugr, HugrView};
     use rstest::{fixture, rstest};
 
     use crate::{circuit::Circuit, ops::SimpleOpEnum, utils::build_simple_circuit};

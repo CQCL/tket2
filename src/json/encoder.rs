@@ -40,7 +40,7 @@ pub(super) struct JsonEncoder {
 
 impl JsonEncoder {
     /// Create a new [`JsonEncoder`] from a [`Circuit`].
-    pub fn new<'circ>(circ: &impl Circuit<'circ>) -> Self {
+    pub fn new(circ: &impl Circuit) -> Self {
         let name = circ.name().map(str::to_string);
 
         // Compute the linear qubit and bit registers. Each one have independent

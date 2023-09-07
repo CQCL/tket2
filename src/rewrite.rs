@@ -52,5 +52,5 @@ impl CircuitRewrite {
 /// Generate rewrite rules for circuits.
 pub trait Rewriter {
     /// Get the rewrite rules for a circuit.
-    fn get_rewrites<'a, C: Circuit<'a> + Clone>(&'a self, circ: &'a C) -> Vec<CircuitRewrite>;
+    fn get_rewrites<'a, C: Circuit + Clone>(&'a self, circ: &'a C) -> Vec<CircuitRewrite>;
 }

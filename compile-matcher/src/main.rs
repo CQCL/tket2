@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use clap::Parser;
-use hugr::hugr::views::{HierarchyView, SiblingGraph};
+use hugr::hugr::views::SiblingGraph;
 use hugr::ops::handle::DfgID;
 use hugr::HugrView;
 use itertools::Itertools;

@@ -1,7 +1,7 @@
 use criterion::{black_box, criterion_group, AxisScale, BenchmarkId, Criterion, PlotConfiguration};
-use hugr::hugr::views::SiblingGraph;
+use hugr::hugr::views::{HierarchyView, SiblingGraph};
 use hugr::HugrView;
-use tket2::circuit::{CircuitHash, HierarchyView};
+use tket2::circuit::CircuitHash;
 
 use super::generators::make_cnot_layers;
 
