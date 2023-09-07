@@ -57,7 +57,7 @@ impl ECCRewriter {
 
     /// Create a new rewriter from a list of equivalent circuit classes.
     ///
-    /// Equivalence classes are represented as [`RepCircSet`]s, lists of
+    /// Equivalence classes are represented as [`EqCircClass`]s, lists of
     /// HUGRs where one of the element is chosen as the representative.
     pub fn from_eccs(eccs: impl Into<Vec<EqCircClass>>) -> Self {
         let eccs = eccs.into();
