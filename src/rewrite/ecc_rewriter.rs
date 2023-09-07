@@ -8,7 +8,7 @@
 //! equivalence class.
 //!
 //! Equivalence classes are generated using Quartz
-//! (https://github.com/quantum-compiler/quartz/). The simplest way
+//! (<https://github.com/quantum-compiler/quartz/>). The simplest way
 //! to generate such a file is to use the `gen_ecc_set.sh` script at the root
 //! of the Quartz repository.
 
@@ -58,7 +58,7 @@ impl ECCRewriter {
     /// Generate such a file using the `gen_ecc_set.sh` script at the root of
     /// the Quartz repository.
     ///
-    /// Quartz: https://github.com/quantum-compiler/quartz/.
+    /// Quartz: <https://github.com/quantum-compiler/quartz/>.
     pub fn from_eccs_json_file(path: impl AsRef<Path>) -> Self {
         let eccs = load_eccs_json_file(path);
         Self::from_eccs(eccs)
