@@ -2,6 +2,7 @@
 
 #[cfg(feature = "portmatching")]
 pub mod ecc_rewriter;
+pub mod strategy;
 #[cfg(feature = "portmatching")]
 pub use ecc_rewriter::ECCRewriter;
 

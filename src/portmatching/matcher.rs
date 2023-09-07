@@ -105,7 +105,7 @@ impl<'a, C: Circuit<'a>> PatternMatch<'a, C> {
         root: Node,
         pattern: PatternID,
         circ: &'a C,
-        matcher: &CircuitMatcher,
+        matcher: &PatternMatcher,
     ) -> Result<Self, InvalidPatternMatch> {
         let mut checker = ConvexChecker::new(circ);
         Self::try_from_root_match_with_checker(root, pattern, circ, matcher, &mut checker)
@@ -121,7 +121,7 @@ impl<'a, C: Circuit<'a>> PatternMatch<'a, C> {
         root: Node,
         pattern: PatternID,
         circ: &'a C,
-        matcher: &CircuitMatcher,
+        matcher: &PatternMatcher,
         checker: &mut ConvexChecker<'a, C>,
     ) -> Result<Self, InvalidPatternMatch> {
         let pattern_ref = matcher
@@ -211,20 +211,20 @@ impl<'a, C: Circuit<'a>> Debug for PatternMatch<'a, C> {
 /// simultaneously.
 #[cfg_attr(feature = "pyo3", pyclass)]
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub struct CircuitMatcher {
+pub struct PatternMatcher {
     automaton: ScopeAutomaton<PNode, PEdge, Port>,
     patterns: Vec<CircuitPattern>,
 }
 
-impl Debug for CircuitMatcher {
+impl Debug for PatternMatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CircuitMatcher")
+        f.debug_struct("PatternMatcher")
             .field("patterns", &self.patterns)
             .finish()
     }
 }
 
-impl CircuitMatcher {
+impl PatternMatcher {
     /// Construct a matcher from a set of patterns
     pub fn from_patterns(patterns: impl Into<Vec<CircuitPattern>>) -> Self {
         let patterns = patterns.into();
@@ -293,7 +293,7 @@ impl CircuitMatcher {
     /// Serialise a matcher into an IO stream.
     ///
     /// Precomputed matchers can be serialised as binary and then loaded
-    /// later using [`CircuitMatcher::load_binary_io`].
+    /// later using [`PatternMatcher::load_binary_io`].
     pub fn save_binary_io<W: io::Write>(
         &self,
         writer: &mut W,
@@ -304,7 +304,7 @@ impl CircuitMatcher {
 
     /// Loads a matcher from an IO stream.
     ///
-    /// Loads streams as created by [`CircuitMatcher::save_binary_io`].
+    /// Loads streams as created by [`PatternMatcher::save_binary_io`].
     pub fn load_binary_io<R: io::Read>(reader: &mut R) -> Result<Self, MatcherSerialisationError> {
         let matcher: Self = rmp_serde::decode::from_read(reader)?;
         Ok(matcher)
@@ -313,7 +313,7 @@ impl CircuitMatcher {
     /// Save a matcher as a binary file.
     ///
     /// Precomputed matchers can be saved as binary files and then loaded
-    /// later using [`CircuitMatcher::load_binary`].
+    /// later using [`PatternMatcher::load_binary`].
     ///
     /// The extension of the file name will always be set or amended to be
     /// `.bin`.
@@ -330,7 +330,7 @@ impl CircuitMatcher {
         Ok(file_name)
     }
 
-    /// Loads a matcher saved using [`CircuitMatcher::save_binary`].
+    /// Loads a matcher saved using [`PatternMatcher::save_binary`].
     pub fn load_binary(name: impl AsRef<Path>) -> Result<Self, MatcherSerialisationError> {
         let file = File::open(name)?;
         let mut reader = std::io::BufReader::new(file);
@@ -441,7 +441,7 @@ mod tests {
     use crate::utils::build_simple_circuit;
     use crate::T2Op;
 
-    use super::{CircuitMatcher, CircuitPattern};
+    use super::{CircuitPattern, PatternMatcher};
 
     static H_CX: OnceLock<Hugr> = OnceLock::new();
     static CX_CX: OnceLock<Hugr> = OnceLock::new();
@@ -475,7 +475,7 @@ mod tests {
         let circ = h_cx();
 
         let p = CircuitPattern::try_from_circuit(&circ).unwrap();
-        let m = CircuitMatcher::from_patterns(vec![p]);
+        let m = PatternMatcher::from_patterns(vec![p]);
 
         let matches = m.find_matches(&circ);
         assert_eq!(matches.len(), 1);
@@ -491,10 +491,10 @@ mod tests {
 
         // Estimate the size of the buffer based on the number of patterns and the size of each pattern
         let mut buf = Vec::with_capacity(patterns[0].n_edges() + patterns[1].n_edges());
-        let m = CircuitMatcher::from_patterns(patterns);
+        let m = PatternMatcher::from_patterns(patterns);
         m.save_binary_io(&mut buf).unwrap();
 
-        let m2 = CircuitMatcher::load_binary_io(&mut buf.as_slice()).unwrap();
+        let m2 = PatternMatcher::load_binary_io(&mut buf.as_slice()).unwrap();
         let mut buf2 = Vec::with_capacity(buf.len());
         m2.save_binary_io(&mut buf2).unwrap();
 

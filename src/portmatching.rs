@@ -5,7 +5,7 @@ pub mod pattern;
 #[cfg(feature = "pyo3")]
 mod pyo3;
 
-pub use matcher::{CircuitMatcher, PatternMatch};
+pub use matcher::{PatternMatch, PatternMatcher};
 pub use pattern::CircuitPattern;
 
 use hugr::Port;

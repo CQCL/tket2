@@ -11,7 +11,7 @@ use portmatching::{HashMap, PatternID};
 use pyo3::{create_exception, exceptions::PyException, prelude::*, types::PyIterator};
 use tket_json_rs::circuit_json::SerialCircuit;
 
-use super::{CircuitMatcher, CircuitPattern, PatternMatch};
+use super::{CircuitPattern, PatternMatch, PatternMatcher};
 use crate::circuit::Circuit;
 use crate::json::TKETDecode;
 use crate::rewrite::CircuitRewrite;
@@ -38,11 +38,11 @@ impl CircuitPattern {
 }
 
 #[pymethods]
-impl CircuitMatcher {
+impl PatternMatcher {
     /// Construct a matcher from a list of patterns.
     #[new]
     pub fn py_from_patterns(patterns: &PyIterator) -> PyResult<Self> {
-        Ok(CircuitMatcher::from_patterns(
+        Ok(PatternMatcher::from_patterns(
             patterns
                 .iter()?
                 .map(|p| p?.extract::<CircuitPattern>())
@@ -118,7 +118,7 @@ impl PyPatternMatch {
     pub fn try_from_rust<'circ, C: Circuit<'circ>>(
         m: PatternMatch<'circ, C>,
         circ: &C,
-        matcher: &CircuitMatcher,
+        matcher: &PatternMatcher,
     ) -> PyResult<Self> {
         let pattern_id = m.pattern_id();
         let pattern = matcher.get_pattern(pattern_id).unwrap();

@@ -3,7 +3,7 @@
 //! Circuits are clustered in equivalence classes based on whether they
 //! represent the same unitary.
 //!
-//! This rewriter uses the [`CircuitMatcher`] to find known subcircuits and
+//! This rewriter uses the [`PatternMatcher`] to find known subcircuits and
 //! generates rewrites to replace them with other circuits within the same
 //! equivalence class.
 //!
@@ -26,7 +26,7 @@ use hugr::{
 use crate::{
     circuit::Circuit,
     passes::taso::{load_eccs_json_file, EqCircClass},
-    portmatching::{CircuitMatcher, CircuitPattern},
+    portmatching::{CircuitPattern, PatternMatcher},
 };
 
 use super::{CircuitRewrite, Rewriter};
@@ -42,7 +42,7 @@ struct TargetID(usize);
 /// circuits.
 pub struct ECCRewriter {
     /// Matcher for finding patterns.
-    matcher: CircuitMatcher,
+    matcher: PatternMatcher,
     /// Targets of some rewrite rules.
     targets: Vec<Hugr>,
     /// Rewrites, stored as a map from the source PatternID to possibly multiple
@@ -79,7 +79,7 @@ impl ECCRewriter {
             .filter_map(|(p, r)| Some((p?, r)))
             .unzip();
         let targets = into_targets(eccs);
-        let matcher = CircuitMatcher::from_patterns(patterns);
+        let matcher = PatternMatcher::from_patterns(patterns);
         Self {
             matcher,
             targets,
