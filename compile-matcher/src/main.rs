@@ -9,7 +9,7 @@ use itertools::Itertools;
 
 use tket2::json::load_tk1_json_file;
 // Import the CircuitMatcher struct and its methods
-use tket2::passes::taso::rep_sets_from_path;
+use tket2::passes::taso::load_eccs_json_file;
 use tket2::portmatching::{CircuitMatcher, CircuitPattern};
 
 /// Program to precompile patterns from files into a CircuitMatcher stored as binary file.
@@ -45,7 +45,7 @@ fn main() {
 
     let all_circs = if input_path.is_file() {
         // Input is an ECC file in JSON format
-        let eccs = rep_sets_from_path(input_path);
+        let eccs = load_eccs_json_file(input_path);
         eccs.into_iter()
             .flat_map(|ecc| ecc.into_circuits())
             .collect_vec()
