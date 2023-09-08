@@ -8,7 +8,6 @@ use std::iter::FusedIterator;
 use hugr::hugr::views::HierarchyView;
 use hugr::ops::{OpTag, OpTrait};
 use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
-use portgraph::PortOffset;
 
 use super::Circuit;
 
@@ -107,7 +106,7 @@ where
                 optype
                     .static_input()
                     // TODO query optype for this port once it is available in hugr.
-                    .map(|_| PortOffset::new_incoming(sig.input.len()).into()),
+                    .map(|_| Port::new_incoming(sig.input.len())),
             )
             .filter_map(|port| {
                 let (from, from_port) = self.circ.linked_ports(node, port).next()?;

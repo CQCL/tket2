@@ -184,9 +184,9 @@ pub fn symbolic_constant_op(s: &str) -> OpType {
     let l: LeafOp = EXTENSION
         .instantiate_extension_op(
             &SYM_OP_ID,
-            vec![TypeArg::Opaque(
-                CustomTypeArg::new(SYM_EXPR_T, value).unwrap(),
-            )],
+            vec![TypeArg::Opaque {
+                arg: CustomTypeArg::new(SYM_EXPR_T, value).unwrap(),
+            }],
         )
         .unwrap()
         .into();
@@ -202,11 +202,11 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<&str> {
             {
                 // TODO also check extension name
 
-                let Some(TypeArg::Opaque(s)) = e.args().get(0) else {
+                let Some(TypeArg::Opaque { arg }) = e.args().get(0) else {
                     panic!("should be an opaque type arg.")
                 };
 
-                let serde_yaml::Value::String(s) = &s.value else {
+                let serde_yaml::Value::String(s) = &arg.value else {
                     panic!("unexpected yaml value.")
                 };
 

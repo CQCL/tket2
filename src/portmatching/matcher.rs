@@ -8,17 +8,8 @@ use std::{
 };
 
 use super::{CircuitPattern, PEdge, PNode};
-use hugr::{
-    hugr::views::{
-        sibling::{
-            ConvexChecker, InvalidReplacement,
-            InvalidSubgraph::{self},
-        },
-        SiblingSubgraph,
-    },
-    ops::OpType,
-    Hugr, Node, Port,
-};
+use hugr::hugr::views::sibling_subgraph::{ConvexChecker, InvalidReplacement, InvalidSubgraph};
+use hugr::{hugr::views::SiblingSubgraph, ops::OpType, Hugr, Node, Port};
 use itertools::Itertools;
 use portmatching::{
     automaton::{LineBuilder, ScopeAutomaton},
@@ -82,7 +73,7 @@ pub struct PatternMatch<'a, C> {
     pub(super) root: Node,
 }
 
-impl<'a, C: Circuit<'a>> PatternMatch<'a, C> {
+impl<'a, C: Circuit<'a> + Clone> PatternMatch<'a, C> {
     /// The matcher's pattern ID of the match.
     pub fn pattern_id(&self) -> PatternID {
         self.pattern
@@ -246,7 +237,10 @@ impl PatternMatcher {
     }
 
     /// Find all convex pattern matches in a circuit.
-    pub fn find_matches<'a, C: Circuit<'a>>(&self, circuit: &'a C) -> Vec<PatternMatch<'a, C>> {
+    pub fn find_matches<'a, C: Circuit<'a> + Clone>(
+        &self,
+        circuit: &'a C,
+    ) -> Vec<PatternMatch<'a, C>> {
         let mut checker = ConvexChecker::new(circuit);
         circuit
             .commands()
@@ -255,7 +249,7 @@ impl PatternMatcher {
     }
 
     /// Find all convex pattern matches in a circuit rooted at a given node.
-    fn find_rooted_matches<'a, C: Circuit<'a>>(
+    fn find_rooted_matches<'a, C: Circuit<'a> + Clone>(
         &self,
         circ: &'a C,
         root: Node,

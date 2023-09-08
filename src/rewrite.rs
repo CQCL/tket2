@@ -7,12 +7,9 @@ pub use ecc_rewriter::ECCRewriter;
 
 use delegate::delegate;
 use derive_more::{From, Into};
+use hugr::hugr::views::sibling_subgraph::InvalidReplacement;
 use hugr::{
-    hugr::{
-        hugrmut::HugrMut,
-        views::{sibling::InvalidReplacement, SiblingSubgraph},
-        Rewrite, SimpleReplacementError,
-    },
+    hugr::{hugrmut::HugrMut, views::SiblingSubgraph, Rewrite, SimpleReplacementError},
     Hugr, HugrView, SimpleReplacement,
 };
 
@@ -55,5 +52,5 @@ impl CircuitRewrite {
 /// Generate rewrite rules for circuits.
 pub trait Rewriter {
     /// Get the rewrite rules for a circuit.
-    fn get_rewrites<'a, C: Circuit<'a>>(&'a self, circ: &'a C) -> Vec<CircuitRewrite>;
+    fn get_rewrites<'a, C: Circuit<'a> + Clone>(&'a self, circ: &'a C) -> Vec<CircuitRewrite>;
 }
