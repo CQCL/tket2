@@ -43,6 +43,7 @@ impl Command {
     }
 }
 
+/// A non-borrowing topological walker over the nodes of a circuit.
 type NodeWalker = pv::Topo<Node, HashSet<Node>>;
 
 /// An iterator over the commands of a circuit.
