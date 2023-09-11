@@ -172,7 +172,7 @@ mod tests {
         assert_eq!(circ.linear_units().count(), 3);
         assert_eq!(circ.qubits().count(), 2);
 
-        assert!(circ.linear_units().all(|(unit, _)| unit.is_linear()));
-        assert!(circ.nonlinear_units().all(|(unit, _)| unit.is_wire()));
+        assert!(circ.linear_units().all(|(unit, _, _)| unit.is_linear()));
+        assert!(circ.nonlinear_units().all(|(unit, _, _)| unit.is_wire()));
     }
 }
