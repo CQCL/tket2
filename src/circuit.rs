@@ -7,7 +7,6 @@ mod units;
 pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
 
-use hugr::hugr::NodeType;
 use hugr::HugrView;
 
 pub use hugr::ops::OpType;
@@ -79,7 +78,7 @@ pub trait Circuit: HugrView {
     where
         Self: Sized,
     {
-        Units::new_input(self, UnitType::All)
+        Units::new_circ_input(self, UnitType::All)
     }
 
     /// Get the linear input units of the circuit and their types.
@@ -88,7 +87,7 @@ pub trait Circuit: HugrView {
     where
         Self: Sized,
     {
-        Units::new_input(self, UnitType::Linear)
+        Units::new_circ_input(self, UnitType::Linear)
     }
 
     /// Get the non-linear input units of the circuit and their types.
@@ -97,7 +96,7 @@ pub trait Circuit: HugrView {
     where
         Self: Sized,
     {
-        Units::new_input(self, UnitType::NonLinear)
+        Units::new_circ_input(self, UnitType::NonLinear)
     }
 
     /// Returns the units corresponding to qubits inputs to the circuit.
@@ -106,7 +105,7 @@ pub trait Circuit: HugrView {
     where
         Self: Sized,
     {
-        Units::new_input(self, UnitType::Qubits)
+        Units::new_circ_input(self, UnitType::Qubits)
     }
 
     /// Returns all the commands in the circuit, in some topological order.
@@ -119,16 +118,6 @@ pub trait Circuit: HugrView {
     {
         // Traverse the circuit in topological order.
         CommandIterator::new(self)
-    }
-
-    /// Returns the [`NodeType`] of a command.
-    fn command_nodetype(&self, command: &Command) -> &NodeType {
-        self.get_nodetype(command.node())
-    }
-
-    /// Returns the [`OpType`] of a command.
-    fn command_optype(&self, command: &Command) -> &OpType {
-        self.get_optype(command.node())
     }
 }
 

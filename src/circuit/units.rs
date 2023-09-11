@@ -6,28 +6,37 @@ use hugr::extension::prelude;
 use hugr::hugr::CircuitUnit;
 use hugr::ops::OpTrait;
 use hugr::types::{Type, TypeBound, TypeRow};
-use hugr::{Node, Port, Wire};
+use hugr::{Direction, Node, Port, Wire};
 
 use super::Circuit;
 
-/// An iterator over the units at the output of a [Node].
+/// A linear unit id, used in [`CircuitUnit::Linear`].
+// TODO: Add this to hugr?
+pub type LinearUnit = usize;
+
+/// An iterator over the units in the input or output boundary of a [Node].
 #[derive(Clone, Debug)]
 pub struct Units<LA = ()> {
-    /// Whether to only.
-    output_mode: UnitType,
-    /// The types of the node outputs.
+    /// Filter over the yielded units.
+    ///
+    /// It can be set to ignore non-linear units, only yield qubits, between
+    /// other options. See [`UnitType`] for more information.
+    mode: UnitType,
+    /// The node of the circuit.
+    node: Node,
+    /// The direction of the boundary.
+    direction: Direction,
+    /// The types of the boundary.
     //
     // TODO: We could avoid cloning the TypeRow if `OpType::signature` returned
     // a reference.
-    node_output_types: TypeRow,
-    /// The node of the circuit.
-    node: Node,
-    /// The current index in the inputs.
-    pub(self) current: usize,
+    type_row: TypeRow,
+    /// The current index in the type row.
+    current: usize,
     /// The amount of linear units yielded.
     linear_count: usize,
-    /// A pre-set assignment of units that maps linear output ports to
-    /// [`CircuitUnit`] ids.
+    /// A pre-set assignment of units that maps linear ports to
+    /// [`CircuitUnit::Linear`] ids.
     ///
     /// The default type is `()`, which assigns new linear ids sequentially.
     unit_assigner: LA,
@@ -39,13 +48,14 @@ impl Units<()> {
     /// This iterator will yield all units originating from the circuit's input
     /// node.
     #[inline]
-    pub(super) fn new_input(circuit: &impl Circuit, output_mode: UnitType) -> Self {
+    pub(super) fn new_circ_input(circuit: &impl Circuit, output_mode: UnitType) -> Self {
         Self {
-            output_mode,
-            node_output_types: circuit
+            mode: output_mode,
+            node: circuit.input(),
+            direction: Direction::Outgoing,
+            type_row: circuit
                 .get_function_type()
                 .map_or_else(Default::default, |ft| ft.input.clone()),
-            node: circuit.input(),
             current: 0,
             linear_count: 0,
             unit_assigner: (),
@@ -62,17 +72,23 @@ where
     // Note that this ignores any incoming linear unit labels, and just assigns
     // new unit ids sequentially.
     #[inline]
-    #[allow(unused)]
     pub(super) fn new(
         circuit: &impl Circuit,
         node: Node,
+        direction: Direction,
         output_mode: UnitType,
         unit_assigner: LA,
     ) -> Self {
+        let sig = circuit.get_optype(node).signature();
+        let type_row = match direction {
+            Direction::Outgoing => sig.output,
+            Direction::Incoming => sig.input,
+        };
         Self {
-            output_mode,
-            node_output_types: circuit.get_optype(node).signature().output,
+            mode: output_mode,
             node,
+            direction,
+            type_row,
             current: 0,
             linear_count: 0,
             unit_assigner,
@@ -80,50 +96,54 @@ where
     }
 
     /// Construct an output value to yield.
+    ///
+    /// Calls [`LinearUnitAssigner::assign`] to assign a linear unit id to the linear ports.
+    /// Non-linear ports are assigned [`CircuitUnit::Wire`]s.
     #[inline]
     fn make_value(&self, typ: &Type, port: Port) -> (CircuitUnit, Port, Type) {
-        match type_is_linear(typ) {
-            true => (
-                self.unit_assigner.assign(port, self.linear_count - 1),
-                port,
-                typ.clone(),
-            ),
-            false => (
-                CircuitUnit::Wire(Wire::new(self.node, port)),
-                port,
-                typ.clone(),
-            ),
-        }
+        let unit = if type_is_linear(typ) {
+            let linear_unit = self.unit_assigner.assign(port, self.linear_count - 1);
+            CircuitUnit::Linear(linear_unit)
+        } else {
+            match self.direction {
+                Direction::Outgoing => CircuitUnit::Wire(Wire::new(self.node, port)),
+                Direction::Incoming => CircuitUnit::Wire(Wire::new(self.node, port)),
+            }
+        };
+        (unit, port, typ.clone())
     }
 }
 
-impl Iterator for Units {
+impl<LA> Iterator for Units<LA>
+where
+    LA: LinearUnitAssigner,
+{
     type Item = (CircuitUnit, Port, Type);
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let typ = self.node_output_types.get(self.current)?;
-            let port = Port::new_outgoing(self.current);
+            let typ = self.type_row.get(self.current)?;
+            let port = Port::new(self.direction, self.current);
             self.current += 1;
             if type_is_linear(typ) {
                 self.linear_count += 1;
             }
-            if self.output_mode.accept(typ) {
+            if self.mode.accept(typ) {
                 return Some(self.make_value(typ, port));
             }
         }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = self.node_output_types.len() - self.current;
-        match self.output_mode {
+        let len = self.type_row.len() - self.current;
+        match self.mode {
             UnitType::All => (len, Some(len)),
             _ => (0, Some(len)),
         }
     }
 }
 
-impl FusedIterator for Units {}
+impl<LA> FusedIterator for Units<LA> where LA: LinearUnitAssigner {}
 
 /// What kind of units to iterate over.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -154,18 +174,16 @@ impl UnitType {
 /// A map for assigning linear unit ids to ports.
 pub trait LinearUnitAssigner {
     /// Assign a linear unit id to an output port.
-    fn assign(&self, port: Port, unit: usize) -> CircuitUnit;
+    ///
+    /// # Parameters
+    /// - port: The node's port in the node.
+    /// - linear_count: The number of linear units yielded so far.
+    fn assign(&self, port: Port, linear_count: usize) -> LinearUnit;
 }
 
 impl LinearUnitAssigner for () {
-    fn assign(&self, _port: Port, unit: usize) -> CircuitUnit {
-        CircuitUnit::Linear(unit)
-    }
-}
-
-impl<'a> LinearUnitAssigner for &'a Vec<usize> {
-    fn assign(&self, _port: Port, unit: usize) -> CircuitUnit {
-        CircuitUnit::Linear(self[unit])
+    fn assign(&self, _port: Port, linear_count: usize) -> LinearUnit {
+        linear_count
     }
 }
 

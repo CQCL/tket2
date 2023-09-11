@@ -5,9 +5,11 @@
 use std::collections::{HashMap, HashSet};
 use std::iter::FusedIterator;
 
+use hugr::hugr::NodeType;
 use hugr::ops::{OpTag, OpTrait};
 use petgraph::visit as pv;
 
+use super::units::{LinearUnit, LinearUnitAssigner, UnitType, Units};
 use super::Circuit;
 
 pub use hugr::hugr::CircuitUnit;
@@ -16,30 +18,109 @@ pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Direction, Node, Port, Wire};
 
 /// An operation applied to specific wires.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Command {
+#[derive(Eq, PartialOrd, Ord, Hash)]
+pub struct Command<'circ, Circ> {
+    /// The circuit.
+    circ: &'circ Circ,
     /// The operation node.
     node: Node,
-    /// The input units to the operation.
-    inputs: Vec<CircuitUnit>,
-    /// The output units to the operation.
-    outputs: Vec<CircuitUnit>,
+    /// An assignment of linear units to the node's ports.
+    linear_units: Vec<Option<LinearUnit>>,
 }
 
-impl Command {
+impl<'circ, Circ: Circuit> Command<'circ, Circ> {
     /// Returns the node corresponding to this command.
     pub fn node(&self) -> Node {
         self.node
     }
 
-    /// Returns the output units of this command.
-    pub fn outputs(&self) -> &Vec<CircuitUnit> {
-        &self.outputs
+    /// Returns the [`NodeType`] of the command.
+    pub fn nodetype(&self) -> &NodeType {
+        self.circ.get_nodetype(self.node)
+    }
+
+    /// Returns the [`OpType`] of the command.
+    pub fn optype(&self) -> &OpType {
+        self.circ.get_optype(self.node)
     }
 
     /// Returns the output units of this command.
-    pub fn inputs(&self) -> &Vec<CircuitUnit> {
-        &self.inputs
+    pub fn outputs(&self) -> Units<&'_ Self> {
+        Units::new(
+            self.circ,
+            self.node,
+            Direction::Outgoing,
+            UnitType::All,
+            self,
+        )
+    }
+
+    /// Returns the output wires of this command.
+    pub fn output_wires(&self) -> impl FusedIterator<Item = (CircuitUnit, Wire)> + '_ {
+        self.outputs()
+            .map(|(unit, port, _)| (unit, Wire::new(self.node, port)))
+    }
+
+    /// Returns the output units of this command.
+    pub fn inputs(&self) -> Units<&'_ Self> {
+        Units::new(
+            self.circ,
+            self.node,
+            Direction::Incoming,
+            UnitType::All,
+            self,
+        )
+    }
+
+    /// Returns the number of inputs of this command.
+    pub fn input_count(&self) -> usize {
+        self.optype().signature().input_count()
+    }
+
+    /// Returns the number of outputs of this command.
+    pub fn output_count(&self) -> usize {
+        self.optype().signature().output_count()
+    }
+}
+
+impl<'a, 'circ, Circ> LinearUnitAssigner for &'a Command<'circ, Circ> {
+    fn assign(&self, port: Port, _linear_count: usize) -> LinearUnit {
+        self.linear_units
+            .get(port.index())
+            .copied()
+            .flatten()
+            .unwrap_or_else(|| {
+                panic!(
+                    "Could not assign a linear unit to port {port:?} of node {:?}",
+                    self.node
+                )
+            })
+    }
+}
+
+impl<'circ, Circ: Circuit> std::fmt::Debug for Command<'circ, Circ> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Command")
+            .field("circ", &self.circ.name())
+            .field("node", &self.node)
+            .field("linear_units", &self.linear_units)
+            .finish()
+    }
+}
+
+impl<'circ, Circ> PartialEq for Command<'circ, Circ> {
+    fn eq(&self, other: &Self) -> bool {
+        self.node == other.node && self.linear_units == other.linear_units
+    }
+}
+
+impl<'circ, Circ> Clone for Command<'circ, Circ> {
+    fn clone(&self) -> Self {
+        Self {
+            circ: self.circ,
+            node: self.node,
+            linear_units: self.linear_units.clone(),
+        }
     }
 }
 
@@ -75,15 +156,12 @@ where
 {
     /// Create a new iterator over the commands of a circuit.
     pub(super) fn new(circ: &'circ Circ) -> Self {
-        // Initialize the linear units from the input's linear ports.
-        // TODO: Clean this up
-        let input_node_wires = circ
-            .node_outputs(circ.input())
-            .map(|port| Wire::new(circ.input(), port));
-        let wire_unit = input_node_wires
-            .zip(circ.linear_units())
-            .filter_map(|(wire, (unit, _, _))| match unit {
-                CircuitUnit::Linear(i) => Some((wire, i)),
+        // Initialize the map assigning linear units to the input's linear
+        // ports.
+        let wire_unit = circ
+            .units()
+            .filter_map(|(unit, port, _)| match unit {
+                CircuitUnit::Linear(i) => Some((Wire::new(circ.input(), port), i)),
                 _ => None,
             })
             .collect();
@@ -93,13 +171,19 @@ where
             circ,
             nodes,
             wire_unit,
-            remaining: circ.node_count() - 2,
+            // Ignore the input and output nodes, and the root.
+            remaining: circ.node_count() - 3,
         }
     }
 
-    /// Process a new node, updating wires in `unit_wires` and returns the
-    /// command for the node if it's not an input or output.
-    fn process_node(&mut self, node: Node) -> Option<Command> {
+    /// Process a new node, updating wires in `unit_wires`.
+    ///
+    /// Returns the an option with the `linear_units` used to construct a
+    /// [`Command`], if the node is not an input or output.
+    ///
+    /// We don't return the command directly to avoid lifetime issues due to the
+    /// mutable borrow here.
+    fn process_node(&mut self, node: Node) -> Option<Vec<Option<LinearUnit>>> {
         let optype = self.circ.get_optype(node);
         let sig = optype.signature();
 
@@ -110,7 +194,7 @@ where
 
         // Get the wire corresponding to each input unit.
         // TODO: Add this to HugrView?
-        let inputs: Vec<_> = sig
+        let _inputs: Vec<_> = sig
             .input_ports()
             .chain(
                 // add the static input port
@@ -158,11 +242,8 @@ where
                 optype.other_port_index(Direction::Outgoing).unwrap(),
             )))
         }
-        Some(Command {
-            node,
-            inputs,
-            outputs,
-        })
+
+        todo!()
     }
 
     /// Returns the linear port on the node that corresponds to the same linear unit.
@@ -187,16 +268,19 @@ impl<'circ, Circ> Iterator for CommandIterator<'circ, Circ>
 where
     Circ: Circuit,
 {
-    type Item = Command;
+    type Item = Command<'circ, Circ>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let node = self.nodes.next(&self.circ.as_petgraph())?;
-            let com = self.process_node(node);
-            if com.is_some() {
+            if let Some(linear_units) = self.process_node(node) {
                 self.remaining -= 1;
-                return com;
+                return Some(Command {
+                    circ: self.circ,
+                    node,
+                    linear_units,
+                });
             }
         }
     }
@@ -214,11 +298,20 @@ mod test {
     use hugr::hugr::views::{HierarchyView, SiblingGraph};
     use hugr::ops::OpName;
     use hugr::HugrView;
+    use itertools::Itertools;
+    use std::fmt::Debug;
 
     use crate::utils::build_simple_circuit;
     use crate::T2Op;
 
     use super::*;
+
+    fn assert_eq_iter<T>(x: impl Iterator<Item = T>, expected: impl IntoIterator<Item = T>)
+    where
+        T: PartialEq + Debug,
+    {
+        assert_eq!(x.collect_vec(), expected.into_iter().collect_vec());
+    }
 
     #[test]
     fn iterate_commands() {
@@ -239,31 +332,37 @@ mod test {
         let mut commands = CommandIterator::new(&circ);
 
         let hadamard = commands.next().unwrap();
-        assert_eq!(
-            circ.command_optype(&hadamard).name().as_str(),
-            t2op_name(T2Op::H)
+        assert_eq!(hadamard.optype().name().as_str(), t2op_name(T2Op::H));
+        assert_eq_iter(
+            hadamard.inputs().map(|(u, _, _)| u),
+            [CircuitUnit::Linear(0)],
         );
-        assert_eq!(hadamard.inputs(), &[CircuitUnit::Linear(0)]);
-        assert_eq!(hadamard.outputs(), &[CircuitUnit::Linear(0)]);
+        assert_eq_iter(
+            hadamard.outputs().map(|(u, _, _)| u),
+            [CircuitUnit::Linear(0)],
+        );
 
         let cx = commands.next().unwrap();
-        assert_eq!(
-            circ.command_optype(&cx).name().as_str(),
-            t2op_name(T2Op::CX)
+        assert_eq!(cx.optype().name().as_str(), t2op_name(T2Op::CX));
+        assert_eq_iter(
+            cx.inputs().map(|(unit, _, _)| unit),
+            [CircuitUnit::Linear(0), CircuitUnit::Linear(1)],
         );
-        assert_eq!(
-            cx.inputs(),
-            &[CircuitUnit::Linear(0), CircuitUnit::Linear(1)]
-        );
-        assert_eq!(
-            cx.outputs(),
-            &[CircuitUnit::Linear(0), CircuitUnit::Linear(1)]
+        assert_eq_iter(
+            cx.outputs().map(|(unit, _, _)| unit),
+            [CircuitUnit::Linear(0), CircuitUnit::Linear(1)],
         );
 
         let t = commands.next().unwrap();
-        assert_eq!(circ.command_optype(&t).name().as_str(), t2op_name(T2Op::T));
-        assert_eq!(t.inputs(), &[CircuitUnit::Linear(1)]);
-        assert_eq!(t.outputs(), &[CircuitUnit::Linear(1)]);
+        assert_eq!(t.optype().name().as_str(), t2op_name(T2Op::T));
+        assert_eq_iter(
+            t.inputs().map(|(unit, _, _)| unit),
+            [CircuitUnit::Linear(1)],
+        );
+        assert_eq_iter(
+            t.outputs().map(|(unit, _, _)| unit),
+            [CircuitUnit::Linear(1)],
+        );
 
         assert_eq!(commands.next(), None);
     }
