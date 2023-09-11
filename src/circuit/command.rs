@@ -2,10 +2,11 @@
 //!
 //! A [`Command`] is an operation applied to an specific wires, possibly identified by their index in the circuit's input vector.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::iter::FusedIterator;
 
 use hugr::ops::{OpTag, OpTrait};
+use petgraph::visit as pv;
 
 use super::Circuit;
 
@@ -42,17 +43,29 @@ impl Command {
     }
 }
 
+type NodeWalker = pv::Topo<Node, HashSet<Node>>;
+
 /// An iterator over the commands of a circuit.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct CommandIterator<'circ, Circ> {
-    /// The circuit
+    /// The circuit.
     circ: &'circ Circ,
-    /// Toposorted nodes
-    nodes: Vec<Node>,
-    /// Current element in `nodes`
-    current: usize,
-    /// Last wires for each linear `CircuitUnit`
+    /// Toposorted nodes.
+    nodes: NodeWalker,
+    /// Last wires for each linear `CircuitUnit`.
     wire_unit: HashMap<Wire, usize>,
+    /// Remaining commands, not counting I/O nodes.
+    remaining: usize,
+}
+
+impl<'circ, Circ: std::fmt::Debug> std::fmt::Debug for CommandIterator<'circ, Circ> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CommandIterator")
+            .field("circ", &self.circ)
+            .field("wire_unit", &self.wire_unit)
+            .field("remaining", &self.remaining)
+            .finish()
+    }
 }
 
 impl<'circ, Circ> CommandIterator<'circ, Circ>
@@ -74,12 +87,12 @@ where
             })
             .collect();
 
-        let nodes = petgraph::algo::toposort(&circ.as_petgraph(), None).unwrap();
+        let nodes = pv::Topo::new(&circ.as_petgraph());
         Self {
             circ,
             nodes,
-            current: 0,
             wire_unit,
+            remaining: circ.node_count() - 2,
         }
     }
 
@@ -173,15 +186,13 @@ where
 {
     type Item = Command;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if self.current == self.nodes.len() {
-                return None;
-            }
-            let node = self.nodes[self.current];
+            let node = self.nodes.next(&self.circ.as_petgraph())?;
             let com = self.process_node(node);
-            self.current += 1;
             if com.is_some() {
+                self.remaining -= 1;
                 return com;
             }
         }
@@ -189,7 +200,7 @@ where
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (0, Some(self.nodes.len() - self.current))
+        (self.remaining, Some(self.remaining))
     }
 }
 
