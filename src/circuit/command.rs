@@ -7,6 +7,7 @@ use std::iter::FusedIterator;
 
 use hugr::hugr::NodeType;
 use hugr::ops::{OpTag, OpTrait};
+use itertools::Itertools;
 use petgraph::visit as pv;
 
 use super::units::{LinearUnit, UnitLabeller, UnitType, Units};
@@ -33,55 +34,93 @@ pub struct Command<'circ, Circ> {
 
 impl<'circ, Circ: Circuit> Command<'circ, Circ> {
     /// Returns the node corresponding to this command.
+    #[inline]
     pub fn node(&self) -> Node {
         self.node
     }
 
     /// Returns the [`NodeType`] of the command.
+    #[inline]
     pub fn nodetype(&self) -> &NodeType {
         self.circ.get_nodetype(self.node)
     }
 
     /// Returns the [`OpType`] of the command.
+    #[inline]
     pub fn optype(&self) -> &OpType {
         self.circ.get_optype(self.node)
     }
 
-    /// Returns the output units of this command.
-    pub fn outputs(&self) -> Units<&'_ Self> {
-        Units::new(
-            self.circ,
-            self.node,
-            Direction::Outgoing,
-            UnitType::All,
-            self,
-        )
+    /// Returns the units of this command in a given direction.
+    #[inline]
+    pub fn units(&self, direction: Direction) -> Units<&'_ Self> {
+        Units::new(self.circ, self.node, direction, UnitType::All, self)
     }
 
-    /// Returns the output wires of this command.
-    pub fn output_wires(&self) -> impl FusedIterator<Item = (CircuitUnit, Wire)> + '_ {
+    /// Returns the linear units of this command in a given direction.
+    #[inline]
+    pub fn linear_units(&self, direction: Direction) -> Units<&'_ Self> {
+        Units::new(self.circ, self.node, direction, UnitType::Linear, self)
+    }
+
+    /// Returns the units and wires of this command in a given direction.
+    #[inline]
+    pub fn unit_wires(
+        &self,
+        direction: Direction,
+    ) -> impl IntoIterator<Item = (CircuitUnit, Wire)> + '_ {
+        self.units(direction)
+            .filter_map(|(unit, port, _)| Some((unit, self.assign_wire(self.node, port)?)))
+            .collect_vec()
+    }
+
+    /// Returns the output units of this command. See [`Command::units`].
+    #[inline]
+    pub fn outputs(&self) -> Units<&'_ Self> {
+        self.units(Direction::Outgoing)
+    }
+
+    /// Returns the linear output units of this command. See [`Command::linear_units`].
+    #[inline]
+    pub fn linear_outputs(&self) -> Units<&'_ Self> {
+        self.linear_units(Direction::Outgoing)
+    }
+
+    /// Returns the output units and wires of this command. See [`Command::unit_wires`].
+    #[inline]
+    pub fn output_wires(&self) -> impl IntoIterator<Item = (CircuitUnit, Wire)> + '_ {
+        // Specialized version of `self.unit_wires()` that avoids collecting a
+        // `Vec` since it doesn't need to borrow `self`.
         self.outputs()
             .map(|(unit, port, _)| (unit, Wire::new(self.node, port)))
     }
 
     /// Returns the output units of this command.
     pub fn inputs(&self) -> Units<&'_ Self> {
-        Units::new(
-            self.circ,
-            self.node,
-            Direction::Incoming,
-            UnitType::All,
-            self,
-        )
+        self.units(Direction::Incoming)
+    }
+
+    /// Returns the linear input units of this command. See [`Command::linear_units`].
+    #[inline]
+    pub fn linear_inputs(&self) -> Units<&'_ Self> {
+        self.linear_units(Direction::Incoming)
+    }
+
+    /// Returns the input units and wires of this command. See [`Command::unit_wires`].
+    #[inline]
+    pub fn input_wires(&self) -> impl IntoIterator<Item = (CircuitUnit, Wire)> + '_ {
+        self.unit_wires(Direction::Incoming)
     }
 
     /// Returns the number of inputs of this command.
+    #[inline]
     pub fn input_count(&self) -> usize {
         let optype = self.optype();
         optype.signature().input_count() + optype.static_input().is_some() as usize
     }
 
     /// Returns the number of outputs of this command.
+    #[inline]
     pub fn output_count(&self) -> usize {
         self.optype().signature().output_count()
     }
