@@ -158,6 +158,10 @@ impl JsonEncoder {
             })
             .collect_vec();
         if inputs.len() != command.input_count() {
+            debug_assert!(!matches!(
+                optype,
+                OpType::Const(_) | OpType::LoadConstant(_)
+            ));
             return false;
         }
 
