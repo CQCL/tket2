@@ -8,6 +8,7 @@ use super::json::op::JsonOp;
 use crate::ops::EXTENSION as T2EXTENSION;
 use hugr::extension::prelude::PRELUDE;
 use hugr::extension::{ExtensionId, ExtensionRegistry, SignatureError};
+use hugr::hugr::IdentList;
 use hugr::ops::custom::{ExternalOp, OpaqueOp};
 use hugr::ops::OpName;
 use hugr::std_extensions::arithmetic::float_types::extension as float_extension;
@@ -18,7 +19,7 @@ use lazy_static::lazy_static;
 use smol_str::SmolStr;
 
 /// The ID of the TKET1 extension.
-pub const TKET1_EXTENSION_ID: ExtensionId = SmolStr::new_inline("TKET1");
+pub const TKET1_EXTENSION_ID: ExtensionId = IdentList::new_unchecked("TKET1");
 
 /// The name for the linear bit custom type.
 pub const LINEAR_BIT_NAME: SmolStr = SmolStr::new_inline("LBit");

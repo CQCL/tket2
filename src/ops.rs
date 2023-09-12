@@ -24,7 +24,7 @@ use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
 use thiserror::Error;
 
 /// Name of tket 2 extension.
-pub const EXTENSION_ID: ExtensionId = ExtensionId::new_inline("quantum.tket2");
+pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("quantum.tket2");
 
 #[derive(
     Clone,
@@ -83,7 +83,8 @@ trait SimpleOpEnum: Into<&'static str> + FromStr + Copy + IntoEnumIterator {
     fn name(&self) -> &str {
         (*self).into()
     }
-    fn from_extension_name(extension: &str, op_name: &str) -> Result<Self, Self::LoadError>;
+    fn from_extension_name(extension: &ExtensionId, op_name: &str)
+        -> Result<Self, Self::LoadError>;
     fn try_from_op_def(op_def: &OpDef) -> Result<Self, Self::LoadError> {
         Self::from_extension_name(op_def.extension(), op_def.name())
     }
@@ -97,8 +98,11 @@ trait SimpleOpEnum: Into<&'static str> + FromStr + Copy + IntoEnumIterator {
     }
 }
 
-fn from_extension_name<T: SimpleOpEnum>(extension: &str, op_name: &str) -> Result<T, NotT2Op> {
-    if extension != EXTENSION_ID {
+fn from_extension_name<T: SimpleOpEnum>(
+    extension: &ExtensionId,
+    op_name: &str,
+) -> Result<T, NotT2Op> {
+    if extension != &EXTENSION_ID {
         return Err(NotT2Op);
     }
     T::from_str(op_name).map_err(|_| NotT2Op)
@@ -149,8 +153,11 @@ impl SimpleOpEnum for T2Op {
         )
     }
 
-    fn from_extension_name(extension: &str, op_name: &str) -> Result<Self, Self::LoadError> {
-        if extension != EXTENSION_ID {
+    fn from_extension_name(
+        extension: &ExtensionId,
+        op_name: &str,
+    ) -> Result<Self, Self::LoadError> {
+        if extension != &EXTENSION_ID {
             return Err(NotT2Op);
         }
         Self::from_str(op_name).map_err(|_| NotT2Op)

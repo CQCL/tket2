@@ -69,7 +69,7 @@ members = ["pyrs", "compile-matcher"]
 
 [workspace.dependencies]
 
-quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "e23323d" }
+quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "bc9692b" }
 portgraph = { version = "0.9", features = ["serde"] }
 pyo3 = { version = "0.19" }
 itertools = { version = "0.11.0" }

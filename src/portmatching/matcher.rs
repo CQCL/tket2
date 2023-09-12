@@ -63,8 +63,8 @@ impl TryFrom<OpType> for MatchOp {
 /// The pattern is identified by a [`PatternID`] that can be used to retrieve the
 /// pattern from the matcher.
 #[derive(Clone)]
-pub struct PatternMatch<'a, C> {
-    position: Subcircuit<'a, C>,
+pub struct PatternMatch {
+    position: Subcircuit,
     pattern: PatternID,
     /// The root of the pattern in the circuit.
     ///
@@ -73,7 +73,7 @@ pub struct PatternMatch<'a, C> {
     pub(super) root: Node,
 }
 
-impl<'a, C: Circuit + Clone> PatternMatch<'a, C> {
+impl PatternMatch {
     /// The matcher's pattern ID of the match.
     pub fn pattern_id(&self) -> PatternID {
         self.pattern
@@ -95,7 +95,7 @@ impl<'a, C: Circuit + Clone> PatternMatch<'a, C> {
     pub fn try_from_root_match(
         root: Node,
         pattern: PatternID,
-        circ: &'a C,
+        circ: &impl Circuit,
         matcher: &PatternMatcher,
     ) -> Result<Self, InvalidPatternMatch> {
         let mut checker = ConvexChecker::new(circ);
@@ -108,12 +108,12 @@ impl<'a, C: Circuit + Clone> PatternMatch<'a, C> {
     /// checker object to speed up convexity checking.
     ///
     /// See [`PatternMatch::try_from_root_match`] for more details.
-    pub fn try_from_root_match_with_checker(
+    pub fn try_from_root_match_with_checker<'c, C: Circuit>(
         root: Node,
         pattern: PatternID,
-        circ: &'a C,
+        circ: &'c C,
         matcher: &PatternMatcher,
-        checker: &mut ConvexChecker<'a, C>,
+        checker: &mut ConvexChecker<'c, C>,
     ) -> Result<Self, InvalidPatternMatch> {
         let pattern_ref = matcher
             .get_pattern(pattern)
@@ -148,7 +148,7 @@ impl<'a, C: Circuit + Clone> PatternMatch<'a, C> {
     pub fn try_from_io(
         root: Node,
         pattern: PatternID,
-        circ: &'a C,
+        circ: &impl Circuit,
         inputs: Vec<Vec<(Node, Port)>>,
         outputs: Vec<(Node, Port)>,
     ) -> Result<Self, InvalidPatternMatch> {
@@ -164,16 +164,15 @@ impl<'a, C: Circuit + Clone> PatternMatch<'a, C> {
     ///
     /// This checks at construction time that the match is convex. This will
     /// have runtime linear in the size of the circuit.
-    pub fn try_from_io_with_checker(
+    pub fn try_from_io_with_checker<'c, C: Circuit>(
         root: Node,
         pattern: PatternID,
-        circ: &'a C,
+        circ: &'c C,
         inputs: Vec<Vec<(Node, Port)>>,
         outputs: Vec<(Node, Port)>,
-        checker: &mut ConvexChecker<'a, C>,
+        checker: &mut ConvexChecker<'c, C>,
     ) -> Result<Self, InvalidPatternMatch> {
-        let subgraph =
-            SiblingSubgraph::try_from_boundary_ports_with_checker(circ, inputs, outputs, checker)?;
+        let subgraph = SiblingSubgraph::try_new_with_checker(inputs, outputs, circ, checker)?;
         Ok(Self {
             position: subgraph.into(),
             pattern,
@@ -182,12 +181,16 @@ impl<'a, C: Circuit + Clone> PatternMatch<'a, C> {
     }
 
     /// Construct a rewrite to replace `self` with `repl`.
-    pub fn to_rewrite(&self, repl: Hugr) -> Result<CircuitRewrite, InvalidReplacement> {
-        CircuitRewrite::try_new(&self.position, repl)
+    pub fn to_rewrite(
+        &self,
+        source: &Hugr,
+        target: Hugr,
+    ) -> Result<CircuitRewrite, InvalidReplacement> {
+        CircuitRewrite::try_new(&self.position, source, target)
     }
 }
 
-impl<'a, C: Circuit> Debug for PatternMatch<'a, C> {
+impl Debug for PatternMatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PatternMatch")
             .field("root", &self.root)
@@ -237,7 +240,7 @@ impl PatternMatcher {
     }
 
     /// Find all convex pattern matches in a circuit.
-    pub fn find_matches<'a, C: Circuit + Clone>(&self, circuit: &'a C) -> Vec<PatternMatch<'a, C>> {
+    pub fn find_matches<C: Circuit + Clone>(&self, circuit: &C) -> Vec<PatternMatch> {
         let mut checker = ConvexChecker::new(circuit);
         circuit
             .commands()
@@ -246,12 +249,12 @@ impl PatternMatcher {
     }
 
     /// Find all convex pattern matches in a circuit rooted at a given node.
-    fn find_rooted_matches<'a, C: Circuit + Clone>(
+    fn find_rooted_matches<'c, C: Circuit + Clone>(
         &self,
-        circ: &'a C,
+        circ: &'c C,
         root: Node,
-        checker: &mut ConvexChecker<'a, C>,
-    ) -> Vec<PatternMatch<'a, C>> {
+        checker: &mut ConvexChecker<'c, C>,
+    ) -> Vec<PatternMatch> {
         self.automaton
             .run(
                 root,
