@@ -4,7 +4,6 @@ use core::panic;
 use std::hash::{Hash, Hasher};
 
 use fxhash::{FxHashMap, FxHasher64};
-use hugr::hugr::views::HierarchyView;
 use hugr::ops::{LeafOp, OpName, OpTag, OpTrait, OpType};
 use hugr::types::TypeBound;
 use hugr::{HugrView, Node, Port};
@@ -29,14 +28,15 @@ pub trait CircuitHash<'circ>: HugrView {
 
 impl<'circ, T> CircuitHash<'circ> for T
 where
-    T: HugrView + HierarchyView<'circ>,
-    for<'a> &'a T:
-        pg::GraphBase<NodeId = Node> + pg::IntoNeighborsDirected + pg::IntoNodeIdentifiers,
+    T: HugrView,
 {
     fn circuit_hash(&'circ self) -> u64 {
         let mut hash_state = HashState::default();
 
-        for node in pg::Topo::new(self).iter(self).filter(|&n| n != self.root()) {
+        for node in pg::Topo::new(&self.as_petgraph())
+            .iter(&self.as_petgraph())
+            .filter(|&n| n != self.root())
+        {
             let hash = hash_node(self, node, &mut hash_state);
             hash_state.set_node(self, node, hash);
         }
