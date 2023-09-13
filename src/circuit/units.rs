@@ -87,7 +87,7 @@ where
         }
     }
 
-    /// Initialize the boudary types.
+    /// Initialize the boundary types.
     ///
     /// We use a [`TypeRow`] to avoid allocating for simple boundaries, but if
     /// any static port is present we create a new owned [`TypeRow`] with them included.
