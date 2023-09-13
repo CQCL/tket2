@@ -4,85 +4,177 @@ use std::iter::FusedIterator;
 
 use hugr::extension::prelude;
 use hugr::hugr::CircuitUnit;
-use hugr::types::{Type, TypeBound, TypeRow};
-use hugr::{Node, Port, Wire};
+use hugr::ops::OpTrait;
+use hugr::types::{EdgeKind, Type, TypeBound, TypeRow};
+use hugr::{Direction, Node, Port, Wire};
 
 use super::Circuit;
 
-/// An iterator over the units of a circuit.
-pub struct Units<'a> {
-    /// Whether to only
-    output_mode: UnitType,
-    /// The inputs to the circuit
-    inputs: Option<&'a TypeRow>,
-    /// Input node of the circuit
-    input_node: Node,
-    /// The current index in the inputs
+/// A linear unit id, used in [`CircuitUnit::Linear`].
+// TODO: Add this to hugr?
+pub type LinearUnit = usize;
+
+/// An iterator over the units in the input or output boundary of a [Node].
+#[derive(Clone, Debug)]
+pub struct Units<UL = ()> {
+    /// Filter over the yielded units.
+    ///
+    /// It can be set to ignore non-linear units, only yield qubits, between
+    /// other options. See [`UnitType`] for more information.
+    mode: UnitType,
+    /// The node of the circuit.
+    node: Node,
+    /// The direction of the boundary.
+    direction: Direction,
+    /// The types of the boundary.
+    types: TypeRow,
+    /// The current index in the type row.
     current: usize,
     /// The amount of linear units yielded.
     linear_count: usize,
+    /// A pre-set assignment of units that maps linear ports to
+    /// [`CircuitUnit::Linear`] ids.
+    ///
+    /// The default type is `()`, which assigns new linear ids sequentially.
+    unit_assigner: UL,
 }
 
-impl<'a> Units<'a> {
-    /// Create a new iterator over the units of a circuit.
-    pub(super) fn new(circuit: &'a impl Circuit, output_mode: UnitType) -> Self {
+impl Units<()> {
+    /// Create a new iterator over the input units of a circuit.
+    ///
+    /// This iterator will yield all units originating from the circuit's input
+    /// node.
+    #[inline]
+    pub(super) fn new_circ_input(circuit: &impl Circuit, output_mode: UnitType) -> Self {
         Self {
-            output_mode,
-            inputs: circuit.get_function_type().map(|ft| &ft.input),
-            input_node: circuit.input(),
+            mode: output_mode,
+            node: circuit.input(),
+            direction: Direction::Outgoing,
+            types: circuit
+                .get_function_type()
+                .map_or_else(Default::default, |ft| ft.input.clone()),
             current: 0,
             linear_count: 0,
+            unit_assigner: (),
         }
+    }
+}
+
+impl<UL> Units<UL>
+where
+    UL: UnitLabeller,
+{
+    /// Create a new iterator over the units of a node.
+    //
+    // Note that this ignores any incoming linear unit labels, and just assigns
+    // new unit ids sequentially.
+    #[inline]
+    #[allow(unused)]
+    pub(super) fn new(
+        circuit: &impl Circuit,
+        node: Node,
+        direction: Direction,
+        output_mode: UnitType,
+        unit_assigner: UL,
+    ) -> Self {
+        Self {
+            mode: output_mode,
+            node,
+            direction,
+            types: Self::init_types(circuit, node, direction),
+            current: 0,
+            linear_count: 0,
+            unit_assigner,
+        }
+    }
+
+    /// Initialize the boundary types.
+    ///
+    /// We use a [`TypeRow`] to avoid allocating for simple boundaries, but if
+    /// any static port is present we create a new owned [`TypeRow`] with them included.
+    //
+    // TODO: This is quite hacky, but we need it to accept Const static inputs.
+    // We should revisit it once this is reworked on the HUGR side.
+    fn init_types(circuit: &impl Circuit, node: Node, direction: Direction) -> TypeRow {
+        let optype = circuit.get_optype(node);
+        let sig = optype.signature();
+        let mut types = match direction {
+            Direction::Outgoing => sig.output,
+            Direction::Incoming => sig.input,
+        };
+        if let Some(other) = optype.static_input() {
+            if direction == Direction::Incoming {
+                types.to_mut().push(other);
+            }
+        }
+        if let Some(EdgeKind::Static(other)) = optype.other_port(direction) {
+            types.to_mut().push(other);
+        }
+        types
     }
 
     /// Construct an output value to yield.
-    fn make_value(&self, typ: &Type, input_port: Port) -> (CircuitUnit, Type) {
-        match type_is_linear(typ) {
-            true => (CircuitUnit::Linear(self.linear_count - 1), typ.clone()),
-            false => (
-                CircuitUnit::Wire(Wire::new(self.input_node, input_port)),
-                typ.clone(),
-            ),
-        }
+    ///
+    /// Calls [`UnitLabeller::assign_linear`] to assign a linear unit id to the linear ports.
+    /// Non-linear ports are assigned [`CircuitUnit::Wire`]s via [`UnitLabeller::assign_wire`].
+    #[inline]
+    fn make_value(&self, typ: &Type, port: Port) -> Option<(CircuitUnit, Port, Type)> {
+        let unit = if type_is_linear(typ) {
+            let linear_unit =
+                self.unit_assigner
+                    .assign_linear(self.node, port, self.linear_count - 1);
+            CircuitUnit::Linear(linear_unit)
+        } else {
+            let wire = self.unit_assigner.assign_wire(self.node, port)?;
+            CircuitUnit::Wire(wire)
+        };
+        Some((unit, port, typ.clone()))
     }
 }
 
-impl<'a> Iterator for Units<'a> {
-    type Item = (CircuitUnit, Type);
+impl<UL> Iterator for Units<UL>
+where
+    UL: UnitLabeller,
+{
+    type Item = (CircuitUnit, Port, Type);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let inputs = self.inputs?;
         loop {
-            let typ = inputs.get(self.current)?;
-            let input_port = Port::new_outgoing(self.current);
+            let typ = self.types.get(self.current)?;
+            let port = Port::new(self.direction, self.current);
             self.current += 1;
             if type_is_linear(typ) {
                 self.linear_count += 1;
             }
-            if self.output_mode.accept(typ) {
-                return Some(self.make_value(typ, input_port));
+            if self.mode.accept(typ) {
+                let val = self.make_value(typ, port);
+                if val.is_some() {
+                    return val;
+                }
             }
         }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = self
-            .inputs
-            .map(|inputs| inputs.len() - self.current)
-            .unwrap_or(0);
-        match self.output_mode {
-            UnitType::All => (len, Some(len)),
-            _ => (0, Some(len)),
+        let len = self.types.len() - self.current;
+        if self.mode == UnitType::All && self.direction == Direction::Outgoing {
+            (len, Some(len))
+        } else {
+            // Even when yielding every unit, a disconnected input non-linear
+            // port cannot be assigned a `CircuitUnit::Wire` and so it will be
+            // skipped.
+            (0, Some(len))
         }
     }
 }
 
-impl<'a> FusedIterator for Units<'a> {}
+impl<UL> FusedIterator for Units<UL> where UL: UnitLabeller {}
 
 /// What kind of units to iterate over.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(super) enum UnitType {
     /// All units.
+    #[default]
     All,
     /// Only the linear units.
     Linear,
@@ -100,6 +192,42 @@ impl UnitType {
             UnitType::Linear => type_is_linear(typ),
             UnitType::Qubits => *typ == prelude::QB_T,
             UnitType::NonLinear => !type_is_linear(typ),
+        }
+    }
+}
+
+/// An trait for assigning linear unit ids and wires to ports of a node.
+pub trait UnitLabeller {
+    /// Assign a linear unit id to an port.
+    ///
+    /// # Parameters
+    /// - node: The node in the circuit.
+    /// - port: The node's port in the node.
+    /// - linear_count: The number of linear units yielded so far.
+    fn assign_linear(&self, node: Node, port: Port, linear_count: usize) -> LinearUnit;
+
+    /// Assign a wire to a port, if possible.
+    ///
+    /// # Parameters
+    /// - node: The node in the circuit.
+    /// - port: The node's port in the node.
+    fn assign_wire(&self, node: Node, port: Port) -> Option<Wire>;
+}
+
+/// The default [`UnitLabeller`] that assigns new linear unit ids
+/// sequentially, and only assigns wires to an outgoing ports (as input ports
+/// require querying the HUGR for their neighbours).
+impl UnitLabeller for () {
+    #[inline]
+    fn assign_linear(&self, _: Node, _: Port, linear_count: usize) -> LinearUnit {
+        linear_count
+    }
+
+    #[inline]
+    fn assign_wire(&self, node: Node, port: Port) -> Option<Wire> {
+        match port.direction() {
+            Direction::Incoming => None,
+            Direction::Outgoing => Some(Wire::new(node, port)),
         }
     }
 }

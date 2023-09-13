@@ -68,7 +68,7 @@ where
             .map(|port| Wire::new(circ.input(), port));
         let wire_unit = input_node_wires
             .zip(circ.linear_units())
-            .filter_map(|(wire, (unit, _))| match unit {
+            .filter_map(|(wire, (unit, _, _))| match unit {
                 CircuitUnit::Linear(i) => Some((wire, i)),
                 _ => None,
             })

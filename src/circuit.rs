@@ -75,38 +75,38 @@ pub trait Circuit: HugrView {
 
     /// Get the input units of the circuit and their types.
     #[inline]
-    fn units(&self) -> Units<'_>
+    fn units(&self) -> Units
     where
         Self: Sized,
     {
-        Units::new(self, UnitType::All)
+        Units::new_circ_input(self, UnitType::All)
     }
 
     /// Get the linear input units of the circuit and their types.
     #[inline]
-    fn linear_units(&self) -> Units<'_>
+    fn linear_units(&self) -> Units
     where
         Self: Sized,
     {
-        Units::new(self, UnitType::Linear)
+        Units::new_circ_input(self, UnitType::Linear)
     }
 
     /// Get the non-linear input units of the circuit and their types.
     #[inline]
-    fn nonlinear_units(&self) -> Units<'_>
+    fn nonlinear_units(&self) -> Units
     where
         Self: Sized,
     {
-        Units::new(self, UnitType::NonLinear)
+        Units::new_circ_input(self, UnitType::NonLinear)
     }
 
     /// Returns the units corresponding to qubits inputs to the circuit.
     #[inline]
-    fn qubits(&self) -> Units<'_>
+    fn qubits(&self) -> Units
     where
         Self: Sized,
     {
-        Units::new(self, UnitType::Qubits)
+        Units::new_circ_input(self, UnitType::Qubits)
     }
 
     /// Returns all the commands in the circuit, in some topological order.
@@ -172,7 +172,7 @@ mod tests {
         assert_eq!(circ.linear_units().count(), 3);
         assert_eq!(circ.qubits().count(), 2);
 
-        assert!(circ.linear_units().all(|(unit, _)| unit.is_linear()));
-        assert!(circ.nonlinear_units().all(|(unit, _)| unit.is_wire()));
+        assert!(circ.linear_units().all(|(unit, _, _)| unit.is_linear()));
+        assert!(circ.nonlinear_units().all(|(unit, _, _)| unit.is_wire()));
     }
 }

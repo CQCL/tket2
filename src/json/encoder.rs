@@ -49,7 +49,7 @@ impl JsonEncoder {
         // TODO Throw an error on non-recognized unit types, or just ignore?
         let mut bit_units = HashMap::new();
         let mut qubit_units = HashMap::new();
-        for (unit, ty) in circ.units() {
+        for (unit, _, ty) in circ.units() {
             if ty == QB_T {
                 let index = vec![qubit_units.len() as i64];
                 let reg = circuit_json::Register("q".to_string(), index);
