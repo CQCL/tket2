@@ -18,7 +18,14 @@ fn add_circuit_module(py: Python, parent: &PyModule) -> PyResult<()> {
     let m = PyModule::new(py, "circuit")?;
     m.add_class::<tket2::T2Op>()?;
     m.add_class::<tket2::Pauli>()?;
-    m.add("OpConvertError", py.get_type::<tket2::json::PyOpConvertError>())?;
+    m.add(
+        "ValidationError",
+        py.get_type::<hugr::hugr::validate::PyValidationError>(),
+    )?;
+    m.add(
+        "OpConvertError",
+        py.get_type::<tket2::json::PyOpConvertError>(),
+    )?;
     parent.add_submodule(m)
 }
 
@@ -27,7 +34,13 @@ fn add_pattern_module(py: Python, parent: &PyModule) -> PyResult<()> {
     let m = PyModule::new(py, "pattern")?;
     m.add_class::<tket2::portmatching::CircuitPattern>()?;
     m.add_class::<tket2::portmatching::PatternMatcher>()?;
-    m.add("InvalidPatternError", py.get_type::<tket2::portmatching::pattern::PyInvalidPatternError>())?;
-    m.add("InvalidReplacementError", py.get_type::<hugr::hugr::views::sibling_subgraph::PyInvalidReplacementError>())?;
+    m.add(
+        "InvalidPatternError",
+        py.get_type::<tket2::portmatching::pattern::PyInvalidPatternError>(),
+    )?;
+    m.add(
+        "InvalidReplacementError",
+        py.get_type::<hugr::hugr::views::sibling_subgraph::PyInvalidReplacementError>(),
+    )?;
     parent.add_submodule(m)
 }

@@ -13,7 +13,7 @@ use super::{
 use crate::circuit::Circuit;
 
 #[cfg(feature = "pyo3")]
-use pyo3::{PyErr, exceptions::PyException, create_exception, pyclass};
+use pyo3::{create_exception, exceptions::PyException, pyclass, PyErr};
 
 /// A pattern that match a circuit exactly
 #[cfg_attr(feature = "pyo3", pyclass)]
@@ -114,7 +114,10 @@ impl From<NoRootFound> for InvalidPattern {
 }
 
 #[cfg(feature = "pyo3")]
-create_exception!(pyrs, PyInvalidPatternError, PyException,
+create_exception!(
+    pyrs,
+    PyInvalidPatternError,
+    PyException,
     "Invalid circuit pattern"
 );
 

@@ -8,7 +8,7 @@ pub mod op;
 mod tests;
 
 #[cfg(feature = "pyo3")]
-use pyo3::{PyErr, exceptions::PyException, create_exception};
+use pyo3::{create_exception, exceptions::PyException, PyErr};
 
 use std::path::Path;
 use std::{fs, io};
@@ -88,7 +88,10 @@ pub enum OpConvertError {
 }
 
 #[cfg(feature = "pyo3")]
-create_exception!(pyrs, PyOpConvertError, PyException,
+create_exception!(
+    pyrs,
+    PyOpConvertError,
+    PyException,
     "Error type for conversion between tket2's `Op` and `OpType`"
 );
 
