@@ -196,7 +196,7 @@ impl UnitType {
     }
 }
 
-/// An trait for assigning linear unit ids and wires to ports of a node.
+/// A trait for assigning linear unit ids and wires to ports of a node.
 pub trait UnitLabeller {
     /// Assign a linear unit id to an port.
     ///
