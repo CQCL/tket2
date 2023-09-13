@@ -96,14 +96,16 @@ impl ECCRewriter {
 }
 
 impl Rewriter for ECCRewriter {
-    fn get_rewrites<'a, C: Circuit<'a>>(&'a self, circ: &'a C) -> Vec<CircuitRewrite> {
+    fn get_rewrites<C: Circuit + Clone>(&self, circ: &C) -> Vec<CircuitRewrite> {
         let matches = self.matcher.find_matches(circ);
         matches
             .into_iter()
             .flat_map(|m| {
                 let pattern_id = m.pattern_id();
-                self.get_targets(pattern_id)
-                    .map(move |repl| m.to_rewrite(repl.clone()).expect("invalid replacement"))
+                self.get_targets(pattern_id).map(move |repl| {
+                    m.to_rewrite(circ.base_hugr(), repl.clone())
+                        .expect("invalid replacement")
+                })
             })
             .collect()
     }

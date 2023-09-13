@@ -121,8 +121,8 @@ impl PyPatternMatch {
     ///
     /// Requires references to the circuit and pattern to resolve indices
     /// into these objects.
-    pub fn try_from_rust<'circ, C: Circuit<'circ>>(
-        m: PatternMatch<'circ, C>,
+    pub fn try_from_rust<C: Circuit + Clone>(
+        m: PatternMatch,
         circ: &C,
         matcher: &PatternMatcher,
     ) -> PyResult<Self> {
@@ -176,7 +176,7 @@ impl PyPatternMatch {
             outputs,
         )
         .expect("Invalid PyCircuitMatch object")
-        .to_rewrite(pyobj_as_hugr(replacement)?)
+        .to_rewrite(&hugr, pyobj_as_hugr(replacement)?)
         .map_err(|e| PyInvalidReplacement::new_err(e.to_string()))
     }
 }

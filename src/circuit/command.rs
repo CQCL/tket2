@@ -5,10 +5,7 @@
 use std::collections::HashMap;
 use std::iter::FusedIterator;
 
-use hugr::hugr::views::HierarchyView;
 use hugr::ops::{OpTag, OpTrait};
-use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
-use portgraph::PortOffset;
 
 use super::Circuit;
 
@@ -60,8 +57,7 @@ pub struct CommandIterator<'circ, Circ> {
 
 impl<'circ, Circ> CommandIterator<'circ, Circ>
 where
-    Circ: HierarchyView<'circ>,
-    for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
+    Circ: Circuit,
 {
     /// Create a new iterator over the commands of a circuit.
     pub(super) fn new(circ: &'circ Circ) -> Self {
@@ -78,7 +74,7 @@ where
             })
             .collect();
 
-        let nodes = petgraph::algo::toposort(circ, None).unwrap();
+        let nodes = petgraph::algo::toposort(&circ.as_petgraph(), None).unwrap();
         Self {
             circ,
             nodes,
@@ -107,7 +103,7 @@ where
                 optype
                     .static_input()
                     // TODO query optype for this port once it is available in hugr.
-                    .map(|_| PortOffset::new_incoming(sig.input.len()).into()),
+                    .map(|_| Port::new_incoming(sig.input.len())),
             )
             .filter_map(|port| {
                 let (from, from_port) = self.circ.linked_ports(node, port).next()?;
@@ -158,8 +154,7 @@ where
 
 impl<'circ, Circ> Iterator for CommandIterator<'circ, Circ>
 where
-    Circ: HierarchyView<'circ>,
-    for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
+    Circ: Circuit,
 {
     type Item = Command;
 
@@ -183,12 +178,7 @@ where
     }
 }
 
-impl<'circ, Circ> FusedIterator for CommandIterator<'circ, Circ>
-where
-    Circ: HierarchyView<'circ>,
-    for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
-{
-}
+impl<'circ, Circ> FusedIterator for CommandIterator<'circ, Circ> where Circ: Circuit {}
 
 #[cfg(test)]
 mod test {

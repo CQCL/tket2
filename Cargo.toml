@@ -41,6 +41,7 @@ strum = "0.25.0"
 fxhash = "0.2.1"
 rmp-serde = { version = "1.1.2", optional = true }
 delegate = "0.10.0"
+bytemuck = "1.14.0"
 
 [features]
 pyo3 = [
@@ -69,7 +70,7 @@ members = ["pyrs", "compile-matcher"]
 
 [workspace.dependencies]
 
-quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "abfaba6" }
-portgraph = { version = "0.8", features = ["serde"] }
+quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "bc9692b" }
+portgraph = { version = "0.9", features = ["serde"] }
 pyo3 = { version = "0.19" }
 itertools = { version = "0.11.0" }

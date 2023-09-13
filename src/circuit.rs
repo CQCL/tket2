@@ -12,12 +12,10 @@ use hugr::hugr::{CircuitUnit, NodeType};
 use hugr::ops::OpTrait;
 use hugr::HugrView;
 
-pub use hugr::hugr::views::HierarchyView;
 pub use hugr::ops::OpType;
 use hugr::types::TypeBound;
 pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
-use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
 
 /// An object behaving like a quantum circuit.
 //
@@ -26,9 +24,11 @@ use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
 // - Vertical slice iterator
 // - Gate count map
 // - Depth
-pub trait Circuit<'circ>: HugrView {
+pub trait Circuit: HugrView {
     /// An iterator over the commands in the circuit.
-    type Commands: Iterator<Item = Command>;
+    type Commands<'a>: Iterator<Item = Command>
+    where
+        Self: 'a;
 
     /// An iterator over the commands applied to an unit.
     type UnitCommands: Iterator<Item = Command>;
@@ -61,10 +61,10 @@ pub trait Circuit<'circ>: HugrView {
     /// Returns all the commands in the circuit, in some topological order.
     ///
     /// Ignores the Input and Output nodes.
-    fn commands(&'circ self) -> Self::Commands;
+    fn commands(&self) -> Self::Commands<'_>;
 
     /// Returns all the commands applied to the given unit, in order.
-    fn unit_commands(&'circ self) -> Self::UnitCommands;
+    fn unit_commands(&self) -> Self::UnitCommands;
 
     /// Returns the [`NodeType`] of a command.
     fn command_nodetype(&self, command: &Command) -> &NodeType {
@@ -80,12 +80,11 @@ pub trait Circuit<'circ>: HugrView {
     fn num_gates(&self) -> usize;
 }
 
-impl<'circ, T> Circuit<'circ> for T
+impl<T> Circuit for T
 where
-    T: 'circ + HierarchyView<'circ>,
-    for<'a> &'a T: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
+    T: HugrView,
 {
-    type Commands = CommandIterator<'circ, T>;
+    type Commands<'a> = CommandIterator<'a, T> where Self: 'a;
     type UnitCommands = std::iter::Empty<Command>;
 
     #[inline]
@@ -123,12 +122,12 @@ where
         }
     }
 
-    fn commands(&'circ self) -> Self::Commands {
+    fn commands(&self) -> Self::Commands<'_> {
         // Traverse the circuit in topological order.
         CommandIterator::new(self)
     }
 
-    fn unit_commands(&'circ self) -> Self::UnitCommands {
+    fn unit_commands(&self) -> Self::UnitCommands {
         // TODO Can we associate linear i/o with the corresponding unit without
         // doing the full toposort?
         unimplemented!()
@@ -152,35 +151,24 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::sync::OnceLock;
-
-    use hugr::{
-        hugr::views::{DescendantsGraph, HierarchyView},
-        ops::handle::DfgID,
-        Hugr, HugrView,
-    };
+    use hugr::Hugr;
 
     use crate::{circuit::Circuit, json::load_tk1_json_str};
 
-    static CIRC: OnceLock<Hugr> = OnceLock::new();
-
-    fn test_circuit() -> DescendantsGraph<'static, DfgID> {
-        let hugr = CIRC.get_or_init(|| {
-            load_tk1_json_str(
-                r#"{
-                "phase": "0",
-                "bits": [],
-                "qubits": [["q", [0]], ["q", [1]]],
-                "commands": [
-                    {"args": [["q", [0]]], "op": {"type": "H"}},
-                    {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}
-                ],
-                "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
-            }"#,
-            )
-            .unwrap()
-        });
-        DescendantsGraph::new(hugr, hugr.root())
+    fn test_circuit() -> Hugr {
+        load_tk1_json_str(
+            r#"{
+            "phase": "0",
+            "bits": [],
+            "qubits": [["q", [0]], ["q", [1]]],
+            "commands": [
+                {"args": [["q", [0]]], "op": {"type": "H"}},
+                {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}
+            ],
+            "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
+        }"#,
+        )
+        .unwrap()
     }
 
     #[test]
