@@ -60,6 +60,14 @@ impl Subcircuit {
     }
 }
 
+impl AsRef<Subcircuit> for SiblingSubgraph {
+    fn as_ref(&self) -> &Subcircuit {
+        // Safety: pointer casting is allowed as Subcircuit is transparently
+        // just SiblingSubgrah.
+        unsafe { &*(self as *const SiblingSubgraph as *const Subcircuit) }
+    }
+}
+
 /// A rewrite rule for circuits.
 #[cfg_attr(feature = "pyo3", pyclass)]
 #[derive(Debug, Clone, From, Into)]
@@ -90,9 +98,7 @@ impl CircuitRewrite {
 
     /// The subcircuit that is replaced.
     pub fn subcircuit(&self) -> &Subcircuit {
-        // Safety: pointer casting is allowed as Subcircuit is transparently
-        // just SiblingSubgrah.
-        unsafe { &*(self.0.subgraph() as *const SiblingSubgraph as *const Subcircuit) }
+        self.0.subgraph().as_ref()
     }
 
     /// The replacement subcircuit.
