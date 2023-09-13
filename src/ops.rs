@@ -179,12 +179,6 @@ impl T2Op {
     }
 }
 
-/// The type of the symbolic expression opaque type arg.
-pub const SYM_EXPR_T: CustomType =
-    CustomType::new_simple(SmolStr::new_inline("SymExpr"), EXTENSION_ID, TypeBound::Eq);
-
-const SYM_OP_ID: SmolStr = SmolStr::new_inline("symbolic_float");
-
 /// Initialize a new custom symbolic expression constant op from a string.
 pub fn symbolic_constant_op(s: &str) -> OpType {
     let value: serde_yaml::Value = s.into();
@@ -192,7 +186,7 @@ pub fn symbolic_constant_op(s: &str) -> OpType {
         .instantiate_extension_op(
             &SYM_OP_ID,
             vec![TypeArg::Opaque {
-                arg: CustomTypeArg::new(SYM_EXPR_T, value).unwrap(),
+                arg: CustomTypeArg::new(SYM_EXPR_T.clone(), value).unwrap(),
             }],
         )
         .unwrap()
@@ -227,21 +221,40 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<&str> {
     }
 }
 
-fn extension() -> Extension {
+/// The name of the symbolic expression opaque type arg.
+pub const SYM_EXPR_NAME: SmolStr = SmolStr::new_inline("SymExpr");
+
+/// The name of the symbolic expression opaque type arg.
+const SYM_OP_ID: SmolStr = SmolStr::new_inline("symbolic_float");
+
+lazy_static! {
+/// The type of the symbolic expression opaque type arg.
+pub static ref SYM_EXPR_T: CustomType =
+    EXTENSION.get_type(&SYM_EXPR_NAME).unwrap().instantiate_concrete([]).unwrap();
+
+pub static ref EXTENSION: Extension = {
     let mut e = Extension::new(EXTENSION_ID);
     load_all_ops::<T2Op>(&mut e).expect("add fail");
+
+    let sym_expr_opdef = e.add_type(
+        SYM_EXPR_NAME,
+        vec![],
+        "Symbolic expression.".into(),
+        TypeBound::Eq.into(),
+    )
+    .unwrap();
+    let sym_expr_param = TypeParam::Opaque(sym_expr_opdef.instantiate_concrete([]).unwrap());
+
     e.add_op_custom_sig_simple(
         SYM_OP_ID,
         "Store a sympy expression that can be evaluated to a float.".to_string(),
-        vec![TypeParam::Opaque(SYM_EXPR_T)],
+        vec![sym_expr_param],
         |_: &[TypeArg]| Ok(FunctionType::new(type_row![], type_row![FLOAT64_TYPE])),
     )
     .unwrap();
-    e
-}
 
-lazy_static! {
-    pub static ref EXTENSION: Extension = extension();
+    e
+};
 }
 
 // From implementations could be made generic over SimpleOpEnum
