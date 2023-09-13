@@ -3,7 +3,7 @@
 use std::{
     fmt::Debug,
     fs::File,
-    io::{self, Write},
+    io,
     path::{Path, PathBuf},
 };
 
@@ -121,22 +121,6 @@ impl PatternMatch {
         let map = pattern_ref
             .get_match_map(root, circ)
             .ok_or(InvalidPatternMatch::MatchNotFound)?;
-        ///////
-        let mut i_nodes = pattern_ref
-            .inputs
-            .iter()
-            .flat_map(|p| p.iter().map(|(n, _)| *n));
-        if i_nodes.any(|n| !map.contains_key(&n)) {
-            dbg!(pattern_ref);
-            dbg!(&map);
-            dbg!(&pattern_ref.inputs);
-            dbg!(&pattern_ref.outputs);
-            File::create("lol.dot")
-                .unwrap()
-                .write_all(circ.dot_string().as_bytes())
-                .unwrap();
-        }
-        ///////
         let inputs = pattern_ref
             .inputs
             .iter()
