@@ -4,6 +4,7 @@
 pub mod ecc_rewriter;
 pub mod strategy;
 
+use bytemuck::TransparentWrapper;
 #[cfg(feature = "portmatching")]
 pub use ecc_rewriter::ECCRewriter;
 
@@ -27,6 +28,8 @@ use crate::circuit::Circuit;
 pub struct Subcircuit {
     pub(crate) subgraph: SiblingSubgraph,
 }
+
+unsafe impl TransparentWrapper<SiblingSubgraph> for Subcircuit {}
 
 impl Subcircuit {
     /// Create a new subcircuit induced from a set of nodes.
@@ -60,14 +63,6 @@ impl Subcircuit {
     }
 }
 
-impl AsRef<Subcircuit> for SiblingSubgraph {
-    fn as_ref(&self) -> &Subcircuit {
-        // Safety: pointer casting is allowed as Subcircuit is transparently
-        // just SiblingSubgrah.
-        unsafe { &*(self as *const SiblingSubgraph as *const Subcircuit) }
-    }
-}
-
 /// A rewrite rule for circuits.
 #[cfg_attr(feature = "pyo3", pyclass)]
 #[derive(Debug, Clone, From, Into)]
@@ -98,7 +93,7 @@ impl CircuitRewrite {
 
     /// The subcircuit that is replaced.
     pub fn subcircuit(&self) -> &Subcircuit {
-        self.0.subgraph().as_ref()
+        Subcircuit::wrap_ref(self.0.subgraph())
     }
 
     /// The replacement subcircuit.
