@@ -5,12 +5,6 @@ mod hash;
 
 pub use hash::CircuitHash;
 
-//#[cfg(feature = "pyo3")]
-//pub mod py_circuit;
-
-//#[cfg(feature = "tkcxx")]
-//pub mod unitarybox;
-
 use self::command::{Command, CommandIterator};
 
 use hugr::extension::prelude::QB_T;
