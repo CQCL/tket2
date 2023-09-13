@@ -210,16 +210,22 @@ impl TryFrom<&OpType> for JsonOp {
 
         let json_optype = if let Ok(t2op) = leaf.clone().try_into() {
             match t2op {
-                T2Op::CX => JsonOpType::CX,
                 T2Op::H => JsonOpType::H,
+                T2Op::CX => JsonOpType::CX,
+                T2Op::T => JsonOpType::T,
+                T2Op::S => JsonOpType::S,
+                T2Op::X => JsonOpType::X,
+                T2Op::Y => JsonOpType::Y,
+                T2Op::Z => JsonOpType::Z,
+                T2Op::Tdg => JsonOpType::Tdg,
+                T2Op::Sdg => JsonOpType::Sdg,
+                T2Op::ZZMax => JsonOpType::ZZMax,
                 T2Op::Measure => JsonOpType::Measure,
                 T2Op::RzF64 => JsonOpType::Rz,
                 T2Op::RxF64 => JsonOpType::Rx,
-                T2Op::TK1 => JsonOpType::TK1,
                 T2Op::PhasedX => JsonOpType::PhasedX,
-                T2Op::ZZMax => JsonOpType::ZZMax,
                 T2Op::ZZPhase => JsonOpType::ZZPhase,
-                _ => return Err(err()),
+                T2Op::TK1 => JsonOpType::TK1,
             }
         } else if let LeafOp::CustomOp(b) = leaf {
             let ext = (*b).as_ref();

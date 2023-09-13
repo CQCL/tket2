@@ -1,27 +1,43 @@
 //! TASO optimiser.
 #![allow(missing_docs)]
 
-use std::path::Path;
-
-use hugr::Hugr;
-// use super::{pattern::node_equality, CircFixedStructPattern, PatternRewriter, RewriteGenerator};
-// use crate::circuit::{
-//     circuit::{Circuit, CircuitRewrite},
-//     operation::Op,
-// };
-
 mod qtz_circuit;
 
-/// An equivalent circuit class (ECC), with a canonical representative.
-#[derive(Clone)]
+use delegate::delegate;
+use fxhash::{FxHashMap, FxHashSet};
+use hugr::{Hugr, HugrView};
+use itertools::{izip, Itertools};
+use priority_queue::DoublePriorityQueue;
+use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::thread::{self, JoinHandle};
+use std::time::Instant;
+use std::{fs, io};
+use std::{fs::File, path::Path};
+
+use serde::{Deserialize, Serialize};
+
+use crate::circuit::CircuitHash;
+use crate::rewrite::strategy::RewriteStrategy;
+use crate::rewrite::Rewriter;
+
+/// A set of circuits forming an Equivalence Circuit Class (ECC).
+///
+/// The set contains a distinguished circuit called the representative circuit.
+/// By convention, this will be the first circuit in a collection. For rewriting
+/// purposes, it is typically chosen to be the smallest.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct EqCircClass {
     rep_circ: Hugr,
-    others: Vec<Hugr>,
+    /// Other equivalent circuits to the representative.
+    other_circs: Vec<Hugr>,
 }
 
 impl EqCircClass {
-    pub fn new(rep_circ: Hugr, others: Vec<Hugr>) -> Self {
-        Self { rep_circ, others }
+    pub fn new(rep_circ: Hugr, other_circs: Vec<Hugr>) -> Self {
+        Self {
+            rep_circ,
+            other_circs,
+        }
     }
 
     /// The representative circuit of the equivalence class.
@@ -31,17 +47,17 @@ impl EqCircClass {
 
     /// The other circuits in the equivalence class.
     pub fn others(&self) -> &[Hugr] {
-        &self.others
+        &self.other_circs
     }
 
     /// All circuits in the equivalence class.
     pub fn circuits(&self) -> impl Iterator<Item = &Hugr> {
-        std::iter::once(&self.rep_circ).chain(self.others.iter())
+        std::iter::once(&self.rep_circ).chain(self.other_circs.iter())
     }
 
     /// Consume into circuits of the equivalence class.
     pub fn into_circuits(self) -> impl Iterator<Item = Hugr> {
-        std::iter::once(self.rep_circ).chain(self.others)
+        std::iter::once(self.rep_circ).chain(self.other_circs)
     }
 
     /// The number of circuits in the equivalence class.
@@ -49,374 +65,355 @@ impl EqCircClass {
     /// An ECC always has a representative circuit, so this method will always
     /// return an integer strictly greater than 0.
     pub fn n_circuits(&self) -> usize {
-        self.others.len() + 1
+        self.other_circs.len() + 1
     }
 }
 
-// TODO refactor so both implementations share more code
+impl FromIterator<Hugr> for EqCircClass {
+    fn from_iter<T: IntoIterator<Item = Hugr>>(iter: T) -> Self {
+        let mut iter = iter.into_iter();
+        let rep_circ = iter.next().unwrap();
+        let other_circs = iter.collect();
+        Self::new(rep_circ, other_circs)
+    }
+}
 
 pub fn load_eccs_json_file(path: impl AsRef<Path>) -> Vec<EqCircClass> {
     let all_circs = qtz_circuit::load_ecc_set(path);
 
     all_circs
         .into_values()
-        .map(|mut all| {
-            // TODO is the rep circ always the first??
-            let rep_circ = all.remove(0);
-
-            EqCircClass {
-                rep_circ,
-                others: all,
-            }
-        })
+        .map(FromIterator::from_iter)
         .collect()
 }
 
-// impl RepCircSet {
-//     // remove blank wires (up to an optional target or all) and report how many there were
-//     fn remove_blanks(circ: &mut Circuit, target: Option<usize>) -> usize {
-//         let mut blankedges: Vec<_> = circ
-//             .node_edges(circ.boundary()[0], Direction::Outgoing)
-//             .into_iter()
-//             .filter(|e| circ.edge_endpoints(*e).unwrap().1 == circ.boundary()[1])
-//             .collect();
-//         let nblank = blankedges.len();
-//         if let Some(target) = target {
-//             assert!(nblank >= target, "not enough blank wires to reach target.");
-//             blankedges.drain(target..).for_each(drop);
-//         }
-//         for e in blankedges {
-//             circ.remove_edge(e);
-//         }
+#[derive(Debug, Clone, Default)]
+struct HugrPQ<P: Ord, C> {
+    queue: DoublePriorityQueue<u64, P>,
+    hash_lookup: FxHashMap<u64, Hugr>,
+    cost_fn: C,
+}
 
-//         nblank
-//     }
+struct Entry<C, P, H> {
+    circ: C,
+    cost: P,
+    hash: H,
+}
 
-//     fn to_rewrites<'s, 'a: 's>(
-//         &'s self,
-//         base_circ: &'a Circuit,
-//     ) -> impl Iterator<Item = CircuitRewrite> + 's {
-//         /*
-//         generates rewrites from all circuits in set to representative circuit
-//         and reverse rewrites (chained)
+impl<P: Ord, C> HugrPQ<P, C> {
+    fn new(cost_fn: C) -> Self {
+        Self {
+            queue: DoublePriorityQueue::new(),
+            hash_lookup: Default::default(),
+            cost_fn,
+        }
+    }
 
-//         assumes all circuits in set have same boundary
+    fn peek(&self) -> Option<Entry<&Hugr, &P, u64>> {
+        let (hash, cost) = self.queue.peek_min()?;
+        let circ = self.hash_lookup.get(hash)?;
+        Some(Entry {
+            circ,
+            cost,
+            hash: *hash,
+        })
+    }
 
-//         for pattern matching, removes blank wires (Input -> Output edges) in pattern
-//         and tries to remove the *same number* of blank wires from the
-//         replacement
+    fn push(&mut self, hugr: Hugr)
+    where
+        C: Fn(&Hugr) -> P,
+    {
+        let hash = hugr.circuit_hash();
+        self.push_with_hash_unchecked(hugr, hash);
+    }
 
-//         (Therefore replacing blank wires with non-blank wires is not a supported operation,
-//         but the opposite is)
-//         */
-//         let mut rep = self.rep_circ.clone();
-//         let rep_blanks = Self::remove_blanks(&mut rep, None);
-//         let patterns = self.others.iter().map(|c2| {
-//             let mut c2 = c2.clone();
-//             let blanks = Self::remove_blanks(&mut c2, None);
-//             (
-//                 CircFixedStructPattern::from_circ(c2, node_equality()),
-//                 &self.rep_circ,
-//                 blanks,
-//             )
-//         });
+    fn push_with_hash_unchecked(&mut self, hugr: Hugr, hash: u64)
+    where
+        C: Fn(&Hugr) -> P,
+    {
+        let cost = (self.cost_fn)(&hugr);
+        self.queue.push(hash, cost);
+        self.hash_lookup.insert(hash, hugr);
+    }
 
-//         let patterns = patterns.chain(self.others.iter().map(move |c2| {
-//             (
-//                 CircFixedStructPattern::from_circ(rep.clone(), node_equality()),
-//                 c2,
-//                 rep_blanks,
-//             )
-//         }));
-//         patterns.flat_map(|(pattern, c2, blanks)| {
-//             PatternRewriter::new(pattern, move |_| {
-//                 let mut replacement = c2.clone();
-//                 Self::remove_blanks(&mut replacement, Some(blanks));
-//                 (replacement, 0.0)
-//             })
-//             .into_rewrites(base_circ)
-//             // pattern_rewriter(pattern, base_circ, )
-//         })
-//     }
-// }
+    fn pop(&mut self) -> Option<Entry<Hugr, P, u64>> {
+        let (hash, cost) = self.queue.pop_min()?;
+        let circ = self.hash_lookup.remove(&hash)?;
+        Some(Entry { circ, cost, hash })
+    }
 
-// pub fn taso_mpsc<C>(
-//     circ: Circuit,
-//     repset: Vec<RepCircSet>,
-//     gamma: f64,
-//     cost: C,
-//     _timeout: i64,
-//     max_threads: usize,
-// ) -> Circuit
-// where
-//     C: Fn(&Circuit) -> usize + Send + Sync,
-// {
-//     // bound the number of threads, chunk up the patterns in to each thread
-//     let n_threads = std::cmp::min(max_threads, repset.len());
+    fn trim(&mut self, max_size: usize) {
+        while self.queue.len() > max_size {
+            self.queue.pop_max();
+        }
+    }
 
-//     let (t_main, r_main) = mpsc::channel();
+    delegate! {
+        to self.queue {
+            fn len(&self) -> usize;
+            fn is_empty(&self) -> bool;
+        }
+    }
+}
 
-//     let mut chunks: Vec<Vec<_>> = (0..n_threads).map(|_| vec![]).collect();
+pub fn taso(
+    circ: Hugr,
+    rewriter: impl Rewriter,
+    strategy: impl RewriteStrategy,
+    cost: impl Fn(&Hugr) -> usize,
+    timeout: Option<u64>,
+) -> Hugr {
+    let start_time = Instant::now();
 
-//     for (count, p) in repset.into_iter().enumerate() {
-//         chunks[count % n_threads].push((count, p));
-//     }
+    let file = File::create("best_circs.csv").unwrap();
+    let mut log_best_circ = csv::Writer::from_writer(file);
 
-//     let _rev_cost = |x: &Circuit| usize::MAX - cost(x);
+    let mut best_circ = circ.clone();
+    let mut best_circ_cost = cost(&circ);
+    log_best(best_circ_cost, &mut log_best_circ).unwrap();
 
-//     let mut pq = PriorityQueue::new();
-//     let mut cbest = circ.clone();
-//     let cin_cost = _rev_cost(&circ);
-//     let mut cbest_cost = cin_cost;
-//     let chash = circuit_hash(&circ);
-//     // map of seen circuits, if the circuit has been popped from the queue,
-//     // holds None
-//     let mut dseen: HashMap<usize, Option<Circuit>> = HashMap::from_iter([(chash, Some(circ))]);
-//     pq.push(chash, cin_cost);
+    // Hash of seen circuits. Dot not store circuits as this map gets huge
+    let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(circ.circuit_hash())]);
 
-//     // each thread scans for rewrites using all the patterns in its chunk, and
-//     // sends rewritten circuits back to main
-//     let (joins, thread_ts): (Vec<_>, Vec<_>) = chunks
-//         .into_iter()
-//         .enumerate()
-//         .map(|(i, repsets)| {
-//             // channel for sending circuits to each thread
-//             let (t_this, r_this) = mpsc::channel();
-//             let tn = t_main.clone();
-//             let jn = thread::spawn(move || {
-//                 for received in r_this {
-//                     let sent_circ: Arc<Circuit> = if let Some(hc) = received {
-//                         hc
-//                     } else {
-//                         // main has signalled no more circuits will be sent
-//                         return;
-//                     };
-//                     println!("thread {i} got one");
-//                     for (set_i, rcs) in &repsets {
-//                         for rewrite in rcs.to_rewrites(&sent_circ) {
-//                             // TODO here is where a optimal data-sharing copy would be handy
-//                             let mut newc = sent_circ.as_ref().clone();
-//                             newc.apply_rewrite(rewrite).expect("rewrite failure");
+    // The priority queue of circuits to be processed (this should not get big)
+    let mut pq = HugrPQ::new(&cost);
 
-//                             tn.send(Some(newc)).unwrap();
-//                             println!("thread {i} sent one back from set {set_i}");
-//                         }
-//                     }
-//                     // no more circuits will be generated, tell main this thread is
-//                     // done with this circuit
-//                     tn.send(None).unwrap();
-//                 }
-//             });
+    pq.push(circ);
 
-//             (jn, t_this)
-//         })
-//         .unzip();
+    let mut circ_cnt = 0;
+    while let Some(Entry { circ, cost, hash }) = pq.pop() {
+        if cost < best_circ_cost {
+            best_circ = circ.clone();
+            best_circ_cost = cost;
+            log_best(best_circ_cost, &mut log_best_circ).unwrap();
+            // Now we only care about smaller circuits
+            seen_hashes.clear();
+            seen_hashes.insert(hash);
+        }
 
-//     while let Some((hc, priority)) = pq.pop() {
-//         let seen_circ = dseen
-//             .insert(hc, None)
-//             .flatten()
-//             .expect("seen circ missing.");
-//         println!("\npopped one of size {}", &seen_circ.node_count());
+        let rewrites = rewriter.get_rewrites(&circ);
+        for new_circ in strategy.apply_rewrites(rewrites, &circ) {
+            let new_circ_hash = new_circ.circuit_hash();
+            circ_cnt += 1;
+            if circ_cnt % 1000 == 0 {
+                println!("{circ_cnt} circuits...");
+                println!("Queue size: {} circuits", pq.len());
+                println!("Total seen: {} circuits", seen_hashes.len());
+            }
+            if seen_hashes.contains(&new_circ_hash) {
+                continue;
+            }
+            pq.push_with_hash_unchecked(new_circ, new_circ_hash);
+            seen_hashes.insert(new_circ_hash);
+        }
 
-//         if priority > cbest_cost {
-//             cbest = seen_circ.clone();
-//             cbest_cost = priority;
-//         }
-//         let seen_circ = Arc::new(seen_circ);
-//         // send the popped circuit to each thread
-//         for thread_t in &thread_ts {
-//             thread_t.send(Some(seen_circ.clone())).unwrap();
-//         }
-//         let mut done_tracker = 0;
-//         for received in &r_main {
-//             let newc = if let Some(newc) = received {
-//                 newc
-//             } else {
-//                 done_tracker += 1;
-//                 if done_tracker == n_threads {
-//                     // all threads have said they are done with this circuit
-//                     break;
-//                 } else {
-//                     continue;
-//                 }
-//             };
-//             println!("Main got one");
-//             let newchash = circuit_hash(&newc);
-//             if dseen.contains_key(&newchash) {
-//                 continue;
-//             }
-//             let newcost = _rev_cost(&newc);
-//             if gamma * (newcost as f64) > (cbest_cost as f64) {
-//                 pq.push(newchash, newcost);
-//                 dseen.insert(newchash, Some(newc));
-//             }
-//         }
-//     }
-//     for (join, tx) in joins.into_iter().zip(thread_ts.into_iter()) {
-//         // tell all the threads we're done and join the threads
-//         tx.send(None).unwrap();
-//         join.join().unwrap();
-//     }
-//     cbest
-// }
+        if pq.len() >= 10000 {
+            // Haircut to keep the queue size manageable
+            pq.trim(5000);
+        }
 
-// pub fn taso<C>(
-//     circ: Circuit,
-//     repset: Vec<RepCircSet>,
-//     gamma: f64,
-//     cost: C,
-//     _timeout: i64,
-// ) -> Circuit
-// where
-//     C: Fn(&Circuit) -> usize + Send + Sync,
-// {
-//     // TODO timeout
+        if let Some(timeout) = timeout {
+            if start_time.elapsed().as_secs() > timeout {
+                println!("Timeout");
+                break;
+            }
+        }
+    }
 
-//     let _rev_cost = |x: &Circuit| usize::MAX - cost(x);
+    println!("END RESULT: {}", cost(&best_circ));
+    fs::write("final_best_circ.gv", best_circ.dot_string()).unwrap();
+    fs::write(
+        "final_best_circ.json",
+        serde_json::to_vec(&best_circ).unwrap(),
+    )
+    .unwrap();
+    best_circ
+}
 
-//     let mut pq = PriorityQueue::new();
-//     let mut cbest = circ.clone();
-//     let cin_cost = _rev_cost(&circ);
-//     let mut cbest_cost = cin_cost;
-//     let chash = circuit_hash(&circ);
-//     // map of seen circuits, if the circuit has been popped from the queue,
-//     // holds None
-//     let mut dseen: HashMap<usize, Option<Circuit>> = HashMap::from_iter([(chash, Some(circ))]);
-//     pq.push(chash, cin_cost);
+// TODO refactor so both implementations share more code
+pub fn taso_mpsc(
+    circ: Hugr,
+    rewriter: impl Rewriter + Send + Clone + 'static,
+    strategy: impl RewriteStrategy + Send + Clone + 'static,
+    cost: impl Fn(&Hugr) -> usize + Send + Sync,
+    timeout: Option<u64>,
+    n_threads: usize,
+) -> Hugr {
+    let start_time = Instant::now();
 
-//     while let Some((hc, priority)) = pq.pop() {
-//         // remove circuit from map and replace with None
-//         let seen_circ = dseen
-//             .insert(hc, None)
-//             .flatten()
-//             .expect("seen circ missing.");
-//         if priority > cbest_cost {
-//             cbest = seen_circ.clone();
-//             cbest_cost = priority;
-//         }
-//         // par_iter implementation
+    let file = File::create("best_circs.csv").unwrap();
+    let mut log_best_circ = csv::Writer::from_writer(file);
 
-//         // let pq = Mutex::new(&mut pq);
-//         // tra_patterns.par_iter().for_each(|(pattern, c2)| {
-//         //     pattern_rewriter(pattern.clone(), &hc.0, |_| (c2.clone(), 0.0)).for_each(|rewrite| {
-//         //         let mut newc = hc.0.clone();
-//         //         newc.apply_rewrite(rewrite).expect("rewrite failure");
-//         //         let newchash = circuit_hash(&newc);
-//         //         let mut dseen = dseen.lock().unwrap();
-//         //         if dseen.contains(&newchash) {
-//         //             return;
-//         //         }
-//         //         let newhc = HashCirc(newc);
-//         //         let newcost = _rev_cost(&newhc);
-//         //         if gamma * (newcost as f64) > (cbest_cost as f64) {
-//         //             let mut pq = pq.lock().unwrap();
-//         //             pq.push(newhc, newcost);
-//         //             dseen.insert(newchash);
-//         //         }
-//         //     });
-//         // })
+    println!("Spinning up {n_threads} threads");
 
-//         // non-parallel implementation:
+    // channel for sending circuits from threads back to main
+    let (t_main, r_main) = mpsc::sync_channel(n_threads * 100);
 
-//         for rp in repset.iter() {
-//             for rewrite in rp.to_rewrites(&seen_circ) {
-//                 // TODO here is where a optimal data-sharing copy would be handy
-//                 let mut newc = seen_circ.clone();
-//                 newc.apply_rewrite(rewrite).expect("rewrite failure");
-//                 let newchash = circuit_hash(&newc);
-//                 if dseen.contains_key(&newchash) {
-//                     continue;
-//                 }
-//                 let newcost = _rev_cost(&newc);
-//                 if gamma * (newcost as f64) > (cbest_cost as f64) {
-//                     pq.push(newchash, newcost);
-//                     dseen.insert(newchash, Some(newc));
-//                 }
-//             }
-//         }
-//     }
-//     cbest
-// }
+    let mut best_circ = circ.clone();
+    let mut best_circ_cost = cost(&best_circ);
+    let circ_hash = circ.circuit_hash();
+    log_best(best_circ_cost, &mut log_best_circ).unwrap();
 
-// fn op_hash(op: &LeafOp) -> Option<usize> {
-//     type Op = LeafOp;
-//     Some(match op {
-//         Op::H => 1,
-//         Op::CX => 2,
-//         Op::ZZMax => 3,
-//         Op::Reset => 4,
-//         Op::Input => 5,
-//         Op::Output => 6,
-//         Op::Noop(_) => 7,
-//         Op::Measure => 8,
-//         Op::Barrier => 9,
-//         Op::AngleAdd => 10,
-//         Op::AngleMul => 11,
-//         Op::AngleNeg => 12,
-//         Op::QuatMul => 13,
-//         // Op::Copy { n_copies, typ } => todo!(),
-//         Op::RxF64 => 14,
-//         Op::RzF64 => 15,
-//         Op::TK1 => 16,
-//         Op::Rotation => 17,
-//         Op::ToRotation => 18,
-//         // should Const of different values be hash different?
-//         Op::Const(_) => 19,
-//         // Op::Custom(_) => todo!(),
-//         _ => return None,
-//     })
-// }
+    // Hash of seen circuits. Dot not store circuits as this map gets huge
+    let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(circ_hash)]);
 
-// fn circuit_hash(circ: &Circuit) -> usize {
-//     // adapted from Quartz (Apache 2.0)
-//     // https://github.com/quantum-compiler/quartz/blob/2e13eb7ffb3c5c5fe96cf5b4246f4fd7512e111e/src/quartz/tasograph/tasograph.cpp#L410
-//     let mut total: usize = 0;
+    // The priority queue of circuits to be processed (this should not get big)
+    let mut pq = HugrPQ::new(&cost);
+    pq.push(circ);
 
-//     let mut hash_vals: HashMap<NodeIndex, usize> = HashMap::new();
-//     let [i, _] = circ.boundary();
+    // each thread scans for rewrites using all the patterns and
+    // sends rewritten circuits back to main
+    let (joins, threads_tx, signal_new_data): (Vec<_>, Vec<_>, Vec<_>) = (0..n_threads)
+        .map(|_| spawn_pattern_matching_thread(t_main.clone(), rewriter.clone(), strategy.clone()))
+        .multiunzip();
 
-//     let _ophash = |o| 17 * 13 + op_hash(o).expect("unhashable op");
-//     hash_vals.insert(i, _ophash(&Op::Input));
+    let mut cycle_inds = (0..n_threads).cycle();
+    let mut threads_empty = vec![true; n_threads];
 
-//     let initial_nodes = circ
-//         .dag
-//         .node_indices()
-//         .filter(|n| circ.dag.node_edges(*n, Direction::Incoming).count() == 0)
-//         .collect();
+    let mut circ_cnt = 0;
+    loop {
+        // Send data in pq to the threads
+        while let Some(Entry {
+            circ,
+            cost: &cost,
+            hash,
+        }) = pq.peek()
+        {
+            if cost < best_circ_cost {
+                best_circ = circ.clone();
+                best_circ_cost = cost;
+                log_best(best_circ_cost, &mut log_best_circ).unwrap();
+                // Now we only care about smaller circuits
+                seen_hashes.clear();
+                seen_hashes.insert(hash);
+            }
+            // try to send to first available thread
+            if let Some(next_ind) = cycle_inds.by_ref().take(n_threads).find(|next_ind| {
+                let tx = &threads_tx[*next_ind];
+                tx.try_send(Some(circ.clone())).is_ok()
+            }) {
+                pq.pop();
+                // Unblock thread if waiting
+                let _ = signal_new_data[next_ind].try_recv();
+                threads_empty[next_ind] = false;
+            } else {
+                // All send channels are full, continue
+                break;
+            }
+        }
 
-//     for nid in TopSortWalker::new(circ.dag_ref(), initial_nodes) {
-//         if hash_vals.contains_key(&nid) {
-//             continue;
-//         }
+        // Receive data from threads, add to pq
+        // We compute the hashes in the threads because it's expensive
+        while let Ok(received) = r_main.try_recv() {
+            let Some((circ_hash, circ)) = received else {
+                panic!("A thread panicked");
+            };
+            circ_cnt += 1;
+            if circ_cnt % 1000 == 0 {
+                println!("{circ_cnt} circuits...");
+                println!("Queue size: {} circuits", pq.len());
+                println!("Total seen: {} circuits", seen_hashes.len());
+            }
+            if seen_hashes.contains(&circ_hash) {
+                continue;
+            }
+            pq.push_with_hash_unchecked(circ, circ_hash);
+            seen_hashes.insert(circ_hash);
+        }
 
-//         let mut myhash = _ophash(circ.node_op(nid).expect("op not found."));
+        // Check if all threads are waiting for new data
+        for (is_waiting, is_empty) in signal_new_data.iter().zip(threads_empty.iter_mut()) {
+            if is_waiting.try_recv().is_ok() {
+                *is_empty = true;
+            }
+        }
+        // If everyone is waiting and we do not have new data, we are done
+        if pq.is_empty() && threads_empty.iter().all(|&x| x) {
+            break;
+        }
+        if let Some(timeout) = timeout {
+            if start_time.elapsed().as_secs() > timeout {
+                println!("Timeout");
+                break;
+            }
+        }
+        if pq.len() >= 10000 {
+            // Haircut to keep the queue size manageable
+            pq.trim(5000);
+        }
+    }
 
-//         for ine in circ.node_edges(nid, Direction::Incoming) {
-//             let (src, _) = circ.edge_endpoints(ine).expect("edge not found.");
-//             debug_assert!(hash_vals.contains_key(&src));
+    println!("Tried {circ_cnt} circuits");
+    println!("Joining");
 
-//             let mut edgehash = hash_vals[&src];
+    for (join, tx, data_tx) in izip!(joins, threads_tx, signal_new_data) {
+        // tell all the threads we're done and join the threads
+        tx.send(None).unwrap();
+        let _ = data_tx.try_recv();
+        join.join().unwrap();
+    }
 
-//             // TODO check if overflow arithmetic is intended
+    println!("END RESULT: {}", cost(&best_circ));
+    fs::write("final_best_circ.gv", best_circ.dot_string()).unwrap();
+    fs::write(
+        "final_best_circ.json",
+        serde_json::to_vec(&best_circ).unwrap(),
+    )
+    .unwrap();
+    best_circ
+}
 
-//             edgehash = edgehash.wrapping_mul(31).wrapping_add(
-//                 circ.port_of_edge(src, ine, Direction::Outgoing)
-//                     .expect("edge not found."),
-//             );
-//             edgehash = edgehash.wrapping_mul(31).wrapping_add(
-//                 circ.port_of_edge(nid, ine, Direction::Incoming)
-//                     .expect("edge not found."),
-//             );
+fn spawn_pattern_matching_thread(
+    tx_main: SyncSender<Option<(u64, Hugr)>>,
+    rewriter: impl Rewriter + Send + 'static,
+    strategy: impl RewriteStrategy + Send + 'static,
+) -> (JoinHandle<()>, SyncSender<Option<Hugr>>, Receiver<()>) {
+    // channel for sending circuits to each thread
+    let (tx_thread, rx) = mpsc::sync_channel(1000);
+    // A flag to wait until new data
+    let (wait_new_data, signal_new_data) = mpsc::sync_channel(0);
 
-//             myhash = myhash.wrapping_add(edgehash);
-//         }
-//         hash_vals.insert(nid, myhash);
-//         total = total.wrapping_add(myhash);
-//     }
+    let jn = thread::spawn(move || {
+        loop {
+            if let Ok(received) = rx.try_recv() {
+                let Some(sent_hugr): Option<Hugr> = received else {
+                    // Terminate thread
+                    break;
+                };
+                let rewrites = rewriter.get_rewrites(&sent_hugr);
+                for new_circ in strategy.apply_rewrites(rewrites, &sent_hugr) {
+                    let new_circ_hash = new_circ.circuit_hash();
+                    tx_main.send(Some((new_circ_hash, new_circ))).unwrap();
+                }
+            } else {
+                // We are out of work, wait for new data
+                wait_new_data.send(()).unwrap();
+            }
+        }
+    });
 
-//     total
-// }
+    (jn, tx_thread, signal_new_data)
+}
 
-// #[cfg(test)]
-// mod tests;
+/// A helper struct for logging improvements in circuit size seen during the
+/// TASO execution.
+//
+// TODO: Replace this fixed logging. Report back intermediate results.
+#[derive(serde::Serialize, Debug)]
+struct BestCircSer {
+    circ_len: usize,
+    time: String,
+}
+
+impl BestCircSer {
+    fn new(circ_len: usize) -> Self {
+        let time = chrono::Local::now().to_rfc3339();
+        Self { circ_len, time }
+    }
+}
+
+fn log_best(cbest: usize, wtr: &mut csv::Writer<File>) -> io::Result<()> {
+    println!("new best of size {}", cbest);
+    wtr.serialize(BestCircSer::new(cbest)).unwrap();
+    wtr.flush()
+}
