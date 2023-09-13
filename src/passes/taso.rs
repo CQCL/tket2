@@ -1,6 +1,18 @@
-//! TASO optimiser.
-#![allow(missing_docs)]
-
+//! TASO circuit optimiser.
+//!
+//! This module implements the TASO circuit optimiser. It relies on a rewriter
+//! and a RewriteStrategy instance to repeatedly rewrite a circuit and optimising
+//! it according to some cost metric (typically gate count).
+//!
+//! The optimiser is implemented as a priority queue of circuits to be processed.
+//! On top of the queue are the circuits with the lowest cost. They are popped
+//! from the queue and replaced by the new circuits obtained from the rewriter
+//! and the rewrite strategy. A hash of every circuit computed is stored to
+//! detect and ignore duplicates. The priority queue is truncated whenever
+//! it gets too large.
+//!
+//! There are currently two implementations: a single-threaded one ([`taso`])
+//! and a multi-threaded one ([`taso_mpsc`]).
 mod qtz_circuit;
 
 use delegate::delegate;
@@ -33,6 +45,7 @@ pub struct EqCircClass {
 }
 
 impl EqCircClass {
+    /// Create a new equivalence class with a representative circuit.
     pub fn new(rep_circ: Hugr, other_circs: Vec<Hugr>) -> Self {
         Self {
             rep_circ,
@@ -78,6 +91,7 @@ impl FromIterator<Hugr> for EqCircClass {
     }
 }
 
+/// Load a set of equivalence classes from a JSON file.
 pub fn load_eccs_json_file(path: impl AsRef<Path>) -> Vec<EqCircClass> {
     let all_circs = qtz_circuit::load_ecc_set(path);
 
@@ -87,6 +101,10 @@ pub fn load_eccs_json_file(path: impl AsRef<Path>) -> Vec<EqCircClass> {
         .collect()
 }
 
+/// A min-priority queue for Hugrs.
+///
+/// The cost function provided will be used as the priority of the Hugrs.
+/// Uses hashes internally to store the Hugrs.
 #[derive(Debug, Clone, Default)]
 struct HugrPQ<P: Ord, C> {
     queue: DoublePriorityQueue<u64, P>,
@@ -101,6 +119,7 @@ struct Entry<C, P, H> {
 }
 
 impl<P: Ord, C> HugrPQ<P, C> {
+    /// Create a new HugrPQ with a cost function.
     fn new(cost_fn: C) -> Self {
         Self {
             queue: DoublePriorityQueue::new(),
@@ -109,6 +128,7 @@ impl<P: Ord, C> HugrPQ<P, C> {
         }
     }
 
+    /// Reference to the minimal Hugr in the queue.
     fn peek(&self) -> Option<Entry<&Hugr, &P, u64>> {
         let (hash, cost) = self.queue.peek_min()?;
         let circ = self.hash_lookup.get(hash)?;
@@ -119,6 +139,7 @@ impl<P: Ord, C> HugrPQ<P, C> {
         })
     }
 
+    /// Push a Hugr into the queue.
     fn push(&mut self, hugr: Hugr)
     where
         C: Fn(&Hugr) -> P,
@@ -127,6 +148,12 @@ impl<P: Ord, C> HugrPQ<P, C> {
         self.push_with_hash_unchecked(hugr, hash);
     }
 
+    /// Push a Hugr into the queue with a precomputed hash.
+    ///
+    /// This is useful to avoid recomputing the hash in [`HugrPQ::push`] when
+    /// it is already known.
+    ///
+    /// This does not check that the hash is valid.
     fn push_with_hash_unchecked(&mut self, hugr: Hugr, hash: u64)
     where
         C: Fn(&Hugr) -> P,
@@ -136,13 +163,17 @@ impl<P: Ord, C> HugrPQ<P, C> {
         self.hash_lookup.insert(hash, hugr);
     }
 
+    /// Pop the minimal Hugr from the queue.
     fn pop(&mut self) -> Option<Entry<Hugr, P, u64>> {
         let (hash, cost) = self.queue.pop_min()?;
         let circ = self.hash_lookup.remove(&hash)?;
         Some(Entry { circ, cost, hash })
     }
 
-    fn trim(&mut self, max_size: usize) {
+    /// Discard the largest elements of the queue.
+    ///
+    /// Only keep up to `max_size` elements.
+    fn truncate(&mut self, max_size: usize) {
         while self.queue.len() > max_size {
             self.queue.pop_max();
         }
@@ -156,6 +187,18 @@ impl<P: Ord, C> HugrPQ<P, C> {
     }
 }
 
+/// Run the TASO optimiser on a circuit.
+///
+/// The optimiser will repeatedly rewrite the circuit using the rewriter and
+/// the rewrite strategy, optimising the circuit according to the cost function
+/// provided. Optionally, a timeout (in seconds) can be provided.
+///
+/// A log of the successive best candidate circuits can be found in the file
+/// `best_circs.csv`. In addition, the final best circuit is retrievable in the
+/// files `final_best_circ.gv` and `final_best_circ.json`.
+///
+/// This is the single-threaded version of the optimiser. See [`taso_mpsc`] for
+/// the multi-threaded version.
 pub fn taso(
     circ: Hugr,
     rewriter: impl Rewriter,
@@ -209,7 +252,7 @@ pub fn taso(
 
         if pq.len() >= 10000 {
             // Haircut to keep the queue size manageable
-            pq.trim(5000);
+            pq.truncate(5000);
         }
 
         if let Some(timeout) = timeout {
@@ -230,6 +273,18 @@ pub fn taso(
     best_circ
 }
 
+/// Run the TASO optimiser on a circuit.
+///
+/// The optimiser will repeatedly rewrite the circuit using the rewriter and
+/// the rewrite strategy, optimising the circuit according to the cost function
+/// provided. Optionally, a timeout (in seconds) can be provided.
+///
+/// A log of the successive best candidate circuits can be found in the file
+/// `best_circs.csv`. In addition, the final best circuit is retrievable in the
+/// files `final_best_circ.gv` and `final_best_circ.json`.
+///
+/// This is the multi-threaded version of the optimiser. See [`taso`] for the
+/// single-threaded version.
 // TODO refactor so both implementations share more code
 pub fn taso_mpsc(
     circ: Hugr,
@@ -339,7 +394,7 @@ pub fn taso_mpsc(
         }
         if pq.len() >= 10000 {
             // Haircut to keep the queue size manageable
-            pq.trim(5000);
+            pq.truncate(5000);
         }
     }
 
