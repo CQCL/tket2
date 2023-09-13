@@ -3,22 +3,19 @@
 use std::fmt;
 
 use derive_more::{From, Into};
+use hugr::hugr::views::sibling_subgraph::PyInvalidReplacementError;
 use hugr::hugr::views::{DescendantsGraph, HierarchyView};
 use hugr::ops::handle::DfgID;
 use hugr::{Hugr, HugrView, Port};
 use itertools::Itertools;
 use portmatching::{HashMap, PatternID};
-use pyo3::{create_exception, exceptions::PyException, prelude::*, types::PyIterator};
+use pyo3::{prelude::*, types::PyIterator};
 use tket_json_rs::circuit_json::SerialCircuit;
 
 use super::{CircuitPattern, PatternMatch, PatternMatcher};
 use crate::circuit::Circuit;
 use crate::json::TKETDecode;
 use crate::rewrite::CircuitRewrite;
-
-create_exception!(pyrs, PyValidateError, PyException);
-create_exception!(pyrs, PyInvalidReplacement, PyException);
-create_exception!(pyrs, PyInvalidPattern, PyException);
 
 #[pymethods]
 impl CircuitPattern {
@@ -27,8 +24,8 @@ impl CircuitPattern {
     pub fn py_from_circuit(circ: PyObject) -> PyResult<CircuitPattern> {
         let hugr = pyobj_as_hugr(circ)?;
         let circ = hugr_as_view(&hugr);
-        CircuitPattern::try_from_circuit(&circ)
-            .map_err(|e| PyInvalidPattern::new_err(e.to_string()))
+        let pattern = CircuitPattern::try_from_circuit(&circ)?;
+        Ok(pattern)
     }
 
     /// A string representation of the pattern.
@@ -64,7 +61,7 @@ impl PatternMatcher {
             .map(|m| {
                 let pattern_id = m.pattern_id();
                 PyPatternMatch::try_from_rust(m, &circ, self).map_err(|e| {
-                    PyInvalidReplacement::new_err(format!(
+                    PyInvalidReplacementError::new_err(format!(
                         "Invalid match for pattern {:?}: {}",
                         pattern_id, e
                     ))
@@ -132,7 +129,7 @@ impl PyPatternMatch {
 
         let node_map: HashMap<Node, Node> = pattern
             .get_match_map(root.0, circ)
-            .ok_or_else(|| PyInvalidReplacement::new_err("Invalid match"))?
+            .ok_or_else(|| PyInvalidReplacementError::new_err("Invalid match"))?
             .into_iter()
             .map(|(p, c)| (Node(p), Node(c)))
             .collect();
@@ -159,6 +156,7 @@ impl PyPatternMatch {
         })
     }
 
+    /// Convert the pattern into a [`CircuitRewrite`].
     pub fn to_rewrite(&self, circ: PyObject, replacement: PyObject) -> PyResult<CircuitRewrite> {
         let hugr = pyobj_as_hugr(circ)?;
         let circ = hugr_as_view(&hugr);
@@ -168,7 +166,7 @@ impl PyPatternMatch {
             .map(|p| p.iter().map(|&(n, p)| (n.0, p)).collect())
             .collect();
         let outputs = self.outputs.iter().map(|&(n, p)| (n.0, p)).collect();
-        PatternMatch::try_from_io(
+        let rewrite = PatternMatch::try_from_io(
             self.root.0,
             PatternID(self.pattern_id),
             &circ,
@@ -176,8 +174,8 @@ impl PyPatternMatch {
             outputs,
         )
         .expect("Invalid PyCircuitMatch object")
-        .to_rewrite(&hugr, pyobj_as_hugr(replacement)?)
-        .map_err(|e| PyInvalidReplacement::new_err(e.to_string()))
+        .to_rewrite(&hugr, pyobj_as_hugr(replacement)?)?;
+        Ok(rewrite)
     }
 }
 
@@ -204,9 +202,7 @@ impl Node {
 
 fn pyobj_as_hugr(circ: PyObject) -> PyResult<Hugr> {
     let ser_c = SerialCircuit::_from_tket1(circ);
-    let hugr: Hugr = ser_c
-        .decode()
-        .map_err(|e| PyValidateError::new_err(e.to_string()))?;
+    let hugr: Hugr = ser_c.decode()?;
     Ok(hugr)
 }
 

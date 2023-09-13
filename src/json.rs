@@ -7,6 +7,9 @@ pub mod op;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "pyo3")]
+use pyo3::{PyErr, exceptions::PyException, create_exception};
+
 use std::path::Path;
 use std::{fs, io};
 
@@ -82,6 +85,18 @@ pub enum OpConvertError {
     /// The serialized operation is not supported.
     #[error("Cannot serialize operation: {0:?}")]
     NonSerializableInputs(OpType),
+}
+
+#[cfg(feature = "pyo3")]
+create_exception!(pyrs, PyOpConvertError, PyException,
+    "Error type for conversion between tket2's `Op` and `OpType`"
+);
+
+#[cfg(feature = "pyo3")]
+impl From<OpConvertError> for PyErr {
+    fn from(err: OpConvertError) -> Self {
+        PyOpConvertError::new_err(err.to_string())
+    }
 }
 
 /// Load a TKET1 circuit from a JSON file.

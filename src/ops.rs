@@ -23,6 +23,9 @@ use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
 use thiserror::Error;
 
+#[cfg(feature = "pyo3")]
+use pyo3::pyclass;
+
 /// Name of tket 2 extension.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("quantum.tket2");
 
@@ -41,6 +44,7 @@ pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("quantum.tket2"
     IntoStaticStr,
     EnumString,
 )]
+#[cfg_attr(feature = "pyo3", pyclass)]
 #[allow(missing_docs)]
 /// Simple enum of tket 2 quantum operations.
 pub enum T2Op {
@@ -61,7 +65,9 @@ pub enum T2Op {
     ZZPhase,
     TK1,
 }
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "pyo3", pyclass)]
 #[allow(missing_docs)]
 /// Simple enum representation of Pauli matrices.
 pub enum Pauli {
