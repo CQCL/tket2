@@ -108,7 +108,6 @@ impl RewriteStrategy for ExhaustiveRewriteStrategy {
             .filter(|rw| {
                 let old_count = rw.subcircuit().node_count() as f64;
                 let new_count = rw.replacement().num_gates() as f64;
-                dbg!(old_count, new_count);
                 new_count < old_count * self.gamma
             })
             .map(|rw| {
