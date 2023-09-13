@@ -1,6 +1,12 @@
 //! Rewriting strategies for circuit optimisation.
 //!
-//! This module contains the [`RewriteStrategy`] trait, which is implemented by
+//! This module contains the [`RewriteStrategy`] trait, which is currently
+//! implemented by
+//!  - [`GreedyRewriteStrategy`], which applies as many rewrites as possible
+//!   on one circuit, and
+//! - [`ExhaustiveRewriteStrategy`], which clones the original circuit as many
+//!   times as there are possible rewrites and applies a different rewrite
+//!   to every circuit.
 
 use std::collections::HashSet;
 
@@ -14,8 +20,9 @@ use super::CircuitRewrite;
 /// Rewriting strategies for circuit optimisation.
 ///
 /// A rewrite strategy takes a set of possible rewrites and applies them
-/// to a circuit according to a strategy, returning a set of possible
-/// optimised circuits.
+/// to a circuit according to a strategy. It returns a list of new circuits,
+/// each obtained by applying one or several non-overlapping rewrites to the
+/// original circuit.
 pub trait RewriteStrategy {
     /// Apply a set of rewrites to a circuit.
     fn apply_rewrites(
@@ -25,7 +32,14 @@ pub trait RewriteStrategy {
     ) -> Vec<Hugr>;
 }
 
-/// A rewrite strategy that applies as many rewrites as possible on one circuit.
+/// A rewrite strategy applying as many non-overlapping rewrites as possible.
+///
+/// All possible rewrites are sorted by the number of gates they remove from
+/// the circuit and are applied in order. If a rewrite overlaps with a rewrite
+/// that has already been applied, it is skipped.
+///
+/// This strategy will always return exactly one circuit: the original circuit
+/// with as many rewrites applied as possible.
 ///
 /// Rewrites are only applied if they strictly decrease gate count.
 pub struct GreedyRewriteStrategy;
