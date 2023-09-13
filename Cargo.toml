@@ -41,6 +41,7 @@ strum = "0.25.0"
 fxhash = "0.2.1"
 rmp-serde = { version = "1.1.2", optional = true }
 delegate = "0.10.0"
+bytemuck = "1.14.0"
 
 [features]
 pyo3 = [
