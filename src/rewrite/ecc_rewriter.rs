@@ -162,6 +162,7 @@ mod tests {
         build_simple_circuit(2, |circ| {
             circ.append(T2Op::H, [0]).unwrap();
             circ.append(T2Op::H, [0]).unwrap();
+            circ.append(T2Op::CX, [0, 1]).unwrap();
             Ok(())
         })
         .unwrap()
