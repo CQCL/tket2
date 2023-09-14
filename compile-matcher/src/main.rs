@@ -65,7 +65,7 @@ fn main() {
     let patterns = all_circs
         .iter()
         .filter_map(|circ| {
-            let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(&circ, circ.root());
+            let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(circ, circ.root());
             // Fail silently on empty or disconnected patterns
             CircuitPattern::try_from_circuit(&circ).ok()
         })

@@ -223,9 +223,11 @@ impl TryFrom<&OpType> for JsonOp {
                 T2Op::Measure => JsonOpType::Measure,
                 T2Op::RzF64 => JsonOpType::Rz,
                 T2Op::RxF64 => JsonOpType::Rx,
+                // TODO: Use a TK2 opaque op once we update the tket-json-rs dependency.
+                T2Op::AngleAdd => JsonOpType::AngleAdd,
+                T2Op::TK1 => JsonOpType::TK1,
                 T2Op::PhasedX => JsonOpType::PhasedX,
                 T2Op::ZZPhase => JsonOpType::ZZPhase,
-                T2Op::TK1 => JsonOpType::TK1,
             }
         } else if let LeafOp::CustomOp(b) = leaf {
             let ext = (*b).as_ref();
