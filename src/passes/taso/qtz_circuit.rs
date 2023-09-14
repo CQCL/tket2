@@ -52,6 +52,7 @@ fn map_op(opstr: &str) -> Op {
         "tdg" => T2Op::Tdg,
         "sdg" => T2Op::Sdg,
         "rz" => T2Op::RzF64,
+        "add" => T2Op::AngleAdd,
         x => panic!("unknown op {x}"),
     }
     .into()

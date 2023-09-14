@@ -59,6 +59,7 @@ pub enum T2Op {
     RxF64,
     PhasedX,
     ZZPhase,
+    AngleAdd,
     TK1,
 }
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, PartialOrd)]
@@ -127,6 +128,10 @@ impl SimpleOpEnum for T2Op {
             Measure => FunctionType::new(one_qb_row, type_row![QB_T, BOOL_T]),
             RzF64 | RxF64 => FunctionType::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
             PhasedX => FunctionType::new(type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE], one_qb_row),
+            AngleAdd => FunctionType::new(
+                type_row![FLOAT64_TYPE, FLOAT64_TYPE],
+                type_row![FLOAT64_TYPE],
+            ),
             TK1 => FunctionType::new(
                 type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE, FLOAT64_TYPE],
                 one_qb_row,
