@@ -5,7 +5,7 @@ use hugr::Hugr;
 use tket2::{
     circuit::Circuit,
     json::{load_tk1_json_file, TKETDecode},
-    passes::taso::taso,
+    passes::taso::{taso, taso_mpsc},
     rewrite::{strategy::ExhaustiveRewriteStrategy, ECCRewriter},
 };
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -42,6 +42,15 @@ struct CmdLineArgs {
         help = "Sets the ECC file to use. It is a JSON file of Quartz-generated ECCs."
     )]
     eccs: String,
+    /// Number of threads (default=1)
+    #[arg(
+        short,
+        long,
+        default_value = "1",
+        value_name = "N_THREADS",
+        help = "The number of threads to use."
+    )]
+    n_threads: usize,
 }
 
 fn save_tk1_json_file(path: impl AsRef<Path>, circ: &Hugr) -> Result<(), std::io::Error> {
@@ -66,7 +75,20 @@ fn main() {
     let strategy = ExhaustiveRewriteStrategy::default();
 
     println!("Optimising...");
-    let opt_circ = taso(circ, rewriter, strategy, |c| c.num_gates(), Some(100));
+    let opt_circ = if opts.n_threads == 1 {
+        println!("Using single-threaded TASO");
+        taso(circ, rewriter, strategy, |c| c.num_gates(), Some(100))
+    } else {
+        println!("Using multi-threaded TASO with {} threads", opts.n_threads);
+        taso_mpsc(
+            circ,
+            rewriter,
+            strategy,
+            |c| c.num_gates(),
+            Some(100),
+            opts.n_threads,
+        )
+    };
 
     println!("Saving result");
     save_tk1_json_file(output_path, &opt_circ).unwrap();

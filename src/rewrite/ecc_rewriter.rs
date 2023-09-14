@@ -40,6 +40,7 @@ struct TargetID(usize);
 /// Valid rewrites turn a non-representative circuit into its representative,
 /// or a representative circuit into any of the equivalent non-representative
 /// circuits.
+#[derive(Debug, Clone)]
 pub struct ECCRewriter {
     /// Matcher for finding patterns.
     matcher: PatternMatcher,
