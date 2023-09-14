@@ -25,10 +25,12 @@ use std::thread::{self, JoinHandle};
 use std::time::Instant;
 use std::{fs, io};
 use std::{fs::File, path::Path};
+use tket_json_rs::circuit_json::SerialCircuit;
 
 use serde::{Deserialize, Serialize};
 
 use crate::circuit::CircuitHash;
+use crate::json::TKETDecode;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
 
@@ -201,14 +203,15 @@ impl<P: Ord, C> HugrPQ<P, C> {
 /// the multi-threaded version.
 pub fn taso(
     circ: Hugr,
-    rewriter: impl Rewriter,
-    strategy: impl RewriteStrategy,
+    rewriter: &impl Rewriter,
+    strategy: &impl RewriteStrategy,
     cost: impl Fn(&Hugr) -> usize,
     timeout: Option<u64>,
-) -> Hugr {
+    circ_name: &str,
+    target_gate_count: usize,
+) -> (Hugr, bool) {
     let start_time = Instant::now();
-
-    let file = File::create("best_circs.csv").unwrap();
+    let file = File::create(format!("logs/best_circs_{circ_name}.csv")).unwrap();
     let mut log_best_circ = csv::Writer::from_writer(file);
 
     let mut best_circ = circ.clone();
@@ -223,7 +226,8 @@ pub fn taso(
 
     pq.push(circ);
 
-    let mut circ_cnt = 0;
+    let mut timed_out = false;
+
     while let Some(Entry { circ, cost, hash }) = pq.pop() {
         if cost < best_circ_cost {
             best_circ = circ.clone();
@@ -233,16 +237,13 @@ pub fn taso(
             seen_hashes.clear();
             seen_hashes.insert(hash);
         }
+        if best_circ_cost <= target_gate_count {
+            break;
+        }
 
         let rewrites = rewriter.get_rewrites(&circ);
         for new_circ in strategy.apply_rewrites(rewrites, &circ) {
             let new_circ_hash = new_circ.circuit_hash();
-            circ_cnt += 1;
-            if circ_cnt % 1000 == 0 {
-                println!("{circ_cnt} circuits...");
-                println!("Queue size: {} circuits", pq.len());
-                println!("Total seen: {} circuits", seen_hashes.len());
-            }
             if seen_hashes.contains(&new_circ_hash) {
                 continue;
             }
@@ -257,20 +258,22 @@ pub fn taso(
 
         if let Some(timeout) = timeout {
             if start_time.elapsed().as_secs() > timeout {
-                println!("Timeout");
+                timed_out = true;
                 break;
             }
         }
     }
 
-    println!("END RESULT: {}", cost(&best_circ));
-    fs::write("final_best_circ.gv", best_circ.dot_string()).unwrap();
-    fs::write(
-        "final_best_circ.json",
-        serde_json::to_vec(&best_circ).unwrap(),
-    )
-    .unwrap();
-    best_circ
+    save_tk1_json_file(format!("logs/final_circ_{circ_name}.json"), &best_circ).unwrap();
+    (best_circ, timed_out)
+}
+
+fn save_tk1_json_file(path: impl AsRef<Path>, circ: &Hugr) -> Result<(), std::io::Error> {
+    let file = fs::File::create(path)?;
+    let writer = io::BufWriter::new(file);
+    let serial_circ = SerialCircuit::encode(circ).unwrap();
+    serde_json::to_writer_pretty(writer, &serial_circ)?;
+    Ok(())
 }
 
 /// Run the TASO optimiser on a circuit.

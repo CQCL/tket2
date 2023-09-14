@@ -66,7 +66,8 @@ harness = false
 
 [workspace]
 
-members = ["pyrs", "compile-matcher", "taso-optimiser"]
+# members = ["pyrs", "compile-matcher", "taso-optimiser", "bench-vs-quartz"]
+members = ["pyrs", "compile-matcher", "bench-vs-quartz"]
 
 [workspace.dependencies]
 
