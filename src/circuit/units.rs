@@ -17,11 +17,6 @@ pub type LinearUnit = usize;
 /// An iterator over the units in the input or output boundary of a [Node].
 #[derive(Clone, Debug)]
 pub struct Units<UL = ()> {
-    /// Filter over the yielded units.
-    ///
-    /// It can be set to ignore non-linear units, only yield qubits, between
-    /// other options. See [`UnitType`] for more information.
-    mode: UnitType,
     /// The node of the circuit.
     node: Node,
     /// The direction of the boundary.
@@ -29,14 +24,14 @@ pub struct Units<UL = ()> {
     /// The types of the boundary.
     types: TypeRow,
     /// The current index in the type row.
-    current: usize,
-    /// The amount of linear units yielded.
+    pos: usize,
+    /// The amount of linear units yielded so far.
     linear_count: usize,
     /// A pre-set assignment of units that maps linear ports to
     /// [`CircuitUnit::Linear`] ids.
     ///
     /// The default type is `()`, which assigns new linear ids sequentially.
-    unit_assigner: UL,
+    unit_labeller: UL,
 }
 
 impl Units<()> {
@@ -45,17 +40,14 @@ impl Units<()> {
     /// This iterator will yield all units originating from the circuit's input
     /// node.
     #[inline]
-    pub(super) fn new_circ_input(circuit: &impl Circuit, output_mode: UnitType) -> Self {
+    pub(super) fn new_circ_input(circuit: &impl Circuit) -> Self {
         Self {
-            mode: output_mode,
             node: circuit.input(),
             direction: Direction::Outgoing,
-            types: circuit
-                .get_function_type()
-                .map_or_else(Default::default, |ft| ft.input.clone()),
-            current: 0,
+            types: circuit.circuit_signature().input.clone(),
+            pos: 0,
             linear_count: 0,
-            unit_assigner: (),
+            unit_labeller: (),
         }
     }
 }
@@ -64,6 +56,12 @@ impl<UL> Units<UL>
 where
     UL: UnitLabeller,
 {
+    /// Apply a [`UnitFilter`] to the iterator's output, possibly unwrapping the
+    /// [`CircuitUnit`] into either a linear unit or a wire.
+    pub fn filter_units<F: UnitFilter>(self) -> FilteredUnits<F, UL> {
+        self.filter_map(F::accept)
+    }
+
     /// Create a new iterator over the units of a node.
     //
     // Note that this ignores any incoming linear unit labels, and just assigns
@@ -74,17 +72,15 @@ where
         circuit: &impl Circuit,
         node: Node,
         direction: Direction,
-        output_mode: UnitType,
-        unit_assigner: UL,
+        unit_labeller: UL,
     ) -> Self {
         Self {
-            mode: output_mode,
             node,
             direction,
             types: Self::init_types(circuit, node, direction),
-            current: 0,
+            pos: 0,
             linear_count: 0,
-            unit_assigner,
+            unit_labeller,
         }
     }
 
@@ -121,11 +117,11 @@ where
     fn make_value(&self, typ: &Type, port: Port) -> Option<(CircuitUnit, Port, Type)> {
         let unit = if type_is_linear(typ) {
             let linear_unit =
-                self.unit_assigner
+                self.unit_labeller
                     .assign_linear(self.node, port, self.linear_count - 1);
             CircuitUnit::Linear(linear_unit)
         } else {
-            let wire = self.unit_assigner.assign_wire(self.node, port)?;
+            let wire = self.unit_labeller.assign_wire(self.node, port)?;
             CircuitUnit::Wire(wire)
         };
         Some((unit, port, typ.clone()))
@@ -138,26 +134,25 @@ where
 {
     type Item = (CircuitUnit, Port, Type);
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let typ = self.types.get(self.current)?;
-            let port = Port::new(self.direction, self.current);
-            self.current += 1;
+            let typ = self.types.get(self.pos)?;
+            let port = Port::new(self.direction, self.pos);
+            self.pos += 1;
             if type_is_linear(typ) {
                 self.linear_count += 1;
             }
-            if self.mode.accept(typ) {
-                let val = self.make_value(typ, port);
-                if val.is_some() {
-                    return val;
-                }
+            let val = self.make_value(typ, port);
+            if val.is_some() {
+                return val;
             }
         }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = self.types.len() - self.current;
-        if self.mode == UnitType::All && self.direction == Direction::Outgoing {
+        let len = self.types.len() - self.pos;
+        if self.direction == Direction::Outgoing {
             (len, Some(len))
         } else {
             // Even when yielding every unit, a disconnected input non-linear
@@ -170,28 +165,68 @@ where
 
 impl<UL> FusedIterator for Units<UL> where UL: UnitLabeller {}
 
-/// What kind of units to iterate over.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(super) enum UnitType {
-    /// All units.
-    #[default]
-    All,
-    /// Only the linear units.
-    Linear,
-    /// Only the qubit units.
-    Qubits,
-    /// Only the non-linear units.
-    NonLinear,
+/// A filtered units iterator
+pub type FilteredUnits<F, UL = ()> = std::iter::FilterMap<
+    Units<UL>,
+    fn((CircuitUnit, Port, Type)) -> Option<<F as UnitFilter>::Item>,
+>;
+
+/// A filter over a [`Units`] iterator.
+pub trait UnitFilter {
+    type Item;
+
+    /// Filter a [`Units`] iterator item, and unwrap it into a `Self::Item` if
+    /// it's accepted.
+    fn accept(item: (CircuitUnit, Port, Type)) -> Option<Self::Item>;
 }
 
-impl UnitType {
-    /// Check if a [`Type`] should be yielded.
-    pub fn accept(self, typ: &Type) -> bool {
-        match self {
-            UnitType::All => true,
-            UnitType::Linear => type_is_linear(typ),
-            UnitType::Qubits => *typ == prelude::QB_T,
-            UnitType::NonLinear => !type_is_linear(typ),
+pub mod filter {
+    use super::*;
+
+    /// A unit filter that accepts linear units.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub struct Linear;
+
+    /// A unit filter that accepts qubits, a subset of [`Linear`].
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub struct Qubits;
+
+    /// A unit filter that accepts non-linear units.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub struct NonLinear;
+
+    impl UnitFilter for Linear {
+        type Item = (LinearUnit, Port, Type);
+
+        fn accept(item: (CircuitUnit, Port, Type)) -> Option<Self::Item> {
+            match item {
+                (CircuitUnit::Linear(unit), port, typ) => Some((unit, port, typ)),
+                _ => None,
+            }
+        }
+    }
+
+    impl UnitFilter for Qubits {
+        type Item = (LinearUnit, Port, Type);
+
+        fn accept(item: (CircuitUnit, Port, Type)) -> Option<Self::Item> {
+            match item {
+                (CircuitUnit::Linear(unit), port, typ) if typ == prelude::QB_T => {
+                    Some((unit, port, typ))
+                }
+                _ => None,
+            }
+        }
+    }
+
+    impl UnitFilter for NonLinear {
+        type Item = (Wire, Port, Type);
+
+        fn accept(item: (CircuitUnit, Port, Type)) -> Option<Self::Item> {
+            match item {
+                (CircuitUnit::Wire(wire), port, typ) => Some((wire, port, typ)),
+                _ => None,
+            }
         }
     }
 }
