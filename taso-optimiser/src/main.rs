@@ -40,7 +40,7 @@ struct CmdLineArgs {
         help = "Sets the ECC file to use. It is a JSON file of Quartz-generated ECCs."
     )]
     eccs: String,
-    /// Timeout in seconds (default=100)
+    /// Timeout in seconds (default=no timeout)
     #[arg(
         short,
         long,
