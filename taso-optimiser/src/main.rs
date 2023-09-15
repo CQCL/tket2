@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+use std::thread;
 use std::{fs, io, path::Path};
 
 use clap::Parser;
@@ -52,11 +54,11 @@ struct CmdLineArgs {
     #[arg(
         short = 'j',
         long,
-        default_value = "1",
+        default_value = "None",
         value_name = "N_THREADS",
-        help = "The number of threads to use. Currently only single-threaded TASO is supported."
+        help = "The number of threads to use. By default, the number of threads is equal to the number of logical cores."
     )]
-    n_threads: usize,
+    n_threads: Option<NonZeroUsize>,
 }
 
 fn save_tk1_json_file(path: impl AsRef<Path>, circ: &Hugr) -> Result<(), std::io::Error> {
@@ -77,15 +79,17 @@ fn main() {
     let circ = load_tk1_json_file(input_path).unwrap();
 
     println!("Compiling rewriter...");
-    let optimiser = if opts.n_threads == 1 {
-        println!("Using single-threaded TASO");
-        TasoOptimiser::default_with_eccs_json_file(ecc_path)
-    } else {
-        unimplemented!("Multi-threaded TASO has been disabled until fixed");
-    };
+    let optimiser = TasoOptimiser::default_with_eccs_json_file(ecc_path);
+
+    let n_threads = opts
+        .n_threads
+        .or_else(|| thread::available_parallelism().ok())
+        .unwrap_or(NonZeroUsize::new(1).unwrap());
+    println!("Using {n_threads} threads");
+
     println!("Optimising...");
     let opt_circ = optimiser
-        .optimise_with_default_log(&circ, opts.timeout)
+        .optimise_with_default_log(&circ, opts.timeout, n_threads)
         .unwrap();
 
     println!("Saving result");

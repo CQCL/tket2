@@ -17,6 +17,7 @@ mod qtz_circuit;
 
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 
+use std::num::NonZeroUsize;
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread::{self, JoinHandle};
 use std::time::Instant;
@@ -76,6 +77,7 @@ impl<'w> LogConfig<'w> {
 ///
 /// [Quartz]: https://arxiv.org/abs/2204.09033
 /// [TASO]: https://dl.acm.org/doi/10.1145/3341301.3359630
+#[derive(Clone, Debug)]
 pub struct TasoOptimiser<R, S, C> {
     rewriter: R,
     strategy: S,
@@ -91,24 +93,19 @@ impl<R, S, C> TasoOptimiser<R, S, C> {
             cost,
         }
     }
+}
 
+impl<R, S, C> TasoOptimiser<R, S, C>
+where
+    R: Rewriter + Send + Clone + 'static,
+    S: RewriteStrategy + Send + Clone + 'static,
+    C: Fn(&Hugr) -> usize + Send + Sync,
+{
     /// Run the TASO optimiser on a circuit.
     ///
     /// A timeout (in seconds) can be provided.
-    pub fn optimise(&self, circ: &Hugr, timeout: Option<u64>) -> Hugr
-    where
-        R: Rewriter,
-        S: RewriteStrategy,
-        C: Fn(&Hugr) -> usize,
-    {
-        taso(
-            circ,
-            &self.rewriter,
-            &self.strategy,
-            &self.cost,
-            Default::default(),
-            timeout,
-        )
+    pub fn optimise(&self, circ: &Hugr, timeout: Option<u64>, n_threads: NonZeroUsize) -> Hugr {
+        self.optimise_with_log(circ, Default::default(), timeout, n_threads)
     }
 
     /// Run the TASO optimiser on a circuit with logging activated.
@@ -119,20 +116,27 @@ impl<R, S, C> TasoOptimiser<R, S, C> {
         circ: &Hugr,
         log_config: LogConfig,
         timeout: Option<u64>,
-    ) -> Hugr
-    where
-        R: Rewriter,
-        S: RewriteStrategy,
-        C: Fn(&Hugr) -> usize,
-    {
-        taso(
-            circ,
-            &self.rewriter,
-            &self.strategy,
-            &self.cost,
-            log_config,
-            timeout,
-        )
+        n_threads: NonZeroUsize,
+    ) -> Hugr {
+        match n_threads.get() {
+            1 => taso(
+                circ,
+                &self.rewriter,
+                &self.strategy,
+                &self.cost,
+                log_config,
+                timeout,
+            ),
+            _ => taso_mpsc(
+                circ,
+                &self.rewriter,
+                &self.strategy,
+                &self.cost,
+                log_config,
+                timeout,
+                n_threads,
+            ),
+        }
     }
 
     /// Run the TASO optimiser on a circuit with default logging.
@@ -145,17 +149,17 @@ impl<R, S, C> TasoOptimiser<R, S, C> {
     /// If the creation of any of these files fails, an error is returned.
     ///
     /// A timeout (in seconds) can be provided.
-    pub fn optimise_with_default_log(&self, circ: &Hugr, timeout: Option<u64>) -> io::Result<Hugr>
-    where
-        R: Rewriter,
-        S: RewriteStrategy,
-        C: Fn(&Hugr) -> usize,
-    {
+    pub fn optimise_with_default_log(
+        &self,
+        circ: &Hugr,
+        timeout: Option<u64>,
+        n_threads: NonZeroUsize,
+    ) -> io::Result<Hugr> {
         let final_circ_json = fs::File::create("final_circ.json")?;
         let circ_candidates_csv = fs::File::create("best_circs.csv")?;
         let progress_log = fs::File::create("taso-optimisation.log")?;
         let log_config = LogConfig::new(final_circ_json, circ_candidates_csv, progress_log);
-        Ok(self.optimise_with_log(circ, log_config, timeout))
+        Ok(self.optimise_with_log(circ, log_config, timeout, n_threads))
     }
 }
 
@@ -253,29 +257,20 @@ fn taso(
     best_circ
 }
 
-/// Run the TASO optimiser on a circuit.
+/// Run the TASO optimiser on a circuit, using multiple threads.
 ///
-/// The optimiser will repeatedly rewrite the circuit using the rewriter and
-/// the rewrite strategy, optimising the circuit according to the cost function
-/// provided. Optionally, a timeout (in seconds) can be provided.
-///
-/// A log of the successive best candidate circuits can be found in the file
-/// `best_circs.csv`. In addition, the final best circuit is retrievable in the
-/// files `final_best_circ.gv` and `final_best_circ.json`.
-///
-/// This is the multi-threaded version of the optimiser. See [`TasoOptimiser`] for the
-/// single-threaded version.
-// TODO Support MPSC and expose in API
-#[allow(dead_code)]
+/// This is the multi-threaded version of [`taso`]. See [`TasoOptimiser`] for
+/// more details.
 fn taso_mpsc(
-    circ: Hugr,
-    rewriter: impl Rewriter + Send + Clone + 'static,
-    strategy: impl RewriteStrategy + Send + Clone + 'static,
+    circ: &Hugr,
+    rewriter: &(impl Rewriter + Send + Clone + 'static),
+    strategy: &(impl RewriteStrategy + Send + Clone + 'static),
     cost: impl Fn(&Hugr) -> usize + Send + Sync,
     log_config: LogConfig,
     timeout: Option<u64>,
-    n_threads: usize,
+    n_threads: NonZeroUsize,
 ) -> Hugr {
+    let n_threads: usize = n_threads.get();
     let start_time = Instant::now();
 
     let mut log_candidates = log_config.circ_candidates_csv.map(csv::Writer::from_writer);
@@ -295,7 +290,7 @@ fn taso_mpsc(
 
     // The priority queue of circuits to be processed (this should not get big)
     let mut pq = HugrPQ::new(&cost);
-    pq.push(circ);
+    pq.push(circ.clone());
 
     // each thread scans for rewrites using all the patterns and
     // sends rewritten circuits back to main
@@ -436,7 +431,7 @@ fn spawn_pattern_matching_thread(
 /// TASO execution.
 //
 // TODO: Replace this fixed logging. Report back intermediate results.
-#[derive(serde::Serialize, Debug)]
+#[derive(serde::Serialize, Clone, Debug)]
 struct BestCircSer {
     circ_len: usize,
     time: String,
