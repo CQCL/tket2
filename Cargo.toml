@@ -39,8 +39,8 @@ strum = "0.25.0"
 fxhash = "0.2.1"
 rmp-serde = { version = "1.1.2", optional = true }
 delegate = "0.10.0"
-csv = { version = "1.2.2", optional = true }
-chrono = { version ="0.4.30", optional = true }
+csv = { version = "1.2.2" }
+chrono = { version ="0.4.30" }
 bytemuck = "1.14.0"
 stringreader = "0.1.1"
 
@@ -53,7 +53,7 @@ pyo3 = [
     "quantinuum-hugr/pyo3",
 ]
 tkcxx = ["dep:tket-rs", "dep:num-complex"]
-portmatching = ["dep:portmatching", "dep:rmp-serde", "dep:csv", "dep:chrono"]
+portmatching = ["dep:portmatching", "dep:rmp-serde"]
 
 [dev-dependencies]
 rstest = "0.18.1"

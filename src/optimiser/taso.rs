@@ -26,10 +26,10 @@ use fxhash::FxHashSet;
 use hugr::{Hugr, HugrView};
 use itertools::{izip, Itertools};
 
-use crate::circuit::{Circuit, CircuitHash};
+use crate::circuit::CircuitHash;
 use crate::json::save_tk1_json_writer;
-use crate::rewrite::strategy::{self, ExhaustiveRewriteStrategy, RewriteStrategy};
-use crate::rewrite::{ECCRewriter, Rewriter};
+use crate::rewrite::strategy::RewriteStrategy;
+use crate::rewrite::Rewriter;
 use hugr_pq::{Entry, HugrPQ};
 
 /// Logging configuration for the TASO optimiser.
@@ -159,12 +159,21 @@ impl<R, S, C> TasoOptimiser<R, S, C> {
     }
 }
 
-impl TasoOptimiser<ECCRewriter, ExhaustiveRewriteStrategy, fn(&Hugr) -> usize> {
-    /// A sane default optimiser using the given ECC sets.
-    pub fn default_with_eccs_json_file(eccs_path: impl AsRef<std::path::Path>) -> Self {
-        let rewriter = ECCRewriter::from_eccs_json_file(eccs_path);
-        let strategy = strategy::ExhaustiveRewriteStrategy::default();
-        Self::new(rewriter, strategy, |c| c.num_gates())
+#[cfg(feature = "portmatching")]
+mod taso_default {
+    use crate::circuit::Circuit;
+    use crate::rewrite::strategy::ExhaustiveRewriteStrategy;
+    use crate::rewrite::ECCRewriter;
+
+    use super::*;
+
+    impl TasoOptimiser<ECCRewriter, ExhaustiveRewriteStrategy, fn(&Hugr) -> usize> {
+        /// A sane default optimiser using the given ECC sets.
+        pub fn default_with_eccs_json_file(eccs_path: impl AsRef<std::path::Path>) -> Self {
+            let rewriter = ECCRewriter::from_eccs_json_file(eccs_path);
+            let strategy = ExhaustiveRewriteStrategy::default();
+            Self::new(rewriter, strategy, |c| c.num_gates())
+        }
     }
 }
 
