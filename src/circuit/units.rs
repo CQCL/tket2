@@ -17,7 +17,6 @@ pub use filter::FilteredUnits;
 
 use std::iter::FusedIterator;
 
-use hugr::extension::prelude;
 use hugr::hugr::CircuitUnit;
 use hugr::ops::OpTrait;
 use hugr::types::{EdgeKind, Type, TypeBound, TypeRow};
@@ -33,7 +32,7 @@ pub type LinearUnit = usize;
 
 /// An iterator over the units in the input or output boundary of a [Node].
 #[derive(Clone, Debug)]
-pub struct Units<UL = ()> {
+pub struct Units<UL = DefaultUnitLabeller> {
     /// The node of the circuit.
     node: Node,
     /// The direction of the boundary.
@@ -51,7 +50,7 @@ pub struct Units<UL = ()> {
     unit_labeller: UL,
 }
 
-impl Units<()> {
+impl Units<DefaultUnitLabeller> {
     /// Create a new iterator over the input units of a circuit.
     ///
     /// This iterator will yield all units originating from the circuit's input
@@ -64,7 +63,7 @@ impl Units<()> {
             types: circuit.circuit_signature().input.clone(),
             pos: 0,
             linear_count: 0,
-            unit_labeller: (),
+            unit_labeller: DefaultUnitLabeller,
         }
     }
 }
@@ -203,7 +202,10 @@ pub trait UnitLabeller {
 /// The default [`UnitLabeller`] that assigns new linear unit ids
 /// sequentially, and only assigns wires to an outgoing ports (as input ports
 /// require querying the HUGR for their neighbours).
-impl UnitLabeller for () {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DefaultUnitLabeller;
+
+impl UnitLabeller for DefaultUnitLabeller {
     #[inline]
     fn assign_linear(&self, _: Node, _: Port, linear_count: usize) -> LinearUnit {
         linear_count

@@ -1,8 +1,15 @@
 //! Filters for the [`Units`] iterator that unwrap the yielded units when
 //! possible.
 
+use hugr::extension::prelude;
+use hugr::hugr::CircuitUnit;
+use hugr::types::Type;
+use hugr::{Port, Wire};
+
+use super::{DefaultUnitLabeller, LinearUnit, Units};
+
 /// A filtered units iterator
-pub type FilteredUnits<F, UL = ()> = std::iter::FilterMap<
+pub type FilteredUnits<F, UL = DefaultUnitLabeller> = std::iter::FilterMap<
     Units<UL>,
     fn((CircuitUnit, Port, Type)) -> Option<<F as UnitFilter>::Item>,
 >;
@@ -15,8 +22,6 @@ pub trait UnitFilter {
     /// it's accepted.
     fn accept(item: (CircuitUnit, Port, Type)) -> Option<Self::Item>;
 }
-
-use super::*;
 
 /// A unit filter that accepts linear units.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
