@@ -10,9 +10,6 @@
 //! and the rewrite strategy. A hash of every circuit computed is stored to
 //! detect and ignore duplicates. The priority queue is truncated whenever
 //! it gets too large.
-//!
-//! There are currently two implementations: a single-threaded one ([`taso`])
-//! and a multi-threaded one ([`taso_mpsc`]).
 
 mod eq_circ_class;
 mod hugr_pq;
@@ -75,8 +72,7 @@ impl<'w> LogConfig<'w> {
 /// always processing the circuit with the lowest cost first. Rewrites are
 /// computed for that circuit and all new circuit obtained are added to the queue.
 ///
-/// This is the single-threaded version of the optimiser. See
-/// [`TasoMpscOptimiser`] for the multi-threaded version.
+/// This optimiser is single-threaded.
 ///
 /// [Quartz]: https://arxiv.org/abs/2204.09033
 /// [TASO]: https://dl.acm.org/doi/10.1145/3341301.3359630
@@ -258,7 +254,7 @@ fn taso(
 /// `best_circs.csv`. In addition, the final best circuit is retrievable in the
 /// files `final_best_circ.gv` and `final_best_circ.json`.
 ///
-/// This is the multi-threaded version of the optimiser. See [`taso`] for the
+/// This is the multi-threaded version of the optimiser. See [`TasoOptimiser`] for the
 /// single-threaded version.
 // TODO Support MPSC and expose in API
 #[allow(dead_code)]
