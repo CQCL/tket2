@@ -108,9 +108,7 @@ pub fn load_tk1_json_str(json: &str) -> Result<Hugr, TK1ConvertError> {
 pub fn save_tk1_json_file(path: impl AsRef<Path>, circ: &Hugr) -> Result<(), TK1ConvertError> {
     let file = fs::File::create(path)?;
     let writer = io::BufWriter::new(file);
-    let serial_circ = SerialCircuit::encode(circ)?;
-    serde_json::to_writer(writer, &serial_circ)?;
-    Ok(())
+    save_tk1_json_writer(circ, writer)
 }
 
 /// Save a circuit in TK1 JSON format to a writer.
