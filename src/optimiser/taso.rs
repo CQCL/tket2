@@ -142,7 +142,7 @@ impl<R, S, C> TasoOptimiser<R, S, C> {
     ///  - `best_circs.csv`: a log of the successive best candidate circuits,
     ///  - `taso-optimisation.log`: a log of the progress of the optimisation.
     ///
-    /// If the creation of any of these files failes, an error is returned.
+    /// If the creation of any of these files fails, an error is returned.
     ///
     /// A timeout (in seconds) can be provided.
     pub fn optimise_with_default_log(&self, circ: &Hugr, timeout: Option<u64>) -> io::Result<Hugr>
