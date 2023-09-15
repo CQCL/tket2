@@ -50,7 +50,7 @@ struct CmdLineArgs {
     timeout: Option<u64>,
     /// Number of threads (default=1)
     #[arg(
-        short,
+        short = 'j',
         long,
         default_value = "1",
         value_name = "N_THREADS",
