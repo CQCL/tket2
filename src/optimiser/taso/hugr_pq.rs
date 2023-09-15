@@ -23,10 +23,10 @@ pub(super) struct Entry<C, P, H> {
 }
 
 impl<P: Ord, C> HugrPQ<P, C> {
-    /// Create a new HugrPQ with a cost function.
-    pub(super) fn new(cost_fn: C) -> Self {
+    /// Create a new HugrPQ with a cost function and some initial capacity.
+    pub(super) fn with_capacity(cost_fn: C, capacity: usize) -> Self {
         Self {
-            queue: DoublePriorityQueue::new(),
+            queue: DoublePriorityQueue::with_capacity(capacity),
             hash_lookup: Default::default(),
             cost_fn,
         }

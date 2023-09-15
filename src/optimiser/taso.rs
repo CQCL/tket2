@@ -98,7 +98,7 @@ impl<R, S, C> TasoOptimiser<R, S, C>
 where
     R: Rewriter + Send + Clone + 'static,
     S: RewriteStrategy + Send + Clone + 'static,
-    C: Fn(&Hugr) -> usize + Send + Sync,
+    C: Fn(&Hugr) -> usize + Send + Sync + Clone + 'static,
 {
     /// Run the TASO optimiser on a circuit.
     ///
@@ -159,7 +159,8 @@ where
         let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(circ.circuit_hash())]);
 
         // The priority queue of circuits to be processed (this should not get big)
-        let mut pq = HugrPQ::new(&self.cost);
+        const PRIORITY_QUEUE_CAPACITY: usize = 10_000;
+        let mut pq = HugrPQ::with_capacity(&self.cost, PRIORITY_QUEUE_CAPACITY);
         pq.push(circ.clone());
 
         let mut circ_cnt = 1;
@@ -190,9 +191,9 @@ where
                 seen_hashes.insert(new_circ_hash);
             }
 
-            if pq.len() >= 10000 {
+            if pq.len() >= PRIORITY_QUEUE_CAPACITY {
                 // Haircut to keep the queue size manageable
-                pq.truncate(5000);
+                pq.truncate(PRIORITY_QUEUE_CAPACITY / 2);
             }
 
             if let Some(timeout) = timeout {
@@ -245,7 +246,8 @@ where
         let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(circ.circuit_hash())]);
 
         // The priority queue of circuits to be processed (this should not get big)
-        let mut pq = HugrPQ::new(&self.cost);
+        const PRIORITY_QUEUE_CAPACITY: usize = 10_000;
+        let mut pq = HugrPQ::with_capacity(&self.cost, PRIORITY_QUEUE_CAPACITY);
         pq.push(circ.clone());
 
         // Each worker waits for circuits to scan for rewrites using all the
@@ -257,6 +259,7 @@ where
                     tx_result.clone(),
                     self.rewriter.clone(),
                     self.strategy.clone(),
+                    (self.cost).clone(),
                 )
             })
             .collect();
@@ -274,25 +277,25 @@ where
 
         'main: loop {
             // Process some items from the priority queue until the workqueue is full
-            'send: while let Some(Entry { circ, cost, hash }) = pq.pop() {
+            'send: while let Some(entry) = pq.pop() {
                 // Check if we got a new best circuit
-                if cost < best_circ_cost {
-                    best_circ = circ.clone();
-                    best_circ_cost = cost;
+                if entry.cost < best_circ_cost {
+                    best_circ = entry.circ.clone();
+                    best_circ_cost = entry.cost;
                     log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
                 }
 
                 // Fill the workqueue with data from pq
-                match tx_work.try_send(Some(circ)) {
+                match tx_work.try_send(Some(entry)) {
                     Ok(()) => {
                         jobs_sent += 1;
                     }
-                    Err(crossbeam_channel::TrySendError::Full(circ)) => {
+                    Err(crossbeam_channel::TrySendError::Full(Some(entry))) => {
                         // The queue is full, put the circuit back in pq.
-                        pq.push_with_hash_unchecked(circ.unwrap(), hash);
+                        pq.push_with_hash_unchecked(entry.circ, entry.hash);
                         break 'send;
                     }
-                    Err(crossbeam_channel::TrySendError::Disconnected(_)) => {
+                    Err(_) => {
                         eprintln!("All our workers panicked. Stopping optimisation.");
                         break 'main;
                     }
@@ -316,8 +319,8 @@ where
                     pq.push_with_hash_unchecked(circ, circ_hash);
 
                     // Haircut to keep the queue size manageable
-                    if pq.len() >= 10000 {
-                        pq.truncate(5000);
+                    if pq.len() >= PRIORITY_QUEUE_CAPACITY {
+                        pq.truncate(PRIORITY_QUEUE_CAPACITY / 2);
                     }
                 }
             };
@@ -386,15 +389,39 @@ where
 }
 
 fn spawn_pattern_matching_thread(
-    rx_work: crossbeam_channel::Receiver<Option<Hugr>>,
+    rx_work: crossbeam_channel::Receiver<Option<Entry<Hugr, usize, u64>>>,
     tx_result: crossbeam_channel::Sender<Vec<(u64, Hugr)>>,
     rewriter: impl Rewriter + Send + 'static,
     strategy: impl RewriteStrategy + Send + 'static,
+    cost: impl Fn(&Hugr) -> usize + Send + Sync + 'static,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
-        while let Ok(Some(hugr)) = rx_work.recv() {
-            let rewrites = rewriter.get_rewrites(&hugr);
-            let circs = strategy.apply_rewrites(rewrites, &hugr);
+        // Each thread keeps a small priority queue of circuits to be processed (smaller than the main thread's queue)
+        const PRIORITY_QUEUE_CAPACITY: usize = 500;
+        let mut pq = HugrPQ::with_capacity(&cost, PRIORITY_QUEUE_CAPACITY);
+
+        'main: loop {
+            // Block until we have at least one circuit to process.
+            if pq.is_empty() {
+                let Ok(Some(entry)) = rx_work.recv() else {
+                    // The main thread has disconnected, we can stop.
+                    break 'main;
+                };
+                pq.push_with_hash_unchecked(entry.circ, entry.hash);
+            }
+            'recv: while pq.len() < PRIORITY_QUEUE_CAPACITY {
+                match rx_work.try_recv() {
+                    Ok(Some(entry)) => pq.push_with_hash_unchecked(entry.circ, entry.hash),
+                    Err(crossbeam_channel::TryRecvError::Empty) => break 'recv,
+                    // The main thread has disconnected, we can stop.
+                    _ => break 'main,
+                }
+            }
+
+            // Process an item from the priority queue
+            let Entry { circ, .. } = pq.pop().unwrap();
+            let rewrites = rewriter.get_rewrites(&circ);
+            let circs = strategy.apply_rewrites(rewrites, &circ);
             let hashed_circs = circs.into_iter().map(|c| (c.circuit_hash(), c)).collect();
             let send = tx_result.send(hashed_circs);
             if send.is_err() {
