@@ -15,12 +15,12 @@ mod eq_circ_class;
 mod hugr_pq;
 mod qtz_circuit;
 
+use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 
 use std::num::NonZeroUsize;
-use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::{fs, io};
 
 use fxhash::FxHashSet;
@@ -162,7 +162,7 @@ where
         let mut pq = HugrPQ::new(&self.cost);
         pq.push(circ.clone());
 
-        let mut circ_cnt = 0;
+        let mut circ_cnt = 1;
         while let Some(Entry { circ, cost, .. }) = pq.pop() {
             if cost < best_circ_cost {
                 best_circ = circ.clone();
@@ -235,7 +235,7 @@ where
         // multi-consumer channel for queuing circuits to be processed by the workers
         let (tx_work, rx_work) = crossbeam_channel::bounded(1000 * n_threads);
         // channel for sending circuits from threads back to main
-        let (tx_result, rx_result) = mpsc::channel();
+        let (tx_result, rx_result) = crossbeam_channel::unbounded();
 
         let mut best_circ = circ.clone();
         let mut best_circ_cost = (self.cost)(&best_circ);
@@ -248,8 +248,8 @@ where
         let mut pq = HugrPQ::new(&self.cost);
         pq.push(circ.clone());
 
-        // each thread scans for rewrites using all the patterns and
-        // sends rewritten circuits back to main
+        // Each worker waits for circuits to scan for rewrites using all the
+        // patterns and send the results back to main.
         let joins: Vec<_> = (0..n_threads)
             .map(|_| {
                 spawn_pattern_matching_thread(
@@ -260,11 +260,21 @@ where
                 )
             })
             .collect();
+        // Drop our copy of the worker channels, so we don't count as a
+        // connected worker.
+        drop(rx_work);
+        drop(tx_result);
 
-        let mut circ_cnt = 0;
+        // A counter of circuits seen.
+        let mut circ_cnt = 1;
+        // A counter of jobs sent to the workers.
+        let mut jobs_sent = 0usize;
+        // A counter of completed jobs received from the workers.
+        let mut jobs_completed = 0usize;
+
         'main: loop {
             // Process some items from the priority queue until the workqueue is full
-            while let Some(Entry { circ, cost, hash }) = pq.pop() {
+            'send: while let Some(Entry { circ, cost, hash }) = pq.pop() {
                 // Check if we got a new best circuit
                 if cost < best_circ_cost {
                     best_circ = circ.clone();
@@ -274,11 +284,13 @@ where
 
                 // Fill the workqueue with data from pq
                 match tx_work.try_send(circ) {
-                    Ok(()) => {}
+                    Ok(()) => {
+                        jobs_sent += 1;
+                    }
                     Err(crossbeam_channel::TrySendError::Full(circ)) => {
                         // The queue is full, put the circuit back in pq.
                         pq.push_with_hash_unchecked(circ, hash);
-                        break;
+                        break 'send;
                     }
                     Err(crossbeam_channel::TrySendError::Disconnected(_)) => {
                         eprintln!("All our workers panicked. Stopping optimisation.");
@@ -287,45 +299,61 @@ where
                 }
             }
 
-            // Receive data from threads, add to pq
-            // We compute the hashes in the threads because it's expensive
-            loop {
-                match rx_result.try_recv() {
-                    Ok((circ_hash, circ)) => {
-                        circ_cnt += 1;
-                        if circ_cnt % 1000 == 0 {
-                            println!("{circ_cnt} circuits...");
-                            println!("Queue size: {} circuits", pq.len());
-                            println!("Total seen: {} circuits", seen_hashes.len());
-                        }
-                        if seen_hashes.contains(&circ_hash) {
-                            continue;
-                        }
-                        pq.push_with_hash_unchecked(circ, circ_hash);
-                        seen_hashes.insert(circ_hash);
-                    }
-                    Err(mpsc::TryRecvError::Empty) => break,
-                    Err(mpsc::TryRecvError::Disconnected) => {
-                        eprintln!("All our workers panicked. Stopping optimisation.");
-                        break 'main;
-                    }
-                }
-            }
+            // Receive data from threads, and add it to the priority queue.
+            // We compute the hashes in the threads because it's expensive.
+            'recv: loop {
+                // Wait a minimum amount of time for results, to avoid
+                // spin-locking while the workers are busy.
+                let receive_timeout = Instant::now() + Duration::from_millis(100);
+                select! {
+                    recv(rx_result) -> msg => {
+                        match msg {
+                            Ok(hashed_circs) => {
+                                jobs_completed += 1;
+                                for (circ_hash, circ) in hashed_circs {
+                                    circ_cnt += 1;
+                                    if circ_cnt % 1000 == 0 {
+                                        println!("{circ_cnt} circuits...");
+                                        println!("Queue size: {} circuits", pq.len());
+                                        println!("Total seen: {} circuits", seen_hashes.len());
+                                    }
+                                    if seen_hashes.contains(&circ_hash) {
+                                        continue;
+                                    }
+                                    seen_hashes.insert(circ_hash);
+                                    pq.push_with_hash_unchecked(circ, circ_hash);
 
-            // If everyone is waiting and we do not have new data, we are done
-            if pq.is_empty() {
-                //&& threads_empty.iter().all(|&x| x) {
-                break;
-            }
-            if let Some(timeout) = timeout {
-                if start_time.elapsed().as_secs() > timeout {
-                    println!("Timeout");
-                    break;
+                                    // Haircut to keep the queue size manageable
+                                    if pq.len() >= 10000 {
+                                        pq.truncate(5000);
+                                    }
+                                }
+                            }
+                            Err(crossbeam_channel::RecvError) => {
+                                eprintln!("All our workers panicked. Stopping optimisation.");
+                                break 'main;
+                            }
+                        }
+                    },
+                    recv(crossbeam_channel::at(receive_timeout)) -> _ => {
+                        assert!(jobs_sent >= jobs_completed);
+                        // If there is no more data to process, we are done.
+                        if pq.is_empty() && jobs_sent == jobs_completed {
+                            break 'main;
+                        };
+                        // If we have a timeout, check if we have exceeded it.
+                        if let Some(timeout) = timeout {
+                            if start_time.elapsed().as_secs() > timeout {
+                                println!("Timeout");
+                                break 'main;
+                            }
+                        };
+                        // Go send some more data to the workers.
+                        if !pq.is_empty() {
+                            break 'recv;
+                        }
+                    },
                 }
-            }
-            if pq.len() >= 10000 {
-                // Haircut to keep the queue size manageable
-                pq.truncate(5000);
             }
         }
 
@@ -349,17 +377,16 @@ where
 
 fn spawn_pattern_matching_thread(
     rx_work: crossbeam_channel::Receiver<Hugr>,
-    tx_result: mpsc::Sender<(u64, Hugr)>,
+    tx_result: crossbeam_channel::Sender<Vec<(u64, Hugr)>>,
     rewriter: impl Rewriter + Send + 'static,
     strategy: impl RewriteStrategy + Send + 'static,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         while let Ok(hugr) = rx_work.recv() {
             let rewrites = rewriter.get_rewrites(&hugr);
-            for new_circ in strategy.apply_rewrites(rewrites, &hugr) {
-                let new_circ_hash = new_circ.circuit_hash();
-                tx_result.send((new_circ_hash, new_circ)).unwrap();
-            }
+            let circs = strategy.apply_rewrites(rewrites, &hugr);
+            let hashed_circs = circs.into_iter().map(|c| (c.circuit_hash(), c)).collect();
+            tx_result.send(hashed_circs).unwrap();
         }
     })
 }
