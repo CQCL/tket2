@@ -15,6 +15,7 @@
 use derive_more::{From, Into};
 use itertools::Itertools;
 use portmatching::PatternID;
+use std::io;
 use std::path::Path;
 
 use hugr::{
@@ -60,9 +61,9 @@ impl ECCRewriter {
     /// the Quartz repository.
     ///
     /// Quartz: <https://github.com/quantum-compiler/quartz/>.
-    pub fn from_eccs_json_file(path: impl AsRef<Path>) -> Self {
-        let eccs = load_eccs_json_file(path);
-        Self::from_eccs(eccs)
+    pub fn try_from_eccs_json_file(path: impl AsRef<Path>) -> io::Result<Self> {
+        let eccs = load_eccs_json_file(path)?;
+        Ok(Self::from_eccs(eccs))
     }
 
     /// Create a new rewriter from a list of equivalent circuit classes.
@@ -219,7 +220,7 @@ mod tests {
         // In this example, all circuits are valid patterns, thus
         // PatternID == TargetID.
         let test_file = "test_files/small_eccs.json";
-        let rewriter = ECCRewriter::from_eccs_json_file(test_file);
+        let rewriter = ECCRewriter::try_from_eccs_json_file(test_file).unwrap();
         assert_eq!(rewriter.rewrite_rules.len(), rewriter.matcher.n_patterns());
         assert_eq!(rewriter.targets.len(), 5 * 4 + 4 * 3);
 

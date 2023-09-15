@@ -1,4 +1,5 @@
 use std::num::NonZeroUsize;
+use std::process::exit;
 use std::thread;
 use std::{fs, io, path::Path};
 
@@ -54,7 +55,6 @@ struct CmdLineArgs {
     #[arg(
         short = 'j',
         long,
-        default_value = "None",
         value_name = "N_THREADS",
         help = "The number of threads to use. By default, the number of threads is equal to the number of logical cores."
     )]
@@ -79,7 +79,13 @@ fn main() {
     let circ = load_tk1_json_file(input_path).unwrap();
 
     println!("Compiling rewriter...");
-    let optimiser = TasoOptimiser::default_with_eccs_json_file(ecc_path);
+    let Ok(optimiser) = TasoOptimiser::default_with_eccs_json_file(ecc_path) else {
+        eprintln!(
+            "Unable to load ECC file {:?}. Is it a JSON file of Quartz-generated ECCs?",
+            ecc_path
+        );
+        exit(1);
+    };
 
     let n_threads = opts
         .n_threads

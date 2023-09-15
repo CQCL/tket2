@@ -401,10 +401,12 @@ mod taso_default {
 
     impl TasoOptimiser<ECCRewriter, ExhaustiveRewriteStrategy, fn(&Hugr) -> usize> {
         /// A sane default optimiser using the given ECC sets.
-        pub fn default_with_eccs_json_file(eccs_path: impl AsRef<std::path::Path>) -> Self {
-            let rewriter = ECCRewriter::from_eccs_json_file(eccs_path);
+        pub fn default_with_eccs_json_file(
+            eccs_path: impl AsRef<std::path::Path>,
+        ) -> io::Result<Self> {
+            let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
             let strategy = ExhaustiveRewriteStrategy::default();
-            Self::new(rewriter, strategy, |c| c.num_gates())
+            Ok(Self::new(rewriter, strategy, |c| c.num_gates()))
         }
     }
 }
