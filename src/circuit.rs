@@ -58,9 +58,13 @@ pub trait Circuit: HugrView {
             .expect("Circuit has no output node");
     }
 
-    /// The number of gates in the circuit.
+    /// The number of quantum gates in the circuit.
     #[inline]
-    fn num_gates(&self) -> usize {
+    fn num_gates(&self) -> usize
+    where
+        Self: Sized,
+    {
+        // TODO: Implement discern quantum gates in the commands iterator.
         self.children(self.root()).count() - 2
     }
 
