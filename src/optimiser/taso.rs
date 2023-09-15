@@ -283,13 +283,13 @@ where
                 }
 
                 // Fill the workqueue with data from pq
-                match tx_work.try_send(circ) {
+                match tx_work.try_send(Some(circ)) {
                     Ok(()) => {
                         jobs_sent += 1;
                     }
                     Err(crossbeam_channel::TrySendError::Full(circ)) => {
                         // The queue is full, put the circuit back in pq.
-                        pq.push_with_hash_unchecked(circ, hash);
+                        pq.push_with_hash_unchecked(circ.unwrap(), hash);
                         break 'send;
                     }
                     Err(crossbeam_channel::TrySendError::Disconnected(_)) => {
@@ -305,9 +305,9 @@ where
                 for (circ_hash, circ) in hashed_circs {
                     circ_cnt += 1;
                     if circ_cnt % 1000 == 0 {
-                        println!("{circ_cnt} circuits...");
-                        println!("Queue size: {} circuits", pq.len());
-                        println!("Total seen: {} circuits", seen_hashes.len());
+                        // TODO: Add a minimum time between logs
+                        log_progress(log_config.progress_log.as_mut(), circ_cnt, pq, &seen_hashes)
+                            .expect("Failed to write to progress log");
                     }
                     if seen_hashes.contains(&circ_hash) {
                         continue;
@@ -322,39 +322,33 @@ where
                 }
             };
 
-            if pq.is_empty() {
-                'recv_blocking: loop {
-                    // If the jobs queue is empty, wait a minimum amount of time for results to avoid
-                    // spin-locking while the workers are busy.
-                    let receive_timeout = Instant::now() + Duration::from_millis(1);
-                    select! {
-                        recv(rx_result) -> msg => {
-                            match msg {
-                                Ok(hashed_circs) => {
-                                    jobs_completed += 1;
-                                    receive_msg(hashed_circs, &mut pq);
-                                },
-                                Err(crossbeam_channel::RecvError) => {
-                                    eprintln!("All our workers panicked. Stopping optimisation.");
-                                    break 'main;
-                                }
+            'recv: loop {
+                // If the jobs queue is empty, wait for results to arrive. If th
+                // priority queue is not empty, still wait for a minimum of time
+                // to avoid spin-locking while the workers are busy.
+                let receive_timeout = if pq.is_empty() && jobs_sent > jobs_completed {
+                    crossbeam_channel::never()
+                } else {
+                    crossbeam_channel::at(Instant::now() + Duration::from_millis(1))
+                };
+                select! {
+                    recv(rx_result) -> msg => {
+                        match msg {
+                            Ok(hashed_circs) => {
+                                jobs_completed += 1;
+                                receive_msg(hashed_circs, &mut pq);
+                            },
+                            Err(crossbeam_channel::RecvError) => {
+                                eprintln!("All our workers panicked. Stopping optimisation.");
+                                break 'main;
                             }
-                        },
-                        recv(crossbeam_channel::at(receive_timeout)) -> _ => {
-                            // Go send some more data to the workers.
-                            if !pq.is_empty() {
-                                break 'recv_blocking;
-                            }
-                        },
-                    }
-                }
-            } else {
-                // If the jobs queue is not empty, empty the results channel and go back to fill the workqueue.
-                //
-                // TODO: Better logic when we know the workqueue was full already?
-                while let Ok(hashed_circs) = rx_result.try_recv() {
-                    jobs_completed += 1;
-                    receive_msg(hashed_circs, &mut pq);
+                        }
+                    },
+                    recv(receive_timeout) -> _ => {
+                        // Go send some more data to the workers.
+                        // (the priority queue must not be empty at this point)
+                        break 'recv;
+                    },
                 }
             }
 
@@ -374,9 +368,10 @@ where
 
         log_processing_end(circ_cnt, true);
 
-        // Drop the channel so the threads know to stop.
+        // Insert poison and drop the channel so the threads know to stop.
+        (0..n_threads).for_each(|_| tx_work.send(None).unwrap());
         drop(tx_work);
-        joins.into_iter().for_each(|j| j.join().unwrap());
+        let _ = joins; // joins.into_iter().for_each(|j| j.join().unwrap());
 
         log_final(
             &best_circ,
@@ -391,17 +386,21 @@ where
 }
 
 fn spawn_pattern_matching_thread(
-    rx_work: crossbeam_channel::Receiver<Hugr>,
+    rx_work: crossbeam_channel::Receiver<Option<Hugr>>,
     tx_result: crossbeam_channel::Sender<Vec<(u64, Hugr)>>,
     rewriter: impl Rewriter + Send + 'static,
     strategy: impl RewriteStrategy + Send + 'static,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
-        while let Ok(hugr) = rx_work.recv() {
+        while let Ok(Some(hugr)) = rx_work.recv() {
             let rewrites = rewriter.get_rewrites(&hugr);
             let circs = strategy.apply_rewrites(rewrites, &hugr);
             let hashed_circs = circs.into_iter().map(|c| (c.circuit_hash(), c)).collect();
-            tx_result.send(hashed_circs).unwrap();
+            let send = tx_result.send(hashed_circs);
+            if send.is_err() {
+                // The main thread has disconnected, we can stop.
+                break;
+            }
         }
     })
 }
