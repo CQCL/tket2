@@ -179,7 +179,7 @@ where
                     log_progress(
                         log_config.progress_log.as_mut(),
                         circ_cnt,
-                        &pq,
+                        Some(&pq),
                         &seen_hashes,
                     )
                     .expect("Failed to write to progress log");
@@ -234,21 +234,17 @@ where
         let mut log_candidates = log_config.circ_candidates_csv.map(csv::Writer::from_writer);
 
         // multi-consumer channel for queuing circuits to be processed by the workers
-        let (tx_work, rx_work) = crossbeam_channel::bounded(1000 * n_threads);
+        let (tx_work, rx_work) = crossbeam_channel::unbounded();
         // channel for sending circuits from threads back to main
         let (tx_result, rx_result) = crossbeam_channel::unbounded();
 
+        let initial_circ_hash = circ.circuit_hash();
         let mut best_circ = circ.clone();
         let mut best_circ_cost = (self.cost)(&best_circ);
         log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
 
         // Hash of seen circuits. Dot not store circuits as this map gets huge
-        let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(circ.circuit_hash())]);
-
-        // The priority queue of circuits to be processed (this should not get big)
-        const PRIORITY_QUEUE_CAPACITY: usize = 10_000;
-        let mut pq = HugrPQ::with_capacity(&self.cost, PRIORITY_QUEUE_CAPACITY);
-        pq.push(circ.clone());
+        let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(initial_circ_hash)]);
 
         // Each worker waits for circuits to scan for rewrites using all the
         // patterns and send the results back to main.
@@ -268,6 +264,11 @@ where
         drop(rx_work);
         drop(tx_result);
 
+        // Queue the initial circuit
+        tx_work
+            .send(Some((initial_circ_hash, circ.clone())))
+            .unwrap();
+
         // A counter of circuits seen.
         let mut circ_cnt = 1;
         // A counter of jobs sent to the workers.
@@ -276,60 +277,11 @@ where
         let mut jobs_completed = 0usize;
 
         'main: loop {
-            // Process some items from the priority queue until the workqueue is full
-            'send: while let Some(entry) = pq.pop() {
-                // Check if we got a new best circuit
-                if entry.cost < best_circ_cost {
-                    best_circ = entry.circ.clone();
-                    best_circ_cost = entry.cost;
-                    log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
-                }
-
-                // Fill the workqueue with data from pq
-                match tx_work.try_send(Some(entry)) {
-                    Ok(()) => {
-                        jobs_sent += 1;
-                    }
-                    Err(crossbeam_channel::TrySendError::Full(Some(entry))) => {
-                        // The queue is full, put the circuit back in pq.
-                        pq.push_with_hash_unchecked(entry.circ, entry.hash);
-                        break 'send;
-                    }
-                    Err(_) => {
-                        eprintln!("All our workers panicked. Stopping optimisation.");
-                        break 'main;
-                    }
-                }
-            }
-
-            // Receive data from threads, and add it to the priority queue.
-            // We compute the hashes in the threads because it's expensive.
-            let mut receive_msg = |hashed_circs, pq: &mut HugrPQ<usize, &C>| {
-                for (circ_hash, circ) in hashed_circs {
-                    circ_cnt += 1;
-                    if circ_cnt % 1000 == 0 {
-                        // TODO: Add a minimum time between logs
-                        log_progress(log_config.progress_log.as_mut(), circ_cnt, pq, &seen_hashes)
-                            .expect("Failed to write to progress log");
-                    }
-                    if seen_hashes.contains(&circ_hash) {
-                        continue;
-                    }
-                    seen_hashes.insert(circ_hash);
-                    pq.push_with_hash_unchecked(circ, circ_hash);
-
-                    // Haircut to keep the queue size manageable
-                    if pq.len() >= PRIORITY_QUEUE_CAPACITY {
-                        pq.truncate(PRIORITY_QUEUE_CAPACITY / 2);
-                    }
-                }
-            };
-
             'recv: loop {
                 // If the jobs queue is empty, wait for results to arrive. If th
                 // priority queue is not empty, still wait for a minimum of time
                 // to avoid spin-locking while the workers are busy.
-                let receive_timeout = if pq.is_empty() && jobs_sent > jobs_completed {
+                let receive_timeout = if jobs_sent > jobs_completed {
                     crossbeam_channel::never()
                 } else {
                     crossbeam_channel::at(Instant::now() + Duration::from_millis(1))
@@ -339,7 +291,47 @@ where
                         match msg {
                             Ok(hashed_circs) => {
                                 jobs_completed += 1;
-                                receive_msg(hashed_circs, &mut pq);
+                                for (circ_hash, circ) in hashed_circs {
+                                    circ_cnt += 1;
+                                    if circ_cnt % 1000 == 0 {
+                                        // TODO: Add a minimum time between logs
+                                        log_progress::<_,u64,usize>(log_config.progress_log.as_mut(), circ_cnt, None, &seen_hashes)
+                                            .expect("Failed to write to progress log");
+                                    }
+                                    if seen_hashes.contains(&circ_hash) {
+                                        continue;
+                                    }
+                                    seen_hashes.insert(circ_hash);
+
+                                    let cost = (self.cost)(&circ);
+
+                                    // Check if we got a new best circuit
+                                    if cost < best_circ_cost {
+                                        best_circ = circ.clone();
+                                        best_circ_cost = cost;
+                                        log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
+                                    }
+
+                                    // Fill the workqueue with data from pq
+                                    if tx_work.send(Some((circ_hash, circ))).is_err() {
+                                        eprintln!("All our workers panicked. Stopping optimisation.");
+                                        break 'main;
+                                    };
+                                    jobs_sent += 1;
+                                }
+
+                                // If there is no more data to process, we are done.
+                                // TODO: Report dropped jobs in the workers, so we can check for termination.
+                                //if jobs_sent == jobs_completed {
+                                //    break 'main;
+                                //};
+                                // If we have a timeout, check if we have exceeded it.
+                                if let Some(timeout) = timeout {
+                                    if start_time.elapsed().as_secs() > timeout {
+                                        println!("Timeout");
+                                        break 'main;
+                                    }
+                                };
                             },
                             Err(crossbeam_channel::RecvError) => {
                                 eprintln!("All our workers panicked. Stopping optimisation.");
@@ -354,19 +346,6 @@ where
                     },
                 }
             }
-
-            assert!(jobs_sent >= jobs_completed);
-            // If there is no more data to process, we are done.
-            if pq.is_empty() && jobs_sent == jobs_completed {
-                break 'main;
-            };
-            // If we have a timeout, check if we have exceeded it.
-            if let Some(timeout) = timeout {
-                if start_time.elapsed().as_secs() > timeout {
-                    println!("Timeout");
-                    break 'main;
-                }
-            };
         }
 
         log_processing_end(circ_cnt, true);
@@ -389,7 +368,7 @@ where
 }
 
 fn spawn_pattern_matching_thread(
-    rx_work: crossbeam_channel::Receiver<Option<Entry<Hugr, usize, u64>>>,
+    rx_work: crossbeam_channel::Receiver<Option<(u64, Hugr)>>,
     tx_result: crossbeam_channel::Sender<Vec<(u64, Hugr)>>,
     rewriter: impl Rewriter + Send + 'static,
     strategy: impl RewriteStrategy + Send + 'static,
@@ -397,21 +376,27 @@ fn spawn_pattern_matching_thread(
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         // Each thread keeps a small priority queue of circuits to be processed (smaller than the main thread's queue)
-        const PRIORITY_QUEUE_CAPACITY: usize = 500;
+        const PRIORITY_QUEUE_CAPACITY: usize = 2_000;
         let mut pq = HugrPQ::with_capacity(&cost, PRIORITY_QUEUE_CAPACITY);
 
         'main: loop {
             // Block until we have at least one circuit to process.
             if pq.is_empty() {
-                let Ok(Some(entry)) = rx_work.recv() else {
+                let Ok(Some((circ, hash))) = rx_work.recv() else {
                     // The main thread has disconnected, we can stop.
                     break 'main;
                 };
-                pq.push_with_hash_unchecked(entry.circ, entry.hash);
+                pq.push_with_hash_unchecked(hash, circ);
             }
-            'recv: while pq.len() < PRIORITY_QUEUE_CAPACITY {
+            'recv: loop {
                 match rx_work.try_recv() {
-                    Ok(Some(entry)) => pq.push_with_hash_unchecked(entry.circ, entry.hash),
+                    Ok(Some((circ, hash))) => {
+                        pq.push_with_hash_unchecked(hash, circ);
+                        // If the queue is full, trim it.
+                        if pq.len() >= PRIORITY_QUEUE_CAPACITY {
+                            pq.truncate(PRIORITY_QUEUE_CAPACITY / 2);
+                        }
+                    }
                     Err(crossbeam_channel::TryRecvError::Empty) => break 'recv,
                     // The main thread has disconnected, we can stop.
                     _ => break 'main,
@@ -489,12 +474,14 @@ fn log_processing_end(circuit_count: usize, needs_joining: bool) {
 fn log_progress<W: io::Write, P: Ord, C>(
     wr: Option<&mut W>,
     circ_cnt: usize,
-    pq: &HugrPQ<P, C>,
+    pq: Option<&HugrPQ<P, C>>,
     seen_hashes: &FxHashSet<u64>,
 ) -> io::Result<()> {
     if let Some(wr) = wr {
         writeln!(wr, "{circ_cnt} circuits...")?;
-        writeln!(wr, "Queue size: {} circuits", pq.len())?;
+        if let Some(pq) = pq {
+            writeln!(wr, "Queue size: {} circuits", pq.len())?;
+        }
         writeln!(wr, "Total seen: {} circuits", seen_hashes.len())?;
     }
     Ok(())

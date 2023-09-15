@@ -19,6 +19,7 @@ pub(super) struct HugrPQ<P: Ord, C> {
 pub(super) struct Entry<C, P, H> {
     pub(super) circ: C,
     pub(super) cost: P,
+    #[allow(unused)] // TODO remove?
     pub(super) hash: H,
 }
 
