@@ -30,6 +30,7 @@ use hugr::{Hugr, HugrView};
 use itertools::{izip, Itertools};
 
 use crate::circuit::{Circuit, CircuitHash};
+use crate::json::save_tk1_json_writer;
 use crate::rewrite::strategy::{self, ExhaustiveRewriteStrategy, RewriteStrategy};
 use crate::rewrite::{ECCRewriter, Rewriter};
 use hugr_pq::{Entry, HugrPQ};
@@ -196,14 +197,11 @@ fn taso(
     pq.push(circ.clone());
 
     let mut circ_cnt = 0;
-    while let Some(Entry { circ, cost, hash }) = pq.pop() {
+    while let Some(Entry { circ, cost, .. }) = pq.pop() {
         if cost < best_circ_cost {
             best_circ = circ.clone();
             best_circ_cost = cost;
             log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
-            // Now we only care about smaller circuits
-            seen_hashes.clear();
-            seen_hashes.insert(hash);
         }
 
         let rewrites = rewriter.get_rewrites(&circ);
@@ -305,7 +303,7 @@ fn taso_mpsc(
 
     let mut circ_cnt = 0;
     loop {
-        // Send data in pq to the threads
+        // Fill each thread workqueue with data from pq
         while let Some(Entry {
             circ,
             cost: &cost,
@@ -321,6 +319,7 @@ fn taso_mpsc(
                 seen_hashes.insert(hash);
             }
             // try to send to first available thread
+            // TODO: Consider using crossbeam-channel
             if let Some(next_ind) = cycle_inds.by_ref().take(n_threads).find(|next_ind| {
                 let tx = &threads_tx[*next_ind];
                 tx.try_send(Some(circ.clone())).is_ok()
@@ -477,8 +476,8 @@ fn log_final<W1: io::Write, W2: io::Write>(
     if let Some(log) = log {
         writeln!(log, "END RESULT: {}", cost(best_circ))?;
     }
-    if let Some(final_circ) = final_circ {
-        final_circ.write_all(&serde_json::to_vec(&best_circ).unwrap())?;
+    if let Some(circ_writer) = final_circ {
+        save_tk1_json_writer(best_circ, circ_writer).unwrap();
     }
     Ok(())
 }
