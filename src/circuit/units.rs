@@ -41,7 +41,7 @@ pub struct Units<UL = DefaultUnitLabeller> {
     types: TypeRow,
     /// The current index in the type row.
     pos: usize,
-    /// The amount of linear units yielded so far.
+    /// The number of linear units yielded so far.
     linear_count: usize,
     /// A pre-set assignment of units that maps linear ports to
     /// [`CircuitUnit::Linear`] ids.
