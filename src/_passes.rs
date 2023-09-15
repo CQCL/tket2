@@ -4,6 +4,7 @@
 // pub mod redundancy;
 // pub mod pattern;
 // pub mod squash;
+#[cfg(feature = "portmatching")]
 pub mod taso;
 // use rayon::prelude::*;
 
