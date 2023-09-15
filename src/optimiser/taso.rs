@@ -18,14 +18,13 @@ mod qtz_circuit;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 
 use std::num::NonZeroUsize;
-use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 use std::time::Instant;
 use std::{fs, io};
 
 use fxhash::FxHashSet;
-use hugr::{Hugr, HugrView};
-use itertools::{izip, Itertools};
+use hugr::Hugr;
 
 use crate::circuit::CircuitHash;
 use crate::json::save_tk1_json_writer;
@@ -161,7 +160,6 @@ where
 
         // The priority queue of circuits to be processed (this should not get big)
         let mut pq = HugrPQ::new(&self.cost);
-
         pq.push(circ.clone());
 
         let mut circ_cnt = 0;
@@ -205,6 +203,8 @@ where
             }
         }
 
+        log_processing_end(circ_cnt, false);
+
         log_final(
             &best_circ,
             log_config.progress_log.as_mut(),
@@ -223,7 +223,7 @@ where
     fn taso_mpsc(
         &self,
         circ: &Hugr,
-        log_config: LogConfig,
+        mut log_config: LogConfig,
         timeout: Option<u64>,
         n_threads: NonZeroUsize,
     ) -> Hugr {
@@ -232,18 +232,17 @@ where
 
         let mut log_candidates = log_config.circ_candidates_csv.map(csv::Writer::from_writer);
 
-        println!("Spinning up {n_threads} threads");
-
+        // multi-consumer channel for queuing circuits to be processed by the workers
+        let (tx_work, rx_work) = crossbeam_channel::bounded(1000 * n_threads);
         // channel for sending circuits from threads back to main
-        let (t_main, r_main) = mpsc::sync_channel(n_threads * 100);
+        let (tx_result, rx_result) = mpsc::channel();
 
         let mut best_circ = circ.clone();
         let mut best_circ_cost = (self.cost)(&best_circ);
-        let circ_hash = circ.circuit_hash();
         log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
 
         // Hash of seen circuits. Dot not store circuits as this map gets huge
-        let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(circ_hash)]);
+        let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(circ.circuit_hash())]);
 
         // The priority queue of circuits to be processed (this should not get big)
         let mut pq = HugrPQ::new(&self.cost);
@@ -251,79 +250,71 @@ where
 
         // each thread scans for rewrites using all the patterns and
         // sends rewritten circuits back to main
-        let (joins, threads_tx, signal_new_data): (Vec<_>, Vec<_>, Vec<_>) = (0..n_threads)
+        let joins: Vec<_> = (0..n_threads)
             .map(|_| {
                 spawn_pattern_matching_thread(
-                    t_main.clone(),
+                    rx_work.clone(),
+                    tx_result.clone(),
                     self.rewriter.clone(),
                     self.strategy.clone(),
                 )
             })
-            .multiunzip();
-
-        let mut cycle_inds = (0..n_threads).cycle();
-        let mut threads_empty = vec![true; n_threads];
+            .collect();
 
         let mut circ_cnt = 0;
-        loop {
-            // Fill each thread workqueue with data from pq
-            while let Some(Entry {
-                circ,
-                cost: &cost,
-                hash,
-            }) = pq.peek()
-            {
+        'main: loop {
+            // Process some items from the priority queue until the workqueue is full
+            while let Some(Entry { circ, cost, hash }) = pq.pop() {
+                // Check if we got a new best circuit
                 if cost < best_circ_cost {
                     best_circ = circ.clone();
                     best_circ_cost = cost;
                     log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
-                    // Now we only care about smaller circuits
-                    seen_hashes.clear();
-                    seen_hashes.insert(hash);
                 }
-                // try to send to first available thread
-                // TODO: Consider using crossbeam-channel
-                if let Some(next_ind) = cycle_inds.by_ref().take(n_threads).find(|next_ind| {
-                    let tx = &threads_tx[*next_ind];
-                    tx.try_send(Some(circ.clone())).is_ok()
-                }) {
-                    pq.pop();
-                    // Unblock thread if waiting
-                    let _ = signal_new_data[next_ind].try_recv();
-                    threads_empty[next_ind] = false;
-                } else {
-                    // All send channels are full, continue
-                    break;
+
+                // Fill the workqueue with data from pq
+                match tx_work.try_send(circ) {
+                    Ok(()) => {}
+                    Err(crossbeam_channel::TrySendError::Full(circ)) => {
+                        // The queue is full, put the circuit back in pq.
+                        pq.push_with_hash_unchecked(circ, hash);
+                        break;
+                    }
+                    Err(crossbeam_channel::TrySendError::Disconnected(_)) => {
+                        eprintln!("All our workers panicked. Stopping optimisation.");
+                        break 'main;
+                    }
                 }
             }
 
             // Receive data from threads, add to pq
             // We compute the hashes in the threads because it's expensive
-            while let Ok(received) = r_main.try_recv() {
-                let Some((circ_hash, circ)) = received else {
-                    panic!("A thread panicked");
-                };
-                circ_cnt += 1;
-                if circ_cnt % 1000 == 0 {
-                    println!("{circ_cnt} circuits...");
-                    println!("Queue size: {} circuits", pq.len());
-                    println!("Total seen: {} circuits", seen_hashes.len());
+            loop {
+                match rx_result.try_recv() {
+                    Ok((circ_hash, circ)) => {
+                        circ_cnt += 1;
+                        if circ_cnt % 1000 == 0 {
+                            println!("{circ_cnt} circuits...");
+                            println!("Queue size: {} circuits", pq.len());
+                            println!("Total seen: {} circuits", seen_hashes.len());
+                        }
+                        if seen_hashes.contains(&circ_hash) {
+                            continue;
+                        }
+                        pq.push_with_hash_unchecked(circ, circ_hash);
+                        seen_hashes.insert(circ_hash);
+                    }
+                    Err(mpsc::TryRecvError::Empty) => break,
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        eprintln!("All our workers panicked. Stopping optimisation.");
+                        break 'main;
+                    }
                 }
-                if seen_hashes.contains(&circ_hash) {
-                    continue;
-                }
-                pq.push_with_hash_unchecked(circ, circ_hash);
-                seen_hashes.insert(circ_hash);
             }
 
-            // Check if all threads are waiting for new data
-            for (is_waiting, is_empty) in signal_new_data.iter().zip(threads_empty.iter_mut()) {
-                if is_waiting.try_recv().is_ok() {
-                    *is_empty = true;
-                }
-            }
             // If everyone is waiting and we do not have new data, we are done
-            if pq.is_empty() && threads_empty.iter().all(|&x| x) {
+            if pq.is_empty() {
+                //&& threads_empty.iter().all(|&x| x) {
                 break;
             }
             if let Some(timeout) = timeout {
@@ -338,57 +329,39 @@ where
             }
         }
 
-        println!("Tried {circ_cnt} circuits");
-        println!("Joining");
+        log_processing_end(circ_cnt, true);
 
-        for (join, tx, data_tx) in izip!(joins, threads_tx, signal_new_data) {
-            // tell all the threads we're done and join the threads
-            tx.send(None).unwrap();
-            let _ = data_tx.try_recv();
-            join.join().unwrap();
-        }
+        // Drop the channel so the threads know to stop.
+        drop(tx_work);
+        joins.into_iter().for_each(|j| j.join().unwrap());
 
-        println!("END RESULT: {}", (self.cost)(&best_circ));
-        fs::write("final_best_circ.gv", best_circ.dot_string()).unwrap();
-        fs::write(
-            "final_best_circ.json",
-            serde_json::to_vec(&best_circ).unwrap(),
+        log_final(
+            &best_circ,
+            log_config.progress_log.as_mut(),
+            log_config.final_circ_json.as_mut(),
+            &self.cost,
         )
-        .unwrap();
+        .expect("Failed to write to progress log and/or final circuit JSON");
+
         best_circ
     }
 }
 
 fn spawn_pattern_matching_thread(
-    tx_main: SyncSender<Option<(u64, Hugr)>>,
+    rx_work: crossbeam_channel::Receiver<Hugr>,
+    tx_result: mpsc::Sender<(u64, Hugr)>,
     rewriter: impl Rewriter + Send + 'static,
     strategy: impl RewriteStrategy + Send + 'static,
-) -> (JoinHandle<()>, SyncSender<Option<Hugr>>, Receiver<()>) {
-    // channel for sending circuits to each thread
-    let (tx_thread, rx) = mpsc::sync_channel(1000);
-    // A flag to wait until new data
-    let (wait_new_data, signal_new_data) = mpsc::sync_channel(0);
-
-    let jn = thread::spawn(move || {
-        loop {
-            if let Ok(received) = rx.try_recv() {
-                let Some(sent_hugr): Option<Hugr> = received else {
-                    // Terminate thread
-                    break;
-                };
-                let rewrites = rewriter.get_rewrites(&sent_hugr);
-                for new_circ in strategy.apply_rewrites(rewrites, &sent_hugr) {
-                    let new_circ_hash = new_circ.circuit_hash();
-                    tx_main.send(Some((new_circ_hash, new_circ))).unwrap();
-                }
-            } else {
-                // We are out of work, wait for new data
-                wait_new_data.send(()).unwrap();
+) -> JoinHandle<()> {
+    thread::spawn(move || {
+        while let Ok(hugr) = rx_work.recv() {
+            let rewrites = rewriter.get_rewrites(&hugr);
+            for new_circ in strategy.apply_rewrites(rewrites, &hugr) {
+                let new_circ_hash = new_circ.circuit_hash();
+                tx_result.send((new_circ_hash, new_circ)).unwrap();
             }
         }
-    });
-
-    (jn, tx_thread, signal_new_data)
+    })
 }
 
 #[cfg(feature = "portmatching")]
@@ -433,6 +406,14 @@ fn log_best<W: io::Write>(cbest: usize, wtr: Option<&mut csv::Writer<W>>) -> io:
     println!("new best of size {}", cbest);
     wtr.serialize(BestCircSer::new(cbest)).unwrap();
     wtr.flush()
+}
+
+fn log_processing_end(circuit_count: usize, needs_joining: bool) {
+    println!("END");
+    println!("Tried {circuit_count} circuits");
+    if needs_joining {
+        println!("Joining");
+    }
 }
 
 fn log_progress<W: io::Write, P: Ord, C>(

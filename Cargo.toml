@@ -43,6 +43,7 @@ csv = { version = "1.2.2" }
 chrono = { version ="0.4.30" }
 bytemuck = "1.14.0"
 stringreader = "0.1.1"
+crossbeam-channel = "0.5.8"
 
 [features]
 pyo3 = [

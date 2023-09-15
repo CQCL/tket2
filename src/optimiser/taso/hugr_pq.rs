@@ -33,6 +33,7 @@ impl<P: Ord, C> HugrPQ<P, C> {
     }
 
     /// Reference to the minimal Hugr in the queue.
+    #[allow(unused)]
     pub(super) fn peek(&self) -> Option<Entry<&Hugr, &P, u64>> {
         let (hash, cost) = self.queue.peek_min()?;
         let circ = self.hash_lookup.get(hash)?;
