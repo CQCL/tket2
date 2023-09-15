@@ -11,7 +11,8 @@ pub mod circuit;
 pub mod extension;
 pub mod json;
 pub(crate) mod ops;
-pub mod passes;
+pub mod optimiser;
+// pub mod _passes;
 pub mod rewrite;
 pub use ops::{symbolic_constant_op, Pauli, T2Op};
 

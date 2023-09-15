@@ -25,7 +25,7 @@ use hugr::{
 
 use crate::{
     circuit::Circuit,
-    passes::taso::{load_eccs_json_file, EqCircClass},
+    optimiser::taso::{load_eccs_json_file, EqCircClass},
     portmatching::{CircuitPattern, PatternMatcher},
 };
 

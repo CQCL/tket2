@@ -3,10 +3,8 @@ use std::{fs, io, path::Path};
 use clap::Parser;
 use hugr::Hugr;
 use tket2::{
-    circuit::Circuit,
     json::{load_tk1_json_file, TKETDecode},
-    passes::taso::{taso, taso_mpsc},
-    rewrite::{strategy::ExhaustiveRewriteStrategy, ECCRewriter},
+    optimiser::TasoOptimiser,
 };
 use tket_json_rs::circuit_json::SerialCircuit;
 
@@ -42,13 +40,21 @@ struct CmdLineArgs {
         help = "Sets the ECC file to use. It is a JSON file of Quartz-generated ECCs."
     )]
     eccs: String,
+    /// Timeout in seconds (default=100)
+    #[arg(
+        short,
+        long,
+        value_name = "TIMEOUT",
+        help = "Timeout in seconds (default=None)."
+    )]
+    timeout: Option<u64>,
     /// Number of threads (default=1)
     #[arg(
         short,
         long,
         default_value = "1",
         value_name = "N_THREADS",
-        help = "The number of threads to use."
+        help = "The number of threads to use. Currently only single-threaded TASO is supported."
     )]
     n_threads: usize,
 }
@@ -71,24 +77,16 @@ fn main() {
     let circ = load_tk1_json_file(input_path).unwrap();
 
     println!("Compiling rewriter...");
-    let rewriter = ECCRewriter::from_eccs_json_file(ecc_path);
-    let strategy = ExhaustiveRewriteStrategy::default();
-
-    println!("Optimising...");
-    let opt_circ = if opts.n_threads == 1 {
+    let optimiser = if opts.n_threads == 1 {
         println!("Using single-threaded TASO");
-        taso(circ, rewriter, strategy, |c| c.num_gates(), Some(100))
+        TasoOptimiser::default_with_eccs_json_file(ecc_path)
     } else {
-        println!("Using multi-threaded TASO with {} threads", opts.n_threads);
-        taso_mpsc(
-            circ,
-            rewriter,
-            strategy,
-            |c| c.num_gates(),
-            Some(100),
-            opts.n_threads,
-        )
+        unimplemented!("Multi-threaded TASO has been disabled until fixed");
     };
+    println!("Optimising...");
+    let opt_circ = optimiser
+        .optimise_with_default_log(&circ, opts.timeout)
+        .unwrap();
 
     println!("Saving result");
     save_tk1_json_file(output_path, &opt_circ).unwrap();

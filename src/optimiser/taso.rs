@@ -13,207 +13,179 @@
 //!
 //! There are currently two implementations: a single-threaded one ([`taso`])
 //! and a multi-threaded one ([`taso_mpsc`]).
+
+mod eq_circ_class;
+mod hugr_pq;
 mod qtz_circuit;
 
-use delegate::delegate;
-use fxhash::{FxHashMap, FxHashSet};
-use hugr::{Hugr, HugrView};
-use itertools::{izip, Itertools};
-use priority_queue::DoublePriorityQueue;
+pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
+
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread::{self, JoinHandle};
 use std::time::Instant;
 use std::{fs, io};
-use std::{fs::File, path::Path};
 
-use serde::{Deserialize, Serialize};
+use fxhash::FxHashSet;
+use hugr::{Hugr, HugrView};
+use itertools::{izip, Itertools};
 
-use crate::circuit::CircuitHash;
-use crate::rewrite::strategy::RewriteStrategy;
-use crate::rewrite::Rewriter;
+use crate::circuit::{Circuit, CircuitHash};
+use crate::rewrite::strategy::{self, ExhaustiveRewriteStrategy, RewriteStrategy};
+use crate::rewrite::{ECCRewriter, Rewriter};
+use hugr_pq::{Entry, HugrPQ};
 
-/// A set of circuits forming an Equivalence Circuit Class (ECC).
-///
-/// The set contains a distinguished circuit called the representative circuit.
-/// By convention, this will be the first circuit in a collection. For rewriting
-/// purposes, it is typically chosen to be the smallest.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct EqCircClass {
-    rep_circ: Hugr,
-    /// Other equivalent circuits to the representative.
-    other_circs: Vec<Hugr>,
+/// Logging configuration for the TASO optimiser.
+#[derive(Default)]
+pub struct LogConfig<'w> {
+    final_circ_json: Option<Box<dyn io::Write + 'w>>,
+    circ_candidates_csv: Option<Box<dyn io::Write + 'w>>,
+    progress_log: Option<Box<dyn io::Write + 'w>>,
 }
 
-impl EqCircClass {
-    /// Create a new equivalence class with a representative circuit.
-    pub fn new(rep_circ: Hugr, other_circs: Vec<Hugr>) -> Self {
-        Self {
-            rep_circ,
-            other_circs,
-        }
-    }
-
-    /// The representative circuit of the equivalence class.
-    pub fn rep_circ(&self) -> &Hugr {
-        &self.rep_circ
-    }
-
-    /// The other circuits in the equivalence class.
-    pub fn others(&self) -> &[Hugr] {
-        &self.other_circs
-    }
-
-    /// All circuits in the equivalence class.
-    pub fn circuits(&self) -> impl Iterator<Item = &Hugr> {
-        std::iter::once(&self.rep_circ).chain(self.other_circs.iter())
-    }
-
-    /// Consume into circuits of the equivalence class.
-    pub fn into_circuits(self) -> impl Iterator<Item = Hugr> {
-        std::iter::once(self.rep_circ).chain(self.other_circs)
-    }
-
-    /// The number of circuits in the equivalence class.
+impl<'w> LogConfig<'w> {
+    /// Create a new logging configuration.
     ///
-    /// An ECC always has a representative circuit, so this method will always
-    /// return an integer strictly greater than 0.
-    pub fn n_circuits(&self) -> usize {
-        self.other_circs.len() + 1
-    }
-}
-
-impl FromIterator<Hugr> for EqCircClass {
-    fn from_iter<T: IntoIterator<Item = Hugr>>(iter: T) -> Self {
-        let mut iter = iter.into_iter();
-        let rep_circ = iter.next().unwrap();
-        let other_circs = iter.collect();
-        Self::new(rep_circ, other_circs)
-    }
-}
-
-/// Load a set of equivalence classes from a JSON file.
-pub fn load_eccs_json_file(path: impl AsRef<Path>) -> Vec<EqCircClass> {
-    let all_circs = qtz_circuit::load_ecc_set(path);
-
-    all_circs
-        .into_values()
-        .map(FromIterator::from_iter)
-        .collect()
-}
-
-/// A min-priority queue for Hugrs.
-///
-/// The cost function provided will be used as the priority of the Hugrs.
-/// Uses hashes internally to store the Hugrs.
-#[derive(Debug, Clone, Default)]
-struct HugrPQ<P: Ord, C> {
-    queue: DoublePriorityQueue<u64, P>,
-    hash_lookup: FxHashMap<u64, Hugr>,
-    cost_fn: C,
-}
-
-struct Entry<C, P, H> {
-    circ: C,
-    cost: P,
-    hash: H,
-}
-
-impl<P: Ord, C> HugrPQ<P, C> {
-    /// Create a new HugrPQ with a cost function.
-    fn new(cost_fn: C) -> Self {
+    /// Three writer objects must be provided:
+    /// - best_circ_json: for the final optimised circuit, in TK1 JSON format,
+    /// - circ_candidates_csv: for a log of the successive best candidate circuits,
+    /// - progress_log: for a log of the progress of the optimisation.
+    pub fn new(
+        best_circ_json: impl io::Write + 'w,
+        circ_candidates_csv: impl io::Write + 'w,
+        progress_log: impl io::Write + 'w,
+    ) -> Self {
         Self {
-            queue: DoublePriorityQueue::new(),
-            hash_lookup: Default::default(),
-            cost_fn,
+            final_circ_json: Some(Box::new(best_circ_json)),
+            circ_candidates_csv: Some(Box::new(circ_candidates_csv)),
+            progress_log: Some(Box::new(progress_log)),
         }
     }
+}
 
-    /// Reference to the minimal Hugr in the queue.
-    fn peek(&self) -> Option<Entry<&Hugr, &P, u64>> {
-        let (hash, cost) = self.queue.peek_min()?;
-        let circ = self.hash_lookup.get(hash)?;
-        Some(Entry {
-            circ,
+/// The TASO optimiser.
+///
+/// Adapted from [Quartz][], and originally [TASO][].
+///
+/// Using a rewriter and a rewrite strategy, the optimiser
+/// will repeatedly rewrite the circuit, optimising the circuit according to
+/// the cost function provided.
+///
+/// Optimisation is done by maintaining a priority queue of circuits and
+/// always processing the circuit with the lowest cost first. Rewrites are
+/// computed for that circuit and all new circuit obtained are added to the queue.
+///
+/// This is the single-threaded version of the optimiser. See
+/// [`TasoMpscOptimiser`] for the multi-threaded version.
+///
+/// [Quartz]: https://arxiv.org/abs/2204.09033
+/// [TASO]: https://dl.acm.org/doi/10.1145/3341301.3359630
+pub struct TasoOptimiser<R, S, C> {
+    rewriter: R,
+    strategy: S,
+    cost: C,
+}
+
+impl<R, S, C> TasoOptimiser<R, S, C> {
+    /// Create a new TASO optimiser.
+    pub fn new(rewriter: R, strategy: S, cost: C) -> Self {
+        Self {
+            rewriter,
+            strategy,
             cost,
-            hash: *hash,
-        })
-    }
-
-    /// Push a Hugr into the queue.
-    fn push(&mut self, hugr: Hugr)
-    where
-        C: Fn(&Hugr) -> P,
-    {
-        let hash = hugr.circuit_hash();
-        self.push_with_hash_unchecked(hugr, hash);
-    }
-
-    /// Push a Hugr into the queue with a precomputed hash.
-    ///
-    /// This is useful to avoid recomputing the hash in [`HugrPQ::push`] when
-    /// it is already known.
-    ///
-    /// This does not check that the hash is valid.
-    fn push_with_hash_unchecked(&mut self, hugr: Hugr, hash: u64)
-    where
-        C: Fn(&Hugr) -> P,
-    {
-        let cost = (self.cost_fn)(&hugr);
-        self.queue.push(hash, cost);
-        self.hash_lookup.insert(hash, hugr);
-    }
-
-    /// Pop the minimal Hugr from the queue.
-    fn pop(&mut self) -> Option<Entry<Hugr, P, u64>> {
-        let (hash, cost) = self.queue.pop_min()?;
-        let circ = self.hash_lookup.remove(&hash)?;
-        Some(Entry { circ, cost, hash })
-    }
-
-    /// Discard the largest elements of the queue.
-    ///
-    /// Only keep up to `max_size` elements.
-    fn truncate(&mut self, max_size: usize) {
-        while self.queue.len() > max_size {
-            self.queue.pop_max();
         }
     }
 
-    delegate! {
-        to self.queue {
-            fn len(&self) -> usize;
-            fn is_empty(&self) -> bool;
-        }
+    /// Run the TASO optimiser on a circuit.
+    ///
+    /// A timeout (in seconds) can be provided.
+    pub fn optimise(&self, circ: &Hugr, timeout: Option<u64>) -> Hugr
+    where
+        R: Rewriter,
+        S: RewriteStrategy,
+        C: Fn(&Hugr) -> usize,
+    {
+        taso(
+            circ,
+            &self.rewriter,
+            &self.strategy,
+            &self.cost,
+            Default::default(),
+            timeout,
+        )
+    }
+
+    /// Run the TASO optimiser on a circuit with logging activated.
+    ///
+    /// A timeout (in seconds) can be provided.
+    pub fn optimise_with_log(
+        &self,
+        circ: &Hugr,
+        log_config: LogConfig,
+        timeout: Option<u64>,
+    ) -> Hugr
+    where
+        R: Rewriter,
+        S: RewriteStrategy,
+        C: Fn(&Hugr) -> usize,
+    {
+        taso(
+            circ,
+            &self.rewriter,
+            &self.strategy,
+            &self.cost,
+            log_config,
+            timeout,
+        )
+    }
+
+    /// Run the TASO optimiser on a circuit with default logging.
+    ///
+    /// The following files will be created:
+    ///  - `final_circ.json`: the final optimised circuit, in TK1 JSON format,
+    ///  - `best_circs.csv`: a log of the successive best candidate circuits,
+    ///  - `taso-optimisation.log`: a log of the progress of the optimisation.
+    ///
+    /// If the creation of any of these files failes, an error is returned.
+    ///
+    /// A timeout (in seconds) can be provided.
+    pub fn optimise_with_default_log(&self, circ: &Hugr, timeout: Option<u64>) -> io::Result<Hugr>
+    where
+        R: Rewriter,
+        S: RewriteStrategy,
+        C: Fn(&Hugr) -> usize,
+    {
+        let final_circ_json = fs::File::create("final_circ.json")?;
+        let circ_candidates_csv = fs::File::create("best_circs.csv")?;
+        let progress_log = fs::File::create("taso-optimisation.log")?;
+        let log_config = LogConfig::new(final_circ_json, circ_candidates_csv, progress_log);
+        Ok(self.optimise_with_log(circ, log_config, timeout))
     }
 }
 
-/// Run the TASO optimiser on a circuit.
-///
-/// The optimiser will repeatedly rewrite the circuit using the rewriter and
-/// the rewrite strategy, optimising the circuit according to the cost function
-/// provided. Optionally, a timeout (in seconds) can be provided.
-///
-/// A log of the successive best candidate circuits can be found in the file
-/// `best_circs.csv`. In addition, the final best circuit is retrievable in the
-/// files `final_best_circ.gv` and `final_best_circ.json`.
-///
-/// This is the single-threaded version of the optimiser. See [`taso_mpsc`] for
-/// the multi-threaded version.
-pub fn taso(
-    circ: Hugr,
-    rewriter: impl Rewriter,
-    strategy: impl RewriteStrategy,
+impl TasoOptimiser<ECCRewriter, ExhaustiveRewriteStrategy, fn(&Hugr) -> usize> {
+    /// A sane default optimiser using the given ECC sets.
+    pub fn default_with_eccs_json_file(eccs_path: impl AsRef<std::path::Path>) -> Self {
+        let rewriter = ECCRewriter::from_eccs_json_file(eccs_path);
+        let strategy = strategy::ExhaustiveRewriteStrategy::default();
+        Self::new(rewriter, strategy, |c| c.num_gates())
+    }
+}
+
+fn taso(
+    circ: &Hugr,
+    rewriter: &impl Rewriter,
+    strategy: &impl RewriteStrategy,
     cost: impl Fn(&Hugr) -> usize,
+    mut log_config: LogConfig,
     timeout: Option<u64>,
 ) -> Hugr {
     let start_time = Instant::now();
 
-    let file = File::create("best_circs.csv").unwrap();
-    let mut log_best_circ = csv::Writer::from_writer(file);
+    let mut log_candidates = log_config.circ_candidates_csv.map(csv::Writer::from_writer);
 
     let mut best_circ = circ.clone();
-    let mut best_circ_cost = cost(&circ);
-    log_best(best_circ_cost, &mut log_best_circ).unwrap();
+    let mut best_circ_cost = cost(circ);
+    log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
 
     // Hash of seen circuits. Dot not store circuits as this map gets huge
     let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(circ.circuit_hash())]);
@@ -221,14 +193,14 @@ pub fn taso(
     // The priority queue of circuits to be processed (this should not get big)
     let mut pq = HugrPQ::new(&cost);
 
-    pq.push(circ);
+    pq.push(circ.clone());
 
     let mut circ_cnt = 0;
     while let Some(Entry { circ, cost, hash }) = pq.pop() {
         if cost < best_circ_cost {
             best_circ = circ.clone();
             best_circ_cost = cost;
-            log_best(best_circ_cost, &mut log_best_circ).unwrap();
+            log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
             // Now we only care about smaller circuits
             seen_hashes.clear();
             seen_hashes.insert(hash);
@@ -239,9 +211,13 @@ pub fn taso(
             let new_circ_hash = new_circ.circuit_hash();
             circ_cnt += 1;
             if circ_cnt % 1000 == 0 {
-                println!("{circ_cnt} circuits...");
-                println!("Queue size: {} circuits", pq.len());
-                println!("Total seen: {} circuits", seen_hashes.len());
+                log_progress(
+                    log_config.progress_log.as_mut(),
+                    circ_cnt,
+                    &pq,
+                    &seen_hashes,
+                )
+                .expect("Failed to write to progress log");
             }
             if seen_hashes.contains(&new_circ_hash) {
                 continue;
@@ -263,13 +239,14 @@ pub fn taso(
         }
     }
 
-    println!("END RESULT: {}", cost(&best_circ));
-    fs::write("final_best_circ.gv", best_circ.dot_string()).unwrap();
-    fs::write(
-        "final_best_circ.json",
-        serde_json::to_vec(&best_circ).unwrap(),
+    log_final(
+        &best_circ,
+        log_config.progress_log.as_mut(),
+        log_config.final_circ_json.as_mut(),
+        &cost,
     )
-    .unwrap();
+    .expect("Failed to write to progress log and/or final circuit JSON");
+
     best_circ
 }
 
@@ -285,19 +262,20 @@ pub fn taso(
 ///
 /// This is the multi-threaded version of the optimiser. See [`taso`] for the
 /// single-threaded version.
-// TODO refactor so both implementations share more code
-pub fn taso_mpsc(
+// TODO Support MPSC and expose in API
+#[allow(dead_code)]
+fn taso_mpsc(
     circ: Hugr,
     rewriter: impl Rewriter + Send + Clone + 'static,
     strategy: impl RewriteStrategy + Send + Clone + 'static,
     cost: impl Fn(&Hugr) -> usize + Send + Sync,
+    log_config: LogConfig,
     timeout: Option<u64>,
     n_threads: usize,
 ) -> Hugr {
     let start_time = Instant::now();
 
-    let file = File::create("best_circs.csv").unwrap();
-    let mut log_best_circ = csv::Writer::from_writer(file);
+    let mut log_candidates = log_config.circ_candidates_csv.map(csv::Writer::from_writer);
 
     println!("Spinning up {n_threads} threads");
 
@@ -307,7 +285,7 @@ pub fn taso_mpsc(
     let mut best_circ = circ.clone();
     let mut best_circ_cost = cost(&best_circ);
     let circ_hash = circ.circuit_hash();
-    log_best(best_circ_cost, &mut log_best_circ).unwrap();
+    log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
 
     // Hash of seen circuits. Dot not store circuits as this map gets huge
     let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(circ_hash)]);
@@ -337,7 +315,7 @@ pub fn taso_mpsc(
             if cost < best_circ_cost {
                 best_circ = circ.clone();
                 best_circ_cost = cost;
-                log_best(best_circ_cost, &mut log_best_circ).unwrap();
+                log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
                 // Now we only care about smaller circuits
                 seen_hashes.clear();
                 seen_hashes.insert(hash);
@@ -467,8 +445,40 @@ impl BestCircSer {
     }
 }
 
-fn log_best(cbest: usize, wtr: &mut csv::Writer<File>) -> io::Result<()> {
+fn log_best<W: io::Write>(cbest: usize, wtr: Option<&mut csv::Writer<W>>) -> io::Result<()> {
+    let Some(wtr) = wtr else {
+        return Ok(());
+    };
     println!("new best of size {}", cbest);
     wtr.serialize(BestCircSer::new(cbest)).unwrap();
     wtr.flush()
+}
+
+fn log_progress<W: io::Write, P: Ord, C>(
+    wr: Option<&mut W>,
+    circ_cnt: usize,
+    pq: &HugrPQ<P, C>,
+    seen_hashes: &FxHashSet<u64>,
+) -> io::Result<()> {
+    if let Some(wr) = wr {
+        writeln!(wr, "{circ_cnt} circuits...")?;
+        writeln!(wr, "Queue size: {} circuits", pq.len())?;
+        writeln!(wr, "Total seen: {} circuits", seen_hashes.len())?;
+    }
+    Ok(())
+}
+
+fn log_final<W1: io::Write, W2: io::Write>(
+    best_circ: &Hugr,
+    log: Option<&mut W1>,
+    final_circ: Option<&mut W2>,
+    cost: impl Fn(&Hugr) -> usize,
+) -> io::Result<()> {
+    if let Some(log) = log {
+        writeln!(log, "END RESULT: {}", cost(best_circ))?;
+    }
+    if let Some(final_circ) = final_circ {
+        final_circ.write_all(&serde_json::to_vec(&best_circ).unwrap())?;
+    }
+    Ok(())
 }
