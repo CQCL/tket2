@@ -301,60 +301,75 @@ where
 
             // Receive data from threads, and add it to the priority queue.
             // We compute the hashes in the threads because it's expensive.
-            'recv: loop {
-                // Wait a minimum amount of time for results, to avoid
-                // spin-locking while the workers are busy.
-                let receive_timeout = Instant::now() + Duration::from_millis(100);
-                select! {
-                    recv(rx_result) -> msg => {
-                        match msg {
-                            Ok(hashed_circs) => {
-                                jobs_completed += 1;
-                                for (circ_hash, circ) in hashed_circs {
-                                    circ_cnt += 1;
-                                    if circ_cnt % 1000 == 0 {
-                                        println!("{circ_cnt} circuits...");
-                                        println!("Queue size: {} circuits", pq.len());
-                                        println!("Total seen: {} circuits", seen_hashes.len());
-                                    }
-                                    if seen_hashes.contains(&circ_hash) {
-                                        continue;
-                                    }
-                                    seen_hashes.insert(circ_hash);
-                                    pq.push_with_hash_unchecked(circ, circ_hash);
+            let mut receive_msg = |hashed_circs, pq: &mut HugrPQ<usize, &C>| {
+                for (circ_hash, circ) in hashed_circs {
+                    circ_cnt += 1;
+                    if circ_cnt % 1000 == 0 {
+                        println!("{circ_cnt} circuits...");
+                        println!("Queue size: {} circuits", pq.len());
+                        println!("Total seen: {} circuits", seen_hashes.len());
+                    }
+                    if seen_hashes.contains(&circ_hash) {
+                        continue;
+                    }
+                    seen_hashes.insert(circ_hash);
+                    pq.push_with_hash_unchecked(circ, circ_hash);
 
-                                    // Haircut to keep the queue size manageable
-                                    if pq.len() >= 10000 {
-                                        pq.truncate(5000);
-                                    }
+                    // Haircut to keep the queue size manageable
+                    if pq.len() >= 10000 {
+                        pq.truncate(5000);
+                    }
+                }
+            };
+
+            if pq.is_empty() {
+                'recv_blocking: loop {
+                    // If the jobs queue is empty, wait a minimum amount of time for results to avoid
+                    // spin-locking while the workers are busy.
+                    let receive_timeout = Instant::now() + Duration::from_millis(1);
+                    select! {
+                        recv(rx_result) -> msg => {
+                            match msg {
+                                Ok(hashed_circs) => {
+                                    jobs_completed += 1;
+                                    receive_msg(hashed_circs, &mut pq);
+                                },
+                                Err(crossbeam_channel::RecvError) => {
+                                    eprintln!("All our workers panicked. Stopping optimisation.");
+                                    break 'main;
                                 }
                             }
-                            Err(crossbeam_channel::RecvError) => {
-                                eprintln!("All our workers panicked. Stopping optimisation.");
-                                break 'main;
+                        },
+                        recv(crossbeam_channel::at(receive_timeout)) -> _ => {
+                            // Go send some more data to the workers.
+                            if !pq.is_empty() {
+                                break 'recv_blocking;
                             }
-                        }
-                    },
-                    recv(crossbeam_channel::at(receive_timeout)) -> _ => {
-                        assert!(jobs_sent >= jobs_completed);
-                        // If there is no more data to process, we are done.
-                        if pq.is_empty() && jobs_sent == jobs_completed {
-                            break 'main;
-                        };
-                        // If we have a timeout, check if we have exceeded it.
-                        if let Some(timeout) = timeout {
-                            if start_time.elapsed().as_secs() > timeout {
-                                println!("Timeout");
-                                break 'main;
-                            }
-                        };
-                        // Go send some more data to the workers.
-                        if !pq.is_empty() {
-                            break 'recv;
-                        }
-                    },
+                        },
+                    }
+                }
+            } else {
+                // If the jobs queue is not empty, empty the results channel and go back to fill the workqueue.
+                //
+                // TODO: Better logic when we know the workqueue was full already?
+                while let Ok(hashed_circs) = rx_result.try_recv() {
+                    jobs_completed += 1;
+                    receive_msg(hashed_circs, &mut pq);
                 }
             }
+
+            assert!(jobs_sent >= jobs_completed);
+            // If there is no more data to process, we are done.
+            if pq.is_empty() && jobs_sent == jobs_completed {
+                break 'main;
+            };
+            // If we have a timeout, check if we have exceeded it.
+            if let Some(timeout) = timeout {
+                if start_time.elapsed().as_secs() > timeout {
+                    println!("Timeout");
+                    break 'main;
+                }
+            };
         }
 
         log_processing_end(circ_cnt, true);
