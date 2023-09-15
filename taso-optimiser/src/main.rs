@@ -1,6 +1,5 @@
 use std::num::NonZeroUsize;
 use std::process::exit;
-use std::thread;
 use std::{fs, io, path::Path};
 
 use clap::Parser;
@@ -89,7 +88,8 @@ fn main() {
 
     let n_threads = opts
         .n_threads
-        .or_else(|| thread::available_parallelism().ok())
+        // TODO: Default to multithreading once that produces better results.
+        //.or_else(|| std::thread::available_parallelism().ok())
         .unwrap_or(NonZeroUsize::new(1).unwrap());
     println!("Using {n_threads} threads");
 
