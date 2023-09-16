@@ -2,14 +2,11 @@ use std::fs;
 use std::path::Path;
 
 use clap::Parser;
-use hugr::hugr::views::SiblingGraph;
-use hugr::ops::handle::DfgID;
-use hugr::HugrView;
 use itertools::Itertools;
 
 use tket2::json::load_tk1_json_file;
 // Import the PatternMatcher struct and its methods
-use tket2::passes::taso::load_eccs_json_file;
+use tket2::optimiser::taso::load_eccs_json_file;
 use tket2::portmatching::{CircuitPattern, PatternMatcher};
 
 /// Program to precompile patterns from files into a PatternMatcher stored as binary file.

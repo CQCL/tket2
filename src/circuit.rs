@@ -14,7 +14,7 @@ use hugr::types::FunctionType;
 pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
 
-use self::units::{UnitType, Units};
+use self::units::{filter, FilteredUnits, Units};
 
 /// An object behaving like a quantum circuit.
 //
@@ -42,24 +42,23 @@ pub trait Circuit: HugrView {
     /// Returns the input node to the circuit.
     #[inline]
     fn input(&self) -> Node {
-        return self
-            .children(self.root())
-            .next()
-            .expect("Circuit has no input node");
+        self.get_io(self.root()).expect("Circuit has no input node")[0]
     }
 
     /// Returns the output node to the circuit.
     #[inline]
     fn output(&self) -> Node {
-        return self
-            .children(self.root())
-            .nth(1)
-            .expect("Circuit has no output node");
+        self.get_io(self.root())
+            .expect("Circuit has no output node")[1]
     }
 
-    /// The number of gates in the circuit.
+    /// The number of quantum gates in the circuit.
     #[inline]
-    fn num_gates(&self) -> usize {
+    fn num_gates(&self) -> usize
+    where
+        Self: Sized,
+    {
+        // TODO: Implement discern quantum gates in the commands iterator.
         self.children(self.root()).count() - 2
     }
 
@@ -78,34 +77,34 @@ pub trait Circuit: HugrView {
     where
         Self: Sized,
     {
-        Units::new_circ_input(self, UnitType::All)
+        Units::new_circ_input(self)
     }
 
     /// Get the linear input units of the circuit and their types.
     #[inline]
-    fn linear_units(&self) -> Units
+    fn linear_units(&self) -> FilteredUnits<filter::Linear>
     where
         Self: Sized,
     {
-        Units::new_circ_input(self, UnitType::Linear)
+        self.units().filter_units::<filter::Linear>()
     }
 
     /// Get the non-linear input units of the circuit and their types.
     #[inline]
-    fn nonlinear_units(&self) -> Units
+    fn nonlinear_units(&self) -> FilteredUnits<filter::NonLinear>
     where
         Self: Sized,
     {
-        Units::new_circ_input(self, UnitType::NonLinear)
+        self.units().filter_units::<filter::NonLinear>()
     }
 
     /// Returns the units corresponding to qubits inputs to the circuit.
     #[inline]
-    fn qubits(&self) -> Units
+    fn qubits(&self) -> FilteredUnits<filter::Qubits>
     where
         Self: Sized,
     {
-        Units::new_circ_input(self, UnitType::Qubits)
+        self.units().filter_units::<filter::Qubits>()
     }
 
     /// Returns all the commands in the circuit, in some topological order.
@@ -160,8 +159,5 @@ mod tests {
         assert_eq!(circ.nonlinear_units().count(), 0);
         assert_eq!(circ.linear_units().count(), 3);
         assert_eq!(circ.qubits().count(), 2);
-
-        assert!(circ.linear_units().all(|(unit, _, _)| unit.is_linear()));
-        assert!(circ.nonlinear_units().all(|(unit, _, _)| unit.is_wire()));
     }
 }

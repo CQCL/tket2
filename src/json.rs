@@ -15,6 +15,7 @@ use hugr::std_extensions::arithmetic::float_types::ConstF64;
 use hugr::values::Value;
 use hugr::Hugr;
 
+use stringreader::StringReader;
 use thiserror::Error;
 use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::optype::OpType as JsonOpType;
@@ -85,22 +86,49 @@ pub enum OpConvertError {
 }
 
 /// Load a TKET1 circuit from a JSON file.
-pub fn load_tk1_json_file(path: impl AsRef<Path>) -> Result<Hugr, TK1LoadError> {
+pub fn load_tk1_json_file(path: impl AsRef<Path>) -> Result<Hugr, TK1ConvertError> {
     let file = fs::File::open(path)?;
     let reader = io::BufReader::new(file);
-    let ser: SerialCircuit = serde_json::from_reader(reader)?;
+    load_tk1_json_reader(reader)
+}
+
+/// Load a TKET1 circuit from a JSON reader.
+pub fn load_tk1_json_reader(json: impl io::Read) -> Result<Hugr, TK1ConvertError> {
+    let ser: SerialCircuit = serde_json::from_reader(json)?;
     Ok(ser.decode()?)
 }
 
 /// Load a TKET1 circuit from a JSON string.
-pub fn load_tk1_json_str(json: &str) -> Result<Hugr, TK1LoadError> {
-    let ser: SerialCircuit = serde_json::from_str(json)?;
-    Ok(ser.decode()?)
+pub fn load_tk1_json_str(json: &str) -> Result<Hugr, TK1ConvertError> {
+    let reader = StringReader::new(json);
+    load_tk1_json_reader(reader)
+}
+
+/// Save a circuit to file in TK1 JSON format.
+pub fn save_tk1_json_file(path: impl AsRef<Path>, circ: &Hugr) -> Result<(), TK1ConvertError> {
+    let file = fs::File::create(path)?;
+    let writer = io::BufWriter::new(file);
+    save_tk1_json_writer(circ, writer)
+}
+
+/// Save a circuit in TK1 JSON format to a writer.
+pub fn save_tk1_json_writer(circ: &Hugr, w: impl io::Write) -> Result<(), TK1ConvertError> {
+    let serial_circ = SerialCircuit::encode(circ)?;
+    serde_json::to_writer(w, &serial_circ)?;
+    Ok(())
+}
+
+/// Save a circuit in TK1 JSON format to a String.
+pub fn save_tk1_json_str(circ: &Hugr) -> Result<String, TK1ConvertError> {
+    let mut buf = io::BufWriter::new(Vec::new());
+    save_tk1_json_writer(circ, &mut buf)?;
+    let bytes = buf.into_inner().unwrap();
+    String::from_utf8(bytes).map_err(|_| TK1ConvertError::InvalidJson)
 }
 
 /// Error type for conversion between `Op` and `OpType`.
 #[derive(Debug, Error)]
-pub enum TK1LoadError {
+pub enum TK1ConvertError {
     /// The serialized operation is not supported.
     #[error("unsupported serialized operation: {0:?}")]
     UnsupportedSerializedOp(JsonOpType),
@@ -118,19 +146,19 @@ pub enum TK1LoadError {
     FileLoadError,
 }
 
-impl From<serde_json::Error> for TK1LoadError {
+impl From<serde_json::Error> for TK1ConvertError {
     fn from(_: serde_json::Error) -> Self {
         Self::InvalidJson
     }
 }
 
-impl From<io::Error> for TK1LoadError {
+impl From<io::Error> for TK1ConvertError {
     fn from(_: io::Error) -> Self {
         Self::FileLoadError
     }
 }
 
-impl From<OpConvertError> for TK1LoadError {
+impl From<OpConvertError> for TK1ConvertError {
     fn from(value: OpConvertError) -> Self {
         match value {
             OpConvertError::UnsupportedSerializedOp(op) => Self::UnsupportedSerializedOp(op),

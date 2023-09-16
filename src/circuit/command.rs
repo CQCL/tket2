@@ -10,7 +10,7 @@ use hugr::ops::{OpTag, OpTrait};
 use itertools::Itertools;
 use petgraph::visit as pv;
 
-use super::units::{LinearUnit, UnitLabeller, UnitType, Units};
+use super::units::{filter, DefaultUnitLabeller, LinearUnit, UnitLabeller, Units};
 use super::Circuit;
 
 pub use hugr::hugr::CircuitUnit;
@@ -54,13 +54,13 @@ impl<'circ, Circ: Circuit> Command<'circ, Circ> {
     /// Returns the units of this command in a given direction.
     #[inline]
     pub fn units(&self, direction: Direction) -> Units<&'_ Self> {
-        Units::new(self.circ, self.node, direction, UnitType::All, self)
+        Units::new(self.circ, self.node, direction, self)
     }
 
     /// Returns the linear units of this command in a given direction.
     #[inline]
     pub fn linear_units(&self, direction: Direction) -> Units<&'_ Self> {
-        Units::new(self.circ, self.node, direction, UnitType::Linear, self)
+        Units::new(self.circ, self.node, direction, self)
     }
 
     /// Returns the units and wires of this command in a given direction.
@@ -241,11 +241,9 @@ where
         //
         // Updates the map tracking the last wire of linear units.
         let linear_units: Vec<_> =
-            Units::new(self.circ, node, Direction::Outgoing, UnitType::Linear, ())
-                .map(|(unit, port, _)| {
-                    let CircuitUnit::Linear(_) = unit else {
-                        panic!("Expected a linear unit");
-                    };
+            Units::new(self.circ, node, Direction::Outgoing, DefaultUnitLabeller)
+                .filter_units::<filter::Linear>()
+                .map(|(_, port, _)| {
                     // Find the linear unit id for this port.
                     let linear_id = self
                         .follow_linear_port(node, port)
