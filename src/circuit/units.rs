@@ -57,14 +57,12 @@ impl Units<DefaultUnitLabeller> {
     /// node.
     #[inline]
     pub(super) fn new_circ_input(circuit: &impl Circuit) -> Self {
-        Self {
-            node: circuit.input(),
-            direction: Direction::Outgoing,
-            types: circuit.circuit_signature().input.clone(),
-            pos: 0,
-            linear_count: 0,
-            unit_labeller: DefaultUnitLabeller,
-        }
+        Self::new(
+            circuit,
+            circuit.input(),
+            Direction::Outgoing,
+            DefaultUnitLabeller,
+        )
     }
 }
 
@@ -159,9 +157,8 @@ where
             if type_is_linear(typ) {
                 self.linear_count += 1;
             }
-            let val = self.make_value(typ, port);
-            if val.is_some() {
-                return val;
+            if let Some(val) = self.make_value(typ, port) {
+                return Some(val);
             }
         }
     }
