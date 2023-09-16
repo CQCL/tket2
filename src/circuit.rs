@@ -43,19 +43,14 @@ pub trait Circuit: HugrView {
     /// Returns the input node to the circuit.
     #[inline]
     fn input(&self) -> Node {
-        return self
-            .children(self.root())
-            .next()
-            .expect("Circuit has no input node");
+        self.get_io(self.root()).expect("Circuit has no input node")[0]
     }
 
     /// Returns the output node to the circuit.
     #[inline]
     fn output(&self) -> Node {
-        return self
-            .children(self.root())
-            .nth(1)
-            .expect("Circuit has no output node");
+        self.get_io(self.root())
+            .expect("Circuit has no output node")[1]
     }
 
     /// The number of quantum gates in the circuit.
