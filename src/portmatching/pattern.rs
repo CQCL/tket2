@@ -59,7 +59,7 @@ impl CircuitPattern {
         let out_ports = circuit.get_optype(out).signature().input_ports();
         let inputs = inp_ports
             .map(|p| circuit.linked_ports(inp, p).collect())
-            .collect();
+            .collect_vec();
         let outputs = out_ports
             .map(|p| {
                 circuit
@@ -68,7 +68,13 @@ impl CircuitPattern {
                     .ok()
                     .expect("invalid circuit")
             })
-            .collect();
+            .collect_vec();
+        if inputs.iter().flatten().any(|&(n, _)| n == out) {
+            // An input is connected to an output => empty qubit, not allowed.
+            return Err(InvalidPattern::NotConnected);
+        }
+        // This is a consequence of the test above.
+        debug_assert!(outputs.iter().all(|(n, _)| *n != inp));
         Ok(Self {
             pattern,
             inputs,
@@ -172,6 +178,19 @@ mod tests {
         let circ = build_simple_circuit(2, |circ| {
             circ.append(T2Op::X, [0])?;
             circ.append(T2Op::T, [1])?;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(
+            CircuitPattern::try_from_circuit(&circ).unwrap_err(),
+            InvalidPattern::NotConnected
+        );
+    }
+
+    #[test]
+    fn pattern_with_empty_qubit() {
+        let circ = build_simple_circuit(2, |circ| {
+            circ.append(T2Op::X, [0])?;
             Ok(())
         })
         .unwrap();

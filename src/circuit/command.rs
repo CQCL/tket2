@@ -67,11 +67,8 @@ where
             .node_outputs(circ.input())
             .map(|port| Wire::new(circ.input(), port));
         let wire_unit = input_node_wires
-            .zip(circ.units().iter())
-            .filter_map(|(wire, (unit, _))| match unit {
-                CircuitUnit::Linear(i) => Some((wire, *i)),
-                _ => None,
-            })
+            .zip(circ.linear_units())
+            .map(|(wire, (linear_unit, _, _))| (wire, linear_unit))
             .collect();
 
         let nodes = petgraph::algo::toposort(&circ.as_petgraph(), None).unwrap();
@@ -111,7 +108,7 @@ where
                 // Get the unit corresponding to a wire, or return a wire Unit.
                 match self.wire_unit.remove(&wire) {
                     Some(unit) => {
-                        if let Some(new_port) = self.circ.follow_linear_port(node, port) {
+                        if let Some(new_port) = self.follow_linear_port(node, port) {
                             self.wire_unit.insert(Wire::new(node, new_port), unit);
                         }
                         Some(CircuitUnit::Linear(unit))
@@ -149,6 +146,21 @@ where
             inputs,
             outputs,
         })
+    }
+
+    fn follow_linear_port(&self, node: Node, port: Port) -> Option<Port> {
+        let optype = self.circ.get_optype(node);
+        if !optype.port_kind(port)?.is_linear() {
+            return None;
+        }
+        // TODO: We assume the linear data uses the same port offsets on both sides of the node.
+        // In the future we may want to have a more general mechanism to handle this.
+        let other_port = Port::new(port.direction().reverse(), port.index());
+        if optype.port_kind(other_port) == optype.port_kind(port) {
+            Some(other_port)
+        } else {
+            None
+        }
     }
 }
 

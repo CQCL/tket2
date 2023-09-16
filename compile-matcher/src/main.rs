@@ -9,7 +9,7 @@ use itertools::Itertools;
 
 use tket2::json::load_tk1_json_file;
 // Import the PatternMatcher struct and its methods
-use tket2::passes::taso::load_eccs_json_file;
+use tket2::optimiser::taso::load_eccs_json_file;
 use tket2::portmatching::{CircuitPattern, PatternMatcher};
 
 /// Program to precompile patterns from files into a PatternMatcher stored as binary file.
@@ -65,7 +65,7 @@ fn main() {
     let patterns = all_circs
         .iter()
         .filter_map(|circ| {
-            let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(&circ, circ.root());
+            let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(circ, circ.root());
             // Fail silently on empty or disconnected patterns
             CircuitPattern::try_from_circuit(&circ).ok()
         })

@@ -80,7 +80,8 @@ impl HashState {
     fn set_node(&mut self, circ: &impl HugrView, node: Node, hash: u64) {
         let optype = circ.get_optype(node);
         let signature = optype.signature();
-        let mut any_nonlinear = false;
+        // Defaults to false in most cases, except for OpType::Const.
+        let mut any_nonlinear = optype.tag() <= OpTag::Const;
         for (port_type, port) in signature
             .output_types()
             .iter()
@@ -148,8 +149,10 @@ fn hash_node(circ: &impl HugrView, node: Node, state: &mut HashState) -> u64 {
 #[cfg(test)]
 mod test {
     use hugr::hugr::views::{HierarchyView, SiblingGraph};
-    use hugr::HugrView;
+    use hugr::{Hugr, HugrView};
+    use tket_json_rs::circuit_json;
 
+    use crate::json::TKETDecode;
     use crate::utils::build_simple_circuit;
     use crate::T2Op;
 
@@ -192,5 +195,27 @@ mod test {
         let hash3 = circ3.circuit_hash();
 
         assert_ne!(hash1, hash3);
+    }
+
+    #[test]
+    fn hash_constants() {
+        let c_str = r#"{"bits": [], "commands": [{"args": [["q", [0]]], "op": {"params": ["0.5"], "type": "Rz"}}], "created_qubits": [], "discarded_qubits": [], "implicit_permutation": [[["q", [0]], ["q", [0]]]], "phase": "0.0", "qubits": [["q", [0]]]}"#;
+        let ser: circuit_json::SerialCircuit = serde_json::from_str(c_str).unwrap();
+        let circ: Hugr = ser.decode().unwrap();
+        circ.circuit_hash();
+    }
+
+    #[test]
+    fn hash_constants_neq() {
+        let c_str1 = r#"{"bits": [], "commands": [{"args": [["q", [0]]], "op": {"params": ["0.5"], "type": "Rz"}}], "created_qubits": [], "discarded_qubits": [], "implicit_permutation": [[["q", [0]], ["q", [0]]]], "phase": "0.0", "qubits": [["q", [0]]]}"#;
+        let c_str2 = r#"{"bits": [], "commands": [{"args": [["q", [0]]], "op": {"params": ["1.0"], "type": "Rz"}}], "created_qubits": [], "discarded_qubits": [], "implicit_permutation": [[["q", [0]], ["q", [0]]]], "phase": "0.0", "qubits": [["q", [0]]]}"#;
+
+        let mut all_hashes = Vec::with_capacity(2);
+        for c_str in [c_str1, c_str2] {
+            let ser: circuit_json::SerialCircuit = serde_json::from_str(c_str).unwrap();
+            let circ: Hugr = ser.decode().unwrap();
+            all_hashes.push(circ.circuit_hash());
+        }
+        assert_ne!(all_hashes[0], all_hashes[1]);
     }
 }

@@ -86,6 +86,7 @@ impl RewriteStrategy for GreedyRewriteStrategy {
 /// strictly reduces the gate count. The default is gamma = 1.0001, as set
 /// in the Quartz paper. This essentially allows rewrites that improve or leave
 /// the number of nodes unchanged.
+#[derive(Debug, Clone)]
 pub struct ExhaustiveRewriteStrategy {
     /// The gamma parameter.
     pub gamma: f64,
