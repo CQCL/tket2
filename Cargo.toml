@@ -13,9 +13,7 @@ lazy_static = "1.4.0"
 cgmath = "0.18.0"
 num-rational = "0.4"
 num-complex = { version = "0.4", optional = true }
-tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs", rev = "619db15d3", features = [
-    "tket2ops",
-] }
+tket-json-rs = { workspace = true }
 rayon = "1.5"
 tket-rs = { optional = true, git = "https://github.com/CQCL-DEV/tket-rs", rev = "bd7e8e04" }
 thiserror = "1.0.28"
@@ -41,7 +39,10 @@ strum = "0.25.0"
 fxhash = "0.2.1"
 rmp-serde = { version = "1.1.2", optional = true }
 delegate = "0.10.0"
+csv = { version = "1.2.2" }
+chrono = { version ="0.4.30" }
 bytemuck = "1.14.0"
+stringreader = "0.1.1"
 
 [features]
 pyo3 = [
@@ -66,7 +67,7 @@ harness = false
 
 [workspace]
 
-members = ["pyrs", "compile-matcher"]
+members = ["pyrs", "compile-matcher", "taso-optimiser"]
 
 [workspace.dependencies]
 
@@ -74,3 +75,6 @@ quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "bc9692b" }
 portgraph = { version = "0.9", features = ["serde"] }
 pyo3 = { version = "0.19" }
 itertools = { version = "0.11.0" }
+tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs", rev = "619db15d3", features = [
+    "tket2ops",
+] }
