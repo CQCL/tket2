@@ -10,7 +10,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 
 /// Optimise circuits using Quartz-generated ECCs.
 ///
-/// Quartz: https://github.com/quantum-compiler/quartz
+/// Quartz: <https://github.com/quantum-compiler/quartz>
 #[derive(Parser, Debug)]
 #[clap(version = "1.0", long_about = None)]
 #[clap(about = "Optimise circuits using Quartz-generated ECCs.")]

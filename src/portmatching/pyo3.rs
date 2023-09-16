@@ -71,7 +71,7 @@ impl PatternMatcher {
     }
 }
 
-/// Python equivalent of [`CircuitMatch`].
+/// Python equivalent of [`PatternMatch`].
 ///
 /// A convex pattern match in a circuit, available from Python.
 ///
@@ -83,7 +83,9 @@ impl PatternMatcher {
 /// over efficiency. It is provided for convenience and not recommended when
 /// performance is a key concern.
 ///
-/// TODO: can this be a wrapper for a [`CircuitMatch`] instead?
+/// TODO: can this be a wrapper for a [`PatternMatch`] instead?
+///
+/// [`PatternMatch`]: crate::portmatching::matcher::PatternMatch
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct PyPatternMatch {
@@ -114,7 +116,7 @@ impl PyPatternMatch {
 }
 
 impl PyPatternMatch {
-    /// Construct a [`PyCircuitMatch`] from a [`PatternMatch`].
+    /// Construct a [`PyPatternMatch`] from a [`PatternMatch`].
     ///
     /// Requires references to the circuit and pattern to resolve indices
     /// into these objects.
