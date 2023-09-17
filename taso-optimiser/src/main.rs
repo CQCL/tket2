@@ -74,12 +74,6 @@ struct CmdLineArgs {
         help = "The number of threads to use. By default, use a single thread."
     )]
     n_threads: Option<NonZeroUsize>,
-    /// Log the tracing metrics of the optimisation into a file.
-    #[arg(
-        long = "trace",
-        help = "Log the tracing metrics of the optimisation into a file."
-    )]
-    tracefile: Option<PathBuf>,
 }
 
 fn save_tk1_json_file(path: impl AsRef<Path>, circ: &Hugr) -> Result<(), std::io::Error> {
@@ -96,7 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup tracing subscribers for stdout and file logging.
     //
     // We need to keep the object around to keep the logging active.
-    let _tracer = Tracer::setup_tracing(opts.logfile, opts.tracefile);
+    let _tracer = Tracer::setup_tracing(opts.logfile);
 
     let input_path = Path::new(&opts.input);
     let output_path = Path::new(&opts.output);

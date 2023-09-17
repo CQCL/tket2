@@ -20,6 +20,7 @@ fn verbose_filter(metadata: &Metadata<'_>) -> bool {
     metadata.target().starts_with(LOG_TARGET) || metadata.target().starts_with(PROGRESS_TARGET)
 }
 
+#[allow(unused)]
 fn metrics_filter(metadata: &Metadata<'_>) -> bool {
     metadata.target().starts_with(METRICS_TARGET)
 }
@@ -27,17 +28,15 @@ fn metrics_filter(metadata: &Metadata<'_>) -> bool {
 #[derive(Debug, Default)]
 pub struct Tracer {
     pub logfile: Option<non_blocking::WorkerGuard>,
-    pub tracefile: Option<non_blocking::WorkerGuard>,
 }
 
 impl Tracer {
     /// Setup tracing subscribers for stdout and file logging.
-    pub fn setup_tracing(logfile: Option<PathBuf>, tracefile: Option<PathBuf>) -> Self {
+    pub fn setup_tracing(logfile: Option<PathBuf>) -> Self {
         let mut tracer = Self::default();
         tracing_subscriber::registry()
             .with(tracer.stdout_layer())
             .with(logfile.map(|f| tracer.logfile_layer(f)))
-            .with(tracefile.map(|f| tracer.metrics_layer(f)))
             .init();
         tracer
     }
@@ -70,17 +69,5 @@ impl Tracer {
             .with_ansi(false)
             .with_writer(non_blocking)
             .with_filter(filter_fn(verbose_filter))
-    }
-
-    fn metrics_layer<S>(&mut self, tracefile: PathBuf) -> impl Layer<S>
-    where
-        S: Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
-    {
-        let (non_blocking, guard) = self.init_writer(tracefile);
-        self.tracefile = Some(guard);
-        tracing_subscriber::fmt::layer()
-            .with_ansi(false)
-            .with_writer(non_blocking)
-            .with_filter(filter_fn(metrics_filter))
     }
 }
