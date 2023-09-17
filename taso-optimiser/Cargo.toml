@@ -12,3 +12,5 @@ tket2 = { path = "../", features = ["portmatching"] }
 quantinuum-hugr = { workspace = true }
 itertools = { workspace = true }
 tket-json-rs = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = "0.3.17"
