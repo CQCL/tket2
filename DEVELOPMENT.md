@@ -79,6 +79,14 @@ stable available.
 cargo +nightly miri test
 ```
 
+To run the python tests, run:
+
+```bash
+cd pyrs
+maturin develop
+pytest
+```
+
 ## 💅 Coding Style
 
 The rustfmt tool is used to enforce a consistent rust coding style. The CI will fail if the code is not formatted correctly. Python code is formatted with black.
