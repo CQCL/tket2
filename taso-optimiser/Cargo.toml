@@ -14,3 +14,4 @@ itertools = { workspace = true }
 tket-json-rs = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = "0.3.17"
+tracing-appender = "0.2.2"

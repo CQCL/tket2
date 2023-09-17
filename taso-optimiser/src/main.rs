@@ -1,18 +1,21 @@
+mod tracing;
+
+use crate::tracing::Tracer;
+
+use std::io::BufWriter;
 use std::num::NonZeroUsize;
+use std::path::PathBuf;
 use std::process::exit;
-use std::{fs, io, path::Path};
+use std::{fs, path::Path};
 
 use clap::Parser;
 use hugr::Hugr;
-use tket2::optimiser::taso::log::{TasoLogger, LOG_TARGET, PROGRESS_TARGET};
+use tket2::optimiser::taso::log::TasoLogger;
 use tket2::{
     json::{load_tk1_json_file, TKETDecode},
     optimiser::TasoOptimiser,
 };
 use tket_json_rs::circuit_json::SerialCircuit;
-use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::Layer;
 
 /// Optimise circuits using Quartz-generated ECCs.
 ///
@@ -28,7 +31,7 @@ struct CmdLineArgs {
         value_name = "FILE",
         help = "Input. A quantum circuit in TK1 JSON format."
     )]
-    input: String,
+    input: PathBuf,
     /// Output circuit file
     #[arg(
         short,
@@ -37,7 +40,7 @@ struct CmdLineArgs {
         value_name = "FILE",
         help = "Output. A quantum circuit in TK1 JSON format."
     )]
-    output: String,
+    output: PathBuf,
     /// ECC file
     #[arg(
         short,
@@ -45,7 +48,7 @@ struct CmdLineArgs {
         value_name = "ECC_FILE",
         help = "Sets the ECC file to use. It is a JSON file of Quartz-generated ECCs."
     )]
-    eccs: String,
+    eccs: PathBuf,
     /// Log output file
     #[arg(
         short,
@@ -54,7 +57,7 @@ struct CmdLineArgs {
         value_name = "LOGFILE",
         help = "Logfile to to output the progress of the optimisation."
     )]
-    logfile: Option<String>,
+    logfile: Option<PathBuf>,
     /// Timeout in seconds (default=no timeout)
     #[arg(
         short,
@@ -68,60 +71,32 @@ struct CmdLineArgs {
         short = 'j',
         long,
         value_name = "N_THREADS",
-        help = "The number of threads to use. By default, the number of threads is equal to the number of logical cores."
+        help = "The number of threads to use. By default, use a single thread."
     )]
     n_threads: Option<NonZeroUsize>,
+    /// Log the tracing metrics of the optimisation into a file.
+    #[arg(
+        long = "trace",
+        help = "Log the tracing metrics of the optimisation into a file."
+    )]
+    tracefile: Option<PathBuf>,
 }
 
 fn save_tk1_json_file(path: impl AsRef<Path>, circ: &Hugr) -> Result<(), std::io::Error> {
     let file = fs::File::create(path)?;
-    let writer = io::BufWriter::new(file);
+    let writer = BufWriter::new(file);
     let serial_circ = SerialCircuit::encode(circ).unwrap();
     serde_json::to_writer_pretty(writer, &serial_circ)?;
     Ok(())
 }
 
-fn setup_tracing(logfile: Option<impl AsRef<Path>>) -> Result<(), Box<dyn std::error::Error>> {
-    let registry = tracing_subscriber::registry();
-
-    // Clean log with the most important events.
-    let stdout_log = tracing_subscriber::fmt::layer()
-        .without_time()
-        .with_target(false)
-        .with_level(false)
-        .with_filter(tracing_subscriber::filter::filter_fn(|metadata| {
-            metadata.target().starts_with(LOG_TARGET)
-        }));
-
-    // Logfile containing all events, with timing and thread metadata.
-    if let Some(logfile) = logfile {
-        let logfile = logfile.as_ref().to_owned();
-        let file_log = tracing_subscriber::fmt::layer()
-            .with_ansi(false)
-            .with_writer(move || {
-                let file = fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&logfile)
-                    .unwrap();
-                io::BufWriter::new(file)
-            })
-            .with_filter(tracing_subscriber::filter::filter_fn(|metadata| {
-                metadata.target().starts_with(LOG_TARGET)
-                    || metadata.target().starts_with(PROGRESS_TARGET)
-            }));
-
-        registry.with(stdout_log).with(file_log).init();
-    } else {
-        registry.with(stdout_log).init();
-    }
-
-    Ok(())
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts = CmdLineArgs::parse();
-    setup_tracing(opts.logfile)?;
+
+    // Setup tracing subscribers for stdout and file logging.
+    //
+    // We need to keep the object around to keep the logging active.
+    let _tracer = Tracer::setup_tracing(opts.logfile, opts.tracefile);
 
     let input_path = Path::new(&opts.input);
     let output_path = Path::new(&opts.output);
