@@ -71,7 +71,7 @@ members = ["pyrs", "compile-matcher", "bench-vs-quartz"]
 
 [workspace.dependencies]
 
-quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "bc9692b" }
+quantinuum-hugr = { path = "../hugr" }
 portgraph = { version = "0.9", features = ["serde"] }
 pyo3 = { version = "0.19" }
 itertools = { version = "0.11.0" }
