@@ -209,7 +209,7 @@ pub fn taso(
     timeout: Option<u64>,
     circ_name: &str,
     target_gate_count: usize,
-) -> (Hugr, bool) {
+) -> Result<(Hugr, bool), ()> {
     let start_time = Instant::now();
     let file = File::create(format!("logs/best_circs_{circ_name}.csv")).unwrap();
     let mut log_best_circ = csv::Writer::from_writer(file);
@@ -242,7 +242,7 @@ pub fn taso(
         }
 
         let rewrites = rewriter.get_rewrites(&circ);
-        for new_circ in strategy.apply_rewrites(rewrites, &circ) {
+        for new_circ in strategy.apply_rewrites(rewrites, &circ)? {
             let new_circ_hash = new_circ.circuit_hash();
             if seen_hashes.contains(&new_circ_hash) {
                 continue;
@@ -265,7 +265,7 @@ pub fn taso(
     }
 
     save_tk1_json_file(format!("logs/final_circ_{circ_name}.json"), &best_circ).unwrap();
-    (best_circ, timed_out)
+    Ok((best_circ, timed_out))
 }
 
 fn save_tk1_json_file(path: impl AsRef<Path>, circ: &Hugr) -> Result<(), std::io::Error> {
@@ -439,7 +439,7 @@ fn spawn_pattern_matching_thread(
                     break;
                 };
                 let rewrites = rewriter.get_rewrites(&sent_hugr);
-                for new_circ in strategy.apply_rewrites(rewrites, &sent_hugr) {
+                for new_circ in strategy.apply_rewrites(rewrites, &sent_hugr).unwrap() {
                     let new_circ_hash = new_circ.circuit_hash();
                     tx_main.send(Some((new_circ_hash, new_circ))).unwrap();
                 }

@@ -29,7 +29,7 @@ pub trait RewriteStrategy {
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
         circ: &Hugr,
-    ) -> Vec<Hugr>;
+    ) -> Result<Vec<Hugr>, ()>;
 }
 
 /// A rewrite strategy applying as many non-overlapping rewrites as possible.
@@ -49,7 +49,7 @@ impl RewriteStrategy for GreedyRewriteStrategy {
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
         circ: &Hugr,
-    ) -> Vec<Hugr> {
+    ) -> Result<Vec<Hugr>, ()> {
         let rewrites = rewrites
             .into_iter()
             .sorted_by_key(|rw| rw.node_count_delta())
@@ -70,7 +70,7 @@ impl RewriteStrategy for GreedyRewriteStrategy {
                 .apply(&mut circ)
                 .expect("Could not perform rewrite in greedy strategy");
         }
-        vec![circ]
+        Ok(vec![circ])
     }
 }
 
@@ -103,7 +103,7 @@ impl RewriteStrategy for ExhaustiveRewriteStrategy {
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
         circ: &Hugr,
-    ) -> Vec<Hugr> {
+    ) -> Result<Vec<Hugr>, ()> {
         rewrites
             .into_iter()
             .filter(|rw| {
@@ -113,8 +113,8 @@ impl RewriteStrategy for ExhaustiveRewriteStrategy {
             })
             .map(|rw| {
                 let mut circ = circ.clone();
-                rw.apply(&mut circ).expect("invalid pattern match");
-                circ
+                rw.apply(&mut circ).map_err(|_| ())?;
+                Ok(circ)
             })
             .collect()
     }
@@ -175,7 +175,7 @@ mod tests {
         ];
 
         let strategy = GreedyRewriteStrategy;
-        let rewritten = strategy.apply_rewrites(rws, &circ);
+        let rewritten = strategy.apply_rewrites(rws, &circ).unwrap();
         assert_eq!(rewritten.len(), 1);
         assert_eq!(rewritten[0].num_gates(), 5);
     }
@@ -196,7 +196,7 @@ mod tests {
         ];
 
         let strategy = ExhaustiveRewriteStrategy::default();
-        let rewritten = strategy.apply_rewrites(rws, &circ);
+        let rewritten = strategy.apply_rewrites(rws, &circ).unwrap();
         let exp_circ_lens = HashSet::from_iter([8, 6, 9]);
         let circ_lens: HashSet<_> = rewritten.iter().map(|c| c.num_gates()).collect();
         assert_eq!(circ_lens, exp_circ_lens);
@@ -218,7 +218,7 @@ mod tests {
         ];
 
         let strategy = ExhaustiveRewriteStrategy { gamma: 10. };
-        let rewritten = strategy.apply_rewrites(rws, &circ);
+        let rewritten = strategy.apply_rewrites(rws, &circ).unwrap();
         let exp_circ_lens = HashSet::from_iter([8, 17, 6, 9]);
         let circ_lens: HashSet<_> = rewritten.iter().map(|c| c.num_gates()).collect();
         assert_eq!(circ_lens, exp_circ_lens);

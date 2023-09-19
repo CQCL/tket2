@@ -24,6 +24,7 @@ struct ElapsedTime {
     timed_out: bool,
     quartz_count: usize,
     opt_count: usize,
+    panicked: bool,
 }
 
 lazy_static! {
@@ -78,7 +79,7 @@ fn main() {
         }
         println!("Optimising {}", record.circ_name);
         let start_time = Instant::now();
-        let (opt_circ, timed_out) = taso(
+        match taso(
             circ,
             &rewriter,
             &strategy,
@@ -86,16 +87,28 @@ fn main() {
             Some(1000),
             &record.circ_name,
             record.count_after,
-        );
-        timings_csv
-            .serialize(ElapsedTime {
-                circ_name: record.circ_name.clone(),
-                elapsed_s: start_time.elapsed().as_secs_f64(),
-                timed_out,
-                quartz_count: record.count_after,
-                opt_count: num_q_gates(&opt_circ),
-            })
-            .unwrap();
+        ) {
+            Ok((opt_circ, timed_out)) => timings_csv
+                .serialize(ElapsedTime {
+                    circ_name: record.circ_name.clone(),
+                    elapsed_s: start_time.elapsed().as_secs_f64(),
+                    timed_out,
+                    quartz_count: record.count_after,
+                    opt_count: num_q_gates(&opt_circ),
+                    panicked: false,
+                })
+                .unwrap(),
+            Err(()) => timings_csv
+                .serialize(ElapsedTime {
+                    circ_name: record.circ_name.clone(),
+                    elapsed_s: start_time.elapsed().as_secs_f64(),
+                    timed_out: false,
+                    quartz_count: record.count_after,
+                    opt_count: 0,
+                    panicked: false,
+                })
+                .unwrap(),
+        };
     }
     println!("Done!");
 }
