@@ -11,6 +11,7 @@ use hugr::{
 };
 use itertools::Itertools;
 use portgraph::PortOffset;
+
 #[cfg(feature = "pyo3")]
 use pyo3::{create_exception, exceptions::PyException, PyErr};
 
@@ -48,9 +49,34 @@ impl TryFrom<CircuitUnit> for Qb {
     }
 }
 
-impl Command {
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct ComCommand {
+    /// The operation node.
+    node: Node,
+    /// An assignment of linear units to the node's ports.
+    //
+    // We'll need something more complex if `follow_linear_port` stops being a
+    // direct map from input to output.
+    inputs: Vec<CircuitUnit>,
+}
+
+impl<'c, Circ> From<Command<'c, Circ>> for ComCommand
+where
+    Circ: HugrView,
+{
+    fn from(com: Command<'c, Circ>) -> Self {
+        ComCommand {
+            node: com.node(),
+            inputs: com.inputs().map(|(c, _, _)| c).collect(),
+        }
+    }
+}
+impl ComCommand {
+    fn node(&self) -> Node {
+        self.node
+    }
     fn qubits(&self) -> impl Iterator<Item = Qb> + '_ {
-        self.inputs().iter().filter_map(|u| {
+        self.inputs.iter().filter_map(|u| {
             let CircuitUnit::Linear(i) = u else {
                 return None;
             };
@@ -58,7 +84,7 @@ impl Command {
         })
     }
     fn port_of_qb(&self, qb: Qb, direction: Direction) -> Option<Port> {
-        self.inputs()
+        self.inputs
             .iter()
             .position(|cu| {
                 let q_cu: CircuitUnit = qb.into();
@@ -68,22 +94,23 @@ impl Command {
     }
 }
 
-type Slice = Vec<Option<Rc<Command>>>;
+type Slice = Vec<Option<Rc<ComCommand>>>;
 type SliceVec = Vec<Slice>;
 
-fn add_to_slice(slice: &mut Slice, com: Rc<Command>) {
+fn add_to_slice(slice: &mut Slice, com: Rc<ComCommand>) {
     for q in com.qubits() {
         slice[q.index()] = Some(com.clone());
     }
 }
 
-fn load_slices<'c>(circ: &'c impl Circuit) -> SliceVec {
+fn load_slices(circ: &impl Circuit) -> SliceVec {
     let mut slices = vec![];
 
     let n_qbs = circ.units().filter_units::<Qubits>().count();
     let mut qubit_free_slice = vec![0; n_qbs];
 
     for command in circ.commands().filter(|c| is_slice_op(circ, c.node())) {
+        let command: ComCommand = command.into();
         let free_slice = command
             .qubits()
             .map(|qb| qubit_free_slice[qb.index()])
@@ -116,10 +143,10 @@ fn available_slice(
     circ: &impl HugrView,
     slice_vec: &[Slice],
     starting_index: usize,
-    command: &Rc<Command>,
-) -> Option<(usize, HashMap<Qb, Rc<Command>>)> {
+    command: &Rc<ComCommand>,
+) -> Option<(usize, HashMap<Qb, Rc<ComCommand>>)> {
     let mut available = None;
-    let mut prev_nodes: HashMap<Qb, Rc<Command>> = HashMap::new();
+    let mut prev_nodes: HashMap<Qb, Rc<ComCommand>> = HashMap::new();
 
     for slice_index in (0..starting_index + 1).rev() {
         // if all qubit slots are empty here the command can be moved here
@@ -148,12 +175,12 @@ fn available_slice(
 // If a command commutes back through this slice return a map from the qubits of
 // the command to the commands in this slice acting on those qubits.
 fn commutes_at_slice(
-    command: &Rc<Command>,
+    command: &Rc<ComCommand>,
     slice: &Slice,
     circ: &impl HugrView,
-) -> Option<HashMap<Qb, Rc<Command>>> {
+) -> Option<HashMap<Qb, Rc<ComCommand>>> {
     // map from qubit to node it is connected to immediately after the free slice.
-    let mut prev_nodes: HashMap<Qb, Rc<Command>> =
+    let mut prev_nodes: HashMap<Qb, Rc<ComCommand>> =
         HashMap::from_iter(command.qubits().map(|q| (q, command.clone())));
 
     for q in command.qubits() {
@@ -199,8 +226,8 @@ pub enum PullForwardError {
     #[error("Hugr mutation error: {0:?}")]
     HugrError(#[from] HugrError),
 
-    #[error("Qubit {0} not found in command {1:?}")]
-    NoQbInCommand(usize, Command),
+    #[error("Qubit {0} not found in command.")]
+    NoQbInCommand(usize),
 
     #[error("No subsequent command found for qubit {0}")]
     NoCommandForQb(usize),
@@ -221,8 +248,8 @@ impl From<PullForwardError> for PyErr {
     }
 }
 struct PullForward {
-    command: Rc<Command>,
-    new_nexts: HashMap<Qb, Rc<Command>>,
+    command: Rc<ComCommand>,
+    new_nexts: HashMap<Qb, Rc<ComCommand>>,
 }
 
 impl Rewrite for PullForward {
@@ -239,10 +266,10 @@ impl Rewrite for PullForward {
     fn apply(self, h: &mut impl HugrMut) -> Result<Self::ApplyResult, Self::Error> {
         let Self { command, new_nexts } = self;
 
-        let qb_port = |command: &Command, qb, direction| {
+        let qb_port = |command: &ComCommand, qb, direction| {
             command
                 .port_of_qb(qb, direction)
-                .ok_or(PullForwardError::NoQbInCommand(qb.index(), command.clone()))
+                .ok_or(PullForwardError::NoQbInCommand(qb.index()))
         };
         // for each qubit, disconnect node and reconnect at destination.
         for qb in command.qubits() {
@@ -491,7 +518,11 @@ mod test {
         build().unwrap()
     }
 
-    fn slice_from_command(commands: &[Command], n_qbs: usize, slice_arr: &[&[usize]]) -> SliceVec {
+    fn slice_from_command(
+        commands: &[ComCommand],
+        n_qbs: usize,
+        slice_arr: &[&[usize]],
+    ) -> SliceVec {
         slice_arr
             .iter()
             .map(|command_indices| {
@@ -509,7 +540,7 @@ mod test {
     #[rstest]
     fn test_load_slices_cx(example_cx: Hugr) {
         let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&example_cx, example_cx.root());
-        let commands: Vec<Command> = circ.commands().map_into().collect();
+        let commands: Vec<ComCommand> = circ.commands().map_into().collect();
         let slices = load_slices(circ);
         let correct = slice_from_command(&commands, 4, &[&[0], &[1], &[2]]);
 
@@ -520,7 +551,7 @@ mod test {
     fn test_load_slices_cx_better(example_cx_better: Hugr) {
         let circ: &SiblingGraph<'_, DfgID> =
             &SiblingGraph::new(&example_cx_better, example_cx_better.root());
-        let commands: Vec<Command> = circ.commands().map_into().collect();
+        let commands: Vec<ComCommand> = circ.commands().map_into().collect();
 
         let slices = load_slices(circ);
         let correct = slice_from_command(&commands, 4, &[&[0, 1], &[2]]);
@@ -532,7 +563,7 @@ mod test {
     fn test_load_slices_bell(t2_bell_circuit: Hugr) {
         let circ: &SiblingGraph<'_, DfgID> =
             &SiblingGraph::new(&t2_bell_circuit, t2_bell_circuit.root());
-        let commands: Vec<Command> = circ.commands().map_into().collect();
+        let commands: Vec<ComCommand> = circ.commands().map_into().collect();
 
         let slices = load_slices(circ);
         let correct = slice_from_command(&commands, 2, &[&[0], &[1]]);
