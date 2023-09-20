@@ -1,12 +1,7 @@
 use std::{collections::HashMap, rc::Rc};
 
 use hugr::{
-    hugr::{
-        hugrmut::HugrMut,
-        views::{HierarchyView, SiblingGraph},
-        CircuitUnit, HugrError, Rewrite,
-    },
-    ops::handle::DfgID,
+    hugr::{hugrmut::HugrMut, CircuitUnit, HugrError, Rewrite},
     Direction, Hugr, HugrView, Node, Port,
 };
 use itertools::Itertools;
@@ -326,9 +321,8 @@ impl Rewrite for PullForward {
 }
 
 /// Pass which greedily commutes operations forwards in order to reduce depth.
-pub fn apply_greedy_commutation(h: &mut Hugr) -> Result<u32, PullForwardError> {
+pub fn apply_greedy_commutation(circ: &mut Hugr) -> Result<u32, PullForwardError> {
     let mut count = 0;
-    let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(h, h.root());
     let mut slice_vec = load_slices(circ);
 
     for slice_index in 0..slice_vec.len() {
@@ -341,7 +335,7 @@ pub fn apply_greedy_commutation(h: &mut Hugr) -> Result<u32, PullForwardError> {
 
         for command in slice_commands {
             if let Some((destination, new_nexts)) =
-                available_slice(&h, &slice_vec, slice_index, &command)
+                available_slice(&circ, &slice_vec, slice_index, &command)
             {
                 debug_assert!(
                     destination < slice_index,
@@ -352,7 +346,7 @@ pub fn apply_greedy_commutation(h: &mut Hugr) -> Result<u32, PullForwardError> {
                     slice_vec[destination][q.index()] = com;
                 }
                 let rewrite = PullForward { command, new_nexts };
-                h.apply_rewrite(rewrite)?;
+                circ.apply_rewrite(rewrite)?;
                 count += 1;
             }
         }
@@ -539,9 +533,9 @@ mod test {
 
     #[rstest]
     fn test_load_slices_cx(example_cx: Hugr) {
-        let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&example_cx, example_cx.root());
+        let circ = example_cx;
         let commands: Vec<ComCommand> = circ.commands().map_into().collect();
-        let slices = load_slices(circ);
+        let slices = load_slices(&circ);
         let correct = slice_from_command(&commands, 4, &[&[0], &[1], &[2]]);
 
         assert_eq!(slices, correct);
@@ -549,11 +543,10 @@ mod test {
 
     #[rstest]
     fn test_load_slices_cx_better(example_cx_better: Hugr) {
-        let circ: &SiblingGraph<'_, DfgID> =
-            &SiblingGraph::new(&example_cx_better, example_cx_better.root());
+        let circ = example_cx_better;
         let commands: Vec<ComCommand> = circ.commands().map_into().collect();
 
-        let slices = load_slices(circ);
+        let slices = load_slices(&circ);
         let correct = slice_from_command(&commands, 4, &[&[0, 1], &[2]]);
 
         assert_eq!(slices, correct);
@@ -561,11 +554,10 @@ mod test {
 
     #[rstest]
     fn test_load_slices_bell(t2_bell_circuit: Hugr) {
-        let circ: &SiblingGraph<'_, DfgID> =
-            &SiblingGraph::new(&t2_bell_circuit, t2_bell_circuit.root());
+        let circ = t2_bell_circuit;
         let commands: Vec<ComCommand> = circ.commands().map_into().collect();
 
-        let slices = load_slices(circ);
+        let slices = load_slices(&circ);
         let correct = slice_from_command(&commands, 2, &[&[0], &[1]]);
 
         assert_eq!(slices, correct);
@@ -573,10 +565,10 @@ mod test {
 
     #[rstest]
     fn test_available_slice(example_cx: Hugr) {
-        let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&example_cx, example_cx.root());
-        let slices = load_slices(circ);
+        let circ = example_cx;
+        let slices = load_slices(&circ);
         let (found, prev_nodes) =
-            available_slice(&example_cx, &slices, 1, slices[2][1].as_ref().unwrap()).unwrap();
+            available_slice(&circ, &slices, 1, slices[2][1].as_ref().unwrap()).unwrap();
         assert_eq!(found, 0);
 
         assert_eq!(
@@ -592,13 +584,12 @@ mod test {
 
     #[rstest]
     fn big_test(big_example: Hugr) {
-        let h = big_example;
-        let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(&h, h.root());
-        let slices = load_slices(circ);
+        let circ = big_example;
+        let slices = load_slices(&circ);
         assert_eq!(slices.len(), 6);
         // can commute final cx to front
         let (found, prev_nodes) =
-            available_slice(&h, &slices, 3, slices[4][1].as_ref().unwrap()).unwrap();
+            available_slice(&circ, &slices, 3, slices[4][1].as_ref().unwrap()).unwrap();
         assert_eq!(found, 1);
         assert_eq!(
             *prev_nodes.get(&Qb(1)).unwrap(),
@@ -610,13 +601,12 @@ mod test {
             slices[2][2].as_ref().unwrap().clone()
         );
         // hadamard can't commute past anything
-        assert!(available_slice(&h, &slices, 4, slices[5][1].as_ref().unwrap()).is_none());
+        assert!(available_slice(&circ, &slices, 4, slices[5][1].as_ref().unwrap()).is_none());
     }
 
     /// Calculate depth by placing commands in slices.
     fn depth(h: &Hugr) -> usize {
-        let circ: &SiblingGraph<'_, DfgID> = &SiblingGraph::new(h, h.root());
-        load_slices(circ).len()
+        load_slices(h).len()
     }
     #[rstest]
     #[case(example_cx(), true, 1)]
