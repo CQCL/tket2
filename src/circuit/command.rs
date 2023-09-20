@@ -323,9 +323,7 @@ impl<'circ, Circ: Circuit> std::fmt::Debug for CommandIterator<'circ, Circ> {
 
 #[cfg(test)]
 mod test {
-    use hugr::hugr::views::{HierarchyView, SiblingGraph};
     use hugr::ops::OpName;
-    use hugr::HugrView;
     use itertools::Itertools;
 
     use crate::utils::build_simple_circuit;
@@ -342,14 +340,13 @@ mod test {
 
     #[test]
     fn iterate_commands() {
-        let hugr = build_simple_circuit(2, |circ| {
+        let circ = build_simple_circuit(2, |circ| {
             circ.append(T2Op::H, [0])?;
             circ.append(T2Op::CX, [0, 1])?;
             circ.append(T2Op::T, [1])?;
             Ok(())
         })
         .unwrap();
-        let circ: SiblingGraph<'_> = SiblingGraph::new(&hugr, hugr.root());
 
         assert_eq!(CommandIterator::new(&circ).count(), 3);
 
