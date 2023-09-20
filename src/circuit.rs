@@ -7,7 +7,6 @@ mod units;
 pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
 
-use hugr::hugr::NodeType;
 use hugr::HugrView;
 
 pub use hugr::ops::OpType;
@@ -118,16 +117,6 @@ pub trait Circuit: HugrView {
     {
         // Traverse the circuit in topological order.
         CommandIterator::new(self)
-    }
-
-    /// Returns the [`NodeType`] of a command.
-    fn command_nodetype(&self, command: &Command) -> &NodeType {
-        self.get_nodetype(command.node())
-    }
-
-    /// Returns the [`OpType`] of a command.
-    fn command_optype(&self, command: &Command) -> &OpType {
-        self.get_optype(command.node())
     }
 }
 

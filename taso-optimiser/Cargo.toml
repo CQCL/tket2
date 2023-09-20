@@ -12,3 +12,8 @@ tket2 = { path = "../", features = ["portmatching"] }
 quantinuum-hugr = { workspace = true }
 itertools = { workspace = true }
 tket-json-rs = { workspace = true }
+peak_alloc = { version = "0.2.0", optional = true }
+
+[features]
+default = ["peak_alloc"]
+peak_alloc = ["dep:peak_alloc"]

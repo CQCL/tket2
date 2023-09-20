@@ -81,7 +81,6 @@ where
     // Note that this ignores any incoming linear unit labels, and just assigns
     // new unit ids sequentially.
     #[inline]
-    #[allow(unused)]
     pub(super) fn new(
         circuit: &impl Circuit,
         node: Node,
