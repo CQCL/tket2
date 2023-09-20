@@ -26,6 +26,8 @@ use thiserror::Error;
 #[cfg(feature = "pyo3")]
 use pyo3::pyclass;
 
+use crate::extension::REGISTRY;
+
 /// Name of tket 2 extension.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("quantum.tket2");
 
@@ -201,6 +203,7 @@ pub fn symbolic_constant_op(s: &str) -> OpType {
             vec![TypeArg::Opaque {
                 arg: CustomTypeArg::new(SYM_EXPR_T.clone(), value).unwrap(),
             }],
+            &REGISTRY,
         )
         .unwrap()
         .into();
@@ -274,7 +277,7 @@ pub static ref EXTENSION: Extension = {
 impl From<T2Op> for LeafOp {
     fn from(op: T2Op) -> Self {
         EXTENSION
-            .instantiate_extension_op(op.name(), [])
+            .instantiate_extension_op(op.name(), [], &REGISTRY)
             .unwrap()
             .into()
     }
@@ -322,8 +325,7 @@ pub(crate) mod test {
 
     use std::sync::Arc;
 
-    use hugr::hugr::views::HierarchyView;
-    use hugr::{extension::OpDef, hugr::views::SiblingGraph, ops::handle::DfgID, Hugr, HugrView};
+    use hugr::{extension::OpDef, Hugr};
     use rstest::{fixture, rstest};
 
     use crate::{circuit::Circuit, ops::SimpleOpEnum, utils::build_simple_circuit};
@@ -354,8 +356,6 @@ pub(crate) mod test {
 
     #[rstest]
     fn check_t2_bell(t2_bell_circuit: Hugr) {
-        let circ: SiblingGraph<'_, DfgID> =
-            SiblingGraph::new(&t2_bell_circuit, t2_bell_circuit.root());
-        assert_eq!(circ.commands().count(), 2);
+        assert_eq!(t2_bell_circuit.commands().count(), 2);
     }
 }
