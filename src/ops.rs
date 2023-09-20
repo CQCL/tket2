@@ -46,6 +46,7 @@ pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("quantum.tket2"
 )]
 #[cfg_attr(feature = "pyo3", pyclass)]
 #[allow(missing_docs)]
+#[non_exhaustive]
 /// Simple enum of tket 2 quantum operations.
 pub enum T2Op {
     H,
