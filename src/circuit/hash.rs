@@ -148,8 +148,7 @@ fn hash_node(circ: &impl HugrView, node: Node, state: &mut HashState) -> u64 {
 
 #[cfg(test)]
 mod test {
-    use hugr::hugr::views::{HierarchyView, SiblingGraph};
-    use hugr::{Hugr, HugrView};
+    use hugr::Hugr;
     use tket_json_rs::circuit_json;
 
     use crate::json::TKETDecode;
@@ -160,38 +159,35 @@ mod test {
 
     #[test]
     fn hash_equality() {
-        let hugr1 = build_simple_circuit(2, |circ| {
+        let circ1 = build_simple_circuit(2, |circ| {
             circ.append(T2Op::H, [0])?;
             circ.append(T2Op::T, [1])?;
             circ.append(T2Op::CX, [0, 1])?;
             Ok(())
         })
         .unwrap();
-        let circ1: SiblingGraph<'_> = SiblingGraph::new(&hugr1, hugr1.root());
         let hash1 = circ1.circuit_hash();
 
         // A circuit built in a different order should have the same hash
-        let hugr2 = build_simple_circuit(2, |circ| {
+        let circ2 = build_simple_circuit(2, |circ| {
             circ.append(T2Op::T, [1])?;
             circ.append(T2Op::H, [0])?;
             circ.append(T2Op::CX, [0, 1])?;
             Ok(())
         })
         .unwrap();
-        let circ2: SiblingGraph<'_> = SiblingGraph::new(&hugr2, hugr2.root());
         let hash2 = circ2.circuit_hash();
 
         assert_eq!(hash1, hash2);
 
         // Inverting the CX control and target should produce a different hash
-        let hugr3 = build_simple_circuit(2, |circ| {
+        let circ3 = build_simple_circuit(2, |circ| {
             circ.append(T2Op::T, [1])?;
             circ.append(T2Op::H, [0])?;
             circ.append(T2Op::CX, [1, 0])?;
             Ok(())
         })
         .unwrap();
-        let circ3: SiblingGraph<'_> = SiblingGraph::new(&hugr3, hugr3.root());
         let hash3 = circ3.circuit_hash();
 
         assert_ne!(hash1, hash3);

@@ -15,3 +15,8 @@ tket-json-rs = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = "0.3.17"
 tracing-appender = "0.2.2"
+peak_alloc = { version = "0.2.0", optional = true }
+
+[features]
+default = ["peak_alloc"]
+peak_alloc = ["dep:peak_alloc"]

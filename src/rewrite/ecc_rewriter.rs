@@ -18,11 +18,7 @@ use portmatching::PatternID;
 use std::io;
 use std::path::Path;
 
-use hugr::{
-    hugr::views::{HierarchyView, SiblingGraph},
-    ops::handle::DfgID,
-    Hugr, HugrView,
-};
+use hugr::Hugr;
 
 use crate::{
     circuit::Circuit,
@@ -139,13 +135,9 @@ fn get_rewrite_rules(rep_sets: &[EqCircClass]) -> Vec<Vec<TargetID>> {
 }
 
 fn get_patterns(rep_sets: &[EqCircClass]) -> Vec<Option<CircuitPattern>> {
-    let all_hugrs = rep_sets.iter().flat_map(|rs| rs.circuits());
-    let all_circs = all_hugrs
-        .map(|hugr| SiblingGraph::<DfgID>::new(hugr, hugr.root()))
-        // TODO: resolve lifetime issues to avoid collecting to vec
-        .collect_vec();
-    all_circs
+    rep_sets
         .iter()
+        .flat_map(|rs| rs.circuits())
         .map(|circ| CircuitPattern::try_from_circuit(circ).ok())
         .collect()
 }

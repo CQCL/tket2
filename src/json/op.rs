@@ -188,6 +188,7 @@ impl From<&JsonOp> for OpType {
             JsonOpType::PhasedX => T2Op::PhasedX.into(),
             JsonOpType::ZZMax => T2Op::ZZMax.into(),
             JsonOpType::ZZPhase => T2Op::ZZPhase.into(),
+            JsonOpType::CZ => T2Op::CZ.into(),
             JsonOpType::noop => LeafOp::Noop { ty: QB_T }.into(),
             _ => LeafOp::CustomOp(Box::new(json_op.as_opaque_op())).into(),
         }
@@ -228,6 +229,7 @@ impl TryFrom<&OpType> for JsonOp {
                 T2Op::TK1 => JsonOpType::TK1,
                 T2Op::PhasedX => JsonOpType::PhasedX,
                 T2Op::ZZPhase => JsonOpType::ZZPhase,
+                T2Op::CZ => JsonOpType::CZ,
             }
         } else if let LeafOp::CustomOp(b) = leaf {
             let ext = (*b).as_ref();
