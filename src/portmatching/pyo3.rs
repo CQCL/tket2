@@ -4,9 +4,7 @@ use std::fmt;
 
 use derive_more::{From, Into};
 use hugr::hugr::views::sibling_subgraph::PyInvalidReplacementError;
-use hugr::hugr::views::{DescendantsGraph, HierarchyView};
-use hugr::ops::handle::DfgID;
-use hugr::{Hugr, HugrView, Port};
+use hugr::{Hugr, Port};
 use itertools::Itertools;
 use portmatching::{HashMap, PatternID};
 use pyo3::{prelude::*, types::PyIterator};
@@ -22,8 +20,7 @@ impl CircuitPattern {
     /// Construct a pattern from a TKET1 circuit
     #[new]
     pub fn py_from_circuit(circ: PyObject) -> PyResult<CircuitPattern> {
-        let hugr = pyobj_as_hugr(circ)?;
-        let circ = hugr_as_view(&hugr);
+        let circ = pyobj_as_hugr(circ)?;
         let pattern = CircuitPattern::try_from_circuit(&circ)?;
         Ok(pattern)
     }
@@ -54,8 +51,7 @@ impl PatternMatcher {
     /// Find all convex matches in a circuit.
     #[pyo3(name = "find_matches")]
     pub fn py_find_matches(&self, circ: PyObject) -> PyResult<Vec<PyPatternMatch>> {
-        let hugr = pyobj_as_hugr(circ)?;
-        let circ = hugr_as_view(&hugr);
+        let circ = pyobj_as_hugr(circ)?;
         self.find_matches(&circ)
             .into_iter()
             .map(|m| {
@@ -160,8 +156,7 @@ impl PyPatternMatch {
 
     /// Convert the pattern into a [`CircuitRewrite`].
     pub fn to_rewrite(&self, circ: PyObject, replacement: PyObject) -> PyResult<CircuitRewrite> {
-        let hugr = pyobj_as_hugr(circ)?;
-        let circ = hugr_as_view(&hugr);
+        let circ = pyobj_as_hugr(circ)?;
         let inputs = self
             .inputs
             .iter()
@@ -176,7 +171,7 @@ impl PyPatternMatch {
             outputs,
         )
         .expect("Invalid PyCircuitMatch object")
-        .to_rewrite(&hugr, pyobj_as_hugr(replacement)?)?;
+        .to_rewrite(&circ, pyobj_as_hugr(replacement)?)?;
         Ok(rewrite)
     }
 }
@@ -206,8 +201,4 @@ fn pyobj_as_hugr(circ: PyObject) -> PyResult<Hugr> {
     let ser_c = SerialCircuit::_from_tket1(circ);
     let hugr: Hugr = ser_c.decode()?;
     Ok(hugr)
-}
-
-fn hugr_as_view(hugr: &Hugr) -> DescendantsGraph<'_, DfgID> {
-    DescendantsGraph::new(hugr, hugr.root())
 }
