@@ -39,9 +39,9 @@ impl CircuitPattern {
         }
         let mut pattern = Pattern::new();
         for cmd in circuit.commands() {
-            let op = circuit.command_optype(&cmd).clone();
+            let op = cmd.optype().clone();
             pattern.require(cmd.node(), op.try_into().unwrap());
-            for out_offset in 0..cmd.outputs().len() {
+            for out_offset in 0..cmd.output_count() {
                 let out_offset = Port::new_outgoing(out_offset);
                 for (next_node, in_offset) in circuit.linked_ports(cmd.node(), out_offset) {
                     if circuit.get_optype(next_node).tag() != hugr::ops::OpTag::Output {
