@@ -8,6 +8,13 @@ use tket2::{
 };
 use tket_json_rs::circuit_json::SerialCircuit;
 
+#[cfg(feature = "peak_alloc")]
+use peak_alloc::PeakAlloc;
+
+#[cfg(feature = "peak_alloc")]
+#[global_allocator]
+static PEAK_ALLOC: PeakAlloc = PeakAlloc;
+
 /// Optimise circuits using Quartz-generated ECCs.
 ///
 /// Quartz: <https://github.com/quantum-compiler/quartz>
@@ -90,6 +97,9 @@ fn main() {
 
     println!("Saving result");
     save_tk1_json_file(output_path, &opt_circ).unwrap();
+
+    #[cfg(feature = "peak_alloc")]
+    println!("Peak memory usage: {} GB", PEAK_ALLOC.peak_usage_as_gb());
 
     println!("Done.")
 }
