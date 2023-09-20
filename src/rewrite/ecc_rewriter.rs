@@ -25,7 +25,7 @@ use hugr::{
 
 use crate::{
     circuit::Circuit,
-    passes::taso::{load_eccs_json_file, EqCircClass},
+    optimiser::taso::{load_eccs_json_file, EqCircClass},
     portmatching::{CircuitPattern, PatternMatcher},
 };
 
@@ -40,6 +40,7 @@ struct TargetID(usize);
 /// Valid rewrites turn a non-representative circuit into its representative,
 /// or a representative circuit into any of the equivalent non-representative
 /// circuits.
+#[derive(Debug, Clone)]
 pub struct ECCRewriter {
     /// Matcher for finding patterns.
     matcher: PatternMatcher,
@@ -96,14 +97,16 @@ impl ECCRewriter {
 }
 
 impl Rewriter for ECCRewriter {
-    fn get_rewrites<'a, C: Circuit<'a>>(&'a self, circ: &'a C) -> Vec<CircuitRewrite> {
+    fn get_rewrites<C: Circuit + Clone>(&self, circ: &C) -> Vec<CircuitRewrite> {
         let matches = self.matcher.find_matches(circ);
         matches
             .into_iter()
             .flat_map(|m| {
                 let pattern_id = m.pattern_id();
-                self.get_targets(pattern_id)
-                    .map(move |repl| m.to_rewrite(repl.clone()).expect("invalid replacement"))
+                self.get_targets(pattern_id).map(move |repl| {
+                    m.to_rewrite(circ.base_hugr(), repl.clone())
+                        .expect("invalid replacement")
+                })
             })
             .collect()
     }
@@ -160,6 +163,7 @@ mod tests {
         build_simple_circuit(2, |circ| {
             circ.append(T2Op::H, [0]).unwrap();
             circ.append(T2Op::H, [0]).unwrap();
+            circ.append(T2Op::CX, [0, 1]).unwrap();
             Ok(())
         })
         .unwrap()

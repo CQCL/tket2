@@ -1,71 +1,71 @@
-use hugr::{hugr::views::SiblingGraph, ops::handle::DfgID, Hugr, HugrView};
-use pyo3::{exceptions::PyTypeError, prelude::*};
-use tket2::{
-    circuit::HierarchyView,
-    json::TKETDecode,
-    passes::apply_greedy_commutation,
-    portmatching::{CircuitPattern, PatternMatcher},
-};
+//! Python bindings for TKET2.
+#![warn(missing_docs)]
+use hugr::Hugr;
+use pyo3::prelude::*;
+use tket2::{json::TKETDecode, passes::apply_greedy_commutation};
 use tket_json_rs::circuit_json::SerialCircuit;
 
-use tket2::extension::REGISTRY;
-use tket2::portmatching::pyo3::PyValidateError;
+mod circuit;
 
-#[pyfunction]
-fn check_soundness(c: Py<PyAny>) -> PyResult<()> {
-    let ser_c = SerialCircuit::_from_tket1(c);
-    let hugr: hugr::Hugr = ser_c.decode().unwrap();
-    hugr.validate(&REGISTRY)
-        .map_err(|e| PyValidateError::new_err(e.to_string()))
-}
-
-#[pyfunction]
-fn to_hugr_dot(c: Py<PyAny>) -> PyResult<String> {
-    let ser_c = SerialCircuit::_from_tket1(c);
-    let hugr: Hugr = ser_c.decode().unwrap();
-    Ok(hugr.dot_string())
-}
-
-#[pyfunction]
-fn to_hugr(c: Py<PyAny>) -> PyResult<Hugr> {
-    let ser_c = SerialCircuit::_from_tket1(c);
-    let hugr: Hugr = ser_c.decode().unwrap();
-    Ok(hugr)
-}
-
-fn pyerr_string<T: std::fmt::Debug>(e: T) -> PyErr {
-    PyErr::new::<PyTypeError, _>(format!("{:?}", e))
-}
 #[pyfunction]
 fn greedy_depth_reduce(py_c: PyObject) -> PyResult<(PyObject, u32)> {
     let s_c = SerialCircuit::_from_tket1(py_c.clone());
-    let mut h: Hugr = s_c.decode().map_err(pyerr_string)?;
-    let n_moves = apply_greedy_commutation(&mut h).map_err(pyerr_string)?;
-    let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(&h, h.root());
+    let mut h: Hugr = s_c.decode()?;
+    let n_moves = apply_greedy_commutation(&mut h)?;
 
-    let s_c = SerialCircuit::encode(&circ).map_err(pyerr_string)?;
+    let s_c = SerialCircuit::encode(&h)?;
     Ok((s_c.to_tket1()?, n_moves))
 }
 
 /// The Python bindings to TKET2.
 #[pymodule]
 fn pyrs(py: Python, m: &PyModule) -> PyResult<()> {
-    add_patterns_module(py, m)?;
+    add_circuit_module(py, m)?;
+    add_pattern_module(py, m)?;
     add_pass_module(py, m)?;
-    m.add_function(wrap_pyfunction!(to_hugr_dot, m)?)?;
-    m.add_function(wrap_pyfunction!(to_hugr, m)?)?;
-
-    m.add("ValidateError", py.get_type::<PyValidateError>())?;
-    m.add_function(wrap_pyfunction!(check_soundness, m)?)?;
     Ok(())
 }
 
-fn add_patterns_module(py: Python, parent: &PyModule) -> PyResult<()> {
-    let m = PyModule::new(py, "patterns")?;
-    m.add_class::<CircuitPattern>()?;
-    m.add_class::<PatternMatcher>()?;
-    parent.add_submodule(m)?;
-    Ok(())
+/// circuit module
+fn add_circuit_module(py: Python, parent: &PyModule) -> PyResult<()> {
+    let m = PyModule::new(py, "circuit")?;
+    m.add_class::<tket2::T2Op>()?;
+    m.add_class::<tket2::Pauli>()?;
+
+    m.add("HugrError", py.get_type::<hugr::hugr::PyHugrError>())?;
+    m.add("BuildError", py.get_type::<hugr::builder::PyBuildError>())?;
+    m.add(
+        "ValidationError",
+        py.get_type::<hugr::hugr::validate::PyValidationError>(),
+    )?;
+    m.add(
+        "HUGRSerializationError",
+        py.get_type::<hugr::hugr::serialize::PyHUGRSerializationError>(),
+    )?;
+    m.add(
+        "OpConvertError",
+        py.get_type::<tket2::json::PyOpConvertError>(),
+    )?;
+
+    parent.add_submodule(m)
+}
+
+/// portmatching module
+fn add_pattern_module(py: Python, parent: &PyModule) -> PyResult<()> {
+    let m = PyModule::new(py, "pattern")?;
+    m.add_class::<tket2::portmatching::CircuitPattern>()?;
+    m.add_class::<tket2::portmatching::PatternMatcher>()?;
+
+    m.add(
+        "InvalidPatternError",
+        py.get_type::<tket2::portmatching::pattern::PyInvalidPatternError>(),
+    )?;
+    m.add(
+        "InvalidReplacementError",
+        py.get_type::<hugr::hugr::views::sibling_subgraph::PyInvalidReplacementError>(),
+    )?;
+
+    parent.add_submodule(m)
 }
 
 fn add_pass_module(py: Python, parent: &PyModule) -> PyResult<()> {

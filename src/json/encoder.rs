@@ -40,7 +40,7 @@ pub(super) struct JsonEncoder {
 
 impl JsonEncoder {
     /// Create a new [`JsonEncoder`] from a [`Circuit`].
-    pub fn new<'circ>(circ: &impl Circuit<'circ>) -> Self {
+    pub fn new(circ: &impl Circuit) -> Self {
         let name = circ.name().map(str::to_string);
 
         // Compute the linear qubit and bit registers. Each one have independent
@@ -49,7 +49,7 @@ impl JsonEncoder {
         // TODO Throw an error on non-recognized unit types, or just ignore?
         let mut bit_units = HashMap::new();
         let mut qubit_units = HashMap::new();
-        for (unit, ty) in circ.units() {
+        for (unit, _, ty) in circ.units() {
             if ty == QB_T {
                 let index = vec![qubit_units.len() as i64];
                 let reg = circuit_json::Register("q".to_string(), index);
@@ -163,8 +163,10 @@ impl JsonEncoder {
             OpType::Const(const_op) => {
                 // New constant, register it if it can be interpreted as a parameter.
                 match const_op.value() {
-                    Value::Prim(PrimValue::Extension((v,))) => {
-                        if let Some(f) = v.downcast_ref::<ConstF64>() {
+                    Value::Prim {
+                        val: PrimValue::Extension { c: (val,) },
+                    } => {
+                        if let Some(f) = val.downcast_ref::<ConstF64>() {
                             f.to_string()
                         } else {
                             return false;

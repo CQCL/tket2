@@ -33,7 +33,7 @@ jobs:
       - name: Check formatting
         run: cargo fmt -- --check
       - name: Run clippy
-        run: cargo clippy --all-targets --features="$FEATURES" -- -D warnings
+        run: cargo clippy --all-targets --features="$FEATURES" --workspace -- -D warnings
       - name: Build docs
         run: cargo doc --no-deps --features="$FEATURES"
         env:

@@ -23,10 +23,11 @@ use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
 use thiserror::Error;
 
-/// Name of tket 2 extension.
-pub const EXTENSION_ID: ExtensionId = ExtensionId::new_inline("quantum.tket2");
 #[cfg(feature = "pyo3")]
-use pyo3::prelude::*;
+use pyo3::pyclass;
+
+/// Name of tket 2 extension.
+pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("quantum.tket2");
 
 #[derive(
     Clone,
@@ -62,10 +63,13 @@ pub enum T2Op {
     RxF64,
     PhasedX,
     ZZPhase,
+    AngleAdd,
     CZ,
     TK1,
 }
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "pyo3", pyclass)]
 #[allow(missing_docs)]
 /// Simple enum representation of Pauli matrices.
 pub enum Pauli {
@@ -87,7 +91,8 @@ trait SimpleOpEnum: Into<&'static str> + FromStr + Copy + IntoEnumIterator {
     fn name(&self) -> &str {
         (*self).into()
     }
-    fn from_extension_name(extension: &str, op_name: &str) -> Result<Self, Self::LoadError>;
+    fn from_extension_name(extension: &ExtensionId, op_name: &str)
+        -> Result<Self, Self::LoadError>;
     fn try_from_op_def(op_def: &OpDef) -> Result<Self, Self::LoadError> {
         Self::from_extension_name(op_def.extension(), op_def.name())
     }
@@ -101,8 +106,11 @@ trait SimpleOpEnum: Into<&'static str> + FromStr + Copy + IntoEnumIterator {
     }
 }
 
-fn from_extension_name<T: SimpleOpEnum>(extension: &str, op_name: &str) -> Result<T, NotT2Op> {
-    if extension != EXTENSION_ID {
+fn from_extension_name<T: SimpleOpEnum>(
+    extension: &ExtensionId,
+    op_name: &str,
+) -> Result<T, NotT2Op> {
+    if extension != &EXTENSION_ID {
         return Err(NotT2Op);
     }
     T::from_str(op_name).map_err(|_| NotT2Op)
@@ -127,6 +135,10 @@ impl SimpleOpEnum for T2Op {
             Measure => FunctionType::new(one_qb_row, type_row![QB_T, BOOL_T]),
             RzF64 | RxF64 => FunctionType::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
             PhasedX => FunctionType::new(type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE], one_qb_row),
+            AngleAdd => FunctionType::new(
+                type_row![FLOAT64_TYPE, FLOAT64_TYPE],
+                type_row![FLOAT64_TYPE],
+            ),
             TK1 => FunctionType::new(
                 type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE, FLOAT64_TYPE],
                 one_qb_row,
@@ -153,8 +165,11 @@ impl SimpleOpEnum for T2Op {
         )
     }
 
-    fn from_extension_name(extension: &str, op_name: &str) -> Result<Self, Self::LoadError> {
-        if extension != EXTENSION_ID {
+    fn from_extension_name(
+        extension: &ExtensionId,
+        op_name: &str,
+    ) -> Result<Self, Self::LoadError> {
+        if extension != &EXTENSION_ID {
             return Err(NotT2Op);
         }
         Self::from_str(op_name).map_err(|_| NotT2Op)
@@ -176,21 +191,15 @@ impl T2Op {
     }
 }
 
-/// The type of the symbolic expression opaque type arg.
-pub const SYM_EXPR_T: CustomType =
-    CustomType::new_simple(SmolStr::new_inline("SymExpr"), EXTENSION_ID, TypeBound::Eq);
-
-const SYM_OP_ID: SmolStr = SmolStr::new_inline("symbolic_float");
-
 /// Initialize a new custom symbolic expression constant op from a string.
 pub fn symbolic_constant_op(s: &str) -> OpType {
     let value: serde_yaml::Value = s.into();
     let l: LeafOp = EXTENSION
         .instantiate_extension_op(
             &SYM_OP_ID,
-            vec![TypeArg::Opaque(
-                CustomTypeArg::new(SYM_EXPR_T, value).unwrap(),
-            )],
+            vec![TypeArg::Opaque {
+                arg: CustomTypeArg::new(SYM_EXPR_T.clone(), value).unwrap(),
+            }],
         )
         .unwrap()
         .into();
@@ -206,11 +215,11 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<&str> {
             {
                 // TODO also check extension name
 
-                let Some(TypeArg::Opaque(s)) = e.args().get(0) else {
+                let Some(TypeArg::Opaque { arg }) = e.args().get(0) else {
                     panic!("should be an opaque type arg.")
                 };
 
-                let serde_yaml::Value::String(s) = &s.value else {
+                let serde_yaml::Value::String(s) = &arg.value else {
                     panic!("unexpected yaml value.")
                 };
 
@@ -224,21 +233,40 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<&str> {
     }
 }
 
-fn extension() -> Extension {
+/// The name of the symbolic expression opaque type arg.
+pub const SYM_EXPR_NAME: SmolStr = SmolStr::new_inline("SymExpr");
+
+/// The name of the symbolic expression opaque type arg.
+const SYM_OP_ID: SmolStr = SmolStr::new_inline("symbolic_float");
+
+lazy_static! {
+/// The type of the symbolic expression opaque type arg.
+pub static ref SYM_EXPR_T: CustomType =
+    EXTENSION.get_type(&SYM_EXPR_NAME).unwrap().instantiate_concrete([]).unwrap();
+
+pub static ref EXTENSION: Extension = {
     let mut e = Extension::new(EXTENSION_ID);
     load_all_ops::<T2Op>(&mut e).expect("add fail");
+
+    let sym_expr_opdef = e.add_type(
+        SYM_EXPR_NAME,
+        vec![],
+        "Symbolic expression.".into(),
+        TypeBound::Eq.into(),
+    )
+    .unwrap();
+    let sym_expr_param = TypeParam::Opaque(sym_expr_opdef.instantiate_concrete([]).unwrap());
+
     e.add_op_custom_sig_simple(
         SYM_OP_ID,
         "Store a sympy expression that can be evaluated to a float.".to_string(),
-        vec![TypeParam::Opaque(SYM_EXPR_T)],
+        vec![sym_expr_param],
         |_: &[TypeArg]| Ok(FunctionType::new(type_row![], type_row![FLOAT64_TYPE])),
     )
     .unwrap();
-    e
-}
 
-lazy_static! {
-    pub static ref EXTENSION: Extension = extension();
+    e
+};
 }
 
 // From implementations could be made generic over SimpleOpEnum
@@ -293,12 +321,8 @@ pub(crate) mod test {
 
     use std::sync::Arc;
 
-    use hugr::{
-        extension::OpDef,
-        hugr::views::{HierarchyView, SiblingGraph},
-        ops::handle::DfgID,
-        Hugr, HugrView,
-    };
+    use hugr::hugr::views::HierarchyView;
+    use hugr::{extension::OpDef, hugr::views::SiblingGraph, ops::handle::DfgID, Hugr, HugrView};
     use rstest::{fixture, rstest};
 
     use crate::{circuit::Circuit, ops::SimpleOpEnum, utils::build_simple_circuit};

@@ -11,12 +11,15 @@ use hugr::{
 };
 use itertools::Itertools;
 use portgraph::PortOffset;
+#[cfg(feature = "pyo3")]
+use pyo3::{create_exception, exceptions::PyException, PyErr};
 
 use crate::{
     circuit::{command::Command, Circuit},
     ops::{Pauli, T2Op},
 };
 
+use crate::circuit::filter::Qubits;
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -74,10 +77,10 @@ fn add_to_slice(slice: &mut Slice, com: Rc<Command>) {
     }
 }
 
-fn load_slices<'c>(circ: &'c impl Circuit<'c>) -> SliceVec {
+fn load_slices<'c>(circ: &'c impl Circuit) -> SliceVec {
     let mut slices = vec![];
 
-    let n_qbs = circ.units().len();
+    let n_qbs = circ.units().filter_units::<Qubits>().count();
     let mut qubit_free_slice = vec![0; n_qbs];
 
     for command in circ.commands().filter(|c| is_slice_op(circ, c.node())) {
@@ -203,6 +206,20 @@ pub enum PullForwardError {
     NoCommandForQb(usize),
 }
 
+#[cfg(feature = "pyo3")]
+create_exception!(
+    pyrs,
+    PyPullForwardError,
+    PyException,
+    "Error in applying PullForward rewrite."
+);
+
+#[cfg(feature = "pyo3")]
+impl From<PullForwardError> for PyErr {
+    fn from(err: PullForwardError) -> Self {
+        PyPullForwardError::new_err(err.to_string())
+    }
+}
 struct PullForward {
     command: Rc<Command>,
     new_nexts: HashMap<Qb, Rc<Command>>,
@@ -589,8 +606,7 @@ mod test {
         let node_count = case.node_count();
         let depth_before = depth(&case);
         let move_count = apply_greedy_commutation(&mut case).unwrap();
-
-        case.validate(&REGISTRY).unwrap();
+        case.infer_and_validate(&REGISTRY).unwrap();
 
         assert_eq!(
             move_count, expected_moves,

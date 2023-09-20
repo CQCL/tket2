@@ -13,7 +13,7 @@ use super::{
 use crate::circuit::Circuit;
 
 #[cfg(feature = "pyo3")]
-use pyo3::prelude::*;
+use pyo3::{create_exception, exceptions::PyException, pyclass, PyErr};
 
 /// A pattern that match a circuit exactly
 #[cfg_attr(feature = "pyo3", pyclass)]
@@ -33,9 +33,7 @@ impl CircuitPattern {
     }
 
     /// Construct a pattern from a circuit.
-    pub fn try_from_circuit<'circ, C: Circuit<'circ>>(
-        circuit: &'circ C,
-    ) -> Result<Self, InvalidPattern> {
+    pub fn try_from_circuit<C: Circuit>(circuit: &C) -> Result<Self, InvalidPattern> {
         if circuit.num_gates() == 0 {
             return Err(InvalidPattern::EmptyCircuit);
         }
@@ -61,7 +59,7 @@ impl CircuitPattern {
         let out_ports = circuit.get_optype(out).signature().input_ports();
         let inputs = inp_ports
             .map(|p| circuit.linked_ports(inp, p).collect())
-            .collect();
+            .collect_vec();
         let outputs = out_ports
             .map(|p| {
                 circuit
@@ -70,7 +68,13 @@ impl CircuitPattern {
                     .ok()
                     .expect("invalid circuit")
             })
-            .collect();
+            .collect_vec();
+        if inputs.iter().flatten().any(|&(n, _)| n == out) {
+            // An input is connected to an output => empty qubit, not allowed.
+            return Err(InvalidPattern::NotConnected);
+        }
+        // This is a consequence of the test above.
+        debug_assert!(outputs.iter().all(|(n, _)| *n != inp));
         Ok(Self {
             pattern,
             inputs,
@@ -79,11 +83,7 @@ impl CircuitPattern {
     }
 
     /// Compute the map from pattern nodes to circuit nodes in `circ`.
-    pub fn get_match_map<'a, C: Circuit<'a>>(
-        &self,
-        root: Node,
-        circ: &C,
-    ) -> Option<HashMap<Node, Node>> {
+    pub fn get_match_map<C: Circuit>(&self, root: Node, circ: &C) -> Option<HashMap<Node, Node>> {
         let single_matcher = SinglePatternMatcher::from_pattern(self.pattern.clone());
         single_matcher
             .get_match_map(
@@ -119,11 +119,24 @@ impl From<NoRootFound> for InvalidPattern {
     }
 }
 
+#[cfg(feature = "pyo3")]
+create_exception!(
+    pyrs,
+    PyInvalidPatternError,
+    PyException,
+    "Invalid circuit pattern"
+);
+
+#[cfg(feature = "pyo3")]
+impl From<InvalidPattern> for PyErr {
+    fn from(err: InvalidPattern) -> Self {
+        PyInvalidPatternError::new_err(err.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use hugr::hugr::views::{DescendantsGraph, HierarchyView, SiblingGraph};
-    use hugr::ops::handle::DfgID;
-    use hugr::{Hugr, HugrView};
+    use hugr::Hugr;
     use itertools::Itertools;
 
     use crate::utils::build_simple_circuit;
@@ -143,9 +156,8 @@ mod tests {
     #[test]
     fn construct_pattern() {
         let hugr = h_cx();
-        let circ: DescendantsGraph<'_, DfgID> = DescendantsGraph::new(&hugr, hugr.root());
 
-        let p = CircuitPattern::try_from_circuit(&circ).unwrap();
+        let p = CircuitPattern::try_from_circuit(&hugr).unwrap();
 
         let edges = p
             .pattern
@@ -163,13 +175,25 @@ mod tests {
 
     #[test]
     fn disconnected_pattern() {
-        let hugr = build_simple_circuit(2, |circ| {
+        let circ = build_simple_circuit(2, |circ| {
             circ.append(T2Op::X, [0])?;
             circ.append(T2Op::T, [1])?;
             Ok(())
         })
         .unwrap();
-        let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(&hugr, hugr.root());
+        assert_eq!(
+            CircuitPattern::try_from_circuit(&circ).unwrap_err(),
+            InvalidPattern::NotConnected
+        );
+    }
+
+    #[test]
+    fn pattern_with_empty_qubit() {
+        let circ = build_simple_circuit(2, |circ| {
+            circ.append(T2Op::X, [0])?;
+            Ok(())
+        })
+        .unwrap();
         assert_eq!(
             CircuitPattern::try_from_circuit(&circ).unwrap_err(),
             InvalidPattern::NotConnected

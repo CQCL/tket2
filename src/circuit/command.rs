@@ -5,10 +5,7 @@
 use std::collections::HashMap;
 use std::iter::FusedIterator;
 
-use hugr::hugr::views::HierarchyView;
 use hugr::ops::{OpTag, OpTrait};
-use petgraph::visit::{GraphBase, IntoNeighborsDirected, IntoNodeIdentifiers};
-use portgraph::PortOffset;
 
 use super::Circuit;
 
@@ -60,8 +57,7 @@ pub struct CommandIterator<'circ, Circ> {
 
 impl<'circ, Circ> CommandIterator<'circ, Circ>
 where
-    Circ: HierarchyView<'circ>,
-    for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
+    Circ: Circuit,
 {
     /// Create a new iterator over the commands of a circuit.
     pub(super) fn new(circ: &'circ Circ) -> Self {
@@ -71,14 +67,11 @@ where
             .node_outputs(circ.input())
             .map(|port| Wire::new(circ.input(), port));
         let wire_unit = input_node_wires
-            .zip(circ.units().iter())
-            .filter_map(|(wire, (unit, _))| match unit {
-                CircuitUnit::Linear(i) => Some((wire, *i)),
-                _ => None,
-            })
+            .zip(circ.linear_units())
+            .map(|(wire, (linear_unit, _, _))| (wire, linear_unit))
             .collect();
 
-        let nodes = petgraph::algo::toposort(circ, None).unwrap();
+        let nodes = petgraph::algo::toposort(&circ.as_petgraph(), None).unwrap();
         Self {
             circ,
             nodes,
@@ -107,7 +100,7 @@ where
                 optype
                     .static_input()
                     // TODO query optype for this port once it is available in hugr.
-                    .map(|_| PortOffset::new_incoming(sig.input.len()).into()),
+                    .map(|_| Port::new_incoming(sig.input.len())),
             )
             .filter_map(|port| {
                 let (from, from_port) = self.circ.linked_ports(node, port).next()?;
@@ -115,7 +108,7 @@ where
                 // Get the unit corresponding to a wire, or return a wire Unit.
                 match self.wire_unit.remove(&wire) {
                     Some(unit) => {
-                        if let Some(new_port) = self.circ.follow_linear_port(node, port) {
+                        if let Some(new_port) = self.follow_linear_port(node, port) {
                             self.wire_unit.insert(Wire::new(node, new_port), unit);
                         }
                         Some(CircuitUnit::Linear(unit))
@@ -154,12 +147,26 @@ where
             outputs,
         })
     }
+
+    fn follow_linear_port(&self, node: Node, port: Port) -> Option<Port> {
+        let optype = self.circ.get_optype(node);
+        if !optype.port_kind(port)?.is_linear() {
+            return None;
+        }
+        // TODO: We assume the linear data uses the same port offsets on both sides of the node.
+        // In the future we may want to have a more general mechanism to handle this.
+        let other_port = Port::new(port.direction().reverse(), port.index());
+        if optype.port_kind(other_port) == optype.port_kind(port) {
+            Some(other_port)
+        } else {
+            None
+        }
+    }
 }
 
 impl<'circ, Circ> Iterator for CommandIterator<'circ, Circ>
 where
-    Circ: HierarchyView<'circ>,
-    for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
+    Circ: Circuit,
 {
     type Item = Command;
 
@@ -183,12 +190,7 @@ where
     }
 }
 
-impl<'circ, Circ> FusedIterator for CommandIterator<'circ, Circ>
-where
-    Circ: HierarchyView<'circ>,
-    for<'a> &'a Circ: GraphBase<NodeId = Node> + IntoNeighborsDirected + IntoNodeIdentifiers,
-{
-}
+impl<'circ, Circ> FusedIterator for CommandIterator<'circ, Circ> where Circ: Circuit {}
 
 #[cfg(test)]
 mod test {
