@@ -238,7 +238,7 @@ where
 
         // multi-consumer priority channel for queuing circuits to be processed by the workers
         let (tx_work, rx_work) =
-            HugrPriorityChannel::init((self.cost).clone(), PRIORITY_QUEUE_CAPACITY);
+            HugrPriorityChannel::init((self.cost).clone(), PRIORITY_QUEUE_CAPACITY * n_threads);
         // channel for sending circuits from threads back to main
         let (tx_result, rx_result) = crossbeam_channel::unbounded();
 
