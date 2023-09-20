@@ -13,7 +13,7 @@ use super::{
 use crate::circuit::Circuit;
 
 #[cfg(feature = "pyo3")]
-use pyo3::prelude::*;
+use pyo3::{create_exception, exceptions::PyException, pyclass, PyErr};
 
 /// A pattern that match a circuit exactly
 #[cfg_attr(feature = "pyo3", pyclass)]
@@ -39,9 +39,9 @@ impl CircuitPattern {
         }
         let mut pattern = Pattern::new();
         for cmd in circuit.commands() {
-            let op = circuit.command_optype(&cmd).clone();
+            let op = cmd.optype().clone();
             pattern.require(cmd.node(), op.try_into().unwrap());
-            for out_offset in 0..cmd.outputs().len() {
+            for out_offset in 0..cmd.output_count() {
                 let out_offset = Port::new_outgoing(out_offset);
                 for (next_node, in_offset) in circuit.linked_ports(cmd.node(), out_offset) {
                     if circuit.get_optype(next_node).tag() != hugr::ops::OpTag::Output {
@@ -116,6 +116,21 @@ pub enum InvalidPattern {
 impl From<NoRootFound> for InvalidPattern {
     fn from(_: NoRootFound) -> Self {
         InvalidPattern::NotConnected
+    }
+}
+
+#[cfg(feature = "pyo3")]
+create_exception!(
+    pyrs,
+    PyInvalidPatternError,
+    PyException,
+    "Invalid circuit pattern"
+);
+
+#[cfg(feature = "pyo3")]
+impl From<InvalidPattern> for PyErr {
+    fn from(err: InvalidPattern) -> Self {
+        PyInvalidPatternError::new_err(err.to_string())
     }
 }
 

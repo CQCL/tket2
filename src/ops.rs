@@ -23,6 +23,11 @@ use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
 use thiserror::Error;
 
+#[cfg(feature = "pyo3")]
+use pyo3::pyclass;
+
+use crate::extension::REGISTRY;
+
 /// Name of tket 2 extension.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("quantum.tket2");
 
@@ -41,7 +46,9 @@ pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("quantum.tket2"
     IntoStaticStr,
     EnumString,
 )]
+#[cfg_attr(feature = "pyo3", pyclass)]
 #[allow(missing_docs)]
+#[non_exhaustive]
 /// Simple enum of tket 2 quantum operations.
 pub enum T2Op {
     H,
@@ -60,9 +67,12 @@ pub enum T2Op {
     PhasedX,
     ZZPhase,
     AngleAdd,
+    CZ,
     TK1,
 }
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "pyo3", pyclass)]
 #[allow(missing_docs)]
 /// Simple enum representation of Pauli matrices.
 pub enum Pauli {
@@ -123,7 +133,7 @@ impl SimpleOpEnum for T2Op {
         let two_qb_row = type_row![QB_T, QB_T];
         match self {
             H | T | S | X | Y | Z | Tdg | Sdg => FunctionType::new(one_qb_row.clone(), one_qb_row),
-            CX | ZZMax => FunctionType::new(two_qb_row.clone(), two_qb_row),
+            CX | ZZMax | CZ => FunctionType::new(two_qb_row.clone(), two_qb_row),
             ZZPhase => FunctionType::new(type_row![QB_T, QB_T, FLOAT64_TYPE], two_qb_row),
             Measure => FunctionType::new(one_qb_row, type_row![QB_T, BOOL_T]),
             RzF64 | RxF64 => FunctionType::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
@@ -177,7 +187,7 @@ impl T2Op {
             X | RxF64 => vec![(0, Pauli::X)],
             T | Z | S | Tdg | Sdg | RzF64 | Measure => vec![(0, Pauli::Z)],
             CX => vec![(0, Pauli::Z), (1, Pauli::X)],
-            ZZMax | ZZPhase => vec![(0, Pauli::Z), (1, Pauli::Z)],
+            ZZMax | ZZPhase | CZ => vec![(0, Pauli::Z), (1, Pauli::Z)],
             // by default, no commutation
             _ => vec![],
         }
@@ -193,6 +203,7 @@ pub fn symbolic_constant_op(s: &str) -> OpType {
             vec![TypeArg::Opaque {
                 arg: CustomTypeArg::new(SYM_EXPR_T.clone(), value).unwrap(),
             }],
+            &REGISTRY,
         )
         .unwrap()
         .into();
@@ -266,7 +277,7 @@ pub static ref EXTENSION: Extension = {
 impl From<T2Op> for LeafOp {
     fn from(op: T2Op) -> Self {
         EXTENSION
-            .instantiate_extension_op(op.name(), [])
+            .instantiate_extension_op(op.name(), [], &REGISTRY)
             .unwrap()
             .into()
     }
@@ -314,8 +325,7 @@ pub(crate) mod test {
 
     use std::sync::Arc;
 
-    use hugr::hugr::views::HierarchyView;
-    use hugr::{extension::OpDef, hugr::views::SiblingGraph, ops::handle::DfgID, Hugr, HugrView};
+    use hugr::{extension::OpDef, Hugr};
     use rstest::{fixture, rstest};
 
     use crate::{circuit::Circuit, ops::SimpleOpEnum, utils::build_simple_circuit};
@@ -346,8 +356,6 @@ pub(crate) mod test {
 
     #[rstest]
     fn check_t2_bell(t2_bell_circuit: Hugr) {
-        let circ: SiblingGraph<'_, DfgID> =
-            SiblingGraph::new(&t2_bell_circuit, t2_bell_circuit.root());
-        assert_eq!(circ.commands().count(), 2);
+        assert_eq!(t2_bell_circuit.commands().count(), 2);
     }
 }

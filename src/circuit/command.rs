@@ -2,11 +2,15 @@
 //!
 //! A [`Command`] is an operation applied to an specific wires, possibly identified by their index in the circuit's input vector.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::iter::FusedIterator;
 
+use hugr::hugr::NodeType;
 use hugr::ops::{OpTag, OpTrait};
+use petgraph::visit as pv;
 
+use super::units::filter::FilteredUnits;
+use super::units::{filter, DefaultUnitLabeller, LinearUnit, UnitLabeller, Units};
 use super::Circuit;
 
 pub use hugr::hugr::CircuitUnit;
@@ -15,44 +19,173 @@ pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Direction, Node, Port, Wire};
 
 /// An operation applied to specific wires.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Command {
+#[derive(Eq, PartialOrd, Ord, Hash)]
+pub struct Command<'circ, Circ> {
+    /// The circuit.
+    circ: &'circ Circ,
     /// The operation node.
     node: Node,
-    /// The input units to the operation.
-    inputs: Vec<CircuitUnit>,
-    /// The output units to the operation.
-    outputs: Vec<CircuitUnit>,
+    /// An assignment of linear units to the node's ports.
+    //
+    // We'll need something more complex if `follow_linear_port` stops being a
+    // direct map from input to output.
+    linear_units: Vec<LinearUnit>,
 }
 
-impl Command {
+impl<'circ, Circ: Circuit> Command<'circ, Circ> {
     /// Returns the node corresponding to this command.
+    #[inline]
     pub fn node(&self) -> Node {
         self.node
     }
 
-    /// Returns the output units of this command.
-    pub fn outputs(&self) -> &Vec<CircuitUnit> {
-        &self.outputs
+    /// Returns the [`NodeType`] of the command.
+    #[inline]
+    pub fn nodetype(&self) -> &NodeType {
+        self.circ.get_nodetype(self.node)
+    }
+
+    /// Returns the [`OpType`] of the command.
+    #[inline]
+    pub fn optype(&self) -> &OpType {
+        self.circ.get_optype(self.node)
+    }
+
+    /// Returns the units of this command in a given direction.
+    #[inline]
+    pub fn units(&self, direction: Direction) -> Units<&'_ Self> {
+        Units::new(self.circ, self.node, direction, self)
+    }
+
+    /// Returns the linear units of this command in a given direction.
+    #[inline]
+    pub fn linear_units(&self, direction: Direction) -> FilteredUnits<filter::Linear, &Self> {
+        Units::new(self.circ, self.node, direction, self).filter_units::<filter::Linear>()
+    }
+
+    /// Returns the units and wires of this command in a given direction.
+    #[inline]
+    pub fn unit_wires(
+        &self,
+        direction: Direction,
+    ) -> impl IntoIterator<Item = (CircuitUnit, Wire)> + '_ {
+        self.units(direction)
+            .filter_map(move |(unit, port, _)| Some((unit, self.assign_wire(self.node, port)?)))
+    }
+
+    /// Returns the output units of this command. See [`Command::units`].
+    #[inline]
+    pub fn outputs(&self) -> Units<&'_ Self> {
+        self.units(Direction::Outgoing)
+    }
+
+    /// Returns the linear output units of this command. See [`Command::linear_units`].
+    #[inline]
+    pub fn linear_outputs(&self) -> FilteredUnits<filter::Linear, &Self> {
+        self.linear_units(Direction::Outgoing)
+    }
+
+    /// Returns the output units and wires of this command. See [`Command::unit_wires`].
+    #[inline]
+    pub fn output_wires(&self) -> impl IntoIterator<Item = (CircuitUnit, Wire)> + '_ {
+        self.unit_wires(Direction::Outgoing)
     }
 
     /// Returns the output units of this command.
-    pub fn inputs(&self) -> &Vec<CircuitUnit> {
-        &self.inputs
+    #[inline]
+    pub fn inputs(&self) -> Units<&'_ Self> {
+        self.units(Direction::Incoming)
+    }
+
+    /// Returns the linear input units of this command. See [`Command::linear_units`].
+    #[inline]
+    pub fn linear_inputs(&self) -> FilteredUnits<filter::Linear, &Self> {
+        self.linear_units(Direction::Incoming)
+    }
+
+    /// Returns the input units and wires of this command. See [`Command::unit_wires`].
+    #[inline]
+    pub fn input_wires(&self) -> impl IntoIterator<Item = (CircuitUnit, Wire)> + '_ {
+        self.unit_wires(Direction::Incoming)
+    }
+
+    /// Returns the number of inputs of this command.
+    #[inline]
+    pub fn input_count(&self) -> usize {
+        let optype = self.optype();
+        optype.signature().input_count() + optype.static_input().is_some() as usize
+    }
+
+    /// Returns the number of outputs of this command.
+    #[inline]
+    pub fn output_count(&self) -> usize {
+        self.optype().signature().output_count()
     }
 }
 
+impl<'a, 'circ, Circ: Circuit> UnitLabeller for &'a Command<'circ, Circ> {
+    #[inline]
+    fn assign_linear(&self, _: Node, port: Port, _linear_count: usize) -> LinearUnit {
+        *self.linear_units.get(port.index()).unwrap_or_else(|| {
+            panic!(
+                "Could not assign a linear unit to port {port:?} of node {:?}",
+                self.node
+            )
+        })
+    }
+
+    #[inline]
+    fn assign_wire(&self, node: Node, port: Port) -> Option<Wire> {
+        match port.direction() {
+            Direction::Incoming => {
+                let (from, from_port) = self.circ.linked_ports(node, port).next()?;
+                Some(Wire::new(from, from_port))
+            }
+            Direction::Outgoing => Some(Wire::new(node, port)),
+        }
+    }
+}
+
+impl<'circ, Circ: Circuit> std::fmt::Debug for Command<'circ, Circ> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Command")
+            .field("circuit name", &self.circ.name())
+            .field("node", &self.node)
+            .field("linear_units", &self.linear_units)
+            .finish()
+    }
+}
+
+impl<'circ, Circ> PartialEq for Command<'circ, Circ> {
+    fn eq(&self, other: &Self) -> bool {
+        self.node == other.node && self.linear_units == other.linear_units
+    }
+}
+
+impl<'circ, Circ> Clone for Command<'circ, Circ> {
+    fn clone(&self) -> Self {
+        Self {
+            circ: self.circ,
+            node: self.node,
+            linear_units: self.linear_units.clone(),
+        }
+    }
+}
+
+/// A non-borrowing topological walker over the nodes of a circuit.
+type NodeWalker = pv::Topo<Node, HashSet<Node>>;
+
 /// An iterator over the commands of a circuit.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct CommandIterator<'circ, Circ> {
-    /// The circuit
+    /// The circuit.
     circ: &'circ Circ,
-    /// Toposorted nodes
-    nodes: Vec<Node>,
-    /// Current element in `nodes`
-    current: usize,
-    /// Last wires for each linear `CircuitUnit`
+    /// Toposorted nodes.
+    nodes: NodeWalker,
+    /// Last wire for each [`LinearUnit`] in the circuit.
     wire_unit: HashMap<Wire, usize>,
+    /// Remaining commands, not counting I/O nodes.
+    remaining: usize,
 }
 
 impl<'circ, Circ> CommandIterator<'circ, Circ>
@@ -61,94 +194,91 @@ where
 {
     /// Create a new iterator over the commands of a circuit.
     pub(super) fn new(circ: &'circ Circ) -> Self {
-        // Initialize the linear units from the input's linear ports.
-        // TODO: Clean this up
-        let input_node_wires = circ
-            .node_outputs(circ.input())
-            .map(|port| Wire::new(circ.input(), port));
-        let wire_unit = input_node_wires
-            .zip(circ.units().iter())
-            .filter_map(|(wire, (unit, _))| match unit {
-                CircuitUnit::Linear(i) => Some((wire, *i)),
-                _ => None,
-            })
+        // Initialize the map assigning linear units to the input's linear
+        // ports.
+        //
+        // TODO: `with_wires` combinator for `Units`?
+        let wire_unit = circ
+            .linear_units()
+            .map(|(linear_unit, port, _)| (Wire::new(circ.input(), port), linear_unit))
             .collect();
 
-        let nodes = petgraph::algo::toposort(&circ.as_petgraph(), None).unwrap();
+        let nodes = pv::Topo::new(&circ.as_petgraph());
         Self {
             circ,
             nodes,
-            current: 0,
             wire_unit,
+            // Ignore the input and output nodes, and the root.
+            remaining: circ.node_count() - 3,
         }
     }
 
-    /// Process a new node, updating wires in `unit_wires` and returns the
-    /// command for the node if it's not an input or output.
-    fn process_node(&mut self, node: Node) -> Option<Command> {
-        let optype = self.circ.get_optype(node);
-        let sig = optype.signature();
-
+    /// Process a new node, updating wires in `unit_wires`.
+    ///
+    /// Returns the an option with the `linear_units` used to construct a
+    /// [`Command`], if the node is not an input or output.
+    ///
+    /// We don't return the command directly to avoid lifetime issues due to the
+    /// mutable borrow here.
+    fn process_node(&mut self, node: Node) -> Option<Vec<LinearUnit>> {
         // The root node is ignored.
         if node == self.circ.root() {
             return None;
         }
-
-        // Get the wire corresponding to each input unit.
-        // TODO: Add this to HugrView?
-        let inputs: Vec<_> = sig
-            .input_ports()
-            .chain(
-                // add the static input port
-                optype
-                    .static_input()
-                    // TODO query optype for this port once it is available in hugr.
-                    .map(|_| Port::new_incoming(sig.input.len())),
-            )
-            .filter_map(|port| {
-                let (from, from_port) = self.circ.linked_ports(node, port).next()?;
-                let wire = Wire::new(from, from_port);
-                // Get the unit corresponding to a wire, or return a wire Unit.
-                match self.wire_unit.remove(&wire) {
-                    Some(unit) => {
-                        if let Some(new_port) = self.circ.follow_linear_port(node, port) {
-                            self.wire_unit.insert(Wire::new(node, new_port), unit);
-                        }
-                        Some(CircuitUnit::Linear(unit))
-                    }
-                    None => Some(CircuitUnit::Wire(wire)),
-                }
-            })
-            .collect();
-        // The units in `self.wire_units` have been updated.
-        // Now we can early return if the node should be ignored.
-        let tag = optype.tag();
+        // Inputs and outputs are also ignored.
+        // The input wire ids are already set in the `wire_unit` map during initialization.
+        let tag = self.circ.get_optype(node).tag();
         if tag == OpTag::Input || tag == OpTag::Output {
             return None;
         }
 
-        let mut outputs: Vec<_> = sig
-            .output_ports()
-            .map(|port| {
-                let wire = Wire::new(node, port);
-                match self.wire_unit.get(&wire) {
-                    Some(&unit) => CircuitUnit::Linear(unit),
-                    None => CircuitUnit::Wire(wire),
-                }
-            })
-            .collect();
-        if let OpType::Const(_) = optype {
-            // add the static output port from a const.
-            outputs.push(CircuitUnit::Wire(Wire::new(
-                node,
-                optype.other_port_index(Direction::Outgoing).unwrap(),
-            )))
+        // Collect the linear units passing through this command into the map
+        // required to construct a `Command`.
+        //
+        // Updates the map tracking the last wire of linear units.
+        let linear_units: Vec<_> =
+            Units::new(self.circ, node, Direction::Outgoing, DefaultUnitLabeller)
+                .filter_units::<filter::Linear>()
+                .map(|(_, port, _)| {
+                    // Find the linear unit id for this port.
+                    let linear_id = self
+                        .follow_linear_port(node, port)
+                        .and_then(|input_port| self.circ.linked_ports(node, input_port).next())
+                        .and_then(|(from, from_port)| {
+                            // Remove the old wire from the map (if there was one)
+                            self.wire_unit.remove(&Wire::new(from, from_port))
+                        })
+                        .unwrap_or({
+                            // New linear unit found. Assign it a new id.
+                            self.wire_unit.len()
+                        });
+                    // Update the map tracking the linear units
+                    let new_wire = Wire::new(node, port);
+                    self.wire_unit.insert(new_wire, linear_id);
+                    linear_id
+                })
+                .collect();
+
+        Some(linear_units)
+    }
+
+    /// Returns the linear port on the node that corresponds to the same linear unit.
+    ///
+    /// We assume the linear data uses the same port offsets on both sides of the node.
+    /// In the future we may want to have a more general mechanism to handle this.
+    //
+    // Note that `Command::linear_units` assumes this behaviour.
+    fn follow_linear_port(&self, node: Node, port: Port) -> Option<Port> {
+        let optype = self.circ.get_optype(node);
+        if !optype.port_kind(port)?.is_linear() {
+            return None;
         }
-        Some(Command {
-            node,
-            inputs,
-            outputs,
-        })
+        let other_port = Port::new(port.direction().reverse(), port.index());
+        if optype.port_kind(other_port) == optype.port_kind(port) {
+            Some(other_port)
+        } else {
+            None
+        }
     }
 }
 
@@ -156,51 +286,67 @@ impl<'circ, Circ> Iterator for CommandIterator<'circ, Circ>
 where
     Circ: Circuit,
 {
-    type Item = Command;
+    type Item = Command<'circ, Circ>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if self.current == self.nodes.len() {
-                return None;
-            }
-            let node = self.nodes[self.current];
-            let com = self.process_node(node);
-            self.current += 1;
-            if com.is_some() {
-                return com;
+            let node = self.nodes.next(&self.circ.as_petgraph())?;
+            if let Some(linear_units) = self.process_node(node) {
+                self.remaining -= 1;
+                return Some(Command {
+                    circ: self.circ,
+                    node,
+                    linear_units,
+                });
             }
         }
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (0, Some(self.nodes.len() - self.current))
+        (self.remaining, Some(self.remaining))
     }
 }
 
 impl<'circ, Circ> FusedIterator for CommandIterator<'circ, Circ> where Circ: Circuit {}
 
+impl<'circ, Circ: Circuit> std::fmt::Debug for CommandIterator<'circ, Circ> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CommandIterator")
+            .field("circuit name", &self.circ.name())
+            .field("wire_unit", &self.wire_unit)
+            .field("remaining", &self.remaining)
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use hugr::hugr::views::{HierarchyView, SiblingGraph};
     use hugr::ops::OpName;
-    use hugr::HugrView;
+    use itertools::Itertools;
 
     use crate::utils::build_simple_circuit;
     use crate::T2Op;
 
     use super::*;
 
+    // We use a macro instead of a function to get the failing line numbers right.
+    macro_rules! assert_eq_iter {
+        ($iterable:expr, $expected:expr $(,)?) => {
+            assert_eq!($iterable.collect_vec(), $expected.into_iter().collect_vec());
+        };
+    }
+
     #[test]
     fn iterate_commands() {
-        let hugr = build_simple_circuit(2, |circ| {
+        let circ = build_simple_circuit(2, |circ| {
             circ.append(T2Op::H, [0])?;
             circ.append(T2Op::CX, [0, 1])?;
             circ.append(T2Op::T, [1])?;
             Ok(())
         })
         .unwrap();
-        let circ: SiblingGraph<'_> = SiblingGraph::new(&hugr, hugr.root());
 
         assert_eq!(CommandIterator::new(&circ).count(), 3);
 
@@ -208,33 +354,40 @@ mod test {
         let t2op_name = |op: T2Op| <T2Op as Into<OpType>>::into(op).name();
 
         let mut commands = CommandIterator::new(&circ);
+        assert_eq!(commands.size_hint(), (3, Some(3)));
 
         let hadamard = commands.next().unwrap();
-        assert_eq!(
-            circ.command_optype(&hadamard).name().as_str(),
-            t2op_name(T2Op::H)
+        assert_eq!(hadamard.optype().name().as_str(), t2op_name(T2Op::H));
+        assert_eq_iter!(
+            hadamard.inputs().map(|(u, _, _)| u),
+            [CircuitUnit::Linear(0)],
         );
-        assert_eq!(hadamard.inputs(), &[CircuitUnit::Linear(0)]);
-        assert_eq!(hadamard.outputs(), &[CircuitUnit::Linear(0)]);
+        assert_eq_iter!(
+            hadamard.outputs().map(|(u, _, _)| u),
+            [CircuitUnit::Linear(0)],
+        );
 
         let cx = commands.next().unwrap();
-        assert_eq!(
-            circ.command_optype(&cx).name().as_str(),
-            t2op_name(T2Op::CX)
+        assert_eq!(cx.optype().name().as_str(), t2op_name(T2Op::CX));
+        assert_eq_iter!(
+            cx.inputs().map(|(unit, _, _)| unit),
+            [CircuitUnit::Linear(0), CircuitUnit::Linear(1)],
         );
-        assert_eq!(
-            cx.inputs(),
-            &[CircuitUnit::Linear(0), CircuitUnit::Linear(1)]
-        );
-        assert_eq!(
-            cx.outputs(),
-            &[CircuitUnit::Linear(0), CircuitUnit::Linear(1)]
+        assert_eq_iter!(
+            cx.outputs().map(|(unit, _, _)| unit),
+            [CircuitUnit::Linear(0), CircuitUnit::Linear(1)],
         );
 
         let t = commands.next().unwrap();
-        assert_eq!(circ.command_optype(&t).name().as_str(), t2op_name(T2Op::T));
-        assert_eq!(t.inputs(), &[CircuitUnit::Linear(1)]);
-        assert_eq!(t.outputs(), &[CircuitUnit::Linear(1)]);
+        assert_eq!(t.optype().name().as_str(), t2op_name(T2Op::T));
+        assert_eq_iter!(
+            t.inputs().map(|(unit, _, _)| unit),
+            [CircuitUnit::Linear(1)],
+        );
+        assert_eq_iter!(
+            t.outputs().map(|(unit, _, _)| unit),
+            [CircuitUnit::Linear(1)],
+        );
 
         assert_eq!(commands.next(), None);
     }
