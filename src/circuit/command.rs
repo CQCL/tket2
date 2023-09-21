@@ -146,6 +146,14 @@ impl<'circ, Circ: Circuit> Command<'circ, Circ> {
             .find(|(cu, _, _)| *cu == unit)
             .map(|(_, port, _)| port)
     }
+
+    /// Returns whether the port is a linear port.
+    #[inline]
+    pub fn is_linear_port(&self, port: Port) -> bool {
+        self.optype()
+            .port_kind(port)
+            .map_or(false, |kind| kind.is_linear())
+    }
 }
 
 impl<'a, 'circ, Circ: Circuit> UnitLabeller for &'a Command<'circ, Circ> {
