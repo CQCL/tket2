@@ -7,13 +7,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{CircuitPattern, PEdge, PNode};
+use super::{CircuitPattern, NodeID, PEdge, PNode};
 use hugr::hugr::views::sibling_subgraph::{ConvexChecker, InvalidReplacement, InvalidSubgraph};
 use hugr::{hugr::views::SiblingSubgraph, ops::OpType, Hugr, Node, Port};
 use itertools::Itertools;
 use portmatching::{
     automaton::{LineBuilder, ScopeAutomaton},
-    PatternID,
+    EdgeProperty, PatternID,
 };
 use thiserror::Error;
 
@@ -30,6 +30,7 @@ use crate::{
 /// Matchable operations in a circuit.
 ///
 /// We currently support [`T2Op`] and a the HUGR load constant operation.
+// TODO: Support OpType::Const, but blocked by use of F64 (Eq support required)
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -257,11 +258,11 @@ impl PatternMatcher {
     ) -> Vec<PatternMatch> {
         self.automaton
             .run(
-                root,
+                root.into(),
                 // Node weights (none)
-                validate_weighted_node(circ),
+                validate_circuit_node(circ),
                 // Check edge exist
-                validate_unweighted_edge(circ),
+                validate_circuit_edge(circ),
             )
             .filter_map(|pattern_id| {
                 handle_match_error(
@@ -380,28 +381,48 @@ impl From<InvalidSubgraph> for InvalidPatternMatch {
     }
 }
 
-fn compatible_offsets((_, pout): &(Port, Port), (pin, _): &(Port, Port)) -> bool {
-    pout.direction() != pin.direction() && pout.index() == pin.index()
+fn compatible_offsets(e1: &PEdge, e2: &PEdge) -> bool {
+    let PEdge::InternalEdge { dst: dst1, .. } = e1 else {
+        return false;
+    };
+    let src2 = e2.offset_id();
+    dst1.direction() != src2.direction() && dst1.index() == src2.index()
 }
 
-/// Check if an edge `e` is valid in a portgraph `g` without weights.
-pub(crate) fn validate_unweighted_edge(
+/// Returns a predicate checking that an edge at `src` satisfies `prop` in `circ`.
+pub(super) fn validate_circuit_edge(
     circ: &impl Circuit,
-) -> impl for<'a> Fn(Node, &'a PEdge) -> Option<Node> + '_ {
-    move |src, &(src_port, tgt_port)| {
-        let (next_node, _) = circ
-            .linked_ports(src, src_port)
-            .find(|&(_, tgt)| tgt == tgt_port)?;
-        Some(next_node)
+) -> impl for<'a> Fn(NodeID, &'a PEdge) -> Option<NodeID> + '_ {
+    move |src, &prop| {
+        let NodeID::HugrNode(src) = src else {
+            return None;
+        };
+        match prop {
+            PEdge::InternalEdge {
+                src: src_port,
+                dst: dst_port,
+                ..
+            } => {
+                let (next_node, next_port) = circ.linked_ports(src, src_port).exactly_one().ok()?;
+                (dst_port == next_port).then_some(NodeID::HugrNode(next_node))
+            }
+            PEdge::InputEdge { src: src_port } => {
+                let (next_node, next_port) = circ.linked_ports(src, src_port).exactly_one().ok()?;
+                Some(NodeID::CopyNode(next_node, next_port))
+            }
+        }
     }
 }
 
-/// Check if a node `n` is valid in a weighted portgraph `g`.
-pub(crate) fn validate_weighted_node(
+/// Returns a predicate checking that `node` satisfies `prop` in `circ`.
+pub(crate) fn validate_circuit_node(
     circ: &impl Circuit,
-) -> impl for<'a> Fn(Node, &PNode) -> bool + '_ {
-    move |v, prop| {
-        let v_weight = MatchOp::try_from(circ.get_optype(v).clone());
+) -> impl for<'a> Fn(NodeID, &PNode) -> bool + '_ {
+    move |node, prop| {
+        let NodeID::HugrNode(node) = node else {
+            return false;
+        };
+        let v_weight = MatchOp::try_from(circ.get_optype(node).clone());
         v_weight.is_ok_and(|w| &w == prop)
     }
 }

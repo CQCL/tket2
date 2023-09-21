@@ -7,10 +7,10 @@ use std::fmt::Debug;
 use thiserror::Error;
 
 use super::{
-    matcher::{validate_unweighted_edge, validate_weighted_node},
+    matcher::{validate_circuit_edge, validate_circuit_node},
     PEdge, PNode,
 };
-use crate::circuit::Circuit;
+use crate::{circuit::Circuit, portmatching::NodeID};
 
 #[cfg(feature = "pyo3")]
 use pyo3::{create_exception, exceptions::PyException, pyclass, PyErr};
@@ -19,7 +19,7 @@ use pyo3::{create_exception, exceptions::PyException, pyclass, PyErr};
 #[cfg_attr(feature = "pyo3", pyclass)]
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CircuitPattern {
-    pub(super) pattern: Pattern<Node, PNode, PEdge>,
+    pub(super) pattern: Pattern<NodeID, PNode, PEdge>,
     /// The input ports
     pub(super) inputs: Vec<Vec<(Node, Port)>>,
     /// The output ports
@@ -40,14 +40,21 @@ impl CircuitPattern {
         let mut pattern = Pattern::new();
         for cmd in circuit.commands() {
             let op = cmd.optype().clone();
-            pattern.require(cmd.node(), op.try_into().unwrap());
-            for out_offset in 0..cmd.output_count() {
-                let out_offset = Port::new_outgoing(out_offset);
-                for (next_node, in_offset) in circuit.linked_ports(cmd.node(), out_offset) {
-                    if circuit.get_optype(next_node).tag() != hugr::ops::OpTag::Output {
-                        pattern.add_edge(cmd.node(), next_node, (out_offset, in_offset));
-                    }
-                }
+            pattern.require(cmd.node().into(), op.try_into().unwrap());
+            for in_offset in 0..cmd.input_count() {
+                let in_offset = Port::new_incoming(in_offset);
+                let edge_prop =
+                    PEdge::try_from_port(cmd.node(), in_offset, circuit).expect("Invalid HUGR");
+                let (prev_node, prev_port) = circuit
+                    .linked_ports(cmd.node(), in_offset)
+                    .exactly_one()
+                    .ok()
+                    .expect("invalid HUGR");
+                let prev_node = match edge_prop {
+                    PEdge::InternalEdge { .. } => NodeID::HugrNode(prev_node),
+                    PEdge::InputEdge { .. } => NodeID::CopyNode(prev_node, prev_port),
+                };
+                pattern.add_edge(cmd.node().into(), prev_node, edge_prop);
             }
         }
         pattern.set_any_root()?;
@@ -83,15 +90,25 @@ impl CircuitPattern {
     }
 
     /// Compute the map from pattern nodes to circuit nodes in `circ`.
-    pub fn get_match_map<C: Circuit>(&self, root: Node, circ: &C) -> Option<HashMap<Node, Node>> {
+    pub fn get_match_map(&self, root: Node, circ: &impl Circuit) -> Option<HashMap<Node, Node>> {
         let single_matcher = SinglePatternMatcher::from_pattern(self.pattern.clone());
         single_matcher
             .get_match_map(
-                root,
-                validate_weighted_node(circ),
-                validate_unweighted_edge(circ),
+                root.into(),
+                validate_circuit_node(circ),
+                validate_circuit_edge(circ),
             )
-            .map(|m| m.into_iter().collect())
+            .map(|m| {
+                m.into_iter()
+                    .filter_map(|(node_p, node_c)| match (node_p, node_c) {
+                        (NodeID::HugrNode(node_p), NodeID::HugrNode(node_c)) => {
+                            Some((node_p, node_c))
+                        }
+                        (NodeID::CopyNode(..), NodeID::CopyNode(..)) => None,
+                        _ => panic!("Invalid match map"),
+                    })
+                    .collect()
+            })
     }
 }
 
@@ -136,9 +153,17 @@ impl From<InvalidPattern> for PyErr {
 
 #[cfg(test)]
 mod tests {
-    use hugr::Hugr;
-    use itertools::Itertools;
 
+    use std::collections::HashSet;
+
+    use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
+    use hugr::extension::prelude::QB_T;
+    use hugr::ops::LeafOp;
+    use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
+    use hugr::types::FunctionType;
+    use hugr::Hugr;
+
+    use crate::extension::REGISTRY;
     use crate::utils::build_simple_circuit;
     use crate::T2Op;
 
@@ -153,23 +178,68 @@ mod tests {
         .unwrap()
     }
 
+    /// A circuit with two rotation gates in sequence, sharing a param
+    fn circ_with_copy() -> Hugr {
+        let input_t = vec![QB_T, FLOAT64_TYPE];
+        let output_t = vec![QB_T];
+        let mut h = DFGBuilder::new(FunctionType::new(input_t, output_t)).unwrap();
+
+        let mut inps = h.input_wires();
+        let qb = inps.next().unwrap();
+        let f = inps.next().unwrap();
+
+        let res = h.add_dataflow_op(T2Op::RxF64, [qb, f]).unwrap();
+        let qb = res.outputs().next().unwrap();
+        let res = h.add_dataflow_op(T2Op::RxF64, [qb, f]).unwrap();
+        let qb = res.outputs().next().unwrap();
+
+        h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap()
+    }
+
+    /// A circuit with two rotation gates in parallel, sharing a param
+    fn circ_with_copy_disconnected() -> Hugr {
+        let input_t = vec![QB_T, QB_T, FLOAT64_TYPE];
+        let output_t = vec![QB_T, QB_T];
+        let mut h = DFGBuilder::new(FunctionType::new(input_t, output_t)).unwrap();
+
+        let mut inps = h.input_wires();
+        let qb1 = inps.next().unwrap();
+        let qb2 = inps.next().unwrap();
+        let f = inps.next().unwrap();
+
+        let res = h.add_dataflow_op(T2Op::RxF64, [qb1, f]).unwrap();
+        let qb1 = res.outputs().next().unwrap();
+        let res = h.add_dataflow_op(T2Op::RxF64, [qb2, f]).unwrap();
+        let qb2 = res.outputs().next().unwrap();
+
+        h.finish_hugr_with_outputs([qb1, qb2], &REGISTRY).unwrap()
+    }
+
     #[test]
     fn construct_pattern() {
         let hugr = h_cx();
 
         let p = CircuitPattern::try_from_circuit(&hugr).unwrap();
 
-        let edges = p
+        let edges: HashSet<_> = p
             .pattern
             .edges()
             .unwrap()
             .iter()
             .map(|e| (e.source.unwrap(), e.target.unwrap()))
-            .collect_vec();
+            .collect();
+        let inp = hugr.input();
+        let cx_gate = NodeID::HugrNode(get_nodes_by_t2op(&hugr, T2Op::CX)[0]);
+        let h_gate = NodeID::HugrNode(get_nodes_by_t2op(&hugr, T2Op::H)[0]);
         assert_eq!(
-            // How would I construct hugr::Nodes for testing here?
-            edges.len(),
-            1
+            edges,
+            [
+                (cx_gate, h_gate),
+                (cx_gate, NodeID::CopyNode(inp, Port::new_outgoing(0))),
+                (cx_gate, NodeID::CopyNode(inp, Port::new_outgoing(1))),
+            ]
+            .into_iter()
+            .collect()
         )
     }
 
@@ -194,6 +264,42 @@ mod tests {
             Ok(())
         })
         .unwrap();
+        assert_eq!(
+            CircuitPattern::try_from_circuit(&circ).unwrap_err(),
+            InvalidPattern::NotConnected
+        );
+    }
+
+    fn get_nodes_by_t2op(circ: &impl Circuit, t2_op: T2Op) -> Vec<Node> {
+        circ.nodes()
+            .filter(|n| {
+                let Ok(op): Result<LeafOp, _> = circ.get_optype(*n).clone().try_into() else {
+                    return false;
+                };
+                op == t2_op.into()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn pattern_with_copy() {
+        let circ = circ_with_copy();
+        let pattern = CircuitPattern::try_from_circuit(&circ).unwrap();
+        let edges = pattern.pattern.edges().unwrap();
+        let rx_ns = get_nodes_by_t2op(&circ, T2Op::RxF64);
+        let inp = circ.input();
+        for rx_n in rx_ns {
+            assert!(edges.iter().any(|e| {
+                e.reverse().is_none()
+                    && e.source.unwrap() == rx_n.into()
+                    && e.target.unwrap() == NodeID::CopyNode(inp, Port::new_outgoing(1))
+            }));
+        }
+    }
+
+    #[test]
+    fn pattern_with_copy_disconnected() {
+        let circ = circ_with_copy_disconnected();
         assert_eq!(
             CircuitPattern::try_from_circuit(&circ).unwrap_err(),
             InvalidPattern::NotConnected
