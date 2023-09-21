@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 use tket2::{
     circuit::{Circuit, OpType},
     json::load_tk1_json_file,
-    optimiser::TasoOptimiser,
+    optimiser::{taso::LogConfig, TasoOptimiser},
     rewrite::{strategy::ExhaustiveRewriteStrategy, ECCRewriter},
     T2Op,
 };
@@ -66,15 +66,21 @@ fn main() {
 
     for result in gate_counts_csv.deserialize() {
         let record: QuartzGateCount = result.unwrap();
-        let circ = load_tk1_json_file(format!("circuits/{}.json", record.circ_name)).unwrap();
-        println!("Optimising {}", record.circ_name);
+        let rec_name = record.circ_name;
+        let final_circ_json = fs::File::create(format!("logs/final_circ_{rec_name}.json")).unwrap();
+        let circ_candidates_csv =
+            fs::File::create(format!("logs/best_circs_{rec_name}.csv")).unwrap();
+        let progress_log =
+            fs::File::create(format!("logs/taso-optimisation_{rec_name}.log")).unwrap();
+        let log_config = LogConfig::new(final_circ_json, circ_candidates_csv, progress_log);
+        let circ = load_tk1_json_file(format!("circuits/{}.json", rec_name)).unwrap();
+        println!("Optimising {}", rec_name);
         let start_time = Instant::now();
-        let opt_circ = taso
-            .optimise_with_default_log(&circ, Some(15), 4.try_into().unwrap())
-            .unwrap();
+        let opt_circ =
+            taso.optimise_with_log(&circ, log_config, Some(1500), 64.try_into().unwrap());
         timings_csv
             .serialize(ElapsedTime {
-                circ_name: record.circ_name.clone(),
+                circ_name: rec_name,
                 elapsed_s: start_time.elapsed().as_secs_f64(),
                 opt_count: num_cx_gates(&opt_circ),
             })
