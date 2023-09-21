@@ -2,7 +2,7 @@
 
 pub mod command;
 mod hash;
-mod units;
+pub mod units;
 
 pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
