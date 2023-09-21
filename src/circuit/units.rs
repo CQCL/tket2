@@ -19,8 +19,10 @@ use std::iter::FusedIterator;
 
 use hugr::hugr::CircuitUnit;
 use hugr::ops::OpTrait;
-use hugr::types::{EdgeKind, Type, TypeBound, TypeRow};
+use hugr::types::{EdgeKind, Type, TypeRow};
 use hugr::{Direction, Node, Port, Wire};
+
+use crate::utils::type_is_linear;
 
 use self::filter::UnitFilter;
 
@@ -214,8 +216,4 @@ impl UnitLabeller for DefaultUnitLabeller {
             Direction::Outgoing => Some(Wire::new(node, port)),
         }
     }
-}
-
-fn type_is_linear(typ: &Type) -> bool {
-    !TypeBound::Copyable.contains(typ.least_upper_bound())
 }
