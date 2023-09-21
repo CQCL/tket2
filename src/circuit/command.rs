@@ -19,7 +19,6 @@ pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Direction, Node, Port, Wire};
 
 /// An operation applied to specific wires.
-#[derive(Eq, PartialOrd, Ord, Hash)]
 pub struct Command<'circ, Circ> {
     /// The circuit.
     circ: &'circ Circ,
@@ -61,6 +60,24 @@ impl<'circ, Circ: Circuit> Command<'circ, Circ> {
     #[inline]
     pub fn linear_units(&self, direction: Direction) -> FilteredUnits<filter::Linear, &Self> {
         Units::new(self.circ, self.node, direction, self).filter_units::<filter::Linear>()
+    }
+
+    /// Returns the linear units of this command in a given direction.
+    #[inline]
+    pub fn qubits(&self, direction: Direction) -> FilteredUnits<filter::Qubits, &Self> {
+        Units::new(self.circ, self.node, direction, self).filter_units::<filter::Qubits>()
+    }
+
+    /// Returns the linear units of this command in a given direction.
+    #[inline]
+    pub fn input_qubits(&self) -> FilteredUnits<filter::Qubits, &Self> {
+        self.qubits(Direction::Incoming)
+    }
+
+    /// Returns the linear units of this command in a given direction.
+    #[inline]
+    pub fn output_qubits(&self) -> FilteredUnits<filter::Qubits, &Self> {
+        self.qubits(Direction::Outgoing)
     }
 
     /// Returns the units and wires of this command in a given direction.
@@ -121,6 +138,22 @@ impl<'circ, Circ: Circuit> Command<'circ, Circ> {
     pub fn output_count(&self) -> usize {
         self.optype().signature().output_count()
     }
+
+    /// Returns the port in the command given a linear unit.
+    #[inline]
+    pub fn linear_unit_port(&self, unit: LinearUnit, direction: Direction) -> Option<Port> {
+        self.linear_units(direction)
+            .find(|(cu, _, _)| *cu == unit)
+            .map(|(_, port, _)| port)
+    }
+
+    /// Returns whether the port is a linear port.
+    #[inline]
+    pub fn is_linear_port(&self, port: Port) -> bool {
+        self.optype()
+            .port_kind(port)
+            .map_or(false, |kind| kind.is_linear())
+    }
 }
 
 impl<'a, 'circ, Circ: Circuit> UnitLabeller for &'a Command<'circ, Circ> {
@@ -162,6 +195,8 @@ impl<'circ, Circ> PartialEq for Command<'circ, Circ> {
     }
 }
 
+impl<'circ, Circ> Eq for Command<'circ, Circ> {}
+
 impl<'circ, Circ> Clone for Command<'circ, Circ> {
     fn clone(&self) -> Self {
         Self {
@@ -169,6 +204,27 @@ impl<'circ, Circ> Clone for Command<'circ, Circ> {
             node: self.node,
             linear_units: self.linear_units.clone(),
         }
+    }
+}
+
+impl<'circ, Circ> std::hash::Hash for Command<'circ, Circ> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.node.hash(state);
+        self.linear_units.hash(state);
+    }
+}
+
+impl<'circ, Circ> PartialOrd for Command<'circ, Circ> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'circ, Circ> Ord for Command<'circ, Circ> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.node
+            .cmp(&other.node)
+            .then(self.linear_units.cmp(&other.linear_units))
     }
 }
 

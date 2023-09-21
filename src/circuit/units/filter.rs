@@ -16,6 +16,7 @@ pub type FilteredUnits<F, UL = DefaultUnitLabeller> = std::iter::FilterMap<
 
 /// A filter over a [`Units`] iterator.
 pub trait UnitFilter {
+    /// The item yielded by the filtered iterator.
     type Item;
 
     /// Filter a [`Units`] iterator item, and unwrap it into a `Self::Item` if
