@@ -216,17 +216,15 @@ impl<'circ, Circ> std::hash::Hash for Command<'circ, Circ> {
 
 impl<'circ, Circ> PartialOrd for Command<'circ, Circ> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match self.node.partial_cmp(&other.node) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        self.linear_units.partial_cmp(&other.linear_units)
+        Some(self.cmp(other))
     }
 }
 
 impl<'circ, Circ> Ord for Command<'circ, Circ> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
+        self.node
+            .cmp(&other.node)
+            .then(self.linear_units.cmp(&other.linear_units))
     }
 }
 
