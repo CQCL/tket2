@@ -29,12 +29,12 @@ use fxhash::FxHashSet;
 use hugr::Hugr;
 
 use crate::circuit::CircuitHash;
+use crate::optimiser::taso::hugr_pchannel::HugrPriorityChannel;
 use crate::optimiser::taso::hugr_pqueue::{Entry, HugrPQ};
 use crate::optimiser::taso::worker::TasoWorker;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
 
-use self::hugr_pchannel::HugrPriorityChannel;
 use self::log::TasoLogger;
 
 /// The TASO optimiser.
@@ -186,7 +186,7 @@ where
         let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(initial_circ_hash)]);
 
         // Each worker waits for circuits to scan for rewrites using all the
-        // patterns and send the results back to main.
+        // patterns and sends the results back to main.
         let joins: Vec<_> = (0..n_threads)
             .map(|i| {
                 TasoWorker::spawn(
@@ -204,7 +204,9 @@ where
         drop(tx_result);
 
         // Queue the initial circuit
-        tx_work.send((initial_circ_hash, circ.clone())).unwrap();
+        tx_work
+            .send(vec![(initial_circ_hash, circ.clone())])
+            .unwrap();
 
         // A counter of circuits seen.
         let mut circ_cnt = 1;
@@ -231,17 +233,17 @@ where
                 recv(rx_result) -> msg => {
                     match msg {
                         Ok(hashed_circs) => {
-                            tracing::span!(tracing::Level::TRACE, "recv_result").in_scope(|| {
+                            let send_result = tracing::span!(tracing::Level::TRACE, "recv_result").in_scope(|| {
                                 jobs_completed += 1;
-                                for (circ_hash, circ) in hashed_circs {
+                                for (circ_hash, circ) in &hashed_circs {
                                     circ_cnt += 1;
                                         logger.log_progress(circ_cnt, None, seen_hashes.len());
-                                    if seen_hashes.contains(&circ_hash) {
+                                    if seen_hashes.contains(circ_hash) {
                                         continue;
                                     }
-                                    seen_hashes.insert(circ_hash);
+                                    seen_hashes.insert(*circ_hash);
 
-                                    let cost = (self.cost)(&circ);
+                                    let cost = (self.cost)(circ);
 
                                     // Check if we got a new best circuit
                                     if cost < best_circ_cost {
@@ -249,15 +251,15 @@ where
                                         best_circ_cost = cost;
                                         logger.log_best(best_circ_cost);
                                     }
-
-                                    // Fill the workqueue with data from pq
-                                    if tx_work.send((circ_hash, circ)).is_err() {
-                                        eprintln!("All our workers panicked. Stopping optimisation.");
-                                        break;
-                                    };
                                     jobs_sent += 1;
                                 }
-                            })
+                                // Fill the workqueue with data from pq
+                                tx_work.send(hashed_circs)
+                            });
+                            if send_result.is_err() {
+                                eprintln!("All our workers panicked. Stopping optimisation.");
+                                break;
+                            }
 
                             // If there is no more data to process, we are done.
                             //
