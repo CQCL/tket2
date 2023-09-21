@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::process::exit;
 
 use clap::Parser;
 use itertools::Itertools;
@@ -42,7 +43,13 @@ fn main() {
 
     let all_circs = if input_path.is_file() {
         // Input is an ECC file in JSON format
-        let eccs = load_eccs_json_file(input_path);
+        let Ok(eccs) = load_eccs_json_file(input_path) else {
+            eprintln!(
+                "Unable to load ECC file {:?}. Is it a JSON file of Quartz-generated ECCs?",
+                input_path
+            );
+            exit(1);
+        };
         eccs.into_iter()
             .flat_map(|ecc| ecc.into_circuits())
             .collect_vec()

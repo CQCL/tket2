@@ -1,3 +1,4 @@
+use std::io;
 use std::path::Path;
 
 use hugr::Hugr;
@@ -77,12 +78,12 @@ impl EqCircClass {
 }
 
 /// Load a set of equivalence classes from a JSON file.
-pub fn load_eccs_json_file(path: impl AsRef<Path>) -> Vec<EqCircClass> {
-    let all_circs = load_ecc_set(path);
+pub fn load_eccs_json_file(path: impl AsRef<Path>) -> io::Result<Vec<EqCircClass>> {
+    let all_circs = load_ecc_set(path)?;
 
-    all_circs
+    Ok(all_circs
         .into_values()
         .map(EqCircClass::from_circuits)
         .collect::<Result<Vec<_>, _>>()
-        .unwrap()
+        .unwrap())
 }

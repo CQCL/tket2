@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io;
 use std::path::Path;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
@@ -109,19 +110,19 @@ impl From<RepCircData> for Circuit {
     }
 }
 
-pub(super) fn load_ecc_set(path: impl AsRef<Path>) -> HashMap<String, Vec<Circuit>> {
-    let jsons = std::fs::read_to_string(path).unwrap();
+pub(super) fn load_ecc_set(path: impl AsRef<Path>) -> io::Result<HashMap<String, Vec<Circuit>>> {
+    let jsons = std::fs::read_to_string(path)?;
     let (_, ecc_map): (Vec<()>, HashMap<String, Vec<RepCircData>>) =
         serde_json::from_str(&jsons).unwrap();
 
-    ecc_map
+    Ok(ecc_map
         .into_values()
         .map(|datmap| {
             let id = datmap[0].meta.id[0].clone();
             let circs = datmap.into_iter().map(|rcd| rcd.into()).collect();
             (id, circs)
         })
-        .collect()
+        .collect())
 }
 
 #[cfg(test)]
@@ -155,7 +156,7 @@ mod tests {
     #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
     fn test_read_complete() {
         let _ecc: HashMap<String, Vec<Circuit>> =
-            load_ecc_set("test_files/h_rz_cxcomplete_ECC_set.json");
+            load_ecc_set("test_files/h_rz_cxcomplete_ECC_set.json").unwrap();
 
         // ecc.values()
         //     .flatten()

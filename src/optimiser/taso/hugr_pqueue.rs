@@ -19,20 +19,22 @@ pub(super) struct HugrPQ<P: Ord, C> {
 pub(super) struct Entry<C, P, H> {
     pub(super) circ: C,
     pub(super) cost: P,
+    #[allow(unused)] // TODO remove?
     pub(super) hash: H,
 }
 
 impl<P: Ord, C> HugrPQ<P, C> {
-    /// Create a new HugrPQ with a cost function.
-    pub(super) fn new(cost_fn: C) -> Self {
+    /// Create a new HugrPQ with a cost function and some initial capacity.
+    pub(super) fn with_capacity(cost_fn: C, capacity: usize) -> Self {
         Self {
-            queue: DoublePriorityQueue::new(),
+            queue: DoublePriorityQueue::with_capacity(capacity),
             hash_lookup: Default::default(),
             cost_fn,
         }
     }
 
     /// Reference to the minimal Hugr in the queue.
+    #[allow(unused)]
     pub(super) fn peek(&self) -> Option<Entry<&Hugr, &P, u64>> {
         let (hash, cost) = self.queue.peek_min()?;
         let circ = self.hash_lookup.get(hash)?;
