@@ -12,25 +12,28 @@
 //! it gets too large.
 
 mod eq_circ_class;
-mod hugr_pq;
+mod hugr_pchannel;
+mod hugr_pqueue;
 mod qtz_circuit;
+mod worker;
 
+use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 
-use std::sync::mpsc::{self, Receiver, SyncSender};
-use std::thread::{self, JoinHandle};
-use std::time::Instant;
+use std::num::NonZeroUsize;
+use std::time::{Duration, Instant};
 use std::{fs, io};
 
 use fxhash::FxHashSet;
-use hugr::{Hugr, HugrView};
-use itertools::{izip, Itertools};
+use hugr::Hugr;
 
 use crate::circuit::CircuitHash;
 use crate::json::save_tk1_json_writer;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
-use hugr_pq::{Entry, HugrPQ};
+use hugr_pqueue::{Entry, HugrPQ};
+
+use self::hugr_pchannel::HugrPriorityChannel;
 
 /// Logging configuration for the TASO optimiser.
 #[derive(Default)]
@@ -76,6 +79,7 @@ impl<'w> LogConfig<'w> {
 ///
 /// [Quartz]: https://arxiv.org/abs/2204.09033
 /// [TASO]: https://dl.acm.org/doi/10.1145/3341301.3359630
+#[derive(Clone, Debug)]
 pub struct TasoOptimiser<R, S, C> {
     rewriter: R,
     strategy: S,
@@ -91,24 +95,19 @@ impl<R, S, C> TasoOptimiser<R, S, C> {
             cost,
         }
     }
+}
 
+impl<R, S, C> TasoOptimiser<R, S, C>
+where
+    R: Rewriter + Send + Clone + 'static,
+    S: RewriteStrategy + Send + Clone + 'static,
+    C: Fn(&Hugr) -> usize + Send + Sync + Clone + 'static,
+{
     /// Run the TASO optimiser on a circuit.
     ///
     /// A timeout (in seconds) can be provided.
-    pub fn optimise(&self, circ: &Hugr, timeout: Option<u64>) -> Hugr
-    where
-        R: Rewriter,
-        S: RewriteStrategy,
-        C: Fn(&Hugr) -> usize,
-    {
-        taso(
-            circ,
-            &self.rewriter,
-            &self.strategy,
-            &self.cost,
-            Default::default(),
-            timeout,
-        )
+    pub fn optimise(&self, circ: &Hugr, timeout: Option<u64>, n_threads: NonZeroUsize) -> Hugr {
+        self.optimise_with_log(circ, Default::default(), timeout, n_threads)
     }
 
     /// Run the TASO optimiser on a circuit with logging activated.
@@ -119,20 +118,12 @@ impl<R, S, C> TasoOptimiser<R, S, C> {
         circ: &Hugr,
         log_config: LogConfig,
         timeout: Option<u64>,
-    ) -> Hugr
-    where
-        R: Rewriter,
-        S: RewriteStrategy,
-        C: Fn(&Hugr) -> usize,
-    {
-        taso(
-            circ,
-            &self.rewriter,
-            &self.strategy,
-            &self.cost,
-            log_config,
-            timeout,
-        )
+        n_threads: NonZeroUsize,
+    ) -> Hugr {
+        match n_threads.get() {
+            1 => self.taso(circ, log_config, timeout),
+            _ => self.taso_multithreaded(circ, log_config, timeout, n_threads),
+        }
     }
 
     /// Run the TASO optimiser on a circuit with default logging.
@@ -145,17 +136,229 @@ impl<R, S, C> TasoOptimiser<R, S, C> {
     /// If the creation of any of these files fails, an error is returned.
     ///
     /// A timeout (in seconds) can be provided.
-    pub fn optimise_with_default_log(&self, circ: &Hugr, timeout: Option<u64>) -> io::Result<Hugr>
-    where
-        R: Rewriter,
-        S: RewriteStrategy,
-        C: Fn(&Hugr) -> usize,
-    {
+    pub fn optimise_with_default_log(
+        &self,
+        circ: &Hugr,
+        timeout: Option<u64>,
+        n_threads: NonZeroUsize,
+    ) -> io::Result<Hugr> {
         let final_circ_json = fs::File::create("final_circ.json")?;
         let circ_candidates_csv = fs::File::create("best_circs.csv")?;
         let progress_log = fs::File::create("taso-optimisation.log")?;
         let log_config = LogConfig::new(final_circ_json, circ_candidates_csv, progress_log);
-        Ok(self.optimise_with_log(circ, log_config, timeout))
+        Ok(self.optimise_with_log(circ, log_config, timeout, n_threads))
+    }
+
+    fn taso(&self, circ: &Hugr, mut log_config: LogConfig, timeout: Option<u64>) -> Hugr {
+        let start_time = Instant::now();
+
+        let mut log_candidates = log_config.circ_candidates_csv.map(csv::Writer::from_writer);
+
+        let mut best_circ = circ.clone();
+        let mut best_circ_cost = (self.cost)(circ);
+        log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
+
+        // Hash of seen circuits. Dot not store circuits as this map gets huge
+        let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(circ.circuit_hash())]);
+
+        // The priority queue of circuits to be processed (this should not get big)
+        const PRIORITY_QUEUE_CAPACITY: usize = 10_000;
+        let mut pq = HugrPQ::with_capacity(&self.cost, PRIORITY_QUEUE_CAPACITY);
+        pq.push(circ.clone());
+
+        let mut circ_cnt = 1;
+        while let Some(Entry { circ, cost, .. }) = pq.pop() {
+            if cost < best_circ_cost {
+                best_circ = circ.clone();
+                best_circ_cost = cost;
+                log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
+            }
+
+            let rewrites = self.rewriter.get_rewrites(&circ);
+            for new_circ in self.strategy.apply_rewrites(rewrites, &circ) {
+                let new_circ_hash = new_circ.circuit_hash();
+                circ_cnt += 1;
+                if circ_cnt % 1000 == 0 {
+                    log_progress(
+                        log_config.progress_log.as_mut(),
+                        circ_cnt,
+                        Some(&pq),
+                        &seen_hashes,
+                    )
+                    .expect("Failed to write to progress log");
+                }
+                if seen_hashes.contains(&new_circ_hash) {
+                    continue;
+                }
+                pq.push_with_hash_unchecked(new_circ, new_circ_hash);
+                seen_hashes.insert(new_circ_hash);
+            }
+
+            if pq.len() >= PRIORITY_QUEUE_CAPACITY {
+                // Haircut to keep the queue size manageable
+                pq.truncate(PRIORITY_QUEUE_CAPACITY / 2);
+            }
+
+            if let Some(timeout) = timeout {
+                if start_time.elapsed().as_secs() > timeout {
+                    println!("Timeout");
+                    break;
+                }
+            }
+        }
+
+        log_processing_end(circ_cnt, false);
+
+        log_final(
+            &best_circ,
+            log_config.progress_log.as_mut(),
+            log_config.final_circ_json.as_mut(),
+            &self.cost,
+        )
+        .expect("Failed to write to progress log and/or final circuit JSON");
+
+        best_circ
+    }
+
+    /// Run the TASO optimiser on a circuit, using multiple threads.
+    ///
+    /// This is the multi-threaded version of [`taso`]. See [`TasoOptimiser`] for
+    /// more details.
+    fn taso_multithreaded(
+        &self,
+        circ: &Hugr,
+        mut log_config: LogConfig,
+        timeout: Option<u64>,
+        n_threads: NonZeroUsize,
+    ) -> Hugr {
+        let n_threads: usize = n_threads.get();
+        const PRIORITY_QUEUE_CAPACITY: usize = 10_000;
+
+        let mut log_candidates = log_config.circ_candidates_csv.map(csv::Writer::from_writer);
+
+        // multi-consumer priority channel for queuing circuits to be processed by the workers
+        let (tx_work, rx_work) =
+            HugrPriorityChannel::init((self.cost).clone(), PRIORITY_QUEUE_CAPACITY * n_threads);
+        // channel for sending circuits from threads back to main
+        let (tx_result, rx_result) = crossbeam_channel::unbounded();
+
+        let initial_circ_hash = circ.circuit_hash();
+        let mut best_circ = circ.clone();
+        let mut best_circ_cost = (self.cost)(&best_circ);
+        log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
+
+        // Hash of seen circuits. Dot not store circuits as this map gets huge
+        let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(initial_circ_hash)]);
+
+        // Each worker waits for circuits to scan for rewrites using all the
+        // patterns and sends the results back to main.
+        let joins: Vec<_> = (0..n_threads)
+            .map(|_| {
+                worker::spawn_pattern_matching_thread(
+                    rx_work.clone(),
+                    tx_result.clone(),
+                    self.rewriter.clone(),
+                    self.strategy.clone(),
+                )
+            })
+            .collect();
+        // Drop our copy of the worker channels, so we don't count as a
+        // connected worker.
+        drop(rx_work);
+        drop(tx_result);
+
+        // Queue the initial circuit
+        tx_work
+            .send(vec![(initial_circ_hash, circ.clone())])
+            .unwrap();
+
+        // A counter of circuits seen.
+        let mut circ_cnt = 1;
+
+        // A counter of jobs sent to the workers.
+        #[allow(unused)]
+        let mut jobs_sent = 0usize;
+        // A counter of completed jobs received from the workers.
+        #[allow(unused)]
+        let mut jobs_completed = 0usize;
+        // TODO: Report dropped jobs in the queue, so we can check for termination.
+
+        // Deadline for the optimization timeout
+        let timeout_event = match timeout {
+            None => crossbeam_channel::never(),
+            Some(t) => crossbeam_channel::at(Instant::now() + Duration::from_secs(t)),
+        };
+
+        // Process worker results until we have seen all the circuits, or we run
+        // out of time.
+        loop {
+            select! {
+                recv(rx_result) -> msg => {
+                    match msg {
+                        Ok(hashed_circs) => {
+                            jobs_completed += 1;
+                            for (circ_hash, circ) in &hashed_circs {
+                                circ_cnt += 1;
+                                if circ_cnt % 1000 == 0 {
+                                    // TODO: Add a minimum time between logs
+                                    log_progress::<_,u64,usize>(log_config.progress_log.as_mut(), circ_cnt, None, &seen_hashes)
+                                        .expect("Failed to write to progress log");
+                                }
+                                if !seen_hashes.insert(*circ_hash) {
+                                    continue;
+                                }
+
+                                let cost = (self.cost)(circ);
+
+                                // Check if we got a new best circuit
+                                if cost < best_circ_cost {
+                                    best_circ = circ.clone();
+                                    best_circ_cost = cost;
+                                    log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
+                                }
+                                jobs_sent += 1;
+                            }
+                            // Fill the workqueue with data from pq
+                            if tx_work.send(hashed_circs).is_err() {
+                                eprintln!("All our workers panicked. Stopping optimisation.");
+                                break;
+                            };
+
+                            // If there is no more data to process, we are done.
+                            //
+                            // TODO: Report dropped jobs in the workers, so we can check for termination.
+                            //if jobs_sent == jobs_completed {
+                            //    break 'main;
+                            //};
+                        },
+                        Err(crossbeam_channel::RecvError) => {
+                            eprintln!("All our workers panicked. Stopping optimisation.");
+                            break;
+                        }
+                    }
+                }
+                recv(timeout_event) -> _ => {
+                    println!("Timeout");
+                    break;
+                }
+            }
+        }
+
+        log_processing_end(circ_cnt, true);
+
+        // Drop the channel so the threads know to stop.
+        drop(tx_work);
+        let _ = joins; // joins.into_iter().for_each(|j| j.join().unwrap());
+
+        log_final(
+            &best_circ,
+            log_config.progress_log.as_mut(),
+            log_config.final_circ_json.as_mut(),
+            &self.cost,
+        )
+        .expect("Failed to write to progress log and/or final circuit JSON");
+
+        best_circ
     }
 }
 
@@ -169,274 +372,21 @@ mod taso_default {
 
     impl TasoOptimiser<ECCRewriter, ExhaustiveRewriteStrategy, fn(&Hugr) -> usize> {
         /// A sane default optimiser using the given ECC sets.
-        pub fn default_with_eccs_json_file(eccs_path: impl AsRef<std::path::Path>) -> Self {
-            let rewriter = ECCRewriter::from_eccs_json_file(eccs_path);
+        pub fn default_with_eccs_json_file(
+            eccs_path: impl AsRef<std::path::Path>,
+        ) -> io::Result<Self> {
+            let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
             let strategy = ExhaustiveRewriteStrategy::default();
-            Self::new(rewriter, strategy, |c| c.num_gates())
+            Ok(Self::new(rewriter, strategy, |c| c.num_gates()))
         }
     }
-}
-
-fn taso(
-    circ: &Hugr,
-    rewriter: &impl Rewriter,
-    strategy: &impl RewriteStrategy,
-    cost: impl Fn(&Hugr) -> usize,
-    mut log_config: LogConfig,
-    timeout: Option<u64>,
-) -> Hugr {
-    let start_time = Instant::now();
-
-    let mut log_candidates = log_config.circ_candidates_csv.map(csv::Writer::from_writer);
-
-    let mut best_circ = circ.clone();
-    let mut best_circ_cost = cost(circ);
-    log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
-
-    // Hash of seen circuits. Dot not store circuits as this map gets huge
-    let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(circ.circuit_hash())]);
-
-    // The priority queue of circuits to be processed (this should not get big)
-    let mut pq = HugrPQ::new(&cost);
-
-    pq.push(circ.clone());
-
-    let mut circ_cnt = 0;
-    while let Some(Entry { circ, cost, .. }) = pq.pop() {
-        if cost < best_circ_cost {
-            best_circ = circ.clone();
-            best_circ_cost = cost;
-            log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
-        }
-
-        let rewrites = rewriter.get_rewrites(&circ);
-        for new_circ in strategy.apply_rewrites(rewrites, &circ) {
-            let new_circ_hash = new_circ.circuit_hash();
-            circ_cnt += 1;
-            if circ_cnt % 1000 == 0 {
-                log_progress(
-                    log_config.progress_log.as_mut(),
-                    circ_cnt,
-                    &pq,
-                    &seen_hashes,
-                )
-                .expect("Failed to write to progress log");
-            }
-            if seen_hashes.contains(&new_circ_hash) {
-                continue;
-            }
-            pq.push_with_hash_unchecked(new_circ, new_circ_hash);
-            seen_hashes.insert(new_circ_hash);
-        }
-
-        if pq.len() >= 10000 {
-            // Haircut to keep the queue size manageable
-            pq.truncate(5000);
-        }
-
-        if let Some(timeout) = timeout {
-            if start_time.elapsed().as_secs() > timeout {
-                println!("Timeout");
-                break;
-            }
-        }
-    }
-
-    log_final(
-        &best_circ,
-        log_config.progress_log.as_mut(),
-        log_config.final_circ_json.as_mut(),
-        &cost,
-    )
-    .expect("Failed to write to progress log and/or final circuit JSON");
-
-    best_circ
-}
-
-/// Run the TASO optimiser on a circuit.
-///
-/// The optimiser will repeatedly rewrite the circuit using the rewriter and
-/// the rewrite strategy, optimising the circuit according to the cost function
-/// provided. Optionally, a timeout (in seconds) can be provided.
-///
-/// A log of the successive best candidate circuits can be found in the file
-/// `best_circs.csv`. In addition, the final best circuit is retrievable in the
-/// files `final_best_circ.gv` and `final_best_circ.json`.
-///
-/// This is the multi-threaded version of the optimiser. See [`TasoOptimiser`] for the
-/// single-threaded version.
-// TODO Support MPSC and expose in API
-#[allow(dead_code)]
-fn taso_mpsc(
-    circ: Hugr,
-    rewriter: impl Rewriter + Send + Clone + 'static,
-    strategy: impl RewriteStrategy + Send + Clone + 'static,
-    cost: impl Fn(&Hugr) -> usize + Send + Sync,
-    log_config: LogConfig,
-    timeout: Option<u64>,
-    n_threads: usize,
-) -> Hugr {
-    let start_time = Instant::now();
-
-    let mut log_candidates = log_config.circ_candidates_csv.map(csv::Writer::from_writer);
-
-    println!("Spinning up {n_threads} threads");
-
-    // channel for sending circuits from threads back to main
-    let (t_main, r_main) = mpsc::sync_channel(n_threads * 100);
-
-    let mut best_circ = circ.clone();
-    let mut best_circ_cost = cost(&best_circ);
-    let circ_hash = circ.circuit_hash();
-    log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
-
-    // Hash of seen circuits. Dot not store circuits as this map gets huge
-    let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(circ_hash)]);
-
-    // The priority queue of circuits to be processed (this should not get big)
-    let mut pq = HugrPQ::new(&cost);
-    pq.push(circ);
-
-    // each thread scans for rewrites using all the patterns and
-    // sends rewritten circuits back to main
-    let (joins, threads_tx, signal_new_data): (Vec<_>, Vec<_>, Vec<_>) = (0..n_threads)
-        .map(|_| spawn_pattern_matching_thread(t_main.clone(), rewriter.clone(), strategy.clone()))
-        .multiunzip();
-
-    let mut cycle_inds = (0..n_threads).cycle();
-    let mut threads_empty = vec![true; n_threads];
-
-    let mut circ_cnt = 0;
-    loop {
-        // Fill each thread workqueue with data from pq
-        while let Some(Entry {
-            circ,
-            cost: &cost,
-            hash,
-        }) = pq.peek()
-        {
-            if cost < best_circ_cost {
-                best_circ = circ.clone();
-                best_circ_cost = cost;
-                log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
-                // Now we only care about smaller circuits
-                seen_hashes.clear();
-                seen_hashes.insert(hash);
-            }
-            // try to send to first available thread
-            // TODO: Consider using crossbeam-channel
-            if let Some(next_ind) = cycle_inds.by_ref().take(n_threads).find(|next_ind| {
-                let tx = &threads_tx[*next_ind];
-                tx.try_send(Some(circ.clone())).is_ok()
-            }) {
-                pq.pop();
-                // Unblock thread if waiting
-                let _ = signal_new_data[next_ind].try_recv();
-                threads_empty[next_ind] = false;
-            } else {
-                // All send channels are full, continue
-                break;
-            }
-        }
-
-        // Receive data from threads, add to pq
-        // We compute the hashes in the threads because it's expensive
-        while let Ok(received) = r_main.try_recv() {
-            let Some((circ_hash, circ)) = received else {
-                panic!("A thread panicked");
-            };
-            circ_cnt += 1;
-            if circ_cnt % 1000 == 0 {
-                println!("{circ_cnt} circuits...");
-                println!("Queue size: {} circuits", pq.len());
-                println!("Total seen: {} circuits", seen_hashes.len());
-            }
-            if seen_hashes.contains(&circ_hash) {
-                continue;
-            }
-            pq.push_with_hash_unchecked(circ, circ_hash);
-            seen_hashes.insert(circ_hash);
-        }
-
-        // Check if all threads are waiting for new data
-        for (is_waiting, is_empty) in signal_new_data.iter().zip(threads_empty.iter_mut()) {
-            if is_waiting.try_recv().is_ok() {
-                *is_empty = true;
-            }
-        }
-        // If everyone is waiting and we do not have new data, we are done
-        if pq.is_empty() && threads_empty.iter().all(|&x| x) {
-            break;
-        }
-        if let Some(timeout) = timeout {
-            if start_time.elapsed().as_secs() > timeout {
-                println!("Timeout");
-                break;
-            }
-        }
-        if pq.len() >= 10000 {
-            // Haircut to keep the queue size manageable
-            pq.truncate(5000);
-        }
-    }
-
-    println!("Tried {circ_cnt} circuits");
-    println!("Joining");
-
-    for (join, tx, data_tx) in izip!(joins, threads_tx, signal_new_data) {
-        // tell all the threads we're done and join the threads
-        tx.send(None).unwrap();
-        let _ = data_tx.try_recv();
-        join.join().unwrap();
-    }
-
-    println!("END RESULT: {}", cost(&best_circ));
-    fs::write("final_best_circ.gv", best_circ.dot_string()).unwrap();
-    fs::write(
-        "final_best_circ.json",
-        serde_json::to_vec(&best_circ).unwrap(),
-    )
-    .unwrap();
-    best_circ
-}
-
-fn spawn_pattern_matching_thread(
-    tx_main: SyncSender<Option<(u64, Hugr)>>,
-    rewriter: impl Rewriter + Send + 'static,
-    strategy: impl RewriteStrategy + Send + 'static,
-) -> (JoinHandle<()>, SyncSender<Option<Hugr>>, Receiver<()>) {
-    // channel for sending circuits to each thread
-    let (tx_thread, rx) = mpsc::sync_channel(1000);
-    // A flag to wait until new data
-    let (wait_new_data, signal_new_data) = mpsc::sync_channel(0);
-
-    let jn = thread::spawn(move || {
-        loop {
-            if let Ok(received) = rx.try_recv() {
-                let Some(sent_hugr): Option<Hugr> = received else {
-                    // Terminate thread
-                    break;
-                };
-                let rewrites = rewriter.get_rewrites(&sent_hugr);
-                for new_circ in strategy.apply_rewrites(rewrites, &sent_hugr) {
-                    let new_circ_hash = new_circ.circuit_hash();
-                    tx_main.send(Some((new_circ_hash, new_circ))).unwrap();
-                }
-            } else {
-                // We are out of work, wait for new data
-                wait_new_data.send(()).unwrap();
-            }
-        }
-    });
-
-    (jn, tx_thread, signal_new_data)
 }
 
 /// A helper struct for logging improvements in circuit size seen during the
 /// TASO execution.
 //
 // TODO: Replace this fixed logging. Report back intermediate results.
-#[derive(serde::Serialize, Debug)]
+#[derive(serde::Serialize, Clone, Debug)]
 struct BestCircSer {
     circ_len: usize,
     time: String,
@@ -458,15 +408,25 @@ fn log_best<W: io::Write>(cbest: usize, wtr: Option<&mut csv::Writer<W>>) -> io:
     wtr.flush()
 }
 
+fn log_processing_end(circuit_count: usize, needs_joining: bool) {
+    println!("END");
+    println!("Tried {circuit_count} circuits");
+    if needs_joining {
+        println!("Joining");
+    }
+}
+
 fn log_progress<W: io::Write, P: Ord, C>(
     wr: Option<&mut W>,
     circ_cnt: usize,
-    pq: &HugrPQ<P, C>,
+    pq: Option<&HugrPQ<P, C>>,
     seen_hashes: &FxHashSet<u64>,
 ) -> io::Result<()> {
     if let Some(wr) = wr {
         writeln!(wr, "{circ_cnt} circuits...")?;
-        writeln!(wr, "Queue size: {} circuits", pq.len())?;
+        if let Some(pq) = pq {
+            writeln!(wr, "Queue size: {} circuits", pq.len())?;
+        }
         writeln!(wr, "Total seen: {} circuits", seen_hashes.len())?;
     }
     Ok(())
