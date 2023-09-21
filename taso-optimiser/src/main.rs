@@ -1,18 +1,25 @@
+use std::num::NonZeroUsize;
+use std::process::exit;
 use std::{fs, io, path::Path};
 
 use clap::Parser;
 use hugr::Hugr;
 use tket2::{
-    circuit::Circuit,
     json::{load_tk1_json_file, TKETDecode},
-    passes::taso::{taso, taso_mpsc},
-    rewrite::{strategy::ExhaustiveRewriteStrategy, ECCRewriter},
+    optimiser::TasoOptimiser,
 };
 use tket_json_rs::circuit_json::SerialCircuit;
 
+#[cfg(feature = "peak_alloc")]
+use peak_alloc::PeakAlloc;
+
+#[cfg(feature = "peak_alloc")]
+#[global_allocator]
+static PEAK_ALLOC: PeakAlloc = PeakAlloc;
+
 /// Optimise circuits using Quartz-generated ECCs.
 ///
-/// Quartz: https://github.com/quantum-compiler/quartz
+/// Quartz: <https://github.com/quantum-compiler/quartz>
 #[derive(Parser, Debug)]
 #[clap(version = "1.0", long_about = None)]
 #[clap(about = "Optimise circuits using Quartz-generated ECCs.")]
@@ -42,15 +49,22 @@ struct CmdLineArgs {
         help = "Sets the ECC file to use. It is a JSON file of Quartz-generated ECCs."
     )]
     eccs: String,
-    /// Number of threads (default=1)
+    /// Timeout in seconds (default=no timeout)
     #[arg(
         short,
         long,
-        default_value = "1",
-        value_name = "N_THREADS",
-        help = "The number of threads to use."
+        value_name = "TIMEOUT",
+        help = "Timeout in seconds (default=None)."
     )]
-    n_threads: usize,
+    timeout: Option<u64>,
+    /// Number of threads (default=1)
+    #[arg(
+        short = 'j',
+        long,
+        value_name = "N_THREADS",
+        help = "The number of threads to use. By default, the number of threads is equal to the number of logical cores."
+    )]
+    n_threads: Option<NonZeroUsize>,
 }
 
 fn save_tk1_json_file(path: impl AsRef<Path>, circ: &Hugr) -> Result<(), std::io::Error> {
@@ -71,27 +85,31 @@ fn main() {
     let circ = load_tk1_json_file(input_path).unwrap();
 
     println!("Compiling rewriter...");
-    let rewriter = ECCRewriter::from_eccs_json_file(ecc_path);
-    let strategy = ExhaustiveRewriteStrategy::default();
+    let Ok(optimiser) = TasoOptimiser::default_with_eccs_json_file(ecc_path) else {
+        eprintln!(
+            "Unable to load ECC file {:?}. Is it a JSON file of Quartz-generated ECCs?",
+            ecc_path
+        );
+        exit(1);
+    };
+
+    let n_threads = opts
+        .n_threads
+        // TODO: Default to multithreading once that produces better results.
+        //.or_else(|| std::thread::available_parallelism().ok())
+        .unwrap_or(NonZeroUsize::new(1).unwrap());
+    println!("Using {n_threads} threads");
 
     println!("Optimising...");
-    let opt_circ = if opts.n_threads == 1 {
-        println!("Using single-threaded TASO");
-        taso(circ, rewriter, strategy, |c| c.num_gates(), Some(100))
-    } else {
-        println!("Using multi-threaded TASO with {} threads", opts.n_threads);
-        taso_mpsc(
-            circ,
-            rewriter,
-            strategy,
-            |c| c.num_gates(),
-            Some(100),
-            opts.n_threads,
-        )
-    };
+    let opt_circ = optimiser
+        .optimise_with_default_log(&circ, opts.timeout, n_threads)
+        .unwrap();
 
     println!("Saving result");
     save_tk1_json_file(output_path, &opt_circ).unwrap();
+
+    #[cfg(feature = "peak_alloc")]
+    println!("Peak memory usage: {} GB", PEAK_ALLOC.peak_usage_as_gb());
 
     println!("Done.")
 }

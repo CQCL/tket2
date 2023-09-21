@@ -1,15 +1,13 @@
 use std::fs;
 use std::path::Path;
+use std::process::exit;
 
 use clap::Parser;
-use hugr::hugr::views::{HierarchyView, SiblingGraph};
-use hugr::ops::handle::DfgID;
-use hugr::HugrView;
 use itertools::Itertools;
 
 use tket2::json::load_tk1_json_file;
 // Import the PatternMatcher struct and its methods
-use tket2::passes::taso::load_eccs_json_file;
+use tket2::optimiser::taso::load_eccs_json_file;
 use tket2::portmatching::{CircuitPattern, PatternMatcher};
 
 /// Program to precompile patterns from files into a PatternMatcher stored as binary file.
@@ -45,7 +43,13 @@ fn main() {
 
     let all_circs = if input_path.is_file() {
         // Input is an ECC file in JSON format
-        let eccs = load_eccs_json_file(input_path);
+        let Ok(eccs) = load_eccs_json_file(input_path) else {
+            eprintln!(
+                "Unable to load ECC file {:?}. Is it a JSON file of Quartz-generated ECCs?",
+                input_path
+            );
+            exit(1);
+        };
         eccs.into_iter()
             .flat_map(|ecc| ecc.into_circuits())
             .collect_vec()
@@ -65,9 +69,8 @@ fn main() {
     let patterns = all_circs
         .iter()
         .filter_map(|circ| {
-            let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(circ, circ.root());
             // Fail silently on empty or disconnected patterns
-            CircuitPattern::try_from_circuit(&circ).ok()
+            CircuitPattern::try_from_circuit(circ).ok()
         })
         .collect_vec();
     println!("Loaded {} patterns.", patterns.len());

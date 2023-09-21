@@ -2,152 +2,125 @@
 
 pub mod command;
 mod hash;
+pub mod units;
 
+pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
 
-use self::command::{Command, CommandIterator};
-
-use hugr::extension::prelude::QB_T;
-use hugr::hugr::{CircuitUnit, NodeType};
-use hugr::ops::OpTrait;
 use hugr::HugrView;
 
 pub use hugr::ops::OpType;
-use hugr::types::TypeBound;
+use hugr::types::FunctionType;
 pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
+
+use self::units::{filter, FilteredUnits, Units};
 
 /// An object behaving like a quantum circuit.
 //
 // TODO: More methods:
 // - other_{in,out}puts (for non-linear i/o + const inputs)?
 // - Vertical slice iterator
-// - Gate count map
 // - Depth
 pub trait Circuit: HugrView {
-    /// An iterator over the commands in the circuit.
-    type Commands<'a>: Iterator<Item = Command>
-    where
-        Self: 'a;
-
-    /// An iterator over the commands applied to an unit.
-    type UnitCommands: Iterator<Item = Command>;
-
     /// Return the name of the circuit
-    fn name(&self) -> Option<&str>;
-
-    /// Get the linear inputs of the circuit and their types.
-    fn units(&self) -> Vec<(CircuitUnit, Type)>;
-
-    /// Returns the units corresponding to qubits inputs to the circuit.
-    #[inline]
-    fn qubits(&self) -> Vec<CircuitUnit> {
-        self.units()
-            .iter()
-            .filter(|(_, typ)| typ == &QB_T)
-            .map(|(unit, _)| *unit)
-            .collect()
-    }
-
-    /// Returns the input node to the circuit.
-    fn input(&self) -> Node;
-
-    /// Returns the output node to the circuit.
-    fn output(&self) -> Node;
-
-    /// Given a linear port in a node, returns the corresponding port on the other side of the node (if any).
-    fn follow_linear_port(&self, node: Node, port: Port) -> Option<Port>;
-
-    /// Returns all the commands in the circuit, in some topological order.
-    ///
-    /// Ignores the Input and Output nodes.
-    fn commands(&self) -> Self::Commands<'_>;
-
-    /// Returns all the commands applied to the given unit, in order.
-    fn unit_commands(&self) -> Self::UnitCommands;
-
-    /// Returns the [`NodeType`] of a command.
-    fn command_nodetype(&self, command: &Command) -> &NodeType {
-        self.get_nodetype(command.node())
-    }
-
-    /// Returns the [`OpType`] of a command.
-    fn command_optype(&self, command: &Command) -> &OpType {
-        self.get_optype(command.node())
-    }
-
-    /// The number of gates in the circuit.
-    fn num_gates(&self) -> usize;
-}
-
-impl<T> Circuit for T
-where
-    T: HugrView,
-{
-    type Commands<'a> = CommandIterator<'a, T> where Self: 'a;
-    type UnitCommands = std::iter::Empty<Command>;
-
     #[inline]
     fn name(&self) -> Option<&str> {
         let meta = self.get_metadata(self.root()).as_object()?;
         meta.get("name")?.as_str()
     }
 
+    /// Returns the function type of the circuit.
+    ///
+    /// Equivalent to [`HugrView::get_function_type`].
     #[inline]
-    fn units(&self) -> Vec<(CircuitUnit, Type)> {
-        let root = self.root();
-        let optype = self.get_optype(root);
-        optype
-            .signature()
-            .input_types()
-            .iter()
-            .filter(|&typ| !TypeBound::Copyable.contains(typ.least_upper_bound()))
-            .enumerate()
-            .map(|(i, typ)| (i.into(), typ.clone()))
-            .collect()
+    fn circuit_signature(&self) -> &FunctionType {
+        self.get_function_type()
+            .expect("Circuit has no function type")
     }
 
-    fn follow_linear_port(&self, node: Node, port: Port) -> Option<Port> {
-        let optype = self.get_optype(node);
-        if !optype.port_kind(port)?.is_linear() {
-            return None;
-        }
-        // TODO: We assume the linear data uses the same port offsets on both sides of the node.
-        // In the future we may want to have a more general mechanism to handle this.
-        let other_port = Port::new(port.direction().reverse(), port.index());
-        if optype.port_kind(other_port) == optype.port_kind(port) {
-            Some(other_port)
-        } else {
-            None
-        }
+    /// Returns the input node to the circuit.
+    #[inline]
+    fn input(&self) -> Node {
+        self.get_io(self.root()).expect("Circuit has no input node")[0]
     }
 
-    fn commands(&self) -> Self::Commands<'_> {
+    /// Returns the output node to the circuit.
+    #[inline]
+    fn output(&self) -> Node {
+        self.get_io(self.root())
+            .expect("Circuit has no output node")[1]
+    }
+
+    /// The number of quantum gates in the circuit.
+    #[inline]
+    fn num_gates(&self) -> usize
+    where
+        Self: Sized,
+    {
+        // TODO: Implement discern quantum gates in the commands iterator.
+        self.children(self.root()).count() - 2
+    }
+
+    /// Count the number of qubits in the circuit.
+    #[inline]
+    fn qubit_count(&self) -> usize
+    where
+        Self: Sized,
+    {
+        self.qubits().count()
+    }
+
+    /// Get the input units of the circuit and their types.
+    #[inline]
+    fn units(&self) -> Units
+    where
+        Self: Sized,
+    {
+        Units::new_circ_input(self)
+    }
+
+    /// Get the linear input units of the circuit and their types.
+    #[inline]
+    fn linear_units(&self) -> FilteredUnits<filter::Linear>
+    where
+        Self: Sized,
+    {
+        self.units().filter_units::<filter::Linear>()
+    }
+
+    /// Get the non-linear input units of the circuit and their types.
+    #[inline]
+    fn nonlinear_units(&self) -> FilteredUnits<filter::NonLinear>
+    where
+        Self: Sized,
+    {
+        self.units().filter_units::<filter::NonLinear>()
+    }
+
+    /// Returns the units corresponding to qubits inputs to the circuit.
+    #[inline]
+    fn qubits(&self) -> FilteredUnits<filter::Qubits>
+    where
+        Self: Sized,
+    {
+        self.units().filter_units::<filter::Qubits>()
+    }
+
+    /// Returns all the commands in the circuit, in some topological order.
+    ///
+    /// Ignores the Input and Output nodes.
+    #[inline]
+    fn commands(&self) -> CommandIterator<'_, Self>
+    where
+        Self: Sized,
+    {
         // Traverse the circuit in topological order.
         CommandIterator::new(self)
     }
-
-    fn unit_commands(&self) -> Self::UnitCommands {
-        // TODO Can we associate linear i/o with the corresponding unit without
-        // doing the full toposort?
-        unimplemented!()
-    }
-
-    #[inline]
-    fn input(&self) -> Node {
-        return self.children(self.root()).next().unwrap();
-    }
-
-    #[inline]
-    fn output(&self) -> Node {
-        return self.children(self.root()).nth(1).unwrap();
-    }
-
-    #[inline]
-    fn num_gates(&self) -> usize {
-        self.children(self.root()).count() - 2
-    }
 }
+
+impl<T> Circuit for T where T: HugrView {}
 
 #[cfg(test)]
 mod tests {
@@ -159,11 +132,12 @@ mod tests {
         load_tk1_json_str(
             r#"{
             "phase": "0",
-            "bits": [],
+            "bits": [["c", [0]]],
             "qubits": [["q", [0]], ["q", [1]]],
             "commands": [
                 {"args": [["q", [0]]], "op": {"type": "H"}},
-                {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}
+                {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}},
+                {"args": [["q", [1]]], "op": {"type": "X"}}
             ],
             "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
         }"#,
@@ -172,8 +146,18 @@ mod tests {
     }
 
     #[test]
-    fn test_num_gates() {
+    fn test_circuit_properties() {
         let circ = test_circuit();
-        assert_eq!(circ.num_gates(), 2);
+
+        assert_eq!(circ.name(), None);
+        assert_eq!(circ.circuit_signature().input.len(), 3);
+        assert_eq!(circ.circuit_signature().output.len(), 3);
+        assert_eq!(circ.qubit_count(), 2);
+        assert_eq!(circ.num_gates(), 3);
+
+        assert_eq!(circ.units().count(), 3);
+        assert_eq!(circ.nonlinear_units().count(), 0);
+        assert_eq!(circ.linear_units().count(), 3);
+        assert_eq!(circ.qubits().count(), 2);
     }
 }

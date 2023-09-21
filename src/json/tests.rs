@@ -2,9 +2,7 @@
 
 use std::collections::HashSet;
 
-use hugr::hugr::views::{HierarchyView, SiblingGraph};
-use hugr::ops::handle::DfgID;
-use hugr::{Hugr, HugrView};
+use hugr::Hugr;
 use rstest::rstest;
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 
@@ -58,10 +56,9 @@ fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num
     let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), num_commands);
 
-    let hugr: Hugr = ser.clone().decode().unwrap();
-    let circ: SiblingGraph<'_, DfgID> = SiblingGraph::new(&hugr, hugr.root());
+    let circ: Hugr = ser.clone().decode().unwrap();
 
-    assert_eq!(circ.qubits().len(), num_qubits);
+    assert_eq!(circ.qubit_count(), num_qubits);
 
     let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
     compare_serial_circs(&ser, &reser);

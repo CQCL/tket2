@@ -49,7 +49,7 @@ impl JsonEncoder {
         // TODO Throw an error on non-recognized unit types, or just ignore?
         let mut bit_units = HashMap::new();
         let mut qubit_units = HashMap::new();
-        for (unit, ty) in circ.units() {
+        for (unit, _, ty) in circ.units() {
             if ty == QB_T {
                 let index = vec![qubit_units.len() as i64];
                 let reg = circuit_json::Register("q".to_string(), index);
@@ -88,7 +88,11 @@ impl JsonEncoder {
     }
 
     /// Add a circuit command to the serialization.
-    pub fn add_command(&mut self, command: Command, optype: &OpType) -> Result<(), OpConvertError> {
+    pub fn add_command<C: Circuit>(
+        &mut self,
+        command: Command<'_, C>,
+        optype: &OpType,
+    ) -> Result<(), OpConvertError> {
         // Register any output of the command that can be used as a TKET1 parameter.
         if self.record_parameters(&command, optype) {
             // for now all ops that record parameters should be ignored (are
@@ -99,8 +103,7 @@ impl JsonEncoder {
         let (args, params): (Vec<Register>, Vec<Wire>) =
             command
                 .inputs()
-                .iter()
-                .partition_map(|&u| match self.unit_to_register(u) {
+                .partition_map(|(u, _, _)| match self.unit_to_register(u) {
                     Some(r) => Either::Left(r),
                     None => match u {
                         CircuitUnit::Wire(w) => Either::Right(w),
@@ -145,17 +148,20 @@ impl JsonEncoder {
     /// Record any output of the command that can be used as a TKET1 parameter.
     /// Returns whether parameters were recorded.
     /// Associates the output wires with the parameter expression.
-    fn record_parameters(&mut self, command: &Command, optype: &OpType) -> bool {
+    fn record_parameters<C: Circuit>(&mut self, command: &Command<'_, C>, optype: &OpType) -> bool {
         // Only consider commands where all inputs are parameters.
         let inputs = command
             .inputs()
-            .iter()
-            .filter_map(|unit| match unit {
-                CircuitUnit::Wire(wire) => self.parameters.get(wire),
+            .filter_map(|(unit, _, _)| match unit {
+                CircuitUnit::Wire(wire) => self.parameters.get(&wire),
                 CircuitUnit::Linear(_) => None,
             })
             .collect_vec();
-        if inputs.len() != command.inputs().len() {
+        if inputs.len() != command.input_count() {
+            debug_assert!(!matches!(
+                optype,
+                OpType::Const(_) | OpType::LoadConstant(_)
+            ));
             return false;
         }
 
@@ -194,9 +200,9 @@ impl JsonEncoder {
             }
         };
 
-        for unit in command.outputs() {
+        for (unit, _, _) in command.outputs() {
             if let CircuitUnit::Wire(wire) = unit {
-                self.parameters.insert(*wire, param.clone());
+                self.parameters.insert(wire, param.clone());
             }
         }
         true

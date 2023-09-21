@@ -15,17 +15,14 @@
 use derive_more::{From, Into};
 use itertools::Itertools;
 use portmatching::PatternID;
+use std::io;
 use std::path::Path;
 
-use hugr::{
-    hugr::views::{HierarchyView, SiblingGraph},
-    ops::handle::DfgID,
-    Hugr, HugrView,
-};
+use hugr::Hugr;
 
 use crate::{
     circuit::Circuit,
-    passes::taso::{load_eccs_json_file, EqCircClass},
+    optimiser::taso::{load_eccs_json_file, EqCircClass},
     portmatching::{CircuitPattern, PatternMatcher},
 };
 
@@ -60,9 +57,9 @@ impl ECCRewriter {
     /// the Quartz repository.
     ///
     /// Quartz: <https://github.com/quantum-compiler/quartz/>.
-    pub fn from_eccs_json_file(path: impl AsRef<Path>) -> Self {
-        let eccs = load_eccs_json_file(path);
-        Self::from_eccs(eccs)
+    pub fn try_from_eccs_json_file(path: impl AsRef<Path>) -> io::Result<Self> {
+        let eccs = load_eccs_json_file(path)?;
+        Ok(Self::from_eccs(eccs))
     }
 
     /// Create a new rewriter from a list of equivalent circuit classes.
@@ -138,13 +135,9 @@ fn get_rewrite_rules(rep_sets: &[EqCircClass]) -> Vec<Vec<TargetID>> {
 }
 
 fn get_patterns(rep_sets: &[EqCircClass]) -> Vec<Option<CircuitPattern>> {
-    let all_hugrs = rep_sets.iter().flat_map(|rs| rs.circuits());
-    let all_circs = all_hugrs
-        .map(|hugr| SiblingGraph::<DfgID>::new(hugr, hugr.root()))
-        // TODO: resolve lifetime issues to avoid collecting to vec
-        .collect_vec();
-    all_circs
+    rep_sets
         .iter()
+        .flat_map(|rs| rs.circuits())
         .map(|circ| CircuitPattern::try_from_circuit(circ).ok())
         .collect()
 }
@@ -219,7 +212,7 @@ mod tests {
         // In this example, all circuits are valid patterns, thus
         // PatternID == TargetID.
         let test_file = "test_files/small_eccs.json";
-        let rewriter = ECCRewriter::from_eccs_json_file(test_file);
+        let rewriter = ECCRewriter::try_from_eccs_json_file(test_file).unwrap();
         assert_eq!(rewriter.rewrite_rules.len(), rewriter.matcher.n_patterns());
         assert_eq!(rewriter.targets.len(), 5 * 4 + 4 * 3);
 
