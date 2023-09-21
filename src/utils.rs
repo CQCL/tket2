@@ -1,12 +1,17 @@
 //! Utility functions for the library.
 
 use hugr::extension::PRELUDE_REGISTRY;
+use hugr::types::{Type, TypeBound};
 use hugr::{
     builder::{BuildError, CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr},
     extension::prelude::QB_T,
     types::FunctionType,
     Hugr,
 };
+
+pub(crate) fn type_is_linear(typ: &Type) -> bool {
+    !TypeBound::Copyable.contains(typ.least_upper_bound())
+}
 
 // utility for building simple qubit-only circuits.
 #[allow(unused)]
