@@ -268,7 +268,9 @@ where
         drop(tx_result);
 
         // Queue the initial circuit
-        tx_work.send((initial_circ_hash, circ.clone())).unwrap();
+        tx_work
+            .send(vec![(initial_circ_hash, circ.clone())])
+            .unwrap();
 
         // A counter of circuits seen.
         let mut circ_cnt = 1;
@@ -295,19 +297,18 @@ where
                     match msg {
                         Ok(hashed_circs) => {
                             jobs_completed += 1;
-                            for (circ_hash, circ) in hashed_circs {
+                            for (circ_hash, circ) in &hashed_circs {
                                 circ_cnt += 1;
                                 if circ_cnt % 1000 == 0 {
                                     // TODO: Add a minimum time between logs
                                     log_progress::<_,u64,usize>(log_config.progress_log.as_mut(), circ_cnt, None, &seen_hashes)
                                         .expect("Failed to write to progress log");
                                 }
-                                if seen_hashes.contains(&circ_hash) {
+                                if !seen_hashes.insert(*circ_hash) {
                                     continue;
                                 }
-                                seen_hashes.insert(circ_hash);
 
-                                let cost = (self.cost)(&circ);
+                                let cost = (self.cost)(circ);
 
                                 // Check if we got a new best circuit
                                 if cost < best_circ_cost {
@@ -315,14 +316,13 @@ where
                                     best_circ_cost = cost;
                                     log_best(best_circ_cost, log_candidates.as_mut()).unwrap();
                                 }
-
-                                // Fill the workqueue with data from pq
-                                if tx_work.send((circ_hash, circ)).is_err() {
-                                    eprintln!("All our workers panicked. Stopping optimisation.");
-                                    break;
-                                };
                                 jobs_sent += 1;
                             }
+                            // Fill the workqueue with data from pq
+                            if tx_work.send(hashed_circs).is_err() {
+                                eprintln!("All our workers panicked. Stopping optimisation.");
+                                break;
+                            };
 
                             // If there is no more data to process, we are done.
                             //

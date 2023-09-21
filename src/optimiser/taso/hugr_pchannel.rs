@@ -27,7 +27,7 @@ where
     ///
     /// Get back a channel on which to queue hugrs with their hash, and
     /// a channel on which to receive the output.    
-    pub fn init(cost_fn: C, queue_capacity: usize) -> (Sender<Item>, Receiver<Item>) {
+    pub fn init(cost_fn: C, queue_capacity: usize) -> (Sender<Vec<Item>>, Receiver<Item>) {
         let (ins, inr) = crossbeam_channel::unbounded();
         let (outs, outr) = crossbeam_channel::bounded(0);
         Self::run(inr, outs, cost_fn, queue_capacity);
@@ -36,7 +36,7 @@ where
 
     /// Run the queuer as a thread.
     fn run(
-        in_channel_orig: Receiver<(u64, Hugr)>,
+        in_channel_orig: Receiver<Vec<(u64, Hugr)>>,
         out_channel_orig: Sender<(u64, Hugr)>,
         cost_fn: C,
         queue_capacity: usize,
@@ -54,8 +54,10 @@ where
                     if pq.is_empty() {
                         // Nothing queued to go out. Wait for input.
                         match in_channel.recv() {
-                            Ok((hash, circ)) => {
-                                pq.push_with_hash_unchecked(circ, hash);
+                            Ok(new_circs) => {
+                                for (hash, circ) in new_circs {
+                                    pq.push_with_hash_unchecked(circ, hash);
+                                }
                             }
                             // The sender has closed the channel, we can stop.
                             Err(_) => break,
@@ -64,8 +66,10 @@ where
                         select! {
                             recv(in_channel) -> result => {
                                 match result {
-                                    Ok((hash, circ)) => {
-                                        pq.push_with_hash_unchecked(circ, hash);
+                                    Ok(new_circs) => {
+                                        for (hash, circ) in new_circs {
+                                            pq.push_with_hash_unchecked(circ, hash);
+                                        }
                                     }
                                     // The sender has closed the channel, we can stop.
                                     Err(_) => break,
