@@ -100,14 +100,12 @@ impl CircuitPattern {
             )
             .map(|m| {
                 m.into_iter()
-                    .filter_map(|(node_p, node_c)| {
-                        let NodeID::HugrNode(node_p) = node_p else {
-                            return None;
-                        };
-                        let NodeID::HugrNode(node_c) = node_c else {
-                            return None;
-                        };
-                        Some((node_p, node_c))
+                    .filter_map(|(node_p, node_c)| match (node_p, node_c) {
+                        (NodeID::HugrNode(node_p), NodeID::HugrNode(node_c)) => {
+                            Some((node_p, node_c))
+                        }
+                        (NodeID::CopyNode(..), NodeID::CopyNode(..)) => None,
+                        _ => panic!("Invalid match map"),
                     })
                     .collect()
             })

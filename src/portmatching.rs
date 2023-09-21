@@ -65,13 +65,16 @@ impl PEdge {
         circ: &impl Circuit,
     ) -> Result<Self, InvalidEdgeProperty> {
         let src = port;
-        let (dst_node, dst) = circ.linked_ports(node, src).exactly_one().map_err(|e| {
-            if e.size_hint().0 > 0 {
-                InvalidEdgeProperty::AmbiguousEdge(src)
-            } else {
-                InvalidEdgeProperty::NoLinkedEdge(src)
-            }
-        })?;
+        let (dst_node, dst) = circ
+            .linked_ports(node, src)
+            .exactly_one()
+            .map_err(|mut e| {
+                if e.next().is_some() {
+                    InvalidEdgeProperty::AmbiguousEdge(src)
+                } else {
+                    InvalidEdgeProperty::NoLinkedEdge(src)
+                }
+            })?;
         if circ.get_optype(dst_node).tag() == OpTag::Input {
             return Ok(Self::InputEdge { src });
         }
@@ -120,6 +123,9 @@ impl portmatching::EdgeProperty for PEdge {
 ///
 /// A node is either a real node in the HUGR graph or a hidden copy node
 /// that is identified by its node and outgoing port.
+///
+/// A NodeID::CopyNode can only be found as a target of a PEdge::InputEdge
+/// property. Furthermore, a NodeID::CopyNode never has a node property.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]

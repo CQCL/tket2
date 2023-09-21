@@ -13,7 +13,7 @@ use hugr::{hugr::views::SiblingSubgraph, ops::OpType, Hugr, Node, Port};
 use itertools::Itertools;
 use portmatching::{
     automaton::{LineBuilder, ScopeAutomaton},
-    PatternID,
+    EdgeProperty, PatternID,
 };
 use thiserror::Error;
 
@@ -385,10 +385,7 @@ fn compatible_offsets(e1: &PEdge, e2: &PEdge) -> bool {
     let PEdge::InternalEdge { dst: dst1, .. } = e1 else {
         return false;
     };
-    let src2 = match *e2 {
-        PEdge::InternalEdge { src, .. } => src,
-        PEdge::InputEdge { src, .. } => src,
-    };
+    let src2 = e2.offset_id();
     dst1.direction() != src2.direction() && dst1.index() == src2.index()
 }
 
