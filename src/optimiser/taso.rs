@@ -251,7 +251,7 @@ where
         let mut seen_hashes: FxHashSet<_> = FromIterator::from_iter([(initial_circ_hash)]);
 
         // Each worker waits for circuits to scan for rewrites using all the
-        // patterns and send the results back to main.
+        // patterns and sends the results back to main.
         let joins: Vec<_> = (0..n_threads)
             .map(|_| {
                 worker::spawn_pattern_matching_thread(
