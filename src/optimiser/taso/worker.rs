@@ -48,7 +48,7 @@ where
     ) {
         while let Ok((_hash, circ)) = rx_work.recv() {
             let hashed_circs = Self::process_circ(circ, &rewriter, &strategy);
-            let send = tracing::span!(tracing::Level::TRACE, "TasoWorker::send_result")
+            let send = tracing::trace_span!(target: "taso::metrics", "TasoWorker::send_result")
                 .in_scope(|| tx_result.send(hashed_circs));
             if send.is_err() {
                 // The main thread closed the send channel, we can stop.

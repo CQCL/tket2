@@ -233,7 +233,7 @@ where
                 recv(rx_result) -> msg => {
                     match msg {
                         Ok(hashed_circs) => {
-                            let send_result = tracing::span!(tracing::Level::TRACE, "recv_result").in_scope(|| {
+                            let send_result = tracing::trace_span!(target: "taso::metrics", "recv_result").in_scope(|| {
                                 jobs_completed += 1;
                                 for (circ_hash, circ) in &hashed_circs {
                                     circ_cnt += 1;
