@@ -9,6 +9,7 @@ use std::{
 
 use super::{CircuitPattern, NodeID, PEdge, PNode};
 use hugr::hugr::views::sibling_subgraph::{ConvexChecker, InvalidReplacement, InvalidSubgraph};
+use hugr::hugr::PortIndex;
 use hugr::{hugr::views::SiblingSubgraph, ops::OpType, Hugr, Node, Port};
 use itertools::Itertools;
 use portmatching::{

@@ -5,7 +5,7 @@
 use std::collections::{HashMap, HashSet};
 use std::iter::FusedIterator;
 
-use hugr::hugr::NodeType;
+use hugr::hugr::{NodeType, PortIndex};
 use hugr::ops::{OpTag, OpTrait};
 use petgraph::visit as pv;
 
