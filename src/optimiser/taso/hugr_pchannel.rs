@@ -45,6 +45,7 @@ where
         let in_channel = in_channel_orig.clone();
         let out_channel = out_channel_orig.clone();
         let _ = builder
+            .name("priority-channel".into())
             .spawn(move || {
                 // The priority queue, local to this thread.
                 let mut pq: HugrPQ<P, C> =

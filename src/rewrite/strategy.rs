@@ -45,6 +45,7 @@ pub trait RewriteStrategy {
 pub struct GreedyRewriteStrategy;
 
 impl RewriteStrategy for GreedyRewriteStrategy {
+    #[tracing::instrument(skip_all)]
     fn apply_rewrites(
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
@@ -99,6 +100,7 @@ impl Default for ExhaustiveRewriteStrategy {
 }
 
 impl RewriteStrategy for ExhaustiveRewriteStrategy {
+    #[tracing::instrument(skip_all)]
     fn apply_rewrites(
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
