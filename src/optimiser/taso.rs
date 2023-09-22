@@ -21,7 +21,6 @@ mod worker;
 use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 
-use std::io;
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
 
@@ -36,6 +35,9 @@ use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
 
 use self::log::TasoLogger;
+
+#[cfg(feature = "portmatching")]
+use std::io;
 
 /// The TASO optimiser.
 ///
