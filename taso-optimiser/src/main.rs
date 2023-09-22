@@ -1,9 +1,16 @@
+mod tracing;
+
+use crate::tracing::Tracer;
+
+use std::io::BufWriter;
 use std::num::NonZeroUsize;
+use std::path::PathBuf;
 use std::process::exit;
-use std::{fs, io, path::Path};
+use std::{fs, path::Path};
 
 use clap::Parser;
 use hugr::Hugr;
+use tket2::optimiser::taso::log::TasoLogger;
 use tket2::{
     json::{load_tk1_json_file, TKETDecode},
     optimiser::TasoOptimiser,
@@ -31,7 +38,7 @@ struct CmdLineArgs {
         value_name = "FILE",
         help = "Input. A quantum circuit in TK1 JSON format."
     )]
-    input: String,
+    input: PathBuf,
     /// Output circuit file
     #[arg(
         short,
@@ -40,7 +47,7 @@ struct CmdLineArgs {
         value_name = "FILE",
         help = "Output. A quantum circuit in TK1 JSON format."
     )]
-    output: String,
+    output: PathBuf,
     /// ECC file
     #[arg(
         short,
@@ -48,7 +55,16 @@ struct CmdLineArgs {
         value_name = "ECC_FILE",
         help = "Sets the ECC file to use. It is a JSON file of Quartz-generated ECCs."
     )]
-    eccs: String,
+    eccs: PathBuf,
+    /// Log output file
+    #[arg(
+        short,
+        long,
+        default_value = "taso-optimisation.log",
+        value_name = "LOGFILE",
+        help = "Logfile to to output the progress of the optimisation."
+    )]
+    logfile: Option<PathBuf>,
     /// Timeout in seconds (default=no timeout)
     #[arg(
         short,
@@ -62,27 +78,37 @@ struct CmdLineArgs {
         short = 'j',
         long,
         value_name = "N_THREADS",
-        help = "The number of threads to use. By default, the number of threads is equal to the number of logical cores."
+        help = "The number of threads to use. By default, use a single thread."
     )]
     n_threads: Option<NonZeroUsize>,
 }
 
 fn save_tk1_json_file(path: impl AsRef<Path>, circ: &Hugr) -> Result<(), std::io::Error> {
     let file = fs::File::create(path)?;
-    let writer = io::BufWriter::new(file);
+    let writer = BufWriter::new(file);
     let serial_circ = SerialCircuit::encode(circ).unwrap();
     serde_json::to_writer_pretty(writer, &serial_circ)?;
     Ok(())
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts = CmdLineArgs::parse();
+
+    // Setup tracing subscribers for stdout and file logging.
+    //
+    // We need to keep the object around to keep the logging active.
+    let _tracer = Tracer::setup_tracing(opts.logfile);
 
     let input_path = Path::new(&opts.input);
     let output_path = Path::new(&opts.output);
     let ecc_path = Path::new(&opts.eccs);
 
-    let circ = load_tk1_json_file(input_path).unwrap();
+    // TODO: Remove this from the Logger, and use tracing events instead.
+    let circ_candidates_csv = fs::File::create("best_circs.csv")?;
+
+    let taso_logger = TasoLogger::new(circ_candidates_csv);
+
+    let circ = load_tk1_json_file(input_path)?;
 
     println!("Compiling rewriter...");
     let Ok(optimiser) = TasoOptimiser::default_with_eccs_json_file(ecc_path) else {
@@ -101,15 +127,14 @@ fn main() {
     println!("Using {n_threads} threads");
 
     println!("Optimising...");
-    let opt_circ = optimiser
-        .optimise_with_default_log(&circ, opts.timeout, n_threads)
-        .unwrap();
+    let opt_circ = optimiser.optimise_with_log(&circ, taso_logger, opts.timeout, n_threads);
 
     println!("Saving result");
-    save_tk1_json_file(output_path, &opt_circ).unwrap();
+    save_tk1_json_file(output_path, &opt_circ)?;
 
     #[cfg(feature = "peak_alloc")]
     println!("Peak memory usage: {} GB", PEAK_ALLOC.peak_usage_as_gb());
 
-    println!("Done.")
+    println!("Done.");
+    Ok(())
 }
