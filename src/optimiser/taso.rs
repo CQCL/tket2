@@ -150,9 +150,7 @@ where
             }
         }
 
-        logger.log_processing_end(circ_cnt, false, timeout_flag);
-        logger.log_final(&best_circ, best_circ_cost);
-
+        logger.log_processing_end(circ_cnt, best_circ_cost, false, timeout_flag);
         best_circ
     }
 
@@ -281,13 +279,11 @@ where
             }
         }
 
-        logger.log_processing_end(circ_cnt, true, timeout_flag);
+        logger.log_processing_end(circ_cnt, best_circ_cost, true, timeout_flag);
 
         // Drop the channel so the threads know to stop.
         drop(tx_work);
         joins.into_iter().for_each(|j| j.join().unwrap());
-
-        logger.log_final(&best_circ, best_circ_cost);
 
         best_circ
     }

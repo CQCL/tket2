@@ -103,9 +103,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output_path = Path::new(&opts.output);
     let ecc_path = Path::new(&opts.eccs);
 
-    let final_circ_json = fs::File::create("final_circ.json")?;
+    // TODO: Remove this from the Logger, and use tracing events instead.
     let circ_candidates_csv = fs::File::create("best_circs.csv")?;
-    let taso_logger = TasoLogger::new(final_circ_json, circ_candidates_csv);
+
+    let taso_logger = TasoLogger::new(circ_candidates_csv);
 
     let circ = load_tk1_json_file(input_path)?;
 
