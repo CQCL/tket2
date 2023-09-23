@@ -72,8 +72,11 @@ impl Chunk {
             .iter()
             .map(|wires| {
                 let (inp_node, inp_port) = wires[0];
-                let (out_node, out_port) =
-                    circ.linked_ports(inp_node, inp_port).exactly_one().ok().unwrap();
+                let (out_node, out_port) = circ
+                    .linked_ports(inp_node, inp_port)
+                    .exactly_one()
+                    .ok()
+                    .unwrap();
                 Wire::new(out_node, out_port)
             })
             .collect();
