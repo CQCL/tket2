@@ -134,7 +134,7 @@ where
                 let new_circ_cost = (self.cost)(&new_circ);
                 circ_cnt += 1;
                 logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
-                if seen_hashes.contains(new_circ_hash, new_circ_cost) {
+                if !seen_hashes.insert(new_circ_hash, new_circ_cost) {
                     continue;
                 }
                 pq.push_unchecked(new_circ, new_circ_hash, new_circ_cost);

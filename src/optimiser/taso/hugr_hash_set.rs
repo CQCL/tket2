@@ -49,7 +49,8 @@ impl HugrHashSet {
         self.buckets[bucket_index].insert(hash)
     }
 
-    /// Returns whether the given hash is present in the set.
+    // /// Returns whether the given hash is present in the set.
+    #[allow(dead_code)]
     pub(super) fn contains(&self, hash: u64, cost: usize) -> bool {
         let Some(min_cost) = self.min_cost else {
             return false;
