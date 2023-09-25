@@ -8,6 +8,7 @@
   packages = lib.optionals pkgs.stdenv.isDarwin (with pkgs.darwin.apple_sdk; [
     frameworks.CoreServices
     frameworks.CoreFoundation
+    pkgs.just
   ]);
 
   # Certain Rust tools won't work without this
