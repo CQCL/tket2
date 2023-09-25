@@ -17,31 +17,7 @@ use crate::{
 
 use thiserror::Error;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct Qb(usize);
-
-impl Qb {
-    fn index(&self) -> usize {
-        self.0
-    }
-}
-
-impl From<Qb> for CircuitUnit {
-    fn from(qb: Qb) -> Self {
-        CircuitUnit::Linear(qb.index())
-    }
-}
-
-impl TryFrom<CircuitUnit> for Qb {
-    type Error = ();
-
-    fn try_from(cu: CircuitUnit) -> Result<Self, Self::Error> {
-        match cu {
-            CircuitUnit::Wire(_) => Err(()),
-            CircuitUnit::Linear(i) => Ok(Qb(i)),
-        }
-    }
-}
+type Qb = crate::circuit::units::LinearUnit;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct ComCommand {
@@ -74,7 +50,7 @@ impl ComCommand {
             let CircuitUnit::Linear(i) = u else {
                 return None;
             };
-            Some(Qb(*i))
+            Some(Qb::new(*i))
         })
     }
     fn port_of_qb(&self, qb: Qb, direction: Direction) -> Option<Port> {
@@ -571,12 +547,12 @@ mod test {
         assert_eq!(found, 0);
 
         assert_eq!(
-            *prev_nodes.get(&Qb(1)).unwrap(),
+            *prev_nodes.get(&Qb::new(1)).unwrap(),
             slices[1][1].as_ref().unwrap().clone()
         );
 
         assert_eq!(
-            *prev_nodes.get(&Qb(3)).unwrap(),
+            *prev_nodes.get(&Qb::new(3)).unwrap(),
             slices[2][3].as_ref().unwrap().clone()
         );
     }
@@ -591,12 +567,12 @@ mod test {
             available_slice(&circ, &slices, 3, slices[4][1].as_ref().unwrap()).unwrap();
         assert_eq!(found, 1);
         assert_eq!(
-            *prev_nodes.get(&Qb(1)).unwrap(),
+            *prev_nodes.get(&Qb::new(1)).unwrap(),
             slices[2][1].as_ref().unwrap().clone()
         );
 
         assert_eq!(
-            *prev_nodes.get(&Qb(2)).unwrap(),
+            *prev_nodes.get(&Qb::new(2)).unwrap(),
             slices[2][2].as_ref().unwrap().clone()
         );
         // hadamard can't commute past anything
