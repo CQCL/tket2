@@ -1,7 +1,7 @@
 use std::{collections::HashMap, rc::Rc};
 
 use hugr::{
-    hugr::{hugrmut::HugrMut, CircuitUnit, HugrError, Rewrite},
+    hugr::{hugrmut::HugrMut, CircuitUnit, HugrError, PortIndex, Rewrite},
     Direction, Hugr, HugrView, Node, Port,
 };
 use itertools::Itertools;
@@ -11,11 +11,10 @@ use portgraph::PortOffset;
 use pyo3::{create_exception, exceptions::PyException, PyErr};
 
 use crate::{
-    circuit::{command::Command, Circuit},
+    circuit::{command::Command, units::filter::Qubits, Circuit},
     ops::{Pauli, T2Op},
 };
 
-use crate::circuit::filter::Qubits;
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

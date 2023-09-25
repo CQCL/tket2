@@ -14,7 +14,7 @@ use hugr::types::FunctionType;
 pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
 
-pub(crate) use self::units::{filter, FilteredUnits, Units};
+use self::units::{filter, FilteredUnits, Units};
 
 /// An object behaving like a quantum circuit.
 //
