@@ -71,6 +71,10 @@ fn add_pass_module(py: Python, parent: &PyModule) -> PyResult<()> {
     let m = PyModule::new(py, "passes")?;
     m.add_function(wrap_pyfunction!(greedy_depth_reduce, m)?)?;
     m.add_class::<tket2::T2Op>()?;
+    m.add(
+        "PullForwardError",
+        py.get_type::<tket2::passes::PyPullForwardError>(),
+    )?;
     parent.add_submodule(m)?;
     Ok(())
 }
