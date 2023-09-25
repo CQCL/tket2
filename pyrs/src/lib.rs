@@ -1,6 +1,6 @@
 //! Python bindings for TKET2.
 #![warn(missing_docs)]
-use hugr::Hugr;
+use circuit::try_with_hugr;
 use pyo3::prelude::*;
 use tket2::{json::TKETDecode, passes::apply_greedy_commutation};
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -9,12 +9,11 @@ mod circuit;
 
 #[pyfunction]
 fn greedy_depth_reduce(py_c: PyObject) -> PyResult<(PyObject, u32)> {
-    let s_c = SerialCircuit::_from_tket1(py_c.clone());
-    let mut h: Hugr = s_c.decode()?;
-    let n_moves = apply_greedy_commutation(&mut h)?;
-
-    let s_c = SerialCircuit::encode(&h)?;
-    Ok((s_c.to_tket1()?, n_moves))
+    try_with_hugr(py_c, |mut h| {
+        let n_moves = apply_greedy_commutation(&mut h)?;
+        let py_c = SerialCircuit::encode(&h)?.to_tket1()?;
+        PyResult::Ok((py_c, n_moves))
+    })
 }
 
 /// The Python bindings to TKET2.
