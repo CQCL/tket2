@@ -41,7 +41,7 @@ impl UnitFilter for Linear {
 
     fn accept(item: (CircuitUnit, Port, Type)) -> Option<Self::Item> {
         match item {
-            (CircuitUnit::Linear(unit), port, typ) => Some((unit, port, typ)),
+            (CircuitUnit::Linear(unit), port, typ) => Some((LinearUnit::new(unit), port, typ)),
             _ => None,
         }
     }
@@ -53,7 +53,7 @@ impl UnitFilter for Qubits {
     fn accept(item: (CircuitUnit, Port, Type)) -> Option<Self::Item> {
         match item {
             (CircuitUnit::Linear(unit), port, typ) if typ == prelude::QB_T => {
-                Some((unit, port, typ))
+                Some((LinearUnit::new(unit), port, typ))
             }
             _ => None,
         }
