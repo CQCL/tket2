@@ -10,3 +10,5 @@ devenv.local.nix
 # direnv
 .direnv
 .pre-commit-config.yaml
+
+justfile
