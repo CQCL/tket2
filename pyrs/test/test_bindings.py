@@ -7,8 +7,6 @@ from pytket.circuit import Circuit
 class DepthOptimisePass:
     def apply(self, circ: Circuit) -> Circuit:
         (circ, n_moves) = passes.greedy_depth_reduce(circ)
-        # print(n_moves)
-        # return n_moves > 0
         return circ
 
 
