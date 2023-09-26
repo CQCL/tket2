@@ -119,17 +119,19 @@ impl<P> ExhaustiveRewriteStrategy<P> {
     }
 }
 
-/// Exhaustive rewrite strategy with CX count cost function.
-///
-/// The gamma parameter is set to the default 1.0001. This is a good default
-/// choice for NISQ-y circuits, where CX gates are the most expensive.
-pub fn exhaustive_cx() -> ExhaustiveRewriteStrategy<fn(&OpType) -> bool> {
-    ExhaustiveRewriteStrategy::with_predicate(is_cx)
-}
+impl ExhaustiveRewriteStrategy<fn(&OpType) -> bool> {
+    /// Exhaustive rewrite strategy with CX count cost function.
+    ///
+    /// The gamma parameter is set to the default 1.0001. This is a good default
+    /// choice for NISQ-y circuits, where CX gates are the most expensive.
+    pub fn exhaustive_cx() -> Self {
+        ExhaustiveRewriteStrategy::with_predicate(is_cx)
+    }
 
-/// Exhaustive rewrite strategy with CX count cost function and provided gamma.
-pub fn exhaustive_cx_with_gamma(gamma: f64) -> ExhaustiveRewriteStrategy<fn(&OpType) -> bool> {
-    ExhaustiveRewriteStrategy::new(gamma, is_cx)
+    /// Exhaustive rewrite strategy with CX count cost function and provided gamma.
+    pub fn exhaustive_cx_with_gamma(gamma: f64) -> Self {
+        ExhaustiveRewriteStrategy::new(gamma, is_cx)
+    }
 }
 
 impl<P: Fn(&OpType) -> bool> RewriteStrategy for ExhaustiveRewriteStrategy<P> {
@@ -256,7 +258,7 @@ mod tests {
             rw_to_empty(&circ, cx_gates[9..10].to_vec()),
         ];
 
-        let strategy = exhaustive_cx();
+        let strategy = ExhaustiveRewriteStrategy::exhaustive_cx();
         let rewritten = strategy.apply_rewrites(rws, &circ);
         let exp_circ_lens = HashSet::from_iter([8, 6, 9]);
         let circ_lens: HashSet<_> = rewritten.iter().map(|c| c.num_gates()).collect();
@@ -278,7 +280,7 @@ mod tests {
             rw_to_empty(&circ, cx_gates[9..10].to_vec()),
         ];
 
-        let strategy = exhaustive_cx_with_gamma(10.);
+        let strategy = ExhaustiveRewriteStrategy::exhaustive_cx_with_gamma(10.);
         let rewritten = strategy.apply_rewrites(rws, &circ);
         let exp_circ_lens = HashSet::from_iter([8, 17, 6, 9]);
         let circ_lens: HashSet<_> = rewritten.iter().map(|c| c.num_gates()).collect();

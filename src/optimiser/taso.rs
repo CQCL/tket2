@@ -297,7 +297,7 @@ mod taso_default {
     use hugr::HugrView;
 
     use crate::ops::op_matches;
-    use crate::rewrite::strategy::{exhaustive_cx, ExhaustiveRewriteStrategy};
+    use crate::rewrite::strategy::ExhaustiveRewriteStrategy;
     use crate::rewrite::ECCRewriter;
     use crate::T2Op;
 
@@ -309,13 +309,15 @@ mod taso_default {
         fn(&Hugr) -> usize,
     >;
 
-    /// A sane default optimiser using the given ECC sets.
-    pub fn default_with_eccs_json_file(
-        eccs_path: impl AsRef<std::path::Path>,
-    ) -> io::Result<DefaultTasoOptimiser> {
-        let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
-        let strategy = exhaustive_cx();
-        Ok(TasoOptimiser::new(rewriter, strategy, num_cx_gates))
+    impl DefaultTasoOptimiser {
+        /// A sane default optimiser using the given ECC sets.
+        pub fn default_with_eccs_json_file(
+            eccs_path: impl AsRef<std::path::Path>,
+        ) -> io::Result<Self> {
+            let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
+            let strategy = ExhaustiveRewriteStrategy::exhaustive_cx();
+            Ok(TasoOptimiser::new(rewriter, strategy, num_cx_gates))
+        }
     }
 
     fn num_cx_gates(circ: &Hugr) -> usize {
@@ -324,5 +326,3 @@ mod taso_default {
             .count()
     }
 }
-#[cfg(feature = "portmatching")]
-pub use taso_default::default_with_eccs_json_file;
