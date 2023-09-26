@@ -3,4 +3,7 @@
 //! Currently, the only optimiser is TASO
 
 pub mod taso;
-pub use taso::{DefaultTasoOptimiser, TasoOptimiser};
+
+#[cfg(feature = "portmatching")]
+pub use taso::DefaultTasoOptimiser;
+pub use taso::TasoOptimiser;
