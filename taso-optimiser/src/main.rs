@@ -10,11 +10,9 @@ use std::{fs, path::Path};
 
 use clap::Parser;
 use hugr::Hugr;
+use tket2::json::{load_tk1_json_file, TKETDecode};
+use tket2::optimiser::taso;
 use tket2::optimiser::taso::log::TasoLogger;
-use tket2::{
-    json::{load_tk1_json_file, TKETDecode},
-    optimiser::TasoOptimiser,
-};
 use tket_json_rs::circuit_json::SerialCircuit;
 
 #[cfg(feature = "peak_alloc")]
@@ -111,7 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let circ = load_tk1_json_file(input_path)?;
 
     println!("Compiling rewriter...");
-    let Ok(optimiser) = TasoOptimiser::default_with_eccs_json_file(ecc_path) else {
+    let Ok(optimiser) = taso::default_with_eccs_json_file(ecc_path) else {
         eprintln!(
             "Unable to load ECC file {:?}. Is it a JSON file of Quartz-generated ECCs?",
             ecc_path

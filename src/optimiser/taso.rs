@@ -293,20 +293,36 @@ where
 
 #[cfg(feature = "portmatching")]
 mod taso_default {
-    use crate::circuit::Circuit;
-    use crate::rewrite::strategy::ExhaustiveRewriteStrategy;
+    use hugr::ops::OpType;
+    use hugr::HugrView;
+
+    use crate::ops::op_matches;
+    use crate::rewrite::strategy::{exhaustive_cx, ExhaustiveRewriteStrategy};
     use crate::rewrite::ECCRewriter;
+    use crate::T2Op;
 
     use super::*;
 
-    impl TasoOptimiser<ECCRewriter, ExhaustiveRewriteStrategy, fn(&Hugr) -> usize> {
-        /// A sane default optimiser using the given ECC sets.
-        pub fn default_with_eccs_json_file(
-            eccs_path: impl AsRef<std::path::Path>,
-        ) -> io::Result<Self> {
-            let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
-            let strategy = ExhaustiveRewriteStrategy::default();
-            Ok(Self::new(rewriter, strategy, |c| c.num_gates()))
-        }
+    pub type DefaultTasoOptimiser = TasoOptimiser<
+        ECCRewriter,
+        ExhaustiveRewriteStrategy<fn(&OpType) -> bool>,
+        fn(&Hugr) -> usize,
+    >;
+
+    /// A sane default optimiser using the given ECC sets.
+    pub fn default_with_eccs_json_file(
+        eccs_path: impl AsRef<std::path::Path>,
+    ) -> io::Result<DefaultTasoOptimiser> {
+        let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
+        let strategy = exhaustive_cx();
+        Ok(TasoOptimiser::new(rewriter, strategy, num_cx_gates))
+    }
+
+    fn num_cx_gates(circ: &Hugr) -> usize {
+        circ.nodes()
+            .filter(|&n| op_matches(circ.get_optype(n), T2Op::CX))
+            .count()
     }
 }
+#[cfg(feature = "portmatching")]
+pub use taso_default::default_with_eccs_json_file;
