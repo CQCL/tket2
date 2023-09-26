@@ -3,4 +3,4 @@
 //! Currently, the only optimiser is TASO
 
 pub mod taso;
-pub use taso::TasoOptimiser;
+pub use taso::{DefaultTasoOptimiser, TasoOptimiser};

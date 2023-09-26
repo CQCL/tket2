@@ -303,6 +303,7 @@ mod taso_default {
 
     use super::*;
 
+    /// The default TASO optimiser using ECC sets.
     pub type DefaultTasoOptimiser = TasoOptimiser<
         ECCRewriter,
         ExhaustiveRewriteStrategy<fn(&OpType) -> bool>,
@@ -326,3 +327,5 @@ mod taso_default {
             .count()
     }
 }
+#[cfg(feature = "portmatching")]
+pub use taso_default::DefaultTasoOptimiser;
