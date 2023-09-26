@@ -10,11 +10,9 @@ use std::{fs, path::Path};
 
 use clap::Parser;
 use hugr::Hugr;
+use tket2::json::{load_tk1_json_file, TKETDecode};
 use tket2::optimiser::taso::log::TasoLogger;
-use tket2::{
-    json::{load_tk1_json_file, TKETDecode},
-    optimiser::TasoOptimiser,
-};
+use tket2::optimiser::TasoOptimiser;
 use tket_json_rs::circuit_json::SerialCircuit;
 
 #[cfg(feature = "peak_alloc")]

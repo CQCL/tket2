@@ -71,6 +71,14 @@ pub enum T2Op {
     TK1,
 }
 
+/// Whether an op is a given T2Op.
+pub(crate) fn op_matches(op: &OpType, t2op: T2Op) -> bool {
+    let Ok(op) = T2Op::try_from(op) else {
+        return false;
+    };
+    op == t2op
+}
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "pyo3", pyclass)]
 #[allow(missing_docs)]
@@ -294,8 +302,32 @@ impl TryFrom<OpType> for T2Op {
     type Error = NotT2Op;
 
     fn try_from(op: OpType) -> Result<Self, Self::Error> {
-        let leaf: LeafOp = op.try_into().map_err(|_| NotT2Op)?;
+        Self::try_from(&op)
+    }
+}
+
+impl TryFrom<&OpType> for T2Op {
+    type Error = NotT2Op;
+
+    fn try_from(op: &OpType) -> Result<Self, Self::Error> {
+        let OpType::LeafOp(leaf) = op else {
+            return Err(NotT2Op);
+        };
         leaf.try_into()
+    }
+}
+
+impl TryFrom<&LeafOp> for T2Op {
+    type Error = NotT2Op;
+
+    fn try_from(op: &LeafOp) -> Result<Self, Self::Error> {
+        match op {
+            LeafOp::CustomOp(b) => match b.as_ref() {
+                ExternalOp::Extension(e) => Self::try_from_op_def(e.def()),
+                ExternalOp::Opaque(o) => from_extension_name(o.extension(), o.name()),
+            },
+            _ => Err(NotT2Op),
+        }
     }
 }
 
@@ -303,13 +335,7 @@ impl TryFrom<LeafOp> for T2Op {
     type Error = NotT2Op;
 
     fn try_from(op: LeafOp) -> Result<Self, Self::Error> {
-        match op {
-            LeafOp::CustomOp(b) => match *b {
-                ExternalOp::Extension(e) => Self::try_from_op_def(e.def()),
-                ExternalOp::Opaque(o) => from_extension_name(o.extension(), o.name()),
-            },
-            _ => Err(NotT2Op),
-        }
+        Self::try_from(&op)
     }
 }
 
