@@ -20,6 +20,7 @@ use thiserror::Error;
 type Qb = crate::circuit::units::LinearUnit;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+// remove once https://github.com/CQCL-DEV/tket2/issues/126 is resolved
 struct ComCommand {
     /// The operation node.
     node: Node,
