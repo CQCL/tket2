@@ -30,8 +30,36 @@ use super::Circuit;
 
 /// A linear unit id, used in [`CircuitUnit::Linear`].
 // TODO: Add this to hugr?
-pub type LinearUnit = usize;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct LinearUnit(usize);
 
+impl LinearUnit {
+    /// Creates a new [`LinearUnit`].
+    pub fn new(index: usize) -> Self {
+        Self(index)
+    }
+    /// Returns the index of this [`LinearUnit`].
+    pub fn index(&self) -> usize {
+        self.0
+    }
+}
+
+impl From<LinearUnit> for CircuitUnit {
+    fn from(lu: LinearUnit) -> Self {
+        CircuitUnit::Linear(lu.index())
+    }
+}
+
+impl TryFrom<CircuitUnit> for LinearUnit {
+    type Error = ();
+
+    fn try_from(cu: CircuitUnit) -> Result<Self, Self::Error> {
+        match cu {
+            CircuitUnit::Wire(_) => Err(()),
+            CircuitUnit::Linear(i) => Ok(LinearUnit(i)),
+        }
+    }
+}
 /// An iterator over the units in the input or output boundary of a [Node].
 #[derive(Clone, Debug)]
 pub struct Units<UL = DefaultUnitLabeller> {
@@ -134,7 +162,7 @@ where
             let linear_unit =
                 self.unit_labeller
                     .assign_linear(self.node, port, self.linear_count - 1);
-            CircuitUnit::Linear(linear_unit)
+            CircuitUnit::Linear(linear_unit.index())
         } else {
             let wire = self.unit_labeller.assign_wire(self.node, port)?;
             CircuitUnit::Wire(wire)
@@ -206,7 +234,7 @@ pub struct DefaultUnitLabeller;
 impl UnitLabeller for DefaultUnitLabeller {
     #[inline]
     fn assign_linear(&self, _: Node, _: Port, linear_count: usize) -> LinearUnit {
-        linear_count
+        LinearUnit(linear_count)
     }
 
     #[inline]

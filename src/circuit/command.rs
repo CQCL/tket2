@@ -256,7 +256,7 @@ where
         // TODO: `with_wires` combinator for `Units`?
         let wire_unit = circ
             .linear_units()
-            .map(|(linear_unit, port, _)| (Wire::new(circ.input(), port), linear_unit))
+            .map(|(linear_unit, port, _)| (Wire::new(circ.input(), port), linear_unit.index()))
             .collect();
 
         let nodes = pv::Topo::new(&circ.as_petgraph());
@@ -311,7 +311,7 @@ where
                     // Update the map tracking the linear units
                     let new_wire = Wire::new(node, port);
                     self.wire_unit.insert(new_wire, linear_id);
-                    linear_id
+                    LinearUnit::new(linear_id)
                 })
                 .collect();
 
