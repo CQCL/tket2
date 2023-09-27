@@ -51,7 +51,7 @@ where
             let send = tracing::trace_span!(target: "taso::metrics", "TasoWorker::send_result")
                 .in_scope(|| tx_result.send(hashed_circs));
             if send.is_err() {
-                // The main thread closed the send channel, we can stop.
+                // The priority queue closed the send channel, we can stop.
                 break;
             }
         }
