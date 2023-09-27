@@ -57,7 +57,7 @@ impl PriorityChannelCommunication {
         self.timeout.send(()).unwrap();
     }
 
-    /// Close the push and pop channels.
+    /// Close the local copies of the push and pop channels.
     pub(super) fn drop_pop_push(&mut self) {
         self.pop = None;
         self.push = None;
