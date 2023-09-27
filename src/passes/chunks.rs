@@ -8,13 +8,20 @@ use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::views::sibling_subgraph::ConvexChecker;
 use hugr::hugr::views::{HierarchyView, SiblingGraph, SiblingSubgraph};
 use hugr::hugr::{HugrError, NodeMetadata};
-use hugr::ops::handle::FuncID;
+use hugr::ops::handle::DataflowParentID;
 use hugr::types::{FunctionType, Signature};
 use hugr::{Hugr, HugrView, Node, Port, Wire};
 use itertools::Itertools;
 
 use crate::extension::REGISTRY;
 use crate::Circuit;
+
+#[cfg(feature = "pyo3")]
+use crate::json::TKETDecode;
+#[cfg(feature = "pyo3")]
+use pyo3::{exceptions::PyAttributeError, pyclass, pymethods, Py, PyAny, PyResult};
+#[cfg(feature = "pyo3")]
+use tket_json_rs::circuit_json::SerialCircuit;
 
 /// An identifier for the connection between chunks.
 ///
@@ -26,6 +33,7 @@ pub type ChunkConnection = Wire;
 
 /// A chunk of a circuit.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "pyo3", pyclass)]
 pub struct Chunk {
     /// The extracted circuit.
     pub circ: Hugr,
@@ -97,7 +105,7 @@ impl Chunk {
         HashMap<ChunkConnection, Vec<(Node, Port)>>,
         HashMap<ChunkConnection, (Node, Port)>,
     ) {
-        let chunk_sg: SiblingGraph<'_, FuncID<true>> =
+        let chunk_sg: SiblingGraph<'_, DataflowParentID> =
             SiblingGraph::try_new(&self.circ, self.circ.root()).unwrap();
         let subgraph = SiblingSubgraph::try_new_dataflow_subgraph(&chunk_sg)
             .expect("The chunk circuit is no longer a dataflow");
@@ -135,6 +143,7 @@ impl Chunk {
 
 /// An utility for splitting a circuit into chunks, and reassembling them afterwards.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "pyo3", pyclass)]
 pub struct CircuitChunks {
     /// The original circuit's signature.
     signature: FunctionType,
@@ -251,6 +260,43 @@ impl CircuitChunks {
         }
 
         Ok(reassembled)
+    }
+
+    /// Returns a list of references to the split circuits.
+    pub fn circuits(&self) -> impl Iterator<Item = &Hugr> {
+        self.chunks.iter().map(|chunk| &chunk.circ)
+    }
+}
+
+#[cfg(feature = "pyo3")]
+#[pymethods]
+impl CircuitChunks {
+    /// Reassemble the chunks into a circuit.
+    #[pyo3(name = "reassemble")]
+    fn py_reassemble(&self) -> PyResult<Py<PyAny>> {
+        let hugr = self.clone().reassemble()?;
+        SerialCircuit::encode(&hugr)?.to_tket1()
+    }
+
+    /// Returns clones of the split circuits.
+    #[pyo3(name = "circuits")]
+    fn py_circuits(&self) -> PyResult<Vec<Py<PyAny>>> {
+        self.circuits()
+            .map(|hugr| SerialCircuit::encode(hugr)?.to_tket1())
+            .collect()
+    }
+
+    /// Returns clones of the split circuits.
+    #[pyo3(name = "update_circuit")]
+    fn py_update_circuit(&mut self, index: usize, new_circ: Py<PyAny>) -> PyResult<()> {
+        let hugr = SerialCircuit::_from_tket1(new_circ).decode()?;
+        if hugr.circuit_signature() != self.chunks[index].circ.circuit_signature() {
+            return Err(PyAttributeError::new_err(
+                "The new circuit has a different signature.",
+            ));
+        }
+        self.chunks[index].circ = hugr;
+        Ok(())
     }
 }
 
