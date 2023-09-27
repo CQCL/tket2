@@ -38,18 +38,20 @@ impl HugrHashSet {
             self.buckets.push_front([hash].into_iter().collect());
             return true;
         };
+        self.buckets.reserve(min_cost.saturating_sub(cost));
         while cost < *min_cost {
             self.buckets.push_front(FxHashSet::default());
             *min_cost -= 1;
         }
         let bucket_index = cost - *min_cost;
-        while bucket_index >= self.buckets.len() {
-            self.buckets.push_back(FxHashSet::default());
+        if bucket_index >= self.buckets.len() {
+            self.buckets
+                .resize_with(bucket_index + 1, FxHashSet::default);
         }
         self.buckets[bucket_index].insert(hash)
     }
 
-    // /// Returns whether the given hash is present in the set.
+    /// Returns whether the given hash is present in the set.
     #[allow(dead_code)]
     pub(super) fn contains(&self, hash: u64, cost: usize) -> bool {
         let Some(min_cost) = self.min_cost else {

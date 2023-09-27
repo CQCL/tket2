@@ -130,17 +130,19 @@ where
 
             let rewrites = self.rewriter.get_rewrites(&circ);
             for new_circ in self.strategy.apply_rewrites(rewrites, &circ) {
-                let new_circ_hash = new_circ.circuit_hash();
                 let new_circ_cost = (self.cost)(&new_circ);
-                circ_cnt += 1;
-                logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
-                if (pq.len() > PRIORITY_QUEUE_CAPACITY / 2
-                    && new_circ_cost > *pq.max_cost().unwrap())
-                    || !seen_hashes.insert(new_circ_hash, new_circ_cost)
+                if pq.len() > PRIORITY_QUEUE_CAPACITY / 2 && new_circ_cost > *pq.max_cost().unwrap()
                 {
-                    // Ignore this circuit: it's either too big or we've already seen it
+                    // Ignore this circuit: it's too big
                     continue;
                 }
+                let new_circ_hash = new_circ.circuit_hash();
+                logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
+                if !seen_hashes.insert(new_circ_hash, new_circ_cost) {
+                    // Ignore this circuit: we've already seen it
+                    continue;
+                }
+                circ_cnt += 1;
                 pq.push_unchecked(new_circ, new_circ_hash, new_circ_cost);
             }
 

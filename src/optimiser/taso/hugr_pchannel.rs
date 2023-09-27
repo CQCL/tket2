@@ -155,21 +155,18 @@ where
                             }
                             recv(self.timeout) -> _ => {
                                 // We've timed out.
-                                self.log
-                                    .send(PriorityChannelLog::CircuitCount(
-                                        self.circ_cnt,
-                                        self.seen_hashes.len(),
-                                    ))
-                                    .unwrap();
                                 break
                             }
                         }
-                        if self.pq.len() >= self.queue_capacity {
-                            self.pq.truncate(self.queue_capacity / 2);
-                            self.seen_hashes.clear_over(*self.pq.max_cost().unwrap());
-                        }
                     }
                 }
+                // Send a last set of logs before terminating.
+                self.log
+                    .send(PriorityChannelLog::CircuitCount(
+                        self.circ_cnt,
+                        self.seen_hashes.len(),
+                    ))
+                    .unwrap();
             })
             .unwrap();
     }
@@ -178,16 +175,25 @@ where
     fn recv(&mut self, circs: Vec<(u64, Hugr)>) {
         for (hash, circ) in circs {
             let cost = (self.pq.cost_fn)(&circ);
-            if self.seen_hashes.insert(hash, cost) {
-                if self.min_cost.is_none() || Some(cost) < self.min_cost {
-                    self.min_cost = Some(cost);
-                    self.log
-                        .send(PriorityChannelLog::NewBestCircuit(circ.clone(), cost))
-                        .unwrap();
-                }
-                self.pq.push_unchecked(circ, hash, cost);
+            if (self.pq.len() > self.queue_capacity / 2 && cost > *self.pq.max_cost().unwrap())
+                || !self.seen_hashes.insert(hash, cost)
+            {
+                // Ignore this circuit: it's either too big or we've seen it before.
+                continue;
             }
+
+            // A new best circuit
+            if self.min_cost.is_none() || Some(cost) < self.min_cost {
+                self.min_cost = Some(cost);
+                self.log
+                    .send(PriorityChannelLog::NewBestCircuit(circ.clone(), cost))
+                    .unwrap();
+            }
+
             self.circ_cnt += 1;
+            self.pq.push_unchecked(circ, hash, cost);
+
+            // Send logs every 1000 circuits.
             if self.circ_cnt % 1000 == 0 {
                 // TODO: Add a minimum time between logs
                 self.log
@@ -197,6 +203,11 @@ where
                     ))
                     .unwrap();
             }
+        }
+        // If the queue got too big, truncate it.
+        if self.pq.len() >= self.queue_capacity {
+            self.pq.truncate(self.queue_capacity / 2);
+            self.seen_hashes.clear_over(*self.pq.max_cost().unwrap());
         }
     }
 }
