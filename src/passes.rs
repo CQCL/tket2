@@ -4,8 +4,11 @@
 // pub mod redundancy;
 // pub mod pattern;
 // pub mod squash;
-#[cfg(feature = "portmatching")]
-pub mod taso;
+mod commutation;
+pub use commutation::apply_greedy_commutation;
+#[cfg(feature = "pyo3")]
+pub use commutation::PyPullForwardError;
+
 // use rayon::prelude::*;
 
 // use crate::circuit::{
