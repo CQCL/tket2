@@ -1,3 +1,25 @@
+from dataclasses import dataclass
+from pyrs.pyrs import passes
+from pytket.circuit import Circuit
+
+
+@dataclass
+class DepthOptimisePass:
+    def apply(self, circ: Circuit) -> Circuit:
+        (circ, n_moves) = passes.greedy_depth_reduce(circ)
+        return circ
+
+
+def test_depth_optimise():
+    c = Circuit(4).CX(0, 2).CX(1, 2).CX(1, 3)
+
+    assert c.depth() == 3
+
+    c = DepthOptimisePass().apply(c)
+
+    assert c.depth() == 2
+
+
 # from dataclasses import dataclass
 # from typing import Callable, Iterable
 # import time
