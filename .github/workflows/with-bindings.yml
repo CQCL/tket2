@@ -1,9 +1,9 @@
 name: Run tests with TKET1 bindings
 
 on:
-  push:
-    branches:
-      - main 
+  #push:
+  #  branches:
+  #    - main 
   workflow_dispatch: {}
 
 env:
