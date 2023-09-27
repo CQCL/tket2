@@ -92,19 +92,10 @@ impl Chunk {
     }
 
     /// Insert the chunk back into a circuit.
-    ///
-    /// Returns a map from the original input/output wires to the inserted [`IncomingPorts`]/[`OutgoingPorts`].
     //
     // TODO: The new chunk may have input ports directly connected to outputs. We have to take care of those.
     #[allow(clippy::type_complexity)]
-    pub(self) fn insert(
-        &self,
-        circ: &mut impl HugrMut,
-        root: Node,
-    ) -> (
-        HashMap<ChunkConnection, Vec<(Node, Port)>>,
-        HashMap<ChunkConnection, (Node, Port)>,
-    ) {
+    pub(self) fn insert(&self, circ: &mut impl HugrMut, root: Node) -> ChunkInsertResult {
         let chunk_sg: SiblingGraph<'_, DataflowParentID> =
             SiblingGraph::try_new(&self.circ, self.circ.root()).unwrap();
         let subgraph = SiblingSubgraph::try_new_dataflow_subgraph(&chunk_sg)
@@ -137,8 +128,21 @@ impl Chunk {
             output_map.insert(wire, (*node_map.get(&node).unwrap(), port));
         }
 
-        (input_map, output_map)
+        ChunkInsertResult {
+            incoming_connections: input_map,
+            outgoing_connections: output_map,
+        }
     }
+}
+
+/// A map from the original input/output [`ChunkConnection`]s to an inserted chunk's inputs and outputs.
+struct ChunkInsertResult {
+    /// A map from incoming connections to a chunk, to the new node and incoming port targets.
+    ///
+    /// A chunk may specify multiple targets to be connected to a single incoming `ChunkConnection`.
+    pub incoming_connections: HashMap<ChunkConnection, Vec<(Node, Port)>>,
+    /// A map from outgoing connections from a chunk, to the new node and outgoing port target.
+    pub outgoing_connections: HashMap<ChunkConnection, (Node, Port)>,
 }
 
 /// An utility for splitting a circuit into chunks, and reassembling them afterwards.
@@ -182,12 +186,8 @@ impl CircuitChunks {
 
         let mut chunks = Vec::new();
         let mut convex_checker = ConvexChecker::new(circ);
-        for commands in &circ.commands().chunks(max_size) {
-            chunks.push(Chunk::extract(
-                circ,
-                commands.map(|cmd| cmd.node()),
-                &mut convex_checker,
-            ));
+        for commands in &circ.commands().map(|cmd| cmd.node()).chunks(max_size) {
+            chunks.push(Chunk::extract(circ, commands, &mut convex_checker));
         }
         Self {
             signature,
@@ -213,6 +213,7 @@ impl CircuitChunks {
 
         let builder = FunctionBuilder::new(name, signature).unwrap();
         let inputs = builder.input_wires();
+        // TODO: Use the correct REGISTRY if the method accepts custom input resources.
         let mut reassembled = builder.finish_hugr_with_outputs(inputs, &REGISTRY).unwrap();
         let root = reassembled.root();
         let [reassembled_input, reassembled_output] = reassembled.get_io(root).unwrap();
@@ -241,10 +242,13 @@ impl CircuitChunks {
 
         for chunk in self.chunks {
             // Insert the chunk circuit without its input/output nodes.
-            let (chunk_targets, chunk_sources) = chunk.insert(&mut reassembled, root);
+            let ChunkInsertResult {
+                incoming_connections,
+                outgoing_connections,
+            } = chunk.insert(&mut reassembled, root);
             // Reconnect the chunk's inputs and outputs in the reassembled circuit.
-            sources.extend(chunk_sources);
-            chunk_targets.into_iter().for_each(|(wire, tgts)| {
+            sources.extend(outgoing_connections);
+            incoming_connections.into_iter().for_each(|(wire, tgts)| {
                 targets.entry(wire).or_default().extend(tgts);
             });
         }
@@ -286,7 +290,7 @@ impl CircuitChunks {
             .collect()
     }
 
-    /// Returns clones of the split circuits.
+    /// Replaces a chunk's circuit with an updated version.
     #[pyo3(name = "update_circuit")]
     fn py_update_circuit(&mut self, index: usize, new_circ: Py<PyAny>) -> PyResult<()> {
         let hugr = SerialCircuit::_from_tket1(new_circ).decode()?;
