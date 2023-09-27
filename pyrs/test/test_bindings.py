@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from pyrs.pyrs import passes
+from pyrs.pyrs import passes, circuit
 from pytket.circuit import Circuit
 
 
@@ -19,6 +19,17 @@ def test_depth_optimise():
 
     assert c.depth() == 2
 
+def test_chunks():
+    c = Circuit(4).CX(0, 2).CX(1, 3).CX(1, 2).CX(0, 3).CX(1, 3)
+
+    assert c.depth() == 3
+
+    chunks = circuit.chunks(c, 2)
+    circuits = chunks.circuits()
+    chunks.update_circuit(0, circuits[0])
+    c2 = chunks.reassemble()
+
+    assert c2.depth() == 3
 
 # from dataclasses import dataclass
 # from typing import Callable, Iterable

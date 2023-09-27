@@ -1,6 +1,6 @@
 //! Python bindings for TKET2.
 #![warn(missing_docs)]
-use circuit::try_with_hugr;
+use circuit::{add_circuit_module, try_with_hugr};
 use pyo3::prelude::*;
 use tket2::{json::TKETDecode, passes::apply_greedy_commutation};
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -23,30 +23,6 @@ fn pyrs(py: Python, m: &PyModule) -> PyResult<()> {
     add_pattern_module(py, m)?;
     add_pass_module(py, m)?;
     Ok(())
-}
-
-/// circuit module
-fn add_circuit_module(py: Python, parent: &PyModule) -> PyResult<()> {
-    let m = PyModule::new(py, "circuit")?;
-    m.add_class::<tket2::T2Op>()?;
-    m.add_class::<tket2::Pauli>()?;
-
-    m.add("HugrError", py.get_type::<hugr::hugr::PyHugrError>())?;
-    m.add("BuildError", py.get_type::<hugr::builder::PyBuildError>())?;
-    m.add(
-        "ValidationError",
-        py.get_type::<hugr::hugr::validate::PyValidationError>(),
-    )?;
-    m.add(
-        "HUGRSerializationError",
-        py.get_type::<hugr::hugr::serialize::PyHUGRSerializationError>(),
-    )?;
-    m.add(
-        "OpConvertError",
-        py.get_type::<tket2::json::PyOpConvertError>(),
-    )?;
-
-    parent.add_submodule(m)
 }
 
 /// portmatching module

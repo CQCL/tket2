@@ -73,7 +73,7 @@ members = ["pyrs", "compile-rewriter", "taso-optimiser"]
 
 [workspace.dependencies]
 
-quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "19ed0fc" }
+quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "af664e3" }
 portgraph = { version = "0.9", features = ["serde"] }
 pyo3 = { version = "0.19" }
 itertools = { version = "0.11.0" }
