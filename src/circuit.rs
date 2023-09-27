@@ -19,6 +19,7 @@ use hugr::types::FunctionType;
 pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
 use itertools::Itertools;
+use portgraph::Direction;
 use thiserror::Error;
 
 use self::units::{filter, FilteredUnits, Units};
@@ -150,8 +151,7 @@ pub trait CircuitMut: Circuit + HugrMut {
         let link = self
             .linked_ports(inp, input_port)
             .at_most_one()
-            .ok()
-            .expect("invalid circuit");
+            .map_err(|_| CircuitMutError::DeleteNonEmptyWire(input_port.index()))?;
         if link.is_some() && link.unwrap().0 != self.output() {
             return Err(CircuitMutError::DeleteNonEmptyWire(input_port.index()));
         }
@@ -167,6 +167,11 @@ pub trait CircuitMut: Circuit + HugrMut {
         }
         // Update input node, output node (if necessary) and root signatures.
         update_signature(self, input_port.index(), link.map(|(_, p)| p.index()));
+        // Resize ports at input/output node
+        self.set_num_ports(inp, 0, self.num_outputs(inp) - 1);
+        if let Some((out, _)) = link {
+            self.set_num_ports(out, self.num_inputs(out) - 1, 0);
+        }
         Ok(())
     }
 }
@@ -197,14 +202,16 @@ fn shift_ports<C: HugrMut + ?Sized>(
     let dir = free_port.direction();
     let port_range = (free_port.index() + 1..max_ind).map(|p| Port::new(dir, p));
     for port in port_range {
-        if let Some(connected_to) = circ
-            .linked_ports(node, port)
-            .at_most_one()
-            .ok()
-            .expect("invalid circuit")
-        {
+        let links = circ.linked_ports(node, port).collect_vec();
+        if !links.is_empty() {
             circ.disconnect(node, port)?;
-            circ.connect(node, free_port, connected_to.0, connected_to.1)?;
+        }
+        for (other_n, other_p) in links {
+            // TODO: simplify when CQCL-DEV/hugr#565 is resolved
+            match dir {
+                Direction::Incoming => circ.connect(other_n, other_p, node, free_port),
+                Direction::Outgoing => circ.connect(node, free_port, other_n, other_p),
+            }?;
         }
         free_port = port;
     }
@@ -243,7 +250,7 @@ fn update_signature<C: HugrMut + Circuit + ?Sized>(
             types.remove(out_index);
             types.into()
         };
-        let new_out_op = Input::new(out_types.clone());
+        let new_out_op = Output::new(out_types.clone());
         let inp_exts = circ.get_nodetype(out).input_extensions().cloned();
         circ.replace_op(out, NodeType::new(new_out_op, inp_exts));
         out_types
