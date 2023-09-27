@@ -2,7 +2,7 @@
 #![warn(missing_docs)]
 use circuit::try_with_hugr;
 use pyo3::prelude::*;
-use tket2::{json::TKETDecode, passes::apply_greedy_commutation};
+use tket2::{json::TKETDecode, optimiser::taso, passes::apply_greedy_commutation};
 use tket_json_rs::circuit_json::SerialCircuit;
 
 mod circuit;
@@ -22,6 +22,7 @@ fn pyrs(py: Python, m: &PyModule) -> PyResult<()> {
     add_circuit_module(py, m)?;
     add_pattern_module(py, m)?;
     add_pass_module(py, m)?;
+    add_optimiser_module(py, m)?;
     Ok(())
 }
 
@@ -77,4 +78,12 @@ fn add_pass_module(py: Python, parent: &PyModule) -> PyResult<()> {
     )?;
     parent.add_submodule(m)?;
     Ok(())
+}
+
+/// circuit optimisation module
+fn add_optimiser_module(py: Python, parent: &PyModule) -> PyResult<()> {
+    let m = PyModule::new(py, "optimiser")?;
+    m.add_class::<taso::pyo3::PyDefaultTasoOptimiser>()?;
+
+    parent.add_submodule(m)
 }

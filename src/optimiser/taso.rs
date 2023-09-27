@@ -15,6 +15,9 @@ mod eq_circ_class;
 mod hugr_pchannel;
 mod hugr_pqueue;
 pub mod log;
+#[cfg(feature = "pyo3")]
+#[cfg(feature = "portmatching")]
+pub mod pyo3;
 mod qtz_circuit;
 mod worker;
 
@@ -35,9 +38,6 @@ use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
 
 use self::log::TasoLogger;
-
-#[cfg(feature = "portmatching")]
-use std::io;
 
 /// The TASO optimiser.
 ///
@@ -295,8 +295,11 @@ where
 mod taso_default {
     use hugr::ops::OpType;
     use hugr::HugrView;
+    use std::io;
+    use std::path::Path;
 
     use crate::ops::op_matches;
+    use crate::rewrite::ecc_rewriter::RewriterSerialisationError;
     use crate::rewrite::strategy::ExhaustiveRewriteStrategy;
     use crate::rewrite::ECCRewriter;
     use crate::T2Op;
@@ -312,10 +315,17 @@ mod taso_default {
 
     impl DefaultTasoOptimiser {
         /// A sane default optimiser using the given ECC sets.
-        pub fn default_with_eccs_json_file(
-            eccs_path: impl AsRef<std::path::Path>,
-        ) -> io::Result<Self> {
+        pub fn default_with_eccs_json_file(eccs_path: impl AsRef<Path>) -> io::Result<Self> {
             let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
+            let strategy = ExhaustiveRewriteStrategy::exhaustive_cx();
+            Ok(TasoOptimiser::new(rewriter, strategy, num_cx_gates))
+        }
+
+        /// A sane default optimiser using a precompiled binary rewriter.
+        pub fn default_with_rewriter_binary(
+            rewriter_path: impl AsRef<Path>,
+        ) -> Result<Self, RewriterSerialisationError> {
+            let rewriter = ECCRewriter::load_binary(rewriter_path)?;
             let strategy = ExhaustiveRewriteStrategy::exhaustive_cx();
             Ok(TasoOptimiser::new(rewriter, strategy, num_cx_gates))
         }

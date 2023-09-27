@@ -13,6 +13,24 @@ pub(crate) fn type_is_linear(typ: &Type) -> bool {
     !TypeBound::Copyable.contains(typ.least_upper_bound())
 }
 
+// Convert a pytket object to HUGR
+#[cfg(feature = "pyo3")]
+mod pyo3 {
+    use hugr::Hugr;
+    use pyo3::prelude::*;
+    use tket_json_rs::circuit_json::SerialCircuit;
+
+    use crate::json::TKETDecode;
+
+    pub(crate) fn pyobj_as_hugr(circ: PyObject) -> PyResult<Hugr> {
+        let ser_c = SerialCircuit::_from_tket1(circ);
+        let hugr: Hugr = ser_c.decode()?;
+        Ok(hugr)
+    }
+}
+#[cfg(feature = "pyo3")]
+pub(crate) use pyo3::pyobj_as_hugr;
+
 // utility for building simple qubit-only circuits.
 #[allow(unused)]
 pub(crate) fn build_simple_circuit(

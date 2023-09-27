@@ -4,16 +4,15 @@ use std::fmt;
 
 use derive_more::{From, Into};
 use hugr::hugr::views::sibling_subgraph::PyInvalidReplacementError;
-use hugr::{Hugr, Port};
+use hugr::Port;
 use itertools::Itertools;
 use portmatching::{HashMap, PatternID};
 use pyo3::{prelude::*, types::PyIterator};
-use tket_json_rs::circuit_json::SerialCircuit;
 
 use super::{CircuitPattern, PatternMatch, PatternMatcher};
 use crate::circuit::Circuit;
-use crate::json::TKETDecode;
 use crate::rewrite::CircuitRewrite;
+use crate::utils::pyobj_as_hugr;
 
 #[pymethods]
 impl CircuitPattern {
@@ -195,10 +194,4 @@ impl Node {
     pub fn __repr__(&self) -> String {
         format!("{:?}", self)
     }
-}
-
-fn pyobj_as_hugr(circ: PyObject) -> PyResult<Hugr> {
-    let ser_c = SerialCircuit::_from_tket1(circ);
-    let hugr: Hugr = ser_c.decode()?;
-    Ok(hugr)
 }
