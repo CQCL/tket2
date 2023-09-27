@@ -276,10 +276,12 @@ mod test {
         })
         .unwrap();
 
-        crate::utils::test::viz_dotstr(&circ.dot_string());
-        let chunks = CircuitChunks::split(&circ, 3);
+        let mut chunks = CircuitChunks::split(&circ, 3);
+
+        // Rearrange the chunks so nodes are inserted in a new order.
+        chunks.chunks.reverse();
+
         let mut reassembled = chunks.reassemble().unwrap();
-        crate::utils::test::viz_dotstr(&reassembled.dot_string());
 
         reassembled.infer_and_validate(&REGISTRY).unwrap();
         assert_eq!(circ.circuit_hash(), reassembled.circuit_hash());
