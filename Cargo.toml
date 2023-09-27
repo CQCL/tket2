@@ -69,7 +69,7 @@ harness = false
 
 [workspace]
 
-members = ["pyrs", "compile-matcher", "taso-optimiser"]
+members = ["pyrs", "compile-rewriter", "taso-optimiser"]
 
 [workspace.dependencies]
 
