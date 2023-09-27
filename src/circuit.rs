@@ -131,29 +131,42 @@ pub trait Circuit: HugrView {
 pub trait CircuitMut: Circuit + HugrMut {
     /// Remove an empty wire from the circuit.
     ///
-    /// Pass the index of the wire at the input port.
+    /// The wire to be removed is identified by the index of the outgoing port
+    /// at the circuit input node.
+    ///
+    /// This will change the circuit signature and will shift all ports after
+    /// the removed wire by -1. If the wire is connected to the output node,
+    /// this will also change the signature output and shift the ports after
+    /// the removed wire by -1.
     ///
     /// This will return an error if the wire is not empty or if a HugrError
     /// occurs.
     fn remove_empty_wire(&mut self, input_port: usize) -> Result<(), CircuitMutError> {
         let inp = self.input();
+        if input_port >= self.num_outputs(inp) {
+            return Err(CircuitMutError::InvalidPortOffset(input_port));
+        }
         let input_port = Port::new_outgoing(input_port);
-        let (out, output_port) = self
+        let link = self
             .linked_ports(inp, input_port)
-            .exactly_one()
+            .at_most_one()
             .ok()
             .expect("invalid circuit");
-        if out != self.output() {
+        if link.is_some() && link.unwrap().0 != self.output() {
             return Err(CircuitMutError::DeleteNonEmptyWire(input_port.index()));
         }
-        self.disconnect(inp, input_port)?;
+        if link.is_some() {
+            self.disconnect(inp, input_port)?;
+        }
 
         // Shift ports at input
         shift_ports(self, inp, input_port, self.num_outputs(inp))?;
         // Shift ports at output
-        shift_ports(self, out, output_port, self.num_inputs(out))?;
-        // Update input node, output node and root signatures.
-        update_type_signature(self, input_port.index(), output_port.index());
+        if let Some((out, output_port)) = link {
+            shift_ports(self, out, output_port, self.num_inputs(out))?;
+        }
+        // Update input node, output node (if necessary) and root signatures.
+        update_signature(self, input_port.index(), link.map(|(_, p)| p.index()));
         Ok(())
     }
 }
@@ -165,8 +178,13 @@ pub enum CircuitMutError {
     #[error("Hugr error: {0:?}")]
     HugrError(hugr::hugr::HugrError),
     /// The wire to be deleted is not empty.
+    #[from(ignore)]
     #[error("Wire {0} cannot be deleted: not empty")]
     DeleteNonEmptyWire(usize),
+    /// The wire does not exist.
+    #[from(ignore)]
+    #[error("Wire {0} does not exist")]
+    InvalidPortOffset(usize),
 }
 
 /// Shift ports in range (free_port + 1 .. max_ind) by -1.
@@ -178,7 +196,6 @@ fn shift_ports<C: HugrMut + ?Sized>(
 ) -> Result<Port, hugr::hugr::HugrError> {
     let dir = free_port.direction();
     let port_range = (free_port.index() + 1..max_ind).map(|p| Port::new(dir, p));
-    dbg!(&port_range);
     for port in port_range {
         if let Some(connected_to) = circ
             .linked_ports(node, port)
@@ -196,10 +213,10 @@ fn shift_ports<C: HugrMut + ?Sized>(
 
 // Update the signature of circ when removing the in_index-th input wire and
 // the out_index-th output wire.
-fn update_type_signature<C: HugrMut + Circuit + ?Sized>(
+fn update_signature<C: HugrMut + Circuit + ?Sized>(
     circ: &mut C,
     in_index: usize,
-    out_index: usize,
+    out_index: Option<usize>,
 ) {
     let inp = circ.input();
     // Update input node
@@ -215,26 +232,31 @@ fn update_type_signature<C: HugrMut + Circuit + ?Sized>(
     let inp_exts = circ.get_nodetype(inp).input_extensions().cloned();
     circ.replace_op(inp, NodeType::new(new_inp_op, inp_exts));
 
-    // Update output node
-    let out = circ.output();
-    let out_types: TypeRow = {
-        let OpType::Output(Output { types }) = circ.get_optype(out).clone() else {
-            panic!("invalid circuit")
+    // Update output node if necessary.
+    let out_types = out_index.map(|out_index| {
+        let out = circ.output();
+        let out_types: TypeRow = {
+            let OpType::Output(Output { types }) = circ.get_optype(out).clone() else {
+                panic!("invalid circuit")
+            };
+            let mut types = types.into_owned();
+            types.remove(out_index);
+            types.into()
         };
-        let mut types = types.into_owned();
-        types.remove(out_index);
-        types.into()
-    };
-    let new_out_op = Input::new(out_types.clone());
-    let inp_exts = circ.get_nodetype(out).input_extensions().cloned();
-    circ.replace_op(out, NodeType::new(new_out_op, inp_exts));
+        let new_out_op = Input::new(out_types.clone());
+        let inp_exts = circ.get_nodetype(out).input_extensions().cloned();
+        circ.replace_op(out, NodeType::new(new_out_op, inp_exts));
+        out_types
+    });
 
     // Update root
     let OpType::DFG(DFG { mut signature, .. }) = circ.get_optype(circ.root()).clone() else {
         panic!("invalid circuit")
     };
     signature.input = inp_types;
-    signature.output = out_types;
+    if let Some(out_types) = out_types {
+        signature.output = out_types;
+    }
     let new_dfg_op = DFG { signature };
     let inp_exts = circ.get_nodetype(circ.root()).input_extensions().cloned();
     circ.replace_op(circ.root(), NodeType::new(new_dfg_op, inp_exts));
@@ -245,7 +267,11 @@ impl<T> CircuitMut for T where T: Circuit + HugrMut {}
 
 #[cfg(test)]
 mod tests {
-    use hugr::Hugr;
+    use hugr::{
+        builder::{DFGBuilder, DataflowHugr},
+        extension::{prelude::BOOL_T, PRELUDE_REGISTRY},
+        Hugr,
+    };
 
     use super::*;
     use crate::{json::load_tk1_json_str, utils::build_simple_circuit, T2Op};
@@ -296,6 +322,20 @@ mod tests {
         assert_eq!(
             circ.remove_empty_wire(0).unwrap_err(),
             CircuitMutError::DeleteNonEmptyWire(0)
+        );
+    }
+
+    #[test]
+    fn remove_bit() {
+        let h = DFGBuilder::new(FunctionType::new(vec![BOOL_T], vec![])).unwrap();
+        let mut circ = h.finish_hugr_with_outputs([], &PRELUDE_REGISTRY).unwrap();
+
+        assert_eq!(circ.units().count(), 1);
+        assert!(circ.remove_empty_wire(0).is_ok());
+        assert_eq!(circ.units().count(), 0);
+        assert_eq!(
+            circ.remove_empty_wire(2).unwrap_err(),
+            CircuitMutError::InvalidPortOffset(2)
         );
     }
 }
