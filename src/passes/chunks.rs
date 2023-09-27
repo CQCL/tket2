@@ -7,7 +7,7 @@ use hugr::extension::ExtensionSet;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::views::sibling_subgraph::ConvexChecker;
 use hugr::hugr::views::{HierarchyView, SiblingGraph, SiblingSubgraph};
-use hugr::hugr::NodeMetadata;
+use hugr::hugr::{HugrError, NodeMetadata};
 use hugr::ops::handle::FuncID;
 use hugr::types::{FunctionType, Signature};
 use hugr::{Hugr, HugrView, Node, Port, Wire};
@@ -16,33 +16,24 @@ use itertools::Itertools;
 use crate::extension::REGISTRY;
 use crate::Circuit;
 
+/// An identifier for the connection between chunks.
+///
+/// This is based on the wires of the original circuit.
+///
+/// When reassembling the circuit, the input/output wires of each chunk are
+/// re-linked by matching these identifiers.
+pub type ChunkConnection = Wire;
+
 /// A chunk of a circuit.
 #[derive(Debug, Clone)]
 pub struct Chunk {
     /// The extracted circuit.
     pub circ: Hugr,
     /// The original wires connected to the input.
-    pub inputs: Vec<Wire>,
+    pub inputs: Vec<ChunkConnection>,
     /// The original wires connected to the output.
-    pub outputs: Vec<Wire>,
+    pub outputs: Vec<ChunkConnection>,
 }
-
-/*
-TODO: Replace the Wires used in this module with better identifiers.
-
-/// An identifier for the source of an inter-chunk edge.
-///
-/// This is required for re-connecting the chunks during reassembly.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ChunkEdgeSource {
-    /// The edge was connected to the input of the original circuit.
-    Input(Port),
-    /// The edge was connected to another chunk.
-    ///
-    /// The source is identified by its node and port in the original circuit.
-    ChunkOutput(Node, Port),
-}
-*/
 
 impl Chunk {
     /// Extract a chunk from a circuit.
@@ -97,13 +88,14 @@ impl Chunk {
     /// Returns a map from the original input/output wires to the inserted [`IncomingPorts`]/[`OutgoingPorts`].
     //
     // TODO: The new chunk may have input ports directly connected to outputs. We have to take care of those.
+    #[allow(clippy::type_complexity)]
     pub(self) fn insert(
         &self,
         circ: &mut impl HugrMut,
         root: Node,
     ) -> (
-        HashMap<Wire, Vec<(Node, Port)>>,
-        HashMap<Wire, (Node, Port)>,
+        HashMap<ChunkConnection, Vec<(Node, Port)>>,
+        HashMap<ChunkConnection, (Node, Port)>,
     ) {
         let chunk_sg: SiblingGraph<'_, FuncID<true>> =
             SiblingGraph::try_new(&self.circ, self.circ.root()).unwrap();
@@ -118,15 +110,15 @@ impl Chunk {
         let mut input_map = HashMap::with_capacity(self.inputs.len());
         let mut output_map = HashMap::with_capacity(self.outputs.len());
 
-        for (&wire, incoming) in self.inputs.iter().zip(subgraph.incoming_ports().iter()) {
+        for (&connection, incoming) in self.inputs.iter().zip(subgraph.incoming_ports().iter()) {
             let incoming = incoming.iter().map(|&(node, port)| {
                 if node == out {
-                    // TODO: Add a map for directly connected Input Wire -> Output Wire.
+                    // TODO: Add a map for directly connected Input connection -> Output Wire.
                     panic!("Chunk input directly connected to the output. This is not currently supported.");
                 }
                 (*node_map.get(&node).unwrap(),port)
             }).collect_vec();
-            input_map.insert(wire, incoming);
+            input_map.insert(connection, incoming);
         }
 
         for (&wire, &(node, port)) in self.outputs.iter().zip(subgraph.outgoing_ports().iter()) {
@@ -150,13 +142,11 @@ pub struct CircuitChunks {
     /// The original circuit's root metadata.
     root_meta: NodeMetadata,
 
-    /// The original circuit's input node. Required to identify chunk edges that
-    /// where connected to the input.
-    circ_input: Node,
+    /// The original circuit's inputs.
+    input_connections: Vec<ChunkConnection>,
 
-    /// The original circuit's output node. Required to identify chunk edges
-    /// that where connected to the output.
-    circ_output: Node,
+    /// The original circuit's outputs.
+    output_connections: Vec<ChunkConnection>,
 
     /// The split circuits.
     pub chunks: Vec<Chunk>,
@@ -169,7 +159,17 @@ impl CircuitChunks {
     pub fn split(circ: &impl Circuit, max_size: usize) -> Self {
         let root_meta = circ.get_metadata(circ.root()).clone();
         let signature = circ.circuit_signature().clone();
+
         let [circ_input, circ_output] = circ.get_io(circ.root()).unwrap();
+        let input_connections = circ
+            .node_outputs(circ_input)
+            .map(|port| Wire::new(circ_input, port))
+            .collect();
+        let output_connections = circ
+            .node_inputs(circ_output)
+            .flat_map(|p| circ.linked_ports(circ_output, p))
+            .map(|(n, p)| Wire::new(n, p))
+            .collect();
 
         let mut chunks = Vec::new();
         let mut convex_checker = ConvexChecker::new(circ);
@@ -183,14 +183,14 @@ impl CircuitChunks {
         Self {
             signature,
             root_meta,
-            circ_input,
-            circ_output,
+            input_connections,
+            output_connections,
             chunks,
         }
     }
 
     /// Reassemble the chunks into a circuit.
-    pub fn reassemble(self) -> Result<Hugr, ()> {
+    pub fn reassemble(self) -> Result<Hugr, HugrError> {
         let name = self
             .root_meta
             .get("name")
@@ -208,10 +208,27 @@ impl CircuitChunks {
         let root = reassembled.root();
         let [reassembled_input, reassembled_output] = reassembled.get_io(root).unwrap();
 
-        // The chunks input and outputs are each identified with a wire in the original circuit.
-        // We collect both sides first, and rewire them after the chunks have been inserted.
-        let mut sources: HashMap<Wire, (Node, Port)> = HashMap::new();
-        let mut targets: HashMap<Wire, Vec<(Node, Port)>> = HashMap::new();
+        // The chunks input and outputs are each identified with a
+        // [`ChunkConnection`]. We collect both sides first, and rewire them
+        // after the chunks have been inserted.
+        let mut sources: HashMap<ChunkConnection, (Node, Port)> = HashMap::new();
+        let mut targets: HashMap<ChunkConnection, Vec<(Node, Port)>> = HashMap::new();
+
+        for (&connection, port) in self
+            .input_connections
+            .iter()
+            .zip(reassembled.node_outputs(reassembled_input))
+        {
+            reassembled.disconnect(reassembled_input, port)?;
+            sources.insert(connection, (reassembled_input, port));
+        }
+        for (&connection, port) in self
+            .output_connections
+            .iter()
+            .zip(reassembled.node_inputs(reassembled_output))
+        {
+            targets.insert(connection, vec![(reassembled_output, port)]);
+        }
 
         for chunk in self.chunks {
             // Insert the chunk circuit without its input/output nodes.
@@ -224,19 +241,14 @@ impl CircuitChunks {
         }
 
         // Reconnect the different chunks.
-        /* TODO
-        for (wire, source) in sources {
-            for (target, port) in targets.remove(&wire).unwrap() {
-                reassembled.link(source.0, source.1, target, port);
+        for (connection, (source, source_port)) in sources {
+            let Some(tgts) = targets.remove(&connection) else {
+                continue;
+            };
+            for (target, target_port) in tgts {
+                reassembled.connect(source, source_port, target, target_port)?;
             }
         }
-        */
-        let _ = (
-            reassembled_input,
-            reassembled_output,
-            self.circ_input,
-            self.circ_output,
-        );
 
         Ok(reassembled)
     }
@@ -266,9 +278,10 @@ mod test {
 
         crate::utils::test::viz_dotstr(&circ.dot_string());
         let chunks = CircuitChunks::split(&circ, 3);
-        let reassembled = chunks.reassemble().unwrap();
+        let mut reassembled = chunks.reassemble().unwrap();
         crate::utils::test::viz_dotstr(&reassembled.dot_string());
 
+        reassembled.infer_and_validate(&REGISTRY).unwrap();
         assert_eq!(circ.circuit_hash(), reassembled.circuit_hash());
     }
 }
