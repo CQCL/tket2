@@ -14,9 +14,11 @@ pub(crate) mod ops;
 pub mod optimiser;
 pub mod passes;
 pub mod rewrite;
-pub use ops::{symbolic_constant_op, Pauli, T2Op};
 
 #[cfg(feature = "portmatching")]
 pub mod portmatching;
 
 mod utils;
+
+pub use circuit::Circuit;
+pub use ops::{symbolic_constant_op, Pauli, T2Op};

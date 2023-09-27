@@ -6,6 +6,7 @@ use pyo3::prelude::*;
 use hugr::{Hugr, HugrView};
 use tket2::extension::REGISTRY;
 use tket2::json::TKETDecode;
+use tket2::passes::CircuitChunks;
 use tket_json_rs::circuit_json::SerialCircuit;
 
 /// Apply a fallible function expecting a hugr on a pytket circuit.
@@ -51,4 +52,39 @@ pub fn to_hugr_dot(c: Py<PyAny>) -> PyResult<String> {
 #[pyfunction]
 pub fn to_hugr(c: Py<PyAny>) -> PyResult<Hugr> {
     with_hugr(c, |hugr| hugr)
+}
+
+#[pyfunction]
+pub fn chunks(c: Py<PyAny>, max_chunk_size: usize) -> PyResult<CircuitChunks> {
+    with_hugr(c, |hugr| CircuitChunks::split(&hugr, max_chunk_size))
+}
+
+/// circuit module
+pub fn add_circuit_module(py: Python, parent: &PyModule) -> PyResult<()> {
+    let m = PyModule::new(py, "circuit")?;
+    m.add_class::<tket2::T2Op>()?;
+    m.add_class::<tket2::Pauli>()?;
+    m.add_class::<tket2::passes::CircuitChunks>()?;
+
+    m.add_function(wrap_pyfunction!(validate_hugr, m)?)?;
+    m.add_function(wrap_pyfunction!(to_hugr_dot, m)?)?;
+    m.add_function(wrap_pyfunction!(to_hugr, m)?)?;
+    m.add_function(wrap_pyfunction!(chunks, m)?)?;
+
+    m.add("HugrError", py.get_type::<hugr::hugr::PyHugrError>())?;
+    m.add("BuildError", py.get_type::<hugr::builder::PyBuildError>())?;
+    m.add(
+        "ValidationError",
+        py.get_type::<hugr::hugr::validate::PyValidationError>(),
+    )?;
+    m.add(
+        "HUGRSerializationError",
+        py.get_type::<hugr::hugr::serialize::PyHUGRSerializationError>(),
+    )?;
+    m.add(
+        "OpConvertError",
+        py.get_type::<tket2::json::PyOpConvertError>(),
+    )?;
+
+    parent.add_submodule(m)
 }
