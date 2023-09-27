@@ -1,6 +1,7 @@
 name: Run tests with TKET1 bindings
 
 on:
+  # Disabled due to https://github.com/CQCL-DEV/tket2/issues/111
   #push:
   #  branches:
   #    - main 
