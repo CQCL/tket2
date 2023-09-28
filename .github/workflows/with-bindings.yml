@@ -1,9 +1,10 @@
 name: Run tests with TKET1 bindings
 
 on:
-  push:
-    branches:
-      - main 
+  # Disabled due to https://github.com/CQCL-DEV/tket2/issues/111
+  #push:
+  #  branches:
+  #    - main 
   workflow_dispatch: {}
 
 env:
