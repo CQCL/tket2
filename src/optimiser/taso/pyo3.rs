@@ -46,14 +46,14 @@ impl PyDefaultTasoOptimiser {
         let circ_candidates_csv = fs::File::create("best_circs.csv").unwrap();
 
         let taso_logger = TasoLogger::new(circ_candidates_csv);
-        self.0.optimise_with_log(
+        let opt_circ = self.0.optimise_with_log(
             &circ,
             taso_logger,
             timeout,
             n_threads.unwrap_or(NonZeroUsize::new(1).unwrap()),
         );
         let ser_circ =
-            SerialCircuit::encode(&circ).map_err(|e| PyTypeError::new_err(e.to_string()))?;
+            SerialCircuit::encode(&opt_circ).map_err(|e| PyTypeError::new_err(e.to_string()))?;
         let tk1_circ = ser_circ
             .to_tket1()
             .map_err(|e| PyTypeError::new_err(e.to_string()))?;
