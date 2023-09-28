@@ -29,7 +29,7 @@ mod pyo3 {
     }
 }
 #[cfg(feature = "pyo3")]
-pub(crate) use pyo3::pyobj_as_hugr;
+pub(crate) use self::pyo3::pyobj_as_hugr;
 
 // utility for building simple qubit-only circuits.
 #[allow(unused)]

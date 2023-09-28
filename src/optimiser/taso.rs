@@ -15,8 +15,7 @@ mod eq_circ_class;
 mod hugr_pchannel;
 mod hugr_pqueue;
 pub mod log;
-#[cfg(feature = "pyo3")]
-#[cfg(feature = "portmatching")]
+#[cfg(all(feature = "pyo3", feature = "portmatching"))]
 pub mod pyo3;
 mod qtz_circuit;
 mod worker;
