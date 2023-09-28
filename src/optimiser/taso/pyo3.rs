@@ -37,7 +37,7 @@ impl PyDefaultTasoOptimiser {
     /// Returns an optimised circuit and log the progress to a CSV
     /// file called "best_circs.csv".
     pub fn optimise(
-        &mut self,
+        &self,
         circ: PyObject,
         timeout: Option<u64>,
         n_threads: Option<NonZeroUsize>,
