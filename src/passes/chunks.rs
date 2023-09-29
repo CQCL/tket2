@@ -1,8 +1,10 @@
 //! Utility
 
 use std::collections::HashMap;
+use std::mem;
+use std::ops::{Index, IndexMut};
 
-use hugr::builder::{Dataflow, DataflowHugr, FunctionBuilder};
+use hugr::builder::{Container, FunctionBuilder};
 use hugr::extension::ExtensionSet;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::views::sibling_subgraph::ConvexChecker;
@@ -13,7 +15,6 @@ use hugr::types::{FunctionType, Signature};
 use hugr::{Hugr, HugrView, Node, Port, Wire};
 use itertools::Itertools;
 
-use crate::extension::REGISTRY;
 use crate::Circuit;
 
 #[cfg(feature = "pyo3")]
@@ -38,9 +39,9 @@ pub struct Chunk {
     /// The extracted circuit.
     pub circ: Hugr,
     /// The original wires connected to the input.
-    pub inputs: Vec<ChunkConnection>,
+    inputs: Vec<ChunkConnection>,
     /// The original wires connected to the output.
-    pub outputs: Vec<ChunkConnection>,
+    outputs: Vec<ChunkConnection>,
 }
 
 impl Chunk {
@@ -170,6 +171,17 @@ impl CircuitChunks {
     ///
     /// The circuit is split into chunks of at most `max_size` gates.
     pub fn split(circ: &impl Circuit, max_size: usize) -> Self {
+        Self::split_with_cost(circ, max_size, |_, _| 1)
+    }
+
+    /// Split a circuit into chunks.
+    ///
+    /// The circuit is split into chunks of at most `max_cost`, using the provided cost function.
+    pub fn split_with_cost<C: Circuit>(
+        circ: &C,
+        max_cost: usize,
+        node_cost: impl Fn(&C, Node) -> usize,
+    ) -> Self {
         let root_meta = circ.get_metadata(circ.root()).clone();
         let signature = circ.circuit_signature().clone();
 
@@ -186,7 +198,12 @@ impl CircuitChunks {
 
         let mut chunks = Vec::new();
         let mut convex_checker = ConvexChecker::new(circ);
-        for commands in &circ.commands().map(|cmd| cmd.node()).chunks(max_size) {
+        let mut running_cost = 0;
+        for (_, commands) in &circ.commands().map(|cmd| cmd.node()).group_by(|&node| {
+            let group = running_cost / max_cost;
+            running_cost += node_cost(circ, node);
+            group
+        }) {
             chunks.push(Chunk::extract(circ, commands, &mut convex_checker));
         }
         Self {
@@ -211,10 +228,10 @@ impl CircuitChunks {
             input_extensions: ExtensionSet::new(),
         };
 
-        let builder = FunctionBuilder::new(name, signature).unwrap();
-        let inputs = builder.input_wires();
-        // TODO: Use the correct REGISTRY if the method accepts custom input resources.
-        let mut reassembled = builder.finish_hugr_with_outputs(inputs, &REGISTRY).unwrap();
+        let mut builder = FunctionBuilder::new(name, signature).unwrap();
+        // Take the unfinished Hugr from the builder, to avoid unnecessary
+        // validation checks that require connecting the inputs an outputs.
+        let mut reassembled = mem::take(builder.hugr_mut());
         let root = reassembled.root();
         let [reassembled_input, reassembled_output] = reassembled.get_io(root).unwrap();
 
@@ -229,7 +246,6 @@ impl CircuitChunks {
             .iter()
             .zip(reassembled.node_outputs(reassembled_input))
         {
-            reassembled.disconnect(reassembled_input, port)?;
             sources.insert(connection, (reassembled_input, port));
         }
         for (&connection, port) in self
@@ -267,8 +283,23 @@ impl CircuitChunks {
     }
 
     /// Returns a list of references to the split circuits.
-    pub fn circuits(&self) -> impl Iterator<Item = &Hugr> {
+    pub fn iter(&self) -> impl Iterator<Item = &Hugr> {
         self.chunks.iter().map(|chunk| &chunk.circ)
+    }
+
+    /// Returns a list of references to the split circuits.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Hugr> {
+        self.chunks.iter_mut().map(|chunk| &mut chunk.circ)
+    }
+
+    /// Returns the number of chunks.
+    pub fn len(&self) -> usize {
+        self.chunks.len()
+    }
+
+    /// Returns `true` if there are no chunks.
+    pub fn is_empty(&self) -> bool {
+        self.chunks.is_empty()
     }
 }
 
@@ -285,7 +316,7 @@ impl CircuitChunks {
     /// Returns clones of the split circuits.
     #[pyo3(name = "circuits")]
     fn py_circuits(&self) -> PyResult<Vec<Py<PyAny>>> {
-        self.circuits()
+        self.iter()
             .map(|hugr| SerialCircuit::encode(hugr)?.to_tket1())
             .collect()
     }
@@ -304,9 +335,24 @@ impl CircuitChunks {
     }
 }
 
+impl Index<usize> for CircuitChunks {
+    type Output = Hugr;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.chunks[index].circ
+    }
+}
+
+impl IndexMut<usize> for CircuitChunks {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.chunks[index].circ
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::circuit::CircuitHash;
+    use crate::extension::REGISTRY;
     use crate::utils::build_simple_circuit;
     use crate::T2Op;
 

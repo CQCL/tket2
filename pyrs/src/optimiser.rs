@@ -61,6 +61,7 @@ impl PyDefaultTasoOptimiser {
                 taso_logger,
                 timeout,
                 n_threads.unwrap_or(NonZeroUsize::new(1).unwrap()),
+                false,
             )
         })
     }

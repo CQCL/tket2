@@ -20,10 +20,12 @@ mod worker;
 
 use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
+use hugr::hugr::HugrError;
 pub use log::TasoLogger;
 
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
+use std::{mem, thread};
 
 use fxhash::FxHashSet;
 use hugr::Hugr;
@@ -32,6 +34,7 @@ use crate::circuit::CircuitHash;
 use crate::optimiser::taso::hugr_pchannel::HugrPriorityChannel;
 use crate::optimiser::taso::hugr_pqueue::{Entry, HugrPQ};
 use crate::optimiser::taso::worker::TasoWorker;
+use crate::passes::CircuitChunks;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
 
@@ -78,8 +81,14 @@ where
     /// Run the TASO optimiser on a circuit.
     ///
     /// A timeout (in seconds) can be provided.
-    pub fn optimise(&self, circ: &Hugr, timeout: Option<u64>, n_threads: NonZeroUsize) -> Hugr {
-        self.optimise_with_log(circ, Default::default(), timeout, n_threads)
+    pub fn optimise(
+        &self,
+        circ: &Hugr,
+        timeout: Option<u64>,
+        n_threads: NonZeroUsize,
+        split_circuit: bool,
+    ) -> Hugr {
+        self.optimise_with_log(circ, Default::default(), timeout, n_threads, split_circuit)
     }
 
     /// Run the TASO optimiser on a circuit with logging activated.
@@ -91,7 +100,13 @@ where
         log_config: TasoLogger,
         timeout: Option<u64>,
         n_threads: NonZeroUsize,
+        split_circuit: bool,
     ) -> Hugr {
+        if split_circuit && n_threads.get() > 1 {
+            return self
+                .split_run(circ, log_config, timeout, n_threads)
+                .unwrap();
+        }
         match n_threads.get() {
             1 => self.taso(circ, log_config, timeout),
             _ => self.taso_multithreaded(circ, log_config, timeout, n_threads),
@@ -285,20 +300,78 @@ where
 
         best_circ
     }
+
+    /// Split the circuit into chunks and process each in a separate thread.
+    #[tracing::instrument(target = "taso::metrics", skip(self, circ, logger))]
+    fn split_run(
+        &self,
+        circ: &Hugr,
+        mut logger: TasoLogger,
+        timeout: Option<u64>,
+        n_threads: NonZeroUsize,
+    ) -> Result<Hugr, HugrError> {
+        // TODO: Add a parameter to set other split cost functions?
+        // (In contrast to `self.cost`, this is a counts the per-node cost)
+        let circ_cx_cost = cost_functions::num_cx_gates(circ);
+        let max_cx_cost = (circ_cx_cost.saturating_sub(1)) / n_threads.get() + 1;
+        logger.log(format!(
+            "Splitting circuit with cost {circ_cx_cost} into chunks of at most {max_cx_cost} CX gates"
+        ));
+        let mut chunks = CircuitChunks::split_with_cost(circ, max_cx_cost, cost_functions::cx_cost);
+
+        let circ_cost = (self.cost)(circ);
+        logger.log_best(circ_cost);
+
+        let (joins, rx_work): (Vec<_>, Vec<_>) = chunks
+            .iter_mut()
+            .enumerate()
+            .map(|(i, chunk)| {
+                let (tx, rx) = crossbeam_channel::unbounded();
+                let taso = self.clone();
+                let chunk = mem::take(chunk);
+                let chunk_cx_cost = cost_functions::num_cx_gates(&chunk);
+                logger.log(format!("Chunk {i} has {chunk_cx_cost} CX gates",));
+                let join = thread::Builder::new()
+                    .name(format!("chunk-{}", i))
+                    .spawn(move || {
+                        let res =
+                            taso.optimise(&chunk, timeout, NonZeroUsize::new(1).unwrap(), false);
+                        tx.send(res).unwrap();
+                    })
+                    .unwrap();
+                (join, rx)
+            })
+            .unzip();
+
+        for i in 0..chunks.len() {
+            let res = rx_work[i]
+                .recv()
+                .unwrap_or_else(|_| panic!("Worker thread panicked"));
+            chunks[i] = res;
+        }
+
+        let best_circ = chunks.reassemble()?;
+        let best_circ_cost = (self.cost)(&best_circ);
+        if best_circ_cost < circ_cost {
+            logger.log_best(best_circ_cost);
+        }
+
+        logger.log_processing_end(n_threads.get(), best_circ_cost, true, false);
+        joins.into_iter().for_each(|j| j.join().unwrap());
+
+        Ok(best_circ)
+    }
 }
 
 #[cfg(feature = "portmatching")]
 mod taso_default {
     use hugr::ops::OpType;
-    use hugr::HugrView;
     use std::io;
     use std::path::Path;
 
-    use crate::ops::op_matches;
     use crate::rewrite::ecc_rewriter::RewriterSerialisationError;
     use crate::rewrite::strategy::ExhaustiveRewriteStrategy;
     use crate::rewrite::ECCRewriter;
-    use crate::T2Op;
 
     use super::*;
 
@@ -314,7 +387,11 @@ mod taso_default {
         pub fn default_with_eccs_json_file(eccs_path: impl AsRef<Path>) -> io::Result<Self> {
             let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
             let strategy = ExhaustiveRewriteStrategy::exhaustive_cx();
-            Ok(TasoOptimiser::new(rewriter, strategy, num_cx_gates))
+            Ok(TasoOptimiser::new(
+                rewriter,
+                strategy,
+                cost_functions::num_cx_gates,
+            ))
         }
 
         /// A sane default optimiser using a precompiled binary rewriter.
@@ -323,15 +400,28 @@ mod taso_default {
         ) -> Result<Self, RewriterSerialisationError> {
             let rewriter = ECCRewriter::load_binary(rewriter_path)?;
             let strategy = ExhaustiveRewriteStrategy::exhaustive_cx();
-            Ok(TasoOptimiser::new(rewriter, strategy, num_cx_gates))
+            Ok(TasoOptimiser::new(
+                rewriter,
+                strategy,
+                cost_functions::num_cx_gates,
+            ))
         }
-    }
-
-    fn num_cx_gates(circ: &Hugr) -> usize {
-        circ.nodes()
-            .filter(|&n| op_matches(circ.get_optype(n), T2Op::CX))
-            .count()
     }
 }
 #[cfg(feature = "portmatching")]
 pub use taso_default::DefaultTasoOptimiser;
+
+mod cost_functions {
+    use super::*;
+    use crate::ops::op_matches;
+    use crate::T2Op;
+    use hugr::{HugrView, Node};
+
+    pub fn num_cx_gates(circ: &Hugr) -> usize {
+        circ.nodes().map(|n| cx_cost(circ, n)).sum()
+    }
+
+    pub fn cx_cost(circ: &Hugr, node: Node) -> usize {
+        op_matches(circ.get_optype(node), T2Op::CX) as usize
+    }
+}
