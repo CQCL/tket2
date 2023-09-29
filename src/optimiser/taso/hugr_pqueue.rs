@@ -81,7 +81,8 @@ impl<P: Ord, C> HugrPQ<P, C> {
     /// Only keep up to `max_size` elements.
     pub(super) fn truncate(&mut self, max_size: usize) {
         while self.queue.len() > max_size {
-            self.queue.pop_max();
+            let (hash, _) = self.queue.pop_max().unwrap();
+            self.hash_lookup.remove(&hash);
         }
     }
 
