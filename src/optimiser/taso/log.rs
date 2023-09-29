@@ -80,13 +80,13 @@ impl<'w> TasoLogger<'w> {
         }
     }
 
-    /// Internal function to log general events, normally printed to stdout.
+    /// Log general events, normally printed to stdout.
     #[inline]
     pub fn log(&self, msg: impl AsRef<str>) {
         tracing::info!(target: LOG_TARGET, "{}", msg.as_ref());
     }
 
-    /// Internal function to log information on the progress of the optimization.
+    /// Log verbose information on the progress of the optimization.
     #[inline]
     pub fn progress(&self, msg: impl AsRef<str>) {
         tracing::info!(target: PROGRESS_TARGET, "{}", msg.as_ref());
