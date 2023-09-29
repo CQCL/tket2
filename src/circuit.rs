@@ -128,52 +128,53 @@ pub trait Circuit: HugrView {
     }
 }
 
-/// A circuit object that can be mutated.
-pub trait CircuitMut: Circuit + HugrMut {
-    /// Remove an empty wire from the circuit.
-    ///
-    /// The wire to be removed is identified by the index of the outgoing port
-    /// at the circuit input node.
-    ///
-    /// This will change the circuit signature and will shift all ports after
-    /// the removed wire by -1. If the wire is connected to the output node,
-    /// this will also change the signature output and shift the ports after
-    /// the removed wire by -1.
-    ///
-    /// This will return an error if the wire is not empty or if a HugrError
-    /// occurs.
-    fn remove_empty_wire(&mut self, input_port: usize) -> Result<(), CircuitMutError> {
-        let inp = self.input();
-        if input_port >= self.num_outputs(inp) {
-            return Err(CircuitMutError::InvalidPortOffset(input_port));
-        }
-        let input_port = Port::new_outgoing(input_port);
-        let link = self
-            .linked_ports(inp, input_port)
-            .at_most_one()
-            .map_err(|_| CircuitMutError::DeleteNonEmptyWire(input_port.index()))?;
-        if link.is_some() && link.unwrap().0 != self.output() {
-            return Err(CircuitMutError::DeleteNonEmptyWire(input_port.index()));
-        }
-        if link.is_some() {
-            self.disconnect(inp, input_port)?;
-        }
-
-        // Shift ports at input
-        shift_ports(self, inp, input_port, self.num_outputs(inp))?;
-        // Shift ports at output
-        if let Some((out, output_port)) = link {
-            shift_ports(self, out, output_port, self.num_inputs(out))?;
-        }
-        // Update input node, output node (if necessary) and root signatures.
-        update_signature(self, input_port.index(), link.map(|(_, p)| p.index()));
-        // Resize ports at input/output node
-        self.set_num_ports(inp, 0, self.num_outputs(inp) - 1);
-        if let Some((out, _)) = link {
-            self.set_num_ports(out, self.num_inputs(out) - 1, 0);
-        }
-        Ok(())
+/// Remove an empty wire in a dataflow HUGR.
+///
+/// The wire to be removed is identified by the index of the outgoing port
+/// at the circuit input node.
+///
+/// This will change the circuit signature and will shift all ports after
+/// the removed wire by -1. If the wire is connected to the output node,
+/// this will also change the signature output and shift the ports after
+/// the removed wire by -1.
+///
+/// This will return an error if the wire is not empty or if a HugrError
+/// occurs.
+#[allow(dead_code)]
+pub(crate) fn remove_empty_wire(
+    circ: &mut impl HugrMut,
+    input_port: usize,
+) -> Result<(), CircuitMutError> {
+    let [inp, out] = circ.get_io(circ.root()).expect("no IO nodes found at root");
+    if input_port >= circ.num_outputs(inp) {
+        return Err(CircuitMutError::InvalidPortOffset(input_port));
     }
+    let input_port = Port::new_outgoing(input_port);
+    let link = circ
+        .linked_ports(inp, input_port)
+        .at_most_one()
+        .map_err(|_| CircuitMutError::DeleteNonEmptyWire(input_port.index()))?;
+    if link.is_some() && link.unwrap().0 != out {
+        return Err(CircuitMutError::DeleteNonEmptyWire(input_port.index()));
+    }
+    if link.is_some() {
+        circ.disconnect(inp, input_port)?;
+    }
+
+    // Shift ports at input
+    shift_ports(circ, inp, input_port, circ.num_outputs(inp))?;
+    // Shift ports at output
+    if let Some((out, output_port)) = link {
+        shift_ports(circ, out, output_port, circ.num_inputs(out))?;
+    }
+    // Update input node, output node (if necessary) and root signatures.
+    update_signature(circ, input_port.index(), link.map(|(_, p)| p.index()));
+    // Resize ports at input/output node
+    circ.set_num_ports(inp, 0, circ.num_outputs(inp) - 1);
+    if let Some((out, _)) = link {
+        circ.set_num_ports(out, circ.num_inputs(out) - 1, 0);
+    }
+    Ok(())
 }
 
 /// Errors that can occur when mutating a circuit.
@@ -270,7 +271,6 @@ fn update_signature<C: HugrMut + Circuit + ?Sized>(
 }
 
 impl<T> Circuit for T where T: HugrView {}
-impl<T> CircuitMut for T where T: Circuit + HugrMut {}
 
 #[cfg(test)]
 mod tests {
@@ -324,10 +324,10 @@ mod tests {
         .unwrap();
 
         assert_eq!(circ.qubit_count(), 2);
-        assert!(circ.remove_empty_wire(1).is_ok());
+        assert!(remove_empty_wire(&mut circ, 1).is_ok());
         assert_eq!(circ.qubit_count(), 1);
         assert_eq!(
-            circ.remove_empty_wire(0).unwrap_err(),
+            remove_empty_wire(&mut circ, 0).unwrap_err(),
             CircuitMutError::DeleteNonEmptyWire(0)
         );
     }
@@ -338,10 +338,10 @@ mod tests {
         let mut circ = h.finish_hugr_with_outputs([], &PRELUDE_REGISTRY).unwrap();
 
         assert_eq!(circ.units().count(), 1);
-        assert!(circ.remove_empty_wire(0).is_ok());
+        assert!(remove_empty_wire(&mut circ, 0).is_ok());
         assert_eq!(circ.units().count(), 0);
         assert_eq!(
-            circ.remove_empty_wire(2).unwrap_err(),
+            remove_empty_wire(&mut circ, 2).unwrap_err(),
             CircuitMutError::InvalidPortOffset(2)
         );
     }
