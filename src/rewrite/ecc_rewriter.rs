@@ -129,7 +129,8 @@ impl ECCRewriter {
     ) -> Result<PathBuf, RewriterSerialisationError> {
         let mut file_name = PathBuf::from(name.as_ref());
         file_name.set_extension("rwr");
-        let mut file = File::create(&file_name)?;
+        let file = File::create(&file_name)?;
+        let mut file = io::BufWriter::new(file);
         self.save_binary_io(&mut file)?;
         Ok(file_name)
     }
