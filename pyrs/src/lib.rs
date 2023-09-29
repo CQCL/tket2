@@ -1,11 +1,13 @@
 //! Python bindings for TKET2.
 #![warn(missing_docs)]
 use circuit::{add_circuit_module, try_with_hugr};
+use optimiser::add_optimiser_module;
 use pyo3::prelude::*;
-use tket2::{json::TKETDecode, optimiser::taso, passes::apply_greedy_commutation};
+use tket2::{json::TKETDecode, passes::apply_greedy_commutation};
 use tket_json_rs::circuit_json::SerialCircuit;
 
 mod circuit;
+mod optimiser;
 
 #[pyfunction]
 fn greedy_depth_reduce(py_c: PyObject) -> PyResult<(PyObject, u32)> {
@@ -54,12 +56,4 @@ fn add_pass_module(py: Python, parent: &PyModule) -> PyResult<()> {
     )?;
     parent.add_submodule(m)?;
     Ok(())
-}
-
-/// circuit optimisation module
-fn add_optimiser_module(py: Python, parent: &PyModule) -> PyResult<()> {
-    let m = PyModule::new(py, "optimiser")?;
-    m.add_class::<taso::pyo3::PyDefaultTasoOptimiser>()?;
-
-    parent.add_submodule(m)
 }

@@ -6,4 +6,4 @@ pub mod taso;
 
 #[cfg(feature = "portmatching")]
 pub use taso::DefaultTasoOptimiser;
-pub use taso::TasoOptimiser;
+pub use taso::{TasoLogger, TasoOptimiser};

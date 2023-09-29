@@ -16,13 +16,12 @@ mod hugr_hash_set;
 mod hugr_pchannel;
 mod hugr_pqueue;
 pub mod log;
-#[cfg(all(feature = "pyo3", feature = "portmatching"))]
-pub mod pyo3;
 mod qtz_circuit;
 mod worker;
 
 use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
+pub use log::TasoLogger;
 
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
@@ -36,8 +35,6 @@ use crate::optimiser::taso::hugr_pqueue::{Entry, HugrPQ};
 use crate::optimiser::taso::worker::TasoWorker;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
-
-use self::log::TasoLogger;
 
 /// The TASO optimiser.
 ///
