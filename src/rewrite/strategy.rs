@@ -42,6 +42,7 @@ pub trait RewriteStrategy {
 /// with as many rewrites applied as possible.
 ///
 /// Rewrites are only applied if they strictly decrease gate count.
+#[derive(Debug, Copy, Clone)]
 pub struct GreedyRewriteStrategy;
 
 impl RewriteStrategy for GreedyRewriteStrategy {
@@ -154,6 +155,99 @@ impl<P: Fn(&OpType) -> bool> RewriteStrategy for ExhaustiveRewriteStrategy<P> {
                 circ
             })
             .collect()
+    }
+}
+
+/// A rewrite strategy that explores applying each rewrite that reduces the size
+/// of the circuit to copies of the circuit.
+///
+/// Tries to apply as many rewrites as possible at each step, using a greedy
+/// strategy.
+///
+/// The cost function is given by the number of operations in the circuit that
+/// satisfy a given Op predicate. This allows for instance to use the total
+/// number of gates (true predicate) or the number of CX gates as cost function.
+#[derive(Debug, Clone)]
+pub struct ExhaustiveGreedyRewriteStrategy<P> {
+    /// The gamma parameter.
+    pub gamma: f64,
+    /// Ops to count for cost function.
+    pub op_predicate: P,
+}
+
+impl<P> ExhaustiveGreedyRewriteStrategy<P> {
+    /// New greedy exhaustive rewrite strategy with provided predicate.
+    ///
+    /// The gamma parameter is set to the default 1.0001.
+    pub fn with_predicate(op_predicate: P) -> Self {
+        Self {
+            gamma: 1.0001,
+            op_predicate,
+        }
+    }
+
+    /// New greedy exhaustive rewrite strategy with provided gamma and predicate.
+    pub fn new(gamma: f64, op_predicate: P) -> Self {
+        Self {
+            gamma,
+            op_predicate,
+        }
+    }
+}
+
+impl ExhaustiveGreedyRewriteStrategy<fn(&OpType) -> bool> {
+    /// Exhaustive rewrite strategy with CX count cost function.
+    ///
+    /// The gamma parameter is set to the default 1.0001. This is a good default
+    /// choice for NISQ-y circuits, where CX gates are the most expensive.
+    pub fn greedy_exhaustive_cx() -> Self {
+        Self::with_predicate(is_cx)
+    }
+}
+
+impl<P: Fn(&OpType) -> bool> RewriteStrategy for ExhaustiveGreedyRewriteStrategy<P> {
+    #[tracing::instrument(skip_all)]
+    fn apply_rewrites(
+        &self,
+        rewrites: impl IntoIterator<Item = CircuitRewrite>,
+        circ: &Hugr,
+    ) -> Vec<Hugr> {
+        // Check only the rewrites that reduce the size of the circuit.
+        let rewrites = rewrites
+            .into_iter()
+            .map(|rw| {
+                let old_count = pre_rewrite_cost(&rw, circ, &self.op_predicate) as f64;
+                let new_count = post_rewrite_cost(&rw, circ, &self.op_predicate) as f64;
+                (new_count - old_count, rw)
+            })
+            .sorted_by_key(|(delta, _)| *delta as isize)
+            .take_while(|(delta, _)| *delta < 0.001)
+            .map(|(_, rw)| rw)
+            .collect_vec();
+
+        let mut rewrite_sets = Vec::with_capacity(rewrites.len());
+        for i in 0..rewrites.len() {
+            let mut curr_circ = circ.clone();
+            let mut changed_nodes = HashSet::new();
+            for rewrite in &rewrites[i..] {
+                if !changed_nodes.is_empty()
+                    && rewrite
+                        .subcircuit()
+                        .nodes()
+                        .iter()
+                        .any(|n| changed_nodes.contains(n))
+                {
+                    continue;
+                }
+                changed_nodes.extend(rewrite.subcircuit().nodes().iter().copied());
+                rewrite
+                    .clone()
+                    .apply(&mut curr_circ)
+                    .expect("Could not perform rewrite in exhaustive greedy strategy");
+            }
+            rewrite_sets.push(curr_circ);
+        }
+        rewrite_sets
     }
 }
 

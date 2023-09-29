@@ -296,7 +296,7 @@ mod taso_default {
 
     use crate::ops::op_matches;
     use crate::rewrite::ecc_rewriter::RewriterSerialisationError;
-    use crate::rewrite::strategy::ExhaustiveRewriteStrategy;
+    use crate::rewrite::strategy::ExhaustiveGreedyRewriteStrategy;
     use crate::rewrite::ECCRewriter;
     use crate::T2Op;
 
@@ -305,7 +305,7 @@ mod taso_default {
     /// The default TASO optimiser using ECC sets.
     pub type DefaultTasoOptimiser = TasoOptimiser<
         ECCRewriter,
-        ExhaustiveRewriteStrategy<fn(&OpType) -> bool>,
+        ExhaustiveGreedyRewriteStrategy<fn(&OpType) -> bool>,
         fn(&Hugr) -> usize,
     >;
 
@@ -313,7 +313,7 @@ mod taso_default {
         /// A sane default optimiser using the given ECC sets.
         pub fn default_with_eccs_json_file(eccs_path: impl AsRef<Path>) -> io::Result<Self> {
             let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
-            let strategy = ExhaustiveRewriteStrategy::exhaustive_cx();
+            let strategy = ExhaustiveGreedyRewriteStrategy::greedy_exhaustive_cx();
             Ok(TasoOptimiser::new(rewriter, strategy, num_cx_gates))
         }
 
@@ -322,7 +322,7 @@ mod taso_default {
             rewriter_path: impl AsRef<Path>,
         ) -> Result<Self, RewriterSerialisationError> {
             let rewriter = ECCRewriter::load_binary(rewriter_path)?;
-            let strategy = ExhaustiveRewriteStrategy::exhaustive_cx();
+            let strategy = ExhaustiveGreedyRewriteStrategy::greedy_exhaustive_cx();
             Ok(TasoOptimiser::new(rewriter, strategy, num_cx_gates))
         }
     }
