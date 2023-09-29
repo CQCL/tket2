@@ -58,7 +58,7 @@ fn main() {
     } else {
         output_path.to_path_buf()
     };
-    let output_file = rewriter.save_binary(output_file.to_str().unwrap()).unwrap();
+    let output_file = rewriter.save_binary(output_file).unwrap();
     println!("Written rewriter to {:?}", output_file);
 
     // Print the file size of output_file in megabytes
