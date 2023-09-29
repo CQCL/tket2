@@ -108,9 +108,14 @@ impl HashState {
 fn hashable_op(op: &OpType) -> impl Hash {
     match op {
         OpType::LeafOp(LeafOp::CustomOp(op)) if !op.args().is_empty() => {
-            panic!("Parametric operation {} cannot be hashed.", op.name())
+            // TODO: Require hashing for TypeParams?
+            format!(
+                "{}[{}]",
+                op.name(),
+                serde_json::to_string(op.args()).unwrap()
+            )
         }
-        _ => op.name(),
+        _ => op.name().to_string(),
     }
 }
 

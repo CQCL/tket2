@@ -13,7 +13,7 @@ use crate::circuit::CircuitHash;
 pub(super) struct HugrPQ<P: Ord, C> {
     queue: DoublePriorityQueue<u64, P>,
     hash_lookup: FxHashMap<u64, Hugr>,
-    pub(super) cost_fn: C,
+    cost_fn: C,
 }
 
 pub(super) struct Entry<C, P, H> {
@@ -51,20 +51,20 @@ impl<P: Ord, C> HugrPQ<P, C> {
         C: Fn(&Hugr) -> P,
     {
         let hash = hugr.circuit_hash();
-        let cost = (self.cost_fn)(&hugr);
-        self.push_unchecked(hugr, hash, cost);
+        self.push_with_hash_unchecked(hugr, hash);
     }
 
-    /// Push a Hugr into the queue with a precomputed hash and cost.
+    /// Push a Hugr into the queue with a precomputed hash.
     ///
-    /// This is useful to avoid recomputing the hash and cost function in
-    /// [`HugrPQ::push`] when they are already known.
+    /// This is useful to avoid recomputing the hash in [`HugrPQ::push`] when
+    /// it is already known.
     ///
     /// This does not check that the hash is valid.
-    pub(super) fn push_unchecked(&mut self, hugr: Hugr, hash: u64, cost: P)
+    pub(super) fn push_with_hash_unchecked(&mut self, hugr: Hugr, hash: u64)
     where
         C: Fn(&Hugr) -> P,
     {
+        let cost = (self.cost_fn)(&hugr);
         self.queue.push(hash, cost);
         self.hash_lookup.insert(hash, hugr);
     }
@@ -83,11 +83,6 @@ impl<P: Ord, C> HugrPQ<P, C> {
         while self.queue.len() > max_size {
             self.queue.pop_max();
         }
-    }
-
-    /// The largest cost in the queue.
-    pub(super) fn max_cost(&self) -> Option<&P> {
-        self.queue.peek_max().map(|(_, cost)| cost)
     }
 
     delegate! {
