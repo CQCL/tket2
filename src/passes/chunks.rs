@@ -1,4 +1,6 @@
-//! Utility
+//! This module provides a utility to split a circuit into chunks, and reassemble them afterwards.
+//!
+//! See [`CircuitChunks`] for more information.
 
 use std::collections::HashMap;
 use std::mem;
@@ -146,7 +148,12 @@ struct ChunkInsertResult {
     pub outgoing_connections: HashMap<ChunkConnection, (Node, Port)>,
 }
 
-/// An utility for splitting a circuit into chunks, and reassembling them afterwards.
+/// An utility for splitting a circuit into chunks, and reassembling them
+/// afterwards.
+///
+/// Circuits can be split into [`CircuitChunks`] with [`CircuitChunks::split`]
+/// or [`CircuitChunks::split_with_cost`], and reassembled with
+/// [`CircuitChunks::reassemble`].
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "pyo3", pyclass)]
 pub struct CircuitChunks {
