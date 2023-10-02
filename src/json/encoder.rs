@@ -77,16 +77,12 @@ impl JsonEncoder {
         // Uses the names from the metadata if available, or initializes new sequentially-numbered registers.
         let mut bit_to_reg = HashMap::new();
         let mut qubit_to_reg = HashMap::new();
-        let get_register = |registers: &mut Vec<Register>, prefix: &str, index| match registers
-            .get(index)
-            .cloned()
-        {
-            Some(r) => r,
-            None => {
+        let get_register = |registers: &mut Vec<Register>, prefix: &str, index| {
+            registers.get(index).cloned().unwrap_or_else(|| {
                 let r = Register(prefix.to_string(), vec![index as i64]);
                 registers.push(r.clone());
                 r
-            }
+            })
         };
         for (unit, _, ty) in circ.units() {
             if ty == QB_T {
