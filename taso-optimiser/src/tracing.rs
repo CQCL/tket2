@@ -36,7 +36,7 @@ impl Tracer {
         let mut tracer = Self::default();
         tracing_subscriber::registry()
             .with(tracer.stdout_layer(show_threads))
-            .with(logfile.map(|f| tracer.logfile_layer(f)))
+            .with(logfile.map(|f| tracer.logfile_layer(f, show_threads)))
             .init();
         tracer
     }
@@ -60,7 +60,7 @@ impl Tracer {
             .with_filter(filter_fn(log_filter))
     }
 
-    fn logfile_layer<S>(&mut self, logfile: PathBuf) -> impl Layer<S>
+    fn logfile_layer<S>(&mut self, logfile: PathBuf, show_threads: bool) -> impl Layer<S>
     where
         S: Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
     {
@@ -68,6 +68,7 @@ impl Tracer {
         self.logfile = Some(guard);
         tracing_subscriber::fmt::layer()
             .with_ansi(false)
+            .with_thread_names(show_threads)
             .with_writer(non_blocking)
             .with_filter(filter_fn(verbose_filter))
     }
