@@ -10,11 +10,9 @@ use std::path::PathBuf;
 use std::process::exit;
 
 use clap::Parser;
-use hugr::Hugr;
-use tket2::json::{load_tk1_json_file, TKETDecode};
+use tket2::json::{load_tk1_json_file, save_tk1_json_file};
 use tket2::optimiser::taso::log::TasoLogger;
 use tket2::optimiser::TasoOptimiser;
-use tket_json_rs::circuit_json::SerialCircuit;
 
 #[cfg(feature = "peak_alloc")]
 use peak_alloc::PeakAlloc;
@@ -88,14 +86,6 @@ struct CmdLineArgs {
     split_circ: bool,
 }
 
-fn save_tk1_json_file(path: impl AsRef<Path>, circ: &Hugr) -> Result<(), std::io::Error> {
-    let file = File::create(path)?;
-    let writer = BufWriter::new(file);
-    let serial_circ = SerialCircuit::encode(circ).unwrap();
-    serde_json::to_writer_pretty(writer, &serial_circ)?;
-    Ok(())
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts = CmdLineArgs::parse();
 
@@ -140,7 +130,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         optimiser.optimise_with_log(&circ, taso_logger, opts.timeout, n_threads, opts.split_circ);
 
     println!("Saving result");
-    save_tk1_json_file(output_path, &opt_circ)?;
+    save_tk1_json_file(&opt_circ, output_path)?;
 
     #[cfg(feature = "peak_alloc")]
     println!("Peak memory usage: {} GB", PEAK_ALLOC.peak_usage_as_gb());
