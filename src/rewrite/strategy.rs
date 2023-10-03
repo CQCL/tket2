@@ -2,11 +2,15 @@
 //!
 //! This module contains the [`RewriteStrategy`] trait, which is currently
 //! implemented by
-//!  - [`GreedyRewriteStrategy`], which applies as many rewrites as possible
+//! - [`GreedyRewriteStrategy`], which applies as many rewrites as possible
 //!   on one circuit, and
-//! - [`ExhaustiveRewriteStrategy`], which clones the original circuit as many
-//!   times as there are possible rewrites and applies a different rewrite
-//!   to every circuit.
+//! - exhaustive strategies, which clone the original circuit and explore every
+//!   possible rewrite (with some pruning strategy):
+//!    - [`NonIncreasingGateCountStrategy`], which only considers rewrites that
+//!      do not increase some cost function (e.g. cx gate count, implemented as
+//!      [`NonIncreasingCXCountStrategy`]), and
+//!    - [`ExhaustiveGammaStrategy`], which ignores rewrites that increase the
+//!      cost function beyond a threshold given by a f64 parameter gamma.
 
 use std::{collections::HashSet, fmt::Debug, iter::Sum};
 
