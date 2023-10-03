@@ -22,7 +22,6 @@ use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 pub use log::TasoLogger;
 
-use std::fmt;
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
 
@@ -76,7 +75,7 @@ impl<R, S> TasoOptimiser<R, S>
 where
     R: Rewriter + Send + Clone + 'static,
     S: RewriteStrategy + Send + Sync + Clone + 'static,
-    S::Cost: fmt::Debug + serde::Serialize,
+    S::Cost: serde::Serialize,
 {
     /// Run the TASO optimiser on a circuit.
     ///

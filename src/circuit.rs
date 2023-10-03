@@ -1,6 +1,7 @@
 //! Quantum circuit representation and operations.
 
 pub mod command;
+pub mod cost;
 mod hash;
 pub mod units;
 
@@ -22,6 +23,7 @@ use itertools::Itertools;
 use portgraph::Direction;
 use thiserror::Error;
 
+use self::cost::CircuitCost;
 use self::units::{filter, FilteredUnits, Units};
 
 /// An object behaving like a quantum circuit.
@@ -125,6 +127,28 @@ pub trait Circuit: HugrView {
     {
         // Traverse the circuit in topological order.
         CommandIterator::new(self)
+    }
+
+    /// Compute the cost of the circuit based on a per-operation cost function.
+    #[inline]
+    fn circuit_cost<F, C>(&self, op_cost: F) -> C
+    where
+        Self: Sized,
+        C: CircuitCost,
+        F: Fn(&OpType) -> C,
+    {
+        self.commands().map(|cmd| op_cost(cmd.optype())).sum()
+    }
+
+    /// Compute the cost of a group of nodes in a circuit based on a
+    /// per-operation cost function.
+    #[inline]
+    fn nodes_cost<F, C>(&self, nodes: impl IntoIterator<Item = Node>, op_cost: F) -> C
+    where
+        C: CircuitCost,
+        F: Fn(&OpType) -> C,
+    {
+        nodes.into_iter().map(|n| op_cost(self.get_optype(n))).sum()
     }
 }
 
