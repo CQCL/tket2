@@ -338,7 +338,7 @@ mod tests {
         let test_file = "test_files/small_eccs.json";
         let rewriter = ECCRewriter::try_from_eccs_json_file(test_file).unwrap();
         assert_eq!(rewriter.rewrite_rules.len(), rewriter.matcher.n_patterns());
-        assert_eq!(rewriter.targets.len(), 5 * 4 + 4 * 3);
+        assert_eq!(rewriter.targets.len(), 5 * 4 + 5 * 3);
 
         // Assert that the rewrite rules are correct, i.e that the rewrite
         // rules in the slice (k..=k+t) is given by [[k+1, ..., k+t], [k], ..., [k]]
@@ -361,8 +361,8 @@ mod tests {
                 curr_repr = TargetID(i);
             }
         }
-        // There should be 4x ECCs of size 3 and 5x ECCs of size 4
-        let exp_n_eccs_of_len = [0, 4 * 2 + 5 * 3, 4, 5];
+        // There should be 5x ECCs of size 3 and 5x ECCs of size 4
+        let exp_n_eccs_of_len = [0, 5 * 2 + 5 * 3, 5, 5];
         assert_eq!(n_eccs_of_len, exp_n_eccs_of_len);
     }
 
