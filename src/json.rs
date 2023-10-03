@@ -7,6 +7,7 @@ pub mod op;
 #[cfg(test)]
 mod tests;
 
+use hugr::hugr::CircuitUnit;
 #[cfg(feature = "pyo3")]
 use pyo3::{create_exception, exceptions::PyException, PyErr};
 
@@ -14,7 +15,7 @@ use std::path::Path;
 use std::{fs, io};
 
 use hugr::ops::OpType;
-use hugr::std_extensions::arithmetic::float_types::ConstF64;
+use hugr::std_extensions::arithmetic::float_types::{ConstF64, FLOAT64_TYPE};
 use hugr::values::Value;
 use hugr::Hugr;
 
@@ -72,6 +73,15 @@ impl TKETDecode for SerialCircuit {
 
     fn encode(circ: &impl Circuit) -> Result<Self, Self::EncodeError> {
         let mut encoder = JsonEncoder::new(circ);
+        let f64_inputs = circ.units().filter_map(|(wire, _, t)| match (wire, t) {
+            (CircuitUnit::Wire(wire), t) if t == FLOAT64_TYPE => Some(wire),
+            (CircuitUnit::Linear(_), _) => None,
+            _ => unimplemented!("Non-float64 input wires not supported"),
+        });
+        for (i, wire) in f64_inputs.enumerate() {
+            let param = format!("f{i}");
+            encoder.add_parameter(wire, param);
+        }
         for com in circ.commands() {
             let optype = com.optype();
             encoder.add_command(com.clone(), optype)?;
