@@ -284,20 +284,25 @@ mod taso_default {
     use std::io;
     use std::path::Path;
 
+    use hugr::ops::OpType;
+
     use crate::rewrite::ecc_rewriter::RewriterSerialisationError;
-    use crate::rewrite::strategy::NonIncreasingCXCountStrategy;
+    use crate::rewrite::strategy::NonIncreasingGateCountStrategy;
     use crate::rewrite::ECCRewriter;
 
     use super::*;
 
     /// The default TASO optimiser using ECC sets.
-    pub type DefaultTasoOptimiser = TasoOptimiser<ECCRewriter, NonIncreasingCXCountStrategy>;
+    pub type DefaultTasoOptimiser = TasoOptimiser<
+        ECCRewriter,
+        NonIncreasingGateCountStrategy<fn(&OpType) -> usize, fn(&OpType) -> usize>,
+    >;
 
     impl DefaultTasoOptimiser {
         /// A sane default optimiser using the given ECC sets.
         pub fn default_with_eccs_json_file(eccs_path: impl AsRef<Path>) -> io::Result<Self> {
             let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
-            let strategy = NonIncreasingCXCountStrategy::default_cx();
+            let strategy = NonIncreasingGateCountStrategy::default_cx();
             Ok(TasoOptimiser::new(rewriter, strategy))
         }
 
@@ -306,7 +311,7 @@ mod taso_default {
             rewriter_path: impl AsRef<Path>,
         ) -> Result<Self, RewriterSerialisationError> {
             let rewriter = ECCRewriter::load_binary(rewriter_path)?;
-            let strategy = NonIncreasingCXCountStrategy::default_cx();
+            let strategy = NonIncreasingGateCountStrategy::default_cx();
             Ok(TasoOptimiser::new(rewriter, strategy))
         }
     }
