@@ -17,20 +17,25 @@ use hugr::hugr::PortIndex;
 use hugr::ops::OpTrait;
 use itertools::Itertools;
 use portmatching::PatternID;
-use std::path::Path;
-use std::{collections::HashSet, io};
+use std::{
+    collections::HashSet,
+    fs::File,
+    io,
+    path::{Path, PathBuf},
+};
+use thiserror::Error;
 
 use hugr::Hugr;
 
 use crate::{
-    circuit::{Circuit, CircuitMut},
+    circuit::{remove_empty_wire, Circuit},
     optimiser::taso::{load_eccs_json_file, EqCircClass},
     portmatching::{CircuitPattern, PatternMatcher},
 };
 
 use super::{CircuitRewrite, Rewriter};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, From, Into)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, From, Into, serde::Serialize, serde::Deserialize)]
 struct TargetID(usize);
 
 /// A rewriter based on circuit equivalence classes.
@@ -39,7 +44,7 @@ struct TargetID(usize);
 /// Valid rewrites turn a non-representative circuit into its representative,
 /// or a representative circuit into any of the equivalent non-representative
 /// circuits.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ECCRewriter {
     /// Matcher for finding patterns.
     matcher: PatternMatcher,
@@ -112,6 +117,54 @@ impl ECCRewriter {
             .iter()
             .map(|id| &self.targets[id.0])
     }
+
+    /// Serialise a rewriter to an IO stream.
+    ///
+    /// Precomputed rewriters can be serialised as binary and then loaded
+    /// later using [`ECCRewriter::load_binary_io`].
+    pub fn save_binary_io<W: io::Write>(
+        &self,
+        writer: &mut W,
+    ) -> Result<(), RewriterSerialisationError> {
+        rmp_serde::encode::write(writer, &self)?;
+        Ok(())
+    }
+
+    /// Load a rewriter from an IO stream.
+    ///
+    /// Loads streams as created by [`ECCRewriter::save_binary_io`].
+    pub fn load_binary_io<R: io::Read>(reader: &mut R) -> Result<Self, RewriterSerialisationError> {
+        let matcher: Self = rmp_serde::decode::from_read(reader)?;
+        Ok(matcher)
+    }
+
+    /// Save a rewriter as a binary file.
+    ///
+    /// Precomputed rewriters can be saved as binary files and then loaded
+    /// later using [`ECCRewriter::load_binary`].
+    ///
+    /// The extension of the file name will always be set or amended to be
+    /// `.rwr`.
+    ///
+    /// If successful, returns the path to the newly created file.
+    pub fn save_binary(
+        &self,
+        name: impl AsRef<Path>,
+    ) -> Result<PathBuf, RewriterSerialisationError> {
+        let mut file_name = PathBuf::from(name.as_ref());
+        file_name.set_extension("rwr");
+        let file = File::create(&file_name)?;
+        let mut file = io::BufWriter::new(file);
+        self.save_binary_io(&mut file)?;
+        Ok(file_name)
+    }
+
+    /// Loads a rewriter saved using [`ECCRewriter::save_binary`].
+    pub fn load_binary(name: impl AsRef<Path>) -> Result<Self, RewriterSerialisationError> {
+        let file = File::open(name)?;
+        let mut reader = std::io::BufReader::new(file);
+        Self::load_binary_io(&mut reader)
+    }
 }
 
 impl Rewriter for ECCRewriter {
@@ -124,7 +177,7 @@ impl Rewriter for ECCRewriter {
                 self.get_targets(pattern_id).map(move |repl| {
                     let mut repl = repl.clone();
                     for &empty_qb in self.empty_wires[pattern_id.0].iter().rev() {
-                        repl.remove_empty_wire(empty_qb).unwrap();
+                        remove_empty_wire(&mut repl, empty_qb).unwrap();
                     }
                     m.to_rewrite(circ.base_hugr(), repl)
                         .expect("invalid replacement")
@@ -132,6 +185,20 @@ impl Rewriter for ECCRewriter {
             })
             .collect()
     }
+}
+
+/// Errors that can occur when (de)serialising an [`ECCRewriter`].
+#[derive(Debug, Error)]
+pub enum RewriterSerialisationError {
+    /// An IO error occured
+    #[error("IO error: {0}")]
+    Io(#[from] io::Error),
+    /// An error occured during deserialisation
+    #[error("Deserialisation error: {0}")]
+    Deserialisation(#[from] rmp_serde::decode::Error),
+    /// An error occured during serialisation
+    #[error("Serialisation error: {0}")]
+    Serialisation(#[from] rmp_serde::encode::Error),
 }
 
 fn into_targets(rep_sets: Vec<EqCircClass>) -> Vec<Hugr> {
@@ -169,7 +236,7 @@ fn get_patterns(rep_sets: &[EqCircClass]) -> Vec<Option<(CircuitPattern, Vec<usi
             let empty_qbs = empty_wires(circ);
             let mut circ = circ.clone();
             for &qb in empty_qbs.iter().rev() {
-                circ.remove_empty_wire(qb).unwrap();
+                remove_empty_wire(&mut circ, qb).unwrap();
             }
             CircuitPattern::try_from_circuit(&circ)
                 .ok()
