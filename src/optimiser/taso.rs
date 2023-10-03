@@ -27,7 +27,7 @@ use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
 
 use fxhash::FxHashSet;
-use hugr::{Hugr, HugrView};
+use hugr::Hugr;
 
 use crate::circuit::CircuitHash;
 use crate::optimiser::taso::hugr_pchannel::HugrPriorityChannel;
