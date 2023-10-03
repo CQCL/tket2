@@ -2,11 +2,12 @@ mod tracing;
 
 use crate::tracing::Tracer;
 
+use std::fs::File;
 use std::io::BufWriter;
 use std::num::NonZeroUsize;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::exit;
-use std::{fs, path::Path};
 
 use clap::Parser;
 use hugr::Hugr;
@@ -82,7 +83,7 @@ struct CmdLineArgs {
 }
 
 fn save_tk1_json_file(path: impl AsRef<Path>, circ: &Hugr) -> Result<(), std::io::Error> {
-    let file = fs::File::create(path)?;
+    let file = File::create(path)?;
     let writer = BufWriter::new(file);
     let serial_circ = SerialCircuit::encode(circ).unwrap();
     serde_json::to_writer_pretty(writer, &serial_circ)?;
@@ -102,7 +103,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ecc_path = Path::new(&opts.eccs);
 
     // TODO: Remove this from the Logger, and use tracing events instead.
-    let circ_candidates_csv = fs::File::create("best_circs.csv")?;
+    let circ_candidates_csv = BufWriter::new(File::create("best_circs.csv")?);
 
     let taso_logger = TasoLogger::new(circ_candidates_csv);
 

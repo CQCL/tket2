@@ -16,7 +16,10 @@ use crate::extension::LINEAR_BIT;
 use crate::ops::match_symb_const_op;
 
 use super::op::JsonOp;
-use super::{OpConvertError, METADATA_IMPLICIT_PERM, METADATA_PHASE};
+use super::{
+    OpConvertError, METADATA_B_REGISTERS, METADATA_IMPLICIT_PERM, METADATA_PHASE,
+    METADATA_Q_REGISTERS,
+};
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
 #[derive(Debug, PartialEq)]
@@ -30,9 +33,13 @@ pub(super) struct JsonEncoder {
     /// The current commands
     commands: Vec<circuit_json::Command>,
     /// The TKET1 qubit registers associated to each qubit unit of the circuit.
-    qubit_regs: HashMap<CircuitUnit, circuit_json::Register>,
+    qubit_to_reg: HashMap<CircuitUnit, Register>,
     /// The TKET1 bit registers associated to each linear bit unit of the circuit.
-    bit_regs: HashMap<CircuitUnit, circuit_json::Register>,
+    bit_to_reg: HashMap<CircuitUnit, Register>,
+    /// The ordered TKET1 names for the input qubit registers.
+    qubit_registers: Vec<Register>,
+    /// The ordered TKET1 names for the input bit registers.
+    bit_registers: Vec<Register>,
     /// A register of wires with constant values, used to recover TKET1
     /// parameters.
     parameters: HashMap<Wire, String>,
@@ -43,48 +50,63 @@ impl JsonEncoder {
     pub fn new(circ: &impl Circuit) -> Self {
         let name = circ.name().map(str::to_string);
 
-        // Compute the linear qubit and bit registers. Each one have independent
-        // indices starting from zero.
-        //
-        // TODO Throw an error on non-recognized unit types, or just ignore?
-        let mut bit_units = HashMap::new();
-        let mut qubit_units = HashMap::new();
+        let mut qubit_registers = vec![];
+        let mut bit_registers = vec![];
+        let mut phase = "0".to_string();
+        let mut implicit_permutation = vec![];
+
+        // Recover other parameters stored in the metadata
+        if let Some(meta) = circ.get_metadata(circ.root()).as_object() {
+            if let Some(p) = meta.get(METADATA_PHASE) {
+                // TODO: Check for invalid encoded metadata
+                phase = p.as_str().unwrap().to_string();
+            }
+            if let Some(perm) = meta.get(METADATA_IMPLICIT_PERM) {
+                // TODO: Check for invalid encoded metadata
+                implicit_permutation = serde_json::from_value(perm.clone()).unwrap();
+            }
+            if let Some(q_regs) = meta.get(METADATA_Q_REGISTERS) {
+                qubit_registers = serde_json::from_value(q_regs.clone()).unwrap();
+            }
+            if let Some(b_regs) = meta.get(METADATA_B_REGISTERS) {
+                bit_registers = serde_json::from_value(b_regs.clone()).unwrap();
+            }
+        }
+
+        // Map the Hugr units to tket1 register names.
+        // Uses the names from the metadata if available, or initializes new sequentially-numbered registers.
+        let mut bit_to_reg = HashMap::new();
+        let mut qubit_to_reg = HashMap::new();
+        let get_register = |registers: &mut Vec<Register>, prefix: &str, index| {
+            registers.get(index).cloned().unwrap_or_else(|| {
+                let r = Register(prefix.to_string(), vec![index as i64]);
+                registers.push(r.clone());
+                r
+            })
+        };
         for (unit, _, ty) in circ.units() {
             if ty == QB_T {
-                let index = vec![qubit_units.len() as i64];
-                let reg = circuit_json::Register("q".to_string(), index);
-                qubit_units.insert(unit, reg);
+                let index = qubit_to_reg.len();
+                let reg = get_register(&mut qubit_registers, "q", index);
+                qubit_to_reg.insert(unit, reg);
             } else if ty == *LINEAR_BIT {
-                let index = vec![bit_units.len() as i64];
-                let reg = circuit_json::Register("c".to_string(), index);
-                bit_units.insert(unit, reg);
+                let index = bit_to_reg.len();
+                let reg = get_register(&mut bit_registers, "b", index);
+                bit_to_reg.insert(unit, reg.clone());
             }
         }
 
-        let mut encoder = Self {
+        Self {
             name,
-            phase: "0".to_string(),
-            implicit_permutation: vec![],
+            phase,
+            implicit_permutation,
             commands: vec![],
-            qubit_regs: qubit_units,
-            bit_regs: bit_units,
+            qubit_to_reg,
+            bit_to_reg,
+            qubit_registers,
+            bit_registers,
             parameters: HashMap::new(),
-        };
-
-        // Encode other parameters stored in the metadata
-        if let Some(meta) = circ.get_metadata(circ.root()).as_object() {
-            if let Some(phase) = meta.get(METADATA_PHASE) {
-                // TODO: Check for invalid encoded metadata
-                encoder.phase = phase.as_str().unwrap().to_string();
-            }
-            if let Some(implicit_perm) = meta.get(METADATA_IMPLICIT_PERM) {
-                // TODO: Check for invalid encoded metadata
-                encoder.implicit_permutation =
-                    serde_json::from_value(implicit_perm.clone()).unwrap();
-            }
         }
-
-        encoder
     }
 
     /// Add a circuit command to the serialization.
@@ -139,8 +161,8 @@ impl JsonEncoder {
             name: self.name,
             phase: self.phase,
             commands: self.commands,
-            qubits: self.qubit_regs.into_values().collect_vec(),
-            bits: self.bit_regs.into_values().collect_vec(),
+            qubits: self.qubit_registers,
+            bits: self.bit_registers,
             implicit_permutation: self.implicit_permutation,
         }
     }
@@ -208,10 +230,11 @@ impl JsonEncoder {
         true
     }
 
-    fn unit_to_register(&self, unit: CircuitUnit) -> Option<circuit_json::Register> {
-        self.qubit_regs
+    /// Translate a linear [`CircuitUnit`] into a [`Register`], if possible.
+    fn unit_to_register(&self, unit: CircuitUnit) -> Option<Register> {
+        self.qubit_to_reg
             .get(&unit)
-            .or_else(|| self.bit_regs.get(&unit))
+            .or_else(|| self.bit_to_reg.get(&unit))
             .cloned()
     }
 }

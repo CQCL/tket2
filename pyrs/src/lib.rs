@@ -1,11 +1,13 @@
 //! Python bindings for TKET2.
 #![warn(missing_docs)]
 use circuit::{add_circuit_module, try_with_hugr};
+use optimiser::add_optimiser_module;
 use pyo3::prelude::*;
 use tket2::{json::TKETDecode, passes::apply_greedy_commutation};
 use tket_json_rs::circuit_json::SerialCircuit;
 
 mod circuit;
+mod optimiser;
 
 #[pyfunction]
 fn greedy_depth_reduce(py_c: PyObject) -> PyResult<(PyObject, u32)> {
@@ -22,6 +24,7 @@ fn pyrs(py: Python, m: &PyModule) -> PyResult<()> {
     add_circuit_module(py, m)?;
     add_pattern_module(py, m)?;
     add_pass_module(py, m)?;
+    add_optimiser_module(py, m)?;
     Ok(())
 }
 
