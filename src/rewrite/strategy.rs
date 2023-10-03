@@ -8,7 +8,7 @@
 //!   possible rewrite (with some pruning strategy):
 //!    - [`NonIncreasingGateCountStrategy`], which only considers rewrites that
 //!      do not increase some cost function (e.g. cx gate count, implemented as
-//!      [`NonIncreasingCXCountStrategy`]), and
+//!      [`NonIncreasingGateCountStrategy::default_cx`]), and
 //!    - [`ExhaustiveGammaStrategy`], which ignores rewrites that increase the
 //!      cost function beyond a threshold given by a f64 parameter gamma.
 
