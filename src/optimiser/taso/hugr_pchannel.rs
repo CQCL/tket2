@@ -135,7 +135,7 @@ where
                             // The senders have closed the channel, we can stop.
                             break;
                         };
-                        self.recv(new_circs);
+                        self.enqueue_circs(new_circs);
                     } else {
                         select! {
                             recv(self.push) -> result => {
@@ -143,7 +143,7 @@ where
                                     // The senders have closed the channel, we can stop.
                                     break;
                                 };
-                                self.recv(new_circs);
+                                self.enqueue_circs(new_circs);
                             }
                             send(self.pop, {let Entry {hash, circ, ..} = self.pq.pop().unwrap(); (hash, circ)}) -> result => {
                                 match result {
@@ -171,13 +171,12 @@ where
     }
 
     /// Add circuits to queue.
-    fn recv(&mut self, circs: Vec<(u64, Hugr)>) {
+    #[tracing::instrument(target = "taso::metrics", skip(self, circs))]
+    fn enqueue_circs(&mut self, circs: Vec<(u64, Hugr)>) {
         for (hash, circ) in circs {
             let cost = (self.pq.cost_fn)(&circ);
-            if (self.pq.len() > self.queue_capacity / 2 && cost > *self.pq.max_cost().unwrap())
-                || !self.seen_hashes.insert(hash)
-            {
-                // Ignore this circuit: it's either too big or we've seen it before.
+            if !self.seen_hashes.insert(hash) {
+                // Ignore this circuit: we've seen it before.
                 continue;
             }
 

@@ -87,6 +87,7 @@ impl<P: Ord, C> HugrPQ<P, C> {
     }
 
     /// The largest cost in the queue.
+    #[allow(unused)]
     pub(super) fn max_cost(&self) -> Option<&P> {
         self.queue.peek_max().map(|(_, cost)| cost)
     }
