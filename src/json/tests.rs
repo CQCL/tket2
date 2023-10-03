@@ -1,6 +1,6 @@
 //! General tests.
 
-use std::collections::HashSet;
+use std::io::BufReader;
 
 use hugr::Hugr;
 use rstest::rstest;
@@ -64,16 +64,26 @@ fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num
     compare_serial_circs(&ser, &reser);
 }
 
+#[rstest]
+#[case::barenco_tof_10("test_files/barenco_tof_10.json")]
+fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
+    let reader = BufReader::new(std::fs::File::open(circ).unwrap());
+    let ser: circuit_json::SerialCircuit = serde_json::from_reader(reader).unwrap();
+    let circ: Hugr = ser.clone().decode().unwrap();
+    let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
+    compare_serial_circs(&ser, &reser);
+}
+
 fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
     assert_eq!(a.name, b.name);
     assert_eq!(a.phase, b.phase);
 
-    let qubits_a: HashSet<_> = a.qubits.iter().collect();
-    let qubits_b: HashSet<_> = b.qubits.iter().collect();
+    let qubits_a: Vec<_> = a.qubits.iter().collect();
+    let qubits_b: Vec<_> = b.qubits.iter().collect();
     assert_eq!(qubits_a, qubits_b);
 
-    let bits_a: HashSet<_> = a.bits.iter().collect();
-    let bits_b: HashSet<_> = b.bits.iter().collect();
+    let bits_a: Vec<_> = a.bits.iter().collect();
+    let bits_b: Vec<_> = b.bits.iter().collect();
     assert_eq!(bits_a, bits_b);
 
     assert_eq!(a.implicit_permutation, b.implicit_permutation);

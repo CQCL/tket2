@@ -30,8 +30,14 @@ use self::encoder::JsonEncoder;
 
 /// Prefix used for storing metadata in the hugr nodes.
 pub const METADATA_PREFIX: &str = "TKET1_JSON";
+/// The global phase specified as metadata.
 const METADATA_PHASE: &str = "TKET1_JSON.phase";
+/// The implicit permutation of qubits.
 const METADATA_IMPLICIT_PERM: &str = "TKET1_JSON.implicit_permutation";
+/// Explicit names for the input qubit registers.
+const METADATA_Q_REGISTERS: &str = "TKET1_JSON.qubit_registers";
+/// Explicit names for the input bit registers.
+const METADATA_B_REGISTERS: &str = "TKET1_JSON.bit_registers";
 
 /// A JSON-serialized circuit that can be converted to a [`Hugr`].
 pub trait TKETDecode: Sized {

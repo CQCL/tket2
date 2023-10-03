@@ -263,6 +263,8 @@ impl CircuitChunks {
             }
         }
 
+        reassembled.set_metadata(root, self.root_meta)?;
+
         Ok(reassembled)
     }
 
