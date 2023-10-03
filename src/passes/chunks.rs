@@ -13,12 +13,14 @@ use hugr::hugr::views::sibling_subgraph::ConvexChecker;
 use hugr::hugr::views::{HierarchyView, SiblingGraph, SiblingSubgraph};
 use hugr::hugr::{HugrError, NodeMetadata};
 use hugr::ops::handle::DataflowParentID;
+use hugr::ops::OpType;
 use hugr::types::{FunctionType, Signature};
 use hugr::{Hugr, HugrView, Node, Port, Wire};
 use itertools::Itertools;
 
 use crate::Circuit;
 
+use crate::circuit::cost::CircuitCost;
 #[cfg(feature = "pyo3")]
 use crate::json::TKETDecode;
 #[cfg(feature = "pyo3")]
@@ -178,16 +180,16 @@ impl CircuitChunks {
     ///
     /// The circuit is split into chunks of at most `max_size` gates.
     pub fn split(circ: &impl Circuit, max_size: usize) -> Self {
-        Self::split_with_cost(circ, max_size, |_, _| 1)
+        Self::split_with_cost(circ, max_size, |_| 1)
     }
 
     /// Split a circuit into chunks.
     ///
     /// The circuit is split into chunks of at most `max_cost`, using the provided cost function.
-    pub fn split_with_cost<C: Circuit>(
-        circ: &C,
-        max_cost: usize,
-        node_cost: impl Fn(&C, Node) -> usize,
+    pub fn split_with_cost<H: Circuit, C: CircuitCost>(
+        circ: &H,
+        max_cost: C,
+        op_cost: impl Fn(&OpType) -> C,
     ) -> Self {
         let root_meta = circ.get_metadata(circ.root()).clone();
         let signature = circ.circuit_signature().clone();
@@ -205,11 +207,17 @@ impl CircuitChunks {
 
         let mut chunks = Vec::new();
         let mut convex_checker = ConvexChecker::new(circ);
-        let mut running_cost = 0;
+        let mut running_cost = C::default();
+        let mut current_group = 0;
         for (_, commands) in &circ.commands().map(|cmd| cmd.node()).group_by(|&node| {
-            let group = running_cost / max_cost;
-            running_cost += node_cost(circ, node);
-            group
+            let new_cost = running_cost.clone() + op_cost(circ.get_optype(node));
+            if new_cost.clone().check_threshold(max_cost.clone()) {
+                running_cost = C::default();
+                current_group += 1;
+            } else {
+                running_cost = new_cost;
+            }
+            current_group
         }) {
             chunks.push(Chunk::extract(circ, commands, &mut convex_checker));
         }
