@@ -8,12 +8,13 @@
 //!   times as there are possible rewrites and applies a different rewrite
 //!   to every circuit.
 
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt::Debug, iter::Sum};
 
+use derive_more::From;
 use hugr::{ops::OpType, Hugr, HugrView, Node};
 use itertools::Itertools;
 
-use crate::{ops::op_matches, T2Op};
+use crate::{ops::op_matches, Circuit, T2Op};
 
 use super::CircuitRewrite;
 
@@ -23,13 +24,22 @@ use super::CircuitRewrite;
 /// to a circuit according to a strategy. It returns a list of new circuits,
 /// each obtained by applying one or several non-overlapping rewrites to the
 /// original circuit.
+///
+/// It also assign every circuit a totally ordered cost that can be used when
+/// using rewrites for circuit optimisation.
 pub trait RewriteStrategy {
+    /// The circuit cost to be minised.
+    type Cost: Ord;
+
     /// Apply a set of rewrites to a circuit.
     fn apply_rewrites(
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
         circ: &Hugr,
     ) -> Vec<Hugr>;
+
+    /// The cost of a circuit.
+    fn circuit_cost(&self, circ: &Hugr) -> Self::Cost;
 }
 
 /// A rewrite strategy applying as many non-overlapping rewrites as possible.
@@ -45,6 +55,8 @@ pub trait RewriteStrategy {
 pub struct GreedyRewriteStrategy;
 
 impl RewriteStrategy for GreedyRewriteStrategy {
+    type Cost = usize;
+
     #[tracing::instrument(skip_all)]
     fn apply_rewrites(
         &self,
@@ -73,68 +85,168 @@ impl RewriteStrategy for GreedyRewriteStrategy {
         }
         vec![circ]
     }
+
+    fn circuit_cost(&self, circ: &Hugr) -> Self::Cost {
+        circ.num_gates()
+    }
 }
 
-/// A rewrite strategy that explores applying each rewrite to copies of the
-/// circuit.
+/// Exhaustive rewrite strategy allowing smaller or equal cost rewrites.
+///
+/// Rewrites are permitted based on a cost function called the major cost: if
+/// the major cost of the target of the rewrite is smaller or equal to the major
+/// cost of the pattern, the rewrite is allowed.
+///
+/// A second cost function, the minor cost, is used as a tie breaker: within
+/// circuits with the same major cost, the circuit ordering prioritises circuits
+/// with a smaller minor cost.
+///
+/// An example would be to use the number of CX gates as major cost and the
+/// total number of gates as minor cost. Compared to a [`ExhaustiveGammaStrategy`],
+/// that would only order circuits based on the number of CX gates, this creates
+/// a less flat optimisation landscape.
+#[derive(Debug, Clone)]
+pub struct NonIncreasingGateCountStrategy<C1, C2> {
+    major_cost: C1,
+    minor_cost: C2,
+}
+
+impl<C1, C2> ExhaustiveThresholdStrategy for NonIncreasingGateCountStrategy<C1, C2>
+where
+    C1: Fn(&OpType) -> usize,
+    C2: Fn(&OpType) -> usize,
+{
+    type OpCost = MajorMinorCost;
+    type SumOpCost = MajorMinorCost;
+
+    fn threshold(&self, pattern_cost: &Self::SumOpCost, target_cost: &Self::SumOpCost) -> bool {
+        target_cost.major <= pattern_cost.major
+    }
+
+    fn op_cost(&self, op: &OpType) -> Self::OpCost {
+        ((self.major_cost)(op), (self.minor_cost)(op)).into()
+    }
+}
+
+/// Non-increasing rewrite strategy based on CX count.
+///
+/// The minor cost to break ties between equal CX counts is the number of
+/// quantum gates.
+pub type NonIncreasingCXCountStrategy =
+    NonIncreasingGateCountStrategy<fn(&OpType) -> usize, fn(&OpType) -> usize>;
+
+impl NonIncreasingCXCountStrategy {
+    /// Create rewrite strategy based on non-increasing CX count.
+    pub fn default_cx() -> Self {
+        Self {
+            major_cost: |op| is_cx(op) as usize,
+            minor_cost: |op| is_quantum(op) as usize,
+        }
+    }
+}
+
+/// Exhaustive rewrite strategy allowing rewrites with bounded cost increase.
 ///
 /// The parameter gamma controls how greedy the algorithm should be. It allows
 /// a rewrite C1 -> C2 if C2 has at most gamma times the cost of C1:
 ///
 /// $cost(C2) < gamma * cost(C1)$
 ///
-/// The cost function is given by the number of operations in the circuit that
-/// satisfy a given Op predicate. This allows for instance to use the total
-/// number of gates (true predicate) or the number of CX gates as cost function.
+/// The cost function is given by the sum of the cost of each operation in the
+/// circuit. This allows for instance to use of the total number of gates (true
+/// predicate), the number of CX gates or a weighted sum of gate types as cost
+/// functions.
 ///
 /// gamma = 1 is the greedy strategy where a rewrite is only allowed if it
 /// strictly reduces the gate count. The default is gamma = 1.0001 (as set in
 /// the Quartz paper) and the number of CX gates. This essentially allows
 /// rewrites that improve or leave the number of CX unchanged.
 #[derive(Debug, Clone)]
-pub struct ExhaustiveRewriteStrategy<P> {
+pub struct ExhaustiveGammaStrategy<C> {
     /// The gamma parameter.
     pub gamma: f64,
-    /// Ops to count for cost function.
-    pub op_predicate: P,
+    /// A cost function for each operation.
+    pub op_cost: C,
 }
 
-impl<P> ExhaustiveRewriteStrategy<P> {
+impl<C: Fn(&OpType) -> usize> ExhaustiveThresholdStrategy for ExhaustiveGammaStrategy<C> {
+    type OpCost = usize;
+    type SumOpCost = usize;
+
+    fn threshold(&self, &pattern_cost: &Self::SumOpCost, &target_cost: &Self::SumOpCost) -> bool {
+        (target_cost as f64) < self.gamma * (pattern_cost as f64)
+    }
+
+    fn op_cost(&self, op: &OpType) -> Self::OpCost {
+        (self.op_cost)(op)
+    }
+}
+
+impl<C> ExhaustiveGammaStrategy<C> {
     /// New exhaustive rewrite strategy with provided predicate.
     ///
     /// The gamma parameter is set to the default 1.0001.
-    pub fn with_predicate(op_predicate: P) -> Self {
+    pub fn with_cost(op_cost: C) -> Self {
         Self {
             gamma: 1.0001,
-            op_predicate,
+            op_cost,
         }
     }
 
     /// New exhaustive rewrite strategy with provided gamma and predicate.
-    pub fn new(gamma: f64, op_predicate: P) -> Self {
-        Self {
-            gamma,
-            op_predicate,
-        }
+    pub fn new(gamma: f64, op_cost: C) -> Self {
+        Self { gamma, op_cost }
     }
 }
 
-impl ExhaustiveRewriteStrategy<fn(&OpType) -> bool> {
+impl ExhaustiveGammaStrategy<fn(&OpType) -> usize> {
     /// Exhaustive rewrite strategy with CX count cost function.
     ///
     /// The gamma parameter is set to the default 1.0001. This is a good default
     /// choice for NISQ-y circuits, where CX gates are the most expensive.
     pub fn exhaustive_cx() -> Self {
-        ExhaustiveRewriteStrategy::with_predicate(is_cx)
+        ExhaustiveGammaStrategy::with_cost(|op| is_cx(op) as usize)
     }
 
     /// Exhaustive rewrite strategy with CX count cost function and provided gamma.
     pub fn exhaustive_cx_with_gamma(gamma: f64) -> Self {
-        ExhaustiveRewriteStrategy::new(gamma, is_cx)
+        ExhaustiveGammaStrategy::new(gamma, |op| is_cx(op) as usize)
     }
 }
 
-impl<P: Fn(&OpType) -> bool> RewriteStrategy for ExhaustiveRewriteStrategy<P> {
+/// Exhaustive strategies based on cost functions and thresholds.
+///
+/// Every possible rewrite is applied to a copy of the input circuit. Thus for
+/// one circuit, up to `n` rewritten circuits will be returned, each obtained
+/// by applying one of the `n` rewrites to the original circuit.
+///
+/// Whether a rewrite is allowed or not is determined by a cost function and a
+/// threshold function: if the cost of the target of the rewrite is below the
+/// threshold given by the cost of the original circuit, the rewrite is
+/// performed.
+///
+/// The cost function must return a value of type `Self::OpCost`. All op costs
+/// are summed up to obtain a total cost that is then compared using the
+/// threshold function.
+pub trait ExhaustiveThresholdStrategy {
+    /// The cost of a single operation.
+    type OpCost;
+    /// The sum of the cost of all operations in a circuit.
+    type SumOpCost;
+
+    /// Whether the rewrite is allowed or not, based on the cost of the pattern and target.
+    fn threshold(&self, pattern_cost: &Self::SumOpCost, target_cost: &Self::SumOpCost) -> bool;
+
+    /// The cost of a single operation.
+    fn op_cost(&self, op: &OpType) -> Self::OpCost;
+}
+
+impl<T: ExhaustiveThresholdStrategy> RewriteStrategy for T
+where
+    T::SumOpCost: Sum<T::OpCost> + Ord,
+{
+    type Cost = T::SumOpCost;
+
     #[tracing::instrument(skip_all)]
     fn apply_rewrites(
         &self,
@@ -144,9 +256,9 @@ impl<P: Fn(&OpType) -> bool> RewriteStrategy for ExhaustiveRewriteStrategy<P> {
         rewrites
             .into_iter()
             .filter(|rw| {
-                let old_count = pre_rewrite_cost(rw, circ, &self.op_predicate) as f64;
-                let new_count = post_rewrite_cost(rw, circ, &self.op_predicate) as f64;
-                new_count < old_count * self.gamma
+                let pattern_cost = pre_rewrite_cost(rw, circ, |op| self.op_cost(op));
+                let target_cost = post_rewrite_cost(rw, circ, |op| self.op_cost(op));
+                self.threshold(&pattern_cost, &target_cost)
             })
             .map(|rw| {
                 let mut circ = circ.clone();
@@ -155,31 +267,85 @@ impl<P: Fn(&OpType) -> bool> RewriteStrategy for ExhaustiveRewriteStrategy<P> {
             })
             .collect()
     }
+
+    fn circuit_cost(&self, circ: &Hugr) -> Self::Cost {
+        cost(circ.nodes(), circ, |op| self.op_cost(op))
+    }
+}
+
+/// A pair of major and minor cost.
+///
+/// This is used to order circuits based on major cost first, then minor cost.
+/// A typical example would be CX count as major cost and total gate count as
+/// minor cost.
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, From)]
+pub struct MajorMinorCost {
+    major: usize,
+    minor: usize,
+}
+
+// Serialise as string so that it is easy to write to CSV
+impl serde::Serialize for MajorMinorCost {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&format!("{:?}", self))
+    }
+}
+
+impl Debug for MajorMinorCost {
+    // TODO: A nicer print for the logs
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(major={}, minor={})", self.major, self.minor)
+    }
+}
+
+impl Sum for MajorMinorCost {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.reduce(|a, b| (a.major + b.major, a.minor + b.minor).into())
+            .unwrap_or_default()
+    }
 }
 
 fn is_cx(op: &OpType) -> bool {
     op_matches(op, T2Op::CX)
 }
 
-fn cost(
-    nodes: impl IntoIterator<Item = Node>,
-    circ: &Hugr,
-    pred: impl Fn(&OpType) -> bool,
-) -> usize {
-    nodes
-        .into_iter()
-        .filter(|n| {
-            let op = circ.get_optype(*n);
-            pred(op)
-        })
-        .count()
+fn is_quantum(op: &OpType) -> bool {
+    let Ok(op): Result<T2Op, _> = op.try_into() else {
+        return false;
+    };
+    op.is_quantum()
 }
 
-fn pre_rewrite_cost(rw: &CircuitRewrite, circ: &Hugr, pred: impl Fn(&OpType) -> bool) -> usize {
+fn cost<C, T, S>(nodes: impl IntoIterator<Item = Node>, circ: &Hugr, op_cost: C) -> S
+where
+    C: Fn(&OpType) -> T,
+    S: Sum<T>,
+{
+    nodes
+        .into_iter()
+        .map(|n| {
+            let op = circ.get_optype(n);
+            op_cost(op)
+        })
+        .sum()
+}
+
+fn pre_rewrite_cost<C, T, S>(rw: &CircuitRewrite, circ: &Hugr, pred: C) -> S
+where
+    C: Fn(&OpType) -> T,
+    S: Sum<T>,
+{
     cost(rw.subcircuit().nodes().iter().copied(), circ, pred)
 }
 
-fn post_rewrite_cost(rw: &CircuitRewrite, circ: &Hugr, pred: impl Fn(&OpType) -> bool) -> usize {
+fn post_rewrite_cost<C, T, S>(rw: &CircuitRewrite, circ: &Hugr, pred: C) -> S
+where
+    C: Fn(&OpType) -> T,
+    S: Sum<T>,
+{
     cost(rw.replacement().nodes(), circ, pred)
 }
 
@@ -258,7 +424,7 @@ mod tests {
             rw_to_empty(&circ, cx_gates[9..10].to_vec()),
         ];
 
-        let strategy = ExhaustiveRewriteStrategy::exhaustive_cx();
+        let strategy = ExhaustiveGammaStrategy::exhaustive_cx();
         let rewritten = strategy.apply_rewrites(rws, &circ);
         let exp_circ_lens = HashSet::from_iter([8, 6, 9]);
         let circ_lens: HashSet<_> = rewritten.iter().map(|c| c.num_gates()).collect();
@@ -280,10 +446,34 @@ mod tests {
             rw_to_empty(&circ, cx_gates[9..10].to_vec()),
         ];
 
-        let strategy = ExhaustiveRewriteStrategy::exhaustive_cx_with_gamma(10.);
+        let strategy = ExhaustiveGammaStrategy::exhaustive_cx_with_gamma(10.);
         let rewritten = strategy.apply_rewrites(rws, &circ);
         let exp_circ_lens = HashSet::from_iter([8, 17, 6, 9]);
         let circ_lens: HashSet<_> = rewritten.iter().map(|c| c.num_gates()).collect();
         assert_eq!(circ_lens, exp_circ_lens);
+    }
+
+    #[test]
+    fn test_exhaustive_default_cx_cost() {
+        let strat = NonIncreasingCXCountStrategy::default_cx();
+        let circ = n_cx(3);
+        assert_eq!(strat.circuit_cost(&circ), (3, 3).into());
+        let circ = build_simple_circuit(2, |circ| {
+            circ.append(T2Op::CX, [0, 1])?;
+            circ.append(T2Op::X, [0])?;
+            circ.append(T2Op::X, [1])?;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(strat.circuit_cost(&circ), (1, 3).into());
+    }
+
+    #[test]
+    fn test_exhaustive_default_cx_threshold() {
+        let strat = NonIncreasingCXCountStrategy::default_cx();
+        assert!(strat.threshold(&(3, 0).into(), &(3, 0).into()));
+        assert!(strat.threshold(&(3, 0).into(), &(3, 5).into()));
+        assert!(!strat.threshold(&(3, 10).into(), &(4, 0).into()));
+        assert!(strat.threshold(&(3, 0).into(), &(1, 5).into()));
     }
 }
