@@ -1,6 +1,6 @@
 //! Logging utilities for the TASO optimiser.
 
-use std::io;
+use std::{fmt::Debug, io};
 
 /// Logging configuration for the TASO optimiser.
 #[derive(Default)]
@@ -35,8 +35,8 @@ impl<'w> TasoLogger<'w> {
 
     /// Log a new best candidate
     #[inline]
-    pub fn log_best(&mut self, best_cost: usize) {
-        self.log(format!("new best of size {}", best_cost));
+    pub fn log_best<C: Debug + serde::Serialize>(&mut self, best_cost: C) {
+        self.log(format!("new best of size {:?}", best_cost));
         if let Some(csv_writer) = self.circ_candidates_csv.as_mut() {
             csv_writer.serialize(BestCircSer::new(best_cost)).unwrap();
             csv_writer.flush().unwrap();
@@ -45,10 +45,10 @@ impl<'w> TasoLogger<'w> {
 
     /// Log the final optimised circuit
     #[inline]
-    pub fn log_processing_end(
+    pub fn log_processing_end<C: Debug>(
         &self,
         circuit_count: usize,
-        best_cost: usize,
+        best_cost: C,
         needs_joining: bool,
         timeout: bool,
     ) {
@@ -57,7 +57,7 @@ impl<'w> TasoLogger<'w> {
         }
         self.log("Optimisation finished");
         self.log(format!("Tried {circuit_count} circuits"));
-        self.log(format!("END RESULT: {}", best_cost));
+        self.log(format!("END RESULT: {:?}", best_cost));
         if needs_joining {
             self.log("Joining worker threads");
         }
@@ -98,14 +98,14 @@ impl<'w> TasoLogger<'w> {
 //
 // TODO: Replace this fixed logging. Report back intermediate results.
 #[derive(serde::Serialize, Clone, Debug)]
-struct BestCircSer {
-    circ_len: usize,
+struct BestCircSer<C> {
+    circ_cost: C,
     time: String,
 }
 
-impl BestCircSer {
-    fn new(circ_len: usize) -> Self {
+impl<C> BestCircSer<C> {
+    fn new(circ_cost: C) -> Self {
         let time = chrono::Local::now().to_rfc3339();
-        Self { circ_len, time }
+        Self { circ_cost, time }
     }
 }
