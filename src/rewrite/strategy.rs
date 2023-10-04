@@ -43,11 +43,14 @@ pub trait RewriteStrategy {
         circ: &Hugr,
     ) -> Vec<Hugr>;
 
-    /// The cost of a circuit.
-    fn circuit_cost(&self, circ: &Hugr) -> Self::Cost;
-
-    /// The cost of a single operation.
+    /// The cost of a single operation for this strategy's cost function.
     fn op_cost(&self, op: &OpType) -> Self::Cost;
+
+    /// The cost of a circuit using this strategy's cost function.
+    #[inline]
+    fn circuit_cost(&self, circ: &Hugr) -> Self::Cost {
+        circ.circuit_cost(|op| self.op_cost(op))
+    }
 }
 
 /// A rewrite strategy applying as many non-overlapping rewrites as possible.
@@ -122,7 +125,10 @@ pub trait ExhaustiveThresholdStrategy {
     type OpCost: CircuitCost;
 
     /// Returns true if the rewrite is allowed, based on the cost of the pattern and target.
-    fn under_threshold(&self, pattern_cost: &Self::OpCost, target_cost: &Self::OpCost) -> bool;
+    #[inline]
+    fn under_threshold(&self, pattern_cost: &Self::OpCost, target_cost: &Self::OpCost) -> bool {
+        target_cost.sub_cost(pattern_cost) <= 0
+    }
 
     /// The cost of a single operation.
     fn op_cost(&self, op: &OpType) -> Self::OpCost;
@@ -152,10 +158,7 @@ impl<T: ExhaustiveThresholdStrategy> RewriteStrategy for T {
             .collect()
     }
 
-    fn circuit_cost(&self, circ: &Hugr) -> Self::Cost {
-        circ.nodes_cost(circ.nodes(), |op| self.op_cost(op))
-    }
-
+    #[inline]
     fn op_cost(&self, op: &OpType) -> Self::Cost {
         <Self as ExhaustiveThresholdStrategy>::op_cost(self, op)
     }
@@ -188,10 +191,7 @@ where
 {
     type OpCost = MajorMinorCost;
 
-    fn under_threshold(&self, pattern_cost: &Self::OpCost, target_cost: &Self::OpCost) -> bool {
-        !target_cost.check_threshold(*pattern_cost)
-    }
-
+    #[inline]
     fn op_cost(&self, op: &OpType) -> Self::OpCost {
         ((self.major_cost)(op), (self.minor_cost)(op)).into()
     }
@@ -204,6 +204,7 @@ impl NonIncreasingGateCountStrategy<fn(&OpType) -> usize, fn(&OpType) -> usize> 
     /// quantum gates.
     ///
     /// This is probably a good default for NISQ-y circuit optimisation.
+    #[inline]
     pub fn default_cx() -> Self {
         Self {
             major_cost: |op| is_cx(op) as usize,
@@ -239,10 +240,12 @@ pub struct ExhaustiveGammaStrategy<C> {
 impl<C: Fn(&OpType) -> usize> ExhaustiveThresholdStrategy for ExhaustiveGammaStrategy<C> {
     type OpCost = usize;
 
+    #[inline]
     fn under_threshold(&self, &pattern_cost: &Self::OpCost, &target_cost: &Self::OpCost) -> bool {
         (target_cost as f64) < self.gamma * (pattern_cost as f64)
     }
 
+    #[inline]
     fn op_cost(&self, op: &OpType) -> Self::OpCost {
         (self.op_cost)(op)
     }
@@ -252,6 +255,7 @@ impl<C> ExhaustiveGammaStrategy<C> {
     /// New exhaustive rewrite strategy with provided predicate.
     ///
     /// The gamma parameter is set to the default 1.0001.
+    #[inline]
     pub fn with_cost(op_cost: C) -> Self {
         Self {
             gamma: 1.0001,
@@ -260,6 +264,7 @@ impl<C> ExhaustiveGammaStrategy<C> {
     }
 
     /// New exhaustive rewrite strategy with provided gamma and predicate.
+    #[inline]
     pub fn new(gamma: f64, op_cost: C) -> Self {
         Self { gamma, op_cost }
     }
@@ -270,11 +275,13 @@ impl ExhaustiveGammaStrategy<fn(&OpType) -> usize> {
     ///
     /// The gamma parameter is set to the default 1.0001. This is a good default
     /// choice for NISQ-y circuits, where CX gates are the most expensive.
+    #[inline]
     pub fn exhaustive_cx() -> Self {
         ExhaustiveGammaStrategy::with_cost(|op| is_cx(op) as usize)
     }
 
     /// Exhaustive rewrite strategy with CX count cost function and provided gamma.
+    #[inline]
     pub fn exhaustive_cx_with_gamma(gamma: f64) -> Self {
         ExhaustiveGammaStrategy::new(gamma, |op| is_cx(op) as usize)
     }
