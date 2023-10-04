@@ -133,11 +133,11 @@ where
             let rewrites = self.rewriter.get_rewrites(&circ);
             for new_circ in self.strategy.apply_rewrites(rewrites, &circ) {
                 let new_circ_hash = new_circ.circuit_hash();
-                circ_cnt += 1;
                 logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
                 if seen_hashes.contains(&new_circ_hash) {
                     continue;
                 }
+                circ_cnt += 1;
                 pq.push_with_hash_unchecked(new_circ, new_circ_hash);
                 seen_hashes.insert(new_circ_hash);
             }
@@ -239,16 +239,13 @@ where
             select! {
                 recv(rx_result) -> msg => {
                     match msg {
-                        Ok(hashed_circs) => {
+                        Ok(mut hashed_circs) => {
                             let send_result = tracing::trace_span!(target: "taso::metrics", "recv_result").in_scope(|| {
                                 jobs_completed += 1;
-                                for (circ_hash, circ) in &hashed_circs {
+                                hashed_circs.retain(|&(hash, _)| seen_hashes.insert(hash));
+                                for (_, circ) in &hashed_circs {
+                                    logger.log_progress(circ_cnt, None, seen_hashes.len());
                                     circ_cnt += 1;
-                                        logger.log_progress(circ_cnt, None, seen_hashes.len());
-                                    if seen_hashes.contains(circ_hash) {
-                                        continue;
-                                    }
-                                    seen_hashes.insert(*circ_hash);
 
                                     let cost = self.cost(circ);
 
