@@ -2,12 +2,20 @@
 
 use std::io::BufReader;
 
+use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
+use hugr::extension::prelude::QB_T;
+use hugr::extension::ExtensionSet;
+use hugr::std_extensions::arithmetic::float_types::{ConstF64, FLOAT64_TYPE};
+use hugr::types::FunctionType;
 use hugr::Hugr;
-use rstest::rstest;
+use rstest::{fixture, rstest};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
+use tket_json_rs::optype;
 
 use crate::circuit::Circuit;
+use crate::extension::REGISTRY;
 use crate::json::TKETDecode;
+use crate::T2Op;
 
 const SIMPLE_JSON: &str = r#"{
         "phase": "0",
@@ -72,6 +80,68 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
     let ser: circuit_json::SerialCircuit = serde_json::from_reader(reader).unwrap();
     let circ: Hugr = ser.clone().decode().unwrap();
     let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
+    compare_serial_circs(&ser, &reser);
+}
+
+#[fixture]
+fn circ_add_angles_symbolic() -> Hugr {
+    let input_t = vec![QB_T, FLOAT64_TYPE, FLOAT64_TYPE];
+    let output_t = vec![QB_T];
+    let mut h = DFGBuilder::new(FunctionType::new(input_t, output_t)).unwrap();
+
+    let mut inps = h.input_wires();
+    let qb = inps.next().unwrap();
+    let f1 = inps.next().unwrap();
+    let f2 = inps.next().unwrap();
+
+    let res = h.add_dataflow_op(T2Op::AngleAdd, [f1, f2]).unwrap();
+    let f12 = res.outputs().next().unwrap();
+    let res = h.add_dataflow_op(T2Op::RxF64, [qb, f12]).unwrap();
+    let qb = res.outputs().next().unwrap();
+
+    h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap()
+}
+
+#[fixture]
+fn circ_add_angles_constants() -> Hugr {
+    let qb_row = vec![QB_T];
+    let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row)).unwrap();
+
+    let qb = h.input_wires().next().unwrap();
+    let f64_ext = hugr::std_extensions::arithmetic::float_types::EXTENSION_ID;
+
+    let point2 = h
+        .add_load_const(ConstF64::new(0.2).into(), ExtensionSet::singleton(&f64_ext))
+        .unwrap();
+    let point3 = h
+        .add_load_const(ConstF64::new(0.3).into(), ExtensionSet::singleton(&f64_ext))
+        .unwrap();
+    let point5 = h
+        .add_dataflow_op(T2Op::AngleAdd, [point2, point3])
+        .unwrap()
+        .out_wire(0);
+
+    let qbs = h
+        .add_dataflow_op(T2Op::RxF64, [qb, point5])
+        .unwrap()
+        .outputs();
+    h.finish_hugr_with_outputs(qbs, &REGISTRY).unwrap()
+}
+
+#[rstest]
+#[case::symbolic(circ_add_angles_symbolic(), "f0 + f1")]
+#[case::constants(circ_add_angles_constants(), "0.2 + 0.3")]
+fn test_add_angle_serialise(#[case] circ_add_angles: Hugr, #[case] param_str: &str) {
+    let ser: SerialCircuit = SerialCircuit::encode(&circ_add_angles).unwrap();
+    assert_eq!(ser.commands.len(), 1);
+    assert_eq!(ser.commands[0].op.op_type, optype::OpType::Rx);
+    assert_eq!(ser.commands[0].op.params, Some(vec![param_str.into()]));
+
+    // Note: this is not a proper roundtrip as the symbols f0 and f1 are not
+    // converted back to circuit inputs. This would require parsing symbolic
+    // expressions.
+    let deser: Hugr = ser.clone().decode().unwrap();
+    let reser = SerialCircuit::encode(&deser).unwrap();
     compare_serial_circs(&ser, &reser);
 }
 
