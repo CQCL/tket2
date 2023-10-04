@@ -140,12 +140,12 @@ where
             let rewrites = self.rewriter.get_rewrites(&circ);
             for new_circ in self.strategy.apply_rewrites(rewrites, &circ) {
                 let new_circ_hash = new_circ.circuit_hash();
-                logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
                 if !seen_hashes.insert(new_circ_hash) {
                     // Ignore this circuit: we've already seen it
                     continue;
                 }
                 circ_cnt += 1;
+                logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
                 let new_circ_cost = self.cost(&new_circ);
                 pq.push_unchecked(new_circ, new_circ_hash, new_circ_cost);
             }
