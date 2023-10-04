@@ -139,21 +139,24 @@ pub fn load_tk1_json_str(json: &str) -> Result<Hugr, TK1ConvertError> {
 }
 
 /// Save a circuit to file in TK1 JSON format.
-pub fn save_tk1_json_file(path: impl AsRef<Path>, circ: &Hugr) -> Result<(), TK1ConvertError> {
+pub fn save_tk1_json_file(
+    circ: &impl Circuit,
+    path: impl AsRef<Path>,
+) -> Result<(), TK1ConvertError> {
     let file = fs::File::create(path)?;
     let writer = io::BufWriter::new(file);
     save_tk1_json_writer(circ, writer)
 }
 
 /// Save a circuit in TK1 JSON format to a writer.
-pub fn save_tk1_json_writer(circ: &Hugr, w: impl io::Write) -> Result<(), TK1ConvertError> {
+pub fn save_tk1_json_writer(circ: &impl Circuit, w: impl io::Write) -> Result<(), TK1ConvertError> {
     let serial_circ = SerialCircuit::encode(circ)?;
     serde_json::to_writer(w, &serial_circ)?;
     Ok(())
 }
 
 /// Save a circuit in TK1 JSON format to a String.
-pub fn save_tk1_json_str(circ: &Hugr) -> Result<String, TK1ConvertError> {
+pub fn save_tk1_json_str(circ: &impl Circuit) -> Result<String, TK1ConvertError> {
     let mut buf = io::BufWriter::new(Vec::new());
     save_tk1_json_writer(circ, &mut buf)?;
     let bytes = buf.into_inner().unwrap();
