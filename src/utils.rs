@@ -42,6 +42,8 @@ pub(crate) mod test {
     /// Open a browser page to render a dot string graph.
     ///
     /// This can be used directly on the output of `Hugr::dot_string`
+    ///
+    /// Only for use in local testing. Will fail to compile on CI.
     #[cfg(not(ci_run))]
     pub(crate) fn viz_dotstr(dotstr: impl AsRef<str>) {
         let mut base: String = "https://dreampuf.github.io/GraphvizOnline/#".into();
@@ -50,6 +52,8 @@ pub(crate) mod test {
     }
 
     /// Open a browser page to render a HugrView's dot string graph.
+    ///
+    /// Only for use in local testing. Will fail to compile on CI.
     #[cfg(not(ci_run))]
     pub(crate) fn viz_hugr(hugr: &impl HugrView) {
         viz_dotstr(hugr.dot_string());
