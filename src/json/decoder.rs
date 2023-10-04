@@ -22,6 +22,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use super::op::JsonOp;
 use super::{try_param_to_constant, METADATA_IMPLICIT_PERM, METADATA_PHASE};
 use crate::extension::{LINEAR_BIT, REGISTRY};
+use crate::json::{METADATA_B_REGISTERS, METADATA_Q_REGISTERS};
 use crate::symbolic_constant_op;
 
 /// The state of an in-progress [`DFGBuilder`] being built from a [`SerialCircuit`].
@@ -76,6 +77,8 @@ impl JsonDecoder {
             "name": serialcirc.name,
             METADATA_PHASE: serialcirc.phase,
             METADATA_IMPLICIT_PERM: serialcirc.implicit_permutation,
+            METADATA_Q_REGISTERS: serialcirc.qubits,
+            METADATA_B_REGISTERS: serialcirc.bits,
         });
         dfg.set_metadata(metadata);
 
