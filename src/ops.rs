@@ -200,6 +200,16 @@ impl T2Op {
             _ => vec![],
         }
     }
+
+    /// Check if this op is a quantum op.
+    pub fn is_quantum(&self) -> bool {
+        use T2Op::*;
+        match self {
+            H | CX | T | S | X | Y | Z | Tdg | Sdg | ZZMax | RzF64 | RxF64 | PhasedX | ZZPhase
+            | CZ | TK1 => true,
+            AngleAdd | Measure => false,
+        }
+    }
 }
 
 /// Initialize a new custom symbolic expression constant op from a string.
