@@ -7,6 +7,7 @@ pub mod op;
 #[cfg(test)]
 mod tests;
 
+use hugr::hugr::CircuitUnit;
 #[cfg(feature = "pyo3")]
 use pyo3::{create_exception, exceptions::PyException, PyErr};
 
@@ -14,7 +15,7 @@ use std::path::Path;
 use std::{fs, io};
 
 use hugr::ops::OpType;
-use hugr::std_extensions::arithmetic::float_types::ConstF64;
+use hugr::std_extensions::arithmetic::float_types::{ConstF64, FLOAT64_TYPE};
 use hugr::values::Value;
 use hugr::Hugr;
 
@@ -72,6 +73,15 @@ impl TKETDecode for SerialCircuit {
 
     fn encode(circ: &impl Circuit) -> Result<Self, Self::EncodeError> {
         let mut encoder = JsonEncoder::new(circ);
+        let f64_inputs = circ.units().filter_map(|(wire, _, t)| match (wire, t) {
+            (CircuitUnit::Wire(wire), t) if t == FLOAT64_TYPE => Some(wire),
+            (CircuitUnit::Linear(_), _) => None,
+            _ => unimplemented!("Non-float64 input wires not supported"),
+        });
+        for (i, wire) in f64_inputs.enumerate() {
+            let param = format!("f{i}");
+            encoder.add_parameter(wire, param);
+        }
         for com in circ.commands() {
             let optype = com.optype();
             encoder.add_command(com.clone(), optype)?;
@@ -129,21 +139,24 @@ pub fn load_tk1_json_str(json: &str) -> Result<Hugr, TK1ConvertError> {
 }
 
 /// Save a circuit to file in TK1 JSON format.
-pub fn save_tk1_json_file(path: impl AsRef<Path>, circ: &Hugr) -> Result<(), TK1ConvertError> {
+pub fn save_tk1_json_file(
+    circ: &impl Circuit,
+    path: impl AsRef<Path>,
+) -> Result<(), TK1ConvertError> {
     let file = fs::File::create(path)?;
     let writer = io::BufWriter::new(file);
     save_tk1_json_writer(circ, writer)
 }
 
 /// Save a circuit in TK1 JSON format to a writer.
-pub fn save_tk1_json_writer(circ: &Hugr, w: impl io::Write) -> Result<(), TK1ConvertError> {
+pub fn save_tk1_json_writer(circ: &impl Circuit, w: impl io::Write) -> Result<(), TK1ConvertError> {
     let serial_circ = SerialCircuit::encode(circ)?;
     serde_json::to_writer(w, &serial_circ)?;
     Ok(())
 }
 
 /// Save a circuit in TK1 JSON format to a String.
-pub fn save_tk1_json_str(circ: &Hugr) -> Result<String, TK1ConvertError> {
+pub fn save_tk1_json_str(circ: &impl Circuit) -> Result<String, TK1ConvertError> {
     let mut buf = io::BufWriter::new(Vec::new());
     save_tk1_json_writer(circ, &mut buf)?;
     let bytes = buf.into_inner().unwrap();
