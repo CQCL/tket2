@@ -13,7 +13,8 @@ use tket_json_rs::circuit_json::{self, Permutation, Register, SerialCircuit};
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
 use crate::extension::LINEAR_BIT;
-use crate::ops::match_symb_const_op;
+use crate::ops::{match_symb_const_op, op_matches};
+use crate::T2Op;
 
 use super::op::JsonOp;
 use super::{
@@ -207,6 +208,9 @@ impl JsonEncoder {
                 // Re-use the parameter from the input.
                 inputs[0].clone()
             }
+            op if op_matches(op, T2Op::AngleAdd) => {
+                format!("{} + {}", inputs[0], inputs[1])
+            }
             OpType::LeafOp(_) => {
                 if let Some(s) = match_symb_const_op(optype) {
                     s.to_string()
@@ -215,16 +219,13 @@ impl JsonEncoder {
                 }
             }
             _ => {
-                // In the future we may want to support arithmetic operations.
-                // (Just concatenating the inputs and the operation symbol, no
-                // need for evaluation).
                 return false;
             }
         };
 
         for (unit, _, _) in command.outputs() {
             if let CircuitUnit::Wire(wire) = unit {
-                self.parameters.insert(wire, param.clone());
+                self.add_parameter(wire, param.clone());
             }
         }
         true
@@ -236,5 +237,9 @@ impl JsonEncoder {
             .get(&unit)
             .or_else(|| self.bit_to_reg.get(&unit))
             .cloned()
+    }
+
+    pub(super) fn add_parameter(&mut self, wire: Wire, param: String) {
+        self.parameters.insert(wire, param);
     }
 }
