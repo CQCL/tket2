@@ -12,11 +12,11 @@ use crate::T2Op;
 
 /// The cost for a group of operations in a circuit, each with cost `OpCost`.
 pub trait CircuitCost: Add<Output = Self> + Sum<Self> + Debug + Default + Clone + Ord {
-    /// Returns true if the cost is above the threshold.
-    fn check_threshold(self, threshold: Self) -> bool;
+    /// Subtract another cost to get the signed distance between `self` and `rhs`.
+    fn sub_cost(&self, rhs: &Self) -> isize;
 
     /// Divide the cost, rounded up.
-    fn div_cost(self, n: NonZeroUsize) -> Self;
+    fn div_cost(&self, n: NonZeroUsize) -> Self;
 }
 
 /// A pair of major and minor cost.
@@ -47,7 +47,7 @@ impl Debug for MajorMinorCost {
     }
 }
 
-impl Add<MajorMinorCost> for MajorMinorCost {
+impl Add for MajorMinorCost {
     type Output = MajorMinorCost;
 
     fn add(self, rhs: MajorMinorCost) -> Self::Output {
@@ -64,26 +64,26 @@ impl Sum for MajorMinorCost {
 
 impl CircuitCost for MajorMinorCost {
     #[inline]
-    fn check_threshold(self, threshold: Self) -> bool {
-        self.major > threshold.major
+    fn sub_cost(&self, rhs: &Self) -> isize {
+        self.major as isize - rhs.major as isize
     }
 
     #[inline]
-    fn div_cost(mut self, n: NonZeroUsize) -> Self {
-        self.major = (self.major.saturating_sub(1)) / n.get() + 1;
-        self.minor = (self.minor.saturating_sub(1)) / n.get() + 1;
-        self
+    fn div_cost(&self, n: NonZeroUsize) -> Self {
+        let major = (self.major.saturating_sub(1)) / n.get() + 1;
+        let minor = (self.minor.saturating_sub(1)) / n.get() + 1;
+        Self { major, minor }
     }
 }
 
 impl CircuitCost for usize {
     #[inline]
-    fn check_threshold(self, threshold: Self) -> bool {
-        self > threshold
+    fn sub_cost(&self, rhs: &Self) -> isize {
+        *self as isize - *rhs as isize
     }
 
     #[inline]
-    fn div_cost(self, n: NonZeroUsize) -> Self {
+    fn div_cost(&self, n: NonZeroUsize) -> Self {
         (self.saturating_sub(1)) / n.get() + 1
     }
 }
@@ -99,4 +99,46 @@ pub fn is_quantum(op: &OpType) -> bool {
         return false;
     };
     op.is_quantum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn major_minor() {
+        let a = MajorMinorCost {
+            major: 10,
+            minor: 2,
+        };
+        let b = MajorMinorCost {
+            major: 20,
+            minor: 1,
+        };
+        assert!(a < b);
+        assert_eq!(
+            a + b,
+            MajorMinorCost {
+                major: 30,
+                minor: 3
+            }
+        );
+        assert_eq!(a.sub_cost(&b), -10);
+        assert_eq!(b.sub_cost(&a), 10);
+        assert_eq!(
+            a.div_cost(NonZeroUsize::new(2).unwrap()),
+            MajorMinorCost { major: 5, minor: 1 }
+        );
+        assert_eq!(
+            a.div_cost(NonZeroUsize::new(3).unwrap()),
+            MajorMinorCost { major: 4, minor: 1 }
+        );
+        assert_eq!(
+            a.div_cost(NonZeroUsize::new(1).unwrap()),
+            MajorMinorCost {
+                major: 10,
+                minor: 2
+            }
+        );
+    }
 }

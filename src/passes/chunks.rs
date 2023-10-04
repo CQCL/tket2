@@ -211,7 +211,7 @@ impl CircuitChunks {
         let mut current_group = 0;
         for (_, commands) in &circ.commands().map(|cmd| cmd.node()).group_by(|&node| {
             let new_cost = running_cost.clone() + op_cost(circ.get_optype(node));
-            if new_cost.clone().check_threshold(max_cost.clone()) {
+            if new_cost.sub_cost(&max_cost) > 0 {
                 running_cost = C::default();
                 current_group += 1;
             } else {
