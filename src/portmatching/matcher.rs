@@ -8,7 +8,9 @@ use std::{
 };
 
 use super::{CircuitPattern, NodeID, PEdge, PNode};
-use hugr::hugr::views::sibling_subgraph::{ConvexChecker, InvalidReplacement, InvalidSubgraph};
+use hugr::hugr::views::sibling_subgraph::{
+    ConvexChecker, InvalidReplacement, InvalidSubgraph, InvalidSubgraphBoundary,
+};
 use hugr::hugr::PortIndex;
 use hugr::{hugr::views::SiblingSubgraph, ops::OpType, Hugr, Node, Port};
 use itertools::Itertools;
@@ -373,9 +375,14 @@ pub enum MatcherSerialisationError {
 impl From<InvalidSubgraph> for InvalidPatternMatch {
     fn from(value: InvalidSubgraph) -> Self {
         match value {
-            InvalidSubgraph::NotConvex => InvalidPatternMatch::NotConvex,
+            // A non-convex subgraph might show itself as a disconnected boundary
+            // in the subgraph
+            InvalidSubgraph::NotConvex
+            | InvalidSubgraph::InvalidBoundary(
+                InvalidSubgraphBoundary::DisconnectedBoundaryPort(_, _),
+            ) => InvalidPatternMatch::NotConvex,
             InvalidSubgraph::EmptySubgraph => InvalidPatternMatch::EmptyMatch,
-            InvalidSubgraph::NoSharedParent | InvalidSubgraph::InvalidBoundary => {
+            InvalidSubgraph::NoSharedParent | InvalidSubgraph::InvalidBoundary(_) => {
                 InvalidPatternMatch::InvalidSubcircuit
             }
         }
@@ -449,6 +456,7 @@ fn handle_match_error<T>(match_res: Result<T, InvalidPatternMatch>, root: Node) 
 mod tests {
     use hugr::Hugr;
     use itertools::Itertools;
+    use rstest::{fixture, rstest};
 
     use crate::utils::build_simple_circuit;
     use crate::T2Op;
@@ -468,6 +476,26 @@ mod tests {
         build_simple_circuit(2, |circ| {
             circ.append(T2Op::CX, [0, 1]).unwrap();
             circ.append(T2Op::CX, [1, 0]).unwrap();
+            Ok(())
+        })
+        .unwrap()
+    }
+
+    #[fixture]
+    fn cx_cx_3() -> Hugr {
+        build_simple_circuit(3, |circ| {
+            circ.append(T2Op::CX, [0, 1]).unwrap();
+            circ.append(T2Op::CX, [2, 1]).unwrap();
+            Ok(())
+        })
+        .unwrap()
+    }
+
+    #[fixture]
+    fn cx_cx() -> Hugr {
+        build_simple_circuit(2, |circ| {
+            circ.append(T2Op::CX, [0, 1]).unwrap();
+            circ.append(T2Op::CX, [0, 1]).unwrap();
             Ok(())
         })
         .unwrap()
@@ -502,5 +530,14 @@ mod tests {
         m2.save_binary_io(&mut buf2).unwrap();
 
         assert_eq!(buf, buf2);
+    }
+
+    #[rstest]
+    fn cx_cx_replace_to_id(cx_cx: Hugr, cx_cx_3: Hugr) {
+        let p = CircuitPattern::try_from_circuit(&cx_cx_3).unwrap();
+        let m = PatternMatcher::from_patterns(vec![p]);
+
+        let matches = m.find_matches(&cx_cx);
+        assert_eq!(matches.len(), 0);
     }
 }
