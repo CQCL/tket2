@@ -1,5 +1,6 @@
 //! PyO3 wrapper for the TASO circuit optimiser.
 
+use std::io::BufWriter;
 use std::{fs, num::NonZeroUsize, path::PathBuf};
 
 use pyo3::prelude::*;
@@ -42,16 +43,31 @@ impl PyDefaultTasoOptimiser {
     ///
     /// Returns an optimised circuit and optionally log the progress to a CSV
     /// file.
+    ///
+    /// # Parameters
+    ///
+    /// * `circ`: The circuit to optimise.
+    /// * `timeout`: The timeout in seconds.
+    /// * `n_threads`: The number of threads to use.
+    /// * `split_circ`: Whether to split the circuit into chunks before
+    ///   processing.
+    ///
+    ///   If this option is set, the optimise will divide the circuit into
+    ///   `n_threads` chunks and optimise each on a separate thread.
+    /// * `log_progress`: The path to a CSV file to log progress to.
+    ///
     pub fn optimise(
         &self,
         circ: PyObject,
         timeout: Option<u64>,
         n_threads: Option<NonZeroUsize>,
+        split_circ: Option<bool>,
         log_progress: Option<PathBuf>,
     ) -> PyResult<PyObject> {
         let taso_logger = log_progress
             .map(|file_name| {
                 let log_file = fs::File::create(file_name).unwrap();
+                let log_file = BufWriter::new(log_file);
                 TasoLogger::new(log_file)
             })
             .unwrap_or_default();
@@ -61,7 +77,7 @@ impl PyDefaultTasoOptimiser {
                 taso_logger,
                 timeout,
                 n_threads.unwrap_or(NonZeroUsize::new(1).unwrap()),
-                false,
+                split_circ.unwrap_or(false),
             )
         })
     }
