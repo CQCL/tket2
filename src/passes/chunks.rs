@@ -99,8 +99,6 @@ impl Chunk {
     }
 
     /// Insert the chunk back into a circuit.
-    //
-    // TODO: The new chunk may have input ports directly connected to outputs. We have to take care of those.
     pub(self) fn insert(&self, circ: &mut impl HugrMut, root: Node) -> ChunkInsertResult {
         let [chunk_inp, chunk_out] = self.circ.get_io(self.circ.root()).unwrap();
 
@@ -178,20 +176,14 @@ struct ChunkInsertResult {
 }
 
 /// The target of a chunk connection in a reassembled circuit.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
 enum ConnectionTarget {
     /// The target is a single node and port.
+    #[from]
     InsertedNode(Node, Port),
     /// The link goes directly to the opposite boundary, without an intermediary
     /// node.
-    #[allow(unused)]
     TransitiveConnection(ChunkConnection),
-}
-
-impl From<(Node, Port)> for ConnectionTarget {
-    fn from((node, port): (Node, Port)) -> Self {
-        Self::InsertedNode(node, port)
-    }
 }
 
 /// An utility for splitting a circuit into chunks, and reassembling them
