@@ -2,10 +2,11 @@
 //!
 //! See [`CircuitChunks`] for more information.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::mem;
 use std::ops::{Index, IndexMut};
 
+use derive_more::From;
 use hugr::builder::{Container, FunctionBuilder};
 use hugr::extension::ExtensionSet;
 use hugr::hugr::hugrmut::HugrMut;
@@ -34,7 +35,8 @@ use tket_json_rs::circuit_json::SerialCircuit;
 ///
 /// When reassembling the circuit, the input/output wires of each chunk are
 /// re-linked by matching these identifiers.
-pub type ChunkConnection = Wire;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
+pub struct ChunkConnection(Wire);
 
 /// A chunk of a circuit.
 #[derive(Debug, Clone)]
@@ -81,13 +83,13 @@ impl Chunk {
                     .exactly_one()
                     .ok()
                     .unwrap();
-                Wire::new(out_node, out_port)
+                Wire::new(out_node, out_port).into()
             })
             .collect();
         let outputs = subgraph
             .outgoing_ports()
             .iter()
-            .map(|&(node, port)| Wire::new(node, port))
+            .map(|&(node, port)| Wire::new(node, port).into())
             .collect();
         Self {
             circ: extracted,
@@ -239,12 +241,12 @@ impl CircuitChunks {
         let [circ_input, circ_output] = circ.get_io(circ.root()).unwrap();
         let input_connections = circ
             .node_outputs(circ_input)
-            .map(|port| Wire::new(circ_input, port))
+            .map(|port| Wire::new(circ_input, port).into())
             .collect();
         let output_connections = circ
             .node_inputs(circ_output)
             .flat_map(|p| circ.linked_ports(circ_output, p))
-            .map(|(n, p)| Wire::new(n, p))
+            .map(|(n, p)| Wire::new(n, p).into())
             .collect();
 
         let mut chunks = Vec::new();
