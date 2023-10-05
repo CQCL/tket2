@@ -12,7 +12,6 @@
 //! it gets too large.
 
 mod eq_circ_class;
-mod hugr_pchannel;
 mod hugr_pqueue;
 pub mod log;
 mod qtz_circuit;
@@ -32,9 +31,8 @@ use hugr::Hugr;
 
 use crate::circuit::cost::CircuitCost;
 use crate::circuit::CircuitHash;
-use crate::optimiser::taso::hugr_pchannel::{HugrPriorityChannel, PriorityChannelLog};
 use crate::optimiser::taso::hugr_pqueue::{Entry, HugrPQ};
-use crate::optimiser::taso::worker::TasoWorker;
+use crate::optimiser::taso::worker::{TasoWorker, WorkChannel, WorkerLog};
 use crate::passes::CircuitChunks;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
@@ -211,37 +209,39 @@ where
             let strategy = self.strategy.clone();
             move |circ: &'_ Hugr| strategy.circuit_cost(circ)
         };
-        let mut pq = HugrPriorityChannel::init(cost_fn, queue_size);
 
         let initial_circ_hash = circ.circuit_hash();
         let mut best_circ = circ.clone();
         let mut best_circ_cost = self.cost(&best_circ);
 
+        // Initialise the work channels and send the initial circuit.
+        let (work_channel, recv_channels) = WorkChannel::new(n_threads);
+        work_channel
+            .send(vec![(initial_circ_hash, circ.clone())], None)
+            .unwrap();
+
+        // A channel for reporting the best circuits to the main thread, and some processing stats.
+        let (tx_log, rx_log) = crossbeam_channel::unbounded();
+
         // Each worker waits for circuits to scan for rewrites using all the
         // patterns and sends the results back to main.
-        let joins: Vec<_> = (0..n_threads)
-            .map(|i| {
+        let joins: Vec<_> = recv_channels
+            .into_iter()
+            .enumerate()
+            .map(|(i, rx_work)| {
                 TasoWorker::spawn(
-                    pq.pop.clone().unwrap(),
-                    pq.push.clone().unwrap(),
+                    i,
+                    rx_work,
+                    work_channel.clone(),
+                    tx_log.clone(),
                     self.rewriter.clone(),
                     self.strategy.clone(),
-                    Some(format!("taso-worker-{i}")),
+                    cost_fn.clone(),
+                    queue_size,
                 )
             })
             .collect();
-
-        // Queue the initial circuit
-        pq.push
-            .as_ref()
-            .unwrap()
-            .send(vec![(initial_circ_hash, circ.clone())])
-            .unwrap();
-        // Drop our copy of the priority queue channels, so we don't count as a
-        // connected worker.
-        pq.drop_pop_push();
-
-        // TODO: Report dropped jobs in the queue, so we can check for termination.
+        drop(tx_log);
 
         // Deadline for the optimisation timeout
         let timeout_event = match timeout {
@@ -252,47 +252,58 @@ where
         // Main loop: log best circuits as they come in from the priority queue,
         // until the timeout is reached.
         let mut timeout_flag = false;
+        let mut circuit_cnt = vec![0; n_threads];
+        let mut hashes_seen = vec![0; n_threads];
         loop {
             select! {
-                recv(pq.log) -> msg => {
+                recv(rx_log) -> msg => {
                     match msg {
-                        Ok(PriorityChannelLog::NewBestCircuit(circ, cost)) => {
-                            best_circ = circ;
-                            best_circ_cost = cost;
-                            logger.log_best(&best_circ_cost);
+                        Ok(WorkerLog::NewBestCircuit(circ, cost)) => {
+                            if cost < best_circ_cost {
+                                best_circ = circ;
+                                best_circ_cost = cost;
+                                logger.log_best(&best_circ_cost);
+                            }
                         },
-                        Ok(PriorityChannelLog::CircuitCount(circuit_cnt, seen_cnt)) => {
-                            logger.log_progress(circuit_cnt, None, seen_cnt);
+                        Ok(WorkerLog::CircuitCount{worker_id, processed_count, seen_count}) => {
+                            circuit_cnt[worker_id] = processed_count;
+                            hashes_seen[worker_id] = seen_count;
+                            logger.log_progress(circuit_cnt.iter().sum(), None, hashes_seen.iter().sum());
                         }
                         Err(crossbeam_channel::RecvError) => {
-                            eprintln!("Priority queue panicked. Stopping optimisation.");
+                            logger.log("Priority queue panicked. Stopping optimisation.");
                             break;
                         }
                     }
                 }
                 recv(timeout_event) -> _ => {
                     timeout_flag = true;
-                    pq.timeout();
+                    // Signal all the workers to stop.
+                    work_channel.close();
                     break;
                 }
             }
         }
 
         // Empty the log from the priority queue and store final circuit count.
-        let mut circuit_cnt = None;
-        while let Ok(log) = pq.log.recv() {
+        while let Ok(log) = rx_log.recv() {
             match log {
-                PriorityChannelLog::NewBestCircuit(circ, cost) => {
+                WorkerLog::NewBestCircuit(circ, cost) => {
                     best_circ = circ;
                     best_circ_cost = cost;
                     logger.log_best(&best_circ_cost);
                 }
-                PriorityChannelLog::CircuitCount(circ_cnt, _) => {
-                    circuit_cnt = Some(circ_cnt);
+                WorkerLog::CircuitCount {
+                    worker_id,
+                    processed_count,
+                    seen_count,
+                } => {
+                    circuit_cnt[worker_id] = processed_count;
+                    hashes_seen[worker_id] = seen_count;
                 }
             }
         }
-        logger.log_processing_end(circuit_cnt.unwrap_or(0), best_circ_cost, true, timeout_flag);
+        logger.log_processing_end(circuit_cnt.iter().sum(), best_circ_cost, true, timeout_flag);
 
         joins.into_iter().for_each(|j| j.join().unwrap());
 
