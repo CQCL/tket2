@@ -99,38 +99,35 @@ impl Chunk {
     /// Insert the chunk back into a circuit.
     //
     // TODO: The new chunk may have input ports directly connected to outputs. We have to take care of those.
-    #[allow(clippy::type_complexity)]
     pub(self) fn insert(&self, circ: &mut impl HugrMut, root: Node) -> ChunkInsertResult {
+        // Insert the chunk circuit into the original circuit.
         let chunk_sg: SiblingGraph<'_, DataflowParentID> =
             SiblingGraph::try_new(&self.circ, self.circ.root()).unwrap();
         let subgraph = SiblingSubgraph::try_new_dataflow_subgraph(&chunk_sg)
-            .expect("The chunk circuit is no longer a dataflow");
+            .expect("The chunk circuit is no longer a dataflow graph");
         let node_map = circ
             .insert_subgraph(root, &self.circ, &subgraph)
             .expect("Failed to insert the chunk subgraph")
             .node_map;
 
-        let [inp, out] = circ.get_io(root).unwrap();
+        //let [chunk_inp, chunk_out] = self.circ.get_io(root).unwrap();
         let mut input_map = HashMap::with_capacity(self.inputs.len());
         let mut output_map = HashMap::with_capacity(self.outputs.len());
 
+        // Re-connect the chunk's inputs.
+        //
+        // The subgraph may be missing some of the original input ports, if they
+        // only had direct wires to the output ports.
         for (&connection, incoming) in self.inputs.iter().zip(subgraph.incoming_ports().iter()) {
-            let incoming = incoming.iter().map(|&(node, port)| {
-                if node == out {
-                    // TODO: Add a map for directly connected Input connection -> Output Wire.
-                    panic!("Chunk input directly connected to the output. This is not currently supported.");
-                }
-                (*node_map.get(&node).unwrap(),port)
-            }).collect_vec();
+            let incoming = incoming
+                .iter()
+                .map(|&(node, port)| (*node_map.get(&node).unwrap(), port).into())
+                .collect_vec();
             input_map.insert(connection, incoming);
         }
 
         for (&wire, &(node, port)) in self.outputs.iter().zip(subgraph.outgoing_ports().iter()) {
-            if node == inp {
-                // TODO: Add a map for directly connected Input Wire -> Output Wire.
-                panic!("Chunk input directly connected to the output. This is not currently supported.");
-            }
-            output_map.insert(wire, (*node_map.get(&node).unwrap(), port));
+            output_map.insert(wire, (*node_map.get(&node).unwrap(), port).into());
         }
 
         ChunkInsertResult {
@@ -141,13 +138,31 @@ impl Chunk {
 }
 
 /// A map from the original input/output [`ChunkConnection`]s to an inserted chunk's inputs and outputs.
+#[derive(Debug, Clone)]
 struct ChunkInsertResult {
     /// A map from incoming connections to a chunk, to the new node and incoming port targets.
     ///
     /// A chunk may specify multiple targets to be connected to a single incoming `ChunkConnection`.
-    pub incoming_connections: HashMap<ChunkConnection, Vec<(Node, Port)>>,
+    pub incoming_connections: HashMap<ChunkConnection, Vec<ConnectionTarget>>,
     /// A map from outgoing connections from a chunk, to the new node and outgoing port target.
-    pub outgoing_connections: HashMap<ChunkConnection, (Node, Port)>,
+    pub outgoing_connections: HashMap<ChunkConnection, ConnectionTarget>,
+}
+
+/// The target of a chunk connection in a reassembled circuit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum ConnectionTarget {
+    /// The target is a single node and port.
+    InsertedNode(Node, Port),
+    /// The link goes directly to the opposite boundary, without an intermediary
+    /// node.
+    #[allow(unused)]
+    TransitiveConnection(ChunkConnection),
+}
+
+impl From<(Node, Port)> for ConnectionTarget {
+    fn from((node, port): (Node, Port)) -> Self {
+        Self::InsertedNode(node, port)
+    }
 }
 
 /// An utility for splitting a circuit into chunks, and reassembling them
@@ -253,22 +268,22 @@ impl CircuitChunks {
         // The chunks input and outputs are each identified with a
         // [`ChunkConnection`]. We collect both sides first, and rewire them
         // after the chunks have been inserted.
-        let mut sources: HashMap<ChunkConnection, (Node, Port)> = HashMap::new();
-        let mut targets: HashMap<ChunkConnection, Vec<(Node, Port)>> = HashMap::new();
+        let mut sources: HashMap<ChunkConnection, ConnectionTarget> = HashMap::new();
+        let mut targets: HashMap<ChunkConnection, Vec<ConnectionTarget>> = HashMap::new();
 
         for (&connection, port) in self
             .input_connections
             .iter()
             .zip(reassembled.node_outputs(reassembled_input))
         {
-            sources.insert(connection, (reassembled_input, port));
+            sources.insert(connection, (reassembled_input, port).into());
         }
         for (&connection, port) in self
             .output_connections
             .iter()
             .zip(reassembled.node_inputs(reassembled_output))
         {
-            targets.insert(connection, vec![(reassembled_output, port)]);
+            targets.insert(connection, vec![(reassembled_output, port).into()]);
         }
 
         for chunk in self.chunks {
@@ -285,11 +300,21 @@ impl CircuitChunks {
         }
 
         // Reconnect the different chunks.
-        for (connection, (source, source_port)) in sources {
+        for (connection, src) in sources {
+            let ConnectionTarget::InsertedNode(source, source_port) = src else {
+                panic!(
+                    "Direct connections between a chunk's input and output are not supported yet."
+                )
+            };
             let Some(tgts) = targets.remove(&connection) else {
                 continue;
             };
-            for (target, target_port) in tgts {
+            for tgt in tgts {
+                let ConnectionTarget::InsertedNode(target, target_port) = tgt else {
+                    panic!(
+                        "Direct connections between a chunk's input and output are not supported yet."
+                    )
+                };
                 reassembled.connect(source, source_port, target, target_port)?;
             }
         }
