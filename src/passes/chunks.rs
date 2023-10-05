@@ -100,13 +100,17 @@ impl Chunk {
 
     /// Insert the chunk back into a circuit.
     pub(self) fn insert(&self, circ: &mut impl HugrMut, root: Node) -> ChunkInsertResult {
-        let [chunk_inp, chunk_out] = self.circ.get_io(self.circ.root()).unwrap();
+        if self.circ.children(self.circ.root()).nth(2).is_none() {
+            // The chunk is empty. We don't need to insert anything.
+            return self.empty_chunk_insert_result();
+        }
 
-        // Insert the chunk circuit into the original circuit.
+        let [chunk_inp, chunk_out] = self.circ.get_io(self.circ.root()).unwrap();
         let chunk_sg: SiblingGraph<'_, DataflowParentID> =
             SiblingGraph::try_new(&self.circ, self.circ.root()).unwrap();
+        // Insert the chunk circuit into the original circuit.
         let subgraph = SiblingSubgraph::try_new_dataflow_subgraph(&chunk_sg)
-            .expect("The chunk circuit is no longer a dataflow graph");
+            .unwrap_or_else(|e| panic!("The chunk circuit is no longer a dataflow graph: {e}"));
         let node_map = circ
             .insert_subgraph(root, &self.circ, &subgraph)
             .expect("Failed to insert the chunk subgraph")
@@ -155,6 +159,50 @@ impl Chunk {
                 (*node_map.get(&node).unwrap(), port).into()
             };
             output_map.insert(wire, target);
+        }
+
+        ChunkInsertResult {
+            incoming_connections: input_map,
+            outgoing_connections: output_map,
+        }
+    }
+
+    /// Compute the return value for `insert` when the chunk is empty (Subgraph would throw an error in this case).
+    ///
+    /// TODO: Support empty Subgraphs in Hugr?
+    fn empty_chunk_insert_result(&self) -> ChunkInsertResult {
+        let [chunk_inp, chunk_out] = self.circ.get_io(self.circ.root()).unwrap();
+        let mut input_map = HashMap::with_capacity(self.inputs.len());
+        let mut output_map = HashMap::with_capacity(self.outputs.len());
+
+        for (&connection, chunk_inp_port) in
+            self.inputs.iter().zip(self.circ.node_outputs(chunk_inp))
+        {
+            let connection_targets: Vec<ConnectionTarget> = self
+                .circ
+                .linked_ports(chunk_inp, chunk_inp_port)
+                .map(|(node, port)| {
+                    assert_eq!(node, chunk_out);
+                    let output_connection = self.outputs[port.index()];
+                    ConnectionTarget::TransitiveConnection(output_connection)
+                })
+                .collect();
+            input_map.insert(connection, connection_targets);
+        }
+
+        for (&wire, chunk_out_port) in self.outputs.iter().zip(self.circ.node_inputs(chunk_out)) {
+            let (node, port) = self
+                .circ
+                .linked_ports(chunk_out, chunk_out_port)
+                .exactly_one()
+                .ok()
+                .unwrap();
+            assert_eq!(node, chunk_inp);
+            let input_connection = self.inputs[port.index()];
+            output_map.insert(
+                wire,
+                ConnectionTarget::TransitiveConnection(input_connection),
+            );
         }
 
         ChunkInsertResult {
@@ -216,7 +264,7 @@ impl CircuitChunks {
     ///
     /// The circuit is split into chunks of at most `max_size` gates.
     pub fn split(circ: &impl Circuit, max_size: usize) -> Self {
-        Self::split_with_cost(circ, max_size, |_| 1)
+        Self::split_with_cost(circ, max_size.saturating_sub(1), |_| 1)
     }
 
     /// Split a circuit into chunks.
@@ -482,14 +530,51 @@ mod test {
         })
         .unwrap();
 
-        let mut chunks = CircuitChunks::split(&circ, 3);
+        let chunks = CircuitChunks::split(&circ, 3);
 
-        // Rearrange the chunks so nodes are inserted in a new order.
-        chunks.chunks.reverse();
+        assert_eq!(chunks.len(), 3);
 
         let mut reassembled = chunks.reassemble().unwrap();
 
         reassembled.infer_and_validate(&REGISTRY).unwrap();
         assert_eq!(circ.circuit_hash(), reassembled.circuit_hash());
+    }
+
+    #[test]
+    fn reassemble_empty() {
+        let circ = build_simple_circuit(3, |circ| {
+            circ.append(T2Op::CX, [0, 1])?;
+            circ.append(T2Op::H, [0])?;
+            circ.append(T2Op::H, [1])?;
+            Ok(())
+        })
+        .unwrap();
+
+        let circ_1q_id = build_simple_circuit(1, |_| Ok(())).unwrap();
+        let circ_2q_id_h = build_simple_circuit(2, |circ| {
+            circ.append(T2Op::H, [0])?;
+            Ok(())
+        })
+        .unwrap();
+
+        let mut chunks = CircuitChunks::split(&circ, 1);
+
+        // Replace the Hs with identities, and the CX with an identity and an H gate.
+        chunks[0] = circ_2q_id_h.clone();
+        chunks[1] = circ_1q_id.clone();
+        chunks[2] = circ_1q_id.clone();
+
+        let mut reassembled = chunks.reassemble().unwrap();
+
+        reassembled.infer_and_validate(&REGISTRY).unwrap();
+
+        assert_eq!(reassembled.commands().count(), 1);
+        let h = reassembled.commands().next().unwrap().node();
+
+        let [inp, out] = reassembled.get_io(reassembled.root()).unwrap();
+        assert_eq!(
+            &reassembled.output_neighbours(inp).collect_vec(),
+            &[h, out, out]
+        );
     }
 }
