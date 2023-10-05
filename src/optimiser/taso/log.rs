@@ -52,12 +52,12 @@ impl<'w> TasoLogger<'w> {
         needs_joining: bool,
         timeout: bool,
     ) {
-        if timeout {
-            self.log("Timeout");
-        }
-        self.log("Optimisation finished");
+        match timeout {
+            true => self.log("Optimisation finished (timeout)"),
+            false => self.log("Optimisation finished"),
+        };
         self.log(format!("Tried {circuit_count} circuits"));
-        self.log(format!("END RESULT: {:?}", best_cost));
+        self.log(format!("---- END RESULT: {:?} ----", best_cost));
         if needs_joining {
             self.log("Joining worker threads");
         }
