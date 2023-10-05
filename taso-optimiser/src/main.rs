@@ -78,6 +78,12 @@ struct CmdLineArgs {
         help = "The number of threads to use. By default, use a single thread."
     )]
     n_threads: Option<NonZeroUsize>,
+    /// Number of threads (default=1)
+    #[arg(
+        long = "split-circ",
+        help = "Split the circuit into chunks and optimize each one in a separate thread. Use `-j` to specify the number of threads to use."
+    )]
+    split_circ: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -86,7 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup tracing subscribers for stdout and file logging.
     //
     // We need to keep the object around to keep the logging active.
-    let _tracer = Tracer::setup_tracing(opts.logfile);
+    let _tracer = Tracer::setup_tracing(opts.logfile, opts.split_circ);
 
     let input_path = Path::new(&opts.input);
     let output_path = Path::new(&opts.output);
@@ -115,8 +121,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(NonZeroUsize::new(1).unwrap());
     println!("Using {n_threads} threads");
 
+    if opts.split_circ && n_threads.get() > 1 {
+        println!("Splitting circuit into {n_threads} chunks.");
+    }
+
     println!("Optimising...");
-    let opt_circ = optimiser.optimise_with_log(&circ, taso_logger, opts.timeout, n_threads);
+    let opt_circ =
+        optimiser.optimise_with_log(&circ, taso_logger, opts.timeout, n_threads, opts.split_circ);
 
     println!("Saving result");
     save_tk1_json_file(&opt_circ, output_path)?;
