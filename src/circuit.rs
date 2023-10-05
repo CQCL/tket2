@@ -262,7 +262,8 @@ fn update_signature<C: HugrMut + Circuit + ?Sized>(
     };
     let new_inp_op = Input::new(inp_types.clone());
     let inp_exts = circ.get_nodetype(inp).input_extensions().cloned();
-    circ.replace_op(inp, NodeType::new(new_inp_op, inp_exts));
+    circ.replace_op(inp, NodeType::new(new_inp_op, inp_exts))
+        .unwrap();
 
     // Update output node if necessary.
     let out_types = out_index.map(|out_index| {
@@ -277,7 +278,8 @@ fn update_signature<C: HugrMut + Circuit + ?Sized>(
         };
         let new_out_op = Output::new(out_types.clone());
         let inp_exts = circ.get_nodetype(out).input_extensions().cloned();
-        circ.replace_op(out, NodeType::new(new_out_op, inp_exts));
+        circ.replace_op(out, NodeType::new(new_out_op, inp_exts))
+            .unwrap();
         out_types
     });
 
@@ -291,7 +293,8 @@ fn update_signature<C: HugrMut + Circuit + ?Sized>(
     }
     let new_dfg_op = DFG { signature };
     let inp_exts = circ.get_nodetype(circ.root()).input_extensions().cloned();
-    circ.replace_op(circ.root(), NodeType::new(new_dfg_op, inp_exts));
+    circ.replace_op(circ.root(), NodeType::new(new_dfg_op, inp_exts))
+        .unwrap();
 }
 
 impl<T> Circuit for T where T: HugrView {}
