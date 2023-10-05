@@ -310,6 +310,12 @@ impl CircuitChunks {
         // order, we can assume that already seen connections will not be merged
         // again.
         let mut transitive_connections: HashMap<ChunkConnection, ChunkConnection> = HashMap::new();
+        let get_merged_connection = |transitive_connections: &HashMap<_, _>, connection| {
+            transitive_connections
+                .get(&connection)
+                .copied()
+                .unwrap_or(connection)
+        };
 
         // Register the source ports for the `ChunkConnections` in the circuit input.
         for (&connection, port) in self
@@ -341,16 +347,15 @@ impl CircuitChunks {
                     }
                     ConnectionTarget::TransitiveConnection(merged_connection) => {
                         // The output's `ChunkConnection` has been merged into one of the input's.
+                        let merged_connection =
+                            get_merged_connection(&transitive_connections, merged_connection);
                         transitive_connections.insert(connection, merged_connection);
                     }
                 }
             }
             for (connection, conn_targets) in incoming_connections {
                 // The connection in the chunk's input may have been merged into a earlier one.
-                let connection = transitive_connections
-                    .get(&connection)
-                    .copied()
-                    .unwrap_or(connection);
+                let connection = get_merged_connection(&transitive_connections, connection);
                 for tgt in conn_targets {
                     match tgt {
                         ConnectionTarget::InsertedNode(node, port) => {
@@ -373,10 +378,7 @@ impl CircuitChunks {
             .zip(reassembled.node_inputs(reassembled_output))
         {
             // The connection in the chunk's input may have been merged into a earlier one.
-            let connection = transitive_connections
-                .get(&connection)
-                .copied()
-                .unwrap_or(connection);
+            let connection = get_merged_connection(&transitive_connections, connection);
             targets
                 .entry(connection)
                 .or_default()
