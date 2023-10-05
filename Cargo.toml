@@ -40,7 +40,7 @@ fxhash = "0.2.1"
 rmp-serde = { version = "1.1.2", optional = true }
 delegate = "0.10.0"
 csv = { version = "1.2.2" }
-chrono = { version ="0.4.30" }
+chrono = { version = "0.4.30" }
 bytemuck = "1.14.0"
 stringreader = "0.1.1"
 crossbeam-channel = "0.5.8"
@@ -73,7 +73,7 @@ members = ["pyrs", "compile-rewriter", "taso-optimiser"]
 
 [workspace.dependencies]
 
-quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "0ce711b" }
+quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "09494f1" }
 portgraph = { version = "0.9", features = ["serde"] }
 pyo3 = { version = "0.19" }
 itertools = { version = "0.11.0" }

@@ -33,7 +33,7 @@ impl CircuitPattern {
     }
 
     /// Construct a pattern from a circuit.
-    pub fn try_from_circuit<C: Circuit>(circuit: &C) -> Result<Self, InvalidPattern> {
+    pub fn try_from_circuit(circuit: &impl Circuit) -> Result<Self, InvalidPattern> {
         if circuit.num_gates() == 0 {
             return Err(InvalidPattern::EmptyCircuit);
         }
