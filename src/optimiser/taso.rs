@@ -21,19 +21,24 @@ mod worker;
 use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 use fxhash::FxHashSet;
+use hugr::hugr::HugrError;
 pub use log::TasoLogger;
 
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
+use std::{mem, thread};
 
 use hugr::Hugr;
 
+use crate::circuit::cost::CircuitCost;
 use crate::circuit::CircuitHash;
 use crate::optimiser::taso::hugr_pchannel::{HugrPriorityChannel, PriorityChannelLog};
 use crate::optimiser::taso::hugr_pqueue::{Entry, HugrPQ};
 use crate::optimiser::taso::worker::TasoWorker;
+use crate::passes::CircuitChunks;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
+use crate::Circuit;
 
 /// The TASO optimiser.
 ///
@@ -75,16 +80,19 @@ impl<R, S> TasoOptimiser<R, S>
 where
     R: Rewriter + Send + Clone + 'static,
     S: RewriteStrategy + Send + Sync + Clone + 'static,
-    S::Cost: serde::Serialize,
+    S::Cost: serde::Serialize + Send + Sync,
 {
     /// Run the TASO optimiser on a circuit.
     ///
     /// A timeout (in seconds) can be provided.
-    pub fn optimise(&self, circ: &Hugr, timeout: Option<u64>, n_threads: NonZeroUsize) -> Hugr
-    where
-        S::Cost: Send + Sync + Clone,
-    {
-        self.optimise_with_log(circ, Default::default(), timeout, n_threads)
+    pub fn optimise(
+        &self,
+        circ: &Hugr,
+        timeout: Option<u64>,
+        n_threads: NonZeroUsize,
+        split_circuit: bool,
+    ) -> Hugr {
+        self.optimise_with_log(circ, Default::default(), timeout, n_threads, split_circuit)
     }
 
     /// Run the TASO optimiser on a circuit with logging activated.
@@ -96,10 +104,13 @@ where
         log_config: TasoLogger,
         timeout: Option<u64>,
         n_threads: NonZeroUsize,
-    ) -> Hugr
-    where
-        S::Cost: Send + Sync + Clone,
-    {
+        split_circuit: bool,
+    ) -> Hugr {
+        if split_circuit && n_threads.get() > 1 {
+            return self
+                .split_run(circ, log_config, timeout, n_threads)
+                .unwrap();
+        }
         match n_threads.get() {
             1 => self.taso(circ, log_config, timeout),
             _ => self.taso_multithreaded(circ, log_config, timeout, n_threads),
@@ -177,10 +188,7 @@ where
         mut logger: TasoLogger,
         timeout: Option<u64>,
         n_threads: NonZeroUsize,
-    ) -> Hugr
-    where
-        S::Cost: Send + Sync + Clone,
-    {
+    ) -> Hugr {
         let n_threads: usize = n_threads.get();
         const PRIORITY_QUEUE_CAPACITY: usize = 10_000;
 
@@ -276,6 +284,66 @@ where
 
         best_circ
     }
+
+    /// Split the circuit into chunks and process each in a separate thread.
+    #[tracing::instrument(target = "taso::metrics", skip(self, circ, logger))]
+    fn split_run(
+        &self,
+        circ: &Hugr,
+        mut logger: TasoLogger,
+        timeout: Option<u64>,
+        n_threads: NonZeroUsize,
+    ) -> Result<Hugr, HugrError> {
+        let circ_cost = self.cost(circ);
+        let max_chunk_cost = circ_cost.clone().div_cost(n_threads);
+        logger.log(format!(
+            "Splitting circuit with cost {:?} into chunks of at most {max_chunk_cost:?}.",
+            circ_cost.clone()
+        ));
+        let mut chunks =
+            CircuitChunks::split_with_cost(circ, max_chunk_cost, |op| self.strategy.op_cost(op));
+
+        logger.log_best(circ_cost.clone());
+
+        let (joins, rx_work): (Vec<_>, Vec<_>) = chunks
+            .iter_mut()
+            .enumerate()
+            .map(|(i, chunk)| {
+                let (tx, rx) = crossbeam_channel::unbounded();
+                let taso = self.clone();
+                let chunk = mem::take(chunk);
+                let chunk_cx_cost = chunk.circuit_cost(|op| self.strategy.op_cost(op));
+                logger.log(format!("Chunk {i} has {chunk_cx_cost:?} CX gates",));
+                let join = thread::Builder::new()
+                    .name(format!("chunk-{}", i))
+                    .spawn(move || {
+                        let res =
+                            taso.optimise(&chunk, timeout, NonZeroUsize::new(1).unwrap(), false);
+                        tx.send(res).unwrap();
+                    })
+                    .unwrap();
+                (join, rx)
+            })
+            .unzip();
+
+        for i in 0..chunks.len() {
+            let res = rx_work[i]
+                .recv()
+                .unwrap_or_else(|_| panic!("Worker thread panicked"));
+            chunks[i] = res;
+        }
+
+        let best_circ = chunks.reassemble()?;
+        let best_circ_cost = self.cost(&best_circ);
+        if best_circ_cost.clone() < circ_cost {
+            logger.log_best(best_circ_cost.clone());
+        }
+
+        logger.log_processing_end(n_threads.get(), best_circ_cost, true, false);
+        joins.into_iter().for_each(|j| j.join().unwrap());
+
+        Ok(best_circ)
+    }
 }
 
 #[cfg(feature = "portmatching")]
@@ -360,7 +428,7 @@ mod tests {
 
     #[rstest]
     fn rz_rz_cancellation(rz_rz: Hugr, taso_opt: DefaultTasoOptimiser) {
-        let opt_rz = taso_opt.optimise(&rz_rz, None, 1.try_into().unwrap());
+        let opt_rz = taso_opt.optimise(&rz_rz, None, 1.try_into().unwrap(), false);
         let cmds = opt_rz
             .commands()
             .map(|cmd| {
