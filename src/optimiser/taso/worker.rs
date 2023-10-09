@@ -15,18 +15,18 @@ use crate::rewrite::Rewriter;
 
 use super::hugr_pqueue::{Entry, HugrPQ};
 
-/// A unit of work for a worker, consisting of a circuit to process and its
-/// hash.
-pub type Work = (u64, Hugr);
+/// A unit of work for a worker, consisting of a circuit to process, along its
+/// hash and cost.
+pub type Work<P> = (P, u64, Hugr);
 
 /// A worker that processes circuits for the TASO optimiser.
 pub struct TasoWorker<R, S, C, P: Ord> {
     /// The worker ID. Used to distribute work.
     id: usize,
     /// The channel to receive work.
-    pop: crossbeam_channel::Receiver<Vec<Work>>,
+    pop: crossbeam_channel::Receiver<Vec<Work<P>>>,
     /// A group of channels to send work.
-    push: WorkChannel,
+    push: WorkChannel<P>,
     /// A channel to log results and processing stats.
     log: crossbeam_channel::Sender<WorkerLog<P>>,
     /// A shared atomic with the current maximum cost in the queue.
@@ -59,8 +59,8 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         id: usize,
-        pop: crossbeam_channel::Receiver<Vec<Work>>,
-        push: WorkChannel,
+        pop: crossbeam_channel::Receiver<Vec<Work<P>>>,
+        push: WorkChannel<P>,
         log: crossbeam_channel::Sender<WorkerLog<P>>,
         rewriter: R,
         strategy: S,
@@ -157,24 +157,26 @@ where
 
     /// Process the next circuit in the queue, applying the rewrite strategy.
     #[tracing::instrument(target = "taso::metrics", skip_all)]
-    fn process_circ(&self, circ: Hugr) -> Vec<Work> {
+    fn process_circ(&self, circ: Hugr) -> Vec<Work<P>> {
         let rewrites = self.rewriter.get_rewrites(&circ);
         let circs = self.strategy.apply_rewrites(rewrites, &circ);
-        circs.into_iter().map(|c| (c.circuit_hash(), c)).collect()
+        circs
+            .into_iter()
+            .map(|c| ((self.pq.cost_fn)(&c), c.circuit_hash(), c))
+            .collect()
     }
 
     /// Add circuits to queue.
     #[tracing::instrument(target = "taso::metrics", skip(self, circs))]
     #[inline]
-    fn enqueue_circs(&mut self, circs: Vec<(u64, Hugr)>) {
+    fn enqueue_circs(&mut self, circs: Vec<(P, u64, Hugr)>) {
         let max_cost = self
             .pq
             .max_cost()
             .map(CircuitCost::as_usize)
             .unwrap_or(usize::MAX);
 
-        for (hash, circ) in circs {
-            let cost = (self.pq.cost_fn)(&circ);
+        for (cost, hash, circ) in circs {
             if !self.seen_hashes.insert(hash) {
                 // Ignore this circuit: we've seen it before.
                 continue;
@@ -236,14 +238,14 @@ where
 ///
 /// Distributes the work pseudo-randomly using circuit hashes.
 #[derive(Debug, Clone, Default)]
-pub struct WorkChannel {
-    worker_channels: Vec<crossbeam_channel::Sender<Vec<Work>>>,
+pub struct WorkChannel<P> {
+    worker_channels: Vec<crossbeam_channel::Sender<Vec<Work<P>>>>,
     pub(self) worker_max_costs: Vec<Arc<AtomicUsize>>,
 }
 
-impl WorkChannel {
+impl<P: CircuitCost> WorkChannel<P> {
     /// Create a new work channel with a given number of workers.
-    pub fn new(num_workers: usize) -> (Self, Vec<crossbeam_channel::Receiver<Vec<Work>>>) {
+    pub fn new(num_workers: usize) -> (Self, Vec<crossbeam_channel::Receiver<Vec<Work<P>>>>) {
         let mut worker_channels = Vec::with_capacity(num_workers);
         let mut rx_channels = Vec::with_capacity(num_workers);
         let mut worker_max_costs = Vec::with_capacity(num_workers);
@@ -267,14 +269,20 @@ impl WorkChannel {
     /// Returns a vector with circuits for the local thread.
     pub fn send(
         &self,
-        work: Vec<Work>,
+        work: Vec<Work<P>>,
         local_id: Option<usize>,
-    ) -> Result<Vec<Work>, SendError<Vec<Work>>> {
+    ) -> Result<Vec<Work<P>>, SendError<Vec<Work<P>>>> {
         let mut split_work = vec![Vec::new(); self.worker_channels.len()];
         let mut local_work = Vec::new();
-        for (hash, circ) in work {
+        // Cache with the maximum cost for each worker.
+        let mut workers_max_cost = vec![None; self.worker_channels.len()];
+        for (cost, hash, circ) in work {
             let worker = hash as usize % self.worker_channels.len();
-            split_work[worker].push((hash, circ));
+            let max_cost = *workers_max_cost[worker]
+                .get_or_insert_with(|| self.worker_max_costs[worker].load(Ordering::Relaxed));
+            if cost.as_usize() <= max_cost {
+                split_work[worker].push((cost, hash, circ));
+            }
         }
         for (worker, work) in split_work.into_iter().enumerate() {
             if work.is_empty() {
@@ -297,8 +305,8 @@ impl WorkChannel {
 }
 
 /// Logging information from the priority channel.
-pub enum WorkerLog<C> {
-    NewBestCircuit(Hugr, C),
+pub enum WorkerLog<P> {
+    NewBestCircuit(Hugr, P),
     CircuitCount {
         worker_id: usize,
         processed_count: usize,

@@ -217,7 +217,10 @@ where
         // Initialise the work channels and send the initial circuit.
         let (work_channel, recv_channels) = WorkChannel::new(n_threads);
         work_channel
-            .send(vec![(initial_circ_hash, circ.clone())], None)
+            .send(
+                vec![(best_circ_cost.clone(), initial_circ_hash, circ.clone())],
+                None,
+            )
             .unwrap();
 
         // A channel for reporting the best circuits to the main thread, and some processing stats.
