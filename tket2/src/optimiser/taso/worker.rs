@@ -1,9 +1,11 @@
 //! Distributed workers for the taso optimiser.
 
 use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 use crate::circuit::cost::CircuitCost;
 use crate::circuit::CircuitHash;
+use crate::optimiser::taso::log::PROGRESS_TARGET;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
 
@@ -62,18 +64,34 @@ where
                 break;
             };
 
+            let time_start = Instant::now();
+
             let rewrites = self.rewriter.get_rewrites(&circ);
+            let time_pmatch = Instant::now();
+
             let rewrite_result = self.strategy.apply_rewrites(rewrites, &circ);
             let max_cost = self.priority_channel.max_cost();
+            let time_rewrite = Instant::now();
+
+            let num_circs = rewrite_result.len();
+            let mut duration_hash = Duration::default();
+            let mut duration_cost = Duration::default();
             let new_circs = rewrite_result
                 .into_iter()
                 .filter_map(|(c, cost_delta)| {
+                    let time_circ = Instant::now();
+
                     let new_cost = cost.add_delta(&cost_delta);
+                    let time_cost = Instant::now();
+                    duration_cost += time_cost - time_circ;
                     if max_cost.is_some() && &new_cost >= max_cost.as_ref().unwrap() {
                         return None;
                     }
 
                     let hash = c.circuit_hash();
+                    let time_hash = Instant::now();
+                    duration_hash += time_hash - time_cost;
+
                     Some(Work {
                         cost: new_cost,
                         hash,
@@ -81,6 +99,7 @@ where
                     })
                 })
                 .collect();
+            let time_process = Instant::now();
 
             let send = tracing::trace_span!(target: "taso::metrics", "TasoWorker::send_result")
                 .in_scope(|| self.priority_channel.send(new_circs));
@@ -88,6 +107,17 @@ where
                 // Terminating
                 break;
             }
+            let time_send = Instant::now();
+
+            tracing::info!(
+                target: PROGRESS_TARGET,
+                "Processed circuit ({num_circs} matches). matching {:4}ms    rewriting {:4}ms    hashing {:4}ms    cost {:4}ms    enqueuing {:4}ms",
+                (time_pmatch - time_start).as_millis(),
+                (time_rewrite - time_pmatch).as_millis(),
+                duration_hash.as_millis(),
+                duration_cost.as_millis(),
+                (time_process - time_send).as_millis(),
+            );
         }
     }
 }

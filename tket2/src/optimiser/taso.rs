@@ -34,6 +34,7 @@ use crate::circuit::cost::CircuitCost;
 use crate::circuit::CircuitHash;
 use crate::optimiser::taso::hugr_pchannel::{HugrPriorityChannel, PriorityChannelLog};
 use crate::optimiser::taso::hugr_pqueue::{Entry, HugrPQ};
+use crate::optimiser::taso::log::PROGRESS_TARGET;
 use crate::optimiser::taso::worker::TasoWorker;
 use crate::passes::CircuitChunks;
 use crate::rewrite::strategy::RewriteStrategy;
@@ -161,21 +162,40 @@ where
                 logger.log_best(&best_circ_cost);
             }
             circ_cnt += 1;
+            let time_best = Instant::now();
 
             let rewrites = self.rewriter.get_rewrites(&circ);
-            for (new_circ, cost_delta) in self.strategy.apply_rewrites(rewrites, &circ) {
+            let time_pmatch = Instant::now();
+            let rewrites = self.strategy.apply_rewrites(rewrites, &circ);
+            let num_circs = rewrites.len();
+            let time_rewrite = Instant::now();
+            let mut duration_hash = Duration::default();
+            let mut duration_cost = Duration::default();
+            let mut duration_enq = Duration::default();
+            for (new_circ, cost_delta) in rewrites {
+                let time_circ = Instant::now();
+
                 let new_circ_cost = cost.add_delta(&cost_delta);
                 if !pq.check_accepted(&new_circ_cost) {
                     continue;
                 }
+                let time_cost = Instant::now();
+                duration_cost += time_cost - time_circ;
 
                 let new_circ_hash = new_circ.circuit_hash();
+                let time_hash = Instant::now();
+                duration_hash += time_hash - time_cost;
+
                 if !seen_hashes.insert(new_circ_hash) {
                     // Ignore this circuit: we've already seen it
                     continue;
                 }
+                let time_seen = Instant::now();
+
                 pq.push_unchecked(new_circ, new_circ_hash, new_circ_cost);
                 logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
+                let time_enq = Instant::now();
+                duration_enq += time_enq - time_seen;
             }
 
             if let Some(timeout) = timeout {
@@ -184,6 +204,16 @@ where
                     break;
                 }
             }
+
+            tracing::info!(
+                target: PROGRESS_TARGET,
+                "Processed circuit ({num_circs} matches). matching {:4}ms    rewriting {:4}ms    hashing {:4}ms    cost {:4}ms    enqueuing {:4}ms",
+                (time_pmatch - time_best).as_millis(),
+                (time_rewrite - time_pmatch).as_millis(),
+                duration_hash.as_millis(),
+                duration_cost.as_millis(),
+                duration_enq.as_millis(),
+            );
         }
 
         logger.log_processing_end(

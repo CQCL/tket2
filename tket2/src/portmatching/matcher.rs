@@ -245,6 +245,7 @@ impl PatternMatcher {
     }
 
     /// Find all convex pattern matches in a circuit.
+    #[inline]
     pub fn find_matches_iter<'a, 'c: 'a, C: Circuit + Clone>(
         &'a self,
         circuit: &'c C,
@@ -256,6 +257,7 @@ impl PatternMatcher {
     }
 
     /// Find all convex pattern matches in a circuit.and collect in to a vector
+    #[inline]
     pub fn find_matches<C: Circuit + Clone>(&self, circuit: &C) -> Vec<PatternMatch> {
         self.find_matches_iter(circuit).collect()
     }
