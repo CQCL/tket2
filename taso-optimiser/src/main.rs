@@ -88,9 +88,9 @@ struct CmdLineArgs {
     #[arg(
         short = 'q',
         long = "queue-size",
-        default_value = "10000",
+        default_value = "100",
         value_name = "QUEUE_SIZE",
-        help = "The priority queue size. Defaults to 10_000."
+        help = "The priority queue size. Defaults to 100."
     )]
     queue_size: usize,
 }

@@ -147,10 +147,10 @@ where
             let strategy = self.strategy.clone();
             move |circ: &'_ Hugr| strategy.circuit_cost(circ)
         };
-        let mut pq = HugrPQ::with_capacity(cost_fn, queue_size);
+        let mut pq = HugrPQ::new(cost_fn, queue_size);
         pq.push(circ.clone());
 
-        let mut circ_cnt = 1;
+        let mut circ_cnt = 0;
         let mut timeout_flag = false;
         while let Some(Entry { circ, cost, .. }) = pq.pop() {
             if cost < best_circ_cost {
@@ -158,6 +158,7 @@ where
                 best_circ_cost = cost;
                 logger.log_best(&best_circ_cost);
             }
+            circ_cnt += 1;
 
             let rewrites = self.rewriter.get_rewrites(&circ);
             for new_circ in self.strategy.apply_rewrites(rewrites, &circ) {
@@ -185,7 +186,13 @@ where
             }
         }
 
-        logger.log_processing_end(circ_cnt, best_circ_cost, false, timeout_flag);
+        logger.log_processing_end(
+            circ_cnt,
+            Some(seen_hashes.len()),
+            best_circ_cost,
+            false,
+            timeout_flag,
+        );
         best_circ
     }
 
@@ -306,7 +313,13 @@ where
                 }
             }
         }
-        logger.log_processing_end(circuit_cnt.iter().sum(), best_circ_cost, true, timeout_flag);
+        logger.log_processing_end(
+            circuit_cnt.iter().sum(),
+            Some(hashes_seen.iter().sum()),
+            best_circ_cost,
+            true,
+            timeout_flag,
+        );
 
         joins.into_iter().for_each(|j| j.join().unwrap());
 
@@ -373,7 +386,7 @@ where
             logger.log_best(best_circ_cost.clone());
         }
 
-        logger.log_processing_end(n_threads.get(), best_circ_cost, true, false);
+        logger.log_processing_end(n_threads.get(), None, best_circ_cost, true, false);
         joins.into_iter().for_each(|j| j.join().unwrap());
 
         Ok(best_circ)

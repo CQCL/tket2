@@ -1,8 +1,8 @@
 //! Distributed workers for the taso optimiser.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
+use std::time::Instant;
 
 use crossbeam_channel::{RecvError, SendError, TryRecvError};
 use fxhash::FxHashSet;
@@ -10,6 +10,7 @@ use hugr::Hugr;
 
 use crate::circuit::cost::CircuitCost;
 use crate::circuit::CircuitHash;
+use crate::optimiser::taso::log::PROGRESS_TARGET;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
 
@@ -31,13 +32,11 @@ pub struct TasoWorker<R, S, C, P: Ord> {
     log: crossbeam_channel::Sender<WorkerLog<P>>,
     /// A shared atomic with the current maximum cost in the queue.
     /// Other workers will avoid sending circuits with a cost higher than this.
-    max_cost: Arc<AtomicUsize>,
+    max_cost: Arc<RwLock<Option<P>>>,
     /// The rewriter to use.
     rewriter: R,
     /// The rewrite strategy to use.
     strategy: S,
-    // The queue capacity. Queue size is halved when it exceeds this.
-    queue_capacity: usize,
     // The priority queue data structure.
     pq: HugrPQ<P, C>,
     // The set of hashes we've seen.
@@ -80,8 +79,7 @@ where
                     max_cost,
                     rewriter,
                     strategy,
-                    queue_capacity,
-                    pq: HugrPQ::with_capacity(cost_fn, queue_capacity),
+                    pq: HugrPQ::new(cost_fn, queue_capacity),
                     seen_hashes: FxHashSet::default(),
                     min_cost: None,
                     circ_cnt: 0,
@@ -157,7 +155,8 @@ where
 
     /// Process the next circuit in the queue, applying the rewrite strategy.
     #[tracing::instrument(target = "taso::metrics", skip_all)]
-    fn process_circ(&self, circ: Hugr) -> Vec<Work<P>> {
+    fn process_circ(&mut self, circ: Hugr) -> Vec<Work<P>> {
+        self.circ_cnt += 1;
         let rewrites = self.rewriter.get_rewrites(&circ);
         let circs = self.strategy.apply_rewrites(rewrites, &circ);
         circs
@@ -170,11 +169,7 @@ where
     #[tracing::instrument(target = "taso::metrics", skip(self, circs))]
     #[inline]
     fn enqueue_circs(&mut self, circs: Vec<(P, u64, Hugr)>) {
-        let max_cost = self
-            .pq
-            .max_cost()
-            .map(CircuitCost::as_usize)
-            .unwrap_or(usize::MAX);
+        let max_cost = self.pq.max_cost().cloned();
 
         for (cost, hash, circ) in circs {
             if !self.seen_hashes.insert(hash) {
@@ -190,35 +185,20 @@ where
                     .unwrap();
             }
 
-            // Skip this circuit if it is too expensive.
-            if cost.as_usize() > max_cost {
-                continue;
-            }
-
-            if self.pq.is_empty() {
-                self.max_cost.store(cost.as_usize(), Ordering::Relaxed);
-            }
-
-            self.circ_cnt += 1;
             self.pq.push_unchecked(circ, hash, cost);
-
-            if self.circ_cnt % 1000 == 0 {
-                self.log_counts();
-            }
         }
+        self.log_counts();
 
-        // If the queue got too big, truncate it.
-        if self.pq.len() >= self.queue_capacity {
-            self.pq.truncate(self.queue_capacity / 2);
-            let new_max_cost = self.pq.max_cost().unwrap().as_usize();
-
-            // Update the upper bound on the cost of circuits we will accept.
-            // Note that some circuits may have been added to the queue with a
-            // cost higher than the new max cost. We don't remove them, but
-            // they will be ignored.
-            if new_max_cost < max_cost {
-                self.max_cost.store(new_max_cost, Ordering::Relaxed);
-            }
+        // Update the upper bound on the cost of circuits we will accept.
+        // Note that some circuits may have been added to the queue with a
+        // cost higher than the new max cost. We don't remove them, but
+        // they will be ignored.
+        let Some(new_max_cost) = self.pq.max_cost().cloned() else {
+            return;
+        };
+        if max_cost.is_none() || new_max_cost < max_cost.unwrap() {
+            let mut lock = self.max_cost.write().unwrap();
+            *lock = Some(new_max_cost);
         }
     }
 
@@ -240,7 +220,7 @@ where
 #[derive(Debug, Clone, Default)]
 pub struct WorkChannel<P> {
     worker_channels: Vec<crossbeam_channel::Sender<Vec<Work<P>>>>,
-    pub(self) worker_max_costs: Vec<Arc<AtomicUsize>>,
+    pub(self) worker_max_costs: Vec<Arc<RwLock<Option<P>>>>,
 }
 
 impl<P: CircuitCost> WorkChannel<P> {
@@ -253,7 +233,7 @@ impl<P: CircuitCost> WorkChannel<P> {
             let (tx, rx) = crossbeam_channel::unbounded();
             worker_channels.push(tx);
             rx_channels.push(rx);
-            worker_max_costs.push(Arc::new(AtomicUsize::new(usize::MAX)));
+            worker_max_costs.push(Arc::new(RwLock::new(None)));
         }
         (
             Self {
@@ -278,9 +258,16 @@ impl<P: CircuitCost> WorkChannel<P> {
         let mut workers_max_cost = vec![None; self.worker_channels.len()];
         for (cost, hash, circ) in work {
             let worker = hash as usize % self.worker_channels.len();
-            let max_cost = *workers_max_cost[worker]
-                .get_or_insert_with(|| self.worker_max_costs[worker].load(Ordering::Relaxed));
-            if cost.as_usize() <= max_cost {
+            let max_cost = workers_max_cost[worker]
+                .get_or_insert_with(|| {
+                    self.worker_max_costs[worker]
+                        .read()
+                        .as_deref()
+                        .cloned()
+                        .unwrap_or_default()
+                })
+                .clone();
+            if max_cost.is_none() || cost <= max_cost.unwrap() {
                 split_work[worker].push((cost, hash, circ));
             }
         }
