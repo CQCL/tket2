@@ -1,6 +1,6 @@
 //! Python bindings for TKET2.
 #![warn(missing_docs)]
-use circuit::{add_circuit_module, to_hugr, try_with_hugr};
+use circuit::{add_circuit_module, to_hugr, try_with_hugr, T2Circuit};
 use hugr::Hugr;
 use optimiser::add_optimiser_module;
 use pyo3::prelude::*;
@@ -63,26 +63,6 @@ impl RuleMatcher {
     }
 }
 
-#[pyclass]
-/// A manager for tket 2 operations on a tket 1 Circuit.
-pub struct T2Circuit(Hugr);
-
-#[pymethods]
-impl T2Circuit {
-    #[new]
-    fn from_circuit(circ: PyObject) -> PyResult<Self> {
-        Ok(Self(to_hugr(circ)?))
-    }
-
-    fn finish(&self) -> PyResult<PyObject> {
-        SerialCircuit::encode(&self.0)?.to_tket1()
-    }
-
-    fn apply_match(&mut self, rw: CircuitRewrite) {
-        rw.apply(&mut self.0).expect("Apply error.");
-    }
-}
-
 #[pyfunction]
 fn greedy_depth_reduce(py_c: PyObject) -> PyResult<(PyObject, u32)> {
     try_with_hugr(py_c, |mut h| {
@@ -99,9 +79,6 @@ fn pyrs(py: Python, m: &PyModule) -> PyResult<()> {
     add_pattern_module(py, m)?;
     add_pass_module(py, m)?;
     add_optimiser_module(py, m)?;
-    m.add_class::<Rule>()?;
-    m.add_class::<RuleMatcher>()?;
-    m.add_class::<T2Circuit>()?;
     Ok(())
 }
 
@@ -110,6 +87,9 @@ fn add_pattern_module(py: Python, parent: &PyModule) -> PyResult<()> {
     let m = PyModule::new(py, "pattern")?;
     m.add_class::<tket2::portmatching::CircuitPattern>()?;
     m.add_class::<tket2::portmatching::PatternMatcher>()?;
+    m.add_class::<CircuitRewrite>()?;
+    m.add_class::<Rule>()?;
+    m.add_class::<RuleMatcher>()?;
 
     m.add(
         "InvalidPatternError",

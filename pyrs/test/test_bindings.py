@@ -1,7 +1,10 @@
 from dataclasses import dataclass
-from pyrs.pyrs import passes, circuit
-from pyrs.pyrs import Rule, RuleMatcher, T2Circuit
+from pyrs.pyrs import passes, circuit, pattern
+
 from pytket.circuit import Circuit
+# TODO clean up after fixing module structure #169
+Rule, RuleMatcher = pattern.Rule, pattern.RuleMatcher
+T2Circuit = circuit.T2Circuit
 
 
 @dataclass

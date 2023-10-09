@@ -7,6 +7,7 @@ use hugr::{Hugr, HugrView};
 use tket2::extension::REGISTRY;
 use tket2::json::TKETDecode;
 use tket2::passes::CircuitChunks;
+use tket2::rewrite::CircuitRewrite;
 use tket_json_rs::circuit_json::SerialCircuit;
 
 /// Apply a fallible function expecting a hugr on a pytket circuit.
@@ -59,9 +60,29 @@ pub fn chunks(c: Py<PyAny>, max_chunk_size: usize) -> PyResult<CircuitChunks> {
     with_hugr(c, |hugr| CircuitChunks::split(&hugr, max_chunk_size))
 }
 
+#[pyclass]
+/// A manager for tket 2 operations on a tket 1 Circuit.
+pub struct T2Circuit(pub Hugr);
+
+#[pymethods]
+impl T2Circuit {
+    #[new]
+    fn from_circuit(circ: PyObject) -> PyResult<Self> {
+        Ok(Self(to_hugr(circ)?))
+    }
+
+    fn finish(&self) -> PyResult<PyObject> {
+        SerialCircuit::encode(&self.0)?.to_tket1()
+    }
+
+    fn apply_match(&mut self, rw: CircuitRewrite) {
+        rw.apply(&mut self.0).expect("Apply error.");
+    }
+}
 /// circuit module
 pub fn add_circuit_module(py: Python, parent: &PyModule) -> PyResult<()> {
     let m = PyModule::new(py, "circuit")?;
+    m.add_class::<T2Circuit>()?;
     m.add_class::<tket2::T2Op>()?;
     m.add_class::<tket2::Pauli>()?;
     m.add_class::<tket2::passes::CircuitChunks>()?;
