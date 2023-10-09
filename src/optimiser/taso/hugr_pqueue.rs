@@ -14,6 +14,7 @@ pub(super) struct HugrPQ<P: Ord, C> {
     queue: DoublePriorityQueue<u64, P>,
     hash_lookup: FxHashMap<u64, Hugr>,
     pub(super) cost_fn: C,
+    max_size: usize,
 }
 
 pub(super) struct Entry<C, P, H> {
@@ -25,11 +26,12 @@ pub(super) struct Entry<C, P, H> {
 
 impl<P: Ord, C> HugrPQ<P, C> {
     /// Create a new HugrPQ with a cost function and some initial capacity.
-    pub(super) fn with_capacity(cost_fn: C, capacity: usize) -> Self {
+    pub(super) fn new(cost_fn: C, max_size: usize) -> Self {
         Self {
-            queue: DoublePriorityQueue::with_capacity(capacity),
+            queue: DoublePriorityQueue::with_capacity(max_size),
             hash_lookup: Default::default(),
             cost_fn,
+            max_size,
         }
     }
 
@@ -46,6 +48,8 @@ impl<P: Ord, C> HugrPQ<P, C> {
     }
 
     /// Push a Hugr into the queue.
+    ///
+    /// If the queue is full, the most last will be dropped.
     pub(super) fn push(&mut self, hugr: Hugr)
     where
         C: Fn(&Hugr) -> P,
@@ -61,10 +65,22 @@ impl<P: Ord, C> HugrPQ<P, C> {
     /// [`HugrPQ::push`] when they are already known.
     ///
     /// This does not check that the hash is valid.
+    ///
+    /// If the queue is full, the most last will be dropped.
     pub(super) fn push_unchecked(&mut self, hugr: Hugr, hash: u64, cost: P)
     where
         C: Fn(&Hugr) -> P,
     {
+        if self.max_size == 0 {
+            return;
+        }
+        if self.len() >= self.max_size {
+            let max_cost = self.max_cost().unwrap();
+            if self.len() >= self.max_size && cost >= *max_cost {
+                return;
+            }
+            self.pop_max();
+        }
         self.queue.push(hash, cost);
         self.hash_lookup.insert(hash, hugr);
     }
@@ -72,6 +88,13 @@ impl<P: Ord, C> HugrPQ<P, C> {
     /// Pop the minimal Hugr from the queue.
     pub(super) fn pop(&mut self) -> Option<Entry<Hugr, P, u64>> {
         let (hash, cost) = self.queue.pop_min()?;
+        let circ = self.hash_lookup.remove(&hash)?;
+        Some(Entry { circ, cost, hash })
+    }
+
+    /// Pop the maximal Hugr from the queue.
+    pub(super) fn pop_max(&mut self) -> Option<Entry<Hugr, P, u64>> {
+        let (hash, cost) = self.queue.pop_max()?;
         let circ = self.hash_lookup.remove(&hash)?;
         Some(Entry { circ, cost, hash })
     }

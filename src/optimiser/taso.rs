@@ -149,7 +149,7 @@ where
             let strategy = self.strategy.clone();
             move |circ: &'_ Hugr| strategy.circuit_cost(circ)
         };
-        let mut pq = HugrPQ::with_capacity(cost_fn, queue_size);
+        let mut pq = HugrPQ::new(cost_fn, queue_size);
         pq.push(circ.clone());
 
         let mut circ_cnt = 1;
@@ -448,7 +448,7 @@ mod tests {
 
     #[rstest]
     fn rz_rz_cancellation(rz_rz: Hugr, taso_opt: DefaultTasoOptimiser) {
-        let opt_rz = taso_opt.optimise(&rz_rz, None, 1.try_into().unwrap(), false, 10_000);
+        let opt_rz = taso_opt.optimise(&rz_rz, None, 1.try_into().unwrap(), false, 100);
         let cmds = opt_rz
             .commands()
             .map(|cmd| {
