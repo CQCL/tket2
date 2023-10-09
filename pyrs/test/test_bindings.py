@@ -1,6 +1,10 @@
 from dataclasses import dataclass
-from pyrs.pyrs import passes, circuit
+from pyrs.pyrs import passes, circuit, pattern
+
 from pytket.circuit import Circuit
+# TODO clean up after fixing module structure #169
+Rule, RuleMatcher = pattern.Rule, pattern.RuleMatcher
+T2Circuit = circuit.T2Circuit
 
 
 @dataclass
@@ -19,6 +23,7 @@ def test_depth_optimise():
 
     assert c.depth() == 2
 
+
 def test_chunks():
     c = Circuit(4).CX(0, 2).CX(1, 3).CX(1, 2).CX(0, 3).CX(1, 3)
 
@@ -30,6 +35,41 @@ def test_chunks():
     c2 = chunks.reassemble()
 
     assert c2.depth() == 3
+
+
+def test_cx_rule():
+    c = T2Circuit(Circuit(4).CX(0, 2).CX(1, 2).CX(1, 2))
+
+    rule = Rule(Circuit(2).CX(0, 1).CX(0, 1), Circuit(2))
+    matcher = RuleMatcher([rule])
+
+    mtch = matcher.find_match(c)
+
+    c.apply_match(mtch)
+
+    coms = c.finish().get_commands()
+    print(coms)
+    assert len(coms) == 1
+
+
+def test_multiple_rules():
+    circuit = T2Circuit(Circuit(3).CX(0, 1).H(0).H(1).H(2).Z(0).H(0).H(1).H(2))
+
+    rule1 = Rule(Circuit(1).H(0).Z(0).H(0), Circuit(1).X(0))
+    rule2 = Rule(Circuit(1).H(0).H(0), Circuit(1))
+    matcher = RuleMatcher([rule1, rule2])
+
+    match_count = 0
+    while match := matcher.find_match(circuit):
+        match_count += 1
+        circuit.apply_match(match)
+
+    assert match_count == 3
+
+    coms = circuit.finish().get_commands()
+    print(coms)
+    assert len(coms) == 2
+
 
 # from dataclasses import dataclass
 # from typing import Callable, Iterable

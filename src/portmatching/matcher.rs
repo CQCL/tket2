@@ -244,12 +244,19 @@ impl PatternMatcher {
     }
 
     /// Find all convex pattern matches in a circuit.
-    pub fn find_matches<C: Circuit + Clone>(&self, circuit: &C) -> Vec<PatternMatch> {
+    pub fn find_matches_iter<'a, 'c: 'a, C: Circuit + Clone>(
+        &'a self,
+        circuit: &'c C,
+    ) -> impl Iterator<Item = PatternMatch> + 'a {
         let mut checker = ConvexChecker::new(circuit);
         circuit
             .commands()
-            .flat_map(|cmd| self.find_rooted_matches(circuit, cmd.node(), &mut checker))
-            .collect()
+            .flat_map(move |cmd| self.find_rooted_matches(circuit, cmd.node(), &mut checker))
+    }
+
+    /// Find all convex pattern matches in a circuit.and collect in to a vector
+    pub fn find_matches<C: Circuit + Clone>(&self, circuit: &C) -> Vec<PatternMatch> {
+        self.find_matches_iter(circuit).collect()
     }
 
     /// Find all convex pattern matches in a circuit rooted at a given node.
