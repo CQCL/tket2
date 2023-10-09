@@ -63,6 +63,7 @@ impl PyDefaultTasoOptimiser {
         n_threads: Option<NonZeroUsize>,
         split_circ: Option<bool>,
         log_progress: Option<PathBuf>,
+        queue_size: Option<usize>,
     ) -> PyResult<PyObject> {
         let taso_logger = log_progress
             .map(|file_name| {
@@ -78,6 +79,7 @@ impl PyDefaultTasoOptimiser {
                 timeout,
                 n_threads.unwrap_or(NonZeroUsize::new(1).unwrap()),
                 split_circ.unwrap_or(false),
+                queue_size.unwrap_or(10_000),
             )
         })
     }
