@@ -9,7 +9,7 @@ use crate::circuit::CircuitHash;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
 
-use super::hugr_pchannel::PriorityChannelCommunication;
+use super::hugr_pchannel::{PriorityChannelCommunication, Work};
 
 /// A worker that processes circuits for the TASO optimiser.
 pub struct TasoWorker<R, S, C, P: Ord> {
@@ -65,7 +65,7 @@ where
     #[tracing::instrument(target = "taso::metrics", skip(self))]
     fn run_loop(&mut self) {
         loop {
-            let Ok((_cost, _hash, circ)) = self.priority_channel.recv() else {
+            let Ok(Work { circ, .. }) = self.priority_channel.recv() else {
                 break;
             };
 
@@ -73,7 +73,15 @@ where
             let circs = self.strategy.apply_rewrites(rewrites, &circ);
             let new_circs = circs
                 .into_iter()
-                .map(|c| ((self.cost_fn)(&c), c.circuit_hash(), c))
+                .map(|c| {
+                    let hash = c.circuit_hash();
+                    let cost = (self.cost_fn)(&c);
+                    Work {
+                        cost,
+                        hash,
+                        circ: c,
+                    }
+                })
                 .collect();
 
             let send = tracing::trace_span!(target: "taso::metrics", "TasoWorker::send_result")

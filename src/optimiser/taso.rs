@@ -225,11 +225,11 @@ where
         let mut best_circ_cost = self.cost(&best_circ);
 
         // Initialise the work channels and send the initial circuit.
-        pq.send(vec![(
-            best_circ_cost.clone(),
-            initial_circ_hash,
-            circ.clone(),
-        )])
+        pq.send(vec![Work {
+            cost: best_circ_cost.clone(),
+            hash: initial_circ_hash,
+            circ: circ.clone(),
+        }])
         .unwrap();
 
         // Each worker waits for circuits to scan for rewrites using all the
@@ -429,6 +429,8 @@ mod taso_default {
 }
 #[cfg(feature = "portmatching")]
 pub use taso_default::DefaultTasoOptimiser;
+
+use self::hugr_pchannel::Work;
 
 #[cfg(test)]
 #[cfg(feature = "portmatching")]

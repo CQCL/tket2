@@ -14,7 +14,7 @@ use super::hugr_pqueue::{Entry, HugrPQ};
 
 /// A unit of work for a worker, consisting of a circuit to process, along its
 /// hash and cost.
-pub type Work<P> = (P, u64, Hugr);
+pub type Work<P> = Entry<Hugr, P, u64>;
 
 /// A priority channel for HUGRs.
 ///
@@ -88,7 +88,10 @@ impl<P: CircuitCost> PriorityChannelCommunication<P> {
         //
         match self.max_cost() {
             Some(max_cost) => {
-                let filtered = work.into_iter().filter(|(c, _, _)| c < &max_cost).collect();
+                let filtered = work
+                    .into_iter()
+                    .filter(|Work { cost, .. }| cost < &max_cost)
+                    .collect();
                 self.push.send(filtered)?;
             }
             _ => self.push.send(work)?,
@@ -219,7 +222,7 @@ where
                             }
                             self.enqueue_circs(new_circs);
                         }
-                        send(self.pop, {let Entry {cost, hash, circ} = self.pq.pop().unwrap(); (cost, hash, circ)}) -> result => {
+                        send(self.pop, self.pq.pop().unwrap()) -> result => {
                             if result.is_err() {
                                 // Something went wrong.
                                 break 'main;
@@ -230,7 +233,7 @@ where
                 }
                 // Send a last set of logs before terminating.
                 self.log
-                    .send(PriorityChannelLog::CircuitCount{
+                    .send(PriorityChannelLog::CircuitCount {
                         processed_count: self.circ_cnt,
                         seen_count: self.seen_hashes.len(),
                         queue_length: self.pq.len(),
@@ -243,7 +246,7 @@ where
     /// Add circuits to queue.
     #[tracing::instrument(target = "taso::metrics", skip(self, circs))]
     fn enqueue_circs(&mut self, circs: Vec<Work<P>>) {
-        for (cost, hash, circ) in circs {
+        for Work { cost, hash, circ } in circs {
             if !self.seen_hashes.insert(hash) {
                 // Ignore this circuit: we've seen it before.
                 continue;
