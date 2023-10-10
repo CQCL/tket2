@@ -2,7 +2,7 @@
 
 use derive_more::From;
 use hugr::ops::OpType;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::iter::Sum;
 use std::num::NonZeroUsize;
 use std::ops::Add;
@@ -12,19 +12,22 @@ use crate::T2Op;
 
 /// The cost for a group of operations in a circuit, each with cost `OpCost`.
 pub trait CircuitCost: Add<Output = Self> + Sum<Self> + Debug + Default + Clone + Ord {
+    type CostDelta: CostDelta;
+
     /// Return the cost as a `usize`. This may discard some of the cost information.
     fn as_usize(&self) -> usize;
 
-    /// Subtract another cost to get the signed distance between `self` and `rhs`.
-    ///
-    /// Equivalent to `self.as_usize() - rhs.as_usize()`.
-    #[inline]
-    fn sub_cost(&self, rhs: &Self) -> isize {
-        self.as_usize() as isize - rhs.as_usize() as isize
-    }
+    /// Return the cost delta between two costs.
+    fn sub_cost(&self, other: &Self) -> Self::CostDelta;
 
     /// Divide the cost, rounded up.
     fn div_cost(&self, n: NonZeroUsize) -> Self;
+}
+
+/// The cost for a group of operations in a circuit, each with cost `OpCost`.
+pub trait CostDelta: Sum<Self> + Debug + Default + Clone + Ord {
+    /// Return the delta as a `isize`. This may discard some of the cost delta information.
+    fn as_isize(&self) -> isize;
 }
 
 /// A pair of major and minor cost.
@@ -33,9 +36,9 @@ pub trait CircuitCost: Add<Output = Self> + Sum<Self> + Debug + Default + Clone 
 /// A typical example would be CX count as major cost and total gate count as
 /// minor cost.
 #[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, From)]
-pub struct MajorMinorCost {
-    major: usize,
-    minor: usize,
+pub struct MajorMinorCost<T = usize> {
+    major: T,
+    minor: T,
 }
 
 // Serialise as string so that it is easy to write to CSV
@@ -48,7 +51,7 @@ impl serde::Serialize for MajorMinorCost {
     }
 }
 
-impl Debug for MajorMinorCost {
+impl<T: Display> Debug for MajorMinorCost<T> {
     // TODO: A nicer print for the logs
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "(major={}, minor={})", self.major, self.minor)
@@ -63,17 +66,33 @@ impl Add for MajorMinorCost {
     }
 }
 
-impl Sum for MajorMinorCost {
+impl<T: Add<Output = T> + Default> Sum for MajorMinorCost<T> {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.reduce(|a, b| (a.major + b.major, a.minor + b.minor).into())
             .unwrap_or_default()
     }
 }
 
-impl CircuitCost for MajorMinorCost {
+impl CostDelta for MajorMinorCost<isize> {
+    #[inline]
+    fn as_isize(&self) -> isize {
+        self.major
+    }
+}
+
+impl CircuitCost for MajorMinorCost<usize> {
+    type CostDelta = MajorMinorCost<isize>;
+
     #[inline]
     fn as_usize(&self) -> usize {
         self.major
+    }
+
+    #[inline]
+    fn sub_cost(&self, other: &Self) -> Self::CostDelta {
+        let major = (self.major as isize) - (other.major as isize);
+        let minor = (self.minor as isize) - (other.minor as isize);
+        MajorMinorCost { major, minor }
     }
 
     #[inline]
@@ -84,10 +103,24 @@ impl CircuitCost for MajorMinorCost {
     }
 }
 
+impl CostDelta for isize {
+    #[inline]
+    fn as_isize(&self) -> isize {
+        *self
+    }
+}
+
 impl CircuitCost for usize {
+    type CostDelta = isize;
+
     #[inline]
     fn as_usize(&self) -> usize {
         *self
+    }
+
+    #[inline]
+    fn sub_cost(&self, other: &Self) -> Self::CostDelta {
+        (*self as isize) - (*other as isize)
     }
 
     #[inline]
@@ -131,8 +164,8 @@ mod tests {
                 minor: 3
             }
         );
-        assert_eq!(a.sub_cost(&b), -10);
-        assert_eq!(b.sub_cost(&a), 10);
+        assert_eq!(a.sub_cost(&b).as_isize(), -10);
+        assert_eq!(b.sub_cost(&a).as_isize(), 10);
         assert_eq!(
             a.div_cost(NonZeroUsize::new(2).unwrap()),
             MajorMinorCost { major: 5, minor: 1 }

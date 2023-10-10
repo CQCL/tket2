@@ -127,7 +127,7 @@ pub trait ExhaustiveThresholdStrategy {
     /// Returns true if the rewrite is allowed, based on the cost of the pattern and target.
     #[inline]
     fn under_threshold(&self, pattern_cost: &Self::OpCost, target_cost: &Self::OpCost) -> bool {
-        target_cost.sub_cost(pattern_cost) <= 0
+        target_cost.sub_cost(pattern_cost).as_isize() <= 0
     }
 
     /// The cost of a single operation.
