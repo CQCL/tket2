@@ -1,11 +1,24 @@
 //! Logging utilities for the TASO optimiser.
 
+use std::time::{Duration, Instant};
 use std::{fmt::Debug, io};
 
 /// Logging configuration for the TASO optimiser.
-#[derive(Default)]
 pub struct TasoLogger<'w> {
     circ_candidates_csv: Option<csv::Writer<Box<dyn io::Write + 'w>>>,
+    last_circ_processed: usize,
+    last_progress_time: Instant,
+}
+
+impl<'w> Default for TasoLogger<'w> {
+    fn default() -> Self {
+        Self {
+            circ_candidates_csv: Default::default(),
+            last_circ_processed: Default::default(),
+            // Ensure the first progress message is printed.
+            last_progress_time: Instant::now() - Duration::from_secs(60),
+        }
+    }
 }
 
 /// The logging target for general events.
@@ -30,6 +43,7 @@ impl<'w> TasoLogger<'w> {
         let boxed_candidates_writer: Box<dyn io::Write> = Box::new(best_progress_csv_writer);
         Self {
             circ_candidates_csv: Some(csv::Writer::from_writer(boxed_candidates_writer)),
+            ..Default::default()
         }
     }
 
@@ -47,19 +61,25 @@ impl<'w> TasoLogger<'w> {
     #[inline]
     pub fn log_processing_end<C: Debug>(
         &self,
-        circuit_count: usize,
+        circuits_processed: usize,
+        circuits_seen: Option<usize>,
         best_cost: C,
         needs_joining: bool,
         timeout: bool,
     ) {
         match timeout {
-            true => self.log("Optimisation finished (timeout)"),
-            false => self.log("Optimisation finished"),
+            true => self.log("Optimisation finished (timeout)."),
+            false => self.log("Optimisation finished."),
         };
-        self.log(format!("Tried {circuit_count} circuits"));
+        match circuits_seen {
+            Some(circuits_seen) => self.log(format!(
+                "Processed {circuits_processed} circuits (out of {circuits_seen} seen)."
+            )),
+            None => self.log(format!("Processed {circuits_processed} circuits.")),
+        }
         self.log(format!("---- END RESULT: {:?} ----", best_cost));
         if needs_joining {
-            self.log("Joining worker threads");
+            self.log("Joining worker threads.");
         }
     }
 
@@ -67,16 +87,21 @@ impl<'w> TasoLogger<'w> {
     #[inline(always)]
     pub fn log_progress(
         &mut self,
-        circ_cnt: usize,
+        circuits_processed: usize,
         workqueue_len: Option<usize>,
         seen_hashes: usize,
     ) {
-        if circ_cnt % 1000 == 0 {
-            self.progress(format!("{circ_cnt} circuits..."));
+        if circuits_processed > self.last_circ_processed
+            && Instant::now() - self.last_progress_time > Duration::from_secs(1)
+        {
+            self.last_circ_processed = circuits_processed;
+            self.last_progress_time = Instant::now();
+
+            self.progress(format!("Processed {circuits_processed} circuits..."));
             if let Some(workqueue_len) = workqueue_len {
-                self.progress(format!("Queue size: {workqueue_len} circuits"));
+                self.progress(format!("Queue size: {workqueue_len} circuits."));
             }
-            self.progress(format!("Total seen: {} circuits", seen_hashes));
+            self.progress(format!("Total seen: {} circuits.", seen_hashes));
         }
     }
 

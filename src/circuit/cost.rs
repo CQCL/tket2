@@ -12,8 +12,16 @@ use crate::T2Op;
 
 /// The cost for a group of operations in a circuit, each with cost `OpCost`.
 pub trait CircuitCost: Add<Output = Self> + Sum<Self> + Debug + Default + Clone + Ord {
+    /// Return the cost as a `usize`. This may discard some of the cost information.
+    fn as_usize(&self) -> usize;
+
     /// Subtract another cost to get the signed distance between `self` and `rhs`.
-    fn sub_cost(&self, rhs: &Self) -> isize;
+    ///
+    /// Equivalent to `self.as_usize() - rhs.as_usize()`.
+    #[inline]
+    fn sub_cost(&self, rhs: &Self) -> isize {
+        self.as_usize() as isize - rhs.as_usize() as isize
+    }
 
     /// Divide the cost, rounded up.
     fn div_cost(&self, n: NonZeroUsize) -> Self;
@@ -64,8 +72,8 @@ impl Sum for MajorMinorCost {
 
 impl CircuitCost for MajorMinorCost {
     #[inline]
-    fn sub_cost(&self, rhs: &Self) -> isize {
-        self.major as isize - rhs.major as isize
+    fn as_usize(&self) -> usize {
+        self.major
     }
 
     #[inline]
@@ -78,8 +86,8 @@ impl CircuitCost for MajorMinorCost {
 
 impl CircuitCost for usize {
     #[inline]
-    fn sub_cost(&self, rhs: &Self) -> isize {
-        *self as isize - *rhs as isize
+    fn as_usize(&self) -> usize {
+        *self
     }
 
     #[inline]

@@ -152,7 +152,7 @@ where
         let mut pq = HugrPQ::new(cost_fn, queue_size);
         pq.push(circ.clone());
 
-        let mut circ_cnt = 1;
+        let mut circ_cnt = 0;
         let mut timeout_flag = false;
         while let Some(Entry { circ, cost, .. }) = pq.pop() {
             if cost < best_circ_cost {
@@ -160,6 +160,7 @@ where
                 best_circ_cost = cost;
                 logger.log_best(&best_circ_cost);
             }
+            circ_cnt += 1;
 
             let rewrites = self.rewriter.get_rewrites(&circ);
             for new_circ in self.strategy.apply_rewrites(rewrites, &circ) {
@@ -187,7 +188,13 @@ where
             }
         }
 
-        logger.log_processing_end(circ_cnt, best_circ_cost, false, timeout_flag);
+        logger.log_processing_end(
+            circ_cnt,
+            Some(seen_hashes.len()),
+            best_circ_cost,
+            false,
+            timeout_flag,
+        );
         best_circ
     }
 
@@ -211,37 +218,33 @@ where
             let strategy = self.strategy.clone();
             move |circ: &'_ Hugr| strategy.circuit_cost(circ)
         };
-        let mut pq = HugrPriorityChannel::init(cost_fn, queue_size);
+        let (pq, rx_log) = HugrPriorityChannel::init(cost_fn.clone(), queue_size);
 
         let initial_circ_hash = circ.circuit_hash();
         let mut best_circ = circ.clone();
         let mut best_circ_cost = self.cost(&best_circ);
+
+        // Initialise the work channels and send the initial circuit.
+        pq.send(vec![Work {
+            cost: best_circ_cost.clone(),
+            hash: initial_circ_hash,
+            circ: circ.clone(),
+        }])
+        .unwrap();
 
         // Each worker waits for circuits to scan for rewrites using all the
         // patterns and sends the results back to main.
         let joins: Vec<_> = (0..n_threads)
             .map(|i| {
                 TasoWorker::spawn(
-                    pq.pop.clone().unwrap(),
-                    pq.push.clone().unwrap(),
+                    i,
+                    pq.clone(),
                     self.rewriter.clone(),
                     self.strategy.clone(),
-                    Some(format!("taso-worker-{i}")),
+                    cost_fn.clone(),
                 )
             })
             .collect();
-
-        // Queue the initial circuit
-        pq.push
-            .as_ref()
-            .unwrap()
-            .send(vec![(initial_circ_hash, circ.clone())])
-            .unwrap();
-        // Drop our copy of the priority queue channels, so we don't count as a
-        // connected worker.
-        pq.drop_pop_push();
-
-        // TODO: Report dropped jobs in the queue, so we can check for termination.
 
         // Deadline for the optimisation timeout
         let timeout_event = match timeout {
@@ -252,47 +255,68 @@ where
         // Main loop: log best circuits as they come in from the priority queue,
         // until the timeout is reached.
         let mut timeout_flag = false;
+        let mut processed_count = 0;
+        let mut seen_count = 0;
         loop {
             select! {
-                recv(pq.log) -> msg => {
+                recv(rx_log) -> msg => {
                     match msg {
                         Ok(PriorityChannelLog::NewBestCircuit(circ, cost)) => {
-                            best_circ = circ;
-                            best_circ_cost = cost;
-                            logger.log_best(&best_circ_cost);
+                            if cost < best_circ_cost {
+                                best_circ = circ;
+                                best_circ_cost = cost;
+                                logger.log_best(&best_circ_cost);
+                            }
                         },
-                        Ok(PriorityChannelLog::CircuitCount(circuit_cnt, seen_cnt)) => {
-                            logger.log_progress(circuit_cnt, None, seen_cnt);
+                        Ok(PriorityChannelLog::CircuitCount{processed_count: proc, seen_count: seen, queue_length}) => {
+                            processed_count = proc;
+                            seen_count = seen;
+                            logger.log_progress(processed_count, Some(queue_length), seen_count);
                         }
                         Err(crossbeam_channel::RecvError) => {
-                            eprintln!("Priority queue panicked. Stopping optimisation.");
+                            logger.log("The priority channel panicked. Stopping TASO optimisation.");
+                            let _ = pq.close();
                             break;
                         }
                     }
                 }
                 recv(timeout_event) -> _ => {
                     timeout_flag = true;
-                    pq.timeout();
+                    // Signal the workers to stop.
+                    let _ = pq.close();
                     break;
                 }
             }
         }
 
         // Empty the log from the priority queue and store final circuit count.
-        let mut circuit_cnt = None;
-        while let Ok(log) = pq.log.recv() {
+        while let Ok(log) = rx_log.recv() {
             match log {
                 PriorityChannelLog::NewBestCircuit(circ, cost) => {
-                    best_circ = circ;
-                    best_circ_cost = cost;
-                    logger.log_best(&best_circ_cost);
+                    if cost < best_circ_cost {
+                        best_circ = circ;
+                        best_circ_cost = cost;
+                        logger.log_best(&best_circ_cost);
+                    }
                 }
-                PriorityChannelLog::CircuitCount(circ_cnt, _) => {
-                    circuit_cnt = Some(circ_cnt);
+                PriorityChannelLog::CircuitCount {
+                    processed_count: proc,
+                    seen_count: seen,
+                    queue_length,
+                } => {
+                    processed_count = proc;
+                    seen_count = seen;
+                    logger.log_progress(processed_count, Some(queue_length), seen_count);
                 }
             }
         }
-        logger.log_processing_end(circuit_cnt.unwrap_or(0), best_circ_cost, true, timeout_flag);
+        logger.log_processing_end(
+            processed_count,
+            Some(seen_count),
+            best_circ_cost,
+            true,
+            timeout_flag,
+        );
 
         joins.into_iter().for_each(|j| j.join().unwrap());
 
@@ -359,7 +383,7 @@ where
             logger.log_best(best_circ_cost.clone());
         }
 
-        logger.log_processing_end(n_threads.get(), best_circ_cost, true, false);
+        logger.log_processing_end(n_threads.get(), None, best_circ_cost, true, false);
         joins.into_iter().for_each(|j| j.join().unwrap());
 
         Ok(best_circ)
@@ -405,6 +429,8 @@ mod taso_default {
 }
 #[cfg(feature = "portmatching")]
 pub use taso_default::DefaultTasoOptimiser;
+
+use self::hugr_pchannel::Work;
 
 #[cfg(test)]
 #[cfg(feature = "portmatching")]
