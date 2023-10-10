@@ -11,10 +11,6 @@ use crate::rewrite::Rewriter;
 
 use super::hugr_pchannel::PriorityChannelCommunication;
 
-/// A unit of work for a worker, consisting of a circuit to process, along its
-/// hash and cost.
-pub type Work<P> = (P, u64, Hugr);
-
 /// A worker that processes circuits for the TASO optimiser.
 pub struct TasoWorker<R, S, C, P: Ord> {
     /// The worker ID.
@@ -73,7 +69,13 @@ where
                 break;
             };
 
-            let new_circs = self.process_circ(circ);
+            let rewrites = self.rewriter.get_rewrites(&circ);
+            let circs = self.strategy.apply_rewrites(rewrites, &circ);
+            let new_circs = circs
+                .into_iter()
+                .map(|c| ((self.cost_fn)(&c), c.circuit_hash(), c))
+                .collect();
+
             let send = tracing::trace_span!(target: "taso::metrics", "TasoWorker::send_result")
                 .in_scope(|| self.priority_channel.send(new_circs));
             if send.is_err() {
@@ -81,16 +83,5 @@ where
                 break;
             }
         }
-    }
-
-    /// Process the next circuit in the queue, applying the rewrite strategy.
-    #[tracing::instrument(target = "taso::metrics", skip_all)]
-    fn process_circ(&mut self, circ: Hugr) -> Vec<Work<P>> {
-        let rewrites = self.rewriter.get_rewrites(&circ);
-        let circs = self.strategy.apply_rewrites(rewrites, &circ);
-        circs
-            .into_iter()
-            .map(|c| ((self.cost_fn)(&c), c.circuit_hash(), c))
-            .collect()
     }
 }
