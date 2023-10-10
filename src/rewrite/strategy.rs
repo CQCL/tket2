@@ -15,7 +15,7 @@
 use std::{collections::HashSet, fmt::Debug};
 
 use hugr::ops::OpType;
-use hugr::{Hugr, HugrView};
+use hugr::Hugr;
 use itertools::Itertools;
 
 use crate::circuit::cost::{is_cx, is_quantum, CircuitCost, CostDelta, MajorMinorCost};
@@ -196,7 +196,7 @@ impl<T: ExhaustiveThresholdStrategy> RewriteStrategy for T {
             .into_iter()
             .filter_map(|rw| {
                 let pattern_cost = pre_rewrite_cost(&rw, circ, |op| self.op_cost(op));
-                let target_cost = post_rewrite_cost(&rw, circ, |op| self.op_cost(op));
+                let target_cost = post_rewrite_cost(&rw, |op| self.op_cost(op));
                 if !self.under_threshold(&pattern_cost, &target_cost) {
                     return None;
                 }
@@ -346,12 +346,12 @@ where
     circ.nodes_cost(rw.subcircuit().nodes().iter().copied(), pred)
 }
 
-fn post_rewrite_cost<F, C>(rw: &CircuitRewrite, circ: &Hugr, pred: F) -> C
+fn post_rewrite_cost<F, C>(rw: &CircuitRewrite, pred: F) -> C
 where
     C: CircuitCost,
     F: Fn(&OpType) -> C,
 {
-    circ.nodes_cost(rw.replacement().nodes(), pred)
+    rw.replacement().circuit_cost(pred)
 }
 
 #[cfg(test)]
