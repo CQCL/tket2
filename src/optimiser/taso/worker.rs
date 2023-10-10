@@ -2,7 +2,6 @@
 
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
-use std::time::Instant;
 
 use crossbeam_channel::{RecvError, SendError, TryRecvError};
 use fxhash::FxHashSet;
@@ -10,7 +9,6 @@ use hugr::Hugr;
 
 use crate::circuit::cost::CircuitCost;
 use crate::circuit::CircuitHash;
-use crate::optimiser::taso::log::PROGRESS_TARGET;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
 

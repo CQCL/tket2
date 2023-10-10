@@ -475,7 +475,7 @@ mod tests {
 
     #[rstest]
     fn rz_rz_cancellation(rz_rz: Hugr, taso_opt: DefaultTasoOptimiser) {
-        let opt_rz = taso_opt.optimise(&rz_rz, None, 1.try_into().unwrap(), false, 10_000);
+        let opt_rz = taso_opt.optimise(&rz_rz, None, 1.try_into().unwrap(), false, 100);
         let cmds = opt_rz
             .commands()
             .map(|cmd| {

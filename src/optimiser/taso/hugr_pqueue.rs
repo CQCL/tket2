@@ -14,7 +14,6 @@ pub(super) struct HugrPQ<P: Ord, C> {
     queue: DoublePriorityQueue<u64, P>,
     hash_lookup: FxHashMap<u64, Hugr>,
     pub(super) cost_fn: C,
-
     max_size: usize,
 }
 
@@ -50,7 +49,7 @@ impl<P: Ord, C> HugrPQ<P, C> {
 
     /// Push a Hugr into the queue.
     ///
-    /// If the queue is full, the most last will be dropped.
+    /// If the queue is full, the element with the highest cost will be dropped.
     pub(super) fn push(&mut self, hugr: Hugr)
     where
         C: Fn(&Hugr) -> P,
@@ -76,8 +75,7 @@ impl<P: Ord, C> HugrPQ<P, C> {
             return;
         }
         if self.len() >= self.max_size {
-            let max_cost = self.max_cost().unwrap();
-            if self.len() >= self.max_size && cost >= *max_cost {
+            if cost >= *self.max_cost().unwrap() {
                 return;
             }
             self.pop_max();
