@@ -1,12 +1,24 @@
 //! Logging utilities for the TASO optimiser.
 
+use std::time::{Duration, Instant};
 use std::{fmt::Debug, io};
 
 /// Logging configuration for the TASO optimiser.
-#[derive(Default)]
 pub struct TasoLogger<'w> {
     circ_candidates_csv: Option<csv::Writer<Box<dyn io::Write + 'w>>>,
     last_circ_processed: usize,
+    last_progress_time: Instant,
+}
+
+impl<'w> Default for TasoLogger<'w> {
+    fn default() -> Self {
+        Self {
+            circ_candidates_csv: Default::default(),
+            last_circ_processed: Default::default(),
+            // Ensure the first progress message is printed.
+            last_progress_time: Instant::now() - Duration::from_secs(60),
+        }
+    }
 }
 
 /// The logging target for general events.
@@ -31,7 +43,7 @@ impl<'w> TasoLogger<'w> {
         let boxed_candidates_writer: Box<dyn io::Write> = Box::new(best_progress_csv_writer);
         Self {
             circ_candidates_csv: Some(csv::Writer::from_writer(boxed_candidates_writer)),
-            last_circ_processed: 0,
+            ..Default::default()
         }
     }
 
@@ -79,8 +91,11 @@ impl<'w> TasoLogger<'w> {
         workqueue_len: Option<usize>,
         seen_hashes: usize,
     ) {
-        if circuits_processed > self.last_circ_processed && circuits_processed % 1000 == 0 {
+        if circuits_processed > self.last_circ_processed
+            && Instant::now() - self.last_progress_time > Duration::from_secs(1)
+        {
             self.last_circ_processed = circuits_processed;
+            self.last_progress_time = Instant::now();
 
             self.progress(format!("Processed {circuits_processed} circuits..."));
             if let Some(workqueue_len) = workqueue_len {

@@ -2,6 +2,7 @@
 
 use std::sync::{Arc, RwLock};
 use std::thread;
+use std::time::Instant;
 
 use crossbeam_channel::{select, Receiver, RecvError, SendError, Sender};
 use fxhash::FxHashSet;
@@ -28,6 +29,9 @@ pub struct HugrPriorityChannel<C, P: Ord> {
     pop: Sender<Work<P>>,
     /// Outbound channel to log to main thread.
     log: Sender<PriorityChannelLog<P>>,
+    /// Timestamp of the last progress log.
+    /// Used to avoid spamming the log.
+    last_progress_log: Instant,
     /// The priority queue data structure.
     pq: HugrPQ<P, C>,
     /// The set of hashes we've seen.
@@ -174,6 +178,8 @@ where
             push,
             pop,
             log,
+            // Ensure we log the first progress.
+            last_progress_log: Instant::now() - std::time::Duration::from_secs(60),
             pq,
             seen_hashes,
             min_cost,
@@ -260,13 +266,15 @@ where
 
         // This is the result from processing a circuit. Add it to the count.
         self.circ_cnt += 1;
-        self.log
-            .send(PriorityChannelLog::CircuitCount {
-                processed_count: self.circ_cnt,
-                seen_count: self.seen_hashes.len(),
-                queue_length: self.pq.len(),
-            })
-            .unwrap();
+        if Instant::now() - self.last_progress_log > std::time::Duration::from_millis(100) {
+            self.log
+                .send(PriorityChannelLog::CircuitCount {
+                    processed_count: self.circ_cnt,
+                    seen_count: self.seen_hashes.len(),
+                    queue_length: self.pq.len(),
+                })
+                .unwrap();
+        }
     }
 
     /// Update the shared `max_cost` value.
