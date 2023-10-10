@@ -128,7 +128,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         exit(1);
     };
-    println!("Using {n_threads} threads");
+    println!(
+        "Using {n_threads} threads. Queue size is {}.",
+        opts.queue_size
+    );
 
     if opts.split_circ && n_threads.get() > 1 {
         println!("Splitting circuit into {n_threads} chunks.");
