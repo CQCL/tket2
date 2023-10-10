@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pyrs.pyrs import passes, circuit, pattern
 
 from pytket.circuit import Circuit
+
 # TODO clean up after fixing module structure #169
 Rule, RuleMatcher = pattern.Rule, pattern.RuleMatcher
 T2Circuit = circuit.T2Circuit
@@ -47,9 +48,9 @@ def test_cx_rule():
 
     c.apply_match(mtch)
 
-    coms = c.finish().get_commands()
-    print(coms)
-    assert len(coms) == 1
+    out = c.finish()
+
+    assert out == Circuit(4).CX(0, 2)
 
 
 def test_multiple_rules():
@@ -66,9 +67,8 @@ def test_multiple_rules():
 
     assert match_count == 3
 
-    coms = circuit.finish().get_commands()
-    print(coms)
-    assert len(coms) == 2
+    out = circuit.finish()
+    assert out == Circuit(3).CX(0, 1).X(0)
 
 
 # from dataclasses import dataclass

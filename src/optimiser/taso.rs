@@ -91,8 +91,16 @@ where
         timeout: Option<u64>,
         n_threads: NonZeroUsize,
         split_circuit: bool,
+        queue_size: usize,
     ) -> Hugr {
-        self.optimise_with_log(circ, Default::default(), timeout, n_threads, split_circuit)
+        self.optimise_with_log(
+            circ,
+            Default::default(),
+            timeout,
+            n_threads,
+            split_circuit,
+            queue_size,
+        )
     }
 
     /// Run the TASO optimiser on a circuit with logging activated.
@@ -105,20 +113,27 @@ where
         timeout: Option<u64>,
         n_threads: NonZeroUsize,
         split_circuit: bool,
+        queue_size: usize,
     ) -> Hugr {
         if split_circuit && n_threads.get() > 1 {
             return self
-                .split_run(circ, log_config, timeout, n_threads)
+                .split_run(circ, log_config, timeout, n_threads, queue_size)
                 .unwrap();
         }
         match n_threads.get() {
-            1 => self.taso(circ, log_config, timeout),
-            _ => self.taso_multithreaded(circ, log_config, timeout, n_threads),
+            1 => self.taso(circ, log_config, timeout, queue_size),
+            _ => self.taso_multithreaded(circ, log_config, timeout, n_threads, queue_size),
         }
     }
 
     #[tracing::instrument(target = "taso::metrics", skip(self, circ, logger))]
-    fn taso(&self, circ: &Hugr, mut logger: TasoLogger, timeout: Option<u64>) -> Hugr {
+    fn taso(
+        &self,
+        circ: &Hugr,
+        mut logger: TasoLogger,
+        timeout: Option<u64>,
+        queue_size: usize,
+    ) -> Hugr {
         let start_time = Instant::now();
 
         let mut best_circ = circ.clone();
@@ -130,12 +145,11 @@ where
         seen_hashes.insert(circ.circuit_hash());
 
         // The priority queue of circuits to be processed (this should not get big)
-        const PRIORITY_QUEUE_CAPACITY: usize = 10_000;
         let cost_fn = {
             let strategy = self.strategy.clone();
             move |circ: &'_ Hugr| strategy.circuit_cost(circ)
         };
-        let mut pq = HugrPQ::with_capacity(cost_fn, PRIORITY_QUEUE_CAPACITY);
+        let mut pq = HugrPQ::new(cost_fn, queue_size);
         pq.push(circ.clone());
 
         let mut circ_cnt = 1;
@@ -160,9 +174,9 @@ where
                 pq.push_unchecked(new_circ, new_circ_hash, new_circ_cost);
             }
 
-            if pq.len() >= PRIORITY_QUEUE_CAPACITY {
+            if pq.len() >= queue_size {
                 // Haircut to keep the queue size manageable
-                pq.truncate(PRIORITY_QUEUE_CAPACITY / 2);
+                pq.truncate(queue_size / 2);
             }
 
             if let Some(timeout) = timeout {
@@ -188,16 +202,16 @@ where
         mut logger: TasoLogger,
         timeout: Option<u64>,
         n_threads: NonZeroUsize,
+        queue_size: usize,
     ) -> Hugr {
         let n_threads: usize = n_threads.get();
-        const PRIORITY_QUEUE_CAPACITY: usize = 10_000;
 
         // multi-consumer priority channel for queuing circuits to be processed by the workers
         let cost_fn = {
             let strategy = self.strategy.clone();
             move |circ: &'_ Hugr| strategy.circuit_cost(circ)
         };
-        let mut pq = HugrPriorityChannel::init(cost_fn, PRIORITY_QUEUE_CAPACITY * n_threads);
+        let mut pq = HugrPriorityChannel::init(cost_fn, queue_size);
 
         let initial_circ_hash = circ.circuit_hash();
         let mut best_circ = circ.clone();
@@ -293,6 +307,7 @@ where
         mut logger: TasoLogger,
         timeout: Option<u64>,
         n_threads: NonZeroUsize,
+        queue_size: usize,
     ) -> Result<Hugr, HugrError> {
         let circ_cost = self.cost(circ);
         let max_chunk_cost = circ_cost.clone().div_cost(n_threads);
@@ -317,8 +332,13 @@ where
                 let join = thread::Builder::new()
                     .name(format!("chunk-{}", i))
                     .spawn(move || {
-                        let res =
-                            taso.optimise(&chunk, timeout, NonZeroUsize::new(1).unwrap(), false);
+                        let res = taso.optimise(
+                            &chunk,
+                            timeout,
+                            NonZeroUsize::new(1).unwrap(),
+                            false,
+                            queue_size,
+                        );
                         tx.send(res).unwrap();
                     })
                     .unwrap();
@@ -428,7 +448,7 @@ mod tests {
 
     #[rstest]
     fn rz_rz_cancellation(rz_rz: Hugr, taso_opt: DefaultTasoOptimiser) {
-        let opt_rz = taso_opt.optimise(&rz_rz, None, 1.try_into().unwrap(), false);
+        let opt_rz = taso_opt.optimise(&rz_rz, None, 1.try_into().unwrap(), false, 100);
         let cmds = opt_rz
             .commands()
             .map(|cmd| {

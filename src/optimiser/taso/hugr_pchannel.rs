@@ -21,8 +21,6 @@ pub(super) struct HugrPriorityChannel<C, P: Ord> {
     log: Sender<PriorityChannelLog<P>>,
     // Inbound channel to be terminated.
     timeout: Receiver<()>,
-    // The queue capacity. Queue size is halved when it exceeds this.
-    queue_capacity: usize,
     // The priority queue data structure.
     pq: HugrPQ<P, C>,
     // The set of hashes we've seen.
@@ -102,7 +100,7 @@ where
         queue_capacity: usize,
     ) -> Self {
         // The priority queue, local to this thread.
-        let pq = HugrPQ::with_capacity(cost_fn, queue_capacity);
+        let pq = HugrPQ::new(cost_fn, queue_capacity);
         // The set of hashes we've seen.
         let seen_hashes = FxHashSet::default();
         // The minimum cost we've seen.
@@ -115,7 +113,6 @@ where
             pop,
             log,
             timeout,
-            queue_capacity,
             pq,
             seen_hashes,
             min_cost,
@@ -204,10 +201,6 @@ where
                     ))
                     .unwrap();
             }
-        }
-        // If the queue got too big, truncate it.
-        if self.pq.len() >= self.queue_capacity {
-            self.pq.truncate(self.queue_capacity / 2);
         }
     }
 }

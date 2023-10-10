@@ -125,6 +125,7 @@ fn nam_taso_optimise(
                 Some(n_threads.try_into().unwrap()),
                 Some(true),
                 log_file,
+                None,
             );
         }
         PyResult::Ok(circ)
