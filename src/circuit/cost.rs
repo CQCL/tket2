@@ -12,6 +12,7 @@ use crate::T2Op;
 
 /// The cost for a group of operations in a circuit, each with cost `OpCost`.
 pub trait CircuitCost: Add<Output = Self> + Sum<Self> + Debug + Default + Clone + Ord {
+    /// The cost delta between two costs.
     type CostDelta: CostDelta;
 
     /// Return the cost as a `usize`. This may discard some of the cost information.
@@ -19,6 +20,9 @@ pub trait CircuitCost: Add<Output = Self> + Sum<Self> + Debug + Default + Clone 
 
     /// Return the cost delta between two costs.
     fn sub_cost(&self, other: &Self) -> Self::CostDelta;
+
+    /// Adds a cost delta to the cost.
+    fn add_delta(&self, delta: &Self::CostDelta) -> Self;
 
     /// Divide the cost, rounded up.
     fn div_cost(&self, n: NonZeroUsize) -> Self;
@@ -96,6 +100,14 @@ impl CircuitCost for MajorMinorCost<usize> {
     }
 
     #[inline]
+    fn add_delta(&self, delta: &Self::CostDelta) -> Self {
+        MajorMinorCost {
+            major: self.major.saturating_add_signed(delta.major),
+            minor: self.minor.saturating_add_signed(delta.minor),
+        }
+    }
+
+    #[inline]
     fn div_cost(&self, n: NonZeroUsize) -> Self {
         let major = (self.major.saturating_sub(1)) / n.get() + 1;
         let minor = (self.minor.saturating_sub(1)) / n.get() + 1;
@@ -121,6 +133,11 @@ impl CircuitCost for usize {
     #[inline]
     fn sub_cost(&self, other: &Self) -> Self::CostDelta {
         (*self as isize) - (*other as isize)
+    }
+
+    #[inline]
+    fn add_delta(&self, delta: &Self::CostDelta) -> Self {
+        self.saturating_add_signed(*delta)
     }
 
     #[inline]
