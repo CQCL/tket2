@@ -3,6 +3,7 @@
 use std::io::BufWriter;
 use std::{fs, num::NonZeroUsize, path::PathBuf};
 
+use hugr::Hugr;
 use pyo3::prelude::*;
 use tket2::optimiser::{DefaultTasoOptimiser, TasoLogger};
 
@@ -56,7 +57,8 @@ impl PyDefaultTasoOptimiser {
     ///   `n_threads` chunks and optimise each on a separate thread.
     /// * `log_progress`: The path to a CSV file to log progress to.
     ///
-    pub fn optimise(
+    #[pyo3(name = "optimise")]
+    pub fn py_optimise(
         &self,
         circ: PyObject,
         timeout: Option<u64>,
@@ -64,6 +66,22 @@ impl PyDefaultTasoOptimiser {
         split_circ: Option<bool>,
         log_progress: Option<PathBuf>,
     ) -> PyResult<PyObject> {
+        update_hugr(circ, |circ| {
+            self.optimise(circ, timeout, n_threads, split_circ, log_progress)
+        })
+    }
+}
+
+impl PyDefaultTasoOptimiser {
+    /// The Python optimise method, but on Hugrs.
+    pub(super) fn optimise(
+        &self,
+        circ: Hugr,
+        timeout: Option<u64>,
+        n_threads: Option<NonZeroUsize>,
+        split_circ: Option<bool>,
+        log_progress: Option<PathBuf>,
+    ) -> Hugr {
         let taso_logger = log_progress
             .map(|file_name| {
                 let log_file = fs::File::create(file_name).unwrap();
@@ -71,14 +89,12 @@ impl PyDefaultTasoOptimiser {
                 TasoLogger::new(log_file)
             })
             .unwrap_or_default();
-        update_hugr(circ, |circ| {
-            self.0.optimise_with_log(
-                &circ,
-                taso_logger,
-                timeout,
-                n_threads.unwrap_or(NonZeroUsize::new(1).unwrap()),
-                split_circ.unwrap_or(false),
-            )
-        })
+        self.0.optimise_with_log(
+            &circ,
+            taso_logger,
+            timeout,
+            n_threads.unwrap_or(NonZeroUsize::new(1).unwrap()),
+            split_circ.unwrap_or(false),
+        )
     }
 }

@@ -72,7 +72,7 @@ pub enum T2Op {
 }
 
 /// Whether an op is a given T2Op.
-pub(crate) fn op_matches(op: &OpType, t2op: T2Op) -> bool {
+pub fn op_matches(op: &OpType, t2op: T2Op) -> bool {
     let Ok(op) = T2Op::try_from(op) else {
         return false;
     };
