@@ -108,6 +108,7 @@ impl<P: Ord, C> HugrPQ<P, C> {
     }
 
     /// The cost function used by the queue.
+    #[allow(unused)]
     pub fn cost_fn(&self) -> &C {
         &self.cost_fn
     }

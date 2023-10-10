@@ -12,7 +12,7 @@ use crate::circuit::update_hugr;
 /// The circuit optimisation module.
 pub fn add_optimiser_module(py: Python, parent: &PyModule) -> PyResult<()> {
     let m = PyModule::new(py, "optimiser")?;
-    m.add_class::<PyDefaultTasoOptimiser>()?;
+    m.add_class::<PyTasoOptimiser>()?;
 
     parent.add_submodule(m)
 }
@@ -22,10 +22,10 @@ pub fn add_optimiser_module(py: Python, parent: &PyModule) -> PyResult<()> {
 /// Currently only exposes loading from an ECC file using the constructor
 /// and optimising using default logging settings.
 #[pyclass(name = "TasoOptimiser")]
-pub struct PyDefaultTasoOptimiser(DefaultTasoOptimiser);
+pub struct PyTasoOptimiser(DefaultTasoOptimiser);
 
 #[pymethods]
-impl PyDefaultTasoOptimiser {
+impl PyTasoOptimiser {
     /// Create a new [`PyDefaultTasoOptimiser`] from a precompiled rewriter.
     #[staticmethod]
     pub fn load_precompiled(path: PathBuf) -> Self {
@@ -80,7 +80,7 @@ impl PyDefaultTasoOptimiser {
     }
 }
 
-impl PyDefaultTasoOptimiser {
+impl PyTasoOptimiser {
     /// The Python optimise method, but on Hugrs.
     pub(super) fn optimise(
         &self,
