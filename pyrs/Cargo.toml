@@ -18,3 +18,4 @@ tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs", rev="619db15d3", 
 quantinuum-hugr = { workspace = true }
 portgraph = { workspace = true, features = ["pyo3"] }
 pyo3 = { workspace = true, features = ["extension-module"] }
+num_cpus = "1.16.0"
