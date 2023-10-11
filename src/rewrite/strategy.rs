@@ -200,7 +200,6 @@ impl<T: ExhaustiveThresholdStrategy> RewriteStrategy for T {
                 if !self.under_threshold(&pattern_cost, &target_cost) {
                     return None;
                 }
-
                 let mut circ = circ.clone();
                 rw.apply(&mut circ).expect("invalid pattern match");
                 Some((circ, target_cost.sub_cost(&pattern_cost)))
