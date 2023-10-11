@@ -101,13 +101,14 @@ impl CircuitRewrite {
         self.0.replacement()
     }
 
-    /// Returns the nodes affected by a rewrite.
+    /// Returns a set of nodes referenced by the rewrite. Modifying any these
+    /// nodes will invalidate it.
     ///
-    /// This includes the nodes in the subcircuit and it's neighbours (contained in
-    /// the rewrite's boundary).
+    /// Two `CircuitRewrite`s can be composed if their invalidation sets are
+    /// disjoint.
     #[inline]
-    pub fn affected_nodes(&self) -> impl Iterator<Item = Node> + '_ {
-        self.0.affected_nodes()
+    pub fn invalidation_set(&self) -> impl Iterator<Item = Node> + '_ {
+        self.0.invalidation_set()
     }
 
     delegate! {

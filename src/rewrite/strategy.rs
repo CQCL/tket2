@@ -221,11 +221,13 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveGreedyStrategy<T> {
             let mut cost_delta = Default::default();
             for (rewrite, delta) in &rewrites[i..] {
                 if !changed_nodes.is_empty()
-                    && rewrite.affected_nodes().any(|n| changed_nodes.contains(&n))
+                    && rewrite
+                        .invalidation_set()
+                        .any(|n| changed_nodes.contains(&n))
                 {
                     continue;
                 }
-                changed_nodes.extend(rewrite.affected_nodes());
+                changed_nodes.extend(rewrite.invalidation_set());
                 cost_delta += delta.clone();
 
                 rewrite
