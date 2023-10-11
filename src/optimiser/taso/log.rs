@@ -1,11 +1,24 @@
 //! Logging utilities for the TASO optimiser.
 
-use std::io;
+use std::time::{Duration, Instant};
+use std::{fmt::Debug, io};
 
 /// Logging configuration for the TASO optimiser.
-#[derive(Default)]
 pub struct TasoLogger<'w> {
     circ_candidates_csv: Option<csv::Writer<Box<dyn io::Write + 'w>>>,
+    last_circ_processed: usize,
+    last_progress_time: Instant,
+}
+
+impl<'w> Default for TasoLogger<'w> {
+    fn default() -> Self {
+        Self {
+            circ_candidates_csv: Default::default(),
+            last_circ_processed: Default::default(),
+            // Ensure the first progress message is printed.
+            last_progress_time: Instant::now() - Duration::from_secs(60),
+        }
+    }
 }
 
 /// The logging target for general events.
@@ -30,13 +43,14 @@ impl<'w> TasoLogger<'w> {
         let boxed_candidates_writer: Box<dyn io::Write> = Box::new(best_progress_csv_writer);
         Self {
             circ_candidates_csv: Some(csv::Writer::from_writer(boxed_candidates_writer)),
+            ..Default::default()
         }
     }
 
     /// Log a new best candidate
     #[inline]
-    pub fn log_best(&mut self, best_cost: usize) {
-        self.log(format!("new best of size {}", best_cost));
+    pub fn log_best<C: Debug + serde::Serialize>(&mut self, best_cost: C) {
+        self.log(format!("new best of size {:?}", best_cost));
         if let Some(csv_writer) = self.circ_candidates_csv.as_mut() {
             csv_writer.serialize(BestCircSer::new(best_cost)).unwrap();
             csv_writer.flush().unwrap();
@@ -45,21 +59,27 @@ impl<'w> TasoLogger<'w> {
 
     /// Log the final optimised circuit
     #[inline]
-    pub fn log_processing_end(
+    pub fn log_processing_end<C: Debug>(
         &self,
-        circuit_count: usize,
-        best_cost: usize,
+        circuits_processed: usize,
+        circuits_seen: Option<usize>,
+        best_cost: C,
         needs_joining: bool,
         timeout: bool,
     ) {
-        if timeout {
-            self.log("Timeout");
+        match timeout {
+            true => self.log("Optimisation finished (timeout)."),
+            false => self.log("Optimisation finished."),
+        };
+        match circuits_seen {
+            Some(circuits_seen) => self.log(format!(
+                "Processed {circuits_processed} circuits (out of {circuits_seen} seen)."
+            )),
+            None => self.log(format!("Processed {circuits_processed} circuits.")),
         }
-        self.log("Optimisation finished");
-        self.log(format!("Tried {circuit_count} circuits"));
-        self.log(format!("END RESULT: {}", best_cost));
+        self.log(format!("---- END RESULT: {:?} ----", best_cost));
         if needs_joining {
-            self.log("Joining worker threads");
+            self.log("Joining worker threads.");
         }
     }
 
@@ -67,28 +87,33 @@ impl<'w> TasoLogger<'w> {
     #[inline(always)]
     pub fn log_progress(
         &mut self,
-        circ_cnt: usize,
+        circuits_processed: usize,
         workqueue_len: Option<usize>,
         seen_hashes: usize,
     ) {
-        if circ_cnt % 1000 == 0 {
-            self.progress(format!("{circ_cnt} circuits..."));
+        if circuits_processed > self.last_circ_processed
+            && Instant::now() - self.last_progress_time > Duration::from_secs(1)
+        {
+            self.last_circ_processed = circuits_processed;
+            self.last_progress_time = Instant::now();
+
+            self.progress(format!("Processed {circuits_processed} circuits..."));
             if let Some(workqueue_len) = workqueue_len {
-                self.progress(format!("Queue size: {workqueue_len} circuits"));
+                self.progress(format!("Queue size: {workqueue_len} circuits."));
             }
-            self.progress(format!("Total seen: {} circuits", seen_hashes));
+            self.progress(format!("Total seen: {} circuits.", seen_hashes));
         }
     }
 
-    /// Internal function to log general events, normally printed to stdout.
+    /// Log general events, normally printed to stdout.
     #[inline]
-    fn log(&self, msg: impl AsRef<str>) {
+    pub fn log(&self, msg: impl AsRef<str>) {
         tracing::info!(target: LOG_TARGET, "{}", msg.as_ref());
     }
 
-    /// Internal function to log information on the progress of the optimization.
+    /// Log verbose information on the progress of the optimization.
     #[inline]
-    fn progress(&self, msg: impl AsRef<str>) {
+    pub fn progress(&self, msg: impl AsRef<str>) {
         tracing::info!(target: PROGRESS_TARGET, "{}", msg.as_ref());
     }
 }
@@ -98,14 +123,14 @@ impl<'w> TasoLogger<'w> {
 //
 // TODO: Replace this fixed logging. Report back intermediate results.
 #[derive(serde::Serialize, Clone, Debug)]
-struct BestCircSer {
-    circ_len: usize,
+struct BestCircSer<C> {
+    circ_cost: C,
     time: String,
 }
 
-impl BestCircSer {
-    fn new(circ_len: usize) -> Self {
+impl<C> BestCircSer<C> {
+    fn new(circ_cost: C) -> Self {
         let time = chrono::Local::now().to_rfc3339();
-        Self { circ_len, time }
+        Self { circ_cost, time }
     }
 }

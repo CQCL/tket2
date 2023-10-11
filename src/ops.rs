@@ -72,7 +72,7 @@ pub enum T2Op {
 }
 
 /// Whether an op is a given T2Op.
-pub(crate) fn op_matches(op: &OpType, t2op: T2Op) -> bool {
+pub fn op_matches(op: &OpType, t2op: T2Op) -> bool {
     let Ok(op) = T2Op::try_from(op) else {
         return false;
     };
@@ -198,6 +198,16 @@ impl T2Op {
             ZZMax | ZZPhase | CZ => vec![(0, Pauli::Z), (1, Pauli::Z)],
             // by default, no commutation
             _ => vec![],
+        }
+    }
+
+    /// Check if this op is a quantum op.
+    pub fn is_quantum(&self) -> bool {
+        use T2Op::*;
+        match self {
+            H | CX | T | S | X | Y | Z | Tdg | Sdg | ZZMax | RzF64 | RxF64 | PhasedX | ZZPhase
+            | CZ | TK1 => true,
+            AngleAdd | Measure => false,
         }
     }
 }

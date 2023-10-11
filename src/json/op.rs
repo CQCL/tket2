@@ -182,6 +182,8 @@ impl From<&JsonOp> for OpType {
             JsonOpType::T => T2Op::T.into(),
             JsonOpType::Tdg => T2Op::Tdg.into(),
             JsonOpType::X => T2Op::X.into(),
+            JsonOpType::Y => T2Op::Y.into(),
+            JsonOpType::Z => T2Op::Z.into(),
             JsonOpType::Rz => T2Op::RzF64.into(),
             JsonOpType::Rx => T2Op::RxF64.into(),
             JsonOpType::TK1 => T2Op::TK1.into(),
@@ -225,7 +227,9 @@ impl TryFrom<&OpType> for JsonOp {
                 T2Op::RzF64 => JsonOpType::Rz,
                 T2Op::RxF64 => JsonOpType::Rx,
                 // TODO: Use a TK2 opaque op once we update the tket-json-rs dependency.
-                T2Op::AngleAdd => JsonOpType::AngleAdd,
+                T2Op::AngleAdd => {
+                    unimplemented!("Serialising AngleAdd not supported. Are all constant folded?")
+                }
                 T2Op::TK1 => JsonOpType::TK1,
                 T2Op::PhasedX => JsonOpType::PhasedX,
                 T2Op::ZZPhase => JsonOpType::ZZPhase,
