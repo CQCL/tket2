@@ -21,7 +21,7 @@ use itertools::Itertools;
 
 use crate::Circuit;
 
-use crate::circuit::cost::CircuitCost;
+use crate::circuit::cost::{CircuitCost, CostDelta};
 #[cfg(feature = "pyo3")]
 use crate::json::TKETDecode;
 #[cfg(feature = "pyo3")]
@@ -295,7 +295,7 @@ impl CircuitChunks {
         let mut current_group = 0;
         for (_, commands) in &circ.commands().map(|cmd| cmd.node()).group_by(|&node| {
             let new_cost = running_cost.clone() + op_cost(circ.get_optype(node));
-            if new_cost.sub_cost(&max_cost) > 0 {
+            if new_cost.sub_cost(&max_cost).as_isize() > 0 {
                 running_cost = C::default();
                 current_group += 1;
             } else {
