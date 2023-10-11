@@ -2,15 +2,21 @@
 //!
 //! This module contains the [`RewriteStrategy`] trait, which is currently
 //! implemented by
-//! - [`GreedyRewriteStrategy`], which applies as many rewrites as possible
-//!   on one circuit, and
-//! - exhaustive strategies, which clone the original circuit and explore every
+//! - [`GreedyRewriteStrategy`], which applies as many rewrites as possible on
+//!   one circuit, and
+//! - Exhaustive strategies, which clone the original circuit and explore every
 //!   possible rewrite (with some pruning strategy):
-//!    - [`NonIncreasingGateCountStrategy`], which only considers rewrites that
-//!      do not increase some cost function (e.g. cx gate count, implemented as
-//!      [`NonIncreasingGateCountStrategy::default_cx`]), and
-//!    - [`ExhaustiveGammaStrategy`], which ignores rewrites that increase the
-//!      cost function beyond a threshold given by a f64 parameter gamma.
+//!    - [`ExhaustiveGreedyStrategy`], which applies multiple combinations of
+//!      non-overlapping rewrites.
+//!    - [`ExhaustiveThresholdStrategy`], which tries every rewrite below
+//!      threshold function.
+//!
+//! The exhaustive strategies are parametrised by a strategy cost function:
+//!    - [`NonIncreasingGateCountCost`], which only considers rewrites that do
+//!      not increase some cost function (e.g. cx gate count, implemented as
+//!      [`NonIncreasingGateCountCost::default_cx`]), and
+//!    - [`GammaStrategyCost`], which ignores rewrites that increase the cost
+//!      function beyond a percentage given by a f64 parameter gamma.
 
 use std::{collections::HashSet, fmt::Debug};
 
@@ -319,7 +325,7 @@ pub trait StrategyCost {
 ///
 /// An example would be to use the number of CX gates as major cost and the
 /// total number of gates as minor cost. Compared to a
-/// [`ExhaustiveGammaStrategy`], that would only order circuits based on the
+/// [`GammaStrategyCost`], that would only order circuits based on the
 /// number of CX gates, this creates a less flat optimisation landscape.
 #[derive(Debug, Clone)]
 pub struct NonIncreasingGateCountCost<C1, C2> {
