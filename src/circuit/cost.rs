@@ -5,7 +5,7 @@ use hugr::ops::OpType;
 use std::fmt::{Debug, Display};
 use std::iter::Sum;
 use std::num::NonZeroUsize;
-use std::ops::Add;
+use std::ops::{Add, AddAssign};
 
 use crate::ops::op_matches;
 use crate::T2Op;
@@ -29,7 +29,9 @@ pub trait CircuitCost: Add<Output = Self> + Sum<Self> + Debug + Default + Clone 
 }
 
 /// The cost for a group of operations in a circuit, each with cost `OpCost`.
-pub trait CostDelta: Sum<Self> + Debug + Default + Clone + Ord {
+pub trait CostDelta:
+    AddAssign + Add<Output = Self> + Sum<Self> + Debug + Default + Clone + Ord
+{
     /// Return the delta as a `isize`. This may discard some of the cost delta information.
     fn as_isize(&self) -> isize;
 }
@@ -62,11 +64,18 @@ impl<T: Display> Debug for MajorMinorCost<T> {
     }
 }
 
-impl Add for MajorMinorCost {
-    type Output = MajorMinorCost;
+impl<T: Add<Output = T>> Add for MajorMinorCost<T> {
+    type Output = MajorMinorCost<T>;
 
-    fn add(self, rhs: MajorMinorCost) -> Self::Output {
+    fn add(self, rhs: MajorMinorCost<T>) -> Self::Output {
         (self.major + rhs.major, self.minor + rhs.minor).into()
+    }
+}
+
+impl<T: AddAssign> AddAssign for MajorMinorCost<T> {
+    fn add_assign(&mut self, rhs: Self) {
+        self.major += rhs.major;
+        self.minor += rhs.minor;
     }
 }
 

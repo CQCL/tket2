@@ -101,6 +101,15 @@ impl CircuitRewrite {
         self.0.replacement()
     }
 
+    /// Returns the nodes affected by a rewrite.
+    ///
+    /// This includes the nodes in the subcircuit and it's neighbours (contained in
+    /// the rewrite's boundary).
+    #[inline]
+    pub fn affected_nodes(&self) -> impl Iterator<Item = Node> + '_ {
+        self.0.affected_nodes()
+    }
+
     delegate! {
         to self.0 {
             /// Apply the rewrite rule to a circuit.
