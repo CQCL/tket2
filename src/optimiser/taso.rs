@@ -169,7 +169,6 @@ where
                     // Ignore this circuit: we've already seen it
                     continue;
                 }
-                circ_cnt += 1;
                 logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
                 let new_circ_cost = cost.add_delta(&cost_delta);
                 pq.push_unchecked(new_circ, new_circ_hash, new_circ_cost);
@@ -390,22 +389,22 @@ mod taso_default {
     use hugr::ops::OpType;
 
     use crate::rewrite::ecc_rewriter::RewriterSerialisationError;
-    use crate::rewrite::strategy::NonIncreasingGateCountStrategy;
+    use crate::rewrite::strategy::{ExhaustiveGreedyStrategy, NonIncreasingGateCountCost};
     use crate::rewrite::ECCRewriter;
 
     use super::*;
 
+    pub type StrategyCost = NonIncreasingGateCountCost<fn(&OpType) -> usize, fn(&OpType) -> usize>;
+
     /// The default TASO optimiser using ECC sets.
-    pub type DefaultTasoOptimiser = TasoOptimiser<
-        ECCRewriter,
-        NonIncreasingGateCountStrategy<fn(&OpType) -> usize, fn(&OpType) -> usize>,
-    >;
+    pub type DefaultTasoOptimiser =
+        TasoOptimiser<ECCRewriter, ExhaustiveGreedyStrategy<StrategyCost>>;
 
     impl DefaultTasoOptimiser {
         /// A sane default optimiser using the given ECC sets.
         pub fn default_with_eccs_json_file(eccs_path: impl AsRef<Path>) -> io::Result<Self> {
             let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
-            let strategy = NonIncreasingGateCountStrategy::default_cx();
+            let strategy = NonIncreasingGateCountCost::default_cx();
             Ok(TasoOptimiser::new(rewriter, strategy))
         }
 
@@ -414,7 +413,7 @@ mod taso_default {
             rewriter_path: impl AsRef<Path>,
         ) -> Result<Self, RewriterSerialisationError> {
             let rewriter = ECCRewriter::load_binary(rewriter_path)?;
-            let strategy = NonIncreasingGateCountStrategy::default_cx();
+            let strategy = NonIncreasingGateCountCost::default_cx();
             Ok(TasoOptimiser::new(rewriter, strategy))
         }
     }
