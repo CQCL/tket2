@@ -157,13 +157,13 @@ where
         while let Some(Entry { circ, cost, .. }) = pq.pop() {
             if cost < best_circ_cost {
                 best_circ = circ.clone();
-                best_circ_cost = cost;
+                best_circ_cost = cost.clone();
                 logger.log_best(&best_circ_cost);
             }
             circ_cnt += 1;
 
             let rewrites = self.rewriter.get_rewrites(&circ);
-            for new_circ in self.strategy.apply_rewrites(rewrites, &circ) {
+            for (new_circ, cost_delta) in self.strategy.apply_rewrites(rewrites, &circ) {
                 let new_circ_hash = new_circ.circuit_hash();
                 if !seen_hashes.insert(new_circ_hash) {
                     // Ignore this circuit: we've already seen it
@@ -171,7 +171,7 @@ where
                 }
                 circ_cnt += 1;
                 logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
-                let new_circ_cost = self.cost(&new_circ);
+                let new_circ_cost = cost.add_delta(&cost_delta);
                 pq.push_unchecked(new_circ, new_circ_hash, new_circ_cost);
             }
 
@@ -235,15 +235,7 @@ where
         // Each worker waits for circuits to scan for rewrites using all the
         // patterns and sends the results back to main.
         let joins: Vec<_> = (0..n_threads)
-            .map(|i| {
-                TasoWorker::spawn(
-                    i,
-                    pq.clone(),
-                    self.rewriter.clone(),
-                    self.strategy.clone(),
-                    cost_fn.clone(),
-                )
-            })
+            .map(|i| TasoWorker::spawn(i, pq.clone(), self.rewriter.clone(), self.strategy.clone()))
             .collect();
 
         // Deadline for the optimisation timeout

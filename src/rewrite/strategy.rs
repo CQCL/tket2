@@ -18,7 +18,7 @@ use hugr::ops::OpType;
 use hugr::Hugr;
 use itertools::Itertools;
 
-use crate::circuit::cost::{is_cx, is_quantum, CircuitCost, MajorMinorCost};
+use crate::circuit::cost::{is_cx, is_quantum, CircuitCost, CostDelta, MajorMinorCost};
 use crate::Circuit;
 
 use super::CircuitRewrite;
@@ -41,7 +41,7 @@ pub trait RewriteStrategy {
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
         circ: &Hugr,
-    ) -> Vec<Hugr>;
+    ) -> RewriteResult<Self::Cost>;
 
     /// The cost of a single operation for this strategy's cost function.
     fn op_cost(&self, op: &OpType) -> Self::Cost;
@@ -50,6 +50,50 @@ pub trait RewriteStrategy {
     #[inline]
     fn circuit_cost(&self, circ: &Hugr) -> Self::Cost {
         circ.circuit_cost(|op| self.op_cost(op))
+    }
+}
+
+/// The result of a rewrite strategy.
+///
+/// Returned by [`RewriteStrategy::apply_rewrites`].
+pub struct RewriteResult<Cost: CircuitCost> {
+    /// The rewritten circuits.
+    pub circs: Vec<Hugr>,
+    /// The cost delta of each rewritten circuit.
+    pub cost_deltas: Vec<Cost::CostDelta>,
+}
+
+impl<Cost: CircuitCost> RewriteResult<Cost> {
+    /// Init a new rewrite result.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            circs: Vec::with_capacity(capacity),
+            cost_deltas: Vec::with_capacity(capacity),
+        }
+    }
+
+    /// Returns the number of rewritten circuits.
+    pub fn len(&self) -> usize {
+        self.circs.len()
+    }
+
+    /// Returns true if there are no rewritten circuits.
+    pub fn is_empty(&self) -> bool {
+        self.circs.is_empty()
+    }
+
+    /// Returns an iterator over the rewritten circuits and their cost deltas.
+    pub fn iter(&self) -> impl Iterator<Item = (&Hugr, &Cost::CostDelta)> {
+        self.circs.iter().zip(self.cost_deltas.iter())
+    }
+}
+
+impl<Cost: CircuitCost> IntoIterator for RewriteResult<Cost> {
+    type Item = (Hugr, Cost::CostDelta);
+    type IntoIter = std::iter::Zip<std::vec::IntoIter<Hugr>, std::vec::IntoIter<Cost::CostDelta>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.circs.into_iter().zip(self.cost_deltas)
     }
 }
 
@@ -74,12 +118,13 @@ impl RewriteStrategy for GreedyRewriteStrategy {
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
         circ: &Hugr,
-    ) -> Vec<Hugr> {
+    ) -> RewriteResult<usize> {
         let rewrites = rewrites
             .into_iter()
             .sorted_by_key(|rw| rw.node_count_delta())
             .take_while(|rw| rw.node_count_delta() < 0);
         let mut changed_nodes = HashSet::new();
+        let mut cost_delta = 0;
         let mut circ = circ.clone();
         for rewrite in rewrites {
             if rewrite
@@ -91,11 +136,15 @@ impl RewriteStrategy for GreedyRewriteStrategy {
                 continue;
             }
             changed_nodes.extend(rewrite.subcircuit().nodes().iter().copied());
+            cost_delta += rewrite.node_count_delta();
             rewrite
                 .apply(&mut circ)
                 .expect("Could not perform rewrite in greedy strategy");
         }
-        vec![circ]
+        RewriteResult {
+            circs: vec![circ],
+            cost_deltas: vec![cost_delta],
+        }
     }
 
     fn circuit_cost(&self, circ: &Hugr) -> Self::Cost {
@@ -128,7 +177,7 @@ pub trait ExhaustiveThresholdStrategy {
     /// Returns true if the rewrite is allowed, based on the cost of the pattern and target.
     #[inline]
     fn under_threshold(&self, pattern_cost: &Self::OpCost, target_cost: &Self::OpCost) -> bool {
-        target_cost.sub_cost(pattern_cost) <= 0
+        target_cost.sub_cost(pattern_cost).as_isize() <= 0
     }
 
     /// The cost of a single operation.
@@ -143,20 +192,21 @@ impl<T: ExhaustiveThresholdStrategy> RewriteStrategy for T {
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
         circ: &Hugr,
-    ) -> Vec<Hugr> {
-        rewrites
+    ) -> RewriteResult<T::OpCost> {
+        let (circs, cost_deltas) = rewrites
             .into_iter()
-            .filter(|rw| {
-                let pattern_cost = pre_rewrite_cost(rw, circ, |op| self.op_cost(op));
-                let target_cost = post_rewrite_cost(rw, |op| self.op_cost(op));
-                self.under_threshold(&pattern_cost, &target_cost)
-            })
-            .map(|rw| {
+            .filter_map(|rw| {
+                let pattern_cost = pre_rewrite_cost(&rw, circ, |op| self.op_cost(op));
+                let target_cost = post_rewrite_cost(&rw, |op| self.op_cost(op));
+                if !self.under_threshold(&pattern_cost, &target_cost) {
+                    return None;
+                }
                 let mut circ = circ.clone();
                 rw.apply(&mut circ).expect("invalid pattern match");
-                circ
+                Some((circ, target_cost.sub_cost(&pattern_cost)))
             })
-            .collect()
+            .unzip();
+        RewriteResult { circs, cost_deltas }
     }
 
     #[inline]
@@ -361,7 +411,7 @@ mod tests {
         let strategy = GreedyRewriteStrategy;
         let rewritten = strategy.apply_rewrites(rws, &circ);
         assert_eq!(rewritten.len(), 1);
-        assert_eq!(rewritten[0].num_gates(), 5);
+        assert_eq!(rewritten.circs[0].num_gates(), 5);
     }
 
     #[test]
@@ -382,7 +432,7 @@ mod tests {
         let strategy = ExhaustiveGammaStrategy::exhaustive_cx();
         let rewritten = strategy.apply_rewrites(rws, &circ);
         let exp_circ_lens = HashSet::from_iter([8, 6, 9]);
-        let circ_lens: HashSet<_> = rewritten.iter().map(|c| c.num_gates()).collect();
+        let circ_lens: HashSet<_> = rewritten.circs.iter().map(|c| c.num_gates()).collect();
         assert_eq!(circ_lens, exp_circ_lens);
     }
 
@@ -404,7 +454,7 @@ mod tests {
         let strategy = ExhaustiveGammaStrategy::exhaustive_cx_with_gamma(10.);
         let rewritten = strategy.apply_rewrites(rws, &circ);
         let exp_circ_lens = HashSet::from_iter([8, 17, 6, 9]);
-        let circ_lens: HashSet<_> = rewritten.iter().map(|c| c.num_gates()).collect();
+        let circ_lens: HashSet<_> = rewritten.circs.iter().map(|c| c.num_gates()).collect();
         assert_eq!(circ_lens, exp_circ_lens);
     }
 
