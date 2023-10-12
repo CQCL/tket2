@@ -157,21 +157,20 @@ where
         while let Some(Entry { circ, cost, .. }) = pq.pop() {
             if cost < best_circ_cost {
                 best_circ = circ.clone();
-                best_circ_cost = cost;
+                best_circ_cost = cost.clone();
                 logger.log_best(&best_circ_cost);
             }
             circ_cnt += 1;
 
             let rewrites = self.rewriter.get_rewrites(&circ);
-            for new_circ in self.strategy.apply_rewrites(rewrites, &circ) {
+            for (new_circ, cost_delta) in self.strategy.apply_rewrites(rewrites, &circ) {
                 let new_circ_hash = new_circ.circuit_hash();
                 if !seen_hashes.insert(new_circ_hash) {
                     // Ignore this circuit: we've already seen it
                     continue;
                 }
-                circ_cnt += 1;
                 logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
-                let new_circ_cost = self.cost(&new_circ);
+                let new_circ_cost = cost.add_delta(&cost_delta);
                 pq.push_unchecked(new_circ, new_circ_hash, new_circ_cost);
             }
 
@@ -235,15 +234,7 @@ where
         // Each worker waits for circuits to scan for rewrites using all the
         // patterns and sends the results back to main.
         let joins: Vec<_> = (0..n_threads)
-            .map(|i| {
-                TasoWorker::spawn(
-                    i,
-                    pq.clone(),
-                    self.rewriter.clone(),
-                    self.strategy.clone(),
-                    cost_fn.clone(),
-                )
-            })
+            .map(|i| TasoWorker::spawn(i, pq.clone(), self.rewriter.clone(), self.strategy.clone()))
             .collect();
 
         // Deadline for the optimisation timeout
@@ -398,22 +389,22 @@ mod taso_default {
     use hugr::ops::OpType;
 
     use crate::rewrite::ecc_rewriter::RewriterSerialisationError;
-    use crate::rewrite::strategy::NonIncreasingGateCountStrategy;
+    use crate::rewrite::strategy::{ExhaustiveGreedyStrategy, NonIncreasingGateCountCost};
     use crate::rewrite::ECCRewriter;
 
     use super::*;
 
+    pub type StrategyCost = NonIncreasingGateCountCost<fn(&OpType) -> usize, fn(&OpType) -> usize>;
+
     /// The default TASO optimiser using ECC sets.
-    pub type DefaultTasoOptimiser = TasoOptimiser<
-        ECCRewriter,
-        NonIncreasingGateCountStrategy<fn(&OpType) -> usize, fn(&OpType) -> usize>,
-    >;
+    pub type DefaultTasoOptimiser =
+        TasoOptimiser<ECCRewriter, ExhaustiveGreedyStrategy<StrategyCost>>;
 
     impl DefaultTasoOptimiser {
         /// A sane default optimiser using the given ECC sets.
         pub fn default_with_eccs_json_file(eccs_path: impl AsRef<Path>) -> io::Result<Self> {
             let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
-            let strategy = NonIncreasingGateCountStrategy::default_cx();
+            let strategy = NonIncreasingGateCountCost::default_cx();
             Ok(TasoOptimiser::new(rewriter, strategy))
         }
 
@@ -422,7 +413,7 @@ mod taso_default {
             rewriter_path: impl AsRef<Path>,
         ) -> Result<Self, RewriterSerialisationError> {
             let rewriter = ECCRewriter::load_binary(rewriter_path)?;
-            let strategy = NonIncreasingGateCountStrategy::default_cx();
+            let strategy = NonIncreasingGateCountCost::default_cx();
             Ok(TasoOptimiser::new(rewriter, strategy))
         }
     }
