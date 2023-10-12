@@ -26,12 +26,13 @@ def taso_pass(
         rewriter_dir = "."
     if rewriter_file is None:
         rewriter_file = Path(rewriter_dir) / "nam_6_3.rwr"
+    opt = optimiser.TasoOptimiser.load_precompiled(rewriter_file)
 
     def apply(circuit: Circuit):
         """Apply TASO optimisation to the circuit."""
         return passes.taso_optimise(
             circuit,
-            optimiser,
+            opt,
             max_threads,
             timeout,
             log_dir,
