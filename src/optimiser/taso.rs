@@ -58,8 +58,8 @@ use crate::Circuit;
 /// [TASO]: https://dl.acm.org/doi/10.1145/3341301.3359630
 #[derive(Clone, Debug)]
 pub struct TasoOptimiser<R, S> {
-    rewriter: R,
-    strategy: S,
+    pub(super) rewriter: R,
+    pub(super) strategy: S,
 }
 
 impl<R, S> TasoOptimiser<R, S> {
@@ -68,7 +68,7 @@ impl<R, S> TasoOptimiser<R, S> {
         Self { rewriter, strategy }
     }
 
-    fn cost(&self, circ: &Hugr) -> S::Cost
+    pub(super) fn cost(&self, circ: &Hugr) -> S::Cost
     where
         S: RewriteStrategy,
     {

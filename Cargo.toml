@@ -45,6 +45,7 @@ bytemuck = "1.14.0"
 stringreader = "0.1.1"
 crossbeam-channel = "0.5.8"
 tracing = { workspace = true }
+rurel = "0.4.0"
 
 [features]
 pyo3 = [
