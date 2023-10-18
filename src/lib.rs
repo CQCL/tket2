@@ -18,6 +18,7 @@ pub mod rewrite;
 #[cfg(feature = "portmatching")]
 pub mod portmatching;
 
+mod phir;
 mod utils;
 
 pub use circuit::Circuit;
