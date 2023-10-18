@@ -2,13 +2,14 @@ use derive_more::From;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-type Metadata = Option<Map<String, Value>>;
+type Metadata = Map<String, Value>;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Data {
     #[serde(flatten)]
     data: DataEnum,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Map::is_empty")]
+    #[serde(default)]
     metadata: Metadata,
 }
 fn default_cvar_def_data() -> String {
@@ -87,7 +88,8 @@ pub(super) struct Op {
     pub op_enum: OpEnum,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub returns: Option<Vec<Arg>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Map::is_empty")]
+    #[serde(default)]
     pub metadata: Metadata,
 }
 
@@ -182,7 +184,8 @@ pub struct PHIRModel {
     format: String,
     #[serde(default = "default_version")]
     version: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Map::is_empty")]
+    #[serde(default)]
     metadata: Metadata,
     ops: Vec<OpListElems>,
 }
@@ -193,7 +196,7 @@ impl PHIRModel {
         Self {
             format: default_format(),
             version: default_version(),
-            metadata: None,
+            metadata: Map::new(),
             ops: vec![],
         }
     }
