@@ -228,6 +228,10 @@ impl Rewrite for PullForward {
 
     type ApplyResult = ();
 
+    type InvalidationSet<'a> = std::vec::IntoIter<Node>
+    where
+        Self: 'a;
+
     const UNCHANGED_ON_FAILURE: bool = false;
 
     fn verify(&self, _h: &impl HugrView) -> Result<(), Self::Error> {
@@ -293,6 +297,15 @@ impl Rewrite for PullForward {
             )?;
         }
         Ok(())
+    }
+
+    fn invalidation_set(&self) -> Self::InvalidationSet<'_> {
+        // TODO: This could avoid creating a vec, but it'll be easier to do once
+        // return position impl trait is available.
+        let mut nodes = vec![self.command.node()];
+        let next_nodes = self.new_nexts.values().map(|c| c.node());
+        nodes.extend(next_nodes);
+        nodes.into_iter()
     }
 }
 
@@ -603,7 +616,7 @@ mod test {
         let node_count = case.node_count();
         let depth_before = depth(&case);
         let move_count = apply_greedy_commutation(&mut case).unwrap();
-        case.infer_and_validate(&REGISTRY).unwrap();
+        case.update_validate(&REGISTRY).unwrap();
 
         assert_eq!(
             move_count, expected_moves,
