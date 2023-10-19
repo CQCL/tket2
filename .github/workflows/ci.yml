@@ -86,10 +86,30 @@ jobs:
         run: cargo test --verbose --all-features --no-run
       - name: Tests with all features
         run: cargo test --verbose --all-features
-      - name: Test pyo3 bindings
+
+  py-tests:
+    # Not required, we can ignore it for the merge queue check.
+    if: github.event_name != 'merge_group'
+    runs-on: ubuntu-latest
+    name: "python bindings"
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: mozilla-actions/sccache-action@v0.0.3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Build pyo3 bindings
         run: |
           pip install -r requirements.txt
           cd pyrs
           maturin build
           pip install ../target/wheels/*.whl
+      - name: Test pyo3 bindings
+        run: |
+          cd pyrs
           pytest
