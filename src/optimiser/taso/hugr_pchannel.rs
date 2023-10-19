@@ -85,18 +85,7 @@ impl<P: CircuitCost> PriorityChannelCommunication<P> {
         if work.is_empty() {
             return Ok(());
         }
-        //
-        match self.max_cost() {
-            Some(max_cost) => {
-                let filtered = work
-                    .into_iter()
-                    .filter(|Work { cost, .. }| cost < &max_cost)
-                    .collect();
-                self.push.send(filtered)?;
-            }
-            _ => self.push.send(work)?,
-        }
-        Ok(())
+        self.push.send(work)
     }
 
     /// Receive a circuit from the priority channel.
