@@ -10,8 +10,9 @@ use crate::{
     Circuit, T2Op,
 };
 
-use super::{model::Arg, PHIRModel};
+use super::model::{Arg, PHIRModel};
 
+/// Convert Circuit-like HUGR to PHIR.
 pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
     let mut ph = PHIRModel::new();
 
@@ -100,6 +101,7 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
 
 /// Get the PHIR name for a quantum operation
 fn t2op_name(t2op: &OpType) -> Result<&'static str, &'static str> {
+    // dbg!(t2op);
     let err = Err("Unknown op");
     let OpType::LeafOp(leaf) = t2op else {
         return err;
@@ -133,6 +135,8 @@ fn t2op_name(t2op: &OpType) -> Result<&'static str, &'static str> {
 #[cfg(test)]
 mod test {
 
+    use std::fs::File;
+
     use hugr::Hugr;
     use rstest::{fixture, rstest};
 
@@ -154,6 +158,7 @@ mod test {
     }
     #[rstest]
     fn test_sample(sample: Hugr) {
+        rmp_serde::encode::write(&mut File::create("sample.hugr").unwrap(), &sample).unwrap();
         let ph = circuit_to_phir(&sample).unwrap();
         assert_eq!(ph.num_ops(), 5);
     }

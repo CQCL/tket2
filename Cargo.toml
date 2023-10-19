@@ -69,7 +69,7 @@ harness = false
 
 [workspace]
 
-members = ["pyrs", "compile-rewriter", "taso-optimiser"]
+members = ["pyrs", "compile-rewriter", "taso-optimiser", "hugr2phir"]
 
 [workspace.dependencies]
 

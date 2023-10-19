@@ -178,6 +178,7 @@ pub(super) enum OpListElems {
     Data(Data),
 }
 
+/// Rust encapsulation of [PHIR](https://github.com/CQCL/phir) spec.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct PHIRModel {
     #[serde(default = "default_format")]
