@@ -42,11 +42,6 @@ To setup the environment manually you will need:
     pip install -r pyrs/dev-requirements.txt
     ```
 
-If you are testing the `tkcxx` feature to bind to TKET-1, you will need to setup
-the `tket-rs` bindings. This requires configuring `conan` for the project, see
-the [TKET-rs readme](https://github.com/CQCL-DEV/tket-rs#readme) for more
-details.
-
 You can use the git hook in [`.github/pre-commit`](.github/pre-commit) to automatically run the test and check formatting before commiting.
 To install it, run:
 
