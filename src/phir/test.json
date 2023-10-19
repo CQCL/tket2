@@ -149,7 +149,7 @@
             "block": "if",
             "condition": {"cop": ">", "args": ["a", 2]},
             "true_branch": [
-                {"cop": "=", "args": ["c"], "returns": [7]},
+                {"cop": "=", "args": [7], "returns": ["c"]},
                 {"qop": "X", "args": [["w", 0]]},
                 {"qop": "H", "args": [["w", 1]]},
                 {"qop": "CX", "args": [[["w", 1], ["w", 2]]]},
