@@ -1,14 +1,62 @@
+use std::collections::HashMap;
+
 use hugr::{
-    ops::{LeafOp, OpType},
-    Hugr, HugrView,
+    extension::prelude::QB_T, hugr::CircuitUnit, ops::OpType,
+    std_extensions::arithmetic::int_types::INT_TYPES,
 };
 
-use crate::{extension::try_unwrap_json_op, Circuit, T2Op};
+use crate::{
+    phir::model::{CVarDefine, Data, Metadata, QVarDefine, Qop},
+    Circuit, T2Op,
+};
 
-use super::PHIRModel;
+use super::{model::Arg, PHIRModel};
 
-pub fn phir_to_hugr(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
-    let ph = PHIRModel::new();
+pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
+    let mut ph = PHIRModel::new();
+
+    const QUBIT_ID: &str = "q";
+    let q_arg = |index| Arg::RegIndex((QUBIT_ID.to_string(), index as u64));
+
+    let mut qubit_count = 0;
+    let mut int_count = 0;
+    let input_map: HashMap<usize, Arg> = circ
+        .units()
+        .enumerate()
+        .map(|(index, (wire, _, t))| match (wire, t) {
+            (CircuitUnit::Wire(_), t) if t == INT_TYPES[6] => {
+                let variable = format!("i{int_count}");
+                let cvar_def: Data = Data {
+                    data: CVarDefine {
+                        data_type: "i64".to_string(),
+                        variable: variable.clone(),
+                        size: None,
+                    }
+                    .into(),
+                    metadata: Metadata::default(),
+                };
+                int_count += 1;
+                ph.add_op(cvar_def);
+                (index, Arg::Register(variable))
+            }
+            (CircuitUnit::Linear(id), t) if t == QB_T => {
+                qubit_count += 1;
+                (index, q_arg(id))
+            }
+            _ => unimplemented!("Non-int64 input wires not supported"),
+        })
+        .collect();
+
+    let qvar_def: Data = Data {
+        data: QVarDefine {
+            data_type: Some("qubits".to_string()),
+            variable: "q".to_string(),
+            size: qubit_count,
+        }
+        .into(),
+        metadata: Metadata::default(),
+    };
+    ph.add_op(qvar_def);
 
     // Define quantum and classical variables for inputs
 
@@ -17,7 +65,24 @@ pub fn phir_to_hugr(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
         let optype = com.optype();
         // filter to only operations that involve qubits or output.
         // classical operations with multiple outputs?
-        let name = t2op_name(optype)?;
+        let qop = t2op_name(optype)?.to_string();
+
+        let args = com
+            .inputs()
+            .map(|(u, _, _)| match u {
+                CircuitUnit::Wire(_) => todo!(),
+                CircuitUnit::Linear(i) => q_arg(i),
+            })
+            .collect();
+        // TODO measure, define output reg and record in "returns"
+        let returns = None;
+        let phir_op = crate::phir::model::Op {
+            op_enum: Qop { qop, args }.into(),
+            returns,
+            metadata: Metadata::default(),
+        };
+
+        ph.add_op(phir_op);
     }
     // Add DFG as SeqBlock
 
@@ -62,5 +127,34 @@ fn t2op_name(t2op: &OpType) -> Result<&'static str, &'static str> {
         })
     } else {
         err
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use hugr::Hugr;
+    use rstest::{fixture, rstest};
+
+    use crate::utils::build_simple_circuit;
+
+    use super::*;
+
+    #[fixture]
+    // A commutation forward exists but depth doesn't change
+    fn sample() -> Hugr {
+        build_simple_circuit(3, |circ| {
+            circ.append(T2Op::H, [1])?;
+            circ.append(T2Op::CX, [0, 1])?;
+            circ.append(T2Op::Z, [0])?;
+            circ.append(T2Op::X, [1])?;
+            Ok(())
+        })
+        .unwrap()
+    }
+    #[rstest]
+    fn test_sample(sample: Hugr) {
+        let ph = circuit_to_phir(&sample).unwrap();
+        assert_eq!(ph.num_ops(), 5);
     }
 }

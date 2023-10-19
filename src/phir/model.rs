@@ -2,15 +2,15 @@ use derive_more::From;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-type Metadata = Map<String, Value>;
+pub(super) type Metadata = Map<String, Value>;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Data {
     #[serde(flatten)]
-    data: DataEnum,
+    pub(super) data: DataEnum,
     #[serde(skip_serializing_if = "Map::is_empty")]
     #[serde(default)]
-    metadata: Metadata,
+    pub(super) metadata: Metadata,
 }
 fn default_cvar_def_data() -> String {
     "i64".to_string()
@@ -204,6 +204,11 @@ impl PHIRModel {
     /// .
     pub(super) fn add_op(&mut self, op: impl Into<OpListElems>) {
         self.ops.push(op.into());
+    }
+
+    /// Returns the number of ops of this [`PHIRModel`].
+    pub fn num_ops(&self) -> usize {
+        self.ops.len()
     }
 }
 
