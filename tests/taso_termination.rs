@@ -55,9 +55,9 @@ mod require_portmatching {
     }
 
     #[rstest]
-    // #[ignore = "Takes 800ms"]
+    //#[ignore = "Takes 200ms"]
     fn taso_termination(simple_circ: Hugr, nam_4_2: DefaultTasoOptimiser) {
-        let opt_circ = nam_4_2.optimise(&simple_circ, None, 1.try_into().unwrap());
+        let opt_circ = nam_4_2.optimise(&simple_circ, None, 1.try_into().unwrap(), false, 10);
         assert_eq!(opt_circ.commands().count(), 11);
     }
 }
