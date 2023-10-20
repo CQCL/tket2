@@ -102,8 +102,8 @@ impl PatternMatch {
         circ: &impl Circuit,
         matcher: &PatternMatcher,
     ) -> Result<Self, InvalidPatternMatch> {
-        let mut checker = ConvexChecker::new(circ);
-        Self::try_from_root_match_with_checker(root, pattern, circ, matcher, &mut checker)
+        let checker = ConvexChecker::new(circ);
+        Self::try_from_root_match_with_checker(root, pattern, circ, matcher, &checker)
     }
 
     /// Create a pattern match from the image of a pattern root with a checker.
@@ -117,7 +117,7 @@ impl PatternMatch {
         pattern: PatternID,
         circ: &'c C,
         matcher: &PatternMatcher,
-        checker: &mut ConvexChecker<'c, C>,
+        checker: &ConvexChecker<'c, C>,
     ) -> Result<Self, InvalidPatternMatch> {
         let pattern_ref = matcher
             .get_pattern(pattern)
@@ -156,8 +156,8 @@ impl PatternMatch {
         inputs: Vec<Vec<(Node, Port)>>,
         outputs: Vec<(Node, Port)>,
     ) -> Result<Self, InvalidPatternMatch> {
-        let mut checker = ConvexChecker::new(circ);
-        Self::try_from_io_with_checker(root, pattern, circ, inputs, outputs, &mut checker)
+        let checker = ConvexChecker::new(circ);
+        Self::try_from_io_with_checker(root, pattern, circ, inputs, outputs, &checker)
     }
 
     /// Create a pattern match from the subcircuit boundaries.
@@ -174,7 +174,7 @@ impl PatternMatch {
         circ: &'c C,
         inputs: Vec<Vec<(Node, Port)>>,
         outputs: Vec<(Node, Port)>,
-        checker: &mut ConvexChecker<'c, C>,
+        checker: &ConvexChecker<'c, C>,
     ) -> Result<Self, InvalidPatternMatch> {
         let subgraph = SiblingSubgraph::try_new_with_checker(inputs, outputs, circ, checker)?;
         Ok(Self {
@@ -248,10 +248,10 @@ impl PatternMatcher {
         &'a self,
         circuit: &'c C,
     ) -> impl Iterator<Item = PatternMatch> + 'a {
-        let mut checker = ConvexChecker::new(circuit);
+        let checker = ConvexChecker::new(circuit);
         circuit
             .commands()
-            .flat_map(move |cmd| self.find_rooted_matches(circuit, cmd.node(), &mut checker))
+            .flat_map(move |cmd| self.find_rooted_matches(circuit, cmd.node(), &checker))
     }
 
     /// Find all convex pattern matches in a circuit.and collect in to a vector
@@ -264,7 +264,7 @@ impl PatternMatcher {
         &self,
         circ: &'c C,
         root: Node,
-        checker: &mut ConvexChecker<'c, C>,
+        checker: &ConvexChecker<'c, C>,
     ) -> Vec<PatternMatch> {
         self.automaton
             .run(
