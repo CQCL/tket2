@@ -1,6 +1,7 @@
 //! Quantum circuit representation and operations.
 
 pub mod command;
+pub mod cost;
 mod hash;
 pub mod units;
 
@@ -22,6 +23,7 @@ use itertools::Itertools;
 use portgraph::Direction;
 use thiserror::Error;
 
+use self::cost::CircuitCost;
 use self::units::{filter, FilteredUnits, Units};
 
 /// An object behaving like a quantum circuit.
@@ -125,6 +127,28 @@ pub trait Circuit: HugrView {
     {
         // Traverse the circuit in topological order.
         CommandIterator::new(self)
+    }
+
+    /// Compute the cost of the circuit based on a per-operation cost function.
+    #[inline]
+    fn circuit_cost<F, C>(&self, op_cost: F) -> C
+    where
+        Self: Sized,
+        C: CircuitCost,
+        F: Fn(&OpType) -> C,
+    {
+        self.commands().map(|cmd| op_cost(cmd.optype())).sum()
+    }
+
+    /// Compute the cost of a group of nodes in a circuit based on a
+    /// per-operation cost function.
+    #[inline]
+    fn nodes_cost<F, C>(&self, nodes: impl IntoIterator<Item = Node>, op_cost: F) -> C
+    where
+        C: CircuitCost,
+        F: Fn(&OpType) -> C,
+    {
+        nodes.into_iter().map(|n| op_cost(self.get_optype(n))).sum()
     }
 }
 
@@ -238,7 +262,8 @@ fn update_signature<C: HugrMut + Circuit + ?Sized>(
     };
     let new_inp_op = Input::new(inp_types.clone());
     let inp_exts = circ.get_nodetype(inp).input_extensions().cloned();
-    circ.replace_op(inp, NodeType::new(new_inp_op, inp_exts));
+    circ.replace_op(inp, NodeType::new(new_inp_op, inp_exts))
+        .unwrap();
 
     // Update output node if necessary.
     let out_types = out_index.map(|out_index| {
@@ -253,7 +278,8 @@ fn update_signature<C: HugrMut + Circuit + ?Sized>(
         };
         let new_out_op = Output::new(out_types.clone());
         let inp_exts = circ.get_nodetype(out).input_extensions().cloned();
-        circ.replace_op(out, NodeType::new(new_out_op, inp_exts));
+        circ.replace_op(out, NodeType::new(new_out_op, inp_exts))
+            .unwrap();
         out_types
     });
 
@@ -267,7 +293,8 @@ fn update_signature<C: HugrMut + Circuit + ?Sized>(
     }
     let new_dfg_op = DFG { signature };
     let inp_exts = circ.get_nodetype(circ.root()).input_extensions().cloned();
-    circ.replace_op(circ.root(), NodeType::new(new_dfg_op, inp_exts));
+    circ.replace_op(circ.root(), NodeType::new(new_dfg_op, inp_exts))
+        .unwrap();
 }
 
 impl<T> Circuit for T where T: HugrView {}

@@ -11,6 +11,8 @@ env:
   CARGO_INCREMENTAL: 0
   RUSTFLAGS: "--cfg=ci_run"
   MIRIFLAGS: '-Zmiri-permissive-provenance' # Required due to warnings in bitvec 1.0.1
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
 
 jobs:
 
@@ -24,8 +26,6 @@ jobs:
           rustup toolchain install nightly --component miri
           rustup override set nightly
           cargo miri setup
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: v0-miri
+      - uses: mozilla-actions/sccache-action@v0.0.3
       - name: Test with Miri
         run: cargo miri test

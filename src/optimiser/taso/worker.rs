@@ -2,36 +2,52 @@
 
 use std::thread::{self, JoinHandle};
 
-use hugr::Hugr;
-
+use crate::circuit::cost::CircuitCost;
 use crate::circuit::CircuitHash;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
 
+use super::hugr_pchannel::{PriorityChannelCommunication, Work};
+
 /// A worker that processes circuits for the TASO optimiser.
-pub struct TasoWorker<R, S> {
-    _phantom: std::marker::PhantomData<(R, S)>,
+pub struct TasoWorker<R, S, P: Ord> {
+    /// The worker ID.
+    #[allow(unused)]
+    id: usize,
+    /// The channel to send and receive work from.
+    priority_channel: PriorityChannelCommunication<P>,
+    /// The rewriter to use.
+    rewriter: R,
+    /// The rewrite strategy to use.
+    strategy: S,
 }
 
-impl<R, S> TasoWorker<R, S>
+impl<R, S, P> TasoWorker<R, S, P>
 where
     R: Rewriter + Send + 'static,
-    S: RewriteStrategy + Send + 'static,
+    S: RewriteStrategy<Cost = P> + Send + 'static,
+    P: CircuitCost + Send + Sync + 'static,
 {
     /// Spawn a new worker thread.
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn(
-        rx_work: crossbeam_channel::Receiver<(u64, Hugr)>,
-        tx_result: crossbeam_channel::Sender<Vec<(u64, Hugr)>>,
+        id: usize,
+        priority_channel: PriorityChannelCommunication<P>,
         rewriter: R,
         strategy: S,
-        worker_name: Option<String>,
     ) -> JoinHandle<()> {
-        let mut builder = thread::Builder::new();
-        if let Some(name) = worker_name {
-            builder = builder.name(name);
-        };
-        builder
-            .spawn(move || Self::worker_loop(rx_work, tx_result, rewriter, strategy))
+        let name = format!("TasoWorker-{id}");
+        thread::Builder::new()
+            .name(name)
+            .spawn(move || {
+                let mut worker = Self {
+                    id,
+                    priority_channel,
+                    rewriter,
+                    strategy,
+                };
+                worker.run_loop()
+            })
             .unwrap()
     }
 
@@ -39,29 +55,33 @@ where
     ///
     /// Processes work until the main thread closes the channel send or receive
     /// channel.
-    #[tracing::instrument(target = "taso::metrics", skip_all)]
-    fn worker_loop(
-        rx_work: crossbeam_channel::Receiver<(u64, Hugr)>,
-        tx_result: crossbeam_channel::Sender<Vec<(u64, Hugr)>>,
-        rewriter: R,
-        strategy: S,
-    ) {
-        while let Ok((_hash, circ)) = rx_work.recv() {
-            let hashed_circs = Self::process_circ(circ, &rewriter, &strategy);
+    #[tracing::instrument(target = "taso::metrics", skip(self))]
+    fn run_loop(&mut self) {
+        loop {
+            let Ok(Work { circ, cost, .. }) = self.priority_channel.recv() else {
+                break;
+            };
+
+            let rewrites = self.rewriter.get_rewrites(&circ);
+            let rewrite_result = self.strategy.apply_rewrites(rewrites, &circ);
+            let new_circs = rewrite_result
+                .into_iter()
+                .map(|(c, cost_delta)| {
+                    let hash = c.circuit_hash();
+                    Work {
+                        cost: cost.add_delta(&cost_delta),
+                        hash,
+                        circ: c,
+                    }
+                })
+                .collect();
+
             let send = tracing::trace_span!(target: "taso::metrics", "TasoWorker::send_result")
-                .in_scope(|| tx_result.send(hashed_circs));
+                .in_scope(|| self.priority_channel.send(new_circs));
             if send.is_err() {
-                // The priority queue closed the send channel, we can stop.
+                // Terminating
                 break;
             }
         }
-    }
-
-    /// Process a circuit.
-    #[tracing::instrument(target = "taso::metrics", skip_all)]
-    fn process_circ(circ: Hugr, rewriter: &R, strategy: &S) -> Vec<(u64, Hugr)> {
-        let rewrites = rewriter.get_rewrites(&circ);
-        let circs = strategy.apply_rewrites(rewrites, &circ);
-        circs.into_iter().map(|c| (c.circuit_hash(), c)).collect()
     }
 }

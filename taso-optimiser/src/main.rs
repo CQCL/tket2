@@ -78,19 +78,40 @@ struct CmdLineArgs {
         help = "The number of threads to use. By default, use a single thread."
     )]
     n_threads: Option<NonZeroUsize>,
+    /// Split the circuit into chunks, and process them separately.
+    #[arg(
+        long = "split-circ",
+        help = "Split the circuit into chunks and optimize each one in a separate thread. Use `-j` to specify the number of threads to use."
+    )]
+    split_circ: bool,
+    /// Max queue size.
+    #[arg(
+        short = 'q',
+        long = "queue-size",
+        default_value = "100",
+        value_name = "QUEUE_SIZE",
+        help = "The priority queue size. Defaults to 100."
+    )]
+    queue_size: usize,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts = CmdLineArgs::parse();
 
-    // Setup tracing subscribers for stdout and file logging.
-    //
-    // We need to keep the object around to keep the logging active.
-    let _tracer = Tracer::setup_tracing(opts.logfile);
-
     let input_path = Path::new(&opts.input);
     let output_path = Path::new(&opts.output);
     let ecc_path = Path::new(&opts.eccs);
+
+    let n_threads = opts
+        .n_threads
+        // TODO: Default to multithreading once that produces better results.
+        //.or_else(|| std::thread::available_parallelism().ok())
+        .unwrap_or(NonZeroUsize::new(1).unwrap());
+
+    // Setup tracing subscribers for stdout and file logging.
+    //
+    // We need to keep the object around to keep the logging active.
+    let _tracer = Tracer::setup_tracing(opts.logfile, n_threads.get() > 1);
 
     // TODO: Remove this from the Logger, and use tracing events instead.
     let circ_candidates_csv = BufWriter::new(File::create("best_circs.csv")?);
@@ -107,16 +128,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         exit(1);
     };
+    println!(
+        "Using {n_threads} threads. Queue size is {}.",
+        opts.queue_size
+    );
 
-    let n_threads = opts
-        .n_threads
-        // TODO: Default to multithreading once that produces better results.
-        //.or_else(|| std::thread::available_parallelism().ok())
-        .unwrap_or(NonZeroUsize::new(1).unwrap());
-    println!("Using {n_threads} threads");
+    if opts.split_circ && n_threads.get() > 1 {
+        println!("Splitting circuit into {n_threads} chunks.");
+    }
 
     println!("Optimising...");
-    let opt_circ = optimiser.optimise_with_log(&circ, taso_logger, opts.timeout, n_threads);
+    let opt_circ = optimiser.optimise_with_log(
+        &circ,
+        taso_logger,
+        opts.timeout,
+        n_threads,
+        opts.split_circ,
+        opts.queue_size,
+    );
 
     println!("Saving result");
     save_tk1_json_file(&opt_circ, output_path)?;

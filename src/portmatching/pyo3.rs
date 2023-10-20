@@ -155,8 +155,7 @@ impl PyPatternMatch {
     }
 
     /// Convert the pattern into a [`CircuitRewrite`].
-    pub fn to_rewrite(&self, circ: PyObject, replacement: PyObject) -> PyResult<CircuitRewrite> {
-        let circ = pyobj_as_hugr(circ)?;
+    pub fn to_rewrite(&self, circ: &Hugr, replacement: Hugr) -> PyResult<CircuitRewrite> {
         let inputs = self
             .inputs
             .iter()
@@ -166,12 +165,12 @@ impl PyPatternMatch {
         let rewrite = PatternMatch::try_from_io(
             self.root.0,
             PatternID(self.pattern_id),
-            &circ,
+            circ,
             inputs,
             outputs,
         )
         .expect("Invalid PyCircuitMatch object")
-        .to_rewrite(&circ, pyobj_as_hugr(replacement)?)?;
+        .to_rewrite(circ, replacement)?;
         Ok(rewrite)
     }
 }
