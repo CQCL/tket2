@@ -368,13 +368,13 @@ pub enum InvalidPatternMatch {
 /// Errors that can occur when (de)serialising a matcher.
 #[derive(Debug, Error)]
 pub enum MatcherSerialisationError {
-    /// An IO error occured
+    /// An IO error occurred
     #[error("IO error: {0}")]
     Io(#[from] io::Error),
-    /// An error occured during deserialisation
+    /// An error occurred during deserialisation
     #[error("Deserialisation error: {0}")]
     Deserialisation(#[from] rmp_serde::decode::Error),
-    /// An error occured during serialisation
+    /// An error occurred during serialisation
     #[error("Serialisation error: {0}")]
     Serialisation(#[from] rmp_serde::encode::Error),
 }

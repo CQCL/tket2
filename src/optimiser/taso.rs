@@ -164,19 +164,18 @@ where
 
             let rewrites = self.rewriter.get_rewrites(&circ);
             for (new_circ, cost_delta) in self.strategy.apply_rewrites(rewrites, &circ) {
+                let new_circ_cost = cost.add_delta(&cost_delta);
+                if !pq.check_accepted(&new_circ_cost) {
+                    continue;
+                }
+
                 let new_circ_hash = new_circ.circuit_hash();
                 if !seen_hashes.insert(new_circ_hash) {
                     // Ignore this circuit: we've already seen it
                     continue;
                 }
-                logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
-                let new_circ_cost = cost.add_delta(&cost_delta);
                 pq.push_unchecked(new_circ, new_circ_hash, new_circ_cost);
-            }
-
-            if pq.len() >= queue_size {
-                // Haircut to keep the queue size manageable
-                pq.truncate(queue_size / 2);
+                logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
             }
 
             if let Some(timeout) = timeout {
