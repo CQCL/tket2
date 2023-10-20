@@ -113,8 +113,7 @@ impl Chunk {
             .unwrap_or_else(|e| panic!("The chunk circuit is no longer a dataflow graph: {e}"));
         let node_map = circ
             .insert_subgraph(root, &self.circ, &subgraph)
-            .expect("Failed to insert the chunk subgraph")
-            .node_map;
+            .expect("Failed to insert the chunk subgraph");
 
         let mut input_map = HashMap::with_capacity(self.inputs.len());
         let mut output_map = HashMap::with_capacity(self.outputs.len());
@@ -536,7 +535,7 @@ mod test {
 
         let mut reassembled = chunks.reassemble().unwrap();
 
-        reassembled.infer_and_validate(&REGISTRY).unwrap();
+        reassembled.update_validate(&REGISTRY).unwrap();
         assert_eq!(circ.circuit_hash(), reassembled.circuit_hash());
     }
 
@@ -566,7 +565,7 @@ mod test {
 
         let mut reassembled = chunks.reassemble().unwrap();
 
-        reassembled.infer_and_validate(&REGISTRY).unwrap();
+        reassembled.update_validate(&REGISTRY).unwrap();
 
         assert_eq!(reassembled.commands().count(), 1);
         let h = reassembled.commands().next().unwrap().node();
