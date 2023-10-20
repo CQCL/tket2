@@ -36,7 +36,6 @@ pub(super) struct CVarDefine {
     #[serde(default = "default_cvar_def_data")]
     pub(super) data_type: String,
     pub(super) variable: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) size: Option<u64>,
 }
 
@@ -66,7 +65,7 @@ pub(super) enum DataEnum {
     ExportVar(ExportVar),
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, From)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, From, Clone)]
 #[serde(untagged)]
 pub(super) enum Arg {
     Register(String),
@@ -203,8 +202,12 @@ impl PHIRModel {
     }
 
     /// .
-    pub(super) fn add_op(&mut self, op: impl Into<OpListElems>) {
+    pub(super) fn append_op(&mut self, op: impl Into<OpListElems>) {
         self.ops.push(op.into());
+    }
+
+    pub(super) fn insert_op(&mut self, index: usize, op: impl Into<OpListElems>) {
+        self.ops.insert(index, op.into());
     }
 
     /// Returns the number of ops of this [`PHIRModel`].

@@ -1,5 +1,6 @@
 //! Utility functions for the library.
 
+use hugr::extension::prelude::BOOL_T;
 use hugr::extension::PRELUDE_REGISTRY;
 use hugr::types::{Type, TypeBound};
 use hugr::{
@@ -19,17 +20,32 @@ pub(crate) fn build_simple_circuit(
     num_qubits: usize,
     f: impl FnOnce(&mut CircuitBuilder<DFGBuilder<Hugr>>) -> Result<(), BuildError>,
 ) -> Result<Hugr, BuildError> {
-    let qb_row = vec![QB_T; num_qubits];
-    let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row))?;
+    build_simple_measure_circuit(num_qubits, 0, |c| {
+        f(c);
+        Ok(vec![])
+    })
+}
+
+// utility for building simple qubit-only circuits with some measure outputs.
+#[allow(unused)]
+pub(crate) fn build_simple_measure_circuit(
+    num_qubits: usize,
+    num_measured_bools: usize,
+    f: impl FnOnce(&mut CircuitBuilder<DFGBuilder<Hugr>>) -> Result<Vec<hugr::Wire>, BuildError>,
+) -> Result<Hugr, BuildError> {
+    let inputs = vec![QB_T; num_qubits];
+    let outputs = [inputs.clone(), vec![BOOL_T; num_measured_bools]].concat();
+
+    let mut h = DFGBuilder::new(FunctionType::new(inputs, outputs))?;
 
     let qbs = h.input_wires();
 
     let mut circ = h.as_circuit(qbs.into_iter().collect());
 
-    f(&mut circ)?;
+    let o = f(&mut circ)?;
 
     let qbs = circ.finish();
-    h.finish_hugr_with_outputs(qbs, &PRELUDE_REGISTRY)
+    h.finish_hugr_with_outputs([qbs, o].concat(), &PRELUDE_REGISTRY)
 }
 
 // Test only utils

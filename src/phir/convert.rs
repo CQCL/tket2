@@ -2,11 +2,12 @@ use std::collections::HashMap;
 
 use hugr::{
     extension::prelude::QB_T, hugr::CircuitUnit, ops::OpType,
-    std_extensions::arithmetic::int_types::INT_TYPES,
+    std_extensions::arithmetic::int_types::INT_TYPES, Wire,
 };
 
 use crate::{
-    phir::model::{CVarDefine, Data, Metadata, QVarDefine, Qop},
+    circuit::Command,
+    phir::model::{CVarDefine, Data, ExportVar, Metadata, QVarDefine, Qop},
     Circuit, T2Op,
 };
 
@@ -20,13 +21,14 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
     let q_arg = |index| Arg::RegIndex((QUBIT_ID.to_string(), index as u64));
 
     let mut qubit_count = 0;
-    let mut int_count = 0;
+    let mut input_int_count = 0;
+    let mut measures: HashMap<Wire, Arg> = HashMap::new();
     let input_map: HashMap<usize, Arg> = circ
         .units()
         .enumerate()
         .map(|(index, (wire, _, t))| match (wire, t) {
             (CircuitUnit::Wire(_), t) if t == INT_TYPES[6] => {
-                let variable = format!("i{int_count}");
+                let variable = format!("i{input_int_count}");
                 let cvar_def: Data = Data {
                     data: CVarDefine {
                         data_type: "i64".to_string(),
@@ -36,8 +38,8 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
                     .into(),
                     metadata: Metadata::default(),
                 };
-                int_count += 1;
-                ph.add_op(cvar_def);
+                input_int_count += 1;
+                ph.append_op(cvar_def);
                 (index, Arg::Register(variable))
             }
             (CircuitUnit::Linear(id), t) if t == QB_T => {
@@ -57,7 +59,7 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
         .into(),
         metadata: Metadata::default(),
     };
-    ph.add_op(qvar_def);
+    ph.append_op(qvar_def);
 
     // Define quantum and classical variables for inputs
 
@@ -76,14 +78,21 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
             })
             .collect();
         // TODO measure, define output reg and record in "returns"
-        let returns = None;
+        let returns = if qop == "Measure" {
+            let (measure_wire, arg) = measure_out_arg(&mut ph, com, circ, measures.len());
+            measures.insert(measure_wire, arg.clone());
+
+            Some(vec![arg])
+        } else {
+            None
+        };
         let phir_op = crate::phir::model::Op {
             op_enum: Qop { qop, args }.into(),
             returns,
             metadata: Metadata::default(),
         };
 
-        ph.add_op(phir_op);
+        ph.append_op(phir_op);
     }
     // Add DFG as SeqBlock
 
@@ -94,6 +103,56 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
     // export measured variables
 
     Ok(ph)
+}
+
+fn measure_out_arg(
+    ph: &mut PHIRModel,
+    com: Command<'_, impl Circuit>,
+    circ: &impl Circuit,
+    measure_idx: usize,
+) -> (Wire, Arg) {
+    let output = circ.get_io(circ.root()).expect("missing io")[1];
+
+    let variable = format!("c{}", measure_idx);
+    let cvar_def: Data = Data {
+        data: CVarDefine {
+            data_type: "i64".to_string(),
+            variable: variable.clone(),
+            size: None,
+        }
+        .into(),
+        metadata: Metadata::default(),
+    };
+    ph.insert_op(0, cvar_def);
+
+    let arg = Arg::Register(variable.clone());
+
+    let measure_wire = com
+        .outputs()
+        .find_map(|(c, _, _)| {
+            let CircuitUnit::Wire(w) = c else { return None };
+            Some(w)
+        })
+        .expect("missing measure output.");
+
+    if circ
+        .linked_ports(measure_wire.node(), measure_wire.source())
+        .find(|(n, _)| *n == output)
+        .is_some()
+    {
+        // if the measured value is output, export it
+        // TODO generalise to export any intermediates connected to output.
+        let export: Data = Data {
+            data: ExportVar {
+                variables: vec![variable],
+                to: None,
+            }
+            .into(),
+            metadata: Metadata::default(),
+        };
+        ph.append_op(export);
+    }
+    (measure_wire, arg)
 }
 
 // TODO: function to generate PHIR expression tree from classical input wire.
@@ -140,19 +199,22 @@ mod test {
     use hugr::Hugr;
     use rstest::{fixture, rstest};
 
-    use crate::utils::build_simple_circuit;
+    use crate::utils::build_simple_measure_circuit;
 
     use super::*;
 
     #[fixture]
     // A commutation forward exists but depth doesn't change
     fn sample() -> Hugr {
-        build_simple_circuit(3, |circ| {
+        build_simple_measure_circuit(2, 2, |circ| {
             circ.append(T2Op::H, [1])?;
             circ.append(T2Op::CX, [0, 1])?;
             circ.append(T2Op::Z, [0])?;
             circ.append(T2Op::X, [1])?;
-            Ok(())
+            let mut c0 = circ.append_with_outputs(T2Op::Measure, [0])?;
+            let c1 = circ.append_with_outputs(T2Op::Measure, [1])?;
+            c0.extend(c1);
+            Ok(c0)
         })
         .unwrap()
     }
@@ -160,6 +222,6 @@ mod test {
     fn test_sample(sample: Hugr) {
         rmp_serde::encode::write(&mut File::create("sample.hugr").unwrap(), &sample).unwrap();
         let ph = circuit_to_phir(&sample).unwrap();
-        assert_eq!(ph.num_ops(), 5);
+        assert_eq!(ph.num_ops(), 11);
     }
 }
