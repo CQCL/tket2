@@ -15,11 +15,12 @@ use tket2::optimiser::taso::log::TasoLogger;
 use tket2::optimiser::TasoOptimiser;
 
 #[cfg(feature = "peak_alloc")]
-use peak_alloc::PeakAlloc;
-
-#[cfg(feature = "peak_alloc")]
 #[global_allocator]
-static PEAK_ALLOC: PeakAlloc = PeakAlloc;
+static PEAK_ALLOC: peak_alloc::PeakAlloc = peak_alloc::PeakAlloc;
+
+#[cfg(all(not(target_env = "msvc"), not(feature = "peak_alloc")))]
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 /// Optimise circuits using Quartz-generated ECCs.
 ///
