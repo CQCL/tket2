@@ -57,7 +57,7 @@ impl Chunk {
     pub(self) fn extract<'h, H: HugrView>(
         circ: &'h H,
         nodes: impl IntoIterator<Item = Node>,
-        checker: &mut ConvexChecker<'h, H>,
+        checker: &ConvexChecker<'h, H>,
     ) -> Self {
         let subgraph = SiblingSubgraph::try_from_nodes_with_checker(
             nodes.into_iter().collect_vec(),
@@ -289,7 +289,7 @@ impl CircuitChunks {
             .collect();
 
         let mut chunks = Vec::new();
-        let mut convex_checker = ConvexChecker::new(circ);
+        let convex_checker = ConvexChecker::new(circ);
         let mut running_cost = C::default();
         let mut current_group = 0;
         for (_, commands) in &circ.commands().map(|cmd| cmd.node()).group_by(|&node| {
@@ -302,7 +302,7 @@ impl CircuitChunks {
             }
             current_group
         }) {
-            chunks.push(Chunk::extract(circ, commands, &mut convex_checker));
+            chunks.push(Chunk::extract(circ, commands, &convex_checker));
         }
         Self {
             signature,
