@@ -1,3 +1,5 @@
+// PHIR JSON schema: https://github.com/CQCL/phir/blob/main/schema.json
+
 use derive_more::From;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};

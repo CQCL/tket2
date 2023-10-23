@@ -167,6 +167,7 @@ fn t2op_name(t2op: &OpType) -> Result<&'static str, &'static str> {
     };
 
     if let Ok(t2op) = leaf.clone().try_into() {
+        // https://github.com/CQCL/phir/blob/main/phir_spec_qasm.md
         Ok(match t2op {
             T2Op::H => "H",
             T2Op::CX => "CX",
@@ -194,8 +195,6 @@ fn t2op_name(t2op: &OpType) -> Result<&'static str, &'static str> {
 #[cfg(test)]
 mod test {
 
-    use std::fs::File;
-
     use hugr::Hugr;
     use rstest::{fixture, rstest};
 
@@ -220,7 +219,7 @@ mod test {
     }
     #[rstest]
     fn test_sample(sample: Hugr) {
-        rmp_serde::encode::write(&mut File::create("sample.hugr").unwrap(), &sample).unwrap();
+        // rmp_serde::encode::write(&mut File::create("sample.hugr").unwrap(), &sample).unwrap();
         let ph = circuit_to_phir(&sample).unwrap();
         assert_eq!(ph.num_ops(), 11);
     }
