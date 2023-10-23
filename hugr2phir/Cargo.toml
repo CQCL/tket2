@@ -11,3 +11,4 @@ tket2 = { path = "../"}
 quantinuum-hugr = { workspace = true }
 rmp-serde = "1.1.2"
 serde_json = "1.0.107"
+itertools.workspace = true

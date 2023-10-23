@@ -1,17 +1,17 @@
 use std::collections::HashMap;
 
+use super::model::{Arg, PHIRModel};
 use crate::{
     circuit::Command,
     phir::model::{CVarDefine, Data, ExportVar, Metadata, QVarDefine, Qop},
     Circuit, T2Op,
 };
+use derive_more::From;
 use hugr::{
     extension::prelude::QB_T, hugr::CircuitUnit, ops::OpType,
     std_extensions::arithmetic::int_types::INT_TYPES, Wire,
 };
 use itertools::{Either, Itertools};
-
-use super::model::{Arg, PHIRModel};
 
 /// Convert Circuit-like HUGR to PHIR.
 pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
@@ -22,8 +22,8 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
 
     let mut qubit_count = 0;
     let mut input_int_count = 0;
-    let mut measures: HashMap<Wire, Arg> = HashMap::new();
-    let input_map: HashMap<usize, Arg> = circ
+    let mut measure_exports = vec![];
+    let _input_map: HashMap<usize, Arg> = circ
         .units()
         .enumerate()
         .map(|(index, (wire, _, t))| match (wire, t) {
@@ -68,7 +68,11 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
         let optype = com.optype();
         // filter to only operations that involve qubits or output.
         // classical operations with multiple outputs?
-        let qop = t2op_name(optype)?.to_string();
+        let qop = match t2op_name(optype) {
+            Ok(qop) => qop.to_string(),
+            Err(OpConvertError::Skip) => continue,
+            Err(OpConvertError::Other(s)) => return Err(s),
+        };
 
         let args = com
             .inputs()
@@ -79,8 +83,12 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
             .collect();
         // TODO measure, define output reg and record in "returns"
         let returns = if qop == "Measure" {
-            let (measure_wire, arg) = measure_out_arg(&mut ph, com, circ);
-            measures.insert(measure_wire, arg.clone());
+            let (arg, def, export) = measure_out_arg(com, circ);
+            ph.insert_op(0, def);
+            if let Some(export) = export {
+                measure_exports.push(export);
+            }
+            // measures.insert(measure_wire, arg.clone());
 
             Some(vec![arg])
         } else {
@@ -94,6 +102,10 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
 
         ph.append_op(phir_op);
     }
+
+    for export in measure_exports {
+        ph.append_op(export);
+    }
     // Add DFG as SeqBlock
 
     // Add conditional as IfBlock
@@ -106,10 +118,9 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
 }
 
 fn measure_out_arg(
-    ph: &mut PHIRModel,
     com: Command<'_, impl Circuit>,
     circ: &impl Circuit,
-) -> (Wire, Arg) {
+) -> (Arg, Data, Option<Data>) {
     let output = circ.get_io(circ.root()).expect("missing io")[1];
 
     let (wires, qb_indices): (Vec<_>, Vec<_>) = com.outputs().partition_map(|(c, _, _)| match c {
@@ -136,37 +147,41 @@ fn measure_out_arg(
         .into(),
         metadata: Metadata::default(),
     };
-    ph.insert_op(0, c_var_def);
 
     let arg = Arg::Register(variable.clone());
 
-    if circ
+    let export: Option<Data> = if circ
         .linked_ports(measure_wire.node(), measure_wire.source())
-        .find(|(n, _)| *n == output)
-        .is_some()
+        .any(|(n, _)| n == output)
     {
         // if the measured value is output, export it
         // TODO generalise to export any intermediates connected to output.
-        let export: Data = Data {
+        Some(Data {
             data: ExportVar {
                 variables: vec![variable],
                 to: None,
             }
             .into(),
             metadata: Metadata::default(),
-        };
-        ph.append_op(export);
-    }
-    (measure_wire, arg)
+        })
+    } else {
+        None
+    };
+    (arg, c_var_def, export)
 }
 
 // TODO: function to generate PHIR expression tree from classical input wire.
 // TODO: constant folding angles
 
+#[derive(From)]
+enum OpConvertError {
+    Skip,
+    Other(&'static str),
+}
+
 /// Get the PHIR name for a quantum operation
-fn t2op_name(t2op: &OpType) -> Result<&'static str, &'static str> {
-    // dbg!(t2op);
-    let err = Err("Unknown op");
+fn t2op_name(t2op: &OpType) -> Result<&'static str, OpConvertError> {
+    let err = Err(OpConvertError::Other("Unknown op"));
     let OpType::LeafOp(leaf) = t2op else {
         return err;
     };
@@ -193,7 +208,8 @@ fn t2op_name(t2op: &OpType) -> Result<&'static str, &'static str> {
             T2Op::AngleAdd | T2Op::TK1 => return err,
         })
     } else {
-        err
+        // TODO arithmetic
+        Err(OpConvertError::Skip)
     }
 }
 

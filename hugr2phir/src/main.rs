@@ -1,3 +1,5 @@
+mod normalize;
+
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -9,6 +11,7 @@ use hugr::{
     ops::{OpTag, OpTrait, OpType},
     Hugr, HugrView,
 };
+
 use tket2::phir::circuit_to_phir;
 
 #[derive(Parser, Debug)]
@@ -39,25 +42,40 @@ fn main() {
         output
     });
 
-    let hugr: Hugr = rmp_serde::from_read(reader).unwrap();
+    let mut hugr: Hugr = rmp_serde::from_read(reader).unwrap();
+    normalize::remove_identity_tuples(&mut hugr);
     // DescendantsGraph::try_new(&hugr, root).unwrap()
     let root = hugr.root();
     let root_op_tag = hugr.get_optype(root).tag();
     let circ: DescendantsGraph = if OpTag::DataflowParent.is_superset(root_op_tag) {
+        // Some dataflow graph
         DescendantsGraph::try_new(&hugr, root).unwrap()
     } else if OpTag::ModuleRoot.is_superset(root_op_tag) {
+        // Assume Guppy generated module
+
         // just take the first function
         let main_node = hugr
             .children(hugr.root())
             .find(|n| matches!(hugr.get_optype(*n), OpType::FuncDefn(_)))
             .expect("Module contains no functions.");
+        // just take the first node again...assume guppy source so always top
+        // level CFG
+        let cfg_node = hugr
+            .children(main_node)
+            .find(|n| matches!(hugr.get_optype(*n), OpType::CFG(_)))
+            .expect("Function contains no cfg.");
 
-        DescendantsGraph::try_new(&hugr, main_node).unwrap()
+        // Now is a bit sketchy...assume only one basic block in CFG
+        let block_node = hugr
+            .children(cfg_node)
+            .find(|n| matches!(hugr.get_optype(*n), OpType::BasicBlock(_)))
+            .expect("CFG contains no basic block.");
+        DescendantsGraph::try_new(&hugr, block_node).unwrap()
     } else {
         panic!("HUGR Root Op type {root_op_tag:?} not supported");
     };
 
     let phir = circuit_to_phir(&circ).unwrap();
 
-    serde_json::to_writer(File::create(&output).unwrap(), &phir).unwrap();
+    serde_json::to_writer(File::create(output).unwrap(), &phir).unwrap();
 }
