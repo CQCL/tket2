@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 
-use hugr::{
-    extension::prelude::QB_T, hugr::CircuitUnit, ops::OpType,
-    std_extensions::arithmetic::int_types::INT_TYPES, Wire,
-};
-
 use crate::{
     circuit::Command,
     phir::model::{CVarDefine, Data, ExportVar, Metadata, QVarDefine, Qop},
     Circuit, T2Op,
 };
+use hugr::{
+    extension::prelude::QB_T, hugr::CircuitUnit, ops::OpType,
+    std_extensions::arithmetic::int_types::INT_TYPES, Wire,
+};
+use itertools::{Either, Itertools};
 
 use super::model::{Arg, PHIRModel};
 
@@ -79,7 +79,7 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
             .collect();
         // TODO measure, define output reg and record in "returns"
         let returns = if qop == "Measure" {
-            let (measure_wire, arg) = measure_out_arg(&mut ph, com, circ, measures.len());
+            let (measure_wire, arg) = measure_out_arg(&mut ph, com, circ);
             measures.insert(measure_wire, arg.clone());
 
             Some(vec![arg])
@@ -109,12 +109,25 @@ fn measure_out_arg(
     ph: &mut PHIRModel,
     com: Command<'_, impl Circuit>,
     circ: &impl Circuit,
-    measure_idx: usize,
 ) -> (Wire, Arg) {
     let output = circ.get_io(circ.root()).expect("missing io")[1];
 
-    let variable = format!("c{}", measure_idx);
-    let cvar_def: Data = Data {
+    let (wires, qb_indices): (Vec<_>, Vec<_>) = com.outputs().partition_map(|(c, _, _)| match c {
+        CircuitUnit::Wire(w) => Either::Left(w),
+        CircuitUnit::Linear(i) => Either::Right(i),
+    });
+
+    let [measure_wire]: [Wire; 1] = wires
+        .try_into()
+        .expect("Should only be one classical wire from measure.");
+    let [qb_index]: [usize; 1] = qb_indices
+        .try_into()
+        .expect("Should only be one quantum wire from measure.");
+
+    // variable name marked with qubit index being measured
+    let variable = format!("c{}", qb_index);
+
+    let c_var_def: Data = Data {
         data: CVarDefine {
             data_type: "i64".to_string(),
             variable: variable.clone(),
@@ -123,17 +136,9 @@ fn measure_out_arg(
         .into(),
         metadata: Metadata::default(),
     };
-    ph.insert_op(0, cvar_def);
+    ph.insert_op(0, c_var_def);
 
     let arg = Arg::Register(variable.clone());
-
-    let measure_wire = com
-        .outputs()
-        .find_map(|(c, _, _)| {
-            let CircuitUnit::Wire(w) = c else { return None };
-            Some(w)
-        })
-        .expect("missing measure output.");
 
     if circ
         .linked_ports(measure_wire.node(), measure_wire.source())
