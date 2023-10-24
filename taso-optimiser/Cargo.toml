@@ -17,7 +17,7 @@ tracing-subscriber = "0.3.17"
 tracing-appender = "0.2.2"
 peak_alloc = { version = "0.2.0", optional = true }
 
-[target.'cfg(all(not(target_env = "msvc"), not(feature = "peak_alloc"))'.dependencies]
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
 tikv-jemallocator = "0.5"
 
 [features]
