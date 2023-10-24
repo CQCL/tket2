@@ -8,6 +8,9 @@ bench = false
 name = "tket2"
 path = "src/lib.rs"
 
+[profile.release]
+lto = "thin"
+
 [dependencies]
 lazy_static = "1.4.0"
 cgmath = "0.18.0"
