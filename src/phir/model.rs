@@ -10,7 +10,6 @@ pub(super) type Metadata = Map<String, Value>;
 pub struct Data {
     #[serde(flatten)]
     pub(super) data: DataEnum,
-    #[serde(skip_serializing_if = "Map::is_empty")]
     #[serde(default)]
     pub(super) metadata: Metadata,
 }
@@ -37,7 +36,7 @@ fn default_version() -> String {
 pub(super) struct CVarDefine {
     #[serde(default = "default_cvar_def_data")]
     pub(super) data_type: String,
-    pub(super) variable: String,
+    pub(super) variable: Sym,
     pub(super) size: Option<u64>,
 }
 
@@ -45,15 +44,14 @@ pub(super) struct CVarDefine {
 pub(super) struct QVarDefine {
     #[serde(default = "default_qvar_def_data")]
     pub(super) data_type: Option<String>,
-    pub(super) variable: String,
+    pub(super) variable: Sym,
     pub(super) size: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub(super) struct ExportVar {
-    pub(super) variables: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(super) to: Option<Vec<String>>,
+    pub(super) variables: Vec<Sym>,
+    pub(super) to: Option<Vec<Sym>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, From)]
@@ -67,43 +65,52 @@ pub(super) enum DataEnum {
     ExportVar(ExportVar),
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, From, Clone)]
-#[serde(untagged)]
-pub(super) enum Arg {
-    Register(String),
-    Number(u64),
-    RegIndex((String, u64)),
-    Variadic(Vec<Arg>),
-    Other(Value),
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, From)]
-#[serde(untagged)]
-pub(super) enum CopArg {
-    Arg(Arg),
-    Cop(Cop),
-}
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub(super) struct Op {
     #[serde(flatten)]
     pub op_enum: OpEnum,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub returns: Option<Vec<Arg>>,
-    #[serde(skip_serializing_if = "Map::is_empty")]
     #[serde(default)]
     pub metadata: Metadata,
 }
+pub type Bit = (String, u64);
+pub type Sym = String;
+#[derive(Serialize, Deserialize, Debug, PartialEq, From, Clone)]
+#[serde(untagged)]
+pub(super) enum COpArg {
+    Sym(Sym),
+    Int(i64),
+    Bit(Bit),
+    // Variadic(Vec<Arg>),
+    COp(COp),
+    // Other(Value),
+}
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub(super) struct Cop {
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, From)]
+#[serde(untagged)]
+pub(super) enum CopReturn {
+    Sym(Sym),
+    Bit(Bit),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub(super) struct COp {
     pub cop: String,
-    pub args: Vec<CopArg>,
+    pub args: Vec<COpArg>,
+    pub returns: Option<Vec<CopReturn>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, From)]
+#[serde(untagged)]
+pub(super) enum QOpArg {
+    ListBit(Vec<Bit>),
+    Bit(Bit),
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub(super) struct Qop {
+pub(super) struct QOp {
     pub qop: String,
-    pub args: Vec<Arg>,
+    pub args: Vec<QOpArg>,
+    pub returns: Option<Vec<Bit>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -111,35 +118,35 @@ pub(super) struct FFCall {
     #[serde(default = "default_ffcall_cop")]
     pub cop: String,
     pub function: String,
+    pub args: Vec<COpArg>,
+    pub returns: Option<Vec<CopReturn>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub(super) struct Mop {
+pub(super) struct MOp {
     pub mop: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, From)]
 #[serde(untagged)]
 pub(super) enum OpEnum {
-    Qop(Qop),
-    Cop(Cop),
+    Qop(QOp),
+    Cop(COp),
     FFCall(FFCall),
-    Mop(Mop),
+    Mop(MOp),
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub(super) struct Block {
     #[serde(flatten)]
     pub block_enum: BlockEnum,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Map<String, Value>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub(super) struct If {
-    pub(super) condition: Cop,
+    pub(super) condition: COp,
     pub(super) true_branch: Vec<Op>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) false_branch: Option<Vec<Op>>,
 }
 
@@ -186,7 +193,6 @@ pub struct PHIRModel {
     format: String,
     #[serde(default = "default_version")]
     version: String,
-    #[serde(skip_serializing_if = "Map::is_empty")]
     #[serde(default)]
     metadata: Metadata,
     ops: Vec<OpListElems>,

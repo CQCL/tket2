@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use super::model::{Arg, PHIRModel};
+use super::model::{Bit, PHIRModel};
 use crate::{
     circuit::Command,
-    phir::model::{CVarDefine, Data, ExportVar, Metadata, QVarDefine, Qop},
+    phir::model::{COpArg, CVarDefine, Data, ExportVar, Metadata, QOp, QOpArg, QVarDefine},
     Circuit, T2Op,
 };
 use derive_more::From;
@@ -18,12 +18,12 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
     let mut ph = PHIRModel::new();
 
     const QUBIT_ID: &str = "q";
-    let q_arg = |index| Arg::RegIndex((QUBIT_ID.to_string(), index as u64));
+    let q_arg = |index| (QUBIT_ID.to_string(), index as u64);
 
     let mut qubit_count = 0;
     let mut input_int_count = 0;
     let mut measure_exports = vec![];
-    let _input_map: HashMap<usize, Arg> = circ
+    let _input_map: HashMap<usize, COpArg> = circ
         .units()
         .enumerate()
         .map(|(index, (wire, _, t))| match (wire, t) {
@@ -40,11 +40,11 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
                 };
                 input_int_count += 1;
                 ph.append_op(cvar_def);
-                (index, Arg::Register(variable))
+                (index, COpArg::Sym(variable))
             }
             (CircuitUnit::Linear(id), t) if t == QB_T => {
                 qubit_count += 1;
-                (index, q_arg(id))
+                (index, COpArg::Bit(q_arg(id)))
             }
             _ => unimplemented!("Non-int64 input wires not supported"),
         })
@@ -74,29 +74,35 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
             Err(OpConvertError::Other(s)) => return Err(s),
         };
 
-        let args = com
+        let args: Vec<Bit> = com
             .inputs()
             .map(|(u, _, _)| match u {
                 CircuitUnit::Wire(_) => todo!(),
                 CircuitUnit::Linear(i) => q_arg(i),
             })
             .collect();
+
+        let args: Vec<QOpArg> = if args.len() == 1 {
+            let [arg]: [Bit; 1] = args.try_into().unwrap();
+            vec![QOpArg::Bit(arg)]
+        } else {
+            vec![QOpArg::ListBit(args)]
+        };
         // TODO measure, define output reg and record in "returns"
         let returns = if qop == "Measure" {
-            let (arg, def, export) = measure_out_arg(com, circ);
+            let (bit, def, export) = measure_out_arg(com, circ);
             ph.insert_op(0, def);
             if let Some(export) = export {
                 measure_exports.push(export);
             }
             // measures.insert(measure_wire, arg.clone());
 
-            Some(vec![arg])
+            Some(vec![bit])
         } else {
             None
         };
         let phir_op = crate::phir::model::Op {
-            op_enum: Qop { qop, args }.into(),
-            returns,
+            op_enum: QOp { qop, args, returns }.into(),
             metadata: Metadata::default(),
         };
 
@@ -120,7 +126,7 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
 fn measure_out_arg(
     com: Command<'_, impl Circuit>,
     circ: &impl Circuit,
-) -> (Arg, Data, Option<Data>) {
+) -> (Bit, Data, Option<Data>) {
     let output = circ.get_io(circ.root()).expect("missing io")[1];
 
     let (wires, qb_indices): (Vec<_>, Vec<_>) = com.outputs().partition_map(|(c, _, _)| match c {
@@ -138,17 +144,19 @@ fn measure_out_arg(
     // variable name marked with qubit index being measured
     let variable = format!("c{}", qb_index);
 
+    // declare a width-1 register per measurement
+    // TODO what if qubit measured multiple times?
     let c_var_def: Data = Data {
         data: CVarDefine {
             data_type: "i64".to_string(),
             variable: variable.clone(),
-            size: None,
+            size: Some(1),
         }
         .into(),
         metadata: Metadata::default(),
     };
 
-    let arg = Arg::Register(variable.clone());
+    let arg = (variable.clone(), 0);
 
     let export: Option<Data> = if circ
         .linked_ports(measure_wire.node(), measure_wire.source())
