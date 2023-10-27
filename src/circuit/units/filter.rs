@@ -2,8 +2,8 @@
 //! possible.
 
 use hugr::extension::prelude;
-use hugr::hugr::CircuitUnit;
 use hugr::types::Type;
+use hugr::CircuitUnit;
 use hugr::{Port, Wire};
 
 use super::{DefaultUnitLabeller, LinearUnit, Units};

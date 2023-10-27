@@ -11,8 +11,9 @@ use super::{CircuitPattern, NodeID, PEdge, PNode};
 use hugr::hugr::views::sibling_subgraph::{
     ConvexChecker, InvalidReplacement, InvalidSubgraph, InvalidSubgraphBoundary,
 };
-use hugr::hugr::PortIndex;
-use hugr::{hugr::views::SiblingSubgraph, ops::OpType, Hugr, Node, Port};
+use hugr::hugr::views::SiblingSubgraph;
+use hugr::ops::OpType;
+use hugr::{Hugr, Node, Port, PortIndex};
 use itertools::Itertools;
 use portmatching::{
     automaton::{LineBuilder, ScopeAutomaton},

@@ -12,11 +12,11 @@ use hugr::extension::ExtensionSet;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::views::sibling_subgraph::ConvexChecker;
 use hugr::hugr::views::{HierarchyView, SiblingGraph, SiblingSubgraph};
-use hugr::hugr::{HugrError, NodeMetadata, PortIndex};
+use hugr::hugr::{HugrError, NodeMetadata};
 use hugr::ops::handle::DataflowParentID;
 use hugr::ops::OpType;
 use hugr::types::{FunctionType, Signature};
-use hugr::{Hugr, HugrView, Node, Port, Wire};
+use hugr::{Hugr, HugrView, Node, Port, PortIndex, Wire};
 use itertools::Itertools;
 
 use crate::Circuit;
