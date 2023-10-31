@@ -24,7 +24,6 @@ def taso_pass(
     and will be passed on to the TASO optimiser if provided."""
     if rewriter is None:
         rewriter = pkg_resources.resource_filename("pyrs", "data/nam_6_3.rwr")
-        print("Using default rewriter", rewriter)
     opt = optimiser.TasoOptimiser.load_precompiled(rewriter)
 
     def apply(circuit: Circuit) -> Circuit:

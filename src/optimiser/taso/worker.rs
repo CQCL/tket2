@@ -64,15 +64,21 @@ where
 
             let rewrites = self.rewriter.get_rewrites(&circ);
             let rewrite_result = self.strategy.apply_rewrites(rewrites, &circ);
+            let max_cost = self.priority_channel.max_cost();
             let new_circs = rewrite_result
                 .into_iter()
-                .map(|(c, cost_delta)| {
+                .filter_map(|(c, cost_delta)| {
+                    let new_cost = cost.add_delta(&cost_delta);
+                    if max_cost.is_some() && &new_cost >= max_cost.as_ref().unwrap() {
+                        return None;
+                    }
+
                     let hash = c.circuit_hash();
-                    Work {
-                        cost: cost.add_delta(&cost_delta),
+                    Some(Work {
+                        cost: new_cost,
                         hash,
                         circ: c,
-                    }
+                    })
                 })
                 .collect();
 

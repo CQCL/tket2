@@ -17,9 +17,9 @@ pub use filter::FilteredUnits;
 
 use std::iter::FusedIterator;
 
-use hugr::hugr::CircuitUnit;
 use hugr::ops::OpTrait;
 use hugr::types::{EdgeKind, Type, TypeRow};
+use hugr::CircuitUnit;
 use hugr::{Direction, Node, Port, Wire};
 
 use crate::utils::type_is_linear;

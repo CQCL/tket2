@@ -8,6 +8,9 @@ bench = false
 name = "tket2"
 path = "src/lib.rs"
 
+[profile.release]
+lto = "thin"
+
 [dependencies]
 lazy_static = "1.4.0"
 cgmath = "0.18.0"
@@ -15,7 +18,6 @@ num-rational = "0.4"
 num-complex = { version = "0.4", optional = true }
 tket-json-rs = { workspace = true }
 rayon = "1.5"
-tket-rs = { optional = true, git = "https://github.com/CQCL-DEV/tket-rs", rev = "bd7e8e04" }
 thiserror = "1.0.28"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -32,7 +34,7 @@ portmatching = { optional = true, git = "https://github.com/lmondada/portmatchin
 ] }
 derive_more = "0.99.17"
 quantinuum-hugr = { workspace = true }
-portgraph = { workspace = true }
+portgraph = { workspace = true, features = ["serde"] }
 pyo3 = { workspace = true, optional = true, features = ["multiple-pymethods"] }
 strum_macros = "0.25.2"
 strum = "0.25.0"
@@ -50,11 +52,9 @@ tracing = { workspace = true }
 pyo3 = [
     "dep:pyo3",
     "tket-json-rs/pyo3",
-    "tket-json-rs/tket2ops",
     "portgraph/pyo3",
     "quantinuum-hugr/pyo3",
 ]
-tkcxx = ["dep:tket-rs", "dep:num-complex"]
 portmatching = ["dep:portmatching", "dep:rmp-serde"]
 
 [dev-dependencies]
@@ -73,11 +73,9 @@ members = ["pyrs", "compile-rewriter", "taso-optimiser"]
 
 [workspace.dependencies]
 
-quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "9254ac7" }
-portgraph = { version = "0.9", features = ["serde"] }
-pyo3 = { version = "0.19" }
+quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "0beb165" }
+portgraph = { version = "0.10" }
+pyo3 = { version = "0.20" }
 itertools = { version = "0.11.0" }
-tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs", rev = "619db15d3", features = [
-    "tket2ops",
-] }
+tket-json-rs = "0.2.0"
 tracing = "0.1.37"

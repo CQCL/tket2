@@ -9,10 +9,10 @@ use hugr::builder::{CircuitBuilder, Container, DFGBuilder, Dataflow, DataflowHug
 use hugr::extension::prelude::{PRELUDE_ID, QB_T};
 use hugr::extension::ExtensionSet;
 
-use hugr::hugr::CircuitUnit;
 use hugr::ops::Const;
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::types::FunctionType;
+use hugr::CircuitUnit;
 use hugr::{Hugr, Wire};
 
 use serde_json::json;
