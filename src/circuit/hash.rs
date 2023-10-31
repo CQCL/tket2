@@ -1,12 +1,11 @@
 //! Circuit hashing.
 
-use core::panic;
 use std::hash::{Hash, Hasher};
 
 use fxhash::{FxHashMap, FxHasher64};
-use hugr::ops::{LeafOp, OpName, OpTag, OpTrait, OpType};
-use hugr::types::TypeBound;
-use hugr::{HugrView, Node, Port};
+use hugr::hugr::views::{HierarchyView, SiblingGraph};
+use hugr::ops::{LeafOp, OpName, OpType};
+use hugr::{HugrView, Node};
 use petgraph::visit::{self as pg, Walker};
 
 use super::Circuit;
@@ -31,17 +30,21 @@ where
     T: HugrView,
 {
     fn circuit_hash(&'circ self) -> u64 {
-        let mut hash_state = HashState::default();
+        let mut node_hashes = HashState::default();
 
         for node in pg::Topo::new(&self.as_petgraph())
             .iter(&self.as_petgraph())
             .filter(|&n| n != self.root())
         {
-            let hash = hash_node(self, node, &mut hash_state);
-            hash_state.set_node(self, node, hash);
+            let hash = hash_node(self, node, &mut node_hashes);
+            if node_hashes.set_hash(node, hash).is_some() {
+                panic!("Hash already set for node {node}");
+            }
         }
 
-        hash_state.get_nonlinear(self.output())
+        node_hashes
+            .node_hash(self.output())
+            .expect("Output hash has not been set")
     }
 }
 
@@ -50,61 +53,27 @@ where
 /// Contains previously computed hashes.
 #[derive(Clone, Default, Debug)]
 struct HashState {
-    /// Computed node hashes for each linear output.
-    ///
-    /// These are removed from the map when consumed.
-    pub linear_hashes: FxHashMap<(Node, Port), u64>,
     /// Computed node hashes.
-    ///
-    /// Only store hashes for nodes with at least one non-linear output.
-    pub nonlinear_hashes: FxHashMap<Node, u64>,
+    pub hashes: FxHashMap<Node, u64>,
 }
 
 impl HashState {
-    /// Return the hash for a port.
-    ///
-    /// If the port was linear, it is removed from the map.
-    fn take(&mut self, node: Node, port: Port) -> u64 {
-        if let Some(hash) = self.linear_hashes.remove(&(node, port)) {
-            return hash;
-        }
-        self.get_nonlinear(node)
-    }
-
     /// Return the hash for a node.
-    fn get_nonlinear(&self, node: Node) -> u64 {
-        *self.nonlinear_hashes.get(&node).unwrap()
+    #[inline]
+    fn node_hash(&self, node: Node) -> Option<u64> {
+        self.hashes.get(&node).copied()
     }
 
     /// Register the hash for a node.
-    fn set_node(&mut self, circ: &impl HugrView, node: Node, hash: u64) {
-        let optype = circ.get_optype(node);
-        let signature = optype.signature();
-        // Defaults to false in most cases, except for OpType::Const.
-        let mut any_nonlinear = optype.tag() <= OpTag::Const;
-        for (port_type, port) in signature
-            .output_types()
-            .iter()
-            .zip(signature.output_ports())
-        {
-            match TypeBound::Copyable.contains(port_type.least_upper_bound()) {
-                true => any_nonlinear = true,
-                false => {
-                    self.linear_hashes.insert((node, port), hash);
-                }
-            }
-        }
-        if any_nonlinear || optype.tag() <= OpTag::Output {
-            self.nonlinear_hashes.insert(node, hash);
-        }
+    ///
+    /// Returns the previous hash, if it was set.
+    #[inline]
+    fn set_hash(&mut self, node: Node, hash: u64) -> Option<u64> {
+        self.hashes.insert(node, hash)
     }
 }
 
 /// Returns a hashable representation of an operation.
-///
-/// Panics if the operation is a parametric CustomOp
-//
-// TODO: Hash custom op parameters. Also the extension name?
 fn hashable_op(op: &OpType) -> impl Hash {
     match op {
         OpType::LeafOp(LeafOp::CustomOp(op)) if !op.args().is_empty() => {
@@ -130,9 +99,13 @@ fn hash_node(circ: &impl HugrView, node: Node, state: &mut HashState) -> u64 {
     let op = circ.get_optype(node);
     let mut hasher = FxHasher64::default();
 
+    // Hash the node children
     if circ.children(node).count() > 0 {
-        panic!("Cannot hash container node {node:?}.");
+        let container: SiblingGraph = SiblingGraph::try_new(circ, node).unwrap();
+        container.circuit_hash().hash(&mut hasher);
     }
+
+    // Hash the node operation
     hashable_op(op).hash(&mut hasher);
 
     // Add each each input neighbour hash, including the connected ports.
@@ -142,7 +115,7 @@ fn hash_node(circ: &impl HugrView, node: Node, state: &mut HashState) -> u64 {
         let input_hash = circ
             .linked_ports(node, input)
             .map(|(pred_node, pred_port)| {
-                let pred_node_hash = state.take(pred_node, pred_port);
+                let pred_node_hash = state.node_hash(pred_node);
                 fxhash::hash64(&(pred_node_hash, pred_port, input))
             })
             .fold(0, |total, hash| hash ^ total);
