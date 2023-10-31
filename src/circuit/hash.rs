@@ -30,17 +30,19 @@ where
     T: HugrView,
 {
     fn circuit_hash(&'circ self) -> u64 {
-        let mut hash_state = HashState::default();
+        let mut node_hashes = HashState::default();
 
         for node in pg::Topo::new(&self.as_petgraph())
             .iter(&self.as_petgraph())
             .filter(|&n| n != self.root())
         {
-            let hash = hash_node(self, node, &mut hash_state);
-            hash_state.set_hash(node, hash);
+            let hash = hash_node(self, node, &mut node_hashes);
+            if node_hashes.set_hash(node, hash).is_some() {
+                panic!("Hash already set for node {node}");
+            }
         }
 
-        hash_state
+        node_hashes
             .node_hash(self.output())
             .expect("Output hash has not been set")
     }
@@ -63,9 +65,11 @@ impl HashState {
     }
 
     /// Register the hash for a node.
+    ///
+    /// Returns the previous hash, if it was set.
     #[inline]
-    fn set_hash(&mut self, node: Node, hash: u64) {
-        self.hashes.insert(node, hash);
+    fn set_hash(&mut self, node: Node, hash: u64) -> Option<u64> {
+        self.hashes.insert(node, hash)
     }
 }
 
@@ -97,8 +101,7 @@ fn hash_node(circ: &impl HugrView, node: Node, state: &mut HashState) -> u64 {
 
     // Hash the node children
     if circ.children(node).count() > 0 {
-        let container: SiblingGraph =
-            SiblingGraph::try_new(circ, node).expect("Cannot hash container node");
+        let container: SiblingGraph = SiblingGraph::try_new(circ, node).unwrap();
         container.circuit_hash().hash(&mut hasher);
     }
 
