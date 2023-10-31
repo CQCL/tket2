@@ -6,7 +6,7 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::iter::FusedIterator;
 
-use hugr::hugr::{NodeType, PortIndex};
+use hugr::hugr::NodeType;
 use hugr::ops::{OpTag, OpTrait};
 use petgraph::visit as pv;
 
@@ -14,10 +14,9 @@ use super::units::filter::FilteredUnits;
 use super::units::{filter, DefaultUnitLabeller, LinearUnit, UnitLabeller, Units};
 use super::Circuit;
 
-pub use hugr::hugr::CircuitUnit;
 pub use hugr::ops::OpType;
 pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
-pub use hugr::{Direction, Node, Port, Wire};
+pub use hugr::{CircuitUnit, Direction, Node, Port, PortIndex, Wire};
 
 /// An operation applied to specific wires.
 pub struct Command<'circ, Circ> {

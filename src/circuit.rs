@@ -8,20 +8,21 @@ pub mod units;
 pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
 
-use hugr::HugrView;
-
 use derive_more::From;
 use hugr::hugr::hugrmut::HugrMut;
-use hugr::hugr::{NodeType, PortIndex};
+use hugr::hugr::NodeType;
 use hugr::ops::dataflow::IOTrait;
-pub use hugr::ops::OpType;
 use hugr::ops::{Input, Output, DFG};
 use hugr::types::FunctionType;
-pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
-pub use hugr::{Node, Port, Wire};
+use hugr::HugrView;
+use hugr::PortIndex;
 use itertools::Itertools;
 use portgraph::Direction;
 use thiserror::Error;
+
+pub use hugr::ops::OpType;
+pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
+pub use hugr::{Node, Port, Wire};
 
 use self::cost::CircuitCost;
 use self::units::{filter, FilteredUnits, Units};

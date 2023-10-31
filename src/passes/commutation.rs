@@ -1,9 +1,7 @@
 use std::{collections::HashMap, rc::Rc};
 
-use hugr::{
-    hugr::{hugrmut::HugrMut, CircuitUnit, HugrError, PortIndex, Rewrite},
-    Direction, Hugr, HugrView, Node, Port,
-};
+use hugr::hugr::{hugrmut::HugrMut, HugrError, Rewrite};
+use hugr::{CircuitUnit, Direction, Hugr, HugrView, Node, Port, PortIndex};
 use itertools::Itertools;
 use portgraph::PortOffset;
 
