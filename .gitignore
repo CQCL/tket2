@@ -1,6 +1,7 @@
 /target
 Cargo.lock
-pyrs/target/
+pytket-tk2/target/
+__pycache__
 .ipynb_checkpoints
 
 # Devenv

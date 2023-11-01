@@ -1,8 +1,8 @@
 test:
-    cargo test
+    cargo test --all-features
 
 fix:
-    cargo clippy --fix --allow-staged
+    cargo clippy --all-targets --all-features --workspace --fix --allow-staged
 
 ptest:
     (cd pyrs && maturin develop && pytest)

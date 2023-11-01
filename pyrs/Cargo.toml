@@ -1,7 +1,10 @@
 [package]
 name = "pyrs"
-version = "0.1.0"
-edition = "2018"
+edition = { workspace = true }
+version = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+license-file = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
@@ -9,7 +12,7 @@ name = "pyrs"
 crate-type = ["cdylib"]
 
 [dependencies]
-tket2 = { path = "../", features = ["pyo3", "portmatching"] }
+tket2 = { workspace = true, features = ["pyo3", "portmatching"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tket-json-rs = { workspace = true, features = ["pyo3"] }
