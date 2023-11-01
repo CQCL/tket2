@@ -9,10 +9,9 @@ use crate::{
 use derive_more::From;
 use hugr::{
     extension::prelude::QB_T,
-    hugr::CircuitUnit,
     ops::{custom::ExternalOp, LeafOp, OpTag, OpTrait, OpType},
     std_extensions::arithmetic::int_types::INT_TYPES,
-    Wire,
+    CircuitUnit, Wire,
 };
 use itertools::{Either, Itertools};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
