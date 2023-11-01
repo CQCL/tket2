@@ -70,13 +70,10 @@ impl<P: Ord, C> HugrPQ<P, C> {
     where
         C: Fn(&Hugr) -> P,
     {
-        if self.max_size == 0 {
+        if !self.check_accepted(&cost) {
             return;
         }
         if self.len() >= self.max_size {
-            if cost >= *self.max_cost().unwrap() {
-                return;
-            }
             self.pop_max();
         }
         self.queue.push(hash, cost);
@@ -108,6 +105,7 @@ impl<P: Ord, C> HugrPQ<P, C> {
     }
 
     /// The cost function used by the queue.
+    #[allow(unused)]
     pub fn cost_fn(&self) -> &C {
         &self.cost_fn
     }
@@ -115,6 +113,20 @@ impl<P: Ord, C> HugrPQ<P, C> {
     /// The largest cost in the queue.
     pub fn max_cost(&self) -> Option<&P> {
         self.queue.peek_max().map(|(_, cost)| cost)
+    }
+
+    /// Returns `true` if an element with the given cost would be accepted.
+    ///
+    /// If `false`, the element will be dropped if passed to [`HugrPQ::push`] or
+    /// [`HugrPQ::push_unchecked`].
+    pub fn check_accepted(&self, cost: &P) -> bool {
+        if self.max_size == 0 {
+            return false;
+        }
+        if self.len() < self.max_size {
+            return true;
+        }
+        cost < self.max_cost().unwrap()
     }
 
     /// Returns `true` is the queue is at capacity.

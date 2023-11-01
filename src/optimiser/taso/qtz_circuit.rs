@@ -4,10 +4,10 @@ use std::path::Path;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::QB_T;
-use hugr::hugr::CircuitUnit;
 use hugr::ops::OpType as Op;
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::types::{FunctionType, Type};
+use hugr::CircuitUnit;
 use hugr::Hugr as Circuit;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};

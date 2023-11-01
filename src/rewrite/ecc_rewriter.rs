@@ -13,8 +13,8 @@
 //! of the Quartz repository.
 
 use derive_more::{From, Into};
-use hugr::hugr::PortIndex;
 use hugr::ops::OpTrait;
+use hugr::PortIndex;
 use itertools::Itertools;
 use portmatching::PatternID;
 use std::{

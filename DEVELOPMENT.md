@@ -42,18 +42,14 @@ To setup the environment manually you will need:
     pip install -r pyrs/dev-requirements.txt
     ```
 
-If you are testing the `tkcxx` feature to bind to TKET-1, you will need to setup
-the `tket-rs` bindings. This requires configuring `conan` for the project, see
-the [TKET-rs readme](https://github.com/CQCL-DEV/tket-rs#readme) for more
-details.
 
-You can use the git hook in [`.github/pre-commit`](.github/pre-commit) to automatically run the test and check formatting before commiting.
+You can use the git hook in [`.github/pre-commit`](.github/pre-commit) to automatically run the test and check formatting before committing.
 To install it, run:
 
 ```bash
-cp .github/pre-commit .git/hooks/pre-commit
+ln -s .github/pre-commit .git/hooks/pre-commit
 # Or, to check before pushing instead
-cp .github/pre-commit .git/hooks/pre-push
+ln -s .github/pre-commit .git/hooks/pre-push
 ```
 
 ## 🏃 Running the tests
@@ -103,8 +99,32 @@ black .
 We also check for clippy warnings, which are a set of linting rules for rust. To run clippy, run:
 
 ```bash
-cargo clippy
-
-# Include code not compiled in the main build
 cargo clippy --all-targets
 ```
+
+## 🌐 Contributing to tket2
+
+We welcome contributions to tket2! Please open [an issue](https://github.com/CQCL/tket2/issues/new) or [pull request](https://github.com/CQCL/tket2/compare) if you have any questions or suggestions.
+
+PRs should be made against the `main` branch, and should pass all CI checks before being merged. This includes using the [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) format for the PR title.
+
+The general format of a contribution title should be:
+
+```
+<type>(<scope>)!: <description>
+```
+
+Where the scope is optional, and the `!` is only included if this is a semver breaking change that requires a major version bump.
+
+We accept the following contribution types:
+
+- feat: New features.
+- fix: Bug fixes.
+- docs: Improvements to the documentation.
+- style: Formatting, missing semi colons, etc; no code change.
+- refactor: Refactoring code without changing behaviour.
+- perf: Code refactoring focused on improving performance.
+- test: Adding missing tests, refactoring tests; no production code change.
+- ci: CI related changes. These changes are not published in the changelog.
+- chore: Updating build tasks, package manager configs, etc. These changes are not published in the changelog.
+- revert: Reverting previous commits.

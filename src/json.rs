@@ -7,7 +7,7 @@ pub mod op;
 #[cfg(test)]
 mod tests;
 
-use hugr::hugr::CircuitUnit;
+use hugr::CircuitUnit;
 #[cfg(feature = "pyo3")]
 use pyo3::{create_exception, exceptions::PyException, PyErr};
 

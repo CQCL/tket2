@@ -6,7 +6,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 
 use crate::{
     circuit::{try_update_hugr, try_with_hugr},
-    optimiser::PyDefaultTasoOptimiser,
+    optimiser::PyTasoOptimiser,
 };
 
 #[pyfunction]
@@ -44,7 +44,7 @@ fn rebase_nam(circ: &PyObject) -> PyResult<()> {
 /// TASO optimisation pass.
 ///
 /// HyperTKET's best attempt at optimising a circuit using circuit rewriting
-/// and TASO.
+/// and the given TASO optimiser.
 ///
 /// By default, the input circuit will be rebased to Nam, i.e. CX + Rz + H before
 /// optimising. This can be deactivated by setting `rebase` to `false`, in which
@@ -55,14 +55,11 @@ fn rebase_nam(circ: &PyObject) -> PyResult<()> {
 /// 15min respectively.
 ///
 /// Log files will be written to the directory `log_dir` if specified.
-///
-/// This requires a `nam_6_3.rwr` file in the current directory. The location
-/// can alternatively be specified using the `rewriter_dir` argument.
 #[pyfunction]
 fn taso_optimise(
     circ: PyObject,
+    optimiser: &PyTasoOptimiser,
     max_threads: Option<NonZeroUsize>,
-    rewriter_dir: Option<PathBuf>,
     timeout: Option<u64>,
     log_dir: Option<PathBuf>,
     rebase: Option<bool>,
@@ -70,7 +67,6 @@ fn taso_optimise(
     // Default parameter values
     let rebase = rebase.unwrap_or(true);
     let max_threads = max_threads.unwrap_or(num_cpus::get().try_into().unwrap());
-    let rewrite_dir = rewriter_dir.unwrap_or(PathBuf::from("."));
     let timeout = timeout.unwrap_or(30);
     // Create log directory if necessary
     if let Some(log_dir) = log_dir.as_ref() {
@@ -94,9 +90,6 @@ fn taso_optimise(
         1 => (vec![1], vec![timeout]),
         _ => unreachable!(),
     };
-    // Load rewriter
-    // TODO: do not hardcode file name
-    let optimiser = PyDefaultTasoOptimiser::load_precompiled(rewrite_dir.join("nam_6_3.rwr"));
     // Optimise
     try_update_hugr(circ, |mut circ| {
         let n_cx = circ

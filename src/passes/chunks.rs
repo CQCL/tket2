@@ -12,11 +12,11 @@ use hugr::extension::ExtensionSet;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::views::sibling_subgraph::ConvexChecker;
 use hugr::hugr::views::{HierarchyView, SiblingGraph, SiblingSubgraph};
-use hugr::hugr::{HugrError, NodeMetadata, PortIndex};
+use hugr::hugr::{HugrError, NodeMetadata};
 use hugr::ops::handle::DataflowParentID;
 use hugr::ops::OpType;
 use hugr::types::{FunctionType, Signature};
-use hugr::{Hugr, HugrView, Node, Port, Wire};
+use hugr::{Hugr, HugrView, Node, Port, PortIndex, Wire};
 use itertools::Itertools;
 
 use crate::Circuit;
@@ -57,7 +57,7 @@ impl Chunk {
     pub(self) fn extract<'h, H: HugrView>(
         circ: &'h H,
         nodes: impl IntoIterator<Item = Node>,
-        checker: &mut ConvexChecker<'h, H>,
+        checker: &ConvexChecker<'h, H>,
     ) -> Self {
         let subgraph = SiblingSubgraph::try_from_nodes_with_checker(
             nodes.into_iter().collect_vec(),
@@ -113,8 +113,7 @@ impl Chunk {
             .unwrap_or_else(|e| panic!("The chunk circuit is no longer a dataflow graph: {e}"));
         let node_map = circ
             .insert_subgraph(root, &self.circ, &subgraph)
-            .expect("Failed to insert the chunk subgraph")
-            .node_map;
+            .expect("Failed to insert the chunk subgraph");
 
         let mut input_map = HashMap::with_capacity(self.inputs.len());
         let mut output_map = HashMap::with_capacity(self.outputs.len());
@@ -290,7 +289,7 @@ impl CircuitChunks {
             .collect();
 
         let mut chunks = Vec::new();
-        let mut convex_checker = ConvexChecker::new(circ);
+        let convex_checker = ConvexChecker::new(circ);
         let mut running_cost = C::default();
         let mut current_group = 0;
         for (_, commands) in &circ.commands().map(|cmd| cmd.node()).group_by(|&node| {
@@ -303,7 +302,7 @@ impl CircuitChunks {
             }
             current_group
         }) {
-            chunks.push(Chunk::extract(circ, commands, &mut convex_checker));
+            chunks.push(Chunk::extract(circ, commands, &convex_checker));
         }
         Self {
             signature,
@@ -536,7 +535,7 @@ mod test {
 
         let mut reassembled = chunks.reassemble().unwrap();
 
-        reassembled.infer_and_validate(&REGISTRY).unwrap();
+        reassembled.update_validate(&REGISTRY).unwrap();
         assert_eq!(circ.circuit_hash(), reassembled.circuit_hash());
     }
 
@@ -566,7 +565,7 @@ mod test {
 
         let mut reassembled = chunks.reassemble().unwrap();
 
-        reassembled.infer_and_validate(&REGISTRY).unwrap();
+        reassembled.update_validate(&REGISTRY).unwrap();
 
         assert_eq!(reassembled.commands().count(), 1);
         let h = reassembled.commands().next().unwrap().node();
