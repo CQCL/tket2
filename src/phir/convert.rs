@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use super::model::{Bit, PHIRModel};
 use crate::{
@@ -8,10 +8,15 @@ use crate::{
 };
 use derive_more::From;
 use hugr::{
-    extension::prelude::QB_T, hugr::CircuitUnit, ops::OpType,
-    std_extensions::arithmetic::int_types::INT_TYPES, Wire,
+    extension::prelude::QB_T,
+    hugr::CircuitUnit,
+    ops::{custom::ExternalOp, LeafOp, OpTag, OpTrait, OpType},
+    std_extensions::arithmetic::int_types::INT_TYPES,
+    Wire,
 };
 use itertools::{Either, Itertools};
+use strum_macros::{EnumIter, EnumString, IntoStaticStr};
+use thiserror::Error;
 
 /// Convert Circuit-like HUGR to PHIR.
 pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
@@ -66,8 +71,12 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
     // Add commands
     for com in circ.commands() {
         let optype = com.optype();
-        // filter to only operations that involve qubits or output.
-        // classical operations with multiple outputs?
+        // at the end take each output wire and export it
+        // skip non-quantum ops
+        // for integer in-wire, recursively convert to Cop
+        // if the wire is one of many, assign a variable for it and log to wire
+        // map
+        // if a constant or arg from wire map encountered, use that directly.
         let qop = match t2op_name(optype) {
             Ok(qop) => qop.to_string(),
             Err(OpConvertError::Skip) => continue,
@@ -188,13 +197,17 @@ enum OpConvertError {
 }
 
 /// Get the PHIR name for a quantum operation
-fn t2op_name(t2op: &OpType) -> Result<&'static str, OpConvertError> {
+fn t2op_name(op: &OpType) -> Result<&'static str, OpConvertError> {
+    dbg!(op);
     let err = Err(OpConvertError::Other("Unknown op"));
-    let OpType::LeafOp(leaf) = t2op else {
+    if let OpTag::Const | OpTag::LoadConst = op.tag() {
+        return Err(OpConvertError::Skip);
+    }
+    let OpType::LeafOp(leaf) = op else {
         return err;
     };
 
-    if let Ok(t2op) = leaf.clone().try_into() {
+    if let Ok(t2op) = leaf.try_into() {
         // https://github.com/CQCL/phir/blob/main/phir_spec_qasm.md
         Ok(match t2op {
             T2Op::H => "H",
@@ -215,12 +228,121 @@ fn t2op_name(t2op: &OpType) -> Result<&'static str, OpConvertError> {
             T2Op::CZ => "CZ",
             T2Op::AngleAdd | T2Op::TK1 => return err,
         })
+    } else if let Ok(phir_cop) = leaf.try_into() {
+        let phir_cop: PhirCop = phir_cop;
+        Ok(match phir_cop {
+            PhirCop::Add => "+",
+            PhirCop::Sub => "-",
+            PhirCop::Mul => "*",
+            PhirCop::Div => "/",
+            PhirCop::Mod => "%",
+            PhirCop::Eq => "==",
+            PhirCop::Neq => "!=",
+            PhirCop::Gt => ">",
+            PhirCop::Lt => "<",
+            PhirCop::Ge => ">=",
+            PhirCop::Le => "<=",
+            PhirCop::And => "&",
+            PhirCop::Or => "|",
+            PhirCop::Xor => "^",
+            PhirCop::Not => "~",
+            PhirCop::Lsh => "<<",
+            PhirCop::Rsh => ">>",
+        })
     } else {
         // TODO arithmetic
         Err(OpConvertError::Skip)
     }
 }
 
+#[derive(
+    Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, EnumIter, IntoStaticStr, EnumString,
+)]
+enum PhirCop {
+    #[strum(serialize = "iadd")]
+    Add,
+    #[strum(serialize = "isub")]
+    Sub,
+    #[strum(serialize = "imul")]
+    Mul,
+    #[strum(serialize = "idiv")]
+    Div,
+    #[strum(serialize = "imod_s")]
+    Mod,
+    #[strum(serialize = "ieq")]
+    Eq,
+    #[strum(serialize = "ine")]
+    Neq,
+    #[strum(serialize = "ilt_s")]
+    Gt,
+    #[strum(serialize = "igt_s")]
+    Lt,
+    #[strum(serialize = "ige_s")]
+    Ge,
+    #[strum(serialize = "ile_s")]
+    Le,
+    #[strum(serialize = "iand")]
+    And,
+    #[strum(serialize = "ior")]
+    Or,
+    #[strum(serialize = "ixor")]
+    Xor,
+    #[strum(serialize = "inot")]
+    Not,
+    #[strum(serialize = "ishl")]
+    Lsh,
+    #[strum(serialize = "ishr")]
+    Rsh,
+}
+
+#[derive(Error, Debug, Clone)]
+#[error("Not a Phir classical op.")]
+struct NotPhirCop;
+
+impl TryFrom<OpType> for PhirCop {
+    type Error = NotPhirCop;
+
+    fn try_from(op: OpType) -> Result<Self, Self::Error> {
+        Self::try_from(&op)
+    }
+}
+
+impl TryFrom<&OpType> for PhirCop {
+    type Error = NotPhirCop;
+
+    fn try_from(op: &OpType) -> Result<Self, Self::Error> {
+        let OpType::LeafOp(leaf) = op else {
+            return Err(NotPhirCop);
+        };
+        leaf.try_into()
+    }
+}
+
+impl TryFrom<&LeafOp> for PhirCop {
+    type Error = NotPhirCop;
+
+    fn try_from(op: &LeafOp) -> Result<Self, Self::Error> {
+        match op {
+            LeafOp::CustomOp(b) => {
+                let name = match b.as_ref() {
+                    ExternalOp::Extension(e) => e.def().name(),
+                    ExternalOp::Opaque(o) => o.name(),
+                };
+
+                PhirCop::from_str(name).map_err(|_| NotPhirCop)
+            }
+            _ => Err(NotPhirCop),
+        }
+    }
+}
+
+impl TryFrom<LeafOp> for PhirCop {
+    type Error = NotPhirCop;
+
+    fn try_from(op: LeafOp) -> Result<Self, Self::Error> {
+        Self::try_from(&op)
+    }
+}
 #[cfg(test)]
 mod test {
 
