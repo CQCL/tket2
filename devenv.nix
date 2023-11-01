@@ -5,11 +5,16 @@
   # https://devenv.sh/packages/
   # on macos frameworks have to be explicitly specified 
   # otherwise a linker error ocurs on rust packages
-  packages = lib.optionals pkgs.stdenv.isDarwin (with pkgs.darwin.apple_sdk; [
-    frameworks.CoreServices
-    frameworks.CoreFoundation
-    pkgs.just
-  ]);
+  packages = [ pkgs.just ]
+    ++ lib.optionals pkgs.stdenv.isLinux [
+    pkgs.stdenv.cc.cc.lib
+  ]
+    ++ lib.optionals pkgs.stdenv.isDarwin (
+    with pkgs.darwin.apple_sdk; [
+      frameworks.CoreServices
+      frameworks.CoreFoundation
+    ]
+  );
 
   # Certain Rust tools won't work without this
   # This can also be fixed by using oxalica/rust-overlay and specifying the rust-src extension
