@@ -110,7 +110,7 @@ jobs:
       - name: Build pyo3 bindings
         run: |
           pip install -r requirements.txt
-          maturin build -m pytket-tk2/Cargo.toml
+          maturin build
           pip install target/wheels/*.whl
       - name: Test pyo3 bindings
         run: |
@@ -158,7 +158,7 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install pytest-cov
-          maturin build -m pytket-tk2/Cargo.toml
+          maturin build
           pip install target/wheels/*.whl
       - name: Run python tests with coverage instrumentation
         run: |

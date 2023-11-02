@@ -38,6 +38,7 @@ homepage = "https://github.com/CQCL/tket2"
 repository = "https://github.com/CQCL/tket2"
 
 [tool.maturin]
+manifest-path = "pytket-tk2/Cargo.toml"
 python-source = "pytket-tk2"
 
 [tool.pytest.ini_options]

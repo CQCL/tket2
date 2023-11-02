@@ -12,11 +12,11 @@ fix:
 
 # Build the python package wheels
 pybuild:
-    maturin build -m pytket-tk2/Cargo.toml --release
+    maturin build --release
 
 # Build the python package for local development
 pydevelop:
-    maturin develop -m pytket-tk2/Cargo.toml
+    maturin develop
 
 # Run the python tests
 pytest: pydevelop

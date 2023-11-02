@@ -62,7 +62,7 @@ cargo +nightly miri test
 To run the python tests, run:
 
 ```bash
-maturin develop -m pytket-tk2/Cargo.toml
+maturin develop
 pytest
 ```
 
