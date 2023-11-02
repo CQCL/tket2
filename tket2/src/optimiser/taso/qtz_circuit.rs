@@ -145,7 +145,7 @@ mod tests {
     #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
     fn test_read_rep() {
         let rep_map: HashMap<String, Circuit> =
-            load_representative_set("test_files/h_rz_cxrepresentative_set.json");
+            load_representative_set("../test_files/h_rz_cxrepresentative_set.json");
 
         for c in rep_map.values().take(1) {
             println!("{}", c.dot_string());
@@ -156,7 +156,7 @@ mod tests {
     #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
     fn test_read_complete() {
         let _ecc: HashMap<String, Vec<Circuit>> =
-            load_ecc_set("test_files/h_rz_cxcomplete_ECC_set.json").unwrap();
+            load_ecc_set("../test_files/h_rz_cxcomplete_ECC_set.json").unwrap();
 
         // ecc.values()
         //     .flatten()
