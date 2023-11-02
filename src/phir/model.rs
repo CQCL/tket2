@@ -111,6 +111,7 @@ pub(super) struct QOp {
     pub qop: String,
     pub args: Vec<QOpArg>,
     pub returns: Option<Vec<Bit>>,
+    pub angles: Option<(Vec<f64>, String)>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]

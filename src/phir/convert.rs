@@ -83,7 +83,12 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
         let args: Vec<Bit> = com
             .inputs()
             .map(|(u, _, _)| match u {
-                CircuitUnit::Wire(_) => todo!(),
+                CircuitUnit::Wire(w) => {
+                    // let cop_arg: COpArg = gen_c_op(circ, w, &mut ph);
+
+                    // arg_map.insert(w, cop_arg);
+                    todo!()
+                }
                 CircuitUnit::Linear(i) => q_arg(i),
             })
             .collect();
@@ -94,21 +99,26 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
         } else {
             vec![QOpArg::ListBit(args)]
         };
-        // TODO measure, define output reg and record in "returns"
+
         let returns = if qop == "Measure" {
             let (bit, wire) = measure_out_arg(com);
             let def = def_measure_var(&bit.0);
 
             ph.insert_op(0, def);
             arg_map.insert(wire, COpArg::Sym(bit.0.clone()));
-            // measures.insert(measure_wire, arg.clone());
 
             Some(vec![bit])
         } else {
             None
         };
         let phir_op = crate::phir::model::Op {
-            op_enum: QOp { qop, args, returns }.into(),
+            op_enum: QOp {
+                qop,
+                args,
+                returns,
+                angles: None,
+            }
+            .into(),
             metadata: Metadata::default(),
         };
 
