@@ -1,8 +1,9 @@
-# Use common dependencies
+# Runtime requirements
 -r requirements.txt
 
 # Development requirements
 maturin     # Build wheels
+pytest      # Unit testing
 ruff        # Code formatting
 pytket      # TKET1
 jupyterlab  # For running the examples

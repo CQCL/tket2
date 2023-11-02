@@ -1,1 +1,0 @@
-# pytket-tk2 dependencies
