@@ -3,17 +3,22 @@ use std::{collections::HashMap, str::FromStr};
 use super::model::{Bit, PHIRModel};
 use crate::{
     circuit::Command,
-    phir::model::{COpArg, CVarDefine, Data, ExportVar, Metadata, QOp, QOpArg, QVarDefine},
+    phir::model::{
+        COp, COpArg, CVarDefine, CopReturn, Data, ExportVar, Metadata, QOp, QOpArg, QVarDefine,
+    },
     Circuit, T2Op,
 };
 use derive_more::From;
 use hugr::{
     extension::prelude::{BOOL_T, QB_T},
     ops::{custom::ExternalOp, Const, LeafOp, OpTag, OpTrait, OpType},
-    std_extensions::arithmetic::{float_types::ConstF64, int_types::INT_TYPES},
+    std_extensions::arithmetic::{
+        float_types::ConstF64,
+        int_types::{ConstIntS, INT_TYPES},
+    },
     types::{EdgeKind, TypeEnum},
-    values::{PrimValue, Value},
-    CircuitUnit, Wire,
+    values::{CustomConst, PrimValue, Value},
+    CircuitUnit, Node, Wire,
 };
 use itertools::{Either, Itertools};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
@@ -89,8 +94,8 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
                     // let cop_arg: COpArg = gen_c_op(circ, w, &mut ph);
 
                     // arg_map.insert(w, cop_arg);
-                    let angle = get_angle(get_const(w, circ).unwrap()).unwrap();
-                    angles.push(angle);
+                    let angle: ConstF64 = get_value(get_const(w, circ).unwrap()).unwrap();
+                    angles.push(angle.value());
                     None
                 }
                 CircuitUnit::Linear(i) => Some(q_arg(i)),
@@ -106,7 +111,7 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
 
         let returns = if qop == "Measure" {
             let (bit, wire) = measure_out_arg(com);
-            let def = def_measure_var(bit.0.clone());
+            let def = def_int_var(bit.0.clone(), 1);
 
             ph.insert_op(0, def);
             arg_map.insert(wire, COpArg::Sym(bit.0.clone()));
@@ -133,31 +138,47 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
 
         ph.append_op(phir_op);
     }
-    let out_type = circ.get_optype(circ.output());
     // get all classical output wires
-    let c_out_wires = circ
-        .node_inputs(circ.output())
-        .filter(|port| out_type.port_kind(*port).is_some_and(|k| !k.is_linear()))
-        .flat_map(|port| circ.linked_ports(circ.output(), port))
-        .map(|(n, p)| Wire::new(n, p))
-        .filter(|w| get_const(*w, circ).is_none())
-        .filter(
-            |wire| match circ.get_optype(wire.node()).port_kind(wire.source()) {
-                Some(EdgeKind::Value(t)) => {
-                    t == BOOL_T
+    let c_out_wires = in_neighbour_wires(circ, circ.output()).filter(|wire| {
+        match circ.get_optype(wire.node()).port_kind(wire.source()) {
+            Some(EdgeKind::Value(t)) => {
+                t == BOOL_T
                     // Ignore sums and tuples
                         || !matches!(t.as_type_enum(), TypeEnum::Sum(_) | TypeEnum::Tuple(_))
-                }
-                _ => false,
-            },
-        );
+            }
+            _ => false,
+        }
+    });
+    let mut temp_var_count = 0..;
 
     for wire in c_out_wires {
-        let variable = arg_map.remove(&wire).ok_or("Missing output variable")?;
+        let Some(variable) = get_c_op(&arg_map, circ, wire) else {
+            continue;
+        };
+
+        //  = arg_map.remove(&wire).ok_or("Missing output variable")?;
         let variable = match variable {
             COpArg::Sym(s) => s,
             COpArg::Bit((s, _)) => s,
-            _ => return Err("Invalid export."),
+            _ => {
+                let out_var_name = format!("__temp{}", temp_var_count.next().unwrap());
+
+                // TODO expand to 64?
+                let def = def_int_var(out_var_name.clone(), 32);
+                let assign = crate::phir::model::Op {
+                    op_enum: COp {
+                        cop: "=".to_string(),
+                        args: vec![variable],
+                        returns: Some(vec![CopReturn::Sym(out_var_name.clone())]),
+                    }
+                    .into(),
+                    metadata: Metadata::default(),
+                };
+                ph.append_op(def);
+                ph.append_op(assign);
+
+                out_var_name
+            } // _ => return Err("Invalid export."),
         };
         let export = Data {
             data: ExportVar {
@@ -179,6 +200,48 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
     // export measured variables
 
     Ok(ph)
+}
+
+fn in_neighbour_wires(circ: &impl Circuit, node: Node) -> impl Iterator<Item = Wire> + '_ {
+    let node_type = circ.get_optype(node);
+    circ.node_inputs(node)
+        .filter(|port| {
+            node_type.port_kind(*port).is_some_and(|k| match k {
+                EdgeKind::Value(t) => t.copyable(),
+                _ => false,
+            })
+        })
+        .flat_map(move |port| circ.linked_ports(node, port))
+        .map(|(n, p)| Wire::new(n, p))
+}
+
+fn get_c_op(arg_map: &HashMap<Wire, COpArg>, circ: &impl Circuit, wire: Wire) -> Option<COpArg> {
+    if let Some(cop) = arg_map.get(&wire) {
+        return Some(cop.clone());
+    }
+
+    if let Some(c) = get_const(wire, circ) {
+        return Some(if c == Const::true_val() {
+            COpArg::IntValue(1)
+        } else if c == Const::false_val() {
+            COpArg::IntValue(0)
+        } else if let Some(int) = get_value::<ConstIntS>(c) {
+            COpArg::IntValue(int.value())
+        } else {
+            panic!("Unknown constant.");
+        });
+    }
+    if let Ok(PhirOp::Cop(cop)) = t2op_name(circ.get_optype(wire.node())) {
+        Some(COpArg::COp(COp {
+            cop: cop.phir_name().to_string(),
+            args: in_neighbour_wires(circ, wire.node())
+                .flat_map(|prev_wire| get_c_op(arg_map, circ, prev_wire))
+                .collect(),
+            returns: None,
+        }))
+    } else {
+        None
+    }
 }
 
 fn measure_out_arg(com: Command<'_, impl Circuit>) -> (Bit, Wire) {
@@ -205,12 +268,12 @@ fn measure_out_arg(com: Command<'_, impl Circuit>) -> (Bit, Wire) {
     (arg, measure_wire)
 }
 
-fn def_measure_var(variable: String) -> Data {
+fn def_int_var(variable: String, size: u64) -> Data {
     Data {
         data: CVarDefine {
             data_type: "i64".to_string(),
             variable,
-            size: Some(1),
+            size: Some(size),
         }
         .into(),
         metadata: Metadata::default(),
@@ -229,19 +292,19 @@ fn get_const(wire: Wire, circ: &impl Circuit) -> Option<Const> {
     })
 }
 
-fn get_angle(op: Const) -> Option<f64> {
+fn get_value<T: CustomConst>(op: Const) -> Option<T> {
     // impl<T: CustomConst> TryFrom<Value> for T in Hugr crate
-    let Value::Prim {
-        val: PrimValue::Extension { c },
+    if let Value::Prim {
+        val: PrimValue::Extension { c: (custom,) },
     } = op.value()
-    else {
-        return None;
-    };
-
-    let c: ConstF64 = *(c.0.clone()).downcast().ok()?;
-
-    Some(c.value())
+    {
+        let c: T = *(custom.clone()).downcast().ok()?;
+        Some(c)
+    } else {
+        None
+    }
 }
+
 // TODO: function to generate PHIR expression tree from classical input wire.
 // TODO: constant folding angles
 
@@ -253,7 +316,7 @@ enum OpConvertError {
 
 enum PhirOp {
     QOp(&'static str),
-    Cop(&'static str),
+    Cop(PhirCop),
     Skip,
 }
 
@@ -289,26 +352,7 @@ fn t2op_name(op: &OpType) -> Result<PhirOp, &'static str> {
             T2Op::AngleAdd | T2Op::TK1 => return err,
         }))
     } else if let Ok(phir_cop) = leaf.try_into() {
-        let phir_cop: PhirCop = phir_cop;
-        Ok(PhirOp::Cop(match phir_cop {
-            PhirCop::Add => "+",
-            PhirCop::Sub => "-",
-            PhirCop::Mul => "*",
-            PhirCop::Div => "/",
-            PhirCop::Mod => "%",
-            PhirCop::Eq => "==",
-            PhirCop::Neq => "!=",
-            PhirCop::Gt => ">",
-            PhirCop::Lt => "<",
-            PhirCop::Ge => ">=",
-            PhirCop::Le => "<=",
-            PhirCop::And => "&",
-            PhirCop::Or => "|",
-            PhirCop::Xor => "^",
-            PhirCop::Not => "~",
-            PhirCop::Lsh => "<<",
-            PhirCop::Rsh => ">>",
-        }))
+        Ok(PhirOp::Cop(phir_cop))
     } else {
         match leaf {
             LeafOp::Tag { .. } | LeafOp::MakeTuple { .. } | LeafOp::UnpackTuple { .. } => {
@@ -357,6 +401,30 @@ enum PhirCop {
     Lsh,
     #[strum(serialize = "ishr")]
     Rsh,
+}
+
+impl PhirCop {
+    fn phir_name(&self) -> &'static str {
+        match self {
+            PhirCop::Add => "+",
+            PhirCop::Sub => "-",
+            PhirCop::Mul => "*",
+            PhirCop::Div => "/",
+            PhirCop::Mod => "%",
+            PhirCop::Eq => "==",
+            PhirCop::Neq => "!=",
+            PhirCop::Gt => ">",
+            PhirCop::Lt => "<",
+            PhirCop::Ge => ">=",
+            PhirCop::Le => "<=",
+            PhirCop::And => "&",
+            PhirCop::Or => "|",
+            PhirCop::Xor => "^",
+            PhirCop::Not => "~",
+            PhirCop::Lsh => "<<",
+            PhirCop::Rsh => ">>",
+        }
+    }
 }
 
 #[derive(Error, Debug, Clone)]

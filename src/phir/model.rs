@@ -78,7 +78,7 @@ pub type Sym = String;
 #[serde(untagged)]
 pub(super) enum COpArg {
     Sym(Sym),
-    Int(i64),
+    IntValue(i64),
     Bit(Bit),
     // Variadic(Vec<Arg>),
     COp(COp),

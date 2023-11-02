@@ -26,10 +26,9 @@ fn identity_dfg(type_combination: TypeRow) -> Hugr {
     ))
     .unwrap();
     let inputs = identity_build.input_wires();
-    let identity = identity_build
+    identity_build
         .finish_hugr_with_outputs(inputs, &REGISTRY)
-        .unwrap();
-    identity
+        .unwrap()
 }
 
 fn find_make_unmake(hugr: &impl HugrView) -> impl Iterator<Item = SimpleReplacement> + '_ {
