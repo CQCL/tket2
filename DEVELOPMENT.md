@@ -24,40 +24,24 @@ devenv shell
 All the required dependencies should be available. You can automate loading the
 shell by setting up [direnv](https://devenv.sh/automatic-shell-activation/).
 
-### Manual setup
+### Poetry setup
 
 To setup the environment manually you will need:
 
-- Rust: https://www.rust-lang.org/tools/install
+- Rust 1.70+: https://www.rust-lang.org/tools/install
 
-- Python 3.10+: https://www.python.org/downloads/
+- Poetry: https://python-poetry.org/
 
-    It is advisable to use a virtual environment for keeping the python
-    environment isolated, see
-    [`venv`](https://docs.python.org/3/tutorial/venv.html) for more details.
-
-    Install the python development dependencies with:
-
-    ```bash
-    pip install -r pyrs/dev-requirements.txt
-    ```
-
-
-You can use the git hook in [`.github/pre-commit`](.github/pre-commit) to automatically run the test and check formatting before committing.
-To install it, run:
-
-```bash
-ln -s .github/pre-commit .git/hooks/pre-commit
-# Or, to check before pushing instead
-ln -s .github/pre-commit .git/hooks/pre-push
-```
+Simply run `poetry shell` to activate an environment with all the required dependencies.
 
 ## 🏃 Running the tests
 
-To compile and test the rust code, run:
+The repository root contains a Justfile with the most common development tasks.
+Run `just` to see a list.
+
+To manually compile and test the rust code, run:
 
 ```bash
-cargo build
 cargo test
 ```
 
@@ -78,9 +62,17 @@ cargo +nightly miri test
 To run the python tests, run:
 
 ```bash
-cd pyrs
-maturin develop
+maturin develop -m pytket-tk2/Cargo.toml
 pytest
+```
+
+You can use the script in [`.github/pre-commit`](.github/pre-commit) to run the test and formatting required by our CI.
+To automatically check that before each commit, install it as a hook with:
+
+```bash
+ln -s .github/pre-commit .git/hooks/pre-commit
+# Or, to check before pushing instead
+ln -s .github/pre-commit .git/hooks/pre-push
 ```
 
 ## 💅 Coding Style
@@ -93,7 +85,7 @@ To format your code, run:
 # Format rust code
 cargo fmt
 # Format python code
-black .
+ruff format .
 ```
 
 We also check for clippy warnings, which are a set of linting rules for rust. To run clippy, run:

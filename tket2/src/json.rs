@@ -106,7 +106,7 @@ pub enum OpConvertError {
 
 #[cfg(feature = "pyo3")]
 create_exception!(
-    pyrs,
+    pytket_tk2,
     PyOpConvertError,
     PyException,
     "Error type for conversion between tket2's `Op` and `OpType`"

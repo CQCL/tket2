@@ -39,7 +39,7 @@
     enable = true;
 
     venv.enable = true;
-    venv.requirements = "-r ${config.env.DEVENV_ROOT}/pyrs/dev-requirements.txt";
+    venv.requirements = "-r ${config.env.DEVENV_ROOT}/pytket-tk2/dev-requirements.txt";
   };
 
   # https://devenv.sh/pre-commit-hooks/

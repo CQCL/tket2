@@ -1,11 +1,11 @@
 from pytket import Circuit
-from pyrs.pyrs import optimiser
+from pytket_tk2 import optimiser
 
 
 def test_simple_optimiser():
-    """ a simple circuit matching test """
+    """a simple circuit matching test"""
     c = Circuit(3).CX(0, 1).CX(0, 1).CX(1, 2)
-    opt = optimiser.TasoOptimiser.compile_eccs("../test_files/cx_cx_eccs.json")
+    opt = optimiser.TasoOptimiser.compile_eccs("test_files/cx_cx_eccs.json")
 
     # optimise for 1s
     cc = opt.optimise(c, 3)

@@ -66,7 +66,7 @@ impl RuleMatcher {
 
 /// The Python bindings to TKET2.
 #[pymodule]
-fn pyrs(py: Python, m: &PyModule) -> PyResult<()> {
+fn pytket_tk2(py: Python, m: &PyModule) -> PyResult<()> {
     add_circuit_module(py, m)?;
     add_pattern_module(py, m)?;
     add_pass_module(py, m)?;

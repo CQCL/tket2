@@ -13,7 +13,7 @@ Version 2 of the TKET compiler.
 ## Features
 
 - `pyo3`
-This optional feature enables some python bindings via pyo3. See the `pyrs` folder for more.
+This optional feature enables some python bindings via pyo3. See the `pytket-tk2` folder for more.
 
 - `portmatching`
   This enables pattern matching using the `portmatching` crate.

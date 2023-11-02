@@ -1,10 +1,10 @@
 from pytket import Circuit
 from pytket.qasm import circuit_from_qasm
-from pyrs.pyrs import pattern
+from pytket_tk2 import pattern
 
 
 def test_simple_matching():
-    """ a simple circuit matching test """
+    """a simple circuit matching test"""
     c = Circuit(2).CX(0, 1).H(1).CX(0, 1)
 
     p1 = pattern.CircuitPattern(Circuit(2).CX(0, 1).H(1))
@@ -16,7 +16,7 @@ def test_simple_matching():
 
 
 def test_non_convex_pattern():
-    """ two-qubit circuits can't match three-qb ones """
+    """two-qubit circuits can't match three-qb ones"""
     p1 = pattern.CircuitPattern(Circuit(3).CX(0, 1).CX(1, 2))
     matcher = pattern.PatternMatcher(iter([p1]))
 
@@ -31,8 +31,8 @@ def test_non_convex_pattern():
 
 
 def test_larger_matching():
-    """ a larger crafted circuit with matches WIP """
-    c = circuit_from_qasm("test/test_files/circ.qasm")
+    """a larger crafted circuit with matches WIP"""
+    c = circuit_from_qasm("test_files/simple.qasm")
 
     p1 = pattern.CircuitPattern(Circuit(2).CX(0, 1).H(1))
     p2 = pattern.CircuitPattern(Circuit(2).H(0).CX(1, 0))

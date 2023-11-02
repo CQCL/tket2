@@ -3,7 +3,7 @@ lto = "thin"
 
 [workspace]
 resolver = "2"
-members = ["tket2", "pyrs", "compile-rewriter", "taso-optimiser"]
+members = ["tket2", "pytket-tk2", "compile-rewriter", "taso-optimiser"]
 default-members = ["tket2"]
 
 [workspace.package]

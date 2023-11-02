@@ -1,8 +1,8 @@
-## pyrs
+## pytket-tk2
 
 This package uses [pyo3](https://pyo3.rs/v0.16.4/) and
 [maturin](https://github.com/PyO3/maturin) to bind TKET2 functionality to
-python as the `pyrs` package.
+python as the `pytket_tk2` package.
 
 Recommended:
 
