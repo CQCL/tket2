@@ -3,7 +3,7 @@
 
 # Development requirements
 maturin     # Build wheels
-black       # Code formatting
+ruff        # Code formatting
 pytket      # TKET1
 jupyterlab  # For running the examples
 graphviz    # Visualisation of Hugrs in the notebooks
