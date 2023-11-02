@@ -8,7 +8,7 @@ use crate::{
 };
 use derive_more::From;
 use hugr::{
-    extension::prelude::QB_T,
+    extension::prelude::{BOOL_T, QB_T},
     ops::{custom::ExternalOp, Const, LeafOp, OpTag, OpTrait, OpType},
     std_extensions::arithmetic::{float_types::ConstF64, int_types::INT_TYPES},
     types::{EdgeKind, TypeEnum},
@@ -77,9 +77,9 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
         // map
         // if a constant or arg from wire map encountered, use that directly.
         let qop = match t2op_name(optype) {
-            Ok(qop) => qop.to_string(),
-            Err(OpConvertError::Skip) => continue,
-            Err(OpConvertError::Other(s)) => return Err(s),
+            Ok(PhirOp::QOp(s)) => s.to_string(),
+            Ok(_) => continue,
+            Err(s) => return Err(s),
         };
         let mut angles = vec![];
         let args: Vec<Bit> = com
@@ -139,22 +139,20 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
         .node_inputs(circ.output())
         .filter(|port| out_type.port_kind(*port).is_some_and(|k| !k.is_linear()))
         .flat_map(|port| circ.linked_ports(circ.output(), port))
-        .map(|(n, p)| Wire::new(n, p));
-
-    dbg!(&arg_map);
-    for wire in c_out_wires {
-        if get_const(wire, circ).is_some() {
-            //TODO handle const outputs
-            continue;
-        }
-        // Ignore sums and tuples
-        match circ.get_optype(wire.node()).port_kind(wire.source()) {
-            Some(EdgeKind::Value(t)) => match t.as_type_enum() {
-                TypeEnum::Sum(_) | TypeEnum::Tuple(_) => continue,
-                _ => (),
+        .map(|(n, p)| Wire::new(n, p))
+        .filter(|w| get_const(*w, circ).is_none())
+        .filter(
+            |wire| match circ.get_optype(wire.node()).port_kind(wire.source()) {
+                Some(EdgeKind::Value(t)) => {
+                    t == BOOL_T
+                    // Ignore sums and tuples
+                        || !matches!(t.as_type_enum(), TypeEnum::Sum(_) | TypeEnum::Tuple(_))
+                }
+                _ => false,
             },
-            _ => continue,
-        }
+        );
+
+    for wire in c_out_wires {
         let variable = arg_map.remove(&wire).ok_or("Missing output variable")?;
         let variable = match variable {
             COpArg::Sym(s) => s,
@@ -253,11 +251,17 @@ enum OpConvertError {
     Other(&'static str),
 }
 
+enum PhirOp {
+    QOp(&'static str),
+    Cop(&'static str),
+    Skip,
+}
+
 /// Get the PHIR name for a quantum operation
-fn t2op_name(op: &OpType) -> Result<&'static str, OpConvertError> {
-    let err = Err(OpConvertError::Other("Unknown op"));
+fn t2op_name(op: &OpType) -> Result<PhirOp, &'static str> {
+    let err = Err("Unknown op");
     if let OpTag::Const | OpTag::LoadConst = op.tag() {
-        return Err(OpConvertError::Skip);
+        return Ok(PhirOp::Skip);
     }
     let OpType::LeafOp(leaf) = op else {
         return err;
@@ -265,7 +269,7 @@ fn t2op_name(op: &OpType) -> Result<&'static str, OpConvertError> {
 
     if let Ok(t2op) = leaf.try_into() {
         // https://github.com/CQCL/phir/blob/main/phir_spec_qasm.md
-        Ok(match t2op {
+        Ok(PhirOp::QOp(match t2op {
             T2Op::H => "H",
             T2Op::CX => "CX",
             T2Op::T => "T",
@@ -283,10 +287,10 @@ fn t2op_name(op: &OpType) -> Result<&'static str, OpConvertError> {
             T2Op::ZZPhase => "RZZ",
             T2Op::CZ => "CZ",
             T2Op::AngleAdd | T2Op::TK1 => return err,
-        })
+        }))
     } else if let Ok(phir_cop) = leaf.try_into() {
         let phir_cop: PhirCop = phir_cop;
-        Ok(match phir_cop {
+        Ok(PhirOp::Cop(match phir_cop {
             PhirCop::Add => "+",
             PhirCop::Sub => "-",
             PhirCop::Mul => "*",
@@ -304,10 +308,14 @@ fn t2op_name(op: &OpType) -> Result<&'static str, OpConvertError> {
             PhirCop::Not => "~",
             PhirCop::Lsh => "<<",
             PhirCop::Rsh => ">>",
-        })
+        }))
     } else {
-        // TODO arithmetic
-        Err(OpConvertError::Skip)
+        match leaf {
+            LeafOp::Tag { .. } | LeafOp::MakeTuple { .. } | LeafOp::UnpackTuple { .. } => {
+                Ok(PhirOp::Skip)
+            }
+            _ => err,
+        }
     }
 }
 
