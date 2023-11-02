@@ -161,7 +161,9 @@ jobs:
           maturin build -m pytket-tk2/Cargo.toml
           pip install target/wheels/*.whl
       - name: Run python tests with coverage instrumentation
-        run: pytest --cov=./ --cov-report=xml
+        run: |
+          pip install pytest -r pytket-tk2/dev-requirements.txt
+          pytest --cov=./ --cov-report=xml
       - name: Upload python coverage to codecov.io
         uses: codecov/codecov-action@v3
         with:
