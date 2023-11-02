@@ -26,12 +26,10 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
 
     let mut qubit_count = 0;
     let mut input_int_count = 0;
-    let mut measure_exports = vec![];
-    let _input_map: HashMap<usize, COpArg> = circ
+    let mut arg_map: HashMap<Wire, COpArg> = circ
         .units()
-        .enumerate()
-        .map(|(index, (wire, _, t))| match (wire, t) {
-            (CircuitUnit::Wire(_), t) if t == INT_TYPES[6] => {
+        .filter_map(|(cu, _, t)| match (cu, t) {
+            (CircuitUnit::Wire(wire), t) if t == INT_TYPES[6] => {
                 let variable = format!("i{input_int_count}");
                 let cvar_def: Data = Data {
                     data: CVarDefine {
@@ -44,11 +42,11 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
                 };
                 input_int_count += 1;
                 ph.append_op(cvar_def);
-                (index, COpArg::Sym(variable))
+                Some((wire, COpArg::Sym(variable)))
             }
-            (CircuitUnit::Linear(id), t) if t == QB_T => {
+            (CircuitUnit::Linear(_), t) if t == QB_T => {
                 qubit_count += 1;
-                (index, COpArg::Bit(q_arg(id)))
+                None
             }
             _ => unimplemented!("Non-int64 input wires not supported"),
         })
@@ -98,11 +96,11 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
         };
         // TODO measure, define output reg and record in "returns"
         let returns = if qop == "Measure" {
-            let (bit, def, export) = measure_out_arg(com, circ);
+            let (bit, wire) = measure_out_arg(com);
+            let def = def_measure_var(&bit.0);
+
             ph.insert_op(0, def);
-            if let Some(export) = export {
-                measure_exports.push(export);
-            }
+            arg_map.insert(wire, COpArg::Sym(bit.0.clone()));
             // measures.insert(measure_wire, arg.clone());
 
             Some(vec![bit])
@@ -116,10 +114,33 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
 
         ph.append_op(phir_op);
     }
+    let out_type = circ.get_optype(circ.output());
+    // get all classical output wires
+    let c_out_wires = circ
+        .node_inputs(circ.output())
+        .filter(|port| out_type.port_kind(*port).is_some_and(|k| !k.is_linear()))
+        .map(|port| circ.linked_ports(circ.output(), port))
+        .flatten()
+        .map(|(n, p)| Wire::new(n, p));
 
-    for export in measure_exports {
+    for wire in c_out_wires {
+        let variable = arg_map.remove(&wire).ok_or("Missing output variable")?;
+        let variable = match variable {
+            COpArg::Sym(s) => s,
+            COpArg::Bit((s, _)) => s,
+            _ => return Err("Invalid export."),
+        };
+        let export = Data {
+            data: ExportVar {
+                variables: vec![variable],
+                to: None,
+            }
+            .into(),
+            metadata: Metadata::default(),
+        };
         ph.append_op(export);
     }
+
     // Add DFG as SeqBlock
 
     // Add conditional as IfBlock
@@ -131,12 +152,7 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
     Ok(ph)
 }
 
-fn measure_out_arg(
-    com: Command<'_, impl Circuit>,
-    circ: &impl Circuit,
-) -> (Bit, Data, Option<Data>) {
-    let output = circ.get_io(circ.root()).expect("missing io")[1];
-
+fn measure_out_arg(com: Command<'_, impl Circuit>) -> (Bit, Wire) {
     let (wires, qb_indices): (Vec<_>, Vec<_>) = com.outputs().partition_map(|(c, _, _)| match c {
         CircuitUnit::Wire(w) => Either::Left(w),
         CircuitUnit::Linear(i) => Either::Right(i),
@@ -154,7 +170,14 @@ fn measure_out_arg(
 
     // declare a width-1 register per measurement
     // TODO what if qubit measured multiple times?
-    let c_var_def: Data = Data {
+
+    let arg = (variable.clone(), 0);
+
+    (arg, measure_wire)
+}
+
+fn def_measure_var(variable: &String) -> Data {
+    Data {
         data: CVarDefine {
             data_type: "i64".to_string(),
             variable: variable.clone(),
@@ -162,28 +185,7 @@ fn measure_out_arg(
         }
         .into(),
         metadata: Metadata::default(),
-    };
-
-    let arg = (variable.clone(), 0);
-
-    let export: Option<Data> = if circ
-        .linked_ports(measure_wire.node(), measure_wire.source())
-        .any(|(n, _)| n == output)
-    {
-        // if the measured value is output, export it
-        // TODO generalise to export any intermediates connected to output.
-        Some(Data {
-            data: ExportVar {
-                variables: vec![variable],
-                to: None,
-            }
-            .into(),
-            metadata: Metadata::default(),
-        })
-    } else {
-        None
-    };
-    (arg, c_var_def, export)
+    }
 }
 
 // TODO: function to generate PHIR expression tree from classical input wire.
@@ -197,7 +199,6 @@ enum OpConvertError {
 
 /// Get the PHIR name for a quantum operation
 fn t2op_name(op: &OpType) -> Result<&'static str, OpConvertError> {
-    dbg!(op);
     let err = Err(OpConvertError::Other("Unknown op"));
     if let OpTag::Const | OpTag::LoadConst = op.tag() {
         return Err(OpConvertError::Skip);
@@ -369,7 +370,6 @@ mod test {
     }
     #[rstest]
     fn test_sample(sample: Hugr) {
-        // rmp_serde::encode::write(&mut File::create("sample.hugr").unwrap(), &sample).unwrap();
         let ph = circuit_to_phir(&sample).unwrap();
         assert_eq!(ph.num_ops(), 11);
     }
