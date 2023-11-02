@@ -459,7 +459,7 @@ mod tests {
 
     #[fixture]
     fn taso_opt() -> DefaultTasoOptimiser {
-        TasoOptimiser::default_with_eccs_json_file("test_files/small_eccs.json").unwrap()
+        TasoOptimiser::default_with_eccs_json_file("../test_files/small_eccs.json").unwrap()
     }
 
     #[rstest]
