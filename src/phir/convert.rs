@@ -9,8 +9,10 @@ use crate::{
 use derive_more::From;
 use hugr::{
     extension::prelude::QB_T,
-    ops::{custom::ExternalOp, LeafOp, OpTag, OpTrait, OpType},
-    std_extensions::arithmetic::int_types::INT_TYPES,
+    ops::{custom::ExternalOp, Const, LeafOp, OpTag, OpTrait, OpType},
+    std_extensions::arithmetic::{float_types::ConstF64, int_types::INT_TYPES},
+    types::{EdgeKind, TypeEnum},
+    values::{PrimValue, Value},
     CircuitUnit, Wire,
 };
 use itertools::{Either, Itertools};
@@ -79,17 +81,19 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
             Err(OpConvertError::Skip) => continue,
             Err(OpConvertError::Other(s)) => return Err(s),
         };
-
+        let mut angles = vec![];
         let args: Vec<Bit> = com
             .inputs()
-            .map(|(u, _, _)| match u {
+            .filter_map(|(u, _, _)| match u {
                 CircuitUnit::Wire(w) => {
                     // let cop_arg: COpArg = gen_c_op(circ, w, &mut ph);
 
                     // arg_map.insert(w, cop_arg);
-                    todo!()
+                    let angle = get_angle(get_const(w, circ).unwrap()).unwrap();
+                    angles.push(angle);
+                    None
                 }
-                CircuitUnit::Linear(i) => q_arg(i),
+                CircuitUnit::Linear(i) => Some(q_arg(i)),
             })
             .collect();
 
@@ -102,7 +106,7 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
 
         let returns = if qop == "Measure" {
             let (bit, wire) = measure_out_arg(com);
-            let def = def_measure_var(&bit.0);
+            let def = def_measure_var(bit.0.clone());
 
             ph.insert_op(0, def);
             arg_map.insert(wire, COpArg::Sym(bit.0.clone()));
@@ -116,10 +120,15 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
                 qop,
                 args,
                 returns,
-                angles: None,
+                angles: (!angles.is_empty()).then_some((angles.clone(), "rad".to_string())),
             }
             .into(),
-            metadata: Metadata::default(),
+            // TODO once PECOS no longer requires angles in the metadata
+            metadata: match angles.len() {
+                0 => Metadata::default(),
+                1 => Metadata::from_iter([("angle".to_string(), angles[0].into())]),
+                _ => Metadata::from_iter([("angles".to_string(), angles.into())]),
+            },
         };
 
         ph.append_op(phir_op);
@@ -129,11 +138,23 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
     let c_out_wires = circ
         .node_inputs(circ.output())
         .filter(|port| out_type.port_kind(*port).is_some_and(|k| !k.is_linear()))
-        .map(|port| circ.linked_ports(circ.output(), port))
-        .flatten()
+        .flat_map(|port| circ.linked_ports(circ.output(), port))
         .map(|(n, p)| Wire::new(n, p));
 
+    dbg!(&arg_map);
     for wire in c_out_wires {
+        if get_const(wire, circ).is_some() {
+            //TODO handle const outputs
+            continue;
+        }
+        // Ignore sums and tuples
+        match circ.get_optype(wire.node()).port_kind(wire.source()) {
+            Some(EdgeKind::Value(t)) => match t.as_type_enum() {
+                TypeEnum::Sum(_) | TypeEnum::Tuple(_) => continue,
+                _ => (),
+            },
+            _ => continue,
+        }
         let variable = arg_map.remove(&wire).ok_or("Missing output variable")?;
         let variable = match variable {
             COpArg::Sym(s) => s,
@@ -186,11 +207,11 @@ fn measure_out_arg(com: Command<'_, impl Circuit>) -> (Bit, Wire) {
     (arg, measure_wire)
 }
 
-fn def_measure_var(variable: &String) -> Data {
+fn def_measure_var(variable: String) -> Data {
     Data {
         data: CVarDefine {
             data_type: "i64".to_string(),
-            variable: variable.clone(),
+            variable,
             size: Some(1),
         }
         .into(),
@@ -198,6 +219,31 @@ fn def_measure_var(variable: &String) -> Data {
     }
 }
 
+fn get_const(wire: Wire, circ: &impl Circuit) -> Option<Const> {
+    if circ.get_optype(wire.node()).tag() != OpTag::LoadConst {
+        return None;
+    }
+
+    circ.input_neighbours(wire.node()).find_map(|n| {
+        let const_op = circ.get_optype(n);
+
+        const_op.clone().try_into().ok()
+    })
+}
+
+fn get_angle(op: Const) -> Option<f64> {
+    // impl<T: CustomConst> TryFrom<Value> for T in Hugr crate
+    let Value::Prim {
+        val: PrimValue::Extension { c },
+    } = op.value()
+    else {
+        return None;
+    };
+
+    let c: ConstF64 = *(c.0.clone()).downcast().ok()?;
+
+    Some(c.value())
+}
 // TODO: function to generate PHIR expression tree from classical input wire.
 // TODO: constant folding angles
 
@@ -356,31 +402,62 @@ impl TryFrom<LeafOp> for PhirCop {
 #[cfg(test)]
 mod test {
 
-    use hugr::Hugr;
+    use hugr::{
+        builder::{BuildError, DFGBuilder, Dataflow, DataflowHugr},
+        extension::{prelude::BOOL_T, ExtensionSet},
+        std_extensions::arithmetic::float_types::{ConstF64, EXTENSION_ID},
+        types::FunctionType,
+        Hugr,
+    };
     use rstest::{fixture, rstest};
 
-    use crate::utils::build_simple_measure_circuit;
+    use crate::extension::REGISTRY;
 
     use super::*;
 
     #[fixture]
     // A commutation forward exists but depth doesn't change
     fn sample() -> Hugr {
-        build_simple_measure_circuit(2, 2, |circ| {
-            circ.append(T2Op::H, [1])?;
-            circ.append(T2Op::CX, [0, 1])?;
-            circ.append(T2Op::Z, [0])?;
-            circ.append(T2Op::X, [1])?;
-            let mut c0 = circ.append_with_outputs(T2Op::Measure, [0])?;
-            let c1 = circ.append_with_outputs(T2Op::Measure, [1])?;
-            c0.extend(c1);
-            Ok(c0)
-        })
+        {
+            let num_qubits = 2;
+            let num_measured_bools = 2;
+            let inputs = vec![QB_T; num_qubits];
+            let outputs = [inputs.clone(), vec![BOOL_T; num_measured_bools]].concat();
+
+            let mut h = DFGBuilder::new(FunctionType::new(inputs, outputs)).unwrap();
+            let angle_const = ConstF64::new(1.2);
+
+            let angle = h
+                .add_load_const(angle_const.into(), ExtensionSet::from_iter([EXTENSION_ID]))
+                .unwrap();
+            let qbs = h.input_wires();
+
+            let mut circ = h.as_circuit(qbs.into_iter().collect());
+
+            let o: Result<Vec<Wire>, BuildError> = (|| {
+                circ.append(T2Op::H, [1])?;
+                circ.append(T2Op::CX, [0, 1])?;
+                circ.append(T2Op::Z, [0])?;
+                circ.append(T2Op::X, [1])?;
+                circ.append_and_consume(
+                    T2Op::RzF64,
+                    [CircuitUnit::Linear(0), CircuitUnit::Wire(angle)],
+                )?;
+                let mut c0 = circ.append_with_outputs(T2Op::Measure, [0])?;
+                let c1 = circ.append_with_outputs(T2Op::Measure, [1])?;
+                c0.extend(c1);
+                Ok(c0)
+            })();
+            let o = o.unwrap();
+
+            let qbs = circ.finish();
+            h.finish_hugr_with_outputs([qbs, o].concat(), &REGISTRY)
+        }
         .unwrap()
     }
     #[rstest]
     fn test_sample(sample: Hugr) {
         let ph = circuit_to_phir(&sample).unwrap();
-        assert_eq!(ph.num_ops(), 11);
+        assert_eq!(ph.num_ops(), 12);
     }
 }
