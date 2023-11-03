@@ -1,5 +1,5 @@
 # from abc import ABC, abstractmethod
-# from pyrs.pyrs import RsCircuit, Signature
+# from tket2 import RsCircuit, Signature
 
 
 # class CustomOpBase(ABC):

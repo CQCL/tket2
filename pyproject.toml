@@ -1,0 +1,46 @@
+[tool.poetry]
+name = "tket2-py"
+version = "0.1.0"
+description = "pytket extension for the tket 2 compiler"
+classifiers = []                                         # TODO
+authors = []                                             # TODO
+maintainers = []                                         # TODO
+include = ["pyproject.toml"]
+license = "Apache-2.0"
+readme = "README.md"
+
+packages = [{ include = "tket2-py" }]
+
+[tool.poetry.dependencies]
+python = ">=3.10"
+
+[tool.poetry.dev-dependencies]
+maturin = "^1.3.0"
+pytket = "*"
+pytest = "^7.1.2"
+ruff = "^0.1.3"
+
+[build-system]
+requires = ["maturin~=1.3"]
+build-backend = "maturin"
+
+[project]
+name = "tket2"
+version = "0.1.0"
+description = "pytket extension for the tket 2 compiler"
+authors = []                                             # TODO
+classifiers = []                                         # TODO
+requires-python = ">=3.10"
+license = "Apache-2.0"
+
+[project.urls]
+homepage = "https://github.com/CQCL/tket2"
+repository = "https://github.com/CQCL/tket2"
+
+[tool.maturin]
+manifest-path = "tket2-py/Cargo.toml"
+python-source = "tket2-py"
+
+[tool.pytest.ini_options]
+# Lark throws deprecation warnings for `src_parse` and `src_constants`.
+filterwarnings = "ignore::DeprecationWarning:lark.*"
