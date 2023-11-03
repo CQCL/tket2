@@ -262,13 +262,19 @@ fn get_c_op(arg_map: &HashMap<Wire, COpArg>, circ: &impl HugrView, wire: Wire) -
 
     // the wire is a known classical operation
     if let Ok(PhirOp::Cop(cop)) = t2op_name(circ.get_optype(wire.node())) {
-        Some(COpArg::COp(COp {
-            cop: cop.phir_name().to_string(),
-            args: in_neighbour_wires(circ, wire.node())
-                .flat_map(|prev_wire| get_c_op(arg_map, circ, prev_wire))
-                .collect(),
-            returns: None,
-        }))
+        let mut args: Vec<COpArg> = in_neighbour_wires(circ, wire.node())
+            .flat_map(|prev_wire| get_c_op(arg_map, circ, prev_wire))
+            .collect();
+        Some(if cop == PhirCop::FromBool {
+            // cast is an identity
+            args.remove(0)
+        } else {
+            COpArg::COp(COp {
+                cop: cop.phir_name().to_string(),
+                args,
+                returns: None,
+            })
+        })
     } else {
         // don't know how to generate this wire in PHIR
         None
@@ -434,6 +440,8 @@ enum PhirCop {
     Lsh,
     #[strum(serialize = "ishr")]
     Rsh,
+    #[strum(serialize = "ifrombool")]
+    FromBool,
 }
 
 impl PhirCop {
@@ -456,6 +464,7 @@ impl PhirCop {
             PhirCop::Not => "~",
             PhirCop::Lsh => "<<",
             PhirCop::Rsh => ">>",
+            PhirCop::FromBool => panic!("{:?} not a valid phir op.", self),
         }
     }
 }
