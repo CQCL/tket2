@@ -12,7 +12,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 
 /// The module definition
 pub fn module(py: Python) -> PyResult<&PyModule> {
-    let m = PyModule::new(py, "circuit")?;
+    let m = PyModule::new(py, "_circuit")?;
     m.add_class::<T2Circuit>()?;
     m.add_class::<tket2::T2Op>()?;
     m.add_class::<tket2::Pauli>()?;

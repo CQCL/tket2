@@ -25,14 +25,10 @@ fn add_submodule(py: Python, parent: &PyModule, submodule: &PyModule) -> PyResul
     // Add submodule to sys.modules.
     // This is required to be able to do `from parent.submodule import ...`.
     //
-    // We set both `tket2.tket2.submodule` for the compiled `.so`,
-    // and `tket2.submodule` for the re-exported version.
-    // (See `tket2-py/tket2/__init__.py`).
-    //
     // See [https://github.com/PyO3/pyo3/issues/759]
+    let parent_name = parent.name()?;
     let submodule_name = submodule.name()?;
     let modules = py.import("sys")?.getattr("modules")?;
-    modules.set_item(format!("tket2.{submodule_name}"), submodule)?;
-    modules.set_item(format!("tket2.tket2.{submodule_name}"), submodule)?;
+    modules.set_item(format!("{parent_name}.{submodule_name}"), submodule)?;
     Ok(())
 }

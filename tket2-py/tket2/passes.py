@@ -5,11 +5,11 @@ import importlib
 from pytket import Circuit
 from pytket.passes import CustomPass
 
+from tket2 import optimiser
+
 # Re-export native bindings
 from .tket2._passes import *  # noqa: F403
 from .tket2 import _passes
-
-from .tket2 import optimiser
 
 __all__ = [
     "taso_pass",

@@ -10,7 +10,7 @@ use tket2::rewrite::CircuitRewrite;
 
 /// The module definition
 pub fn module(py: Python) -> PyResult<&PyModule> {
-    let m = PyModule::new(py, "pattern")?;
+    let m = PyModule::new(py, "_pattern")?;
     m.add_class::<tket2::portmatching::CircuitPattern>()?;
     m.add_class::<tket2::portmatching::PatternMatcher>()?;
     m.add_class::<CircuitRewrite>()?;

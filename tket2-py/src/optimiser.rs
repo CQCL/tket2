@@ -11,7 +11,7 @@ use crate::circuit::update_hugr;
 
 /// The module definition
 pub fn module(py: Python) -> PyResult<&PyModule> {
-    let m = PyModule::new(py, "optimiser")?;
+    let m = PyModule::new(py, "_optimiser")?;
     m.add_class::<PyTasoOptimiser>()?;
     Ok(m)
 }
