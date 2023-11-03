@@ -9,6 +9,21 @@ use crate::{
     optimiser::PyTasoOptimiser,
 };
 
+/// The module definition
+///
+/// This module is re-exported from the python module with the same name.
+pub fn module(py: Python) -> PyResult<&PyModule> {
+    let m = PyModule::new(py, "_passes")?;
+    m.add_function(wrap_pyfunction!(greedy_depth_reduce, m)?)?;
+    m.add_function(wrap_pyfunction!(taso_optimise, m)?)?;
+    m.add_class::<tket2::T2Op>()?;
+    m.add(
+        "PullForwardError",
+        py.get_type::<tket2::passes::PyPullForwardError>(),
+    )?;
+    Ok(m)
+}
+
 #[pyfunction]
 fn greedy_depth_reduce(py_c: PyObject) -> PyResult<(PyObject, u32)> {
     try_with_hugr(py_c, |mut h| {
@@ -118,17 +133,4 @@ fn taso_optimise(
         }
         PyResult::Ok(circ)
     })
-}
-
-pub(crate) fn add_pass_module(py: Python, parent: &PyModule) -> PyResult<()> {
-    let m = PyModule::new(py, "passes")?;
-    m.add_function(wrap_pyfunction!(greedy_depth_reduce, m)?)?;
-    m.add_function(wrap_pyfunction!(taso_optimise, m)?)?;
-    m.add_class::<tket2::T2Op>()?;
-    m.add(
-        "PullForwardError",
-        py.get_type::<tket2::passes::PyPullForwardError>(),
-    )?;
-    parent.add_submodule(m)?;
-    Ok(())
 }

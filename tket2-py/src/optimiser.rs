@@ -9,12 +9,11 @@ use tket2::optimiser::{DefaultTasoOptimiser, TasoLogger};
 
 use crate::circuit::update_hugr;
 
-/// The circuit optimisation module.
-pub fn add_optimiser_module(py: Python, parent: &PyModule) -> PyResult<()> {
-    let m = PyModule::new(py, "optimiser")?;
+/// The module definition
+pub fn module(py: Python) -> PyResult<&PyModule> {
+    let m = PyModule::new(py, "_optimiser")?;
     m.add_class::<PyTasoOptimiser>()?;
-
-    parent.add_submodule(m)
+    Ok(m)
 }
 
 /// Wrapped [`DefaultTasoOptimiser`].

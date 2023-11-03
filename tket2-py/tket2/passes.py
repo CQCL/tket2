@@ -4,7 +4,17 @@ import importlib
 
 from pytket import Circuit
 from pytket.passes import CustomPass
-from tket2 import passes, optimiser
+
+from tket2 import optimiser
+
+# Re-export native bindings
+from .tket2._passes import *  # noqa: F403
+from .tket2 import _passes
+
+__all__ = [
+    "taso_pass",
+    *_passes.__all__,
+]
 
 
 def taso_pass(
@@ -28,7 +38,7 @@ def taso_pass(
 
     def apply(circuit: Circuit) -> Circuit:
         """Apply TASO optimisation to the circuit."""
-        return passes.taso_optimise(
+        return _passes.taso_optimise(
             circuit,
             opt,
             max_threads,

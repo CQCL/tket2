@@ -10,6 +10,37 @@ use tket2::passes::CircuitChunks;
 use tket2::rewrite::CircuitRewrite;
 use tket_json_rs::circuit_json::SerialCircuit;
 
+/// The module definition
+pub fn module(py: Python) -> PyResult<&PyModule> {
+    let m = PyModule::new(py, "_circuit")?;
+    m.add_class::<T2Circuit>()?;
+    m.add_class::<tket2::T2Op>()?;
+    m.add_class::<tket2::Pauli>()?;
+    m.add_class::<tket2::passes::CircuitChunks>()?;
+
+    m.add_function(wrap_pyfunction!(validate_hugr, m)?)?;
+    m.add_function(wrap_pyfunction!(to_hugr_dot, m)?)?;
+    m.add_function(wrap_pyfunction!(to_hugr, m)?)?;
+    m.add_function(wrap_pyfunction!(chunks, m)?)?;
+
+    m.add("HugrError", py.get_type::<hugr::hugr::PyHugrError>())?;
+    m.add("BuildError", py.get_type::<hugr::builder::PyBuildError>())?;
+    m.add(
+        "ValidationError",
+        py.get_type::<hugr::hugr::validate::PyValidationError>(),
+    )?;
+    m.add(
+        "HUGRSerializationError",
+        py.get_type::<hugr::hugr::serialize::PyHUGRSerializationError>(),
+    )?;
+    m.add(
+        "OpConvertError",
+        py.get_type::<tket2::json::PyOpConvertError>(),
+    )?;
+
+    Ok(m)
+}
+
 /// Apply a fallible function expecting a hugr on a pytket circuit.
 pub fn try_with_hugr<T, E, F>(circ: Py<PyAny>, f: F) -> PyResult<T>
 where
@@ -78,34 +109,4 @@ impl T2Circuit {
     fn apply_match(&mut self, rw: CircuitRewrite) {
         rw.apply(&mut self.0).expect("Apply error.");
     }
-}
-/// circuit module
-pub fn add_circuit_module(py: Python, parent: &PyModule) -> PyResult<()> {
-    let m = PyModule::new(py, "circuit")?;
-    m.add_class::<T2Circuit>()?;
-    m.add_class::<tket2::T2Op>()?;
-    m.add_class::<tket2::Pauli>()?;
-    m.add_class::<tket2::passes::CircuitChunks>()?;
-
-    m.add_function(wrap_pyfunction!(validate_hugr, m)?)?;
-    m.add_function(wrap_pyfunction!(to_hugr_dot, m)?)?;
-    m.add_function(wrap_pyfunction!(to_hugr, m)?)?;
-    m.add_function(wrap_pyfunction!(chunks, m)?)?;
-
-    m.add("HugrError", py.get_type::<hugr::hugr::PyHugrError>())?;
-    m.add("BuildError", py.get_type::<hugr::builder::PyBuildError>())?;
-    m.add(
-        "ValidationError",
-        py.get_type::<hugr::hugr::validate::PyValidationError>(),
-    )?;
-    m.add(
-        "HUGRSerializationError",
-        py.get_type::<hugr::hugr::serialize::PyHUGRSerializationError>(),
-    )?;
-    m.add(
-        "OpConvertError",
-        py.get_type::<tket2::json::PyOpConvertError>(),
-    )?;
-
-    parent.add_submodule(m)
 }
