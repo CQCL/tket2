@@ -44,12 +44,12 @@ To setup the environment manually you will need:
 
 
 You can use the git hook in [`.github/pre-commit`](.github/pre-commit) to automatically run the test and check formatting before committing.
-To install it, run:
+To install it, run this from the root of the repository:
 
 ```bash
-ln -s .github/pre-commit .git/hooks/pre-commit
+ln -s .github/pre-commit $PWD/.git/hooks/pre-commit
 # Or, to check before pushing instead
-ln -s .github/pre-commit .git/hooks/pre-push
+ln -s .github/pre-commit $PWD/.git/hooks/pre-push
 ```
 
 ## 🏃 Running the tests
