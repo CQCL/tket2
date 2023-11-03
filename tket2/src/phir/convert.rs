@@ -18,69 +18,108 @@ use hugr::{
     },
     types::{EdgeKind, TypeEnum},
     values::{CustomConst, PrimValue, Value},
-    CircuitUnit, Node, Wire,
+    CircuitUnit, HugrView, Node, Wire,
 };
 use itertools::{Either, Itertools};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 use thiserror::Error;
 
+const QUBIT_ID: &str = "q";
+fn q_arg(index: usize) -> (String, u64) {
+    (QUBIT_ID.to_string(), index as u64)
+}
 /// Convert Circuit-like HUGR to PHIR.
 pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
     let mut ph = PHIRModel::new();
 
-    const QUBIT_ID: &str = "q";
-    let q_arg = |index| (QUBIT_ID.to_string(), index as u64);
+    // Define quantum and classical variables for inputs
+    let init_arg_map = init_input_variables(circ, &mut ph);
 
-    let mut qubit_count = 0;
-    let mut input_int_count = 0;
-    let mut arg_map: HashMap<Wire, COpArg> = circ
-        .units()
-        .filter_map(|(cu, _, t)| match (cu, t) {
-            (CircuitUnit::Wire(wire), t) if t == INT_TYPES[6] => {
-                let variable = format!("i{input_int_count}");
-                let cvar_def: Data = Data {
-                    data: CVarDefine {
-                        data_type: "i64".to_string(),
-                        variable: variable.clone(),
-                        size: None,
+    // add commands to Phir
+    let final_arg_map = add_commands(circ, &mut ph, init_arg_map)?;
+
+    // get all classical output wires
+    export_outputs(circ, final_arg_map, &mut ph);
+
+    // TODO: Add DFG as SeqBlock
+
+    // TODO: Add conditional as IfBlock
+
+    // TODO: Add wasm calls
+
+    Ok(ph)
+}
+
+/// Assign variables to output values and export them.
+fn export_outputs(circ: &impl Circuit, arg_map: HashMap<Wire, COpArg>, ph: &mut PHIRModel) {
+    let c_out_args = in_neighbour_wires(circ, circ.output())
+        .filter_map(|wire| get_export_cop(circ, wire, &arg_map));
+    let mut temp_var_count = 0..;
+
+    for variable in c_out_args {
+        let variable = match variable {
+            COpArg::Sym(s) => s,
+            COpArg::Bit((s, _)) => s,
+            _ => {
+                // assign the value to a newly defined variable so it can be exported
+                let out_var_name = format!("__temp{}", temp_var_count.next().unwrap());
+
+                // TODO expand to 64?
+                let def = def_int_var(out_var_name.clone(), 32);
+                let assign = crate::phir::model::Op {
+                    op_enum: COp {
+                        cop: "=".to_string(),
+                        args: vec![variable],
+                        returns: Some(vec![CopReturn::Sym(out_var_name.clone())]),
                     }
                     .into(),
                     metadata: Metadata::default(),
                 };
-                input_int_count += 1;
-                ph.append_op(cvar_def);
-                Some((wire, COpArg::Sym(variable)))
-            }
-            (CircuitUnit::Linear(_), t) if t == QB_T => {
-                qubit_count += 1;
-                None
-            }
-            _ => unimplemented!("Non-int64 input wires not supported"),
-        })
-        .collect();
+                ph.append_op(def);
+                ph.append_op(assign);
 
-    let qvar_def: Data = Data {
-        data: QVarDefine {
-            data_type: Some("qubits".to_string()),
-            variable: "q".to_string(),
-            size: qubit_count,
-        }
-        .into(),
-        metadata: Metadata::default(),
+                out_var_name
+            }
+        };
+        let export = Data {
+            data: ExportVar {
+                variables: vec![variable],
+                to: None,
+            }
+            .into(),
+            metadata: Metadata::default(),
+        };
+        ph.append_op(export);
+    }
+}
+
+fn get_export_cop(
+    circ: &impl HugrView,
+    wire: Wire,
+    arg_map: &HashMap<Wire, COpArg>,
+) -> Option<COpArg> {
+    // we only care about certain copyable Value out edges.
+    let Some(EdgeKind::Value(t)) = circ.get_optype(wire.node()).port_kind(wire.source()) else {
+        return None;
     };
-    ph.append_op(qvar_def);
+    // Ignore sums and tuples
+    if t == BOOL_T || !matches!(t.as_type_enum(), TypeEnum::Sum(_) | TypeEnum::Tuple(_)) {
+        get_c_op(arg_map, circ, wire)
+    } else {
+        None
+    }
+}
 
-    // Define quantum and classical variables for inputs
-
+/// Add quantum (acting on qubits) commands ot PHIR
+fn add_commands(
+    circ: &impl Circuit,
+    ph: &mut PHIRModel,
+    mut arg_map: HashMap<Wire, COpArg>,
+) -> Result<HashMap<Wire, COpArg>, &'static str> {
     // Add commands
     for com in circ.commands() {
         let optype = com.optype();
-        // at the end take each output wire and export it
-        // skip non-quantum ops
-        // for integer in-wire, recursively convert to Cop
-        // if the wire is one of many, assign a variable for it and log to wire
-        // map
-        // if a constant or arg from wire map encountered, use that directly.
+
         let qop = match t2op_name(optype) {
             Ok(PhirOp::QOp(s)) => s.to_string(),
             Ok(_) => continue,
@@ -91,10 +130,10 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
             .inputs()
             .filter_map(|(u, _, _)| match u {
                 CircuitUnit::Wire(w) => {
-                    // let cop_arg: COpArg = gen_c_op(circ, w, &mut ph);
+                    // TODO: constant folding angles
 
-                    // arg_map.insert(w, cop_arg);
-                    let angle: ConstF64 = get_value(get_const(w, circ).unwrap()).unwrap();
+                    let angle: ConstF64 = get_value(get_const(w, circ).unwrap())
+                        .expect("Only constant angles supported as QOP inputs.");
                     angles.push(angle.value());
                     None
                 }
@@ -138,71 +177,55 @@ pub fn circuit_to_phir(circ: &impl Circuit) -> Result<PHIRModel, &'static str> {
 
         ph.append_op(phir_op);
     }
-    // get all classical output wires
-    let c_out_wires = in_neighbour_wires(circ, circ.output()).filter(|wire| {
-        match circ.get_optype(wire.node()).port_kind(wire.source()) {
-            Some(EdgeKind::Value(t)) => {
-                t == BOOL_T
-                    // Ignore sums and tuples
-                        || !matches!(t.as_type_enum(), TypeEnum::Sum(_) | TypeEnum::Tuple(_))
-            }
-            _ => false,
-        }
-    });
-    let mut temp_var_count = 0..;
+    Ok(arg_map)
+}
 
-    for wire in c_out_wires {
-        let Some(variable) = get_c_op(&arg_map, circ, wire) else {
-            continue;
-        };
-
-        //  = arg_map.remove(&wire).ok_or("Missing output variable")?;
-        let variable = match variable {
-            COpArg::Sym(s) => s,
-            COpArg::Bit((s, _)) => s,
-            _ => {
-                let out_var_name = format!("__temp{}", temp_var_count.next().unwrap());
-
-                // TODO expand to 64?
-                let def = def_int_var(out_var_name.clone(), 32);
-                let assign = crate::phir::model::Op {
-                    op_enum: COp {
-                        cop: "=".to_string(),
-                        args: vec![variable],
-                        returns: Some(vec![CopReturn::Sym(out_var_name.clone())]),
+/// Initialize phir variables for input qubits/integers
+/// Returning a map from the input wire to the corresponding PHIR variable.
+fn init_input_variables(circ: &impl Circuit, ph: &mut PHIRModel) -> HashMap<Wire, COpArg> {
+    let mut qubit_count = 0;
+    let mut input_int_count = 0;
+    let arg_map: HashMap<Wire, COpArg> = circ
+        .units()
+        .filter_map(|(cu, _, t)| match (cu, t) {
+            (CircuitUnit::Wire(wire), t) if t == INT_TYPES[6] => {
+                let variable = format!("i{input_int_count}");
+                let cvar_def: Data = Data {
+                    data: CVarDefine {
+                        data_type: "i64".to_string(),
+                        variable: variable.clone(),
+                        size: None,
                     }
                     .into(),
                     metadata: Metadata::default(),
                 };
-                ph.append_op(def);
-                ph.append_op(assign);
-
-                out_var_name
-            } // _ => return Err("Invalid export."),
-        };
-        let export = Data {
-            data: ExportVar {
-                variables: vec![variable],
-                to: None,
+                input_int_count += 1;
+                ph.append_op(cvar_def);
+                Some((wire, COpArg::Sym(variable)))
             }
-            .into(),
-            metadata: Metadata::default(),
-        };
-        ph.append_op(export);
-    }
+            (CircuitUnit::Linear(_), t) if t == QB_T => {
+                qubit_count += 1;
+                None
+            }
+            _ => unimplemented!("Non-int64 input wires not supported"),
+        })
+        .collect();
 
-    // Add DFG as SeqBlock
-
-    // Add conditional as IfBlock
-
-    // Add wasm calls
-
-    // export measured variables
-
-    Ok(ph)
+    let qvar_def: Data = Data {
+        data: QVarDefine {
+            data_type: Some("qubits".to_string()),
+            variable: "q".to_string(),
+            size: qubit_count,
+        }
+        .into(),
+        metadata: Metadata::default(),
+    };
+    ph.append_op(qvar_def);
+    arg_map
 }
 
-fn in_neighbour_wires(circ: &impl Circuit, node: Node) -> impl Iterator<Item = Wire> + '_ {
+/// Iterate all Value wires inbound on a node
+fn in_neighbour_wires(circ: &impl HugrView, node: Node) -> impl Iterator<Item = Wire> + '_ {
     let node_type = circ.get_optype(node);
     circ.node_inputs(node)
         .filter(|port| {
@@ -215,11 +238,16 @@ fn in_neighbour_wires(circ: &impl Circuit, node: Node) -> impl Iterator<Item = W
         .map(|(n, p)| Wire::new(n, p))
 }
 
-fn get_c_op(arg_map: &HashMap<Wire, COpArg>, circ: &impl Circuit, wire: Wire) -> Option<COpArg> {
+/// Recursively walk back from a classical wire, turning each operation that
+/// generates it in to a PHIR classical op (COp).
+// TODO: Should be made non-recursive for scaling.
+fn get_c_op(arg_map: &HashMap<Wire, COpArg>, circ: &impl HugrView, wire: Wire) -> Option<COpArg> {
+    // the wire is a known variable, return it
     if let Some(cop) = arg_map.get(&wire) {
         return Some(cop.clone());
     }
 
+    // the wire comes from a constant
     if let Some(c) = get_const(wire, circ) {
         return Some(if c == Const::true_val() {
             COpArg::IntValue(1)
@@ -231,6 +259,8 @@ fn get_c_op(arg_map: &HashMap<Wire, COpArg>, circ: &impl Circuit, wire: Wire) ->
             panic!("Unknown constant.");
         });
     }
+
+    // the wire is a known classical operation
     if let Ok(PhirOp::Cop(cop)) = t2op_name(circ.get_optype(wire.node())) {
         Some(COpArg::COp(COp {
             cop: cop.phir_name().to_string(),
@@ -240,10 +270,13 @@ fn get_c_op(arg_map: &HashMap<Wire, COpArg>, circ: &impl Circuit, wire: Wire) ->
             returns: None,
         }))
     } else {
+        // don't know how to generate this wire in PHIR
         None
     }
 }
 
+/// For a measure operation, generate a new variable name for it and
+/// return the measurement result wire.
 fn measure_out_arg(com: Command<'_, impl Circuit>) -> (Bit, Wire) {
     let (wires, qb_indices): (Vec<_>, Vec<_>) = com.outputs().partition_map(|(c, _, _)| match c {
         CircuitUnit::Wire(w) => Either::Left(w),
@@ -268,6 +301,7 @@ fn measure_out_arg(com: Command<'_, impl Circuit>) -> (Bit, Wire) {
     (arg, measure_wire)
 }
 
+/// Generate PHIR integer variable definition
 fn def_int_var(variable: String, size: u64) -> Data {
     Data {
         data: CVarDefine {
@@ -280,7 +314,8 @@ fn def_int_var(variable: String, size: u64) -> Data {
     }
 }
 
-fn get_const(wire: Wire, circ: &impl Circuit) -> Option<Const> {
+//. If a Wire comes from a LoadConst, return the original Const op holding the value.
+fn get_const(wire: Wire, circ: &impl HugrView) -> Option<Const> {
     if circ.get_optype(wire.node()).tag() != OpTag::LoadConst {
         return None;
     }
@@ -292,6 +327,7 @@ fn get_const(wire: Wire, circ: &impl Circuit) -> Option<Const> {
     })
 }
 
+/// For a Const holding a CustomConst, extract the CustomConst by downcasting.
 fn get_value<T: CustomConst>(op: Const) -> Option<T> {
     // impl<T: CustomConst> TryFrom<Value> for T in Hugr crate
     if let Value::Prim {
@@ -304,9 +340,6 @@ fn get_value<T: CustomConst>(op: Const) -> Option<T> {
         None
     }
 }
-
-// TODO: function to generate PHIR expression tree from classical input wire.
-// TODO: constant folding angles
 
 #[derive(From)]
 enum OpConvertError {
