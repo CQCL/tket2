@@ -1,5 +1,9 @@
-from .tket2 import *  # noqa: F403,F405
+# Re-export native bindings
+#
+# Manual listing to avoid F405 errors
+from .tket2 import circuit, optimiser, pattern
 
-__doc__ = tket2.__doc__  # noqa: F405
-if hasattr(tket2, "__all__"):  # noqa: F405
-    __all__ = tket2.__all__  # noqa: F405
+# Mixed modules import the native bindings manually
+from . import passes
+
+__all__ = [circuit, optimiser, passes, pattern]
