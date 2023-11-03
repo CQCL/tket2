@@ -1,5 +1,5 @@
 [package]
-name = "pytket-tk2"
+name = "tket2-py"
 edition = { workspace = true }
 version = { workspace = true }
 rust-version = { workspace = true }
@@ -8,7 +8,7 @@ license-file = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "pytket_tk2"
+name = "tket2"
 crate-type = ["cdylib"]
 
 [dependencies]
@@ -20,3 +20,6 @@ quantinuum-hugr = { workspace = true }
 portgraph = { workspace = true, features = ["pyo3", "serde"] }
 pyo3 = { workspace = true, features = ["extension-module"] }
 num_cpus = "1.16.0"
+derive_more = "0.99.17"
+itertools = { workspace = true }
+portmatching = { workspace = true }

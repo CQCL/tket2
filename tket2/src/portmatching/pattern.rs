@@ -138,7 +138,7 @@ impl From<NoRootFound> for InvalidPattern {
 
 #[cfg(feature = "pyo3")]
 create_exception!(
-    pytket_tk2,
+    tket2,
     PyInvalidPatternError,
     PyException,
     "Invalid circuit pattern"

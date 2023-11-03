@@ -1,6 +1,6 @@
 from pytket import Circuit
 from pytket.qasm import circuit_from_qasm
-from pytket_tk2 import pattern
+from tket2 import pattern
 
 
 def test_simple_matching():

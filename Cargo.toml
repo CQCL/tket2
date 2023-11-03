@@ -3,7 +3,7 @@ lto = "thin"
 
 [workspace]
 resolver = "2"
-members = ["tket2", "pytket-tk2", "compile-rewriter", "taso-optimiser"]
+members = ["tket2", "tket2-py", "compile-rewriter", "taso-optimiser"]
 default-members = ["tket2"]
 
 [workspace.package]
@@ -23,3 +23,6 @@ pyo3 = { version = "0.20" }
 itertools = { version = "0.11.0" }
 tket-json-rs = "0.2.0"
 tracing = "0.1.37"
+portmatching = { git = "https://github.com/lmondada/portmatching", rev = "738c91c", features = [
+    "serde",
+] }

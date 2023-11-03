@@ -1,5 +1,5 @@
 from pytket import Circuit
-from pytket_tk2 import optimiser
+from tket2 import optimiser
 
 
 def test_simple_optimiser():

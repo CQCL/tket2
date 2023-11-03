@@ -204,7 +204,7 @@ pub enum PullForwardError {
 
 #[cfg(feature = "pyo3")]
 create_exception!(
-    pytket_tk2,
+    tket2,
     PyPullForwardError,
     PyException,
     "Error in applying PullForward rewrite."

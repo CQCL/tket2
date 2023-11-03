@@ -1,6 +1,6 @@
 /target
 Cargo.lock
-pytket-tk2/target/
+tket2-py/target/
 __pycache__
 .ipynb_checkpoints
 

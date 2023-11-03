@@ -1,5 +1,5 @@
 from pytket import Circuit, OpType
-from pytket_tk2.passes import taso_pass
+from tket2.passes import taso_pass
 
 
 def test_simple_taso_pass_no_opt():

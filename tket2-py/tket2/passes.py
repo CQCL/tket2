@@ -4,7 +4,7 @@ import importlib
 
 from pytket import Circuit
 from pytket.passes import CustomPass
-from pytket_tk2 import passes, optimiser
+from tket2 import passes, optimiser
 
 
 def taso_pass(
@@ -23,9 +23,7 @@ def taso_pass(
     The arguments `max_threads`, `timeout`, `log_dir` and `rebase` are optional
     and will be passed on to the TASO optimiser if provided."""
     if rewriter is None:
-        rewriter = Path(
-            importlib.resources.files("pytket_tk2").joinpath("data/nam_6_3.rwr")
-        )
+        rewriter = Path(importlib.resources.files("tket2").joinpath("data/nam_6_3.rwr"))
     opt = optimiser.TasoOptimiser.load_precompiled(rewriter)
 
     def apply(circuit: Circuit) -> Circuit:
