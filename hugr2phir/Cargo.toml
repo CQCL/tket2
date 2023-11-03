@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.4.2", features = ["derive"] }
-tket2 = { path = "../"}
+tket2 = { workspace = true }
 quantinuum-hugr = { workspace = true }
 rmp-serde = "1.1.2"
 serde_json = "1.0.107"
