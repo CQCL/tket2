@@ -1,6 +1,12 @@
+# Build artifacts
 /target
-Cargo.lock
 tket2-py/target/
+
+# Lock files
+Cargo.lock
+poetry.lock
+
+# Python caches
 __pycache__
 .ipynb_checkpoints
 
