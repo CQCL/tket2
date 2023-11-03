@@ -11,8 +11,15 @@ fi
 
 if ! cargo fmt -- --check
 then
-    echo "There are some code style issues."
-    echo "Run cargo fmt first."
+    echo "There are some rust code style issues."
+    echo "Run `cargo fmt` first."
+    exit 1
+fi
+
+if ! ruff format --check .
+then
+    echo "There are some python code style issues."
+    echo "Run `ruff format .` first."
     exit 1
 fi
 
@@ -25,6 +32,12 @@ fi
 if ! cargo test --all-features
 then
     echo "There are some test issues."
+    exit 1
+fi
+
+if ! ruff check
+then
+    echo "There are some python linting issues."
     exit 1
 fi
 
