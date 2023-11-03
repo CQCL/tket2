@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from pyrs.pyrs import passes, circuit, pattern
+from tket2 import passes, circuit, pattern
 
 from pytket.circuit import Circuit
 
@@ -77,7 +77,7 @@ def test_multiple_rules():
 # from functools import wraps
 
 # import pytest
-# from pyrs.pyrs import (
+# from tket2 import (
 #     RsCircuit,
 #     WireType,
 #     RsOpType,
@@ -96,7 +96,7 @@ def test_multiple_rules():
 #     decompose_custom_pass,
 #     count_pycustom,
 # )
-# from pyrs.custom_base import CustomOpBase
+# from tket2.custom_base import CustomOpBase
 
 # from pytket import Circuit, OpType, Qubit
 

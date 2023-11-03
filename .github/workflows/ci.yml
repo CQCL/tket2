@@ -29,14 +29,22 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: mozilla-actions/sccache-action@v0.0.3
-      - name: Check formatting
+      - name: Check rust formatting
         run: cargo fmt -- --check
+      - name: Check python formatting
+        uses: chartboost/ruff-action@v1
+        with:
+          args: format --check
       - name: Run clippy
         run: cargo clippy --all-targets --all-features --workspace -- -D warnings
       - name: Build docs
         run: cargo doc --no-deps --all-features
         env:
           RUSTDOCFLAGS: "-Dwarnings"
+      - name: Python lints
+        uses: chartboost/ruff-action@v1
+        with:
+          args: check
 
   benches:
     # Not required, we can ignore it for the merge queue check.
@@ -101,14 +109,11 @@ jobs:
           cache: 'pip'
       - name: Build pyo3 bindings
         run: |
-          pip install -r requirements.txt
-          cd pyrs
+          pip install -r dev-requirements.txt
           maturin build
-          pip install ../target/wheels/*.whl
+          pip install target/wheels/*.whl
       - name: Test pyo3 bindings
-        run: |
-          cd pyrs
-          pytest
+        run: pytest
 
   coverage:
     if: github.event_name != 'merge_group'
@@ -149,15 +154,12 @@ jobs:
           cache: 'pip'
       - name: Build pyo3 bindings
         run: |
-          pip install -r requirements.txt
+          pip install -r dev-requirements.txt
           pip install pytest-cov
-          cd pyrs
           maturin build
-          pip install ../target/wheels/*.whl
+          pip install target/wheels/*.whl
       - name: Run python tests with coverage instrumentation
-        run: |
-          cd pyrs
-          pytest --cov=./ --cov-report=xml
+        run: pytest --cov=./ --cov-report=xml
       - name: Upload python coverage to codecov.io
         uses: codecov/codecov-action@v3
         with:

@@ -1,6 +1,13 @@
+# Build artifacts
 /target
+tket2-py/target/
+
+# Lock files
 Cargo.lock
-pyrs/target/
+poetry.lock
+
+# Python caches
+__pycache__
 .ipynb_checkpoints
 
 # Devenv

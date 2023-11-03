@@ -11,10 +11,9 @@ use pass::add_pass_module;
 
 use hugr::Hugr;
 use pyo3::prelude::*;
-use tket2::{
-    portmatching::{pyo3::PyPatternMatch, CircuitPattern, PatternMatcher},
-    rewrite::CircuitRewrite,
-};
+use tket2::portmatching::pyo3::PyPatternMatch;
+use tket2::portmatching::{CircuitPattern, PatternMatcher};
+use tket2::rewrite::CircuitRewrite;
 
 #[derive(Clone)]
 #[pyclass]
@@ -66,7 +65,8 @@ impl RuleMatcher {
 
 /// The Python bindings to TKET2.
 #[pymodule]
-fn pyrs(py: Python, m: &PyModule) -> PyResult<()> {
+#[pyo3(name = "tket2")]
+fn tket2_py(py: Python, m: &PyModule) -> PyResult<()> {
     add_circuit_module(py, m)?;
     add_pattern_module(py, m)?;
     add_pass_module(py, m)?;
