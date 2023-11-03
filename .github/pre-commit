@@ -16,7 +16,8 @@ then
     exit 1
 fi
 
-if ! ruff format --check .
+# Run `ruff` python formatting if it is available
+if command -v ruff &> /dev/null && ! ruff format --check .
 then
     echo "There are some python code style issues."
     echo "Run `ruff format .` first."
@@ -35,7 +36,8 @@ then
     exit 1
 fi
 
-if ! ruff check
+# Run `ruff` python linting if it is available
+if command -v ruff &> /dev/null && ! ruff check .
 then
     echo "There are some python linting issues."
     exit 1
