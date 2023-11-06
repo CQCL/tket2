@@ -32,6 +32,7 @@ To setup the environment manually you will need:
 
 - Poetry: https://python-poetry.org/
 
+
 Simply run `poetry shell` to activate an environment with all the required dependencies.
 
 ## 🏃 Running the tests
@@ -70,9 +71,9 @@ You can use the script in [`.github/pre-commit`](.github/pre-commit) to run the 
 To automatically check that before each commit, install it as a hook with:
 
 ```bash
-ln -s .github/pre-commit .git/hooks/pre-commit
+ln -s .github/pre-commit $PWD/.git/hooks/pre-commit
 # Or, to check before pushing instead
-ln -s .github/pre-commit .git/hooks/pre-push
+ln -s .github/pre-commit $PWD/.git/hooks/pre-push
 ```
 
 ## 💅 Coding Style
