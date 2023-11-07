@@ -30,3 +30,11 @@ check:
 format:
     cargo fmt
     ruff format .
+
+# Generate a test coverage report
+coverage:
+    cargo llvm-cov --lcov > lcov.info
+
+# Generate a python test coverage report
+pycoverage: pydevelop
+    pytest --cov=./ --cov-report=html
