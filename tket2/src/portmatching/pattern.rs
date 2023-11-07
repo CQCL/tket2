@@ -53,7 +53,7 @@ impl CircuitPattern {
                     .expect("invalid HUGR");
                 let prev_node = match edge_prop {
                     PEdge::InternalEdge { .. } => NodeID::HugrNode(prev_node),
-                    PEdge::InputEdge { .. } => NodeID::CopyNode(prev_node, prev_port.into()),
+                    PEdge::InputEdge { .. } => NodeID::new_copy(prev_node, prev_port),
                 };
                 pattern.add_edge(cmd.node().into(), prev_node, edge_prop);
             }
@@ -162,7 +162,7 @@ mod tests {
     use hugr::ops::LeafOp;
     use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
     use hugr::types::FunctionType;
-    use hugr::{Direction, Hugr};
+    use hugr::Hugr;
 
     use crate::extension::REGISTRY;
     use crate::utils::build_simple_circuit;
@@ -236,14 +236,8 @@ mod tests {
             edges,
             [
                 (cx_gate, h_gate),
-                (
-                    cx_gate,
-                    NodeID::CopyNode(inp, Port::new(Direction::Outgoing, 0))
-                ),
-                (
-                    cx_gate,
-                    NodeID::CopyNode(inp, Port::new(Direction::Outgoing, 1))
-                ),
+                (cx_gate, NodeID::new_copy(inp, 0)),
+                (cx_gate, NodeID::new_copy(inp, 1)),
             ]
             .into_iter()
             .collect()
@@ -299,7 +293,7 @@ mod tests {
             assert!(edges.iter().any(|e| {
                 e.reverse().is_none()
                     && e.source.unwrap() == rx_n.into()
-                    && e.target.unwrap() == NodeID::CopyNode(inp, Port::new(Direction::Outgoing, 1))
+                    && e.target.unwrap() == NodeID::new_copy(inp, 1)
             }));
         }
     }

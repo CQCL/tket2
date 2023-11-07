@@ -5,6 +5,7 @@ pub mod pattern;
 #[cfg(feature = "pyo3")]
 pub mod pyo3;
 
+use hugr::OutgoingPort;
 use itertools::Itertools;
 pub use matcher::{PatternMatch, PatternMatcher};
 pub use pattern::CircuitPattern;
@@ -132,6 +133,14 @@ impl portmatching::EdgeProperty for PEdge {
 pub(super) enum NodeID {
     HugrNode(Node),
     CopyNode(Node, Port),
+}
+
+impl NodeID {
+    /// Create a new copy NodeID.
+    pub fn new_copy(node: Node, port: impl Into<OutgoingPort>) -> Self {
+        let port: OutgoingPort = port.into();
+        Self::CopyNode(node, port.into())
+    }
 }
 
 impl From<Node> for NodeID {
