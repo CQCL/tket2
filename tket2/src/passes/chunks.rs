@@ -223,13 +223,11 @@ struct ChunkInsertResult {
 }
 
 /// The target of a chunk connection in a reassembled circuit.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum ConnectionTarget {
     /// The target is a chunk node's input.
-    #[from]
     InsertedInput(Node, IncomingPort),
     /// The target is a chunk node's output.
-    #[from]
     InsertedOutput(Node, OutgoingPort),
     /// The link goes directly to the opposite boundary, without an intermediary
     /// node.

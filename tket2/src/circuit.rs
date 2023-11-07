@@ -234,7 +234,6 @@ fn shift_ports<C: HugrMut + ?Sized>(
             circ.disconnect(node, port)?;
         }
         for (other_n, other_p) in links {
-            // TODO: simplify when CQCL-DEV/hugr#565 is resolved
             match other_p.as_directed() {
                 Right(other_p) => {
                     let dst_port = free_port.as_incoming().unwrap();
