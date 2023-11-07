@@ -6,8 +6,8 @@ mod hash;
 pub mod units;
 
 pub use command::{Command, CommandIterator};
-use either::Either::{Left, Right};
 pub use hash::CircuitHash;
+use itertools::Either::{Left, Right};
 
 use derive_more::From;
 use hugr::hugr::hugrmut::HugrMut;

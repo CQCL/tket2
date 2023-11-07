@@ -6,9 +6,9 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::iter::FusedIterator;
 
-use either::Either::{Left, Right};
 use hugr::hugr::NodeType;
 use hugr::ops::{OpTag, OpTrait};
+use itertools::Either::{Left, Right};
 use petgraph::visit as pv;
 
 use super::units::filter::FilteredUnits;
