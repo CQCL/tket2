@@ -13,7 +13,7 @@ use hugr::hugr::views::sibling_subgraph::{
 };
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::OpType;
-use hugr::{Hugr, Node, Port, PortIndex};
+use hugr::{Hugr, IncomingPort, Node, OutgoingPort, Port, PortIndex};
 use itertools::Itertools;
 use portmatching::{
     automaton::{LineBuilder, ScopeAutomaton},
@@ -129,12 +129,16 @@ impl PatternMatch {
         let inputs = pattern_ref
             .inputs
             .iter()
-            .map(|p| p.iter().map(|(n, p)| (map[n], *p)).collect_vec())
+            .map(|ps| {
+                ps.iter()
+                    .map(|(n, p)| (map[n], p.as_incoming().unwrap()))
+                    .collect_vec()
+            })
             .collect_vec();
         let outputs = pattern_ref
             .outputs
             .iter()
-            .map(|(n, p)| (map[n], *p))
+            .map(|(n, p)| (map[n], p.as_outgoing().unwrap()))
             .collect_vec();
         Self::try_from_io_with_checker(root, pattern, circ, inputs, outputs, checker)
     }
@@ -154,8 +158,8 @@ impl PatternMatch {
         root: Node,
         pattern: PatternID,
         circ: &impl Circuit,
-        inputs: Vec<Vec<(Node, Port)>>,
-        outputs: Vec<(Node, Port)>,
+        inputs: Vec<Vec<(Node, IncomingPort)>>,
+        outputs: Vec<(Node, OutgoingPort)>,
     ) -> Result<Self, InvalidPatternMatch> {
         let checker = ConvexChecker::new(circ);
         Self::try_from_io_with_checker(root, pattern, circ, inputs, outputs, &checker)
@@ -173,8 +177,8 @@ impl PatternMatch {
         root: Node,
         pattern: PatternID,
         circ: &'c C,
-        inputs: Vec<Vec<(Node, Port)>>,
-        outputs: Vec<(Node, Port)>,
+        inputs: Vec<Vec<(Node, IncomingPort)>>,
+        outputs: Vec<(Node, OutgoingPort)>,
         checker: &ConvexChecker<'c, C>,
     ) -> Result<Self, InvalidPatternMatch> {
         let subgraph = SiblingSubgraph::try_new_with_checker(inputs, outputs, circ, checker)?;

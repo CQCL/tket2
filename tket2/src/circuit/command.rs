@@ -6,6 +6,7 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::iter::FusedIterator;
 
+use either::Either::{Left, Right};
 use hugr::hugr::NodeType;
 use hugr::ops::{OpTag, OpTrait};
 use petgraph::visit as pv;
@@ -169,12 +170,12 @@ impl<'a, 'circ, Circ: Circuit> UnitLabeller for &'a Command<'circ, Circ> {
 
     #[inline]
     fn assign_wire(&self, node: Node, port: Port) -> Option<Wire> {
-        match port.direction() {
-            Direction::Incoming => {
-                let (from, from_port) = self.circ.linked_ports(node, port).next()?;
+        match port.as_directed() {
+            Left(to_port) => {
+                let (from, from_port) = self.circ.linked_outputs(node, to_port).next()?;
                 Some(Wire::new(from, from_port))
             }
-            Direction::Outgoing => Some(Wire::new(node, port)),
+            Right(from_port) => Some(Wire::new(node, from_port)),
         }
     }
 }
@@ -274,7 +275,10 @@ where
         // TODO: `with_wires` combinator for `Units`?
         let wire_unit = circ
             .linear_units()
-            .map(|(linear_unit, port, _)| (Wire::new(circ.input(), port), linear_unit.index()))
+            .map(|(linear_unit, port, _)| {
+                let port = port.as_outgoing().unwrap();
+                (Wire::new(circ.input(), port), linear_unit.index())
+            })
             .collect();
 
         let nodes = pv::Topo::new(&circ.as_petgraph());
@@ -378,7 +382,10 @@ where
                     // Find the linear unit id for this port.
                     let linear_id = self
                         .follow_linear_port(node, port)
-                        .and_then(|input_port| self.circ.linked_ports(node, input_port).next())
+                        .and_then(|input_port| {
+                            let input_port = input_port.as_incoming().unwrap();
+                            self.circ.linked_outputs(node, input_port).next()
+                        })
                         .and_then(|(from, from_port)| {
                             // Remove the old wire from the map (if there was one)
                             self.wire_unit.remove(&Wire::new(from, from_port))
@@ -388,6 +395,7 @@ where
                             self.wire_unit.len()
                         });
                     // Update the map tracking the linear units
+                    let port = port.as_outgoing().unwrap();
                     let new_wire = Wire::new(node, port);
                     self.wire_unit.insert(new_wire, linear_id);
                     LinearUnit::new(linear_id)

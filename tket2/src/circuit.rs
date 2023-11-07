@@ -6,6 +6,7 @@ mod hash;
 pub mod units;
 
 pub use command::{Command, CommandIterator};
+use either::Either::{Left, Right};
 pub use hash::CircuitHash;
 
 use derive_more::From;
@@ -174,7 +175,7 @@ pub(crate) fn remove_empty_wire(
     if input_port >= circ.num_outputs(inp) {
         return Err(CircuitMutError::InvalidPortOffset(input_port));
     }
-    let input_port = Port::new_outgoing(input_port);
+    let input_port = Port::new(Direction::Outgoing, input_port);
     let link = circ
         .linked_ports(inp, input_port)
         .at_most_one()
@@ -234,9 +235,15 @@ fn shift_ports<C: HugrMut + ?Sized>(
         }
         for (other_n, other_p) in links {
             // TODO: simplify when CQCL-DEV/hugr#565 is resolved
-            match dir {
-                Direction::Incoming => circ.connect(other_n, other_p, node, free_port),
-                Direction::Outgoing => circ.connect(node, free_port, other_n, other_p),
+            match other_p.as_directed() {
+                Right(other_p) => {
+                    let dst_port = free_port.as_incoming().unwrap();
+                    circ.connect(other_n, other_p, node, dst_port)
+                }
+                Left(other_p) => {
+                    let src_port = free_port.as_outgoing().unwrap();
+                    circ.connect(node, src_port, other_n, other_p)
+                }
             }?;
         }
         free_port = port;
