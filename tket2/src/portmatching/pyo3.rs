@@ -4,7 +4,7 @@ use std::fmt;
 
 use derive_more::{From, Into};
 use hugr::hugr::views::sibling_subgraph::PyInvalidReplacementError;
-use hugr::{Hugr, Port};
+use hugr::{Hugr, IncomingPort, OutgoingPort};
 use itertools::Itertools;
 use portmatching::{HashMap, PatternID};
 use pyo3::{prelude::*, types::PyIterator};
@@ -94,11 +94,11 @@ pub struct PyPatternMatch {
     /// This is the incoming boundary of a [`hugr::hugr::views::SiblingSubgraph`].
     /// The input ports are grouped together if they are connected to the same
     /// source.
-    pub inputs: Vec<Vec<(Node, Port)>>,
+    pub inputs: Vec<Vec<(Node, IncomingPort)>>,
     /// The output ports of the subcircuit.
     ///
     /// This is the outgoing boundary of a [`hugr::hugr::views::SiblingSubgraph`].
-    pub outputs: Vec<(Node, Port)>,
+    pub outputs: Vec<(Node, OutgoingPort)>,
     /// The node map from pattern to circuit.
     pub node_map: HashMap<Node, Node>,
 }
@@ -134,16 +134,16 @@ impl PyPatternMatch {
         let inputs = pattern
             .inputs
             .iter()
-            .map(|p| {
-                p.iter()
-                    .map(|&(n, p)| (node_map[&Node(n)], p))
+            .map(|ps| {
+                ps.iter()
+                    .map(|&(n, p)| (node_map[&Node(n)], p.as_incoming().unwrap()))
                     .collect_vec()
             })
             .collect_vec();
         let outputs = pattern
             .outputs
             .iter()
-            .map(|&(n, p)| (node_map[&Node(n)], p))
+            .map(|&(n, p)| (node_map[&Node(n)], p.as_outgoing().unwrap()))
             .collect_vec();
         Ok(Self {
             pattern_id: pattern_id.0,

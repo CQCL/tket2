@@ -239,9 +239,7 @@ impl UnitLabeller for DefaultUnitLabeller {
 
     #[inline]
     fn assign_wire(&self, node: Node, port: Port) -> Option<Wire> {
-        match port.direction() {
-            Direction::Incoming => None,
-            Direction::Outgoing => Some(Wire::new(node, port)),
-        }
+        let port = port.as_outgoing().ok()?;
+        Some(Wire::new(node, port))
     }
 }

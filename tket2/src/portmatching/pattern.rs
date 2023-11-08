@@ -1,5 +1,6 @@
 //! Circuit Patterns for pattern matching
 
+use hugr::IncomingPort;
 use hugr::{ops::OpTrait, Node, Port};
 use itertools::Itertools;
 use portmatching::{patterns::NoRootFound, HashMap, Pattern, SinglePatternMatcher};
@@ -42,17 +43,17 @@ impl CircuitPattern {
             let op = cmd.optype().clone();
             pattern.require(cmd.node().into(), op.try_into().unwrap());
             for in_offset in 0..cmd.input_count() {
-                let in_offset = Port::new_incoming(in_offset);
-                let edge_prop =
-                    PEdge::try_from_port(cmd.node(), in_offset, circuit).expect("Invalid HUGR");
+                let in_offset: IncomingPort = in_offset.into();
+                let edge_prop = PEdge::try_from_port(cmd.node(), in_offset.into(), circuit)
+                    .expect("Invalid HUGR");
                 let (prev_node, prev_port) = circuit
-                    .linked_ports(cmd.node(), in_offset)
+                    .linked_outputs(cmd.node(), in_offset)
                     .exactly_one()
                     .ok()
                     .expect("invalid HUGR");
                 let prev_node = match edge_prop {
                     PEdge::InternalEdge { .. } => NodeID::HugrNode(prev_node),
-                    PEdge::InputEdge { .. } => NodeID::CopyNode(prev_node, prev_port),
+                    PEdge::InputEdge { .. } => NodeID::new_copy(prev_node, prev_port),
                 };
                 pattern.add_edge(cmd.node().into(), prev_node, edge_prop);
             }
@@ -235,8 +236,8 @@ mod tests {
             edges,
             [
                 (cx_gate, h_gate),
-                (cx_gate, NodeID::CopyNode(inp, Port::new_outgoing(0))),
-                (cx_gate, NodeID::CopyNode(inp, Port::new_outgoing(1))),
+                (cx_gate, NodeID::new_copy(inp, 0)),
+                (cx_gate, NodeID::new_copy(inp, 1)),
             ]
             .into_iter()
             .collect()
@@ -292,7 +293,7 @@ mod tests {
             assert!(edges.iter().any(|e| {
                 e.reverse().is_none()
                     && e.source.unwrap() == rx_n.into()
-                    && e.target.unwrap() == NodeID::CopyNode(inp, Port::new_outgoing(1))
+                    && e.target.unwrap() == NodeID::new_copy(inp, 1)
             }));
         }
     }

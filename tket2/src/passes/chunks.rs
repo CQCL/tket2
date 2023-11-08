@@ -16,7 +16,7 @@ use hugr::hugr::{HugrError, NodeMetadata};
 use hugr::ops::handle::DataflowParentID;
 use hugr::ops::OpType;
 use hugr::types::{FunctionType, Signature};
-use hugr::{Hugr, HugrView, Node, Port, PortIndex, Wire};
+use hugr::{Hugr, HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 use itertools::Itertools;
 
 use crate::Circuit;
@@ -79,7 +79,7 @@ impl Chunk {
             .map(|wires| {
                 let (inp_node, inp_port) = wires[0];
                 let (out_node, out_port) = circ
-                    .linked_ports(inp_node, inp_port)
+                    .linked_outputs(inp_node, inp_port)
                     .exactly_one()
                     .ok()
                     .unwrap();
@@ -127,7 +127,7 @@ impl Chunk {
         {
             let connection_targets: Vec<ConnectionTarget> = self
                 .circ
-                .linked_ports(chunk_inp, chunk_inp_port)
+                .linked_inputs(chunk_inp, chunk_inp_port)
                 .map(|(node, port)| {
                     if node == chunk_out {
                         // This was a direct wire from the chunk input to the output. Use the output's [`ChunkConnection`].
@@ -135,7 +135,7 @@ impl Chunk {
                         ConnectionTarget::TransitiveConnection(output_connection)
                     } else {
                         // Translate the original chunk node into the inserted node.
-                        (*node_map.get(&node).unwrap(), port).into()
+                        ConnectionTarget::InsertedInput(*node_map.get(&node).unwrap(), port)
                     }
                 })
                 .collect();
@@ -145,7 +145,7 @@ impl Chunk {
         for (&wire, chunk_out_port) in self.outputs.iter().zip(self.circ.node_inputs(chunk_out)) {
             let (node, port) = self
                 .circ
-                .linked_ports(chunk_out, chunk_out_port)
+                .linked_outputs(chunk_out, chunk_out_port)
                 .exactly_one()
                 .ok()
                 .unwrap();
@@ -155,7 +155,7 @@ impl Chunk {
                 ConnectionTarget::TransitiveConnection(input_connection)
             } else {
                 // Translate the original chunk node into the inserted node.
-                (*node_map.get(&node).unwrap(), port).into()
+                ConnectionTarget::InsertedOutput(*node_map.get(&node).unwrap(), port)
             };
             output_map.insert(wire, target);
         }
@@ -223,11 +223,12 @@ struct ChunkInsertResult {
 }
 
 /// The target of a chunk connection in a reassembled circuit.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum ConnectionTarget {
-    /// The target is a single node and port.
-    #[from]
-    InsertedNode(Node, Port),
+    /// The target is a chunk node's input.
+    InsertedInput(Node, IncomingPort),
+    /// The target is a chunk node's output.
+    InsertedOutput(Node, OutgoingPort),
     /// The link goes directly to the opposite boundary, without an intermediary
     /// node.
     TransitiveConnection(ChunkConnection),
@@ -284,7 +285,7 @@ impl CircuitChunks {
             .collect();
         let output_connections = circ
             .node_inputs(circ_output)
-            .flat_map(|p| circ.linked_ports(circ_output, p))
+            .flat_map(|p| circ.linked_outputs(circ_output, p))
             .map(|(n, p)| Wire::new(n, p).into())
             .collect();
 
@@ -336,8 +337,8 @@ impl CircuitChunks {
         // The chunks input and outputs are each identified with a
         // [`ChunkConnection`]. We collect both sides first, and rewire them
         // after the chunks have been inserted.
-        let mut sources: HashMap<ChunkConnection, (Node, Port)> = HashMap::new();
-        let mut targets: HashMap<ChunkConnection, Vec<(Node, Port)>> = HashMap::new();
+        let mut sources: HashMap<ChunkConnection, (Node, OutgoingPort)> = HashMap::new();
+        let mut targets: HashMap<ChunkConnection, Vec<(Node, IncomingPort)>> = HashMap::new();
 
         // A map for `ChunkConnection`s that have been merged into another (due
         // to identity wires in the updated chunks).
@@ -380,7 +381,7 @@ impl CircuitChunks {
             // (due to an identity wire).
             for (connection, conn_target) in outgoing_connections {
                 match conn_target {
-                    ConnectionTarget::InsertedNode(node, port) => {
+                    ConnectionTarget::InsertedOutput(node, port) => {
                         // The output of a chunk always has fresh `ChunkConnection`s.
                         sources.insert(connection, (node, port));
                     }
@@ -390,6 +391,7 @@ impl CircuitChunks {
                             get_merged_connection(&transitive_connections, merged_connection);
                         transitive_connections.insert(connection, merged_connection);
                     }
+                    _ => panic!("Unexpected connection target"),
                 }
             }
             for (connection, conn_targets) in incoming_connections {
@@ -397,7 +399,7 @@ impl CircuitChunks {
                 let connection = get_merged_connection(&transitive_connections, connection);
                 for tgt in conn_targets {
                     match tgt {
-                        ConnectionTarget::InsertedNode(node, port) => {
+                        ConnectionTarget::InsertedInput(node, port) => {
                             targets.entry(connection).or_default().push((node, port));
                         }
                         ConnectionTarget::TransitiveConnection(_merged_connection) => {
@@ -405,6 +407,7 @@ impl CircuitChunks {
                             // outgoing_connections, so we don't need to do
                             // anything here.
                         }
+                        _ => panic!("Unexpected connection target"),
                     }
                 }
             }
