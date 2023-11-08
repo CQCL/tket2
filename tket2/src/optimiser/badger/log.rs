@@ -49,8 +49,17 @@ impl<'w> BadgerLogger<'w> {
 
     /// Log a new best candidate
     #[inline]
-    pub fn log_best<C: Debug + serde::Serialize>(&mut self, best_cost: C) {
-        self.log(format!("new best of size {:?}", best_cost));
+    pub fn log_best<C: Debug + serde::Serialize>(
+        &mut self,
+        best_cost: C,
+        num_rewrites: Option<usize>,
+    ) {
+        match num_rewrites {
+            Some(rs) => self.log(format!(
+                "new best of size {best_cost:?} after {rs} rewrites"
+            )),
+            None => self.log(format!("new best of size {:?}", best_cost)),
+        }
         if let Some(csv_writer) = self.circ_candidates_csv.as_mut() {
             csv_writer.serialize(BestCircSer::new(best_cost)).unwrap();
             csv_writer.flush().unwrap();

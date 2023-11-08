@@ -37,6 +37,7 @@ use crate::optimiser::badger::hugr_pqueue::{Entry, HugrPQ};
 use crate::optimiser::badger::worker::BadgerWorker;
 use crate::passes::CircuitChunks;
 use crate::rewrite::strategy::RewriteStrategy;
+use crate::rewrite::trace::RewriteTracer;
 use crate::rewrite::Rewriter;
 use crate::Circuit;
 
@@ -158,7 +159,8 @@ where
 
         let mut best_circ = circ.clone();
         let mut best_circ_cost = self.cost(circ);
-        logger.log_best(&best_circ_cost);
+        let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.len());
+        logger.log_best(&best_circ_cost, num_rewrites);
 
         // Hash of seen circuits. Dot not store circuits as this map gets huge
         let hash = circ.circuit_hash().unwrap();
@@ -181,7 +183,8 @@ where
             if cost < best_circ_cost {
                 best_circ = circ.clone();
                 best_circ_cost = cost.clone();
-                logger.log_best(&best_circ_cost);
+                let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.len());
+                logger.log_best(&best_circ_cost, num_rewrites);
                 last_best_time = Instant::now();
             }
             circ_cnt += 1;
@@ -297,7 +300,8 @@ where
                             if cost < best_circ_cost {
                                 best_circ = circ;
                                 best_circ_cost = cost;
-                                logger.log_best(&best_circ_cost);
+                                let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.len());
+                                logger.log_best(&best_circ_cost, num_rewrites);
                                 if let Some(t) = opt.progress_timeout {
                                     progress_timeout_event = crossbeam_channel::at(Instant::now() + Duration::from_secs(t));
                                 }
@@ -337,7 +341,8 @@ where
                     if cost < best_circ_cost {
                         best_circ = circ;
                         best_circ_cost = cost;
-                        logger.log_best(&best_circ_cost);
+                        let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.len());
+                        logger.log_best(&best_circ_cost, num_rewrites);
                     }
                 }
                 PriorityChannelLog::CircuitCount {
@@ -381,7 +386,8 @@ where
         let mut chunks =
             CircuitChunks::split_with_cost(circ, max_chunk_cost, |op| self.strategy.op_cost(op));
 
-        logger.log_best(circ_cost.clone());
+        let num_rewrites = circ.rewrite_trace().map(|rs| rs.len());
+        logger.log_best(circ_cost.clone(), num_rewrites);
 
         let (joins, rx_work): (Vec<_>, Vec<_>) = chunks
             .iter_mut()
@@ -420,7 +426,8 @@ where
         let best_circ = chunks.reassemble()?;
         let best_circ_cost = self.cost(&best_circ);
         if best_circ_cost.clone() < circ_cost {
-            logger.log_best(best_circ_cost.clone());
+            let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.len());
+            logger.log_best(best_circ_cost.clone(), num_rewrites);
         }
 
         logger.log_processing_end(opt.n_threads.get(), None, best_circ_cost, true, false);

@@ -3,6 +3,7 @@
 #[cfg(feature = "portmatching")]
 pub mod ecc_rewriter;
 pub mod strategy;
+pub mod trace;
 
 use bytemuck::TransparentWrapper;
 #[cfg(feature = "portmatching")]
