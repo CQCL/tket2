@@ -11,7 +11,11 @@ use hugr::extension::{ExtensionId, ExtensionRegistry, SignatureError};
 use hugr::hugr::IdentList;
 use hugr::ops::custom::{ExternalOp, OpaqueOp};
 use hugr::ops::OpName;
-use hugr::std_extensions::arithmetic::float_types::extension as float_extension;
+use hugr::std_extensions::arithmetic::{
+    float_types::extension as float_extension, int_ops::extension as int_ops_extension,
+    int_types::extension as int_types_extension,
+};
+
 use hugr::types::type_param::{CustomTypeArg, TypeArg, TypeParam};
 use hugr::types::{CustomType, FunctionType, Type, TypeBound};
 use hugr::Extension;
@@ -70,6 +74,9 @@ pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::from([
     PRELUDE.clone(),
     T2EXTENSION.clone(),
     float_extension(),
+    int_ops_extension(),
+    int_types_extension(),
+
 ]);
 
 

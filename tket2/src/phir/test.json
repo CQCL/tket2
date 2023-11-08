@@ -1,0 +1,187 @@
+{
+    "format": "PHIR/JSON",
+    "version": "0.1.0",
+    "metadata": {
+        "program_name": "example_prog",
+        "description": "Program showing off PHIR",
+        "num_qubits": 10
+    },
+    "ops": [
+        {"//": "qreg q[2];"},
+        {"//": "qreg w[3];"},
+        {"//": "qreg d[5];"},
+        {
+            "data": "qvar_define",
+            "data_type": "qubits",
+            "variable": "q",
+            "size": 2
+        },
+        {
+            "data": "qvar_define",
+            "data_type": "qubits",
+            "variable": "w",
+            "size": 3
+        },
+        {
+            "data": "qvar_define",
+            "data_type": "qubits",
+            "variable": "d",
+            "size": 5
+        },
+
+        {"//": "creg m[2];"},
+        {"//": "creg a[32];"},
+        {"//": "creg b[32];"},
+        {"//": "creg c[12];"},
+        {"//": "creg d[10];"},
+        {"//": "creg e[30];"},
+        {"//": "creg f[5];"},
+        {"//": "creg g[32];"},
+        {"data": "cvar_define", "data_type": "i64", "variable": "m", "size": 2},
+        {
+            "data": "cvar_define",
+            "data_type": "i64",
+            "variable": "a",
+            "size": 32
+        },
+        {
+            "data": "cvar_define",
+            "data_type": "i64",
+            "variable": "b",
+            "size": 32
+        },
+        {
+            "data": "cvar_define",
+            "data_type": "i64",
+            "variable": "c",
+            "size": 12
+        },
+        {
+            "data": "cvar_define",
+            "data_type": "i64",
+            "variable": "d",
+            "size": 10
+        },
+        {
+            "data": "cvar_define",
+            "data_type": "i64",
+            "variable": "e",
+            "size": 30
+        },
+        {"data": "cvar_define", "data_type": "i64", "variable": "f", "size": 5},
+        {
+            "data": "cvar_define",
+            "data_type": "i64",
+            "variable": "g",
+            "size": 32
+        },
+
+        {"//": "h q[0];"},
+        {"qop": "H", "args": [["q", 0]]},
+
+        {"//": "CX q[0], q[1];"},
+        {"qop": "CX", "args": [[["q", 0], ["q", 1]]]},
+
+        {"//": "measure q -> m;"},
+        {
+            "qop": "Measure",
+            "args": [["q", 0], ["q", 1]],
+            "returns": [["m", 0], ["m", 1]]
+        },
+
+        {"//": "b = 5;"},
+        {"cop": "=", "args": [5], "returns": ["b"]},
+
+        {"//": "c = 3;"},
+        {"cop": "=", "args": [3], "returns": ["c"]},
+
+        {"//": "a[0] = add(b, c);  // FF call, e.g., Wasm call"},
+        {
+            "cop": "ffcall",
+            "function": "add",
+            "args": ["b", "c"],
+            "returns": [["a", 0]]
+        },
+
+        {"//": "if(m==1) a = (c[2] ^ d) | (e - 2 + (f & g));"},
+        {
+            "block": "if",
+            "condition": {"cop": "==", "args": ["m", 1]},
+            "true_branch": [
+                {
+                    "cop": "=",
+                    "args": [
+                        {
+                            "cop": "|",
+                            "args": [
+                                {"cop": "^", "args": [["c", 2], "d"]},
+                                {
+                                    "cop": "+",
+                                    "args": [
+                                        {"cop": "-", "args": ["e", 2]},
+                                        {"cop": "&", "args": ["f", "g"]}
+                                    ]
+                                }
+                            ]
+                        }
+                    ],
+                    "returns": ["a"]
+                }
+            ]
+        },
+
+        {"//": "if(m==2) sub(d, e);  // Conditioned void FF call. Void calls are assumed to update a separate classical state running asynchronously/in parallel."},
+        {
+            "block": "if",
+            "condition": {"cop": "==", "args": ["m", 2]},
+            "true_branch": [
+                {"cop": "ffcall", "function": "sub", "args": ["d", "e"]}
+            ]
+        },
+
+        {"//": "if(a > 2) c = 7;"},
+        {"//": "if(a > 2) x w[0];"},
+        {"//": "if(a > 2) h w[1];"},
+        {"//": "if(a > 2) CX w[1], w[2];"},
+        {"//": "if(a > 2) measure w[1] -> g[0];"},
+        {"//": "if(a > 2) measure w[2] -> g[1];"},
+        {
+            "block": "if",
+            "condition": {"cop": ">", "args": ["a", 2]},
+            "true_branch": [
+                {"cop": "=", "args": [7], "returns": ["c"]},
+                {"qop": "X", "args": [["w", 0]]},
+                {"qop": "H", "args": [["w", 1]]},
+                {"qop": "CX", "args": [[["w", 1], ["w", 2]]]},
+                {
+                    "qop": "Measure",
+                    "args": [["w", 1], ["w", 2]],
+                    "returns": [["g", 0], ["g", 1]]
+                }
+            ]
+        },
+
+        {"//": "if(a[3]==1) h d;"},
+        {
+            "block": "if",
+            "condition": {"cop": "==", "args": [["a", 3], 1]},
+            "true_branch": [
+                {
+                    "qop": "H",
+                    "args": [["d", 0], ["d", 1], ["d", 2], ["d", 3], ["d", 4]]
+                }
+            ]
+        },
+
+        {"//": "measure d -> f;"},
+        {
+            "qop": "Measure",
+            "args": [["d", 0], ["d", 1], ["d", 2], ["d", 3], ["d", 4]],
+            "returns": [["f", 0], ["f", 1], ["f", 2], ["f", 3], ["f", 4]]
+        },
+        {
+            "data": "cvar_export",
+            "variables": ["m", "a", "b", "c", "d", "e", "f", "g"]
+        }
+    ]
+}
