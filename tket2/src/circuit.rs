@@ -38,8 +38,7 @@ pub trait Circuit: HugrView {
     /// Return the name of the circuit
     #[inline]
     fn name(&self) -> Option<&str> {
-        let meta = self.get_metadata(self.root()).as_object()?;
-        meta.get("name")?.as_str()
+        self.get_metadata(self.root(), "name")?.as_str()
     }
 
     /// Returns the function type of the circuit.

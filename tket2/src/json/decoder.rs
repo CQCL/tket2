@@ -73,14 +73,14 @@ impl JsonDecoder {
 
         // Metadata. The circuit requires "name", and we store other things that
         // should pass through the serialization roundtrip.
-        let metadata = json!({
-            "name": serialcirc.name,
-            METADATA_PHASE: serialcirc.phase,
-            METADATA_IMPLICIT_PERM: serialcirc.implicit_permutation,
-            METADATA_Q_REGISTERS: serialcirc.qubits,
-            METADATA_B_REGISTERS: serialcirc.bits,
-        });
-        dfg.set_metadata(metadata);
+        dfg.set_metadata("name", json!(serialcirc.name));
+        dfg.set_metadata(METADATA_PHASE, json!(serialcirc.phase));
+        dfg.set_metadata(
+            METADATA_IMPLICIT_PERM,
+            json!(serialcirc.implicit_permutation),
+        );
+        dfg.set_metadata(METADATA_Q_REGISTERS, json!(serialcirc.qubits));
+        dfg.set_metadata(METADATA_B_REGISTERS, json!(serialcirc.bits));
 
         let dangling_wires = dfg.input_wires().collect::<Vec<_>>();
         JsonDecoder {
