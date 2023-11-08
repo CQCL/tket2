@@ -233,7 +233,7 @@ where
     }
 
     /// Add circuits to queue.
-    #[tracing::instrument(target = "taso::metrics", skip(self, circs))]
+    #[tracing::instrument(target = "badger::metrics", skip(self, circs))]
     fn enqueue_circs(&mut self, circs: Vec<Work<P>>) {
         for Work { cost, hash, circ } in circs {
             if !self.seen_hashes.insert(hash) {

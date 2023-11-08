@@ -1,5 +1,5 @@
 [package]
-name = "taso-optimiser"
+name = "badger-optimiser"
 edition = { workspace = true }
 version = { workspace = true }
 rust-version = { workspace = true }

@@ -10,5 +10,5 @@ A clean python 3.10 environment with `maturin` installed. At which point running
 `maturin develop` in this directory should build and install the package in the
 environment. Run `pytest` in this directory to test everything is working.
 
-Don't forget to use the `--release` flag when using TASO and other heavy
+Don't forget to use the `--release` flag when using Badger and other heavy
 computational workloads.

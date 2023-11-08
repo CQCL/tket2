@@ -11,8 +11,8 @@ use std::process::exit;
 
 use clap::Parser;
 use tket2::json::{load_tk1_json_file, save_tk1_json_file};
-use tket2::optimiser::taso::log::TasoLogger;
-use tket2::optimiser::TasoOptimiser;
+use tket2::optimiser::badger::log::BadgerLogger;
+use tket2::optimiser::BadgerOptimiser;
 
 #[cfg(feature = "peak_alloc")]
 #[global_allocator]
@@ -58,7 +58,7 @@ struct CmdLineArgs {
     #[arg(
         short,
         long,
-        default_value = "taso-optimisation.log",
+        default_value = "badger-optimisation.log",
         value_name = "LOGFILE",
         help = "Logfile to to output the progress of the optimisation."
     )]
@@ -117,12 +117,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // TODO: Remove this from the Logger, and use tracing events instead.
     let circ_candidates_csv = BufWriter::new(File::create("best_circs.csv")?);
 
-    let taso_logger = TasoLogger::new(circ_candidates_csv);
+    let badger_logger = BadgerLogger::new(circ_candidates_csv);
 
     let circ = load_tk1_json_file(input_path)?;
 
     println!("Compiling rewriter...");
-    let Ok(optimiser) = TasoOptimiser::default_with_eccs_json_file(ecc_path) else {
+    let Ok(optimiser) = BadgerOptimiser::default_with_eccs_json_file(ecc_path) else {
         eprintln!(
             "Unable to load ECC file {:?}. Is it a JSON file of Quartz-generated ECCs?",
             ecc_path
@@ -141,7 +141,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Optimising...");
     let opt_circ = optimiser.optimise_with_log(
         &circ,
-        taso_logger,
+        badger_logger,
         opts.timeout,
         n_threads,
         opts.split_circ,

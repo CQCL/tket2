@@ -1,6 +1,6 @@
-//! TASO circuit optimiser.
+//! Badger circuit optimiser.
 //!
-//! This module implements the TASO circuit optimiser. It relies on a rewriter
+//! This module implements the Badger circuit optimiser. It relies on a rewriter
 //! and a RewriteStrategy instance to repeatedly rewrite a circuit and optimising
 //! it according to some cost metric (typically gate count).
 //!
@@ -22,7 +22,7 @@ use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 use fxhash::FxHashSet;
 use hugr::hugr::HugrError;
-pub use log::TasoLogger;
+pub use log::BadgerLogger;
 
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
@@ -32,15 +32,15 @@ use hugr::Hugr;
 
 use crate::circuit::cost::CircuitCost;
 use crate::circuit::CircuitHash;
-use crate::optimiser::taso::hugr_pchannel::{HugrPriorityChannel, PriorityChannelLog};
-use crate::optimiser::taso::hugr_pqueue::{Entry, HugrPQ};
-use crate::optimiser::taso::worker::TasoWorker;
+use crate::optimiser::badger::hugr_pchannel::{HugrPriorityChannel, PriorityChannelLog};
+use crate::optimiser::badger::hugr_pqueue::{Entry, HugrPQ};
+use crate::optimiser::badger::worker::BadgerWorker;
 use crate::passes::CircuitChunks;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
 use crate::Circuit;
 
-/// The TASO optimiser.
+/// The Badger optimiser.
 ///
 /// Adapted from [Quartz][], and originally [TASO][].
 ///
@@ -57,13 +57,13 @@ use crate::Circuit;
 /// [Quartz]: https://arxiv.org/abs/2204.09033
 /// [TASO]: https://dl.acm.org/doi/10.1145/3341301.3359630
 #[derive(Clone, Debug)]
-pub struct TasoOptimiser<R, S> {
+pub struct BadgerOptimiser<R, S> {
     rewriter: R,
     strategy: S,
 }
 
-impl<R, S> TasoOptimiser<R, S> {
-    /// Create a new TASO optimiser.
+impl<R, S> BadgerOptimiser<R, S> {
+    /// Create a new Badger optimiser.
     pub fn new(rewriter: R, strategy: S) -> Self {
         Self { rewriter, strategy }
     }
@@ -76,13 +76,13 @@ impl<R, S> TasoOptimiser<R, S> {
     }
 }
 
-impl<R, S> TasoOptimiser<R, S>
+impl<R, S> BadgerOptimiser<R, S>
 where
     R: Rewriter + Send + Clone + 'static,
     S: RewriteStrategy + Send + Sync + Clone + 'static,
     S::Cost: serde::Serialize + Send + Sync,
 {
-    /// Run the TASO optimiser on a circuit.
+    /// Run the Badger optimiser on a circuit.
     ///
     /// A timeout (in seconds) can be provided.
     pub fn optimise(
@@ -103,13 +103,13 @@ where
         )
     }
 
-    /// Run the TASO optimiser on a circuit with logging activated.
+    /// Run the Badger optimiser on a circuit with logging activated.
     ///
     /// A timeout (in seconds) can be provided.
     pub fn optimise_with_log(
         &self,
         circ: &Hugr,
-        log_config: TasoLogger,
+        log_config: BadgerLogger,
         timeout: Option<u64>,
         n_threads: NonZeroUsize,
         split_circuit: bool,
@@ -121,16 +121,16 @@ where
                 .unwrap();
         }
         match n_threads.get() {
-            1 => self.taso(circ, log_config, timeout, queue_size),
-            _ => self.taso_multithreaded(circ, log_config, timeout, n_threads, queue_size),
+            1 => self.badger(circ, log_config, timeout, queue_size),
+            _ => self.badger_multithreaded(circ, log_config, timeout, n_threads, queue_size),
         }
     }
 
-    #[tracing::instrument(target = "taso::metrics", skip(self, circ, logger))]
-    fn taso(
+    #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
+    fn badger(
         &self,
         circ: &Hugr,
-        mut logger: TasoLogger,
+        mut logger: BadgerLogger,
         timeout: Option<u64>,
         queue_size: usize,
     ) -> Hugr {
@@ -196,15 +196,15 @@ where
         best_circ
     }
 
-    /// Run the TASO optimiser on a circuit, using multiple threads.
+    /// Run the Badger optimiser on a circuit, using multiple threads.
     ///
-    /// This is the multi-threaded version of [`taso`]. See [`TasoOptimiser`] for
+    /// This is the multi-threaded version of [`badger`]. See [`BadgerOptimiser`] for
     /// more details.
-    #[tracing::instrument(target = "taso::metrics", skip(self, circ, logger))]
-    fn taso_multithreaded(
+    #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
+    fn badger_multithreaded(
         &self,
         circ: &Hugr,
-        mut logger: TasoLogger,
+        mut logger: BadgerLogger,
         timeout: Option<u64>,
         n_threads: NonZeroUsize,
         queue_size: usize,
@@ -233,7 +233,9 @@ where
         // Each worker waits for circuits to scan for rewrites using all the
         // patterns and sends the results back to main.
         let joins: Vec<_> = (0..n_threads)
-            .map(|i| TasoWorker::spawn(i, pq.clone(), self.rewriter.clone(), self.strategy.clone()))
+            .map(|i| {
+                BadgerWorker::spawn(i, pq.clone(), self.rewriter.clone(), self.strategy.clone())
+            })
             .collect();
 
         // Deadline for the optimisation timeout
@@ -264,7 +266,7 @@ where
                             logger.log_progress(processed_count, Some(queue_length), seen_count);
                         }
                         Err(crossbeam_channel::RecvError) => {
-                            logger.log("The priority channel panicked. Stopping TASO optimisation.");
+                            logger.log("The priority channel panicked. Stopping Badger optimisation.");
                             let _ = pq.close();
                             break;
                         }
@@ -314,11 +316,11 @@ where
     }
 
     /// Split the circuit into chunks and process each in a separate thread.
-    #[tracing::instrument(target = "taso::metrics", skip(self, circ, logger))]
+    #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
     fn split_run(
         &self,
         circ: &Hugr,
-        mut logger: TasoLogger,
+        mut logger: BadgerLogger,
         timeout: Option<u64>,
         n_threads: NonZeroUsize,
         queue_size: usize,
@@ -339,14 +341,14 @@ where
             .enumerate()
             .map(|(i, chunk)| {
                 let (tx, rx) = crossbeam_channel::unbounded();
-                let taso = self.clone();
+                let badger = self.clone();
                 let chunk = mem::take(chunk);
                 let chunk_cx_cost = chunk.circuit_cost(|op| self.strategy.op_cost(op));
                 logger.log(format!("Chunk {i} has {chunk_cx_cost:?} CX gates",));
                 let join = thread::Builder::new()
                     .name(format!("chunk-{}", i))
                     .spawn(move || {
-                        let res = taso.optimise(
+                        let res = badger.optimise(
                             &chunk,
                             timeout,
                             NonZeroUsize::new(1).unwrap(),
@@ -381,7 +383,7 @@ where
 }
 
 #[cfg(feature = "portmatching")]
-mod taso_default {
+mod badger_default {
     use std::io;
     use std::path::Path;
 
@@ -395,16 +397,16 @@ mod taso_default {
 
     pub type StrategyCost = NonIncreasingGateCountCost<fn(&OpType) -> usize, fn(&OpType) -> usize>;
 
-    /// The default TASO optimiser using ECC sets.
-    pub type DefaultTasoOptimiser =
-        TasoOptimiser<ECCRewriter, ExhaustiveGreedyStrategy<StrategyCost>>;
+    /// The default Badger optimiser using ECC sets.
+    pub type DefaultBadgerOptimiser =
+        BadgerOptimiser<ECCRewriter, ExhaustiveGreedyStrategy<StrategyCost>>;
 
-    impl DefaultTasoOptimiser {
+    impl DefaultBadgerOptimiser {
         /// A sane default optimiser using the given ECC sets.
         pub fn default_with_eccs_json_file(eccs_path: impl AsRef<Path>) -> io::Result<Self> {
             let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
             let strategy = NonIncreasingGateCountCost::default_cx();
-            Ok(TasoOptimiser::new(rewriter, strategy))
+            Ok(BadgerOptimiser::new(rewriter, strategy))
         }
 
         /// A sane default optimiser using a precompiled binary rewriter.
@@ -413,12 +415,12 @@ mod taso_default {
         ) -> Result<Self, RewriterSerialisationError> {
             let rewriter = ECCRewriter::load_binary(rewriter_path)?;
             let strategy = NonIncreasingGateCountCost::default_cx();
-            Ok(TasoOptimiser::new(rewriter, strategy))
+            Ok(BadgerOptimiser::new(rewriter, strategy))
         }
     }
 }
 #[cfg(feature = "portmatching")]
-pub use taso_default::DefaultTasoOptimiser;
+pub use badger_default::DefaultBadgerOptimiser;
 
 use self::hugr_pchannel::Work;
 
@@ -436,7 +438,7 @@ mod tests {
 
     use crate::{extension::REGISTRY, Circuit, T2Op};
 
-    use super::{DefaultTasoOptimiser, TasoOptimiser};
+    use super::{BadgerOptimiser, DefaultBadgerOptimiser};
 
     #[fixture]
     fn rz_rz() -> Hugr {
@@ -458,13 +460,13 @@ mod tests {
     }
 
     #[fixture]
-    fn taso_opt() -> DefaultTasoOptimiser {
-        TasoOptimiser::default_with_eccs_json_file("../test_files/small_eccs.json").unwrap()
+    fn badger_opt() -> DefaultBadgerOptimiser {
+        BadgerOptimiser::default_with_eccs_json_file("../test_files/small_eccs.json").unwrap()
     }
 
     #[rstest]
-    fn rz_rz_cancellation(rz_rz: Hugr, taso_opt: DefaultTasoOptimiser) {
-        let opt_rz = taso_opt.optimise(&rz_rz, None, 1.try_into().unwrap(), false, 100);
+    fn rz_rz_cancellation(rz_rz: Hugr, badger_opt: DefaultBadgerOptimiser) {
+        let opt_rz = badger_opt.optimise(&rz_rz, None, 1.try_into().unwrap(), false, 100);
         let cmds = opt_rz
             .commands()
             .map(|cmd| {

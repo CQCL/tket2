@@ -1,42 +1,42 @@
-//! PyO3 wrapper for the TASO circuit optimiser.
+//! PyO3 wrapper for the Badger circuit optimiser.
 
 use std::io::BufWriter;
 use std::{fs, num::NonZeroUsize, path::PathBuf};
 
 use hugr::Hugr;
 use pyo3::prelude::*;
-use tket2::optimiser::{DefaultTasoOptimiser, TasoLogger};
+use tket2::optimiser::{BadgerLogger, DefaultBadgerOptimiser};
 
 use crate::circuit::update_hugr;
 
 /// The module definition
 pub fn module(py: Python) -> PyResult<&PyModule> {
     let m = PyModule::new(py, "_optimiser")?;
-    m.add_class::<PyTasoOptimiser>()?;
+    m.add_class::<PyBadgerOptimiser>()?;
     Ok(m)
 }
 
-/// Wrapped [`DefaultTasoOptimiser`].
+/// Wrapped [`DefaultBadgerOptimiser`].
 ///
 /// Currently only exposes loading from an ECC file using the constructor
 /// and optimising using default logging settings.
-#[pyclass(name = "TasoOptimiser")]
-pub struct PyTasoOptimiser(DefaultTasoOptimiser);
+#[pyclass(name = "BadgerOptimiser")]
+pub struct PyBadgerOptimiser(DefaultBadgerOptimiser);
 
 #[pymethods]
-impl PyTasoOptimiser {
-    /// Create a new [`PyDefaultTasoOptimiser`] from a precompiled rewriter.
+impl PyBadgerOptimiser {
+    /// Create a new [`PyDefaultBadgerOptimiser`] from a precompiled rewriter.
     #[staticmethod]
     pub fn load_precompiled(path: PathBuf) -> Self {
-        Self(DefaultTasoOptimiser::default_with_rewriter_binary(path).unwrap())
+        Self(DefaultBadgerOptimiser::default_with_rewriter_binary(path).unwrap())
     }
 
-    /// Create a new [`PyDefaultTasoOptimiser`] from ECC sets.
+    /// Create a new [`PyDefaultBadgerOptimiser`] from ECC sets.
     ///
     /// This will compile the rewriter from the provided ECC JSON file.
     #[staticmethod]
     pub fn compile_eccs(path: &str) -> Self {
-        Self(DefaultTasoOptimiser::default_with_eccs_json_file(path).unwrap())
+        Self(DefaultBadgerOptimiser::default_with_eccs_json_file(path).unwrap())
     }
 
     /// Run the optimiser on a circuit.
@@ -79,7 +79,7 @@ impl PyTasoOptimiser {
     }
 }
 
-impl PyTasoOptimiser {
+impl PyBadgerOptimiser {
     /// The Python optimise method, but on Hugrs.
     pub(super) fn optimise(
         &self,
@@ -90,16 +90,16 @@ impl PyTasoOptimiser {
         log_progress: Option<PathBuf>,
         queue_size: Option<usize>,
     ) -> Hugr {
-        let taso_logger = log_progress
+        let badger_logger = log_progress
             .map(|file_name| {
                 let log_file = fs::File::create(file_name).unwrap();
                 let log_file = BufWriter::new(log_file);
-                TasoLogger::new(log_file)
+                BadgerLogger::new(log_file)
             })
             .unwrap_or_default();
         self.0.optimise_with_log(
             &circ,
-            taso_logger,
+            badger_logger,
             timeout,
             n_threads.unwrap_or(NonZeroUsize::new(1).unwrap()),
             split_circ.unwrap_or(false),
