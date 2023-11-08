@@ -6,7 +6,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 
 use crate::{
     circuit::{try_update_hugr, try_with_hugr},
-    optimiser::PyTasoOptimiser,
+    optimiser::PyBadgerOptimiser,
 };
 
 /// The module definition
@@ -15,7 +15,7 @@ use crate::{
 pub fn module(py: Python) -> PyResult<&PyModule> {
     let m = PyModule::new(py, "_passes")?;
     m.add_function(wrap_pyfunction!(greedy_depth_reduce, m)?)?;
-    m.add_function(wrap_pyfunction!(taso_optimise, m)?)?;
+    m.add_function(wrap_pyfunction!(badger_optimise, m)?)?;
     m.add_class::<tket2::T2Op>()?;
     m.add(
         "PullForwardError",
@@ -56,10 +56,10 @@ fn rebase_nam(circ: &PyObject) -> PyResult<()> {
     })
 }
 
-/// TASO optimisation pass.
+/// Badger optimisation pass.
 ///
 /// HyperTKET's best attempt at optimising a circuit using circuit rewriting
-/// and the given TASO optimiser.
+/// and the given Badger optimiser.
 ///
 /// By default, the input circuit will be rebased to Nam, i.e. CX + Rz + H before
 /// optimising. This can be deactivated by setting `rebase` to `false`, in which
@@ -71,9 +71,9 @@ fn rebase_nam(circ: &PyObject) -> PyResult<()> {
 ///
 /// Log files will be written to the directory `log_dir` if specified.
 #[pyfunction]
-fn taso_optimise(
+fn badger_optimise(
     circ: PyObject,
-    optimiser: &PyTasoOptimiser,
+    optimiser: &PyBadgerOptimiser,
     max_threads: Option<NonZeroUsize>,
     timeout: Option<u64>,
     log_dir: Option<PathBuf>,
@@ -92,7 +92,7 @@ fn taso_optimise(
         rebase_nam(&circ)?;
     }
     // Logic to choose how to split the circuit
-    let taso_splits = |n_threads: NonZeroUsize| match n_threads.get() {
+    let badger_splits = |n_threads: NonZeroUsize| match n_threads.get() {
         n if n >= 7 => (
             vec![n, 3, 1],
             vec![timeout / 2, timeout / 10 * 3, timeout / 10 * 2],
@@ -115,7 +115,7 @@ fn taso_optimise(
             (n_cx / 50).try_into().unwrap_or(1.try_into().unwrap()),
             max_threads,
         );
-        let (split_threads, split_timeouts) = taso_splits(n_threads);
+        let (split_threads, split_timeouts) = badger_splits(n_threads);
         for (i, (n_threads, timeout)) in split_threads.into_iter().zip(split_timeouts).enumerate() {
             let log_file = log_dir.as_ref().map(|log_dir| {
                 let mut log_file = log_dir.clone();

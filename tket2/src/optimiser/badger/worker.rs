@@ -1,4 +1,4 @@
-//! Distributed workers for the taso optimiser.
+//! Distributed workers for the badger optimiser.
 
 use std::thread::{self, JoinHandle};
 
@@ -9,8 +9,8 @@ use crate::rewrite::Rewriter;
 
 use super::hugr_pchannel::{PriorityChannelCommunication, Work};
 
-/// A worker that processes circuits for the TASO optimiser.
-pub struct TasoWorker<R, S, P: Ord> {
+/// A worker that processes circuits for the Badger optimiser.
+pub struct BadgerWorker<R, S, P: Ord> {
     /// The worker ID.
     #[allow(unused)]
     id: usize,
@@ -22,7 +22,7 @@ pub struct TasoWorker<R, S, P: Ord> {
     strategy: S,
 }
 
-impl<R, S, P> TasoWorker<R, S, P>
+impl<R, S, P> BadgerWorker<R, S, P>
 where
     R: Rewriter + Send + 'static,
     S: RewriteStrategy<Cost = P> + Send + 'static,
@@ -36,7 +36,7 @@ where
         rewriter: R,
         strategy: S,
     ) -> JoinHandle<()> {
-        let name = format!("TasoWorker-{id}");
+        let name = format!("BadgerWorker-{id}");
         thread::Builder::new()
             .name(name)
             .spawn(move || {
@@ -55,7 +55,7 @@ where
     ///
     /// Processes work until the main thread closes the channel send or receive
     /// channel.
-    #[tracing::instrument(target = "taso::metrics", skip(self))]
+    #[tracing::instrument(target = "badger::metrics", skip(self))]
     fn run_loop(&mut self) {
         loop {
             let Ok(Work { circ, cost, .. }) = self.priority_channel.recv() else {
@@ -82,7 +82,7 @@ where
                 })
                 .collect();
 
-            let send = tracing::trace_span!(target: "taso::metrics", "TasoWorker::send_result")
+            let send = tracing::trace_span!(target: "badger::metrics", "BadgerWorker::send_result")
                 .in_scope(|| self.priority_channel.send(new_circs));
             if send.is_err() {
                 // Terminating

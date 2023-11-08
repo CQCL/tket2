@@ -29,7 +29,7 @@ use hugr::Hugr;
 
 use crate::{
     circuit::{remove_empty_wire, Circuit},
-    optimiser::taso::{load_eccs_json_file, EqCircClass},
+    optimiser::badger::{load_eccs_json_file, EqCircClass},
     portmatching::{CircuitPattern, PatternMatcher},
 };
 

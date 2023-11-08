@@ -1,16 +1,16 @@
-//! Logging utilities for the TASO optimiser.
+//! Logging utilities for the Badger optimiser.
 
 use std::time::{Duration, Instant};
 use std::{fmt::Debug, io};
 
-/// Logging configuration for the TASO optimiser.
-pub struct TasoLogger<'w> {
+/// Logging configuration for the Badger optimiser.
+pub struct BadgerLogger<'w> {
     circ_candidates_csv: Option<csv::Writer<Box<dyn io::Write + 'w>>>,
     last_circ_processed: usize,
     last_progress_time: Instant,
 }
 
-impl<'w> Default for TasoLogger<'w> {
+impl<'w> Default for BadgerLogger<'w> {
     fn default() -> Self {
         Self {
             circ_candidates_csv: Default::default(),
@@ -22,13 +22,13 @@ impl<'w> Default for TasoLogger<'w> {
 }
 
 /// The logging target for general events.
-pub const LOG_TARGET: &str = "taso::log";
+pub const LOG_TARGET: &str = "badger::log";
 /// The logging target for progress events. More verbose than the general log.
-pub const PROGRESS_TARGET: &str = "taso::progress";
+pub const PROGRESS_TARGET: &str = "badger::progress";
 /// The logging target for function spans.
-pub const METRICS_TARGET: &str = "taso::metrics";
+pub const METRICS_TARGET: &str = "badger::metrics";
 
-impl<'w> TasoLogger<'w> {
+impl<'w> BadgerLogger<'w> {
     /// Create a new logging configuration.
     ///
     /// Two writer objects must be provided:
@@ -119,7 +119,7 @@ impl<'w> TasoLogger<'w> {
 }
 
 /// A helper struct for logging improvements in circuit size seen during the
-/// TASO execution.
+/// Badger execution.
 //
 // TODO: Replace this fixed logging. Report back intermediate results.
 #[derive(serde::Serialize, Clone, Debug)]

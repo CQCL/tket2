@@ -4,7 +4,7 @@ use hugr::Hugr;
 use rstest::{fixture, rstest};
 use tket2::{
     json::TKETDecode,
-    optimiser::{DefaultTasoOptimiser, TasoOptimiser},
+    optimiser::{BadgerOptimiser, DefaultBadgerOptimiser},
     Circuit,
 };
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -14,8 +14,8 @@ use tket_json_rs::circuit_json::SerialCircuit;
 /// This is the complete set of ECCs for 2-qubit circuits with up to
 /// 4 gates, using the NAM gateset (CX, Rz, H).
 #[fixture]
-fn nam_4_2() -> DefaultTasoOptimiser {
-    TasoOptimiser::default_with_eccs_json_file("../test_files/Nam_4_2_complete_ECC_set.json")
+fn nam_4_2() -> DefaultBadgerOptimiser {
+    BadgerOptimiser::default_with_eccs_json_file("../test_files/Nam_4_2_complete_ECC_set.json")
         .unwrap()
 }
 
@@ -56,7 +56,7 @@ fn simple_circ() -> Hugr {
 
 #[rstest]
 //#[ignore = "Takes 200ms"]
-fn taso_termination(simple_circ: Hugr, nam_4_2: DefaultTasoOptimiser) {
+fn badger_termination(simple_circ: Hugr, nam_4_2: DefaultBadgerOptimiser) {
     let opt_circ = nam_4_2.optimise(&simple_circ, None, 1.try_into().unwrap(), false, 10);
     assert_eq!(opt_circ.commands().count(), 11);
 }

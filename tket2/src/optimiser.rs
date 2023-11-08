@@ -1,9 +1,9 @@
 //! Optimisers for circuit rewriting.
 //!
-//! Currently, the only optimiser is TASO
+//! Currently, the only optimiser is Badger
 
-pub mod taso;
+pub mod badger;
 
 #[cfg(feature = "portmatching")]
-pub use taso::DefaultTasoOptimiser;
-pub use taso::{TasoLogger, TasoOptimiser};
+pub use badger::DefaultBadgerOptimiser;
+pub use badger::{BadgerLogger, BadgerOptimiser};
