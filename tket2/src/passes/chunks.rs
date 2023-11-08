@@ -12,7 +12,7 @@ use hugr::extension::ExtensionSet;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::views::sibling_subgraph::ConvexChecker;
 use hugr::hugr::views::{HierarchyView, SiblingGraph, SiblingSubgraph};
-use hugr::hugr::{HugrError, NodeMetadata};
+use hugr::hugr::{HugrError, NodeMetadataMap};
 use hugr::ops::handle::DataflowParentID;
 use hugr::ops::OpType;
 use hugr::types::{FunctionType, Signature};
@@ -247,7 +247,7 @@ pub struct CircuitChunks {
     signature: FunctionType,
 
     /// The original circuit's root metadata.
-    root_meta: NodeMetadata,
+    root_meta: Option<NodeMetadataMap>,
 
     /// The original circuit's inputs.
     input_connections: Vec<ChunkConnection>,
@@ -275,7 +275,7 @@ impl CircuitChunks {
         max_cost: C,
         op_cost: impl Fn(&OpType) -> C,
     ) -> Self {
-        let root_meta = circ.get_metadata(circ.root()).clone();
+        let root_meta = circ.get_node_metadata(circ.root()).cloned();
         let signature = circ.circuit_signature().clone();
 
         let [circ_input, circ_output] = circ.get_io(circ.root()).unwrap();
@@ -318,8 +318,9 @@ impl CircuitChunks {
     pub fn reassemble(self) -> Result<Hugr, HugrError> {
         let name = self
             .root_meta
-            .get("name")
-            .and_then(|v| v.as_str())
+            .as_ref()
+            .and_then(|map| map.get("name"))
+            .and_then(|s| s.as_str())
             .unwrap_or("");
         let signature = Signature {
             signature: self.signature,
@@ -437,7 +438,7 @@ impl CircuitChunks {
             }
         }
 
-        reassembled.set_metadata(root, self.root_meta)?;
+        reassembled.overwrite_node_metadata(root, self.root_meta)?;
 
         Ok(reassembled)
     }

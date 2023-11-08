@@ -57,21 +57,19 @@ impl JsonEncoder {
         let mut implicit_permutation = vec![];
 
         // Recover other parameters stored in the metadata
-        if let Some(meta) = circ.get_metadata(circ.root()).as_object() {
-            if let Some(p) = meta.get(METADATA_PHASE) {
-                // TODO: Check for invalid encoded metadata
-                phase = p.as_str().unwrap().to_string();
-            }
-            if let Some(perm) = meta.get(METADATA_IMPLICIT_PERM) {
-                // TODO: Check for invalid encoded metadata
-                implicit_permutation = serde_json::from_value(perm.clone()).unwrap();
-            }
-            if let Some(q_regs) = meta.get(METADATA_Q_REGISTERS) {
-                qubit_registers = serde_json::from_value(q_regs.clone()).unwrap();
-            }
-            if let Some(b_regs) = meta.get(METADATA_B_REGISTERS) {
-                bit_registers = serde_json::from_value(b_regs.clone()).unwrap();
-            }
+        // TODO: Check for invalid encoded metadata
+        let root = circ.root();
+        if let Some(p) = circ.get_metadata(root, METADATA_PHASE) {
+            phase = p.as_str().unwrap().to_string();
+        }
+        if let Some(perm) = circ.get_metadata(root, METADATA_IMPLICIT_PERM) {
+            implicit_permutation = serde_json::from_value(perm.clone()).unwrap();
+        }
+        if let Some(q_regs) = circ.get_metadata(root, METADATA_Q_REGISTERS) {
+            qubit_registers = serde_json::from_value(q_regs.clone()).unwrap();
+        }
+        if let Some(b_regs) = circ.get_metadata(root, METADATA_B_REGISTERS) {
+            bit_registers = serde_json::from_value(b_regs.clone()).unwrap();
         }
 
         // Map the Hugr units to tket1 register names.
