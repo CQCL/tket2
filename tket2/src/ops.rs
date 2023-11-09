@@ -264,7 +264,7 @@ const SYM_OP_ID: SmolStr = SmolStr::new_inline("symbolic_float");
 lazy_static! {
 /// The type of the symbolic expression opaque type arg.
 pub static ref SYM_EXPR_T: CustomType =
-    EXTENSION.get_type(&SYM_EXPR_NAME).unwrap().instantiate_concrete([]).unwrap();
+    EXTENSION.get_type(&SYM_EXPR_NAME).unwrap().instantiate([]).unwrap();
 
 pub static ref EXTENSION: Extension = {
     let mut e = Extension::new(EXTENSION_ID);
@@ -277,7 +277,7 @@ pub static ref EXTENSION: Extension = {
         TypeBound::Eq.into(),
     )
     .unwrap();
-    let sym_expr_param = TypeParam::Opaque(sym_expr_opdef.instantiate_concrete([]).unwrap());
+    let sym_expr_param = TypeParam::Opaque(sym_expr_opdef.instantiate([]).unwrap());
 
     e.add_op_custom_sig_simple(
         SYM_OP_ID,

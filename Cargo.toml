@@ -17,7 +17,7 @@ license-file = "LICENCE"
 [workspace.dependencies]
 
 tket2 = { path = "./tket2" }
-quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "b71cae6" }
+quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "d0499ad" }
 portgraph = { version = "0.10" }
 pyo3 = { version = "0.20" }
 itertools = { version = "0.11.0" }
