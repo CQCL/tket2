@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+use crate::extension::{
+    SYM_EXPR_T, SYM_OP_ID, TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID,
+};
 use hugr::{
     extension::{
         prelude::{BOOL_T, QB_T},
@@ -9,14 +12,13 @@ use hugr::{
     std_extensions::arithmetic::float_types::FLOAT64_TYPE,
     type_row,
     types::{
-        type_param::{CustomTypeArg, TypeArg, TypeParam},
-        CustomType, FunctionType, TypeBound,
+        type_param::{CustomTypeArg, TypeArg},
+        FunctionType,
     },
     Extension,
 };
-use lazy_static::lazy_static;
+
 use serde::{Deserialize, Serialize};
-use smol_str::SmolStr;
 
 use std::str::FromStr;
 use strum::IntoEnumIterator;
@@ -27,9 +29,6 @@ use thiserror::Error;
 use pyo3::pyclass;
 
 use crate::extension::REGISTRY;
-
-/// Name of tket 2 extension.
-pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("quantum.tket2");
 
 #[derive(
     Clone,
@@ -95,7 +94,9 @@ pub enum Pauli {
 pub struct NotT2Op;
 
 // this trait could be implemented in Hugr
-trait SimpleOpEnum: Into<&'static str> + FromStr + Copy + IntoEnumIterator {
+pub(crate) trait SimpleOpEnum:
+    Into<&'static str> + FromStr + Copy + IntoEnumIterator
+{
     type LoadError: std::error::Error;
 
     fn signature(&self) -> FunctionType;
@@ -255,42 +256,6 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<&str> {
     }
 }
 
-/// The name of the symbolic expression opaque type arg.
-pub const SYM_EXPR_NAME: SmolStr = SmolStr::new_inline("SymExpr");
-
-/// The name of the symbolic expression opaque type arg.
-const SYM_OP_ID: SmolStr = SmolStr::new_inline("symbolic_float");
-
-lazy_static! {
-/// The type of the symbolic expression opaque type arg.
-pub static ref SYM_EXPR_T: CustomType =
-    EXTENSION.get_type(&SYM_EXPR_NAME).unwrap().instantiate([]).unwrap();
-
-pub static ref EXTENSION: Extension = {
-    let mut e = Extension::new(EXTENSION_ID);
-    load_all_ops::<T2Op>(&mut e).expect("add fail");
-
-    let sym_expr_opdef = e.add_type(
-        SYM_EXPR_NAME,
-        vec![],
-        "Symbolic expression.".into(),
-        TypeBound::Eq.into(),
-    )
-    .unwrap();
-    let sym_expr_param = TypeParam::Opaque(sym_expr_opdef.instantiate([]).unwrap());
-
-    e.add_op_custom_sig_simple(
-        SYM_OP_ID,
-        "Store a sympy expression that can be evaluated to a float.".to_string(),
-        vec![sym_expr_param],
-        |_: &[TypeArg]| Ok(FunctionType::new(type_row![], type_row![FLOAT64_TYPE])),
-    )
-    .unwrap();
-
-    e
-};
-}
-
 // From implementations could be made generic over SimpleOpEnum
 impl From<T2Op> for LeafOp {
     fn from(op: T2Op) -> Self {
@@ -350,7 +315,9 @@ impl TryFrom<LeafOp> for T2Op {
 }
 
 /// load all variants of a `SimpleOpEnum` in to an extension as op defs.
-fn load_all_ops<T: SimpleOpEnum>(extension: &mut Extension) -> Result<(), ExtensionBuildError> {
+pub(crate) fn load_all_ops<T: SimpleOpEnum>(
+    extension: &mut Extension,
+) -> Result<(), ExtensionBuildError> {
     for op in T::all_variants() {
         op.add_to_extension(extension)?;
     }
@@ -364,9 +331,9 @@ pub(crate) mod test {
     use hugr::{extension::OpDef, Hugr};
     use rstest::{fixture, rstest};
 
+    use super::T2Op;
+    use crate::extension::{TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID};
     use crate::{circuit::Circuit, ops::SimpleOpEnum, utils::build_simple_circuit};
-
-    use super::{T2Op, EXTENSION, EXTENSION_ID};
     fn get_opdef(op: impl SimpleOpEnum) -> Option<&'static Arc<OpDef>> {
         EXTENSION.get_op(op.name())
     }
