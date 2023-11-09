@@ -33,7 +33,7 @@ pub const JSON_PAYLOAD_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Payload")
 lazy_static! {
 /// A custom type for the encoded TKET1 operation
 static ref TKET1_OP_PAYLOAD : CustomType =
-    TKET1_EXTENSION.get_type(&JSON_PAYLOAD_NAME).unwrap().instantiate_concrete([]).unwrap();
+    TKET1_EXTENSION.get_type(&JSON_PAYLOAD_NAME).unwrap().instantiate([]).unwrap();
 
 /// The TKET1 extension, containing the opaque TKET1 operations.
 pub static ref TKET1_EXTENSION: Extension = {
@@ -42,7 +42,7 @@ pub static ref TKET1_EXTENSION: Extension = {
     res.add_type(LINEAR_BIT_NAME, vec![], "A linear bit.".into(), TypeBound::Any.into()).unwrap();
 
     let json_op_payload_def = res.add_type(JSON_PAYLOAD_NAME, vec![], "Opaque TKET1 operation metadata.".into(), TypeBound::Eq.into()).unwrap();
-    let json_op_payload = TypeParam::Opaque(json_op_payload_def.instantiate_concrete([]).unwrap());
+    let json_op_payload = TypeParam::Opaque(json_op_payload_def.instantiate([]).unwrap());
     res.add_op_custom_sig(
         JSON_OP_NAME,
         "An opaque TKET1 operation.".into(),
@@ -60,7 +60,7 @@ pub static ref LINEAR_BIT: Type = {
     Type::new_extension(TKET1_EXTENSION
         .get_type(&LINEAR_BIT_NAME)
         .unwrap()
-        .instantiate_concrete([])
+        .instantiate([])
         .unwrap())
     };
 
