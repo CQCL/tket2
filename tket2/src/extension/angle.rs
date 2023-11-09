@@ -274,6 +274,13 @@ mod test {
         assert_ne!(const_a32_7, const_a33_7);
         assert_ne!(const_a32_7, const_a32_8);
         assert_eq!(const_a32_7, ConstAngle::new(5, 7).unwrap());
+
+        assert!(const_a32_7
+            .check_custom_type(&super::super::angle_custom_type(5))
+            .is_ok());
+        assert!(const_a32_7
+            .check_custom_type(&super::super::angle_custom_type(6))
+            .is_err());
         assert!(matches!(
             ConstAngle::new(3, 256),
             Err(ConstTypeError::CustomCheckFail(_))
