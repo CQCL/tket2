@@ -19,6 +19,9 @@ use hugr::{type_row, Extension};
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
 
+/// Definition for Angle ops and types.
+pub mod angle;
+
 /// The ID of the TKET1 extension.
 pub const TKET1_EXTENSION_ID: ExtensionId = IdentList::new_unchecked("TKET1");
 
@@ -163,6 +166,7 @@ pub static ref TKET2_EXTENSION: Extension = {
     )
     .unwrap();
 
+    angle::add_to_extension(&mut e);
     e
 };
 }
