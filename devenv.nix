@@ -26,6 +26,8 @@
   enterShell = ''
     hello
     cargo --version
+    python --version
+    poetry --version
   '';
 
   # https://devenv.sh/languages/
@@ -38,9 +40,9 @@
 
   languages.python = {
     enable = true;
-
-    venv.enable = true;
-    venv.requirements = "-r ${config.env.DEVENV_ROOT}/tket2-py/dev-requirements.txt";
+    poetry = {
+      enable = true;
+    };
   };
 
   # https://devenv.sh/pre-commit-hooks/
