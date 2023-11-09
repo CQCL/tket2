@@ -21,6 +21,10 @@ pub(super) fn angle_custom_type(extension: &Extension, log_denom_arg: TypeArg) -
     angle_def(extension).instantiate([log_denom_arg]).unwrap()
 }
 
+fn angle_type(log_denom: u8) -> Type {
+    Type::new_extension(super::angle_custom_type(log_denom))
+}
+
 /// The largest permitted log-denominator.
 pub const LOG_DENOM_MAX: u8 = 53;
 
@@ -154,10 +158,9 @@ fn abinop_sig(arg_values: &[TypeArg]) -> Result<FunctionType, SignatureError> {
     let m: u8 = get_log_denom(arg0)?;
     let n: u8 = get_log_denom(arg1)?;
     let l: u8 = max(m, n);
-    let ang_typ = |n| Type::new_extension(super::angle_custom_type(n));
     Ok(FunctionType::new(
-        vec![ang_typ(n), ang_typ(m)],
-        vec![ang_typ(l)],
+        vec![angle_type(m), angle_type(n)],
+        vec![angle_type(l)],
     ))
 }
 
@@ -292,5 +295,18 @@ mod test {
         let const_af1 = ConstAngle::from_radians_rounding(5, 0.21874 * TAU).unwrap();
         assert_eq!(const_af1.value(), 7);
         assert_eq!(const_af1.log_denom(), 5);
+
+        assert!(ConstAngle::from_radians_rounding(54, 0.21874 * TAU).is_err());
+    }
+    #[test]
+    fn test_binop_sig() {
+        let sig = abinop_sig(&[type_arg(23), type_arg(42)]).unwrap();
+
+        assert_eq!(
+            sig,
+            FunctionType::new(vec![angle_type(23), angle_type(42)], vec![angle_type(42)])
+        );
+
+        assert!(abinop_sig(&[type_arg(23), type_arg(89)]).is_err());
     }
 }
