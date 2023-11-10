@@ -14,10 +14,9 @@ use super::{
 use crate::{circuit::Circuit, portmatching::NodeID};
 
 #[cfg(feature = "pyo3")]
-use pyo3::{create_exception, exceptions::PyException, pyclass, PyErr};
+use pyo3::{create_exception, exceptions::PyException, PyErr};
 
 /// A pattern that match a circuit exactly
-#[cfg_attr(feature = "pyo3", pyclass)]
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CircuitPattern {
     pub(super) pattern: Pattern<NodeID, PNode, PEdge>,

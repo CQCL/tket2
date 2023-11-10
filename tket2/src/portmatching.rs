@@ -2,8 +2,6 @@
 
 pub mod matcher;
 pub mod pattern;
-#[cfg(feature = "pyo3")]
-pub mod pyo3;
 
 use hugr::OutgoingPort;
 use itertools::Itertools;
