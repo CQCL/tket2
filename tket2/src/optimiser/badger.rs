@@ -466,7 +466,7 @@ mod tests {
 
     #[rstest]
     fn rz_rz_cancellation(rz_rz: Hugr, badger_opt: DefaultBadgerOptimiser) {
-        let opt_rz = badger_opt.optimise(&rz_rz, None, 1.try_into().unwrap(), false, 100);
+        let opt_rz = badger_opt.optimise(&rz_rz, None, 1.try_into().unwrap(), false, 4);
         let cmds = opt_rz
             .commands()
             .map(|cmd| {
@@ -478,6 +478,23 @@ mod tests {
             })
             .collect::<Vec<(T2Op, _, _)>>();
         let exp_cmds = vec![(T2Op::AngleAdd, 2, 1), (T2Op::RzF64, 2, 1)];
+        assert_eq!(cmds, exp_cmds);
+    }
+
+    #[rstest]
+    fn rz_rz_cancellation_parallel(rz_rz: Hugr, badger_opt: DefaultBadgerOptimiser) {
+        let opt_rz = badger_opt.optimise(&rz_rz, Some(0), 2.try_into().unwrap(), false, 4);
+        let cmds = opt_rz
+            .commands()
+            .map(|cmd| {
+                (
+                    cmd.optype().try_into().unwrap(),
+                    cmd.inputs().count(),
+                    cmd.outputs().count(),
+                )
+            })
+            .collect::<Vec<(T2Op, _, _)>>();
+        let exp_cmds = vec![(T2Op::RzF64, 2, 1), (T2Op::RzF64, 2, 1)];
         assert_eq!(cmds, exp_cmds);
     }
 }
