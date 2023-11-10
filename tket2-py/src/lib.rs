@@ -1,10 +1,10 @@
 //! Python bindings for TKET2.
 #![warn(missing_docs)]
 
-mod circuit;
-mod optimiser;
-mod passes;
-mod pattern;
+pub mod circuit;
+pub mod optimiser;
+pub mod passes;
+pub mod pattern;
 
 use pyo3::prelude::*;
 

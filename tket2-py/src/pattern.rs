@@ -1,22 +1,28 @@
-//!
+//! Pattern matching on circuits.
+
+pub mod portmatching;
 
 use crate::circuit::{to_hugr, T2Circuit};
 
 use hugr::Hugr;
 use pyo3::prelude::*;
-use tket2::portmatching::pyo3::PyPatternMatch;
 use tket2::portmatching::{CircuitPattern, PatternMatcher};
 use tket2::rewrite::CircuitRewrite;
 
 /// The module definition
 pub fn module(py: Python) -> PyResult<&PyModule> {
     let m = PyModule::new(py, "_pattern")?;
-    m.add_class::<tket2::portmatching::CircuitPattern>()?;
-    m.add_class::<tket2::portmatching::PatternMatcher>()?;
     m.add_class::<CircuitRewrite>()?;
     m.add_class::<Rule>()?;
     m.add_class::<RuleMatcher>()?;
+    m.add_class::<self::portmatching::PyCircuitPattern>()?;
+    m.add_class::<self::portmatching::PyPatternMatcher>()?;
+    m.add_class::<self::portmatching::PyPatternMatch>()?;
 
+    m.add(
+        "InvalidReplacementError",
+        py.get_type::<hugr::hugr::views::sibling_subgraph::PyInvalidReplacementError>(),
+    )?;
     m.add(
         "InvalidPatternError",
         py.get_type::<tket2::portmatching::pattern::PyInvalidPatternError>(),
@@ -64,12 +70,10 @@ impl RuleMatcher {
     }
 
     pub fn find_match(&self, target: &T2Circuit) -> PyResult<Option<CircuitRewrite>> {
-        let h = &target.0;
-        let p_match = self.matcher.find_matches_iter(h).next();
-        if let Some(m) = p_match {
-            let py_match = PyPatternMatch::try_from_rust(m, h, &self.matcher)?;
-            let r = self.rights.get(py_match.pattern_id).unwrap().clone();
-            let rw = py_match.to_rewrite(h, r)?;
+        let h = &target.hugr;
+        if let Some(p_match) = self.matcher.find_matches_iter(h).next() {
+            let r = self.rights.get(p_match.pattern_id().0).unwrap().clone();
+            let rw = p_match.to_rewrite(h, r)?;
             Ok(Some(rw))
         } else {
             Ok(None)

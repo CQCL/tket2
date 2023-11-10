@@ -22,12 +22,6 @@ use itertools::Itertools;
 use crate::Circuit;
 
 use crate::circuit::cost::{CircuitCost, CostDelta};
-#[cfg(feature = "pyo3")]
-use crate::json::TKETDecode;
-#[cfg(feature = "pyo3")]
-use pyo3::{exceptions::PyAttributeError, pyclass, pymethods, Py, PyAny, PyResult};
-#[cfg(feature = "pyo3")]
-use tket_json_rs::circuit_json::SerialCircuit;
 
 /// An identifier for the connection between chunks.
 ///
@@ -40,7 +34,6 @@ pub struct ChunkConnection(Wire);
 
 /// A chunk of a circuit.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "pyo3", pyclass)]
 pub struct Chunk {
     /// The extracted circuit.
     pub circ: Hugr,
@@ -241,7 +234,6 @@ enum ConnectionTarget {
 /// or [`CircuitChunks::split_with_cost`], and reassembled with
 /// [`CircuitChunks::reassemble`].
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "pyo3", pyclass)]
 pub struct CircuitChunks {
     /// The original circuit's signature.
     signature: FunctionType,
@@ -461,38 +453,6 @@ impl CircuitChunks {
     /// Returns `true` if there are no chunks.
     pub fn is_empty(&self) -> bool {
         self.chunks.is_empty()
-    }
-}
-
-#[cfg(feature = "pyo3")]
-#[pymethods]
-impl CircuitChunks {
-    /// Reassemble the chunks into a circuit.
-    #[pyo3(name = "reassemble")]
-    fn py_reassemble(&self) -> PyResult<Py<PyAny>> {
-        let hugr = self.clone().reassemble()?;
-        SerialCircuit::encode(&hugr)?.to_tket1()
-    }
-
-    /// Returns clones of the split circuits.
-    #[pyo3(name = "circuits")]
-    fn py_circuits(&self) -> PyResult<Vec<Py<PyAny>>> {
-        self.iter()
-            .map(|hugr| SerialCircuit::encode(hugr)?.to_tket1())
-            .collect()
-    }
-
-    /// Replaces a chunk's circuit with an updated version.
-    #[pyo3(name = "update_circuit")]
-    fn py_update_circuit(&mut self, index: usize, new_circ: Py<PyAny>) -> PyResult<()> {
-        let hugr = SerialCircuit::_from_tket1(new_circ).decode()?;
-        if hugr.circuit_signature() != self.chunks[index].circ.circuit_signature() {
-            return Err(PyAttributeError::new_err(
-                "The new circuit has a different signature.",
-            ));
-        }
-        self.chunks[index].circ = hugr;
-        Ok(())
     }
 }
 

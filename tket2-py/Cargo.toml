@@ -22,3 +22,4 @@ pyo3 = { workspace = true, features = ["extension-module"] }
 num_cpus = "1.16.0"
 derive_more = "0.99.17"
 itertools = { workspace = true }
+portmatching = { workspace = true }

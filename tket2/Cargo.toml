@@ -37,10 +37,7 @@ typetag = "0.2.8"
 itertools = { workspace = true }
 petgraph = { version = "0.6.3", default-features = false }
 serde_yaml = "0.9.22"
-# portmatching = { version = "0.2.0", optional = true, features = ["serde"]}
-portmatching = { optional = true, git = "https://github.com/lmondada/portmatching", rev = "738c91c", features = [
-    "serde",
-] }
+portmatching = { workspace = true, optional = true, features = ["serde"] }
 derive_more = "0.99.17"
 quantinuum-hugr = { workspace = true }
 portgraph = { workspace = true, features = ["serde"] }
