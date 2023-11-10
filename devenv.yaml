@@ -1,6 +1,8 @@
 inputs:
+  nixpkgs-stable:
+    url: github:NixOS/nixpkgs/nixos-23.05
   fenix:
-    url: github:nix-community/fenix
+    url: github:nix-community/fenix/monthly
     inputs:
       nixpkgs:
         follows: nixpkgs
