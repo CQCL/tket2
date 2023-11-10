@@ -297,6 +297,11 @@ mod test {
         assert_eq!(const_af1.log_denom(), 5);
 
         assert!(ConstAngle::from_radians_rounding(54, 0.21874 * TAU).is_err());
+
+        assert!(const_a32_7.equal_consts(&ConstAngle::new(5, 7).unwrap()));
+        assert_ne!(const_a32_7, const_a33_7);
+
+        assert_eq!(const_a32_8.name(), "a(2π*8/2^6)");
     }
     #[test]
     fn test_binop_sig() {
