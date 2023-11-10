@@ -163,6 +163,6 @@ jobs:
       - name: Upload python coverage to codecov.io
         uses: codecov/codecov-action@v3
         with:
-          files: pyrs/coverage.xml
+          files: coverage.xml
           name: python
           token: ${{ secrets.CODECOV_TOKEN }}
