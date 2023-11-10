@@ -59,8 +59,8 @@ pub fn to_hugr_dot(c: Py<PyAny>) -> PyResult<String> {
 
 /// Downcast a python object to a [`Hugr`].
 #[pyfunction]
-pub fn to_hugr(c: Py<PyAny>) -> PyResult<Hugr> {
-    with_hugr(c, |hugr| hugr)
+pub fn to_hugr(c: Py<PyAny>) -> PyResult<T2Circuit> {
+    with_hugr(c, |hugr| hugr.into())
 }
 
 /// A [`hugr::Node`] wrapper for Python.

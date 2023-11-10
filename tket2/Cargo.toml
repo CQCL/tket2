@@ -12,12 +12,7 @@ name = "tket2"
 path = "src/lib.rs"
 
 [features]
-pyo3 = [
-    "dep:pyo3",
-    "tket-json-rs/pyo3",
-    "portgraph/pyo3",
-    "quantinuum-hugr/pyo3",
-]
+pyo3 = ["dep:pyo3"]
 portmatching = ["dep:portmatching", "dep:rmp-serde"]
 
 [dependencies]

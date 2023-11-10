@@ -2,6 +2,7 @@
 
 use pyo3::{prelude::*, PyTypeInfo};
 
+use derive_more::From;
 use hugr::{Hugr, HugrView};
 use tket2::extension::REGISTRY;
 use tket2::json::TKETDecode;
@@ -12,7 +13,7 @@ use crate::pattern::rewrite::PyCircuitRewrite;
 
 /// A manager for tket 2 operations on a tket 1 Circuit.
 #[pyclass]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, From)]
 pub struct T2Circuit {
     /// Rust representation of the circuit.
     pub hugr: Hugr,
@@ -23,7 +24,7 @@ impl T2Circuit {
     #[new]
     fn from_circuit(circ: PyObject) -> PyResult<Self> {
         Ok(Self {
-            hugr: super::to_hugr(circ)?,
+            hugr: with_hugr(circ, |hugr| hugr)?,
         })
     }
 

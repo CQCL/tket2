@@ -3,14 +3,13 @@
 use std::fmt;
 
 use derive_more::{From, Into};
-use hugr::Node;
 use itertools::Itertools;
 use portmatching::PatternID;
 use pyo3::{prelude::*, types::PyIterator};
 
 use tket2::portmatching::{CircuitPattern, PatternMatch, PatternMatcher};
 
-use crate::circuit::{try_with_hugr, with_hugr};
+use crate::circuit::{try_with_hugr, with_hugr, PyNode};
 
 /// A pattern that match a circuit exactly
 ///
@@ -111,8 +110,8 @@ impl PyPatternMatch {
     }
 
     /// Returns the root of the pattern in the circuit.
-    pub fn root(&self) -> Node {
-        self.pmatch.root()
+    pub fn root(&self) -> PyNode {
+        self.pmatch.root().into()
     }
 
     /// A string representation of the pattern.

@@ -49,7 +49,7 @@ impl Rule {
         let l = to_hugr(l)?;
         let r = to_hugr(r)?;
 
-        Ok(Rule([l, r]))
+        Ok(Rule([l.hugr, r.hugr]))
     }
 }
 #[pyclass]
