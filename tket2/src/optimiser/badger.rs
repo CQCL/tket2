@@ -440,6 +440,13 @@ mod tests {
 
     use super::{BadgerOptimiser, DefaultBadgerOptimiser};
 
+    /// Simplified description of the circuit's commands.
+    fn gates(circ: &Hugr) -> Vec<T2Op> {
+        circ.commands()
+            .map(|cmd| cmd.optype().try_into().unwrap())
+            .collect()
+    }
+
     #[fixture]
     fn rz_rz() -> Hugr {
         let input_t = vec![QB_T, FLOAT64_TYPE, FLOAT64_TYPE];
@@ -467,34 +474,14 @@ mod tests {
     #[rstest]
     fn rz_rz_cancellation(rz_rz: Hugr, badger_opt: DefaultBadgerOptimiser) {
         let opt_rz = badger_opt.optimise(&rz_rz, None, 1.try_into().unwrap(), false, 4);
-        let cmds = opt_rz
-            .commands()
-            .map(|cmd| {
-                (
-                    cmd.optype().try_into().unwrap(),
-                    cmd.inputs().count(),
-                    cmd.outputs().count(),
-                )
-            })
-            .collect::<Vec<(T2Op, _, _)>>();
-        let exp_cmds = vec![(T2Op::AngleAdd, 2, 1), (T2Op::RzF64, 2, 1)];
-        assert_eq!(cmds, exp_cmds);
+        // Rzs combined into a single one.
+        assert_eq!(gates(&opt_rz), vec![T2Op::AngleAdd, T2Op::RzF64]);
     }
 
     #[rstest]
     fn rz_rz_cancellation_parallel(rz_rz: Hugr, badger_opt: DefaultBadgerOptimiser) {
         let opt_rz = badger_opt.optimise(&rz_rz, Some(0), 2.try_into().unwrap(), false, 4);
-        let cmds = opt_rz
-            .commands()
-            .map(|cmd| {
-                (
-                    cmd.optype().try_into().unwrap(),
-                    cmd.inputs().count(),
-                    cmd.outputs().count(),
-                )
-            })
-            .collect::<Vec<(T2Op, _, _)>>();
-        let exp_cmds = vec![(T2Op::RzF64, 2, 1), (T2Op::RzF64, 2, 1)];
-        assert_eq!(cmds, exp_cmds);
+        // No optimization done due to the zero timeout.
+        assert_eq!(gates(&opt_rz), vec![T2Op::RzF64, T2Op::RzF64]);
     }
 }
