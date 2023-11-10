@@ -17,9 +17,6 @@ use hugr::{
     Hugr, SimpleReplacement,
 };
 
-#[cfg(feature = "pyo3")]
-use pyo3::prelude::*;
-
 use crate::circuit::Circuit;
 
 /// A subcircuit of a circuit.
@@ -64,7 +61,6 @@ impl Subcircuit {
 }
 
 /// A rewrite rule for circuits.
-#[cfg_attr(feature = "pyo3", pyclass)]
 #[derive(Debug, Clone, From, Into)]
 pub struct CircuitRewrite(SimpleReplacement);
 

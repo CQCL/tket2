@@ -6,8 +6,9 @@ use hugr::{Hugr, HugrView};
 use tket2::extension::REGISTRY;
 use tket2::json::TKETDecode;
 use tket2::passes::CircuitChunks;
-use tket2::rewrite::CircuitRewrite;
 use tket_json_rs::circuit_json::SerialCircuit;
+
+use crate::pattern::rewrite::PyCircuitRewrite;
 
 /// A manager for tket 2 operations on a tket 1 Circuit.
 #[pyclass]
@@ -30,8 +31,8 @@ impl T2Circuit {
         SerialCircuit::encode(&self.hugr)?.to_tket1_with_gil()
     }
 
-    fn apply_match(&mut self, rw: CircuitRewrite) {
-        rw.apply(&mut self.hugr).expect("Apply error.");
+    fn apply_match(&mut self, rw: PyCircuitRewrite) {
+        rw.rewrite.apply(&mut self.hugr).expect("Apply error.");
     }
 }
 impl T2Circuit {
