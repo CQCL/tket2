@@ -5,18 +5,22 @@
 use std::collections::HashMap;
 
 use super::json::op::JsonOp;
-use crate::ops::EXTENSION as T2EXTENSION;
+use crate::ops::load_all_ops;
+use crate::T2Op;
 use hugr::extension::prelude::PRELUDE;
 use hugr::extension::{ExtensionId, ExtensionRegistry, SignatureError};
 use hugr::hugr::IdentList;
 use hugr::ops::custom::{ExternalOp, OpaqueOp};
 use hugr::ops::OpName;
-use hugr::std_extensions::arithmetic::float_types::extension as float_extension;
+use hugr::std_extensions::arithmetic::float_types::{extension as float_extension, FLOAT64_TYPE};
 use hugr::types::type_param::{CustomTypeArg, TypeArg, TypeParam};
 use hugr::types::{CustomType, FunctionType, Type, TypeBound};
-use hugr::Extension;
+use hugr::{type_row, Extension};
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
+
+/// Definition for Angle ops and types.
+pub mod angle;
 
 /// The ID of the TKET1 extension.
 pub const TKET1_EXTENSION_ID: ExtensionId = IdentList::new_unchecked("TKET1");
@@ -68,7 +72,7 @@ pub static ref LINEAR_BIT: Type = {
 pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::from([
     TKET1_EXTENSION.clone(),
     PRELUDE.clone(),
-    T2EXTENSION.clone(),
+    TKET2_EXTENSION.clone(),
     float_extension(),
 ]);
 
@@ -124,4 +128,50 @@ fn json_op_signature(args: &[TypeArg]) -> Result<FunctionType, SignatureError> {
     };
     let op: JsonOp = serde_yaml::from_value(arg.value.clone()).unwrap(); // TODO Errors!
     Ok(op.signature())
+}
+
+/// Angle type with given log denominator.
+pub fn angle_custom_type(log_denom: u8) -> CustomType {
+    angle::angle_custom_type(&TKET2_EXTENSION, angle::type_arg(log_denom))
+}
+
+/// Name of tket 2 extension.
+pub const TKET2_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("quantum.tket2");
+
+/// The name of the symbolic expression opaque type arg.
+pub const SYM_EXPR_NAME: SmolStr = SmolStr::new_inline("SymExpr");
+
+/// The name of the symbolic expression opaque type arg.
+pub const SYM_OP_ID: SmolStr = SmolStr::new_inline("symbolic_float");
+
+lazy_static! {
+/// The type of the symbolic expression opaque type arg.
+pub static ref SYM_EXPR_T: CustomType =
+    TKET2_EXTENSION.get_type(&SYM_EXPR_NAME).unwrap().instantiate([]).unwrap();
+
+/// The extension definition for TKET2 ops and types.
+pub static ref TKET2_EXTENSION: Extension = {
+    let mut e = Extension::new(TKET2_EXTENSION_ID);
+    load_all_ops::<T2Op>(&mut e).expect("add fail");
+
+    let sym_expr_opdef = e.add_type(
+        SYM_EXPR_NAME,
+        vec![],
+        "Symbolic expression.".into(),
+        TypeBound::Eq.into(),
+    )
+    .unwrap();
+    let sym_expr_param = TypeParam::Opaque(sym_expr_opdef.instantiate([]).unwrap());
+
+    e.add_op_custom_sig_simple(
+        SYM_OP_ID,
+        "Store a sympy expression that can be evaluated to a float.".to_string(),
+        vec![sym_expr_param],
+        |_: &[TypeArg]| Ok(FunctionType::new(type_row![], type_row![FLOAT64_TYPE])),
+    )
+    .unwrap();
+
+    angle::add_to_extension(&mut e);
+    e
+};
 }
