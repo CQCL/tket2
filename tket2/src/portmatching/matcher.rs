@@ -79,9 +79,14 @@ pub struct PatternMatch {
 }
 
 impl PatternMatch {
-    /// The matcher's pattern ID of the match.
+    /// The matched pattern ID.
     pub fn pattern_id(&self) -> PatternID {
         self.pattern
+    }
+
+    /// Returns the root of the pattern in the circuit.
+    pub fn root(&self) -> Node {
+        self.root
     }
 
     /// Create a pattern match from the image of a pattern root.

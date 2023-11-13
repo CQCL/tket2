@@ -1,3 +1,7 @@
+//! Passes for optimising circuits.
+
+pub mod chunks;
+
 use std::{cmp::min, convert::TryInto, fs, num::NonZeroUsize, path::PathBuf};
 
 use pyo3::{prelude::*, types::IntoPyDict};
@@ -16,7 +20,8 @@ pub fn module(py: Python) -> PyResult<&PyModule> {
     let m = PyModule::new(py, "_passes")?;
     m.add_function(wrap_pyfunction!(greedy_depth_reduce, m)?)?;
     m.add_function(wrap_pyfunction!(badger_optimise, m)?)?;
-    m.add_class::<tket2::T2Op>()?;
+    m.add_class::<self::chunks::PyCircuitChunks>()?;
+    m.add_function(wrap_pyfunction!(self::chunks::chunks, m)?)?;
     m.add(
         "PullForwardError",
         py.get_type::<tket2::passes::PyPullForwardError>(),
@@ -28,7 +33,7 @@ pub fn module(py: Python) -> PyResult<&PyModule> {
 fn greedy_depth_reduce(py_c: PyObject) -> PyResult<(PyObject, u32)> {
     try_with_hugr(py_c, |mut h| {
         let n_moves = apply_greedy_commutation(&mut h)?;
-        let py_c = SerialCircuit::encode(&h)?.to_tket1()?;
+        let py_c = SerialCircuit::encode(&h)?.to_tket1_with_gil()?;
         PyResult::Ok((py_c, n_moves))
     })
 }

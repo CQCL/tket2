@@ -17,9 +17,10 @@ license-file = "LICENCE"
 [workspace.dependencies]
 
 tket2 = { path = "./tket2" }
-quantinuum-hugr = { git = "https://github.com/CQCL-DEV/hugr", rev = "b256c2b" }
+quantinuum-hugr = { git = "https://github.com/CQCL/hugr", rev = "78faf6d" }
 portgraph = { version = "0.10" }
 pyo3 = { version = "0.20" }
 itertools = { version = "0.11.0" }
-tket-json-rs = "0.2.0"
+tket-json-rs = { version = "0.3.0" }
 tracing = "0.1.37"
+portmatching = { git = "https://github.com/lmondada/portmatching", rev = "738c91c" }

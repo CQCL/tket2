@@ -1,27 +1,31 @@
 //! Circuit-related functionality and utilities.
 #![allow(unused)]
 
+pub mod convert;
+
+use derive_more::{From, Into};
 use pyo3::prelude::*;
+use std::fmt;
 
 use hugr::{Hugr, HugrView};
 use tket2::extension::REGISTRY;
 use tket2::json::TKETDecode;
-use tket2::passes::CircuitChunks;
 use tket2::rewrite::CircuitRewrite;
 use tket_json_rs::circuit_json::SerialCircuit;
+
+pub use self::convert::{try_update_hugr, try_with_hugr, update_hugr, with_hugr, T2Circuit};
 
 /// The module definition
 pub fn module(py: Python) -> PyResult<&PyModule> {
     let m = PyModule::new(py, "_circuit")?;
     m.add_class::<T2Circuit>()?;
+    m.add_class::<PyNode>()?;
     m.add_class::<tket2::T2Op>()?;
     m.add_class::<tket2::Pauli>()?;
-    m.add_class::<tket2::passes::CircuitChunks>()?;
 
     m.add_function(wrap_pyfunction!(validate_hugr, m)?)?;
     m.add_function(wrap_pyfunction!(to_hugr_dot, m)?)?;
     m.add_function(wrap_pyfunction!(to_hugr, m)?)?;
-    m.add_function(wrap_pyfunction!(chunks, m)?)?;
 
     m.add("HugrError", py.get_type::<hugr::hugr::PyHugrError>())?;
     m.add("BuildError", py.get_type::<hugr::builder::PyBuildError>())?;
@@ -41,72 +45,50 @@ pub fn module(py: Python) -> PyResult<&PyModule> {
     Ok(m)
 }
 
-/// Apply a fallible function expecting a hugr on a pytket circuit.
-pub fn try_with_hugr<T, E, F>(circ: Py<PyAny>, f: F) -> PyResult<T>
-where
-    E: Into<PyErr>,
-    F: FnOnce(Hugr) -> Result<T, E>,
-{
-    let hugr = SerialCircuit::_from_tket1(circ).decode()?;
-    (f)(hugr).map_err(|e| e.into())
-}
-
-/// Apply a function expecting a hugr on a pytket circuit.
-pub fn with_hugr<T, F: FnOnce(Hugr) -> T>(circ: Py<PyAny>, f: F) -> PyResult<T> {
-    try_with_hugr(circ, |hugr| Ok::<T, PyErr>((f)(hugr)))
-}
-
-/// Apply a hugr-to-hugr function on a pytket circuit, and return the modified circuit.
-pub fn try_update_hugr<E: Into<PyErr>, F: FnOnce(Hugr) -> Result<Hugr, E>>(
-    circ: Py<PyAny>,
-    f: F,
-) -> PyResult<Py<PyAny>> {
-    let hugr = try_with_hugr(circ, f)?;
-    SerialCircuit::encode(&hugr)?.to_tket1()
-}
-
-/// Apply a hugr-to-hugr function on a pytket circuit, and return the modified circuit.
-pub fn update_hugr<F: FnOnce(Hugr) -> Hugr>(circ: Py<PyAny>, f: F) -> PyResult<Py<PyAny>> {
-    let hugr = with_hugr(circ, f)?;
-    SerialCircuit::encode(&hugr)?.to_tket1()
-}
-
+/// Run the validation checks on a circuit.
 #[pyfunction]
 pub fn validate_hugr(c: Py<PyAny>) -> PyResult<()> {
     try_with_hugr(c, |hugr| hugr.validate(&REGISTRY))
 }
 
+/// Return a Graphviz DOT string representation of the circuit.
 #[pyfunction]
 pub fn to_hugr_dot(c: Py<PyAny>) -> PyResult<String> {
     with_hugr(c, |hugr| hugr.dot_string())
 }
 
+/// Downcast a python object to a [`Hugr`].
 #[pyfunction]
-pub fn to_hugr(c: Py<PyAny>) -> PyResult<Hugr> {
-    with_hugr(c, |hugr| hugr)
+pub fn to_hugr(c: Py<PyAny>) -> PyResult<T2Circuit> {
+    with_hugr(c, |hugr| hugr.into())
 }
 
-#[pyfunction]
-pub fn chunks(c: Py<PyAny>, max_chunk_size: usize) -> PyResult<CircuitChunks> {
-    with_hugr(c, |hugr| CircuitChunks::split(&hugr, max_chunk_size))
-}
-
+/// A [`hugr::Node`] wrapper for Python.
 #[pyclass]
-/// A manager for tket 2 operations on a tket 1 Circuit.
-pub struct T2Circuit(pub Hugr);
+#[pyo3(name = "Node")]
+#[repr(transparent)]
+#[derive(From, Into, PartialEq, Eq, Hash, Clone, Copy)]
+pub struct PyNode {
+    /// Rust representation of the node
+    pub node: hugr::Node,
+}
+
+impl fmt::Display for PyNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.node.fmt(f)
+    }
+}
+
+impl fmt::Debug for PyNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.node.fmt(f)
+    }
+}
 
 #[pymethods]
-impl T2Circuit {
-    #[new]
-    fn from_circuit(circ: PyObject) -> PyResult<Self> {
-        Ok(Self(to_hugr(circ)?))
-    }
-
-    fn finish(&self) -> PyResult<PyObject> {
-        SerialCircuit::encode(&self.0)?.to_tket1()
-    }
-
-    fn apply_match(&mut self, rw: CircuitRewrite) {
-        rw.apply(&mut self.0).expect("Apply error.");
+impl PyNode {
+    /// A string representation of the pattern.
+    pub fn __repr__(&self) -> String {
+        format!("{:?}", self)
     }
 }

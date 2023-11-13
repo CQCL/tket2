@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pytket.circuit import Circuit
 
-from tket2 import circuit
+from tket2 import passes
 from tket2.passes import greedy_depth_reduce
 from tket2.circuit import T2Circuit
 from tket2.pattern import Rule, RuleMatcher
@@ -29,7 +29,7 @@ def test_chunks():
 
     assert c.depth() == 3
 
-    chunks = circuit.chunks(c, 2)
+    chunks = passes.chunks(c, 2)
     circuits = chunks.circuits()
     chunks.update_circuit(0, circuits[0])
     c2 = chunks.reassemble()
