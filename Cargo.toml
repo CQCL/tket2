@@ -7,7 +7,7 @@ members = ["tket2", "tket2-py", "compile-rewriter", "badger-optimiser"]
 default-members = ["tket2"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.0.0-alpha.1"
 rust-version = "1.70"
 edition = "2021"
 homepage = "https://github.com/CQCL/tket2"

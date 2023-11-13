@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tket2-py"
-version = "0.1.0"
+version = "0.0.0-alpha.1"
 description = "pytket extension for the tket 2 compiler"
 classifiers = []                                         # TODO
 authors = []                                             # TODO
@@ -27,7 +27,7 @@ build-backend = "maturin"
 
 [project]
 name = "tket2"
-version = "0.1.0"
+version = "0.0.0-alpha.1"
 description = "pytket extension for the tket 2 compiler"
 authors = []                                             # TODO
 classifiers = []                                         # TODO
