@@ -25,7 +25,8 @@ pub fn module(py: Python) -> PyResult<&PyModule> {
 
     m.add_function(wrap_pyfunction!(validate_hugr, m)?)?;
     m.add_function(wrap_pyfunction!(to_hugr_dot, m)?)?;
-    m.add_function(wrap_pyfunction!(to_hugr, m)?)?;
+    m.add_function(wrap_pyfunction!(tket1_to_hugr, m)?)?;
+    m.add_function(wrap_pyfunction!(hugr_to_tket1, m)?)?;
 
     m.add("HugrError", py.get_type::<hugr::hugr::PyHugrError>())?;
     m.add("BuildError", py.get_type::<hugr::builder::PyBuildError>())?;
@@ -57,10 +58,16 @@ pub fn to_hugr_dot(c: Py<PyAny>) -> PyResult<String> {
     with_hugr(c, |hugr| hugr.dot_string())
 }
 
-/// Downcast a python object to a [`Hugr`].
+/// Cast a python tket1 circuit to a [`T2Circuit`].
 #[pyfunction]
-pub fn to_hugr(c: Py<PyAny>) -> PyResult<T2Circuit> {
-    with_hugr(c, |hugr| hugr.into())
+pub fn tket1_to_hugr(c: Py<PyAny>) -> PyResult<T2Circuit> {
+    T2Circuit::from_circuit(c)
+}
+
+/// Cast a [`T2Circuit`] to a python tket1 circuit.
+#[pyfunction]
+pub fn hugr_to_tket1(c: T2Circuit) -> PyResult<Py<PyAny>> {
+    c.finish()
 }
 
 /// A [`hugr::Node`] wrapper for Python.
