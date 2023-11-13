@@ -247,7 +247,26 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveGreedyStrategy<T> {
                 curr_circ
                     .update_validate(&crate::extension::REGISTRY)
                     .unwrap_or_else(|_e| {
-                        //writeln!(std::fs::File::create("error.log").unwrap(), "{e:#?}",).unwrap();
+                        std::fs::File::create("circuit.dot")
+                            .unwrap()
+                            .write_all(circ.dot_string().as_bytes())
+                            .unwrap();
+                        writeln!(
+                            std::fs::File::create("circuit.log").unwrap(),
+                            "{pre_rewrite_circ:#?}"
+                        )
+                        .unwrap();
+
+                        let (pre_rewrite, _) = &rewrites[i];
+                        std::fs::File::create("pre-rewrite.dot")
+                            .unwrap()
+                            .write_all(pre_rewrite.0.replacement().dot_string().as_bytes())
+                            .unwrap();
+                        writeln!(
+                            std::fs::File::create("pre-rewrite.log").unwrap(),
+                            "{pre_rewrite:#?}",
+                        )
+                        .unwrap();
 
                         std::fs::File::create("rewrite.dot")
                             .unwrap()

@@ -3,17 +3,17 @@ CircuitRewrite(
         subgraph: SiblingSubgraph {
             nodes: [
                 Node(
-                    5,
+                    3,
                 ),
                 Node(
-                    10,
+                    7,
                 ),
             ],
             inputs: [
                 [
                     (
                         Node(
-                            5,
+                            3,
                         ),
                         IncomingPort(
                             1,
@@ -23,7 +23,7 @@ CircuitRewrite(
                 [
                     (
                         Node(
-                            10,
+                            7,
                         ),
                         IncomingPort(
                             1,
@@ -33,7 +33,7 @@ CircuitRewrite(
                 [
                     (
                         Node(
-                            5,
+                            3,
                         ),
                         IncomingPort(
                             0,
@@ -44,7 +44,7 @@ CircuitRewrite(
             outputs: [
                 (
                     Node(
-                        5,
+                        3,
                     ),
                     OutgoingPort(
                         1,
@@ -52,7 +52,7 @@ CircuitRewrite(
                 ),
                 (
                     Node(
-                        10,
+                        7,
                     ),
                     OutgoingPort(
                         1,
@@ -60,7 +60,7 @@ CircuitRewrite(
                 ),
                 (
                     Node(
-                        10,
+                        7,
                     ),
                     OutgoingPort(
                         0,
@@ -724,36 +724,6 @@ CircuitRewrite(
         nu_inp: {
             (
                 Node(
-                    3,
-                ),
-                IncomingPort(
-                    1,
-                ),
-            ): (
-                Node(
-                    10,
-                ),
-                IncomingPort(
-                    1,
-                ),
-            ),
-            (
-                Node(
-                    3,
-                ),
-                IncomingPort(
-                    0,
-                ),
-            ): (
-                Node(
-                    5,
-                ),
-                IncomingPort(
-                    0,
-                ),
-            ),
-            (
-                Node(
                     4,
                 ),
                 IncomingPort(
@@ -761,27 +731,47 @@ CircuitRewrite(
                 ),
             ): (
                 Node(
-                    5,
+                    3,
                 ),
                 IncomingPort(
                     1,
+                ),
+            ),
+            (
+                Node(
+                    3,
+                ),
+                IncomingPort(
+                    1,
+                ),
+            ): (
+                Node(
+                    7,
+                ),
+                IncomingPort(
+                    1,
+                ),
+            ),
+            (
+                Node(
+                    3,
+                ),
+                IncomingPort(
+                    0,
+                ),
+            ): (
+                Node(
+                    3,
+                ),
+                IncomingPort(
+                    0,
                 ),
             ),
         },
         nu_out: {
             (
                 Node(
-                    12,
-                ),
-                IncomingPort(
-                    0,
-                ),
-            ): IncomingPort(
-                2,
-            ),
-            (
-                Node(
-                    11,
+                    8,
                 ),
                 IncomingPort(
                     0,
@@ -791,7 +781,17 @@ CircuitRewrite(
             ),
             (
                 Node(
-                    6,
+                    9,
+                ),
+                IncomingPort(
+                    0,
+                ),
+            ): IncomingPort(
+                2,
+            ),
+            (
+                Node(
+                    4,
                 ),
                 IncomingPort(
                     0,

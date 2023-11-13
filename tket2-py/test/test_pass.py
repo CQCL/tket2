@@ -13,7 +13,7 @@ def test_simple_badger_pass_no_opt():
 
 def test_failing():
     """a failing circuit optimisation test"""
-    c = circuit_from_qasm("test_files/failing.qasm")
+    c = circuit_from_qasm("test_files/failing_simple.qasm")
     c = T2Circuit(c)
 
     # print(c.to_hugr_json())
