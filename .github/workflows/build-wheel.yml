@@ -1,0 +1,56 @@
+on:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - main
+
+name: Create Python wheel and push to internal repo
+
+jobs:
+  build-upload-hosted-wheels:
+    name: Build and upload wheels for hosted Github OSes
+    strategy:
+      matrix:
+        os: ['ubuntu-22.06']
+    runs-on: ${{ matrix.os }}
+
+    steps:
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust stable toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install cargo-edit (to update version number)
+      run: cargo install cargo-edit
+
+    - name: Cache poetry
+        uses: actions/cache@v3.3.1
+        with:
+          path: ~/.cache/pypoetry/virtualenvs
+          key: ${{ runner.os }}-${{ matrix.python-version }}-poetry-${{ hashFiles('**/poetry.lock') }}
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: Set up Poetry
+      run: |
+        pip install poetry
+        poetry run pip install --upgrade pip
+        poetry install
+
+    - name: Update Cargo version based on tags
+      run: cargo set-version $(dunamai from any --style semver --bump)
+
+    - name: Build Python wheel for ${{ matrix.os }}
+      run: poetry run maturin build
+
+    - name: Upload Python wheel for ${{ matrix.os }}
+      run: poetry run maturin upload --repository-url "https://cqcpythonrepository.azurewebsites.net/"
+      env:
+        MATURIN_USERNAME: ${{ secrets.??? }}
+        MATURIN_PASSWORD: ${{ secrets.??? }}
