@@ -1,0 +1,172 @@
+NotADag {
+    node: Node(
+        0,
+    ),
+    optype: DFG(
+        DFG {
+            signature: FunctionType {
+                input: TypeRow {
+                    types: [
+                        Type(
+                            Prim(
+                                Extension(
+                                    CustomType {
+                                        extension: IdentList(
+                                            "prelude",
+                                        ),
+                                        id: "qubit",
+                                        args: [],
+                                        bound: Any,
+                                    },
+                                ),
+                            ),
+                            Any,
+                        ),
+                        Type(
+                            Prim(
+                                Extension(
+                                    CustomType {
+                                        extension: IdentList(
+                                            "prelude",
+                                        ),
+                                        id: "qubit",
+                                        args: [],
+                                        bound: Any,
+                                    },
+                                ),
+                            ),
+                            Any,
+                        ),
+                        Type(
+                            Prim(
+                                Extension(
+                                    CustomType {
+                                        extension: IdentList(
+                                            "prelude",
+                                        ),
+                                        id: "qubit",
+                                        args: [],
+                                        bound: Any,
+                                    },
+                                ),
+                            ),
+                            Any,
+                        ),
+                        Type(
+                            Prim(
+                                Extension(
+                                    CustomType {
+                                        extension: IdentList(
+                                            "prelude",
+                                        ),
+                                        id: "qubit",
+                                        args: [],
+                                        bound: Any,
+                                    },
+                                ),
+                            ),
+                            Any,
+                        ),
+                        Type(
+                            Prim(
+                                Extension(
+                                    CustomType {
+                                        extension: IdentList(
+                                            "prelude",
+                                        ),
+                                        id: "qubit",
+                                        args: [],
+                                        bound: Any,
+                                    },
+                                ),
+                            ),
+                            Any,
+                        ),
+                    ],
+                },
+                output: TypeRow {
+                    types: [
+                        Type(
+                            Prim(
+                                Extension(
+                                    CustomType {
+                                        extension: IdentList(
+                                            "prelude",
+                                        ),
+                                        id: "qubit",
+                                        args: [],
+                                        bound: Any,
+                                    },
+                                ),
+                            ),
+                            Any,
+                        ),
+                        Type(
+                            Prim(
+                                Extension(
+                                    CustomType {
+                                        extension: IdentList(
+                                            "prelude",
+                                        ),
+                                        id: "qubit",
+                                        args: [],
+                                        bound: Any,
+                                    },
+                                ),
+                            ),
+                            Any,
+                        ),
+                        Type(
+                            Prim(
+                                Extension(
+                                    CustomType {
+                                        extension: IdentList(
+                                            "prelude",
+                                        ),
+                                        id: "qubit",
+                                        args: [],
+                                        bound: Any,
+                                    },
+                                ),
+                            ),
+                            Any,
+                        ),
+                        Type(
+                            Prim(
+                                Extension(
+                                    CustomType {
+                                        extension: IdentList(
+                                            "prelude",
+                                        ),
+                                        id: "qubit",
+                                        args: [],
+                                        bound: Any,
+                                    },
+                                ),
+                            ),
+                            Any,
+                        ),
+                        Type(
+                            Prim(
+                                Extension(
+                                    CustomType {
+                                        extension: IdentList(
+                                            "prelude",
+                                        ),
+                                        id: "qubit",
+                                        args: [],
+                                        bound: Any,
+                                    },
+                                ),
+                            ),
+                            Any,
+                        ),
+                    ],
+                },
+                extension_reqs: ExtensionSet(
+                    {},
+                ),
+            },
+        },
+    ),
+}

@@ -18,11 +18,12 @@
 //!    - [`GammaStrategyCost`], which ignores rewrites that increase the cost
 //!      function beyond a percentage given by a f64 parameter gamma.
 
+use std::io::Write;
 use std::{collections::HashSet, fmt::Debug};
 
 use derive_more::From;
 use hugr::ops::OpType;
-use hugr::Hugr;
+use hugr::{Hugr, HugrView};
 use itertools::Itertools;
 
 use crate::circuit::cost::{is_cx, is_quantum, CircuitCost, CostDelta, MajorMinorCost};
@@ -215,10 +216,17 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveGreedyStrategy<T> {
             .collect_vec();
 
         let mut rewrite_sets = RewriteResult::with_capacity(rewrites.len());
+        println!(
+            "Applying rewrite strategy. Got {} rewrites.",
+            rewrites.len()
+        );
         for i in 0..rewrites.len() {
             let mut curr_circ = circ.clone();
+            let mut pre_rewrite_circ = circ.clone();
             let mut changed_nodes = HashSet::new();
             let mut cost_delta = Default::default();
+            println!("Starting from rewrite {i}");
+            let mut j = i;
             for (rewrite, delta) in &rewrites[i..] {
                 if !changed_nodes.is_empty()
                     && rewrite
@@ -234,7 +242,48 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveGreedyStrategy<T> {
                     .clone()
                     .apply(&mut curr_circ)
                     .expect("Could not perform rewrite in exhaustive greedy strategy");
+
+                println!("  Applied rewrite {j}");
+                curr_circ
+                    .update_validate(&crate::extension::REGISTRY)
+                    .unwrap_or_else(|_e| {
+                        //writeln!(std::fs::File::create("error.log").unwrap(), "{e:#?}",).unwrap();
+
+                        std::fs::File::create("rewrite.dot")
+                            .unwrap()
+                            .write_all(rewrite.0.replacement().dot_string().as_bytes())
+                            .unwrap();
+                        writeln!(
+                            std::fs::File::create("rewrite.log").unwrap(),
+                            "{rewrite:#?}",
+                        )
+                        .unwrap();
+
+                        std::fs::File::create("pre_optimization.dot")
+                            .unwrap()
+                            .write_all(pre_rewrite_circ.dot_string().as_bytes())
+                            .unwrap();
+                        writeln!(
+                            std::fs::File::create("pre_optimization.log").unwrap(),
+                            "{pre_rewrite_circ:#?}"
+                        )
+                        .unwrap();
+
+                        std::fs::File::create("post_optimization.dot")
+                            .unwrap()
+                            .write_all(curr_circ.dot_string().as_bytes())
+                            .unwrap();
+                        writeln!(
+                            std::fs::File::create("post_optimization.log").unwrap(),
+                            "{curr_circ:#?}"
+                        )
+                        .unwrap();
+                        panic!("  Rewrite {j} failed. See log files");
+                    });
+                j += 1;
+                pre_rewrite_circ = curr_circ.clone();
             }
+
             rewrite_sets.circs.push(curr_circ);
             rewrite_sets.cost_deltas.push(cost_delta);
         }

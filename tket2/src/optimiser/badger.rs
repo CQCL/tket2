@@ -169,6 +169,9 @@ where
                     continue;
                 }
 
+                let mut c = new_circ.clone();
+                c.update_validate(&crate::extension::REGISTRY).unwrap();
+
                 let new_circ_hash = new_circ.circuit_hash();
                 if !seen_hashes.insert(new_circ_hash) {
                     // Ignore this circuit: we've already seen it

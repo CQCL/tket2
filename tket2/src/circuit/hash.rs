@@ -44,7 +44,7 @@ where
 
         node_hashes
             .node_hash(self.output())
-            .expect("Output hash has not been set")
+            .expect("Output hash has not been set. Is the circuit acyclic?")
     }
 }
 

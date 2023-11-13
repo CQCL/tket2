@@ -1,0 +1,804 @@
+CircuitRewrite(
+    SimpleReplacement {
+        subgraph: SiblingSubgraph {
+            nodes: [
+                Node(
+                    4,
+                ),
+                Node(
+                    16,
+                ),
+            ],
+            inputs: [
+                [
+                    (
+                        Node(
+                            4,
+                        ),
+                        IncomingPort(
+                            1,
+                        ),
+                    ),
+                ],
+                [
+                    (
+                        Node(
+                            16,
+                        ),
+                        IncomingPort(
+                            1,
+                        ),
+                    ),
+                ],
+                [
+                    (
+                        Node(
+                            4,
+                        ),
+                        IncomingPort(
+                            0,
+                        ),
+                    ),
+                ],
+            ],
+            outputs: [
+                (
+                    Node(
+                        4,
+                    ),
+                    OutgoingPort(
+                        1,
+                    ),
+                ),
+                (
+                    Node(
+                        16,
+                    ),
+                    OutgoingPort(
+                        1,
+                    ),
+                ),
+                (
+                    Node(
+                        16,
+                    ),
+                    OutgoingPort(
+                        0,
+                    ),
+                ),
+            ],
+        },
+        replacement: Hugr {
+            graph: MultiPortGraph {
+                graph: PortGraph {
+                    nodes: {
+                        NodeIndex(0): Node {
+                            inputs: [],
+                            outputs: [],
+                        },
+                        NodeIndex(1): Node {
+                            inputs: [],
+                            outputs: PortIndex(0)..PortIndex(4),
+                        },
+                        NodeIndex(2): Node {
+                            inputs: PortIndex(4)..PortIndex(8),
+                            outputs: [],
+                        },
+                        NodeIndex(3): Node {
+                            inputs: PortIndex(8)..PortIndex(11),
+                            outputs: PortIndex(11)..PortIndex(14),
+                        },
+                        NodeIndex(4): Node {
+                            inputs: PortIndex(14)..PortIndex(17),
+                            outputs: PortIndex(17)..PortIndex(20),
+                        },
+                    },
+                    ports: {
+                        PortIndex(0): Port {
+                            node: NodeIndex(1),
+                            direction: Outgoing,
+                            link: PortIndex(15),
+                        },
+                        PortIndex(1): Port {
+                            node: NodeIndex(1),
+                            direction: Outgoing,
+                            link: PortIndex(9),
+                        },
+                        PortIndex(2): Port {
+                            node: NodeIndex(1),
+                            direction: Outgoing,
+                            link: PortIndex(8),
+                        },
+                        PortIndex(3): Port {
+                            node: NodeIndex(1),
+                            direction: Outgoing,
+                        },
+                        PortIndex(4): Port {
+                            node: NodeIndex(2),
+                            direction: Incoming,
+                            link: PortIndex(18),
+                        },
+                        PortIndex(5): Port {
+                            node: NodeIndex(2),
+                            direction: Incoming,
+                            link: PortIndex(12),
+                        },
+                        PortIndex(6): Port {
+                            node: NodeIndex(2),
+                            direction: Incoming,
+                            link: PortIndex(17),
+                        },
+                        PortIndex(7): Port {
+                            node: NodeIndex(2),
+                            direction: Incoming,
+                        },
+                        PortIndex(8): Port {
+                            node: NodeIndex(3),
+                            direction: Incoming,
+                            link: PortIndex(2),
+                        },
+                        PortIndex(9): Port {
+                            node: NodeIndex(3),
+                            direction: Incoming,
+                            link: PortIndex(1),
+                        },
+                        PortIndex(10): Port {
+                            node: NodeIndex(3),
+                            direction: Incoming,
+                        },
+                        PortIndex(11): Port {
+                            node: NodeIndex(3),
+                            direction: Outgoing,
+                            link: PortIndex(14),
+                        },
+                        PortIndex(12): Port {
+                            node: NodeIndex(3),
+                            direction: Outgoing,
+                            link: PortIndex(5),
+                        },
+                        PortIndex(13): Port {
+                            node: NodeIndex(3),
+                            direction: Outgoing,
+                        },
+                        PortIndex(14): Port {
+                            node: NodeIndex(4),
+                            direction: Incoming,
+                            link: PortIndex(11),
+                        },
+                        PortIndex(15): Port {
+                            node: NodeIndex(4),
+                            direction: Incoming,
+                            link: PortIndex(0),
+                        },
+                        PortIndex(16): Port {
+                            node: NodeIndex(4),
+                            direction: Incoming,
+                        },
+                        PortIndex(17): Port {
+                            node: NodeIndex(4),
+                            direction: Outgoing,
+                            link: PortIndex(6),
+                        },
+                        PortIndex(18): Port {
+                            node: NodeIndex(4),
+                            direction: Outgoing,
+                            link: PortIndex(4),
+                        },
+                        PortIndex(19): Port {
+                            node: NodeIndex(4),
+                            direction: Outgoing,
+                        },
+                    },
+                },
+                multiport: BitVec<usize, bitvec::order::Lsb0> {
+                    addr: 0x0000000000000008,
+                    head: 000000,
+                    bits: 0,
+                    capacity: 0,
+                } [],
+                copy_node: BitVec<usize, bitvec::order::Lsb0> {
+                    addr: 0x0000000000000008,
+                    head: 000000,
+                    bits: 0,
+                    capacity: 0,
+                } [],
+                copy_node_count: 0,
+                subport_count: 0,
+            },
+            hierarchy: Hierarchy {
+                data: UnmanagedDenseMap {
+                    data: [
+                        NodeData {
+                            children: Some(
+                                [
+                                    NodeIndex(1),
+                                    NodeIndex(4),
+                                ],
+                            ),
+                            children_count: 4,
+                            parent: None,
+                            siblings: [
+                                None,
+                                None,
+                            ],
+                        },
+                        NodeData {
+                            children: None,
+                            children_count: 0,
+                            parent: Some(
+                                NodeIndex(0),
+                            ),
+                            siblings: [
+                                None,
+                                Some(
+                                    NodeIndex(2),
+                                ),
+                            ],
+                        },
+                        NodeData {
+                            children: None,
+                            children_count: 0,
+                            parent: Some(
+                                NodeIndex(0),
+                            ),
+                            siblings: [
+                                Some(
+                                    NodeIndex(1),
+                                ),
+                                Some(
+                                    NodeIndex(3),
+                                ),
+                            ],
+                        },
+                        NodeData {
+                            children: None,
+                            children_count: 0,
+                            parent: Some(
+                                NodeIndex(0),
+                            ),
+                            siblings: [
+                                Some(
+                                    NodeIndex(2),
+                                ),
+                                Some(
+                                    NodeIndex(4),
+                                ),
+                            ],
+                        },
+                        NodeData {
+                            children: None,
+                            children_count: 0,
+                            parent: Some(
+                                NodeIndex(0),
+                            ),
+                            siblings: [
+                                Some(
+                                    NodeIndex(3),
+                                ),
+                                None,
+                            ],
+                        },
+                    ],
+                    phantom: PhantomData<portgraph::NodeIndex>,
+                    default: NodeData {
+                        children: None,
+                        children_count: 0,
+                        parent: None,
+                        siblings: [
+                            None,
+                            None,
+                        ],
+                    },
+                },
+            },
+            root: NodeIndex(0),
+            op_types: UnmanagedDenseMap {
+                data: [
+                    NodeType {
+                        op: DFG(
+                            DFG {
+                                signature: FunctionType {
+                                    input: TypeRow {
+                                        types: [
+                                            Type(
+                                                Prim(
+                                                    Extension(
+                                                        CustomType {
+                                                            extension: IdentList(
+                                                                "prelude",
+                                                            ),
+                                                            id: "qubit",
+                                                            args: [],
+                                                            bound: Any,
+                                                        },
+                                                    ),
+                                                ),
+                                                Any,
+                                            ),
+                                            Type(
+                                                Prim(
+                                                    Extension(
+                                                        CustomType {
+                                                            extension: IdentList(
+                                                                "prelude",
+                                                            ),
+                                                            id: "qubit",
+                                                            args: [],
+                                                            bound: Any,
+                                                        },
+                                                    ),
+                                                ),
+                                                Any,
+                                            ),
+                                            Type(
+                                                Prim(
+                                                    Extension(
+                                                        CustomType {
+                                                            extension: IdentList(
+                                                                "prelude",
+                                                            ),
+                                                            id: "qubit",
+                                                            args: [],
+                                                            bound: Any,
+                                                        },
+                                                    ),
+                                                ),
+                                                Any,
+                                            ),
+                                        ],
+                                    },
+                                    output: TypeRow {
+                                        types: [
+                                            Type(
+                                                Prim(
+                                                    Extension(
+                                                        CustomType {
+                                                            extension: IdentList(
+                                                                "prelude",
+                                                            ),
+                                                            id: "qubit",
+                                                            args: [],
+                                                            bound: Any,
+                                                        },
+                                                    ),
+                                                ),
+                                                Any,
+                                            ),
+                                            Type(
+                                                Prim(
+                                                    Extension(
+                                                        CustomType {
+                                                            extension: IdentList(
+                                                                "prelude",
+                                                            ),
+                                                            id: "qubit",
+                                                            args: [],
+                                                            bound: Any,
+                                                        },
+                                                    ),
+                                                ),
+                                                Any,
+                                            ),
+                                            Type(
+                                                Prim(
+                                                    Extension(
+                                                        CustomType {
+                                                            extension: IdentList(
+                                                                "prelude",
+                                                            ),
+                                                            id: "qubit",
+                                                            args: [],
+                                                            bound: Any,
+                                                        },
+                                                    ),
+                                                ),
+                                                Any,
+                                            ),
+                                        ],
+                                    },
+                                    extension_reqs: ExtensionSet(
+                                        {},
+                                    ),
+                                },
+                            },
+                        ),
+                        input_extensions: None,
+                    },
+                    NodeType {
+                        op: Input(
+                            Input {
+                                types: TypeRow {
+                                    types: [
+                                        Type(
+                                            Prim(
+                                                Extension(
+                                                    CustomType {
+                                                        extension: IdentList(
+                                                            "prelude",
+                                                        ),
+                                                        id: "qubit",
+                                                        args: [],
+                                                        bound: Any,
+                                                    },
+                                                ),
+                                            ),
+                                            Any,
+                                        ),
+                                        Type(
+                                            Prim(
+                                                Extension(
+                                                    CustomType {
+                                                        extension: IdentList(
+                                                            "prelude",
+                                                        ),
+                                                        id: "qubit",
+                                                        args: [],
+                                                        bound: Any,
+                                                    },
+                                                ),
+                                            ),
+                                            Any,
+                                        ),
+                                        Type(
+                                            Prim(
+                                                Extension(
+                                                    CustomType {
+                                                        extension: IdentList(
+                                                            "prelude",
+                                                        ),
+                                                        id: "qubit",
+                                                        args: [],
+                                                        bound: Any,
+                                                    },
+                                                ),
+                                            ),
+                                            Any,
+                                        ),
+                                    ],
+                                },
+                            },
+                        ),
+                        input_extensions: None,
+                    },
+                    NodeType {
+                        op: Output(
+                            Output {
+                                types: TypeRow {
+                                    types: [
+                                        Type(
+                                            Prim(
+                                                Extension(
+                                                    CustomType {
+                                                        extension: IdentList(
+                                                            "prelude",
+                                                        ),
+                                                        id: "qubit",
+                                                        args: [],
+                                                        bound: Any,
+                                                    },
+                                                ),
+                                            ),
+                                            Any,
+                                        ),
+                                        Type(
+                                            Prim(
+                                                Extension(
+                                                    CustomType {
+                                                        extension: IdentList(
+                                                            "prelude",
+                                                        ),
+                                                        id: "qubit",
+                                                        args: [],
+                                                        bound: Any,
+                                                    },
+                                                ),
+                                            ),
+                                            Any,
+                                        ),
+                                        Type(
+                                            Prim(
+                                                Extension(
+                                                    CustomType {
+                                                        extension: IdentList(
+                                                            "prelude",
+                                                        ),
+                                                        id: "qubit",
+                                                        args: [],
+                                                        bound: Any,
+                                                    },
+                                                ),
+                                            ),
+                                            Any,
+                                        ),
+                                    ],
+                                },
+                            },
+                        ),
+                        input_extensions: None,
+                    },
+                    NodeType {
+                        op: LeafOp(
+                            CustomOp(
+                                Opaque(
+                                    OpaqueOp {
+                                        extension: IdentList(
+                                            "quantum.tket2",
+                                        ),
+                                        op_name: "CX",
+                                        description: "TKET 2 quantum op: CX",
+                                        args: [],
+                                        signature: Some(
+                                            FunctionType {
+                                                input: TypeRow {
+                                                    types: [
+                                                        Type(
+                                                            Prim(
+                                                                Extension(
+                                                                    CustomType {
+                                                                        extension: IdentList(
+                                                                            "prelude",
+                                                                        ),
+                                                                        id: "qubit",
+                                                                        args: [],
+                                                                        bound: Any,
+                                                                    },
+                                                                ),
+                                                            ),
+                                                            Any,
+                                                        ),
+                                                        Type(
+                                                            Prim(
+                                                                Extension(
+                                                                    CustomType {
+                                                                        extension: IdentList(
+                                                                            "prelude",
+                                                                        ),
+                                                                        id: "qubit",
+                                                                        args: [],
+                                                                        bound: Any,
+                                                                    },
+                                                                ),
+                                                            ),
+                                                            Any,
+                                                        ),
+                                                    ],
+                                                },
+                                                output: TypeRow {
+                                                    types: [
+                                                        Type(
+                                                            Prim(
+                                                                Extension(
+                                                                    CustomType {
+                                                                        extension: IdentList(
+                                                                            "prelude",
+                                                                        ),
+                                                                        id: "qubit",
+                                                                        args: [],
+                                                                        bound: Any,
+                                                                    },
+                                                                ),
+                                                            ),
+                                                            Any,
+                                                        ),
+                                                        Type(
+                                                            Prim(
+                                                                Extension(
+                                                                    CustomType {
+                                                                        extension: IdentList(
+                                                                            "prelude",
+                                                                        ),
+                                                                        id: "qubit",
+                                                                        args: [],
+                                                                        bound: Any,
+                                                                    },
+                                                                ),
+                                                            ),
+                                                            Any,
+                                                        ),
+                                                    ],
+                                                },
+                                                extension_reqs: ExtensionSet(
+                                                    {},
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                ),
+                            ),
+                        ),
+                        input_extensions: None,
+                    },
+                    NodeType {
+                        op: LeafOp(
+                            CustomOp(
+                                Opaque(
+                                    OpaqueOp {
+                                        extension: IdentList(
+                                            "quantum.tket2",
+                                        ),
+                                        op_name: "CX",
+                                        description: "TKET 2 quantum op: CX",
+                                        args: [],
+                                        signature: Some(
+                                            FunctionType {
+                                                input: TypeRow {
+                                                    types: [
+                                                        Type(
+                                                            Prim(
+                                                                Extension(
+                                                                    CustomType {
+                                                                        extension: IdentList(
+                                                                            "prelude",
+                                                                        ),
+                                                                        id: "qubit",
+                                                                        args: [],
+                                                                        bound: Any,
+                                                                    },
+                                                                ),
+                                                            ),
+                                                            Any,
+                                                        ),
+                                                        Type(
+                                                            Prim(
+                                                                Extension(
+                                                                    CustomType {
+                                                                        extension: IdentList(
+                                                                            "prelude",
+                                                                        ),
+                                                                        id: "qubit",
+                                                                        args: [],
+                                                                        bound: Any,
+                                                                    },
+                                                                ),
+                                                            ),
+                                                            Any,
+                                                        ),
+                                                    ],
+                                                },
+                                                output: TypeRow {
+                                                    types: [
+                                                        Type(
+                                                            Prim(
+                                                                Extension(
+                                                                    CustomType {
+                                                                        extension: IdentList(
+                                                                            "prelude",
+                                                                        ),
+                                                                        id: "qubit",
+                                                                        args: [],
+                                                                        bound: Any,
+                                                                    },
+                                                                ),
+                                                            ),
+                                                            Any,
+                                                        ),
+                                                        Type(
+                                                            Prim(
+                                                                Extension(
+                                                                    CustomType {
+                                                                        extension: IdentList(
+                                                                            "prelude",
+                                                                        ),
+                                                                        id: "qubit",
+                                                                        args: [],
+                                                                        bound: Any,
+                                                                    },
+                                                                ),
+                                                            ),
+                                                            Any,
+                                                        ),
+                                                    ],
+                                                },
+                                                extension_reqs: ExtensionSet(
+                                                    {},
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                ),
+                            ),
+                        ),
+                        input_extensions: None,
+                    },
+                ],
+                phantom: PhantomData<portgraph::NodeIndex>,
+                default: NodeType {
+                    op: Module(
+                        Module,
+                    ),
+                    input_extensions: None,
+                },
+            },
+            metadata: UnmanagedDenseMap {
+                data: [
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                ],
+                phantom: PhantomData<portgraph::NodeIndex>,
+                default: None,
+            },
+        },
+        nu_inp: {
+            (
+                Node(
+                    3,
+                ),
+                IncomingPort(
+                    0,
+                ),
+            ): (
+                Node(
+                    4,
+                ),
+                IncomingPort(
+                    0,
+                ),
+            ),
+            (
+                Node(
+                    4,
+                ),
+                IncomingPort(
+                    1,
+                ),
+            ): (
+                Node(
+                    4,
+                ),
+                IncomingPort(
+                    1,
+                ),
+            ),
+            (
+                Node(
+                    3,
+                ),
+                IncomingPort(
+                    1,
+                ),
+            ): (
+                Node(
+                    16,
+                ),
+                IncomingPort(
+                    1,
+                ),
+            ),
+        },
+        nu_out: {
+            (
+                Node(
+                    5,
+                ),
+                IncomingPort(
+                    0,
+                ),
+            ): IncomingPort(
+                0,
+            ),
+            (
+                Node(
+                    2,
+                ),
+                IncomingPort(
+                    1,
+                ),
+            ): IncomingPort(
+                1,
+            ),
+            (
+                Node(
+                    2,
+                ),
+                IncomingPort(
+                    3,
+                ),
+            ): IncomingPort(
+                2,
+            ),
+        },
+    },
+)
