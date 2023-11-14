@@ -3,7 +3,7 @@
 pub mod portmatching;
 pub mod rewrite;
 
-use crate::circuit::{to_hugr, T2Circuit};
+use crate::circuit::{tket1_to_hugr, T2Circuit};
 
 use hugr::Hugr;
 use pyo3::prelude::*;
@@ -46,8 +46,8 @@ pub struct Rule(pub [Hugr; 2]);
 impl Rule {
     #[new]
     fn new_rule(l: PyObject, r: PyObject) -> PyResult<Rule> {
-        let l = to_hugr(l)?;
-        let r = to_hugr(r)?;
+        let l = tket1_to_hugr(l)?;
+        let r = tket1_to_hugr(r)?;
 
         Ok(Rule([l.hugr, r.hugr]))
     }

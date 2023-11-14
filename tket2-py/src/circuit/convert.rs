@@ -1,9 +1,11 @@
 //! Utilities for calling Hugr functions on generic python objects.
 
+use pyo3::exceptions::PyAttributeError;
 use pyo3::{prelude::*, PyTypeInfo};
 
 use derive_more::From;
 use hugr::{Hugr, HugrView};
+use serde::Serialize;
 use tket2::extension::REGISTRY;
 use tket2::json::TKETDecode;
 use tket2::passes::CircuitChunks;
@@ -21,19 +23,53 @@ pub struct T2Circuit {
 
 #[pymethods]
 impl T2Circuit {
+    /// Cast a tket1 circuit to a [`T2Circuit`].
     #[new]
-    fn from_circuit(circ: PyObject) -> PyResult<Self> {
+    pub fn from_circuit(circ: PyObject) -> PyResult<Self> {
         Ok(Self {
             hugr: with_hugr(circ, |hugr| hugr)?,
         })
     }
 
-    fn finish(&self) -> PyResult<PyObject> {
+    /// Cast the [`T2Circuit`] to a tket1 circuit.
+    pub fn finish(&self) -> PyResult<PyObject> {
         SerialCircuit::encode(&self.hugr)?.to_tket1_with_gil()
     }
 
-    fn apply_match(&mut self, rw: PyCircuitRewrite) {
+    /// Apply a rewrite on the circuit.
+    pub fn apply_match(&mut self, rw: PyCircuitRewrite) {
         rw.rewrite.apply(&mut self.hugr).expect("Apply error.");
+    }
+
+    /// Encode the circuit as a HUGR json string.
+    pub fn to_hugr_json(&self) -> PyResult<String> {
+        Ok(serde_json::to_string(&self.hugr).unwrap())
+    }
+
+    /// Decode a HUGR json string to a circuit.
+    #[staticmethod]
+    pub fn from_hugr_json(json: &str) -> PyResult<Self> {
+        let hugr = serde_json::from_str(json)
+            .map_err(|e| PyErr::new::<PyAttributeError, _>(format!("Invalid encoded HUGR: {e}")))?;
+        Ok(T2Circuit { hugr })
+    }
+
+    /// Encode the circuit as a tket1 json string.
+    ///
+    /// FIXME: Currently the encoded circuit cannot be loaded back due to
+    /// [https://github.com/CQCL/hugr/issues/683]
+    pub fn to_tket1_json(&self) -> PyResult<String> {
+        Ok(serde_json::to_string(&SerialCircuit::encode(&self.hugr)?).unwrap())
+    }
+
+    /// Decode a tket1 json string to a circuit.
+    #[staticmethod]
+    pub fn from_tket1_json(json: &str) -> PyResult<Self> {
+        let tk1: SerialCircuit = serde_json::from_str(json)
+            .map_err(|e| PyErr::new::<PyAttributeError, _>(format!("Invalid encoded HUGR: {e}")))?;
+        Ok(T2Circuit {
+            hugr: tk1.decode()?,
+        })
     }
 }
 impl T2Circuit {
