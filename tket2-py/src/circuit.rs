@@ -25,8 +25,8 @@ pub fn module(py: Python) -> PyResult<&PyModule> {
 
     m.add_function(wrap_pyfunction!(validate_hugr, m)?)?;
     m.add_function(wrap_pyfunction!(to_hugr_dot, m)?)?;
-    m.add_function(wrap_pyfunction!(tket1_to_hugr, m)?)?;
-    m.add_function(wrap_pyfunction!(hugr_to_tket1, m)?)?;
+    m.add_function(wrap_pyfunction!(tket1_to_tket2, m)?)?;
+    m.add_function(wrap_pyfunction!(tket2_to_tket1, m)?)?;
 
     m.add("HugrError", py.get_type::<hugr::hugr::PyHugrError>())?;
     m.add("BuildError", py.get_type::<hugr::builder::PyBuildError>())?;
@@ -48,26 +48,26 @@ pub fn module(py: Python) -> PyResult<&PyModule> {
 
 /// Run the validation checks on a circuit.
 #[pyfunction]
-pub fn validate_hugr(c: Py<PyAny>) -> PyResult<()> {
-    try_with_hugr(c, |hugr| hugr.validate(&REGISTRY))
+pub fn validate_hugr(c: &PyAny) -> PyResult<()> {
+    try_with_hugr(c, |hugr, _| hugr.validate(&REGISTRY))
 }
 
 /// Return a Graphviz DOT string representation of the circuit.
 #[pyfunction]
-pub fn to_hugr_dot(c: Py<PyAny>) -> PyResult<String> {
-    with_hugr(c, |hugr| hugr.dot_string())
+pub fn to_hugr_dot(c: &PyAny) -> PyResult<String> {
+    with_hugr(c, |hugr, _| hugr.dot_string())
 }
 
 /// Cast a python tket1 circuit to a [`T2Circuit`].
 #[pyfunction]
-pub fn tket1_to_hugr(c: Py<PyAny>) -> PyResult<T2Circuit> {
+pub fn tket1_to_tket2(c: &PyAny) -> PyResult<T2Circuit> {
     T2Circuit::from_circuit(c)
 }
 
 /// Cast a [`T2Circuit`] to a python tket1 circuit.
 #[pyfunction]
-pub fn hugr_to_tket1(c: T2Circuit) -> PyResult<Py<PyAny>> {
-    c.finish()
+pub fn tket2_to_tket1(py: Python, c: T2Circuit) -> PyResult<&PyAny> {
+    c.finish(py)
 }
 
 /// A [`hugr::Node`] wrapper for Python.

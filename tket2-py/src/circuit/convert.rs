@@ -25,15 +25,15 @@ pub struct T2Circuit {
 impl T2Circuit {
     /// Cast a tket1 circuit to a [`T2Circuit`].
     #[new]
-    pub fn from_circuit(circ: PyObject) -> PyResult<Self> {
+    pub fn from_circuit(circ: &PyAny) -> PyResult<Self> {
         Ok(Self {
-            hugr: with_hugr(circ, |hugr| hugr)?,
+            hugr: with_hugr(circ, |hugr, _| hugr)?,
         })
     }
 
     /// Cast the [`T2Circuit`] to a tket1 circuit.
-    pub fn finish(&self) -> PyResult<PyObject> {
-        SerialCircuit::encode(&self.hugr)?.to_tket1_with_gil()
+    pub fn finish<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
+        SerialCircuit::encode(&self.hugr)?.to_tket1(py)
     }
 
     /// Apply a rewrite on the circuit.
@@ -76,52 +76,77 @@ impl T2Circuit {
     /// Tries to extract a T2Circuit from a python object.
     ///
     /// Returns an error if the py object is not a T2Circuit.
-    pub fn try_extract(circ: Py<PyAny>) -> PyResult<Self> {
-        Python::with_gil(|py| circ.as_ref(py).extract::<T2Circuit>())
+    pub fn try_extract(circ: &PyAny) -> PyResult<Self> {
+        circ.extract::<T2Circuit>()
+    }
+}
+
+/// A flag to indicate the encoding of a circuit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CircuitType {
+    /// A `pytket` `Circuit`.
+    Tket1,
+    /// A tket2 `T2Circuit`, represented as a HUGR.
+    Tket2,
+}
+
+impl CircuitType {
+    /// Converts a `Hugr` into the format indicated by the flag.
+    pub fn convert(self, py: Python, hugr: Hugr) -> PyResult<&PyAny> {
+        match self {
+            CircuitType::Tket1 => SerialCircuit::encode(&hugr)?.to_tket1(py),
+            CircuitType::Tket2 => Ok(Py::new(py, T2Circuit { hugr })?.into_ref(py)),
+        }
     }
 }
 
 /// Apply a fallible function expecting a hugr on a pytket circuit.
-pub fn try_with_hugr<T, E, F>(circ: Py<PyAny>, f: F) -> PyResult<T>
+pub fn try_with_hugr<T, E, F>(circ: &PyAny, f: F) -> PyResult<T>
 where
     E: Into<PyErr>,
-    F: FnOnce(Hugr) -> Result<T, E>,
+    F: FnOnce(Hugr, CircuitType) -> Result<T, E>,
 {
-    let hugr = Python::with_gil(|py| -> PyResult<Hugr> {
-        let circ = circ.as_ref(py);
-        match T2Circuit::extract(circ) {
-            // hugr circuit
-            Ok(t2circ) => Ok(t2circ.hugr),
-            // tket1 circuit
-            Err(_) => Ok(SerialCircuit::from_tket1(circ)?.decode()?),
-        }
-    })?;
-    (f)(hugr).map_err(|e| e.into())
+    let (hugr, typ) = match T2Circuit::extract(circ) {
+        // hugr circuit
+        Ok(t2circ) => (t2circ.hugr, CircuitType::Tket2),
+        // tket1 circuit
+        Err(_) => (
+            SerialCircuit::from_tket1(circ)?.decode()?,
+            CircuitType::Tket1,
+        ),
+    };
+    (f)(hugr, typ).map_err(|e| e.into())
 }
 
 /// Apply a function expecting a hugr on a pytket circuit.
-pub fn with_hugr<T, F>(circ: Py<PyAny>, f: F) -> PyResult<T>
+pub fn with_hugr<T, F>(circ: &PyAny, f: F) -> PyResult<T>
 where
-    F: FnOnce(Hugr) -> T,
+    F: FnOnce(Hugr, CircuitType) -> T,
 {
-    try_with_hugr(circ, |hugr| Ok::<T, PyErr>((f)(hugr)))
+    try_with_hugr(circ, |hugr, typ| Ok::<T, PyErr>((f)(hugr, typ)))
 }
 
 /// Apply a hugr-to-hugr function on a pytket circuit, and return the modified circuit.
-pub fn try_update_hugr<E, F>(circ: Py<PyAny>, f: F) -> PyResult<Py<PyAny>>
+pub fn try_update_hugr<E, F>(circ: &PyAny, f: F) -> PyResult<&PyAny>
 where
     E: Into<PyErr>,
-    F: FnOnce(Hugr) -> Result<Hugr, E>,
+    F: FnOnce(Hugr, CircuitType) -> Result<Hugr, E>,
 {
-    let hugr = try_with_hugr(circ, f)?;
-    SerialCircuit::encode(&hugr)?.to_tket1_with_gil()
+    let py = circ.py();
+    try_with_hugr(circ, |hugr, typ| {
+        let hugr = f(hugr, typ).map_err(|e| e.into())?;
+        typ.convert(py, hugr)
+    })
 }
 
 /// Apply a hugr-to-hugr function on a pytket circuit, and return the modified circuit.
-pub fn update_hugr<F>(circ: Py<PyAny>, f: F) -> PyResult<Py<PyAny>>
+pub fn update_hugr<F>(circ: &PyAny, f: F) -> PyResult<&PyAny>
 where
-    F: FnOnce(Hugr) -> Hugr,
+    F: FnOnce(Hugr, CircuitType) -> Hugr,
 {
-    let hugr = with_hugr(circ, f)?;
-    SerialCircuit::encode(&hugr)?.to_tket1_with_gil()
+    let py = circ.py();
+    try_with_hugr(circ, |hugr, typ| {
+        let hugr = f(hugr, typ);
+        typ.convert(py, hugr)
+    })
 }

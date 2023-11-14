@@ -57,16 +57,16 @@ impl PyBadgerOptimiser {
     /// * `log_progress`: The path to a CSV file to log progress to.
     ///
     #[pyo3(name = "optimise")]
-    pub fn py_optimise(
+    pub fn py_optimise<'py>(
         &self,
-        circ: PyObject,
+        circ: &'py PyAny,
         timeout: Option<u64>,
         n_threads: Option<NonZeroUsize>,
         split_circ: Option<bool>,
         log_progress: Option<PathBuf>,
         queue_size: Option<usize>,
-    ) -> PyResult<PyObject> {
-        update_hugr(circ, |circ| {
+    ) -> PyResult<&'py PyAny> {
+        update_hugr(circ, |circ, _| {
             self.optimise(
                 circ,
                 timeout,

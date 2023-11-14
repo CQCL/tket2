@@ -3,8 +3,24 @@ from pytket.circuit import Circuit
 
 from tket2 import passes
 from tket2.passes import greedy_depth_reduce
-from tket2.circuit import T2Circuit
+from tket2.circuit import T2Circuit, to_hugr_dot, tket1_to_tket2, tket2_to_tket1
 from tket2.pattern import Rule, RuleMatcher
+
+
+def test_conversion():
+    tk1 = Circuit(4).CX(0, 2).CX(1, 2).CX(1, 3)
+    tk1_dot = to_hugr_dot(tk1)
+
+    tk2 = tket1_to_tket2(tk1)
+    tk2_dot = to_hugr_dot(tk2)
+
+    assert type(tk2) == T2Circuit
+    assert tk1_dot == tk2_dot
+
+    tk1_back = tket2_to_tket1(tk2)
+
+    assert tk1_back == tk1
+    assert type(tk1_back) == Circuit
 
 
 @dataclass
@@ -35,6 +51,13 @@ def test_chunks():
     c2 = chunks.reassemble()
 
     assert c2.depth() == 3
+    assert type(c2) == Circuit
+
+    # Split and reassemble, with a tket2 circuit
+    tk2_chunks = passes.chunks(T2Circuit(c2), 2)
+    tk2 = tk2_chunks.reassemble()
+
+    assert type(tk2) == T2Circuit
 
 
 def test_cx_rule():
