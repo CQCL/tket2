@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use hugr::extension::prelude::QB_T;
 use hugr::ops::OpType;
 use hugr::std_extensions::arithmetic::float_types::ConstF64;
-use hugr::values::{PrimValue, Value};
+use hugr::values::Value;
 use hugr::Wire;
 use itertools::{Either, Itertools};
 use tket_json_rs::circuit_json::{self, Permutation, Register, SerialCircuit};
@@ -190,9 +190,7 @@ impl JsonEncoder {
             OpType::Const(const_op) => {
                 // New constant, register it if it can be interpreted as a parameter.
                 match const_op.value() {
-                    Value::Prim {
-                        val: PrimValue::Extension { c: (val,) },
-                    } => {
+                    Value::Extension { c: (val,) } => {
                         if let Some(f) = val.downcast_ref::<ConstF64>() {
                             f.to_string()
                         } else {
