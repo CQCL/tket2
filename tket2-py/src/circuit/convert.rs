@@ -23,7 +23,7 @@ pub struct Tk2Circuit {
 
 #[pymethods]
 impl Tk2Circuit {
-    /// Cast a tket1 circuit to a [`Tk2Circuit`].
+    /// Convert a tket1 circuit to a [`Tk2Circuit`].
     #[new]
     pub fn from_tket1(circ: &PyAny) -> PyResult<Self> {
         Ok(Self {
@@ -31,7 +31,7 @@ impl Tk2Circuit {
         })
     }
 
-    /// Cast the [`Tk2Circuit`] to a tket1 circuit.
+    /// Convert the [`Tk2Circuit`] to a tket1 circuit.
     pub fn to_tket1<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
         SerialCircuit::encode(&self.hugr)?.to_tket1(py)
     }
