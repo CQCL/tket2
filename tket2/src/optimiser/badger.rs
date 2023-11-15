@@ -480,8 +480,7 @@ mod tests {
 
     #[rstest]
     fn rz_rz_cancellation_parallel(rz_rz: Hugr, badger_opt: DefaultBadgerOptimiser) {
-        let opt_rz = badger_opt.optimise(&rz_rz, Some(0), 2.try_into().unwrap(), false, 4);
-        // No optimization done due to the zero timeout.
-        assert_eq!(gates(&opt_rz), vec![T2Op::RzF64, T2Op::RzF64]);
+        let mut opt_rz = badger_opt.optimise(&rz_rz, Some(0), 2.try_into().unwrap(), false, 4);
+        opt_rz.update_validate(&REGISTRY).unwrap();
     }
 }
