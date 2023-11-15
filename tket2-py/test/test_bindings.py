@@ -3,7 +3,7 @@ from pytket.circuit import Circuit
 
 from tket2 import passes
 from tket2.passes import greedy_depth_reduce
-from tket2.circuit import T2Circuit, to_hugr_dot, tket1_to_tket2, tket2_to_tket1
+from tket2.circuit import Tk2Circuit, to_hugr_dot
 from tket2.pattern import Rule, RuleMatcher
 
 
@@ -11,13 +11,13 @@ def test_conversion():
     tk1 = Circuit(4).CX(0, 2).CX(1, 2).CX(1, 3)
     tk1_dot = to_hugr_dot(tk1)
 
-    tk2 = tket1_to_tket2(tk1)
+    tk2 = Tk2Circuit(tk1)
     tk2_dot = to_hugr_dot(tk2)
 
-    assert type(tk2) == T2Circuit
+    assert type(tk2) == Tk2Circuit
     assert tk1_dot == tk2_dot
 
-    tk1_back = tket2_to_tket1(tk2)
+    tk1_back = tk2.to_tket1()
 
     assert tk1_back == tk1
     assert type(tk1_back) == Circuit
@@ -54,14 +54,14 @@ def test_chunks():
     assert type(c2) == Circuit
 
     # Split and reassemble, with a tket2 circuit
-    tk2_chunks = passes.chunks(T2Circuit(c2), 2)
+    tk2_chunks = passes.chunks(Tk2Circuit(c2), 2)
     tk2 = tk2_chunks.reassemble()
 
-    assert type(tk2) == T2Circuit
+    assert type(tk2) == Tk2Circuit
 
 
 def test_cx_rule():
-    c = T2Circuit(Circuit(4).CX(0, 2).CX(1, 2).CX(1, 2))
+    c = Tk2Circuit(Circuit(4).CX(0, 2).CX(1, 2).CX(1, 2))
 
     rule = Rule(Circuit(2).CX(0, 1).CX(0, 1), Circuit(2))
     matcher = RuleMatcher([rule])
@@ -70,13 +70,13 @@ def test_cx_rule():
 
     c.apply_match(mtch)
 
-    out = c.finish()
+    out = c.to_tket1()
 
     assert out == Circuit(4).CX(0, 2)
 
 
 def test_multiple_rules():
-    circ = T2Circuit(Circuit(3).CX(0, 1).H(0).H(1).H(2).Z(0).H(0).H(1).H(2))
+    circ = Tk2Circuit(Circuit(3).CX(0, 1).H(0).H(1).H(2).Z(0).H(0).H(1).H(2))
 
     rule1 = Rule(Circuit(1).H(0).Z(0).H(0), Circuit(1).X(0))
     rule2 = Rule(Circuit(1).H(0).H(0), Circuit(1))
@@ -89,5 +89,5 @@ def test_multiple_rules():
 
     assert match_count == 3
 
-    out = circ.finish()
+    out = circ.to_tket1()
     assert out == Circuit(3).CX(0, 1).X(0)

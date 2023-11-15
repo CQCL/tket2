@@ -16,23 +16,23 @@ use crate::pattern::rewrite::PyCircuitRewrite;
 /// A manager for tket 2 operations on a tket 1 Circuit.
 #[pyclass]
 #[derive(Clone, Debug, PartialEq, From)]
-pub struct T2Circuit {
+pub struct Tk2Circuit {
     /// Rust representation of the circuit.
     pub hugr: Hugr,
 }
 
 #[pymethods]
-impl T2Circuit {
-    /// Cast a tket1 circuit to a [`T2Circuit`].
+impl Tk2Circuit {
+    /// Cast a tket1 circuit to a [`Tk2Circuit`].
     #[new]
-    pub fn from_circuit(circ: &PyAny) -> PyResult<Self> {
+    pub fn from_tket1(circ: &PyAny) -> PyResult<Self> {
         Ok(Self {
             hugr: with_hugr(circ, |hugr, _| hugr)?,
         })
     }
 
-    /// Cast the [`T2Circuit`] to a tket1 circuit.
-    pub fn finish<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
+    /// Cast the [`Tk2Circuit`] to a tket1 circuit.
+    pub fn to_tket1<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
         SerialCircuit::encode(&self.hugr)?.to_tket1(py)
     }
 
@@ -51,7 +51,7 @@ impl T2Circuit {
     pub fn from_hugr_json(json: &str) -> PyResult<Self> {
         let hugr = serde_json::from_str(json)
             .map_err(|e| PyErr::new::<PyAttributeError, _>(format!("Invalid encoded HUGR: {e}")))?;
-        Ok(T2Circuit { hugr })
+        Ok(Tk2Circuit { hugr })
     }
 
     /// Encode the circuit as a tket1 json string.
@@ -67,17 +67,17 @@ impl T2Circuit {
     pub fn from_tket1_json(json: &str) -> PyResult<Self> {
         let tk1: SerialCircuit = serde_json::from_str(json)
             .map_err(|e| PyErr::new::<PyAttributeError, _>(format!("Invalid encoded HUGR: {e}")))?;
-        Ok(T2Circuit {
+        Ok(Tk2Circuit {
             hugr: tk1.decode()?,
         })
     }
 }
-impl T2Circuit {
-    /// Tries to extract a T2Circuit from a python object.
+impl Tk2Circuit {
+    /// Tries to extract a Tk2Circuit from a python object.
     ///
-    /// Returns an error if the py object is not a T2Circuit.
+    /// Returns an error if the py object is not a Tk2Circuit.
     pub fn try_extract(circ: &PyAny) -> PyResult<Self> {
-        circ.extract::<T2Circuit>()
+        circ.extract::<Tk2Circuit>()
     }
 }
 
@@ -86,7 +86,7 @@ impl T2Circuit {
 pub enum CircuitType {
     /// A `pytket` `Circuit`.
     Tket1,
-    /// A tket2 `T2Circuit`, represented as a HUGR.
+    /// A tket2 `Tk2Circuit`, represented as a HUGR.
     Tket2,
 }
 
@@ -95,7 +95,7 @@ impl CircuitType {
     pub fn convert(self, py: Python, hugr: Hugr) -> PyResult<&PyAny> {
         match self {
             CircuitType::Tket1 => SerialCircuit::encode(&hugr)?.to_tket1(py),
-            CircuitType::Tket2 => Ok(Py::new(py, T2Circuit { hugr })?.into_ref(py)),
+            CircuitType::Tket2 => Ok(Py::new(py, Tk2Circuit { hugr })?.into_ref(py)),
         }
     }
 }
@@ -106,7 +106,7 @@ where
     E: Into<PyErr>,
     F: FnOnce(Hugr, CircuitType) -> Result<T, E>,
 {
-    let (hugr, typ) = match T2Circuit::extract(circ) {
+    let (hugr, typ) = match Tk2Circuit::extract(circ) {
         // hugr circuit
         Ok(t2circ) => (t2circ.hugr, CircuitType::Tket2),
         // tket1 circuit

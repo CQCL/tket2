@@ -13,7 +13,7 @@ use crate::circuit::{try_with_hugr, with_hugr};
 #[pyfunction]
 pub fn chunks(c: &PyAny, max_chunk_size: usize) -> PyResult<PyCircuitChunks> {
     with_hugr(c, |hugr, typ| {
-        // TODO: Detect if the circuit is in tket1 format or T2Circuit.
+        // TODO: Detect if the circuit is in tket1 format or Tk2Circuit.
         let chunks = CircuitChunks::split(&hugr, max_chunk_size);
         (chunks, typ).into()
     })

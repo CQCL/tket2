@@ -13,20 +13,18 @@ use tket2::json::TKETDecode;
 use tket2::rewrite::CircuitRewrite;
 use tket_json_rs::circuit_json::SerialCircuit;
 
-pub use self::convert::{try_update_hugr, try_with_hugr, update_hugr, with_hugr, T2Circuit};
+pub use self::convert::{try_update_hugr, try_with_hugr, update_hugr, with_hugr, Tk2Circuit};
 
 /// The module definition
 pub fn module(py: Python) -> PyResult<&PyModule> {
     let m = PyModule::new(py, "_circuit")?;
-    m.add_class::<T2Circuit>()?;
+    m.add_class::<Tk2Circuit>()?;
     m.add_class::<PyNode>()?;
     m.add_class::<tket2::T2Op>()?;
     m.add_class::<tket2::Pauli>()?;
 
     m.add_function(wrap_pyfunction!(validate_hugr, m)?)?;
     m.add_function(wrap_pyfunction!(to_hugr_dot, m)?)?;
-    m.add_function(wrap_pyfunction!(tket1_to_tket2, m)?)?;
-    m.add_function(wrap_pyfunction!(tket2_to_tket1, m)?)?;
 
     m.add("HugrError", py.get_type::<hugr::hugr::PyHugrError>())?;
     m.add("BuildError", py.get_type::<hugr::builder::PyBuildError>())?;
@@ -56,18 +54,6 @@ pub fn validate_hugr(c: &PyAny) -> PyResult<()> {
 #[pyfunction]
 pub fn to_hugr_dot(c: &PyAny) -> PyResult<String> {
     with_hugr(c, |hugr, _| hugr.dot_string())
-}
-
-/// Cast a python tket1 circuit to a [`T2Circuit`].
-#[pyfunction]
-pub fn tket1_to_tket2(c: &PyAny) -> PyResult<T2Circuit> {
-    T2Circuit::from_circuit(c)
-}
-
-/// Cast a [`T2Circuit`] to a python tket1 circuit.
-#[pyfunction]
-pub fn tket2_to_tket1(py: Python, c: T2Circuit) -> PyResult<&PyAny> {
-    c.finish(py)
 }
 
 /// A [`hugr::Node`] wrapper for Python.
