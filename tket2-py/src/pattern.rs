@@ -3,7 +3,7 @@
 pub mod portmatching;
 pub mod rewrite;
 
-use crate::circuit::{to_hugr, T2Circuit};
+use crate::circuit::Tk2Circuit;
 
 use hugr::Hugr;
 use pyo3::prelude::*;
@@ -45,9 +45,9 @@ pub struct Rule(pub [Hugr; 2]);
 #[pymethods]
 impl Rule {
     #[new]
-    fn new_rule(l: PyObject, r: PyObject) -> PyResult<Rule> {
-        let l = to_hugr(l)?;
-        let r = to_hugr(r)?;
+    fn new_rule(l: &PyAny, r: &PyAny) -> PyResult<Rule> {
+        let l = Tk2Circuit::from_tket1(l)?;
+        let r = Tk2Circuit::from_tket1(r)?;
 
         Ok(Rule([l.hugr, r.hugr]))
     }
@@ -71,7 +71,7 @@ impl RuleMatcher {
         Ok(Self { matcher, rights })
     }
 
-    pub fn find_match(&self, target: &T2Circuit) -> PyResult<Option<PyCircuitRewrite>> {
+    pub fn find_match(&self, target: &Tk2Circuit) -> PyResult<Option<PyCircuitRewrite>> {
         let h = &target.hugr;
         if let Some(p_match) = self.matcher.find_matches_iter(h).next() {
             let r = self.rights.get(p_match.pattern_id().0).unwrap().clone();

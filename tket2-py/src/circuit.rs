@@ -13,19 +13,18 @@ use tket2::json::TKETDecode;
 use tket2::rewrite::CircuitRewrite;
 use tket_json_rs::circuit_json::SerialCircuit;
 
-pub use self::convert::{try_update_hugr, try_with_hugr, update_hugr, with_hugr, T2Circuit};
+pub use self::convert::{try_update_hugr, try_with_hugr, update_hugr, with_hugr, Tk2Circuit};
 
 /// The module definition
 pub fn module(py: Python) -> PyResult<&PyModule> {
     let m = PyModule::new(py, "_circuit")?;
-    m.add_class::<T2Circuit>()?;
+    m.add_class::<Tk2Circuit>()?;
     m.add_class::<PyNode>()?;
     m.add_class::<tket2::T2Op>()?;
     m.add_class::<tket2::Pauli>()?;
 
     m.add_function(wrap_pyfunction!(validate_hugr, m)?)?;
     m.add_function(wrap_pyfunction!(to_hugr_dot, m)?)?;
-    m.add_function(wrap_pyfunction!(to_hugr, m)?)?;
 
     m.add("HugrError", py.get_type::<hugr::hugr::PyHugrError>())?;
     m.add("BuildError", py.get_type::<hugr::builder::PyBuildError>())?;
@@ -47,20 +46,14 @@ pub fn module(py: Python) -> PyResult<&PyModule> {
 
 /// Run the validation checks on a circuit.
 #[pyfunction]
-pub fn validate_hugr(c: Py<PyAny>) -> PyResult<()> {
-    try_with_hugr(c, |hugr| hugr.validate(&REGISTRY))
+pub fn validate_hugr(c: &PyAny) -> PyResult<()> {
+    try_with_hugr(c, |hugr, _| hugr.validate(&REGISTRY))
 }
 
 /// Return a Graphviz DOT string representation of the circuit.
 #[pyfunction]
-pub fn to_hugr_dot(c: Py<PyAny>) -> PyResult<String> {
-    with_hugr(c, |hugr| hugr.dot_string())
-}
-
-/// Downcast a python object to a [`Hugr`].
-#[pyfunction]
-pub fn to_hugr(c: Py<PyAny>) -> PyResult<T2Circuit> {
-    with_hugr(c, |hugr| hugr.into())
+pub fn to_hugr_dot(c: &PyAny) -> PyResult<String> {
+    with_hugr(c, |hugr, _| hugr.dot_string())
 }
 
 /// A [`hugr::Node`] wrapper for Python.

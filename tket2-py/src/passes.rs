@@ -5,8 +5,7 @@ pub mod chunks;
 use std::{cmp::min, convert::TryInto, fs, num::NonZeroUsize, path::PathBuf};
 
 use pyo3::{prelude::*, types::IntoPyDict};
-use tket2::{json::TKETDecode, op_matches, passes::apply_greedy_commutation, Circuit, T2Op};
-use tket_json_rs::circuit_json::SerialCircuit;
+use tket2::{op_matches, passes::apply_greedy_commutation, Circuit, T2Op};
 
 use crate::{
     circuit::{try_update_hugr, try_with_hugr},
@@ -30,17 +29,16 @@ pub fn module(py: Python) -> PyResult<&PyModule> {
 }
 
 #[pyfunction]
-fn greedy_depth_reduce(py_c: PyObject) -> PyResult<(PyObject, u32)> {
-    try_with_hugr(py_c, |mut h| {
+fn greedy_depth_reduce(circ: &PyAny) -> PyResult<(&PyAny, u32)> {
+    let py = circ.py();
+    try_with_hugr(circ, |mut h, typ| {
         let n_moves = apply_greedy_commutation(&mut h)?;
-        let py_c = SerialCircuit::encode(&h)?.to_tket1_with_gil()?;
-        PyResult::Ok((py_c, n_moves))
+        let circ = typ.convert(py, h)?;
+        PyResult::Ok((circ, n_moves))
     })
 }
 
 /// Rebase a circuit to the Nam gate set (CX, Rz, H) using TKET1.
-///
-/// Acquires the python GIL to call TKET's `auto_rebase_pass`.
 ///
 /// Equivalent to running the following code:
 /// ```python
@@ -48,17 +46,16 @@ fn greedy_depth_reduce(py_c: PyObject) -> PyResult<(PyObject, u32)> {
 /// from pytket import OpType
 /// auto_rebase_pass({OpType.CX, OpType.Rz, OpType.H}).apply(circ)"
 // ```
-fn rebase_nam(circ: &PyObject) -> PyResult<()> {
-    Python::with_gil(|py| {
-        let auto_rebase = py
-            .import("pytket.passes.auto_rebase")?
-            .getattr("auto_rebase_pass")?;
-        let optype = py.import("pytket")?.getattr("OpType")?;
-        let locals = [("OpType", &optype)].into_py_dict(py);
-        let op_set = py.eval("{OpType.CX, OpType.Rz, OpType.H}", None, Some(locals))?;
-        let rebase_pass = auto_rebase.call1((op_set,))?.getattr("apply")?;
-        rebase_pass.call1((circ,)).map(|_| ())
-    })
+fn rebase_nam(circ: &PyAny) -> PyResult<()> {
+    let py = circ.py();
+    let auto_rebase = py
+        .import("pytket.passes.auto_rebase")?
+        .getattr("auto_rebase_pass")?;
+    let optype = py.import("pytket")?.getattr("OpType")?;
+    let locals = [("OpType", &optype)].into_py_dict(py);
+    let op_set = py.eval("{OpType.CX, OpType.Rz, OpType.H}", None, Some(locals))?;
+    let rebase_pass = auto_rebase.call1((op_set,))?.getattr("apply")?;
+    rebase_pass.call1((circ,)).map(|_| ())
 }
 
 /// Badger optimisation pass.
@@ -76,14 +73,14 @@ fn rebase_nam(circ: &PyObject) -> PyResult<()> {
 ///
 /// Log files will be written to the directory `log_dir` if specified.
 #[pyfunction]
-fn badger_optimise(
-    circ: PyObject,
+fn badger_optimise<'py>(
+    circ: &'py PyAny,
     optimiser: &PyBadgerOptimiser,
     max_threads: Option<NonZeroUsize>,
     timeout: Option<u64>,
     log_dir: Option<PathBuf>,
     rebase: Option<bool>,
-) -> PyResult<PyObject> {
+) -> PyResult<&'py PyAny> {
     // Default parameter values
     let rebase = rebase.unwrap_or(true);
     let max_threads = max_threads.unwrap_or(num_cpus::get().try_into().unwrap());
@@ -94,7 +91,7 @@ fn badger_optimise(
     }
     // Rebase circuit
     if rebase {
-        rebase_nam(&circ)?;
+        rebase_nam(circ)?;
     }
     // Logic to choose how to split the circuit
     let badger_splits = |n_threads: NonZeroUsize| match n_threads.get() {
@@ -111,7 +108,7 @@ fn badger_optimise(
         _ => unreachable!(),
     };
     // Optimise
-    try_update_hugr(circ, |mut circ| {
+    try_update_hugr(circ, |mut circ, _| {
         let n_cx = circ
             .commands()
             .filter(|c| op_matches(c.optype(), T2Op::CX))
