@@ -141,16 +141,19 @@ where
         logger.log_best(&best_circ_cost);
 
         // Hash of seen circuits. Dot not store circuits as this map gets huge
+        let hash = circ.circuit_hash().unwrap();
         let mut seen_hashes = FxHashSet::default();
-        seen_hashes.insert(circ.circuit_hash());
+        seen_hashes.insert(hash);
 
         // The priority queue of circuits to be processed (this should not get big)
         let cost_fn = {
             let strategy = self.strategy.clone();
             move |circ: &'_ Hugr| strategy.circuit_cost(circ)
         };
+        let cost = (cost_fn)(circ);
+
         let mut pq = HugrPQ::new(cost_fn, queue_size);
-        pq.push(circ.clone());
+        pq.push_unchecked(circ.clone(), hash, cost);
 
         let mut circ_cnt = 0;
         let mut timeout_flag = false;
@@ -169,7 +172,13 @@ where
                     continue;
                 }
 
-                let new_circ_hash = new_circ.circuit_hash();
+                let Ok(new_circ_hash) = new_circ.circuit_hash() else {
+                    // The composed rewrites produced a loop.
+                    //
+                    // See [https://github.com/CQCL/tket2/discussions/242]
+                    continue;
+                };
+
                 if !seen_hashes.insert(new_circ_hash) {
                     // Ignore this circuit: we've already seen it
                     continue;
@@ -218,7 +227,7 @@ where
         };
         let (pq, rx_log) = HugrPriorityChannel::init(cost_fn.clone(), queue_size);
 
-        let initial_circ_hash = circ.circuit_hash();
+        let initial_circ_hash = circ.circuit_hash().unwrap();
         let mut best_circ = circ.clone();
         let mut best_circ_cost = self.cost(&best_circ);
 
