@@ -1,5 +1,10 @@
 # Representation of quantum types in HUGR
 
+TKET2 makes use of the
+[HUGR](https://github.com/CQCL/hugr/blob/main/specification/hugr.md)
+IR to represent programs. Here we describe how quantum operations (and
+the angles associated with some of them) are represented.
+
 Besides a range of quantum operations (like Hadamard, CX, etc.)
 that take and return `Qubit`, we note the following operations for
 allocating/deallocating `Qubit`s:
