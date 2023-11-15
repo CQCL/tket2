@@ -73,7 +73,13 @@ where
                         return None;
                     }
 
-                    let hash = c.circuit_hash();
+                    let Ok(hash) = c.circuit_hash() else {
+                        // The composed rewrites were not valid.
+                        //
+                        // See [https://github.com/CQCL/tket2/discussions/242]
+                        return None;
+                    };
+
                     Some(Work {
                         cost: new_cost,
                         hash,
