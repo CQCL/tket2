@@ -42,6 +42,8 @@ impl Tk2Circuit {
     }
 
     /// Encode the circuit as a HUGR json string.
+    //
+    // TODO: Bind a messagepack encoder/decoder too.
     pub fn to_hugr_json(&self) -> PyResult<String> {
         Ok(serde_json::to_string(&self.hugr).unwrap())
     }
@@ -100,7 +102,9 @@ impl CircuitType {
     }
 }
 
-/// Apply a fallible function expecting a hugr on a pytket circuit.
+/// Apply a fallible function expecting a hugr on a python circuit.
+///
+/// This method supports both `pytket.Circuit` and `Tk2Circuit` python objects.
 pub fn try_with_hugr<T, E, F>(circ: &PyAny, f: F) -> PyResult<T>
 where
     E: Into<PyErr>,
@@ -118,7 +122,9 @@ where
     (f)(hugr, typ).map_err(|e| e.into())
 }
 
-/// Apply a function expecting a hugr on a pytket circuit.
+/// Apply a function expecting a hugr on a python circuit.
+///
+/// This method supports both `pytket.Circuit` and `Tk2Circuit` python objects.
 pub fn with_hugr<T, F>(circ: &PyAny, f: F) -> PyResult<T>
 where
     F: FnOnce(Hugr, CircuitType) -> T,
@@ -126,7 +132,10 @@ where
     try_with_hugr(circ, |hugr, typ| Ok::<T, PyErr>((f)(hugr, typ)))
 }
 
-/// Apply a hugr-to-hugr function on a pytket circuit, and return the modified circuit.
+/// Apply a fallible hugr-to-hugr function on a python circuit, and return the modified circuit.
+///
+/// This method supports both `pytket.Circuit` and `Tk2Circuit` python objects.
+/// The returned Hugr is converted to the matching python object.
 pub fn try_update_hugr<E, F>(circ: &PyAny, f: F) -> PyResult<&PyAny>
 where
     E: Into<PyErr>,
@@ -139,7 +148,10 @@ where
     })
 }
 
-/// Apply a hugr-to-hugr function on a pytket circuit, and return the modified circuit.
+/// Apply a hugr-to-hugr function on a python circuit, and return the modified circuit.
+///
+/// This method supports both `pytket.Circuit` and `Tk2Circuit` python objects.
+/// The returned Hugr is converted to the matching python object.
 pub fn update_hugr<F>(circ: &PyAny, f: F) -> PyResult<&PyAny>
 where
     F: FnOnce(Hugr, CircuitType) -> Hugr,
