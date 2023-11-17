@@ -11,7 +11,6 @@ use hugr::extension::prelude::PRELUDE;
 use hugr::extension::{ExtensionId, ExtensionRegistry, SignatureError};
 use hugr::hugr::IdentList;
 use hugr::ops::custom::{ExternalOp, OpaqueOp};
-use hugr::ops::OpName;
 use hugr::std_extensions::arithmetic::float_types::{extension as float_extension, FLOAT64_TYPE};
 use hugr::types::type_param::{CustomTypeArg, TypeArg, TypeParam};
 use hugr::types::{CustomType, FunctionType, Type, TypeBound};

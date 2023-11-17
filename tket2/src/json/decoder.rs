@@ -64,7 +64,7 @@ impl JsonDecoder {
             }
             wire_map.insert((register, 0).into(), i);
         }
-        let sig = FunctionType::new_linear(
+        let sig = FunctionType::new_endo(
             [vec![QB_T; num_qubits], vec![LINEAR_BIT.clone(); num_bits]].concat(),
         );
         // .with_extension_delta(&ExtensionSet::singleton(&TKET1_EXTENSION_ID));

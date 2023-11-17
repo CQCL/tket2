@@ -166,7 +166,7 @@ fn abinop_sig(arg_values: &[TypeArg]) -> Result<FunctionType, SignatureError> {
 
 fn aunop_sig(extension: &Extension) -> Result<FunctionType, SignatureError> {
     let angle = type_var(0, extension)?;
-    Ok(FunctionType::new_linear(vec![angle]))
+    Ok(FunctionType::new_endo(vec![angle]))
 }
 
 fn angle_def(extension: &Extension) -> &TypeDef {

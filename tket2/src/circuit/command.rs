@@ -130,14 +130,13 @@ impl<'circ, Circ: Circuit> Command<'circ, Circ> {
     /// Returns the number of inputs of this command.
     #[inline]
     pub fn input_count(&self) -> usize {
-        let optype = self.optype();
-        optype.signature().input_count() + optype.static_input().is_some() as usize
+        self.optype().value_input_count() + self.optype().static_input_port().is_some() as usize
     }
 
     /// Returns the number of outputs of this command.
     #[inline]
     pub fn output_count(&self) -> usize {
-        self.optype().signature().output_count()
+        self.optype().value_output_count() + self.optype().static_output_port().is_some() as usize
     }
 
     /// Returns the port in the command given a linear unit.

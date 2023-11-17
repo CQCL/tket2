@@ -13,7 +13,6 @@
 //! of the Quartz repository.
 
 use derive_more::{From, Into};
-use hugr::ops::OpTrait;
 use hugr::PortIndex;
 use itertools::Itertools;
 use portmatching::PatternID;
@@ -247,12 +246,13 @@ fn get_patterns(rep_sets: &[EqCircClass]) -> Vec<Option<(CircuitPattern, Vec<usi
 
 /// The port offsets of wires that are empty.
 fn empty_wires(circ: &impl Circuit) -> Vec<usize> {
-    let inp = circ.input();
-    circ.node_outputs(inp)
+    let input = circ.input();
+    let input_sig = circ.signature(input).unwrap();
+    circ.node_outputs(input)
         // Only consider dataflow edges
-        .filter(|&p| circ.get_optype(inp).signature().get(p).is_some())
+        .filter(|&p| input_sig.out_port_type(p).is_some())
         // Only consider ports linked to at most one other port
-        .filter_map(|p| Some((p, circ.linked_ports(inp, p).at_most_one().ok()?)))
+        .filter_map(|p| Some((p, circ.linked_ports(input, p).at_most_one().ok()?)))
         // Ports are either connected to output or nothing
         .filter_map(|(from, to)| {
             if let Some((n, _)) = to {
