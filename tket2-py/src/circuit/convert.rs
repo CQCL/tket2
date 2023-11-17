@@ -6,6 +6,7 @@ use pyo3::{prelude::*, PyTypeInfo};
 use derive_more::From;
 use hugr::{Hugr, HugrView};
 use serde::Serialize;
+use tket2::circuit::CircuitHash;
 use tket2::extension::REGISTRY;
 use tket2::json::TKETDecode;
 use tket2::passes::CircuitChunks;
@@ -72,6 +73,16 @@ impl Tk2Circuit {
         Ok(Tk2Circuit {
             hugr: tk1.decode()?,
         })
+    }
+
+    /// Returns a hash of the circuit.
+    pub fn hash(&self) -> u64 {
+        self.hugr.circuit_hash()
+    }
+
+    /// Hash the circuit
+    pub fn __hash__(&self) -> isize {
+        self.hash() as isize
     }
 }
 impl Tk2Circuit {
