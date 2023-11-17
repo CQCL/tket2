@@ -6,7 +6,9 @@ rust-version = { workspace = true }
 homepage = { workspace = true }
 license-file = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lints]
+workspace = true
+
 [lib]
 name = "tket2"
 crate-type = ["cdylib"]

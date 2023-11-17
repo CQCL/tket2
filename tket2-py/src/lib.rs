@@ -1,6 +1,4 @@
 //! Python bindings for TKET2.
-#![warn(missing_docs)]
-
 pub mod circuit;
 pub mod optimiser;
 pub mod passes;

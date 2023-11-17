@@ -1,5 +1,3 @@
-#![warn(missing_docs)]
-
 //! TKET2: The Hardware Agnostic Quantum Compiler
 //!
 //! TKET2 is an open source quantum compiler developed by Quantinuum. Central to
