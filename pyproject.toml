@@ -7,7 +7,6 @@ authors = []                                             # TODO
 maintainers = []                                         # TODO
 include = ["pyproject.toml"]
 license = "Apache-2.0"
-license_file = "LICENCE"
 readme = "README.md"
 
 packages = [{ include = "tket2-py" }]
@@ -33,7 +32,7 @@ description = "pytket extension for the tket 2 compiler"
 authors = []                                             # TODO
 classifiers = []                                         # TODO
 requires-python = ">=3.10"
-license = "Apache-2.0"
+license = { file = "LICENCE" }
 
 [project.urls]
 homepage = "https://github.com/CQCL/tket2"
