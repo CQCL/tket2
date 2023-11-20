@@ -17,7 +17,6 @@ pub use filter::FilteredUnits;
 
 use std::iter::FusedIterator;
 
-use hugr::ops::OpTrait;
 use hugr::types::{EdgeKind, Type, TypeRow};
 use hugr::CircuitUnit;
 use hugr::{Direction, Node, Port, Wire};
@@ -136,17 +135,19 @@ where
     // We should revisit it once this is reworked on the HUGR side.
     fn init_types(circuit: &impl Circuit, node: Node, direction: Direction) -> TypeRow {
         let optype = circuit.get_optype(node);
-        let sig = optype.signature();
+        let sig = circuit.signature(node).unwrap_or_default();
         let mut types = match direction {
             Direction::Outgoing => sig.output,
             Direction::Incoming => sig.input,
         };
-        if let Some(other) = optype.static_input() {
-            if direction == Direction::Incoming {
-                types.to_mut().push(other);
+        if direction == Direction::Incoming {
+            if let Some(static_port) = optype.static_input_port() {
+                if let Some(EdgeKind::Static(static_type)) = optype.port_kind(static_port) {
+                    types.to_mut().push(static_type);
+                }
             }
         }
-        if let Some(EdgeKind::Static(other)) = optype.other_port(direction) {
+        if let Some(EdgeKind::Static(other)) = optype.other_port_kind(direction) {
             types.to_mut().push(other);
         }
         types

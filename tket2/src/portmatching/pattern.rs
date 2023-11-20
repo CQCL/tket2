@@ -1,7 +1,7 @@
 //! Circuit Patterns for pattern matching
 
 use hugr::IncomingPort;
-use hugr::{ops::OpTrait, Node, Port};
+use hugr::{Node, Port};
 use itertools::Itertools;
 use portmatching::{patterns::NoRootFound, HashMap, Pattern, SinglePatternMatcher};
 use std::fmt::Debug;
@@ -62,8 +62,8 @@ impl CircuitPattern {
             return Err(InvalidPattern::NotConnected);
         }
         let (inp, out) = (circuit.input(), circuit.output());
-        let inp_ports = circuit.get_optype(inp).signature().output_ports();
-        let out_ports = circuit.get_optype(out).signature().input_ports();
+        let inp_ports = circuit.signature(inp).unwrap().output_ports();
+        let out_ports = circuit.signature(out).unwrap().input_ports();
         let inputs = inp_ports
             .map(|p| circuit.linked_ports(inp, p).collect())
             .collect_vec();

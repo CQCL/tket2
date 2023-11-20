@@ -1,3 +1,5 @@
+//! Benchmarks for the tket2 crate.
+
 #[allow(dead_code)]
 mod benchmarks;
 

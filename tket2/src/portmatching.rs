@@ -78,9 +78,9 @@ impl PEdge {
             return Ok(Self::InputEdge { src });
         }
         let port_type = circ
-            .get_optype(node)
-            .signature()
-            .get(src)
+            .signature(node)
+            .unwrap()
+            .port_type(src)
             .cloned()
             .ok_or(InvalidEdgeProperty::UntypedPort(src))?;
         let is_reversible = type_is_linear(&port_type);

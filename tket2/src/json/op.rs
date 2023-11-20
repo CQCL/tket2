@@ -245,13 +245,15 @@ impl TryFrom<&OpType> for JsonOp {
         let mut num_qubits = 0;
         let mut num_bits = 0;
         let mut num_params = 0;
-        for ty in op.signature().input.iter() {
-            if ty == &QB_T {
-                num_qubits += 1
-            } else if *ty == *LINEAR_BIT {
-                num_bits += 1
-            } else if ty == &FLOAT64_TYPE {
-                num_params += 1
+        if let Some(sig) = op.dataflow_signature() {
+            for ty in sig.input.iter() {
+                if ty == &QB_T {
+                    num_qubits += 1
+                } else if *ty == *LINEAR_BIT {
+                    num_bits += 1
+                } else if ty == &FLOAT64_TYPE {
+                    num_params += 1
+                }
             }
         }
 
