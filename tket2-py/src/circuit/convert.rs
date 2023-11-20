@@ -11,7 +11,7 @@ use tket2::json::TKETDecode;
 use tket2::passes::CircuitChunks;
 use tket_json_rs::circuit_json::SerialCircuit;
 
-use crate::pattern::rewrite::PyCircuitRewrite;
+use crate::rewrite::PyCircuitRewrite;
 
 /// A manager for tket 2 operations on a tket 1 Circuit.
 #[pyclass]

@@ -1,20 +1,17 @@
 //! Pattern matching on circuits.
 
 pub mod portmatching;
-pub mod rewrite;
 
 use crate::circuit::Tk2Circuit;
+use crate::rewrite::PyCircuitRewrite;
 
 use hugr::Hugr;
 use pyo3::prelude::*;
 use tket2::portmatching::{CircuitPattern, PatternMatcher};
 
-use self::rewrite::PyCircuitRewrite;
-
 /// The module definition
 pub fn module(py: Python) -> PyResult<&PyModule> {
     let m = PyModule::new(py, "_pattern")?;
-    m.add_class::<self::rewrite::PyCircuitRewrite>()?;
     m.add_class::<Rule>()?;
     m.add_class::<RuleMatcher>()?;
     m.add_class::<self::portmatching::PyCircuitPattern>()?;
