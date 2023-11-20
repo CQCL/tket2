@@ -1,6 +1,6 @@
 //! Utilities for calling Hugr functions on generic python objects.
 
-use pyo3::exceptions::PyAttributeError;
+use pyo3::exceptions::{PyAttributeError, PyValueError};
 use pyo3::{prelude::*, PyTypeInfo};
 
 use derive_more::From;
@@ -10,9 +10,12 @@ use tket2::circuit::CircuitHash;
 use tket2::extension::REGISTRY;
 use tket2::json::TKETDecode;
 use tket2::passes::CircuitChunks;
+use tket2::{Circuit, T2Op};
 use tket_json_rs::circuit_json::SerialCircuit;
 
 use crate::pattern::rewrite::PyCircuitRewrite;
+
+use super::PyCircuitCost;
 
 /// A manager for tket 2 operations on a tket 1 Circuit.
 #[pyclass]
@@ -73,6 +76,26 @@ impl Tk2Circuit {
         Ok(Tk2Circuit {
             hugr: tk1.decode()?,
         })
+    }
+
+    /// Compute the cost of the circuit based on a per-operation cost function.
+    ///
+    /// :param cost_fn: A function that takes a `T2Op` and returns an arbitrary cost.
+    ///     The cost must implement `__add__`.
+    /// :returns: The sum of all operation costs.
+    pub fn circuit_cost<'py>(&self, cost_fn: &'py PyAny) -> PyResult<&'py PyAny> {
+        let py = cost_fn.py();
+        let circ_cost = self.hugr.circuit_cost(|op| {
+            let tk2_op: T2Op = op.try_into().map_err(|e| {
+                PyErr::new::<PyValueError, _>(format!(
+                    "Could not convert circuit operation to a `T2Op`: {e}"
+                ))
+            })?;
+            cost_fn.call1((tk2_op,)).map(|cost| PyCircuitCost {
+                cost: cost.to_object(py),
+            })
+        })?;
+        Ok(circ_cost.cost.clone().into_ref(py))
     }
 
     /// Returns a hash of the circuit.

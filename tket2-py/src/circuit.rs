@@ -2,6 +2,7 @@
 #![allow(unused)]
 
 pub mod convert;
+pub mod cost;
 
 use derive_more::{From, Into};
 use pyo3::prelude::*;
@@ -14,14 +15,17 @@ use tket2::rewrite::CircuitRewrite;
 use tket_json_rs::circuit_json::SerialCircuit;
 
 pub use self::convert::{try_update_hugr, try_with_hugr, update_hugr, with_hugr, Tk2Circuit};
+pub use self::cost::PyCircuitCost;
+pub use tket2::{Pauli, T2Op};
 
 /// The module definition
 pub fn module(py: Python) -> PyResult<&PyModule> {
     let m = PyModule::new(py, "_circuit")?;
     m.add_class::<Tk2Circuit>()?;
     m.add_class::<PyNode>()?;
-    m.add_class::<tket2::T2Op>()?;
-    m.add_class::<tket2::Pauli>()?;
+    m.add_class::<PyCircuitCost>()?;
+    m.add_class::<T2Op>()?;
+    m.add_class::<Pauli>()?;
 
     m.add_function(wrap_pyfunction!(validate_hugr, m)?)?;
     m.add_function(wrap_pyfunction!(to_hugr_dot, m)?)?;
