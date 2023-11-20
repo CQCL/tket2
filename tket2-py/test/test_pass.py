@@ -58,7 +58,7 @@ def test_cx_rule():
 
     mtch = matcher.find_match(c)
 
-    c.apply_match(mtch)
+    c.apply_rewrite(mtch)
 
     out = c.to_tket1()
 
@@ -75,7 +75,7 @@ def test_multiple_rules():
     match_count = 0
     while match := matcher.find_match(circ):
         match_count += 1
-        circ.apply_match(match)
+        circ.apply_rewrite(match)
 
     assert match_count == 3
 

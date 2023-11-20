@@ -41,7 +41,7 @@ impl Tk2Circuit {
     }
 
     /// Apply a rewrite on the circuit.
-    pub fn apply_match(&mut self, rw: PyCircuitRewrite) {
+    pub fn apply_rewrite(&mut self, rw: PyCircuitRewrite) {
         rw.rewrite.apply(&mut self.hugr).expect("Apply error.");
     }
 
@@ -106,6 +106,16 @@ impl Tk2Circuit {
     /// Hash the circuit
     pub fn __hash__(&self) -> isize {
         self.hash() as isize
+    }
+
+    /// Copy the circuit.
+    pub fn __copy__(&self) -> PyResult<Self> {
+        Ok(self.clone())
+    }
+
+    /// Copy the circuit.
+    pub fn __deepcopy__(&self, _memo: Py<PyAny>) -> PyResult<Self> {
+        Ok(self.clone())
     }
 }
 impl Tk2Circuit {
