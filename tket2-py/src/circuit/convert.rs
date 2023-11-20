@@ -13,7 +13,7 @@ use tket2::passes::CircuitChunks;
 use tket2::{Circuit, T2Op};
 use tket_json_rs::circuit_json::SerialCircuit;
 
-use crate::pattern::rewrite::PyCircuitRewrite;
+use crate::rewrite::PyCircuitRewrite;
 
 use super::PyCircuitCost;
 
