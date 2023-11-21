@@ -53,7 +53,7 @@ impl<P: Ord, C> HugrPQ<P, C> {
     where
         C: Fn(&Hugr) -> P,
     {
-        let hash = hugr.circuit_hash();
+        let hash = hugr.circuit_hash().unwrap();
         let cost = (self.cost_fn)(&hugr);
         self.push_unchecked(hugr, hash, cost);
     }
