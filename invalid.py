@@ -16,7 +16,15 @@ def compare_unitaries(a, b) -> bool:
 
 
 if __name__ == "__main__":
-    invalid_file = "fails/3b9bab70-d668-11ea-a4be-38f9d36dfbf2-pre.json"
+    # All of these fail the check
+    files = [
+        "fails/01e360c0-d669-11ea-8a28-38f9d36dfbf2-pre.json",
+        "fails/3b9bab70-d668-11ea-a4be-38f9d36dfbf2-pre.json",
+        "fails/3b6260d6-d668-11ea-a4be-38f9d36dfbf2-pre.json",
+        "fails/3d13dc5c-d668-11ea-a4be-38f9d36dfbf2-pre.json",
+        "fails/3d7242ec-d668-11ea-a4be-38f9d36dfbf2-pre.json",
+    ]
+    invalid_file = files[0]
 
     print("Loading circuit")
     # invalid_circ = circuit_from_qasm(invalid_file)
