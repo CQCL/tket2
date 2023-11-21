@@ -17,7 +17,26 @@ use crate::rewrite::PyCircuitRewrite;
 
 use super::PyCircuitCost;
 
-/// A manager for tket 2 operations on a tket 1 Circuit.
+/// A circuit in tket2 format.
+///
+/// This can be freely converted to and from a `pytket.Circuit`. Prefer using
+/// this class when applying multiple tket2 operations on a circuit, as it
+/// avoids the overhead of converting to and from a `pytket.Circuit` each time.
+///
+/// Node indices returned by this class are not stable across conversion to and
+/// from a `pytket.Circuit`.
+///
+/// # Examples
+///
+/// Convert between `pytket.Circuit`s and `Tk2Circuit`s:
+/// ```python
+/// from pytket import Circuit
+/// c = Circuit(2).H(0).CX(0, 1)
+/// # Convert to a Tk2Circuit
+/// t2c = Tk2Circuit(c)
+/// # Convert back to a pytket.Circuit
+/// c2 = t2c.to_tket1()
+/// ```
 #[pyclass]
 #[derive(Clone, Debug, PartialEq, From)]
 pub struct Tk2Circuit {
