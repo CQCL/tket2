@@ -15,7 +15,7 @@ use tket_json_rs::optype;
 use crate::circuit::Circuit;
 use crate::extension::REGISTRY;
 use crate::json::TKETDecode;
-use crate::T2Op;
+use crate::Tk2Op;
 
 const SIMPLE_JSON: &str = r#"{
         "phase": "0",
@@ -94,9 +94,9 @@ fn circ_add_angles_symbolic() -> Hugr {
     let f1 = inps.next().unwrap();
     let f2 = inps.next().unwrap();
 
-    let res = h.add_dataflow_op(T2Op::AngleAdd, [f1, f2]).unwrap();
+    let res = h.add_dataflow_op(Tk2Op::AngleAdd, [f1, f2]).unwrap();
     let f12 = res.outputs().next().unwrap();
-    let res = h.add_dataflow_op(T2Op::RxF64, [qb, f12]).unwrap();
+    let res = h.add_dataflow_op(Tk2Op::RxF64, [qb, f12]).unwrap();
     let qb = res.outputs().next().unwrap();
 
     h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap()
@@ -117,12 +117,12 @@ fn circ_add_angles_constants() -> Hugr {
         .add_load_const(ConstF64::new(0.3).into(), ExtensionSet::singleton(&f64_ext))
         .unwrap();
     let point5 = h
-        .add_dataflow_op(T2Op::AngleAdd, [point2, point3])
+        .add_dataflow_op(Tk2Op::AngleAdd, [point2, point3])
         .unwrap()
         .out_wire(0);
 
     let qbs = h
-        .add_dataflow_op(T2Op::RxF64, [qb, point5])
+        .add_dataflow_op(Tk2Op::RxF64, [qb, point5])
         .unwrap()
         .outputs();
     h.finish_hugr_with_outputs(qbs, &REGISTRY).unwrap()

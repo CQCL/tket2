@@ -5,7 +5,7 @@ pub mod chunks;
 use std::{cmp::min, convert::TryInto, fs, num::NonZeroUsize, path::PathBuf};
 
 use pyo3::{prelude::*, types::IntoPyDict};
-use tket2::{op_matches, passes::apply_greedy_commutation, Circuit, T2Op};
+use tket2::{op_matches, passes::apply_greedy_commutation, Circuit, Tk2Op};
 
 use crate::{
     circuit::{try_update_hugr, try_with_hugr},
@@ -111,7 +111,7 @@ fn badger_optimise<'py>(
     try_update_hugr(circ, |mut circ, _| {
         let n_cx = circ
             .commands()
-            .filter(|c| op_matches(c.optype(), T2Op::CX))
+            .filter(|c| op_matches(c.optype(), Tk2Op::CX))
             .count();
         let n_threads = min(
             (n_cx / 50).try_into().unwrap_or(1.try_into().unwrap()),

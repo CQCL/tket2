@@ -470,7 +470,7 @@ mod test {
     use itertools::Itertools;
 
     use crate::utils::build_simple_circuit;
-    use crate::T2Op;
+    use crate::Tk2Op;
 
     use super::*;
 
@@ -484,23 +484,23 @@ mod test {
     #[test]
     fn iterate_commands() {
         let circ = build_simple_circuit(2, |circ| {
-            circ.append(T2Op::H, [0])?;
-            circ.append(T2Op::CX, [0, 1])?;
-            circ.append(T2Op::T, [1])?;
+            circ.append(Tk2Op::H, [0])?;
+            circ.append(Tk2Op::CX, [0, 1])?;
+            circ.append(Tk2Op::T, [1])?;
             Ok(())
         })
         .unwrap();
 
         assert_eq!(CommandIterator::new(&circ).count(), 3);
 
-        // TODO: Expose the operation names directly in T2Op to clean this up
-        let t2op_name = |op: T2Op| <T2Op as Into<OpType>>::into(op).name();
+        // TODO: Expose the operation names directly in Tk2Op to clean this up
+        let tk2op_name = |op: Tk2Op| <Tk2Op as Into<OpType>>::into(op).name();
 
         let mut commands = CommandIterator::new(&circ);
         assert_eq!(commands.size_hint(), (3, Some(3)));
 
         let hadamard = commands.next().unwrap();
-        assert_eq!(hadamard.optype().name().as_str(), t2op_name(T2Op::H));
+        assert_eq!(hadamard.optype().name().as_str(), tk2op_name(Tk2Op::H));
         assert_eq_iter!(
             hadamard.inputs().map(|(u, _, _)| u),
             [CircuitUnit::Linear(0)],
@@ -511,7 +511,7 @@ mod test {
         );
 
         let cx = commands.next().unwrap();
-        assert_eq!(cx.optype().name().as_str(), t2op_name(T2Op::CX));
+        assert_eq!(cx.optype().name().as_str(), tk2op_name(Tk2Op::CX));
         assert_eq_iter!(
             cx.inputs().map(|(unit, _, _)| unit),
             [CircuitUnit::Linear(0), CircuitUnit::Linear(1)],
@@ -522,7 +522,7 @@ mod test {
         );
 
         let t = commands.next().unwrap();
-        assert_eq!(t.optype().name().as_str(), t2op_name(T2Op::T));
+        assert_eq!(t.optype().name().as_str(), tk2op_name(Tk2Op::T));
         assert_eq_iter!(
             t.inputs().map(|(unit, _, _)| unit),
             [CircuitUnit::Linear(1)],

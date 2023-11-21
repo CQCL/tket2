@@ -466,14 +466,14 @@ mod tests {
         circuit::Circuit,
         rewrite::{CircuitRewrite, Subcircuit},
         utils::build_simple_circuit,
-        T2Op,
+        Tk2Op,
     };
 
     fn n_cx(n_gates: usize) -> Hugr {
         let qbs = [0, 1];
         build_simple_circuit(2, |circ| {
             for _ in 0..n_gates {
-                circ.append(T2Op::CX, qbs).unwrap();
+                circ.append(Tk2Op::CX, qbs).unwrap();
             }
             Ok(())
         })
@@ -554,9 +554,9 @@ mod tests {
         let circ = n_cx(3);
         assert_eq!(strat.circuit_cost(&circ), (3, 3).into());
         let circ = build_simple_circuit(2, |circ| {
-            circ.append(T2Op::CX, [0, 1])?;
-            circ.append(T2Op::X, [0])?;
-            circ.append(T2Op::X, [1])?;
+            circ.append(Tk2Op::CX, [0, 1])?;
+            circ.append(Tk2Op::X, [0])?;
+            circ.append(Tk2Op::X, [1])?;
             Ok(())
         })
         .unwrap();

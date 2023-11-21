@@ -446,12 +446,12 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use crate::json::load_tk1_json_str;
-    use crate::{extension::REGISTRY, Circuit, T2Op};
+    use crate::{extension::REGISTRY, Circuit, Tk2Op};
 
     use super::{BadgerOptimiser, DefaultBadgerOptimiser};
 
     /// Simplified description of the circuit's commands.
-    fn gates(circ: &Hugr) -> Vec<T2Op> {
+    fn gates(circ: &Hugr) -> Vec<Tk2Op> {
         circ.commands()
             .map(|cmd| cmd.optype().try_into().unwrap())
             .collect()
@@ -468,9 +468,9 @@ mod tests {
         let f1 = inps.next().unwrap();
         let f2 = inps.next().unwrap();
 
-        let res = h.add_dataflow_op(T2Op::RzF64, [qb, f1]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::RzF64, [qb, f1]).unwrap();
         let qb = res.outputs().next().unwrap();
-        let res = h.add_dataflow_op(T2Op::RzF64, [qb, f2]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::RzF64, [qb, f2]).unwrap();
         let qb = res.outputs().next().unwrap();
 
         h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap()
@@ -519,7 +519,7 @@ mod tests {
     fn rz_rz_cancellation(rz_rz: Hugr, badger_opt: DefaultBadgerOptimiser) {
         let opt_rz = badger_opt.optimise(&rz_rz, None, 1.try_into().unwrap(), false, 4);
         // Rzs combined into a single one.
-        assert_eq!(gates(&opt_rz), vec![T2Op::AngleAdd, T2Op::RzF64]);
+        assert_eq!(gates(&opt_rz), vec![Tk2Op::AngleAdd, Tk2Op::RzF64]);
     }
 
     #[rstest]

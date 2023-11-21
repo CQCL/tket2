@@ -49,7 +49,7 @@ use crate::extension::REGISTRY;
 #[allow(missing_docs)]
 #[non_exhaustive]
 /// Simple enum of tket 2 quantum operations.
-pub enum T2Op {
+pub enum Tk2Op {
     H,
     CX,
     T,
@@ -70,12 +70,12 @@ pub enum T2Op {
     TK1,
 }
 
-/// Whether an op is a given T2Op.
-pub fn op_matches(op: &OpType, t2op: T2Op) -> bool {
-    let Ok(op) = T2Op::try_from(op) else {
+/// Whether an op is a given Tk2Op.
+pub fn op_matches(op: &OpType, tk2op: Tk2Op) -> bool {
+    let Ok(op) = Tk2Op::try_from(op) else {
         return false;
     };
-    op == t2op
+    op == tk2op
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, PartialOrd)]
@@ -90,8 +90,8 @@ pub enum Pauli {
 }
 
 #[derive(Debug, Error, PartialEq, Clone, Copy)]
-#[error("Not a T2Op.")]
-pub struct NotT2Op;
+#[error("Not a Tk2Op.")]
+pub struct NotTk2Op;
 
 // this trait could be implemented in Hugr
 pub(crate) trait SimpleOpEnum:
@@ -121,11 +121,11 @@ pub(crate) trait SimpleOpEnum:
 fn from_extension_name<T: SimpleOpEnum>(
     extension: &ExtensionId,
     op_name: &str,
-) -> Result<T, NotT2Op> {
+) -> Result<T, NotTk2Op> {
     if extension != &EXTENSION_ID {
-        return Err(NotT2Op);
+        return Err(NotTk2Op);
     }
-    T::from_str(op_name).map_err(|_| NotT2Op)
+    T::from_str(op_name).map_err(|_| NotTk2Op)
 }
 
 impl Pauli {
@@ -134,10 +134,10 @@ impl Pauli {
         *self == Pauli::I || other == Pauli::I || *self == other
     }
 }
-impl SimpleOpEnum for T2Op {
-    type LoadError = NotT2Op;
+impl SimpleOpEnum for Tk2Op {
+    type LoadError = NotTk2Op;
     fn signature(&self) -> FunctionType {
-        use T2Op::*;
+        use Tk2Op::*;
         let one_qb_row = type_row![QB_T];
         let two_qb_row = type_row![QB_T, QB_T];
         match self {
@@ -182,15 +182,15 @@ impl SimpleOpEnum for T2Op {
         op_name: &str,
     ) -> Result<Self, Self::LoadError> {
         if extension != &EXTENSION_ID {
-            return Err(NotT2Op);
+            return Err(NotTk2Op);
         }
-        Self::from_str(op_name).map_err(|_| NotT2Op)
+        Self::from_str(op_name).map_err(|_| NotTk2Op)
     }
 }
 
-impl T2Op {
+impl Tk2Op {
     pub(crate) fn qubit_commutation(&self) -> Vec<(usize, Pauli)> {
-        use T2Op::*;
+        use Tk2Op::*;
 
         match self {
             X | RxF64 => vec![(0, Pauli::X)],
@@ -204,7 +204,7 @@ impl T2Op {
 
     /// Check if this op is a quantum op.
     pub fn is_quantum(&self) -> bool {
-        use T2Op::*;
+        use Tk2Op::*;
         match self {
             H | CX | T | S | X | Y | Z | Tdg | Sdg | ZZMax | RzF64 | RxF64 | PhasedX | ZZPhase
             | CZ | TK1 => true,
@@ -257,8 +257,8 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<&str> {
 }
 
 // From implementations could be made generic over SimpleOpEnum
-impl From<T2Op> for LeafOp {
-    fn from(op: T2Op) -> Self {
+impl From<Tk2Op> for LeafOp {
+    fn from(op: Tk2Op) -> Self {
         EXTENSION
             .instantiate_extension_op(op.name(), [], &REGISTRY)
             .unwrap()
@@ -266,34 +266,34 @@ impl From<T2Op> for LeafOp {
     }
 }
 
-impl From<T2Op> for OpType {
-    fn from(op: T2Op) -> Self {
+impl From<Tk2Op> for OpType {
+    fn from(op: Tk2Op) -> Self {
         let l: LeafOp = op.into();
         l.into()
     }
 }
 
-impl TryFrom<OpType> for T2Op {
-    type Error = NotT2Op;
+impl TryFrom<OpType> for Tk2Op {
+    type Error = NotTk2Op;
 
     fn try_from(op: OpType) -> Result<Self, Self::Error> {
         Self::try_from(&op)
     }
 }
 
-impl TryFrom<&OpType> for T2Op {
-    type Error = NotT2Op;
+impl TryFrom<&OpType> for Tk2Op {
+    type Error = NotTk2Op;
 
     fn try_from(op: &OpType) -> Result<Self, Self::Error> {
         let OpType::LeafOp(leaf) = op else {
-            return Err(NotT2Op);
+            return Err(NotTk2Op);
         };
         leaf.try_into()
     }
 }
 
-impl TryFrom<&LeafOp> for T2Op {
-    type Error = NotT2Op;
+impl TryFrom<&LeafOp> for Tk2Op {
+    type Error = NotTk2Op;
 
     fn try_from(op: &LeafOp) -> Result<Self, Self::Error> {
         match op {
@@ -301,13 +301,13 @@ impl TryFrom<&LeafOp> for T2Op {
                 ExternalOp::Extension(e) => Self::try_from_op_def(e.def()),
                 ExternalOp::Opaque(o) => from_extension_name(o.extension(), o.name()),
             },
-            _ => Err(NotT2Op),
+            _ => Err(NotTk2Op),
         }
     }
 }
 
-impl TryFrom<LeafOp> for T2Op {
-    type Error = NotT2Op;
+impl TryFrom<LeafOp> for Tk2Op {
+    type Error = NotTk2Op;
 
     fn try_from(op: LeafOp) -> Result<Self, Self::Error> {
         Self::try_from(&op)
@@ -331,7 +331,7 @@ pub(crate) mod test {
     use hugr::{extension::OpDef, Hugr};
     use rstest::{fixture, rstest};
 
-    use super::T2Op;
+    use super::Tk2Op;
     use crate::extension::{TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID};
     use crate::{circuit::Circuit, ops::SimpleOpEnum, utils::build_simple_circuit};
     fn get_opdef(op: impl SimpleOpEnum) -> Option<&'static Arc<OpDef>> {
@@ -341,16 +341,16 @@ pub(crate) mod test {
     fn create_extension() {
         assert_eq!(EXTENSION.name(), &EXTENSION_ID);
 
-        for o in T2Op::all_variants() {
-            assert_eq!(T2Op::try_from_op_def(get_opdef(o).unwrap()), Ok(o));
+        for o in Tk2Op::all_variants() {
+            assert_eq!(Tk2Op::try_from_op_def(get_opdef(o).unwrap()), Ok(o));
         }
     }
 
     #[fixture]
     pub(crate) fn t2_bell_circuit() -> Hugr {
         let h = build_simple_circuit(2, |circ| {
-            circ.append(T2Op::H, [0])?;
-            circ.append(T2Op::CX, [0, 1])?;
+            circ.append(Tk2Op::H, [0])?;
+            circ.append(Tk2Op::CX, [0, 1])?;
             Ok(())
         });
 

@@ -26,39 +26,39 @@ use pyo3::prelude::*;
 
 use crate::{
     circuit::Circuit,
-    ops::NotT2Op,
+    ops::NotTk2Op,
     rewrite::{CircuitRewrite, Subcircuit},
-    T2Op,
+    Tk2Op,
 };
 
 /// Matchable operations in a circuit.
 ///
-/// We currently support [`T2Op`] and a the HUGR load constant operation.
+/// We currently support [`Tk2Op`] and a the HUGR load constant operation.
 // TODO: Support OpType::Const, but blocked by use of F64 (Eq support required)
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
 pub(crate) enum MatchOp {
     /// A TKET2 operation.
-    Op(T2Op),
+    Op(Tk2Op),
     /// A HUGR load constant operation.
     LoadConstant,
 }
 
-impl From<T2Op> for MatchOp {
-    fn from(op: T2Op) -> Self {
+impl From<Tk2Op> for MatchOp {
+    fn from(op: Tk2Op) -> Self {
         Self::Op(op)
     }
 }
 
 impl TryFrom<OpType> for MatchOp {
-    type Error = NotT2Op;
+    type Error = NotTk2Op;
 
     fn try_from(value: OpType) -> Result<Self, Self::Error> {
         match value {
             OpType::LeafOp(op) => Ok(Self::Op(op.try_into()?)),
             OpType::LoadConstant(_) => Ok(Self::LoadConstant),
-            _ => Err(NotT2Op),
+            _ => Err(NotTk2Op),
         }
     }
 }
@@ -476,14 +476,14 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use crate::utils::build_simple_circuit;
-    use crate::T2Op;
+    use crate::Tk2Op;
 
     use super::{CircuitPattern, PatternMatcher};
 
     fn h_cx() -> Hugr {
         build_simple_circuit(2, |circ| {
-            circ.append(T2Op::CX, [0, 1]).unwrap();
-            circ.append(T2Op::H, [0]).unwrap();
+            circ.append(Tk2Op::CX, [0, 1]).unwrap();
+            circ.append(Tk2Op::H, [0]).unwrap();
             Ok(())
         })
         .unwrap()
@@ -491,8 +491,8 @@ mod tests {
 
     fn cx_xc() -> Hugr {
         build_simple_circuit(2, |circ| {
-            circ.append(T2Op::CX, [0, 1]).unwrap();
-            circ.append(T2Op::CX, [1, 0]).unwrap();
+            circ.append(Tk2Op::CX, [0, 1]).unwrap();
+            circ.append(Tk2Op::CX, [1, 0]).unwrap();
             Ok(())
         })
         .unwrap()
@@ -501,8 +501,8 @@ mod tests {
     #[fixture]
     fn cx_cx_3() -> Hugr {
         build_simple_circuit(3, |circ| {
-            circ.append(T2Op::CX, [0, 1]).unwrap();
-            circ.append(T2Op::CX, [2, 1]).unwrap();
+            circ.append(Tk2Op::CX, [0, 1]).unwrap();
+            circ.append(Tk2Op::CX, [2, 1]).unwrap();
             Ok(())
         })
         .unwrap()
@@ -511,8 +511,8 @@ mod tests {
     #[fixture]
     fn cx_cx() -> Hugr {
         build_simple_circuit(2, |circ| {
-            circ.append(T2Op::CX, [0, 1]).unwrap();
-            circ.append(T2Op::CX, [0, 1]).unwrap();
+            circ.append(Tk2Op::CX, [0, 1]).unwrap();
+            circ.append(Tk2Op::CX, [0, 1]).unwrap();
             Ok(())
         })
         .unwrap()

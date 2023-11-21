@@ -19,7 +19,7 @@ use tket_json_rs::optype::OpType as JsonOpType;
 
 use super::OpConvertError;
 use crate::extension::{try_unwrap_json_op, LINEAR_BIT};
-use crate::T2Op;
+use crate::Tk2Op;
 
 /// A serialized operation, containing the operation type and all its attributes.
 ///
@@ -177,20 +177,20 @@ impl From<&JsonOp> for OpType {
     fn from(json_op: &JsonOp) -> Self {
         match json_op.op.op_type {
             // JsonOpType::X => LeafOp::X.into(),
-            JsonOpType::H => T2Op::H.into(),
-            JsonOpType::CX => T2Op::CX.into(),
-            JsonOpType::T => T2Op::T.into(),
-            JsonOpType::Tdg => T2Op::Tdg.into(),
-            JsonOpType::X => T2Op::X.into(),
-            JsonOpType::Y => T2Op::Y.into(),
-            JsonOpType::Z => T2Op::Z.into(),
-            JsonOpType::Rz => T2Op::RzF64.into(),
-            JsonOpType::Rx => T2Op::RxF64.into(),
-            JsonOpType::TK1 => T2Op::TK1.into(),
-            JsonOpType::PhasedX => T2Op::PhasedX.into(),
-            JsonOpType::ZZMax => T2Op::ZZMax.into(),
-            JsonOpType::ZZPhase => T2Op::ZZPhase.into(),
-            JsonOpType::CZ => T2Op::CZ.into(),
+            JsonOpType::H => Tk2Op::H.into(),
+            JsonOpType::CX => Tk2Op::CX.into(),
+            JsonOpType::T => Tk2Op::T.into(),
+            JsonOpType::Tdg => Tk2Op::Tdg.into(),
+            JsonOpType::X => Tk2Op::X.into(),
+            JsonOpType::Y => Tk2Op::Y.into(),
+            JsonOpType::Z => Tk2Op::Z.into(),
+            JsonOpType::Rz => Tk2Op::RzF64.into(),
+            JsonOpType::Rx => Tk2Op::RxF64.into(),
+            JsonOpType::TK1 => Tk2Op::TK1.into(),
+            JsonOpType::PhasedX => Tk2Op::PhasedX.into(),
+            JsonOpType::ZZMax => Tk2Op::ZZMax.into(),
+            JsonOpType::ZZPhase => Tk2Op::ZZPhase.into(),
+            JsonOpType::CZ => Tk2Op::CZ.into(),
             JsonOpType::noop => LeafOp::Noop { ty: QB_T }.into(),
             _ => LeafOp::CustomOp(Box::new(json_op.as_opaque_op())).into(),
         }
@@ -211,29 +211,29 @@ impl TryFrom<&OpType> for JsonOp {
             return Err(err());
         };
 
-        let json_optype = if let Ok(t2op) = leaf.clone().try_into() {
-            match t2op {
-                T2Op::H => JsonOpType::H,
-                T2Op::CX => JsonOpType::CX,
-                T2Op::T => JsonOpType::T,
-                T2Op::S => JsonOpType::S,
-                T2Op::X => JsonOpType::X,
-                T2Op::Y => JsonOpType::Y,
-                T2Op::Z => JsonOpType::Z,
-                T2Op::Tdg => JsonOpType::Tdg,
-                T2Op::Sdg => JsonOpType::Sdg,
-                T2Op::ZZMax => JsonOpType::ZZMax,
-                T2Op::Measure => JsonOpType::Measure,
-                T2Op::RzF64 => JsonOpType::Rz,
-                T2Op::RxF64 => JsonOpType::Rx,
+        let json_optype = if let Ok(tk2op) = leaf.clone().try_into() {
+            match tk2op {
+                Tk2Op::H => JsonOpType::H,
+                Tk2Op::CX => JsonOpType::CX,
+                Tk2Op::T => JsonOpType::T,
+                Tk2Op::S => JsonOpType::S,
+                Tk2Op::X => JsonOpType::X,
+                Tk2Op::Y => JsonOpType::Y,
+                Tk2Op::Z => JsonOpType::Z,
+                Tk2Op::Tdg => JsonOpType::Tdg,
+                Tk2Op::Sdg => JsonOpType::Sdg,
+                Tk2Op::ZZMax => JsonOpType::ZZMax,
+                Tk2Op::Measure => JsonOpType::Measure,
+                Tk2Op::RzF64 => JsonOpType::Rz,
+                Tk2Op::RxF64 => JsonOpType::Rx,
                 // TODO: Use a TK2 opaque op once we update the tket-json-rs dependency.
-                T2Op::AngleAdd => {
+                Tk2Op::AngleAdd => {
                     unimplemented!("Serialising AngleAdd not supported. Are all constant folded?")
                 }
-                T2Op::TK1 => JsonOpType::TK1,
-                T2Op::PhasedX => JsonOpType::PhasedX,
-                T2Op::ZZPhase => JsonOpType::ZZPhase,
-                T2Op::CZ => JsonOpType::CZ,
+                Tk2Op::TK1 => JsonOpType::TK1,
+                Tk2Op::PhasedX => JsonOpType::PhasedX,
+                Tk2Op::ZZPhase => JsonOpType::ZZPhase,
+                Tk2Op::CZ => JsonOpType::CZ,
             }
         } else if let LeafOp::CustomOp(b) = leaf {
             let ext = (*b).as_ref();
