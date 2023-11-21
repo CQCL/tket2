@@ -122,7 +122,7 @@ impl Tk2Circuit {
 
     /// Returns a hash of the circuit.
     pub fn hash(&self) -> u64 {
-        self.hugr.circuit_hash()
+        self.hugr.circuit_hash().unwrap()
     }
 
     /// Hash the circuit
