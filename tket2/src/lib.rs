@@ -19,4 +19,4 @@ pub mod portmatching;
 mod utils;
 
 pub use circuit::Circuit;
-pub use ops::{op_matches, symbolic_constant_op, Pauli, T2Op};
+pub use ops::{op_matches, symbolic_constant_op, Pauli, Tk2Op};

@@ -12,7 +12,7 @@ use hugr::Hugr as Circuit;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::T2Op;
+use crate::Tk2Op;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct RepCircOp {
@@ -43,17 +43,17 @@ struct RepCircData {
 fn map_op(opstr: &str) -> Op {
     // TODO, more
     match opstr {
-        "h" => T2Op::H,
-        "cx" => T2Op::CX,
-        "t" => T2Op::T,
-        "s" => T2Op::S,
-        "x" => T2Op::X,
-        "y" => T2Op::Y,
-        "z" => T2Op::Z,
-        "tdg" => T2Op::Tdg,
-        "sdg" => T2Op::Sdg,
-        "rz" => T2Op::RzF64,
-        "add" => T2Op::AngleAdd,
+        "h" => Tk2Op::H,
+        "cx" => Tk2Op::CX,
+        "t" => Tk2Op::T,
+        "s" => Tk2Op::S,
+        "x" => Tk2Op::X,
+        "y" => Tk2Op::Y,
+        "z" => Tk2Op::Z,
+        "tdg" => Tk2Op::Tdg,
+        "sdg" => Tk2Op::Sdg,
+        "rz" => Tk2Op::RzF64,
+        "add" => Tk2Op::AngleAdd,
         x => panic!("unknown op {x}"),
     }
     .into()
