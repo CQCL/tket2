@@ -399,7 +399,7 @@ mod badger_default {
     use hugr::ops::OpType;
 
     use crate::rewrite::ecc_rewriter::RewriterSerialisationError;
-    use crate::rewrite::strategy::{ExhaustiveGreedyStrategy, NonIncreasingGateCountCost};
+    use crate::rewrite::strategy::{NonIncreasingGateCountCost, ExhaustiveThresholdStrategy};
     use crate::rewrite::ECCRewriter;
 
     use super::*;
@@ -408,13 +408,13 @@ mod badger_default {
 
     /// The default Badger optimiser using ECC sets.
     pub type DefaultBadgerOptimiser =
-        BadgerOptimiser<ECCRewriter, ExhaustiveGreedyStrategy<StrategyCost>>;
+        BadgerOptimiser<ECCRewriter, ExhaustiveThresholdStrategy<StrategyCost>>;
 
     impl DefaultBadgerOptimiser {
         /// A sane default optimiser using the given ECC sets.
         pub fn default_with_eccs_json_file(eccs_path: impl AsRef<Path>) -> io::Result<Self> {
             let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
-            let strategy = NonIncreasingGateCountCost::default_cx();
+            let strategy = NonIncreasingGateCountCost::default_threshold_cx();
             Ok(BadgerOptimiser::new(rewriter, strategy))
         }
 
@@ -423,7 +423,7 @@ mod badger_default {
             rewriter_path: impl AsRef<Path>,
         ) -> Result<Self, RewriterSerialisationError> {
             let rewriter = ECCRewriter::load_binary(rewriter_path)?;
-            let strategy = NonIncreasingGateCountCost::default_cx();
+            let strategy = NonIncreasingGateCountCost::default_threshold_cx();
             Ok(BadgerOptimiser::new(rewriter, strategy))
         }
     }

@@ -363,6 +363,21 @@ impl NonIncreasingGateCountCost<fn(&OpType) -> usize, fn(&OpType) -> usize> {
         }
         .into()
     }
+
+    /// Non-increasing rewrite strategy based on CX count.
+    ///
+    /// The minor cost to break ties between equal CX counts is the number of
+    /// quantum gates.
+    ///
+    /// This is probably a good default for NISQ-y circuit optimisation.
+    #[inline]
+    pub fn default_threshold_cx() -> ExhaustiveThresholdStrategy<Self> {
+        Self {
+            major_cost: |op| is_cx(op) as usize,
+            minor_cost: |op| is_quantum(op) as usize,
+        }
+        .into()
+    }
 }
 
 /// Rewrite strategy cost allowing rewrites with bounded cost increase.
