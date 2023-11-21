@@ -141,16 +141,19 @@ where
         logger.log_best(&best_circ_cost);
 
         // Hash of seen circuits. Dot not store circuits as this map gets huge
+        let hash = circ.circuit_hash().unwrap();
         let mut seen_hashes = FxHashSet::default();
-        seen_hashes.insert(circ.circuit_hash());
+        seen_hashes.insert(hash);
 
         // The priority queue of circuits to be processed (this should not get big)
         let cost_fn = {
             let strategy = self.strategy.clone();
             move |circ: &'_ Hugr| strategy.circuit_cost(circ)
         };
+        let cost = (cost_fn)(circ);
+
         let mut pq = HugrPQ::new(cost_fn, queue_size);
-        pq.push(circ.clone());
+        pq.push_unchecked(circ.clone(), hash, cost);
 
         let mut circ_cnt = 0;
         let mut timeout_flag = false;
@@ -169,7 +172,13 @@ where
                     continue;
                 }
 
-                let new_circ_hash = new_circ.circuit_hash();
+                let Ok(new_circ_hash) = new_circ.circuit_hash() else {
+                    // The composed rewrites produced a loop.
+                    //
+                    // See [https://github.com/CQCL/tket2/discussions/242]
+                    continue;
+                };
+
                 if !seen_hashes.insert(new_circ_hash) {
                     // Ignore this circuit: we've already seen it
                     continue;
@@ -218,7 +227,7 @@ where
         };
         let (pq, rx_log) = HugrPriorityChannel::init(cost_fn.clone(), queue_size);
 
-        let initial_circ_hash = circ.circuit_hash();
+        let initial_circ_hash = circ.circuit_hash().unwrap();
         let mut best_circ = circ.clone();
         let mut best_circ_cost = self.cost(&best_circ);
 
@@ -436,6 +445,7 @@ mod tests {
     };
     use rstest::{fixture, rstest};
 
+    use crate::json::load_tk1_json_str;
     use crate::{extension::REGISTRY, Circuit, Tk2Op};
 
     use super::{BadgerOptimiser, DefaultBadgerOptimiser};
@@ -466,9 +476,43 @@ mod tests {
         h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap()
     }
 
+    /// This hugr corresponds to the qasm circuit:
+    ///
+    /// ```skip
+    /// OPENQASM 2.0;
+    /// include "qelib1.inc";
+    ///
+    /// qreg q[5];
+    /// cx q[4],q[1];
+    /// cx q[3],q[4];
+    /// cx q[1],q[2];
+    /// cx q[4],q[0];
+    /// u3(0.5*pi,0.0*pi,0.5*pi) q[1];
+    /// cx q[0],q[2];
+    /// cx q[3],q[1];
+    /// cx q[0],q[2];
+    /// ```
+    const NON_COMPOSABLE: &str = r#"{"phase":"0.0","commands":[{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[4]],["q",[1]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[1]],["q",[2]]]},{"op":{"type":"U3","params":["0.5","0","0.5"],"signature":["Q"]},"args":[["q",[1]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[3]],["q",[4]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[4]],["q",[0]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[0]],["q",[2]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[0]],["q",[2]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[3]],["q",[1]]]}],"qubits":[["q",[0]],["q",[1]],["q",[2]],["q",[3]],["q",[4]]],"bits":[],"implicit_permutation":[[["q",[0]],["q",[0]]],[["q",[1]],["q",[1]]],[["q",[2]],["q",[2]]],[["q",[3]],["q",[3]]],[["q",[4]],["q",[4]]]]}"#;
+
+    /// A Hugr that would trigger non-composable rewrites, if we applied them blindly from nam_6_3 matches.
+    #[fixture]
+    fn non_composable_rw_hugr() -> Hugr {
+        load_tk1_json_str(NON_COMPOSABLE).unwrap()
+    }
+
+    /// A badger optimiser using a reduced set of rewrite rules.
     #[fixture]
     fn badger_opt() -> DefaultBadgerOptimiser {
         BadgerOptimiser::default_with_eccs_json_file("../test_files/small_eccs.json").unwrap()
+    }
+
+    /// A badger optimiser using the complete nam_6_3 rewrite set.
+    ///
+    /// NOTE: This takes a few seconds to load.
+    /// Use [`badger_opt`] if possible.
+    #[fixture]
+    fn badger_opt_full() -> DefaultBadgerOptimiser {
+        BadgerOptimiser::default_with_rewriter_binary("../test_files/nam_6_3.rwr").unwrap()
     }
 
     #[rstest]
@@ -482,5 +526,22 @@ mod tests {
     fn rz_rz_cancellation_parallel(rz_rz: Hugr, badger_opt: DefaultBadgerOptimiser) {
         let mut opt_rz = badger_opt.optimise(&rz_rz, Some(0), 2.try_into().unwrap(), false, 4);
         opt_rz.update_validate(&REGISTRY).unwrap();
+    }
+
+    #[rstest]
+    #[ignore = "Loading the ECC set is really slow (~5 seconds)"]
+    fn non_composable_rewrites(
+        non_composable_rw_hugr: Hugr,
+        badger_opt_full: DefaultBadgerOptimiser,
+    ) {
+        let mut opt = badger_opt_full.optimise(
+            &non_composable_rw_hugr,
+            Some(0),
+            1.try_into().unwrap(),
+            false,
+            10,
+        );
+        // No rewrites applied.
+        opt.update_validate(&REGISTRY).unwrap();
     }
 }
