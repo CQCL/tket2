@@ -74,20 +74,17 @@ impl Sub for PyCircuitCost {
 impl Sum for PyCircuitCost {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         Python::with_gil(|py| {
-            let mut acc = None;
-            for c in iter {
-                match &mut acc {
-                    None => acc = Some(c.cost),
-                    Some(cost) => {
-                        *cost = cost
+            let cost = iter
+                .fold(None, |acc: Option<PyObject>, c| {
+                    Some(match acc {
+                        None => c.cost,
+                        Some(cost) => cost
                             .call_method1(py, "__add__", (c.cost,))
-                            .expect("Could not add circuit cost objects.")
-                    }
-                }
-            }
-            PyCircuitCost {
-                cost: acc.unwrap_or_else(|| py.None()),
-            }
+                            .expect("Could not add circuit cost objects."),
+                    })
+                })
+                .unwrap_or_else(|| py.None());
+            PyCircuitCost { cost }
         })
     }
 }
