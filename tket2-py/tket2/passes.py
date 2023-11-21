@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Optional
-import importlib
+from importlib import resources
 
 from pytket import Circuit
 from pytket.passes import CustomPass
@@ -33,7 +33,7 @@ def badger_pass(
     The arguments `max_threads`, `timeout`, `log_dir` and `rebase` are optional
     and will be passed on to the Badger optimiser if provided."""
     if rewriter is None:
-        rewriter = Path(importlib.resources.files("tket2").joinpath("data/nam_6_3.rwr"))
+        rewriter = Path(resources.files("tket2").joinpath("data/nam_6_3.rwr"))
     opt = optimiser.BadgerOptimiser.load_precompiled(rewriter)
 
     def apply(circuit: Circuit) -> Circuit:
