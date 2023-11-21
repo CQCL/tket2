@@ -20,7 +20,7 @@ pub fn module(py: Python) -> PyResult<&PyModule> {
     let m = PyModule::new(py, "_circuit")?;
     m.add_class::<Tk2Circuit>()?;
     m.add_class::<PyNode>()?;
-    m.add_class::<tket2::T2Op>()?;
+    m.add_class::<tket2::Tk2Op>()?;
     m.add_class::<tket2::Pauli>()?;
 
     m.add_function(wrap_pyfunction!(validate_hugr, m)?)?;

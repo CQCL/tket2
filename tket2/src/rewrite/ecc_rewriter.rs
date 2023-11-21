@@ -268,7 +268,7 @@ fn empty_wires(circ: &impl Circuit) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{utils::build_simple_circuit, T2Op};
+    use crate::{utils::build_simple_circuit, Tk2Op};
 
     use super::*;
 
@@ -278,9 +278,9 @@ mod tests {
 
     fn h_h() -> Hugr {
         build_simple_circuit(2, |circ| {
-            circ.append(T2Op::H, [0]).unwrap();
-            circ.append(T2Op::H, [0]).unwrap();
-            circ.append(T2Op::CX, [0, 1]).unwrap();
+            circ.append(Tk2Op::H, [0]).unwrap();
+            circ.append(Tk2Op::H, [0]).unwrap();
+            circ.append(Tk2Op::CX, [0, 1]).unwrap();
             Ok(())
         })
         .unwrap()
@@ -288,8 +288,8 @@ mod tests {
 
     fn cx_cx() -> Hugr {
         build_simple_circuit(2, |circ| {
-            circ.append(T2Op::CX, [0, 1]).unwrap();
-            circ.append(T2Op::CX, [0, 1]).unwrap();
+            circ.append(Tk2Op::CX, [0, 1]).unwrap();
+            circ.append(Tk2Op::CX, [0, 1]).unwrap();
             Ok(())
         })
         .unwrap()
@@ -297,8 +297,8 @@ mod tests {
 
     fn cx_x() -> Hugr {
         build_simple_circuit(2, |circ| {
-            circ.append(T2Op::CX, [0, 1]).unwrap();
-            circ.append(T2Op::X, [1]).unwrap();
+            circ.append(Tk2Op::CX, [0, 1]).unwrap();
+            circ.append(Tk2Op::X, [1]).unwrap();
             Ok(())
         })
         .unwrap()
@@ -306,8 +306,8 @@ mod tests {
 
     fn x_cx() -> Hugr {
         build_simple_circuit(2, |circ| {
-            circ.append(T2Op::X, [1]).unwrap();
-            circ.append(T2Op::CX, [0, 1]).unwrap();
+            circ.append(Tk2Op::X, [1]).unwrap();
+            circ.append(Tk2Op::CX, [0, 1]).unwrap();
             Ok(())
         })
         .unwrap()

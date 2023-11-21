@@ -14,7 +14,7 @@ use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
 use crate::extension::LINEAR_BIT;
 use crate::ops::{match_symb_const_op, op_matches};
-use crate::T2Op;
+use crate::Tk2Op;
 
 use super::op::JsonOp;
 use super::{
@@ -204,7 +204,7 @@ impl JsonEncoder {
                 // Re-use the parameter from the input.
                 inputs[0].clone()
             }
-            op if op_matches(op, T2Op::AngleAdd) => {
+            op if op_matches(op, Tk2Op::AngleAdd) => {
                 format!("{} + {}", inputs[0], inputs[1])
             }
             OpType::LeafOp(_) => {

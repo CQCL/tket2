@@ -165,14 +165,14 @@ mod tests {
 
     use crate::extension::REGISTRY;
     use crate::utils::build_simple_circuit;
-    use crate::T2Op;
+    use crate::Tk2Op;
 
     use super::*;
 
     fn h_cx() -> Hugr {
         build_simple_circuit(2, |circ| {
-            circ.append(T2Op::CX, [0, 1])?;
-            circ.append(T2Op::H, [0])?;
+            circ.append(Tk2Op::CX, [0, 1])?;
+            circ.append(Tk2Op::H, [0])?;
             Ok(())
         })
         .unwrap()
@@ -188,9 +188,9 @@ mod tests {
         let qb = inps.next().unwrap();
         let f = inps.next().unwrap();
 
-        let res = h.add_dataflow_op(T2Op::RxF64, [qb, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb, f]).unwrap();
         let qb = res.outputs().next().unwrap();
-        let res = h.add_dataflow_op(T2Op::RxF64, [qb, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb, f]).unwrap();
         let qb = res.outputs().next().unwrap();
 
         h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap()
@@ -207,9 +207,9 @@ mod tests {
         let qb2 = inps.next().unwrap();
         let f = inps.next().unwrap();
 
-        let res = h.add_dataflow_op(T2Op::RxF64, [qb1, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb1, f]).unwrap();
         let qb1 = res.outputs().next().unwrap();
-        let res = h.add_dataflow_op(T2Op::RxF64, [qb2, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb2, f]).unwrap();
         let qb2 = res.outputs().next().unwrap();
 
         h.finish_hugr_with_outputs([qb1, qb2], &REGISTRY).unwrap()
@@ -229,8 +229,8 @@ mod tests {
             .map(|e| (e.source.unwrap(), e.target.unwrap()))
             .collect();
         let inp = hugr.input();
-        let cx_gate = NodeID::HugrNode(get_nodes_by_t2op(&hugr, T2Op::CX)[0]);
-        let h_gate = NodeID::HugrNode(get_nodes_by_t2op(&hugr, T2Op::H)[0]);
+        let cx_gate = NodeID::HugrNode(get_nodes_by_tk2op(&hugr, Tk2Op::CX)[0]);
+        let h_gate = NodeID::HugrNode(get_nodes_by_tk2op(&hugr, Tk2Op::H)[0]);
         assert_eq!(
             edges,
             [
@@ -246,8 +246,8 @@ mod tests {
     #[test]
     fn disconnected_pattern() {
         let circ = build_simple_circuit(2, |circ| {
-            circ.append(T2Op::X, [0])?;
-            circ.append(T2Op::T, [1])?;
+            circ.append(Tk2Op::X, [0])?;
+            circ.append(Tk2Op::T, [1])?;
             Ok(())
         })
         .unwrap();
@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn pattern_with_empty_qubit() {
         let circ = build_simple_circuit(2, |circ| {
-            circ.append(T2Op::X, [0])?;
+            circ.append(Tk2Op::X, [0])?;
             Ok(())
         })
         .unwrap();
@@ -270,7 +270,7 @@ mod tests {
         );
     }
 
-    fn get_nodes_by_t2op(circ: &impl Circuit, t2_op: T2Op) -> Vec<Node> {
+    fn get_nodes_by_tk2op(circ: &impl Circuit, t2_op: Tk2Op) -> Vec<Node> {
         circ.nodes()
             .filter(|n| {
                 let Ok(op): Result<LeafOp, _> = circ.get_optype(*n).clone().try_into() else {
@@ -286,7 +286,7 @@ mod tests {
         let circ = circ_with_copy();
         let pattern = CircuitPattern::try_from_circuit(&circ).unwrap();
         let edges = pattern.pattern.edges().unwrap();
-        let rx_ns = get_nodes_by_t2op(&circ, T2Op::RxF64);
+        let rx_ns = get_nodes_by_tk2op(&circ, Tk2Op::RxF64);
         let inp = circ.input();
         for rx_n in rx_ns {
             assert!(edges.iter().any(|e| {

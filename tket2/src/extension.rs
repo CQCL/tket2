@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use super::json::op::JsonOp;
 use crate::ops::load_all_ops;
-use crate::T2Op;
+use crate::Tk2Op;
 use hugr::extension::prelude::PRELUDE;
 use hugr::extension::{ExtensionId, ExtensionRegistry, SignatureError};
 use hugr::hugr::IdentList;
@@ -67,7 +67,7 @@ pub static ref LINEAR_BIT: Type = {
         .unwrap())
     };
 
-/// Extension registry including the prelude, TKET1 and T2Ops extensions.
+/// Extension registry including the prelude, TKET1 and Tk2Ops extensions.
 pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::from([
     TKET1_EXTENSION.clone(),
     PRELUDE.clone(),
@@ -151,7 +151,7 @@ pub static ref SYM_EXPR_T: CustomType =
 /// The extension definition for TKET2 ops and types.
 pub static ref TKET2_EXTENSION: Extension = {
     let mut e = Extension::new(TKET2_EXTENSION_ID);
-    load_all_ops::<T2Op>(&mut e).expect("add fail");
+    load_all_ops::<Tk2Op>(&mut e).expect("add fail");
 
     let sym_expr_opdef = e.add_type(
         SYM_EXPR_NAME,
