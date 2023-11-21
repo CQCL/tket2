@@ -11,7 +11,7 @@ use tket2::circuit::CircuitHash;
 use tket2::extension::REGISTRY;
 use tket2::json::TKETDecode;
 use tket2::passes::CircuitChunks;
-use tket2::{Circuit, T2Op};
+use tket2::{Circuit, Tk2Op};
 use tket_json_rs::circuit_json::SerialCircuit;
 
 use crate::rewrite::PyCircuitRewrite;
@@ -100,15 +100,15 @@ impl Tk2Circuit {
 
     /// Compute the cost of the circuit based on a per-operation cost function.
     ///
-    /// :param cost_fn: A function that takes a `T2Op` and returns an arbitrary cost.
+    /// :param cost_fn: A function that takes a `Tk2Op` and returns an arbitrary cost.
     ///     The cost must implement `__add__`.
     /// :returns: The sum of all operation costs.
     pub fn circuit_cost<'py>(&self, cost_fn: &'py PyAny) -> PyResult<&'py PyAny> {
         let py = cost_fn.py();
         let cost_fn = |op: &OpType| -> PyResult<PyCircuitCost> {
-            let tk2_op: T2Op = op.try_into().map_err(|e| {
+            let tk2_op: Tk2Op = op.try_into().map_err(|e| {
                 PyErr::new::<PyValueError, _>(format!(
-                    "Could not convert circuit operation to a `T2Op`: {e}"
+                    "Could not convert circuit operation to a `Tk2Op`: {e}"
                 ))
             })?;
             let cost = cost_fn.call1((tk2_op,))?;

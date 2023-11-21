@@ -141,16 +141,16 @@ mod test {
 
     use crate::json::TKETDecode;
     use crate::utils::build_simple_circuit;
-    use crate::T2Op;
+    use crate::Tk2Op;
 
     use super::*;
 
     #[test]
     fn hash_equality() {
         let circ1 = build_simple_circuit(2, |circ| {
-            circ.append(T2Op::H, [0])?;
-            circ.append(T2Op::T, [1])?;
-            circ.append(T2Op::CX, [0, 1])?;
+            circ.append(Tk2Op::H, [0])?;
+            circ.append(Tk2Op::T, [1])?;
+            circ.append(Tk2Op::CX, [0, 1])?;
             Ok(())
         })
         .unwrap();
@@ -158,9 +158,9 @@ mod test {
 
         // A circuit built in a different order should have the same hash
         let circ2 = build_simple_circuit(2, |circ| {
-            circ.append(T2Op::T, [1])?;
-            circ.append(T2Op::H, [0])?;
-            circ.append(T2Op::CX, [0, 1])?;
+            circ.append(Tk2Op::T, [1])?;
+            circ.append(Tk2Op::H, [0])?;
+            circ.append(Tk2Op::CX, [0, 1])?;
             Ok(())
         })
         .unwrap();
@@ -170,9 +170,9 @@ mod test {
 
         // Inverting the CX control and target should produce a different hash
         let circ3 = build_simple_circuit(2, |circ| {
-            circ.append(T2Op::T, [1])?;
-            circ.append(T2Op::H, [0])?;
-            circ.append(T2Op::CX, [1, 0])?;
+            circ.append(Tk2Op::T, [1])?;
+            circ.append(Tk2Op::H, [0])?;
+            circ.append(Tk2Op::CX, [1, 0])?;
             Ok(())
         })
         .unwrap();

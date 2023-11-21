@@ -16,7 +16,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 
 pub use self::convert::{try_update_hugr, try_with_hugr, update_hugr, with_hugr, Tk2Circuit};
 pub use self::cost::PyCircuitCost;
-pub use tket2::{Pauli, T2Op};
+pub use tket2::{Pauli, Tk2Op};
 
 /// The module definition
 pub fn module(py: Python) -> PyResult<&PyModule> {
@@ -24,7 +24,7 @@ pub fn module(py: Python) -> PyResult<&PyModule> {
     m.add_class::<Tk2Circuit>()?;
     m.add_class::<PyNode>()?;
     m.add_class::<PyCircuitCost>()?;
-    m.add_class::<T2Op>()?;
+    m.add_class::<Tk2Op>()?;
     m.add_class::<Pauli>()?;
 
     m.add_function(wrap_pyfunction!(validate_hugr, m)?)?;

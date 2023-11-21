@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pytket.circuit import Circuit
 
-from tket2.circuit import Tk2Circuit, T2Op, to_hugr_dot
+from tket2.circuit import Tk2Circuit, Tk2Op, to_hugr_dot
 
 
 @dataclass
@@ -18,10 +18,12 @@ class CustomCost:
 def test_cost():
     circ = Tk2Circuit(Circuit(4).CX(0, 1).H(1).CX(1, 2).CX(0, 3).H(0))
 
-    print(circ.circuit_cost(lambda op: int(op == T2Op.CX)))
+    print(circ.circuit_cost(lambda op: int(op == Tk2Op.CX)))
 
-    assert circ.circuit_cost(lambda op: int(op == T2Op.CX)) == 3
-    assert circ.circuit_cost(lambda op: CustomCost(1, op == T2Op.H)) == CustomCost(5, 2)
+    assert circ.circuit_cost(lambda op: int(op == Tk2Op.CX)) == 3
+    assert circ.circuit_cost(lambda op: CustomCost(1, op == Tk2Op.H)) == CustomCost(
+        5, 2
+    )
 
 
 def test_hash():

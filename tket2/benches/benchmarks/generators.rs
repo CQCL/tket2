@@ -3,7 +3,7 @@ use hugr::extension::prelude::QB_T;
 use hugr::extension::PRELUDE_REGISTRY;
 use hugr::types::FunctionType;
 use hugr::Hugr;
-use tket2::T2Op;
+use tket2::Tk2Op;
 
 /// Helper function for building circuits.
 ///
@@ -47,7 +47,7 @@ pub fn make_cnot_layers(num_qubits: usize, layers: usize) -> Hugr {
             let cnot_count = (num_qubits - start) / 2;
             for i in 0..cnot_count {
                 let q = i * 2 + start;
-                circ.append(T2Op::CX, [q, q + 1])?;
+                circ.append(Tk2Op::CX, [q, q + 1])?;
             }
         }
         Ok(())

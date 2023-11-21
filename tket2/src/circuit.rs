@@ -315,7 +315,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::{json::load_tk1_json_str, utils::build_simple_circuit, T2Op};
+    use crate::{json::load_tk1_json_str, utils::build_simple_circuit, Tk2Op};
 
     fn test_circuit() -> Hugr {
         load_tk1_json_str(
@@ -352,7 +352,7 @@ mod tests {
     #[test]
     fn remove_qubit() {
         let mut circ = build_simple_circuit(2, |circ| {
-            circ.append(T2Op::X, [0])?;
+            circ.append(Tk2Op::X, [0])?;
             Ok(())
         })
         .unwrap();
