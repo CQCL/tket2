@@ -71,7 +71,7 @@ create_py_exception!(
 create_py_exception!(
     tket2::json::OpConvertError,
     PyOpConvertError,
-    "Error type for conversion between `Op` and `OpType`."
+    "Error type for the conversion between tket2 and tket1 operations."
 );
 
 /// Run the validation checks on a circuit.
