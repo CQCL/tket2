@@ -112,16 +112,18 @@ impl PartialOrd for PyCircuitCost {
 
 impl Ord for PyCircuitCost {
     fn cmp(&self, other: &Self) -> Ordering {
-        Python::with_gil(|py| {
-            let res = self
-                .cost
-                .call_method1(py, "__lt__", (&other.cost,))
-                .expect("Could not compare circuit cost objects.");
-            match res.is_true(py) {
-                Ok(true) => Ordering::Less,
-                _ => Ordering::Greater,
+        Python::with_gil(|py| -> PyResult<Ordering> {
+            let res = self.cost.call_method1(py, "__lt__", (&other.cost,))?;
+            if res.is_true(py)? {
+                return Ok(Ordering::Less);
             }
+            let res = self.cost.call_method1(py, "__eq__", (&other.cost,))?;
+            if res.is_true(py)? {
+                return Ok(Ordering::Equal);
+            }
+            Ok(Ordering::Greater)
         })
+        .expect("Could not compare circuit cost objects.")
     }
 }
 
