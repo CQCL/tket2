@@ -5,6 +5,8 @@ pub mod cost;
 mod hash;
 pub mod units;
 
+use std::iter::Sum;
+
 pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
 use itertools::Either::{Left, Right};
@@ -25,7 +27,6 @@ pub use hugr::ops::OpType;
 pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
 
-use self::cost::CircuitCost;
 use self::units::{filter, FilteredUnits, Units};
 
 /// An object behaving like a quantum circuit.
@@ -135,7 +136,7 @@ pub trait Circuit: HugrView {
     fn circuit_cost<F, C>(&self, op_cost: F) -> C
     where
         Self: Sized,
-        C: CircuitCost,
+        C: Sum,
         F: Fn(&OpType) -> C,
     {
         self.commands().map(|cmd| op_cost(cmd.optype())).sum()
@@ -146,7 +147,7 @@ pub trait Circuit: HugrView {
     #[inline]
     fn nodes_cost<F, C>(&self, nodes: impl IntoIterator<Item = Node>, op_cost: F) -> C
     where
-        C: CircuitCost,
+        C: Sum,
         F: Fn(&OpType) -> C,
     {
         nodes.into_iter().map(|n| op_cost(self.get_optype(n))).sum()
