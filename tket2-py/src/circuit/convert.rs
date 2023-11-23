@@ -101,7 +101,9 @@ impl Tk2Circuit {
     /// Compute the cost of the circuit based on a per-operation cost function.
     ///
     /// :param cost_fn: A function that takes a `Tk2Op` and returns an arbitrary cost.
-    ///     The cost must implement `__add__`.
+    ///     The cost must implement `__add__`, `__sub__`, `__lt__`,
+    ///     `__eq__`, `__int__`, and integer `__div__`.
+    ///
     /// :returns: The sum of all operation costs.
     pub fn circuit_cost<'py>(&self, cost_fn: &'py PyAny) -> PyResult<&'py PyAny> {
         let py = cost_fn.py();
