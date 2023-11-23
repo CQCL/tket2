@@ -13,9 +13,6 @@ use super::{
 };
 use crate::{circuit::Circuit, portmatching::NodeID};
 
-#[cfg(feature = "pyo3")]
-use pyo3::{create_exception, exceptions::PyException, PyErr};
-
 /// A pattern that match a circuit exactly
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CircuitPattern {
@@ -133,21 +130,6 @@ pub enum InvalidPattern {
 impl From<NoRootFound> for InvalidPattern {
     fn from(_: NoRootFound) -> Self {
         InvalidPattern::NotConnected
-    }
-}
-
-#[cfg(feature = "pyo3")]
-create_exception!(
-    tket2,
-    PyInvalidPatternError,
-    PyException,
-    "Invalid circuit pattern"
-);
-
-#[cfg(feature = "pyo3")]
-impl From<InvalidPattern> for PyErr {
-    fn from(err: InvalidPattern) -> Self {
-        PyInvalidPatternError::new_err(err.to_string())
     }
 }
 

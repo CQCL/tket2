@@ -5,9 +5,6 @@ use hugr::{CircuitUnit, Direction, Hugr, HugrView, Node, Port, PortIndex};
 use itertools::Itertools;
 use portgraph::PortOffset;
 
-#[cfg(feature = "pyo3")]
-use pyo3::{create_exception, exceptions::PyException, PyErr};
-
 use crate::{
     circuit::{command::Command, units::filter::Qubits, Circuit},
     ops::{Pauli, Tk2Op},
@@ -202,20 +199,6 @@ pub enum PullForwardError {
     NoCommandForQb(usize),
 }
 
-#[cfg(feature = "pyo3")]
-create_exception!(
-    tket2,
-    PyPullForwardError,
-    PyException,
-    "Error in applying PullForward rewrite."
-);
-
-#[cfg(feature = "pyo3")]
-impl From<PullForwardError> for PyErr {
-    fn from(err: PullForwardError) -> Self {
-        PyPullForwardError::new_err(err.to_string())
-    }
-}
 struct PullForward {
     command: Rc<ComCommand>,
     new_nexts: HashMap<Qb, Rc<ComCommand>>,
