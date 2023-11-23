@@ -4,6 +4,7 @@ pub mod portmatching;
 
 use crate::circuit::Tk2Circuit;
 use crate::rewrite::PyCircuitRewrite;
+use crate::utils::{create_py_exception, ConvertPyErr};
 
 use hugr::Hugr;
 use pyo3::prelude::*;
@@ -19,20 +20,28 @@ pub fn module(py: Python) -> PyResult<&PyModule> {
     m.add_class::<self::portmatching::PyPatternMatch>()?;
 
     m.add(
-        "InvalidReplacementError",
-        py.get_type::<hugr::hugr::views::sibling_subgraph::PyInvalidReplacementError>(),
-    )?;
-    m.add(
         "InvalidPatternError",
-        py.get_type::<tket2::portmatching::pattern::PyInvalidPatternError>(),
+        py.get_type::<PyInvalidPatternError>(),
     )?;
     m.add(
         "InvalidReplacementError",
-        py.get_type::<hugr::hugr::views::sibling_subgraph::PyInvalidReplacementError>(),
+        py.get_type::<PyInvalidReplacementError>(),
     )?;
 
     Ok(m)
 }
+
+create_py_exception!(
+    hugr::hugr::views::sibling_subgraph::InvalidReplacement,
+    PyInvalidReplacementError,
+    "Errors that can occur while constructing a HUGR replacement."
+);
+
+create_py_exception!(
+    tket2::portmatching::pattern::InvalidPattern,
+    PyInvalidPatternError,
+    "Conversion error from circuit to pattern."
+);
 
 #[derive(Clone)]
 #[pyclass]
@@ -63,7 +72,7 @@ impl RuleMatcher {
             rules.into_iter().map(|Rule([l, r])| (l, r)).unzip();
         let patterns: Result<Vec<CircuitPattern>, _> =
             lefts.iter().map(CircuitPattern::try_from_circuit).collect();
-        let matcher = PatternMatcher::from_patterns(patterns?);
+        let matcher = PatternMatcher::from_patterns(patterns.convert_pyerrs()?);
 
         Ok(Self { matcher, rights })
     }
@@ -72,7 +81,7 @@ impl RuleMatcher {
         let h = &target.hugr;
         if let Some(p_match) = self.matcher.find_matches_iter(h).next() {
             let r = self.rights.get(p_match.pattern_id().0).unwrap().clone();
-            let rw = p_match.to_rewrite(h, r)?;
+            let rw = p_match.to_rewrite(h, r).convert_pyerrs()?;
             Ok(Some(rw.into()))
         } else {
             Ok(None)

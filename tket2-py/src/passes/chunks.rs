@@ -8,6 +8,7 @@ use tket2::Circuit;
 
 use crate::circuit::convert::CircuitType;
 use crate::circuit::{try_with_hugr, with_hugr};
+use crate::utils::ConvertPyErr;
 
 /// Split a circuit into chunks of a given size.
 #[pyfunction]
@@ -38,7 +39,7 @@ pub struct PyCircuitChunks {
 impl PyCircuitChunks {
     /// Reassemble the chunks into a circuit.
     fn reassemble<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
-        let hugr = self.clone().chunks.reassemble()?;
+        let hugr = self.clone().chunks.reassemble().convert_pyerrs()?;
         self.original_type.convert(py, hugr)
     }
 
