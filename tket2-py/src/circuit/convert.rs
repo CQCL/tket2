@@ -15,6 +15,7 @@ use tket2::{Circuit, Tk2Op};
 use tket_json_rs::circuit_json::SerialCircuit;
 
 use crate::rewrite::PyCircuitRewrite;
+use crate::utils::ConvertPyErr;
 
 use super::{cost, PyCircuitCost};
 
@@ -57,7 +58,9 @@ impl Tk2Circuit {
 
     /// Convert the [`Tk2Circuit`] to a tket1 circuit.
     pub fn to_tket1<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
-        SerialCircuit::encode(&self.hugr)?.to_tket1(py)
+        SerialCircuit::encode(&self.hugr)
+            .convert_pyerrs()?
+            .to_tket1(py)
     }
 
     /// Apply a rewrite on the circuit.
@@ -85,7 +88,7 @@ impl Tk2Circuit {
     /// FIXME: Currently the encoded circuit cannot be loaded back due to
     /// [https://github.com/CQCL/hugr/issues/683]
     pub fn to_tket1_json(&self) -> PyResult<String> {
-        Ok(serde_json::to_string(&SerialCircuit::encode(&self.hugr)?).unwrap())
+        Ok(serde_json::to_string(&SerialCircuit::encode(&self.hugr).convert_pyerrs()?).unwrap())
     }
 
     /// Decode a tket1 json string to a circuit.
@@ -94,7 +97,7 @@ impl Tk2Circuit {
         let tk1: SerialCircuit = serde_json::from_str(json)
             .map_err(|e| PyErr::new::<PyAttributeError, _>(format!("Invalid encoded HUGR: {e}")))?;
         Ok(Tk2Circuit {
-            hugr: tk1.decode()?,
+            hugr: tk1.decode().convert_pyerrs()?,
         })
     }
 
@@ -164,7 +167,7 @@ impl CircuitType {
     /// Converts a `Hugr` into the format indicated by the flag.
     pub fn convert(self, py: Python, hugr: Hugr) -> PyResult<&PyAny> {
         match self {
-            CircuitType::Tket1 => SerialCircuit::encode(&hugr)?.to_tket1(py),
+            CircuitType::Tket1 => SerialCircuit::encode(&hugr).convert_pyerrs()?.to_tket1(py),
             CircuitType::Tket2 => Ok(Py::new(py, Tk2Circuit { hugr })?.into_ref(py)),
         }
     }
@@ -175,7 +178,7 @@ impl CircuitType {
 /// This method supports both `pytket.Circuit` and `Tk2Circuit` python objects.
 pub fn try_with_hugr<T, E, F>(circ: &PyAny, f: F) -> PyResult<T>
 where
-    E: Into<PyErr>,
+    E: ConvertPyErr<Output = PyErr>,
     F: FnOnce(Hugr, CircuitType) -> Result<T, E>,
 {
     let (hugr, typ) = match Tk2Circuit::extract(circ) {
@@ -183,11 +186,11 @@ where
         Ok(t2circ) => (t2circ.hugr, CircuitType::Tket2),
         // tket1 circuit
         Err(_) => (
-            SerialCircuit::from_tket1(circ)?.decode()?,
+            SerialCircuit::from_tket1(circ)?.decode().convert_pyerrs()?,
             CircuitType::Tket1,
         ),
     };
-    (f)(hugr, typ).map_err(|e| e.into())
+    (f)(hugr, typ).map_err(|e| e.convert_pyerrs())
 }
 
 /// Apply a function expecting a hugr on a python circuit.
@@ -206,12 +209,12 @@ where
 /// The returned Hugr is converted to the matching python object.
 pub fn try_update_hugr<E, F>(circ: &PyAny, f: F) -> PyResult<&PyAny>
 where
-    E: Into<PyErr>,
+    E: ConvertPyErr<Output = PyErr>,
     F: FnOnce(Hugr, CircuitType) -> Result<Hugr, E>,
 {
     let py = circ.py();
     try_with_hugr(circ, |hugr, typ| {
-        let hugr = f(hugr, typ).map_err(|e| e.into())?;
+        let hugr = f(hugr, typ).map_err(|e| e.convert_pyerrs())?;
         typ.convert(py, hugr)
     })
 }

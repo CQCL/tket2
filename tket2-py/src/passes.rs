@@ -7,6 +7,7 @@ use std::{cmp::min, convert::TryInto, fs, num::NonZeroUsize, path::PathBuf};
 use pyo3::{prelude::*, types::IntoPyDict};
 use tket2::{op_matches, passes::apply_greedy_commutation, Circuit, Tk2Op};
 
+use crate::utils::{create_py_exception, ConvertPyErr};
 use crate::{
     circuit::{try_update_hugr, try_with_hugr},
     optimiser::PyBadgerOptimiser,
@@ -21,18 +22,17 @@ pub fn module(py: Python) -> PyResult<&PyModule> {
     m.add_function(wrap_pyfunction!(badger_optimise, m)?)?;
     m.add_class::<self::chunks::PyCircuitChunks>()?;
     m.add_function(wrap_pyfunction!(self::chunks::chunks, m)?)?;
-    m.add(
-        "PullForwardError",
-        py.get_type::<tket2::passes::PyPullForwardError>(),
-    )?;
+    m.add("PullForwardError", py.get_type::<PyPullForwardError>())?;
     Ok(m)
 }
+
+create_py_exception!(tket2::passes::PullForwardError, PyPullForwardError, "");
 
 #[pyfunction]
 fn greedy_depth_reduce(circ: &PyAny) -> PyResult<(&PyAny, u32)> {
     let py = circ.py();
     try_with_hugr(circ, |mut h, typ| {
-        let n_moves = apply_greedy_commutation(&mut h)?;
+        let n_moves = apply_greedy_commutation(&mut h).convert_pyerrs()?;
         let circ = typ.convert(py, h)?;
         PyResult::Ok((circ, n_moves))
     })

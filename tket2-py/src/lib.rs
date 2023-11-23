@@ -4,6 +4,7 @@ pub mod optimiser;
 pub mod passes;
 pub mod pattern;
 pub mod rewrite;
+pub mod utils;
 
 use pyo3::prelude::*;
 
