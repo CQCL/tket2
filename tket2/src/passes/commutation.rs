@@ -184,7 +184,7 @@ fn commutation_on_port(comms: &[(usize, Pauli)], port: Port) -> Option<Pauli> {
         .find_map(|(i, p)| (*i == port.index()).then_some(*p))
 }
 
-/// Error from a [`PullForward`] operation.
+/// Error from a `PullForward` operation.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 #[allow(missing_docs)]
 pub enum PullForwardError {
