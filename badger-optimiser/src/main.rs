@@ -12,6 +12,7 @@ use std::process::exit;
 use clap::Parser;
 use tket2::json::{load_tk1_json_file, save_tk1_json_file};
 use tket2::optimiser::badger::log::BadgerLogger;
+use tket2::optimiser::badger::BadgerOptions;
 use tket2::optimiser::BadgerOptimiser;
 
 #[cfg(feature = "peak_alloc")]
@@ -71,6 +72,14 @@ struct CmdLineArgs {
         help = "Timeout in seconds (default=None)."
     )]
     timeout: Option<u64>,
+    /// Maximum time in seconds to wait between circuit improvements (default=no timeout)
+    #[arg(
+        short = 'p',
+        long,
+        value_name = "PROGRESS_TIMEOUT",
+        help = "Maximum time in seconds to wait between circuit improvements (default=None)."
+    )]
+    progress_timeout: Option<u64>,
     /// Number of threads (default=1)
     #[arg(
         short = 'j',
@@ -142,10 +151,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt_circ = optimiser.optimise_with_log(
         &circ,
         badger_logger,
-        opts.timeout,
-        n_threads,
-        opts.split_circ,
-        opts.queue_size,
+        BadgerOptions {
+            timeout: opts.timeout,
+            progress_timeout: opts.progress_timeout,
+            n_threads,
+            split_circuit: opts.split_circ,
+            queue_size: opts.queue_size,
+        },
     );
 
     println!("Saving result");

@@ -5,6 +5,7 @@ use std::{fs, num::NonZeroUsize, path::PathBuf};
 
 use hugr::Hugr;
 use pyo3::prelude::*;
+use tket2::optimiser::badger::BadgerOptions;
 use tket2::optimiser::{BadgerLogger, DefaultBadgerOptimiser};
 
 use crate::circuit::update_hugr;
@@ -47,35 +48,55 @@ impl PyBadgerOptimiser {
     /// # Parameters
     ///
     /// * `circ`: The circuit to optimise.
-    /// * `timeout`: The timeout in seconds.
-    /// * `n_threads`: The number of threads to use.
-    /// * `split_circ`: Whether to split the circuit into chunks before
-    ///   processing.
     ///
-    ///   If this option is set, the optimise will divide the circuit into
-    ///   `n_threads` chunks and optimise each on a separate thread.
+    /// * `timeout`: The maximum time (in seconds) to run the optimiser.
+    ///
+    ///     If `None` the optimiser will run indefinitely, or until
+    ///     `progress_timeout` is reached.
+    ///
+    /// * `progress_timeout`: The maximum time (in seconds) to search for new
+    ///     improvements to the circuit. If no progress is made in this time,
+    ///     the optimiser will stop.
+    ///
+    ///     If `None` the optimiser will run indefinitely, or until `timeout` is
+    ///     reached.
+    ///
+    /// * `n_threads`: The number of threads to use. Defaults to `1`.
+    ///
+    /// * `split_circ`: Whether to split the circuit into chunks and process
+    ///     each in a separate thread.
+    ///
+    ///     If this option is set to `true`, the optimiser will split the
+    ///     circuit into `n_threads` chunks.
+    ///
+    ///     If this option is set to `false`, the optimiser will run `n_threads`
+    ///     parallel searches on the whole circuit (default).
+    ///
+    /// * `queue_size`: The maximum size of the circuit candidates priority
+    ///     queue. Defaults to `20`.
+    ///
     /// * `log_progress`: The path to a CSV file to log progress to.
     ///
     #[pyo3(name = "optimise")]
+    #[allow(clippy::too_many_arguments)]
     pub fn py_optimise<'py>(
         &self,
         circ: &'py PyAny,
         timeout: Option<u64>,
+        progress_timeout: Option<u64>,
         n_threads: Option<NonZeroUsize>,
         split_circ: Option<bool>,
-        log_progress: Option<PathBuf>,
         queue_size: Option<usize>,
+        log_progress: Option<PathBuf>,
     ) -> PyResult<&'py PyAny> {
-        update_hugr(circ, |circ, _| {
-            self.optimise(
-                circ,
-                timeout,
-                n_threads,
-                split_circ,
-                log_progress,
-                queue_size,
-            )
-        })
+        let options = BadgerOptions {
+            timeout,
+            progress_timeout,
+            n_threads: n_threads.unwrap_or(NonZeroUsize::new(1).unwrap()),
+            split_circuit: split_circ.unwrap_or(false),
+            queue_size: queue_size.unwrap_or(100),
+        };
+        update_hugr(circ, |circ, _| self.optimise(circ, log_progress, options))
     }
 }
 
@@ -84,11 +105,8 @@ impl PyBadgerOptimiser {
     pub(super) fn optimise(
         &self,
         circ: Hugr,
-        timeout: Option<u64>,
-        n_threads: Option<NonZeroUsize>,
-        split_circ: Option<bool>,
         log_progress: Option<PathBuf>,
-        queue_size: Option<usize>,
+        options: BadgerOptions,
     ) -> Hugr {
         let badger_logger = log_progress
             .map(|file_name| {
@@ -97,13 +115,6 @@ impl PyBadgerOptimiser {
                 BadgerLogger::new(log_file)
             })
             .unwrap_or_default();
-        self.0.optimise_with_log(
-            &circ,
-            badger_logger,
-            timeout,
-            n_threads.unwrap_or(NonZeroUsize::new(1).unwrap()),
-            split_circ.unwrap_or(false),
-            queue_size.unwrap_or(100),
-        )
+        self.0.optimise_with_log(&circ, badger_logger, options)
     }
 }

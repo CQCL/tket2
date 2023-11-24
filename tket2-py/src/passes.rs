@@ -5,6 +5,7 @@ pub mod chunks;
 use std::{cmp::min, convert::TryInto, fs, num::NonZeroUsize, path::PathBuf};
 
 use pyo3::{prelude::*, types::IntoPyDict};
+use tket2::optimiser::badger::BadgerOptions;
 use tket2::{op_matches, passes::apply_greedy_commutation, Circuit, Tk2Op};
 
 use crate::utils::{create_py_exception, ConvertPyErr};
@@ -78,6 +79,7 @@ fn badger_optimise<'py>(
     optimiser: &PyBadgerOptimiser,
     max_threads: Option<NonZeroUsize>,
     timeout: Option<u64>,
+    progress_timeout: Option<u64>,
     log_dir: Option<PathBuf>,
     rebase: Option<bool>,
 ) -> PyResult<&'py PyAny> {
@@ -85,6 +87,7 @@ fn badger_optimise<'py>(
     let rebase = rebase.unwrap_or(true);
     let max_threads = max_threads.unwrap_or(num_cpus::get().try_into().unwrap());
     let timeout = timeout.unwrap_or(30);
+    let progress_timeout = progress_timeout.unwrap_or(timeout.div_ceil(2));
     // Create log directory if necessary
     if let Some(log_dir) = log_dir.as_ref() {
         fs::create_dir_all(log_dir)?;
@@ -124,14 +127,14 @@ fn badger_optimise<'py>(
                 log_file.push(format!("cycle-{i}.log"));
                 log_file
             });
-            circ = optimiser.optimise(
-                circ,
-                Some(timeout),
-                Some(n_threads.try_into().unwrap()),
-                Some(true),
-                log_file,
-                None,
-            );
+            let options = BadgerOptions {
+                timeout: Some(timeout),
+                progress_timeout: Some(progress_timeout),
+                n_threads: n_threads.try_into().unwrap(),
+                split_circuit: true,
+                ..Default::default()
+            };
+            circ = optimiser.optimise(circ, log_file, options);
         }
         PyResult::Ok(circ)
     })

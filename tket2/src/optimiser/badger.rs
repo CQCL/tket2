@@ -40,6 +40,50 @@ use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
 use crate::Circuit;
 
+/// Configuration options for the Badger optimiser.
+#[derive(Copy, Clone, Debug)]
+pub struct BadgerOptions {
+    /// The maximum time (in seconds) to run the optimiser.
+    ///
+    /// Defaults to `None`, which means no timeout.
+    pub timeout: Option<u64>,
+    /// The maximum time (in seconds) to search for new improvements to the
+    /// circuit. If no progress is made in this time, the optimiser will stop.
+    ///
+    /// Defaults to `None`, which means no timeout.
+    pub progress_timeout: Option<u64>,
+    /// The number of threads to use.
+    ///
+    /// Defaults to `1`.
+    pub n_threads: NonZeroUsize,
+    /// Whether to split the circuit into chunks and process each in a separate thread.
+    ///
+    /// If this option is set to `true`, the optimiser will split the circuit into `n_threads`
+    /// chunks.
+    ///
+    /// If this option is set to `false`, the optimiser will run parallel searches on the whole
+    /// circuit.
+    ///
+    /// Defaults to `false`.
+    pub split_circuit: bool,
+    /// The maximum size of the circuit candidates priority queue.
+    ///
+    /// Defaults to `20`.
+    pub queue_size: usize,
+}
+
+impl Default for BadgerOptions {
+    fn default() -> Self {
+        Self {
+            timeout: Default::default(),
+            progress_timeout: Default::default(),
+            n_threads: NonZeroUsize::new(1).unwrap(),
+            split_circuit: Default::default(),
+            queue_size: 20,
+        }
+    }
+}
+
 /// The Badger optimiser.
 ///
 /// Adapted from [Quartz][], and originally [TASO][].
@@ -85,22 +129,8 @@ where
     /// Run the Badger optimiser on a circuit.
     ///
     /// A timeout (in seconds) can be provided.
-    pub fn optimise(
-        &self,
-        circ: &Hugr,
-        timeout: Option<u64>,
-        n_threads: NonZeroUsize,
-        split_circuit: bool,
-        queue_size: usize,
-    ) -> Hugr {
-        self.optimise_with_log(
-            circ,
-            Default::default(),
-            timeout,
-            n_threads,
-            split_circuit,
-            queue_size,
-        )
+    pub fn optimise(&self, circ: &Hugr, options: BadgerOptions) -> Hugr {
+        self.optimise_with_log(circ, Default::default(), options)
     }
 
     /// Run the Badger optimiser on a circuit with logging activated.
@@ -110,30 +140,19 @@ where
         &self,
         circ: &Hugr,
         log_config: BadgerLogger,
-        timeout: Option<u64>,
-        n_threads: NonZeroUsize,
-        split_circuit: bool,
-        queue_size: usize,
+        options: BadgerOptions,
     ) -> Hugr {
-        if split_circuit && n_threads.get() > 1 {
-            return self
-                .split_run(circ, log_config, timeout, n_threads, queue_size)
-                .unwrap();
+        if options.split_circuit && options.n_threads.get() > 1 {
+            return self.split_run(circ, log_config, options).unwrap();
         }
-        match n_threads.get() {
-            1 => self.badger(circ, log_config, timeout, queue_size),
-            _ => self.badger_multithreaded(circ, log_config, timeout, n_threads, queue_size),
+        match options.n_threads.get() {
+            1 => self.badger(circ, log_config, options),
+            _ => self.badger_multithreaded(circ, log_config, options),
         }
     }
 
     #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
-    fn badger(
-        &self,
-        circ: &Hugr,
-        mut logger: BadgerLogger,
-        timeout: Option<u64>,
-        queue_size: usize,
-    ) -> Hugr {
+    fn badger(&self, circ: &Hugr, mut logger: BadgerLogger, opt: BadgerOptions) -> Hugr {
         let start_time = Instant::now();
 
         let mut best_circ = circ.clone();
@@ -152,7 +171,7 @@ where
         };
         let cost = (cost_fn)(circ);
 
-        let mut pq = HugrPQ::new(cost_fn, queue_size);
+        let mut pq = HugrPQ::new(cost_fn, opt.queue_size);
         pq.push_unchecked(circ.clone(), hash, cost);
 
         let mut circ_cnt = 0;
@@ -187,7 +206,7 @@ where
                 logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
             }
 
-            if let Some(timeout) = timeout {
+            if let Some(timeout) = opt.timeout {
                 if start_time.elapsed().as_secs() > timeout {
                     timeout_flag = true;
                     break;
@@ -214,18 +233,16 @@ where
         &self,
         circ: &Hugr,
         mut logger: BadgerLogger,
-        timeout: Option<u64>,
-        n_threads: NonZeroUsize,
-        queue_size: usize,
+        opt: BadgerOptions,
     ) -> Hugr {
-        let n_threads: usize = n_threads.get();
+        let n_threads: usize = opt.n_threads.get();
 
         // multi-consumer priority channel for queuing circuits to be processed by the workers
         let cost_fn = {
             let strategy = self.strategy.clone();
             move |circ: &'_ Hugr| strategy.circuit_cost(circ)
         };
-        let (pq, rx_log) = HugrPriorityChannel::init(cost_fn.clone(), queue_size);
+        let (pq, rx_log) = HugrPriorityChannel::init(cost_fn.clone(), opt.queue_size);
 
         let initial_circ_hash = circ.circuit_hash().unwrap();
         let mut best_circ = circ.clone();
@@ -248,7 +265,7 @@ where
             .collect();
 
         // Deadline for the optimisation timeout
-        let timeout_event = match timeout {
+        let timeout_event = match opt.timeout {
             None => crossbeam_channel::never(),
             Some(t) => crossbeam_channel::at(Instant::now() + Duration::from_secs(t)),
         };
@@ -330,12 +347,10 @@ where
         &self,
         circ: &Hugr,
         mut logger: BadgerLogger,
-        timeout: Option<u64>,
-        n_threads: NonZeroUsize,
-        queue_size: usize,
+        opt: BadgerOptions,
     ) -> Result<Hugr, HugrError> {
         let circ_cost = self.cost(circ);
-        let max_chunk_cost = circ_cost.clone().div_cost(n_threads);
+        let max_chunk_cost = circ_cost.clone().div_cost(opt.n_threads);
         logger.log(format!(
             "Splitting circuit with cost {:?} into chunks of at most {max_chunk_cost:?}.",
             circ_cost.clone()
@@ -359,10 +374,11 @@ where
                     .spawn(move || {
                         let res = badger.optimise(
                             &chunk,
-                            timeout,
-                            NonZeroUsize::new(1).unwrap(),
-                            false,
-                            queue_size,
+                            BadgerOptions {
+                                n_threads: NonZeroUsize::new(1).unwrap(),
+                                split_circuit: false,
+                                ..opt
+                            },
                         );
                         tx.send(res).unwrap();
                     })
@@ -384,7 +400,7 @@ where
             logger.log_best(best_circ_cost.clone());
         }
 
-        logger.log_processing_end(n_threads.get(), None, best_circ_cost, true, false);
+        logger.log_processing_end(opt.n_threads.get(), None, best_circ_cost, true, false);
         joins.into_iter().for_each(|j| j.join().unwrap());
 
         Ok(best_circ)
@@ -446,6 +462,7 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use crate::json::load_tk1_json_str;
+    use crate::optimiser::badger::BadgerOptions;
     use crate::{extension::REGISTRY, Circuit, Tk2Op};
 
     use super::{BadgerOptimiser, DefaultBadgerOptimiser};
@@ -517,14 +534,28 @@ mod tests {
 
     #[rstest]
     fn rz_rz_cancellation(rz_rz: Hugr, badger_opt: DefaultBadgerOptimiser) {
-        let opt_rz = badger_opt.optimise(&rz_rz, None, 1.try_into().unwrap(), false, 4);
+        let opt_rz = badger_opt.optimise(
+            &rz_rz,
+            BadgerOptions {
+                queue_size: 4,
+                ..Default::default()
+            },
+        );
         // Rzs combined into a single one.
         assert_eq!(gates(&opt_rz), vec![Tk2Op::AngleAdd, Tk2Op::RzF64]);
     }
 
     #[rstest]
     fn rz_rz_cancellation_parallel(rz_rz: Hugr, badger_opt: DefaultBadgerOptimiser) {
-        let mut opt_rz = badger_opt.optimise(&rz_rz, Some(0), 2.try_into().unwrap(), false, 4);
+        let mut opt_rz = badger_opt.optimise(
+            &rz_rz,
+            BadgerOptions {
+                timeout: Some(0),
+                n_threads: 2.try_into().unwrap(),
+                queue_size: 4,
+                ..Default::default()
+            },
+        );
         opt_rz.update_validate(&REGISTRY).unwrap();
     }
 
@@ -536,10 +567,11 @@ mod tests {
     ) {
         let mut opt = badger_opt_full.optimise(
             &non_composable_rw_hugr,
-            Some(0),
-            1.try_into().unwrap(),
-            false,
-            10,
+            BadgerOptions {
+                timeout: Some(0),
+                queue_size: 4,
+                ..Default::default()
+            },
         );
         // No rewrites applied.
         opt.update_validate(&REGISTRY).unwrap();
