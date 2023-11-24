@@ -2,6 +2,7 @@
 
 use hugr::Hugr;
 use rstest::{fixture, rstest};
+use tket2::optimiser::badger::BadgerOptions;
 use tket2::{
     json::TKETDecode,
     optimiser::{BadgerOptimiser, DefaultBadgerOptimiser},
@@ -57,6 +58,12 @@ fn simple_circ() -> Hugr {
 #[rstest]
 //#[ignore = "Takes 200ms"]
 fn badger_termination(simple_circ: Hugr, nam_4_2: DefaultBadgerOptimiser) {
-    let opt_circ = nam_4_2.optimise(&simple_circ, None, 1.try_into().unwrap(), false, 10);
+    let opt_circ = nam_4_2.optimise(
+        &simple_circ,
+        BadgerOptions {
+            queue_size: 10,
+            ..Default::default()
+        },
+    );
     assert_eq!(opt_circ.commands().count(), 11);
 }
