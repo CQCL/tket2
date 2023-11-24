@@ -2,6 +2,7 @@ mod tracing;
 
 use crate::tracing::Tracer;
 
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::BufWriter;
 use std::num::NonZeroUsize;
@@ -12,7 +13,7 @@ use std::process::exit;
 use clap::Parser;
 use tket2::json::{load_tk1_json_file, save_tk1_json_file};
 use tket2::optimiser::badger::log::BadgerLogger;
-use tket2::optimiser::BadgerOptimiser;
+use tket2::optimiser::{BadgerOptimiser, DefaultBadgerOptimiser};
 
 #[cfg(feature = "peak_alloc")]
 #[global_allocator]
@@ -121,12 +122,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let circ = load_tk1_json_file(input_path)?;
 
-    println!("Compiling rewriter...");
-    let Ok(optimiser) = BadgerOptimiser::default_with_eccs_json_file(ecc_path) else {
-        eprintln!(
-            "Unable to load ECC file {:?}. Is it a JSON file of Quartz-generated ECCs?",
-            ecc_path
-        );
+    println!("Loading optimiser...");
+    let Ok(optimiser) = load_optimiser(ecc_path) else {
+        eprintln!("Unable to load ECC file {ecc_path:?}. Is it a JSON file of Quartz-generated ECCs? Or a pre-compiled `.rwr` ECC set?");
         exit(1);
     };
     println!(
@@ -156,4 +154,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Done.");
     Ok(())
+}
+
+fn load_optimiser(ecc_path: &Path) -> Result<DefaultBadgerOptimiser, Box<dyn std::error::Error>> {
+    Ok(match ecc_path.extension().and_then(OsStr::to_str) {
+        Some("json") => BadgerOptimiser::default_with_eccs_json_file(ecc_path)?,
+        Some("rwr") => BadgerOptimiser::default_with_rewriter_binary(ecc_path)?,
+        _ => Err("ECC file must be a `.json` file or a pre-compiled `.rwr` ECC set.".to_string())?,
+    })
 }
