@@ -87,7 +87,6 @@ fn badger_optimise<'py>(
     let rebase = rebase.unwrap_or(true);
     let max_threads = max_threads.unwrap_or(num_cpus::get().try_into().unwrap());
     let timeout = timeout.unwrap_or(30);
-    let progress_timeout = progress_timeout.unwrap_or(timeout.div_ceil(2));
     // Create log directory if necessary
     if let Some(log_dir) = log_dir.as_ref() {
         fs::create_dir_all(log_dir)?;
@@ -129,7 +128,7 @@ fn badger_optimise<'py>(
             });
             let options = BadgerOptions {
                 timeout: Some(timeout),
-                progress_timeout: Some(progress_timeout),
+                progress_timeout,
                 n_threads: n_threads.try_into().unwrap(),
                 split_circuit: true,
                 ..Default::default()

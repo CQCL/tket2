@@ -154,6 +154,7 @@ where
     #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
     fn badger(&self, circ: &Hugr, mut logger: BadgerLogger, opt: BadgerOptions) -> Hugr {
         let start_time = Instant::now();
+        let mut last_best_time = Instant::now();
 
         let mut best_circ = circ.clone();
         let mut best_circ_cost = self.cost(circ);
@@ -181,6 +182,7 @@ where
                 best_circ = circ.clone();
                 best_circ_cost = cost.clone();
                 logger.log_best(&best_circ_cost);
+                last_best_time = Instant::now();
             }
             circ_cnt += 1;
 
@@ -208,6 +210,12 @@ where
 
             if let Some(timeout) = opt.timeout {
                 if start_time.elapsed().as_secs() > timeout {
+                    timeout_flag = true;
+                    break;
+                }
+            }
+            if let Some(p_timeout) = opt.progress_timeout {
+                if last_best_time.elapsed().as_secs() > p_timeout {
                     timeout_flag = true;
                     break;
                 }
@@ -270,6 +278,12 @@ where
             Some(t) => crossbeam_channel::at(Instant::now() + Duration::from_secs(t)),
         };
 
+        // Deadline for the timeout when no progress is made
+        let mut progress_timeout_event = match opt.progress_timeout {
+            None => crossbeam_channel::never(),
+            Some(t) => crossbeam_channel::at(Instant::now() + Duration::from_secs(t)),
+        };
+
         // Main loop: log best circuits as they come in from the priority queue,
         // until the timeout is reached.
         let mut timeout_flag = false;
@@ -284,6 +298,9 @@ where
                                 best_circ = circ;
                                 best_circ_cost = cost;
                                 logger.log_best(&best_circ_cost);
+                                if let Some(t) = opt.progress_timeout {
+                                    progress_timeout_event = crossbeam_channel::at(Instant::now() + Duration::from_secs(t));
+                                }
                             }
                         },
                         Ok(PriorityChannelLog::CircuitCount{processed_count: proc, seen_count: seen, queue_length}) => {
@@ -299,6 +316,12 @@ where
                     }
                 }
                 recv(timeout_event) -> _ => {
+                    timeout_flag = true;
+                    // Signal the workers to stop.
+                    let _ = pq.close();
+                    break;
+                }
+                recv(progress_timeout_event) -> _ => {
                     timeout_flag = true;
                     // Signal the workers to stop.
                     let _ = pq.close();
