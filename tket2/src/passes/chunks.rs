@@ -8,14 +8,13 @@ use std::ops::{Index, IndexMut};
 
 use derive_more::From;
 use hugr::builder::{Container, FunctionBuilder};
-use hugr::extension::ExtensionSet;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::views::sibling_subgraph::ConvexChecker;
 use hugr::hugr::views::{HierarchyView, SiblingGraph, SiblingSubgraph};
 use hugr::hugr::{HugrError, NodeMetadataMap};
 use hugr::ops::handle::DataflowParentID;
 use hugr::ops::OpType;
-use hugr::types::{FunctionType, Signature};
+use hugr::types::FunctionType;
 use hugr::{Hugr, HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 use itertools::Itertools;
 
@@ -59,7 +58,7 @@ impl Chunk {
         )
         .expect("Failed to define the chunk subgraph");
         let extracted = subgraph
-            .extract_subgraph(circ, "Chunk", ExtensionSet::new())
+            .extract_subgraph(circ, "Chunk")
             .expect("Failed to extract chunk");
         // Transform the subgraph's input/output sets into wires that can be
         // matched between different chunks.
@@ -314,13 +313,8 @@ impl CircuitChunks {
             .and_then(|map| map.get("name"))
             .and_then(|s| s.as_str())
             .unwrap_or("");
-        let signature = Signature {
-            signature: self.signature,
-            // TODO: Is this correct? Can a circuit root have a fixed set of input extensions?
-            input_extensions: ExtensionSet::new(),
-        };
 
-        let mut builder = FunctionBuilder::new(name, signature).unwrap();
+        let mut builder = FunctionBuilder::new(name, self.signature.into()).unwrap();
         // Take the unfinished Hugr from the builder, to avoid unnecessary
         // validation checks that require connecting the inputs an outputs.
         let mut reassembled = mem::take(builder.hugr_mut());

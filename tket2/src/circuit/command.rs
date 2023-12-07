@@ -16,7 +16,7 @@ use super::units::{filter, DefaultUnitLabeller, LinearUnit, UnitLabeller, Units}
 use super::Circuit;
 
 pub use hugr::ops::OpType;
-pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
+pub use hugr::types::{EdgeKind, Type, TypeRow};
 pub use hugr::{CircuitUnit, Direction, Node, Port, PortIndex, Wire};
 
 /// An operation applied to specific wires.
