@@ -1,12 +1,11 @@
-use std::collections::HashMap;
-
 use crate::extension::{
     SYM_EXPR_T, SYM_OP_ID, TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID,
 };
 use hugr::{
     extension::{
         prelude::{BOOL_T, QB_T},
-        ExtensionBuildError, ExtensionId, OpDef,
+        simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp},
+        ExtensionId, OpDef, SignatureFunc,
     },
     ops::{custom::ExternalOp, LeafOp, OpType},
     std_extensions::arithmetic::float_types::FLOAT64_TYPE,
@@ -15,13 +14,10 @@ use hugr::{
         type_param::{CustomTypeArg, TypeArg},
         FunctionType,
     },
-    Extension,
 };
 
 use serde::{Deserialize, Serialize};
 
-use std::str::FromStr;
-use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
 use thiserror::Error;
 
@@ -72,10 +68,10 @@ pub enum Tk2Op {
 
 /// Whether an op is a given Tk2Op.
 pub fn op_matches(op: &OpType, tk2op: Tk2Op) -> bool {
-    let Ok(op) = Tk2Op::try_from(op) else {
+    let Some(ext_op) = tk2op.to_extension_op() else {
         return false;
     };
-    op == tk2op
+    op.as_leaf_op().and_then(|op| op.as_extension_op()) == Some(&ext_op)
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, PartialOrd)]
@@ -93,50 +89,14 @@ pub enum Pauli {
 #[error("Not a Tk2Op.")]
 pub struct NotTk2Op;
 
-// this trait could be implemented in Hugr
-pub(crate) trait SimpleOpEnum:
-    Into<&'static str> + FromStr + Copy + IntoEnumIterator
-{
-    type LoadError: std::error::Error;
-
-    fn signature(&self) -> FunctionType;
-    fn name(&self) -> &str {
-        (*self).into()
-    }
-    fn from_extension_name(extension: &ExtensionId, op_name: &str)
-        -> Result<Self, Self::LoadError>;
-    fn try_from_op_def(op_def: &OpDef) -> Result<Self, Self::LoadError> {
-        Self::from_extension_name(op_def.extension(), op_def.name())
-    }
-    fn add_to_extension<'e>(
-        &self,
-        ext: &'e mut Extension,
-    ) -> Result<&'e OpDef, ExtensionBuildError>;
-
-    fn all_variants() -> <Self as IntoEnumIterator>::Iterator {
-        <Self as IntoEnumIterator>::iter()
-    }
-}
-
-fn from_extension_name<T: SimpleOpEnum>(
-    extension: &ExtensionId,
-    op_name: &str,
-) -> Result<T, NotTk2Op> {
-    if extension != &EXTENSION_ID {
-        return Err(NotTk2Op);
-    }
-    T::from_str(op_name).map_err(|_| NotTk2Op)
-}
-
 impl Pauli {
     /// Check if this pauli commutes with another.
     pub fn commutes_with(&self, other: Self) -> bool {
         *self == Pauli::I || other == Pauli::I || *self == other
     }
 }
-impl SimpleOpEnum for Tk2Op {
-    type LoadError = NotTk2Op;
-    fn signature(&self) -> FunctionType {
+impl MakeOpDef for Tk2Op {
+    fn signature(&self) -> SignatureFunc {
         use Tk2Op::*;
         let one_qb_row = type_row![QB_T];
         let two_qb_row = type_row![QB_T, QB_T];
@@ -156,35 +116,28 @@ impl SimpleOpEnum for Tk2Op {
                 one_qb_row,
             ),
         }
+        .into()
     }
 
-    fn add_to_extension<'e>(
-        &self,
-        ext: &'e mut Extension,
-    ) -> Result<&'e OpDef, ExtensionBuildError> {
-        let name = self.name().into();
-        let FunctionType { input, output, .. } = self.signature();
-        ext.add_op_custom_sig(
-            name,
-            format!("TKET 2 quantum op: {}", self.name()),
-            vec![],
-            HashMap::from_iter([(
-                "commutation".to_string(),
-                serde_yaml::to_value(self.qubit_commutation()).unwrap(),
-            )]),
-            vec![],
-            move |_: &_| Ok(FunctionType::new(input.clone(), output.clone())),
-        )
+    fn post_opdef(&self, def: &mut OpDef) {
+        def.add_misc(
+            "commutation",
+            serde_yaml::to_value(self.qubit_commutation()).unwrap(),
+        );
     }
 
-    fn from_extension_name(
-        extension: &ExtensionId,
-        op_name: &str,
-    ) -> Result<Self, Self::LoadError> {
-        if extension != &EXTENSION_ID {
-            return Err(NotTk2Op);
-        }
-        Self::from_str(op_name).map_err(|_| NotTk2Op)
+    fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
+        try_from_name(op_def.name())
+    }
+}
+
+impl MakeRegisteredOp for Tk2Op {
+    fn extension_id(&self) -> ExtensionId {
+        EXTENSION_ID.to_owned()
+    }
+
+    fn registry<'s, 'r: 's>(&'s self) -> &'r hugr::extension::ExtensionRegistry {
+        &REGISTRY
     }
 }
 
@@ -238,7 +191,7 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<&str> {
             {
                 // TODO also check extension name
 
-                let Some(TypeArg::Opaque { arg }) = e.args().get(0) else {
+                let Some(TypeArg::Opaque { arg }) = e.args().first() else {
                     panic!("should be an opaque type arg.")
                 };
 
@@ -256,20 +209,9 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<&str> {
     }
 }
 
-// From implementations could be made generic over SimpleOpEnum
 impl From<Tk2Op> for LeafOp {
     fn from(op: Tk2Op) -> Self {
-        EXTENSION
-            .instantiate_extension_op(op.name(), [], &REGISTRY)
-            .unwrap()
-            .into()
-    }
-}
-
-impl From<Tk2Op> for OpType {
-    fn from(op: Tk2Op) -> Self {
-        let l: LeafOp = op.into();
-        l.into()
+        op.to_extension_op().unwrap().into()
     }
 }
 
@@ -277,7 +219,8 @@ impl TryFrom<OpType> for Tk2Op {
     type Error = NotTk2Op;
 
     fn try_from(op: OpType) -> Result<Self, Self::Error> {
-        Self::try_from(&op)
+        let leaf: LeafOp = op.try_into().map_err(|_| NotTk2Op)?;
+        leaf.try_into()
     }
 }
 
@@ -296,13 +239,15 @@ impl TryFrom<&LeafOp> for Tk2Op {
     type Error = NotTk2Op;
 
     fn try_from(op: &LeafOp) -> Result<Self, Self::Error> {
-        match op {
-            LeafOp::CustomOp(b) => match b.as_ref() {
-                ExternalOp::Extension(e) => Self::try_from_op_def(e.def()),
-                ExternalOp::Opaque(o) => from_extension_name(o.extension(), o.name()),
-            },
-            _ => Err(NotTk2Op),
+        let LeafOp::CustomOp(ext) = op else {
+            return Err(NotTk2Op);
+        };
+
+        match ext.as_ref() {
+            ExternalOp::Extension(ext) => Tk2Op::from_extension_op(ext),
+            ExternalOp::Opaque(opaque) => try_from_name(opaque.name()),
         }
+        .map_err(|_| NotTk2Op)
     }
 }
 
@@ -314,35 +259,29 @@ impl TryFrom<LeafOp> for Tk2Op {
     }
 }
 
-/// load all variants of a `SimpleOpEnum` in to an extension as op defs.
-pub(crate) fn load_all_ops<T: SimpleOpEnum>(
-    extension: &mut Extension,
-) -> Result<(), ExtensionBuildError> {
-    for op in T::all_variants() {
-        op.add_to_extension(extension)?;
-    }
-    Ok(())
-}
 #[cfg(test)]
 pub(crate) mod test {
 
     use std::sync::Arc;
 
+    use hugr::extension::simple_op::MakeOpDef;
+    use hugr::ops::OpName;
     use hugr::{extension::OpDef, Hugr};
     use rstest::{fixture, rstest};
+    use strum::IntoEnumIterator;
 
     use super::Tk2Op;
     use crate::extension::{TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID};
-    use crate::{circuit::Circuit, ops::SimpleOpEnum, utils::build_simple_circuit};
-    fn get_opdef(op: impl SimpleOpEnum) -> Option<&'static Arc<OpDef>> {
-        EXTENSION.get_op(op.name())
+    use crate::{circuit::Circuit, utils::build_simple_circuit};
+    fn get_opdef(op: impl OpName) -> Option<&'static Arc<OpDef>> {
+        EXTENSION.get_op(&op.name())
     }
     #[test]
     fn create_extension() {
         assert_eq!(EXTENSION.name(), &EXTENSION_ID);
 
-        for o in Tk2Op::all_variants() {
-            assert_eq!(Tk2Op::try_from_op_def(get_opdef(o).unwrap()), Ok(o));
+        for o in Tk2Op::iter() {
+            assert_eq!(Tk2Op::from_def(get_opdef(o).unwrap()), Ok(o));
         }
     }
 

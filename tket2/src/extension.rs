@@ -2,18 +2,16 @@
 //!
 //! This includes a extension for the opaque TKET1 operations.
 
-use std::collections::HashMap;
-
 use super::json::op::JsonOp;
-use crate::ops::load_all_ops;
 use crate::Tk2Op;
 use hugr::extension::prelude::PRELUDE;
-use hugr::extension::{ExtensionId, ExtensionRegistry, SignatureError};
+use hugr::extension::simple_op::MakeOpDef;
+use hugr::extension::{CustomSignatureFunc, ExtensionId, ExtensionRegistry, SignatureError};
 use hugr::hugr::IdentList;
 use hugr::ops::custom::{ExternalOp, OpaqueOp};
 use hugr::std_extensions::arithmetic::float_types::{extension as float_extension, FLOAT64_TYPE};
 use hugr::types::type_param::{CustomTypeArg, TypeArg, TypeParam};
-use hugr::types::{CustomType, FunctionType, Type, TypeBound};
+use hugr::types::{CustomType, FunctionType, PolyFuncType, Type, TypeBound};
 use hugr::{type_row, Extension};
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
@@ -45,14 +43,11 @@ pub static ref TKET1_EXTENSION: Extension = {
     res.add_type(LINEAR_BIT_NAME, vec![], "A linear bit.".into(), TypeBound::Any.into()).unwrap();
 
     let json_op_payload_def = res.add_type(JSON_PAYLOAD_NAME, vec![], "Opaque TKET1 operation metadata.".into(), TypeBound::Eq.into()).unwrap();
-    let json_op_payload = TypeParam::Opaque(json_op_payload_def.instantiate([]).unwrap());
-    res.add_op_custom_sig(
+    let json_op_payload = TypeParam::Opaque{ty:json_op_payload_def.instantiate([]).unwrap()};
+    res.add_op(
         JSON_OP_NAME,
         "An opaque TKET1 operation.".into(),
-        vec![json_op_payload],
-        HashMap::new(),
-        vec![],
-        json_op_signature,
+        JsonOpSignature([json_op_payload])
     ).unwrap();
 
     res
@@ -68,12 +63,12 @@ pub static ref LINEAR_BIT: Type = {
     };
 
 /// Extension registry including the prelude, TKET1 and Tk2Ops extensions.
-pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::from([
+pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
     TKET1_EXTENSION.clone(),
     PRELUDE.clone(),
     TKET2_EXTENSION.clone(),
     float_extension(),
-]);
+]).unwrap();
 
 
 }
@@ -98,7 +93,7 @@ pub(crate) fn wrap_json_op(op: &JsonOp) -> ExternalOp {
         JSON_OP_NAME,
         "".into(),
         vec![payload],
-        Some(sig),
+        sig,
     )
     .into()
 }
@@ -111,7 +106,7 @@ pub(crate) fn try_unwrap_json_op(ext: &ExternalOp) -> Option<JsonOp> {
     if ext.name() != format!("{TKET1_EXTENSION_ID}.{JSON_OP_NAME}") {
         return None;
     }
-    let Some(TypeArg::Opaque { arg }) = ext.args().get(0) else {
+    let Some(TypeArg::Opaque { arg }) = ext.args().first() else {
         // TODO: Throw an error? We should never get here if the name matches.
         return None;
     };
@@ -119,14 +114,26 @@ pub(crate) fn try_unwrap_json_op(ext: &ExternalOp) -> Option<JsonOp> {
     Some(op)
 }
 
-/// Compute the signature of a json-encoded TKET1 operation.
-fn json_op_signature(args: &[TypeArg]) -> Result<FunctionType, SignatureError> {
-    let [TypeArg::Opaque { arg }] = args else {
-        // This should have already been checked.
-        panic!("Wrong number of arguments");
-    };
-    let op: JsonOp = serde_yaml::from_value(arg.value.clone()).unwrap(); // TODO Errors!
-    Ok(op.signature())
+struct JsonOpSignature([TypeParam; 1]);
+
+impl CustomSignatureFunc for JsonOpSignature {
+    fn compute_signature<'o, 'a: 'o>(
+        &'a self,
+        arg_values: &[TypeArg],
+        _def: &'o hugr::extension::OpDef,
+        _extension_registry: &ExtensionRegistry,
+    ) -> Result<PolyFuncType, SignatureError> {
+        let [TypeArg::Opaque { arg }] = arg_values else {
+            // This should have already been checked.
+            panic!("Wrong number of arguments");
+        };
+        let op: JsonOp = serde_yaml::from_value(arg.value.clone()).unwrap(); // TODO Errors!
+        Ok(op.signature().into())
+    }
+
+    fn static_params(&self) -> &[TypeParam] {
+        &self.0
+    }
 }
 
 /// Angle type with given log denominator.
@@ -151,7 +158,7 @@ pub static ref SYM_EXPR_T: CustomType =
 /// The extension definition for TKET2 ops and types.
 pub static ref TKET2_EXTENSION: Extension = {
     let mut e = Extension::new(TKET2_EXTENSION_ID);
-    load_all_ops::<Tk2Op>(&mut e).expect("add fail");
+    Tk2Op::load_all_ops(&mut e).expect("add fail");
 
     let sym_expr_opdef = e.add_type(
         SYM_EXPR_NAME,
@@ -160,13 +167,12 @@ pub static ref TKET2_EXTENSION: Extension = {
         TypeBound::Eq.into(),
     )
     .unwrap();
-    let sym_expr_param = TypeParam::Opaque(sym_expr_opdef.instantiate([]).unwrap());
+    let sym_expr_param = TypeParam::Opaque{ty:sym_expr_opdef.instantiate([]).unwrap()};
 
-    e.add_op_custom_sig_simple(
+    e.add_op(
         SYM_OP_ID,
         "Store a sympy expression that can be evaluated to a float.".to_string(),
-        vec![sym_expr_param],
-        |_: &[TypeArg]| Ok(FunctionType::new(type_row![], type_row![FLOAT64_TYPE])),
+        PolyFuncType::new(vec![sym_expr_param], FunctionType::new(type_row![], type_row![FLOAT64_TYPE])),
     )
     .unwrap();
 
