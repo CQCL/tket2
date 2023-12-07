@@ -207,11 +207,11 @@ impl TryFrom<&OpType> for JsonOp {
         //
         // Non-supported Hugr operations throw an error.
         let err = || OpConvertError::UnsupportedOpSerialization(op.clone());
-        let OpType::LeafOp(leaf) = op else {
+        let Some(leaf) = op.as_leaf_op() else {
             return Err(err());
         };
 
-        let json_optype = if let Ok(tk2op) = leaf.clone().try_into() {
+        let json_optype = if let Ok(tk2op) = leaf.try_into() {
             match tk2op {
                 Tk2Op::H => JsonOpType::H,
                 Tk2Op::CX => JsonOpType::CX,

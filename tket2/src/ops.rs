@@ -239,7 +239,15 @@ impl TryFrom<&LeafOp> for Tk2Op {
     type Error = NotTk2Op;
 
     fn try_from(op: &LeafOp) -> Result<Self, Self::Error> {
-        Tk2Op::from_extension_op(op.as_extension_op().ok_or(NotTk2Op)?).map_err(|_| NotTk2Op)
+        let LeafOp::CustomOp(ext) = op else {
+            return Err(NotTk2Op);
+        };
+
+        match ext.as_ref() {
+            ExternalOp::Extension(ext) => Tk2Op::from_extension_op(ext),
+            ExternalOp::Opaque(opaque) => try_from_name(opaque.name()),
+        }
+        .map_err(|_| NotTk2Op)
     }
 }
 
