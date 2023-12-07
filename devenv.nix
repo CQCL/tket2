@@ -42,7 +42,7 @@ in
 
   languages.rust = {
     enable = true;
-    channel = "stable";
+    channel = "beta";
     components = [ "rustc" "cargo" "clippy" "rustfmt" "rust-analyzer" ];
   };
 

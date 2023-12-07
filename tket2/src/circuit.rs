@@ -24,7 +24,7 @@ use portgraph::Direction;
 use thiserror::Error;
 
 pub use hugr::ops::OpType;
-pub use hugr::types::{EdgeKind, Signature, Type, TypeRow};
+pub use hugr::types::{EdgeKind, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
 
 use self::units::{filter, FilteredUnits, Units};
@@ -46,9 +46,11 @@ pub trait Circuit: HugrView {
     ///
     /// Equivalent to [`HugrView::get_function_type`].
     #[inline]
-    fn circuit_signature(&self) -> &FunctionType {
+    fn circuit_signature(&self) -> FunctionType {
         self.get_function_type()
             .expect("Circuit has no function type")
+            .body()
+            .clone()
     }
 
     /// Returns the input node to the circuit.
@@ -338,8 +340,8 @@ mod tests {
         let circ = test_circuit();
 
         assert_eq!(circ.name(), None);
-        assert_eq!(circ.circuit_signature().input.len(), 3);
-        assert_eq!(circ.circuit_signature().output.len(), 3);
+        assert_eq!(circ.circuit_signature().input_count(), 3);
+        assert_eq!(circ.circuit_signature().output_count(), 3);
         assert_eq!(circ.qubit_count(), 2);
         assert_eq!(circ.num_gates(), 3);
 
