@@ -89,41 +89,6 @@ pub enum Pauli {
 #[error("Not a Tk2Op.")]
 pub struct NotTk2Op;
 
-// // this trait could be implemented in Hugr
-// pub(crate) trait SimpleOpEnum:
-//     Into<&'static str> + FromStr + Copy + IntoEnumIterator
-// {
-//     type LoadError: std::error::Error;
-
-//     fn signature(&self) -> FunctionType;
-//     fn name(&self) -> &str {
-//         (*self).into()
-//     }
-//     fn from_extension_name(extension: &ExtensionId, op_name: &str)
-//         -> Result<Self, Self::LoadError>;
-//     fn try_from_op_def(op_def: &OpDef) -> Result<Self, Self::LoadError> {
-//         Self::from_extension_name(op_def.extension(), op_def.name())
-//     }
-//     fn add_to_extension<'e>(
-//         &self,
-//         ext: &'e mut Extension,
-//     ) -> Result<&'e OpDef, ExtensionBuildError>;
-
-//     fn all_variants() -> <Self as IntoEnumIterator>::Iterator {
-//         <Self as IntoEnumIterator>::iter()
-//     }
-// }
-
-// fn from_extension_name<T: SimpleOpEnum>(
-//     extension: &ExtensionId,
-//     op_name: &str,
-// ) -> Result<T, NotTk2Op> {
-//     if extension != &EXTENSION_ID {
-//         return Err(NotTk2Op);
-//     }
-//     T::from_str(op_name).map_err(|_| NotTk2Op)
-// }
-
 impl Pauli {
     /// Check if this pauli commutes with another.
     pub fn commutes_with(&self, other: Self) -> bool {
