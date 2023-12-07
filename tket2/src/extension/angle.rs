@@ -1,7 +1,9 @@
 use std::{cmp::max, num::NonZeroU64};
 
 use hugr::{
-    extension::{prelude::ERROR_TYPE, ExtensionRegistry, SignatureError, TypeDef, PRELUDE},
+    extension::{
+        prelude::ERROR_TYPE, ExtensionRegistry, SignatureError, SignatureFromArgs, TypeDef, PRELUDE,
+    },
     types::{
         type_param::{TypeArgError, TypeParam},
         ConstTypeError, CustomCheckFailure, CustomType, FunctionType, PolyFuncType, Type, TypeArg,
@@ -153,15 +155,28 @@ fn collect_array<const N: usize, T: std::fmt::Debug>(arr: &[T]) -> [&T; N] {
     arr.iter().collect_vec().try_into().unwrap()
 }
 
-fn abinop_sig(arg_values: &[TypeArg]) -> Result<FunctionType, SignatureError> {
-    let [arg0, arg1] = collect_array(arg_values);
-    let m: u8 = get_log_denom(arg0)?;
-    let n: u8 = get_log_denom(arg1)?;
-    let l: u8 = max(m, n);
-    Ok(FunctionType::new(
-        vec![angle_type(m), angle_type(n)],
-        vec![angle_type(l)],
-    ))
+fn abinop_sig() -> impl SignatureFromArgs {
+    struct BinOp;
+    const PARAMS: &[TypeParam] = &[LOG_DENOM_TYPE_PARAM];
+
+    impl SignatureFromArgs for BinOp {
+        fn compute_signature(
+            &self,
+            arg_values: &[TypeArg],
+        ) -> Result<PolyFuncType, SignatureError> {
+            let [arg0, arg1] = collect_array(arg_values);
+            let m: u8 = get_log_denom(arg0)?;
+            let n: u8 = get_log_denom(arg1)?;
+            let l: u8 = max(m, n);
+            Ok(FunctionType::new(vec![angle_type(m), angle_type(n)], vec![angle_type(l)]).into())
+        }
+
+        fn static_params(&self) -> &[TypeParam] {
+            PARAMS
+        }
+    }
+
+    BinOp
 }
 
 fn aunop_sig(extension: &Extension) -> Result<FunctionType, SignatureError> {
@@ -173,81 +188,80 @@ fn angle_def(extension: &Extension) -> &TypeDef {
     extension.get_type(&ANGLE_TYPE_ID).unwrap()
 }
 
+fn generic_angle_type(var_id: usize, angle_type_def: &TypeDef) -> Type {
+    Type::new_extension(
+        angle_type_def
+            .instantiate(vec![TypeArg::new_var_use(var_id, LOG_DENOM_TYPE_PARAM)])
+            .unwrap(),
+    )
+}
 pub(super) fn add_to_extension(extension: &mut Extension) {
-    extension
+    let angle_type_def = extension
         .add_type(
             ANGLE_TYPE_ID,
             vec![LOG_DENOM_TYPE_PARAM],
             "angle value with a given log-denominator".to_owned(),
             TypeBound::Eq.into(),
         )
-        .unwrap();
+        .unwrap()
+        .clone();
 
-    let reg1: ExtensionRegistry = [PRELUDE.to_owned(), extension.to_owned()].into();
     extension
-        .add_op_type_scheme(
+        .add_op(
             "atrunc".into(),
             "truncate an angle to one with a lower log-denominator with the same value, rounding \
             down in [0, 2π) if necessary"
                 .to_owned(),
-            Default::default(),
-            vec![],
-            PolyFuncType::new_validated(
+            PolyFuncType::new(
                 vec![LOG_DENOM_TYPE_PARAM, LOG_DENOM_TYPE_PARAM],
-                atrunc_sig(extension).unwrap(),
-                &reg1,
-            )
-            .unwrap(),
+                // atrunc_sig(extension).unwrap(),
+                FunctionType::new(
+                    vec![generic_angle_type(0, &angle_type_def)],
+                    vec![generic_angle_type(1, &angle_type_def)],
+                ),
+            ),
         )
         .unwrap();
 
     extension
-        .add_op_type_scheme(
+        .add_op(
             "aconvert".into(),
             "convert an angle to one with another log-denominator having the same value, if \
             possible, otherwise return an error"
                 .to_owned(),
-            Default::default(),
-            vec![],
-            PolyFuncType::new_validated(
+            PolyFuncType::new(
                 vec![LOG_DENOM_TYPE_PARAM, LOG_DENOM_TYPE_PARAM],
-                aconvert_sig(extension).unwrap(),
-                &reg1,
-            )
-            .unwrap(),
+                FunctionType::new(
+                    vec![generic_angle_type(0, &angle_type_def)],
+                    vec![Type::new_sum(vec![
+                        generic_angle_type(1, &angle_type_def),
+                        ERROR_TYPE,
+                    ])],
+                ),
+            ),
         )
         .unwrap();
 
     extension
-        .add_op_custom_sig_simple(
-            "aadd".into(),
-            "addition of angles".to_owned(),
-            vec![LOG_DENOM_TYPE_PARAM],
-            abinop_sig,
-        )
+        .add_op("aadd".into(), "addition of angles".to_owned(), abinop_sig())
         .unwrap();
 
     extension
-        .add_op_custom_sig_simple(
+        .add_op(
             "asub".into(),
             "subtraction of the second angle from the first".to_owned(),
-            vec![LOG_DENOM_TYPE_PARAM],
-            abinop_sig,
+            abinop_sig(),
         )
         .unwrap();
 
     extension
-        .add_op_type_scheme(
+        .add_op(
             "aneg".into(),
             "negation of an angle".to_owned(),
-            Default::default(),
-            vec![],
-            PolyFuncType::new_validated(
-                vec![LOG_DENOM_TYPE_PARAM, LOG_DENOM_TYPE_PARAM],
-                aunop_sig(extension).unwrap(),
-                &reg1,
-            )
-            .unwrap(),
+            PolyFuncType::new(
+                vec![LOG_DENOM_TYPE_PARAM],
+                FunctionType::new_endo(vec![generic_angle_type(0, &angle_type_def)]),
+            ),
         )
         .unwrap();
 }
@@ -305,13 +319,19 @@ mod test {
     }
     #[test]
     fn test_binop_sig() {
-        let sig = abinop_sig(&[type_arg(23), type_arg(42)]).unwrap();
+        let binop_sig = abinop_sig();
+
+        let sig = binop_sig
+            .compute_signature(&[type_arg(23), type_arg(42)])
+            .unwrap();
 
         assert_eq!(
             sig,
-            FunctionType::new(vec![angle_type(23), angle_type(42)], vec![angle_type(42)])
+            FunctionType::new(vec![angle_type(23), angle_type(42)], vec![angle_type(42)]).into()
         );
 
-        assert!(abinop_sig(&[type_arg(23), type_arg(89)]).is_err());
+        assert!(binop_sig
+            .compute_signature(&[type_arg(23), type_arg(89)])
+            .is_err());
     }
 }

@@ -49,7 +49,7 @@ pub static ref TKET1_EXTENSION: Extension = {
     res.add_op(
         JSON_OP_NAME,
         "An opaque TKET1 operation.".into(),
-        JsonOpSignature(json_op_payload)
+        JsonOpSignature([json_op_payload])
     ).unwrap();
 
     res
@@ -116,14 +116,14 @@ pub(crate) fn try_unwrap_json_op(ext: &ExternalOp) -> Option<JsonOp> {
     Some(op)
 }
 
-struct JsonOpSignature(TypeParam);
+struct JsonOpSignature([TypeParam; 1]);
 
 impl CustomSignatureFunc for JsonOpSignature {
     fn compute_signature<'o, 'a: 'o>(
         &'a self,
         arg_values: &[TypeArg],
-        def: &'o hugr::extension::OpDef,
-        extension_registry: &ExtensionRegistry,
+        _def: &'o hugr::extension::OpDef,
+        _extension_registry: &ExtensionRegistry,
     ) -> Result<PolyFuncType, SignatureError> {
         let [TypeArg::Opaque { arg }] = arg_values else {
             // This should have already been checked.
@@ -134,7 +134,7 @@ impl CustomSignatureFunc for JsonOpSignature {
     }
 
     fn static_params(&self) -> &[TypeParam] {
-        &[self.0]
+        &self.0
     }
 }
 /// Compute the signature of a json-encoded TKET1 operation.
