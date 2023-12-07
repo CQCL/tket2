@@ -16,7 +16,7 @@ use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::NodeType;
 use hugr::ops::dataflow::IOTrait;
 use hugr::ops::{Input, Output, DFG};
-use hugr::types::{FunctionType, PolyFuncType};
+use hugr::types::FunctionType;
 use hugr::HugrView;
 use hugr::PortIndex;
 use itertools::Itertools;

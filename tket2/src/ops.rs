@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::extension::{
     SYM_EXPR_T, SYM_OP_ID, TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID,
 };
@@ -7,7 +5,7 @@ use hugr::{
     extension::{
         prelude::{BOOL_T, QB_T},
         simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp},
-        ExtensionBuildError, ExtensionId, OpDef, SignatureFunc,
+        ExtensionId, OpDef, SignatureFunc,
     },
     ops::{custom::ExternalOp, LeafOp, OpType},
     std_extensions::arithmetic::float_types::FLOAT64_TYPE,
@@ -16,7 +14,6 @@ use hugr::{
         type_param::{CustomTypeArg, TypeArg},
         FunctionType,
     },
-    Extension,
 };
 
 use serde::{Deserialize, Serialize};
@@ -229,7 +226,7 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<&str> {
             {
                 // TODO also check extension name
 
-                let Some(TypeArg::Opaque { arg }) = e.args().get(0) else {
+                let Some(TypeArg::Opaque { arg }) = e.args().first() else {
                     panic!("should be an opaque type arg.")
                 };
 

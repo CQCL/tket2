@@ -2,8 +2,6 @@
 //!
 //! This includes a extension for the opaque TKET1 operations.
 
-use std::collections::HashMap;
-
 use super::json::op::JsonOp;
 use crate::Tk2Op;
 use hugr::extension::prelude::PRELUDE;
@@ -108,7 +106,7 @@ pub(crate) fn try_unwrap_json_op(ext: &ExternalOp) -> Option<JsonOp> {
     if ext.name() != format!("{TKET1_EXTENSION_ID}.{JSON_OP_NAME}") {
         return None;
     }
-    let Some(TypeArg::Opaque { arg }) = ext.args().get(0) else {
+    let Some(TypeArg::Opaque { arg }) = ext.args().first() else {
         // TODO: Throw an error? We should never get here if the name matches.
         return None;
     };
@@ -136,15 +134,6 @@ impl CustomSignatureFunc for JsonOpSignature {
     fn static_params(&self) -> &[TypeParam] {
         &self.0
     }
-}
-/// Compute the signature of a json-encoded TKET1 operation.
-fn json_op_signature(args: &[TypeArg]) -> Result<FunctionType, SignatureError> {
-    let [TypeArg::Opaque { arg }] = args else {
-        // This should have already been checked.
-        panic!("Wrong number of arguments");
-    };
-    let op: JsonOp = serde_yaml::from_value(arg.value.clone()).unwrap(); // TODO Errors!
-    Ok(op.signature())
 }
 
 /// Angle type with given log denominator.

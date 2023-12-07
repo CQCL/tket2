@@ -1,9 +1,7 @@
 use std::{cmp::max, num::NonZeroU64};
 
 use hugr::{
-    extension::{
-        prelude::ERROR_TYPE, ExtensionRegistry, SignatureError, SignatureFromArgs, TypeDef, PRELUDE,
-    },
+    extension::{prelude::ERROR_TYPE, SignatureError, SignatureFromArgs, TypeDef},
     types::{
         type_param::{TypeArgError, TypeParam},
         ConstTypeError, CustomCheckFailure, CustomType, FunctionType, PolyFuncType, Type, TypeArg,
@@ -129,27 +127,6 @@ impl CustomConst for ConstAngle {
     }
 }
 
-fn type_var(var_id: usize, extension: &Extension) -> Result<Type, SignatureError> {
-    Ok(Type::new_extension(angle_def(extension).instantiate(
-        vec![TypeArg::new_var_use(var_id, LOG_DENOM_TYPE_PARAM)],
-    )?))
-}
-fn atrunc_sig(extension: &Extension) -> Result<FunctionType, SignatureError> {
-    let in_angle = type_var(0, extension)?;
-    let out_angle = type_var(1, extension)?;
-
-    Ok(FunctionType::new(vec![in_angle], vec![out_angle]))
-}
-
-fn aconvert_sig(extension: &Extension) -> Result<FunctionType, SignatureError> {
-    let in_angle = type_var(0, extension)?;
-    let out_angle = type_var(1, extension)?;
-    Ok(FunctionType::new(
-        vec![in_angle],
-        vec![Type::new_sum(vec![out_angle, ERROR_TYPE])],
-    ))
-}
-
 /// Collect a vector into an array.
 fn collect_array<const N: usize, T: std::fmt::Debug>(arr: &[T]) -> [&T; N] {
     arr.iter().collect_vec().try_into().unwrap()
@@ -177,11 +154,6 @@ fn abinop_sig() -> impl SignatureFromArgs {
     }
 
     BinOp
-}
-
-fn aunop_sig(extension: &Extension) -> Result<FunctionType, SignatureError> {
-    let angle = type_var(0, extension)?;
-    Ok(FunctionType::new_endo(vec![angle]))
 }
 
 fn angle_def(extension: &Extension) -> &TypeDef {
