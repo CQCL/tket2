@@ -21,3 +21,6 @@ devenv.local.nix
 .coverage
 coverage.xml
 lcov.info
+
+# python hypothesis testing
+.hypothesis
