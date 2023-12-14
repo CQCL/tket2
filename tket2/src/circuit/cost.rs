@@ -225,4 +225,32 @@ mod tests {
             LexicographicCost([10, 2])
         );
     }
+
+    #[test]
+    fn zero_dim_cost() {
+        let a = LexicographicCost::<usize, 0>([]);
+        let b = LexicographicCost::<usize, 0>([]);
+        assert_eq!(a, b);
+        assert_eq!(a + b, LexicographicCost::<usize, 0>([]));
+        assert_eq!(a.sub_cost(&b).as_isize(), 0);
+        assert_eq!(b.sub_cost(&a).as_isize(), 0);
+        assert_eq!(a.div_cost(NonZeroUsize::new(2).unwrap()), a);
+        assert_eq!(a.div_cost(NonZeroUsize::new(3).unwrap()), a);
+        assert_eq!(a.div_cost(NonZeroUsize::new(1).unwrap()), a);
+    }
+
+    #[test]
+    fn as_usize() {
+        let a = LexicographicCost([10, 2]);
+        assert_eq!(a.as_usize(), 10);
+        let a = LexicographicCost::<usize, 0>([]);
+        assert_eq!(a.as_usize(), 0);
+    }
+
+    #[test]
+    fn serde_serialize() {
+        let a = LexicographicCost([10, 2]);
+        let s = serde_json::to_string(&a).unwrap();
+        assert_eq!(s, "\"[10, 2]\"");
+    }
 }
