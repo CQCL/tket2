@@ -1,6 +1,5 @@
 //! Cost definitions for a circuit.
 
-use derive_more::From;
 use hugr::ops::OpType;
 use itertools::izip;
 use std::fmt::Debug;
