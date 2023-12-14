@@ -344,7 +344,7 @@ where
 
     #[inline]
     fn op_cost(&self, op: &OpType) -> Self::OpCost {
-        ((self.major_cost)(op), (self.minor_cost)(op)).into()
+        [(self.major_cost)(op), (self.minor_cost)(op)].into()
     }
 }
 
