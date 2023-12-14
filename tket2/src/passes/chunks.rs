@@ -9,7 +9,7 @@ use std::ops::{Index, IndexMut};
 use derive_more::From;
 use hugr::builder::{Container, FunctionBuilder};
 use hugr::hugr::hugrmut::HugrMut;
-use hugr::hugr::views::sibling_subgraph::ConvexChecker;
+use hugr::hugr::views::sibling_subgraph::TopoConvexChecker;
 use hugr::hugr::views::{HierarchyView, SiblingGraph, SiblingSubgraph};
 use hugr::hugr::{HugrError, NodeMetadataMap};
 use hugr::ops::handle::DataflowParentID;
@@ -17,6 +17,7 @@ use hugr::ops::OpType;
 use hugr::types::FunctionType;
 use hugr::{Hugr, HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 use itertools::Itertools;
+use portgraph::algorithms::ConvexChecker;
 
 use crate::Circuit;
 
@@ -46,10 +47,10 @@ impl Chunk {
     /// Extract a chunk from a circuit.
     ///
     /// The chunk is extracted from the input wires to the output wires.
-    pub(self) fn extract<'h, H: HugrView>(
-        circ: &'h H,
+    pub(self) fn extract<H: HugrView>(
+        circ: &H,
         nodes: impl IntoIterator<Item = Node>,
-        checker: &ConvexChecker<'h, H>,
+        checker: &impl ConvexChecker,
     ) -> Self {
         let subgraph = SiblingSubgraph::try_from_nodes_with_checker(
             nodes.into_iter().collect_vec(),
@@ -281,7 +282,7 @@ impl CircuitChunks {
             .collect();
 
         let mut chunks = Vec::new();
-        let convex_checker = ConvexChecker::new(circ);
+        let convex_checker = TopoConvexChecker::new(circ);
         let mut running_cost = C::default();
         let mut current_group = 0;
         for (_, commands) in &circ.commands().map(|cmd| cmd.node()).group_by(|&node| {

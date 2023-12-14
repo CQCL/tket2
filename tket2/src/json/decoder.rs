@@ -6,8 +6,7 @@ use std::hash::{Hash, Hasher};
 use std::mem;
 
 use hugr::builder::{CircuitBuilder, Container, DFGBuilder, Dataflow, DataflowHugr};
-use hugr::extension::prelude::{PRELUDE_ID, QB_T};
-use hugr::extension::ExtensionSet;
+use hugr::extension::prelude::QB_T;
 
 use hugr::ops::Const;
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
@@ -147,9 +146,7 @@ impl JsonDecoder {
             Some(c) => {
                 let const_type = FLOAT64_TYPE;
                 let const_op = Const::new(c, const_type).unwrap();
-                self.hugr
-                    .add_load_const(const_op, ExtensionSet::singleton(&PRELUDE_ID))
-                    .unwrap()
+                self.hugr.add_load_const(const_op).unwrap()
             }
             None => {
                 // store string in custom op.
