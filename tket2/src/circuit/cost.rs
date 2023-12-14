@@ -44,9 +44,12 @@ pub trait CostDelta:
 /// minor cost.
 pub type MajorMinorCost<T = usize> = LexicographicCost<T, 2>;
 
-impl<T> From<(T, T)> for MajorMinorCost<T> {
-    fn from((major, minor): (T, T)) -> Self {
-        Self([major, minor])
+impl<const N: usize, V, T> From<V> for LexicographicCost<T, N>
+where
+    V: Into<[T; N]>,
+{
+    fn from(v: V) -> Self {
+        Self(v.into())
     }
 }
 
@@ -54,7 +57,7 @@ impl<T> From<(T, T)> for MajorMinorCost<T> {
 ///
 /// An array of cost functions, where the first one is infinitely more important
 /// than the second, which is infinitely more important than the third, etc.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, From)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LexicographicCost<T, const N: usize>([T; N]);
 
 impl<const N: usize, T: Default + Copy> Default for LexicographicCost<T, N> {
