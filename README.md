@@ -13,10 +13,13 @@ Version 2 of the TKET compiler.
 ## Features
 
 - `pyo3`
-This optional feature enables some python bindings via pyo3. See the `tket2-py` folder for more.
+  Enables some python bindings via pyo3. See the `tket2-py` folder for more.
 
 - `portmatching`
-  This enables pattern matching using the `portmatching` crate.
+  Enables pattern matching using the `portmatching` crate.
+
+- `rewrite-tracing`
+  Adds opt-in tracking of the rewrites applied to a circuit.
 
 ## Developing TKET2
 
