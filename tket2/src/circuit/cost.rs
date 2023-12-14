@@ -131,7 +131,7 @@ impl<const N: usize> CircuitCost for LexicographicCost<usize, N> {
     #[inline]
     fn sub_cost(&self, other: &Self) -> Self::CostDelta {
         let mut costdelta = [0; N];
-        for (delta, &a, &b) in izip!(costdelta.iter_mut(), self.0.iter(), other.0.iter()) {
+        for (delta, &a, &b) in izip!(costdelta.iter_mut(), &self.0, &other.0) {
             *delta = (a as isize) - (b as isize);
         }
         LexicographicCost(costdelta)
@@ -140,7 +140,7 @@ impl<const N: usize> CircuitCost for LexicographicCost<usize, N> {
     #[inline]
     fn add_delta(&self, delta: &Self::CostDelta) -> Self {
         let mut ret = [0; N];
-        for (add, &a, &b) in izip!(ret.iter_mut(), self.0.iter(), delta.0.iter()) {
+        for (add, &a, &b) in izip!(ret.iter_mut(), &self.0, &delta.0) {
             *add = a.saturating_add_signed(b);
         }
         Self(ret)
@@ -149,7 +149,7 @@ impl<const N: usize> CircuitCost for LexicographicCost<usize, N> {
     #[inline]
     fn div_cost(&self, n: NonZeroUsize) -> Self {
         let mut ret = [0; N];
-        for (div, &a) in izip!(ret.iter_mut(), self.0.iter()) {
+        for (div, &a) in ret.iter_mut().zip(&self.0) {
             *div = (a.saturating_sub(1)) / n.get() + 1;
         }
         Self(ret)
