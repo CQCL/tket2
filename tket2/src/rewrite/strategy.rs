@@ -145,7 +145,6 @@ impl RewriteStrategy for GreedyRewriteStrategy {
             }
             changed_nodes.extend(rewrite.subcircuit().nodes().iter().copied());
             cost_delta += rewrite.node_count_delta();
-            circ.add_rewrite_trace(RewriteTrace::new(1));
             rewrite
                 .apply(&mut circ)
                 .expect("Could not perform rewrite in greedy strategy");
@@ -237,7 +236,7 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveGreedyStrategy<T> {
 
                 rewrite
                     .clone()
-                    .apply(&mut curr_circ)
+                    .apply_notrace(&mut curr_circ)
                     .expect("Could not perform rewrite in exhaustive greedy strategy");
             }
 
@@ -292,7 +291,6 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveThresholdStrategy<T> {
                     return None;
                 }
                 let mut circ = circ.clone();
-                circ.add_rewrite_trace(RewriteTrace::new(1));
                 rw.apply(&mut circ).expect("invalid pattern match");
                 Some((circ, target_cost.sub_cost(&pattern_cost)))
             })
