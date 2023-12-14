@@ -1,5 +1,6 @@
 use std::{cmp::max, num::NonZeroU64};
 
+use hugr::extension::ExtensionSet;
 use hugr::{
     extension::{prelude::ERROR_TYPE, SignatureError, SignatureFromArgs, TypeDef},
     types::{
@@ -13,6 +14,8 @@ use hugr::{
 use itertools::Itertools;
 use smol_str::SmolStr;
 use std::f64::consts::TAU;
+
+use super::TKET2_EXTENSION_ID;
 
 /// Identifier for the angle type.
 const ANGLE_TYPE_ID: SmolStr = SmolStr::new_inline("angle");
@@ -124,6 +127,9 @@ impl CustomConst for ConstAngle {
     }
     fn equal_consts(&self, other: &dyn CustomConst) -> bool {
         hugr::values::downcast_equal_consts(self, other)
+    }
+    fn extension_reqs(&self) -> ExtensionSet {
+        ExtensionSet::singleton(&TKET2_EXTENSION_ID)
     }
 }
 

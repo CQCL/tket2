@@ -4,7 +4,7 @@ use std::io::BufReader;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::QB_T;
-use hugr::extension::ExtensionSet;
+
 use hugr::std_extensions::arithmetic::float_types::{ConstF64, FLOAT64_TYPE};
 use hugr::types::FunctionType;
 use hugr::Hugr;
@@ -108,14 +108,9 @@ fn circ_add_angles_constants() -> Hugr {
     let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row)).unwrap();
 
     let qb = h.input_wires().next().unwrap();
-    let f64_ext = hugr::std_extensions::arithmetic::float_types::EXTENSION_ID;
 
-    let point2 = h
-        .add_load_const(ConstF64::new(0.2).into(), ExtensionSet::singleton(&f64_ext))
-        .unwrap();
-    let point3 = h
-        .add_load_const(ConstF64::new(0.3).into(), ExtensionSet::singleton(&f64_ext))
-        .unwrap();
+    let point2 = h.add_load_const(ConstF64::new(0.2).into()).unwrap();
+    let point3 = h.add_load_const(ConstF64::new(0.3).into()).unwrap();
     let point5 = h
         .add_dataflow_op(Tk2Op::AngleAdd, [point2, point3])
         .unwrap()
