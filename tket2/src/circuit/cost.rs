@@ -2,7 +2,8 @@
 
 use derive_more::From;
 use hugr::ops::OpType;
-use std::fmt::{Debug, Display};
+use itertools::izip;
+use std::fmt::Debug;
 use std::iter::Sum;
 use std::num::NonZeroUsize;
 use std::ops::{Add, AddAssign};
@@ -72,10 +73,10 @@ impl<const N: usize> serde::Serialize for LexicographicCost<usize, N> {
     }
 }
 
-impl<T: Display, const N: usize> Debug for LexicographicCost<T, N> {
+impl<T: Debug, const N: usize> Debug for LexicographicCost<T, N> {
     // TODO: A nicer print for the logs
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{:?}", self.0)
     }
 }
 
@@ -86,7 +87,7 @@ impl<T: Add<Output = T> + Copy, const N: usize> Add for LexicographicCost<T, N> 
         for i in 0..N {
             self.0[i] = self.0[i] + rhs.0[i];
         }
-        return self;
+        self
     }
 }
 
@@ -130,8 +131,8 @@ impl<const N: usize> CircuitCost for LexicographicCost<usize, N> {
     #[inline]
     fn sub_cost(&self, other: &Self) -> Self::CostDelta {
         let mut costdelta = [0; N];
-        for i in 0..N {
-            costdelta[i] = (self.0[i] as isize) - (other.0[i] as isize);
+        for (delta, &a, &b) in izip!(costdelta.iter_mut(), self.0.iter(), other.0.iter()) {
+            *delta = (a as isize) - (b as isize);
         }
         LexicographicCost(costdelta)
     }
@@ -139,8 +140,8 @@ impl<const N: usize> CircuitCost for LexicographicCost<usize, N> {
     #[inline]
     fn add_delta(&self, delta: &Self::CostDelta) -> Self {
         let mut ret = [0; N];
-        for i in 0..N {
-            ret[i] = self.0[i].saturating_add_signed(delta.0[i]);
+        for (add, &a, &b) in izip!(ret.iter_mut(), self.0.iter(), delta.0.iter()) {
+            *add = a.saturating_add_signed(b);
         }
         Self(ret)
     }
@@ -148,8 +149,8 @@ impl<const N: usize> CircuitCost for LexicographicCost<usize, N> {
     #[inline]
     fn div_cost(&self, n: NonZeroUsize) -> Self {
         let mut ret = [0; N];
-        for i in 0..N {
-            ret[i] = (self.0[i].saturating_sub(1)) / n.get() + 1;
+        for (div, &a) in izip!(ret.iter_mut(), self.0.iter()) {
+            *div = (a.saturating_sub(1)) / n.get() + 1;
         }
         Self(ret)
     }
