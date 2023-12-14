@@ -112,6 +112,8 @@ pub trait RewriteTracer: Circuit + HugrMut + Sized {
     /// Returns the traces of rewrites applied to the circuit.
     ///
     /// Returns `None` if rewrite tracing is not enabled for this circuit.
+    //
+    // TODO return an `impl Iterator` once rust 1.75 lands.
     #[inline]
     fn rewrite_trace(&self) -> Option<Vec<RewriteTrace>> {
         if !REWRITE_TRACING_ENABLED {
