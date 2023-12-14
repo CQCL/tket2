@@ -28,6 +28,7 @@ use itertools::Itertools;
 use crate::circuit::cost::{is_cx, is_quantum, CircuitCost, CostDelta, MajorMinorCost};
 use crate::Circuit;
 
+use super::trace::{RewriteTrace, RewriteTracer};
 use super::CircuitRewrite;
 
 /// Rewriting strategies for circuit optimisation.
@@ -219,6 +220,7 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveGreedyStrategy<T> {
             let mut curr_circ = circ.clone();
             let mut changed_nodes = HashSet::new();
             let mut cost_delta = Default::default();
+            let mut composed_rewrite_count = 0;
             for (rewrite, delta) in &rewrites[i..] {
                 if !changed_nodes.is_empty()
                     && rewrite
@@ -230,11 +232,15 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveGreedyStrategy<T> {
                 changed_nodes.extend(rewrite.invalidation_set());
                 cost_delta += delta.clone();
 
+                composed_rewrite_count += 1;
+
                 rewrite
                     .clone()
-                    .apply(&mut curr_circ)
+                    .apply_notrace(&mut curr_circ)
                     .expect("Could not perform rewrite in exhaustive greedy strategy");
             }
+
+            curr_circ.add_rewrite_trace(RewriteTrace::new(composed_rewrite_count));
             rewrite_sets.circs.push(curr_circ);
             rewrite_sets.cost_deltas.push(cost_delta);
         }
@@ -462,6 +468,7 @@ mod tests {
     use hugr::{Hugr, Node};
     use itertools::Itertools;
 
+    use crate::rewrite::trace::REWRITE_TRACING_ENABLED;
     use crate::{
         circuit::Circuit,
         rewrite::{CircuitRewrite, Subcircuit},
@@ -494,8 +501,15 @@ mod tests {
 
     #[test]
     fn test_greedy_strategy() {
-        let circ = n_cx(10);
+        let mut circ = n_cx(10);
         let cx_gates = circ.commands().map(|cmd| cmd.node()).collect_vec();
+
+        assert_eq!(circ.rewrite_trace(), None);
+        circ.enable_rewrite_tracing();
+        match REWRITE_TRACING_ENABLED {
+            true => assert_eq!(circ.rewrite_trace(), Some(vec![])),
+            false => assert_eq!(circ.rewrite_trace(), None),
+        }
 
         let rws = [
             rw_to_empty(&circ, cx_gates[0..2].to_vec()),
@@ -508,12 +522,17 @@ mod tests {
         let rewritten = strategy.apply_rewrites(rws, &circ);
         assert_eq!(rewritten.len(), 1);
         assert_eq!(rewritten.circs[0].num_gates(), 5);
+
+        if REWRITE_TRACING_ENABLED {
+            assert_eq!(rewritten.circs[0].rewrite_trace().unwrap().len(), 3);
+        }
     }
 
     #[test]
     fn test_exhaustive_default_strategy() {
-        let circ = n_cx(10);
+        let mut circ = n_cx(10);
         let cx_gates = circ.commands().map(|cmd| cmd.node()).collect_vec();
+        circ.enable_rewrite_tracing();
 
         let rws = [
             rw_to_empty(&circ, cx_gates[0..2].to_vec()),
@@ -527,6 +546,23 @@ mod tests {
         let exp_circ_lens = HashSet::from_iter([3, 7, 9]);
         let circ_lens: HashSet<_> = rewritten.circs.iter().map(|c| c.num_gates()).collect();
         assert_eq!(circ_lens, exp_circ_lens);
+
+        if REWRITE_TRACING_ENABLED {
+            // Each strategy branch applies a single rewrite, composed of
+            // multiple individual elements from `rws`.
+            assert_eq!(
+                rewritten.circs[0].rewrite_trace().unwrap(),
+                vec![RewriteTrace::new(3)]
+            );
+            assert_eq!(
+                rewritten.circs[1].rewrite_trace().unwrap(),
+                vec![RewriteTrace::new(2)]
+            );
+            assert_eq!(
+                rewritten.circs[2].rewrite_trace().unwrap(),
+                vec![RewriteTrace::new(1)]
+            );
+        }
     }
 
     #[test]

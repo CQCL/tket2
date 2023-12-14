@@ -3,12 +3,12 @@
 #[cfg(feature = "portmatching")]
 pub mod ecc_rewriter;
 pub mod strategy;
+pub mod trace;
 
 use bytemuck::TransparentWrapper;
 #[cfg(feature = "portmatching")]
 pub use ecc_rewriter::ECCRewriter;
 
-use delegate::delegate;
 use derive_more::{From, Into};
 use hugr::hugr::views::sibling_subgraph::{InvalidReplacement, InvalidSubgraph};
 use hugr::Node;
@@ -18,6 +18,8 @@ use hugr::{
 };
 
 use crate::circuit::Circuit;
+
+use self::trace::RewriteTracer;
 
 /// A subcircuit of a circuit.
 #[derive(Debug, Clone, From, Into)]
@@ -107,11 +109,17 @@ impl CircuitRewrite {
         self.0.invalidation_set()
     }
 
-    delegate! {
-        to self.0 {
-            /// Apply the rewrite rule to a circuit.
-            pub fn apply(self, circ: &mut impl HugrMut) -> Result<(), SimpleReplacementError>;
-        }
+    /// Apply the rewrite rule to a circuit.
+    #[inline]
+    pub fn apply(self, circ: &mut impl HugrMut) -> Result<(), SimpleReplacementError> {
+        circ.add_rewrite_trace(&self);
+        self.0.apply(circ)
+    }
+
+    /// Apply the rewrite rule to a circuit, without registering it in the rewrite trace.
+    #[inline]
+    pub fn apply_notrace(self, circ: &mut impl HugrMut) -> Result<(), SimpleReplacementError> {
+        self.0.apply(circ)
     }
 }
 

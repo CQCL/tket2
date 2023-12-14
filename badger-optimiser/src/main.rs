@@ -15,6 +15,7 @@ use tket2::json::{load_tk1_json_file, save_tk1_json_file};
 use tket2::optimiser::badger::log::BadgerLogger;
 use tket2::optimiser::badger::BadgerOptions;
 use tket2::optimiser::{BadgerOptimiser, DefaultBadgerOptimiser};
+use tket2::rewrite::trace::RewriteTracer;
 
 #[cfg(feature = "peak_alloc")]
 #[global_allocator]
@@ -104,6 +105,12 @@ struct CmdLineArgs {
         help = "The priority queue size. Defaults to 100."
     )]
     queue_size: usize,
+    /// Trace each rewrite applied to the circuit.
+    #[arg(
+        long = "rewrite-tracing",
+        help = "Trace each rewrite applied to the circuit. Prints statistics for the best circuit at the end of the optimisation."
+    )]
+    rewrite_tracing: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -129,7 +136,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let badger_logger = BadgerLogger::new(circ_candidates_csv);
 
-    let circ = load_tk1_json_file(input_path)?;
+    let mut circ = load_tk1_json_file(input_path)?;
+    if opts.rewrite_tracing {
+        circ.enable_rewrite_tracing();
+    }
 
     println!("Loading optimiser...");
     let Ok(optimiser) = load_optimiser(ecc_path) else {
