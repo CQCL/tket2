@@ -1,9 +1,43 @@
 from pytket import Circuit, OpType
 from dataclasses import dataclass
-
+from typing import Callable, Any
 from tket2.passes import badger_pass, greedy_depth_reduce, chunks
 from tket2.circuit import Tk2Circuit
 from tket2.pattern import Rule, RuleMatcher
+import hypothesis.strategies as st
+from hypothesis.strategies._internal import SearchStrategy
+from hypothesis import given, settings
+
+
+@st.composite
+def circuits(
+    draw: Callable[[SearchStrategy[Any]], Any],
+    n_qubits: SearchStrategy[int] = st.integers(min_value=0, max_value=8),
+    depth: SearchStrategy[int] = st.integers(min_value=5, max_value=50),
+) -> Circuit:
+    total_qubits = draw(n_qubits)
+    circuit = Circuit(total_qubits)
+    if total_qubits == 0:
+        return circuit
+    for _ in range(draw(depth)):
+        gates = [circuit.Rz, circuit.H]
+        if total_qubits > 1:
+            gates.extend([circuit.CX])
+        gate = draw(st.sampled_from(gates))
+        control = draw(st.integers(min_value=0, max_value=total_qubits - 1))
+        if gate in (circuit.CX,):
+            target = draw(
+                st.integers(min_value=0, max_value=total_qubits - 1).filter(
+                    lambda x: x != control
+                )
+            )
+            gate(control, target)
+        if gate == circuit.Rz:
+            angle = draw(st.floats(min_value=-2.0, max_value=2.0))
+            gate(angle, control)
+        if gate == circuit.H:
+            gate(control)
+    return circuit
 
 
 def test_simple_badger_pass_no_opt():
@@ -28,6 +62,15 @@ def test_depth_optimise():
     c = DepthOptimisePass().apply(c)
 
     assert c.depth() == 2
+
+
+@given(circ=circuits())
+@settings(print_blob=True, deadline=30)
+def test_depth_hyp(circ: Circuit) -> None:
+    new, _ = greedy_depth_reduce(circ)
+
+    assert circ.n_gates == new.n_gates
+    assert new.depth() <= circ.depth()
 
 
 def test_chunks():

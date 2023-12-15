@@ -113,8 +113,7 @@ fn available_slice(
 ) -> Option<(usize, HashMap<Qb, Rc<ComCommand>>)> {
     let mut available = None;
     let mut prev_nodes: HashMap<Qb, Rc<ComCommand>> = HashMap::new();
-
-    for slice_index in (0..starting_index + 1).rev() {
+    for slice_index in (0..=starting_index).rev() {
         // if all qubit slots are empty here the command can be moved here
         if command
             .qubits()
@@ -146,8 +145,7 @@ fn commutes_at_slice(
     circ: &impl HugrView,
 ) -> Option<HashMap<Qb, Rc<ComCommand>>> {
     // map from qubit to node it is connected to immediately after the free slice.
-    let mut prev_nodes: HashMap<Qb, Rc<ComCommand>> =
-        HashMap::from_iter(command.qubits().map(|q| (q, command.clone())));
+    let mut prev_nodes: HashMap<Qb, Rc<ComCommand>> = HashMap::new();
 
     for q in command.qubits() {
         // if slot is empty, continue checking.
@@ -304,26 +302,25 @@ pub fn apply_greedy_commutation(circ: &mut Hugr) -> Result<u32, PullForwardError
             .collect();
 
         for command in slice_commands {
-            if let Some((destination, new_nexts)) =
+            let Some((destination, new_nexts)) =
                 available_slice(&circ, &slice_vec, slice_index, &command)
-            {
-                debug_assert!(
-                    destination < slice_index,
-                    "Avoid mutating slices we haven't got to yet."
-                );
-                for q in command.qubits() {
-                    let com = slice_vec[slice_index][q.index()].take();
-                    slice_vec[destination][q.index()] = com;
-                }
-                let rewrite = PullForward { command, new_nexts };
-                circ.apply_rewrite(rewrite)?;
-                count += 1;
+            else {
+                continue;
+            };
+
+            debug_assert!(
+                destination < slice_index,
+                "Avoid mutating slices we haven't got to yet."
+            );
+            for q in command.qubits() {
+                let com = slice_vec[slice_index][q.index()].take();
+                slice_vec[destination][q.index()] = com;
             }
+            let rewrite = PullForward { command, new_nexts };
+            circ.apply_rewrite(rewrite)?;
+            count += 1;
         }
     }
-
-    // TODO remove empty slices and return
-    // and full slices at start?
     Ok(count)
 }
 
@@ -482,6 +479,17 @@ mod test {
         build().unwrap()
     }
 
+    // bug https://github.com/CQCL/tket2/issues/253
+    fn cx_commute_bug() -> Hugr {
+        build_simple_circuit(3, |circ| {
+            circ.append(Tk2Op::H, [2])?;
+            circ.append(Tk2Op::CX, [2, 1])?;
+            circ.append(Tk2Op::CX, [0, 2])?;
+            circ.append(Tk2Op::CX, [0, 1])?;
+            Ok(())
+        })
+        .unwrap()
+    }
     fn slice_from_command(
         commands: &[ComCommand],
         n_qbs: usize,
@@ -546,10 +554,7 @@ mod test {
             slices[1][1].as_ref().unwrap().clone()
         );
 
-        assert_eq!(
-            *prev_nodes.get(&Qb::new(3)).unwrap(),
-            slices[2][3].as_ref().unwrap().clone()
-        );
+        assert!(prev_nodes.get(&Qb::new(3)).is_none());
     }
 
     #[rstest]
@@ -589,6 +594,7 @@ mod test {
     #[case(commutes_but_same_depth(), false, 1)]
     #[case(non_linear_inputs(), true, 1)]
     #[case(non_linear_outputs(), true, 1)]
+    #[case(cx_commute_bug(), true, 1)]
     fn commutation_example(
         #[case] mut case: Hugr,
         #[case] should_reduce: bool,
