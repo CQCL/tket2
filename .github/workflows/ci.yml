@@ -103,13 +103,14 @@ jobs:
       - uses: mozilla-actions/sccache-action@v0.0.3
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-python@v4
+      - name: Install poetry
+        run: pipx install poetry
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
+          cache: 'poetry'
       - name: Build pyo3 bindings
         run: |
-          pip install poetry
           poetry install
           poetry run maturin build
           poetry add target/wheels/*.whl
@@ -149,13 +150,14 @@ jobs:
       - uses: mozilla-actions/sccache-action@v0.0.3
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-python@v4
+      - name: Install poetry
+        run: pipx install poetry
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
+          cache: 'poetry'
       - name: Build pyo3 bindings
         run: |
-          pip install poetry
           poetry install
           poetry run maturin build
           poetry add target/wheels/*.whl
