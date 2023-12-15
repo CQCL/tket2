@@ -64,18 +64,6 @@ def test_depth_optimise():
     assert c.depth() == 2
 
 
-def test_depth_optimise_buggy():
-    # bug https://github.com/CQCL/tket2/issues/253
-    c = Circuit(3).H(2).CX(2, 1).CX(0, 2).CX(0, 1)
-
-    assert c.depth() == 4
-
-    c, moves = greedy_depth_reduce(c)
-    assert moves == 1
-    assert c == Circuit(3).H(2).CX(0, 1).CX(2, 1).CX(0, 2)
-    assert c.depth() == 3
-
-
 @given(circ=circuits())
 @settings(print_blob=True, deadline=30)
 def test_depth_hyp(circ: Circuit) -> None:

@@ -145,8 +145,7 @@ fn commutes_at_slice(
     circ: &impl HugrView,
 ) -> Option<HashMap<Qb, Rc<ComCommand>>> {
     // map from qubit to node it is connected to immediately after the free slice.
-    let mut prev_nodes: HashMap<Qb, Rc<ComCommand>> =
-        HashMap::from_iter(command.qubits().map(|q| (q, command.clone())));
+    let mut prev_nodes: HashMap<Qb, Rc<ComCommand>> = HashMap::new();
 
     for q in command.qubits() {
         // if slot is empty, continue checking.
@@ -480,6 +479,17 @@ mod test {
         build().unwrap()
     }
 
+    // bug https://github.com/CQCL/tket2/issues/253
+    fn cx_commute_bug() -> Hugr {
+        build_simple_circuit(3, |circ| {
+            circ.append(Tk2Op::H, [2])?;
+            circ.append(Tk2Op::CX, [2, 1])?;
+            circ.append(Tk2Op::CX, [0, 2])?;
+            circ.append(Tk2Op::CX, [0, 1])?;
+            Ok(())
+        })
+        .unwrap()
+    }
     fn slice_from_command(
         commands: &[ComCommand],
         n_qbs: usize,
@@ -584,6 +594,7 @@ mod test {
     #[case(commutes_but_same_depth(), false, 1)]
     #[case(non_linear_inputs(), true, 1)]
     #[case(non_linear_outputs(), true, 1)]
+    #[case(cx_commute_bug(), true, 1)]
     fn commutation_example(
         #[case] mut case: Hugr,
         #[case] should_reduce: bool,
