@@ -113,8 +113,7 @@ fn available_slice(
 ) -> Option<(usize, HashMap<Qb, Rc<ComCommand>>)> {
     let mut available = None;
     let mut prev_nodes: HashMap<Qb, Rc<ComCommand>> = HashMap::new();
-
-    for slice_index in (0..starting_index + 1).rev() {
+    for slice_index in (0..=starting_index).rev() {
         // if all qubit slots are empty here the command can be moved here
         if command
             .qubits()
@@ -304,26 +303,25 @@ pub fn apply_greedy_commutation(circ: &mut Hugr) -> Result<u32, PullForwardError
             .collect();
 
         for command in slice_commands {
-            if let Some((destination, new_nexts)) =
+            let Some((destination, new_nexts)) =
                 available_slice(&circ, &slice_vec, slice_index, &command)
-            {
-                debug_assert!(
-                    destination < slice_index,
-                    "Avoid mutating slices we haven't got to yet."
-                );
-                for q in command.qubits() {
-                    let com = slice_vec[slice_index][q.index()].take();
-                    slice_vec[destination][q.index()] = com;
-                }
-                let rewrite = PullForward { command, new_nexts };
-                circ.apply_rewrite(rewrite)?;
-                count += 1;
+            else {
+                continue;
+            };
+
+            debug_assert!(
+                destination < slice_index,
+                "Avoid mutating slices we haven't got to yet."
+            );
+            for q in command.qubits() {
+                let com = slice_vec[slice_index][q.index()].take();
+                slice_vec[destination][q.index()] = com;
             }
+            let rewrite = PullForward { command, new_nexts };
+            circ.apply_rewrite(rewrite)?;
+            count += 1;
         }
     }
-
-    // TODO remove empty slices and return
-    // and full slices at start?
     Ok(count)
 }
 
@@ -546,10 +544,7 @@ mod test {
             slices[1][1].as_ref().unwrap().clone()
         );
 
-        assert_eq!(
-            *prev_nodes.get(&Qb::new(3)).unwrap(),
-            slices[2][3].as_ref().unwrap().clone()
-        );
+        assert!(prev_nodes.get(&Qb::new(3)).is_none());
     }
 
     #[rstest]
