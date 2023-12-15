@@ -63,17 +63,17 @@ where
             };
 
             let rewrites = self.rewriter.get_rewrites(&circ);
-            let rewrite_result = self.strategy.apply_rewrites(rewrites, &circ);
             let max_cost = self.priority_channel.max_cost();
-            let new_circs = rewrite_result
-                .into_iter()
-                .filter_map(|(c, cost_delta)| {
-                    let new_cost = cost.add_delta(&cost_delta);
+            let new_circs = self
+                .strategy
+                .apply_rewrites(rewrites, &circ)
+                .filter_map(|r| {
+                    let new_cost = cost.add_delta(&r.cost_delta);
                     if max_cost.is_some() && &new_cost >= max_cost.as_ref().unwrap() {
                         return None;
                     }
 
-                    let Ok(hash) = c.circuit_hash() else {
+                    let Ok(hash) = r.circ.circuit_hash() else {
                         // The composed rewrites were not valid.
                         //
                         // See [https://github.com/CQCL/tket2/discussions/242]
@@ -83,7 +83,7 @@ where
                     Some(Work {
                         cost: new_cost,
                         hash,
-                        circ: c,
+                        circ: r.circ,
                     })
                 })
                 .collect();
