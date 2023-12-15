@@ -49,6 +49,7 @@ impl<P: Ord, C> HugrPQ<P, C> {
     /// Push a Hugr into the queue.
     ///
     /// If the queue is full, the element with the highest cost will be dropped.
+    #[allow(unused)]
     pub fn push(&mut self, hugr: Hugr)
     where
         C: Fn(&Hugr) -> P,
@@ -97,6 +98,7 @@ impl<P: Ord, C> HugrPQ<P, C> {
     /// Discard the largest elements of the queue.
     ///
     /// Only keep up to `max_size` elements.
+    #[allow(unused)]
     pub fn truncate(&mut self, max_size: usize) {
         while self.queue.len() > max_size {
             let (hash, _) = self.queue.pop_max().unwrap();
