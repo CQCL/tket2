@@ -12,10 +12,12 @@
 //!      threshold function.
 //!
 //! The exhaustive strategies are parametrised by a strategy cost function:
-//!    - [`NonIncreasingGateCountCost`], which only considers rewrites that do
-//!      not increase some cost function (e.g. cx gate count, implemented as
-//!      [`NonIncreasingGateCountCost::default_cx`]), and
-//!    - [`GammaStrategyCost`], which ignores rewrites that increase the cost
+//!    - [`LexicographicCostFunction`] allows rewrites that do
+//!      not increase some coarse cost function (e.g. CX count), whilst
+//!      ordering them according to a lexicographic ordering of finer cost
+//!      functions (e.g. total gate count). See
+//!      [`LexicographicCostFunction::default_cx`]) for a default implementation.
+//!    - [`GammaStrategyCost`] ignores rewrites that increase the cost
 //!      function beyond a percentage given by a f64 parameter gamma.
 
 use std::{collections::HashSet, fmt::Debug};
@@ -25,7 +27,7 @@ use hugr::ops::OpType;
 use hugr::Hugr;
 use itertools::Itertools;
 
-use crate::circuit::cost::{is_cx, is_quantum, CircuitCost, CostDelta, MajorMinorCost};
+use crate::circuit::cost::{is_cx, is_quantum, CircuitCost, CostDelta, LexicographicCost};
 use crate::Circuit;
 
 use super::trace::{RewriteTrace, RewriteTracer};
@@ -336,49 +338,51 @@ pub trait StrategyCost {
 
 /// Rewrite strategy cost allowing smaller or equal cost rewrites.
 ///
-/// Rewrites are permitted based on a cost function called the major cost: if
-/// the major cost of the target of the rewrite is smaller or equal to the major
-/// cost of the pattern, the rewrite is allowed.
+/// Rewrites are permitted based on a coarse cost function: if
+/// the coarse cost of the target of the rewrite is smaller or equal to the
+/// coarse cost of the pattern, the rewrite is allowed.
 ///
-/// A second cost function, the minor cost, is used as a tie breaker: within
-/// circuits with the same major cost, the circuit ordering prioritises circuits
-/// with a smaller minor cost.
+/// Further more fine-grained cost functions can be used as tie breakers: within
+/// circuits with the same coarse cost, circuits are ranked according to a
+/// lexicographic ordering of their cost functions.
 ///
-/// An example would be to use the number of CX gates as major cost and the
-/// total number of gates as minor cost. Compared to a
-/// [`GammaStrategyCost`], that would only order circuits based on the
-/// number of CX gates, this creates a less flat optimisation landscape.
+/// An example would be to use the number of CX gates as coarse cost and the
+/// total number of gates as the only fine grained cost function.
+///
+/// Lexicographic orderings may be useful to add relief to an otherwise flat
+/// optimisation landscape.
 #[derive(Debug, Clone)]
-pub struct NonIncreasingGateCountCost<C1, C2> {
-    major_cost: C1,
-    minor_cost: C2,
+pub struct LexicographicCostFunction<F, const N: usize> {
+    cost_fns: [F; N],
 }
 
-impl<C1, C2> StrategyCost for NonIncreasingGateCountCost<C1, C2>
+impl<F, const N: usize> StrategyCost for LexicographicCostFunction<F, N>
 where
-    C1: Fn(&OpType) -> usize,
-    C2: Fn(&OpType) -> usize,
+    F: Fn(&OpType) -> usize,
 {
-    type OpCost = MajorMinorCost;
+    type OpCost = LexicographicCost<usize, N>;
 
     #[inline]
     fn op_cost(&self, op: &OpType) -> Self::OpCost {
-        ((self.major_cost)(op), (self.minor_cost)(op)).into()
+        let mut costs = [0; N];
+        for (cost_fn, cost_mut) in self.cost_fns.iter().zip(&mut costs) {
+            *cost_mut = cost_fn(op);
+        }
+        costs.into()
     }
 }
 
-impl NonIncreasingGateCountCost<fn(&OpType) -> usize, fn(&OpType) -> usize> {
+impl LexicographicCostFunction<fn(&OpType) -> usize, 2> {
     /// Non-increasing rewrite strategy based on CX count.
     ///
-    /// The minor cost to break ties between equal CX counts is the number of
-    /// quantum gates.
+    /// A fine-grained cost function given by the total number of quantum gates
+    /// is used to rank circuits with equal CX count.
     ///
     /// This is probably a good default for NISQ-y circuit optimisation.
     #[inline]
     pub fn default_cx() -> ExhaustiveGreedyStrategy<Self> {
         Self {
-            major_cost: |op| is_cx(op) as usize,
-            minor_cost: |op| is_quantum(op) as usize,
+            cost_fns: [|op| is_cx(op) as usize, |op| is_quantum(op) as usize],
         }
         .into()
     }
@@ -538,7 +542,7 @@ mod tests {
             rw_to_empty(&circ, cx_gates[9..10].to_vec()),
         ];
 
-        let strategy = NonIncreasingGateCountCost::default_cx();
+        let strategy = LexicographicCostFunction::default_cx();
         let rewritten = strategy.apply_rewrites(rws, &circ);
         let exp_circ_lens = HashSet::from_iter([3, 7, 9]);
         let circ_lens: HashSet<_> = rewritten.circs.iter().map(|c| c.num_gates()).collect();
@@ -583,7 +587,7 @@ mod tests {
 
     #[test]
     fn test_exhaustive_default_cx_cost() {
-        let strat = NonIncreasingGateCountCost::default_cx();
+        let strat = LexicographicCostFunction::default_cx();
         let circ = n_cx(3);
         assert_eq!(strat.circuit_cost(&circ), (3, 3).into());
         let circ = build_simple_circuit(2, |circ| {
@@ -598,7 +602,7 @@ mod tests {
 
     #[test]
     fn test_exhaustive_default_cx_threshold() {
-        let strat = NonIncreasingGateCountCost::default_cx().strat_cost;
+        let strat = LexicographicCostFunction::default_cx().strat_cost;
         assert!(strat.under_threshold(&(3, 0).into(), &(3, 0).into()));
         assert!(strat.under_threshold(&(3, 0).into(), &(3, 5).into()));
         assert!(!strat.under_threshold(&(3, 10).into(), &(4, 0).into()));
