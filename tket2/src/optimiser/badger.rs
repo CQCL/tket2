@@ -606,4 +606,10 @@ mod tests {
         // No rewrites applied.
         opt.update_validate(&REGISTRY).unwrap();
     }
+
+    #[test]
+    fn load_precompiled_bin() {
+        let opt = BadgerOptimiser::default_with_rewriter_binary("../test_files/small_eccs.rwr");
+        opt.unwrap();
+    }
 }
