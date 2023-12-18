@@ -376,7 +376,7 @@ impl LexicographicCostFunction<fn(&OpType) -> usize, 2> {
     /// Non-increasing rewrite strategy based on CX count.
     ///
     /// A fine-grained cost function given by the total number of quantum gates
-    /// is used rank circuits with equal CX count.
+    /// is used to rank circuits with equal CX count.
     ///
     /// This is probably a good default for NISQ-y circuit optimisation.
     #[inline]
