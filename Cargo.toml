@@ -8,7 +8,7 @@ default-members = ["tket2"]
 
 [workspace.package]
 version = "0.0.0-alpha.1"
-rust-version = "1.71"
+rust-version = "1.75"
 edition = "2021"
 homepage = "https://github.com/CQCL/tket2"
 license-file = "LICENCE"
@@ -20,7 +20,7 @@ missing_docs = "warn"
 [workspace.dependencies]
 
 tket2 = { path = "./tket2" }
-quantinuum-hugr = { git = "https://github.com/CQCL/hugr", rev = "4b11a24" }
+quantinuum-hugr = { git = "https://github.com/CQCL/hugr", rev = "0edee65" }
 portgraph = { version = "0.11" }
 pyo3 = { version = "0.20" }
 itertools = { version = "0.12.0" }
