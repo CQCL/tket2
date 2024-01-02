@@ -28,7 +28,7 @@ shell by setting up [direnv](https://devenv.sh/automatic-shell-activation/).
 
 To setup the environment manually you will need:
 
-- Rust 1.71+: https://www.rust-lang.org/tools/install
+- Rust 1.75+: https://www.rust-lang.org/tools/install
 
 - Poetry: https://python-poetry.org/
 

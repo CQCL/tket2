@@ -9,7 +9,7 @@ use hugr::extension::simple_op::MakeOpDef;
 use hugr::extension::{CustomSignatureFunc, ExtensionId, ExtensionRegistry, SignatureError};
 use hugr::hugr::IdentList;
 use hugr::ops::custom::{ExternalOp, OpaqueOp};
-use hugr::std_extensions::arithmetic::float_types::{extension as float_extension, FLOAT64_TYPE};
+use hugr::std_extensions::arithmetic::float_types::{EXTENSION as FLOAT_EXTENSION, FLOAT64_TYPE};
 use hugr::types::type_param::{CustomTypeArg, TypeArg, TypeParam};
 use hugr::types::{CustomType, FunctionType, PolyFuncType, Type, TypeBound};
 use hugr::{type_row, Extension};
@@ -67,7 +67,7 @@ pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
     TKET1_EXTENSION.clone(),
     PRELUDE.clone(),
     TKET2_EXTENSION.clone(),
-    float_extension(),
+    FLOAT_EXTENSION.clone(),
 ]).unwrap();
 
 
