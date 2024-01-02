@@ -190,13 +190,20 @@ where
             circ_cnt += 1;
 
             let rewrites = self.rewriter.get_rewrites(&circ);
-            for (new_circ, cost_delta) in self.strategy.apply_rewrites(rewrites, &circ) {
-                let new_circ_cost = cost.add_delta(&cost_delta);
+
+            // Get combinations of rewrites that can be applied to the circuit,
+            // and filter them to keep only the ones that
+            //
+            // - Don't have a worse cost than the last candidate in the priority queue.
+            // - Do not invalidate the circuit by creating a loop.
+            // - We haven't seen yet.
+            for r in self.strategy.apply_rewrites(rewrites, &circ) {
+                let new_circ_cost = cost.add_delta(&r.cost_delta);
                 if !pq.check_accepted(&new_circ_cost) {
                     continue;
                 }
 
-                let Ok(new_circ_hash) = new_circ.circuit_hash() else {
+                let Ok(new_circ_hash) = r.circ.circuit_hash() else {
                     // The composed rewrites produced a loop.
                     //
                     // See [https://github.com/CQCL/tket2/discussions/242]
@@ -207,7 +214,8 @@ where
                     // Ignore this circuit: we've already seen it
                     continue;
                 }
-                pq.push_unchecked(new_circ, new_circ_hash, new_circ_cost);
+
+                pq.push_unchecked(r.circ, new_circ_hash, new_circ_cost);
                 logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
             }
 
