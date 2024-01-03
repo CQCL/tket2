@@ -71,19 +71,27 @@ impl TKETDecode for SerialCircuit {
 
     fn encode(circ: &impl Circuit) -> Result<Self, Self::EncodeError> {
         let mut encoder = JsonEncoder::new(circ);
+
+        // Pre-register any float input as a constant value in the encoder.
         let f64_inputs = circ.units().filter_map(|(wire, _, t)| match (wire, t) {
             (CircuitUnit::Wire(wire), t) if t == FLOAT64_TYPE => Some(wire),
             (CircuitUnit::Linear(_), _) => None,
             _ => unimplemented!("Non-float64 input wires not supported"),
         });
         for (i, wire) in f64_inputs.enumerate() {
-            let param = format!("f{i}");
-            encoder.add_parameter(wire, param);
+            let constant = ConstF64::new(i as f64).into();
+            encoder.add_constant(wire, constant);
         }
+
+        // Process each command in the circuit.
+        //
+        // Commands that only compute non-linear values are constant-folded.
+        // Other commands are added as encoded gates.
         for com in circ.commands() {
             let optype = com.optype();
-            encoder.add_command(com.clone(), optype)?;
+            encoder.add_command(circ, com.clone(), optype)?;
         }
+
         Ok(encoder.finish())
     }
 }

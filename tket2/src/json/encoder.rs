@@ -2,10 +2,9 @@
 
 use std::collections::HashMap;
 
+use hugr::algorithm::const_fold::fold_const;
 use hugr::extension::prelude::QB_T;
-use hugr::ops::OpType;
-use hugr::std_extensions::arithmetic::float_types::ConstF64;
-use hugr::values::Value;
+use hugr::ops::{Const, OpType};
 use hugr::Wire;
 use itertools::{Either, Itertools};
 use tket_json_rs::circuit_json::{self, Permutation, Register, SerialCircuit};
@@ -13,8 +12,6 @@ use tket_json_rs::circuit_json::{self, Permutation, Register, SerialCircuit};
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
 use crate::extension::LINEAR_BIT;
-use crate::ops::{match_symb_const_op, op_matches};
-use crate::Tk2Op;
 
 use super::op::JsonOp;
 use super::{
@@ -31,7 +28,7 @@ pub(super) struct JsonEncoder {
     phase: String,
     /// Implicit permutation of output qubits
     implicit_permutation: Vec<Permutation>,
-    /// The current commands
+    /// The current encoded commands
     commands: Vec<circuit_json::Command>,
     /// The TKET1 qubit registers associated to each qubit unit of the circuit.
     qubit_to_reg: HashMap<CircuitUnit, Register>,
@@ -41,9 +38,9 @@ pub(super) struct JsonEncoder {
     qubit_registers: Vec<Register>,
     /// The ordered TKET1 names for the input bit registers.
     bit_registers: Vec<Register>,
-    /// A register of wires with constant values, used to recover TKET1
-    /// parameters.
-    parameters: HashMap<Wire, String>,
+    /// A register of constant values carried over non-linear wires. These may
+    /// be variable names, or constant-folded values.
+    constants: HashMap<Wire, Const>,
 }
 
 impl JsonEncoder {
@@ -104,24 +101,28 @@ impl JsonEncoder {
             bit_to_reg,
             qubit_registers,
             bit_registers,
-            parameters: HashMap::new(),
+            constants: HashMap::new(),
         }
     }
 
     /// Add a circuit command to the serialization.
     pub fn add_command<C: Circuit>(
         &mut self,
+        circ: &C,
         command: Command<'_, C>,
         optype: &OpType,
     ) -> Result<(), OpConvertError> {
-        // Register any output of the command that can be used as a TKET1 parameter.
-        if self.record_parameters(&command, optype) {
-            // for now all ops that record parameters should be ignored (are
-            // just constants)
+        // Register the constant output of the command, if any.
+        // This may require constant-folding the command (if possible).
+        //
+        // May error out if the constant output cannot be computed (e.g. if the
+        // inputs are not all constants).
+        if self.record_constants(circ, &command, optype) {
+            // If the command was constant-folded, we don't add as a circuit gate.
             return Ok(());
         }
 
-        let (args, params): (Vec<Register>, Vec<Wire>) =
+        let (args, input_params): (Vec<Register>, Vec<Wire>) =
             command
                 .inputs()
                 .partition_map(|(u, _, _)| match self.unit_to_register(u) {
@@ -129,7 +130,7 @@ impl JsonEncoder {
                     None => match u {
                         CircuitUnit::Wire(w) => Either::Right(w),
                         CircuitUnit::Linear(_) => {
-                            panic!("No register found for the linear input {u:?}.")
+                            panic!("No register found for the linear input {u:?} to command {command:?}.")
                         }
                     },
                 });
@@ -138,13 +139,13 @@ impl JsonEncoder {
         let opgroup = None;
         let op: JsonOp = optype.try_into()?;
         let mut op: circuit_json::Operation = op.into_operation();
-        if !params.is_empty() {
+        if !input_params.is_empty() {
             op.params = Some(
-                params
+                input_params
                     .into_iter()
-                    .filter_map(|w| self.parameters.get(&w))
-                    .cloned()
-                    .collect(),
+                    .filter_map(|w| self.constants.get(&w))
+                    .map(|c| self.encode_constant(c))
+                    .collect_vec(),
             )
         }
         // TODO: ops that contain free variables.
@@ -166,18 +167,31 @@ impl JsonEncoder {
         }
     }
 
-    /// Record any output of the command that can be used as a TKET1 parameter.
-    /// Returns whether parameters were recorded.
-    /// Associates the output wires with the parameter expression.
-    fn record_parameters<C: Circuit>(&mut self, command: &Command<'_, C>, optype: &OpType) -> bool {
+    /// Record the constant outputs of the command.
+    ///
+    /// If the output can be computed from the constant inputs, the command is
+    /// evaluated using the commands's [`ConstFold`] method.
+    ///
+    /// Returns `true` if any parameter was recorded.
+    fn record_constants<C: Circuit>(
+        &mut self,
+        circ: &C,
+        command: &Command<'_, C>,
+        optype: &OpType,
+    ) -> bool {
         // Only consider commands where all inputs are parameters.
+        let input_ports = circ.node_inputs(command.node());
         let inputs = command
             .inputs()
-            .filter_map(|(unit, _, _)| match unit {
-                CircuitUnit::Wire(wire) => self.parameters.get(&wire),
+            .zip(input_ports)
+            .filter_map(|((unit, _, _), inp_port)| match unit {
+                CircuitUnit::Wire(wire) => Some((inp_port, self.constants.get(&wire)?.clone())),
                 CircuitUnit::Linear(_) => None,
             })
             .collect_vec();
+
+        // If the command has non-constant inputs, we can't fold it.
+        // (It will be added as a circuit gate instead).
         if inputs.len() != command.input_count() {
             debug_assert!(!matches!(
                 optype,
@@ -186,45 +200,33 @@ impl JsonEncoder {
             return false;
         }
 
-        let param = match optype {
-            OpType::Const(const_op) => {
-                // New constant, register it if it can be interpreted as a parameter.
-                match const_op.value() {
-                    Value::Extension { c: (val,) } => {
-                        if let Some(f) = val.downcast_ref::<ConstF64>() {
-                            f.to_string()
-                        } else {
-                            return false;
-                        }
-                    }
-                    _ => return false,
-                }
+        if let OpType::Const(constant) = optype {
+            // New constant definition
+            for (_, wire) in command.output_wires() {
+                self.add_constant(wire, constant.clone());
             }
-            OpType::LoadConstant(_op_type) => {
-                // Re-use the parameter from the input.
-                inputs[0].clone()
-            }
-            op if op_matches(op, Tk2Op::AngleAdd) => {
-                format!("{} + {}", inputs[0], inputs[1])
-            }
-            OpType::LeafOp(_) => {
-                if let Some(s) = match_symb_const_op(optype) {
-                    s.to_string()
-                } else {
-                    return false;
-                }
-            }
-            _ => {
-                return false;
+        } else {
+            // Fold the command, if possible.
+            let consts = fold_const(optype, &inputs).unwrap_or_else(|| {
+                // This command cannot be constant-folded.
+                panic!("Unable to constant-fold command {command:#?} with optype {optype:#?}.")
+            });
+            for (out_port, constant) in consts {
+                let wire = Wire::new(command.node(), out_port);
+                self.add_constant(wire, constant);
             }
         };
-
-        for (unit, _, _) in command.outputs() {
-            if let CircuitUnit::Wire(wire) = unit {
-                self.add_parameter(wire, param.clone());
-            }
-        }
         true
+    }
+
+    /// Associate a constant value with a non-linear wire.
+    pub(super) fn add_constant(&mut self, wire: Wire, constant: Const) {
+        self.constants.insert(wire, constant);
+    }
+
+    /// Encode a constant value as a string that can be added to a [`SerialCircuit`].
+    fn encode_constant(&self, constant: &Const) -> String {
+        serde_json::to_string(constant).unwrap()
     }
 
     /// Translate a linear [`CircuitUnit`] into a [`Register`], if possible.
@@ -233,9 +235,5 @@ impl JsonEncoder {
             .get(&unit)
             .or_else(|| self.bit_to_reg.get(&unit))
             .cloned()
-    }
-
-    pub(super) fn add_parameter(&mut self, wire: Wire, param: String) {
-        self.parameters.insert(wire, param);
     }
 }
