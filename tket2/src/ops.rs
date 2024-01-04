@@ -182,6 +182,38 @@ pub fn symbolic_constant_op(s: &str) -> OpType {
     l.into()
 }
 
+/// match against a symbolic constant
+pub(crate) fn match_symb_const_op(op: &OpType) -> Option<String> {
+    // Extract the symbol for a symbolic operation node.
+    let symbol_from_typeargs = |args: &[TypeArg]| -> String {
+        args.first()
+            .and_then(|arg| match arg {
+                TypeArg::Opaque { arg } => match &arg.value {
+                    serde_yaml::Value::String(s) => Some(s.clone()),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("Found an invalid type arg in a symbolic operation node."))
+    };
+
+    let OpType::LeafOp(LeafOp::CustomOp(op)) = op else {
+        return None;
+    };
+    if op.name() != format!("{EXTENSION_ID}.{SYM_OP_ID}") {
+        return None;
+    }
+    match op.as_ref() {
+        ExternalOp::Extension(e) if e.def().extension() == &EXTENSION_ID => {
+            Some(symbol_from_typeargs(e.args()))
+        }
+        ExternalOp::Opaque(e) if e.extension() == &EXTENSION_ID => {
+            Some(symbol_from_typeargs(e.args()))
+        }
+        _ => None,
+    }
+}
+
 impl From<Tk2Op> for LeafOp {
     fn from(op: Tk2Op) -> Self {
         op.to_extension_op().unwrap().into()

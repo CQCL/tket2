@@ -4,14 +4,17 @@ use std::collections::HashMap;
 
 use hugr::algorithm::const_fold::fold_const;
 use hugr::extension::prelude::QB_T;
-use hugr::ops::{Const, OpType};
+use hugr::ops::{Const, OpName, OpType};
+use hugr::std_extensions::arithmetic::float_types::ConstF64;
+use hugr::values::Value;
 use hugr::Wire;
 use itertools::{Either, Itertools};
 use tket_json_rs::circuit_json::{self, Permutation, Register, SerialCircuit};
 
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
-use crate::extension::LINEAR_BIT;
+use crate::extension::{LINEAR_BIT, SYM_OP_ID, TKET2_EXTENSION_ID};
+use crate::ops::match_symb_const_op;
 
 use super::op::JsonOp;
 use super::{
@@ -40,7 +43,21 @@ pub(super) struct JsonEncoder {
     bit_registers: Vec<Register>,
     /// A register of constant values carried over non-linear wires. These may
     /// be variable names, or constant-folded values.
-    constants: HashMap<Wire, Const>,
+    constants: HashMap<Wire, EncodableConst>,
+}
+
+/// A constant value that can be encoded as a [`SerialCircuit`] parameter.
+///
+/// We keep constants as [`Const`] values until we need to serialize them,
+/// so they can be constant-folded if possible.
+///
+/// If we can't constant-fold a value, we encode it as a symbolic string.
+#[derive(Debug, Clone, PartialEq)]
+enum EncodableConst {
+    /// A Hugr constant value that can be constant-folded as needed.
+    Const(Const),
+    /// An already-encoded symbolic constant.
+    Symbolic(String),
 }
 
 impl JsonEncoder {
@@ -143,8 +160,8 @@ impl JsonEncoder {
             op.params = Some(
                 input_params
                     .into_iter()
-                    .filter_map(|w| self.constants.get(&w))
-                    .map(|c| self.encode_constant(c))
+                    .filter_map(|w| self.constants.get(&w).cloned())
+                    .map(|c| c.into_string())
                     .collect_vec(),
             )
         }
@@ -185,7 +202,7 @@ impl JsonEncoder {
             .inputs()
             .zip(input_ports)
             .filter_map(|((unit, _, _), inp_port)| match unit {
-                CircuitUnit::Wire(wire) => Some((inp_port, self.constants.get(&wire)?.clone())),
+                CircuitUnit::Wire(wire) => Some((inp_port, self.constants.get(&wire)?)),
                 CircuitUnit::Linear(_) => None,
             })
             .collect_vec();
@@ -200,13 +217,54 @@ impl JsonEncoder {
             return false;
         }
 
-        if let OpType::Const(constant) = optype {
-            // New constant definition
-            for (_, wire) in command.output_wires() {
-                self.add_constant(wire, constant.clone());
+        // Special cases for operations that define a new constant.
+        match optype {
+            // Hugr constant definition.
+            OpType::Const(constant) => {
+                // New constant definition
+                for (_, wire) in command.output_wires() {
+                    self.add_constant(wire, constant.clone());
+                }
+                return true;
             }
-        } else {
-            // Fold the command, if possible.
+            // tket1 symbolic constant definition (already encoded).
+            OpType::LeafOp(op) if op.name() == format!("{TKET2_EXTENSION_ID}.{SYM_OP_ID}") => {
+                let symbol = match_symb_const_op(optype).unwrap_or_else(|| {
+                    panic!("Unable to extract the symbolic constant from optype {optype:#?}.")
+                });
+                for (_, wire) in command.output_wires() {
+                    self.constants
+                        .insert(wire, EncodableConst::Symbolic(symbol.clone()));
+                }
+                return true;
+            }
+            // A lifting from a constant wire into a value. We can propagate the constant directly.
+            OpType::LoadConstant(_) => {
+                debug_assert_eq!(inputs.len(), 1);
+                let constant = inputs[0].1.clone();
+                for (_, wire) in command.output_wires() {
+                    self.constants.insert(wire, constant.clone());
+                }
+                return true;
+            }
+            _ => {}
+        }
+
+        // Fold the command, if possible.
+        // Encode them as symbolic constants otherwise.
+        if inputs
+            .iter()
+            .all(|(_, c)| matches!(c, EncodableConst::Const(_)))
+        {
+            // All inputs are constants, so we can constant-fold the command.
+            // (This may still fail if the command is not constant-foldable).
+            let inputs = inputs
+                .into_iter()
+                .map(|(p, c)| match c {
+                    EncodableConst::Const(c) => (p, c.clone()),
+                    EncodableConst::Symbolic(_) => unreachable!(),
+                })
+                .collect_vec();
             let consts = fold_const(optype, &inputs).unwrap_or_else(|| {
                 // This command cannot be constant-folded.
                 panic!("Unable to constant-fold command {command:#?} with optype {optype:#?}.")
@@ -215,18 +273,18 @@ impl JsonEncoder {
                 let wire = Wire::new(command.node(), out_port);
                 self.add_constant(wire, constant);
             }
-        };
+        } else {
+            // Some inputs are symbolic constants, so we can't constant-fold.
+            //
+            // TODO: Add support for symbolic folding in HUGR.
+            panic!("Unable to constant-fold command {command:#?} with optype {optype:#?}.")
+        }
         true
     }
 
     /// Associate a constant value with a non-linear wire.
     pub(super) fn add_constant(&mut self, wire: Wire, constant: Const) {
-        self.constants.insert(wire, constant);
-    }
-
-    /// Encode a constant value as a string that can be added to a [`SerialCircuit`].
-    fn encode_constant(&self, constant: &Const) -> String {
-        serde_json::to_string(constant).unwrap()
+        self.constants.insert(wire, EncodableConst::Const(constant));
     }
 
     /// Translate a linear [`CircuitUnit`] into a [`Register`], if possible.
@@ -235,5 +293,38 @@ impl JsonEncoder {
             .get(&unit)
             .or_else(|| self.bit_to_reg.get(&unit))
             .cloned()
+    }
+}
+
+impl EncodableConst {
+    /// Encode a constant value as a string that can be added to a [`SerialCircuit`].
+    #[allow(unused)]
+    fn into_encoded(self) -> Self {
+        Self::Symbolic(self.into_string())
+    }
+
+    /// The string-encoded value of the constant.
+    fn into_string(self) -> String {
+        let constant = match self {
+            Self::Symbolic(s) => return s,
+            Self::Const(c) => c,
+        };
+
+        // Encode the constant as a JSON string.
+        //
+        // If the constant is an extension value, we encode the internal data directly.
+        //
+        // TODO: Ideally, the CustomConst would be able to encode themselves as a string.
+        // Here we have to manually hardcode the float conversion instead.
+        match constant.value() {
+            Value::Extension { c: (val,) } => {
+                if let Some(f) = val.downcast_ref::<ConstF64>() {
+                    f.to_string()
+                } else {
+                    serde_json::to_string(val).unwrap()
+                }
+            }
+            _ => serde_json::to_string(&constant).unwrap(),
+        }
     }
 }
