@@ -466,7 +466,13 @@ impl<'circ, Circ: Circuit> std::fmt::Debug for CommandIterator<'circ, Circ> {
 
 #[cfg(test)]
 mod test {
+    use hugr::builder::{Container, DFGBuilder, Dataflow, DataflowHugr};
+    use hugr::extension::prelude::QB_T;
+    use hugr::ops::handle::NodeHandle;
     use hugr::ops::OpName;
+    use hugr::std_extensions::arithmetic::float_ops::FLOAT_OPS_REGISTRY;
+    use hugr::std_extensions::arithmetic::float_types::ConstF64;
+    use hugr::types::FunctionType;
     use itertools::Itertools;
 
     use crate::utils::build_simple_circuit;
@@ -533,5 +539,66 @@ mod test {
         );
 
         assert_eq!(commands.next(), None);
+    }
+
+    /// Commands iterator with non-linear wires.
+    #[test]
+    fn commands_nonlinear() {
+        let qb_row = vec![QB_T; 1];
+        let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row)).unwrap();
+        let [q_in] = h.input_wires_arr();
+
+        let constant = h.add_constant(ConstF64::new(0.5)).unwrap();
+        let loaded_const = h.load_const(&constant).unwrap();
+        let rz = h
+            .add_dataflow_op(Tk2Op::RzF64, [q_in, loaded_const])
+            .unwrap();
+
+        let circ = h
+            .finish_hugr_with_outputs(rz.outputs(), &FLOAT_OPS_REGISTRY)
+            .unwrap();
+
+        assert_eq!(CommandIterator::new(&circ).count(), 3);
+        let mut commands = CommandIterator::new(&circ);
+
+        // First command is the constant definition.
+        // It has a single output.
+        let const_cmd = commands.next().unwrap();
+        assert_eq!(const_cmd.optype().name().as_str(), "const:custom:f64(0.5)");
+        assert_eq_iter!(const_cmd.inputs().map(|(u, _, _)| u), [],);
+        assert_eq_iter!(
+            const_cmd.outputs().map(|(u, _, _)| u),
+            [CircuitUnit::Wire(Wire::new(constant.node(), 0))],
+        );
+
+        // Next, the load constant command.
+        // It has a single input and a single output.
+        let load_const_cmd = commands.next().unwrap();
+        let load_const_node = load_const_cmd.node();
+        assert_eq!(load_const_cmd.optype().name().as_str(), "LoadConstant");
+        assert_eq_iter!(
+            load_const_cmd.inputs().map(|(u, _, _)| u),
+            [CircuitUnit::Wire(Wire::new(constant.node(), 0))],
+        );
+        assert_eq_iter!(
+            load_const_cmd.outputs().map(|(u, _, _)| u),
+            [CircuitUnit::Wire(Wire::new(load_const_node, 0))],
+        );
+
+        // Finally, the rz command.
+        // It has the qubit and loaded constant as input and a single output.
+        let rz_cmd = commands.next().unwrap();
+        assert_eq!(rz_cmd.optype().name().as_str(), "quantum.tket2.RzF64");
+        assert_eq_iter!(
+            rz_cmd.inputs().map(|(u, _, _)| u),
+            [
+                CircuitUnit::Linear(0),
+                CircuitUnit::Wire(Wire::new(load_const_node, 0))
+            ],
+        );
+        assert_eq_iter!(
+            rz_cmd.outputs().map(|(u, _, _)| u),
+            [CircuitUnit::Linear(0)],
+        );
     }
 }
