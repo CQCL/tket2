@@ -1,9 +1,10 @@
 //! Intermediate structure for converting encoding [`Circuit`]s into [`SerialCircuit`]s.
 
+use core::panic;
 use std::collections::HashMap;
 
 use hugr::extension::prelude::QB_T;
-use hugr::ops::OpType;
+use hugr::ops::{OpName, OpType};
 use hugr::std_extensions::arithmetic::float_types::ConstF64;
 use hugr::values::Value;
 use hugr::Wire;
@@ -179,10 +180,14 @@ impl JsonEncoder {
             })
             .collect_vec();
         if inputs.len() != command.input_count() {
-            debug_assert!(!matches!(
-                optype,
-                OpType::Const(_) | OpType::LoadConstant(_)
-            ));
+            debug_assert!(
+                !matches!(optype, OpType::Const(_) | OpType::LoadConstant(_)),
+                "Found a {} with {} inputs, of which {} are non-linear. In node {:?}",
+                optype.name(),
+                command.input_count(),
+                inputs.len(),
+                command.node()
+            );
             return false;
         }
 
@@ -220,8 +225,12 @@ impl JsonEncoder {
         };
 
         for (unit, _, _) in command.outputs() {
-            if let CircuitUnit::Wire(wire) = unit {
-                self.add_parameter(wire, param.clone());
+            match unit {
+                CircuitUnit::Wire(wire) => self.add_parameter(wire, param.clone()),
+                CircuitUnit::Linear(_) => panic!(
+                    "Found a non-wire output {unit:?} for a {} command.",
+                    optype.name()
+                ),
             }
         }
         true
