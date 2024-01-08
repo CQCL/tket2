@@ -1,6 +1,7 @@
 use crate::extension::{
     SYM_EXPR_T, SYM_OP_ID, TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID,
 };
+use hugr::ops::OpName;
 use hugr::{
     extension::{
         prelude::{BOOL_T, QB_T},
@@ -68,10 +69,7 @@ pub enum Tk2Op {
 
 /// Whether an op is a given Tk2Op.
 pub fn op_matches(op: &OpType, tk2op: Tk2Op) -> bool {
-    let Some(ext_op) = tk2op.to_extension_op() else {
-        return false;
-    };
-    op.as_leaf_op().and_then(|op| op.as_extension_op()) == Some(&ext_op)
+    op.name() == <Tk2Op as Into<OpType>>::into(tk2op).name()
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, PartialOrd)]
