@@ -140,13 +140,9 @@ where
             Direction::Outgoing => sig.output,
             Direction::Incoming => sig.input,
         };
-        if direction == Direction::Incoming {
-            if let Some(static_port) = optype.static_input_port() {
-                if let Some(EdgeKind::Static(static_type)) = optype.port_kind(static_port) {
-                    types.to_mut().push(static_type);
-                }
-            }
-        }
+        if let Some(EdgeKind::Static(static_type)) = optype.static_port_kind(direction) {
+            types.to_mut().push(static_type);
+        };
         if let Some(EdgeKind::Static(other)) = optype.other_port_kind(direction) {
             types.to_mut().push(other);
         }
