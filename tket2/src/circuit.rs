@@ -49,8 +49,6 @@ pub trait Circuit: HugrView {
     fn circuit_signature(&self) -> FunctionType {
         self.get_function_type()
             .expect("Circuit has no function type")
-            .body()
-            .clone()
     }
 
     /// Returns the input node to the circuit.
