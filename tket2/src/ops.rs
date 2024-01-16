@@ -65,6 +65,9 @@ pub enum Tk2Op {
     AngleAdd,
     CZ,
     TK1,
+    QAlloc,
+    QFree,
+    Reset,
 }
 
 /// Whether an op is a given Tk2Op.
@@ -99,7 +102,9 @@ impl MakeOpDef for Tk2Op {
         let one_qb_row = type_row![QB_T];
         let two_qb_row = type_row![QB_T, QB_T];
         match self {
-            H | T | S | X | Y | Z | Tdg | Sdg => FunctionType::new(one_qb_row.clone(), one_qb_row),
+            H | T | S | X | Y | Z | Tdg | Sdg | Reset => {
+                FunctionType::new(one_qb_row.clone(), one_qb_row)
+            }
             CX | ZZMax | CZ => FunctionType::new(two_qb_row.clone(), two_qb_row),
             ZZPhase => FunctionType::new(type_row![QB_T, QB_T, FLOAT64_TYPE], two_qb_row),
             Measure => FunctionType::new(one_qb_row, type_row![QB_T, BOOL_T]),
@@ -113,6 +118,8 @@ impl MakeOpDef for Tk2Op {
                 type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE, FLOAT64_TYPE],
                 one_qb_row,
             ),
+            QAlloc => FunctionType::new(type_row![], one_qb_row),
+            QFree => FunctionType::new(one_qb_row, type_row![]),
         }
         .into()
     }
@@ -159,7 +166,7 @@ impl Tk2Op {
         match self {
             H | CX | T | S | X | Y | Z | Tdg | Sdg | ZZMax | RzF64 | RxF64 | PhasedX | ZZPhase
             | CZ | TK1 => true,
-            AngleAdd | Measure => false,
+            AngleAdd | Measure | QAlloc | QFree | Reset => false,
         }
     }
 }
@@ -269,6 +276,7 @@ pub(crate) mod test {
 
     use hugr::extension::simple_op::MakeOpDef;
     use hugr::ops::OpName;
+    use hugr::CircuitUnit;
     use hugr::{extension::OpDef, Hugr};
     use rstest::{fixture, rstest};
     use strum::IntoEnumIterator;
@@ -302,5 +310,27 @@ pub(crate) mod test {
     #[rstest]
     fn check_t2_bell(t2_bell_circuit: Hugr) {
         assert_eq!(t2_bell_circuit.commands().count(), 2);
+    }
+
+    #[test]
+    fn ancilla_circ() {
+        let h = build_simple_circuit(1, |circ| {
+            let empty: [CircuitUnit; 0] = []; // requires type annotation
+            let ancilla = circ.append_with_outputs(Tk2Op::QAlloc, empty)?[0];
+            let ancilla = circ.append_with_outputs(Tk2Op::Reset, [ancilla])?[0];
+
+            let ancilla = circ.append_with_outputs(
+                Tk2Op::CX,
+                [CircuitUnit::Linear(0), CircuitUnit::Wire(ancilla)],
+            )?[0];
+            let ancilla = circ.append_with_outputs(Tk2Op::Measure, [ancilla])?[0];
+            circ.append_and_consume(Tk2Op::QFree, [ancilla])?;
+
+            Ok(())
+        })
+        .unwrap();
+
+        // 5 commands: alloc, reset, cx, measure, free
+        assert_eq!(h.commands().count(), 5);
     }
 }

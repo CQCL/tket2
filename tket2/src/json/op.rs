@@ -191,6 +191,7 @@ impl From<&JsonOp> for OpType {
             JsonOpType::ZZMax => Tk2Op::ZZMax.into(),
             JsonOpType::ZZPhase => Tk2Op::ZZPhase.into(),
             JsonOpType::CZ => Tk2Op::CZ.into(),
+            JsonOpType::Reset => Tk2Op::Reset.into(),
             JsonOpType::noop => LeafOp::Noop { ty: QB_T }.into(),
             _ => LeafOp::CustomOp(Box::new(json_op.as_opaque_op())).into(),
         }
@@ -228,12 +229,16 @@ impl TryFrom<&OpType> for JsonOp {
                 Tk2Op::RxF64 => JsonOpType::Rx,
                 // TODO: Use a TK2 opaque op once we update the tket-json-rs dependency.
                 Tk2Op::AngleAdd => {
-                    unimplemented!("Serialising AngleAdd not supported. Are all constant folded?")
+                    unimplemented!("Serialising AngleAdd not supported. Are all constants folded?")
                 }
                 Tk2Op::TK1 => JsonOpType::TK1,
                 Tk2Op::PhasedX => JsonOpType::PhasedX,
                 Tk2Op::ZZPhase => JsonOpType::ZZPhase,
                 Tk2Op::CZ => JsonOpType::CZ,
+                Tk2Op::Reset => JsonOpType::Reset,
+                Tk2Op::QAlloc | Tk2Op::QFree => {
+                    unimplemented!("TKET1 does not support dynamic qubit allocation/discarding.")
+                }
             }
         } else if let LeafOp::CustomOp(b) = leaf {
             let ext = (*b).as_ref();
