@@ -6,7 +6,7 @@ from tket2.circuit import Tk2Circuit
 from tket2.pattern import Rule, RuleMatcher
 import hypothesis.strategies as st
 from hypothesis.strategies._internal import SearchStrategy
-from hypothesis import given, settings
+from hypothesis import given, settings, reproduce_failure
 
 
 @st.composite
@@ -66,11 +66,21 @@ def test_depth_optimise():
 
 @given(circ=circuits())
 @settings(print_blob=True, deadline=30)
+@reproduce_failure('6.93.2', b'AXicY2ZkZGBiZEABTCARJkYmAAEXABM=')
 def test_depth_hyp(circ: Circuit) -> None:
     new, _ = greedy_depth_reduce(circ)
 
     assert circ.n_gates == new.n_gates
     assert new.depth() <= circ.depth()
+
+
+def test_depth_bug() -> None:
+    circ = Circuit(3).H(0).CX(1,0).H(0).CX(0,2).H(0).CX(1,2)
+    new, _ = greedy_depth_reduce(circ)
+
+    assert circ.n_gates == new.n_gates
+    assert new.depth() <= circ.depth()
+
 
 
 def test_chunks():

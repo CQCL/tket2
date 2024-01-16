@@ -331,7 +331,7 @@ mod test {
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::{BOOL_T, QB_T},
-        std_extensions::arithmetic::float_types::FLOAT64_TYPE,
+        std_extensions::arithmetic::float_types::{ConstF64, FLOAT64_TYPE},
         type_row,
         types::FunctionType,
         Hugr,
@@ -490,6 +490,26 @@ mod test {
         })
         .unwrap()
     }
+
+    fn cx_commute_bug2() -> Hugr {
+        let build = || {
+            let mut dfg = DFGBuilder::new(FunctionType::new_endo(type_row![QB_T; 3]))?;
+            let f = dfg.add_load_const(ConstF64::new(0.0))?;
+
+            let mut circ = dfg.as_circuit(dfg.input_wires().collect_vec());
+            circ.append(Tk2Op::H, [0])?;
+            circ.append(Tk2Op::CX, [1, 0])?;
+            // circ.append(Tk2Op::H, [0])?;
+            circ.append_and_consume(Tk2Op::RzF64, [CircuitUnit::Linear(0), CircuitUnit::Wire(f)])?;
+
+            circ.append(Tk2Op::CX, [0, 2])?;
+            circ.append(Tk2Op::H, [0])?;
+            circ.append(Tk2Op::CX, [1, 2])?;
+            let qbs = circ.finish();
+            dfg.finish_hugr_with_outputs(qbs, &REGISTRY)
+        };
+        build().unwrap()
+    }
     fn slice_from_command(
         commands: &[ComCommand],
         n_qbs: usize,
@@ -595,6 +615,7 @@ mod test {
     #[case(non_linear_inputs(), true, 1)]
     #[case(non_linear_outputs(), true, 1)]
     #[case(cx_commute_bug(), true, 1)]
+    #[case(cx_commute_bug2(), false, 1)]
     fn commutation_example(
         #[case] mut case: Hugr,
         #[case] should_reduce: bool,
@@ -624,6 +645,8 @@ mod test {
             case.node_count(),
             node_count,
             "depth optimisation should not change the number of nodes."
-        )
+        );
+
+        crate::utils::test::viz_hugr(&case);
     }
 }
