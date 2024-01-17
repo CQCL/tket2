@@ -1,5 +1,9 @@
 inputs:
-  nixpkgs-stable:
+  # contains fix to poetry package not yet in nixpkgs-unstable
+  # as of 2024-01-17
+  poetry-fix:
+    url: github:NixOS/nixpkgs/a11119e
+  nixpkgs-2305:
     url: github:NixOS/nixpkgs/nixos-23.05
   fenix:
     url: github:nix-community/fenix

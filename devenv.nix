@@ -1,6 +1,7 @@
 { pkgs, lib, config, inputs, ... }:
 let
-  pkgs-stable = import inputs.nixpkgs-stable { system = pkgs.stdenv.system; };
+  pkgs-2305 = import inputs.nixpkgs-2305 { system = pkgs.stdenv.system; };
+  pkgs-poetry = import inputs.poetry-fix { system = pkgs.stdenv.system; };
 in
 {
   # https://devenv.sh/packages/
@@ -10,7 +11,7 @@ in
     pkgs.just
     pkgs.llvmPackages_16.libllvm
     # cargo-llvm-cov is currently marked broken on nixpkgs unstable
-    pkgs-stable.cargo-llvm-cov
+    pkgs-2305.cargo-llvm-cov
   ]
   ++ lib.optionals pkgs.stdenv.isLinux [
     pkgs.stdenv.cc.cc.lib
@@ -42,7 +43,7 @@ in
 
   languages.rust = {
     enable = true;
-    channel = "beta";
+    channel = "stable";
     components = [ "rustc" "cargo" "clippy" "rustfmt" "rust-analyzer" ];
   };
 
@@ -50,6 +51,9 @@ in
     enable = true;
     poetry = {
       enable = true;
+      activate.enable = true;
+      # contains fix to poetry package on macos
+      package = pkgs-poetry.poetry;
     };
   };
 
