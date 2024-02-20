@@ -5,8 +5,7 @@ use hugr::{
     extension::{prelude::ERROR_TYPE, SignatureError, SignatureFromArgs, TypeDef},
     types::{
         type_param::{TypeArgError, TypeParam},
-        ConstTypeError, CustomCheckFailure, CustomType, FunctionType, PolyFuncType, Type, TypeArg,
-        TypeBound,
+        ConstTypeError, CustomType, FunctionType, PolyFuncType, Type, TypeArg, TypeBound,
     },
     values::CustomConst,
     Extension,
@@ -116,14 +115,9 @@ impl CustomConst for ConstAngle {
     fn name(&self) -> SmolStr {
         format!("a(2π*{}/2^{})", self.value, self.log_denom).into()
     }
-    fn check_custom_type(&self, typ: &CustomType) -> Result<(), CustomCheckFailure> {
-        if typ.clone() == super::angle_custom_type(self.log_denom) {
-            Ok(())
-        } else {
-            Err(CustomCheckFailure::Message(
-                "Angle constant type mismatch.".into(),
-            ))
-        }
+
+    fn custom_type(&self) -> CustomType {
+        super::angle_custom_type(self.log_denom)
     }
     fn equal_consts(&self, other: &dyn CustomConst) -> bool {
         hugr::values::downcast_equal_consts(self, other)
@@ -270,12 +264,14 @@ mod test {
         assert_ne!(const_a32_7, const_a32_8);
         assert_eq!(const_a32_7, ConstAngle::new(5, 7).unwrap());
 
-        assert!(const_a32_7
-            .check_custom_type(&super::super::angle_custom_type(5))
-            .is_ok());
-        assert!(const_a32_7
-            .check_custom_type(&super::super::angle_custom_type(6))
-            .is_err());
+        assert_eq!(
+            const_a32_7.custom_type(),
+            super::super::angle_custom_type(5)
+        );
+        assert_ne!(
+            const_a32_7.custom_type(),
+            super::super::angle_custom_type(6)
+        );
         assert!(matches!(
             ConstAngle::new(3, 256),
             Err(ConstTypeError::CustomCheckFail(_))

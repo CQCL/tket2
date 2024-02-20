@@ -20,7 +20,7 @@ missing_docs = "warn"
 [workspace.dependencies]
 
 tket2 = { path = "./tket2" }
-quantinuum-hugr = { version = "0.1" }
+quantinuum-hugr = { version = "0.2" }
 portgraph = { version = "0.11" }
 pyo3 = { version = "0.20" }
 itertools = { version = "0.12.0" }
