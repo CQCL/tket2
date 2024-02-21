@@ -37,7 +37,7 @@ impl CircuitPattern {
         let mut pattern = Pattern::new();
         for cmd in circuit.commands() {
             let op = cmd.optype().clone();
-            pattern.require(cmd.node().into(), op.try_into().unwrap());
+            pattern.require(cmd.node().into(), op.into());
             for in_offset in 0..cmd.input_count() {
                 let in_offset: IncomingPort = in_offset.into();
                 let edge_prop = PEdge::try_from_port(cmd.node(), in_offset.into(), circuit)
