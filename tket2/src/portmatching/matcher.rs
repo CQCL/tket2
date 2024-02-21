@@ -12,7 +12,7 @@ use hugr::hugr::views::sibling_subgraph::{
     InvalidReplacement, InvalidSubgraph, InvalidSubgraphBoundary, TopoConvexChecker,
 };
 use hugr::hugr::views::SiblingSubgraph;
-use hugr::ops::OpType;
+use hugr::ops::{OpName, OpType};
 use hugr::{Hugr, IncomingPort, Node, OutgoingPort, Port, PortIndex};
 use itertools::Itertools;
 use portgraph::algorithms::ConvexChecker;
@@ -20,6 +20,7 @@ use portmatching::{
     automaton::{LineBuilder, ScopeAutomaton},
     EdgeProperty, PatternID,
 };
+use smol_str::SmolStr;
 use thiserror::Error;
 
 #[cfg(feature = "pyo3")]
@@ -27,40 +28,41 @@ use pyo3::prelude::*;
 
 use crate::{
     circuit::Circuit,
-    ops::NotTk2Op,
     rewrite::{CircuitRewrite, Subcircuit},
-    Tk2Op,
 };
 
 /// Matchable operations in a circuit.
-///
-/// We currently support [`Tk2Op`] and a the HUGR load constant operation.
-// TODO: Support OpType::Const, but blocked by use of F64 (Eq support required)
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
-pub(crate) enum MatchOp {
-    /// A TKET2 operation.
-    Op(Tk2Op),
-    /// A HUGR load constant operation.
-    LoadConstant,
+pub(crate) struct MatchOp {
+    /// The operation identifier
+    op_name: SmolStr,
+    /// The encoded operation, if necessary for comparisons.
+    ///
+    /// This as a temporary hack for comparing parametric operations, since
+    /// OpType doesn't implement Eq, Hash, or Ord.
+    encoded: Option<Vec<u8>>,
 }
 
-impl From<Tk2Op> for MatchOp {
-    fn from(op: Tk2Op) -> Self {
-        Self::Op(op)
-    }
-}
-
-impl TryFrom<OpType> for MatchOp {
-    type Error = NotTk2Op;
-
-    fn try_from(value: OpType) -> Result<Self, Self::Error> {
-        match value {
-            OpType::LeafOp(op) => Ok(Self::Op(op.try_into()?)),
-            OpType::LoadConstant(_) => Ok(Self::LoadConstant),
-            _ => Err(NotTk2Op),
-        }
+impl From<OpType> for MatchOp {
+    fn from(op: OpType) -> Self {
+        let op_name = op.name();
+        // Avoid encoding some operations if we know they can be uniquely
+        // identified by their name.
+        let encoded = match op {
+            OpType::Module(_) => None,
+            OpType::LeafOp(leaf)
+                if leaf
+                    .as_extension_op()
+                    .map(|ext| ext.args().is_empty())
+                    .unwrap_or_default() =>
+            {
+                None
+            }
+            _ => rmp_serde::encode::to_vec(&op).ok(),
+        };
+        Self { op_name, encoded }
     }
 }
 
@@ -448,8 +450,7 @@ pub(crate) fn validate_circuit_node(
         let NodeID::HugrNode(node) = node else {
             return false;
         };
-        let v_weight = MatchOp::try_from(circ.get_optype(node).clone());
-        v_weight.is_ok_and(|w| &w == prop)
+        &MatchOp::from(circ.get_optype(node).clone()) == prop
     }
 }
 

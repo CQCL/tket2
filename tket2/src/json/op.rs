@@ -49,6 +49,7 @@ impl JsonOp {
     /// [`JsonOp::new_from_op`] for a version that generates a signature if none
     /// is defined.
     #[allow(unused)]
+    #[allow(clippy::question_mark)]
     pub fn new(op: circuit_json::Operation) -> Option<Self> {
         let Some(sig) = &op.signature else {
             return None;
