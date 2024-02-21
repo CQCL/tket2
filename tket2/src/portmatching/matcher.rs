@@ -32,9 +32,6 @@ use crate::{
 };
 
 /// Matchable operations in a circuit.
-///
-/// We currently support [`Tk2Op`] and a the HUGR load constant operation.
-// TODO: Support OpType::Const, but blocked by use of F64 (Eq support required)
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
