@@ -171,18 +171,6 @@ mod tests {
     }
 
     #[fixture]
-    fn rhs() -> Hugr {
-        let mut h = DFGBuilder::new(FunctionType::new(vec![], vec![QB_T])).unwrap();
-
-        let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
-        let q = res.out_wire(0);
-        let res = h.add_dataflow_op(Tk2Op::Reset, [q]).unwrap();
-        let q = res.out_wire(0);
-
-        h.finish_hugr_with_outputs([q], &PRELUDE_REGISTRY).unwrap()
-    }
-
-    #[fixture]
     pub fn circ() -> Hugr {
         let mut h = DFGBuilder::new(FunctionType::new(vec![QB_T], vec![QB_T])).unwrap();
         let mut inps = h.input_wires();
