@@ -149,35 +149,37 @@ impl From<Node> for NodeID {
 
 #[cfg(test)]
 mod tests {
+    use crate::Tk2Op;
     use hugr::{
-        builder::{BuildError, DFGBuilder, Dataflow, DataflowHugr},
+        builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::{prelude::QB_T, PRELUDE_REGISTRY},
         types::FunctionType,
-        Hugr, HugrView,
+        Hugr,
     };
     use rstest::{fixture, rstest};
-    use crate::{utils::test::viz_hugr, Tk2Op};
 
     use super::{CircuitPattern, PatternMatcher};
 
-    fn alloc() -> Result<Hugr, BuildError> {
-        let mut h = DFGBuilder::new(FunctionType::new(vec![], vec![QB_T]))?;
+    #[fixture]
+    fn lhs() -> Hugr {
+        let mut h = DFGBuilder::new(FunctionType::new(vec![], vec![QB_T])).unwrap();
 
-        let res = h.add_dataflow_op(Tk2Op::QAlloc, [])?;
+        let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
         let q = res.out_wire(0);
 
-        h.finish_hugr_with_outputs([q], &PRELUDE_REGISTRY)
+        h.finish_hugr_with_outputs([q], &PRELUDE_REGISTRY).unwrap()
     }
 
-    fn alloc_reset() -> Result<Hugr, BuildError> {
-        let mut h = DFGBuilder::new(FunctionType::new(vec![], vec![QB_T]))?;
+    #[fixture]
+    fn rhs() -> Hugr {
+        let mut h = DFGBuilder::new(FunctionType::new(vec![], vec![QB_T])).unwrap();
 
-        let res = h.add_dataflow_op(Tk2Op::QAlloc, [])?;
+        let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
         let q = res.out_wire(0);
-        let res = h.add_dataflow_op(Tk2Op::Reset, [q])?;
+        let res = h.add_dataflow_op(Tk2Op::Reset, [q]).unwrap();
         let q = res.out_wire(0);
 
-        h.finish_hugr_with_outputs([q], &PRELUDE_REGISTRY)
+        h.finish_hugr_with_outputs([q], &PRELUDE_REGISTRY).unwrap()
     }
 
     #[fixture]
@@ -193,29 +195,16 @@ mod tests {
         let q_out = res.out_wire(1);
         h.add_dataflow_op(Tk2Op::QFree, [q_in]).unwrap();
 
-        h.finish_hugr_with_outputs([q_out], &PRELUDE_REGISTRY).unwrap()
+        h.finish_hugr_with_outputs([q_out], &PRELUDE_REGISTRY)
+            .unwrap()
     }
 
     #[rstest]
-    fn simple_match(mut circ: Hugr) {
-        // viz_hugr(&circ);
-        let lhs = alloc().unwrap();
-        let rhs = alloc_reset().unwrap();
-
+    fn simple_match(circ: Hugr, lhs: Hugr) {
         let p = CircuitPattern::try_from_circuit(&lhs).unwrap();
         let m = PatternMatcher::from_patterns(vec![p]);
 
         let matches = m.find_matches(&circ);
-        for matched in matches {
-            dbg!(&matched);
-            matched
-                .to_rewrite(&circ, rhs.clone())
-                .unwrap()
-                .apply(&mut circ)
-                .unwrap_or_else(|e| {
-                    // dbg!(matched.to_rewrite(&circ, rhs.clone()));
-                    panic!("{}", e)
-                })
-        }
+        assert_eq!(matches.len(), 1);
     }
 }
