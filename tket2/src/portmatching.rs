@@ -146,3 +146,53 @@ impl From<Node> for NodeID {
         Self::HugrNode(node)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::Tk2Op;
+    use hugr::{
+        builder::{DFGBuilder, Dataflow, DataflowHugr},
+        extension::{prelude::QB_T, PRELUDE_REGISTRY},
+        types::FunctionType,
+        Hugr,
+    };
+    use rstest::{fixture, rstest};
+
+    use super::{CircuitPattern, PatternMatcher};
+
+    #[fixture]
+    fn lhs() -> Hugr {
+        let mut h = DFGBuilder::new(FunctionType::new(vec![], vec![QB_T])).unwrap();
+
+        let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
+        let q = res.out_wire(0);
+
+        h.finish_hugr_with_outputs([q], &PRELUDE_REGISTRY).unwrap()
+    }
+
+    #[fixture]
+    pub fn circ() -> Hugr {
+        let mut h = DFGBuilder::new(FunctionType::new(vec![QB_T], vec![QB_T])).unwrap();
+        let mut inps = h.input_wires();
+        let q_in = inps.next().unwrap();
+
+        let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
+        let q_out = res.out_wire(0);
+        let res = h.add_dataflow_op(Tk2Op::CZ, [q_in, q_out]).unwrap();
+        let q_in = res.out_wire(0);
+        let q_out = res.out_wire(1);
+        h.add_dataflow_op(Tk2Op::QFree, [q_in]).unwrap();
+
+        h.finish_hugr_with_outputs([q_out], &PRELUDE_REGISTRY)
+            .unwrap()
+    }
+
+    #[rstest]
+    fn simple_match(circ: Hugr, lhs: Hugr) {
+        let p = CircuitPattern::try_from_circuit(&lhs).unwrap();
+        let m = PatternMatcher::from_patterns(vec![p]);
+
+        let matches = m.find_matches(&circ);
+        assert_eq!(matches.len(), 1);
+    }
+}
