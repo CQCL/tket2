@@ -148,6 +148,7 @@ impl PatternMatch {
             .iter()
             .map(|(n, p)| (map[n], p.as_outgoing().unwrap()))
             .collect_vec();
+        dbg!(&map, &inputs, &outputs);
         Self::try_from_io_with_checker(root, pattern, circ, inputs, outputs, checker)
     }
 

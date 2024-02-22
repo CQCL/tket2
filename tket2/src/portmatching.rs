@@ -146,3 +146,76 @@ impl From<Node> for NodeID {
         Self::HugrNode(node)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use hugr::{
+        builder::{BuildError, DFGBuilder, Dataflow, DataflowHugr},
+        extension::{prelude::QB_T, PRELUDE_REGISTRY},
+        types::FunctionType,
+        Hugr, HugrView,
+    };
+    use rstest::{fixture, rstest};
+    use crate::{utils::test::viz_hugr, Tk2Op};
+
+    use super::{CircuitPattern, PatternMatcher};
+
+    fn alloc() -> Result<Hugr, BuildError> {
+        let mut h = DFGBuilder::new(FunctionType::new(vec![], vec![QB_T]))?;
+
+        let res = h.add_dataflow_op(Tk2Op::QAlloc, [])?;
+        let q = res.out_wire(0);
+
+        h.finish_hugr_with_outputs([q], &PRELUDE_REGISTRY)
+    }
+
+    fn alloc_reset() -> Result<Hugr, BuildError> {
+        let mut h = DFGBuilder::new(FunctionType::new(vec![], vec![QB_T]))?;
+
+        let res = h.add_dataflow_op(Tk2Op::QAlloc, [])?;
+        let q = res.out_wire(0);
+        let res = h.add_dataflow_op(Tk2Op::Reset, [q])?;
+        let q = res.out_wire(0);
+
+        h.finish_hugr_with_outputs([q], &PRELUDE_REGISTRY)
+    }
+
+    #[fixture]
+    pub fn circ() -> Hugr {
+        let mut h = DFGBuilder::new(FunctionType::new(vec![QB_T], vec![QB_T])).unwrap();
+        let mut inps = h.input_wires();
+        let q_in = inps.next().unwrap();
+
+        let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
+        let q_out = res.out_wire(0);
+        let res = h.add_dataflow_op(Tk2Op::CZ, [q_in, q_out]).unwrap();
+        let q_in = res.out_wire(0);
+        let q_out = res.out_wire(1);
+        h.add_dataflow_op(Tk2Op::QFree, [q_in]).unwrap();
+
+        h.finish_hugr_with_outputs([q_out], &PRELUDE_REGISTRY).unwrap()
+    }
+
+    #[rstest]
+    fn simple_match(mut circ: Hugr) {
+        // viz_hugr(&circ);
+        let lhs = alloc().unwrap();
+        let rhs = alloc_reset().unwrap();
+
+        let p = CircuitPattern::try_from_circuit(&lhs).unwrap();
+        let m = PatternMatcher::from_patterns(vec![p]);
+
+        let matches = m.find_matches(&circ);
+        for matched in matches {
+            dbg!(&matched);
+            matched
+                .to_rewrite(&circ, rhs.clone())
+                .unwrap()
+                .apply(&mut circ)
+                .unwrap_or_else(|e| {
+                    // dbg!(matched.to_rewrite(&circ, rhs.clone()));
+                    panic!("{}", e)
+                })
+        }
+    }
+}
