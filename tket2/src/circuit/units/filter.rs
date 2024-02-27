@@ -1,5 +1,9 @@
 //! Filters for the [`Units`] iterator that unwrap the yielded units when
 //! possible.
+//!
+//! These are meant to be used as a parameter to [`Iterator::filter_map`].
+//!
+//! [`Units`]: crate::circuit::units::Units
 
 use hugr::extension::prelude;
 use hugr::types::Type;
