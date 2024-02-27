@@ -20,7 +20,6 @@ use hugr::types::FunctionType;
 use hugr::PortIndex;
 use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
-use portgraph::Direction;
 use thiserror::Error;
 
 pub use hugr::ops::OpType;
@@ -175,9 +174,9 @@ pub(crate) fn remove_empty_wire(
     if input_port >= circ.num_outputs(inp) {
         return Err(CircuitMutError::InvalidPortOffset(input_port));
     }
-    let input_port = Port::new(Direction::Outgoing, input_port);
+    let input_port = OutgoingPort::from(input_port);
     let link = circ
-        .linked_ports(inp, input_port)
+        .linked_inputs(inp, input_port)
         .at_most_one()
         .map_err(|_| CircuitMutError::DeleteNonEmptyWire(input_port.index()))?;
     if link.is_some() && link.unwrap().0 != out {
@@ -223,9 +222,10 @@ pub enum CircuitMutError {
 fn shift_ports<C: HugrMut + ?Sized>(
     circ: &mut C,
     node: Node,
-    mut free_port: Port,
+    free_port: impl Into<Port>,
     max_ind: usize,
 ) -> Result<Port, hugr::hugr::HugrError> {
+    let mut free_port = free_port.into();
     let dir = free_port.direction();
     let port_range = (free_port.index() + 1..max_ind).map(|p| Port::new(dir, p));
     for port in port_range {
