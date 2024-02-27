@@ -17,8 +17,8 @@ use hugr::hugr::NodeType;
 use hugr::ops::dataflow::IOTrait;
 use hugr::ops::{Input, Output, DFG};
 use hugr::types::FunctionType;
-use hugr::HugrView;
 use hugr::PortIndex;
+use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
 use portgraph::Direction;
 use thiserror::Error;
@@ -27,7 +27,7 @@ pub use hugr::ops::OpType;
 pub use hugr::types::{EdgeKind, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
 
-use self::units::{filter, FilteredUnits, Units};
+use self::units::{filter, LinearUnit, Units};
 
 /// An object behaving like a quantum circuit.
 //
@@ -85,7 +85,7 @@ pub trait Circuit: HugrView {
 
     /// Get the input units of the circuit and their types.
     #[inline]
-    fn units(&self) -> Units
+    fn units(&self) -> Units<OutgoingPort>
     where
         Self: Sized,
     {
@@ -94,29 +94,29 @@ pub trait Circuit: HugrView {
 
     /// Get the linear input units of the circuit and their types.
     #[inline]
-    fn linear_units(&self) -> FilteredUnits<filter::Linear>
+    fn linear_units(&self) -> impl Iterator<Item = (LinearUnit, OutgoingPort, Type)> + '_
     where
         Self: Sized,
     {
-        self.units().filter_units::<filter::Linear>()
+        self.units().filter_map(filter::filter_linear)
     }
 
     /// Get the non-linear input units of the circuit and their types.
     #[inline]
-    fn nonlinear_units(&self) -> FilteredUnits<filter::NonLinear>
+    fn nonlinear_units(&self) -> impl Iterator<Item = (Wire, OutgoingPort, Type)> + '_
     where
         Self: Sized,
     {
-        self.units().filter_units::<filter::NonLinear>()
+        self.units().filter_map(filter::filter_non_linear)
     }
 
     /// Returns the units corresponding to qubits inputs to the circuit.
     #[inline]
-    fn qubits(&self) -> FilteredUnits<filter::Qubits>
+    fn qubits(&self) -> impl Iterator<Item = (LinearUnit, OutgoingPort, Type)> + '_
     where
         Self: Sized,
     {
-        self.units().filter_units::<filter::Qubits>()
+        self.units().filter_map(filter::filter_qubit)
     }
 
     /// Returns all the commands in the circuit, in some topological order.
