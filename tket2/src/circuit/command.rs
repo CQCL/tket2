@@ -127,7 +127,7 @@ impl<'circ, Circ: Circuit> Command<'circ, Circ> {
     /// Returns the input units and wires of this command.
     #[inline]
     pub fn input_wires(&self) -> impl IntoIterator<Item = (CircuitUnit, Wire)> + '_ {
-        self.outputs().filter_map(move |(unit, port, _typ)| {
+        self.inputs().filter_map(move |(unit, port, _typ)| {
             let w = self.assign_wire(self.node, port.into())?;
             Some((unit, w))
         })
