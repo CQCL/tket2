@@ -84,7 +84,7 @@ impl Units<OutgoingPort, DefaultUnitLabeller> {
     /// node.
     #[inline]
     pub(super) fn new_circ_input(circuit: &impl Circuit) -> Self {
-        Self::new(circuit, circuit.input(), DefaultUnitLabeller)
+        Self::new_outgoing(circuit, circuit.input(), DefaultUnitLabeller)
     }
 }
 
@@ -92,12 +92,9 @@ impl<UL> Units<OutgoingPort, UL>
 where
     UL: UnitLabeller,
 {
-    /// Create a new iterator over the units of a node.
-    ///
-    /// This iterator will yield all units originating from the given node,
-    /// and return the corresponding outgoing ports.
+    /// Create a new iterator over the units originating from node.
     #[inline]
-    pub(super) fn new(circuit: &impl Circuit, node: Node, unit_labeller: UL) -> Self {
+    pub(super) fn new_outgoing(circuit: &impl Circuit, node: Node, unit_labeller: UL) -> Self {
         Self::new_with_dir(circuit, node, Direction::Outgoing, unit_labeller)
     }
 }
@@ -106,12 +103,9 @@ impl<UL> Units<IncomingPort, UL>
 where
     UL: UnitLabeller,
 {
-    /// Create a new reversed iterator over the units of a node.
-    ///
-    /// This iterator will yield all units reaching the given node,
-    /// and return the corresponding incoming ports.
+    /// Create a new iterator over the units terminating on the node.
     #[inline]
-    pub(super) fn new_reversed(circuit: &impl Circuit, node: Node, unit_labeller: UL) -> Self {
+    pub(super) fn new_incoming(circuit: &impl Circuit, node: Node, unit_labeller: UL) -> Self {
         Self::new_with_dir(circuit, node, Direction::Incoming, unit_labeller)
     }
 }

@@ -94,7 +94,7 @@ impl<'circ, Circ: Circuit> Command<'circ, Circ> {
     /// Returns the output units of this command. See [`Command::units`].
     #[inline]
     pub fn outputs(&self) -> Units<OutgoingPort, &'_ Self> {
-        Units::new(self.circ, self.node, self)
+        Units::new_outgoing(self.circ, self.node, self)
     }
 
     /// Returns the linear output units of this command. See [`Command::linear_units`].
@@ -115,7 +115,7 @@ impl<'circ, Circ: Circuit> Command<'circ, Circ> {
     /// Returns the output units of this command.
     #[inline]
     pub fn inputs(&self) -> Units<IncomingPort, &'_ Self> {
-        Units::new_reversed(self.circ, self.node, self)
+        Units::new_incoming(self.circ, self.node, self)
     }
 
     /// Returns the linear input units of this command. See [`Command::linear_units`].
@@ -377,7 +377,7 @@ where
         // required to construct a `Command`.
         //
         // Updates the map tracking the last wire of linear units.
-        let linear_units: Vec<_> = Units::new(self.circ, node, DefaultUnitLabeller)
+        let linear_units: Vec<_> = Units::new_outgoing(self.circ, node, DefaultUnitLabeller)
             .filter_map(filter::filter_linear)
             .map(|(_, port, _)| {
                 // Find the linear unit id for this port.
