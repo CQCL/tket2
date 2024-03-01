@@ -1,72 +1,39 @@
 //! Filters for the [`Units`] iterator that unwrap the yielded units when
 //! possible.
+//!
+//! These are meant to be used as a parameter to [`Iterator::filter_map`].
+//!
+//! [`Units`]: crate::circuit::units::Units
 
 use hugr::extension::prelude;
 use hugr::types::Type;
 use hugr::CircuitUnit;
-use hugr::{Port, Wire};
+use hugr::Wire;
 
-use super::{DefaultUnitLabeller, LinearUnit, Units};
+use super::LinearUnit;
 
-/// A filtered units iterator
-pub type FilteredUnits<F, UL = DefaultUnitLabeller> = std::iter::FilterMap<
-    Units<UL>,
-    fn((CircuitUnit, Port, Type)) -> Option<<F as UnitFilter>::Item>,
->;
-
-/// A filter over a [`Units`] iterator.
-pub trait UnitFilter {
-    /// The item yielded by the filtered iterator.
-    type Item;
-
-    /// Filter a [`Units`] iterator item, and unwrap it into a `Self::Item` if
-    /// it's accepted.
-    fn accept(item: (CircuitUnit, Port, Type)) -> Option<Self::Item>;
-}
-
-/// A unit filter that accepts linear units.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Linear;
-
-/// A unit filter that accepts qubits, a subset of [`Linear`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Qubits;
-
-/// A unit filter that accepts non-linear units.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct NonLinear;
-
-impl UnitFilter for Linear {
-    type Item = (LinearUnit, Port, Type);
-
-    fn accept(item: (CircuitUnit, Port, Type)) -> Option<Self::Item> {
-        match item {
-            (CircuitUnit::Linear(unit), port, typ) => Some((LinearUnit::new(unit), port, typ)),
-            _ => None,
-        }
+/// A unit filter that return only linear units.
+pub fn filter_linear<P>(item: (CircuitUnit, P, Type)) -> Option<(LinearUnit, P, Type)> {
+    match item {
+        (CircuitUnit::Linear(unit), port, typ) => Some((LinearUnit::new(unit), port, typ)),
+        _ => None,
     }
 }
 
-impl UnitFilter for Qubits {
-    type Item = (LinearUnit, Port, Type);
-
-    fn accept(item: (CircuitUnit, Port, Type)) -> Option<Self::Item> {
-        match item {
-            (CircuitUnit::Linear(unit), port, typ) if typ == prelude::QB_T => {
-                Some((LinearUnit::new(unit), port, typ))
-            }
-            _ => None,
+/// A unit filter that return only qubits, a subset of [`filter_linear`].
+pub fn filter_qubit<P>(item: (CircuitUnit, P, Type)) -> Option<(LinearUnit, P, Type)> {
+    match item {
+        (CircuitUnit::Linear(unit), port, typ) if typ == prelude::QB_T => {
+            Some((LinearUnit::new(unit), port, typ))
         }
+        _ => None,
     }
 }
 
-impl UnitFilter for NonLinear {
-    type Item = (Wire, Port, Type);
-
-    fn accept(item: (CircuitUnit, Port, Type)) -> Option<Self::Item> {
-        match item {
-            (CircuitUnit::Wire(wire), port, typ) => Some((wire, port, typ)),
-            _ => None,
-        }
+/// A unit filter that return only non-linear units.
+pub fn filter_non_linear<P>(item: (CircuitUnit, P, Type)) -> Option<(Wire, P, Type)> {
+    match item {
+        (CircuitUnit::Wire(wire), port, typ) => Some((wire, port, typ)),
+        _ => None,
     }
 }

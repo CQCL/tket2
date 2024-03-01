@@ -6,7 +6,7 @@ use itertools::Itertools;
 use portgraph::PortOffset;
 
 use crate::{
-    circuit::{command::Command, units::filter::Qubits, Circuit},
+    circuit::{command::Command, Circuit},
     ops::{Pauli, Tk2Op},
 };
 
@@ -72,7 +72,7 @@ fn add_to_slice(slice: &mut Slice, com: Rc<ComCommand>) {
 fn load_slices(circ: &impl Circuit) -> SliceVec {
     let mut slices = vec![];
 
-    let n_qbs = circ.units().filter_units::<Qubits>().count();
+    let n_qbs = circ.qubit_count();
     let mut qubit_free_slice = vec![0; n_qbs];
 
     for command in circ.commands().filter(|c| is_slice_op(circ, c.node())) {

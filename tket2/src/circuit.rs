@@ -17,17 +17,16 @@ use hugr::hugr::NodeType;
 use hugr::ops::dataflow::IOTrait;
 use hugr::ops::{Input, Output, DFG};
 use hugr::types::FunctionType;
-use hugr::HugrView;
 use hugr::PortIndex;
+use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
-use portgraph::Direction;
 use thiserror::Error;
 
 pub use hugr::ops::OpType;
 pub use hugr::types::{EdgeKind, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
 
-use self::units::{filter, FilteredUnits, Units};
+use self::units::{filter, LinearUnit, Units};
 
 /// An object behaving like a quantum circuit.
 //
@@ -85,7 +84,7 @@ pub trait Circuit: HugrView {
 
     /// Get the input units of the circuit and their types.
     #[inline]
-    fn units(&self) -> Units
+    fn units(&self) -> Units<OutgoingPort>
     where
         Self: Sized,
     {
@@ -94,29 +93,29 @@ pub trait Circuit: HugrView {
 
     /// Get the linear input units of the circuit and their types.
     #[inline]
-    fn linear_units(&self) -> FilteredUnits<filter::Linear>
+    fn linear_units(&self) -> impl Iterator<Item = (LinearUnit, OutgoingPort, Type)> + '_
     where
         Self: Sized,
     {
-        self.units().filter_units::<filter::Linear>()
+        self.units().filter_map(filter::filter_linear)
     }
 
     /// Get the non-linear input units of the circuit and their types.
     #[inline]
-    fn nonlinear_units(&self) -> FilteredUnits<filter::NonLinear>
+    fn nonlinear_units(&self) -> impl Iterator<Item = (Wire, OutgoingPort, Type)> + '_
     where
         Self: Sized,
     {
-        self.units().filter_units::<filter::NonLinear>()
+        self.units().filter_map(filter::filter_non_linear)
     }
 
     /// Returns the units corresponding to qubits inputs to the circuit.
     #[inline]
-    fn qubits(&self) -> FilteredUnits<filter::Qubits>
+    fn qubits(&self) -> impl Iterator<Item = (LinearUnit, OutgoingPort, Type)> + '_
     where
         Self: Sized,
     {
-        self.units().filter_units::<filter::Qubits>()
+        self.units().filter_map(filter::filter_qubit)
     }
 
     /// Returns all the commands in the circuit, in some topological order.
@@ -175,9 +174,9 @@ pub(crate) fn remove_empty_wire(
     if input_port >= circ.num_outputs(inp) {
         return Err(CircuitMutError::InvalidPortOffset(input_port));
     }
-    let input_port = Port::new(Direction::Outgoing, input_port);
+    let input_port = OutgoingPort::from(input_port);
     let link = circ
-        .linked_ports(inp, input_port)
+        .linked_inputs(inp, input_port)
         .at_most_one()
         .map_err(|_| CircuitMutError::DeleteNonEmptyWire(input_port.index()))?;
     if link.is_some() && link.unwrap().0 != out {
@@ -223,9 +222,10 @@ pub enum CircuitMutError {
 fn shift_ports<C: HugrMut + ?Sized>(
     circ: &mut C,
     node: Node,
-    mut free_port: Port,
+    free_port: impl Into<Port>,
     max_ind: usize,
 ) -> Result<Port, hugr::hugr::HugrError> {
+    let mut free_port = free_port.into();
     let dir = free_port.direction();
     let port_range = (free_port.index() + 1..max_ind).map(|p| Port::new(dir, p));
     for port in port_range {
