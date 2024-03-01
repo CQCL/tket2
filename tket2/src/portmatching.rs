@@ -1,4 +1,57 @@
-//! Pattern matching for circuits
+//! Pattern matching for circuits.
+//!
+//! This module provides a way to define circuit patterns and match
+//! them against circuits.
+//!
+//! # Examples
+//! ```
+//! use tket2::portmatching::{CircuitPattern, PatternMatcher};
+//! use tket2::Tk2Op;
+//! use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
+//! use hugr::extension::prelude::QB_T;
+//! use hugr::ops::handle::NodeHandle;
+//! use hugr::types::FunctionType;
+//!
+//! # fn doctest() -> Result<(), Box<dyn std::error::Error>> {
+//! // Define a simple pattern that matches a single qubit allocation.
+//! let circuit_pattern = {
+//!     let mut dfg = DFGBuilder::new(FunctionType::new(vec![], vec![QB_T]))?;
+//!     let alloc = dfg.add_dataflow_op(Tk2Op::QAlloc, [])?;
+//!     dfg.finish_hugr_with_outputs(alloc.outputs(), &tket2::extension::REGISTRY)
+//! }?;
+//! let pattern = CircuitPattern::try_from_circuit(&circuit_pattern)?;
+//!
+//! // Define a circuit that contains a qubit allocation.
+//! //
+//! // -----[Z]--x---
+//! //           |
+//! //  0|--[Z]--o---
+//! let (circuit, alloc_node) = {
+//!     let mut dfg = DFGBuilder::new(FunctionType::new(vec![QB_T], vec![QB_T, QB_T]))?;
+//!     let [input_wire] = dfg.input_wires_arr();
+//!     let alloc = dfg.add_dataflow_op(Tk2Op::QAlloc, [])?;
+//!     let [alloc_wire] = alloc.outputs_arr();
+//!
+//!     let mut circuit = dfg.as_circuit(vec![input_wire, alloc_wire]);
+//!     circuit
+//!         .append(Tk2Op::Z, [1])?
+//!         .append(Tk2Op::Z, [0])?
+//!         .append(Tk2Op::CX, [1, 0])?;
+//!     let outputs = circuit.finish();
+//!
+//!     let circuit = dfg.finish_hugr_with_outputs(outputs, &tket2::extension::REGISTRY)?;
+//!     (circuit, alloc.node())
+//! };
+//!
+//! // Create a pattern matcher and find matches.
+//! let matcher = PatternMatcher::from_patterns(vec![pattern]);
+//! let matches = matcher.find_matches(&circuit);
+//!
+//! assert_eq!(matches.len(), 1);
+//! assert_eq!(matches[0].nodes(), [alloc_node]);
+//! # Ok(())
+//! # }
+//! ```
 
 pub mod matcher;
 pub mod pattern;
