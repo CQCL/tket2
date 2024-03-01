@@ -92,6 +92,16 @@ impl PatternMatch {
         self.root
     }
 
+    /// Returns the matched subcircuit in the original circuit.
+    pub fn subcircuit(&self) -> &Subcircuit {
+        &self.position
+    }
+
+    /// Returns the matched nodes in the original circuit.
+    pub fn nodes(&self) -> &[Node] {
+        self.position.nodes()
+    }
+
     /// Create a pattern match from the image of a pattern root.
     ///
     /// This checks at construction time that the match is convex. This will
