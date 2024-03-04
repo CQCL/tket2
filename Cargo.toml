@@ -21,7 +21,7 @@ missing_docs = "warn"
 
 tket2 = { path = "./tket2" }
 quantinuum-hugr = { version = "0.2" }
-portgraph = { version = "0.11" }
+portgraph = { version = "0.12" }
 pyo3 = { version = "0.20" }
 itertools = { version = "0.12.0" }
 tket-json-rs = { version = "0.3.0" }
