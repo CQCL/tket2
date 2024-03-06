@@ -1,7 +1,10 @@
 //! Utilities for calling Hugr functions on generic python objects.
+//!
+//! Supports both `pytket.Circuit` and `Tk2Circuit` python objects.
 
 use hugr::ops::OpType;
 use pyo3::exceptions::{PyAttributeError, PyValueError};
+use pyo3::types::PyString;
 use pyo3::{prelude::*, PyTypeInfo};
 
 use derive_more::From;
@@ -48,15 +51,18 @@ pub struct Tk2Circuit {
 
 #[pymethods]
 impl Tk2Circuit {
-    /// Convert a tket1 circuit to a [`Tk2Circuit`].
+    /// Initialize a `Tk2Circuit` from a `pytket.Circuit` or `guppy.Hugr`.
+    ///
+    /// Converts the input circuit to a `Hugr` if required via its serialisation
+    /// interface.
     #[new]
-    pub fn from_tket1(circ: &PyAny) -> PyResult<Self> {
+    pub fn new(circ: &PyAny) -> PyResult<Self> {
         Ok(Self {
             hugr: with_hugr(circ, |hugr, _| hugr)?,
         })
     }
 
-    /// Convert the [`Tk2Circuit`] to a tket1 circuit.
+    /// Convert the `Tk2Circuit` to a tket1 circuit.
     pub fn to_tket1<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
         SerialCircuit::encode(&self.hugr)
             .convert_pyerrs()?
@@ -84,9 +90,6 @@ impl Tk2Circuit {
     }
 
     /// Encode the circuit as a tket1 json string.
-    ///
-    /// FIXME: Currently the encoded circuit cannot be loaded back due to
-    /// [https://github.com/CQCL/hugr/issues/683]
     pub fn to_tket1_json(&self) -> PyResult<String> {
         Ok(serde_json::to_string(&SerialCircuit::encode(&self.hugr).convert_pyerrs()?).unwrap())
     }
@@ -156,21 +159,76 @@ impl Tk2Circuit {
 
 /// A flag to indicate the encoding of a circuit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum CircuitType {
     /// A `pytket` `Circuit`.
     Tket1,
     /// A tket2 `Tk2Circuit`, represented as a HUGR.
     Tket2,
+    /// A `guppylang.module.GuppyModule` or `guppylang.hugr.Hugr`.
+    ///
+    /// This a pure python structure, and requires a conversion to a
+    /// `Tk2Circuit` before using it in the Rust backend.
+    ///
+    /// Re-encoding is not supported, modifying a `Guppy` object will return it
+    /// as a `Tk2Circuit`.
+    Guppy,
 }
 
 impl CircuitType {
     /// Converts a `Hugr` into the format indicated by the flag.
+    ///
+    /// If the flag is `Guppy`, the `Hugr` is converted to a `Tk2Circuit`.
     pub fn convert(self, py: Python, hugr: Hugr) -> PyResult<&PyAny> {
         match self {
             CircuitType::Tket1 => SerialCircuit::encode(&hugr).convert_pyerrs()?.to_tket1(py),
             CircuitType::Tket2 => Ok(Py::new(py, Tk2Circuit { hugr })?.into_ref(py)),
+            CircuitType::Guppy => CircuitType::Tket2.convert(py, hugr),
         }
     }
+}
+
+/// Extract a `Hugr` from a python object, and return it along the original encoding tag.
+fn extract_hugr(circ: &PyAny) -> PyResult<(Hugr, CircuitType)> {
+    if let Ok(t2circ) = Tk2Circuit::extract(circ) {
+        return Ok((t2circ.hugr, CircuitType::Tket2));
+    }
+
+    let py = circ.py();
+    let guppy_hugr = py.import("guppylang.hugr.Hugr")?;
+    let guppy_module = py.import("guppylang.module.GuppyModule")?;
+
+    let is_guppy_module = circ.is_instance(guppy_module)?;
+    let is_guppy_hugr = circ.is_instance(guppy_hugr)?;
+
+    if !is_guppy_module && !is_guppy_hugr {
+        // Decode it as a tket1 circuit.
+        return Ok((
+            SerialCircuit::from_tket1(circ)?.decode().convert_pyerrs()?,
+            CircuitType::Tket1,
+        ));
+    }
+
+    // Ensure we are working with the compiled circuit.
+    let circ = match is_guppy_module {
+        true => circ.call_method0("compile")?,
+        false => circ,
+    };
+
+    // Convert the guppy Hugr to a Tk2Circuit.
+    let json = guppy_hugr
+        .call_method0("serialize")?
+        .extract::<&PyString>()?;
+    let hugr = serde_json::from_str(&json.to_string_lossy()).map_err(|e| {
+        PyErr::new::<PyAttributeError, _>(format!(
+            "Failed to convert the Guppy circuit into a Tk2Circuit. {e}"
+        ))
+    })?;
+
+    // TODO: The compiled Guppy is a Module root, which is not a valid Circuit.
+    // We need guppy to output DFGs instead.
+
+    Ok((hugr, CircuitType::Guppy))
 }
 
 /// Apply a fallible function expecting a hugr on a python circuit.
@@ -181,15 +239,7 @@ where
     E: ConvertPyErr<Output = PyErr>,
     F: FnOnce(Hugr, CircuitType) -> Result<T, E>,
 {
-    let (hugr, typ) = match Tk2Circuit::extract(circ) {
-        // hugr circuit
-        Ok(t2circ) => (t2circ.hugr, CircuitType::Tket2),
-        // tket1 circuit
-        Err(_) => (
-            SerialCircuit::from_tket1(circ)?.decode().convert_pyerrs()?,
-            CircuitType::Tket1,
-        ),
-    };
+    let (hugr, typ) = extract_hugr(circ)?;
     (f)(hugr, typ).map_err(|e| e.convert_pyerrs())
 }
 
