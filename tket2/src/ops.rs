@@ -70,6 +70,13 @@ pub enum Tk2Op {
     Reset,
 }
 
+impl Tk2Op {
+    #[allow(dead_code)]
+    fn exposed_name(&self) -> smol_str::SmolStr {
+        <Tk2Op as Into<OpType>>::into(*self).name()
+    }
+}
+
 /// Whether an op is a given Tk2Op.
 pub fn op_matches(op: &OpType, tk2op: Tk2Op) -> bool {
     op.name() == <Tk2Op as Into<OpType>>::into(tk2op).name()
