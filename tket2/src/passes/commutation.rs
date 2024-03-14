@@ -281,6 +281,8 @@ impl Rewrite for PullForward {
     fn invalidation_set(&self) -> Self::InvalidationSet<'_> {
         // TODO: This could avoid creating a vec, but it'll be easier to do once
         // return position impl trait is available.
+        // RPITIT requires 1.75 stable in December 2023
+        // could change Rewrite trait to take that into account if using that version
         let mut nodes = vec![self.command.node()];
         let next_nodes = self.new_nexts.values().map(|c| c.node());
         nodes.extend(next_nodes);
