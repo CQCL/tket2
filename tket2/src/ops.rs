@@ -71,15 +71,15 @@ pub enum Tk2Op {
 }
 
 impl Tk2Op {
-    #[allow(dead_code)]
-    fn exposed_name(&self) -> smol_str::SmolStr {
+    /// Expose the operation names directly in Tk2Op
+    pub fn exposed_name(&self) -> smol_str::SmolStr {
         <Tk2Op as Into<OpType>>::into(*self).name()
     }
 }
 
 /// Whether an op is a given Tk2Op.
 pub fn op_matches(op: &OpType, tk2op: Tk2Op) -> bool {
-    op.name() == <Tk2Op as Into<OpType>>::into(tk2op).name()
+    op.name() == tk2op.exposed_name()
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, PartialOrd)]
