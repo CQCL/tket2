@@ -207,10 +207,6 @@ impl Rewrite for PullForward {
 
     type ApplyResult = ();
 
-    type InvalidationSet<'a> = std::vec::IntoIter<Node>
-    where
-        Self: 'a;
-
     const UNCHANGED_ON_FAILURE: bool = false;
 
     fn verify(&self, _h: &impl HugrView) -> Result<(), Self::Error> {
@@ -248,10 +244,10 @@ impl Rewrite for PullForward {
                 // do not need to commute along this qubit.
                 continue;
             }
-            h.disconnect(command.node(), in_port)?;
-            h.disconnect(command.node(), out_port)?;
+            h.disconnect(command.node(), in_port);
+            h.disconnect(command.node(), out_port);
             // connect old source and destination - identity operation.
-            h.connect(src, src_port.index(), dst, dst_port.index())?;
+            h.connect(src, src_port.index(), dst, dst_port.index());
 
             let new_dst_port = qb_port(new_neighbour_com, qb, Direction::Incoming)?;
             let (new_src, new_src_port) = h
@@ -260,25 +256,25 @@ impl Rewrite for PullForward {
                 .ok()
                 .unwrap();
             // disconnect link which we will insert in to.
-            h.disconnect(new_neighbour_com.node(), new_dst_port)?;
+            h.disconnect(new_neighbour_com.node(), new_dst_port);
 
             h.connect(
                 new_src,
                 new_src_port.index(),
                 command.node(),
                 in_port.index(),
-            )?;
+            );
             h.connect(
                 command.node(),
                 out_port.index(),
                 new_neighbour_com.node(),
                 new_dst_port.index(),
-            )?;
+            );
         }
         Ok(())
     }
 
-    fn invalidation_set(&self) -> Self::InvalidationSet<'_> {
+    fn invalidation_set(&self) -> impl Iterator<Item = Node> {
         // TODO: This could avoid creating a vec, but it'll be easier to do once
         // return position impl trait is available.
         // This is done in the Rewrite trait of hugr so once that version

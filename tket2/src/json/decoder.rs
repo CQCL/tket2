@@ -8,8 +8,6 @@ use std::mem;
 use hugr::builder::{CircuitBuilder, Container, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::QB_T;
 
-use hugr::ops::Const;
-use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::types::FunctionType;
 use hugr::CircuitUnit;
 use hugr::{Hugr, Wire};
@@ -143,11 +141,7 @@ impl JsonDecoder {
     /// TODO: If the parameter is a variable, returns the corresponding wire from the input.
     fn create_param_wire(&mut self, param: &str) -> Wire {
         match try_param_to_constant(param) {
-            Some(c) => {
-                let const_type = FLOAT64_TYPE;
-                let const_op = Const::new(c, const_type).unwrap();
-                self.hugr.add_load_const(const_op).unwrap()
-            }
+            Some(const_op) => self.hugr.add_load_const(const_op),
             None => {
                 // store string in custom op.
                 let symb_op = symbolic_constant_op(param);

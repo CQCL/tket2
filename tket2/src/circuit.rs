@@ -16,7 +16,7 @@ use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::NodeType;
 use hugr::ops::dataflow::IOTrait;
 use hugr::ops::{Input, Output, DFG};
-use hugr::types::FunctionType;
+use hugr::types::PolyFuncType;
 use hugr::PortIndex;
 use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
@@ -45,7 +45,7 @@ pub trait Circuit: HugrView {
     ///
     /// Equivalent to [`HugrView::get_function_type`].
     #[inline]
-    fn circuit_signature(&self) -> FunctionType {
+    fn circuit_signature(&self) -> PolyFuncType {
         self.get_function_type()
             .expect("Circuit has no function type")
     }
@@ -183,7 +183,7 @@ pub(crate) fn remove_empty_wire(
         return Err(CircuitMutError::DeleteNonEmptyWire(input_port.index()));
     }
     if link.is_some() {
-        circ.disconnect(inp, input_port)?;
+        circ.disconnect(inp, input_port);
     }
 
     // Shift ports at input
@@ -231,7 +231,7 @@ fn shift_ports<C: HugrMut + ?Sized>(
     for port in port_range {
         let links = circ.linked_ports(node, port).collect_vec();
         if !links.is_empty() {
-            circ.disconnect(node, port)?;
+            circ.disconnect(node, port);
         }
         for (other_n, other_p) in links {
             match other_p.as_directed() {
@@ -243,7 +243,7 @@ fn shift_ports<C: HugrMut + ?Sized>(
                     let src_port = free_port.as_outgoing().unwrap();
                     circ.connect(node, src_port, other_n, other_p)
                 }
-            }?;
+            };
         }
         free_port = port;
     }
@@ -308,6 +308,7 @@ impl<T> Circuit for T where T: HugrView {}
 
 #[cfg(test)]
 mod tests {
+    use hugr::types::FunctionType;
     use hugr::{
         builder::{DFGBuilder, DataflowHugr},
         extension::{prelude::BOOL_T, PRELUDE_REGISTRY},
@@ -338,8 +339,8 @@ mod tests {
         let circ = test_circuit();
 
         assert_eq!(circ.name(), None);
-        assert_eq!(circ.circuit_signature().input_count(), 3);
-        assert_eq!(circ.circuit_signature().output_count(), 3);
+        assert_eq!(circ.circuit_signature().body().input_count(), 3);
+        assert_eq!(circ.circuit_signature().body().output_count(), 3);
         assert_eq!(circ.qubit_count(), 2);
         assert_eq!(circ.num_gates(), 3);
 

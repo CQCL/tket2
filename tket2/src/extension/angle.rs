@@ -1,13 +1,13 @@
 use std::{cmp::max, num::NonZeroU64};
 
 use hugr::extension::ExtensionSet;
+use hugr::ops::constant::{downcast_equal_consts, CustomConst};
 use hugr::{
     extension::{prelude::ERROR_TYPE, SignatureError, SignatureFromArgs, TypeDef},
     types::{
         type_param::{TypeArgError, TypeParam},
         ConstTypeError, CustomType, FunctionType, PolyFuncType, Type, TypeArg, TypeBound,
     },
-    values::CustomConst,
     Extension,
 };
 use itertools::Itertools;
@@ -116,11 +116,13 @@ impl CustomConst for ConstAngle {
         format!("a(2π*{}/2^{})", self.value, self.log_denom).into()
     }
 
-    fn custom_type(&self) -> CustomType {
-        super::angle_custom_type(self.log_denom)
+    /// report the type
+    fn get_type(&self) -> Type {
+        super::angle_custom_type(self.log_denom).into()
     }
+
     fn equal_consts(&self, other: &dyn CustomConst) -> bool {
-        hugr::values::downcast_equal_consts(self, other)
+        downcast_equal_consts(self, other)
     }
     fn extension_reqs(&self) -> ExtensionSet {
         ExtensionSet::singleton(&TKET2_EXTENSION_ID)
@@ -205,9 +207,9 @@ pub(super) fn add_to_extension(extension: &mut Extension) {
                 vec![LOG_DENOM_TYPE_PARAM, LOG_DENOM_TYPE_PARAM],
                 FunctionType::new(
                     vec![generic_angle_type(0, &angle_type_def)],
-                    vec![Type::new_sum(vec![
-                        generic_angle_type(1, &angle_type_def),
-                        ERROR_TYPE,
+                    vec![Type::new_sum([
+                        generic_angle_type(1, &angle_type_def).into(),
+                        ERROR_TYPE.into(),
                     ])],
                 ),
             ),
@@ -265,12 +267,12 @@ mod test {
         assert_eq!(const_a32_7, ConstAngle::new(5, 7).unwrap());
 
         assert_eq!(
-            const_a32_7.custom_type(),
-            super::super::angle_custom_type(5)
+            const_a32_7.get_type(),
+            super::super::angle_custom_type(5).into()
         );
         assert_ne!(
-            const_a32_7.custom_type(),
-            super::super::angle_custom_type(6)
+            const_a32_7.get_type(),
+            super::super::angle_custom_type(6).into()
         );
         assert!(matches!(
             ConstAngle::new(3, 256),

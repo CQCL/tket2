@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use hugr::extension::prelude::QB_T;
 use hugr::ops::{OpName, OpType};
 use hugr::std_extensions::arithmetic::float_types::ConstF64;
-use hugr::values::Value;
 use hugr::Wire;
 use itertools::{Either, Itertools};
 use tket_json_rs::circuit_json::{self, Permutation, Register, SerialCircuit};
@@ -194,16 +193,10 @@ impl JsonEncoder {
         let param = match optype {
             OpType::Const(const_op) => {
                 // New constant, register it if it can be interpreted as a parameter.
-                match const_op.value() {
-                    Value::Extension { c: (val,) } => {
-                        if let Some(f) = val.downcast_ref::<ConstF64>() {
-                            f.to_string()
-                        } else {
-                            return false;
-                        }
-                    }
-                    _ => return false,
-                }
+                let Some(const_float) = const_op.get_custom_value::<ConstF64>() else {
+                    return false;
+                };
+                const_float.to_string()
             }
             OpType::LoadConstant(_op_type) => {
                 // Re-use the parameter from the input.

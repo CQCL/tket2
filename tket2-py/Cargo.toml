@@ -18,7 +18,7 @@ tket2 = { workspace = true, features = ["pyo3", "portmatching"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tket-json-rs = { workspace = true, features = ["pyo3"] }
-quantinuum-hugr = { workspace = true }
+hugr = { workspace = true }
 portgraph = { workspace = true, features = ["serde"] }
 pyo3 = { workspace = true, features = ["extension-module"] }
 num_cpus = { workspace = true }

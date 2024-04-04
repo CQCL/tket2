@@ -78,9 +78,7 @@ pub trait RewriteTracer: Circuit + HugrMut + Sized {
         if !REWRITE_TRACING_ENABLED {
             return;
         }
-        let meta = self
-            .get_metadata_mut(self.root(), METADATA_REWRITES)
-            .unwrap();
+        let meta = self.get_metadata_mut(self.root(), METADATA_REWRITES);
         if *meta == NodeMetadata::Null {
             *meta = NodeMetadata::Array(vec![]);
         }
@@ -96,8 +94,7 @@ pub trait RewriteTracer: Circuit + HugrMut + Sized {
         }
         match self
             .get_metadata_mut(self.root(), METADATA_REWRITES)
-            .ok()
-            .and_then(|m| m.as_array_mut())
+            .as_array_mut()
         {
             Some(meta) => {
                 let rewrite = rewrite.into();

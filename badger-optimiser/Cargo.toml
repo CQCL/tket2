@@ -12,7 +12,7 @@ license-file = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tket2 = { workspace = true, features = ["portmatching", "rewrite-tracing"] }
-quantinuum-hugr = { workspace = true }
+hugr = { workspace = true }
 itertools = { workspace = true }
 tket-json-rs = { workspace = true }
 tracing = { workspace = true }

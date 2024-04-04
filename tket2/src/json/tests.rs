@@ -109,8 +109,8 @@ fn circ_add_angles_constants() -> Hugr {
 
     let qb = h.input_wires().next().unwrap();
 
-    let point2 = h.add_load_const(ConstF64::new(0.2)).unwrap();
-    let point3 = h.add_load_const(ConstF64::new(0.3)).unwrap();
+    let point2 = h.add_load_const(ConstF64::new(0.2));
+    let point3 = h.add_load_const(ConstF64::new(0.3));
     let point5 = h
         .add_dataflow_op(Tk2Op::AngleAdd, [point2, point3])
         .unwrap()
