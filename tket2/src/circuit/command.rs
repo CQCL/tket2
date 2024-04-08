@@ -501,8 +501,7 @@ mod test {
 
         assert_eq!(CommandIterator::new(&circ).count(), 3);
 
-        // TODO: Expose the operation names directly in Tk2Op to clean this up
-        let tk2op_name = |op: Tk2Op| <Tk2Op as Into<OpType>>::into(op).name();
+        let tk2op_name = |op: Tk2Op| op.exposed_name();
 
         let mut commands = CommandIterator::new(&circ);
         assert_eq!(commands.size_hint(), (3, Some(3)));
