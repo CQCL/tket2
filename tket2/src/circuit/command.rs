@@ -229,21 +229,6 @@ impl<'circ, Circ> std::hash::Hash for Command<'circ, Circ> {
     }
 }
 
-impl<'circ, Circ> PartialOrd for Command<'circ, Circ> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<'circ, Circ> Ord for Command<'circ, Circ> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.node
-            .cmp(&other.node)
-            .then(self.input_linear_units.cmp(&other.input_linear_units))
-            .then(self.output_linear_units.cmp(&other.output_linear_units))
-    }
-}
-
 /// A non-borrowing topological walker over the nodes of a circuit.
 type NodeWalker = pv::Topo<Node, HashSet<Node>>;
 
@@ -682,6 +667,31 @@ mod test {
             free_cmd.outputs().map(|(unit, _, _)| unit).collect_vec(),
             []
         );
+
+        Ok(())
+    }
+
+    /// Test the manual trait implementations of `Command`.
+    #[test]
+    fn test_impls() -> Result<(), Box<dyn std::error::Error>> {
+        use std::hash::{DefaultHasher, Hash, Hasher};
+
+        let qb_row = vec![QB_T; 1];
+        let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), vec![]))?;
+        let [q_in] = h.input_wires_arr();
+        h.add_dataflow_op(Tk2Op::QFree, [q_in])?;
+        let circ = h.finish_hugr_with_outputs([], &REGISTRY)?;
+
+        let cmd1 = circ.commands().next().unwrap();
+        let cmd2 = circ.commands().next().unwrap();
+
+        assert_eq!(cmd1, cmd2);
+
+        let mut hasher1 = DefaultHasher::new();
+        cmd1.hash(&mut hasher1);
+        let mut hasher2 = DefaultHasher::new();
+        cmd2.hash(&mut hasher2);
+        assert_eq!(hasher1.finish(), hasher2.finish());
 
         Ok(())
     }
