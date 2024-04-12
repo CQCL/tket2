@@ -10,6 +10,7 @@ use hugr::hugr::NodeType;
 use hugr::ops::{OpTag, OpTrait};
 use hugr::{IncomingPort, OutgoingPort};
 use itertools::Either::{self, Left, Right};
+use itertools::{EitherOrBoth, Itertools};
 use petgraph::visit as pv;
 
 use super::units::{filter, DefaultUnitLabeller, LinearUnit, UnitLabeller, Units};
@@ -25,11 +26,10 @@ pub struct Command<'circ, Circ> {
     circ: &'circ Circ,
     /// The operation node.
     node: Node,
-    /// An assignment of linear units to the node's ports.
-    //
-    // We'll need something more complex if `follow_linear_port` stops being a
-    // direct map from input to output.
-    linear_units: Vec<LinearUnit>,
+    /// An assignment of linear units to the node's input ports.
+    input_linear_units: Vec<LinearUnit>,
+    /// An assignment of linear units to the node's output ports.
+    output_linear_units: Vec<LinearUnit>,
 }
 
 impl<'circ, Circ: Circuit> Command<'circ, Circ> {
@@ -165,7 +165,11 @@ impl<'circ, Circ: Circuit> Command<'circ, Circ> {
 impl<'a, 'circ, Circ: Circuit> UnitLabeller for &'a Command<'circ, Circ> {
     #[inline]
     fn assign_linear(&self, _: Node, port: Port, _linear_count: usize) -> LinearUnit {
-        *self.linear_units.get(port.index()).unwrap_or_else(|| {
+        let units = match port.direction() {
+            Direction::Incoming => &self.input_linear_units,
+            Direction::Outgoing => &self.output_linear_units,
+        };
+        *units.get(port.index()).unwrap_or_else(|| {
             panic!(
                 "Could not assign a linear unit to port {port:?} of node {:?}",
                 self.node
@@ -190,14 +194,17 @@ impl<'circ, Circ: Circuit> std::fmt::Debug for Command<'circ, Circ> {
         f.debug_struct("Command")
             .field("circuit name", &self.circ.name())
             .field("node", &self.node)
-            .field("linear_units", &self.linear_units)
+            .field("input_linear_units", &self.input_linear_units)
+            .field("output_linear_units", &self.output_linear_units)
             .finish()
     }
 }
 
 impl<'circ, Circ> PartialEq for Command<'circ, Circ> {
     fn eq(&self, other: &Self) -> bool {
-        self.node == other.node && self.linear_units == other.linear_units
+        self.node == other.node
+            && self.input_linear_units == other.input_linear_units
+            && self.output_linear_units == other.output_linear_units
     }
 }
 
@@ -208,7 +215,8 @@ impl<'circ, Circ> Clone for Command<'circ, Circ> {
         Self {
             circ: self.circ,
             node: self.node,
-            linear_units: self.linear_units.clone(),
+            input_linear_units: self.input_linear_units.clone(),
+            output_linear_units: self.output_linear_units.clone(),
         }
     }
 }
@@ -216,7 +224,8 @@ impl<'circ, Circ> Clone for Command<'circ, Circ> {
 impl<'circ, Circ> std::hash::Hash for Command<'circ, Circ> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.node.hash(state);
-        self.linear_units.hash(state);
+        self.input_linear_units.hash(state);
+        self.output_linear_units.hash(state);
     }
 }
 
@@ -230,7 +239,8 @@ impl<'circ, Circ> Ord for Command<'circ, Circ> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.node
             .cmp(&other.node)
-            .then(self.linear_units.cmp(&other.linear_units))
+            .then(self.input_linear_units.cmp(&other.input_linear_units))
+            .then(self.output_linear_units.cmp(&other.output_linear_units))
     }
 }
 
@@ -356,12 +366,13 @@ where
 
     /// Process a new node, updating wires in `unit_wires`.
     ///
-    /// Returns the an option with the `linear_units` used to construct a
-    /// [`Command`], if the node is not an input or output.
+    /// Returns the an option with the `input_linear_units` and
+    /// `output_linear_units` needed to construct a [`Command`], if the node is
+    /// not an input or output.
     ///
     /// We don't return the command directly to avoid lifetime issues due to the
     /// mutable borrow here.
-    fn process_node(&mut self, node: Node) -> Option<Vec<LinearUnit>> {
+    fn process_node(&mut self, node: Node) -> Option<(Vec<LinearUnit>, Vec<LinearUnit>)> {
         // The root node is ignored.
         if node == self.circ.root() {
             return None;
@@ -373,56 +384,61 @@ where
             return None;
         }
 
-        // Collect the linear units passing through this command into the map
+        // Collect the linear units passing through this command into the maps
         // required to construct a `Command`.
         //
+        // Linear input ports are matched sequentially against the linear output
+        // ports, ignoring any non-linear ports when assigning unit ids. That
+        // is, the nth linear input is matched against the nth linear output,
+        // independently of whether there are any other ports mixed in.
+        //
         // Updates the map tracking the last wire of linear units.
-        let linear_units: Vec<_> = Units::new_outgoing(self.circ, node, DefaultUnitLabeller)
-            .filter_map(filter::filter_linear)
-            .map(|(_, port, _)| {
-                // Find the linear unit id for this port.
-                let linear_id = self
-                    .follow_linear_port(node, port)
-                    .and_then(|input_port| {
-                        let input_port = input_port.as_incoming().unwrap();
-                        self.circ.linked_outputs(node, input_port).next()
-                    })
-                    .and_then(|(from, from_port)| {
-                        // Remove the old wire from the map (if there was one)
-                        self.wire_unit.remove(&Wire::new(from, from_port))
-                    })
-                    .unwrap_or({
-                        // New linear unit found. Assign it a new id.
-                        self.wire_unit.len()
-                    });
-                // Update the map tracking the linear units
-                let new_wire = Wire::new(node, port);
-                self.wire_unit.insert(new_wire, linear_id);
-                LinearUnit::new(linear_id)
-            })
-            .collect();
+        let mut input_linear_units = Vec::new();
+        let mut output_linear_units = Vec::new();
 
-        Some(linear_units)
-    }
+        let input_units = Units::new_incoming(self.circ, node, DefaultUnitLabeller)
+            .filter_map(filter::filter_linear);
+        let output_units = Units::new_outgoing(self.circ, node, DefaultUnitLabeller)
+            .filter_map(filter::filter_linear);
+        for ports in input_units.zip_longest(output_units) {
+            match ports {
+                EitherOrBoth::Right((_, out_port, _)) => {
+                    // Add a new linear unit for this output port.
+                    let new_wire = Wire::new(node, out_port);
+                    let linear_id = self.wire_unit.len();
+                    self.wire_unit.insert(new_wire, linear_id);
+                    output_linear_units.push(LinearUnit::new(linear_id));
+                }
+                EitherOrBoth::Left((_, in_port, _)) => {
+                    // Terminate the input linear unit.
+                    let Some(linear_id) = self.circ.linked_outputs(node, in_port).next().and_then(
+                        |(wire_node, wire_port)| {
+                            self.wire_unit.remove(&Wire::new(wire_node, wire_port))
+                        },
+                    ) else {
+                        continue;
+                    };
+                    input_linear_units.push(LinearUnit::new(linear_id));
+                }
+                EitherOrBoth::Both((_, in_port, _), (_, out_port, _)) => {
+                    // Update the input linear unit using the output port.
+                    let Some(linear_id) = self.circ.linked_outputs(node, in_port).next().and_then(
+                        |(wire_node, wire_port)| {
+                            self.wire_unit.remove(&Wire::new(wire_node, wire_port))
+                        },
+                    ) else {
+                        continue;
+                    };
+                    let linear_unit = LinearUnit::new(linear_id);
+                    let new_wire = Wire::new(node, out_port);
+                    input_linear_units.push(linear_unit);
+                    output_linear_units.push(linear_unit);
+                    self.wire_unit.insert(new_wire, linear_id);
+                }
+            }
+        }
 
-    /// Returns the linear port on the node that corresponds to the same linear unit.
-    ///
-    /// We assume the linear data uses the same port offsets on both sides of the node.
-    /// In the future we may want to have a more general mechanism to handle this.
-    //
-    // Note that `Command::linear_units` assumes this behaviour.
-    fn follow_linear_port(&self, node: Node, port: impl Into<Port>) -> Option<Port> {
-        let port = port.into();
-        let optype = self.circ.get_optype(node);
-        if !optype.port_kind(port)?.is_linear() {
-            return None;
-        }
-        let other_port = Port::new(port.direction().reverse(), port.index());
-        if optype.port_kind(other_port) == optype.port_kind(port) {
-            Some(other_port)
-        } else {
-            None
-        }
+        Some((input_linear_units, output_linear_units))
     }
 }
 
@@ -437,12 +453,13 @@ where
         loop {
             let node = self.next_node()?;
             // Process the node, returning a command if it's not an input or output.
-            if let Some(linear_units) = self.process_node(node) {
+            if let Some((input_linear_units, output_linear_units)) = self.process_node(node) {
                 self.remaining -= 1;
                 return Some(Command {
                     circ: self.circ,
                     node,
-                    linear_units,
+                    input_linear_units,
+                    output_linear_units,
                 });
             }
         }
