@@ -478,6 +478,8 @@ mod test {
     use hugr::std_extensions::arithmetic::float_types::ConstF64;
     use hugr::types::FunctionType;
     use itertools::Itertools;
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
 
     use crate::extension::REGISTRY;
     use crate::utils::build_simple_circuit;
@@ -674,8 +676,6 @@ mod test {
     /// Test the manual trait implementations of `Command`.
     #[test]
     fn test_impls() -> Result<(), Box<dyn std::error::Error>> {
-        use std::hash::{DefaultHasher, Hash, Hasher};
-
         let qb_row = vec![QB_T; 1];
         let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), vec![]))?;
         let [q_in] = h.input_wires_arr();
