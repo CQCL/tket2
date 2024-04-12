@@ -477,6 +477,7 @@ mod test {
     use hugr::types::FunctionType;
     use itertools::Itertools;
 
+    use crate::extension::REGISTRY;
     use crate::utils::build_simple_circuit;
     use crate::Tk2Op;
 
@@ -601,5 +602,70 @@ mod test {
             rz_cmd.outputs().map(|(u, _, _)| u),
             [CircuitUnit::Linear(0)],
         );
+    }
+
+    /// Commands that allocate and free linear units.
+    ///
+    /// Creates the following circuit:
+    /// ```plaintext
+    /// -------------[  ]---[QFree]
+    ///              [CX]
+    ///   [QAlloc]---[  ]-------------
+    /// ```
+    /// and checks that every command is correctly generated, and correctly
+    /// computes input/output units.
+    #[test]
+    fn alloc_free() -> Result<(), Box<dyn std::error::Error>> {
+        let qb_row = vec![QB_T; 1];
+        let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row))?;
+
+        let [q_in] = h.input_wires_arr();
+
+        let alloc = h.add_dataflow_op(Tk2Op::QAlloc, [])?;
+        let [q_new] = alloc.outputs_arr();
+
+        let cx = h.add_dataflow_op(Tk2Op::CX, [q_in, q_new])?;
+        let [q_in, q_new] = cx.outputs_arr();
+
+        let free = h.add_dataflow_op(Tk2Op::QFree, [q_in])?;
+
+        let circ = h.finish_hugr_with_outputs([q_new], &REGISTRY)?;
+
+        let mut cmds = circ.commands();
+
+        let alloc_cmd = cmds.next().unwrap();
+        assert_eq!(alloc_cmd.node(), alloc.node());
+        assert_eq!(
+            alloc_cmd.inputs().map(|(unit, _, _)| unit).collect_vec(),
+            []
+        );
+        assert_eq!(
+            alloc_cmd.outputs().map(|(unit, _, _)| unit).collect_vec(),
+            [CircuitUnit::Linear(1)]
+        );
+
+        let cx_cmd = cmds.next().unwrap();
+        assert_eq!(cx_cmd.node(), cx.node());
+        assert_eq!(
+            cx_cmd.inputs().map(|(unit, _, _)| unit).collect_vec(),
+            [CircuitUnit::Linear(0), CircuitUnit::Linear(1)]
+        );
+        assert_eq!(
+            cx_cmd.outputs().map(|(unit, _, _)| unit).collect_vec(),
+            [CircuitUnit::Linear(0), CircuitUnit::Linear(1)]
+        );
+
+        let free_cmd = cmds.next().unwrap();
+        assert_eq!(free_cmd.node(), free.node());
+        assert_eq!(
+            free_cmd.inputs().map(|(unit, _, _)| unit).collect_vec(),
+            [CircuitUnit::Linear(0)]
+        );
+        assert_eq!(
+            free_cmd.outputs().map(|(unit, _, _)| unit).collect_vec(),
+            []
+        );
+
+        Ok(())
     }
 }
