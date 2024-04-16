@@ -205,15 +205,11 @@ impl JsonEncoder {
             op if op_matches(op, Tk2Op::AngleAdd) => {
                 format!("{} + {}", inputs[0], inputs[1])
             }
-            OpType::LeafOp(_) => {
-                if let Some(s) = match_symb_const_op(optype) {
-                    s.to_string()
-                } else {
-                    return false;
-                }
-            }
             _ => {
-                return false;
+                let Some(s) = match_symb_const_op(optype) else {
+                    return false;
+                };
+                s.to_string()
             }
         };
 

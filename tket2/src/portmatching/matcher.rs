@@ -52,8 +52,8 @@ impl From<OpType> for MatchOp {
         // identified by their name.
         let encoded = match op {
             OpType::Module(_) => None,
-            OpType::LeafOp(leaf)
-                if leaf
+            OpType::CustomOp(custom_op)
+                if custom_op
                     .as_extension_op()
                     .map(|ext| ext.args().is_empty())
                     .unwrap_or_default() =>

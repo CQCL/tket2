@@ -8,7 +8,7 @@ use hugr::{
         simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp},
         ExtensionId, OpDef, SignatureFunc,
     },
-    ops::{custom::ExternalOp, LeafOp, OpType},
+    ops::{CustomOp, OpType},
     std_extensions::arithmetic::float_types::FLOAT64_TYPE,
     type_row,
     types::{
@@ -181,7 +181,7 @@ impl Tk2Op {
 /// Initialize a new custom symbolic expression constant op from a string.
 pub fn symbolic_constant_op(s: &str) -> OpType {
     let value: serde_yaml::Value = s.into();
-    let l: LeafOp = EXTENSION
+    EXTENSION
         .instantiate_extension_op(
             &SYM_OP_ID,
             vec![TypeArg::Opaque {
@@ -190,8 +190,7 @@ pub fn symbolic_constant_op(s: &str) -> OpType {
             &REGISTRY,
         )
         .unwrap()
-        .into();
-    l.into()
+        .into()
 }
 
 /// match against a symbolic constant
@@ -209,14 +208,14 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<String> {
             .unwrap_or_else(|| panic!("Found an invalid type arg in a symbolic operation node."))
     };
 
-    if let OpType::LeafOp(LeafOp::CustomOp(e)) = op {
-        match e.as_ref() {
-            ExternalOp::Extension(e)
+    if let OpType::CustomOp(custom_op) = op {
+        match custom_op {
+            CustomOp::Extension(e)
                 if e.def().name() == &SYM_OP_ID && e.def().extension() == &EXTENSION_ID =>
             {
                 Some(symbol_from_typeargs(e.args()))
             }
-            ExternalOp::Opaque(e) if e.name() == &SYM_OP_ID && e.extension() == &EXTENSION_ID => {
+            CustomOp::Opaque(e) if e.name() == &SYM_OP_ID && e.extension() == &EXTENSION_ID => {
                 Some(symbol_from_typeargs(e.args()))
             }
             _ => None,
@@ -226,9 +225,19 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<String> {
     }
 }
 
-impl From<Tk2Op> for LeafOp {
-    fn from(op: Tk2Op) -> Self {
-        op.to_extension_op().unwrap().into()
+impl TryFrom<&OpType> for Tk2Op {
+    type Error = NotTk2Op;
+
+    fn try_from(op: &OpType) -> Result<Self, Self::Error> {
+        let OpType::CustomOp(custom_op) = op else {
+            return Err(NotTk2Op);
+        };
+
+        match custom_op {
+            CustomOp::Extension(ext) => Tk2Op::from_extension_op(ext),
+            CustomOp::Opaque(opaque) => try_from_name(opaque.name()),
+        }
+        .map_err(|_| NotTk2Op)
     }
 }
 
@@ -236,42 +245,6 @@ impl TryFrom<OpType> for Tk2Op {
     type Error = NotTk2Op;
 
     fn try_from(op: OpType) -> Result<Self, Self::Error> {
-        let leaf: LeafOp = op.try_into().map_err(|_| NotTk2Op)?;
-        leaf.try_into()
-    }
-}
-
-impl TryFrom<&OpType> for Tk2Op {
-    type Error = NotTk2Op;
-
-    fn try_from(op: &OpType) -> Result<Self, Self::Error> {
-        let OpType::LeafOp(leaf) = op else {
-            return Err(NotTk2Op);
-        };
-        leaf.try_into()
-    }
-}
-
-impl TryFrom<&LeafOp> for Tk2Op {
-    type Error = NotTk2Op;
-
-    fn try_from(op: &LeafOp) -> Result<Self, Self::Error> {
-        let LeafOp::CustomOp(ext) = op else {
-            return Err(NotTk2Op);
-        };
-
-        match ext.as_ref() {
-            ExternalOp::Extension(ext) => Tk2Op::from_extension_op(ext),
-            ExternalOp::Opaque(opaque) => try_from_name(opaque.name()),
-        }
-        .map_err(|_| NotTk2Op)
-    }
-}
-
-impl TryFrom<LeafOp> for Tk2Op {
-    type Error = NotTk2Op;
-
-    fn try_from(op: LeafOp) -> Result<Self, Self::Error> {
         Self::try_from(&op)
     }
 }

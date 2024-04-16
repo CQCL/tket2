@@ -8,8 +8,8 @@
 
 use hugr::extension::prelude::QB_T;
 
-use hugr::ops::custom::ExternalOp;
-use hugr::ops::{LeafOp, OpTrait, OpType};
+use hugr::ops::custom::CustomOp;
+use hugr::ops::{Noop, OpTrait, OpType};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::types::FunctionType;
 
@@ -150,7 +150,7 @@ impl JsonOp {
     }
 
     /// Wraps the op into a Hugr opaque operation
-    fn as_opaque_op(&self) -> ExternalOp {
+    fn as_custom_op(&self) -> CustomOp {
         crate::extension::wrap_json_op(self)
     }
 
@@ -177,7 +177,6 @@ impl From<&JsonOp> for OpType {
     /// Any other operation is wrapped in an `OpaqueOp`.
     fn from(json_op: &JsonOp) -> Self {
         match json_op.op.op_type {
-            // JsonOpType::X => LeafOp::X.into(),
             JsonOpType::H => Tk2Op::H.into(),
             JsonOpType::CX => Tk2Op::CX.into(),
             JsonOpType::T => Tk2Op::T.into(),
@@ -193,8 +192,13 @@ impl From<&JsonOp> for OpType {
             JsonOpType::ZZPhase => Tk2Op::ZZPhase.into(),
             JsonOpType::CZ => Tk2Op::CZ.into(),
             JsonOpType::Reset => Tk2Op::Reset.into(),
-            JsonOpType::noop => LeafOp::Noop { ty: QB_T }.into(),
-            _ => LeafOp::CustomOp(Box::new(json_op.as_opaque_op())).into(),
+            JsonOpType::noop => {
+                // TODO: Replace with `Noop::new` once that is published.
+                let mut noop = Noop::default();
+                noop.ty = QB_T;
+                noop.into()
+            }
+            _ => json_op.as_custom_op().into(),
         }
     }
 }
@@ -209,11 +213,8 @@ impl TryFrom<&OpType> for JsonOp {
         //
         // Non-supported Hugr operations throw an error.
         let err = || OpConvertError::UnsupportedOpSerialization(op.clone());
-        let Some(leaf) = op.as_leaf_op() else {
-            return Err(err());
-        };
 
-        let json_optype = if let Ok(tk2op) = leaf.try_into() {
+        let json_optype = if let Ok(tk2op) = op.try_into() {
             match tk2op {
                 Tk2Op::H => JsonOpType::H,
                 Tk2Op::CX => JsonOpType::CX,
@@ -241,9 +242,8 @@ impl TryFrom<&OpType> for JsonOp {
                     unimplemented!("TKET1 does not support dynamic qubit allocation/discarding.")
                 }
             }
-        } else if let LeafOp::CustomOp(b) = leaf {
-            let ext = (*b).as_ref();
-            return try_unwrap_json_op(ext).ok_or_else(err);
+        } else if let OpType::CustomOp(custom_op) = op {
+            return try_unwrap_json_op(custom_op).ok_or_else(err);
         } else {
             return Err(err());
         };

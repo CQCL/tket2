@@ -8,7 +8,8 @@ use hugr::extension::prelude::PRELUDE;
 use hugr::extension::simple_op::MakeOpDef;
 use hugr::extension::{CustomSignatureFunc, ExtensionId, ExtensionRegistry, SignatureError};
 use hugr::hugr::IdentList;
-use hugr::ops::custom::{ExternalOp, OpaqueOp};
+use hugr::ops::custom::{CustomOp, OpaqueOp};
+use hugr::ops::OpName;
 use hugr::std_extensions::arithmetic::float_types::{EXTENSION as FLOAT_EXTENSION, FLOAT64_TYPE};
 use hugr::types::type_param::{CustomTypeArg, TypeArg, TypeParam};
 use hugr::types::{CustomType, FunctionType, PolyFuncType, Type, TypeBound};
@@ -73,7 +74,7 @@ pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
 
 }
 /// Create a new opaque operation
-pub(crate) fn wrap_json_op(op: &JsonOp) -> ExternalOp {
+pub(crate) fn wrap_json_op(op: &JsonOp) -> CustomOp {
     // TODO: This throws an error
     //let op = serde_yaml::to_value(op).unwrap();
     //let payload = TypeArg::Opaque(CustomTypeArg::new(TKET1_OP_PAYLOAD.clone(), op).unwrap());
@@ -100,7 +101,7 @@ pub(crate) fn wrap_json_op(op: &JsonOp) -> ExternalOp {
 
 /// Extract a json-encoded TKET1 operation from an opaque operation, if
 /// possible.
-pub(crate) fn try_unwrap_json_op(ext: &ExternalOp) -> Option<JsonOp> {
+pub(crate) fn try_unwrap_json_op(ext: &CustomOp) -> Option<JsonOp> {
     // TODO: Check `extensions.contains(&TKET1_EXTENSION_ID)`
     // (but the ext op extensions are an empty set?)
     if ext.name() != format!("{TKET1_EXTENSION_ID}.{JSON_OP_NAME}") {
