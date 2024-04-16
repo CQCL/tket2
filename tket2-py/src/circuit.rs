@@ -21,25 +21,25 @@ pub use self::cost::PyCircuitCost;
 pub use tket2::{Pauli, Tk2Op};
 
 /// The module definition
-pub fn module(py: Python) -> PyResult<&PyModule> {
-    let m = PyModule::new(py, "_circuit")?;
+pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
+    let m = PyModule::new_bound(py, "_circuit")?;
     m.add_class::<Tk2Circuit>()?;
     m.add_class::<PyNode>()?;
     m.add_class::<PyCircuitCost>()?;
     m.add_class::<Tk2Op>()?;
     m.add_class::<Pauli>()?;
 
-    m.add_function(wrap_pyfunction!(validate_hugr, m)?)?;
-    m.add_function(wrap_pyfunction!(to_hugr_dot, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_hugr, &m)?)?;
+    m.add_function(wrap_pyfunction!(to_hugr_dot, &m)?)?;
 
-    m.add("HugrError", py.get_type::<PyHugrError>())?;
-    m.add("BuildError", py.get_type::<PyBuildError>())?;
-    m.add("ValidationError", py.get_type::<PyValidationError>())?;
+    m.add("HugrError", py.get_type_bound::<PyHugrError>())?;
+    m.add("BuildError", py.get_type_bound::<PyBuildError>())?;
+    m.add("ValidationError", py.get_type_bound::<PyValidationError>())?;
     m.add(
         "HUGRSerializationError",
-        py.get_type::<PyHUGRSerializationError>(),
+        py.get_type_bound::<PyHUGRSerializationError>(),
     )?;
-    m.add("OpConvertError", py.get_type::<PyOpConvertError>())?;
+    m.add("OpConvertError", py.get_type_bound::<PyOpConvertError>())?;
 
     Ok(m)
 }
@@ -76,13 +76,13 @@ create_py_exception!(
 
 /// Run the validation checks on a circuit.
 #[pyfunction]
-pub fn validate_hugr(c: &PyAny) -> PyResult<()> {
+pub fn validate_hugr(c: &Bound<PyAny>) -> PyResult<()> {
     try_with_hugr(c, |hugr, _| hugr.validate(&REGISTRY))
 }
 
 /// Return a Graphviz DOT string representation of the circuit.
 #[pyfunction]
-pub fn to_hugr_dot(c: &PyAny) -> PyResult<String> {
+pub fn to_hugr_dot(c: &Bound<PyAny>) -> PyResult<String> {
     with_hugr(c, |hugr, _| hugr.dot_string())
 }
 

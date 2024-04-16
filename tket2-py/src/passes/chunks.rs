@@ -12,7 +12,7 @@ use crate::utils::ConvertPyErr;
 
 /// Split a circuit into chunks of a given size.
 #[pyfunction]
-pub fn chunks(c: &PyAny, max_chunk_size: usize) -> PyResult<PyCircuitChunks> {
+pub fn chunks(c: &Bound<PyAny>, max_chunk_size: usize) -> PyResult<PyCircuitChunks> {
     with_hugr(c, |hugr, typ| {
         // TODO: Detect if the circuit is in tket1 format or Tk2Circuit.
         let chunks = CircuitChunks::split(&hugr, max_chunk_size);
@@ -38,13 +38,13 @@ pub struct PyCircuitChunks {
 #[pymethods]
 impl PyCircuitChunks {
     /// Reassemble the chunks into a circuit.
-    fn reassemble<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
+    fn reassemble<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let hugr = self.clone().chunks.reassemble().convert_pyerrs()?;
         self.original_type.convert(py, hugr)
     }
 
     /// Returns clones of the split circuits.
-    fn circuits<'py>(&self, py: Python<'py>) -> PyResult<Vec<&'py PyAny>> {
+    fn circuits<'py>(&self, py: Python<'py>) -> PyResult<Vec<Bound<'py, PyAny>>> {
         self.chunks
             .iter()
             .map(|hugr| self.original_type.convert(py, hugr.clone()))
@@ -52,7 +52,7 @@ impl PyCircuitChunks {
     }
 
     /// Replaces a chunk's circuit with an updated version.
-    fn update_circuit(&mut self, index: usize, new_circ: &PyAny) -> PyResult<()> {
+    fn update_circuit(&mut self, index: usize, new_circ: &Bound<PyAny>) -> PyResult<()> {
         try_with_hugr(new_circ, |hugr, _| {
             if hugr.circuit_signature() != self.chunks[index].circuit_signature() {
                 return Err(PyAttributeError::new_err(
