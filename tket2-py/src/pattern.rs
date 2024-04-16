@@ -11,8 +11,8 @@ use pyo3::prelude::*;
 use tket2::portmatching::{CircuitPattern, PatternMatcher};
 
 /// The module definition
-pub fn module(py: Python) -> PyResult<&PyModule> {
-    let m = PyModule::new(py, "_pattern")?;
+pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
+    let m = PyModule::new_bound(py, "_pattern")?;
     m.add_class::<Rule>()?;
     m.add_class::<RuleMatcher>()?;
     m.add_class::<self::portmatching::PyCircuitPattern>()?;
@@ -21,11 +21,11 @@ pub fn module(py: Python) -> PyResult<&PyModule> {
 
     m.add(
         "InvalidPatternError",
-        py.get_type::<PyInvalidPatternError>(),
+        py.get_type_bound::<PyInvalidPatternError>(),
     )?;
     m.add(
         "InvalidReplacementError",
-        py.get_type::<PyInvalidReplacementError>(),
+        py.get_type_bound::<PyInvalidReplacementError>(),
     )?;
 
     Ok(m)
@@ -51,7 +51,7 @@ pub struct Rule(pub [Hugr; 2]);
 #[pymethods]
 impl Rule {
     #[new]
-    fn new_rule(l: &PyAny, r: &PyAny) -> PyResult<Rule> {
+    fn new_rule(l: &Bound<PyAny>, r: &Bound<PyAny>) -> PyResult<Rule> {
         let l = Tk2Circuit::from_tket1(l)?;
         let r = Tk2Circuit::from_tket1(r)?;
 
