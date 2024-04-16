@@ -386,39 +386,37 @@ where
         let output_units = Units::new_outgoing(self.circ, node, DefaultUnitLabeller)
             .filter_map(filter::filter_linear);
         for ports in input_units.zip_longest(output_units) {
+            // Terminate the input linear unit.
+            // Returns the linear id of the terminated unit.
+            let mut terminate_input =
+                |port: IncomingPort, wire_unit: &mut HashMap<Wire, usize>| -> Option<usize> {
+                    let linear_id = self.circ.single_linked_output(node, port).and_then(
+                        |(wire_node, wire_port)| wire_unit.remove(&Wire::new(wire_node, wire_port)),
+                    )?;
+                    input_linear_units.push(LinearUnit::new(linear_id));
+                    Some(linear_id)
+                };
+
+            // Add a new linear unit for this output port.
+            let mut register_output =
+                |unit: usize, port: OutgoingPort, wire_unit: &mut HashMap<Wire, usize>| {
+                    let wire = Wire::new(node, port);
+                    wire_unit.insert(wire, unit);
+                    output_linear_units.push(LinearUnit::new(unit));
+                };
+
             match ports {
                 EitherOrBoth::Right((_, out_port, _)) => {
-                    // Add a new linear unit for this output port.
-                    let new_wire = Wire::new(node, out_port);
-                    let linear_id = self.wire_unit.len();
-                    self.wire_unit.insert(new_wire, linear_id);
-                    output_linear_units.push(LinearUnit::new(linear_id));
+                    let new_id = self.wire_unit.len();
+                    register_output(new_id, out_port, &mut self.wire_unit);
                 }
                 EitherOrBoth::Left((_, in_port, _)) => {
-                    // Terminate the input linear unit.
-                    let Some(linear_id) = self.circ.linked_outputs(node, in_port).next().and_then(
-                        |(wire_node, wire_port)| {
-                            self.wire_unit.remove(&Wire::new(wire_node, wire_port))
-                        },
-                    ) else {
-                        continue;
-                    };
-                    input_linear_units.push(LinearUnit::new(linear_id));
+                    terminate_input(in_port, &mut self.wire_unit);
                 }
                 EitherOrBoth::Both((_, in_port, _), (_, out_port, _)) => {
-                    // Update the input linear unit using the output port.
-                    let Some(linear_id) = self.circ.linked_outputs(node, in_port).next().and_then(
-                        |(wire_node, wire_port)| {
-                            self.wire_unit.remove(&Wire::new(wire_node, wire_port))
-                        },
-                    ) else {
-                        continue;
-                    };
-                    let linear_unit = LinearUnit::new(linear_id);
-                    let new_wire = Wire::new(node, out_port);
-                    input_linear_units.push(linear_unit);
-                    output_linear_units.push(linear_unit);
-                    self.wire_unit.insert(new_wire, linear_id);
+                    if let Some(linear_id) = terminate_input(in_port, &mut self.wire_unit) {
+                        register_output(linear_id, out_port, &mut self.wire_unit);
+                    }
                 }
             }
         }
