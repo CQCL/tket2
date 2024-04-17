@@ -17,20 +17,23 @@ use crate::{
 /// The module definition
 ///
 /// This module is re-exported from the python module with the same name.
-pub fn module(py: Python) -> PyResult<&PyModule> {
-    let m = PyModule::new(py, "_passes")?;
-    m.add_function(wrap_pyfunction!(greedy_depth_reduce, m)?)?;
-    m.add_function(wrap_pyfunction!(badger_optimise, m)?)?;
+pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
+    let m = PyModule::new_bound(py, "_passes")?;
+    m.add_function(wrap_pyfunction!(greedy_depth_reduce, &m)?)?;
+    m.add_function(wrap_pyfunction!(badger_optimise, &m)?)?;
     m.add_class::<self::chunks::PyCircuitChunks>()?;
-    m.add_function(wrap_pyfunction!(self::chunks::chunks, m)?)?;
-    m.add("PullForwardError", py.get_type::<PyPullForwardError>())?;
+    m.add_function(wrap_pyfunction!(self::chunks::chunks, &m)?)?;
+    m.add(
+        "PullForwardError",
+        py.get_type_bound::<PyPullForwardError>(),
+    )?;
     Ok(m)
 }
 
 create_py_exception!(tket2::passes::PullForwardError, PyPullForwardError, "");
 
 #[pyfunction]
-fn greedy_depth_reduce(circ: &PyAny) -> PyResult<(&PyAny, u32)> {
+fn greedy_depth_reduce<'py>(circ: &Bound<'py, PyAny>) -> PyResult<(Bound<'py, PyAny>, u32)> {
     let py = circ.py();
     try_with_hugr(circ, |mut h, typ| {
         let n_moves = apply_greedy_commutation(&mut h).convert_pyerrs()?;
@@ -47,14 +50,14 @@ fn greedy_depth_reduce(circ: &PyAny) -> PyResult<(&PyAny, u32)> {
 /// from pytket import OpType
 /// auto_rebase_pass({OpType.CX, OpType.Rz, OpType.H}).apply(circ)"
 // ```
-fn rebase_nam(circ: &PyAny) -> PyResult<()> {
+fn rebase_nam(circ: &Bound<PyAny>) -> PyResult<()> {
     let py = circ.py();
     let auto_rebase = py
-        .import("pytket.passes.auto_rebase")?
+        .import_bound("pytket.passes.auto_rebase")?
         .getattr("auto_rebase_pass")?;
-    let optype = py.import("pytket")?.getattr("OpType")?;
-    let locals = [("OpType", &optype)].into_py_dict(py);
-    let op_set = py.eval("{OpType.CX, OpType.Rz, OpType.H}", None, Some(locals))?;
+    let optype = py.import_bound("pytket")?.getattr("OpType")?;
+    let locals = [("OpType", &optype)].into_py_dict_bound(py);
+    let op_set = py.eval_bound("{OpType.CX, OpType.Rz, OpType.H}", None, Some(&locals))?;
     let rebase_pass = auto_rebase.call1((op_set,))?.getattr("apply")?;
     rebase_pass.call1((circ,)).map(|_| ())
 }
@@ -75,14 +78,14 @@ fn rebase_nam(circ: &PyAny) -> PyResult<()> {
 /// Log files will be written to the directory `log_dir` if specified.
 #[pyfunction]
 fn badger_optimise<'py>(
-    circ: &'py PyAny,
+    circ: &Bound<'py, PyAny>,
     optimiser: &PyBadgerOptimiser,
     max_threads: Option<NonZeroUsize>,
     timeout: Option<u64>,
     progress_timeout: Option<u64>,
     log_dir: Option<PathBuf>,
     rebase: Option<bool>,
-) -> PyResult<&'py PyAny> {
+) -> PyResult<Bound<'py, PyAny>> {
     // Default parameter values
     let rebase = rebase.unwrap_or(true);
     let max_threads = max_threads.unwrap_or(num_cpus::get().try_into().unwrap());
