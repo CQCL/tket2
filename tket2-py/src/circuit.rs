@@ -16,7 +16,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 
 use crate::utils::create_py_exception;
 
-use self::convert::Tk2CircuitBuild;
+use self::convert::DFG;
 pub use self::convert::{try_update_hugr, try_with_hugr, update_hugr, with_hugr, Tk2Circuit};
 pub use self::cost::PyCircuitCost;
 pub use tket2::{Pauli, Tk2Op};
@@ -25,7 +25,7 @@ pub use tket2::{Pauli, Tk2Op};
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let m = PyModule::new_bound(py, "_circuit")?;
     m.add_class::<Tk2Circuit>()?;
-    m.add_class::<Tk2CircuitBuild>()?;
+    m.add_class::<DFG>()?;
     m.add_class::<PyNode>()?;
     m.add_class::<PyCircuitCost>()?;
     m.add_class::<Tk2Op>()?;
@@ -110,10 +110,80 @@ impl fmt::Debug for PyNode {
     }
 }
 
+#[pyclass]
+struct WireIter {
+    node: PyNode,
+    current: usize,
+}
+
+#[pymethods]
+impl WireIter {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(mut slf: PyRefMut<'_, Self>) -> Option<PyWire> {
+        slf.current += 1;
+        Some(slf.node.__getitem__(slf.current - 1).unwrap())
+    }
+}
+
 #[pymethods]
 impl PyNode {
     /// A string representation of the pattern.
     pub fn __repr__(&self) -> String {
         format!("{:?}", self)
+    }
+
+    pub fn __getitem__(&self, idx: usize) -> PyResult<PyWire> {
+        Ok(hugr::Wire::new(self.node, idx).into())
+    }
+
+    fn __iter__(slf: PyRef<'_, Self>) -> PyResult<Py<WireIter>> {
+        let iter = WireIter {
+            current: 0,
+            node: *slf,
+        };
+        Py::new(slf.py(), iter)
+    }
+
+    fn outs(&self, n: usize) -> Vec<PyWire> {
+        (0..n)
+            .map(|i| hugr::Wire::new(self.node, i).into())
+            .collect()
+    }
+}
+
+/// A [`hugr::Node`] wrapper for Python.
+#[pyclass]
+#[pyo3(name = "Node")]
+#[repr(transparent)]
+#[derive(From, Into, PartialEq, Eq, Hash, Clone, Copy)]
+pub struct PyWire {
+    /// Rust representation of the node
+    pub wire: hugr::Wire,
+}
+
+impl fmt::Display for PyWire {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.wire.fmt(f)
+    }
+}
+
+impl fmt::Debug for PyWire {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.wire.fmt(f)
+    }
+}
+
+#[pymethods]
+impl PyWire {
+    /// A string representation of the pattern.
+    pub fn __repr__(&self) -> String {
+        format!("{:?}", self)
+    }
+
+    pub fn node(&self) -> PyNode {
+        self.wire.node().into()
     }
 }

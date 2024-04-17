@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pytket.circuit import Circuit
 
-from tket2.circuit import Tk2Circuit, Tk2Op, to_hugr_dot, Tk2CircuitBuild
+from tket2.circuit import Tk2Circuit, Tk2Op, to_hugr_dot, DFG
 
 
 @dataclass
@@ -52,10 +52,12 @@ def test_conversion():
 
 
 def test_append():
-    c = Tk2CircuitBuild(2)
+    c = DFG(2)
+    q0, q1 = c.inputs()
+    h_node = c.add_op(Tk2Op.H, [q0])
+    q0, q1 = c.add_op(Tk2Op.CX, [h_node[0], q1]).outs(2)
+    q0, q1 = c.add_op(Tk2Op.CX, [q1, q0]).outs(2)
 
-    c.append(Tk2Op.CX, [0, 1])
-
-    c = c.finish()
+    c = c.finish([q0, q1])
 
     print(c.to_tket1().get_commands())
