@@ -1,6 +1,9 @@
 //! Utilities for calling Hugr functions on generic python objects.
 
+use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
+use hugr::extension::prelude::QB_T;
 use hugr::ops::OpType;
+use hugr::types::FunctionType;
 use pyo3::exceptions::{PyAttributeError, PyValueError};
 use pyo3::types::PyAnyMethods;
 use pyo3::{
@@ -8,7 +11,7 @@ use pyo3::{
 };
 
 use derive_more::From;
-use hugr::{Hugr, HugrView};
+use hugr::{Hugr, HugrView, Wire};
 use serde::Serialize;
 use tket2::circuit::CircuitHash;
 use tket2::extension::REGISTRY;
@@ -154,6 +157,59 @@ impl Tk2Circuit {
     /// Returns an error if the py object is not a Tk2Circuit.
     pub fn try_extract(circ: &PyAny) -> PyResult<Self> {
         circ.extract::<Tk2Circuit>()
+    }
+}
+
+#[pyclass]
+#[derive(Clone, Debug, PartialEq, From)]
+pub struct Tk2CircuitBuild {
+    /// Rust representation of the circuit.
+    builder: DFGBuilder<Hugr>,
+    qbs: Vec<Wire>,
+}
+#[pymethods]
+impl Tk2CircuitBuild {
+    #[new]
+    pub fn new(n_qubits: usize) -> PyResult<Self> {
+        let builder =
+            DFGBuilder::new(FunctionType::new_endo(vec![QB_T; n_qubits])).convert_pyerrs()?;
+        let qbs = builder.input_wires().collect();
+        Ok(Self { builder, qbs })
+    }
+
+    pub fn finish(&mut self) -> PyResult<Tk2Circuit> {
+        Ok(Tk2Circuit {
+            hugr: self
+                .builder
+                .clone()
+                .finish_hugr_with_outputs(self.qbs.clone(), &REGISTRY)
+                .convert_pyerrs()?,
+        })
+    }
+
+    pub fn append<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        op: Tk2Op,
+        qbs: Vec<usize>,
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        slf.with_circ_builder(|circ| {
+            circ.append(op, qbs).convert_pyerrs()?;
+            Ok(())
+        })?;
+        Ok(slf)
+    }
+}
+
+impl Tk2CircuitBuild {
+    fn with_circ_builder<T>(
+        &mut self,
+        f: impl FnOnce(&mut CircuitBuilder<DFGBuilder<Hugr>>) -> PyResult<T>,
+    ) -> PyResult<T> {
+        let mut circ = self.builder.as_circuit(self.qbs.clone());
+        let outs = f(&mut circ);
+        self.qbs = circ.finish();
+
+        outs
     }
 }
 

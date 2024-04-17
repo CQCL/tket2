@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pytket.circuit import Circuit
 
-from tket2.circuit import Tk2Circuit, Tk2Op, to_hugr_dot
+from tket2.circuit import Tk2Circuit, Tk2Op, to_hugr_dot, Tk2CircuitBuild
 
 
 @dataclass
@@ -49,3 +49,13 @@ def test_conversion():
 
     assert tk1_back == tk1
     assert type(tk1_back) == Circuit
+
+
+def test_append():
+    c = Tk2CircuitBuild(2)
+
+    c.append(Tk2Op.CX, [0, 1])
+
+    c = c.finish()
+
+    print(c.to_tket1().get_commands())
