@@ -235,7 +235,12 @@ impl TryFrom<&OpType> for Tk2Op {
 
         match custom_op {
             CustomOp::Extension(ext) => Tk2Op::from_extension_op(ext),
-            CustomOp::Opaque(opaque) => try_from_name(opaque.name()),
+            CustomOp::Opaque(opaque) => {
+                if opaque.extension() != &EXTENSION_ID {
+                    return Err(NotTk2Op);
+                }
+                try_from_name(opaque.name())
+            }
         }
         .map_err(|_| NotTk2Op)
     }
