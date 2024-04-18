@@ -3,14 +3,14 @@
 use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::QB_T;
 use hugr::ops::handle::NodeHandle;
-use hugr::ops::OpType;
+use hugr::ops::{CustomOp, OpType};
 use hugr::types::FunctionType;
 use itertools::Itertools;
 use pyo3::exceptions::{PyAttributeError, PyValueError};
 use pyo3::types::PyAnyMethods;
 use pyo3::{
-    pyclass, pymethods, Bound, FromPyObject, PyAny, PyErr, PyRefMut, PyResult, PyTypeInfo, Python,
-    ToPyObject,
+    pyclass, pymethods, Bound, FromPyObject, PyAny, PyErr, PyObject, PyRefMut, PyResult,
+    PyTypeInfo, Python, ToPyObject,
 };
 
 use derive_more::From;
@@ -26,7 +26,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use crate::rewrite::PyCircuitRewrite;
 use crate::utils::ConvertPyErr;
 
-use super::{cost, PyCircuitCost, PyNode, PyWire};
+use super::{cost, PyCircuitCost, PyCustom, PyNode, PyWire};
 
 /// A circuit in tket2 format.
 ///
@@ -182,9 +182,12 @@ impl DFG {
         self.builder.input_wires().map_into().collect()
     }
 
-    pub fn add_op(&mut self, op: Tk2Op, inputs: Vec<PyWire>) -> PyResult<PyNode> {
+    pub fn add_op<'py>(&mut self, op: Bound<'py, PyAny>, inputs: Vec<PyWire>) -> PyResult<PyNode> {
+        // TODO can try to extract OpType first, and try "to_custom" if that fails.
+        let py_custom: PyCustom = op.call_method0("to_custom")?.extract()?;
+
         self.builder
-            .add_dataflow_op(op, inputs.into_iter().map_into())
+            .add_dataflow_op(py_custom, inputs.into_iter().map_into())
             .convert_pyerrs()
             .map(|d| d.node().into())
     }

@@ -5,16 +5,22 @@ pub mod convert;
 pub mod cost;
 
 use derive_more::{From, Into};
+use hugr::extension::prelude::QB_T;
+use hugr::hugr::IdentList;
+use hugr::ops::custom::{ExtensionOp, OpaqueOp};
+use hugr::ops::{CustomOp, OpType};
+use hugr::types::FunctionType;
 use pyo3::prelude::*;
 use std::fmt;
 
-use hugr::{Hugr, HugrView};
+use hugr::{type_row, Hugr, HugrView};
 use tket2::extension::REGISTRY;
 use tket2::json::TKETDecode;
 use tket2::rewrite::CircuitRewrite;
 use tket_json_rs::circuit_json::SerialCircuit;
 
 use crate::utils::create_py_exception;
+use crate::utils::ConvertPyErr;
 
 use self::convert::DFG;
 pub use self::convert::{try_update_hugr, try_with_hugr, update_hugr, with_hugr, Tk2Circuit};
@@ -29,6 +35,7 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     m.add_class::<PyNode>()?;
     m.add_class::<PyCircuitCost>()?;
     m.add_class::<Tk2Op>()?;
+    m.add_class::<PyCustom>()?;
     m.add_class::<Pauli>()?;
 
     m.add_function(wrap_pyfunction!(validate_hugr, &m)?)?;
@@ -185,5 +192,36 @@ impl PyWire {
 
     pub fn node(&self) -> PyNode {
         self.wire.node().into()
+    }
+}
+
+#[pyclass]
+#[pyo3(name = "CustomOp")]
+#[repr(transparent)]
+#[derive(From, Into, PartialEq, Clone)]
+struct PyCustom(CustomOp);
+
+impl From<PyCustom> for OpType {
+    fn from(op: PyCustom) -> Self {
+        op.0.into()
+    }
+}
+#[pymethods]
+impl PyCustom {
+    #[staticmethod]
+    fn new_custom_quantum(extension: &str, op_name: &str, n_qubits: [usize; 2]) -> PyResult<Self> {
+        let [q_in, q_out] = n_qubits;
+        Ok(CustomOp::new_opaque(OpaqueOp::new(
+            IdentList::new(extension).unwrap(),
+            op_name,
+            Default::default(),
+            [],
+            FunctionType::new(vec![QB_T; q_in], vec![QB_T; q_out]),
+        ))
+        .into())
+    }
+
+    fn to_custom(&self) -> Self {
+        self.clone()
     }
 }
