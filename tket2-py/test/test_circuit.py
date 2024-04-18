@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pytket._tket.circuit import Circuit
 
-from tket2.circuit import Tk2Circuit, Tk2Op, to_hugr_dot, DFG, Node, Gate
+from tket2.circuit import Tk2Circuit, Tk2Op, to_hugr_dot, Dfg, Node, Gate
 
 
 @dataclass
@@ -86,9 +86,8 @@ PauliZ = PauliZDef()
 def insert_after(c: Tk2Circuit, node: Node, op: Gate):
     ...
 
-
 def test_append():
-    c = DFG(2)
+    c = Dfg(2)
     q0, q1 = c.inputs()
     h_node = c.add_op(H, [q0])
     q0, q1 = c.add_op(CX, [h_node[0], q1]).outs(2)
@@ -97,4 +96,5 @@ def test_append():
     q0 = c.add_op(PauliX, [q0]).outs(1)[0]
     t2c = c.finish([q0, q1])
 
+    print(t2c.node_op(h_node))
     print(t2c.to_tket1().get_commands())

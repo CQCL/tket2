@@ -153,6 +153,21 @@ impl Tk2Circuit {
     pub fn __deepcopy__(&self, _memo: Bound<PyAny>) -> PyResult<Self> {
         Ok(self.clone())
     }
+
+    fn node_op(&self, node: PyNode) -> PyResult<PyCustom> {
+        let custom: CustomOp = self
+            .hugr
+            .get_optype(node.node)
+            .clone()
+            .try_into()
+            .map_err(|e| {
+                PyErr::new::<PyValueError, _>(format!(
+                    "Could not convert circuit operation to a `CustomOp`: {e}"
+                ))
+            })?;
+
+        Ok(custom.into())
+    }
 }
 impl Tk2Circuit {
     /// Tries to extract a Tk2Circuit from a python object.

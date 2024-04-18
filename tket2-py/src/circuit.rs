@@ -201,11 +201,18 @@ impl PyWire {
 #[derive(From, Into, PartialEq, Clone)]
 struct PyCustom(CustomOp);
 
+impl fmt::Debug for PyCustom {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 impl From<PyCustom> for OpType {
     fn from(op: PyCustom) -> Self {
         op.0.into()
     }
 }
+
 #[pymethods]
 impl PyCustom {
     #[staticmethod]
@@ -223,5 +230,8 @@ impl PyCustom {
 
     fn to_custom(&self) -> Self {
         self.clone()
+    }
+    pub fn __repr__(&self) -> String {
+        format!("{:?}", self)
     }
 }
