@@ -22,7 +22,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use crate::utils::create_py_exception;
 use crate::utils::ConvertPyErr;
 
-use self::convert::DFG;
+use self::convert::Dfg;
 pub use self::convert::{try_update_hugr, try_with_hugr, update_hugr, with_hugr, Tk2Circuit};
 pub use self::cost::PyCircuitCost;
 pub use tket2::{Pauli, Tk2Op};
@@ -31,7 +31,7 @@ pub use tket2::{Pauli, Tk2Op};
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let m = PyModule::new_bound(py, "_circuit")?;
     m.add_class::<Tk2Circuit>()?;
-    m.add_class::<DFG>()?;
+    m.add_class::<Dfg>()?;
     m.add_class::<PyNode>()?;
     m.add_class::<PyCircuitCost>()?;
     m.add_class::<Tk2Op>()?;
@@ -142,7 +142,7 @@ impl PyNode {
         format!("{:?}", self)
     }
 
-    pub fn __getitem__(&self, idx: usize) -> PyResult<PyWire> {
+    fn __getitem__(&self, idx: usize) -> PyResult<PyWire> {
         Ok(hugr::Wire::new(self.node, idx).into())
     }
 
@@ -190,7 +190,7 @@ impl PyWire {
         format!("{:?}", self)
     }
 
-    pub fn node(&self) -> PyNode {
+    fn node(&self) -> PyNode {
         self.wire.node().into()
     }
 }

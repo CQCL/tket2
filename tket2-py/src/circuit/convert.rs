@@ -165,24 +165,24 @@ impl Tk2Circuit {
 
 #[pyclass]
 #[derive(Clone, Debug, PartialEq, From)]
-pub struct DFG {
+pub(super) struct Dfg {
     /// Rust representation of the circuit.
     builder: DFGBuilder<Hugr>,
 }
 #[pymethods]
-impl DFG {
+impl Dfg {
     #[new]
-    pub fn new(n_qubits: usize) -> PyResult<Self> {
+    fn new(n_qubits: usize) -> PyResult<Self> {
         let builder =
             DFGBuilder::new(FunctionType::new_endo(vec![QB_T; n_qubits])).convert_pyerrs()?;
         Ok(Self { builder })
     }
 
-    pub fn inputs(&self) -> Vec<PyWire> {
+    fn inputs(&self) -> Vec<PyWire> {
         self.builder.input_wires().map_into().collect()
     }
 
-    pub fn add_op<'py>(&mut self, op: Bound<'py, PyAny>, inputs: Vec<PyWire>) -> PyResult<PyNode> {
+    fn add_op(&mut self, op: Bound<'_, PyAny>, inputs: Vec<PyWire>) -> PyResult<PyNode> {
         // TODO can try to extract OpType first, and try "to_custom" if that fails.
         let py_custom: PyCustom = op.call_method0("to_custom")?.extract()?;
 
@@ -202,7 +202,7 @@ impl DFG {
     //     })
     // }
 
-    pub fn finish(&mut self, outputs: Vec<PyWire>) -> PyResult<Tk2Circuit> {
+    fn finish(&mut self, outputs: Vec<PyWire>) -> PyResult<Tk2Circuit> {
         Ok(Tk2Circuit {
             hugr: self
                 .builder
