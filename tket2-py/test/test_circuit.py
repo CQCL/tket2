@@ -1,9 +1,7 @@
 from dataclasses import dataclass
-from enum import Enum
-from typing import Protocol
-from pytket.circuit import Circuit
+from pytket._tket.circuit import Circuit
 
-from tket2.circuit import Tk2Circuit, Tk2Op, to_hugr_dot, DFG, CustomOp
+from tket2.circuit import Tk2Circuit, Tk2Op, to_hugr_dot, DFG, Node, Gate
 
 
 @dataclass
@@ -53,16 +51,6 @@ def test_conversion():
     assert type(tk1_back) == Circuit
 
 
-class Gate(Protocol):
-    n_qubits: int
-    name: str
-
-    def to_custom(self) -> CustomOp:
-        return CustomOp.new_custom_quantum(
-            "quantum.mycustom", self.name, (self.n_qubits, self.n_qubits)
-        )
-
-
 class CXDef(Gate):
     name = "CX"
     n_qubits = 2
@@ -83,13 +71,20 @@ class PauliXDef(Gate):
     name = "X"
     n_qubits = 1
 
+
 PauliX = PauliXDef()
+
 
 class PauliZDef(Gate):
     name = "Z"
     n_qubits = 1
 
+
 PauliZ = PauliZDef()
+
+
+def insert_after(c: Tk2Circuit, node: Node, op: Gate):
+    ...
 
 
 def test_append():
@@ -100,6 +95,6 @@ def test_append():
     q0, q1 = c.add_op(CX, [q1, q0]).outs(2)
 
     q0 = c.add_op(PauliX, [q0]).outs(1)[0]
-    c = c.finish([q0, q1])
+    t2c = c.finish([q0, q1])
 
-    print(c.to_tket1().get_commands())
+    print(t2c.to_tket1().get_commands())
