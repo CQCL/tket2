@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 
 use fxhash::{FxHashMap, FxHasher64};
 use hugr::hugr::views::{HierarchyView, SiblingGraph};
-use hugr::ops::{LeafOp, OpName, OpType};
+use hugr::ops::{OpName, OpType};
 use hugr::{HugrView, Node};
 use petgraph::visit::{self as pg, Walker};
 use thiserror::Error;
@@ -78,7 +78,7 @@ impl HashState {
 /// Returns a hashable representation of an operation.
 fn hashable_op(op: &OpType) -> impl Hash {
     match op {
-        OpType::LeafOp(LeafOp::CustomOp(op)) if !op.args().is_empty() => {
+        OpType::CustomOp(op) if !op.args().is_empty() => {
             // TODO: Require hashing for TypeParams?
             format!(
                 "{}[{}]",

@@ -96,7 +96,7 @@ impl PartialEq for PyCircuitCost {
                 .cost
                 .call_method1(py, "__eq__", (&other.cost,))
                 .expect("Could not compare circuit cost objects.");
-            res.is_true(py)
+            res.is_truthy(py)
                 .expect("Could not compare circuit cost objects.")
         })
     }
@@ -114,11 +114,11 @@ impl Ord for PyCircuitCost {
     fn cmp(&self, other: &Self) -> Ordering {
         Python::with_gil(|py| -> PyResult<Ordering> {
             let res = self.cost.call_method1(py, "__lt__", (&other.cost,))?;
-            if res.is_true(py)? {
+            if res.is_truthy(py)? {
                 return Ok(Ordering::Less);
             }
             let res = self.cost.call_method1(py, "__eq__", (&other.cost,))?;
-            if res.is_true(py)? {
+            if res.is_truthy(py)? {
                 return Ok(Ordering::Equal);
             }
             Ok(Ordering::Greater)

@@ -140,7 +140,7 @@ mod tests {
 
     use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
     use hugr::extension::prelude::QB_T;
-    use hugr::ops::LeafOp;
+    use hugr::ops::OpType;
     use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
     use hugr::types::FunctionType;
     use hugr::Hugr;
@@ -253,13 +253,9 @@ mod tests {
     }
 
     fn get_nodes_by_tk2op(circ: &impl Circuit, t2_op: Tk2Op) -> Vec<Node> {
+        let t2_op: OpType = t2_op.into();
         circ.nodes()
-            .filter(|n| {
-                let Ok(op): Result<LeafOp, _> = circ.get_optype(*n).clone().try_into() else {
-                    return false;
-                };
-                op == t2_op.into()
-            })
+            .filter(|n| circ.get_optype(*n) == &t2_op)
             .collect()
     }
 

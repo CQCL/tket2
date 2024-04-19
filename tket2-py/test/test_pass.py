@@ -64,13 +64,22 @@ def test_depth_optimise():
     assert c.depth() == 2
 
 
-@given(circ=circuits())
-@settings(print_blob=True, deadline=30)
-def test_depth_hyp(circ: Circuit) -> None:
+def _depth_impl(circ: Circuit) -> None:
     new, _ = greedy_depth_reduce(circ)
 
     assert circ.n_gates == new.n_gates
     assert new.depth() <= circ.depth()
+
+
+@given(circ=circuits())
+@settings(print_blob=True, deadline=30)
+def test_depth_hyp(circ: Circuit) -> None:
+    _depth_impl(circ)
+
+
+def test_depth_bug() -> None:
+    circ = Circuit(3).H(0).CX(1, 0).H(0).CX(0, 2).H(0).CX(1, 2)
+    _depth_impl(circ)
 
 
 def test_chunks():

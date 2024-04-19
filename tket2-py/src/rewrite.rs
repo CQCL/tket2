@@ -9,8 +9,8 @@ use tket2::rewrite::{CircuitRewrite, ECCRewriter, Rewriter};
 use crate::circuit::Tk2Circuit;
 
 /// The module definition
-pub fn module(py: Python) -> PyResult<&PyModule> {
-    let m = PyModule::new(py, "_rewrite")?;
+pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
+    let m = PyModule::new_bound(py, "_rewrite")?;
     m.add_class::<PyECCRewriter>()?;
     m.add_class::<PyCircuitRewrite>()?;
     Ok(m)

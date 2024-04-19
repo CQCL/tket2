@@ -29,7 +29,7 @@ pub struct PyCircuitPattern {
 impl PyCircuitPattern {
     /// Construct a pattern from a TKET1 circuit
     #[new]
-    pub fn from_circuit(circ: &PyAny) -> PyResult<Self> {
+    pub fn from_circuit(circ: &Bound<PyAny>) -> PyResult<Self> {
         let pattern = try_with_hugr(circ, |circ, _| CircuitPattern::try_from_circuit(&circ))?;
         Ok(pattern.into())
     }
@@ -61,7 +61,7 @@ pub struct PyPatternMatcher {
 impl PyPatternMatcher {
     /// Construct a matcher from a list of patterns.
     #[new]
-    pub fn py_from_patterns(patterns: &PyIterator) -> PyResult<Self> {
+    pub fn py_from_patterns(patterns: &Bound<PyIterator>) -> PyResult<Self> {
         Ok(PatternMatcher::from_patterns(
             patterns
                 .iter()?
@@ -79,7 +79,7 @@ impl PyPatternMatcher {
     }
 
     /// Find all convex matches in a circuit.
-    pub fn find_matches(&self, circ: &PyAny) -> PyResult<Vec<PyPatternMatch>> {
+    pub fn find_matches(&self, circ: &Bound<PyAny>) -> PyResult<Vec<PyPatternMatch>> {
         with_hugr(circ, |circ, _| {
             self.matcher
                 .find_matches(&circ)

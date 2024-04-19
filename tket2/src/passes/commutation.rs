@@ -6,7 +6,7 @@ use itertools::Itertools;
 use portgraph::PortOffset;
 
 use crate::{
-    circuit::{command::Command, units::filter::Qubits, Circuit},
+    circuit::{command::Command, Circuit},
     ops::{Pauli, Tk2Op},
 };
 
@@ -72,7 +72,7 @@ fn add_to_slice(slice: &mut Slice, com: Rc<ComCommand>) {
 fn load_slices(circ: &impl Circuit) -> SliceVec {
     let mut slices = vec![];
 
-    let n_qbs = circ.units().filter_units::<Qubits>().count();
+    let n_qbs = circ.qubit_count();
     let mut qubit_free_slice = vec![0; n_qbs];
 
     for command in circ.commands().filter(|c| is_slice_op(circ, c.node())) {
@@ -207,10 +207,6 @@ impl Rewrite for PullForward {
 
     type ApplyResult = ();
 
-    type InvalidationSet<'a> = std::vec::IntoIter<Node>
-    where
-        Self: 'a;
-
     const UNCHANGED_ON_FAILURE: bool = false;
 
     fn verify(&self, _h: &impl HugrView) -> Result<(), Self::Error> {
@@ -248,10 +244,10 @@ impl Rewrite for PullForward {
                 // do not need to commute along this qubit.
                 continue;
             }
-            h.disconnect(command.node(), in_port)?;
-            h.disconnect(command.node(), out_port)?;
+            h.disconnect(command.node(), in_port);
+            h.disconnect(command.node(), out_port);
             // connect old source and destination - identity operation.
-            h.connect(src, src_port.index(), dst, dst_port.index())?;
+            h.connect(src, src_port.index(), dst, dst_port.index());
 
             let new_dst_port = qb_port(new_neighbour_com, qb, Direction::Incoming)?;
             let (new_src, new_src_port) = h
@@ -260,27 +256,29 @@ impl Rewrite for PullForward {
                 .ok()
                 .unwrap();
             // disconnect link which we will insert in to.
-            h.disconnect(new_neighbour_com.node(), new_dst_port)?;
+            h.disconnect(new_neighbour_com.node(), new_dst_port);
 
             h.connect(
                 new_src,
                 new_src_port.index(),
                 command.node(),
                 in_port.index(),
-            )?;
+            );
             h.connect(
                 command.node(),
                 out_port.index(),
                 new_neighbour_com.node(),
                 new_dst_port.index(),
-            )?;
+            );
         }
         Ok(())
     }
 
-    fn invalidation_set(&self) -> Self::InvalidationSet<'_> {
+    fn invalidation_set(&self) -> impl Iterator<Item = Node> {
         // TODO: This could avoid creating a vec, but it'll be easier to do once
         // return position impl trait is available.
+        // This is done in the Rewrite trait of hugr so once that version
+        // is released, it can be updated here
         let mut nodes = vec![self.command.node()];
         let next_nodes = self.new_nexts.values().map(|c| c.node());
         nodes.extend(next_nodes);

@@ -52,11 +52,11 @@ impl From<OpType> for MatchOp {
         // identified by their name.
         let encoded = match op {
             OpType::Module(_) => None,
-            OpType::LeafOp(leaf)
-                if leaf
+            OpType::CustomOp(custom_op)
+                if custom_op
                     .as_extension_op()
                     .map(|ext| ext.args().is_empty())
-                    .unwrap_or_default() =>
+                    .unwrap_or(false) =>
             {
                 None
             }
@@ -90,6 +90,16 @@ impl PatternMatch {
     /// Returns the root of the pattern in the circuit.
     pub fn root(&self) -> Node {
         self.root
+    }
+
+    /// Returns the matched subcircuit in the original circuit.
+    pub fn subcircuit(&self) -> &Subcircuit {
+        &self.position
+    }
+
+    /// Returns the matched nodes in the original circuit.
+    pub fn nodes(&self) -> &[Node] {
+        self.position.nodes()
     }
 
     /// Create a pattern match from the image of a pattern root.

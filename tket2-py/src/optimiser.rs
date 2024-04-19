@@ -11,8 +11,8 @@ use tket2::optimiser::{BadgerLogger, DefaultBadgerOptimiser};
 use crate::circuit::update_hugr;
 
 /// The module definition
-pub fn module(py: Python) -> PyResult<&PyModule> {
-    let m = PyModule::new(py, "_optimiser")?;
+pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
+    let m = PyModule::new_bound(py, "_optimiser")?;
     m.add_class::<PyBadgerOptimiser>()?;
     Ok(m)
 }
@@ -81,14 +81,14 @@ impl PyBadgerOptimiser {
     #[allow(clippy::too_many_arguments)]
     pub fn py_optimise<'py>(
         &self,
-        circ: &'py PyAny,
+        circ: &Bound<'py, PyAny>,
         timeout: Option<u64>,
         progress_timeout: Option<u64>,
         n_threads: Option<NonZeroUsize>,
         split_circ: Option<bool>,
         queue_size: Option<usize>,
         log_progress: Option<PathBuf>,
-    ) -> PyResult<&'py PyAny> {
+    ) -> PyResult<Bound<'py, PyAny>> {
         let options = BadgerOptions {
             timeout,
             progress_timeout,
