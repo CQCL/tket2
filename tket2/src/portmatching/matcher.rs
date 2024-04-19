@@ -56,7 +56,7 @@ impl From<OpType> for MatchOp {
                 if custom_op
                     .as_extension_op()
                     .map(|ext| ext.args().is_empty())
-                    .unwrap_or_default() =>
+                    .unwrap_or(false) =>
             {
                 None
             }

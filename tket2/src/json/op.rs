@@ -214,38 +214,40 @@ impl TryFrom<&OpType> for JsonOp {
         // Non-supported Hugr operations throw an error.
         let err = || OpConvertError::UnsupportedOpSerialization(op.clone());
 
-        let json_optype = if let Ok(tk2op) = op.try_into() {
-            match tk2op {
-                Tk2Op::H => JsonOpType::H,
-                Tk2Op::CX => JsonOpType::CX,
-                Tk2Op::T => JsonOpType::T,
-                Tk2Op::S => JsonOpType::S,
-                Tk2Op::X => JsonOpType::X,
-                Tk2Op::Y => JsonOpType::Y,
-                Tk2Op::Z => JsonOpType::Z,
-                Tk2Op::Tdg => JsonOpType::Tdg,
-                Tk2Op::Sdg => JsonOpType::Sdg,
-                Tk2Op::ZZMax => JsonOpType::ZZMax,
-                Tk2Op::Measure => JsonOpType::Measure,
-                Tk2Op::RzF64 => JsonOpType::Rz,
-                Tk2Op::RxF64 => JsonOpType::Rx,
-                // TODO: Use a TK2 opaque op once we update the tket-json-rs dependency.
-                Tk2Op::AngleAdd => {
-                    unimplemented!("Serialising AngleAdd not supported. Are all constants folded?")
-                }
-                Tk2Op::TK1 => JsonOpType::TK1,
-                Tk2Op::PhasedX => JsonOpType::PhasedX,
-                Tk2Op::ZZPhase => JsonOpType::ZZPhase,
-                Tk2Op::CZ => JsonOpType::CZ,
-                Tk2Op::Reset => JsonOpType::Reset,
-                Tk2Op::QAlloc | Tk2Op::QFree => {
-                    unimplemented!("TKET1 does not support dynamic qubit allocation/discarding.")
-                }
+        let Ok(tk2op) = op.try_into() else {
+            if let OpType::CustomOp(custom_op) = op {
+                return try_unwrap_json_op(custom_op).ok_or_else(err);
+            } else {
+                return Err(err());
             }
-        } else if let OpType::CustomOp(custom_op) = op {
-            return try_unwrap_json_op(custom_op).ok_or_else(err);
-        } else {
-            return Err(err());
+        };
+
+        let json_optype = match tk2op {
+            Tk2Op::H => JsonOpType::H,
+            Tk2Op::CX => JsonOpType::CX,
+            Tk2Op::T => JsonOpType::T,
+            Tk2Op::S => JsonOpType::S,
+            Tk2Op::X => JsonOpType::X,
+            Tk2Op::Y => JsonOpType::Y,
+            Tk2Op::Z => JsonOpType::Z,
+            Tk2Op::Tdg => JsonOpType::Tdg,
+            Tk2Op::Sdg => JsonOpType::Sdg,
+            Tk2Op::ZZMax => JsonOpType::ZZMax,
+            Tk2Op::Measure => JsonOpType::Measure,
+            Tk2Op::RzF64 => JsonOpType::Rz,
+            Tk2Op::RxF64 => JsonOpType::Rx,
+            // TODO: Use a TK2 opaque op once we update the tket-json-rs dependency.
+            Tk2Op::AngleAdd => {
+                unimplemented!("Serialising AngleAdd not supported. Are all constants folded?")
+            }
+            Tk2Op::TK1 => JsonOpType::TK1,
+            Tk2Op::PhasedX => JsonOpType::PhasedX,
+            Tk2Op::ZZPhase => JsonOpType::ZZPhase,
+            Tk2Op::CZ => JsonOpType::CZ,
+            Tk2Op::Reset => JsonOpType::Reset,
+            Tk2Op::QAlloc | Tk2Op::QFree => {
+                unimplemented!("TKET1 does not support dynamic qubit allocation/discarding.")
+            }
         };
 
         let mut num_qubits = 0;

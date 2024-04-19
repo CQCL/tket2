@@ -116,7 +116,6 @@ impl CustomConst for ConstAngle {
         format!("a(2π*{}/2^{})", self.value, self.log_denom).into()
     }
 
-    /// report the type
     fn get_type(&self) -> Type {
         super::angle_custom_type(self.log_denom).into()
     }
@@ -243,6 +242,7 @@ pub(super) fn add_to_extension(extension: &mut Extension) {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::extension::angle_custom_type;
     use hugr::types::TypeArg;
 
     #[test]
@@ -266,14 +266,8 @@ mod test {
         assert_ne!(const_a32_7, const_a32_8);
         assert_eq!(const_a32_7, ConstAngle::new(5, 7).unwrap());
 
-        assert_eq!(
-            const_a32_7.get_type(),
-            super::super::angle_custom_type(5).into()
-        );
-        assert_ne!(
-            const_a32_7.get_type(),
-            super::super::angle_custom_type(6).into()
-        );
+        assert_eq!(const_a32_7.get_type(), angle_custom_type(5).into());
+        assert_ne!(const_a32_7.get_type(), angle_custom_type(6).into());
         assert!(matches!(
             ConstAngle::new(3, 256),
             Err(ConstTypeError::CustomCheckFail(_))
