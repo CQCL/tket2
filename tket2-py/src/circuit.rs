@@ -33,6 +33,7 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     m.add_class::<Tk2Circuit>()?;
     m.add_class::<Dfg>()?;
     m.add_class::<PyNode>()?;
+    m.add_class::<PyWire>()?;
     m.add_class::<PyCircuitCost>()?;
     m.add_class::<Tk2Op>()?;
     m.add_class::<PyCustom>()?;
@@ -163,7 +164,7 @@ impl PyNode {
 
 /// A [`hugr::Node`] wrapper for Python.
 #[pyclass]
-#[pyo3(name = "Node")]
+#[pyo3(name = "Wire")]
 #[repr(transparent)]
 #[derive(From, Into, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct PyWire {
