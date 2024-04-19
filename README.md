@@ -22,8 +22,6 @@ This crate includes a number of optimisation passes and rewrite utilities
 for circuits, as well as interoperability with [`tket1`] circuits via its
 serial encoding.
 
-Python bindings are available in the `tket2` package on PyPi.
-
   [quantinuum-hugr]: https://lib.rs/crates/quantinuum-hugr
   [`Circuit`]: https://docs.rs/tket2/latest/tket2/trait.Circuit.html
   [`tket1`]: https://github.com/CQCL/tket
