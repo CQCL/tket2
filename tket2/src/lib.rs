@@ -20,6 +20,7 @@
 //!
 //! ```
 //! use tket2::{Circuit, Hugr};
+//! use hugr::HugrView;
 //!
 //! // Load a tket1 circuit.
 //! let mut circ: Hugr = tket2::json::load_tk1_json_file("../test_files/barenco_tof_5.json").unwrap();
@@ -32,10 +33,9 @@
 //!     println!("{:?}", command.optype());
 //! }
 //!
-//! # // TODO: Waiting for mermaid support in hugr.
-//! # // Render the circuit as a mermaid diagram.
-//! # //println!("{}", circ.mermaid_string());
-//! #
+//! // Render the circuit as a mermaid diagram.
+//! println!("{}", circ.mermaid_string());
+//!
 //! // Optimise the circuit.
 //! tket2::passes::apply_greedy_commutation(&mut circ);
 //! ```
