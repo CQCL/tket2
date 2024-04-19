@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pytket._tket.circuit import Circuit
+import itertools
 
 from tket2.circuit import Tk2Circuit, Tk2Op, to_hugr_dot, Dfg, Node, Gate, Wire
 from tket2.pattern import Rule, RuleMatcher
@@ -118,32 +119,62 @@ PauliY = PauliYDef()
 
 
 def merge_rules() -> list[Rule]:
-    return [
-        # Identity
-        Rule(Circuit(1).X(0).X(0), Circuit(1)),
-        Rule(Circuit(1).Y(0).Y(0), Circuit(1)),
-        Rule(Circuit(1).Z(0).Z(0), Circuit(1)),
-        # Phase-neglected
-        Rule(Circuit(1).X(0).Z(0), Circuit(1).Y(0)),
-        Rule(Circuit(1).X(0).Y(0), Circuit(1).Z(0)),
-        Rule(Circuit(1).Y(0).Z(0), Circuit(1).X(0)),
-        Rule(Circuit(1).Y(0).X(0), Circuit(1).Z(0)),
-        Rule(Circuit(1).Z(0).X(0), Circuit(1).Y(0)),
-        Rule(Circuit(1).Z(0).Y(0), Circuit(1).X(0)),
+    paulis = [PauliX, PauliY, PauliZ]
+    identities = [
+        Rule(CircBuild(1).add_c(p, [0]).add_c(p, [0]).finish(), CircBuild(1).finish())
+        for p in paulis
     ]
+
+    off_diag = [
+        Rule(
+            CircBuild(1).add_c(p0, [0]).add_c(p1, [0]).finish(),
+            CircBuild(1).add_c(p2, [0]).finish(),
+        )
+        for p0, p1, p2 in itertools.permutations(paulis)
+    ]
+    return [*identities, *off_diag]
 
 
 def propagate_rules() -> list[Rule]:
-    return [
-        # Push through Hadamard
-        Rule(Circuit(1).X(0).H(0), Circuit(1).H(0).Z(0)),
-        Rule(Circuit(1).Z(0).H(0), Circuit(1).H(0).X(0)),
-        # Push through CX
-        Rule(Circuit(2).Z(0).CX(0, 1), Circuit(2).CX(0, 1).Z(0)),
-        Rule(Circuit(2).X(1).CX(0, 1), Circuit(2).CX(0, 1).X(1)),
-        Rule(Circuit(2).Z(1).CX(0, 1), Circuit(2).CX(0, 1).Z(0).Z(1)),
-        Rule(Circuit(2).X(0).CX(0, 1), Circuit(2).CX(0, 1).X(0).X(1)),
+    hadamard_rules = [
+        Rule(
+            CircBuild(1).add_c(PauliX, [0]).add_c(H, [0]).finish(),
+            CircBuild(1).add_c(H, [0]).add_c(PauliZ, [0]).finish(),
+        ),
+        Rule(
+            CircBuild(1).add_c(PauliZ, [0]).add_c(H, [0]).finish(),
+            CircBuild(1).add_c(H, [0]).add_c(PauliX, [0]).finish(),
+        ),
     ]
+
+    cx_rules = [
+        Rule(
+            CircBuild(2).add_c(PauliZ, [0]).add_c(CX, [0, 1]).finish(),
+            CircBuild(2).add_c(CX, [0, 1]).add_c(PauliZ, [0]).finish(),
+        ),
+        Rule(
+            CircBuild(2).add_c(PauliX, [1]).add_c(CX, [0, 1]).finish(),
+            CircBuild(2).add_c(CX, [0, 1]).add_c(PauliX, [1]).finish(),
+        ),
+        Rule(
+            CircBuild(2).add_c(PauliZ, [1]).add_c(CX, [0, 1]).finish(),
+            CircBuild(2)
+            .add_c(CX, [0, 1])
+            .add_c(PauliZ, [0])
+            .add_c(PauliZ, [1])
+            .finish(),
+        ),
+        Rule(
+            CircBuild(2).add_c(PauliX, [0]).add_c(CX, [0, 1]).finish(),
+            CircBuild(2)
+            .add_c(CX, [0, 1])
+            .add_c(PauliX, [0])
+            .add_c(PauliX, [1])
+            .finish(),
+        ),
+    ]
+
+    return [*hadamard_rules, *cx_rules]
 
 
 def propagate(circ: Tk2Circuit) -> int:
