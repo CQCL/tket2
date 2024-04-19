@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from pytket._tket.circuit import Circuit
 
-from tket2.circuit import Tk2Circuit, Tk2Op, to_hugr_dot, Dfg, Node, Gate
+from tket2.circuit import Tk2Circuit, Tk2Op, to_hugr_dot, Dfg, Node, Gate, Wire
+from tket2.pattern import Rule, RuleMatcher
 
 
 @dataclass
@@ -51,6 +52,31 @@ def test_conversion():
     assert type(tk1_back) == Circuit
 
 
+class CircBuild:
+    dfg: Dfg
+    qbs: list[Wire]
+
+    def __init__(self, n_qb: int) -> None:
+        self.dfg = Dfg(n_qb)
+        self.qbs = self.dfg.inputs()
+
+    def add(self, op: Gate, indices: list[int]) -> Node:
+        qbs = [self.qbs[i] for i in indices]
+        n = self.dfg.add_op(op, qbs)
+        outs = n.outs(len(indices))
+        for i, o in zip(indices, outs):
+            self.qbs[i] = o
+
+        return n
+
+    def add_c(self, op: Gate, indices: list[int]) -> "CircBuild":
+        self.add(op, indices)
+        return self
+
+    def finish(self) -> Tk2Circuit:
+        return self.dfg.finish(self.qbs)
+
+
 class CXDef(Gate):
     name = "CX"
     n_qubits = 2
@@ -83,18 +109,83 @@ class PauliZDef(Gate):
 PauliZ = PauliZDef()
 
 
-def insert_after(c: Tk2Circuit, node: Node, op: Gate):
-    ...
+class PauliYDef(Gate):
+    name = "Y"
+    n_qubits = 1
 
-def test_append():
+
+PauliY = PauliYDef()
+
+
+def merge_rules() -> list[Rule]:
+    return [
+        # Identity
+        Rule(Circuit(1).X(0).X(0), Circuit(1)),
+        Rule(Circuit(1).Y(0).Y(0), Circuit(1)),
+        Rule(Circuit(1).Z(0).Z(0), Circuit(1)),
+        # Phase-neglected
+        Rule(Circuit(1).X(0).Z(0), Circuit(1).Y(0)),
+        Rule(Circuit(1).X(0).Y(0), Circuit(1).Z(0)),
+        Rule(Circuit(1).Y(0).Z(0), Circuit(1).X(0)),
+        Rule(Circuit(1).Y(0).X(0), Circuit(1).Z(0)),
+        Rule(Circuit(1).Z(0).X(0), Circuit(1).Y(0)),
+        Rule(Circuit(1).Z(0).Y(0), Circuit(1).X(0)),
+    ]
+
+
+def propagate_rules() -> list[Rule]:
+    return [
+        # Push through Hadamard
+        Rule(Circuit(1).X(0).H(0), Circuit(1).H(0).Z(0)),
+        Rule(Circuit(1).Z(0).H(0), Circuit(1).H(0).X(0)),
+        # Push through CX
+        Rule(Circuit(2).Z(0).CX(0, 1), Circuit(2).CX(0, 1).Z(0)),
+        Rule(Circuit(2).X(1).CX(0, 1), Circuit(2).CX(0, 1).X(1)),
+        Rule(Circuit(2).Z(1).CX(0, 1), Circuit(2).CX(0, 1).Z(0).Z(1)),
+        Rule(Circuit(2).X(0).CX(0, 1), Circuit(2).CX(0, 1).X(0).X(1)),
+    ]
+
+
+def propagate(circ: Tk2Circuit) -> int:
+    propagate_match = RuleMatcher(propagate_rules() + merge_rules())
+    match_count = 0
+    while match := propagate_match.find_match(circ):
+        match_count += 1
+        circ.apply_rewrite(match)
+
+    return match_count
+
+
+def test_simple_z_prop():
     c = Dfg(2)
     q0, q1 = c.inputs()
+    # add error
+    q0 = c.add_op(PauliX, [q0]).outs(1)[0]
     h_node = c.add_op(H, [q0])
     q0, q1 = c.add_op(CX, [h_node[0], q1]).outs(2)
-    q0, q1 = c.add_op(CX, [q1, q0]).outs(2)
-
-    q0 = c.add_op(PauliX, [q0]).outs(1)[0]
     t2c = c.finish([q0, q1])
 
-    print(t2c.node_op(h_node))
-    print(t2c.to_tket1().get_commands())
+    assert t2c.to_tket1() == Circuit(2).X(0).H(0).CX(0, 1)
+
+    assert propagate(t2c) == 2
+
+    assert t2c.to_tket1() == Circuit(2).H(0).CX(0, 1).Z(0)
+
+
+def test_cat():
+    c = (
+        CircBuild(4)
+        .add_c(H, [2])
+        .add_c(PauliX, [2])
+        .add_c(CX, [2, 1])
+        .add_c(CX, [2, 3])
+        .add_c(CX, [1, 0])
+    )
+    t2c = c.finish()
+    assert t2c.to_tket1() == Circuit(4).H(2).X(2).CX(2, 1).CX(2, 3).CX(1, 0)
+
+    assert propagate(t2c) == 3
+
+    assert t2c.to_tket1() == Circuit(4).H(2).CX(2, 1).CX(2, 3).CX(1, 0).X(0).X(1).X(
+        2
+    ).X(3)
