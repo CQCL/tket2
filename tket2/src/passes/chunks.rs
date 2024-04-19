@@ -58,9 +58,7 @@ impl Chunk {
             checker,
         )
         .expect("Failed to define the chunk subgraph");
-        let extracted = subgraph
-            .extract_subgraph(circ, "Chunk")
-            .expect("Failed to extract chunk");
+        let extracted = subgraph.extract_subgraph(circ, "Chunk");
         // Transform the subgraph's input/output sets into wires that can be
         // matched between different chunks.
         //
@@ -104,9 +102,7 @@ impl Chunk {
         // Insert the chunk circuit into the original circuit.
         let subgraph = SiblingSubgraph::try_new_dataflow_subgraph(&chunk_sg)
             .unwrap_or_else(|e| panic!("The chunk circuit is no longer a dataflow graph: {e}"));
-        let node_map = circ
-            .insert_subgraph(root, &self.circ, &subgraph)
-            .expect("Failed to insert the chunk subgraph");
+        let node_map = circ.insert_subgraph(root, &self.circ, &subgraph);
 
         let mut input_map = HashMap::with_capacity(self.inputs.len());
         let mut output_map = HashMap::with_capacity(self.outputs.len());
@@ -268,7 +264,7 @@ impl CircuitChunks {
         op_cost: impl Fn(&OpType) -> C,
     ) -> Self {
         let root_meta = circ.get_node_metadata(circ.root()).cloned();
-        let signature = circ.circuit_signature().clone();
+        let signature = circ.circuit_signature().body().clone();
 
         let [circ_input, circ_output] = circ.get_io(circ.root()).unwrap();
         let input_connections = circ
@@ -421,11 +417,11 @@ impl CircuitChunks {
                 continue;
             };
             for (target, target_port) in tgts {
-                reassembled.connect(source, source_port, target, target_port)?;
+                reassembled.connect(source, source_port, target, target_port);
             }
         }
 
-        reassembled.overwrite_node_metadata(root, self.root_meta)?;
+        reassembled.overwrite_node_metadata(root, self.root_meta);
 
         Ok(reassembled)
     }

@@ -12,9 +12,8 @@ use hugr::CircuitUnit;
 use std::path::Path;
 use std::{fs, io};
 
-use hugr::ops::OpType;
+use hugr::ops::{Const, OpType};
 use hugr::std_extensions::arithmetic::float_types::{ConstF64, FLOAT64_TYPE};
-use hugr::values::Value;
 use hugr::Hugr;
 
 use stringreader::StringReader;
@@ -194,7 +193,7 @@ fn parse_val(n: &str) -> Option<f64> {
 }
 /// Try to interpret a TKET1 parameter as a constant value.
 #[inline]
-fn try_param_to_constant(param: &str) -> Option<Value> {
+fn try_param_to_constant(param: &str) -> Option<Const> {
     if let Some(f) = parse_val(param) {
         Some(ConstF64::new(f).into())
     } else if param.split('/').count() == 2 {

@@ -1,15 +1,13 @@
 [package]
-name = "compile-matcher"
+name = "compile-rewriter"
 edition = { workspace = true }
 version = { workspace = true }
 rust-version = { workspace = true }
 homepage = { workspace = true }
 license-file = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
 tket2 = { workspace = true, features = ["portmatching"] }
-quantinuum-hugr = { workspace = true }
+hugr = { workspace = true }
 itertools = { workspace = true }

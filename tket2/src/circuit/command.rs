@@ -552,8 +552,8 @@ mod test {
         let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row)).unwrap();
         let [q_in] = h.input_wires_arr();
 
-        let constant = h.add_constant(ConstF64::new(0.5)).unwrap();
-        let loaded_const = h.load_const(&constant).unwrap();
+        let constant = h.add_constant(ConstF64::new(0.5));
+        let loaded_const = h.load_const(&constant);
         let rz = h
             .add_dataflow_op(Tk2Op::RzF64, [q_in, loaded_const])
             .unwrap();

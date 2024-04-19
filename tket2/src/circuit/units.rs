@@ -140,6 +140,8 @@ where
     //
     // TODO: This is quite hacky, but we need it to accept Const static inputs.
     // We should revisit it once this is reworked on the HUGR side.
+    //
+    // TODO: EdgeKind::Function is not currently supported.
     fn init_types(circuit: &impl Circuit, node: Node, direction: Direction) -> TypeRow {
         let optype = circuit.get_optype(node);
         let sig = circuit.signature(node).unwrap_or_default();
@@ -147,10 +149,10 @@ where
             Direction::Outgoing => sig.output,
             Direction::Incoming => sig.input,
         };
-        if let Some(EdgeKind::Static(static_type)) = optype.static_port_kind(direction) {
+        if let Some(EdgeKind::Const(static_type)) = optype.static_port_kind(direction) {
             types.to_mut().push(static_type);
         };
-        if let Some(EdgeKind::Static(other)) = optype.other_port_kind(direction) {
+        if let Some(EdgeKind::Const(other)) = optype.other_port_kind(direction) {
             types.to_mut().push(other);
         }
         types

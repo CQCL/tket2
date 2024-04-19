@@ -17,7 +17,7 @@ pub fn build_simple_circuit(
 
     let qbs = h.input_wires();
 
-    let mut circ = h.as_circuit(qbs.into_iter().collect());
+    let mut circ = h.as_circuit(qbs);
 
     f(&mut circ)?;
 
