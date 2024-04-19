@@ -12,5 +12,5 @@ class Gate(Protocol):
 
     def to_custom(self) -> CustomOp:
         return CustomOp.new_custom_quantum(
-            "quantum.mycustom", self.name, (self.n_qubits, self.n_qubits)
+            "quantum.tket2", self.name, (self.n_qubits, self.n_qubits)
         )
