@@ -15,6 +15,7 @@ from tket2.circuit import (
     Command,
 )
 from tket2.pattern import Rule, RuleMatcher
+from tket2.rewrite import Subcircuit, CircuitRewrite
 
 
 @dataclass
@@ -219,27 +220,46 @@ def propagate(circ: Tk2Circuit) -> int:
     return match_count
 
 
+def add_error_after(circ: Tk2Circuit, n_qb: int, node: Node, error: Gate):
+    # TODO infer n_qb by querying port interface of `node`
+    subc = Subcircuit([node], circ)
+    replace_build = CircBuild(n_qb)
+    current = circ.node_op(node)
+    replace_build.add(current, [0])
+    replace_build.add(error, [0])
+    replacement = replace_build.finish()
+
+    rw = CircuitRewrite(subc, circ, replacement)
+
+    circ.apply_rewrite(rw)
+
+
 def test_simple_z_prop():
     c = Dfg(2)
     q0, q1 = c.inputs()
-    # add error
-    q0 = c.add_op(PauliXGate, [q0]).outs(1)[0]
-    h_node = c.add_op(HGate, [q0])
+    h_node_e = c.add_op(HGate, [q0])
+    h_node = c.add_op(HGate, h_node_e.outs(1))
     q0, q1 = c.add_op(CXGate, [h_node[0], q1]).outs(2)
     t2c = c.finish([q0, q1])
 
-    assert t2c.to_tket1() == Circuit(2).X(0).H(0).CX(0, 1)
+    add_error_after(t2c, 1, h_node_e, PauliXGate)
+
+    assert t2c.to_tket1() == Circuit(2).H(0).X(0).H(0).CX(0, 1)
 
     assert propagate(t2c) == 2
 
-    assert t2c.to_tket1() == Circuit(2).H(0).CX(0, 1).Z(0)
+    assert t2c.to_tket1() == Circuit(2).H(0).H(0).CX(0, 1).Z(0)
 
 
 def test_cat():
-    c = CircBuild(4).extend(
-        (H(2), PauliX(2), CX(2, 1), CX(2, 3), CX(1, 0)),
+    c = CircBuild(4)
+    h_node = c.add(HGate, [2])
+    c.extend(
+        (CX(2, 1), CX(2, 3), CX(1, 0)),
     )
     t2c = c.finish()
+
+    add_error_after(t2c, 1, h_node, PauliXGate)
     assert t2c.to_tket1() == Circuit(4).H(2).X(2).CX(2, 1).CX(2, 3).CX(1, 0)
 
     assert propagate(t2c) == 3
