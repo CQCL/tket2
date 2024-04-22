@@ -1,8 +1,19 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pytket._tket.circuit import Circuit
 import itertools
 
-from tket2.circuit import Tk2Circuit, Tk2Op, to_hugr_dot, Dfg, Node, Gate, Wire
+from tket2.circuit import (
+    Tk2Circuit,
+    Tk2Op,
+    to_hugr_dot,
+    Dfg,
+    Node,
+    Gate,
+    Wire,
+    GateDef,
+    Command,
+)
 from tket2.pattern import Rule, RuleMatcher
 
 
@@ -70,65 +81,94 @@ class CircBuild:
 
         return n
 
-    def add_c(self, op: Gate, indices: list[int]) -> "CircBuild":
-        self.add(op, indices)
+    def extend(self, ops: Iterable[Command]) -> "CircBuild":
+        for op in ops:
+            self.add(op.gate, op.qubits())
         return self
 
     def finish(self) -> Tk2Circuit:
         return self.dfg.finish(self.qbs)
 
 
-class CXDef(Gate):
-    name = "CX"
-    n_qubits = 2
+CXGate = GateDef(2, "CX")
+HGate = GateDef(1, "H")
+PauliXGate = GateDef(1, "X")
+PauliZGate = GateDef(1, "Z")
+PauliYGate = GateDef(1, "Y")
 
 
-CX = CXDef()
+@dataclass(frozen=True)
+class H(Command[GateDef]):
+    qubit: int
+
+    @property
+    def gate(self) -> GateDef:
+        return HGate
+
+    def qubits(self) -> list[int]:
+        return [self.qubit]
 
 
-class HDef(Gate):
-    name = "H"
-    n_qubits = 1
+@dataclass(frozen=True)
+class CX(Command[GateDef]):
+    control: int
+    target: int
+
+    @property
+    def gate(self) -> GateDef:
+        return CXGate
+
+    def qubits(self) -> list[int]:
+        return [self.control, self.target]
 
 
-H = HDef()
+@dataclass(frozen=True)
+class PauliX(Command[GateDef]):
+    qubit: int
+
+    @property
+    def gate(self) -> GateDef:
+        return PauliXGate
+
+    def qubits(self) -> list[int]:
+        return [self.qubit]
 
 
-class PauliXDef(Gate):
-    name = "X"
-    n_qubits = 1
+@dataclass(frozen=True)
+class PauliZ(Command[GateDef]):
+    qubit: int
+
+    @property
+    def gate(self) -> GateDef:
+        return PauliZGate
+
+    def qubits(self) -> list[int]:
+        return [self.qubit]
 
 
-PauliX = PauliXDef()
+@dataclass(frozen=True)
+class PauliY(Command[GateDef]):
+    qubit: int
 
+    @property
+    def gate(self) -> GateDef:
+        return PauliYGate
 
-class PauliZDef(Gate):
-    name = "Z"
-    n_qubits = 1
-
-
-PauliZ = PauliZDef()
-
-
-class PauliYDef(Gate):
-    name = "Y"
-    n_qubits = 1
-
-
-PauliY = PauliYDef()
+    def qubits(self) -> list[int]:
+        return [self.qubit]
 
 
 def merge_rules() -> list[Rule]:
-    paulis = [PauliX, PauliY, PauliZ]
+    paulis = [PauliX(0), PauliY(0), PauliZ(0)]
     identities = [
-        Rule(CircBuild(1).add_c(p, [0]).add_c(p, [0]).finish(), CircBuild(1).finish())
+        Rule(CircBuild(1).extend((p, p)).finish(), CircBuild(1).finish())
         for p in paulis
     ]
 
     off_diag = [
         Rule(
-            CircBuild(1).add_c(p0, [0]).add_c(p1, [0]).finish(),
-            CircBuild(1).add_c(p2, [0]).finish(),
+            CircBuild(1).extend((p0, p1)).finish(),
+            CircBuild(1).extend((p2,)).finish(),
         )
         for p0, p1, p2 in itertools.permutations(paulis)
     ]
@@ -138,39 +178,31 @@ def merge_rules() -> list[Rule]:
 def propagate_rules() -> list[Rule]:
     hadamard_rules = [
         Rule(
-            CircBuild(1).add_c(PauliX, [0]).add_c(H, [0]).finish(),
-            CircBuild(1).add_c(H, [0]).add_c(PauliZ, [0]).finish(),
+            CircBuild(1).extend((PauliX(0), H(0))).finish(),
+            CircBuild(1).extend((H(0), PauliZ(0))).finish(),
         ),
         Rule(
-            CircBuild(1).add_c(PauliZ, [0]).add_c(H, [0]).finish(),
-            CircBuild(1).add_c(H, [0]).add_c(PauliX, [0]).finish(),
+            CircBuild(1).extend((PauliZ(0), H(0))).finish(),
+            CircBuild(1).extend((H(0), PauliX(0))).finish(),
         ),
     ]
 
     cx_rules = [
         Rule(
-            CircBuild(2).add_c(PauliZ, [0]).add_c(CX, [0, 1]).finish(),
-            CircBuild(2).add_c(CX, [0, 1]).add_c(PauliZ, [0]).finish(),
+            CircBuild(2).extend([PauliZ(0), CX(0, 1)]).finish(),
+            CircBuild(2).extend([CX(0, 1), PauliZ(0)]).finish(),
         ),
         Rule(
-            CircBuild(2).add_c(PauliX, [1]).add_c(CX, [0, 1]).finish(),
-            CircBuild(2).add_c(CX, [0, 1]).add_c(PauliX, [1]).finish(),
+            CircBuild(2).extend([PauliX(1), CX(0, 1)]).finish(),
+            CircBuild(2).extend([CX(0, 1), PauliX(1)]).finish(),
         ),
         Rule(
-            CircBuild(2).add_c(PauliZ, [1]).add_c(CX, [0, 1]).finish(),
-            CircBuild(2)
-            .add_c(CX, [0, 1])
-            .add_c(PauliZ, [0])
-            .add_c(PauliZ, [1])
-            .finish(),
+            CircBuild(2).extend([PauliZ(1), CX(0, 1)]).finish(),
+            CircBuild(2).extend([CX(0, 1), PauliZ(0), PauliZ(1)]).finish(),
         ),
         Rule(
-            CircBuild(2).add_c(PauliX, [0]).add_c(CX, [0, 1]).finish(),
-            CircBuild(2)
-            .add_c(CX, [0, 1])
-            .add_c(PauliX, [0])
-            .add_c(PauliX, [1])
-            .finish(),
+            CircBuild(2).extend([PauliX(0), CX(0, 1)]).finish(),
+            CircBuild(2).extend([CX(0, 1), PauliX(0), PauliX(1)]).finish(),
         ),
     ]
 
@@ -191,9 +223,9 @@ def test_simple_z_prop():
     c = Dfg(2)
     q0, q1 = c.inputs()
     # add error
-    q0 = c.add_op(PauliX, [q0]).outs(1)[0]
-    h_node = c.add_op(H, [q0])
-    q0, q1 = c.add_op(CX, [h_node[0], q1]).outs(2)
+    q0 = c.add_op(PauliXGate, [q0]).outs(1)[0]
+    h_node = c.add_op(HGate, [q0])
+    q0, q1 = c.add_op(CXGate, [h_node[0], q1]).outs(2)
     t2c = c.finish([q0, q1])
 
     assert t2c.to_tket1() == Circuit(2).X(0).H(0).CX(0, 1)
@@ -204,13 +236,8 @@ def test_simple_z_prop():
 
 
 def test_cat():
-    c = (
-        CircBuild(4)
-        .add_c(H, [2])
-        .add_c(PauliX, [2])
-        .add_c(CX, [2, 1])
-        .add_c(CX, [2, 3])
-        .add_c(CX, [1, 0])
+    c = CircBuild(4).extend(
+        (H(2), PauliX(2), CX(2, 1), CX(2, 3), CX(1, 0)),
     )
     t2c = c.finish()
     assert t2c.to_tket1() == Circuit(4).H(2).X(2).CX(2, 1).CX(2, 3).CX(1, 0)
