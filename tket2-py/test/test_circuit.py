@@ -82,13 +82,30 @@ class CircBuild:
 
         return n
 
-    def extend(self, ops: Iterable[Command]) -> "CircBuild":
-        for op in ops:
-            self.add(op.gate, op.qubits())
+    def add_command(self, command: Command) -> Node:
+        return self.add(command.gate, command.qubits())
+
+    def extend(self, coms: Iterable[Command]) -> "CircBuild":
+        for op in coms:
+            self.add_command(op)
         return self
 
     def finish(self) -> Tk2Circuit:
         return self.dfg.finish(self.qbs)
+
+
+def from_coms(*args: Command) -> Tk2Circuit:
+    commands = []
+    n_qb = 0
+    # traverses commands twice which isn't great
+    for arg in args:
+        max_qb = max(arg.qubits()) + 1
+        n_qb = max(n_qb, max_qb)
+        commands.append(arg)
+
+    build = CircBuild(n_qb)
+    build.extend(commands)
+    return build.finish()
 
 
 CXGate = GateDef(2, "CX")
@@ -178,33 +195,15 @@ def merge_rules() -> list[Rule]:
 
 def propagate_rules() -> list[Rule]:
     hadamard_rules = [
-        Rule(
-            CircBuild(1).extend((PauliX(0), H(0))).finish(),
-            CircBuild(1).extend((H(0), PauliZ(0))).finish(),
-        ),
-        Rule(
-            CircBuild(1).extend((PauliZ(0), H(0))).finish(),
-            CircBuild(1).extend((H(0), PauliX(0))).finish(),
-        ),
+        Rule(from_coms(PauliX(0), H(0)), from_coms(H(0), PauliZ(0))),
+        Rule(from_coms(PauliZ(0), H(0)), from_coms(H(0), PauliX(0))),
     ]
 
     cx_rules = [
-        Rule(
-            CircBuild(2).extend([PauliZ(0), CX(0, 1)]).finish(),
-            CircBuild(2).extend([CX(0, 1), PauliZ(0)]).finish(),
-        ),
-        Rule(
-            CircBuild(2).extend([PauliX(1), CX(0, 1)]).finish(),
-            CircBuild(2).extend([CX(0, 1), PauliX(1)]).finish(),
-        ),
-        Rule(
-            CircBuild(2).extend([PauliZ(1), CX(0, 1)]).finish(),
-            CircBuild(2).extend([CX(0, 1), PauliZ(0), PauliZ(1)]).finish(),
-        ),
-        Rule(
-            CircBuild(2).extend([PauliX(0), CX(0, 1)]).finish(),
-            CircBuild(2).extend([CX(0, 1), PauliX(0), PauliX(1)]).finish(),
-        ),
+        Rule(from_coms(PauliZ(0), CX(0, 1)), from_coms(CX(0, 1), PauliZ(0))),
+        Rule(from_coms(PauliX(1), CX(0, 1)), from_coms(CX(0, 1), PauliX(1))),
+        Rule(from_coms(PauliZ(1), CX(0, 1)), from_coms(CX(0, 1), PauliZ(0), PauliZ(1))),
+        Rule(from_coms(PauliX(0), CX(0, 1)), from_coms(CX(0, 1), PauliX(0), PauliX(1))),
     ]
 
     return [*hadamard_rules, *cx_rules]
@@ -253,9 +252,9 @@ def test_simple_z_prop():
 
 def test_cat():
     c = CircBuild(4)
-    h_node = c.add(HGate, [2])
+    h_node = c.add_command(H(2))
     c.extend(
-        (CX(2, 1), CX(2, 3), CX(1, 0)),
+        [CX(2, 1), CX(2, 3), CX(1, 0)],
     )
     t2c = c.finish()
 
