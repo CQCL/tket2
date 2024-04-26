@@ -13,6 +13,7 @@ from tket2.circuit import (
     Wire,
     GateDef,
     Command,
+    CustomOp,
 )
 from tket2.pattern import Rule, RuleMatcher
 from tket2.rewrite import Subcircuit, CircuitRewrite
@@ -113,6 +114,8 @@ HGate = GateDef(1, "H")
 PauliXGate = GateDef(1, "X")
 PauliZGate = GateDef(1, "Z")
 PauliYGate = GateDef(1, "Y")
+QAlloc = CustomOp.new_custom_quantum("quantum.tket2", "QAlloc", (0, 1))
+QFree = CustomOp.new_custom_quantum("quantum.tket2", "QFree", (1, 0))
 
 
 @dataclass(frozen=True)
@@ -266,3 +269,10 @@ def test_cat():
     assert t2c.to_tket1() == Circuit(4).H(2).CX(2, 1).CX(2, 3).CX(1, 0).X(0).X(1).X(
         2
     ).X(3)
+
+
+def test_alloc_free():
+    c = CircBuild(0)
+    alloc = c.dfg.add_op(QAlloc, [])
+    c.dfg.add_op(QFree, alloc.outs(1))
+    c.finish()  # validates
