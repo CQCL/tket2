@@ -13,15 +13,14 @@ TKET2's design is its hardware agnosticism which allows researchers and
 quantum software developers to take advantage of its state of the art
 compilation for many different quantum architectures.
 
-TKET2 circuits are represented using the HUGR IR defined in the
-[quantinuum-hugr] crate. The [`Circuit`] trait provides a high level interface
-for working with HUGRs representing quantum circuits, and defines a HUGR
-extension with quantum operations. The library defines a composable pass system
-for optimising circuits, and provides a number of built-in passes for common
-optimisations.
+Circuits are represented using the HUGR IR defined in the
+[quantinuum-hugr] crate. TKET2 augments Hugr with  
+* The [`Circuit`] trait, providing a high-level interface for working with HUGRs representing quantum circuits  
+* a HUGR extension with quantum operations  
+* A composable pass system for optimising circuits  
+* A number of built-in rewrite utilities and passes for common optimisations
 
-This crate includes a number of optimisation passes and rewrite utilities
-for circuits, as well as interoperability with [`tket1`] circuits via its
+This crate is interoperable with [`tket1`] circuits via its
 serial encoding.
 
   [quantinuum-hugr]: https://lib.rs/crates/quantinuum-hugr
