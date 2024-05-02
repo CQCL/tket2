@@ -1,4 +1,4 @@
-//!
+//! Cost functions defined from python objects.
 
 use std::cmp::Ordering;
 use std::iter::Sum;
