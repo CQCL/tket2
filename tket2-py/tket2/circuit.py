@@ -8,13 +8,19 @@ from .tket2._circuit import *  # noqa: F403
 __all__ = _circuit.__all__
 
 
+QB_T = HugrType.qubit()
+
+
 class Gate(Protocol):
     n_qubits: int
     name: str
 
     def to_custom(self) -> CustomOp:
-        return CustomOp.new_custom_quantum(
-            "quantum.tket2", self.name, (self.n_qubits, self.n_qubits)
+        return CustomOp(
+            "quantum.tket2",
+            self.name,
+            [QB_T] * self.n_qubits,
+            [QB_T] * self.n_qubits,
         )
 
 

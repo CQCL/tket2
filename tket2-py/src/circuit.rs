@@ -5,16 +5,16 @@ pub mod convert;
 pub mod cost;
 
 use derive_more::{From, Into};
-use hugr::extension::prelude::QB_T;
+use hugr::extension::prelude::{BOOL_T, QB_T};
 use hugr::hugr::IdentList;
 use hugr::ops::custom::{ExtensionOp, OpaqueOp};
 use hugr::ops::{CustomOp, OpType};
-use hugr::types::FunctionType;
+use hugr::types::{CustomType, FunctionType, Type, TypeBound};
 use pyo3::prelude::*;
 use std::fmt;
 
 use hugr::{type_row, Hugr, HugrView};
-use tket2::extension::REGISTRY;
+use tket2::extension::{LINEAR_BIT, REGISTRY};
 use tket2::json::TKETDecode;
 use tket2::rewrite::CircuitRewrite;
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -22,7 +22,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use crate::utils::create_py_exception;
 use crate::utils::ConvertPyErr;
 
-use self::convert::Dfg;
+use self::convert::{into_vec, Dfg};
 pub use self::convert::{try_update_hugr, try_with_hugr, update_hugr, with_hugr, Tk2Circuit};
 pub use self::cost::PyCircuitCost;
 pub use tket2::{Pauli, Tk2Op};
@@ -37,6 +37,7 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     m.add_class::<PyCircuitCost>()?;
     m.add_class::<Tk2Op>()?;
     m.add_class::<PyCustom>()?;
+    m.add_class::<PyHugrType>()?;
     m.add_class::<Pauli>()?;
 
     m.add_function(wrap_pyfunction!(validate_hugr, &m)?)?;
@@ -216,15 +217,19 @@ impl From<PyCustom> for OpType {
 
 #[pymethods]
 impl PyCustom {
-    #[staticmethod]
-    fn new_custom_quantum(extension: &str, op_name: &str, n_qubits: [usize; 2]) -> PyResult<Self> {
-        let [q_in, q_out] = n_qubits;
+    #[new]
+    fn new(
+        extension: &str,
+        op_name: &str,
+        input_types: Vec<PyHugrType>,
+        output_types: Vec<PyHugrType>,
+    ) -> PyResult<Self> {
         Ok(CustomOp::new_opaque(OpaqueOp::new(
             IdentList::new(extension).unwrap(),
             op_name,
             Default::default(),
             [],
-            FunctionType::new(vec![QB_T; q_in], vec![QB_T; q_out]),
+            FunctionType::new(into_vec(input_types), into_vec(output_types)),
         ))
         .into())
     }
@@ -232,6 +237,76 @@ impl PyCustom {
     fn to_custom(&self) -> Self {
         self.clone()
     }
+    pub fn __repr__(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+#[pyclass]
+#[pyo3(name = "TypeBound")]
+#[derive(PartialEq, Clone, Debug)]
+enum PyTypeBound {
+    Any,
+    Copyable,
+    Eq,
+}
+
+impl From<PyTypeBound> for TypeBound {
+    fn from(bound: PyTypeBound) -> Self {
+        match bound {
+            PyTypeBound::Any => TypeBound::Any,
+            PyTypeBound::Copyable => TypeBound::Copyable,
+            PyTypeBound::Eq => TypeBound::Eq,
+        }
+    }
+}
+
+impl From<TypeBound> for PyTypeBound {
+    fn from(bound: TypeBound) -> Self {
+        match bound {
+            TypeBound::Any => PyTypeBound::Any,
+            TypeBound::Copyable => PyTypeBound::Copyable,
+            TypeBound::Eq => PyTypeBound::Eq,
+        }
+    }
+}
+
+#[pyclass]
+#[pyo3(name = "HugrType")]
+#[repr(transparent)]
+#[derive(From, Into, PartialEq, Clone)]
+struct PyHugrType(Type);
+
+impl fmt::Debug for PyHugrType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+#[pymethods]
+impl PyHugrType {
+    #[new]
+    fn new(extension: &str, type_name: &str, bound: PyTypeBound) -> Self {
+        Self(Type::new_extension(CustomType::new_simple(
+            type_name.into(),
+            IdentList::new(extension).unwrap(),
+            bound.into(),
+        )))
+    }
+    #[staticmethod]
+    fn qubit() -> Self {
+        Self(QB_T)
+    }
+
+    #[staticmethod]
+    fn linear_bit() -> Self {
+        Self(LINEAR_BIT.to_owned())
+    }
+
+    #[staticmethod]
+    fn bool() -> Self {
+        Self(BOOL_T)
+    }
+
     pub fn __repr__(&self) -> String {
         format!("{:?}", self)
     }

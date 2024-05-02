@@ -4,7 +4,7 @@ use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::QB_T;
 use hugr::ops::handle::NodeHandle;
 use hugr::ops::{CustomOp, OpType};
-use hugr::types::FunctionType;
+use hugr::types::{FunctionType, Type};
 use itertools::Itertools;
 use pyo3::exceptions::{PyAttributeError, PyValueError};
 use pyo3::types::PyAnyMethods;
@@ -26,7 +26,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use crate::rewrite::PyCircuitRewrite;
 use crate::utils::ConvertPyErr;
 
-use super::{cost, PyCircuitCost, PyCustom, PyNode, PyWire};
+use super::{cost, PyCircuitCost, PyCustom, PyHugrType, PyNode, PyWire};
 
 /// A circuit in tket2 format.
 ///
@@ -187,9 +187,12 @@ pub(super) struct Dfg {
 #[pymethods]
 impl Dfg {
     #[new]
-    fn new(n_qubits: usize) -> PyResult<Self> {
-        let builder =
-            DFGBuilder::new(FunctionType::new_endo(vec![QB_T; n_qubits])).convert_pyerrs()?;
+    fn new(input_types: Vec<PyHugrType>, output_types: Vec<PyHugrType>) -> PyResult<Self> {
+        let builder = DFGBuilder::new(FunctionType::new(
+            into_vec(input_types),
+            into_vec(output_types),
+        ))
+        .convert_pyerrs()?;
         Ok(Self { builder })
     }
 
@@ -207,16 +210,6 @@ impl Dfg {
             .map(|d| d.node().into())
     }
 
-    // pub fn finish(&mut self) -> PyResult<Tk2Circuit> {
-    //     Ok(Tk2Circuit {
-    //         hugr: self
-    //             .builder
-    //             .clone()
-    //             .finish_hugr_with_outputs(self.qbs.clone(), &REGISTRY)
-    //             .convert_pyerrs()?,
-    //     })
-    // }
-
     fn finish(&mut self, outputs: Vec<PyWire>) -> PyResult<Tk2Circuit> {
         Ok(Tk2Circuit {
             hugr: self
@@ -226,32 +219,7 @@ impl Dfg {
                 .convert_pyerrs()?,
         })
     }
-
-    // pub fn append<'a>(
-    //     mut slf: PyRefMut<'a, Self>,
-    //     op: Tk2Op,
-    //     qbs: Vec<usize>,
-    // ) -> PyResult<PyRefMut<'a, Self>> {
-    //     slf.with_circ_builder(|circ| {
-    //         circ.append(op, qbs).convert_pyerrs()?;
-    //         Ok(())
-    //     })?;
-    //     Ok(slf)
-    // }
 }
-
-// impl DFG {
-//     fn with_circ_builder<T>(
-//         &mut self,
-//         f: impl FnOnce(&mut CircuitBuilder<DFGBuilder<Hugr>>) -> PyResult<T>,
-//     ) -> PyResult<T> {
-//         let mut circ = self.builder.as_circuit(self.qbs.clone());
-//         let outs = f(&mut circ);
-//         self.qbs = circ.finish();
-
-//         outs
-//     }
-// }
 
 /// A flag to indicate the encoding of a circuit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -331,4 +299,8 @@ where
         let hugr = f(hugr, typ);
         typ.convert(py, hugr)
     })
+}
+
+pub(super) fn into_vec<T, S: From<T>>(v: impl IntoIterator<Item = T>) -> Vec<S> {
+    v.into_iter().map_into().collect()
 }

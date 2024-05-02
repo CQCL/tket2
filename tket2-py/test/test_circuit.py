@@ -14,6 +14,7 @@ from tket2.circuit import (
     GateDef,
     Command,
     CustomOp,
+    QB_T,
 )
 from tket2.pattern import Rule, RuleMatcher
 from tket2.rewrite import Subcircuit, CircuitRewrite
@@ -71,7 +72,7 @@ class CircBuild:
     qbs: list[Wire]
 
     def __init__(self, n_qb: int) -> None:
-        self.dfg = Dfg(n_qb)
+        self.dfg = Dfg([QB_T] * n_qb, [QB_T] * n_qb)
         self.qbs = self.dfg.inputs()
 
     def add(self, op: Gate, indices: list[int]) -> Node:
@@ -114,8 +115,8 @@ HGate = GateDef(1, "H")
 PauliXGate = GateDef(1, "X")
 PauliZGate = GateDef(1, "Z")
 PauliYGate = GateDef(1, "Y")
-QAlloc = CustomOp.new_custom_quantum("quantum.tket2", "QAlloc", (0, 1))
-QFree = CustomOp.new_custom_quantum("quantum.tket2", "QFree", (1, 0))
+QAlloc = CustomOp("quantum.tket2", "QAlloc", [], [QB_T])
+QFree = CustomOp("quantum.tket2", "QFree", [QB_T], [])
 
 
 @dataclass(frozen=True)
@@ -237,7 +238,7 @@ def add_error_after(circ: Tk2Circuit, n_qb: int, node: Node, error: Gate):
 
 
 def test_simple_z_prop():
-    c = Dfg(2)
+    c = Dfg([QB_T] * 2, [QB_T] * 2)
     q0, q1 = c.inputs()
     h_node_e = c.add_op(HGate, [q0])
     h_node = c.add_op(HGate, h_node_e.outs(1))
