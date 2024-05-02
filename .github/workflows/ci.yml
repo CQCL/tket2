@@ -23,7 +23,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -51,7 +51,7 @@ jobs:
     if: github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
       - uses: mozilla-actions/sccache-action@v0.0.4
@@ -76,7 +76,7 @@ jobs:
             isMerge: true
     name: tests (Rust ${{ matrix.rust }})
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - id: toolchain
         uses: dtolnay/rust-toolchain@master
         with:
@@ -99,7 +99,7 @@ jobs:
     runs-on: ubuntu-latest
     name: "python bindings"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: mozilla-actions/sccache-action@v0.0.4
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
