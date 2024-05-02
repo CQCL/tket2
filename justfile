@@ -2,39 +2,66 @@
 help:
     @just --list --justfile {{justfile()}}
 
-# Run all the rust tests
-test:
-    cargo test --all-features
+# Prepare the environment for development, installing all the dependencies and
+# setting up the pre-commit hooks.
+setup:
+    poetry install
+    poetry run -- pre-commit install -t pre-commit
 
-# Auto-fix all clippy warnings
-fix:
-    cargo clippy --all-targets --all-features --workspace --fix --allow-staged
-
-# Build the python package wheels
-pybuild:
-    maturin build --release
-
-# Build the python package for local development
-pydevelop:
-    maturin develop
-
-# Run the python tests
-pytest: pydevelop
-    pytest
-
-# Run the pre-commit checks
+# Run the pre-commit checks.
 check:
-    ./.github/pre-commit
+    poetry run -- pre-commit run --all-files
 
-# Format the code
-format:
-    cargo fmt
-    ruff format .
+# Compile the wheels for the python package.
+build:
+    poetry run -- maturin build --release
 
-# Generate a test coverage report
-coverage:
-    cargo llvm-cov --lcov > lcov.info
+# Run all the tests.
+test language="[rust|python]" : (_run_lang language \
+        "poetry run cargo test --all-features" \
+        "poetry run maturin develop && poetry run pytest"
+    )
+# Note: We cannot use `cargo test --workspace` because there
+# are two crates that use pyo3, and that causes a linking conflict.
 
-# Generate a python test coverage report
-pycoverage: pydevelop
-    pytest --cov=./ --cov-report=html
+# Auto-fix all clippy warnings.
+fix language="[rust|python]": (_run_lang language \
+        "poetry run -- cargo clippy --all-targets --all-features --workspace --fix --allow-staged --allow-dirty" \
+        "poetry run -- ruff check --fix"
+    )
+
+# Format the code.
+format language="[rust|python]": (_run_lang language \
+        "poetry run cargo fmt" \
+        "poetry run ruff format"
+    )
+
+# Generate a test coverage report.
+coverage language="[rust|python]": (_run_lang language \
+        "poetry run -- cargo llvm-cov --lcov > lcov.info" \
+        "poetry run -- maturin develop && poetry run pytest --cov=./ --cov-report=html"
+    )
+
+# Load a shell with all the dependencies installed
+shell:
+    poetry shell
+
+
+# Runs a rust and a python command, depending on the `language` variable.
+#
+# If `language` is set to `rust` or `python`, only run the command for that language.
+# Otherwise, run both commands.
+_run_lang language rust_cmd python_cmd:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{ language }}" = "rust" ]; then
+        set -x
+        {{ rust_cmd }}
+    elif [ "{{ language }}" = "python" ]; then
+        set -x
+        {{ python_cmd }}
+    else
+        set -x
+        {{ rust_cmd }}
+        {{ python_cmd }}
+    fi

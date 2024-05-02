@@ -14,10 +14,10 @@ quantum software developers to take advantage of its state of the art
 compilation for many different quantum architectures.
 
 Circuits are represented using the HUGR IR defined in the
-[quantinuum-hugr] crate. TKET2 augments Hugr with  
-* The [`Circuit`] trait, providing a high-level interface for working with HUGRs representing quantum circuits  
-* a HUGR extension with quantum operations  
-* A composable pass system for optimising circuits  
+[quantinuum-hugr] crate. TKET2 augments Hugr with
+* The [`Circuit`] trait, providing a high-level interface for working with HUGRs representing quantum circuits
+* a HUGR extension with quantum operations
+* A composable pass system for optimising circuits
 * A number of built-in rewrite utilities and passes for common optimisations
 
 This crate is interoperable with [`tket1`] circuits via its

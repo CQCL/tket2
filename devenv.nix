@@ -5,7 +5,7 @@ let
 in
 {
   # https://devenv.sh/packages/
-  # on macos frameworks have to be explicitly specified 
+  # on macos frameworks have to be explicitly specified
   # otherwise a linker error ocurs on rust packages
   packages = [
     pkgs.just

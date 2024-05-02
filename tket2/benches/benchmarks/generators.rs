@@ -33,11 +33,11 @@ pub fn build_simple_circuit(
 /// For example, for 4 qubits and 5 layers, we get the following circuit:
 /// ```text
 /// --*-----*-----*--
-///   |     |     |  
+///   |     |     |
 /// --x--*--x--*--x--
-///      |     |     
+///      |     |
 /// --*--x--*--x--*--
-///   |     |     |  
+///   |     |     |
 /// --x-----x-----x--
 /// ```
 pub fn make_cnot_layers(num_qubits: usize, layers: usize) -> Hugr {
