@@ -135,7 +135,7 @@ jobs:
           cargo llvm-cov --doctests --all-features
           cargo llvm-cov report --codecov --output-path coverage.json
       - name: Upload rust coverage to codecov.io
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: coverage.json
           name: rust
@@ -164,7 +164,7 @@ jobs:
       - name: Run python tests with coverage instrumentation
         run: poetry run pytest --cov=./ --cov-report=xml
       - name: Upload python coverage to codecov.io
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: coverage.xml
           name: python
