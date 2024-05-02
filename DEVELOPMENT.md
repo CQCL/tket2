@@ -28,71 +28,68 @@ shell by setting up [direnv](https://devenv.sh/automatic-shell-activation/).
 
 To setup the environment manually you will need:
 
-- Rust 1.75+: https://www.rust-lang.org/tools/install
+- Just: https://just.systems/
+- Rust `>=1.75`: https://www.rust-lang.org/tools/install
+- Poetry `>=1.8`: https://python-poetry.org/
 
-- Poetry: https://python-poetry.org/
-
-
-Simply run `poetry shell` to activate an environment with all the required dependencies.
-
-## 🏃 Running the tests
-
-The repository root contains a Justfile with the most common development tasks.
-Run `just` to see a list.
-
-To manually compile and test the rust code, run:
+Once you have these installed, install the required python dependencies and setup pre-commit hooks with:
 
 ```bash
-cargo test
+just setup
 ```
 
-Run the benchmarks with:
+## 🚀 Local development using the tket2 python library
+
+If you want to use the `tket2` python library directly from the repository, you can build it with:
 
 ```bash
-cargo bench
+just build
 ```
 
-Finally, if you have rust nightly installed, you can run `miri` to detect
-undefined behaviour in the code. Note that the _devenv_ shell only has rust
-stable available.
+This will build the python wheels and make them available in the `target/wheels` folder.
 
-```bash
-cargo +nightly miri test
-```
-
-To run the python tests, run:
+Alternatively, you can build the package directly into a virtual environment as an editable package.
+That way, you can make changes to the python code and see the changes reflected in your environment.
+For this you must have `maturin` installed (you can install it with `pip install maturin`) and run:
 
 ```bash
 maturin develop
-pytest
 ```
 
-You can use the script in [`.github/pre-commit`](.github/pre-commit) to run the test and formatting required by our CI.
-To automatically check that before each commit, install it as a hook with:
+## 🏃 Running the tests
+
+To compile and test the code, run:
 
 ```bash
-ln -s .github/pre-commit $PWD/.git/hooks/pre-commit
-# Or, to check before pushing instead
-ln -s .github/pre-commit $PWD/.git/hooks/pre-push
+just test
+# or, to test only the rust code or the python code
+just test rust
+just test python
 ```
+
+Run `just` to see all available commands.
 
 ## 💅 Coding Style
 
-The rustfmt tool is used to enforce a consistent rust coding style. The CI will fail if the code is not formatted correctly. Python code is formatted with black.
+We use `rustfmt` and `ruff` to enforce a consistent coding style. The CI will fail if the code is not formatted correctly.
 
 To format your code, run:
 
 ```bash
-# Format rust code
-cargo fmt
-# Format python code
-ruff format .
+just format
 ```
 
-We also check for clippy warnings, which are a set of linting rules for rust. To run clippy, run:
+We also check for linting errors with `clippy`, `ruff` and `mypy`.
+To check all linting and formatting, run:
 
 ```bash
-cargo clippy --all-targets
+just check
+```
+
+some errors can be fixed automatically with
+
+```bash
+just fix
 ```
 
 ## 📈 Code Coverage
@@ -101,17 +98,12 @@ We run coverage checks on the CI. Once you submit a PR, you can review the
 line-by-line coverage report on
 [codecov](https://app.codecov.io/gh/CQCL/tket2/commits?branch=All%20branches).
 
-To run the rust coverage checks locally, install `cargo-llvm-cov`, generate the report with:
+To run the coverage checks locally, install `cargo-llvm-cov` by running `cargo install cargo-llvm-cov` and then run:
 ```bash
-cargo llvm-cov --lcov > lcov.info
+just coverage
 ```
-and open it with your favourite coverage viewer. In VSCode, you can use
+This will generate a coverage file that can be opened with your favourite coverage viewer. In VSCode, you can use
 [`coverage-gutters`](https://marketplace.visualstudio.com/items?itemName=ryanluker.vscode-coverage-gutters).
-
-Similarly, to run the python coverage checks locally, install `pytest-cov` and run:
-```bash
-pytest --cov=./ --cov-report=xml
-```
 
 ## 🌐 Contributing to tket2
 
