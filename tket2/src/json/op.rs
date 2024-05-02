@@ -233,7 +233,11 @@ impl TryFrom<&OpType> for JsonOp {
             Tk2Op::Tdg => JsonOpType::Tdg,
             Tk2Op::Sdg => JsonOpType::Sdg,
             Tk2Op::ZZMax => JsonOpType::ZZMax,
-            Tk2Op::Measure => JsonOpType::Measure,
+            Tk2Op::Measure => {
+                unimplemented!(
+                    "Cannot convert TKET2 Measure to TKET1 due to mismatching semantics."
+                )
+            }
             Tk2Op::RzF64 => JsonOpType::Rz,
             Tk2Op::RxF64 => JsonOpType::Rx,
             // TODO: Use a TK2 opaque op once we update the tket-json-rs dependency.
