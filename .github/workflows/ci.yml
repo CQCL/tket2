@@ -28,7 +28,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - uses: mozilla-actions/sccache-action@v0.0.3
+      - uses: mozilla-actions/sccache-action@v0.0.4
       - name: Check rust formatting
         run: cargo fmt -- --check
       - name: Check python formatting
@@ -54,7 +54,7 @@ jobs:
       - uses: actions/checkout@v3
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
-      - uses: mozilla-actions/sccache-action@v0.0.3
+      - uses: mozilla-actions/sccache-action@v0.0.4
       - name: Build benchmarks with no features
         run: cargo bench --verbose --no-run --no-default-features
       - name: Build benchmarks with all features
@@ -83,7 +83,7 @@ jobs:
           toolchain: ${{ matrix.rust }}
       - name: Configure default rust toolchain
         run: rustup override set ${{steps.toolchain.outputs.name}}
-      - uses: mozilla-actions/sccache-action@v0.0.3
+      - uses: mozilla-actions/sccache-action@v0.0.4
       - name: Build with no features
         run: cargo test --verbose --no-default-features --no-run
       - name: Tests with no features
@@ -100,7 +100,7 @@ jobs:
     name: "python bindings"
     steps:
       - uses: actions/checkout@v3
-      - uses: mozilla-actions/sccache-action@v0.0.3
+      - uses: mozilla-actions/sccache-action@v0.0.4
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Install poetry
@@ -123,7 +123,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: mozilla-actions/sccache-action@v0.0.3
+      - uses: mozilla-actions/sccache-action@v0.0.4
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: llvm-tools-preview
@@ -147,7 +147,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: mozilla-actions/sccache-action@v0.0.3
+      - uses: mozilla-actions/sccache-action@v0.0.4
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Install poetry
