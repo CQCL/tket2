@@ -37,6 +37,8 @@ in
     poetry --version
     export LLVM_COV="${pkgs.llvmPackages_16.libllvm}/bin/llvm-cov"
     export LLVM_PROFDATA="${pkgs.llvmPackages_16.libllvm}/bin/llvm-profdata"
+
+    just setup
   '';
 
   # https://devenv.sh/languages/
@@ -57,9 +59,4 @@ in
     };
   };
 
-  # https://devenv.sh/pre-commit-hooks/
-  pre-commit.hooks.clippy.enable = true;
-  pre-commit.tools.clippy = lib.mkForce config.languages.rust.toolchain.clippy;
-  pre-commit.hooks.rustfmt.enable = true;
-  pre-commit.tools.rustfmt = lib.mkForce config.languages.rust.toolchain.rustfmt;
 }
