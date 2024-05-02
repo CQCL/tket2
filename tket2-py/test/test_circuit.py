@@ -4,21 +4,21 @@ from pytket._tket.circuit import Circuit
 import itertools
 
 from tket2.circuit import (
+    BOOL_T,
     Tk2Circuit,
     Tk2Op,
     ToCustom,
     to_hugr_dot,
     Dfg,
     Node,
-    Gate,
     Wire,
     GateDef,
     Command,
     CustomOp,
     QB_T,
 )
-from tket2.pattern import Rule, RuleMatcher
-from tket2.rewrite import Subcircuit, CircuitRewrite
+from tket2.pattern import Rule, RuleMatcher  # type: ignore
+from tket2.rewrite import Subcircuit, CircuitRewrite  # type: ignore
 
 
 @dataclass
@@ -85,6 +85,9 @@ class CircBuild:
 
         return n
 
+    def measure_all(self) -> list[Wire]:
+        return [self.add(Measure, [i]).outs(1)[0] for i in range(len(self.qbs))]
+
     def add_command(self, command: Command) -> Node:
         return self.add(command.gate, command.qubits())
 
@@ -111,22 +114,15 @@ def from_coms(*args: Command) -> Tk2Circuit:
     return build.finish()
 
 
-CXGate = GateDef(2, "CX")
-HGate = GateDef(1, "H")
-PauliXGate = GateDef(1, "X")
-PauliZGate = GateDef(1, "Z")
-PauliYGate = GateDef(1, "Y")
 QAlloc = CustomOp("quantum.tket2", "QAlloc", [], [QB_T])
 QFree = CustomOp("quantum.tket2", "QFree", [QB_T], [])
+Measure = CustomOp("quantum.tket2", "Measure", [QB_T], [QB_T, BOOL_T])
 
 
 @dataclass(frozen=True)
 class H(Command[GateDef]):
     qubit: int
-
-    @property
-    def gate(self) -> GateDef:
-        return HGate
+    gate = GateDef(1, "H")
 
     def qubits(self) -> list[int]:
         return [self.qubit]
@@ -136,10 +132,7 @@ class H(Command[GateDef]):
 class CX(Command[GateDef]):
     control: int
     target: int
-
-    @property
-    def gate(self) -> GateDef:
-        return CXGate
+    gate = GateDef(2, "CX")
 
     def qubits(self) -> list[int]:
         return [self.control, self.target]
@@ -148,10 +141,7 @@ class CX(Command[GateDef]):
 @dataclass(frozen=True)
 class PauliX(Command[GateDef]):
     qubit: int
-
-    @property
-    def gate(self) -> GateDef:
-        return PauliXGate
+    gate = GateDef(1, "X")
 
     def qubits(self) -> list[int]:
         return [self.qubit]
@@ -160,10 +150,7 @@ class PauliX(Command[GateDef]):
 @dataclass(frozen=True)
 class PauliZ(Command[GateDef]):
     qubit: int
-
-    @property
-    def gate(self) -> GateDef:
-        return PauliZGate
+    gate = GateDef(1, "Z")
 
     def qubits(self) -> list[int]:
         return [self.qubit]
@@ -172,10 +159,7 @@ class PauliZ(Command[GateDef]):
 @dataclass(frozen=True)
 class PauliY(Command[GateDef]):
     qubit: int
-
-    @property
-    def gate(self) -> GateDef:
-        return PauliYGate
+    gate = GateDef(1, "Y")
 
     def qubits(self) -> list[int]:
         return [self.qubit]
@@ -224,7 +208,7 @@ def propagate(circ: Tk2Circuit) -> int:
     return match_count
 
 
-def add_error_after(circ: Tk2Circuit, n_qb: int, node: Node, error: Gate):
+def add_error_after(circ: Tk2Circuit, n_qb: int, node: Node, error: ToCustom):
     # TODO infer n_qb by querying port interface of `node`
     subc = Subcircuit([node], circ)
     replace_build = CircBuild(n_qb)
@@ -241,12 +225,12 @@ def add_error_after(circ: Tk2Circuit, n_qb: int, node: Node, error: Gate):
 def test_simple_z_prop():
     c = Dfg([QB_T] * 2, [QB_T] * 2)
     q0, q1 = c.inputs()
-    h_node_e = c.add_op(HGate, [q0])
-    h_node = c.add_op(HGate, h_node_e.outs(1))
-    q0, q1 = c.add_op(CXGate, [h_node[0], q1]).outs(2)
+    h_node_e = c.add_op(H.gate, [q0])
+    h_node = c.add_op(H.gate, h_node_e.outs(1))
+    q0, q1 = c.add_op(CX.gate, [h_node[0], q1]).outs(2)
     t2c = c.finish([q0, q1])
 
-    add_error_after(t2c, 1, h_node_e, PauliXGate)
+    add_error_after(t2c, 1, h_node_e, PauliX.gate)
 
     assert t2c.to_tket1() == Circuit(2).H(0).X(0).H(0).CX(0, 1)
 
@@ -258,12 +242,11 @@ def test_simple_z_prop():
 def test_cat():
     c = CircBuild(4)
     h_node = c.add_command(H(2))
-    c.extend(
+    t2c = c.extend(
         [CX(2, 1), CX(2, 3), CX(1, 0)],
-    )
-    t2c = c.finish()
+    ).finish()
 
-    add_error_after(t2c, 1, h_node, PauliXGate)
+    add_error_after(t2c, 1, h_node, PauliX.gate)
     assert t2c.to_tket1() == Circuit(4).H(2).X(2).CX(2, 1).CX(2, 3).CX(1, 0)
 
     assert propagate(t2c) == 3
@@ -277,4 +260,11 @@ def test_alloc_free():
     c = CircBuild(0)
     alloc = c.dfg.add_op(QAlloc, [])
     c.dfg.add_op(QFree, alloc.outs(1))
+    c.finish()  # validates
+
+
+def test_measure():
+    c = CircBuild(2)
+    # discard measurement results
+    _ = c.measure_all()
     c.finish()  # validates

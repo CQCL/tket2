@@ -9,35 +9,31 @@ __all__ = _circuit.__all__
 
 
 QB_T = HugrType.qubit()
+LB_T = HugrType.linear_bit()
+BOOL_T = HugrType.bool()
 
 
 class ToCustom(Protocol):
     def to_custom(self) -> CustomOp: ...
 
 
-class Gate(Protocol):
+@dataclass(frozen=True)
+class GateDef(ToCustom):
     n_qubits: int
     name: str
+    n_bits: int = 0
 
     def to_custom(self) -> CustomOp:
-        return CustomOp(
-            "quantum.tket2",
-            self.name,
-            [QB_T] * self.n_qubits,
-            [QB_T] * self.n_qubits,
-        )
+        types = [QB_T] * self.n_qubits + [LB_T] * self.n_bits
+        return CustomOp("quantum.tket2", self.name, types, types)
 
 
-@dataclass(frozen=True)
-class GateDef(Gate):
-    n_qubits: int
-    name: str
-
-
-T = TypeVar("T", bound=Gate)
+T = TypeVar("T", bound=ToCustom)
 
 
 class Command(Protocol[T]):
-    gate: T
+    gate: ToCustom
 
     def qubits(self) -> list[int]: ...
+    def bits(self) -> list[int]:
+        return []
