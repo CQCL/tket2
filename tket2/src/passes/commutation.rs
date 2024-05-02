@@ -552,7 +552,7 @@ mod test {
             slices[1][1].as_ref().unwrap().clone()
         );
 
-        assert!(prev_nodes.get(&Qb::new(3)).is_none());
+        assert!(!prev_nodes.contains_key(&Qb::new(3)));
     }
 
     #[rstest]

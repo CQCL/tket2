@@ -12,6 +12,10 @@ workspace = true
 [lib]
 name = "tket2"
 crate-type = ["cdylib"]
+# This library collides with the tket2 crate, so we don't want to generate docs for it.
+doc = false
+test = false
+bench = false
 
 [dependencies]
 tket2 = { workspace = true, features = ["pyo3", "portmatching"] }
@@ -20,7 +24,7 @@ serde_json = { workspace = true }
 tket-json-rs = { workspace = true, features = ["pyo3"] }
 hugr = { workspace = true }
 portgraph = { workspace = true, features = ["serde"] }
-pyo3 = { workspace = true, features = ["extension-module"] }
+pyo3 = { workspace = true }
 num_cpus = { workspace = true }
 derive_more = { workspace = true }
 itertools = { workspace = true }

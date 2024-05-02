@@ -42,7 +42,7 @@ size).
 
 With these constraints, we can treat all `Qubit` operations as returning all qubits they take
 in. The implicit bijection from input `Qubit` to output allows register
-allocation for all `Qubit` wires. 
+allocation for all `Qubit` wires.
 If further the program does not contain any `qalloc` or `qfree`
 operations we can state the program only uses `N` qubits.
 

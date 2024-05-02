@@ -33,7 +33,10 @@ def badger_pass(
     The arguments `max_threads`, `timeout`, `log_dir` and `rebase` are optional
     and will be passed on to the Badger optimiser if provided."""
     if rewriter is None:
-        rewriter = Path(resources.files("tket2").joinpath("data/nam_6_3.rwr"))
+        with resources.as_file(
+            resources.files("tket2").joinpath("data/nam_6_3.rwr")
+        ) as r:
+            rewriter = Path(r)
     opt = optimiser.BadgerOptimiser.load_precompiled(rewriter)
 
     def apply(circuit: Circuit) -> Circuit:

@@ -30,7 +30,11 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     Ok(m)
 }
 
-create_py_exception!(tket2::passes::PullForwardError, PyPullForwardError, "");
+create_py_exception!(
+    tket2::passes::PullForwardError,
+    PyPullForwardError,
+    "Error from a `PullForward` operation"
+);
 
 #[pyfunction]
 fn greedy_depth_reduce<'py>(circ: &Bound<'py, PyAny>) -> PyResult<(Bound<'py, PyAny>, u32)> {
