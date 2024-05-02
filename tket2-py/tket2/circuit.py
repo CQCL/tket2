@@ -11,6 +11,10 @@ __all__ = _circuit.__all__
 QB_T = HugrType.qubit()
 
 
+class ToCustom(Protocol):
+    def to_custom(self) -> CustomOp: ...
+
+
 class Gate(Protocol):
     n_qubits: int
     name: str

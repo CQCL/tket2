@@ -201,8 +201,11 @@ impl Dfg {
     }
 
     fn add_op(&mut self, op: Bound<'_, PyAny>, inputs: Vec<PyWire>) -> PyResult<PyNode> {
-        // TODO can try to extract OpType first, and try "to_custom" if that fails.
-        let py_custom: PyCustom = op.call_method0("to_custom")?.extract()?;
+        let py_custom: PyCustom = if let Ok(c) = op.extract() {
+            c
+        } else {
+            op.call_method0("to_custom")?.extract()?
+        };
 
         self.builder
             .add_dataflow_op(py_custom, inputs.into_iter().map_into())

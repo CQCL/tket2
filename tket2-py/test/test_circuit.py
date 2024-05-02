@@ -6,6 +6,7 @@ import itertools
 from tket2.circuit import (
     Tk2Circuit,
     Tk2Op,
+    ToCustom,
     to_hugr_dot,
     Dfg,
     Node,
@@ -75,7 +76,7 @@ class CircBuild:
         self.dfg = Dfg([QB_T] * n_qb, [QB_T] * n_qb)
         self.qbs = self.dfg.inputs()
 
-    def add(self, op: Gate, indices: list[int]) -> Node:
+    def add(self, op: ToCustom, indices: list[int]) -> Node:
         qbs = [self.qbs[i] for i in indices]
         n = self.dfg.add_op(op, qbs)
         outs = n.outs(len(indices))
