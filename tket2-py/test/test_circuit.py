@@ -84,7 +84,7 @@ class CircBuild:
         return n
 
     def measure_all(self) -> list[Wire]:
-        return [self.add(Measure, [i]).outs(1)[0] for i in range(len(self.qbs))]
+        return [self.add(Measure, [i]).outs(2)[1] for i in range(len(self.qbs))]
 
     def add_command(self, command: Command) -> Node:
         return self.add(command.op(), command.qubits())
@@ -115,6 +115,7 @@ def from_coms(*args: Command) -> Tk2Circuit:
 QAlloc = CustomOp("quantum.tket2", "QAlloc", [], [QB_T])
 QFree = CustomOp("quantum.tket2", "QFree", [QB_T], [])
 Measure = CustomOp("quantum.tket2", "Measure", [QB_T], [QB_T, BOOL_T])
+Not = CustomOp("logic", "Not", [BOOL_T], [BOOL_T])
 
 
 @dataclass(frozen=True)
@@ -269,5 +270,6 @@ def test_alloc_free():
 def test_measure():
     c = CircBuild(2)
     # discard measurement results
-    _ = c.measure_all()
+    bit = c.measure_all()[0]
+    c.dfg.add_op(Not, [bit])
     c.finish()  # validates
