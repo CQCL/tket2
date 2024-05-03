@@ -199,7 +199,14 @@ def test_measure(propagate_matcher: RuleMatcher):
     q0 = c.add_op(PauliX.op(), [q0])[0]
     outs = [w for q in (q0, q1) for w in c.add_op(Measure, [q]).outs(2)]
     before = c.finish(outs)
-
+    """
+    ──►X───►Measure─►
+            │
+            └────►
+    ───────►Measure─►
+            │
+            └────►
+    """
     assert apply_exhaustive(before, propagate_matcher) == 1
 
     c = Dfg([QB_T, QB_T], [QB_T, BOOL_T, QB_T, BOOL_T])
@@ -207,6 +214,12 @@ def test_measure(propagate_matcher: RuleMatcher):
     q0, b0, q1, b1 = [w for q in (q0, q1) for w in c.add_op(Measure, [q]).outs(2)]
     b0 = c.add_op(Not, [b0])[0]
     after = c.finish([q0, b0, q1, b1])
+    """
+    ──►Measure──────►
+            └─►Not─►
+    ──────►Measure──►
+                └────►
+    """
 
     # can't compare using tket1 circuits because measure can't be converted.
     assert hash(before) == hash(after)
