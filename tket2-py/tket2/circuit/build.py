@@ -84,10 +84,7 @@ def from_coms(*args: Command) -> Tk2Circuit:
 
 # Some common operations
 
-QAlloc = CustomOp("quantum.tket2", "QAlloc", [], [QB_T])
-QFree = CustomOp("quantum.tket2", "QFree", [QB_T], [])
-Measure = CustomOp("quantum.tket2", "Measure", [QB_T], [QB_T, BOOL_T])
-Not = CustomOp("logic", "Not", [BOOL_T], [BOOL_T])
+# Define some "Commands" for pure quantum gates (n qubits in and n qubits out)
 
 
 @dataclass(frozen=True)
@@ -139,3 +136,11 @@ class PauliY(Command):
 
     def qubits(self) -> list[int]:
         return [self.qubit]
+
+
+# Define CustomOps for common operations that don't have an (n qubits in, n
+# qubits out) signature
+QAlloc = CustomOp("quantum.tket2", "QAlloc", [], [QB_T])
+QFree = CustomOp("quantum.tket2", "QFree", [QB_T], [])
+Measure = CustomOp("quantum.tket2", "Measure", [QB_T], [QB_T, BOOL_T])
+Not = CustomOp("logic", "Not", [BOOL_T], [BOOL_T])
