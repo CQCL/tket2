@@ -63,6 +63,11 @@ impl PyCircuitRewrite {
     }
 }
 
+/// A subcircuit specification.
+///
+/// Python equivalent of [`Subcircuit`].
+///
+/// [`Subcircuit`]: tket2::rewrite::Subcircuit
 #[pyclass]
 #[pyo3(name = "Subcircuit")]
 #[derive(Debug, Clone, From)]

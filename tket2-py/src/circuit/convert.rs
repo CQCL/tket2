@@ -200,15 +200,10 @@ impl Dfg {
         self.builder.input_wires().map_into().collect()
     }
 
-    fn add_op(&mut self, op: Bound<'_, PyAny>, inputs: Vec<PyWire>) -> PyResult<PyNode> {
-        let py_custom: PyCustom = if let Ok(c) = op.extract() {
-            c
-        } else {
-            op.call_method0("to_custom")?.extract()?
-        };
-
+    fn add_op(&mut self, op: PyCustom, inputs: Vec<PyWire>) -> PyResult<PyNode> {
+        let custom: CustomOp = op.into();
         self.builder
-            .add_dataflow_op(py_custom, inputs.into_iter().map_into())
+            .add_dataflow_op(custom, inputs.into_iter().map_into())
             .convert_pyerrs()
             .map(|d| d.node().into())
     }
