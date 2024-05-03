@@ -42,6 +42,7 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
 
     m.add_function(wrap_pyfunction!(validate_hugr, &m)?)?;
     m.add_function(wrap_pyfunction!(to_hugr_dot, &m)?)?;
+    m.add_function(wrap_pyfunction!(to_hugr_mermaid, &m)?)?;
 
     m.add("HugrError", py.get_type_bound::<PyHugrError>())?;
     m.add("BuildError", py.get_type_bound::<PyBuildError>())?;
@@ -95,6 +96,12 @@ pub fn validate_hugr(c: &Bound<PyAny>) -> PyResult<()> {
 #[pyfunction]
 pub fn to_hugr_dot(c: &Bound<PyAny>) -> PyResult<String> {
     with_hugr(c, |hugr, _| hugr.dot_string())
+}
+
+/// Return a Mermaid diagram representation of the circuit.
+#[pyfunction]
+pub fn to_hugr_mermaid(c: &Bound<PyAny>) -> PyResult<String> {
+    with_hugr(c, |hugr, _| hugr.mermaid_string())
 }
 
 /// A [`hugr::Node`] wrapper for Python.
