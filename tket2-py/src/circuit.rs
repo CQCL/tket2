@@ -8,7 +8,7 @@ use derive_more::{From, Into};
 use hugr::extension::prelude::{BOOL_T, QB_T};
 use hugr::hugr::IdentList;
 use hugr::ops::custom::{ExtensionOp, OpaqueOp};
-use hugr::ops::{CustomOp, OpType};
+use hugr::ops::{CustomOp, OpName, OpType};
 use hugr::types::{CustomType, FunctionType, Type, TypeBound};
 use pyo3::prelude::*;
 use std::fmt;
@@ -239,6 +239,10 @@ impl PyCustom {
     }
     pub fn __repr__(&self) -> String {
         format!("{:?}", self)
+    }
+
+    fn name(&self) -> String {
+        self.0.name().to_string()
     }
 }
 #[pyclass]

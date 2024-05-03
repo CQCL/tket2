@@ -236,6 +236,7 @@ def measure_rules() -> list[Rule]:
 
 
 def propagate(circ: Tk2Circuit) -> int:
+    # TODO take rules as argument
     propagate_match = RuleMatcher(propagate_rules() + merge_rules() + measure_rules())
     match_count = 0
     while match := propagate_match.find_match(circ):
@@ -259,6 +260,20 @@ def add_error_after(circ: Tk2Circuit, n_qb: int, node: Node, error: CustomOp):
     circ.apply_rewrite(rw)
 
 
+def final_pauli_string(circ: Tk2Circuit) -> str:
+    """Assuming the circuit only has qubit outputs - check the final operations
+    on each qubit, and if they are paulis concatenate them into a string."""
+
+    def map_op(op: CustomOp) -> str:
+        # strip the extension name
+        n = op.name()[len("quantum.tket2.") :]
+        return n if n in ("X", "Y", "Z") else "I"
+
+    return "".join(
+        map_op(circ.node_op(w.node())) for w in circ.node_inputs(circ.output_node())
+    )
+
+
 def test_simple_z_prop():
     c = Dfg([QB_T] * 2, [QB_T] * 2)
     q0, q1 = c.inputs()
@@ -274,6 +289,8 @@ def test_simple_z_prop():
     assert propagate(t2c) == 2
 
     assert t2c.to_tket1() == Circuit(2).H(0).H(0).CX(0, 1).Z(0)
+
+    assert final_pauli_string(t2c) == "ZI"
 
 
 def test_cat():
@@ -291,6 +308,8 @@ def test_cat():
     assert t2c.to_tket1() == Circuit(4).H(2).CX(2, 1).CX(2, 3).CX(1, 0).X(0).X(1).X(
         2
     ).X(3)
+
+    assert final_pauli_string(t2c) == "XXXX"
 
 
 def test_alloc_free():

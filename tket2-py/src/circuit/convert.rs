@@ -168,6 +168,28 @@ impl Tk2Circuit {
 
         Ok(custom.into())
     }
+
+    fn node_inputs(&self, node: PyNode) -> Vec<PyWire> {
+        self.hugr
+            .all_linked_outputs(node.node)
+            .map(|(n, p)| Wire::new(n, p).into())
+            .collect()
+    }
+
+    fn node_outputs(&self, node: PyNode) -> Vec<PyWire> {
+        self.hugr
+            .node_outputs(node.node)
+            .map(|p| Wire::new(node.node, p).into())
+            .collect()
+    }
+
+    fn input_node(&self) -> PyNode {
+        self.hugr.input().into()
+    }
+
+    fn output_node(&self) -> PyNode {
+        self.hugr.output().into()
+    }
 }
 impl Tk2Circuit {
     /// Tries to extract a Tk2Circuit from a python object.
