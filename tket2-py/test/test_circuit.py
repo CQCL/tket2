@@ -202,8 +202,41 @@ def propagate_rules() -> list[Rule]:
     return [*hadamard_rules, *cx_rules]
 
 
+def measure_rules() -> list[Rule]:
+    # X flips the measured bit
+    r_build = Dfg([QB_T], [QB_T, BOOL_T])
+    qs = r_build.inputs()
+    qs = r_build.add_op(PauliX.op(), qs).outs(1)
+    q, b = r_build.add_op(Measure, qs).outs(2)
+    ltk = r_build.finish([q, b])
+
+    r_build = Dfg([QB_T], [QB_T, BOOL_T])
+    qs = r_build.inputs()
+    q, b = r_build.add_op(Measure, qs).outs(2)
+    b = r_build.add_op(Not, [b])[0]
+    rtk = r_build.finish([q, b])
+
+    rules = [Rule(ltk, rtk)]
+
+    # Z does not affect measurement result
+    r_build = Dfg([QB_T], [QB_T, BOOL_T])
+    qs = r_build.inputs()
+    qs = r_build.add_op(PauliZ.op(), qs).outs(1)
+    qs, b = r_build.add_op(Measure, qs).outs(2)
+    ltk = r_build.finish([qs, b])
+
+    r_build = Dfg([QB_T], [QB_T, BOOL_T])
+    qs = r_build.inputs()
+    q, b = r_build.add_op(Measure, qs).outs(2)
+    rtk = r_build.finish([q, b])
+
+    rules.append(Rule(ltk, rtk))
+
+    return rules
+
+
 def propagate(circ: Tk2Circuit) -> int:
-    propagate_match = RuleMatcher(propagate_rules() + merge_rules())
+    propagate_match = RuleMatcher(propagate_rules() + merge_rules() + measure_rules())
     match_count = 0
     while match := propagate_match.find_match(circ):
         match_count += 1
@@ -268,8 +301,18 @@ def test_alloc_free():
 
 
 def test_measure():
-    c = CircBuild(2)
-    # discard measurement results
-    bit = c.measure_all()[0]
-    c.dfg.add_op(Not, [bit])
-    c.finish()  # validates
+    c = Dfg([QB_T, QB_T], [QB_T, BOOL_T, QB_T, BOOL_T])
+    q0, q1 = c.inputs()
+    q0 = c.add_op(PauliX.op(), [q0])[0]
+    outs = [w for q in (q0, q1) for w in c.add_op(Measure, [q]).outs(2)]
+    before = c.finish(outs)
+
+    assert propagate(before) == 1
+
+    c = Dfg([QB_T, QB_T], [QB_T, BOOL_T, QB_T, BOOL_T])
+    q0, q1 = c.inputs()
+    q0, b0, q1, b1 = [w for q in (q0, q1) for w in c.add_op(Measure, [q]).outs(2)]
+    b0 = c.add_op(Not, [b0])[0]
+    after = c.finish([q0, b0, q1, b1])
+
+    assert hash(before) == hash(after)
