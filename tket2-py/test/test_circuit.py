@@ -1,5 +1,6 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
+import pytest
 from pytket._tket.circuit import Circuit
 import itertools
 
@@ -169,6 +170,7 @@ class PauliY(Command):
         return [self.qubit]
 
 
+@pytest.fixture
 def merge_rules() -> list[Rule]:
     paulis = [PauliX(0), PauliY(0), PauliZ(0)]
     identities = [
@@ -186,6 +188,7 @@ def merge_rules() -> list[Rule]:
     return [*identities, *off_diag]
 
 
+@pytest.fixture
 def propagate_rules() -> list[Rule]:
     hadamard_rules = [
         Rule(from_coms(PauliX(0), H(0)), from_coms(H(0), PauliZ(0))),
@@ -202,6 +205,7 @@ def propagate_rules() -> list[Rule]:
     return [*hadamard_rules, *cx_rules]
 
 
+@pytest.fixture
 def measure_rules() -> list[Rule]:
     # X flips the measured bit
     r_build = Dfg([QB_T], [QB_T, BOOL_T])
@@ -235,19 +239,26 @@ def measure_rules() -> list[Rule]:
     return rules
 
 
-def propagate(circ: Tk2Circuit) -> int:
-    # TODO take rules as argument
-    propagate_match = RuleMatcher(propagate_rules() + merge_rules() + measure_rules())
+@pytest.fixture
+def propagate_matcher(
+    merge_rules: list[Rule], propagate_rules: list[Rule], measure_rules: list[Rule]
+) -> RuleMatcher:
+    return RuleMatcher([*merge_rules, *propagate_rules, *measure_rules])
+
+
+def apply_exhaustive(circ: Tk2Circuit, matcher: RuleMatcher) -> int:
+    """Apply the first matching rule until no more matches are found. Return the
+    number of rewrites applied."""
     match_count = 0
-    while match := propagate_match.find_match(circ):
+    while match := matcher.find_match(circ):
         match_count += 1
         circ.apply_rewrite(match)
 
     return match_count
 
 
-def add_error_after(circ: Tk2Circuit, n_qb: int, node: Node, error: CustomOp):
-    # TODO infer n_qb by querying port interface of `node`
+def add_error_after(circ: Tk2Circuit, node: Node, error: CustomOp):
+    n_qb = len(circ.node_outputs(node)) - 1  # ignore Order port
     subc = Subcircuit([node], circ)
     replace_build = CircBuild(n_qb)
     current = circ.node_op(node)
@@ -269,12 +280,13 @@ def final_pauli_string(circ: Tk2Circuit) -> str:
         n = op.name()[len("quantum.tket2.") :]
         return n if n in ("X", "Y", "Z") else "I"
 
+    # TODO ignore non-qubit outputs
     return "".join(
         map_op(circ.node_op(w.node())) for w in circ.node_inputs(circ.output_node())
     )
 
 
-def test_simple_z_prop():
+def test_simple_z_prop(propagate_matcher: RuleMatcher):
     c = Dfg([QB_T] * 2, [QB_T] * 2)
     q0, q1 = c.inputs()
     h_node_e = c.add_op(H.op(), [q0])
@@ -282,28 +294,28 @@ def test_simple_z_prop():
     q0, q1 = c.add_op(CX.op(), [h_node[0], q1]).outs(2)
     t2c = c.finish([q0, q1])
 
-    add_error_after(t2c, 1, h_node_e, PauliX.op())
+    add_error_after(t2c, h_node_e, PauliX.op())
 
     assert t2c.to_tket1() == Circuit(2).H(0).X(0).H(0).CX(0, 1)
 
-    assert propagate(t2c) == 2
+    assert apply_exhaustive(t2c, propagate_matcher) == 2
 
     assert t2c.to_tket1() == Circuit(2).H(0).H(0).CX(0, 1).Z(0)
 
     assert final_pauli_string(t2c) == "ZI"
 
 
-def test_cat():
+def test_cat(propagate_matcher: RuleMatcher):
     c = CircBuild(4)
     h_node = c.add_command(H(2))
     t2c = c.extend(
         [CX(2, 1), CX(2, 3), CX(1, 0)],
     ).finish()
 
-    add_error_after(t2c, 1, h_node, PauliX.op())
+    add_error_after(t2c, h_node, PauliX.op())
     assert t2c.to_tket1() == Circuit(4).H(2).X(2).CX(2, 1).CX(2, 3).CX(1, 0)
 
-    assert propagate(t2c) == 3
+    assert apply_exhaustive(t2c, propagate_matcher) == 3
 
     assert t2c.to_tket1() == Circuit(4).H(2).CX(2, 1).CX(2, 3).CX(1, 0).X(0).X(1).X(
         2
@@ -319,14 +331,14 @@ def test_alloc_free():
     c.finish()  # validates
 
 
-def test_measure():
+def test_measure(propagate_matcher: RuleMatcher):
     c = Dfg([QB_T, QB_T], [QB_T, BOOL_T, QB_T, BOOL_T])
     q0, q1 = c.inputs()
     q0 = c.add_op(PauliX.op(), [q0])[0]
     outs = [w for q in (q0, q1) for w in c.add_op(Measure, [q]).outs(2)]
     before = c.finish(outs)
 
-    assert propagate(before) == 1
+    assert apply_exhaustive(before, propagate_matcher) == 1
 
     c = Dfg([QB_T, QB_T], [QB_T, BOOL_T, QB_T, BOOL_T])
     q0, q1 = c.inputs()
@@ -334,4 +346,5 @@ def test_measure():
     b0 = c.add_op(Not, [b0])[0]
     after = c.finish([q0, b0, q1, b1])
 
+    # can't compare using tket1 circuits because measure can't be converted.
     assert hash(before) == hash(after)
