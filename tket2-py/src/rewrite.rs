@@ -4,15 +4,16 @@ use derive_more::From;
 use itertools::Itertools;
 use pyo3::prelude::*;
 use std::path::PathBuf;
-use tket2::rewrite::{CircuitRewrite, ECCRewriter, Rewriter};
+use tket2::rewrite::{CircuitRewrite, ECCRewriter, Rewriter, Subcircuit};
 
-use crate::circuit::Tk2Circuit;
+use crate::circuit::{PyNode, Tk2Circuit};
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let m = PyModule::new_bound(py, "_rewrite")?;
     m.add_class::<PyECCRewriter>()?;
     m.add_class::<PyCircuitRewrite>()?;
+    m.add_class::<PySubcircuit>()?;
     Ok(m)
 }
 
@@ -43,6 +44,45 @@ impl PyCircuitRewrite {
     /// The replacement subcircuit.
     pub fn replacement(&self) -> Tk2Circuit {
         self.rewrite.replacement().clone().into()
+    }
+
+    #[new]
+    fn try_new(
+        source_position: PySubcircuit,
+        source_circ: PyRef<Tk2Circuit>,
+        replacement: Tk2Circuit,
+    ) -> PyResult<Self> {
+        Ok(Self {
+            rewrite: CircuitRewrite::try_new(
+                &source_position.0,
+                &source_circ.hugr,
+                replacement.hugr,
+            )
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
+        })
+    }
+}
+
+/// A subcircuit specification.
+///
+/// Python equivalent of [`Subcircuit`].
+///
+/// [`Subcircuit`]: tket2::rewrite::Subcircuit
+#[pyclass]
+#[pyo3(name = "Subcircuit")]
+#[derive(Debug, Clone, From)]
+#[repr(transparent)]
+pub struct PySubcircuit(Subcircuit);
+
+#[pymethods]
+impl PySubcircuit {
+    #[new]
+    fn from_nodes(nodes: Vec<PyNode>, circ: &Tk2Circuit) -> PyResult<Self> {
+        let nodes: Vec<_> = nodes.into_iter().map_into().collect();
+        Ok(Self(
+            Subcircuit::try_from_nodes(nodes, &circ.hugr)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
+        ))
     }
 }
 

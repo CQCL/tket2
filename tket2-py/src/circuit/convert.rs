@@ -1,14 +1,20 @@
 //! Utilities for calling Hugr functions on generic python objects.
 
-use hugr::ops::OpType;
+use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
+use hugr::extension::prelude::QB_T;
+use hugr::ops::handle::NodeHandle;
+use hugr::ops::{CustomOp, OpType};
+use hugr::types::{FunctionType, Type};
+use itertools::Itertools;
 use pyo3::exceptions::{PyAttributeError, PyValueError};
 use pyo3::types::PyAnyMethods;
 use pyo3::{
-    pyclass, pymethods, Bound, FromPyObject, PyAny, PyErr, PyResult, PyTypeInfo, Python, ToPyObject,
+    pyclass, pymethods, Bound, FromPyObject, PyAny, PyErr, PyObject, PyRefMut, PyResult,
+    PyTypeInfo, Python, ToPyObject,
 };
 
 use derive_more::From;
-use hugr::{Hugr, HugrView};
+use hugr::{Hugr, HugrView, Wire};
 use serde::Serialize;
 use tket2::circuit::CircuitHash;
 use tket2::extension::REGISTRY;
@@ -20,7 +26,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use crate::rewrite::PyCircuitRewrite;
 use crate::utils::ConvertPyErr;
 
-use super::{cost, PyCircuitCost};
+use super::{cost, PyCircuitCost, PyCustom, PyHugrType, PyNode, PyWire};
 
 /// A circuit in tket2 format.
 ///
@@ -147,6 +153,43 @@ impl Tk2Circuit {
     pub fn __deepcopy__(&self, _memo: Bound<PyAny>) -> PyResult<Self> {
         Ok(self.clone())
     }
+
+    fn node_op(&self, node: PyNode) -> PyResult<PyCustom> {
+        let custom: CustomOp = self
+            .hugr
+            .get_optype(node.node)
+            .clone()
+            .try_into()
+            .map_err(|e| {
+                PyErr::new::<PyValueError, _>(format!(
+                    "Could not convert circuit operation to a `CustomOp`: {e}"
+                ))
+            })?;
+
+        Ok(custom.into())
+    }
+
+    fn node_inputs(&self, node: PyNode) -> Vec<PyWire> {
+        self.hugr
+            .all_linked_outputs(node.node)
+            .map(|(n, p)| Wire::new(n, p).into())
+            .collect()
+    }
+
+    fn node_outputs(&self, node: PyNode) -> Vec<PyWire> {
+        self.hugr
+            .node_outputs(node.node)
+            .map(|p| Wire::new(node.node, p).into())
+            .collect()
+    }
+
+    fn input_node(&self) -> PyNode {
+        self.hugr.input().into()
+    }
+
+    fn output_node(&self) -> PyNode {
+        self.hugr.output().into()
+    }
 }
 impl Tk2Circuit {
     /// Tries to extract a Tk2Circuit from a python object.
@@ -154,6 +197,47 @@ impl Tk2Circuit {
     /// Returns an error if the py object is not a Tk2Circuit.
     pub fn try_extract(circ: &PyAny) -> PyResult<Self> {
         circ.extract::<Tk2Circuit>()
+    }
+}
+
+#[pyclass]
+#[derive(Clone, Debug, PartialEq, From)]
+pub(super) struct Dfg {
+    /// Rust representation of the circuit.
+    builder: DFGBuilder<Hugr>,
+}
+#[pymethods]
+impl Dfg {
+    #[new]
+    fn new(input_types: Vec<PyHugrType>, output_types: Vec<PyHugrType>) -> PyResult<Self> {
+        let builder = DFGBuilder::new(FunctionType::new(
+            into_vec(input_types),
+            into_vec(output_types),
+        ))
+        .convert_pyerrs()?;
+        Ok(Self { builder })
+    }
+
+    fn inputs(&self) -> Vec<PyWire> {
+        self.builder.input_wires().map_into().collect()
+    }
+
+    fn add_op(&mut self, op: PyCustom, inputs: Vec<PyWire>) -> PyResult<PyNode> {
+        let custom: CustomOp = op.into();
+        self.builder
+            .add_dataflow_op(custom, inputs.into_iter().map_into())
+            .convert_pyerrs()
+            .map(|d| d.node().into())
+    }
+
+    fn finish(&mut self, outputs: Vec<PyWire>) -> PyResult<Tk2Circuit> {
+        Ok(Tk2Circuit {
+            hugr: self
+                .builder
+                .clone()
+                .finish_hugr_with_outputs(outputs.into_iter().map_into(), &REGISTRY)
+                .convert_pyerrs()?,
+        })
     }
 }
 
@@ -235,4 +319,8 @@ where
         let hugr = f(hugr, typ);
         typ.convert(py, hugr)
     })
+}
+
+pub(super) fn into_vec<T, S: From<T>>(v: impl IntoIterator<Item = T>) -> Vec<S> {
+    v.into_iter().map_into().collect()
 }

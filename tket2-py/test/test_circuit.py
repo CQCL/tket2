@@ -1,7 +1,12 @@
 from dataclasses import dataclass
-from pytket.circuit import Circuit
 
-from tket2.circuit import Tk2Circuit, Tk2Op, to_hugr_dot
+from pytket._tket.circuit import Circuit
+
+from tket2.circuit import (
+    Tk2Circuit,
+    Tk2Op,
+    to_hugr_dot,
+)
 
 
 @dataclass
