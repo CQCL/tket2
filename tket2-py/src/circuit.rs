@@ -13,7 +13,7 @@ use hugr::types::{CustomType, FunctionType, Type, TypeBound};
 use pyo3::prelude::*;
 use std::fmt;
 
-use hugr::{type_row, Hugr, HugrView};
+use hugr::{type_row, Hugr, HugrView, PortIndex};
 use tket2::extension::{LINEAR_BIT, REGISTRY};
 use tket2::json::TKETDecode;
 use tket2::rewrite::CircuitRewrite;
@@ -201,6 +201,10 @@ impl PyWire {
 
     fn node(&self) -> PyNode {
         self.wire.node().into()
+    }
+
+    fn port(&self) -> usize {
+        self.wire.source().index()
     }
 }
 

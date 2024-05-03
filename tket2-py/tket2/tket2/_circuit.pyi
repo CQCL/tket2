@@ -66,6 +66,9 @@ class Wire:
     def node(self) -> Node:
         """Source node of wire."""
 
+    def port(self) -> int:
+        """Source port of wire."""
+
 class CustomOp:
     """A HUGR custom operation."""
     def __init__(
