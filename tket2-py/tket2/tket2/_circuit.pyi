@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, auto
 from typing import Any, Callable
 from pytket._tket.circuit import Circuit
 
@@ -29,8 +29,27 @@ class Tk2Circuit:
 class Tk2Op(Enum):
     """A Tket2 built-in operation."""
 
-    H = 1
-    CX = 2
+    H = auto()
+    CX = auto()
+    T = auto()
+    S = auto()
+    X = auto()
+    Y = auto()
+    Z = auto()
+    Tdg = auto()
+    Sdg = auto()
+    ZZMax = auto()
+    Measure = auto()
+    RzF64 = auto()
+    RxF64 = auto()
+    PhasedX = auto()
+    ZZPhase = auto()
+    AngleAdd = auto()
+    CZ = auto()
+    TK1 = auto()
+    QAlloc = auto()
+    QFree = auto()
+    Reset = auto()
 
 class TypeBound(Enum):
     """HUGR type bounds."""
