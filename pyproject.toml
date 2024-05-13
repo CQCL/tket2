@@ -22,7 +22,7 @@ pytest-cov = "^5.0.0"
 ruff = "^0.4.4"
 mypy = "^1.9.0"
 hypothesis = "^6.101.0"
-graphviz = "^0.17"
+graphviz = "^0.20"
 pre-commit = "^3.7.1"
 
 [build-system]
