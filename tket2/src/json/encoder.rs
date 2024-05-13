@@ -4,7 +4,7 @@ use core::panic;
 use std::collections::HashMap;
 
 use hugr::extension::prelude::QB_T;
-use hugr::ops::{OpName, OpType};
+use hugr::ops::{NamedOp, OpType};
 use hugr::std_extensions::arithmetic::float_types::ConstF64;
 use hugr::Wire;
 use itertools::{Either, Itertools};
@@ -193,7 +193,7 @@ impl JsonEncoder {
         let param = match optype {
             OpType::Const(const_op) => {
                 // New constant, register it if it can be interpreted as a parameter.
-                let Some(const_float) = const_op.get_custom_value::<ConstF64>() else {
+                let Some(const_float) = const_op.value().get_custom_value::<ConstF64>() else {
                     return false;
                 };
                 const_float.to_string()

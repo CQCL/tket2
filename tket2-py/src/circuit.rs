@@ -8,7 +8,7 @@ use derive_more::{From, Into};
 use hugr::extension::prelude::{BOOL_T, QB_T};
 use hugr::hugr::IdentList;
 use hugr::ops::custom::{ExtensionOp, OpaqueOp};
-use hugr::ops::{CustomOp, OpName, OpType};
+use hugr::ops::{CustomOp, NamedOp, OpName, OpType};
 use hugr::types::{CustomType, FunctionType, Type, TypeBound};
 use pyo3::prelude::*;
 use std::fmt;

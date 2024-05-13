@@ -471,7 +471,7 @@ mod test {
     use hugr::builder::{Container, DFGBuilder, Dataflow, DataflowHugr};
     use hugr::extension::prelude::QB_T;
     use hugr::ops::handle::NodeHandle;
-    use hugr::ops::OpName;
+    use hugr::ops::{NamedOp, Value};
     use hugr::std_extensions::arithmetic::float_ops::FLOAT_OPS_REGISTRY;
     use hugr::std_extensions::arithmetic::float_types::ConstF64;
     use hugr::types::FunctionType;
@@ -552,7 +552,7 @@ mod test {
         let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row)).unwrap();
         let [q_in] = h.input_wires_arr();
 
-        let constant = h.add_constant(ConstF64::new(0.5));
+        let constant = h.add_constant(Value::extension(ConstF64::new(0.5)));
         let loaded_const = h.load_const(&constant);
         let rz = h
             .add_dataflow_op(Tk2Op::RzF64, [q_in, loaded_const])

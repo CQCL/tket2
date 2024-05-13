@@ -1,7 +1,7 @@
 use crate::extension::{
     SYM_EXPR_T, SYM_OP_ID, TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID,
 };
-use hugr::ops::OpName;
+use hugr::ops::NamedOp;
 use hugr::{
     extension::{
         prelude::{BOOL_T, QB_T},
@@ -260,7 +260,7 @@ pub(crate) mod test {
     use std::sync::Arc;
 
     use hugr::extension::simple_op::MakeOpDef;
-    use hugr::ops::OpName;
+    use hugr::ops::NamedOp;
     use hugr::CircuitUnit;
     use hugr::{extension::OpDef, Hugr};
     use rstest::{fixture, rstest};
@@ -269,7 +269,7 @@ pub(crate) mod test {
     use super::Tk2Op;
     use crate::extension::{TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID};
     use crate::{circuit::Circuit, utils::build_simple_circuit};
-    fn get_opdef(op: impl OpName) -> Option<&'static Arc<OpDef>> {
+    fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
         EXTENSION.get_op(&op.name())
     }
     #[test]

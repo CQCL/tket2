@@ -9,7 +9,7 @@ use hugr::extension::simple_op::MakeOpDef;
 use hugr::extension::{CustomSignatureFunc, ExtensionId, ExtensionRegistry, SignatureError};
 use hugr::hugr::IdentList;
 use hugr::ops::custom::{CustomOp, OpaqueOp};
-use hugr::ops::OpName;
+use hugr::ops::NamedOp;
 use hugr::std_extensions::arithmetic::float_types::{EXTENSION as FLOAT_EXTENSION, FLOAT64_TYPE};
 use hugr::types::type_param::{CustomTypeArg, TypeArg, TypeParam};
 use hugr::types::{CustomType, FunctionType, PolyFuncType, Type, TypeBound};
