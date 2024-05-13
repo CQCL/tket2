@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 
 use fxhash::{FxHashMap, FxHasher64};
 use hugr::hugr::views::{HierarchyView, SiblingGraph};
-use hugr::ops::{OpName, OpType};
+use hugr::ops::{NamedOp, OpType};
 use hugr::{HugrView, Node};
 use petgraph::visit::{self as pg, Walker};
 use thiserror::Error;

@@ -12,7 +12,7 @@ use hugr::hugr::views::sibling_subgraph::{
     InvalidReplacement, InvalidSubgraph, InvalidSubgraphBoundary, TopoConvexChecker,
 };
 use hugr::hugr::views::SiblingSubgraph;
-use hugr::ops::{OpName, OpType};
+use hugr::ops::{NamedOp, OpType};
 use hugr::{Hugr, IncomingPort, Node, OutgoingPort, Port, PortIndex};
 use itertools::Itertools;
 use portgraph::algorithms::ConvexChecker;
@@ -386,6 +386,9 @@ pub enum InvalidPatternMatch {
     /// case an error would have been raised earlier on).
     #[error("empty match")]
     EmptyMatch,
+    #[error(transparent)]
+    #[allow(missing_docs)]
+    Other(InvalidSubgraph),
 }
 
 /// Errors that can occur when (de)serialising a matcher.
@@ -415,6 +418,7 @@ impl From<InvalidSubgraph> for InvalidPatternMatch {
             InvalidSubgraph::NoSharedParent | InvalidSubgraph::InvalidBoundary(_) => {
                 InvalidPatternMatch::InvalidSubcircuit
             }
+            other => InvalidPatternMatch::Other(other),
         }
     }
 }
@@ -472,11 +476,7 @@ fn handle_match_error<T>(match_res: Result<T, InvalidPatternMatch>, root: Node) 
     match_res
         .map_err(|err| match err {
             InvalidPatternMatch::NotConvex => InvalidPatternMatch::NotConvex,
-            InvalidPatternMatch::MatchNotFound
-            | InvalidPatternMatch::InvalidSubcircuit
-            | InvalidPatternMatch::EmptyMatch => {
-                panic!("invalid match at root node {root:?}")
-            }
+            other => panic!("invalid match at root node {root:?}: {other}"),
         })
         .ok()
 }
