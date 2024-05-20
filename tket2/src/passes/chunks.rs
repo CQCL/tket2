@@ -281,7 +281,7 @@ impl CircuitChunks {
         let convex_checker = TopoConvexChecker::new(circ);
         let mut running_cost = C::default();
         let mut current_group = 0;
-        for (_, commands) in &circ.commands().map(|cmd| cmd.node()).group_by(|&node| {
+        for (_, commands) in &circ.commands().map(|cmd| cmd.node()).chunk_by(|&node| {
             let new_cost = running_cost.clone() + op_cost(circ.get_optype(node));
             if new_cost.sub_cost(&max_cost).as_isize() > 0 {
                 running_cost = C::default();
