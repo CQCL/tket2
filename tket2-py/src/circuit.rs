@@ -1,8 +1,9 @@
 //! Circuit-related functionality and utilities.
 #![allow(unused)]
 
-pub mod convert;
-pub mod cost;
+mod convert;
+mod cost;
+mod tk2circuit;
 
 use derive_more::{From, Into};
 use hugr::extension::prelude::{BOOL_T, QB_T};
@@ -22,9 +23,10 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use crate::utils::create_py_exception;
 use crate::utils::ConvertPyErr;
 
-use self::convert::{into_vec, Dfg};
-pub use self::convert::{try_update_hugr, try_with_hugr, update_hugr, with_hugr, Tk2Circuit};
+pub use self::convert::{try_update_hugr, try_with_hugr, update_hugr, with_hugr, CircuitType};
 pub use self::cost::PyCircuitCost;
+pub use self::tk2circuit::Tk2Circuit;
+use self::tk2circuit::{into_vec, Dfg};
 pub use tket2::{Pauli, Tk2Op};
 
 /// The module definition
