@@ -52,8 +52,8 @@ pub struct Rule(pub [Hugr; 2]);
 impl Rule {
     #[new]
     fn new_rule(l: &Bound<PyAny>, r: &Bound<PyAny>) -> PyResult<Rule> {
-        let l = Tk2Circuit::from_tket1(l)?;
-        let r = Tk2Circuit::from_tket1(r)?;
+        let l = Tk2Circuit::new(l)?;
+        let r = Tk2Circuit::new(r)?;
 
         Ok(Rule([l.hugr, r.hugr]))
     }

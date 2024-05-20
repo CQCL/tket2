@@ -6,7 +6,7 @@ use pyo3::prelude::*;
 use tket2::passes::CircuitChunks;
 use tket2::Circuit;
 
-use crate::circuit::convert::CircuitType;
+use crate::circuit::CircuitType;
 use crate::circuit::{try_with_hugr, with_hugr};
 use crate::utils::ConvertPyErr;
 
