@@ -5,6 +5,7 @@ from ._tket2.pattern import (
     CircuitPattern,
     PatternMatcher,
     PatternMatch,
+    PatternID,
     InvalidPatternError,
     InvalidReplacementError,
 )
@@ -15,6 +16,7 @@ __all__ = [
     "CircuitPattern",
     "PatternMatcher",
     "PatternMatch",
+    "PatternID",
     "InvalidPatternError",
     "InvalidReplacementError",
 ]

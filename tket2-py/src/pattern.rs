@@ -18,6 +18,7 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     m.add_class::<self::portmatching::PyCircuitPattern>()?;
     m.add_class::<self::portmatching::PyPatternMatcher>()?;
     m.add_class::<self::portmatching::PyPatternMatch>()?;
+    m.add_class::<self::portmatching::PyPatternID>()?;
 
     m.add(
         "InvalidPatternError",

@@ -130,6 +130,19 @@ pub struct PyPatternID {
     pub id: PatternID,
 }
 
+#[pymethods]
+impl PyPatternID {
+    /// A string representation of the pattern.
+    pub fn __repr__(&self) -> String {
+        format!("{:?}", self.id)
+    }
+
+    /// Cast the pattern ID to an integer.
+    pub fn __int__(&self) -> usize {
+        self.id.into()
+    }
+}
+
 impl fmt::Display for PyPatternID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.id.fmt(f)
