@@ -2,9 +2,6 @@
 /target
 tket2-py/target/
 
-# Lock files
-Cargo.lock
-
 # Python caches
 __pycache__
 .ipynb_checkpoints
