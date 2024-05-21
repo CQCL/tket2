@@ -10,7 +10,7 @@ use crate::circuit::{PyNode, Tk2Circuit};
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
-    let m = PyModule::new_bound(py, "_rewrite")?;
+    let m = PyModule::new_bound(py, "rewrite")?;
     m.add_class::<PyECCRewriter>()?;
     m.add_class::<PyCircuitRewrite>()?;
     m.add_class::<PySubcircuit>()?;

@@ -12,7 +12,7 @@ use tket2::portmatching::{CircuitPattern, PatternMatcher};
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
-    let m = PyModule::new_bound(py, "_pattern")?;
+    let m = PyModule::new_bound(py, "pattern")?;
     m.add_class::<Rule>()?;
     m.add_class::<RuleMatcher>()?;
     m.add_class::<self::portmatching::PyCircuitPattern>()?;

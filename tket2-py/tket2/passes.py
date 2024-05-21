@@ -8,12 +8,23 @@ from pytket.passes import CustomPass
 from tket2 import optimiser
 
 # Re-export native bindings
-from .tket2._passes import *  # noqa: F403
-from .tket2 import _passes
+from ._tket2.passes import (
+    CircuitChunks,
+    greedy_depth_reduce,
+    badger_optimise,
+    chunks,
+    PullForwardError,
+)
 
 __all__ = [
     "badger_pass",
-    *_passes.__all__,
+    # Bindings.
+    # TODO: Wrap these in Python classes.
+    "CircuitChunks",
+    "greedy_depth_reduce",
+    "badger_optimise",
+    "chunks",
+    "PullForwardError",
 ]
 
 
@@ -41,7 +52,7 @@ def badger_pass(
 
     def apply(circuit: Circuit) -> Circuit:
         """Apply Badger optimisation to the circuit."""
-        return _passes.badger_optimise(
+        return badger_optimise(
             circuit,
             opt,
             max_threads,

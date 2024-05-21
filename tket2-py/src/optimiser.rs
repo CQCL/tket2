@@ -12,7 +12,7 @@ use crate::circuit::update_hugr;
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
-    let m = PyModule::new_bound(py, "_optimiser")?;
+    let m = PyModule::new_bound(py, "optimiser")?;
     m.add_class::<PyBadgerOptimiser>()?;
     Ok(m)
 }

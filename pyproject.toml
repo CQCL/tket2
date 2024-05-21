@@ -43,6 +43,7 @@ homepage = "https://github.com/CQCL/tket2"
 repository = "https://github.com/CQCL/tket2"
 
 [tool.maturin]
+module-name = "tket2._tket2"
 manifest-path = "tket2-py/Cargo.toml"
 python-source = "tket2-py"
 # "extension-module" tells pyo3 we want to build an extension module (skips linking against libpython.so)
