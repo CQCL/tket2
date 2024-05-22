@@ -52,3 +52,7 @@ features = ["pyo3/extension-module"]
 [tool.pytest.ini_options]
 # Lark throws deprecation warnings for `src_parse` and `src_constants`.
 filterwarnings = "ignore::DeprecationWarning:lark.*"
+
+[tool.pyright]
+# Rust bindings have typing stubs but no python source code.
+reportMissingModuleSource = "none"
