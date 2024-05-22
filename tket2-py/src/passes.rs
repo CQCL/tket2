@@ -18,7 +18,7 @@ use crate::{
 ///
 /// This module is re-exported from the python module with the same name.
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
-    let m = PyModule::new_bound(py, "_passes")?;
+    let m = PyModule::new_bound(py, "passes")?;
     m.add_function(wrap_pyfunction!(greedy_depth_reduce, &m)?)?;
     m.add_function(wrap_pyfunction!(badger_optimise, &m)?)?;
     m.add_class::<self::chunks::PyCircuitChunks>()?;

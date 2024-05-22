@@ -31,7 +31,7 @@ pub use tket2::{Pauli, Tk2Op};
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
-    let m = PyModule::new_bound(py, "_circuit")?;
+    let m = PyModule::new_bound(py, "circuit")?;
     m.add_class::<Tk2Circuit>()?;
     m.add_class::<Dfg>()?;
     m.add_class::<PyNode>()?;

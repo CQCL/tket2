@@ -1,6 +1,47 @@
 # Re-export native bindings
 
-from ..tket2 import _circuit
-from ..tket2._circuit import *  # noqa: F403
+from .._tket2.circuit import (
+    Tk2Circuit,
+    Dfg,
+    Node,
+    Wire,
+    CircuitCost,
+    Tk2Op,
+    CustomOp,
+    HugrType,
+    Pauli,
+    validate_hugr,
+    to_hugr_dot,
+    to_hugr_mermaid,
+    HugrError,
+    BuildError,
+    ValidationError,
+    HUGRSerializationError,
+    OpConvertError,
+)
 
-__all__ = _circuit.__all__
+from .build import CircBuild, Command
+
+__all__ = [
+    "CircBuild",
+    "Command",
+    # Bindings.
+    # TODO: Wrap these in Python classes.
+    "Tk2Circuit",
+    "Dfg",
+    "Node",
+    "Wire",
+    "CircuitCost",
+    "Tk2Op",
+    "CustomOp",
+    "HugrType",
+    "Pauli",
+    "validate_hugr",
+    "to_hugr_dot",
+    "to_hugr_mermaid",
+    "HugrError",
+    "BuildError",
+    "ValidationError",
+    "HUGRSerializationError",
+    "OpConvertError",
+]

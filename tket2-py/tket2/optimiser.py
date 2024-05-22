@@ -1,5 +1,4 @@
 # Re-export native bindings
-from .tket2._optimiser import *  # noqa: F403
-from .tket2 import _optimiser
+from ._tket2.optimiser import BadgerOptimiser
 
-__all__ = _optimiser.__all__
+__all__ = ["BadgerOptimiser"]
