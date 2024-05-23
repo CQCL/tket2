@@ -1,6 +1,7 @@
 # Build artifacts
 /target
 tket2-py/target/
+/dist
 
 # Python caches
 __pycache__
