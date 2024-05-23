@@ -1,0 +1,65 @@
+{
+    "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+    "include-component-in-tag": true,
+    "bump-minor-pre-major": true,
+    "bump-patch-for-minor-pre-major": true,
+    "initial-version": "0.0.0",
+    "packages": {
+        "tket2-py": {
+            "release-type": "python",
+            "component": "tket2-py",
+            "package-name": "tket2",
+            "include-component-in-tag": true,
+            "draft": false,
+            "prerelease": false,
+            "draft-pull-request": true
+        }
+    },
+    "changelog-sections": [
+        {
+            "type": "feat",
+            "section": "Features"
+        },
+        {
+            "type": "fix",
+            "section": "Bug Fixes"
+        },
+        {
+            "type": "perf",
+            "section": "Performance Improvements"
+        },
+        {
+            "type": "revert",
+            "section": "Reverts"
+        },
+        {
+            "type": "docs",
+            "section": "Documentation"
+        },
+        {
+            "type": "style",
+            "section": "Styling",
+            "hidden": true
+        },
+        {
+            "type": "chore",
+            "section": "Miscellaneous Chores",
+            "hidden": true
+        },
+        {
+            "type": "refactor",
+            "section": "Code Refactoring",
+            "hidden": true
+        },
+        {
+            "type": "test",
+            "section": "Tests",
+            "hidden": true
+        },
+        {
+            "type": "ci",
+            "section": "Continuous Integration",
+            "hidden": true
+        }
+    ]
+}
