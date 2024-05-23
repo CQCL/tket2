@@ -4,9 +4,9 @@ from pytket._tket.circuit import Circuit
 
 from tket2.circuit import (
     Tk2Circuit,
-    Tk2Op,
     to_hugr_dot,
 )
+from tket2.ops import Tk2Op
 
 
 @dataclass

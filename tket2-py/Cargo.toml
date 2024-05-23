@@ -18,7 +18,7 @@ test = false
 bench = false
 
 [dependencies]
-tket2 = { workspace = true, features = ["pyo3", "portmatching"] }
+tket2 = { workspace = true, features = ["portmatching"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tket-json-rs = { workspace = true, features = ["pyo3"] }
@@ -29,3 +29,4 @@ num_cpus = { workspace = true }
 derive_more = { workspace = true }
 itertools = { workspace = true }
 portmatching = { workspace = true }
+strum = { workspace = true }
