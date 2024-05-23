@@ -2,9 +2,21 @@
 name = "tket2-py"
 version = "0.0.0-alpha.1"
 description = "pytket extension for the tket 2 compiler"
-classifiers = []                                         # TODO
-authors = []                                             # TODO
-maintainers = []                                         # TODO
+classifiers = [
+    "Environment :: Console",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+]
+authors = ["TKET development team <tket-support@cambridgequantum.com>"]
+maintainers = ["TKET development team <tket-support@cambridgequantum.com>"]
 include = ["pyproject.toml"]
 license = "Apache-2.0"
 readme = "README.md"
@@ -31,10 +43,27 @@ build-backend = "maturin"
 
 [project]
 name = "tket2"
+classifiers = [
+    "Environment :: Console",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+]
+authors = [
+    { name = "TKET development team", email = "tket-support@cambridgequantum.com" },
+]
+maintainers = [
+    { name = "TKET development team", email = "tket-support@cambridgequantum.com" },
+]
 version = "0.0.0-alpha.1"
 description = "pytket extension for the tket 2 compiler"
-authors = []                                             # TODO
-classifiers = []                                         # TODO
 requires-python = ">=3.10"
 license = { file = "LICENCE" }
 
