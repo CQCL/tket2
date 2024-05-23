@@ -15,8 +15,8 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering",
 ]
-authors = ["TKET development team <tket-support@cambridgequantum.com>"]
-maintainers = ["TKET development team <tket-support@cambridgequantum.com>"]
+authors = ["TKET development team <tket-support@quantinuum.com>"]
+maintainers = ["TKET development team <tket-support@quantinuum.com>"]
 include = ["pyproject.toml"]
 license = "Apache-2.0"
 readme = "README.md"
@@ -57,10 +57,10 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 authors = [
-    { name = "TKET development team", email = "tket-support@cambridgequantum.com" },
+    { name = "TKET development team", email = "tket-support@quantinuum.com" },
 ]
 maintainers = [
-    { name = "TKET development team", email = "tket-support@cambridgequantum.com" },
+    { name = "TKET development team", email = "tket-support@quantinuum.com" },
 ]
 version = "0.0.0-alpha.1"
 description = "pytket extension for the tket 2 compiler"

@@ -5,7 +5,7 @@
 #
 #     maturin generate-ci github > .github/workflows/python-wheels.yml
 #
-# An edit the `on:` action triggers and the filters in `jobs.release.if`.
+# And edit the `on:` action triggers and the filters in `jobs.release.if`.
 name: CI
 
 on:
