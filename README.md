@@ -12,8 +12,8 @@ compilation for many different quantum architectures.
 a python package on [PyPI](https://pypi.org/project/tket2/).
 
 See the respective
-[Rust](https://github.com/CQCL/tket2/blob/main/rust/README.md) and
-[Python](https://github.com/CQCL/tket2/blob/main/python/README.md) READMEs for
+[Rust](https://github.com/CQCL/tket2/blob/main/tket2) and
+[Python](https://github.com/CQCL/tket2/blob/main/tket2-py) READMEs for
 more information.
 
 ## Developing TKET2

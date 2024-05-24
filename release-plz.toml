@@ -31,6 +31,3 @@ commit_parsers = [
 [[package]]
 name = "tket2"
 release = true
-
-# Temporarily disabled until the first manual release
-publish = false
