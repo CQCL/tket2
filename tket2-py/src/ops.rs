@@ -25,7 +25,7 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
 #[derive(Debug, Clone, From)]
 #[repr(transparent)]
 pub struct PyTk2Op {
-    /// Rust representation of the circuit chunks.
+    /// Rust representation of the operation.
     pub op: Tk2Op,
 }
 
@@ -107,7 +107,7 @@ impl PyTk2OpIter {
 #[derive(Debug, Clone, From)]
 #[repr(transparent)]
 pub struct PyPauli {
-    /// Rust representation of the circuit chunks.
+    /// Rust representation of the pauli matrix.
     pub p: Pauli,
 }
 
