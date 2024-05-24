@@ -18,11 +18,9 @@ build:
 
 # Run all the tests.
 test language="[rust|python]" : (_run_lang language \
-        "poetry run cargo test --all-features" \
+        "poetry run cargo test --all-features --workspace" \
         "poetry run maturin develop && poetry run pytest"
     )
-# Note: We cannot use `cargo test --workspace` because there
-# are two crates that use pyo3, and that causes a linking conflict.
 
 # Auto-fix all clippy warnings.
 fix language="[rust|python]": (_run_lang language \

@@ -1,5 +1,6 @@
 //! Python bindings for TKET2.
 pub mod circuit;
+pub mod ops;
 pub mod optimiser;
 pub mod passes;
 pub mod pattern;
@@ -12,6 +13,7 @@ use pyo3::prelude::*;
 #[pymodule]
 fn _tket2(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     add_submodule(py, m, circuit::module(py)?)?;
+    add_submodule(py, m, ops::module(py)?)?;
     add_submodule(py, m, optimiser::module(py)?)?;
     add_submodule(py, m, passes::module(py)?)?;
     add_submodule(py, m, pattern::module(py)?)?;

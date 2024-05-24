@@ -25,6 +25,7 @@ use tket2::passes::CircuitChunks;
 use tket2::{Circuit, Tk2Op};
 use tket_json_rs::circuit_json::SerialCircuit;
 
+use crate::ops::PyTk2Op;
 use crate::rewrite::PyCircuitRewrite;
 use crate::utils::ConvertPyErr;
 
@@ -127,7 +128,8 @@ impl Tk2Circuit {
                     "Could not convert circuit operation to a `Tk2Op`: {e}"
                 ))
             })?;
-            let cost = cost_fn.call1((tk2_op,))?;
+            let tk2_py_op = PyTk2Op::from(tk2_op);
+            let cost = cost_fn.call1((tk2_py_op,))?;
             Ok(PyCircuitCost {
                 cost: cost.to_object(py),
             })

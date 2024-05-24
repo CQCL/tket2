@@ -15,9 +15,6 @@ name = "tket2"
 path = "src/lib.rs"
 
 [features]
-# Enables some python bindings
-pyo3 = ["dep:pyo3"]
-
 # Enables search and replace optimisation passes using the `portmatching` crate.
 portmatching = ["dep:portmatching", "dep:rmp-serde"]
 
@@ -47,7 +44,6 @@ portmatching = { workspace = true, optional = true, features = ["serde"] }
 derive_more = { workspace = true }
 hugr = { workspace = true }
 portgraph = { workspace = true, features = ["serde"] }
-pyo3 = { workspace = true, optional = true, features = ["multiple-pymethods"] }
 strum_macros = { workspace = true }
 strum = { workspace = true }
 fxhash = { workspace = true }

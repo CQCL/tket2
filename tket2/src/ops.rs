@@ -22,9 +22,6 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
 use thiserror::Error;
 
-#[cfg(feature = "pyo3")]
-use pyo3::pyclass;
-
 use crate::extension::REGISTRY;
 
 #[derive(
@@ -42,7 +39,6 @@ use crate::extension::REGISTRY;
     IntoStaticStr,
     EnumString,
 )]
-#[cfg_attr(feature = "pyo3", pyclass)]
 #[allow(missing_docs)]
 #[non_exhaustive]
 /// Simple enum of tket 2 quantum operations.
@@ -82,8 +78,9 @@ pub fn op_matches(op: &OpType, tk2op: Tk2Op) -> bool {
     op.name() == tk2op.exposed_name()
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "pyo3", pyclass)]
+#[derive(
+    Clone, Copy, Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, PartialOrd, EnumString,
+)]
 #[allow(missing_docs)]
 /// Simple enum representation of Pauli matrices.
 pub enum Pauli {

@@ -56,9 +56,6 @@ tket2::passes::apply_greedy_commutation(&mut circ);
 
 ## Features
 
-- `pyo3`
-  Enables some python bindings via pyo3. See the `tket2-py` folder for more.
-
 - `portmatching`
   Enables pattern matching using the `portmatching` crate.
 

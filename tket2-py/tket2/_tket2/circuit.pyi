@@ -1,6 +1,7 @@
-from enum import Enum, auto
+from enum import Enum
 from typing import Any, Callable
 from pytket._tket.circuit import Circuit
+from tket2._tket2.ops import Tk2Op
 
 class Tk2Circuit:
     """Rust representation of a TKET2 circuit."""
@@ -116,31 +117,6 @@ class CircuitCost:
 
         The cost object must implement __add__, __sub__, __eq__, and __lt__."""
 
-class Tk2Op(Enum):
-    """A Tket2 built-in operation."""
-
-    H = auto()
-    CX = auto()
-    T = auto()
-    S = auto()
-    X = auto()
-    Y = auto()
-    Z = auto()
-    Tdg = auto()
-    Sdg = auto()
-    ZZMax = auto()
-    Measure = auto()
-    RzF64 = auto()
-    RxF64 = auto()
-    PhasedX = auto()
-    ZZPhase = auto()
-    AngleAdd = auto()
-    CZ = auto()
-    TK1 = auto()
-    QAlloc = auto()
-    QFree = auto()
-    Reset = auto()
-
 class CustomOp:
     """A HUGR custom operation."""
 
@@ -176,14 +152,6 @@ class HugrType:
     @staticmethod
     def bool() -> HugrType:
         """Boolean type (HUGR 2-ary unit sum)."""
-
-class Pauli(Enum):
-    """Simple enum representation of Pauli matrices."""
-
-    I = auto()  # noqa: E741
-    X = auto()
-    Y = auto()
-    Z = auto()
 
 class TypeBound(Enum):
     """HUGR type bounds."""

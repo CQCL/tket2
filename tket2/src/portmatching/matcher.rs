@@ -23,9 +23,6 @@ use portmatching::{
 use smol_str::SmolStr;
 use thiserror::Error;
 
-#[cfg(feature = "pyo3")]
-use pyo3::prelude::*;
-
 use crate::{
     circuit::Circuit,
     rewrite::{CircuitRewrite, Subcircuit},
@@ -230,7 +227,6 @@ impl Debug for PatternMatch {
 ///
 /// This uses a state automaton internally to match against a set of patterns
 /// simultaneously.
-#[cfg_attr(feature = "pyo3", pyclass)]
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PatternMatcher {
     automaton: ScopeAutomaton<PNode, PEdge, Port>,
