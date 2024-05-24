@@ -36,11 +36,13 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     m.add_class::<Dfg>()?;
     m.add_class::<PyNode>()?;
     m.add_class::<PyWire>()?;
+    m.add_class::<WireIter>()?;
     m.add_class::<PyCircuitCost>()?;
     m.add_class::<Tk2Op>()?;
     m.add_class::<PyCustom>()?;
     m.add_class::<PyHugrType>()?;
     m.add_class::<Pauli>()?;
+    m.add_class::<PyTypeBound>()?;
 
     m.add_function(wrap_pyfunction!(validate_hugr, &m)?)?;
     m.add_function(wrap_pyfunction!(to_hugr_dot, &m)?)?;
@@ -129,7 +131,8 @@ impl fmt::Debug for PyNode {
 }
 
 #[pyclass]
-struct WireIter {
+/// An iterator over the wires of a node.
+pub struct WireIter {
     node: PyNode,
     current: usize,
 }
