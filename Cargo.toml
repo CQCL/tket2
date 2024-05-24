@@ -7,12 +7,11 @@ members = ["tket2", "tket2-py", "compile-rewriter", "badger-optimiser"]
 default-members = ["tket2"]
 
 [workspace.package]
-version = "0.0.0-alpha.1"
 rust-version = "1.75"
 edition = "2021"
 homepage = "https://github.com/CQCL/tket2"
-license-file = "LICENCE"
-# authors
+repository = "https://github.com/CQCL/tket2"
+license = "Apache-2.0"
 
 [workspace.lints.rust]
 missing_docs = "warn"

@@ -98,7 +98,7 @@ checksum = "0c4b4d0bd25bd0b74681c0ad21497610ce1b7c91b1022cd21c80c6fbdd9476b0"
 
 [[package]]
 name = "badger-optimiser"
-version = "0.0.0-alpha.1"
+version = "0.0.0"
 dependencies = [
  "clap",
  "hugr",
@@ -305,7 +305,7 @@ dependencies = [
 
 [[package]]
 name = "compile-rewriter"
-version = "0.0.0-alpha.1"
+version = "0.0.0"
 dependencies = [
  "clap",
  "hugr",
@@ -1737,7 +1737,7 @@ dependencies = [
 
 [[package]]
 name = "tket2"
-version = "0.0.0-alpha.1"
+version = "0.1.0-alpha.1"
 dependencies = [
  "bytemuck",
  "cgmath",
@@ -1778,7 +1778,7 @@ dependencies = [
 
 [[package]]
 name = "tket2-py"
-version = "0.0.0-alpha.1"
+version = "0.0.0"
 dependencies = [
  "derive_more",
  "hugr",

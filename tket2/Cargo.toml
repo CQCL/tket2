@@ -1,10 +1,17 @@
 [package]
 name = "tket2"
+version = "0.1.0-alpha.1"
 edition = { workspace = true }
-version = { workspace = true }
 rust-version = { workspace = true }
+
+license = { workspace = true }
+readme = "README.md"
+documentation = "https://docs.rs/tket2"
 homepage = { workspace = true }
-license-file = { workspace = true }
+repository = { workspace = true }
+description = "Quantinuum's TKET2 Quantum Compiler"
+keywords = ["Quantum", "Quantinuum"]
+categories = ["compilers"]
 
 [lints]
 workspace = true
