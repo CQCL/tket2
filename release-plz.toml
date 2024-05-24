@@ -4,6 +4,9 @@
 # Open the release PR as a draft
 pr_draft = true
 
+# Default to not processing the packages
+release = false
+
 # Enforce adding the project name in the git tag, to avoid collisions with python.
 # (This would normally only be enabled once there are multiple packages in the workspace)
 git_tag_name = "{{ package }}-v{{ version }}"
@@ -24,3 +27,10 @@ commit_parsers = [
     { message = "^revert", group = "Reverted changes", skip = true },
     { message = "^ci", group = "CI", skip = true },
 ]
+
+[[package]]
+name = "tket2"
+release = true
+
+# Temporarily disabled until the first manual release
+publish = false
