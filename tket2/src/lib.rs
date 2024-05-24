@@ -18,7 +18,8 @@
 //!
 //! # Example
 //!
-//! ```
+#![cfg_attr(not(miri), doc = "```")] // this doctest reads from the filesystem, so it fails with miri
+#![cfg_attr(miri, doc = "```ignore")]
 //! use tket2::{Circuit, Hugr};
 //! use hugr::HugrView;
 //!
