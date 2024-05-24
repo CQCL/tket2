@@ -6,7 +6,7 @@
 #     maturin generate-ci github > .github/workflows/python-wheels.yml
 #
 # And edit the `on:` action triggers and the filters in `jobs.release.if`.
-name: CI
+name: Python wheels 🐍
 
 on:
   push:
@@ -47,7 +47,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist -i python3.10
           sccache: 'true'
           manylinux: auto
       - name: Upload wheels
