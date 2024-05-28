@@ -15,9 +15,9 @@ use derive_more::From;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::NodeType;
 use hugr::ops::dataflow::IOTrait;
-use hugr::ops::{Input, Output, DFG};
+use hugr::ops::{Input, NamedOp, OpParent, OpTag, OpTrait, Output, DFG};
 use hugr::types::PolyFuncType;
-use hugr::PortIndex;
+use hugr::{Hugr, PortIndex};
 use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
 use thiserror::Error;
@@ -28,54 +28,138 @@ pub use hugr::{Node, Port, Wire};
 
 use self::units::{filter, LinearUnit, Units};
 
-/// An object behaving like a quantum circuit.
-//
-// TODO: More methods:
-// - other_{in,out}puts (for non-linear i/o + const inputs)?
-// - Vertical slice iterator
-// - Depth
-pub trait Circuit: HugrView {
+/// A quantum circuit, represented as a function in a HUGR.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Circuit<T = Hugr> {
+    /// The HUGR containing the circuit.
+    hugr: T,
+    /// The parent node of the circuit.
+    ///
+    /// This is checked at runtime to ensure that the node is a DFG node.
+    parent: Node,
+}
+
+impl<T: Default + HugrView> Default for Circuit<T> {
+    fn default() -> Self {
+        let hugr = T::default();
+        let parent = hugr.root();
+        Self { hugr, parent }
+    }
+}
+
+impl<T: HugrView> Circuit<T> {
+    /// Create a new circuit from a HUGR and a node.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the parent node is not a DFG node in the HUGR.
+    pub fn try_new(hugr: T, parent: Node) -> Result<Self, CircuitError> {
+        check_hugr(&hugr, parent)?;
+        Ok(Self { hugr, parent })
+    }
+
+    /// Create a new circuit from a HUGR and a node.
+    ///
+    /// See [`Circuit::try_new`] for a version that returns an error.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the parent node is not a DFG node in the HUGR.
+    pub fn new(hugr: T, parent: Node) -> Self {
+        Self::try_new(hugr, parent).unwrap_or_else(|e| panic!("{}", e))
+    }
+
+    /// Returns the node containing the circuit definition.
+    pub fn parent(&self) -> Node {
+        self.parent
+    }
+
+    /// Get a reference to the HUGR containing the circuit.
+    pub fn hugr(&self) -> &T {
+        &self.hugr
+    }
+
+    /// Unwrap the HUGR containing the circuit.
+    pub fn into_hugr(self) -> T {
+        self.hugr
+    }
+
+    /// Get a mutable reference to the HUGR containing the circuit.
+    ///
+    /// Mutation to the hugr MUST NOT invalidate the parent node,
+    /// by changing the node's type to a non-DFG node or by removing it.
+    pub fn hugr_mut(&mut self) -> &mut T {
+        &mut self.hugr
+    }
+
+    /// Ensures the circuit contains an owned HUGR.
+    pub fn to_owned(&self) -> Circuit<Hugr> {
+        let hugr = self.hugr.base_hugr().clone();
+        Circuit {
+            hugr,
+            parent: self.parent,
+        }
+    }
+
     /// Return the name of the circuit
     #[inline]
-    fn name(&self) -> Option<&str> {
-        self.get_metadata(self.root(), "name")?.as_str()
+    pub fn name(&self) -> Option<&str> {
+        self.hugr.get_metadata(self.parent(), "name")?.as_str()
     }
 
     /// Returns the function type of the circuit.
     ///
     /// Equivalent to [`HugrView::get_function_type`].
     #[inline]
-    fn circuit_signature(&self) -> PolyFuncType {
-        self.get_function_type()
-            .expect("Circuit has no function type")
+    pub fn circuit_signature(&self) -> PolyFuncType {
+        let op = self.hugr.get_optype(self.parent);
+        match op {
+            OpType::FuncDecl(decl) => decl.signature.clone(),
+            OpType::FuncDefn(defn) => defn.signature.clone(),
+            _ => op
+                .inner_function_type()
+                .expect("Circuit parent should have a function type")
+                .into(),
+        }
     }
 
     /// Returns the input node to the circuit.
     #[inline]
-    fn input(&self) -> Node {
-        self.get_io(self.root()).expect("Circuit has no input node")[0]
+    pub fn input_node(&self) -> Node {
+        self.hugr
+            .get_io(self.parent)
+            .expect("Circuit has no input node")[0]
     }
 
     /// Returns the output node to the circuit.
     #[inline]
-    fn output(&self) -> Node {
-        self.get_io(self.root())
+    pub fn output_node(&self) -> Node {
+        self.hugr
+            .get_io(self.parent)
             .expect("Circuit has no output node")[1]
+    }
+
+    /// Returns the input and output nodes of the circuit.
+    #[inline]
+    pub fn io_nodes(&self) -> [Node; 2] {
+        self.hugr
+            .get_io(self.parent)
+            .expect("Circuit has no I/O nodes")
     }
 
     /// The number of quantum gates in the circuit.
     #[inline]
-    fn num_gates(&self) -> usize
+    pub fn num_gates(&self) -> usize
     where
         Self: Sized,
     {
-        // TODO: Implement discern quantum gates in the commands iterator.
-        self.children(self.root()).count() - 2
+        // TODO: Discern quantum gates in the commands iterator.
+        self.hugr().children(self.parent).count() - 2
     }
 
     /// Count the number of qubits in the circuit.
     #[inline]
-    fn qubit_count(&self) -> usize
+    pub fn qubit_count(&self) -> usize
     where
         Self: Sized,
     {
@@ -84,7 +168,7 @@ pub trait Circuit: HugrView {
 
     /// Get the input units of the circuit and their types.
     #[inline]
-    fn units(&self) -> Units<OutgoingPort>
+    pub fn units(&self) -> Units<OutgoingPort>
     where
         Self: Sized,
     {
@@ -93,7 +177,7 @@ pub trait Circuit: HugrView {
 
     /// Get the linear input units of the circuit and their types.
     #[inline]
-    fn linear_units(&self) -> impl Iterator<Item = (LinearUnit, OutgoingPort, Type)> + '_
+    pub fn linear_units(&self) -> impl Iterator<Item = (LinearUnit, OutgoingPort, Type)> + '_
     where
         Self: Sized,
     {
@@ -102,7 +186,7 @@ pub trait Circuit: HugrView {
 
     /// Get the non-linear input units of the circuit and their types.
     #[inline]
-    fn nonlinear_units(&self) -> impl Iterator<Item = (Wire, OutgoingPort, Type)> + '_
+    pub fn nonlinear_units(&self) -> impl Iterator<Item = (Wire, OutgoingPort, Type)> + '_
     where
         Self: Sized,
     {
@@ -111,7 +195,7 @@ pub trait Circuit: HugrView {
 
     /// Returns the units corresponding to qubits inputs to the circuit.
     #[inline]
-    fn qubits(&self) -> impl Iterator<Item = (LinearUnit, OutgoingPort, Type)> + '_
+    pub fn qubits(&self) -> impl Iterator<Item = (LinearUnit, OutgoingPort, Type)> + '_
     where
         Self: Sized,
     {
@@ -122,7 +206,7 @@ pub trait Circuit: HugrView {
     ///
     /// Ignores the Input and Output nodes.
     #[inline]
-    fn commands(&self) -> CommandIterator<'_, Self>
+    pub fn commands(&self) -> CommandIterator<'_, T>
     where
         Self: Sized,
     {
@@ -132,7 +216,7 @@ pub trait Circuit: HugrView {
 
     /// Compute the cost of the circuit based on a per-operation cost function.
     #[inline]
-    fn circuit_cost<F, C>(&self, op_cost: F) -> C
+    pub fn circuit_cost<F, C>(&self, op_cost: F) -> C
     where
         Self: Sized,
         C: Sum,
@@ -144,13 +228,60 @@ pub trait Circuit: HugrView {
     /// Compute the cost of a group of nodes in a circuit based on a
     /// per-operation cost function.
     #[inline]
-    fn nodes_cost<F, C>(&self, nodes: impl IntoIterator<Item = Node>, op_cost: F) -> C
+    pub fn nodes_cost<F, C>(&self, nodes: impl IntoIterator<Item = Node>, op_cost: F) -> C
     where
         C: Sum,
         F: Fn(&OpType) -> C,
     {
-        nodes.into_iter().map(|n| op_cost(self.get_optype(n))).sum()
+        nodes
+            .into_iter()
+            .map(|n| op_cost(self.hugr.get_optype(n)))
+            .sum()
     }
+
+    /// Return the graphviz representation of the underlying graph and hierarchy side by side.
+    ///
+    /// For a simpler representation, use the [`Circuit::mermaid_string`] format instead.
+    pub fn dot_string(&self) -> String {
+        // TODO: This will print the whole HUGR without identifying the circuit container.
+        // Should we add some extra formatting for that?
+        self.hugr.dot_string()
+    }
+
+    /// Return the mermaid representation of the underlying hierarchical graph.
+    ///
+    /// The hierarchy is represented using subgraphs. Edges are labelled with
+    /// their source and target ports.
+    ///
+    /// For a more detailed representation, use the [`Circuit::dot_string`]
+    /// format instead.
+    pub fn mermaid_string(&self) -> String {
+        // TODO: See comment in `dot_string`.
+        self.hugr.mermaid_string()
+    }
+}
+
+impl<T: HugrView> From<T> for Circuit<T> {
+    fn from(hugr: T) -> Self {
+        let parent = hugr.root();
+        Self::new(hugr, parent)
+    }
+}
+
+/// Checks if the passed hugr is a valid circuit,
+/// and return [`CircuitError`] if not.
+fn check_hugr(hugr: &impl HugrView, parent: Node) -> Result<(), CircuitError> {
+    if !hugr.contains_node(parent) {
+        return Err(CircuitError::MissingParentNode { parent });
+    }
+    let optype = hugr.get_optype(parent);
+    if !OpTag::DataflowParent.is_superset(optype.tag()) {
+        return Err(CircuitError::NonDFGParent {
+            parent,
+            optype: optype.clone(),
+        });
+    }
+    Ok(())
 }
 
 /// Remove an empty wire in a dataflow HUGR.
@@ -167,15 +298,18 @@ pub trait Circuit: HugrView {
 /// occurs.
 #[allow(dead_code)]
 pub(crate) fn remove_empty_wire(
-    circ: &mut impl HugrMut,
+    circ: &mut Circuit<impl HugrMut>,
     input_port: usize,
 ) -> Result<(), CircuitMutError> {
-    let [inp, out] = circ.get_io(circ.root()).expect("no IO nodes found at root");
-    if input_port >= circ.num_outputs(inp) {
+    let parent = circ.parent();
+    let hugr = circ.hugr_mut();
+
+    let [inp, out] = hugr.get_io(parent).expect("no IO nodes found at parent");
+    if input_port >= hugr.num_outputs(inp) {
         return Err(CircuitMutError::InvalidPortOffset(input_port));
     }
     let input_port = OutgoingPort::from(input_port);
-    let link = circ
+    let link = hugr
         .linked_inputs(inp, input_port)
         .at_most_one()
         .map_err(|_| CircuitMutError::DeleteNonEmptyWire(input_port.index()))?;
@@ -183,23 +317,50 @@ pub(crate) fn remove_empty_wire(
         return Err(CircuitMutError::DeleteNonEmptyWire(input_port.index()));
     }
     if link.is_some() {
-        circ.disconnect(inp, input_port);
+        hugr.disconnect(inp, input_port);
     }
 
     // Shift ports at input
-    shift_ports(circ, inp, input_port, circ.num_outputs(inp))?;
+    shift_ports(hugr, inp, input_port, hugr.num_outputs(inp))?;
     // Shift ports at output
     if let Some((out, output_port)) = link {
-        shift_ports(circ, out, output_port, circ.num_inputs(out))?;
+        shift_ports(hugr, out, output_port, hugr.num_inputs(out))?;
     }
-    // Update input node, output node (if necessary) and root signatures.
-    update_signature(circ, input_port.index(), link.map(|(_, p)| p.index()));
+    // Update input node, output node (if necessary) and parent signatures.
+    update_signature(
+        hugr,
+        parent,
+        input_port.index(),
+        link.map(|(_, p)| p.index()),
+    );
     // Resize ports at input/output node
-    circ.set_num_ports(inp, 0, circ.num_outputs(inp) - 1);
+    hugr.set_num_ports(inp, 0, hugr.num_outputs(inp) - 1);
     if let Some((out, _)) = link {
-        circ.set_num_ports(out, circ.num_inputs(out) - 1, 0);
+        hugr.set_num_ports(out, hugr.num_inputs(out) - 1, 0);
     }
     Ok(())
+}
+
+/// Errors that can occur when mutating a circuit.
+#[derive(Debug, Clone, Error, PartialEq)]
+pub enum CircuitError {
+    /// The parent node for the circuit does not exist in the HUGR.
+    #[error("{parent} cannot define a circuit as it is not present in the HUGR.")]
+    MissingParentNode {
+        /// The node that was used as the parent.
+        parent: Node,
+    },
+    /// The parent node for the circuit is not a DFG node.
+    #[error(
+        "{parent} cannot be used as a circuit parent. A {} is not a dataflow container.",
+        optype.name()
+    )]
+    NonDFGParent {
+        /// The node that was used as the parent.
+        parent: Node,
+        /// The parent optype.
+        optype: OpType,
+    },
 }
 
 /// Errors that can occur when mutating a circuit.
@@ -252,15 +413,18 @@ fn shift_ports<C: HugrMut + ?Sized>(
 
 // Update the signature of circ when removing the in_index-th input wire and
 // the out_index-th output wire.
-fn update_signature<C: HugrMut + Circuit + ?Sized>(
-    circ: &mut C,
+fn update_signature(
+    hugr: &mut impl HugrMut,
+    parent: Node,
     in_index: usize,
     out_index: Option<usize>,
 ) {
-    let inp = circ.input();
+    let inp = hugr
+        .get_io(parent)
+        .expect("no IO nodes found at circuit parent")[0];
     // Update input node
     let inp_types: TypeRow = {
-        let OpType::Input(Input { types }) = circ.get_optype(inp).clone() else {
+        let OpType::Input(Input { types }) = hugr.get_optype(inp).clone() else {
             panic!("invalid circuit")
         };
         let mut types = types.into_owned();
@@ -268,15 +432,15 @@ fn update_signature<C: HugrMut + Circuit + ?Sized>(
         types.into()
     };
     let new_inp_op = Input::new(inp_types.clone());
-    let inp_exts = circ.get_nodetype(inp).input_extensions().cloned();
-    circ.replace_op(inp, NodeType::new(new_inp_op, inp_exts))
+    let inp_exts = hugr.get_nodetype(inp).input_extensions().cloned();
+    hugr.replace_op(inp, NodeType::new(new_inp_op, inp_exts))
         .unwrap();
 
     // Update output node if necessary.
     let out_types = out_index.map(|out_index| {
-        let out = circ.output();
+        let out = hugr.get_io(parent).unwrap()[1];
         let out_types: TypeRow = {
-            let OpType::Output(Output { types }) = circ.get_optype(out).clone() else {
+            let OpType::Output(Output { types }) = hugr.get_optype(out).clone() else {
                 panic!("invalid circuit")
             };
             let mut types = types.into_owned();
@@ -284,14 +448,14 @@ fn update_signature<C: HugrMut + Circuit + ?Sized>(
             types.into()
         };
         let new_out_op = Output::new(out_types.clone());
-        let inp_exts = circ.get_nodetype(out).input_extensions().cloned();
-        circ.replace_op(out, NodeType::new(new_out_op, inp_exts))
+        let inp_exts = hugr.get_nodetype(out).input_extensions().cloned();
+        hugr.replace_op(out, NodeType::new(new_out_op, inp_exts))
             .unwrap();
         out_types
     });
 
-    // Update root
-    let OpType::DFG(DFG { mut signature, .. }) = circ.get_optype(circ.root()).clone() else {
+    // Update parent
+    let OpType::DFG(DFG { mut signature, .. }) = hugr.get_optype(parent).clone() else {
         panic!("invalid circuit")
     };
     signature.input = inp_types;
@@ -299,26 +463,25 @@ fn update_signature<C: HugrMut + Circuit + ?Sized>(
         signature.output = out_types;
     }
     let new_dfg_op = DFG { signature };
-    let inp_exts = circ.get_nodetype(circ.root()).input_extensions().cloned();
-    circ.replace_op(circ.root(), NodeType::new(new_dfg_op, inp_exts))
+    let inp_exts = hugr.get_nodetype(parent).input_extensions().cloned();
+    hugr.replace_op(parent, NodeType::new(new_dfg_op, inp_exts))
         .unwrap();
 }
 
-impl<T> Circuit for T where T: HugrView {}
-
 #[cfg(test)]
 mod tests {
+    use cool_asserts::assert_matches;
+
     use hugr::types::FunctionType;
     use hugr::{
         builder::{DFGBuilder, DataflowHugr},
         extension::{prelude::BOOL_T, PRELUDE_REGISTRY},
-        Hugr,
     };
 
     use super::*;
     use crate::{json::load_tk1_json_str, utils::build_simple_circuit, Tk2Op};
 
-    fn test_circuit() -> Hugr {
+    fn test_circuit() -> Circuit {
         load_tk1_json_str(
             r#"{ "phase": "0",
             "bits": [["c", [0]]],
@@ -368,9 +531,22 @@ mod tests {
     }
 
     #[test]
+    fn test_invalid_parent() {
+        let hugr = Hugr::default();
+
+        assert_matches!(
+            Circuit::try_new(hugr.clone(), hugr.root()),
+            Err(CircuitError::NonDFGParent { .. }),
+        );
+    }
+
+    #[test]
     fn remove_bit() {
         let h = DFGBuilder::new(FunctionType::new(vec![BOOL_T], vec![])).unwrap();
-        let mut circ = h.finish_hugr_with_outputs([], &PRELUDE_REGISTRY).unwrap();
+        let mut circ: Circuit = h
+            .finish_hugr_with_outputs([], &PRELUDE_REGISTRY)
+            .unwrap()
+            .into();
 
         assert_eq!(circ.units().count(), 1);
         assert!(remove_empty_wire(&mut circ, 0).is_ok());

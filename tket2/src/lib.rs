@@ -20,11 +20,11 @@
 //!
 #![cfg_attr(not(miri), doc = "```")] // this doctest reads from the filesystem, so it fails with miri
 #![cfg_attr(miri, doc = "```ignore")]
-//! use tket2::{Circuit, Hugr};
+//! use tket2::Circuit;
 //! use hugr::HugrView;
 //!
 //! // Load a tket1 circuit.
-//! let mut circ: Hugr = tket2::json::load_tk1_json_file("../test_files/barenco_tof_5.json").unwrap();
+//! let mut circ: Circuit = tket2::json::load_tk1_json_file("../test_files/barenco_tof_5.json").unwrap();
 //!
 //! assert_eq!(circ.qubit_count(), 9);
 //! assert_eq!(circ.num_gates(), 170);

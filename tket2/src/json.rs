@@ -14,7 +14,6 @@ use std::{fs, io};
 
 use hugr::ops::{OpType, Value};
 use hugr::std_extensions::arithmetic::float_types::{ConstF64, FLOAT64_TYPE};
-use hugr::Hugr;
 
 use stringreader::StringReader;
 use thiserror::Error;
@@ -37,23 +36,23 @@ const METADATA_Q_REGISTERS: &str = "TKET1_JSON.qubit_registers";
 /// Explicit names for the input bit registers.
 const METADATA_B_REGISTERS: &str = "TKET1_JSON.bit_registers";
 
-/// A JSON-serialized circuit that can be converted to a [`Hugr`].
+/// A JSON-serialized circuit that can be converted to a [`Circuit`].
 pub trait TKETDecode: Sized {
     /// The error type for decoding.
     type DecodeError;
     /// The error type for decoding.
     type EncodeError;
-    /// Convert the serialized circuit to a [`Hugr`].
-    fn decode(self) -> Result<Hugr, Self::DecodeError>;
-    /// Convert a [`Hugr`] to a new serialized circuit.
-    fn encode(circuit: &impl Circuit) -> Result<Self, Self::EncodeError>;
+    /// Convert the serialized circuit to a circuit.
+    fn decode(self) -> Result<Circuit, Self::DecodeError>;
+    /// Convert a circuit to a new serialized circuit.
+    fn encode(circuit: &Circuit) -> Result<Self, Self::EncodeError>;
 }
 
 impl TKETDecode for SerialCircuit {
     type DecodeError = OpConvertError;
     type EncodeError = OpConvertError;
 
-    fn decode(self) -> Result<Hugr, Self::DecodeError> {
+    fn decode(self) -> Result<Circuit, Self::DecodeError> {
         let mut decoder = JsonDecoder::new(&self);
 
         if !self.phase.is_empty() {
@@ -65,10 +64,10 @@ impl TKETDecode for SerialCircuit {
         for com in self.commands {
             decoder.add_command(com);
         }
-        Ok(decoder.finish())
+        Ok(decoder.finish().into())
     }
 
-    fn encode(circ: &impl Circuit) -> Result<Self, Self::EncodeError> {
+    fn encode(circ: &Circuit) -> Result<Self, Self::EncodeError> {
         let mut encoder = JsonEncoder::new(circ);
         let f64_inputs = circ.units().filter_map(|(wire, _, t)| match (wire, t) {
             (CircuitUnit::Wire(wire), t) if t == FLOAT64_TYPE => Some(wire),
@@ -102,43 +101,41 @@ pub enum OpConvertError {
 }
 
 /// Load a TKET1 circuit from a JSON file.
-pub fn load_tk1_json_file(path: impl AsRef<Path>) -> Result<Hugr, TK1ConvertError> {
+pub fn load_tk1_json_file(path: impl AsRef<Path>) -> Result<Circuit, TK1ConvertError> {
     let file = fs::File::open(path)?;
     let reader = io::BufReader::new(file);
     load_tk1_json_reader(reader)
 }
 
 /// Load a TKET1 circuit from a JSON reader.
-pub fn load_tk1_json_reader(json: impl io::Read) -> Result<Hugr, TK1ConvertError> {
+pub fn load_tk1_json_reader(json: impl io::Read) -> Result<Circuit, TK1ConvertError> {
     let ser: SerialCircuit = serde_json::from_reader(json)?;
-    Ok(ser.decode()?)
+    let circ: Circuit = ser.decode()?;
+    Ok(circ)
 }
 
 /// Load a TKET1 circuit from a JSON string.
-pub fn load_tk1_json_str(json: &str) -> Result<Hugr, TK1ConvertError> {
+pub fn load_tk1_json_str(json: &str) -> Result<Circuit, TK1ConvertError> {
     let reader = StringReader::new(json);
     load_tk1_json_reader(reader)
 }
 
 /// Save a circuit to file in TK1 JSON format.
-pub fn save_tk1_json_file(
-    circ: &impl Circuit,
-    path: impl AsRef<Path>,
-) -> Result<(), TK1ConvertError> {
+pub fn save_tk1_json_file(circ: &Circuit, path: impl AsRef<Path>) -> Result<(), TK1ConvertError> {
     let file = fs::File::create(path)?;
     let writer = io::BufWriter::new(file);
     save_tk1_json_writer(circ, writer)
 }
 
 /// Save a circuit in TK1 JSON format to a writer.
-pub fn save_tk1_json_writer(circ: &impl Circuit, w: impl io::Write) -> Result<(), TK1ConvertError> {
+pub fn save_tk1_json_writer(circ: &Circuit, w: impl io::Write) -> Result<(), TK1ConvertError> {
     let serial_circ = SerialCircuit::encode(circ)?;
     serde_json::to_writer(w, &serial_circ)?;
     Ok(())
 }
 
 /// Save a circuit in TK1 JSON format to a String.
-pub fn save_tk1_json_str(circ: &impl Circuit) -> Result<String, TK1ConvertError> {
+pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, TK1ConvertError> {
     let mut buf = io::BufWriter::new(Vec::new());
     save_tk1_json_writer(circ, &mut buf)?;
     let bytes = buf.into_inner().unwrap();

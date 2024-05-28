@@ -1,12 +1,13 @@
 use std::{collections::HashMap, rc::Rc};
 
 use hugr::hugr::{hugrmut::HugrMut, HugrError, Rewrite};
-use hugr::{CircuitUnit, Direction, Hugr, HugrView, Node, Port, PortIndex};
+use hugr::{CircuitUnit, Direction, HugrView, Node, Port, PortIndex};
 use itertools::Itertools;
 use portgraph::PortOffset;
 
+use crate::Circuit;
 use crate::{
-    circuit::{command::Command, Circuit},
+    circuit::command::Command,
     ops::{Pauli, Tk2Op},
 };
 
@@ -26,11 +27,8 @@ struct ComCommand {
     inputs: Vec<CircuitUnit>,
 }
 
-impl<'c, Circ> From<Command<'c, Circ>> for ComCommand
-where
-    Circ: HugrView,
-{
-    fn from(com: Command<'c, Circ>) -> Self {
+impl<'c, T: HugrView> From<Command<'c, T>> for ComCommand {
+    fn from(com: Command<'c, T>) -> Self {
         ComCommand {
             node: com.node(),
             inputs: com.inputs().map(|(c, _, _)| c).collect(),
@@ -69,13 +67,16 @@ fn add_to_slice(slice: &mut Slice, com: Rc<ComCommand>) {
     }
 }
 
-fn load_slices(circ: &impl Circuit) -> SliceVec {
+fn load_slices(circ: &Circuit<impl HugrView>) -> SliceVec {
     let mut slices = vec![];
 
     let n_qbs = circ.qubit_count();
     let mut qubit_free_slice = vec![0; n_qbs];
 
-    for command in circ.commands().filter(|c| is_slice_op(circ, c.node())) {
+    for command in circ
+        .commands()
+        .filter(|c| is_slice_op(circ.hugr(), c.node()))
+    {
         let command: ComCommand = command.into();
         let free_slice = command
             .qubits()
@@ -106,7 +107,7 @@ fn is_slice_op(h: &impl HugrView, node: Node) -> bool {
 /// Starting from starting_index, work back along slices to check for the
 /// earliest slice that can accommodate this command, if any.
 fn available_slice(
-    circ: &impl HugrView,
+    circ: &Circuit,
     slice_vec: &[Slice],
     starting_index: usize,
     command: &Rc<ComCommand>,
@@ -142,7 +143,7 @@ fn available_slice(
 fn commutes_at_slice(
     command: &Rc<ComCommand>,
     slice: &Slice,
-    circ: &impl HugrView,
+    circ: &Circuit,
 ) -> Option<HashMap<Qb, Rc<ComCommand>>> {
     // map from qubit to node it is connected to immediately after the free slice.
     let mut prev_nodes: HashMap<Qb, Rc<ComCommand>> = HashMap::new();
@@ -155,12 +156,22 @@ fn commutes_at_slice(
 
         let port = command.port_of_qb(q, Direction::Incoming)?;
 
-        let op: Tk2Op = circ.get_optype(command.node()).clone().try_into().ok()?;
+        let op: Tk2Op = circ
+            .hugr()
+            .get_optype(command.node())
+            .clone()
+            .try_into()
+            .ok()?;
         // TODO: if not tk2op, might still have serialized commutation data we
         // can use.
         let pauli = commutation_on_port(&op.qubit_commutation(), port)?;
 
-        let other_op: Tk2Op = circ.get_optype(other_com.node()).clone().try_into().ok()?;
+        let other_op: Tk2Op = circ
+            .hugr()
+            .get_optype(other_com.node())
+            .clone()
+            .try_into()
+            .ok()?;
         let other_pauli = commutation_on_port(
             &other_op.qubit_commutation(),
             other_com.port_of_qb(q, Direction::Outgoing)?,
@@ -287,7 +298,7 @@ impl Rewrite for PullForward {
 }
 
 /// Pass which greedily commutes operations forwards in order to reduce depth.
-pub fn apply_greedy_commutation(circ: &mut Hugr) -> Result<u32, PullForwardError> {
+pub fn apply_greedy_commutation(circ: &mut Circuit) -> Result<u32, PullForwardError> {
     let mut count = 0;
     let mut slice_vec = load_slices(circ);
 
@@ -301,7 +312,7 @@ pub fn apply_greedy_commutation(circ: &mut Hugr) -> Result<u32, PullForwardError
 
         for command in slice_commands {
             let Some((destination, new_nexts)) =
-                available_slice(&circ, &slice_vec, slice_index, &command)
+                available_slice(circ, &slice_vec, slice_index, &command)
             else {
                 continue;
             };
@@ -315,7 +326,7 @@ pub fn apply_greedy_commutation(circ: &mut Hugr) -> Result<u32, PullForwardError
                 slice_vec[destination][q.index()] = com;
             }
             let rewrite = PullForward { command, new_nexts };
-            circ.apply_rewrite(rewrite)?;
+            circ.hugr_mut().apply_rewrite(rewrite)?;
             count += 1;
         }
     }
@@ -332,16 +343,14 @@ mod test {
         std_extensions::arithmetic::float_types::FLOAT64_TYPE,
         type_row,
         types::FunctionType,
-        Hugr,
     };
-    use itertools::Itertools;
     use rstest::{fixture, rstest};
 
     use super::*;
 
     #[fixture]
     // example circuit from original task
-    fn example_cx() -> Hugr {
+    fn example_cx() -> Circuit {
         build_simple_circuit(4, |circ| {
             circ.append(Tk2Op::CX, [0, 2])?;
             circ.append(Tk2Op::CX, [1, 2])?;
@@ -353,7 +362,7 @@ mod test {
 
     #[fixture]
     // example circuit from original task with lower depth
-    fn example_cx_better() -> Hugr {
+    fn example_cx_better() -> Circuit {
         build_simple_circuit(4, |circ| {
             circ.append(Tk2Op::CX, [0, 2])?;
             circ.append(Tk2Op::CX, [1, 3])?;
@@ -365,7 +374,7 @@ mod test {
 
     #[fixture]
     // can't commute anything here
-    fn cant_commute() -> Hugr {
+    fn cant_commute() -> Circuit {
         build_simple_circuit(4, |circ| {
             circ.append(Tk2Op::Z, [1])?;
             circ.append(Tk2Op::CX, [0, 1])?;
@@ -376,7 +385,7 @@ mod test {
     }
 
     #[fixture]
-    fn big_example() -> Hugr {
+    fn big_example() -> Circuit {
         build_simple_circuit(4, |circ| {
             circ.append(Tk2Op::CX, [0, 3])?;
             circ.append(Tk2Op::CX, [1, 2])?;
@@ -395,7 +404,7 @@ mod test {
 
     #[fixture]
     // commute a single qubit gate
-    fn single_qb_commute() -> Hugr {
+    fn single_qb_commute() -> Circuit {
         build_simple_circuit(3, |circ| {
             circ.append(Tk2Op::H, [1])?;
             circ.append(Tk2Op::CX, [0, 1])?;
@@ -407,7 +416,7 @@ mod test {
     #[fixture]
 
     // commute 2 single qubit gates
-    fn single_qb_commute_2() -> Hugr {
+    fn single_qb_commute_2() -> Circuit {
         build_simple_circuit(4, |circ| {
             circ.append(Tk2Op::CX, [1, 2])?;
             circ.append(Tk2Op::CX, [1, 0])?;
@@ -421,7 +430,7 @@ mod test {
 
     #[fixture]
     // A commutation forward exists but depth doesn't change
-    fn commutes_but_same_depth() -> Hugr {
+    fn commutes_but_same_depth() -> Circuit {
         build_simple_circuit(3, |circ| {
             circ.append(Tk2Op::H, [1])?;
             circ.append(Tk2Op::CX, [0, 1])?;
@@ -434,7 +443,7 @@ mod test {
 
     #[fixture]
     // Gate being commuted has a non-linear input
-    fn non_linear_inputs() -> Hugr {
+    fn non_linear_inputs() -> Circuit {
         let build = || {
             let mut dfg = DFGBuilder::new(FunctionType::new(
                 type_row![QB_T, QB_T, FLOAT64_TYPE],
@@ -451,12 +460,12 @@ mod test {
             let qbs = circ.finish();
             dfg.finish_hugr_with_outputs(qbs, &REGISTRY)
         };
-        build().unwrap()
+        build().unwrap().into()
     }
 
     #[fixture]
     // Gates being commuted have non-linear outputs
-    fn non_linear_outputs() -> Hugr {
+    fn non_linear_outputs() -> Circuit {
         let build = || {
             let mut dfg = DFGBuilder::new(FunctionType::new(
                 type_row![QB_T, QB_T],
@@ -474,11 +483,11 @@ mod test {
             outs.extend(measured);
             dfg.finish_hugr_with_outputs(outs, &REGISTRY)
         };
-        build().unwrap()
+        build().unwrap().into()
     }
 
     // bug https://github.com/CQCL/tket2/issues/253
-    fn cx_commute_bug() -> Hugr {
+    fn cx_commute_bug() -> Circuit {
         build_simple_circuit(3, |circ| {
             circ.append(Tk2Op::H, [2])?;
             circ.append(Tk2Op::CX, [2, 1])?;
@@ -508,7 +517,7 @@ mod test {
     }
 
     #[rstest]
-    fn test_load_slices_cx(example_cx: Hugr) {
+    fn test_load_slices_cx(example_cx: Circuit) {
         let circ = example_cx;
         let commands: Vec<ComCommand> = circ.commands().map_into().collect();
         let slices = load_slices(&circ);
@@ -518,7 +527,7 @@ mod test {
     }
 
     #[rstest]
-    fn test_load_slices_cx_better(example_cx_better: Hugr) {
+    fn test_load_slices_cx_better(example_cx_better: Circuit) {
         let circ = example_cx_better;
         let commands: Vec<ComCommand> = circ.commands().map_into().collect();
 
@@ -529,7 +538,7 @@ mod test {
     }
 
     #[rstest]
-    fn test_load_slices_bell(t2_bell_circuit: Hugr) {
+    fn test_load_slices_bell(t2_bell_circuit: Circuit) {
         let circ = t2_bell_circuit;
         let commands: Vec<ComCommand> = circ.commands().map_into().collect();
 
@@ -540,7 +549,7 @@ mod test {
     }
 
     #[rstest]
-    fn test_available_slice(example_cx: Hugr) {
+    fn test_available_slice(example_cx: Circuit) {
         let circ = example_cx;
         let slices = load_slices(&circ);
         let (found, prev_nodes) =
@@ -556,7 +565,7 @@ mod test {
     }
 
     #[rstest]
-    fn big_test(big_example: Hugr) {
+    fn big_test(big_example: Circuit) {
         let circ = big_example;
         let slices = load_slices(&circ);
         assert_eq!(slices.len(), 6);
@@ -578,7 +587,7 @@ mod test {
     }
 
     /// Calculate depth by placing commands in slices.
-    fn depth(h: &Hugr) -> usize {
+    fn depth(h: &Circuit) -> usize {
         load_slices(h).len()
     }
     #[rstest]
@@ -594,14 +603,14 @@ mod test {
     #[case(non_linear_outputs(), true, 1)]
     #[case(cx_commute_bug(), true, 1)]
     fn commutation_example(
-        #[case] mut case: Hugr,
+        #[case] mut case: Circuit,
         #[case] should_reduce: bool,
         #[case] expected_moves: u32,
     ) {
-        let node_count = case.node_count();
+        let node_count = case.hugr().node_count();
         let depth_before = depth(&case);
         let move_count = apply_greedy_commutation(&mut case).unwrap();
-        case.update_validate(&REGISTRY).unwrap();
+        case.hugr_mut().update_validate(&REGISTRY).unwrap();
 
         assert_eq!(
             move_count, expected_moves,
@@ -619,7 +628,7 @@ mod test {
         }
 
         assert_eq!(
-            case.node_count(),
+            case.hugr().node_count(),
             node_count,
             "depth optimisation should not change the number of nodes."
         )

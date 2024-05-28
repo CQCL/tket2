@@ -68,6 +68,7 @@ rstest = { workspace = true }
 criterion = { workspace = true, features = ["html_reports"] }
 webbrowser = { workspace = true }
 urlencoding = { workspace = true }
+cool_asserts = { workspace = true }
 
 [[bench]]
 name = "bench_main"

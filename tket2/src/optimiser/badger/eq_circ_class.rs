@@ -26,10 +26,10 @@ pub struct EqCircClass {
 
 impl EqCircClass {
     /// Create a new equivalence class with a representative circuit.
-    pub fn new(rep_circ: Hugr, other_circs: Vec<Hugr>) -> Self {
+    pub fn new(rep_circ: Circuit, other_circs: impl IntoIterator<Item = Circuit>) -> Self {
         Self {
-            rep_circ,
-            other_circs,
+            rep_circ: rep_circ.into_hugr(),
+            other_circs: other_circs.into_iter().map(|c| c.into_hugr()).collect(),
         }
     }
 
@@ -64,8 +64,11 @@ impl EqCircClass {
     /// Create an equivalence class from a set of circuits.
     ///
     /// The smallest circuit is chosen as the representative.
-    pub fn from_circuits(circs: impl Into<Vec<Hugr>>) -> Result<Self, EqCircClassError> {
-        let mut circs: Vec<_> = circs.into();
+    pub fn from_circuits(
+        circs: impl IntoIterator<Item = Circuit>,
+    ) -> Result<Self, EqCircClassError> {
+        let mut circs: Vec<Circuit> = circs.into_iter().collect();
+
         if circs.is_empty() {
             return Err(EqCircClassError::NoRepresentative);
         };

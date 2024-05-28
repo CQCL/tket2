@@ -15,7 +15,6 @@ use tket2::json::{load_tk1_json_file, save_tk1_json_file};
 use tket2::optimiser::badger::log::BadgerLogger;
 use tket2::optimiser::badger::BadgerOptions;
 use tket2::optimiser::{BadgerOptimiser, DefaultBadgerOptimiser};
-use tket2::rewrite::trace::RewriteTracer;
 
 #[cfg(feature = "peak_alloc")]
 #[global_allocator]

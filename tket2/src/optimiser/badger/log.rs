@@ -40,7 +40,7 @@ impl<'w> BadgerLogger<'w> {
     ///
     /// [`log`]: <https://docs.rs/log/latest/log/>
     pub fn new(best_progress_csv_writer: impl io::Write + 'w) -> Self {
-        let boxed_candidates_writer: Box<dyn io::Write> = Box::new(best_progress_csv_writer);
+        let boxed_candidates_writer: Box<dyn io::Write + 'w> = Box::new(best_progress_csv_writer);
         Self {
             circ_candidates_csv: Some(csv::Writer::from_writer(boxed_candidates_writer)),
             ..Default::default()

@@ -10,16 +10,15 @@ use bytemuck::TransparentWrapper;
 pub use ecc_rewriter::ECCRewriter;
 
 use derive_more::{From, Into};
+use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::views::sibling_subgraph::{InvalidReplacement, InvalidSubgraph};
-use hugr::Node;
 use hugr::{
-    hugr::{hugrmut::HugrMut, views::SiblingSubgraph, Rewrite, SimpleReplacementError},
-    Hugr, SimpleReplacement,
+    hugr::{views::SiblingSubgraph, Rewrite, SimpleReplacementError},
+    SimpleReplacement,
 };
+use hugr::{Hugr, HugrView, Node};
 
 use crate::circuit::Circuit;
-
-use self::trace::RewriteTracer;
 
 /// A subcircuit of a circuit.
 #[derive(Debug, Clone, From, Into)]
@@ -34,9 +33,9 @@ impl Subcircuit {
     /// Create a new subcircuit induced from a set of nodes.
     pub fn try_from_nodes(
         nodes: impl Into<Vec<Node>>,
-        hugr: &Hugr,
+        circ: &Circuit,
     ) -> Result<Self, InvalidSubgraph> {
-        let subgraph = SiblingSubgraph::try_from_nodes(nodes, hugr)?;
+        let subgraph = SiblingSubgraph::try_from_nodes(nodes, circ.hugr())?;
         Ok(Self { subgraph })
     }
 
@@ -53,12 +52,13 @@ impl Subcircuit {
     /// Create a rewrite rule to replace the subcircuit.
     pub fn create_rewrite(
         &self,
-        source: &Hugr,
-        target: Hugr,
+        source: &Circuit,
+        target: Circuit,
     ) -> Result<CircuitRewrite, InvalidReplacement> {
-        Ok(CircuitRewrite(
-            self.subgraph.create_simple_replacement(source, target)?,
-        ))
+        Ok(CircuitRewrite(self.subgraph.create_simple_replacement(
+            source.hugr(),
+            target.into_hugr(),
+        )?))
     }
 }
 
@@ -70,12 +70,12 @@ impl CircuitRewrite {
     /// Create a new rewrite rule.
     pub fn try_new(
         source_position: &Subcircuit,
-        source: &Hugr,
-        target: Hugr,
+        source: &Circuit<impl HugrView>,
+        target: Circuit,
     ) -> Result<Self, InvalidReplacement> {
         source_position
             .subgraph
-            .create_simple_replacement(source, target)
+            .create_simple_replacement(source.hugr(), target.into_hugr())
             .map(Self)
     }
 
@@ -95,8 +95,8 @@ impl CircuitRewrite {
     }
 
     /// The replacement subcircuit.
-    pub fn replacement(&self) -> &Hugr {
-        self.0.replacement()
+    pub fn replacement(&self) -> Circuit<&Hugr> {
+        self.0.replacement().into()
     }
 
     /// Returns a set of nodes referenced by the rewrite. Modifying any these
@@ -111,20 +111,23 @@ impl CircuitRewrite {
 
     /// Apply the rewrite rule to a circuit.
     #[inline]
-    pub fn apply(self, circ: &mut impl HugrMut) -> Result<(), SimpleReplacementError> {
+    pub fn apply(self, circ: &mut Circuit<impl HugrMut>) -> Result<(), SimpleReplacementError> {
         circ.add_rewrite_trace(&self);
-        self.0.apply(circ)
+        self.0.apply(circ.hugr_mut())
     }
 
     /// Apply the rewrite rule to a circuit, without registering it in the rewrite trace.
     #[inline]
-    pub fn apply_notrace(self, circ: &mut impl HugrMut) -> Result<(), SimpleReplacementError> {
-        self.0.apply(circ)
+    pub fn apply_notrace(
+        self,
+        circ: &mut Circuit<impl HugrMut>,
+    ) -> Result<(), SimpleReplacementError> {
+        self.0.apply(circ.hugr_mut())
     }
 }
 
 /// Generate rewrite rules for circuits.
 pub trait Rewriter {
     /// Get the rewrite rules for a circuit.
-    fn get_rewrites<C: Circuit + Clone>(&self, circ: &C) -> Vec<CircuitRewrite>;
+    fn get_rewrites(&self, circ: &Circuit<impl HugrView>) -> Vec<CircuitRewrite>;
 }

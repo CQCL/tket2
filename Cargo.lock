@@ -326,6 +326,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
+name = "cool_asserts"
+version = "2.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee9f254e53f61e2688d3677fa2cbe4e9b950afd56f48819c98817417cf6b28ec"
+dependencies = [
+ "indent_write",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -707,9 +716,19 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8e15eaffd64f1cceac13429e5ceaf20017691e647cc56b8b7c53d73ad9f8714"
+checksum = "5ebf436d9d4d0239fcb511a1f7d745548bbdc6316baf50bb2e944f294542ea24"
+dependencies = [
+ "hugr-core",
+ "hugr-passes",
+]
+
+[[package]]
+name = "hugr-core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f2b8cfdccedf45a563e526a4a2c7443025ece0e2518bca1c3f227318607de44"
 dependencies = [
  "bitvec",
  "cgmath",
@@ -719,7 +738,7 @@ dependencies = [
  "downcast-rs",
  "enum_dispatch",
  "html-escape",
- "itertools 0.12.1",
+ "itertools 0.13.0",
  "lazy_static",
  "num-rational",
  "paste",
@@ -734,6 +753,19 @@ dependencies = [
  "strum_macros",
  "thiserror",
  "typetag",
+]
+
+[[package]]
+name = "hugr-passes"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08c1ae428e41786736cc92cbc3ae11ad39f178591d36a9ac3d1c8990e1a9bf76"
+dependencies = [
+ "hugr-core",
+ "itertools 0.13.0",
+ "lazy_static",
+ "paste",
+ "thiserror",
 ]
 
 [[package]]
@@ -768,6 +800,12 @@ dependencies = [
  "unicode-bidi",
  "unicode-normalization",
 ]
+
+[[package]]
+name = "indent_write"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cfe9645a18782869361d9c8732246be7b410ad4e919d3609ebabdac00ba12c3"
 
 [[package]]
 name = "indexmap"
@@ -813,15 +851,6 @@ name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
 dependencies = [
  "either",
 ]
@@ -1742,6 +1771,7 @@ dependencies = [
  "bytemuck",
  "cgmath",
  "chrono",
+ "cool_asserts",
  "criterion",
  "crossbeam-channel",
  "csv",
