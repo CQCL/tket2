@@ -26,7 +26,7 @@ packages = [{ include = "tket2-py" }]
 [tool.poetry.dependencies]
 python = ">=3.10, <4.0"
 pytket = "1.28.0"
-hugr = { version = "~0.2.0a1" }
+hugr = { version = "~0.2.1" }
 guppylang = { git = "https://github.com/CQCL/guppylang.git", rev = "937260af694fbbd5bd217f23d20f13ee4759757c" }
 
 [tool.poetry.group.dev.dependencies]
