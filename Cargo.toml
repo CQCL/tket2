@@ -3,8 +3,8 @@ lto = "thin"
 
 [workspace]
 resolver = "2"
-members = ["tket2", "tket2-py", "compile-rewriter", "badger-optimiser"]
-default-members = ["tket2"]
+members = ["tket2", "tket2-py", "compile-rewriter", "badger-optimiser", "tket2-hseries"]
+default-members = ["tket2", "tket2-hseries"]
 
 [workspace.package]
 rust-version = "1.75"
@@ -19,7 +19,8 @@ missing_docs = "warn"
 [workspace.dependencies]
 
 tket2 = { path = "./tket2" }
-hugr = "0.4.0"
+hugr = "0.5.0"
+hugr-cli = "0.1.0"
 portgraph = "0.12"
 pyo3 = "0.21.2"
 itertools = "0.13.0"

@@ -258,6 +258,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap-stdin"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc126d12a0930c94c3548581294d5f19360ac02e408600b4d7619d7234e8b505"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
+name = "clap-verbosity-flag"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb9b20c0dd58e4c2e991c8d203bbeb76c11304d1011659686b5b644bc29aa478"
+dependencies = [
+ "clap",
+ "log",
+]
+
+[[package]]
 name = "clap_builder"
 version = "4.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -707,9 +726,33 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8e15eaffd64f1cceac13429e5ceaf20017691e647cc56b8b7c53d73ad9f8714"
+checksum = "5ebf436d9d4d0239fcb511a1f7d745548bbdc6316baf50bb2e944f294542ea24"
+dependencies = [
+ "hugr-core",
+ "hugr-passes",
+]
+
+[[package]]
+name = "hugr-cli"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfb044591f0f794712a8a390859bc1d4ae181062ada7f1ed0fc9f7fdb835fe10"
+dependencies = [
+ "clap",
+ "clap-stdin",
+ "clap-verbosity-flag",
+ "hugr-core",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "hugr-core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f2b8cfdccedf45a563e526a4a2c7443025ece0e2518bca1c3f227318607de44"
 dependencies = [
  "bitvec",
  "cgmath",
@@ -719,7 +762,7 @@ dependencies = [
  "downcast-rs",
  "enum_dispatch",
  "html-escape",
- "itertools 0.12.1",
+ "itertools 0.13.0",
  "lazy_static",
  "num-rational",
  "paste",
@@ -734,6 +777,19 @@ dependencies = [
  "strum_macros",
  "thiserror",
  "typetag",
+]
+
+[[package]]
+name = "hugr-passes"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08c1ae428e41786736cc92cbc3ae11ad39f178591d36a9ac3d1c8990e1a9bf76"
+dependencies = [
+ "hugr-core",
+ "itertools 0.13.0",
+ "lazy_static",
+ "paste",
+ "thiserror",
 ]
 
 [[package]]
@@ -813,15 +869,6 @@ name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
 dependencies = [
  "either",
 ]
@@ -1774,6 +1821,18 @@ dependencies = [
  "typetag",
  "urlencoding",
  "webbrowser",
+]
+
+[[package]]
+name = "tket2-hseries"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "hugr",
+ "hugr-cli",
+ "lazy_static",
+ "serde_json",
+ "tket2",
 ]
 
 [[package]]
