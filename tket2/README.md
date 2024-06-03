@@ -2,7 +2,7 @@
 
 [![build_status][]](https://github.com/CQCL/tket2/actions)
 ![msrv][]
-[![codecov][]](https://codecov.io/gh/CQCL/tket2)
+[![codecov][]](https://codecov.io/gh/CQCL/tket2/tket2)
 
 TKET2 is an open source quantum compiler developed by Quantinuum. Central to
 TKET2's design is its hardware agnosticism which allows researchers and
@@ -69,7 +69,7 @@ This project is licensed under Apache License, Version 2.0 ([LICENSE][] or http:
 
   [build_status]: https://github.com/CQCL/tket2/workflows/Continuous%20integration/badge.svg?branch=main
   [msrv]: https://img.shields.io/badge/rust-1.75.0%2B-blue.svg
-  [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket2?logo=codecov
+  [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket2/tket2?logo=codecov
   [hugr]: https://lib.rs/crates/hugr
   [hugr Builder]: https://docs.rs/hugr/latest/hugr/builder/index.html
   [API documentation here]: https://docs.rs/tket2/

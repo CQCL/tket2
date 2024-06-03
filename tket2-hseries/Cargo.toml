@@ -1,6 +1,6 @@
 [package]
 name = "tket2-hseries"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 edition.workspace = true
 rust-version.workspace = true
 
@@ -21,7 +21,7 @@ cli = ["dep:hugr-cli", "dep:clap"]
 hugr.workspace = true
 hugr-cli = { workspace = true, optional = true }
 clap = { workspace = true, optional = true, features = ["derive"] }
-tket2.workspace = true
+tket2 = { path = "../tket2", version = "0.1.0-alpha.1" }
 serde_json.workspace = true
 lazy_static.workspace = true
 

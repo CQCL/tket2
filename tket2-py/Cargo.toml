@@ -19,7 +19,7 @@ test = false
 bench = false
 
 [dependencies]
-tket2 = { workspace = true, features = ["portmatching"] }
+tket2 = { path = "../tket2", version = "0.1.0-alpha.1" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tket-json-rs = { workspace = true, features = ["pyo3"] }
