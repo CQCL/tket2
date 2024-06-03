@@ -1,4 +1,4 @@
-from typing import Iterator, Optional
+from typing import Iterator
 from .circuit import Node, Tk2Circuit
 from .rewrite import CircuitRewrite
 from pytket._tket.circuit import Circuit
@@ -19,8 +19,11 @@ class RuleMatcher:
     def __init__(self, rules: list[Rule]) -> None:
         """Create a new rule matcher."""
 
-    def find_matches(self, circ: Tk2Circuit) -> Optional[CircuitRewrite]:
+    def find_match(self, circ: Tk2Circuit) -> CircuitRewrite | None:
         """Find a match of the rules in the circuit."""
+
+    def find_matches(self, circ: Tk2Circuit) -> list[CircuitRewrite]:
+        """Find all matches of the rules in the circuit."""
 
 class CircuitPattern:
     """A pattern that matches a circuit exactly."""
@@ -34,8 +37,11 @@ class PatternMatcher:
     def __init__(self, patterns: Iterator[CircuitPattern]) -> None:
         """Create a new pattern matcher."""
 
-    def find_matches(self, circ: Circuit | Tk2Circuit) -> list[PatternMatch]:
+    def find_match(self, circ: Tk2Circuit) -> PatternMatch | None:
         """Find a match of the patterns in the circuit."""
+
+    def find_matches(self, circ: Tk2Circuit) -> list[PatternMatch]:
+        """Find all matches of the patterns in the circuit."""
 
 class PatternMatch:
     """A convex pattern match in a circuit"""

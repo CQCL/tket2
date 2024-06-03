@@ -80,6 +80,16 @@ impl PyPatternMatcher {
         Ok(format!("{:?}", self.matcher))
     }
 
+    /// Find one convex match in a circuit.
+    pub fn find_match(&self, circ: &Bound<PyAny>) -> PyResult<Option<PyPatternMatch>> {
+        with_hugr(circ, |circ, _| {
+            self.matcher
+                .find_matches_iter(&circ.into())
+                .next()
+                .map(Into::into)
+        })
+    }
+
     /// Find all convex matches in a circuit.
     pub fn find_matches(&self, circ: &Bound<PyAny>) -> PyResult<Vec<PyPatternMatch>> {
         with_hugr(circ, |circ, _| {

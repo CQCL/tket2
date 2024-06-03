@@ -6,8 +6,9 @@ use crate::circuit::Tk2Circuit;
 use crate::rewrite::PyCircuitRewrite;
 use crate::utils::{create_py_exception, ConvertPyErr};
 
+use hugr::HugrView;
 use pyo3::prelude::*;
-use tket2::portmatching::{CircuitPattern, PatternMatcher};
+use tket2::portmatching::{CircuitPattern, PatternMatch, PatternMatcher};
 use tket2::Circuit;
 
 /// The module definition
@@ -79,13 +80,31 @@ impl RuleMatcher {
     }
 
     pub fn find_match(&self, target: &Tk2Circuit) -> PyResult<Option<PyCircuitRewrite>> {
-        let h = &target.circ;
-        if let Some(p_match) = self.matcher.find_matches_iter(h).next() {
-            let r = self.rights.get(p_match.pattern_id().0).unwrap().clone();
-            let rw = p_match.to_rewrite(h, r).convert_pyerrs()?;
-            Ok(Some(rw.into()))
+        let circ = &target.circ;
+        if let Some(pmatch) = self.matcher.find_matches_iter(circ).next() {
+            Ok(Some(self.match_to_rewrite(pmatch, circ)?))
         } else {
             Ok(None)
         }
+    }
+
+    pub fn find_matches(&self, target: &Tk2Circuit) -> PyResult<Vec<PyCircuitRewrite>> {
+        let circ = &target.circ;
+        self.matcher
+            .find_matches_iter(circ)
+            .map(|m| self.match_to_rewrite(m, circ))
+            .collect()
+    }
+}
+
+impl RuleMatcher {
+    fn match_to_rewrite(
+        &self,
+        pmatch: PatternMatch,
+        target: &Circuit<impl HugrView>,
+    ) -> PyResult<PyCircuitRewrite> {
+        let r = self.rights.get(pmatch.pattern_id().0).unwrap().clone();
+        let rw = pmatch.to_rewrite(target, r).convert_pyerrs()?;
+        Ok(rw.into())
     }
 }
