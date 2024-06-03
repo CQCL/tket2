@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Iterable
+from typing import Any, Iterable
 
 class Tk2Op(Enum):
     """A rust-backed Tket2 built-in operation."""
@@ -57,4 +57,4 @@ class Pauli(Enum):
     def __str__(self) -> str:
         """Get the string name of the Pauli."""
 
-    def __eq__(self, value: Pauli) -> bool: ...
+    def __eq__(self, value: Any) -> bool: ...

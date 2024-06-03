@@ -112,8 +112,7 @@ jobs:
       - name: Build pyo3 bindings
         run: |
           poetry install
-          poetry run maturin build
-          poetry add target/wheels/*.whl
+          poetry run maturin develop
       - name: Test pyo3 bindings
         run: poetry run pytest
 

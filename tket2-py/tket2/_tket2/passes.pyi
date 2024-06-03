@@ -1,8 +1,11 @@
 from pathlib import Path
+from typing import TypeVar
 
 from .optimiser import BadgerOptimiser
 from .circuit import Tk2Circuit
 from pytket._tket.circuit import Circuit
+
+CircuitClass = TypeVar("CircuitClass", Circuit, Tk2Circuit)
 
 class CircuitChunks:
     def reassemble(self) -> Circuit | Tk2Circuit:
@@ -17,21 +20,21 @@ class CircuitChunks:
 class PullForwardError(Exception):
     """Error from a `PullForward` operation."""
 
-def greedy_depth_reduce(circ: Circuit | Tk2Circuit) -> tuple[Circuit | Tk2Circuit, int]:
+def greedy_depth_reduce(circ: CircuitClass) -> tuple[CircuitClass, int]:
     """Greedy depth reduction of a circuit.
 
     Returns the reduced circuit and the depth reduction.
     """
 
 def badger_optimise(
-    circ: Circuit | Tk2Circuit,
+    circ: CircuitClass,
     optimiser: BadgerOptimiser,
     max_threads: int | None = None,
     timeout: int | None = None,
     progress_timeout: int | None = None,
     log_dir: Path | None = None,
-    rebase: bool = False,
-) -> Circuit | Tk2Circuit:
+    rebase: bool | None = False,
+) -> CircuitClass:
     """Optimise a circuit using the Badger optimiser.
 
     HyperTKET's best attempt at optimising a circuit using circuit rewriting
