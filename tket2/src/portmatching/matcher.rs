@@ -13,7 +13,7 @@ use hugr::hugr::views::sibling_subgraph::{
 };
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::{NamedOp, OpType};
-use hugr::{Hugr, IncomingPort, Node, OutgoingPort, Port, PortIndex};
+use hugr::{HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex};
 use itertools::Itertools;
 use portgraph::algorithms::ConvexChecker;
 use portmatching::{
@@ -115,10 +115,10 @@ impl PatternMatch {
     pub fn try_from_root_match(
         root: Node,
         pattern: PatternID,
-        circ: &impl Circuit,
+        circ: &Circuit,
         matcher: &PatternMatcher,
     ) -> Result<Self, InvalidPatternMatch> {
-        let checker = TopoConvexChecker::new(circ);
+        let checker = TopoConvexChecker::new(circ.hugr());
         Self::try_from_root_match_with_checker(root, pattern, circ, matcher, &checker)
     }
 
@@ -128,10 +128,10 @@ impl PatternMatch {
     /// checker object to speed up convexity checking.
     ///
     /// See [`PatternMatch::try_from_root_match`] for more details.
-    pub fn try_from_root_match_with_checker<C: Circuit>(
+    pub fn try_from_root_match_with_checker(
         root: Node,
         pattern: PatternID,
-        circ: &C,
+        circ: &Circuit<impl HugrView>,
         matcher: &PatternMatcher,
         checker: &impl ConvexChecker,
     ) -> Result<Self, InvalidPatternMatch> {
@@ -172,11 +172,11 @@ impl PatternMatch {
     pub fn try_from_io(
         root: Node,
         pattern: PatternID,
-        circ: &impl Circuit,
+        circ: &Circuit,
         inputs: Vec<Vec<(Node, IncomingPort)>>,
         outputs: Vec<(Node, OutgoingPort)>,
     ) -> Result<Self, InvalidPatternMatch> {
-        let checker = TopoConvexChecker::new(circ);
+        let checker = TopoConvexChecker::new(circ.hugr());
         Self::try_from_io_with_checker(root, pattern, circ, inputs, outputs, &checker)
     }
 
@@ -188,15 +188,16 @@ impl PatternMatch {
     ///
     /// This checks at construction time that the match is convex. This will
     /// have runtime linear in the size of the circuit.
-    pub fn try_from_io_with_checker<C: Circuit>(
+    pub fn try_from_io_with_checker(
         root: Node,
         pattern: PatternID,
-        circ: &C,
+        circ: &Circuit<impl HugrView>,
         inputs: Vec<Vec<(Node, IncomingPort)>>,
         outputs: Vec<(Node, OutgoingPort)>,
         checker: &impl ConvexChecker,
     ) -> Result<Self, InvalidPatternMatch> {
-        let subgraph = SiblingSubgraph::try_new_with_checker(inputs, outputs, circ, checker)?;
+        let subgraph =
+            SiblingSubgraph::try_new_with_checker(inputs, outputs, circ.hugr(), checker)?;
         Ok(Self {
             position: subgraph.into(),
             pattern,
@@ -207,8 +208,8 @@ impl PatternMatch {
     /// Construct a rewrite to replace `self` with `repl`.
     pub fn to_rewrite(
         &self,
-        source: &Hugr,
-        target: Hugr,
+        source: &Circuit<impl HugrView>,
+        target: Circuit,
     ) -> Result<CircuitRewrite, InvalidReplacement> {
         CircuitRewrite::try_new(&self.position, source, target)
     }
@@ -263,25 +264,25 @@ impl PatternMatcher {
     }
 
     /// Find all convex pattern matches in a circuit.
-    pub fn find_matches_iter<'a, 'c: 'a, C: Circuit + Clone>(
+    pub fn find_matches_iter<'a, 'c: 'a>(
         &'a self,
-        circuit: &'c C,
+        circuit: &'c Circuit<impl HugrView>,
     ) -> impl Iterator<Item = PatternMatch> + 'a {
-        let checker = TopoConvexChecker::new(circuit);
+        let checker = TopoConvexChecker::new(circuit.hugr());
         circuit
             .commands()
             .flat_map(move |cmd| self.find_rooted_matches(circuit, cmd.node(), &checker))
     }
 
     /// Find all convex pattern matches in a circuit.and collect in to a vector
-    pub fn find_matches<C: Circuit + Clone>(&self, circuit: &C) -> Vec<PatternMatch> {
+    pub fn find_matches(&self, circuit: &Circuit<impl HugrView>) -> Vec<PatternMatch> {
         self.find_matches_iter(circuit).collect()
     }
 
     /// Find all convex pattern matches in a circuit rooted at a given node.
-    fn find_rooted_matches<C: Circuit + Clone>(
+    fn find_rooted_matches(
         &self,
-        circ: &C,
+        circ: &Circuit<impl HugrView>,
         root: Node,
         checker: &impl ConvexChecker,
     ) -> Vec<PatternMatch> {
@@ -429,23 +430,24 @@ fn compatible_offsets(e1: &PEdge, e2: &PEdge) -> bool {
 
 /// Returns a predicate checking that an edge at `src` satisfies `prop` in `circ`.
 pub(super) fn validate_circuit_edge(
-    circ: &impl Circuit,
+    circ: &Circuit<impl HugrView>,
 ) -> impl for<'a> Fn(NodeID, &'a PEdge) -> Option<NodeID> + '_ {
     move |src, &prop| {
         let NodeID::HugrNode(src) = src else {
             return None;
         };
+        let hugr = circ.hugr();
         match prop {
             PEdge::InternalEdge {
                 src: src_port,
                 dst: dst_port,
                 ..
             } => {
-                let (next_node, next_port) = circ.linked_ports(src, src_port).exactly_one().ok()?;
+                let (next_node, next_port) = hugr.linked_ports(src, src_port).exactly_one().ok()?;
                 (dst_port == next_port).then_some(NodeID::HugrNode(next_node))
             }
             PEdge::InputEdge { src: src_port } => {
-                let (next_node, next_port) = circ.linked_ports(src, src_port).exactly_one().ok()?;
+                let (next_node, next_port) = hugr.linked_ports(src, src_port).exactly_one().ok()?;
                 Some(NodeID::CopyNode(next_node, next_port))
             }
         }
@@ -454,13 +456,13 @@ pub(super) fn validate_circuit_edge(
 
 /// Returns a predicate checking that `node` satisfies `prop` in `circ`.
 pub(crate) fn validate_circuit_node(
-    circ: &impl Circuit,
+    circ: &Circuit<impl HugrView>,
 ) -> impl for<'a> Fn(NodeID, &PNode) -> bool + '_ {
     move |node, prop| {
         let NodeID::HugrNode(node) = node else {
             return false;
         };
-        &MatchOp::from(circ.get_optype(node).clone()) == prop
+        &MatchOp::from(circ.hugr().get_optype(node).clone()) == prop
     }
 }
 
@@ -479,16 +481,15 @@ fn handle_match_error<T>(match_res: Result<T, InvalidPatternMatch>, root: Node) 
 
 #[cfg(test)]
 mod tests {
-    use hugr::Hugr;
     use itertools::Itertools;
     use rstest::{fixture, rstest};
 
     use crate::utils::build_simple_circuit;
-    use crate::Tk2Op;
+    use crate::{Circuit, Tk2Op};
 
     use super::{CircuitPattern, PatternMatcher};
 
-    fn h_cx() -> Hugr {
+    fn h_cx() -> Circuit {
         build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::CX, [0, 1]).unwrap();
             circ.append(Tk2Op::H, [0]).unwrap();
@@ -497,7 +498,7 @@ mod tests {
         .unwrap()
     }
 
-    fn cx_xc() -> Hugr {
+    fn cx_xc() -> Circuit {
         build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::CX, [0, 1]).unwrap();
             circ.append(Tk2Op::CX, [1, 0]).unwrap();
@@ -507,7 +508,7 @@ mod tests {
     }
 
     #[fixture]
-    fn cx_cx_3() -> Hugr {
+    fn cx_cx_3() -> Circuit {
         build_simple_circuit(3, |circ| {
             circ.append(Tk2Op::CX, [0, 1]).unwrap();
             circ.append(Tk2Op::CX, [2, 1]).unwrap();
@@ -517,7 +518,7 @@ mod tests {
     }
 
     #[fixture]
-    fn cx_cx() -> Hugr {
+    fn cx_cx() -> Circuit {
         build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::CX, [0, 1]).unwrap();
             circ.append(Tk2Op::CX, [0, 1]).unwrap();
@@ -558,7 +559,7 @@ mod tests {
     }
 
     #[rstest]
-    fn cx_cx_replace_to_id(cx_cx: Hugr, cx_cx_3: Hugr) {
+    fn cx_cx_replace_to_id(cx_cx: Circuit, cx_cx_3: Circuit) {
         let p = CircuitPattern::try_from_circuit(&cx_cx_3).unwrap();
         let m = PatternMatcher::from_patterns(vec![p]);
 

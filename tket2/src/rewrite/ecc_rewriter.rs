@@ -13,7 +13,7 @@
 //! of the Quartz repository.
 
 use derive_more::{From, Into};
-use hugr::PortIndex;
+use hugr::{Hugr, HugrView, PortIndex};
 use itertools::Itertools;
 use portmatching::PatternID;
 use std::{
@@ -23,8 +23,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use thiserror::Error;
-
-use hugr::Hugr;
 
 use crate::{
     circuit::{remove_empty_wire, Circuit},
@@ -76,7 +74,7 @@ impl ECCRewriter {
     /// Equivalence classes are represented as [`EqCircClass`]s, lists of
     /// HUGRs where one of the elements is chosen as the representative.
     pub fn from_eccs(eccs: impl Into<Vec<EqCircClass>>) -> Self {
-        let eccs = eccs.into();
+        let eccs: Vec<EqCircClass> = eccs.into();
         let rewrite_rules = get_rewrite_rules(&eccs);
         let patterns = get_patterns(&eccs);
         let targets = into_targets(eccs);
@@ -90,7 +88,7 @@ impl ECCRewriter {
                 let targets = r
                     .into_iter()
                     .filter(|&id| {
-                        let circ = &targets[id.0];
+                        let circ = (&targets[id.0]).into();
                         let target_empty_wires: HashSet<_> =
                             empty_wires(&circ).into_iter().collect();
                         pattern_empty_wires
@@ -111,10 +109,10 @@ impl ECCRewriter {
     }
 
     /// Get all targets of rewrite rules given a source pattern.
-    fn get_targets(&self, pattern: PatternID) -> impl Iterator<Item = &Hugr> {
+    fn get_targets(&self, pattern: PatternID) -> impl Iterator<Item = Circuit<&Hugr>> {
         self.rewrite_rules[pattern.0]
             .iter()
-            .map(|id| &self.targets[id.0])
+            .map(|id| (&self.targets[id.0]).into())
     }
 
     /// Serialise a rewriter to an IO stream.
@@ -167,19 +165,18 @@ impl ECCRewriter {
 }
 
 impl Rewriter for ECCRewriter {
-    fn get_rewrites<C: Circuit + Clone>(&self, circ: &C) -> Vec<CircuitRewrite> {
+    fn get_rewrites(&self, circ: &Circuit<impl HugrView>) -> Vec<CircuitRewrite> {
         let matches = self.matcher.find_matches(circ);
         matches
             .into_iter()
             .flat_map(|m| {
                 let pattern_id = m.pattern_id();
                 self.get_targets(pattern_id).map(move |repl| {
-                    let mut repl = repl.clone();
+                    let mut repl = repl.to_owned();
                     for &empty_qb in self.empty_wires[pattern_id.0].iter().rev() {
                         remove_empty_wire(&mut repl, empty_qb).unwrap();
                     }
-                    m.to_rewrite(circ.base_hugr(), repl)
-                        .expect("invalid replacement")
+                    m.to_rewrite(circ, repl).expect("invalid replacement")
                 })
             })
             .collect()
@@ -231,9 +228,9 @@ fn get_patterns(rep_sets: &[EqCircClass]) -> Vec<Option<(CircuitPattern, Vec<usi
     rep_sets
         .iter()
         .flat_map(|rs| rs.circuits())
-        .map(|circ| {
-            let empty_qbs = empty_wires(circ);
-            let mut circ = circ.clone();
+        .map(|hugr| {
+            let mut circ: Circuit = hugr.clone().into();
+            let empty_qbs = empty_wires(&circ);
             for &qb in empty_qbs.iter().rev() {
                 remove_empty_wire(&mut circ, qb).unwrap();
             }
@@ -245,19 +242,20 @@ fn get_patterns(rep_sets: &[EqCircClass]) -> Vec<Option<(CircuitPattern, Vec<usi
 }
 
 /// The port offsets of wires that are empty.
-fn empty_wires(circ: &impl Circuit) -> Vec<usize> {
-    let input = circ.input();
-    let input_sig = circ.signature(input).unwrap();
-    circ.node_outputs(input)
+fn empty_wires(circ: &Circuit<impl HugrView>) -> Vec<usize> {
+    let hugr = circ.hugr();
+    let input = circ.input_node();
+    let input_sig = hugr.signature(input).unwrap();
+    hugr.node_outputs(input)
         // Only consider dataflow edges
         .filter(|&p| input_sig.out_port_type(p).is_some())
         // Only consider ports linked to at most one other port
-        .filter_map(|p| Some((p, circ.linked_ports(input, p).at_most_one().ok()?)))
+        .filter_map(|p| Some((p, hugr.linked_ports(input, p).at_most_one().ok()?)))
         // Ports are either connected to output or nothing
         .filter_map(|(from, to)| {
             if let Some((n, _)) = to {
                 // Wires connected to output
-                (n == circ.output()).then_some(from.index())
+                (n == circ.output_node()).then_some(from.index())
             } else {
                 // Wires connected to nothing
                 Some(from.index())
@@ -272,11 +270,11 @@ mod tests {
 
     use super::*;
 
-    fn empty() -> Hugr {
+    fn empty() -> Circuit {
         build_simple_circuit(2, |_| Ok(())).unwrap()
     }
 
-    fn h_h() -> Hugr {
+    fn h_h() -> Circuit {
         build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::H, [0]).unwrap();
             circ.append(Tk2Op::H, [0]).unwrap();
@@ -286,7 +284,7 @@ mod tests {
         .unwrap()
     }
 
-    fn cx_cx() -> Hugr {
+    fn cx_cx() -> Circuit {
         build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::CX, [0, 1]).unwrap();
             circ.append(Tk2Op::CX, [0, 1]).unwrap();
@@ -295,7 +293,7 @@ mod tests {
         .unwrap()
     }
 
-    fn cx_x() -> Hugr {
+    fn cx_x() -> Circuit {
         build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::CX, [0, 1]).unwrap();
             circ.append(Tk2Op::X, [1]).unwrap();
@@ -304,7 +302,7 @@ mod tests {
         .unwrap()
     }
 
-    fn x_cx() -> Hugr {
+    fn x_cx() -> Circuit {
         build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::X, [1]).unwrap();
             circ.append(Tk2Op::CX, [0, 1]).unwrap();
@@ -328,7 +326,13 @@ mod tests {
                 vec![TargetID(3)],
             ]
         );
-        assert_eq!(rewriter.get_targets(PatternID(1)).collect_vec(), [&h_h()]);
+        assert_eq!(
+            rewriter
+                .get_targets(PatternID(1))
+                .map(|c| c.to_owned())
+                .collect_vec(),
+            [h_h()]
+        );
     }
 
     #[test]

@@ -6,19 +6,19 @@ use std::time::Instant;
 
 use crossbeam_channel::{select, Receiver, RecvError, SendError, Sender};
 use fxhash::FxHashSet;
-use hugr::Hugr;
 
 use crate::circuit::cost::CircuitCost;
+use crate::Circuit;
 
 use super::hugr_pqueue::{Entry, HugrPQ};
 
 /// A unit of work for a worker, consisting of a circuit to process, along its
 /// hash and cost.
-pub type Work<P> = Entry<Hugr, P, u64>;
+pub type Work<P> = Entry<Circuit, P, u64>;
 
-/// A priority channel for HUGRs.
+/// A priority channel for circuits.
 ///
-/// Queues hugrs using a cost function `C` that produces priority values `P`.
+/// Queues circuits using a cost function `C` that produces priority values `P`.
 ///
 /// Uses a thread internally to orchestrate the queueing.
 #[derive(Debug, Clone)]
@@ -50,7 +50,7 @@ pub struct HugrPriorityChannel<C, P: Ord> {
 /// Logging information from the priority channel.
 #[derive(Debug, Clone)]
 pub enum PriorityChannelLog<P> {
-    NewBestCircuit(Hugr, P),
+    NewBestCircuit(Circuit, P),
     CircuitCount {
         processed_count: usize,
         seen_count: usize,
@@ -106,12 +106,12 @@ impl<P: CircuitCost> PriorityChannelCommunication<P> {
 
 impl<C, P> HugrPriorityChannel<C, P>
 where
-    C: Fn(&Hugr) -> P + Send + Sync + 'static,
+    C: Fn(&Circuit) -> P + Send + Sync + 'static,
     P: CircuitCost + Send + Sync + 'static,
 {
     /// Initialize the queueing system.
     ///
-    /// Start the Hugr priority queue in a new thread.
+    /// Start the circuit priority queue in a new thread.
     ///
     /// Get back a [`PriorityChannelCommunication`] for adding and removing circuits to/from the queue,
     /// and a channel receiver to receive logging information.

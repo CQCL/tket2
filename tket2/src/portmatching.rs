@@ -18,7 +18,7 @@
 //!     let mut dfg = DFGBuilder::new(FunctionType::new(vec![], vec![QB_T]))?;
 //!     let alloc = dfg.add_dataflow_op(Tk2Op::QAlloc, [])?;
 //!     dfg.finish_hugr_with_outputs(alloc.outputs(), &tket2::extension::REGISTRY)
-//! }?;
+//! }?.into();
 //! let pattern = CircuitPattern::try_from_circuit(&circuit_pattern)?;
 //!
 //! // Define a circuit that contains a qubit allocation.
@@ -39,7 +39,7 @@
 //!         .append(Tk2Op::CX, [1, 0])?;
 //!     let outputs = circuit.finish();
 //!
-//!     let circuit = dfg.finish_hugr_with_outputs(outputs, &tket2::extension::REGISTRY)?;
+//!     let circuit = dfg.finish_hugr_with_outputs(outputs, &tket2::extension::REGISTRY)?.into();
 //!     (circuit, alloc.node())
 //! };
 //!
@@ -56,7 +56,7 @@
 pub mod matcher;
 pub mod pattern;
 
-use hugr::OutgoingPort;
+use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
 pub use matcher::{PatternMatch, PatternMatcher};
 pub use pattern::CircuitPattern;
@@ -111,13 +111,10 @@ enum InvalidEdgeProperty {
 }
 
 impl PEdge {
-    fn try_from_port(
-        node: Node,
-        port: Port,
-        circ: &impl Circuit,
-    ) -> Result<Self, InvalidEdgeProperty> {
+    fn try_from_port(node: Node, port: Port, circ: &Circuit) -> Result<Self, InvalidEdgeProperty> {
+        let hugr = circ.hugr();
         let src = port;
-        let (dst_node, dst) = circ
+        let (dst_node, dst) = hugr
             .linked_ports(node, src)
             .exactly_one()
             .map_err(|mut e| {
@@ -127,10 +124,10 @@ impl PEdge {
                     InvalidEdgeProperty::NoLinkedEdge(src)
                 }
             })?;
-        if circ.get_optype(dst_node).tag() == OpTag::Input {
+        if hugr.get_optype(dst_node).tag() == OpTag::Input {
             return Ok(Self::InputEdge { src });
         }
-        let port_type = circ
+        let port_type = hugr
             .signature(node)
             .unwrap()
             .port_type(src)
@@ -202,29 +199,30 @@ impl From<Node> for NodeID {
 
 #[cfg(test)]
 mod tests {
-    use crate::Tk2Op;
+    use crate::{Circuit, Tk2Op};
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::{prelude::QB_T, PRELUDE_REGISTRY},
         types::FunctionType,
-        Hugr,
     };
     use rstest::{fixture, rstest};
 
     use super::{CircuitPattern, PatternMatcher};
 
     #[fixture]
-    fn lhs() -> Hugr {
+    fn lhs() -> Circuit {
         let mut h = DFGBuilder::new(FunctionType::new(vec![], vec![QB_T])).unwrap();
 
         let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
         let q = res.out_wire(0);
 
-        h.finish_hugr_with_outputs([q], &PRELUDE_REGISTRY).unwrap()
+        h.finish_hugr_with_outputs([q], &PRELUDE_REGISTRY)
+            .unwrap()
+            .into()
     }
 
     #[fixture]
-    pub fn circ() -> Hugr {
+    pub fn circ() -> Circuit {
         let mut h = DFGBuilder::new(FunctionType::new(vec![QB_T], vec![QB_T])).unwrap();
         let mut inps = h.input_wires();
         let q_in = inps.next().unwrap();
@@ -238,10 +236,11 @@ mod tests {
 
         h.finish_hugr_with_outputs([q_out], &PRELUDE_REGISTRY)
             .unwrap()
+            .into()
     }
 
     #[rstest]
-    fn simple_match(circ: Hugr, lhs: Hugr) {
+    fn simple_match(circ: Circuit, lhs: Circuit) {
         let p = CircuitPattern::try_from_circuit(&lhs).unwrap();
         let m = PatternMatcher::from_patterns(vec![p]);
 

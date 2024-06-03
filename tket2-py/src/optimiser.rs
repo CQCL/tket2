@@ -3,10 +3,10 @@
 use std::io::BufWriter;
 use std::{fs, num::NonZeroUsize, path::PathBuf};
 
-use hugr::Hugr;
 use pyo3::prelude::*;
 use tket2::optimiser::badger::BadgerOptions;
 use tket2::optimiser::{BadgerLogger, DefaultBadgerOptimiser};
+use tket2::Circuit;
 
 use crate::circuit::update_hugr;
 
@@ -96,7 +96,10 @@ impl PyBadgerOptimiser {
             split_circuit: split_circ.unwrap_or(false),
             queue_size: queue_size.unwrap_or(100),
         };
-        update_hugr(circ, |circ, _| self.optimise(circ, log_progress, options))
+        update_hugr(circ, |circ, _| {
+            self.optimise(circ.into(), log_progress, options)
+                .into_hugr()
+        })
     }
 }
 
@@ -104,10 +107,10 @@ impl PyBadgerOptimiser {
     /// The Python optimise method, but on Hugrs.
     pub(super) fn optimise(
         &self,
-        circ: Hugr,
+        circ: Circuit,
         log_progress: Option<PathBuf>,
         options: BadgerOptions,
-    ) -> Hugr {
+    ) -> Circuit {
         let badger_logger = log_progress
             .map(|file_name| {
                 let log_file = fs::File::create(file_name).unwrap();

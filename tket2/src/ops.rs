@@ -257,15 +257,16 @@ pub(crate) mod test {
     use std::sync::Arc;
 
     use hugr::extension::simple_op::MakeOpDef;
+    use hugr::extension::OpDef;
     use hugr::ops::NamedOp;
     use hugr::CircuitUnit;
-    use hugr::{extension::OpDef, Hugr};
     use rstest::{fixture, rstest};
     use strum::IntoEnumIterator;
 
     use super::Tk2Op;
+    use crate::circuit::Circuit;
     use crate::extension::{TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID};
-    use crate::{circuit::Circuit, utils::build_simple_circuit};
+    use crate::utils::build_simple_circuit;
     fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
         EXTENSION.get_op(&op.name())
     }
@@ -279,7 +280,7 @@ pub(crate) mod test {
     }
 
     #[fixture]
-    pub(crate) fn t2_bell_circuit() -> Hugr {
+    pub(crate) fn t2_bell_circuit() -> Circuit {
         let h = build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::H, [0])?;
             circ.append(Tk2Op::CX, [0, 1])?;
@@ -290,7 +291,7 @@ pub(crate) mod test {
     }
 
     #[rstest]
-    fn check_t2_bell(t2_bell_circuit: Hugr) {
+    fn check_t2_bell(t2_bell_circuit: Circuit) {
         assert_eq!(t2_bell_circuit.commands().count(), 2);
     }
 

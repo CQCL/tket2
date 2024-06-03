@@ -7,12 +7,11 @@ use hugr::extension::prelude::QB_T;
 use hugr::ops::OpType as Op;
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::types::{FunctionType, Type};
-use hugr::CircuitUnit;
-use hugr::Hugr as Circuit;
+use hugr::{CircuitUnit, Hugr};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::Tk2Op;
+use crate::{Circuit, Tk2Op};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct RepCircOp {
@@ -60,7 +59,7 @@ fn map_op(opstr: &str) -> Op {
 }
 
 // TODO change to TryFrom
-impl From<RepCircData> for Circuit {
+impl From<RepCircData> for Circuit<Hugr> {
     fn from(RepCircData { circ: rc, meta }: RepCircData) -> Self {
         let qb_types: Vec<Type> = vec![QB_T; meta.n_qb];
         let param_types: Vec<Type> = vec![FLOAT64_TYPE; meta.n_input_param];
@@ -107,10 +106,13 @@ impl From<RepCircData> for Circuit {
         builder
             .finish_hugr_with_outputs(circ_outputs, &crate::extension::REGISTRY)
             .unwrap()
+            .into()
     }
 }
 
-pub(super) fn load_ecc_set(path: impl AsRef<Path>) -> io::Result<HashMap<String, Vec<Circuit>>> {
+pub(super) fn load_ecc_set(
+    path: impl AsRef<Path>,
+) -> io::Result<HashMap<String, Vec<Circuit<Hugr>>>> {
     let jsons = std::fs::read_to_string(path)?;
     let (_, ecc_map): (Vec<()>, HashMap<String, Vec<RepCircData>>) =
         serde_json::from_str(&jsons).unwrap();
@@ -127,12 +129,9 @@ pub(super) fn load_ecc_set(path: impl AsRef<Path>) -> io::Result<HashMap<String,
 
 #[cfg(test)]
 mod tests {
-    // use crate::validate::check_soundness;
-
-    use hugr::HugrView;
-
     use super::*;
-    fn load_representative_set(path: &str) -> HashMap<String, Circuit> {
+
+    fn load_representative_set(path: &str) -> HashMap<String, Circuit<Hugr>> {
         let jsons = std::fs::read_to_string(path).unwrap();
         // read_rep_json(&jsons).unwrap();
         let st: Vec<RepCircData> = serde_json::from_str(&jsons).unwrap();
@@ -144,8 +143,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
     fn test_read_rep() {
-        let rep_map: HashMap<String, Circuit> =
-            load_representative_set("../test_files/h_rz_cxrepresentative_set.json");
+        let rep_map = load_representative_set("../test_files/h_rz_cxrepresentative_set.json");
 
         for c in rep_map.values().take(1) {
             println!("{}", c.dot_string());
@@ -155,8 +153,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
     fn test_read_complete() {
-        let _ecc: HashMap<String, Vec<Circuit>> =
-            load_ecc_set("../test_files/h_rz_cxcomplete_ECC_set.json").unwrap();
+        let _ecc = load_ecc_set("../test_files/h_rz_cxcomplete_ECC_set.json").unwrap();
 
         // ecc.values()
         //     .flatten()
