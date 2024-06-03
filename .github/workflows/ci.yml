@@ -112,8 +112,7 @@ jobs:
       - name: Build pyo3 bindings
         run: |
           poetry install
-          poetry run maturin build
-          poetry add target/wheels/*.whl
+          poetry run maturin develop
       - name: Test pyo3 bindings
         run: poetry run pytest
 
@@ -159,8 +158,7 @@ jobs:
       - name: Build pyo3 bindings
         run: |
           poetry install
-          poetry run maturin build
-          poetry add target/wheels/*.whl
+          poetry run maturin develop
       - name: Run python tests with coverage instrumentation
         run: poetry run pytest --cov=./ --cov-report=xml
       - name: Upload python coverage to codecov.io

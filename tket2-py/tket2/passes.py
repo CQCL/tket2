@@ -3,7 +3,7 @@ from typing import Optional
 from importlib import resources
 
 from pytket import Circuit
-from pytket.passes import CustomPass
+from pytket.passes import CustomPass, BasePass
 
 from tket2 import optimiser
 
@@ -32,9 +32,10 @@ def badger_pass(
     rewriter: Optional[Path] = None,
     max_threads: Optional[int] = None,
     timeout: Optional[int] = None,
+    progress_timeout: Optional[int] = None,
     log_dir: Optional[Path] = None,
-    rebase: Optional[bool] = None,
-) -> CustomPass:
+    rebase: bool = False,
+) -> BasePass:
     """Construct a Badger pass.
 
     The Badger optimiser requires a pre-compiled rewriter produced by the
@@ -54,11 +55,12 @@ def badger_pass(
         """Apply Badger optimisation to the circuit."""
         return badger_optimise(
             circuit,
-            opt,
-            max_threads,
-            timeout,
-            log_dir,
-            rebase,
+            optimiser=opt,
+            max_threads=max_threads,
+            timeout=timeout,
+            progress_timeout=progress_timeout,
+            log_dir=log_dir,
+            rebase=rebase,
         )
 
     return CustomPass(apply)
