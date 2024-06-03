@@ -36,7 +36,9 @@ const METADATA_Q_REGISTERS: &str = "TKET1_JSON.qubit_registers";
 /// Explicit names for the input bit registers.
 const METADATA_B_REGISTERS: &str = "TKET1_JSON.bit_registers";
 
-/// A JSON-serialized circuit that can be converted to a [`Circuit`].
+/// A serialized representation of a [`Circuit`].
+///
+/// Implemented by [`SerialCircuit`], the JSON format used by tket1's `pytket` library.
 pub trait TKETDecode: Sized {
     /// The error type for decoding.
     type DecodeError;
