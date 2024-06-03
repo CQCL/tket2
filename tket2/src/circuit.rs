@@ -86,7 +86,7 @@ impl<T: HugrView> Circuit<T> {
 
     /// Get a mutable reference to the HUGR containing the circuit.
     ///
-    /// Mutation to the hugr MUST NOT invalidate the parent node,
+    /// Mutation of the hugr MUST NOT invalidate the parent node,
     /// by changing the node's type to a non-DFG node or by removing it.
     pub fn hugr_mut(&mut self) -> &mut T {
         &mut self.hugr
