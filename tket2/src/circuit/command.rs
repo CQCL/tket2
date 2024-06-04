@@ -465,17 +465,19 @@ impl<'circ, T: HugrView> std::fmt::Debug for CommandIterator<'circ, T> {
 mod test {
     use hugr::builder::{Container, DFGBuilder, Dataflow, DataflowHugr};
     use hugr::extension::prelude::QB_T;
+    use hugr::hugr::hugrmut::HugrMut;
     use hugr::ops::handle::NodeHandle;
     use hugr::ops::{NamedOp, Value};
     use hugr::std_extensions::arithmetic::float_ops::FLOAT_OPS_REGISTRY;
     use hugr::std_extensions::arithmetic::float_types::ConstF64;
     use hugr::types::FunctionType;
     use itertools::Itertools;
+    use rstest::{fixture, rstest};
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
     use crate::extension::REGISTRY;
-    use crate::utils::build_simple_circuit;
+    use crate::utils::{build_module_with_circuit, build_simple_circuit};
     use crate::Tk2Op;
 
     use super::*;
@@ -487,16 +489,47 @@ mod test {
         };
     }
 
-    #[test]
-    fn iterate_commands() {
-        let circ = build_simple_circuit(2, |circ| {
+    /// 2-qubit circuit with a Hadamard, a CNOT, and a T gate.
+    #[fixture]
+    fn simple_circuit() -> Circuit {
+        build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::H, [0])?;
             circ.append(Tk2Op::CX, [0, 1])?;
             circ.append(Tk2Op::T, [1])?;
             Ok(())
         })
-        .unwrap();
+        .unwrap()
+    }
 
+    /// 2-qubit circuit with a Hadamard, a CNOT, and a T gate,
+    /// defined inside a module.
+    #[fixture]
+    fn simple_module() -> Circuit {
+        build_module_with_circuit(2, |circ| {
+            circ.append(Tk2Op::H, [0])?;
+            circ.append(Tk2Op::CX, [0, 1])?;
+            circ.append(Tk2Op::T, [1])?;
+            Ok(())
+        })
+        .unwrap()
+    }
+
+    /// 2-qubit circuit with a Hadamard, a CNOT, and a T gate,
+    /// defined inside a module containing other circuits.
+    #[fixture]
+    fn module_with_circuits() -> Circuit {
+        let mut module = simple_module();
+        let other_circ = simple_circuit();
+        let hugr = module.hugr_mut();
+        hugr.insert_hugr(hugr.root(), other_circ.into_hugr());
+        return module;
+    }
+
+    #[rstest]
+    #[case::dfg_rooted(simple_circuit())]
+    #[case::module_rooted(simple_module())]
+    #[case::complex_module_rooted(module_with_circuits())]
+    fn iterate_commands_simple(#[case] circ: Circuit) {
         assert_eq!(CommandIterator::new(&circ).count(), 3);
 
         let tk2op_name = |op: Tk2Op| op.exposed_name();
