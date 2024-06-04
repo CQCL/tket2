@@ -1,12 +1,14 @@
 //! Utility functions for the library.
 
+use hugr::builder::{Container, DataflowSubContainer, FunctionBuilder, HugrBuilder, ModuleBuilder};
 use hugr::extension::PRELUDE_REGISTRY;
+use hugr::ops::handle::NodeHandle;
 use hugr::types::{Type, TypeBound};
+use hugr::Hugr;
 use hugr::{
     builder::{BuildError, CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr},
     extension::prelude::QB_T,
     types::FunctionType,
-    Hugr,
 };
 
 use crate::circuit::Circuit;
@@ -15,12 +17,12 @@ pub(crate) fn type_is_linear(typ: &Type) -> bool {
     !TypeBound::Copyable.contains(typ.least_upper_bound())
 }
 
-// utility for building simple qubit-only circuits.
+/// Utility for building simple qubit-only circuits.
 #[allow(unused)]
-pub(crate) fn build_simple_circuit(
-    num_qubits: usize,
-    f: impl FnOnce(&mut CircuitBuilder<DFGBuilder<Hugr>>) -> Result<(), BuildError>,
-) -> Result<Circuit, BuildError> {
+pub(crate) fn build_simple_circuit<F>(num_qubits: usize, f: F) -> Result<Circuit, BuildError>
+where
+    F: FnOnce(&mut CircuitBuilder<DFGBuilder<Hugr>>) -> Result<(), BuildError>,
+{
     let qb_row = vec![QB_T; num_qubits];
     let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row))?;
 
@@ -33,6 +35,26 @@ pub(crate) fn build_simple_circuit(
     let qbs = circ.finish();
     let hugr = h.finish_hugr_with_outputs(qbs, &PRELUDE_REGISTRY)?;
     Ok(hugr.into())
+}
+
+/// Utility for building a module with a single circuit definition.
+#[allow(unused)]
+pub(crate) fn build_module_with_circuit<F>(num_qubits: usize, f: F) -> Result<Circuit, BuildError>
+where
+    F: FnOnce(&mut CircuitBuilder<FunctionBuilder<&mut Hugr>>) -> Result<(), BuildError>,
+{
+    let mut builder = ModuleBuilder::new();
+    let circ = {
+        let qb_row = vec![QB_T; num_qubits];
+        let circ_signature = FunctionType::new(qb_row.clone(), qb_row);
+        let mut dfg = builder.define_function("main", circ_signature.into())?;
+        let mut circ = dfg.as_circuit(dfg.input_wires());
+        f(&mut circ)?;
+        let qbs = circ.finish();
+        dfg.finish_with_outputs(qbs)?
+    };
+    let hugr = builder.finish_hugr(&PRELUDE_REGISTRY)?;
+    Ok(Circuit::new(hugr, circ.node()))
 }
 
 // Test only utils
