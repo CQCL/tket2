@@ -111,6 +111,9 @@ We welcome contributions to tket2! Please open [an issue](https://github.com/CQC
 
 PRs should be made against the `main` branch, and should pass all CI checks before being merged. This includes using the [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) format for the PR title.
 
+Some tests may be skipped based on the changes made. To run all the tests in
+your PR mark it with a 'run-ci-checks' label and push new commits to it.
+
 The general format of a contribution title should be:
 
 ```

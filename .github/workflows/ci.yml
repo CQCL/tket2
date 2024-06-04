@@ -16,88 +16,180 @@ env:
   CARGO_INCREMENTAL: 0
   RUSTFLAGS: "--cfg=ci_run"
   MIRIFLAGS: '-Zmiri-permissive-provenance' # Required due to warnings in bitvec 1.0.1
+  CI: true # insta snapshots behave differently on ci
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: "sccache"
 
 jobs:
-  check:
+  # Check if changes were made to the relevant files.
+  # Always returns true if running on the default branch, to ensure all changes are throughly checked.
+  changes:
+    name: Check for changes
+    runs-on: ubuntu-latest
+    # Required permissions
+    permissions:
+      pull-requests: read
+    # Set job outputs to values from filter step
+    # These outputs are always true when running after a merge to main, or if the PR has a `run-ci-checks` label.
+    outputs:
+      rust: ${{ steps.filter.outputs.rust == 'true' || steps.override.outputs.out == 'true' }}
+      python: ${{ steps.filter.outputs.python == 'true' || steps.override.outputs.out == 'true' }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Override label
+      id: override
+      run: |
+        echo "Labels: ${{ github.event.pull_request.labels.*.name }}"
+        echo "Label contains run-ci-checks: ${{ contains( github.event.pull_request.labels.*.name, 'run-ci-checks') }}"
+        if [ "${{ github.event_name == 'pull_request' && contains( github.event.pull_request.labels.*.name, 'run-ci-checks') }}" == "true" ]; then
+          echo "Overriding due to label 'run-ci-checks'"
+          echo "out=true" >> $GITHUB_OUTPUT
+        elif [ "${{ github.ref_name == github.event.repository.default_branch }}" == "true" ]; then
+          echo "Overriding due to running on the default branch"
+          echo "out=true" >> $GITHUB_OUTPUT
+        fi
+    - uses: dorny/paths-filter@v3
+      id: filter
+      with:
+        filters: .github/change-filters.yml
+
+  check-rs:
+    name: Check Rust code 🦀
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: mozilla-actions/sccache-action@v0.0.4
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - uses: mozilla-actions/sccache-action@v0.0.4
-      - name: Check rust formatting
+      - name: Check formatting
         run: cargo fmt -- --check
-      - name: Check python formatting
-        uses: chartboost/ruff-action@v1
-        with:
-          args: format --check
       - name: Run clippy
         run: cargo clippy --all-targets --all-features --workspace -- -D warnings
       - name: Build docs
-        run: cargo doc --no-deps --all-features
+        run: cargo doc --no-deps --all-features --workspace
         env:
           RUSTDOCFLAGS: "-Dwarnings"
-      - name: Python lints
-        uses: chartboost/ruff-action@v1
-        with:
-          args: check
 
-  benches:
-    # Not required, we can ignore it for the merge queue check.
-    if: github.event_name != 'merge_group'
+  check-py:
+    name: Check Python code 🐍
+    needs: changes
+    if: ${{ needs.changes.outputs.python == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: mozilla-actions/sccache-action@v0.0.4
+      - name: Install poetry
+        run: pipx install poetry
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: "poetry"
+      - name: Install the project libraries
+        # Note: We do not need to compile with maturin here,
+        # as we are only checking the Python code.
+        run: poetry install
+      - name: Type check with mypy
+        run: poetry run mypy .
+      - name: Check formatting with ruff
+        run: poetry run ruff format --check
+      - name: Lint with ruff
+        run: poetry run ruff check
+
+  benches:
+    name: Build benchmarks 🏋️
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' && github.event_name != 'merge_group' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mozilla-actions/sccache-action@v0.0.4
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
-      - uses: mozilla-actions/sccache-action@v0.0.4
       - name: Build benchmarks with no features
-        run: cargo bench --verbose --no-run --no-default-features
+        run: cargo bench --verbose --no-run --workspace --no-default-features
       - name: Build benchmarks with all features
-        run: cargo bench --verbose --no-run --all-features
+        run: cargo bench --verbose --no-run --workspace --all-features
 
-  tests:
+  # Run tests on Rust stable
+  tests-rs-stable-no-features:
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    name: tests (Rust stable, no features)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mozilla-actions/sccache-action@v0.0.4
+      - id: toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 'stable'
+      - name: Configure default rust toolchain
+        run: rustup override set ${{steps.toolchain.outputs.name}}
+      - name: Build with no features
+        run: cargo test --verbose --workspace --no-default-features --no-run
+      - name: Tests with no features
+        run: cargo test --verbose --workspace --no-default-features
+
+  # Run tests on Rust stable
+  tests-rs-stable-all-features:
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    name: tests (Rust stable, all features)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mozilla-actions/sccache-action@v0.0.4
+      - id: toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 'stable'
+      - name: Configure default rust toolchain
+        run: rustup override set ${{steps.toolchain.outputs.name}}
+      - name: Build with all features
+        run: cargo test --verbose --workspace --all-features --no-run
+      - name: Tests with all features
+        run: cargo test --verbose --workspace --all-features
+
+  # Run tests on other toolchains
+  tests-rs-other:
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' && github.event_name != 'merge_group' }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: true
       matrix:
-        rust: ['1.75', stable, beta]
-        # workaround to ignore non-stable tests when running the merge queue checks
-        # see: https://github.community/t/how-to-conditionally-include-exclude-items-in-matrix-eg-based-on-branch/16853/6
-        isMerge:
-            - ${{ github.event_name == 'merge_group' }}
-        exclude:
-          - rust: '1.75'
-            isMerge: true
-          - rust: beta
-            isMerge: true
+        # Pinned nightly version until this gets resolved:
+        # https://github.com/rust-lang/rust/issues/125474
+        rust: ['1.75', beta, 'nightly-2024-05-22']
     name: tests (Rust ${{ matrix.rust }})
     steps:
       - uses: actions/checkout@v4
+      - uses: mozilla-actions/sccache-action@v0.0.4
       - id: toolchain
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
       - name: Configure default rust toolchain
         run: rustup override set ${{steps.toolchain.outputs.name}}
-      - uses: mozilla-actions/sccache-action@v0.0.4
       - name: Build with no features
-        run: cargo test --verbose --no-default-features --no-run
+        run: cargo test --verbose --workspace --no-default-features --no-run
       - name: Tests with no features
-        run: cargo test --verbose --no-default-features
+        run: cargo test --verbose --workspace --no-default-features
       - name: Build with all features
-        run: cargo test --verbose --all-features --no-run
+        run: cargo test --verbose --workspace --all-features --no-run
       - name: Tests with all features
-        run: cargo test --verbose --all-features
+        run: cargo test --verbose --workspace --all-features
 
-  py-tests:
-    # Not required, we can ignore it for the merge queue check.
-    if: github.event_name != 'merge_group'
+  tests-py:
+    needs: changes
+    if: ${{ needs.changes.outputs.python == 'true' }}
     runs-on: ubuntu-latest
-    name: "python bindings"
+    name: tests (Python)
     steps:
       - uses: actions/checkout@v4
       - uses: mozilla-actions/sccache-action@v0.0.4
@@ -116,33 +208,41 @@ jobs:
       - name: Test pyo3 bindings
         run: poetry run pytest
 
-  coverage:
-    if: github.event_name != 'merge_group'
-    needs: [tests, check]
+  coverage-rs:
+    name: Check Rust coverage 🦀
+    needs: [changes, tests-rs-stable-no-features, tests-rs-stable-all-features, tests-rs-other, check-rs]
+    # Run only if there are changes in the relevant files and the check job passed or was skipped
+    if: always() && !failure() && !cancelled() && needs.changes.outputs.rust == 'true' && github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: mozilla-actions/sccache-action@v0.0.4
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 'nightly'
           components: llvm-tools-preview
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Run tests with coverage instrumentation
         run: |
-          cargo llvm-cov clean --workspace
-          cargo llvm-cov --doctests --all-features
-          cargo llvm-cov report --codecov --output-path coverage.json
-      - name: Upload rust coverage to codecov.io
+            cargo llvm-cov clean --workspace
+            cargo llvm-cov --no-report --workspace --no-default-features --doctests
+            cargo llvm-cov --no-report --workspace --all-features --doctests
+      - name: Generate coverage report
+        run: cargo llvm-cov --all-features report --codecov --output-path coverage.json
+      - name: Upload coverage to codecov.io
         uses: codecov/codecov-action@v4
         with:
           files: coverage.json
           name: rust
+          flags: rust
           token: ${{ secrets.CODECOV_TOKEN }}
 
-  py-coverage:
-    if: github.event_name != 'merge_group'
-    needs: [py-tests, check]
+  coverage-py:
+    name: Check Python coverage 🐍
+    needs: [changes, tests-py, check-py]
+    # Run only if there are changes in the relevant files and the check job passed or was skipped
+    if: always() && !failure() && !cancelled() && needs.changes.outputs.python == 'true' && github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -166,4 +266,37 @@ jobs:
         with:
           files: coverage.xml
           name: python
+          flags: python
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # This is a meta job to mark successful completion of the required checks,
+  # even if they are skipped due to no changes in the relevant files.
+  required-checks:
+    name: Required checks 🦀+🐍
+    needs: [changes, check-rs, check-py, tests-rs-stable-no-features, tests-rs-stable-all-features, tests-py]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Debug changes step output
+        run: |
+          echo "Rust: ${{ needs.changes.outputs.rust }}"
+          echo "Python: ${{ needs.changes.outputs.python }}"
+      - name: Fail if required checks failed
+        # This condition should simply be `if: failure() || cancelled()`,
+        # but there seems to be a bug in the github workflow runner.
+        #
+        # See https://github.com/orgs/community/discussions/80788
+        if: |
+          needs.changes.result == 'failure' || needs.changes.result == 'cancelled' ||
+          needs.check-rs.result == 'failure' || needs.check-rs.result == 'cancelled' ||
+          needs.check-py.result == 'failure' || needs.check-py.result == 'cancelled' ||
+          needs.tests-rs-stable-no-features.result == 'failure' || needs.tests-rs-stable-no-features.result == 'cancelled' ||
+          needs.tests-rs-stable-all-features.result == 'failure' || needs.tests-rs-stable-all-features.result == 'cancelled' ||
+          needs.tests-py.result == 'failure' || needs.tests-py.result == 'cancelled'
+        run: |
+          echo "Required checks failed"
+          echo "Please check the logs for more information"
+          exit 1
+      - name: Pass if required checks passed
+        run: |
+          echo "All required checks passed"
