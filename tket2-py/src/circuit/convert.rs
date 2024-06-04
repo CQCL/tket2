@@ -44,8 +44,10 @@ impl CircuitType {
     /// Converts a `Hugr` into the format indicated by the flag.
     pub fn convert(self, py: Python, hugr: Hugr) -> PyResult<Bound<PyAny>> {
         match self {
-            CircuitType::Tket1 => SerialCircuit::encode(&hugr).convert_pyerrs()?.to_tket1(py),
-            CircuitType::Tket2 => Ok(Bound::new(py, Tk2Circuit { hugr })?.into_any()),
+            CircuitType::Tket1 => SerialCircuit::encode(&hugr.into())
+                .convert_pyerrs()?
+                .to_tket1(py),
+            CircuitType::Tket2 => Ok(Bound::new(py, Tk2Circuit { circ: hugr.into() })?.into_any()),
         }
     }
 }
@@ -58,16 +60,16 @@ where
     E: ConvertPyErr<Output = PyErr>,
     F: FnOnce(Hugr, CircuitType) -> Result<T, E>,
 {
-    let (hugr, typ) = match Tk2Circuit::extract_bound(circ) {
+    let (circ, typ) = match Tk2Circuit::extract_bound(circ) {
         // hugr circuit
-        Ok(t2circ) => (t2circ.hugr, CircuitType::Tket2),
+        Ok(t2circ) => (t2circ.circ, CircuitType::Tket2),
         // tket1 circuit
         Err(_) => (
             SerialCircuit::from_tket1(circ)?.decode().convert_pyerrs()?,
             CircuitType::Tket1,
         ),
     };
-    (f)(hugr, typ).map_err(|e| e.convert_pyerrs())
+    (f)(circ.into_hugr(), typ).map_err(|e| e.convert_pyerrs())
 }
 
 /// Apply a function expecting a hugr on a python circuit.

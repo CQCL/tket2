@@ -18,7 +18,7 @@ use std::iter::FusedIterator;
 use std::marker::PhantomData;
 
 use hugr::types::{EdgeKind, Type, TypeRow};
-use hugr::{CircuitUnit, IncomingPort, OutgoingPort};
+use hugr::{CircuitUnit, HugrView, IncomingPort, OutgoingPort};
 use hugr::{Direction, Node, Port, Wire};
 
 use crate::utils::type_is_linear;
@@ -83,8 +83,8 @@ impl Units<OutgoingPort, DefaultUnitLabeller> {
     /// This iterator will yield all units originating from the circuit's input
     /// node.
     #[inline]
-    pub(super) fn new_circ_input(circuit: &impl Circuit) -> Self {
-        Self::new_outgoing(circuit, circuit.input(), DefaultUnitLabeller)
+    pub(super) fn new_circ_input<T: HugrView>(circuit: &Circuit<T>) -> Self {
+        Self::new_outgoing(circuit, circuit.input_node(), DefaultUnitLabeller)
     }
 }
 
@@ -94,7 +94,11 @@ where
 {
     /// Create a new iterator over the units originating from node.
     #[inline]
-    pub(super) fn new_outgoing(circuit: &impl Circuit, node: Node, unit_labeller: UL) -> Self {
+    pub(super) fn new_outgoing<T: HugrView>(
+        circuit: &Circuit<T>,
+        node: Node,
+        unit_labeller: UL,
+    ) -> Self {
         Self::new_with_dir(circuit, node, Direction::Outgoing, unit_labeller)
     }
 }
@@ -105,7 +109,11 @@ where
 {
     /// Create a new iterator over the units terminating on the node.
     #[inline]
-    pub(super) fn new_incoming(circuit: &impl Circuit, node: Node, unit_labeller: UL) -> Self {
+    pub(super) fn new_incoming<T: HugrView>(
+        circuit: &Circuit<T>,
+        node: Node,
+        unit_labeller: UL,
+    ) -> Self {
         Self::new_with_dir(circuit, node, Direction::Incoming, unit_labeller)
     }
 }
@@ -117,8 +125,8 @@ where
 {
     /// Create a new iterator over the units of a node.
     #[inline]
-    fn new_with_dir(
-        circuit: &impl Circuit,
+    fn new_with_dir<T: HugrView>(
+        circuit: &Circuit<T>,
         node: Node,
         direction: Direction,
         unit_labeller: UL,
@@ -142,9 +150,10 @@ where
     // We should revisit it once this is reworked on the HUGR side.
     //
     // TODO: EdgeKind::Function is not currently supported.
-    fn init_types(circuit: &impl Circuit, node: Node, direction: Direction) -> TypeRow {
-        let optype = circuit.get_optype(node);
-        let sig = circuit.signature(node).unwrap_or_default();
+    fn init_types<T: HugrView>(circuit: &Circuit<T>, node: Node, direction: Direction) -> TypeRow {
+        let hugr = circuit.hugr();
+        let optype = hugr.get_optype(node);
+        let sig = hugr.signature(node).unwrap_or_default();
         let mut types = match direction {
             Direction::Outgoing => sig.output,
             Direction::Incoming => sig.input,

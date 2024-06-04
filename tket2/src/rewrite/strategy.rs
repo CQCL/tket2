@@ -25,13 +25,13 @@ use std::{collections::HashSet, fmt::Debug};
 
 use derive_more::From;
 use hugr::ops::OpType;
-use hugr::Hugr;
+use hugr::HugrView;
 use itertools::Itertools;
 
 use crate::circuit::cost::{is_cx, is_quantum, CircuitCost, CostDelta, LexicographicCost};
 use crate::Circuit;
 
-use super::trace::{RewriteTrace, RewriteTracer};
+use super::trace::RewriteTrace;
 use super::CircuitRewrite;
 
 /// Rewriting strategies for circuit optimisation.
@@ -51,7 +51,7 @@ pub trait RewriteStrategy {
     fn apply_rewrites(
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
-        circ: &Hugr,
+        circ: &Circuit,
     ) -> impl Iterator<Item = RewriteResult<Self::Cost>>;
 
     /// The cost of a single operation for this strategy's cost function.
@@ -59,13 +59,13 @@ pub trait RewriteStrategy {
 
     /// The cost of a circuit using this strategy's cost function.
     #[inline]
-    fn circuit_cost(&self, circ: &Hugr) -> Self::Cost {
+    fn circuit_cost(&self, circ: &Circuit<impl HugrView>) -> Self::Cost {
         circ.circuit_cost(|op| self.op_cost(op))
     }
 
     /// Returns the cost of a rewrite's matched subcircuit before replacing it.
     #[inline]
-    fn pre_rewrite_cost(&self, rw: &CircuitRewrite, circ: &Hugr) -> Self::Cost {
+    fn pre_rewrite_cost(&self, rw: &CircuitRewrite, circ: &Circuit) -> Self::Cost {
         circ.nodes_cost(rw.subcircuit().nodes().iter().copied(), |op| {
             self.op_cost(op)
         })
@@ -81,15 +81,18 @@ pub trait RewriteStrategy {
 #[derive(Debug, Clone)]
 pub struct RewriteResult<C: CircuitCost> {
     /// The rewritten circuit.
-    pub circ: Hugr,
+    pub circ: Circuit,
     /// The cost delta of the rewrite.
     pub cost_delta: C::CostDelta,
 }
 
-impl<C: CircuitCost> From<(Hugr, C::CostDelta)> for RewriteResult<C> {
+impl<C: CircuitCost, T: HugrView> From<(Circuit<T>, C::CostDelta)> for RewriteResult<C> {
     #[inline]
-    fn from((circ, cost_delta): (Hugr, C::CostDelta)) -> Self {
-        Self { circ, cost_delta }
+    fn from((circ, cost_delta): (Circuit<T>, C::CostDelta)) -> Self {
+        Self {
+            circ: circ.to_owned(),
+            cost_delta,
+        }
     }
 }
 
@@ -113,7 +116,7 @@ impl RewriteStrategy for GreedyRewriteStrategy {
     fn apply_rewrites(
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
-        circ: &Hugr,
+        circ: &Circuit,
     ) -> impl Iterator<Item = RewriteResult<Self::Cost>> {
         let rewrites = rewrites
             .into_iter()
@@ -140,7 +143,7 @@ impl RewriteStrategy for GreedyRewriteStrategy {
         iter::once((circ, cost_delta).into())
     }
 
-    fn circuit_cost(&self, circ: &Hugr) -> Self::Cost {
+    fn circuit_cost(&self, circ: &Circuit<impl HugrView>) -> Self::Cost {
         circ.num_gates()
     }
 
@@ -184,7 +187,7 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveGreedyStrategy<T> {
     fn apply_rewrites(
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
-        circ: &Hugr,
+        circ: &Circuit,
     ) -> impl Iterator<Item = RewriteResult<Self::Cost>> {
         // Check only the rewrites that reduce the size of the circuit.
         let rewrites = rewrites
@@ -262,7 +265,7 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveThresholdStrategy<T> {
     fn apply_rewrites(
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
-        circ: &Hugr,
+        circ: &Circuit,
     ) -> impl Iterator<Item = RewriteResult<Self::Cost>> {
         rewrites.into_iter().filter_map(|rw| {
             let pattern_cost = self.pre_rewrite_cost(&rw, circ);
@@ -429,7 +432,7 @@ impl GammaStrategyCost<fn(&OpType) -> usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hugr::{Hugr, Node};
+    use hugr::Node;
     use itertools::Itertools;
 
     use crate::rewrite::trace::REWRITE_TRACING_ENABLED;
@@ -440,7 +443,7 @@ mod tests {
         Tk2Op,
     };
 
-    fn n_cx(n_gates: usize) -> Hugr {
+    fn n_cx(n_gates: usize) -> Circuit {
         let qbs = [0, 1];
         build_simple_circuit(2, |circ| {
             for _ in 0..n_gates {
@@ -452,15 +455,15 @@ mod tests {
     }
 
     /// Rewrite cx_nodes -> empty
-    fn rw_to_empty(hugr: &Hugr, cx_nodes: impl Into<Vec<Node>>) -> CircuitRewrite {
-        let subcirc = Subcircuit::try_from_nodes(cx_nodes, hugr).unwrap();
-        subcirc.create_rewrite(hugr, n_cx(0)).unwrap()
+    fn rw_to_empty(circ: &Circuit, cx_nodes: impl Into<Vec<Node>>) -> CircuitRewrite {
+        let subcirc = Subcircuit::try_from_nodes(cx_nodes, circ).unwrap();
+        subcirc.create_rewrite(circ, n_cx(0)).unwrap()
     }
 
     /// Rewrite cx_nodes -> 10x CX
-    fn rw_to_full(hugr: &Hugr, cx_nodes: impl Into<Vec<Node>>) -> CircuitRewrite {
-        let subcirc = Subcircuit::try_from_nodes(cx_nodes, hugr).unwrap();
-        subcirc.create_rewrite(hugr, n_cx(10)).unwrap()
+    fn rw_to_full(circ: &Circuit, cx_nodes: impl Into<Vec<Node>>) -> CircuitRewrite {
+        let subcirc = Subcircuit::try_from_nodes(cx_nodes, circ).unwrap();
+        subcirc.create_rewrite(circ, n_cx(10)).unwrap()
     }
 
     #[test]

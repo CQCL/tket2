@@ -55,7 +55,7 @@ use super::{cost, with_hugr, PyCircuitCost, PyCustom, PyHugrType, PyNode, PyWire
 #[derive(Clone, Debug, PartialEq, From)]
 pub struct Tk2Circuit {
     /// Rust representation of the circuit.
-    pub hugr: Hugr,
+    pub circ: Circuit,
 }
 
 #[pymethods]
@@ -67,40 +67,40 @@ impl Tk2Circuit {
     #[new]
     pub fn new(circ: &Bound<PyAny>) -> PyResult<Self> {
         Ok(Self {
-            hugr: with_hugr(circ, |hugr, _| hugr)?,
+            circ: with_hugr(circ, |hugr, _| hugr)?.into(),
         })
     }
 
     /// Convert the [`Tk2Circuit`] to a tket1 circuit.
     pub fn to_tket1<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        SerialCircuit::encode(&self.hugr)
+        SerialCircuit::encode(&self.circ)
             .convert_pyerrs()?
             .to_tket1(py)
     }
 
     /// Apply a rewrite on the circuit.
     pub fn apply_rewrite(&mut self, rw: PyCircuitRewrite) {
-        rw.rewrite.apply(&mut self.hugr).expect("Apply error.");
+        rw.rewrite.apply(&mut self.circ).expect("Apply error.");
     }
 
     /// Encode the circuit as a HUGR json string.
     //
     // TODO: Bind a messagepack encoder/decoder too.
     pub fn to_hugr_json(&self) -> PyResult<String> {
-        Ok(serde_json::to_string(&self.hugr).unwrap())
+        Ok(serde_json::to_string(self.circ.hugr()).unwrap())
     }
 
     /// Decode a HUGR json string to a circuit.
     #[staticmethod]
     pub fn from_hugr_json(json: &str) -> PyResult<Self> {
-        let hugr = serde_json::from_str(json)
+        let hugr: Hugr = serde_json::from_str(json)
             .map_err(|e| PyErr::new::<PyAttributeError, _>(format!("Invalid encoded HUGR: {e}")))?;
-        Ok(Tk2Circuit { hugr })
+        Ok(Tk2Circuit { circ: hugr.into() })
     }
 
     /// Encode the circuit as a tket1 json string.
     pub fn to_tket1_json(&self) -> PyResult<String> {
-        Ok(serde_json::to_string(&SerialCircuit::encode(&self.hugr).convert_pyerrs()?).unwrap())
+        Ok(serde_json::to_string(&SerialCircuit::encode(&self.circ).convert_pyerrs()?).unwrap())
     }
 
     /// Decode a tket1 json string to a circuit.
@@ -109,7 +109,7 @@ impl Tk2Circuit {
         let tk1: SerialCircuit = serde_json::from_str(json)
             .map_err(|e| PyErr::new::<PyAttributeError, _>(format!("Invalid encoded HUGR: {e}")))?;
         Ok(Tk2Circuit {
-            hugr: tk1.decode().convert_pyerrs()?,
+            circ: tk1.decode().convert_pyerrs()?,
         })
     }
 
@@ -134,13 +134,13 @@ impl Tk2Circuit {
                 cost: cost.to_object(py),
             })
         };
-        let circ_cost = self.hugr.circuit_cost(cost_fn)?;
+        let circ_cost = self.circ.circuit_cost(cost_fn)?;
         Ok(circ_cost.cost.into_bound(py))
     }
 
     /// Returns a hash of the circuit.
     pub fn hash(&self) -> u64 {
-        self.hugr.circuit_hash().unwrap()
+        self.circ.circuit_hash().unwrap()
     }
 
     /// Hash the circuit
@@ -160,7 +160,8 @@ impl Tk2Circuit {
 
     fn node_op(&self, node: PyNode) -> PyResult<PyCustom> {
         let custom: CustomOp = self
-            .hugr
+            .circ
+            .hugr()
             .get_optype(node.node)
             .clone()
             .try_into()
@@ -174,25 +175,27 @@ impl Tk2Circuit {
     }
 
     fn node_inputs(&self, node: PyNode) -> Vec<PyWire> {
-        self.hugr
+        self.circ
+            .hugr()
             .all_linked_outputs(node.node)
             .map(|(n, p)| Wire::new(n, p).into())
             .collect()
     }
 
     fn node_outputs(&self, node: PyNode) -> Vec<PyWire> {
-        self.hugr
+        self.circ
+            .hugr()
             .node_outputs(node.node)
             .map(|p| Wire::new(node.node, p).into())
             .collect()
     }
 
     fn input_node(&self) -> PyNode {
-        self.hugr.input().into()
+        self.circ.input_node().into()
     }
 
     fn output_node(&self) -> PyNode {
-        self.hugr.output().into()
+        self.circ.output_node().into()
     }
 }
 impl Tk2Circuit {
@@ -236,11 +239,12 @@ impl Dfg {
 
     fn finish(&mut self, outputs: Vec<PyWire>) -> PyResult<Tk2Circuit> {
         Ok(Tk2Circuit {
-            hugr: self
+            circ: self
                 .builder
                 .clone()
                 .finish_hugr_with_outputs(outputs.into_iter().map_into(), &REGISTRY)
-                .convert_pyerrs()?,
+                .convert_pyerrs()?
+                .into(),
         })
     }
 }

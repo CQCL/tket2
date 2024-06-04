@@ -17,13 +17,13 @@ pub const METADATA_REWRITES: &str = "TKET2.rewrites";
 /// Enable it by setting the `rewrite-tracing` feature.
 ///
 /// Note that circuits must be explicitly enabled for rewrite tracing by calling
-/// [`RewriteTracer::enable_rewrite_tracing`].
+/// [`Circuit::enable_rewrite_tracing`].
 pub const REWRITE_TRACING_ENABLED: bool = cfg!(feature = "rewrite-tracing");
 
 /// The trace of a rewrite applied to a circuit.
 ///
 /// Traces are only enabled if the `rewrite-tracing` feature is enabled and
-/// [`RewriteTracer::enable_rewrite_tracing`] is called on the circuit.
+/// [`Circuit::enable_rewrite_tracing`] is called on the circuit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct RewriteTrace {
@@ -67,18 +67,19 @@ impl From<RewriteTrace> for serde_json::Value {
     }
 }
 
-/// Extension trait for circuits that can trace rewrites applied to them.
+/// Implementation for rewrite tracing in circuits.
 ///
 /// This is only tracked if the `rewrite-tracing` feature is enabled and
 /// `enable_rewrite_tracing` is called on the circuit before.
-pub trait RewriteTracer: Circuit + HugrMut + Sized {
+impl<T: HugrMut> Circuit<T> {
     /// Enable rewrite tracing for the circuit.
     #[inline]
-    fn enable_rewrite_tracing(&mut self) {
+    pub fn enable_rewrite_tracing(&mut self) {
         if !REWRITE_TRACING_ENABLED {
             return;
         }
-        let meta = self.get_metadata_mut(self.root(), METADATA_REWRITES);
+        let root = self.parent();
+        let meta = self.hugr_mut().get_metadata_mut(root, METADATA_REWRITES);
         if *meta == NodeMetadata::Null {
             *meta = NodeMetadata::Array(vec![]);
         }
@@ -88,12 +89,14 @@ pub trait RewriteTracer: Circuit + HugrMut + Sized {
     ///
     /// Returns `true` if the rewrite was successfully registered, or `false` if it was ignored.
     #[inline]
-    fn add_rewrite_trace(&mut self, rewrite: impl Into<RewriteTrace>) -> bool {
+    pub fn add_rewrite_trace(&mut self, rewrite: impl Into<RewriteTrace>) -> bool {
         if !REWRITE_TRACING_ENABLED {
             return false;
         }
+        let root = self.parent();
         match self
-            .get_metadata_mut(self.root(), METADATA_REWRITES)
+            .hugr_mut()
+            .get_metadata_mut(root, METADATA_REWRITES)
             .as_array_mut()
         {
             Some(meta) => {
@@ -112,14 +115,12 @@ pub trait RewriteTracer: Circuit + HugrMut + Sized {
     //
     // TODO return an `impl Iterator` once rust 1.75 lands.
     #[inline]
-    fn rewrite_trace(&self) -> Option<Vec<RewriteTrace>> {
+    pub fn rewrite_trace(&self) -> Option<Vec<RewriteTrace>> {
         if !REWRITE_TRACING_ENABLED {
             return None;
         }
-        let meta = self.get_metadata(self.root(), METADATA_REWRITES)?;
+        let meta = self.hugr().get_metadata(self.parent(), METADATA_REWRITES)?;
         let rewrites = meta.as_array()?;
         Some(rewrites.iter().map_into().collect_vec())
     }
 }
-
-impl<T: Circuit + HugrMut> RewriteTracer for T {}

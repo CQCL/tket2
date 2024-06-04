@@ -8,7 +8,7 @@ use std::iter::FusedIterator;
 
 use hugr::hugr::NodeType;
 use hugr::ops::{OpTag, OpTrait};
-use hugr::{IncomingPort, OutgoingPort};
+use hugr::{HugrView, IncomingPort, OutgoingPort};
 use itertools::Either::{self, Left, Right};
 use itertools::{EitherOrBoth, Itertools};
 use petgraph::visit as pv;
@@ -21,9 +21,9 @@ pub use hugr::types::{EdgeKind, Type, TypeRow};
 pub use hugr::{CircuitUnit, Direction, Node, Port, PortIndex, Wire};
 
 /// An operation applied to specific wires.
-pub struct Command<'circ, Circ> {
+pub struct Command<'circ, T> {
     /// The circuit.
-    circ: &'circ Circ,
+    circ: &'circ Circuit<T>,
     /// The operation node.
     node: Node,
     /// An assignment of linear units to the node's input ports.
@@ -32,7 +32,7 @@ pub struct Command<'circ, Circ> {
     output_linear_units: Vec<LinearUnit>,
 }
 
-impl<'circ, Circ: Circuit> Command<'circ, Circ> {
+impl<'circ, T: HugrView> Command<'circ, T> {
     /// Returns the node corresponding to this command.
     #[inline]
     pub fn node(&self) -> Node {
@@ -42,13 +42,13 @@ impl<'circ, Circ: Circuit> Command<'circ, Circ> {
     /// Returns the [`NodeType`] of the command.
     #[inline]
     pub fn nodetype(&self) -> &NodeType {
-        self.circ.get_nodetype(self.node)
+        self.circ.hugr().get_nodetype(self.node)
     }
 
     /// Returns the [`OpType`] of the command.
     #[inline]
     pub fn optype(&self) -> &OpType {
-        self.circ.get_optype(self.node)
+        self.circ.hugr().get_optype(self.node)
     }
 
     /// Returns the units of this command in a given direction.
@@ -162,7 +162,7 @@ impl<'circ, Circ: Circuit> Command<'circ, Circ> {
     }
 }
 
-impl<'a, 'circ, Circ: Circuit> UnitLabeller for &'a Command<'circ, Circ> {
+impl<'a, 'circ, T: HugrView> UnitLabeller for &'a Command<'circ, T> {
     #[inline]
     fn assign_linear(&self, _: Node, port: Port, _linear_count: usize) -> LinearUnit {
         let units = match port.direction() {
@@ -181,7 +181,7 @@ impl<'a, 'circ, Circ: Circuit> UnitLabeller for &'a Command<'circ, Circ> {
     fn assign_wire(&self, node: Node, port: Port) -> Option<Wire> {
         match port.as_directed() {
             Left(to_port) => {
-                let (from, from_port) = self.circ.linked_outputs(node, to_port).next()?;
+                let (from, from_port) = self.circ.hugr().linked_outputs(node, to_port).next()?;
                 Some(Wire::new(from, from_port))
             }
             Right(from_port) => Some(Wire::new(node, from_port)),
@@ -189,7 +189,7 @@ impl<'a, 'circ, Circ: Circuit> UnitLabeller for &'a Command<'circ, Circ> {
     }
 }
 
-impl<'circ, Circ: Circuit> std::fmt::Debug for Command<'circ, Circ> {
+impl<'circ, T: HugrView> std::fmt::Debug for Command<'circ, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Command")
             .field("circuit name", &self.circ.name())
@@ -200,7 +200,7 @@ impl<'circ, Circ: Circuit> std::fmt::Debug for Command<'circ, Circ> {
     }
 }
 
-impl<'circ, Circ> PartialEq for Command<'circ, Circ> {
+impl<'circ, T: HugrView> PartialEq for Command<'circ, T> {
     fn eq(&self, other: &Self) -> bool {
         self.node == other.node
             && self.input_linear_units == other.input_linear_units
@@ -208,9 +208,9 @@ impl<'circ, Circ> PartialEq for Command<'circ, Circ> {
     }
 }
 
-impl<'circ, Circ> Eq for Command<'circ, Circ> {}
+impl<'circ, T: HugrView> Eq for Command<'circ, T> {}
 
-impl<'circ, Circ> Clone for Command<'circ, Circ> {
+impl<'circ, T: HugrView> Clone for Command<'circ, T> {
     fn clone(&self) -> Self {
         Self {
             circ: self.circ,
@@ -221,7 +221,7 @@ impl<'circ, Circ> Clone for Command<'circ, Circ> {
     }
 }
 
-impl<'circ, Circ> std::hash::Hash for Command<'circ, Circ> {
+impl<'circ, T: HugrView> std::hash::Hash for Command<'circ, T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.node.hash(state);
         self.input_linear_units.hash(state);
@@ -234,9 +234,9 @@ type NodeWalker = pv::Topo<Node, HashSet<Node>>;
 
 /// An iterator over the commands of a circuit.
 #[derive(Clone)]
-pub struct CommandIterator<'circ, Circ> {
+pub struct CommandIterator<'circ, T> {
     /// The circuit.
-    circ: &'circ Circ,
+    circ: &'circ Circuit<T>,
     /// Toposorted nodes.
     nodes: NodeWalker,
     /// Last wire for each [`LinearUnit`] in the circuit.
@@ -263,28 +263,25 @@ pub struct CommandIterator<'circ, Circ> {
     delayed_node: Option<Node>,
 }
 
-impl<'circ, Circ> CommandIterator<'circ, Circ>
-where
-    Circ: Circuit,
-{
+impl<'circ, T: HugrView> CommandIterator<'circ, T> {
     /// Create a new iterator over the commands of a circuit.
-    pub(super) fn new(circ: &'circ Circ) -> Self {
+    pub(super) fn new(circ: &'circ Circuit<T>) -> Self {
         // Initialize the map assigning linear units to the input's linear
         // ports.
         //
         // TODO: `with_wires` combinator for `Units`?
         let wire_unit = circ
             .linear_units()
-            .map(|(linear_unit, port, _)| (Wire::new(circ.input(), port), linear_unit.index()))
+            .map(|(linear_unit, port, _)| (Wire::new(circ.input_node(), port), linear_unit.index()))
             .collect();
 
-        let nodes = pv::Topo::new(&circ.as_petgraph());
+        let nodes = pv::Topo::new(&circ.hugr().as_petgraph());
         Self {
             circ,
             nodes,
             wire_unit,
             // Ignore the input and output nodes, and the root.
-            remaining: circ.node_count() - 3,
+            remaining: circ.hugr().node_count() - 3,
             delayed_consts: HashSet::new(),
             delayed_consumers: HashMap::new(),
             delayed_node: None,
@@ -299,13 +296,13 @@ where
         let node = self
             .delayed_node
             .take()
-            .or_else(|| self.nodes.next(&self.circ.as_petgraph()))?;
+            .or_else(|| self.nodes.next(&self.circ.hugr().as_petgraph()))?;
 
         // If this node is a constant or load const node, delay it.
-        let tag = self.circ.get_optype(node).tag();
+        let tag = self.circ.hugr().get_optype(node).tag();
         if tag == OpTag::Const || tag == OpTag::LoadConst {
             self.delayed_consts.insert(node);
-            for consumer in self.circ.output_neighbours(node) {
+            for consumer in self.circ.hugr().output_neighbours(node) {
                 *self.delayed_consumers.entry(consumer).or_default() += 1;
             }
             return self.next_node();
@@ -316,7 +313,7 @@ where
             true => {
                 let delayed = self.next_delayed_node(node);
                 self.delayed_consts.remove(&delayed);
-                for consumer in self.circ.output_neighbours(delayed) {
+                for consumer in self.circ.hugr().output_neighbours(delayed) {
                     let Entry::Occupied(mut entry) = self.delayed_consumers.entry(consumer) else {
                         panic!("Delayed node consumer was not in delayed_consumers. Delayed node: {delayed:?}, consumer: {consumer:?}.");
                     };
@@ -336,6 +333,7 @@ where
     fn next_delayed_node(&mut self, consumer: Node) -> Node {
         let Some(delayed_pred) = self
             .circ
+            .hugr()
             .input_neighbours(consumer)
             .find(|k| self.delayed_consts.contains(k))
         else {
@@ -359,12 +357,12 @@ where
     /// mutable borrow here.
     fn process_node(&mut self, node: Node) -> Option<(Vec<LinearUnit>, Vec<LinearUnit>)> {
         // The root node is ignored.
-        if node == self.circ.root() {
+        if node == self.circ.parent() {
             return None;
         }
         // Inputs and outputs are also ignored.
         // The input wire ids are already set in the `wire_unit` map during initialization.
-        let tag = self.circ.get_optype(node).tag();
+        let tag = self.circ.hugr().get_optype(node).tag();
         if tag == OpTag::Input || tag == OpTag::Output {
             return None;
         }
@@ -390,7 +388,7 @@ where
             // Returns the linear id of the terminated unit.
             let mut terminate_input =
                 |port: IncomingPort, wire_unit: &mut HashMap<Wire, usize>| -> Option<usize> {
-                    let linear_id = self.circ.single_linked_output(node, port).and_then(
+                    let linear_id = self.circ.hugr().single_linked_output(node, port).and_then(
                         |(wire_node, wire_port)| wire_unit.remove(&Wire::new(wire_node, wire_port)),
                     )?;
                     input_linear_units.push(LinearUnit::new(linear_id));
@@ -425,11 +423,8 @@ where
     }
 }
 
-impl<'circ, Circ> Iterator for CommandIterator<'circ, Circ>
-where
-    Circ: Circuit,
-{
-    type Item = Command<'circ, Circ>;
+impl<'circ, T: HugrView> Iterator for CommandIterator<'circ, T> {
+    type Item = Command<'circ, T>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -454,9 +449,9 @@ where
     }
 }
 
-impl<'circ, Circ> FusedIterator for CommandIterator<'circ, Circ> where Circ: Circuit {}
+impl<'circ, T: HugrView> FusedIterator for CommandIterator<'circ, T> {}
 
-impl<'circ, Circ: Circuit> std::fmt::Debug for CommandIterator<'circ, Circ> {
+impl<'circ, T: HugrView> std::fmt::Debug for CommandIterator<'circ, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CommandIterator")
             .field("circuit name", &self.circ.name())
@@ -558,9 +553,10 @@ mod test {
             .add_dataflow_op(Tk2Op::RzF64, [q_in, loaded_const])
             .unwrap();
 
-        let circ = h
+        let circ: Circuit = h
             .finish_hugr_with_outputs(rz.outputs(), &FLOAT_OPS_REGISTRY)
-            .unwrap();
+            .unwrap()
+            .into();
 
         assert_eq!(CommandIterator::new(&circ).count(), 3);
         let mut commands = CommandIterator::new(&circ);
@@ -631,7 +627,7 @@ mod test {
 
         let free = h.add_dataflow_op(Tk2Op::QFree, [q_in])?;
 
-        let circ = h.finish_hugr_with_outputs([q_new], &REGISTRY)?;
+        let circ: Circuit = h.finish_hugr_with_outputs([q_new], &REGISTRY)?.into();
 
         let mut cmds = circ.commands();
 
@@ -678,7 +674,7 @@ mod test {
         let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), vec![]))?;
         let [q_in] = h.input_wires_arr();
         h.add_dataflow_op(Tk2Op::QFree, [q_in])?;
-        let circ = h.finish_hugr_with_outputs([], &REGISTRY)?;
+        let circ: Circuit = h.finish_hugr_with_outputs([], &REGISTRY)?.into();
 
         let cmd1 = circ.commands().next().unwrap();
         let cmd2 = circ.commands().next().unwrap();

@@ -1,6 +1,6 @@
 //! Circuit Patterns for pattern matching
 
-use hugr::IncomingPort;
+use hugr::{HugrView, IncomingPort};
 use hugr::{Node, Port};
 use itertools::Itertools;
 use portmatching::{patterns::NoRootFound, HashMap, Pattern, SinglePatternMatcher};
@@ -30,7 +30,8 @@ impl CircuitPattern {
     }
 
     /// Construct a pattern from a circuit.
-    pub fn try_from_circuit(circuit: &impl Circuit) -> Result<Self, InvalidPattern> {
+    pub fn try_from_circuit(circuit: &Circuit) -> Result<Self, InvalidPattern> {
+        let hugr = circuit.hugr();
         if circuit.num_gates() == 0 {
             return Err(InvalidPattern::EmptyCircuit);
         }
@@ -42,10 +43,9 @@ impl CircuitPattern {
                 let in_offset: IncomingPort = in_offset.into();
                 let edge_prop = PEdge::try_from_port(cmd.node(), in_offset.into(), circuit)
                     .expect("Invalid HUGR");
-                let (prev_node, prev_port) = circuit
+                let (prev_node, prev_port) = hugr
                     .linked_outputs(cmd.node(), in_offset)
                     .exactly_one()
-                    .ok()
                     .expect("invalid HUGR");
                 let prev_node = match edge_prop {
                     PEdge::InternalEdge { .. } => NodeID::HugrNode(prev_node),
@@ -58,18 +58,16 @@ impl CircuitPattern {
         if !pattern.is_valid() {
             return Err(InvalidPattern::NotConnected);
         }
-        let (inp, out) = (circuit.input(), circuit.output());
-        let inp_ports = circuit.signature(inp).unwrap().output_ports();
-        let out_ports = circuit.signature(out).unwrap().input_ports();
+        let [inp, out] = circuit.io_nodes();
+        let inp_ports = hugr.signature(inp).unwrap().output_ports();
+        let out_ports = hugr.signature(out).unwrap().input_ports();
         let inputs = inp_ports
-            .map(|p| circuit.linked_ports(inp, p).collect())
+            .map(|p| hugr.linked_ports(inp, p).collect())
             .collect_vec();
         let outputs = out_ports
             .map(|p| {
-                circuit
-                    .linked_ports(out, p)
+                hugr.linked_ports(out, p)
                     .exactly_one()
-                    .ok()
                     .expect("invalid circuit")
             })
             .collect_vec();
@@ -87,7 +85,11 @@ impl CircuitPattern {
     }
 
     /// Compute the map from pattern nodes to circuit nodes in `circ`.
-    pub fn get_match_map(&self, root: Node, circ: &impl Circuit) -> Option<HashMap<Node, Node>> {
+    pub fn get_match_map(
+        &self,
+        root: Node,
+        circ: &Circuit<impl HugrView>,
+    ) -> Option<HashMap<Node, Node>> {
         let single_matcher = SinglePatternMatcher::from_pattern(self.pattern.clone());
         single_matcher
             .get_match_map(
@@ -143,7 +145,6 @@ mod tests {
     use hugr::ops::OpType;
     use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
     use hugr::types::FunctionType;
-    use hugr::Hugr;
 
     use crate::extension::REGISTRY;
     use crate::utils::build_simple_circuit;
@@ -151,7 +152,7 @@ mod tests {
 
     use super::*;
 
-    fn h_cx() -> Hugr {
+    fn h_cx() -> Circuit {
         build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::CX, [0, 1])?;
             circ.append(Tk2Op::H, [0])?;
@@ -161,7 +162,7 @@ mod tests {
     }
 
     /// A circuit with two rotation gates in sequence, sharing a param
-    fn circ_with_copy() -> Hugr {
+    fn circ_with_copy() -> Circuit {
         let input_t = vec![QB_T, FLOAT64_TYPE];
         let output_t = vec![QB_T];
         let mut h = DFGBuilder::new(FunctionType::new(input_t, output_t)).unwrap();
@@ -175,11 +176,11 @@ mod tests {
         let res = h.add_dataflow_op(Tk2Op::RxF64, [qb, f]).unwrap();
         let qb = res.outputs().next().unwrap();
 
-        h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap()
+        h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap().into()
     }
 
     /// A circuit with two rotation gates in parallel, sharing a param
-    fn circ_with_copy_disconnected() -> Hugr {
+    fn circ_with_copy_disconnected() -> Circuit {
         let input_t = vec![QB_T, QB_T, FLOAT64_TYPE];
         let output_t = vec![QB_T, QB_T];
         let mut h = DFGBuilder::new(FunctionType::new(input_t, output_t)).unwrap();
@@ -194,14 +195,16 @@ mod tests {
         let res = h.add_dataflow_op(Tk2Op::RxF64, [qb2, f]).unwrap();
         let qb2 = res.outputs().next().unwrap();
 
-        h.finish_hugr_with_outputs([qb1, qb2], &REGISTRY).unwrap()
+        h.finish_hugr_with_outputs([qb1, qb2], &REGISTRY)
+            .unwrap()
+            .into()
     }
 
     #[test]
     fn construct_pattern() {
-        let hugr = h_cx();
+        let circ = h_cx();
 
-        let p = CircuitPattern::try_from_circuit(&hugr).unwrap();
+        let p = CircuitPattern::try_from_circuit(&circ).unwrap();
 
         let edges: HashSet<_> = p
             .pattern
@@ -210,9 +213,9 @@ mod tests {
             .iter()
             .map(|e| (e.source.unwrap(), e.target.unwrap()))
             .collect();
-        let inp = hugr.input();
-        let cx_gate = NodeID::HugrNode(get_nodes_by_tk2op(&hugr, Tk2Op::CX)[0]);
-        let h_gate = NodeID::HugrNode(get_nodes_by_tk2op(&hugr, Tk2Op::H)[0]);
+        let inp = circ.input_node();
+        let cx_gate = NodeID::HugrNode(get_nodes_by_tk2op(&circ, Tk2Op::CX)[0]);
+        let h_gate = NodeID::HugrNode(get_nodes_by_tk2op(&circ, Tk2Op::H)[0]);
         assert_eq!(
             edges,
             [
@@ -252,10 +255,11 @@ mod tests {
         );
     }
 
-    fn get_nodes_by_tk2op(circ: &impl Circuit, t2_op: Tk2Op) -> Vec<Node> {
+    fn get_nodes_by_tk2op(circ: &Circuit, t2_op: Tk2Op) -> Vec<Node> {
         let t2_op: OpType = t2_op.into();
-        circ.nodes()
-            .filter(|n| circ.get_optype(*n) == &t2_op)
+        circ.hugr()
+            .nodes()
+            .filter(|n| circ.hugr().get_optype(*n) == &t2_op)
             .collect()
     }
 
@@ -265,7 +269,7 @@ mod tests {
         let pattern = CircuitPattern::try_from_circuit(&circ).unwrap();
         let edges = pattern.pattern.edges().unwrap();
         let rx_ns = get_nodes_by_tk2op(&circ, Tk2Op::RxF64);
-        let inp = circ.input();
+        let inp = circ.input_node();
         for rx_n in rx_ns {
             assert!(edges.iter().any(|e| {
                 e.reverse().is_none()
