@@ -144,7 +144,7 @@ impl RewriteStrategy for GreedyRewriteStrategy {
     }
 
     fn circuit_cost(&self, circ: &Circuit<impl HugrView>) -> Self::Cost {
-        circ.num_gates()
+        circ.num_operations()
     }
 
     fn op_cost(&self, _op: &OpType) -> Self::Cost {
@@ -488,7 +488,7 @@ mod tests {
         let strategy = GreedyRewriteStrategy;
         let rewritten = strategy.apply_rewrites(rws, &circ).collect_vec();
         assert_eq!(rewritten.len(), 1);
-        assert_eq!(rewritten[0].circ.num_gates(), 5);
+        assert_eq!(rewritten[0].circ.num_operations(), 5);
 
         if REWRITE_TRACING_ENABLED {
             assert_eq!(rewritten[0].circ.rewrite_trace().unwrap().len(), 3);
@@ -511,7 +511,7 @@ mod tests {
         let strategy = LexicographicCostFunction::default_cx();
         let rewritten = strategy.apply_rewrites(rws, &circ).collect_vec();
         let exp_circ_lens = HashSet::from_iter([3, 7, 9]);
-        let circ_lens: HashSet<_> = rewritten.iter().map(|r| r.circ.num_gates()).collect();
+        let circ_lens: HashSet<_> = rewritten.iter().map(|r| r.circ.num_operations()).collect();
         assert_eq!(circ_lens, exp_circ_lens);
 
         if REWRITE_TRACING_ENABLED {
@@ -547,7 +547,7 @@ mod tests {
         let strategy = GammaStrategyCost::exhaustive_cx_with_gamma(10.);
         let rewritten = strategy.apply_rewrites(rws, &circ);
         let exp_circ_lens = HashSet::from_iter([8, 17, 6, 9]);
-        let circ_lens: HashSet<_> = rewritten.map(|r| r.circ.num_gates()).collect();
+        let circ_lens: HashSet<_> = rewritten.map(|r| r.circ.num_operations()).collect();
         assert_eq!(circ_lens, exp_circ_lens);
     }
 
