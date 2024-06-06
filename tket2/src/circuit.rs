@@ -9,15 +9,17 @@ use std::iter::Sum;
 
 pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
+use hugr::hugr::views::{DescendantsGraph, ExtractHugr, HierarchyView};
 use itertools::Either::{Left, Right};
 
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::NodeType;
 use hugr::ops::dataflow::IOTrait;
-use hugr::ops::{Input, NamedOp, OpParent, OpTag, OpTrait, Output};
+use hugr::ops::{Input, NamedOp, OpParent, OpTag, OpTrait, Output, DFG};
 use hugr::types::{FunctionType, PolyFuncType};
 use hugr::{Hugr, PortIndex};
 use hugr::{HugrView, OutgoingPort};
+use hugr_core::hugr::internal::HugrMutInternals;
 use itertools::Itertools;
 use thiserror::Error;
 
@@ -298,6 +300,37 @@ impl<T: HugrView> Circuit<T> {
     pub fn mermaid_string(&self) -> String {
         // TODO: See comment in `dot_string`.
         self.hugr.mermaid_string()
+    }
+
+    /// Extracts the circuit into a new owned HUGR containing the circuit at the root.
+    /// Replaces the circuit container operation with an [`OpType::Dfg`].
+    ///
+    /// Regions that are not descendants of the parent node are not included in the new HUGR.
+    /// This may invalidate calls to functions defined elsewhere. Make sure to inline any
+    /// external functions before calling this method.
+    pub fn extract_dfg(self) -> Result<Circuit<Hugr>, CircuitMutError>
+    where
+        T: ExtractHugr,
+    {
+        let mut circ = if self.parent == self.hugr.root() {
+            self.to_owned()
+        } else {
+            let view: DescendantsGraph = DescendantsGraph::try_new(&self.hugr, self.parent)
+                .expect("Circuit parent was not a dataflow container.");
+            view.extract_hugr().into()
+        };
+
+        // Replace the parent node with a DFG node, if necessary.
+        let nodetype = circ.hugr.get_nodetype(circ.parent());
+        if !matches!(nodetype.op(), OpType::DFG(_)) {
+            let dfg = DFG {
+                signature: circ.circuit_signature(),
+            };
+            let input_extensions = nodetype.input_extensions().cloned();
+            let nodetype = NodeType::new(OpType::DFG(dfg), input_extensions);
+            circ.hugr.replace_op(circ.parent(), nodetype)?;
+        }
+        Ok(circ)
     }
 }
 
@@ -648,12 +681,9 @@ mod tests {
         #[case] circ: Circuit,
         #[case] qubits: usize,
         #[case] bits: usize,
-        #[case] _name: Option<&str>,
+        #[case] name: Option<&str>,
     ) {
-        // TODO: The decoder discards the circuit name.
-        // This requires decoding circuits into `FuncDefn` nodes instead of `Dfg`,
-        // but currently that causes errors with the replacement methods.
-        //assert_eq!(circ.name(), name);
+        assert_eq!(circ.name(), name);
         assert_eq!(circ.circuit_signature().input_count(), qubits + bits);
         assert_eq!(circ.circuit_signature().output_count(), qubits + bits);
         assert_eq!(circ.qubit_count(), qubits);
