@@ -74,7 +74,10 @@ impl EqCircClass {
         };
 
         // Find the index for the smallest circuit
-        let min_index = circs.iter().position_min_by_key(|c| c.num_gates()).unwrap();
+        let min_index = circs
+            .iter()
+            .position_min_by_key(|c| c.num_operations())
+            .unwrap();
         let representative = circs.swap_remove(min_index);
         Ok(Self::new(representative, circs))
     }
