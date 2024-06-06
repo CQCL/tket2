@@ -517,7 +517,7 @@ mod tests {
         .unwrap()
     }
 
-    /// 2-qubit circuit with a Hadamard, a CNOT, and a Rz gate.
+    /// 2-qubit circuit with a Hadamard, a CNOT, and a X gate.
     #[fixture]
     fn simple_circuit() -> Circuit {
         build_simple_circuit(2, |circ| {
@@ -538,7 +538,7 @@ mod tests {
         .unwrap()
     }
 
-    /// 2-qubit circuit with a Hadamard, a CNOT, and a Rz gate,
+    /// 2-qubit circuit with a Hadamard, a CNOT, and a X gate,
     /// defined inside a module.
     #[fixture]
     fn simple_module() -> Circuit {
