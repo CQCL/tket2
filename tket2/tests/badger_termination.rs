@@ -1,6 +1,5 @@
 #![cfg(feature = "portmatching")]
 
-use hugr::Hugr;
 use rstest::{fixture, rstest};
 use tket2::optimiser::badger::BadgerOptions;
 use tket2::{
@@ -29,7 +28,7 @@ fn nam_4_2() -> DefaultBadgerOptimiser {
 ///q_2: ┤ X ├───────────────────────────────────────────┤ X ├─────────────
 ///     └───┘                                           └───┘
 #[fixture]
-fn simple_circ() -> Hugr {
+fn simple_circ() -> Circuit {
     // The TK1 json of the circuit
     let json = r#"{
         "bits": [],
@@ -57,7 +56,7 @@ fn simple_circ() -> Hugr {
 
 #[rstest]
 //#[ignore = "Takes 200ms"]
-fn badger_termination(simple_circ: Hugr, nam_4_2: DefaultBadgerOptimiser) {
+fn badger_termination(simple_circ: Circuit, nam_4_2: DefaultBadgerOptimiser) {
     let opt_circ = nam_4_2.optimise(
         &simple_circ,
         BadgerOptions {

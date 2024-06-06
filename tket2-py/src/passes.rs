@@ -39,9 +39,10 @@ create_py_exception!(
 #[pyfunction]
 fn greedy_depth_reduce<'py>(circ: &Bound<'py, PyAny>) -> PyResult<(Bound<'py, PyAny>, u32)> {
     let py = circ.py();
-    try_with_hugr(circ, |mut h, typ| {
-        let n_moves = apply_greedy_commutation(&mut h).convert_pyerrs()?;
-        let circ = typ.convert(py, h)?;
+    try_with_hugr(circ, |h, typ| {
+        let mut circ: Circuit = h.into();
+        let n_moves = apply_greedy_commutation(&mut circ).convert_pyerrs()?;
+        let circ = typ.convert(py, circ.into_hugr())?;
         PyResult::Ok((circ, n_moves))
     })
 }
@@ -117,7 +118,8 @@ fn badger_optimise<'py>(
         _ => unreachable!(),
     };
     // Optimise
-    try_update_hugr(circ, |mut circ, _| {
+    try_update_hugr(circ, |hugr, _| {
+        let mut circ: Circuit = hugr.into();
         let n_cx = circ
             .commands()
             .filter(|c| op_matches(c.optype(), Tk2Op::CX))
@@ -142,6 +144,6 @@ fn badger_optimise<'py>(
             };
             circ = optimiser.optimise(circ, log_file, options);
         }
-        PyResult::Ok(circ)
+        PyResult::Ok(circ.into_hugr())
     })
 }

@@ -173,8 +173,11 @@ impl PyPauli {
     }
 
     /// Check if two Pauli matrices are equal.
-    pub fn __eq__(&self, other: &PyPauli) -> bool {
-        self.p == other.p
+    pub fn __eq__(&self, other: &Bound<PyAny>) -> bool {
+        let Ok(other): Result<&Bound<PyPauli>, _> = other.downcast() else {
+            return false;
+        };
+        self.p == other.borrow().p
     }
 }
 

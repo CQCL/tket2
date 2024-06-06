@@ -1,7 +1,10 @@
+from typing import TypeVar
 from .circuit import Tk2Circuit
 from pytket._tket.circuit import Circuit
 
 from pathlib import Path
+
+CircuitClass = TypeVar("CircuitClass", Circuit, Tk2Circuit)
 
 class BadgerOptimiser:
     @staticmethod
@@ -14,14 +17,14 @@ class BadgerOptimiser:
 
     def optimise(
         self,
-        circ: Tk2Circuit | Circuit,
+        circ: CircuitClass,
         timeout: int | None = None,
         progress_timeout: int | None = None,
         n_threads: int | None = None,
         split_circ: bool = False,
         queue_size: int | None = None,
         log_progress: Path | None = None,
-    ) -> Tk2Circuit | Circuit:
+    ) -> CircuitClass:
         """Optimise a circuit.
 
         :param circ: The circuit to optimise.

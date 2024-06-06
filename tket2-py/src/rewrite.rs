@@ -43,7 +43,7 @@ impl PyCircuitRewrite {
 
     /// The replacement subcircuit.
     pub fn replacement(&self) -> Tk2Circuit {
-        self.rewrite.replacement().clone().into()
+        self.rewrite.replacement().to_owned().into()
     }
 
     #[new]
@@ -55,8 +55,8 @@ impl PyCircuitRewrite {
         Ok(Self {
             rewrite: CircuitRewrite::try_new(
                 &source_position.0,
-                &source_circ.hugr,
-                replacement.hugr,
+                &source_circ.circ,
+                replacement.circ,
             )
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
         })
@@ -80,7 +80,7 @@ impl PySubcircuit {
     fn from_nodes(nodes: Vec<PyNode>, circ: &Tk2Circuit) -> PyResult<Self> {
         let nodes: Vec<_> = nodes.into_iter().map_into().collect();
         Ok(Self(
-            Subcircuit::try_from_nodes(nodes, &circ.hugr)
+            Subcircuit::try_from_nodes(nodes, &circ.circ)
                 .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
         ))
     }
@@ -107,7 +107,7 @@ impl PyECCRewriter {
     /// Returns a list of circuit rewrites that can be applied to the given Tk2Circuit.
     pub fn get_rewrites(&self, circ: &Tk2Circuit) -> Vec<PyCircuitRewrite> {
         self.0
-            .get_rewrites(&circ.hugr)
+            .get_rewrites(&circ.circ)
             .into_iter()
             .map_into()
             .collect()

@@ -84,8 +84,8 @@ def measure_rules() -> list[Rule]:
     r_build = Dfg([QB_T], [QB_T, BOOL_T])
     qs = r_build.inputs()
     qs = r_build.add_op(PauliZ.op(), qs).outs(1)
-    qs, b = r_build.add_op(Measure, qs).outs(2)
-    ltk = r_build.finish([qs, b])
+    q, b = r_build.add_op(Measure, qs).outs(2)
+    ltk = r_build.finish([q, b])
 
     r_build = Dfg([QB_T], [QB_T, BOOL_T])
     qs = r_build.inputs()

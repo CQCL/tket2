@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use hugr::extension::prelude::QB_T;
 use hugr::ops::{NamedOp, OpType};
 use hugr::std_extensions::arithmetic::float_types::ConstF64;
-use hugr::Wire;
+use hugr::{HugrView, Wire};
 use itertools::{Either, Itertools};
 use tket_json_rs::circuit_json::{self, Permutation, Register, SerialCircuit};
 
@@ -48,8 +48,9 @@ pub(super) struct JsonEncoder {
 
 impl JsonEncoder {
     /// Create a new [`JsonEncoder`] from a [`Circuit`].
-    pub fn new(circ: &impl Circuit) -> Self {
+    pub fn new<T: HugrView>(circ: &Circuit<T>) -> Self {
         let name = circ.name().map(str::to_string);
+        let hugr = circ.hugr();
 
         let mut qubit_registers = vec![];
         let mut bit_registers = vec![];
@@ -58,17 +59,17 @@ impl JsonEncoder {
 
         // Recover other parameters stored in the metadata
         // TODO: Check for invalid encoded metadata
-        let root = circ.root();
-        if let Some(p) = circ.get_metadata(root, METADATA_PHASE) {
+        let root = circ.parent();
+        if let Some(p) = hugr.get_metadata(root, METADATA_PHASE) {
             phase = p.as_str().unwrap().to_string();
         }
-        if let Some(perm) = circ.get_metadata(root, METADATA_IMPLICIT_PERM) {
+        if let Some(perm) = hugr.get_metadata(root, METADATA_IMPLICIT_PERM) {
             implicit_permutation = serde_json::from_value(perm.clone()).unwrap();
         }
-        if let Some(q_regs) = circ.get_metadata(root, METADATA_Q_REGISTERS) {
+        if let Some(q_regs) = hugr.get_metadata(root, METADATA_Q_REGISTERS) {
             qubit_registers = serde_json::from_value(q_regs.clone()).unwrap();
         }
-        if let Some(b_regs) = circ.get_metadata(root, METADATA_B_REGISTERS) {
+        if let Some(b_regs) = hugr.get_metadata(root, METADATA_B_REGISTERS) {
             bit_registers = serde_json::from_value(b_regs.clone()).unwrap();
         }
 
@@ -109,9 +110,9 @@ impl JsonEncoder {
     }
 
     /// Add a circuit command to the serialization.
-    pub fn add_command<C: Circuit>(
+    pub fn add_command<T: HugrView>(
         &mut self,
-        command: Command<'_, C>,
+        command: Command<'_, T>,
         optype: &OpType,
     ) -> Result<(), OpConvertError> {
         // Register any output of the command that can be used as a TKET1 parameter.
@@ -169,7 +170,11 @@ impl JsonEncoder {
     /// Record any output of the command that can be used as a TKET1 parameter.
     /// Returns whether parameters were recorded.
     /// Associates the output wires with the parameter expression.
-    fn record_parameters<C: Circuit>(&mut self, command: &Command<'_, C>, optype: &OpType) -> bool {
+    fn record_parameters<T: HugrView>(
+        &mut self,
+        command: &Command<'_, T>,
+        optype: &OpType,
+    ) -> bool {
         // Only consider commands where all inputs are parameters.
         let inputs = command
             .inputs()

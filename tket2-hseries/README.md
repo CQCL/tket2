@@ -13,7 +13,7 @@ Install using `cargo`:
 cargo install tket2-hseries
 ```
 
-This will install the `tket2-hseries` binary. 
+This will install the `tket2-hseries` binary.
 
 ## Recent Changes
 

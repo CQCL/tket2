@@ -22,13 +22,12 @@ use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 use fxhash::FxHashSet;
 use hugr::hugr::HugrError;
+use hugr::HugrView;
 pub use log::BadgerLogger;
 
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
 use std::{mem, thread};
-
-use hugr::Hugr;
 
 use crate::circuit::cost::CircuitCost;
 use crate::circuit::CircuitHash;
@@ -37,7 +36,6 @@ use crate::optimiser::badger::hugr_pqueue::{Entry, HugrPQ};
 use crate::optimiser::badger::worker::BadgerWorker;
 use crate::passes::CircuitChunks;
 use crate::rewrite::strategy::RewriteStrategy;
-use crate::rewrite::trace::RewriteTracer;
 use crate::rewrite::Rewriter;
 use crate::Circuit;
 
@@ -113,7 +111,7 @@ impl<R, S> BadgerOptimiser<R, S> {
         Self { rewriter, strategy }
     }
 
-    fn cost(&self, circ: &Hugr) -> S::Cost
+    fn cost(&self, circ: &Circuit<impl HugrView>) -> S::Cost
     where
         S: RewriteStrategy,
     {
@@ -130,7 +128,7 @@ where
     /// Run the Badger optimiser on a circuit.
     ///
     /// A timeout (in seconds) can be provided.
-    pub fn optimise(&self, circ: &Hugr, options: BadgerOptions) -> Hugr {
+    pub fn optimise(&self, circ: &Circuit<impl HugrView>, options: BadgerOptions) -> Circuit {
         self.optimise_with_log(circ, Default::default(), options)
     }
 
@@ -139,10 +137,10 @@ where
     /// A timeout (in seconds) can be provided.
     pub fn optimise_with_log(
         &self,
-        circ: &Hugr,
+        circ: &Circuit<impl HugrView>,
         log_config: BadgerLogger,
         options: BadgerOptions,
-    ) -> Hugr {
+    ) -> Circuit {
         if options.split_circuit && options.n_threads.get() > 1 {
             return self.split_run(circ, log_config, options).unwrap();
         }
@@ -153,12 +151,18 @@ where
     }
 
     #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
-    fn badger(&self, circ: &Hugr, mut logger: BadgerLogger, opt: BadgerOptions) -> Hugr {
+    fn badger(
+        &self,
+        circ: &Circuit<impl HugrView>,
+        mut logger: BadgerLogger,
+        opt: BadgerOptions,
+    ) -> Circuit {
         let start_time = Instant::now();
         let mut last_best_time = Instant::now();
 
+        let circ = circ.to_owned();
         let mut best_circ = circ.clone();
-        let mut best_circ_cost = self.cost(circ);
+        let mut best_circ_cost = self.cost(&circ);
         let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.len());
         logger.log_best(&best_circ_cost, num_rewrites);
 
@@ -170,12 +174,12 @@ where
         // The priority queue of circuits to be processed (this should not get big)
         let cost_fn = {
             let strategy = self.strategy.clone();
-            move |circ: &'_ Hugr| strategy.circuit_cost(circ)
+            move |circ: &'_ Circuit| strategy.circuit_cost(circ)
         };
-        let cost = (cost_fn)(circ);
+        let cost = (cost_fn)(&circ);
 
         let mut pq = HugrPQ::new(cost_fn, opt.queue_size);
-        pq.push_unchecked(circ.clone(), hash, cost);
+        pq.push_unchecked(circ.to_owned(), hash, cost);
 
         let mut circ_cnt = 0;
         let mut timeout_flag = false;
@@ -250,16 +254,17 @@ where
     #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
     fn badger_multithreaded(
         &self,
-        circ: &Hugr,
+        circ: &Circuit<impl HugrView>,
         mut logger: BadgerLogger,
         opt: BadgerOptions,
-    ) -> Hugr {
+    ) -> Circuit {
         let n_threads: usize = opt.n_threads.get();
+        let circ = circ.to_owned();
 
         // multi-consumer priority channel for queuing circuits to be processed by the workers
         let cost_fn = {
             let strategy = self.strategy.clone();
-            move |circ: &'_ Hugr| strategy.circuit_cost(circ)
+            move |circ: &'_ Circuit| strategy.circuit_cost(circ)
         };
         let (pq, rx_log) = HugrPriorityChannel::init(cost_fn.clone(), opt.queue_size);
 
@@ -271,7 +276,7 @@ where
         pq.send(vec![Work {
             cost: best_circ_cost.clone(),
             hash: initial_circ_hash,
-            circ: circ.clone(),
+            circ,
         }])
         .unwrap();
 
@@ -381,18 +386,19 @@ where
     #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
     fn split_run(
         &self,
-        circ: &Hugr,
+        circ: &Circuit<impl HugrView>,
         mut logger: BadgerLogger,
         opt: BadgerOptions,
-    ) -> Result<Hugr, HugrError> {
-        let circ_cost = self.cost(circ);
+    ) -> Result<Circuit, HugrError> {
+        let circ = circ.to_owned();
+        let circ_cost = self.cost(&circ);
         let max_chunk_cost = circ_cost.clone().div_cost(opt.n_threads);
         logger.log(format!(
             "Splitting circuit with cost {:?} into chunks of at most {max_chunk_cost:?}.",
             circ_cost.clone()
         ));
         let mut chunks =
-            CircuitChunks::split_with_cost(circ, max_chunk_cost, |op| self.strategy.op_cost(op));
+            CircuitChunks::split_with_cost(&circ, max_chunk_cost, |op| self.strategy.op_cost(op));
 
         let num_rewrites = circ.rewrite_trace().map(|rs| rs.len());
         logger.log_best(circ_cost.clone(), num_rewrites);
@@ -495,7 +501,6 @@ mod tests {
         extension::prelude::QB_T,
         std_extensions::arithmetic::float_types::FLOAT64_TYPE,
         types::FunctionType,
-        Hugr,
     };
     use rstest::{fixture, rstest};
 
@@ -506,14 +511,14 @@ mod tests {
     use super::{BadgerOptimiser, DefaultBadgerOptimiser};
 
     /// Simplified description of the circuit's commands.
-    fn gates(circ: &Hugr) -> Vec<Tk2Op> {
+    fn gates(circ: &Circuit) -> Vec<Tk2Op> {
         circ.commands()
             .map(|cmd| cmd.optype().try_into().unwrap())
             .collect()
     }
 
     #[fixture]
-    fn rz_rz() -> Hugr {
+    fn rz_rz() -> Circuit {
         let input_t = vec![QB_T, FLOAT64_TYPE, FLOAT64_TYPE];
         let output_t = vec![QB_T];
         let mut h = DFGBuilder::new(FunctionType::new(input_t, output_t)).unwrap();
@@ -528,7 +533,7 @@ mod tests {
         let res = h.add_dataflow_op(Tk2Op::RzF64, [qb, f2]).unwrap();
         let qb = res.outputs().next().unwrap();
 
-        h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap()
+        h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap().into()
     }
 
     /// This hugr corresponds to the qasm circuit:
@@ -549,9 +554,9 @@ mod tests {
     /// ```
     const NON_COMPOSABLE: &str = r#"{"phase":"0.0","commands":[{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[4]],["q",[1]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[1]],["q",[2]]]},{"op":{"type":"U3","params":["0.5","0","0.5"],"signature":["Q"]},"args":[["q",[1]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[3]],["q",[4]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[4]],["q",[0]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[0]],["q",[2]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[0]],["q",[2]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[3]],["q",[1]]]}],"qubits":[["q",[0]],["q",[1]],["q",[2]],["q",[3]],["q",[4]]],"bits":[],"implicit_permutation":[[["q",[0]],["q",[0]]],[["q",[1]],["q",[1]]],[["q",[2]],["q",[2]]],[["q",[3]],["q",[3]]],[["q",[4]],["q",[4]]]]}"#;
 
-    /// A Hugr that would trigger non-composable rewrites, if we applied them blindly from nam_6_3 matches.
+    /// A circuit that would trigger non-composable rewrites, if we applied them blindly from nam_6_3 matches.
     #[fixture]
-    fn non_composable_rw_hugr() -> Hugr {
+    fn non_composable_rw_hugr() -> Circuit {
         load_tk1_json_str(NON_COMPOSABLE).unwrap()
     }
 
@@ -571,7 +576,7 @@ mod tests {
     }
 
     #[rstest]
-    fn rz_rz_cancellation(rz_rz: Hugr, badger_opt: DefaultBadgerOptimiser) {
+    fn rz_rz_cancellation(rz_rz: Circuit, badger_opt: DefaultBadgerOptimiser) {
         let opt_rz = badger_opt.optimise(
             &rz_rz,
             BadgerOptions {
@@ -584,7 +589,7 @@ mod tests {
     }
 
     #[rstest]
-    fn rz_rz_cancellation_parallel(rz_rz: Hugr, badger_opt: DefaultBadgerOptimiser) {
+    fn rz_rz_cancellation_parallel(rz_rz: Circuit, badger_opt: DefaultBadgerOptimiser) {
         let mut opt_rz = badger_opt.optimise(
             &rz_rz,
             BadgerOptions {
@@ -594,13 +599,13 @@ mod tests {
                 ..Default::default()
             },
         );
-        opt_rz.update_validate(&REGISTRY).unwrap();
+        opt_rz.hugr_mut().update_validate(&REGISTRY).unwrap();
     }
 
     #[rstest]
     #[ignore = "Loading the ECC set is really slow (~5 seconds)"]
     fn non_composable_rewrites(
-        non_composable_rw_hugr: Hugr,
+        non_composable_rw_hugr: Circuit,
         badger_opt_full: DefaultBadgerOptimiser,
     ) {
         let mut opt = badger_opt_full.optimise(
@@ -612,7 +617,7 @@ mod tests {
             },
         );
         // No rewrites applied.
-        opt.update_validate(&REGISTRY).unwrap();
+        opt.hugr_mut().update_validate(&REGISTRY).unwrap();
     }
 
     #[test]

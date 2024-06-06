@@ -15,7 +15,7 @@ use hugr::hugr::{HugrError, NodeMetadataMap};
 use hugr::ops::handle::DataflowParentID;
 use hugr::ops::OpType;
 use hugr::types::FunctionType;
-use hugr::{Hugr, HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
+use hugr::{HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 use itertools::Itertools;
 use portgraph::algorithms::ConvexChecker;
 
@@ -36,7 +36,7 @@ pub struct ChunkConnection(Wire);
 #[derive(Debug, Clone)]
 pub struct Chunk {
     /// The extracted circuit.
-    pub circ: Hugr,
+    pub circ: Circuit,
     /// The original wires connected to the input.
     inputs: Vec<ChunkConnection>,
     /// The original wires connected to the output.
@@ -47,18 +47,18 @@ impl Chunk {
     /// Extract a chunk from a circuit.
     ///
     /// The chunk is extracted from the input wires to the output wires.
-    pub(self) fn extract<H: HugrView>(
-        circ: &H,
+    pub(self) fn extract(
+        circ: &Circuit,
         nodes: impl IntoIterator<Item = Node>,
         checker: &impl ConvexChecker,
     ) -> Self {
         let subgraph = SiblingSubgraph::try_from_nodes_with_checker(
             nodes.into_iter().collect_vec(),
-            circ,
+            circ.hugr(),
             checker,
         )
         .expect("Failed to define the chunk subgraph");
-        let extracted = subgraph.extract_subgraph(circ, "Chunk");
+        let extracted = subgraph.extract_subgraph(circ.hugr(), "Chunk").into();
         // Transform the subgraph's input/output sets into wires that can be
         // matched between different chunks.
         //
@@ -70,6 +70,7 @@ impl Chunk {
             .map(|wires| {
                 let (inp_node, inp_port) = wires[0];
                 let (out_node, out_port) = circ
+                    .hugr()
                     .linked_outputs(inp_node, inp_port)
                     .exactly_one()
                     .ok()
@@ -91,18 +92,20 @@ impl Chunk {
 
     /// Insert the chunk back into a circuit.
     pub(self) fn insert(&self, circ: &mut impl HugrMut, root: Node) -> ChunkInsertResult {
-        if self.circ.children(self.circ.root()).nth(2).is_none() {
+        let chunk = self.circ.hugr();
+        let chunk_root = chunk.root();
+        if chunk.children(self.circ.parent()).nth(2).is_none() {
             // The chunk is empty. We don't need to insert anything.
             return self.empty_chunk_insert_result();
         }
 
-        let [chunk_inp, chunk_out] = self.circ.get_io(self.circ.root()).unwrap();
+        let [chunk_inp, chunk_out] = chunk.get_io(chunk_root).unwrap();
         let chunk_sg: SiblingGraph<'_, DataflowParentID> =
-            SiblingGraph::try_new(&self.circ, self.circ.root()).unwrap();
+            SiblingGraph::try_new(&chunk, chunk_root).unwrap();
         // Insert the chunk circuit into the original circuit.
         let subgraph = SiblingSubgraph::try_new_dataflow_subgraph(&chunk_sg)
             .unwrap_or_else(|e| panic!("The chunk circuit is no longer a dataflow graph: {e}"));
-        let node_map = circ.insert_subgraph(root, &self.circ, &subgraph);
+        let node_map = circ.insert_subgraph(root, &chunk, &subgraph);
 
         let mut input_map = HashMap::with_capacity(self.inputs.len());
         let mut output_map = HashMap::with_capacity(self.outputs.len());
@@ -111,11 +114,8 @@ impl Chunk {
         //
         // Connections to an inserted node are translated into a [`ConnectionTarget::InsertedNode`].
         // Connections from the input directly into the output become a [`ConnectionTarget::TransitiveConnection`].
-        for (&connection, chunk_inp_port) in
-            self.inputs.iter().zip(self.circ.node_outputs(chunk_inp))
-        {
-            let connection_targets: Vec<ConnectionTarget> = self
-                .circ
+        for (&connection, chunk_inp_port) in self.inputs.iter().zip(chunk.node_outputs(chunk_inp)) {
+            let connection_targets: Vec<ConnectionTarget> = chunk
                 .linked_inputs(chunk_inp, chunk_inp_port)
                 .map(|(node, port)| {
                     if node == chunk_out {
@@ -131,9 +131,8 @@ impl Chunk {
             input_map.insert(connection, connection_targets);
         }
 
-        for (&wire, chunk_out_port) in self.outputs.iter().zip(self.circ.node_inputs(chunk_out)) {
-            let (node, port) = self
-                .circ
+        for (&wire, chunk_out_port) in self.outputs.iter().zip(chunk.node_inputs(chunk_out)) {
+            let (node, port) = chunk
                 .linked_outputs(chunk_out, chunk_out_port)
                 .exactly_one()
                 .ok()
@@ -159,15 +158,13 @@ impl Chunk {
     ///
     /// TODO: Support empty Subgraphs in Hugr?
     fn empty_chunk_insert_result(&self) -> ChunkInsertResult {
-        let [chunk_inp, chunk_out] = self.circ.get_io(self.circ.root()).unwrap();
+        let hugr = self.circ.hugr();
+        let [chunk_inp, chunk_out] = self.circ.io_nodes();
         let mut input_map = HashMap::with_capacity(self.inputs.len());
         let mut output_map = HashMap::with_capacity(self.outputs.len());
 
-        for (&connection, chunk_inp_port) in
-            self.inputs.iter().zip(self.circ.node_outputs(chunk_inp))
-        {
-            let connection_targets: Vec<ConnectionTarget> = self
-                .circ
+        for (&connection, chunk_inp_port) in self.inputs.iter().zip(hugr.node_outputs(chunk_inp)) {
+            let connection_targets: Vec<ConnectionTarget> = hugr
                 .linked_ports(chunk_inp, chunk_inp_port)
                 .map(|(node, port)| {
                     assert_eq!(node, chunk_out);
@@ -178,9 +175,8 @@ impl Chunk {
             input_map.insert(connection, connection_targets);
         }
 
-        for (&wire, chunk_out_port) in self.outputs.iter().zip(self.circ.node_inputs(chunk_out)) {
-            let (node, port) = self
-                .circ
+        for (&wire, chunk_out_port) in self.outputs.iter().zip(hugr.node_inputs(chunk_out)) {
+            let (node, port) = hugr
                 .linked_ports(chunk_out, chunk_out_port)
                 .exactly_one()
                 .ok()
@@ -251,38 +247,39 @@ impl CircuitChunks {
     /// Split a circuit into chunks.
     ///
     /// The circuit is split into chunks of at most `max_size` gates.
-    pub fn split(circ: &impl Circuit, max_size: usize) -> Self {
+    pub fn split(circ: &Circuit, max_size: usize) -> Self {
         Self::split_with_cost(circ, max_size.saturating_sub(1), |_| 1)
     }
 
     /// Split a circuit into chunks.
     ///
     /// The circuit is split into chunks of at most `max_cost`, using the provided cost function.
-    pub fn split_with_cost<H: Circuit, C: CircuitCost>(
-        circ: &H,
+    pub fn split_with_cost<C: CircuitCost>(
+        circ: &Circuit,
         max_cost: C,
         op_cost: impl Fn(&OpType) -> C,
     ) -> Self {
-        let root_meta = circ.get_node_metadata(circ.root()).cloned();
+        let hugr = circ.hugr();
+        let root_meta = hugr.get_node_metadata(circ.parent()).cloned();
         let signature = circ.circuit_signature().body().clone();
 
-        let [circ_input, circ_output] = circ.get_io(circ.root()).unwrap();
-        let input_connections = circ
+        let [circ_input, circ_output] = circ.io_nodes();
+        let input_connections = hugr
             .node_outputs(circ_input)
             .map(|port| Wire::new(circ_input, port).into())
             .collect();
-        let output_connections = circ
+        let output_connections = hugr
             .node_inputs(circ_output)
-            .flat_map(|p| circ.linked_outputs(circ_output, p))
+            .flat_map(|p| hugr.linked_outputs(circ_output, p))
             .map(|(n, p)| Wire::new(n, p).into())
             .collect();
 
         let mut chunks = Vec::new();
-        let convex_checker = TopoConvexChecker::new(circ);
+        let convex_checker = TopoConvexChecker::new(circ.hugr());
         let mut running_cost = C::default();
         let mut current_group = 0;
         for (_, commands) in &circ.commands().map(|cmd| cmd.node()).chunk_by(|&node| {
-            let new_cost = running_cost.clone() + op_cost(circ.get_optype(node));
+            let new_cost = running_cost.clone() + op_cost(hugr.get_optype(node));
             if new_cost.sub_cost(&max_cost).as_isize() > 0 {
                 running_cost = C::default();
                 current_group += 1;
@@ -303,7 +300,7 @@ impl CircuitChunks {
     }
 
     /// Reassemble the chunks into a circuit.
-    pub fn reassemble(self) -> Result<Hugr, HugrError> {
+    pub fn reassemble(self) -> Result<Circuit, HugrError> {
         let name = self
             .root_meta
             .as_ref()
@@ -423,16 +420,16 @@ impl CircuitChunks {
 
         reassembled.overwrite_node_metadata(root, self.root_meta);
 
-        Ok(reassembled)
+        Ok(reassembled.into())
     }
 
     /// Returns a list of references to the split circuits.
-    pub fn iter(&self) -> impl Iterator<Item = &Hugr> {
+    pub fn iter(&self) -> impl Iterator<Item = &Circuit> {
         self.chunks.iter().map(|chunk| &chunk.circ)
     }
 
     /// Returns a list of references to the split circuits.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Hugr> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Circuit> {
         self.chunks.iter_mut().map(|chunk| &mut chunk.circ)
     }
 
@@ -448,7 +445,7 @@ impl CircuitChunks {
 }
 
 impl Index<usize> for CircuitChunks {
-    type Output = Hugr;
+    type Output = Circuit;
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.chunks[index].circ
@@ -490,7 +487,7 @@ mod test {
 
         let mut reassembled = chunks.reassemble().unwrap();
 
-        reassembled.update_validate(&REGISTRY).unwrap();
+        reassembled.hugr_mut().update_validate(&REGISTRY).unwrap();
         assert_eq!(circ.circuit_hash(), reassembled.circuit_hash());
     }
 
@@ -520,14 +517,14 @@ mod test {
 
         let mut reassembled = chunks.reassemble().unwrap();
 
-        reassembled.update_validate(&REGISTRY).unwrap();
+        reassembled.hugr_mut().update_validate(&REGISTRY).unwrap();
 
         assert_eq!(reassembled.commands().count(), 1);
         let h = reassembled.commands().next().unwrap().node();
 
-        let [inp, out] = reassembled.get_io(reassembled.root()).unwrap();
+        let [inp, out] = reassembled.io_nodes();
         assert_eq!(
-            &reassembled.output_neighbours(inp).collect_vec(),
+            &reassembled.hugr().output_neighbours(inp).collect_vec(),
             &[h, out, out]
         );
     }

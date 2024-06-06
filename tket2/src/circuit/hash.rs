@@ -12,7 +12,7 @@ use thiserror::Error;
 use super::Circuit;
 
 /// Circuit hashing utilities.
-pub trait CircuitHash<'circ>: HugrView {
+pub trait CircuitHash {
     /// Compute hash of a circuit.
     ///
     /// We compute a hash for each command from its operation and the hash of
@@ -23,14 +23,26 @@ pub trait CircuitHash<'circ>: HugrView {
     ///
     /// Adapted from Quartz (Apache 2.0)
     /// <https://github.com/quantum-compiler/quartz/blob/2e13eb7ffb3c5c5fe96cf5b4246f4fd7512e111e/src/quartz/tasograph/tasograph.cpp#L410>
-    fn circuit_hash(&'circ self) -> Result<u64, HashError>;
+    fn circuit_hash(&self) -> Result<u64, HashError>;
 }
 
-impl<'circ, T> CircuitHash<'circ> for T
+impl<T: HugrView> CircuitHash for Circuit<T> {
+    fn circuit_hash(&self) -> Result<u64, HashError> {
+        let hugr = self.hugr();
+        let container: SiblingGraph = SiblingGraph::try_new(hugr, self.parent()).unwrap();
+        container.circuit_hash()
+    }
+}
+
+impl<T> CircuitHash for T
 where
     T: HugrView,
 {
-    fn circuit_hash(&'circ self) -> Result<u64, HashError> {
+    fn circuit_hash(&self) -> Result<u64, HashError> {
+        let Some([_, output_node]) = self.get_io(self.root()) else {
+            return Err(HashError::NotADfg);
+        };
+
         let mut node_hashes = HashState::default();
 
         for node in pg::Topo::new(&self.as_petgraph())
@@ -45,7 +57,7 @@ where
 
         // If the output node has no hash, the topological sort failed due to a cycle.
         node_hashes
-            .node_hash(self.output())
+            .node_hash(output_node)
             .ok_or(HashError::CyclicCircuit)
     }
 }
@@ -132,11 +144,13 @@ pub enum HashError {
     /// The circuit contains a cycle.
     #[error("The circuit contains a cycle.")]
     CyclicCircuit,
+    /// The hashed hugr is not a DFG.
+    #[error("Tried to hash a non-dfg hugr.")]
+    NotADfg,
 }
 
 #[cfg(test)]
 mod test {
-    use hugr::Hugr;
     use tket_json_rs::circuit_json;
 
     use crate::json::TKETDecode;
@@ -185,7 +199,7 @@ mod test {
     fn hash_constants() {
         let c_str = r#"{"bits": [], "commands": [{"args": [["q", [0]]], "op": {"params": ["0.5"], "type": "Rz"}}], "created_qubits": [], "discarded_qubits": [], "implicit_permutation": [[["q", [0]], ["q", [0]]]], "phase": "0.0", "qubits": [["q", [0]]]}"#;
         let ser: circuit_json::SerialCircuit = serde_json::from_str(c_str).unwrap();
-        let circ: Hugr = ser.decode().unwrap();
+        let circ: Circuit = ser.decode().unwrap();
         circ.circuit_hash().unwrap();
     }
 
@@ -197,7 +211,7 @@ mod test {
         let mut all_hashes = Vec::with_capacity(2);
         for c_str in [c_str1, c_str2] {
             let ser: circuit_json::SerialCircuit = serde_json::from_str(c_str).unwrap();
-            let circ: Hugr = ser.decode().unwrap();
+            let circ: Circuit = ser.decode().unwrap();
             all_hashes.push(circ.circuit_hash().unwrap());
         }
         assert_ne!(all_hashes[0], all_hashes[1]);

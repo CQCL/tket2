@@ -1,0 +1,18 @@
+# Filters used by [dorny/path-filters](https://github.com/dorny/paths-filter)
+# to detect changes in each subproject, and only run the corresponding jobs.
+
+rust-core: &rust-core
+  - "tket2/**"
+  - "Cargo.toml"
+  - "Cargo.lock"
+
+rust:
+  - *rust-core
+  - "badger-optimiser/**"
+  - "compile-rewriter/**"
+
+python:
+  - *rust-core
+  - "tket2-py/**"
+  - "pyproject.toml"
+  - "poetry.lock"
