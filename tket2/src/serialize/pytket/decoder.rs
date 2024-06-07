@@ -66,11 +66,11 @@ impl JsonDecoder {
         );
         // .with_extension_delta(&ExtensionSet::singleton(&TKET1_EXTENSION_ID));
 
+        // TODO: Use a FunctionBuilder and store the circuit name there.
         let mut dfg = DFGBuilder::new(sig).unwrap();
 
         // Metadata. The circuit requires "name", and we store other things that
         // should pass through the serialization roundtrip.
-        dfg.set_metadata("name", json!(serialcirc.name));
         dfg.set_metadata(METADATA_PHASE, json!(serialcirc.phase));
         dfg.set_metadata(
             METADATA_IMPLICIT_PERM,
