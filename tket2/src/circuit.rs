@@ -231,6 +231,22 @@ impl<T: HugrView> Circuit<T> {
         CommandIterator::new(self)
     }
 
+    /// Returns the top-level operations in the circuit, in some topological
+    /// order.
+    ///
+    /// This is a subset of the commands returned by [`Circuit::commands`], only
+    /// including [`Tk2Op`]s, pytket ops, and any other custom operations.
+    ///
+    ///   [`Tk2Op`]: crate::Tk2Op
+    #[inline]
+    pub fn operations(&self) -> impl Iterator<Item = Command<T>> + '_
+    where
+        Self: Sized,
+    {
+        // Traverse the circuit in topological order.
+        self.commands().filter(|cmd| cmd.optype().is_custom_op())
+    }
+
     /// Compute the cost of the circuit based on a per-operation cost function.
     #[inline]
     pub fn circuit_cost<F, C>(&self, op_cost: F) -> C
@@ -570,6 +586,7 @@ mod tests {
         );
         assert_eq!(circ.qubit_count(), qubits);
         assert_eq!(circ.num_operations(), 3);
+        assert_eq!(circ.operations().count(), 3);
 
         assert_eq!(circ.units().count(), qubits + bits);
         assert_eq!(circ.nonlinear_units().count(), 0);
