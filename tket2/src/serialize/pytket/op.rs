@@ -23,7 +23,7 @@ use crate::Tk2Op;
 
 /// A serialized operation, containing the operation type and all its attributes.
 ///
-/// Wrapper around [`circuit_json::Operation`] with cached number of qubits and bits.
+/// Wrapper around [`tket_json_rs::circuit_json::Operation`] with cached number of qubits and bits.
 ///
 /// The `Operation` contained by this struct is guaranteed to have a signature.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

@@ -24,7 +24,7 @@
 //! use hugr::HugrView;
 //!
 //! // Load a tket1 circuit.
-//! let mut circ: Circuit = tket2::json::load_tk1_json_file("../test_files/barenco_tof_5.json").unwrap();
+//! let mut circ: Circuit = tket2::serialize::load_tk1_json_file("../test_files/barenco_tof_5.json").unwrap();
 //!
 //! assert_eq!(circ.qubit_count(), 9);
 //! assert_eq!(circ.num_operations(), 170);
@@ -45,11 +45,11 @@
 
 pub mod circuit;
 pub mod extension;
-pub mod json;
 pub(crate) mod ops;
 pub mod optimiser;
 pub mod passes;
 pub mod rewrite;
+pub mod serialize;
 
 #[cfg(feature = "portmatching")]
 pub mod portmatching;

@@ -1,8 +1,10 @@
-//! Json serialization and deserialization.
+//! Serialization and deserialization of circuits using the `pytket` JSON format.
 
 mod decoder;
 mod encoder;
-pub mod op;
+mod op;
+
+pub(crate) use op::JsonOp;
 
 #[cfg(test)]
 mod tests;
