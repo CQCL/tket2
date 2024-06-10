@@ -1,3 +1,4 @@
+from typing import no_type_check
 from tket2.circuit import Tk2Circuit
 
 import math
@@ -14,17 +15,18 @@ def test_load_compiled_module():
     module.load(quantum)
 
     @guppy(module)
+    @no_type_check
     def my_func(
         q0: qubit,
         q1: qubit,
     ) -> tuple[bool,]:
-        q0 = phased_x(q0, py(math.pi / 2), py(-math.pi / 2))  # type: ignore
-        q0 = rz(q0, py(math.pi))  # type: ignore
-        q1 = phased_x(q1, py(math.pi / 2), py(-math.pi / 2))  # type: ignore
-        q1 = rz(q1, py(math.pi))  # type: ignore
-        q0, q1 = zz_max(q0, q1)  # type: ignore
-        _ = measure(q0)  # type: ignore
-        return (measure(q1),)  # type: ignore
+        q0 = phased_x(q0, py(math.pi / 2), py(-math.pi / 2))
+        q0 = rz(q0, py(math.pi))
+        q1 = phased_x(q1, py(math.pi / 2), py(-math.pi / 2))
+        q1 = rz(q1, py(math.pi))
+        q0, q1 = zz_max(q0, q1)
+        _ = measure(q0)
+        return (measure(q1),)
 
     # Compile the module, and convert it to a JSON string
     hugr = module.compile()
