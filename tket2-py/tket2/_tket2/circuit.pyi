@@ -56,6 +56,10 @@ class Tk2Circuit:
         """Encode the circuit as a pytket json string."""
 
     @staticmethod
+    def from_guppy_json(json: str, function: str) -> Tk2Circuit:
+        """Load a function from a compiled guppy module, encoded as a json string."""
+
+    @staticmethod
     def from_tket1_json(json: str) -> Tk2Circuit:
         """Decode a pytket json string to a Tk2Circuit."""
 
