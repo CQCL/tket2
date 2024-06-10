@@ -153,7 +153,7 @@ pub enum HashError {
 mod test {
     use tket_json_rs::circuit_json;
 
-    use crate::json::TKETDecode;
+    use crate::serialize::TKETDecode;
     use crate::utils::build_simple_circuit;
     use crate::Tk2Op;
 

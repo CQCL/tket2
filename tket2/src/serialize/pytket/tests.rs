@@ -11,9 +11,9 @@ use rstest::{fixture, rstest};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::optype;
 
+use super::TKETDecode;
 use crate::circuit::Circuit;
 use crate::extension::REGISTRY;
-use crate::json::TKETDecode;
 use crate::Tk2Op;
 
 const SIMPLE_JSON: &str = r#"{

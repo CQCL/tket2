@@ -497,8 +497,9 @@ mod tests {
     };
 
     use super::*;
-    use crate::utils::build_module_with_circuit;
-    use crate::{json::load_tk1_json_str, utils::build_simple_circuit, Tk2Op};
+    use crate::serialize::load_tk1_json_str;
+    use crate::utils::{build_module_with_circuit, build_simple_circuit};
+    use crate::Tk2Op;
 
     #[fixture]
     fn tk1_circuit() -> Circuit {
