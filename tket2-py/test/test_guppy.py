@@ -1,21 +1,18 @@
-from guppylang import guppy
-
-from tket2.circuit import (
-    Tk2Circuit,
-)
+from tket2.circuit import Tk2Circuit
 
 import math
 
+from guppylang import guppy
 from guppylang.module import GuppyModule
 from guppylang.prelude import quantum
 from guppylang.prelude.builtins import py
 from guppylang.prelude.quantum import measure, phased_x, qubit, rz, zz_max
 
-module = GuppyModule("test")
-module.load(quantum)
-
 
 def test_load_compiled_module():
+    module = GuppyModule("test")
+    module.load(quantum)
+
     @guppy(module)
     def my_func(
         q0: qubit,
