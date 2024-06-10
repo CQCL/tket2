@@ -743,7 +743,7 @@ dependencies = [
  "num-rational",
  "paste",
  "petgraph",
- "portgraph 0.12.0",
+ "portgraph 0.12.1",
  "regex",
  "serde",
  "serde_json",
@@ -1190,9 +1190,9 @@ dependencies = [
 
 [[package]]
 name = "portgraph"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8ad1ebc029f8dfab4f023f14c7e41b3b3a257cf28b2928949153e563c9bf02c"
+checksum = "0d83271bd5c2249831ff13227e6b3a968e115b6d4f4a2027a8ce02838b789ff8"
 dependencies = [
  "bitvec",
  "context-iterators",
@@ -1785,7 +1785,7 @@ dependencies = [
  "num-complex",
  "num-rational",
  "petgraph",
- "portgraph 0.12.0",
+ "portgraph 0.12.1",
  "portmatching",
  "priority-queue",
  "rayon",
@@ -1814,7 +1814,7 @@ dependencies = [
  "hugr",
  "itertools 0.13.0",
  "num_cpus",
- "portgraph 0.12.0",
+ "portgraph 0.12.1",
  "portmatching",
  "pyo3",
  "serde",
