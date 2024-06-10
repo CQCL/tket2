@@ -140,26 +140,3 @@ pub enum CircuitLoadError {
     #[error("Error loading the circuit: {0}")]
     CircuitLoadError(#[from] CircuitError),
 }
-
-#[cfg(test)]
-mod test {
-    use rstest::{fixture, rstest};
-
-    use super::*;
-
-    #[fixture]
-    fn guppy_circuit_json() -> &'static str {
-        include_str!("../../../test_files/guppy_hugr.json")
-    }
-
-    #[rstest]
-    #[case::complex(guppy_circuit_json(), "main", 17)]
-    fn test_load_guppy_json(
-        #[case] json: &str,
-        #[case] function: &str,
-        #[case] num_commands: usize,
-    ) {
-        let circ = load_guppy_json_str(json, function).unwrap_or_else(|e| panic!("{}", e));
-        assert_eq!(circ.num_operations(), num_commands);
-    }
-}

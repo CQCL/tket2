@@ -146,6 +146,15 @@ impl Tk2Circuit {
         Ok(circ_cost.cost.into_bound(py))
     }
 
+    /// Returns the number of operations in the circuit.
+    ///
+    /// This includes [`Tk2Op`]s, pytket ops, and any other custom operations.
+    ///
+    /// Nested circuits are traversed to count their operations.
+    pub fn num_operations(&self) -> usize {
+        self.circ.num_operations()
+    }
+
     /// Returns a hash of the circuit.
     pub fn hash(&self) -> u64 {
         self.circ.circuit_hash().unwrap()

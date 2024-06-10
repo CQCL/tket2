@@ -24,6 +24,14 @@ class Tk2Circuit:
     def circuit_cost(self, cost_fn: Callable[[Tk2Op], Any]) -> int:
         """Compute the cost of the circuit. Return value must implement __add__."""
 
+    def num_operations(self) -> int:
+        """The number of operations in the circuit.
+
+        This includes [`Tk2Op`]s, pytket ops, and any other custom operations.
+
+        Nested circuits are traversed to count their operations.
+        """
+
     def node_op(self, node: Node) -> CustomOp:
         """If the node corresponds to a custom op, return it. Otherwise, raise an error."""
 
