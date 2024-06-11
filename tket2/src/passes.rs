@@ -5,3 +5,6 @@ pub use commutation::{apply_greedy_commutation, PullForwardError};
 
 pub mod chunks;
 pub use chunks::CircuitChunks;
+
+pub mod tuple_unpack;
+pub use tuple_unpack::find_tuple_unpack_rewrites;
