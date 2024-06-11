@@ -17,7 +17,6 @@ use std::{fs, io};
 use hugr::ops::{OpType, Value};
 use hugr::std_extensions::arithmetic::float_types::{ConstF64, FLOAT64_TYPE};
 
-use stringreader::StringReader;
 use thiserror::Error;
 use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::optype::OpType as JsonOpType;
@@ -120,7 +119,7 @@ pub fn load_tk1_json_reader(json: impl io::Read) -> Result<Circuit, TK1ConvertEr
 
 /// Load a TKET1 circuit from a JSON string.
 pub fn load_tk1_json_str(json: &str) -> Result<Circuit, TK1ConvertError> {
-    let reader = StringReader::new(json);
+    let reader = json.as_bytes();
     load_tk1_json_reader(reader)
 }
 

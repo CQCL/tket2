@@ -59,7 +59,6 @@ delegate = { workspace = true }
 csv = { workspace = true }
 chrono = { workspace = true }
 bytemuck = { workspace = true }
-stringreader = { workspace = true }
 crossbeam-channel = { workspace = true }
 tracing = { workspace = true }
 

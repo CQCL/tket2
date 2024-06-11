@@ -98,6 +98,15 @@ impl Tk2Circuit {
         Ok(Tk2Circuit { circ: hugr.into() })
     }
 
+    /// Load a function from a compiled guppy module, encoded as a json string.
+    #[staticmethod]
+    pub fn from_guppy_json(json: &str, function: &str) -> PyResult<Self> {
+        let circ = tket2::serialize::load_guppy_json_str(json, function).map_err(|e| {
+            PyErr::new::<PyAttributeError, _>(format!("Invalid encoded circuit: {e}"))
+        })?;
+        Ok(Tk2Circuit { circ })
+    }
+
     /// Encode the circuit as a tket1 json string.
     pub fn to_tket1_json(&self) -> PyResult<String> {
         Ok(serde_json::to_string(&SerialCircuit::encode(&self.circ).convert_pyerrs()?).unwrap())
@@ -106,11 +115,10 @@ impl Tk2Circuit {
     /// Decode a tket1 json string to a circuit.
     #[staticmethod]
     pub fn from_tket1_json(json: &str) -> PyResult<Self> {
-        let tk1: SerialCircuit = serde_json::from_str(json)
-            .map_err(|e| PyErr::new::<PyAttributeError, _>(format!("Invalid encoded HUGR: {e}")))?;
-        Ok(Tk2Circuit {
-            circ: tk1.decode().convert_pyerrs()?,
-        })
+        let circ = tket2::serialize::load_tk1_json_str(json).map_err(|e| {
+            PyErr::new::<PyAttributeError, _>(format!("Could not load pytket circuit: {e}"))
+        })?;
+        Ok(Tk2Circuit { circ })
     }
 
     /// Compute the cost of the circuit based on a per-operation cost function.
@@ -136,6 +144,15 @@ impl Tk2Circuit {
         };
         let circ_cost = self.circ.circuit_cost(cost_fn)?;
         Ok(circ_cost.cost.into_bound(py))
+    }
+
+    /// Returns the number of operations in the circuit.
+    ///
+    /// This includes [`Tk2Op`]s, pytket ops, and any other custom operations.
+    ///
+    /// Nested circuits are traversed to count their operations.
+    pub fn num_operations(&self) -> usize {
+        self.circ.num_operations()
     }
 
     /// Returns a hash of the circuit.
