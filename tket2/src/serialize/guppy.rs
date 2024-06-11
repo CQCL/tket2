@@ -35,7 +35,7 @@ pub fn load_guppy_json_reader(
     find_function(hugr, function)
 }
 
-/// Looks from the required function in a HUGR compiled from a guppy module.
+/// Looks for the required function in a HUGR compiled from a guppy module.
 ///
 /// Guppy functions are compiled into a root module, with each function as a `FuncDecl` child.
 /// Each `FuncDecl` contains a `CFG` operation that defines the function.
