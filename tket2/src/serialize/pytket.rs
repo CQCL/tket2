@@ -27,6 +27,8 @@ use crate::circuit::Circuit;
 use self::decoder::JsonDecoder;
 use self::encoder::JsonEncoder;
 
+pub use crate::passes::pytket::lower_to_pytket;
+
 /// Prefix used for storing metadata in the hugr nodes.
 pub const METADATA_PREFIX: &str = "TKET1_JSON";
 /// The global phase specified as metadata.
@@ -92,7 +94,7 @@ impl TKETDecode for SerialCircuit {
 }
 
 /// Error type for conversion between `Op` and `OpType`.
-#[derive(Debug, Error)]
+#[derive(Clone, PartialEq, Debug, Error)]
 pub enum OpConvertError {
     /// The serialized operation is not supported.
     #[error("Unsupported serialized pytket operation: {0:?}")]
@@ -123,6 +125,13 @@ pub fn load_tk1_json_str(json: &str) -> Result<Circuit, TK1ConvertError> {
 }
 
 /// Save a circuit to file in TK1 JSON format.
+///
+/// You may need to normalize the circuit using [`lower_to_pytket`] before saving.
+///
+/// # Errors
+///
+/// Returns an error if the circuit is not flat or if it contains operations not
+/// supported by pytket.
 pub fn save_tk1_json_file(circ: &Circuit, path: impl AsRef<Path>) -> Result<(), TK1ConvertError> {
     let file = fs::File::create(path)?;
     let writer = io::BufWriter::new(file);
@@ -130,6 +139,13 @@ pub fn save_tk1_json_file(circ: &Circuit, path: impl AsRef<Path>) -> Result<(), 
 }
 
 /// Save a circuit in TK1 JSON format to a writer.
+///
+/// You may need to normalize the circuit using [`lower_to_pytket`] before saving.
+///
+/// # Errors
+///
+/// Returns an error if the circuit is not flat or if it contains operations not
+/// supported by pytket.
 pub fn save_tk1_json_writer(circ: &Circuit, w: impl io::Write) -> Result<(), TK1ConvertError> {
     let serial_circ = SerialCircuit::encode(circ)?;
     serde_json::to_writer(w, &serial_circ)?;
@@ -137,6 +153,13 @@ pub fn save_tk1_json_writer(circ: &Circuit, w: impl io::Write) -> Result<(), TK1
 }
 
 /// Save a circuit in TK1 JSON format to a String.
+///
+/// You may need to normalize the circuit using [`lower_to_pytket`] before saving.
+///
+/// # Errors
+///
+/// Returns an error if the circuit is not flat or if it contains operations not
+/// supported by pytket.
 pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, TK1ConvertError> {
     let mut buf = io::BufWriter::new(Vec::new());
     save_tk1_json_writer(circ, &mut buf)?;

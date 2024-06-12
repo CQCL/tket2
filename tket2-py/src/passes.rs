@@ -36,6 +36,12 @@ create_py_exception!(
     "Error from a `PullForward` operation"
 );
 
+create_py_exception!(
+    tket2::passes::pytket::PytketLoweringError,
+    PyPytketLoweringError,
+    "Errors that can occur while removing high-level operations from HUGR intended to be encoded as a pytket circuit."
+);
+
 #[pyfunction]
 fn greedy_depth_reduce<'py>(circ: &Bound<'py, PyAny>) -> PyResult<(Bound<'py, PyAny>, u32)> {
     let py = circ.py();
