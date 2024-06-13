@@ -53,7 +53,7 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         "HUGRSerializationError",
         py.get_type_bound::<PyHUGRSerializationError>(),
     )?;
-    m.add("OpConvertError", py.get_type_bound::<PyOpConvertError>())?;
+    m.add("TK1ConvertError", py.get_type_bound::<PyTK1ConvertError>())?;
 
     Ok(m)
 }
@@ -83,8 +83,8 @@ create_py_exception!(
 );
 
 create_py_exception!(
-    tket2::serialize::pytket::OpConvertError,
-    PyOpConvertError,
+    tket2::serialize::pytket::TK1ConvertError,
+    PyTK1ConvertError,
     "Error type for the conversion between tket2 and tket1 operations."
 );
 
