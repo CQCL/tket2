@@ -24,6 +24,14 @@ class Tk2Circuit:
     def circuit_cost(self, cost_fn: Callable[[Tk2Op], Any]) -> int:
         """Compute the cost of the circuit. Return value must implement __add__."""
 
+    def num_operations(self) -> int:
+        """The number of operations in the circuit.
+
+        This includes [`Tk2Op`]s, pytket ops, and any other custom operations.
+
+        Nested circuits are traversed to count their operations.
+        """
+
     def node_op(self, node: Node) -> CustomOp:
         """If the node corresponds to a custom op, return it. Otherwise, raise an error."""
 
@@ -54,6 +62,10 @@ class Tk2Circuit:
 
     def to_tket1_json(self) -> str:
         """Encode the circuit as a pytket json string."""
+
+    @staticmethod
+    def from_guppy_json(json: str, function: str) -> Tk2Circuit:
+        """Load a function from a compiled guppy module, encoded as a json string."""
 
     @staticmethod
     def from_tket1_json(json: str) -> Tk2Circuit:
@@ -168,4 +180,4 @@ class HugrError(Exception): ...
 class BuildError(Exception): ...
 class ValidationError(Exception): ...
 class HUGRSerializationError(Exception): ...
-class OpConvertError(Exception): ...
+class TK1ConvertError(Exception): ...

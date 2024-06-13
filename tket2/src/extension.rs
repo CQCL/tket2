@@ -2,7 +2,7 @@
 //!
 //! This includes a extension for the opaque TKET1 operations.
 
-use super::json::op::JsonOp;
+use super::serialize::pytket::JsonOp;
 use crate::Tk2Op;
 use hugr::extension::prelude::PRELUDE;
 use hugr::extension::simple_op::MakeOpDef;
