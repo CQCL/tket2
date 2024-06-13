@@ -504,8 +504,8 @@ mod tests {
     };
     use rstest::{fixture, rstest};
 
-    use crate::json::load_tk1_json_str;
     use crate::optimiser::badger::BadgerOptions;
+    use crate::serialize::load_tk1_json_str;
     use crate::{extension::REGISTRY, Circuit, Tk2Op};
 
     use super::{BadgerOptimiser, DefaultBadgerOptimiser};

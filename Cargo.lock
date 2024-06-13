@@ -249,9 +249,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.4"
+version = "4.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90bc066a67923782aa8515dbaea16946c5bcc5addbd668bb80af688e53e548a0"
+checksum = "a9689a29b593160de5bc4aacab7b5d54fb52231de70122626c178e6a368994c7"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -278,9 +278,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.2"
+version = "4.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae129e2e766ae0ec03484e609954119f123cc1fe650337e155d03b022f24f7b4"
+checksum = "2e5387378c84f6faa26890ebf9f0a92989f8873d4d380467bcd0d8d8620424df"
 dependencies = [
  "anstream",
  "anstyle",
@@ -290,9 +290,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.5.4"
+version = "4.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "528131438037fd55894f62d6e9f068b8f45ac57ffa77517819645d10aed04f64"
+checksum = "c780290ccf4fb26629baa7a1081e68ced113f1d3ec302fa5948f1c381ebf06c6"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -735,11 +735,11 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ebf436d9d4d0239fcb511a1f7d745548bbdc6316baf50bb2e944f294542ea24"
+checksum = "a20246e5f1a0aae160b80b71bc4d5c1dcccc5605dbe6458ac6f9af73137339c3"
 dependencies = [
- "hugr-core",
+ "hugr-core 0.2.0",
  "hugr-passes",
 ]
 
@@ -752,7 +752,7 @@ dependencies = [
  "clap",
  "clap-stdin",
  "clap-verbosity-flag",
- "hugr-core",
+ "hugr-core 0.1.0",
  "serde_json",
  "thiserror",
 ]
@@ -776,7 +776,38 @@ dependencies = [
  "num-rational",
  "paste",
  "petgraph",
- "portgraph 0.12.0",
+ "portgraph 0.12.1",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "smol_str",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "typetag",
+]
+
+[[package]]
+name = "hugr-core"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd64c708ba21cedae58e37f3557d139ee6eaeaaa7df0ab9541385249c1ee6065"
+dependencies = [
+ "bitvec",
+ "cgmath",
+ "context-iterators",
+ "delegate 0.12.0",
+ "derive_more",
+ "downcast-rs",
+ "enum_dispatch",
+ "html-escape",
+ "itertools 0.13.0",
+ "lazy_static",
+ "num-rational",
+ "paste",
+ "petgraph",
+ "portgraph 0.12.1",
  "regex",
  "serde",
  "serde_json",
@@ -790,11 +821,11 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08c1ae428e41786736cc92cbc3ae11ad39f178591d36a9ac3d1c8990e1a9bf76"
+checksum = "7522d3a5299a49ee453f6d0e3c3a6e8e7ed08a38cbd11e1d19163b97098ce9be"
 dependencies = [
- "hugr-core",
+ "hugr-core 0.2.0",
  "itertools 0.13.0",
  "lazy_static",
  "paste",
@@ -1223,9 +1254,9 @@ dependencies = [
 
 [[package]]
 name = "portgraph"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8ad1ebc029f8dfab4f023f14c7e41b3b3a257cf28b2928949153e563c9bf02c"
+checksum = "0d83271bd5c2249831ff13227e6b3a968e115b6d4f4a2027a8ce02838b789ff8"
 dependencies = [
  "bitvec",
  "context-iterators",
@@ -1610,12 +1641,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "stringreader"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "913e7b03d63752f6cdd2df77da36749d82669904798fe8944b9ec3d23f159905"
-
-[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1632,9 +1657,9 @@ dependencies = [
 
 [[package]]
 name = "strum_macros"
-version = "0.26.3"
+version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7993a8e3a9e88a00351486baae9522c91b123a088f76469e5bd5cc17198ea87"
+checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -1799,7 +1824,7 @@ dependencies = [
 
 [[package]]
 name = "tket2"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "bytemuck",
  "cgmath",
@@ -1818,7 +1843,7 @@ dependencies = [
  "num-complex",
  "num-rational",
  "petgraph",
- "portgraph 0.12.0",
+ "portgraph 0.12.1",
  "portmatching",
  "priority-queue",
  "rayon",
@@ -1828,7 +1853,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "smol_str",
- "stringreader",
  "strum",
  "strum_macros",
  "thiserror",
@@ -1859,7 +1883,7 @@ dependencies = [
  "hugr",
  "itertools 0.13.0",
  "num_cpus",
- "portgraph 0.12.0",
+ "portgraph 0.12.1",
  "portmatching",
  "pyo3",
  "serde",

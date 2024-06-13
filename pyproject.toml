@@ -24,18 +24,19 @@ readme = "README.md"
 packages = [{ include = "tket2-py" }]
 
 [tool.poetry.dependencies]
-python = ">=3.10"
+python = "^3.10"
 pytket = "1.28.0"
 
 [tool.poetry.group.dev.dependencies]
-maturin = "^1.5.1"
-pytest = "^8.2.1"
+maturin = "^1.6.0"
+pytest = "^8.2.2"
 pytest-cov = "^5.0.0"
-ruff = "^0.4.7"
+ruff = "^0.4.8"
 mypy = "^1.9.0"
-hypothesis = "^6.103.0"
+hypothesis = "^6.103.1"
 graphviz = "^0.20"
 pre-commit = "^3.7.1"
+guppylang = "^0.5.0"
 
 [build-system]
 requires = ["maturin~=1.5.1"]

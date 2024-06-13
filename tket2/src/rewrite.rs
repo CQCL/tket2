@@ -84,7 +84,7 @@ impl CircuitRewrite {
     /// The difference between the new number of nodes minus the old. A positive
     /// number is an increase in node count, a negative number is a decrease.
     pub fn node_count_delta(&self) -> isize {
-        let new_count = self.replacement().num_gates() as isize;
+        let new_count = self.replacement().num_operations() as isize;
         let old_count = self.subcircuit().node_count() as isize;
         new_count - old_count
     }

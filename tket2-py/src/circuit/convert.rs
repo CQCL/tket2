@@ -20,8 +20,8 @@ use hugr::{Hugr, HugrView, Wire};
 use serde::Serialize;
 use tket2::circuit::CircuitHash;
 use tket2::extension::REGISTRY;
-use tket2::json::TKETDecode;
 use tket2::passes::CircuitChunks;
+use tket2::serialize::TKETDecode;
 use tket2::{Circuit, Tk2Op};
 use tket_json_rs::circuit_json::SerialCircuit;
 

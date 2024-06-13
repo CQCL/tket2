@@ -16,8 +16,8 @@ use std::fmt;
 
 use hugr::{type_row, Hugr, HugrView, PortIndex};
 use tket2::extension::{LINEAR_BIT, REGISTRY};
-use tket2::json::TKETDecode;
 use tket2::rewrite::CircuitRewrite;
+use tket2::serialize::TKETDecode;
 use tket_json_rs::circuit_json::SerialCircuit;
 
 use crate::utils::create_py_exception;
@@ -53,7 +53,7 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         "HUGRSerializationError",
         py.get_type_bound::<PyHUGRSerializationError>(),
     )?;
-    m.add("OpConvertError", py.get_type_bound::<PyOpConvertError>())?;
+    m.add("TK1ConvertError", py.get_type_bound::<PyTK1ConvertError>())?;
 
     Ok(m)
 }
@@ -83,8 +83,8 @@ create_py_exception!(
 );
 
 create_py_exception!(
-    tket2::json::OpConvertError,
-    PyOpConvertError,
+    tket2::serialize::pytket::TK1ConvertError,
+    PyTK1ConvertError,
     "Error type for the conversion between tket2 and tket1 operations."
 );
 

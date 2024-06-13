@@ -1,8 +1,11 @@
-//! Json serialization and deserialization.
+//! Serialization and deserialization of circuits using the `pytket` JSON format.
 
 mod decoder;
 mod encoder;
-pub mod op;
+mod op;
+
+use hugr::types::Type;
+pub(crate) use op::JsonOp;
 
 #[cfg(test)]
 mod tests;
@@ -15,7 +18,6 @@ use std::{fs, io};
 use hugr::ops::{OpType, Value};
 use hugr::std_extensions::arithmetic::float_types::{ConstF64, FLOAT64_TYPE};
 
-use stringreader::StringReader;
 use thiserror::Error;
 use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::optype::OpType as JsonOpType;
@@ -51,8 +53,8 @@ pub trait TKETDecode: Sized {
 }
 
 impl TKETDecode for SerialCircuit {
-    type DecodeError = OpConvertError;
-    type EncodeError = OpConvertError;
+    type DecodeError = TK1ConvertError;
+    type EncodeError = TK1ConvertError;
 
     fn decode(self) -> Result<Circuit, Self::DecodeError> {
         let mut decoder = JsonDecoder::new(&self);
@@ -72,11 +74,12 @@ impl TKETDecode for SerialCircuit {
     fn encode(circ: &Circuit) -> Result<Self, Self::EncodeError> {
         let mut encoder = JsonEncoder::new(circ);
         let f64_inputs = circ.units().filter_map(|(wire, _, t)| match (wire, t) {
-            (CircuitUnit::Wire(wire), t) if t == FLOAT64_TYPE => Some(wire),
+            (CircuitUnit::Wire(wire), t) if t == FLOAT64_TYPE => Some(Ok(wire)),
             (CircuitUnit::Linear(_), _) => None,
-            _ => unimplemented!("Non-float64 input wires not supported"),
+            (_, typ) => Some(Err(TK1ConvertError::NonSerializableInputs { typ })),
         });
         for (i, wire) in f64_inputs.enumerate() {
+            let wire = wire?;
             let param = format!("f{i}");
             encoder.add_parameter(wire, param);
         }
@@ -92,14 +95,11 @@ impl TKETDecode for SerialCircuit {
 #[derive(Debug, Error)]
 pub enum OpConvertError {
     /// The serialized operation is not supported.
-    #[error("Unsupported serialized operation: {0:?}")]
+    #[error("Unsupported serialized pytket operation: {0:?}")]
     UnsupportedSerializedOp(JsonOpType),
     /// The serialized operation is not supported.
-    #[error("Cannot serialize operation: {0:?}")]
+    #[error("Cannot serialize tket2 operation: {0:?}")]
     UnsupportedOpSerialization(OpType),
-    /// The serialized operation is not supported.
-    #[error("Cannot serialize operation: {0:?}")]
-    NonSerializableInputs(OpType),
 }
 
 /// Load a TKET1 circuit from a JSON file.
@@ -118,7 +118,7 @@ pub fn load_tk1_json_reader(json: impl io::Read) -> Result<Circuit, TK1ConvertEr
 
 /// Load a TKET1 circuit from a JSON string.
 pub fn load_tk1_json_str(json: &str) -> Result<Circuit, TK1ConvertError> {
-    let reader = StringReader::new(json);
+    let reader = json.as_bytes();
     load_tk1_json_reader(reader)
 }
 
@@ -141,49 +141,30 @@ pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, TK1ConvertError> {
     let mut buf = io::BufWriter::new(Vec::new());
     save_tk1_json_writer(circ, &mut buf)?;
     let bytes = buf.into_inner().unwrap();
-    String::from_utf8(bytes).map_err(|_| TK1ConvertError::InvalidJson)
+    Ok(String::from_utf8(bytes)?)
 }
 
 /// Error type for conversion between `Op` and `OpType`.
 #[derive(Debug, Error)]
 pub enum TK1ConvertError {
-    /// The serialized operation is not supported.
-    #[error("unsupported serialized operation: {0:?}")]
-    UnsupportedSerializedOp(JsonOpType),
-    /// The serialized operation is not supported.
-    #[error("cannot serialize operation: {0:?}")]
-    UnsupportedOpSerialization(OpType),
-    /// The serialized operation is not supported.
-    #[error("cannot serialize operation: {0:?}")]
-    NonSerializableInputs(OpType),
+    /// Operation conversion error.
+    #[error("{0}")]
+    OpConversionError(#[from] OpConvertError),
+    /// The circuit has non-serializable inputs.
+    #[error("Circuit contains non-serializable input of type {typ}.")]
+    NonSerializableInputs {
+        /// The unsupported type.
+        typ: Type,
+    },
     /// Invalid JSON,
-    #[error("invalid JSON")]
-    InvalidJson,
+    #[error("Invalid pytket JSON. {0}")]
+    InvalidJson(#[from] serde_json::Error),
+    /// Invalid JSON,
+    #[error("Invalid JSON encoding. {0}")]
+    InvalidJsonEncoding(#[from] std::string::FromUtf8Error),
     /// File not found.,
-    #[error("unable to load file")]
-    FileLoadError,
-}
-
-impl From<serde_json::Error> for TK1ConvertError {
-    fn from(_: serde_json::Error) -> Self {
-        Self::InvalidJson
-    }
-}
-
-impl From<io::Error> for TK1ConvertError {
-    fn from(_: io::Error) -> Self {
-        Self::FileLoadError
-    }
-}
-
-impl From<OpConvertError> for TK1ConvertError {
-    fn from(value: OpConvertError) -> Self {
-        match value {
-            OpConvertError::UnsupportedSerializedOp(op) => Self::UnsupportedSerializedOp(op),
-            OpConvertError::UnsupportedOpSerialization(op) => Self::UnsupportedOpSerialization(op),
-            OpConvertError::NonSerializableInputs(op) => Self::NonSerializableInputs(op),
-        }
-    }
+    #[error("Unable to load pytket json file. {0}")]
+    FileLoadError(#[from] io::Error),
 }
 
 #[inline]

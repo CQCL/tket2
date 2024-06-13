@@ -147,14 +147,31 @@ impl<T: HugrView> Circuit<T> {
             .expect("Circuit has no I/O nodes")
     }
 
-    /// The number of quantum gates in the circuit.
+    /// The number of operations in the circuit.
+    ///
+    /// This includes [`Tk2Op`]s, pytket ops, and any other custom operations.
+    ///
+    /// Nested circuits are traversed to count their operations.
+    ///
+    ///   [`Tk2Op`]: crate::Tk2Op
     #[inline]
-    pub fn num_gates(&self) -> usize
+    pub fn num_operations(&self) -> usize
     where
         Self: Sized,
     {
-        // TODO: Discern quantum gates in the commands iterator.
-        self.hugr().children(self.parent).count() - 2
+        let mut count = 0;
+        let mut roots = vec![self.parent];
+        while let Some(node) = roots.pop() {
+            for child in self.hugr().children(node) {
+                let optype = self.hugr().get_optype(child);
+                if optype.is_custom_op() {
+                    count += 1;
+                } else if OpTag::DataflowParent.is_superset(optype.tag()) {
+                    roots.push(child);
+                }
+            }
+        }
+        count
     }
 
     /// Count the number of qubits in the circuit.
@@ -471,6 +488,7 @@ fn update_signature(
 #[cfg(test)]
 mod tests {
     use cool_asserts::assert_matches;
+    use rstest::{fixture, rstest};
 
     use hugr::types::FunctionType;
     use hugr::{
@@ -479,9 +497,12 @@ mod tests {
     };
 
     use super::*;
-    use crate::{json::load_tk1_json_str, utils::build_simple_circuit, Tk2Op};
+    use crate::serialize::load_tk1_json_str;
+    use crate::utils::{build_module_with_circuit, build_simple_circuit};
+    use crate::Tk2Op;
 
-    fn test_circuit() -> Circuit {
+    #[fixture]
+    fn tk1_circuit() -> Circuit {
         load_tk1_json_str(
             r#"{ "phase": "0",
             "bits": [["c", [0]]],
@@ -489,7 +510,7 @@ mod tests {
             "commands": [
                 {"args": [["q", [0]]], "op": {"type": "H"}},
                 {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}},
-                {"args": [["q", [1]]], "op": {"type": "X"}}
+                {"args": [["q", [1]]], "op": {"params": ["0.25"], "type": "Rz"}}
             ],
             "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
         }"#,
@@ -497,20 +518,63 @@ mod tests {
         .unwrap()
     }
 
-    #[test]
-    fn test_circuit_properties() {
-        let circ = test_circuit();
+    /// 2-qubit circuit with a Hadamard, a CNOT, and a X gate.
+    #[fixture]
+    fn simple_circuit() -> Circuit {
+        build_simple_circuit(2, |circ| {
+            circ.append(Tk2Op::H, [0])?;
+            circ.append(Tk2Op::CX, [0, 1])?;
+            circ.append(Tk2Op::X, [1])?;
 
-        assert_eq!(circ.name(), None);
-        assert_eq!(circ.circuit_signature().body().input_count(), 3);
-        assert_eq!(circ.circuit_signature().body().output_count(), 3);
-        assert_eq!(circ.qubit_count(), 2);
-        assert_eq!(circ.num_gates(), 3);
+            // TODO: Replace the `X` with the following once Hugr adds `CircuitBuilder::add_constant`.
+            // See https://github.com/CQCL/hugr/pull/1168
 
-        assert_eq!(circ.units().count(), 3);
+            //let angle = circ.add_constant(ConstF64::new(0.5));
+            //circ.append_and_consume(
+            //    Tk2Op::RzF64,
+            //    [CircuitUnit::Linear(1), CircuitUnit::Wire(angle)],
+            //)?;
+            Ok(())
+        })
+        .unwrap()
+    }
+
+    /// 2-qubit circuit with a Hadamard, a CNOT, and a X gate,
+    /// defined inside a module.
+    #[fixture]
+    fn simple_module() -> Circuit {
+        build_module_with_circuit(2, |circ| {
+            circ.append(Tk2Op::H, [0])?;
+            circ.append(Tk2Op::CX, [0, 1])?;
+            circ.append(Tk2Op::X, [1])?;
+            Ok(())
+        })
+        .unwrap()
+    }
+
+    #[rstest]
+    #[case::simple(simple_circuit(), 2, 0, None)]
+    #[case::module(simple_module(), 2, 0, None)]
+    #[case::tk1(tk1_circuit(), 2, 1, None)]
+    fn test_circuit_properties(
+        #[case] circ: Circuit,
+        #[case] qubits: usize,
+        #[case] bits: usize,
+        #[case] name: Option<&str>,
+    ) {
+        assert_eq!(circ.name(), name);
+        assert_eq!(circ.circuit_signature().body().input_count(), qubits + bits);
+        assert_eq!(
+            circ.circuit_signature().body().output_count(),
+            qubits + bits
+        );
+        assert_eq!(circ.qubit_count(), qubits);
+        assert_eq!(circ.num_operations(), 3);
+
+        assert_eq!(circ.units().count(), qubits + bits);
         assert_eq!(circ.nonlinear_units().count(), 0);
-        assert_eq!(circ.linear_units().count(), 3);
-        assert_eq!(circ.qubits().count(), 2);
+        assert_eq!(circ.linear_units().count(), qubits + bits);
+        assert_eq!(circ.qubits().count(), qubits);
     }
 
     #[test]

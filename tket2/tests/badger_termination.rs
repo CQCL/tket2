@@ -2,11 +2,9 @@
 
 use rstest::{fixture, rstest};
 use tket2::optimiser::badger::BadgerOptions;
-use tket2::{
-    json::TKETDecode,
-    optimiser::{BadgerOptimiser, DefaultBadgerOptimiser},
-    Circuit,
-};
+use tket2::optimiser::{BadgerOptimiser, DefaultBadgerOptimiser};
+use tket2::serialize::TKETDecode;
+use tket2::Circuit;
 use tket_json_rs::circuit_json::SerialCircuit;
 
 /// A set of equivalence circuit classes (ECC)

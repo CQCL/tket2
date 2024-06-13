@@ -32,7 +32,7 @@ impl CircuitPattern {
     /// Construct a pattern from a circuit.
     pub fn try_from_circuit(circuit: &Circuit) -> Result<Self, InvalidPattern> {
         let hugr = circuit.hugr();
-        if circuit.num_gates() == 0 {
+        if circuit.num_operations() == 0 {
             return Err(InvalidPattern::EmptyCircuit);
         }
         let mut pattern = Pattern::new();
