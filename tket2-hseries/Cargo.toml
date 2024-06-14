@@ -1,0 +1,33 @@
+[package]
+name = "tket2-hseries"
+version = "0.1.0-alpha.1"
+edition.workspace = true
+rust-version.workspace = true
+
+license.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/tket2-hseries"
+homepage.workspace = true
+repository.workspace = true
+description = "TKET2 tool for preparing and validating `Hugr`s for compilation targeting Quantinuum H-series  quantum computers"
+keywords = ["Quantum", "Quantinuum"]
+categories = ["compilers"]
+
+[features]
+default = ["cli"]
+cli = ["dep:hugr-cli", "dep:clap"]
+
+[dependencies]
+hugr.workspace = true
+hugr-cli = { workspace = true, optional = true }
+clap = { workspace = true, optional = true, features = ["derive"] }
+tket2 = { path = "../tket2", version = "0.1.0-alpha.1" }
+serde_json.workspace = true
+lazy_static.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "tket2-hseries"
+required-features = ["cli"]

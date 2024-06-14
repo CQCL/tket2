@@ -258,6 +258,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap-stdin"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc126d12a0930c94c3548581294d5f19360ac02e408600b4d7619d7234e8b505"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
+name = "clap-verbosity-flag"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb9b20c0dd58e4c2e991c8d203bbeb76c11304d1011659686b5b644bc29aa478"
+dependencies = [
+ "clap",
+ "log",
+]
+
+[[package]]
 name = "clap_builder"
 version = "4.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -720,8 +739,53 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a20246e5f1a0aae160b80b71bc4d5c1dcccc5605dbe6458ac6f9af73137339c3"
 dependencies = [
- "hugr-core",
+ "hugr-core 0.2.0",
  "hugr-passes",
+]
+
+[[package]]
+name = "hugr-cli"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3d973149618f24c966ea90cfaf5955c184b670d38b18f3114a66a20dc5b712b"
+dependencies = [
+ "clap",
+ "clap-stdin",
+ "clap-verbosity-flag",
+ "hugr-core 0.1.0",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "hugr-core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f2b8cfdccedf45a563e526a4a2c7443025ece0e2518bca1c3f227318607de44"
+dependencies = [
+ "bitvec",
+ "cgmath",
+ "context-iterators",
+ "delegate 0.12.0",
+ "derive_more",
+ "downcast-rs",
+ "enum_dispatch",
+ "html-escape",
+ "itertools 0.13.0",
+ "lazy_static",
+ "num-rational",
+ "paste",
+ "petgraph",
+ "portgraph 0.12.1",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "smol_str",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "typetag",
 ]
 
 [[package]]
@@ -761,7 +825,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7522d3a5299a49ee453f6d0e3c3a6e8e7ed08a38cbd11e1d19163b97098ce9be"
 dependencies = [
- "hugr-core",
+ "hugr-core 0.2.0",
  "itertools 0.13.0",
  "lazy_static",
  "paste",
@@ -1797,6 +1861,18 @@ dependencies = [
  "typetag",
  "urlencoding",
  "webbrowser",
+]
+
+[[package]]
+name = "tket2-hseries"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "clap",
+ "hugr",
+ "hugr-cli",
+ "lazy_static",
+ "serde_json",
+ "tket2",
 ]
 
 [[package]]
