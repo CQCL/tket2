@@ -739,7 +739,7 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a20246e5f1a0aae160b80b71bc4d5c1dcccc5605dbe6458ac6f9af73137339c3"
 dependencies = [
- "hugr-core",
+ "hugr-core 0.2.0",
  "hugr-passes",
 ]
 
@@ -752,9 +752,40 @@ dependencies = [
  "clap",
  "clap-stdin",
  "clap-verbosity-flag",
- "hugr-core",
+ "hugr-core 0.1.0",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "hugr-core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f2b8cfdccedf45a563e526a4a2c7443025ece0e2518bca1c3f227318607de44"
+dependencies = [
+ "bitvec",
+ "cgmath",
+ "context-iterators",
+ "delegate 0.12.0",
+ "derive_more",
+ "downcast-rs",
+ "enum_dispatch",
+ "html-escape",
+ "itertools 0.13.0",
+ "lazy_static",
+ "num-rational",
+ "paste",
+ "petgraph",
+ "portgraph 0.12.1",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "smol_str",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "typetag",
 ]
 
 [[package]]
@@ -794,7 +825,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7522d3a5299a49ee453f6d0e3c3a6e8e7ed08a38cbd11e1d19163b97098ce9be"
 dependencies = [
- "hugr-core",
+ "hugr-core 0.2.0",
  "itertools 0.13.0",
  "lazy_static",
  "paste",
