@@ -303,7 +303,7 @@ impl<T: HugrView> Circuit<T> {
     }
 
     /// Extracts the circuit into a new owned HUGR containing the circuit at the root.
-    /// Replaces the circuit container operation with an [`OpType::Dfg`].
+    /// Replaces the circuit container operation with an [`OpType::DFG`].
     ///
     /// Regions that are not descendants of the parent node are not included in the new HUGR.
     /// This may invalidate calls to functions defined elsewhere. Make sure to inline any
