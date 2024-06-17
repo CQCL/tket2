@@ -3,7 +3,6 @@ import pytket.circuit
 from tket2.circuit import Tk2Circuit
 
 import math
-import pytest
 
 from guppylang import guppy
 from guppylang.module import GuppyModule
@@ -20,11 +19,10 @@ def test_load_pure_circuit():
 
     @guppy(module)
     @no_type_check
-    @pytest.mark.no_cover
     def my_func(
         q0: qubit,
         q1: qubit,
-    ) -> tuple[qubit, qubit]:
+    ) -> tuple[qubit, qubit]:  # pragma: no cover
         q0 = phased_x(q0, py(math.pi / 2), py(-math.pi / 2))
         q0 = rz(q0, py(math.pi))
         q1 = phased_x(q1, py(math.pi / 2), py(-math.pi / 2))
@@ -57,11 +55,10 @@ def test_load_hybrid_circuit():
 
     @guppy(module)
     @no_type_check
-    @pytest.mark.no_cover
     def my_func(
         q0: qubit,
         q1: qubit,
-    ) -> tuple[bool,]:
+    ) -> tuple[bool,]:  # pragma: no cover
         q0 = phased_x(q0, py(math.pi / 2), py(-math.pi / 2))
         q0 = rz(q0, py(math.pi))
         q1 = phased_x(q1, py(math.pi / 2), py(-math.pi / 2))
