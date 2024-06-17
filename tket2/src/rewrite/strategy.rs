@@ -451,19 +451,23 @@ mod tests {
             }
             Ok(())
         })
-        .unwrap()
+        .unwrap_or_else(|e| panic!("{}", e))
     }
 
     /// Rewrite cx_nodes -> empty
     fn rw_to_empty(circ: &Circuit, cx_nodes: impl Into<Vec<Node>>) -> CircuitRewrite {
         let subcirc = Subcircuit::try_from_nodes(cx_nodes, circ).unwrap();
-        subcirc.create_rewrite(circ, n_cx(0)).unwrap()
+        subcirc
+            .create_rewrite(circ, n_cx(0))
+            .unwrap_or_else(|e| panic!("{}", e))
     }
 
     /// Rewrite cx_nodes -> 10x CX
     fn rw_to_full(circ: &Circuit, cx_nodes: impl Into<Vec<Node>>) -> CircuitRewrite {
         let subcirc = Subcircuit::try_from_nodes(cx_nodes, circ).unwrap();
-        subcirc.create_rewrite(circ, n_cx(10)).unwrap()
+        subcirc
+            .create_rewrite(circ, n_cx(10))
+            .unwrap_or_else(|e| panic!("{}", e))
     }
 
     #[test]

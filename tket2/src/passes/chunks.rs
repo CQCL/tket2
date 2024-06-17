@@ -261,7 +261,7 @@ impl CircuitChunks {
     ) -> Self {
         let hugr = circ.hugr();
         let root_meta = hugr.get_node_metadata(circ.parent()).cloned();
-        let signature = circ.circuit_signature().body().clone();
+        let signature = circ.circuit_signature().clone();
 
         let [circ_input, circ_output] = circ.io_nodes();
         let input_connections = hugr
