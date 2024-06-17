@@ -71,8 +71,10 @@ fn make_rewrite<T: HugrView>(circ: &Circuit<T>, cmd: Command<T>) -> Option<Circu
         return None;
     }
 
-    // TODO: SimpleReplacement currently fails when replacements have multiports.
+    // TODO: SimpleReplacement fails when replacements have multiports.
     // We only support matching a single unpack for now.
+    //
+    // This can be removed once https://github.com/CQCL/hugr/pull/1191 gets released.
     if unpack_nodes.len() > 1 {
         return None;
     }
