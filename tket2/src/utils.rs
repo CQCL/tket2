@@ -3,10 +3,12 @@
 use hugr::builder::{Container, DataflowSubContainer, FunctionBuilder, HugrBuilder, ModuleBuilder};
 use hugr::extension::PRELUDE_REGISTRY;
 use hugr::ops::handle::NodeHandle;
+use hugr::std_extensions::arithmetic::float_ops::FLOAT_OPS_REGISTRY;
+use hugr::std_extensions::arithmetic::float_types;
 use hugr::types::{Type, TypeBound};
 use hugr::Hugr;
 use hugr::{
-    builder::{BuildError, CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr},
+    builder::{BuildError, CircuitBuilder, Dataflow, DataflowHugr},
     extension::prelude::QB_T,
     types::FunctionType,
 };
@@ -21,10 +23,12 @@ pub(crate) fn type_is_linear(typ: &Type) -> bool {
 #[allow(unused)]
 pub(crate) fn build_simple_circuit<F>(num_qubits: usize, f: F) -> Result<Circuit, BuildError>
 where
-    F: FnOnce(&mut CircuitBuilder<DFGBuilder<Hugr>>) -> Result<(), BuildError>,
+    F: FnOnce(&mut CircuitBuilder<FunctionBuilder<Hugr>>) -> Result<(), BuildError>,
 {
     let qb_row = vec![QB_T; num_qubits];
-    let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row))?;
+    let signature =
+        FunctionType::new(qb_row.clone(), qb_row).with_extension_delta(float_types::EXTENSION_ID);
+    let mut h = FunctionBuilder::new("main", signature.into())?;
 
     let qbs = h.input_wires();
 
@@ -33,7 +37,9 @@ where
     f(&mut circ)?;
 
     let qbs = circ.finish();
-    let hugr = h.finish_hugr_with_outputs(qbs, &PRELUDE_REGISTRY)?;
+
+    // The float ops registry is required to define constant float values.
+    let hugr = h.finish_hugr_with_outputs(qbs, &FLOAT_OPS_REGISTRY)?;
     Ok(hugr.into())
 }
 

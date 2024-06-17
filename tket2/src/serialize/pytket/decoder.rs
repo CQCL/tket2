@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::mem;
 
-use hugr::builder::{CircuitBuilder, Container, DFGBuilder, Dataflow, DataflowHugr};
+use hugr::builder::{CircuitBuilder, Container, Dataflow, DataflowHugr, FunctionBuilder};
 use hugr::extension::prelude::QB_T;
 
 use hugr::types::FunctionType;
@@ -22,13 +22,13 @@ use super::{METADATA_B_REGISTERS, METADATA_Q_REGISTERS};
 use crate::extension::{LINEAR_BIT, REGISTRY};
 use crate::symbolic_constant_op;
 
-/// The state of an in-progress [`DFGBuilder`] being built from a [`SerialCircuit`].
+/// The state of an in-progress [`FunctionBuilder`] being built from a [`SerialCircuit`].
 ///
 /// Mostly used to define helper internal methods.
 #[derive(Debug, PartialEq)]
 pub(super) struct JsonDecoder {
     /// The Hugr being built.
-    pub hugr: DFGBuilder<Hugr>,
+    pub hugr: FunctionBuilder<Hugr>,
     /// The dangling wires of the builder.
     /// Used to generate [`CircuitBuilder`]s.
     dangling_wires: Vec<Wire>,
@@ -66,8 +66,8 @@ impl JsonDecoder {
         );
         // .with_extension_delta(&ExtensionSet::singleton(&TKET1_EXTENSION_ID));
 
-        // TODO: Use a FunctionBuilder and store the circuit name there.
-        let mut dfg = DFGBuilder::new(sig).unwrap();
+        let name = serialcirc.name.clone().unwrap_or_default();
+        let mut dfg = FunctionBuilder::new(name, sig.into()).unwrap();
 
         // Metadata. The circuit requires "name", and we store other things that
         // should pass through the serialization roundtrip.
@@ -128,7 +128,7 @@ impl JsonDecoder {
     }
 
     /// Apply a function to the internal hugr builder viewed as a [`CircuitBuilder`].
-    fn with_circ_builder(&mut self, f: impl FnOnce(&mut CircuitBuilder<DFGBuilder<Hugr>>)) {
+    fn with_circ_builder(&mut self, f: impl FnOnce(&mut CircuitBuilder<FunctionBuilder<Hugr>>)) {
         let mut circ = self.hugr.as_circuit(mem::take(&mut self.dangling_wires));
         f(&mut circ);
         self.dangling_wires = circ.finish();

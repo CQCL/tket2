@@ -412,7 +412,7 @@ impl From<InvalidSubgraph> for InvalidPatternMatch {
                 InvalidSubgraphBoundary::DisconnectedBoundaryPort(_, _),
             ) => InvalidPatternMatch::NotConvex,
             InvalidSubgraph::EmptySubgraph => InvalidPatternMatch::EmptyMatch,
-            InvalidSubgraph::NoSharedParent | InvalidSubgraph::InvalidBoundary(_) => {
+            InvalidSubgraph::NoSharedParent { .. } | InvalidSubgraph::InvalidBoundary(_) => {
                 InvalidPatternMatch::InvalidSubcircuit
             }
             other => InvalidPatternMatch::Other(other),

@@ -12,6 +12,7 @@ pub use ecc_rewriter::ECCRewriter;
 use derive_more::{From, Into};
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::views::sibling_subgraph::{InvalidReplacement, InvalidSubgraph};
+use hugr::hugr::views::ExtractHugr;
 use hugr::{
     hugr::{views::SiblingSubgraph, Rewrite, SimpleReplacementError},
     SimpleReplacement,
@@ -33,7 +34,7 @@ impl Subcircuit {
     /// Create a new subcircuit induced from a set of nodes.
     pub fn try_from_nodes(
         nodes: impl Into<Vec<Node>>,
-        circ: &Circuit,
+        circ: &Circuit<impl HugrView>,
     ) -> Result<Self, InvalidSubgraph> {
         let subgraph = SiblingSubgraph::try_from_nodes(nodes, circ.hugr())?;
         Ok(Self { subgraph })
@@ -49,16 +50,25 @@ impl Subcircuit {
         self.subgraph.node_count()
     }
 
-    /// Create a rewrite rule to replace the subcircuit.
+    /// Create a rewrite rule to replace the subcircuit with a new circuit.
+    ///
+    /// # Parameters
+    /// * `circuit` - The base circuit that contains the subcircuit.
+    /// * `replacement` - The new circuit to replace the subcircuit with.
     pub fn create_rewrite(
         &self,
-        source: &Circuit,
-        target: Circuit,
+        circuit: &Circuit<impl HugrView>,
+        replacement: Circuit<impl ExtractHugr>,
     ) -> Result<CircuitRewrite, InvalidReplacement> {
-        Ok(CircuitRewrite(self.subgraph.create_simple_replacement(
-            source.hugr(),
-            target.into_hugr(),
-        )?))
+        // The replacement must be a Dfg rooted hugr.
+        let replacement = replacement
+            .extract_dfg()
+            .unwrap_or_else(|e| panic!("{}", e))
+            .into_hugr();
+        Ok(CircuitRewrite(
+            self.subgraph
+                .create_simple_replacement(circuit.hugr(), replacement)?,
+        ))
     }
 }
 
@@ -69,13 +79,17 @@ pub struct CircuitRewrite(SimpleReplacement);
 impl CircuitRewrite {
     /// Create a new rewrite rule.
     pub fn try_new(
-        source_position: &Subcircuit,
-        source: &Circuit<impl HugrView>,
-        target: Circuit,
+        circuit_position: &Subcircuit,
+        circuit: &Circuit<impl HugrView>,
+        replacement: Circuit<impl ExtractHugr>,
     ) -> Result<Self, InvalidReplacement> {
-        source_position
+        let replacement = replacement
+            .extract_dfg()
+            .unwrap_or_else(|e| panic!("{}", e))
+            .into_hugr();
+        circuit_position
             .subgraph
-            .create_simple_replacement(source.hugr(), target.into_hugr())
+            .create_simple_replacement(circuit.hugr(), replacement)
             .map(Self)
     }
 

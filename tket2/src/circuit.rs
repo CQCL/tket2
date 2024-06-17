@@ -2,6 +2,7 @@
 
 pub mod command;
 pub mod cost;
+mod extract_dfg;
 mod hash;
 pub mod units;
 
@@ -9,6 +10,7 @@ use std::iter::Sum;
 
 pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
+use hugr::hugr::views::{DescendantsGraph, ExtractHugr, HierarchyView};
 use itertools::Either::{Left, Right};
 
 use hugr::hugr::hugrmut::HugrMut;
@@ -298,6 +300,27 @@ impl<T: HugrView> Circuit<T> {
     pub fn mermaid_string(&self) -> String {
         // TODO: See comment in `dot_string`.
         self.hugr.mermaid_string()
+    }
+
+    /// Extracts the circuit into a new owned HUGR containing the circuit at the root.
+    /// Replaces the circuit container operation with an [`OpType::DFG`].
+    ///
+    /// Regions that are not descendants of the parent node are not included in the new HUGR.
+    /// This may invalidate calls to functions defined elsewhere. Make sure to inline any
+    /// external functions before calling this method.
+    pub fn extract_dfg(&self) -> Result<Circuit<Hugr>, CircuitMutError>
+    where
+        T: ExtractHugr,
+    {
+        let mut circ = if self.parent == self.hugr.root() {
+            self.to_owned()
+        } else {
+            let view: DescendantsGraph = DescendantsGraph::try_new(&self.hugr, self.parent)
+                .expect("Circuit parent was not a dataflow container.");
+            view.extract_hugr().into()
+        };
+        extract_dfg::rewrite_into_dfg(&mut circ)?;
+        Ok(circ)
     }
 }
 
@@ -648,12 +671,9 @@ mod tests {
         #[case] circ: Circuit,
         #[case] qubits: usize,
         #[case] bits: usize,
-        #[case] _name: Option<&str>,
+        #[case] name: Option<&str>,
     ) {
-        // TODO: The decoder discards the circuit name.
-        // This requires decoding circuits into `FuncDefn` nodes instead of `Dfg`,
-        // but currently that causes errors with the replacement methods.
-        //assert_eq!(circ.name(), name);
+        assert_eq!(circ.name(), name);
         assert_eq!(circ.circuit_signature().input_count(), qubits + bits);
         assert_eq!(circ.circuit_signature().output_count(), qubits + bits);
         assert_eq!(circ.qubit_count(), qubits);

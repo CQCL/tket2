@@ -50,6 +50,7 @@ serde_yaml = { workspace = true }
 portmatching = { workspace = true, optional = true, features = ["serde"] }
 derive_more = { workspace = true }
 hugr = { workspace = true }
+hugr-core = { workspace = true }
 portgraph = { workspace = true, features = ["serde"] }
 strum_macros = { workspace = true }
 strum = { workspace = true }
