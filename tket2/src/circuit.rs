@@ -2,6 +2,7 @@
 
 pub mod command;
 pub mod cost;
+mod extract_dfg;
 mod hash;
 pub mod units;
 
@@ -15,11 +16,10 @@ use itertools::Either::{Left, Right};
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::NodeType;
 use hugr::ops::dataflow::IOTrait;
-use hugr::ops::{Input, NamedOp, OpParent, OpTag, OpTrait, Output, DFG};
+use hugr::ops::{Input, NamedOp, OpParent, OpTag, OpTrait, Output};
 use hugr::types::{FunctionType, PolyFuncType};
 use hugr::{Hugr, PortIndex};
 use hugr::{HugrView, OutgoingPort};
-use hugr_core::hugr::internal::HugrMutInternals;
 use itertools::Itertools;
 use thiserror::Error;
 
@@ -308,7 +308,7 @@ impl<T: HugrView> Circuit<T> {
     /// Regions that are not descendants of the parent node are not included in the new HUGR.
     /// This may invalidate calls to functions defined elsewhere. Make sure to inline any
     /// external functions before calling this method.
-    pub fn extract_dfg(self) -> Result<Circuit<Hugr>, CircuitMutError>
+    pub fn extract_dfg(&self) -> Result<Circuit<Hugr>, CircuitMutError>
     where
         T: ExtractHugr,
     {
@@ -319,17 +319,7 @@ impl<T: HugrView> Circuit<T> {
                 .expect("Circuit parent was not a dataflow container.");
             view.extract_hugr().into()
         };
-
-        // Replace the parent node with a DFG node, if necessary.
-        let nodetype = circ.hugr.get_nodetype(circ.parent());
-        if !matches!(nodetype.op(), OpType::DFG(_)) {
-            let dfg = DFG {
-                signature: circ.circuit_signature(),
-            };
-            let input_extensions = nodetype.input_extensions().cloned();
-            let nodetype = NodeType::new(OpType::DFG(dfg), input_extensions);
-            circ.hugr.replace_op(circ.parent(), nodetype)?;
-        }
+        extract_dfg::rewrite_into_dfg(&mut circ)?;
         Ok(circ)
     }
 }
