@@ -3,6 +3,7 @@ import pytket.circuit
 from tket2.circuit import Tk2Circuit
 
 import math
+import pytest
 
 from guppylang import guppy
 from guppylang.module import GuppyModule
@@ -19,6 +20,7 @@ def test_load_pure_circuit():
 
     @guppy(module)
     @no_type_check
+    @pytest.mark.no_cover
     def my_func(
         q0: qubit,
         q1: qubit,
@@ -55,6 +57,7 @@ def test_load_hybrid_circuit():
 
     @guppy(module)
     @no_type_check
+    @pytest.mark.no_cover
     def my_func(
         q0: qubit,
         q1: qubit,
