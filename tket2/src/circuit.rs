@@ -105,13 +105,12 @@ impl<T: HugrView> Circuit<T> {
     /// If the circuit is a function definition, returns the name of the
     /// function.
     ///
-    /// If the name is empty or the circuit has a different parent type, returns
+    /// If the name is empty or the circuit is not a function definition, returns
     /// `None`.
     #[inline]
     pub fn name(&self) -> Option<&str> {
         let op = self.hugr.get_optype(self.parent);
         let name = match op {
-            OpType::FuncDecl(decl) => &decl.name,
             OpType::FuncDefn(defn) => &defn.name,
             _ => return None,
         };
@@ -313,6 +312,7 @@ fn check_hugr(hugr: &impl HugrView, parent: Node) -> Result<(), CircuitError> {
             }),
         },
         OpType::DataflowBlock(_) => Ok(()),
+        OpType::Case(_) => Ok(()),
         _ => Err(CircuitError::InvalidParentOp {
             parent,
             optype: optype.clone(),
@@ -420,7 +420,7 @@ pub enum CircuitMutError {
     #[error("Hugr error: {0:?}")]
     HugrError(#[from] hugr::hugr::HugrError),
     /// A circuit validation error occurred.
-    #[error("{0}")]
+    #[error("transparent")]
     CircuitError(#[from] CircuitError),
     /// The wire to be deleted is not empty.
     #[from(ignore)]
@@ -521,24 +521,28 @@ fn update_signature(
             }
         }
         OpType::FuncDefn(defn) => {
-            let mut sign: FunctionType = defn.signature.clone().try_into().map_err(|_| {
+            let mut sig: FunctionType = defn.signature.clone().try_into().map_err(|_| {
                 CircuitError::ParametricSignature {
                     parent,
                     optype: OpType::FuncDefn(defn.clone()),
                     signature: defn.signature.clone(),
                 }
             })?;
-            sign.input = inp_types;
+            sig.input = inp_types;
             if let Some(out_types) = out_types {
-                sign.output = out_types;
+                sig.output = out_types;
             }
-            defn.signature = sign.into();
+            defn.signature = sig.into();
         }
         OpType::DataflowBlock(block) => {
             block.inputs = inp_types;
             if out_types.is_some() {
                 unimplemented!("DataflowBlock output signature update")
             }
+        }
+        OpType::Case(case) => {
+            let out_types = out_types.unwrap_or_else(|| case.signature.output().clone());
+            case.signature = FunctionType::new(inp_types, out_types)
         }
         _ => Err(CircuitError::InvalidParentOp {
             parent,
