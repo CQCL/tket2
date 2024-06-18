@@ -108,8 +108,8 @@ fn circ_add_angles_constants() -> Circuit {
 
     let qb = h.input_wires().next().unwrap();
 
-    let point2 = h.add_load_value(ConstF64::new(0.2));
-    let point3 = h.add_load_value(ConstF64::new(0.3));
+    let point2 = h.add_load_value(ConstF64::new(0.2 * std::f64::consts::PI));
+    let point3 = h.add_load_value(ConstF64::new(0.3 * std::f64::consts::PI));
     let point5 = h
         .add_dataflow_op(Tk2Op::AngleAdd, [point2, point3])
         .unwrap()

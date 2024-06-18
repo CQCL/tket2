@@ -190,22 +190,40 @@ pub enum TK1ConvertError {
     FileLoadError(#[from] io::Error),
 }
 
-#[inline]
-fn parse_val(n: &str) -> Option<f64> {
-    n.parse::<f64>().ok()
-}
 /// Try to interpret a TKET1 parameter as a constant value.
+///
+/// Angle parameters in TKET1 are encoded as a number of half-turns,
+/// whereas HUGR uses radians.
 #[inline]
 fn try_param_to_constant(param: &str) -> Option<Value> {
-    if let Some(f) = parse_val(param) {
-        Some(ConstF64::new(f).into())
+    fn parse_val(n: &str) -> Option<f64> {
+        n.parse::<f64>().ok()
+    }
+
+    let half_turns = if let Some(f) = parse_val(param) {
+        f
     } else if param.split('/').count() == 2 {
         // TODO: Use the rational types from `Hugr::extensions::rotation`
         let (n, d) = param.split_once('/').unwrap();
         let n = parse_val(n)?;
         let d = parse_val(d)?;
-        Some(ConstF64::new(n / d).into())
+        n / d
     } else {
-        None
-    }
+        return None;
+    };
+
+    let radians = half_turns * std::f64::consts::PI;
+    Some(ConstF64::new(radians).into())
+}
+
+/// Convert a HUGR angle constant to a TKET1 parameter.
+///
+/// Angle parameters in TKET1 are encoded as a number of half-turns,
+/// whereas HUGR uses radians.
+#[inline]
+fn try_constant_to_param(val: &Value) -> Option<String> {
+    let const_float = val.get_custom_value::<ConstF64>()?;
+    let radians: f64 = **const_float;
+    let half_turns = radians / std::f64::consts::PI;
+    Some(half_turns.to_string())
 }
