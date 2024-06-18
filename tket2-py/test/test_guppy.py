@@ -1,6 +1,6 @@
 from typing import no_type_check
 import pytket.circuit
-from tket2.circuit import Tk2Circuit
+from test.util import guppy_to_circuit
 
 import math
 
@@ -32,15 +32,9 @@ def test_load_pure_circuit():
         q1 = rz(q1, py(math.pi))
         return (q0, q1)
 
-    # Compile the module
-    hugr = module.compile()
-    json = hugr.to_raw().to_json()
-
-    # Load it from the JSON string
-    circ = Tk2Circuit.from_guppy_json(json, "my_func")
+    circ = guppy_to_circuit(my_func)
     assert circ.num_operations() == 7
 
-    # Convert into a pytket Circuit
     tk1 = circ.to_tket1()
     assert tk1.n_gates == 7
     assert tk1.n_qubits == 2
@@ -67,12 +61,7 @@ def test_load_hybrid_circuit():
         _ = measure(q0)
         return (measure(q1),)
 
-    # Compile the module, and convert it to a JSON string
-    hugr = module.compile()
-    json = hugr.to_raw().to_json()
-
-    # Load the module from the JSON string
-    circ = Tk2Circuit.from_guppy_json(json, "my_func")
+    circ = guppy_to_circuit(my_func)
 
     # The 7 operations in the function, plus two implicit QFree
     assert circ.num_operations() == 9
