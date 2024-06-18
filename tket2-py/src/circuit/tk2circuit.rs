@@ -20,6 +20,7 @@ use hugr::{Hugr, HugrView, Wire};
 use serde::Serialize;
 use tket2::circuit::CircuitHash;
 use tket2::extension::REGISTRY;
+use tket2::passes::pytket::lower_to_pytket;
 use tket2::passes::CircuitChunks;
 use tket2::serialize::TKETDecode;
 use tket2::{Circuit, Tk2Op};
@@ -73,9 +74,8 @@ impl Tk2Circuit {
 
     /// Convert the [`Tk2Circuit`] to a tket1 circuit.
     pub fn to_tket1<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        SerialCircuit::encode(&self.circ)
-            .convert_pyerrs()?
-            .to_tket1(py)
+        let circ = lower_to_pytket(&self.circ).convert_pyerrs()?;
+        SerialCircuit::encode(&circ).convert_pyerrs()?.to_tket1(py)
     }
 
     /// Apply a rewrite on the circuit.
@@ -109,7 +109,9 @@ impl Tk2Circuit {
 
     /// Encode the circuit as a tket1 json string.
     pub fn to_tket1_json(&self) -> PyResult<String> {
-        Ok(serde_json::to_string(&SerialCircuit::encode(&self.circ).convert_pyerrs()?).unwrap())
+        // Try to simplify tuple pack-unpack pairs, and other operations not supported by pytket.
+        let circ = lower_to_pytket(&self.circ).convert_pyerrs()?;
+        Ok(serde_json::to_string(&SerialCircuit::encode(&circ).convert_pyerrs()?).unwrap())
     }
 
     /// Decode a tket1 json string to a circuit.

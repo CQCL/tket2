@@ -5,7 +5,6 @@ use std::collections::HashMap;
 
 use hugr::extension::prelude::QB_T;
 use hugr::ops::{NamedOp, OpType};
-use hugr::std_extensions::arithmetic::float_types::ConstF64;
 use hugr::{HugrView, Wire};
 use itertools::{Either, Itertools};
 use tket_json_rs::circuit_json::{self, Permutation, Register, SerialCircuit};
@@ -18,8 +17,8 @@ use crate::Tk2Op;
 
 use super::op::JsonOp;
 use super::{
-    OpConvertError, METADATA_B_REGISTERS, METADATA_IMPLICIT_PERM, METADATA_PHASE,
-    METADATA_Q_REGISTERS,
+    try_constant_to_param, OpConvertError, METADATA_B_REGISTERS, METADATA_IMPLICIT_PERM,
+    METADATA_PHASE, METADATA_Q_REGISTERS,
 };
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
@@ -198,10 +197,10 @@ impl JsonEncoder {
         let param = match optype {
             OpType::Const(const_op) => {
                 // New constant, register it if it can be interpreted as a parameter.
-                let Some(const_float) = const_op.value().get_custom_value::<ConstF64>() else {
-                    return false;
-                };
-                const_float.to_string()
+                match try_constant_to_param(const_op.value()) {
+                    Some(param) => param,
+                    None => return false,
+                }
             }
             OpType::LoadConstant(_op_type) => {
                 // Re-use the parameter from the input.
