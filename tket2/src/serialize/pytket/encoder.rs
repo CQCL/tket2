@@ -12,7 +12,6 @@ use tket_json_rs::circuit_json::{self, Permutation, Register, SerialCircuit};
 
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
-use crate::extension::LINEAR_BIT;
 use crate::ops::{match_symb_const_op, op_matches};
 use crate::Tk2Op;
 
@@ -82,7 +81,6 @@ impl JsonEncoder {
         // Map the Hugr units to tket1 register names.
         // Uses the names from the metadata if available, or initializes new sequentially-numbered registers.
         let mut qubit_to_reg = HashMap::new();
-        let mut bit_to_reg = HashMap::new();
         let get_register = |registers: &mut Vec<Register>, name: &str, index| {
             registers.get(index).cloned().unwrap_or_else(|| {
                 let r = Register(name.to_string(), vec![index as i64]);
@@ -95,12 +93,11 @@ impl JsonEncoder {
                 let index = qubit_to_reg.len();
                 let reg = get_register(&mut qubit_registers, "q", index);
                 qubit_to_reg.insert(unit, reg);
-            } else if ty == *LINEAR_BIT {
-                let index = bit_to_reg.len();
-                let reg = get_register(&mut bit_registers, "b", index);
-                bit_to_reg.insert(unit, reg.clone());
             }
         }
+
+        // TODO: Encode non-linear bits
+        let bit_to_reg = HashMap::new();
 
         let mut encoder = Self {
             name,
@@ -251,10 +248,7 @@ impl JsonEncoder {
 
     /// Translate a linear [`CircuitUnit`] into a [`Register`], if possible.
     fn unit_to_register(&self, unit: CircuitUnit) -> Option<Register> {
-        self.qubit_to_reg
-            .get(&unit)
-            .or_else(|| self.bit_to_reg.get(&unit))
-            .cloned()
+        self.qubit_to_reg.get(&unit).cloned()
     }
 
     /// Associate a parameter expression with a wire.

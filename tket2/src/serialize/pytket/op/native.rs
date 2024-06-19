@@ -1,6 +1,6 @@
 //! Operations that have corresponding representations in both `pytket` and `tket2`.
 
-use hugr::extension::prelude::QB_T;
+use hugr::extension::prelude::{BOOL_T, QB_T};
 
 use hugr::ops::{Noop, OpTrait, OpType};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
@@ -10,7 +10,6 @@ use hugr::IncomingPort;
 use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as Tk1OpType;
 
-use crate::extension::LINEAR_BIT;
 use crate::Tk2Op;
 
 /// An operation with a native TKET2 counterpart.
@@ -48,6 +47,7 @@ impl NativeOp {
             Tk2Op::ZZPhase => Tk1OpType::ZZPhase,
             Tk2Op::CZ => Tk1OpType::CZ,
             Tk2Op::Reset => Tk1OpType::Reset,
+            Tk2Op::Measure => Tk1OpType::Measure,
             Tk2Op::AngleAdd => {
                 // These operations should be folded into constant before serialisation,
                 // or replaced by pytket logic expressions.
@@ -55,10 +55,6 @@ impl NativeOp {
                     op: tk2op.into(),
                     serial_op: None,
                 });
-            }
-            // TKET2 measurements and TKET1 measurements have different semantics.
-            Tk2Op::Measure => {
-                return None;
             }
             // These operations do not have a direct pytket counterpart.
             Tk2Op::QAlloc | Tk2Op::QFree => {
@@ -92,6 +88,7 @@ impl NativeOp {
             Tk1OpType::ZZPhase => Tk2Op::ZZPhase.into(),
             Tk1OpType::CZ => Tk2Op::CZ.into(),
             Tk1OpType::Reset => Tk2Op::Reset.into(),
+            Tk1OpType::Measure => Tk2Op::Measure.into(),
             Tk1OpType::noop => Noop::new(QB_T).into(),
             _ => {
                 return None;
@@ -111,15 +108,25 @@ impl NativeOp {
         let mut num_bits = 0;
         let mut num_params = 0;
         if let Some(sig) = self.signature() {
+            let mut input_bits = 0;
             for ty in sig.input.iter() {
                 if ty == &QB_T {
                     num_qubits += 1
-                } else if *ty == *LINEAR_BIT {
-                    num_bits += 1
+                } else if ty == &BOOL_T {
+                    input_bits += 1
                 } else if ty == &FLOAT64_TYPE {
                     num_params += 1
                 }
             }
+
+            // Since bits in pytket are linear,
+            // we take the maximum of the number of bits in the input and output.
+            num_bits = sig
+                .output
+                .iter()
+                .filter(|&ty| ty == &BOOL_T)
+                .count()
+                .max(input_bits);
         }
 
         let params = (num_params > 0).then(|| vec!["".into(); num_params]);

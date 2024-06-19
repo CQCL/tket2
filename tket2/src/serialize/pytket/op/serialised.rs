@@ -1,6 +1,6 @@
 //! Wrapper over pytket operations that cannot be represented naturally in tket2.
 
-use hugr::extension::prelude::QB_T;
+use hugr::extension::prelude::{BOOL_T, QB_T};
 
 use hugr::ops::custom::{CustomOp, ExtensionOp};
 use hugr::ops::{NamedOp, OpType};
@@ -13,7 +13,7 @@ use serde::de::Error;
 use tket_json_rs::circuit_json;
 
 use crate::extension::{
-    LINEAR_BIT, REGISTRY, TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME, TKET1_OP_PAYLOAD,
+    REGISTRY, TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME, TKET1_OP_PAYLOAD,
 };
 use crate::serialize::pytket::OpConvertError;
 
@@ -110,7 +110,7 @@ impl OpaqueTk1Op {
     pub fn signature(&self) -> FunctionType {
         let linear = [
             vec![QB_T; self.num_qubits],
-            vec![LINEAR_BIT.clone(); self.num_bits],
+            vec![BOOL_T.clone(); self.num_bits],
         ]
         .concat();
         let params = vec![FLOAT64_TYPE; self.num_params];

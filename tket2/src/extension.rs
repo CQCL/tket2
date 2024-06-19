@@ -10,7 +10,7 @@ use hugr::extension::{CustomSignatureFunc, ExtensionId, ExtensionRegistry, Signa
 use hugr::hugr::IdentList;
 use hugr::std_extensions::arithmetic::float_types::{EXTENSION as FLOAT_EXTENSION, FLOAT64_TYPE};
 use hugr::types::type_param::{TypeArg, TypeParam};
-use hugr::types::{CustomType, FunctionType, PolyFuncType, Type, TypeBound};
+use hugr::types::{CustomType, FunctionType, PolyFuncType, TypeBound};
 use hugr::{type_row, Extension};
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
@@ -20,9 +20,6 @@ pub mod angle;
 
 /// The ID of the TKET1 extension.
 pub const TKET1_EXTENSION_ID: ExtensionId = IdentList::new_unchecked("TKET1");
-
-/// The name for the linear bit custom type.
-pub const LINEAR_BIT_NAME: SmolStr = SmolStr::new_inline("LBit");
 
 /// The name for opaque TKET1 operations.
 pub const TKET1_OP_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Op");
@@ -39,8 +36,6 @@ pub static ref TKET1_OP_PAYLOAD : CustomType =
 pub static ref TKET1_EXTENSION: Extension = {
     let mut res = Extension::new(TKET1_EXTENSION_ID);
 
-    res.add_type(LINEAR_BIT_NAME, vec![], "A linear bit.".into(), TypeBound::Any.into()).unwrap();
-
     let tket1_op_payload_def = res.add_type(TKET1_PAYLOAD_NAME, vec![], "Opaque TKET1 operation metadata.".into(), TypeBound::Eq.into()).unwrap();
     let tket1_op_payload = TypeParam::Opaque{ty:tket1_op_payload_def.instantiate([]).unwrap()};
     res.add_op(
@@ -51,15 +46,6 @@ pub static ref TKET1_EXTENSION: Extension = {
 
     res
 };
-
-/// The type for linear bits. Part of the TKET1 extension.
-pub static ref LINEAR_BIT: Type = {
-    Type::new_extension(TKET1_EXTENSION
-        .get_type(&LINEAR_BIT_NAME)
-        .unwrap()
-        .instantiate([])
-        .unwrap())
-    };
 
 /// Extension registry including the prelude, TKET1 and Tk2Ops extensions.
 pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([

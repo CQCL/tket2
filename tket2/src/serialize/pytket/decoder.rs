@@ -6,7 +6,7 @@ use std::hash::{Hash, Hasher};
 use std::mem;
 
 use hugr::builder::{CircuitBuilder, Container, Dataflow, DataflowHugr, FunctionBuilder};
-use hugr::extension::prelude::QB_T;
+use hugr::extension::prelude::{BOOL_T, QB_T};
 
 use hugr::ops::OpType;
 use hugr::types::FunctionType;
@@ -21,7 +21,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use super::op::Tk1Op;
 use super::{try_param_to_constant, TK1ConvertError, METADATA_IMPLICIT_PERM, METADATA_PHASE};
 use super::{METADATA_B_REGISTERS, METADATA_Q_REGISTERS};
-use crate::extension::{LINEAR_BIT, REGISTRY, TKET1_EXTENSION_ID};
+use crate::extension::{REGISTRY, TKET1_EXTENSION_ID};
 use crate::symbolic_constant_op;
 
 /// The state of an in-progress [`FunctionBuilder`] being built from a [`SerialCircuit`].
@@ -47,10 +47,8 @@ impl JsonDecoder {
     pub fn try_new(serialcirc: &SerialCircuit) -> Result<Self, TK1ConvertError> {
         let num_qubits = serialcirc.qubits.len();
         let num_bits = serialcirc.bits.len();
-        let sig = FunctionType::new_endo(
-            [vec![QB_T; num_qubits], vec![LINEAR_BIT.clone(); num_bits]].concat(),
-        )
-        .with_extension_delta(TKET1_EXTENSION_ID);
+        let sig = FunctionType::new_endo([vec![QB_T; num_qubits], vec![BOOL_T; num_bits]].concat())
+            .with_extension_delta(TKET1_EXTENSION_ID);
 
         let name = serialcirc.name.clone().unwrap_or_default();
         let mut dfg = FunctionBuilder::new(name, sig.into()).unwrap();
@@ -73,9 +71,9 @@ impl JsonDecoder {
             check_register(register)?;
             wire_map.insert(register.into(), CircuitUnit::Linear(i));
         }
-        for (i, register) in serialcirc.bits.iter().enumerate() {
+        for (register, &input_wire) in serialcirc.bits.iter().zip(&dangling_wires) {
             check_register(register)?;
-            wire_map.insert(register.into(), CircuitUnit::Linear(i + num_qubits));
+            wire_map.insert(register.into(), CircuitUnit::Wire(input_wire));
         }
 
         Ok(JsonDecoder {
@@ -102,10 +100,7 @@ impl JsonDecoder {
         let circuit_json::Command { op, args, .. } = command;
         let num_qubits = args
             .iter()
-            .take_while(|&arg| match self.reg_wire(arg) {
-                CircuitUnit::Linear(i) => i < self.num_qubits,
-                _ => false,
-            })
+            .take_while(|&arg| self.reg_wire(arg).is_linear())
             .count();
         let num_input_bits = args.len() - num_qubits;
         let op_params = op.params.clone();

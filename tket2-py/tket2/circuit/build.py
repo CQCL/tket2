@@ -3,7 +3,6 @@ from tket2.circuit import HugrType, CustomOp, Dfg, Node, Wire, Tk2Circuit
 from dataclasses import dataclass
 
 QB_T = HugrType.qubit()
-LB_T = HugrType.linear_bit()
 BOOL_T = HugrType.bool()
 
 
@@ -22,7 +21,7 @@ class Command(Protocol):
 
     @classmethod
     def op(cls) -> CustomOp:
-        types = [QB_T] * cls.n_qb + [LB_T] * cls.n_lb
+        types = [QB_T] * cls.n_qb + [BOOL_T] * cls.n_lb
         return CustomOp(cls.extension_name, cls.gate_name, types, types)
 
 
