@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use hugr::extension::prelude::QB_T;
 use hugr::ops::{NamedOp, OpType};
+use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::{HugrView, Wire};
 use itertools::{Either, Itertools};
 use tket_json_rs::circuit_json::{self, Permutation, Register, SerialCircuit};
@@ -15,10 +16,10 @@ use crate::extension::LINEAR_BIT;
 use crate::ops::{match_symb_const_op, op_matches};
 use crate::Tk2Op;
 
-use super::op::JsonOp;
+use super::op::Tk1Op;
 use super::{
-    try_constant_to_param, OpConvertError, METADATA_B_REGISTERS, METADATA_IMPLICIT_PERM,
-    METADATA_PHASE, METADATA_Q_REGISTERS,
+    try_constant_to_param, OpConvertError, TK1ConvertError, METADATA_B_REGISTERS,
+    METADATA_IMPLICIT_PERM, METADATA_PHASE, METADATA_Q_REGISTERS,
 };
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
@@ -37,8 +38,14 @@ pub(super) struct JsonEncoder {
     /// The TKET1 bit registers associated to each linear bit unit of the circuit.
     bit_to_reg: HashMap<CircuitUnit, Register>,
     /// The ordered TKET1 names for the input qubit registers.
+    ///
+    /// Nb: Although `tket-json-rs` calls these "registers", they're actually
+    /// identifiers for single qubits in the `Register::0` register.
     qubit_registers: Vec<Register>,
     /// The ordered TKET1 names for the input bit registers.
+    ///
+    /// Nb: Although `tket-json-rs` calls these "registers", they're actually
+    /// identifiers for single bits in the `Register::0` register.
     bit_registers: Vec<Register>,
     /// A register of wires with constant values, used to recover TKET1
     /// parameters.
@@ -47,7 +54,7 @@ pub(super) struct JsonEncoder {
 
 impl JsonEncoder {
     /// Create a new [`JsonEncoder`] from a [`Circuit`].
-    pub fn new<T: HugrView>(circ: &Circuit<T>) -> Self {
+    pub fn new(circ: &Circuit<impl HugrView>) -> Result<Self, TK1ConvertError> {
         let name = circ.name().map(str::to_string);
         let hugr = circ.hugr();
 
@@ -74,11 +81,11 @@ impl JsonEncoder {
 
         // Map the Hugr units to tket1 register names.
         // Uses the names from the metadata if available, or initializes new sequentially-numbered registers.
-        let mut bit_to_reg = HashMap::new();
         let mut qubit_to_reg = HashMap::new();
-        let get_register = |registers: &mut Vec<Register>, prefix: &str, index| {
+        let mut bit_to_reg = HashMap::new();
+        let get_register = |registers: &mut Vec<Register>, name: &str, index| {
             registers.get(index).cloned().unwrap_or_else(|| {
-                let r = Register(prefix.to_string(), vec![index as i64]);
+                let r = Register(name.to_string(), vec![index as i64]);
                 registers.push(r.clone());
                 r
             })
@@ -95,7 +102,7 @@ impl JsonEncoder {
             }
         }
 
-        Self {
+        let mut encoder = Self {
             name,
             phase,
             implicit_permutation,
@@ -105,7 +112,11 @@ impl JsonEncoder {
             qubit_registers,
             bit_registers,
             parameters: HashMap::new(),
-        }
+        };
+
+        encoder.add_input_parameters(circ)?;
+
+        Ok(encoder)
     }
 
     /// Add a circuit command to the serialization.
@@ -136,8 +147,16 @@ impl JsonEncoder {
 
         // TODO Restore the opgroup (once the decoding supports it)
         let opgroup = None;
-        let op: JsonOp = optype.try_into()?;
-        let mut op: circuit_json::Operation = op.into_operation();
+
+        // Convert the command's operator to a pytket serialized one. This will
+        // return an error for operations that should have been caught by the
+        // `record_parameters` branch above (in addition to other unsupported
+        // ops).
+        let op: Tk1Op = Tk1Op::try_from_optype(optype.clone())?;
+        let mut op: circuit_json::Operation = op
+            .serialised_op()
+            .ok_or_else(|| OpConvertError::UnsupportedOpSerialization(optype.clone()))?;
+
         if !params.is_empty() {
             op.params = Some(
                 params
@@ -155,6 +174,7 @@ impl JsonEncoder {
         Ok(())
     }
 
+    /// Finish building and return the final [`SerialCircuit`].
     pub fn finish(self) -> SerialCircuit {
         SerialCircuit {
             name: self.name,
@@ -237,7 +257,28 @@ impl JsonEncoder {
             .cloned()
     }
 
-    pub(super) fn add_parameter(&mut self, wire: Wire, param: String) {
+    /// Associate a parameter expression with a wire.
+    fn add_parameter(&mut self, wire: Wire, param: String) {
         self.parameters.insert(wire, param);
+    }
+
+    /// Adds a parameter for each floating-point input to the circuit.
+    fn add_input_parameters(
+        &mut self,
+        circ: &Circuit<impl HugrView>,
+    ) -> Result<(), TK1ConvertError> {
+        let mut num_f64_inputs = 0;
+        for (wire, _, typ) in circ.units() {
+            match wire {
+                CircuitUnit::Linear(_) => {}
+                CircuitUnit::Wire(wire) if typ == FLOAT64_TYPE => {
+                    let param = format!("f{num_f64_inputs}");
+                    num_f64_inputs += 1;
+                    self.add_parameter(wire, param);
+                }
+                CircuitUnit::Wire(_) => return Err(TK1ConvertError::NonSerializableInputs { typ }),
+            }
+        }
+        Ok(())
     }
 }

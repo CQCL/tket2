@@ -5,18 +5,18 @@ mod encoder;
 mod op;
 
 use hugr::types::Type;
-pub(crate) use op::JsonOp;
+
+// Required for serialising ops in the tket1 hugr extension.
+pub(crate) use op::serialised::OpaqueTk1Op;
 
 #[cfg(test)]
 mod tests;
-
-use hugr::CircuitUnit;
 
 use std::path::Path;
 use std::{fs, io};
 
 use hugr::ops::{OpType, Value};
-use hugr::std_extensions::arithmetic::float_types::{ConstF64, FLOAT64_TYPE};
+use hugr::std_extensions::arithmetic::float_types::ConstF64;
 
 use thiserror::Error;
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -59,7 +59,7 @@ impl TKETDecode for SerialCircuit {
     type EncodeError = TK1ConvertError;
 
     fn decode(self) -> Result<Circuit, Self::DecodeError> {
-        let mut decoder = JsonDecoder::new(&self);
+        let mut decoder = JsonDecoder::try_new(&self)?;
 
         if !self.phase.is_empty() {
             // TODO - add a phase gate
@@ -74,17 +74,7 @@ impl TKETDecode for SerialCircuit {
     }
 
     fn encode(circ: &Circuit) -> Result<Self, Self::EncodeError> {
-        let mut encoder = JsonEncoder::new(circ);
-        let f64_inputs = circ.units().filter_map(|(wire, _, t)| match (wire, t) {
-            (CircuitUnit::Wire(wire), t) if t == FLOAT64_TYPE => Some(Ok(wire)),
-            (CircuitUnit::Linear(_), _) => None,
-            (_, typ) => Some(Err(TK1ConvertError::NonSerializableInputs { typ })),
-        });
-        for (i, wire) in f64_inputs.enumerate() {
-            let wire = wire?;
-            let param = format!("f{i}");
-            encoder.add_parameter(wire, param);
-        }
+        let mut encoder = JsonEncoder::new(circ)?;
         for com in circ.commands() {
             let optype = com.optype();
             encoder.add_command(com.clone(), optype)?;
@@ -171,13 +161,21 @@ pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, TK1ConvertError> {
 #[derive(Debug, Error)]
 pub enum TK1ConvertError {
     /// Operation conversion error.
-    #[error("{0}")]
+    #[error(transparent)]
     OpConversionError(#[from] OpConvertError),
     /// The circuit has non-serializable inputs.
     #[error("Circuit contains non-serializable input of type {typ}.")]
     NonSerializableInputs {
         /// The unsupported type.
         typ: Type,
+    },
+    /// The circuit uses multi-indexed registers.
+    //
+    // This could be supported in the future, if there is a need for it.
+    #[error("Register {register} in the circuit has multiple indices. Tket2 does not support multi-indexed registers.")]
+    MultiIndexedRegister {
+        /// The register name.
+        register: String,
     },
     /// Invalid JSON,
     #[error("Invalid pytket JSON. {0}")]

@@ -90,9 +90,12 @@ pub enum Pauli {
     Z,
 }
 
-#[derive(Debug, Error, PartialEq, Clone, Copy)]
-#[error("Not a Tk2Op.")]
-pub struct NotTk2Op;
+#[derive(Debug, Error, PartialEq, Clone)]
+#[error("{} is not a Tk2Op.", op.name())]
+pub struct NotTk2Op {
+    /// The offending operation.
+    pub op: OpType,
+}
 
 impl Pauli {
     /// Check if this pauli commutes with another.
@@ -226,20 +229,7 @@ impl TryFrom<&OpType> for Tk2Op {
     type Error = NotTk2Op;
 
     fn try_from(op: &OpType) -> Result<Self, Self::Error> {
-        let OpType::CustomOp(custom_op) = op else {
-            return Err(NotTk2Op);
-        };
-
-        match custom_op {
-            CustomOp::Extension(ext) => Tk2Op::from_extension_op(ext),
-            CustomOp::Opaque(opaque) => {
-                if opaque.extension() != &EXTENSION_ID {
-                    return Err(NotTk2Op);
-                }
-                try_from_name(opaque.name())
-            }
-        }
-        .map_err(|_| NotTk2Op)
+        optype_to_tk2op(op).ok_or_else(|| NotTk2Op { op: op.clone() })
     }
 }
 
@@ -247,8 +237,26 @@ impl TryFrom<OpType> for Tk2Op {
     type Error = NotTk2Op;
 
     fn try_from(op: OpType) -> Result<Self, Self::Error> {
-        Self::try_from(&op)
+        optype_to_tk2op(&op).ok_or_else(|| NotTk2Op { op })
     }
+}
+
+// Internal implementation for `TryFrom<Optype> for Tk2Op` that doesn't copy the `OpType` when it errors.
+fn optype_to_tk2op(op: &OpType) -> Option<Tk2Op> {
+    let OpType::CustomOp(custom_op) = op else {
+        return None;
+    };
+
+    match custom_op {
+        CustomOp::Extension(ext) => Tk2Op::from_extension_op(ext),
+        CustomOp::Opaque(opaque) => {
+            if opaque.extension() != &EXTENSION_ID {
+                return None;
+            }
+            try_from_name(opaque.name())
+        }
+    }
+    .ok()
 }
 
 #[cfg(test)]
