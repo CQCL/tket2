@@ -55,7 +55,11 @@ impl PyCircuitChunks {
     fn update_circuit(&mut self, index: usize, new_circ: &Bound<PyAny>) -> PyResult<()> {
         try_with_hugr(new_circ, |hugr, _| {
             let circ: Circuit = hugr.into();
-            if circ.circuit_signature() != self.chunks[index].circuit_signature() {
+            let circuit_sig = circ.circuit_signature();
+            let chunk_sig = self.chunks[index].circuit_signature();
+            if circuit_sig.input() != chunk_sig.input()
+                || circuit_sig.output() != chunk_sig.output()
+            {
                 return Err(PyAttributeError::new_err(
                     "The new circuit has a different signature.",
                 ));

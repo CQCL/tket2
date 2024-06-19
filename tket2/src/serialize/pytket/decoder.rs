@@ -10,7 +10,7 @@ use hugr::extension::prelude::QB_T;
 
 use hugr::ops::OpType;
 use hugr::types::FunctionType;
-use hugr::{CircuitUnit, HugrView};
+use hugr::CircuitUnit;
 use hugr::{Hugr, Wire};
 
 use itertools::Itertools;
@@ -90,7 +90,6 @@ impl JsonDecoder {
     /// Finish building the [`Hugr`].
     pub fn finish(self) -> Hugr {
         // TODO: Throw validation error?
-        println!("{}", self.hugr.hugr().mermaid_string());
         self.hugr
             .finish_hugr_with_outputs(self.dangling_wires, &REGISTRY)
             .unwrap()
