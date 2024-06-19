@@ -25,7 +25,7 @@ use tket_json_rs::optype::OpType as SerialOpType;
 use crate::circuit::Circuit;
 
 use self::decoder::JsonDecoder;
-use self::encoder::JsonEncoder;
+use self::encoder::Tk1Encoder;
 
 pub use crate::passes::pytket::lower_to_pytket;
 
@@ -74,7 +74,7 @@ impl TKETDecode for SerialCircuit {
     }
 
     fn encode(circ: &Circuit) -> Result<Self, Self::EncodeError> {
-        let mut encoder = JsonEncoder::new(circ)?;
+        let mut encoder = Tk1Encoder::new(circ)?;
         for com in circ.commands() {
             let optype = com.optype();
             encoder.add_command(com.clone(), optype)?;
