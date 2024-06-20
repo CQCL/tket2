@@ -32,9 +32,9 @@ pub struct OpaqueTk1Op {
     /// Internal operation data.
     op: circuit_json::Operation,
     /// Number of qubits declared by the operation.
-    num_qubits: usize,
+    pub num_qubits: usize,
     /// Number of bits declared by the operation.
-    num_bits: usize,
+    pub num_bits: usize,
     /// Node input for each parameter in `op.params`.
     ///
     /// If the input is `None`, the parameter does not use a Hugr port and is
@@ -42,7 +42,7 @@ pub struct OpaqueTk1Op {
     param_inputs: Vec<Option<IncomingPort>>,
     /// The number of non-None inputs in `param_inputs`, corresponding to the
     /// FLOAT64_TYPE inputs to the Hugr operation.
-    num_params: usize,
+    pub num_params: usize,
 }
 
 impl OpaqueTk1Op {

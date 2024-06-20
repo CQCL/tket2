@@ -95,6 +95,46 @@ impl Tk1Op {
             Tk1Op::Opaque(json_op) => itertools::Either::Right(json_op.param_ports()),
         }
     }
+
+    /// Returns the number of qubit inputs for this operation.
+    pub fn qubit_inputs(&self) -> usize {
+        match self {
+            Tk1Op::Native(native_op) => native_op.input_qubits,
+            Tk1Op::Opaque(json_op) => json_op.num_qubits,
+        }
+    }
+
+    /// Returns the number of bit inputs for this operation.
+    pub fn bit_inputs(&self) -> usize {
+        match self {
+            Tk1Op::Native(native_op) => native_op.input_bits,
+            Tk1Op::Opaque(json_op) => json_op.num_bits,
+        }
+    }
+
+    /// Returns the number of qubit outputs for this operation.
+    pub fn qubit_outputs(&self) -> usize {
+        match self {
+            Tk1Op::Native(native_op) => native_op.output_qubits,
+            Tk1Op::Opaque(json_op) => json_op.num_qubits,
+        }
+    }
+
+    /// Returns the number of bit outputs for this operation.
+    pub fn bit_outputs(&self) -> usize {
+        match self {
+            Tk1Op::Native(native_op) => native_op.output_bits,
+            Tk1Op::Opaque(json_op) => json_op.num_bits,
+        }
+    }
+
+    /// Returns the number of parameters for this operation.
+    pub fn num_params(&self) -> usize {
+        match self {
+            Tk1Op::Native(native_op) => native_op.num_params,
+            Tk1Op::Opaque(json_op) => json_op.num_params,
+        }
+    }
 }
 
 impl From<Tk1Op> for OpType {

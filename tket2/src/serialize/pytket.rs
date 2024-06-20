@@ -6,6 +6,7 @@ mod op;
 
 use hugr::types::Type;
 
+use hugr::Node;
 // Required for serialising ops in the tket1 hugr extension.
 pub(crate) use op::serialised::OpaqueTk1Op;
 
@@ -15,7 +16,7 @@ mod tests;
 use std::path::Path;
 use std::{fs, io};
 
-use hugr::ops::{OpType, Value};
+use hugr::ops::{NamedOp, OpType, Value};
 use hugr::std_extensions::arithmetic::float_types::ConstF64;
 
 use thiserror::Error;
@@ -156,6 +157,37 @@ pub enum OpConvertError {
     /// The serialized operation is not supported.
     #[error("Cannot serialize tket2 operation: {0:?}")]
     UnsupportedOpSerialization(OpType),
+    /// The operation has non-serializable inputs.
+    #[error("Operation {} in {node} has an unsupported input of type {typ}.", optype.name())]
+    UnsupportedInputType {
+        /// The unsupported type.
+        typ: Type,
+        /// The operation name.
+        optype: OpType,
+        /// The node.
+        node: Node,
+    },
+    /// The operation has non-serializable outputs.
+    #[error("Operation {} in {node} has an unsupported output of type {typ}.", optype.name())]
+    UnsupportedOutputType {
+        /// The unsupported type.
+        typ: Type,
+        /// The operation name.
+        optype: OpType,
+        /// The node.
+        node: Node,
+    },
+    /// The operation has output-only qubits.
+    /// This is not currently supported by the encoder.
+    #[error("Operation {} in {node} has more output qubits than inputs.", optype.name())]
+    TooManyOutputQubits {
+        /// The unsupported type.
+        typ: Type,
+        /// The operation name.
+        optype: OpType,
+        /// The node.
+        node: Node,
+    },
     /// The opaque tket1 operation had an invalid type parameter.
     #[error("Opaque TKET1 operation had an invalid type parameter. {error}")]
     InvalidOpaqueTypeParam {

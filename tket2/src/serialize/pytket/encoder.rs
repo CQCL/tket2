@@ -7,7 +7,7 @@ use hugr::extension::prelude::{BOOL_T, QB_T};
 use hugr::ops::{NamedOp, OpType};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::{HugrView, Wire};
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 use tket_json_rs::circuit_json::Register as RegisterUnit;
 use tket_json_rs::circuit_json::{self, Permutation, SerialCircuit};
 
@@ -31,7 +31,7 @@ pub(super) struct Tk1Encoder {
     phase: String,
     /// Implicit permutation of output qubits
     implicit_permutation: Vec<Permutation>,
-    /// The current commands
+    /// The current serialised commands
     commands: Vec<circuit_json::Command>,
     /// A tracker for the qubits used in the circuit.
     qubits: QubitTracker,
@@ -92,18 +92,78 @@ impl Tk1Encoder {
             return Ok(());
         }
 
-        let (args, params): (Vec<RegisterUnit>, Vec<Wire>) =
-            command
-                .inputs()
-                .partition_map(|(u, _, _)| match self.unit_to_register(u) {
-                    Some(r) => Either::Left(r),
-                    None => match u {
-                        CircuitUnit::Wire(w) => Either::Right(w),
-                        CircuitUnit::Linear(_) => {
-                            panic!("No register found for the linear input {u:?}.")
-                        }
-                    },
+        let tk1op: Tk1Op = Tk1Op::try_from_optype(optype.clone())?;
+
+        // Get the registers and wires associated with the operation's inputs.
+        let mut qubit_args = Vec::with_capacity(tk1op.qubit_inputs());
+        let mut bit_args = Vec::with_capacity(tk1op.bit_inputs());
+        let mut params = Vec::with_capacity(tk1op.num_params());
+        for (unit, _, ty) in command.inputs() {
+            if ty == QB_T {
+                let reg = self.unit_to_register(unit).unwrap_or_else(|| {
+                    panic!(
+                        "No register found for qubit input {unit} in node {}.",
+                        command.node(),
+                    )
                 });
+                qubit_args.push(reg);
+            } else if ty == BOOL_T {
+                let reg = self.unit_to_register(unit).unwrap_or_else(|| {
+                    panic!(
+                        "No register found for bit input {unit} in node {}.",
+                        command.node(),
+                    )
+                });
+                bit_args.push(reg);
+            } else if ty == FLOAT64_TYPE {
+                let CircuitUnit::Wire(param_wire) = unit else {
+                    unreachable!("Float types are not linear.")
+                };
+                params.push(param_wire);
+            } else {
+                return Err(OpConvertError::UnsupportedInputType {
+                    typ: ty.clone(),
+                    optype: optype.clone(),
+                    node: command.node(),
+                });
+            }
+        }
+
+        let mut bit_output_count = 0;
+        let mut qubit_output_count = 0;
+        for (unit, _, ty) in command.outputs() {
+            if ty == QB_T {
+                // Currently we do not support encoding operations that allocate
+                // new qubits.
+                qubit_output_count += 1;
+                if qubit_args.len() < qubit_output_count {
+                    return Err(OpConvertError::TooManyOutputQubits {
+                        typ: ty.clone(),
+                        optype: optype.clone(),
+                        node: command.node(),
+                    });
+                }
+            } else if ty == BOOL_T {
+                // If the operation has any bit outputs, associate their wires with either an
+                // input bit register, or create a new one.
+                let CircuitUnit::Wire(wire) = unit else {
+                    panic!("Bool types are not linear.")
+                };
+                if let Some(reg) = bit_args.get(bit_output_count) {
+                    self.bits.set_bit_register(wire, reg.clone());
+                } else {
+                    let reg = self.bits.add_bit_register(wire);
+                    bit_args.push(reg.clone());
+                }
+                bit_output_count += 1;
+            } else {
+                return Err(OpConvertError::UnsupportedOutputType {
+                    typ: ty.clone(),
+                    optype: optype.clone(),
+                    node: command.node(),
+                });
+            }
+        }
 
         // TODO Restore the opgroup (once the decoding supports it)
         let opgroup = None;
@@ -112,13 +172,12 @@ impl Tk1Encoder {
         // return an error for operations that should have been caught by the
         // `record_parameters` branch above (in addition to other unsupported
         // ops).
-        let op: Tk1Op = Tk1Op::try_from_optype(optype.clone())?;
-        let mut op: circuit_json::Operation = op
+        let mut serial_op: circuit_json::Operation = tk1op
             .serialised_op()
             .ok_or_else(|| OpConvertError::UnsupportedOpSerialization(optype.clone()))?;
 
         if !params.is_empty() {
-            op.params = Some(
+            serial_op.params = Some(
                 params
                     .into_iter()
                     .filter_map(|w| self.parameters.get(&w))
@@ -129,8 +188,15 @@ impl Tk1Encoder {
         // TODO: ops that contain free variables.
         // (update decoder to ignore them too, but store them in the wrapped op)
 
-        let command = circuit_json::Command { op, args, opgroup };
+        let mut args = qubit_args;
+        args.append(&mut bit_args);
+        let command = circuit_json::Command {
+            op: serial_op,
+            args,
+            opgroup,
+        };
         self.commands.push(command);
+
         Ok(())
     }
 
@@ -275,6 +341,11 @@ impl BitTracker {
         let reg = RegisterUnit("b".to_string(), vec![self.bit_to_reg.len() as i64]);
         self.bit_to_reg.insert(wire, reg);
         self.bit_to_reg.get(&wire).unwrap()
+    }
+
+    /// Set the register for a bit wire
+    pub fn set_bit_register(&mut self, wire: Wire, reg: RegisterUnit) {
+        self.bit_to_reg.insert(wire, reg);
     }
 
     /// Returns the register unit for a bit wire, if it exists.
