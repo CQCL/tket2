@@ -9,7 +9,6 @@ use hugr::types::type_param::CustomTypeArg;
 use hugr::types::{FunctionType, TypeArg};
 
 use hugr::IncomingPort;
-use itertools::Itertools;
 use serde::de::Error;
 use tket_json_rs::circuit_json;
 
@@ -47,31 +46,6 @@ pub struct OpaqueTk1Op {
 }
 
 impl OpaqueTk1Op {
-    /// Create a new `OpaqueTk1Op` from a `circuit_json::Operation`, computing its
-    /// number of qubits from the signature
-    ///
-    /// Fails if the operation does not define a signature. See
-    /// [`OpaqueTk1Op::new_from_op`] for a version that generates a signature if none
-    /// is defined.
-    #[allow(clippy::question_mark)]
-    pub fn new(op: circuit_json::Operation) -> Option<Self> {
-        let Some(sig) = &op.signature else {
-            return None;
-        };
-        let input_counts = sig.iter().map(String::as_ref).counts();
-        let num_qubits = input_counts.get("Q").copied().unwrap_or(0);
-        let num_bits = input_counts.get("B").copied().unwrap_or(0);
-        let mut op = Self {
-            op,
-            num_qubits,
-            num_bits,
-            param_inputs: Vec::new(),
-            num_params: 0,
-        };
-        op.compute_param_fields();
-        Some(op)
-    }
-
     /// Create a new `OpaqueTk1Op` from a `circuit_json::Operation`, with the number
     /// of qubits and bits explicitly specified.
     ///
