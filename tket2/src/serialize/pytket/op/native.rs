@@ -78,10 +78,12 @@ impl NativeOp {
             Tk1OpType::H => Tk2Op::H.into(),
             Tk1OpType::CX => Tk2Op::CX.into(),
             Tk1OpType::T => Tk2Op::T.into(),
-            Tk1OpType::Tdg => Tk2Op::Tdg.into(),
+            Tk1OpType::S => Tk2Op::S.into(),
             Tk1OpType::X => Tk2Op::X.into(),
             Tk1OpType::Y => Tk2Op::Y.into(),
             Tk1OpType::Z => Tk2Op::Z.into(),
+            Tk1OpType::Tdg => Tk2Op::Tdg.into(),
+            Tk1OpType::Sdg => Tk2Op::Sdg.into(),
             Tk1OpType::Rz => Tk2Op::RzF64.into(),
             Tk1OpType::Rx => Tk2Op::RxF64.into(),
             Tk1OpType::TK1 => Tk2Op::TK1.into(),
@@ -156,5 +158,38 @@ impl NativeOp {
                 .filter(|(_, ty)| ty == &FLOAT64_TYPE)
                 .map(|(port, _)| port)
         })
+    }
+}
+
+#[cfg(test)]
+mod cfg {
+    use super::*;
+    use hugr::ops::NamedOp;
+    use rstest::rstest;
+    use strum::IntoEnumIterator;
+
+    #[rstest]
+    fn tk2_optype_correspondence() {
+        for tk2op in Tk2Op::iter() {
+            let Some(native_op) = NativeOp::try_from_tk2op(tk2op) else {
+                // Ignore unsupported ops.
+                continue;
+            };
+
+            let Some(serial_op) = native_op.serial_op.clone() else {
+                // Ignore ops that do not have a serialised equivalent.
+                // (But are still handled by the encoder).
+                continue;
+            };
+
+            let Some(native_op2) = NativeOp::try_from_serial_optype(serial_op.clone()) else {
+                panic!(
+                    "{} serialises into {serial_op:?}, but failed to be deserialised.",
+                    tk2op.name()
+                )
+            };
+
+            assert_eq!(native_op, native_op2);
+        }
     }
 }
