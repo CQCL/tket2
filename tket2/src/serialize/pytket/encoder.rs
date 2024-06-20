@@ -19,7 +19,7 @@ use crate::Tk2Op;
 use super::op::Tk1Op;
 use super::{
     try_constant_to_param, OpConvertError, TK1ConvertError, METADATA_B_REGISTERS,
-    METADATA_IMPLICIT_PERM, METADATA_PHASE, METADATA_Q_REGISTERS,
+    METADATA_IMPLICIT_PERM, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_REGISTERS,
 };
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
@@ -165,8 +165,10 @@ impl Tk1Encoder {
             }
         }
 
-        // TODO Restore the opgroup (once the decoding supports it)
-        let opgroup = None;
+        let opgroup: Option<String> = command
+            .metadata(METADATA_OPGROUP)
+            .and_then(serde_json::Value::as_str)
+            .map(ToString::to_string);
 
         // Convert the command's operator to a pytket serialized one. This will
         // return an error for operations that should have been caught by the

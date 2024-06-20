@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::iter::FusedIterator;
 
 use hugr::hugr::views::{HierarchyView, SiblingGraph};
-use hugr::hugr::NodeType;
+use hugr::hugr::{NodeMetadata, NodeType};
 use hugr::ops::{OpTag, OpTrait};
 use hugr::{HugrView, IncomingPort, OutgoingPort};
 use itertools::Either::{self, Left, Right};
@@ -160,6 +160,12 @@ impl<'circ, T: HugrView> Command<'circ, T> {
         self.optype()
             .port_kind(port)
             .map_or(false, |kind| kind.is_linear())
+    }
+
+    /// Returns a metadata value associated with the command's node.
+    #[inline]
+    pub fn metadata(&self, key: impl AsRef<str>) -> Option<&NodeMetadata> {
+        self.circ.hugr().get_metadata(self.node, key)
     }
 }
 

@@ -19,7 +19,10 @@ use tket_json_rs::circuit_json;
 use tket_json_rs::circuit_json::SerialCircuit;
 
 use super::op::Tk1Op;
-use super::{try_param_to_constant, TK1ConvertError, METADATA_IMPLICIT_PERM, METADATA_PHASE};
+use super::{
+    try_param_to_constant, TK1ConvertError, METADATA_IMPLICIT_PERM, METADATA_OPGROUP,
+    METADATA_PHASE,
+};
 use super::{METADATA_B_REGISTERS, METADATA_Q_REGISTERS};
 use crate::extension::{REGISTRY, TKET1_EXTENSION_ID};
 use crate::symbolic_constant_op;
@@ -96,8 +99,9 @@ impl JsonDecoder {
     /// Add a tket1 [`circuit_json::Command`] from the serial circuit to the
     /// decoder.
     pub fn add_command(&mut self, command: circuit_json::Command) {
-        // TODO Store the command's `opgroup` in the metadata.
-        let circuit_json::Command { op, args, .. } = command;
+        let circuit_json::Command {
+            op, args, opgroup, ..
+        } = command;
         let num_qubits = args
             .iter()
             .take_while(|&arg| self.reg_wire(arg).is_linear())
@@ -117,9 +121,13 @@ impl JsonDecoder {
         let append_wires: Vec<CircuitUnit> = arg_units.chain(param_units).collect_vec();
         let op: OpType = (&tk1op).into();
 
-        self.with_circ_builder(|circ| {
-            circ.append_and_consume(op, append_wires).unwrap();
-        });
+        let wires =
+            self.with_circ_builder(|circ| circ.append_with_outputs(op, append_wires).unwrap());
+
+        if let (Some(opgroup), [w, ..]) = (opgroup, wires.as_slice()) {
+            self.hugr
+                .set_child_metadata(w.node(), METADATA_OPGROUP, json!(opgroup));
+        }
     }
 
     /// Apply a function to the internal hugr builder viewed as a [`CircuitBuilder`].
