@@ -143,7 +143,7 @@ impl NativeOp {
     }
 
     /// Consumes the `NativeOp` and returns the underlying `OpType`.
-    pub fn into_op(self) -> OpType {
+    pub fn into_optype(self) -> OpType {
         self.op
     }
 
