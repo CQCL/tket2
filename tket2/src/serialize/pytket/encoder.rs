@@ -1,7 +1,7 @@
 //! Intermediate structure for converting encoding [`Circuit`]s into [`SerialCircuit`]s.
 
 use core::panic;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use hugr::extension::prelude::{BOOL_T, QB_T};
 use hugr::ops::{NamedOp, OpType};
@@ -300,6 +300,8 @@ struct BitTracker {
     inputs: Vec<RegisterUnit>,
     /// Map each bit wire to a TKET1 register element.
     bit_to_reg: HashMap<Wire, RegisterUnit>,
+    /// Unused input bits, that can be written to.
+    unused_inputs: VecDeque<RegisterUnit>,
 }
 
 impl BitTracker {
@@ -308,6 +310,8 @@ impl BitTracker {
     ///
     /// If the circuit contains more bit inputs than the provided list,
     /// new registers are created for the remaining bits.
+    ///
+    /// TODO: Compute output bit permutations when finishing the circuit.
     pub fn new(circ: &Circuit<impl HugrView>) -> Self {
         let mut tracker = BitTracker::default();
 
@@ -325,11 +329,23 @@ impl BitTracker {
 
         for (i, wire) in bit_input_wires.enumerate() {
             // Use the given input register names if available, or create new ones.
-            if let Some(reg) = tracker.inputs.get(i) {
+            let reg = if let Some(reg) = tracker.inputs.get(i) {
                 tracker.bit_to_reg.insert(wire, reg.clone());
+                reg
             } else {
                 let reg = tracker.add_bit_register(wire).clone();
                 tracker.inputs.push(reg);
+                tracker.inputs.last().unwrap()
+            };
+
+            // If the input is not used in the circuit, store it as a bit that can be written to.
+            if circ
+                .hugr()
+                .linked_inputs(wire.node(), wire.source())
+                .next()
+                .is_none()
+            {
+                tracker.unused_inputs.push_back(reg.clone());
             }
         }
 
@@ -338,7 +354,10 @@ impl BitTracker {
 
     /// Add a new register unit for a bit wire.
     pub fn add_bit_register(&mut self, wire: Wire) -> &RegisterUnit {
-        let reg = RegisterUnit("b".to_string(), vec![self.bit_to_reg.len() as i64]);
+        let reg = match self.unused_inputs.pop_front() {
+            Some(reg) => reg,
+            None => RegisterUnit("b".to_string(), vec![self.bit_to_reg.len() as i64]),
+        };
         self.bit_to_reg.insert(wire, reg);
         self.bit_to_reg.get(&wire).unwrap()
     }
