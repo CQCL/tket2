@@ -83,17 +83,6 @@ impl TKETDecode for SerialCircuit {
     }
 }
 
-/// Error type for conversion between `Op` and `OpType`.
-#[derive(Clone, PartialEq, Debug, Error)]
-pub enum OpConvertError {
-    /// The serialized operation is not supported.
-    #[error("Unsupported serialized pytket operation: {0:?}")]
-    UnsupportedSerializedOp(SerialOpType),
-    /// The serialized operation is not supported.
-    #[error("Cannot serialize tket2 operation: {0:?}")]
-    UnsupportedOpSerialization(OpType),
-}
-
 /// Load a TKET1 circuit from a JSON file.
 pub fn load_tk1_json_file(path: impl AsRef<Path>) -> Result<Circuit, TK1ConvertError> {
     let file = fs::File::open(path)?;
@@ -159,6 +148,26 @@ pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, TK1ConvertError> {
 
 /// Error type for conversion between `Op` and `OpType`.
 #[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum OpConvertError {
+    /// The serialized operation is not supported.
+    #[error("Unsupported serialized pytket operation: {0:?}")]
+    UnsupportedSerializedOp(SerialOpType),
+    /// The serialized operation is not supported.
+    #[error("Cannot serialize tket2 operation: {0:?}")]
+    UnsupportedOpSerialization(OpType),
+    /// The opaque tket1 operation had an invalid type parameter.
+    #[error("Opaque TKET1 operation had an invalid type parameter. {error}")]
+    InvalidOpaqueTypeParam {
+        /// The serialization error.
+        #[from]
+        error: serde_yaml::Error,
+    },
+}
+
+/// Error type for conversion between `Op` and `OpType`.
+#[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum TK1ConvertError {
     /// Operation conversion error.
     #[error(transparent)]

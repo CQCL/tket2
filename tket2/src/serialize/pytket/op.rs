@@ -17,7 +17,7 @@ use self::native::NativeOp;
 use self::serialised::OpaqueTk1Op;
 use super::OpConvertError;
 
-/// An operation originated from pytket, containing the operation type and all its attributes.
+/// An operation originating from pytket, containing the operation type and all its attributes.
 ///
 /// Wrapper around [`tket_json_rs::circuit_json::Operation`] with cached number of qubits and bits.
 ///
@@ -43,16 +43,15 @@ impl Tk1Op {
         let tk1_op = if let Ok(tk2op) = res {
             NativeOp::try_from_tk2op(tk2op).map(Tk1Op::Native)
         } else {
-            OpaqueTk1Op::try_from_tket2(&op).map(Tk1Op::Opaque)
+            OpaqueTk1Op::try_from_tket2(&op)?.map(Tk1Op::Opaque)
         };
 
-        tk1_op.ok_or_else(|| OpConvertError::UnsupportedOpSerialization(op))
+        tk1_op.ok_or(OpConvertError::UnsupportedOpSerialization(op))
     }
 
     /// Create a new `Tk1Op` from a tket1 `circuit_json::Operation`.
     ///
-    /// Requires specifying the number of qubits and bits in the operation in
-    /// case the `serial_op` does not define a signature.
+    /// If `serial_op` defines a signature then `num_qubits` and `num_qubits` are ignored. Otherwise, a signature is synthesised from those parameters.
     pub fn from_serialised_op(
         serial_op: circuit_json::Operation,
         num_qubits: usize,
@@ -73,6 +72,14 @@ impl Tk1Op {
         }
     }
 
+    /// Consumes the operation and returns a hugr optype.
+    pub fn into_optype(self) -> OpType {
+        match self {
+            Tk1Op::Native(native_op) => native_op.into_optype(),
+            Tk1Op::Opaque(json_op) => json_op.as_custom_op().into(),
+        }
+    }
+
     /// Get the [`tket_json_rs::circuit_json::Operation`] for the operation.
     pub fn serialised_op(&self) -> Option<circuit_json::Operation> {
         match self {
@@ -87,6 +94,12 @@ impl Tk1Op {
             Tk1Op::Native(native_op) => itertools::Either::Left(native_op.param_ports()),
             Tk1Op::Opaque(json_op) => itertools::Either::Right(json_op.param_ports()),
         }
+    }
+}
+
+impl From<Tk1Op> for OpType {
+    fn from(tk1_op: Tk1Op) -> Self {
+        tk1_op.into_optype()
     }
 }
 

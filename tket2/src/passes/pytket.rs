@@ -27,7 +27,8 @@ pub fn lower_to_pytket(circ: &Circuit) -> Result<Circuit, PytketLoweringError> {
 }
 
 /// Errors that can occur during the lowering process.
-#[derive(Clone, PartialEq, Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum PytketLoweringError {
     /// An error occurred during the conversion of an operation.
     #[error("operation conversion error: {0}")]

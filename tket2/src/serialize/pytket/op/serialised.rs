@@ -10,30 +10,31 @@ use hugr::types::{FunctionType, TypeArg};
 
 use hugr::IncomingPort;
 use itertools::Itertools;
+use serde::de::Error;
 use tket_json_rs::circuit_json;
 
 use crate::extension::{
     LINEAR_BIT, REGISTRY, TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME, TKET1_OP_PAYLOAD,
 };
+use crate::serialize::pytket::OpConvertError;
 
 /// A serialized operation, containing the operation type and all its attributes.
+///
+/// This value is only used if the operation does not have a native TKET2
+/// counterpart that can be represented as a [`NativeOp`].
 ///
 /// Wrapper around [`tket_json_rs::circuit_json::Operation`] with cached number of qubits and bits.
 ///
 /// The `Operation` contained by this struct is guaranteed to have a signature.
+///
+///   [`NativeOp`]: super::native::NativeOp
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct OpaqueTk1Op {
     /// Internal operation data.
     op: circuit_json::Operation,
     /// Number of qubits declared by the operation.
-    ///
-    /// This value is only used if the operation does not have a native TKET2
-    /// counterpart.
     num_qubits: usize,
     /// Number of bits declared by the operation.
-    ///
-    /// This value is only used if the operation does not have a native TKET2
-    /// counterpart.
     num_bits: usize,
     /// Node input for each parameter in `op.params`.
     ///
@@ -52,7 +53,6 @@ impl OpaqueTk1Op {
     /// Fails if the operation does not define a signature. See
     /// [`OpaqueTk1Op::new_from_op`] for a version that generates a signature if none
     /// is defined.
-    #[allow(unused)]
     #[allow(clippy::question_mark)]
     pub fn new(op: circuit_json::Operation) -> Option<Self> {
         let Some(sig) = &op.signature else {
@@ -100,29 +100,37 @@ impl OpaqueTk1Op {
     /// Try to convert a tket2 operation into a `OpaqueTk1Op`.
     ///
     /// Only succeeds if the operation is a [`CustomOp`] containing a tket1 operation
-    /// from the [`TKET1_EXTENSION_ID`] extension.
-    pub fn try_from_tket2(op: &OpType) -> Option<Self> {
+    /// from the [`TKET1_EXTENSION_ID`] extension. Returns `None` if the operation
+    /// is not a tket1 operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns a
+    pub fn try_from_tket2(op: &OpType) -> Result<Option<Self>, OpConvertError> {
         let OpType::CustomOp(custom_op) = op else {
-            return None;
+            return Ok(None);
         };
 
         // TODO: Check `extensions.contains(&TKET1_EXTENSION_ID)`
         // (but the ext op extensions are an empty set?)
         if custom_op.name() != format!("{TKET1_EXTENSION_ID}.{TKET1_OP_NAME}") {
-            return None;
+            return Ok(None);
         }
         let Some(TypeArg::Opaque { arg }) = custom_op.args().first() else {
-            // TODO: Throw an error? We should never get here if the name matches.
-            return None;
+            return Err(serde_yaml::Error::custom(
+                "Opaque TKET1 operation did not have a yaml-encoded type argument.",
+            )
+            .into());
         };
-        let op = serde_yaml::from_value(arg.value.clone()).ok()?;
-        Some(op)
+        let op = serde_yaml::from_value(arg.value.clone())?;
+        Ok(Some(op))
     }
 
     /// Compute the signature of the operation.
     ///
-    /// We assume the operation has `num_qubits` qubit inputs and outputs,
-    /// `num_bits` bit input and outputs, and `num_params` parameter inputs.
+    /// The signature returned has `num_qubits` qubit inputs, followed by
+    /// `num_bits` bit inputs, followed by `num_params` `f64` inputs. It has
+    /// `num_qubits` qubit outputs followed by `num_bits` bit outputs.
     #[inline]
     pub fn signature(&self) -> FunctionType {
         let linear = [
@@ -155,15 +163,6 @@ impl OpaqueTk1Op {
         ExtensionOp::new(op_def.clone(), vec![payload], &REGISTRY)
             .unwrap_or_else(|e| panic!("{e}"))
             .into()
-        //let sig = self.signature();
-        //OpaqueOp::new(
-        //    TKET1_EXTENSION_ID,
-        //    TKET1_OP_NAME,
-        //    "".into(),
-        //    vec![payload],
-        //    sig,
-        //)
-        //.into()
     }
 
     /// Compute the `parameter_input` and `num_params` fields by looking for
