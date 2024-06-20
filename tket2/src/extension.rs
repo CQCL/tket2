@@ -46,7 +46,7 @@ pub static ref TKET1_EXTENSION: Extension = {
     res.add_op(
         TKET1_OP_NAME,
         "An opaque TKET1 operation.".into(),
-        JsonOpSignature([tket1_op_payload])
+        Tk1Signature([tket1_op_payload])
     ).unwrap();
 
     res
@@ -72,9 +72,9 @@ pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
 
 }
 
-struct JsonOpSignature([TypeParam; 1]);
+struct Tk1Signature([TypeParam; 1]);
 
-impl CustomSignatureFunc for JsonOpSignature {
+impl CustomSignatureFunc for Tk1Signature {
     fn compute_signature<'o, 'a: 'o>(
         &'a self,
         arg_values: &[TypeArg],

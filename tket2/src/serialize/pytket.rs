@@ -20,7 +20,7 @@ use hugr::std_extensions::arithmetic::float_types::ConstF64;
 
 use thiserror::Error;
 use tket_json_rs::circuit_json::SerialCircuit;
-use tket_json_rs::optype::OpType as JsonOpType;
+use tket_json_rs::optype::OpType as SerialOpType;
 
 use crate::circuit::Circuit;
 
@@ -88,7 +88,7 @@ impl TKETDecode for SerialCircuit {
 pub enum OpConvertError {
     /// The serialized operation is not supported.
     #[error("Unsupported serialized pytket operation: {0:?}")]
-    UnsupportedSerializedOp(JsonOpType),
+    UnsupportedSerializedOp(SerialOpType),
     /// The serialized operation is not supported.
     #[error("Cannot serialize tket2 operation: {0:?}")]
     UnsupportedOpSerialization(OpType),

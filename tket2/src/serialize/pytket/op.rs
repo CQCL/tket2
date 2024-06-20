@@ -1,7 +1,7 @@
-//! This module defines the internal `JsonOp` struct wrapping the logic for
+//! This module defines the internal [`Tk1Op`] struct wrapping the logic for
 //! going between `tket_json_rs::optype::OpType` and `hugr::ops::OpType`.
 //!
-//! The `JsonOp` tries to homogenize the
+//! The `Tk1Op` tries to homogenize the
 //! `tket_json_rs::circuit_json::Operation`s coming from the encoded TKET1
 //! circuits by ensuring they always define a signature, and computing the
 //! explicit count of qubits and linear bits.

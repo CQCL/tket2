@@ -46,11 +46,11 @@ pub struct OpaqueTk1Op {
 }
 
 impl OpaqueTk1Op {
-    /// Create a new `JsonOp` from a `circuit_json::Operation`, computing its
+    /// Create a new `OpaqueTk1Op` from a `circuit_json::Operation`, computing its
     /// number of qubits from the signature
     ///
     /// Fails if the operation does not define a signature. See
-    /// [`JsonOp::new_from_op`] for a version that generates a signature if none
+    /// [`OpaqueTk1Op::new_from_op`] for a version that generates a signature if none
     /// is defined.
     #[allow(unused)]
     #[allow(clippy::question_mark)]
@@ -72,7 +72,7 @@ impl OpaqueTk1Op {
         Some(op)
     }
 
-    /// Create a new `JsonOp` from a `circuit_json::Operation`, with the number
+    /// Create a new `OpaqueTk1Op` from a `circuit_json::Operation`, with the number
     /// of qubits and bits explicitly specified.
     ///
     /// If the operation does not define a signature, one is generated with the
@@ -97,7 +97,7 @@ impl OpaqueTk1Op {
         op
     }
 
-    /// Try to convert a tket2 operation into a `JsonOp`.
+    /// Try to convert a tket2 operation into a `OpaqueTk1Op`.
     ///
     /// Only succeeds if the operation is a [`CustomOp`] containing a tket1 operation
     /// from the [`TKET1_EXTENSION_ID`] extension.
