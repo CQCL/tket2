@@ -55,6 +55,32 @@ const PARAMETRIZED: &str = r#"{
         "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
     }"#;
 
+fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
+    assert_eq!(a.name, b.name);
+    assert_eq!(a.phase, b.phase);
+
+    let qubits_a: Vec<_> = a.qubits.iter().collect();
+    let qubits_b: Vec<_> = b.qubits.iter().collect();
+    assert_eq!(qubits_a, qubits_b);
+
+    let bits_a: Vec<_> = a.bits.iter().collect();
+    let bits_b: Vec<_> = b.bits.iter().collect();
+    assert_eq!(bits_a, bits_b);
+
+    assert_eq!(a.implicit_permutation, b.implicit_permutation);
+
+    assert_eq!(a.commands.len(), b.commands.len());
+
+    // the below only works if both serial circuits share a topological ordering
+    // of commands.
+    for (a, b) in a.commands.iter().zip(b.commands.iter()) {
+        assert_eq!(a.op.op_type, b.op.op_type);
+        assert_eq!(a.args, b.args);
+        assert_eq!(a.op.params, b.op.params);
+    }
+    // TODO: Check commands equality (they only implement PartialEq)
+}
+
 #[rstest]
 #[case::simple(SIMPLE_JSON, 2, 2)]
 #[case::unknown_op(UNKNOWN_OP, 2, 3)]
@@ -137,30 +163,4 @@ fn test_add_angle_serialise(#[case] circ_add_angles: Circuit, #[case] param_str:
     let deser: Circuit = ser.clone().decode().unwrap();
     let reser = SerialCircuit::encode(&deser).unwrap();
     compare_serial_circs(&ser, &reser);
-}
-
-fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
-    assert_eq!(a.name, b.name);
-    assert_eq!(a.phase, b.phase);
-
-    let qubits_a: Vec<_> = a.qubits.iter().collect();
-    let qubits_b: Vec<_> = b.qubits.iter().collect();
-    assert_eq!(qubits_a, qubits_b);
-
-    let bits_a: Vec<_> = a.bits.iter().collect();
-    let bits_b: Vec<_> = b.bits.iter().collect();
-    assert_eq!(bits_a, bits_b);
-
-    assert_eq!(a.implicit_permutation, b.implicit_permutation);
-
-    assert_eq!(a.commands.len(), b.commands.len());
-
-    // the below only works if both serial circuits share a topological ordering
-    // of commands.
-    for (a, b) in a.commands.iter().zip(b.commands.iter()) {
-        assert_eq!(a.op.op_type, b.op.op_type);
-        assert_eq!(a.args, b.args);
-        assert_eq!(a.op.params, b.op.params);
-    }
-    // TODO: Check commands equality (they only implement PartialEq)
 }

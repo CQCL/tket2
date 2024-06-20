@@ -90,9 +90,12 @@ pub enum Pauli {
     Z,
 }
 
-#[derive(Debug, Error, PartialEq, Clone, Copy)]
-#[error("Not a Tk2Op.")]
-pub struct NotTk2Op;
+#[derive(Debug, Error, PartialEq, Clone)]
+#[error("{} is not a Tk2Op.", op.name())]
+pub struct NotTk2Op {
+    /// The offending operation.
+    pub op: OpType,
+}
 
 impl Pauli {
     /// Check if this pauli commutes with another.
@@ -226,28 +229,20 @@ impl TryFrom<&OpType> for Tk2Op {
     type Error = NotTk2Op;
 
     fn try_from(op: &OpType) -> Result<Self, Self::Error> {
-        let OpType::CustomOp(custom_op) = op else {
-            return Err(NotTk2Op);
-        };
+        {
+            let OpType::CustomOp(custom_op) = op else {
+                return Err(NotTk2Op { op: op.clone() });
+            };
 
-        match custom_op {
-            CustomOp::Extension(ext) => Tk2Op::from_extension_op(ext),
-            CustomOp::Opaque(opaque) => {
-                if opaque.extension() != &EXTENSION_ID {
-                    return Err(NotTk2Op);
-                }
-                try_from_name(opaque.name())
+            match custom_op {
+                CustomOp::Extension(ext) => Tk2Op::from_extension_op(ext).ok(),
+                CustomOp::Opaque(opaque) => match opaque.extension() == &EXTENSION_ID {
+                    true => try_from_name(opaque.name()).ok(),
+                    false => None,
+                },
             }
+            .ok_or_else(|| NotTk2Op { op: op.clone() })
         }
-        .map_err(|_| NotTk2Op)
-    }
-}
-
-impl TryFrom<OpType> for Tk2Op {
-    type Error = NotTk2Op;
-
-    fn try_from(op: OpType) -> Result<Self, Self::Error> {
-        Self::try_from(&op)
     }
 }
 

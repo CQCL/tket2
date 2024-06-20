@@ -2,16 +2,14 @@
 //!
 //! This includes a extension for the opaque TKET1 operations.
 
-use super::serialize::pytket::JsonOp;
+use crate::serialize::pytket::OpaqueTk1Op;
 use crate::Tk2Op;
 use hugr::extension::prelude::PRELUDE;
 use hugr::extension::simple_op::MakeOpDef;
 use hugr::extension::{CustomSignatureFunc, ExtensionId, ExtensionRegistry, SignatureError};
 use hugr::hugr::IdentList;
-use hugr::ops::custom::{CustomOp, OpaqueOp};
-use hugr::ops::NamedOp;
 use hugr::std_extensions::arithmetic::float_types::{EXTENSION as FLOAT_EXTENSION, FLOAT64_TYPE};
-use hugr::types::type_param::{CustomTypeArg, TypeArg, TypeParam};
+use hugr::types::type_param::{TypeArg, TypeParam};
 use hugr::types::{CustomType, FunctionType, PolyFuncType, Type, TypeBound};
 use hugr::{type_row, Extension};
 use lazy_static::lazy_static;
@@ -27,15 +25,15 @@ pub const TKET1_EXTENSION_ID: ExtensionId = IdentList::new_unchecked("TKET1");
 pub const LINEAR_BIT_NAME: SmolStr = SmolStr::new_inline("LBit");
 
 /// The name for opaque TKET1 operations.
-pub const JSON_OP_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Op");
+pub const TKET1_OP_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Op");
 
 /// The ID of an opaque TKET1 operation metadata.
-pub const JSON_PAYLOAD_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Payload");
+pub const TKET1_PAYLOAD_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Payload");
 
 lazy_static! {
 /// A custom type for the encoded TKET1 operation
-static ref TKET1_OP_PAYLOAD : CustomType =
-    TKET1_EXTENSION.get_type(&JSON_PAYLOAD_NAME).unwrap().instantiate([]).unwrap();
+pub static ref TKET1_OP_PAYLOAD : CustomType =
+    TKET1_EXTENSION.get_type(&TKET1_PAYLOAD_NAME).unwrap().instantiate([]).unwrap();
 
 /// The TKET1 extension, containing the opaque TKET1 operations.
 pub static ref TKET1_EXTENSION: Extension = {
@@ -43,12 +41,12 @@ pub static ref TKET1_EXTENSION: Extension = {
 
     res.add_type(LINEAR_BIT_NAME, vec![], "A linear bit.".into(), TypeBound::Any.into()).unwrap();
 
-    let json_op_payload_def = res.add_type(JSON_PAYLOAD_NAME, vec![], "Opaque TKET1 operation metadata.".into(), TypeBound::Eq.into()).unwrap();
-    let json_op_payload = TypeParam::Opaque{ty:json_op_payload_def.instantiate([]).unwrap()};
+    let tket1_op_payload_def = res.add_type(TKET1_PAYLOAD_NAME, vec![], "Opaque TKET1 operation metadata.".into(), TypeBound::Eq.into()).unwrap();
+    let tket1_op_payload = TypeParam::Opaque{ty:tket1_op_payload_def.instantiate([]).unwrap()};
     res.add_op(
-        JSON_OP_NAME,
+        TKET1_OP_NAME,
         "An opaque TKET1 operation.".into(),
-        JsonOpSignature([json_op_payload])
+        Tk1Signature([tket1_op_payload])
     ).unwrap();
 
     res
@@ -73,51 +71,10 @@ pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
 
 
 }
-/// Create a new opaque operation
-pub(crate) fn wrap_json_op(op: &JsonOp) -> CustomOp {
-    // TODO: This throws an error
-    //let op = serde_yaml::to_value(op).unwrap();
-    //let payload = TypeArg::Opaque(CustomTypeArg::new(TKET1_OP_PAYLOAD.clone(), op).unwrap());
-    //TKET1_EXTENSION
-    //    .get_op(&JSON_OP_NAME)
-    //    .unwrap()
-    //    .instantiate_opaque([payload])
-    //    .unwrap()
-    //    .into()
-    let sig = op.signature();
-    let op = serde_yaml::to_value(op).unwrap();
-    let payload = TypeArg::Opaque {
-        arg: CustomTypeArg::new(TKET1_OP_PAYLOAD.clone(), op).unwrap(),
-    };
-    OpaqueOp::new(
-        TKET1_EXTENSION_ID,
-        JSON_OP_NAME,
-        "".into(),
-        vec![payload],
-        sig,
-    )
-    .into()
-}
 
-/// Extract a json-encoded TKET1 operation from an opaque operation, if
-/// possible.
-pub(crate) fn try_unwrap_json_op(ext: &CustomOp) -> Option<JsonOp> {
-    // TODO: Check `extensions.contains(&TKET1_EXTENSION_ID)`
-    // (but the ext op extensions are an empty set?)
-    if ext.name() != format!("{TKET1_EXTENSION_ID}.{JSON_OP_NAME}") {
-        return None;
-    }
-    let Some(TypeArg::Opaque { arg }) = ext.args().first() else {
-        // TODO: Throw an error? We should never get here if the name matches.
-        return None;
-    };
-    let op = serde_yaml::from_value(arg.value.clone()).ok()?;
-    Some(op)
-}
+struct Tk1Signature([TypeParam; 1]);
 
-struct JsonOpSignature([TypeParam; 1]);
-
-impl CustomSignatureFunc for JsonOpSignature {
+impl CustomSignatureFunc for Tk1Signature {
     fn compute_signature<'o, 'a: 'o>(
         &'a self,
         arg_values: &[TypeArg],
@@ -128,7 +85,7 @@ impl CustomSignatureFunc for JsonOpSignature {
             // This should have already been checked.
             panic!("Wrong number of arguments");
         };
-        let op: JsonOp = serde_yaml::from_value(arg.value.clone()).unwrap(); // TODO Errors!
+        let op: OpaqueTk1Op = serde_yaml::from_value(arg.value.clone()).unwrap(); // TODO Errors!
         Ok(op.signature().into())
     }
 

@@ -100,7 +100,7 @@ fn load_slices(circ: &Circuit<impl HugrView>) -> SliceVec {
 
 /// check if node is one we want to put in to a slice.
 fn is_slice_op(h: &impl HugrView, node: Node) -> bool {
-    let op: Result<Tk2Op, _> = h.get_optype(node).clone().try_into();
+    let op: Result<Tk2Op, _> = h.get_optype(node).try_into();
     op.is_ok()
 }
 
@@ -156,22 +156,12 @@ fn commutes_at_slice(
 
         let port = command.port_of_qb(q, Direction::Incoming)?;
 
-        let op: Tk2Op = circ
-            .hugr()
-            .get_optype(command.node())
-            .clone()
-            .try_into()
-            .ok()?;
+        let op: Tk2Op = circ.hugr().get_optype(command.node()).try_into().ok()?;
         // TODO: if not tk2op, might still have serialized commutation data we
         // can use.
         let pauli = commutation_on_port(&op.qubit_commutation(), port)?;
 
-        let other_op: Tk2Op = circ
-            .hugr()
-            .get_optype(other_com.node())
-            .clone()
-            .try_into()
-            .ok()?;
+        let other_op: Tk2Op = circ.hugr().get_optype(other_com.node()).try_into().ok()?;
         let other_pauli = commutation_on_port(
             &other_op.qubit_commutation(),
             other_com.port_of_qb(q, Direction::Outgoing)?,
