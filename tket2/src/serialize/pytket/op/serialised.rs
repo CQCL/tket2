@@ -79,7 +79,8 @@ impl OpaqueTk1Op {
     ///
     /// # Errors
     ///
-    /// Returns a
+    /// Returns an [`OpConvertError`] if the operation is a tket1 operation, but it
+    /// contains invalid data.
     pub fn try_from_tket2(op: &OpType) -> Result<Option<Self>, OpConvertError> {
         let OpType::CustomOp(custom_op) = op else {
             return Ok(None);
