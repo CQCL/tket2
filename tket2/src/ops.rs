@@ -229,32 +229,21 @@ impl TryFrom<&OpType> for Tk2Op {
     type Error = NotTk2Op;
 
     fn try_from(op: &OpType) -> Result<Self, Self::Error> {
-        optype_to_tk2op(op)
+        {
+            let OpType::CustomOp(custom_op) = op else {
+                return Err(NotTk2Op { op: op.clone() });
+            };
+
+            match custom_op {
+                CustomOp::Extension(ext) => Tk2Op::from_extension_op(ext).ok(),
+                CustomOp::Opaque(opaque) => match opaque.extension() == &EXTENSION_ID {
+                    true => try_from_name(opaque.name()).ok(),
+                    false => None,
+                },
+            }
+            .ok_or_else(|| NotTk2Op { op: op.clone() })
+        }
     }
-}
-
-impl TryFrom<OpType> for Tk2Op {
-    type Error = NotTk2Op;
-
-    fn try_from(op: OpType) -> Result<Self, Self::Error> {
-        optype_to_tk2op(&op)
-    }
-}
-
-// Internal implementation for `TryFrom<Optype> for Tk2Op` that doesn't copy the `OpType` when it errors.
-fn optype_to_tk2op(op: &OpType) -> Result<Tk2Op, NotTk2Op> {
-    let OpType::CustomOp(custom_op) = op else {
-        return Err(NotTk2Op { op: op.clone() });
-    };
-
-    match custom_op {
-        CustomOp::Extension(ext) => Tk2Op::from_extension_op(ext).ok(),
-        CustomOp::Opaque(opaque) => match opaque.extension() == &EXTENSION_ID {
-            true => try_from_name(opaque.name()).ok(),
-            false => None,
-        },
-    }
-    .ok_or_else(|| NotTk2Op { op: op.clone() })
 }
 
 #[cfg(test)]
