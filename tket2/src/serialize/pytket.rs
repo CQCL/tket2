@@ -7,6 +7,7 @@ mod op;
 use hugr::types::Type;
 
 use hugr::Node;
+use itertools::Itertools;
 // Required for serialising ops in the tket1 hugr extension.
 pub(crate) use op::serialised::OpaqueTk1Op;
 
@@ -20,12 +21,12 @@ use hugr::ops::{NamedOp, OpType, Value};
 use hugr::std_extensions::arithmetic::float_types::ConstF64;
 
 use thiserror::Error;
-use tket_json_rs::circuit_json::SerialCircuit;
+use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::optype::OpType as SerialOpType;
 
 use crate::circuit::Circuit;
 
-use self::decoder::JsonDecoder;
+use self::decoder::Tk1Decoder;
 use self::encoder::Tk1Encoder;
 
 pub use crate::passes::pytket::lower_to_pytket;
@@ -62,7 +63,7 @@ impl TKETDecode for SerialCircuit {
     type EncodeError = TK1ConvertError;
 
     fn decode(self) -> Result<Circuit, Self::DecodeError> {
-        let mut decoder = JsonDecoder::try_new(&self)?;
+        let mut decoder = Tk1Decoder::try_new(&self)?;
 
         if !self.phase.is_empty() {
             // TODO - add a phase gate
@@ -196,6 +197,35 @@ pub enum OpConvertError {
         /// The serialization error.
         #[from]
         error: serde_yaml::Error,
+    },
+    /// Tried to decode a tket1 operation with not enough parameters.
+    #[error(
+        "Operation {} is missing encoded parameters. Expected at least {expected} but only \"{}\" were specified.",
+        optype.name(),
+        params.iter().join(", "),
+    )]
+    MissingSerialisedParams {
+        /// The operation name.
+        optype: OpType,
+        /// The expected number of parameters.
+        expected: usize,
+        /// The given of parameters.
+        params: Vec<String>,
+    },
+    /// Tried to decode a tket1 operation with not enough qubit/bit arguments.
+    #[error(
+        "Operation {} is missing encoded arguments. Expected {expected_qubits} and {expected_bits}, but only \"{args:?}\" were specified.",
+        optype.name(),
+    )]
+    MissingSerialisedArguments {
+        /// The operation name.
+        optype: OpType,
+        /// The expected number of qubits.
+        expected_qubits: usize,
+        /// The expected number of bits.
+        expected_bits: usize,
+        /// The given of parameters.
+        args: Vec<circuit_json::Register>,
     },
 }
 

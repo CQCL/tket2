@@ -57,11 +57,14 @@ impl Tk1Op {
         num_qubits: usize,
         num_bits: usize,
     ) -> Self {
-        if let Some(native) = NativeOp::try_from_serial_optype(serial_op.op_type.clone()) {
+        let op = if let Some(native) = NativeOp::try_from_serial_optype(serial_op.op_type.clone()) {
             Tk1Op::Native(native)
         } else {
             Tk1Op::Opaque(OpaqueTk1Op::new_from_op(serial_op, num_qubits, num_bits))
-        }
+        };
+        debug_assert_eq!(num_qubits, op.qubit_inputs().max(op.qubit_outputs()));
+        debug_assert_eq!(num_bits, op.bit_inputs().max(op.bit_outputs()));
+        op
     }
 
     /// Get the hugr optype for the operation.

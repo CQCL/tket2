@@ -358,7 +358,7 @@ impl BitTracker {
     pub fn add_bit_register(&mut self, wire: Wire) -> &RegisterUnit {
         let reg = match self.unused_inputs.pop_front() {
             Some(reg) => reg,
-            None => RegisterUnit("b".to_string(), vec![self.bit_to_reg.len() as i64]),
+            None => RegisterUnit("c".to_string(), vec![self.bit_to_reg.len() as i64]),
         };
         self.bit_to_reg.insert(wire, reg);
         self.bit_to_reg.get(&wire).unwrap()

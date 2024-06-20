@@ -13,15 +13,15 @@ use hugr::types::FunctionType;
 use hugr::CircuitUnit;
 use hugr::{Hugr, Wire};
 
-use itertools::Itertools;
+use itertools::{EitherOrBoth, Itertools};
 use serde_json::json;
 use tket_json_rs::circuit_json;
 use tket_json_rs::circuit_json::SerialCircuit;
 
 use super::op::Tk1Op;
 use super::{
-    try_param_to_constant, TK1ConvertError, METADATA_IMPLICIT_PERM, METADATA_OPGROUP,
-    METADATA_PHASE,
+    try_param_to_constant, OpConvertError, TK1ConvertError, METADATA_IMPLICIT_PERM,
+    METADATA_OPGROUP, METADATA_PHASE,
 };
 use super::{METADATA_B_REGISTERS, METADATA_Q_REGISTERS};
 use crate::extension::{REGISTRY, TKET1_EXTENSION_ID};
@@ -31,7 +31,7 @@ use crate::symbolic_constant_op;
 ///
 /// Mostly used to define helper internal methods.
 #[derive(Debug, PartialEq)]
-pub(super) struct JsonDecoder {
+pub(super) struct Tk1Decoder {
     /// The Hugr being built.
     pub hugr: FunctionBuilder<Hugr>,
     /// The dangling wires of the builder.
@@ -39,14 +39,10 @@ pub(super) struct JsonDecoder {
     dangling_wires: Vec<Wire>,
     /// A map from the json registers to the units in the circuit being built.
     register_units: HashMap<RegisterHash, CircuitUnit>,
-    /// The number of qubits in the circuit.
-    num_qubits: usize,
-    /// The number of bits in the circuit.
-    num_bits: usize,
 }
 
-impl JsonDecoder {
-    /// Initialize a new [`JsonDecoder`], using the metadata from a [`SerialCircuit`].
+impl Tk1Decoder {
+    /// Initialize a new [`Tk1Decoder`], using the metadata from a [`SerialCircuit`].
     pub fn try_new(serialcirc: &SerialCircuit) -> Result<Self, TK1ConvertError> {
         let num_qubits = serialcirc.qubits.len();
         let num_bits = serialcirc.bits.len();
@@ -74,17 +70,19 @@ impl JsonDecoder {
             check_register(register)?;
             wire_map.insert(register.into(), CircuitUnit::Linear(i));
         }
-        for (register, &input_wire) in serialcirc.bits.iter().zip(&dangling_wires) {
+        for (register, &input_wire) in serialcirc
+            .bits
+            .iter()
+            .zip(dangling_wires.iter().skip(num_qubits))
+        {
             check_register(register)?;
             wire_map.insert(register.into(), CircuitUnit::Wire(input_wire));
         }
 
-        Ok(JsonDecoder {
+        Ok(Tk1Decoder {
             hugr: dfg,
             dangling_wires,
             register_units: wire_map,
-            num_qubits,
-            num_bits,
         })
     }
 
@@ -98,36 +96,38 @@ impl JsonDecoder {
 
     /// Add a tket1 [`circuit_json::Command`] from the serial circuit to the
     /// decoder.
-    pub fn add_command(&mut self, command: circuit_json::Command) {
+    pub fn add_command(&mut self, command: circuit_json::Command) -> Result<(), OpConvertError> {
         let circuit_json::Command {
             op, args, opgroup, ..
         } = command;
+        let op_params = op.params.clone().unwrap_or_default();
+
+        // Interpret the serialised operation as a [`Tk1Op`].
         let num_qubits = args
             .iter()
-            .take_while(|&arg| self.reg_wire(arg).is_linear())
+            .take_while(|&arg| self.register_unit(arg).is_linear())
             .count();
         let num_input_bits = args.len() - num_qubits;
-        let op_params = op.params.clone();
         let tk1op = Tk1Op::from_serialised_op(op, num_qubits, num_input_bits);
 
-        let param_units = tk1op
-            .param_ports()
-            .enumerate()
-            .filter_map(|(i, _port)| op_params.as_ref()?.get(i).map(String::as_ref))
-            .map(|p| CircuitUnit::Wire(self.create_param_wire(p)))
-            .collect_vec();
-        let arg_units = args.into_iter().map(|reg| self.reg_wire(&reg));
-
-        let append_wires: Vec<CircuitUnit> = arg_units.chain(param_units).collect_vec();
+        let (input_wires, output_registers) = self.get_op_units(&tk1op, &args, op_params)?;
         let op: OpType = (&tk1op).into();
 
         let wires =
-            self.with_circ_builder(|circ| circ.append_with_outputs(op, append_wires).unwrap());
+            self.with_circ_builder(|circ| circ.append_with_outputs(op, input_wires).unwrap());
 
+        // Store the opgroup metadata.
         if let (Some(opgroup), [w, ..]) = (opgroup, wires.as_slice()) {
             self.hugr
                 .set_child_metadata(w.node(), METADATA_OPGROUP, json!(opgroup));
         }
+
+        // Assign the new output wires to some register, if needed.
+        for (register, wire) in output_registers.into_iter().zip(wires) {
+            self.set_register_unit(&register, wire);
+        }
+
+        Ok(())
     }
 
     /// Apply a function to the internal hugr builder viewed as a [`CircuitBuilder`].
@@ -139,6 +139,88 @@ impl JsonDecoder {
         let res = f(&mut circ);
         self.dangling_wires = circ.finish();
         res
+    }
+
+    /// Returns the input units to connect to a new operation
+    /// and optionally a register to associate with the new output wires.
+    ///
+    /// It may add constant nodes to the Hugr if the operation has constant parameters.
+    fn get_op_units(
+        &mut self,
+        tk1op: &Tk1Op,
+        args: &[circuit_json::Register],
+        params: Vec<String>,
+    ) -> Result<(Vec<CircuitUnit>, Vec<circuit_json::Register>), OpConvertError> {
+        // Arguments are always ordered with qubits first, and then bits.
+        let mut inputs = Vec::with_capacity(args.len() + params.len());
+        let mut outputs = Vec::with_capacity(tk1op.qubit_outputs() + tk1op.bit_outputs());
+
+        let mut current_arg = 0;
+        let mut next_arg = || {
+            if args.len() <= current_arg {
+                return Err(OpConvertError::MissingSerialisedArguments {
+                    optype: tk1op.optype(),
+                    expected_qubits: tk1op.qubit_inputs(),
+                    expected_bits: tk1op.bit_inputs(),
+                    args: args.to_owned(),
+                });
+            }
+            current_arg += 1;
+            Ok(&args[current_arg - 1])
+        };
+
+        // Qubit wires
+        assert_eq!(
+            tk1op.qubit_inputs(),
+            tk1op.qubit_outputs(),
+            "Operations with different numbers of input and output qubits are not currently supported."
+        );
+        for _ in 0..tk1op.qubit_inputs() {
+            let reg = next_arg()?;
+            inputs.push(self.register_unit(&reg));
+            outputs.push(reg.clone());
+        }
+
+        // Bit wires
+        for zip in (0..tk1op.bit_inputs()).zip_longest(0..tk1op.bit_outputs()) {
+            let reg = next_arg()?;
+            match zip {
+                EitherOrBoth::Both(_inp, _out) => {
+                    // A bit used both as input and output.
+                    inputs.push(self.register_unit(&reg));
+                    outputs.push(reg.clone());
+                }
+                EitherOrBoth::Left(_inp) => {
+                    // A bit used only used as input.
+                    inputs.push(self.register_unit(&reg));
+                }
+                EitherOrBoth::Right(_out) => {
+                    // A new bit output.
+                    outputs.push(reg.clone());
+                }
+            }
+        }
+
+        // Check that the operation is not missing parameters.
+        //
+        // Nb: `Tk1Op::Opaque` operations may not have parameters in their hugr definition.
+        // In that case, we just store the parameter values in the opaque data.
+        if tk1op.num_params() > params.len() {
+            return Err(OpConvertError::MissingSerialisedParams {
+                optype: tk1op.optype(),
+                expected: tk1op.num_params(),
+                params,
+            });
+        }
+        // Add the parameter wires to the units.
+        inputs.extend(
+            tk1op
+                .param_ports()
+                .zip(params.into_iter())
+                .map(|(_port, param)| CircuitUnit::Wire(self.create_param_wire(&param))),
+        );
+
+        Ok((inputs, outputs))
     }
 
     /// Returns the wire carrying a parameter.
@@ -161,12 +243,21 @@ impl JsonDecoder {
     /// Return the wire unit for the `elem`th value of a given register.
     ///
     /// Relies on TKET1 constraint that all registers have unique names.
-    fn reg_wire(&self, register: &circuit_json::Register) -> CircuitUnit {
+    fn register_unit(&self, register: &circuit_json::Register) -> CircuitUnit {
         self.register_units[&register.into()]
+    }
+
+    /// Update the [`CircuitUnit`] for a register.
+    fn set_register_unit(
+        &mut self,
+        register: &circuit_json::Register,
+        unit: impl Into<CircuitUnit>,
+    ) {
+        self.register_units.insert(register.into(), unit.into());
     }
 }
 
-/// A hashed register, used to identify registers in the [`JsonDecoder::register_wire`] map,
+/// A hashed register, used to identify registers in the [`Tk1Decoder::register_wire`] map,
 /// avoiding string clones on lookup.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct RegisterHash {
