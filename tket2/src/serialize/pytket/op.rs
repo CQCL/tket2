@@ -13,6 +13,8 @@ use hugr::ops::OpType;
 use hugr::IncomingPort;
 use tket_json_rs::circuit_json;
 
+use crate::Tk2Op;
+
 use self::native::NativeOp;
 use self::serialised::OpaqueTk1Op;
 use super::OpConvertError;
@@ -38,15 +40,19 @@ impl Tk1Op {
     /// # Errors
     ///
     /// Returns an error if the operation is not supported by the TKET1 serialization.
-    pub fn try_from_optype(op: OpType) -> Result<Self, OpConvertError> {
-        let res = (&op).try_into();
-        let tk1_op = if let Ok(tk2op) = res {
-            NativeOp::try_from_tk2op(tk2op).map(Tk1Op::Native)
+    pub fn try_from_optype(op: OpType) -> Result<Option<Self>, OpConvertError> {
+        if let Ok(tk2op) = Tk2Op::try_from(&op) {
+            let native = NativeOp::try_from_tk2op(tk2op)
+                .ok_or_else(|| OpConvertError::UnsupportedOpSerialization(op))?;
+            // Skip serialisation for some special cases.
+            if native.serial_op().is_none() {
+                return Ok(None);
+            }
+            Ok(Some(Tk1Op::Native(native)))
         } else {
-            OpaqueTk1Op::try_from_tket2(&op)?.map(Tk1Op::Opaque)
-        };
-
-        tk1_op.ok_or(OpConvertError::UnsupportedOpSerialization(op))
+            let opaque = OpaqueTk1Op::try_from_tket2(&op)?;
+            Ok(opaque.map(Tk1Op::Opaque))
+        }
     }
 
     /// Create a new `Tk1Op` from a tket1 `circuit_json::Operation`.

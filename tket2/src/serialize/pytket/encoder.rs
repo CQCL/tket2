@@ -9,17 +9,19 @@ use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::{HugrView, Wire};
 use itertools::Itertools;
 use tket_json_rs::circuit_json::Register as RegisterUnit;
-use tket_json_rs::circuit_json::{self, Permutation, SerialCircuit};
+use tket_json_rs::circuit_json::{self, SerialCircuit};
 
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
 use crate::ops::{match_symb_const_op, op_matches};
+use crate::serialize::pytket::RegisterHash;
 use crate::Tk2Op;
 
 use super::op::Tk1Op;
 use super::{
-    try_constant_to_param, OpConvertError, TK1ConvertError, METADATA_B_REGISTERS,
-    METADATA_IMPLICIT_PERM, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_REGISTERS,
+    try_constant_to_param, OpConvertError, TK1ConvertError, METADATA_B_OUTPUT_REGISTERS,
+    METADATA_B_REGISTERS, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS,
+    METADATA_Q_REGISTERS,
 };
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
@@ -29,8 +31,6 @@ pub(super) struct Tk1Encoder {
     name: Option<String>,
     /// Global phase value. Defaults to "0"
     phase: String,
-    /// Implicit permutation of output qubits
-    implicit_permutation: Vec<Permutation>,
     /// The current serialised commands
     commands: Vec<circuit_json::Command>,
     /// A tracker for the qubits used in the circuit.
@@ -60,10 +60,7 @@ impl Tk1Encoder {
             Some(p) => p.as_str().unwrap().to_string(),
             None => "0".to_string(),
         };
-        let implicit_permutation = match hugr.get_metadata(circ.parent(), METADATA_IMPLICIT_PERM) {
-            Some(perm) => serde_json::from_value(perm.clone()).unwrap(),
-            None => vec![],
-        };
+
         let qubit_tracker = QubitTracker::new(circ);
         let bit_tracker = BitTracker::new(circ);
         let parameter_tracker = ParameterTracker::new(circ);
@@ -71,7 +68,6 @@ impl Tk1Encoder {
         Ok(Self {
             name,
             phase,
-            implicit_permutation,
             commands: vec![],
             qubits: qubit_tracker,
             bits: bit_tracker,
@@ -92,7 +88,10 @@ impl Tk1Encoder {
             return Ok(());
         }
 
-        let tk1op: Tk1Op = Tk1Op::try_from_optype(optype.clone())?;
+        let Some(tk1op) = Tk1Op::try_from_optype(optype.clone())? else {
+            // This command should be ignored.
+            return Ok(());
+        };
 
         // Get the registers and wires associated with the operation's inputs.
         let mut qubit_args = Vec::with_capacity(tk1op.qubit_inputs());
@@ -129,33 +128,32 @@ impl Tk1Encoder {
             }
         }
 
-        let mut bit_output_count = 0;
-        let mut qubit_output_count = 0;
         for (unit, _, ty) in command.outputs() {
             if ty == QB_T {
-                // Currently we do not support encoding operations that allocate
-                // new qubits.
-                qubit_output_count += 1;
-                if qubit_args.len() < qubit_output_count {
-                    return Err(OpConvertError::TooManyOutputQubits {
-                        typ: ty.clone(),
-                        optype: optype.clone(),
-                        node: command.node(),
-                    });
+                // If the qubit is not already in the qubit tracker, add it as a
+                // new register.
+                let CircuitUnit::Linear(unit_id) = unit else {
+                    panic!("Qubit types are linear.")
+                };
+                if self.qubits.get(unit_id).is_none() {
+                    let reg = self.qubits.add_qubit_register(unit_id);
+                    qubit_args.push(reg.clone());
                 }
             } else if ty == BOOL_T {
-                // If the operation has any bit outputs, associate their wires with either an
-                // input bit register, or create a new one.
+                // If the operation has any bit outputs, create a new one bit
+                // register.
+                //
+                // Note that we do not reassign input registers to the new
+                // output wires as we do not know if the bit value was modified
+                // by the operation, and the old value may be needed later.
+                //
+                // This may cause register duplication for opaque operations
+                // with input bits.
                 let CircuitUnit::Wire(wire) = unit else {
                     panic!("Bool types are not linear.")
                 };
-                if let Some(reg) = bit_args.get(bit_output_count) {
-                    self.bits.set_bit_register(wire, reg.clone());
-                } else {
-                    let reg = self.bits.add_bit_register(wire);
-                    bit_args.push(reg.clone());
-                }
-                bit_output_count += 1;
+                let reg = self.bits.add_bit_register(wire);
+                bit_args.push(reg.clone());
             } else {
                 return Err(OpConvertError::UnsupportedOutputType {
                     typ: ty.clone(),
@@ -203,14 +201,20 @@ impl Tk1Encoder {
     }
 
     /// Finish building and return the final [`SerialCircuit`].
-    pub fn finish(self) -> SerialCircuit {
+    pub fn finish(self, circ: &Circuit<impl HugrView>) -> SerialCircuit {
+        let (qubits, qubits_permutation) = self.qubits.finish(circ);
+        let (bits, mut bits_permutation) = self.bits.finish(circ);
+
+        let mut implicit_permutation = qubits_permutation;
+        implicit_permutation.append(&mut bits_permutation);
+
         SerialCircuit {
             name: self.name,
             phase: self.phase,
             commands: self.commands,
-            qubits: self.qubits.finish(),
-            bits: self.bits.finish(),
-            implicit_permutation: self.implicit_permutation,
+            qubits,
+            bits,
+            implicit_permutation,
         }
     }
 
@@ -232,6 +236,8 @@ impl Tk1Encoder {
 struct QubitTracker {
     /// The ordered TKET1 names for the input qubit registers.
     inputs: Vec<RegisterUnit>,
+    /// The ordered TKET1 names for the output qubit registers.
+    outputs: Option<Vec<RegisterUnit>>,
     /// The TKET1 qubit registers associated to each qubit unit of the circuit.
     qubit_to_reg: HashMap<usize, RegisterUnit>,
 }
@@ -250,6 +256,13 @@ impl QubitTracker {
             .get_metadata(circ.parent(), METADATA_Q_REGISTERS)
         {
             tracker.inputs = serde_json::from_value(input_regs.clone()).unwrap();
+        }
+        let output_regs = circ
+            .hugr()
+            .get_metadata(circ.parent(), METADATA_Q_OUTPUT_REGISTERS)
+            .map(|regs| serde_json::from_value(regs.clone()).unwrap());
+        if let Some(output_regs) = output_regs {
+            tracker.outputs = Some(output_regs);
         }
 
         let qubit_count = circ.units().filter(|(_, _, ty)| ty == &QB_T).count();
@@ -279,14 +292,46 @@ impl QubitTracker {
         self.qubit_to_reg.get(&unit_id)
     }
 
-    /// Consumes the tracker and returns the final list of bit registers.
-    pub fn finish(mut self) -> Vec<RegisterUnit> {
-        let mut missing_regs: HashSet<_> = self.qubit_to_reg.into_values().collect();
-        for reg in &self.inputs {
-            missing_regs.remove(reg);
+    /// Consumes the tracker and returns the final list of qubit registers, along
+    /// with the final permutation of the outputs.
+    pub fn finish(
+        mut self,
+        _circ: &Circuit<impl HugrView>,
+    ) -> (Vec<RegisterUnit>, Vec<circuit_json::Permutation>) {
+        // Ensure the input and output lists have the same registers.
+        let mut outputs = self.outputs.unwrap_or_default();
+        let mut input_regs: HashSet<RegisterHash> =
+            self.inputs.iter().map(RegisterHash::from).collect();
+        let output_regs: HashSet<RegisterHash> = outputs.iter().map(RegisterHash::from).collect();
+
+        for inp in &self.inputs {
+            if !output_regs.contains(&inp.into()) {
+                outputs.push(inp.clone());
+            }
         }
-        self.inputs.extend(missing_regs);
-        self.inputs
+        for out in &outputs {
+            if !input_regs.contains(&out.into()) {
+                self.inputs.push(out.clone());
+            }
+        }
+        input_regs.extend(output_regs);
+
+        // Add registers defined mid-circuit to both ends.
+        for reg in self.qubit_to_reg.into_values() {
+            if !input_regs.contains(&(&reg).into()) {
+                self.inputs.push(reg.clone());
+                outputs.push(reg);
+            }
+        }
+
+        // TODO: Look at the circuit outputs to determine the final permutation.
+        let permutation = outputs
+            .into_iter()
+            .zip(&self.inputs)
+            .map(|(out, inp)| circuit_json::Permutation(inp.clone(), out))
+            .collect_vec();
+
+        (self.inputs, permutation)
     }
 }
 
@@ -297,13 +342,16 @@ impl QubitTracker {
 /// We rename it to `RegisterUnit` here to avoid confusion.
 #[derive(Debug, Clone, Default)]
 struct BitTracker {
-    /// The ordered TKET1 names for the bit inputs, and their identifying wire
-    /// from the circuit input node.
+    /// The ordered TKET1 names for the bit inputs.
     inputs: Vec<RegisterUnit>,
+    /// The expected order of TKET1 names for the bit outputs,
+    /// if that was stored in the metadata.
+    outputs: Option<Vec<RegisterUnit>>,
     /// Map each bit wire to a TKET1 register element.
     bit_to_reg: HashMap<Wire, RegisterUnit>,
-    /// Unused input bits, that can be written to.
-    unused_inputs: VecDeque<RegisterUnit>,
+    /// Registers defined in the metadata, but not present in the circuit
+    /// inputs.
+    unused_registers: VecDeque<RegisterUnit>,
 }
 
 impl BitTracker {
@@ -323,40 +371,51 @@ impl BitTracker {
         {
             tracker.inputs = serde_json::from_value(input_regs.clone()).unwrap();
         }
+        let output_regs = circ
+            .hugr()
+            .get_metadata(circ.parent(), METADATA_B_OUTPUT_REGISTERS)
+            .map(|regs| serde_json::from_value(regs.clone()).unwrap());
+        if let Some(output_regs) = output_regs {
+            tracker.outputs = Some(output_regs);
+        }
 
         let bit_input_wires = circ.units().filter_map(|u| match u {
             (CircuitUnit::Wire(w), _, ty) if ty == BOOL_T => Some(w),
             _ => None,
         });
 
+        let mut unused_registers: HashSet<RegisterUnit> = tracker.inputs.iter().cloned().collect();
         for (i, wire) in bit_input_wires.enumerate() {
-            // Use the given input register names if available, or create new ones.
-            let reg = if let Some(reg) = tracker.inputs.get(i) {
-                tracker.bit_to_reg.insert(wire, reg.clone());
-                reg
-            } else {
-                let reg = tracker.add_bit_register(wire).clone();
-                tracker.inputs.push(reg);
-                tracker.inputs.last().unwrap()
-            };
-
-            // If the input is not used in the circuit, store it as a bit that can be written to.
+            // If the input is not used in the circuit, ignore it.
             if circ
                 .hugr()
                 .linked_inputs(wire.node(), wire.source())
                 .next()
                 .is_none()
             {
-                tracker.unused_inputs.push_back(reg.clone());
+                continue;
             }
+
+            // Use the given input register names if available, or create new ones.
+            if let Some(reg) = tracker.inputs.get(i) {
+                unused_registers.remove(reg);
+                tracker.bit_to_reg.insert(wire, reg.clone());
+            } else {
+                let reg = tracker.add_bit_register(wire).clone();
+                tracker.inputs.push(reg);
+            };
         }
+
+        // If a register was defined in the metadata but not used in the circuit,
+        // we keep it so it can be assigned to an operation output.
+        tracker.unused_registers = unused_registers.into_iter().collect();
 
         tracker
     }
 
     /// Add a new register unit for a bit wire.
     pub fn add_bit_register(&mut self, wire: Wire) -> &RegisterUnit {
-        let reg = match self.unused_inputs.pop_front() {
+        let reg = match self.unused_registers.pop_front() {
             Some(reg) => reg,
             None => RegisterUnit("c".to_string(), vec![self.bit_to_reg.len() as i64]),
         };
@@ -364,24 +423,85 @@ impl BitTracker {
         self.bit_to_reg.get(&wire).unwrap()
     }
 
-    /// Set the register for a bit wire
-    pub fn set_bit_register(&mut self, wire: Wire, reg: RegisterUnit) {
-        self.bit_to_reg.insert(wire, reg);
-    }
-
     /// Returns the register unit for a bit wire, if it exists.
     pub fn get(&self, wire: &Wire) -> Option<&RegisterUnit> {
         self.bit_to_reg.get(wire)
     }
 
-    /// Consumes the tracker and returns the final list of bit registers.
-    pub fn finish(mut self) -> Vec<RegisterUnit> {
-        let mut missing_regs: HashSet<_> = self.bit_to_reg.into_values().collect();
-        for reg in &self.inputs {
-            missing_regs.remove(reg);
+    /// Consumes the tracker and returns the final list of bit registers, along
+    /// with the final permutation of the outputs.
+    pub fn finish(
+        mut self,
+        circ: &Circuit<impl HugrView>,
+    ) -> (Vec<RegisterUnit>, Vec<circuit_json::Permutation>) {
+        let mut circuit_output_order: Vec<RegisterUnit> = Vec::with_capacity(self.inputs.len());
+        for (node, port) in circ.hugr().all_linked_outputs(circ.output_node()) {
+            let wire = Wire::new(node, port);
+            if let Some(reg) = self.bit_to_reg.get(&wire) {
+                circuit_output_order.push(reg.clone());
+            }
         }
-        self.inputs.extend(missing_regs);
-        self.inputs
+
+        // Ensure the input and output lists have the same registers.
+        let mut outputs = self.outputs.unwrap_or_default();
+        let mut input_regs: HashSet<RegisterHash> =
+            self.inputs.iter().map(RegisterHash::from).collect();
+        let output_regs: HashSet<RegisterHash> = outputs.iter().map(RegisterHash::from).collect();
+
+        for inp in &self.inputs {
+            if !output_regs.contains(&inp.into()) {
+                outputs.push(inp.clone());
+            }
+        }
+        for out in &outputs {
+            if !input_regs.contains(&out.into()) {
+                self.inputs.push(out.clone());
+            }
+        }
+        input_regs.extend(output_regs);
+
+        // Add registers defined mid-circuit to both ends.
+        for reg in self.bit_to_reg.into_values() {
+            if !input_regs.contains(&(&reg).into()) {
+                self.inputs.push(reg.clone());
+                outputs.push(reg);
+            }
+        }
+
+        // And ensure `circuit_output_order` has all virtual registers added too.
+        let circuit_outputs: HashSet<RegisterHash> = circuit_output_order
+            .iter()
+            .map(RegisterHash::from)
+            .collect();
+        for out in &outputs {
+            if !circuit_outputs.contains(&out.into()) {
+                circuit_output_order.push(out.clone());
+            }
+        }
+
+        // Compute the final permutation. This is a combination of two mappings:
+        // - First, the original implicit permutation for the circuit, if this was decoded from pytket.
+        let original_permutation: HashMap<RegisterUnit, RegisterHash> = self
+            .inputs
+            .iter()
+            .zip(&outputs)
+            .map(|(inp, out)| (inp.clone(), RegisterHash::from(out)))
+            .collect();
+        // - Second, the actual reordering of outputs seen at the circuit's output node.
+        let mut circuit_permutation: HashMap<RegisterHash, RegisterUnit> = outputs
+            .iter()
+            .zip(circuit_output_order)
+            .map(|(out, circ_out)| (RegisterHash::from(out), circ_out))
+            .collect();
+        // The final permutation is the composition of these two mappings.
+        let permutation = original_permutation
+            .into_iter()
+            .map(|(inp, out)| {
+                circuit_json::Permutation(inp, circuit_permutation.remove(&out).unwrap())
+            })
+            .collect_vec();
+
+        (self.inputs, permutation)
     }
 }
 

@@ -1,5 +1,6 @@
 //! General tests.
 
+use std::collections::HashMap;
 use std::io::BufReader;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
@@ -67,18 +68,26 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
     let bits_b: Vec<_> = b.bits.iter().collect();
     assert_eq!(bits_a, bits_b);
 
-    assert_eq!(a.implicit_permutation, b.implicit_permutation);
-
     assert_eq!(a.commands.len(), b.commands.len());
 
-    // the below only works if both serial circuits share a topological ordering
-    // of commands.
+    let get_permutation =
+        |p: &Vec<circuit_json::Permutation>| -> HashMap<circuit_json::Register, circuit_json::Register> {p.iter().map(|p| (p.0.clone(), p.1.clone())).collect()};
+    let _permutation_a = get_permutation(&a.implicit_permutation);
+    let _permutation_b = get_permutation(&b.implicit_permutation);
+
+    // This comparison only works if both serial circuits share a topological
+    // ordering of commands.
+    //
+    // We also cannot compare the arguments directly, since we may permute them
+    // internally.
+    //
+    // TODO: Do a proper comparison independent of the toposort ordering, and
+    // track register reordering.
     for (a, b) in a.commands.iter().zip(b.commands.iter()) {
         assert_eq!(a.op.op_type, b.op.op_type);
-        assert_eq!(a.args, b.args);
         assert_eq!(a.op.params, b.op.params);
+        assert_eq!(a.args.len(), b.args.len());
     }
-    // TODO: Check commands equality (they only implement PartialEq)
 }
 
 #[rstest]

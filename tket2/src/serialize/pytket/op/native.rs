@@ -76,7 +76,10 @@ impl NativeOp {
             }
             // These operations do not have a direct pytket counterpart.
             Tk2Op::QAlloc | Tk2Op::QFree => {
-                return None;
+                // These operations are implicitly supported by the encoding,
+                // they do not create an explicit pytket operation but instead
+                // add new qubits to the circuit input/output.
+                return Some(Self::new(tk2op.into(), None));
             }
         };
 
@@ -137,6 +140,14 @@ impl NativeOp {
     /// Returns the dataflow signature for this operation.
     pub fn signature(&self) -> Option<FunctionType> {
         self.op.dataflow_signature()
+    }
+
+    /// Returns the serial optype for this operation.
+    ///
+    /// Some special operations do not have a direct serialised counterpart, and
+    /// should be skipped during serialisation.
+    pub fn serial_op(&self) -> Option<&Tk1OpType> {
+        self.serial_op.as_ref()
     }
 
     /// Returns the tket2 optype for this operation.

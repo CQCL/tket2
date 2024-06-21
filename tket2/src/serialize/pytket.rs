@@ -14,6 +14,7 @@ pub(crate) use op::serialised::OpaqueTk1Op;
 #[cfg(test)]
 mod tests;
 
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
 use std::{fs, io};
 
@@ -35,12 +36,14 @@ pub use crate::passes::pytket::lower_to_pytket;
 pub const METADATA_PREFIX: &str = "TKET1";
 /// The global phase specified as metadata.
 const METADATA_PHASE: &str = "TKET1.phase";
-/// The implicit permutation of qubits.
-const METADATA_IMPLICIT_PERM: &str = "TKET1.implicit_permutation";
 /// Explicit names for the input qubit registers.
 const METADATA_Q_REGISTERS: &str = "TKET1.qubit_registers";
+/// The reordered qubit registers in the output, if an implicit permutation was applied.
+const METADATA_Q_OUTPUT_REGISTERS: &str = "TKET1.qubit_output_registers";
 /// Explicit names for the input bit registers.
 const METADATA_B_REGISTERS: &str = "TKET1.bit_registers";
+/// The reordered bit registers in the output, if an implicit permutation was applied.
+const METADATA_B_OUTPUT_REGISTERS: &str = "TKET1.bit_output_registers";
 /// A tket1 operation "opgroup" field.
 const METADATA_OPGROUP: &str = "TKET1.opgroup";
 
@@ -72,7 +75,7 @@ impl TKETDecode for SerialCircuit {
         }
 
         for com in self.commands {
-            decoder.add_command(com);
+            decoder.add_command(com)?;
         }
         Ok(decoder.finish().into())
     }
@@ -83,7 +86,7 @@ impl TKETDecode for SerialCircuit {
             let optype = com.optype();
             encoder.add_command(com.clone(), optype)?;
         }
-        Ok(encoder.finish())
+        Ok(encoder.finish(circ))
     }
 }
 
@@ -297,4 +300,21 @@ fn try_constant_to_param(val: &Value) -> Option<String> {
     let radians: f64 = **const_float;
     let half_turns = radians / std::f64::consts::PI;
     Some(half_turns.to_string())
+}
+
+/// A hashed register, used to identify registers in the [`Tk1Decoder::register_wire`] map,
+/// avoiding string and vector clones on lookup.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+struct RegisterHash {
+    hash: u64,
+}
+
+impl From<&circuit_json::Register> for RegisterHash {
+    fn from(reg: &circuit_json::Register) -> Self {
+        let mut hasher = DefaultHasher::new();
+        reg.hash(&mut hasher);
+        Self {
+            hash: hasher.finish(),
+        }
+    }
 }
