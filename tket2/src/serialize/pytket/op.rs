@@ -19,11 +19,10 @@ use self::native::NativeOp;
 use self::serialised::OpaqueTk1Op;
 use super::OpConvertError;
 
-/// An operation originating from pytket, containing the operation type and all its attributes.
+/// An intermediary artifact when converting between TKET1 and TKET2 operations.
 ///
-/// Wrapper around [`tket_json_rs::circuit_json::Operation`] with cached number of qubits and bits.
-///
-/// The `Operation` contained by this struct is guaranteed to have a signature.
+/// This enum represents either operations that can be represented natively in TKET2,
+/// or operations that must be serialised as opaque TKET1 operations.
 #[derive(Clone, Debug, PartialEq, derive_more::From)]
 pub enum Tk1Op {
     /// An operation with a native TKET2 counterpart.
