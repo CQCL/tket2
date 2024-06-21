@@ -14,7 +14,8 @@ pub(crate) use op::serialised::OpaqueTk1Op;
 #[cfg(test)]
 mod tests;
 
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::{fs, io};
 
