@@ -59,8 +59,17 @@ impl Tk1Decoder {
 
         // Compute the output register reordering, and store it in the metadata.
         //
-        // The `implicit_permutation` field is a dictionary mapping input registers
-        // to output registers on the same path.
+        // The `implicit_permutation` field is a dictionary mapping input
+        // registers to output registers on the same path.
+        //
+        // Here we store an ordered list showing the order in which the input
+        // registers appear in the output.
+        //
+        // For a circuit with three qubit registers 0, 1, 2 and an implicit
+        // permutation {0 -> 1, 1 -> 2, 2 -> 0}, `output_to_input` will be
+        // {1 -> 0, 2 -> 1, 0 -> 2} and the output order will be [2, 0, 1].
+        // That is, at position 0 of the output we'll see the register originally
+        // named 2, at position 1 the register originally named 0, and so on.
         let mut output_qubits = Vec::with_capacity(serialcirc.qubits.len());
         let mut output_bits = Vec::with_capacity(serialcirc.bits.len());
         let output_to_input: HashMap<circuit_json::Register, circuit_json::Register> = serialcirc
@@ -69,9 +78,11 @@ impl Tk1Decoder {
             .map(|p| (p.1.clone(), p.0.clone()))
             .collect();
         for qubit in &serialcirc.qubits {
+            // For each output position, find the input register that should be there.
             output_qubits.push(output_to_input.get(qubit).unwrap_or(qubit).clone());
         }
         for bit in &serialcirc.bits {
+            // For each output position, find the input register that should be there.
             output_bits.push(output_to_input.get(bit).unwrap_or(bit).clone());
         }
         dfg.set_metadata(METADATA_Q_OUTPUT_REGISTERS, json!(output_qubits));
@@ -149,7 +160,7 @@ impl Tk1Decoder {
                 .set_child_metadata(new_op.node(), METADATA_OPGROUP, json!(opgroup));
         }
 
-        // Assign the new output wires to some register, if needed.
+        // Assign the new output wires to some register, replacing the previous association.
         for (register, wire) in output_registers.into_iter().zip_eq(wires) {
             self.set_register_wire(register, wire);
         }
