@@ -1,4 +1,4 @@
-//! Intermediate structure for converting decoding [`SerialCircuit`]s into [`Hugr`]s.
+//! Intermediate structure for decoding [`SerialCircuit`]s into [`Hugr`]s.
 
 use std::collections::{HashMap, HashSet};
 

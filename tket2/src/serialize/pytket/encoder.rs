@@ -1,4 +1,4 @@
-//! Intermediate structure for converting encoding [`Circuit`]s into [`SerialCircuit`]s.
+//! Intermediate structure for encoding [`Circuit`]s into [`SerialCircuit`]s.
 
 use core::panic;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -280,14 +280,14 @@ impl QubitTracker {
         tracker
     }
 
-    /// Add a new register unit for a bit wire.
+    /// Add a new register unit for a qubit wire.
     pub fn add_qubit_register(&mut self, unit_id: usize) -> &RegisterUnit {
         let reg = RegisterUnit("q".to_string(), vec![self.qubit_to_reg.len() as i64]);
         self.qubit_to_reg.insert(unit_id, reg);
         self.qubit_to_reg.get(&unit_id).unwrap()
     }
 
-    /// Returns the register unit for a bit wire, if it exists.
+    /// Returns the register unit for a qubit wire, if it exists.
     pub fn get(&self, unit_id: usize) -> Option<&RegisterUnit> {
         self.qubit_to_reg.get(&unit_id)
     }
