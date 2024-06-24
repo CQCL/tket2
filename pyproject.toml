@@ -25,7 +25,7 @@ packages = [{ include = "tket2-py" }]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-pytket = "1.29.0"
+pytket = "1.29.2"
 
 [tool.poetry.group.dev.dependencies]
 maturin = "^1.6.0"
