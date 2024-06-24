@@ -240,6 +240,8 @@ struct QubitTracker {
     outputs: Option<Vec<RegisterUnit>>,
     /// The TKET1 qubit registers associated to each qubit unit of the circuit.
     qubit_to_reg: HashMap<usize, RegisterUnit>,
+    /// A generator of new registers units to use for bit wires.
+    unit_generator: RegisterUnitGenerator,
 }
 
 impl QubitTracker {
@@ -265,6 +267,14 @@ impl QubitTracker {
             tracker.outputs = Some(output_regs);
         }
 
+        tracker.unit_generator = RegisterUnitGenerator::new(
+            "q",
+            tracker
+                .inputs
+                .iter()
+                .chain(tracker.outputs.iter().flatten()),
+        );
+
         let qubit_count = circ.units().filter(|(_, _, ty)| ty == &QB_T).count();
 
         for i in 0..qubit_count {
@@ -282,7 +292,7 @@ impl QubitTracker {
 
     /// Add a new register unit for a qubit wire.
     pub fn add_qubit_register(&mut self, unit_id: usize) -> &RegisterUnit {
-        let reg = RegisterUnit("q".to_string(), vec![self.qubit_to_reg.len() as i64]);
+        let reg = self.unit_generator.next();
         self.qubit_to_reg.insert(unit_id, reg);
         self.qubit_to_reg.get(&unit_id).unwrap()
     }
@@ -325,6 +335,9 @@ impl QubitTracker {
         }
 
         // TODO: Look at the circuit outputs to determine the final permutation.
+        //
+        // We don't have the `CircuitUnit::Linear` assignments for the outputs
+        // here, so that requires some extra piping.
         let permutation = outputs
             .into_iter()
             .zip(&self.inputs)
@@ -352,6 +365,8 @@ struct BitTracker {
     /// Registers defined in the metadata, but not present in the circuit
     /// inputs.
     unused_registers: VecDeque<RegisterUnit>,
+    /// A generator of new registers units to use for bit wires.
+    unit_generator: RegisterUnitGenerator,
 }
 
 impl BitTracker {
@@ -378,6 +393,14 @@ impl BitTracker {
         if let Some(output_regs) = output_regs {
             tracker.outputs = Some(output_regs);
         }
+
+        tracker.unit_generator = RegisterUnitGenerator::new(
+            "c",
+            tracker
+                .inputs
+                .iter()
+                .chain(tracker.outputs.iter().flatten()),
+        );
 
         let bit_input_wires = circ.units().filter_map(|u| match u {
             (CircuitUnit::Wire(w), _, ty) if ty == BOOL_T => Some(w),
@@ -415,10 +438,11 @@ impl BitTracker {
 
     /// Add a new register unit for a bit wire.
     pub fn add_bit_register(&mut self, wire: Wire) -> &RegisterUnit {
-        let reg = match self.unused_registers.pop_front() {
-            Some(reg) => reg,
-            None => RegisterUnit("c".to_string(), vec![self.bit_to_reg.len() as i64]),
-        };
+        let reg = self
+            .unused_registers
+            .pop_front()
+            .unwrap_or_else(|| self.unit_generator.next());
+
         self.bit_to_reg.insert(wire, reg);
         self.bit_to_reg.get(&wire).unwrap()
     }
@@ -600,5 +624,45 @@ impl ParameterTracker {
     /// Returns the parameter expression for a wire, if it exists.
     fn get(&self, wire: &Wire) -> Option<&String> {
         self.parameters.get(wire)
+    }
+}
+
+/// A utility class for finding new unused qubit/bit names.
+#[derive(Debug, Clone, Default)]
+struct RegisterUnitGenerator {
+    /// The next index to use for a new register.
+    next_unit: u16,
+    /// The register name to use.
+    register: String,
+}
+
+impl RegisterUnitGenerator {
+    /// Create a new [`RegisterUnitGenerator`]
+    ///
+    /// Scans the set of existing registers to find the last used index, and
+    /// starts generating new unit names from there.
+    pub fn new<'a>(
+        register: impl ToString,
+        existing: impl IntoIterator<Item = &'a RegisterUnit>,
+    ) -> Self {
+        let register = register.to_string();
+        let mut last_unit: Option<u16> = None;
+        for reg in existing {
+            if reg.0 != register {
+                continue;
+            }
+            last_unit = Some(reg.1[0] as u16);
+        }
+        RegisterUnitGenerator {
+            register,
+            next_unit: last_unit.map_or(0, |i| i + 1),
+        }
+    }
+
+    /// Returns a fresh register unit.
+    pub fn next(&mut self) -> RegisterUnit {
+        let unit = self.next_unit;
+        self.next_unit += 1;
+        RegisterUnit(self.register.clone(), vec![unit as i64])
     }
 }
