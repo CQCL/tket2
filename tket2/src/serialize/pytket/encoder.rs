@@ -243,11 +243,11 @@ struct QubitTracker {
 }
 
 impl QubitTracker {
-    /// Create a new [`QubitTracker`] from the bit inputs of a [`Circuit`].
-    /// Reads the [`METADATA_Q_REGISTERS`] metadata entry with preset pytket bit register names.
+    /// Create a new [`QubitTracker`] from the qubit inputs of a [`Circuit`].
+    /// Reads the [`METADATA_Q_REGISTERS`] metadata entry with preset pytket qubit register names.
     ///
-    /// If the circuit contains more bit inputs than the provided list,
-    /// new registers are created for the remaining bits.
+    /// If the circuit contains more qubit inputs than the provided list,
+    /// new registers are created for the remaining qubits.
     pub fn new(circ: &Circuit<impl HugrView>) -> Self {
         let mut tracker = QubitTracker::default();
 

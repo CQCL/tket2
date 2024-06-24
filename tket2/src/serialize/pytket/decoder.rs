@@ -123,9 +123,10 @@ impl Tk1Decoder {
             let wire = self.register_wires.remove(&register).unwrap();
             outputs.push(wire);
         }
-        for wire in self.register_wires.into_values() {
-            outputs.push(wire);
-        }
+        debug_assert!(
+            self.register_wires.is_empty(),
+            "Some output wires were not associated with a register."
+        );
 
         self.hugr
             .finish_hugr_with_outputs(outputs, &REGISTRY)
