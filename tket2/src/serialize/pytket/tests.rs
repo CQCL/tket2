@@ -1,6 +1,6 @@
 //! General tests.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::BufReader;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
@@ -56,24 +56,50 @@ const PARAMETRIZED: &str = r#"{
         "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
     }"#;
 
+/// Check some properties of the serial circuit.
+fn validate_serial_circ(circ: &SerialCircuit) {
+    // Check that all commands have valid arguments.
+    for command in &circ.commands {
+        for arg in &command.args {
+            assert!(
+                circ.qubits.contains(arg) || circ.bits.contains(arg),
+                "Circuit command {command:?} has an invalid argument '{arg:?}'"
+            );
+        }
+    }
+
+    // Check that the implicit permutation is valid.
+    let perm: HashMap<circuit_json::Register, circuit_json::Register> = circ
+        .implicit_permutation
+        .iter()
+        .map(|p| (p.0.clone(), p.1.clone()))
+        .collect();
+    for (key, value) in &perm {
+        let valid_qubits = circ.qubits.contains(key) && circ.qubits.contains(value);
+        let valid_bits = circ.bits.contains(key) && circ.bits.contains(value);
+        assert!(
+            valid_qubits || valid_bits,
+            "Circuit has an invalid permutation '{key:?} -> {value:?}'"
+        );
+    }
+    assert_eq!(
+        perm.len(),
+        circ.implicit_permutation.len(),
+        "Circuit has duplicate permutations",
+    );
+    assert_eq!(
+        HashSet::<&circuit_json::Register>::from_iter(perm.values()).len(),
+        perm.len(),
+        "Circuit has duplicate values in permutations"
+    );
+}
+
 fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
     assert_eq!(a.name, b.name);
     assert_eq!(a.phase, b.phase);
-
-    let qubits_a: Vec<_> = a.qubits.iter().collect();
-    let qubits_b: Vec<_> = b.qubits.iter().collect();
-    assert_eq!(qubits_a, qubits_b);
-
-    let bits_a: Vec<_> = a.bits.iter().collect();
-    let bits_b: Vec<_> = b.bits.iter().collect();
-    assert_eq!(bits_a, bits_b);
-
+    assert_eq!(&a.qubits, &b.qubits);
+    assert_eq!(&a.bits, &b.bits);
     assert_eq!(a.commands.len(), b.commands.len());
-
-    let get_permutation =
-        |p: &Vec<circuit_json::Permutation>| -> HashMap<circuit_json::Register, circuit_json::Register> {p.iter().map(|p| (p.0.clone(), p.1.clone())).collect()};
-    let _permutation_a = get_permutation(&a.implicit_permutation);
-    let _permutation_b = get_permutation(&b.implicit_permutation);
 
     // This comparison only works if both serial circuits share a topological
     // ordering of commands.
@@ -103,6 +129,7 @@ fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num
     assert_eq!(circ.qubit_count(), num_qubits);
 
     let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
+    validate_serial_circ(&reser);
     compare_serial_circs(&ser, &reser);
 }
 
@@ -114,6 +141,7 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
     let ser: circuit_json::SerialCircuit = serde_json::from_reader(reader).unwrap();
     let circ: Circuit = ser.clone().decode().unwrap();
     let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
+    validate_serial_circ(&reser);
     compare_serial_circs(&ser, &reser);
 }
 
@@ -171,5 +199,6 @@ fn test_add_angle_serialise(#[case] circ_add_angles: Circuit, #[case] param_str:
     // expressions.
     let deser: Circuit = ser.clone().decode().unwrap();
     let reser = SerialCircuit::encode(&deser).unwrap();
+    validate_serial_circ(&reser);
     compare_serial_circs(&ser, &reser);
 }
