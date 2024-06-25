@@ -673,7 +673,7 @@ impl RegisterUnitGenerator {
             if reg.0 != register {
                 continue;
             }
-            last_unit = Some(reg.1[0] as u16);
+            last_unit = Some(last_unit.unwrap_or_default().max(reg.1[0] as u16));
         }
         RegisterUnitGenerator {
             register,
