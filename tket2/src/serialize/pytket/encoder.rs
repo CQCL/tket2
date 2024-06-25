@@ -4,7 +4,7 @@ use core::panic;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use hugr::extension::prelude::{BOOL_T, QB_T};
-use hugr::ops::{NamedOp, OpType};
+use hugr::ops::{OpTrait, OpType};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::{HugrView, Wire};
 use itertools::Itertools;
@@ -82,9 +82,20 @@ impl Tk1Encoder {
         optype: &OpType,
     ) -> Result<(), OpConvertError> {
         // Register any output of the command that can be used as a TKET1 parameter.
-        if self.parameters.record_parameters(&command, optype) {
+        if self.parameters.record_parameters(&command, optype)? {
             // for now all ops that record parameters should be ignored (are
             // just constants)
+            return Ok(());
+        }
+
+        // Special case for the QAlloc operation.
+        // This does not translate to a TKET1 operation, we just start tracking a new qubit register.
+        if optype == &Tk2Op::QAlloc.into() {
+            let Some((CircuitUnit::Linear(unit_id), _, _)) = command.outputs().next() else {
+                panic!("QAlloc should have a single qubit output.")
+            };
+            debug_assert!(self.qubits.get(unit_id).is_none());
+            self.qubits.add_qubit_register(unit_id);
             return Ok(());
         }
 
@@ -560,25 +571,40 @@ impl ParameterTracker {
         &mut self,
         command: &Command<'_, T>,
         optype: &OpType,
-    ) -> bool {
-        // Only consider commands where all inputs are parameters.
-        let inputs = command
-            .inputs()
-            .filter_map(|(unit, _, _)| match unit {
-                CircuitUnit::Wire(wire) => self.parameters.get(&wire),
-                CircuitUnit::Linear(_) => None,
-            })
-            .collect_vec();
-        if inputs.len() != command.input_count() {
-            debug_assert!(
-                !matches!(optype, OpType::Const(_) | OpType::LoadConstant(_)),
-                "Found a {} with {} inputs, of which {} are non-linear. In node {:?}",
-                optype.name(),
-                command.input_count(),
-                inputs.len(),
-                command.node()
-            );
-            return false;
+    ) -> Result<bool, OpConvertError> {
+        let input_count = if let Some(signature) = optype.dataflow_signature() {
+            // Only consider commands where all inputs are parameters,
+            // and some outputs are also parameters.
+            let all_inputs = signature.input().iter().all(|ty| ty == &FLOAT64_TYPE);
+            let some_output = signature.output().iter().any(|ty| ty == &FLOAT64_TYPE);
+            if !all_inputs || !some_output {
+                return Ok(false);
+            }
+            signature.input_count()
+        } else if let OpType::Const(_) = optype {
+            // `Const` is a special non-dataflow command we can handle.
+            // It has zero inputs.
+            0
+        } else {
+            // Not a parameter-generating command.
+            return Ok(false);
+        };
+
+        // Collect the input parameters.
+        let mut inputs = Vec::with_capacity(input_count);
+        for (unit, _, _) in command.inputs() {
+            let CircuitUnit::Wire(wire) = unit else {
+                panic!("Float types are not linear")
+            };
+            let Some(param) = self.parameters.get(&wire) else {
+                let typ = FLOAT64_TYPE;
+                return Err(OpConvertError::UnresolvedParamInput {
+                    typ,
+                    optype: optype.clone(),
+                    node: command.node(),
+                });
+            };
+            inputs.push(param);
         }
 
         let param = match optype {
@@ -586,7 +612,7 @@ impl ParameterTracker {
                 // New constant, register it if it can be interpreted as a parameter.
                 match try_constant_to_param(const_op.value()) {
                     Some(param) => param,
-                    None => return false,
+                    None => return Ok(false),
                 }
             }
             OpType::LoadConstant(_op_type) => {
@@ -598,22 +624,18 @@ impl ParameterTracker {
             }
             _ => {
                 let Some(s) = match_symb_const_op(optype) else {
-                    return false;
+                    return Ok(false);
                 };
                 s.to_string()
             }
         };
 
         for (unit, _, _) in command.outputs() {
-            match unit {
-                CircuitUnit::Wire(wire) => self.add_parameter(wire, param.clone()),
-                CircuitUnit::Linear(_) => panic!(
-                    "Found a non-wire output {unit:?} for a {} command.",
-                    optype.name()
-                ),
+            if let CircuitUnit::Wire(wire) = unit {
+                self.add_parameter(wire, param.clone())
             }
         }
-        true
+        Ok(true)
     }
 
     /// Associate a parameter expression with a wire.

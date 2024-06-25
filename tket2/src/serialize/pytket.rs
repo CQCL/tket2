@@ -184,6 +184,16 @@ pub enum OpConvertError {
         /// The node.
         node: Node,
     },
+    /// A parameter input could not be evaluated.
+    #[error("The {typ} parameter input for operation {} in {node} could not be resolved.", optype.name())]
+    UnresolvedParamInput {
+        /// The parameter type.
+        typ: Type,
+        /// The operation with the missing input param.
+        optype: OpType,
+        /// The node.
+        node: Node,
+    },
     /// The operation has output-only qubits.
     /// This is not currently supported by the encoder.
     #[error("Operation {} in {node} has more output qubits than inputs.", optype.name())]
