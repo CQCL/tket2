@@ -225,8 +225,12 @@ pub enum Tk2Op {
     CnY,
     /// N-qubit controlled Z gate
     CnZ,
+    /// N-qubit controlled Rx gate
+    CnRx,
     /// N-qubit controlled Ry gate
     CnRy,
+    /// N-qubit controlled Rz gate
+    CnRz,
     /// N-qubit gate composed of identical PhasedX gates in parallel
     NPhasedX,
     */
@@ -353,17 +357,17 @@ impl Tk2Op {
         // TODO: Review missing commutation relations
         match self {
             // 1 qubit X commutation
-            X | RxF64 | SX | SXdg => vec![(0, Pauli::X)],
+            X | RxF64 | SX | SXdg | V | Vdg => vec![(0, Pauli::X)],
             // 1 qubit Y commutation
             Y | RyF64 => vec![(0, Pauli::Y)],
             // 1 qubit Z commutation
-            Z | T | Tdg | S | Sdg | V | Vdg | RzF64 | Measure | Reset => vec![(0, Pauli::Z)],
+            Z | T | Tdg | S | Sdg | RzF64 | Measure | Reset => vec![(0, Pauli::Z)],
             // Controlled X commutation
-            CX | CRxF64 | CSX | CSXdg => vec![(0, Pauli::Z), (1, Pauli::X)],
+            CX | CRxF64 | CSX | CSXdg | CV | CVdg => vec![(0, Pauli::Z), (1, Pauli::X)],
             // Controlled Y commutation
             CY | CRyF64 => vec![(0, Pauli::Z), (1, Pauli::Y)],
             // Controlled Z commutation
-            CZ | CT | CTdg | CS | CSdg | CV | CVdg | CRzF64 => {
+            CZ | CT | CTdg | CS | CSdg | CRzF64 => {
                 vec![(0, Pauli::Z), (1, Pauli::Z)]
             }
             // Other controlled ops
