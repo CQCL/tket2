@@ -80,7 +80,7 @@ pub enum Tk2Op {
     RzF64,
     /// TK1 gate
     ///
-    /// TK1(α, β, γ) = Rz(α) Rx(β) Rz(γ)
+    /// TK1(α, β, γ) = RzF64(α) RxF64(β) RzF64(γ)
     TK1,
     /// U1 gate
     ///
@@ -155,9 +155,9 @@ pub enum Tk2Op {
     GPI2,
 
     // Other multi-qubit gates
-    /// ZZPhase gate, with a parameter in half-turns
+    /// XXPhase gate, with a parameter in half-turns
     XXPhase,
-    /// ZZPhase gate, with a parameter in half-turns
+    /// YYPhase gate, with a parameter in half-turns
     YYPhase,
     /// ZZPhase gate, with a parameter in half-turns
     ZZPhase,
