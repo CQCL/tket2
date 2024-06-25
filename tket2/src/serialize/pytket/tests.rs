@@ -6,13 +6,15 @@ use std::io::BufReader;
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::{BOOL_T, QB_T};
 
+use hugr::hugr::hugrmut::HugrMut;
 use hugr::std_extensions::arithmetic::float_types::{ConstF64, FLOAT64_TYPE};
 use hugr::types::FunctionType;
+use hugr::HugrView;
 use rstest::{fixture, rstest};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::optype;
 
-use super::TKETDecode;
+use super::{TKETDecode, METADATA_Q_OUTPUT_REGISTERS};
 use crate::circuit::Circuit;
 use crate::extension::REGISTRY;
 use crate::Tk2Op;
@@ -28,6 +30,17 @@ const SIMPLE_JSON: &str = r#"{
         "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
     }"#;
 
+const MULTI_REGISTER: &str = r#"{
+        "phase": "0",
+        "bits": [],
+        "qubits": [["q", [2]], ["q", [1]], ["my_qubits", [2]]],
+        "commands": [
+            {"args": [["my_qubits", [2]]], "op": {"type": "H"}},
+            {"args": [["q", [2]], ["q", [1]]], "op": {"type": "CX"}}
+        ],
+        "implicit_permutation": []
+    }"#;
+
 const UNKNOWN_OP: &str = r#"{
         "phase": "1/2",
         "bits": [["c", [0]], ["c", [1]]],
@@ -41,7 +54,7 @@ const UNKNOWN_OP: &str = r#"{
         "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]], [["q", [2]], ["q", [2]]]]
     }"#;
 
-const PARAMETRIZED: &str = r#"{
+const PARAMETERIZED: &str = r#"{
         "phase": "0.0",
         "bits": [],
         "qubits": [["q", [0]], ["q", [1]]],
@@ -116,6 +129,33 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
     }
 }
 
+/// A simple circuit with some preset qubit registers
+#[fixture]
+fn circ_preset_qubits() -> Circuit {
+    let input_t = vec![QB_T];
+    let output_t = vec![QB_T, QB_T];
+    let mut h = DFGBuilder::new(FunctionType::new(input_t, output_t)).unwrap();
+
+    let [qb0] = h.input_wires_arr();
+    let [qb1] = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap().outputs_arr();
+
+    let [qb0, qb1] = h
+        .add_dataflow_op(Tk2Op::CZ, [qb0, qb1])
+        .unwrap()
+        .outputs_arr();
+
+    let mut hugr = h.finish_hugr_with_outputs([qb0, qb1], &REGISTRY).unwrap();
+
+    // A preset register for the first qubit output
+    hugr.set_metadata(
+        hugr.root(),
+        METADATA_Q_OUTPUT_REGISTERS,
+        serde_json::json!([["q", [1]]]),
+    );
+
+    hugr.into()
+}
+
 /// A simple circuit with ancillae
 #[fixture]
 fn circ_measure_ancilla() -> Circuit {
@@ -188,8 +228,9 @@ fn circ_add_angles_constants() -> Circuit {
 
 #[rstest]
 #[case::simple(SIMPLE_JSON, 2, 2)]
+#[case::simple(MULTI_REGISTER, 2, 3)]
 #[case::unknown_op(UNKNOWN_OP, 2, 3)]
-#[case::parametrized(PARAMETRIZED, 4, 2)]
+#[case::parametrized(PARAMETERIZED, 4, 2)]
 fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num_qubits: usize) {
     let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), num_commands);
@@ -220,13 +261,22 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
 /// Note: this is not a pure roundtrip as the encoder may add internal qubits/bits to the circuit.
 #[rstest]
 #[case::meas_ancilla(circ_measure_ancilla(), FunctionType::new_endo(vec![QB_T, QB_T, BOOL_T, BOOL_T]))]
+#[case::preset_qubits(circ_preset_qubits(), FunctionType::new_endo(vec![QB_T, QB_T, QB_T]))]
 fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: FunctionType) {
     let ser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
     let deser: Circuit = ser.clone().decode().unwrap();
 
     let deser_sig = deser.circuit_signature();
-    assert_eq!(&deser_sig.input, &decoded_sig.input);
-    assert_eq!(&deser_sig.output, &decoded_sig.output);
+    assert_eq!(
+        &deser_sig.input, &decoded_sig.input,
+        "Input signature mismatch\n  Expected: {}\n  Actual:   {}",
+        &deser_sig, &decoded_sig
+    );
+    assert_eq!(
+        &deser_sig.output, &decoded_sig.output,
+        "Output signature mismatch\n  Expected: {}\n  Actual:   {}",
+        &deser_sig, &decoded_sig
+    );
 
     let reser = SerialCircuit::encode(&deser).unwrap();
     validate_serial_circ(&reser);
