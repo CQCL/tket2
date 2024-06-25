@@ -98,7 +98,7 @@ pub enum Tk2Op {
     ///
     /// Parametric on three Euler angles
     ///
-    /// See [https://docs.quantum.ibm.com/api/qiskit/qiskit.circuit.library.UGate]
+    /// See <https://docs.quantum.ibm.com/api/qiskit/qiskit.circuit.library.UGate>
     U3,
 
     /// Parametric X rotation with two angle parameters
