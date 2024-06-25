@@ -39,31 +39,197 @@ use crate::extension::REGISTRY;
     IntoStaticStr,
     EnumString,
 )]
-#[allow(missing_docs)]
 #[non_exhaustive]
 /// Simple enum of tket 2 quantum operations.
+//
+// When adding new operations, make sure to also edit:
+// - `Tk2Op::is_quantum` and `Tk2Op::qubit_commutation` in this same file
+// - `tket2/src/serialize/pytket/op/native.rs`: For pytket operation equivalence
+// - `tket2-py/tket2/ops.py`: For pure-python operation definitions
 pub enum Tk2Op {
-    H,
-    CX,
-    T,
-    S,
+    // Single-qubit gates
+    /// X rotation
     X,
+    /// Y rotation
     Y,
+    /// Z rotation
     Z,
+    /// Hadamard gate
+    H,
+    /// T gate
+    T,
+    /// Inverse T gate
     Tdg,
+    /// S gate
+    S,
+    /// Inverse S gate
     Sdg,
-    ZZMax,
-    Measure,
-    RzF64,
+    /// SX gate
+    SX,
+    /// Inverse SX gate
+    SXdg,
+    /// V gate
+    V,
+    /// Inverse V gate
+    Vdg,
+    /// X rotation with an angle parameter in half-turns
     RxF64,
-    PhasedX,
-    ZZPhase,
-    AngleAdd,
-    CZ,
+    /// Y rotation with an angle parameter in half-turns
+    RyF64,
+    /// Z rotation with an angle parameter in half-turns
+    RzF64,
+    /// TK1 gate
+    ///
+    /// TK1(α, β, γ) = Rz(α) Rx(β) Rz(γ)
     TK1,
+    /// U1 gate
+    ///
+    /// U1(α) = U3(0, 0, α)
+    ///
+    /// See [Tk2Op::U3]
+    U1,
+    /// U2 gate
+    ///
+    /// U2(α, β) = U3(1/2, α, β)
+    ///
+    /// See [Tk2Op::U3]
+    U2,
+    /// U gate used by IBM
+    ///
+    /// Parametric on three Euler angles
+    ///
+    /// See [https://docs.quantum.ibm.com/api/qiskit/qiskit.circuit.library.UGate]
+    U3,
+
+    /// Parametric X rotation with two angle parameters
+    ///
+    /// PhasedX(α, β) = RzF64(β) RxF64(α) RzF64(-β)
+    PhasedX,
+
+    // Controlled single-qubit gates
+    /// Controlled X gate
+    CX,
+    /// Controlled Y gate
+    CY,
+    /// Controlled Z gate
+    CZ,
+    /// Controlled Hadamard gate
+    CH,
+    /// Controlled T gate
+    CT,
+    /// Controlled inverse T gate
+    CTdg,
+    /// Controlled S gate
+    CS,
+    /// Controlled inverse S gate
+    CSdg,
+    /// Controlled SX gate
+    CSX,
+    /// Controlled inverse SX gate
+    CSXdg,
+    /// Controlled V gate
+    CV,
+    /// Controlled inverse V gate
+    CVdg,
+    /// Controlled X rotation with an angle parameter in half-turns
+    CRxF64,
+    /// Controlled Y rotation with an angle parameter in half-turns
+    CRyF64,
+    /// Controlled Z rotation with an angle parameter in half-turns
+    CRzF64,
+    /// Controlled U1 gate
+    ///
+    /// See [Tk2Op::U1]
+    CU1,
+    /// Controlled U2 gate
+    ///
+    /// See [Tk2Op::U2]
+    CU2,
+    /// Controlled U3 gate
+    ///
+    /// See [Tk2Op::U3]
+    CU3,
+    /// GPi gate
+    GPI,
+    /// GPi2 gate
+    GPI2,
+
+    // Other multi-qubit gates
+    /// ZZPhase gate, with a parameter in half-turns
+    XXPhase,
+    /// ZZPhase gate, with a parameter in half-turns
+    YYPhase,
+    /// ZZPhase gate, with a parameter in half-turns
+    ZZPhase,
+    /// Maximally entangling ZZPhase gate
+    ZZMax,
+    /// TK2 gate
+    ///
+    /// TK2(α, β, γ) = XXPhase(α) YYPhase(β) ZZPhase(γ)
+    TK2,
+    /// Swap two qubits
+    SWAP,
+    /// Controlled qubit swap
+    CSWAP,
+    /// Three-qubit gate that swaps the first and third qubits
+    BRIDGE,
+    /// Toffoli gate, or double-controlled X gate
+    CCX,
+    /// ECR gate
+    ECR,
+    /// ISWAP gate
+    ///
+    /// Also known as an XY gate
+    ISWAP,
+    /// Maximally entangling ISWAP gate
+    ///
+    /// ISWAPMax = ISWAP(1)
+    ISWAPMax,
+    /// Phased ISWAP
+    PhasedISWAP,
+    /// ESWAP gate
+    ESWAP,
+    /// Three-qubit XX phase gate
+    ///
+    /// XXPhase3(α)[q0, q1, q2] = XXPhase(α)[q0, q1] XXPhase(α)[q1, q2] XXPhase(α)[q0, q2]
+    XXPhase3,
+    /// FSim gate
+    FSim,
+    /// Sycamore gate
+    ///
+    /// Sycamore = FSim(1/2, 1/6)
+    Sycamore,
+    /// AAMS gate
+    AAMS,
+
+    // Non unitary operations
+    /// Measurement
+    Measure,
+    /// Qubit allocation
     QAlloc,
+    /// Qubit deallocation
     QFree,
+    /// Reset qubit to |0>
     Reset,
+
+    // Angle manipulation
+    /// Add two angles together
+    AngleAdd,
+    /*
+    TODO: Gates with parametric signatures
+
+    Barrier,
+    /// N-qubit controlled X gate
+    CnX,
+    /// N-qubit controlled Y gate
+    CnY,
+    /// N-qubit controlled Z gate
+    CnZ,
+    /// N-qubit controlled Ry gate
+    CnRy,
+    /// N-qubit gate composed of identical PhasedX gates in parallel
+    NPhasedX,
+    */
 }
 
 impl Tk2Op {
@@ -106,27 +272,54 @@ impl Pauli {
 impl MakeOpDef for Tk2Op {
     fn signature(&self) -> SignatureFunc {
         use Tk2Op::*;
-        let one_qb_row = type_row![QB_T];
-        let two_qb_row = type_row![QB_T, QB_T];
+
+        // Define the type rows once to avoid repeated static allocations.
+        let row_1q = type_row![QB_T];
+        let row_1q_1param = type_row![QB_T, FLOAT64_TYPE];
+        let row_1q_2param = type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE];
+        let row_1q_3param = type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE, FLOAT64_TYPE];
+        let row_2q = type_row![QB_T, QB_T];
+        let row_2q_1param = type_row![QB_T, QB_T, FLOAT64_TYPE];
+        let row_2q_2param = type_row![QB_T, QB_T, FLOAT64_TYPE, FLOAT64_TYPE];
+        let row_2q_3param = type_row![QB_T, QB_T, FLOAT64_TYPE, FLOAT64_TYPE, FLOAT64_TYPE];
+        let row_3q = type_row![QB_T, QB_T, QB_T];
+        let row_3q_1param = type_row![QB_T, QB_T, QB_T, FLOAT64_TYPE];
+
         match self {
-            H | T | S | X | Y | Z | Tdg | Sdg | Reset => {
-                FunctionType::new(one_qb_row.clone(), one_qb_row)
+            // 1 qubit gates
+            X | Y | Z | H | T | Tdg | S | Sdg | SX | SXdg | V | Vdg | Reset => {
+                FunctionType::new_endo(row_1q.clone())
             }
-            CX | ZZMax | CZ => FunctionType::new(two_qb_row.clone(), two_qb_row),
-            ZZPhase => FunctionType::new(type_row![QB_T, QB_T, FLOAT64_TYPE], two_qb_row),
-            Measure => FunctionType::new(one_qb_row, type_row![QB_T, BOOL_T]),
-            RzF64 | RxF64 => FunctionType::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
-            PhasedX => FunctionType::new(type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE], one_qb_row),
+            // 1 qubit, 1 parameter
+            RxF64 | RyF64 | RzF64 | U1 | GPI | GPI2 => FunctionType::new(row_1q_1param, row_1q),
+            // 1 qubit, 2 parameters
+            PhasedX | U2 => FunctionType::new(row_1q_2param, row_1q),
+            // 1 qubit, 3 parameters
+            TK1 | U3 => FunctionType::new(row_1q_3param, row_1q),
+            // 2 qubit gates
+            CX | CY | CZ | CH | CT | CTdg | CS | CSdg | CSX | CSXdg | CV | CVdg | ZZMax | SWAP
+            | ISWAPMax | ECR | Sycamore => FunctionType::new_endo(row_2q),
+            // 2 qubits, 1 parameter
+            CRxF64 | CRyF64 | CRzF64 | XXPhase | YYPhase | ZZPhase | CU1 | ISWAP | ESWAP => {
+                FunctionType::new(row_2q_1param, row_2q)
+            }
+            // 2 qubits, 2 parameters
+            CU2 | PhasedISWAP | FSim => FunctionType::new(row_2q_2param, row_2q),
+            // 2 qubits, 3 parameters
+            TK2 | CU3 | AAMS => FunctionType::new(row_2q_3param, row_2q),
+            // 3 qubit gates
+            CSWAP | BRIDGE | CCX => FunctionType::new_endo(row_3q),
+            // 3 qubits, 1 parameter
+            XXPhase3 => FunctionType::new(row_3q_1param, row_3q),
+            // Bit operations
+            Measure => FunctionType::new(row_1q, type_row![QB_T, BOOL_T]),
+            QAlloc => FunctionType::new(type_row![], row_1q),
+            QFree => FunctionType::new(row_1q, type_row![]),
+            // Parameter gates
             AngleAdd => FunctionType::new(
                 type_row![FLOAT64_TYPE, FLOAT64_TYPE],
                 type_row![FLOAT64_TYPE],
             ),
-            TK1 => FunctionType::new(
-                type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE, FLOAT64_TYPE],
-                one_qb_row,
-            ),
-            QAlloc => FunctionType::new(type_row![], one_qb_row),
-            QFree => FunctionType::new(one_qb_row, type_row![]),
         }
         .into()
     }
@@ -157,11 +350,26 @@ impl Tk2Op {
     pub(crate) fn qubit_commutation(&self) -> Vec<(usize, Pauli)> {
         use Tk2Op::*;
 
+        // TODO: Review missing commutation relations
         match self {
-            X | RxF64 => vec![(0, Pauli::X)],
-            T | Z | S | Tdg | Sdg | RzF64 | Measure => vec![(0, Pauli::Z)],
-            CX => vec![(0, Pauli::Z), (1, Pauli::X)],
-            ZZMax | ZZPhase | CZ => vec![(0, Pauli::Z), (1, Pauli::Z)],
+            // 1 qubit X commutation
+            X | RxF64 | SX | SXdg => vec![(0, Pauli::X)],
+            // 1 qubit Y commutation
+            Y | RyF64 => vec![(0, Pauli::Y)],
+            // 1 qubit Z commutation
+            Z | T | Tdg | S | Sdg | V | Vdg | RzF64 | Measure | Reset => vec![(0, Pauli::Z)],
+            // Controlled X commutation
+            CX | CRxF64 | CSX | CSXdg => vec![(0, Pauli::Z), (1, Pauli::X)],
+            // Controlled Y commutation
+            CY | CRyF64 => vec![(0, Pauli::Z), (1, Pauli::Y)],
+            // Controlled Z commutation
+            CZ | CT | CTdg | CS | CSdg | CV | CVdg | CRzF64 => {
+                vec![(0, Pauli::Z), (1, Pauli::Z)]
+            }
+            // Other controlled ops
+            CH | CU1 | CU2 | CU3 => vec![(0, Pauli::Z)],
+            // Multi-qubit gates
+            CCX => vec![(0, Pauli::Z), (1, Pauli::Z), (2, Pauli::X)],
             // by default, no commutation
             _ => vec![],
         }
@@ -170,11 +378,7 @@ impl Tk2Op {
     /// Check if this op is a quantum op.
     pub fn is_quantum(&self) -> bool {
         use Tk2Op::*;
-        match self {
-            H | CX | T | S | X | Y | Z | Tdg | Sdg | ZZMax | RzF64 | RxF64 | PhasedX | ZZPhase
-            | CZ | TK1 => true,
-            AngleAdd | Measure | QAlloc | QFree | Reset => false,
-        }
+        !matches!(self, AngleAdd | Measure | QAlloc | QFree | Reset)
     }
 }
 
