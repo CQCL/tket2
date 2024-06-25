@@ -681,8 +681,8 @@ mod tests {
         assert_eq!(circ.operations().count(), 3);
 
         assert_eq!(circ.units().count(), qubits + bits);
-        assert_eq!(circ.nonlinear_units().count(), 0);
-        assert_eq!(circ.linear_units().count(), qubits + bits);
+        assert_eq!(circ.nonlinear_units().count(), bits);
+        assert_eq!(circ.linear_units().count(), qubits);
         assert_eq!(circ.qubits().count(), qubits);
     }
 

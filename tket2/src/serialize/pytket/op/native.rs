@@ -1,6 +1,6 @@
 //! Operations that have corresponding representations in both `pytket` and `tket2`.
 
-use hugr::extension::prelude::QB_T;
+use hugr::extension::prelude::{BOOL_T, QB_T};
 
 use hugr::ops::{Noop, OpTrait, OpType};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
@@ -10,13 +10,12 @@ use hugr::IncomingPort;
 use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as Tk1OpType;
 
-use crate::extension::LINEAR_BIT;
 use crate::Tk2Op;
 
 /// An operation with a native TKET2 counterpart.
 ///
 /// Note that the signature of the native and serialised operations may differ.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct NativeOp {
     /// The tket2 optype.
     op: OpType,
@@ -25,9 +24,30 @@ pub struct NativeOp {
     /// Some specific operations do not have a direct pytket counterpart, and must be handled
     /// separately.
     serial_op: Option<Tk1OpType>,
+    /// Number of input qubits to the operation.
+    pub input_qubits: usize,
+    /// Number of output qubits to the operation.
+    pub input_bits: usize,
+    /// Number of parameters to the operation.
+    pub num_params: usize,
+    /// Number of output qubits to the operation.
+    pub output_qubits: usize,
+    /// Number of output bits to the operation.
+    pub output_bits: usize,
 }
 
 impl NativeOp {
+    /// Initialise a new `NativeOp`.
+    fn new(op: OpType, serial_op: Option<Tk1OpType>) -> Self {
+        let mut native_op = Self {
+            op,
+            serial_op,
+            ..Default::default()
+        };
+        native_op.compute_counts();
+        native_op
+    }
+
     /// Create a new `NativeOp` from a `circuit_json::Operation`.
     pub fn try_from_tk2op(tk2op: Tk2Op) -> Option<Self> {
         let serial_op = match tk2op {
@@ -48,28 +68,22 @@ impl NativeOp {
             Tk2Op::ZZPhase => Tk1OpType::ZZPhase,
             Tk2Op::CZ => Tk1OpType::CZ,
             Tk2Op::Reset => Tk1OpType::Reset,
+            Tk2Op::Measure => Tk1OpType::Measure,
             Tk2Op::AngleAdd => {
                 // These operations should be folded into constant before serialisation,
                 // or replaced by pytket logic expressions.
-                return Some(Self {
-                    op: tk2op.into(),
-                    serial_op: None,
-                });
-            }
-            // TKET2 measurements and TKET1 measurements have different semantics.
-            Tk2Op::Measure => {
-                return None;
+                return Some(Self::new(tk2op.into(), None));
             }
             // These operations do not have a direct pytket counterpart.
             Tk2Op::QAlloc | Tk2Op::QFree => {
-                return None;
+                // These operations are implicitly supported by the encoding,
+                // they do not create an explicit pytket operation but instead
+                // add new qubits to the circuit input/output.
+                return Some(Self::new(tk2op.into(), None));
             }
         };
 
-        Some(Self {
-            op: tk2op.into(),
-            serial_op: Some(serial_op),
-        })
+        Some(Self::new(tk2op.into(), Some(serial_op)))
     }
 
     /// Returns the translated tket2 optype for this operation, if it exists.
@@ -92,35 +106,24 @@ impl NativeOp {
             Tk1OpType::ZZPhase => Tk2Op::ZZPhase.into(),
             Tk1OpType::CZ => Tk2Op::CZ.into(),
             Tk1OpType::Reset => Tk2Op::Reset.into(),
+            Tk1OpType::Measure => Tk2Op::Measure.into(),
             Tk1OpType::noop => Noop::new(QB_T).into(),
             _ => {
                 return None;
             }
         };
-        Some(Self {
-            op,
-            serial_op: Some(serial_op),
-        })
+        Some(Self::new(op, Some(serial_op)))
     }
 
     /// Converts this `NativeOp` into a tket_json_rs operation.
     pub fn serialised_op(&self) -> Option<circuit_json::Operation> {
         let serial_op = self.serial_op.clone()?;
 
-        let mut num_qubits = 0;
-        let mut num_bits = 0;
-        let mut num_params = 0;
-        if let Some(sig) = self.signature() {
-            for ty in sig.input.iter() {
-                if ty == &QB_T {
-                    num_qubits += 1
-                } else if *ty == *LINEAR_BIT {
-                    num_bits += 1
-                } else if ty == &FLOAT64_TYPE {
-                    num_params += 1
-                }
-            }
-        }
+        // Since pytket operations are always linear,
+        // use the maximum of input and output bits/qubits.
+        let num_qubits = self.input_qubits.max(self.output_qubits);
+        let num_bits = self.input_bits.max(self.output_bits);
+        let num_params = self.num_params;
 
         let params = (num_params > 0).then(|| vec!["".into(); num_params]);
 
@@ -137,6 +140,14 @@ impl NativeOp {
     /// Returns the dataflow signature for this operation.
     pub fn signature(&self) -> Option<FunctionType> {
         self.op.dataflow_signature()
+    }
+
+    /// Returns the serial optype for this operation.
+    ///
+    /// Some special operations do not have a direct serialised counterpart, and
+    /// should be skipped during serialisation.
+    pub fn serial_op(&self) -> Option<&Tk1OpType> {
+        self.serial_op.as_ref()
     }
 
     /// Returns the tket2 optype for this operation.
@@ -158,6 +169,34 @@ impl NativeOp {
                 .filter(|(_, ty)| ty == &FLOAT64_TYPE)
                 .map(|(port, _)| port)
         })
+    }
+
+    /// Update the internal bit/qubit/parameter counts.
+    fn compute_counts(&mut self) {
+        self.input_bits = 0;
+        self.input_qubits = 0;
+        self.num_params = 0;
+        self.output_bits = 0;
+        self.output_qubits = 0;
+        let Some(sig) = self.signature() else {
+            return;
+        };
+        for ty in sig.input_types() {
+            if ty == &QB_T {
+                self.input_qubits += 1;
+            } else if ty == &BOOL_T {
+                self.input_bits += 1;
+            } else if ty == &FLOAT64_TYPE {
+                self.num_params += 1;
+            }
+        }
+        for ty in sig.output_types() {
+            if ty == &QB_T {
+                self.output_qubits += 1;
+            } else if ty == &BOOL_T {
+                self.output_bits += 1;
+            }
+        }
     }
 }
 

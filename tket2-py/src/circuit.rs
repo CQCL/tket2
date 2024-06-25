@@ -15,7 +15,7 @@ use pyo3::prelude::*;
 use std::fmt;
 
 use hugr::{type_row, Hugr, HugrView, PortIndex};
-use tket2::extension::{LINEAR_BIT, REGISTRY};
+use tket2::extension::REGISTRY;
 use tket2::rewrite::CircuitRewrite;
 use tket2::serialize::TKETDecode;
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -313,11 +313,6 @@ impl PyHugrType {
     #[staticmethod]
     fn qubit() -> Self {
         Self(QB_T)
-    }
-
-    #[staticmethod]
-    fn linear_bit() -> Self {
-        Self(LINEAR_BIT.to_owned())
     }
 
     #[staticmethod]

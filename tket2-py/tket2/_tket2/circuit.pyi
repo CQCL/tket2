@@ -158,10 +158,6 @@ class HugrType:
         """Qubit type from HUGR prelude."""
 
     @staticmethod
-    def linear_bit() -> HugrType:
-        """Linear bit type from TKET1 extension."""
-
-    @staticmethod
     def bool() -> HugrType:
         """Boolean type (HUGR 2-ary unit sum)."""
 

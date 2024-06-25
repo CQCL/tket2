@@ -65,3 +65,10 @@ def test_load_hybrid_circuit():
 
     # The 7 operations in the function, plus two implicit QFree
     assert circ.num_operations() == 9
+
+    tk1 = circ.to_tket1()
+    assert tk1.n_gates == 7
+    assert tk1.n_qubits == 2
+
+    gates = list(tk1)
+    assert gates[4].op.type == pytket.circuit.OpType.ZZMax

@@ -6,39 +6,47 @@ mod op;
 
 use hugr::types::Type;
 
+use hugr::Node;
+use itertools::Itertools;
 // Required for serialising ops in the tket1 hugr extension.
 pub(crate) use op::serialised::OpaqueTk1Op;
 
 #[cfg(test)]
 mod tests;
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::{fs, io};
 
-use hugr::ops::{OpType, Value};
+use hugr::ops::{NamedOp, OpType, Value};
 use hugr::std_extensions::arithmetic::float_types::ConstF64;
 
 use thiserror::Error;
-use tket_json_rs::circuit_json::SerialCircuit;
+use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::optype::OpType as SerialOpType;
 
 use crate::circuit::Circuit;
 
-use self::decoder::JsonDecoder;
-use self::encoder::JsonEncoder;
+use self::decoder::Tk1Decoder;
+use self::encoder::Tk1Encoder;
 
 pub use crate::passes::pytket::lower_to_pytket;
 
 /// Prefix used for storing metadata in the hugr nodes.
-pub const METADATA_PREFIX: &str = "TKET1_JSON";
+pub const METADATA_PREFIX: &str = "TKET1";
 /// The global phase specified as metadata.
-const METADATA_PHASE: &str = "TKET1_JSON.phase";
-/// The implicit permutation of qubits.
-const METADATA_IMPLICIT_PERM: &str = "TKET1_JSON.implicit_permutation";
+const METADATA_PHASE: &str = "TKET1.phase";
 /// Explicit names for the input qubit registers.
-const METADATA_Q_REGISTERS: &str = "TKET1_JSON.qubit_registers";
+const METADATA_Q_REGISTERS: &str = "TKET1.qubit_registers";
+/// The reordered qubit registers in the output, if an implicit permutation was applied.
+const METADATA_Q_OUTPUT_REGISTERS: &str = "TKET1.qubit_output_registers";
 /// Explicit names for the input bit registers.
-const METADATA_B_REGISTERS: &str = "TKET1_JSON.bit_registers";
+const METADATA_B_REGISTERS: &str = "TKET1.bit_registers";
+/// The reordered bit registers in the output, if an implicit permutation was applied.
+const METADATA_B_OUTPUT_REGISTERS: &str = "TKET1.bit_output_registers";
+/// A tket1 operation "opgroup" field.
+const METADATA_OPGROUP: &str = "TKET1.opgroup";
 
 /// A serialized representation of a [`Circuit`].
 ///
@@ -59,7 +67,7 @@ impl TKETDecode for SerialCircuit {
     type EncodeError = TK1ConvertError;
 
     fn decode(self) -> Result<Circuit, Self::DecodeError> {
-        let mut decoder = JsonDecoder::try_new(&self)?;
+        let mut decoder = Tk1Decoder::try_new(&self)?;
 
         if !self.phase.is_empty() {
             // TODO - add a phase gate
@@ -68,18 +76,18 @@ impl TKETDecode for SerialCircuit {
         }
 
         for com in self.commands {
-            decoder.add_command(com);
+            decoder.add_command(com)?;
         }
         Ok(decoder.finish().into())
     }
 
     fn encode(circ: &Circuit) -> Result<Self, Self::EncodeError> {
-        let mut encoder = JsonEncoder::new(circ)?;
+        let mut encoder = Tk1Encoder::new(circ)?;
         for com in circ.commands() {
             let optype = com.optype();
             encoder.add_command(com.clone(), optype)?;
         }
-        Ok(encoder.finish())
+        Ok(encoder.finish(circ))
     }
 }
 
@@ -156,12 +164,82 @@ pub enum OpConvertError {
     /// The serialized operation is not supported.
     #[error("Cannot serialize tket2 operation: {0:?}")]
     UnsupportedOpSerialization(OpType),
+    /// The operation has non-serializable inputs.
+    #[error("Operation {} in {node} has an unsupported input of type {typ}.", optype.name())]
+    UnsupportedInputType {
+        /// The unsupported type.
+        typ: Type,
+        /// The operation name.
+        optype: OpType,
+        /// The node.
+        node: Node,
+    },
+    /// The operation has non-serializable outputs.
+    #[error("Operation {} in {node} has an unsupported output of type {typ}.", optype.name())]
+    UnsupportedOutputType {
+        /// The unsupported type.
+        typ: Type,
+        /// The operation name.
+        optype: OpType,
+        /// The node.
+        node: Node,
+    },
+    /// A parameter input could not be evaluated.
+    #[error("The {typ} parameter input for operation {} in {node} could not be resolved.", optype.name())]
+    UnresolvedParamInput {
+        /// The parameter type.
+        typ: Type,
+        /// The operation with the missing input param.
+        optype: OpType,
+        /// The node.
+        node: Node,
+    },
+    /// The operation has output-only qubits.
+    /// This is not currently supported by the encoder.
+    #[error("Operation {} in {node} has more output qubits than inputs.", optype.name())]
+    TooManyOutputQubits {
+        /// The unsupported type.
+        typ: Type,
+        /// The operation name.
+        optype: OpType,
+        /// The node.
+        node: Node,
+    },
     /// The opaque tket1 operation had an invalid type parameter.
     #[error("Opaque TKET1 operation had an invalid type parameter. {error}")]
     InvalidOpaqueTypeParam {
         /// The serialization error.
         #[from]
         error: serde_yaml::Error,
+    },
+    /// Tried to decode a tket1 operation with not enough parameters.
+    #[error(
+        "Operation {} is missing encoded parameters. Expected at least {expected} but only \"{}\" were specified.",
+        optype.name(),
+        params.iter().join(", "),
+    )]
+    MissingSerialisedParams {
+        /// The operation name.
+        optype: OpType,
+        /// The expected number of parameters.
+        expected: usize,
+        /// The given of parameters.
+        params: Vec<String>,
+    },
+    /// Tried to decode a tket1 operation with not enough qubit/bit arguments.
+    #[error(
+        "Operation {} is missing encoded arguments. Expected {expected_qubits} and {expected_bits}, but only \"{args:?}\" were specified.",
+        optype.name(),
+    )]
+    MissingSerialisedArguments {
+        /// The operation name.
+        optype: OpType,
+        /// The expected number of qubits.
+        expected_qubits: usize,
+        /// The expected number of bits.
+        expected_bits: usize,
+        /// The given of parameters.
+        args: Vec<circuit_json::Register>,
     },
 }
 
@@ -233,4 +311,21 @@ fn try_constant_to_param(val: &Value) -> Option<String> {
     let radians: f64 = **const_float;
     let half_turns = radians / std::f64::consts::PI;
     Some(half_turns.to_string())
+}
+
+/// A hashed register, used to identify registers in the [`Tk1Decoder::register_wire`] map,
+/// avoiding string and vector clones on lookup.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+struct RegisterHash {
+    hash: u64,
+}
+
+impl From<&circuit_json::Register> for RegisterHash {
+    fn from(reg: &circuit_json::Register) -> Self {
+        let mut hasher = DefaultHasher::new();
+        reg.hash(&mut hasher);
+        Self {
+            hash: hasher.finish(),
+        }
+    }
 }

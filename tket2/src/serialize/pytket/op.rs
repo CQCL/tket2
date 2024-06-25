@@ -13,15 +13,16 @@ use hugr::ops::OpType;
 use hugr::IncomingPort;
 use tket_json_rs::circuit_json;
 
+use crate::Tk2Op;
+
 use self::native::NativeOp;
 use self::serialised::OpaqueTk1Op;
 use super::OpConvertError;
 
-/// An operation originating from pytket, containing the operation type and all its attributes.
+/// An intermediary artifact when converting between TKET1 and TKET2 operations.
 ///
-/// Wrapper around [`tket_json_rs::circuit_json::Operation`] with cached number of qubits and bits.
-///
-/// The `Operation` contained by this struct is guaranteed to have a signature.
+/// This enum represents either operations that can be represented natively in TKET2,
+/// or operations that must be serialised as opaque TKET1 operations.
 #[derive(Clone, Debug, PartialEq, derive_more::From)]
 pub enum Tk1Op {
     /// An operation with a native TKET2 counterpart.
@@ -38,15 +39,19 @@ impl Tk1Op {
     /// # Errors
     ///
     /// Returns an error if the operation is not supported by the TKET1 serialization.
-    pub fn try_from_optype(op: OpType) -> Result<Self, OpConvertError> {
-        let res = (&op).try_into();
-        let tk1_op = if let Ok(tk2op) = res {
-            NativeOp::try_from_tk2op(tk2op).map(Tk1Op::Native)
+    pub fn try_from_optype(op: OpType) -> Result<Option<Self>, OpConvertError> {
+        if let Ok(tk2op) = Tk2Op::try_from(&op) {
+            let native = NativeOp::try_from_tk2op(tk2op)
+                .ok_or_else(|| OpConvertError::UnsupportedOpSerialization(op))?;
+            // Skip serialisation for some special cases.
+            if native.serial_op().is_none() {
+                return Ok(None);
+            }
+            Ok(Some(Tk1Op::Native(native)))
         } else {
-            OpaqueTk1Op::try_from_tket2(&op)?.map(Tk1Op::Opaque)
-        };
-
-        tk1_op.ok_or(OpConvertError::UnsupportedOpSerialization(op))
+            let opaque = OpaqueTk1Op::try_from_tket2(&op)?;
+            Ok(opaque.map(Tk1Op::Opaque))
+        }
     }
 
     /// Create a new `Tk1Op` from a tket1 `circuit_json::Operation`.
@@ -57,11 +62,14 @@ impl Tk1Op {
         num_qubits: usize,
         num_bits: usize,
     ) -> Self {
-        if let Some(native) = NativeOp::try_from_serial_optype(serial_op.op_type.clone()) {
+        let op = if let Some(native) = NativeOp::try_from_serial_optype(serial_op.op_type.clone()) {
             Tk1Op::Native(native)
         } else {
             Tk1Op::Opaque(OpaqueTk1Op::new_from_op(serial_op, num_qubits, num_bits))
-        }
+        };
+        debug_assert_eq!(num_qubits, op.qubit_inputs().max(op.qubit_outputs()));
+        debug_assert_eq!(num_bits, op.bit_inputs().max(op.bit_outputs()));
+        op
     }
 
     /// Get the hugr optype for the operation.
@@ -93,6 +101,46 @@ impl Tk1Op {
         match self {
             Tk1Op::Native(native_op) => itertools::Either::Left(native_op.param_ports()),
             Tk1Op::Opaque(json_op) => itertools::Either::Right(json_op.param_ports()),
+        }
+    }
+
+    /// Returns the number of qubit inputs for this operation.
+    pub fn qubit_inputs(&self) -> usize {
+        match self {
+            Tk1Op::Native(native_op) => native_op.input_qubits,
+            Tk1Op::Opaque(json_op) => json_op.num_qubits,
+        }
+    }
+
+    /// Returns the number of bit inputs for this operation.
+    pub fn bit_inputs(&self) -> usize {
+        match self {
+            Tk1Op::Native(native_op) => native_op.input_bits,
+            Tk1Op::Opaque(json_op) => json_op.num_bits,
+        }
+    }
+
+    /// Returns the number of qubit outputs for this operation.
+    pub fn qubit_outputs(&self) -> usize {
+        match self {
+            Tk1Op::Native(native_op) => native_op.output_qubits,
+            Tk1Op::Opaque(json_op) => json_op.num_qubits,
+        }
+    }
+
+    /// Returns the number of bit outputs for this operation.
+    pub fn bit_outputs(&self) -> usize {
+        match self {
+            Tk1Op::Native(native_op) => native_op.output_bits,
+            Tk1Op::Opaque(json_op) => json_op.num_bits,
+        }
+    }
+
+    /// Returns the number of parameters for this operation.
+    pub fn num_params(&self) -> usize {
+        match self {
+            Tk1Op::Native(native_op) => native_op.num_params,
+            Tk1Op::Opaque(json_op) => json_op.num_params,
         }
     }
 }
