@@ -11,6 +11,7 @@ from tket2 import optimiser
 from ._tket2.passes import (
     CircuitChunks,
     greedy_depth_reduce,
+    lower_to_pytket,
     badger_optimise,
     chunks,
     PullForwardError,
@@ -22,6 +23,7 @@ __all__ = [
     # TODO: Wrap these in Python classes.
     "CircuitChunks",
     "greedy_depth_reduce",
+    "lower_to_pytket",
     "badger_optimise",
     "chunks",
     "PullForwardError",
