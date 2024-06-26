@@ -24,7 +24,7 @@ devenv shell
 All the required dependencies should be available. You can automate loading the
 shell by setting up [direnv](https://devenv.sh/automatic-shell-activation/).
 
-### Poetry setup
+### Manual setup
 
 To setup the environment manually you will need:
 
@@ -79,17 +79,19 @@ To format your code, run:
 just format
 ```
 
-We also check for linting errors with `clippy`, `ruff` and `mypy`.
-To check all linting and formatting, run:
+We also use various linters to catch common mistakes and enforce best practices. To run these, use:
 
 ```bash
 just check
 ```
 
-some errors can be fixed automatically with
+To quickly fix common issues, run:
 
 ```bash
 just fix
+# or, to fix only the rust code or the python code
+just fix rust
+just fix python
 ```
 
 ## 📈 Code Coverage
@@ -98,10 +100,17 @@ We run coverage checks on the CI. Once you submit a PR, you can review the
 line-by-line coverage report on
 [codecov](https://app.codecov.io/gh/CQCL/tket2/commits?branch=All%20branches).
 
-To run the coverage checks locally, install `cargo-llvm-cov` by running `cargo install cargo-llvm-cov` and then run:
+To run the coverage checks locally, first install `cargo-llvm-cov`.
+```bash
+cargo install cargo-llvm-cov
+```
+
+Then run the tests:
+
 ```bash
 just coverage
 ```
+
 This will generate a coverage file that can be opened with your favourite coverage viewer. In VSCode, you can use
 [`coverage-gutters`](https://marketplace.visualstudio.com/items?itemName=ryanluker.vscode-coverage-gutters).
 
@@ -134,3 +143,50 @@ We accept the following contribution types:
 - ci: CI related changes. These changes are not published in the changelog.
 - chore: Updating build tasks, package manager configs, etc. These changes are not published in the changelog.
 - revert: Reverting previous commits.
+
+## :shipit: Releasing new versions
+
+We use automation to bump the version number and generate changelog entries
+based on the [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) labels. Release PRs are created automatically
+for each package when new changes are merged into the `main` branch. Once the PR is
+approved by someone in the [release team](.github/CODEOWNERS) and is merged, the new package
+is published on PyPI or crates.io as appropriate.
+
+The changelog can be manually edited before merging the release PR. Note however
+that modifying the diff before other changes are merged will cause the
+automation to close the release PR and create a new one to avoid conflicts.
+
+### Rust crate release
+
+Rust releases are managed by `release-plz`. This tool will automatically detect
+breaking changes even when they are not marked as such in the commit message,
+and bump the version accordingly.
+
+To modify the version being released, update the `Cargo.toml`,
+`CHANGELOG.md`, PR name, and PR description in the release PR with the desired version. You may also have to update the dates.
+Rust pre-release versions should be formatted as `0.1.0-alpha.1` (or `-beta`, or `-rc`).
+
+### Python package release
+
+Python releases are managed by `release-please`. This tool always bumps the
+minor version (or the pre-release version if the previous version was a
+pre-release).
+
+To override the version getting released, you must merge a PR to `main` containing
+`Release-As: 0.1.0` in the description.
+Python pre-release versions should be formatted as `0.1.0a1` (or `b1`, `rc1`).
+
+### Patch releases
+
+Sometimes we need to release a patch version to fix a critical bug, but we don't want
+to include all the changes that have been merged into the main branch. In this case,
+you can create a new branch from the latest release tag and cherry-pick the commits
+you want to include in the patch release.
+
+You will need to modify the version and changelog manually in this case. Check
+the existing release PRs for examples on how to do this. Once the branch is
+ready, create a [github release](https://github.com/CQCL/tket2/releases/new).
+The tag should follow the format used in the previous releases, e.g. `tket2-py-v0.1.1`.
+
+For rust crates, you will need someone from the release team to manually
+publish the new version to crates.io by running `cargo release`.
