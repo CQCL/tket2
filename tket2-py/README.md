@@ -19,7 +19,7 @@ See also the Rust library with the same name on [crates.io](https://crates.io/cr
 
 ## Install
 
-Tket2 can be installed via `pip`. Requires Python >= 3.10.
+TKET2 can be installed via `pip`. Requires Python >= 3.10.
 
 ```sh
 pip install tket2

@@ -163,7 +163,7 @@ breaking changes even when they are not marked as such in the commit message,
 and bump the version accordingly.
 
 To modify the version being released, update the `Cargo.toml`,
-CHANGELOG.md, PR name, and PR description in the release PR with the desired version. You may also have to update the dates.
+`CHANGELOG.md`, PR name, and PR description in the release PR with the desired version. You may also have to update the dates.
 Rust pre-release versions should be formatted as `0.1.0-alpha.1` (or `-beta`, or `-rc`).
 
 ### Python package release
@@ -185,7 +185,7 @@ you want to include in the patch release.
 
 You will need to modify the version and changelog manually in this case. Check
 the existing release PRs for examples on how to do this. Once the branch is
-ready, create a [github release](https://github.com/CQCL/hugr/releases/new).
+ready, create a [github release](https://github.com/CQCL/tket2/releases/new).
 The tag should follow the format used in the previous releases, e.g. `hugr-py-v0.1.1`.
 
 For rust crates, you will need someone from the release team to manually
