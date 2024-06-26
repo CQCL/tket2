@@ -71,10 +71,19 @@ impl CircuitPattern {
                     .expect("invalid circuit")
             })
             .collect_vec();
-        if inputs.iter().flatten().any(|&(n, _)| n == out) {
+        if let Some((to_node, to_port)) = inputs.iter().flatten().find(|&&(n, _)| n == out).copied()
+        {
             // An input is connected to an output => empty qubit, not allowed.
-            return Err(InvalidPattern::NotConnected);
+            let (from_node, from_port): (Node, Port) =
+                hugr.linked_ports(to_node, to_port).next().unwrap();
+            return Err(InvalidPattern::EmptyWire {
+                from_node,
+                from_port,
+                to_node,
+                to_port,
+            });
         }
+
         // This is a consequence of the test above.
         debug_assert!(outputs.iter().all(|(n, _)| *n != inp));
         Ok(Self {
@@ -120,13 +129,23 @@ impl Debug for CircuitPattern {
 
 /// Conversion error from circuit to pattern.
 #[derive(Debug, Error, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum InvalidPattern {
     /// An empty circuit cannot be a pattern.
-    #[error("empty circuit is invalid pattern")]
+    #[error("Empty circuit are not allowed as patterns")]
     EmptyCircuit,
     /// Patterns must be connected circuits.
-    #[error("pattern is not connected")]
+    #[error("The pattern is not connected")]
     NotConnected,
+    /// Patterns cannot include empty wires.
+    #[error("The pattern contains an empty wire between {from_node}:{from_port} and {to_node}:{to_port}")]
+    #[allow(missing_docs)]
+    EmptyWire {
+        from_node: Node,
+        from_port: Port,
+        to_node: Node,
+        to_port: Port,
+    },
 }
 
 impl From<NoRootFound> for InvalidPattern {
@@ -140,6 +159,7 @@ mod tests {
 
     use std::collections::HashSet;
 
+    use cool_asserts::assert_matches;
     use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
     use hugr::extension::prelude::QB_T;
     use hugr::ops::OpType;
@@ -249,9 +269,9 @@ mod tests {
             Ok(())
         })
         .unwrap();
-        assert_eq!(
+        assert_matches!(
             CircuitPattern::try_from_circuit(&circ).unwrap_err(),
-            InvalidPattern::NotConnected
+            InvalidPattern::EmptyWire { .. }
         );
     }
 
