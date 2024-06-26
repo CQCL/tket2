@@ -4,18 +4,17 @@ use derive_more::From;
 use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
 use tket2::passes::CircuitChunks;
-use tket2::Circuit;
 
 use crate::circuit::CircuitType;
-use crate::circuit::{try_with_hugr, with_hugr};
+use crate::circuit::{try_with_circ, with_circ};
 use crate::utils::ConvertPyErr;
 
 /// Split a circuit into chunks of a given size.
 #[pyfunction]
 pub fn chunks(c: &Bound<PyAny>, max_chunk_size: usize) -> PyResult<PyCircuitChunks> {
-    with_hugr(c, |hugr, typ| {
+    with_circ(c, |hugr, typ| {
         // TODO: Detect if the circuit is in tket1 format or Tk2Circuit.
-        let chunks = CircuitChunks::split(&hugr.into(), max_chunk_size);
+        let chunks = CircuitChunks::split(&hugr, max_chunk_size);
         (chunks, typ).into()
     })
 }
@@ -40,21 +39,20 @@ impl PyCircuitChunks {
     /// Reassemble the chunks into a circuit.
     fn reassemble<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let circ = self.clone().chunks.reassemble().convert_pyerrs()?;
-        self.original_type.convert(py, circ.into_hugr())
+        self.original_type.convert(py, circ)
     }
 
     /// Returns clones of the split circuits.
     fn circuits<'py>(&self, py: Python<'py>) -> PyResult<Vec<Bound<'py, PyAny>>> {
         self.chunks
             .iter()
-            .map(|circ| self.original_type.convert(py, circ.clone().into_hugr()))
+            .map(|circ| self.original_type.convert(py, circ.clone()))
             .collect()
     }
 
     /// Replaces a chunk's circuit with an updated version.
     fn update_circuit(&mut self, index: usize, new_circ: &Bound<PyAny>) -> PyResult<()> {
-        try_with_hugr(new_circ, |hugr, _| {
-            let circ: Circuit = hugr.into();
+        try_with_circ(new_circ, |circ, _| {
             let circuit_sig = circ.circuit_signature();
             let chunk_sig = self.chunks[index].circuit_signature();
             if circuit_sig.input() != chunk_sig.input()

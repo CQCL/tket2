@@ -31,7 +31,7 @@ use crate::rewrite::PyCircuitRewrite;
 use crate::types::PyHugrType;
 use crate::utils::{into_vec, ConvertPyErr};
 
-use super::{cost, with_hugr, PyCircuitCost, PyNode, PyWire};
+use super::{cost, with_circ, PyCircuitCost, PyNode, PyWire};
 
 /// A circuit in tket2 format.
 ///
@@ -69,7 +69,7 @@ impl Tk2Circuit {
     #[new]
     pub fn new(circ: &Bound<PyAny>) -> PyResult<Self> {
         Ok(Self {
-            circ: with_hugr(circ, |hugr, _| hugr)?.into(),
+            circ: with_circ(circ, |hugr, _| hugr)?,
         })
     }
 

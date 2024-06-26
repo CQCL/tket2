@@ -8,7 +8,7 @@ use tket2::optimiser::badger::BadgerOptions;
 use tket2::optimiser::{BadgerLogger, DefaultBadgerOptimiser};
 use tket2::Circuit;
 
-use crate::circuit::update_hugr;
+use crate::circuit::update_circ;
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
@@ -96,10 +96,7 @@ impl PyBadgerOptimiser {
             split_circuit: split_circ.unwrap_or(false),
             queue_size: queue_size.unwrap_or(100),
         };
-        update_hugr(circ, |circ, _| {
-            self.optimise(circ.into(), log_progress, options)
-                .into_hugr()
-        })
+        update_circ(circ, |circ, _| self.optimise(circ, log_progress, options))
     }
 }
 
