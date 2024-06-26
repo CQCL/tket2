@@ -42,9 +42,9 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     m.add_class::<PyHugrType>()?;
     m.add_class::<PyTypeBound>()?;
 
-    m.add_function(wrap_pyfunction!(validate_hugr, &m)?)?;
-    m.add_function(wrap_pyfunction!(to_hugr_dot, &m)?)?;
-    m.add_function(wrap_pyfunction!(to_hugr_mermaid, &m)?)?;
+    m.add_function(wrap_pyfunction!(validate_circuit, &m)?)?;
+    m.add_function(wrap_pyfunction!(render_circuit_dot, &m)?)?;
+    m.add_function(wrap_pyfunction!(render_circuit_mermaid, &m)?)?;
 
     m.add("HugrError", py.get_type_bound::<PyHugrError>())?;
     m.add("BuildError", py.get_type_bound::<PyBuildError>())?;
@@ -90,19 +90,19 @@ create_py_exception!(
 
 /// Run the validation checks on a circuit.
 #[pyfunction]
-pub fn validate_hugr(c: &Bound<PyAny>) -> PyResult<()> {
+pub fn validate_circuit(c: &Bound<PyAny>) -> PyResult<()> {
     try_with_hugr(c, |hugr, _| hugr.validate(&REGISTRY))
 }
 
 /// Return a Graphviz DOT string representation of the circuit.
 #[pyfunction]
-pub fn to_hugr_dot(c: &Bound<PyAny>) -> PyResult<String> {
+pub fn render_circuit_dot(c: &Bound<PyAny>) -> PyResult<String> {
     with_hugr(c, |hugr, _| hugr.dot_string())
 }
 
 /// Return a Mermaid diagram representation of the circuit.
 #[pyfunction]
-pub fn to_hugr_mermaid(c: &Bound<PyAny>) -> PyResult<String> {
+pub fn render_circuit_mermaid(c: &Bound<PyAny>) -> PyResult<String> {
     with_hugr(c, |hugr, _| hugr.mermaid_string())
 }
 
