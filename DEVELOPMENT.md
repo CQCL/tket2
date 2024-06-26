@@ -186,7 +186,7 @@ you want to include in the patch release.
 You will need to modify the version and changelog manually in this case. Check
 the existing release PRs for examples on how to do this. Once the branch is
 ready, create a [github release](https://github.com/CQCL/tket2/releases/new).
-The tag should follow the format used in the previous releases, e.g. `hugr-py-v0.1.1`.
+The tag should follow the format used in the previous releases, e.g. `tket2-py-v0.1.1`.
 
 For rust crates, you will need someone from the release team to manually
 publish the new version to crates.io by running `cargo release`.

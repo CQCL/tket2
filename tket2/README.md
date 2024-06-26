@@ -5,9 +5,9 @@
 [![codecov][]](https://codecov.io/gh/CQCL/tket2)
 
 TKET2 is an open source quantum compiler developed by Quantinuum. Central to
-TKET2's design is its hardware agnosticism which allows researchers and
-quantum software developers to take advantage of its state of the art
-compilation for many different quantum architectures.
+TKET2's design is its hardware agnosticism which allows researchers and quantum
+software developers to take advantage of its powerful compilation for many
+different quantum architectures.
 
 Circuits are represented using the HUGR IR defined in the
 [hugr] crate. TKET2 augments Hugr with

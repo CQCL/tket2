@@ -4,9 +4,9 @@
 [![codecov][]](https://codecov.io/gh/CQCL/tket2)
 
 TKET2 is an open source quantum compiler developed by Quantinuum. Central to
-TKET2's design is its hardware agnosticism which allows researchers and
-quantum software developers to take advantage of its state of the art
-compilation for many different quantum architectures.
+TKET2's design is its hardware agnosticism which allows researchers and quantum
+software developers to take advantage of its powerful compilation for many
+different quantum architectures.
 
 `tket2` is available as a rust crate on [crates.io](https://crates.io/crates/tket2) and as
 a python package on [PyPI](https://pypi.org/project/tket2/).
