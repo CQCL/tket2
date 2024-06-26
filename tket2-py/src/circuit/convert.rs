@@ -28,7 +28,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use crate::rewrite::PyCircuitRewrite;
 use crate::utils::ConvertPyErr;
 
-use super::{cost, PyCircuitCost, PyCustom, PyHugrType, PyNode, PyWire, Tk2Circuit};
+use super::{cost, PyCircuitCost, PyNode, PyWire, Tk2Circuit};
 
 /// A flag to indicate the encoding of a circuit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

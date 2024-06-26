@@ -3,8 +3,8 @@ import itertools
 import pytest
 from pytket._tket.circuit import Circuit
 
+from tket2.ops import CustomOp
 from tket2.circuit import (
-    CustomOp,
     Dfg,
     Wire,
     Tk2Circuit,
@@ -139,7 +139,7 @@ def final_pauli_string(circ: Tk2Circuit) -> str:
 
     def map_op(op: CustomOp) -> str:
         # strip the extension name
-        n = op.name()[len("quantum.tket2.") :]
+        n = op.name[len("quantum.tket2.") :]
         return n if n in ("X", "Y", "Z") else "I"
 
     # TODO ignore non-qubit outputs

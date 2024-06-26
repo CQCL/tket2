@@ -1,9 +1,8 @@
 from typing import Protocol, Iterable
-from tket2.circuit import HugrType, CustomOp, Dfg, Node, Wire, Tk2Circuit
+from tket2.circuit import Dfg, Node, Wire, Tk2Circuit
+from tket2.types import QB_T, BOOL_T
+from tket2.ops import CustomOp
 from dataclasses import dataclass
-
-QB_T = HugrType.qubit()
-BOOL_T = HugrType.bool()
 
 
 class Command(Protocol):

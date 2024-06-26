@@ -1,17 +1,26 @@
 //! Bindings for rust-defined operations
 
-use derive_more::From;
-use hugr::ops::NamedOp;
+use derive_more::{From, Into};
+use hugr::hugr::IdentList;
+use hugr::ops::custom::{ExtensionOp, OpaqueOp};
+use hugr::types::FunctionType;
 use pyo3::prelude::*;
+use std::fmt;
 use std::str::FromStr;
 use strum::IntoEnumIterator;
+
+use hugr::ops::{CustomOp, NamedOp, OpType};
 use tket2::{Pauli, Tk2Op};
+
+use crate::types::PyHugrType;
+use crate::utils::into_vec;
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let m = PyModule::new_bound(py, "ops")?;
     m.add_class::<PyTk2Op>()?;
     m.add_class::<PyPauli>()?;
+    m.add_class::<PyCustomOp>()?;
     Ok(m)
 }
 
@@ -56,6 +65,12 @@ impl PyTk2Op {
     #[getter]
     pub fn qualified_name(&self) -> String {
         self.op.exposed_name().to_string()
+    }
+
+    /// Wrap the operation as a custom operation.
+    pub fn to_custom(&self) -> PyCustomOp {
+        let custom: ExtensionOp = self.op.into_extension_op();
+        CustomOp::new_extension(custom).into()
     }
 
     /// String representation of the operation.
@@ -201,5 +216,58 @@ impl PyPauliIter {
     /// Get the next Pauli matrix.
     pub fn __next__(&mut self) -> Option<PyPauli> {
         self.it.next().map(|p| PyPauli { p })
+    }
+}
+
+/// A wrapped custom operation.
+#[pyclass]
+#[pyo3(name = "CustomOp")]
+#[repr(transparent)]
+#[derive(From, Into, PartialEq, Clone)]
+pub struct PyCustomOp(CustomOp);
+
+impl fmt::Debug for PyCustomOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl From<PyCustomOp> for OpType {
+    fn from(op: PyCustomOp) -> Self {
+        op.0.into()
+    }
+}
+
+#[pymethods]
+impl PyCustomOp {
+    #[new]
+    fn new(
+        extension: &str,
+        op_name: &str,
+        input_types: Vec<PyHugrType>,
+        output_types: Vec<PyHugrType>,
+    ) -> PyResult<Self> {
+        Ok(CustomOp::new_opaque(OpaqueOp::new(
+            IdentList::new(extension).unwrap(),
+            op_name,
+            Default::default(),
+            [],
+            FunctionType::new(into_vec(input_types), into_vec(output_types)),
+        ))
+        .into())
+    }
+
+    fn to_custom(&self) -> Self {
+        self.clone()
+    }
+
+    /// String representation of the operation.
+    pub fn __repr__(&self) -> String {
+        format!("{:?}", self)
+    }
+
+    #[getter]
+    fn name(&self) -> String {
+        self.0.name().to_string()
     }
 }

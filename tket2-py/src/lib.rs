@@ -5,6 +5,7 @@ pub mod optimiser;
 pub mod passes;
 pub mod pattern;
 pub mod rewrite;
+pub mod types;
 pub mod utils;
 
 use pyo3::prelude::*;
@@ -18,6 +19,7 @@ fn _tket2(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     add_submodule(py, m, passes::module(py)?)?;
     add_submodule(py, m, pattern::module(py)?)?;
     add_submodule(py, m, rewrite::module(py)?)?;
+    add_submodule(py, m, types::module(py)?)?;
     Ok(())
 }
 

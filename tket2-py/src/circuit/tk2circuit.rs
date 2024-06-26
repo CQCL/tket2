@@ -11,7 +11,7 @@ use itertools::Itertools;
 use pyo3::exceptions::{PyAttributeError, PyValueError};
 use pyo3::types::{PyAnyMethods, PyModule, PyString, PyTypeMethods};
 use pyo3::{
-    pyclass, pymethods, Bound, FromPyObject, PyAny, PyErr, PyObject, PyRefMut, PyResult,
+    pyclass, pymethods, Bound, FromPyObject, PyAny, PyErr, PyObject, PyRef, PyRefMut, PyResult,
     PyTypeInfo, Python, ToPyObject,
 };
 
@@ -26,11 +26,12 @@ use tket2::serialize::TKETDecode;
 use tket2::{Circuit, Tk2Op};
 use tket_json_rs::circuit_json::SerialCircuit;
 
-use crate::ops::PyTk2Op;
+use crate::ops::{PyCustomOp, PyTk2Op};
 use crate::rewrite::PyCircuitRewrite;
-use crate::utils::ConvertPyErr;
+use crate::types::PyHugrType;
+use crate::utils::{into_vec, ConvertPyErr};
 
-use super::{cost, with_hugr, PyCircuitCost, PyCustom, PyHugrType, PyNode, PyWire};
+use super::{cost, with_hugr, PyCircuitCost, PyNode, PyWire};
 
 /// A circuit in tket2 format.
 ///
@@ -177,7 +178,7 @@ impl Tk2Circuit {
         Ok(self.clone())
     }
 
-    fn node_op(&self, node: PyNode) -> PyResult<PyCustom> {
+    fn node_op(&self, node: PyNode) -> PyResult<PyCustomOp> {
         let custom: CustomOp = self
             .circ
             .hugr()
@@ -248,8 +249,18 @@ impl Dfg {
         self.builder.input_wires().map_into().collect()
     }
 
-    fn add_op(&mut self, op: PyCustom, inputs: Vec<PyWire>) -> PyResult<PyNode> {
-        let custom: CustomOp = op.into();
+    fn add_op(&mut self, op: Bound<PyAny>, inputs: Vec<PyWire>) -> PyResult<PyNode> {
+        // TODO: Once we wrap `Dfg` in a pure python class we can make the conversion there,
+        // and have a concrete `op: PyCustomOp` argument here.
+        let custom: PyCustomOp = op
+            .call_method0("to_custom")
+            .map_err(|_| {
+                PyErr::new::<PyValueError, _>(
+                    "The operation must implement the `ToCustomOp` protocol.",
+                )
+            })?
+            .extract()?;
+        let custom: CustomOp = custom.into();
         self.builder
             .add_dataflow_op(custom, inputs.into_iter().map_into())
             .convert_pyerrs()
@@ -266,8 +277,4 @@ impl Dfg {
                 .into(),
         })
     }
-}
-
-pub(super) fn into_vec<T, S: From<T>>(v: impl IntoIterator<Item = T>) -> Vec<S> {
-    v.into_iter().map_into().collect()
 }

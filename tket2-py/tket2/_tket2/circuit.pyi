@@ -1,12 +1,13 @@
-from enum import Enum
 from typing import Any, Callable
-from pytket._tket.circuit import Circuit
-from tket2._tket2.ops import Tk2Op
+from pytket._tket.circuit import Tk1Circuit
+
+from tket2._tket2.ops import Tk2Op, CustomOp
+from tket2._tket2.types import HugrType
 
 class Tk2Circuit:
     """Rust representation of a TKET2 circuit."""
 
-    def __init__(self, circ: Circuit) -> None:
+    def __init__(self, circ: Tk1Circuit) -> None:
         """Create a Tk2Circuit from a pytket Circuit."""
 
     def __hash__(self) -> int:
@@ -35,7 +36,7 @@ class Tk2Circuit:
     def node_op(self, node: Node) -> CustomOp:
         """If the node corresponds to a custom op, return it. Otherwise, raise an error."""
 
-    def to_tket1(self) -> Circuit:
+    def to_tket1(self) -> Tk1Circuit:
         """Convert to pytket Circuit."""
 
     def apply_rewrite(self, rw) -> None:
@@ -84,7 +85,7 @@ class Dfg:
     def inputs(self) -> list[Wire]:
         """The output wires of the input node in the DFG, one for each input type."""
 
-    def add_op(self, op: CustomOp, wires: list[Wire]) -> Node:
+    def add_op(self, op: CustomOp | Any, wires: list[Wire]) -> Node:
         """Add a custom operation to the DFG, wiring in input wires."""
 
     def finish(self, outputs: list[Wire]) -> Tk2Circuit:
@@ -129,48 +130,9 @@ class CircuitCost:
 
         The cost object must implement __add__, __sub__, __eq__, and __lt__."""
 
-class CustomOp:
-    """A HUGR custom operation."""
-
-    def __init__(
-        self,
-        extension: str,
-        op_name: str,
-        input_types: list[HugrType],
-        output_types: list[HugrType],
-    ) -> None:
-        """Create a new custom operation from name and input/output types."""
-
-    def to_custom(self) -> CustomOp:
-        """Convert to a custom operation. Identity operation."""
-
-    def name(self) -> str:
-        """Fully qualified (include extension) name of the operation."""
-
-class HugrType:
-    """Value types in HUGR."""
-
-    def __init__(self, extension: str, type_name: str, bound: TypeBound) -> None:
-        """Create a new named Custom type."""
-
-    @staticmethod
-    def qubit() -> HugrType:
-        """Qubit type from HUGR prelude."""
-
-    @staticmethod
-    def bool() -> HugrType:
-        """Boolean type (HUGR 2-ary unit sum)."""
-
-class TypeBound(Enum):
-    """HUGR type bounds."""
-
-    Any = 0  # Any type
-    Copyable = 1  # Copyable type
-    Eq = 2  # Equality-comparable type
-
-def render_circuit_dot(hugr: Tk2Circuit | Circuit) -> str: ...
-def render_circuit_mermaid(hugr: Tk2Circuit | Circuit) -> str: ...
-def validate_circuit(hugr: Tk2Circuit | Circuit) -> None: ...
+def render_circuit_dot(hugr: Tk2Circuit | Tk1Circuit) -> str: ...
+def render_circuit_mermaid(hugr: Tk2Circuit | Tk1Circuit) -> str: ...
+def validate_circuit(hugr: Tk2Circuit | Tk1Circuit) -> None: ...
 
 class HugrError(Exception): ...
 class BuildError(Exception): ...

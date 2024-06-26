@@ -45,3 +45,9 @@ macro_rules! create_py_exception {
     };
 }
 pub(crate) use create_py_exception;
+use itertools::Itertools;
+
+/// Convert an iterator of one type into vector of another type.
+pub fn into_vec<T, S: From<T>>(v: impl IntoIterator<Item = T>) -> Vec<S> {
+    v.into_iter().map_into().collect()
+}

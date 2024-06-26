@@ -1,6 +1,7 @@
 use crate::extension::{
     SYM_EXPR_T, SYM_OP_ID, TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID,
 };
+use hugr::ops::custom::ExtensionOp;
 use hugr::ops::NamedOp;
 use hugr::{
     extension::{
@@ -70,6 +71,12 @@ impl Tk2Op {
     /// Expose the operation names directly in Tk2Op
     pub fn exposed_name(&self) -> smol_str::SmolStr {
         <Tk2Op as Into<OpType>>::into(*self).name()
+    }
+
+    /// Wraps the operation in an [`ExtensionOp`]
+    pub fn into_extension_op(self) -> ExtensionOp {
+        <Self as MakeRegisteredOp>::to_extension_op(self)
+            .expect("Failed to convert to extension op.")
     }
 }
 
