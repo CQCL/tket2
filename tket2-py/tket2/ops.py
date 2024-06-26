@@ -7,6 +7,7 @@ import tket2
 
 from tket2._tket2.ops import CustomOp
 from tket2.circuit.build import QB_T
+from tket2.types import BOOL_T
 
 __all__ = ["CustomOp", "ToCustomOp", "Tk2Op", "Pauli"]
 
@@ -108,3 +109,7 @@ class Pauli(Enum):
         elif isinstance(other, str):
             return self.name == other
         return False
+
+
+# Define other common operations
+Not = CustomOp("logic", "Not", [BOOL_T], [BOOL_T])
