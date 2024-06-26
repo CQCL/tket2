@@ -1,5 +1,5 @@
 from typing import Any, Callable
-from pytket._tket.circuit import Tk1Circuit
+from pytket._tket.circuit import Circuit as Tk1Circuit
 
 from tket2._tket2.ops import Tk2Op, CustomOp
 from tket2._tket2.types import HugrType
