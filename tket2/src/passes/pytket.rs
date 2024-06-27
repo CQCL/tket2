@@ -38,3 +38,103 @@ pub enum PytketLoweringError {
     #[error("Non-local operations found. Function calls are not supported.")]
     NonLocalOperations,
 }
+
+#[cfg(test)]
+mod test {
+    use crate::Tk2Op;
+
+    use super::*;
+    use hugr::builder::{
+        Container, Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder, SubContainer,
+    };
+    use hugr::extension::prelude::QB_T;
+    use hugr::extension::{ExtensionSet, PRELUDE_REGISTRY};
+    use hugr::ops::handle::NodeHandle;
+    use hugr::ops::{MakeTuple, OpType, UnpackTuple, Value};
+    use hugr::types::FunctionType;
+    use hugr::{type_row, HugrView};
+    use rstest::{fixture, rstest};
+
+    /// Builds a circuit in the style of guppy's output.
+    ///
+    /// This is composed of a `Module`, containing a `FuncDefn`, containing a
+    /// `CFG`, containing an `Exit` and a `DataflowBlock` with the actual
+    /// circuit.
+    #[fixture]
+    fn guppy_like_circuit() -> Circuit {
+        fn build() -> Result<Circuit, hugr::builder::BuildError> {
+            let two_qbs = type_row![QB_T, QB_T];
+            let circ_signature = FunctionType::new_endo(two_qbs.clone());
+            let circ;
+
+            let mut builder = ModuleBuilder::new();
+            let _func = {
+                let mut func = builder.define_function("main", circ_signature.into())?;
+                let [q1, q2] = func.input_wires_arr();
+
+                let cfg = {
+                    let mut cfg = func.cfg_builder(
+                        [(QB_T, q1), (QB_T, q2)],
+                        None,
+                        two_qbs.clone(),
+                        ExtensionSet::new(),
+                    )?;
+
+                    circ = {
+                        let mut dfg =
+                            cfg.simple_entry_builder(two_qbs.clone(), 1, ExtensionSet::new())?;
+                        let [q1, q2] = dfg.input_wires_arr();
+
+                        let [q1] = dfg.add_dataflow_op(Tk2Op::H, [q1])?.outputs_arr();
+                        let [q1, q2] = dfg.add_dataflow_op(Tk2Op::CX, [q1, q2])?.outputs_arr();
+
+                        let [tup] = dfg
+                            .add_dataflow_op(MakeTuple::new(two_qbs.clone()), [q1, q2])?
+                            .outputs_arr();
+                        let [q1, q2] = dfg
+                            .add_dataflow_op(UnpackTuple::new(two_qbs), [tup])?
+                            .outputs_arr();
+
+                        let branch = dfg.add_load_const(Value::tuple([]));
+
+                        dfg.finish_with_outputs(branch, [q1, q2])?
+                    };
+                    cfg.branch(&circ, 0, &cfg.exit_block())?;
+
+                    cfg.finish_sub_container()?
+                };
+                let [q1, q2] = cfg.outputs_arr();
+
+                func.finish_with_outputs([q1, q2])?
+            };
+
+            let hugr = builder.finish_hugr(&PRELUDE_REGISTRY)?;
+            Ok(Circuit::new(hugr, circ.node()))
+        }
+        build().unwrap()
+    }
+
+    #[rstest]
+    #[case::guppy_like_circuit(guppy_like_circuit())]
+    fn test_pytket_lowering(#[case] circ: Circuit) {
+        use cool_asserts::assert_matches;
+
+        assert_eq!(circ.num_operations(), 2);
+
+        let lowered_circ = lower_to_pytket(&circ).unwrap();
+
+        assert_eq!(lowered_circ.num_operations(), 2);
+        assert_matches!(
+            lowered_circ.hugr().get_optype(lowered_circ.parent()),
+            OpType::DFG(_)
+        );
+        assert_matches!(
+            lowered_circ.hugr().get_optype(lowered_circ.input_node()),
+            OpType::Input(_)
+        );
+        assert_matches!(
+            lowered_circ.hugr().get_optype(lowered_circ.output_node()),
+            OpType::Output(_)
+        );
+    }
+}
