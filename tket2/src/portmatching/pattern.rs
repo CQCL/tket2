@@ -132,7 +132,7 @@ impl Debug for CircuitPattern {
 #[non_exhaustive]
 pub enum InvalidPattern {
     /// An empty circuit cannot be a pattern.
-    #[error("Empty circuit are not allowed as patterns")]
+    #[error("Empty circuits are not allowed as patterns")]
     EmptyCircuit,
     /// Patterns must be connected circuits.
     #[error("The pattern is not connected")]
