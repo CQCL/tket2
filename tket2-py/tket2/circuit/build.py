@@ -1,9 +1,8 @@
 from typing import Protocol, Iterable
-from tket2.circuit import HugrType, CustomOp, Dfg, Node, Wire, Tk2Circuit
+from tket2.circuit import Dfg, Node, Wire, Tk2Circuit
+from tket2.types import QB_T, BOOL_T
+from tket2.ops import CustomOp, Tk2Op, ToCustomOp
 from dataclasses import dataclass
-
-QB_T = HugrType.qubit()
-BOOL_T = HugrType.bool()
 
 
 class Command(Protocol):
@@ -36,9 +35,10 @@ class CircBuild:
         self.dfg = Dfg([QB_T] * n_qb, [QB_T] * n_qb)
         self.qbs = self.dfg.inputs()
 
-    def add(self, op: CustomOp, indices: list[int]) -> Node:
+    def add(self, op: ToCustomOp, indices: list[int]) -> Node:
         """Add a Custom operation to some qubits and update the qubit list."""
         qbs = [self.qbs[i] for i in indices]
+        op = op.to_custom()
         n = self.dfg.add_op(op, qbs)
         outs = n.outs(len(indices))
         for i, o in zip(indices, outs):
@@ -48,7 +48,7 @@ class CircBuild:
 
     def measure_all(self) -> list[Wire]:
         """Append a measurement to all qubits and return the measurement result wires."""
-        return [self.add(Measure, [i]).outs(2)[1] for i in range(len(self.qbs))]
+        return [self.add(Tk2Op.Measure, [i]).outs(2)[1] for i in range(len(self.qbs))]
 
     def add_command(self, command: Command) -> Node:
         """Add a Command to the circuit and return the new node."""
@@ -135,11 +135,3 @@ class PauliY(Command):
 
     def qubits(self) -> list[int]:
         return [self.qubit]
-
-
-# Define CustomOps for common operations that don't have an (n qubits in, n
-# qubits out) signature
-QAlloc = CustomOp("quantum.tket2", "QAlloc", [], [QB_T])
-QFree = CustomOp("quantum.tket2", "QFree", [QB_T], [])
-Measure = CustomOp("quantum.tket2", "Measure", [QB_T], [QB_T, BOOL_T])
-Not = CustomOp("logic", "Not", [BOOL_T], [BOOL_T])

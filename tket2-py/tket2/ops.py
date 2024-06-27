@@ -1,10 +1,33 @@
+from __future__ import annotations
+
 from enum import Enum, auto
+from typing import Protocol
 
 import tket2
 
+from tket2._tket2.ops import CustomOp
+from tket2.circuit.build import QB_T
+from tket2.types import BOOL_T
+
+__all__ = ["CustomOp", "ToCustomOp", "Tk2Op", "Pauli"]
+
+
+class ToCustomOp(Protocol):
+    """Operation that can be converted to a HUGR CustomOp."""
+
+    def to_custom(self) -> CustomOp:
+        """Convert to a custom operation."""
+
+    @property
+    def name(self) -> str:
+        """Name of the operation."""
+
 
 class Tk2Op(Enum):
-    """A Tket2 built-in operation."""
+    """A Tket2 built-in operation.
+
+    Implements the `ToCustomOp` protocol.
+    """
 
     H = auto()
     CX = auto()
@@ -28,6 +51,10 @@ class Tk2Op(Enum):
     QFree = auto()
     Reset = auto()
 
+    def to_custom(self) -> CustomOp:
+        """Convert to a custom operation."""
+        return self._to_rs().to_custom()
+
     def _to_rs(self) -> tket2._tket2.ops.Tk2Op:
         """Convert to the Rust-backed Tk2Op representation."""
         return tket2._tket2.ops.Tk2Op(self.name)
@@ -49,12 +76,20 @@ class Tk2Op(Enum):
 
 
 class Pauli(Enum):
-    """Simple enum representation of Pauli matrices."""
+    """Simple enum representation of Pauli matrices.
+
+    Implements the `ToCustomOp` protocol.
+    """
 
     I = auto()  # noqa: E741
     X = auto()
     Y = auto()
     Z = auto()
+
+    def to_custom(self) -> CustomOp:
+        extension_name = "quantum.tket2"
+        gate_name = self.name
+        return CustomOp(extension_name, gate_name, [QB_T], [QB_T])
 
     def _to_rs(self) -> tket2._tket2.ops.Pauli:
         """Convert to the Rust-backed Pauli representation."""
@@ -74,3 +109,7 @@ class Pauli(Enum):
         elif isinstance(other, str):
             return self.name == other
         return False
+
+
+# Define other common operations
+Not = CustomOp("logic", "Not", [BOOL_T], [BOOL_T])

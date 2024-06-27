@@ -3,8 +3,8 @@ import itertools
 import pytest
 from pytket._tket.circuit import Circuit
 
+from tket2.ops import CustomOp, Tk2Op, Not
 from tket2.circuit import (
-    CustomOp,
     Dfg,
     Wire,
     Tk2Circuit,
@@ -14,15 +14,11 @@ from tket2.circuit.build import (
     QB_T,
     CircBuild,
     H,
-    Measure,
-    Not,
     from_coms,
     CX,
     PauliX,
     PauliY,
     PauliZ,
-    QAlloc,
-    QFree,
 )
 from tket2.pattern import Rule, RuleMatcher  # type: ignore
 from tket2.rewrite import CircuitRewrite, Subcircuit  # type: ignore
@@ -69,12 +65,12 @@ def measure_rules() -> list[Rule]:
     r_build = Dfg([QB_T], [QB_T, BOOL_T])
     qs = r_build.inputs()
     qs = r_build.add_op(PauliX.op(), qs).outs(1)
-    q, b = r_build.add_op(Measure, qs).outs(2)
+    q, b = r_build.add_op(Tk2Op.Measure, qs).outs(2)
     ltk = r_build.finish([q, b])
 
     r_build = Dfg([QB_T], [QB_T, BOOL_T])
     qs = r_build.inputs()
-    q, b = r_build.add_op(Measure, qs).outs(2)
+    q, b = r_build.add_op(Tk2Op.Measure, qs).outs(2)
     b = r_build.add_op(Not, [b])[0]
     rtk = r_build.finish([q, b])
 
@@ -84,12 +80,12 @@ def measure_rules() -> list[Rule]:
     r_build = Dfg([QB_T], [QB_T, BOOL_T])
     qs = r_build.inputs()
     qs = r_build.add_op(PauliZ.op(), qs).outs(1)
-    q, b = r_build.add_op(Measure, qs).outs(2)
+    q, b = r_build.add_op(Tk2Op.Measure, qs).outs(2)
     ltk = r_build.finish([q, b])
 
     r_build = Dfg([QB_T], [QB_T, BOOL_T])
     qs = r_build.inputs()
-    q, b = r_build.add_op(Measure, qs).outs(2)
+    q, b = r_build.add_op(Tk2Op.Measure, qs).outs(2)
     rtk = r_build.finish([q, b])
 
     rules.append(Rule(ltk, rtk))
@@ -139,7 +135,7 @@ def final_pauli_string(circ: Tk2Circuit) -> str:
 
     def map_op(op: CustomOp) -> str:
         # strip the extension name
-        n = op.name()[len("quantum.tket2.") :]
+        n = op.name[len("quantum.tket2.") :]
         return n if n in ("X", "Y", "Z") else "I"
 
     # TODO ignore non-qubit outputs
@@ -188,8 +184,8 @@ def test_cat(propagate_matcher: RuleMatcher):
 
 def test_alloc_free():
     c = CircBuild(0)
-    alloc = c.dfg.add_op(QAlloc, [])
-    c.dfg.add_op(QFree, alloc.outs(1))
+    alloc = c.dfg.add_op(Tk2Op.QAlloc, [])
+    c.dfg.add_op(Tk2Op.QFree, alloc.outs(1))
     c.finish()  # validates
 
 
@@ -197,7 +193,7 @@ def test_measure(propagate_matcher: RuleMatcher):
     c = Dfg([QB_T, QB_T], [QB_T, BOOL_T, QB_T, BOOL_T])
     q0, q1 = c.inputs()
     q0 = c.add_op(PauliX.op(), [q0])[0]
-    outs = [w for q in (q0, q1) for w in c.add_op(Measure, [q]).outs(2)]
+    outs = [w for q in (q0, q1) for w in c.add_op(Tk2Op.Measure, [q]).outs(2)]
     before = c.finish(outs)
     """
     ──►X───►Measure─►
@@ -211,7 +207,7 @@ def test_measure(propagate_matcher: RuleMatcher):
 
     c = Dfg([QB_T, QB_T], [QB_T, BOOL_T, QB_T, BOOL_T])
     q0, q1 = c.inputs()
-    q0, b0, q1, b1 = [w for q in (q0, q1) for w in c.add_op(Measure, [q]).outs(2)]
+    q0, b0, q1, b1 = [w for q in (q0, q1) for w in c.add_op(Tk2Op.Measure, [q]).outs(2)]
     b0 = c.add_op(Not, [b0])[0]
     after = c.finish([q0, b0, q1, b1])
     """

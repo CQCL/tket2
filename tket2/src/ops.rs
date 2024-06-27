@@ -1,6 +1,7 @@
 use crate::extension::{
     SYM_EXPR_T, SYM_OP_ID, TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID,
 };
+use hugr::ops::custom::ExtensionOp;
 use hugr::ops::NamedOp;
 use hugr::{
     extension::{
@@ -70,6 +71,12 @@ impl Tk2Op {
     /// Expose the operation names directly in Tk2Op
     pub fn exposed_name(&self) -> smol_str::SmolStr {
         <Tk2Op as Into<OpType>>::into(*self).name()
+    }
+
+    /// Wraps the operation in an [`ExtensionOp`]
+    pub fn into_extension_op(self) -> ExtensionOp {
+        <Self as MakeRegisteredOp>::to_extension_op(self)
+            .expect("Failed to convert to extension op.")
     }
 }
 
@@ -159,6 +166,7 @@ impl Tk2Op {
 
         match self {
             X | RxF64 => vec![(0, Pauli::X)],
+            Y => vec![(0, Pauli::Y)],
             T | Z | S | Tdg | Sdg | RzF64 | Measure => vec![(0, Pauli::Z)],
             CX => vec![(0, Pauli::Z), (1, Pauli::X)],
             ZZMax | ZZPhase | CZ => vec![(0, Pauli::Z), (1, Pauli::Z)],
@@ -249,6 +257,7 @@ impl TryFrom<&OpType> for Tk2Op {
 #[cfg(test)]
 pub(crate) mod test {
 
+    use std::str::FromStr;
     use std::sync::Arc;
 
     use hugr::extension::simple_op::MakeOpDef;
@@ -262,6 +271,7 @@ pub(crate) mod test {
     use crate::circuit::Circuit;
     use crate::extension::{TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID};
     use crate::utils::build_simple_circuit;
+    use crate::Pauli;
     fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
         EXTENSION.get_op(&op.name())
     }
@@ -310,5 +320,33 @@ pub(crate) mod test {
 
         // 5 commands: alloc, reset, cx, measure, free
         assert_eq!(h.commands().count(), 5);
+    }
+
+    #[test]
+    fn tk2op_properties() {
+        for op in Tk2Op::iter() {
+            // The exposed name should start with "quantum.tket2."
+            assert!(op.exposed_name().starts_with(&EXTENSION_ID.to_string()));
+
+            let ext_op = op.into_extension_op();
+            assert_eq!(ext_op.args(), &[]);
+            assert_eq!(ext_op.def().extension(), &EXTENSION_ID);
+            let name = ext_op.def().name();
+            assert_eq!(Tk2Op::from_str(name), Ok(op));
+        }
+
+        // Other calls
+        assert!(Tk2Op::H.is_quantum());
+        assert!(!Tk2Op::Measure.is_quantum());
+
+        for (op, pauli) in [
+            (Tk2Op::X, Pauli::X),
+            (Tk2Op::Y, Pauli::Y),
+            (Tk2Op::Z, Pauli::Z),
+        ]
+        .iter()
+        {
+            assert_eq!(op.qubit_commutation(), &[(0, *pauli)]);
+        }
     }
 }

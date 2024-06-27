@@ -25,8 +25,8 @@ use crate::utils::ConvertPyErr;
 
 pub use self::convert::{try_update_hugr, try_with_hugr, update_hugr, with_hugr, CircuitType};
 pub use self::cost::PyCircuitCost;
+use self::tk2circuit::Dfg;
 pub use self::tk2circuit::Tk2Circuit;
-use self::tk2circuit::{into_vec, Dfg};
 pub use tket2::{Pauli, Tk2Op};
 
 /// The module definition
@@ -38,13 +38,10 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     m.add_class::<PyWire>()?;
     m.add_class::<WireIter>()?;
     m.add_class::<PyCircuitCost>()?;
-    m.add_class::<PyCustom>()?;
-    m.add_class::<PyHugrType>()?;
-    m.add_class::<PyTypeBound>()?;
 
-    m.add_function(wrap_pyfunction!(validate_hugr, &m)?)?;
-    m.add_function(wrap_pyfunction!(to_hugr_dot, &m)?)?;
-    m.add_function(wrap_pyfunction!(to_hugr_mermaid, &m)?)?;
+    m.add_function(wrap_pyfunction!(validate_circuit, &m)?)?;
+    m.add_function(wrap_pyfunction!(render_circuit_dot, &m)?)?;
+    m.add_function(wrap_pyfunction!(render_circuit_mermaid, &m)?)?;
 
     m.add("HugrError", py.get_type_bound::<PyHugrError>())?;
     m.add("BuildError", py.get_type_bound::<PyBuildError>())?;
@@ -90,19 +87,19 @@ create_py_exception!(
 
 /// Run the validation checks on a circuit.
 #[pyfunction]
-pub fn validate_hugr(c: &Bound<PyAny>) -> PyResult<()> {
+pub fn validate_circuit(c: &Bound<PyAny>) -> PyResult<()> {
     try_with_hugr(c, |hugr, _| hugr.validate(&REGISTRY))
 }
 
 /// Return a Graphviz DOT string representation of the circuit.
 #[pyfunction]
-pub fn to_hugr_dot(c: &Bound<PyAny>) -> PyResult<String> {
+pub fn render_circuit_dot(c: &Bound<PyAny>) -> PyResult<String> {
     with_hugr(c, |hugr, _| hugr.dot_string())
 }
 
 /// Return a Mermaid diagram representation of the circuit.
 #[pyfunction]
-pub fn to_hugr_mermaid(c: &Bound<PyAny>) -> PyResult<String> {
+pub fn render_circuit_mermaid(c: &Bound<PyAny>) -> PyResult<String> {
     with_hugr(c, |hugr, _| hugr.mermaid_string())
 }
 
@@ -208,119 +205,5 @@ impl PyWire {
 
     fn port(&self) -> usize {
         self.wire.source().index()
-    }
-}
-
-#[pyclass]
-#[pyo3(name = "CustomOp")]
-#[repr(transparent)]
-#[derive(From, Into, PartialEq, Clone)]
-struct PyCustom(CustomOp);
-
-impl fmt::Debug for PyCustom {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl From<PyCustom> for OpType {
-    fn from(op: PyCustom) -> Self {
-        op.0.into()
-    }
-}
-
-#[pymethods]
-impl PyCustom {
-    #[new]
-    fn new(
-        extension: &str,
-        op_name: &str,
-        input_types: Vec<PyHugrType>,
-        output_types: Vec<PyHugrType>,
-    ) -> PyResult<Self> {
-        Ok(CustomOp::new_opaque(OpaqueOp::new(
-            IdentList::new(extension).unwrap(),
-            op_name,
-            Default::default(),
-            [],
-            FunctionType::new(into_vec(input_types), into_vec(output_types)),
-        ))
-        .into())
-    }
-
-    fn to_custom(&self) -> Self {
-        self.clone()
-    }
-    pub fn __repr__(&self) -> String {
-        format!("{:?}", self)
-    }
-
-    fn name(&self) -> String {
-        self.0.name().to_string()
-    }
-}
-#[pyclass]
-#[pyo3(name = "TypeBound")]
-#[derive(PartialEq, Clone, Debug)]
-enum PyTypeBound {
-    Any,
-    Copyable,
-    Eq,
-}
-
-impl From<PyTypeBound> for TypeBound {
-    fn from(bound: PyTypeBound) -> Self {
-        match bound {
-            PyTypeBound::Any => TypeBound::Any,
-            PyTypeBound::Copyable => TypeBound::Copyable,
-            PyTypeBound::Eq => TypeBound::Eq,
-        }
-    }
-}
-
-impl From<TypeBound> for PyTypeBound {
-    fn from(bound: TypeBound) -> Self {
-        match bound {
-            TypeBound::Any => PyTypeBound::Any,
-            TypeBound::Copyable => PyTypeBound::Copyable,
-            TypeBound::Eq => PyTypeBound::Eq,
-        }
-    }
-}
-
-#[pyclass]
-#[pyo3(name = "HugrType")]
-#[repr(transparent)]
-#[derive(From, Into, PartialEq, Clone)]
-struct PyHugrType(Type);
-
-impl fmt::Debug for PyHugrType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-#[pymethods]
-impl PyHugrType {
-    #[new]
-    fn new(extension: &str, type_name: &str, bound: PyTypeBound) -> Self {
-        Self(Type::new_extension(CustomType::new_simple(
-            type_name.into(),
-            IdentList::new(extension).unwrap(),
-            bound.into(),
-        )))
-    }
-    #[staticmethod]
-    fn qubit() -> Self {
-        Self(QB_T)
-    }
-
-    #[staticmethod]
-    fn bool() -> Self {
-        Self(BOOL_T)
-    }
-
-    pub fn __repr__(&self) -> String {
-        format!("{:?}", self)
     }
 }

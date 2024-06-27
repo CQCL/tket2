@@ -4,7 +4,7 @@ from pytket._tket.circuit import Circuit
 
 from tket2.circuit import (
     Tk2Circuit,
-    to_hugr_dot,
+    render_circuit_dot,
 )
 from tket2.ops import Tk2Op
 
@@ -42,10 +42,10 @@ def test_hash():
 
 def test_conversion():
     tk1 = Circuit(4).CX(0, 2).CX(1, 2).CX(1, 3)
-    tk1_dot = to_hugr_dot(tk1)
+    tk1_dot = render_circuit_dot(tk1)
 
     tk2 = Tk2Circuit(tk1)
-    tk2_dot = to_hugr_dot(tk2)
+    tk2_dot = render_circuit_dot(tk2)
 
     assert type(tk2) == Tk2Circuit
     assert tk1_dot == tk2_dot
