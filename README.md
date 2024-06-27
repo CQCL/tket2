@@ -16,6 +16,14 @@ See the respective
 [Python](https://github.com/CQCL/tket2/blob/main/tket2-py) READMEs for
 more information.
 
+## Usage
+
+The rust crate documentation is available at [docs.rs](https://docs.rs/tket2).
+
+See the [Getting Started][getting-started] notebook for a quick introduction to using `tket2` in Python.
+
+  [getting-started]: https://github.com/CQCL/tket2/blob/main/tket2-py/examples/1-Getting-Started.ipynb
+
 ## Developing TKET2
 
 See [DEVELOPMENT.md][] for instructions on setting up the development environment.
