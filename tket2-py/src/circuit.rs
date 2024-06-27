@@ -23,7 +23,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use crate::utils::create_py_exception;
 use crate::utils::ConvertPyErr;
 
-pub use self::convert::{try_update_hugr, try_with_hugr, update_hugr, with_hugr, CircuitType};
+pub use self::convert::{try_update_circ, try_with_circ, update_circ, with_circ, CircuitType};
 pub use self::cost::PyCircuitCost;
 use self::tk2circuit::Dfg;
 pub use self::tk2circuit::Tk2Circuit;
@@ -88,19 +88,19 @@ create_py_exception!(
 /// Run the validation checks on a circuit.
 #[pyfunction]
 pub fn validate_circuit(c: &Bound<PyAny>) -> PyResult<()> {
-    try_with_hugr(c, |hugr, _| hugr.validate(&REGISTRY))
+    try_with_circ(c, |circ, _| circ.hugr().validate(&REGISTRY))
 }
 
 /// Return a Graphviz DOT string representation of the circuit.
 #[pyfunction]
 pub fn render_circuit_dot(c: &Bound<PyAny>) -> PyResult<String> {
-    with_hugr(c, |hugr, _| hugr.dot_string())
+    with_circ(c, |hugr, _| hugr.dot_string())
 }
 
 /// Return a Mermaid diagram representation of the circuit.
 #[pyfunction]
 pub fn render_circuit_mermaid(c: &Bound<PyAny>) -> PyResult<String> {
-    with_hugr(c, |hugr, _| hugr.mermaid_string())
+    with_circ(c, |hugr, _| hugr.mermaid_string())
 }
 
 /// A [`hugr::Node`] wrapper for Python.

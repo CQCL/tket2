@@ -1,4 +1,4 @@
-//! Utilities for calling Hugr functions on generic python objects.
+//! Utilities for calling tket2 Circuit functions on generic python objects.
 
 use std::borrow::Borrow;
 
@@ -41,27 +41,25 @@ pub enum CircuitType {
 }
 
 impl CircuitType {
-    /// Converts a `Hugr` into the format indicated by the flag.
-    pub fn convert(self, py: Python, hugr: Hugr) -> PyResult<Bound<PyAny>> {
+    /// Converts a circuit into the format indicated by the flag.
+    pub fn convert(self, py: Python, circ: Circuit) -> PyResult<Bound<PyAny>> {
         match self {
-            CircuitType::Tket1 => SerialCircuit::encode(&hugr.into())
-                .convert_pyerrs()?
-                .to_tket1(py),
-            CircuitType::Tket2 => Ok(Bound::new(py, Tk2Circuit { circ: hugr.into() })?.into_any()),
+            CircuitType::Tket1 => SerialCircuit::encode(&circ).convert_pyerrs()?.to_tket1(py),
+            CircuitType::Tket2 => Ok(Bound::new(py, Tk2Circuit { circ })?.into_any()),
         }
     }
 }
 
-/// Apply a fallible function expecting a hugr on a python circuit.
+/// Apply a fallible function expecting a tket2 circuit on a python object.
 ///
 /// This method supports both `pytket.Circuit` and `Tk2Circuit` python objects.
-pub fn try_with_hugr<T, E, F>(circ: &Bound<PyAny>, f: F) -> PyResult<T>
+pub fn try_with_circ<T, E, F>(circ: &Bound<PyAny>, f: F) -> PyResult<T>
 where
     E: ConvertPyErr<Output = PyErr>,
-    F: FnOnce(Hugr, CircuitType) -> Result<T, E>,
+    F: FnOnce(Circuit, CircuitType) -> Result<T, E>,
 {
     let (circ, typ) = match Tk2Circuit::extract_bound(circ) {
-        // hugr circuit
+        // tket2 circuit
         Ok(t2circ) => (t2circ.circ, CircuitType::Tket2),
         // tket1 circuit
         Err(_) => (
@@ -69,46 +67,72 @@ where
             CircuitType::Tket1,
         ),
     };
-    (f)(circ.into_hugr(), typ).map_err(|e| e.convert_pyerrs())
+    (f)(circ, typ).map_err(|e| e.convert_pyerrs())
 }
 
-/// Apply a function expecting a hugr on a python circuit.
+/// Apply a function expecting a tket2 circuit on a python object.
 ///
 /// This method supports both `pytket.Circuit` and `Tk2Circuit` python objects.
-pub fn with_hugr<T, F>(circ: &Bound<PyAny>, f: F) -> PyResult<T>
+pub fn with_circ<T, F>(circ: &Bound<PyAny>, f: F) -> PyResult<T>
 where
-    F: FnOnce(Hugr, CircuitType) -> T,
+    F: FnOnce(Circuit, CircuitType) -> T,
 {
-    try_with_hugr(circ, |hugr, typ| Ok::<T, PyErr>((f)(hugr, typ)))
+    try_with_circ(circ, |circ, typ| Ok::<T, PyErr>((f)(circ, typ)))
 }
 
-/// Apply a fallible hugr-to-hugr function on a python circuit, and return the modified circuit.
+/// Apply a fallible circuit-to-circuit function on a python object, and return the modified result.
 ///
 /// This method supports both `pytket.Circuit` and `Tk2Circuit` python objects.
-/// The returned Hugr is converted to the matching python object.
-pub fn try_update_hugr<'py, E, F>(circ: &Bound<'py, PyAny>, f: F) -> PyResult<Bound<'py, PyAny>>
+/// The returned [`Circuit`] is converted back into the circuit representation used in the input.
+pub fn try_update_circ<'py, E, F>(circ: &Bound<'py, PyAny>, f: F) -> PyResult<Bound<'py, PyAny>>
 where
     E: ConvertPyErr<Output = PyErr>,
-    F: FnOnce(Hugr, CircuitType) -> Result<Hugr, E>,
+    F: FnOnce(Circuit, CircuitType) -> Result<Circuit, E>,
 {
     let py = circ.py();
-    try_with_hugr(circ, |hugr, typ| {
-        let hugr = f(hugr, typ).map_err(|e| e.convert_pyerrs())?;
-        typ.convert(py, hugr)
+    try_with_circ(circ, |circ, typ| {
+        let circ = f(circ, typ).map_err(|e| e.convert_pyerrs())?;
+        typ.convert(py, circ)
     })
 }
 
-/// Apply a hugr-to-hugr function on a python circuit, and return the modified circuit.
+/// Apply a circuit-to-circuit function on a python object, and return the modified result.
 ///
 /// This method supports both `pytket.Circuit` and `Tk2Circuit` python objects.
-/// The returned Hugr is converted to the matching python object.
-pub fn update_hugr<'py, F>(circ: &Bound<'py, PyAny>, f: F) -> PyResult<Bound<'py, PyAny>>
+/// The returned [`Circuit`] is converted back into the circuit representation used in the input.
+pub fn update_circ<'py, F>(circ: &Bound<'py, PyAny>, f: F) -> PyResult<Bound<'py, PyAny>>
 where
-    F: FnOnce(Hugr, CircuitType) -> Hugr,
+    F: FnOnce(Circuit, CircuitType) -> Circuit,
 {
     let py = circ.py();
-    try_with_hugr(circ, |hugr, typ| {
-        let hugr = f(hugr, typ);
-        typ.convert(py, hugr)
+    try_with_circ(circ, |circ, typ| {
+        let circ = f(circ, typ);
+        typ.convert(py, circ)
     })
+}
+
+#[cfg(test)]
+mod test {
+    use crate::utils::test::make_module_tk2_circuit;
+
+    use super::*;
+    use cool_asserts::assert_matches;
+    use pyo3::prelude::*;
+    use rstest::rstest;
+
+    #[rstest]
+    fn test_with_circ() -> PyResult<()> {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|py| {
+            let circ = make_module_tk2_circuit(py)?;
+
+            with_circ(&circ, |circ, typ| {
+                assert_eq!(typ, CircuitType::Tket2);
+
+                let parent_optype = circ.hugr().get_optype(circ.parent());
+                assert_matches!(parent_optype, OpType::FuncDefn(_));
+            })
+        })?;
+        Ok(())
+    }
 }

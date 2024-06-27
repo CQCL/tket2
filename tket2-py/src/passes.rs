@@ -6,11 +6,11 @@ use std::{cmp::min, convert::TryInto, fs, num::NonZeroUsize, path::PathBuf};
 
 use pyo3::{prelude::*, types::IntoPyDict};
 use tket2::optimiser::badger::BadgerOptions;
-use tket2::{op_matches, passes::apply_greedy_commutation, Circuit, Tk2Op};
+use tket2::{op_matches, passes::apply_greedy_commutation, Tk2Op};
 
 use crate::utils::{create_py_exception, ConvertPyErr};
 use crate::{
-    circuit::{try_update_hugr, try_with_hugr},
+    circuit::{try_update_circ, try_with_circ},
     optimiser::PyBadgerOptimiser,
 };
 
@@ -45,10 +45,9 @@ create_py_exception!(
 #[pyfunction]
 fn greedy_depth_reduce<'py>(circ: &Bound<'py, PyAny>) -> PyResult<(Bound<'py, PyAny>, u32)> {
     let py = circ.py();
-    try_with_hugr(circ, |h, typ| {
-        let mut circ: Circuit = h.into();
+    try_with_circ(circ, |mut circ, typ| {
         let n_moves = apply_greedy_commutation(&mut circ).convert_pyerrs()?;
-        let circ = typ.convert(py, circ.into_hugr())?;
+        let circ = typ.convert(py, circ)?;
         PyResult::Ok((circ, n_moves))
     })
 }
@@ -124,8 +123,7 @@ fn badger_optimise<'py>(
         _ => unreachable!(),
     };
     // Optimise
-    try_update_hugr(circ, |hugr, _| {
-        let mut circ: Circuit = hugr.into();
+    try_update_circ(circ, |mut circ, _| {
         let n_cx = circ
             .commands()
             .filter(|c| op_matches(c.optype(), Tk2Op::CX))
@@ -150,6 +148,6 @@ fn badger_optimise<'py>(
             };
             circ = optimiser.optimise(circ, log_file, options);
         }
-        PyResult::Ok(circ.into_hugr())
+        PyResult::Ok(circ)
     })
 }
