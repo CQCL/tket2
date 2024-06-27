@@ -19,7 +19,9 @@ test = false
 bench = false
 
 [dependencies]
-tket2 = { path = "../tket2", version = "0.1.0-alpha.1", features = ["portmatching"] }
+tket2 = { path = "../tket2", version = "0.1.0-alpha.1", features = [
+    "portmatching",
+] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tket-json-rs = { workspace = true, features = ["pyo3"] }
@@ -31,3 +33,7 @@ derive_more = { workspace = true }
 itertools = { workspace = true }
 portmatching = { workspace = true }
 strum = { workspace = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
+cool_asserts = { workspace = true }

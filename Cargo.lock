@@ -1849,6 +1849,7 @@ dependencies = [
 name = "tket2-py"
 version = "0.0.0"
 dependencies = [
+ "cool_asserts",
  "derive_more",
  "hugr",
  "itertools 0.13.0",
@@ -1856,6 +1857,7 @@ dependencies = [
  "portgraph 0.12.1",
  "portmatching",
  "pyo3",
+ "rstest",
  "serde",
  "serde_json",
  "strum",

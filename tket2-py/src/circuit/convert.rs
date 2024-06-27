@@ -110,3 +110,29 @@ where
         typ.convert(py, circ)
     })
 }
+
+#[cfg(test)]
+mod test {
+    use crate::utils::test::make_module_tk2_circuit;
+
+    use super::*;
+    use cool_asserts::assert_matches;
+    use pyo3::prelude::*;
+    use rstest::rstest;
+
+    #[rstest]
+    fn test_with_circ() -> PyResult<()> {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|py| {
+            let circ = make_module_tk2_circuit(py)?;
+
+            with_circ(&circ, |circ, typ| {
+                assert_eq!(typ, CircuitType::Tket2);
+
+                let parent_optype = circ.hugr().get_optype(circ.parent());
+                assert_matches!(parent_optype, OpType::FuncDefn(_));
+            })
+        })?;
+        Ok(())
+    }
+}
