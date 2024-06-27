@@ -12,7 +12,7 @@ use hugr::hugr::views::sibling_subgraph::{
     InvalidReplacement, InvalidSubgraph, InvalidSubgraphBoundary, TopoConvexChecker,
 };
 use hugr::hugr::views::SiblingSubgraph;
-use hugr::ops::{NamedOp, OpType};
+use hugr::ops::{CustomOp, NamedOp, OpType};
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex};
 use itertools::Itertools;
 use portgraph::algorithms::ConvexChecker;
@@ -45,21 +45,31 @@ pub(crate) struct MatchOp {
 impl From<OpType> for MatchOp {
     fn from(op: OpType) -> Self {
         let op_name = op.name();
-        // Avoid encoding some operations if we know they can be uniquely
-        // identified by their name.
-        let encoded = match op {
-            OpType::Module(_) => None,
-            OpType::CustomOp(custom_op)
-                if custom_op
-                    .as_extension_op()
-                    .map(|ext| ext.args().is_empty())
-                    .unwrap_or(false) =>
-            {
-                None
-            }
-            _ => rmp_serde::encode::to_vec(&op).ok(),
-        };
+        let encoded = encode_op(op);
         Self { op_name, encoded }
+    }
+}
+
+/// Encode a unique identifier for an operation.
+///
+/// Avoids encoding some data if we know the operation can be uniquely
+/// identified by their name.
+fn encode_op(op: OpType) -> Option<Vec<u8>> {
+    match op {
+        OpType::Module(_) => None,
+        OpType::CustomOp(op) => {
+            let opaque = match op {
+                CustomOp::Extension(ext_op) => ext_op.make_opaque(),
+                CustomOp::Opaque(opaque) => *opaque,
+            };
+            let mut encoded: Vec<u8> = Vec::new();
+            // Ignore irrelevant fields
+            rmp_serde::encode::write(&mut encoded, opaque.extension()).ok()?;
+            rmp_serde::encode::write(&mut encoded, opaque.name()).ok()?;
+            rmp_serde::encode::write(&mut encoded, opaque.args()).ok()?;
+            Some(encoded)
+        }
+        _ => rmp_serde::encode::to_vec(&op).ok(),
     }
 }
 
