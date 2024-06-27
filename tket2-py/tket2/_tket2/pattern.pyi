@@ -1,17 +1,29 @@
 from typing import Iterator
 from .circuit import Node, Tk2Circuit
 from .rewrite import CircuitRewrite
-from pytket._tket.circuit import Circuit
+from pytket._tket.circuit import Circuit as Tk1Circuit
 
 class Rule:
     """A rewrite rule defined by a left hand side and right hand side of an equation."""
 
     def __init__(
         self,
-        l: Circuit | Tk2Circuit,  # noqa: E741
-        r: Circuit | Tk2Circuit,
+        l: Tk1Circuit | Tk2Circuit,  # noqa: E741
+        r: Tk1Circuit | Tk2Circuit,
     ) -> None:
         """Create a new rewrite rule."""
+
+    def lhs(self) -> Tk2Circuit:
+        """Get the left hand side of the rule.
+
+        This is the pattern that is matched in the circuit.
+        """
+
+    def rhs(self) -> Tk2Circuit:
+        """Get the right hand side of the rule.
+
+        This is the pattern that is replaced in the circuit.
+        """
 
 class RuleMatcher:
     """A matcher for multiple rewrite rule."""
@@ -28,7 +40,7 @@ class RuleMatcher:
 class CircuitPattern:
     """A pattern that matches a circuit exactly."""
 
-    def __init__(self, circ: Circuit | Tk2Circuit) -> None:
+    def __init__(self, circ: Tk1Circuit | Tk2Circuit) -> None:
         """Create a new circuit pattern."""
 
 class PatternMatcher:
