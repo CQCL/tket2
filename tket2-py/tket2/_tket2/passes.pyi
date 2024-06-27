@@ -26,6 +26,9 @@ def greedy_depth_reduce(circ: CircuitClass) -> tuple[CircuitClass, int]:
     Returns the reduced circuit and the depth reduction.
     """
 
+def lower_to_pytket(circ: CircuitClass) -> CircuitClass:
+    """Lower the high-level operations in a Hugr so it can be interpreted by pytket."""
+
 def badger_optimise(
     circ: CircuitClass,
     optimiser: BadgerOptimiser,
