@@ -13,10 +13,10 @@ __all__ = ["CustomOp", "ToCustomOp", "Tk2Op", "Pauli"]
 
 
 class ToCustomOp(Protocol):
-    """Operation that can be converted to a HUGR's CustomOp."""
+    """Operation that can be converted to a HUGR CustomOp."""
 
     def to_custom(self) -> CustomOp:
-        """Convert to a custom operation. Identity operation."""
+        """Convert to a custom operation."""
 
     @property
     def name(self) -> str:
