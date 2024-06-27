@@ -25,6 +25,13 @@ TKET2 can be installed via `pip`. Requires Python >= 3.10.
 pip install tket2
 ```
 
+## Usage
+
+See the [Getting Started][getting-started] guide and the other [examples].
+
+  [getting-started]: https://github.com/CQCL/tket2/blob/main/tket2-py/examples/1-Getting-Started.ipynb
+  [examples]: https://github.com/CQCL/tket2/blob/main/tket2-py/examples/
+
 ## Development
 
 This package uses [pyo3](https://pyo3.rs/v0.16.4/) and
