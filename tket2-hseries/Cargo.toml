@@ -24,6 +24,14 @@ clap = { workspace = true, optional = true, features = ["derive"] }
 tket2 = { path = "../tket2", version = "0.1.0-alpha.1" }
 serde_json.workspace = true
 lazy_static.workspace = true
+smol_str.workspace = true
+serde.workspace = true
+strum_macros.workspace = true
+strum.workspace = true
+cool_asserts.workspace = true
+
+[dev-dependencies]
+cool_asserts = { workspace = true }
 
 [lints]
 workspace = true

@@ -1838,10 +1838,15 @@ name = "tket2-hseries"
 version = "0.1.0-alpha.1"
 dependencies = [
  "clap",
+ "cool_asserts",
  "hugr",
  "hugr-cli",
  "lazy_static",
+ "serde",
  "serde_json",
+ "smol_str",
+ "strum",
+ "strum_macros",
  "tket2",
 ]
 
