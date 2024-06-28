@@ -3,10 +3,10 @@ use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
         prelude::{BOOL_T, QB_T},
-        simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
+        simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp},
         ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, PRELUDE,
     },
-    ops::{NamedOp as _, OpType},
+    ops::{CustomOp, NamedOp as _, OpType},
     types::FunctionType,
     Extension, Wire,
 };
@@ -54,8 +54,8 @@ lazy_static! {
 )]
 #[allow(missing_docs)]
 #[non_exhaustive]
-enum LazyQuantumOp {
-    Measure,
+pub enum LazyQuantumOp {
+    LazyMeasure,
 }
 
 impl MakeOpDef for LazyQuantumOp {
@@ -81,10 +81,16 @@ impl MakeRegisteredOp for LazyQuantumOp {
 impl TryFrom<&OpType> for LazyQuantumOp {
     type Error = ();
     fn try_from(value: &OpType) -> Result<Self, Self::Error> {
-        (|| {
-            let custom_op = value.as_custom_op()?;
-            try_from_name(&custom_op.name()).ok()
-        })()
+        let Some(custom_op) = value.as_custom_op() else {
+            Err(())?
+        };
+        match custom_op {
+            CustomOp::Extension(ext) => Self::from_extension_op(ext).ok(),
+            CustomOp::Opaque(opaque) if opaque.extension() == &EXTENSION_ID => {
+                try_from_name(opaque.name()).ok()
+            }
+            _ => None,
+        }
         .ok_or(())
     }
 }
@@ -94,7 +100,7 @@ pub trait LazyQuantumOpBuilder: Dataflow {
     /// TODO docs
     fn add_lazy_measure(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
-            .add_dataflow_op(LazyQuantumOp::Measure, [qb])?
+            .add_dataflow_op(LazyQuantumOp::LazyMeasure, [qb])?
             .outputs_arr())
     }
 }
