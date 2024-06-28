@@ -42,11 +42,16 @@ impl CircuitPattern {
             for in_offset in 0..cmd.input_count() {
                 let in_offset: IncomingPort = in_offset.into();
                 let edge_prop = PEdge::try_from_port(cmd.node(), in_offset.into(), circuit)
-                    .expect("Invalid HUGR");
+                    .unwrap_or_else(|e| panic!("Invalid HUGR, {e}"));
                 let (prev_node, prev_port) = hugr
                     .linked_outputs(cmd.node(), in_offset)
                     .exactly_one()
-                    .expect("invalid HUGR");
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "{} input port {in_offset} does not have a single neighbour",
+                            cmd.node()
+                        )
+                    });
                 let prev_node = match edge_prop {
                     PEdge::InternalEdge { .. } => NodeID::HugrNode(prev_node),
                     PEdge::InputEdge { .. } => NodeID::new_copy(prev_node, prev_port),

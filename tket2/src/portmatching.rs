@@ -56,6 +56,7 @@
 pub mod matcher;
 pub mod pattern;
 
+use hugr::types::EdgeKind;
 use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
 pub use matcher::{PatternMatch, PatternMatcher};
@@ -98,6 +99,7 @@ enum PEdge {
 }
 
 #[derive(Debug, Clone, Error)]
+#[non_exhaustive]
 enum InvalidEdgeProperty {
     /// The port is linked to multiple edges.
     #[error("port {0:?} is linked to multiple edges")]
@@ -106,8 +108,8 @@ enum InvalidEdgeProperty {
     #[error("port {0:?} is not linked to any edge")]
     NoLinkedEdge(Port),
     /// The port does not have a type.
-    #[error("port {0:?} does not have a type")]
-    UntypedPort(Port),
+    #[error("{0}:{1} does not have a type")]
+    UntypedPort(Node, Port),
 }
 
 impl PEdge {
@@ -127,12 +129,13 @@ impl PEdge {
         if hugr.get_optype(dst_node).tag() == OpTag::Input {
             return Ok(Self::InputEdge { src });
         }
-        let port_type = hugr
-            .signature(node)
-            .unwrap()
-            .port_type(src)
-            .cloned()
-            .ok_or(InvalidEdgeProperty::UntypedPort(src))?;
+
+        // Get the port type for either value or constant ports.
+        let port_type = match hugr.get_optype(node).port_kind(src) {
+            Some(EdgeKind::Value(typ)) => typ,
+            Some(EdgeKind::Const(typ)) => typ,
+            _ => return Err(InvalidEdgeProperty::UntypedPort(node, src)),
+        };
         let is_reversible = type_is_linear(&port_type);
         Ok(Self::InternalEdge {
             src,
