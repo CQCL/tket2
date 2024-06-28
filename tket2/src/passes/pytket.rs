@@ -41,6 +41,7 @@ pub enum PytketLoweringError {
 
 #[cfg(test)]
 mod test {
+    use crate::extension::REGISTRY;
     use crate::Tk2Op;
 
     use super::*;
@@ -50,8 +51,8 @@ mod test {
     use hugr::extension::prelude::QB_T;
     use hugr::extension::{ExtensionSet, PRELUDE_REGISTRY};
     use hugr::ops::handle::NodeHandle;
-    use hugr::ops::{MakeTuple, OpType, UnpackTuple, Value};
-    use hugr::types::FunctionType;
+    use hugr::ops::{MakeTuple, OpType, Tag, UnpackTuple};
+    use hugr::types::{FunctionType, TypeRow};
     use hugr::{type_row, HugrView};
     use rstest::{fixture, rstest};
 
@@ -95,7 +96,10 @@ mod test {
                             .add_dataflow_op(UnpackTuple::new(two_qbs), [tup])?
                             .outputs_arr();
 
-                        let branch = dfg.add_load_const(Value::tuple([]));
+                        // Adds an empty Unit branch.
+                        let [branch] = dfg
+                            .add_dataflow_op(Tag::new(0, vec![TypeRow::new()]), [])?
+                            .outputs_arr();
 
                         dfg.finish_with_outputs(branch, [q1, q2])?
                     };
@@ -119,11 +123,10 @@ mod test {
     fn test_pytket_lowering(#[case] circ: Circuit) {
         use cool_asserts::assert_matches;
 
-        assert_eq!(circ.num_operations(), 2);
-
         let lowered_circ = lower_to_pytket(&circ).unwrap();
+        lowered_circ.hugr().validate(&REGISTRY).unwrap();
 
-        assert_eq!(lowered_circ.num_operations(), 2);
+        assert_eq!(lowered_circ.parent(), lowered_circ.hugr().root());
         assert_matches!(
             lowered_circ.hugr().get_optype(lowered_circ.parent()),
             OpType::DFG(_)
@@ -136,5 +139,34 @@ mod test {
             lowered_circ.hugr().get_optype(lowered_circ.output_node()),
             OpType::Output(_)
         );
+        assert_eq!(lowered_circ.num_operations(), circ.num_operations());
+
+        // Check that the circuit signature is preserved.
+        let original_sig = circ.circuit_signature();
+        let lowered_sig = lowered_circ.circuit_signature();
+        assert_eq!(lowered_sig.input(), original_sig.input());
+
+        // The output signature may have changed due CFG branch tag removal.
+        let output_count_diff =
+            original_sig.output().len() as isize - lowered_sig.output().len() as isize;
+        assert!(
+            output_count_diff == 0 || output_count_diff == 1,
+            "Output count mismatch. Original: {}, Lowered: {}",
+            original_sig,
+            lowered_sig
+        );
+        assert_eq!(
+            lowered_sig.output()[..],
+            original_sig.output()[output_count_diff as usize..]
+        );
+
+        // Check that the output node was successfully updated
+        let output_sig = lowered_circ
+            .hugr()
+            .signature(lowered_circ.output_node())
+            .unwrap();
+        assert_eq!(lowered_sig.output(), output_sig.input());
+        println!("Lowered circuit: {}", lowered_sig);
+        println!("Output node: {}", output_sig);
     }
 }
