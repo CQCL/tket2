@@ -1,10 +1,9 @@
-use hugr::ops::NamedOp;
+//! TODO docs
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
         simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp, OpLoadError},
         ExtensionBuildError, ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, TypeDef,
-        PRELUDE,
     },
     ops::{custom::ExtensionOp, CustomOp, OpType},
     types::{
@@ -14,9 +13,7 @@ use hugr::{
 };
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
-use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
-
-use tket2::extension::TKET2_EXTENSION;
+use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
 /// TODO docs
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.lazy");
@@ -31,14 +28,16 @@ lazy_static! {
         ext
     };
 
+    /// TODO docs
     pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
-        PRELUDE.to_owned(),
         EXTENSION.to_owned()
     ]).unwrap();
 
+    /// TODO docs
     pub static ref LAZY_TYPE_NAME: SmolStr = SmolStr::new_inline("Lazy");
 }
 
+/// TODO docs
 pub fn add_lazy_type_def(ext: &mut Extension) -> Result<&TypeDef, ExtensionBuildError> {
     ext.add_type(
         LAZY_TYPE_NAME.to_owned(),
@@ -48,6 +47,7 @@ pub fn add_lazy_type_def(ext: &mut Extension) -> Result<&TypeDef, ExtensionBuild
     )
 }
 
+/// TODO docs
 pub fn lazy_custom_type(t: Type) -> CustomType {
     CustomType::new(
         LAZY_TYPE_NAME.to_owned(),
@@ -57,6 +57,7 @@ pub fn lazy_custom_type(t: Type) -> CustomType {
     )
 }
 
+/// TODO docs
 pub fn lazy_type(t: Type) -> Type {
     lazy_custom_type(t).into()
 }
@@ -143,7 +144,7 @@ fn concrete_lazy_op_type_args(
     match args {
         [TypeArg::Type { ty }] => Ok(ty.clone()),
         _ => Err(OpLoadError::InvalidArgs(
-            hugr::extension::SignatureError::InvalidTypeArgs.into(),
+            hugr::extension::SignatureError::InvalidTypeArgs,
         )),
     }
 }
@@ -255,7 +256,10 @@ impl<D: Dataflow> LazyOpBuilder for D {}
 #[cfg(test)]
 pub(crate) mod test {
     use cool_asserts::assert_matches;
-    use hugr::builder::{Dataflow, DataflowHugr, FunctionBuilder};
+    use hugr::{
+        builder::{Dataflow, DataflowHugr, FunctionBuilder},
+        ops::NamedOp,
+    };
     use std::sync::Arc;
     use strum::IntoEnumIterator;
 
