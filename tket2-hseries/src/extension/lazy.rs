@@ -79,7 +79,7 @@ pub fn lazy_type(t: Type) -> Type {
 )]
 #[allow(missing_docs)]
 #[non_exhaustive]
-enum LazyOp {
+pub enum LazyOp {
     Lift,
     Read,
     Dup,
@@ -176,6 +176,24 @@ impl MakeRegisteredOp for ConcreteLazyOp {
     }
 }
 
+impl TryFrom<&OpType> for LazyOp {
+    type Error = ();
+
+    fn try_from(value: &OpType) -> Result<Self, Self::Error> {
+        let Some(custom_op) = value.as_custom_op() else {
+            Err(())?
+        };
+        match custom_op {
+            CustomOp::Extension(ext) => Self::from_extension_op(ext).ok(),
+            CustomOp::Opaque(opaque) if opaque.extension() == &EXTENSION_ID => {
+                try_from_name(opaque.name()).ok()
+            }
+            _ => None,
+        }
+        .ok_or(())
+    }
+}
+
 impl TryFrom<&OpType> for ConcreteLazyOp {
     type Error = ();
 
@@ -184,7 +202,7 @@ impl TryFrom<&OpType> for ConcreteLazyOp {
             Err(())?
         };
         match custom_op {
-            CustomOp::Extension(ext) => ConcreteLazyOp::from_extension_op(ext).ok(),
+            CustomOp::Extension(ext) => Self::from_extension_op(ext).ok(),
             CustomOp::Opaque(opaque) if opaque.extension() == &EXTENSION_ID => (|| {
                 let op = try_from_name(opaque.name()).ok()?;
                 let typ = concrete_lazy_op_type_args(opaque.args()).ok()?;
