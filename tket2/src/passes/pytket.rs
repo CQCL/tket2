@@ -166,7 +166,5 @@ mod test {
             .signature(lowered_circ.output_node())
             .unwrap();
         assert_eq!(lowered_sig.output(), output_sig.input());
-        println!("Lowered circuit: {}", lowered_sig);
-        println!("Output node: {}", output_sig);
     }
 }
