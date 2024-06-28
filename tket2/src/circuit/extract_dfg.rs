@@ -47,7 +47,7 @@ fn remove_cfg_empty_output_tuple(
     signature: FunctionType,
 ) -> Result<FunctionType, CircuitMutError> {
     let sig = signature;
-    let parent = circ.parent();
+    let input_node = circ.input_node();
 
     let output_node = circ.output_node();
     let output_nodetype = circ.hugr.get_nodetype(output_node).clone();
@@ -89,8 +89,8 @@ fn remove_cfg_empty_output_tuple(
     let new_op = Output {
         types: new_types.clone().into(),
     };
-    let new_node = hugr.add_node_with_parent(
-        parent,
+    let new_node = hugr.add_node_after(
+        input_node,
         NodeType::new(
             new_op,
             output_nodetype
