@@ -16,15 +16,15 @@ use smol_str::SmolStr;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
 /// TODO docs
-pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.lazy");
+pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.futures");
 
 lazy_static! {
-    /// The "tket2.lazy" extension
+    /// The "tket2.futures" extension
     pub static ref EXTENSION: Extension = {
         let mut ext = Extension::new(EXTENSION_ID);
-        let _ = add_lazy_type_def(&mut ext).unwrap();
+        let _ = add_future_type_def(&mut ext).unwrap();
 
-        LazyOp::load_all_ops(&mut ext).unwrap();
+        FutureOp::load_all_ops(&mut ext).unwrap();
         ext
     };
 
@@ -34,23 +34,23 @@ lazy_static! {
     ]).unwrap();
 
     /// TODO docs
-    pub static ref LAZY_TYPE_NAME: SmolStr = SmolStr::new_inline("Lazy");
+    pub static ref FUTURE_TYPE_NAME: SmolStr = SmolStr::new_inline("Future");
 }
 
 /// TODO docs
-pub fn add_lazy_type_def(ext: &mut Extension) -> Result<&TypeDef, ExtensionBuildError> {
+pub fn add_future_type_def(ext: &mut Extension) -> Result<&TypeDef, ExtensionBuildError> {
     ext.add_type(
-        LAZY_TYPE_NAME.to_owned(),
+        FUTURE_TYPE_NAME.to_owned(),
         vec![TypeBound::Any.into()],
-        "A value that is only computed when needed".into(),
+        "A value that computed asynchronously".into(),
         TypeBound::Any.into(),
     )
 }
 
 /// TODO docs
-pub fn lazy_custom_type(t: Type) -> CustomType {
+pub fn future_custom_type(t: Type) -> CustomType {
     CustomType::new(
-        LAZY_TYPE_NAME.to_owned(),
+        FUTURE_TYPE_NAME.to_owned(),
         vec![t.into()],
         EXTENSION_ID,
         TypeBound::Any,
@@ -58,8 +58,8 @@ pub fn lazy_custom_type(t: Type) -> CustomType {
 }
 
 /// TODO docs
-pub fn lazy_type(t: Type) -> Type {
-    lazy_custom_type(t).into()
+pub fn future_type(t: Type) -> Type {
+    future_custom_type(t).into()
 }
 
 #[derive(
@@ -79,45 +79,28 @@ pub fn lazy_type(t: Type) -> Type {
 )]
 #[allow(missing_docs)]
 #[non_exhaustive]
-pub enum LazyOp {
-    Lift,
+pub enum FutureOp {
     Read,
     Dup,
     Free,
 }
 
-// impl LazyOp {
-//     /// Expose the operation names directly in Tk2Op
-//     pub fn exposed_name(&self) -> smol_str::SmolStr {
-//         <LazyOp as Into<OpType>>::into(*self).name()
-//     }
-
-//     /// Wraps the operation in an [`ExtensionOp`]
-//     pub fn into_extension_op(self) -> ExtensionOp {
-//         <Self as MakeRegisteredOp>::to_extension_op(self)
-//             .expect("Failed to convert to extension op.")
-//     }
-// }
-
-impl MakeOpDef for LazyOp {
+impl MakeOpDef for FutureOp {
     fn signature(&self) -> SignatureFunc {
         let t_param = TypeParam::from(TypeBound::Any);
         let t_type = Type::new_var_use(0, TypeBound::Any);
-        let lazy_type = lazy_type(t_type.clone());
+        let future_type = future_type(t_type.clone());
         match self {
-            LazyOp::Lift => {
-                PolyFuncType::new([t_param], FunctionType::new(t_type, lazy_type)).into()
+            FutureOp::Read => {
+                PolyFuncType::new([t_param], FunctionType::new(future_type, t_type)).into()
             }
-            LazyOp::Read => {
-                PolyFuncType::new([t_param], FunctionType::new(lazy_type, t_type)).into()
-            }
-            LazyOp::Dup => PolyFuncType::new(
+            FutureOp::Dup => PolyFuncType::new(
                 [t_param],
-                FunctionType::new(lazy_type.clone(), vec![lazy_type.clone(), lazy_type]),
+                FunctionType::new(future_type.clone(), vec![future_type.clone(), future_type]),
             )
             .into(),
-            LazyOp::Free => {
-                PolyFuncType::new([t_param], FunctionType::new(lazy_type.clone(), vec![])).into()
+            FutureOp::Free => {
+                PolyFuncType::new([t_param], FunctionType::new(future_type.clone(), vec![])).into()
             }
         }
     }
@@ -127,18 +110,18 @@ impl MakeOpDef for LazyOp {
     }
 }
 
-struct ConcreteLazyOp {
-    op: LazyOp,
+struct ConcreteFutureOp {
+    op: FutureOp,
     typ: Type,
 }
 
-impl<'a> From<&'a ConcreteLazyOp> for &'static str {
-    fn from(value: &ConcreteLazyOp) -> Self {
+impl<'a> From<&'a ConcreteFutureOp> for &'static str {
+    fn from(value: &ConcreteFutureOp) -> Self {
         value.op.into()
     }
 }
 
-fn concrete_lazy_op_type_args(
+fn concrete_future_op_type_args(
     args: &[TypeArg],
 ) -> Result<Type, hugr::extension::simple_op::OpLoadError> {
     match args {
@@ -149,15 +132,15 @@ fn concrete_lazy_op_type_args(
     }
 }
 
-impl MakeExtensionOp for ConcreteLazyOp {
+impl MakeExtensionOp for ConcreteFutureOp {
     fn from_extension_op(
         ext_op: &ExtensionOp,
     ) -> Result<Self, hugr::extension::simple_op::OpLoadError>
     where
         Self: Sized,
     {
-        let op = LazyOp::from_def(ext_op.def())?;
-        let typ = concrete_lazy_op_type_args(ext_op.args())?;
+        let op = FutureOp::from_def(ext_op.def())?;
+        let typ = concrete_future_op_type_args(ext_op.args())?;
         Ok(Self { op, typ })
     }
 
@@ -166,7 +149,7 @@ impl MakeExtensionOp for ConcreteLazyOp {
     }
 }
 
-impl MakeRegisteredOp for ConcreteLazyOp {
+impl MakeRegisteredOp for ConcreteFutureOp {
     fn extension_id(&self) -> ExtensionId {
         EXTENSION_ID
     }
@@ -176,7 +159,7 @@ impl MakeRegisteredOp for ConcreteLazyOp {
     }
 }
 
-impl TryFrom<&OpType> for LazyOp {
+impl TryFrom<&OpType> for FutureOp {
     type Error = ();
 
     fn try_from(value: &OpType) -> Result<Self, Self::Error> {
@@ -194,7 +177,7 @@ impl TryFrom<&OpType> for LazyOp {
     }
 }
 
-impl TryFrom<&OpType> for ConcreteLazyOp {
+impl TryFrom<&OpType> for ConcreteFutureOp {
     type Error = ();
 
     fn try_from(value: &OpType) -> Result<Self, Self::Error> {
@@ -205,7 +188,7 @@ impl TryFrom<&OpType> for ConcreteLazyOp {
             CustomOp::Extension(ext) => Self::from_extension_op(ext).ok(),
             CustomOp::Opaque(opaque) if opaque.extension() == &EXTENSION_ID => (|| {
                 let op = try_from_name(opaque.name()).ok()?;
-                let typ = concrete_lazy_op_type_args(opaque.args()).ok()?;
+                let typ = concrete_future_op_type_args(opaque.args()).ok()?;
                 Some(Self { op, typ })
             })(),
             _ => None,
@@ -215,26 +198,13 @@ impl TryFrom<&OpType> for ConcreteLazyOp {
 }
 
 /// TODO docs
-pub trait LazyOpBuilder: Dataflow {
-    /// TODO docs
-    fn add_lift(&mut self, unlifted: Wire, typ: Type) -> Result<[Wire; 1], BuildError> {
-        Ok(self
-            .add_dataflow_op(
-                ConcreteLazyOp {
-                    op: LazyOp::Lift,
-                    typ,
-                },
-                [unlifted],
-            )?
-            .outputs_arr())
-    }
-
+pub trait FutureOpBuilder: Dataflow {
     /// TODO docs
     fn add_read(&mut self, lifted: Wire, typ: Type) -> Result<[Wire; 1], BuildError> {
         Ok(self
             .add_dataflow_op(
-                ConcreteLazyOp {
-                    op: LazyOp::Read,
+                ConcreteFutureOp {
+                    op: FutureOp::Read,
                     typ,
                 },
                 [lifted],
@@ -246,8 +216,8 @@ pub trait LazyOpBuilder: Dataflow {
     fn add_dup(&mut self, lifted: Wire, typ: Type) -> Result<[Wire; 2], BuildError> {
         Ok(self
             .add_dataflow_op(
-                ConcreteLazyOp {
-                    op: LazyOp::Dup,
+                ConcreteFutureOp {
+                    op: FutureOp::Dup,
                     typ,
                 },
                 [lifted],
@@ -258,8 +228,8 @@ pub trait LazyOpBuilder: Dataflow {
     /// TODO docs
     fn add_free(&mut self, lifted: Wire, typ: Type) -> Result<(), BuildError> {
         let op = self.add_dataflow_op(
-            ConcreteLazyOp {
-                op: LazyOp::Free,
+            ConcreteFutureOp {
+                op: FutureOp::Free,
                 typ,
             },
             [lifted],
@@ -269,7 +239,7 @@ pub trait LazyOpBuilder: Dataflow {
     }
 }
 
-impl<D: Dataflow> LazyOpBuilder for D {}
+impl<D: Dataflow> FutureOpBuilder for D {}
 
 #[cfg(test)]
 pub(crate) mod test {
@@ -291,8 +261,8 @@ pub(crate) mod test {
     fn create_extension() {
         assert_eq!(EXTENSION.name(), &EXTENSION_ID);
 
-        for o in LazyOp::iter() {
-            assert_eq!(LazyOp::from_def(get_opdef(o).unwrap()), Ok(o));
+        for o in FutureOp::iter() {
+            assert_eq!(FutureOp::from_def(get_opdef(o).unwrap()), Ok(o));
         }
     }
 
@@ -300,24 +270,20 @@ pub(crate) mod test {
     fn circuit() {
         let t_param = TypeParam::from(TypeBound::Any);
         let t = Type::new_var_use(0, TypeBound::Any);
-        let lazy_type = lazy_type(t.clone());
+        let future_type = future_type(t.clone());
 
         let hugr = {
             let mut func_builder = FunctionBuilder::new(
                 "circuit",
-                PolyFuncType::new(
-                    vec![t_param],
-                    FunctionType::new_endo(vec![t.clone(), lazy_type]),
-                ),
+                PolyFuncType::new(vec![t_param], FunctionType::new(future_type, t.clone())),
             )
             .unwrap();
-            let [t_w, lazy_w] = func_builder.input_wires_arr();
-            func_builder.add_free(lazy_w, t.clone()).unwrap();
-            let [lazy_w] = func_builder.add_lift(t_w, t.clone()).unwrap();
-            let [lazy_w, lazy_dup_w] = func_builder.add_dup(lazy_w, t.clone()).unwrap();
+            let [future_w] = func_builder.input_wires_arr();
+            let [future_w, lazy_dup_w] = func_builder.add_dup(future_w, t.clone()).unwrap();
+            func_builder.add_free(future_w, t.clone()).unwrap();
             let [t_w] = func_builder.add_read(lazy_dup_w, t).unwrap();
             func_builder
-                .finish_hugr_with_outputs([t_w, lazy_w], &REGISTRY)
+                .finish_hugr_with_outputs([t_w], &REGISTRY)
                 .unwrap()
         };
         assert_matches!(hugr.validate(&REGISTRY), Ok(_));

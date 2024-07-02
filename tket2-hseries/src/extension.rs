@@ -1,4 +1,4 @@
 //! TODO docs
 
-pub mod lazy;
+pub mod futures;
 pub mod quantum_lazy;

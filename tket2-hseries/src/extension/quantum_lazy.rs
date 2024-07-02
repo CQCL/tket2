@@ -14,9 +14,9 @@ use hugr::{
 use lazy_static::lazy_static;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
-use crate::extension::lazy;
+use crate::extension::futures;
 
-use super::lazy::lazy_type;
+use super::futures::future_type;
 
 /// TODO docs
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.quantum.lazy");
@@ -31,7 +31,7 @@ lazy_static! {
 
     /// TODO docs
     pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
-        lazy::EXTENSION.to_owned(),
+        futures::EXTENSION.to_owned(),
         PRELUDE.to_owned(),
         EXTENSION.to_owned()
     ]).unwrap();
@@ -60,7 +60,7 @@ pub enum LazyQuantumOp {
 
 impl MakeOpDef for LazyQuantumOp {
     fn signature(&self) -> SignatureFunc {
-        FunctionType::new(QB_T, vec![QB_T, lazy_type(BOOL_T)]).into()
+        FunctionType::new(QB_T, vec![QB_T, future_type(BOOL_T)]).into()
     }
 
     fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
@@ -112,11 +112,11 @@ mod test {
     use std::sync::Arc;
 
     use cool_asserts::assert_matches;
+    use futures::FutureOpBuilder as _;
     use hugr::{
         builder::{DataflowHugr, FunctionBuilder},
         ops::NamedOp,
     };
-    use lazy::LazyOpBuilder as _;
     use strum::IntoEnumIterator as _;
 
     use super::*;

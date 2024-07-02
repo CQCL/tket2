@@ -12,7 +12,7 @@ use tket2::Tk2Op;
 use lazy_static::lazy_static;
 
 use crate::extension::{
-    lazy::LazyOpBuilder,
+    futures::FutureOpBuilder,
     quantum_lazy::{self, LazyQuantumOpBuilder},
 };
 /// TODO docs
@@ -127,7 +127,7 @@ mod test {
     use tket2::extension::TKET2_EXTENSION;
 
     use crate::extension::{
-        lazy::{self, LazyOp},
+        futures::{self, FutureOp},
         quantum_lazy::LazyQuantumOp,
     };
 
@@ -136,7 +136,7 @@ mod test {
     lazy_static! {
         pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
             quantum_lazy::EXTENSION.to_owned(),
-            lazy::EXTENSION.to_owned(),
+            futures::EXTENSION.to_owned(),
             TKET2_EXTENSION.to_owned(),
             PRELUDE.to_owned(),
             float_types::EXTENSION.clone(),
@@ -163,7 +163,7 @@ mod test {
         let mut num_lazy_measure = 0;
         for n in hugr.nodes() {
             let ot = hugr.get_optype(n);
-            if let Ok(LazyOp::Read) = ot.try_into() {
+            if let Ok(FutureOp::Read) = ot.try_into() {
                 num_read += 1;
             } else if let Ok(LazyQuantumOp::LazyMeasure) = ot.try_into() {
                 num_lazy_measure += 1;
