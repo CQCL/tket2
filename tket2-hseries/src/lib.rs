@@ -6,6 +6,10 @@ use hugr::Hugr;
 #[cfg(feature = "cli")]
 pub mod cli;
 
+pub mod extension;
+
+pub mod lazify_measure;
+
 /// Modify a [Hugr] into a form that is acceptable for ingress into an H-series.
 ///
 /// Returns an error if this cannot be done.
