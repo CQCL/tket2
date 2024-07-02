@@ -59,6 +59,24 @@ impl Rule {
 
         Ok(Rule([l.circ, r.circ]))
     }
+
+    /// The left hand side of the rule.
+    ///
+    /// This is the pattern that will be matched against the target circuit.
+    fn lhs(&self) -> Tk2Circuit {
+        Tk2Circuit {
+            circ: self.0[0].clone(),
+        }
+    }
+
+    /// The right hand side of the rule.
+    ///
+    /// This is the replacement that will be applied to the target circuit.
+    fn rhs(&self) -> Tk2Circuit {
+        Tk2Circuit {
+            circ: self.0[1].clone(),
+        }
+    }
 }
 #[pyclass]
 struct RuleMatcher {
