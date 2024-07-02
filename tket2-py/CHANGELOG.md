@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.1.0...tket2-py-v0.1.1) (2024-07-02)
+
+
+### Features
+
+* Add `lhs` and `rhs` bindings to `Rule` ([#440](https://github.com/CQCL/tket2/issues/440)) ([49b1c89](https://github.com/CQCL/tket2/commit/49b1c89aeeaff73c6ebf66d3f81dddc4ad81f7bb))
+
 ## 0.1.0a1 (2024-06-28)
 
 Initial alpha release of the Python bindings for TKET2.
