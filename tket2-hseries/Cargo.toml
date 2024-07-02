@@ -21,7 +21,7 @@ cli = ["dep:hugr-cli", "dep:clap"]
 hugr.workspace = true
 hugr-cli = { workspace = true, optional = true }
 clap = { workspace = true, optional = true, features = ["derive"] }
-tket2 = { path = "../tket2", version = "0.1.0-alpha.1" }
+tket2 = { path = "../tket2", version = "0.1.0-alpha.3" }
 serde_json.workspace = true
 lazy_static.workspace = true
 
