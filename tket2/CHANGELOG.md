@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.3](https://github.com/CQCL/tket2/compare/tket2-v0.1.0-alpha.2...tket2-v0.1.0-alpha.3) - 2024-07-02
+
+### Bug Fixes
+- Single source of truth for circuit names, and better circuit errors ([#390](https://github.com/CQCL/tket2/pull/390))
+- Support non-DFG circuits ([#391](https://github.com/CQCL/tket2/pull/391))
+- Portmatching not matching const edges ([#444](https://github.com/CQCL/tket2/pull/444))
+- Pattern matcher discriminating on opaqueOp description ([#441](https://github.com/CQCL/tket2/pull/441))
+- `extract_dfg` inserting the output node with an invalid child order ([#442](https://github.com/CQCL/tket2/pull/442))
+
+### Documentation
+- Update tket2-py readme ([#431](https://github.com/CQCL/tket2/pull/431))
+- Better error reporting in portmatching ([#437](https://github.com/CQCL/tket2/pull/437))
+
+### New Features
+- `Circuit::operations` ([#395](https://github.com/CQCL/tket2/pull/395))
+- tuple unpack rewrite ([#406](https://github.com/CQCL/tket2/pull/406))
+- guppy → pytket conversion ([#407](https://github.com/CQCL/tket2/pull/407))
+- Drop linear bits, improve pytket encoding/decoding ([#420](https://github.com/CQCL/tket2/pull/420))
+- *(py)* Allow using `Tk2Op`s in the builder ([#436](https://github.com/CQCL/tket2/pull/436))
+
+### Refactor
+- [**breaking**] Simplify tket1 conversion errors ([#408](https://github.com/CQCL/tket2/pull/408))
+- Cleanup tket1 serialized op structures ([#419](https://github.com/CQCL/tket2/pull/419))
+
 ## [0.1.0-alpha.2](https://github.com/CQCL/tket2/compare/tket2-v0.1.0-alpha.1...tket2-v0.1.0-alpha.2) - 2024-06-11
 
 ### Bug Fixes
