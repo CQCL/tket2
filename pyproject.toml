@@ -28,7 +28,7 @@ python = "^3.10"
 pytket = "1.29.2"
 
 [tool.poetry.group.dev.dependencies]
-maturin = "^1.6.0"
+maturin = "^1.7.0"
 pytest = "^8.2.2"
 pytest-cov = "^5.0.0"
 ruff = "^0.5.0"
