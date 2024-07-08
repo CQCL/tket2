@@ -26,7 +26,7 @@ missing_docs = "warn"
 
 tket2 = { path = "./tket2" }
 hugr = "0.5.1"
-hugr-cli = "0.1.1"
+hugr-cli = "0.1.2"
 hugr-core = "0.2.0"
 portgraph = "0.12"
 pyo3 = "0.21.2"
