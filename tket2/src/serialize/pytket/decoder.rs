@@ -48,7 +48,7 @@ impl Tk1Decoder {
             .with_extension_delta(TKET1_EXTENSION_ID);
 
         let name = serialcirc.name.clone().unwrap_or_default();
-        let mut dfg = FunctionBuilder::new(name, sig.into()).unwrap();
+        let mut dfg = FunctionBuilder::new(name, sig).unwrap();
         let dangling_wires = dfg.input_wires().collect::<Vec<_>>();
 
         // Metadata. The circuit requires "name", and we store other things that

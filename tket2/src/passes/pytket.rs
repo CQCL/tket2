@@ -70,13 +70,12 @@ mod test {
 
             let mut builder = ModuleBuilder::new();
             let _func = {
-                let mut func = builder.define_function("main", circ_signature.into())?;
+                let mut func = builder.define_function("main", circ_signature)?;
                 let [q1, q2] = func.input_wires_arr();
 
                 let cfg = {
                     let mut cfg = func.cfg_builder(
                         [(QB_T, q1), (QB_T, q2)],
-                        None,
                         two_qbs.clone(),
                         ExtensionSet::new(),
                     )?;
