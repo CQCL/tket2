@@ -1780,9 +1780,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tket-json-rs"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f62807960274a10068c64b213795f0009027c534ffe48924ca2e12d09acad8e7"
+checksum = "b2ca98b0f30f8dfb05a77081305b34891e2362331253cb9bf3c10efa879dbbb3"
 dependencies = [
  "pyo3",
  "pythonize",
