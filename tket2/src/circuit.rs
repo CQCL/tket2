@@ -15,7 +15,6 @@ use hugr_core::hugr::internal::HugrMutInternals;
 use itertools::Either::{Left, Right};
 
 use hugr::hugr::hugrmut::HugrMut;
-use hugr::hugr::NodeType;
 use hugr::ops::dataflow::IOTrait;
 use hugr::ops::{Input, NamedOp, OpParent, OpTag, OpTrait, Output};
 use hugr::types::{FunctionType, PolyFuncType};
@@ -528,10 +527,7 @@ fn update_signature(
         types.remove(in_index);
         types.into()
     };
-    let new_inp_op = Input::new(inp_types.clone());
-    let inp_exts = hugr.get_nodetype(inp).input_extensions().cloned();
-    hugr.replace_op(inp, NodeType::new(new_inp_op, inp_exts))
-        .unwrap();
+    hugr.replace_op(inp, Input::new(inp_types.clone())).unwrap();
 
     // Update output node if necessary.
     let out_types = out_index.map(|out_index| {
@@ -544,17 +540,14 @@ fn update_signature(
             types.remove(out_index);
             types.into()
         };
-        let new_out_op = Output::new(out_types.clone());
-        let inp_exts = hugr.get_nodetype(out).input_extensions().cloned();
-        hugr.replace_op(out, NodeType::new(new_out_op, inp_exts))
+        hugr.replace_op(out, Output::new(out_types.clone()))
             .unwrap();
         out_types
     });
 
     // Update the parent's signature
-    let nodetype = hugr.get_nodetype(parent).clone();
-    let input_extensions = nodetype.input_extensions().cloned();
-    let mut optype = nodetype.into_op();
+    let mut optype = hugr.get_optype(parent).clone();
+
     // Replace the parent node operation with the right operation type
     // This must be able to process all implementers of `DataflowParent`.
     match &mut optype {
@@ -594,7 +587,7 @@ fn update_signature(
         })?,
     }
 
-    hugr.replace_op(parent, NodeType::new(optype, input_extensions))?;
+    hugr.replace_op(parent, optype)?;
 
     Ok(())
 }

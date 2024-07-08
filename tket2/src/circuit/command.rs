@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::iter::FusedIterator;
 
 use hugr::hugr::views::{HierarchyView, SiblingGraph};
-use hugr::hugr::{NodeMetadata, NodeType};
+use hugr::hugr::NodeMetadata;
 use hugr::ops::{OpTag, OpTrait};
 use hugr::{HugrView, IncomingPort, OutgoingPort};
 use itertools::Either::{self, Left, Right};
@@ -38,12 +38,6 @@ impl<'circ, T: HugrView> Command<'circ, T> {
     #[inline]
     pub fn node(&self) -> Node {
         self.node
-    }
-
-    /// Returns the [`NodeType`] of the command.
-    #[inline]
-    pub fn nodetype(&self) -> &NodeType {
-        self.circ.hugr().get_nodetype(self.node)
     }
 
     /// Returns the [`OpType`] of the command.

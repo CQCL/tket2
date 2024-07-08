@@ -1,7 +1,6 @@
 //! Internal implementation of `Circuit::extract_dfg`.
 
 use hugr::hugr::hugrmut::HugrMut;
-use hugr::hugr::NodeType;
 use hugr::ops::{OpTrait, OpType, Output, DFG};
 use hugr::types::{FunctionType, SumType, TypeEnum};
 use hugr::HugrView;
@@ -26,10 +25,7 @@ pub(super) fn rewrite_into_dfg(circ: &mut Circuit) -> Result<(), CircuitMutError
     };
 
     let dfg = DFG { signature };
-    let nodetype = circ.hugr.get_nodetype(circ.parent());
-    let input_extensions = nodetype.input_extensions().cloned();
-    let nodetype = NodeType::new(OpType::DFG(dfg), input_extensions);
-    circ.hugr.replace_op(circ.parent(), nodetype)?;
+    circ.hugr.replace_op(circ.parent(), OpType::DFG(dfg))?;
 
     Ok(())
 }
@@ -50,8 +46,7 @@ fn remove_cfg_empty_output_tuple(
     let input_node = circ.input_node();
 
     let output_node = circ.output_node();
-    let output_nodetype = circ.hugr.get_nodetype(output_node).clone();
-    let output_op = output_nodetype.op();
+    let output_op = circ.hugr.get_optype(output_node).clone();
 
     let output_sig = output_op
         .dataflow_signature()
@@ -89,16 +84,7 @@ fn remove_cfg_empty_output_tuple(
     let new_op = Output {
         types: new_types.clone().into(),
     };
-    let new_node = hugr.add_node_after(
-        input_node,
-        NodeType::new(
-            new_op,
-            output_nodetype
-                .input_extensions()
-                .cloned()
-                .unwrap_or_default(),
-        ),
-    );
+    let new_node = hugr.add_node_after(input_node, new_op);
 
     // Reconnect the outputs.
     for (i, (neigh, port)) in input_neighs.into_iter().enumerate() {

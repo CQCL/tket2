@@ -308,7 +308,7 @@ impl CircuitChunks {
             .and_then(|s| s.as_str())
             .unwrap_or("");
 
-        let mut builder = FunctionBuilder::new(name, self.signature.into()).unwrap();
+        let mut builder = FunctionBuilder::new(name, self.signature).unwrap();
         // Take the unfinished Hugr from the builder, to avoid unnecessary
         // validation checks that require connecting the inputs an outputs.
         let mut reassembled = mem::take(builder.hugr_mut());
