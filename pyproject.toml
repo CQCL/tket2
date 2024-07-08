@@ -36,7 +36,7 @@ mypy = "^1.10.1"
 hypothesis = "^6.105.1"
 graphviz = "^0.20"
 pre-commit = "^3.7.1"
-guppylang = "^0.5.2"
+guppylang = "^0.6.0"
 
 [build-system]
 requires = ["maturin~=1.5.1"]

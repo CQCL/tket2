@@ -178,13 +178,13 @@ test = ["coverage", "pytest (>=7,<8.1)", "pytest-cov", "pytest-mock (>=3)"]
 
 [[package]]
 name = "guppylang"
-version = "0.5.2"
+version = "0.6.0"
 description = "Pythonic quantum-classical programming language"
 optional = false
 python-versions = "<4.0,>=3.10"
 files = [
-    {file = "guppylang-0.5.2-py3-none-any.whl", hash = "sha256:fc7f397869c96280fb19ed1eb7ef55e6a3198235e73dabf937cea106e91ee1f4"},
-    {file = "guppylang-0.5.2.tar.gz", hash = "sha256:a7716e5fa15190f9c3cadaec363f4f1a59660251cb7c45b180d96500cec9346f"},
+    {file = "guppylang-0.6.0-py3-none-any.whl", hash = "sha256:4b56df0c2a214c29ad4ea6b47fd2700d78c774e55d35e26f37229810606cf59c"},
+    {file = "guppylang-0.6.0.tar.gz", hash = "sha256:3ba2bbed76d099c907c035abd791ff95a1ec2026120444d0681068e8dc1a85ac"},
 ]
 
 [package.dependencies]
@@ -1035,4 +1035,4 @@ test = ["covdefaults (>=2.3)", "coverage (>=7.2.7)", "coverage-enable-subprocess
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "aa0f199b02f0b74d6e55f69054b353ec44d3d30fccb27699fe8fd2b408b5504a"
+content-hash = "94d67d8e3edd37a0758c43e1ac18ff5099adb91672a1c0099f8b963b4fc61fe7"
