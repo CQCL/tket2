@@ -1,6 +1,6 @@
 //! Rust-backed representation of circuits
 
-use std::borrow::Borrow;
+use std::borrow::{Borrow, Cow};
 
 use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::QB_T;
@@ -178,7 +178,7 @@ impl Tk2Circuit {
         Ok(self.clone())
     }
 
-    fn node_op(&self, node: PyNode) -> PyResult<PyCustomOp> {
+    fn node_op(&self, node: PyNode) -> PyResult<Cow<[u8]>> {
         let custom: CustomOp = self
             .circ
             .hugr()
@@ -191,7 +191,7 @@ impl Tk2Circuit {
                 ))
             })?;
 
-        Ok(custom.into())
+        Ok(serde_json::to_vec(&custom).unwrap().into())
     }
 
     fn node_inputs(&self, node: PyNode) -> Vec<PyWire> {
@@ -224,57 +224,5 @@ impl Tk2Circuit {
     /// Returns an error if the py object is not a Tk2Circuit.
     pub fn try_extract(circ: &PyAny) -> PyResult<Self> {
         circ.extract::<Tk2Circuit>()
-    }
-}
-
-#[pyclass]
-#[derive(Clone, Debug, PartialEq, From)]
-pub(super) struct Dfg {
-    /// Rust representation of the circuit.
-    builder: DFGBuilder<Hugr>,
-}
-#[pymethods]
-impl Dfg {
-    #[new]
-    fn new(input_types: Vec<PyHugrType>, output_types: Vec<PyHugrType>) -> PyResult<Self> {
-        let builder = DFGBuilder::new(FunctionType::new(
-            into_vec(input_types),
-            into_vec(output_types),
-        ))
-        .convert_pyerrs()?;
-        Ok(Self { builder })
-    }
-
-    fn inputs(&self) -> Vec<PyWire> {
-        self.builder.input_wires().map_into().collect()
-    }
-
-    fn add_op(&mut self, op: Bound<PyAny>, inputs: Vec<PyWire>) -> PyResult<PyNode> {
-        // TODO: Once we wrap `Dfg` in a pure python class we can make the conversion there,
-        // and have a concrete `op: PyCustomOp` argument here.
-        let custom: PyCustomOp = op
-            .call_method0("to_custom")
-            .map_err(|_| {
-                PyErr::new::<PyValueError, _>(
-                    "The operation must implement the `ToCustomOp` protocol.",
-                )
-            })?
-            .extract()?;
-        let custom: CustomOp = custom.into();
-        self.builder
-            .add_dataflow_op(custom, inputs.into_iter().map_into())
-            .convert_pyerrs()
-            .map(|d| d.node().into())
-    }
-
-    fn finish(&mut self, outputs: Vec<PyWire>) -> PyResult<Tk2Circuit> {
-        Ok(Tk2Circuit {
-            circ: self
-                .builder
-                .clone()
-                .finish_hugr_with_outputs(outputs.into_iter().map_into(), &REGISTRY)
-                .convert_pyerrs()?
-                .into(),
-        })
     }
 }
