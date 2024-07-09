@@ -21,10 +21,10 @@ from tket2.circuit.build import (
     Measure,
     QAlloc,
     QFree,
-    Not,
     load_custom,
     id_circ,
 )
+from hugr.std.logic import Not
 from tket2.pattern import Rule, RuleMatcher  # type: ignore
 from tket2.rewrite import CircuitRewrite, Subcircuit  # type: ignore
 

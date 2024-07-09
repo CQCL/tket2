@@ -27,7 +27,7 @@ packages = [{ include = "tket2-py" }]
 python = "^3.10"
 pytket = "1.29.2"
 # hugr = "^0.3.1"
-hugr = { git = "https://github.com/CQCL/hugr.git", subdirectory = "hugr-py", branch = "ss/extend" }
+hugr = { git = "https://github.com/CQCL/hugr.git", subdirectory = "hugr-py", branch = "ss/std" }
 
 [tool.poetry.group.dev.dependencies]
 maturin = "^1.7.0"

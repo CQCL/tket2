@@ -2,6 +2,7 @@ from __future__ import annotations
 from hugr.hugr import Hugr
 from hugr import tys, ops
 from hugr.ops import ComWire, Command
+from hugr.std.float import FLOAT_T
 from hugr.tracked_dfg import TrackedDfg
 from tket2.circuit import Tk2Circuit
 
@@ -112,14 +113,6 @@ class MeasureDef(QuantumOps):
 Measure = MeasureDef()
 
 
-FLOAT_T = tys.Opaque(
-    extension="arithmetic.float.types",
-    id="float64",
-    args=[],
-    bound=tys.TypeBound.Copyable,
-)
-
-
 _RzSig = tys.FunctionType([tys.Qubit, FLOAT_T], [tys.Qubit])
 
 
@@ -166,24 +159,3 @@ class QFreeDef(QuantumOps):
 
 
 QFree = QFreeDef()
-
-
-@dataclass(frozen=True)
-class LogicOps(ops.Custom):
-    extension: tys.ExtensionId = "logic"
-
-
-_NotSig = tys.FunctionType.endo([tys.Bool])
-
-
-@dataclass(frozen=True)
-class NotDef(LogicOps):
-    num_out: int = 1
-    op_name: str = "Not"
-    signature: tys.FunctionType = _NotSig
-
-    def __call__(self, a: ComWire) -> Command:
-        return super().__call__(a)
-
-
-Not = NotDef()
