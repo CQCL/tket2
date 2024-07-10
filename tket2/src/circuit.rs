@@ -356,10 +356,14 @@ fn check_hugr(hugr: &impl HugrView, parent: Node) -> Result<(), CircuitError> {
         },
         OpType::DataflowBlock(_) => Ok(()),
         OpType::Case(_) => Ok(()),
-        _ => Err(CircuitError::InvalidParentOp {
-            parent,
-            optype: optype.clone(),
-        }),
+        OpType::TailLoop(_) => Ok(()),
+        _ => {
+            debug_assert_eq!(None, optype.tag().partial_cmp(&OpTag::DataflowParent),);
+            Err(CircuitError::InvalidParentOp {
+                parent,
+                optype: optype.clone(),
+            })
+        }
     }
 }
 
@@ -580,6 +584,9 @@ fn update_signature(
         OpType::Case(case) => {
             let out_types = out_types.unwrap_or_else(|| case.signature.output().clone());
             case.signature = FunctionType::new(inp_types, out_types)
+        }
+        OpType::TailLoop(_) => {
+            unimplemented!("TailLoop signature update")
         }
         _ => Err(CircuitError::InvalidParentOp {
             parent,
