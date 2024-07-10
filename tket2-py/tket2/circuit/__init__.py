@@ -2,7 +2,6 @@
 
 from .._tket2.circuit import (
     Tk2Circuit,
-    Dfg,
     Node,
     Wire,
     CircuitCost,
@@ -24,7 +23,6 @@ __all__ = [
     # Bindings.
     # TODO: Wrap these in Python classes.
     "Tk2Circuit",
-    "Dfg",
     "Node",
     "Wire",
     "CircuitCost",

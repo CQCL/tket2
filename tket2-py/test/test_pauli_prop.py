@@ -3,15 +3,14 @@ import itertools
 import pytest
 from pytket._tket.circuit import Circuit
 
-from tket2.ops import CustomOp, Tk2Op, Not
+from hugr.ops import Custom
+from hugr.node_port import Wire
 from tket2.circuit import (
-    Dfg,
-    Wire,
     Tk2Circuit,
+    Node as Tk2Node,
+    render_circuit_mermaid,
 )
 from tket2.circuit.build import (
-    BOOL_T,
-    QB_T,
     CircBuild,
     H,
     from_coms,
@@ -19,7 +18,13 @@ from tket2.circuit.build import (
     PauliX,
     PauliY,
     PauliZ,
+    Measure,
+    QAlloc,
+    QFree,
+    load_custom,
+    id_circ,
 )
+from hugr.std.logic import Not
 from tket2.pattern import Rule, RuleMatcher  # type: ignore
 from tket2.rewrite import CircuitRewrite, Subcircuit  # type: ignore
 
@@ -27,16 +32,10 @@ from tket2.rewrite import CircuitRewrite, Subcircuit  # type: ignore
 @pytest.fixture
 def merge_rules() -> list[Rule]:
     paulis = [PauliX(0), PauliY(0), PauliZ(0)]
-    identities = [
-        Rule(CircBuild(1).extend((p, p)).finish(), CircBuild(1).finish())
-        for p in paulis
-    ]
+    identities = [Rule(from_coms(p, p), id_circ(1)) for p in paulis]
 
     off_diag = [
-        Rule(
-            CircBuild(1).extend((p0, p1)).finish(),
-            CircBuild(1).extend((p2,)).finish(),
-        )
+        Rule(from_coms(p0, p1), from_coms(p2))
         for p0, p1, p2 in itertools.permutations(paulis)
     ]
     return [*identities, *off_diag]
@@ -62,31 +61,29 @@ def propagate_rules() -> list[Rule]:
 @pytest.fixture
 def measure_rules() -> list[Rule]:
     # X flips the measured bit
-    r_build = Dfg([QB_T], [QB_T, BOOL_T])
-    qs = r_build.inputs()
-    qs = r_build.add_op(PauliX.op(), qs).outs(1)
-    q, b = r_build.add_op(Tk2Op.Measure, qs).outs(2)
-    ltk = r_build.finish([q, b])
+    r_build = CircBuild.with_nqb(1)
+    (_, measure) = r_build.extend(PauliX(0), Measure(0))
+    r_build.set_indexed_outputs(0, measure[1])
+    ltk = r_build.finish()
 
-    r_build = Dfg([QB_T], [QB_T, BOOL_T])
-    qs = r_build.inputs()
-    q, b = r_build.add_op(Tk2Op.Measure, qs).outs(2)
-    b = r_build.add_op(Not, [b])[0]
-    rtk = r_build.finish([q, b])
+    r_build = CircBuild.with_nqb(1)
+    b = r_build.add(Measure(0))[1]
+    b = r_build.add(Not(b))[0]
+    r_build.set_indexed_outputs(0, b)
+    rtk = r_build.finish()
 
     rules = [Rule(ltk, rtk)]
 
     # Z does not affect measurement result
-    r_build = Dfg([QB_T], [QB_T, BOOL_T])
-    qs = r_build.inputs()
-    qs = r_build.add_op(PauliZ.op(), qs).outs(1)
-    q, b = r_build.add_op(Tk2Op.Measure, qs).outs(2)
-    ltk = r_build.finish([q, b])
+    r_build = CircBuild.with_nqb(1)
+    (_, measure) = r_build.extend(PauliZ(0), Measure(0))
+    r_build.set_indexed_outputs(0, measure[1])
+    ltk = r_build.finish()
 
-    r_build = Dfg([QB_T], [QB_T, BOOL_T])
-    qs = r_build.inputs()
-    q, b = r_build.add_op(Tk2Op.Measure, qs).outs(2)
-    rtk = r_build.finish([q, b])
+    r_build = CircBuild.with_nqb(1)
+    b = r_build.add(Measure(0))[1]
+    r_build.set_indexed_outputs(0, b)
+    rtk = r_build.finish()
 
     rules.append(Rule(ltk, rtk))
 
@@ -111,17 +108,19 @@ def apply_exhaustive(circ: Tk2Circuit, matcher: RuleMatcher) -> int:
     return match_count
 
 
-def add_error_after(circ: Tk2Circuit, wire: Wire, error: CustomOp):
+def add_error_after(circ: Tk2Circuit, wire: Wire, error: Custom):
     """Use a rewrite to insert an operation on a qubit wire assuming the error is
     a one qubit operation, and the source gate of the wire only acts on qubits."""
-    node = wire.node()
-    port = wire.port()
+    port = wire.out_port()
+    node = Tk2Node(port.node.idx)
+    port_offset = port.offset
     n_qb = len(circ.node_outputs(node)) - 1  # ignore Order port
     subc = Subcircuit([node], circ)
-    replace_build = CircBuild(n_qb)
-    current = circ.node_op(node)
-    replace_build.add(current, list(range(n_qb)))
-    replace_build.add(error, [port])
+    replace_build = CircBuild.with_nqb(n_qb)
+    current = load_custom(circ.node_op(node))
+    replace_build.add(current(*list(range(n_qb))))
+    replace_build.add(error(port_offset))
+    replace_build.set_tracked_outputs()
     replacement = replace_build.finish()
 
     rw = CircuitRewrite(subc, circ, replacement)
@@ -133,27 +132,28 @@ def final_pauli_string(circ: Tk2Circuit) -> str:
     """Assuming the circuit only has qubit outputs - check the final operations
     on each qubit, and if they are paulis concatenate them into a string."""
 
-    def map_op(op: CustomOp) -> str:
-        # strip the extension name
-        n = op.name[len("quantum.tket2.") :]
+    def map_op(op: Custom) -> str:
+        n = op.op_name
         return n if n in ("X", "Y", "Z") else "I"
 
     # TODO ignore non-qubit outputs
     return "".join(
-        map_op(circ.node_op(w.node())) for w in circ.node_inputs(circ.output_node())
+        map_op(load_custom(circ.node_op(w.node())))
+        for w in circ.node_inputs(circ.output_node())
     )
 
 
 def test_simple_z_prop(propagate_matcher: RuleMatcher):
-    c = Dfg([QB_T] * 2, [QB_T] * 2)
-    q0, q1 = c.inputs()
-    h_node_e = c.add_op(H.op(), [q0])
-    h_node = c.add_op(H.op(), h_node_e.outs(1))
-    q0, q1 = c.add_op(CX.op(), [h_node[0], q1]).outs(2)
-    t2c = c.finish([q0, q1])
+    c = CircBuild.with_nqb(2)
 
-    add_error_after(t2c, h_node_e[0], PauliX.op())
+    (h_node_e, *_) = c.extend(H(0), H(0), CX(0, 1))
+    c.set_tracked_outputs()
 
+    t2c = c.finish()
+
+    add_error_after(t2c, h_node_e[0], PauliX)
+
+    print(render_circuit_mermaid(t2c))
     assert t2c.to_tket1() == Circuit(2).H(0).X(0).H(0).CX(0, 1)
 
     assert apply_exhaustive(t2c, propagate_matcher) == 2
@@ -164,13 +164,17 @@ def test_simple_z_prop(propagate_matcher: RuleMatcher):
 
 
 def test_cat(propagate_matcher: RuleMatcher):
-    c = CircBuild(4)
-    h_node = c.add_command(H(2))
-    t2c = c.extend(
-        [CX(2, 1), CX(2, 3), CX(1, 0)],
-    ).finish()
+    c = CircBuild.with_nqb(4)
+    (h_node, *_) = c.extend(
+        H(2),
+        CX(2, 1),
+        CX(2, 3),
+        CX(1, 0),
+    )
+    c.set_tracked_outputs()
+    t2c = c.finish()
 
-    add_error_after(t2c, h_node[0], PauliX.op())
+    add_error_after(t2c, h_node[0], PauliX)
     assert t2c.to_tket1() == Circuit(4).H(2).X(2).CX(2, 1).CX(2, 3).CX(1, 0)
 
     assert apply_exhaustive(t2c, propagate_matcher) == 3
@@ -183,18 +187,19 @@ def test_cat(propagate_matcher: RuleMatcher):
 
 
 def test_alloc_free():
-    c = CircBuild(0)
-    alloc = c.dfg.add_op(Tk2Op.QAlloc, [])
-    c.dfg.add_op(Tk2Op.QFree, alloc.outs(1))
+    c = CircBuild()
+    alloc = c.add(QAlloc())
+    c.add(QFree(alloc))
+    c.set_outputs()
     c.finish()  # validates
 
 
 def test_measure(propagate_matcher: RuleMatcher):
-    c = Dfg([QB_T, QB_T], [QB_T, BOOL_T, QB_T, BOOL_T])
-    q0, q1 = c.inputs()
-    q0 = c.add_op(PauliX.op(), [q0])[0]
-    outs = [w for q in (q0, q1) for w in c.add_op(Tk2Op.Measure, [q]).outs(2)]
-    before = c.finish(outs)
+    c = CircBuild.with_nqb(2)
+    (_, m0, m1) = c.extend(PauliX(0), Measure(0), Measure(1))
+
+    c.set_indexed_outputs(0, m0[1], 1, m1[1])
+    before = c.finish()
     """
     ──►X───►Measure─►
             │
@@ -204,12 +209,11 @@ def test_measure(propagate_matcher: RuleMatcher):
             └────►
     """
     assert apply_exhaustive(before, propagate_matcher) == 1
-
-    c = Dfg([QB_T, QB_T], [QB_T, BOOL_T, QB_T, BOOL_T])
-    q0, q1 = c.inputs()
-    q0, b0, q1, b1 = [w for q in (q0, q1) for w in c.add_op(Tk2Op.Measure, [q]).outs(2)]
-    b0 = c.add_op(Not, [b0])[0]
-    after = c.finish([q0, b0, q1, b1])
+    c = CircBuild.with_nqb(2)
+    (m0, m1) = c.extend(Measure(0), Measure(1))
+    nt = c.add(Not(m0[1]))
+    c.set_indexed_outputs(0, nt, 1, m1[1])
+    after = c.finish()
     """
     ──►Measure──────►
             └─►Not─►

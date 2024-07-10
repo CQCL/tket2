@@ -1,137 +1,161 @@
-from typing import Protocol, Iterable
-from tket2.circuit import Dfg, Node, Wire, Tk2Circuit
-from tket2.types import QB_T, BOOL_T
-from tket2.ops import CustomOp, Tk2Op, ToCustomOp
+from __future__ import annotations
+from hugr.hugr import Hugr
+from hugr import tys, ops
+from hugr.ops import ComWire, Command
+from hugr.std.float import FLOAT_T
+from hugr.tracked_dfg import TrackedDfg
+from tket2.circuit import Tk2Circuit
+
 from dataclasses import dataclass
 
 
-class Command(Protocol):
-    """Interface to specify a custom operation over some qubits and linear bits.
-    Refers to qubits and bits by index."""
-
-    gate_name: str
-    n_qb: int
-    n_lb: int = 0
-    extension_name: str = "quantum.tket2"
-
-    def qubits(self) -> list[int]: ...
-    def bits(self) -> list[int]:
-        return []
-
-    @classmethod
-    def op(cls) -> CustomOp:
-        types = [QB_T] * cls.n_qb + [BOOL_T] * cls.n_lb
-        return CustomOp(cls.extension_name, cls.gate_name, types, types)
-
-
-class CircBuild:
+class CircBuild(TrackedDfg):
     """Helper class to build a circuit from commands by tracking qubits,
     allowing commands to be specified by qubit index."""
 
-    dfg: Dfg
-    qbs: list[Wire]
-
-    def __init__(self, n_qb: int) -> None:
-        self.dfg = Dfg([QB_T] * n_qb, [QB_T] * n_qb)
-        self.qbs = self.dfg.inputs()
-
-    def add(self, op: ToCustomOp, indices: list[int]) -> Node:
-        """Add a Custom operation to some qubits and update the qubit list."""
-        qbs = [self.qbs[i] for i in indices]
-        op = op.to_custom()
-        n = self.dfg.add_op(op, qbs)
-        outs = n.outs(len(indices))
-        for i, o in zip(indices, outs):
-            self.qbs[i] = o
-
-        return n
-
-    def measure_all(self) -> list[Wire]:
-        """Append a measurement to all qubits and return the measurement result wires."""
-        return [self.add(Tk2Op.Measure, [i]).outs(2)[1] for i in range(len(self.qbs))]
-
-    def add_command(self, command: Command) -> Node:
-        """Add a Command to the circuit and return the new node."""
-        return self.add(command.op(), command.qubits())
-
-    def extend(self, coms: Iterable[Command]) -> "CircBuild":
-        """Add a sequence of commands to the circuit."""
-        for op in coms:
-            self.add_command(op)
-        return self
+    @classmethod
+    def with_nqb(cls, n_qb: int) -> CircBuild:
+        return cls(*[tys.Qubit] * n_qb, track_inputs=True)
 
     def finish(self) -> Tk2Circuit:
         """Finish building the circuit by setting all the qubits as the output
         and validate."""
-        return self.dfg.finish(self.qbs)
+        return load_hugr(self.hugr)
 
 
 def from_coms(*args: Command) -> Tk2Circuit:
-    """Build a circuit from a sequence of commands, assuming only qubit outputs."""
-    commands = []
+    """Build a circuit from a sequence of commands, assuming
+    only qubits are referred to by index."""
+    commands: list[Command] = []
     n_qb = 0
     # traverses commands twice which isn't great
     for arg in args:
-        max_qb = max(arg.qubits()) + 1
+        max_qb = max(i for i in arg.incoming if isinstance(i, int)) + 1
         n_qb = max(n_qb, max_qb)
         commands.append(arg)
 
-    build = CircBuild(n_qb)
-    build.extend(commands)
+    build = CircBuild.with_nqb(n_qb)
+    build.extend(*commands)
+    build.set_tracked_outputs()
     return build.finish()
 
 
-# Some common operations
-
-# Define some "Commands" for pure quantum gates (n qubits in and n qubits out)
-
-
-@dataclass(frozen=True)
-class H(Command):
-    qubit: int
-    gate_name = "H"
-    n_qb = 1
-
-    def qubits(self) -> list[int]:
-        return [self.qubit]
+def load_hugr(h: Hugr) -> Tk2Circuit:
+    return Tk2Circuit.from_hugr_json(h.to_serial().model_dump_json())
 
 
-@dataclass(frozen=True)
-class CX(Command):
-    control: int
-    target: int
-    gate_name = "CX"
-    n_qb = 2
+def load_custom(serialized: bytes) -> ops.Custom:
+    import hugr.serialization.ops as sops
+    import json
 
-    def qubits(self) -> list[int]:
-        return [self.control, self.target]
+    dct = json.loads(serialized)
+    dct["parent"] = -1
+    return sops.CustomOp(**dct).deserialize()
+
+
+def id_circ(n_qb: int) -> Tk2Circuit:
+    b = CircBuild.with_nqb(n_qb)
+    b.set_tracked_outputs()
+    return b.finish()
 
 
 @dataclass(frozen=True)
-class PauliX(Command):
-    qubit: int
-    gate_name = "X"
-    n_qb = 1
+class QuantumOps(ops.Custom):
+    extension: tys.ExtensionId = "quantum.tket2"
 
-    def qubits(self) -> list[int]:
-        return [self.qubit]
+
+_OneQbSig = tys.FunctionType.endo([tys.Qubit])
 
 
 @dataclass(frozen=True)
-class PauliZ(Command):
-    qubit: int
-    gate_name = "Z"
-    n_qb = 1
+class OneQbGate(QuantumOps):
+    op_name: str  # type: ignore[misc] # no-default fields follows one with a default
+    num_out: int = 1
+    signature: tys.FunctionType = _OneQbSig
 
-    def qubits(self) -> list[int]:
-        return [self.qubit]
+    def __call__(self, q: ComWire) -> Command:
+        return super().__call__(q)
+
+
+H = OneQbGate("H")
+PauliX = OneQbGate("X")
+PauliY = OneQbGate("Y")
+PauliZ = OneQbGate("Z")
+
+_TwoQbSig = tys.FunctionType.endo([tys.Qubit] * 2)
 
 
 @dataclass(frozen=True)
-class PauliY(Command):
-    qubit: int
-    gate_name = "Y"
-    n_qb = 1
+class TwoQbGate(QuantumOps):
+    op_name: str  # type: ignore[misc] # no-default fields follows one with a default
+    num_out: int = 2
+    signature: tys.FunctionType = _TwoQbSig
 
-    def qubits(self) -> list[int]:
-        return [self.qubit]
+    def __call__(self, q0: ComWire, q1: ComWire) -> Command:
+        return super().__call__(q0, q1)
+
+
+CX = TwoQbGate("CX")
+
+_MeasSig = tys.FunctionType([tys.Qubit], [tys.Qubit, tys.Bool])
+
+
+@dataclass(frozen=True)
+class MeasureDef(QuantumOps):
+    op_name: str = "Measure"
+    num_out: int = 2
+    signature: tys.FunctionType = _MeasSig
+
+    def __call__(self, q: ComWire) -> Command:
+        return super().__call__(q)
+
+
+Measure = MeasureDef()
+
+
+_RzSig = tys.FunctionType([tys.Qubit, FLOAT_T], [tys.Qubit])
+
+
+@dataclass(frozen=True)
+class RzDef(QuantumOps):
+    op_name: str = "Rz"
+    num_out: int = 1
+    signature: tys.FunctionType = _RzSig
+
+    def __call__(self, q: ComWire, fl_wire: ComWire) -> Command:
+        return super().__call__(q, fl_wire)
+
+
+Rz = RzDef()
+
+
+_QallocSig = tys.FunctionType([], [tys.Qubit])
+
+
+@dataclass(frozen=True)
+class QAllocDef(QuantumOps):
+    op_name: str = "QAlloc"
+    num_out: int = 1
+    signature: tys.FunctionType = _QallocSig
+
+    def __call__(self) -> Command:
+        return super().__call__()
+
+
+QAlloc = QAllocDef()
+
+
+_QfreeSig = tys.FunctionType([tys.Qubit], [])
+
+
+@dataclass(frozen=True)
+class QFreeDef(QuantumOps):
+    op_name: str = "QFree"
+    num_out: int = 0
+    signature: tys.FunctionType = _QfreeSig
+
+    def __call__(self, qb: ComWire) -> Command:
+        return super().__call__(qb)
+
+
+QFree = QFreeDef()

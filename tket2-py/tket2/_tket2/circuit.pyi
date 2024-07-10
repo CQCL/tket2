@@ -1,8 +1,7 @@
 from typing import Any, Callable
 from pytket._tket.circuit import Circuit as Tk1Circuit
 
-from tket2._tket2.ops import Tk2Op, CustomOp
-from tket2._tket2.types import HugrType
+from tket2._tket2.ops import Tk2Op
 
 class Tk2Circuit:
     """Rust representation of a TKET2 circuit."""
@@ -33,7 +32,7 @@ class Tk2Circuit:
         Nested circuits are traversed to count their operations.
         """
 
-    def node_op(self, node: Node) -> CustomOp:
+    def node_op(self, node: Node) -> bytes:
         """If the node corresponds to a custom op, return it. Otherwise, raise an error."""
 
     def to_tket1(self) -> Tk1Circuit:
@@ -72,46 +71,11 @@ class Tk2Circuit:
     def from_tket1_json(json: str) -> Tk2Circuit:
         """Decode a pytket json string to a Tk2Circuit."""
 
-class Dfg:
-    """A builder for a HUGR dataflow graph."""
-
-    def __init__(
-        self,
-        input_types: list[HugrType],
-        output_types: list[HugrType],
-    ) -> None:
-        """Begin building a dataflow graph with specified input and output types."""
-
-    def inputs(self) -> list[Wire]:
-        """The output wires of the input node in the DFG, one for each input type."""
-
-    def add_op(self, op: CustomOp | Any, wires: list[Wire]) -> Node:
-        """Add a custom operation to the DFG, wiring in input wires."""
-
-    def finish(self, outputs: list[Wire]) -> Tk2Circuit:
-        """Finish building the DFG by wiring in output wires to the output node
-        (one per output type) and return the resulting circuit."""
-
 class Node:
     """Handle to node in HUGR."""
 
-    def outs(self, n: int) -> list[Wire]:
-        """Generate n output wires from this node."""
-
-    def __getitem__(self, i: int) -> Wire:
-        """Get the i-th output wire from this node."""
-
-    def __iter__(self) -> Any:
-        """Iterate over the output wires from this node."""
-
-class WireIter:
-    """Iterator for wires from a node."""
-
-    def __iter__(self) -> WireIter:
-        """Get the iterator."""
-
-    def __next__(self) -> Wire:
-        """Get the next wire from the node."""
+    def __init__(self, idx: int) -> None:
+        """Create a new node handle."""
 
 class Wire:
     """An outgoing edge from a node in a HUGR, defined by the node and outgoing port."""

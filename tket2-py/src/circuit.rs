@@ -25,7 +25,6 @@ use crate::utils::ConvertPyErr;
 
 pub use self::convert::{try_update_circ, try_with_circ, update_circ, with_circ, CircuitType};
 pub use self::cost::PyCircuitCost;
-use self::tk2circuit::Dfg;
 pub use self::tk2circuit::Tk2Circuit;
 pub use tket2::{Pauli, Tk2Op};
 
@@ -33,10 +32,8 @@ pub use tket2::{Pauli, Tk2Op};
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let m = PyModule::new_bound(py, "circuit")?;
     m.add_class::<Tk2Circuit>()?;
-    m.add_class::<Dfg>()?;
     m.add_class::<PyNode>()?;
     m.add_class::<PyWire>()?;
-    m.add_class::<WireIter>()?;
     m.add_class::<PyCircuitCost>()?;
 
     m.add_function(wrap_pyfunction!(validate_circuit, &m)?)?;
@@ -125,48 +122,17 @@ impl fmt::Debug for PyNode {
     }
 }
 
-#[pyclass]
-/// An iterator over the wires of a node.
-pub struct WireIter {
-    node: PyNode,
-    current: usize,
-}
-
-#[pymethods]
-impl WireIter {
-    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
-        slf
-    }
-
-    fn __next__(mut slf: PyRefMut<'_, Self>) -> Option<PyWire> {
-        slf.current += 1;
-        Some(slf.node.__getitem__(slf.current - 1).unwrap())
-    }
-}
-
 #[pymethods]
 impl PyNode {
+    #[new]
+    fn new(index: usize) -> Self {
+        Self {
+            node: serde_json::from_value(serde_json::Value::Number(index.into())).unwrap(),
+        }
+    }
     /// A string representation of the pattern.
     pub fn __repr__(&self) -> String {
         format!("{:?}", self)
-    }
-
-    fn __getitem__(&self, idx: usize) -> PyResult<PyWire> {
-        Ok(hugr::Wire::new(self.node, idx).into())
-    }
-
-    fn __iter__(slf: PyRef<'_, Self>) -> PyResult<Py<WireIter>> {
-        let iter = WireIter {
-            current: 0,
-            node: *slf,
-        };
-        Py::new(slf.py(), iter)
-    }
-
-    fn outs(&self, n: usize) -> Vec<PyWire> {
-        (0..n)
-            .map(|i| hugr::Wire::new(self.node, i).into())
-            .collect()
     }
 }
 
