@@ -178,44 +178,35 @@ test = ["coverage", "pytest (>=7,<8.1)", "pytest-cov", "pytest-mock (>=3)"]
 
 [[package]]
 name = "guppylang"
-version = "0.6.0"
+version = "0.6.2"
 description = "Pythonic quantum-classical programming language"
 optional = false
-python-versions = "^3.10"
-files = []
-develop = false
+python-versions = "<4.0,>=3.10"
+files = [
+    {file = "guppylang-0.6.2-py3-none-any.whl", hash = "sha256:202344e8a5ae2f463d04b559b0b8bf977a5ae5ccbf7bfb36dc12b13d3eab81fb"},
+    {file = "guppylang-0.6.2.tar.gz", hash = "sha256:1cac30642bc15f71682559c0f863d01c00c62fe0970cee480e63bf09f0708ca7"},
+]
 
 [package.dependencies]
-graphviz = "^0.20.1"
-hugr = ">=0.3.0,<0.4.0"
-networkx = "^3.2.1"
-pydantic = "^2.7.0b1"
-typing-extensions = "^4.9.0"
-
-[package.source]
-type = "git"
-url = "https://github.com/CQCL/guppylang"
-reference = "3da3936"
-resolved_reference = "3da393674de7d03dd0d5d5b8239dd8968d16c4c4"
+graphviz = ">=0.20.1,<0.21.0"
+hugr = ">=0.4.0,<0.5.0"
+networkx = ">=3.2.1,<4.0.0"
+pydantic = ">=2.7.0b1,<3.0.0"
+typing-extensions = ">=4.9.0,<5.0.0"
 
 [[package]]
 name = "hugr"
-version = "0.3.1"
+version = "0.4.0"
 description = "Quantinuum's common representation for quantum programs"
 optional = false
 python-versions = ">=3.10"
-files = []
-develop = false
+files = [
+    {file = "hugr-0.4.0-py3-none-any.whl", hash = "sha256:284f9a8eba8e638b3c2b0ed54b0cddfa84c527cdcb10bdc468cc70f9cd6c3f4d"},
+    {file = "hugr-0.4.0.tar.gz", hash = "sha256:060693b1bc04a19c433eef262ff9574d909091851e73a4fc442887ee818257b1"},
+]
 
 [package.dependencies]
 pydantic = ">=2.7,<2.9"
-
-[package.source]
-type = "git"
-url = "https://github.com/CQCL/hugr.git"
-reference = "ss/std"
-resolved_reference = "ee9476cad230969b0307847332e94642f5e14c6a"
-subdirectory = "hugr-py"
 
 [[package]]
 name = "hypothesis"
@@ -843,6 +834,7 @@ files = [
     {file = "PyYAML-6.0.1-cp311-cp311-win_amd64.whl", hash = "sha256:bf07ee2fef7014951eeb99f56f39c9bb4af143d8aa3c21b1677805985307da34"},
     {file = "PyYAML-6.0.1-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:855fb52b0dc35af121542a76b9a84f8d1cd886ea97c84703eaa6d88e37a2ad28"},
     {file = "PyYAML-6.0.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:40df9b996c2b73138957fe23a16a4f0ba614f4c0efce1e9406a184b6d07fa3a9"},
+    {file = "PyYAML-6.0.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:a08c6f0fe150303c1c6b71ebcd7213c2858041a7e01975da3a99aed1e7a378ef"},
     {file = "PyYAML-6.0.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6c22bec3fbe2524cde73d7ada88f6566758a8f7227bfbf93a408a9d86bcc12a0"},
     {file = "PyYAML-6.0.1-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:8d4e9c88387b0f5c7d5f281e55304de64cf7f9c0021a3525bd3b1c542da3b0e4"},
     {file = "PyYAML-6.0.1-cp312-cp312-win32.whl", hash = "sha256:d483d2cdf104e7c9fa60c544d92981f12ad66a457afae824d146093b8c294c54"},
@@ -1059,4 +1051,4 @@ test = ["covdefaults (>=2.3)", "coverage (>=7.2.7)", "coverage-enable-subprocess
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "ff1189d9e20fb11e8cfef377617e040667837fcb9cc0b71ac20affc5446edfaf"
+content-hash = "b053589f0c76dcd5acea899a498f7c9d31eebed1b094370e5585b29fb375bdc9"
