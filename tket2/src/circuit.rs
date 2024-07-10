@@ -358,7 +358,10 @@ fn check_hugr(hugr: &impl HugrView, parent: Node) -> Result<(), CircuitError> {
         OpType::Case(_) => Ok(()),
         OpType::TailLoop(_) => Ok(()),
         _ => {
-            assert_eq!(None, optype.tag().partial_cmp(&OpTag::DataflowParent));
+            debug_assert_eq!(
+                None,
+                optype.tag().partial_cmp(&OpTag::DataflowParent),
+            );
             Err(CircuitError::InvalidParentOp {
                 parent,
                 optype: optype.clone(),
