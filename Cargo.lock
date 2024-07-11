@@ -259,9 +259,9 @@ dependencies = [
 
 [[package]]
 name = "clap-stdin"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc126d12a0930c94c3548581294d5f19360ac02e408600b4d7619d7234e8b505"
+checksum = "26aebacacd89c47b46d417017046e359921a2914e56b3abdb9caefac048405b1"
 dependencies = [
  "thiserror",
 ]
@@ -735,9 +735,9 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.6.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79e9896b1c2f2760f71e05e8e56492e98f828e4abb17055055f851752c54720a"
+checksum = "93a66a8749a4713a4421aaf479e9db1f281abbd7eaf2f03ae16e772c1b248f7c"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -745,9 +745,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-cli"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cce7564fd98a98a3e6576b627f18294319e02664aa4765924defdc789062e5f6"
+checksum = "b0cab2e45d6198f3a00eb8fe8951bb2cf6ecde81f562e021079a65b3aa0ee81f"
 dependencies = [
  "clap",
  "clap-stdin",
@@ -759,9 +759,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86da0c1e47982cb16d20911c33af448cae7b4aa36f1f5ff44753c38dbb152aae"
+checksum = "fd3a6cde9950d93a466b63e43777651ecd8becccf2d9bffa857d77301a280541"
 dependencies = [
  "bitvec",
  "cgmath",
@@ -790,14 +790,15 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4ae0241e13fc66d944faaa7c25b4062336274e6d533a0da05b55fa9b8b601df"
+checksum = "a034c5f270b5827418acee2e867423f57c030bb13685d715df12281865b78bda"
 dependencies = [
  "hugr-core",
  "itertools 0.13.0",
  "lazy_static",
  "paste",
+ "petgraph",
  "thiserror",
 ]
 

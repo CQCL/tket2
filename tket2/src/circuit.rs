@@ -11,7 +11,6 @@ use std::iter::Sum;
 pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
 use hugr::hugr::views::{DescendantsGraph, ExtractHugr, HierarchyView};
-use hugr_core::hugr::internal::HugrMutInternals;
 use itertools::Either::{Left, Right};
 
 use hugr::hugr::hugrmut::HugrMut;
@@ -317,11 +316,7 @@ impl<T: HugrView> Circuit<T> {
         } else {
             let view: DescendantsGraph = DescendantsGraph::try_new(&self.hugr, self.parent)
                 .expect("Circuit parent was not a dataflow container.");
-            let mut hugr = view.extract_hugr();
-            // TODO: Remove this once hugr 0.6.0 gets released.
-            // https://github.com/CQCL/hugr/pull/1239
-            hugr.set_num_ports(hugr.root(), 0, 0);
-            hugr.into()
+            view.extract_hugr().into()
         };
         extract_dfg::rewrite_into_dfg(&mut circ)?;
         Ok(circ)

@@ -138,6 +138,10 @@ impl MakeOpDef for Tk2Op {
         .into()
     }
 
+    fn extension(&self) -> ExtensionId {
+        EXTENSION_ID.to_owned()
+    }
+
     fn post_opdef(&self, def: &mut OpDef) {
         def.add_misc(
             "commutation",
@@ -146,7 +150,7 @@ impl MakeOpDef for Tk2Op {
     }
 
     fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
-        try_from_name(op_def.name())
+        try_from_name(op_def.name(), &EXTENSION_ID)
     }
 }
 
@@ -244,10 +248,7 @@ impl TryFrom<&OpType> for Tk2Op {
 
             match custom_op {
                 CustomOp::Extension(ext) => Tk2Op::from_extension_op(ext).ok(),
-                CustomOp::Opaque(opaque) => match opaque.extension() == &EXTENSION_ID {
-                    true => try_from_name(opaque.name()).ok(),
-                    false => None,
-                },
+                CustomOp::Opaque(opaque) => try_from_name(opaque.name(), &EXTENSION_ID).ok(),
             }
             .ok_or_else(|| NotTk2Op { op: op.clone() })
         }
