@@ -24,10 +24,7 @@ pub(super) fn rewrite_into_dfg(circ: &mut Circuit) -> Result<(), CircuitMutError
         _ => signature,
     };
 
-    let dfg = DFG { signature };
-    circ.hugr.replace_op(circ.parent(), OpType::DFG(dfg))?;
-    // let parent = circ.parent();
-    // circ.hugr.replace_op(parent, DFG { signature })?;
+    circ.hugr.replace_op(circ.parent(), DFG { signature })?;
 
     Ok(())
 }
