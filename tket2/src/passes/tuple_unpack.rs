@@ -96,9 +96,30 @@ fn remove_pack_unpack<T: HugrView>(
     let mut nodes = unpack_nodes;
     nodes.push(pack_node);
     let subcirc = Subcircuit::try_from_nodes(nodes, circ).unwrap();
+    let subcirc_signature = subcirc.signature(circ);
 
-    let mut replacement = DFGBuilder::new(subcirc.signature(circ)).unwrap();
+    // The output port order in `Subcircuit::try_from_nodes` is not too well defined.
+    // Check that the outputs are in the expected order.
+    debug_assert!(
+        itertools::equal(
+            subcirc_signature.output().iter(),
+            tuple_types
+                .iter()
+                .cycle()
+                .take(num_unpack_outputs)
+                .chain(itertools::repeat_n(
+                    &Type::new_tuple(tuple_types.to_vec()),
+                    num_other_outputs
+                ))
+        ),
+        "Unpacked tuple values must come before tupled values"
+    );
+
+    let mut replacement = DFGBuilder::new(subcirc_signature).unwrap();
     let mut outputs = Vec::with_capacity(num_unpack_outputs + num_other_outputs);
+
+    // Wire the inputs directly to the unpack outputs
+    outputs.extend(replacement.input_wires().cycle().take(num_unpack_outputs));
 
     // If needed, re-add the tuple pack node and connect its output to the tuple outputs.
     if num_other_outputs > 0 {
@@ -109,9 +130,6 @@ fn remove_pack_unpack<T: HugrView>(
             .outputs_arr();
         outputs.extend(std::iter::repeat(tuple).take(num_other_outputs))
     }
-
-    // Wire the inputs directly to the unpack outputs
-    outputs.extend(replacement.input_wires().cycle().take(num_unpack_outputs));
 
     let replacement = replacement
         .finish_prelude_hugr_with_outputs(outputs)
