@@ -122,8 +122,6 @@ impl<T: HugrView> Circuit<T> {
     }
 
     /// Returns the function type of the circuit.
-    ///
-    /// Equivalent to [`HugrView::get_function_type`].
     #[inline]
     pub fn circuit_signature(&self) -> FunctionType {
         let op = self.hugr.get_optype(self.parent);
