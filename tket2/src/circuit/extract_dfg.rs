@@ -24,8 +24,7 @@ pub(super) fn rewrite_into_dfg(circ: &mut Circuit) -> Result<(), CircuitMutError
         _ => signature,
     };
 
-    let dfg = DFG { signature };
-    circ.hugr.replace_op(circ.parent(), OpType::DFG(dfg))?;
+    circ.hugr.replace_op(circ.parent(), DFG { signature })?;
 
     Ok(())
 }
@@ -81,10 +80,12 @@ fn remove_cfg_empty_output_tuple(
 
     // Add a new output node.
     let new_types = output_sig.input[1..].to_vec();
-    let new_op = Output {
-        types: new_types.clone().into(),
-    };
-    let new_node = hugr.add_node_after(input_node, new_op);
+    let new_node = hugr.add_node_after(
+        input_node,
+        Output {
+            types: new_types.clone().into(),
+        },
+    );
 
     // Reconnect the outputs.
     for (i, (neigh, port)) in input_neighs.into_iter().enumerate() {

@@ -9,6 +9,6 @@ publish = false
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
-tket2 = { workspace = true, features = ["portmatching"] }
+tket2 = { path = "../tket2", features = ["portmatching"] }
 hugr = { workspace = true }
 itertools = { workspace = true }
