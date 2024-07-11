@@ -71,14 +71,6 @@ fn make_rewrite<T: HugrView>(circ: &Circuit<T>, cmd: Command<T>) -> Option<Circu
         return None;
     }
 
-    // TODO: SimpleReplacement fails when replacements have multiports.
-    // We only support matching a single unpack for now.
-    //
-    // This can be removed once https://github.com/CQCL/hugr/pull/1191 gets released.
-    if unpack_nodes.len() > 1 {
-        return None;
-    }
-
     // Remove all unpack operations, but only remove the pack operation if all neighbours are unpacks.
     match links.len() == unpack_nodes.len() {
         true => Some(remove_pack_unpack(
@@ -136,6 +128,9 @@ mod test {
     use hugr::types::FunctionType;
     use rstest::{fixture, rstest};
 
+    /// A simple pack operation followed by an unpack operation.
+    ///
+    /// These can be removed entirely.
     #[fixture]
     fn simple_pack_unpack() -> Circuit {
         let mut h = DFGBuilder::new(FunctionType::new_endo(type_row![QB_T, BOOL_T])).unwrap();
@@ -154,6 +149,9 @@ mod test {
             .into()
     }
 
+    /// A pack operation followed by two unpack operations from the same tuple.
+    ///
+    /// These can be removed entirely.
     #[fixture]
     fn multi_unpack() -> Circuit {
         let mut h = DFGBuilder::new(FunctionType::new(
@@ -179,9 +177,37 @@ mod test {
             .into()
     }
 
+    /// A pack operation followed by an unpack operation, where the tuple is also returned.
+    ///
+    /// The unpack operation can be removed, but the pack operation cannot.
+    #[fixture]
+    fn partial_unpack() -> Circuit {
+        let mut h = DFGBuilder::new(FunctionType::new(
+            type_row![BOOL_T, BOOL_T],
+            vec![BOOL_T, BOOL_T, Type::new_tuple(type_row![BOOL_T, BOOL_T])],
+        ))
+        .unwrap();
+        let mut inps = h.input_wires();
+        let b1 = inps.next().unwrap();
+        let b2 = inps.next().unwrap();
+
+        let op = MakeTuple::new(type_row![BOOL_T, BOOL_T]);
+        let [tuple] = h.add_dataflow_op(op, [b1, b2]).unwrap().outputs_arr();
+
+        let op = UnpackTuple::new(type_row![BOOL_T, BOOL_T]);
+        let [b1, b2] = h.add_dataflow_op(op, [tuple]).unwrap().outputs_arr();
+
+        h.finish_prelude_hugr_with_outputs([b1, b2, tuple])
+            .unwrap()
+            .into()
+    }
+
     #[rstest]
     #[case::simple(simple_pack_unpack(), 1, 0)]
-    #[case::multi(multi_unpack(), 0, 3)]
+    #[case::multi(multi_unpack(), 1, 0)]
+    // TODO: Partial unpack is not currently supported.
+    #[ignore = "Unimplemented."]
+    #[case::partial(partial_unpack(), 1, 1)]
     fn test_pack_unpack(
         #[case] mut circ: Circuit,
         #[case] expected_rewrites: usize,
