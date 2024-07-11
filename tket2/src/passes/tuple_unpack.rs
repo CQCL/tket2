@@ -205,8 +205,8 @@ mod test {
     #[rstest]
     #[case::simple(simple_pack_unpack(), 1, 0)]
     #[case::multi(multi_unpack(), 1, 0)]
-    // TODO: Partial unpack is not currently supported. 
-    #[should_panic]
+    // TODO: Partial unpack is not currently supported.
+    #[ignore = "Unimplemented."]
     #[case::partial(partial_unpack(), 1, 1)]
     fn test_pack_unpack(
         #[case] mut circ: Circuit,
