@@ -25,6 +25,10 @@ packages = [{ include = "tket2-py" }]
 
 [tool.poetry.dependencies]
 python = "^3.10"
+# Note: Be sure to update the dependency versions in [project.dependencies] as well
+#
+# Poetry does not currently follow PEP 621, it will be supported on poetry 2
+# https://github.com/python-poetry/poetry/issues/3332
 pytket = "1.29.2"
 hugr = "^0.4.0"
 
@@ -40,7 +44,7 @@ pre-commit = "^3.7.1"
 guppylang = "^0.6.2"
 
 [build-system]
-requires = ["maturin~=1.5.1"]
+requires = ["maturin~=1.7"]
 build-backend = "maturin"
 
 [project]
@@ -68,6 +72,9 @@ version = "0.1.0a2"
 description = "pytket extension for the tket 2 compiler"
 requires-python = ">=3.10"
 license = { file = "LICENCE" }
+
+# Note: Be sure to update the dependency versions in [tool.poetry.dependencies] as well
+dependencies = ['pytket >= 1.29.2, < 2', 'hugr >= 0.4.0, < 0.5']
 
 [project.urls]
 homepage = "https://github.com/CQCL/tket2"
