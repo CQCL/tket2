@@ -29,7 +29,7 @@ python = "^3.10"
 #
 # Poetry does not currently follow PEP 621, it will be supported on poetry 2
 # https://github.com/python-poetry/poetry/issues/3332
-pytket = "1.29.2"
+pytket = "1.30.0"
 hugr = "^0.4.0"
 
 [tool.poetry.group.dev.dependencies]
