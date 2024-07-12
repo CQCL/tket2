@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.1.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.1.0...tket2-py-v0.1.1) (2024-07-12)
+## [0.1.0a3](https://github.com/CQCL/tket2/compare/tket2-py-v0.1.0...tket2-py-v0.1.0a3) (2024-07-12)
 
 
 ### Documentation
