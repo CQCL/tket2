@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.1.0...tket2-py-v0.1.1) (2024-07-12)
+
+
+### Documentation
+
+* simplify the getting started notebook ([#466](https://github.com/CQCL/tket2/issues/466)) ([10639b9](https://github.com/CQCL/tket2/commit/10639b9ea6766cf9a91deb556dc1852881c7cd96))
+
 ## [0.1.0a2](https://github.com/CQCL/tket2/compare/tket2-py-v0.0.0a1...tket2-py-v0.1.0a2) (2024-07-10)
 
 
