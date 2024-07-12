@@ -12,6 +12,18 @@ updates:
     commit-message:
       # Use a conventional commit tag
       prefix: "chore(deps-rs)"
+    groups:
+      hugr:
+        patterns: ["hugr*"]
+      dev:
+        dependency-type: "development"
+        update-types: ["patch", "minor"]
+      patch:
+        update-types: ["patch"]
+      minor:
+        update-types: ["minor"]
+      # Major updates still generate individual PRs
+
   - package-ecosystem: "pip"
     directory: "/" # Location of package manifests
     schedule:
@@ -19,6 +31,18 @@ updates:
     commit-message:
       # Use a conventional commit tag
       prefix: "chore(deps-py)"
+    groups:
+      hugr:
+        patterns: ["hugr*"]
+      dev:
+        dependency-type: "development"
+        update-types: ["patch", "minor"]
+      patch:
+        update-types: ["patch"]
+      minor:
+        update-types: ["minor"]
+      # Major updates still generate individual PRs
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
