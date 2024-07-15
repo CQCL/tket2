@@ -1,8 +1,17 @@
+//! Provides `LazifyMeasurePass` which replaces [Tket2Op::Measure] nodes with
+//! [LazyQuantumOp::Measure] nodes.
+//!
+//! [Tket2Op::Measure]: tket2::Tk2Op::Measure
+//! [LazyQuantumOp::Measure]: crate::extension::quantum_lazy::LazyQuantumOp::Measure
 use std::collections::{HashMap, HashSet};
 
 use hugr::{
+    algorithms::validation::ValidationLevel,
     builder::{DFGBuilder, Dataflow, DataflowHugr},
-    extension::prelude::{BOOL_T, QB_T},
+    extension::{
+        prelude::{BOOL_T, QB_T},
+        ExtensionRegistry,
+    },
     hugr::{hugrmut::HugrMut, views::SiblingSubgraph, Rewrite},
     types::FunctionType,
     Hugr, HugrView, IncomingPort, Node, OutgoingPort, SimpleReplacement,
@@ -15,21 +24,39 @@ use crate::extension::{
     futures::FutureOpBuilder,
     quantum_lazy::{self, LazyQuantumOpBuilder},
 };
-/// TODO docs
-pub struct LazifyMeaurePass;
+
+/// A `Hugr -> Hugr` pass that replaces [tket2::Tk2Op::Measure] nodes with
+/// [quantum_lazy::LazyQuantumOp::Measure] nodes. To construct a `LazifyMeasurePass` use
+/// [Default::default].
+#[derive(Default)]
+pub struct LazifyMeaurePass(ValidationLevel);
 
 type Error = Box<dyn std::error::Error>;
+
 impl LazifyMeaurePass {
-    /// TODO docs
-    pub fn run(&self, hugr: &mut impl HugrMut) -> Result<(), Error> {
-        let mut state = State::new(hugr.nodes().filter_map(
-            |n| match hugr.get_optype(n).try_into() {
-                Ok(Tk2Op::Measure) => Some(WorkItem::ReplaceMeasure(n)),
-                _ => None,
-            },
-        ));
-        while state.work_one(hugr)? {}
-        Ok(())
+    /// Run `LazifyMeasurePass` on the given [HugrMut]. `registry` is used for
+    /// validation, if enabled.
+    pub fn run(&self, hugr: &mut impl HugrMut, registry: &ExtensionRegistry) -> Result<(), Error> {
+        self.0
+            .run_validated_pass(hugr, registry, |hugr, _validation_level| {
+                // TODO: if _validation_level is not None, verify no non-local edges
+                let mut state =
+                    State::new(
+                        hugr.nodes()
+                            .filter_map(|n| match hugr.get_optype(n).try_into() {
+                                Ok(Tk2Op::Measure) => Some(WorkItem::ReplaceMeasure(n)),
+                                _ => None,
+                            }),
+                    );
+                while state.work_one(hugr)? {}
+                Ok(())
+            })
+    }
+
+    /// Returns a new `LazifyMeasurePass` with the given [ValidationLevel].
+    pub fn with_validation_level(mut self, level: ValidationLevel) -> Self {
+        self.0 = level;
+        self
     }
 }
 
@@ -163,7 +190,7 @@ mod test {
     use cool_asserts::assert_matches;
 
     use hugr::{
-        extension::{ExtensionRegistry, PRELUDE},
+        extension::{ExtensionRegistry, EMPTY_REG, PRELUDE},
         std_extensions::arithmetic::float_types,
     };
     use tket2::extension::TKET2_EXTENSION;
@@ -197,7 +224,9 @@ mod test {
             builder.finish_hugr_with_outputs(outs, &REGISTRY).unwrap()
         };
         assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
-        LazifyMeaurePass.run(&mut hugr).unwrap();
+        LazifyMeaurePass::default()
+            .run(&mut hugr, &EMPTY_REG)
+            .unwrap();
         assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
         let mut num_read = 0;
         let mut num_lazy_measure = 0;
@@ -230,7 +259,9 @@ mod test {
             .unwrap();
 
         assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
-        LazifyMeaurePass.run(&mut hugr).unwrap();
+        LazifyMeaurePass::default()
+            .run(&mut hugr, &EMPTY_REG)
+            .unwrap();
         assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
     }
 
@@ -245,7 +276,9 @@ mod test {
         let mut hugr = builder.finish_hugr_with_outputs([qb], &REGISTRY).unwrap();
 
         assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
-        LazifyMeaurePass.run(&mut hugr).unwrap();
+        LazifyMeaurePass::default()
+            .run(&mut hugr, &EMPTY_REG)
+            .unwrap();
         assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
     }
 }

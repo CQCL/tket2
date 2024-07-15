@@ -1,4 +1,8 @@
-//! Docs
+//! This module defines the Hugr extension used to represent Lazy Quantum
+//! Operations.
+//!
+//! Lazyness is represented by returning `tket2.futures.Future` classical
+//! values. Qubits are never lazy.
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
@@ -18,11 +22,11 @@ use crate::extension::futures;
 
 use super::futures::future_type;
 
-/// TODO docs
+/// The "tket2.quantum.lazy" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.quantum.lazy");
 
 lazy_static! {
-    /// The "tket2.quantum.lazy" extension
+    /// The "tket2.quantum.lazy" extension.
     pub static ref EXTENSION: Extension = {
         let mut ext = Extension::new(EXTENSION_ID);
         LazyQuantumOp::load_all_ops(&mut ext).unwrap();
