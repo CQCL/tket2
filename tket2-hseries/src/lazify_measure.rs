@@ -29,7 +29,7 @@ use crate::extension::{
 /// [quantum_lazy::LazyQuantumOp::Measure] nodes. To construct a `LazifyMeasurePass` use
 /// [Default::default].
 #[derive(Default)]
-pub struct LazifyMeaurePass(ValidationLevel);
+pub struct LazifyMeasurePass(ValidationLevel);
 
 type Error = Box<dyn std::error::Error>;
 
