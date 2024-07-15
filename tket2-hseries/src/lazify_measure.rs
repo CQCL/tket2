@@ -11,7 +11,6 @@ use hugr::{
     extension::{
         prelude::{BOOL_T, QB_T},
         ExtensionRegistry,
-
     },
     hugr::{hugrmut::HugrMut, views::SiblingSubgraph, Rewrite},
     types::FunctionType,
