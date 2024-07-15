@@ -175,8 +175,8 @@ impl WorkItem {
     fn work(self, hugr: &mut impl HugrMut) -> Result<impl IntoIterator<Item = Self>, Error> {
         match self {
             Self::ReplaceMeasure(node) => {
-                // for now we read immeidately, but when we don't the first
-                // result are the linked inputs we must return
+                // for now we read immediately, but when we don't the first
+                // results are the linked inputs we must return
                 let (_, replace) = simple_replace_measure(hugr, node);
                 replace.apply(hugr)?;
                 Ok(std::iter::empty())
