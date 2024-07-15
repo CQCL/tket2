@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tket2-py"
-version = "0.1.0a3"
+version = "0.1.0a4"
 description = "pytket extension for the tket 2 compiler"
 classifiers = [
     "Environment :: Console",
@@ -29,7 +29,7 @@ python = "^3.10"
 #
 # Poetry does not currently follow PEP 621, it will be supported on poetry 2
 # https://github.com/python-poetry/poetry/issues/3332
-pytket = "1.29.2"
+pytket = "1.30.0"
 hugr = "^0.4.0"
 
 [tool.poetry.group.dev.dependencies]
@@ -38,7 +38,7 @@ pytest = "^8.2.2"
 pytest-cov = "^5.0.0"
 ruff = "^0.5.1"
 mypy = "^1.10.1"
-hypothesis = "^6.105.1"
+hypothesis = "^6.108.2"
 graphviz = "^0.20"
 pre-commit = "^3.7.1"
 guppylang = "^0.6.2"
@@ -68,7 +68,7 @@ authors = [
 maintainers = [
     { name = "TKET development team", email = "tket-support@quantinuum.com" },
 ]
-version = "0.1.0a3"
+version = "0.1.0a4"
 description = "pytket extension for the tket 2 compiler"
 requires-python = ">=3.10"
 license = { file = "LICENCE" }
