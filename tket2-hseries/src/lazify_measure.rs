@@ -4,7 +4,8 @@ use hugr::{
     builder::{DFGBuilder, Dataflow, DataflowHugr},
     extension::prelude::{BOOL_T, QB_T},
     hugr::{hugrmut::HugrMut, views::SiblingSubgraph, Rewrite},
-    types::FunctionType, Hugr, HugrView, IncomingPort, Node, OutgoingPort, SimpleReplacement,
+    types::FunctionType,
+    Hugr, HugrView, IncomingPort, Node, OutgoingPort, SimpleReplacement,
 };
 use tket2::Tk2Op;
 
@@ -134,7 +135,7 @@ fn simple_replace_measure(
             .map(|(i, target)| (target, IncomingPort::from(i + 1))),
     );
     assert_eq!(nu_out.len(), 1 + num_uses_of_bool);
-    assert_eq!(nu_out.len(), hugr.in_value_types(o).count());
+    assert_eq!(nu_out.len(), replacement_hugr.in_value_types(o).count());
 
     let nu_out_set = nu_out.keys().copied().collect();
     (
@@ -204,7 +205,7 @@ mod test {
             let ot = hugr.get_optype(n);
             if let Ok(FutureOp::Read) = ot.try_into() {
                 num_read += 1;
-            } else if let Ok(LazyQuantumOp::LazyMeasure) = ot.try_into() {
+            } else if let Ok(LazyQuantumOp::Measure) = ot.try_into() {
                 num_lazy_measure += 1;
             } else {
                 assert_matches!(Tk2Op::try_from(ot), Err(_))

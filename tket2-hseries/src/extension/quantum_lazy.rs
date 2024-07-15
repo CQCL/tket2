@@ -1,4 +1,4 @@
-//! TODO docs
+//! Docs
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
@@ -6,7 +6,7 @@ use hugr::{
         simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp},
         ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, PRELUDE,
     },
-    ops::{CustomOp, NamedOp as _, OpType},
+    ops::{CustomOp, OpType},
     types::FunctionType,
     Extension, Wire,
 };
@@ -29,7 +29,8 @@ lazy_static! {
         ext
     };
 
-    /// TODO docs
+    /// Extension registry including the "tket2.quantum.lazy" extension and
+    /// dependencies.
     pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
         futures::EXTENSION.to_owned(),
         PRELUDE.to_owned(),
@@ -55,7 +56,7 @@ lazy_static! {
 #[allow(missing_docs)]
 #[non_exhaustive]
 pub enum LazyQuantumOp {
-    LazyMeasure,
+    Measure,
 }
 
 impl MakeOpDef for LazyQuantumOp {
@@ -96,12 +97,13 @@ impl TryFrom<&OpType> for LazyQuantumOp {
     }
 }
 
-/// TODO docs
+/// An extension trait for [Dataflow] providing methods to add
+/// "tket2.quantum.lazy" operations.
 pub trait LazyQuantumOpBuilder: Dataflow {
-    /// TODO docs
+    /// Add a "tket2.quantum.lazy.Measure" op.
     fn add_lazy_measure(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
-            .add_dataflow_op(LazyQuantumOp::LazyMeasure, [qb])?
+            .add_dataflow_op(LazyQuantumOp::Measure, [qb])?
             .outputs_arr())
     }
 }
