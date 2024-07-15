@@ -33,7 +33,7 @@ pub struct LazifyMeasurePass(ValidationLevel);
 
 type Error = Box<dyn std::error::Error>;
 
-impl LazifyMeaurePass {
+impl LazifyMeasurePass {
     /// Run `LazifyMeasurePass` on the given [HugrMut]. `registry` is used for
     /// validation, if enabled.
     pub fn run(&self, hugr: &mut impl HugrMut, registry: &ExtensionRegistry) -> Result<(), Error> {
@@ -224,7 +224,7 @@ mod test {
             builder.finish_hugr_with_outputs(outs, &REGISTRY).unwrap()
         };
         assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
-        LazifyMeaurePass::default()
+        LazifyMeasurePass::default()
             .run(&mut hugr, &EMPTY_REG)
             .unwrap();
         assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
@@ -259,7 +259,7 @@ mod test {
             .unwrap();
 
         assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
-        LazifyMeaurePass::default()
+        LazifyMeasurePass::default()
             .run(&mut hugr, &EMPTY_REG)
             .unwrap();
         assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
@@ -276,7 +276,7 @@ mod test {
         let mut hugr = builder.finish_hugr_with_outputs([qb], &REGISTRY).unwrap();
 
         assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
-        LazifyMeaurePass::default()
+        LazifyMeasurePass::default()
             .run(&mut hugr, &EMPTY_REG)
             .unwrap();
         assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
