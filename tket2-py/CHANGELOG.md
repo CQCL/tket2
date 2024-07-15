@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0a4](https://github.com/CQCL/tket2/compare/tket2-py-v0.1.0...tket2-py-v0.1.0a4) (2024-07-15)
+
+
+### Bug Fixes
+
+* Recompile ecc sets after [#441](https://github.com/CQCL/tket2/issues/441) ([#484](https://github.com/CQCL/tket2/issues/484)) ([1122fa4](https://github.com/CQCL/tket2/commit/1122fa453790fe5fd3433d4e028fb327949d9619))
+
 ## [0.1.0a3](https://github.com/CQCL/tket2/compare/tket2-py-v0.1.0...tket2-py-v0.1.0a3) (2024-07-12)
 
 
