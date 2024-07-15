@@ -113,11 +113,11 @@ mod test {
     use std::sync::Arc;
 
     use cool_asserts::assert_matches;
+    use futures::FutureOpBuilder as _;
     use hugr::{
         builder::{DataflowHugr, FunctionBuilder},
         ops::NamedOp,
     };
-    use futures::FutureOpBuilder as _;
     use strum::IntoEnumIterator as _;
 
     use super::*;
@@ -138,11 +138,9 @@ mod test {
     #[test]
     fn circuit() {
         let hugr = {
-            let mut func_builder = FunctionBuilder::new(
-                "circuit",
-                FunctionType::new(QB_T, vec![QB_T, BOOL_T]),
-            )
-            .unwrap();
+            let mut func_builder =
+                FunctionBuilder::new("circuit", FunctionType::new(QB_T, vec![QB_T, BOOL_T]))
+                    .unwrap();
             let [qb] = func_builder.input_wires_arr();
             let [qb, lazy_b] = func_builder.add_lazy_measure(qb).unwrap();
             let [b] = func_builder.add_read(lazy_b, BOOL_T).unwrap();
