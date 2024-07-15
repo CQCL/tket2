@@ -562,8 +562,14 @@ mod tests {
 
     /// A badger optimiser using a reduced set of rewrite rules.
     #[fixture]
-    fn badger_opt() -> DefaultBadgerOptimiser {
+    fn badger_opt_json() -> DefaultBadgerOptimiser {
         BadgerOptimiser::default_with_eccs_json_file("../test_files/small_eccs.json").unwrap()
+    }
+
+    /// A badger optimiser using a reduced set of rewrite rules.
+    #[fixture]
+    fn badger_opt_compiled() -> DefaultBadgerOptimiser {
+        BadgerOptimiser::default_with_rewriter_binary("../test_files/small_eccs.rwr").unwrap()
     }
 
     /// A badger optimiser using the complete nam_6_3 rewrite set.
@@ -576,7 +582,9 @@ mod tests {
     }
 
     #[rstest]
-    fn rz_rz_cancellation(rz_rz: Circuit, badger_opt: DefaultBadgerOptimiser) {
+    #[case::compiled(badger_opt_compiled())]
+    #[case::json(badger_opt_json())]
+    fn rz_rz_cancellation(rz_rz: Circuit, #[case] badger_opt: DefaultBadgerOptimiser) {
         let opt_rz = badger_opt.optimise(
             &rz_rz,
             BadgerOptions {
@@ -589,7 +597,9 @@ mod tests {
     }
 
     #[rstest]
-    fn rz_rz_cancellation_parallel(rz_rz: Circuit, badger_opt: DefaultBadgerOptimiser) {
+    #[case::compiled(badger_opt_compiled())]
+    #[case::json(badger_opt_json())]
+    fn rz_rz_cancellation_parallel(rz_rz: Circuit, #[case] badger_opt: DefaultBadgerOptimiser) {
         let mut opt_rz = badger_opt.optimise(
             &rz_rz,
             BadgerOptions {
