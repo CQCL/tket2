@@ -8,6 +8,7 @@ rust-core: &rust-core
 
 rust:
   - *rust-core
+  - "tket2-hseries/**"
   - "badger-optimiser/**"
   - "compile-rewriter/**"
 
