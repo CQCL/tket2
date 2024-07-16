@@ -66,7 +66,7 @@ pub enum LazyQuantumOp {
 impl MakeOpDef for LazyQuantumOp {
     fn signature(&self) -> SignatureFunc {
         match self {
-            Self::Measure => FunctionType::new(QB_T, vec![QB_T, future_type(BOOL_T)]).into()
+            Self::Measure => FunctionType::new(QB_T, vec![QB_T, future_type(BOOL_T)]).into(),
         }
     }
 
