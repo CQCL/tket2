@@ -65,7 +65,9 @@ pub enum LazyQuantumOp {
 
 impl MakeOpDef for LazyQuantumOp {
     fn signature(&self) -> SignatureFunc {
-        FunctionType::new(QB_T, vec![QB_T, future_type(BOOL_T)]).into()
+        match self {
+            Self::Measure => FunctionType::new(QB_T, vec![QB_T, future_type(BOOL_T)]).into()
+        }
     }
 
     fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
