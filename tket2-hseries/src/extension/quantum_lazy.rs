@@ -1,7 +1,7 @@
 //! This module defines the Hugr extension used to represent Lazy Quantum
 //! Operations.
 //!
-//! Lazyness is represented by returning `tket2.futures.Future` classical
+//! Laziness is represented by returning `tket2.futures.Future` classical
 //! values. Qubits are never lazy.
 use hugr::{
     builder::{BuildError, Dataflow},
