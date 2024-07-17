@@ -127,14 +127,12 @@ impl NativeOp {
 
         let params = (num_params > 0).then(|| vec!["".into(); num_params]);
 
-        Some(circuit_json::Operation {
-            op_type: serial_op,
-            n_qb: Some(num_qubits as u32),
-            params,
-            op_box: None,
-            signature: Some([vec!["Q".into(); num_qubits], vec!["B".into(); num_bits]].concat()),
-            conditional: None,
-        })
+        let mut op = circuit_json::Operation::default();
+        op.op_type = serial_op;
+        op.n_qb = Some(num_qubits as u32);
+        op.params = params;
+        op.signature = Some([vec!["Q".into(); num_qubits], vec!["B".into(); num_bits]].concat());
+        Some(op)
     }
 
     /// Returns the dataflow signature for this operation.

@@ -81,8 +81,7 @@ mod test {
                     )?;
 
                     circ = {
-                        let mut dfg =
-                            cfg.simple_entry_builder(two_qbs.clone(), 1, ExtensionSet::new())?;
+                        let mut dfg = cfg.simple_entry_builder(two_qbs.clone(), 1)?;
                         let [q1, q2] = dfg.input_wires_arr();
 
                         let [q1] = dfg.add_dataflow_op(Tk2Op::H, [q1])?.outputs_arr();
