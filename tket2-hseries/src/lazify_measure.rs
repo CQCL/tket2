@@ -13,7 +13,7 @@ use hugr::{
         ExtensionRegistry,
     },
     hugr::{hugrmut::HugrMut, views::SiblingSubgraph, Rewrite},
-    types::FunctionType,
+    types::Signature,
     Hugr, HugrView, IncomingPort, Node, OutgoingPort, SimpleReplacement,
 };
 use tket2::Tk2Op;
@@ -85,7 +85,7 @@ impl State {
 
 lazy_static! {
     static ref MEASURE_READ_HUGR: Hugr = {
-        let mut builder = DFGBuilder::new(FunctionType::new(QB_T, vec![QB_T, BOOL_T])).unwrap();
+        let mut builder = DFGBuilder::new(Signature::new(QB_T, vec![QB_T, BOOL_T])).unwrap();
         let [qb] = builder.input_wires_arr();
         let [qb, lazy_r] = builder.add_lazy_measure(qb).unwrap();
         let [r] = builder.add_read(lazy_r, BOOL_T).unwrap();
@@ -99,7 +99,7 @@ fn measure_replacement(num_dups: usize) -> Hugr {
     let mut out_types = vec![QB_T];
     out_types.extend((0..num_dups).map(|_| BOOL_T));
     let num_out_types = out_types.len();
-    let mut builder = DFGBuilder::new(FunctionType::new(QB_T, out_types)).unwrap();
+    let mut builder = DFGBuilder::new(Signature::new(QB_T, out_types)).unwrap();
     let [qb] = builder.input_wires_arr();
     let [qb, mut future_r] = builder.add_lazy_measure(qb).unwrap();
     let mut future_rs = vec![];
@@ -215,7 +215,7 @@ mod test {
     #[test]
     fn simple() {
         let mut hugr = {
-            let mut builder = DFGBuilder::new(FunctionType::new(QB_T, vec![QB_T, BOOL_T])).unwrap();
+            let mut builder = DFGBuilder::new(Signature::new(QB_T, vec![QB_T, BOOL_T])).unwrap();
             let [qb] = builder.input_wires_arr();
             let outs = builder
                 .add_dataflow_op(Tk2Op::Measure, [qb])
@@ -248,7 +248,7 @@ mod test {
     #[test]
     fn multiple_uses() {
         let mut builder =
-            DFGBuilder::new(FunctionType::new(QB_T, vec![QB_T, BOOL_T, BOOL_T])).unwrap();
+            DFGBuilder::new(Signature::new(QB_T, vec![QB_T, BOOL_T, BOOL_T])).unwrap();
         let [qb] = builder.input_wires_arr();
         let [qb, bool] = builder
             .add_dataflow_op(Tk2Op::Measure, [qb])
@@ -267,7 +267,7 @@ mod test {
 
     #[test]
     fn no_uses() {
-        let mut builder = DFGBuilder::new(FunctionType::new_endo(QB_T)).unwrap();
+        let mut builder = DFGBuilder::new(Signature::new_endo(QB_T)).unwrap();
         let [qb] = builder.input_wires_arr();
         let [qb, _] = builder
             .add_dataflow_op(Tk2Op::Measure, [qb])

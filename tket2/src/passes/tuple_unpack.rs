@@ -125,7 +125,7 @@ mod test {
     use hugr::extension::prelude::{BOOL_T, QB_T};
     use hugr::ops::{MakeTuple, UnpackTuple};
     use hugr::type_row;
-    use hugr::types::FunctionType;
+    use hugr::types::Signature;
     use rstest::{fixture, rstest};
 
     /// A simple pack operation followed by an unpack operation.
@@ -133,7 +133,7 @@ mod test {
     /// These can be removed entirely.
     #[fixture]
     fn simple_pack_unpack() -> Circuit {
-        let mut h = DFGBuilder::new(FunctionType::new_endo(type_row![QB_T, BOOL_T])).unwrap();
+        let mut h = DFGBuilder::new(Signature::new_endo(type_row![QB_T, BOOL_T])).unwrap();
         let mut inps = h.input_wires();
         let qb1 = inps.next().unwrap();
         let b2 = inps.next().unwrap();
@@ -154,7 +154,7 @@ mod test {
     /// These can be removed entirely.
     #[fixture]
     fn multi_unpack() -> Circuit {
-        let mut h = DFGBuilder::new(FunctionType::new(
+        let mut h = DFGBuilder::new(Signature::new(
             type_row![BOOL_T, BOOL_T],
             type_row![BOOL_T, BOOL_T, BOOL_T, BOOL_T],
         ))
@@ -182,7 +182,7 @@ mod test {
     /// The unpack operation can be removed, but the pack operation cannot.
     #[fixture]
     fn partial_unpack() -> Circuit {
-        let mut h = DFGBuilder::new(FunctionType::new(
+        let mut h = DFGBuilder::new(Signature::new(
             type_row![BOOL_T, BOOL_T],
             vec![BOOL_T, BOOL_T, Type::new_tuple(type_row![BOOL_T, BOOL_T])],
         ))

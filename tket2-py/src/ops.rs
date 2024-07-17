@@ -3,7 +3,7 @@
 use derive_more::{From, Into};
 use hugr::hugr::IdentList;
 use hugr::ops::custom::{ExtensionOp, OpaqueOp};
-use hugr::types::FunctionType;
+use hugr::types::Signature;
 use pyo3::prelude::*;
 use std::fmt;
 use std::str::FromStr;
@@ -252,7 +252,7 @@ impl PyCustomOp {
             op_name,
             Default::default(),
             [],
-            FunctionType::new(into_vec(input_types), into_vec(output_types)),
+            Signature::new(into_vec(input_types), into_vec(output_types)),
         ))
         .into())
     }

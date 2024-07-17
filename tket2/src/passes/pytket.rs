@@ -52,7 +52,7 @@ mod test {
     use hugr::extension::{ExtensionSet, PRELUDE_REGISTRY};
     use hugr::ops::handle::NodeHandle;
     use hugr::ops::{MakeTuple, OpType, Tag, UnpackTuple};
-    use hugr::types::{FunctionType, TypeRow};
+    use hugr::types::{Signature, TypeRow};
     use hugr::{type_row, HugrView};
     use rstest::{fixture, rstest};
 
@@ -65,7 +65,7 @@ mod test {
     fn guppy_like_circuit() -> Circuit {
         fn build() -> Result<Circuit, hugr::builder::BuildError> {
             let two_qbs = type_row![QB_T, QB_T];
-            let circ_signature = FunctionType::new_endo(two_qbs.clone());
+            let circ_signature = Signature::new_endo(two_qbs.clone());
             let circ;
 
             let mut builder = ModuleBuilder::new();

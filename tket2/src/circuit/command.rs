@@ -481,7 +481,7 @@ mod test {
     use hugr::ops::{NamedOp, Value};
     use hugr::std_extensions::arithmetic::float_ops::FLOAT_OPS_REGISTRY;
     use hugr::std_extensions::arithmetic::float_types::ConstF64;
-    use hugr::types::FunctionType;
+    use hugr::types::Signature;
     use itertools::Itertools;
     use rstest::{fixture, rstest};
     use std::collections::hash_map::DefaultHasher;
@@ -588,7 +588,7 @@ mod test {
     #[test]
     fn commands_nonlinear() {
         let qb_row = vec![QB_T; 1];
-        let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row)).unwrap();
+        let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), qb_row)).unwrap();
         let [q_in] = h.input_wires_arr();
 
         let constant = h.add_constant(Value::extension(ConstF64::new(0.5)));
@@ -659,7 +659,7 @@ mod test {
     #[test]
     fn alloc_free() -> Result<(), Box<dyn std::error::Error>> {
         let qb_row = vec![QB_T; 1];
-        let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row))?;
+        let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), qb_row))?;
 
         let [q_in] = h.input_wires_arr();
 
@@ -715,7 +715,7 @@ mod test {
     #[test]
     fn test_impls() -> Result<(), Box<dyn std::error::Error>> {
         let qb_row = vec![QB_T; 1];
-        let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), vec![]))?;
+        let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), vec![]))?;
         let [q_in] = h.input_wires_arr();
         h.add_dataflow_op(Tk2Op::QFree, [q_in])?;
         let circ: Circuit = h.finish_hugr_with_outputs([], &REGISTRY)?.into();
