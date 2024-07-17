@@ -541,8 +541,24 @@ pub(crate) mod test {
 
             for op in &ops {
                 let op_t: OpType = op.clone().to_extension_op().unwrap().into();
+                let def_op: BasicResultOp = (&op_t).try_into().unwrap();
+                let ResultOpDef::Basic(basic_op) = &op.result_op else {
+                    panic!();
+                };
+                assert_eq!(basic_op, &def_op);
                 let new_op: ResultOp = (&op_t).try_into().unwrap();
                 assert_eq!(&new_op, op);
+
+                let op = op.clone().array_op(ARR_SIZE);
+                let op_t: OpType = op.clone().to_extension_op().unwrap().into();
+                let def_op: ArrayResultOp = (&op_t).try_into().unwrap();
+                let ResultOpDef::Array(array_op, size) = &op.result_op else {
+                    panic!();
+                };
+                assert_eq!(array_op, &def_op);
+                assert_eq!(size, &ARR_SIZE);
+                let new_op: ResultOp = (&op_t).try_into().unwrap();
+                assert_eq!(&new_op, &op);
             }
             let [b, f, i, u, a_b, a_f, a_i, a_u] = func_builder.input_wires_arr();
 
