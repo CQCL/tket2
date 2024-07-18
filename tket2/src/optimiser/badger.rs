@@ -53,8 +53,8 @@ pub struct BadgerOptions {
     pub progress_timeout: Option<u64>,
     /// The maximum number of circuits to process before stopping the optimisation.
     ///
-    /// Only applies to single-threaded and on a per-thread basis in data parallel
-    /// (split_circuit=true) optimisation.
+    /// For data parallel multi-threading, (split_circuit=true), applies on a
+    /// per-thread basis, otherwise applies globally.
     ///
     /// Defaults to `None`, which means no limit.
     pub max_circuit_cnt: Option<usize>,
@@ -278,13 +278,6 @@ where
         let n_threads: usize = opt.n_threads.get();
         let circ = circ.to_owned();
 
-        if let Some(max_circuit_cnt) = opt.max_circuit_cnt {
-            logger.warn(format!(
-                "Ignoring max_circuit_cnt (set to {max_circuit_cnt}). This is\
- only supported in single-threaded and data parallel optimisation."
-            ));
-        }
-
         // multi-consumer priority channel for queuing circuits to be processed by the workers
         let cost_fn = {
             let strategy = self.strategy.clone();
@@ -347,6 +340,14 @@ where
                         Ok(PriorityChannelLog::CircuitCount{processed_count: proc, seen_count: seen, queue_length}) => {
                             processed_count = proc;
                             seen_count = seen;
+                            if let Some(max_circuit_cnt) = opt.max_circuit_cnt {
+                                if seen_count > max_circuit_cnt {
+                                    timeout_flag = true;
+                                    // Signal the workers to stop.
+                                    let _ = pq.close();
+                                    break;
+                                }
+                            }
                             logger.log_progress(processed_count, Some(queue_length), seen_count);
                         }
                         Err(crossbeam_channel::RecvError) => {
