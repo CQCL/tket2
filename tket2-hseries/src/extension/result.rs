@@ -6,12 +6,17 @@ use hugr::{
     extension::{
         prelude::{BOOL_T, PRELUDE, STRING_CUSTOM_TYPE},
         simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp, OpLoadError},
-        ExtensionId, ExtensionRegistry, OpDef, SignatureFunc,
+        ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc,
     },
     ops::{CustomOp, NamedOp, OpType},
     std_extensions::arithmetic::{
-        float_types::{EXTENSION as FLOAT_EXTENSION, FLOAT64_TYPE},
-        int_types::{EXTENSION as INT_EXTENSION, INT_TYPE_ID, LOG_WIDTH_TYPE_PARAM},
+        float_types::{
+            EXTENSION as FLOAT_EXTENSION, EXTENSION_ID as FLOAT_EXTENSION_ID, FLOAT64_TYPE,
+        },
+        int_types::{
+            EXTENSION as INT_EXTENSION, EXTENSION_ID as INT_EXTENSION_ID, INT_TYPE_ID,
+            LOG_WIDTH_TYPE_PARAM,
+        },
     },
     type_row,
     types::{
@@ -31,7 +36,7 @@ pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.result")
 lazy_static! {
     /// The "tket2.result" extension.
     pub static ref EXTENSION: Extension = {
-        let mut ext = Extension::new(EXTENSION_ID);
+        let mut ext = Extension::new_with_reqs(EXTENSION_ID, ExtensionSet::from_iter([INT_EXTENSION_ID, FLOAT_EXTENSION_ID]));
         ResultOpDef::load_all_ops(&mut ext).unwrap();
         ext
     };
