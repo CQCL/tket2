@@ -32,8 +32,7 @@ lazy_static! {
     /// The "tket2.result" extension.
     pub static ref EXTENSION: Extension = {
         let mut ext = Extension::new(EXTENSION_ID);
-        BasicResultOp::load_all_ops(&mut ext).unwrap();
-        ArrayResultOp::load_all_ops(&mut ext).unwrap();
+        ResultOpDef::load_all_ops(&mut ext).unwrap();
         ext
     };
 
@@ -64,14 +63,19 @@ lazy_static! {
 )]
 #[allow(missing_docs)]
 #[non_exhaustive]
-/// Result report operations for simple types.
+/// Result report operations from quantum runtime.
 /*
 result_int<Tag: StringArg, N: BoundedNat>( int<N> ) // N is bitwidth, e.g. i32, i64
 result_uint<Tag: StringArg, N: BoundedNat>( int<N> ) // unsigned
 result_bool<Tag: StringArg>( Sum((), ()) )
 result_f64<Tag: StringArg>( f64 )
+
+result_arr_int<Tag: StringArg, N: Nat, M: BoundedNat>( Array<N, int<M> > )
+result_arr_uint<Tag: StringArg, N: Nat, M: BoundedNat>( Array<N, int<M> > )
+result_arr_f64<Tag: StringArg, N: Nat>( Array<N,f64> )
+result_arr_bool<Tag: StringArg, N: Nat>( Array<N, Sum((), ()) > )
 */
-pub enum BasicResultOp {
+pub enum ResultOpDef {
     #[strum(serialize = "result_bool")]
     Bool,
     #[strum(serialize = "result_int")]
@@ -80,44 +84,84 @@ pub enum BasicResultOp {
     UInt,
     #[strum(serialize = "result_f64")]
     F64,
-}
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Serialize,
-    Deserialize,
-    Hash,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumIter,
-    IntoStaticStr,
-    EnumString,
-)]
-#[allow(missing_docs)]
-#[non_exhaustive]
-/// Result report operations for arrays of simple types.
-/*
-result_arr_int<Tag: StringArg, N: Nat, M: BoundedNat>( Array<N, int<M> > )
-result_arr_uint<Tag: StringArg, N: Nat, M: BoundedNat>( Array<N, int<M> > )
-result_arr_f64<Tag: StringArg, N: Nat>( Array<N,f64> )
-result_arr_bool<Tag: StringArg, N: Nat>( Array<N, Sum((), ()) > )*/
-pub enum ArrayResultOp {
     #[strum(serialize = "result_array_bool")]
-    Bool,
+    ArrBool,
     #[strum(serialize = "result_array_int")]
-    Int,
+    ArrInt,
     #[strum(serialize = "result_array_uint")]
-    UInt,
+    ArrUInt,
     #[strum(serialize = "result_array_f64")]
-    Float,
+    ArrF64,
 }
 
-trait AsResultOp {
-    fn arg_type(&self) -> Type;
-    fn type_params(&self) -> Vec<TypeParam>;
+impl ResultOpDef {
+    fn arg_type(&self) -> Type {
+        match self {
+            Self::Bool => BOOL_T,
+            Self::Int | Self::UInt => int_tv(1),
+            Self::F64 => FLOAT64_TYPE,
+            Self::ArrBool | Self::ArrF64 => {
+                let inner_t = self.simple_type_op().arg_type();
+                array_type(inner_t)
+            }
+            Self::ArrInt | Self::ArrUInt => array_type(int_tv(2)),
+        }
+    }
+
+    fn simple_type_op(&self) -> Self {
+        match self {
+            Self::ArrBool => Self::Bool,
+            Self::ArrInt => Self::Int,
+            Self::ArrUInt => Self::UInt,
+            Self::ArrF64 => Self::F64,
+            _ => *self,
+        }
+    }
+
+    fn array_type_op(&self) -> Self {
+        match self {
+            Self::Bool => Self::ArrBool,
+            Self::Int => Self::ArrInt,
+            Self::UInt => Self::ArrUInt,
+            Self::F64 => Self::ArrF64,
+            _ => *self,
+        }
+    }
+
+    fn type_params(&self) -> Vec<TypeParam> {
+        match self {
+            Self::Bool | Self::F64 => vec![],
+            Self::Int | Self::UInt => vec![LOG_WIDTH_TYPE_PARAM],
+            _ => [
+                vec![TypeParam::max_nat()],
+                self.simple_type_op().type_params(),
+            ]
+            .concat(),
+        }
+    }
+
+    fn instantiate(&self, args: &[TypeArg]) -> Result<ResultOp, OpLoadError> {
+        let parsed_args = concrete_result_op_type_args(args)?;
+
+        match (parsed_args, self) {
+            ((tag, None, None), Self::Bool | Self::F64) => Ok(ResultOp::_new_basic(tag, *self)),
+            ((tag, Some(width), None), Self::Int | Self::UInt) => {
+                Ok(ResultOp::_new_int(tag, width as u8, *self))
+            }
+            ((_, Some(size), _), _) => {
+                let inner_args = match args {
+                    [t, _] => vec![t.clone()],
+                    [t, _, w] => vec![t.clone(), w.clone()],
+                    _ => unreachable!(),
+                };
+                Ok(self
+                    .simple_type_op()
+                    .instantiate(&inner_args)?
+                    .array_op(size))
+            }
+            _ => Err(hugr::extension::SignatureError::InvalidTypeArgs.into()),
+        }
+    }
 
     fn result_signature(&self) -> SignatureFunc {
         let string_param = TypeParam::Opaque {
@@ -130,112 +174,28 @@ trait AsResultOp {
         )
         .into()
     }
-
-    fn instantiate(&self, args: &[TypeArg]) -> Result<ResultOp, OpLoadError>;
 }
 
-impl AsResultOp for BasicResultOp {
-    fn arg_type(&self) -> Type {
-        self.basic_op_type(1)
-    }
-
-    fn type_params(&self) -> Vec<TypeParam> {
-        match self {
-            Self::Bool | Self::F64 => vec![],
-            Self::Int | Self::UInt => vec![LOG_WIDTH_TYPE_PARAM],
-        }
-    }
-
-    fn instantiate(&self, args: &[TypeArg]) -> Result<ResultOp, OpLoadError> {
-        let args = concrete_result_op_type_args(args)?;
-        match args {
-            (tag, None, None) => Ok(ResultOp {
-                tag,
-                result_op: ResultOpDef::Basic(*self),
-                int_width: None,
-            }),
-            (tag, Some(width), None) => Ok(ResultOp {
-                tag,
-                result_op: ResultOpDef::Basic(*self),
-                int_width: Some(width as u8),
-            }),
-            _ => Err(hugr::extension::SignatureError::InvalidTypeArgs.into()),
-        }
-    }
+fn array_type(inner_t: Type) -> Type {
+    let size_var = TypeArg::new_var_use(1, TypeParam::max_nat());
+    PRELUDE
+        .get_type("array")
+        .unwrap()
+        .instantiate(vec![size_var, inner_t.into()])
+        .unwrap()
+        .into()
 }
 
-impl BasicResultOp {
-    fn as_array_op(&self) -> ArrayResultOp {
-        match self {
-            Self::Bool => ArrayResultOp::Bool,
-            Self::Int => ArrayResultOp::Int,
-            Self::UInt => ArrayResultOp::UInt,
-            Self::F64 => ArrayResultOp::Float,
-        }
-    }
-
-    fn basic_op_type(&self, int_tv_idx: usize) -> Type {
-        match self {
-            Self::Bool => BOOL_T,
-            Self::Int | Self::UInt => INT_EXTENSION
-                .get_type(&INT_TYPE_ID)
-                .unwrap()
-                .instantiate(vec![TypeArg::new_var_use(int_tv_idx, LOG_WIDTH_TYPE_PARAM)])
-                .unwrap()
-                .into(),
-            Self::F64 => FLOAT64_TYPE,
-        }
-    }
-}
-impl ArrayResultOp {
-    fn inner_type_op(&self) -> BasicResultOp {
-        match self {
-            Self::Bool => BasicResultOp::Bool,
-            Self::Int => BasicResultOp::Int,
-            Self::UInt => BasicResultOp::UInt,
-            Self::Float => BasicResultOp::F64,
-        }
-    }
-}
-impl AsResultOp for ArrayResultOp {
-    fn arg_type(&self) -> Type {
-        let inner_t = self.inner_type_op().basic_op_type(2);
-        let size_var = TypeArg::new_var_use(1, TypeParam::max_nat());
-        PRELUDE
-            .get_type("array")
-            .unwrap()
-            .instantiate(vec![size_var, inner_t.into()])
-            .unwrap()
-            .into()
-    }
-
-    fn type_params(&self) -> Vec<TypeParam> {
-        [
-            vec![TypeParam::max_nat()],
-            self.inner_type_op().type_params(),
-        ]
-        .concat()
-    }
-
-    fn instantiate(&self, args: &[TypeArg]) -> Result<ResultOp, OpLoadError> {
-        let args = concrete_result_op_type_args(args)?;
-        match args {
-            (tag, Some(size), None) => Ok(ResultOp {
-                tag,
-                result_op: ResultOpDef::Array(*self, size),
-                int_width: None,
-            }),
-            (tag, Some(size), Some(width)) => Ok(ResultOp {
-                tag,
-                result_op: ResultOpDef::Array(*self, size),
-                int_width: Some(width as u8),
-            }),
-            _ => Err(hugr::extension::SignatureError::InvalidTypeArgs.into()),
-        }
-    }
+fn int_tv(int_tv_idx: usize) -> Type {
+    INT_EXTENSION
+        .get_type(&INT_TYPE_ID)
+        .unwrap()
+        .instantiate(vec![TypeArg::new_var_use(int_tv_idx, LOG_WIDTH_TYPE_PARAM)])
+        .unwrap()
+        .into()
 }
 
-impl MakeOpDef for BasicResultOp {
+impl MakeOpDef for ResultOpDef {
     fn signature(&self) -> SignatureFunc {
         self.result_signature()
     }
@@ -249,24 +209,16 @@ impl MakeOpDef for BasicResultOp {
     }
 }
 
-impl MakeOpDef for ArrayResultOp {
-    fn signature(&self) -> SignatureFunc {
-        self.result_signature()
-    }
-
-    fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
-        try_from_name(op_def.name(), &EXTENSION_ID)
-    }
-
-    fn extension(&self) -> ExtensionId {
-        EXTENSION_ID
-    }
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Hash, PartialEq)]
+enum SimpleArgs {
+    Basic,
+    Int(u8),
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Hash, PartialEq, Eq)]
-enum ResultOpDef {
-    Basic(BasicResultOp),
-    Array(ArrayResultOp, u64),
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Hash, PartialEq)]
+enum ResultArgs {
+    Simple(SimpleArgs),
+    Array(SimpleArgs, u64),
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Hash, PartialEq)]
@@ -274,39 +226,48 @@ enum ResultOpDef {
 pub struct ResultOp {
     tag: String,
     result_op: ResultOpDef,
-    int_width: Option<u8>,
+    args: ResultArgs,
 }
 
 impl ResultOp {
-    fn _new_basic(tag: impl Into<String>, result_op: BasicResultOp) -> Self {
+    fn _new_basic(tag: impl Into<String>, result_op: ResultOpDef) -> Self {
         Self {
             tag: tag.into(),
-            result_op: ResultOpDef::Basic(result_op),
-            int_width: None,
+            result_op,
+            args: ResultArgs::Simple(SimpleArgs::Basic),
         }
     }
 
+    fn _new_int(tag: impl Into<String>, int_width: u8, int_op: ResultOpDef) -> Self {
+        Self {
+            tag: tag.into(),
+            result_op: int_op,
+            args: ResultArgs::Simple(SimpleArgs::Int(int_width)),
+        }
+    }
     /// Create a new "tket2.result" operation for a boolean result.
     pub fn new_bool(tag: impl Into<String>) -> Self {
-        Self::_new_basic(tag, BasicResultOp::Bool)
+        Self::_new_basic(tag, ResultOpDef::Bool)
     }
 
     /// Create a new "tket2.result" operation for a floating-point result.
     pub fn new_f64(tag: impl Into<String>) -> Self {
-        Self::_new_basic(tag, BasicResultOp::F64)
+        Self::_new_basic(tag, ResultOpDef::F64)
     }
 
     /// Convert this "tket2.result" operation to an array result operation over the same inner type.
     /// The size of the array is set to the given value.
     /// If this operation is already an array result operation, its size is updated.
     pub fn array_op(mut self, size: u64) -> Self {
-        match &mut self.result_op {
-            ResultOpDef::Basic(op) => Self {
-                result_op: ResultOpDef::Array(op.as_array_op(), size),
-                ..self
-            },
-            ResultOpDef::Array(_, curr_size) => {
-                *curr_size = size;
+        let result_op = self.result_op.array_type_op();
+        match &mut self.args {
+            ResultArgs::Simple(s_args) => {
+                self.args = ResultArgs::Array(s_args.clone(), size);
+                self.result_op = result_op;
+                self
+            }
+            ResultArgs::Array(_, s) => {
+                *s = size;
                 self
             }
         }
@@ -314,20 +275,12 @@ impl ResultOp {
 
     /// Create a new "tket2.result" operation for a signed integer result of a given bit width.
     pub fn new_int(tag: impl Into<String>, int_width: u8) -> Self {
-        Self {
-            tag: tag.into(),
-            result_op: ResultOpDef::Basic(BasicResultOp::Int),
-            int_width: Some(int_width),
-        }
+        Self::_new_int(tag, int_width, ResultOpDef::Int)
     }
 
     /// Create a new "tket2.result" operation for an unsigned integer result of a given bit width.
     pub fn new_uint(tag: impl Into<String>, int_width: u8) -> Self {
-        Self {
-            tag: tag.into(),
-            result_op: ResultOpDef::Basic(BasicResultOp::UInt),
-            int_width: Some(int_width),
-        }
+        Self::_new_int(tag, int_width, ResultOpDef::UInt)
     }
 }
 
@@ -354,12 +307,10 @@ fn concrete_result_op_type_args(
 
 impl<'a> From<&'a ResultOp> for &'static str {
     fn from(value: &ResultOp) -> Self {
-        match &value.result_op {
-            ResultOpDef::Basic(op) => op.into(),
-            ResultOpDef::Array(op, _) => op.into(),
-        }
+        value.result_op.into()
     }
 }
+
 impl MakeExtensionOp for ResultOp {
     fn from_extension_op(
         ext_op: &hugr::ops::custom::ExtensionOp,
@@ -369,12 +320,7 @@ impl MakeExtensionOp for ResultOp {
     {
         let def = ext_op.def();
         let args = ext_op.args();
-        if let Ok(array_op) = ArrayResultOp::from_def(def) {
-            array_op.instantiate(args)
-        } else {
-            let basic_op = BasicResultOp::from_def(def)?;
-            basic_op.instantiate(args)
-        }
+        ResultOpDef::from_def(def)?.instantiate(args)
     }
 
     fn type_args(&self) -> Vec<TypeArg> {
@@ -382,19 +328,17 @@ impl MakeExtensionOp for ResultOp {
             arg: CustomTypeArg::new(STRING_CUSTOM_TYPE, self.tag.clone().into()).unwrap(),
         }];
 
-        let basic_op = match self.result_op {
-            ResultOpDef::Basic(op) => op,
-            ResultOpDef::Array(op, size) => {
+        match self.args {
+            ResultArgs::Simple(_) => {}
+            ResultArgs::Array(_, size) => {
                 type_args.push(TypeArg::BoundedNat { n: size });
-                op.inner_type_op()
             }
-        };
+        }
 
-        match basic_op {
-            BasicResultOp::Int | BasicResultOp::UInt => {
-                type_args.push(TypeArg::BoundedNat {
-                    n: self.int_width.expect("Int result op expects an int width.") as u64,
-                });
+        match self.args {
+            ResultArgs::Simple(SimpleArgs::Int(width))
+            | ResultArgs::Array(SimpleArgs::Int(width), _) => {
+                type_args.push(TypeArg::BoundedNat { n: width as u64 });
             }
             _ => {}
         }
@@ -413,22 +357,7 @@ impl MakeRegisteredOp for ResultOp {
     }
 }
 
-impl TryFrom<&OpType> for BasicResultOp {
-    type Error = ();
-
-    fn try_from(value: &OpType) -> Result<Self, Self::Error> {
-        let Some(custom_op) = value.as_custom_op() else {
-            Err(())?
-        };
-        match custom_op {
-            CustomOp::Extension(ext) => Self::from_extension_op(ext).ok(),
-            CustomOp::Opaque(opaque) => try_from_name(opaque.name(), &EXTENSION_ID).ok(),
-        }
-        .ok_or(())
-    }
-}
-
-impl TryFrom<&OpType> for ArrayResultOp {
+impl TryFrom<&OpType> for ResultOpDef {
     type Error = ();
 
     fn try_from(value: &OpType) -> Result<Self, Self::Error> {
@@ -452,17 +381,8 @@ impl TryFrom<&OpType> for ResultOp {
         };
         match custom_op {
             CustomOp::Extension(ext) => Self::from_extension_op(ext),
-            CustomOp::Opaque(opaque) => {
-                if let Ok(basic_op) = try_from_name::<BasicResultOp>(opaque.name(), &EXTENSION_ID) {
-                    basic_op.instantiate(opaque.args())
-                } else if let Ok(array_op) =
-                    try_from_name::<ArrayResultOp>(opaque.name(), &EXTENSION_ID)
-                {
-                    array_op.instantiate(opaque.args())
-                } else {
-                    Err(OpLoadError::NotMember(opaque.name().to_string()))
-                }
-            }
+            CustomOp::Opaque(opaque) => try_from_name::<ResultOpDef>(opaque.name(), &EXTENSION_ID)?
+                .instantiate(opaque.args()),
         }
     }
 }
@@ -503,12 +423,8 @@ pub(crate) mod test {
     fn create_extension() {
         assert_eq!(EXTENSION.name(), &EXTENSION_ID);
 
-        for o in BasicResultOp::iter() {
-            assert_eq!(BasicResultOp::from_def(get_opdef(o).unwrap()), Ok(o));
-        }
-
-        for o in ArrayResultOp::iter() {
-            assert_eq!(ArrayResultOp::from_def(get_opdef(o).unwrap()), Ok(o));
+        for o in ResultOpDef::iter() {
+            assert_eq!(ResultOpDef::from_def(get_opdef(o).unwrap()), Ok(o));
         }
     }
 
@@ -541,22 +457,16 @@ pub(crate) mod test {
 
             for op in &ops {
                 let op_t: OpType = op.clone().to_extension_op().unwrap().into();
-                let def_op: BasicResultOp = (&op_t).try_into().unwrap();
-                let ResultOpDef::Basic(basic_op) = &op.result_op else {
-                    panic!();
-                };
-                assert_eq!(basic_op, &def_op);
+                let def_op: ResultOpDef = (&op_t).try_into().unwrap();
+                assert_eq!(op.result_op, def_op);
                 let new_op: ResultOp = (&op_t).try_into().unwrap();
                 assert_eq!(&new_op, op);
 
                 let op = op.clone().array_op(ARR_SIZE);
                 let op_t: OpType = op.clone().to_extension_op().unwrap().into();
-                let def_op: ArrayResultOp = (&op_t).try_into().unwrap();
-                let ResultOpDef::Array(array_op, size) = &op.result_op else {
-                    panic!();
-                };
-                assert_eq!(array_op, &def_op);
-                assert_eq!(size, &ARR_SIZE);
+                let def_op: ResultOpDef = (&op_t).try_into().unwrap();
+
+                assert_eq!(op.result_op, def_op);
                 let new_op: ResultOp = (&op_t).try_into().unwrap();
                 assert_eq!(&new_op, &op);
             }
