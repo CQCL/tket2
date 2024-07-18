@@ -735,9 +735,9 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93a66a8749a4713a4421aaf479e9db1f281abbd7eaf2f03ae16e772c1b248f7c"
+checksum = "de2694a502f45f121f16b43b18b2d23e7b10e02140c7f15f0b75bb0f1fcd52bc"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -745,9 +745,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-cli"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0cab2e45d6198f3a00eb8fe8951bb2cf6ecde81f562e021079a65b3aa0ee81f"
+checksum = "55a6e94c3256d4d0e8a627861b77b0880ce9e772dd76613f8e53bed2dfa94233"
 dependencies = [
  "clap",
  "clap-stdin",
@@ -759,9 +759,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd3a6cde9950d93a466b63e43777651ecd8becccf2d9bffa857d77301a280541"
+checksum = "6a8c876db355d019432300959c916e783c5cb63d9454fab353ef122c95fc08aa"
 dependencies = [
  "bitvec",
  "cgmath",
@@ -790,9 +790,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a034c5f270b5827418acee2e867423f57c030bb13685d715df12281865b78bda"
+checksum = "8c3ce02c8ff515af36391fa253ef52d43be3597d0547da2d4bde1ee8de84b4d5"
 dependencies = [
  "hugr-core",
  "itertools 0.13.0",
@@ -1781,9 +1781,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tket-json-rs"
-version = "0.4.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2ca98b0f30f8dfb05a77081305b34891e2362331253cb9bf3c10efa879dbbb3"
+checksum = "37b6cb2ca748ea4ef01553d16c60aaf3ac728749ff591c87df1da0ccc357bb31"
 dependencies = [
  "pyo3",
  "pythonize",
