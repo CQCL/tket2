@@ -51,6 +51,13 @@ pub struct BadgerOptions {
     ///
     /// Defaults to `None`, which means no timeout.
     pub progress_timeout: Option<u64>,
+    /// The maximum number of circuits to process before stopping the optimisation.
+    ///
+    /// Only applies to single-threaded and on a per-thread basis in data parallel
+    /// (split_circuit=true) optimisation.
+    ///
+    /// Defaults to `None`, which means no limit.
+    pub max_circuit_cnt: Option<usize>,
     /// The number of threads to use.
     ///
     /// Defaults to `1`.
@@ -79,6 +86,7 @@ impl Default for BadgerOptions {
             n_threads: NonZeroUsize::new(1).unwrap(),
             split_circuit: Default::default(),
             queue_size: 20,
+            max_circuit_cnt: None,
         }
     }
 }
@@ -194,6 +202,7 @@ where
             circ_cnt += 1;
 
             let rewrites = self.rewriter.get_rewrites(&circ);
+            logger.register_branching_factor(rewrites.len());
 
             // Get combinations of rewrites that can be applied to the circuit,
             // and filter them to keep only the ones that
@@ -235,6 +244,12 @@ where
                     break;
                 }
             }
+            if let Some(max_circuit_cnt) = opt.max_circuit_cnt {
+                if seen_hashes.len() >= max_circuit_cnt {
+                    timeout_flag = true;
+                    break;
+                }
+            }
         }
 
         logger.log_processing_end(
@@ -243,6 +258,7 @@ where
             best_circ_cost,
             false,
             timeout_flag,
+            start_time.elapsed(),
         );
         best_circ
     }
@@ -258,6 +274,7 @@ where
         mut logger: BadgerLogger,
         opt: BadgerOptions,
     ) -> Circuit {
+        let start_time = Instant::now();
         let n_threads: usize = opt.n_threads.get();
         let circ = circ.to_owned();
 
@@ -375,6 +392,7 @@ where
             best_circ_cost,
             true,
             timeout_flag,
+            start_time.elapsed(),
         );
 
         joins.into_iter().for_each(|j| j.join().unwrap());
@@ -390,6 +408,7 @@ where
         mut logger: BadgerLogger,
         opt: BadgerOptions,
     ) -> Result<Circuit, HugrError> {
+        let start_time = Instant::now();
         let circ = circ.to_owned();
         let circ_cost = self.cost(&circ);
         let max_chunk_cost = circ_cost.clone().div_cost(opt.n_threads);
@@ -444,7 +463,14 @@ where
             logger.log_best(best_circ_cost.clone(), num_rewrites);
         }
 
-        logger.log_processing_end(opt.n_threads.get(), None, best_circ_cost, true, false);
+        logger.log_processing_end(
+            opt.n_threads.get(),
+            None,
+            best_circ_cost,
+            true,
+            false,
+            start_time.elapsed(),
+        );
         joins.into_iter().for_each(|j| j.join().unwrap());
 
         Ok(best_circ)

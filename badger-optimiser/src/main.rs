@@ -81,6 +81,14 @@ struct CmdLineArgs {
         help = "Maximum time in seconds to wait between circuit improvements (default=None)."
     )]
     progress_timeout: Option<u64>,
+    /// Maximum number of circuits to process (default=no limit)
+    #[arg(
+        short = 'c',
+        long,
+        value_name = "MAX_CIRCUIT_CNT",
+        help = "Maximum number of circuits to process (default=None)."
+    )]
+    max_circuit_cnt: Option<usize>,
     /// Number of threads (default=1)
     #[arg(
         short = 'j',
@@ -164,6 +172,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             n_threads,
             split_circuit: opts.split_circ,
             queue_size: opts.queue_size,
+            max_circuit_cnt: opts.max_circuit_cnt,
         },
     );
 
