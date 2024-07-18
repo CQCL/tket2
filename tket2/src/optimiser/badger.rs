@@ -278,6 +278,13 @@ where
         let n_threads: usize = opt.n_threads.get();
         let circ = circ.to_owned();
 
+        if let Some(max_circuit_cnt) = opt.max_circuit_cnt {
+            logger.warn(format!(
+                "Ignoring max_circuit_cnt (set to {max_circuit_cnt}). This is\
+ only supported in single-threaded and data parallel optimisation."
+            ));
+        }
+
         // multi-consumer priority channel for queuing circuits to be processed by the workers
         let cost_fn = {
             let strategy = self.strategy.clone();

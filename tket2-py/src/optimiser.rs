@@ -64,6 +64,9 @@ impl PyBadgerOptimiser {
     /// * `max_circuit_cnt`: The maximum number of circuits to process before
     ///     stopping the optimisation.
     ///
+    ///     Only applies to single-threaded and on a per-thread basis in data
+    ///     parallel (`split_circuit=true`) optimisation.
+    ///
     ///     If `None` the optimiser will run indefinitely, or until `timeout` is
     ///     reached.
     ///

@@ -127,6 +127,12 @@ impl<'w> BadgerLogger<'w> {
         tracing::info!(target: LOG_TARGET, "{}", msg.as_ref());
     }
 
+    /// Log a warning message.
+    #[inline]
+    pub fn warn(&self, msg: impl AsRef<str>) {
+        tracing::warn!(target: LOG_TARGET, "{}", msg.as_ref());
+    }
+
     /// Log verbose information on the progress of the optimization.
     #[inline]
     pub fn progress(&self, msg: impl AsRef<str>) {
