@@ -332,7 +332,7 @@ mod test {
         extension::prelude::{BOOL_T, QB_T},
         std_extensions::arithmetic::float_types::FLOAT64_TYPE,
         type_row,
-        types::FunctionType,
+        types::Signature,
     };
     use rstest::{fixture, rstest};
 
@@ -435,7 +435,7 @@ mod test {
     // Gate being commuted has a non-linear input
     fn non_linear_inputs() -> Circuit {
         let build = || {
-            let mut dfg = DFGBuilder::new(FunctionType::new(
+            let mut dfg = DFGBuilder::new(Signature::new(
                 type_row![QB_T, QB_T, FLOAT64_TYPE],
                 type_row![QB_T, QB_T],
             ))?;
@@ -457,7 +457,7 @@ mod test {
     // Gates being commuted have non-linear outputs
     fn non_linear_outputs() -> Circuit {
         let build = || {
-            let mut dfg = DFGBuilder::new(FunctionType::new(
+            let mut dfg = DFGBuilder::new(Signature::new(
                 type_row![QB_T, QB_T],
                 type_row![QB_T, QB_T, BOOL_T],
             ))?;

@@ -4,7 +4,7 @@ use hugr::extension::prelude::{BOOL_T, QB_T};
 
 use hugr::ops::{Noop, OpTrait, OpType};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
-use hugr::types::FunctionType;
+use hugr::types::Signature;
 
 use hugr::IncomingPort;
 use tket_json_rs::circuit_json;
@@ -136,7 +136,7 @@ impl NativeOp {
     }
 
     /// Returns the dataflow signature for this operation.
-    pub fn signature(&self) -> Option<FunctionType> {
+    pub fn signature(&self) -> Option<Signature> {
         self.op.dataflow_signature()
     }
 

@@ -14,7 +14,7 @@ use hugr::hugr::views::{HierarchyView, SiblingGraph, SiblingSubgraph};
 use hugr::hugr::{HugrError, NodeMetadataMap};
 use hugr::ops::handle::DataflowParentID;
 use hugr::ops::OpType;
-use hugr::types::FunctionType;
+use hugr::types::Signature;
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 use itertools::Itertools;
 use portgraph::algorithms::ConvexChecker;
@@ -228,7 +228,7 @@ enum ConnectionTarget {
 #[derive(Debug, Clone)]
 pub struct CircuitChunks {
     /// The original circuit's signature.
-    signature: FunctionType,
+    signature: Signature,
 
     /// The original circuit's root metadata.
     root_meta: Option<NodeMetadataMap>,

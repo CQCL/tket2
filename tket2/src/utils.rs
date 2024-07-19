@@ -10,7 +10,7 @@ use hugr::Hugr;
 use hugr::{
     builder::{BuildError, CircuitBuilder, Dataflow, DataflowHugr},
     extension::prelude::QB_T,
-    types::FunctionType,
+    types::Signature,
 };
 
 use crate::circuit::Circuit;
@@ -27,7 +27,7 @@ where
 {
     let qb_row = vec![QB_T; num_qubits];
     let signature =
-        FunctionType::new(qb_row.clone(), qb_row).with_extension_delta(float_types::EXTENSION_ID);
+        Signature::new(qb_row.clone(), qb_row).with_extension_delta(float_types::EXTENSION_ID);
     let mut h = FunctionBuilder::new("main", signature)?;
 
     let qbs = h.input_wires();
@@ -52,7 +52,7 @@ where
     let mut builder = ModuleBuilder::new();
     let circ = {
         let qb_row = vec![QB_T; num_qubits];
-        let circ_signature = FunctionType::new(qb_row.clone(), qb_row);
+        let circ_signature = Signature::new(qb_row.clone(), qb_row);
         let mut dfg = builder.define_function("main", circ_signature)?;
         let mut circ = dfg.as_circuit(dfg.input_wires());
         f(&mut circ)?;

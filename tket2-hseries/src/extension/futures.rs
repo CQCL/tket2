@@ -10,9 +10,7 @@ use hugr::{
         ExtensionBuildError, ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, TypeDef,
     },
     ops::{custom::ExtensionOp, CustomOp, OpType},
-    types::{
-        type_param::TypeParam, CustomType, FunctionType, PolyFuncType, Type, TypeArg, TypeBound,
-    },
+    types::{type_param::TypeParam, CustomType, PolyFuncType, Signature, Type, TypeArg, TypeBound},
     Extension, Wire,
 };
 use lazy_static::lazy_static;
@@ -97,15 +95,15 @@ impl MakeOpDef for FutureOp {
         let future_type = future_type(t_type.clone());
         match self {
             FutureOp::Read => {
-                PolyFuncType::new([t_param], FunctionType::new(future_type, t_type)).into()
+                PolyFuncType::new([t_param], Signature::new(future_type, t_type)).into()
             }
             FutureOp::Dup => PolyFuncType::new(
                 [t_param],
-                FunctionType::new(future_type.clone(), vec![future_type.clone(), future_type]),
+                Signature::new(future_type.clone(), vec![future_type.clone(), future_type]),
             )
             .into(),
             FutureOp::Free => {
-                PolyFuncType::new([t_param], FunctionType::new(future_type.clone(), vec![])).into()
+                PolyFuncType::new([t_param], Signature::new(future_type.clone(), vec![])).into()
             }
         }
     }
@@ -287,7 +285,7 @@ pub(crate) mod test {
         let hugr = {
             let mut func_builder = FunctionBuilder::new(
                 "circuit",
-                PolyFuncType::new(vec![t_param], FunctionType::new(future_type, t.clone())),
+                PolyFuncType::new(vec![t_param], Signature::new(future_type, t.clone())),
             )
             .unwrap();
             let [future_w] = func_builder.input_wires_arr();

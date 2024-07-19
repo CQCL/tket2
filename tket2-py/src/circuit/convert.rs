@@ -6,7 +6,7 @@ use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::QB_T;
 use hugr::ops::handle::NodeHandle;
 use hugr::ops::{CustomOp, OpType};
-use hugr::types::{FunctionType, Type};
+use hugr::types::Type;
 use itertools::Itertools;
 use pyo3::exceptions::{PyAttributeError, PyValueError};
 use pyo3::types::{PyAnyMethods, PyModule, PyString, PyTypeMethods};

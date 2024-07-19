@@ -7,7 +7,7 @@ use hugr::extension::prelude::{BOOL_T, QB_T};
 
 use hugr::ops::handle::NodeHandle;
 use hugr::ops::OpType;
-use hugr::types::FunctionType;
+use hugr::types::Signature;
 use hugr::{Hugr, Wire};
 
 use itertools::{EitherOrBoth, Itertools};
@@ -44,7 +44,7 @@ impl Tk1Decoder {
     pub fn try_new(serialcirc: &SerialCircuit) -> Result<Self, TK1ConvertError> {
         let num_qubits = serialcirc.qubits.len();
         let num_bits = serialcirc.bits.len();
-        let sig = FunctionType::new_endo([vec![QB_T; num_qubits], vec![BOOL_T; num_bits]].concat())
+        let sig = Signature::new_endo([vec![QB_T; num_qubits], vec![BOOL_T; num_bits]].concat())
             .with_extension_delta(TKET1_EXTENSION_ID);
 
         let name = serialcirc.name.clone().unwrap_or_default();

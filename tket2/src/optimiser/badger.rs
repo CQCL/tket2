@@ -500,7 +500,7 @@ mod tests {
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::QB_T,
         std_extensions::arithmetic::float_types::FLOAT64_TYPE,
-        types::FunctionType,
+        types::Signature,
     };
     use rstest::{fixture, rstest};
 
@@ -521,7 +521,7 @@ mod tests {
     fn rz_rz() -> Circuit {
         let input_t = vec![QB_T, FLOAT64_TYPE, FLOAT64_TYPE];
         let output_t = vec![QB_T];
-        let mut h = DFGBuilder::new(FunctionType::new(input_t, output_t)).unwrap();
+        let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
         let mut inps = h.input_wires();
         let qb = inps.next().unwrap();

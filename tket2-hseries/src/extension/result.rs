@@ -1,6 +1,7 @@
 //! This module defines the Hugr extension used to represent result reporting operations,
 //! with static string tags.
 //!
+use hugr::types::Signature;
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
@@ -21,7 +22,7 @@ use hugr::{
     type_row,
     types::{
         type_param::{CustomTypeArg, TypeParam},
-        FunctionType, PolyFuncType, Type, TypeArg,
+        PolyFuncType, Type, TypeArg,
     },
     Extension, Wire,
 };
@@ -175,7 +176,7 @@ impl ResultOpDef {
 
         PolyFuncType::new(
             [vec![string_param], self.type_params()].concat(),
-            FunctionType::new(self.arg_type(), type_row![]),
+            Signature::new(self.arg_type(), type_row![]),
         )
         .into()
     }
@@ -412,6 +413,7 @@ impl<D: Dataflow> ResultOpBuilder for D {}
 #[cfg(test)]
 pub(crate) mod test {
     use cool_asserts::assert_matches;
+    use hugr::types::Signature;
     use hugr::{
         builder::{Dataflow, DataflowHugr, FunctionBuilder},
         extension::prelude::array_type,
@@ -455,7 +457,7 @@ pub(crate) mod test {
         .concat();
         let hugr = {
             let mut func_builder =
-                FunctionBuilder::new("circuit", FunctionType::new(in_row, type_row![])).unwrap();
+                FunctionBuilder::new("circuit", Signature::new(in_row, type_row![])).unwrap();
             let ops = [
                 ResultOp::new_bool("b"),
                 ResultOp::new_f64("f"),

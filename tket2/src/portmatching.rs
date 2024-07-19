@@ -10,12 +10,12 @@
 //! use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
 //! use hugr::extension::prelude::QB_T;
 //! use hugr::ops::handle::NodeHandle;
-//! use hugr::types::FunctionType;
+//! use hugr::types::Signature;
 //!
 //! # fn doctest() -> Result<(), Box<dyn std::error::Error>> {
 //! // Define a simple pattern that matches a single qubit allocation.
 //! let circuit_pattern = {
-//!     let mut dfg = DFGBuilder::new(FunctionType::new(vec![], vec![QB_T]))?;
+//!     let mut dfg = DFGBuilder::new(Signature::new(vec![], vec![QB_T]))?;
 //!     let alloc = dfg.add_dataflow_op(Tk2Op::QAlloc, [])?;
 //!     dfg.finish_hugr_with_outputs(alloc.outputs(), &tket2::extension::REGISTRY)
 //! }?.into();
@@ -27,7 +27,7 @@
 //! //           |
 //! //  0|--[Z]--o---
 //! let (circuit, alloc_node) = {
-//!     let mut dfg = DFGBuilder::new(FunctionType::new(vec![QB_T], vec![QB_T, QB_T]))?;
+//!     let mut dfg = DFGBuilder::new(Signature::new(vec![QB_T], vec![QB_T, QB_T]))?;
 //!     let [input_wire] = dfg.input_wires_arr();
 //!     let alloc = dfg.add_dataflow_op(Tk2Op::QAlloc, [])?;
 //!     let [alloc_wire] = alloc.outputs_arr();
@@ -206,7 +206,7 @@ mod tests {
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::{prelude::QB_T, PRELUDE_REGISTRY},
-        types::FunctionType,
+        types::Signature,
     };
     use rstest::{fixture, rstest};
 
@@ -214,7 +214,7 @@ mod tests {
 
     #[fixture]
     fn lhs() -> Circuit {
-        let mut h = DFGBuilder::new(FunctionType::new(vec![], vec![QB_T])).unwrap();
+        let mut h = DFGBuilder::new(Signature::new(vec![], vec![QB_T])).unwrap();
 
         let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
         let q = res.out_wire(0);
@@ -226,7 +226,7 @@ mod tests {
 
     #[fixture]
     pub fn circ() -> Circuit {
-        let mut h = DFGBuilder::new(FunctionType::new(vec![QB_T], vec![QB_T])).unwrap();
+        let mut h = DFGBuilder::new(Signature::new(vec![QB_T], vec![QB_T])).unwrap();
         let mut inps = h.input_wires();
         let q_in = inps.next().unwrap();
 

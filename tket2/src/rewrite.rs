@@ -13,7 +13,7 @@ use derive_more::{From, Into};
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::views::sibling_subgraph::{InvalidReplacement, InvalidSubgraph};
 use hugr::hugr::views::ExtractHugr;
-use hugr::types::FunctionType;
+use hugr::types::Signature;
 use hugr::{
     hugr::{views::SiblingSubgraph, Rewrite, SimpleReplacementError},
     SimpleReplacement,
@@ -52,7 +52,7 @@ impl Subcircuit {
     }
 
     /// The signature of the subcircuit.
-    pub fn signature(&self, circ: &Circuit<impl HugrView>) -> FunctionType {
+    pub fn signature(&self, circ: &Circuit<impl HugrView>) -> Signature {
         self.subgraph.signature(circ.hugr())
     }
 
