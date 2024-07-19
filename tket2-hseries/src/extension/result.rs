@@ -201,6 +201,20 @@ impl MakeOpDef for ResultOpDef {
     fn extension(&self) -> ExtensionId {
         EXTENSION_ID
     }
+
+    fn description(&self) -> String {
+        match self {
+            Self::Bool => "Report a boolean result.",
+            Self::Int => "Report a signed integer result.",
+            Self::UInt => "Report an unsigned integer result.",
+            Self::F64 => "Report a floating-point result.",
+            Self::ArrBool => "Report an array of boolean results.",
+            Self::ArrInt => "Report an array of signed integer results.",
+            Self::ArrUInt => "Report an array of unsigned integer results.",
+            Self::ArrF64 => "Report an array of floating-point results.",
+        }
+        .to_string()
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Hash, PartialEq)]
