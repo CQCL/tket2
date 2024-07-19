@@ -479,6 +479,7 @@ mod badger_default {
         }
 
         /// A sane default optimiser using a precompiled binary rewriter.
+        #[cfg(feature = "binary-eccs")]
         pub fn default_with_rewriter_binary(
             rewriter_path: impl AsRef<Path>,
         ) -> Result<Self, RewriterSerialisationError> {

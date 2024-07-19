@@ -119,20 +119,24 @@ impl ECCRewriter {
     ///
     /// Precomputed rewriters can be serialised as binary and then loaded
     /// later using [`ECCRewriter::load_binary_io`].
+    #[cfg(feature = "binary-eccs")]
     pub fn save_binary_io<W: io::Write>(
         &self,
         writer: &mut W,
     ) -> Result<(), RewriterSerialisationError> {
-        rmp_serde::encode::write(writer, &self)?;
+        let mut encoder = zstd::Encoder::new(writer, 9)?;
+        rmp_serde::encode::write(&mut encoder, &self)?;
+        encoder.finish()?;
         Ok(())
     }
 
     /// Load a rewriter from an IO stream.
     ///
     /// Loads streams as created by [`ECCRewriter::save_binary_io`].
+    #[cfg(feature = "binary-eccs")]
     pub fn load_binary_io<R: io::Read>(reader: &mut R) -> Result<Self, RewriterSerialisationError> {
-        let matcher: Self = rmp_serde::decode::from_read(reader)?;
-        Ok(matcher)
+        let data = zstd::decode_all(reader)?;
+        Ok(rmp_serde::decode::from_slice(&data)?)
     }
 
     /// Save a rewriter as a binary file.
@@ -144,6 +148,7 @@ impl ECCRewriter {
     /// `.rwr`.
     ///
     /// If successful, returns the path to the newly created file.
+    #[cfg(feature = "binary-eccs")]
     pub fn save_binary(
         &self,
         name: impl AsRef<Path>,
@@ -157,10 +162,14 @@ impl ECCRewriter {
     }
 
     /// Loads a rewriter saved using [`ECCRewriter::save_binary`].
+    ///
+    /// Requires the `binary-eccs` feature to be enabled.
+    #[cfg(feature = "binary-eccs")]
     pub fn load_binary(name: impl AsRef<Path>) -> Result<Self, RewriterSerialisationError> {
-        let file = File::open(name)?;
-        let mut reader = std::io::BufReader::new(file);
-        Self::load_binary_io(&mut reader)
+        let mut file = File::open(name)?;
+        // Note: Buffering does not improve performance when using
+        // `zstd::decode_all`.
+        Self::load_binary_io(&mut file)
     }
 }
 
