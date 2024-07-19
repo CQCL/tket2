@@ -140,11 +140,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         circ.enable_rewrite_tracing();
     }
 
-    println!("Loading optimiser...");
+    print!("Loading optimiser...");
+    let load_ecc_start = std::time::Instant::now();
     let Ok(optimiser) = load_optimiser(ecc_path) else {
+        println!();
         eprintln!("Unable to load ECC file {ecc_path:?}. Is it a JSON file of Quartz-generated ECCs? Or a pre-compiled `.rwr` ECC set?");
         exit(1);
     };
+    println!(" done in {:?}", load_ecc_start.elapsed());
+
     println!(
         "Using {n_threads} threads. Queue size is {}.",
         opts.queue_size
