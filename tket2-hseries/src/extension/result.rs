@@ -4,7 +4,7 @@
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
-        prelude::{BOOL_T, PRELUDE, STRING_CUSTOM_TYPE},
+        prelude::{self, BOOL_T, PRELUDE, STRING_CUSTOM_TYPE},
         simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp, OpLoadError},
         ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc,
     },
@@ -14,7 +14,7 @@ use hugr::{
             EXTENSION as FLOAT_EXTENSION, EXTENSION_ID as FLOAT_EXTENSION_ID, FLOAT64_TYPE,
         },
         int_types::{
-            EXTENSION as INT_EXTENSION, EXTENSION_ID as INT_EXTENSION_ID, INT_TYPE_ID,
+            int_type, EXTENSION as INT_EXTENSION, EXTENSION_ID as INT_EXTENSION_ID,
             LOG_WIDTH_TYPE_PARAM,
         },
     },
@@ -182,22 +182,11 @@ impl ResultOpDef {
 }
 
 fn array_type(inner_t: Type) -> Type {
-    let size_var = TypeArg::new_var_use(1, TypeParam::max_nat());
-    PRELUDE
-        .get_type("array")
-        .unwrap()
-        .instantiate(vec![size_var, inner_t.into()])
-        .unwrap()
-        .into()
+    prelude::array_type(TypeArg::new_var_use(1, TypeParam::max_nat()), inner_t)
 }
 
 fn int_tv(int_tv_idx: usize) -> Type {
-    INT_EXTENSION
-        .get_type(&INT_TYPE_ID)
-        .unwrap()
-        .instantiate(vec![TypeArg::new_var_use(int_tv_idx, LOG_WIDTH_TYPE_PARAM)])
-        .unwrap()
-        .into()
+    int_type(TypeArg::new_var_use(int_tv_idx, LOG_WIDTH_TYPE_PARAM))
 }
 
 impl MakeOpDef for ResultOpDef {
