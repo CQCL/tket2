@@ -52,13 +52,16 @@ fn main() {
         );
         exit(1);
     };
-    println!("Saving to file...");
+    print!("Saving to file...");
     let output_file = if output_path.is_dir() {
         output_path.join("matcher.rwr")
     } else {
         output_path.to_path_buf()
     };
+    let write_time = Instant::now();
     let output_file = rewriter.save_binary(output_file).unwrap();
+    println!(" done in {:?}", write_time.elapsed());
+
     println!("Written rewriter to {:?}", output_file);
 
     // Print the file size of output_file in megabytes

@@ -21,6 +21,7 @@ bench = false
 [dependencies]
 tket2 = { path = "../tket2", version = "0.1.0-alpha.1", features = [
     "portmatching",
+    "binary-eccs",
 ] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
