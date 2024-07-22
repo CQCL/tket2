@@ -22,7 +22,7 @@ tracing-appender = { workspace = true }
 peak_alloc = { workspace = true, optional = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-tikv-jemallocator = "0.5"
+tikv-jemallocator = "0.6"
 
 [features]
 default = []
