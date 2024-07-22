@@ -93,13 +93,13 @@ def test_chunks():
     c2 = circ_chunks.reassemble()
 
     assert c2.depth() == 3
-    assert type(c2) == Circuit
+    assert type(c2) is Circuit
 
     # Split and reassemble, with a tket2 circuit
     tk2_chunks = chunks(Tk2Circuit(c2), 2)
     tk2 = tk2_chunks.reassemble()
 
-    assert type(tk2) == Tk2Circuit
+    assert type(tk2) is Tk2Circuit
 
 
 def test_cx_rule():
