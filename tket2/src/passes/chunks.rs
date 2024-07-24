@@ -460,8 +460,12 @@ impl IndexMut<usize> for CircuitChunks {
 
 #[cfg(test)]
 mod test {
+    use rstest::{fixture, rstest};
+    use tket_json_rs::SerialCircuit;
+
     use crate::circuit::CircuitHash;
     use crate::extension::REGISTRY;
+    use crate::serialize::TKETDecode;
     use crate::utils::build_simple_circuit;
     use crate::Tk2Op;
 
@@ -527,5 +531,19 @@ mod test {
             &reassembled.hugr().output_neighbours(inp).collect_vec(),
             &[h, out, out]
         );
+    }
+
+    /// Just a one-qubit circuit with Rz gate
+    #[fixture]
+    fn rz() -> Circuit {
+        let json = r#"{"phase":"0.0","commands":[{"op":{"type":"Rz","n_qb":1,"params":["0.25"],"signature":["Q"]},"args":[["q",[0]]]}],"qubits":[["q",[1]],["q",[0]]],"bits":[],"implicit_permutation":[[["q",[0]],["q",[0]]],[["q",[1]],["q",[1]]]]}"#;
+        let ser: SerialCircuit = serde_json::from_str(json).unwrap();
+        ser.decode().unwrap()
+    }
+
+    #[rstest]
+    fn split_rz(rz: Circuit) {
+        let chunks = CircuitChunks::split_with_cost(&rz, 1, |_| 0);
+        assert_eq!(chunks.len(), 1);
     }
 }
