@@ -16,7 +16,7 @@ use itertools::Either::{Left, Right};
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::dataflow::IOTrait;
 use hugr::ops::{Input, NamedOp, OpParent, OpTag, OpTrait, Output};
-use hugr::types::{FunctionType, PolyFuncType};
+use hugr::types::{PolyFuncType, Signature};
 use hugr::{Hugr, PortIndex};
 use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
@@ -123,7 +123,7 @@ impl<T: HugrView> Circuit<T> {
 
     /// Returns the function type of the circuit.
     #[inline]
-    pub fn circuit_signature(&self) -> FunctionType {
+    pub fn circuit_signature(&self) -> Signature {
         let op = self.hugr.get_optype(self.parent);
         op.inner_function_type()
             .unwrap_or_else(|| panic!("{} is an invalid circuit parent type.", op.name()))
@@ -555,7 +555,7 @@ fn update_signature(
             }
         }
         OpType::FuncDefn(defn) => {
-            let mut sig: FunctionType = defn.signature.clone().try_into().map_err(|_| {
+            let mut sig: Signature = defn.signature.clone().try_into().map_err(|_| {
                 CircuitError::ParametricSignature {
                     parent,
                     optype: OpType::FuncDefn(defn.clone()),
@@ -576,7 +576,7 @@ fn update_signature(
         }
         OpType::Case(case) => {
             let out_types = out_types.unwrap_or_else(|| case.signature.output().clone());
-            case.signature = FunctionType::new(inp_types, out_types)
+            case.signature = Signature::new(inp_types, out_types)
         }
         OpType::TailLoop(_) => {
             unimplemented!("TailLoop signature update")
@@ -597,7 +597,7 @@ mod tests {
     use cool_asserts::assert_matches;
     use rstest::{fixture, rstest};
 
-    use hugr::types::FunctionType;
+    use hugr::types::Signature;
     use hugr::{
         builder::{DFGBuilder, DataflowHugr},
         extension::{prelude::BOOL_T, PRELUDE_REGISTRY},
@@ -713,7 +713,7 @@ mod tests {
 
     #[test]
     fn remove_bit() {
-        let h = DFGBuilder::new(FunctionType::new(vec![BOOL_T], vec![])).unwrap();
+        let h = DFGBuilder::new(Signature::new(vec![BOOL_T], vec![])).unwrap();
         let mut circ: Circuit = h
             .finish_hugr_with_outputs([], &PRELUDE_REGISTRY)
             .unwrap()

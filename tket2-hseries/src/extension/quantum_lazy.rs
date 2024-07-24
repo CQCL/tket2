@@ -1,7 +1,7 @@
 //! This module defines the Hugr extension used to represent Lazy Quantum
 //! Operations.
 //!
-//! Lazyness is represented by returning `tket2.futures.Future` classical
+//! Laziness is represented by returning `tket2.futures.Future` classical
 //! values. Qubits are never lazy.
 use hugr::{
     builder::{BuildError, Dataflow},
@@ -11,7 +11,7 @@ use hugr::{
         ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, PRELUDE,
     },
     ops::{CustomOp, OpType},
-    types::FunctionType,
+    types::Signature,
     Extension, Wire,
 };
 
@@ -66,7 +66,7 @@ pub enum LazyQuantumOp {
 impl MakeOpDef for LazyQuantumOp {
     fn signature(&self) -> SignatureFunc {
         match self {
-            Self::Measure => FunctionType::new(QB_T, vec![QB_T, future_type(BOOL_T)]).into(),
+            Self::Measure => Signature::new(QB_T, vec![QB_T, future_type(BOOL_T)]).into(),
         }
     }
 
@@ -147,8 +147,7 @@ mod test {
     fn circuit() {
         let hugr = {
             let mut func_builder =
-                FunctionBuilder::new("circuit", FunctionType::new(QB_T, vec![QB_T, BOOL_T]))
-                    .unwrap();
+                FunctionBuilder::new("circuit", Signature::new(QB_T, vec![QB_T, BOOL_T])).unwrap();
             let [qb] = func_builder.input_wires_arr();
             let [qb, lazy_b] = func_builder.add_lazy_measure(qb).unwrap();
             let [b] = func_builder.add_read(lazy_b, BOOL_T).unwrap();

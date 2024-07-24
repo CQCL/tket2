@@ -169,7 +169,7 @@ mod tests {
     use hugr::extension::prelude::QB_T;
     use hugr::ops::OpType;
     use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
-    use hugr::types::FunctionType;
+    use hugr::types::Signature;
 
     use crate::extension::REGISTRY;
     use crate::utils::build_simple_circuit;
@@ -190,7 +190,7 @@ mod tests {
     fn circ_with_copy() -> Circuit {
         let input_t = vec![QB_T, FLOAT64_TYPE];
         let output_t = vec![QB_T];
-        let mut h = DFGBuilder::new(FunctionType::new(input_t, output_t)).unwrap();
+        let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
         let mut inps = h.input_wires();
         let qb = inps.next().unwrap();
@@ -208,7 +208,7 @@ mod tests {
     fn circ_with_copy_disconnected() -> Circuit {
         let input_t = vec![QB_T, QB_T, FLOAT64_TYPE];
         let output_t = vec![QB_T, QB_T];
-        let mut h = DFGBuilder::new(FunctionType::new(input_t, output_t)).unwrap();
+        let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
         let mut inps = h.input_wires();
         let qb1 = inps.next().unwrap();

@@ -28,7 +28,10 @@ portmatching = ["dep:portmatching", "dep:rmp-serde"]
 # Stores a trace of the applied rewrites
 rewrite-tracing = []
 
-default = []
+# Support compressed binary encoded ECC files
+binary-eccs = ["dep:zstd"]
+
+default = ["binary-eccs"]
 
 [dependencies]
 lazy_static = { workspace = true }
@@ -62,6 +65,7 @@ chrono = { workspace = true }
 bytemuck = { workspace = true }
 crossbeam-channel = { workspace = true }
 tracing = { workspace = true }
+zstd = { workspace = true, optional = true }
 
 [dev-dependencies]
 rstest = { workspace = true }

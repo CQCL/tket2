@@ -3,7 +3,7 @@
 use core::panic;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
-use hugr::ops::{OpTrait, OpType};
+use hugr::ops::{MakeTuple, OpTrait, OpType};
 use hugr::types::Type;
 use hugr::{HugrView, Node};
 use itertools::Itertools;
@@ -72,41 +72,67 @@ fn make_rewrite<T: HugrView>(circ: &Circuit<T>, cmd: Command<T>) -> Option<Circu
     }
 
     // Remove all unpack operations, but only remove the pack operation if all neighbours are unpacks.
-    match links.len() == unpack_nodes.len() {
-        true => Some(remove_pack_unpack(
-            circ,
-            &tuple_types,
-            tuple_node,
-            unpack_nodes,
-        )),
-        false => {
-            // TODO: Add a rewrite to remove some of the unpack operations.
-            None
-        }
-    }
+    let num_other_outputs = links.len() - unpack_nodes.len();
+    Some(remove_pack_unpack(
+        circ,
+        &tuple_types,
+        tuple_node,
+        unpack_nodes,
+        num_other_outputs,
+    ))
 }
 
-/// Returns a rewrite to remove a tuple pack operation that's only followed by unpack operations.
+/// Returns a rewrite to remove a tuple pack operation that's followed by unpack operations,
+/// and `other_tuple_links` other operations.
 fn remove_pack_unpack<T: HugrView>(
     circ: &Circuit<T>,
     tuple_types: &[Type],
     pack_node: Node,
     unpack_nodes: Vec<Node>,
+    num_other_outputs: usize,
 ) -> CircuitRewrite {
-    let num_outputs = tuple_types.len() * unpack_nodes.len();
+    let num_unpack_outputs = tuple_types.len() * unpack_nodes.len();
 
     let mut nodes = unpack_nodes;
     nodes.push(pack_node);
     let subcirc = Subcircuit::try_from_nodes(nodes, circ).unwrap();
+    let subcirc_signature = subcirc.signature(circ);
 
-    let replacement = DFGBuilder::new(subcirc.signature(circ)).unwrap();
-    let wires = replacement
-        .input_wires()
-        .cycle()
-        .take(num_outputs)
-        .collect_vec();
+    // The output port order in `Subcircuit::try_from_nodes` is not too well defined.
+    // Check that the outputs are in the expected order.
+    debug_assert!(
+        itertools::equal(
+            subcirc_signature.output().iter(),
+            tuple_types
+                .iter()
+                .cycle()
+                .take(num_unpack_outputs)
+                .chain(itertools::repeat_n(
+                    &Type::new_tuple(tuple_types.to_vec()),
+                    num_other_outputs
+                ))
+        ),
+        "Unpacked tuple values must come before tupled values"
+    );
+
+    let mut replacement = DFGBuilder::new(subcirc_signature).unwrap();
+    let mut outputs = Vec::with_capacity(num_unpack_outputs + num_other_outputs);
+
+    // Wire the inputs directly to the unpack outputs
+    outputs.extend(replacement.input_wires().cycle().take(num_unpack_outputs));
+
+    // If needed, re-add the tuple pack node and connect its output to the tuple outputs.
+    if num_other_outputs > 0 {
+        let op = MakeTuple::new(tuple_types.to_vec().into());
+        let [tuple] = replacement
+            .add_dataflow_op(op, replacement.input_wires())
+            .unwrap()
+            .outputs_arr();
+        outputs.extend(std::iter::repeat(tuple).take(num_other_outputs))
+    }
+
     let replacement = replacement
-        .finish_prelude_hugr_with_outputs(wires)
+        .finish_prelude_hugr_with_outputs(outputs)
         .unwrap_or_else(|e| {
             panic!("Failed to create replacement for removing tuple pack/unpack operations. {e}")
         })
@@ -125,7 +151,7 @@ mod test {
     use hugr::extension::prelude::{BOOL_T, QB_T};
     use hugr::ops::{MakeTuple, UnpackTuple};
     use hugr::type_row;
-    use hugr::types::FunctionType;
+    use hugr::types::Signature;
     use rstest::{fixture, rstest};
 
     /// A simple pack operation followed by an unpack operation.
@@ -133,7 +159,7 @@ mod test {
     /// These can be removed entirely.
     #[fixture]
     fn simple_pack_unpack() -> Circuit {
-        let mut h = DFGBuilder::new(FunctionType::new_endo(type_row![QB_T, BOOL_T])).unwrap();
+        let mut h = DFGBuilder::new(Signature::new_endo(type_row![QB_T, BOOL_T])).unwrap();
         let mut inps = h.input_wires();
         let qb1 = inps.next().unwrap();
         let b2 = inps.next().unwrap();
@@ -154,7 +180,7 @@ mod test {
     /// These can be removed entirely.
     #[fixture]
     fn multi_unpack() -> Circuit {
-        let mut h = DFGBuilder::new(FunctionType::new(
+        let mut h = DFGBuilder::new(Signature::new(
             type_row![BOOL_T, BOOL_T],
             type_row![BOOL_T, BOOL_T, BOOL_T, BOOL_T],
         ))
@@ -182,7 +208,7 @@ mod test {
     /// The unpack operation can be removed, but the pack operation cannot.
     #[fixture]
     fn partial_unpack() -> Circuit {
-        let mut h = DFGBuilder::new(FunctionType::new(
+        let mut h = DFGBuilder::new(Signature::new(
             type_row![BOOL_T, BOOL_T],
             vec![BOOL_T, BOOL_T, Type::new_tuple(type_row![BOOL_T, BOOL_T])],
         ))
@@ -205,8 +231,6 @@ mod test {
     #[rstest]
     #[case::simple(simple_pack_unpack(), 1, 0)]
     #[case::multi(multi_unpack(), 1, 0)]
-    // TODO: Partial unpack is not currently supported.
-    #[ignore = "Unimplemented."]
     #[case::partial(partial_unpack(), 1, 1)]
     fn test_pack_unpack(
         #[case] mut circ: Circuit,

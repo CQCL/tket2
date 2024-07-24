@@ -6,7 +6,7 @@ use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::QB_T;
 use hugr::ops::OpType as Op;
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
-use hugr::types::{FunctionType, Type};
+use hugr::types::{Signature, Type};
 use hugr::{CircuitUnit, Hugr};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -63,7 +63,7 @@ impl From<RepCircData> for Circuit<Hugr> {
     fn from(RepCircData { circ: rc, meta }: RepCircData) -> Self {
         let qb_types: Vec<Type> = vec![QB_T; meta.n_qb];
         let param_types: Vec<Type> = vec![FLOAT64_TYPE; meta.n_input_param];
-        let mut builder = DFGBuilder::new(FunctionType::new(
+        let mut builder = DFGBuilder::new(Signature::new(
             [qb_types.clone(), param_types].concat(),
             qb_types,
         ))

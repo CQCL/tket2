@@ -10,7 +10,7 @@ use hugr::extension::{CustomSignatureFunc, ExtensionId, ExtensionRegistry, Signa
 use hugr::hugr::IdentList;
 use hugr::std_extensions::arithmetic::float_types::{EXTENSION as FLOAT_EXTENSION, FLOAT64_TYPE};
 use hugr::types::type_param::{TypeArg, TypeParam};
-use hugr::types::{CustomType, FunctionType, PolyFuncType, TypeBound};
+use hugr::types::{CustomType, PolyFuncType, PolyFuncTypeRV, Signature, TypeBound};
 use hugr::{type_row, Extension};
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
@@ -66,13 +66,14 @@ impl CustomSignatureFunc for Tk1Signature {
         arg_values: &[TypeArg],
         _def: &'o hugr::extension::OpDef,
         _extension_registry: &ExtensionRegistry,
-    ) -> Result<PolyFuncType, SignatureError> {
+    ) -> Result<PolyFuncTypeRV, SignatureError> {
         let [TypeArg::Opaque { arg }] = arg_values else {
             // This should have already been checked.
             panic!("Wrong number of arguments");
         };
         let op: OpaqueTk1Op = serde_yaml::from_value(arg.value.clone()).unwrap(); // TODO Errors!
-        Ok(op.signature().into())
+        let poly_func: PolyFuncType = op.signature().into();
+        Ok(poly_func.into())
     }
 
     fn static_params(&self) -> &[TypeParam] {
@@ -116,7 +117,7 @@ pub static ref TKET2_EXTENSION: Extension = {
     e.add_op(
         SYM_OP_ID,
         "Store a sympy expression that can be evaluated to a float.".to_string(),
-        PolyFuncType::new(vec![sym_expr_param], FunctionType::new(type_row![], type_row![FLOAT64_TYPE])),
+        PolyFuncType::new(vec![sym_expr_param], Signature::new(type_row![], type_row![FLOAT64_TYPE])),
     )
     .unwrap();
 

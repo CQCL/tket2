@@ -2,7 +2,7 @@
 
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::{OpTrait, OpType, Output, DFG};
-use hugr::types::{FunctionType, SumType, TypeEnum};
+use hugr::types::{Signature, SumType, TypeEnum};
 use hugr::HugrView;
 use hugr_core::hugr::internal::HugrMutInternals;
 use itertools::Itertools;
@@ -39,8 +39,8 @@ pub(super) fn rewrite_into_dfg(circ: &mut Circuit) -> Result<(), CircuitMutError
 ///     when possible.
 fn remove_cfg_empty_output_tuple(
     circ: &mut Circuit,
-    signature: FunctionType,
-) -> Result<FunctionType, CircuitMutError> {
+    signature: Signature,
+) -> Result<Signature, CircuitMutError> {
     let sig = signature;
     let input_node = circ.input_node();
 
@@ -93,6 +93,6 @@ fn remove_cfg_empty_output_tuple(
     }
 
     // Return the updated circuit signature.
-    let sig = FunctionType::new(sig.input, new_types);
+    let sig = Signature::new(sig.input, new_types);
     Ok(sig)
 }

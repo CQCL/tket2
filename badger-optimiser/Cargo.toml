@@ -12,7 +12,11 @@ publish = false
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tket2 = { path = "../tket2", features = ["portmatching", "rewrite-tracing"] }
+tket2 = { path = "../tket2", features = [
+    "portmatching",
+    "rewrite-tracing",
+    "binary-eccs",
+] }
 hugr = { workspace = true }
 itertools = { workspace = true }
 tket-json-rs = { workspace = true }
@@ -22,7 +26,7 @@ tracing-appender = { workspace = true }
 peak_alloc = { workspace = true, optional = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-tikv-jemallocator = "0.5"
+tikv-jemallocator = "0.6"
 
 [features]
 default = []

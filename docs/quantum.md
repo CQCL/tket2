@@ -36,7 +36,7 @@ compatibility:
 1. The `main` function takes one `Array<N, Qubit>`
 input and has one output of the same type (the same statically known
 size).
-2. All Operations that have a `FunctionType` involving `Qubit` have as
+2. All Operations that have a `Signature` involving `Qubit` have as
  many `Qubit` input wires as output.
 
 

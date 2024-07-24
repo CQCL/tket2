@@ -2,11 +2,12 @@ use std::{cmp::max, num::NonZeroU64};
 
 use hugr::extension::ExtensionSet;
 use hugr::ops::constant::{downcast_equal_consts, CustomConst};
+use hugr::types::PolyFuncTypeRV;
 use hugr::{
     extension::{prelude::ERROR_TYPE, SignatureError, SignatureFromArgs, TypeDef},
     types::{
         type_param::{TypeArgError, TypeParam},
-        ConstTypeError, CustomType, FunctionType, PolyFuncType, Type, TypeArg, TypeBound,
+        ConstTypeError, CustomType, PolyFuncType, Signature, Type, TypeArg, TypeBound,
     },
     Extension,
 };
@@ -141,12 +142,14 @@ fn abinop_sig() -> impl SignatureFromArgs {
         fn compute_signature(
             &self,
             arg_values: &[TypeArg],
-        ) -> Result<PolyFuncType, SignatureError> {
+        ) -> Result<PolyFuncTypeRV, SignatureError> {
             let [arg0, arg1] = collect_array(arg_values);
             let m: u8 = get_log_denom(arg0)?;
             let n: u8 = get_log_denom(arg1)?;
             let l: u8 = max(m, n);
-            Ok(FunctionType::new(vec![angle_type(m), angle_type(n)], vec![angle_type(l)]).into())
+            let poly_func: PolyFuncType =
+                Signature::new(vec![angle_type(m), angle_type(n)], vec![angle_type(l)]).into();
+            Ok(poly_func.into())
         }
 
         fn static_params(&self) -> &[TypeParam] {
@@ -188,7 +191,7 @@ pub(super) fn add_to_extension(extension: &mut Extension) {
             PolyFuncType::new(
                 vec![LOG_DENOM_TYPE_PARAM, LOG_DENOM_TYPE_PARAM],
                 // atrunc_sig(extension).unwrap(),
-                FunctionType::new(
+                Signature::new(
                     vec![generic_angle_type(0, &angle_type_def)],
                     vec![generic_angle_type(1, &angle_type_def)],
                 ),
@@ -204,11 +207,11 @@ pub(super) fn add_to_extension(extension: &mut Extension) {
                 .to_owned(),
             PolyFuncType::new(
                 vec![LOG_DENOM_TYPE_PARAM, LOG_DENOM_TYPE_PARAM],
-                FunctionType::new(
+                Signature::new(
                     vec![generic_angle_type(0, &angle_type_def)],
                     vec![Type::new_sum([
-                        generic_angle_type(1, &angle_type_def).into(),
-                        ERROR_TYPE.into(),
+                        generic_angle_type(1, &angle_type_def),
+                        ERROR_TYPE,
                     ])],
                 ),
             ),
@@ -233,7 +236,7 @@ pub(super) fn add_to_extension(extension: &mut Extension) {
             "negation of an angle".to_owned(),
             PolyFuncType::new(
                 vec![LOG_DENOM_TYPE_PARAM],
-                FunctionType::new_endo(vec![generic_angle_type(0, &angle_type_def)]),
+                Signature::new_endo(vec![generic_angle_type(0, &angle_type_def)]),
             ),
         )
         .unwrap();
@@ -295,10 +298,9 @@ mod test {
             .compute_signature(&[type_arg(23), type_arg(42)])
             .unwrap();
 
-        assert_eq!(
-            sig,
-            FunctionType::new(vec![angle_type(23), angle_type(42)], vec![angle_type(42)]).into()
-        );
+        let poly_type: PolyFuncType =
+            Signature::new(vec![angle_type(23), angle_type(42)], vec![angle_type(42)]).into();
+        assert_eq!(sig, poly_type.into());
 
         assert!(binop_sig
             .compute_signature(&[type_arg(23), type_arg(89)])
