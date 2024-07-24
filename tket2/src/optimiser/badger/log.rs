@@ -8,6 +8,7 @@ pub struct BadgerLogger<'w> {
     circ_candidates_csv: Option<csv::Writer<Box<dyn io::Write + 'w>>>,
     last_circ_processed: usize,
     last_progress_time: Instant,
+    branching_factor: UsizeAverage,
 }
 
 impl<'w> Default for BadgerLogger<'w> {
@@ -17,6 +18,7 @@ impl<'w> Default for BadgerLogger<'w> {
             last_circ_processed: Default::default(),
             // Ensure the first progress message is printed.
             last_progress_time: Instant::now() - Duration::from_secs(60),
+            branching_factor: UsizeAverage::new(),
         }
     }
 }
@@ -75,10 +77,14 @@ impl<'w> BadgerLogger<'w> {
         best_cost: C,
         needs_joining: bool,
         timeout: bool,
+        elapsed_time: Duration,
     ) {
+        let elapsed_secs = elapsed_time.as_secs_f32();
         match timeout {
-            true => self.log("Optimisation finished (timeout)."),
-            false => self.log("Optimisation finished."),
+            true => self.log(format!(
+                "Optimisation finished in {elapsed_secs:.2}s (timeout)."
+            )),
+            false => self.log(format!("Optimisation finished in {elapsed_secs:.2}s.")),
         };
         match circuits_seen {
             Some(circuits_seen) => self.log(format!(
@@ -86,6 +92,7 @@ impl<'w> BadgerLogger<'w> {
             )),
             None => self.log(format!("Processed {circuits_processed} circuits.")),
         }
+        self.log_avg_branching_factor();
         self.log(format!("---- END RESULT: {:?} ----", best_cost));
         if needs_joining {
             self.log("Joining worker threads.");
@@ -120,10 +127,28 @@ impl<'w> BadgerLogger<'w> {
         tracing::info!(target: LOG_TARGET, "{}", msg.as_ref());
     }
 
+    /// Log a warning message.
+    #[inline]
+    pub fn warn(&self, msg: impl AsRef<str>) {
+        tracing::warn!(target: LOG_TARGET, "{}", msg.as_ref());
+    }
+
     /// Log verbose information on the progress of the optimization.
     #[inline]
     pub fn progress(&self, msg: impl AsRef<str>) {
         tracing::info!(target: PROGRESS_TARGET, "{}", msg.as_ref());
+    }
+
+    /// Append a new branching factor to the average.
+    pub fn register_branching_factor(&mut self, branching_factor: usize) {
+        self.branching_factor.append(branching_factor);
+    }
+
+    /// Log the average branching factor so far.
+    pub fn log_avg_branching_factor(&self) {
+        if let Some(avg) = self.branching_factor.average() {
+            self.log(format!("Average branching factor: {}", avg));
+        }
     }
 }
 
@@ -141,5 +166,32 @@ impl<C> BestCircSer<C> {
     fn new(circ_cost: C) -> Self {
         let time = chrono::Local::now().to_rfc3339();
         Self { circ_cost, time }
+    }
+}
+
+struct UsizeAverage {
+    sum: usize,
+    count: usize,
+}
+
+impl UsizeAverage {
+    pub fn new() -> Self {
+        Self {
+            sum: Default::default(),
+            count: 0,
+        }
+    }
+
+    pub fn append(&mut self, value: usize) {
+        self.sum += value;
+        self.count += 1;
+    }
+
+    pub fn average(&self) -> Option<f64> {
+        if self.count > 0 {
+            Some(self.sum as f64 / self.count as f64)
+        } else {
+            None
+        }
     }
 }
