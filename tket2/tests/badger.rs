@@ -1,5 +1,7 @@
 #![cfg(feature = "portmatching")]
 
+use std::num::NonZeroUsize;
+
 use rstest::{fixture, rstest};
 use tket2::optimiser::badger::BadgerOptions;
 use tket2::optimiser::{BadgerOptimiser, DefaultBadgerOptimiser};
@@ -15,6 +17,13 @@ use tket_json_rs::circuit_json::SerialCircuit;
 fn nam_4_2() -> DefaultBadgerOptimiser {
     BadgerOptimiser::default_with_eccs_json_file("../test_files/Nam_4_2_complete_ECC_set.json")
         .unwrap()
+}
+
+#[fixture]
+fn barenco_tof_10() -> Circuit {
+    let json = std::fs::read_to_string("../test_files/barenco_tof_10.json").unwrap();
+    let ser: SerialCircuit = serde_json::from_str(&json).unwrap();
+    ser.decode().unwrap()
 }
 
 /// The following circuit
@@ -63,4 +72,18 @@ fn badger_termination(simple_circ: Circuit, nam_4_2: DefaultBadgerOptimiser) {
         },
     );
     assert_eq!(opt_circ.commands().count(), 11);
+}
+
+#[rstest]
+fn badger_barenco_tof_10(barenco_tof_10: Circuit, nam_4_2: DefaultBadgerOptimiser) {
+    let opt_circ = nam_4_2.optimise(
+        &barenco_tof_10,
+        BadgerOptions {
+            max_circuit_cnt: Some(0), // This will abort the optimisation immediately
+            n_threads: NonZeroUsize::new(2).unwrap(),
+            split_circuit: true,
+            ..Default::default()
+        },
+    );
+    assert_eq!(opt_circ, barenco_tof_10);
 }
