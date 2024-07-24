@@ -95,7 +95,9 @@ impl Default for BadgerOptions {
 /// always processing the circuit with the lowest cost first. Rewrites are
 /// computed for that circuit and all new circuit obtained are added to the queue.
 ///
-/// This optimiser is single-threaded.
+/// There are a single-threaded and two multi-threaded versions of the optimiser,
+/// controlled by setting the [`BadgerOptions::n_threads`] and
+/// [`BadgerOptions::split_circuit`] fields.
 ///
 /// [Quartz]: https://arxiv.org/abs/2204.09033
 /// [TASO]: https://dl.acm.org/doi/10.1145/3341301.3359630
@@ -141,15 +143,20 @@ where
         log_config: BadgerLogger,
         options: BadgerOptions,
     ) -> Circuit {
-        if options.split_circuit && options.n_threads.get() > 1 {
-            return self.split_run(circ, log_config, options).unwrap();
-        }
         match options.n_threads.get() {
             1 => self.badger(circ, log_config, options),
-            _ => self.badger_multithreaded(circ, log_config, options),
+            _ => {
+                if options.split_circuit {
+                    self.badger_split_multithreaded(circ, log_config, options)
+                        .unwrap()
+                } else {
+                    self.badger_multithreaded(circ, log_config, options)
+                }
+            }
         }
     }
 
+    /// Run the Badger optimiser on a circuit, using a single thread.
     #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
     fn badger(
         &self,
@@ -249,8 +256,8 @@ where
 
     /// Run the Badger optimiser on a circuit, using multiple threads.
     ///
-    /// This is the multi-threaded version of [`badger`]. See [`BadgerOptimiser`] for
-    /// more details.
+    /// This is the multi-threaded version of [`Self::badger`], using a single
+    /// priority queue and multiple workers to process the circuits in parallel.
     #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
     fn badger_multithreaded(
         &self,
@@ -382,9 +389,11 @@ where
         best_circ
     }
 
+    /// Run the Badger optimiser on a circuit, with data parallel multithreading.
+    ///
     /// Split the circuit into chunks and process each in a separate thread.
     #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
-    fn split_run(
+    fn badger_split_multithreaded(
         &self,
         circ: &Circuit<impl HugrView>,
         mut logger: BadgerLogger,
