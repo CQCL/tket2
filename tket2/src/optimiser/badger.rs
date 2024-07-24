@@ -657,6 +657,27 @@ mod tests {
     }
 
     #[rstest]
+    #[case::compiled(badger_opt_compiled())]
+    #[case::json(badger_opt_json())]
+    fn rz_rz_cancellation_split_parallel(
+        rz_rz: Circuit,
+        #[case] badger_opt: DefaultBadgerOptimiser,
+    ) {
+        let mut opt_rz = badger_opt.optimise(
+            &rz_rz,
+            BadgerOptions {
+                timeout: Some(0),
+                n_threads: 2.try_into().unwrap(),
+                queue_size: 4,
+                split_circuit: true,
+                ..Default::default()
+            },
+        );
+        opt_rz.hugr_mut().update_validate(&REGISTRY).unwrap();
+        assert_eq!(opt_rz.commands().count(), 2);
+    }
+
+    #[rstest]
     #[ignore = "Loading the ECC set is really slow (~5 seconds)"]
     fn non_composable_rewrites(
         non_composable_rw_hugr: Circuit,
