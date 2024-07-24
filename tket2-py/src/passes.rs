@@ -102,18 +102,27 @@ fn lower_to_pytket<'py>(circ: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>>
 /// optimising. This can be deactivated by setting `rebase` to `false`, in which
 /// case the circuit is expected to be in the Nam gate set.
 ///
-/// Will use at most `max_threads` threads (plus a constant) and take at most
-/// `timeout` seconds (plus a constant). Default to the number of cpus and
-/// 15min respectively.
+/// Will use at most `max_threads` threads (plus a constant). Defaults to the
+/// number of CPUs available.
+///
+/// The optimisation will terminate at the first of the following timeout
+/// criteria, if set:
+/// - `timeout` seconds (default: 15min) have elapsed since the start of the
+///    optimisation
+/// - `progress_timeout` (default: None) seconds have elapsed since progress
+///    in the cost function was last made
+/// - `max_circuit_cnt` (default: None) circuits have been explored.
 ///
 /// Log files will be written to the directory `log_dir` if specified.
 #[pyfunction]
+#[allow(clippy::too_many_arguments)]
 fn badger_optimise<'py>(
     circ: &Bound<'py, PyAny>,
     optimiser: &PyBadgerOptimiser,
     max_threads: Option<NonZeroUsize>,
     timeout: Option<u64>,
     progress_timeout: Option<u64>,
+    max_circuit_cnt: Option<usize>,
     log_dir: Option<PathBuf>,
     rebase: Option<bool>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -165,6 +174,7 @@ fn badger_optimise<'py>(
                 progress_timeout,
                 n_threads: n_threads.try_into().unwrap(),
                 split_circuit: true,
+                max_circuit_cnt,
                 ..Default::default()
             };
             circ = optimiser.optimise(circ, log_file, options);

@@ -35,6 +35,7 @@ def badger_optimise(
     max_threads: int | None = None,
     timeout: int | None = None,
     progress_timeout: int | None = None,
+    max_circuit_cnt: int | None = None,
     log_dir: Path | None = None,
     rebase: bool | None = False,
 ) -> CircuitClass:
@@ -47,9 +48,16 @@ def badger_optimise(
     optimising. This can be deactivated by setting `rebase` to `false`, in which
     case the circuit is expected to be in the Nam gate set.
 
-    Will use at most `max_threads` threads (plus a constant) and take at most
-    `timeout` seconds (plus a constant). Default to the number of cpus and
-    15min respectively.
+    Will use at most `max_threads` threads (plus a constant). Defaults to the
+    number of CPUs available.
+
+    The optimisation will terminate at the first of the following timeout
+    criteria, if set:
+    - `timeout` seconds (default: 15min) have elapsed since the start of the
+      optimisation
+    - `progress_timeout` (default: None) seconds have elapsed since progress
+      in the cost function was last made
+    - `max_circuit_cnt` (default: None) circuits have been explored.
 
     Log files will be written to the directory `log_dir` if specified.
     """
