@@ -8,7 +8,7 @@ use hugr::extension::prelude::{BOOL_T, QB_T};
 
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::std_extensions::arithmetic::float_types::{ConstF64, FLOAT64_TYPE};
-use hugr::types::FunctionType;
+use hugr::types::Signature;
 use hugr::HugrView;
 use rstest::{fixture, rstest};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
@@ -134,7 +134,7 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
 fn circ_preset_qubits() -> Circuit {
     let input_t = vec![QB_T];
     let output_t = vec![QB_T, QB_T];
-    let mut h = DFGBuilder::new(FunctionType::new(input_t, output_t)).unwrap();
+    let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
     let [qb0] = h.input_wires_arr();
     let [qb1] = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap().outputs_arr();
@@ -161,7 +161,7 @@ fn circ_preset_qubits() -> Circuit {
 fn circ_measure_ancilla() -> Circuit {
     let input_t = vec![QB_T];
     let output_t = vec![BOOL_T, BOOL_T];
-    let mut h = DFGBuilder::new(FunctionType::new(input_t, output_t)).unwrap();
+    let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
     let [qb] = h.input_wires_arr();
     let [anc] = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap().outputs_arr();
@@ -190,7 +190,7 @@ fn circ_measure_ancilla() -> Circuit {
 fn circ_add_angles_symbolic() -> Circuit {
     let input_t = vec![QB_T, FLOAT64_TYPE, FLOAT64_TYPE];
     let output_t = vec![QB_T];
-    let mut h = DFGBuilder::new(FunctionType::new(input_t, output_t)).unwrap();
+    let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
     let [qb, f1, f2] = h.input_wires_arr();
     let [f12] = h
@@ -208,7 +208,7 @@ fn circ_add_angles_symbolic() -> Circuit {
 #[fixture]
 fn circ_add_angles_constants() -> Circuit {
     let qb_row = vec![QB_T];
-    let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row)).unwrap();
+    let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), qb_row)).unwrap();
 
     let qb = h.input_wires().next().unwrap();
 
@@ -260,9 +260,9 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
 ///
 /// Note: this is not a pure roundtrip as the encoder may add internal qubits/bits to the circuit.
 #[rstest]
-#[case::meas_ancilla(circ_measure_ancilla(), FunctionType::new_endo(vec![QB_T, QB_T, BOOL_T, BOOL_T]))]
-#[case::preset_qubits(circ_preset_qubits(), FunctionType::new_endo(vec![QB_T, QB_T, QB_T]))]
-fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: FunctionType) {
+#[case::meas_ancilla(circ_measure_ancilla(), Signature::new_endo(vec![QB_T, QB_T, BOOL_T, BOOL_T]))]
+#[case::preset_qubits(circ_preset_qubits(), Signature::new_endo(vec![QB_T, QB_T, QB_T]))]
+fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
     let ser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
     let deser: Circuit = ser.clone().decode().unwrap();
 

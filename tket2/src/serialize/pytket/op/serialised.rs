@@ -6,7 +6,7 @@ use hugr::ops::custom::{CustomOp, ExtensionOp};
 use hugr::ops::{NamedOp, OpType};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::types::type_param::CustomTypeArg;
-use hugr::types::{FunctionType, TypeArg};
+use hugr::types::{Signature, TypeArg};
 
 use hugr::IncomingPort;
 use serde::de::Error;
@@ -107,14 +107,14 @@ impl OpaqueTk1Op {
     /// `num_bits` bit inputs, followed by `num_params` `f64` inputs. It has
     /// `num_qubits` qubit outputs followed by `num_bits` bit outputs.
     #[inline]
-    pub fn signature(&self) -> FunctionType {
+    pub fn signature(&self) -> Signature {
         let linear = [
             vec![QB_T; self.num_qubits],
             vec![BOOL_T.clone(); self.num_bits],
         ]
         .concat();
         let params = vec![FLOAT64_TYPE; self.num_params];
-        FunctionType::new([linear.clone(), params].concat(), linear)
+        Signature::new([linear.clone(), params].concat(), linear)
             .with_extension_delta(TKET1_EXTENSION_ID)
     }
 

@@ -1,7 +1,7 @@
 use hugr::builder::{BuildError, CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::QB_T;
 use hugr::extension::PRELUDE_REGISTRY;
-use hugr::types::FunctionType;
+use hugr::types::Signature;
 use hugr::Hugr;
 use tket2::Tk2Op;
 
@@ -13,7 +13,7 @@ pub fn build_simple_circuit(
     f: impl FnOnce(&mut CircuitBuilder<DFGBuilder<Hugr>>) -> Result<(), BuildError>,
 ) -> Result<Hugr, BuildError> {
     let qb_row = vec![QB_T; num_qubits];
-    let mut h = DFGBuilder::new(FunctionType::new(qb_row.clone(), qb_row))?;
+    let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), qb_row))?;
 
     let qbs = h.input_wires();
 

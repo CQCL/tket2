@@ -14,7 +14,7 @@ use hugr::{
     type_row,
     types::{
         type_param::{CustomTypeArg, TypeArg},
-        FunctionType,
+        Signature,
     },
 };
 
@@ -117,23 +117,23 @@ impl MakeOpDef for Tk2Op {
         let two_qb_row = type_row![QB_T, QB_T];
         match self {
             H | T | S | X | Y | Z | Tdg | Sdg | Reset => {
-                FunctionType::new(one_qb_row.clone(), one_qb_row)
+                Signature::new(one_qb_row.clone(), one_qb_row)
             }
-            CX | ZZMax | CZ => FunctionType::new(two_qb_row.clone(), two_qb_row),
-            ZZPhase => FunctionType::new(type_row![QB_T, QB_T, FLOAT64_TYPE], two_qb_row),
-            Measure => FunctionType::new(one_qb_row, type_row![QB_T, BOOL_T]),
-            RzF64 | RxF64 => FunctionType::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
-            PhasedX => FunctionType::new(type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE], one_qb_row),
-            AngleAdd => FunctionType::new(
+            CX | ZZMax | CZ => Signature::new(two_qb_row.clone(), two_qb_row),
+            ZZPhase => Signature::new(type_row![QB_T, QB_T, FLOAT64_TYPE], two_qb_row),
+            Measure => Signature::new(one_qb_row, type_row![QB_T, BOOL_T]),
+            RzF64 | RxF64 => Signature::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
+            PhasedX => Signature::new(type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE], one_qb_row),
+            AngleAdd => Signature::new(
                 type_row![FLOAT64_TYPE, FLOAT64_TYPE],
                 type_row![FLOAT64_TYPE],
             ),
-            TK1 => FunctionType::new(
+            TK1 => Signature::new(
                 type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE, FLOAT64_TYPE],
                 one_qb_row,
             ),
-            QAlloc => FunctionType::new(type_row![], one_qb_row),
-            QFree => FunctionType::new(one_qb_row, type_row![]),
+            QAlloc => Signature::new(type_row![], one_qb_row),
+            QFree => Signature::new(one_qb_row, type_row![]),
         }
         .into()
     }

@@ -47,10 +47,10 @@ def test_conversion():
     tk2 = Tk2Circuit(tk1)
     tk2_dot = render_circuit_dot(tk2)
 
-    assert type(tk2) == Tk2Circuit
+    assert type(tk2) is Tk2Circuit
     assert tk1_dot == tk2_dot
 
     tk1_back = tk2.to_tket1()
 
     assert tk1_back == tk1
-    assert type(tk1_back) == Circuit
+    assert type(tk1_back) is Circuit
