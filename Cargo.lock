@@ -721,7 +721,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.9.0"
-source = "git+https://github.com/CQCL/hugr?branch=doug/nonlocal#2df4620205e73c3913a6c3e2363c1b70f7e9fc1e"
+source = "git+https://github.com/CQCL/hugr?branch=main#4ea618e35204485c97520e324777d0a417a1d79c"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -730,7 +730,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.6.0"
-source = "git+https://github.com/CQCL/hugr?branch=doug/nonlocal#2df4620205e73c3913a6c3e2363c1b70f7e9fc1e"
+source = "git+https://github.com/CQCL/hugr?branch=main#4ea618e35204485c97520e324777d0a417a1d79c"
 dependencies = [
  "bitvec",
  "cgmath",
@@ -759,7 +759,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.6.0"
-source = "git+https://github.com/CQCL/hugr?branch=doug/nonlocal#2df4620205e73c3913a6c3e2363c1b70f7e9fc1e"
+source = "git+https://github.com/CQCL/hugr?branch=main#4ea618e35204485c97520e324777d0a417a1d79c"
 dependencies = [
  "hugr-core",
  "itertools 0.13.0",
@@ -2336,8 +2336,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "hugr-cli"
-version = "0.2.0"
-source = "git+https://github.com/CQCL/hugr?branch=doug/nonlocal#2df4620205e73c3913a6c3e2363c1b70f7e9fc1e"

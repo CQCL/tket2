@@ -10,7 +10,7 @@ use hugr::extension::{CustomSignatureFunc, ExtensionId, ExtensionRegistry, Signa
 use hugr::hugr::IdentList;
 use hugr::std_extensions::arithmetic::float_types::{EXTENSION as FLOAT_EXTENSION, FLOAT64_TYPE};
 use hugr::types::type_param::{TypeArg, TypeParam};
-use hugr::types::{CustomType, PolyFuncType, PolyFuncTypeRV, Signature, TypeBound};
+use hugr::types::{CustomType, PolyFuncType, PolyFuncTypeRV, Signature};
 use hugr::{type_row, Extension};
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
@@ -104,19 +104,10 @@ pub static ref TKET2_EXTENSION: Extension = {
     let mut e = Extension::new(TKET2_EXTENSION_ID);
     Tk2Op::load_all_ops(&mut e).expect("add fail");
 
-    let sym_expr_opdef = e.add_type(
-        SYM_EXPR_NAME,
-        vec![],
-        "Symbolic expression.".into(),
-        TypeBound::Eq.into(),
-    )
-    .unwrap();
-    let sym_expr_param = TypeParam::String;
-
     e.add_op(
         SYM_OP_ID,
         "Store a sympy expression that can be evaluated to a float.".to_string(),
-        PolyFuncType::new(vec![sym_expr_param], Signature::new(type_row![], type_row![FLOAT64_TYPE])),
+        PolyFuncType::new(vec![TypeParam::String], Signature::new(type_row![], type_row![FLOAT64_TYPE])),
     )
     .unwrap();
 
