@@ -25,7 +25,6 @@ missing_docs = "warn"
 [workspace.dependencies]
 
 hugr = "0.9.0"
-hugr-cli = "0.2.0"
 hugr-core = "0.6.0"
 portgraph = "0.12"
 pyo3 = "0.21.2"
@@ -68,3 +67,9 @@ urlencoding = "2.1.2"
 webbrowser = "1.0.0"
 cool_asserts = "2.0.3"
 zstd = "0.13.2"
+
+
+# DO NOT MERGE
+[patch.crates-io]
+hugr = { git = "https://github.com/CQCL/hugr", branch = "main" }
+hugr-core = { git = "https://github.com/CQCL/hugr", branch = "main" }

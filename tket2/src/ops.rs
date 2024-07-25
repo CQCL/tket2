@@ -1,5 +1,5 @@
 use crate::extension::{
-    SYM_EXPR_T, SYM_OP_ID, TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID,
+    SYM_OP_ID, TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID,
 };
 use hugr::ops::custom::ExtensionOp;
 use hugr::ops::NamedOp;
@@ -12,10 +12,7 @@ use hugr::{
     ops::{CustomOp, OpType},
     std_extensions::arithmetic::float_types::FLOAT64_TYPE,
     type_row,
-    types::{
-        type_param::{CustomTypeArg, TypeArg},
-        Signature,
-    },
+    types::{type_param::TypeArg, Signature},
 };
 
 use serde::{Deserialize, Serialize};
@@ -145,7 +142,7 @@ impl MakeOpDef for Tk2Op {
     fn post_opdef(&self, def: &mut OpDef) {
         def.add_misc(
             "commutation",
-            serde_yaml::to_value(self.qubit_commutation()).unwrap(),
+            serde_json::to_value(self.qubit_commutation()).unwrap(),
         );
     }
 
@@ -191,16 +188,9 @@ impl Tk2Op {
 }
 
 /// Initialize a new custom symbolic expression constant op from a string.
-pub fn symbolic_constant_op(s: &str) -> OpType {
-    let value: serde_yaml::Value = s.into();
+pub fn symbolic_constant_op(arg: String) -> OpType {
     EXTENSION
-        .instantiate_extension_op(
-            &SYM_OP_ID,
-            vec![TypeArg::Opaque {
-                arg: CustomTypeArg::new(SYM_EXPR_T.clone(), value).unwrap(),
-            }],
-            &REGISTRY,
-        )
+        .instantiate_extension_op(&SYM_OP_ID, vec![arg.into()], &REGISTRY)
         .unwrap()
         .into()
 }
@@ -211,10 +201,7 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<String> {
     let symbol_from_typeargs = |args: &[TypeArg]| -> String {
         args.first()
             .and_then(|arg| match arg {
-                TypeArg::Opaque { arg } => match &arg.value {
-                    serde_yaml::Value::String(s) => Some(s.clone()),
-                    _ => None,
-                },
+                TypeArg::String { arg } => Some(arg.clone()),
                 _ => None,
             })
             .unwrap_or_else(|| panic!("Found an invalid type arg in a symbolic operation node."))

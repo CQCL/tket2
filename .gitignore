@@ -21,3 +21,6 @@ lcov.info
 
 # python hypothesis testing
 .hypothesis
+
+# local cargo config
+/.cargo/config.toml

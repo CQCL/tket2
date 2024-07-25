@@ -36,8 +36,7 @@ pub static ref TKET1_OP_PAYLOAD : CustomType =
 pub static ref TKET1_EXTENSION: Extension = {
     let mut res = Extension::new(TKET1_EXTENSION_ID);
 
-    let tket1_op_payload_def = res.add_type(TKET1_PAYLOAD_NAME, vec![], "Opaque TKET1 operation metadata.".into(), TypeBound::Eq.into()).unwrap();
-    let tket1_op_payload = TypeParam::Opaque{ty:tket1_op_payload_def.instantiate([]).unwrap()};
+    let tket1_op_payload = TypeParam::String;
     res.add_op(
         TKET1_OP_NAME,
         "An opaque TKET1 operation.".into(),
@@ -67,11 +66,11 @@ impl CustomSignatureFunc for Tk1Signature {
         _def: &'o hugr::extension::OpDef,
         _extension_registry: &ExtensionRegistry,
     ) -> Result<PolyFuncTypeRV, SignatureError> {
-        let [TypeArg::Opaque { arg }] = arg_values else {
+        let [TypeArg::String { arg }] = arg_values else {
             // This should have already been checked.
             panic!("Wrong number of arguments");
         };
-        let op: OpaqueTk1Op = serde_yaml::from_value(arg.value.clone()).unwrap(); // TODO Errors!
+        let op: OpaqueTk1Op = serde_json::from_str(arg).unwrap(); // TODO Errors!
         let poly_func: PolyFuncType = op.signature().into();
         Ok(poly_func.into())
     }
@@ -112,7 +111,7 @@ pub static ref TKET2_EXTENSION: Extension = {
         TypeBound::Eq.into(),
     )
     .unwrap();
-    let sym_expr_param = TypeParam::Opaque{ty:sym_expr_opdef.instantiate([]).unwrap()};
+    let sym_expr_param = TypeParam::String;
 
     e.add_op(
         SYM_OP_ID,

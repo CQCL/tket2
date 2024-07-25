@@ -246,7 +246,7 @@ impl Tk1Decoder {
             tk1op
                 .param_ports()
                 .zip(params)
-                .map(|(_port, param)| self.create_param_wire(&param)),
+                .map(|(_port, param)| self.create_param_wire(param)),
         );
 
         Ok((inputs, outputs))
@@ -257,8 +257,8 @@ impl Tk1Decoder {
     /// If the parameter is a constant, a constant definition is added to the Hugr.
     ///
     /// TODO: If the parameter is a variable, returns the corresponding wire from the input.
-    fn create_param_wire(&mut self, param: &str) -> Wire {
-        match try_param_to_constant(param) {
+    fn create_param_wire(&mut self, param: String) -> Wire {
+        match try_param_to_constant(&param) {
             Some(const_op) => self.hugr.add_load_const(const_op),
             None => {
                 // store string in custom op.

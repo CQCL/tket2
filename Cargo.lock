@@ -262,25 +262,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clap-stdin"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "471df7896633bfc1e7d3da5b598422891e4cb8931210168ec63ea586e285803f"
-dependencies = [
- "thiserror",
-]
-
-[[package]]
-name = "clap-verbosity-flag"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb9b20c0dd58e4c2e991c8d203bbeb76c11304d1011659686b5b644bc29aa478"
-dependencies = [
- "clap",
- "log",
-]
-
-[[package]]
 name = "clap_builder"
 version = "4.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -740,32 +721,16 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bcfc2468cd2c63e86c562d491130a32d9a8e6f192dc67916818b9a3da02d7e0"
+source = "git+https://github.com/CQCL/hugr?branch=doug/nonlocal#2df4620205e73c3913a6c3e2363c1b70f7e9fc1e"
 dependencies = [
  "hugr-core",
  "hugr-passes",
 ]
 
 [[package]]
-name = "hugr-cli"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "691c29c35c238fadb6b2605952f9d6cf539e6a3c36a850f3f9a3a256dda601ca"
-dependencies = [
- "clap",
- "clap-stdin",
- "clap-verbosity-flag",
- "hugr-core",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
 name = "hugr-core"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7384f55699d0290a2d6d491518d0fe15f43d7c5d312814a112b8a17d5666d7c4"
+source = "git+https://github.com/CQCL/hugr?branch=doug/nonlocal#2df4620205e73c3913a6c3e2363c1b70f7e9fc1e"
 dependencies = [
  "bitvec",
  "cgmath",
@@ -784,7 +749,6 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "serde_yaml",
  "smol_str",
  "strum",
  "strum_macros",
@@ -795,8 +759,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9905dac38c839a5ea493dde57a3761d656fe782526b6e2d2a258f574a40799a"
+source = "git+https://github.com/CQCL/hugr?branch=doug/nonlocal#2df4620205e73c3913a6c3e2363c1b70f7e9fc1e"
 dependencies = [
  "hugr-core",
  "itertools 0.13.0",
@@ -1859,10 +1822,8 @@ dependencies = [
 name = "tket2-hseries"
 version = "0.1.0-alpha.1"
 dependencies = [
- "clap",
  "cool_asserts",
  "hugr",
- "hugr-cli",
  "lazy_static",
  "serde",
  "serde_json",
@@ -2375,3 +2336,8 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "hugr-cli"
+version = "0.2.0"
+source = "git+https://github.com/CQCL/hugr?branch=doug/nonlocal#2df4620205e73c3913a6c3e2363c1b70f7e9fc1e"
