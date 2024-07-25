@@ -111,7 +111,7 @@ fn lower_to_pytket<'py>(circ: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>>
 ///    optimisation
 /// - `progress_timeout` (default: None) seconds have elapsed since progress
 ///    in the cost function was last made
-/// - `max_circuit_cnt` (default: None) circuits have been explored.
+/// - `max_circuit_count` (default: None) circuits have been explored.
 ///
 /// Log files will be written to the directory `log_dir` if specified.
 #[pyfunction]
@@ -122,7 +122,7 @@ fn badger_optimise<'py>(
     max_threads: Option<NonZeroUsize>,
     timeout: Option<u64>,
     progress_timeout: Option<u64>,
-    max_circuit_cnt: Option<usize>,
+    max_circuit_count: Option<usize>,
     log_dir: Option<PathBuf>,
     rebase: Option<bool>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -174,7 +174,7 @@ fn badger_optimise<'py>(
                 progress_timeout,
                 n_threads: n_threads.try_into().unwrap(),
                 split_circuit: true,
-                max_circuit_cnt,
+                max_circuit_count,
                 ..Default::default()
             };
             circ = optimiser.optimise(circ, log_file, options);

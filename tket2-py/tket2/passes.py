@@ -35,7 +35,7 @@ def badger_pass(
     max_threads: Optional[int] = None,
     timeout: Optional[int] = None,
     progress_timeout: Optional[int] = None,
-    max_circuit_cnt: Optional[int] = None,
+    max_circuit_count: Optional[int] = None,
     log_dir: Optional[Path] = None,
     rebase: bool = False,
 ) -> BasePass:
@@ -45,7 +45,7 @@ def badger_pass(
     `compile-rewriter <https://github.com/CQCL/tket2/tree/main/badger-optimiser>`_
     utility. If `rewriter` is not specified, a default one will be used.
 
-    The arguments `max_threads`, `timeout`, `progress_timeout`, `max_circuit_cnt`,
+    The arguments `max_threads`, `timeout`, `progress_timeout`, `max_circuit_count`,
     `log_dir` and `rebase` are optional and will be passed on to the Badger
     optimiser if provided."""
     if rewriter is None:
@@ -63,7 +63,7 @@ def badger_pass(
             max_threads=max_threads,
             timeout=timeout,
             progress_timeout=progress_timeout,
-            max_circuit_cnt=max_circuit_cnt,
+            max_circuit_count=max_circuit_count,
             log_dir=log_dir,
             rebase=rebase,
         )

@@ -35,7 +35,7 @@ def badger_optimise(
     max_threads: int | None = None,
     timeout: int | None = None,
     progress_timeout: int | None = None,
-    max_circuit_cnt: int | None = None,
+    max_circuit_count: int | None = None,
     log_dir: Path | None = None,
     rebase: bool | None = False,
 ) -> CircuitClass:
@@ -57,7 +57,7 @@ def badger_optimise(
       optimisation
     - `progress_timeout` (default: None) seconds have elapsed since progress
       in the cost function was last made
-    - `max_circuit_cnt` (default: None) circuits have been explored.
+    - `max_circuit_count` (default: None) circuits have been explored.
 
     Log files will be written to the directory `log_dir` if specified.
     """

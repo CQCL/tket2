@@ -85,10 +85,10 @@ struct CmdLineArgs {
     #[arg(
         short = 'c',
         long,
-        value_name = "MAX_CIRCUIT_CNT",
+        value_name = "MAX_CIRCUIT_COUNT",
         help = "Maximum number of circuits to process (default=None)."
     )]
-    max_circuit_cnt: Option<usize>,
+    max_circuit_count: Option<usize>,
     /// Number of threads (default=1)
     #[arg(
         short = 'j',
@@ -176,7 +176,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             n_threads,
             split_circuit: opts.split_circ,
             queue_size: opts.queue_size,
-            max_circuit_cnt: opts.max_circuit_cnt,
+            max_circuit_count: opts.max_circuit_count,
         },
     );
 
