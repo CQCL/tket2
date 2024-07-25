@@ -57,7 +57,7 @@ pub struct BadgerOptions {
     /// per-thread basis, otherwise applies globally.
     ///
     /// Defaults to `None`, which means no limit.
-    pub max_circuit_cnt: Option<usize>,
+    pub max_circuit_count: Option<usize>,
     /// The number of threads to use.
     ///
     /// Defaults to `1`.
@@ -86,7 +86,7 @@ impl Default for BadgerOptions {
             n_threads: NonZeroUsize::new(1).unwrap(),
             split_circuit: Default::default(),
             queue_size: 20,
-            max_circuit_cnt: None,
+            max_circuit_count: None,
         }
     }
 }
@@ -251,8 +251,8 @@ where
                     break;
                 }
             }
-            if let Some(max_circuit_cnt) = opt.max_circuit_cnt {
-                if seen_hashes.len() >= max_circuit_cnt {
+            if let Some(max_circuit_count) = opt.max_circuit_count {
+                if seen_hashes.len() >= max_circuit_count {
                     timeout_flag = true;
                     break;
                 }
@@ -347,8 +347,8 @@ where
                         Ok(PriorityChannelLog::CircuitCount{processed_count: proc, seen_count: seen, queue_length}) => {
                             processed_count = proc;
                             seen_count = seen;
-                            if let Some(max_circuit_cnt) = opt.max_circuit_cnt {
-                                if seen_count > max_circuit_cnt {
+                            if let Some(max_circuit_count) = opt.max_circuit_count {
+                                if seen_count > max_circuit_count {
                                     timeout_flag = true;
                                     // Signal the workers to stop.
                                     let _ = pq.close();

@@ -61,7 +61,7 @@ impl PyBadgerOptimiser {
     ///     If `None` the optimiser will run indefinitely, or until `timeout` is
     ///     reached.
     ///
-    /// * `max_circuit_cnt`: The maximum number of circuits to process before
+    /// * `max_circuit_count`: The maximum number of circuits to process before
     ///     stopping the optimisation.
     ///
     ///
@@ -94,7 +94,7 @@ impl PyBadgerOptimiser {
         circ: &Bound<'py, PyAny>,
         timeout: Option<u64>,
         progress_timeout: Option<u64>,
-        max_circuit_cnt: Option<usize>,
+        max_circuit_count: Option<usize>,
         n_threads: Option<NonZeroUsize>,
         split_circ: Option<bool>,
         queue_size: Option<usize>,
@@ -103,7 +103,7 @@ impl PyBadgerOptimiser {
         let options = BadgerOptions {
             timeout,
             progress_timeout,
-            max_circuit_cnt,
+            max_circuit_count,
             n_threads: n_threads.unwrap_or(NonZeroUsize::new(1).unwrap()),
             split_circuit: split_circ.unwrap_or(false),
             queue_size: queue_size.unwrap_or(100),
