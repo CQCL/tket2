@@ -11,9 +11,7 @@ use hugr::IncomingPort;
 use serde::de::Error;
 use tket_json_rs::circuit_json;
 
-use crate::extension::{
-    REGISTRY, TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME,
-};
+use crate::extension::{REGISTRY, TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME};
 use crate::serialize::pytket::OpConvertError;
 
 /// A serialized operation, containing the operation type and all its attributes.
