@@ -607,13 +607,13 @@ mod tests {
     /// A badger optimiser using a reduced set of rewrite rules.
     #[fixture]
     fn badger_opt_json() -> DefaultBadgerOptimiser {
-        BadgerOptimiser::default_with_eccs_json_file("../test_files/small_eccs.json").unwrap()
+        BadgerOptimiser::default_with_eccs_json_file("../test_files/eccs/small_eccs.json").unwrap()
     }
 
     /// A badger optimiser using a reduced set of rewrite rules.
     #[fixture]
     fn badger_opt_compiled() -> DefaultBadgerOptimiser {
-        BadgerOptimiser::default_with_rewriter_binary("../test_files/small_eccs.rwr").unwrap()
+        BadgerOptimiser::default_with_rewriter_binary("../test_files/eccs/small_eccs.rwr").unwrap()
     }
 
     /// A badger optimiser using the complete nam_6_3 rewrite set.
@@ -622,7 +622,7 @@ mod tests {
     /// Use [`badger_opt`] if possible.
     #[fixture]
     fn badger_opt_full() -> DefaultBadgerOptimiser {
-        BadgerOptimiser::default_with_rewriter_binary("../test_files/nam_6_3.rwr").unwrap()
+        BadgerOptimiser::default_with_rewriter_binary("../test_files/eccs/nam_6_3.rwr").unwrap()
     }
 
     #[rstest]
@@ -697,7 +697,8 @@ mod tests {
 
     #[test]
     fn load_precompiled_bin() {
-        let opt = BadgerOptimiser::default_with_rewriter_binary("../test_files/small_eccs.rwr");
+        let opt =
+            BadgerOptimiser::default_with_rewriter_binary("../test_files/eccs/small_eccs.rwr");
         opt.unwrap();
     }
 }
