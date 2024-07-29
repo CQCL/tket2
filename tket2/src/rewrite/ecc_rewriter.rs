@@ -348,7 +348,7 @@ mod tests {
     fn ecc_rewriter_from_file() {
         // In this example, all circuits are valid patterns, thus
         // PatternID == TargetID.
-        let test_file = "../test_files/small_eccs.json";
+        let test_file = "../test_files/eccs/small_eccs.json";
         let rewriter = ECCRewriter::try_from_eccs_json_file(test_file).unwrap();
         assert_eq!(rewriter.rewrite_rules.len(), rewriter.matcher.n_patterns());
         assert_eq!(rewriter.targets.len(), 5 * 4 + 5 * 3);
