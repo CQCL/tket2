@@ -44,6 +44,10 @@ coverage language="[rust|python]": (_run_lang language \
 shell:
     poetry shell
 
+# Runs `compile-rewriter` on the ECCs in `test_files/eccs`
+recompile-eccs:
+    scripts/compile-test-eccs.sh
+
 
 # Runs a rust and a python command, depending on the `language` variable.
 #
