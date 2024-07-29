@@ -30,7 +30,7 @@ python = "^3.10"
 # Poetry does not currently follow PEP 621, it will be supported on poetry 2
 # https://github.com/python-poetry/poetry/issues/3332
 pytket = "1.30.0"
-hugr = "^0.4.0"
+hugr = "^0.5.0"
 
 [tool.poetry.group.dev.dependencies]
 maturin = "^1.7.0"
@@ -74,7 +74,7 @@ requires-python = ">=3.10"
 license = { file = "LICENCE" }
 
 # Note: Be sure to update the dependency versions in [tool.poetry.dependencies] as well
-dependencies = ['pytket >= 1.29.2, < 2', 'hugr >= 0.4.0, < 0.5']
+dependencies = ['pytket >= 1.29.2, < 2', 'hugr >= 0.5.0, < 0.6']
 
 [project.urls]
 homepage = "https://github.com/CQCL/tket2"

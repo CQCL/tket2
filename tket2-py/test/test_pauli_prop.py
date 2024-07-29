@@ -133,7 +133,7 @@ def final_pauli_string(circ: Tk2Circuit) -> str:
     on each qubit, and if they are paulis concatenate them into a string."""
 
     def map_op(op: Custom) -> str:
-        n = op.op_name
+        n = op.name
         return n if n in ("X", "Y", "Z") else "I"
 
     # TODO ignore non-qubit outputs

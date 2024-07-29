@@ -26,8 +26,8 @@ missing_docs = "warn"
 [workspace.dependencies]
 
 # Make sure to run `just recompile-eccs` if the hugr serialisation format changes.
-hugr = "0.9.1"
-hugr-core = "0.6.1"
+hugr = "0.10.0"
+hugr-core = "0.7.0"
 portgraph = "0.12"
 pyo3 = "0.21.2"
 itertools = "0.13.0"
@@ -69,9 +69,3 @@ urlencoding = "2.1.2"
 webbrowser = "1.0.0"
 cool_asserts = "2.0.3"
 zstd = "0.13.2"
-
-
-# DO NOT MERGE
-[patch.crates-io]
-hugr = { git = "https://github.com/CQCL/hugr", branch = "main" }
-hugr-core = { git = "https://github.com/CQCL/hugr", branch = "main" }

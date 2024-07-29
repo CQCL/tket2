@@ -25,8 +25,6 @@ pub enum PyTypeBound {
     Any,
     /// The type can be copied in the program.
     Copyable,
-    /// The equality operation is valid on this type.
-    Eq,
 }
 
 impl From<PyTypeBound> for TypeBound {
@@ -34,7 +32,6 @@ impl From<PyTypeBound> for TypeBound {
         match bound {
             PyTypeBound::Any => TypeBound::Any,
             PyTypeBound::Copyable => TypeBound::Copyable,
-            PyTypeBound::Eq => TypeBound::Eq,
         }
     }
 }
@@ -44,7 +41,6 @@ impl From<TypeBound> for PyTypeBound {
         match bound {
             TypeBound::Any => PyTypeBound::Any,
             TypeBound::Copyable => PyTypeBound::Copyable,
-            TypeBound::Eq => PyTypeBound::Eq,
         }
     }
 }

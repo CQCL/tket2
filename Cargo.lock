@@ -720,20 +720,19 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.9.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39fe922e36cf43f807e83e3ae7265f5e60c47f5843bd3a9e92db718ea03270e0"
+checksum = "daa4ecfcad4aaf337f974e196e0b79ac9288a19535a5b57c9c77f0aaed1d0c6a"
 dependencies = [
  "hugr-core",
  "hugr-passes",
 ]
 
 [[package]]
-[[package]]
 name = "hugr-core"
-version = "0.6.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30162597f260dcbde8e63156fa7cd59f2b4d396c491664ea5355428799b69588"
+checksum = "7de0f6d5bd8ce765a989d928a773b6816b89051bdf1da55d27ac2b6965fa0e07"
 dependencies = [
  "bitvec",
  "cgmath",
@@ -761,9 +760,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4449d424edfc728e86a22584c69d8b77eb216ed4aded27d2adb7859ce9fe44d4"
+checksum = "31c601b2bc2168e841cb1087f2f7d383a4cace5c9926e10e79e2dd4829cd6758"
 dependencies = [
  "hugr-core",
  "itertools 0.13.0",

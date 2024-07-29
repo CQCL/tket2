@@ -177,7 +177,7 @@ pub(super) fn add_to_extension(extension: &mut Extension) {
             ANGLE_TYPE_ID,
             vec![LOG_DENOM_TYPE_PARAM],
             "angle value with a given log-denominator".to_owned(),
-            TypeBound::Eq.into(),
+            TypeBound::Copyable.into(),
         )
         .unwrap()
         .clone();
