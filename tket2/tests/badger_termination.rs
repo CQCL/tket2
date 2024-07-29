@@ -13,8 +13,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 /// 4 gates, using the NAM gateset (CX, Rz, H).
 #[fixture]
 fn nam_4_2() -> DefaultBadgerOptimiser {
-    BadgerOptimiser::default_with_eccs_json_file("../test_files/Nam_4_2_complete_ECC_set.json")
-        .unwrap()
+    BadgerOptimiser::default_with_eccs_json_file("../test_files/eccs/nam_4_2.json").unwrap()
 }
 
 /// The following circuit
