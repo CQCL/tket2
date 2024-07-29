@@ -89,12 +89,12 @@ impl OpaqueTk1Op {
             return Ok(None);
         }
         let Some(TypeArg::String { arg }) = custom_op.args().first() else {
-            return Err(serde_yaml::Error::custom(
+            return Err(serde_json::Error::custom(
                 "Opaque TKET1 operation did not have a yaml-encoded type argument.",
             )
             .into());
         };
-        let op = serde_yaml::from_str(arg)?;
+        let op = serde_json::from_str(arg)?;
         Ok(Some(op))
     }
 
