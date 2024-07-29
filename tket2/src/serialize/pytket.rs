@@ -210,7 +210,7 @@ pub enum OpConvertError {
     InvalidOpaqueTypeParam {
         /// The serialization error.
         #[from]
-        error: serde_yaml::Error,
+        error: serde_json::Error,
     },
     /// Tried to decode a tket1 operation with not enough parameters.
     #[error(

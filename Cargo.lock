@@ -262,25 +262,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clap-stdin"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "471df7896633bfc1e7d3da5b598422891e4cb8931210168ec63ea586e285803f"
-dependencies = [
- "thiserror",
-]
-
-[[package]]
-name = "clap-verbosity-flag"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb9b20c0dd58e4c2e991c8d203bbeb76c11304d1011659686b5b644bc29aa478"
-dependencies = [
- "clap",
- "log",
-]
-
-[[package]]
 name = "clap_builder"
 version = "4.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -739,33 +720,19 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.9.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39fe922e36cf43f807e83e3ae7265f5e60c47f5843bd3a9e92db718ea03270e0"
+checksum = "daa4ecfcad4aaf337f974e196e0b79ac9288a19535a5b57c9c77f0aaed1d0c6a"
 dependencies = [
  "hugr-core",
  "hugr-passes",
 ]
 
 [[package]]
-name = "hugr-cli"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d91be39fb061aa91aaac3f0f376927f718781c27d627ebf425804bf9c2daff9"
-dependencies = [
- "clap",
- "clap-stdin",
- "clap-verbosity-flag",
- "hugr-core",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
 name = "hugr-core"
-version = "0.6.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30162597f260dcbde8e63156fa7cd59f2b4d396c491664ea5355428799b69588"
+checksum = "7de0f6d5bd8ce765a989d928a773b6816b89051bdf1da55d27ac2b6965fa0e07"
 dependencies = [
  "bitvec",
  "cgmath",
@@ -784,7 +751,6 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "serde_yaml",
  "smol_str",
  "strum",
  "strum_macros",
@@ -794,9 +760,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4449d424edfc728e86a22584c69d8b77eb216ed4aded27d2adb7859ce9fe44d4"
+checksum = "31c601b2bc2168e841cb1087f2f7d383a4cace5c9926e10e79e2dd4829cd6758"
 dependencies = [
  "hugr-core",
  "itertools 0.13.0",
@@ -1583,19 +1549,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_yaml"
-version = "0.9.34+deprecated"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
-dependencies = [
- "indexmap",
- "itoa",
- "ryu",
- "serde",
- "unsafe-libyaml",
-]
-
-[[package]]
 name = "sharded-slab"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1843,7 +1796,6 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
- "serde_yaml",
  "smol_str",
  "strum",
  "strum_macros",
@@ -1860,10 +1812,8 @@ dependencies = [
 name = "tket2-hseries"
 version = "0.1.0-alpha.1"
 dependencies = [
- "clap",
  "cool_asserts",
  "hugr",
- "hugr-cli",
  "lazy_static",
  "serde",
  "serde_json",
@@ -2018,12 +1968,6 @@ name = "unindent"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7de7d73e1754487cb58364ee906a499937a0dfabd86bcb980fa99ec8c8fa2ce"
-
-[[package]]
-name = "unsafe-libyaml"
-version = "0.2.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 
 [[package]]
 name = "url"

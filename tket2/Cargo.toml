@@ -49,7 +49,6 @@ smol_str = { workspace = true }
 typetag = { workspace = true }
 itertools = { workspace = true }
 petgraph = { workspace = true }
-serde_yaml = { workspace = true }
 portmatching = { workspace = true, optional = true, features = ["serde"] }
 derive_more = { workspace = true }
 hugr = { workspace = true }

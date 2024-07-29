@@ -3,9 +3,6 @@
 
 use hugr::Hugr;
 
-#[cfg(feature = "cli")]
-pub mod cli;
-
 pub mod extension;
 
 pub mod lazify_measure;

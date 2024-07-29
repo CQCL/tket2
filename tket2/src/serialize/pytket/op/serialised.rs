@@ -5,16 +5,13 @@ use hugr::extension::prelude::{BOOL_T, QB_T};
 use hugr::ops::custom::{CustomOp, ExtensionOp};
 use hugr::ops::{NamedOp, OpType};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
-use hugr::types::type_param::CustomTypeArg;
 use hugr::types::{Signature, TypeArg};
 
 use hugr::IncomingPort;
 use serde::de::Error;
 use tket_json_rs::circuit_json;
 
-use crate::extension::{
-    REGISTRY, TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME, TKET1_OP_PAYLOAD,
-};
+use crate::extension::{REGISTRY, TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME};
 use crate::serialize::pytket::OpConvertError;
 
 /// A serialized operation, containing the operation type and all its attributes.
@@ -91,13 +88,13 @@ impl OpaqueTk1Op {
         if custom_op.name() != format!("{TKET1_EXTENSION_ID}.{TKET1_OP_NAME}") {
             return Ok(None);
         }
-        let Some(TypeArg::Opaque { arg }) = custom_op.args().first() else {
-            return Err(serde_yaml::Error::custom(
+        let Some(TypeArg::String { arg }) = custom_op.args().first() else {
+            return Err(serde_json::Error::custom(
                 "Opaque TKET1 operation did not have a yaml-encoded type argument.",
             )
             .into());
         };
-        let op = serde_yaml::from_value(arg.value.clone())?;
+        let op = serde_json::from_str(arg)?;
         Ok(Some(op))
     }
 
@@ -130,9 +127,8 @@ impl OpaqueTk1Op {
 
     /// Wraps the op into a [`TKET1_OP_NAME`] opaque operation.
     pub fn as_custom_op(&self) -> CustomOp {
-        let op = serde_yaml::to_value(self).unwrap();
-        let payload = TypeArg::Opaque {
-            arg: CustomTypeArg::new(TKET1_OP_PAYLOAD.clone(), op).unwrap(),
+        let payload = TypeArg::String {
+            arg: serde_json::to_string(self).unwrap(),
         };
         let op_def = TKET1_EXTENSION.get_op(&TKET1_OP_NAME).unwrap();
         ExtensionOp::new(op_def.clone(), vec![payload], &REGISTRY)

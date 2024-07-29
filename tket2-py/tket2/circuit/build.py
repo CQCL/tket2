@@ -69,7 +69,7 @@ _OneQbSig = tys.FunctionType.endo([tys.Qubit])
 
 @dataclass(frozen=True)
 class OneQbGate(QuantumOps):
-    op_name: str  # type: ignore[misc] # no-default fields follows one with a default
+    name: str  # type: ignore[misc] # no-default fields follows one with a default
     num_out: int = 1
     signature: tys.FunctionType = _OneQbSig
 
@@ -87,7 +87,7 @@ _TwoQbSig = tys.FunctionType.endo([tys.Qubit] * 2)
 
 @dataclass(frozen=True)
 class TwoQbGate(QuantumOps):
-    op_name: str  # type: ignore[misc] # no-default fields follows one with a default
+    name: str  # type: ignore[misc] # no-default fields follows one with a default
     num_out: int = 2
     signature: tys.FunctionType = _TwoQbSig
 
@@ -102,7 +102,7 @@ _MeasSig = tys.FunctionType([tys.Qubit], [tys.Qubit, tys.Bool])
 
 @dataclass(frozen=True)
 class MeasureDef(QuantumOps):
-    op_name: str = "Measure"
+    name: str = "Measure"
     num_out: int = 2
     signature: tys.FunctionType = _MeasSig
 
@@ -118,7 +118,7 @@ _RzSig = tys.FunctionType([tys.Qubit, FLOAT_T], [tys.Qubit])
 
 @dataclass(frozen=True)
 class RzDef(QuantumOps):
-    op_name: str = "Rz"
+    name: str = "Rz"
     num_out: int = 1
     signature: tys.FunctionType = _RzSig
 
@@ -134,7 +134,7 @@ _QallocSig = tys.FunctionType([], [tys.Qubit])
 
 @dataclass(frozen=True)
 class QAllocDef(QuantumOps):
-    op_name: str = "QAlloc"
+    name: str = "QAlloc"
     num_out: int = 1
     signature: tys.FunctionType = _QallocSig
 
@@ -150,7 +150,7 @@ _QfreeSig = tys.FunctionType([tys.Qubit], [])
 
 @dataclass(frozen=True)
 class QFreeDef(QuantumOps):
-    op_name: str = "QFree"
+    name: str = "QFree"
     num_out: int = 0
     signature: tys.FunctionType = _QfreeSig
 

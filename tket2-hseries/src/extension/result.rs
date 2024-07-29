@@ -5,7 +5,7 @@ use hugr::types::Signature;
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
-        prelude::{self, BOOL_T, PRELUDE, STRING_CUSTOM_TYPE},
+        prelude::{self, BOOL_T, PRELUDE},
         simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp, OpLoadError},
         ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc,
     },
@@ -20,10 +20,7 @@ use hugr::{
         },
     },
     type_row,
-    types::{
-        type_param::{CustomTypeArg, TypeParam},
-        PolyFuncType, Type, TypeArg,
-    },
+    types::{type_param::TypeParam, PolyFuncType, Type, TypeArg},
     Extension, Wire,
 };
 
@@ -170,12 +167,8 @@ impl ResultOpDef {
     }
 
     fn result_signature(&self) -> SignatureFunc {
-        let string_param = TypeParam::Opaque {
-            ty: STRING_CUSTOM_TYPE,
-        };
-
         PolyFuncType::new(
-            [vec![string_param], self.type_params()].concat(),
+            [vec![TypeParam::String], self.type_params()].concat(),
             Signature::new(self.arg_type(), type_row![]),
         )
         .into()
@@ -297,17 +290,15 @@ fn concrete_result_op_type_args(
     args: &[TypeArg],
 ) -> Result<(String, Option<u64>, Option<u64>), OpLoadError> {
     let err = || hugr::extension::SignatureError::InvalidTypeArgs.into();
-    let extract_string =
-        |arg: &CustomTypeArg| arg.value.as_str().map(|s| s.to_string()).ok_or(err());
     match args {
-        [TypeArg::Opaque { arg }] => Ok((extract_string(arg)?, None, None)),
+        [TypeArg::String { arg }] => Ok((arg.to_owned(), None, None)),
 
-        [TypeArg::Opaque { arg }, TypeArg::BoundedNat { n }] => {
-            Ok((extract_string(arg)?, Some(*n), None))
+        [TypeArg::String { arg }, TypeArg::BoundedNat { n }] => {
+            Ok((arg.to_owned(), Some(*n), None))
         }
 
-        [TypeArg::Opaque { arg }, TypeArg::BoundedNat { n }, TypeArg::BoundedNat { n: m }] => {
-            Ok((extract_string(arg)?, Some(*n), Some(*m)))
+        [TypeArg::String { arg }, TypeArg::BoundedNat { n }, TypeArg::BoundedNat { n: m }] => {
+            Ok((arg.to_owned(), Some(*n), Some(*m)))
         }
 
         _ => Err(err()),
@@ -333,9 +324,7 @@ impl MakeExtensionOp for ResultOp {
     }
 
     fn type_args(&self) -> Vec<TypeArg> {
-        let mut type_args = vec![TypeArg::Opaque {
-            arg: CustomTypeArg::new(STRING_CUSTOM_TYPE, self.tag.clone().into()).unwrap(),
-        }];
+        let mut type_args = vec![self.tag.clone().into()];
 
         match self.args {
             ResultArgs::Simple(_) => {}

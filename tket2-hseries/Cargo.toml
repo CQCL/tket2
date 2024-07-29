@@ -13,15 +13,9 @@ description = "TKET2 tool for preparing and validating `Hugr`s for compilation t
 keywords = ["Quantum", "Quantinuum"]
 categories = ["compilers"]
 
-[features]
-default = ["cli"]
-cli = ["dep:hugr-cli", "dep:clap"]
-
 [dependencies]
 hugr.workspace = true
-hugr-cli = { workspace = true, optional = true }
 tket2 = { path = "../tket2", version = "0.1.0-alpha.1" }
-clap = { workspace = true, optional = true, features = ["derive"] }
 lazy_static.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
@@ -34,7 +28,3 @@ cool_asserts.workspace = true
 
 [lints]
 workspace = true
-
-[[bin]]
-name = "tket2-hseries"
-required-features = ["cli"]
