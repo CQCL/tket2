@@ -15,5 +15,6 @@ rust:
 python:
   - *rust-core
   - "tket2-py/**"
+  - "tket2-eccs/**"
   - "pyproject.toml"
   - "poetry.lock"
