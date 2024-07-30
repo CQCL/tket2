@@ -14,12 +14,16 @@ check:
 
 # Compile the wheels for the python package.
 build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Ensure that we are using the local version of `pytket-eccs`
+    poetry install -C tket2-eccs
     poetry run -- maturin build --release
 
 # Run all the tests.
 test language="[rust|python]" : (_run_lang language \
         "poetry run cargo test --all-features --workspace" \
-        "poetry run maturin develop && poetry run pytest"
+        "poetry install -C tket2-eccs && poetry run maturin develop && poetry run pytest"
     )
 
 # Auto-fix all clippy warnings.
@@ -37,7 +41,7 @@ format language="[rust|python]": (_run_lang language \
 # Generate a test coverage report.
 coverage language="[rust|python]": (_run_lang language \
         "poetry run -- cargo llvm-cov --lcov > lcov.info" \
-        "poetry run -- maturin develop && poetry run pytest --cov=./ --cov-report=html"
+        "poetry install -C tket2-eccs && poetry run -- maturin develop && poetry run pytest --cov=./ --cov-report=html"
     )
 
 # Load a shell with all the dependencies installed
