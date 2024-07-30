@@ -7,10 +7,10 @@ use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
         prelude::{BOOL_T, QB_T},
-        simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp},
+        simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp, OpLoadError},
         ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, PRELUDE,
     },
-    ops::{CustomOp, OpType},
+    ops::{NamedOp as _, OpType},
     types::Signature,
     Extension, Wire,
 };
@@ -90,16 +90,13 @@ impl MakeRegisteredOp for LazyQuantumOp {
 }
 
 impl TryFrom<&OpType> for LazyQuantumOp {
-    type Error = ();
+    type Error = OpLoadError;
     fn try_from(value: &OpType) -> Result<Self, Self::Error> {
-        let Some(custom_op) = value.as_custom_op() else {
-            Err(())?
-        };
-        match custom_op {
-            CustomOp::Extension(ext) => Self::from_extension_op(ext).ok(),
-            CustomOp::Opaque(opaque) => try_from_name(opaque.name(), &EXTENSION_ID).ok(),
-        }
-        .ok_or(())
+        Self::from_op(
+            value
+                .as_custom_op()
+                .ok_or(OpLoadError::NotMember(value.name().into()))?,
+        )
     }
 }
 
