@@ -6,10 +6,14 @@
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
-        simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp, OpLoadError},
-        ExtensionBuildError, ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, TypeDef,
+        simple_op::{
+            try_from_name, HasConcrete, HasDef, MakeExtensionOp, MakeOpDef, MakeRegisteredOp,
+            OpLoadError,
+        },
+        ExtensionBuildError, ExtensionId, ExtensionRegistry, OpDef, SignatureError, SignatureFunc,
+        TypeDef,
     },
-    ops::{custom::ExtensionOp, CustomOp, OpType},
+    ops::{custom::ExtensionOp, NamedOp, OpType},
     types::{type_param::TypeParam, CustomType, PolyFuncType, Signature, Type, TypeArg, TypeBound},
     Extension, Wire,
 };
@@ -27,7 +31,7 @@ lazy_static! {
         let mut ext = Extension::new(EXTENSION_ID);
         let _ = add_future_type_def(&mut ext).unwrap();
 
-        FutureOp::load_all_ops(&mut ext).unwrap();
+        FutureOpDef::load_all_ops(&mut ext).unwrap();
         ext
     };
 
@@ -82,27 +86,27 @@ pub fn future_type(t: Type) -> Type {
 #[allow(missing_docs)]
 #[non_exhaustive]
 /// Simple enum of "tket2.futures" operations.
-pub enum FutureOp {
+pub enum FutureOpDef {
     Read,
     Dup,
     Free,
 }
 
-impl MakeOpDef for FutureOp {
+impl MakeOpDef for FutureOpDef {
     fn signature(&self) -> SignatureFunc {
         let t_param = TypeParam::from(TypeBound::Any);
         let t_type = Type::new_var_use(0, TypeBound::Any);
         let future_type = future_type(t_type.clone());
         match self {
-            FutureOp::Read => {
+            FutureOpDef::Read => {
                 PolyFuncType::new([t_param], Signature::new(future_type, t_type)).into()
             }
-            FutureOp::Dup => PolyFuncType::new(
+            FutureOpDef::Dup => PolyFuncType::new(
                 [t_param],
                 Signature::new(future_type.clone(), vec![future_type.clone(), future_type]),
             )
             .into(),
-            FutureOp::Free => {
+            FutureOpDef::Free => {
                 PolyFuncType::new([t_param], Signature::new(future_type.clone(), vec![])).into()
             }
         }
@@ -118,49 +122,50 @@ impl MakeOpDef for FutureOp {
 
     fn description(&self) -> String {
         match self {
-            FutureOp::Read => "Read a value from a Future, consuming it".into(),
-            FutureOp::Dup => {
+            FutureOpDef::Read => "Read a value from a Future, consuming it".into(),
+            FutureOpDef::Dup => {
                 "Duplicate a Future. The original Future is consumed and two Futures are returned"
                     .into()
             }
-            FutureOp::Free => "Consume a future without reading it.".into(),
+            FutureOpDef::Free => "Consume a future without reading it.".into(),
         }
     }
 }
 
-impl<'a> From<&'a ConcreteFutureOp> for &'static str {
-    fn from(value: &ConcreteFutureOp) -> Self {
+impl HasConcrete for FutureOpDef {
+    type Concrete = FutureOp;
+
+    fn instantiate(&self, type_args: &[TypeArg]) -> Result<Self::Concrete, OpLoadError> {
+        match type_args {
+            [TypeArg::Type { ty }] => Ok(FutureOp {
+                op: *self,
+                typ: ty.clone(),
+            }),
+            _ => Err(SignatureError::InvalidTypeArgs.into()),
+        }
+    }
+}
+
+impl<'a> From<&'a FutureOp> for &'static str {
+    fn from(value: &FutureOp) -> Self {
         value.op.into()
     }
 }
 
 /// Concrete "tket2.futures" operations with type set.
-struct ConcreteFutureOp {
-    op: FutureOp,
-    typ: Type,
+pub struct FutureOp {
+    /// The `FutureOpDef` that defines this operation.
+    pub op: FutureOpDef,
+    /// The inner type of the `Future` this op acts on.
+    pub typ: Type,
 }
 
-fn concrete_future_op_type_args(
-    args: &[TypeArg],
-) -> Result<Type, hugr::extension::simple_op::OpLoadError> {
-    match args {
-        [TypeArg::Type { ty }] => Ok(ty.clone()),
-        _ => Err(OpLoadError::InvalidArgs(
-            hugr::extension::SignatureError::InvalidTypeArgs,
-        )),
-    }
-}
-
-impl MakeExtensionOp for ConcreteFutureOp {
-    fn from_extension_op(
-        ext_op: &ExtensionOp,
-    ) -> Result<Self, hugr::extension::simple_op::OpLoadError>
+impl MakeExtensionOp for FutureOp {
+    fn from_extension_op(ext_op: &ExtensionOp) -> Result<Self, OpLoadError>
     where
         Self: Sized,
     {
-        let op = FutureOp::from_def(ext_op.def())?;
-        let typ = concrete_future_op_type_args(ext_op.args())?;
-        Ok(Self { op, typ })
+        FutureOpDef::from_def(ext_op.def())?.instantiate(ext_op.args())
     }
 
     fn type_args(&self) -> Vec<hugr::types::TypeArg> {
@@ -168,7 +173,7 @@ impl MakeExtensionOp for ConcreteFutureOp {
     }
 }
 
-impl MakeRegisteredOp for ConcreteFutureOp {
+impl MakeRegisteredOp for FutureOp {
     fn extension_id(&self) -> ExtensionId {
         EXTENSION_ID
     }
@@ -178,31 +183,31 @@ impl MakeRegisteredOp for ConcreteFutureOp {
     }
 }
 
-impl TryFrom<&OpType> for FutureOp {
-    type Error = ();
+impl HasDef for FutureOp {
+    type Def = FutureOpDef;
+}
+
+impl TryFrom<&OpType> for FutureOpDef {
+    type Error = OpLoadError;
 
     fn try_from(value: &OpType) -> Result<Self, Self::Error> {
-        let Some(custom_op) = value.as_custom_op() else {
-            Err(())?
-        };
-        match custom_op {
-            CustomOp::Extension(ext) => Self::from_extension_op(ext).ok(),
-            CustomOp::Opaque(opaque) => try_from_name(opaque.name(), &EXTENSION_ID).ok(),
-        }
-        .ok_or(())
+        Self::from_op(
+            value
+                .as_custom_op()
+                .ok_or(OpLoadError::NotMember(value.name().into()))?,
+        )
     }
 }
 
-impl TryFrom<&OpType> for ConcreteFutureOp {
-    type Error = ();
+impl TryFrom<&OpType> for FutureOp {
+    type Error = OpLoadError;
 
     fn try_from(value: &OpType) -> Result<Self, Self::Error> {
-        (|| {
-            let op = value.try_into().ok()?;
-            let typ = concrete_future_op_type_args(value.as_custom_op()?.args()).ok()?;
-            Some(Self { op, typ })
-        })()
-        .ok_or(())
+        Self::from_op(
+            value
+                .as_custom_op()
+                .ok_or(OpLoadError::NotMember(value.name().into()))?,
+        )
     }
 }
 
@@ -213,8 +218,8 @@ pub trait FutureOpBuilder: Dataflow {
     fn add_read(&mut self, lifted: Wire, typ: Type) -> Result<[Wire; 1], BuildError> {
         Ok(self
             .add_dataflow_op(
-                ConcreteFutureOp {
-                    op: FutureOp::Read,
+                FutureOp {
+                    op: FutureOpDef::Read,
                     typ,
                 },
                 [lifted],
@@ -226,8 +231,8 @@ pub trait FutureOpBuilder: Dataflow {
     fn add_dup(&mut self, lifted: Wire, typ: Type) -> Result<[Wire; 2], BuildError> {
         Ok(self
             .add_dataflow_op(
-                ConcreteFutureOp {
-                    op: FutureOp::Dup,
+                FutureOp {
+                    op: FutureOpDef::Dup,
                     typ,
                 },
                 [lifted],
@@ -238,8 +243,8 @@ pub trait FutureOpBuilder: Dataflow {
     /// Add a "tket2.futures.Free" op.
     fn add_free(&mut self, lifted: Wire, typ: Type) -> Result<(), BuildError> {
         let op = self.add_dataflow_op(
-            ConcreteFutureOp {
-                op: FutureOp::Free,
+            FutureOp {
+                op: FutureOpDef::Free,
                 typ,
             },
             [lifted],
@@ -271,8 +276,8 @@ pub(crate) mod test {
     fn create_extension() {
         assert_eq!(EXTENSION.name(), &EXTENSION_ID);
 
-        for o in FutureOp::iter() {
-            assert_eq!(FutureOp::from_def(get_opdef(o).unwrap()), Ok(o));
+        for o in FutureOpDef::iter() {
+            assert_eq!(FutureOpDef::from_def(get_opdef(o).unwrap()), Ok(o));
         }
     }
 

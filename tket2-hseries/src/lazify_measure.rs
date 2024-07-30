@@ -196,7 +196,7 @@ mod test {
     use tket2::extension::TKET2_EXTENSION;
 
     use crate::extension::{
-        futures::{self, FutureOp},
+        futures::{self, FutureOpDef},
         quantum_lazy::LazyQuantumOp,
     };
 
@@ -232,7 +232,7 @@ mod test {
         let mut num_lazy_measure = 0;
         for n in hugr.nodes() {
             let ot = hugr.get_optype(n);
-            if let Ok(FutureOp::Read) = ot.try_into() {
+            if let Ok(FutureOpDef::Read) = ot.try_into() {
                 num_read += 1;
             } else if let Ok(LazyQuantumOp::Measure) = ot.try_into() {
                 num_lazy_measure += 1;
