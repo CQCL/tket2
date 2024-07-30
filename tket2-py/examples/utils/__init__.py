@@ -1,9 +1,14 @@
 """Some utility functions for the example notebooks."""
 
+from typing import TYPE_CHECKING, Any
 from tket2.passes import lower_to_pytket
 from tket2.circuit import Tk2Circuit
 
-from guppylang.definition.function import RawFunctionDef
+if TYPE_CHECKING:
+    try:
+        from guppylang.definition.function import RawFunctionDef  # type: ignore[import-untyped, import-not-found, unused-ignore]  # noqa: F401
+    except ImportError:
+        RawFunctionDef = Any
 
 
 # We need to define this helper function for now. It will be included in guppy in the future.
