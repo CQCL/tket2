@@ -1,0 +1,60 @@
+name: Build and publish pure python wheels
+# Builds and publishes the pure wheels on pypi.
+#
+# This does not include the main `tket2-py` package, which is built using maturin.
+# See `python-wheels.yml` for that workflow.
+#
+# When running on a release event or as a workflow dispatch for a tag,
+# and if the tag matches `{package}-v*`,
+# this workflow will publish the wheels to pypi.
+# If the version is already published, pypi just ignores it.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  release:
+    types:
+      - published
+
+jobs:
+  build-publish:
+    name: Build and publish wheels
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package:
+          - 'tket2-eccs'
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.5
+      - name: Install poetry
+        run: pipx install poetry
+      - name: Set up Python '3.10'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: "poetry"
+
+      - name: Build sdist and wheels
+        run: |
+          cd ${{ matrix.package }}
+          poetry build -o ../dist
+
+      - name: Upload the built packages as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.package }}-sdist
+          path: |
+            dist/*.tar.gz
+            dist/*.whl
+
+      - name: Publish to PyPI
+        if: ${{ (github.event_name == 'release' && github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.package)) ) || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.package)) ) }}
+        run: |
+          cd ${{ matrix.package }}
+          poetry config pypi-token.pypi ${{ secrets.PYPI_PUBLISH }}
+          poetry publish --dist-dir ../dist --skip-existing
