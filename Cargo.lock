@@ -1814,12 +1814,15 @@ version = "0.1.0-alpha.1"
 dependencies = [
  "cool_asserts",
  "hugr",
+ "itertools 0.13.0",
  "lazy_static",
+ "petgraph",
  "serde",
  "serde_json",
  "smol_str",
  "strum",
  "strum_macros",
+ "thiserror",
  "tket2",
 ]
 
