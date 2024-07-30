@@ -176,27 +176,12 @@ dev = ["flake8", "pep8-naming", "tox (>=3)", "twine", "wheel"]
 docs = ["sphinx (>=5,<7)", "sphinx-autodoc-typehints", "sphinx-rtd-theme"]
 test = ["coverage", "pytest (>=7,<8.1)", "pytest-cov", "pytest-mock (>=3)"]
 
-[[package]]
-name = "guppylang"
-version = "0.7.0"
-description = "Pythonic quantum-classical programming language"
-optional = false
-python-versions = "^3.10"
-files = []
-develop = false
-
 [package.dependencies]
 graphviz = "^0.20.1"
 hugr = "^0.5.0"
 networkx = "^3.2.1"
 pydantic = "^2.7.0b1"
 typing-extensions = "^4.9.0"
-
-[package.source]
-type = "git"
-url = "https://github.com/CQCL/guppylang"
-reference = "doug/hugr-0.10.0"
-resolved_reference = "bb29407e091c6f5e73c675ee9c2e8316f6590e77"
 
 [[package]]
 name = "hugr"

@@ -41,7 +41,6 @@ mypy = "^1.11.0"
 hypothesis = "^6.108.5"
 graphviz = "^0.20"
 pre-commit = "^3.8.0"
-guppylang = {git = "https://github.com/CQCL/guppylang", branch = "doug/hugr-0.10.0"}
 
 [build-system]
 requires = ["maturin~=1.7"]
