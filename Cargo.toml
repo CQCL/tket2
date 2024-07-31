@@ -68,3 +68,7 @@ urlencoding = "2.1.2"
 webbrowser = "1.0.0"
 cool_asserts = "2.0.3"
 zstd = "0.13.2"
+
+[profile.release.package.tket2-py]
+# Some configurations to reduce the size of tket2 wheels
+strip = true
