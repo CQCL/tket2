@@ -6,16 +6,21 @@
 use std::collections::{HashMap, HashSet};
 
 use hugr::{
-    algorithms::validation::ValidationLevel,
+    algorithms::{
+        ensure_no_nonlocal_edges,
+        non_local::NonLocalEdgesError,
+        validation::{ValidatePassError, ValidationLevel},
+    },
     builder::{DFGBuilder, Dataflow, DataflowHugr},
     extension::{
         prelude::{BOOL_T, QB_T},
         ExtensionRegistry,
     },
-    hugr::{hugrmut::HugrMut, views::SiblingSubgraph, Rewrite},
+    hugr::{hugrmut::HugrMut, views::SiblingSubgraph, Rewrite, SimpleReplacementError},
     types::Signature,
     Hugr, HugrView, IncomingPort, Node, OutgoingPort, SimpleReplacement,
 };
+use thiserror::Error;
 use tket2::Tk2Op;
 
 use lazy_static::lazy_static;
@@ -28,18 +33,39 @@ use crate::extension::{
 /// A `Hugr -> Hugr` pass that replaces [tket2::Tk2Op::Measure] nodes with
 /// [quantum_lazy::LazyQuantumOp::Measure] nodes. To construct a `LazifyMeasurePass` use
 /// [Default::default].
+///
+/// The `Hugr` must not contain any non-local edges. If validation is enabled,
+/// this precondition will be verified.
 #[derive(Default)]
 pub struct LazifyMeasurePass(ValidationLevel);
 
-type Error = Box<dyn std::error::Error>;
+#[derive(Error, Debug)]
+/// An error reported from [LazifyMeasurePass].
+pub enum LazifyMeasurePassError {
+    /// The [Hugr] was invalid either before or after a pass ran.
+    #[error(transparent)]
+    ValidationError(#[from] ValidatePassError),
+    /// The [Hugr] was found to contain non-local edges.
+    #[error(transparent)]
+    NonLocalEdgesError(#[from] NonLocalEdgesError),
+    /// A [SimpleReplacement] failed during the running of the pass.
+    #[error(transparent)]
+    SimpleReplacementError(#[from] SimpleReplacementError),
+}
 
 impl LazifyMeasurePass {
     /// Run `LazifyMeasurePass` on the given [HugrMut]. `registry` is used for
     /// validation, if enabled.
-    pub fn run(&self, hugr: &mut impl HugrMut, registry: &ExtensionRegistry) -> Result<(), Error> {
+    pub fn run(
+        &self,
+        hugr: &mut impl HugrMut,
+        registry: &ExtensionRegistry,
+    ) -> Result<(), LazifyMeasurePassError> {
         self.0
-            .run_validated_pass(hugr, registry, |hugr, _validation_level| {
-                // TODO: if _validation_level is not None, verify no non-local edges
+            .run_validated_pass(hugr, registry, |hugr, validation_level| {
+                if validation_level != &ValidationLevel::None {
+                    ensure_no_nonlocal_edges(hugr)?;
+                }
                 let mut state =
                     State::new(
                         hugr.nodes()
@@ -74,7 +100,7 @@ impl State {
         Self { worklist }
     }
 
-    fn work_one(&mut self, hugr: &mut impl HugrMut) -> Result<bool, Error> {
+    fn work_one(&mut self, hugr: &mut impl HugrMut) -> Result<bool, LazifyMeasurePassError> {
         let Some(item) = self.worklist.pop() else {
             return Ok(false);
         };
@@ -172,7 +198,10 @@ fn simple_replace_measure(
 }
 
 impl WorkItem {
-    fn work(self, hugr: &mut impl HugrMut) -> Result<impl IntoIterator<Item = Self>, Error> {
+    fn work(
+        self,
+        hugr: &mut impl HugrMut,
+    ) -> Result<impl IntoIterator<Item = Self>, LazifyMeasurePassError> {
         match self {
             Self::ReplaceMeasure(node) => {
                 // for now we read immediately, but when we don't the first
@@ -196,7 +225,7 @@ mod test {
     use tket2::extension::TKET2_EXTENSION;
 
     use crate::extension::{
-        futures::{self, FutureOp},
+        futures::{self, FutureOpDef},
         quantum_lazy::LazyQuantumOp,
     };
 
@@ -232,7 +261,7 @@ mod test {
         let mut num_lazy_measure = 0;
         for n in hugr.nodes() {
             let ot = hugr.get_optype(n);
-            if let Ok(FutureOp::Read) = ot.try_into() {
+            if let Ok(FutureOpDef::Read) = ot.try_into() {
                 num_read += 1;
             } else if let Ok(LazyQuantumOp::Measure) = ot.try_into() {
                 num_lazy_measure += 1;
