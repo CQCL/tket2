@@ -86,7 +86,7 @@ repos:
         name: pytest
         description: Run python tests
         # Ensure that we are using the local version of `tket2-eccs` and not the one from PyPI
-        entry: poetry run -- sh -c "poetry install -C tket2-eccs & maturin develop && pytest --cov=./ --cov-report=html"
+        entry: poetry run -- sh -c "poetry install -C tket2-eccs && maturin develop && pytest --cov=./ --cov-report=html"
         language: system
         files: \.py$
         pass_filenames: false
