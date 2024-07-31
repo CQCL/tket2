@@ -153,6 +153,7 @@ impl<'a> From<&'a FutureOp> for &'static str {
 }
 
 /// Concrete "tket2.futures" operations with type set.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FutureOp {
     /// The `FutureOpDef` that defines this operation.
     pub op: FutureOpDef,
@@ -279,6 +280,19 @@ pub(crate) mod test {
         for o in FutureOpDef::iter() {
             assert_eq!(FutureOpDef::from_def(get_opdef(o).unwrap()), Ok(o));
         }
+    }
+
+    #[test]
+    fn future_op_from_def() {
+        let typ = Type::UNIT;
+
+        assert_eq!(
+            FutureOp {
+                op: FutureOpDef::Free,
+                typ: typ.clone()
+            },
+            FutureOpDef::Free.instantiate(&[typ.into()]).unwrap()
+        )
     }
 
     #[test]
