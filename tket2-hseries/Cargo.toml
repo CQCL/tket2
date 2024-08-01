@@ -15,7 +15,7 @@ categories = ["compilers"]
 
 [dependencies]
 hugr.workspace = true
-tket2 = { path = "../tket2", version = "0.1.0-alpha.1" }
+tket2 = { path = "../tket2", version = "0.1.0-alpha.3" }
 lazy_static.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
