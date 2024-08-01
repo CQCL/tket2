@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.2.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.1.0...tket2-py-v0.2.0) (2024-08-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* increased minimum required version of hugr to 0.9.0
+* `.rwr` ECC files generated with older versions are no longer supported. Please recompile them, or compress the file with `zstd`.
+
+### Features
+
+* Add timeout options and stats to Badger ([#496](https://github.com/CQCL/tket2/issues/496)) ([32a9885](https://github.com/CQCL/tket2/commit/32a98853db1415c6934fa26c966cb430c74023aa))
+* Compress binary ECCs using zlib ([#498](https://github.com/CQCL/tket2/issues/498)) ([d9a713c](https://github.com/CQCL/tket2/commit/d9a713c068077dfea8c12301c1973575ddc8ca2c))
+* Expose advanced Badger timeout options to tket2-py ([#506](https://github.com/CQCL/tket2/issues/506)) ([fe7d40e](https://github.com/CQCL/tket2/commit/fe7d40e4a176375c22fae5e52d42aeaf9ab38d33))
+* Move the compiled eccs to a separate package ([#517](https://github.com/CQCL/tket2/issues/517)) ([7247cc6](https://github.com/CQCL/tket2/commit/7247cc65f4c4e679fd5b680d1e53e630f06d94a1))
+
+
+### Bug Fixes
+
+* Recompile ecc sets after [#441](https://github.com/CQCL/tket2/issues/441) ([#484](https://github.com/CQCL/tket2/issues/484)) ([1122fa4](https://github.com/CQCL/tket2/commit/1122fa453790fe5fd3433d4e028fb327949d9619))
+
+
+### Miscellaneous Chores
+
+* bump hugr version to 0.10.0 ([#508](https://github.com/CQCL/tket2/issues/508)) ([eca258b](https://github.com/CQCL/tket2/commit/eca258bfbef5fcd82a0d3b3d70cb736e275b3487))
+
 ## [0.1.0a4](https://github.com/CQCL/tket2/compare/tket2-py-v0.1.0...tket2-py-v0.1.0a4) (2024-07-15)
 
 
