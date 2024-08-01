@@ -34,7 +34,7 @@ See the [Getting Started][getting-started] guide and the other [examples].
 
 ## Development
 
-This package uses [pyo3](https://pyo3.rs/v0.16.4/) and
+This package uses [pyo3](https://pyo3.rs/latest/) and
 [maturin](https://github.com/PyO3/maturin) to bind TKET2 functionality to
 python as the `tket2` package.
 
@@ -56,4 +56,4 @@ See [DEVELOPMENT.md] for more information.
 
 This project is licensed under Apache License, Version 2.0 ([LICENCE][] or http://www.apache.org/licenses/LICENSE-2.0).
 
-  [LICENCE]: ./LICENCE
+  [LICENCE]: https://github.com/CQCL/tket2/blob/main/LICENCE

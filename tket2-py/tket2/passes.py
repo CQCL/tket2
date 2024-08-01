@@ -1,6 +1,5 @@
 from pathlib import Path
 from typing import Optional
-from importlib import resources
 
 from pytket import Circuit
 from pytket.passes import CustomPass, BasePass
@@ -49,10 +48,14 @@ def badger_pass(
     `log_dir` and `rebase` are optional and will be passed on to the Badger
     optimiser if provided."""
     if rewriter is None:
-        with resources.as_file(
-            resources.files("tket2").joinpath("data/nam_6_3.rwr")
-        ) as r:
-            rewriter = Path(r)
+        try:
+            import tket2_eccs
+        except ImportError:
+            raise ValueError(
+                "The default rewriter is not available. Please specify a path to a rewriter or install tket2-eccs."
+            )
+
+        rewriter = tket2_eccs.nam_6_3()
     opt = optimiser.BadgerOptimiser.load_precompiled(rewriter)
 
     def apply(circuit: Circuit) -> Circuit:

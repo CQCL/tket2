@@ -23,7 +23,7 @@ done
 # Additional hard-coded step:
 # The python package contains a copy of the nam_6_3 ecc,
 # which must be manually copied.
-PY_ECCS_DIR="$DIR/../tket2-py/tket2/data"
+PY_ECCS_DIR="$DIR/../tket2-eccs/src/tket2_eccs/data"
 nam_6_3="$ECCS_DIR/nam_6_3.rwr"
 PY_NAM_6_3="$PY_ECCS_DIR/nam_6_3.rwr"
 

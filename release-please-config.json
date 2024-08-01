@@ -13,6 +13,15 @@
             "draft": false,
             "prerelease": false,
             "draft-pull-request": true
+        },
+        "tket2-eccs": {
+            "release-type": "python",
+            "component": "tket2-eccs",
+            "package-name": "tket2_eccs",
+            "include-component-in-tag": true,
+            "draft": false,
+            "prerelease": false,
+            "draft-pull-request": true
         }
     },
     "changelog-sections": [

@@ -988,6 +988,19 @@ mpmath = ">=1.1.0,<1.4"
 dev = ["hypothesis (>=6.70.0)", "pytest (>=7.1.0)"]
 
 [[package]]
+name = "tket2-eccs"
+version = "0.1.0a4"
+description = "Precompiled rewrite sets for the tket 2 compiler"
+optional = false
+python-versions = "^3.10"
+files = []
+develop = true
+
+[package.source]
+type = "directory"
+url = "tket2-eccs"
+
+[[package]]
 name = "tomli"
 version = "2.0.1"
 description = "A lil' TOML parser"
@@ -1043,4 +1056,4 @@ test = ["covdefaults (>=2.3)", "coverage (>=7.2.7)", "coverage-enable-subprocess
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "efdc0517bec3808efe89eda8bd30825263ff97e19978bc097b77e1ad05606dec"
+content-hash = "88363821a01c67d2fb6cf2c59e8585083e8d3b56e0fc31050d833b324e83830c"
