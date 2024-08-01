@@ -5,7 +5,7 @@
 
 ### ⚠ BREAKING CHANGES
 
-* increased minimum required version of hugr to 0.9.0
+* increased minimum required version of hugr to 0.10.0
 * `.rwr` ECC files generated with older versions are no longer supported. Please recompile them, or compress the file with `zstd`.
 
 ### Features
