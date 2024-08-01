@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0-alpha.1](https://github.com/CQCL/tket2/releases/tag/tket2-hseries-v0.1.0-alpha.1) - 2024-08-01
+## [0.1.0](https://github.com/CQCL/tket2/releases/tag/tket2-hseries-v0.1.0) - 2024-08-01
 
 ### New Features
 - [**breaking**] init tket2-hseries ([#368](https://github.com/CQCL/tket2/pull/368))
