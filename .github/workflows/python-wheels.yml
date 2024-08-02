@@ -5,7 +5,7 @@
 #
 #     maturin generate-ci github > .github/workflows/python-wheels.yml
 #
-# And edit the `on:` action triggers and the filters in `jobs.release.if`.
+# And merge the changes into this file.
 name: Python wheels 🐍
 
 on:
@@ -21,7 +21,24 @@ permissions:
   contents: read
 
 jobs:
+  # Check if the tag matches the package name,
+  # or if the workflow is running on a non-release event.
+  check-tag:
+    name: Check tag
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check-tag.outputs.run }}
+    steps:
+      - name: Check tag
+        id: check-tag
+        run: |
+          echo "run=$SHOULD_RUN" >> $GITHUB_OUTPUT
+        env:
+          SHOULD_RUN: ${{ github.event_name != 'release' || ( github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/tket2-py-v') ) }}
+
   linux:
+    needs: check-tag
+    if: ${{ needs.check-tag.outputs.run == 'true' }}
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -57,6 +74,8 @@ jobs:
           path: dist
 
   musllinux:
+    needs: check-tag
+    if: ${{ needs.check-tag.outputs.run == 'true' }}
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -88,6 +107,8 @@ jobs:
           path: dist
 
   windows:
+    needs: check-tag
+    if: ${{ needs.check-tag.outputs.run == 'true' }}
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -115,6 +136,8 @@ jobs:
           path: dist
 
   macos:
+    needs: check-tag
+    if: ${{ needs.check-tag.outputs.run == 'true' }}
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -141,6 +164,8 @@ jobs:
           path: dist
 
   sdist:
+    needs: check-tag
+    if: ${{ needs.check-tag.outputs.run == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -158,14 +183,14 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    if: ${{ (github.event_name == 'release' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/tket2-py-v') ) || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/tket2-py-v') ) }}
     needs: [linux, musllinux, windows, macos, sdist]
+    if: ${{ (github.event_name == 'release' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/tket2-py-v') ) || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/tket2-py-v') ) }}
     steps:
       - uses: actions/download-artifact@v4
       - name: Publish to PyPI
         uses: PyO3/maturin-action@v1
         env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_PUBLISH }}
+          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_PUBLISH_TKET2 }}
         with:
           command: upload
           args: --non-interactive --skip-existing wheels-*/*
