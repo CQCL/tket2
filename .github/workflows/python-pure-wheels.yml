@@ -32,7 +32,7 @@ jobs:
       # Skip the workflow when triggered by a release event for any other package.
       - name: Check tag
         run: |
-          echo "run=$SHOULD_RUN" >> $GITHUB_ENV
+          echo "run=$SHOULD_RUN" >> $GITHUB_OUTPUT
         env:
           SHOULD_RUN: ${{ github.event_name != 'release' || ( github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.name)) ) }}
 
