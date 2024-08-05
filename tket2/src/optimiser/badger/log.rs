@@ -5,7 +5,7 @@ use std::{fmt::Debug, io};
 
 /// Logging configuration for the Badger optimiser.
 pub struct BadgerLogger<'w> {
-    circ_candidates_csv: Option<csv::Writer<Box<dyn io::Write + 'w>>>,
+    circ_candidates_csv: Option<csv::Writer<Box<dyn io::Write + Send + Sync + 'w>>>,
     last_circ_processed: usize,
     last_progress_time: Instant,
     branching_factor: UsizeAverage,
@@ -41,8 +41,9 @@ impl<'w> BadgerLogger<'w> {
     /// or [`PROGRESS_TARGET`].
     ///
     /// [`log`]: <https://docs.rs/log/latest/log/>
-    pub fn new(best_progress_csv_writer: impl io::Write + 'w) -> Self {
-        let boxed_candidates_writer: Box<dyn io::Write + 'w> = Box::new(best_progress_csv_writer);
+    pub fn new(best_progress_csv_writer: impl io::Write + Send + Sync + 'w) -> Self {
+        let boxed_candidates_writer: Box<dyn io::Write + Send + Sync + 'w> =
+            Box::new(best_progress_csv_writer);
         Self {
             circ_candidates_csv: Some(csv::Writer::from_writer(boxed_candidates_writer)),
             ..Default::default()

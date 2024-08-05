@@ -24,6 +24,7 @@ use fxhash::FxHashSet;
 use hugr::hugr::HugrError;
 use hugr::HugrView;
 pub use log::BadgerLogger;
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
@@ -131,7 +132,7 @@ impl<R, S> BadgerOptimiser<R, S> {
 
 impl<R, S> BadgerOptimiser<R, S>
 where
-    R: Rewriter + Send + Clone + 'static,
+    R: Rewriter + Send + Clone + Sync + 'static,
     S: RewriteStrategy + Send + Sync + Clone + 'static,
     S::Cost: serde::Serialize + Send + Sync,
 {
@@ -440,7 +441,7 @@ where
         logger.log_best(circ_cost.clone(), num_rewrites);
 
         let (joins, rx_work): (Vec<_>, Vec<_>) = chunks
-            .iter_mut()
+            .par_iter_mut()
             .enumerate()
             .map(|(i, chunk)| {
                 let (tx, rx) = crossbeam_channel::unbounded();
