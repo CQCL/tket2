@@ -445,9 +445,6 @@ impl CircuitChunks {
         self.chunks.is_empty()
     }
 
-    fn par_iter_mut_helper(chunk: &mut Chunk) -> &mut Circuit {
-        &mut chunk.circ
-    }
     /// Supports implementation of rayon::iter::IntoParallelRefMutIterator
     fn par_iter_mut(
         &mut self,
@@ -458,7 +455,7 @@ impl CircuitChunks {
         self.chunks
             .as_parallel_slice_mut()
             .into_par_iter()
-            .map(Self::par_iter_mut_helper)
+            .map(|chunk| &mut chunk.circ)
     }
 }
 
