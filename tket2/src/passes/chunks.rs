@@ -18,6 +18,8 @@ use hugr::types::Signature;
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 use itertools::Itertools;
 use portgraph::algorithms::ConvexChecker;
+use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::slice::ParallelSliceMut;
 
 use crate::Circuit;
 
@@ -442,6 +444,22 @@ impl CircuitChunks {
     pub fn is_empty(&self) -> bool {
         self.chunks.is_empty()
     }
+
+    fn par_iter_mut_helper(chunk: &mut Chunk) -> &mut Circuit {
+        &mut chunk.circ
+    }
+    /// Supports implementation of rayon::iter::IntoParallelRefMutIterator
+    fn par_iter_mut(
+        &mut self,
+    ) -> rayon::iter::Map<
+        rayon::slice::IterMut<'_, Chunk>,
+        for<'a> fn(&'a mut Chunk) -> &'a mut Circuit,
+    > {
+        self.chunks
+            .as_parallel_slice_mut()
+            .into_par_iter()
+            .map(Self::par_iter_mut_helper)
+    }
 }
 
 impl Index<usize> for CircuitChunks {
@@ -455,6 +473,18 @@ impl Index<usize> for CircuitChunks {
 impl IndexMut<usize> for CircuitChunks {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.chunks[index].circ
+    }
+}
+
+impl<'data> IntoParallelRefMutIterator<'data> for CircuitChunks {
+    type Item = &'data mut Circuit;
+    type Iter = rayon::iter::Map<
+        rayon::slice::IterMut<'data, Chunk>,
+        for<'a> fn(&'a mut Chunk) -> &'a mut Circuit,
+    >;
+
+    fn par_iter_mut(&'data mut self) -> Self::Iter {
+        self.par_iter_mut()
     }
 }
 
