@@ -31,34 +31,35 @@ jobs:
       #
       # Skip the workflow when triggered by a release event for any other package.
       - name: Check tag
+        id: check-tag
         run: |
           echo "run=$SHOULD_RUN" >> $GITHUB_OUTPUT
         env:
           SHOULD_RUN: ${{ github.event_name != 'release' || ( github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.name)) ) }}
 
       - uses: actions/checkout@v4
-        if: ${{ github.job.steps.check-tag.outputs.run == 'true' }}
+        if: ${{ steps.check-tag.outputs.run == 'true' }}
       - name: Run sccache-cache
-        if: ${{ github.job.steps.check-tag.outputs.run == 'true' }}
+        if: ${{ steps.check-tag.outputs.run == 'true' }}
         uses: mozilla-actions/sccache-action@v0.0.5
       - name: Install poetry
-        if: ${{ github.job.steps.check-tag.outputs.run == 'true' }}
+        if: ${{ steps.check-tag.outputs.run == 'true' }}
         run: pipx install poetry
       - name: Set up Python '3.10'
-        if: ${{ github.job.steps.check-tag.outputs.run == 'true' }}
+        if: ${{ steps.check-tag.outputs.run == 'true' }}
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           cache: "poetry"
 
       - name: Build sdist and wheels
-        if: ${{ github.job.steps.check-tag.outputs.run == 'true' }}
+        if: ${{ steps.check-tag.outputs.run == 'true' }}
         run: |
           cd ${{ matrix.target.name }}
           poetry build -o ../dist
 
       - name: Upload the built packages as artifacts
-        if: ${{ github.job.steps.check-tag.outputs.run == 'true' }}
+        if: ${{ steps.check-tag.outputs.run == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.target.name }}-sdist
