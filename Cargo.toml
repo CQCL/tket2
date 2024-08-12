@@ -51,7 +51,7 @@ num-rational = "0.4"
 num_cpus = "1.16.0"
 peak_alloc = "0.2.0"
 petgraph = { version = "0.6.3", default-features = false }
-priority-queue = "2.0.3"
+priority-queue = "2.1.0"
 rayon = "1.5"
 rmp-serde = "1.1.2"
 rstest = "0.19.0"
