@@ -7,7 +7,7 @@ use hugr::{
     extension::{
         prelude::{self, BOOL_T, PRELUDE},
         simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp, OpLoadError},
-        ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc,
+        ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version,
     },
     ops::{CustomOp, NamedOp, OpType},
     std_extensions::arithmetic::{
@@ -30,11 +30,13 @@ use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
 /// The "tket2.result" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.result");
+/// The "tket2.result" extension version.
+pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
     /// The "tket2.result" extension.
     pub static ref EXTENSION: Extension = {
-        let mut ext = Extension::new_with_reqs(EXTENSION_ID, ExtensionSet::from_iter([INT_EXTENSION_ID, FLOAT_EXTENSION_ID]));
+        let mut ext = Extension::new(EXTENSION_ID, EXTENSION_VERSION).with_reqs(ExtensionSet::from_iter([INT_EXTENSION_ID, FLOAT_EXTENSION_ID]));
         ResultOpDef::load_all_ops(&mut ext).unwrap();
         ext
     };

@@ -6,7 +6,9 @@ use crate::serialize::pytket::OpaqueTk1Op;
 use crate::Tk2Op;
 use hugr::extension::prelude::PRELUDE;
 use hugr::extension::simple_op::MakeOpDef;
-use hugr::extension::{CustomSignatureFunc, ExtensionId, ExtensionRegistry, SignatureError};
+use hugr::extension::{
+    CustomSignatureFunc, ExtensionId, ExtensionRegistry, SignatureError, Version,
+};
 use hugr::hugr::IdentList;
 use hugr::std_extensions::arithmetic::float_types::{EXTENSION as FLOAT_EXTENSION, FLOAT64_TYPE};
 use hugr::types::type_param::{TypeArg, TypeParam};
@@ -27,6 +29,9 @@ pub const TKET1_OP_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Op");
 /// The ID of an opaque TKET1 operation metadata.
 pub const TKET1_PAYLOAD_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Payload");
 
+/// Current version of the TKET 1 extension
+pub const TKET1_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+
 lazy_static! {
 /// A custom type for the encoded TKET1 operation
 pub static ref TKET1_OP_PAYLOAD : CustomType =
@@ -34,7 +39,7 @@ pub static ref TKET1_OP_PAYLOAD : CustomType =
 
 /// The TKET1 extension, containing the opaque TKET1 operations.
 pub static ref TKET1_EXTENSION: Extension = {
-    let mut res = Extension::new(TKET1_EXTENSION_ID);
+    let mut res = Extension::new(TKET1_EXTENSION_ID, TKET1_EXTENSION_VERSION);
 
     let tket1_op_payload = TypeParam::String;
     res.add_op(
@@ -94,6 +99,9 @@ pub const SYM_EXPR_NAME: SmolStr = SmolStr::new_inline("SymExpr");
 /// The name of the symbolic expression opaque type arg.
 pub const SYM_OP_ID: SmolStr = SmolStr::new_inline("symbolic_float");
 
+/// Current version of the TKET 2 extension
+pub const TKET2_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+
 lazy_static! {
 /// The type of the symbolic expression opaque type arg.
 pub static ref SYM_EXPR_T: CustomType =
@@ -101,7 +109,7 @@ pub static ref SYM_EXPR_T: CustomType =
 
 /// The extension definition for TKET2 ops and types.
 pub static ref TKET2_EXTENSION: Extension = {
-    let mut e = Extension::new(TKET2_EXTENSION_ID);
+    let mut e = Extension::new(TKET2_EXTENSION_ID, TKET2_EXTENSION_VERSION);
     Tk2Op::load_all_ops(&mut e).expect("add fail");
 
     e.add_op(

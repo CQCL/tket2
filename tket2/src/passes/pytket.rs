@@ -49,7 +49,7 @@ mod test {
         Container, Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder, SubContainer,
     };
     use hugr::extension::prelude::QB_T;
-    use hugr::extension::{ExtensionSet, PRELUDE_REGISTRY};
+    use hugr::extension::PRELUDE_REGISTRY;
     use hugr::ops::handle::NodeHandle;
     use hugr::ops::{MakeTuple, OpType, Tag, UnpackTuple};
     use hugr::types::{Signature, TypeRow};
@@ -74,11 +74,7 @@ mod test {
                 let [q1, q2] = func.input_wires_arr();
 
                 let cfg = {
-                    let mut cfg = func.cfg_builder(
-                        [(QB_T, q1), (QB_T, q2)],
-                        two_qbs.clone(),
-                        ExtensionSet::new(),
-                    )?;
+                    let mut cfg = func.cfg_builder([(QB_T, q1), (QB_T, q2)], two_qbs.clone())?;
 
                     circ = {
                         let mut dfg = cfg.simple_entry_builder(two_qbs.clone(), 1)?;
