@@ -11,7 +11,7 @@ use hugr::{
             OpLoadError,
         },
         ExtensionBuildError, ExtensionId, ExtensionRegistry, OpDef, SignatureError, SignatureFunc,
-        TypeDef,
+        TypeDef, Version,
     },
     ops::{custom::ExtensionOp, NamedOp, OpType},
     types::{type_param::TypeParam, CustomType, PolyFuncType, Signature, Type, TypeArg, TypeBound},
@@ -24,11 +24,13 @@ use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
 /// The ID of the `tket2.futures` extension.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.futures");
+/// The "tket2.futures" extension version
+pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
     /// The "tket2.futures" extension.
     pub static ref EXTENSION: Extension = {
-        let mut ext = Extension::new(EXTENSION_ID);
+        let mut ext = Extension::new(EXTENSION_ID, EXTENSION_VERSION);
         let _ = add_future_type_def(&mut ext).unwrap();
 
         FutureOpDef::load_all_ops(&mut ext).unwrap();

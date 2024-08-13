@@ -8,7 +8,7 @@ use hugr::{
     extension::{
         prelude::{BOOL_T, QB_T},
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp, OpLoadError},
-        ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, PRELUDE,
+        ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, Version, PRELUDE,
     },
     ops::{NamedOp as _, OpType},
     types::Signature,
@@ -24,11 +24,13 @@ use super::futures::future_type;
 
 /// The "tket2.quantum.lazy" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.quantum.lazy");
+/// The "tket2.quantum.lazy" extension version.
+pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
     /// The "tket2.quantum.lazy" extension.
     pub static ref EXTENSION: Extension = {
-        let mut ext = Extension::new(EXTENSION_ID);
+        let mut ext = Extension::new(EXTENSION_ID, EXTENSION_VERSION);
         LazyQuantumOp::load_all_ops(&mut ext).unwrap();
         ext
     };
