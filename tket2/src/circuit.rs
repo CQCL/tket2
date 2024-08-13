@@ -595,6 +595,8 @@ fn update_signature(
 #[cfg(test)]
 mod tests {
     use cool_asserts::assert_matches;
+    use hugr::std_extensions::arithmetic::float_types::ConstF64;
+    use hugr::CircuitUnit;
     use rstest::{fixture, rstest};
 
     use hugr::types::Signature;
@@ -627,22 +629,17 @@ mod tests {
         .unwrap()
     }
 
-    /// 2-qubit circuit with a Hadamard, a CNOT, and a X gate.
+    /// 2-qubit circuit with a Hadamard, a CNOT, and an Rz gate.
     #[fixture]
     fn simple_circuit() -> Circuit {
         build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::H, [0])?;
             circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append(Tk2Op::X, [1])?;
-
-            // TODO: Replace the `X` with the following once Hugr adds `CircuitBuilder::add_constant`.
-            // See https://github.com/CQCL/hugr/pull/1168
-
-            //let angle = circ.add_constant(ConstF64::new(0.5));
-            //circ.append_and_consume(
-            //    Tk2Op::RzF64,
-            //    [CircuitUnit::Linear(1), CircuitUnit::Wire(angle)],
-            //)?;
+            let angle = circ.add_constant(ConstF64::new(0.5));
+            circ.append_and_consume(
+                Tk2Op::RzF64,
+                [CircuitUnit::Linear(1), CircuitUnit::Wire(angle)],
+            )?;
             Ok(())
         })
         .unwrap()
