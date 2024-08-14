@@ -32,7 +32,7 @@ python = "^3.10"
 # https://github.com/python-poetry/poetry/issues/3332
 tket2_eccs = { path = "tket2-eccs", develop = true }
 pytket = "1.31.1"
-hugr = "^0.6.0"
+hugr = "^0.7.0"
 
 [tool.poetry.group.dev.dependencies]
 maturin = "^1.7.0"
@@ -77,7 +77,7 @@ license = { file = "LICENCE" }
 # Note: Be sure to update the dependency versions in [tool.poetry.dependencies] as well
 dependencies = [
     'pytket >= 1.29.2, < 2',
-    'hugr >= 0.6.0, < 0.7',
+    'hugr >= 0.7.0, < 0.8',
     'tket2_eccs >= 0.1.0, < 0.2',
 ]
 

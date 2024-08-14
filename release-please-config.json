@@ -14,7 +14,10 @@
             "include-component-in-tag": true,
             "draft": false,
             "prerelease": false,
-            "draft-pull-request": true
+            "draft-pull-request": true,
+            "extra-files": [
+                "pyproject.toml"
+            ]
         },
         "tket2-eccs": {
             "release-type": "python",
