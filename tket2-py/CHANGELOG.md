@@ -2,6 +2,9 @@
 
 ## [0.2.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.2.0...tket2-py-v0.2.1) (2024-08-14)
 
+### ⚠ BREAKING CHANGES
+
+* increased minimum required version of hugr to 0.7.0
 
 ### Documentation
 
@@ -12,7 +15,6 @@
 
 ### ⚠ BREAKING CHANGES
 
-* increased minimum required version of hugr to 0.10.0
 * `.rwr` ECC files generated with older versions are no longer supported. Please recompile them, or compress the file with `zstd`.
 
 ### Features
