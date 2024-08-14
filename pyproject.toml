@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tket2-py"
-version = "0.2.0"
+version = "0.2.1"
 description = "Quantinuum's TKET2 Quantum Compiler"
 classifiers = [
     "Environment :: Console",
@@ -69,7 +69,7 @@ authors = [
 maintainers = [
     { name = "TKET development team", email = "tket-support@quantinuum.com" },
 ]
-version = "0.2.0"
+version = "0.2.1"
 description = "Quantinuum's TKET2 Quantum Compiler"
 requires-python = ">=3.10"
 license = { file = "LICENCE" }
