@@ -100,7 +100,8 @@ pub enum ResultOpDef {
 }
 
 impl ResultOpDef {
-    fn arg_type(&self) -> Type {
+    /// Type of the argument to the result operation.
+    pub fn arg_type(&self) -> Type {
         match self {
             Self::Bool => BOOL_T,
             Self::Int | Self::UInt => int_tv(1),
@@ -133,7 +134,8 @@ impl ResultOpDef {
         }
     }
 
-    fn type_params(&self) -> Vec<TypeParam> {
+    /// Type parameters for result operation.
+    pub fn type_params(&self) -> Vec<TypeParam> {
         match self {
             Self::Bool | Self::F64 => vec![],
             Self::Int | Self::UInt => vec![LOG_WIDTH_TYPE_PARAM],
@@ -145,7 +147,8 @@ impl ResultOpDef {
         }
     }
 
-    fn instantiate(&self, args: &[TypeArg]) -> Result<ResultOp, OpLoadError> {
+    /// Instantiate the result operation with the given type arguments.
+    pub fn instantiate(&self, args: &[TypeArg]) -> Result<ResultOp, OpLoadError> {
         let parsed_args = concrete_result_op_type_args(args)?;
 
         match (parsed_args, self) {
@@ -214,23 +217,32 @@ impl MakeOpDef for ResultOpDef {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Hash, PartialEq)]
-enum SimpleArgs {
+/// Type arguments to a numeric result operation (not an array).
+pub enum SimpleArgs {
+    /// No type arguments, simple result type.
     Basic,
+    /// Integer type argument, specifying bit width.
     Int(u8),
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Hash, PartialEq)]
-enum ResultArgs {
+/// Arguments to a "tket2.result" operation.
+pub enum ResultArgs {
+    /// Simple result type, not an array.
     Simple(SimpleArgs),
+    /// Argument for array result type, with inner type arguments and array size.
     Array(SimpleArgs, u64),
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Hash, PartialEq)]
 /// Concrete instantiation of a "tket2.result" operation.
 pub struct ResultOp {
-    tag: String,
-    result_op: ResultOpDef,
-    args: ResultArgs,
+    /// Static string tag for the result.
+    pub tag: String,
+    /// The result operation definition.
+    pub result_op: ResultOpDef,
+    /// Type arguments for the result operation.
+    pub args: ResultArgs,
 }
 
 impl ResultOp {
