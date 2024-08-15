@@ -1772,7 +1772,7 @@ dependencies = [
 
 [[package]]
 name = "tket2"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bytemuck",
  "cgmath",
@@ -1814,7 +1814,7 @@ dependencies = [
 
 [[package]]
 name = "tket2-hseries"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cool_asserts",
  "hugr",
