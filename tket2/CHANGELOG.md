@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1](https://github.com/CQCL/tket2/compare/tket2-v0.1.0...tket2-v0.1.1) - 2024-08-15
+
+### New Features
+- Move parallel evaluation code to CircuitChunks ([#528](https://github.com/CQCL/tket2/pull/528))
+
+
 ## [0.1.0](https://github.com/CQCL/tket2/compare/tket2-v0.1.0-alpha.2...tket2-v0.1.0) - 2024-08-01
 
 ### Bug Fixes
