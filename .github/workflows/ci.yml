@@ -163,9 +163,9 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        # Pinned nightly version until this gets resolved:
-        # https://github.com/rust-lang/rust/issues/125474
-        rust: ['1.75', beta, 'nightly-2024-05-22']
+        # Stable is covered by `tests-stable-no-features` and `tests-stable-all-features`
+        # Nightly is covered by `tests-nightly-coverage`
+        rust: ['1.75', beta]
     name: tests (Rust ${{ matrix.rust }})
     steps:
       - uses: actions/checkout@v4
@@ -184,6 +184,37 @@ jobs:
         run: cargo test --verbose --workspace --all-features --no-run
       - name: Tests with all features
         run: cargo test --verbose --workspace --all-features
+
+  tests-nightly-coverage:
+    needs: changes
+    # Run only if there are changes in the relevant files
+    if: ${{ needs.changes.outputs.rust == 'true' && github.event_name != 'merge_group' }}
+    runs-on: ubuntu-latest
+    name: tests (Rust nightly, coverage)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          # Nightly is required to count doctests coverage
+          toolchain: 'nightly'
+          components: llvm-tools-preview
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Run tests with coverage instrumentation
+        run: |
+            cargo llvm-cov clean --workspace
+            cargo llvm-cov --no-report --workspace --no-default-features --doctests
+            cargo llvm-cov --no-report --workspace --all-features --doctests
+      - name: Generate coverage report
+        run: cargo llvm-cov --all-features report --codecov --output-path coverage.json
+      - name: Upload coverage to codecov.io
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.json
+          name: rust
+          flags: rust
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   tests-py:
     needs: changes
@@ -207,36 +238,6 @@ jobs:
           poetry run maturin develop
       - name: Test pyo3 bindings
         run: poetry run pytest
-
-  coverage-rs:
-    name: Check Rust coverage 🦀
-    needs: [changes, tests-rs-stable-no-features, tests-rs-stable-all-features, tests-rs-other, check-rs]
-    # Run only if there are changes in the relevant files and the check job passed or was skipped
-    if: always() && !failure() && !cancelled() && needs.changes.outputs.rust == 'true' && github.event_name != 'merge_group'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: mozilla-actions/sccache-action@v0.0.5
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 'nightly'
-          components: llvm-tools-preview
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-      - name: Run tests with coverage instrumentation
-        run: |
-            cargo llvm-cov clean --workspace
-            cargo llvm-cov --no-report --workspace --no-default-features --doctests
-            cargo llvm-cov --no-report --workspace --all-features --doctests
-      - name: Generate coverage report
-        run: cargo llvm-cov --all-features report --codecov --output-path coverage.json
-      - name: Upload coverage to codecov.io
-        uses: codecov/codecov-action@v4
-        with:
-          files: coverage.json
-          name: rust
-          flags: rust
-          token: ${{ secrets.CODECOV_TOKEN }}
 
   coverage-py:
     name: Check Python coverage 🐍
