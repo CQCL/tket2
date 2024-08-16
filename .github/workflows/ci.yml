@@ -236,32 +236,26 @@ jobs:
         run: |
           poetry install
           poetry run maturin develop
-      - name: Test pyo3 bindings
-        run: poetry run pytest
+      - name: Run python tests with coverage instrumentation
+        run: poetry run pytest --cov=./ --cov-report=xml
+      - name: Upload coverage output artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: py-coverage
+          path: coverage.xml
 
   coverage-py:
-    name: Check Python coverage 🐍
+    name: Upload Python coverage 🐍
     needs: [changes, tests-py, check-py]
     # Run only if there are changes in the relevant files and the check job passed or was skipped
     if: always() && !failure() && !cancelled() && needs.changes.outputs.python == 'true' && github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: mozilla-actions/sccache-action@v0.0.5
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - name: Install poetry
-        run: pipx install poetry
-      - uses: actions/setup-python@v5
+      - uses: actions/download-artifact@v3
         with:
-          python-version: '3.11'
-          cache: 'poetry'
-      - name: Build pyo3 bindings
-        run: |
-          poetry install
-          poetry run maturin develop
-      - name: Run python tests with coverage instrumentation
-        run: poetry run pytest --cov=./ --cov-report=xml
+          name: py-coverage
+          path: coverage.xml
       - name: Upload python coverage to codecov.io
         uses: codecov/codecov-action@v4
         with:
