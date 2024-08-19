@@ -239,7 +239,7 @@ jobs:
       - name: Run python tests with coverage instrumentation
         run: poetry run pytest --cov=./ --cov-report=xml
       - name: Upload coverage output artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: py-coverage
           path: coverage.xml
