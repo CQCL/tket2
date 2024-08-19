@@ -38,9 +38,9 @@ hugr = "^0.7.0"
 maturin = "^1.7.0"
 pytest = "^8.3.2"
 pytest-cov = "^5.0.0"
-ruff = "^0.5.7"
+ruff = "^0.6.1"
 mypy = "^1.11.1"
-hypothesis = "^6.111.0"
+hypothesis = "^6.111.1"
 graphviz = "^0.20"
 pre-commit = "^3.8.0"
 
@@ -102,6 +102,9 @@ filterwarnings = "ignore::DeprecationWarning:lark.*"
 [tool.pyright]
 # Rust bindings have typing stubs but no python source code.
 reportMissingModuleSource = "none"
+
+[tool.ruff]
+extend-exclude = ["*.ipynb"]
 
 [[tool.mypy.overrides]]
 # Ignore errors in tikv-jemalloc.
