@@ -62,11 +62,11 @@ use itertools::Itertools;
 pub use matcher::{PatternMatch, PatternMatcher};
 pub use pattern::CircuitPattern;
 
+use crate::static_circ::MatchOp;
 use hugr::{
     ops::{OpTag, OpTrait},
     Node, Port,
 };
-use matcher::MatchOp;
 use thiserror::Error;
 
 use crate::{circuit::Circuit, utils::type_is_linear};
