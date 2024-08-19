@@ -103,6 +103,9 @@ filterwarnings = "ignore::DeprecationWarning:lark.*"
 # Rust bindings have typing stubs but no python source code.
 reportMissingModuleSource = "none"
 
+[tool.ruff]
+extend-exclude = ["*.ipynb"]
+
 [[tool.mypy.overrides]]
 # Ignore errors in tikv-jemalloc.
 module = "gen_run_tests.*"
