@@ -5,7 +5,7 @@ use smol_str::SmolStr;
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
-pub(crate) struct MatchOp {
+pub struct MatchOp {
     /// The operation identifier
     op_name: SmolStr,
     /// The encoded operation, if necessary for comparisons.
