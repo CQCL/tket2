@@ -1,6 +1,8 @@
 //! A 2d array-like representation of simple quantum circuits.
 
+mod hash;
 mod match_op;
+mod rewrite;
 
 use std::{collections::BTreeMap, fmt, rc::Rc};
 
@@ -36,7 +38,6 @@ pub struct OpLocation {
 
 impl StaticSizeCircuit {
     /// Returns the number of qubits in the circuit.
-    #[allow(unused)]
     pub fn qubit_count(&self) -> usize {
         self.qubit_ops.len()
     }
