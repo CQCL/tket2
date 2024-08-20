@@ -3,7 +3,8 @@
 use hugr::{HugrView, IncomingPort};
 use hugr::{Node, Port};
 use itertools::Itertools;
-use portmatching::{patterns::NoRootFound, HashMap, Pattern, SinglePatternMatcher};
+use portmatching::patterns::NoRootFound;
+use portmatching::{HashMap, Pattern, SinglePatternMatcher};
 use std::fmt::Debug;
 use thiserror::Error;
 

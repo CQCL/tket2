@@ -50,6 +50,8 @@ pub mod optimiser;
 pub mod passes;
 pub mod rewrite;
 pub mod serialize;
+#[cfg(feature = "portmatching")]
+pub mod static_circ;
 
 #[cfg(feature = "portmatching")]
 pub mod portmatching;
