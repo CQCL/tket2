@@ -30,8 +30,8 @@ pre-commit = "^3.8.0"
 tket2 = { path = "tket2-py", develop = true }
 
 [tool.maturin]
-# Maturin is not the build system for the workspace (it is only used for `tket2-py`)
-# we mirror the `tket2-py/pyproject.toml` config here so `maturin develop` still works
+# Maturin is not the build system for the workspace (it is only used for `tket2-py`).
+# We mirror the `tket2-py/pyproject.toml` config here so `maturin develop` still works
 # from the root of the workspace.
 manifest-path = "tket2-py/Cargo.toml"
 python-source = "tket2-py"
