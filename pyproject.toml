@@ -1,38 +1,20 @@
 [tool.poetry]
-name = "tket2-py"
-version = "0.2.1"
-description = "Quantinuum's TKET2 Quantum Compiler"
-classifiers = [
-    "Environment :: Console",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: Apache Software License",
-    "Operating System :: MacOS :: MacOS X",
-    "Operating System :: POSIX :: Linux",
-    "Operating System :: Microsoft :: Windows",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Science/Research",
-    "Topic :: Scientific/Engineering",
-]
+name = "tket2-project"
+version = "0.0.0"
+description = "Namespace for the python packages in the tket2 repository. See the individual packages for more information."
 authors = ["TKET development team <tket-support@quantinuum.com>"]
 maintainers = ["TKET development team <tket-support@quantinuum.com>"]
-include = ["pyproject.toml"]
 license = "Apache-2.0"
 readme = "README.md"
 
-packages = [{ include = "tket2-py" }]
+packages = [
+    { include = "tket2", from = "tket2-py" },
+    { include = "tket2_eccs", from = "tket2-eccs" },
+]
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.10"
-
-# Note: Be sure to update the dependency versions in [project.dependencies] as well
-#
-# Poetry does not currently follow PEP 621, it will be supported on poetry 2
-# https://github.com/python-poetry/poetry/issues/3332
-tket2_eccs = { path = "tket2-eccs", develop = true }
-pytket = "1.31.1"
-hugr = "^0.7.0"
 
 [tool.poetry.group.dev.dependencies]
 maturin = "^1.7.0"
@@ -44,69 +26,22 @@ hypothesis = "^6.111.1"
 graphviz = "^0.20"
 pre-commit = "^3.8.0"
 
-[build-system]
-requires = ["maturin~=1.7"]
-build-backend = "maturin"
-
-[project]
-name = "tket2"
-classifiers = [
-    "Environment :: Console",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: Apache Software License",
-    "Operating System :: MacOS :: MacOS X",
-    "Operating System :: POSIX :: Linux",
-    "Operating System :: Microsoft :: Windows",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Science/Research",
-    "Topic :: Scientific/Engineering",
-]
-authors = [
-    { name = "TKET development team", email = "tket-support@quantinuum.com" },
-]
-maintainers = [
-    { name = "TKET development team", email = "tket-support@quantinuum.com" },
-]
-version = "0.2.1"
-description = "Quantinuum's TKET2 Quantum Compiler"
-requires-python = ">=3.10"
-license = { file = "LICENCE" }
-
-# Note: Be sure to update the dependency versions in [tool.poetry.dependencies] as well
-dependencies = [
-    'pytket >= 1.29.2, < 2',
-    'hugr >= 0.7.0, < 0.8',
-    'tket2_eccs >= 0.1.0, < 0.2',
-]
-
-[project.urls]
-homepage = "https://github.com/CQCL/tket2"
-repository = "https://github.com/CQCL/tket2"
+[tool.poetry.group.tket2.dependencies]
+tket2 = { path = "tket2-py", develop = true }
 
 [tool.maturin]
-module-name = "tket2._tket2"
+# Maturin is not the build system for the workspace (it is only used for `tket2-py`).
+# We mirror the `tket2-py/pyproject.toml` config here so `maturin develop` still works
+# from the root of the workspace.
 manifest-path = "tket2-py/Cargo.toml"
 python-source = "tket2-py"
+module-name = "tket2._tket2"
 # "extension-module" tells pyo3 we want to build an extension module (skips linking against libpython.so)
 features = ["pyo3/extension-module"]
 
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.pytest]
 pythonpath = "tket2-py"
-
-[tool.pytest.ini_options]
-# Lark throws deprecation warnings for `src_parse` and `src_constants`.
-filterwarnings = "ignore::DeprecationWarning:lark.*"
-
-[tool.pyright]
-# Rust bindings have typing stubs but no python source code.
-reportMissingModuleSource = "none"
-
-[tool.ruff]
-extend-exclude = ["*.ipynb"]
-
-[[tool.mypy.overrides]]
-# Ignore errors in tikv-jemalloc.
-module = "gen_run_tests.*"
-ignore_errors = true
