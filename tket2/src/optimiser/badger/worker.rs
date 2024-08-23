@@ -2,10 +2,10 @@
 
 use std::thread::{self, JoinHandle};
 
-use crate::circuit::cost::CircuitCost;
 use crate::circuit::CircuitHash;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
+use crate::{circuit::cost::CircuitCost, Circuit};
 
 use super::hugr_pchannel::{PriorityChannelCommunication, Work};
 
@@ -24,8 +24,8 @@ pub struct BadgerWorker<R, S, P: Ord> {
 
 impl<R, S, P> BadgerWorker<R, S, P>
 where
-    R: Rewriter + Send + 'static,
-    S: RewriteStrategy<Cost = P> + Send + 'static,
+    R: Rewriter<Circuit> + Send + 'static,
+    S: RewriteStrategy<Circuit, R::CircuitRewrite, Cost = P> + Send + 'static,
     P: CircuitCost + Send + Sync + 'static,
 {
     /// Spawn a new worker thread.

@@ -2,9 +2,7 @@ use hugr::ops::{CustomOp, NamedOp, OpType};
 use smol_str::SmolStr;
 
 /// Matchable operations in a circuit.
-#[derive(
-    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
 pub struct MatchOp {
     /// The operation identifier
     op_name: SmolStr,
@@ -13,6 +11,14 @@ pub struct MatchOp {
     /// This as a temporary hack for comparing parametric operations, since
     /// OpType doesn't implement Eq, Hash, or Ord.
     encoded: Option<Vec<u8>>,
+}
+
+impl std::fmt::Debug for MatchOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MatchOp")
+            .field("op_name", &self.op_name)
+            .finish()
+    }
 }
 
 impl From<OpType> for MatchOp {

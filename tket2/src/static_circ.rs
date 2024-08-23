@@ -4,22 +4,29 @@ mod hash;
 mod match_op;
 mod rewrite;
 
+pub use rewrite::{BoxedStaticRewrite, StaticRewrite};
+
 use std::{collections::BTreeMap, fmt, rc::Rc};
 
 use hugr::{Direction, HugrView, Port, PortIndex};
 pub(crate) use match_op::MatchOp;
 
 use derive_more::{From, Into};
+use serde::{Deserialize, Deserializer};
 use thiserror::Error;
 
-use crate::{circuit::units::filter, Circuit};
+use crate::{
+    circuit::{units::filter, CircuitCostTrait, RemoveEmptyWire},
+    Circuit, CircuitMutError,
+};
 
 /// A circuit with a fixed number of qubits numbered from 0 to `num_qubits - 1`.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, serde::Serialize)]
 pub struct StaticSizeCircuit {
     /// All quantum operations on qubits.
     qubit_ops: Vec<Vec<Rc<MatchOp>>>,
     /// Map operations to their locations in `qubit_ops`.
+    #[serde(skip)]
     op_locations: BTreeMap<MatchOpPtr, Vec<OpLocation>>,
 }
 
@@ -28,18 +35,39 @@ type MatchOpPtr = *const MatchOp;
 /// The location of an operation in a `StaticSizeCircuit`.
 ///
 /// Given by the qubit index and the position within that qubit's op list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OpLocation {
     /// The index of the qubit the operation acts on.
-    qubit: StaticQubitIndex,
+    pub qubit: StaticQubitIndex,
     /// The index of the operation in the qubit's operation list.
-    op_idx: usize,
+    pub op_idx: usize,
+}
+
+impl OpLocation {
+    pub fn try_add_op_idx(self, op_idx: isize) -> Option<Self> {
+        Some(Self {
+            op_idx: self.op_idx.checked_add_signed(op_idx)?,
+            ..self
+        })
+    }
 }
 
 impl StaticSizeCircuit {
+    /// Create an empty `StaticSizeCircuit` with the given number of qubits.
+    pub fn with_qubit_count(qubit_count: usize) -> Self {
+        Self {
+            qubit_ops: vec![Vec::new(); qubit_count],
+            op_locations: BTreeMap::new(),
+        }
+    }
+
     /// Returns the number of qubits in the circuit.
     pub fn qubit_count(&self) -> usize {
         self.qubit_ops.len()
+    }
+
+    pub fn n_ops(&self) -> usize {
+        self.op_locations.len()
     }
 
     /// Returns an iterator over the qubits in the circuit.
@@ -48,15 +76,20 @@ impl StaticSizeCircuit {
     }
 
     /// Returns the operations on a given qubit.
-    pub fn qubit_ops(
-        &self,
-        qubit: StaticQubitIndex,
-    ) -> impl ExactSizeIterator<Item = &MatchOp> + '_ {
-        self.qubit_ops[qubit.0].iter().map(|op| op.as_ref())
+    pub fn qubit_ops(&self, qubit: StaticQubitIndex) -> &[Rc<MatchOp>] {
+        &self.qubit_ops[qubit.0]
     }
 
-    fn get(&self, loc: OpLocation) -> Option<&Rc<MatchOp>> {
+    fn get_rc(&self, loc: OpLocation) -> Option<&Rc<MatchOp>> {
         self.qubit_ops.get(loc.qubit.0)?.get(loc.op_idx)
+    }
+
+    pub fn get(&self, loc: OpLocation) -> Option<&MatchOp> {
+        self.get_rc(loc).map(|op| op.as_ref())
+    }
+
+    pub fn get_ptr(&self, loc: OpLocation) -> Option<MatchOpPtr> {
+        self.get_rc(loc).map(Rc::as_ptr)
     }
 
     fn exists(&self, loc: OpLocation) -> bool {
@@ -66,16 +99,33 @@ impl StaticSizeCircuit {
     }
 
     /// The port of the operation that `loc` is at.
-    fn qubit_port(&self, loc: OpLocation) -> usize {
-        let op = self.get(loc).unwrap();
-        self.op_location(op).iter().position(|l| l == &loc).unwrap()
+    pub(crate) fn qubit_port(&self, loc: OpLocation) -> usize {
+        let op = self.get_rc(loc).unwrap();
+        self.op_locations(op)
+            .iter()
+            .position(|l| l == &loc)
+            .unwrap()
+    }
+
+    /// Get an equivalent location for the op at `loc` but at `port`.
+    ///
+    /// Every op corresponds to as many locations as it has qubits. This
+    /// function returns the location of the op at `loc` but at `port`.
+    pub fn equivalent_location(&self, loc: OpLocation, port: usize) -> Option<OpLocation> {
+        let op = self.get_rc(loc)?;
+        self.op_locations(op).get(port).copied()
+    }
+
+    pub fn all_locations(&self) -> impl Iterator<Item = OpLocation> + '_ {
+        self.qubits_iter().flat_map(|qb| {
+            (0..self.qubit_ops(qb).len()).map(move |op_idx| OpLocation { qubit: qb, op_idx })
+        })
     }
 
     /// Returns the location and port of the operation linked to the given
     /// operation at the given port.
     pub fn linked_op(&self, loc: OpLocation, port: Port) -> Option<(Port, OpLocation)> {
-        let op = self.get(loc)?;
-        let loc = self.op_location(op).get(port.index())?;
+        let loc = self.equivalent_location(loc, port.index())?;
         match port.direction() {
             Direction::Outgoing => {
                 let next_loc = OpLocation {
@@ -104,7 +154,7 @@ impl StaticSizeCircuit {
         }
     }
 
-    fn op_location(&self, op: &Rc<MatchOp>) -> &[OpLocation] {
+    pub(crate) fn op_locations(&self, op: &Rc<MatchOp>) -> &[OpLocation] {
         self.op_locations[&Rc::as_ptr(op)].as_slice()
     }
 
@@ -114,7 +164,10 @@ impl StaticSizeCircuit {
         let op_ptr = Rc::as_ptr(&op);
         for qubit in qubits {
             if qubit.0 >= self.qubit_count() {
-                self.qubit_ops.resize(qubit.0 + 1, Vec::new());
+                panic!(
+                    "Cannot add op on qubit {qubit:?} to circuit with {} qubits",
+                    self.qubit_count()
+                );
             }
             let op_idx = self.qubit_ops[qubit.0].len();
             self.qubit_ops[qubit.0].push(op.clone());
@@ -134,13 +187,21 @@ impl StaticSizeCircuit {
 /// A qubit index within a `StaticSizeCircuit`.
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into)]
-pub struct StaticQubitIndex(usize);
+pub struct StaticQubitIndex(pub(crate) usize);
+
+// TODO: this is unsafe but was added for ECCRewriter to work.
+impl<H: HugrView> From<H> for StaticSizeCircuit {
+    fn from(hugr: H) -> Self {
+        let circuit = Circuit::from(hugr);
+        (&circuit).try_into().unwrap()
+    }
+}
 
 impl<H: HugrView> TryFrom<&Circuit<H>> for StaticSizeCircuit {
     type Error = StaticSizeCircuitError;
 
     fn try_from(circuit: &Circuit<H>) -> Result<Self, Self::Error> {
-        let mut res = Self::default();
+        let mut res = Self::with_qubit_count(circuit.qubit_count());
         for cmd in circuit.commands() {
             let qubits = cmd
                 .units(Direction::Incoming)
@@ -188,6 +249,65 @@ impl PartialEq for StaticSizeCircuit {
 }
 
 impl Eq for StaticSizeCircuit {}
+
+impl<'de> Deserialize<'de> for StaticSizeCircuit {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct StaticSizeCircuitHelper {
+            qubit_ops: Vec<Vec<Rc<MatchOp>>>,
+        }
+
+        let helper = StaticSizeCircuitHelper::deserialize(deserializer)?;
+        let mut op_locations = BTreeMap::<MatchOpPtr, Vec<OpLocation>>::new();
+
+        for (qubit, ops) in helper.qubit_ops.iter().enumerate() {
+            for (op_idx, op) in ops.iter().enumerate() {
+                let op_ptr = Rc::as_ptr(op);
+                op_locations.entry(op_ptr).or_default().push(OpLocation {
+                    qubit: StaticQubitIndex(qubit),
+                    op_idx,
+                });
+            }
+        }
+
+        Ok(StaticSizeCircuit {
+            qubit_ops: helper.qubit_ops,
+            op_locations,
+        })
+    }
+}
+
+impl CircuitCostTrait for StaticSizeCircuit {
+    fn circuit_cost<F, C>(&self, op_cost: F) -> C
+    where
+        Self: Sized,
+        C: std::iter::Sum,
+        F: Fn(&hugr::ops::OpType) -> C,
+    {
+        todo!()
+    }
+
+    fn nodes_cost<F, C>(&self, nodes: impl IntoIterator<Item = hugr::Node>, op_cost: F) -> C
+    where
+        C: std::iter::Sum,
+        F: Fn(&hugr::ops::OpType) -> C,
+    {
+        todo!()
+    }
+}
+
+impl RemoveEmptyWire for StaticSizeCircuit {
+    fn remove_empty_wire(&mut self, input_port: usize) -> Result<(), CircuitMutError> {
+        todo!()
+    }
+
+    fn empty_wires(&self) -> Vec<usize> {
+        todo!()
+    }
+}
 
 #[cfg(test)]
 mod tests {

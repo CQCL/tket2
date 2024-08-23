@@ -72,6 +72,7 @@ criterion = { workspace = true, features = ["html_reports"] }
 webbrowser = { workspace = true }
 urlencoding = { workspace = true }
 cool_asserts = { workspace = true }
+insta = "1.39.0"
 
 [[bench]]
 name = "bench_main"

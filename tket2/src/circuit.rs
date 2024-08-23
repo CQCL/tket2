@@ -253,31 +253,6 @@ impl<T: HugrView> Circuit<T> {
         self.commands().filter(|cmd| cmd.optype().is_custom_op())
     }
 
-    /// Compute the cost of the circuit based on a per-operation cost function.
-    #[inline]
-    pub fn circuit_cost<F, C>(&self, op_cost: F) -> C
-    where
-        Self: Sized,
-        C: Sum,
-        F: Fn(&OpType) -> C,
-    {
-        self.commands().map(|cmd| op_cost(cmd.optype())).sum()
-    }
-
-    /// Compute the cost of a group of nodes in a circuit based on a
-    /// per-operation cost function.
-    #[inline]
-    pub fn nodes_cost<F, C>(&self, nodes: impl IntoIterator<Item = Node>, op_cost: F) -> C
-    where
-        C: Sum,
-        F: Fn(&OpType) -> C,
-    {
-        nodes
-            .into_iter()
-            .map(|n| op_cost(self.hugr.get_optype(n)))
-            .sum()
-    }
-
     /// Return the graphviz representation of the underlying graph and hierarchy side by side.
     ///
     /// For a simpler representation, use the [`Circuit::mermaid_string`] format instead.
@@ -321,6 +296,48 @@ impl<T: HugrView> Circuit<T> {
     }
 }
 
+pub trait CircuitCostTrait {
+    /// Compute the cost of the circuit based on a per-operation cost function.
+    fn circuit_cost<F, C>(&self, op_cost: F) -> C
+    where
+        Self: Sized,
+        C: Sum,
+        F: Fn(&OpType) -> C;
+
+    /// Compute the cost of a group of nodes in a circuit based on a
+    /// per-operation cost function.
+    fn nodes_cost<F, C>(&self, nodes: impl IntoIterator<Item = Node>, op_cost: F) -> C
+    where
+        C: Sum,
+        F: Fn(&OpType) -> C;
+}
+
+impl<H: HugrView> CircuitCostTrait for Circuit<H> {
+    #[inline]
+    fn circuit_cost<F, C>(&self, op_cost: F) -> C
+    where
+        Self: Sized,
+        C: Sum,
+        F: Fn(&OpType) -> C,
+    {
+        self.commands().map(|cmd| op_cost(cmd.optype())).sum()
+    }
+
+    /// Compute the cost of a group of nodes in a circuit based on a
+    /// per-operation cost function.
+    #[inline]
+    fn nodes_cost<F, C>(&self, nodes: impl IntoIterator<Item = Node>, op_cost: F) -> C
+    where
+        C: Sum,
+        F: Fn(&OpType) -> C,
+    {
+        nodes
+            .into_iter()
+            .map(|n| op_cost(self.hugr.get_optype(n)))
+            .sum()
+    }
+}
+
 impl<T: HugrView> From<T> for Circuit<T> {
     fn from(hugr: T) -> Self {
         let parent = hugr.root();
@@ -360,61 +377,90 @@ fn check_hugr(hugr: &impl HugrView, parent: Node) -> Result<(), CircuitError> {
     }
 }
 
-/// Remove an empty wire in a dataflow HUGR.
-///
-/// The wire to be removed is identified by the index of the outgoing port
-/// at the circuit input node.
-///
-/// This will change the circuit signature and will shift all ports after
-/// the removed wire by -1. If the wire is connected to the output node,
-/// this will also change the signature output and shift the ports after
-/// the removed wire by -1.
-///
-/// This will return an error if the wire is not empty or if a HugrError
-/// occurs.
-#[allow(dead_code)]
-pub(crate) fn remove_empty_wire(
-    circ: &mut Circuit<impl HugrMut>,
-    input_port: usize,
-) -> Result<(), CircuitMutError> {
-    let parent = circ.parent();
-    let hugr = circ.hugr_mut();
+pub(crate) trait RemoveEmptyWire {
+    /// Remove an empty wire in a dataflow HUGR.
+    ///
+    /// The wire to be removed is identified by the index of the outgoing port
+    /// at the circuit input node.
+    ///
+    /// This will change the circuit signature and will shift all ports after
+    /// the removed wire by -1. If the wire is connected to the output node,
+    /// this will also change the signature output and shift the ports after
+    /// the removed wire by -1.
+    ///
+    /// This will return an error if the wire is not empty or if a HugrError
+    /// occurs.
+    fn remove_empty_wire(&mut self, input_port: usize) -> Result<(), CircuitMutError>;
 
-    let [inp, out] = hugr.get_io(parent).expect("no IO nodes found at parent");
-    if input_port >= hugr.num_outputs(inp) {
-        return Err(CircuitMutError::InvalidPortOffset(input_port));
-    }
-    let input_port = OutgoingPort::from(input_port);
-    let link = hugr
-        .linked_inputs(inp, input_port)
-        .at_most_one()
-        .map_err(|_| CircuitMutError::DeleteNonEmptyWire(input_port.index()))?;
-    if link.is_some() && link.unwrap().0 != out {
-        return Err(CircuitMutError::DeleteNonEmptyWire(input_port.index()));
-    }
-    if link.is_some() {
-        hugr.disconnect(inp, input_port);
+    /// The port offsets of wires that are empty.
+    fn empty_wires(&self) -> Vec<usize>;
+}
+
+impl<H: HugrMut> RemoveEmptyWire for Circuit<H> {
+    #[allow(dead_code)]
+    fn remove_empty_wire(&mut self, input_port: usize) -> Result<(), CircuitMutError> {
+        let parent = self.parent();
+        let hugr = self.hugr_mut();
+
+        let [inp, out] = hugr.get_io(parent).expect("no IO nodes found at parent");
+        if input_port >= hugr.num_outputs(inp) {
+            return Err(CircuitMutError::InvalidPortOffset(input_port));
+        }
+        let input_port = OutgoingPort::from(input_port);
+        let link = hugr
+            .linked_inputs(inp, input_port)
+            .at_most_one()
+            .map_err(|_| CircuitMutError::DeleteNonEmptyWire(input_port.index()))?;
+        if link.is_some() && link.unwrap().0 != out {
+            return Err(CircuitMutError::DeleteNonEmptyWire(input_port.index()));
+        }
+        if link.is_some() {
+            hugr.disconnect(inp, input_port);
+        }
+
+        // Shift ports at input
+        shift_ports(hugr, inp, input_port, hugr.num_outputs(inp))?;
+        // Shift ports at output
+        if let Some((out, output_port)) = link {
+            shift_ports(hugr, out, output_port, hugr.num_inputs(out))?;
+        }
+        // Update input node, output node (if necessary) and parent signatures.
+        update_signature(
+            hugr,
+            parent,
+            input_port.index(),
+            link.map(|(_, p)| p.index()),
+        )?;
+        // Resize ports at input/output node
+        hugr.set_num_ports(inp, 0, hugr.num_outputs(inp) - 1);
+        if let Some((out, _)) = link {
+            hugr.set_num_ports(out, hugr.num_inputs(out) - 1, 0);
+        }
+        Ok(())
     }
 
-    // Shift ports at input
-    shift_ports(hugr, inp, input_port, hugr.num_outputs(inp))?;
-    // Shift ports at output
-    if let Some((out, output_port)) = link {
-        shift_ports(hugr, out, output_port, hugr.num_inputs(out))?;
+    /// The port offsets of wires that are empty.
+    fn empty_wires(&self) -> Vec<usize> {
+        let hugr = self.hugr();
+        let input = self.input_node();
+        let input_sig = hugr.signature(input).unwrap();
+        hugr.node_outputs(input)
+            // Only consider dataflow edges
+            .filter(|&p| input_sig.out_port_type(p).is_some())
+            // Only consider ports linked to at most one other port
+            .filter_map(|p| Some((p, hugr.linked_ports(input, p).at_most_one().ok()?)))
+            // Ports are either connected to output or nothing
+            .filter_map(|(from, to)| {
+                if let Some((n, _)) = to {
+                    // Wires connected to output
+                    (n == self.output_node()).then_some(from.index())
+                } else {
+                    // Wires connected to nothing
+                    Some(from.index())
+                }
+            })
+            .collect()
     }
-    // Update input node, output node (if necessary) and parent signatures.
-    update_signature(
-        hugr,
-        parent,
-        input_port.index(),
-        link.map(|(_, p)| p.index()),
-    )?;
-    // Resize ports at input/output node
-    hugr.set_num_ports(inp, 0, hugr.num_outputs(inp) - 1);
-    if let Some((out, _)) = link {
-        hugr.set_num_ports(out, hugr.num_inputs(out) - 1, 0);
-    }
-    Ok(())
 }
 
 /// Errors that can occur when mutating a circuit.
@@ -690,10 +736,10 @@ mod tests {
         .unwrap();
 
         assert_eq!(circ.qubit_count(), 2);
-        assert!(remove_empty_wire(&mut circ, 1).is_ok());
+        assert!(circ.remove_empty_wire(1).is_ok());
         assert_eq!(circ.qubit_count(), 1);
         assert_eq!(
-            remove_empty_wire(&mut circ, 0).unwrap_err(),
+            circ.remove_empty_wire(0).unwrap_err(),
             CircuitMutError::DeleteNonEmptyWire(0)
         );
     }
@@ -717,10 +763,10 @@ mod tests {
             .into();
 
         assert_eq!(circ.units().count(), 1);
-        assert!(remove_empty_wire(&mut circ, 0).is_ok());
+        assert!(circ.remove_empty_wire(0).is_ok());
         assert_eq!(circ.units().count(), 0);
         assert_eq!(
-            remove_empty_wire(&mut circ, 2).unwrap_err(),
+            circ.remove_empty_wire(2).unwrap_err(),
             CircuitMutError::InvalidPortOffset(2)
         );
     }

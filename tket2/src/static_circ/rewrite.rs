@@ -1,7 +1,10 @@
 use std::{collections::BTreeMap, ops::Range, rc::Rc};
 
 use derive_more::{From, Into};
+use portmatching::{IndexingScheme, PatternMatch};
 use thiserror::Error;
+
+use crate::portmatching::indexing::StaticIndexScheme;
 
 use super::{OpLocation, StaticQubitIndex, StaticSizeCircuit};
 
@@ -99,6 +102,8 @@ impl StaticSizeCircuit {
     }
 }
 
+pub type BoxedStaticRewrite = StaticRewrite<Box<dyn Fn(StaticQubitIndex) -> StaticQubitIndex>>;
+
 /// A rewrite that applies on a static circuit.
 pub struct StaticRewrite<F> {
     /// The subcircuit to be replaced.
@@ -107,6 +112,16 @@ pub struct StaticRewrite<F> {
     pub replacement: StaticSizeCircuit,
     /// The qubit map.
     pub qubit_map: F,
+}
+
+impl<F: Fn(StaticQubitIndex) -> StaticQubitIndex> StaticRewrite<F> {
+    pub fn from_pattern_match(
+        match_map: &PatternMatch<<StaticIndexScheme as IndexingScheme<StaticSizeCircuit>>::Map>,
+        pattern: StaticSizeCircuit,
+        subject: &StaticSizeCircuit,
+    ) -> Self {
+        todo!()
+    }
 }
 
 impl StaticSizeCircuit {

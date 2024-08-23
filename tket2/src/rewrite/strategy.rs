@@ -24,11 +24,15 @@ use std::iter;
 use std::{collections::HashSet, fmt::Debug};
 
 use derive_more::From;
+use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::OpType;
 use hugr::HugrView;
 use itertools::Itertools;
 
 use crate::circuit::cost::{is_cx, is_quantum, CircuitCost, CostDelta, LexicographicCost};
+use crate::circuit::CircuitCostTrait;
+#[cfg(feature = "portmatching")]
+use crate::static_circ::{BoxedStaticRewrite, StaticSizeCircuit};
 use crate::Circuit;
 
 use super::trace::RewriteTrace;
@@ -43,29 +47,29 @@ use super::CircuitRewrite;
 ///
 /// It also assign every circuit a totally ordered cost that can be used when
 /// using rewrites for circuit optimisation.
-pub trait RewriteStrategy {
+pub trait RewriteStrategy<C: CircuitCostTrait, R> {
     /// The circuit cost to be minimised.
     type Cost: CircuitCost;
 
     /// Apply a set of rewrites to a circuit.
     fn apply_rewrites(
         &self,
-        rewrites: impl IntoIterator<Item = CircuitRewrite>,
-        circ: &Circuit,
-    ) -> impl Iterator<Item = RewriteResult<Self::Cost>>;
+        rewrites: impl IntoIterator<Item = R>,
+        circ: &C,
+    ) -> impl Iterator<Item = RewriteResult<C, Self::Cost>>;
 
     /// The cost of a single operation for this strategy's cost function.
     fn op_cost(&self, op: &OpType) -> Self::Cost;
 
     /// The cost of a circuit using this strategy's cost function.
     #[inline]
-    fn circuit_cost(&self, circ: &Circuit<impl HugrView>) -> Self::Cost {
+    fn circuit_cost(&self, circ: &C) -> Self::Cost {
         circ.circuit_cost(|op| self.op_cost(op))
     }
 
     /// Returns the cost of a rewrite's matched subcircuit before replacing it.
     #[inline]
-    fn pre_rewrite_cost(&self, rw: &CircuitRewrite, circ: &Circuit) -> Self::Cost {
+    fn pre_rewrite_cost(&self, rw: &CircuitRewrite, circ: &C) -> Self::Cost {
         circ.nodes_cost(rw.subcircuit().nodes().iter().copied(), |op| {
             self.op_cost(op)
         })
@@ -79,16 +83,16 @@ pub trait RewriteStrategy {
 
 /// A possible rewrite result returned by a rewrite strategy.
 #[derive(Debug, Clone)]
-pub struct RewriteResult<C: CircuitCost> {
+pub struct RewriteResult<Circuit, C: CircuitCost> {
     /// The rewritten circuit.
     pub circ: Circuit,
     /// The cost delta of the rewrite.
     pub cost_delta: C::CostDelta,
 }
 
-impl<C: CircuitCost, T: HugrView> From<(Circuit<T>, C::CostDelta)> for RewriteResult<C> {
+impl<Circuit: Clone, C: CircuitCost> From<(Circuit, C::CostDelta)> for RewriteResult<Circuit, C> {
     #[inline]
-    fn from((circ, cost_delta): (Circuit<T>, C::CostDelta)) -> Self {
+    fn from((circ, cost_delta): (Circuit, C::CostDelta)) -> Self {
         Self {
             circ: circ.to_owned(),
             cost_delta,
@@ -109,7 +113,7 @@ impl<C: CircuitCost, T: HugrView> From<(Circuit<T>, C::CostDelta)> for RewriteRe
 #[derive(Debug, Copy, Clone)]
 pub struct GreedyRewriteStrategy;
 
-impl RewriteStrategy for GreedyRewriteStrategy {
+impl RewriteStrategy<Circuit, CircuitRewrite> for GreedyRewriteStrategy {
     type Cost = usize;
 
     #[tracing::instrument(skip_all)]
@@ -117,7 +121,7 @@ impl RewriteStrategy for GreedyRewriteStrategy {
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
         circ: &Circuit,
-    ) -> impl Iterator<Item = RewriteResult<Self::Cost>> {
+    ) -> impl Iterator<Item = RewriteResult<Circuit, Self::Cost>> {
         let rewrites = rewrites
             .into_iter()
             .sorted_by_key(|rw| rw.node_count_delta())
@@ -143,7 +147,7 @@ impl RewriteStrategy for GreedyRewriteStrategy {
         iter::once((circ, cost_delta).into())
     }
 
-    fn circuit_cost(&self, circ: &Circuit<impl HugrView>) -> Self::Cost {
+    fn circuit_cost(&self, circ: &Circuit) -> Self::Cost {
         circ.num_operations()
     }
 
@@ -180,7 +184,25 @@ pub struct ExhaustiveGreedyStrategy<T> {
     pub strat_cost: T,
 }
 
-impl<T: StrategyCost> RewriteStrategy for ExhaustiveGreedyStrategy<T> {
+#[cfg(feature = "portmatching")]
+impl<T: StrategyCost> RewriteStrategy<StaticSizeCircuit, BoxedStaticRewrite>
+    for ExhaustiveGreedyStrategy<T>
+{
+    type Cost = T::OpCost;
+
+    fn apply_rewrites(
+        &self,
+        rewrites: impl IntoIterator<Item = BoxedStaticRewrite>,
+        circ: &StaticSizeCircuit,
+    ) -> impl Iterator<Item = RewriteResult<StaticSizeCircuit, Self::Cost>> {
+        [].into_iter()
+    }
+
+    fn op_cost(&self, op: &OpType) -> Self::Cost {
+        todo!()
+    }
+}
+impl<T: StrategyCost> RewriteStrategy<Circuit, CircuitRewrite> for ExhaustiveGreedyStrategy<T> {
     type Cost = T::OpCost;
 
     #[tracing::instrument(skip_all)]
@@ -188,13 +210,16 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveGreedyStrategy<T> {
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
         circ: &Circuit,
-    ) -> impl Iterator<Item = RewriteResult<Self::Cost>> {
+    ) -> impl Iterator<Item = RewriteResult<Circuit, Self::Cost>> {
         // Check only the rewrites that reduce the size of the circuit.
         let rewrites = rewrites
             .into_iter()
             .filter_map(|rw| {
                 let pattern_cost = self.pre_rewrite_cost(&rw, circ);
-                let target_cost = self.post_rewrite_cost(&rw);
+                let target_cost =
+                    <Self as RewriteStrategy<Circuit, CircuitRewrite>>::post_rewrite_cost(
+                        &self, &rw,
+                    );
                 if !self.strat_cost.under_threshold(&pattern_cost, &target_cost) {
                     return None;
                 }
@@ -258,7 +283,7 @@ pub struct ExhaustiveThresholdStrategy<T> {
     pub strat_cost: T,
 }
 
-impl<T: StrategyCost> RewriteStrategy for ExhaustiveThresholdStrategy<T> {
+impl<T: StrategyCost> RewriteStrategy<Circuit, CircuitRewrite> for ExhaustiveThresholdStrategy<T> {
     type Cost = T::OpCost;
 
     #[tracing::instrument(skip_all)]
@@ -266,7 +291,7 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveThresholdStrategy<T> {
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
         circ: &Circuit,
-    ) -> impl Iterator<Item = RewriteResult<Self::Cost>> {
+    ) -> impl Iterator<Item = RewriteResult<Circuit, Self::Cost>> {
         rewrites.into_iter().filter_map(|rw| {
             let pattern_cost = self.pre_rewrite_cost(&rw, circ);
             let target_cost = self.post_rewrite_cost(&rw);

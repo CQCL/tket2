@@ -1,0 +1,12 @@
+---
+source: tket2/src/portmatching/pattern.rs
+expression: circ.to_constraint_vec()
+---
+[
+    IsOp { op: MatchOp { op_name: "quantum.tket2.CX" } }(PatternOpLocation { qubit: CircuitPath(), op_idx: 0 }),
+    Link { out_port: 0, in_port: 0 }(PatternOpLocation { qubit: CircuitPath(), op_idx: 0 }, PatternOpLocation { qubit: CircuitPath(), op_idx: 1 }),
+    IsOp { op: MatchOp { op_name: "quantum.tket2.H" } }(PatternOpLocation { qubit: CircuitPath(), op_idx: 1 }),
+    NotEq { n_other: 1 }(PatternOpLocation { qubit: CircuitPath(), op_idx: 1 }, PatternOpLocation { qubit: CircuitPath(), op_idx: 0 }),
+    IsOp { op: MatchOp { op_name: "quantum.tket2.CX" } }(PatternOpLocation { qubit: CircuitPath(01), op_idx: 0 }),
+    NotEq { n_other: 1 }(PatternOpLocation { qubit: CircuitPath(01), op_idx: 0 }, PatternOpLocation { qubit: CircuitPath(), op_idx: 1 }),
+]
