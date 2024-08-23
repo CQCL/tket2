@@ -96,8 +96,8 @@ jobs:
           key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}
-      # Note: We do not need to compile with maturin here,
-      # as we are only checking the Python code.
+      - name: Setup dependencies
+        run: uv sync -v
       - name: Type check with mypy
         run: uv run mypy .
       - name: Check formatting with ruff
