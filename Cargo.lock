@@ -1034,7 +1034,9 @@ dependencies = [
 
 [[package]]
 name = "portmatching"
-version = "0.3.0"
+version = "0.4.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27f7164a1070f3055aa2db0e35fe6beac2e4d726e4ee19d829b40975c4b6f5b0"
 dependencies = [
  "bimap",
  "bitvec",
