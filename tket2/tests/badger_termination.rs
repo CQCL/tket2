@@ -55,11 +55,11 @@ fn simple_circ() -> Circuit {
 //#[ignore = "Takes 200ms"]
 fn badger_termination(simple_circ: Circuit, nam_4_2: DefaultBadgerOptimiser) {
     let opt_circ = nam_4_2.optimise(
-        &simple_circ,
+        &(&simple_circ).try_into().unwrap(),
         BadgerOptions {
             queue_size: 10,
             ..Default::default()
         },
     );
-    assert_eq!(opt_circ.commands().count(), 11);
+    assert_eq!(opt_circ.n_ops(), 11);
 }

@@ -147,7 +147,8 @@ impl CircuitRewrite {
 }
 
 /// Generate rewrite rules for circuits.
-pub trait Rewriter {
+pub trait Rewriter<C> {
+    type CircuitRewrite;
     /// Get the rewrite rules for a circuit.
-    fn get_rewrites(&self, circ: &Circuit<impl HugrView>) -> Vec<CircuitRewrite>;
+    fn get_rewrites(&self, circ: &C) -> Vec<Self::CircuitRewrite>;
 }

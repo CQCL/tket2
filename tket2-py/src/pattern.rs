@@ -8,7 +8,7 @@ use crate::utils::{create_py_exception, ConvertPyErr};
 
 use hugr::HugrView;
 use pyo3::prelude::*;
-use tket2::portmatching::{CircuitPattern, PatternMatch, PatternMatcher};
+use tket2::portmatching::{CircuitPattern, PatternMatch, CircuitMatcher};
 use tket2::Circuit;
 
 /// The module definition
@@ -80,7 +80,7 @@ impl Rule {
 }
 #[pyclass]
 struct RuleMatcher {
-    matcher: PatternMatcher,
+    matcher: CircuitMatcher,
     rights: Vec<Circuit>,
 }
 
@@ -92,7 +92,7 @@ impl RuleMatcher {
             rules.into_iter().map(|Rule([l, r])| (l, r)).unzip();
         let patterns: Result<Vec<CircuitPattern>, _> =
             lefts.iter().map(CircuitPattern::try_from_circuit).collect();
-        let matcher = PatternMatcher::from_patterns(patterns.convert_pyerrs()?);
+        let matcher = CircuitMatcher::from_patterns(patterns.convert_pyerrs()?);
 
         Ok(Self { matcher, rights })
     }

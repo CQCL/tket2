@@ -7,7 +7,7 @@ use itertools::Itertools;
 use portmatching::PatternID;
 use pyo3::{prelude::*, types::PyIterator};
 
-use tket2::portmatching::{CircuitPattern, PatternMatch, PatternMatcher};
+use tket2::portmatching::{CircuitPattern, PatternMatch, CircuitMatcher};
 
 use crate::circuit::{try_with_circ, with_circ, PyNode};
 
@@ -54,7 +54,7 @@ impl PyCircuitPattern {
 #[derive(Debug, Clone, From)]
 pub struct PyPatternMatcher {
     /// Rust representation of the matcher
-    pub matcher: PatternMatcher,
+    pub matcher: CircuitMatcher,
 }
 
 #[pymethods]
@@ -62,7 +62,7 @@ impl PyPatternMatcher {
     /// Construct a matcher from a list of patterns.
     #[new]
     pub fn py_from_patterns(patterns: &Bound<PyIterator>) -> PyResult<Self> {
-        Ok(PatternMatcher::from_patterns(
+        Ok(CircuitMatcher::from_patterns(
             patterns
                 .iter()?
                 .map(|p| {

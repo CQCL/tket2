@@ -3,17 +3,16 @@ use fxhash::FxHashMap;
 use priority_queue::DoublePriorityQueue;
 
 use crate::circuit::CircuitHash;
-use crate::Circuit;
 
 /// A min-priority queue for Hugrs.
 ///
 /// The cost function provided will be used as the priority of the Hugrs.
 /// Uses hashes internally to store the Hugrs.
 #[derive(Debug, Clone, Default)]
-pub struct HugrPQ<P: Ord, C> {
+pub struct HugrPQ<Circuit, P: Ord, Cost> {
     queue: DoublePriorityQueue<u64, P>,
     hash_lookup: FxHashMap<u64, Circuit>,
-    cost_fn: C,
+    cost_fn: Cost,
     max_size: usize,
 }
 
@@ -23,9 +22,9 @@ pub struct Entry<C, P, H> {
     pub hash: H,
 }
 
-impl<P: Ord, C> HugrPQ<P, C> {
+impl<Circuit, P: Ord, Cost> HugrPQ<Circuit, P, Cost> {
     /// Create a new HugrPQ with a cost function and some initial capacity.
-    pub fn new(cost_fn: C, max_size: usize) -> Self {
+    pub fn new(cost_fn: Cost, max_size: usize) -> Self {
         Self {
             queue: DoublePriorityQueue::with_capacity(max_size),
             hash_lookup: Default::default(),
@@ -52,7 +51,8 @@ impl<P: Ord, C> HugrPQ<P, C> {
     #[allow(unused)]
     pub fn push(&mut self, circ: Circuit)
     where
-        C: Fn(&Circuit) -> P,
+        Cost: Fn(&Circuit) -> P,
+        Circuit: CircuitHash,
     {
         let hash = circ.circuit_hash().unwrap();
         let cost = (self.cost_fn)(&circ);
@@ -69,7 +69,7 @@ impl<P: Ord, C> HugrPQ<P, C> {
     /// If the queue is full, the most last will be dropped.
     pub fn push_unchecked(&mut self, circ: Circuit, hash: u64, cost: P)
     where
-        C: Fn(&Circuit) -> P,
+        Cost: Fn(&Circuit) -> P,
     {
         if !self.check_accepted(&cost) {
             return;
@@ -108,7 +108,7 @@ impl<P: Ord, C> HugrPQ<P, C> {
 
     /// The cost function used by the queue.
     #[allow(unused)]
-    pub fn cost_fn(&self) -> &C {
+    pub fn cost_fn(&self) -> &Cost {
         &self.cost_fn
     }
 
