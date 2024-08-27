@@ -1,63 +1,36 @@
-[tool.poetry]
-name = "tket2-eccs"
-version = "0.1.0"
-description = "Precompiled rewrite sets for the tket 2 compiler"
-classifiers = [
-    "Environment :: Console",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: Apache Software License",
-    "Operating System :: MacOS :: MacOS X",
-    "Operating System :: POSIX :: Linux",
-    "Operating System :: Microsoft :: Windows",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Science/Research",
-    "Topic :: Scientific/Engineering",
-]
-authors = ["TKET development team <tket-support@quantinuum.com>"]
-maintainers = ["TKET development team <tket-support@quantinuum.com>"]
-include = ["pyproject.toml"]
-license = "Apache-2.0"
-readme = "README.md"
-
-packages = [{ include = "tket2_eccs", from = "src" }]
-
-[tool.poetry.dependencies]
-python = "^3.10"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
 [project]
 name = "tket2_eccs"
-classifiers = [
-    "Environment :: Console",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: Apache Software License",
-    "Operating System :: MacOS :: MacOS X",
-    "Operating System :: POSIX :: Linux",
-    "Operating System :: Microsoft :: Windows",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Science/Research",
-    "Topic :: Scientific/Engineering",
-]
+version = "0.1.0"
+requires-python = ">=3.10,<3.13"
+description = "Precompiled rewrite sets for the tket 2 compiler"
+license = { file = "LICENCE" }
+readme = "README.md"
 authors = [
     { name = "TKET development team", email = "tket-support@quantinuum.com" },
 ]
 maintainers = [
     { name = "TKET development team", email = "tket-support@quantinuum.com" },
 ]
-version = "0.1.0"
-description = "Precompiled rewrite sets for the tket 2 compiler"
-requires-python = ">=3.10"
-license = { file = "LICENCE" }
+classifiers = [
+    "Environment :: Console",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+]
 
 dependencies = []
 
 [project.urls]
 homepage = "https://github.com/CQCL/tket2/tree/main/tket2-eccs"
 repository = "https://github.com/CQCL/tket2/tree/main/tket2-eccs"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

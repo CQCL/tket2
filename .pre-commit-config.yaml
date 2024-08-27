@@ -34,66 +34,59 @@ repos:
 
   - repo: local
     hooks:
-      - id: poetry-install
-        name: sync poetry deps
-        description: Ensure development tools are installed.
-        entry: poetry install --sync
-        language: system
-        files: poetry.lock
-        pass_filenames: false
       - id: ruff-format
         name: ruff format
         description: Format python code with `ruff`.
-        entry: poetry run ruff format
+        entry: uv run ruff format
         language: system
         files: \.py$
         pass_filenames: false
       - id: ruff-check
         name: ruff
         description: Check python code with `ruff`.
-        entry: poetry run ruff check --fix --exit-non-zero-on-fix
+        entry: uv run ruff check --fix --exit-non-zero-on-fix
         language: system
         files: \.py$
         pass_filenames: false
       - id: mypy-check
         name: mypy
         description: Check python code with `mypy`.
-        entry: poetry run mypy .
+        entry: uv run mypy .
         language: system
         files: \.py$
         pass_filenames: false
       - id: cargo-fmt
         name: cargo format
         description: Format rust code with `cargo fmt`.
-        entry: poetry run -- cargo fmt --all -- --check
+        entry: uv run -- cargo fmt --all -- --check
         language: system
         files: \.rs$
         pass_filenames: false
       - id: cargo-check
         name: cargo check
         description: Check rust code with `cargo check`.
-        entry: poetry run -- cargo check --all --all-features --workspace
+        entry: uv run -- cargo check --all --all-features --workspace
         language: system
         files: \.rs$
         pass_filenames: false
       - id: cargo-test
         name: cargo test
         description: Run tests with `cargo test`.
-        entry: poetry run -- cargo test --all-features --workspace
+        entry: uv run -- cargo test --all-features --workspace
         language: system
         files: \.rs$
         pass_filenames: false
       - id: cargo-clippy
         name: cargo clippy
         description: Run clippy lints with `cargo clippy`.
-        entry: poetry run -- cargo clippy --all-features --all-targets --workspace -- -D warnings
+        entry: uv run -- cargo clippy --all-features --all-targets --workspace -- -D warnings
         language: system
         files: \.rs$
         pass_filenames: false
       - id: cargo-doc
         name: cargo doc
         description: Generate documentation with `cargo doc`.
-        entry: poetry run -- cargo doc --no-deps --all-features --workspace
+        entry: uv run -- cargo doc --no-deps --all-features --workspace
         language: system
         files: \.rs$
         pass_filenames: false
@@ -101,7 +94,7 @@ repos:
         name: pytest
         description: Run python tests
         # Ensure that we are using the local version of `tket2-eccs` and not the one from PyPI
-        entry: poetry run -- sh -c "poetry install -C tket2-eccs && maturin develop && pytest --cov=./ --cov-report=html"
+        entry: uv run -- sh -c "maturin develop && pytest --cov=./ --cov-report=html"
         language: system
         files: \.py$
         pass_filenames: false

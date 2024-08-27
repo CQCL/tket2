@@ -1,33 +1,24 @@
-[tool.poetry]
-name = "tket2-project"
-version = "0.0.0"
-description = "Namespace for the python packages in the tket2 repository. See the individual packages for more information."
-authors = ["TKET development team <tket-support@quantinuum.com>"]
-maintainers = ["TKET development team <tket-support@quantinuum.com>"]
-license = "Apache-2.0"
-readme = "README.md"
+[tool.uv.workspace]
+members = ["tket2-py", "tket2-eccs"]
 
-packages = [
-    { include = "tket2", from = "tket2-py" },
-    { include = "tket2_eccs", from = "tket2-eccs" },
+[tool.uv]
+
+dev-dependencies = [
+    "maturin >=1.7.0,<2",
+    "pytest >=8.3.2,<9",
+    "pytest-cov >=5.0.0,<6",
+    "ruff >=0.6.2,<0.7",
+    "mypy >=1.11.1,<2",
+    "hypothesis >=6.111.1,<7",
+    "graphviz >=0.20,<0.21",
+    "pre-commit >=3.8.0,<4",
+    # Required to run `maturin develop`
+    "pip >=24",
 ]
-package-mode = false
 
-[tool.poetry.dependencies]
-python = "^3.10"
-
-[tool.poetry.group.dev.dependencies]
-maturin = "^1.7.0"
-pytest = "^8.3.2"
-pytest-cov = "^5.0.0"
-ruff = "^0.6.2"
-mypy = "^1.11.2"
-hypothesis = "^6.111.2"
-graphviz = "^0.20"
-pre-commit = "^3.8.0"
-
-[tool.poetry.group.tket2.dependencies]
-tket2 = { path = "tket2-py", develop = true }
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.maturin]
 # Maturin is not the build system for the workspace (it is only used for `tket2-py`).
@@ -39,9 +30,26 @@ module-name = "tket2._tket2"
 # "extension-module" tells pyo3 we want to build an extension module (skips linking against libpython.so)
 features = ["pyo3/extension-module"]
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.mypy]
+exclude = '''(?x)(
+    ^target/        # Build artifacts
+    | ^notebooks/   # Examples
+    | ^test_files/  # Test files
+)'''
 
-[tool.pytest]
-pythonpath = "tket2-py"
+# TODO: Fix the lint errors and enable this
+#strict = true
+
+[tool.coverage.report]
+exclude_also = [
+    # Don't complain about missing coverage on typing imports
+    "if TYPE_CHECKING:",
+
+    # Don't complain if tests don't hit defensive assertion code:
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "raise InternalGuppyError",
+
+    # Don't complain about abstract methods, they aren't run:
+    "@abstractmethod",
+]

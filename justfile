@@ -5,48 +5,40 @@ help:
 # Prepare the environment for development, installing all the dependencies and
 # setting up the pre-commit hooks.
 setup:
-    poetry install
-    poetry run -- pre-commit install -t pre-commit
+    uv sync
+    [[ -n "${TKET2_JUST_INHIBIT_GIT_HOOKS:-}" ]] || uv run pre-commit install -t pre-commit
 
 # Run the pre-commit checks.
 check:
-    poetry run -- pre-commit run --all-files
+    uv run pre-commit run --all-files
 
 # Compile the wheels for the python package.
 build:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # Ensure that we are using the local version of `pytket-eccs`
-    poetry install -C tket2-eccs
-    poetry run -- maturin build --release
+    uv run maturin build --release
 
 # Run all the tests.
 test language="[rust|python]" : (_run_lang language \
-        "poetry run cargo test --all-features --workspace" \
-        "poetry install -C tket2-eccs && poetry run maturin develop && poetry run pytest"
+        "uv run cargo test --all-features --workspace" \
+        "uv run maturin develop && uv run pytest"
     )
 
 # Auto-fix all clippy warnings.
 fix language="[rust|python]": (_run_lang language \
-        "poetry run -- cargo clippy --all-targets --all-features --workspace --fix --allow-staged --allow-dirty" \
-        "poetry run -- ruff check --fix"
+        "uv run cargo clippy --all-targets --all-features --workspace --fix --allow-staged --allow-dirty" \
+        "uv run ruff check --fix"
     )
 
 # Format the code.
 format language="[rust|python]": (_run_lang language \
-        "poetry run cargo fmt" \
-        "poetry run ruff format"
+        "uv run cargo fmt" \
+        "uv run ruff format"
     )
 
 # Generate a test coverage report.
 coverage language="[rust|python]": (_run_lang language \
-        "poetry run -- cargo llvm-cov --lcov > lcov.info" \
-        "poetry install -C tket2-eccs && poetry run -- maturin develop && poetry run pytest --cov=./ --cov-report=html"
+        "uv run cargo llvm-cov --lcov > lcov.info" \
+        "uv run maturin develop && uv run pytest --cov=./ --cov-report=html"
     )
-
-# Load a shell with all the dependencies installed
-shell:
-    poetry shell
 
 # Runs `compile-rewriter` on the ECCs in `test_files/eccs`
 recompile-eccs:
