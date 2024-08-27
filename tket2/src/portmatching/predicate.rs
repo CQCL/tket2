@@ -1,7 +1,10 @@
 use portgraph::PortOffset;
 use portmatching as pm;
 
-use crate::static_circ::{MatchOp, OpLocation, StaticSizeCircuit};
+use crate::{
+    static_circ::{OpLocation, StaticSizeCircuit},
+    Tk2Op,
+};
 
 use super::{indexing::PatternOpLocation, Constraint};
 
@@ -13,7 +16,7 @@ pub enum Predicate {
     /// An edge from `out_port` to `in_port`.
     Link { out_port: usize, in_port: usize },
     /// An operation of type `op`.
-    IsOp { op: MatchOp },
+    IsOp { op: Tk2Op },
     /// Check that the locations map is injective on the set of locations.
     NotEq { n_other: usize },
 }

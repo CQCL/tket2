@@ -1,9 +1,12 @@
 //! A 2d array-like representation of simple quantum circuits.
 
 mod hash;
-mod match_op;
+mod iter;
+// mod match_op;
 mod rewrite;
 
+pub use hash::UpdatableHash;
+use iter::Command;
 pub use rewrite::{BoxedStaticRewrite, StaticRewrite};
 
 use std::{
@@ -13,29 +16,29 @@ use std::{
     rc::Rc,
 };
 
-use hugr::{Direction, HugrView, Port, PortIndex};
-pub(crate) use match_op::MatchOp;
+use hugr::{ops::OpType, Direction, Hugr, HugrView, Port, PortIndex};
 
 use derive_more::{From, Into};
 use serde::{Deserialize, Deserializer};
 use thiserror::Error;
 
 use crate::{
-    circuit::{units::filter, CircuitCostTrait, RemoveEmptyWire},
-    Circuit, CircuitMutError,
+    circuit::{units::filter, RemoveEmptyWire, ToTk2OpIter},
+    utils::build_simple_circuit,
+    Circuit, CircuitMutError, Tk2Op,
 };
 
 /// A circuit with a fixed number of qubits numbered from 0 to `num_qubits - 1`.
 #[derive(Clone, Default, serde::Serialize)]
 pub struct StaticSizeCircuit {
     /// All quantum operations on qubits.
-    qubit_ops: Vec<Vec<Rc<MatchOp>>>,
+    qubit_ops: Vec<Vec<Rc<Tk2Op>>>,
     /// Map operations to their locations in `qubit_ops`.
     #[serde(skip)]
-    op_locations: BTreeMap<MatchOpPtr, Vec<OpLocation>>,
+    op_locations: BTreeMap<Tk2OpPtr, Vec<OpLocation>>,
 }
 
-type MatchOpPtr = *const MatchOp;
+type Tk2OpPtr = *const Tk2Op;
 
 /// The location of an operation in a `StaticSizeCircuit`.
 ///
@@ -81,19 +84,19 @@ impl StaticSizeCircuit {
     }
 
     /// Returns the operations on a given qubit.
-    pub fn qubit_ops(&self, qubit: StaticQubitIndex) -> &[Rc<MatchOp>] {
+    pub fn qubit_ops(&self, qubit: StaticQubitIndex) -> &[Rc<Tk2Op>] {
         &self.qubit_ops[qubit.0]
     }
 
-    pub(crate) fn get_rc(&self, loc: OpLocation) -> Option<&Rc<MatchOp>> {
+    pub(crate) fn get_rc(&self, loc: OpLocation) -> Option<&Rc<Tk2Op>> {
         self.qubit_ops.get(loc.qubit.0)?.get(loc.op_idx)
     }
 
-    pub fn get(&self, loc: OpLocation) -> Option<&MatchOp> {
+    pub fn get(&self, loc: OpLocation) -> Option<&Tk2Op> {
         self.get_rc(loc).map(|op| op.as_ref())
     }
 
-    pub fn get_ptr(&self, loc: OpLocation) -> Option<MatchOpPtr> {
+    pub fn get_ptr(&self, loc: OpLocation) -> Option<Tk2OpPtr> {
         self.get_rc(loc).map(Rc::as_ptr)
     }
 
@@ -161,11 +164,11 @@ impl StaticSizeCircuit {
         }
     }
 
-    pub(crate) fn op_locations(&self, op: &Rc<MatchOp>) -> &[OpLocation] {
+    pub(crate) fn op_locations(&self, op: &Rc<Tk2Op>) -> &[OpLocation] {
         self.op_locations[&Rc::as_ptr(op)].as_slice()
     }
 
-    fn append_op(&mut self, op: MatchOp, qubits: impl IntoIterator<Item = StaticQubitIndex>) {
+    fn append_op(&mut self, op: Tk2Op, qubits: impl IntoIterator<Item = StaticQubitIndex>) {
         let qubits = qubits.into_iter();
         let op = Rc::new(op);
         let op_ptr = Rc::as_ptr(&op);
@@ -186,7 +189,7 @@ impl StaticSizeCircuit {
     }
 
     #[allow(unused)]
-    fn all_ops_iter(&self) -> impl Iterator<Item = &Rc<MatchOp>> {
+    fn all_ops_iter(&self) -> impl Iterator<Item = &Rc<Tk2Op>> {
         self.qubit_ops.iter().flat_map(|ops| ops.iter())
     }
 
@@ -194,7 +197,7 @@ impl StaticSizeCircuit {
     pub fn add_subcircuit(
         &mut self,
         other: &Self,
-        ops: &BTreeSet<MatchOpPtr>,
+        ops: &BTreeSet<Tk2OpPtr>,
     ) -> BTreeMap<OpLocation, OpLocation> {
         // The new qubits to append to self
         let mut append_qubit_ops = Vec::new();
@@ -311,10 +314,22 @@ impl<H: HugrView> TryFrom<&Circuit<H>> for StaticSizeCircuit {
             if cmd.units(Direction::Outgoing).count() != qubits.len() {
                 return Err(StaticSizeCircuitError::InvalidCircuit);
             }
-            let op = cmd.optype().clone().into();
+            let op = cmd.optype().try_into().unwrap();
             res.append_op(op, qubits.into_iter().map(|u| StaticQubitIndex(u.index())));
         }
         Ok(res)
+    }
+}
+
+impl From<StaticSizeCircuit> for Circuit<Hugr> {
+    fn from(value: StaticSizeCircuit) -> Self {
+        build_simple_circuit(value.qubit_count(), |circ| {
+            for cmd in value.commands() {
+                circ.append(cmd.op, cmd.qubits.into_iter().map(|qb| qb.0))?;
+            }
+            Ok(())
+        })
+        .unwrap()
     }
 }
 
@@ -353,11 +368,11 @@ impl<'de> Deserialize<'de> for StaticSizeCircuit {
     {
         #[derive(Deserialize)]
         struct StaticSizeCircuitHelper {
-            qubit_ops: Vec<Vec<Rc<MatchOp>>>,
+            qubit_ops: Vec<Vec<Rc<Tk2Op>>>,
         }
 
         let helper = StaticSizeCircuitHelper::deserialize(deserializer)?;
-        let mut op_locations = BTreeMap::<MatchOpPtr, Vec<OpLocation>>::new();
+        let mut op_locations = BTreeMap::<Tk2OpPtr, Vec<OpLocation>>::new();
 
         for (qubit, ops) in helper.qubit_ops.iter().enumerate() {
             for (op_idx, op) in ops.iter().enumerate() {
@@ -376,32 +391,33 @@ impl<'de> Deserialize<'de> for StaticSizeCircuit {
     }
 }
 
-impl CircuitCostTrait for StaticSizeCircuit {
-    fn circuit_cost<F, C>(&self, op_cost: F) -> C
-    where
-        Self: Sized,
-        C: std::iter::Sum,
-        F: Fn(&hugr::ops::OpType) -> C,
-    {
-        todo!()
-    }
+impl ToTk2OpIter for StaticSizeCircuit {
+    type Iter<'a> = Box<dyn Iterator<Item = Tk2Op> + 'a> where Self: 'a;
 
-    fn nodes_cost<F, C>(&self, nodes: impl IntoIterator<Item = hugr::Node>, op_cost: F) -> C
-    where
-        C: std::iter::Sum,
-        F: Fn(&hugr::ops::OpType) -> C,
-    {
-        todo!()
+    fn tk2_ops(&self) -> Self::Iter<'_> {
+        Box::new(self.all_ops_iter().map(|op| **op))
     }
 }
 
 impl RemoveEmptyWire for StaticSizeCircuit {
     fn remove_empty_wire(&mut self, input_port: usize) -> Result<(), CircuitMutError> {
-        todo!()
+        self.qubit_ops.remove(input_port);
+        for (_, ops) in self.op_locations.iter_mut() {
+            for loc in ops.iter_mut() {
+                assert_ne!(loc.qubit.0, input_port, "input port is not empty");
+                if loc.qubit.0 > input_port {
+                    loc.qubit = StaticQubitIndex(loc.qubit.0 - 1);
+                }
+            }
+        }
+        Ok(())
     }
 
     fn empty_wires(&self) -> Vec<usize> {
-        todo!()
+        self.qubits_iter()
+            .filter(|&qb| self.qubit_ops(qb).is_empty())
+            .map(|qb| qb.0)
+            .collect()
     }
 }
 

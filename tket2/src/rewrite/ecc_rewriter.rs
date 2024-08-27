@@ -25,13 +25,13 @@ use std::{
 use thiserror::Error;
 
 use crate::{
-    circuit::RemoveEmptyWire,
+    circuit::{cost::CircuitCost, RemoveEmptyWire},
     optimiser::badger::{load_eccs_json_file, EqCircClass},
     portmatching::CircuitMatcher,
     static_circ::{StaticQubitIndex, StaticRewrite, StaticSizeCircuit},
 };
 
-use super::{CircuitRewrite, Rewriter};
+use super::{strategy::StrategyCost, CircuitRewrite, Rewriter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, From, Into, serde::Serialize, serde::Deserialize)]
 struct TargetID(usize);
@@ -198,6 +198,31 @@ impl Rewriter<StaticSizeCircuit> for ECCRewriter<CircuitMatcher, StaticSizeCircu
                 })
             })
             .collect()
+    }
+
+    fn apply_rewrite(
+        &self,
+        rw: Self::CircuitRewrite,
+        circ: &StaticSizeCircuit,
+    ) -> Result<StaticSizeCircuit, hugr::hugr::SimpleReplacementError> {
+        // TOOD: handle error
+        Ok(circ.apply_rewrite(&rw).unwrap())
+    }
+
+    fn rewrite_cost_delta<S: StrategyCost>(
+        &self,
+        rw: &Self::CircuitRewrite,
+        circ: &StaticSizeCircuit,
+        cost_strategy: &S,
+    ) -> <S::OpCost as CircuitCost>::CostDelta {
+        let StaticRewrite {
+            replacement,
+            subcircuit,
+            ..
+        } = rw;
+        cost_strategy
+            .circuit_cost(replacement)
+            .sub_cost(&cost_strategy.circuit_cost(&circ.subcircuit(subcircuit).unwrap()))
     }
 }
 

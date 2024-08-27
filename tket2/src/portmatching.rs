@@ -65,16 +65,16 @@ use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
 pub use matcher::CircuitMatcher;
 
-use crate::static_circ::MatchOp;
 use hugr::{
     ops::{OpTag, OpTrait},
     Node, Port,
 };
 use thiserror::Error;
 
+use crate::Tk2Op;
 use crate::{circuit::Circuit, utils::type_is_linear};
 
-type PNode = MatchOp;
+type PNode = Tk2Op;
 
 /// An edge property in a circuit pattern.
 ///

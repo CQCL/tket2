@@ -5,11 +5,14 @@ use std::{
 
 use cgmath::num_traits::{WrappingAdd, WrappingShl};
 
-use crate::circuit::{CircuitHash, HashError};
+use crate::{
+    circuit::{CircuitHash, HashError},
+    Tk2Op,
+};
 
 use super::{
     rewrite::{OpInterval, StaticRewrite},
-    MatchOp, StaticQubitIndex, StaticSizeCircuit,
+    StaticQubitIndex, StaticSizeCircuit,
 };
 
 pub struct UpdatableHash {
@@ -37,21 +40,21 @@ impl UpdatableHash {
     }
 
     /// Compute the hash of the circuit that results from applying the given rewrite.
-    pub fn hash_rewrite<F>(&self, circuit: &StaticSizeCircuit, rewrite: &StaticRewrite<F>) -> u64
+    pub fn hash_rewrite<F>(&self, rewrite: &StaticRewrite<F>) -> Result<u64, ()>
     where
         F: Fn(StaticQubitIndex) -> StaticQubitIndex,
     {
         let new_hash = Self::with_static(&rewrite.replacement);
-        hash_iter((0..circuit.qubit_count()).map(|i| {
+        Ok(hash_iter((0..self.cum_hash.len()).map(|i| {
             if let Some(interval) = rewrite.subcircuit.op_indices.get(&StaticQubitIndex(i)) {
                 splice(&self.cum_hash[i], interval, &new_hash.cum_hash[i])
             } else {
                 *self.cum_hash[i].last().unwrap()
             }
-        }))
+        })))
     }
 
-    fn hash_op(op: &MatchOp) -> u64 {
+    fn hash_op(op: &Tk2Op) -> u64 {
         let mut hasher = fxhash::FxHasher::default();
         op.hash(&mut hasher);
         hasher.finish()
@@ -161,7 +164,7 @@ mod tests {
 
         // Assert the hash of the rewritten circuit matches the spliced hash
         let hash_updater = UpdatableHash::with_static(&initial_circuit);
-        let rewritten_hash = hash_updater.hash_rewrite(&initial_circuit, &rewrite);
+        let rewritten_hash = hash_updater.hash_rewrite(&rewrite).unwrap();
         let expected_hash = rewritten_circuit.circuit_hash().unwrap();
         assert_eq!(rewritten_hash, expected_hash);
     }

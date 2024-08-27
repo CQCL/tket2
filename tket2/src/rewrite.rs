@@ -19,7 +19,9 @@ use hugr::{
     SimpleReplacement,
 };
 use hugr::{Hugr, HugrView, Node};
+use strategy::StrategyCost;
 
+use crate::circuit::cost::CircuitCost;
 use crate::circuit::Circuit;
 
 /// A subcircuit of a circuit.
@@ -146,9 +148,27 @@ impl CircuitRewrite {
     }
 }
 
+pub type CostDelta<S> = <<S as StrategyCost>::OpCost as CircuitCost>::CostDelta;
+
 /// Generate rewrite rules for circuits.
 pub trait Rewriter<C> {
     type CircuitRewrite;
+
     /// Get the rewrite rules for a circuit.
     fn get_rewrites(&self, circ: &C) -> Vec<Self::CircuitRewrite>;
+
+    /// Apply a rewrite rule to a circuit.
+    fn apply_rewrite(
+        &self,
+        rw: Self::CircuitRewrite,
+        circ: &C,
+    ) -> Result<C, SimpleReplacementError>;
+
+    /// Get the cost delta for a rewrite rule.
+    fn rewrite_cost_delta<S: StrategyCost>(
+        &self,
+        rw: &Self::CircuitRewrite,
+        circ: &C,
+        strategy: &S,
+    ) -> CostDelta<S>;
 }

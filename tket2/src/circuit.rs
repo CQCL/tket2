@@ -26,6 +26,8 @@ pub use hugr::ops::OpType;
 pub use hugr::types::{EdgeKind, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
 
+use crate::Tk2Op;
+
 use self::units::{filter, LinearUnit, Units};
 
 /// A quantum circuit, represented as a function in a HUGR.
@@ -296,45 +298,21 @@ impl<T: HugrView> Circuit<T> {
     }
 }
 
-pub trait CircuitCostTrait {
-    /// Compute the cost of the circuit based on a per-operation cost function.
-    fn circuit_cost<F, C>(&self, op_cost: F) -> C
+pub trait ToTk2OpIter {
+    type Iter<'a>: Iterator<Item = Tk2Op> + 'a
     where
-        Self: Sized,
-        C: Sum,
-        F: Fn(&OpType) -> C;
+        Self: 'a;
 
-    /// Compute the cost of a group of nodes in a circuit based on a
-    /// per-operation cost function.
-    fn nodes_cost<F, C>(&self, nodes: impl IntoIterator<Item = Node>, op_cost: F) -> C
-    where
-        C: Sum,
-        F: Fn(&OpType) -> C;
+    /// Compute the cost of the circuit based on a per-operation cost function.
+    fn tk2_ops(&self) -> Self::Iter<'_>;
 }
 
-impl<H: HugrView> CircuitCostTrait for Circuit<H> {
-    #[inline]
-    fn circuit_cost<F, C>(&self, op_cost: F) -> C
-    where
-        Self: Sized,
-        C: Sum,
-        F: Fn(&OpType) -> C,
-    {
-        self.commands().map(|cmd| op_cost(cmd.optype())).sum()
-    }
+impl<H: HugrView> ToTk2OpIter for Circuit<H> {
+    type Iter<'a> = Box<dyn Iterator<Item = Tk2Op> + 'a> where Self: 'a;
 
-    /// Compute the cost of a group of nodes in a circuit based on a
-    /// per-operation cost function.
     #[inline]
-    fn nodes_cost<F, C>(&self, nodes: impl IntoIterator<Item = Node>, op_cost: F) -> C
-    where
-        C: Sum,
-        F: Fn(&OpType) -> C,
-    {
-        nodes
-            .into_iter()
-            .map(|n| op_cost(self.hugr.get_optype(n)))
-            .sum()
+    fn tk2_ops(&self) -> Self::Iter<'_> {
+        Box::new(self.commands().map(|cmd| cmd.optype().try_into().unwrap()))
     }
 }
 

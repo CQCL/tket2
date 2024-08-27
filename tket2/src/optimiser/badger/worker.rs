@@ -3,14 +3,15 @@
 use std::thread::{self, JoinHandle};
 
 use crate::circuit::CircuitHash;
-use crate::rewrite::strategy::RewriteStrategy;
+use crate::rewrite::strategy::StrategyCost;
 use crate::rewrite::Rewriter;
+use crate::static_circ::UpdatableHash;
 use crate::{circuit::cost::CircuitCost, Circuit};
 
 use super::hugr_pchannel::{PriorityChannelCommunication, Work};
 
 /// A worker that processes circuits for the Badger optimiser.
-pub struct BadgerWorker<R, S, P: Ord> {
+pub struct BadgerWorker<R, Cost, P: Ord> {
     /// The worker ID.
     #[allow(unused)]
     id: usize,
@@ -19,13 +20,13 @@ pub struct BadgerWorker<R, S, P: Ord> {
     /// The rewriter to use.
     rewriter: R,
     /// The rewrite strategy to use.
-    strategy: S,
+    cost: Cost,
 }
 
-impl<R, S, P> BadgerWorker<R, S, P>
+impl<R, Cost, P> BadgerWorker<R, Cost, P>
 where
-    R: Rewriter<Circuit> + Send + 'static,
-    S: RewriteStrategy<Circuit, R::CircuitRewrite, Cost = P> + Send + 'static,
+    R: Rewriter<Circuit, Cost> + Send + 'static,
+    Cost: StrategyCost + Send + 'static,
     P: CircuitCost + Send + Sync + 'static,
 {
     /// Spawn a new worker thread.
@@ -34,7 +35,7 @@ where
         id: usize,
         priority_channel: PriorityChannelCommunication<P>,
         rewriter: R,
-        strategy: S,
+        strategy: Cost,
     ) -> JoinHandle<()> {
         let name = format!("BadgerWorker-{id}");
         thread::Builder::new()
@@ -44,7 +45,7 @@ where
                     id,
                     priority_channel,
                     rewriter,
-                    strategy,
+                    cost: strategy,
                 };
                 worker.run_loop()
             })
@@ -64,9 +65,9 @@ where
 
             let rewrites = self.rewriter.get_rewrites(&circ);
             let max_cost = self.priority_channel.max_cost();
-            let new_circs = self
-                .strategy
-                .apply_rewrites(rewrites, &circ)
+            let fast_hasher = UpdatableHash::with_static(&circ);
+            let new_circs = rewrites
+                .into_iter()
                 .filter_map(|r| {
                     let new_cost = cost.add_delta(&r.cost_delta);
                     if max_cost.is_some() && &new_cost >= max_cost.as_ref().unwrap() {

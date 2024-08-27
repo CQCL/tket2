@@ -190,15 +190,12 @@ impl CircuitCost for usize {
 }
 
 /// Returns true if the operation is a controlled X operation.
-pub fn is_cx(op: &OpType) -> bool {
-    op_matches(op, Tk2Op::CX)
+pub fn is_cx(op: Tk2Op) -> bool {
+    op == Tk2Op::CX
 }
 
 /// Returns true if the operation is a quantum operation.
-pub fn is_quantum(op: &OpType) -> bool {
-    let Ok(op): Result<Tk2Op, _> = op.try_into() else {
-        return false;
-    };
+pub fn is_quantum(op: Tk2Op) -> bool {
     op.is_quantum()
 }
 

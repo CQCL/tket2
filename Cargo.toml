@@ -7,7 +7,7 @@ members = [
     "tket2",
     # "tket2-py",
     # "compile-rewriter",
-    # "badger-optimiser",
+    "badger-optimiser",
     "tket2-hseries",
 ]
 default-members = ["tket2", "tket2-hseries"]

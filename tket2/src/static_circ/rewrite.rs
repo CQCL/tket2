@@ -50,7 +50,10 @@ impl StaticSubcircuit {
 pub struct InvalidSubcircuitError;
 
 impl StaticSizeCircuit {
-    fn subcircuit(&self, subcircuit: &StaticSubcircuit) -> Result<Self, InvalidSubcircuitError> {
+    pub fn subcircuit(
+        &self,
+        subcircuit: &StaticSubcircuit,
+    ) -> Result<Self, InvalidSubcircuitError> {
         let Self {
             mut qubit_ops,
             mut op_locations,

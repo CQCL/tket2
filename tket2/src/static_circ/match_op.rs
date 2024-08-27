@@ -1,6 +1,8 @@
 use hugr::ops::{CustomOp, NamedOp, OpType};
 use smol_str::SmolStr;
 
+use crate::Tk2Op;
+
 /// Matchable operations in a circuit.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
 pub struct MatchOp {
@@ -26,6 +28,13 @@ impl From<OpType> for MatchOp {
         let op_name = op.name();
         let encoded = encode_op(op);
         Self { op_name, encoded }
+    }
+}
+
+impl From<MatchOp> for OpType {
+    fn from(op: MatchOp) -> Self {
+        let op: Tk2Op = op.op_name.into();
+        op.into()
     }
 }
 
