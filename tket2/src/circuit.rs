@@ -9,7 +9,7 @@ pub mod units;
 use std::iter::Sum;
 
 pub use command::{Command, CommandIterator};
-pub use hash::CircuitHash;
+pub use hash::{CircuitHash, HashError};
 use hugr::hugr::views::{DescendantsGraph, ExtractHugr, HierarchyView};
 use itertools::Either::{Left, Right};
 
