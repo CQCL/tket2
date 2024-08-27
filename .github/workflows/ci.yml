@@ -97,7 +97,7 @@ jobs:
           restore-keys: |
             uv-${{ runner.os }}
       - name: Setup dependencies
-        run: uv sync
+        run: uv sync --locked
       - name: Type check with mypy
         run: uv run mypy .
       - name: Check formatting with ruff
@@ -247,7 +247,7 @@ jobs:
           restore-keys: |
             uv-${{ runner.os }}
       - name: Setup dependencies
-        run: uv sync
+        run: uv sync --locked
       - name: Run python tests with coverage instrumentation
         run: uv run pytest --cov=./ --cov-report=xml
       - name: Upload coverage output artifact
