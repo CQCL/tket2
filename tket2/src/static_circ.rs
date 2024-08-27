@@ -6,7 +6,12 @@ mod rewrite;
 
 pub use rewrite::{BoxedStaticRewrite, StaticRewrite};
 
-use std::{collections::BTreeMap, fmt, rc::Rc};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, BTreeSet},
+    fmt, mem,
+    rc::Rc,
+};
 
 use hugr::{Direction, HugrView, Port, PortIndex};
 pub(crate) use match_op::MatchOp;
@@ -35,7 +40,7 @@ type MatchOpPtr = *const MatchOp;
 /// The location of an operation in a `StaticSizeCircuit`.
 ///
 /// Given by the qubit index and the position within that qubit's op list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OpLocation {
     /// The index of the qubit the operation acts on.
     pub qubit: StaticQubitIndex,
@@ -44,7 +49,7 @@ pub struct OpLocation {
 }
 
 impl OpLocation {
-    pub fn try_add_op_idx(self, op_idx: isize) -> Option<Self> {
+    pub(crate) fn try_add_op_idx(self, op_idx: isize) -> Option<Self> {
         Some(Self {
             op_idx: self.op_idx.checked_add_signed(op_idx)?,
             ..self
@@ -80,7 +85,7 @@ impl StaticSizeCircuit {
         &self.qubit_ops[qubit.0]
     }
 
-    fn get_rc(&self, loc: OpLocation) -> Option<&Rc<MatchOp>> {
+    pub(crate) fn get_rc(&self, loc: OpLocation) -> Option<&Rc<MatchOp>> {
         self.qubit_ops.get(loc.qubit.0)?.get(loc.op_idx)
     }
 
@@ -117,9 +122,11 @@ impl StaticSizeCircuit {
     }
 
     pub fn all_locations(&self) -> impl Iterator<Item = OpLocation> + '_ {
-        self.qubits_iter().flat_map(|qb| {
-            (0..self.qubit_ops(qb).len()).map(move |op_idx| OpLocation { qubit: qb, op_idx })
-        })
+        self.qubits_iter().flat_map(|qb| self.qubit_locations(qb))
+    }
+
+    pub fn qubit_locations(&self, qb: StaticQubitIndex) -> impl Iterator<Item = OpLocation> {
+        (0..self.qubit_ops(qb).len()).map(move |op_idx| OpLocation { qubit: qb, op_idx })
     }
 
     /// Returns the location and port of the operation linked to the given
@@ -181,6 +188,95 @@ impl StaticSizeCircuit {
     #[allow(unused)]
     fn all_ops_iter(&self) -> impl Iterator<Item = &Rc<MatchOp>> {
         self.qubit_ops.iter().flat_map(|ops| ops.iter())
+    }
+
+    /// Add `other` on a new set of qubits.
+    pub fn add_subcircuit(
+        &mut self,
+        other: &Self,
+        ops: &BTreeSet<MatchOpPtr>,
+    ) -> BTreeMap<OpLocation, OpLocation> {
+        // The new qubits to append to self
+        let mut append_qubit_ops = Vec::new();
+        // The current new qubit being added
+        let mut new_qubit_ops = Vec::new();
+        // Map from locations in `other` to new locations in (future) `self`
+        let mut op_location_map = BTreeMap::new();
+
+        for qb in other.qubits_iter() {
+            for other_loc in other.qubit_locations(qb) {
+                let op = other.get_rc(other_loc).unwrap();
+                let new_qubit_idx = StaticQubitIndex(self.qubit_count() + append_qubit_ops.len());
+                let new_op_idx = new_qubit_ops.len();
+                if ops.contains(&Rc::as_ptr(op)) {
+                    new_qubit_ops.push(op.clone());
+                    op_location_map.insert(
+                        other_loc,
+                        OpLocation {
+                            qubit: new_qubit_idx,
+                            op_idx: new_op_idx,
+                        },
+                    );
+                } else {
+                    if !new_qubit_ops.is_empty() {
+                        append_qubit_ops.push(mem::take(&mut new_qubit_ops));
+                    }
+                }
+            }
+            if !new_qubit_ops.is_empty() {
+                append_qubit_ops.push(mem::take(&mut new_qubit_ops));
+            }
+        }
+
+        self.qubit_ops.extend(append_qubit_ops);
+        dbg!(&op_location_map);
+        self.op_locations
+            .extend(other.op_locations.iter().filter_map(|(op, locs)| {
+                Some((
+                    *op,
+                    locs.iter()
+                        .map(|loc| op_location_map.get(loc).cloned())
+                        .collect::<Option<Vec<_>>>()?,
+                ))
+            }));
+        op_location_map
+    }
+
+    pub(crate) fn merge_qubits(
+        &mut self,
+        StaticQubitIndex(mut left_qubit): StaticQubitIndex,
+        StaticQubitIndex(right_qubit): StaticQubitIndex,
+    ) -> StaticQubitIndex {
+        assert_ne!(left_qubit, right_qubit);
+
+        let left_offset = self.qubit_ops[left_qubit].len();
+
+        // Append right qubit ops to left qubit
+        let right_ops = mem::take(&mut self.qubit_ops[right_qubit]);
+        self.qubit_ops[left_qubit].extend(right_ops);
+        self.qubit_ops.remove(right_qubit);
+
+        if left_qubit > right_qubit {
+            left_qubit -= 1;
+        }
+
+        // Update op locations
+        // TODO: check if this preserves convexity
+        for ops in self.op_locations.values_mut() {
+            for op in ops.iter_mut() {
+                match op.qubit.0.cmp(&right_qubit) {
+                    Ordering::Equal => {
+                        op.qubit = StaticQubitIndex(left_qubit);
+                        op.op_idx += left_offset;
+                    }
+                    Ordering::Greater => {
+                        op.qubit = StaticQubitIndex(op.qubit.0 - 1);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        StaticQubitIndex(left_qubit)
     }
 }
 
@@ -311,6 +407,8 @@ impl RemoveEmptyWire for StaticSizeCircuit {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use hugr::Port;
     use portgraph::PortOffset;
     use rstest::rstest;
@@ -382,5 +480,64 @@ mod tests {
 
         // Check if the linked operation is correct
         assert_eq!(linked_op_location, expected_loc);
+    }
+
+    #[test]
+    fn test_add_subcircuit() {
+        // Create a main circuit
+        let main_circuit = build_simple_circuit(3, |circ| {
+            circ.append(Tk2Op::H, [0])?;
+            circ.append(Tk2Op::CX, [0, 1])?;
+            Ok(())
+        })
+        .unwrap();
+        let mut main_circuit: StaticSizeCircuit = (&main_circuit).try_into().unwrap();
+
+        // Create a subcircuit
+        let sub_circuit = build_simple_circuit(2, |circ| {
+            circ.append(Tk2Op::X, [0])?;
+            circ.append(Tk2Op::X, [0])?;
+            circ.append(Tk2Op::X, [0])?;
+            circ.append(Tk2Op::Y, [1])?;
+            Ok(())
+        })
+        .unwrap();
+        let sub_circuit: StaticSizeCircuit = (&sub_circuit).try_into().unwrap();
+
+        // Define the nodes to add from the subcircuit
+        let nodes = BTreeSet::from_iter(
+            [
+                OpLocation {
+                    qubit: 0.into(),
+                    op_idx: 0,
+                },
+                OpLocation {
+                    qubit: 0.into(),
+                    op_idx: 2,
+                },
+                OpLocation {
+                    qubit: 1.into(),
+                    op_idx: 0,
+                },
+            ]
+            .into_iter()
+            .map(|loc| sub_circuit.get_ptr(loc).unwrap()),
+        );
+
+        // Add the subcircuit to the main circuit
+        let node_map = main_circuit.add_subcircuit(&sub_circuit, &nodes);
+
+        // Check if the nodes were added correctly
+        assert_eq!(node_map.len(), 3);
+
+        // Three original qubits + first new qubit split into two + second new qubit
+        assert_eq!(main_circuit.qubit_count(), 6);
+
+        // Check if the operations were added to the main circuit
+        assert_eq!(main_circuit.qubit_ops(3.into()).len(), 1); // First X gate
+        assert_eq!(main_circuit.qubit_ops(4.into()).len(), 1); // Second X gate
+        assert_eq!(main_circuit.qubit_ops(5.into()).len(), 1); // Y gate
+
+        insta::assert_debug_snapshot!(main_circuit);
     }
 }

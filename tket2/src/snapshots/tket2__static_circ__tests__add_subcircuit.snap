@@ -1,0 +1,37 @@
+---
+source: tket2/src/static_circ.rs
+expression: main_circuit
+---
+StaticSizeCircuit {
+    qubit_ops: [
+        [
+            MatchOp {
+                op_name: "quantum.tket2.H",
+            },
+            MatchOp {
+                op_name: "quantum.tket2.CX",
+            },
+        ],
+        [
+            MatchOp {
+                op_name: "quantum.tket2.CX",
+            },
+        ],
+        [],
+        [
+            MatchOp {
+                op_name: "quantum.tket2.X",
+            },
+        ],
+        [
+            MatchOp {
+                op_name: "quantum.tket2.X",
+            },
+        ],
+        [
+            MatchOp {
+                op_name: "quantum.tket2.Y",
+            },
+        ],
+    ],
+}

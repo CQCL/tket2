@@ -56,6 +56,9 @@ pub mod static_circ;
 #[cfg(feature = "portmatching")]
 pub mod portmatching;
 
+#[cfg(feature = "portmatching")]
+pub mod portdiff;
+
 mod utils;
 
 pub use circuit::{Circuit, CircuitError, CircuitMutError};

@@ -4,7 +4,7 @@ pub use pattern::PatternOpLocation;
 
 use std::collections::{BTreeMap, VecDeque};
 
-use pattern::CircuitPath;
+pub(crate) use pattern::CircuitPath;
 use portmatching::indexing as pmx;
 
 use crate::static_circ::{OpLocation, StaticSizeCircuit};
@@ -13,17 +13,45 @@ use crate::static_circ::{OpLocation, StaticSizeCircuit};
 #[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
 pub struct StaticIndexScheme;
 
-/// A 2d map taking `PatternOpLocation`s as keys.
+/// A map taking pairs (K, isize) as keys, where the isize is expected to
+/// be within a contiguous range of indices.
 #[derive(Clone)]
-pub struct Map<V>(BTreeMap<CircuitPath, (usize, VecDeque<Option<V>>)>);
+pub struct OpLocationMap<K, V>(BTreeMap<K, (usize, VecDeque<Option<V>>)>);
 
-impl<V: Clone> Default for Map<V> {
+impl<K: Ord, V: Clone> OpLocationMap<K, V> {
+    pub fn get_val(&self, key: &K, idx: isize) -> Option<&V> {
+        let (offset, vec) = self.0.get(key)?;
+        let idx = offset.checked_add_signed(idx)?;
+        vec.get(idx)?.as_ref()
+    }
+
+    pub fn set_val(&mut self, key: K, idx: isize, val: V) {
+        let (offset, vec) = self.0.entry(key).or_default();
+        while offset.checked_add_signed(idx).is_none() {
+            vec.push_front(None);
+            *offset += 1;
+        }
+        let idx = offset.checked_add_signed(idx).unwrap();
+        if vec.len() <= idx {
+            vec.resize(idx + 1, None);
+        }
+        vec[idx] = Some(val);
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &V> {
+        self.0
+            .values()
+            .flat_map(|(_, vec)| vec.iter().filter_map(|v| v.as_ref()))
+    }
+}
+
+impl<K, V: Clone> Default for OpLocationMap<K, V> {
     fn default() -> Self {
         Self(BTreeMap::new())
     }
 }
 
-impl<V: pmx::IndexValue> pmx::IndexMap for Map<V> {
+impl<V: pmx::IndexValue> pmx::IndexMap for OpLocationMap<CircuitPath, V> {
     type Key = PatternOpLocation;
 
     type Value = V;
@@ -34,9 +62,7 @@ impl<V: pmx::IndexValue> pmx::IndexMap for Map<V> {
 
     fn get(&self, var: &Self::Key) -> Option<Self::ValueRef<'_>> {
         let PatternOpLocation { qubit, op_idx } = var;
-        let (offset, vec) = self.0.get(qubit)?;
-        let idx = offset.checked_add_signed(*op_idx as isize)?;
-        vec.get(idx)?.as_ref()
+        self.get_val(&qubit, *op_idx as isize)
     }
 
     fn bind(&mut self, var: Self::Key, val: Self::Value) -> Result<(), pmx::BindVariableError> {
@@ -49,26 +75,17 @@ impl<V: pmx::IndexValue> pmx::IndexMap for Map<V> {
         }
 
         let PatternOpLocation { qubit, op_idx } = var;
-        let (offset, vec) = self.0.entry(qubit).or_default();
-        while offset.checked_add_signed(op_idx as isize).is_none() {
-            vec.push_front(None);
-            *offset += 1;
-        }
-        let idx = offset.checked_add_signed(op_idx as isize).unwrap();
-        if vec.len() <= idx {
-            vec.resize(idx + 1, None);
-        }
-        vec[idx] = Some(val);
+        self.set_val(qubit, op_idx as isize, val);
         Ok(())
     }
 }
 
 impl pmx::IndexingScheme<StaticSizeCircuit> for StaticIndexScheme {
-    type Map = Map<OpLocation>;
+    type Map = OpLocationMap<CircuitPath, OpLocation>;
 
     fn valid_bindings(
         &self,
-        key: &pmx::Key<Self, StaticSizeCircuit>,
+        key: &PatternOpLocation,
         known_bindings: &Self::Map,
         data: &StaticSizeCircuit,
     ) -> pmx::BindingResult<Self, StaticSizeCircuit> {
@@ -79,7 +96,6 @@ impl pmx::IndexingScheme<StaticSizeCircuit> for StaticIndexScheme {
         } else if key.op_idx != 0 {
             // Can only bind if the idx 0 is bound.
             if let Some(root) = get_known(&key.with_op_idx(0)) {
-                dbg!(&root);
                 let Some(loc) = root.try_add_op_idx(key.op_idx as isize) else {
                     return Ok(vec![].into());
                 };
@@ -93,7 +109,7 @@ impl pmx::IndexingScheme<StaticSizeCircuit> for StaticIndexScheme {
             }
         } else {
             // Bind first op on a new qubit
-            if key.qubit.is_root() {
+            if key.qubit.is_empty() {
                 // It is the root of the pattern, all locations are valid
                 Ok(Vec::from_iter(data.all_locations()).into())
             } else {

@@ -17,8 +17,8 @@ use thiserror::Error;
 /// to be discovered when traversing the pattern.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct PatternOpLocation {
-    pub(super) qubit: CircuitPath,
-    pub(super) op_idx: i8,
+    pub(crate) qubit: CircuitPath,
+    pub(crate) op_idx: i8,
 }
 
 impl PartialOrd for PatternOpLocation {
@@ -56,6 +56,27 @@ impl PatternOpLocation {
         let loc = new_root.try_add_op_idx(op_idx as isize)?;
         circ.get(loc).map(|_| loc)
     }
+
+    pub(crate) fn all_locations_on_path(&self) -> Vec<PatternOpLocation> {
+        let prefix = if self.op_idx == 0 {
+            if self.qubit.is_empty() {
+                return vec![PatternOpLocation::new(CircuitPath::empty_path(), 0)];
+            }
+            Self {
+                qubit: self.qubit.truncate(self.qubit.len() - 1),
+                op_idx: self.qubit.op_offset(self.qubit.len() - 1),
+            }
+        } else {
+            let step = if self.op_idx > 0 { 1 } else { -1 };
+            Self {
+                op_idx: self.op_idx - step,
+                ..*self
+            }
+        };
+        let mut res = prefix.all_locations_on_path();
+        res.push(*self);
+        res
+    }
 }
 
 #[derive(Debug, Error)]
@@ -71,7 +92,7 @@ impl StaticSizeCircuit {
         &self,
     ) -> Result<Vec<(CircuitPath, usize)>, DisconnectedCircuit> {
         let mut qubit_starts = vec![None; self.qubit_count()];
-        qubit_starts[0] = Some((CircuitPath::root(), 0));
+        qubit_starts[0] = Some((CircuitPath::empty_path(), 0));
         let mut next_qubits = VecDeque::from_iter([StaticQubitIndex(0)]);
 
         while let Some(qubit) = next_qubits.pop_front() {
@@ -106,22 +127,28 @@ const MAX_PATH_LEN: usize = 8;
 /// corresponding to moving op_offset along the current qubit and then changing
 /// the current qubit to the qubit at the given port.
 ///
-/// Odd items are op_offsets, even items are ports. Ports are always positive.
+/// Even items are op_offsets, odd items are ports. Ports are always positive.
 #[derive(
     Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, serde::Serialize, serde::Deserialize,
 )]
-pub(crate) struct CircuitPath([i8; MAX_PATH_LEN * 2]);
+pub struct CircuitPath([i8; MAX_PATH_LEN * 2]);
 
 impl CircuitPath {
+    fn new(path: &[i8]) -> Self {
+        let mut new_path = Self::empty_path();
+        new_path.0[..path.len()].copy_from_slice(path);
+        new_path
+    }
+
     fn resolve(&self, circ: &StaticSizeCircuit, root: OpLocation) -> Option<OpLocation> {
         get_qubit_root(circ, &self.0, root)
     }
 
-    pub(super) fn is_root(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    fn root() -> Self {
+    fn empty_path() -> Self {
         Self([0; MAX_PATH_LEN * 2])
     }
 
@@ -139,6 +166,20 @@ impl CircuitPath {
         new_path.0[ind] = op_offset;
         new_path.0[ind + 1] = port;
         new_path
+    }
+
+    fn truncate(&self, n: usize) -> Self {
+        let mut new_path = Self::empty_path();
+        new_path.0[..(2 * n)].copy_from_slice(&self.0[..(2 * n)]);
+        new_path
+    }
+
+    fn op_offset(&self, n: usize) -> i8 {
+        self.0[2 * n]
+    }
+
+    fn port(&self, n: usize) -> i8 {
+        self.0[2 * n + 1]
     }
 }
 
@@ -212,8 +253,7 @@ mod tests {
         // Convert the circuit to StaticSizeCircuit
         let static_circuit: StaticSizeCircuit = (&circuit).try_into().unwrap();
 
-        let mut path = CircuitPath::default();
-        path.0[..path_elements.len()].copy_from_slice(&path_elements);
+        let path = CircuitPath::new(&path_elements);
 
         assert_eq!(path.resolve(&static_circuit, root), expected);
     }
@@ -233,12 +273,63 @@ mod tests {
         let static_circuit: StaticSizeCircuit = (&circuit).try_into().unwrap();
         let starts = static_circuit.find_qubit_starts().unwrap();
 
-        let path = CircuitPath::root();
+        let path = CircuitPath::empty_path();
         assert_eq!(starts.len(), 3);
-        assert_eq!(starts[0], (CircuitPath::root(), 0));
+        assert_eq!(starts[0], (CircuitPath::empty_path(), 0));
         let path = path.append(1, 1);
         assert_eq!(starts[1], (path, 0));
         let path = path.append(2, 0);
         assert_eq!(starts[2], (path, 1));
+    }
+
+    #[rstest]
+    #[case(
+        PatternOpLocation::new(CircuitPath::empty_path(), 0),
+        vec![PatternOpLocation::new(CircuitPath::empty_path(), 0)]
+    )]
+    #[case(
+        PatternOpLocation::new(CircuitPath::empty_path(), 1),
+        vec![
+            PatternOpLocation::new(CircuitPath::empty_path(), 0),
+            PatternOpLocation::new(CircuitPath::empty_path(), 1)
+        ]
+    )]
+    #[case(
+        PatternOpLocation::new(CircuitPath::new(&[1, 0]), 0),
+        vec![
+            PatternOpLocation::new(CircuitPath::empty_path(), 0),
+            PatternOpLocation::new(CircuitPath::empty_path(), 1),
+            PatternOpLocation::new(CircuitPath::new(&[1, 0]), 0)
+        ]
+    )]
+    #[case(
+        PatternOpLocation::new(CircuitPath::new(&[-1, 1]), 2),
+        vec![
+            PatternOpLocation::new(CircuitPath::empty_path(), 0),
+            PatternOpLocation::new(CircuitPath::empty_path(), -1),
+            PatternOpLocation::new(CircuitPath::new(&[-1, 1]), 0),
+            PatternOpLocation::new(CircuitPath::new(&[-1, 1]), 1),
+            PatternOpLocation::new(CircuitPath::new(&[-1, 1]), 2)
+        ]
+    )]
+    #[case(
+        PatternOpLocation::new(CircuitPath::new(&[1, 0, 2, 1]), 2),
+        vec![
+            PatternOpLocation::new(CircuitPath::empty_path(), 0),
+            PatternOpLocation::new(CircuitPath::empty_path(), 1),
+            PatternOpLocation::new(CircuitPath::new(&[1, 0]), 0),
+            PatternOpLocation::new(CircuitPath::new(&[1, 0]), 1),
+            PatternOpLocation::new(CircuitPath::new(&[1, 0]), 2),
+            PatternOpLocation::new(CircuitPath::new(&[1, 0, 2, 1]), 0),
+            PatternOpLocation::new(CircuitPath::new(&[1, 0, 2, 1]), 1),
+            PatternOpLocation::new(CircuitPath::new(&[1, 0, 2, 1]), 2)
+        ]
+    )]
+    fn test_all_locations_on_path(
+        #[case] input: PatternOpLocation,
+        #[case] expected: Vec<PatternOpLocation>,
+    ) {
+        let result = input.all_locations_on_path();
+        assert_eq!(result, expected, "Failed for input: {:?}", input);
     }
 }
