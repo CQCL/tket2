@@ -38,6 +38,7 @@ in
     export LLVM_PROFDATA="${pkgs.llvmPackages_16.libllvm}/bin/llvm-profdata"
 
     just setup
+    source .venv/bin/activate
   '';
 
   # https://devenv.sh/languages/
