@@ -46,7 +46,7 @@ jobs:
 
       - name: Set up uv
         if: ${{ steps.check-tag.outputs.run == 'true' }}
-        run: curl -LsSf https://astral.sh/uv/0.3.2/install.sh | sh
+        run: curl -LsSf https://astral.sh/uv/0.3.4/install.sh | sh
       - name: Set up Python
         if: ${{ steps.check-tag.outputs.run == 'true' }}
         uses: actions/setup-python@v5
