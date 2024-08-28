@@ -42,7 +42,7 @@ impl<'circ, T: HugrView> Command<'circ, T> {
 
     /// Returns the [`OpType`] of the command.
     #[inline]
-    pub fn optype(&self) -> &OpType {
+    pub fn optype(&self) -> &'circ OpType {
         self.circ.hugr().get_optype(self.node)
     }
 
