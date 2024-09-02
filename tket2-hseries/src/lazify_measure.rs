@@ -20,6 +20,7 @@ use hugr::{
     types::Signature,
     Hugr, HugrView, IncomingPort, Node, OutgoingPort, SimpleReplacement,
 };
+use itertools::Itertools as _;
 use thiserror::Error;
 use tket2::Tk2Op;
 
@@ -179,11 +180,12 @@ fn simple_replace_measure(
         .unwrap();
     // A map from (target ports of edges from nodes in `removal` to nodes not in `removal`) to
     // (input ports of the Output node of `replacement`).
-    let mut nu_out: HashMap<_, _> = [((target_node, target_port), IncomingPort::from(0))]
-        .into_iter()
-        .collect();
+    let mut nu_out = HashMap::from_iter([((target_node, target_port), IncomingPort::from(0))]);
+    let mut measure_result_inputs = hugr.linked_inputs(node, OutgoingPort::from(1)).collect_vec();
+    measure_result_inputs.sort();
     nu_out.extend(
-        hugr.linked_inputs(node, OutgoingPort::from(1))
+        measure_result_inputs
+            .into_iter()
             .enumerate()
             .map(|(i, target)| (target, IncomingPort::from(i + 1))),
     );
