@@ -1,7 +1,8 @@
-//! This module defines the Hugr extension used to represent Lazy Quantum
-//! Operations.
+//! This module defines the Hugr extension used to represent H-series
+//! quantum operations.
 //!
-//! Laziness is represented by returning `tket2.futures.Future` classical
+//! In the case of lazy operations,
+//! laziness is represented by returning `tket2.futures.Future` classical
 //! values. Qubits are never lazy.
 use hugr::{
     builder::{BuildError, Dataflow},
@@ -127,7 +128,7 @@ impl TryFrom<&OpType> for HSeriesOp {
 
 /// An extension trait for [Dataflow] providing methods to add
 /// "tket2.hseries" operations.
-pub trait LazyQuantumOpBuilder: Dataflow {
+pub trait HSeriesOpBuilder: Dataflow {
     /// Add a "tket2.hseries.LazyMeasure" op.
     fn add_lazy_measure(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
@@ -199,7 +200,7 @@ pub trait LazyQuantumOpBuilder: Dataflow {
     }
 }
 
-impl<D: Dataflow> LazyQuantumOpBuilder for D {}
+impl<D: Dataflow> HSeriesOpBuilder for D {}
 
 #[cfg(test)]
 mod test {

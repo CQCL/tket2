@@ -27,7 +27,7 @@ use lazy_static::lazy_static;
 
 use crate::extension::{
     futures::FutureOpBuilder,
-    hseries::{self, LazyQuantumOpBuilder},
+    hseries::{self, HSeriesOpBuilder},
 };
 
 /// A `Hugr -> Hugr` pass that replaces [tket2::Tk2Op::Measure] nodes with
