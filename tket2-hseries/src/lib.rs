@@ -12,7 +12,7 @@ use tket2::Tk2Op;
 
 use thiserror::Error;
 
-use extension::{futures::FutureOpDef, quantum_lazy::HSeriesOp};
+use extension::{futures::FutureOpDef, hseries::HSeriesOp};
 use lazify_measure::{LazifyMeasurePass, LazifyMeasurePassError};
 
 pub mod extension;

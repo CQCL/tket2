@@ -27,7 +27,7 @@ use lazy_static::lazy_static;
 
 use crate::extension::{
     futures::FutureOpBuilder,
-    quantum_lazy::{self, LazyQuantumOpBuilder},
+    hseries::{self, LazyQuantumOpBuilder},
 };
 
 /// A `Hugr -> Hugr` pass that replaces [tket2::Tk2Op::Measure] nodes with
@@ -116,7 +116,7 @@ lazy_static! {
         let [qb, lazy_r] = builder.add_lazy_measure(qb).unwrap();
         let [r] = builder.add_read(lazy_r, BOOL_T).unwrap();
         builder
-            .finish_hugr_with_outputs([qb, r], &quantum_lazy::REGISTRY)
+            .finish_hugr_with_outputs([qb, r], &hseries::REGISTRY)
             .unwrap()
     };
 }
@@ -148,7 +148,7 @@ fn measure_replacement(num_dups: usize) -> Hugr {
     assert_eq!(num_out_types, rs.len());
     assert_eq!(num_out_types, num_dups + 1);
     builder
-        .finish_hugr_with_outputs(rs, &quantum_lazy::REGISTRY)
+        .finish_hugr_with_outputs(rs, &hseries::REGISTRY)
         .unwrap()
 }
 
@@ -226,14 +226,14 @@ mod test {
 
     use crate::extension::{
         futures::{self, FutureOpDef},
-        quantum_lazy::HSeriesOp,
+        hseries::HSeriesOp,
     };
 
     use super::*;
 
     lazy_static! {
         pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
-            quantum_lazy::EXTENSION.to_owned(),
+            hseries::EXTENSION.to_owned(),
             futures::EXTENSION.to_owned(),
             TKET2_EXTENSION.to_owned(),
             PRELUDE.to_owned(),
