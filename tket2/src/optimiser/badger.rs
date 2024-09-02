@@ -566,9 +566,9 @@ mod tests {
         let f1 = inps.next().unwrap();
         let f2 = inps.next().unwrap();
 
-        let res = h.add_dataflow_op(Tk2Op::RzF64, [qb, f1]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rz, [qb, f1]).unwrap();
         let qb = res.outputs().next().unwrap();
-        let res = h.add_dataflow_op(Tk2Op::RzF64, [qb, f2]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rz, [qb, f2]).unwrap();
         let qb = res.outputs().next().unwrap();
 
         h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap().into()
@@ -643,7 +643,7 @@ mod tests {
 
         // Rzs combined into a single one.
         assert_eq!(op1.cast::<FloatOps>(), Some(FloatOps::fadd));
-        assert!(op_matches(op2, Tk2Op::RzF64));
+        assert!(op_matches(op2, Tk2Op::Rz));
     }
 
     #[rstest]

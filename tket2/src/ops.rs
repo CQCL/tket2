@@ -51,8 +51,8 @@ pub enum Tk2Op {
     Tdg,
     Sdg,
     Measure,
-    RzF64,
-    RxF64,
+    Rz,
+    Rx,
     CZ,
     TK1,
     QAlloc,
@@ -114,7 +114,7 @@ impl MakeOpDef for Tk2Op {
             }
             CX | CZ => Signature::new(two_qb_row.clone(), two_qb_row),
             Measure => Signature::new(one_qb_row, type_row![QB_T, BOOL_T]),
-            RzF64 | RxF64 => Signature::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
+            Rz | Rx => Signature::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
             TK1 => Signature::new(
                 type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE, FLOAT64_TYPE],
                 one_qb_row,
@@ -156,9 +156,9 @@ impl Tk2Op {
         use Tk2Op::*;
 
         match self {
-            X | RxF64 => vec![(0, Pauli::X)],
+            X | Rx => vec![(0, Pauli::X)],
             Y => vec![(0, Pauli::Y)],
-            T | Z | S | Tdg | Sdg | RzF64 | Measure => vec![(0, Pauli::Z)],
+            T | Z | S | Tdg | Sdg | Rz | Measure => vec![(0, Pauli::Z)],
             CX => vec![(0, Pauli::Z), (1, Pauli::X)],
             CZ => vec![(0, Pauli::Z), (1, Pauli::Z)],
             // by default, no commutation
@@ -170,7 +170,7 @@ impl Tk2Op {
     pub fn is_quantum(&self) -> bool {
         use Tk2Op::*;
         match self {
-            H | CX | T | S | X | Y | Z | Tdg | Sdg | RzF64 | RxF64 | CZ | TK1 => true,
+            H | CX | T | S | X | Y | Z | Tdg | Sdg | Rz | Rx | CZ | TK1 => true,
             Measure | QAlloc | QFree | Reset => false,
         }
     }

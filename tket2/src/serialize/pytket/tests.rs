@@ -201,7 +201,7 @@ fn circ_add_angles_symbolic() -> Circuit {
         .unwrap()
         .outputs_arr();
     let [qb] = h
-        .add_dataflow_op(Tk2Op::RxF64, [qb, f12])
+        .add_dataflow_op(Tk2Op::Rx, [qb, f12])
         .unwrap()
         .outputs_arr();
 
@@ -223,7 +223,7 @@ fn circ_add_angles_constants() -> Circuit {
         .out_wire(0);
 
     let qbs = h
-        .add_dataflow_op(Tk2Op::RxF64, [qb, point5])
+        .add_dataflow_op(Tk2Op::Rx, [qb, point5])
         .unwrap()
         .outputs();
     h.finish_hugr_with_outputs(qbs, &REGISTRY).unwrap().into()

@@ -54,7 +54,7 @@ fn map_op(opstr: &str) -> Op {
         "z" => Tk2Op::Z,
         "tdg" => Tk2Op::Tdg,
         "sdg" => Tk2Op::Sdg,
-        "rz" => Tk2Op::RzF64,
+        "rz" => Tk2Op::Rz,
         x => panic!("unknown op {x}"),
     }
     .into()

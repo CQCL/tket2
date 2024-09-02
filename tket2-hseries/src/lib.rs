@@ -132,7 +132,7 @@ mod test {
 
             // depending on the angle means this op can't be lifted above the float ops
             let [qb] = builder
-                .add_dataflow_op(Tk2Op::RxF64, [qb, angle])
+                .add_dataflow_op(Tk2Op::Rx, [qb, angle])
                 .unwrap()
                 .outputs_arr();
             let rx_node = qb.node();

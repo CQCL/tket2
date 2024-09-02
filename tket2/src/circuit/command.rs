@@ -593,9 +593,7 @@ mod test {
 
         let constant = h.add_constant(Value::extension(ConstF64::new(0.5)));
         let loaded_const = h.load_const(&constant);
-        let rz = h
-            .add_dataflow_op(Tk2Op::RzF64, [q_in, loaded_const])
-            .unwrap();
+        let rz = h.add_dataflow_op(Tk2Op::Rz, [q_in, loaded_const]).unwrap();
 
         let circ: Circuit = h
             .finish_hugr_with_outputs(rz.outputs(), &FLOAT_OPS_REGISTRY)
@@ -619,7 +617,7 @@ mod test {
         // It has a single input and a single output.
         let load_const_cmd = commands.next().unwrap();
         let load_const_node = load_const_cmd.node();
-        assert_eq!(load_const_cmd.optype().name().as_str(), "LoadConstant");
+        assert!(load_const_cmd.optype().is_load_constant());
         assert_eq_iter!(
             load_const_cmd.inputs().map(|(u, _, _)| u),
             [CircuitUnit::Wire(Wire::new(constant.node(), 0))],
@@ -632,7 +630,7 @@ mod test {
         // Finally, the rz command.
         // It has the qubit and loaded constant as input and a single output.
         let rz_cmd = commands.next().unwrap();
-        assert_eq!(rz_cmd.optype().name().as_str(), "quantum.tket2.RzF64");
+        assert_eq!(rz_cmd.optype().cast(), Some(Tk2Op::Rz));
         assert_eq_iter!(
             rz_cmd.inputs().map(|(u, _, _)| u),
             [

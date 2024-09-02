@@ -196,9 +196,9 @@ mod tests {
         let qb = inps.next().unwrap();
         let f = inps.next().unwrap();
 
-        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb, f]).unwrap();
         let qb = res.outputs().next().unwrap();
-        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb, f]).unwrap();
         let qb = res.outputs().next().unwrap();
 
         h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap().into()
@@ -215,9 +215,9 @@ mod tests {
         let qb2 = inps.next().unwrap();
         let f = inps.next().unwrap();
 
-        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb1, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb1, f]).unwrap();
         let qb1 = res.outputs().next().unwrap();
-        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb2, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb2, f]).unwrap();
         let qb2 = res.outputs().next().unwrap();
 
         h.finish_hugr_with_outputs([qb1, qb2], &REGISTRY)
@@ -293,7 +293,7 @@ mod tests {
         let circ = circ_with_copy();
         let pattern = CircuitPattern::try_from_circuit(&circ).unwrap();
         let edges = pattern.pattern.edges().unwrap();
-        let rx_ns = get_nodes_by_tk2op(&circ, Tk2Op::RxF64);
+        let rx_ns = get_nodes_by_tk2op(&circ, Tk2Op::Rx);
         let inp = circ.input_node();
         for rx_n in rx_ns {
             assert!(edges.iter().any(|e| {
