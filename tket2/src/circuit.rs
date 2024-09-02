@@ -188,7 +188,9 @@ impl<T: HugrView> Circuit<T> {
         while let Some(node) = roots.pop() {
             for child in self.hugr().children(node) {
                 let optype = self.hugr().get_optype(child);
-                if optype.is_extension_op() && !IGNORED_EXTENSION_OPS.contains(&optype.name()) {
+                if matches!(optype, OpType::ExtensionOp(_) | OpType::OpaqueOp(_))
+                    && !IGNORED_EXTENSION_OPS.contains(&optype.name())
+                {
                     count += 1;
                 } else if OpTag::DataflowParent.is_superset(optype.tag()) {
                     roots.push(child);

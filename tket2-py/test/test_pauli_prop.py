@@ -4,11 +4,10 @@ import pytest
 from pytket._tket.circuit import Circuit
 
 from hugr.ops import Custom
-from hugr.node_port import Wire
+from hugr.hugr import Wire
 from tket2.circuit import (
     Tk2Circuit,
     Node as Tk2Node,
-    render_circuit_mermaid,
 )
 from tket2.circuit.build import (
     CircBuild,
@@ -133,7 +132,7 @@ def final_pauli_string(circ: Tk2Circuit) -> str:
     on each qubit, and if they are paulis concatenate them into a string."""
 
     def map_op(op: Custom) -> str:
-        n = op.name
+        n = op.name()
         return n if n in ("X", "Y", "Z") else "I"
 
     # TODO ignore non-qubit outputs
@@ -153,7 +152,6 @@ def test_simple_z_prop(propagate_matcher: RuleMatcher):
 
     add_error_after(t2c, h_node_e[0], PauliX)
 
-    print(render_circuit_mermaid(t2c))
     assert t2c.to_tket1() == Circuit(2).H(0).X(0).H(0).CX(0, 1)
 
     assert apply_exhaustive(t2c, propagate_matcher) == 2
