@@ -7,7 +7,10 @@ use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::{BOOL_T, QB_T};
 
 use hugr::hugr::hugrmut::HugrMut;
-use hugr::std_extensions::arithmetic::float_types::{ConstF64, FLOAT64_TYPE};
+use hugr::std_extensions::arithmetic::{
+    float_ops::FloatOps,
+    float_types::{ConstF64, FLOAT64_TYPE},
+};
 use hugr::types::Signature;
 use hugr::HugrView;
 use rstest::{fixture, rstest};
@@ -194,7 +197,7 @@ fn circ_add_angles_symbolic() -> Circuit {
 
     let [qb, f1, f2] = h.input_wires_arr();
     let [f12] = h
-        .add_dataflow_op(Tk2Op::AngleAdd, [f1, f2])
+        .add_dataflow_op(FloatOps::fadd, [f1, f2])
         .unwrap()
         .outputs_arr();
     let [qb] = h
@@ -215,7 +218,7 @@ fn circ_add_angles_constants() -> Circuit {
     let point2 = h.add_load_value(ConstF64::new(0.2 * std::f64::consts::PI));
     let point3 = h.add_load_value(ConstF64::new(0.3 * std::f64::consts::PI));
     let point5 = h
-        .add_dataflow_op(Tk2Op::AngleAdd, [point2, point3])
+        .add_dataflow_op(FloatOps::fadd, [point2, point3])
         .unwrap()
         .out_wire(0);
 

@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use hugr::extension::prelude::{BOOL_T, QB_T};
 use hugr::ops::{OpTrait, OpType};
+use hugr::std_extensions::arithmetic::float_ops::FloatOps;
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::{HugrView, Wire};
 use itertools::Itertools;
@@ -13,7 +14,7 @@ use tket_json_rs::circuit_json::{self, SerialCircuit};
 
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
-use crate::ops::{match_symb_const_op, op_matches};
+use crate::ops::match_symb_const_op;
 use crate::serialize::pytket::RegisterHash;
 use crate::Tk2Op;
 
@@ -619,7 +620,8 @@ impl ParameterTracker {
                 // Re-use the parameter from the input.
                 inputs[0].clone()
             }
-            op if op_matches(op, Tk2Op::AngleAdd) => {
+            // TODO replace with .cast() after updating to HUGR 0.12
+            OpType::ExtensionOp(_) if optype.cast::<FloatOps>() == Some(FloatOps::fadd) => {
                 format!("{} + {}", inputs[0], inputs[1])
             }
             _ => {

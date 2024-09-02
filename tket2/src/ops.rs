@@ -56,7 +56,6 @@ pub enum Tk2Op {
     RxF64,
     PhasedX,
     ZZPhase,
-    AngleAdd,
     CZ,
     TK1,
     QAlloc,
@@ -121,10 +120,6 @@ impl MakeOpDef for Tk2Op {
             Measure => Signature::new(one_qb_row, type_row![QB_T, BOOL_T]),
             RzF64 | RxF64 => Signature::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
             PhasedX => Signature::new(type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE], one_qb_row),
-            AngleAdd => Signature::new(
-                type_row![FLOAT64_TYPE, FLOAT64_TYPE],
-                type_row![FLOAT64_TYPE],
-            ),
             TK1 => Signature::new(
                 type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE, FLOAT64_TYPE],
                 one_qb_row,
@@ -182,7 +177,7 @@ impl Tk2Op {
         match self {
             H | CX | T | S | X | Y | Z | Tdg | Sdg | ZZMax | RzF64 | RxF64 | PhasedX | ZZPhase
             | CZ | TK1 => true,
-            AngleAdd | Measure | QAlloc | QFree | Reset => false,
+            Measure | QAlloc | QFree | Reset => false,
         }
     }
 }
