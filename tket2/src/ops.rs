@@ -9,7 +9,7 @@ use hugr::{
         simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp},
         ExtensionId, OpDef, SignatureFunc,
     },
-    ops::{CustomOp, OpType},
+    ops::OpType,
     std_extensions::arithmetic::float_types::FLOAT64_TYPE,
     type_row,
     types::{type_param::TypeArg, Signature},
@@ -207,17 +207,11 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<String> {
             .unwrap_or_else(|| panic!("Found an invalid type arg in a symbolic operation node."))
     };
 
-    if let OpType::CustomOp(custom_op) = op {
-        match custom_op {
-            CustomOp::Extension(e)
-                if e.def().name() == &SYM_OP_ID && e.def().extension() == &EXTENSION_ID =>
-            {
-                Some(symbol_from_typeargs(e.args()))
-            }
-            CustomOp::Opaque(e) if e.name() == &SYM_OP_ID && e.extension() == &EXTENSION_ID => {
-                Some(symbol_from_typeargs(e.args()))
-            }
-            _ => None,
+    if let OpType::ExtensionOp(e) = op {
+        if e.def().name() == &SYM_OP_ID && e.def().extension() == &EXTENSION_ID {
+            Some(symbol_from_typeargs(e.args()))
+        } else {
+            None
         }
     } else {
         None
@@ -229,13 +223,10 @@ impl TryFrom<&OpType> for Tk2Op {
 
     fn try_from(op: &OpType) -> Result<Self, Self::Error> {
         {
-            let OpType::CustomOp(custom_op) = op else {
-                return Err(NotTk2Op { op: op.clone() });
-            };
-
-            match custom_op {
-                CustomOp::Extension(ext) => Tk2Op::from_extension_op(ext).ok(),
-                CustomOp::Opaque(opaque) => try_from_name(opaque.name(), &EXTENSION_ID).ok(),
+            match op {
+                OpType::ExtensionOp(ext) => Tk2Op::from_extension_op(ext).ok(),
+                OpType::OpaqueOp(opaque) => try_from_name(&opaque.name(), &EXTENSION_ID).ok(),
+                _ => None,
             }
             .ok_or_else(|| NotTk2Op { op: op.clone() })
         }

@@ -196,7 +196,7 @@ impl TryFrom<&OpType> for FutureOpDef {
     fn try_from(value: &OpType) -> Result<Self, Self::Error> {
         Self::from_op(
             value
-                .as_custom_op()
+                .as_extension_op()
                 .ok_or(OpLoadError::NotMember(value.name().into()))?,
         )
     }
@@ -208,7 +208,7 @@ impl TryFrom<&OpType> for FutureOp {
     fn try_from(value: &OpType) -> Result<Self, Self::Error> {
         Self::from_op(
             value
-                .as_custom_op()
+                .as_extension_op()
                 .ok_or(OpLoadError::NotMember(value.name().into()))?,
         )
     }

@@ -12,7 +12,7 @@ use hugr::hugr::views::sibling_subgraph::{
     InvalidReplacement, InvalidSubgraph, InvalidSubgraphBoundary, TopoConvexChecker,
 };
 use hugr::hugr::views::SiblingSubgraph;
-use hugr::ops::{CustomOp, NamedOp, OpType};
+use hugr::ops::{NamedOp, OpType};
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex};
 use itertools::Itertools;
 use portgraph::algorithms::ConvexChecker;
@@ -57,16 +57,13 @@ impl From<OpType> for MatchOp {
 fn encode_op(op: OpType) -> Option<Vec<u8>> {
     match op {
         OpType::Module(_) => None,
-        OpType::CustomOp(op) => {
-            let opaque = match op {
-                CustomOp::Extension(ext_op) => ext_op.make_opaque(),
-                CustomOp::Opaque(opaque) => *opaque,
-            };
+        OpType::ExtensionOp(op) => encode_op(OpType::OpaqueOp(op.make_opaque())),
+        OpType::OpaqueOp(op) => {
             let mut encoded: Vec<u8> = Vec::new();
             // Ignore irrelevant fields
-            rmp_serde::encode::write(&mut encoded, opaque.extension()).ok()?;
-            rmp_serde::encode::write(&mut encoded, opaque.name()).ok()?;
-            rmp_serde::encode::write(&mut encoded, opaque.args()).ok()?;
+            rmp_serde::encode::write(&mut encoded, op.extension()).ok()?;
+            rmp_serde::encode::write(&mut encoded, &op.name()).ok()?;
+            rmp_serde::encode::write(&mut encoded, op.args()).ok()?;
             Some(encoded)
         }
         _ => rmp_serde::encode::to_vec(&op).ok(),

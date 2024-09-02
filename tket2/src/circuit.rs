@@ -6,20 +6,23 @@ mod extract_dfg;
 mod hash;
 pub mod units;
 
+use std::collections::HashSet;
 use std::iter::Sum;
 
 pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
+use hugr::extension::prelude::{NoopDef, TupleOpDef};
 use hugr::hugr::views::{DescendantsGraph, ExtractHugr, HierarchyView};
 use itertools::Either::{Left, Right};
 
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::dataflow::IOTrait;
-use hugr::ops::{Input, NamedOp, OpParent, OpTag, OpTrait, Output};
+use hugr::ops::{Input, NamedOp, OpName, OpParent, OpTag, OpTrait, Output};
 use hugr::types::{PolyFuncType, Signature};
 use hugr::{Hugr, PortIndex};
 use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
+use lazy_static::lazy_static;
 use thiserror::Error;
 
 pub use hugr::ops::OpType;
@@ -45,6 +48,21 @@ impl<T: Default + HugrView> Default for Circuit<T> {
         let parent = hugr.root();
         Self { hugr, parent }
     }
+}
+
+lazy_static! {
+    /// Most [`Optype::ExtensionOp`]s are counted as operations in the circuit, except for
+    /// some special ones like tuple pack/unpack and the Noop operation.
+    ///
+    /// We have to insert the extension id manually due to
+    /// https://github.com/CQCL/hugr/issues/1496
+    static ref IGNORED_EXTENSION_OPS: HashSet<OpName> = {
+        let mut set = HashSet::new();
+        set.insert(format!("prelude.{}", NoopDef.name()).into());
+        set.insert(format!("prelude.{}", TupleOpDef::MakeTuple.name()).into());
+        set.insert(format!("prelude.{}", TupleOpDef::UnpackTuple.name()).into());
+        set
+    };
 }
 
 impl<T: HugrView> Circuit<T> {
@@ -170,7 +188,7 @@ impl<T: HugrView> Circuit<T> {
         while let Some(node) = roots.pop() {
             for child in self.hugr().children(node) {
                 let optype = self.hugr().get_optype(child);
-                if optype.is_custom_op() {
+                if optype.is_extension_op() && !IGNORED_EXTENSION_OPS.contains(&optype.name()) {
                     count += 1;
                 } else if OpTag::DataflowParent.is_superset(optype.tag()) {
                     roots.push(child);
@@ -250,7 +268,9 @@ impl<T: HugrView> Circuit<T> {
         Self: Sized,
     {
         // Traverse the circuit in topological order.
-        self.commands().filter(|cmd| cmd.optype().is_custom_op())
+        self.commands().filter(|cmd| {
+            cmd.optype().is_extension_op() && !IGNORED_EXTENSION_OPS.contains(&cmd.optype().name())
+        })
     }
 
     /// Compute the cost of the circuit based on a per-operation cost function.
