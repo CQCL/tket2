@@ -64,7 +64,10 @@ lazy_static! {
         set
     };
 }
-
+#[test]
+fn issue_1496_remains() {
+  assert_eq!("noop", NoopDef.name())
+}
 impl<T: HugrView> Circuit<T> {
     /// Create a new circuit from a HUGR and a node.
     ///
