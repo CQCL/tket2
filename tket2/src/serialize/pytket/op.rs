@@ -76,7 +76,7 @@ impl Tk1Op {
     pub fn optype(&self) -> OpType {
         match self {
             Tk1Op::Native(native_op) => native_op.optype().clone(),
-            Tk1Op::Opaque(json_op) => json_op.as_custom_op().into(),
+            Tk1Op::Opaque(json_op) => json_op.as_extension_op().into(),
         }
     }
 
@@ -84,7 +84,7 @@ impl Tk1Op {
     pub fn into_optype(self) -> OpType {
         match self {
             Tk1Op::Native(native_op) => native_op.into_optype(),
-            Tk1Op::Opaque(json_op) => json_op.as_custom_op().into(),
+            Tk1Op::Opaque(json_op) => json_op.as_extension_op().into(),
         }
     }
 

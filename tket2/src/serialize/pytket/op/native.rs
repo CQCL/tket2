@@ -1,8 +1,8 @@
 //! Operations that have corresponding representations in both `pytket` and `tket2`.
 
-use hugr::extension::prelude::{BOOL_T, QB_T};
+use hugr::extension::prelude::{Noop, BOOL_T, QB_T};
 
-use hugr::ops::{Noop, OpTrait, OpType};
+use hugr::ops::{OpTrait, OpType};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::types::Signature;
 

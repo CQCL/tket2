@@ -2,7 +2,7 @@
 
 use hugr::extension::prelude::{BOOL_T, QB_T};
 
-use hugr::ops::custom::{CustomOp, ExtensionOp};
+use hugr::ops::custom::ExtensionOp;
 use hugr::ops::{NamedOp, OpType};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::types::{Signature, TypeArg};
@@ -79,18 +79,20 @@ impl OpaqueTk1Op {
     /// Returns an [`OpConvertError`] if the operation is a tket1 operation, but it
     /// contains invalid data.
     pub fn try_from_tket2(op: &OpType) -> Result<Option<Self>, OpConvertError> {
-        let OpType::CustomOp(custom_op) = op else {
-            return Ok(None);
-        };
-
-        // TODO: Check `extensions.contains(&TKET1_EXTENSION_ID)`
-        // (but the ext op extensions are an empty set?)
-        if custom_op.name() != format!("{TKET1_EXTENSION_ID}.{TKET1_OP_NAME}") {
+        // TODO: Check `extensions.contains(&TKET1_EXTENSION_ID)`?
+        if op.name() != format!("{TKET1_EXTENSION_ID}.{TKET1_OP_NAME}") {
             return Ok(None);
         }
+        let OpType::ExtensionOp(custom_op) = op else {
+            assert!(
+                !matches!(op, OpType::OpaqueOp(_)),
+                "Opaque Ops should have been resolved into ExtensionOps"
+            );
+            return Ok(None);
+        };
         let Some(TypeArg::String { arg }) = custom_op.args().first() else {
             return Err(serde_json::Error::custom(
-                "Opaque TKET1 operation did not have a yaml-encoded type argument.",
+                "Opaque TKET1 operation did not have a json-encoded type argument.",
             )
             .into());
         };
@@ -126,14 +128,12 @@ impl OpaqueTk1Op {
     }
 
     /// Wraps the op into a [`TKET1_OP_NAME`] opaque operation.
-    pub fn as_custom_op(&self) -> CustomOp {
+    pub fn as_extension_op(&self) -> ExtensionOp {
         let payload = TypeArg::String {
             arg: serde_json::to_string(self).unwrap(),
         };
         let op_def = TKET1_EXTENSION.get_op(&TKET1_OP_NAME).unwrap();
-        ExtensionOp::new(op_def.clone(), vec![payload], &REGISTRY)
-            .unwrap_or_else(|e| panic!("{e}"))
-            .into()
+        ExtensionOp::new(op_def.clone(), vec![payload], &REGISTRY).unwrap_or_else(|e| panic!("{e}"))
     }
 
     /// Compute the `parameter_input` and `num_params` fields by looking for

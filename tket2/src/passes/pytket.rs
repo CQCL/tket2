@@ -48,10 +48,10 @@ mod test {
     use hugr::builder::{
         Container, Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder, SubContainer,
     };
-    use hugr::extension::prelude::QB_T;
+    use hugr::extension::prelude::{MakeTuple, UnpackTuple, QB_T};
     use hugr::extension::PRELUDE_REGISTRY;
     use hugr::ops::handle::NodeHandle;
-    use hugr::ops::{MakeTuple, OpType, Tag, UnpackTuple};
+    use hugr::ops::{OpType, Tag};
     use hugr::types::{Signature, TypeRow};
     use hugr::{type_row, HugrView};
     use rstest::{fixture, rstest};
