@@ -226,7 +226,7 @@ mod test {
 
     use crate::extension::{
         futures::{self, FutureOpDef},
-        quantum_lazy::LazyQuantumOp,
+        quantum_lazy::HSeriesOp,
     };
 
     use super::*;
@@ -263,7 +263,7 @@ mod test {
             let ot = hugr.get_optype(n);
             if let Ok(FutureOpDef::Read) = ot.try_into() {
                 num_read += 1;
-            } else if let Ok(LazyQuantumOp::Measure) = ot.try_into() {
+            } else if let Ok(HSeriesOp::LazyMeasure) = ot.try_into() {
                 num_lazy_measure += 1;
             } else {
                 assert_matches!(Tk2Op::try_from(ot), Err(_))
