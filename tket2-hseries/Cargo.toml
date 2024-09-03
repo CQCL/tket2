@@ -13,6 +13,14 @@ description = "TKET2 tool for preparing and validating `Hugr`s for compilation t
 keywords = ["Quantum", "Quantinuum"]
 categories = ["compilers"]
 
+[features]
+default = ["cli"]
+cli = ["dep:clap", "dep:hugr-cli", "dep:clap-verbosity-flag", "dep:clio"]
+
+[[bin]]
+name = "tket2-hseries"
+required-features = ["cli"]
+
 [dependencies]
 hugr.workspace = true
 tket2 = { path = "../tket2", version = "0.1.1" }
@@ -24,6 +32,10 @@ strum.workspace = true
 strum_macros.workspace = true
 thiserror.workspace = true
 itertools.workspace = true
+clap = { workspace = true, optional = true}
+hugr-cli = { version = "*", optional = true }
+clap-verbosity-flag = { version = "*", optional = true }
+clio = { version = "*", features = ["clap-parse"], optional = true }
 
 [dev-dependencies]
 cool_asserts.workspace = true

@@ -72,3 +72,9 @@ zstd = "0.13.2"
 [profile.release.package.tket2-py]
 # Some configurations to reduce the size of tket2 wheels
 strip = true
+
+[patch."crates-io"]
+hugr = { git = "https://github.com/CQCL/hugr.git", branch = "doug/hugr-cli-tweak" }
+hugr-core = { git = "https://github.com/CQCL/hugr.git", branch = "doug/hugr-cli-tweak" }
+hugr-passes = { git = "https://github.com/CQCL/hugr.git", branch = "doug/hugr-cli-tweak" }
+hugr-cli = { git = "https://github.com/CQCL/hugr.git", branch = "doug/hugr-cli-tweak" }
