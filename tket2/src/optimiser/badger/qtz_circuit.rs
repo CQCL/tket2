@@ -40,6 +40,9 @@ struct RepCircData {
 }
 
 fn map_op(opstr: &str) -> Op {
+    if opstr == "add" {
+        return hugr::std_extensions::arithmetic::float_ops::FloatOps::fadd.into();
+    }
     // TODO, more
     match opstr {
         "h" => Tk2Op::H,
@@ -52,7 +55,6 @@ fn map_op(opstr: &str) -> Op {
         "tdg" => Tk2Op::Tdg,
         "sdg" => Tk2Op::Sdg,
         "rz" => Tk2Op::RzF64,
-        "add" => Tk2Op::AngleAdd,
         x => panic!("unknown op {x}"),
     }
     .into()

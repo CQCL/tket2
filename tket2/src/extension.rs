@@ -10,7 +10,10 @@ use hugr::extension::{
     CustomSignatureFunc, ExtensionId, ExtensionRegistry, SignatureError, Version,
 };
 use hugr::hugr::IdentList;
-use hugr::std_extensions::arithmetic::float_types::{EXTENSION as FLOAT_EXTENSION, FLOAT64_TYPE};
+use hugr::std_extensions::arithmetic::{
+    float_ops::EXTENSION as FLOAT_OPS_EXTENSION,
+    float_types::{EXTENSION as FLOAT_TYPES_EXTENSION, FLOAT64_TYPE},
+};
 use hugr::types::type_param::{TypeArg, TypeParam};
 use hugr::types::{CustomType, PolyFuncType, PolyFuncTypeRV, Signature};
 use hugr::{type_row, Extension};
@@ -53,10 +56,11 @@ pub static ref TKET1_EXTENSION: Extension = {
 
 /// Extension registry including the prelude, TKET1 and Tk2Ops extensions.
 pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
-    TKET1_EXTENSION.clone(),
-    PRELUDE.clone(),
-    TKET2_EXTENSION.clone(),
-    FLOAT_EXTENSION.clone(),
+    TKET1_EXTENSION.to_owned(),
+    PRELUDE.to_owned(),
+    TKET2_EXTENSION.to_owned(),
+    FLOAT_TYPES_EXTENSION.to_owned(),
+    FLOAT_OPS_EXTENSION.to_owned(),
 ]).unwrap();
 
 

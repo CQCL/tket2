@@ -69,11 +69,6 @@ impl NativeOp {
             Tk2Op::CZ => Tk1OpType::CZ,
             Tk2Op::Reset => Tk1OpType::Reset,
             Tk2Op::Measure => Tk1OpType::Measure,
-            Tk2Op::AngleAdd => {
-                // These operations should be folded into constant before serialisation,
-                // or replaced by pytket logic expressions.
-                return Some(Self::new(tk2op.into(), None));
-            }
             // These operations do not have a direct pytket counterpart.
             Tk2Op::QAlloc | Tk2Op::QFree => {
                 // These operations are implicitly supported by the encoding,

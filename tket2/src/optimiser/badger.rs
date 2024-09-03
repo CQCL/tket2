@@ -555,13 +555,6 @@ mod tests {
 
     use super::{BadgerOptimiser, DefaultBadgerOptimiser};
 
-    /// Simplified description of the circuit's commands.
-    fn gates(circ: &Circuit) -> Vec<Tk2Op> {
-        circ.commands()
-            .map(|cmd| cmd.optype().try_into().unwrap())
-            .collect()
-    }
-
     #[fixture]
     fn rz_rz() -> Circuit {
         let input_t = vec![QB_T, FLOAT64_TYPE, FLOAT64_TYPE];
@@ -630,6 +623,10 @@ mod tests {
     #[case::compiled(badger_opt_compiled())]
     #[case::json(badger_opt_json())]
     fn rz_rz_cancellation(rz_rz: Circuit, #[case] badger_opt: DefaultBadgerOptimiser) {
+        use hugr::{ops::OpType, std_extensions::arithmetic::float_ops::FloatOps};
+
+        use crate::op_matches;
+
         let opt_rz = badger_opt.optimise(
             &rz_rz,
             BadgerOptions {
@@ -637,8 +634,16 @@ mod tests {
                 ..Default::default()
             },
         );
+        let [op1, op2]: [&OpType; 2] = opt_rz
+            .commands()
+            .map(|cmd| cmd.optype())
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
         // Rzs combined into a single one.
-        assert_eq!(gates(&opt_rz), vec![Tk2Op::AngleAdd, Tk2Op::RzF64]);
+        assert_eq!(op1.cast::<FloatOps>(), Some(FloatOps::fadd));
+        assert!(op_matches(op2, Tk2Op::RzF64));
     }
 
     #[rstest]

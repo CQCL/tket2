@@ -45,7 +45,6 @@ class Tk2Op(Enum):
     RxF64 = auto()
     PhasedX = auto()
     ZZPhase = auto()
-    AngleAdd = auto()
     CZ = auto()
     TK1 = auto()
     QAlloc = auto()
