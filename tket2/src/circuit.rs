@@ -6,8 +6,6 @@ mod extract_dfg;
 mod hash;
 pub mod units;
 
-use std::iter::Sum;
-
 pub use command::{Command, CommandIterator};
 pub use hash::{CircuitHash, HashError};
 use hugr::hugr::views::{DescendantsGraph, ExtractHugr, HierarchyView};
@@ -298,7 +296,9 @@ impl<T: HugrView> Circuit<T> {
     }
 }
 
+/// Convert a circuit to an iterator of [`Tk2Op`]s.
 pub trait ToTk2OpIter {
+    /// The iterator type.
     type Iter<'a>: Iterator<Item = Tk2Op> + 'a
     where
         Self: 'a;
@@ -355,7 +355,7 @@ fn check_hugr(hugr: &impl HugrView, parent: Node) -> Result<(), CircuitError> {
     }
 }
 
-pub(crate) trait RemoveEmptyWire {
+pub trait RemoveEmptyWire {
     /// Remove an empty wire in a dataflow HUGR.
     ///
     /// The wire to be removed is identified by the index of the outgoing port

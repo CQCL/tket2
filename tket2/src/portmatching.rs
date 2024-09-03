@@ -223,7 +223,7 @@ mod tests {
     #[rstest]
     fn simple_match(circ: Circuit, lhs: Circuit) {
         let circ = StaticSizeCircuit::try_from(&lhs).unwrap();
-        let m = CircuitMatcher::from_patterns(vec![circ.clone()]);
+        let m = CircuitMatcher::try_from_patterns(vec![circ.clone()]).unwrap();
 
         let matches = m.find_matches(&circ);
         assert_eq!(matches.count(), 1);

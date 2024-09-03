@@ -6,79 +6,113 @@ use hugr::Port;
 use hugr::{Direction, PortIndex};
 use itertools::Itertools;
 use portmatching::Pattern;
+use thiserror::Error;
 
 use super::constraint::constraint_key;
-use super::indexing::PatternOpLocation;
+use super::indexing::{DisconnectedCircuit, PatternOpPosition};
 use super::predicate::Predicate;
 use super::Constraint;
-use crate::static_circ::{OpLocation, StaticSizeCircuit};
+use crate::static_circ::{OpPosition, StaticQubitIndex, StaticSizeCircuit};
+
+#[derive(Debug, Clone, Copy, Error)]
+pub enum InvalidStaticPattern {
+    #[error("pattern is disconnected")]
+    Disconnected,
+    #[error("pattern has no qubits")]
+    EmptyPattern,
+    #[error("Qubit {0:?} has no operations")]
+    EmptyQubit(StaticQubitIndex),
+}
+
+impl From<DisconnectedCircuit> for InvalidStaticPattern {
+    fn from(_: DisconnectedCircuit) -> Self {
+        InvalidStaticPattern::Disconnected
+    }
+}
 
 impl Pattern for StaticSizeCircuit {
     type Constraint = Constraint;
+    type Error = InvalidStaticPattern;
 
-    fn to_constraint_vec(&self) -> Vec<Self::Constraint> {
+    fn try_to_constraint_vec(&self) -> Result<Vec<Self::Constraint>, Self::Error> {
+        if self.qubit_count() == 0 {
+            return Err(InvalidStaticPattern::EmptyPattern);
+        } else if let Some(q) = self.qubits_iter().find(|q| self.qubit_ops(*q).is_empty()) {
+            return Err(InvalidStaticPattern::EmptyQubit(q));
+        }
+
         let mut constraints = Vec::new();
 
-        let starts = self.find_qubit_starts().unwrap();
-        let to_pattern_loc = |loc: &OpLocation| {
-            let (qubit_path, start) = starts[loc.qubit.0];
-            let offset = (loc.op_idx as i8) - (start as i8);
-            PatternOpLocation::new(qubit_path, offset)
+        let starts = self.find_qubit_starts()?;
+        let to_pattern_pos = |pos: OpPosition| {
+            let (qubit_path, start) = starts[pos.qubit.0];
+            let offset = (pos.index as i8) - (start as i8);
+            PatternOpPosition::new(qubit_path, offset)
         };
-        // Keep one location per op
-        let mut known_locations = BTreeSet::new();
 
-        for loc in self.all_locations() {
-            constraints.push(
-                Constraint::try_new(
-                    Predicate::IsOp {
-                        op: self.get(loc).unwrap().clone(),
-                    },
-                    vec![to_pattern_loc(&loc)],
-                )
-                .unwrap(),
-            );
-            if loc.op_idx > 0 {
-                let in_port = self.qubit_port(loc);
-                let (out_port, prev_loc) = self
-                    .linked_op(loc, Port::new(Direction::Incoming, in_port))
+        // Add IsOp and SameOp constraints
+        for op in self.ops_iter() {
+            let all_pos = self
+                .positions(op)
+                .unwrap()
+                .iter()
+                .copied()
+                .map(to_pattern_pos)
+                .collect_vec();
+            // Add IsOp on the first location
+            let pred = Predicate::IsOp {
+                op: self.get(op).unwrap().op,
+            };
+            constraints.push(Constraint::try_new(pred, vec![all_pos[0]]).unwrap());
+
+            // Add SameOp
+            let arity = all_pos.len();
+            if arity > 1 {
+                let pred = Predicate::SameOp { arity };
+                constraints.push(Constraint::try_new(pred, all_pos).unwrap());
+            }
+        }
+
+        // Add Link constraints
+        for pos in self.positions_iter() {
+            if pos.index > 0 {
+                let in_port = self.position_offset(pos).unwrap();
+                let op = self.at_position(pos).unwrap();
+                let (out_port, prev_op) = self
+                    .linked_op(op, Port::new(Direction::Incoming, in_port))
                     .unwrap();
+                let prev_pos = self.get_position(prev_op, out_port.index()).unwrap();
                 constraints.push(
                     Constraint::try_new(
                         Predicate::Link {
                             out_port: out_port.index(),
                             in_port,
                         },
-                        vec![to_pattern_loc(&prev_loc), to_pattern_loc(&loc)],
+                        vec![to_pattern_pos(prev_pos), to_pattern_pos(pos)],
                     )
                     .unwrap(),
                 );
             }
-            let loc_0 = to_pattern_loc(&self.equivalent_location(loc, 0).unwrap());
-            let other_locations = known_locations
-                .iter()
-                .copied()
-                .filter(|l| l != &loc_0)
-                .collect_vec();
-            if !other_locations.is_empty() {
-                constraints.push(
-                    Constraint::try_new(
-                        Predicate::NotEq {
-                            n_other: other_locations.len(),
-                        },
-                        Vec::from_iter(
-                            [to_pattern_loc(&loc)]
-                                .into_iter()
-                                .chain(other_locations.iter().copied()),
-                        ),
-                    )
-                    .unwrap(),
-                );
-            }
-            known_locations.insert(loc_0);
         }
+
+        // Add DistinctQubits constraints
+        let qubit_starts: BTreeSet<_> = starts
+            .iter()
+            .map(|&(qubit, _)| PatternOpPosition { qubit, op_idx: 0 })
+            .collect();
+        for &loc in &qubit_starts {
+            let mut starts = vec![loc];
+            starts.extend(qubit_starts.range(..loc).copied());
+            if starts.len() > 1 {
+                let n_qubits = starts.len();
+                constraints.push(
+                    Constraint::try_new(Predicate::DistinctQubits { n_qubits }, starts).unwrap(),
+                );
+            }
+        }
+
         constraints.sort_unstable_by(|c1, c2| constraint_key(c1).cmp(&constraint_key(c2)));
-        constraints
+        Ok(constraints)
     }
 }
 
@@ -154,7 +188,7 @@ mod tests {
     fn construct_pattern() {
         let circ = h_cx();
 
-        insta::assert_debug_snapshot!(circ.to_constraint_vec());
+        insta::assert_debug_snapshot!(circ.try_to_constraint_vec().unwrap());
     }
 
     #[test]
@@ -167,7 +201,7 @@ mod tests {
         })
         .unwrap();
         let circ = StaticSizeCircuit::try_from(&circ).unwrap();
-        circ.to_constraint_vec();
+        circ.try_to_constraint_vec().unwrap();
     }
 
     #[test]
@@ -179,7 +213,7 @@ mod tests {
         })
         .unwrap();
         let circ = StaticSizeCircuit::try_from(&circ).unwrap();
-        circ.to_constraint_vec();
+        circ.try_to_constraint_vec().unwrap();
     }
 
     // fn get_nodes_by_tk2op(circ: &Circuit, t2_op: Tk2Op) -> Vec<Node> {

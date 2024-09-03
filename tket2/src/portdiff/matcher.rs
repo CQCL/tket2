@@ -1,22 +1,31 @@
-use hugr::{Direction, Port};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    rc::Rc,
+};
+
+use hugr::{Direction, Port, PortIndex};
 use itertools::Itertools;
 use portdiff::{self as pd, port_diff::Owned, Graph, PortDiff, Site};
 use portgraph::PortOffset;
-use portmatching::{self as pm, indexing as pmx, IndexingScheme, ManyMatcher, PortMatcher};
+use portmatching::{
+    self as pm, indexing as pmx, IndexingScheme, ManyMatcher, PatternFallback, PortMatcher,
+};
 
 use crate::{
     portmatching::{
-        indexing::{CircuitPath, OpLocationMap, PatternOpLocation, StaticIndexScheme},
+        indexing::{CircuitPath, OpLocationMap, PatternOpPosition, StaticIndexScheme},
+        pattern::InvalidStaticPattern,
         predicate::Predicate,
     },
-    static_circ::{OpLocation, StaticSizeCircuit},
+    static_circ::{OpPosition, StaticSizeCircuit},
 };
 
-type DiffCircuit = PortDiff<StaticSizeCircuit>;
+pub type DiffCircuit = PortDiff<StaticSizeCircuit>;
 
 /// A matcher object for fast pattern matching on circuits using diffed rewriting.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DiffCircuitMatcher(
-    ManyMatcher<StaticSizeCircuit, PatternOpLocation, Predicate, StaticIndexScheme>,
+    ManyMatcher<StaticSizeCircuit, PatternOpPosition, Predicate, StaticIndexScheme>,
 );
 
 impl PortMatcher<DiffCircuit> for DiffCircuitMatcher {
@@ -30,52 +39,69 @@ impl PortMatcher<DiffCircuit> for DiffCircuitMatcher {
     }
 }
 
+impl DiffCircuitMatcher {
+    /// Create a new DiffCircuitMatcher from a list of patterns.
+    pub fn try_from_patterns(
+        patterns: Vec<StaticSizeCircuit>,
+    ) -> Result<Self, InvalidStaticPattern> {
+        let matcher = ManyMatcher::try_from_patterns(patterns, PatternFallback::Skip)?;
+        Ok(DiffCircuitMatcher(matcher))
+    }
+}
+
 impl pm::Predicate<DiffCircuit> for Predicate {
-    type Value = Owned<OpLocation, StaticSizeCircuit>;
+    type Value = Owned<OpPosition, StaticSizeCircuit>;
 
     fn check(&self, _: &DiffCircuit, args: &[impl std::borrow::Borrow<Self::Value>]) -> bool {
         match self {
             &Predicate::Link { out_port, in_port } => {
                 let Owned {
-                    data: out_loc,
+                    data: out_pos,
                     owner: out_owner,
                 } = args[0].borrow();
                 let Owned {
-                    data: in_loc,
+                    data: in_pos,
                     owner: in_owner,
                 } = args[1].borrow();
                 // Make sure the location refers to the right port
-                let out_loc = out_owner
-                    .graph()
-                    .equivalent_location(*out_loc, out_port)
-                    .unwrap();
-                let in_loc = in_owner
-                    .graph()
-                    .equivalent_location(*in_loc, in_port)
-                    .unwrap();
-                let op_out_locs = follow_link(
+                let Some(out_pos) = out_owner.graph().equivalent_position(*out_pos, out_port)
+                else {
+                    return false;
+                };
+                let Some(in_pos) = in_owner.graph().equivalent_position(*in_pos, in_port) else {
+                    return false;
+                };
+                let opp_out_pos = follow_link(
                     &Owned {
-                        data: out_loc,
+                        data: out_pos,
                         owner: out_owner.clone(),
                     },
                     Direction::Outgoing,
                     &[],
                 );
-                op_out_locs.contains(&Owned {
-                    data: in_loc,
+                opp_out_pos.contains(&Owned {
+                    data: in_pos,
                     owner: in_owner.clone(),
                 })
             }
-            Predicate::IsOp { op } => {
+            &Predicate::IsOp { op } => {
                 let loc = args[0].borrow();
-                loc.owner.graph().get(loc.data) == Some(op)
+                let id = loc.owner.graph().at_position(loc.data).unwrap();
+                loc.owner.graph().get(id).map(|op| op.op) == Some(op)
             }
-            &Predicate::NotEq { n_other } => {
-                let loc = args[0].borrow();
-                let op = loc.owner.graph().get_ptr(loc.data).unwrap();
-                for i in 0..n_other {
-                    let other_loc = args[i + 1].borrow();
-                    if other_loc.owner.graph().get_ptr(other_loc.data) == Some(op) {
+            Predicate::SameOp { .. } => args.iter().tuple_windows().all(|(a, b)| {
+                let pos_a = a.borrow();
+                let pos_b = b.borrow();
+                let data_a = pos_a.owner.graph();
+                let data_b = pos_b.owner.graph();
+                data_a.at_position(pos_a.data) == data_b.at_position(pos_b.data)
+            }),
+            &Predicate::DistinctQubits { .. } => {
+                let mut qubits = BTreeMap::new();
+                for loc in args.iter().map(|a| a.borrow()) {
+                    let owner_qubits: &mut BTreeSet<_> =
+                        qubits.entry(PortDiff::as_ptr(&loc.owner)).or_default();
+                    if !owner_qubits.insert(loc.data.qubit) {
                         return false;
                     }
                 }
@@ -86,7 +112,7 @@ impl pm::Predicate<DiffCircuit> for Predicate {
 }
 
 impl pmx::IndexingScheme<DiffCircuit> for StaticIndexScheme {
-    type Map = OpLocationMap<CircuitPath, Owned<OpLocation, StaticSizeCircuit>>;
+    type Map = OpLocationMap<CircuitPath, Owned<OpPosition, StaticSizeCircuit>>;
 
     fn valid_bindings(
         &self,
@@ -112,9 +138,9 @@ impl pmx::IndexingScheme<DiffCircuit> for StaticIndexScheme {
                 let diffs = all_neighbours(data);
                 return Ok(Vec::from_iter(diffs.flat_map(|diff| {
                     diff.graph()
-                        .nodes_iter()
-                        .map(|data| Owned {
-                            data,
+                        .ops_iter()
+                        .map(|op| Owned {
+                            data: diff.graph().get_position(op, 0).unwrap(),
                             owner: diff.clone(),
                         })
                         .collect_vec()
@@ -135,8 +161,8 @@ impl pmx::IndexingScheme<DiffCircuit> for StaticIndexScheme {
             if key.op_idx == 0 {
                 // Same op, but on a different port
                 let curr_circ = last_loc.owner.graph();
-                let port = curr_circ.qubit_port(last_loc.data);
-                let new_loc = curr_circ.equivalent_location(last_loc.data, port);
+                let port = key.qubit.port(key.qubit.len() - 1) as usize;
+                let new_loc = curr_circ.equivalent_position(last_loc.data, port);
                 Ok(Vec::from_iter(new_loc.map(|new_loc| Owned {
                     data: new_loc,
                     owner: last_loc.owner.clone(),
@@ -161,26 +187,24 @@ impl pmx::IndexingScheme<DiffCircuit> for StaticIndexScheme {
 /// All locations at the other end of a link from `loc`, both in the same diff
 /// and in compatible diffs.
 fn follow_link(
-    loc: &Owned<OpLocation, StaticSizeCircuit>,
+    pos: &Owned<OpPosition, StaticSizeCircuit>,
     dir: Direction,
     known_diffs: &[PortDiff<StaticSizeCircuit>],
-) -> Vec<Owned<OpLocation, StaticSizeCircuit>> {
-    let curr_circ = loc.owner.graph();
-    let port_index = curr_circ.qubit_port(loc.data);
-    let port = Port::new(dir, port_index);
+) -> Vec<Owned<OpPosition, StaticSizeCircuit>> {
+    let curr_circ = pos.owner.graph();
+    let offset = curr_circ.position_offset(pos.data).unwrap();
+    let node = curr_circ.at_position(pos.data).unwrap();
+    let port = Port::new(dir, offset);
 
-    let site = Site {
-        node: loc.data,
-        port: port,
-    };
+    let site = Site { node, port };
     // All ports that correspond to site (note: in static circuits there should be at most 1)
     let mut all_ports = Vec::new();
 
     // Check if there is a boundary port that corresponds to site
     all_ports.extend(
-        loc.owner
+        pos.owner
             .boundary_iter()
-            .find(|b| loc.owner.boundary_site(*b) == &site)
+            .find(|b| pos.owner.boundary_site(*b) == Some(&site))
             .map(pd::Port::Boundary),
     );
     // Find bound ports that corresponds to site
@@ -188,22 +212,32 @@ fn follow_link(
 
     let mut ret = Vec::new();
     // Follow link within curr_circ if there is one
-    if let Some((_, linked_loc)) = curr_circ.linked_op(loc.data, port) {
+    if let Some((linked_port, linked_op)) = curr_circ.linked_op(node, port) {
+        let data = curr_circ
+            .get_position(linked_op, linked_port.index())
+            .unwrap();
         ret.push(Owned {
-            owner: loc.owner.clone(),
-            data: linked_loc,
+            owner: pos.owner.clone(),
+            data,
         });
     }
     // Find opposite ports for all ports in all_ports
     for port in all_ports {
         ret.extend(
-            loc.owner
+            pos.owner
                 .opposite_ports(port)
                 .into_iter()
                 .filter(|p| PortDiff::are_compatible(known_diffs.iter().chain([&p.owner])))
-                .map(|p| Owned {
-                    data: p.site().node,
-                    owner: p.owner,
+                .filter_map(|p| {
+                    let data = p
+                        .owner
+                        .graph()
+                        .get_position(p.site()?.node, p.site()?.port.index()) // TODO: Handle sentinels
+                        .unwrap();
+                    Some(Owned {
+                        data,
+                        owner: p.owner,
+                    })
                 }),
         );
     }

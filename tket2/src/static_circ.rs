@@ -3,11 +3,14 @@
 mod hash;
 mod iter;
 // mod match_op;
+mod position;
 mod rewrite;
 
 pub use hash::UpdatableHash;
 use iter::Command;
-pub use rewrite::{BoxedStaticRewrite, StaticRewrite};
+use itertools::Itertools;
+pub use position::OpPosition;
+pub use rewrite::{BoxedStaticRewrite, NonConvexRewriteError, StaticRewrite};
 
 use std::{
     cmp::Ordering,
@@ -28,44 +31,71 @@ use crate::{
     Circuit, CircuitMutError, Tk2Op,
 };
 
+/// A circuit operation
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    From,
+    Into,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub struct StaticOp {
+    /// The operation type
+    pub op: Tk2Op,
+    /// The positions of the operation (qubit and index)
+    pub positions: Vec<OpPosition>,
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    From,
+    Into,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub struct OpId(usize);
+
 /// A circuit with a fixed number of qubits numbered from 0 to `num_qubits - 1`.
-#[derive(Clone, Default, serde::Serialize)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct StaticSizeCircuit {
-    /// All quantum operations on qubits.
-    qubit_ops: Vec<Vec<Rc<Tk2Op>>>,
-    /// Map operations to their locations in `qubit_ops`.
-    #[serde(skip)]
-    op_locations: BTreeMap<Tk2OpPtr, Vec<OpLocation>>,
+    /// A 2D array of quantum operations for each qubit.
+    qubit_ops: Vec<Vec<OpId>>,
+    /// A list of all quantum operations in the circuit.
+    all_ops: Vec<StaticOp>,
 }
 
-type Tk2OpPtr = *const Tk2Op;
+impl PartialEq for StaticSizeCircuit {
+    fn eq(&self, other: &Self) -> bool {
+        let zip1 = self.qubit_ops.iter().zip(other.qubit_ops.iter());
+        let zip2 = zip1.flat_map(|(a, b)| a.iter().zip(b.iter()));
 
-/// The location of an operation in a `StaticSizeCircuit`.
-///
-/// Given by the qubit index and the position within that qubit's op list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct OpLocation {
-    /// The index of the qubit the operation acts on.
-    pub qubit: StaticQubitIndex,
-    /// The index of the operation in the qubit's operation list.
-    pub op_idx: usize,
-}
-
-impl OpLocation {
-    pub(crate) fn try_add_op_idx(self, op_idx: isize) -> Option<Self> {
-        Some(Self {
-            op_idx: self.op_idx.checked_add_signed(op_idx)?,
-            ..self
-        })
+        // Compare ops themselves, not their OpIds.
+        zip2.map(|(&a, &b)| (self.get(a), other.get(b)))
+            .all(|(a, b)| a == b)
     }
 }
+
+impl Eq for StaticSizeCircuit {}
 
 impl StaticSizeCircuit {
     /// Create an empty `StaticSizeCircuit` with the given number of qubits.
     pub fn with_qubit_count(qubit_count: usize) -> Self {
         Self {
             qubit_ops: vec![Vec::new(); qubit_count],
-            op_locations: BTreeMap::new(),
+            ..Self::default()
         }
     }
 
@@ -75,7 +105,7 @@ impl StaticSizeCircuit {
     }
 
     pub fn n_ops(&self) -> usize {
-        self.op_locations.len()
+        self.all_ops.len()
     }
 
     /// Returns an iterator over the qubits in the circuit.
@@ -84,94 +114,63 @@ impl StaticSizeCircuit {
     }
 
     /// Returns the operations on a given qubit.
-    pub fn qubit_ops(&self, qubit: StaticQubitIndex) -> &[Rc<Tk2Op>] {
+    pub fn qubit_ops(&self, qubit: StaticQubitIndex) -> &[OpId] {
         &self.qubit_ops[qubit.0]
     }
 
-    pub(crate) fn get_rc(&self, loc: OpLocation) -> Option<&Rc<Tk2Op>> {
-        self.qubit_ops.get(loc.qubit.0)?.get(loc.op_idx)
+    pub fn get(&self, op: OpId) -> Option<&StaticOp> {
+        self.all_ops.get(op.0)
     }
 
-    pub fn get(&self, loc: OpLocation) -> Option<&Tk2Op> {
-        self.get_rc(loc).map(|op| op.as_ref())
+    fn get_mut(&mut self, op: OpId) -> Option<&mut StaticOp> {
+        self.all_ops.get_mut(op.0)
     }
 
-    pub fn get_ptr(&self, loc: OpLocation) -> Option<Tk2OpPtr> {
-        self.get_rc(loc).map(Rc::as_ptr)
-    }
-
-    fn exists(&self, loc: OpLocation) -> bool {
-        self.qubit_ops
-            .get(loc.qubit.0)
-            .map_or(false, |ops| ops.get(loc.op_idx).is_some())
-    }
-
-    /// The port of the operation that `loc` is at.
-    pub(crate) fn qubit_port(&self, loc: OpLocation) -> usize {
-        let op = self.get_rc(loc).unwrap();
-        self.op_locations(op)
-            .iter()
-            .position(|l| l == &loc)
-            .unwrap()
-    }
-
-    /// Get an equivalent location for the op at `loc` but at `port`.
-    ///
-    /// Every op corresponds to as many locations as it has qubits. This
-    /// function returns the location of the op at `loc` but at `port`.
-    pub fn equivalent_location(&self, loc: OpLocation, port: usize) -> Option<OpLocation> {
-        let op = self.get_rc(loc)?;
-        self.op_locations(op).get(port).copied()
-    }
-
-    pub fn all_locations(&self) -> impl Iterator<Item = OpLocation> + '_ {
-        self.qubits_iter().flat_map(|qb| self.qubit_locations(qb))
-    }
-
-    pub fn qubit_locations(&self, qb: StaticQubitIndex) -> impl Iterator<Item = OpLocation> {
-        (0..self.qubit_ops(qb).len()).map(move |op_idx| OpLocation { qubit: qb, op_idx })
+    pub fn positions(&self, op: OpId) -> Option<&[OpPosition]> {
+        Some(&self.get(op)?.positions)
     }
 
     /// Returns the location and port of the operation linked to the given
     /// operation at the given port.
-    pub fn linked_op(&self, loc: OpLocation, port: Port) -> Option<(Port, OpLocation)> {
-        let loc = self.equivalent_location(loc, port.index())?;
+    pub fn linked_op(&self, op: OpId, port: Port) -> Option<(Port, OpId)> {
+        let pos = self.get_position(op, port.index())?;
         match port.direction() {
             Direction::Outgoing => {
-                let next_loc = OpLocation {
-                    qubit: loc.qubit,
-                    op_idx: loc.op_idx + 1,
+                let next_pos = OpPosition {
+                    qubit: pos.qubit,
+                    index: pos.index + 1,
                 };
-                if self.exists(next_loc) {
-                    let index = self.qubit_port(next_loc);
-                    Some((Port::new(Direction::Incoming, index), next_loc))
+                if let Some(next_op) = self.at_position(next_pos) {
+                    let offset = self.position_offset(next_pos).unwrap();
+                    Some((Port::new(Direction::Incoming, offset), next_op))
                 } else {
                     None
                 }
             }
             Direction::Incoming => {
-                if loc.op_idx == 0 {
-                    None
-                } else {
-                    let prev_loc = OpLocation {
-                        qubit: loc.qubit,
-                        op_idx: loc.op_idx - 1,
-                    };
-                    let index = self.qubit_port(prev_loc);
-                    Some((Port::new(Direction::Outgoing, index), prev_loc))
-                }
+                let prev_index = pos.index.checked_sub(1)?;
+                let prev_pos = OpPosition {
+                    qubit: pos.qubit,
+                    index: prev_index,
+                };
+                let offset = self.position_offset(prev_pos).unwrap();
+                let prev_op = self.at_position(prev_pos).unwrap();
+                Some((Port::new(Direction::Outgoing, offset), prev_op))
             }
         }
     }
 
-    pub(crate) fn op_locations(&self, op: &Rc<Tk2Op>) -> &[OpLocation] {
-        self.op_locations[&Rc::as_ptr(op)].as_slice()
-    }
-
-    fn append_op(&mut self, op: Tk2Op, qubits: impl IntoIterator<Item = StaticQubitIndex>) {
+    pub(crate) fn append_op(
+        &mut self,
+        op: Tk2Op,
+        qubits: impl IntoIterator<Item = StaticQubitIndex>,
+    ) -> OpId {
         let qubits = qubits.into_iter();
-        let op = Rc::new(op);
-        let op_ptr = Rc::as_ptr(&op);
+        let id = OpId(self.all_ops.len());
+        let mut op = StaticOp {
+            op,
+            positions: Vec::new(),
+        };
         for qubit in qubits {
             if qubit.0 >= self.qubit_count() {
                 panic!(
@@ -179,113 +178,36 @@ impl StaticSizeCircuit {
                     self.qubit_count()
                 );
             }
-            let op_idx = self.qubit_ops[qubit.0].len();
-            self.qubit_ops[qubit.0].push(op.clone());
-            self.op_locations
-                .entry(op_ptr)
-                .or_default()
-                .push(OpLocation { qubit, op_idx });
+            let index = self.qubit_ops[qubit.0].len();
+            self.qubit_ops[qubit.0].push(id);
+            op.positions.push(OpPosition { qubit, index });
         }
+        self.all_ops.push(op);
+        id
     }
 
-    #[allow(unused)]
-    fn all_ops_iter(&self) -> impl Iterator<Item = &Rc<Tk2Op>> {
-        self.qubit_ops.iter().flat_map(|ops| ops.iter())
-    }
-
-    /// Add `other` on a new set of qubits.
-    pub fn add_subcircuit(
-        &mut self,
-        other: &Self,
-        ops: &BTreeSet<Tk2OpPtr>,
-    ) -> BTreeMap<OpLocation, OpLocation> {
-        // The new qubits to append to self
-        let mut append_qubit_ops = Vec::new();
-        // The current new qubit being added
-        let mut new_qubit_ops = Vec::new();
-        // Map from locations in `other` to new locations in (future) `self`
-        let mut op_location_map = BTreeMap::new();
-
-        for qb in other.qubits_iter() {
-            for other_loc in other.qubit_locations(qb) {
-                let op = other.get_rc(other_loc).unwrap();
-                let new_qubit_idx = StaticQubitIndex(self.qubit_count() + append_qubit_ops.len());
-                let new_op_idx = new_qubit_ops.len();
-                if ops.contains(&Rc::as_ptr(op)) {
-                    new_qubit_ops.push(op.clone());
-                    op_location_map.insert(
-                        other_loc,
-                        OpLocation {
-                            qubit: new_qubit_idx,
-                            op_idx: new_op_idx,
-                        },
-                    );
-                } else {
-                    if !new_qubit_ops.is_empty() {
-                        append_qubit_ops.push(mem::take(&mut new_qubit_ops));
-                    }
-                }
-            }
-            if !new_qubit_ops.is_empty() {
-                append_qubit_ops.push(mem::take(&mut new_qubit_ops));
-            }
-        }
-
-        self.qubit_ops.extend(append_qubit_ops);
-        dbg!(&op_location_map);
-        self.op_locations
-            .extend(other.op_locations.iter().filter_map(|(op, locs)| {
-                Some((
-                    *op,
-                    locs.iter()
-                        .map(|loc| op_location_map.get(loc).cloned())
-                        .collect::<Option<Vec<_>>>()?,
-                ))
-            }));
-        op_location_map
-    }
-
-    pub(crate) fn merge_qubits(
-        &mut self,
-        StaticQubitIndex(mut left_qubit): StaticQubitIndex,
-        StaticQubitIndex(right_qubit): StaticQubitIndex,
-    ) -> StaticQubitIndex {
-        assert_ne!(left_qubit, right_qubit);
-
-        let left_offset = self.qubit_ops[left_qubit].len();
-
-        // Append right qubit ops to left qubit
-        let right_ops = mem::take(&mut self.qubit_ops[right_qubit]);
-        self.qubit_ops[left_qubit].extend(right_ops);
-        self.qubit_ops.remove(right_qubit);
-
-        if left_qubit > right_qubit {
-            left_qubit -= 1;
-        }
-
-        // Update op locations
-        // TODO: check if this preserves convexity
-        for ops in self.op_locations.values_mut() {
-            for op in ops.iter_mut() {
-                match op.qubit.0.cmp(&right_qubit) {
-                    Ordering::Equal => {
-                        op.qubit = StaticQubitIndex(left_qubit);
-                        op.op_idx += left_offset;
-                    }
-                    Ordering::Greater => {
-                        op.qubit = StaticQubitIndex(op.qubit.0 - 1);
-                    }
-                    _ => {}
-                }
-            }
-        }
-        StaticQubitIndex(left_qubit)
+    /// Iterate over all operations in the circuit.
+    pub fn ops_iter(&self) -> impl Iterator<Item = OpId> {
+        (0..self.all_ops.len()).map(OpId)
     }
 }
 
 /// A qubit index within a `StaticSizeCircuit`.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    From,
+    Into,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct StaticQubitIndex(pub(crate) usize);
 
 // TODO: this is unsafe but was added for ECCRewriter to work.
@@ -353,41 +275,21 @@ impl fmt::Debug for StaticSizeCircuit {
     }
 }
 
-impl PartialEq for StaticSizeCircuit {
-    fn eq(&self, other: &Self) -> bool {
-        self.qubit_ops == other.qubit_ops
-    }
-}
-
-impl Eq for StaticSizeCircuit {}
-
-impl<'de> Deserialize<'de> for StaticSizeCircuit {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct StaticSizeCircuitHelper {
-            qubit_ops: Vec<Vec<Rc<Tk2Op>>>,
-        }
-
-        let helper = StaticSizeCircuitHelper::deserialize(deserializer)?;
-        let mut op_locations = BTreeMap::<Tk2OpPtr, Vec<OpLocation>>::new();
-
-        for (qubit, ops) in helper.qubit_ops.iter().enumerate() {
-            for (op_idx, op) in ops.iter().enumerate() {
-                let op_ptr = Rc::as_ptr(op);
-                op_locations.entry(op_ptr).or_default().push(OpLocation {
-                    qubit: StaticQubitIndex(qubit),
-                    op_idx,
-                });
+impl fmt::Display for StaticSizeCircuit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for qb in self.qubits_iter() {
+            write!(f, "Qubit {}:", qb.0)?;
+            for &op in self.qubit_ops(qb) {
+                let positions = &self.get(op).unwrap().positions;
+                let qubits = positions
+                    .iter()
+                    .map(|pos| format!("{}", pos.qubit.0))
+                    .join(", ");
+                write!(f, " {op:?} ({qubits})")?;
             }
+            writeln!(f)?;
         }
-
-        Ok(StaticSizeCircuit {
-            qubit_ops: helper.qubit_ops,
-            op_locations,
-        })
+        Ok(())
     }
 }
 
@@ -395,21 +297,22 @@ impl ToTk2OpIter for StaticSizeCircuit {
     type Iter<'a> = Box<dyn Iterator<Item = Tk2Op> + 'a> where Self: 'a;
 
     fn tk2_ops(&self) -> Self::Iter<'_> {
-        Box::new(self.all_ops_iter().map(|op| **op))
+        Box::new(self.ops_iter().map(|op| self.get(op).unwrap().op))
     }
 }
 
 impl RemoveEmptyWire for StaticSizeCircuit {
     fn remove_empty_wire(&mut self, input_port: usize) -> Result<(), CircuitMutError> {
         self.qubit_ops.remove(input_port);
-        for (_, ops) in self.op_locations.iter_mut() {
-            for loc in ops.iter_mut() {
-                assert_ne!(loc.qubit.0, input_port, "input port is not empty");
-                if loc.qubit.0 > input_port {
-                    loc.qubit = StaticQubitIndex(loc.qubit.0 - 1);
-                }
-            }
-        }
+        self.remap_positions(|loc| {
+            assert_ne!(loc.qubit.0, input_port, "input port is not empty");
+            let qubit = if loc.qubit.0 > input_port {
+                StaticQubitIndex(loc.qubit.0 - 1)
+            } else {
+                loc.qubit
+            };
+            OpPosition { qubit, ..loc }
+        });
         Ok(())
     }
 
@@ -425,13 +328,13 @@ impl RemoveEmptyWire for StaticSizeCircuit {
 mod tests {
     use std::collections::BTreeSet;
 
-    use hugr::Port;
+    use hugr::{Port, PortIndex};
     use portgraph::PortOffset;
     use rstest::rstest;
 
     use super::StaticSizeCircuit;
     use crate::ops::Tk2Op;
-    use crate::static_circ::OpLocation;
+    use crate::static_circ::OpPosition;
     use crate::utils::build_simple_circuit;
 
     #[test]
@@ -459,19 +362,19 @@ mod tests {
     #[case(PortOffset::Incoming(1), None)]
     #[case(
         PortOffset::Outgoing(1),
-        Some((PortOffset::Incoming(0).into(), OpLocation {
+        Some((PortOffset::Incoming(0).into(), OpPosition {
             qubit: 1.into(),
-            op_idx: 1,
+            index: 1,
         }))
     )]
     #[case(
         PortOffset::Incoming(0),
-        Some((PortOffset::Outgoing(0).into(), OpLocation {
+        Some((PortOffset::Outgoing(0).into(), OpPosition {
             qubit: 0.into(),
-            op_idx: 0,
+            index: 0,
         }))
     )]
-    fn test_linked_op(#[case] port: PortOffset, #[case] expected_loc: Option<(Port, OpLocation)>) {
+    fn test_linked_op(#[case] port: PortOffset, #[case] expected_loc: Option<(Port, OpPosition)>) {
         let circuit = build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::H, [0])?;
             circ.append(Tk2Op::CX, [0, 1])?;
@@ -483,16 +386,19 @@ mod tests {
         let static_circuit: StaticSizeCircuit = (&circuit).try_into().unwrap();
 
         // Define the location of the CX gate
-        let cx_location = OpLocation {
+        let cx_pos = OpPosition {
             qubit: 0.into(),
-            op_idx: 1,
+            index: 1,
         };
 
         // Define the port for the CX gate
         let cx_port = port.into();
+        let cx_op_id = static_circuit.at_position(cx_pos).unwrap();
 
         // Get the linked operation for the CX gate
-        let linked_op_location = static_circuit.linked_op(cx_location, cx_port);
+        let linked_op_location = static_circuit
+            .linked_op(cx_op_id, cx_port)
+            .map(|(port, op)| (port, static_circuit.get_position(op, port.index()).unwrap()));
 
         // Check if the linked operation is correct
         assert_eq!(linked_op_location, expected_loc);
@@ -523,21 +429,21 @@ mod tests {
         // Define the nodes to add from the subcircuit
         let nodes = BTreeSet::from_iter(
             [
-                OpLocation {
+                OpPosition {
                     qubit: 0.into(),
-                    op_idx: 0,
+                    index: 0,
                 },
-                OpLocation {
+                OpPosition {
                     qubit: 0.into(),
-                    op_idx: 2,
+                    index: 2,
                 },
-                OpLocation {
+                OpPosition {
                     qubit: 1.into(),
-                    op_idx: 0,
+                    index: 0,
                 },
             ]
             .into_iter()
-            .map(|loc| sub_circuit.get_ptr(loc).unwrap()),
+            .map(|pos| sub_circuit.at_position(pos).unwrap()),
         );
 
         // Add the subcircuit to the main circuit
@@ -555,5 +461,14 @@ mod tests {
         assert_eq!(main_circuit.qubit_ops(5.into()).len(), 1); // Y gate
 
         insta::assert_debug_snapshot!(main_circuit);
+    }
+
+    #[test]
+    fn serde_roundtrip() {
+        let mut circ = StaticSizeCircuit::with_qubit_count(2);
+        circ.append_op(Tk2Op::CX, vec![0.into(), 1.into()]);
+        let ser = serde_json::to_string_pretty(&circ).unwrap();
+        let circ2: StaticSizeCircuit = serde_json::from_str(&ser).unwrap();
+        assert_eq!(circ, circ2);
     }
 }

@@ -4,6 +4,7 @@ use std::{
 };
 
 use cgmath::num_traits::{WrappingAdd, WrappingShl};
+use itertools::Itertools;
 
 use crate::{
     circuit::{CircuitHash, HashError},
@@ -12,7 +13,7 @@ use crate::{
 
 use super::{
     rewrite::{OpInterval, StaticRewrite},
-    StaticQubitIndex, StaticSizeCircuit,
+    StaticOp, StaticQubitIndex, StaticSizeCircuit,
 };
 
 pub struct UpdatableHash {
@@ -27,8 +28,8 @@ impl UpdatableHash {
         for row in circuit.qubit_ops.iter() {
             let mut prev_hash = 0;
             let mut row_hash = Vec::with_capacity(row.len());
-            for op in row.iter() {
-                let hash = Self::hash_op(op);
+            for &op in row.iter() {
+                let hash = Self::hash_op(&circuit.get(op).unwrap());
                 let combined_hash = prev_hash.wrapping_shl(5).wrapping_add(&hash);
                 row_hash.push(combined_hash);
                 prev_hash = combined_hash;
@@ -44,17 +45,22 @@ impl UpdatableHash {
     where
         F: Fn(StaticQubitIndex) -> StaticQubitIndex,
     {
+        let mut row_hashes = self
+            .cum_hash
+            .iter()
+            .map(|row| *row.last().unwrap())
+            .collect_vec();
         let new_hash = Self::with_static(&rewrite.replacement);
-        Ok(hash_iter((0..self.cum_hash.len()).map(|i| {
-            if let Some(interval) = rewrite.subcircuit.op_indices.get(&StaticQubitIndex(i)) {
-                splice(&self.cum_hash[i], interval, &new_hash.cum_hash[i])
-            } else {
-                *self.cum_hash[i].last().unwrap()
-            }
-        })))
+        for (i, new_cum_hash) in new_hash.cum_hash.iter().enumerate() {
+            let subj_i = (rewrite.qubit_map)(StaticQubitIndex(i)).0;
+            let interval = &rewrite.subcircuit.op_indices[&subj_i.into()];
+            row_hashes[subj_i] = splice(&self.cum_hash[subj_i], interval, new_cum_hash);
+        }
+
+        Ok(hash_iter(row_hashes))
     }
 
-    fn hash_op(op: &Tk2Op) -> u64 {
+    fn hash_op(op: &StaticOp) -> u64 {
         let mut hasher = fxhash::FxHasher::default();
         op.hash(&mut hasher);
         hasher.finish()
@@ -91,7 +97,7 @@ fn hash_delta(cum_hashes: &[u64], Range { start, end }: Range<usize>) -> u64 {
     end_hash.wrapping_sub(start_hash_shifted)
 }
 
-fn hash_iter<T: Hash>(iter: impl Iterator<Item = T>) -> u64 {
+fn hash_iter<T: Hash>(iter: impl IntoIterator<Item = T>) -> u64 {
     let mut hasher = fxhash::FxHasher::default();
     for item in iter {
         item.hash(&mut hasher);
@@ -105,7 +111,7 @@ impl CircuitHash for StaticSizeCircuit {
             hash_updater
                 .cum_hash
                 .iter()
-                .map(|row| row.last().unwrap_or(&0)),
+                .map(|row| *row.last().unwrap_or(&0)),
         ))
     }
 }

@@ -1,22 +1,23 @@
 use std::collections::BTreeSet;
 
-use super::{indexing::PatternOpLocation, predicate::Predicate};
+use super::{indexing::PatternOpPosition, predicate::Predicate};
 
 use itertools::Itertools;
 use portmatching as pm;
 
-pub type Constraint = pm::Constraint<PatternOpLocation, Predicate>;
+pub type Constraint = pm::Constraint<PatternOpPosition, Predicate>;
 
-pub(super) fn constraint_key(c: &Constraint) -> (&PatternOpLocation, &Predicate) {
+pub(super) fn constraint_key(c: &Constraint) -> (&PatternOpPosition, &Predicate) {
     let arg = match c.predicate() {
         Predicate::Link { .. } => c.required_bindings().iter().max().unwrap(),
         Predicate::IsOp { .. } => c.required_bindings().first().unwrap(),
-        Predicate::NotEq { .. } => c.required_bindings().first().unwrap(),
+        Predicate::SameOp { .. } => c.required_bindings().first().unwrap(),
+        Predicate::DistinctQubits { .. } => c.required_bindings().first().unwrap(),
     };
     (arg, c.predicate())
 }
 
-impl pm::ToConstraintsTree<PatternOpLocation> for Predicate {
+impl pm::ToConstraintsTree<PatternOpPosition> for Predicate {
     fn to_constraints_tree(constraints: Vec<Constraint>) -> pm::MutuallyExclusiveTree<Constraint> {
         let constraints = constraints
             .into_iter()
@@ -42,11 +43,23 @@ impl pm::ToConstraintsTree<PatternOpLocation> for Predicate {
                     }
                 })
             }
-            Predicate::NotEq { .. } => {
+            Predicate::SameOp { .. } => {
+                pm::MutuallyExclusiveTree::with_pairwise_mutex(constraints, |a, b| {
+                    if !matches!(b.predicate(), Predicate::SameOp { .. }) {
+                        return false;
+                    }
+                    // a and b are mutually exclusive if they share an argument
+                    let a_args: BTreeSet<_> = a.required_bindings().iter().copied().collect();
+                    let b_args: BTreeSet<_> = b.required_bindings().iter().copied().collect();
+                    assert_ne!(a_args, b_args);
+                    !a_args.is_disjoint(&b_args)
+                })
+            }
+            Predicate::DistinctQubits { .. } => {
                 let constraints = constraints.into_iter().filter(|(c, _)| {
-                    // We can only turn IsNotEqual constraints into mutex predicates
+                    // We can only turn DistinctQubits constraints into mutex predicates
                     // if they act on the same variable
-                    matches!(c.predicate(), Predicate::NotEq { .. })
+                    matches!(c.predicate(), Predicate::DistinctQubits { .. })
                         && fst_required_binding_eq(c, &first)
                 });
                 pm::MutuallyExclusiveTree::with_powerset(constraints.collect())
@@ -55,9 +68,9 @@ impl pm::ToConstraintsTree<PatternOpLocation> for Predicate {
     }
 }
 
-impl pm::ConditionedPredicate<PatternOpLocation> for Predicate {
+impl pm::ConditionedPredicate<PatternOpPosition> for Predicate {
     fn conditioned(constraint: &Constraint, satisfied: &[&Constraint]) -> Option<Constraint> {
-        if !matches!(constraint.predicate(), Predicate::NotEq { .. }) {
+        if !matches!(constraint.predicate(), Predicate::DistinctQubits { .. }) {
             return Some(constraint.clone());
         }
         let first_key = constraint.required_bindings()[0];
@@ -77,9 +90,9 @@ impl pm::ConditionedPredicate<PatternOpLocation> for Predicate {
             return None;
         }
         let mut args = vec![first_key];
-        let n_other = keys.len();
         args.extend(keys);
-        Some(Constraint::try_new(Predicate::NotEq { n_other }, args).unwrap())
+        let n_qubits = args.len();
+        Some(Constraint::try_new(Predicate::DistinctQubits { n_qubits }, args).unwrap())
     }
 }
 

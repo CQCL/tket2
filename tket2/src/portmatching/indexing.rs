@@ -1,31 +1,31 @@
 mod pattern;
 
-pub use pattern::PatternOpLocation;
+pub use pattern::{DisconnectedCircuit, PatternOpPosition};
 
 use std::collections::{BTreeMap, VecDeque};
 
 pub(crate) use pattern::CircuitPath;
 use portmatching::indexing as pmx;
 
-use crate::static_circ::{OpLocation, StaticSizeCircuit};
+use crate::static_circ::{OpPosition, StaticSizeCircuit};
 
 /// Indexing scheme for `StaticSizeCircuit`.
 #[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
 pub struct StaticIndexScheme;
 
 /// A map taking pairs (K, isize) as keys, where the isize is expected to
-/// be within a contiguous range of indices.
-#[derive(Clone)]
+/// be within a contiguous interval of indices.
+#[derive(Clone, Debug)]
 pub struct OpLocationMap<K, V>(BTreeMap<K, (usize, VecDeque<Option<V>>)>);
 
 impl<K: Ord, V: Clone> OpLocationMap<K, V> {
-    pub fn get_val(&self, key: &K, idx: isize) -> Option<&V> {
+    pub(crate) fn get_val(&self, key: &K, idx: isize) -> Option<&V> {
         let (offset, vec) = self.0.get(key)?;
         let idx = offset.checked_add_signed(idx)?;
         vec.get(idx)?.as_ref()
     }
 
-    pub fn set_val(&mut self, key: K, idx: isize, val: V) {
+    pub(crate) fn set_val(&mut self, key: K, idx: isize, val: V) {
         let (offset, vec) = self.0.entry(key).or_default();
         while offset.checked_add_signed(idx).is_none() {
             vec.push_front(None);
@@ -38,7 +38,7 @@ impl<K: Ord, V: Clone> OpLocationMap<K, V> {
         vec[idx] = Some(val);
     }
 
-    pub fn values(&self) -> impl Iterator<Item = &V> {
+    pub(crate) fn values(&self) -> impl Iterator<Item = &V> {
         self.0
             .values()
             .flat_map(|(_, vec)| vec.iter().filter_map(|v| v.as_ref()))
@@ -52,7 +52,7 @@ impl<K, V: Clone> Default for OpLocationMap<K, V> {
 }
 
 impl<V: pmx::IndexValue> pmx::IndexMap for OpLocationMap<CircuitPath, V> {
-    type Key = PatternOpLocation;
+    type Key = PatternOpPosition;
 
     type Value = V;
 
@@ -61,7 +61,7 @@ impl<V: pmx::IndexValue> pmx::IndexMap for OpLocationMap<CircuitPath, V> {
         Self: 'a;
 
     fn get(&self, var: &Self::Key) -> Option<Self::ValueRef<'_>> {
-        let PatternOpLocation { qubit, op_idx } = var;
+        let PatternOpPosition { qubit, op_idx } = var;
         self.get_val(&qubit, *op_idx as isize)
     }
 
@@ -74,18 +74,18 @@ impl<V: pmx::IndexValue> pmx::IndexMap for OpLocationMap<CircuitPath, V> {
             });
         }
 
-        let PatternOpLocation { qubit, op_idx } = var;
+        let PatternOpPosition { qubit, op_idx } = var;
         self.set_val(qubit, op_idx as isize, val);
         Ok(())
     }
 }
 
 impl pmx::IndexingScheme<StaticSizeCircuit> for StaticIndexScheme {
-    type Map = OpLocationMap<CircuitPath, OpLocation>;
+    type Map = OpLocationMap<CircuitPath, OpPosition>;
 
     fn valid_bindings(
         &self,
-        key: &PatternOpLocation,
+        key: &PatternOpPosition,
         known_bindings: &Self::Map,
         data: &StaticSizeCircuit,
     ) -> pmx::BindingResult<Self, StaticSizeCircuit> {
@@ -96,11 +96,11 @@ impl pmx::IndexingScheme<StaticSizeCircuit> for StaticIndexScheme {
         } else if key.op_idx != 0 {
             // Can only bind if the idx 0 is bound.
             if let Some(root) = get_known(&key.with_op_idx(0)) {
-                let Some(loc) = root.try_add_op_idx(key.op_idx as isize) else {
+                let Some(pos) = root.try_add_op_idx(key.op_idx as isize) else {
                     return Ok(vec![].into());
                 };
-                if data.get(loc).is_some() {
-                    Ok(vec![loc].into())
+                if data.exists(pos) {
+                    Ok(vec![pos].into())
                 } else {
                     Ok(vec![].into())
                 }
@@ -111,13 +111,13 @@ impl pmx::IndexingScheme<StaticSizeCircuit> for StaticIndexScheme {
             // Bind first op on a new qubit
             if key.qubit.is_empty() {
                 // It is the root of the pattern, all locations are valid
-                Ok(Vec::from_iter(data.all_locations()).into())
+                Ok(Vec::from_iter(data.positions_iter()).into())
             } else {
                 // It is a new qubit, use the root to resolve it.
-                if let Some(&root) = get_known(&PatternOpLocation::root()) {
+                if let Some(&root) = get_known(&PatternOpPosition::root()) {
                     Ok(Vec::from_iter(key.resolve(data, root)).into())
                 } else {
-                    Err(pmx::MissingIndexKeys(vec![PatternOpLocation::root()]))
+                    Err(pmx::MissingIndexKeys(vec![PatternOpPosition::root()]))
                 }
             }
         }

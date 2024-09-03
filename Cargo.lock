@@ -1169,8 +1169,6 @@ dependencies = [
 [[package]]
 name = "portdiff"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecc4a48447ba995caa50602de028f27d6d3020f659d90cce9162c3da6662d46a"
 dependencies = [
  "bimap",
  "delegate",
@@ -1181,6 +1179,7 @@ dependencies = [
  "relrc",
  "serde",
  "thiserror",
+ "union-find",
  "uuid",
 ]
 
@@ -1202,12 +1201,11 @@ dependencies = [
 [[package]]
 name = "portmatching"
 version = "0.4.0-rc.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27f7164a1070f3055aa2db0e35fe6beac2e4d726e4ee19d829b40975c4b6f5b0"
 dependencies = [
  "bimap",
  "bitvec",
  "delegate",
+ "derive-where",
  "derive_more",
  "itertools 0.10.5",
  "petgraph",
@@ -1844,9 +1842,9 @@ dependencies = [
 
 [[package]]
 name = "union-find"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c109a31f4b2557d711f79c65b0e097359c033c78ba6416b78593e78f3dba930f"
+checksum = "039142448432983c34b64739f8526f8f233a1eec7a66e61b6ab29acfa781194e"
 
 [[package]]
 name = "url"

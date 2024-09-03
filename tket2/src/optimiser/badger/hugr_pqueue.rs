@@ -9,53 +9,46 @@ use crate::circuit::CircuitHash;
 /// The cost function provided will be used as the priority of the Hugrs.
 /// Uses hashes internally to store the Hugrs.
 #[derive(Debug, Clone, Default)]
-pub struct HugrPQ<Circuit, P: Ord, Cost> {
+pub struct HugrPQ<Circuit, P: Ord, HashFn> {
     queue: DoublePriorityQueue<u64, P>,
     hash_lookup: FxHashMap<u64, Circuit>,
-    cost_fn: Cost,
+    hash_fn: HashFn,
     max_size: usize,
 }
 
-pub struct Entry<C, P, H> {
+pub struct Entry<C, P> {
     pub circ: C,
     pub cost: P,
-    pub hash: H,
 }
 
-impl<Circuit, P: Ord, Cost> HugrPQ<Circuit, P, Cost> {
+impl<Circuit, P: Ord, HashFn> HugrPQ<Circuit, P, HashFn> {
     /// Create a new HugrPQ with a cost function and some initial capacity.
-    pub fn new(cost_fn: Cost, max_size: usize) -> Self {
+    pub fn new(max_size: usize, hash_fn: HashFn) -> Self {
         Self {
             queue: DoublePriorityQueue::with_capacity(max_size),
             hash_lookup: Default::default(),
-            cost_fn,
             max_size,
+            hash_fn,
         }
     }
 
     /// Reference to the minimal circuit in the queue.
     #[allow(unused)]
-    pub fn peek(&self) -> Option<Entry<&Circuit, &P, u64>> {
+    pub fn peek(&self) -> Option<Entry<&Circuit, &P>> {
         let (hash, cost) = self.queue.peek_min()?;
         let circ = self.hash_lookup.get(hash)?;
-        Some(Entry {
-            circ,
-            cost,
-            hash: *hash,
-        })
+        Some(Entry { circ, cost })
     }
 
     /// Push a circuit into the queue.
     ///
     /// If the queue is full, the element with the highest cost will be dropped.
     #[allow(unused)]
-    pub fn push(&mut self, circ: Circuit)
+    pub fn push(&mut self, circ: Circuit, cost: P)
     where
-        Cost: Fn(&Circuit) -> P,
-        Circuit: CircuitHash,
+        HashFn: Fn(&Circuit) -> u64,
     {
-        let hash = circ.circuit_hash().unwrap();
-        let cost = (self.cost_fn)(&circ);
+        let hash = (self.hash_fn)(&circ);
         self.push_unchecked(circ, hash, cost);
     }
 
@@ -67,10 +60,7 @@ impl<Circuit, P: Ord, Cost> HugrPQ<Circuit, P, Cost> {
     /// This does not check that the hash is valid.
     ///
     /// If the queue is full, the most last will be dropped.
-    pub fn push_unchecked(&mut self, circ: Circuit, hash: u64, cost: P)
-    where
-        Cost: Fn(&Circuit) -> P,
-    {
+    pub fn push_unchecked(&mut self, circ: Circuit, hash: u64, cost: P) {
         if !self.check_accepted(&cost) {
             return;
         }
@@ -82,17 +72,17 @@ impl<Circuit, P: Ord, Cost> HugrPQ<Circuit, P, Cost> {
     }
 
     /// Pop the minimal circuit from the queue.
-    pub fn pop(&mut self) -> Option<Entry<Circuit, P, u64>> {
+    pub fn pop(&mut self) -> Option<Entry<Circuit, P>> {
         let (hash, cost) = self.queue.pop_min()?;
         let circ = self.hash_lookup.remove(&hash)?;
-        Some(Entry { circ, cost, hash })
+        Some(Entry { circ, cost })
     }
 
     /// Pop the maximal circuit from the queue.
-    pub fn pop_max(&mut self) -> Option<Entry<Circuit, P, u64>> {
+    pub fn pop_max(&mut self) -> Option<Entry<Circuit, P>> {
         let (hash, cost) = self.queue.pop_max()?;
         let circ = self.hash_lookup.remove(&hash)?;
-        Some(Entry { circ, cost, hash })
+        Some(Entry { circ, cost })
     }
 
     /// Discard the largest elements of the queue.
@@ -104,12 +94,6 @@ impl<Circuit, P: Ord, Cost> HugrPQ<Circuit, P, Cost> {
             let (hash, _) = self.queue.pop_max().unwrap();
             self.hash_lookup.remove(&hash);
         }
-    }
-
-    /// The cost function used by the queue.
-    #[allow(unused)]
-    pub fn cost_fn(&self) -> &Cost {
-        &self.cost_fn
     }
 
     /// The largest cost in the queue.

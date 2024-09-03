@@ -1,33 +1,38 @@
 //! Portdiff support for StaticSizeCircuits.
 
 mod matcher;
+mod rewrite;
 
-pub use matcher::DiffCircuitMatcher;
+use std::collections::BTreeMap;
 
-use hugr::{IncomingPort, OutgoingPort, Port, PortIndex};
-use itertools::{Either, Itertools};
-use portdiff::{self as pd, BoundPort, EdgeEnd, Site};
+pub use matcher::{DiffCircuit, DiffCircuitMatcher};
+pub use rewrite::DiffRewrite;
 
-use crate::static_circ::{OpLocation, StaticSizeCircuit};
+use derive_more::Into;
+use hugr::{Direction, IncomingPort, OutgoingPort, Port, PortIndex};
+use itertools::Itertools;
+use portdiff::{self as pd, port_diff::Owned, BoundPort, EdgeEnd, Site};
+
+use crate::static_circ::{OpId, OpPosition, StaticSizeCircuit};
 
 impl pd::Graph for StaticSizeCircuit {
-    type Node = OpLocation; // use the location at the 0-th qubit
-
-    type Edge = (OpLocation, OutgoingPort); // use the edge source and outport index
+    type Node = OpId;
+    type Edge = EdgeId;
 
     type PortLabel = Port; // use port offset
 
     fn nodes_iter(&self) -> impl Iterator<Item = Self::Node> + '_ {
-        self.all_locations() // each location is a node on a qubit
-            .map(|loc| self.equivalent_location(loc, 0).unwrap()) // get location at port 0
-            .unique()
+        self.ops_iter()
     }
 
     fn edges_iter(&self) -> impl Iterator<Item = Self::Edge> + '_ {
-        self.all_locations() // each location is a node on a qubit
-            .map(|loc| (loc, self.qubit_port(loc).into()))
-            // filter out port locations with no successor op
-            .filter(|&(loc, port): &(_, OutgoingPort)| self.linked_op(loc, port.into()).is_some())
+        self.positions_iter() // each location is a node on a qubit
+            .filter_map(|pos| {
+                let out_port: OutgoingPort = self.position_offset(pos).unwrap().into();
+                let node = self.at_position(pos).unwrap();
+                let port = out_port.into();
+                EdgeId::try_from_site(Site { node, port }, self)
+            })
     }
 
     fn get_port_site(
@@ -35,23 +40,14 @@ impl pd::Graph for StaticSizeCircuit {
         bound_port: BoundPort<Self::Edge>,
     ) -> Site<Self::Node, Self::PortLabel> {
         match bound_port.end {
-            EdgeEnd::Left => {
-                let (loc, port) = bound_port.edge;
-                Site {
-                    node: loc,
-                    port: port.into(),
-                }
-            }
-            EdgeEnd::Right => {
-                let (left_loc, left_port) = bound_port.edge;
-                let (right_port, right_loc) = self
-                    .linked_op(left_loc, left_port.into())
-                    .expect("invalid bound port");
-                Site {
-                    node: right_loc,
-                    port: right_port,
-                }
-            }
+            EdgeEnd::Left => Site {
+                node: bound_port.edge.source(),
+                port: bound_port.edge.source_port().into(),
+            },
+            EdgeEnd::Right => Site {
+                node: bound_port.edge.target(self),
+                port: bound_port.edge.target_port(self).into(),
+            },
         }
     }
 
@@ -59,43 +55,32 @@ impl pd::Graph for StaticSizeCircuit {
         &self,
         site: Site<Self::Node, Self::PortLabel>,
     ) -> impl Iterator<Item = BoundPort<Self::Edge>> + '_ {
-        let Site { node: loc, port } = site;
-        let bound_port = match port.as_directed() {
-            Either::Right(port) => Some(BoundPort {
-                edge: (loc, port),
-                end: EdgeEnd::Left,
-            }),
-            Either::Left(port) => {
-                if let Some((port, loc)) = self.linked_op(loc, port.into()) {
-                    let port = port.as_outgoing().expect("two incoming ports are linked");
-                    Some(BoundPort {
-                        edge: (loc, port),
-                        end: EdgeEnd::Right,
-                    })
-                } else {
-                    None
-                }
-            }
+        let Some(edge) = EdgeId::try_from_site(site, self) else {
+            return None.into_iter();
         };
-        bound_port.into_iter()
+        let end = match site.port.direction() {
+            Direction::Incoming => EdgeEnd::Right,
+            Direction::Outgoing => EdgeEnd::Left,
+        };
+        Some(BoundPort { edge, end }).into_iter()
     }
 
     fn get_sites(
         &self,
         node: Self::Node,
     ) -> impl Iterator<Item = Site<Self::Node, Self::PortLabel>> + '_ {
-        let op = self.get_rc(node).unwrap();
-        self.op_locations(op).iter().flat_map(|&loc| {
-            let port = self.qubit_port(loc);
+        let op = self.get(node.into()).unwrap();
+        op.positions.iter().flat_map(move |&pos| {
+            let port = self.position_offset(pos).unwrap();
             let out_port: OutgoingPort = port.into();
             let in_port: IncomingPort = port.into();
             vec![
                 Site {
-                    node: loc,
+                    node,
                     port: out_port.into(),
                 },
                 Site {
-                    node: loc,
+                    node,
                     port: in_port.into(),
                 },
             ]
@@ -106,71 +91,142 @@ impl pd::Graph for StaticSizeCircuit {
         &mut self,
         left: Site<Self::Node, Self::PortLabel>,
         right: Site<Self::Node, Self::PortLabel>,
-    ) -> (BoundPort<Self::Edge>, BoundPort<Self::Edge>) {
-        let Site {
-            node: left_loc,
-            port: left_port,
-        } = left;
-        let Site {
-            node: right_loc,
-            port: right_port,
-        } = right;
-
+    ) {
         // Make sure the sites are not already linked
-        if self.linked_op(left_loc, left_port).is_some() {
-            panic!("left site is already linked");
+        if let Some(new_right) = self.linked_op(left.node.into(), left.port.into()) {
+            panic!("left site is already linked to {new_right:?}");
         }
-        if self.linked_op(right_loc, right_port).is_some() {
+        if self
+            .linked_op(right.node.into(), right.port.into())
+            .is_some()
+        {
             panic!("right site is already linked");
         }
-        let left_port = left_port.as_outgoing().unwrap();
 
-        // Get the qubits of the sites
+        // Find the qubits at the sites
         let left_qubit = self
-            .equivalent_location(left_loc, left_port.index())
-            .unwrap()
+            .get_position(left.node, left.port.index())
+            .expect("invalid location")
             .qubit;
         let right_qubit = self
-            .equivalent_location(right_loc, right_port.index())
-            .unwrap()
+            .get_position(right.node, right.port.index())
+            .expect("invalid location")
             .qubit;
 
-        // Merge the qubits
-        let new_qubit = self.merge_qubits(left_qubit, right_qubit);
-
-        // Find new location and create edge ID
-        let new_loc = self
-            .equivalent_location(
-                OpLocation {
-                    qubit: new_qubit,
-                    op_idx: left_port.index(),
-                },
-                0,
-            )
-            .unwrap();
-        let edge = (new_loc, left_port.into());
-
-        (
-            BoundPort {
-                edge,
-                end: EdgeEnd::Left,
-            },
-            BoundPort {
-                edge,
-                end: EdgeEnd::Right,
-            },
-        )
+        self.merge_qubits(left_qubit, right_qubit);
     }
 
     fn add_subgraph(
         &mut self,
         graph: &Self,
         nodes: &std::collections::BTreeSet<Self::Node>,
-    ) -> std::collections::BTreeMap<Self::Node, Self::Node> {
-        let nodes = nodes
-            .iter()
-            .map(|&loc| graph.get_ptr(loc).expect("invalid op location"))
-            .collect();
-        self.add_subcircuit(graph, &nodes)
+    ) -> BTreeMap<Self::Node, Self::Node> {
+        let node_map = self.add_subcircuit(graph, &nodes);
+        node_map
+            .into_iter()
+            .map(|(k, v)| (graph.at_position(k).unwrap(), self.at_position(v).unwrap()))
+            .collect()
     }
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Into,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub struct EdgeId {
+    /// use the edge source and outport index
+    source: OpId,
+    out_port: OutgoingPort,
+}
+
+impl EdgeId {
+    pub fn try_from_site(site: Site<OpId, Port>, circuit: &StaticSizeCircuit) -> Option<Self> {
+        let (opp_port, opp_node) = circuit.linked_op(site.node, site.port)?;
+        let (out_port, source) = match site.port.direction() {
+            Direction::Incoming => (opp_port, opp_node),
+            Direction::Outgoing => (site.port, site.node),
+        };
+        let out_port = out_port.as_outgoing().expect("checked direction above");
+        Some(Self { source, out_port })
+    }
+
+    pub fn source(&self) -> OpId {
+        self.source
+    }
+
+    pub fn source_port(&self) -> OutgoingPort {
+        self.out_port
+    }
+
+    pub fn source_position(&self, circuit: &StaticSizeCircuit) -> OpPosition {
+        circuit
+            .get_position(self.source(), self.source_port().index())
+            .expect("invalid edge ID")
+    }
+
+    pub fn target(&self, circuit: &StaticSizeCircuit) -> OpId {
+        let (_, target) = circuit
+            .linked_op(self.source().into(), self.source_port().into())
+            .expect("invalid edge ID");
+        target
+    }
+
+    pub fn target_port(&self, circuit: &StaticSizeCircuit) -> IncomingPort {
+        let (target_port, _) = circuit
+            .linked_op(self.source().into(), self.source_port().into())
+            .expect("invalid edge ID");
+        target_port.as_incoming().expect("invalid edge ID")
+    }
+
+    pub fn target_position(&self, circuit: &StaticSizeCircuit) -> OpPosition {
+        circuit
+            .get_position(self.target(circuit), self.target_port(circuit).index())
+            .expect("invalid edge ID")
+    }
+}
+
+type OwnedSite = Owned<Site<OpId, Port>, StaticSizeCircuit>;
+type OwnedPort = Owned<pd::Port<StaticSizeCircuit>, StaticSizeCircuit>;
+
+fn site_to_port(site: OwnedSite) -> Option<OwnedPort> {
+    as_boundary_port(&site).or_else(|| {
+        as_bound_port(Owned {
+            data: site.data,
+            owner: site.owner,
+        })
+    })
+}
+
+fn as_boundary_port(site: &OwnedSite) -> Option<OwnedPort> {
+    site.owner
+        .boundary_iter()
+        .find(|&bd| {
+            let s = site.owner.boundary_site(bd);
+            s == Some(&site.data)
+        })
+        .map(|bd| Owned {
+            data: pd::Port::Boundary(bd),
+            owner: site.owner.clone(),
+        })
+}
+
+fn as_bound_port(site: OwnedSite) -> Option<OwnedPort> {
+    let edge = EdgeId::try_from_site(site.data, site.owner.graph())?;
+    let end = match site.data.port.direction() {
+        Direction::Incoming => EdgeEnd::Right,
+        Direction::Outgoing => EdgeEnd::Left,
+    };
+    Some(Owned {
+        data: pd::Port::Bound(BoundPort { edge, end }),
+        owner: site.owner,
+    })
 }

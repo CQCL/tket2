@@ -1,12 +1,15 @@
+use std::collections::BTreeSet;
+
+use itertools::Itertools;
 use portgraph::PortOffset;
 use portmatching as pm;
 
 use crate::{
-    static_circ::{OpLocation, StaticSizeCircuit},
+    static_circ::{OpPosition, StaticSizeCircuit},
     Tk2Op,
 };
 
-use super::{indexing::PatternOpLocation, Constraint};
+use super::{indexing::PatternOpPosition, Constraint};
 
 /// Predicate for matching `StaticSizeCircuit`s.
 #[derive(
@@ -17,8 +20,10 @@ pub enum Predicate {
     Link { out_port: usize, in_port: usize },
     /// An operation of type `op`.
     IsOp { op: Tk2Op },
-    /// Check that the locations map is injective on the set of locations.
-    NotEq { n_other: usize },
+    /// All locations are the same operation.
+    SameOp { arity: usize },
+    /// Check that the first qubit is distinct from all others.
+    DistinctQubits { n_qubits: usize },
 }
 
 impl pm::ArityPredicate for Predicate {
@@ -26,46 +31,52 @@ impl pm::ArityPredicate for Predicate {
         match self {
             Predicate::Link { .. } => 2,
             Predicate::IsOp { .. } => 1,
-            Predicate::NotEq { n_other } => n_other + 1,
+            Predicate::SameOp { arity } => *arity,
+            Predicate::DistinctQubits { n_qubits } => *n_qubits,
         }
     }
 }
 
 impl pm::Predicate<StaticSizeCircuit> for Predicate {
-    type Value = OpLocation;
+    type Value = OpPosition;
 
     fn check(
         &self,
         data: &StaticSizeCircuit,
         args: &[impl std::borrow::Borrow<Self::Value>],
     ) -> bool {
-        match self {
-            &Predicate::Link { out_port, in_port } => {
-                let &out_loc = args[0].borrow();
-                let &in_loc = args[1].borrow();
-                data.linked_op(out_loc, PortOffset::Outgoing(out_port as u16).into())
-                    == Some((PortOffset::Incoming(in_port as u16).into(), in_loc))
+        let to_op_id = |pos| data.at_position(pos).unwrap();
+        match *self {
+            Predicate::Link { out_port, in_port } => {
+                let &out_pos = args[0].borrow();
+                let &in_pos = args[1].borrow();
+                let out_op = to_op_id(out_pos);
+                let in_op = to_op_id(in_pos);
+                data.linked_op(out_op, PortOffset::Outgoing(out_port as u16).into())
+                    == Some((PortOffset::Incoming(in_port as u16).into(), in_op))
             }
-            Predicate::IsOp { op } => {
-                let &loc = args[0].borrow();
-                data.get(loc) == Some(op)
+            Predicate::IsOp { ref op } => {
+                let &pos = args[0].borrow();
+                let id = to_op_id(pos);
+                data.get(id).map(|op| op.op) == Some(*op)
             }
-            &Predicate::NotEq { n_other } => {
-                let op = data.get_ptr(*args[0].borrow()).unwrap();
-                for i in 0..n_other {
-                    let &loc = args[i + 1].borrow();
-                    if data.get_ptr(loc) == Some(op) {
-                        return false;
-                    }
-                }
-                true
+            Predicate::SameOp { .. } => args.iter().tuple_windows().all(|(a, b)| {
+                let &loc_a = a.borrow();
+                let &loc_b = b.borrow();
+                let op_a = to_op_id(loc_a);
+                let op_b = to_op_id(loc_b);
+                op_a == op_b
+            }),
+            Predicate::DistinctQubits { n_qubits } => {
+                let qubits = args.iter().map(|loc| loc.borrow().qubit);
+                qubits.unique().count() == n_qubits
             }
         }
     }
 }
 
-impl pm::DetHeuristic<PatternOpLocation> for Predicate {
+impl pm::DetHeuristic<PatternOpPosition> for Predicate {
     fn make_det(_constraints: &[&Constraint]) -> bool {
-        true
+        false
     }
 }

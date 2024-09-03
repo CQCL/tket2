@@ -12,7 +12,7 @@
 //! it gets too large.
 
 mod eq_circ_class;
-mod hugr_pchannel;
+// mod hugr_pchannel;
 mod hugr_pqueue;
 pub mod log;
 mod qtz_circuit;
@@ -23,22 +23,23 @@ pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 use fxhash::FxHashSet;
 use hugr::hugr::HugrError;
 pub use log::BadgerLogger;
+use portdiff::{self as pd, GraphView, PortDiff};
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
 use std::num::NonZeroUsize;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 use std::{mem, thread};
 
-use crate::circuit::cost::CircuitCost;
+use crate::circuit::cost::{CircuitCost, CostDelta};
 use crate::circuit::{CircuitHash, ToTk2OpIter};
-use crate::optimiser::badger::hugr_pchannel::{HugrPriorityChannel, PriorityChannelLog};
+// use crate::optimiser::badger::hugr_pchannel::{HugrPriorityChannel, PriorityChannelLog};
 use crate::optimiser::badger::hugr_pqueue::{Entry, HugrPQ};
 // use crate::optimiser::badger::worker::BadgerWorker;
-use crate::passes::CircuitChunks;
+use crate::portdiff::{DiffCircuit, DiffRewrite};
 use crate::rewrite::strategy::StrategyCost;
 use crate::rewrite::Rewriter;
 use crate::static_circ::{StaticQubitIndex, StaticRewrite, StaticSizeCircuit, UpdatableHash};
-use crate::Circuit;
 
 /// Configuration options for the Badger optimiser.
 #[derive(Copy, Clone, Debug)]
@@ -124,7 +125,6 @@ impl<R, Cost> BadgerOptimiser<R, Cost> {
 
     fn cost<C: ToTk2OpIter>(&self, circ: &C) -> Cost::OpCost
     where
-        R: Rewriter<C>,
         Cost: StrategyCost,
     {
         self.cost.circuit_cost(circ)
@@ -135,10 +135,12 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
     /// Run the Badger optimiser on a circuit.
     ///
     /// A timeout (in seconds) can be provided.
-    pub fn optimise<F>(&self, circ: &StaticSizeCircuit, options: BadgerOptions) -> StaticSizeCircuit
+    pub fn optimise(&self, circ: &StaticSizeCircuit, options: BadgerOptions) -> StaticSizeCircuit
     where
-        R: Rewriter<StaticSizeCircuit, CircuitRewrite = StaticRewrite<F>> + Clone,
-        F: Fn(StaticQubitIndex) -> StaticQubitIndex,
+        R: Rewriter<DiffCircuit, CircuitRewrite = DiffRewrite> + Clone,
+        // R: Rewriter<StaticSizeCircuit, CircuitRewrite = StaticRewrite<F>> + Clone,
+        // F: Fn(StaticQubitIndex) -> StaticQubitIndex,
+        Cost::OpCost: serde::Serialize,
     {
         self.optimise_with_log(circ, Default::default(), options)
     }
@@ -146,18 +148,26 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
     /// Run the Badger optimiser on a circuit with logging activated.
     ///
     /// A timeout (in seconds) can be provided.
-    pub fn optimise_with_log<F>(
+    pub fn optimise_with_log(
         &self,
         circ: &StaticSizeCircuit,
         log_config: BadgerLogger,
         options: BadgerOptions,
     ) -> StaticSizeCircuit
     where
-        R: Rewriter<StaticSizeCircuit, CircuitRewrite = StaticRewrite<F>> + Clone,
-        F: Fn(StaticQubitIndex) -> StaticQubitIndex,
+        R: Rewriter<DiffCircuit, CircuitRewrite = DiffRewrite> + Clone,
+        // R: Rewriter<StaticSizeCircuit, CircuitRewrite = StaticRewrite<F>> + Clone,
+        // F: Fn(StaticQubitIndex) -> StaticQubitIndex,
+        Cost::OpCost: serde::Serialize,
     {
         match options.n_threads.get() {
-            1 => self.badger(circ, log_config, options),
+            1 => {
+                let diffs = self.badger_diff(circ, log_config, options);
+                // Serialize the diff as JSON and print to stdout
+                let json = serde_json::to_string(&diffs).unwrap();
+                println!("{}", json);
+                PortDiff::extract_graph(diffs.sinks().collect()).unwrap()
+            }
             _ => {
                 // if options.split_circuit {
                 //     self.badger_split_multithreaded(circ, log_config, options)
@@ -171,51 +181,154 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
     }
 
     /// Run the Badger optimiser on a circuit, using a single thread.
-    #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
-    fn badger<F>(
+    // #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
+    // fn badger<F>(
+    //     &self,
+    //     circ: &StaticSizeCircuit,
+    //     mut logger: BadgerLogger,
+    //     opt: BadgerOptions,
+    // ) -> StaticSizeCircuit
+    // where
+    //     R: Rewriter<StaticSizeCircuit, CircuitRewrite = StaticRewrite<F>> + Clone,
+    //     F: Fn(StaticQubitIndex) -> StaticQubitIndex,
+    //     Cost::OpCost: serde::Serialize,
+    // {
+    //     let start_time = Instant::now();
+    //     let mut last_best_time = Instant::now();
+
+    //     let circ = circ.to_owned();
+    //     let mut best_circ = circ.clone();
+    //     let mut best_circ_cost = self.cost(&circ);
+    //     // let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.len());
+    //     logger.log_best(&best_circ_cost, None);
+
+    //     // Hash of seen circuits. Dot not store circuits as this map gets huge
+    //     let hash = circ.circuit_hash().unwrap();
+    //     let mut seen_hashes = FxHashSet::default();
+    //     seen_hashes.insert(hash);
+
+    //     // The priority queue of circuits to be processed (this should not get big)
+    //     let cost_fn = {
+    //         let strategy = self.cost.clone();
+    //         move |circ: &'_ StaticSizeCircuit| strategy.circuit_cost(circ)
+    //     };
+    //     let cost = (cost_fn)(&circ);
+
+    //     let mut pq = HugrPQ::new(cost_fn, opt.queue_size);
+    //     pq.push_unchecked(circ.to_owned(), hash, cost);
+
+    //     let mut circ_cnt = 0;
+    //     let mut timeout_flag = false;
+    //     while let Some(Entry { circ, cost, .. }) = pq.pop() {
+    //         if cost < best_circ_cost {
+    //             best_circ = circ.clone();
+    //             best_circ_cost = cost.clone();
+    //             // let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.len());
+    //             logger.log_best(&best_circ_cost, None);
+    //             last_best_time = Instant::now();
+    //         }
+    //         circ_cnt += 1;
+
+    //         let rewrites = self.rewriter.get_rewrites(&circ);
+    //         logger.register_branching_factor(rewrites.len());
+
+    //         // Get combinations of rewrites that can be applied to the circuit,
+    //         // and filter them to keep only the ones that
+    //         //
+    //         // - Don't have a worse cost than the last candidate in the priority queue.
+    //         // - Do not invalidate the circuit by creating a loop.
+    //         // - We haven't seen yet.
+    //         let fast_hasher = UpdatableHash::with_static(&circ);
+    //         for rw in rewrites {
+    //             let Ok(rw_cost) = self.rewriter.rewrite_cost_delta(&rw, &circ, &self.cost) else {
+    //                 continue; // could not compute cost, probably not convex
+    //             };
+    //             let new_circ_cost = cost.add_delta(&rw_cost);
+    //             if !pq.check_accepted(&new_circ_cost) {
+    //                 continue;
+    //             }
+
+    //             let Ok(new_circ_hash) = fast_hasher.hash_rewrite(&rw) else {
+    //                 // The composed rewrites produced a loop.
+    //                 //
+    //                 // See [https://github.com/CQCL/tket2/discussions/242]
+    //                 continue;
+    //             };
+
+    //             if !seen_hashes.insert(new_circ_hash) {
+    //                 // Ignore this circuit: we've already seen it
+    //                 continue;
+    //             }
+
+    //             if let Ok(new_circ) = self.rewriter.apply_rewrite(rw, &circ) {
+    //                 pq.push_unchecked(new_circ, new_circ_hash, new_circ_cost);
+    //                 logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
+    //             }
+    //         }
+
+    //         if let Some(timeout) = opt.timeout {
+    //             if start_time.elapsed().as_secs() > timeout {
+    //                 timeout_flag = true;
+    //                 break;
+    //             }
+    //         }
+    //         if let Some(p_timeout) = opt.progress_timeout {
+    //             if last_best_time.elapsed().as_secs() > p_timeout {
+    //                 timeout_flag = true;
+    //                 break;
+    //             }
+    //         }
+    //         if let Some(max_circuit_count) = opt.max_circuit_count {
+    //             if seen_hashes.len() >= max_circuit_count {
+    //                 timeout_flag = true;
+    //                 break;
+    //             }
+    //         }
+    //     }
+
+    //     logger.log_processing_end(
+    //         circ_cnt,
+    //         Some(seen_hashes.len()),
+    //         best_circ_cost,
+    //         false,
+    //         timeout_flag,
+    //         start_time.elapsed(),
+    //     );
+    //     best_circ
+    // }
+
+    fn badger_diff(
         &self,
         circ: &StaticSizeCircuit,
         mut logger: BadgerLogger,
         opt: BadgerOptions,
-    ) -> StaticSizeCircuit
+    ) -> GraphView<StaticSizeCircuit>
     where
-        R: Rewriter<StaticSizeCircuit, CircuitRewrite = StaticRewrite<F>> + Clone,
-        F: Fn(StaticQubitIndex) -> StaticQubitIndex,
+        R: Rewriter<DiffCircuit, CircuitRewrite = DiffRewrite> + Clone,
+        Cost::OpCost: serde::Serialize,
     {
         let start_time = Instant::now();
         let mut last_best_time = Instant::now();
 
-        let circ = circ.to_owned();
-        let mut best_circ = circ.clone();
-        let mut best_circ_cost = self.cost(&circ);
-        // let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.len());
-        // logger.log_best(&best_circ_cost, num_rewrites);
+        let hash = circ.circuit_hash().unwrap();
+
+        let circ = DiffCircuit::from_graph(circ.clone());
+        // The list of all "salient" circuits, i.e. those that result from
+        // salient rewrites (the best type of rewrite).
+        let mut salient_diffs = vec![circ.clone()];
 
         // Hash of seen circuits. Dot not store circuits as this map gets huge
-        let hash = circ.circuit_hash().unwrap();
         let mut seen_hashes = FxHashSet::default();
         seen_hashes.insert(hash);
 
-        // The priority queue of circuits to be processed (this should not get big)
-        let cost_fn = {
-            let strategy = self.cost.clone();
-            move |circ: &'_ StaticSizeCircuit| strategy.circuit_cost(circ)
-        };
-        let cost = (cost_fn)(&circ);
-
-        let mut pq = HugrPQ::new(cost_fn, opt.queue_size);
-        pq.push_unchecked(circ.to_owned(), hash, cost);
+        let mut pq = HugrPQ::new(opt.queue_size, |circ: &'_ PortDiff<_>| {
+            PortDiff::as_ptr(&circ) as u64
+        });
+        pq.push(circ.to_owned(), PQCost::default());
 
         let mut circ_cnt = 0;
         let mut timeout_flag = false;
-        while let Some(Entry { circ, cost, .. }) = pq.pop() {
-            if cost < best_circ_cost {
-                best_circ = circ.clone();
-                best_circ_cost = cost.clone();
-                // let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.len());
-                // logger.log_best(&best_circ_cost, num_rewrites);
-                last_best_time = Instant::now();
-            }
+        while let Some(Entry { circ, cost }) = pq.pop() {
             circ_cnt += 1;
 
             let rewrites = self.rewriter.get_rewrites(&circ);
@@ -227,29 +340,53 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
             // - Don't have a worse cost than the last candidate in the priority queue.
             // - Do not invalidate the circuit by creating a loop.
             // - We haven't seen yet.
-            let fast_hasher = UpdatableHash::with_static(&circ);
+            let Ok(extracted) = PortDiff::extract_graph(vec![circ.clone()]) else {
+                continue;
+            };
+            let fast_hasher = UpdatableHash::with_static(&extracted);
             for rw in rewrites {
-                let rw_cost = self.rewriter.rewrite_cost_delta(&rw, &circ, &self.cost);
-                let new_circ_cost = cost.add_delta(&rw_cost);
-                if !pq.check_accepted(&new_circ_cost) {
-                    continue;
-                }
-
-                let Ok(new_circ_hash) = fast_hasher.hash_rewrite(&rw) else {
-                    // The composed rewrites produced a loop.
-                    //
-                    // See [https://github.com/CQCL/tket2/discussions/242]
-                    continue;
+                let Ok(rw_cost) = self.rewriter.rewrite_cost_delta(&rw, &circ, &self.cost) else {
+                    println!("rewrite cost delta failed");
+                    continue; // could not compute cost, probably not convex
                 };
-
-                if !seen_hashes.insert(new_circ_hash) {
-                    // Ignore this circuit: we've already seen it
+                let mut new_cost = cost.add_rewrite_cost(rw_cost.as_isize());
+                if !pq.check_accepted(&new_cost) {
                     continue;
                 }
 
-                let new_circ = self.rewriter.apply_rewrite(rw, &circ).unwrap();
-                pq.push_unchecked(new_circ, new_circ_hash, new_circ_cost);
-                logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
+                // let Ok(new_circ_hash) = fast_hasher.hash_rewrite(&rw) else {
+                //     // The composed rewrites produced a loop.
+                //     //
+                //     // See [https://github.com/CQCL/tket2/discussions/242]
+                //     continue;
+                // };
+
+                // if !seen_hashes.insert(new_circ_hash) {
+                //     // Ignore this circuit: we've already seen it
+                //     continue;
+                // }
+
+                if let Ok(new_circ) = self.rewriter.apply_rewrite(rw.clone(), &circ) {
+                    // TODO: use updateable hash
+                    let Ok(extracted) = PortDiff::extract_graph(vec![new_circ.clone()]) else {
+                        continue;
+                    };
+                    if !extracted.is_acyclic() {
+                        continue;
+                    }
+                    let new_circ_hash = extracted.circuit_hash().unwrap();
+                    if !seen_hashes.insert(new_circ_hash) {
+                        continue;
+                    }
+                    if new_cost.is_salient() {
+                        salient_diffs.push(new_circ.clone());
+                        last_best_time = Instant::now();
+                        new_cost = PQCost::zero(); // Reset aggregate cost
+                    }
+                    pq.push(new_circ, new_cost);
+                    logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
+                }
+                println!("pq len: {}", pq.len());
             }
 
             if let Some(timeout) = opt.timeout {
@@ -272,15 +409,19 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
             }
         }
 
+        if timeout_flag {
+            println!("Timed out");
+        }
+
         logger.log_processing_end(
             circ_cnt,
             Some(seen_hashes.len()),
-            best_circ_cost,
+            (),
             false,
             timeout_flag,
             start_time.elapsed(),
         );
-        best_circ
+        GraphView::from_sinks(salient_diffs)
     }
 
     // /// Run the Badger optimiser on a circuit, using multiple threads.
@@ -513,6 +654,42 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
     // }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct PQCost {
+    n_rewrites_since_salient: usize,
+    total_cost_delta: isize, // TODO: Change this to CostDelta.
+}
+
+impl PartialOrd for PQCost {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for PQCost {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let key = |cost: &Self| (cost.n_rewrites_since_salient, cost.total_cost_delta.clone());
+        key(self).cmp(&key(other))
+    }
+}
+
+impl PQCost {
+    fn zero() -> Self {
+        Self::default()
+    }
+
+    fn add_rewrite_cost(&self, rewrite_cost: isize) -> Self {
+        Self {
+            n_rewrites_since_salient: self.n_rewrites_since_salient + 1,
+            total_cost_delta: self.total_cost_delta + rewrite_cost,
+        }
+    }
+
+    fn is_salient(&self) -> bool {
+        self.total_cost_delta < 0
+    }
+}
+
 #[cfg(feature = "portmatching")]
 mod badger_default {
     use std::io;
@@ -520,6 +697,7 @@ mod badger_default {
 
     use hugr::ops::OpType;
 
+    use crate::portdiff::DiffCircuitMatcher;
     use crate::portmatching::CircuitMatcher;
     use crate::rewrite::ecc_rewriter::RewriterSerialisationError;
     use crate::rewrite::strategy::LexicographicCostFunction;
@@ -535,10 +713,14 @@ mod badger_default {
     pub type DefaultBadgerOptimiser =
         BadgerOptimiser<ECCRewriter<CircuitMatcher, StaticSizeCircuit>, StrategyCost>;
 
+    /// The portdiff Badger optimiser using ECC sets.
+    pub type DiffBadgerOptimiser =
+        BadgerOptimiser<ECCRewriter<DiffCircuitMatcher, StaticSizeCircuit>, StrategyCost>;
+
     impl DefaultBadgerOptimiser {
         /// A sane default optimiser using the given ECC sets.
         pub fn default_with_eccs_json_file(eccs_path: impl AsRef<Path>) -> io::Result<Self> {
-            let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
+            let rewriter = ECCRewriter::<CircuitMatcher, _>::try_from_eccs_json_file(eccs_path)?;
             let strategy = LexicographicCostFunction::default_cx();
             Ok(BadgerOptimiser::new(rewriter, strategy))
         }
@@ -553,11 +735,32 @@ mod badger_default {
             Ok(BadgerOptimiser::new(rewriter, strategy))
         }
     }
-}
-#[cfg(feature = "portmatching")]
-pub use badger_default::DefaultBadgerOptimiser;
 
-use self::hugr_pchannel::Work;
+    impl DiffBadgerOptimiser {
+        /// A sane default optimiser using the given ECC sets.
+        pub fn diff_with_eccs_json_file(eccs_path: impl AsRef<Path>) -> io::Result<Self> {
+            let rewriter =
+                ECCRewriter::<DiffCircuitMatcher, _>::try_from_eccs_json_file(eccs_path)?;
+            let strategy = LexicographicCostFunction::default_cx();
+            Ok(BadgerOptimiser::new(rewriter, strategy))
+        }
+
+        /// A sane default optimiser using a precompiled binary rewriter.
+        #[cfg(feature = "binary-eccs")]
+        pub fn diff_with_rewriter_binary(
+            rewriter_path: impl AsRef<Path>,
+        ) -> Result<Self, RewriterSerialisationError> {
+            let rewriter = ECCRewriter::load_binary(rewriter_path)?;
+            let strategy = LexicographicCostFunction::default_cx();
+            Ok(BadgerOptimiser::new(rewriter, strategy))
+        }
+    }
+}
+
+#[cfg(feature = "portmatching")]
+pub use badger_default::{DefaultBadgerOptimiser, DiffBadgerOptimiser};
+
+// use self::hugr_pchannel::Work;
 
 #[cfg(test)]
 #[cfg(feature = "portmatching")]

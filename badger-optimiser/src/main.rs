@@ -13,7 +13,8 @@ use std::process::exit;
 use clap::Parser;
 use tket2::optimiser::badger::log::BadgerLogger;
 use tket2::optimiser::badger::BadgerOptions;
-use tket2::optimiser::{BadgerOptimiser, DefaultBadgerOptimiser};
+use tket2::optimiser::BadgerOptimiser;
+use tket2::optimiser::DiffBadgerOptimiser;
 use tket2::serialize::{load_tk1_json_file, save_tk1_json_file};
 use tket2::static_circ::StaticSizeCircuit;
 
@@ -171,10 +172,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn load_optimiser(ecc_path: &Path) -> Result<DefaultBadgerOptimiser, Box<dyn std::error::Error>> {
+fn load_optimiser(ecc_path: &Path) -> Result<DiffBadgerOptimiser, Box<dyn std::error::Error>> {
     Ok(match ecc_path.extension().and_then(OsStr::to_str) {
-        Some("json") => BadgerOptimiser::default_with_eccs_json_file(ecc_path)?,
-        Some("rwr") => BadgerOptimiser::default_with_rewriter_binary(ecc_path)?,
+        Some("json") => BadgerOptimiser::diff_with_eccs_json_file(ecc_path)?,
+        Some("rwr") => BadgerOptimiser::diff_with_rewriter_binary(ecc_path)?,
         _ => Err("ECC file must be a `.json` file or a pre-compiled `.rwr` ECC set.".to_string())?,
     })
 }

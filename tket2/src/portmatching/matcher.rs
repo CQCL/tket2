@@ -8,12 +8,13 @@ use std::{
 };
 
 use super::{
-    indexing::{PatternOpLocation, StaticIndexScheme},
+    indexing::{PatternOpPosition, StaticIndexScheme},
+    pattern::InvalidStaticPattern,
     predicate::Predicate,
 };
 use delegate::delegate;
 use hugr::hugr::views::sibling_subgraph::{InvalidSubgraph, InvalidSubgraphBoundary};
-use portmatching::{IndexingScheme, ManyMatcher, PatternID, PortMatcher};
+use portmatching::{IndexingScheme, ManyMatcher, PatternFallback, PatternID, PortMatcher};
 use thiserror::Error;
 
 use crate::static_circ::StaticSizeCircuit;
@@ -24,7 +25,7 @@ use crate::static_circ::StaticSizeCircuit;
 /// simultaneously.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CircuitMatcher(
-    ManyMatcher<StaticSizeCircuit, PatternOpLocation, Predicate, StaticIndexScheme>,
+    ManyMatcher<StaticSizeCircuit, PatternOpPosition, Predicate, StaticIndexScheme>,
 );
 
 impl PortMatcher<StaticSizeCircuit> for CircuitMatcher {
@@ -39,8 +40,14 @@ impl PortMatcher<StaticSizeCircuit> for CircuitMatcher {
 }
 
 impl CircuitMatcher {
-    pub fn from_patterns(patterns: Vec<StaticSizeCircuit>) -> Self {
-        CircuitMatcher(ManyMatcher::from_patterns(patterns))
+    /// Create a matcher from a set of patterns, skipping disconnected patterns.
+    pub fn try_from_patterns(
+        patterns: Vec<StaticSizeCircuit>,
+    ) -> Result<Self, InvalidStaticPattern> {
+        Ok(CircuitMatcher(ManyMatcher::try_from_patterns(
+            patterns,
+            PatternFallback::Skip,
+        )?))
     }
 
     /// Serialise a matcher into an IO stream.
@@ -215,7 +222,7 @@ mod tests {
     fn construct_matcher() {
         let circ = h_cx();
 
-        let m = CircuitMatcher::from_patterns(vec![circ.clone()]);
+        let m = CircuitMatcher::try_from_patterns(vec![circ.clone()]).unwrap();
 
         let matches = m.find_matches(&circ);
         assert_eq!(matches.count(), 1);
@@ -228,7 +235,7 @@ mod tests {
 
         // Estimate the size of the buffer based on the number of patterns and the size of each pattern
         let mut buf = Vec::with_capacity(patterns[0].n_ops() + patterns[1].n_ops());
-        let m = CircuitMatcher::from_patterns(patterns);
+        let m = CircuitMatcher::try_from_patterns(patterns).unwrap();
         m.save_binary_io(&mut buf).unwrap();
 
         let m2 = CircuitMatcher::load_binary_io(&mut buf.as_slice()).unwrap();
@@ -240,7 +247,7 @@ mod tests {
 
     #[rstest]
     fn cx_cx_replace_to_id(cx_cx: StaticSizeCircuit, cx_cx_3: StaticSizeCircuit) {
-        let m = CircuitMatcher::from_patterns(vec![cx_cx_3]);
+        let m = CircuitMatcher::try_from_patterns(vec![cx_cx_3]).unwrap();
 
         let matches = m.find_matches(&cx_cx);
         assert_eq!(matches.count(), 0);
