@@ -3,7 +3,8 @@
 //! This module contains the [`RewriteStrategy`] trait, which is currently
 //! implemented by
 
-use std::iter;
+use std::iter::{self, Sum};
+use std::ops::{Add, AddAssign};
 use std::{collections::HashSet, fmt::Debug};
 
 use derive_more::From;
@@ -45,13 +46,10 @@ impl<Circuit: Clone, C: CircuitCost> From<(Circuit, C::CostDelta)> for RewriteRe
 /// See [`ExhaustiveThresholdStrategy`], [`ExhaustiveGreedyStrategy`].
 pub trait StrategyCost {
     /// The cost of a single operation.
-    type OpCost: CircuitCost;
+    type OpCost: Copy + Ord + AddAssign + Sum + Default;
 
-    /// Returns true if the rewrite is allowed, based on the cost of the pattern and target.
-    #[inline]
-    fn under_threshold(&self, pattern_cost: &Self::OpCost, target_cost: &Self::OpCost) -> bool {
-        target_cost.sub_cost(pattern_cost).as_isize() <= 0
-    }
+    /// Returns true if the rewrite cost is "very good".
+    fn is_salient(&self, cost: &Self::OpCost) -> bool;
 
     /// The cost of a single operation.
     fn op_cost(&self, op: Tk2Op) -> Self::OpCost;

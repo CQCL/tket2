@@ -27,6 +27,7 @@ use portdiff::{self as pd, GraphView, PortDiff};
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
 use std::num::NonZeroUsize;
+use std::ops::AddAssign;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 use std::{mem, thread};
@@ -349,7 +350,7 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
                     println!("rewrite cost delta failed");
                     continue; // could not compute cost, probably not convex
                 };
-                let mut new_cost = cost.add_rewrite_cost(rw_cost.as_isize());
+                let mut new_cost = cost.add_rewrite_cost(rw_cost);
                 if !pq.check_accepted(&new_cost) {
                     continue;
                 }
@@ -378,10 +379,15 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
                     if !seen_hashes.insert(new_circ_hash) {
                         continue;
                     }
-                    if new_cost.is_salient() {
+                    if self.cost.is_salient(&new_cost.total_cost_delta) {
+                        // The compound rewrite is salient. Reset the cost
                         salient_diffs.push(new_circ.clone());
                         last_best_time = Instant::now();
                         new_cost = PQCost::zero(); // Reset aggregate cost
+                    } else if self.cost.is_salient(&rw_cost) {
+                        // The latest rewrite is salient, so maybe this is the
+                        // right direction
+                        new_cost.n_rewrites_since_salient = 0;
                     }
                     pq.push(new_circ, new_cost);
                     logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
@@ -656,38 +662,42 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-struct PQCost {
+struct PQCost<C> {
     n_rewrites_since_salient: usize,
-    total_cost_delta: isize, // TODO: Change this to CostDelta.
+    total_cost_delta: C,
 }
 
-impl PartialOrd for PQCost {
+impl<C: Ord> PartialOrd for PQCost<C> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for PQCost {
+impl<C: Ord> Ord for PQCost<C> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         let key = |cost: &Self| (cost.n_rewrites_since_salient, cost.total_cost_delta.clone());
         key(self).cmp(&key(other))
     }
 }
 
-impl PQCost {
-    fn zero() -> Self {
+impl<C> PQCost<C> {
+    fn zero() -> Self
+    where
+        C: Default,
+    {
         Self::default()
     }
 
-    fn add_rewrite_cost(&self, rewrite_cost: isize) -> Self {
+    fn add_rewrite_cost(&self, rewrite_cost: C) -> Self
+    where
+        C: AddAssign + Copy,
+    {
+        let mut total_cost_delta = self.total_cost_delta;
+        total_cost_delta += rewrite_cost;
         Self {
             n_rewrites_since_salient: self.n_rewrites_since_salient + 1,
-            total_cost_delta: self.total_cost_delta + rewrite_cost,
+            total_cost_delta,
         }
-    }
-
-    fn is_salient(&self) -> bool {
-        self.total_cost_delta < 0
     }
 }
 

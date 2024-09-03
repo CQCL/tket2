@@ -1,12 +1,8 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    rc::Rc,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use hugr::{Direction, Port, PortIndex};
 use itertools::Itertools;
 use portdiff::{self as pd, port_diff::Owned, Graph, PortDiff, Site};
-use portgraph::PortOffset;
 use portmatching::{
     self as pm, indexing as pmx, IndexingScheme, ManyMatcher, PatternFallback, PortMatcher,
 };
@@ -206,7 +202,7 @@ fn follow_link(
     all_ports.extend(
         pos.owner
             .boundary_iter()
-            .find(|b| pos.owner.boundary_site(*b) == Some(&site))
+            .find(|b| pos.owner.boundary_site(*b).try_as_site_ref() == Some(&site))
             .map(pd::Port::Boundary),
     );
     // Find bound ports that corresponds to site
@@ -230,11 +226,16 @@ fn follow_link(
                 .opposite_ports(port)
                 .into_iter()
                 .filter(|p| PortDiff::are_compatible(known_diffs.iter().chain([&p.owner])))
+                .flat_map(|p|
+                    // This handles empty wires in the graph by recursively finding the
+                    // first "real" port.
+                    p.owner.resolve_port(p.data)
+                )
                 .filter_map(|p| {
                     let data = p
                         .owner
                         .graph()
-                        .get_position(p.site()?.node, p.site()?.port.index()) // TODO: Handle sentinels
+                        .get_position(p.site().unwrap().node, p.site().unwrap().port.index())
                         .unwrap();
                     Some(Owned {
                         data,

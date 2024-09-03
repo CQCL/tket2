@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use hugr::{Direction, Port};
-use itertools::Itertools;
 use portdiff::{self as pd, port_diff::Owned, Site};
 
 use crate::{
@@ -13,7 +12,7 @@ use super::{site_to_port, DiffCircuit};
 
 type PortMap = BTreeMap<
     Owned<pd::Port<StaticSizeCircuit>, StaticSizeCircuit>,
-    pd::BoundaryPort<StaticSizeCircuit>,
+    pd::BoundarySite<StaticSizeCircuit>,
 >;
 
 /// A rewrite that applies on a static circuit.
@@ -105,6 +104,7 @@ impl DiffRewrite {
 
         // Fill port map
         let mut port_map = PortMap::new();
+        let mut n_wires = 0; // Keep track of the number of wires that we have assigned ids to
         for qubit in pattern.qubits_iter() {
             assert!(
                 pattern.qubit_ops(qubit).len() > 0,
@@ -125,7 +125,7 @@ impl DiffRewrite {
                 if let Some(start_port) = pos_to_port(start, Direction::Incoming) {
                     port_map.insert(
                         start_port,
-                        pd::BoundaryPort::Site(Site {
+                        pd::BoundarySite::Site(Site {
                             node: replacement.at_position(start_repl).unwrap(),
                             port: Port::new(Direction::Incoming, start_port_repl),
                         }),
@@ -135,20 +135,31 @@ impl DiffRewrite {
                     let end_port_repl = replacement.position_offset(end_repl.into()).unwrap();
                     port_map.insert(
                         end_port,
-                        pd::BoundaryPort::Site(Site {
+                        pd::BoundarySite::Site(Site {
                             node: replacement.at_position(end_repl).unwrap(),
                             port: Port::new(Direction::Outgoing, end_port_repl),
                         }),
                     );
                 }
             } else {
-                // if let Some(start_port) = pos_to_port(start, Direction::Incoming) {
-                //     port_map.insert(start_port, pd::BoundaryPort::Sentinel(qubit.0));
-                // }
-                // if let Some(end_port) = pos_to_port(end, Direction::Outgoing) {
-                //     port_map.insert(end_port, pd::BoundaryPort::Sentinel(qubit.0));
-                // }
-                return Err(());
+                let mut created_wire = false;
+                if let Some(start_port) = pos_to_port(start, Direction::Incoming) {
+                    let right_wire_end = pd::BoundarySite::Wire {
+                        id: n_wires,
+                        end: pd::EdgeEnd::Right,
+                    };
+                    port_map.insert(start_port, right_wire_end);
+                    created_wire = true;
+                }
+                if let Some(end_port) = pos_to_port(end, Direction::Outgoing) {
+                    let left_wire_end = pd::BoundarySite::Wire {
+                        id: n_wires,
+                        end: pd::EdgeEnd::Left,
+                    };
+                    port_map.insert(end_port, left_wire_end);
+                    created_wire = true;
+                }
+                n_wires += created_wire as usize;
             }
         }
 

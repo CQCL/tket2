@@ -210,7 +210,7 @@ fn as_boundary_port(site: &OwnedSite) -> Option<OwnedPort> {
     site.owner
         .boundary_iter()
         .find(|&bd| {
-            let s = site.owner.boundary_site(bd);
+            let s = site.owner.boundary_site(bd).try_as_site_ref();
             s == Some(&site.data)
         })
         .map(|bd| Owned {

@@ -167,5 +167,5 @@ pub trait Rewriter<C> {
         rw: &Self::CircuitRewrite,
         circ: &C,
         strategy: &S,
-    ) -> Result<CostDelta<S>, Self::Error>;
+    ) -> Result<S::OpCost, Self::Error>;
 }

@@ -355,8 +355,9 @@ fn check_hugr(hugr: &impl HugrView, parent: Node) -> Result<(), CircuitError> {
     }
 }
 
+/// Remove empty wires in the circuit.
 pub trait RemoveEmptyWire {
-    /// Remove an empty wire in a dataflow HUGR.
+    /// Remove an empty wire in a Circuit.
     ///
     /// The wire to be removed is identified by the index of the outgoing port
     /// at the circuit input node.
