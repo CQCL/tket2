@@ -380,7 +380,7 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
                         continue;
                     }
                     if self.cost.is_salient(&new_cost.total_cost_delta) {
-                        // The compound rewrite is salient. Reset the cost
+                        // The compound rewrite is salient, success! Reset the cost
                         salient_diffs.push(new_circ.clone());
                         last_best_time = Instant::now();
                         new_cost = PQCost::zero(); // Reset aggregate cost
@@ -663,19 +663,19 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct PQCost<C> {
-    n_rewrites_since_salient: usize,
     total_cost_delta: C,
+    n_rewrites_since_salient: usize,
 }
 
-impl<C: Ord> PartialOrd for PQCost<C> {
+impl<C: Ord + Copy> PartialOrd for PQCost<C> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<C: Ord> Ord for PQCost<C> {
+impl<C: Ord + Copy> Ord for PQCost<C> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let key = |cost: &Self| (cost.n_rewrites_since_salient, cost.total_cost_delta.clone());
+        let key = |cost: &Self| (cost.n_rewrites_since_salient, cost.total_cost_delta);
         key(self).cmp(&key(other))
     }
 }

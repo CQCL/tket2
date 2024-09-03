@@ -276,20 +276,20 @@ impl Rewriter<StaticSizeCircuit> for ECCRewriter<CircuitMatcher, StaticSizeCircu
         &self,
         rw: &Self::CircuitRewrite,
         circ: &StaticSizeCircuit,
-        cost_strategy: &S,
-    ) -> Result<<S::OpCost as CircuitCost>::CostDelta, Self::Error> {
+        strategy: &S,
+    ) -> Result<S::OpCost, Self::Error> {
         let StaticRewrite {
             replacement,
             subcircuit,
             ..
         } = rw;
-        Ok(cost_strategy.circuit_cost(replacement).sub_cost(
-            &cost_strategy.circuit_cost(
-                &circ
-                    .subcircuit(subcircuit)
-                    .map_err(|_| NonConvexRewriteError)?,
-            ),
-        ))
+        let mut repl_cost = strategy.circuit_cost(replacement);
+        repl_cost -= strategy.circuit_cost(
+            &circ
+                .subcircuit(subcircuit)
+                .map_err(|_| NonConvexRewriteError)?,
+        );
+        Ok(repl_cost)
     }
 }
 
@@ -327,17 +327,17 @@ impl Rewriter<DiffCircuit> for ECCRewriter<DiffCircuitMatcher, StaticSizeCircuit
     fn rewrite_cost_delta<S: StrategyCost>(
         &self,
         rw: &Self::CircuitRewrite,
-        circ: &DiffCircuit,
+        _: &DiffCircuit,
         strategy: &S,
-    ) -> Result<super::CostDelta<S>, Self::Error> {
+    ) -> Result<S::OpCost, Self::Error> {
         let DiffRewrite {
             pattern,
             replacement,
             ..
         } = rw;
-        Ok(strategy
-            .circuit_cost(replacement)
-            .sub_cost(&strategy.circuit_cost(pattern)))
+        let mut repl_cost = strategy.circuit_cost(replacement);
+        repl_cost -= strategy.circuit_cost(pattern);
+        Ok(repl_cost)
     }
 }
 
