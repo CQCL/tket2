@@ -620,7 +620,6 @@ impl ParameterTracker {
                 // Re-use the parameter from the input.
                 inputs[0].clone()
             }
-            // TODO replace with .cast() after updating to HUGR 0.12
             OpType::ExtensionOp(_) if optype.cast::<FloatOps>() == Some(FloatOps::fadd) => {
                 format!("{} + {}", inputs[0], inputs[1])
             }
