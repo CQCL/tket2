@@ -65,7 +65,7 @@ bytemuck = { workspace = true }
 crossbeam-channel = { workspace = true }
 tracing = { workspace = true }
 zstd = { workspace = true, optional = true }
-portdiff = { path = "../../portdiff" }
+portdiff = "0.2.0"
 
 [dev-dependencies]
 rstest = { workspace = true }

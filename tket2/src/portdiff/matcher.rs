@@ -92,9 +92,11 @@ impl pm::Predicate<DiffCircuit> for Predicate {
             Predicate::SameOp { .. } => args.iter().tuple_windows().all(|(a, b)| {
                 let pos_a = a.borrow();
                 let pos_b = b.borrow();
-                let data_a = pos_a.owner.graph();
-                let data_b = pos_b.owner.graph();
-                data_a.at_position(pos_a.data) == data_b.at_position(pos_b.data)
+                if pos_a.owner != pos_b.owner {
+                    return false;
+                }
+                let data = pos_a.owner.graph();
+                data.at_position(pos_a.data) == data.at_position(pos_b.data)
             }),
             &Predicate::DistinctQubits { .. } => {
                 let mut qubits = BTreeMap::new();

@@ -165,7 +165,7 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
                 let diffs = self.badger_diff(circ, log_config, options);
                 // Serialize the diff as JSON and print to stdout
                 let json = serde_json::to_string(&diffs).unwrap();
-                println!("{}", json);
+                std::fs::write("diffs.json", json).expect("Unable to write file");
                 PortDiff::extract_graph(diffs.sinks().collect()).unwrap()
             }
             _ => {
@@ -387,6 +387,7 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
                     logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
                 }
                 println!("pq len: {}", pq.len());
+                println!("salient diffs len: {}", salient_diffs.len());
             }
 
             if let Some(timeout) = opt.timeout {

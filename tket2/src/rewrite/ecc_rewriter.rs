@@ -303,14 +303,14 @@ impl Rewriter<DiffCircuit> for ECCRewriter<DiffCircuitMatcher, StaticSizeCircuit
             .into_iter()
             .flat_map(|m| {
                 let pattern_id = m.pattern;
-                self.get_targets(pattern_id).map(move |repl| {
+                self.get_targets(pattern_id).filter_map(move |repl| {
                     let mut repl = repl.to_owned();
                     let mut pattern = self.targets[pattern_id.0].clone();
                     for &empty_qb in self.empty_wires[pattern_id.0].iter().rev() {
                         repl.remove_empty_wire(empty_qb).unwrap();
                         pattern.remove_empty_wire(empty_qb).unwrap();
                     }
-                    DiffRewrite::from_pattern_match(&m.match_data, &pattern, repl)
+                    DiffRewrite::try_from_pattern_match(&m.match_data, &pattern, repl).ok()
                 })
             })
             .collect()

@@ -48,11 +48,11 @@ impl DiffRewrite {
     }
 
     /// Create a DiffRewrite from a pattern match.
-    pub fn from_pattern_match(
+    pub fn try_from_pattern_match(
         match_map: &OpLocationMap<CircuitPath, Owned<OpPosition, StaticSizeCircuit>>,
         pattern: &StaticSizeCircuit,
         replacement: StaticSizeCircuit,
-    ) -> Self {
+    ) -> Result<Self, ()> {
         let starts = pattern.find_qubit_starts().unwrap();
 
         // Fill nodes
@@ -142,22 +142,23 @@ impl DiffRewrite {
                     );
                 }
             } else {
-                if let Some(start_port) = pos_to_port(start, Direction::Incoming) {
-                    port_map.insert(start_port, pd::BoundaryPort::Sentinel(qubit.0));
-                }
-                if let Some(end_port) = pos_to_port(end, Direction::Outgoing) {
-                    port_map.insert(end_port, pd::BoundaryPort::Sentinel(qubit.0));
-                }
+                // if let Some(start_port) = pos_to_port(start, Direction::Incoming) {
+                //     port_map.insert(start_port, pd::BoundaryPort::Sentinel(qubit.0));
+                // }
+                // if let Some(end_port) = pos_to_port(end, Direction::Outgoing) {
+                //     port_map.insert(end_port, pd::BoundaryPort::Sentinel(qubit.0));
+                // }
+                return Err(());
             }
         }
 
-        Self {
+        Ok(Self {
             nodes,
             edges,
             pattern: pattern.clone(),
             port_map,
             replacement,
-        }
+        })
     }
 }
 
