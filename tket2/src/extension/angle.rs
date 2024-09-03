@@ -37,6 +37,20 @@ pub struct ConstAngle {
 }
 
 impl ConstAngle {
+    /// The constant π
+    pub const PI: Self = Self::new_unchecked(1, 1);
+    /// The constant 2π
+    pub const TAU: Self = Self::new_unchecked(0, 1);
+    /// The constant π/2
+    pub const PI_2: Self = Self::new_unchecked(2, 1);
+    /// The constant π/4
+    pub const PI_4: Self = Self::new_unchecked(3, 1);
+
+    /// Create a new [`ConstAngle`] from a log-denominator and a numerator without
+    /// checking for validity.
+    const fn new_unchecked(log_denom: u8, value: u64) -> Self {
+        Self { log_denom, value }
+    }
     /// Create a new [`ConstAngle`] from a log-denominator and a numerator
     pub fn new(log_denom: u8, value: u64) -> Result<Self, ConstTypeError> {
         if !is_valid_log_denom(log_denom) {
@@ -73,6 +87,13 @@ impl ConstAngle {
         })
     }
 
+    /// Create a new [`ConstAngle`] from a floating-point value in radians,
+    /// using the highest possible log-denominator and
+    /// rounding to the nearest corresponding value. (Ties round away from zero.)
+    pub fn from_radians_rounding_max(theta: f64) -> Result<Self, ConstTypeError> {
+        Self::from_radians_rounding(LOG_DENOM_MAX, theta)
+    }
+
     /// Returns the value of the constant
     pub fn value(&self) -> u64 {
         self.value
@@ -81,6 +102,16 @@ impl ConstAngle {
     /// Returns the log-denominator of the constant
     pub fn log_denom(&self) -> u8 {
         self.log_denom
+    }
+
+    /// Returns the value of the constant in radians
+    pub fn to_radians(&self) -> f64 {
+        self.to_turns() * TAU
+    }
+
+    /// Returns the value of the constant divided by 2π
+    pub fn to_turns(&self) -> f64 {
+        (self.value as f64) / (1u64 << self.log_denom) as f64
     }
 }
 

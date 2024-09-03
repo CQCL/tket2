@@ -3,8 +3,6 @@
 use hugr::builder::{Container, DataflowSubContainer, FunctionBuilder, HugrBuilder, ModuleBuilder};
 use hugr::extension::PRELUDE_REGISTRY;
 use hugr::ops::handle::NodeHandle;
-use hugr::std_extensions::arithmetic::float_ops::FLOAT_OPS_REGISTRY;
-use hugr::std_extensions::arithmetic::float_types;
 use hugr::types::{Type, TypeBound};
 use hugr::Hugr;
 use hugr::{
@@ -14,6 +12,7 @@ use hugr::{
 };
 
 use crate::circuit::Circuit;
+use crate::extension::{REGISTRY, TKET2_EXTENSION_ID};
 
 pub(crate) fn type_is_linear(typ: &Type) -> bool {
     !TypeBound::Copyable.contains(typ.least_upper_bound())
@@ -26,8 +25,7 @@ where
     F: FnOnce(&mut CircuitBuilder<FunctionBuilder<Hugr>>) -> Result<(), BuildError>,
 {
     let qb_row = vec![QB_T; num_qubits];
-    let signature =
-        Signature::new(qb_row.clone(), qb_row).with_extension_delta(float_types::EXTENSION_ID);
+    let signature = Signature::new(qb_row.clone(), qb_row).with_extension_delta(TKET2_EXTENSION_ID);
     let mut h = FunctionBuilder::new("main", signature)?;
 
     let qbs = h.input_wires();
@@ -38,8 +36,7 @@ where
 
     let qbs = circ.finish();
 
-    // The float ops registry is required to define constant float values.
-    let hugr = h.finish_hugr_with_outputs(qbs, &FLOAT_OPS_REGISTRY)?;
+    let hugr = h.finish_hugr_with_outputs(qbs, &REGISTRY)?;
     Ok(hugr.into())
 }
 

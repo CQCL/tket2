@@ -326,11 +326,14 @@ pub fn apply_greedy_commutation(circ: &mut Circuit) -> Result<u32, PullForwardEr
 #[cfg(test)]
 mod test {
 
-    use crate::{extension::REGISTRY, ops::test::t2_bell_circuit, utils::build_simple_circuit};
+    use crate::{
+        extension::{angle::ANGLE_TYPE, REGISTRY},
+        ops::test::t2_bell_circuit,
+        utils::build_simple_circuit,
+    };
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::{BOOL_T, QB_T},
-        std_extensions::arithmetic::float_types::FLOAT64_TYPE,
         type_row,
         types::Signature,
     };
@@ -436,7 +439,7 @@ mod test {
     fn non_linear_inputs() -> Circuit {
         let build = || {
             let mut dfg = DFGBuilder::new(Signature::new(
-                type_row![QB_T, QB_T, FLOAT64_TYPE],
+                type_row![QB_T, QB_T, ANGLE_TYPE],
                 type_row![QB_T, QB_T],
             ))?;
 

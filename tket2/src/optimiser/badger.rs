@@ -544,20 +544,19 @@ mod tests {
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::QB_T,
-        std_extensions::arithmetic::float_types::FLOAT64_TYPE,
         types::Signature,
     };
     use rstest::{fixture, rstest};
 
-    use crate::optimiser::badger::BadgerOptions;
     use crate::serialize::load_tk1_json_str;
+    use crate::{extension::angle::ANGLE_TYPE, optimiser::badger::BadgerOptions};
     use crate::{extension::REGISTRY, Circuit, Tk2Op};
 
     use super::{BadgerOptimiser, DefaultBadgerOptimiser};
 
     #[fixture]
     fn rz_rz() -> Circuit {
-        let input_t = vec![QB_T, FLOAT64_TYPE, FLOAT64_TYPE];
+        let input_t = vec![QB_T, ANGLE_TYPE, ANGLE_TYPE];
         let output_t = vec![QB_T];
         let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
@@ -623,9 +622,9 @@ mod tests {
     #[case::compiled(badger_opt_compiled())]
     #[case::json(badger_opt_json())]
     fn rz_rz_cancellation(rz_rz: Circuit, #[case] badger_opt: DefaultBadgerOptimiser) {
-        use hugr::{ops::OpType, std_extensions::arithmetic::float_ops::FloatOps};
+        use hugr::ops::OpType;
 
-        use crate::op_matches;
+        use crate::{extension::angle::AngleOp, op_matches};
 
         let opt_rz = badger_opt.optimise(
             &rz_rz,
@@ -642,7 +641,7 @@ mod tests {
             .unwrap();
 
         // Rzs combined into a single one.
-        assert_eq!(op1.cast::<FloatOps>(), Some(FloatOps::fadd));
+        assert_eq!(op1.cast(), Some(AngleOp::aadd));
         assert!(op_matches(op2, Tk2Op::Rz));
     }
 
