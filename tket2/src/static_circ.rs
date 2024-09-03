@@ -7,22 +7,15 @@ mod position;
 mod rewrite;
 
 pub use hash::UpdatableHash;
-use iter::Command;
 use itertools::Itertools;
 pub use position::OpPosition;
 pub use rewrite::{BoxedStaticRewrite, NonConvexRewriteError, StaticRewrite};
 
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
-    fmt, mem,
-    rc::Rc,
-};
+use std::fmt;
 
-use hugr::{ops::OpType, Direction, Hugr, HugrView, Port, PortIndex};
+use hugr::{Direction, Hugr, HugrView, Port, PortIndex};
 
 use derive_more::{From, Into};
-use serde::{Deserialize, Deserializer};
 use thiserror::Error;
 
 use crate::{
@@ -52,6 +45,7 @@ pub struct StaticOp {
     pub positions: Vec<OpPosition>,
 }
 
+/// An integer identifier for an operation in a `StaticSizeCircuit`.
 #[derive(
     Debug,
     Clone,
@@ -104,6 +98,7 @@ impl StaticSizeCircuit {
         self.qubit_ops.len()
     }
 
+    /// Returns the number of operations in the circuit.
     pub fn n_ops(&self) -> usize {
         self.all_ops.len()
     }
@@ -118,6 +113,7 @@ impl StaticSizeCircuit {
         &self.qubit_ops[qubit.0]
     }
 
+    /// Returns the operation with the given id.
     pub fn get(&self, op: OpId) -> Option<&StaticOp> {
         self.all_ops.get(op.0)
     }
@@ -126,6 +122,7 @@ impl StaticSizeCircuit {
         self.all_ops.get_mut(op.0)
     }
 
+    /// All positions of a given operation.
     pub fn positions(&self, op: OpId) -> Option<&[OpPosition]> {
         Some(&self.get(op)?.positions)
     }
