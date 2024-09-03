@@ -11,7 +11,7 @@ use itertools::Itertools;
 pub use position::OpPosition;
 pub use rewrite::{BoxedStaticRewrite, NonConvexRewriteError, StaticRewrite};
 
-use std::fmt;
+use std::{fmt, mem};
 
 use hugr::{Direction, Hugr, HugrView, Port, PortIndex};
 
@@ -90,6 +90,28 @@ impl StaticSizeCircuit {
         Self {
             qubit_ops: vec![Vec::new(); qubit_count],
             ..Self::default()
+        }
+    }
+
+    /// Add an input node to the circuit.
+    ///
+    /// Currently using Tk2Op::QAlloc.
+    pub fn add_input(&mut self) {
+        // Add the input node
+        let qalloc = self.append_op(Tk2Op::QAlloc, []);
+        let qubits = self.qubits_iter().collect_vec();
+        for &qb in &qubits {
+            self.qubit_ops[qb.0].insert(0, qalloc);
+        }
+        self.remap_positions(|pos| OpPosition {
+            index: pos.index + 1,
+            ..pos
+        });
+        for &qb in &qubits {
+            self.all_ops[qalloc.0].positions.push(OpPosition {
+                qubit: qb,
+                index: 0,
+            });
         }
     }
 
@@ -244,6 +266,10 @@ impl From<StaticSizeCircuit> for Circuit<Hugr> {
     fn from(value: StaticSizeCircuit) -> Self {
         build_simple_circuit(value.qubit_count(), |circ| {
             for cmd in value.commands() {
+                if cmd.op == Tk2Op::QAlloc {
+                    // ignore qallocs (used as input)
+                    continue;
+                }
                 circ.append(cmd.op, cmd.qubits.into_iter().map(|qb| qb.0))?;
             }
             Ok(())

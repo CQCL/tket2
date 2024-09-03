@@ -18,21 +18,16 @@ pub mod log;
 mod qtz_circuit;
 // mod worker;
 
-use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 use fxhash::FxHashSet;
-use hugr::hugr::HugrError;
 pub use log::BadgerLogger;
-use portdiff::{self as pd, GraphView, PortDiff};
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+use portdiff::{GraphView, PortDiff};
 
+use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 use std::ops::AddAssign;
-use std::rc::Rc;
-use std::time::{Duration, Instant};
-use std::{mem, thread};
+use std::time::Instant;
 
-use crate::circuit::cost::{CircuitCost, CostDelta};
 use crate::circuit::{CircuitHash, ToTk2OpIter};
 // use crate::optimiser::badger::hugr_pchannel::{HugrPriorityChannel, PriorityChannelLog};
 use crate::optimiser::badger::hugr_pqueue::{Entry, HugrPQ};
@@ -40,7 +35,7 @@ use crate::optimiser::badger::hugr_pqueue::{Entry, HugrPQ};
 use crate::portdiff::{DiffCircuit, DiffRewrite};
 use crate::rewrite::strategy::StrategyCost;
 use crate::rewrite::Rewriter;
-use crate::static_circ::{StaticQubitIndex, StaticRewrite, StaticSizeCircuit, UpdatableHash};
+use crate::static_circ::{StaticSizeCircuit, UpdatableHash};
 
 /// Configuration options for the Badger optimiser.
 #[derive(Copy, Clone, Debug)]
@@ -311,12 +306,14 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
         let start_time = Instant::now();
         let mut last_best_time = Instant::now();
 
+        let mut circ = circ.clone();
+        circ.add_input(); // Add an input and output nodes so that the qubit order is fixed
         let hash = circ.circuit_hash().unwrap();
 
         let circ = DiffCircuit::from_graph(circ.clone());
         // The list of all "salient" circuits, i.e. those that result from
         // salient rewrites (the best type of rewrite).
-        let mut salient_diffs = vec![circ.clone()];
+        let mut salient_diffs = BTreeSet::from([circ.clone()]);
 
         // Hash of seen circuits. Dot not store circuits as this map gets huge
         let mut seen_hashes = FxHashSet::default();
@@ -381,7 +378,7 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
                     }
                     if self.cost.is_salient(&new_cost.total_cost_delta) {
                         // The compound rewrite is salient, success! Reset the cost
-                        salient_diffs.push(new_circ.clone());
+                        insert_salient(new_circ.clone(), &mut salient_diffs);
                         last_best_time = Instant::now();
                         new_cost = PQCost::zero(); // Reset aggregate cost
                     } else if self.cost.is_salient(&rw_cost) {
@@ -659,6 +656,15 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
 
     //     Ok(best_circ)
     // }
+}
+
+fn insert_salient(
+    new_circ: PortDiff<StaticSizeCircuit>,
+    salient_diffs: &mut BTreeSet<PortDiff<StaticSizeCircuit>>,
+) {
+    // TODO: squash the diffs into a single one
+    // Find the set of salient diffs that are the direct predecessors of new_circ
+    salient_diffs.insert(new_circ);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
