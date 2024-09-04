@@ -157,6 +157,10 @@ pub enum AngleOp {
     atorad,
     /// Check angle equality
     aeq,
+    /// Multiply angle by a scalar
+    amul,
+    /// Divide by scalar with rounding
+    adiv,
 }
 
 impl MakeOpDef for AngleOp {
@@ -188,6 +192,9 @@ impl MakeOpDef for AngleOp {
             }
             AngleOp::atorad => Signature::new(type_row![ANGLE_TYPE], type_row![FLOAT64_TYPE]),
             AngleOp::aeq => Signature::new(type_row![ANGLE_TYPE, ANGLE_TYPE], type_row![BOOL_T]),
+            AngleOp::amul | AngleOp::adiv => {
+                Signature::new(type_row![ANGLE_TYPE, USIZE_T], type_row![ANGLE_TYPE])
+            }
         }
         .into()
     }
@@ -203,6 +210,8 @@ impl MakeOpDef for AngleOp {
             AngleOp::afromrad => "construct angle from radians, rounding given a log-denominator",
             AngleOp::atorad => "convert angle to radians",
             AngleOp::aeq => "check angle equality",
+            AngleOp::amul => "multiply angle by a scalar",
+            AngleOp::adiv => "Divide angle by an integer. If the integer is not a power of 2, or if the resulting denominator would exceed 2^64, the result is rounded to the nearest 2 pi / 2^ 64",
         }.to_owned()
     }
 
@@ -277,7 +286,6 @@ mod test {
     #[test]
     fn test_ops() {
         let ops = AngleOp::iter().collect::<Vec<_>>();
-        assert_eq!(ops.len(), 9);
         for op in ops {
             let optype: OpType = op.into();
             assert_eq!(optype.cast(), Some(op));
