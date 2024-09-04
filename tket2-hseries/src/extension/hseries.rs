@@ -20,7 +20,10 @@ use hugr::{
 
 use lazy_static::lazy_static;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
-use tket2::Tk2Op;
+use tket2::{
+    extension::{angle::AngleOp, TKET2_EXTENSION},
+    Tk2Op,
+};
 
 use crate::extension::futures;
 
@@ -46,6 +49,7 @@ lazy_static! {
         PRELUDE.to_owned(),
         EXTENSION.to_owned(),
         FLOAT_TYPES.to_owned(),
+        TKET2_EXTENSION.to_owned()
     ]).unwrap();
 }
 
@@ -209,10 +213,20 @@ pub fn lower_tk2_op(
     .into_iter()
     .map(|(node, _)| node)
     .collect::<Vec<_>>();
+
     fn pi_mul(builder: &mut impl Dataflow, multiplier: f64) -> Wire {
         builder.add_load_const(ops::Const::new(
             ConstF64::new(multiplier * std::f64::consts::PI).into(),
         ))
+    }
+
+    fn atorad(builder: &mut impl Dataflow, angle: Wire) -> Wire {
+        builder
+            .add_dataflow_op(AngleOp::atorad, [angle])
+            .unwrap()
+            .outputs()
+            .next()
+            .unwrap()
     }
 
     let lowered_nodes = hugr::algorithms::lower_ops(&mut hugr, |op| {
@@ -230,6 +244,13 @@ pub fn lower_tk2_op(
 
                 let q = b.add_phased_x(q, pi_2, pi_minus_2).ok()?;
                 let q = b.add_rz(q, pi).ok()?;
+
+                b.finish_hugr_with_outputs([q], &REGISTRY).ok()?
+            }
+            Tk2Op::Rz => {
+                let [q, angle] = b.input_wires_arr();
+                let float = atorad(&mut b, angle);
+                let q = b.add_rz(q, float).ok()?;
 
                 b.finish_hugr_with_outputs([q], &REGISTRY).ok()?
             }
@@ -255,6 +276,7 @@ mod test {
     use tket2::Circuit;
 
     use super::*;
+    use rstest::rstest;
 
     fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
         EXTENSION.get_op(&op.name())
@@ -350,21 +372,26 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_lower_circuit() {
-        let mut b = DFGBuilder::new(Signature::new_endo(QB_T)).unwrap();
-        let [q] = b
-            .add_dataflow_op(Tk2Op::H, [b.input_wires().next().unwrap()])
-            .unwrap()
-            .outputs_arr();
-        let mut h = b.finish_hugr_with_outputs([q], &REGISTRY).unwrap();
+    #[rstest]
+    #[case(Tk2Op::H, vec![HSeriesOp::PhasedX, HSeriesOp::Rz])]
+    #[case(Tk2Op::Rz, vec![HSeriesOp::Rz])]
+    fn test_lower(#[case] t2op: Tk2Op, #[case] hseries_ops: Vec<HSeriesOp>) {
+        // build dfg with just the op
 
-        lower_tk2_op(&mut h).unwrap();
+        use ops::handle::NodeHandle;
+        let optype: OpType = t2op.into();
+        let sig = optype.dataflow_signature().unwrap();
+        let mut b = DFGBuilder::new(sig).unwrap();
+        let n = b.add_dataflow_op(optype, b.input_wires()).unwrap();
+        let mut h = b.finish_hugr_with_outputs(n.outputs(), &REGISTRY).unwrap();
+
+        let lowered = lower_tk2_op(&mut h).unwrap();
+        assert_eq!(lowered, vec![n.node()]);
         let circ = Circuit::new(&h, h.root());
         let ops: Vec<HSeriesOp> = circ
             .commands()
             .filter_map(|com| com.optype().cast())
             .collect();
-        assert_eq!(ops, vec![HSeriesOp::PhasedX, HSeriesOp::Rz]);
+        assert_eq!(ops, hseries_ops);
     }
 }

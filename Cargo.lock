@@ -1853,6 +1853,7 @@ dependencies = [
  "itertools 0.13.0",
  "lazy_static",
  "petgraph",
+ "rstest",
  "serde",
  "serde_json",
  "smol_str",
