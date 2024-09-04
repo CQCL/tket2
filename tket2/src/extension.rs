@@ -89,11 +89,6 @@ impl CustomSignatureFunc for Tk1Signature {
     }
 }
 
-/// Angle type with given log denominator.
-pub fn angle_custom_type(log_denom: u8) -> CustomType {
-    angle::angle_custom_type(&TKET2_EXTENSION, angle::type_arg(log_denom))
-}
-
 /// Name of tket 2 extension.
 pub const TKET2_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("quantum.tket2");
 
