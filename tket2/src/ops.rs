@@ -43,7 +43,9 @@ use crate::extension::REGISTRY;
 pub enum Tk2Op {
     H,
     CX,
+    CY,
     CZ,
+    CRz,
     T,
     Tdg,
     S,
@@ -110,10 +112,11 @@ impl MakeOpDef for Tk2Op {
         let one_qb_row = type_row![QB_T];
         match self {
             H | T | S | X | Y | Z | Tdg | Sdg | Reset => Signature::new_endo(one_qb_row),
-            CX | CZ => Signature::new_endo(type_row![QB_T; 2]),
+            CX | CZ | CY => Signature::new_endo(type_row![QB_T; 2]),
             Toffoli => Signature::new_endo(type_row![QB_T; 3]),
             Measure => Signature::new(one_qb_row, type_row![QB_T, BOOL_T]),
             Rz | Rx | Ry => Signature::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
+            CRz => Signature::new(type_row![QB_T, QB_T, FLOAT64_TYPE], type_row![QB_T; 2]),
             QAlloc => Signature::new(type_row![], one_qb_row),
             QFree => Signature::new(one_qb_row, type_row![]),
         }
@@ -165,7 +168,7 @@ impl Tk2Op {
     pub fn is_quantum(&self) -> bool {
         use Tk2Op::*;
         match self {
-            H | CX | T | S | X | Y | Z | Tdg | Sdg | Rz | Rx | Toffoli | Ry | CZ => true,
+            H | CX | T | S | X | Y | Z | Tdg | Sdg | Rz | Rx | Toffoli | Ry | CZ | CY | CRz => true,
             Measure | QAlloc | QFree | Reset => false,
         }
     }
