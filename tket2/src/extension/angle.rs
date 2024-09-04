@@ -211,7 +211,7 @@ impl MakeOpDef for AngleOp {
             AngleOp::atorad => "convert angle to radians",
             AngleOp::aeq => "check angle equality",
             AngleOp::amul => "multiply angle by a scalar",
-            AngleOp::adiv => "Divide angle by an integer. If the integer is not a power of 2, or if the resulting denominator would exceed 2^64, the result is rounded to the nearest 2 pi / 2^ 64",
+            AngleOp::adiv => "Divide angle by an integer. If the integer is not a power of 2, or if the resulting denominator would exceed 2^64, the result is rounded to the nearest multiple of 2 pi / 2^ 64",
         }.to_owned()
     }
 
