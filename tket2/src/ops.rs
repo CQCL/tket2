@@ -1,3 +1,4 @@
+use crate::extension::angle::ANGLE_TYPE;
 use crate::extension::{
     SYM_OP_ID, TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID,
 };
@@ -10,7 +11,6 @@ use hugr::{
         ExtensionId, OpDef, SignatureFunc,
     },
     ops::OpType,
-    std_extensions::arithmetic::float_types::FLOAT64_TYPE,
     type_row,
     types::{type_param::TypeArg, Signature},
 };
@@ -43,21 +43,21 @@ use crate::extension::REGISTRY;
 pub enum Tk2Op {
     H,
     CX,
+    CY,
+    CZ,
+    CRz,
     T,
+    Tdg,
     S,
+    Sdg,
     X,
     Y,
     Z,
-    Tdg,
-    Sdg,
-    ZZMax,
+    Rx,
+    Ry,
+    Rz,
+    Toffoli,
     Measure,
-    RzF64,
-    RxF64,
-    PhasedX,
-    ZZPhase,
-    CZ,
-    TK1,
     QAlloc,
     QFree,
     Reset,
@@ -110,20 +110,13 @@ impl MakeOpDef for Tk2Op {
     fn signature(&self) -> SignatureFunc {
         use Tk2Op::*;
         let one_qb_row = type_row![QB_T];
-        let two_qb_row = type_row![QB_T, QB_T];
         match self {
-            H | T | S | X | Y | Z | Tdg | Sdg | Reset => {
-                Signature::new(one_qb_row.clone(), one_qb_row)
-            }
-            CX | ZZMax | CZ => Signature::new(two_qb_row.clone(), two_qb_row),
-            ZZPhase => Signature::new(type_row![QB_T, QB_T, FLOAT64_TYPE], two_qb_row),
+            H | T | S | X | Y | Z | Tdg | Sdg | Reset => Signature::new_endo(one_qb_row),
+            CX | CZ | CY => Signature::new_endo(type_row![QB_T; 2]),
+            Toffoli => Signature::new_endo(type_row![QB_T; 3]),
             Measure => Signature::new(one_qb_row, type_row![QB_T, BOOL_T]),
-            RzF64 | RxF64 => Signature::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
-            PhasedX => Signature::new(type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE], one_qb_row),
-            TK1 => Signature::new(
-                type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE, FLOAT64_TYPE],
-                one_qb_row,
-            ),
+            Rz | Rx | Ry => Signature::new(type_row![QB_T, ANGLE_TYPE], one_qb_row),
+            CRz => Signature::new(type_row![QB_T, QB_T, ANGLE_TYPE], type_row![QB_T; 2]),
             QAlloc => Signature::new(type_row![], one_qb_row),
             QFree => Signature::new(one_qb_row, type_row![]),
         }
@@ -161,11 +154,11 @@ impl Tk2Op {
         use Tk2Op::*;
 
         match self {
-            X | RxF64 => vec![(0, Pauli::X)],
+            X | Rx => vec![(0, Pauli::X)],
             Y => vec![(0, Pauli::Y)],
-            T | Z | S | Tdg | Sdg | RzF64 | Measure => vec![(0, Pauli::Z)],
+            T | Z | S | Tdg | Sdg | Rz | Measure => vec![(0, Pauli::Z)],
             CX => vec![(0, Pauli::Z), (1, Pauli::X)],
-            ZZMax | ZZPhase | CZ => vec![(0, Pauli::Z), (1, Pauli::Z)],
+            CZ => vec![(0, Pauli::Z), (1, Pauli::Z)],
             // by default, no commutation
             _ => vec![],
         }
@@ -175,8 +168,7 @@ impl Tk2Op {
     pub fn is_quantum(&self) -> bool {
         use Tk2Op::*;
         match self {
-            H | CX | T | S | X | Y | Z | Tdg | Sdg | ZZMax | RzF64 | RxF64 | PhasedX | ZZPhase
-            | CZ | TK1 => true,
+            H | CX | T | S | X | Y | Z | Tdg | Sdg | Rz | Rx | Toffoli | Ry | CZ | CY | CRz => true,
             Measure | QAlloc | QFree | Reset => false,
         }
     }
