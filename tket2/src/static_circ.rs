@@ -93,6 +93,13 @@ impl StaticSizeCircuit {
         }
     }
 
+    /// Count the number of CX gates in the circuit.
+    pub fn cx_count(&self) -> usize {
+        self.ops_iter()
+            .filter(|op| self.get(*op).unwrap().op == Tk2Op::CX)
+            .count()
+    }
+
     /// Add an input node to the circuit.
     ///
     /// Currently using Tk2Op::QAlloc.

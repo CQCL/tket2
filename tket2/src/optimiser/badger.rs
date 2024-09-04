@@ -19,11 +19,13 @@ mod qtz_circuit;
 // mod worker;
 
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
-use fxhash::FxHashSet;
+use fxhash::{FxHashMap, FxHashSet};
+use itertools::Itertools;
 pub use log::BadgerLogger;
-use portdiff::{GraphView, PortDiff};
+use portdiff::{PortDiff, PortDiffGraph};
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::iter::Sum;
 use std::num::NonZeroUsize;
 use std::ops::AddAssign;
 use std::time::Instant;
@@ -298,7 +300,7 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
         circ: &StaticSizeCircuit,
         mut logger: BadgerLogger,
         opt: BadgerOptions,
-    ) -> GraphView<StaticSizeCircuit>
+    ) -> PortDiffGraph<StaticSizeCircuit>
     where
         R: Rewriter<DiffCircuit, CircuitRewrite = DiffRewrite> + Clone,
         Cost::OpCost: serde::Serialize,
@@ -319,14 +321,20 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
         let mut seen_hashes = FxHashSet::default();
         seen_hashes.insert(hash);
 
+        // The cost_delta of each rewrite. This needs to be accessible through
+        // an index (not just in the queue) as we need to retrieve the cost of
+        // all parents to calculate the cost of a rewrite.
+        let mut all_costs = FxHashMap::default();
+
         let mut pq = HugrPQ::new(opt.queue_size, |circ: &'_ PortDiff<_>| {
             PortDiff::as_ptr(&circ) as u64
         });
         pq.push(circ.to_owned(), PQCost::default());
+        all_costs.insert(PortDiff::as_ptr(&circ), PQCost::default());
 
         let mut circ_cnt = 0;
         let mut timeout_flag = false;
-        while let Some(Entry { circ, cost }) = pq.pop() {
+        while let Some(Entry { circ, .. }) = pq.pop() {
             circ_cnt += 1;
 
             let rewrites = self.rewriter.get_rewrites(&circ);
@@ -347,7 +355,11 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
                     println!("rewrite cost delta failed");
                     continue; // could not compute cost, probably not convex
                 };
-                let mut new_cost = cost.add_rewrite_cost(rw_cost);
+                // Rewrite cost: sum of parent costs + rewrite delta cost
+                let mut new_cost: PQCost<Cost::OpCost> =
+                    rw.parents().map(|p| all_costs[&PortDiff::as_ptr(p)]).sum();
+                new_cost = new_cost.add_rewrite_cost(rw_cost);
+
                 if !pq.check_accepted(&new_cost) {
                     continue;
                 }
@@ -364,7 +376,7 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
                 //     continue;
                 // }
 
-                if let Ok(new_circ) = self.rewriter.apply_rewrite(rw.clone(), &circ) {
+                if let Ok(mut new_circ) = self.rewriter.apply_rewrite(rw.clone(), &circ) {
                     // TODO: use updateable hash
                     let Ok(extracted) = PortDiff::extract_graph(vec![new_circ.clone()]) else {
                         continue;
@@ -378,20 +390,19 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
                     }
                     if self.cost.is_salient(&new_cost.total_cost_delta) {
                         // The compound rewrite is salient, success! Reset the cost
-                        insert_salient(new_circ.clone(), &mut salient_diffs);
+                        // Use the squashed diff henceforth, more efficient
+                        new_circ = insert_salient(new_circ.clone(), &mut salient_diffs);
                         last_best_time = Instant::now();
                         new_cost = PQCost::zero(); // Reset aggregate cost
-                    } else if self.cost.is_salient(&rw_cost) {
-                        // The latest rewrite is salient, so maybe this is the
-                        // right direction
-                        new_cost.n_rewrites_since_salient = 0;
                     }
+                    all_costs.insert(PortDiff::as_ptr(&new_circ), new_cost);
                     pq.push(new_circ, new_cost);
                     logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
                 }
                 println!("pq len: {}", pq.len());
                 println!("salient diffs len: {}", salient_diffs.len());
             }
+            // panic!("early abort");
 
             if let Some(timeout) = opt.timeout {
                 if start_time.elapsed().as_secs() > timeout {
@@ -425,7 +436,7 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
             timeout_flag,
             start_time.elapsed(),
         );
-        GraphView::from_sinks(salient_diffs)
+        PortDiffGraph::from_sinks(salient_diffs)
     }
 
     // /// Run the Badger optimiser on a circuit, using multiple threads.
@@ -658,13 +669,20 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
     // }
 }
 
+/// Squash the diffs since the last salient diffs, insert into the set and return
+/// the squashed diff.
 fn insert_salient(
     new_circ: PortDiff<StaticSizeCircuit>,
     salient_diffs: &mut BTreeSet<PortDiff<StaticSizeCircuit>>,
-) {
-    // TODO: squash the diffs into a single one
-    // Find the set of salient diffs that are the direct predecessors of new_circ
-    salient_diffs.insert(new_circ);
+) -> PortDiff<StaticSizeCircuit> {
+    // The graph between new_circ and the previous salient diffs.
+    // let g = PortDiffGraph::from_sinks_while([new_circ], |circ| !salient_diffs.contains(circ));
+    // let squashed = g
+    //     .try_squash()
+    //     .expect("failed squashing a single circ: new_circ is not a valid diff");
+    let squashed = new_circ;
+    salient_diffs.insert(squashed.clone());
+    squashed
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -703,6 +721,20 @@ impl<C> PQCost<C> {
         Self {
             n_rewrites_since_salient: self.n_rewrites_since_salient + 1,
             total_cost_delta,
+        }
+    }
+}
+
+impl<C: Sum> Sum for PQCost<C> {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        let (costs, n_rewrites): (Vec<_>, Vec<_>) = iter
+            .map(|cost| (cost.total_cost_delta, cost.n_rewrites_since_salient))
+            .unzip();
+        let total_cost_delta = costs.into_iter().sum();
+        let n_rewrites_since_salient = n_rewrites.into_iter().max().unwrap_or(0);
+        Self {
+            total_cost_delta,
+            n_rewrites_since_salient,
         }
     }
 }

@@ -5,33 +5,33 @@ expression: main_circuit
 StaticSizeCircuit {
     qubit_ops: [
         [
-            MatchOp {
-                op_name: "quantum.tket2.H",
-            },
-            MatchOp {
-                op_name: "quantum.tket2.CX",
-            },
+            OpId(
+                0,
+            ),
+            OpId(
+                1,
+            ),
         ],
         [
-            MatchOp {
-                op_name: "quantum.tket2.CX",
-            },
+            OpId(
+                1,
+            ),
         ],
         [],
         [
-            MatchOp {
-                op_name: "quantum.tket2.X",
-            },
+            OpId(
+                3,
+            ),
         ],
         [
-            MatchOp {
-                op_name: "quantum.tket2.X",
-            },
+            OpId(
+                4,
+            ),
         ],
         [
-            MatchOp {
-                op_name: "quantum.tket2.Y",
-            },
+            OpId(
+                2,
+            ),
         ],
     ],
 }

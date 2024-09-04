@@ -43,6 +43,10 @@ impl DiffCircuitMatcher {
         let matcher = ManyMatcher::try_from_patterns(patterns, PatternFallback::Skip)?;
         Ok(DiffCircuitMatcher(matcher))
     }
+
+    pub fn dot_string(&self) -> String {
+        self.0.dot_string()
+    }
 }
 
 impl pm::Predicate<DiffCircuit> for Predicate {
@@ -229,8 +233,7 @@ fn follow_link(
                 .flat_map(|p|
                     // This handles empty wires in the graph by recursively finding the
                     // first "real" port.
-                    p.owner.resolve_port(p.data)
-                )
+                    p.owner.resolve_port(p.data))
                 .filter_map(|p| {
                     let data = p
                         .owner
@@ -264,4 +267,38 @@ fn all_neighbours(
         .flat_map(|port| data.opposite_ports(port))
         .map(|port| port.owner)
         .filter(move |other| pd::PortDiff::are_compatible([data, other]))
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{rewrite::ECCRewriter, Tk2Op};
+
+    use super::*;
+
+    #[test]
+    fn test_match() {
+        let mut circ = StaticSizeCircuit::with_qubit_count(2);
+        circ.append_op(Tk2Op::CX, [0.into(), 1.into()]);
+        circ.append_op(Tk2Op::CX, [0.into(), 1.into()]);
+        circ.add_input();
+        let matcher = DiffCircuitMatcher::try_from_patterns(vec![circ.clone()]).unwrap();
+        let diff = DiffCircuit::from_graph(circ);
+        assert_eq!(matcher.find_matches(&diff).count(), 1);
+    }
+
+    #[test]
+    fn test_match_2() {
+        let mut circ = StaticSizeCircuit::with_qubit_count(2);
+        circ.append_op(Tk2Op::CX, [0.into(), 1.into()]);
+        circ.append_op(Tk2Op::CX, [0.into(), 1.into()]);
+        circ.add_input();
+        let rewriter =
+            ECCRewriter::<DiffCircuitMatcher, StaticSizeCircuit>::try_from_eccs_json_file(
+                "../test_files/only_cx.json",
+            )
+            .unwrap();
+        let matcher = rewriter.matcher();
+        let diff = DiffCircuit::from_graph(circ);
+        assert_eq!(matcher.find_matches(&diff).count(), 6);
+    }
 }

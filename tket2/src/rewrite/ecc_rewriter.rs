@@ -103,6 +103,7 @@ impl<C: From<Hugr> + RemoveEmptyWire> ECCRewriter<CircuitMatcher, C> {
             })
             .multiunzip();
         let matcher = CircuitMatcher::try_from_patterns(patterns).unwrap();
+
         Self {
             matcher,
             targets,
@@ -175,6 +176,11 @@ where
         self.rewrite_rules[pattern.0]
             .iter()
             .map(|id| &self.targets[id.0])
+    }
+
+    /// Get the matcher used by this rewriter.
+    pub fn matcher(&self) -> &M {
+        &self.matcher
     }
 
     /// Serialise a rewriter to an IO stream.

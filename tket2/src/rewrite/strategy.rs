@@ -46,7 +46,7 @@ impl<Circuit: Clone, C: CircuitCost> From<(Circuit, C::CostDelta)> for RewriteRe
 /// See [`ExhaustiveThresholdStrategy`], [`ExhaustiveGreedyStrategy`].
 pub trait StrategyCost {
     /// The cost of a single operation.
-    type OpCost: Copy + Ord + AddAssign + SubAssign + Sum + Default;
+    type OpCost: Copy + Ord + AddAssign + SubAssign + Sum + Default + std::fmt::Debug;
 
     /// Returns true if the rewrite cost is "very good".
     fn is_salient(&self, cost: &Self::OpCost) -> bool;

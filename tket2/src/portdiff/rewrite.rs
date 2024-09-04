@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use hugr::{Direction, Port};
+use itertools::Itertools;
 use portdiff::{self as pd, port_diff::Owned, Site};
 
 use crate::{
@@ -171,6 +172,11 @@ impl DiffRewrite {
             replacement,
         })
     }
+
+    /// All diffs rewritten by `self`.
+    pub fn parents(&self) -> impl Iterator<Item = &DiffCircuit> {
+        self.nodes.iter().map(|n| &n.owner).unique()
+    }
 }
 
 #[cfg(test)]
@@ -178,7 +184,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use hugr::OutgoingPort;
-    use portdiff::{self as pd, BoundPort, EdgeEnd, GraphView, PortDiff};
+    use portdiff::{self as pd, BoundPort, EdgeEnd, PortDiff, PortDiffGraph};
 
     use crate::{portdiff::EdgeId, Tk2Op};
 
@@ -208,9 +214,9 @@ mod tests {
         let new_circ = rw.apply(&owner).unwrap();
         PortDiff::extract_graph(vec![new_circ.clone()]).unwrap();
 
-        let g = GraphView::from_sinks(vec![new_circ]);
+        let g = PortDiffGraph::from_sinks(vec![new_circ]);
         let ser = serde_json::to_string(&g).unwrap();
-        let g: GraphView<StaticSizeCircuit> = serde_json::from_str(&ser).unwrap();
+        let g: PortDiffGraph<StaticSizeCircuit> = serde_json::from_str(&ser).unwrap();
         let new_circ = g.sinks().next().unwrap();
         PortDiff::extract_graph(vec![new_circ.clone()]).unwrap();
     }
@@ -290,9 +296,9 @@ mod tests {
         let out_circ = PortDiff::extract_graph(vec![new_circ.clone()]).unwrap();
         assert_eq!(out_circ, circ);
 
-        let g = GraphView::from_sinks(vec![new_circ]);
+        let g = PortDiffGraph::from_sinks(vec![new_circ]);
         let ser = serde_json::to_string_pretty(&g).unwrap();
-        let g: GraphView<StaticSizeCircuit> = serde_json::from_str(&ser).unwrap();
+        let g: PortDiffGraph<StaticSizeCircuit> = serde_json::from_str(&ser).unwrap();
         let new_circ = g.sinks().next().unwrap();
         PortDiff::extract_graph(vec![new_circ.clone()]).unwrap();
     }

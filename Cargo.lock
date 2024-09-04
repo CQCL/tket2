@@ -1317,10 +1317,11 @@ checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
 
 [[package]]
 name = "relrc"
-version = "0.2.2"
+version = "0.3.0-rc.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c943647cf4a83a4090efb429d4efb338e8b68a22d5ca9295d350b85bc3f19ef"
+checksum = "9ec6cb8151d5358fa4e68127d05745bea2743e9d2e47d75e30b30e05fc9088f7"
 dependencies = [
+ "derive-where",
  "derive_more",
  "petgraph",
  "serde",
