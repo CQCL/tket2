@@ -11,6 +11,7 @@ use hugr::extension::{
     CustomSignatureFunc, ExtensionId, ExtensionRegistry, SignatureError, Version,
 };
 use hugr::hugr::IdentList;
+use hugr::std_extensions::arithmetic::float_types::EXTENSION as FLOAT_TYPES;
 use hugr::types::type_param::{TypeArg, TypeParam};
 use hugr::types::{CustomType, PolyFuncType, PolyFuncTypeRV, Signature};
 use hugr::{type_row, Extension};
@@ -56,6 +57,7 @@ pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
     TKET1_EXTENSION.to_owned(),
     PRELUDE.to_owned(),
     TKET2_EXTENSION.to_owned(),
+    FLOAT_TYPES.to_owned(),
 ]).unwrap();
 
 
