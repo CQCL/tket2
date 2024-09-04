@@ -87,7 +87,7 @@ class Pauli(Enum):
     Z = auto()
 
     def to_custom(self) -> CustomOp:
-        extension_name = "quantum.tket2"
+        extension_name = "tket2.quantum"
         gate_name = self.name
         return CustomOp(extension_name, gate_name, [QB_T], [QB_T])
 
