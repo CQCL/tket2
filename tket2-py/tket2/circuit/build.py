@@ -112,7 +112,7 @@ class MeasureDef(QuantumOps):
 
 Measure = MeasureDef()
 
-
+# TODO use angle type once extension is serialised.
 _RzSig = tys.FunctionType([tys.Qubit, FLOAT_T], [tys.Qubit])
 
 

@@ -88,14 +88,13 @@ mod test {
         builder::{Container, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer},
         extension::prelude::{BOOL_T, QB_T},
         ops::handle::NodeHandle,
-        std_extensions::arithmetic::float_types::ConstF64,
         type_row,
         types::Signature,
         HugrView as _,
     };
     use itertools::Itertools as _;
     use petgraph::visit::{Topo, Walker as _};
-    use tket2::Tk2Op;
+    use tket2::{extension::angle::ConstAngle, Tk2Op};
 
     use crate::{extension::futures::FutureOpDef, HSeriesPass};
 
@@ -120,7 +119,7 @@ mod test {
                 .node();
 
             // this LoadConstant should be pushed below the quantum ops where possible
-            let angle = builder.add_load_value(ConstF64::new(1.0));
+            let angle = builder.add_load_value(ConstAngle::PI);
             let f_node = angle.node();
 
             // with no dependencies, this H should be lifted to the start
@@ -130,7 +129,7 @@ mod test {
                 .outputs_arr();
             let h_node = qb.node();
 
-            // depending on the angle means this op can't be lifted above the float ops
+            // depending on the angle means this op can't be lifted above the angle ops
             let [qb] = builder
                 .add_dataflow_op(Tk2Op::Rx, [qb, angle])
                 .unwrap()

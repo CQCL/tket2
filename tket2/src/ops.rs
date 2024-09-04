@@ -1,3 +1,4 @@
+use crate::extension::angle::ANGLE_TYPE;
 use crate::extension::{
     SYM_OP_ID, TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID,
 };
@@ -10,7 +11,6 @@ use hugr::{
         ExtensionId, OpDef, SignatureFunc,
     },
     ops::OpType,
-    std_extensions::arithmetic::float_types::FLOAT64_TYPE,
     type_row,
     types::{type_param::TypeArg, Signature},
 };
@@ -115,8 +115,8 @@ impl MakeOpDef for Tk2Op {
             CX | CZ | CY => Signature::new_endo(type_row![QB_T; 2]),
             Toffoli => Signature::new_endo(type_row![QB_T; 3]),
             Measure => Signature::new(one_qb_row, type_row![QB_T, BOOL_T]),
-            Rz | Rx | Ry => Signature::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
-            CRz => Signature::new(type_row![QB_T, QB_T, FLOAT64_TYPE], type_row![QB_T; 2]),
+            Rz | Rx | Ry => Signature::new(type_row![QB_T, ANGLE_TYPE], one_qb_row),
+            CRz => Signature::new(type_row![QB_T, QB_T, ANGLE_TYPE], type_row![QB_T; 2]),
             QAlloc => Signature::new(type_row![], one_qb_row),
             QFree => Signature::new(one_qb_row, type_row![]),
         }

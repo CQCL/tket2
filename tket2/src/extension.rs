@@ -4,16 +4,13 @@
 
 use crate::serialize::pytket::OpaqueTk1Op;
 use crate::Tk2Op;
+use angle::ANGLE_TYPE;
 use hugr::extension::prelude::PRELUDE;
 use hugr::extension::simple_op::MakeOpDef;
 use hugr::extension::{
     CustomSignatureFunc, ExtensionId, ExtensionRegistry, SignatureError, Version,
 };
 use hugr::hugr::IdentList;
-use hugr::std_extensions::arithmetic::{
-    float_ops::EXTENSION as FLOAT_OPS_EXTENSION,
-    float_types::{EXTENSION as FLOAT_TYPES_EXTENSION, FLOAT64_TYPE},
-};
 use hugr::types::type_param::{TypeArg, TypeParam};
 use hugr::types::{CustomType, PolyFuncType, PolyFuncTypeRV, Signature};
 use hugr::{type_row, Extension};
@@ -59,8 +56,6 @@ pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
     TKET1_EXTENSION.to_owned(),
     PRELUDE.to_owned(),
     TKET2_EXTENSION.to_owned(),
-    FLOAT_TYPES_EXTENSION.to_owned(),
-    FLOAT_OPS_EXTENSION.to_owned(),
 ]).unwrap();
 
 
@@ -96,7 +91,7 @@ pub const TKET2_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("quantum.
 pub const SYM_EXPR_NAME: SmolStr = SmolStr::new_inline("SymExpr");
 
 /// The name of the symbolic expression opaque type arg.
-pub const SYM_OP_ID: SmolStr = SmolStr::new_inline("symbolic_float");
+pub const SYM_OP_ID: SmolStr = SmolStr::new_inline("symbolic_angle");
 
 /// Current version of the TKET 2 extension
 pub const TKET2_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
@@ -113,8 +108,8 @@ pub static ref TKET2_EXTENSION: Extension = {
 
     e.add_op(
         SYM_OP_ID,
-        "Store a sympy expression that can be evaluated to a float.".to_string(),
-        PolyFuncType::new(vec![TypeParam::String], Signature::new(type_row![], type_row![FLOAT64_TYPE])),
+        "Store a sympy expression that can be evaluated to an angle.".to_string(),
+        PolyFuncType::new(vec![TypeParam::String], Signature::new(type_row![], type_row![ANGLE_TYPE])),
     )
     .unwrap();
 

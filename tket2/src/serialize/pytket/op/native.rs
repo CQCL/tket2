@@ -3,13 +3,13 @@
 use hugr::extension::prelude::{Noop, BOOL_T, QB_T};
 
 use hugr::ops::{OpTrait, OpType};
-use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::types::Signature;
 
 use hugr::IncomingPort;
 use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as Tk1OpType;
 
+use crate::extension::angle::ANGLE_TYPE;
 use crate::Tk2Op;
 
 /// An operation with a native TKET2 counterpart.
@@ -159,7 +159,7 @@ impl NativeOp {
             let types = sig.input_types().to_owned();
             sig.input_ports()
                 .zip(types)
-                .filter(|(_, ty)| ty == &FLOAT64_TYPE)
+                .filter(|(_, ty)| ty == &ANGLE_TYPE)
                 .map(|(port, _)| port)
         })
     }
@@ -179,7 +179,7 @@ impl NativeOp {
                 self.input_qubits += 1;
             } else if ty == &BOOL_T {
                 self.input_bits += 1;
-            } else if ty == &FLOAT64_TYPE {
+            } else if ty == &ANGLE_TYPE {
                 self.num_params += 1;
             }
         }

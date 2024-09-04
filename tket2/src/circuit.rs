@@ -621,7 +621,6 @@ fn update_signature(
 #[cfg(test)]
 mod tests {
     use cool_asserts::assert_matches;
-    use hugr::std_extensions::arithmetic::float_types::ConstF64;
     use hugr::CircuitUnit;
     use rstest::{fixture, rstest};
 
@@ -632,6 +631,7 @@ mod tests {
     };
 
     use super::*;
+    use crate::extension::angle::ConstAngle;
     use crate::serialize::load_tk1_json_str;
     use crate::utils::{build_module_with_circuit, build_simple_circuit};
     use crate::Tk2Op;
@@ -661,7 +661,7 @@ mod tests {
         build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::H, [0])?;
             circ.append(Tk2Op::CX, [0, 1])?;
-            let angle = circ.add_constant(ConstF64::new(0.5));
+            let angle = circ.add_constant(ConstAngle::PI_2);
             circ.append_and_consume(
                 Tk2Op::Rz,
                 [CircuitUnit::Linear(1), CircuitUnit::Wire(angle)],
