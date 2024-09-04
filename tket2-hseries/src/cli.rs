@@ -11,6 +11,7 @@ use hugr::{
 use hugr_cli::HugrArgs;
 
 use crate::HSeriesPass;
+mod extensions;
 
 /// CLI arguments.
 #[derive(Parser, Debug)]
@@ -20,6 +21,7 @@ use crate::HSeriesPass;
 #[non_exhaustive]
 pub enum CliArgs {
     Run(RunArgs),
+    GenExtensions(hugr_cli::extensions::ExtArgs),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum)]
