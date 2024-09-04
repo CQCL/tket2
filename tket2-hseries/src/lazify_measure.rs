@@ -1,8 +1,8 @@
 //! Provides `LazifyMeasurePass` which replaces [Tket2Op::Measure] nodes with
-//! [LazyQuantumOp::Measure] nodes.
+//! [HSeriesOp::Measure] nodes.
 //!
 //! [Tket2Op::Measure]: tket2::Tk2Op::Measure
-//! [LazyQuantumOp::Measure]: crate::extension::quantum_lazy::LazyQuantumOp::Measure
+//! [HSeriesOp::Measure]: crate::extension::hseries::HSeriesOp::Measure
 use std::collections::{HashMap, HashSet};
 
 use hugr::{
@@ -31,7 +31,7 @@ use crate::extension::{
 };
 
 /// A `Hugr -> Hugr` pass that replaces [tket2::Tk2Op::Measure] nodes with
-/// [quantum_lazy::LazyQuantumOp::Measure] nodes. To construct a `LazifyMeasurePass` use
+/// [hseries::HSeriesOp::Measure] nodes. To construct a `LazifyMeasurePass` use
 /// [Default::default].
 ///
 /// The `Hugr` must not contain any non-local edges. If validation is enabled,
