@@ -2,7 +2,8 @@
 //! Quantinuum H-series quantum computers.
 use hugr::{
     algorithms::{
-        force_order, validation::{ValidatePassError, ValidationLevel},
+        force_order,
+        validation::{ValidatePassError, ValidationLevel},
     },
     extension::ExtensionRegistry,
     hugr::{hugrmut::HugrMut, HugrError},
@@ -58,11 +59,21 @@ impl HSeriesPass {
         Ok(())
     }
 
-    pub fn lazify_measure(&self, hugr: &mut impl HugrMut, registry: &ExtensionRegistry) -> Result<(), LazifyMeasurePassError> {
-        LazifyMeasurePass::default().with_validation_level(self.validation_level).run(hugr, registry)
+    pub fn lazify_measure(
+        &self,
+        hugr: &mut impl HugrMut,
+        registry: &ExtensionRegistry,
+    ) -> Result<(), LazifyMeasurePassError> {
+        LazifyMeasurePass::default()
+            .with_validation_level(self.validation_level)
+            .run(hugr, registry)
     }
 
-    pub fn force_order(&self, hugr: &mut impl HugrMut, registry: &ExtensionRegistry) -> Result<(), HSeriesPassError> {
+    pub fn force_order(
+        &self,
+        hugr: &mut impl HugrMut,
+        registry: &ExtensionRegistry,
+    ) -> Result<(), HSeriesPassError> {
         self.validation_level
             .run_validated_pass(hugr, registry, |hugr, _| {
                 force_order(hugr, hugr.root(), |hugr, node| {
@@ -76,7 +87,8 @@ impl HSeriesPass {
                     } else {
                         0
                     }
-                }).map_err(HSeriesPassError::ForceOrderError)
+                })
+                .map_err(HSeriesPassError::ForceOrderError)
             })
     }
 

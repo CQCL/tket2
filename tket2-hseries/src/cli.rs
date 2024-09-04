@@ -3,12 +3,14 @@ use std::io::Write;
 
 use clap::{Parser, ValueEnum};
 use clio::Output;
-use serde_json::to_string_pretty;
 
-use hugr::{algorithms::validation::ValidationLevel, extension::ExtensionRegistry, hugr::hugrmut::HugrMut, Hugr, HugrView};
-use hugr_cli::{HugrArgs, Package};
+use hugr::{
+    algorithms::validation::ValidationLevel, extension::ExtensionRegistry, hugr::hugrmut::HugrMut,
+    Hugr,
+};
+use hugr_cli::HugrArgs;
 
-use crate::{lazify_measure::LazifyMeasurePass, HSeriesPass};
+use crate::HSeriesPass;
 
 /// CLI arguments.
 #[derive(Parser, Debug)]
@@ -20,14 +22,12 @@ pub enum CliArgs {
     Run(RunArgs),
 }
 
-#[derive(Copy,Clone, PartialEq,Eq,PartialOrd,Ord,Debug,ValueEnum)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum)]
 pub enum Pass {
     All,
     LazifyMeasure,
     ForceOrder,
 }
-
-
 
 /// Validate and visualise a HUGR file.
 #[derive(Parser, Debug)]
@@ -43,7 +43,7 @@ pub struct RunArgs {
     #[arg(value_enum, default_value = "all")]
     pub pass: Pass,
 
-    #[arg(long="validate",default_value = "true")]
+    #[arg(long = "validate", default_value = "true")]
     pub validate_pass: bool,
 }
 
@@ -62,9 +62,9 @@ pub struct RunCommand {
 }
 
 impl RunArgs {
-    pub fn run(&mut self) -> Result<Hugr, Box<dyn Error>>{
+    pub fn run(&mut self) -> Result<Hugr, Box<dyn Error>> {
         let (hugrs, reg) = self.hugr_args.validate()?;
-        let Ok::<[_;1],_>([mut hugr]) = hugrs.try_into() else {
+        let Ok::<[_; 1], _>([mut hugr]) = hugrs.try_into() else {
             Err("Only one module is supported".to_string())?
         };
         let validation_level = if self.validate_pass {
@@ -80,13 +80,22 @@ impl RunArgs {
 
 impl RunCommand {
     pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
-        write!(self.output, "{}", serde_json::to_string_pretty(&self.run_args.run()?)?)?;
+        write!(
+            self.output,
+            "{}",
+            serde_json::to_string_pretty(&self.run_args.run()?)?
+        )?;
         Ok(())
     }
 }
 
 impl Pass {
-    pub fn run(&self, hugr: &mut impl HugrMut, registry: &ExtensionRegistry, level: ValidationLevel) -> Result<(), Box<dyn Error>> {
+    pub fn run(
+        &self,
+        hugr: &mut impl HugrMut,
+        registry: &ExtensionRegistry,
+        level: ValidationLevel,
+    ) -> Result<(), Box<dyn Error>> {
         let pass = HSeriesPass::default().with_validation_level(level);
         match self {
             Pass::All => pass.run(hugr, registry)?,
