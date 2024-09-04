@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.3.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.2.1...tket2-py-v0.3.0) (2024-09-04)
+
+
+### ⚠ BREAKING CHANGES
+
+* quantum extension renamed from "quantum.tket2" to "tket2.quantum"
+* Parametric Tk2Ops take angle type rather than float.
+* Rename lazy extension to "hseries" and add hseries ops.
+* `Tk2Op::AngleAdd` removed, use `fadd` from the hugr float ops standard extension
+* Updated to latest hugr version (`hugr-rs 0.12` / `hugr-py 0.8`). ECCs need to be recompiled.
+
+### Features
+
+* HSeries ops ([#573](https://github.com/CQCL/tket2/issues/573)) ([e6acc88](https://github.com/CQCL/tket2/commit/e6acc881d7ab67c584e6622d387bf2025209f8b8))
+* remove Tk2Op::AngleAdd ([#567](https://github.com/CQCL/tket2/issues/567)) ([42cc82f](https://github.com/CQCL/tket2/commit/42cc82f0ee6e77dffb2f55c53613a7c4c8687824))
+* replace f64 with angle type for tk2 ops ([#578](https://github.com/CQCL/tket2/issues/578)) ([d14631f](https://github.com/CQCL/tket2/commit/d14631f762f7ad2cf7db65e66b11cc38a54966ef))
+* Update rust hugr dependency to `0.12.0`, and python hugr to `0.8.0` ([#568](https://github.com/CQCL/tket2/issues/568)) ([258a7c5](https://github.com/CQCL/tket2/commit/258a7c5ec25ee2665c524a174704944f0c19729e))
+
+
+### Bug Fixes
+
+* quantum extension name wrong way round ([#582](https://github.com/CQCL/tket2/issues/582)) ([06a6838](https://github.com/CQCL/tket2/commit/06a68386ce6d0b1376ed369da2a42d3b3eaa056a))
+
 ## [0.2.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.2.0...tket2-py-v0.2.1) (2024-08-14)
 
 ### ⚠ BREAKING CHANGES
