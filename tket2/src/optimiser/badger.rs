@@ -676,11 +676,12 @@ fn insert_salient(
     salient_diffs: &mut BTreeSet<PortDiff<StaticSizeCircuit>>,
 ) -> PortDiff<StaticSizeCircuit> {
     // The graph between new_circ and the previous salient diffs.
-    // let g = PortDiffGraph::from_sinks_while([new_circ], |circ| !salient_diffs.contains(circ));
-    // let squashed = g
-    //     .try_squash()
-    //     .expect("failed squashing a single circ: new_circ is not a valid diff");
-    let squashed = new_circ;
+    let g =
+        PortDiffGraph::from_sinks_while([new_circ.clone()], |circ| !salient_diffs.contains(circ));
+    let squashed = g
+        .try_squash()
+        .expect("failed squashing a single circ: new_circ is not a valid diff");
+
     salient_diffs.insert(squashed.clone());
     squashed
 }
