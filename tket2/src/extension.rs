@@ -87,7 +87,7 @@ impl CustomSignatureFunc for Tk1Signature {
 }
 
 /// Name of tket 2 extension.
-pub const TKET2_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("quantum.tket2");
+pub const TKET2_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.quantum");
 
 /// The name of the symbolic expression opaque type arg.
 pub const SYM_EXPR_NAME: SmolStr = SmolStr::new_inline("SymExpr");
