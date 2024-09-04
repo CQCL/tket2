@@ -663,7 +663,7 @@ mod tests {
             circ.append(Tk2Op::CX, [0, 1])?;
             let angle = circ.add_constant(ConstF64::new(0.5));
             circ.append_and_consume(
-                Tk2Op::RzF64,
+                Tk2Op::Rz,
                 [CircuitUnit::Linear(1), CircuitUnit::Wire(angle)],
             )?;
             Ok(())

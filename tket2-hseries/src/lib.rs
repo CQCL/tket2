@@ -12,7 +12,7 @@ use tket2::Tk2Op;
 
 use thiserror::Error;
 
-use extension::{futures::FutureOpDef, quantum_lazy::LazyQuantumOp};
+use extension::{futures::FutureOpDef, hseries::HSeriesOp};
 use lazify_measure::{LazifyMeasurePass, LazifyMeasurePassError};
 
 pub mod extension;
@@ -56,7 +56,7 @@ impl HSeriesPass {
             .run_validated_pass(hugr, registry, |hugr, _| {
                 force_order(hugr, hugr.root(), |hugr, node| {
                     let optype = hugr.get_optype(node);
-                    if Tk2Op::try_from(optype).is_ok() || LazyQuantumOp::try_from(optype).is_ok() {
+                    if Tk2Op::try_from(optype).is_ok() || HSeriesOp::try_from(optype).is_ok() {
                         // quantum ops are lifted as early as possible
                         -1
                     } else if let Ok(FutureOpDef::Read) = hugr.get_optype(node).try_into() {
@@ -132,7 +132,7 @@ mod test {
 
             // depending on the angle means this op can't be lifted above the float ops
             let [qb] = builder
-                .add_dataflow_op(Tk2Op::RxF64, [qb, angle])
+                .add_dataflow_op(Tk2Op::Rx, [qb, angle])
                 .unwrap()
                 .outputs_arr();
             let rx_node = qb.node();

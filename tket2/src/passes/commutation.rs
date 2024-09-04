@@ -446,7 +446,7 @@ mod test {
 
             circ.append(Tk2Op::H, [1])?;
             circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append_and_consume(Tk2Op::RzF64, [CircuitUnit::Linear(0), CircuitUnit::Wire(f)])?;
+            circ.append_and_consume(Tk2Op::Rz, [CircuitUnit::Linear(0), CircuitUnit::Wire(f)])?;
             let qbs = circ.finish();
             dfg.finish_hugr_with_outputs(qbs, &REGISTRY)
         };
