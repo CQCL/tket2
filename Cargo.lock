@@ -474,6 +474,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "delegate"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5060bb0febb73fa907273f8a7ed17ab4bf831d585eac835b28ec24a1e2460956"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.71",
+]
+
+[[package]]
 name = "deranged"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -741,9 +752,9 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41def210e277099199acba8a9f5d74938612607a0309cf695dc147b0f5870c74"
+checksum = "34ee4f66c9add4abc4b1ed5895b8f4ca1ee3727a0aacbb011696bb0a5946be01"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -751,14 +762,14 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dce2072c663e82ec9cc43282ff555c90fa139f3e5396a693f2b2a14d72e694e0"
+checksum = "b9cadea7900319ff43c7ee211a28e7de26a3d3f3b1d1bdd4c3de3dfee1199d3e"
 dependencies = [
  "bitvec",
  "cgmath",
  "context-iterators",
- "delegate 0.12.0",
+ "delegate 0.13.0",
  "derive_more 1.0.0",
  "downcast-rs",
  "enum_dispatch",
@@ -782,9 +793,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c47d41300b40e1dfd53f17382b2fe4dc815c9707d7507dc68846562ea7ee78b9"
+checksum = "6636bd4e828751880354ea8000bcc0be0d753aed9062783b72c78b668b813aa8"
 dependencies = [
  "hugr-core",
  "itertools 0.13.0",

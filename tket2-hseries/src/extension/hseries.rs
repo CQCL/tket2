@@ -195,24 +195,27 @@ impl<D: Dataflow> HSeriesOpBuilder for D {}
 /// Lower `Tk2Op` operations to `HSeriesOp` operations.
 pub fn lower_tk2_op(
     mut hugr: impl hugr::hugr::hugrmut::HugrMut,
-) -> Result<(), Box<dyn std::error::Error>> {
-    tket2::passes::replace_ops(&mut hugr, |op| {
+) -> Result<Vec<hugr::Node>, Box<dyn std::error::Error>> {
+    let replaced_nodes = hugr::algorithms::replace_many_ops(&mut hugr, |op| {
         let op: Tk2Op = op.cast()?;
         Some(match op {
             Tk2Op::QAlloc => HSeriesOp::QAlloc,
             Tk2Op::QFree => HSeriesOp::QFree,
             Tk2Op::Reset => HSeriesOp::Reset,
             Tk2Op::Measure => HSeriesOp::Measure,
-            Tk2Op::Rz => HSeriesOp::Rz,
             _ => return None,
         })
-    })?;
+    })?
+    .into_iter()
+    .map(|(node, _)| node)
+    .collect::<Vec<_>>();
     fn pi_mul(builder: &mut impl Dataflow, multiplier: f64) -> Wire {
         builder.add_load_const(ops::Const::new(
             ConstF64::new(multiplier * std::f64::consts::PI).into(),
         ))
     }
-    tket2::passes::lower_ops(&mut hugr, |op| {
+
+    let lowered_nodes = hugr::algorithms::lower_ops(&mut hugr, |op| {
         let sig = op.dataflow_signature()?;
         let sig = Signature::new(sig.input, sig.output); // ignore extension delta
         let op = op.cast()?;
@@ -234,7 +237,7 @@ pub fn lower_tk2_op(
         })
     })?;
 
-    Ok(())
+    Ok([replaced_nodes, lowered_nodes].concat())
 }
 
 #[cfg(test)]
@@ -318,18 +321,9 @@ mod test {
 
     #[test]
     fn test_lower_direct() {
-        let mut b = FunctionBuilder::new(
-            "circuit",
-            Signature::new(type_row![FLOAT64_TYPE], type_row![]),
-        )
-        .unwrap();
-        let [angle] = b.input_wires_arr();
+        let mut b = FunctionBuilder::new("circuit", Signature::new_endo(type_row![])).unwrap();
         let [q] = b.add_dataflow_op(Tk2Op::QAlloc, []).unwrap().outputs_arr();
         let [q] = b.add_dataflow_op(Tk2Op::Reset, [q]).unwrap().outputs_arr();
-        let [q] = b
-            .add_dataflow_op(Tk2Op::Rz, [q, angle])
-            .unwrap()
-            .outputs_arr();
         let [q, _] = b
             .add_dataflow_op(Tk2Op::Measure, [q])
             .unwrap()
@@ -337,7 +331,9 @@ mod test {
         b.add_dataflow_op(Tk2Op::QFree, [q]).unwrap();
         // TODO remaining ops
         let mut h = b.finish_hugr_with_outputs([], &REGISTRY).unwrap();
-        lower_tk2_op(&mut h).unwrap();
+
+        let lowered = lower_tk2_op(&mut h).unwrap();
+        assert_eq!(lowered.len(), 4);
         let circ = Circuit::new(&h, h.root());
         let ops: Vec<HSeriesOp> = circ
             .commands()
@@ -348,7 +344,6 @@ mod test {
             vec![
                 HSeriesOp::QAlloc,
                 HSeriesOp::Reset,
-                HSeriesOp::Rz,
                 HSeriesOp::Measure,
                 HSeriesOp::QFree
             ]
