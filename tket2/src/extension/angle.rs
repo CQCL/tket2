@@ -19,7 +19,7 @@ const ANGLE_TYPE_ID: SmolStr = SmolStr::new_inline("angle");
 pub const ANGLE_CUSTOM_TYPE: CustomType =
     CustomType::new_simple(ANGLE_TYPE_ID, TKET2_EXTENSION_ID, TypeBound::Copyable);
 
-/// Dyadic rational angle type  (as [Type])
+/// Type representing an angle that is a dyadic rational multiple of π (as [Type])
 pub const ANGLE_TYPE: Type = Type::new_extension(ANGLE_CUSTOM_TYPE);
 
 /// The largest permitted log-denominator.
@@ -107,7 +107,7 @@ impl CustomConst for ConstAngle {
 #[non_exhaustive]
 /// Angle operations
 pub enum AngleOp {
-    /// Truncate an angle to one with a lower log-denominator with the same value, rounding down in [0, 2π) if necessary
+    /// Truncate an angle to one with a lower log-denominator with the nearest value, rounding down in [0, 2π) if necessary
     atrunc,
     /// Addition of angles
     aadd,
@@ -142,7 +142,7 @@ impl MakeOpDef for AngleOp {
 
     fn description(&self) -> String {
         match self {
-            AngleOp::atrunc => "truncate an angle to one with a lower log-denominator with the same value, rounding down in [0, 2π) if necessary",
+            AngleOp::atrunc => "truncate an angle to one with a lower log-denominator with the nearest value, rounding down in [0, 2π) if necessary",
             AngleOp::aadd => "addition of angles",
             AngleOp::asub => "subtraction of the second angle from the first",
             AngleOp::aneg => "negation of an angle",
