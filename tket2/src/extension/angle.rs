@@ -1,7 +1,8 @@
-use hugr::extension::prelude::USIZE_T;
+use hugr::extension::prelude::{sum_with_error, BOOL_T, USIZE_T};
 use hugr::extension::simple_op::{MakeOpDef, MakeRegisteredOp};
 use hugr::extension::ExtensionSet;
 use hugr::ops::constant::{downcast_equal_consts, CustomConst};
+use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::type_row;
 use hugr::{
     types::{ConstTypeError, CustomType, Signature, Type, TypeBound},
@@ -146,6 +147,16 @@ pub enum AngleOp {
     asub,
     /// Negation of an angle
     aneg,
+    /// Construct angle from numerator and log-denominator
+    anew,
+    /// Decompose angle into numerator and log-denominator
+    aparts,
+    /// Construct angle from radians
+    afromrad,
+    /// Convert angle to radians
+    atorad,
+    /// Check angle equality
+    aeq,
 }
 
 impl MakeOpDef for AngleOp {
@@ -167,6 +178,16 @@ impl MakeOpDef for AngleOp {
                 Signature::new(type_row![ANGLE_TYPE, ANGLE_TYPE], type_row![ANGLE_TYPE])
             }
             AngleOp::aneg => Signature::new_endo(type_row![ANGLE_TYPE]),
+            AngleOp::anew => Signature::new(
+                type_row![USIZE_T, USIZE_T],
+                vec![sum_with_error(ANGLE_TYPE).into()],
+            ),
+            AngleOp::aparts => Signature::new(type_row![ANGLE_TYPE], type_row![USIZE_T, USIZE_T]),
+            AngleOp::afromrad => {
+                Signature::new(type_row![USIZE_T, FLOAT64_TYPE], type_row![ANGLE_TYPE])
+            }
+            AngleOp::atorad => Signature::new(type_row![ANGLE_TYPE], type_row![FLOAT64_TYPE]),
+            AngleOp::aeq => Signature::new(type_row![ANGLE_TYPE, ANGLE_TYPE], type_row![BOOL_T]),
         }
         .into()
     }
@@ -177,6 +198,11 @@ impl MakeOpDef for AngleOp {
             AngleOp::aadd => "addition of angles",
             AngleOp::asub => "subtraction of the second angle from the first",
             AngleOp::aneg => "negation of an angle",
+            AngleOp::anew => "construct angle from numerator and log-denominator, returning an error if invalid",
+            AngleOp::aparts => "decompose angle into numerator and log-denominator",
+            AngleOp::afromrad => "construct angle from radians, rounding given a log-denominator",
+            AngleOp::atorad => "convert angle to radians",
+            AngleOp::aeq => "check angle equality",
         }.to_owned()
     }
 
@@ -251,7 +277,7 @@ mod test {
     #[test]
     fn test_ops() {
         let ops = AngleOp::iter().collect::<Vec<_>>();
-        assert_eq!(ops.len(), 4);
+        assert_eq!(ops.len(), 9);
         for op in ops {
             let optype: OpType = op.into();
             assert_eq!(optype.cast(), Some(op));
