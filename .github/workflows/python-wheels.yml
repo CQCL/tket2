@@ -16,6 +16,10 @@ on:
     types:
       - published
   workflow_dispatch:
+  # TODO: Remove this testing trigger
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -67,7 +71,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out ../dist --find-interpreter
           sccache: 'true'
           manylinux: auto
           working-directory: ${{ env.MODULE_DIR }}
@@ -101,7 +105,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out ../dist --find-interpreter
           sccache: 'true'
           manylinux: musllinux_1_2
           working-directory: ${{ env.MODULE_DIR }}
@@ -132,7 +136,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out ../dist --find-interpreter
           sccache: 'true'
           working-directory: ${{ env.MODULE_DIR }}
       - name: Upload wheels
@@ -161,7 +165,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out ../dist --find-interpreter
           sccache: 'true'
           working-directory: ${{ env.MODULE_DIR }}
       - name: Upload wheels
@@ -180,7 +184,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: sdist
-          args: --out dist
+          args: --out ../dist
           working-directory: ${{ env.MODULE_DIR }}
       - name: Upload sdist
         uses: actions/upload-artifact@v4
@@ -192,14 +196,11 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     needs: [linux, musllinux, windows, macos, sdist]
-    if: ${{ (github.event_name == 'release' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/tket2-py-v') ) || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/tket2-py-v') ) }}
+    # if: ${{ (github.event_name == 'release' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/tket2-py-v') ) || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/tket2-py-v') ) }}
     steps:
       - uses: actions/download-artifact@v4
       - name: Publish to PyPI
         uses: PyO3/maturin-action@v1
-        env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_PUBLISH_TKET2 }}
         with:
           command: upload
           args: --non-interactive --skip-existing wheels-*/*
-          working-directory: ${{ env.MODULE_DIR }}
