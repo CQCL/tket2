@@ -196,7 +196,7 @@ pub fn is_cx(op: &OpType) -> bool {
 
 /// Returns true if the operation is a quantum operation.
 pub fn is_quantum(op: &OpType) -> bool {
-    let Ok(op): Result<Tk2Op, _> = op.try_into() else {
+    let Some(op): Option<Tk2Op> = op.cast() else {
         return false;
     };
     op.is_quantum()

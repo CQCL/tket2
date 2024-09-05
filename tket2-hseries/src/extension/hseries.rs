@@ -8,10 +8,9 @@ use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
         prelude::{BOOL_T, QB_T},
-        simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp, OpLoadError},
+        simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, Version, PRELUDE,
     },
-    ops::{NamedOp as _, OpType},
     std_extensions::arithmetic::float_types::{EXTENSION as FLOAT_TYPES, FLOAT64_TYPE},
     type_row,
     types::Signature,
@@ -112,17 +111,6 @@ impl MakeRegisteredOp for HSeriesOp {
 
     fn registry<'s, 'r: 's>(&'s self) -> &'r ExtensionRegistry {
         &REGISTRY
-    }
-}
-
-impl TryFrom<&OpType> for HSeriesOp {
-    type Error = OpLoadError;
-    fn try_from(value: &OpType) -> Result<Self, Self::Error> {
-        Self::from_op(
-            value
-                .as_extension_op()
-                .ok_or(OpLoadError::NotMember(value.name().into()))?,
-        )
     }
 }
 

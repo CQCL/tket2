@@ -13,8 +13,6 @@ use hugr::ops::OpType;
 use hugr::IncomingPort;
 use tket_json_rs::circuit_json;
 
-use crate::Tk2Op;
-
 use self::native::NativeOp;
 use self::serialised::OpaqueTk1Op;
 use super::OpConvertError;
@@ -40,7 +38,7 @@ impl Tk1Op {
     ///
     /// Returns an error if the operation is not supported by the TKET1 serialization.
     pub fn try_from_optype(op: OpType) -> Result<Option<Self>, OpConvertError> {
-        if let Ok(tk2op) = Tk2Op::try_from(&op) {
+        if let Some(tk2op) = op.cast() {
             let native = NativeOp::try_from_tk2op(tk2op)
                 .ok_or_else(|| OpConvertError::UnsupportedOpSerialization(op))?;
             // Skip serialisation for some special cases.
