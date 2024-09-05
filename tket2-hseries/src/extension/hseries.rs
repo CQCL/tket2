@@ -97,7 +97,7 @@ impl MakeOpDef for HSeriesOp {
     }
 
     fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
-        try_from_name(op_def.name(), &EXTENSION_ID)
+        try_from_name(op_def.name(), op_def.extension())
     }
 
     fn extension(&self) -> ExtensionId {
@@ -210,7 +210,7 @@ mod test {
     use futures::FutureOpBuilder as _;
     use hugr::{
         builder::{DataflowHugr, FunctionBuilder},
-        ops::NamedOp,
+        ops::{NamedOp, OpType},
     };
     use strum::IntoEnumIterator as _;
 
@@ -266,5 +266,16 @@ mod test {
                 .unwrap()
         };
         assert_matches!(hugr.validate(&REGISTRY), Ok(_));
+    }
+
+    #[test]
+    fn test_cast() {
+        // test overlapping names don't cause cast errors
+        for op in HSeriesOp::iter() {
+            let optype: OpType = op.into();
+            let new_op: HSeriesOp = optype.cast().unwrap();
+            assert_eq!(op, new_op);
+            assert_eq!(optype.cast::<tket2::Tk2Op>(), None);
+        }
     }
 }

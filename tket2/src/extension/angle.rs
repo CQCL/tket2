@@ -185,7 +185,7 @@ impl MakeOpDef for AngleOp {
     where
         Self: Sized,
     {
-        hugr::extension::simple_op::try_from_name(op_def.name(), &ANGLE_EXTENSION_ID)
+        hugr::extension::simple_op::try_from_name(op_def.name(), op_def.extension())
     }
 
     fn signature(&self) -> hugr::extension::SignatureFunc {
