@@ -1,6 +1,6 @@
 use hugr::extension::prelude::{sum_with_error, BOOL_T, USIZE_T};
 use hugr::extension::simple_op::{MakeOpDef, MakeRegisteredOp};
-use hugr::extension::ExtensionSet;
+use hugr::extension::{ExtensionId, ExtensionSet, Version};
 use hugr::ops::constant::{downcast_equal_consts, CustomConst};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::type_row;
@@ -12,13 +12,28 @@ use smol_str::SmolStr;
 use std::f64::consts::TAU;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
-use super::TKET2_EXTENSION_ID;
+use lazy_static::lazy_static;
+
+/// Name of tket 2 angle extension.
+pub const ANGLE_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.angle");
+
+/// Current version of the TKET 2 angle extension
+pub const ANGLE_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+
+lazy_static! {
+    /// The extension definition for TKET2 angle type and ops.
+    pub static ref ANGLE_EXTENSION: Extension = {
+        let mut e = Extension::new(ANGLE_EXTENSION_ID, ANGLE_EXTENSION_VERSION);
+        add_to_extension(&mut e);
+        e
+    };
+}
 
 /// Identifier for the angle type.
 const ANGLE_TYPE_ID: SmolStr = SmolStr::new_inline("angle");
 /// Dyadic rational angle type (as [CustomType])
 pub const ANGLE_CUSTOM_TYPE: CustomType =
-    CustomType::new_simple(ANGLE_TYPE_ID, TKET2_EXTENSION_ID, TypeBound::Copyable);
+    CustomType::new_simple(ANGLE_TYPE_ID, ANGLE_EXTENSION_ID, TypeBound::Copyable);
 
 /// Type representing an angle that is a dyadic rational multiple of π (as [Type])
 pub const ANGLE_TYPE: Type = Type::new_extension(ANGLE_CUSTOM_TYPE);
@@ -130,7 +145,7 @@ impl CustomConst for ConstAngle {
         downcast_equal_consts(self, other)
     }
     fn extension_reqs(&self) -> ExtensionSet {
-        ExtensionSet::singleton(&TKET2_EXTENSION_ID)
+        ExtensionSet::singleton(&ANGLE_EXTENSION_ID)
     }
 }
 
@@ -170,7 +185,7 @@ impl MakeOpDef for AngleOp {
     where
         Self: Sized,
     {
-        hugr::extension::simple_op::try_from_name(op_def.name(), &TKET2_EXTENSION_ID)
+        hugr::extension::simple_op::try_from_name(op_def.name(), &ANGLE_EXTENSION_ID)
     }
 
     fn signature(&self) -> hugr::extension::SignatureFunc {
@@ -216,7 +231,7 @@ impl MakeOpDef for AngleOp {
     }
 
     fn extension(&self) -> hugr::extension::ExtensionId {
-        TKET2_EXTENSION_ID
+        ANGLE_EXTENSION_ID
     }
 
     // TODO constant folding
@@ -225,7 +240,7 @@ impl MakeOpDef for AngleOp {
 
 impl MakeRegisteredOp for AngleOp {
     fn extension_id(&self) -> hugr::extension::ExtensionId {
-        TKET2_EXTENSION_ID
+        ANGLE_EXTENSION_ID
     }
 
     fn registry<'s, 'r: 's>(&'s self) -> &'r hugr::extension::ExtensionRegistry {

@@ -58,6 +58,7 @@ pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
     PRELUDE.to_owned(),
     TKET2_EXTENSION.to_owned(),
     FLOAT_TYPES.to_owned(),
+    angle::ANGLE_EXTENSION.to_owned()
 ]).unwrap();
 
 
