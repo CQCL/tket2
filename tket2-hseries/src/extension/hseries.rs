@@ -30,8 +30,8 @@ use crate::extension::futures;
 use super::futures::future_type;
 
 mod lower;
-pub use lower::lower_tk2_op;
 use lower::pi_mul;
+pub use lower::{check_lowered, lower_tk2_op};
 
 /// The "tket2.hseries" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.hseries");
