@@ -15,6 +15,7 @@ fn main() {
         CliArgs::GenExtensions(args) => {
             let reg = ExtensionRegistry::try_new([
                 tket2::extension::TKET2_EXTENSION.to_owned(),
+                tket2::extension::angle::ANGLE_EXTENSION.to_owned(),
                 tket2_hseries::extension::hseries::EXTENSION.to_owned(),
                 tket2_hseries::extension::futures::EXTENSION.to_owned(),
                 tket2_hseries::extension::result::EXTENSION.to_owned(),
