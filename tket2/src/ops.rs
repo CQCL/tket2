@@ -135,7 +135,7 @@ impl MakeOpDef for Tk2Op {
     }
 
     fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
-        try_from_name(op_def.name(), &EXTENSION_ID)
+        try_from_name(op_def.name(), op_def.extension())
     }
 }
 
