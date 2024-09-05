@@ -8,7 +8,7 @@ use hugr::{
 };
 use itertools::Either;
 use thiserror::Error;
-use tket2::{extension::angle::AngleOp, Tk2Op};
+use tket2::{extension::angle::AngleOpBuilder, Tk2Op};
 
 use crate::extension::hseries::{HSeriesOp, HSeriesOpBuilder};
 
@@ -20,15 +20,6 @@ pub(super) fn pi_mul(builder: &mut impl Dataflow, multiplier: f64) -> Wire {
 
 fn const_f64(builder: &mut impl Dataflow, value: f64) -> Wire {
     builder.add_load_const(ops::Const::new(ConstF64::new(value).into()))
-}
-
-fn atorad(builder: &mut impl Dataflow, angle: Wire) -> Wire {
-    builder
-        .add_dataflow_op(AngleOp::atorad, [angle])
-        .unwrap()
-        .outputs()
-        .next()
-        .unwrap()
 }
 
 /// Errors produced by the [`op_to_hugr`] function.
@@ -62,19 +53,19 @@ fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerBuildError> {
         (Tk2Op::CY, [c, t]) => b.build_cy(*c, *t)?.into(),
         (Tk2Op::CZ, [c, t]) => b.build_cz(*c, *t)?.into(),
         (Tk2Op::Rx, [q, angle]) => {
-            let float = atorad(&mut b, *angle);
+            let float = b.add_atorad(*angle)?;
             vec![b.build_rx(*q, float)?]
         }
         (Tk2Op::Ry, [q, angle]) => {
-            let float = atorad(&mut b, *angle);
+            let float = b.add_atorad(*angle)?;
             vec![b.build_ry(*q, float)?]
         }
         (Tk2Op::Rz, [q, angle]) => {
-            let float = atorad(&mut b, *angle);
+            let float = b.add_atorad(*angle)?;
             vec![b.add_rz(*q, float)?]
         }
         (Tk2Op::CRz, [c, t, angle]) => {
-            let float = atorad(&mut b, *angle);
+            let float = b.add_atorad(*angle)?;
             b.build_crz(*c, *t, float)?.into()
         }
         (Tk2Op::Toffoli, [a, b_, c]) => b.build_toffoli(*a, *b_, *c)?.into(),
