@@ -224,8 +224,8 @@ mod test {
 
         let lowered = lower_tk2_op(&mut h).unwrap();
         assert_eq!(lowered.len(), 4);
-        // dfg, input, output, alloc, phasedx, rz, phasedx, free + 4x(float + load)
-        assert_eq!(h.node_count(), 16);
+        // dfg, input, output, alloc, phasedx, rz, atorad, phasedx, free + 4x(float + load)
+        assert_eq!(h.node_count(), 17);
         assert_eq!(check_lowered(&h), Ok(()));
     }
 }

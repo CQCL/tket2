@@ -53,7 +53,8 @@ lazy_static! {
         PRELUDE.to_owned(),
         EXTENSION.to_owned(),
         FLOAT_TYPES.to_owned(),
-        TKET2_EXTENSION.to_owned()
+        TKET2_EXTENSION.to_owned(),
+        tket2::extension::angle::ANGLE_EXTENSION.to_owned(),
     ]).unwrap();
 }
 
