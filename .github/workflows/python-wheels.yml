@@ -20,6 +20,9 @@ on:
 permissions:
   contents: read
 
+env:
+  MODULE_DIR: tket2-py
+
 jobs:
   # Check if the tag matches the package name,
   # or if the workflow is running on a non-release event.
@@ -67,6 +70,7 @@ jobs:
           args: --release --out dist --find-interpreter
           sccache: 'true'
           manylinux: auto
+          working-directory: ${{ env.MODULE_DIR }}
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -100,6 +104,7 @@ jobs:
           args: --release --out dist --find-interpreter
           sccache: 'true'
           manylinux: musllinux_1_2
+          working-directory: ${{ env.MODULE_DIR }}
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -129,6 +134,7 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --find-interpreter
           sccache: 'true'
+          working-directory: ${{ env.MODULE_DIR }}
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -157,6 +163,7 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --find-interpreter
           sccache: 'true'
+          working-directory: ${{ env.MODULE_DIR }}
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -174,6 +181,7 @@ jobs:
         with:
           command: sdist
           args: --out dist
+          working-directory: ${{ env.MODULE_DIR }}
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
@@ -194,3 +202,4 @@ jobs:
         with:
           command: upload
           args: --non-interactive --skip-existing wheels-*/*
+          working-directory: ${{ env.MODULE_DIR }}

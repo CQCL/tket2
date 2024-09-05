@@ -14,7 +14,7 @@ check:
 
 # Compile the wheels for the python package.
 build:
-    uv run maturin build --release
+    cd tket2-py && uv run maturin build --release
 
 # Run all the tests.
 test language="[rust|python]" : (_run_lang language \
