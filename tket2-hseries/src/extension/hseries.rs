@@ -23,7 +23,6 @@ use hugr::{
 
 use lazy_static::lazy_static;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
-use tket2::extension::TKET2_EXTENSION;
 
 use crate::extension::futures;
 
@@ -53,7 +52,6 @@ lazy_static! {
         PRELUDE.to_owned(),
         EXTENSION.to_owned(),
         FLOAT_TYPES.to_owned(),
-        TKET2_EXTENSION.to_owned(),
         tket2::extension::angle::ANGLE_EXTENSION.to_owned(),
     ]).unwrap();
 }
