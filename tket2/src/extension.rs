@@ -115,8 +115,6 @@ pub static ref TKET2_EXTENSION: Extension = {
         PolyFuncType::new(vec![TypeParam::String], Signature::new(type_row![], type_row![ANGLE_TYPE])),
     )
     .unwrap();
-
-    angle::add_to_extension(&mut e);
     e
 };
 }
