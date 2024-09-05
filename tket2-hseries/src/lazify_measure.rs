@@ -69,8 +69,8 @@ impl LazifyMeasurePass {
                 let mut state =
                     State::new(
                         hugr.nodes()
-                            .filter_map(|n| match hugr.get_optype(n).try_into() {
-                                Ok(Tk2Op::Measure) => Some(WorkItem::ReplaceMeasure(n)),
+                            .filter_map(|n| match hugr.get_optype(n).cast() {
+                                Some(Tk2Op::Measure) => Some(WorkItem::ReplaceMeasure(n)),
                                 _ => None,
                             }),
                     );
@@ -157,7 +157,7 @@ fn simple_replace_measure(
     node: Node,
 ) -> (HashSet<(Node, IncomingPort)>, SimpleReplacement) {
     assert!(
-        hugr.get_optype(node).try_into() == Ok(Tk2Op::Measure),
+        hugr.get_optype(node).cast() == Some(Tk2Op::Measure),
         "{:?}",
         hugr.get_optype(node)
     );
@@ -216,7 +216,6 @@ impl WorkItem {
 
 #[cfg(test)]
 mod test {
-    use cool_asserts::assert_matches;
 
     use hugr::{
         extension::{ExtensionRegistry, EMPTY_REG, PRELUDE},
@@ -261,12 +260,12 @@ mod test {
         let mut num_lazy_measure = 0;
         for n in hugr.nodes() {
             let ot = hugr.get_optype(n);
-            if let Ok(FutureOpDef::Read) = ot.try_into() {
+            if let Some(FutureOpDef::Read) = ot.cast() {
                 num_read += 1;
-            } else if let Ok(HSeriesOp::LazyMeasure) = ot.try_into() {
+            } else if let Some(HSeriesOp::LazyMeasure) = ot.cast() {
                 num_lazy_measure += 1;
             } else {
-                assert_matches!(Tk2Op::try_from(ot), Err(_))
+                assert_eq!(ot.cast::<Tk2Op>(), None)
             }
         }
 

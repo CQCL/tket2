@@ -7,7 +7,7 @@ use hugr::ops::NamedOp;
 use hugr::{
     extension::{
         prelude::{BOOL_T, QB_T},
-        simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp},
+        simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionId, OpDef, SignatureFunc,
     },
     ops::OpType,
@@ -202,21 +202,6 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<String> {
         }
     } else {
         None
-    }
-}
-
-impl TryFrom<&OpType> for Tk2Op {
-    type Error = NotTk2Op;
-
-    fn try_from(op: &OpType) -> Result<Self, Self::Error> {
-        {
-            match op {
-                OpType::ExtensionOp(ext) => Tk2Op::from_extension_op(ext).ok(),
-                OpType::OpaqueOp(opaque) => try_from_name(&opaque.name(), &EXTENSION_ID).ok(),
-                _ => None,
-            }
-            .ok_or_else(|| NotTk2Op { op: op.clone() })
-        }
     }
 }
 

@@ -202,18 +202,6 @@ impl TryFrom<&OpType> for FutureOpDef {
     }
 }
 
-impl TryFrom<&OpType> for FutureOp {
-    type Error = OpLoadError;
-
-    fn try_from(value: &OpType) -> Result<Self, Self::Error> {
-        Self::from_op(
-            value
-                .as_extension_op()
-                .ok_or(OpLoadError::NotMember(value.name().into()))?,
-        )
-    }
-}
-
 /// An extension trait for [Dataflow] providing methods to add "tket2.futures"
 /// operations.
 pub trait FutureOpBuilder: Dataflow {
