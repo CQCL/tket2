@@ -5,7 +5,7 @@ use std::borrow::{Borrow, Cow};
 use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::QB_T;
 use hugr::ops::handle::NodeHandle;
-use hugr::ops::{ExtensionOp, OpType};
+use hugr::ops::{ExtensionOp, NamedOp, OpType};
 use hugr::types::Type;
 use itertools::Itertools;
 use pyo3::exceptions::{PyAttributeError, PyValueError};
@@ -134,11 +134,12 @@ impl Tk2Circuit {
     pub fn circuit_cost<'py>(&self, cost_fn: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         let py = cost_fn.py();
         let cost_fn = |op: &OpType| -> PyResult<PyCircuitCost> {
-            let tk2_op: Tk2Op = op.try_into().map_err(|e| {
-                PyErr::new::<PyValueError, _>(format!(
-                    "Could not convert circuit operation to a `Tk2Op`: {e}"
-                ))
-            })?;
+            let Some(tk2_op) = op.cast::<Tk2Op>() else {
+                let op_name = op.name();
+                return Err(PyErr::new::<PyValueError, _>(format!(
+                    "Could not convert circuit operation to a `Tk2Op`: {op_name}"
+                )));
+            };
             let tk2_py_op = PyTk2Op::from(tk2_op);
             let cost = cost_fn.call1((tk2_py_op,))?;
             Ok(PyCircuitCost {

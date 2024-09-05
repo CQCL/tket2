@@ -78,10 +78,10 @@ impl HSeriesPass {
             .run_validated_pass(hugr, registry, |hugr, _| {
                 force_order(hugr, hugr.root(), |hugr, node| {
                     let optype = hugr.get_optype(node);
-                    if Tk2Op::try_from(optype).is_ok() || HSeriesOp::try_from(optype).is_ok() {
+                    if optype.cast::<Tk2Op>().is_some() || optype.cast::<HSeriesOp>().is_some() {
                         // quantum ops are lifted as early as possible
                         -1
-                    } else if let Ok(FutureOpDef::Read) = hugr.get_optype(node).try_into() {
+                    } else if let Some(FutureOpDef::Read) = hugr.get_optype(node).cast() {
                         // read ops are sunk as late as possible
                         1
                     } else {

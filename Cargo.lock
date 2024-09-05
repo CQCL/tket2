@@ -1888,7 +1888,7 @@ dependencies = [
 
 [[package]]
 name = "tket2"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "bytemuck",
  "cgmath",
@@ -1930,7 +1930,7 @@ dependencies = [
 
 [[package]]
 name = "tket2-hseries"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "clap",
  "clap-verbosity-flag",

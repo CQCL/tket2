@@ -8,10 +8,9 @@ use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
         prelude::{BOOL_T, QB_T},
-        simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp, OpLoadError},
+        simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, Version, PRELUDE,
     },
-    ops::{NamedOp as _, OpType},
     std_extensions::arithmetic::float_types::{EXTENSION as FLOAT_TYPES, FLOAT64_TYPE},
     type_row,
     types::Signature,
@@ -97,7 +96,7 @@ impl MakeOpDef for HSeriesOp {
     }
 
     fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
-        try_from_name(op_def.name(), &EXTENSION_ID)
+        try_from_name(op_def.name(), op_def.extension())
     }
 
     fn extension(&self) -> ExtensionId {
@@ -112,17 +111,6 @@ impl MakeRegisteredOp for HSeriesOp {
 
     fn registry<'s, 'r: 's>(&'s self) -> &'r ExtensionRegistry {
         &REGISTRY
-    }
-}
-
-impl TryFrom<&OpType> for HSeriesOp {
-    type Error = OpLoadError;
-    fn try_from(value: &OpType) -> Result<Self, Self::Error> {
-        Self::from_op(
-            value
-                .as_extension_op()
-                .ok_or(OpLoadError::NotMember(value.name().into()))?,
-        )
     }
 }
 
@@ -210,7 +198,7 @@ mod test {
     use futures::FutureOpBuilder as _;
     use hugr::{
         builder::{DataflowHugr, FunctionBuilder},
-        ops::NamedOp,
+        ops::{NamedOp, OpType},
     };
     use strum::IntoEnumIterator as _;
 
@@ -266,5 +254,16 @@ mod test {
                 .unwrap()
         };
         assert_matches!(hugr.validate(&REGISTRY), Ok(_));
+    }
+
+    #[test]
+    fn test_cast() {
+        // test overlapping names don't cause cast errors
+        for op in HSeriesOp::iter() {
+            let optype: OpType = op.into();
+            let new_op: HSeriesOp = optype.cast().unwrap();
+            assert_eq!(op, new_op);
+            assert_eq!(optype.cast::<tket2::Tk2Op>(), None);
+        }
     }
 }

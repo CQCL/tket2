@@ -194,7 +194,7 @@ impl MakeOpDef for ResultOpDef {
     }
 
     fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
-        try_from_name(op_def.name(), &EXTENSION_ID)
+        try_from_name(op_def.name(), op_def.extension())
     }
 
     fn extension(&self) -> ExtensionId {
@@ -380,17 +380,6 @@ impl TryFrom<&OpType> for ResultOpDef {
     }
 }
 
-impl TryFrom<&OpType> for ResultOp {
-    type Error = OpLoadError;
-
-    fn try_from(value: &OpType) -> Result<Self, Self::Error> {
-        let Some(ext) = value.as_extension_op() else {
-            Err(OpLoadError::NotMember(value.name().into()))?
-        };
-        Self::from_extension_op(ext)
-    }
-}
-
 /// An extension trait for [Dataflow] providing methods to add "tket2.result"
 /// operations.
 pub trait ResultOpBuilder: Dataflow {
@@ -464,7 +453,7 @@ pub(crate) mod test {
                 let op_t: OpType = op.clone().to_extension_op().unwrap().into();
                 let def_op: ResultOpDef = (&op_t).try_into().unwrap();
                 assert_eq!(op.result_op, def_op);
-                let new_op: ResultOp = (&op_t).try_into().unwrap();
+                let new_op: ResultOp = op_t.cast().unwrap();
                 assert_eq!(&new_op, op);
 
                 let op = op.clone().array_op(ARR_SIZE);
@@ -472,7 +461,7 @@ pub(crate) mod test {
                 let def_op: ResultOpDef = (&op_t).try_into().unwrap();
 
                 assert_eq!(op.result_op, def_op);
-                let new_op: ResultOp = (&op_t).try_into().unwrap();
+                let new_op: ResultOp = op_t.cast().unwrap();
                 assert_eq!(&new_op, &op);
             }
             let [b, f, i, u, a_b, a_f, a_i, a_u] = func_builder.input_wires_arr();
