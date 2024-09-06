@@ -81,8 +81,8 @@ fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
 }
 
 /// Lower `Tk2Op` operations to `HSeriesOp` operations.
-pub fn lower_tk2_op(mut hugr: impl HugrMut) -> Result<Vec<hugr::Node>, LowerTk2Error> {
-    let replaced_nodes = lower_direct(&mut hugr)?;
+pub fn lower_tk2_op(hugr: &mut impl HugrMut) -> Result<Vec<hugr::Node>, LowerTk2Error> {
+    let replaced_nodes = lower_direct(hugr)?;
     let mut hugr_map: HashMap<Tk2Op, Hugr> = HashMap::new();
     for op in Tk2Op::iter() {
         match op_to_hugr(op) {
@@ -93,8 +93,7 @@ pub fn lower_tk2_op(mut hugr: impl HugrMut) -> Result<Vec<hugr::Node>, LowerTk2E
         };
     }
 
-    let lowered_nodes =
-        hugr::algorithms::lower_ops(&mut hugr, |op| hugr_map.get(&op.cast()?).cloned())?;
+    let lowered_nodes = hugr::algorithms::lower_ops(hugr, |op| hugr_map.get(&op.cast()?).cloned())?;
 
     Ok([replaced_nodes, lowered_nodes].concat())
 }
