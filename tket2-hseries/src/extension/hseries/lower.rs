@@ -1,7 +1,7 @@
 use hugr::{
     builder::{BuildError, DFGBuilder, Dataflow, DataflowHugr},
     hugr::{hugrmut::HugrMut, HugrError},
-    ops::{self, OpTrait},
+    ops::{self, DataflowOpTrait},
     std_extensions::arithmetic::float_types::ConstF64,
     types::Signature,
     Hugr, HugrView, Node, Wire,
@@ -14,17 +14,16 @@ use crate::extension::hseries::{HSeriesOp, HSeriesOpBuilder};
 
 use super::REGISTRY;
 
-pub(super) fn pi_mul(builder: &mut impl Dataflow, multiplier: f64) -> Wire {
+pub(super) fn pi_mul_f64<T: Dataflow + ?Sized>(builder: &mut T, multiplier: f64) -> Wire {
     const_f64(builder, multiplier * std::f64::consts::PI)
 }
 
-fn const_f64(builder: &mut impl Dataflow, value: f64) -> Wire {
+fn const_f64<T: Dataflow + ?Sized>(builder: &mut T, value: f64) -> Wire {
     builder.add_load_const(ops::Const::new(ConstF64::new(value).into()))
 }
 
 /// Errors produced by the [`op_to_hugr`] function.
 #[derive(Debug, Error)]
-#[error(transparent)]
 pub enum LowerBuildError {
     #[error("Error when building the circuit: {0}")]
     BuildError(#[from] BuildError),
@@ -34,8 +33,8 @@ pub enum LowerBuildError {
 }
 
 fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerBuildError> {
-    let optype: ops::OpType = op.into();
-    let sig = optype.dataflow_signature().expect("known to be dataflow");
+    let optype: ops::ExtensionOp = op.into_extension_op();
+    let sig = optype.signature();
     let sig = Signature::new(sig.input, sig.output); // ignore extension delta
     let mut b = DFGBuilder::new(sig)?;
     let inputs: Vec<_> = b.input_wires().collect();
@@ -144,7 +143,6 @@ mod test {
             .unwrap()
             .outputs_arr();
         b.add_dataflow_op(Tk2Op::QFree, [q]).unwrap();
-        // TODO remaining ops
         let mut h = b.finish_hugr_with_outputs([], &REGISTRY).unwrap();
 
         let lowered = lower_direct(&mut h).unwrap();
