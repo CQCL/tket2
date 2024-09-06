@@ -9,7 +9,7 @@ use hugr::{
     extension::{
         prelude::{BOOL_T, QB_T},
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
-        ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, Version, PRELUDE,
+        ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version, PRELUDE,
     },
     ops::Value,
     std_extensions::arithmetic::{
@@ -40,7 +40,12 @@ pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 lazy_static! {
     /// The "tket2.hseries" extension.
     pub static ref EXTENSION: Extension = {
-        let mut ext = Extension::new(EXTENSION_ID, EXTENSION_VERSION);
+        let mut ext = Extension::new(EXTENSION_ID, EXTENSION_VERSION).with_reqs(ExtensionSet::from_iter([
+            futures::EXTENSION.name(),
+            PRELUDE.name(),
+            FLOAT_TYPES.name(),
+            tket2::extension::angle::ANGLE_EXTENSION.name(),
+        ].into_iter().cloned()));
         HSeriesOp::load_all_ops(&mut ext).unwrap();
         ext
     };
@@ -48,9 +53,9 @@ lazy_static! {
     /// Extension registry including the "tket2.hseries" extension and
     /// dependencies.
     pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
+        EXTENSION.to_owned(),
         futures::EXTENSION.to_owned(),
         PRELUDE.to_owned(),
-        EXTENSION.to_owned(),
         FLOAT_TYPES.to_owned(),
         tket2::extension::angle::ANGLE_EXTENSION.to_owned(),
     ]).unwrap();
