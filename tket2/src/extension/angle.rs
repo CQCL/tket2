@@ -269,44 +269,32 @@ pub trait AngleOpBuilder: Dataflow {
     fn add_atrunc(&mut self, angle: Wire, log_denom: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(AngleOp::atrunc, [angle, log_denom])?
-            .outputs()
-            .next()
-            .unwrap())
+            .out_wire(0))
     }
     /// Add a "tket2.angle.aadd" op.
     fn add_aadd(&mut self, angle1: Wire, angle2: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(AngleOp::aadd, [angle1, angle2])?
-            .outputs()
-            .next()
-            .unwrap())
+            .out_wire(0))
     }
 
     /// Add a "tket2.angle.asub" op.
     fn add_asub(&mut self, angle1: Wire, angle2: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(AngleOp::asub, [angle1, angle2])?
-            .outputs()
-            .next()
-            .unwrap())
+            .out_wire(0))
     }
 
     /// Add a "tket2.angle.aneg" op.
     fn add_aneg(&mut self, angle: Wire) -> Result<Wire, BuildError> {
-        Ok(self
-            .add_dataflow_op(AngleOp::aneg, [angle])?
-            .outputs()
-            .next()
-            .unwrap())
+        Ok(self.add_dataflow_op(AngleOp::aneg, [angle])?.out_wire(0))
     }
 
     /// Add a "tket2.angle.anew" op.
     fn add_anew(&mut self, numerator: Wire, log_denominator: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(AngleOp::anew, [numerator, log_denominator])?
-            .outputs()
-            .next()
-            .unwrap())
+            .out_wire(0))
     }
 
     /// Add a "tket2.angle.aparts" op.
@@ -320,45 +308,33 @@ pub trait AngleOpBuilder: Dataflow {
     fn add_afromrad(&mut self, log_denominator: Wire, radians: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(AngleOp::afromrad, [log_denominator, radians])?
-            .outputs()
-            .next()
-            .unwrap())
+            .out_wire(0))
     }
 
     /// Add a "tket2.angle.atorad" op.
     fn add_atorad(&mut self, angle: Wire) -> Result<Wire, BuildError> {
-        Ok(self
-            .add_dataflow_op(AngleOp::atorad, [angle])?
-            .outputs()
-            .next()
-            .unwrap())
+        Ok(self.add_dataflow_op(AngleOp::atorad, [angle])?.out_wire(0))
     }
 
     /// Add a "tket2.angle.aeq" op.
     fn add_aeq(&mut self, angle1: Wire, angle2: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(AngleOp::aeq, [angle1, angle2])?
-            .outputs()
-            .next()
-            .unwrap())
+            .out_wire(0))
     }
 
     /// Add a "tket2.angle.amul" op.
     fn add_amul(&mut self, angle: Wire, scalar: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(AngleOp::amul, [angle, scalar])?
-            .outputs()
-            .next()
-            .unwrap())
+            .out_wire(0))
     }
 
     /// Add a "tket2.angle.adiv" op.
     fn add_adiv(&mut self, angle: Wire, scalar: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(AngleOp::adiv, [angle, scalar])?
-            .outputs()
-            .next()
-            .unwrap())
+            .out_wire(0))
     }
 }
 
