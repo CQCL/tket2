@@ -191,12 +191,6 @@ pub trait HSeriesOpBuilder: Dataflow {
 
     /// Build a hadamard gate in terms of HSeries primitives.
     fn build_h(&mut self, qb: Wire) -> Result<Wire, BuildError> {
-        // Clifford gate: Hadamard
-        // gate h() a
-        // {
-        // PhasedX(pi/2, -pi/2) a;
-        // Rz(pi) a;
-        // }
         let pi = pi_mul_f64(self, 1.0);
         let pi_2 = pi_mul_f64(self, 0.5);
         let pi_minus_2 = pi_mul_f64(self, -0.5);
@@ -207,11 +201,6 @@ pub trait HSeriesOpBuilder: Dataflow {
 
     /// Build an X gate in terms of HSeries primitives.
     fn build_x(&mut self, qb: Wire) -> Result<Wire, BuildError> {
-        // Pauli gate: bit-flip
-        // gate x() a
-        // {
-        //    PhasedX(pi, 0) a;
-        // }
         let pi = pi_mul_f64(self, 1.0);
         let zero = pi_mul_f64(self, 0.0);
         self.add_phased_x(qb, pi, zero)
@@ -219,11 +208,6 @@ pub trait HSeriesOpBuilder: Dataflow {
 
     /// Build a Y gate in terms of HSeries primitives.
     fn build_y(&mut self, qb: Wire) -> Result<Wire, BuildError> {
-        // Pauli gate: bit and phase flip
-        // gate y() a
-        // {
-        //    PhasedX(pi, pi/2) a;
-        // }
         let pi = pi_mul_f64(self, 1.0);
         let pi_2 = pi_mul_f64(self, 0.5);
         self.add_phased_x(qb, pi, pi_2)
@@ -261,15 +245,6 @@ pub trait HSeriesOpBuilder: Dataflow {
 
     /// Build a CNOT gate in terms of HSeries primitives.
     fn build_cx(&mut self, c: Wire, t: Wire) -> Result<[Wire; 2], BuildError> {
-        // Clifford gate: CNOT
-        // gate CX() c,t
-        // {
-        // PhasedX(-pi/2, pi/2) t;
-        // ZZ() c, t;
-        // Rz(-pi/2) c;
-        // PhasedX(pi/2, pi) t;
-        // Rz(-pi/2) t;
-        // }
         let pi = pi_mul_f64(self, 1.0);
         let pi_2 = pi_mul_f64(self, 0.5);
         let pi_minus_2 = pi_mul_f64(self, -0.5);
@@ -285,61 +260,47 @@ pub trait HSeriesOpBuilder: Dataflow {
 
     /// Build a CY gate in terms of HSeries primitives.
     fn build_cy(&mut self, a: Wire, b: Wire) -> Result<[Wire; 2], BuildError> {
-        // gate cy() a,b
-        // {
-        //    sdg b;
-        //    cx a,b;
-        //    s b;
-        // }
-        let b = self.build_sdg(b)?;
-        let [a, b] = self.build_cx(a, b)?;
-        let b = self.build_s(b)?;
+        let pi_2 = pi_mul_f64(self, 0.5);
+        let pi_minus_2 = pi_mul_f64(self, -0.5);
+        let zero = pi_mul_f64(self, 0.0);
+
+        let a = self.add_phased_x(a, pi_minus_2, zero)?;
+        let [a, b] = self.add_zz_max(a, b)?;
+        let a = self.add_rz(a, pi_2)?;
+        let b = self.add_phased_x(b, pi_2, pi_2)?;
+        let b = self.add_rz(b, pi_minus_2)?;
         Ok([a, b])
     }
 
     /// Build a CZ gate in terms of HSeries primitives.
     fn build_cz(&mut self, a: Wire, b: Wire) -> Result<[Wire; 2], BuildError> {
-        // gate cz() a,b
-        // {
-        //    h b;
-        //    cx a,b;
-        //    h b;
-        // }
-        let b = self.build_h(b)?;
-        let [a, b] = self.build_cx(a, b)?;
-        let b = self.build_h(b)?;
+        let pi = pi_mul_f64(self, 1.0);
+        let pi_2 = pi_mul_f64(self, 0.5);
+        let pi_minus_2 = pi_mul_f64(self, -0.5);
+
+        let a = self.add_phased_x(a, pi, pi)?;
+        let [a, b] = self.add_zz_max(a, b)?;
+        let a = self.add_phased_x(a, pi, pi_2)?;
+        let b = self.add_rz(b, pi_2)?;
+        let a = self.add_rz(a, pi_minus_2)?;
+
         Ok([a, b])
     }
 
     /// Build a RX gate in terms of HSeries primitives.
     fn build_rx(&mut self, qb: Wire, theta: Wire) -> Result<Wire, BuildError> {
-        // Rotation around X-axis
-        // gate rx(theta) a
-        // {
-        //    phased_x(theta, 0) a;
-        // }
         let zero = pi_mul_f64(self, 0.0);
         self.add_phased_x(qb, theta, zero)
     }
 
     /// Build a RY gate in terms of HSeries primitives.
     fn build_ry(&mut self, qb: Wire, theta: Wire) -> Result<Wire, BuildError> {
-        // Rotation around Y-axis
-        // gate ry(theta) a
-        // {
-        //    phased_x(theta, pi/2) a;
-        // }
         let pi_2 = pi_mul_f64(self, 0.5);
         self.add_phased_x(qb, theta, pi_2)
     }
 
     /// Build a CRZ gate in terms of HSeries primitives.
     fn build_crz(&mut self, a: Wire, b: Wire, lambda: Wire) -> Result<[Wire; 2], BuildError> {
-        // gate crz(lambda) a,b
-        // {
-        //    ZZPhase(-lambda/2) a, b;
-        //    Rz(lambda/2) b;
-        // }
         let two = self.add_load_const(Value::from(ConstF64::new(2.0)));
         let lambda_2 = self
             .add_dataflow_op(FloatOps::fdiv, [lambda, two])?
@@ -355,31 +316,31 @@ pub trait HSeriesOpBuilder: Dataflow {
 
     /// Build a Toffoli (CCX) gate in terms of HSeries primitives.
     fn build_toffoli(&mut self, a: Wire, b: Wire, c: Wire) -> Result<[Wire; 3], BuildError> {
-        // gate ccx() a,b,c
-        // {
-        //    h c;
-        //    cx b,c; tdg c;
-        //    cx a,c; t c;
-        //    cx b,c; tdg c;
-        //    cx a,c; t b; t c; h c;
-        //    cx a,b; t a; tdg b;
-        //    cx a,b;
-        // }
-        let c = self.build_h(c)?;
-        let [b, c] = self.build_cx(b, c)?;
-        let c = self.build_tdg(c)?;
-        let [a, c] = self.build_cx(a, c)?;
-        let c = self.build_t(c)?;
-        let [b, c] = self.build_cx(b, c)?;
-        let c = self.build_tdg(c)?;
-        let [a, c] = self.build_cx(a, c)?;
-        let b = self.build_t(b)?;
-        let c = self.build_t(c)?;
-        let c = self.build_h(c)?;
-        let [a, b] = self.build_cx(a, b)?;
-        let a = self.build_t(a)?;
-        let b = self.build_tdg(b)?;
-        let [a, b] = self.build_cx(a, b)?;
+        let pi = pi_mul_f64(self, 1.0);
+        let pi_2 = pi_mul_f64(self, 0.5);
+        let pi_minus_2 = pi_mul_f64(self, -0.5);
+        let pi_4 = pi_mul_f64(self, 0.25);
+        let pi_minus_4 = pi_mul_f64(self, -0.25);
+        let pi_minus_3_4 = pi_mul_f64(self, -0.75);
+        let zero = pi_mul_f64(self, 0.0);
+
+        let c = self.add_phased_x(c, pi, pi)?;
+        let [b, c] = self.add_zz_max(b, c)?;
+        let c = self.add_phased_x(c, pi_4, pi_minus_2)?;
+        let [a, c] = self.add_zz_max(a, c)?;
+        let c = self.add_phased_x(c, pi_minus_4, zero)?;
+        let [b, c] = self.add_zz_max(b, c)?;
+        let b = self.add_phased_x(b, pi_minus_2, pi_4)?;
+        let c = self.add_phased_x(c, pi_4, pi_2)?;
+        let [a, c] = self.add_zz_max(a, c)?;
+        let [a, b] = self.add_zz_max(a, b)?;
+        let c = self.add_phased_x(c, pi_minus_3_4, zero)?;
+        let b = self.add_phased_x(b, pi_4, pi_4)?;
+        let [a, b] = self.add_zz_max(a, b)?;
+        let a = self.add_rz(a, pi_4)?;
+        let b = self.add_phased_x(b, pi_minus_2, pi_4)?;
+        let b = self.add_rz(b, pi_4)?;
+
         Ok([a, b, c])
     }
 }
