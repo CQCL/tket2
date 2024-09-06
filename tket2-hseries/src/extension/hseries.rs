@@ -337,22 +337,19 @@ pub trait HSeriesOpBuilder: Dataflow {
     fn build_crz(&mut self, a: Wire, b: Wire, lambda: Wire) -> Result<[Wire; 2], BuildError> {
         // gate crz(lambda) a,b
         // {
+        //    ZZPhase(-lambda/2) a, b;
         //    Rz(lambda/2) b;
-        //    cx a, b;
-        //    Rz(-lambda/2) b;
-        //    cx a, b;
         // }
         let two = self.add_load_const(Value::from(ConstF64::new(2.0)));
         let lambda_2 = self
             .add_dataflow_op(FloatOps::fdiv, [lambda, two])?
             .out_wire(0);
-        let b = self.add_rz(b, lambda_2)?;
-        let [a, b] = self.build_cx(a, b)?;
         let lambda_minus_2 = self
             .add_dataflow_op(FloatOps::fneg, [lambda_2])?
             .out_wire(0);
-        let b = self.add_rz(b, lambda_minus_2)?;
-        let [a, b] = self.build_cx(a, b)?;
+
+        let [a, b] = self.add_zz_phase(a, b, lambda_minus_2)?;
+        let b = self.add_rz(b, lambda_2)?;
         Ok([a, b])
     }
 
