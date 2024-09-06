@@ -133,7 +133,15 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
     /// Run the Badger optimiser on a circuit.
     ///
     /// A timeout (in seconds) can be provided.
-    pub fn optimise(&self, circ: &StaticSizeCircuit, options: BadgerOptions) -> StaticSizeCircuit
+    ///
+    /// Return a graph of the salient diffs found. Salient diffs are the
+    /// rewrites that reduce the circuit cost most (currently the ones with
+    /// a strictly smaller than 0 CX count delta).
+    pub fn optimise(
+        &self,
+        circ: &StaticSizeCircuit,
+        options: BadgerOptions,
+    ) -> PortDiffGraph<StaticSizeCircuit>
     where
         R: Rewriter<DiffCircuit, CircuitRewrite = DiffRewrite> + Clone,
         // R: Rewriter<StaticSizeCircuit, CircuitRewrite = StaticRewrite<F>> + Clone,
@@ -151,7 +159,7 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
         circ: &StaticSizeCircuit,
         log_config: BadgerLogger,
         options: BadgerOptions,
-    ) -> StaticSizeCircuit
+    ) -> PortDiffGraph<StaticSizeCircuit>
     where
         R: Rewriter<DiffCircuit, CircuitRewrite = DiffRewrite> + Clone,
         // R: Rewriter<StaticSizeCircuit, CircuitRewrite = StaticRewrite<F>> + Clone,
@@ -159,13 +167,7 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
         Cost::OpCost: serde::Serialize,
     {
         match options.n_threads.get() {
-            1 => {
-                let diffs = self.badger_diff(circ, log_config, options);
-                // Serialize the diff as JSON and print to stdout
-                let json = serde_json::to_string(&diffs).unwrap();
-                std::fs::write("diffs.json", json).expect("Unable to write file");
-                PortDiff::extract_graph(diffs.sinks().collect()).unwrap()
-            }
+            1 => self.badger_diff(circ, log_config, options),
             _ => {
                 // if options.split_circuit {
                 //     self.badger_split_multithreaded(circ, log_config, options)
@@ -340,16 +342,18 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
             let rewrites = self.rewriter.get_rewrites(&circ);
             logger.register_branching_factor(rewrites.len());
 
+            // TODO: use updateable hash
+            // let Ok(extracted) = PortDiff::extract_graph(vec![circ.clone()]) else {
+            //     continue;
+            // };
+            // let fast_hasher = UpdatableHash::with_static(&extracted);
+
             // Get combinations of rewrites that can be applied to the circuit,
             // and filter them to keep only the ones that
             //
             // - Don't have a worse cost than the last candidate in the priority queue.
             // - Do not invalidate the circuit by creating a loop.
             // - We haven't seen yet.
-            let Ok(extracted) = PortDiff::extract_graph(vec![circ.clone()]) else {
-                continue;
-            };
-            let fast_hasher = UpdatableHash::with_static(&extracted);
             for rw in rewrites {
                 let Ok(rw_cost) = self.rewriter.rewrite_cost_delta(&rw, &circ, &self.cost) else {
                     println!("rewrite cost delta failed");
@@ -402,7 +406,6 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
                 println!("pq len: {}", pq.len());
                 println!("salient diffs len: {}", salient_diffs.len());
             }
-            // panic!("early abort");
 
             if let Some(timeout) = opt.timeout {
                 if start_time.elapsed().as_secs() > timeout {

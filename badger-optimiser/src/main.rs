@@ -149,7 +149,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // }
 
     println!("Optimising...");
-    let opt_circ = optimiser.optimise_with_log(
+    let best_diffs = optimiser.optimise_with_log(
         &circ,
         badger_logger,
         BadgerOptions {
@@ -163,7 +163,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     println!("Saving result");
-    save_tk1_json_file(&opt_circ.into(), output_path)?;
+    serde_json::to_writer_pretty(File::create(output_path)?, &best_diffs)?;
 
     #[cfg(feature = "peak_alloc")]
     println!("Peak memory usage: {} GB", PEAK_ALLOC.peak_usage_as_gb());
