@@ -6,7 +6,6 @@ use hugr::{
     types::Signature,
     Hugr, HugrView, Node, Wire,
 };
-use itertools::Either;
 use thiserror::Error;
 use tket2::{extension::angle::AngleOpBuilder, Tk2Op};
 
@@ -22,17 +21,23 @@ fn const_f64<T: Dataflow + ?Sized>(builder: &mut T, value: f64) -> Wire {
     builder.add_load_const(ops::Const::new(ConstF64::new(value).into()))
 }
 
-/// Errors produced by the [`op_to_hugr`] function.
+/// Errors produced by lowering [Tk2Op]s.
 #[derive(Debug, Error)]
-pub enum LowerBuildError {
+pub enum LowerTk2Error {
     #[error("Error when building the circuit: {0}")]
     BuildError(#[from] BuildError),
 
     #[error("Unrecognised operation: {0:?} with {1} inputs")]
     UnknownOp(Tk2Op, usize),
+
+    #[error("Error when replacing op: {0}")]
+    OpReplacement(#[from] HugrError),
+
+    #[error("Error when lowering ops: {0}")]
+    CircuitReplacement(#[from] hugr::algorithms::lower::LowerError),
 }
 
-fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerBuildError> {
+fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
     let optype: ops::ExtensionOp = op.into_extension_op();
     let sig = optype.signature();
     let sig = Signature::new(sig.input, sig.output); // ignore extension delta
@@ -71,23 +76,20 @@ fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerBuildError> {
         (Tk2Op::QAlloc | Tk2Op::QFree | Tk2Op::Reset | Tk2Op::Measure, _) => {
             unreachable!("should be covered by lower_direct")
         }
-        _ => return Err(LowerBuildError::UnknownOp(op, inputs.len())), // non-exhaustive
+        _ => return Err(LowerTk2Error::UnknownOp(op, inputs.len())), // non-exhaustive
     };
     Ok(b.finish_hugr_with_outputs(outputs, &REGISTRY)?)
 }
 
 /// Lower `Tk2Op` operations to `HSeriesOp` operations.
-pub fn lower_tk2_op(
-    mut hugr: impl HugrMut,
-) -> Result<Vec<hugr::Node>, Either<HugrError, hugr::algorithms::lower::LowerError>> {
-    let replaced_nodes = lower_direct(&mut hugr).map_err(Either::Left)?;
-    let lowered_nodes = hugr::algorithms::lower_ops(&mut hugr, |op| op_to_hugr(op.cast()?).ok())
-        .map_err(Either::Right)?;
+pub fn lower_tk2_op(mut hugr: impl HugrMut) -> Result<Vec<hugr::Node>, LowerTk2Error> {
+    let replaced_nodes = lower_direct(&mut hugr)?;
+    let lowered_nodes = hugr::algorithms::lower_ops(&mut hugr, |op| op_to_hugr(op.cast()?).ok())?;
 
     Ok([replaced_nodes, lowered_nodes].concat())
 }
 
-fn lower_direct(hugr: &mut impl HugrMut) -> Result<Vec<Node>, HugrError> {
+fn lower_direct(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
     Ok(hugr::algorithms::replace_many_ops(hugr, |op| {
         let op: Tk2Op = op.cast()?;
         Some(match op {
