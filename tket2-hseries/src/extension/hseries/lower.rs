@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use hugr::{
     builder::{BuildError, DFGBuilder, Dataflow, DataflowHugr},
     hugr::{hugrmut::HugrMut, HugrError},
@@ -6,6 +8,7 @@ use hugr::{
     types::Signature,
     Hugr, HugrView, Node, Wire,
 };
+use strum::IntoEnumIterator;
 use thiserror::Error;
 use tket2::{extension::angle::AngleOpBuilder, Tk2Op};
 
@@ -73,9 +76,6 @@ fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
             b.build_crz(*c, *t, float)?.into()
         }
         (Tk2Op::Toffoli, [a, b_, c]) => b.build_toffoli(*a, *b_, *c)?.into(),
-        (Tk2Op::QAlloc | Tk2Op::QFree | Tk2Op::Reset | Tk2Op::Measure, _) => {
-            unreachable!("should be covered by lower_direct")
-        }
         _ => return Err(LowerTk2Error::UnknownOp(op, inputs.len())), // non-exhaustive
     };
     Ok(b.finish_hugr_with_outputs(outputs, &REGISTRY)?)
@@ -84,7 +84,20 @@ fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
 /// Lower `Tk2Op` operations to `HSeriesOp` operations.
 pub fn lower_tk2_op(mut hugr: impl HugrMut) -> Result<Vec<hugr::Node>, LowerTk2Error> {
     let replaced_nodes = lower_direct(&mut hugr)?;
-    let lowered_nodes = hugr::algorithms::lower_ops(&mut hugr, |op| op_to_hugr(op.cast()?).ok())?;
+    let mut hugr_map: HashMap<Tk2Op, Hugr> = HashMap::new();
+    for op in Tk2Op::iter() {
+        match op_to_hugr(op) {
+            Ok(h) => hugr_map.insert(op, h),
+            // filter out unknown ops, includes those covered by direct lowering
+            Err(LowerTk2Error::UnknownOp(_, _)) => continue,
+            Err(e) => return Err(e),
+        };
+    }
+
+    let lowered_nodes = hugr::algorithms::lower_ops(&mut hugr, |op| {
+        let op: Tk2Op = op.cast()?;
+        hugr_map.get(&op).cloned()
+    })?;
 
     Ok([replaced_nodes, lowered_nodes].concat())
 }
