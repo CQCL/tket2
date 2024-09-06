@@ -41,8 +41,7 @@ pub enum LowerTk2Error {
 }
 
 fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
-    let optype: ops::ExtensionOp = op.into_extension_op();
-    let sig = optype.signature();
+    let sig = op.into_extension_op().signature();
     let sig = Signature::new(sig.input, sig.output); // ignore extension delta
     let mut b = DFGBuilder::new(sig)?;
     let inputs: Vec<_> = b.input_wires().collect();
@@ -94,10 +93,8 @@ pub fn lower_tk2_op(mut hugr: impl HugrMut) -> Result<Vec<hugr::Node>, LowerTk2E
         };
     }
 
-    let lowered_nodes = hugr::algorithms::lower_ops(&mut hugr, |op| {
-        let op: Tk2Op = op.cast()?;
-        hugr_map.get(&op).cloned()
-    })?;
+    let lowered_nodes =
+        hugr::algorithms::lower_ops(&mut hugr, |op| hugr_map.get(&op.cast()?).cloned())?;
 
     Ok([replaced_nodes, lowered_nodes].concat())
 }
