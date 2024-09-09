@@ -27,7 +27,7 @@ use portdiff::{PortDiff, PortDiffGraph};
 use std::collections::{BTreeMap, BTreeSet};
 use std::iter::Sum;
 use std::num::NonZeroUsize;
-use std::ops::AddAssign;
+use std::ops::{AddAssign, Deref};
 use std::time::Instant;
 
 use crate::circuit::{CircuitHash, ToTk2OpIter};
@@ -316,8 +316,8 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
 
         let circ = DiffCircuit::from_graph(circ.clone());
         // The list of all "salient" circuits, i.e. those that result from
-        // salient rewrites (the best type of rewrite).
-        let mut salient_diffs = BTreeSet::from([circ.clone()]);
+        // salient rewrites (the best type of rewrite), along with the value of the rewrite.
+        let mut salient_diffs = BTreeMap::from([(circ.clone(), 0)]);
 
         // Hash of seen circuits. Dot not store circuits as this map gets huge
         let mut seen_hashes = FxHashSet::default();
@@ -392,10 +392,10 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
                     if !seen_hashes.insert(new_circ_hash) {
                         continue;
                     }
-                    if self.cost.is_salient(&new_cost.total_cost_delta) {
-                        // The compound rewrite is salient, success! Reset the cost
+                    if let Some(value) = self.cost.value(&new_cost.total_cost_delta) {
+                        // The compound rewrite is valuable, success! Reset the cost
                         // Use the squashed diff henceforth, more efficient
-                        new_circ = insert_salient(new_circ.clone(), &mut salient_diffs);
+                        new_circ = insert_salient(new_circ.clone(), &mut salient_diffs, value);
                         last_best_time = Instant::now();
                         new_cost = PQCost::zero(); // Reset aggregate cost
                     }
@@ -439,7 +439,16 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
             timeout_flag,
             start_time.elapsed(),
         );
-        PortDiffGraph::from_sinks(salient_diffs)
+
+        // Construct the portdiffgraph to return
+        let g = PortDiffGraph::from_sinks(salient_diffs.keys().cloned());
+        g.map_value(|n| {
+            salient_diffs
+                .iter()
+                // TODO: Disgusting hack
+                .find(|(k, _)| (*k).deref() as *const _ == n as *const _)
+                .map(|(_, v)| *v)
+        })
     }
 
     // /// Run the Badger optimiser on a circuit, using multiple threads.
@@ -676,16 +685,18 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
 /// the squashed diff.
 fn insert_salient(
     new_circ: PortDiff<StaticSizeCircuit>,
-    salient_diffs: &mut BTreeSet<PortDiff<StaticSizeCircuit>>,
+    salient_diffs: &mut BTreeMap<PortDiff<StaticSizeCircuit>, usize>,
+    rewrite_value: usize,
 ) -> PortDiff<StaticSizeCircuit> {
     // The graph between new_circ and the previous salient diffs.
-    let g =
-        PortDiffGraph::from_sinks_while([new_circ.clone()], |circ| !salient_diffs.contains(circ));
+    let g = PortDiffGraph::from_sinks_while([new_circ.clone()], |circ| {
+        !salient_diffs.contains_key(circ)
+    });
     let squashed = g
         .try_squash()
         .expect("failed squashing a single circ: new_circ is not a valid diff");
 
-    salient_diffs.insert(squashed.clone());
+    salient_diffs.insert(squashed.clone(), rewrite_value);
     squashed
 }
 
@@ -747,8 +758,6 @@ impl<C: Sum> Sum for PQCost<C> {
 mod badger_default {
     use std::io;
     use std::path::Path;
-
-    use hugr::ops::OpType;
 
     use crate::portdiff::DiffCircuitMatcher;
     use crate::portmatching::CircuitMatcher;

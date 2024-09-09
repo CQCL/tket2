@@ -48,8 +48,11 @@ pub trait StrategyCost {
     /// The cost of a single operation.
     type OpCost: Copy + Ord + AddAssign + SubAssign + Sum + Default + std::fmt::Debug;
 
-    /// Returns true if the rewrite cost is "very good".
-    fn is_salient(&self, cost: &Self::OpCost) -> bool;
+    /// An estimate rewrite's value given its cost.
+    ///
+    /// Return `None` if the rewrite should not be considered valuable (salient),
+    /// otherwise return its value as a positive integer.
+    fn value(&self, cost: &Self::OpCost) -> Option<usize>;
 
     /// The cost of a single operation.
     fn op_cost(&self, op: Tk2Op) -> Self::OpCost;
@@ -95,8 +98,12 @@ where
         costs.into()
     }
 
-    fn is_salient(&self, cost: &Self::OpCost) -> bool {
-        cost.msb() < &0
+    fn value(&self, cost: &Self::OpCost) -> Option<usize> {
+        if cost.msb() < &0 {
+            return Some(-cost.msb() as usize);
+        } else {
+            None
+        }
     }
 }
 
@@ -148,8 +155,12 @@ impl<C: Fn(Tk2Op) -> usize> StrategyCost for GammaStrategyCost<C> {
         (self.op_cost)(op) as isize
     }
 
-    fn is_salient(&self, cost: &Self::OpCost) -> bool {
-        cost < &0
+    fn value(&self, cost: &Self::OpCost) -> Option<usize> {
+        if cost < &0 {
+            Some(-cost as usize)
+        } else {
+            None
+        }
     }
 }
 

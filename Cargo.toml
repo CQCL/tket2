@@ -5,7 +5,7 @@ lto = "thin"
 resolver = "2"
 members = [
     "tket2",
-    # "tket2-py",
+    "tket2-py",
     # "compile-rewriter",
     "badger-optimiser",
     "tket2-hseries",
@@ -34,6 +34,7 @@ itertools = "0.13.0"
 tket-json-rs = "0.5.1"
 tracing = "0.1.37"
 portmatching = "0.4.0-rc.2"
+portdiff = { path = "../portdiff" }
 bytemuck = "1.17.0"
 cgmath = "0.18.0"
 chrono = "0.4.30"
