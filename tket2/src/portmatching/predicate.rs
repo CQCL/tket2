@@ -76,7 +76,7 @@ impl pm::Predicate<StaticSizeCircuit> for Predicate {
 }
 
 impl pm::DetHeuristic<PatternOpPosition> for Predicate {
-    fn make_det(_constraints: &[&Constraint]) -> bool {
-        false
+    fn make_det(constraints: &[&Constraint]) -> bool {
+        constraints.len() > 2
     }
 }
