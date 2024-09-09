@@ -311,6 +311,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "compile-rewriter"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "hugr",
+ "itertools 0.13.0",
+ "tket2",
+]
+
+[[package]]
 name = "console"
 version = "0.15.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
