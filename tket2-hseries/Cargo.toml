@@ -15,7 +15,7 @@ categories = ["compilers"]
 
 [features]
 default = ["cli"]
-cli = ["dep:clap", "dep:hugr-cli", "dep:clap-verbosity-flag", "dep:clio"]
+cli = ["dep:clap", "dep:hugr-cli"]
 
 [[bin]]
 name = "tket2-hseries"
@@ -33,9 +33,7 @@ strum_macros.workspace = true
 thiserror.workspace = true
 itertools.workspace = true
 clap = { workspace = true, optional = true}
-hugr-cli = { version = "*", optional = true }
-clap-verbosity-flag = { version = "*", optional = true }
-clio = { version = "*", features = ["clap-parse"], optional = true }
+hugr-cli = { workspace = true, optional = true }
 
 [dev-dependencies]
 cool_asserts.workspace = true

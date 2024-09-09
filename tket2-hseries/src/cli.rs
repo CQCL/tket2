@@ -5,8 +5,8 @@ use clap::Parser;
 /// CLI arguments.
 #[derive(Parser, Debug)]
 #[clap(version = "1.0", long_about = None)]
-#[clap(about = "HUGR CLI tools.")]
-#[group(id = "hugr")]
+#[clap(about = "tket2-hseries CLI tools.")]
+#[group(id = "tket2-hseries")]
 #[non_exhaustive]
 pub enum CliArgs {
     /// Generate serialized extensions.

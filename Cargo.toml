@@ -28,6 +28,7 @@ missing_docs = "warn"
 # Make sure to run `just recompile-eccs` if the hugr serialisation format changes.
 hugr = "0.12.1"
 hugr-core = "0.9.1"
+hugr-cli = "0.6.0"
 portgraph = "0.12"
 pyo3 = "0.21.2"
 itertools = "0.13.0"
