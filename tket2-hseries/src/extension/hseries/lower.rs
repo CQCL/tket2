@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use hugr::{
+    algorithms::validation::{ValidatePassError, ValidationLevel},
     builder::{BuildError, DFGBuilder, Dataflow, DataflowHugr},
+    extension::ExtensionRegistry,
     hugr::{hugrmut::HugrMut, HugrError},
     ops::{self, DataflowOpTrait},
     std_extensions::arithmetic::float_types::ConstF64,
@@ -26,6 +28,7 @@ fn const_f64<T: Dataflow + ?Sized>(builder: &mut T, value: f64) -> Wire {
 
 /// Errors produced by lowering [Tk2Op]s.
 #[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum LowerTk2Error {
     #[error("Error when building the circuit: {0}")]
     BuildError(#[from] BuildError),
@@ -38,6 +41,12 @@ pub enum LowerTk2Error {
 
     #[error("Error when lowering ops: {0}")]
     CircuitReplacement(#[from] hugr::algorithms::lower::LowerError),
+
+    #[error("Tk2Ops were not lowered: {0:?}")]
+    Unlowered(Vec<Node>),
+
+    #[error(transparent)]
+    ValidationError(#[from] ValidatePassError),
 }
 
 fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
@@ -133,6 +142,37 @@ pub fn check_lowered(hugr: &impl HugrView) -> Result<(), Vec<Node>> {
         Ok(())
     } else {
         Err(unlowered)
+    }
+}
+
+/// A `Hugr -> Hugr` pass that replaces [tket2::Tk2Op] nodes to
+/// equivalent graphs made [HSeriesOp]s.
+///
+/// Invokes [lower_tk2_op]. If validation is enabled the resulting HUGR is
+/// checked with [check_lowered].
+#[derive(Default, Debug, Clone)]
+pub struct LowerTket2ToHSeriesPass(ValidationLevel);
+
+impl LowerTket2ToHSeriesPass {
+    /// Run `LowerTket2ToHSeriesPass` on the given [HugrMut]. `registry` is used
+    /// for validation, if enabled.
+    pub fn run(
+        &self,
+        hugr: &mut impl HugrMut,
+        registry: &ExtensionRegistry,
+    ) -> Result<(), LowerTk2Error> {
+        self.0.run_validated_pass(hugr, registry, |hugr, level| {
+            lower_tk2_op(hugr)?;
+            if *level != ValidationLevel::None {
+                check_lowered(hugr).map_err(LowerTk2Error::Unlowered)?;
+            }
+            Ok(())
+        })
+    }
+
+    /// Returns a new `LowerTket2ToHSeriesPass` with the given [ValidationLevel].
+    pub fn with_validation_level(&self, level: ValidationLevel) -> Self {
+        Self(level)
     }
 }
 
