@@ -155,9 +155,9 @@ checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
 name = "bytemuck"
-version = "1.17.1"
+version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "773d90827bc3feecfb67fab12e24de0749aad83c74b9504ecde46237b5cd24e2"
+checksum = "94bbb0ad554ad961ddc5da507a12a29b14e4ae5bda06b19f575a3e6079d2e2ae"
 
 [[package]]
 name = "byteorder"
@@ -253,9 +253,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.16"
+version = "4.5.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed6719fffa43d0d87e5fd8caeab59be1554fb028cd30edc88fc4369b17971019"
+checksum = "3e5a21b8495e732f1b3c364c9949b201ca7bae518c502c80256c96ad79eaf6ac"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -273,9 +273,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.15"
+version = "4.5.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "216aec2b177652e3846684cbfe25c9964d18ec45234f0f5da5157b207ed1aab6"
+checksum = "8cf2dd12af7a047ad9d6da2b6b249759a22a7abc0f474c1dae1777afa4b21a73"
 dependencies = [
  "anstream",
  "anstyle",
@@ -793,8 +793,9 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.12.0"
-source = "git+https://github.com/CQCL/hugr.git?branch=doug/hugr-cli-tweak#768bfdb51454445124b0052ce4fba1fdce7d1373"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34ee4f66c9add4abc4b1ed5895b8f4ca1ee3727a0aacbb011696bb0a5946be01"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -802,8 +803,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-cli"
-version = "0.5.0"
-source = "git+https://github.com/CQCL/hugr.git?branch=doug/hugr-cli-tweak#768bfdb51454445124b0052ce4fba1fdce7d1373"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6df2f78a68df30280cc351522dee4d537707478d216758aa7404cbeb13aa770"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -816,8 +818,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.9.0"
-source = "git+https://github.com/CQCL/hugr.git?branch=doug/hugr-cli-tweak#768bfdb51454445124b0052ce4fba1fdce7d1373"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9cadea7900319ff43c7ee211a28e7de26a3d3f3b1d1bdd4c3de3dfee1199d3e"
 dependencies = [
  "bitvec",
  "cgmath",
@@ -846,8 +849,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.8.0"
-source = "git+https://github.com/CQCL/hugr.git?branch=doug/hugr-cli-tweak#768bfdb51454445124b0052ce4fba1fdce7d1373"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6636bd4e828751880354ea8000bcc0be0d753aed9062783b72c78b668b813aa8"
 dependencies = [
  "hugr-core",
  "itertools 0.13.0",
@@ -1625,18 +1629,18 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.209"
+version = "1.0.210"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99fce0ffe7310761ca6bf9faf5115afbc19688edd00171d81b1bb1b116c63e09"
+checksum = "c8e3592472072e6e22e0a54d5904d9febf8508f65fb8552499a1abc7d1078c3a"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.209"
+version = "1.0.210"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5831b979fd7b5439637af1752d535ff49f4860c0f341d1baeb6faf0f4242170"
+checksum = "243902eda00fad750862fc144cea25caca5e20d615af0a81bee94ca738f1df1f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1645,9 +1649,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.127"
+version = "1.0.128"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8043c06d9f82bd7271361ed64f415fe5e12a77fdb52e573e7f06a516dea329ad"
+checksum = "6ff5456707a1de34e7e37f2a6fd3d3f808c318259cbd01ab6377795054b483d8"
 dependencies = [
  "itoa",
  "memchr",
@@ -1897,7 +1901,7 @@ dependencies = [
  "criterion",
  "crossbeam-channel",
  "csv",
- "delegate 0.12.0",
+ "delegate 0.13.0",
  "derive_more 0.99.18",
  "downcast-rs",
  "fxhash",
@@ -1941,6 +1945,7 @@ dependencies = [
  "itertools 0.13.0",
  "lazy_static",
  "petgraph",
+ "rstest",
  "serde",
  "serde_json",
  "smol_str",

@@ -25,7 +25,7 @@ pub mod lazify_measure;
 /// Modify a [hugr::Hugr] into a form that is acceptable for ingress into an H-series.
 /// Returns an error if this cannot be done.
 ///
-/// To constuct a `HSeriesPass` use [Default::default].
+/// To construct a `HSeriesPass` use [Default::default].
 #[derive(Debug, Clone, Copy, Default)]
 pub struct HSeriesPass {
     validation_level: ValidationLevel,

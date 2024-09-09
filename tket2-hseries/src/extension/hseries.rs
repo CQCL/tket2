@@ -9,9 +9,13 @@ use hugr::{
     extension::{
         prelude::{BOOL_T, QB_T},
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
-        ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, Version, PRELUDE,
+        ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version, PRELUDE,
     },
-    std_extensions::arithmetic::float_types::{EXTENSION as FLOAT_TYPES, FLOAT64_TYPE},
+    ops::Value,
+    std_extensions::arithmetic::{
+        float_ops::FloatOps,
+        float_types::{ConstF64, EXTENSION as FLOAT_TYPES, FLOAT64_TYPE},
+    },
     type_row,
     types::Signature,
     Extension, Wire,
@@ -24,6 +28,10 @@ use crate::extension::futures;
 
 use super::futures::future_type;
 
+mod lower;
+use lower::pi_mul_f64;
+pub use lower::{check_lowered, lower_tk2_op};
+
 /// The "tket2.hseries" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.hseries");
 /// The "tket2.hseries" extension version.
@@ -32,7 +40,12 @@ pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 lazy_static! {
     /// The "tket2.hseries" extension.
     pub static ref EXTENSION: Extension = {
-        let mut ext = Extension::new(EXTENSION_ID, EXTENSION_VERSION);
+        let mut ext = Extension::new(EXTENSION_ID, EXTENSION_VERSION).with_reqs(ExtensionSet::from_iter([
+            futures::EXTENSION.name(),
+            PRELUDE.name(),
+            FLOAT_TYPES.name(),
+            tket2::extension::angle::ANGLE_EXTENSION.name(),
+        ].into_iter().cloned()));
         HSeriesOp::load_all_ops(&mut ext).unwrap();
         ext
     };
@@ -40,10 +53,11 @@ lazy_static! {
     /// Extension registry including the "tket2.hseries" extension and
     /// dependencies.
     pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
+        EXTENSION.to_owned(),
         futures::EXTENSION.to_owned(),
         PRELUDE.to_owned(),
-        EXTENSION.to_owned(),
         FLOAT_TYPES.to_owned(),
+        tket2::extension::angle::ANGLE_EXTENSION.to_owned(),
     ]).unwrap();
 }
 
@@ -133,11 +147,7 @@ pub trait HSeriesOpBuilder: Dataflow {
 
     /// Add a "tket2.hseries.Reset" op.
     fn add_reset(&mut self, qb: Wire) -> Result<Wire, BuildError> {
-        Ok(self
-            .add_dataflow_op(HSeriesOp::Reset, [qb])?
-            .outputs()
-            .next()
-            .unwrap())
+        Ok(self.add_dataflow_op(HSeriesOp::Reset, [qb])?.out_wire(0))
     }
 
     /// Add a "tket2.hseries.ZZMax" op.
@@ -158,33 +168,180 @@ pub trait HSeriesOpBuilder: Dataflow {
     fn add_phased_x(&mut self, qb: Wire, angle1: Wire, angle2: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(HSeriesOp::PhasedX, [qb, angle1, angle2])?
-            .outputs()
-            .next()
-            .unwrap())
+            .out_wire(0))
     }
 
     /// Add a "tket2.hseries.Rz" op.
     fn add_rz(&mut self, qb: Wire, angle: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(HSeriesOp::Rz, [qb, angle])?
-            .outputs()
-            .next()
-            .unwrap())
+            .out_wire(0))
     }
 
     /// Add a "tket2.hseries.QAlloc" op.
     fn add_qalloc(&mut self) -> Result<Wire, BuildError> {
-        Ok(self
-            .add_dataflow_op(HSeriesOp::QAlloc, [])?
-            .outputs()
-            .next()
-            .unwrap())
+        Ok(self.add_dataflow_op(HSeriesOp::QAlloc, [])?.out_wire(0))
     }
 
     /// Add a "tket2.hseries.QFree" op.
     fn add_qfree(&mut self, qb: Wire) -> Result<(), BuildError> {
         self.add_dataflow_op(HSeriesOp::QFree, [qb])?;
         Ok(())
+    }
+
+    /// Build a hadamard gate in terms of HSeries primitives.
+    fn build_h(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi = pi_mul_f64(self, 1.0);
+        let pi_2 = pi_mul_f64(self, 0.5);
+        let pi_minus_2 = pi_mul_f64(self, -0.5);
+
+        let q = self.add_phased_x(qb, pi_2, pi_minus_2)?;
+        self.add_rz(q, pi)
+    }
+
+    /// Build an X gate in terms of HSeries primitives.
+    fn build_x(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi = pi_mul_f64(self, 1.0);
+        let zero = pi_mul_f64(self, 0.0);
+        self.add_phased_x(qb, pi, zero)
+    }
+
+    /// Build a Y gate in terms of HSeries primitives.
+    fn build_y(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi = pi_mul_f64(self, 1.0);
+        let pi_2 = pi_mul_f64(self, 0.5);
+        self.add_phased_x(qb, pi, pi_2)
+    }
+
+    /// Build a Z gate in terms of HSeries primitives.
+    fn build_z(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi = pi_mul_f64(self, 1.0);
+        self.add_rz(qb, pi)
+    }
+
+    /// Build an S gate in terms of HSeries primitives.
+    fn build_s(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi_2 = pi_mul_f64(self, 0.5);
+        self.add_rz(qb, pi_2)
+    }
+
+    /// Build an Sdg gate in terms of HSeries primitives.
+    fn build_sdg(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi_minus_2 = pi_mul_f64(self, -0.5);
+        self.add_rz(qb, pi_minus_2)
+    }
+
+    /// Build a T gate in terms of HSeries primitives.
+    fn build_t(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi_4 = pi_mul_f64(self, 0.25);
+        self.add_rz(qb, pi_4)
+    }
+
+    /// Build a Tdg gate in terms of HSeries primitives.
+    fn build_tdg(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi_minus_4 = pi_mul_f64(self, -0.25);
+        self.add_rz(qb, pi_minus_4)
+    }
+
+    /// Build a CNOT gate in terms of HSeries primitives.
+    fn build_cx(&mut self, c: Wire, t: Wire) -> Result<[Wire; 2], BuildError> {
+        let pi = pi_mul_f64(self, 1.0);
+        let pi_2 = pi_mul_f64(self, 0.5);
+        let pi_minus_2 = pi_mul_f64(self, -0.5);
+
+        let t = self.add_phased_x(t, pi_minus_2, pi_2)?;
+        let [c, t] = self.add_zz_max(c, t)?;
+        let c = self.add_rz(c, pi_minus_2)?;
+        let t = self.add_phased_x(t, pi_2, pi)?;
+        let t = self.add_rz(t, pi_minus_2)?;
+
+        Ok([c, t])
+    }
+
+    /// Build a CY gate in terms of HSeries primitives.
+    fn build_cy(&mut self, a: Wire, b: Wire) -> Result<[Wire; 2], BuildError> {
+        let pi_2 = pi_mul_f64(self, 0.5);
+        let pi_minus_2 = pi_mul_f64(self, -0.5);
+        let zero = pi_mul_f64(self, 0.0);
+
+        let a = self.add_phased_x(a, pi_minus_2, zero)?;
+        let [a, b] = self.add_zz_max(a, b)?;
+        let a = self.add_rz(a, pi_2)?;
+        let b = self.add_phased_x(b, pi_2, pi_2)?;
+        let b = self.add_rz(b, pi_minus_2)?;
+        Ok([a, b])
+    }
+
+    /// Build a CZ gate in terms of HSeries primitives.
+    fn build_cz(&mut self, a: Wire, b: Wire) -> Result<[Wire; 2], BuildError> {
+        let pi = pi_mul_f64(self, 1.0);
+        let pi_2 = pi_mul_f64(self, 0.5);
+        let pi_minus_2 = pi_mul_f64(self, -0.5);
+
+        let a = self.add_phased_x(a, pi, pi)?;
+        let [a, b] = self.add_zz_max(a, b)?;
+        let a = self.add_phased_x(a, pi, pi_2)?;
+        let b = self.add_rz(b, pi_2)?;
+        let a = self.add_rz(a, pi_minus_2)?;
+
+        Ok([a, b])
+    }
+
+    /// Build a RX gate in terms of HSeries primitives.
+    fn build_rx(&mut self, qb: Wire, theta: Wire) -> Result<Wire, BuildError> {
+        let zero = pi_mul_f64(self, 0.0);
+        self.add_phased_x(qb, theta, zero)
+    }
+
+    /// Build a RY gate in terms of HSeries primitives.
+    fn build_ry(&mut self, qb: Wire, theta: Wire) -> Result<Wire, BuildError> {
+        let pi_2 = pi_mul_f64(self, 0.5);
+        self.add_phased_x(qb, theta, pi_2)
+    }
+
+    /// Build a CRZ gate in terms of HSeries primitives.
+    fn build_crz(&mut self, a: Wire, b: Wire, lambda: Wire) -> Result<[Wire; 2], BuildError> {
+        let two = self.add_load_const(Value::from(ConstF64::new(2.0)));
+        let lambda_2 = self
+            .add_dataflow_op(FloatOps::fdiv, [lambda, two])?
+            .out_wire(0);
+        let lambda_minus_2 = self
+            .add_dataflow_op(FloatOps::fneg, [lambda_2])?
+            .out_wire(0);
+
+        let [a, b] = self.add_zz_phase(a, b, lambda_minus_2)?;
+        let b = self.add_rz(b, lambda_2)?;
+        Ok([a, b])
+    }
+
+    /// Build a Toffoli (CCX) gate in terms of HSeries primitives.
+    fn build_toffoli(&mut self, a: Wire, b: Wire, c: Wire) -> Result<[Wire; 3], BuildError> {
+        let pi = pi_mul_f64(self, 1.0);
+        let pi_2 = pi_mul_f64(self, 0.5);
+        let pi_minus_2 = pi_mul_f64(self, -0.5);
+        let pi_4 = pi_mul_f64(self, 0.25);
+        let pi_minus_4 = pi_mul_f64(self, -0.25);
+        let pi_minus_3_4 = pi_mul_f64(self, -0.75);
+        let zero = pi_mul_f64(self, 0.0);
+
+        let c = self.add_phased_x(c, pi, pi)?;
+        let [b, c] = self.add_zz_max(b, c)?;
+        let c = self.add_phased_x(c, pi_4, pi_minus_2)?;
+        let [a, c] = self.add_zz_max(a, c)?;
+        let c = self.add_phased_x(c, pi_minus_4, zero)?;
+        let [b, c] = self.add_zz_max(b, c)?;
+        let b = self.add_phased_x(b, pi_minus_2, pi_4)?;
+        let c = self.add_phased_x(c, pi_4, pi_2)?;
+        let [a, c] = self.add_zz_max(a, c)?;
+        let [a, b] = self.add_zz_max(a, b)?;
+        let c = self.add_phased_x(c, pi_minus_3_4, zero)?;
+        let b = self.add_phased_x(b, pi_4, pi_4)?;
+        let [a, b] = self.add_zz_max(a, b)?;
+        let a = self.add_rz(a, pi_4)?;
+        let b = self.add_phased_x(b, pi_minus_2, pi_4)?;
+        let b = self.add_rz(b, pi_4)?;
+
+        Ok([a, b, c])
     }
 }
 
@@ -196,10 +353,8 @@ mod test {
 
     use cool_asserts::assert_matches;
     use futures::FutureOpBuilder as _;
-    use hugr::{
-        builder::{DataflowHugr, FunctionBuilder},
-        ops::{NamedOp, OpType},
-    };
+    use hugr::builder::{DataflowHugr, FunctionBuilder};
+    use hugr::ops::{NamedOp, OpType};
     use strum::IntoEnumIterator as _;
 
     use super::*;
