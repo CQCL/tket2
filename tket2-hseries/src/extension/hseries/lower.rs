@@ -146,7 +146,7 @@ pub fn check_lowered(hugr: &impl HugrView) -> Result<(), Vec<Node>> {
 }
 
 /// A `Hugr -> Hugr` pass that replaces [tket2::Tk2Op] nodes to
-/// equivalent graphs made [HSeriesOp]s.
+/// equivalent graphs made of [HSeriesOp]s.
 ///
 /// Invokes [lower_tk2_op]. If validation is enabled the resulting HUGR is
 /// checked with [check_lowered].
