@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/CQCL/tket2/compare/tket2-v0.2.0...tket2-v0.3.0) - 2024-09-09
+
+### Bug Fixes
+
+- extension ops checking against incorrect name ([#593](https://github.com/CQCL/tket2/pull/593))
+- [**breaking**] remove TryFrom for extension ops use `cast` ([#592](https://github.com/CQCL/tket2/pull/592))
+- don't load angle extensions on to quantum ([#597](https://github.com/CQCL/tket2/pull/597))
+
+### New Features
+
+- [**breaking**] move angle types + and ops to new "tket2.angle" extension ([#591](https://github.com/CQCL/tket2/pull/591))
+- dataflow builder methods for angle ops ([#596](https://github.com/CQCL/tket2/pull/596))
+- lowering tk2ops -> hseriesops ([#579](https://github.com/CQCL/tket2/pull/579))
+
 ## [0.2.0](https://github.com/CQCL/tket2/compare/tket2-v0.1.1...tket2-v0.2.0) - 2024-09-04
 
 ### Bug Fixes
