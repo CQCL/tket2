@@ -15,6 +15,9 @@ use thiserror::Error;
 use extension::{futures::FutureOpDef, hseries::HSeriesOp};
 use lazify_measure::{LazifyMeasurePass, LazifyMeasurePassError};
 
+#[cfg(feature = "cli")]
+pub mod cli;
+
 pub mod extension;
 
 pub mod lazify_measure;
@@ -51,7 +54,26 @@ impl HSeriesPass {
         hugr: &mut impl HugrMut,
         registry: &ExtensionRegistry,
     ) -> Result<(), HSeriesPassError> {
-        self.lazify_measure().run(hugr, registry)?;
+        self.lazify_measure(hugr, registry)?;
+        self.force_order(hugr, registry)?;
+        Ok(())
+    }
+
+    pub fn lazify_measure(
+        &self,
+        hugr: &mut impl HugrMut,
+        registry: &ExtensionRegistry,
+    ) -> Result<(), LazifyMeasurePassError> {
+        LazifyMeasurePass::default()
+            .with_validation_level(self.validation_level)
+            .run(hugr, registry)
+    }
+
+    pub fn force_order(
+        &self,
+        hugr: &mut impl HugrMut,
+        registry: &ExtensionRegistry,
+    ) -> Result<(), HSeriesPassError> {
         self.validation_level
             .run_validated_pass(hugr, registry, |hugr, _| {
                 force_order(hugr, hugr.root(), |hugr, node| {
@@ -65,14 +87,9 @@ impl HSeriesPass {
                     } else {
                         0
                     }
-                })?;
-                Ok::<_, HSeriesPassError>(())
-            })?;
-        Ok(())
-    }
-
-    fn lazify_measure(&self) -> LazifyMeasurePass {
-        LazifyMeasurePass::default().with_validation_level(self.validation_level)
+                })
+                .map_err(HSeriesPassError::ForceOrderError)
+            })
     }
 
     /// Returns a new `HSeriesPass` with the given [ValidationLevel].
