@@ -2,7 +2,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use hugr::{Direction, Port, PortIndex};
 use itertools::Itertools;
-use portdiff::{self as pd, port_diff::Owned, Graph, PortDiff, Site};
+use portdiff::{
+    self as pd, graph_view::MergeStrategy, port_diff::Owned, Graph, PortDiff, PortDiffGraph, Site,
+};
 use portmatching::{
     self as pm, indexing as pmx, IndexingScheme, ManyMatcher, PatternFallback, PortMatcher,
 };
@@ -44,6 +46,7 @@ impl DiffCircuitMatcher {
         Ok(DiffCircuitMatcher(matcher))
     }
 
+    /// Produce a dot string representation of the matcher.
     pub fn dot_string(&self) -> String {
         self.0.dot_string()
     }
@@ -223,13 +226,24 @@ fn follow_link(
             data,
         });
     }
+
+    let known_graph = PortDiffGraph::from_sinks(known_diffs.iter().cloned());
+    let is_compatible = |p: &PortDiff<StaticSizeCircuit>| {
+        let mut known_graph = known_graph.clone();
+        known_graph
+            .merge(
+                PortDiffGraph::from_sinks(vec![p.clone()]),
+                MergeStrategy::FailOnConflicts,
+            )
+            .is_ok()
+    };
     // Find opposite ports for all ports in all_ports
     for port in all_ports {
         ret.extend(
             pos.owner
                 .opposite_ports(port)
                 .into_iter()
-                .filter(|p| PortDiff::are_compatible(known_diffs.iter().chain([&p.owner])))
+                .filter(|p| is_compatible(&p.owner))
                 .flat_map(|p|
                     // This handles empty wires in the graph by recursively finding the
                     // first "real" port.
