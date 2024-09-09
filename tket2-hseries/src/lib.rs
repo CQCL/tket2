@@ -107,7 +107,6 @@ mod test {
     };
     use itertools::Itertools as _;
     use petgraph::visit::{Topo, Walker as _};
-    
 
     use crate::{
         extension::{futures::FutureOpDef, hseries::HSeriesOp},
