@@ -15,6 +15,8 @@ use thiserror::Error;
 use extension::{futures::FutureOpDef, hseries::HSeriesOp};
 use lazify_measure::{LazifyMeasurePass, LazifyMeasurePassError};
 
+#[cfg(feature = "cli")]
+pub mod cli;
 pub mod extension;
 
 pub mod lazify_measure;

@@ -278,11 +278,34 @@ jobs:
           flags: python
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  # Ensure that serialized extensions match rust implementation
+  tket2-extensions:
+    needs: [changes, tests-rs-stable-all-features]
+    if: ${{ needs.changes.outputs.rust == 'true' && github.event_name != 'merge_group' }}
+    name: Check standard extensions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mozilla-actions/sccache-action@v0.0.5
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: extractions/setup-just@v2
+      - name: Generate the updated definitions
+        run: just gen-extensions
+      - name: Check if the declarations are up to date
+        run: |
+          git diff --exit-code --name-only tket2-py/tket2/extensions/_json_defs
+          if [ $? -ne 0 ]; then
+            echo "The serialized standard extensions are not up to date"
+            echo "Please run 'just gen-extensions' and commit the changes"
+            exit 1
+          fi
+
   # This is a meta job to mark successful completion of the required checks,
   # even if they are skipped due to no changes in the relevant files.
   required-checks:
     name: Required checks 🦀+🐍
-    needs: [changes, check-rs, check-py, tests-rs-stable-no-features, tests-rs-stable-all-features, tests-py]
+    needs: [changes, check-rs, check-py, tests-rs-stable-no-features, tests-rs-stable-all-features, tests-py, tket2-extensions]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
