@@ -36,7 +36,7 @@ const ANGLE_TYPE_ID: SmolStr = SmolStr::new_inline("angle");
 pub const ANGLE_CUSTOM_TYPE: CustomType =
     CustomType::new_simple(ANGLE_TYPE_ID, ANGLE_EXTENSION_ID, TypeBound::Copyable);
 
-/// Type representing an angle that is a dyadic rational multiple of π (as [Type])
+/// Type representing an angle that is a dyadic rational multiple of 2π (as [Type])
 pub const ANGLE_TYPE: Type = Type::new_extension(ANGLE_CUSTOM_TYPE);
 
 /// The largest permitted log-denominator.
