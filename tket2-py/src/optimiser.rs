@@ -3,12 +3,15 @@
 use std::io::BufWriter;
 use std::{fs, num::NonZeroUsize, path::PathBuf};
 
+use portdiff::PortDiffGraph;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use tket2::optimiser::badger::BadgerOptions;
-use tket2::optimiser::{BadgerLogger, DefaultBadgerOptimiser};
+use tket2::optimiser::{BadgerLogger, DefaultBadgerOptimiser, DiffBadgerOptimiser};
+use tket2::static_circ::StaticSizeCircuit;
 use tket2::Circuit;
 
-use crate::circuit::update_circ;
+use crate::circuit::{try_with_circ, update_circ};
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
@@ -22,14 +25,14 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
 /// Currently only exposes loading from an ECC file using the constructor
 /// and optimising using default logging settings.
 #[pyclass(name = "BadgerOptimiser")]
-pub struct PyBadgerOptimiser(DefaultBadgerOptimiser);
+pub struct PyBadgerOptimiser(DiffBadgerOptimiser);
 
 #[pymethods]
 impl PyBadgerOptimiser {
     /// Create a new [`PyDefaultBadgerOptimiser`] from a precompiled rewriter.
     #[staticmethod]
     pub fn load_precompiled(path: PathBuf) -> Self {
-        Self(DefaultBadgerOptimiser::default_with_rewriter_binary(path).unwrap())
+        Self(DiffBadgerOptimiser::diff_with_rewriter_binary(path).unwrap())
     }
 
     /// Create a new [`PyDefaultBadgerOptimiser`] from ECC sets.
@@ -37,7 +40,7 @@ impl PyBadgerOptimiser {
     /// This will compile the rewriter from the provided ECC JSON file.
     #[staticmethod]
     pub fn compile_eccs(path: &str) -> Self {
-        Self(DefaultBadgerOptimiser::default_with_eccs_json_file(path).unwrap())
+        Self(DiffBadgerOptimiser::diff_with_eccs_json_file(path).unwrap())
     }
 
     /// Run the optimiser on a circuit.
@@ -87,9 +90,8 @@ impl PyBadgerOptimiser {
     ///
     /// * `log_progress`: The path to a CSV file to log progress to.
     ///
-    #[pyo3(name = "optimise")]
     #[allow(clippy::too_many_arguments)]
-    pub fn py_optimise<'py>(
+    pub fn run_portdiff<'py>(
         &self,
         circ: &Bound<'py, PyAny>,
         timeout: Option<u64>,
@@ -99,7 +101,7 @@ impl PyBadgerOptimiser {
         split_circ: Option<bool>,
         queue_size: Option<usize>,
         log_progress: Option<PathBuf>,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    ) -> PyResult<String> {
         let options = BadgerOptions {
             timeout,
             progress_timeout,
@@ -108,7 +110,10 @@ impl PyBadgerOptimiser {
             split_circuit: split_circ.unwrap_or(false),
             queue_size: queue_size.unwrap_or(100),
         };
-        update_circ(circ, |circ, _| self.optimise(circ, log_progress, options))
+        try_with_circ(circ, |circ, _| {
+            let diffs = self.optimise(circ, log_progress, options);
+            serde_json::to_string(&diffs).map_err(|e| PyErr::new::<PyValueError, _>(e.to_string()))
+        })
     }
 }
 
@@ -119,7 +124,8 @@ impl PyBadgerOptimiser {
         circ: Circuit,
         log_progress: Option<PathBuf>,
         options: BadgerOptions,
-    ) -> Circuit {
+    ) -> PortDiffGraph<StaticSizeCircuit> {
+        let circ: StaticSizeCircuit = (&circ).try_into().unwrap();
         let badger_logger = log_progress
             .map(|file_name| {
                 let log_file = fs::File::create(file_name).unwrap();

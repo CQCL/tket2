@@ -145,8 +145,9 @@ impl Tk2Circuit {
                 cost: cost.to_object(py),
             })
         };
-        let circ_cost = self.circ.circuit_cost(cost_fn)?;
-        Ok(circ_cost.cost.into_bound(py))
+        unimplemented!();
+        // let circ_cost = self.circ.circuit_cost(cost_fn)?;
+        // Ok(circ_cost.cost.into_bound(py))
     }
 
     /// Returns the number of operations in the circuit.
