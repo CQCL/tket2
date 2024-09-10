@@ -1,6 +1,6 @@
 [package]
 name = "tket2-hseries"
-version = "0.1.1"
+version = "0.2.0"
 edition.workspace = true
 rust-version.workspace = true
 
@@ -15,7 +15,7 @@ categories = ["compilers"]
 
 [dependencies]
 hugr.workspace = true
-tket2 = { path = "../tket2", version = "0.1.1" }
+tket2 = { path = "../tket2", version = "0.2.0" }
 lazy_static.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
@@ -28,6 +28,7 @@ itertools.workspace = true
 [dev-dependencies]
 cool_asserts.workspace = true
 petgraph.workspace = true
+rstest.workspace = true
 
 [lints]
 workspace = true

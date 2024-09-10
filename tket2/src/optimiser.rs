@@ -2,8 +2,8 @@
 //!
 //! Currently, the only optimiser is Badger
 
+#[cfg(feature = "portmatching")]
 pub mod badger;
 
-pub use badger::{BadgerLogger, BadgerOptimiser};
 #[cfg(feature = "portmatching")]
-pub use badger::{DefaultBadgerOptimiser, DiffBadgerOptimiser};
+pub use badger::{BadgerLogger, BadgerOptimiser, DefaultBadgerOptimiser, DiffBadgerOptimiser};

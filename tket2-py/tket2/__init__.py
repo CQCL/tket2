@@ -12,3 +12,8 @@ working with quantum circuits. See also the Rust library with the same name on
 from . import circuit, ops, optimiser, passes, pattern, rewrite
 
 __all__ = ["circuit", "ops", "optimiser", "passes", "pattern", "rewrite"]
+
+
+# This is updated by our release-please workflow, triggered by this
+# annotation: x-release-please-version
+__version__ = "0.3.0"

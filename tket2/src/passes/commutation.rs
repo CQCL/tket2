@@ -100,8 +100,7 @@ fn load_slices(circ: &Circuit<impl HugrView>) -> SliceVec {
 
 /// check if node is one we want to put in to a slice.
 fn is_slice_op(h: &impl HugrView, node: Node) -> bool {
-    let op: Result<Tk2Op, _> = h.get_optype(node).try_into();
-    op.is_ok()
+    h.get_optype(node).cast::<Tk2Op>().is_some()
 }
 
 /// Starting from starting_index, work back along slices to check for the
@@ -156,12 +155,12 @@ fn commutes_at_slice(
 
         let port = command.port_of_qb(q, Direction::Incoming)?;
 
-        let op: Tk2Op = circ.hugr().get_optype(command.node()).try_into().ok()?;
+        let op: Tk2Op = circ.hugr().get_optype(command.node()).cast()?;
         // TODO: if not tk2op, might still have serialized commutation data we
         // can use.
         let pauli = commutation_on_port(&op.qubit_commutation(), port)?;
 
-        let other_op: Tk2Op = circ.hugr().get_optype(other_com.node()).try_into().ok()?;
+        let other_op: Tk2Op = circ.hugr().get_optype(other_com.node()).cast()?;
         let other_pauli = commutation_on_port(
             &other_op.qubit_commutation(),
             other_com.port_of_qb(q, Direction::Outgoing)?,
@@ -326,11 +325,14 @@ pub fn apply_greedy_commutation(circ: &mut Circuit) -> Result<u32, PullForwardEr
 #[cfg(test)]
 mod test {
 
-    use crate::{extension::REGISTRY, ops::test::t2_bell_circuit, utils::build_simple_circuit};
+    use crate::{
+        extension::{angle::ANGLE_TYPE, REGISTRY},
+        ops::test::t2_bell_circuit,
+        utils::build_simple_circuit,
+    };
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::{BOOL_T, QB_T},
-        std_extensions::arithmetic::float_types::FLOAT64_TYPE,
         type_row,
         types::Signature,
     };
@@ -436,7 +438,7 @@ mod test {
     fn non_linear_inputs() -> Circuit {
         let build = || {
             let mut dfg = DFGBuilder::new(Signature::new(
-                type_row![QB_T, QB_T, FLOAT64_TYPE],
+                type_row![QB_T, QB_T, ANGLE_TYPE],
                 type_row![QB_T, QB_T],
             ))?;
 
@@ -446,7 +448,7 @@ mod test {
 
             circ.append(Tk2Op::H, [1])?;
             circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append_and_consume(Tk2Op::RzF64, [CircuitUnit::Linear(0), CircuitUnit::Wire(f)])?;
+            circ.append_and_consume(Tk2Op::Rz, [CircuitUnit::Linear(0), CircuitUnit::Wire(f)])?;
             let qbs = circ.finish();
             dfg.finish_hugr_with_outputs(qbs, &REGISTRY)
         };

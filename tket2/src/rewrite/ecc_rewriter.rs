@@ -13,7 +13,8 @@
 //! of the Quartz repository.
 
 use derive_more::{From, Into};
-use hugr::Hugr;
+use hugr::ops::custom::{resolve_extension_ops, OpaqueOpError};
+use hugr::{Hugr, HugrView, PortIndex};
 use itertools::Itertools;
 use portdiff as pd;
 use portmatching::{PatternID, PortMatcher};
@@ -25,6 +26,7 @@ use std::{
 };
 use thiserror::Error;
 
+use crate::extension::REGISTRY;
 use crate::{
     circuit::{cost::CircuitCost, RemoveEmptyWire},
     optimiser::badger::{load_eccs_json_file, EqCircClass},
@@ -207,7 +209,10 @@ where
         C: for<'a> serde::Deserialize<'a>,
     {
         let data = zstd::decode_all(reader)?;
-        Ok(rmp_serde::decode::from_slice(&data)?)
+        let eccs: Self = rmp_serde::decode::from_slice(&data)?;
+        // TODO: call this if `C` is a `Circuit` or a `Hugr`.
+        //eccs.resolve_extension_ops()?;
+        Ok(eccs)
     }
 
     /// Save a rewriter as a binary file.
@@ -245,6 +250,18 @@ where
         // `zstd::decode_all`.
         Self::load_binary_io(&mut file)
     }
+
+    // When the ECC gets loaded, all custom operations are an instance of `OpaqueOp`.
+    // We need to resolve them into `ExtensionOp`s by validating the definitions.
+    //
+    // NOTE: This shouldn't be needed when `C = StaticSizeCircuit`, since ops are always resolved to Tk2Ops there.
+    // If C is a `Circuit` or a `Hugr`, however, we should implement and call this from `load_binary_io`.
+    //
+    //fn resolve_extension_ops(&mut self) -> Result<(), OpaqueOpError> {
+    //    self.targets
+    //        .iter_mut()
+    //        .try_for_each(|hugr| resolve_extension_ops(hugr, &REGISTRY))
+    //}
 }
 
 impl Rewriter<StaticSizeCircuit> for ECCRewriter<CircuitMatcher, StaticSizeCircuit> {
@@ -359,6 +376,9 @@ pub enum RewriterSerialisationError {
     /// An error occurred during serialisation
     #[error("Serialisation error: {0}")]
     Serialisation(#[from] rmp_serde::encode::Error),
+    /// An error occurred during resolving extension ops
+    #[error("Resolving extension ops error: {0}")]
+    OpaqueOp(#[from] OpaqueOpError),
 }
 
 fn into_targets<C: From<Hugr>>(rep_sets: Vec<EqCircClass>) -> Vec<C> {

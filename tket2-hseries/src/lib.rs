@@ -12,7 +12,7 @@ use tket2::Tk2Op;
 
 use thiserror::Error;
 
-use extension::{futures::FutureOpDef, quantum_lazy::LazyQuantumOp};
+use extension::{futures::FutureOpDef, hseries::HSeriesOp};
 use lazify_measure::{LazifyMeasurePass, LazifyMeasurePassError};
 
 pub mod extension;
@@ -22,7 +22,7 @@ pub mod lazify_measure;
 /// Modify a [hugr::Hugr] into a form that is acceptable for ingress into an H-series.
 /// Returns an error if this cannot be done.
 ///
-/// To constuct a `HSeriesPass` use [Default::default].
+/// To construct a `HSeriesPass` use [Default::default].
 #[derive(Debug, Clone, Copy, Default)]
 pub struct HSeriesPass {
     validation_level: ValidationLevel,
@@ -56,10 +56,10 @@ impl HSeriesPass {
             .run_validated_pass(hugr, registry, |hugr, _| {
                 force_order(hugr, hugr.root(), |hugr, node| {
                     let optype = hugr.get_optype(node);
-                    if Tk2Op::try_from(optype).is_ok() || LazyQuantumOp::try_from(optype).is_ok() {
+                    if optype.cast::<Tk2Op>().is_some() || optype.cast::<HSeriesOp>().is_some() {
                         // quantum ops are lifted as early as possible
                         -1
-                    } else if let Ok(FutureOpDef::Read) = hugr.get_optype(node).try_into() {
+                    } else if let Some(FutureOpDef::Read) = hugr.get_optype(node).cast() {
                         // read ops are sunk as late as possible
                         1
                     } else {
@@ -88,14 +88,13 @@ mod test {
         builder::{Container, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer},
         extension::prelude::{BOOL_T, QB_T},
         ops::handle::NodeHandle,
-        std_extensions::arithmetic::float_types::ConstF64,
         type_row,
         types::Signature,
         HugrView as _,
     };
     use itertools::Itertools as _;
     use petgraph::visit::{Topo, Walker as _};
-    use tket2::Tk2Op;
+    use tket2::{extension::angle::ConstAngle, Tk2Op};
 
     use crate::{extension::futures::FutureOpDef, HSeriesPass};
 
@@ -120,7 +119,7 @@ mod test {
                 .node();
 
             // this LoadConstant should be pushed below the quantum ops where possible
-            let angle = builder.add_load_value(ConstF64::new(1.0));
+            let angle = builder.add_load_value(ConstAngle::PI);
             let f_node = angle.node();
 
             // with no dependencies, this H should be lifted to the start
@@ -130,9 +129,9 @@ mod test {
                 .outputs_arr();
             let h_node = qb.node();
 
-            // depending on the angle means this op can't be lifted above the float ops
+            // depending on the angle means this op can't be lifted above the angle ops
             let [qb] = builder
-                .add_dataflow_op(Tk2Op::RxF64, [qb, angle])
+                .add_dataflow_op(Tk2Op::Rx, [qb, angle])
                 .unwrap()
                 .outputs_arr();
             let rx_node = qb.node();

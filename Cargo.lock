@@ -158,9 +158,9 @@ checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
 name = "bytemuck"
-version = "1.17.0"
+version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fd4c6dcc3b0aea2f5c0b4b82c2b15fe39ddbc76041a310848f4706edf76bb31"
+checksum = "94bbb0ad554ad961ddc5da507a12a29b14e4ae5bda06b19f575a3e6079d2e2ae"
 
 [[package]]
 name = "byteorder"
@@ -256,9 +256,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.16"
+version = "4.5.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed6719fffa43d0d87e5fd8caeab59be1554fb028cd30edc88fc4369b17971019"
+checksum = "3e5a21b8495e732f1b3c364c9949b201ca7bae518c502c80256c96ad79eaf6ac"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -266,9 +266,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.15"
+version = "4.5.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "216aec2b177652e3846684cbfe25c9964d18ec45234f0f5da5157b207ed1aab6"
+checksum = "8cf2dd12af7a047ad9d6da2b6b249759a22a7abc0f474c1dae1777afa4b21a73"
 dependencies = [
  "anstream",
  "anstyle",
@@ -478,6 +478,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "delegate"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5060bb0febb73fa907273f8a7ed17ab4bf831d585eac835b28ec24a1e2460956"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "deranged"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -508,6 +519,27 @@ dependencies = [
  "quote",
  "rustc_version",
  "syn",
+]
+
+[[package]]
+name = "derive_more"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
+dependencies = [
+ "derive_more-impl",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "unicode-xid",
 ]
 
 [[package]]
@@ -752,9 +784,9 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.11.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "888ee8f56c9e2788b9d74162e2d057426fae9d5cfe4167c415c20260754ea433"
+checksum = "34ee4f66c9add4abc4b1ed5895b8f4ca1ee3727a0aacbb011696bb0a5946be01"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -762,15 +794,15 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.8.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff8a7da4d5b36861d0695e7b9bc3120099bc2b579642e33886022b3e65c92d16"
+checksum = "b9cadea7900319ff43c7ee211a28e7de26a3d3f3b1d1bdd4c3de3dfee1199d3e"
 dependencies = [
  "bitvec",
  "cgmath",
  "context-iterators",
- "delegate",
- "derive_more",
+ "delegate 0.13.0",
+ "derive_more 1.0.0",
  "downcast-rs",
  "enum_dispatch",
  "html-escape",
@@ -793,9 +825,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.7.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75f2dd0e0c842e9513532b3025420dfdb5fed2db511cc83c749f964b25982bc8"
+checksum = "6636bd4e828751880354ea8000bcc0be0d753aed9062783b72c78b668b813aa8"
 dependencies = [
  "hugr-core",
  "itertools 0.13.0",
@@ -1253,9 +1285,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47b8c9581eb7f41e6c51db6e12e0367680d6313e1fb70293bf9dbd15ca728581"
 dependencies = [
  "bimap",
- "delegate",
+ "delegate 0.12.0",
  "derive-where",
- "derive_more",
+ "derive_more 0.99.18",
  "itertools 0.13.0",
  "petgraph",
  "relrc",
@@ -1273,7 +1305,7 @@ checksum = "4791aa897c125c0f9e606c9a26092f1a6ca50af86f7e37de54ab7e5a7673bdb0"
 dependencies = [
  "bitvec",
  "context-iterators",
- "delegate",
+ "delegate 0.12.0",
  "itertools 0.13.0",
  "petgraph",
  "serde",
@@ -1288,9 +1320,9 @@ checksum = "449c326d5b09e279f756526d3933b6e844274ce258d4bbd7b55b000fc05c341a"
 dependencies = [
  "bimap",
  "bitvec",
- "delegate",
+ "delegate 0.12.0",
  "derive-where",
- "derive_more",
+ "derive_more 0.99.18",
  "itertools 0.10.5",
  "petgraph",
  "portgraph",
@@ -1486,7 +1518,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbaf57ebd4bc8edc69be8590fbe89b0f4ed21cee32b83bb7f1e60eb0aa07c1d3"
 dependencies = [
  "derive-where",
- "derive_more",
+ "derive_more 0.99.18",
  "petgraph",
  "serde",
  "thiserror",
@@ -1596,18 +1628,18 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.208"
+version = "1.0.210"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cff085d2cb684faa248efb494c39b68e522822ac0de72ccf08109abde717cfb2"
+checksum = "c8e3592472072e6e22e0a54d5904d9febf8508f65fb8552499a1abc7d1078c3a"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.208"
+version = "1.0.210"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24008e81ff7613ed8e5ba0cfaf24e2c2f1e5b8a0495711e44fcd4882fca62bcf"
+checksum = "243902eda00fad750862fc144cea25caca5e20d615af0a81bee94ca738f1df1f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1616,9 +1648,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.125"
+version = "1.0.128"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83c8e735a073ccf5be70aa8066aa984eaf2fa000db6c8d0100ae605b366d31ed"
+checksum = "6ff5456707a1de34e7e37f2a6fd3d3f808c318259cbd01ab6377795054b483d8"
 dependencies = [
  "itoa",
  "memchr",
@@ -1841,7 +1873,7 @@ dependencies = [
 
 [[package]]
 name = "tket2"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "bytemuck",
  "cgmath",
@@ -1850,8 +1882,8 @@ dependencies = [
  "criterion",
  "crossbeam-channel",
  "csv",
- "delegate",
- "derive_more",
+ "delegate 0.13.0",
+ "derive_more 0.99.18",
  "downcast-rs",
  "fxhash",
  "hugr",
@@ -1885,13 +1917,14 @@ dependencies = [
 
 [[package]]
 name = "tket2-hseries"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "cool_asserts",
  "hugr",
  "itertools 0.13.0",
  "lazy_static",
  "petgraph",
+ "rstest",
  "serde",
  "serde_json",
  "smol_str",
@@ -1906,7 +1939,7 @@ name = "tket2-py"
 version = "0.0.0"
 dependencies = [
  "cool_asserts",
- "derive_more",
+ "derive_more 0.99.18",
  "hugr",
  "itertools 0.13.0",
  "num_cpus",
@@ -2041,6 +2074,12 @@ checksum = "a56d1686db2308d901306f92a263857ef59ea39678a5458e7cb17f01415101f5"
 dependencies = [
  "tinyvec",
 ]
+
+[[package]]
+name = "unicode-xid"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "229730647fbc343e3a80e463c1db7f78f3855d3f3739bee0dda773c9a037c90a"
 
 [[package]]
 name = "unindent"

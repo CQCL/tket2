@@ -1,59 +1,49 @@
-use std::{cmp::max, num::NonZeroU64};
-
-use hugr::extension::ExtensionSet;
+use hugr::builder::{BuildError, Dataflow};
+use hugr::extension::prelude::{sum_with_error, BOOL_T, USIZE_T};
+use hugr::extension::simple_op::{MakeOpDef, MakeRegisteredOp};
+use hugr::extension::{ExtensionId, ExtensionSet, Version};
 use hugr::ops::constant::{downcast_equal_consts, CustomConst};
-use hugr::types::PolyFuncTypeRV;
+use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
+use hugr::{type_row, Wire};
 use hugr::{
-    extension::{prelude::ERROR_TYPE, SignatureError, SignatureFromArgs, TypeDef},
-    types::{
-        type_param::{TypeArgError, TypeParam},
-        ConstTypeError, CustomType, PolyFuncType, Signature, Type, TypeArg, TypeBound,
-    },
+    types::{ConstTypeError, CustomType, Signature, Type, TypeBound},
     Extension,
 };
-use itertools::Itertools;
 use smol_str::SmolStr;
 use std::f64::consts::TAU;
+use strum::{EnumIter, EnumString, IntoStaticStr};
 
-use super::TKET2_EXTENSION_ID;
+use lazy_static::lazy_static;
+
+/// Name of tket 2 angle extension.
+pub const ANGLE_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.angle");
+
+/// Current version of the TKET 2 angle extension
+pub const ANGLE_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+
+lazy_static! {
+    /// The extension definition for TKET2 angle type and ops.
+    pub static ref ANGLE_EXTENSION: Extension = {
+        let mut e = Extension::new(ANGLE_EXTENSION_ID, ANGLE_EXTENSION_VERSION);
+        add_to_extension(&mut e);
+        e
+    };
+}
 
 /// Identifier for the angle type.
 const ANGLE_TYPE_ID: SmolStr = SmolStr::new_inline("angle");
+/// Dyadic rational angle type (as [CustomType])
+pub const ANGLE_CUSTOM_TYPE: CustomType =
+    CustomType::new_simple(ANGLE_TYPE_ID, ANGLE_EXTENSION_ID, TypeBound::Copyable);
 
-pub(super) fn angle_custom_type(extension: &Extension, log_denom_arg: TypeArg) -> CustomType {
-    angle_def(extension).instantiate([log_denom_arg]).unwrap()
-}
-
-fn angle_type(log_denom: u8) -> Type {
-    Type::new_extension(super::angle_custom_type(log_denom))
-}
+/// Type representing an angle that is a dyadic rational multiple of π (as [Type])
+pub const ANGLE_TYPE: Type = Type::new_extension(ANGLE_CUSTOM_TYPE);
 
 /// The largest permitted log-denominator.
 pub const LOG_DENOM_MAX: u8 = 53;
 
 const fn is_valid_log_denom(n: u8) -> bool {
     n <= LOG_DENOM_MAX
-}
-
-/// Type parameter for the log-denominator of an angle.
-pub const LOG_DENOM_TYPE_PARAM: TypeParam =
-    TypeParam::bounded_nat(NonZeroU64::MIN.saturating_add(LOG_DENOM_MAX as u64));
-
-/// Get the log-denominator of the specified type argument or error if the argument is invalid.
-fn get_log_denom(arg: &TypeArg) -> Result<u8, TypeArgError> {
-    match arg {
-        TypeArg::BoundedNat { n } if is_valid_log_denom(*n as u8) => Ok(*n as u8),
-        _ => Err(TypeArgError::TypeMismatch {
-            arg: arg.clone(),
-            param: LOG_DENOM_TYPE_PARAM,
-        }),
-    }
-}
-
-pub(super) const fn type_arg(log_denom: u8) -> TypeArg {
-    TypeArg::BoundedNat {
-        n: log_denom as u64,
-    }
 }
 
 /// An angle
@@ -64,6 +54,20 @@ pub struct ConstAngle {
 }
 
 impl ConstAngle {
+    /// The constant π
+    pub const PI: Self = Self::new_unchecked(1, 1);
+    /// The constant 2π
+    pub const TAU: Self = Self::new_unchecked(0, 1);
+    /// The constant π/2
+    pub const PI_2: Self = Self::new_unchecked(2, 1);
+    /// The constant π/4
+    pub const PI_4: Self = Self::new_unchecked(3, 1);
+
+    /// Create a new [`ConstAngle`] from a log-denominator and a numerator without
+    /// checking for validity.
+    const fn new_unchecked(log_denom: u8, value: u64) -> Self {
+        Self { log_denom, value }
+    }
     /// Create a new [`ConstAngle`] from a log-denominator and a numerator
     pub fn new(log_denom: u8, value: u64) -> Result<Self, ConstTypeError> {
         if !is_valid_log_denom(log_denom) {
@@ -100,6 +104,13 @@ impl ConstAngle {
         })
     }
 
+    /// Create a new [`ConstAngle`] from a floating-point value in radians,
+    /// using the highest possible log-denominator and
+    /// rounding to the nearest corresponding value. (Ties round away from zero.)
+    pub fn from_radians_rounding_max(theta: f64) -> Result<Self, ConstTypeError> {
+        Self::from_radians_rounding(LOG_DENOM_MAX, theta)
+    }
+
     /// Returns the value of the constant
     pub fn value(&self) -> u64 {
         self.value
@@ -108,6 +119,16 @@ impl ConstAngle {
     /// Returns the log-denominator of the constant
     pub fn log_denom(&self) -> u8 {
         self.log_denom
+    }
+
+    /// Returns the value of the constant in radians
+    pub fn to_radians(&self) -> f64 {
+        self.to_turns() * TAU
+    }
+
+    /// Returns the value of the constant divided by 2π
+    pub fn to_turns(&self) -> f64 {
+        (self.value as f64) / (1u64 << self.log_denom) as f64
     }
 }
 
@@ -118,147 +139,218 @@ impl CustomConst for ConstAngle {
     }
 
     fn get_type(&self) -> Type {
-        super::angle_custom_type(self.log_denom).into()
+        ANGLE_TYPE
     }
 
     fn equal_consts(&self, other: &dyn CustomConst) -> bool {
         downcast_equal_consts(self, other)
     }
     fn extension_reqs(&self) -> ExtensionSet {
-        ExtensionSet::singleton(&TKET2_EXTENSION_ID)
+        ExtensionSet::singleton(&ANGLE_EXTENSION_ID)
     }
 }
 
-/// Collect a vector into an array.
-fn collect_array<const N: usize, T: std::fmt::Debug>(arr: &[T]) -> [&T; N] {
-    arr.iter().collect_vec().try_into().unwrap()
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, EnumIter, IntoStaticStr, EnumString)]
+#[allow(missing_docs, non_camel_case_types)]
+#[non_exhaustive]
+/// Angle operations
+pub enum AngleOp {
+    /// Truncate an angle to one with a lower log-denominator with the nearest value, rounding down in [0, 2π) if necessary
+    atrunc,
+    /// Addition of angles
+    aadd,
+    /// Subtraction of the second angle from the first
+    asub,
+    /// Negation of an angle
+    aneg,
+    /// Construct angle from numerator and log-denominator
+    anew,
+    /// Decompose angle into numerator and log-denominator
+    aparts,
+    /// Construct angle from radians
+    afromrad,
+    /// Convert angle to radians
+    atorad,
+    /// Check angle equality
+    aeq,
+    /// Multiply angle by a scalar
+    amul,
+    /// Divide by scalar with rounding
+    adiv,
 }
 
-fn abinop_sig() -> impl SignatureFromArgs {
-    struct BinOp;
-    const PARAMS: &[TypeParam] = &[LOG_DENOM_TYPE_PARAM];
-
-    impl SignatureFromArgs for BinOp {
-        fn compute_signature(
-            &self,
-            arg_values: &[TypeArg],
-        ) -> Result<PolyFuncTypeRV, SignatureError> {
-            let [arg0, arg1] = collect_array(arg_values);
-            let m: u8 = get_log_denom(arg0)?;
-            let n: u8 = get_log_denom(arg1)?;
-            let l: u8 = max(m, n);
-            let poly_func: PolyFuncType =
-                Signature::new(vec![angle_type(m), angle_type(n)], vec![angle_type(l)]).into();
-            Ok(poly_func.into())
-        }
-
-        fn static_params(&self) -> &[TypeParam] {
-            PARAMS
-        }
+impl MakeOpDef for AngleOp {
+    fn from_def(
+        op_def: &hugr::extension::OpDef,
+    ) -> Result<Self, hugr::extension::simple_op::OpLoadError>
+    where
+        Self: Sized,
+    {
+        hugr::extension::simple_op::try_from_name(op_def.name(), op_def.extension())
     }
 
-    BinOp
+    fn signature(&self) -> hugr::extension::SignatureFunc {
+        match self {
+            AngleOp::atrunc => {
+                Signature::new(type_row![ANGLE_TYPE, USIZE_T], type_row![ANGLE_TYPE])
+            }
+            AngleOp::aadd | AngleOp::asub => {
+                Signature::new(type_row![ANGLE_TYPE, ANGLE_TYPE], type_row![ANGLE_TYPE])
+            }
+            AngleOp::aneg => Signature::new_endo(type_row![ANGLE_TYPE]),
+            AngleOp::anew => Signature::new(
+                type_row![USIZE_T, USIZE_T],
+                vec![sum_with_error(ANGLE_TYPE).into()],
+            ),
+            AngleOp::aparts => Signature::new(type_row![ANGLE_TYPE], type_row![USIZE_T, USIZE_T]),
+            AngleOp::afromrad => {
+                Signature::new(type_row![USIZE_T, FLOAT64_TYPE], type_row![ANGLE_TYPE])
+            }
+            AngleOp::atorad => Signature::new(type_row![ANGLE_TYPE], type_row![FLOAT64_TYPE]),
+            AngleOp::aeq => Signature::new(type_row![ANGLE_TYPE, ANGLE_TYPE], type_row![BOOL_T]),
+            AngleOp::amul | AngleOp::adiv => {
+                Signature::new(type_row![ANGLE_TYPE, USIZE_T], type_row![ANGLE_TYPE])
+            }
+        }
+        .into()
+    }
+
+    fn description(&self) -> String {
+        match self {
+            AngleOp::atrunc => "truncate an angle to one with a lower log-denominator with the nearest value, rounding down in [0, 2π) if necessary",
+            AngleOp::aadd => "addition of angles",
+            AngleOp::asub => "subtraction of the second angle from the first",
+            AngleOp::aneg => "negation of an angle",
+            AngleOp::anew => "construct angle from numerator and log-denominator, returning an error if invalid",
+            AngleOp::aparts => "decompose angle into numerator and log-denominator",
+            AngleOp::afromrad => "construct angle from radians, rounding given a log-denominator",
+            AngleOp::atorad => "convert angle to radians",
+            AngleOp::aeq => "check angle equality",
+            AngleOp::amul => "multiply angle by a scalar",
+            AngleOp::adiv => "Divide angle by an integer. If the integer is not a power of 2, or if the resulting denominator would exceed 2^64, the result is rounded to the nearest multiple of 2 pi / 2^ 64",
+        }.to_owned()
+    }
+
+    fn extension(&self) -> hugr::extension::ExtensionId {
+        ANGLE_EXTENSION_ID
+    }
+
+    // TODO constant folding
+    // https://github.com/CQCL/tket2/issues/405
 }
 
-fn angle_def(extension: &Extension) -> &TypeDef {
-    extension.get_type(&ANGLE_TYPE_ID).unwrap()
+impl MakeRegisteredOp for AngleOp {
+    fn extension_id(&self) -> hugr::extension::ExtensionId {
+        ANGLE_EXTENSION_ID
+    }
+
+    fn registry<'s, 'r: 's>(&'s self) -> &'r hugr::extension::ExtensionRegistry {
+        &super::REGISTRY
+    }
 }
 
-fn generic_angle_type(var_id: usize, angle_type_def: &TypeDef) -> Type {
-    Type::new_extension(
-        angle_type_def
-            .instantiate(vec![TypeArg::new_var_use(var_id, LOG_DENOM_TYPE_PARAM)])
-            .unwrap(),
-    )
-}
 pub(super) fn add_to_extension(extension: &mut Extension) {
-    let angle_type_def = extension
+    extension
         .add_type(
             ANGLE_TYPE_ID,
-            vec![LOG_DENOM_TYPE_PARAM],
-            "angle value with a given log-denominator".to_owned(),
+            vec![],
+            "angle type expressed as dyadic rational multiples of 2π".to_owned(),
             TypeBound::Copyable.into(),
         )
-        .unwrap()
-        .clone();
-
-    extension
-        .add_op(
-            "atrunc".into(),
-            "truncate an angle to one with a lower log-denominator with the same value, rounding \
-            down in [0, 2π) if necessary"
-                .to_owned(),
-            PolyFuncType::new(
-                vec![LOG_DENOM_TYPE_PARAM, LOG_DENOM_TYPE_PARAM],
-                // atrunc_sig(extension).unwrap(),
-                Signature::new(
-                    vec![generic_angle_type(0, &angle_type_def)],
-                    vec![generic_angle_type(1, &angle_type_def)],
-                ),
-            ),
-        )
         .unwrap();
 
-    extension
-        .add_op(
-            "aconvert".into(),
-            "convert an angle to one with another log-denominator having the same value, if \
-            possible, otherwise return an error"
-                .to_owned(),
-            PolyFuncType::new(
-                vec![LOG_DENOM_TYPE_PARAM, LOG_DENOM_TYPE_PARAM],
-                Signature::new(
-                    vec![generic_angle_type(0, &angle_type_def)],
-                    vec![Type::new_sum([
-                        generic_angle_type(1, &angle_type_def),
-                        ERROR_TYPE,
-                    ])],
-                ),
-            ),
-        )
-        .unwrap();
-
-    extension
-        .add_op("aadd".into(), "addition of angles".to_owned(), abinop_sig())
-        .unwrap();
-
-    extension
-        .add_op(
-            "asub".into(),
-            "subtraction of the second angle from the first".to_owned(),
-            abinop_sig(),
-        )
-        .unwrap();
-
-    extension
-        .add_op(
-            "aneg".into(),
-            "negation of an angle".to_owned(),
-            PolyFuncType::new(
-                vec![LOG_DENOM_TYPE_PARAM],
-                Signature::new_endo(vec![generic_angle_type(0, &angle_type_def)]),
-            ),
-        )
-        .unwrap();
+    AngleOp::load_all_ops(extension).expect("add fail");
 }
+
+/// An extension trait for [Dataflow] providing methods to add
+/// "tket2.angle" operations.
+pub trait AngleOpBuilder: Dataflow {
+    /// Add a "tket2.angle.atrunc" op.
+    fn add_atrunc(&mut self, angle: Wire, log_denom: Wire) -> Result<Wire, BuildError> {
+        Ok(self
+            .add_dataflow_op(AngleOp::atrunc, [angle, log_denom])?
+            .out_wire(0))
+    }
+    /// Add a "tket2.angle.aadd" op.
+    fn add_aadd(&mut self, angle1: Wire, angle2: Wire) -> Result<Wire, BuildError> {
+        Ok(self
+            .add_dataflow_op(AngleOp::aadd, [angle1, angle2])?
+            .out_wire(0))
+    }
+
+    /// Add a "tket2.angle.asub" op.
+    fn add_asub(&mut self, angle1: Wire, angle2: Wire) -> Result<Wire, BuildError> {
+        Ok(self
+            .add_dataflow_op(AngleOp::asub, [angle1, angle2])?
+            .out_wire(0))
+    }
+
+    /// Add a "tket2.angle.aneg" op.
+    fn add_aneg(&mut self, angle: Wire) -> Result<Wire, BuildError> {
+        Ok(self.add_dataflow_op(AngleOp::aneg, [angle])?.out_wire(0))
+    }
+
+    /// Add a "tket2.angle.anew" op.
+    fn add_anew(&mut self, numerator: Wire, log_denominator: Wire) -> Result<Wire, BuildError> {
+        Ok(self
+            .add_dataflow_op(AngleOp::anew, [numerator, log_denominator])?
+            .out_wire(0))
+    }
+
+    /// Add a "tket2.angle.aparts" op.
+    fn add_aparts(&mut self, angle: Wire) -> Result<[Wire; 2], BuildError> {
+        Ok(self
+            .add_dataflow_op(AngleOp::aparts, [angle])?
+            .outputs_arr())
+    }
+
+    /// Add a "tket2.angle.afromrad" op.
+    fn add_afromrad(&mut self, log_denominator: Wire, radians: Wire) -> Result<Wire, BuildError> {
+        Ok(self
+            .add_dataflow_op(AngleOp::afromrad, [log_denominator, radians])?
+            .out_wire(0))
+    }
+
+    /// Add a "tket2.angle.atorad" op.
+    fn add_atorad(&mut self, angle: Wire) -> Result<Wire, BuildError> {
+        Ok(self.add_dataflow_op(AngleOp::atorad, [angle])?.out_wire(0))
+    }
+
+    /// Add a "tket2.angle.aeq" op.
+    fn add_aeq(&mut self, angle1: Wire, angle2: Wire) -> Result<Wire, BuildError> {
+        Ok(self
+            .add_dataflow_op(AngleOp::aeq, [angle1, angle2])?
+            .out_wire(0))
+    }
+
+    /// Add a "tket2.angle.amul" op.
+    fn add_amul(&mut self, angle: Wire, scalar: Wire) -> Result<Wire, BuildError> {
+        Ok(self
+            .add_dataflow_op(AngleOp::amul, [angle, scalar])?
+            .out_wire(0))
+    }
+
+    /// Add a "tket2.angle.adiv" op.
+    fn add_adiv(&mut self, angle: Wire, scalar: Wire) -> Result<Wire, BuildError> {
+        Ok(self
+            .add_dataflow_op(AngleOp::adiv, [angle, scalar])?
+            .out_wire(0))
+    }
+}
+
+impl<D: Dataflow> AngleOpBuilder for D {}
 
 #[cfg(test)]
 mod test {
+    use hugr::{
+        builder::{DFGBuilder, DataflowHugr},
+        ops::OpType,
+    };
+    use strum::IntoEnumIterator;
+
+    use crate::extension::REGISTRY;
+
     use super::*;
-    use crate::extension::angle_custom_type;
-    use hugr::types::TypeArg;
-
-    #[test]
-    fn test_angle_log_denoms() {
-        let type_arg_53 = TypeArg::BoundedNat { n: 53 };
-        assert_eq!(get_log_denom(&type_arg_53).unwrap(), 53);
-
-        let type_arg_54 = TypeArg::BoundedNat { n: 54 };
-        assert!(matches!(
-            get_log_denom(&type_arg_54),
-            Err(TypeArgError::TypeMismatch { .. })
-        ));
-    }
 
     #[test]
     fn test_angle_consts() {
@@ -269,8 +361,7 @@ mod test {
         assert_ne!(const_a32_7, const_a32_8);
         assert_eq!(const_a32_7, ConstAngle::new(5, 7).unwrap());
 
-        assert_eq!(const_a32_7.get_type(), angle_custom_type(5).into());
-        assert_ne!(const_a32_7.get_type(), angle_custom_type(6).into());
+        assert_eq!(const_a32_7.get_type(), ANGLE_TYPE);
         assert!(matches!(
             ConstAngle::new(3, 256),
             Err(ConstTypeError::CustomCheckFail(_))
@@ -290,20 +381,34 @@ mod test {
 
         assert_eq!(const_a32_8.name(), "a(2π*8/2^6)");
     }
+
     #[test]
-    fn test_binop_sig() {
-        let binop_sig = abinop_sig();
+    fn test_ops() {
+        let ops = AngleOp::iter().collect::<Vec<_>>();
+        for op in ops {
+            let optype: OpType = op.into();
+            assert_eq!(optype.cast(), Some(op));
+        }
+    }
 
-        let sig = binop_sig
-            .compute_signature(&[type_arg(23), type_arg(42)])
-            .unwrap();
+    #[test]
+    fn test_builder() {
+        let mut builder =
+            DFGBuilder::new(Signature::new(vec![ANGLE_TYPE, USIZE_T], vec![BOOL_T])).unwrap();
 
-        let poly_type: PolyFuncType =
-            Signature::new(vec![angle_type(23), angle_type(42)], vec![angle_type(42)]).into();
-        assert_eq!(sig, poly_type.into());
+        let [angle, scalar] = builder.input_wires_arr();
+        let radians = builder.add_atorad(angle).unwrap();
+        let angle = builder.add_afromrad(scalar, radians).unwrap();
+        let angle = builder.add_amul(angle, scalar).unwrap();
+        let angle = builder.add_adiv(angle, scalar).unwrap();
+        let angle = builder.add_aadd(angle, angle).unwrap();
+        let angle = builder.add_asub(angle, angle).unwrap();
+        let [num, log_denom] = builder.add_aparts(angle).unwrap();
+        let _angle_sum = builder.add_anew(num, log_denom).unwrap();
+        let angle = builder.add_aneg(angle).unwrap();
+        let angle = builder.add_atrunc(angle, log_denom).unwrap();
+        let bool = builder.add_aeq(angle, angle).unwrap();
 
-        assert!(binop_sig
-            .compute_signature(&[type_arg(23), type_arg(89)])
-            .is_err());
+        let _hugr = builder.finish_hugr_with_outputs([bool], &REGISTRY).unwrap();
     }
 }

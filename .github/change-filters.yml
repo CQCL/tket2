@@ -17,4 +17,4 @@ python:
   - "tket2-py/**"
   - "tket2-eccs/**"
   - "pyproject.toml"
-  - "poetry.lock"
+  - "uv.lock"

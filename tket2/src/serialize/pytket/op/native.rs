@@ -1,15 +1,15 @@
 //! Operations that have corresponding representations in both `pytket` and `tket2`.
 
-use hugr::extension::prelude::{BOOL_T, QB_T};
+use hugr::extension::prelude::{Noop, BOOL_T, QB_T};
 
-use hugr::ops::{Noop, OpTrait, OpType};
-use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
+use hugr::ops::{OpTrait, OpType};
 use hugr::types::Signature;
 
 use hugr::IncomingPort;
 use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as Tk1OpType;
 
+use crate::extension::angle::ANGLE_TYPE;
 use crate::Tk2Op;
 
 /// An operation with a native TKET2 counterpart.
@@ -53,27 +53,22 @@ impl NativeOp {
         let serial_op = match tk2op {
             Tk2Op::H => Tk1OpType::H,
             Tk2Op::CX => Tk1OpType::CX,
+            Tk2Op::CY => Tk1OpType::CY,
+            Tk2Op::CZ => Tk1OpType::CZ,
+            Tk2Op::CRz => Tk1OpType::CRz,
             Tk2Op::T => Tk1OpType::T,
+            Tk2Op::Tdg => Tk1OpType::Tdg,
             Tk2Op::S => Tk1OpType::S,
+            Tk2Op::Sdg => Tk1OpType::Sdg,
             Tk2Op::X => Tk1OpType::X,
             Tk2Op::Y => Tk1OpType::Y,
             Tk2Op::Z => Tk1OpType::Z,
-            Tk2Op::Tdg => Tk1OpType::Tdg,
-            Tk2Op::Sdg => Tk1OpType::Sdg,
-            Tk2Op::ZZMax => Tk1OpType::ZZMax,
-            Tk2Op::RzF64 => Tk1OpType::Rz,
-            Tk2Op::RxF64 => Tk1OpType::Rx,
-            Tk2Op::TK1 => Tk1OpType::TK1,
-            Tk2Op::PhasedX => Tk1OpType::PhasedX,
-            Tk2Op::ZZPhase => Tk1OpType::ZZPhase,
-            Tk2Op::CZ => Tk1OpType::CZ,
+            Tk2Op::Rx => Tk1OpType::Rx,
+            Tk2Op::Rz => Tk1OpType::Rz,
+            Tk2Op::Ry => Tk1OpType::Ry,
+            Tk2Op::Toffoli => Tk1OpType::CCX,
             Tk2Op::Reset => Tk1OpType::Reset,
             Tk2Op::Measure => Tk1OpType::Measure,
-            Tk2Op::AngleAdd => {
-                // These operations should be folded into constant before serialisation,
-                // or replaced by pytket logic expressions.
-                return Some(Self::new(tk2op.into(), None));
-            }
             // These operations do not have a direct pytket counterpart.
             Tk2Op::QAlloc | Tk2Op::QFree => {
                 // These operations are implicitly supported by the encoding,
@@ -91,20 +86,20 @@ impl NativeOp {
         let op = match serial_op {
             Tk1OpType::H => Tk2Op::H.into(),
             Tk1OpType::CX => Tk2Op::CX.into(),
+            Tk1OpType::CY => Tk2Op::CY.into(),
+            Tk1OpType::CZ => Tk2Op::CZ.into(),
+            Tk1OpType::CRz => Tk2Op::CRz.into(),
             Tk1OpType::T => Tk2Op::T.into(),
+            Tk1OpType::Tdg => Tk2Op::Tdg.into(),
             Tk1OpType::S => Tk2Op::S.into(),
+            Tk1OpType::Sdg => Tk2Op::Sdg.into(),
             Tk1OpType::X => Tk2Op::X.into(),
             Tk1OpType::Y => Tk2Op::Y.into(),
             Tk1OpType::Z => Tk2Op::Z.into(),
-            Tk1OpType::Tdg => Tk2Op::Tdg.into(),
-            Tk1OpType::Sdg => Tk2Op::Sdg.into(),
-            Tk1OpType::Rz => Tk2Op::RzF64.into(),
-            Tk1OpType::Rx => Tk2Op::RxF64.into(),
-            Tk1OpType::TK1 => Tk2Op::TK1.into(),
-            Tk1OpType::PhasedX => Tk2Op::PhasedX.into(),
-            Tk1OpType::ZZMax => Tk2Op::ZZMax.into(),
-            Tk1OpType::ZZPhase => Tk2Op::ZZPhase.into(),
-            Tk1OpType::CZ => Tk2Op::CZ.into(),
+            Tk1OpType::Rx => Tk2Op::Rx.into(),
+            Tk1OpType::Ry => Tk2Op::Ry.into(),
+            Tk1OpType::Rz => Tk2Op::Rz.into(),
+            Tk1OpType::CCX => Tk2Op::Toffoli.into(),
             Tk1OpType::Reset => Tk2Op::Reset.into(),
             Tk1OpType::Measure => Tk2Op::Measure.into(),
             Tk1OpType::noop => Noop::new(QB_T).into(),
@@ -164,7 +159,7 @@ impl NativeOp {
             let types = sig.input_types().to_owned();
             sig.input_ports()
                 .zip(types)
-                .filter(|(_, ty)| ty == &FLOAT64_TYPE)
+                .filter(|(_, ty)| ty == &ANGLE_TYPE)
                 .map(|(port, _)| port)
         })
     }
@@ -184,7 +179,7 @@ impl NativeOp {
                 self.input_qubits += 1;
             } else if ty == &BOOL_T {
                 self.input_bits += 1;
-            } else if ty == &FLOAT64_TYPE {
+            } else if ty == &ANGLE_TYPE {
                 self.num_params += 1;
             }
         }

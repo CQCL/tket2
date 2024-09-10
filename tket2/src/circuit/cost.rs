@@ -1,5 +1,6 @@
 //! Cost definitions for a circuit.
 
+use hugr::ops::OpType;
 use itertools::izip;
 use std::fmt::Debug;
 use std::iter::Sum;
@@ -218,7 +219,10 @@ pub fn is_cx(op: Tk2Op) -> bool {
 }
 
 /// Returns true if the operation is a quantum operation.
-pub fn is_quantum(op: Tk2Op) -> bool {
+pub fn is_quantum(op: &OpType) -> bool {
+    let Some(op): Option<Tk2Op> = op.cast() else {
+        return false;
+    };
     op.is_quantum()
 }
 

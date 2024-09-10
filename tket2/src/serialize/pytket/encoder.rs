@@ -5,7 +5,6 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use hugr::extension::prelude::{BOOL_T, QB_T};
 use hugr::ops::{OpTrait, OpType};
-use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::{HugrView, Wire};
 use itertools::Itertools;
 use tket_json_rs::circuit_json::Register as RegisterUnit;
@@ -13,7 +12,8 @@ use tket_json_rs::circuit_json::{self, SerialCircuit};
 
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
-use crate::ops::{match_symb_const_op, op_matches};
+use crate::extension::angle::{AngleOp, ANGLE_TYPE};
+use crate::ops::match_symb_const_op;
 use crate::serialize::pytket::RegisterHash;
 use crate::Tk2Op;
 
@@ -49,7 +49,7 @@ impl Tk1Encoder {
 
         // Check for unsupported input types.
         for (_, _, typ) in circ.units() {
-            if ![FLOAT64_TYPE, QB_T, BOOL_T].contains(&typ) {
+            if ![ANGLE_TYPE, QB_T, BOOL_T].contains(&typ) {
                 return Err(TK1ConvertError::NonSerializableInputs { typ });
             }
         }
@@ -125,9 +125,9 @@ impl Tk1Encoder {
                     )
                 });
                 bit_args.push(reg);
-            } else if ty == FLOAT64_TYPE {
+            } else if ty == ANGLE_TYPE {
                 let CircuitUnit::Wire(param_wire) = unit else {
-                    unreachable!("Float types are not linear.")
+                    unreachable!("Angle types are not linear.")
                 };
                 params.push(param_wire);
             } else {
@@ -552,12 +552,12 @@ impl ParameterTracker {
     fn new(circ: &Circuit<impl HugrView>) -> Self {
         let mut tracker = ParameterTracker::default();
 
-        let float_input_wires = circ.units().filter_map(|u| match u {
-            (CircuitUnit::Wire(w), _, ty) if ty == FLOAT64_TYPE => Some(w),
+        let angle_input_wires = circ.units().filter_map(|u| match u {
+            (CircuitUnit::Wire(w), _, ty) if ty == ANGLE_TYPE => Some(w),
             _ => None,
         });
 
-        for (i, wire) in float_input_wires.enumerate() {
+        for (i, wire) in angle_input_wires.enumerate() {
             tracker.add_parameter(wire, format!("f{i}"));
         }
 
@@ -575,8 +575,8 @@ impl ParameterTracker {
         let input_count = if let Some(signature) = optype.dataflow_signature() {
             // Only consider commands where all inputs are parameters,
             // and some outputs are also parameters.
-            let all_inputs = signature.input().iter().all(|ty| ty == &FLOAT64_TYPE);
-            let some_output = signature.output().iter().any(|ty| ty == &FLOAT64_TYPE);
+            let all_inputs = signature.input().iter().all(|ty| ty == &ANGLE_TYPE);
+            let some_output = signature.output().iter().any(|ty| ty == &ANGLE_TYPE);
             if !all_inputs || !some_output {
                 return Ok(false);
             }
@@ -594,10 +594,10 @@ impl ParameterTracker {
         let mut inputs = Vec::with_capacity(input_count);
         for (unit, _, _) in command.inputs() {
             let CircuitUnit::Wire(wire) = unit else {
-                panic!("Float types are not linear")
+                panic!("Angle types are not linear")
             };
             let Some(param) = self.parameters.get(&wire) else {
-                let typ = FLOAT64_TYPE;
+                let typ = ANGLE_TYPE;
                 return Err(OpConvertError::UnresolvedParamInput {
                     typ,
                     optype: optype.clone(),
@@ -619,7 +619,7 @@ impl ParameterTracker {
                 // Re-use the parameter from the input.
                 inputs[0].clone()
             }
-            op if op_matches(op, Tk2Op::AngleAdd) => {
+            OpType::ExtensionOp(_) if optype.cast() == Some(AngleOp::aadd) => {
                 format!("{} + {}", inputs[0], inputs[1])
             }
             _ => {

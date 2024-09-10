@@ -262,7 +262,7 @@ impl<H: HugrView> TryFrom<&Circuit<H>> for StaticSizeCircuit {
             if cmd.units(Direction::Outgoing).count() != qubits.len() {
                 return Err(StaticSizeCircuitError::InvalidCircuit);
             }
-            let op = cmd.optype().try_into().unwrap();
+            let op = cmd.optype().cast().unwrap();
             res.append_op(op, qubits.into_iter().map(|u| StaticQubitIndex(u.index())));
         }
         Ok(res)

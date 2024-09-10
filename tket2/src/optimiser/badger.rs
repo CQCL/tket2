@@ -830,27 +830,20 @@ mod tests {
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::QB_T,
-        std_extensions::arithmetic::float_types::FLOAT64_TYPE,
         types::Signature,
     };
     use rstest::{fixture, rstest};
 
     use crate::serialize::load_tk1_json_str;
+    use crate::{extension::angle::ANGLE_TYPE, optimiser::badger::BadgerOptions};
     use crate::{extension::REGISTRY, Circuit, Tk2Op};
     use crate::{optimiser::badger::BadgerOptions, static_circ::StaticSizeCircuit};
 
     use super::{BadgerOptimiser, DefaultBadgerOptimiser};
 
-    /// Simplified description of the circuit's commands.
-    fn gates(circ: &Circuit) -> Vec<Tk2Op> {
-        circ.commands()
-            .map(|cmd| cmd.optype().try_into().unwrap())
-            .collect()
-    }
-
     #[fixture]
-    fn rz_rz() -> StaticSizeCircuit {
-        let input_t = vec![QB_T, FLOAT64_TYPE, FLOAT64_TYPE];
+    fn rz_rz() -> Circuit {
+        let input_t = vec![QB_T, ANGLE_TYPE, ANGLE_TYPE];
         let output_t = vec![QB_T];
         let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
@@ -859,9 +852,9 @@ mod tests {
         let f1 = inps.next().unwrap();
         let f2 = inps.next().unwrap();
 
-        let res = h.add_dataflow_op(Tk2Op::RzF64, [qb, f1]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rz, [qb, f1]).unwrap();
         let qb = res.outputs().next().unwrap();
-        let res = h.add_dataflow_op(Tk2Op::RzF64, [qb, f2]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rz, [qb, f2]).unwrap();
         let qb = res.outputs().next().unwrap();
 
         let circ: Circuit = h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap().into();
