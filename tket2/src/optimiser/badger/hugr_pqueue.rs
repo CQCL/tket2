@@ -2,8 +2,6 @@ use delegate::delegate;
 use fxhash::FxHashMap;
 use priority_queue::DoublePriorityQueue;
 
-use crate::circuit::CircuitHash;
-
 /// A min-priority queue for Hugrs.
 ///
 /// The cost function provided will be used as the priority of the Hugrs.

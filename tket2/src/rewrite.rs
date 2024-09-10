@@ -148,11 +148,14 @@ impl CircuitRewrite {
     }
 }
 
+/// The cost delta type for a rewrite rule.
 pub type CostDelta<S> = <<S as StrategyCost>::OpCost as CircuitCost>::CostDelta;
 
 /// Generate rewrite rules for circuits.
 pub trait Rewriter<C> {
+    /// The rewrite object type.
     type CircuitRewrite;
+    /// The error type for rewrite rules.
     type Error;
 
     /// Get the rewrite rules for a circuit.

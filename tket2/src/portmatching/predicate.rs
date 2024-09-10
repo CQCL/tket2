@@ -1,3 +1,5 @@
+//! Pattern matching predicates.
+
 use std::collections::BTreeSet;
 
 use itertools::Itertools;
@@ -17,13 +19,28 @@ use super::{indexing::PatternOpPosition, Constraint};
 )]
 pub enum Predicate {
     /// An edge from `out_port` to `in_port`.
-    Link { out_port: usize, in_port: usize },
+    Link {
+        /// The outgoing source port of the edge.
+        out_port: usize,
+        /// The incoming target port of the edge.
+        in_port: usize,
+    },
     /// An operation of type `op`.
-    IsOp { op: Tk2Op },
+    IsOp {
+        /// The operation type to match.
+        op: Tk2Op,
+    },
     /// All locations are the same operation.
-    SameOp { arity: usize },
+    SameOp {
+        /// The arity of the predicate, i.e. the number of positions
+        /// that share the same op.
+        arity: usize,
+    },
     /// Check that the first qubit is distinct from all others.
-    DistinctQubits { n_qubits: usize },
+    DistinctQubits {
+        /// The number of positions to check.
+        n_qubits: usize,
+    },
 }
 
 impl pm::ArityPredicate for Predicate {

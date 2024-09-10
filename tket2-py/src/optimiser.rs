@@ -7,11 +7,11 @@ use portdiff::PortDiffGraph;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use tket2::optimiser::badger::BadgerOptions;
-use tket2::optimiser::{BadgerLogger, DefaultBadgerOptimiser, DiffBadgerOptimiser};
+use tket2::optimiser::{BadgerLogger, DiffBadgerOptimiser};
 use tket2::static_circ::StaticSizeCircuit;
 use tket2::Circuit;
 
-use crate::circuit::{try_with_circ, update_circ};
+use crate::circuit::try_with_circ;
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {

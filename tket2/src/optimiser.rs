@@ -4,6 +4,5 @@
 
 #[cfg(feature = "portmatching")]
 pub mod badger;
-
 #[cfg(feature = "portmatching")]
 pub use badger::{BadgerLogger, BadgerOptimiser, DefaultBadgerOptimiser, DiffBadgerOptimiser};

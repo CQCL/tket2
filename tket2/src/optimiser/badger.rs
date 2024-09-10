@@ -20,11 +20,10 @@ mod qtz_circuit;
 
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 use fxhash::{FxHashMap, FxHashSet};
-use itertools::Itertools;
 pub use log::BadgerLogger;
 use portdiff::{PortDiff, PortDiffGraph};
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::iter::Sum;
 use std::num::NonZeroUsize;
 use std::ops::{AddAssign, Deref};
@@ -37,7 +36,7 @@ use crate::optimiser::badger::hugr_pqueue::{Entry, HugrPQ};
 use crate::portdiff::{DiffCircuit, DiffRewrite};
 use crate::rewrite::strategy::StrategyCost;
 use crate::rewrite::Rewriter;
-use crate::static_circ::{StaticSizeCircuit, UpdatableHash};
+use crate::static_circ::StaticSizeCircuit;
 
 /// Configuration options for the Badger optimiser.
 #[derive(Copy, Clone, Debug)]
@@ -832,12 +831,11 @@ mod tests {
         extension::prelude::QB_T,
         types::Signature,
     };
-    use rstest::{fixture, rstest};
+    use rstest::fixture;
 
     use crate::serialize::load_tk1_json_str;
     use crate::{extension::angle::ANGLE_TYPE, optimiser::badger::BadgerOptions};
     use crate::{extension::REGISTRY, Circuit, Tk2Op};
-    use crate::{optimiser::badger::BadgerOptions, static_circ::StaticSizeCircuit};
 
     use super::{BadgerOptimiser, DefaultBadgerOptimiser};
 

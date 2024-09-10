@@ -1,3 +1,5 @@
+//! Indexing scheme into StaticSizeCircuit.
+
 mod pattern;
 
 pub use pattern::{DisconnectedCircuit, PatternOpPosition};

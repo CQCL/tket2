@@ -6,7 +6,7 @@
 
 use std::collections::VecDeque;
 
-use crate::static_circ::{OpPosition, StaticQubitIndex, StaticSizeCircuit};
+use crate::static_circ::{OpPosition, StaticSizeCircuit};
 
 use itertools::Itertools;
 use thiserror::Error;
@@ -35,20 +35,24 @@ impl Ord for PatternOpPosition {
 }
 
 impl PatternOpPosition {
+    /// Create a new position in a pattern.
     pub fn new(qubit: CircuitPath, op_idx: i8) -> Self {
         Self { qubit, op_idx }
     }
 
+    /// Create a new position with a different operation index.
     pub fn with_op_idx(self, op_idx: i8) -> Self {
         Self { op_idx, ..self }
     }
 
+    /// Create a new position from an operation position.
     pub fn from_position(loc: OpPosition, starts: &[(CircuitPath, usize)]) -> Self {
         let (qubit_path, start) = starts[loc.qubit.0];
         let offset = (loc.index as i8) - (start as i8);
         PatternOpPosition::new(qubit_path, offset)
     }
 
+    /// Create the root pattern position.   
     pub fn root() -> Self {
         Self {
             qubit: CircuitPath([0; MAX_PATH_LEN * 2]),

@@ -15,7 +15,7 @@ use tket2::optimiser::badger::log::BadgerLogger;
 use tket2::optimiser::badger::BadgerOptions;
 use tket2::optimiser::BadgerOptimiser;
 use tket2::optimiser::DiffBadgerOptimiser;
-use tket2::serialize::{load_tk1_json_file, save_tk1_json_file};
+use tket2::serialize::load_tk1_json_file;
 use tket2::static_circ::StaticSizeCircuit;
 
 #[cfg(feature = "peak_alloc")]

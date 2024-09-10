@@ -1,3 +1,4 @@
+//! Constraints for port matching.
 use std::collections::BTreeSet;
 
 use super::{indexing::PatternOpPosition, predicate::Predicate};

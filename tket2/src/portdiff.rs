@@ -10,7 +10,6 @@ pub use rewrite::DiffRewrite;
 
 use derive_more::Into;
 use hugr::{Direction, IncomingPort, OutgoingPort, Port, PortIndex};
-use itertools::Itertools;
 use portdiff::{self as pd, port_diff::Owned, BoundPort, EdgeEnd, Site};
 
 use crate::static_circ::{OpId, OpPosition, StaticSizeCircuit};
@@ -129,6 +128,7 @@ impl pd::Graph for StaticSizeCircuit {
     }
 }
 
+/// An edge in a StaticSizeCircuit.
 #[derive(
     Debug,
     Clone,
@@ -149,6 +149,7 @@ pub struct EdgeId {
 }
 
 impl EdgeId {
+    /// Create an edge from a site in the circuit.
     pub fn try_from_site(site: Site<OpId, Port>, circuit: &StaticSizeCircuit) -> Option<Self> {
         let (opp_port, opp_node) = circuit.linked_op(site.node, site.port)?;
         let (out_port, source) = match site.port.direction() {
@@ -159,20 +160,28 @@ impl EdgeId {
         Some(Self { source, out_port })
     }
 
+    /// Get the source of the edge.
     pub fn source(&self) -> OpId {
         self.source
     }
 
+    /// Get the source port of the edge.
     pub fn source_port(&self) -> OutgoingPort {
         self.out_port
     }
 
+    /// Get the source position of the edge.
+    ///
+    /// This requires the `circuit` the edge belongs to.
     pub fn source_position(&self, circuit: &StaticSizeCircuit) -> OpPosition {
         circuit
             .get_position(self.source(), self.source_port().index())
             .expect("invalid edge ID")
     }
 
+    /// Get the target of the edge.
+    ///
+    /// This requires the `circuit` the edge belongs to.
     pub fn target(&self, circuit: &StaticSizeCircuit) -> OpId {
         let (_, target) = circuit
             .linked_op(self.source().into(), self.source_port().into())
@@ -180,6 +189,9 @@ impl EdgeId {
         target
     }
 
+    /// Get the target port of the edge.
+    ///
+    /// This requires the `circuit` the edge belongs to.
     pub fn target_port(&self, circuit: &StaticSizeCircuit) -> IncomingPort {
         let (target_port, _) = circuit
             .linked_op(self.source().into(), self.source_port().into())
@@ -187,6 +199,9 @@ impl EdgeId {
         target_port.as_incoming().expect("invalid edge ID")
     }
 
+    /// Get the target position of the edge.
+    ///
+    /// This requires the `circuit` the edge belongs to.
     pub fn target_position(&self, circuit: &StaticSizeCircuit) -> OpPosition {
         circuit
             .get_position(self.target(circuit), self.target_port(circuit).index())

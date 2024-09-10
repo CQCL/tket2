@@ -2,18 +2,18 @@
 
 pub mod chunks;
 
-use std::{cmp::min, convert::TryInto, fs, num::NonZeroUsize, path::PathBuf};
+// use std::{cmp::min, convert::TryInto, fs, num::NonZeroUsize, path::PathBuf};
 
 use pyo3::{prelude::*, types::IntoPyDict};
-use tket2::optimiser::badger::BadgerOptions;
+// use tket2::optimiser::badger::BadgerOptions;
 use tket2::passes;
-use tket2::{op_matches, Tk2Op};
+// use tket2::{op_matches, Tk2Op};
 
 use crate::circuit::CircuitType;
 use crate::utils::{create_py_exception, ConvertPyErr};
 use crate::{
-    circuit::{try_update_circ, try_with_circ},
-    optimiser::PyBadgerOptimiser,
+    circuit::try_with_circ,
+    // optimiser::PyBadgerOptimiser,
 };
 
 /// The module definition
@@ -62,7 +62,7 @@ fn greedy_depth_reduce<'py>(circ: &Bound<'py, PyAny>) -> PyResult<(Bound<'py, Py
 /// from pytket.passes.auto_rebase import auto_rebase_pass
 /// from pytket import OpType
 /// auto_rebase_pass({OpType.CX, OpType.Rz, OpType.H}).apply(circ)"
-// ```
+/// ```
 fn rebase_nam(circ: &Bound<PyAny>) -> PyResult<()> {
     let py = circ.py();
     let auto_rebase = py
