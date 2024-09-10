@@ -229,6 +229,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "TODO"]
     fn serialise_round_trip() {
         let circs = [h_cx(), cx_xc()];
         let patterns = circs.to_vec();

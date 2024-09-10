@@ -1280,9 +1280,9 @@ checksum = "da544ee218f0d287a911e9c99a39a8c9bc8fcad3cb8db5959940044ecfc67265"
 
 [[package]]
 name = "portdiff"
-version = "0.4.0-rc.1"
+version = "0.4.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72da68fb6b22982a6b09a02d280382ca12c7d72c723517a5c97349b8c4b4e388"
+checksum = "36c95273c2d34a4a1e0a7e37e90418fa8a9d1069f9b339b4e65ead2135bd4e80"
 dependencies = [
  "bimap",
  "delegate 0.12.0",
@@ -1513,9 +1513,8 @@ checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
 
 [[package]]
 name = "relrc"
-version = "0.3.0-rc.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7be49ee9f8512129870d109ce25c3e465b64923cf8e6c4ff4d9df9247dc8ab23"
+version = "0.3.0-rc.4"
+source = "git+https://github.com/lmondada/relrc.git?rev=ae8e03f0bbb07e6314cba247d1b5239c5bef3ae1#ae8e03f0bbb07e6314cba247d1b5239c5bef3ae1"
 dependencies = [
  "derive-where",
  "derive_more 0.99.18",
@@ -1947,6 +1946,7 @@ dependencies = [
  "portgraph",
  "portmatching",
  "pyo3",
+ "relrc",
  "rstest",
  "serde",
  "serde_json",

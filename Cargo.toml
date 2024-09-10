@@ -34,7 +34,7 @@ itertools = "0.13.0"
 tket-json-rs = "0.5.1"
 tracing = "0.1.37"
 portmatching = "0.4.0-rc.2"
-portdiff = "0.4.0-rc.1"
+portdiff = "0.4.0-rc.2"
 bytemuck = "1.18.0"
 cgmath = "0.18.0"
 chrono = "0.4.30"
@@ -69,7 +69,11 @@ urlencoding = "2.1.2"
 webbrowser = "1.0.0"
 cool_asserts = "2.0.3"
 zstd = "0.13.2"
+relrc = "0.3.0-rc.4"
 
 [profile.release.package.tket2-py]
 # Some configurations to reduce the size of tket2 wheels
 strip = true
+
+[patch.crates-io]
+relrc = { git = "https://github.com/lmondada/relrc.git", rev = "ae8e03f0bbb07e6314cba247d1b5239c5bef3ae1" }

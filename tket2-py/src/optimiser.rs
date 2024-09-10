@@ -3,15 +3,19 @@
 use std::io::BufWriter;
 use std::{fs, num::NonZeroUsize, path::PathBuf};
 
-use portdiff::PortDiffGraph;
+use hugr::{Node, NodeIndex};
+use portdiff::port_diff::{EdgeData, PortDiffData};
+use portdiff::{NodeId, PortDiff, PortDiffGraph};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use relrc::graph_view::RelRcGraphSerializer;
+use relrc::RelRcGraph;
 use tket2::optimiser::badger::BadgerOptions;
 use tket2::optimiser::{BadgerLogger, DiffBadgerOptimiser};
 use tket2::static_circ::StaticSizeCircuit;
 use tket2::Circuit;
 
-use crate::circuit::try_with_circ;
+use crate::circuit::{try_with_circ, Tk2Circuit};
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
@@ -101,7 +105,7 @@ impl PyBadgerOptimiser {
         split_circ: Option<bool>,
         queue_size: Option<usize>,
         log_progress: Option<PathBuf>,
-    ) -> PyResult<String> {
+    ) -> PyResult<PyPortDiffGraph> {
         let options = BadgerOptions {
             timeout,
             progress_timeout,
@@ -112,7 +116,8 @@ impl PyBadgerOptimiser {
         };
         try_with_circ(circ, |circ, _| {
             let diffs = self.optimise(circ, log_progress, options);
-            serde_json::to_string(&diffs).map_err(|e| PyErr::new::<PyValueError, _>(e.to_string()))
+            let py_diffs: Result<PyPortDiffGraph, _> = diffs.try_into();
+            py_diffs.map_err(|e| PyErr::new::<PyValueError, _>(e.to_string()))
         })
     }
 }
@@ -134,5 +139,62 @@ impl PyBadgerOptimiser {
             })
             .unwrap_or_default();
         self.0.optimise_with_log(&circ, badger_logger, options)
+    }
+}
+
+/// Wrapped [`DefaultBadgerOptimiser`].
+///
+/// Currently only exposes loading from an ECC file using the constructor
+/// and optimising using default logging settings.
+#[pyclass(name = "PortDiffGraph")]
+#[derive(Clone)]
+pub struct PyPortDiffGraph(
+    RelRcGraphSerializer<PortDiffData<StaticSizeCircuit>, EdgeData<StaticSizeCircuit>>,
+);
+
+impl PyPortDiffGraph {
+    /// Parse the graph
+    #[allow(dead_code)]
+    fn diffs(&self) -> PyResult<PortDiffGraph<StaticSizeCircuit>> {
+        self.clone()
+            .try_into()
+            .map_err(|_| PyErr::new::<PyValueError, _>(format!("Invalid encoded circuit")))
+    }
+}
+
+#[pymethods]
+impl PyPortDiffGraph {
+    ///
+    fn extract_graph(&self, nodes: Vec<usize>) -> PyResult<Tk2Circuit> {
+        let all_diffs = self.0.get_diffs().unwrap();
+        let diffs = nodes
+            .into_iter()
+            .map(|idx| all_diffs[idx].clone().into())
+            .collect();
+        let graph = PortDiff::extract_graph(diffs)
+            .map_err(|e| PyErr::new::<PyValueError, _>(format!("Error extracting graph: {e:?}")))?;
+        if !graph.is_acyclic() {
+            return Err(PyErr::new::<PyValueError, _>(format!("Not a DAG")));
+        } else {
+            let circ: Circuit = graph.into();
+            Ok(circ.into())
+        }
+    }
+}
+
+impl From<PortDiffGraph<StaticSizeCircuit>> for PyPortDiffGraph {
+    fn from(value: PortDiffGraph<StaticSizeCircuit>) -> Self {
+        let g = value.inner().into();
+        Self(g)
+    }
+}
+
+impl TryFrom<PyPortDiffGraph> for PortDiffGraph<StaticSizeCircuit> {
+    type Error = (); //GraphDeserializationError;
+
+    fn try_from(value: PyPortDiffGraph) -> Result<Self, Self::Error> {
+        let g: RelRcGraph<PortDiffData<StaticSizeCircuit>, EdgeData<StaticSizeCircuit>> =
+            value.0.try_into().map_err(|_| ())?;
+        Ok(g.into())
     }
 }
