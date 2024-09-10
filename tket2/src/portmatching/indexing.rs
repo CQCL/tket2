@@ -64,7 +64,7 @@ impl<V: pmx::IndexValue> pmx::IndexMap for OpLocationMap<CircuitPath, V> {
 
     fn get(&self, var: &Self::Key) -> Option<Self::ValueRef<'_>> {
         let PatternOpPosition { qubit, op_idx } = var;
-        self.get_val(&qubit, *op_idx as isize)
+        self.get_val(qubit, *op_idx as isize)
     }
 
     fn bind(&mut self, var: Self::Key, val: Self::Value) -> Result<(), pmx::BindVariableError> {
@@ -94,7 +94,7 @@ impl pmx::IndexingScheme<StaticSizeCircuit> for StaticIndexScheme {
         let get_known = |key| <Self::Map as pmx::IndexMap>::get(known_bindings, key);
         if let Some(v) = <Self::Map as pmx::IndexMap>::get(known_bindings, key) {
             // Already bound.
-            Ok(vec![v.clone()].into())
+            Ok(vec![*v].into())
         } else if key.op_idx != 0 {
             // Can only bind if the idx 0 is bound.
             if let Some(root) = get_known(&key.with_op_idx(0)) {

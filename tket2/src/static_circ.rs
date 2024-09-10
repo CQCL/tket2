@@ -11,7 +11,7 @@ use itertools::Itertools;
 pub use position::OpPosition;
 pub use rewrite::{BoxedStaticRewrite, NonConvexRewriteError, StaticRewrite};
 
-use std::{fmt, mem};
+use std::fmt;
 
 use hugr::{Direction, Hugr, HugrView, Port, PortIndex};
 

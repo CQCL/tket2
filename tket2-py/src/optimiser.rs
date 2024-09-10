@@ -91,9 +91,9 @@ impl PyBadgerOptimiser {
     /// * `log_progress`: The path to a CSV file to log progress to.
     ///
     #[allow(clippy::too_many_arguments)]
-    pub fn run_portdiff<'py>(
+    pub fn run_portdiff(
         &self,
-        circ: &Bound<'py, PyAny>,
+        circ: &Bound<'_, PyAny>,
         timeout: Option<u64>,
         progress_timeout: Option<u64>,
         max_circuit_count: Option<usize>,

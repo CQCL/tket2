@@ -1,7 +1,6 @@
 #![cfg(feature = "portmatching")]
 
-use rstest::{fixture, rstest};
-use tket2::optimiser::badger::BadgerOptions;
+use rstest::fixture;
 use tket2::optimiser::{BadgerOptimiser, DefaultBadgerOptimiser};
 use tket2::serialize::TKETDecode;
 use tket2::Circuit;

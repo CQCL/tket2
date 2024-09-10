@@ -1280,7 +1280,9 @@ checksum = "da544ee218f0d287a911e9c99a39a8c9bc8fcad3cb8db5959940044ecfc67265"
 
 [[package]]
 name = "portdiff"
-version = "0.3.1"
+version = "0.4.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72da68fb6b22982a6b09a02d280382ca12c7d72c723517a5c97349b8c4b4e388"
 dependencies = [
  "bimap",
  "delegate 0.12.0",

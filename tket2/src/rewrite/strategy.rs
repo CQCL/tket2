@@ -3,24 +3,15 @@
 //! This module contains the [`RewriteStrategy`] trait, which is currently
 //! implemented by
 
-use std::iter::{self, Sum};
-use std::ops::{Add, AddAssign, SubAssign};
-use std::{collections::HashSet, fmt::Debug};
+use std::iter::{Sum};
+use std::ops::{AddAssign, SubAssign};
+use std::fmt::Debug;
 
-use derive_more::From;
-use hugr::hugr::hugrmut::HugrMut;
-use hugr::ops::OpType;
-use hugr::HugrView;
-use itertools::Itertools;
 
-use crate::circuit::cost::{is_cx, CircuitCost, CostDelta, LexicographicCost};
+use crate::circuit::cost::{is_cx, CircuitCost, LexicographicCost};
 use crate::circuit::ToTk2OpIter;
-#[cfg(feature = "portmatching")]
-use crate::static_circ::{BoxedStaticRewrite, StaticSizeCircuit};
-use crate::{Circuit, Tk2Op};
+use crate::Tk2Op;
 
-use super::trace::RewriteTrace;
-use super::CircuitRewrite;
 
 /// A possible rewrite result returned by a rewrite strategy.
 #[derive(Debug, Clone)]
@@ -119,7 +110,6 @@ impl LexicographicCostFunction<fn(Tk2Op) -> usize, 2> {
         Self {
             cost_fns: [|op| is_cx(op) as usize, |op| op.is_quantum() as usize],
         }
-        .into()
     }
 }
 

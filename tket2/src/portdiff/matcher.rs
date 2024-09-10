@@ -242,7 +242,6 @@ fn follow_link(
         ret.extend(
             pos.owner
                 .opposite_ports(port)
-                .into_iter()
                 .filter(|p| is_compatible(&p.owner))
                 .flat_map(|p|
                     // This handles empty wires in the graph by recursively finding the

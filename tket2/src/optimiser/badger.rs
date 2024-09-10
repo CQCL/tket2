@@ -328,7 +328,7 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
         let mut all_costs = FxHashMap::default();
 
         let mut pq = HugrPQ::new(opt.queue_size, |circ: &'_ PortDiff<_>| {
-            PortDiff::as_ptr(&circ) as u64
+            PortDiff::as_ptr(circ) as u64
         });
         pq.push(circ.to_owned(), PQCost::default());
         all_costs.insert(PortDiff::as_ptr(&circ), PQCost::default());
@@ -445,7 +445,7 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
             salient_diffs
                 .iter()
                 // TODO: Disgusting hack
-                .find(|(k, _)| (*k).deref() as *const _ == n as *const _)
+                .find(|(k, _)| std::ptr::eq((*k).deref(), n))
                 .map(|(_, v)| *v)
         })
     }
@@ -833,14 +833,15 @@ mod tests {
     };
     use rstest::fixture;
 
+    use crate::extension::angle::ANGLE_TYPE;
     use crate::serialize::load_tk1_json_str;
-    use crate::{extension::angle::ANGLE_TYPE, optimiser::badger::BadgerOptions};
+    use crate::static_circ::StaticSizeCircuit;
     use crate::{extension::REGISTRY, Circuit, Tk2Op};
 
     use super::{BadgerOptimiser, DefaultBadgerOptimiser};
 
     #[fixture]
-    fn rz_rz() -> Circuit {
+    fn rz_rz() -> StaticSizeCircuit {
         let input_t = vec![QB_T, ANGLE_TYPE, ANGLE_TYPE];
         let output_t = vec![QB_T];
         let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();

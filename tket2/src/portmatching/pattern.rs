@@ -126,6 +126,7 @@ mod tests {
     use hugr::extension::prelude::QB_T;
     use hugr::ops::OpType;
     use hugr::types::Signature;
+    use hugr::{HugrView, Node};
 
     use crate::extension::angle::ANGLE_TYPE;
     use crate::extension::REGISTRY;
@@ -225,22 +226,21 @@ mod tests {
             .collect()
     }
 
-    #[test]
-    #[ignore = "reason"]
-    fn pattern_with_copy() {
-        let circ = circ_with_copy();
-        let pattern = CircuitPattern::try_from_circuit(&circ).unwrap();
-        let edges = pattern.pattern.edges().unwrap();
-        let rx_ns = get_nodes_by_tk2op(&circ, Tk2Op::Rx);
-        let inp = circ.input_node();
-        for rx_n in rx_ns {
-            assert!(edges.iter().any(|e| {
-                e.reverse().is_none()
-                    && e.source.unwrap() == rx_n.into()
-                    && e.target.unwrap() == NodeID::new_copy(inp, 1)
-            }));
-        }
-    }
+    //#[test]
+    //fn pattern_with_copy() {
+    //    let circ = circ_with_copy();
+    //    let pattern = CircuitPattern::try_from_circuit(&circ).unwrap();
+    //    let edges = pattern.pattern.edges().unwrap();
+    //    let rx_ns = get_nodes_by_tk2op(&circ, Tk2Op::Rx);
+    //    let inp = circ.input_node();
+    //    for rx_n in rx_ns {
+    //        assert!(edges.iter().any(|e| {
+    //            e.reverse().is_none()
+    //                && e.source.unwrap() == rx_n.into()
+    //                && e.target.unwrap() == NodeID::new_copy(inp, 1)
+    //        }));
+    //    }
+    //}
 
     // #[test]
     // fn pattern_with_copy_disconnected() {

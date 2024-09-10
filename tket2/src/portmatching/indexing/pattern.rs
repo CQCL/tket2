@@ -52,7 +52,7 @@ impl PatternOpPosition {
         PatternOpPosition::new(qubit_path, offset)
     }
 
-    /// Create the root pattern position.   
+    /// Create the root pattern position.
     pub fn root() -> Self {
         Self {
             qubit: CircuitPath([0; MAX_PATH_LEN * 2]),

@@ -13,7 +13,7 @@
 //! of the Quartz repository.
 
 use derive_more::{From, Into};
-use hugr::ops::custom::{resolve_extension_ops, OpaqueOpError};
+use hugr::ops::custom::OpaqueOpError;
 use hugr::{Hugr, HugrView, PortIndex};
 use itertools::Itertools;
 use portdiff as pd;
@@ -26,7 +26,6 @@ use std::{
 };
 use thiserror::Error;
 
-use crate::extension::REGISTRY;
 use crate::{
     circuit::{cost::CircuitCost, RemoveEmptyWire},
     optimiser::badger::{load_eccs_json_file, EqCircClass},
@@ -344,7 +343,7 @@ impl Rewriter<DiffCircuit> for ECCRewriter<DiffCircuitMatcher, StaticSizeCircuit
         rw: Self::CircuitRewrite,
         circ: &DiffCircuit,
     ) -> Result<DiffCircuit, Self::Error> {
-        rw.apply(&circ)
+        rw.apply(circ)
     }
 
     fn rewrite_cost_delta<S: StrategyCost>(

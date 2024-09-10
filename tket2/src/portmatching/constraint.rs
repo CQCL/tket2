@@ -83,8 +83,8 @@ impl pm::ConditionedPredicate<PatternOpPosition> for Predicate {
             .iter()
             .filter(|s| s.required_bindings()[0] == first_key)
         {
-            for k in s.required_bindings()[1..].iter().copied() {
-                keys.remove(&k);
+            for k in s.required_bindings()[1..].iter() {
+                keys.remove(k);
             }
         }
         if keys.is_empty() {

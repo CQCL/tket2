@@ -1,6 +1,5 @@
 //! Pattern matching predicates.
 
-use std::collections::BTreeSet;
 
 use itertools::Itertools;
 use portgraph::PortOffset;

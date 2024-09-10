@@ -85,7 +85,7 @@ impl DiffRewrite {
                 };
                 site_to_port(Owned {
                     data: site,
-                    owner: owner,
+                    owner,
                 })
             } else {
                 None
@@ -108,7 +108,7 @@ impl DiffRewrite {
         let mut n_wires = 0; // Keep track of the number of wires that we have assigned ids to
         for qubit in pattern.qubits_iter() {
             assert!(
-                pattern.qubit_ops(qubit).len() > 0,
+                !pattern.qubit_ops(qubit).is_empty(),
                 "found empty qubit in pattern"
             );
             let start = OpPosition { qubit, index: 0 };
@@ -117,8 +117,8 @@ impl DiffRewrite {
                 index: pattern.qubit_ops(qubit).len() - 1,
             };
             let start_repl = OpPosition { qubit, index: 0 };
-            if replacement.qubit_ops(qubit).len() > 0 {
-                let start_port_repl = replacement.position_offset(start_repl.into()).unwrap();
+            if !replacement.qubit_ops(qubit).is_empty() {
+                let start_port_repl = replacement.position_offset(start_repl).unwrap();
                 let end_repl = OpPosition {
                     qubit,
                     index: replacement.qubit_ops(qubit).len() - 1,
@@ -133,7 +133,7 @@ impl DiffRewrite {
                     );
                 }
                 if let Some(end_port) = pos_to_port(end, Direction::Outgoing) {
-                    let end_port_repl = replacement.position_offset(end_repl.into()).unwrap();
+                    let end_port_repl = replacement.position_offset(end_repl).unwrap();
                     port_map.insert(
                         end_port,
                         pd::BoundarySite::Site(Site {

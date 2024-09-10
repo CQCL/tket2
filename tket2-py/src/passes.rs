@@ -2,19 +2,12 @@
 
 pub mod chunks;
 
-// use std::{cmp::min, convert::TryInto, fs, num::NonZeroUsize, path::PathBuf};
-
 use pyo3::{prelude::*, types::IntoPyDict};
-// use tket2::optimiser::badger::BadgerOptions;
 use tket2::passes;
-// use tket2::{op_matches, Tk2Op};
 
+use crate::circuit::try_with_circ;
 use crate::circuit::CircuitType;
 use crate::utils::{create_py_exception, ConvertPyErr};
-use crate::{
-    circuit::try_with_circ,
-    // optimiser::PyBadgerOptimiser,
-};
 
 /// The module definition
 ///

@@ -24,7 +24,7 @@ fn extract_circ_to_file<'py>(
     let extracted = PortDiff::extract_graph(chosen_diffs)
         .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?;
     if !extracted.is_acyclic() {
-        return Ok(false);
+        Ok(false)
     } else {
         let circ: Circuit = extracted.into();
         save_tk1_json_file(&circ, file_name)

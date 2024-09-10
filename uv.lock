@@ -1,8 +1,6 @@
 version = 1
 requires-python = ">=3.10, <3.13"
 resolution-markers = [
-    "python_full_version < '3.13'",
-    "python_full_version >= '3.13'",
 ]
 
 [manifest]
@@ -784,7 +782,7 @@ wheels = [
 
 [[package]]
 name = "tket2"
-version = "0.2.1"
+version = "0.3.0"
 source = { editable = "tket2-py" }
 dependencies = [
     { name = "hugr" },

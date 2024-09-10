@@ -68,7 +68,7 @@ impl pd::Graph for StaticSizeCircuit {
         &self,
         node: Self::Node,
     ) -> impl Iterator<Item = Site<Self::Node, Self::PortLabel>> + '_ {
-        let op = self.get(node.into()).unwrap();
+        let op = self.get(node).unwrap();
         op.positions.iter().flat_map(move |&pos| {
             let port = self.position_offset(pos).unwrap();
             let out_port: OutgoingPort = port.into();
@@ -92,11 +92,11 @@ impl pd::Graph for StaticSizeCircuit {
         right: Site<Self::Node, Self::PortLabel>,
     ) {
         // Make sure the sites are not already linked
-        if let Some(new_right) = self.linked_op(left.node.into(), left.port.into()) {
+        if let Some(new_right) = self.linked_op(left.node, left.port) {
             panic!("left site is already linked to {new_right:?}");
         }
         if self
-            .linked_op(right.node.into(), right.port.into())
+            .linked_op(right.node, right.port)
             .is_some()
         {
             panic!("right site is already linked");
@@ -120,7 +120,7 @@ impl pd::Graph for StaticSizeCircuit {
         graph: &Self,
         nodes: &std::collections::BTreeSet<Self::Node>,
     ) -> BTreeMap<Self::Node, Self::Node> {
-        let node_map = self.add_subcircuit(graph, &nodes);
+        let node_map = self.add_subcircuit(graph, nodes);
         node_map
             .into_iter()
             .map(|(k, v)| (graph.at_position(k).unwrap(), self.at_position(v).unwrap()))
@@ -184,7 +184,7 @@ impl EdgeId {
     /// This requires the `circuit` the edge belongs to.
     pub fn target(&self, circuit: &StaticSizeCircuit) -> OpId {
         let (_, target) = circuit
-            .linked_op(self.source().into(), self.source_port().into())
+            .linked_op(self.source(), self.source_port().into())
             .expect("invalid edge ID");
         target
     }
@@ -194,7 +194,7 @@ impl EdgeId {
     /// This requires the `circuit` the edge belongs to.
     pub fn target_port(&self, circuit: &StaticSizeCircuit) -> IncomingPort {
         let (target_port, _) = circuit
-            .linked_op(self.source().into(), self.source_port().into())
+            .linked_op(self.source(), self.source_port().into())
             .expect("invalid edge ID");
         target_port.as_incoming().expect("invalid edge ID")
     }

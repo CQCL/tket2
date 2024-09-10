@@ -6,10 +6,7 @@ use std::{
 use cgmath::num_traits::{WrappingAdd, WrappingShl};
 use itertools::Itertools;
 
-use crate::{
-    circuit::{CircuitHash, HashError},
-    Tk2Op,
-};
+use crate::circuit::{CircuitHash, HashError};
 
 use super::{
     rewrite::{OpInterval, StaticRewrite},
@@ -29,7 +26,7 @@ impl UpdatableHash {
             let mut prev_hash = 0;
             let mut row_hash = Vec::with_capacity(row.len());
             for &op in row.iter() {
-                let hash = Self::hash_op(&circuit.get(op).unwrap());
+                let hash = Self::hash_op(circuit.get(op).unwrap());
                 let combined_hash = prev_hash.wrapping_shl(5).wrapping_add(&hash);
                 row_hash.push(combined_hash);
                 prev_hash = combined_hash;

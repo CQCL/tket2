@@ -3,7 +3,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     mem,
     ops::Range,
-    rc::Rc,
 };
 
 use derive_more::{From, Into};
@@ -14,7 +13,7 @@ use crate::portmatching::indexing::{
     CircuitPath, OpLocationMap, PatternOpPosition, StaticIndexScheme,
 };
 
-use super::{iter::Command, OpId, OpPosition, StaticOp, StaticQubitIndex, StaticSizeCircuit};
+use super::{iter::Command, OpId, OpPosition, StaticQubitIndex, StaticSizeCircuit};
 
 /// An interval of operation indices.
 #[derive(Debug, Clone, PartialEq, Eq, From, Into)]
@@ -255,14 +254,14 @@ fn compute_op_intervals(
                 qubit: qb,
                 index: 0,
             },
-            &starts,
+            starts,
         );
         let last_loc = PatternOpPosition::from_position(
             OpPosition {
                 qubit: qb,
                 index: pattern.qubit_ops(qb).len() - 1,
             },
-            &starts,
+            starts,
         );
         let &fst_loc = match_map
             .get_val(&fst_loc.qubit, fst_loc.op_idx as isize)
@@ -287,7 +286,7 @@ fn compute_qubit_map(
     let mut qubit_map = BTreeMap::new();
     for qb in pattern.qubits_iter() {
         let pattern_qb = starts[qb.0].0;
-        let subj_qb = match_map.get_val(&pattern_qb, 0 as isize).unwrap().qubit;
+        let subj_qb = match_map.get_val(&pattern_qb, 0_isize).unwrap().qubit;
         qubit_map.insert(qb, subj_qb);
     }
     qubit_map

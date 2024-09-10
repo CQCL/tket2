@@ -2,10 +2,8 @@
 
 use derive_more::From;
 use itertools::Itertools;
-use portmatching::ManyMatcher;
 use pyo3::prelude::*;
-use std::path::PathBuf;
-use tket2::rewrite::{CircuitRewrite, ECCRewriter, Rewriter, Subcircuit};
+use tket2::rewrite::{CircuitRewrite, Subcircuit};
 
 use crate::circuit::{PyNode, Tk2Circuit};
 
