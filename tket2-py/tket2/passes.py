@@ -11,7 +11,7 @@ from ._tket2.passes import (
     CircuitChunks,
     greedy_depth_reduce,
     lower_to_pytket,
-    badger_optimise,
+    # badger_optimise,
     chunks,
     PullForwardError,
 )
@@ -23,7 +23,7 @@ __all__ = [
     "CircuitChunks",
     "greedy_depth_reduce",
     "lower_to_pytket",
-    "badger_optimise",
+    # "badger_optimise",
     "chunks",
     "PullForwardError",
 ]
@@ -31,12 +31,13 @@ __all__ = [
 
 def badger_pass(
     rewriter: Optional[Path] = None,
-    max_threads: Optional[int] = None,
+    # max_threads: Optional[int] = None,
     timeout: Optional[int] = None,
     progress_timeout: Optional[int] = None,
     max_circuit_count: Optional[int] = None,
+    queue_size: Optional[int] = None,
     log_dir: Optional[Path] = None,
-    rebase: bool = False,
+    # rebase: bool = False,
 ) -> BasePass:
     """Construct a Badger pass.
 
@@ -60,15 +61,14 @@ def badger_pass(
 
     def apply(circuit: Circuit) -> Circuit:
         """Apply Badger optimisation to the circuit."""
-        return badger_optimise(
+        all_rewrites = opt.run_portdiff(
             circuit,
-            optimiser=opt,
-            max_threads=max_threads,
             timeout=timeout,
             progress_timeout=progress_timeout,
             max_circuit_count=max_circuit_count,
-            log_dir=log_dir,
-            rebase=rebase,
+            queue_size=queue_size,
+            log_progress=log_dir,
         )
+        return optimiser.extract_optimal_circuit(all_rewrites).to_tket1()
 
     return CustomPass(apply)

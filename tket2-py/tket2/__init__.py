@@ -9,9 +9,9 @@ working with quantum circuits. See also the Rust library with the same name on
 [crates.io](https://crates.io/crates/tket2).
 """
 
-from . import circuit, ops, optimiser, passes, pattern, rewrite
+from . import circuit, ops, optimiser, passes
 
-__all__ = ["circuit", "ops", "optimiser", "passes", "pattern", "rewrite"]
+__all__ = ["circuit", "ops", "optimiser", "passes"]
 
 
 # This is updated by our release-please workflow, triggered by this

@@ -13,7 +13,7 @@ use pyo3::prelude::*;
 
 /// The Python bindings to TKET2.
 #[pymodule]
-#[pyo3(name = "tket2")]
+#[pyo3(name = "_tket2")]
 fn _tket2(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     add_submodule(py, m, circuit::module(py)?)?;
     add_submodule(py, m, ops::module(py)?)?;

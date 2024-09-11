@@ -1,15 +1,16 @@
 //! PyO3 wrapper for the Badger circuit optimiser.
 
+use std::collections::BTreeSet;
 use std::io::BufWriter;
 use std::{fs, num::NonZeroUsize, path::PathBuf};
 
-use hugr::{Node, NodeIndex};
+use itertools::Itertools;
 use portdiff::port_diff::{EdgeData, PortDiffData};
-use portdiff::{NodeId, PortDiff, PortDiffGraph};
+use portdiff::{PortDiff, PortDiffGraph};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use relrc::graph_view::RelRcGraphSerializer;
-use relrc::RelRcGraph;
+use relrc::{RelRc, RelRcGraph};
 use tket2::optimiser::badger::BadgerOptions;
 use tket2::optimiser::{BadgerLogger, DiffBadgerOptimiser};
 use tket2::static_circ::StaticSizeCircuit;
@@ -21,6 +22,7 @@ use crate::circuit::{try_with_circ, Tk2Circuit};
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let m = PyModule::new_bound(py, "optimiser")?;
     m.add_class::<PyBadgerOptimiser>()?;
+    m.add_class::<PyPortDiffGraph>()?;
     Ok(m)
 }
 
@@ -164,8 +166,8 @@ impl PyPortDiffGraph {
 
 #[pymethods]
 impl PyPortDiffGraph {
-    ///
-    fn extract_graph(&self, nodes: Vec<usize>) -> PyResult<Tk2Circuit> {
+    /// Extract circuit from a portdiff graph rewrite history.
+    fn extract_circuit(&self, nodes: Vec<usize>) -> PyResult<Tk2Circuit> {
         let all_diffs = self.0.get_diffs().unwrap();
         let diffs = nodes
             .into_iter()
@@ -179,6 +181,44 @@ impl PyPortDiffGraph {
             let circ: Circuit = graph.into();
             Ok(circ.into())
         }
+    }
+
+    fn all_edges(&self) -> PyResult<Vec<(usize, usize, BTreeSet<usize>)>> {
+        let all_diffs = self.0.get_diffs().unwrap();
+        let find_ind = |n: &RelRc<_, _>| {
+            all_diffs
+                .iter()
+                .position(|v| RelRc::as_ptr(v) == RelRc::as_ptr(n))
+                .unwrap()
+        };
+        let res = all_diffs
+            .iter()
+            .flat_map(|d| {
+                d.all_outgoing()
+                    .iter()
+                    .map(|e| {
+                        let nodes = e
+                            .value()
+                            .subgraph()
+                            .nodes()
+                            .iter()
+                            .map(|n| (*n).into())
+                            .collect();
+                        (find_ind(e.source()), find_ind(e.target()), nodes)
+                    })
+                    .collect_vec()
+            })
+            .collect();
+        Ok(res)
+    }
+
+    fn value(&self, idx: usize) -> Option<usize> {
+        let all_diffs = self.0.get_diffs().unwrap();
+        all_diffs.get(idx).and_then(|d| d.value().value())
+    }
+
+    fn n_diffs(&self) -> usize {
+        self.0.get_diffs().unwrap().len()
     }
 }
 
