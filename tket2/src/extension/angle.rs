@@ -57,7 +57,7 @@ impl ConstAngle {
     /// The constant π
     pub const PI: Self = Self::new_unchecked(1, 1);
     /// The constant 2π
-    pub const TAU: Self = Self::new_unchecked(0, 1);
+    pub const TAU: Self = Self::new_unchecked(0, 0);
     /// The constant π/2
     pub const PI_2: Self = Self::new_unchecked(2, 1);
     /// The constant π/4
@@ -410,5 +410,10 @@ mod test {
         let bool = builder.add_aeq(angle, angle).unwrap();
 
         let _hugr = builder.finish_hugr_with_outputs([bool], &REGISTRY).unwrap();
+    }
+
+    #[rstest::rstest]
+    fn const_angle_statics(#[values(ConstAngle::TAU, ConstAngle::PI, ConstAngle::PI_2, ConstAngle::PI_4)] konst: ConstAngle) {
+        assert_eq!(ConstAngle::new(konst.log_denom(), konst.value()), Ok(konst));
     }
 }
