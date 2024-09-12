@@ -413,7 +413,10 @@ mod test {
     }
 
     #[rstest::rstest]
-    fn const_angle_statics(#[values(ConstAngle::TAU, ConstAngle::PI, ConstAngle::PI_2, ConstAngle::PI_4)] konst: ConstAngle) {
+    fn const_angle_statics(
+        #[values(ConstAngle::TAU, ConstAngle::PI, ConstAngle::PI_2, ConstAngle::PI_4)]
+        konst: ConstAngle,
+    ) {
         assert_eq!(ConstAngle::new(konst.log_denom(), konst.value()), Ok(konst));
     }
 }
