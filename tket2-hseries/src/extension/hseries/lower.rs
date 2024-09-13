@@ -12,7 +12,7 @@ use hugr::{
 };
 use strum::IntoEnumIterator;
 use thiserror::Error;
-use tket2::{extension::angle::AngleOpBuilder, Tk2Op};
+use tket2::{extension::rotation::RotationOpBuilder, Tk2Op};
 
 use crate::extension::hseries::{HSeriesOp, HSeriesOpBuilder};
 
@@ -179,7 +179,7 @@ impl LowerTket2ToHSeriesPass {
 #[cfg(test)]
 mod test {
     use hugr::{builder::FunctionBuilder, type_row, HugrView};
-    use tket2::{extension::angle::ANGLE_TYPE, Circuit};
+    use tket2::{extension::rotation::ROTATION_TYPE, Circuit};
 
     use super::*;
     use rstest::rstest;
@@ -251,7 +251,7 @@ mod test {
 
     #[test]
     fn test_mixed() {
-        let mut b = DFGBuilder::new(Signature::new(type_row![ANGLE_TYPE], type_row![])).unwrap();
+        let mut b = DFGBuilder::new(Signature::new(type_row![ROTATION_TYPE], type_row![])).unwrap();
         let [angle] = b.input_wires_arr();
         let [q] = b.add_dataflow_op(Tk2Op::QAlloc, []).unwrap().outputs_arr();
         let [q] = b.add_dataflow_op(Tk2Op::H, [q]).unwrap().outputs_arr();

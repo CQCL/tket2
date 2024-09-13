@@ -326,7 +326,7 @@ pub fn apply_greedy_commutation(circ: &mut Circuit) -> Result<u32, PullForwardEr
 mod test {
 
     use crate::{
-        extension::{angle::ANGLE_TYPE, REGISTRY},
+        extension::{rotation::ROTATION_TYPE, REGISTRY},
         ops::test::t2_bell_circuit,
         utils::build_simple_circuit,
     };
@@ -438,7 +438,7 @@ mod test {
     fn non_linear_inputs() -> Circuit {
         let build = || {
             let mut dfg = DFGBuilder::new(Signature::new(
-                type_row![QB_T, QB_T, ANGLE_TYPE],
+                type_row![QB_T, QB_T, ROTATION_TYPE],
                 type_row![QB_T, QB_T],
             ))?;
 

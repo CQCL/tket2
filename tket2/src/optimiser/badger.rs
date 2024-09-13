@@ -549,14 +549,14 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use crate::serialize::load_tk1_json_str;
-    use crate::{extension::angle::ANGLE_TYPE, optimiser::badger::BadgerOptions};
+    use crate::{extension::rotation::ROTATION_TYPE, optimiser::badger::BadgerOptions};
     use crate::{extension::REGISTRY, Circuit, Tk2Op};
 
     use super::{BadgerOptimiser, DefaultBadgerOptimiser};
 
     #[fixture]
     fn rz_rz() -> Circuit {
-        let input_t = vec![QB_T, ANGLE_TYPE, ANGLE_TYPE];
+        let input_t = vec![QB_T, ROTATION_TYPE, ROTATION_TYPE];
         let output_t = vec![QB_T];
         let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
@@ -624,7 +624,7 @@ mod tests {
     fn rz_rz_cancellation(rz_rz: Circuit, #[case] badger_opt: DefaultBadgerOptimiser) {
         use hugr::ops::OpType;
 
-        use crate::{extension::angle::AngleOp, op_matches};
+        use crate::{extension::rotation::RotationOp, op_matches};
 
         let opt_rz = badger_opt.optimise(
             &rz_rz,
@@ -641,7 +641,7 @@ mod tests {
             .unwrap();
 
         // Rzs combined into a single one.
-        assert_eq!(op1.cast(), Some(AngleOp::aadd));
+        assert_eq!(op1.cast(), Some(RotationOp::aadd));
         assert!(op_matches(op2, Tk2Op::Rz));
     }
 

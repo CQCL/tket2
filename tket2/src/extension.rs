@@ -4,7 +4,6 @@
 
 use crate::serialize::pytket::OpaqueTk1Op;
 use crate::Tk2Op;
-use angle::ANGLE_TYPE;
 use hugr::extension::prelude::PRELUDE;
 use hugr::extension::simple_op::MakeOpDef;
 use hugr::extension::{
@@ -16,10 +15,11 @@ use hugr::types::type_param::{TypeArg, TypeParam};
 use hugr::types::{CustomType, PolyFuncType, PolyFuncTypeRV, Signature};
 use hugr::{type_row, Extension};
 use lazy_static::lazy_static;
+use rotation::ROTATION_TYPE;
 use smol_str::SmolStr;
 
 /// Definition for Angle ops and types.
-pub mod angle;
+pub mod rotation;
 
 /// The ID of the TKET1 extension.
 pub const TKET1_EXTENSION_ID: ExtensionId = IdentList::new_unchecked("TKET1");
@@ -58,7 +58,7 @@ pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
     PRELUDE.to_owned(),
     TKET2_EXTENSION.to_owned(),
     FLOAT_TYPES.to_owned(),
-    angle::ANGLE_EXTENSION.to_owned()
+    rotation::ROTATION_EXTENSION.to_owned()
 ]).unwrap();
 
 
@@ -112,7 +112,7 @@ pub static ref TKET2_EXTENSION: Extension = {
     e.add_op(
         SYM_OP_ID,
         "Store a sympy expression that can be evaluated to an angle.".to_string(),
-        PolyFuncType::new(vec![TypeParam::String], Signature::new(type_row![], type_row![ANGLE_TYPE])),
+        PolyFuncType::new(vec![TypeParam::String], Signature::new(type_row![], type_row![ROTATION_TYPE])),
     )
     .unwrap();
     e

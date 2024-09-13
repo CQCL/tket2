@@ -9,7 +9,7 @@ use hugr::IncomingPort;
 use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as Tk1OpType;
 
-use crate::extension::angle::ANGLE_TYPE;
+use crate::extension::rotation::ROTATION_TYPE;
 use crate::Tk2Op;
 
 /// An operation with a native TKET2 counterpart.
@@ -159,7 +159,7 @@ impl NativeOp {
             let types = sig.input_types().to_owned();
             sig.input_ports()
                 .zip(types)
-                .filter(|(_, ty)| ty == &ANGLE_TYPE)
+                .filter(|(_, ty)| ty == &ROTATION_TYPE)
                 .map(|(port, _)| port)
         })
     }
@@ -179,7 +179,7 @@ impl NativeOp {
                 self.input_qubits += 1;
             } else if ty == &BOOL_T {
                 self.input_bits += 1;
-            } else if ty == &ANGLE_TYPE {
+            } else if ty == &ROTATION_TYPE {
                 self.num_params += 1;
             }
         }

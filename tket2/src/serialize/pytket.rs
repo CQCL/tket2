@@ -26,7 +26,7 @@ use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::optype::OpType as SerialOpType;
 
 use crate::circuit::Circuit;
-use crate::extension::angle::ConstAngle;
+use crate::extension::rotation::ConstRotation;
 
 use self::decoder::Tk1Decoder;
 use self::encoder::Tk1Encoder;
@@ -298,7 +298,7 @@ fn try_param_to_constant(param: &str) -> Option<Value> {
     };
 
     let radians = half_turns * std::f64::consts::PI;
-    ConstAngle::from_radians_rounding_max(radians)
+    ConstRotation::from_radians_rounding_max(radians)
         .ok()
         .map(Into::into)
 }
@@ -309,7 +309,7 @@ fn try_param_to_constant(param: &str) -> Option<Value> {
 /// whereas HUGR uses radians.
 #[inline]
 fn try_constant_to_param(val: &Value) -> Option<String> {
-    let const_angle = val.get_custom_value::<ConstAngle>()?;
+    let const_angle = val.get_custom_value::<ConstRotation>()?;
     let half_turns = const_angle.to_turns() * 2.0;
     Some(half_turns.to_string())
 }

@@ -12,7 +12,7 @@ use tket_json_rs::circuit_json::{self, SerialCircuit};
 
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
-use crate::extension::angle::{AngleOp, ANGLE_TYPE};
+use crate::extension::rotation::{RotationOp, ROTATION_TYPE};
 use crate::ops::match_symb_const_op;
 use crate::serialize::pytket::RegisterHash;
 use crate::Tk2Op;
@@ -49,7 +49,7 @@ impl Tk1Encoder {
 
         // Check for unsupported input types.
         for (_, _, typ) in circ.units() {
-            if ![ANGLE_TYPE, QB_T, BOOL_T].contains(&typ) {
+            if ![ROTATION_TYPE, QB_T, BOOL_T].contains(&typ) {
                 return Err(TK1ConvertError::NonSerializableInputs { typ });
             }
         }
@@ -125,7 +125,7 @@ impl Tk1Encoder {
                     )
                 });
                 bit_args.push(reg);
-            } else if ty == ANGLE_TYPE {
+            } else if ty == ROTATION_TYPE {
                 let CircuitUnit::Wire(param_wire) = unit else {
                     unreachable!("Angle types are not linear.")
                 };
@@ -553,7 +553,7 @@ impl ParameterTracker {
         let mut tracker = ParameterTracker::default();
 
         let angle_input_wires = circ.units().filter_map(|u| match u {
-            (CircuitUnit::Wire(w), _, ty) if ty == ANGLE_TYPE => Some(w),
+            (CircuitUnit::Wire(w), _, ty) if ty == ROTATION_TYPE => Some(w),
             _ => None,
         });
 
@@ -575,8 +575,8 @@ impl ParameterTracker {
         let input_count = if let Some(signature) = optype.dataflow_signature() {
             // Only consider commands where all inputs are parameters,
             // and some outputs are also parameters.
-            let all_inputs = signature.input().iter().all(|ty| ty == &ANGLE_TYPE);
-            let some_output = signature.output().iter().any(|ty| ty == &ANGLE_TYPE);
+            let all_inputs = signature.input().iter().all(|ty| ty == &ROTATION_TYPE);
+            let some_output = signature.output().iter().any(|ty| ty == &ROTATION_TYPE);
             if !all_inputs || !some_output {
                 return Ok(false);
             }
@@ -597,7 +597,7 @@ impl ParameterTracker {
                 panic!("Angle types are not linear")
             };
             let Some(param) = self.parameters.get(&wire) else {
-                let typ = ANGLE_TYPE;
+                let typ = ROTATION_TYPE;
                 return Err(OpConvertError::UnresolvedParamInput {
                     typ,
                     optype: optype.clone(),
@@ -619,7 +619,7 @@ impl ParameterTracker {
                 // Re-use the parameter from the input.
                 inputs[0].clone()
             }
-            OpType::ExtensionOp(_) if optype.cast() == Some(AngleOp::aadd) => {
+            OpType::ExtensionOp(_) if optype.cast() == Some(RotationOp::aadd) => {
                 format!("{} + {}", inputs[0], inputs[1])
             }
             _ => {

@@ -10,7 +10,7 @@ use hugr::{CircuitUnit, Hugr};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::extension::angle::{AngleOp, ANGLE_TYPE};
+use crate::extension::rotation::{RotationOp, ROTATION_TYPE};
 use crate::{Circuit, Tk2Op};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -41,7 +41,7 @@ struct RepCircData {
 
 fn map_op(opstr: &str) -> Op {
     if opstr == "add" {
-        return AngleOp::aadd.into();
+        return RotationOp::aadd.into();
     }
     // TODO, more
     match opstr {
@@ -64,7 +64,7 @@ fn map_op(opstr: &str) -> Op {
 impl From<RepCircData> for Circuit<Hugr> {
     fn from(RepCircData { circ: rc, meta }: RepCircData) -> Self {
         let qb_types: Vec<Type> = vec![QB_T; meta.n_qb];
-        let param_types: Vec<Type> = vec![ANGLE_TYPE; meta.n_input_param];
+        let param_types: Vec<Type> = vec![ROTATION_TYPE; meta.n_input_param];
         let mut builder = DFGBuilder::new(Signature::new(
             [qb_types.clone(), param_types].concat(),
             qb_types,

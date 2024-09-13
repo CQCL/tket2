@@ -15,7 +15,7 @@ use tket_json_rs::optype;
 
 use super::{TKETDecode, METADATA_Q_OUTPUT_REGISTERS};
 use crate::circuit::Circuit;
-use crate::extension::angle::{AngleOp, ConstAngle, ANGLE_TYPE};
+use crate::extension::rotation::{ConstRotation, RotationOp, ROTATION_TYPE};
 use crate::extension::REGISTRY;
 use crate::Tk2Op;
 
@@ -188,13 +188,13 @@ fn circ_measure_ancilla() -> Circuit {
 
 #[fixture]
 fn circ_add_angles_symbolic() -> Circuit {
-    let input_t = vec![QB_T, ANGLE_TYPE, ANGLE_TYPE];
+    let input_t = vec![QB_T, ROTATION_TYPE, ROTATION_TYPE];
     let output_t = vec![QB_T];
     let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
     let [qb, f1, f2] = h.input_wires_arr();
     let [f12] = h
-        .add_dataflow_op(AngleOp::aadd, [f1, f2])
+        .add_dataflow_op(RotationOp::aadd, [f1, f2])
         .unwrap()
         .outputs_arr();
     let [qb] = h
@@ -212,10 +212,10 @@ fn circ_add_angles_constants() -> Circuit {
 
     let qb = h.input_wires().next().unwrap();
 
-    let point2 = h.add_load_value(ConstAngle::new(2, 3).unwrap());
-    let point3 = h.add_load_value(ConstAngle::new(4, 5).unwrap());
+    let point2 = h.add_load_value(ConstRotation::new(2, 3).unwrap());
+    let point3 = h.add_load_value(ConstRotation::new(4, 5).unwrap());
     let point5 = h
-        .add_dataflow_op(AngleOp::aadd, [point2, point3])
+        .add_dataflow_op(RotationOp::aadd, [point2, point3])
         .unwrap()
         .out_wire(0);
 
