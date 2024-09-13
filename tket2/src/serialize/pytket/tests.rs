@@ -194,7 +194,7 @@ fn circ_add_angles_symbolic() -> Circuit {
 
     let [qb, f1, f2] = h.input_wires_arr();
     let [f12] = h
-        .add_dataflow_op(RotationOp::aadd, [f1, f2])
+        .add_dataflow_op(RotationOp::radd, [f1, f2])
         .unwrap()
         .outputs_arr();
     let [qb] = h
@@ -212,10 +212,10 @@ fn circ_add_angles_constants() -> Circuit {
 
     let qb = h.input_wires().next().unwrap();
 
-    let point2 = h.add_load_value(ConstRotation::new(2, 3).unwrap());
-    let point3 = h.add_load_value(ConstRotation::new(4, 5).unwrap());
+    let point2 = h.add_load_value(ConstRotation::new(0.2).unwrap());
+    let point3 = h.add_load_value(ConstRotation::new(0.3).unwrap());
     let point5 = h
-        .add_dataflow_op(RotationOp::aadd, [point2, point3])
+        .add_dataflow_op(RotationOp::radd, [point2, point3])
         .unwrap()
         .out_wire(0);
 
@@ -290,7 +290,7 @@ fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
 /// expressions.
 #[rstest]
 #[case::symbolic(circ_add_angles_symbolic(), "f0 + f1")]
-#[case::constants(circ_add_angles_constants(), "1.5 + 0.625")]
+#[case::constants(circ_add_angles_constants(), "0.2 + 0.3")]
 fn test_add_angle_serialise(#[case] circ_add_angles: Circuit, #[case] param_str: &str) {
     let ser: SerialCircuit = SerialCircuit::encode(&circ_add_angles).unwrap();
     assert_eq!(ser.commands.len(), 1);

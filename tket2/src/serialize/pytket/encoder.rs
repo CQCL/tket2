@@ -619,7 +619,7 @@ impl ParameterTracker {
                 // Re-use the parameter from the input.
                 inputs[0].clone()
             }
-            OpType::ExtensionOp(_) if optype.cast() == Some(RotationOp::aadd) => {
+            OpType::ExtensionOp(_) if optype.cast() == Some(RotationOp::radd) => {
                 format!("{} + {}", inputs[0], inputs[1])
             }
             _ => {

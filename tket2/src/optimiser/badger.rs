@@ -641,7 +641,7 @@ mod tests {
             .unwrap();
 
         // Rzs combined into a single one.
-        assert_eq!(op1.cast(), Some(RotationOp::aadd));
+        assert_eq!(op1.cast(), Some(RotationOp::radd));
         assert!(op_matches(op2, Tk2Op::Rz));
     }
 

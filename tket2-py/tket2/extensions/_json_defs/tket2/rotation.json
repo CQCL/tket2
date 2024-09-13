@@ -7,7 +7,7 @@
       "extension": "tket2.rotation",
       "name": "rotation",
       "params": [],
-      "description": "rotation type expressed as dyadic rational multiples of 2π",
+      "description": "rotation type expressed as number of half turns",
       "bound": {
         "b": "Explicit",
         "bound": "C"
@@ -16,122 +16,14 @@
   },
   "values": {},
   "operations": {
-    "aadd": {
+    "fromturns": {
       "extension": "tket2.rotation",
-      "name": "aadd",
-      "description": "addition of rotations",
+      "name": "fromturns",
+      "description": "Construct rotation from number of turns (would be multiples of π in radians).",
       "signature": {
         "params": [],
         "body": {
           "input": [
-            {
-              "t": "Opaque",
-              "extension": "tket2.rotation",
-              "id": "rotation",
-              "args": [],
-              "bound": "C"
-            },
-            {
-              "t": "Opaque",
-              "extension": "tket2.rotation",
-              "id": "rotation",
-              "args": [],
-              "bound": "C"
-            }
-          ],
-          "output": [
-            {
-              "t": "Opaque",
-              "extension": "tket2.rotation",
-              "id": "rotation",
-              "args": [],
-              "bound": "C"
-            }
-          ],
-          "extension_reqs": []
-        }
-      },
-      "binary": false
-    },
-    "adiv": {
-      "extension": "tket2.rotation",
-      "name": "adiv",
-      "description": "Divide rotation by an integer. If the integer is not a power of 2, or if the resulting denominator would exceed 2^64, the result is rounded to the nearest multiple of 2 pi / 2^ 64",
-      "signature": {
-        "params": [],
-        "body": {
-          "input": [
-            {
-              "t": "Opaque",
-              "extension": "tket2.rotation",
-              "id": "rotation",
-              "args": [],
-              "bound": "C"
-            },
-            {
-              "t": "I"
-            }
-          ],
-          "output": [
-            {
-              "t": "Opaque",
-              "extension": "tket2.rotation",
-              "id": "rotation",
-              "args": [],
-              "bound": "C"
-            }
-          ],
-          "extension_reqs": []
-        }
-      },
-      "binary": false
-    },
-    "aeq": {
-      "extension": "tket2.rotation",
-      "name": "aeq",
-      "description": "check rotation equality",
-      "signature": {
-        "params": [],
-        "body": {
-          "input": [
-            {
-              "t": "Opaque",
-              "extension": "tket2.rotation",
-              "id": "rotation",
-              "args": [],
-              "bound": "C"
-            },
-            {
-              "t": "Opaque",
-              "extension": "tket2.rotation",
-              "id": "rotation",
-              "args": [],
-              "bound": "C"
-            }
-          ],
-          "output": [
-            {
-              "t": "Sum",
-              "s": "Unit",
-              "size": 2
-            }
-          ],
-          "extension_reqs": []
-        }
-      },
-      "binary": false
-    },
-    "afromrad": {
-      "extension": "tket2.rotation",
-      "name": "afromrad",
-      "description": "construct rotation from radians, rounding given a log-denominator",
-      "signature": {
-        "params": [],
-        "body": {
-          "input": [
-            {
-              "t": "I"
-            },
             {
               "t": "Opaque",
               "extension": "arithmetic.float.types",
@@ -154,148 +46,10 @@
       },
       "binary": false
     },
-    "amul": {
+    "radd": {
       "extension": "tket2.rotation",
-      "name": "amul",
-      "description": "multiply rotation by a scalar",
-      "signature": {
-        "params": [],
-        "body": {
-          "input": [
-            {
-              "t": "Opaque",
-              "extension": "tket2.rotation",
-              "id": "rotation",
-              "args": [],
-              "bound": "C"
-            },
-            {
-              "t": "I"
-            }
-          ],
-          "output": [
-            {
-              "t": "Opaque",
-              "extension": "tket2.rotation",
-              "id": "rotation",
-              "args": [],
-              "bound": "C"
-            }
-          ],
-          "extension_reqs": []
-        }
-      },
-      "binary": false
-    },
-    "aneg": {
-      "extension": "tket2.rotation",
-      "name": "aneg",
-      "description": "negation of a rotation",
-      "signature": {
-        "params": [],
-        "body": {
-          "input": [
-            {
-              "t": "Opaque",
-              "extension": "tket2.rotation",
-              "id": "rotation",
-              "args": [],
-              "bound": "C"
-            }
-          ],
-          "output": [
-            {
-              "t": "Opaque",
-              "extension": "tket2.rotation",
-              "id": "rotation",
-              "args": [],
-              "bound": "C"
-            }
-          ],
-          "extension_reqs": []
-        }
-      },
-      "binary": false
-    },
-    "anew": {
-      "extension": "tket2.rotation",
-      "name": "anew",
-      "description": "construct rotation from numerator and log-denominator, returning an error if invalid",
-      "signature": {
-        "params": [],
-        "body": {
-          "input": [
-            {
-              "t": "I"
-            },
-            {
-              "t": "I"
-            }
-          ],
-          "output": [
-            {
-              "t": "Sum",
-              "s": "General",
-              "rows": [
-                [
-                  {
-                    "t": "Opaque",
-                    "extension": "prelude",
-                    "id": "error",
-                    "args": [],
-                    "bound": "C"
-                  }
-                ],
-                [
-                  {
-                    "t": "Opaque",
-                    "extension": "tket2.rotation",
-                    "id": "rotation",
-                    "args": [],
-                    "bound": "C"
-                  }
-                ]
-              ]
-            }
-          ],
-          "extension_reqs": []
-        }
-      },
-      "binary": false
-    },
-    "aparts": {
-      "extension": "tket2.rotation",
-      "name": "aparts",
-      "description": "decompose rotation into numerator and log-denominator",
-      "signature": {
-        "params": [],
-        "body": {
-          "input": [
-            {
-              "t": "Opaque",
-              "extension": "tket2.rotation",
-              "id": "rotation",
-              "args": [],
-              "bound": "C"
-            }
-          ],
-          "output": [
-            {
-              "t": "I"
-            },
-            {
-              "t": "I"
-            }
-          ],
-          "extension_reqs": []
-        }
-      },
-      "binary": false
-    },
-    "asub": {
-      "extension": "tket2.rotation",
-      "name": "asub",
-      "description": "subtraction of the second rotation from the first",
+      "name": "radd",
+      "description": "Add two angles together (experimental).",
       "signature": {
         "params": [],
         "body": {
@@ -329,10 +83,10 @@
       },
       "binary": false
     },
-    "atorad": {
+    "toturns": {
       "extension": "tket2.rotation",
-      "name": "atorad",
-      "description": "convert rotation to radians",
+      "name": "toturns",
+      "description": "Convert rotation to number of turns (would be multiples of π in radians).",
       "signature": {
         "params": [],
         "body": {
@@ -350,39 +104,6 @@
               "t": "Opaque",
               "extension": "arithmetic.float.types",
               "id": "float64",
-              "args": [],
-              "bound": "C"
-            }
-          ],
-          "extension_reqs": []
-        }
-      },
-      "binary": false
-    },
-    "atrunc": {
-      "extension": "tket2.rotation",
-      "name": "atrunc",
-      "description": "truncate a rotation to one with a lower log-denominator with the nearest value, rounding down in [0, 2π) if necessary",
-      "signature": {
-        "params": [],
-        "body": {
-          "input": [
-            {
-              "t": "Opaque",
-              "extension": "tket2.rotation",
-              "id": "rotation",
-              "args": [],
-              "bound": "C"
-            },
-            {
-              "t": "I"
-            }
-          ],
-          "output": [
-            {
-              "t": "Opaque",
-              "extension": "tket2.rotation",
-              "id": "rotation",
               "args": [],
               "bound": "C"
             }

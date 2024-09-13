@@ -297,10 +297,7 @@ fn try_param_to_constant(param: &str) -> Option<Value> {
         return None;
     };
 
-    let radians = half_turns * std::f64::consts::PI;
-    ConstRotation::from_radians_rounding_max(radians)
-        .ok()
-        .map(Into::into)
+    ConstRotation::new(half_turns).ok().map(Into::into)
 }
 
 /// Convert a HUGR angle constant to a TKET1 parameter.
@@ -310,7 +307,7 @@ fn try_param_to_constant(param: &str) -> Option<Value> {
 #[inline]
 fn try_constant_to_param(val: &Value) -> Option<String> {
     let const_angle = val.get_custom_value::<ConstRotation>()?;
-    let half_turns = const_angle.to_turns() * 2.0;
+    let half_turns = const_angle.half_turns();
     Some(half_turns.to_string())
 }
 

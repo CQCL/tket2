@@ -605,10 +605,7 @@ mod test {
         // First command is the constant definition.
         // It has a single output.
         let const_cmd = commands.next().unwrap();
-        assert_eq!(
-            const_cmd.optype().name().as_str(),
-            "const:custom:a(2π*1/2^2)"
-        );
+        assert_eq!(const_cmd.optype().name().as_str(), "const:custom:a(π*0.5)");
         assert_eq_iter!(const_cmd.inputs().map(|(u, _, _)| u), [],);
         assert_eq_iter!(
             const_cmd.outputs().map(|(u, _, _)| u),

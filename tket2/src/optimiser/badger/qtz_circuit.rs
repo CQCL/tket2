@@ -41,7 +41,7 @@ struct RepCircData {
 
 fn map_op(opstr: &str) -> Op {
     if opstr == "add" {
-        return RotationOp::aadd.into();
+        return RotationOp::radd.into();
     }
     // TODO, more
     match opstr {

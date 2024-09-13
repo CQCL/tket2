@@ -6,7 +6,7 @@ use hugr::{
     extension::ExtensionRegistry,
     hugr::{hugrmut::HugrMut, HugrError},
     ops::{self, DataflowOpTrait},
-    std_extensions::arithmetic::float_types::ConstF64,
+    std_extensions::arithmetic::{float_ops::FloatOps, float_types::ConstF64},
     types::Signature,
     Hugr, HugrView, Node, Wire,
 };
@@ -68,25 +68,32 @@ fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
         (Tk2Op::CY, [c, t]) => b.build_cy(*c, *t)?.into(),
         (Tk2Op::CZ, [c, t]) => b.build_cz(*c, *t)?.into(),
         (Tk2Op::Rx, [q, angle]) => {
-            let float = b.add_atorad(*angle)?;
+            let float = build_to_radians(&mut b, *angle)?;
             vec![b.build_rx(*q, float)?]
         }
         (Tk2Op::Ry, [q, angle]) => {
-            let float = b.add_atorad(*angle)?;
+            let float = build_to_radians(&mut b, *angle)?;
             vec![b.build_ry(*q, float)?]
         }
         (Tk2Op::Rz, [q, angle]) => {
-            let float = b.add_atorad(*angle)?;
+            let float = build_to_radians(&mut b, *angle)?;
             vec![b.add_rz(*q, float)?]
         }
         (Tk2Op::CRz, [c, t, angle]) => {
-            let float = b.add_atorad(*angle)?;
+            let float = build_to_radians(&mut b, *angle)?;
             b.build_crz(*c, *t, float)?.into()
         }
         (Tk2Op::Toffoli, [a, b_, c]) => b.build_toffoli(*a, *b_, *c)?.into(),
         _ => return Err(LowerTk2Error::UnknownOp(op, inputs.len())), // non-exhaustive
     };
     Ok(b.finish_hugr_with_outputs(outputs, &REGISTRY)?)
+}
+
+fn build_to_radians(b: &mut DFGBuilder<Hugr>, rotation: Wire) -> Result<Wire, BuildError> {
+    let turns = b.add_toturns(rotation)?;
+    let tau = pi_mul_f64(b, 2.0);
+    let float = b.add_dataflow_op(FloatOps::fmul, [turns, tau])?.out_wire(0);
+    Ok(float)
 }
 
 /// Lower `Tk2Op` operations to `HSeriesOp` operations.
@@ -264,8 +271,8 @@ mod test {
 
         let lowered = lower_tk2_op(&mut h).unwrap();
         assert_eq!(lowered.len(), 4);
-        // dfg, input, output, alloc, phasedx, rz, atorad, phasedx, free + 4x(float + load)
-        assert_eq!(h.node_count(), 17);
+        // dfg, input, output, alloc, phasedx, rz, toturns, fmul, phasedx, free + 5x(float + load)
+        assert_eq!(h.node_count(), 20);
         assert_eq!(check_lowered(&h), Ok(()));
     }
 }
