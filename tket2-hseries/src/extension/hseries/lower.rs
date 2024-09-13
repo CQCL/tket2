@@ -91,8 +91,8 @@ fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
 
 fn build_to_radians(b: &mut DFGBuilder<Hugr>, rotation: Wire) -> Result<Wire, BuildError> {
     let turns = b.add_toturns(rotation)?;
-    let tau = pi_mul_f64(b, 2.0);
-    let float = b.add_dataflow_op(FloatOps::fmul, [turns, tau])?.out_wire(0);
+    let pi = pi_mul_f64(b, 1.0);
+    let float = b.add_dataflow_op(FloatOps::fmul, [turns, pi])?.out_wire(0);
     Ok(float)
 }
 
