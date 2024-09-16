@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.3.0...tket2-hseries-v0.4.0) - 2024-09-16
+
+### New Features
+
+- [**breaking**] `HSeriesPass` lowers `Tk2Op`s into `HSeriesOp`s ([#602](https://github.com/CQCL/tket2/pull/602))
+- [**breaking**] simplify angle extension in to a half turns rotation type ([#611](https://github.com/CQCL/tket2/pull/611))
+
 ## [0.3.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.2.0...tket2-hseries-v0.3.0) - 2024-09-09
 
 ### Bug Fixes
