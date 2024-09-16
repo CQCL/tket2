@@ -4,10 +4,7 @@ use hugr::{
     extension::ExtensionRegistry,
     hugr::{hugrmut::HugrMut, HugrError},
     ops::{self, DataflowOpTrait},
-    std_extensions::arithmetic::{
-        float_ops::FloatOps,
-        float_types::ConstF64,
-    },
+    std_extensions::arithmetic::{float_ops::FloatOps, float_types::ConstF64},
     types::Signature,
     Hugr, HugrView, Node, Wire,
 };
