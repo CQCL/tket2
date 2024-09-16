@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/CQCL/tket2/compare/tket2-v0.3.0...tket2-v0.4.0) - 2024-09-16
+
+### Bug Fixes
+
+- angle type docstring to say 2pi ([#607](https://github.com/CQCL/tket2/pull/607))
+- Fix broken ConstAngle::TAU ([#609](https://github.com/CQCL/tket2/pull/609))
+
+### New Features
+
+- [**breaking**] simplify angle extension in to a half turns rotation type ([#611](https://github.com/CQCL/tket2/pull/611))
+
 ## [0.3.0](https://github.com/CQCL/tket2/compare/tket2-v0.2.0...tket2-v0.3.0) - 2024-09-09
 
 ### Bug Fixes
