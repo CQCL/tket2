@@ -1,6 +1,6 @@
 use hugr::builder::{BuildError, Dataflow};
 use hugr::extension::simple_op::{MakeOpDef, MakeRegisteredOp};
-use hugr::extension::{ExtensionId, ExtensionSet, Version};
+use hugr::extension::{prelude::option_type, ExtensionId, ExtensionSet, Version};
 use hugr::ops::constant::{downcast_equal_consts, CustomConst};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::{type_row, Wire};
@@ -131,9 +131,10 @@ impl MakeOpDef for RotationOp {
 
     fn signature(&self) -> hugr::extension::SignatureFunc {
         match self {
-            RotationOp::fromturns => {
-                Signature::new(type_row![FLOAT64_TYPE], type_row![ROTATION_TYPE])
-            }
+            RotationOp::fromturns => Signature::new(
+                type_row![FLOAT64_TYPE],
+                Type::from(option_type(type_row![ROTATION_TYPE])),
+            ),
             RotationOp::toturns => {
                 Signature::new(type_row![ROTATION_TYPE], type_row![FLOAT64_TYPE])
             }
@@ -259,14 +260,17 @@ mod test {
 
     #[test]
     fn test_builder() {
-        let mut builder = DFGBuilder::new(Signature::new_endo(vec![ROTATION_TYPE])).unwrap();
+        let mut builder = DFGBuilder::new(Signature::new(
+            ROTATION_TYPE,
+            Type::from(option_type(ROTATION_TYPE)),
+        ))
+        .unwrap();
 
         let [rotation] = builder.input_wires_arr();
         let turns = builder.add_toturns(rotation).unwrap();
-        let rotation = builder.add_fromturns(turns).unwrap();
-
+        let mb_rotation = builder.add_fromturns(turns).unwrap();
         let _hugr = builder
-            .finish_hugr_with_outputs([rotation], &REGISTRY)
+            .finish_hugr_with_outputs([mb_rotation], &REGISTRY)
             .unwrap();
     }
 
