@@ -44,7 +44,6 @@ lazy_static! {
             futures::EXTENSION.name(),
             PRELUDE.name(),
             FLOAT_TYPES.name(),
-            tket2::extension::rotation::ROTATION_EXTENSION.name(),
         ].into_iter().cloned()));
         HSeriesOp::load_all_ops(&mut ext).unwrap();
         ext
@@ -57,7 +56,6 @@ lazy_static! {
         futures::EXTENSION.to_owned(),
         PRELUDE.to_owned(),
         FLOAT_TYPES.to_owned(),
-        tket2::extension::rotation::ROTATION_EXTENSION.to_owned(),
     ]).unwrap();
 }
 

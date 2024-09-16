@@ -1,22 +1,33 @@
-use std::collections::HashMap;
-
 use hugr::{
     algorithms::validation::{ValidatePassError, ValidationLevel},
     builder::{BuildError, DFGBuilder, Dataflow, DataflowHugr},
     extension::ExtensionRegistry,
     hugr::{hugrmut::HugrMut, HugrError},
     ops::{self, DataflowOpTrait},
-    std_extensions::arithmetic::{float_ops::FloatOps, float_types::ConstF64},
+    std_extensions::arithmetic::{
+        float_ops::FloatOps,
+        float_types::ConstF64,
+    },
     types::Signature,
     Hugr, HugrView, Node, Wire,
 };
+use lazy_static::lazy_static;
+use std::collections::HashMap;
 use strum::IntoEnumIterator;
 use thiserror::Error;
 use tket2::{extension::rotation::RotationOpBuilder, Tk2Op};
 
 use crate::extension::hseries::{HSeriesOp, HSeriesOpBuilder};
 
-use super::REGISTRY;
+lazy_static! {
+    /// Extension registry including [crate::extension::hseries::REGISTRY] and
+    /// [tket2::extension::rotation::ROTATION_EXTENSION].
+    pub static ref REGISTRY: ExtensionRegistry = {
+        let mut registry = super::REGISTRY.to_owned();
+        registry.register(tket2::extension::rotation::ROTATION_EXTENSION.to_owned()).unwrap();
+        registry
+    };
+}
 
 pub(super) fn pi_mul_f64<T: Dataflow + ?Sized>(builder: &mut T, multiplier: f64) -> Wire {
     const_f64(builder, multiplier * std::f64::consts::PI)
