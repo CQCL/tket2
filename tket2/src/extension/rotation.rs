@@ -110,10 +110,10 @@ impl CustomConst for ConstRotation {
 #[non_exhaustive]
 /// Rotation operations
 pub enum RotationOp {
-    /// Construct rotation from number of half turns (would be multiples of π in radians).
-    fromturns,
-    /// Convert rotation to number of half turns (would be multiples of π in radians).
-    toturns,
+    /// Construct rotation from number of half-turns (would be multiples of π in radians).
+    from_halfturns,
+    /// Convert rotation to number of half-turns (would be multiples of π in radians).
+    to_halfturns,
     /// Add two angles together (experimental, may be removed, use float addition
     /// first instead if possible).
     radd,
@@ -131,11 +131,11 @@ impl MakeOpDef for RotationOp {
 
     fn signature(&self) -> hugr::extension::SignatureFunc {
         match self {
-            RotationOp::fromturns => Signature::new(
+            RotationOp::from_halfturns => Signature::new(
                 type_row![FLOAT64_TYPE],
                 Type::from(option_type(type_row![ROTATION_TYPE])),
             ),
-            RotationOp::toturns => {
+            RotationOp::to_halfturns => {
                 Signature::new(type_row![ROTATION_TYPE], type_row![FLOAT64_TYPE])
             }
             RotationOp::radd => Signature::new(
@@ -148,11 +148,11 @@ impl MakeOpDef for RotationOp {
 
     fn description(&self) -> String {
         match self {
-            RotationOp::fromturns => {
-                "Construct rotation from number of turns (would be multiples of π in radians)."
+            RotationOp::from_halfturns => {
+                "Construct rotation from number of half-turns (would be multiples of π in radians)."
             }
-            RotationOp::toturns => {
-                "Convert rotation to number of turns (would be multiples of π in radians)."
+            RotationOp::to_halfturns => {
+                "Convert rotation to number of half-turns (would be multiples of π in radians)."
             }
             RotationOp::radd => "Add two angles together (experimental).",
         }
@@ -194,16 +194,16 @@ pub(super) fn add_to_extension(extension: &mut Extension) {
 /// "tket2.rotation" operations.
 pub trait RotationOpBuilder: Dataflow {
     /// Add a "tket2.rotation.fromturns" op.
-    fn add_fromturns(&mut self, turns: Wire) -> Result<Wire, BuildError> {
+    fn add_from_halfturns(&mut self, turns: Wire) -> Result<Wire, BuildError> {
         Ok(self
-            .add_dataflow_op(RotationOp::fromturns, [turns])?
+            .add_dataflow_op(RotationOp::from_halfturns, [turns])?
             .out_wire(0))
     }
 
     /// Add a "tket2.rotation.toturns" op.
-    fn add_toturns(&mut self, rotation: Wire) -> Result<Wire, BuildError> {
+    fn add_to_halfturns(&mut self, rotation: Wire) -> Result<Wire, BuildError> {
         Ok(self
-            .add_dataflow_op(RotationOp::toturns, [rotation])?
+            .add_dataflow_op(RotationOp::to_halfturns, [rotation])?
             .out_wire(0))
     }
 }
@@ -267,8 +267,8 @@ mod test {
         .unwrap();
 
         let [rotation] = builder.input_wires_arr();
-        let turns = builder.add_toturns(rotation).unwrap();
-        let mb_rotation = builder.add_fromturns(turns).unwrap();
+        let turns = builder.add_to_halfturns(rotation).unwrap();
+        let mb_rotation = builder.add_from_halfturns(turns).unwrap();
         let _hugr = builder
             .finish_hugr_with_outputs([mb_rotation], &REGISTRY)
             .unwrap();
