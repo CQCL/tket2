@@ -1,22 +1,30 @@
-use std::collections::HashMap;
-
 use hugr::{
     algorithms::validation::{ValidatePassError, ValidationLevel},
     builder::{BuildError, DFGBuilder, Dataflow, DataflowHugr},
     extension::ExtensionRegistry,
     hugr::{hugrmut::HugrMut, HugrError},
     ops::{self, DataflowOpTrait},
-    std_extensions::arithmetic::float_types::ConstF64,
+    std_extensions::arithmetic::{float_ops::FloatOps, float_types::ConstF64},
     types::Signature,
     Hugr, HugrView, Node, Wire,
 };
+use lazy_static::lazy_static;
+use std::collections::HashMap;
 use strum::IntoEnumIterator;
 use thiserror::Error;
-use tket2::{extension::angle::AngleOpBuilder, Tk2Op};
+use tket2::{extension::rotation::RotationOpBuilder, Tk2Op};
 
 use crate::extension::hseries::{HSeriesOp, HSeriesOpBuilder};
 
-use super::REGISTRY;
+lazy_static! {
+    /// Extension registry including [crate::extension::hseries::REGISTRY] and
+    /// [tket2::extension::rotation::ROTATION_EXTENSION].
+    pub static ref REGISTRY: ExtensionRegistry = {
+        let mut registry = super::REGISTRY.to_owned();
+        registry.register(tket2::extension::rotation::ROTATION_EXTENSION.to_owned()).unwrap();
+        registry
+    };
+}
 
 pub(super) fn pi_mul_f64<T: Dataflow + ?Sized>(builder: &mut T, multiplier: f64) -> Wire {
     const_f64(builder, multiplier * std::f64::consts::PI)
@@ -68,25 +76,32 @@ fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
         (Tk2Op::CY, [c, t]) => b.build_cy(*c, *t)?.into(),
         (Tk2Op::CZ, [c, t]) => b.build_cz(*c, *t)?.into(),
         (Tk2Op::Rx, [q, angle]) => {
-            let float = b.add_atorad(*angle)?;
+            let float = build_to_radians(&mut b, *angle)?;
             vec![b.build_rx(*q, float)?]
         }
         (Tk2Op::Ry, [q, angle]) => {
-            let float = b.add_atorad(*angle)?;
+            let float = build_to_radians(&mut b, *angle)?;
             vec![b.build_ry(*q, float)?]
         }
         (Tk2Op::Rz, [q, angle]) => {
-            let float = b.add_atorad(*angle)?;
+            let float = build_to_radians(&mut b, *angle)?;
             vec![b.add_rz(*q, float)?]
         }
         (Tk2Op::CRz, [c, t, angle]) => {
-            let float = b.add_atorad(*angle)?;
+            let float = build_to_radians(&mut b, *angle)?;
             b.build_crz(*c, *t, float)?.into()
         }
         (Tk2Op::Toffoli, [a, b_, c]) => b.build_toffoli(*a, *b_, *c)?.into(),
         _ => return Err(LowerTk2Error::UnknownOp(op, inputs.len())), // non-exhaustive
     };
     Ok(b.finish_hugr_with_outputs(outputs, &REGISTRY)?)
+}
+
+fn build_to_radians(b: &mut DFGBuilder<Hugr>, rotation: Wire) -> Result<Wire, BuildError> {
+    let turns = b.add_to_halfturns(rotation)?;
+    let pi = pi_mul_f64(b, 1.0);
+    let float = b.add_dataflow_op(FloatOps::fmul, [turns, pi])?.out_wire(0);
+    Ok(float)
 }
 
 /// Lower `Tk2Op` operations to `HSeriesOp` operations.
@@ -179,7 +194,7 @@ impl LowerTket2ToHSeriesPass {
 #[cfg(test)]
 mod test {
     use hugr::{builder::FunctionBuilder, type_row, HugrView};
-    use tket2::{extension::angle::ANGLE_TYPE, Circuit};
+    use tket2::{extension::rotation::ROTATION_TYPE, Circuit};
 
     use super::*;
     use rstest::rstest;
@@ -251,7 +266,7 @@ mod test {
 
     #[test]
     fn test_mixed() {
-        let mut b = DFGBuilder::new(Signature::new(type_row![ANGLE_TYPE], type_row![])).unwrap();
+        let mut b = DFGBuilder::new(Signature::new(type_row![ROTATION_TYPE], type_row![])).unwrap();
         let [angle] = b.input_wires_arr();
         let [q] = b.add_dataflow_op(Tk2Op::QAlloc, []).unwrap().outputs_arr();
         let [q] = b.add_dataflow_op(Tk2Op::H, [q]).unwrap().outputs_arr();
@@ -264,8 +279,8 @@ mod test {
 
         let lowered = lower_tk2_op(&mut h).unwrap();
         assert_eq!(lowered.len(), 4);
-        // dfg, input, output, alloc, phasedx, rz, atorad, phasedx, free + 4x(float + load)
-        assert_eq!(h.node_count(), 17);
+        // dfg, input, output, alloc, phasedx, rz, toturns, fmul, phasedx, free + 5x(float + load)
+        assert_eq!(h.node_count(), 20);
         assert_eq!(check_lowered(&h), Ok(()));
     }
 }

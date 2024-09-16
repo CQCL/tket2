@@ -10,7 +10,7 @@ use hugr::IncomingPort;
 use serde::de::Error;
 use tket_json_rs::circuit_json;
 
-use crate::extension::angle::ANGLE_TYPE;
+use crate::extension::rotation::ROTATION_TYPE;
 use crate::extension::{REGISTRY, TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME};
 use crate::serialize::pytket::OpConvertError;
 
@@ -38,7 +38,7 @@ pub struct OpaqueTk1Op {
     /// instead stored purely as metadata for the `Operation`.
     param_inputs: Vec<Option<IncomingPort>>,
     /// The number of non-None inputs in `param_inputs`, corresponding to the
-    /// ANGLE_TYPE inputs to the Hugr operation.
+    /// ROTATION_TYPE inputs to the Hugr operation.
     pub num_params: usize,
 }
 
@@ -112,7 +112,7 @@ impl OpaqueTk1Op {
             vec![BOOL_T.clone(); self.num_bits],
         ]
         .concat();
-        let params = vec![ANGLE_TYPE; self.num_params];
+        let params = vec![ROTATION_TYPE; self.num_params];
         Signature::new([linear.clone(), params].concat(), linear)
             .with_extension_delta(TKET1_EXTENSION_ID)
     }

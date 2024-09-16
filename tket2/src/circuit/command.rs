@@ -485,7 +485,7 @@ mod test {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
-    use crate::extension::angle::ConstAngle;
+    use crate::extension::rotation::ConstRotation;
     use crate::extension::REGISTRY;
     use crate::utils::{build_module_with_circuit, build_simple_circuit};
     use crate::Tk2Op;
@@ -590,7 +590,7 @@ mod test {
         let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), qb_row)).unwrap();
         let [q_in] = h.input_wires_arr();
 
-        let constant = h.add_constant(Value::extension(ConstAngle::PI_2));
+        let constant = h.add_constant(Value::extension(ConstRotation::PI_2));
         let loaded_const = h.load_const(&constant);
         let rz = h.add_dataflow_op(Tk2Op::Rz, [q_in, loaded_const]).unwrap();
 
@@ -605,10 +605,7 @@ mod test {
         // First command is the constant definition.
         // It has a single output.
         let const_cmd = commands.next().unwrap();
-        assert_eq!(
-            const_cmd.optype().name().as_str(),
-            "const:custom:a(2π*1/2^2)"
-        );
+        assert_eq!(const_cmd.optype().name().as_str(), "const:custom:a(π*0.5)");
         assert_eq_iter!(const_cmd.inputs().map(|(u, _, _)| u), [],);
         assert_eq_iter!(
             const_cmd.outputs().map(|(u, _, _)| u),
