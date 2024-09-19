@@ -1937,6 +1937,8 @@ name = "tket2-hseries"
 version = "0.4.0"
 dependencies = [
  "clap",
+ "clap-verbosity-flag",
+ "clio",
  "cool_asserts",
  "hugr",
  "hugr-cli",

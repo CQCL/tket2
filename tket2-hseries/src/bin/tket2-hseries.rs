@@ -1,10 +1,13 @@
 //! CLI for tket2-hseries
 
+use std::process::ExitCode;
+
 use clap::Parser as _;
+use clap_verbosity_flag::Level;
 use hugr::extension::ExtensionRegistry;
 use tket2_hseries::cli::CliArgs;
 
-fn main() {
+fn main() -> ExitCode {
     match CliArgs::parse() {
         CliArgs::GenExtensions(args) => {
             let reg = ExtensionRegistry::try_new([
@@ -17,10 +20,21 @@ fn main() {
             .unwrap();
 
             args.run_dump(&reg);
+            ExitCode::SUCCESS
+        }
+        CliArgs::Run(mut args) => {
+            if let Err(e) = args.run() {
+                if args.verbosity(Level::Error) {
+                    eprintln!("Error: {}", e);
+                }
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            }
         }
         _ => {
             eprintln!("Unknown command");
-            std::process::exit(1);
+            ExitCode::FAILURE
         }
-    };
+    }
 }

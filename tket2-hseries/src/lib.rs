@@ -28,9 +28,23 @@ pub mod lazify_measure;
 /// Returns an error if this cannot be done.
 ///
 /// To construct a `HSeriesPass` use [Default::default].
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct HSeriesPass {
     validation_level: ValidationLevel,
+    run_lowertket2: bool,
+    run_lazify_measure: bool,
+    run_force_order: bool,
+}
+
+impl Default for HSeriesPass {
+    fn default() -> Self {
+        Self {
+            validation_level: ValidationLevel::default(),
+            run_lowertket2: true,
+            run_lazify_measure: true,
+            run_force_order: true,
+        }
+    }
 }
 
 #[derive(Error, Debug)]
@@ -58,24 +72,30 @@ impl HSeriesPass {
         hugr: &mut impl HugrMut,
         registry: &ExtensionRegistry,
     ) -> Result<(), HSeriesPassError> {
-        self.lower_tk2().run(hugr, registry)?;
-        self.lazify_measure().run(hugr, registry)?;
-        self.validation_level
-            .run_validated_pass(hugr, registry, |hugr, _| {
-                force_order(hugr, hugr.root(), |hugr, node| {
-                    let optype = hugr.get_optype(node);
-                    if optype.cast::<Tk2Op>().is_some() || optype.cast::<HSeriesOp>().is_some() {
-                        // quantum ops are lifted as early as possible
-                        -1
-                    } else if let Some(FutureOpDef::Read) = hugr.get_optype(node).cast() {
-                        // read ops are sunk as late as possible
-                        1
-                    } else {
-                        0
-                    }
+        if self.run_lowertket2 {
+            self.lower_tk2().run(hugr, registry)?;
+        }
+        if self.run_lazify_measure {
+            self.lazify_measure().run(hugr, registry)?;
+        }
+        if self.run_force_order {
+            self.validation_level
+                .run_validated_pass(hugr, registry, |hugr, _| {
+                    force_order(hugr, hugr.root(), |hugr, node| {
+                        let optype = hugr.get_optype(node);
+                        if optype.cast::<Tk2Op>().is_some() || optype.cast::<HSeriesOp>().is_some() {
+                            // quantum ops are lifted as early as possible
+                            -1
+                        } else if let Some(FutureOpDef::Read) = hugr.get_optype(node).cast() {
+                            // read ops are sunk as late as possible
+                            1
+                        } else {
+                            0
+                        }
+                    })?;
+                    Ok::<_, HSeriesPassError>(())
                 })?;
-                Ok::<_, HSeriesPassError>(())
-            })?;
+            }
         Ok(())
     }
 
@@ -90,6 +110,22 @@ impl HSeriesPass {
     /// Returns a new `HSeriesPass` with the given [ValidationLevel].
     pub fn with_validation_level(mut self, level: ValidationLevel) -> Self {
         self.validation_level = level;
+        self
+    }
+
+    pub fn with_lowertket2(mut self, run: bool) -> Self {
+        self.run_lowertket2 = run;
+        self
+
+    }
+
+    pub fn with_lazify_measure(mut self, run: bool) -> Self {
+        self.run_lazify_measure = run;
+        self
+    }
+
+    pub fn with_force_order(mut self, run: bool) -> Self {
+        self.run_force_order = run;
         self
     }
 }
