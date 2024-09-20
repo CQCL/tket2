@@ -2,7 +2,7 @@
 from ._tket2.optimiser import BadgerOptimiser, PortDiffGraph
 from ._tket2.circuit import Tk2Circuit
 
-from z3 import Bool, Optimize, Implies, Not, And, sat
+from z3 import Bool, Optimize, Implies, Not, And, Or, sat
 
 __all__ = ["BadgerOptimiser", "PortDiffGraph"]
 
@@ -19,6 +19,9 @@ def construct_z3_optimiser(diffs: PortDiffGraph, exclude_cycles=None):
     for i in range(diffs.n_diffs()):
         b = bool_array[i]
         s.add_soft(b, diffs.value(i))
+
+    # Exclude all-false case
+    s.add(Or(*bool_array))
 
     edges = diffs.all_edges()
     for i in range(len(edges)):
@@ -58,7 +61,6 @@ def extract_optimal_circuit(diffs: PortDiffGraph) -> Tk2Circuit:
         selected = [i for (i, b) in enumerate(bool_array) if model[b]]
         try:
             solution = diffs.extract_circuit(selected)
-            print(f"Selected rewrites: {selected}")
         except Exception:
             solution = None
             exclude_cycles.append(selected)

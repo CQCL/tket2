@@ -402,8 +402,6 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
                     pq.push(new_circ, new_cost);
                     logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
                 }
-                println!("pq len: {}", pq.len());
-                println!("salient diffs len: {}", salient_diffs.len());
             }
 
             if let Some(timeout) = opt.timeout {
@@ -424,10 +422,6 @@ impl<R, Cost: StrategyCost + Clone> BadgerOptimiser<R, Cost> {
                     break;
                 }
             }
-        }
-
-        if timeout_flag {
-            println!("Timed out");
         }
 
         logger.log_processing_end(

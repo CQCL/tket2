@@ -1281,8 +1281,7 @@ checksum = "da544ee218f0d287a911e9c99a39a8c9bc8fcad3cb8db5959940044ecfc67265"
 [[package]]
 name = "portdiff"
 version = "0.4.0-rc.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36c95273c2d34a4a1e0a7e37e90418fa8a9d1069f9b339b4e65ead2135bd4e80"
+source = "git+https://github.com/lmondada/portdiff.git?rev=e2f42af#e2f42af9a28a933bde2a677da24f94586557ad35"
 dependencies = [
  "bimap",
  "delegate 0.12.0",
@@ -1514,7 +1513,7 @@ checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
 [[package]]
 name = "relrc"
 version = "0.3.0-rc.4"
-source = "git+https://github.com/lmondada/relrc.git?rev=ae8e03f0bbb07e6314cba247d1b5239c5bef3ae1#ae8e03f0bbb07e6314cba247d1b5239c5bef3ae1"
+source = "git+https://github.com/lmondada/relrc.git?rev=68e2c8a#68e2c8a79add5f1c50d21d204c3e14f84652af86"
 dependencies = [
  "derive-where",
  "derive_more 0.99.18",
