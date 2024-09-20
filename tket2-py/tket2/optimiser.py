@@ -2,9 +2,13 @@
 from ._tket2.optimiser import BadgerOptimiser, PortDiffGraph
 from ._tket2.circuit import Tk2Circuit
 
+from urllib.parse import urlencode, quote_plus
+
 from z3 import Bool, Optimize, Implies, Not, And, Or, sat
 
 __all__ = ["BadgerOptimiser", "PortDiffGraph"]
+
+PortDiffGraph.render_jupyter = lambda self: render_portdiff_jupyter(self)
 
 
 def construct_z3_optimiser(diffs: PortDiffGraph, exclude_cycles=None):
@@ -65,3 +69,19 @@ def extract_optimal_circuit(diffs: PortDiffGraph) -> Tk2Circuit:
             solution = None
             exclude_cycles.append(selected)
     return solution
+
+
+def render_portdiff_jupyter(diffs: PortDiffGraph):
+    from IPython.display import HTML, IFrame, display
+
+    params = {"data": diffs.json(), "type": "tket"}
+    base_url = "http://luca.mondada.net/portdiff"
+    url = f"{base_url}?{urlencode(params, quote_via=quote_plus)}"
+    if len(url) > 8200:
+        display(
+            HTML(
+                "<p>Portdiff graph is too large to render in notebook. Export as JSON and open in a browser.</p>"
+            )
+        )
+    else:
+        display(IFrame(url, width=700, height=400))

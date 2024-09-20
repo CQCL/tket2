@@ -1281,7 +1281,7 @@ checksum = "da544ee218f0d287a911e9c99a39a8c9bc8fcad3cb8db5959940044ecfc67265"
 [[package]]
 name = "portdiff"
 version = "0.4.0-rc.2"
-source = "git+https://github.com/lmondada/portdiff.git?rev=e2f42af#e2f42af9a28a933bde2a677da24f94586557ad35"
+source = "git+https://github.com/lmondada/portdiff.git?rev=e38eb9d#e38eb9d7fbee74d40354164b2b50800a3ebae5c6"
 dependencies = [
  "bimap",
  "delegate 0.12.0",

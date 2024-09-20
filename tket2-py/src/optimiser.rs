@@ -220,6 +220,10 @@ impl PyPortDiffGraph {
     fn n_diffs(&self) -> usize {
         self.0.get_diffs().unwrap().len()
     }
+
+    fn json(&self) -> String {
+        serde_json::to_string(&self.0).unwrap()
+    }
 }
 
 impl From<PortDiffGraph<StaticSizeCircuit>> for PyPortDiffGraph {
