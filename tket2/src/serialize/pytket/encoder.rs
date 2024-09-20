@@ -620,7 +620,7 @@ impl ParameterTracker {
                 inputs[0].clone()
             }
             OpType::ExtensionOp(_) if optype.cast() == Some(RotationOp::radd) => {
-                format!("{} + {}", inputs[0], inputs[1])
+                format!("({} + {})", inputs[0], inputs[1])
             }
             _ => {
                 let Some(s) = match_symb_const_op(optype) else {

@@ -289,8 +289,8 @@ fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
 /// converted back to circuit inputs. This would require parsing symbolic
 /// expressions.
 #[rstest]
-#[case::symbolic(circ_add_angles_symbolic(), "f0 + f1")]
-#[case::constants(circ_add_angles_constants(), "0.2 + 0.3")]
+#[case::symbolic(circ_add_angles_symbolic(), "(f0 + f1)")]
+#[case::constants(circ_add_angles_constants(), "(0.2 + 0.3)")]
 fn test_add_angle_serialise(#[case] circ_add_angles: Circuit, #[case] param_str: &str) {
     let ser: SerialCircuit = SerialCircuit::encode(&circ_add_angles).unwrap();
     assert_eq!(ser.commands.len(), 1);
