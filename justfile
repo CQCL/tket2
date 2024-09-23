@@ -18,7 +18,7 @@ build:
 
 # Run all the tests.
 test language="[rust|python]" : (_run_lang language \
-        "uv run cargo test --all-features --workspace" \
+        "uv run cargo test --all-features" \
         "uv run maturin develop && uv run pytest"
     )
 
