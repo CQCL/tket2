@@ -75,7 +75,7 @@ def render_portdiff_jupyter(diffs: PortDiffGraph):
     from IPython.display import HTML, IFrame, display
 
     params = {"data": diffs.json(), "type": "tket"}
-    base_url = "http://luca.mondada.net/portdiff"
+    base_url = "https://luca.mondada.net/portdiff"
     url = f"{base_url}?{urlencode(params, quote_via=quote_plus)}"
     if len(url) > 8200:
         display(
