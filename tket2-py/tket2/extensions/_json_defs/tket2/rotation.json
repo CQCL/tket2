@@ -19,7 +19,7 @@
     "from_halfturns": {
       "extension": "tket2.rotation",
       "name": "from_halfturns",
-      "description": "Construct rotation from number of half-turns (would be multiples of π in radians).",
+      "description": "Construct rotation from number of half-turns (would be multiples of π in radians). Returns None if the float is non-finite.",
       "signature": {
         "params": [],
         "body": {
