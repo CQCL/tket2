@@ -1,7 +1,6 @@
 use crate::extension::rotation::ROTATION_TYPE;
-use crate::extension::{
-    SYM_OP_ID, TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID,
-};
+use crate::extension::sympy::SympyOpDef;
+use crate::extension::{SYM_OP_ID, TKET2_EXTENSION_ID as EXTENSION_ID};
 use hugr::ops::custom::ExtensionOp;
 use hugr::ops::NamedOp;
 use hugr::{
@@ -176,10 +175,7 @@ impl Tk2Op {
 
 /// Initialize a new custom symbolic expression constant op from a string.
 pub fn symbolic_constant_op(arg: String) -> OpType {
-    EXTENSION
-        .instantiate_extension_op(&SYM_OP_ID, vec![arg.into()], &REGISTRY)
-        .unwrap()
-        .into()
+    SympyOpDef.with_expr(arg).into()
 }
 
 /// match against a symbolic constant
