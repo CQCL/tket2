@@ -49,7 +49,7 @@ impl FromStr for SympyOpDef {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == SYM_EXPR_NAME {
+        if s == SYM_OP_ID {
             Ok(Self)
         } else {
             Err(())
@@ -143,4 +143,34 @@ lazy_static! {
 pub static ref SYM_EXPR_T: CustomType =
     TKET2_EXTENSION.get_type(&SYM_EXPR_NAME).unwrap().instantiate([]).unwrap();
 
+}
+
+#[cfg(test)]
+mod tests {
+    use hugr::extension::simple_op::MakeOpDef;
+    use hugr::ops::NamedOp;
+
+    use super::*;
+    use crate::extension::TKET2_EXTENSION;
+
+    #[test]
+    fn test_extension() {
+        assert_eq!(TKET2_EXTENSION.name(), &SympyOpDef.extension());
+
+        let opdef = TKET2_EXTENSION.get_op(&SympyOpDef.name());
+        assert_eq!(SympyOpDef::from_def(opdef.unwrap()), Ok(SympyOpDef));
+    }
+
+    #[test]
+    fn test_op() {
+        let op = SympyOp {
+            expr: "cos(pi/2)".to_string(),
+        };
+
+        let op_t: ExtensionOp = op.clone().to_extension_op().unwrap();
+        assert!(SympyOpDef::from_op(&op_t).is_ok());
+
+        let new_op = SympyOp::from_op(&op_t).unwrap();
+        assert_eq!(new_op, op);
+    }
 }
