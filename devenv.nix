@@ -1,7 +1,6 @@
 { pkgs, lib, config, inputs, ... }:
 let
   pkgs-2305 = import inputs.nixpkgs-2305 { system = pkgs.stdenv.system; };
-  pkgs-poetry = import inputs.poetry-fix { system = pkgs.stdenv.system; };
 in
 {
   # https://devenv.sh/packages/
@@ -34,11 +33,12 @@ in
     hello
     cargo --version
     python --version
-    poetry --version
+    uv --version
     export LLVM_COV="${pkgs.llvmPackages_16.libllvm}/bin/llvm-cov"
     export LLVM_PROFDATA="${pkgs.llvmPackages_16.libllvm}/bin/llvm-profdata"
 
     just setup
+    source .venv/bin/activate
   '';
 
   # https://devenv.sh/languages/
@@ -51,11 +51,8 @@ in
 
   languages.python = {
     enable = true;
-    poetry = {
+    uv = {
       enable = true;
-      activate.enable = true;
-      # contains fix to poetry package on macos
-      package = pkgs-poetry.poetry;
     };
   };
 

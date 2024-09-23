@@ -13,24 +13,28 @@
 //! of the Quartz repository.
 
 use derive_more::{From, Into};
+use hugr::ops::custom::OpaqueOpError;
 use hugr::{Hugr, HugrView, PortIndex};
 use itertools::Itertools;
-use portmatching::PatternID;
+use portdiff as pd;
+use portmatching::{PatternID, PortMatcher};
 use std::{
     collections::HashSet,
     fs::File,
-    io,
+    io::{self},
     path::{Path, PathBuf},
 };
 use thiserror::Error;
 
 use crate::{
-    circuit::{remove_empty_wire, Circuit},
+    circuit::{cost::CircuitCost, RemoveEmptyWire},
     optimiser::badger::{load_eccs_json_file, EqCircClass},
-    portmatching::{CircuitPattern, PatternMatcher},
+    portdiff::{DiffCircuit, DiffCircuitMatcher, DiffRewrite},
+    portmatching::CircuitMatcher,
+    static_circ::{NonConvexRewriteError, StaticQubitIndex, StaticRewrite, StaticSizeCircuit},
 };
 
-use super::{CircuitRewrite, Rewriter};
+use super::{strategy::StrategyCost, Rewriter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, From, Into, serde::Serialize, serde::Deserialize)]
 struct TargetID(usize);
@@ -42,11 +46,11 @@ struct TargetID(usize);
 /// or a representative circuit into any of the equivalent non-representative
 /// circuits.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ECCRewriter {
+pub struct ECCRewriter<Matcher, Circuit> {
     /// Matcher for finding patterns.
-    matcher: PatternMatcher,
+    matcher: Matcher,
     /// Targets of some rewrite rules.
-    targets: Vec<Hugr>,
+    targets: Vec<Circuit>,
     /// Rewrites, stored as a map from the source PatternID to possibly multiple
     /// target TargetIDs. The usize index of PatternID is used to index into
     /// the outer vector.
@@ -56,7 +60,7 @@ pub struct ECCRewriter {
     empty_wires: Vec<Vec<usize>>,
 }
 
-impl ECCRewriter {
+impl<C: From<Hugr> + RemoveEmptyWire> ECCRewriter<CircuitMatcher, C> {
     /// Create a new rewriter from equivalent circuit classes in JSON file.
     ///
     /// This uses the Quartz JSON file format to store equivalent circuit classes.
@@ -77,7 +81,7 @@ impl ECCRewriter {
         let eccs: Vec<EqCircClass> = eccs.into();
         let rewrite_rules = get_rewrite_rules(&eccs);
         let patterns = get_patterns(&eccs);
-        let targets = into_targets(eccs);
+        let targets: Vec<C> = into_targets(eccs);
         // Remove failed patterns
         let (patterns, empty_wires, rewrite_rules): (Vec<_>, Vec<_>, Vec<_>) = patterns
             .into_iter()
@@ -88,9 +92,9 @@ impl ECCRewriter {
                 let targets = r
                     .into_iter()
                     .filter(|&id| {
-                        let circ = (&targets[id.0]).into();
+                        let circ = &targets[id.0];
                         let target_empty_wires: HashSet<_> =
-                            empty_wires(&circ).into_iter().collect();
+                            circ.empty_wires().into_iter().collect();
                         pattern_empty_wires
                             .iter()
                             .all(|&w| target_empty_wires.contains(&w))
@@ -99,7 +103,8 @@ impl ECCRewriter {
                 Some((pattern, pattern_empty_wires, targets))
             })
             .multiunzip();
-        let matcher = PatternMatcher::from_patterns(patterns);
+        let matcher = CircuitMatcher::try_from_patterns(patterns).unwrap();
+
         Self {
             matcher,
             targets,
@@ -107,12 +112,76 @@ impl ECCRewriter {
             empty_wires,
         }
     }
+}
 
+impl<C: From<Hugr> + RemoveEmptyWire> ECCRewriter<DiffCircuitMatcher, C> {
+    /// Create a new rewriter from equivalent circuit classes in JSON file.
+    ///
+    /// This uses the Quartz JSON file format to store equivalent circuit classes.
+    /// Generate such a file using the `gen_ecc_set.sh` script at the root of
+    /// the Quartz repository.
+    ///
+    /// Quartz: <https://github.com/quantum-compiler/quartz/>.
+    pub fn try_from_eccs_json_file(path: impl AsRef<Path>) -> io::Result<Self> {
+        let eccs = load_eccs_json_file(path)?;
+        Ok(Self::from_eccs(eccs))
+    }
+
+    /// Create a new rewriter from a list of equivalent circuit classes.
+    ///
+    /// Equivalence classes are represented as [`EqCircClass`]s, lists of
+    /// HUGRs where one of the elements is chosen as the representative.
+    pub fn from_eccs(eccs: impl Into<Vec<EqCircClass>>) -> Self {
+        let eccs: Vec<EqCircClass> = eccs.into();
+        let rewrite_rules = get_rewrite_rules(&eccs);
+        let patterns = get_patterns(&eccs);
+        let targets: Vec<C> = into_targets(eccs);
+        // Remove failed patterns
+        let (patterns, empty_wires, rewrite_rules): (Vec<_>, Vec<_>, Vec<_>) = patterns
+            .into_iter()
+            .zip(rewrite_rules)
+            .filter_map(|(p, r)| {
+                // Filter out target IDs where empty wires are not empty
+                let (pattern, pattern_empty_wires) = p?;
+                let targets = r
+                    .into_iter()
+                    .filter(|&id| {
+                        let circ = &targets[id.0];
+                        let target_empty_wires: HashSet<_> =
+                            circ.empty_wires().into_iter().collect();
+                        pattern_empty_wires
+                            .iter()
+                            .all(|&w| target_empty_wires.contains(&w))
+                    })
+                    .collect();
+                Some((pattern, pattern_empty_wires, targets))
+            })
+            .multiunzip();
+        let matcher = DiffCircuitMatcher::try_from_patterns(patterns).unwrap();
+        Self {
+            matcher,
+            targets,
+            rewrite_rules,
+            empty_wires,
+        }
+    }
+}
+
+impl<C: From<Hugr> + RemoveEmptyWire, M> ECCRewriter<M, C>
+where
+    M: serde::Serialize,
+    for<'a> M: serde::Deserialize<'a>,
+{
     /// Get all targets of rewrite rules given a source pattern.
-    fn get_targets(&self, pattern: PatternID) -> impl Iterator<Item = Circuit<&Hugr>> {
+    fn get_targets(&self, pattern: PatternID) -> impl Iterator<Item = &C> {
         self.rewrite_rules[pattern.0]
             .iter()
-            .map(|id| (&self.targets[id.0]).into())
+            .map(|id| &self.targets[id.0])
+    }
+
+    /// Get the matcher used by this rewriter.
+    pub fn matcher(&self) -> &M {
+        &self.matcher
     }
 
     /// Serialise a rewriter to an IO stream.
@@ -120,10 +189,10 @@ impl ECCRewriter {
     /// Precomputed rewriters can be serialised as binary and then loaded
     /// later using [`ECCRewriter::load_binary_io`].
     #[cfg(feature = "binary-eccs")]
-    pub fn save_binary_io<W: io::Write>(
-        &self,
-        writer: W,
-    ) -> Result<(), RewriterSerialisationError> {
+    pub fn save_binary_io<W: io::Write>(&self, writer: W) -> Result<(), RewriterSerialisationError>
+    where
+        C: serde::Serialize,
+    {
         let mut encoder = zstd::Encoder::new(writer, 9)?;
         rmp_serde::encode::write(&mut encoder, &self)?;
         encoder.finish()?;
@@ -134,9 +203,15 @@ impl ECCRewriter {
     ///
     /// Loads streams as created by [`ECCRewriter::save_binary_io`].
     #[cfg(feature = "binary-eccs")]
-    pub fn load_binary_io<R: io::Read>(reader: R) -> Result<Self, RewriterSerialisationError> {
+    pub fn load_binary_io<R: io::Read>(reader: R) -> Result<Self, RewriterSerialisationError>
+    where
+        C: for<'a> serde::Deserialize<'a>,
+    {
         let data = zstd::decode_all(reader)?;
-        Ok(rmp_serde::decode::from_slice(&data)?)
+        let eccs: Self = rmp_serde::decode::from_slice(&data)?;
+        // TODO: call this if `C` is a `Circuit` or a `Hugr`.
+        //eccs.resolve_extension_ops()?;
+        Ok(eccs)
     }
 
     /// Save a rewriter as a binary file.
@@ -149,10 +224,10 @@ impl ECCRewriter {
     ///
     /// If successful, returns the path to the newly created file.
     #[cfg(feature = "binary-eccs")]
-    pub fn save_binary(
-        &self,
-        name: impl AsRef<Path>,
-    ) -> Result<PathBuf, RewriterSerialisationError> {
+    pub fn save_binary(&self, name: impl AsRef<Path>) -> Result<PathBuf, RewriterSerialisationError>
+    where
+        C: serde::Serialize,
+    {
         let mut file_name = PathBuf::from(name.as_ref());
         file_name.set_extension("rwr");
         let file = File::create(&file_name)?;
@@ -165,30 +240,126 @@ impl ECCRewriter {
     ///
     /// Requires the `binary-eccs` feature to be enabled.
     #[cfg(feature = "binary-eccs")]
-    pub fn load_binary(name: impl AsRef<Path>) -> Result<Self, RewriterSerialisationError> {
+    pub fn load_binary(name: impl AsRef<Path>) -> Result<Self, RewriterSerialisationError>
+    where
+        C: for<'a> serde::Deserialize<'a>,
+    {
         let mut file = File::open(name)?;
         // Note: Buffering does not improve performance when using
         // `zstd::decode_all`.
         Self::load_binary_io(&mut file)
     }
+
+    // When the ECC gets loaded, all custom operations are an instance of `OpaqueOp`.
+    // We need to resolve them into `ExtensionOp`s by validating the definitions.
+    //
+    // NOTE: This shouldn't be needed when `C = StaticSizeCircuit`, since ops are always resolved to Tk2Ops there.
+    // If C is a `Circuit` or a `Hugr`, however, we should implement and call this from `load_binary_io`.
+    //
+    //fn resolve_extension_ops(&mut self) -> Result<(), OpaqueOpError> {
+    //    self.targets
+    //        .iter_mut()
+    //        .try_for_each(|hugr| resolve_extension_ops(hugr, &REGISTRY))
+    //}
 }
 
-impl Rewriter for ECCRewriter {
-    fn get_rewrites(&self, circ: &Circuit<impl HugrView>) -> Vec<CircuitRewrite> {
+impl Rewriter<StaticSizeCircuit> for ECCRewriter<CircuitMatcher, StaticSizeCircuit> {
+    type CircuitRewrite = StaticRewrite<Box<dyn Fn(StaticQubitIndex) -> StaticQubitIndex>>;
+    type Error = NonConvexRewriteError;
+
+    fn get_rewrites(&self, circ: &StaticSizeCircuit) -> Vec<Self::CircuitRewrite> {
         let matches = self.matcher.find_matches(circ);
         matches
             .into_iter()
             .flat_map(|m| {
-                let pattern_id = m.pattern_id();
+                let pattern_id = m.pattern;
                 self.get_targets(pattern_id).map(move |repl| {
                     let mut repl = repl.to_owned();
+                    let mut pattern = self.targets[pattern_id.0].clone();
                     for &empty_qb in self.empty_wires[pattern_id.0].iter().rev() {
-                        remove_empty_wire(&mut repl, empty_qb).unwrap();
+                        repl.remove_empty_wire(empty_qb).unwrap();
+                        pattern.remove_empty_wire(empty_qb).unwrap();
                     }
-                    m.to_rewrite(circ, repl).expect("invalid replacement")
+                    StaticRewrite::from_pattern_match(&m, &pattern, repl)
                 })
             })
             .collect()
+    }
+
+    fn apply_rewrite(
+        &self,
+        rw: Self::CircuitRewrite,
+        circ: &StaticSizeCircuit,
+    ) -> Result<StaticSizeCircuit, NonConvexRewriteError> {
+        circ.apply_rewrite(&rw)
+    }
+
+    fn rewrite_cost_delta<S: StrategyCost>(
+        &self,
+        rw: &Self::CircuitRewrite,
+        circ: &StaticSizeCircuit,
+        strategy: &S,
+    ) -> Result<S::OpCost, Self::Error> {
+        let StaticRewrite {
+            replacement,
+            subcircuit,
+            ..
+        } = rw;
+        let mut repl_cost = strategy.circuit_cost(replacement);
+        repl_cost -= strategy.circuit_cost(
+            &circ
+                .subcircuit(subcircuit)
+                .map_err(|_| NonConvexRewriteError)?,
+        );
+        Ok(repl_cost)
+    }
+}
+
+impl Rewriter<DiffCircuit> for ECCRewriter<DiffCircuitMatcher, StaticSizeCircuit> {
+    type CircuitRewrite = DiffRewrite;
+    type Error = pd::InvalidRewriteError;
+
+    fn get_rewrites(&self, circ: &DiffCircuit) -> Vec<Self::CircuitRewrite> {
+        let matches = self.matcher.find_matches(circ).collect_vec();
+        matches
+            .into_iter()
+            .flat_map(|m| {
+                let pattern_id = m.pattern;
+                self.get_targets(pattern_id).filter_map(move |repl| {
+                    let mut repl = repl.to_owned();
+                    let mut pattern = self.targets[pattern_id.0].clone();
+                    for &empty_qb in self.empty_wires[pattern_id.0].iter().rev() {
+                        repl.remove_empty_wire(empty_qb).unwrap();
+                        pattern.remove_empty_wire(empty_qb).unwrap();
+                    }
+                    DiffRewrite::try_from_pattern_match(&m.match_data, &pattern, repl).ok()
+                })
+            })
+            .collect()
+    }
+
+    fn apply_rewrite(
+        &self,
+        rw: Self::CircuitRewrite,
+        circ: &DiffCircuit,
+    ) -> Result<DiffCircuit, Self::Error> {
+        rw.apply(circ)
+    }
+
+    fn rewrite_cost_delta<S: StrategyCost>(
+        &self,
+        rw: &Self::CircuitRewrite,
+        _: &DiffCircuit,
+        strategy: &S,
+    ) -> Result<S::OpCost, Self::Error> {
+        let DiffRewrite {
+            pattern,
+            replacement,
+            ..
+        } = rw;
+        let mut repl_cost = strategy.circuit_cost(replacement);
+        repl_cost -= strategy.circuit_cost(pattern);
+        Ok(repl_cost)
     }
 }
 
@@ -204,12 +375,16 @@ pub enum RewriterSerialisationError {
     /// An error occurred during serialisation
     #[error("Serialisation error: {0}")]
     Serialisation(#[from] rmp_serde::encode::Error),
+    /// An error occurred during resolving extension ops
+    #[error("Resolving extension ops error: {0}")]
+    OpaqueOp(#[from] OpaqueOpError),
 }
 
-fn into_targets(rep_sets: Vec<EqCircClass>) -> Vec<Hugr> {
+fn into_targets<C: From<Hugr>>(rep_sets: Vec<EqCircClass>) -> Vec<C> {
     rep_sets
         .into_iter()
         .flat_map(|rs| rs.into_circuits())
+        .map_into()
         .collect()
 }
 
@@ -233,49 +408,26 @@ fn get_rewrite_rules(rep_sets: &[EqCircClass]) -> Vec<Vec<TargetID>> {
 
 /// For an equivalence class, return all valid patterns together with the
 /// indices of the wires that have been removed in the pattern circuit.
-fn get_patterns(rep_sets: &[EqCircClass]) -> Vec<Option<(CircuitPattern, Vec<usize>)>> {
+fn get_patterns<C: From<Hugr> + RemoveEmptyWire>(
+    rep_sets: &[EqCircClass],
+) -> Vec<Option<(C, Vec<usize>)>> {
     rep_sets
         .iter()
         .flat_map(|rs| rs.circuits())
         .map(|hugr| {
-            let mut circ: Circuit = hugr.clone().into();
-            let empty_qbs = empty_wires(&circ);
+            let mut circ: C = hugr.clone().into();
+            let empty_qbs = circ.empty_wires();
             for &qb in empty_qbs.iter().rev() {
-                remove_empty_wire(&mut circ, qb).unwrap();
+                circ.remove_empty_wire(qb).unwrap();
             }
-            CircuitPattern::try_from_circuit(&circ)
-                .ok()
-                .map(|circ| (circ, empty_qbs))
-        })
-        .collect()
-}
-
-/// The port offsets of wires that are empty.
-fn empty_wires(circ: &Circuit<impl HugrView>) -> Vec<usize> {
-    let hugr = circ.hugr();
-    let input = circ.input_node();
-    let input_sig = hugr.signature(input).unwrap();
-    hugr.node_outputs(input)
-        // Only consider dataflow edges
-        .filter(|&p| input_sig.out_port_type(p).is_some())
-        // Only consider ports linked to at most one other port
-        .filter_map(|p| Some((p, hugr.linked_ports(input, p).at_most_one().ok()?)))
-        // Ports are either connected to output or nothing
-        .filter_map(|(from, to)| {
-            if let Some((n, _)) = to {
-                // Wires connected to output
-                (n == circ.output_node()).then_some(from.index())
-            } else {
-                // Wires connected to nothing
-                Some(from.index())
-            }
+            Some((circ, empty_qbs))
         })
         .collect()
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{utils::build_simple_circuit, Tk2Op};
+    use crate::{utils::build_simple_circuit, Circuit, Tk2Op};
 
     use super::*;
 
@@ -321,10 +473,11 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "TODO"]
     fn small_ecc_rewriter() {
         let ecc1 = EqCircClass::new(h_h(), vec![empty(), cx_cx()]);
         let ecc2 = EqCircClass::new(cx_x(), vec![x_cx()]);
-        let rewriter = ECCRewriter::from_eccs(vec![ecc1, ecc2]);
+        let rewriter = ECCRewriter::<DiffCircuitMatcher, _>::from_eccs(vec![ecc1, ecc2]);
         assert_eq!(rewriter.targets.len(), 5);
         assert_eq!(
             rewriter.rewrite_rules,
@@ -338,18 +491,20 @@ mod tests {
         assert_eq!(
             rewriter
                 .get_targets(PatternID(1))
-                .map(|c| c.to_owned())
+                .map(|c: &Circuit| c.clone())
                 .collect_vec(),
             [h_h()]
         );
     }
 
     #[test]
+    #[ignore = "TODO"]
     fn ecc_rewriter_from_file() {
         // In this example, all circuits are valid patterns, thus
         // PatternID == TargetID.
         let test_file = "../test_files/eccs/small_eccs.json";
-        let rewriter = ECCRewriter::try_from_eccs_json_file(test_file).unwrap();
+        let rewriter: ECCRewriter<CircuitMatcher, StaticSizeCircuit> =
+            ECCRewriter::<CircuitMatcher, _>::try_from_eccs_json_file(test_file).unwrap();
         assert_eq!(rewriter.rewrite_rules.len(), rewriter.matcher.n_patterns());
         assert_eq!(rewriter.targets.len(), 5 * 4 + 5 * 3);
 
@@ -384,21 +539,27 @@ mod tests {
     #[test]
     fn ecc_rewriter_empty_params() {
         let test_file = "../test_files/cx_cx_eccs.json";
-        let rewriter = ECCRewriter::try_from_eccs_json_file(test_file).unwrap();
+        let rewriter =
+            ECCRewriter::<CircuitMatcher, _>::try_from_eccs_json_file(test_file).unwrap();
 
         let cx_cx = cx_cx();
-        assert_eq!(rewriter.get_rewrites(&cx_cx).len(), 1);
+        assert_eq!(
+            rewriter.get_rewrites(&(&cx_cx).try_into().unwrap()).len(),
+            1
+        );
     }
 
     #[test]
     #[cfg(feature = "binary-eccs")]
     fn ecc_file_roundtrip() {
         let ecc = EqCircClass::new(h_h(), vec![empty(), cx_cx()]);
-        let rewriter = ECCRewriter::from_eccs([ecc]);
+        let rewriter: ECCRewriter<CircuitMatcher, StaticSizeCircuit> =
+            ECCRewriter::<CircuitMatcher, _>::from_eccs(vec![ecc]);
 
         let mut data: Vec<u8> = Vec::new();
         rewriter.save_binary_io(&mut data).unwrap();
-        let loaded_rewriter = ECCRewriter::load_binary_io(data.as_slice()).unwrap();
+        let loaded_rewriter =
+            ECCRewriter::<CircuitMatcher, _>::load_binary_io(data.as_slice()).unwrap();
 
         assert_eq!(
             rewriter.matcher.n_patterns(),

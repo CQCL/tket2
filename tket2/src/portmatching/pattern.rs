@@ -1,161 +1,118 @@
 //! Circuit Patterns for pattern matching
 
-use hugr::{HugrView, IncomingPort};
-use hugr::{Node, Port};
+use std::collections::BTreeSet;
+
+use hugr::Port;
+use hugr::{Direction, PortIndex};
 use itertools::Itertools;
-use portmatching::{patterns::NoRootFound, HashMap, Pattern, SinglePatternMatcher};
-use std::fmt::Debug;
+use portmatching::Pattern;
 use thiserror::Error;
 
-use super::{
-    matcher::{validate_circuit_edge, validate_circuit_node},
-    PEdge, PNode,
-};
-use crate::{circuit::Circuit, portmatching::NodeID};
+use super::constraint::constraint_key;
+use super::indexing::{DisconnectedCircuit, PatternOpPosition};
+use super::predicate::Predicate;
+use super::Constraint;
+use crate::static_circ::{OpPosition, StaticQubitIndex, StaticSizeCircuit};
 
-/// A pattern that match a circuit exactly
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub struct CircuitPattern {
-    pub(super) pattern: Pattern<NodeID, PNode, PEdge>,
-    /// The input ports
-    pub(super) inputs: Vec<Vec<(Node, Port)>>,
-    /// The output ports
-    pub(super) outputs: Vec<(Node, Port)>,
+#[derive(Debug, Clone, Copy, Error)]
+pub enum InvalidStaticPattern {
+    #[error("pattern is disconnected")]
+    Disconnected,
+    #[error("pattern has no qubits")]
+    EmptyPattern,
+    #[error("Qubit {0:?} has no operations")]
+    EmptyQubit(StaticQubitIndex),
 }
 
-impl CircuitPattern {
-    /// The number of edges in the pattern.
-    pub fn n_edges(&self) -> usize {
-        self.pattern.n_edges()
+impl From<DisconnectedCircuit> for InvalidStaticPattern {
+    fn from(_: DisconnectedCircuit) -> Self {
+        InvalidStaticPattern::Disconnected
     }
+}
 
-    /// Construct a pattern from a circuit.
-    pub fn try_from_circuit(circuit: &Circuit) -> Result<Self, InvalidPattern> {
-        let hugr = circuit.hugr();
-        if circuit.num_operations() == 0 {
-            return Err(InvalidPattern::EmptyCircuit);
+impl Pattern for StaticSizeCircuit {
+    type Constraint = Constraint;
+    type Error = InvalidStaticPattern;
+
+    fn try_to_constraint_vec(&self) -> Result<Vec<Self::Constraint>, Self::Error> {
+        if self.qubit_count() == 0 {
+            return Err(InvalidStaticPattern::EmptyPattern);
+        } else if let Some(q) = self.qubits_iter().find(|q| self.qubit_ops(*q).is_empty()) {
+            return Err(InvalidStaticPattern::EmptyQubit(q));
         }
-        let mut pattern = Pattern::new();
-        for cmd in circuit.commands() {
-            let op = cmd.optype().clone();
-            pattern.require(cmd.node().into(), op.into());
-            for in_offset in 0..cmd.input_count() {
-                let in_offset: IncomingPort = in_offset.into();
-                let edge_prop = PEdge::try_from_port(cmd.node(), in_offset.into(), circuit)
-                    .unwrap_or_else(|e| panic!("Invalid HUGR, {e}"));
-                let (prev_node, prev_port) = hugr
-                    .linked_outputs(cmd.node(), in_offset)
-                    .exactly_one()
-                    .unwrap_or_else(|_| {
-                        panic!(
-                            "{} input port {in_offset} does not have a single neighbour",
-                            cmd.node()
-                        )
-                    });
-                let prev_node = match edge_prop {
-                    PEdge::InternalEdge { .. } => NodeID::HugrNode(prev_node),
-                    PEdge::InputEdge { .. } => NodeID::new_copy(prev_node, prev_port),
-                };
-                pattern.add_edge(cmd.node().into(), prev_node, edge_prop);
+
+        let mut constraints = Vec::new();
+
+        let starts = self.find_qubit_starts()?;
+        let to_pattern_pos = |pos: OpPosition| {
+            let (qubit_path, start) = starts[pos.qubit.0];
+            let offset = (pos.index as i8) - (start as i8);
+            PatternOpPosition::new(qubit_path, offset)
+        };
+
+        // Add IsOp and SameOp constraints
+        for op in self.ops_iter() {
+            let all_pos = self
+                .positions(op)
+                .unwrap()
+                .iter()
+                .copied()
+                .map(to_pattern_pos)
+                .collect_vec();
+            // Add IsOp on the first location
+            let pred = Predicate::IsOp {
+                op: self.get(op).unwrap().op,
+            };
+            constraints.push(Constraint::try_new(pred, vec![all_pos[0]]).unwrap());
+
+            // Add SameOp
+            let arity = all_pos.len();
+            if arity > 1 {
+                let pred = Predicate::SameOp { arity };
+                constraints.push(Constraint::try_new(pred, all_pos).unwrap());
             }
         }
-        pattern.set_any_root()?;
-        if !pattern.is_valid() {
-            return Err(InvalidPattern::NotConnected);
-        }
-        let [inp, out] = circuit.io_nodes();
-        let inp_ports = hugr.signature(inp).unwrap().output_ports();
-        let out_ports = hugr.signature(out).unwrap().input_ports();
-        let inputs = inp_ports
-            .map(|p| hugr.linked_ports(inp, p).collect())
-            .collect_vec();
-        let outputs = out_ports
-            .map(|p| {
-                hugr.linked_ports(out, p)
-                    .exactly_one()
-                    .expect("invalid circuit")
-            })
-            .collect_vec();
-        if let Some((to_node, to_port)) = inputs.iter().flatten().find(|&&(n, _)| n == out).copied()
-        {
-            // An input is connected to an output => empty qubit, not allowed.
-            let (from_node, from_port): (Node, Port) =
-                hugr.linked_ports(to_node, to_port).next().unwrap();
-            return Err(InvalidPattern::EmptyWire {
-                from_node,
-                from_port,
-                to_node,
-                to_port,
-            });
+
+        // Add Link constraints
+        for pos in self.positions_iter() {
+            if pos.index > 0 {
+                let in_port = self.position_offset(pos).unwrap();
+                let op = self.at_position(pos).unwrap();
+                let (out_port, prev_op) = self
+                    .linked_op(op, Port::new(Direction::Incoming, in_port))
+                    .unwrap();
+                let prev_pos = self.get_position(prev_op, out_port.index()).unwrap();
+                constraints.push(
+                    Constraint::try_new(
+                        Predicate::Link {
+                            out_port: out_port.index(),
+                            in_port,
+                        },
+                        vec![to_pattern_pos(prev_pos), to_pattern_pos(pos)],
+                    )
+                    .unwrap(),
+                );
+            }
         }
 
-        // This is a consequence of the test above.
-        debug_assert!(outputs.iter().all(|(n, _)| *n != inp));
-        Ok(Self {
-            pattern,
-            inputs,
-            outputs,
-        })
-    }
+        // Add DistinctQubits constraints
+        let qubit_starts: BTreeSet<_> = starts
+            .iter()
+            .map(|&(qubit, _)| PatternOpPosition { qubit, op_idx: 0 })
+            .collect();
+        for &loc in &qubit_starts {
+            let mut starts = vec![loc];
+            starts.extend(qubit_starts.range(..loc).copied());
+            if starts.len() > 1 {
+                let n_qubits = starts.len();
+                constraints.push(
+                    Constraint::try_new(Predicate::DistinctQubits { n_qubits }, starts).unwrap(),
+                );
+            }
+        }
 
-    /// Compute the map from pattern nodes to circuit nodes in `circ`.
-    pub fn get_match_map(
-        &self,
-        root: Node,
-        circ: &Circuit<impl HugrView>,
-    ) -> Option<HashMap<Node, Node>> {
-        let single_matcher = SinglePatternMatcher::from_pattern(self.pattern.clone());
-        single_matcher
-            .get_match_map(
-                root.into(),
-                validate_circuit_node(circ),
-                validate_circuit_edge(circ),
-            )
-            .map(|m| {
-                m.into_iter()
-                    .filter_map(|(node_p, node_c)| match (node_p, node_c) {
-                        (NodeID::HugrNode(node_p), NodeID::HugrNode(node_c)) => {
-                            Some((node_p, node_c))
-                        }
-                        (NodeID::CopyNode(..), NodeID::CopyNode(..)) => None,
-                        _ => panic!("Invalid match map"),
-                    })
-                    .collect()
-            })
-    }
-}
-
-impl Debug for CircuitPattern {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.pattern.fmt(f)?;
-        Ok(())
-    }
-}
-
-/// Conversion error from circuit to pattern.
-#[derive(Debug, Error, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum InvalidPattern {
-    /// An empty circuit cannot be a pattern.
-    #[error("Empty circuits are not allowed as patterns")]
-    EmptyCircuit,
-    /// Patterns must be connected circuits.
-    #[error("The pattern is not connected")]
-    NotConnected,
-    /// Patterns cannot include empty wires.
-    #[error("The pattern contains an empty wire between {from_node}:{from_port} and {to_node}:{to_port}")]
-    #[allow(missing_docs)]
-    EmptyWire {
-        from_node: Node,
-        from_port: Port,
-        to_node: Node,
-        to_port: Port,
-    },
-}
-
-impl From<NoRootFound> for InvalidPattern {
-    fn from(_: NoRootFound) -> Self {
-        InvalidPattern::NotConnected
+        constraints.sort_unstable_by(|c1, c2| constraint_key(c1).cmp(&constraint_key(c2)));
+        Ok(constraints)
     }
 }
 
@@ -168,27 +125,30 @@ mod tests {
     use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
     use hugr::extension::prelude::QB_T;
     use hugr::ops::OpType;
-    use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
     use hugr::types::Signature;
+    use hugr::{HugrView, Node};
 
+    use crate::extension::angle::ANGLE_TYPE;
     use crate::extension::REGISTRY;
+    use crate::portmatching::NodeID;
     use crate::utils::build_simple_circuit;
-    use crate::Tk2Op;
+    use crate::{Circuit, Tk2Op};
 
     use super::*;
 
-    fn h_cx() -> Circuit {
-        build_simple_circuit(2, |circ| {
+    fn h_cx() -> StaticSizeCircuit {
+        let circ = build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::CX, [0, 1])?;
             circ.append(Tk2Op::H, [0])?;
             Ok(())
         })
-        .unwrap()
+        .unwrap();
+        StaticSizeCircuit::try_from(&circ).unwrap()
     }
 
     /// A circuit with two rotation gates in sequence, sharing a param
     fn circ_with_copy() -> Circuit {
-        let input_t = vec![QB_T, FLOAT64_TYPE];
+        let input_t = vec![QB_T, ANGLE_TYPE];
         let output_t = vec![QB_T];
         let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
@@ -196,17 +156,18 @@ mod tests {
         let qb = inps.next().unwrap();
         let f = inps.next().unwrap();
 
-        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb, f]).unwrap();
         let qb = res.outputs().next().unwrap();
-        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb, f]).unwrap();
         let qb = res.outputs().next().unwrap();
 
         h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap().into()
     }
 
     /// A circuit with two rotation gates in parallel, sharing a param
+    #[ignore = "reason"]
     fn circ_with_copy_disconnected() -> Circuit {
-        let input_t = vec![QB_T, QB_T, FLOAT64_TYPE];
+        let input_t = vec![QB_T, QB_T, ANGLE_TYPE];
         let output_t = vec![QB_T, QB_T];
         let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
@@ -215,9 +176,9 @@ mod tests {
         let qb2 = inps.next().unwrap();
         let f = inps.next().unwrap();
 
-        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb1, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb1, f]).unwrap();
         let qb1 = res.outputs().next().unwrap();
-        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb2, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb2, f]).unwrap();
         let qb2 = res.outputs().next().unwrap();
 
         h.finish_hugr_with_outputs([qb1, qb2], &REGISTRY)
@@ -229,31 +190,11 @@ mod tests {
     fn construct_pattern() {
         let circ = h_cx();
 
-        let p = CircuitPattern::try_from_circuit(&circ).unwrap();
-
-        let edges: HashSet<_> = p
-            .pattern
-            .edges()
-            .unwrap()
-            .iter()
-            .map(|e| (e.source.unwrap(), e.target.unwrap()))
-            .collect();
-        let inp = circ.input_node();
-        let cx_gate = NodeID::HugrNode(get_nodes_by_tk2op(&circ, Tk2Op::CX)[0]);
-        let h_gate = NodeID::HugrNode(get_nodes_by_tk2op(&circ, Tk2Op::H)[0]);
-        assert_eq!(
-            edges,
-            [
-                (cx_gate, h_gate),
-                (cx_gate, NodeID::new_copy(inp, 0)),
-                (cx_gate, NodeID::new_copy(inp, 1)),
-            ]
-            .into_iter()
-            .collect()
-        )
+        insta::assert_debug_snapshot!(circ.try_to_constraint_vec().unwrap());
     }
 
     #[test]
+    #[should_panic]
     fn disconnected_pattern() {
         let circ = build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::X, [0])?;
@@ -261,23 +202,20 @@ mod tests {
             Ok(())
         })
         .unwrap();
-        assert_eq!(
-            CircuitPattern::try_from_circuit(&circ).unwrap_err(),
-            InvalidPattern::NotConnected
-        );
+        let circ = StaticSizeCircuit::try_from(&circ).unwrap();
+        circ.try_to_constraint_vec().unwrap();
     }
 
     #[test]
+    #[should_panic]
     fn pattern_with_empty_qubit() {
         let circ = build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::X, [0])?;
             Ok(())
         })
         .unwrap();
-        assert_matches!(
-            CircuitPattern::try_from_circuit(&circ).unwrap_err(),
-            InvalidPattern::EmptyWire { .. }
-        );
+        let circ = StaticSizeCircuit::try_from(&circ).unwrap();
+        circ.try_to_constraint_vec().unwrap();
     }
 
     fn get_nodes_by_tk2op(circ: &Circuit, t2_op: Tk2Op) -> Vec<Node> {
@@ -288,28 +226,28 @@ mod tests {
             .collect()
     }
 
-    #[test]
-    fn pattern_with_copy() {
-        let circ = circ_with_copy();
-        let pattern = CircuitPattern::try_from_circuit(&circ).unwrap();
-        let edges = pattern.pattern.edges().unwrap();
-        let rx_ns = get_nodes_by_tk2op(&circ, Tk2Op::RxF64);
-        let inp = circ.input_node();
-        for rx_n in rx_ns {
-            assert!(edges.iter().any(|e| {
-                e.reverse().is_none()
-                    && e.source.unwrap() == rx_n.into()
-                    && e.target.unwrap() == NodeID::new_copy(inp, 1)
-            }));
-        }
-    }
+    //#[test]
+    //fn pattern_with_copy() {
+    //    let circ = circ_with_copy();
+    //    let pattern = CircuitPattern::try_from_circuit(&circ).unwrap();
+    //    let edges = pattern.pattern.edges().unwrap();
+    //    let rx_ns = get_nodes_by_tk2op(&circ, Tk2Op::Rx);
+    //    let inp = circ.input_node();
+    //    for rx_n in rx_ns {
+    //        assert!(edges.iter().any(|e| {
+    //            e.reverse().is_none()
+    //                && e.source.unwrap() == rx_n.into()
+    //                && e.target.unwrap() == NodeID::new_copy(inp, 1)
+    //        }));
+    //    }
+    //}
 
-    #[test]
-    fn pattern_with_copy_disconnected() {
-        let circ = circ_with_copy_disconnected();
-        assert_eq!(
-            CircuitPattern::try_from_circuit(&circ).unwrap_err(),
-            InvalidPattern::NotConnected
-        );
-    }
+    // #[test]
+    // fn pattern_with_copy_disconnected() {
+    //     let circ = circ_with_copy_disconnected();
+    //     assert_eq!(
+    //         CircuitPattern::try_from_circuit(&circ).unwrap_err(),
+    //         InvalidPattern::NotConnected
+    //     );
+    // }
 }

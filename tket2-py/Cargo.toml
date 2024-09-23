@@ -19,7 +19,7 @@ test = false
 bench = false
 
 [dependencies]
-tket2 = { path = "../tket2", version = "0.1.1", features = [
+tket2 = { path = "../tket2", version = "0.2.0", features = [
     "portmatching",
     "binary-eccs",
 ] }
@@ -33,7 +33,9 @@ num_cpus = { workspace = true }
 derive_more = { workspace = true }
 itertools = { workspace = true }
 portmatching = { workspace = true }
+portdiff = { workspace = true }
 strum = { workspace = true }
+relrc = { workspace = true }
 
 [dev-dependencies]
 rstest = { workspace = true }

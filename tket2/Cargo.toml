@@ -1,6 +1,6 @@
 [package]
 name = "tket2"
-version = "0.1.1"
+version = "0.2.0"
 edition = { workspace = true }
 rust-version = { workspace = true }
 
@@ -65,6 +65,7 @@ bytemuck = { workspace = true }
 crossbeam-channel = { workspace = true }
 tracing = { workspace = true }
 zstd = { workspace = true, optional = true }
+portdiff = { workspace = true }
 
 [dev-dependencies]
 rstest = { workspace = true }
@@ -72,6 +73,7 @@ criterion = { workspace = true, features = ["html_reports"] }
 webbrowser = { workspace = true }
 urlencoding = { workspace = true }
 cool_asserts = { workspace = true }
+insta = "1.39.0"
 
 [[bench]]
 name = "bench_main"

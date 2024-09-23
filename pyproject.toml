@@ -1,112 +1,55 @@
-[tool.poetry]
-name = "tket2-py"
-version = "0.2.1"
-description = "Quantinuum's TKET2 Quantum Compiler"
-classifiers = [
-    "Environment :: Console",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: Apache Software License",
-    "Operating System :: MacOS :: MacOS X",
-    "Operating System :: POSIX :: Linux",
-    "Operating System :: Microsoft :: Windows",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Science/Research",
-    "Topic :: Scientific/Engineering",
+[tool.uv.workspace]
+members = ["tket2-py", "tket2-eccs"]
+
+[tool.uv]
+
+dev-dependencies = [
+    "maturin >=1.7.0,<2",
+    "pytest >=8.3.2,<9",
+    "pytest-cov >=5.0.0,<6",
+    "ruff >=0.6.2,<0.7",
+    "mypy >=1.11.1,<2",
+    "hypothesis >=6.111.1,<7",
+    "graphviz >=0.20,<0.21",
+    "pre-commit >=3.8.0,<4",
+    # Required to run `maturin develop`
+    "pip >=24",
 ]
-authors = ["TKET development team <tket-support@quantinuum.com>"]
-maintainers = ["TKET development team <tket-support@quantinuum.com>"]
-include = ["pyproject.toml"]
-license = "Apache-2.0"
-readme = "README.md"
-
-packages = [{ include = "tket2-py" }]
-
-[tool.poetry.dependencies]
-python = "^3.10"
-
-# Note: Be sure to update the dependency versions in [project.dependencies] as well
-#
-# Poetry does not currently follow PEP 621, it will be supported on poetry 2
-# https://github.com/python-poetry/poetry/issues/3332
-tket2_eccs = { path = "tket2-eccs", develop = true }
-pytket = "1.31.1"
-hugr = "^0.7.0"
-
-[tool.poetry.group.dev.dependencies]
-maturin = "^1.7.0"
-pytest = "^8.3.2"
-pytest-cov = "^5.0.0"
-ruff = "^0.6.1"
-mypy = "^1.11.1"
-hypothesis = "^6.111.1"
-graphviz = "^0.20"
-pre-commit = "^3.8.0"
 
 [build-system]
-requires = ["maturin~=1.7"]
-build-backend = "maturin"
-
-[project]
-name = "tket2"
-classifiers = [
-    "Environment :: Console",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: Apache Software License",
-    "Operating System :: MacOS :: MacOS X",
-    "Operating System :: POSIX :: Linux",
-    "Operating System :: Microsoft :: Windows",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Science/Research",
-    "Topic :: Scientific/Engineering",
-]
-authors = [
-    { name = "TKET development team", email = "tket-support@quantinuum.com" },
-]
-maintainers = [
-    { name = "TKET development team", email = "tket-support@quantinuum.com" },
-]
-version = "0.2.1"
-description = "Quantinuum's TKET2 Quantum Compiler"
-requires-python = ">=3.10"
-license = { file = "LICENCE" }
-
-# Note: Be sure to update the dependency versions in [tool.poetry.dependencies] as well
-dependencies = [
-    'pytket >= 1.29.2, < 2',
-    'hugr >= 0.7.0, < 0.8',
-    'tket2_eccs >= 0.1.0, < 0.2',
-]
-
-[project.urls]
-homepage = "https://github.com/CQCL/tket2"
-repository = "https://github.com/CQCL/tket2"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.maturin]
-module-name = "tket2._tket2"
+# Maturin is not the build system for the workspace (it is only used for `tket2-py`).
+# We mirror the `tket2-py/pyproject.toml` config here so `maturin develop` still works
+# from the root of the workspace.
 manifest-path = "tket2-py/Cargo.toml"
 python-source = "tket2-py"
+module-name = "tket2._tket2"
 # "extension-module" tells pyo3 we want to build an extension module (skips linking against libpython.so)
 features = ["pyo3/extension-module"]
 
-[tool.pytest]
-pythonpath = "tket2-py"
+[tool.mypy]
+exclude = '''(?x)(
+    ^target/        # Build artifacts
+    | ^notebooks/   # Examples
+    | ^test_files/  # Test files
+)'''
 
-[tool.pytest.ini_options]
-# Lark throws deprecation warnings for `src_parse` and `src_constants`.
-filterwarnings = "ignore::DeprecationWarning:lark.*"
+# TODO: Fix the lint errors and enable this
+#strict = true
 
-[tool.pyright]
-# Rust bindings have typing stubs but no python source code.
-reportMissingModuleSource = "none"
+[tool.coverage.report]
+exclude_also = [
+    # Don't complain about missing coverage on typing imports
+    "if TYPE_CHECKING:",
 
-[tool.ruff]
-extend-exclude = ["*.ipynb"]
+    # Don't complain if tests don't hit defensive assertion code:
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "raise InternalGuppyError",
 
-[[tool.mypy.overrides]]
-# Ignore errors in tikv-jemalloc.
-module = "gen_run_tests.*"
-ignore_errors = true
+    # Don't complain about abstract methods, they aren't run:
+    "@abstractmethod",
+]

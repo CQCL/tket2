@@ -90,8 +90,15 @@ impl HashState {
 /// Returns a hashable representation of an operation.
 fn hashable_op(op: &OpType) -> impl Hash {
     match op {
-        OpType::CustomOp(op) if !op.args().is_empty() => {
+        OpType::ExtensionOp(op) if !op.args().is_empty() => {
             // TODO: Require hashing for TypeParams?
+            format!(
+                "{}[{}]",
+                op.name(),
+                serde_json::to_string(op.args()).unwrap()
+            )
+        }
+        OpType::OpaqueOp(op) if !op.args().is_empty() => {
             format!(
                 "{}[{}]",
                 op.name(),

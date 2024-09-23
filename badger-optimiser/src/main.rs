@@ -13,8 +13,10 @@ use std::process::exit;
 use clap::Parser;
 use tket2::optimiser::badger::log::BadgerLogger;
 use tket2::optimiser::badger::BadgerOptions;
-use tket2::optimiser::{BadgerOptimiser, DefaultBadgerOptimiser};
-use tket2::serialize::{load_tk1_json_file, save_tk1_json_file};
+use tket2::optimiser::BadgerOptimiser;
+use tket2::optimiser::DiffBadgerOptimiser;
+use tket2::serialize::load_tk1_json_file;
+use tket2::static_circ::StaticSizeCircuit;
 
 #[cfg(feature = "peak_alloc")]
 #[global_allocator]
@@ -89,20 +91,6 @@ struct CmdLineArgs {
         help = "Maximum number of circuits to process (default=None)."
     )]
     max_circuit_count: Option<usize>,
-    /// Number of threads (default=1)
-    #[arg(
-        short = 'j',
-        long,
-        value_name = "N_THREADS",
-        help = "The number of threads to use. By default, use a single thread."
-    )]
-    n_threads: Option<NonZeroUsize>,
-    /// Split the circuit into chunks, and process them separately.
-    #[arg(
-        long = "split-circ",
-        help = "Split the circuit into chunks and optimize each one in a separate thread. Use `-j` to specify the number of threads to use."
-    )]
-    split_circ: bool,
     /// Max queue size.
     #[arg(
         short = 'q',
@@ -127,26 +115,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output_path = Path::new(&opts.output);
     let ecc_path = Path::new(&opts.eccs);
 
-    let n_threads = opts
-        .n_threads
-        // TODO: Default to multithreading once that produces better results.
-        //.or_else(|| std::thread::available_parallelism().ok())
-        .unwrap_or(NonZeroUsize::new(1).unwrap());
-
     // Setup tracing subscribers for stdout and file logging.
     //
     // We need to keep the object around to keep the logging active.
-    let _tracer = Tracer::setup_tracing(opts.logfile, n_threads.get() > 1);
+    let _tracer = Tracer::setup_tracing(opts.logfile, false);
 
     // TODO: Remove this from the Logger, and use tracing events instead.
     let circ_candidates_csv = BufWriter::new(File::create("best_circs.csv")?);
 
     let badger_logger = BadgerLogger::new(circ_candidates_csv);
 
-    let mut circ = load_tk1_json_file(input_path)?;
-    if opts.rewrite_tracing {
-        circ.enable_rewrite_tracing();
-    }
+    let circ: StaticSizeCircuit = (&load_tk1_json_file(input_path)?).try_into().unwrap();
+    // if opts.rewrite_tracing {
+    //     circ.enable_rewrite_tracing();
+    // }
 
     print!("Loading optimiser...");
     let load_ecc_start = std::time::Instant::now();
@@ -157,31 +139,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     println!(" done in {:?}", load_ecc_start.elapsed());
 
-    println!(
-        "Using {n_threads} threads. Queue size is {}.",
-        opts.queue_size
-    );
+    // println!(
+    //     "Using {n_threads} threads. Queue size is {}.",
+    //     opts.queue_size
+    // );
 
-    if opts.split_circ && n_threads.get() > 1 {
-        println!("Splitting circuit into {n_threads} chunks.");
-    }
+    // if opts.split_circ && n_threads.get() > 1 {
+    //     println!("Splitting circuit into {n_threads} chunks.");
+    // }
 
     println!("Optimising...");
-    let opt_circ = optimiser.optimise_with_log(
+    let best_diffs = optimiser.optimise_with_log(
         &circ,
         badger_logger,
         BadgerOptions {
             timeout: opts.timeout,
             progress_timeout: opts.progress_timeout,
-            n_threads,
-            split_circuit: opts.split_circ,
+            n_threads: NonZeroUsize::new(1).unwrap(),
+            split_circuit: false,
             queue_size: opts.queue_size,
             max_circuit_count: opts.max_circuit_count,
         },
     );
 
     println!("Saving result");
-    save_tk1_json_file(&opt_circ, output_path)?;
+    serde_json::to_writer_pretty(File::create(output_path)?, &best_diffs)?;
 
     #[cfg(feature = "peak_alloc")]
     println!("Peak memory usage: {} GB", PEAK_ALLOC.peak_usage_as_gb());
@@ -190,10 +172,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn load_optimiser(ecc_path: &Path) -> Result<DefaultBadgerOptimiser, Box<dyn std::error::Error>> {
+fn load_optimiser(ecc_path: &Path) -> Result<DiffBadgerOptimiser, Box<dyn std::error::Error>> {
     Ok(match ecc_path.extension().and_then(OsStr::to_str) {
-        Some("json") => BadgerOptimiser::default_with_eccs_json_file(ecc_path)?,
-        Some("rwr") => BadgerOptimiser::default_with_rewriter_binary(ecc_path)?,
+        Some("json") => BadgerOptimiser::diff_with_eccs_json_file(ecc_path)?,
+        Some("rwr") => BadgerOptimiser::diff_with_rewriter_binary(ecc_path)?,
         _ => Err("ECC file must be a `.json` file or a pre-compiled `.rwr` ECC set.".to_string())?,
     })
 }

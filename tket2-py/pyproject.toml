@@ -1,0 +1,66 @@
+[project]
+name = "tket2"
+version = "0.3.0"
+requires-python = ">=3.10,<3.13"
+description = "Quantinuum's TKET2 Quantum Compiler"
+license = { file = "LICENCE" }
+readme = "README.md"
+authors = [
+    { name = "TKET development team", email = "tket-support@quantinuum.com" },
+]
+maintainers = [
+    { name = "TKET development team", email = "tket-support@quantinuum.com" },
+]
+classifiers = [
+    "Environment :: Console",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+]
+
+dependencies = [
+    'pytket >= 1.29.2, < 2',
+    'hugr >= 0.8.0, < 0.9',
+    'tket2_eccs >= 0.1.0, < 0.2',
+]
+
+[tool.uv.sources]
+tket2_eccs = { workspace = true }
+
+[project.urls]
+homepage = "https://github.com/CQCL/tket2/tree/main/tket2-py"
+repository = "https://github.com/CQCL/tket2/tree/main/tket2-py"
+
+[build-system]
+requires = ["maturin~=1.7"]
+build-backend = "maturin"
+
+[tool.maturin]
+# Make sure to copy any changes to the root `pyproject.toml` config too.
+module-name = "tket2._tket2"
+manifest-path = "Cargo.toml"
+# "extension-module" tells pyo3 we want to build an extension module (skips linking against libpython.so)
+features = ["pyo3/extension-module"]
+
+[tool.pytest.ini_options]
+# Lark throws deprecation warnings for `src_parse` and `src_constants`.
+filterwarnings = "ignore::DeprecationWarning:lark.*"
+
+[tool.pyright]
+# Rust bindings have typing stubs but no python source code.
+reportMissingModuleSource = "none"
+
+[tool.ruff]
+extend-exclude = ["*.ipynb"]
+
+[[tool.mypy.overrides]]
+# Ignore errors in tikv-jemalloc.
+module = "gen_run_tests.*"
+ignore_errors = true

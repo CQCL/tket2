@@ -1,0 +1,37 @@
+---
+source: tket2/src/static_circ.rs
+expression: main_circuit
+---
+StaticSizeCircuit {
+    qubit_ops: [
+        [
+            OpId(
+                0,
+            ),
+            OpId(
+                1,
+            ),
+        ],
+        [
+            OpId(
+                1,
+            ),
+        ],
+        [],
+        [
+            OpId(
+                3,
+            ),
+        ],
+        [
+            OpId(
+                4,
+            ),
+        ],
+        [
+            OpId(
+                2,
+            ),
+        ],
+    ],
+}

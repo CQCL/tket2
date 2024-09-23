@@ -119,7 +119,7 @@ impl MakeOpDef for FutureOpDef {
     }
 
     fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
-        try_from_name(op_def.name(), &EXTENSION_ID)
+        try_from_name(op_def.name(), op_def.extension())
     }
 
     fn description(&self) -> String {
@@ -196,19 +196,7 @@ impl TryFrom<&OpType> for FutureOpDef {
     fn try_from(value: &OpType) -> Result<Self, Self::Error> {
         Self::from_op(
             value
-                .as_custom_op()
-                .ok_or(OpLoadError::NotMember(value.name().into()))?,
-        )
-    }
-}
-
-impl TryFrom<&OpType> for FutureOp {
-    type Error = OpLoadError;
-
-    fn try_from(value: &OpType) -> Result<Self, Self::Error> {
-        Self::from_op(
-            value
-                .as_custom_op()
+                .as_extension_op()
                 .ok_or(OpLoadError::NotMember(value.name().into()))?,
         )
     }

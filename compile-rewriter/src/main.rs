@@ -5,7 +5,9 @@ use std::time::Instant;
 
 use clap::Parser;
 
+use tket2::portdiff::DiffCircuitMatcher;
 use tket2::rewrite::ECCRewriter;
+use tket2::static_circ::StaticSizeCircuit;
 
 /// Program to precompile patterns from files into a PatternMatcher stored as binary file.
 #[derive(Parser, Debug)]
@@ -45,7 +47,9 @@ fn main() {
     };
     let start_time = Instant::now();
     println!("Compiling rewriter...");
-    let Ok(rewriter) = ECCRewriter::try_from_eccs_json_file(input_path) else {
+    let Ok(rewriter) =
+        ECCRewriter::<DiffCircuitMatcher, StaticSizeCircuit>::try_from_eccs_json_file(input_path)
+    else {
         eprintln!(
             "Unable to load ECC file {:?}. Is it a JSON file of Quartz-generated ECCs?",
             input_path

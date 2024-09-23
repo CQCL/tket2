@@ -5,9 +5,8 @@ use itertools::izip;
 use std::fmt::Debug;
 use std::iter::Sum;
 use std::num::NonZeroUsize;
-use std::ops::{Add, AddAssign};
+use std::ops::{Add, AddAssign, SubAssign};
 
-use crate::ops::op_matches;
 use crate::Tk2Op;
 
 /// The cost for a group of operations in a circuit, each with cost `OpCost`.
@@ -59,6 +58,14 @@ where
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LexicographicCost<T, const N: usize>([T; N]);
 
+impl<T, const N: usize> LexicographicCost<T, N> {
+    /// Create a new lexicographic cost.
+    pub fn msb(&self) -> &T {
+        assert!(N > 0);
+        &self.0[0]
+    }
+}
+
 impl<const N: usize, T: Default + Copy> Default for LexicographicCost<T, N> {
     fn default() -> Self {
         Self([Default::default(); N])
@@ -67,6 +74,16 @@ impl<const N: usize, T: Default + Copy> Default for LexicographicCost<T, N> {
 
 // Serialise as string so that it is easy to write to CSV
 impl<const N: usize> serde::Serialize for LexicographicCost<usize, N> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&format!("{:?}", self))
+    }
+}
+
+// Serialise as string so that it is easy to write to CSV
+impl<const N: usize> serde::Serialize for LexicographicCost<isize, N> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -97,6 +114,13 @@ impl<T: AddAssign + Copy, const N: usize> AddAssign for LexicographicCost<T, N> 
     fn add_assign(&mut self, rhs: Self) {
         for i in 0..N {
             self.0[i] += rhs.0[i];
+        }
+    }
+}
+impl<T: SubAssign + Copy, const N: usize> SubAssign for LexicographicCost<T, N> {
+    fn sub_assign(&mut self, rhs: Self) {
+        for i in 0..N {
+            self.0[i] -= rhs.0[i];
         }
     }
 }
@@ -190,13 +214,13 @@ impl CircuitCost for usize {
 }
 
 /// Returns true if the operation is a controlled X operation.
-pub fn is_cx(op: &OpType) -> bool {
-    op_matches(op, Tk2Op::CX)
+pub fn is_cx(op: Tk2Op) -> bool {
+    op == Tk2Op::CX
 }
 
 /// Returns true if the operation is a quantum operation.
 pub fn is_quantum(op: &OpType) -> bool {
-    let Ok(op): Result<Tk2Op, _> = op.try_into() else {
+    let Some(op): Option<Tk2Op> = op.cast() else {
         return false;
     };
     op.is_quantum()
@@ -251,7 +275,7 @@ mod tests {
 
     #[test]
     fn serde_serialize() {
-        let a = LexicographicCost([10, 2]);
+        let a = LexicographicCost([10isize, 2]);
         let s = serde_json::to_string(&a).unwrap();
         assert_eq!(s, "\"[10, 2]\"");
     }

@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.1.1...tket2-hseries-v0.2.0) - 2024-09-04
+
+### New Features
+- [**breaking**] Update rust hugr dependency to `0.12.0`, and python hugr to `0.8.0` ([#568](https://github.com/CQCL/tket2/pull/568))
+- [**breaking**] HSeries ops ([#573](https://github.com/CQCL/tket2/pull/573))
+- [**breaking**] replace f64 with angle type for tk2 ops ([#578](https://github.com/CQCL/tket2/pull/578))
+
 ## [0.1.1](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.1.0...tket2-hseries-v0.1.1) - 2024-08-15
 
 ### New Features

@@ -25,7 +25,7 @@ jobs:
     strategy:
       matrix:
         target:
-          - { name: tket2-eccs, key_secret: PYPI_PUBLISH_TKET2_ECCS }
+          - { dir: tket2-eccs, name: tket2_eccs, key_secret: PYPI_PUBLISH_TKET2_ECCS }
     steps:
       # Check the release tag against the package name
       #
@@ -35,41 +35,56 @@ jobs:
         run: |
           echo "run=$SHOULD_RUN" >> $GITHUB_OUTPUT
         env:
-          SHOULD_RUN: ${{ github.event_name != 'release' || ( github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.name)) ) }}
+          SHOULD_RUN: ${{ github.event_name != 'release' || ( github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.dir)) ) }}
 
       - uses: actions/checkout@v4
         if: ${{ steps.check-tag.outputs.run == 'true' }}
       - name: Run sccache-cache
         if: ${{ steps.check-tag.outputs.run == 'true' }}
         uses: mozilla-actions/sccache-action@v0.0.5
-      - name: Install poetry
+
+
+      - name: Set up uv
         if: ${{ steps.check-tag.outputs.run == 'true' }}
-        run: pipx install poetry
-      - name: Set up Python '3.10'
+        run: .github/script/install-uv.sh
+      - name: Set up Python
         if: ${{ steps.check-tag.outputs.run == 'true' }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-          cache: "poetry"
+          python-version: '3.12'
 
       - name: Build sdist and wheels
         if: ${{ steps.check-tag.outputs.run == 'true' }}
         run: |
-          cd ${{ matrix.target.name }}
-          poetry build -o ../dist
+          cd ${{ matrix.target.dir }}
+          uvx --from build pyproject-build --installer uv --outdir ../dist
 
       - name: Upload the built packages as artifacts
         if: ${{ steps.check-tag.outputs.run == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: build-${{ matrix.target.name }}-sdist
+          name: build-${{ matrix.target.dir }}-sdist
           path: |
             dist/*.tar.gz
             dist/*.whl
 
-      - name: Publish to PyPI
-        if: ${{ (github.event_name == 'release' && github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.name)) ) || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.name)) ) }}
+      - name: Test installing the built wheels
+        if: ${{ steps.check-tag.outputs.run == 'true' }}
         run: |
-          cd ${{ matrix.target.name }}
-          poetry config pypi-token.pypi ${{ secrets[matrix.target.key_secret] }}
-          poetry publish --dist-dir ../dist --skip-existing
+          echo "Testing the newly built ${{ matrix.target.name }} wheels..."
+          uv run -f dist --with ${{ matrix.target.name }} --refresh-package ${{ matrix.target.name }} --no-project -- python -c "import ${{ matrix.target.name }}"
+          uvx twine check --strict dist/*
+
+      - name: Publish to PyPI
+        if: ${{ (github.event_name == 'release' && github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.dir)) ) || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.dir)) ) }}
+        run: |
+          echo "Publishing to PyPI..."
+          echo "Based on the following workflow variables, this is a new version tag push:"
+          echo "  - event_name: ${{ github.event_name }}"
+          echo "  - ref_type: ${{ github.ref_type }}"
+          echo "  - ref: ${{ github.ref }}"
+          uvx twine upload --skip-existing --verbose dist/*
+        env:
+          TWINE_NON_INTERACTIVE: 1
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets[matrix.target.key_secret] }}

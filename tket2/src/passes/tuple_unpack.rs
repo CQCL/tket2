@@ -3,7 +3,8 @@
 use core::panic;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
-use hugr::ops::{MakeTuple, OpTrait, OpType};
+use hugr::extension::prelude::{MakeTuple, TupleOpDef};
+use hugr::ops::{NamedOp, OpTrait, OpType};
 use hugr::types::Type;
 use hugr::{HugrView, Node};
 use itertools::Itertools;
@@ -20,10 +21,24 @@ pub fn find_tuple_unpack_rewrites(
     circ.commands().filter_map(|cmd| make_rewrite(circ, cmd))
 }
 
+/// Returns true if the given optype is a MakeTuple operation.
+///
+/// Boilerplate required due to https://github.com/CQCL/hugr/issues/1496
+fn is_make_tuple(optype: &OpType) -> bool {
+    optype.name() == format!("prelude.{}", TupleOpDef::MakeTuple.name())
+}
+
+/// Returns true if the given optype is an UnpackTuple operation.
+///
+/// Boilerplate required due to https://github.com/CQCL/hugr/issues/1496
+fn is_unpack_tuple(optype: &OpType) -> bool {
+    optype.name() == format!("prelude.{}", TupleOpDef::UnpackTuple.name())
+}
+
 fn make_rewrite<T: HugrView>(circ: &Circuit<T>, cmd: Command<T>) -> Option<CircuitRewrite> {
     let cmd_optype = cmd.optype();
     let tuple_node = cmd.node();
-    if !matches!(cmd_optype, OpType::MakeTuple(_)) {
+    if !is_make_tuple(cmd_optype) {
         return None;
     }
     let tuple_types = cmd_optype
@@ -50,20 +65,7 @@ fn make_rewrite<T: HugrView>(circ: &Circuit<T>, cmd: Command<T>) -> Option<Circu
 
     let unpack_nodes = links
         .iter()
-        .filter(|&&neigh| match circ.hugr().get_optype(neigh) {
-            OpType::UnpackTuple(_) => {
-                debug_assert_eq!(
-                    circ.hugr()
-                        .get_optype(neigh)
-                        .dataflow_signature()
-                        .unwrap()
-                        .output_types(),
-                    tuple_types
-                );
-                true
-            }
-            _ => false,
-        })
+        .filter(|&&neigh| is_unpack_tuple(circ.hugr().get_optype(neigh)))
         .copied()
         .collect_vec();
 
@@ -148,8 +150,7 @@ fn remove_pack_unpack<T: HugrView>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use hugr::extension::prelude::{BOOL_T, QB_T};
-    use hugr::ops::{MakeTuple, UnpackTuple};
+    use hugr::extension::prelude::{UnpackTuple, BOOL_T, QB_T};
     use hugr::type_row;
     use hugr::types::Signature;
     use rstest::{fixture, rstest};

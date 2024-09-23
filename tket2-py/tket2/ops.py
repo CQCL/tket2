@@ -32,22 +32,21 @@ class Tk2Op(Enum):
 
     H = auto()
     CX = auto()
+    CY = auto()
+    CZ = auto()
+    CRz = auto()
     T = auto()
+    Tdg = auto()
     S = auto()
+    Sdg = auto()
     X = auto()
     Y = auto()
     Z = auto()
-    Tdg = auto()
-    Sdg = auto()
-    ZZMax = auto()
+    Rz = auto()
+    Rx = auto()
+    Ry = auto()
+    Toffoli = auto()
     Measure = auto()
-    RzF64 = auto()
-    RxF64 = auto()
-    PhasedX = auto()
-    ZZPhase = auto()
-    AngleAdd = auto()
-    CZ = auto()
-    TK1 = auto()
     QAlloc = auto()
     QFree = auto()
     Reset = auto()
@@ -88,7 +87,7 @@ class Pauli(Enum):
     Z = auto()
 
     def to_custom(self) -> CustomOp:
-        extension_name = "quantum.tket2"
+        extension_name = "tket2.quantum"
         gate_name = self.name
         return CustomOp(extension_name, gate_name, [QB_T], [QB_T])
 

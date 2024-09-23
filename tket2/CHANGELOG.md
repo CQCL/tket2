@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/CQCL/tket2/compare/tket2-v0.1.1...tket2-v0.2.0) - 2024-09-04
+
+### Bug Fixes
+- [**breaking**] quantum extension name wrong way round ([#582](https://github.com/CQCL/tket2/pull/582))
+
+### New Features
+- Extend Command::optype lifetime ([#562](https://github.com/CQCL/tket2/pull/562))
+- [**breaking**] Update rust hugr dependency to `0.12.0`, and python hugr to `0.8.0` ([#568](https://github.com/CQCL/tket2/pull/568))
+- [**breaking**] remove Tk2Op::AngleAdd ([#567](https://github.com/CQCL/tket2/pull/567))
+- [**breaking**] angle type no longer parametric. ([#577](https://github.com/CQCL/tket2/pull/577))
+- [**breaking**] HSeries ops ([#573](https://github.com/CQCL/tket2/pull/573))
+- [**breaking**] replace f64 with angle type for tk2 ops ([#578](https://github.com/CQCL/tket2/pull/578))
+- more angle ops (construct, deconstruct, radians, equality) ([#581](https://github.com/CQCL/tket2/pull/581))
+
 ## [0.1.1](https://github.com/CQCL/tket2/compare/tket2-v0.1.0...tket2-v0.1.1) - 2024-08-15
 
 ### New Features

@@ -1,26 +1,23 @@
 //! Bindings for rust-defined operations
 
 use derive_more::{From, Into};
-use hugr::hugr::IdentList;
-use hugr::ops::custom::{ExtensionOp, OpaqueOp};
-use hugr::types::Signature;
+use hugr::ops::custom::ExtensionOp;
 use pyo3::prelude::*;
 use std::fmt;
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 
-use hugr::ops::{CustomOp, NamedOp, OpType};
+use hugr::ops::{NamedOp, OpType};
 use tket2::{Pauli, Tk2Op};
 
 use crate::types::PyHugrType;
-use crate::utils::into_vec;
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let m = PyModule::new_bound(py, "ops")?;
     m.add_class::<PyTk2Op>()?;
     m.add_class::<PyPauli>()?;
-    m.add_class::<PyCustomOp>()?;
+    m.add_class::<PyExtensionOp>()?;
     Ok(m)
 }
 
@@ -68,9 +65,8 @@ impl PyTk2Op {
     }
 
     /// Wrap the operation as a custom operation.
-    pub fn to_custom(&self) -> PyCustomOp {
-        let custom: ExtensionOp = self.op.into_extension_op();
-        CustomOp::new_extension(custom).into()
+    pub fn to_custom(&self) -> PyExtensionOp {
+        self.op.into_extension_op().into()
     }
 
     /// String representation of the operation.
@@ -224,37 +220,40 @@ impl PyPauliIter {
 #[pyo3(name = "CustomOp")]
 #[repr(transparent)]
 #[derive(From, Into, PartialEq, Clone)]
-pub struct PyCustomOp(CustomOp);
+pub struct PyExtensionOp(ExtensionOp);
 
-impl fmt::Debug for PyCustomOp {
+impl fmt::Debug for PyExtensionOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl From<PyCustomOp> for OpType {
-    fn from(op: PyCustomOp) -> Self {
+impl From<PyExtensionOp> for OpType {
+    fn from(op: PyExtensionOp) -> Self {
         op.0.into()
     }
 }
 
 #[pymethods]
-impl PyCustomOp {
+impl PyExtensionOp {
     #[new]
+    #[allow(unused)]
     fn new(
         extension: &str,
         op_name: &str,
         input_types: Vec<PyHugrType>,
         output_types: Vec<PyHugrType>,
     ) -> PyResult<Self> {
-        Ok(CustomOp::new_opaque(OpaqueOp::new(
-            IdentList::new(extension).unwrap(),
-            op_name,
-            Default::default(),
-            [],
-            Signature::new(into_vec(input_types), into_vec(output_types)),
-        ))
-        .into())
+        // FIXME: Broken during the update to hugr 0.12
+        // Operations must now always be backed by an opDef, so the old way
+        // of creating `PyOpaqueOp`s on the fly is no longer possible.
+        unimplemented!("Python Extension Ops need an operation definition")
+        //let opdef = todo!();
+        //Ok(ExtensionOp::new(
+        //    opdef,
+        //    [],
+        //    Signature::new(into_vec(input_types), into_vec(output_types)),
+        //))
     }
 
     fn to_custom(&self) -> Self {

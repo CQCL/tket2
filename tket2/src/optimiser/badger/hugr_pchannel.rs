@@ -33,7 +33,7 @@ pub struct HugrPriorityChannel<C, P: Ord> {
     /// Used to avoid spamming the log.
     last_progress_log: Instant,
     /// The priority queue data structure.
-    pq: HugrPQ<P, C>,
+    pq: HugrPQ<Circuit, P, C>,
     /// The set of hashes we've seen.
     seen_hashes: FxHashSet<u64>,
     /// The minimum cost we've seen.

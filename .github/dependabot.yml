@@ -25,7 +25,10 @@ updates:
       # Major updates still generate individual PRs
 
   - package-ecosystem: "pip"
-    directory: "/" # Location of package manifests
+    directories: # Location of package manifests
+      - "/"
+      - "/tket2-py"
+      - "/tket2-eccs"
     schedule:
       interval: "weekly"
     commit-message:
