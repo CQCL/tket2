@@ -149,7 +149,7 @@ impl MakeOpDef for RotationOp {
     fn description(&self) -> String {
         match self {
             RotationOp::from_halfturns => {
-                "Construct rotation from number of half-turns (would be multiples of π in radians)."
+                "Construct rotation from number of half-turns (would be multiples of π in radians). Returns None if the float is non-finite."
             }
             RotationOp::to_halfturns => {
                 "Convert rotation to number of half-turns (would be multiples of π in radians)."

@@ -16,6 +16,7 @@ use tket_json_rs::optype;
 use super::{TKETDecode, METADATA_Q_OUTPUT_REGISTERS};
 use crate::circuit::Circuit;
 use crate::extension::rotation::{ConstRotation, RotationOp, ROTATION_TYPE};
+use crate::extension::sympy::SympyOpDef;
 use crate::extension::REGISTRY;
 use crate::Tk2Op;
 
@@ -226,6 +227,34 @@ fn circ_add_angles_constants() -> Circuit {
     h.finish_hugr_with_outputs(qbs, &REGISTRY).unwrap().into()
 }
 
+#[fixture]
+/// An Rx operation using some complex ops to compute its angle `cos(pi) + 1`.
+fn circ_complex_angle_computation() -> Circuit {
+    let qb_row = vec![QB_T];
+    let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), qb_row)).unwrap();
+
+    let qb = h.input_wires().next().unwrap();
+
+    let point2 = h.add_load_value(ConstRotation::new(0.2).unwrap());
+    let sympy = h
+        .add_dataflow_op(SympyOpDef.with_expr("cos(pi)".to_string()), [])
+        .unwrap()
+        .out_wire(0);
+    let final_rot = h
+        .add_dataflow_op(RotationOp::radd, [sympy, point2])
+        .unwrap()
+        .out_wire(0);
+
+    // TODO: Mix in some float ops. This requires unwrapping the result of `RotationOp::from_halfturns`.
+
+    let qbs = h
+        .add_dataflow_op(Tk2Op::Rx, [qb, final_rot])
+        .unwrap()
+        .outputs();
+
+    h.finish_hugr_with_outputs(qbs, &REGISTRY).unwrap().into()
+}
+
 #[rstest]
 #[case::simple(SIMPLE_JSON, 2, 2)]
 #[case::simple(MULTI_REGISTER, 2, 3)]
@@ -289,8 +318,9 @@ fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
 /// converted back to circuit inputs. This would require parsing symbolic
 /// expressions.
 #[rstest]
-#[case::symbolic(circ_add_angles_symbolic(), "f0 + f1")]
-#[case::constants(circ_add_angles_constants(), "0.2 + 0.3")]
+#[case::symbolic(circ_add_angles_symbolic(), "(f0 + f1)")]
+#[case::constants(circ_add_angles_constants(), "(0.2 + 0.3)")]
+#[case::complex(circ_complex_angle_computation(), "(cos(pi) + 0.2)")]
 fn test_add_angle_serialise(#[case] circ_add_angles: Circuit, #[case] param_str: &str) {
     let ser: SerialCircuit = SerialCircuit::encode(&circ_add_angles).unwrap();
     assert_eq!(ser.commands.len(), 1);

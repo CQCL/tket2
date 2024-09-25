@@ -47,8 +47,12 @@ impl Tk1Op {
             }
             Ok(Some(Tk1Op::Native(native)))
         } else {
-            let opaque = OpaqueTk1Op::try_from_tket2(&op)?;
-            Ok(opaque.map(Tk1Op::Opaque))
+            // Unrecognised opaque operation. If it's an opaque tket1 op, return it.
+            // Otherwise, it's an unsupported operation and we should fail.
+            match OpaqueTk1Op::try_from_tket2(&op)? {
+                Some(opaque) => Ok(Some(Tk1Op::Opaque(opaque))),
+                None => Err(OpConvertError::UnsupportedOpSerialization(op.clone())),
+            }
         }
     }
 

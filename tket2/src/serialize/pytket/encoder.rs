@@ -5,6 +5,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use hugr::extension::prelude::{BOOL_T, QB_T};
 use hugr::ops::{OpTrait, OpType};
+use hugr::std_extensions::arithmetic::float_ops::FloatOps;
+use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
+use hugr::types::Type;
 use hugr::{HugrView, Wire};
 use itertools::Itertools;
 use tket_json_rs::circuit_json::Register as RegisterUnit;
@@ -13,6 +16,7 @@ use tket_json_rs::circuit_json::{self, SerialCircuit};
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
 use crate::extension::rotation::{RotationOp, ROTATION_TYPE};
+use crate::extension::sympy::SympyOp;
 use crate::ops::match_symb_const_op;
 use crate::serialize::pytket::RegisterHash;
 use crate::Tk2Op;
@@ -573,10 +577,19 @@ impl ParameterTracker {
         optype: &OpType,
     ) -> Result<bool, OpConvertError> {
         let input_count = if let Some(signature) = optype.dataflow_signature() {
-            // Only consider commands where all inputs are parameters,
-            // and some outputs are also parameters.
-            let all_inputs = signature.input().iter().all(|ty| ty == &ROTATION_TYPE);
-            let some_output = signature.output().iter().any(|ty| ty == &ROTATION_TYPE);
+            // Only consider commands where all inputs and some outputs are
+            // parameters that we can track.
+            //
+            // TODO: We should track Option<T> parameters too, `RotationOp::from_halfturns` returns options.
+            const TRACKED_PARAMS: [Type; 2] = [ROTATION_TYPE, FLOAT64_TYPE];
+            let all_inputs = signature
+                .input()
+                .iter()
+                .all(|ty| TRACKED_PARAMS.contains(ty));
+            let some_output = signature
+                .output()
+                .iter()
+                .any(|ty| TRACKED_PARAMS.contains(ty));
             if !all_inputs || !some_output {
                 return Ok(false);
             }
@@ -619,8 +632,28 @@ impl ParameterTracker {
                 // Re-use the parameter from the input.
                 inputs[0].clone()
             }
-            OpType::ExtensionOp(_) if optype.cast() == Some(RotationOp::radd) => {
-                format!("{} + {}", inputs[0], inputs[1])
+            // Encode some angle and float operations directly as strings using
+            // the already encoded inputs. Fail if the operation is not
+            // supported, and let the operation encoding process it instead.
+            OpType::ExtensionOp(_) => {
+                if let Some(s) = optype
+                    .cast::<RotationOp>()
+                    .and_then(|op| self.encode_rotation_op(&op, inputs.as_slice()))
+                {
+                    s
+                } else if let Some(s) = optype
+                    .cast::<FloatOps>()
+                    .and_then(|op| self.encode_float_op(&op, inputs.as_slice()))
+                {
+                    s
+                } else if let Some(s) = optype
+                    .cast::<SympyOp>()
+                    .and_then(|op| self.encode_sympy_op(&op, inputs.as_slice()))
+                {
+                    s
+                } else {
+                    return Ok(false);
+                }
             }
             _ => {
                 let Some(s) = match_symb_const_op(optype) else {
@@ -646,6 +679,52 @@ impl ParameterTracker {
     /// Returns the parameter expression for a wire, if it exists.
     fn get(&self, wire: &Wire) -> Option<&String> {
         self.parameters.get(wire)
+    }
+
+    /// Encode an [`RotationOp`]s as a string, given its encoded inputs.
+    ///
+    /// `inputs` contains the expressions to compute each input.
+    fn encode_rotation_op(&self, op: &RotationOp, inputs: &[&String]) -> Option<String> {
+        let s = match op {
+            RotationOp::radd => format!("({} + {})", inputs[0], inputs[1]),
+            // Encode/decode the rotation as pytket parameters, expressed as half-turns.
+            // Note that the tracked parameter strings are always written in half-turns,
+            // so the conversion here is a no-op.
+            RotationOp::to_halfturns => inputs[0].clone(),
+            RotationOp::from_halfturns => inputs[0].clone(),
+        };
+        Some(s)
+    }
+
+    /// Encode an [`FloatOps`] as a string, given its encoded inputs.
+    fn encode_float_op(&self, op: &FloatOps, inputs: &[&String]) -> Option<String> {
+        let s = match op {
+            FloatOps::fadd => format!("({} + {})", inputs[0], inputs[1]),
+            FloatOps::fsub => format!("({} - {})", inputs[0], inputs[1]),
+            FloatOps::fneg => format!("(-{})", inputs[0]),
+            FloatOps::fmul => format!("({} * {})", inputs[0], inputs[1]),
+            FloatOps::fdiv => format!("({} / {})", inputs[0], inputs[1]),
+            FloatOps::fpow => format!("({} ** {})", inputs[0], inputs[1]),
+            FloatOps::ffloor => format!("floor({})", inputs[0]),
+            FloatOps::fceil => format!("ceil({})", inputs[0]),
+            FloatOps::fround => format!("round({})", inputs[0]),
+            FloatOps::fmax => format!("max({}, {})", inputs[0], inputs[1]),
+            FloatOps::fmin => format!("min({}, {})", inputs[0], inputs[1]),
+            FloatOps::fabs => format!("abs({})", inputs[0]),
+            _ => return None,
+        };
+        Some(s)
+    }
+
+    /// Encode a [`SympyOp`]s as a string.
+    ///
+    /// Note that the sympy operation does not have any inputs.
+    fn encode_sympy_op(&self, op: &SympyOp, inputs: &[&String]) -> Option<String> {
+        if !inputs.is_empty() {
+            return None;
+        }
+
+        Some(op.expr.clone())
     }
 }
 
