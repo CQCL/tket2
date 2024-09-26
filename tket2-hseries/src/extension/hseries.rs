@@ -246,11 +246,12 @@ pub trait HSeriesOpBuilder: Dataflow {
         let pi = pi_mul_f64(self, 1.0);
         let pi_2 = pi_mul_f64(self, 0.5);
         let pi_minus_2 = pi_mul_f64(self, -0.5);
+        let zero = self.add_load_const(Value::from(ConstF64::new(0.0)));
 
-        let t = self.add_phased_x(t, pi_minus_2, pi_2)?;
+        let t = self.add_phased_x(t, pi_2, pi_2)?;
         let [c, t] = self.add_zz_max(c, t)?;
-        let c = self.add_rz(c, pi_minus_2)?;
-        let t = self.add_phased_x(t, pi_2, pi)?;
+        let c = self.add_rz(c, pi_2)?;
+        let t = self.add_phased_x(t, pi_2, zero)?;
         let t = self.add_rz(t, pi_minus_2)?;
 
         Ok([c, t])
