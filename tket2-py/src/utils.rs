@@ -61,7 +61,7 @@ pub(crate) mod test {
     use hugr::extension::prelude::QB_T;
     use hugr::extension::PRELUDE_REGISTRY;
     use hugr::ops::handle::NodeHandle;
-    use hugr::types::FunctionType;
+    use hugr::types::Signature;
     use hugr::Hugr;
     use pyo3::{Bound, PyResult, Python};
     use tket2::Circuit;
@@ -77,8 +77,8 @@ pub(crate) mod test {
         let mut builder = ModuleBuilder::new();
         let circ = {
             let qb_row = vec![QB_T; num_qubits];
-            let circ_signature = FunctionType::new(qb_row.clone(), qb_row);
-            let mut dfg = builder.define_function("main", circ_signature.into())?;
+            let circ_signature = Signature::new(qb_row.clone(), qb_row);
+            let mut dfg = builder.define_function("main", circ_signature)?;
             let mut circ = dfg.as_circuit(dfg.input_wires());
             f(&mut circ)?;
             let qbs = circ.finish();

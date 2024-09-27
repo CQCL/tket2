@@ -7,6 +7,7 @@ pub mod pattern;
 pub mod rewrite;
 pub mod types;
 pub mod utils;
+pub mod expr;
 
 use pyo3::prelude::*;
 

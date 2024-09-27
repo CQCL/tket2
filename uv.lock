@@ -1,9 +1,5 @@
 version = 1
 requires-python = ">=3.10, <3.13"
-resolution-markers = [
-    "python_full_version < '3.13'",
-    "python_full_version >= '3.13'",
-]
 
 [manifest]
 members = [
@@ -784,11 +780,12 @@ wheels = [
 
 [[package]]
 name = "tket2"
-version = "0.2.1"
+version = "0.3.0"
 source = { editable = "tket2-py" }
 dependencies = [
     { name = "hugr" },
     { name = "pytket" },
+    { name = "sympy" },
     { name = "tket2-eccs" },
 ]
 
@@ -796,6 +793,7 @@ dependencies = [
 requires-dist = [
     { name = "hugr", specifier = ">=0.8.0,<0.9" },
     { name = "pytket", specifier = ">=1.29.2,<2" },
+    { name = "sympy", specifier = ">=1.12" },
     { name = "tket2-eccs", editable = "tket2-eccs" },
 ]
 

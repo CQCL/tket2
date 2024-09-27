@@ -27,7 +27,6 @@ use crate::symbolic_constant_op;
 /// The state of an in-progress [`FunctionBuilder`] being built from a [`SerialCircuit`].
 ///
 /// Mostly used to define helper internal methods.
-#[derive(Debug, PartialEq)]
 pub(super) struct Tk1Decoder {
     /// The Hugr being built.
     pub hugr: FunctionBuilder<Hugr>,
@@ -37,6 +36,9 @@ pub(super) struct Tk1Decoder {
     ordered_registers: Vec<RegisterHash>,
     /// A set of registers that encode qubits.
     qubit_registers: HashSet<RegisterHash>,
+
+    /// TODO
+    expression_parser: Option<Box<dyn Fn(String) -> Result<Hugr, Box<dyn std::error::Error>>>>
 }
 
 impl Tk1Decoder {
@@ -112,6 +114,7 @@ impl Tk1Decoder {
             register_wires,
             ordered_registers,
             qubit_registers,
+            expression_parser: None
         })
     }
 
@@ -242,12 +245,11 @@ impl Tk1Decoder {
             });
         }
         // Add the parameter wires to the input.
-        inputs.extend(
-            tk1op
+        let ops = tk1op
                 .param_ports()
                 .zip(params)
-                .map(|(_port, param)| self.create_param_wire(param)),
-        );
+                .map(|(_port, param)| self.create_param_wire(param)).collect::<Result<Vec<_>, _>>()?;
+        inputs.extend(ops);
 
         Ok((inputs, outputs))
     }
@@ -257,14 +259,20 @@ impl Tk1Decoder {
     /// If the parameter is a constant, a constant definition is added to the Hugr.
     ///
     /// TODO: If the parameter is a variable, returns the corresponding wire from the input.
-    fn create_param_wire(&mut self, param: String) -> Wire {
-        match try_param_to_constant(&param) {
-            Some(const_op) => self.hugr.add_load_const(const_op),
-            None => {
-                // store string in custom op.
-                let symb_op = symbolic_constant_op(param);
-                let o = self.hugr.add_dataflow_op(symb_op, []).unwrap();
-                o.out_wire(0)
+    fn create_param_wire(&mut self, param: String) -> Result<Wire, OpConvertError> {
+        if let Some(parse) = self.expression_parser.as_ref() {
+            let hugr = parse(param.clone()).map_err(|e| OpConvertError::UnparsableExpression { expr: param, msg: e.to_string() })?;
+            let root = self.hugr.add_hugr(hugr).new_root;
+            Ok(Wire::new(root, 0))
+        } else {
+            match try_param_to_constant(&param) {
+                Some(const_op) => Ok(self.hugr.add_load_const(const_op)),
+                None => {
+                    // store string in custom op.
+                    let symb_op = symbolic_constant_op(param);
+                    let o = self.hugr.add_dataflow_op(symb_op, []).unwrap();
+                    Ok(o.out_wire(0))
+                }
             }
         }
     }

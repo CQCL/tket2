@@ -14,6 +14,7 @@ in
   ]
   ++ lib.optionals pkgs.stdenv.isLinux [
     pkgs.stdenv.cc.cc.lib
+    pkgs.stdenv.cc.cc
   ]
   ++ lib.optionals pkgs.stdenv.isDarwin (
     with pkgs.darwin.apple_sdk; [
@@ -36,12 +37,15 @@ in
     uv --version
     export LLVM_COV="${pkgs.llvmPackages_16.libllvm}/bin/llvm-cov"
     export LLVM_PROFDATA="${pkgs.llvmPackages_16.libllvm}/bin/llvm-profdata"
-
-    just setup
+    export TKET2_JUST_INHIBIT_GIT_HOOKS=1
+    export LD_LIBRARY_PATH="${config.env.DEVENV_PROFILE}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}";
+    just setup || true
     source .venv/bin/activate
   '';
 
-  # https://devenv.sh/languages/
+  env = {
+    PYO3_PYTHON = "${config.env.DEVENV_PROFILE}/bin/python";
+  };
 
   languages.rust = {
     enable = true;

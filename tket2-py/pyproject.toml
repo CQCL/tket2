@@ -29,6 +29,7 @@ dependencies = [
     'pytket >= 1.29.2, < 2',
     'hugr >= 0.8.0, < 0.9',
     'tket2_eccs >= 0.1.0, < 0.2',
+    'sympy >= 1.12'
 ]
 
 [tool.uv.sources]

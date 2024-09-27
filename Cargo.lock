@@ -1961,6 +1961,7 @@ dependencies = [
  "derive_more 0.99.18",
  "hugr",
  "itertools 0.13.0",
+ "libc",
  "num_cpus",
  "portgraph 0.12.2",
  "portmatching",

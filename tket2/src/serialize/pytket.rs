@@ -158,6 +158,8 @@ pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, TK1ConvertError> {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum OpConvertError {
+    #[error("Failed to parse expression '{expr}': {msg}")]
+    UnparsableExpression{ expr: String, msg: String},
     /// The serialized operation is not supported.
     #[error("Unsupported serialized pytket operation: {0:?}")]
     UnsupportedSerializedOp(SerialOpType),
