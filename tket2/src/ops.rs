@@ -272,7 +272,7 @@ pub(crate) mod test {
     #[test]
     fn tk2op_properties() {
         for op in Tk2Op::iter() {
-            // The exposed name should start with "quantum.tket2."
+            // The exposed name should start with "tket2.quantum."
             assert!(op.exposed_name().starts_with(&EXTENSION_ID.to_string()));
 
             let ext_op = op.into_extension_op();

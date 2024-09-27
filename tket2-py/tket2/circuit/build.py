@@ -1,6 +1,8 @@
 from __future__ import annotations
-from hugr.hugr import Hugr
+from typing import Iterable
+
 from hugr import tys, ops
+from hugr.ext import Package, Extension
 from hugr.ops import ComWire, Command
 from hugr.std.float import FLOAT_T
 from hugr.build.tracked_dfg import TrackedDfg
@@ -17,10 +19,35 @@ class CircBuild(TrackedDfg):
     def with_nqb(cls, n_qb: int) -> CircBuild:
         return cls(*[tys.Qubit] * n_qb, track_inputs=True)
 
-    def finish(self) -> Tk2Circuit:
+    def finish_package(
+        self, other_extensions: Iterable[Extension] | None = None
+    ) -> Package:
+        """Finish building the package by setting all the qubits as the output
+        and wrap it in a hugr package with the required extensions.
+
+        Args:
+            other_extensions: Other extensions to include in the package.
+        Returns:
+            The finished package.
+        """
+        import tket2.extensions as ext
+
+        extensions = [
+            ext.rotation(),
+            ext.futures(),
+            ext.hseries(),
+            ext.quantum(),
+            ext.result(),
+            *(other_extensions or []),
+        ]
+
+        return Package(modules=[self.hugr], extensions=extensions)
+
+    def finish(self, other_extensions: list[Extension] | None = None) -> Tk2Circuit:
         """Finish building the circuit by setting all the qubits as the output
         and validate."""
-        return load_hugr(self.hugr)
+
+        return load_hugr_pkg(self.finish_package(other_extensions))
 
 
 def from_coms(*args: Command) -> Tk2Circuit:
@@ -40,8 +67,8 @@ def from_coms(*args: Command) -> Tk2Circuit:
     return build.finish()
 
 
-def load_hugr(h: Hugr) -> Tk2Circuit:
-    return Tk2Circuit.from_hugr_json(h.to_json())
+def load_hugr_pkg(package: Package) -> Tk2Circuit:
+    return Tk2Circuit.from_hugr_json(package.to_json())
 
 
 def load_custom(serialized: bytes) -> ops.Custom:
@@ -61,7 +88,7 @@ def id_circ(n_qb: int) -> Tk2Circuit:
 
 @dataclass(frozen=True)
 class QuantumOps(ops.Custom):
-    extension: tys.ExtensionId = "quantum.tket2"
+    extension: tys.ExtensionId = "tket2.quantum"
 
 
 _OneQbSig = tys.FunctionType.endo([tys.Qubit])

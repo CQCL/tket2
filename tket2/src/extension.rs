@@ -4,13 +4,12 @@
 
 use crate::serialize::pytket::OpaqueTk1Op;
 use crate::Tk2Op;
-use hugr::extension::prelude::PRELUDE;
 use hugr::extension::simple_op::MakeOpDef;
 use hugr::extension::{
     CustomSignatureFunc, ExtensionId, ExtensionRegistry, SignatureError, Version,
 };
 use hugr::hugr::IdentList;
-use hugr::std_extensions::arithmetic::float_types::EXTENSION as FLOAT_TYPES;
+use hugr::std_extensions::STD_REG;
 use hugr::types::type_param::{TypeArg, TypeParam};
 use hugr::types::{CustomType, PolyFuncType, PolyFuncTypeRV};
 use hugr::Extension;
@@ -57,15 +56,13 @@ pub static ref TKET1_EXTENSION: Extension = {
     res
 };
 
-/// Extension registry including the prelude, TKET1 and Tk2Ops extensions.
-pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
+/// Extension registry including the prelude, std, TKET1, and Tk2Ops extensions.
+pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new(
+    STD_REG.iter().map(|(_, e)| e.to_owned()).chain([
     TKET1_EXTENSION.to_owned(),
-    PRELUDE.to_owned(),
     TKET2_EXTENSION.to_owned(),
-    FLOAT_TYPES.to_owned(),
     rotation::ROTATION_EXTENSION.to_owned()
-]).unwrap();
-
+])).unwrap();
 
 }
 
