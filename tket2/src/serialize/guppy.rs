@@ -1,13 +1,15 @@
 //! Load pre-compiled guppy functions.
 
 use std::path::Path;
-use std::{fs, io};
+use std::{fs, io, mem};
 
 use hugr::ops::{NamedOp, OpTag, OpTrait, OpType};
 use hugr::{Hugr, HugrView};
+use hugr_cli::Package;
 use itertools::Itertools;
 use thiserror::Error;
 
+use crate::extension::REGISTRY;
 use crate::{Circuit, CircuitError};
 
 /// Loads a pre-compiled guppy file.
@@ -31,7 +33,12 @@ pub fn load_guppy_json_reader(
     reader: impl io::Read,
     function: &str,
 ) -> Result<Circuit, CircuitLoadError> {
-    let hugr: Hugr = serde_json::from_reader(reader)?;
+    let pkg: Package = serde_json::from_reader(reader)?;
+    let mut hugrs = pkg.validate(&mut REGISTRY.clone())?;
+    if hugrs.len() != 1 {
+        return Err(CircuitLoadError::InvalidNumHugrs(hugrs.len()));
+    }
+    let hugr = mem::take(&mut hugrs[0]);
     find_function(hugr, function)
 }
 
@@ -48,7 +55,7 @@ pub fn load_guppy_json_reader(
 /// - If the root of the HUGR is not a module operation.
 /// - If the function is not found in the module.
 /// - If the function has control flow primitives.
-fn find_function(hugr: Hugr, function_name: &str) -> Result<Circuit, CircuitLoadError> {
+pub fn find_function(hugr: Hugr, function_name: &str) -> Result<Circuit, CircuitLoadError> {
     // Find the root module.
     let module = hugr.root();
     if !OpTag::ModuleRoot.is_superset(hugr.get_optype(module).tag()) {
@@ -139,4 +146,10 @@ pub enum CircuitLoadError {
     /// Error loading the circuit.
     #[error("Error loading the circuit: {0}")]
     CircuitLoadError(#[from] CircuitError),
+    /// Error validating the loaded circuit.
+    #[error("{0}")]
+    ValError(#[from] hugr_cli::validate::ValError),
+    /// The encoded HUGR package must have a single HUGR.
+    #[error("The encoded HUGR package must have a single HUGR, but it has {0} HUGRs.")]
+    InvalidNumHugrs(usize),
 }

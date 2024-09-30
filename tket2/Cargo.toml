@@ -65,6 +65,10 @@ bytemuck = { workspace = true }
 crossbeam-channel = { workspace = true }
 tracing = { workspace = true }
 zstd = { workspace = true, optional = true }
+# Required to acces the `Package` type.
+# Remove once https://github.com/CQCL/hugr/issues/1530 is fixed.
+hugr-cli = { workspace = true }
+
 
 [dev-dependencies]
 rstest = { workspace = true }
