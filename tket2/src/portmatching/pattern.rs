@@ -143,12 +143,15 @@ pub enum InvalidPattern {
     #[display("The pattern is not connected")]
     NotConnected,
     /// Patterns cannot include empty wires.
-    #[display("The pattern contains an empty wire between {from_node}:{from_port} and {to_node}:{to_port}")]
-    #[allow(missing_docs)]
+    #[display("The pattern contains an empty wire between {from_node}, {from_port} and {to_node}, {to_port}")]
     EmptyWire {
+        /// The source node
         from_node: Node,
+        /// The source port
         from_port: Port,
+        /// The target node
         to_node: Node,
+        /// The target port
         to_port: Port,
     },
 }

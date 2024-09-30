@@ -33,6 +33,7 @@ pub struct HSeriesPass {
 }
 
 #[derive(Error, Debug, Display, From)]
+#[non_exhaustive]
 /// An error reported from [HSeriesPass].
 pub enum HSeriesPassError {
     /// The [hugr::Hugr] was invalid either before or after a pass ran.

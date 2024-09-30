@@ -40,6 +40,7 @@ use crate::extension::{
 pub struct LazifyMeasurePass(ValidationLevel);
 
 #[derive(Error, Debug, Display, From)]
+#[non_exhaustive]
 /// An error reported from [LazifyMeasurePass].
 pub enum LazifyMeasurePassError {
     /// The [Hugr] was invalid either before or after a pass ran.

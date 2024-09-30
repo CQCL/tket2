@@ -147,6 +147,7 @@ fn hash_node(circ: &impl HugrView, node: Node, state: &mut HashState) -> Result<
 
 /// Errors that can occur while hashing a hugr.
 #[derive(Debug, Display, Clone, PartialEq, Eq, Error)]
+#[non_exhaustive]
 pub enum HashError {
     /// The circuit contains a cycle.
     #[display("The circuit contains a cycle.")]

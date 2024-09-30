@@ -36,7 +36,7 @@ pub fn load_guppy_json_reader(
     let pkg: Package = serde_json::from_reader(reader)?;
     let mut hugrs = pkg.validate(&mut REGISTRY.clone())?;
     if hugrs.len() != 1 {
-        return Err(CircuitLoadError::InvalidNumHugrs(hugrs.len()));
+        return Err(CircuitLoadError::InvalidNumHugrs { count: hugrs.len() });
     }
     let hugr = mem::take(&mut hugrs[0]);
     find_function(hugr, function)
@@ -155,7 +155,9 @@ pub enum CircuitLoadError {
     #[from]
     ValError(hugr_cli::validate::ValError),
     /// The encoded HUGR package must have a single HUGR.
-    #[display("The encoded HUGR package must have a single HUGR, but it has {_0} HUGRs.")]
-    #[error(ignore)] // `_0` is not the error source
-    InvalidNumHugrs(usize),
+    #[display("The encoded HUGR package must have a single HUGR, but it has {count} HUGRs.")]
+    InvalidNumHugrs {
+        /// The number of HUGRs encountered in the encoded HUGR package.
+        count: usize,
+    },
 }

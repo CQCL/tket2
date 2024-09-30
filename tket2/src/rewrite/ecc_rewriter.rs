@@ -205,6 +205,7 @@ impl Rewriter for ECCRewriter {
 
 /// Errors that can occur when (de)serialising an [`ECCRewriter`].
 #[derive(Debug, Display, Error, From)]
+#[non_exhaustive]
 pub enum RewriterSerialisationError {
     /// An IO error occurred
     #[display("IO error: {_0}")]

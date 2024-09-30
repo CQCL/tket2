@@ -37,20 +37,28 @@ fn const_f64<T: Dataflow + ?Sized>(builder: &mut T, value: f64) -> Wire {
 
 /// Errors produced by lowering [Tk2Op]s.
 #[derive(Debug, Display, Error, From)]
-#[allow(missing_docs)]
+#[non_exhaustive]
 pub enum LowerTk2Error {
+    /// An error raised when building the circuit.
     #[display("Error when building the circuit: {_0}")]
     BuildError(BuildError),
+    /// Found an unrecognised operation.
     #[display("Unrecognised operation: {} with {_1} inputs", _0.name())]
     UnknownOp(Tk2Op, usize),
+    /// An error raised when replacing an operation.
     #[display("Error when replacing op: {_0}")]
     OpReplacement(HugrError),
+    /// An error raised when lowering operations.
     #[display("Error when lowering ops: {_0}")]
     CircuitReplacement(hugr::algorithms::lower::LowerError),
-    #[display("Tk2Ops were not lowered: {_0:?}")]
+    /// Tk2Ops were not lowered after the pass.
+    #[display("Tk2Ops were not lowered: {missing_ops:?}")]
     #[from(ignore)]
-    #[error(ignore)] // `_0` is not the error source
-    Unlowered(Vec<Node>),
+    Unlowered {
+        /// The list of nodes that were not lowered.
+        missing_ops: Vec<Node>,
+    },
+    /// Validation error in the final hugr.
     ValidationError(ValidatePassError),
 }
 
@@ -176,7 +184,8 @@ impl LowerTket2ToHSeriesPass {
         self.0.run_validated_pass(hugr, registry, |hugr, level| {
             lower_tk2_op(hugr)?;
             if *level != ValidationLevel::None {
-                check_lowered(hugr).map_err(LowerTk2Error::Unlowered)?;
+                check_lowered(hugr)
+                    .map_err(|missing_ops| LowerTk2Error::Unlowered { missing_ops })?;
             }
             Ok(())
         })

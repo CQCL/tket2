@@ -183,18 +183,24 @@ fn commutation_on_port(comms: &[(usize, Pauli)], port: Port) -> Option<Pauli> {
 
 /// Error from a `PullForward` operation.
 #[derive(Debug, Display, Clone, Error, PartialEq, Eq, From)]
-#[allow(missing_docs)]
+#[non_exhaustive]
 pub enum PullForwardError {
-    // Error in hugr mutation.
+    /// Error in hugr mutation.
     #[display("Hugr mutation error: {_0}")]
     #[from]
     HugrError(HugrError),
-    #[display("Qubit {_0} not found in command.")]
-    #[error(ignore)] // `_0` is not the error source
-    NoQbInCommand(usize),
-    #[display("No subsequent command found for qubit {_0}")]
-    #[error(ignore)] // `_0` is not the error source
-    NoCommandForQb(usize),
+    /// Qubit not found in command.
+    #[display("Qubit {qubit} not found in command.")]
+    NoQbInCommand {
+        /// The qubit index
+        qubit: usize,
+    },
+    /// No command for qubit
+    #[display("No subsequent command found for qubit {qubit}")]
+    NoCommandForQb {
+        /// The qubit index
+        qubit: usize,
+    },
 }
 
 struct PullForward {
@@ -219,7 +225,7 @@ impl Rewrite for PullForward {
         let qb_port = |command: &ComCommand, qb, direction| {
             command
                 .port_of_qb(qb, direction)
-                .ok_or(PullForwardError::NoQbInCommand(qb.index()))
+                .ok_or(PullForwardError::NoQbInCommand { qubit: qb.index() })
         };
         // for each qubit, disconnect node and reconnect at destination.
         for qb in command.qubits() {
@@ -238,7 +244,7 @@ impl Rewrite for PullForward {
                 .unwrap();
 
             let Some(new_neighbour_com) = new_nexts.get(&qb) else {
-                return Err(PullForwardError::NoCommandForQb(qb.index()));
+                return Err(PullForwardError::NoCommandForQb { qubit: qb.index() });
             };
             if new_neighbour_com == &command {
                 // do not need to commute along this qubit.

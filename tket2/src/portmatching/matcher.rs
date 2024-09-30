@@ -372,6 +372,7 @@ impl PatternMatcher {
 
 /// Errors that can occur when constructing matches.
 #[derive(Debug, Display, Clone, PartialEq, Eq, Error)]
+#[non_exhaustive]
 pub enum InvalidPatternMatch {
     /// The match is not convex.
     #[display("match is not convex")]
@@ -396,6 +397,7 @@ pub enum InvalidPatternMatch {
 
 /// Errors that can occur when (de)serialising a matcher.
 #[derive(Debug, Display, Error, From)]
+#[non_exhaustive]
 pub enum MatcherSerialisationError {
     /// An IO error occurred
     #[display("IO error: {_0}")]
