@@ -61,7 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: mozilla-actions/sccache-action@v0.0.6
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: mozilla-actions/sccache-action@v0.0.6
       - name: Set up uv
         run: .github/script/install-uv.sh
       - name: "Set up Python"
@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: mozilla-actions/sccache-action@v0.0.6
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Build benchmarks with no features
@@ -130,7 +130,7 @@ jobs:
     name: tests (Rust stable, no features)
     steps:
       - uses: actions/checkout@v4
-      - uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: mozilla-actions/sccache-action@v0.0.6
       - id: toolchain
         uses: dtolnay/rust-toolchain@master
         with:
@@ -150,7 +150,7 @@ jobs:
     name: tests (Rust stable, all features)
     steps:
       - uses: actions/checkout@v4
-      - uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: mozilla-actions/sccache-action@v0.0.6
       - id: toolchain
         uses: dtolnay/rust-toolchain@master
         with:
@@ -176,7 +176,7 @@ jobs:
     name: tests (Rust ${{ matrix.rust }})
     steps:
       - uses: actions/checkout@v4
-      - uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: mozilla-actions/sccache-action@v0.0.6
       - id: toolchain
         uses: dtolnay/rust-toolchain@master
         with:
@@ -200,7 +200,7 @@ jobs:
     name: tests (Rust nightly, coverage)
     steps:
       - uses: actions/checkout@v4
-      - uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: mozilla-actions/sccache-action@v0.0.6
       - uses: dtolnay/rust-toolchain@master
         with:
           # Nightly is required to count doctests coverage
@@ -230,7 +230,7 @@ jobs:
     name: tests (Python)
     steps:
       - uses: actions/checkout@v4
-      - uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: mozilla-actions/sccache-action@v0.0.6
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Set up uv
@@ -286,7 +286,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: mozilla-actions/sccache-action@v0.0.5
+      - uses: mozilla-actions/sccache-action@v0.0.6
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
       - uses: extractions/setup-just@v2
