@@ -15,6 +15,7 @@ use hugr::extension::prelude::{LiftDef, NoopDef, TupleOpDef};
 use hugr::hugr::views::{DescendantsGraph, ExtractHugr, HierarchyView};
 use itertools::Either::{Left, Right};
 
+use derive_more::{Display, Error, From};
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::dataflow::IOTrait;
 use hugr::ops::{Input, NamedOp, OpName, OpParent, OpTag, OpTrait, Output};
@@ -23,7 +24,6 @@ use hugr::{Hugr, PortIndex};
 use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use thiserror::Error;
 
 pub use hugr::ops::OpType;
 pub use hugr::types::{EdgeKind, Type, TypeRow};
@@ -444,16 +444,16 @@ pub(crate) fn remove_empty_wire(
 }
 
 /// Errors that can occur when mutating a circuit.
-#[derive(Debug, Clone, Error, PartialEq)]
+#[derive(Display, Debug, Clone, Error, PartialEq)]
 pub enum CircuitError {
     /// The parent node for the circuit does not exist in the HUGR.
-    #[error("{parent} cannot define a circuit as it is not present in the HUGR.")]
+    #[display("{parent} cannot define a circuit as it is not present in the HUGR.")]
     MissingParentNode {
         /// The node that was used as the parent.
         parent: Node,
     },
     /// Circuit parents must have a concrete signature.
-    #[error(
+    #[display(
         "{} node {parent} cannot be used as a circuit parent. Circuits must have a concrete signature, but the node has signature '{}'.",
         optype.name(),
         signature
@@ -467,7 +467,7 @@ pub enum CircuitError {
         signature: PolyFuncType,
     },
     /// The parent node for the circuit has an invalid optype.
-    #[error(
+    #[display(
         "{} node {parent} cannot be used as a circuit parent. Only 'DFG', 'DataflowBlock', or 'FuncDefn' operations are allowed.",
         optype.name()
     )]
@@ -480,21 +480,23 @@ pub enum CircuitError {
 }
 
 /// Errors that can occur when mutating a circuit.
-#[derive(Debug, Clone, Error, PartialEq)]
+#[derive(Display, Debug, Clone, Error, PartialEq, From)]
 pub enum CircuitMutError {
     /// A Hugr error occurred.
-    #[error("Hugr error: {0:?}")]
-    HugrError(#[from] hugr::hugr::HugrError),
+    #[display("Hugr error: {_0:?}")]
+    #[from]
+    HugrError(hugr::hugr::HugrError),
     /// A circuit validation error occurred.
-    #[error("transparent")]
-    CircuitError(#[from] CircuitError),
+    #[display("transparent")]
+    #[from]
+    CircuitError(CircuitError),
     /// The wire to be deleted is not empty.
-    #[from(ignore)]
-    #[error("Wire {0} cannot be deleted: not empty")]
+    #[display("Wire {_0} cannot be deleted: not empty")]
+    #[error(ignore)] // `_0` is not the error source
     DeleteNonEmptyWire(usize),
     /// The wire does not exist.
-    #[from(ignore)]
-    #[error("Wire {0} does not exist")]
+    #[display("Wire {_0} does not exist")]
+    #[error(ignore)] // `_0` is not the error source
     InvalidPortOffset(usize),
 }
 

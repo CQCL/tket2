@@ -62,12 +62,12 @@ use itertools::Itertools;
 pub use matcher::{PatternMatch, PatternMatcher};
 pub use pattern::CircuitPattern;
 
+use derive_more::{Display, Error};
 use hugr::{
     ops::{OpTag, OpTrait},
     Node, Port,
 };
 use matcher::MatchOp;
-use thiserror::Error;
 
 use crate::{circuit::Circuit, utils::type_is_linear};
 
@@ -98,17 +98,19 @@ enum PEdge {
     InputEdge { src: Port },
 }
 
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Clone, Error, Display)]
 #[non_exhaustive]
 enum InvalidEdgeProperty {
     /// The port is linked to multiple edges.
-    #[error("port {0:?} is linked to multiple edges")]
+    #[display("port {_0:?} is linked to multiple edges")]
+    #[error(ignore)] // `_0` is not the error source
     AmbiguousEdge(Port),
     /// The port is not linked to any edge.
-    #[error("port {0:?} is not linked to any edge")]
+    #[display("port {_0:?} is not linked to any edge")]
+    #[error(ignore)] // `_0` is not the error source
     NoLinkedEdge(Port),
     /// The port does not have a type.
-    #[error("{0}:{1} does not have a type")]
+    #[display("{_0}:{_1} does not have a type")]
     UntypedPort(Node, Port),
 }
 

@@ -14,10 +14,9 @@ use hugr::{
     types::{type_param::TypeArg, Signature},
 };
 
+use derive_more::{Display, Error};
 use serde::{Deserialize, Serialize};
-
-use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
-use thiserror::Error;
+use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
 use crate::extension::REGISTRY;
 
@@ -92,8 +91,8 @@ pub enum Pauli {
     Z,
 }
 
-#[derive(Debug, Error, PartialEq, Clone)]
-#[error("{} is not a Tk2Op.", op.name())]
+#[derive(Display, Debug, Error, PartialEq, Clone)]
+#[display("{} is not a Tk2Op.", op.name())]
 pub struct NotTk2Op {
     /// The offending operation.
     pub op: OpType,

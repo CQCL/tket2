@@ -1,5 +1,6 @@
 //! Provides a preparation and validation workflow for Hugrs targeting
 //! Quantinuum H-series quantum computers.
+use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
         force_order,
@@ -9,8 +10,6 @@ use hugr::{
     hugr::{hugrmut::HugrMut, HugrError},
 };
 use tket2::Tk2Op;
-
-use thiserror::Error;
 
 use extension::{
     futures::FutureOpDef,
@@ -33,21 +32,17 @@ pub struct HSeriesPass {
     validation_level: ValidationLevel,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Display, From)]
 /// An error reported from [HSeriesPass].
 pub enum HSeriesPassError {
     /// The [hugr::Hugr] was invalid either before or after a pass ran.
-    #[error(transparent)]
-    ValidationError(#[from] ValidatePassError),
+    ValidationError(ValidatePassError),
     /// An error from the component [LazifyMeasurePass].
-    #[error(transparent)]
-    LazyMeasureError(#[from] LazifyMeasurePassError),
+    LazyMeasureError(LazifyMeasurePassError),
     /// An error from the component [force_order()] pass.
-    #[error(transparent)]
-    ForceOrderError(#[from] HugrError),
+    ForceOrderError(HugrError),
     /// An error from the component [LowerTket2ToHSeriesPass] pass.
-    #[error(transparent)]
-    LowerTk2Error(#[from] LowerTk2Error),
+    LowerTk2Error(LowerTk2Error),
 }
 
 impl HSeriesPass {

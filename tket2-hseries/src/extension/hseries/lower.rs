@@ -1,3 +1,5 @@
+use derive_more::{Display, Error, From};
+use hugr::ops::NamedOp;
 use hugr::{
     algorithms::validation::{ValidatePassError, ValidationLevel},
     builder::{BuildError, DFGBuilder, Dataflow, DataflowHugr},
@@ -11,7 +13,6 @@ use hugr::{
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
-use thiserror::Error;
 use tket2::{extension::rotation::RotationOpBuilder, Tk2Op};
 
 use crate::extension::hseries::{HSeriesOp, HSeriesOpBuilder};
@@ -35,26 +36,22 @@ fn const_f64<T: Dataflow + ?Sized>(builder: &mut T, value: f64) -> Wire {
 }
 
 /// Errors produced by lowering [Tk2Op]s.
-#[derive(Debug, Error)]
+#[derive(Debug, Display, Error, From)]
 #[allow(missing_docs)]
 pub enum LowerTk2Error {
-    #[error("Error when building the circuit: {0}")]
-    BuildError(#[from] BuildError),
-
-    #[error("Unrecognised operation: {0:?} with {1} inputs")]
+    #[display("Error when building the circuit: {_0}")]
+    BuildError(BuildError),
+    #[display("Unrecognised operation: {} with {_1} inputs", _0.name())]
     UnknownOp(Tk2Op, usize),
-
-    #[error("Error when replacing op: {0}")]
-    OpReplacement(#[from] HugrError),
-
-    #[error("Error when lowering ops: {0}")]
-    CircuitReplacement(#[from] hugr::algorithms::lower::LowerError),
-
-    #[error("Tk2Ops were not lowered: {0:?}")]
+    #[display("Error when replacing op: {_0}")]
+    OpReplacement(HugrError),
+    #[display("Error when lowering ops: {_0}")]
+    CircuitReplacement(hugr::algorithms::lower::LowerError),
+    #[display("Tk2Ops were not lowered: {_0:?}")]
+    #[from(ignore)]
+    #[error(ignore)] // `_0` is not the error source
     Unlowered(Vec<Node>),
-
-    #[error(transparent)]
-    ValidationError(#[from] ValidatePassError),
+    ValidationError(ValidatePassError),
 }
 
 fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {

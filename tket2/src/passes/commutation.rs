@@ -1,5 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
+use derive_more::{Display, Error, From};
 use hugr::hugr::{hugrmut::HugrMut, HugrError, Rewrite};
 use hugr::{CircuitUnit, Direction, HugrView, Node, Port, PortIndex};
 use itertools::Itertools;
@@ -10,8 +11,6 @@ use crate::{
     circuit::command::Command,
     ops::{Pauli, Tk2Op},
 };
-
-use thiserror::Error;
 
 type Qb = crate::circuit::units::LinearUnit;
 
@@ -183,17 +182,18 @@ fn commutation_on_port(comms: &[(usize, Pauli)], port: Port) -> Option<Pauli> {
 }
 
 /// Error from a `PullForward` operation.
-#[derive(Debug, Clone, Error, PartialEq, Eq)]
+#[derive(Debug, Display, Clone, Error, PartialEq, Eq, From)]
 #[allow(missing_docs)]
 pub enum PullForwardError {
     // Error in hugr mutation.
-    #[error("Hugr mutation error: {0:?}")]
-    HugrError(#[from] HugrError),
-
-    #[error("Qubit {0} not found in command.")]
+    #[display("Hugr mutation error: {_0}")]
+    #[from]
+    HugrError(HugrError),
+    #[display("Qubit {_0} not found in command.")]
+    #[error(ignore)] // `_0` is not the error source
     NoQbInCommand(usize),
-
-    #[error("No subsequent command found for qubit {0}")]
+    #[display("No subsequent command found for qubit {_0}")]
+    #[error(ignore)] // `_0` is not the error source
     NoCommandForQb(usize),
 }
 

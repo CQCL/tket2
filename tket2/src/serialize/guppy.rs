@@ -3,11 +3,11 @@
 use std::path::Path;
 use std::{fs, io, mem};
 
+use derive_more::{Display, Error, From};
 use hugr::ops::{NamedOp, OpTag, OpTrait, OpType};
 use hugr::{Hugr, HugrView};
 use hugr_cli::Package;
 use itertools::Itertools;
-use thiserror::Error;
 
 use crate::extension::REGISTRY;
 use crate::{Circuit, CircuitError};
@@ -109,16 +109,19 @@ pub fn find_function(hugr: Hugr, function_name: &str) -> Result<Circuit, Circuit
 }
 
 /// Error type for conversion between `Op` and `OpType`.
-#[derive(Debug, Error)]
+#[derive(Debug, Display, Error, From)]
+#[non_exhaustive]
 pub enum CircuitLoadError {
     /// Cannot load the circuit file.
-    #[error("Cannot load the circuit file: {0}")]
-    InvalidFile(#[from] io::Error),
+    #[display("Cannot load the circuit file: {_0}")]
+    #[from]
+    InvalidFile(io::Error),
     /// Invalid JSON
-    #[error("Invalid JSON. {0}")]
-    InvalidJson(#[from] serde_json::Error),
+    #[display("Invalid JSON. {_0}")]
+    #[from]
+    InvalidJson(serde_json::Error),
     /// The root node is not a module operation.
-    #[error(
+    #[display(
         "Expected a HUGR with a module at the root, but found a {} instead.",
         root_op.name()
     )]
@@ -127,7 +130,7 @@ pub enum CircuitLoadError {
         root_op: OpType,
     },
     /// The function is not found in the module.
-    #[error(
+    #[display(
         "Function '{function}' not found in the loaded module. Available functions: [{}]",
         available_functions.join(", ")
     )]
@@ -138,18 +141,21 @@ pub enum CircuitLoadError {
         available_functions: Vec<String>,
     },
     /// The function has an invalid control flow structure.
-    #[error("Function '{function}' has an invalid control flow structure. Currently only flat functions with no control flow primitives are supported.")]
+    #[display("Function '{function}' has an invalid control flow structure. Currently only flat functions with no control flow primitives are supported.")]
     InvalidControlFlow {
         /// The function name.
         function: String,
     },
     /// Error loading the circuit.
-    #[error("Error loading the circuit: {0}")]
-    CircuitLoadError(#[from] CircuitError),
+    #[display("Error loading the circuit: {_0}")]
+    #[from]
+    CircuitLoadError(CircuitError),
     /// Error validating the loaded circuit.
-    #[error("{0}")]
-    ValError(#[from] hugr_cli::validate::ValError),
+    #[display("{_0}")]
+    #[from]
+    ValError(hugr_cli::validate::ValError),
     /// The encoded HUGR package must have a single HUGR.
-    #[error("The encoded HUGR package must have a single HUGR, but it has {0} HUGRs.")]
+    #[display("The encoded HUGR package must have a single HUGR, but it has {_0} HUGRs.")]
+    #[error(ignore)] // `_0` is not the error source
     InvalidNumHugrs(usize),
 }
