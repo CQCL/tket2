@@ -30,7 +30,7 @@ hugr = { workspace = true }
 portgraph = { workspace = true, features = ["serde"] }
 pyo3 = { workspace = true }
 num_cpus = { workspace = true }
-derive_more = { workspace = true }
+derive_more = { workspace = true, features = ["into", "from"] }
 itertools = { workspace = true }
 portmatching = { workspace = true }
 strum = { workspace = true }

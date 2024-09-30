@@ -15,6 +15,7 @@ use hugr::extension::prelude::{LiftDef, NoopDef, TupleOpDef};
 use hugr::hugr::views::{DescendantsGraph, ExtractHugr, HierarchyView};
 use itertools::Either::{Left, Right};
 
+use derive_more::{Display, Error, From};
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::dataflow::IOTrait;
 use hugr::ops::{Input, NamedOp, OpName, OpParent, OpTag, OpTrait, Output};
@@ -23,7 +24,6 @@ use hugr::{Hugr, PortIndex};
 use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use thiserror::Error;
 
 pub use hugr::ops::OpType;
 pub use hugr::types::{EdgeKind, Type, TypeRow};
@@ -408,15 +408,24 @@ pub(crate) fn remove_empty_wire(
 
     let [inp, out] = hugr.get_io(parent).expect("no IO nodes found at parent");
     if input_port >= hugr.num_outputs(inp) {
-        return Err(CircuitMutError::InvalidPortOffset(input_port));
+        return Err(CircuitMutError::InvalidPortOffset {
+            input_port,
+            dataflow_node: parent,
+        });
     }
     let input_port = OutgoingPort::from(input_port);
     let link = hugr
         .linked_inputs(inp, input_port)
         .at_most_one()
-        .map_err(|_| CircuitMutError::DeleteNonEmptyWire(input_port.index()))?;
+        .map_err(|_| CircuitMutError::DeleteNonEmptyWire {
+            input_port: input_port.index(),
+            dataflow_node: parent,
+        })?;
     if link.is_some() && link.unwrap().0 != out {
-        return Err(CircuitMutError::DeleteNonEmptyWire(input_port.index()));
+        return Err(CircuitMutError::DeleteNonEmptyWire {
+            input_port: input_port.index(),
+            dataflow_node: parent,
+        });
     }
     if link.is_some() {
         hugr.disconnect(inp, input_port);
@@ -444,17 +453,18 @@ pub(crate) fn remove_empty_wire(
 }
 
 /// Errors that can occur when mutating a circuit.
-#[derive(Debug, Clone, Error, PartialEq)]
+#[derive(Display, Debug, Clone, Error, PartialEq)]
+#[non_exhaustive]
 pub enum CircuitError {
     /// The parent node for the circuit does not exist in the HUGR.
-    #[error("{parent} cannot define a circuit as it is not present in the HUGR.")]
+    #[display("{parent} cannot define a circuit as it is not present in the HUGR.")]
     MissingParentNode {
         /// The node that was used as the parent.
         parent: Node,
     },
     /// Circuit parents must have a concrete signature.
-    #[error(
-        "{} node {parent} cannot be used as a circuit parent. Circuits must have a concrete signature, but the node has signature '{}'.",
+    #[display(
+        "{parent} with op {} cannot be used as a circuit parent. Circuits must have a concrete signature, but the node has signature '{}'.",
         optype.name(),
         signature
     )]
@@ -467,8 +477,8 @@ pub enum CircuitError {
         signature: PolyFuncType,
     },
     /// The parent node for the circuit has an invalid optype.
-    #[error(
-        "{} node {parent} cannot be used as a circuit parent. Only 'DFG', 'DataflowBlock', or 'FuncDefn' operations are allowed.",
+    #[display(
+        "{parent} with op {} cannot be used as a circuit parent. Only 'DFG', 'DataflowBlock', or 'FuncDefn' operations are allowed.",
         optype.name()
     )]
     InvalidParentOp {
@@ -480,22 +490,31 @@ pub enum CircuitError {
 }
 
 /// Errors that can occur when mutating a circuit.
-#[derive(Debug, Clone, Error, PartialEq)]
+#[derive(Display, Debug, Clone, Error, PartialEq, From)]
+#[non_exhaustive]
 pub enum CircuitMutError {
     /// A Hugr error occurred.
-    #[error("Hugr error: {0:?}")]
-    HugrError(#[from] hugr::hugr::HugrError),
+    #[from]
+    HugrError(hugr::hugr::HugrError),
     /// A circuit validation error occurred.
-    #[error("transparent")]
-    CircuitError(#[from] CircuitError),
+    #[from]
+    CircuitError(CircuitError),
     /// The wire to be deleted is not empty.
-    #[from(ignore)]
-    #[error("Wire {0} cannot be deleted: not empty")]
-    DeleteNonEmptyWire(usize),
-    /// The wire does not exist.
-    #[from(ignore)]
-    #[error("Wire {0} does not exist")]
-    InvalidPortOffset(usize),
+    #[display("Tried to delete non-empty input wire with offset {input_port} on dataflow node {dataflow_node}")]
+    DeleteNonEmptyWire {
+        /// The input port offset
+        input_port: usize,
+        /// The port's node
+        dataflow_node: Node,
+    },
+    /// Invalid dataflow input offset
+    #[display("Dataflow node {dataflow_node} does not have an input with offset {input_port}")]
+    InvalidPortOffset {
+        /// The input port offset
+        input_port: usize,
+        /// The port's node
+        dataflow_node: Node,
+    },
 }
 
 /// Shift ports in range (free_port + 1 .. max_ind) by -1.
@@ -720,7 +739,10 @@ mod tests {
         assert_eq!(circ.qubit_count(), 1);
         assert_eq!(
             remove_empty_wire(&mut circ, 0).unwrap_err(),
-            CircuitMutError::DeleteNonEmptyWire(0)
+            CircuitMutError::DeleteNonEmptyWire {
+                input_port: 0,
+                dataflow_node: circ.parent()
+            }
         );
     }
 
@@ -747,7 +769,10 @@ mod tests {
         assert_eq!(circ.units().count(), 0);
         assert_eq!(
             remove_empty_wire(&mut circ, 2).unwrap_err(),
-            CircuitMutError::InvalidPortOffset(2)
+            CircuitMutError::InvalidPortOffset {
+                input_port: 2,
+                dataflow_node: circ.parent()
+            }
         );
     }
 }

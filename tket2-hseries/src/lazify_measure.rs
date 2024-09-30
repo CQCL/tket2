@@ -5,6 +5,7 @@
 //! [HSeriesOp::Measure]: crate::extension::hseries::HSeriesOp::Measure
 use std::collections::{HashMap, HashSet};
 
+use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
         ensure_no_nonlocal_edges,
@@ -20,7 +21,6 @@ use hugr::{
     types::Signature,
     Hugr, HugrView, IncomingPort, Node, OutgoingPort, SimpleReplacement,
 };
-use thiserror::Error;
 use tket2::Tk2Op;
 
 use lazy_static::lazy_static;
@@ -39,18 +39,16 @@ use crate::extension::{
 #[derive(Default)]
 pub struct LazifyMeasurePass(ValidationLevel);
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Display, From)]
+#[non_exhaustive]
 /// An error reported from [LazifyMeasurePass].
 pub enum LazifyMeasurePassError {
     /// The [Hugr] was invalid either before or after a pass ran.
-    #[error(transparent)]
-    ValidationError(#[from] ValidatePassError),
+    ValidationError(ValidatePassError),
     /// The [Hugr] was found to contain non-local edges.
-    #[error(transparent)]
-    NonLocalEdgesError(#[from] NonLocalEdgesError),
+    NonLocalEdgesError(NonLocalEdgesError),
     /// A [SimpleReplacement] failed during the running of the pass.
-    #[error(transparent)]
-    SimpleReplacementError(#[from] SimpleReplacementError),
+    SimpleReplacementError(SimpleReplacementError),
 }
 
 impl LazifyMeasurePass {

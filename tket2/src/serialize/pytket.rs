@@ -22,7 +22,7 @@ use std::{fs, io};
 
 use hugr::ops::{NamedOp, OpType, Value};
 
-use thiserror::Error;
+use derive_more::{Display, Error, From};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::optype::OpType as SerialOpType;
 
@@ -156,17 +156,19 @@ pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, TK1ConvertError> {
 }
 
 /// Error type for conversion between `Op` and `OpType`.
-#[derive(Debug, Error)]
+#[derive(Display, Debug, Error, From)]
 #[non_exhaustive]
 pub enum OpConvertError {
     /// The serialized operation is not supported.
-    #[error("Unsupported serialized pytket operation: {0:?}")]
+    #[display("Unsupported serialized pytket operation: {_0:?}")]
+    #[error(ignore)] // `_0` is not the error source
     UnsupportedSerializedOp(SerialOpType),
     /// The serialized operation is not supported.
-    #[error("Cannot serialize tket2 operation: {0:?}")]
+    #[display("Cannot serialize tket2 operation: {_0:?}")]
+    #[error(ignore)] // `_0` is not the error source
     UnsupportedOpSerialization(OpType),
     /// The operation has non-serializable inputs.
-    #[error("Operation {} in {node} has an unsupported input of type {typ}.", optype.name())]
+    #[display("Operation {} in {node} has an unsupported input of type {typ}.", optype.name())]
     UnsupportedInputType {
         /// The unsupported type.
         typ: Type,
@@ -176,7 +178,7 @@ pub enum OpConvertError {
         node: Node,
     },
     /// The operation has non-serializable outputs.
-    #[error("Operation {} in {node} has an unsupported output of type {typ}.", optype.name())]
+    #[display("Operation {} in {node} has an unsupported output of type {typ}.", optype.name())]
     UnsupportedOutputType {
         /// The unsupported type.
         typ: Type,
@@ -186,7 +188,7 @@ pub enum OpConvertError {
         node: Node,
     },
     /// A parameter input could not be evaluated.
-    #[error("The {typ} parameter input for operation {} in {node} could not be resolved.", optype.name())]
+    #[display("The {typ} parameter input for operation {} in {node} could not be resolved.", optype.name())]
     UnresolvedParamInput {
         /// The parameter type.
         typ: Type,
@@ -197,7 +199,7 @@ pub enum OpConvertError {
     },
     /// The operation has output-only qubits.
     /// This is not currently supported by the encoder.
-    #[error("Operation {} in {node} has more output qubits than inputs.", optype.name())]
+    #[display("Operation {} in {node} has more output qubits than inputs.", optype.name())]
     TooManyOutputQubits {
         /// The unsupported type.
         typ: Type,
@@ -207,14 +209,15 @@ pub enum OpConvertError {
         node: Node,
     },
     /// The opaque tket1 operation had an invalid type parameter.
-    #[error("Opaque TKET1 operation had an invalid type parameter. {error}")]
+    #[display("Opaque TKET1 operation had an invalid type parameter. {error}")]
+    #[from]
     InvalidOpaqueTypeParam {
         /// The serialization error.
-        #[from]
+        #[error(source)]
         error: serde_json::Error,
     },
     /// Tried to decode a tket1 operation with not enough parameters.
-    #[error(
+    #[display(
         "Operation {} is missing encoded parameters. Expected at least {expected} but only \"{}\" were specified.",
         optype.name(),
         params.iter().join(", "),
@@ -228,7 +231,7 @@ pub enum OpConvertError {
         params: Vec<String>,
     },
     /// Tried to decode a tket1 operation with not enough qubit/bit arguments.
-    #[error(
+    #[display(
         "Operation {} is missing encoded arguments. Expected {expected_qubits} and {expected_bits}, but only \"{args:?}\" were specified.",
         optype.name(),
     )]
@@ -245,14 +248,14 @@ pub enum OpConvertError {
 }
 
 /// Error type for conversion between `Op` and `OpType`.
-#[derive(Debug, Error)]
+#[derive(Debug, Display, Error, From)]
 #[non_exhaustive]
 pub enum TK1ConvertError {
     /// Operation conversion error.
-    #[error(transparent)]
-    OpConversionError(#[from] OpConvertError),
+    #[from]
+    OpConversionError(OpConvertError),
     /// The circuit has non-serializable inputs.
-    #[error("Circuit contains non-serializable input of type {typ}.")]
+    #[display("Circuit contains non-serializable input of type {typ}.")]
     NonSerializableInputs {
         /// The unsupported type.
         typ: Type,
@@ -260,20 +263,23 @@ pub enum TK1ConvertError {
     /// The circuit uses multi-indexed registers.
     //
     // This could be supported in the future, if there is a need for it.
-    #[error("Register {register} in the circuit has multiple indices. Tket2 does not support multi-indexed registers.")]
+    #[display("Register {register} in the circuit has multiple indices. Tket2 does not support multi-indexed registers.")]
     MultiIndexedRegister {
         /// The register name.
         register: String,
     },
     /// Invalid JSON,
-    #[error("Invalid pytket JSON. {0}")]
-    InvalidJson(#[from] serde_json::Error),
+    #[display("Invalid pytket JSON. {_0}")]
+    #[from]
+    InvalidJson(serde_json::Error),
     /// Invalid JSON,
-    #[error("Invalid JSON encoding. {0}")]
-    InvalidJsonEncoding(#[from] std::string::FromUtf8Error),
+    #[display("Invalid JSON encoding. {_0}")]
+    #[from]
+    InvalidJsonEncoding(std::string::FromUtf8Error),
     /// File not found.,
-    #[error("Unable to load pytket json file. {0}")]
-    FileLoadError(#[from] io::Error),
+    #[display("Unable to load pytket json file. {_0}")]
+    #[from]
+    FileLoadError(io::Error),
 }
 
 /// Try to interpret a TKET1 parameter as a constant value.

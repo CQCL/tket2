@@ -1902,7 +1902,7 @@ dependencies = [
  "crossbeam-channel",
  "csv",
  "delegate 0.13.0",
- "derive_more 0.99.18",
+ "derive_more 1.0.0",
  "downcast-rs",
  "fxhash",
  "hugr",
@@ -1924,7 +1924,6 @@ dependencies = [
  "smol_str",
  "strum",
  "strum_macros",
- "thiserror",
  "tket-json-rs",
  "tracing",
  "typetag",
@@ -1939,6 +1938,7 @@ version = "0.4.0"
 dependencies = [
  "clap",
  "cool_asserts",
+ "derive_more 1.0.0",
  "hugr",
  "hugr-cli",
  "itertools 0.13.0",
@@ -1950,7 +1950,6 @@ dependencies = [
  "smol_str",
  "strum",
  "strum_macros",
- "thiserror",
  "tket2",
 ]
 
@@ -1959,7 +1958,7 @@ name = "tket2-py"
 version = "0.0.0"
 dependencies = [
  "cool_asserts",
- "derive_more 0.99.18",
+ "derive_more 1.0.0",
  "hugr",
  "hugr-cli",
  "itertools 0.13.0",

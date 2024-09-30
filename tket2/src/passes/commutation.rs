@@ -1,5 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
+use derive_more::{Display, Error, From};
 use hugr::hugr::{hugrmut::HugrMut, HugrError, Rewrite};
 use hugr::{CircuitUnit, Direction, HugrView, Node, Port, PortIndex};
 use itertools::Itertools;
@@ -10,8 +11,6 @@ use crate::{
     circuit::command::Command,
     ops::{Pauli, Tk2Op},
 };
-
-use thiserror::Error;
 
 type Qb = crate::circuit::units::LinearUnit;
 
@@ -183,18 +182,25 @@ fn commutation_on_port(comms: &[(usize, Pauli)], port: Port) -> Option<Pauli> {
 }
 
 /// Error from a `PullForward` operation.
-#[derive(Debug, Clone, Error, PartialEq, Eq)]
-#[allow(missing_docs)]
+#[derive(Debug, Display, Clone, Error, PartialEq, Eq, From)]
+#[non_exhaustive]
 pub enum PullForwardError {
-    // Error in hugr mutation.
-    #[error("Hugr mutation error: {0:?}")]
-    HugrError(#[from] HugrError),
-
-    #[error("Qubit {0} not found in command.")]
-    NoQbInCommand(usize),
-
-    #[error("No subsequent command found for qubit {0}")]
-    NoCommandForQb(usize),
+    /// Error in hugr mutation.
+    #[display("Hugr mutation error: {_0}")]
+    #[from]
+    HugrError(HugrError),
+    /// Qubit not found in command.
+    #[display("Qubit {qubit} not found in command.")]
+    NoQbInCommand {
+        /// The qubit index
+        qubit: usize,
+    },
+    /// No command for qubit
+    #[display("No subsequent command found for qubit {qubit}")]
+    NoCommandForQb {
+        /// The qubit index
+        qubit: usize,
+    },
 }
 
 struct PullForward {
@@ -219,7 +225,7 @@ impl Rewrite for PullForward {
         let qb_port = |command: &ComCommand, qb, direction| {
             command
                 .port_of_qb(qb, direction)
-                .ok_or(PullForwardError::NoQbInCommand(qb.index()))
+                .ok_or(PullForwardError::NoQbInCommand { qubit: qb.index() })
         };
         // for each qubit, disconnect node and reconnect at destination.
         for qb in command.qubits() {
@@ -238,7 +244,7 @@ impl Rewrite for PullForward {
                 .unwrap();
 
             let Some(new_neighbour_com) = new_nexts.get(&qb) else {
-                return Err(PullForwardError::NoCommandForQb(qb.index()));
+                return Err(PullForwardError::NoCommandForQb { qubit: qb.index() });
             };
             if new_neighbour_com == &command {
                 // do not need to commute along this qubit.

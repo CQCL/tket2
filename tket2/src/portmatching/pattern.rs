@@ -1,11 +1,11 @@
 //! Circuit Patterns for pattern matching
 
+use derive_more::{Display, Error};
 use hugr::{HugrView, IncomingPort};
 use hugr::{Node, Port};
 use itertools::Itertools;
 use portmatching::{patterns::NoRootFound, HashMap, Pattern, SinglePatternMatcher};
 use std::fmt::Debug;
-use thiserror::Error;
 
 use super::{
     matcher::{validate_circuit_edge, validate_circuit_node},
@@ -133,22 +133,25 @@ impl Debug for CircuitPattern {
 }
 
 /// Conversion error from circuit to pattern.
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Display, Debug, Error, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum InvalidPattern {
     /// An empty circuit cannot be a pattern.
-    #[error("Empty circuits are not allowed as patterns")]
+    #[display("Empty circuits are not allowed as patterns")]
     EmptyCircuit,
     /// Patterns must be connected circuits.
-    #[error("The pattern is not connected")]
+    #[display("The pattern is not connected")]
     NotConnected,
     /// Patterns cannot include empty wires.
-    #[error("The pattern contains an empty wire between {from_node}:{from_port} and {to_node}:{to_port}")]
-    #[allow(missing_docs)]
+    #[display("The pattern contains an empty wire between {from_node}, {from_port} and {to_node}, {to_port}")]
     EmptyWire {
+        /// The source node
         from_node: Node,
+        /// The source port
         from_port: Port,
+        /// The target node
         to_node: Node,
+        /// The target port
         to_port: Port,
     },
 }
