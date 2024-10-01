@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Literal
 
 from pytket import Circuit
 from pytket.passes import CustomPass, BasePass
@@ -37,12 +37,16 @@ def badger_pass(
     max_circuit_count: Optional[int] = None,
     log_dir: Optional[Path] = None,
     rebase: bool = False,
+    cost_fn: Literal["cx", "rz"] | None = None,
 ) -> BasePass:
     """Construct a Badger pass.
 
     The Badger optimiser requires a pre-compiled rewriter produced by the
     `compile-rewriter <https://github.com/CQCL/tket2/tree/main/badger-optimiser>`_
     utility. If `rewriter` is not specified, a default one will be used.
+
+    The cost function to minimise can be specified by passing `cost_fn` as `'cx'`
+    or `'rz'`. If not specified, the default is `'cx'`.
 
     The arguments `max_threads`, `timeout`, `progress_timeout`, `max_circuit_count`,
     `log_dir` and `rebase` are optional and will be passed on to the Badger
@@ -56,7 +60,7 @@ def badger_pass(
             )
 
         rewriter = tket2_eccs.nam_6_3()
-    opt = optimiser.BadgerOptimiser.load_precompiled(rewriter)
+    opt = optimiser.BadgerOptimiser.load_precompiled(rewriter, cost_fn=cost_fn)
 
     def apply(circuit: Circuit) -> Circuit:
         """Apply Badger optimisation to the circuit."""

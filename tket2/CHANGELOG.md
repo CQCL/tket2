@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `LexicographicCostFunction::cx_count()` and `LexicographicCostFunction::rz_count()`
+- `LexicographicCostFunction::into_greedy_strategy()` and `LexicographicCostFunction::into_threshold_strategy()`
+- `LexicographicCostFunction` implements `Default` and will use `cx_count`.
+
+
+### Changed
+- [**breaking**] Renamed `LexicographicCostFunction::default_cx()` to `LexicographicCostFunction::default_cx_strategy()`.
+
 ## [0.1.1](https://github.com/CQCL/tket2/compare/tket2-v0.1.0...tket2-v0.1.1) - 2024-08-15
 
 ### New Features

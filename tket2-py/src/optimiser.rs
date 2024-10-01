@@ -3,6 +3,7 @@
 use std::io::BufWriter;
 use std::{fs, num::NonZeroUsize, path::PathBuf};
 
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use tket2::optimiser::badger::BadgerOptions;
 use tket2::optimiser::{BadgerLogger, DefaultBadgerOptimiser};
@@ -24,20 +25,60 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
 #[pyclass(name = "BadgerOptimiser")]
 pub struct PyBadgerOptimiser(DefaultBadgerOptimiser);
 
+/// The cost function to use for the Badger optimiser.
+#[derive(Debug, Clone, Copy, Default)]
+pub enum BadgerCostFunction {
+    /// Minimise CX count.
+    #[default]
+    CXCount,
+    /// Minimise Rz count.
+    RzCount,
+}
+
+impl<'py> FromPyObject<'py> for BadgerCostFunction {
+    fn extract(ob: &'py PyAny) -> PyResult<Self> {
+        let str = ob.extract::<&str>()?;
+        match str {
+            "cx" => Ok(BadgerCostFunction::CXCount),
+            "rz" => Ok(BadgerCostFunction::RzCount),
+            _ => Err(PyErr::new::<PyValueError, _>(format!(
+                "Invalid cost function: {}. Expected 'cx' or 'rz'.",
+                str
+            ))),
+        }
+    }
+}
+
 #[pymethods]
 impl PyBadgerOptimiser {
     /// Create a new [`PyDefaultBadgerOptimiser`] from a precompiled rewriter.
     #[staticmethod]
-    pub fn load_precompiled(path: PathBuf) -> Self {
-        Self(DefaultBadgerOptimiser::default_with_rewriter_binary(path).unwrap())
+    pub fn load_precompiled(path: PathBuf, cost_fn: Option<BadgerCostFunction>) -> Self {
+        let opt = match cost_fn.unwrap_or_default() {
+            BadgerCostFunction::CXCount => {
+                DefaultBadgerOptimiser::default_with_rewriter_binary(path).unwrap()
+            }
+            BadgerCostFunction::RzCount => {
+                DefaultBadgerOptimiser::rz_opt_with_rewriter_binary(path).unwrap()
+            }
+        };
+        Self(opt)
     }
 
     /// Create a new [`PyDefaultBadgerOptimiser`] from ECC sets.
     ///
     /// This will compile the rewriter from the provided ECC JSON file.
     #[staticmethod]
-    pub fn compile_eccs(path: &str) -> Self {
-        Self(DefaultBadgerOptimiser::default_with_eccs_json_file(path).unwrap())
+    pub fn compile_eccs(path: &str, cost_fn: Option<BadgerCostFunction>) -> Self {
+        let opt = match cost_fn.unwrap_or_default() {
+            BadgerCostFunction::CXCount => {
+                DefaultBadgerOptimiser::default_with_eccs_json_file(path).unwrap()
+            }
+            BadgerCostFunction::RzCount => {
+                DefaultBadgerOptimiser::rz_opt_with_eccs_json_file(path).unwrap()
+            }
+        };
+        Self(opt)
     }
 
     /// Run the optimiser on a circuit.
