@@ -12,7 +12,8 @@
 //! to generate such a file is to use the `gen_ecc_set.sh` script at the root
 //! of the Quartz repository.
 
-use derive_more::{From, Into};
+use derive_more::{Display, Error, From, Into};
+use hugr::ops::custom::{resolve_extension_ops, OpaqueOpError};
 use hugr::{Hugr, HugrView, PortIndex};
 use itertools::Itertools;
 use portmatching::PatternID;
@@ -22,8 +23,8 @@ use std::{
     io,
     path::{Path, PathBuf},
 };
-use thiserror::Error;
 
+use crate::extension::REGISTRY;
 use crate::{
     circuit::{remove_empty_wire, Circuit},
     optimiser::badger::{load_eccs_json_file, EqCircClass},
@@ -136,7 +137,9 @@ impl ECCRewriter {
     #[cfg(feature = "binary-eccs")]
     pub fn load_binary_io<R: io::Read>(reader: R) -> Result<Self, RewriterSerialisationError> {
         let data = zstd::decode_all(reader)?;
-        Ok(rmp_serde::decode::from_slice(&data)?)
+        let mut eccs: Self = rmp_serde::decode::from_slice(&data)?;
+        eccs.resolve_extension_ops()?;
+        Ok(eccs)
     }
 
     /// Save a rewriter as a binary file.
@@ -171,6 +174,14 @@ impl ECCRewriter {
         // `zstd::decode_all`.
         Self::load_binary_io(&mut file)
     }
+
+    /// When the ECC gets loaded, all custom operations are an instance of `OpaqueOp`.
+    /// We need to resolve them into `ExtensionOp`s by validating the definitions.
+    fn resolve_extension_ops(&mut self) -> Result<(), OpaqueOpError> {
+        self.targets
+            .iter_mut()
+            .try_for_each(|hugr| resolve_extension_ops(hugr, &REGISTRY))
+    }
 }
 
 impl Rewriter for ECCRewriter {
@@ -193,17 +204,21 @@ impl Rewriter for ECCRewriter {
 }
 
 /// Errors that can occur when (de)serialising an [`ECCRewriter`].
-#[derive(Debug, Error)]
+#[derive(Debug, Display, Error, From)]
+#[non_exhaustive]
 pub enum RewriterSerialisationError {
     /// An IO error occurred
-    #[error("IO error: {0}")]
-    Io(#[from] io::Error),
+    #[display("IO error: {_0}")]
+    Io(io::Error),
     /// An error occurred during deserialisation
-    #[error("Deserialisation error: {0}")]
-    Deserialisation(#[from] rmp_serde::decode::Error),
+    #[display("Deserialisation error: {_0}")]
+    Deserialisation(rmp_serde::decode::Error),
     /// An error occurred during serialisation
-    #[error("Serialisation error: {0}")]
-    Serialisation(#[from] rmp_serde::encode::Error),
+    #[display("Serialisation error: {_0}")]
+    Serialisation(rmp_serde::encode::Error),
+    /// An error occurred during resolving extension ops
+    #[display("Resolving extension ops error: {_0}")]
+    OpaqueOp(OpaqueOpError),
 }
 
 fn into_targets(rep_sets: Vec<EqCircClass>) -> Vec<Hugr> {

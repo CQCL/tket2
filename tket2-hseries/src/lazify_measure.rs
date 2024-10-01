@@ -1,10 +1,11 @@
 //! Provides `LazifyMeasurePass` which replaces [Tket2Op::Measure] nodes with
-//! [LazyQuantumOp::Measure] nodes.
+//! [HSeriesOp::Measure] nodes.
 //!
 //! [Tket2Op::Measure]: tket2::Tk2Op::Measure
-//! [LazyQuantumOp::Measure]: crate::extension::quantum_lazy::LazyQuantumOp::Measure
+//! [HSeriesOp::Measure]: crate::extension::hseries::HSeriesOp::Measure
 use std::collections::{HashMap, HashSet};
 
+use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
         ensure_no_nonlocal_edges,
@@ -20,18 +21,17 @@ use hugr::{
     types::Signature,
     Hugr, HugrView, IncomingPort, Node, OutgoingPort, SimpleReplacement,
 };
-use thiserror::Error;
 use tket2::Tk2Op;
 
 use lazy_static::lazy_static;
 
 use crate::extension::{
     futures::FutureOpBuilder,
-    quantum_lazy::{self, LazyQuantumOpBuilder},
+    hseries::{self, HSeriesOpBuilder},
 };
 
 /// A `Hugr -> Hugr` pass that replaces [tket2::Tk2Op::Measure] nodes with
-/// [quantum_lazy::LazyQuantumOp::Measure] nodes. To construct a `LazifyMeasurePass` use
+/// [hseries::HSeriesOp::Measure] nodes. To construct a `LazifyMeasurePass` use
 /// [Default::default].
 ///
 /// The `Hugr` must not contain any non-local edges. If validation is enabled,
@@ -39,18 +39,16 @@ use crate::extension::{
 #[derive(Default)]
 pub struct LazifyMeasurePass(ValidationLevel);
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Display, From)]
+#[non_exhaustive]
 /// An error reported from [LazifyMeasurePass].
 pub enum LazifyMeasurePassError {
     /// The [Hugr] was invalid either before or after a pass ran.
-    #[error(transparent)]
-    ValidationError(#[from] ValidatePassError),
+    ValidationError(ValidatePassError),
     /// The [Hugr] was found to contain non-local edges.
-    #[error(transparent)]
-    NonLocalEdgesError(#[from] NonLocalEdgesError),
+    NonLocalEdgesError(NonLocalEdgesError),
     /// A [SimpleReplacement] failed during the running of the pass.
-    #[error(transparent)]
-    SimpleReplacementError(#[from] SimpleReplacementError),
+    SimpleReplacementError(SimpleReplacementError),
 }
 
 impl LazifyMeasurePass {
@@ -69,8 +67,8 @@ impl LazifyMeasurePass {
                 let mut state =
                     State::new(
                         hugr.nodes()
-                            .filter_map(|n| match hugr.get_optype(n).try_into() {
-                                Ok(Tk2Op::Measure) => Some(WorkItem::ReplaceMeasure(n)),
+                            .filter_map(|n| match hugr.get_optype(n).cast() {
+                                Some(Tk2Op::Measure) => Some(WorkItem::ReplaceMeasure(n)),
                                 _ => None,
                             }),
                     );
@@ -116,7 +114,7 @@ lazy_static! {
         let [qb, lazy_r] = builder.add_lazy_measure(qb).unwrap();
         let [r] = builder.add_read(lazy_r, BOOL_T).unwrap();
         builder
-            .finish_hugr_with_outputs([qb, r], &quantum_lazy::REGISTRY)
+            .finish_hugr_with_outputs([qb, r], &hseries::REGISTRY)
             .unwrap()
     };
 }
@@ -148,7 +146,7 @@ fn measure_replacement(num_dups: usize) -> Hugr {
     assert_eq!(num_out_types, rs.len());
     assert_eq!(num_out_types, num_dups + 1);
     builder
-        .finish_hugr_with_outputs(rs, &quantum_lazy::REGISTRY)
+        .finish_hugr_with_outputs(rs, &hseries::REGISTRY)
         .unwrap()
 }
 
@@ -157,7 +155,7 @@ fn simple_replace_measure(
     node: Node,
 ) -> (HashSet<(Node, IncomingPort)>, SimpleReplacement) {
     assert!(
-        hugr.get_optype(node).try_into() == Ok(Tk2Op::Measure),
+        hugr.get_optype(node).cast() == Some(Tk2Op::Measure),
         "{:?}",
         hugr.get_optype(node)
     );
@@ -216,7 +214,6 @@ impl WorkItem {
 
 #[cfg(test)]
 mod test {
-    use cool_asserts::assert_matches;
 
     use hugr::{
         extension::{ExtensionRegistry, EMPTY_REG, PRELUDE},
@@ -226,14 +223,14 @@ mod test {
 
     use crate::extension::{
         futures::{self, FutureOpDef},
-        quantum_lazy::LazyQuantumOp,
+        hseries::HSeriesOp,
     };
 
     use super::*;
 
     lazy_static! {
         pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
-            quantum_lazy::EXTENSION.to_owned(),
+            hseries::EXTENSION.to_owned(),
             futures::EXTENSION.to_owned(),
             TKET2_EXTENSION.to_owned(),
             PRELUDE.to_owned(),
@@ -261,12 +258,12 @@ mod test {
         let mut num_lazy_measure = 0;
         for n in hugr.nodes() {
             let ot = hugr.get_optype(n);
-            if let Ok(FutureOpDef::Read) = ot.try_into() {
+            if let Some(FutureOpDef::Read) = ot.cast() {
                 num_read += 1;
-            } else if let Ok(LazyQuantumOp::Measure) = ot.try_into() {
+            } else if let Some(HSeriesOp::LazyMeasure) = ot.cast() {
                 num_lazy_measure += 1;
             } else {
-                assert_matches!(Tk2Op::try_from(ot), Err(_))
+                assert_eq!(ot.cast::<Tk2Op>(), None)
             }
         }
 

@@ -1,13 +1,15 @@
 //! Load pre-compiled guppy functions.
 
 use std::path::Path;
-use std::{fs, io};
+use std::{fs, io, mem};
 
+use derive_more::{Display, Error, From};
 use hugr::ops::{NamedOp, OpTag, OpTrait, OpType};
 use hugr::{Hugr, HugrView};
+use hugr_cli::Package;
 use itertools::Itertools;
-use thiserror::Error;
 
+use crate::extension::REGISTRY;
 use crate::{Circuit, CircuitError};
 
 /// Loads a pre-compiled guppy file.
@@ -31,7 +33,12 @@ pub fn load_guppy_json_reader(
     reader: impl io::Read,
     function: &str,
 ) -> Result<Circuit, CircuitLoadError> {
-    let hugr: Hugr = serde_json::from_reader(reader)?;
+    let pkg: Package = serde_json::from_reader(reader)?;
+    let mut hugrs = pkg.validate(&mut REGISTRY.clone())?;
+    if hugrs.len() != 1 {
+        return Err(CircuitLoadError::InvalidNumHugrs { count: hugrs.len() });
+    }
+    let hugr = mem::take(&mut hugrs[0]);
     find_function(hugr, function)
 }
 
@@ -48,7 +55,7 @@ pub fn load_guppy_json_reader(
 /// - If the root of the HUGR is not a module operation.
 /// - If the function is not found in the module.
 /// - If the function has control flow primitives.
-fn find_function(hugr: Hugr, function_name: &str) -> Result<Circuit, CircuitLoadError> {
+pub fn find_function(hugr: Hugr, function_name: &str) -> Result<Circuit, CircuitLoadError> {
     // Find the root module.
     let module = hugr.root();
     if !OpTag::ModuleRoot.is_superset(hugr.get_optype(module).tag()) {
@@ -102,16 +109,19 @@ fn find_function(hugr: Hugr, function_name: &str) -> Result<Circuit, CircuitLoad
 }
 
 /// Error type for conversion between `Op` and `OpType`.
-#[derive(Debug, Error)]
+#[derive(Debug, Display, Error, From)]
+#[non_exhaustive]
 pub enum CircuitLoadError {
     /// Cannot load the circuit file.
-    #[error("Cannot load the circuit file: {0}")]
-    InvalidFile(#[from] io::Error),
+    #[display("Cannot load the circuit file: {_0}")]
+    #[from]
+    InvalidFile(io::Error),
     /// Invalid JSON
-    #[error("Invalid JSON. {0}")]
-    InvalidJson(#[from] serde_json::Error),
+    #[display("Invalid JSON. {_0}")]
+    #[from]
+    InvalidJson(serde_json::Error),
     /// The root node is not a module operation.
-    #[error(
+    #[display(
         "Expected a HUGR with a module at the root, but found a {} instead.",
         root_op.name()
     )]
@@ -120,7 +130,7 @@ pub enum CircuitLoadError {
         root_op: OpType,
     },
     /// The function is not found in the module.
-    #[error(
+    #[display(
         "Function '{function}' not found in the loaded module. Available functions: [{}]",
         available_functions.join(", ")
     )]
@@ -131,12 +141,23 @@ pub enum CircuitLoadError {
         available_functions: Vec<String>,
     },
     /// The function has an invalid control flow structure.
-    #[error("Function '{function}' has an invalid control flow structure. Currently only flat functions with no control flow primitives are supported.")]
+    #[display("Function '{function}' has an invalid control flow structure. Currently only flat functions with no control flow primitives are supported.")]
     InvalidControlFlow {
         /// The function name.
         function: String,
     },
     /// Error loading the circuit.
-    #[error("Error loading the circuit: {0}")]
-    CircuitLoadError(#[from] CircuitError),
+    #[display("Error loading the circuit: {_0}")]
+    #[from]
+    CircuitLoadError(CircuitError),
+    /// Error validating the loaded circuit.
+    #[display("{_0}")]
+    #[from]
+    ValError(hugr_cli::validate::ValError),
+    /// The encoded HUGR package must have a single HUGR.
+    #[display("The encoded HUGR package must have a single HUGR, but it has {count} HUGRs.")]
+    InvalidNumHugrs {
+        /// The number of HUGRs encountered in the encoded HUGR package.
+        count: usize,
+    },
 }

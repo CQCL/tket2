@@ -1,5 +1,6 @@
 //! Provides a preparation and validation workflow for Hugrs targeting
 //! Quantinuum H-series quantum computers.
+use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
         force_order,
@@ -10,11 +11,14 @@ use hugr::{
 };
 use tket2::Tk2Op;
 
-use thiserror::Error;
-
-use extension::{futures::FutureOpDef, quantum_lazy::LazyQuantumOp};
+use extension::{
+    futures::FutureOpDef,
+    hseries::{HSeriesOp, LowerTk2Error, LowerTket2ToHSeriesPass},
+};
 use lazify_measure::{LazifyMeasurePass, LazifyMeasurePassError};
 
+#[cfg(feature = "cli")]
+pub mod cli;
 pub mod extension;
 
 pub mod lazify_measure;
@@ -22,25 +26,24 @@ pub mod lazify_measure;
 /// Modify a [hugr::Hugr] into a form that is acceptable for ingress into an H-series.
 /// Returns an error if this cannot be done.
 ///
-/// To constuct a `HSeriesPass` use [Default::default].
+/// To construct a `HSeriesPass` use [Default::default].
 #[derive(Debug, Clone, Copy, Default)]
 pub struct HSeriesPass {
     validation_level: ValidationLevel,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Display, From)]
+#[non_exhaustive]
 /// An error reported from [HSeriesPass].
-
 pub enum HSeriesPassError {
     /// The [hugr::Hugr] was invalid either before or after a pass ran.
-    #[error(transparent)]
-    ValidationError(#[from] ValidatePassError),
+    ValidationError(ValidatePassError),
     /// An error from the component [LazifyMeasurePass].
-    #[error(transparent)]
-    LazyMeasureError(#[from] LazifyMeasurePassError),
+    LazyMeasureError(LazifyMeasurePassError),
     /// An error from the component [force_order()] pass.
-    #[error(transparent)]
-    ForceOrderError(#[from] HugrError),
+    ForceOrderError(HugrError),
+    /// An error from the component [LowerTket2ToHSeriesPass] pass.
+    LowerTk2Error(LowerTk2Error),
 }
 
 impl HSeriesPass {
@@ -51,15 +54,16 @@ impl HSeriesPass {
         hugr: &mut impl HugrMut,
         registry: &ExtensionRegistry,
     ) -> Result<(), HSeriesPassError> {
+        self.lower_tk2().run(hugr, registry)?;
         self.lazify_measure().run(hugr, registry)?;
         self.validation_level
             .run_validated_pass(hugr, registry, |hugr, _| {
                 force_order(hugr, hugr.root(), |hugr, node| {
                     let optype = hugr.get_optype(node);
-                    if Tk2Op::try_from(optype).is_ok() || LazyQuantumOp::try_from(optype).is_ok() {
+                    if optype.cast::<Tk2Op>().is_some() || optype.cast::<HSeriesOp>().is_some() {
                         // quantum ops are lifted as early as possible
                         -1
-                    } else if let Ok(FutureOpDef::Read) = hugr.get_optype(node).try_into() {
+                    } else if let Some(FutureOpDef::Read) = hugr.get_optype(node).cast() {
                         // read ops are sunk as late as possible
                         1
                     } else {
@@ -69,6 +73,10 @@ impl HSeriesPass {
                 Ok::<_, HSeriesPassError>(())
             })?;
         Ok(())
+    }
+
+    fn lower_tk2(&self) -> LowerTket2ToHSeriesPass {
+        LowerTket2ToHSeriesPass::default().with_validation_level(self.validation_level)
     }
 
     fn lazify_measure(&self) -> LazifyMeasurePass {
@@ -95,9 +103,11 @@ mod test {
     };
     use itertools::Itertools as _;
     use petgraph::visit::{Topo, Walker as _};
-    use tket2::Tk2Op;
 
-    use crate::{extension::futures::FutureOpDef, HSeriesPass};
+    use crate::{
+        extension::{futures::FutureOpDef, hseries::HSeriesOp},
+        HSeriesPass,
+    };
 
     #[test]
     fn hseries_pass() {
@@ -120,19 +130,19 @@ mod test {
                 .node();
 
             // this LoadConstant should be pushed below the quantum ops where possible
-            let angle = builder.add_load_value(ConstF64::new(1.0));
+            let angle = builder.add_load_value(ConstF64::new(0.0));
             let f_node = angle.node();
 
-            // with no dependencies, this H should be lifted to the start
+            // with no dependencies, this Reset should be lifted to the start
             let [qb] = builder
-                .add_dataflow_op(Tk2Op::H, [qb])
+                .add_dataflow_op(HSeriesOp::Reset, [qb])
                 .unwrap()
                 .outputs_arr();
             let h_node = qb.node();
 
-            // depending on the angle means this op can't be lifted above the float ops
+            // depending on the angle means this op can't be lifted above the angle ops
             let [qb] = builder
-                .add_dataflow_op(Tk2Op::RxF64, [qb, angle])
+                .add_dataflow_op(HSeriesOp::Rz, [qb, angle])
                 .unwrap()
                 .outputs_arr();
             let rx_node = qb.node();
@@ -141,7 +151,7 @@ mod test {
             // Reads will be added.  The Lazy Measure will be lifted and the
             // reads will be sunk.
             let [qb, measure_result] = builder
-                .add_dataflow_op(Tk2Op::Measure, [qb])
+                .add_dataflow_op(HSeriesOp::Measure, [qb])
                 .unwrap()
                 .outputs_arr();
 

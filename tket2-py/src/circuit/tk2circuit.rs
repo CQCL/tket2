@@ -1,12 +1,15 @@
 //! Rust-backed representation of circuits
 
 use std::borrow::{Borrow, Cow};
+use std::mem;
 
 use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::QB_T;
+use hugr::extension::{ExtensionRegistry, EMPTY_REG};
 use hugr::ops::handle::NodeHandle;
-use hugr::ops::{CustomOp, OpType};
+use hugr::ops::{ExtensionOp, NamedOp, OpType};
 use hugr::types::Type;
+use hugr_cli::Package;
 use itertools::Itertools;
 use pyo3::exceptions::{PyAttributeError, PyValueError};
 use pyo3::types::{PyAnyMethods, PyModule, PyString, PyTypeMethods};
@@ -26,7 +29,7 @@ use tket2::serialize::TKETDecode;
 use tket2::{Circuit, Tk2Op};
 use tket_json_rs::circuit_json::SerialCircuit;
 
-use crate::ops::{PyCustomOp, PyTk2Op};
+use crate::ops::PyTk2Op;
 use crate::rewrite::PyCircuitRewrite;
 use crate::types::PyHugrType;
 use crate::utils::{into_vec, ConvertPyErr};
@@ -94,9 +97,20 @@ impl Tk2Circuit {
     /// Decode a HUGR json string to a circuit.
     #[staticmethod]
     pub fn from_hugr_json(json: &str) -> PyResult<Self> {
-        let hugr: Hugr = serde_json::from_str(json)
+        let pkg: Package = serde_json::from_str(json)
             .map_err(|e| PyErr::new::<PyAttributeError, _>(format!("Invalid encoded HUGR: {e}")))?;
-        Ok(Tk2Circuit { circ: hugr.into() })
+        let mut reg = REGISTRY.clone();
+        let mut hugrs = pkg.validate(&mut reg).map_err(|e| {
+            PyErr::new::<PyAttributeError, _>(format!("Invalid encoded circuit: {e}"))
+        })?;
+        if hugrs.len() != 1 {
+            return Err(PyValueError::new_err(
+                "Invalid HUGR json: Package must contain exactly one hugr.",
+            ));
+        }
+        Ok(Tk2Circuit {
+            circ: mem::take(&mut hugrs[0]).into(),
+        })
     }
 
     /// Load a function from a compiled guppy module, encoded as a json string.
@@ -134,11 +148,12 @@ impl Tk2Circuit {
     pub fn circuit_cost<'py>(&self, cost_fn: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         let py = cost_fn.py();
         let cost_fn = |op: &OpType| -> PyResult<PyCircuitCost> {
-            let tk2_op: Tk2Op = op.try_into().map_err(|e| {
-                PyErr::new::<PyValueError, _>(format!(
-                    "Could not convert circuit operation to a `Tk2Op`: {e}"
-                ))
-            })?;
+            let Some(tk2_op) = op.cast::<Tk2Op>() else {
+                let op_name = op.name();
+                return Err(PyErr::new::<PyValueError, _>(format!(
+                    "Could not convert circuit operation to a `Tk2Op`: {op_name}"
+                )));
+            };
             let tk2_py_op = PyTk2Op::from(tk2_op);
             let cost = cost_fn.call1((tk2_py_op,))?;
             Ok(PyCircuitCost {
@@ -179,7 +194,7 @@ impl Tk2Circuit {
     }
 
     fn node_op(&self, node: PyNode) -> PyResult<Cow<[u8]>> {
-        let custom: CustomOp = self
+        let custom: ExtensionOp = self
             .circ
             .hugr()
             .get_optype(node.node)
@@ -187,7 +202,7 @@ impl Tk2Circuit {
             .try_into()
             .map_err(|e| {
                 PyErr::new::<PyValueError, _>(format!(
-                    "Could not convert circuit operation to a `CustomOp`: {e}"
+                    "Could not convert circuit operation to an `ExtensionOp`: {e}"
                 ))
             })?;
 

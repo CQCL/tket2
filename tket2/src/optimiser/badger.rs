@@ -561,27 +561,19 @@ mod tests {
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::QB_T,
-        std_extensions::arithmetic::float_types::FLOAT64_TYPE,
         types::Signature,
     };
     use rstest::{fixture, rstest};
 
-    use crate::optimiser::badger::BadgerOptions;
     use crate::serialize::load_tk1_json_str;
+    use crate::{extension::rotation::ROTATION_TYPE, optimiser::badger::BadgerOptions};
     use crate::{extension::REGISTRY, Circuit, Tk2Op};
 
     use super::{BadgerOptimiser, DefaultBadgerOptimiser};
 
-    /// Simplified description of the circuit's commands.
-    fn gates(circ: &Circuit) -> Vec<Tk2Op> {
-        circ.commands()
-            .map(|cmd| cmd.optype().try_into().unwrap())
-            .collect()
-    }
-
     #[fixture]
     fn rz_rz() -> Circuit {
-        let input_t = vec![QB_T, FLOAT64_TYPE, FLOAT64_TYPE];
+        let input_t = vec![QB_T, ROTATION_TYPE, ROTATION_TYPE];
         let output_t = vec![QB_T];
         let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
@@ -590,9 +582,9 @@ mod tests {
         let f1 = inps.next().unwrap();
         let f2 = inps.next().unwrap();
 
-        let res = h.add_dataflow_op(Tk2Op::RzF64, [qb, f1]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rz, [qb, f1]).unwrap();
         let qb = res.outputs().next().unwrap();
-        let res = h.add_dataflow_op(Tk2Op::RzF64, [qb, f2]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rz, [qb, f2]).unwrap();
         let qb = res.outputs().next().unwrap();
 
         h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap().into()
@@ -647,6 +639,10 @@ mod tests {
     #[case::compiled(badger_opt_compiled())]
     #[case::json(badger_opt_json())]
     fn rz_rz_cancellation(rz_rz: Circuit, #[case] badger_opt: DefaultBadgerOptimiser) {
+        use hugr::ops::OpType;
+
+        use crate::{extension::rotation::RotationOp, op_matches};
+
         let opt_rz = badger_opt.optimise(
             &rz_rz,
             BadgerOptions {
@@ -654,8 +650,16 @@ mod tests {
                 ..Default::default()
             },
         );
+        let [op1, op2]: [&OpType; 2] = opt_rz
+            .commands()
+            .map(|cmd| cmd.optype())
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
         // Rzs combined into a single one.
-        assert_eq!(gates(&opt_rz), vec![Tk2Op::AngleAdd, Tk2Op::RzF64]);
+        assert_eq!(op1.cast(), Some(RotationOp::radd));
+        assert!(op_matches(op2, Tk2Op::Rz));
     }
 
     #[rstest]

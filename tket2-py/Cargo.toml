@@ -19,7 +19,7 @@ test = false
 bench = false
 
 [dependencies]
-tket2 = { path = "../tket2", version = "0.1.1", features = [
+tket2 = { path = "../tket2", version = "0.4.0", features = [
     "portmatching",
     "binary-eccs",
 ] }
@@ -30,10 +30,13 @@ hugr = { workspace = true }
 portgraph = { workspace = true, features = ["serde"] }
 pyo3 = { workspace = true }
 num_cpus = { workspace = true }
-derive_more = { workspace = true }
+derive_more = { workspace = true, features = ["into", "from"] }
 itertools = { workspace = true }
 portmatching = { workspace = true }
 strum = { workspace = true }
+# Required to acces the `Package` type.
+# Remove once https://github.com/CQCL/hugr/issues/1530 is fixed.
+hugr-cli = { workspace = true }
 
 [dev-dependencies]
 rstest = { workspace = true }

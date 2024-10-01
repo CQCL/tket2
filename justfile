@@ -14,12 +14,12 @@ check:
 
 # Compile the wheels for the python package.
 build:
-    uv run maturin build --release
+    cd tket2-py && uv run maturin build --release
 
 # Run all the tests.
 test language="[rust|python]" : (_run_lang language \
-        "uv run cargo test --all-features --workspace" \
-        "uv run maturin develop && uv run pytest"
+        "uv run cargo test --all-features" \
+        "uv run maturin develop --uv && uv run pytest"
     )
 
 # Auto-fix all clippy warnings.
@@ -44,6 +44,9 @@ coverage language="[rust|python]": (_run_lang language \
 recompile-eccs:
     scripts/compile-test-eccs.sh
 
+# Generate serialized declarations for the tket2 extensions
+gen-extensions:
+    cargo run -p tket2-hseries gen-extensions -o tket2-py/tket2/extensions/_json_defs
 
 # Runs a rust and a python command, depending on the `language` variable.
 #

@@ -62,12 +62,12 @@ use itertools::Itertools;
 pub use matcher::{PatternMatch, PatternMatcher};
 pub use pattern::CircuitPattern;
 
+use derive_more::{Display, Error};
 use hugr::{
     ops::{OpTag, OpTrait},
     Node, Port,
 };
 use matcher::MatchOp;
-use thiserror::Error;
 
 use crate::{circuit::Circuit, utils::type_is_linear};
 
@@ -98,18 +98,18 @@ enum PEdge {
     InputEdge { src: Port },
 }
 
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Clone, Error, Display)]
 #[non_exhaustive]
 enum InvalidEdgeProperty {
     /// The port is linked to multiple edges.
-    #[error("port {0:?} is linked to multiple edges")]
-    AmbiguousEdge(Port),
+    #[display("{port} in {node} is linked to multiple edges")]
+    AmbiguousEdge { port: Port, node: Node },
     /// The port is not linked to any edge.
-    #[error("port {0:?} is not linked to any edge")]
-    NoLinkedEdge(Port),
+    #[display("{port} in {node} is not linked to any edge")]
+    NoLinkedEdge { port: Port, node: Node },
     /// The port does not have a type.
-    #[error("{0}:{1} does not have a type")]
-    UntypedPort(Node, Port),
+    #[display("{port} in {node} does not have a type")]
+    UntypedPort { port: Port, node: Node },
 }
 
 impl PEdge {
@@ -121,9 +121,9 @@ impl PEdge {
             .exactly_one()
             .map_err(|mut e| {
                 if e.next().is_some() {
-                    InvalidEdgeProperty::AmbiguousEdge(src)
+                    InvalidEdgeProperty::AmbiguousEdge { port: src, node }
                 } else {
-                    InvalidEdgeProperty::NoLinkedEdge(src)
+                    InvalidEdgeProperty::NoLinkedEdge { port: src, node }
                 }
             })?;
         if hugr.get_optype(dst_node).tag() == OpTag::Input {
@@ -134,7 +134,7 @@ impl PEdge {
         let port_type = match hugr.get_optype(node).port_kind(src) {
             Some(EdgeKind::Value(typ)) => typ,
             Some(EdgeKind::Const(typ)) => typ,
-            _ => return Err(InvalidEdgeProperty::UntypedPort(node, src)),
+            _ => return Err(InvalidEdgeProperty::UntypedPort { node, port: src }),
         };
         let is_reversible = type_is_linear(&port_type);
         Ok(Self::InternalEdge {

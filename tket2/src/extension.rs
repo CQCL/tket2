@@ -4,21 +4,26 @@
 
 use crate::serialize::pytket::OpaqueTk1Op;
 use crate::Tk2Op;
-use hugr::extension::prelude::PRELUDE;
 use hugr::extension::simple_op::MakeOpDef;
 use hugr::extension::{
     CustomSignatureFunc, ExtensionId, ExtensionRegistry, SignatureError, Version,
 };
 use hugr::hugr::IdentList;
-use hugr::std_extensions::arithmetic::float_types::{EXTENSION as FLOAT_EXTENSION, FLOAT64_TYPE};
+use hugr::std_extensions::STD_REG;
 use hugr::types::type_param::{TypeArg, TypeParam};
-use hugr::types::{CustomType, PolyFuncType, PolyFuncTypeRV, Signature};
-use hugr::{type_row, Extension};
+use hugr::types::{CustomType, PolyFuncType, PolyFuncTypeRV};
+use hugr::Extension;
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
 
 /// Definition for Angle ops and types.
-pub mod angle;
+pub mod rotation;
+pub mod sympy;
+
+use sympy::SympyOpDef;
+/// Backwards compatible exports.
+/// TODO: Remove in a breaking release.
+pub use sympy::{SYM_EXPR_NAME, SYM_EXPR_T, SYM_OP_ID};
 
 /// The ID of the TKET1 extension.
 pub const TKET1_EXTENSION_ID: ExtensionId = IdentList::new_unchecked("TKET1");
@@ -51,14 +56,13 @@ pub static ref TKET1_EXTENSION: Extension = {
     res
 };
 
-/// Extension registry including the prelude, TKET1 and Tk2Ops extensions.
-pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
-    TKET1_EXTENSION.clone(),
-    PRELUDE.clone(),
-    TKET2_EXTENSION.clone(),
-    FLOAT_EXTENSION.clone(),
-]).unwrap();
-
+/// Extension registry including the prelude, std, TKET1, and Tk2Ops extensions.
+pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new(
+    STD_REG.iter().map(|(_, e)| e.to_owned()).chain([
+    TKET1_EXTENSION.to_owned(),
+    TKET2_EXTENSION.to_owned(),
+    rotation::ROTATION_EXTENSION.to_owned()
+])).unwrap();
 
 }
 
@@ -85,41 +89,18 @@ impl CustomSignatureFunc for Tk1Signature {
     }
 }
 
-/// Angle type with given log denominator.
-pub fn angle_custom_type(log_denom: u8) -> CustomType {
-    angle::angle_custom_type(&TKET2_EXTENSION, angle::type_arg(log_denom))
-}
-
 /// Name of tket 2 extension.
-pub const TKET2_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("quantum.tket2");
-
-/// The name of the symbolic expression opaque type arg.
-pub const SYM_EXPR_NAME: SmolStr = SmolStr::new_inline("SymExpr");
-
-/// The name of the symbolic expression opaque type arg.
-pub const SYM_OP_ID: SmolStr = SmolStr::new_inline("symbolic_float");
+pub const TKET2_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.quantum");
 
 /// Current version of the TKET 2 extension
 pub const TKET2_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
-/// The type of the symbolic expression opaque type arg.
-pub static ref SYM_EXPR_T: CustomType =
-    TKET2_EXTENSION.get_type(&SYM_EXPR_NAME).unwrap().instantiate([]).unwrap();
-
 /// The extension definition for TKET2 ops and types.
 pub static ref TKET2_EXTENSION: Extension = {
     let mut e = Extension::new(TKET2_EXTENSION_ID, TKET2_EXTENSION_VERSION);
     Tk2Op::load_all_ops(&mut e).expect("add fail");
-
-    e.add_op(
-        SYM_OP_ID,
-        "Store a sympy expression that can be evaluated to a float.".to_string(),
-        PolyFuncType::new(vec![TypeParam::String], Signature::new(type_row![], type_row![FLOAT64_TYPE])),
-    )
-    .unwrap();
-
-    angle::add_to_extension(&mut e);
+    SympyOpDef.add_to_extension(&mut e).unwrap();
     e
 };
 }

@@ -3,6 +3,7 @@
 //!
 //! This is a best-effort attempt, and may not always succeed.
 
+use derive_more::{Display, Error, From};
 use itertools::Itertools;
 
 use crate::serialize::pytket::OpConvertError;
@@ -27,15 +28,16 @@ pub fn lower_to_pytket(circ: &Circuit) -> Result<Circuit, PytketLoweringError> {
 }
 
 /// Errors that can occur during the lowering process.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Display, Error, From)]
 #[non_exhaustive]
 pub enum PytketLoweringError {
     /// An error occurred during the conversion of an operation.
-    #[error("operation conversion error: {0}")]
-    OpConversionError(#[from] OpConvertError),
+    #[display("operation conversion error: {_0}")]
+    #[from]
+    OpConversionError(OpConvertError),
     /// The circuit is not fully-contained in a region.
     /// Function calls are not supported.
-    #[error("Non-local operations found. Function calls are not supported.")]
+    #[display("Non-local operations found. Function calls are not supported.")]
     NonLocalOperations,
 }
 
@@ -48,10 +50,10 @@ mod test {
     use hugr::builder::{
         Container, Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder, SubContainer,
     };
-    use hugr::extension::prelude::QB_T;
+    use hugr::extension::prelude::{MakeTuple, UnpackTuple, QB_T};
     use hugr::extension::PRELUDE_REGISTRY;
     use hugr::ops::handle::NodeHandle;
-    use hugr::ops::{MakeTuple, OpType, Tag, UnpackTuple};
+    use hugr::ops::{OpType, Tag};
     use hugr::types::{Signature, TypeRow};
     use hugr::{type_row, HugrView};
     use rstest::{fixture, rstest};

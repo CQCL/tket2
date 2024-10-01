@@ -7,7 +7,6 @@ use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::{BOOL_T, QB_T};
 
 use hugr::hugr::hugrmut::HugrMut;
-use hugr::std_extensions::arithmetic::float_types::{ConstF64, FLOAT64_TYPE};
 use hugr::types::Signature;
 use hugr::HugrView;
 use rstest::{fixture, rstest};
@@ -16,6 +15,8 @@ use tket_json_rs::optype;
 
 use super::{TKETDecode, METADATA_Q_OUTPUT_REGISTERS};
 use crate::circuit::Circuit;
+use crate::extension::rotation::{ConstRotation, RotationOp, ROTATION_TYPE};
+use crate::extension::sympy::SympyOpDef;
 use crate::extension::REGISTRY;
 use crate::Tk2Op;
 
@@ -61,8 +62,8 @@ const PARAMETERIZED: &str = r#"{
         "commands": [
             {"args":[["q",[0]]],"op":{"type":"H"}},
             {"args":[["q",[1]],["q",[0]]],"op":{"type":"CX"}},
-            {"args":[["q",[0]]],"op":{"params":["0.1"],"type":"Rz"}},
-            {"args": [["q", [0]]], "op": {"params": ["3.141596/pi", "alpha", "0.3"], "type": "TK1"}}
+            {"args":[["q",[0]]],"op":{"params":["1.5707963267948966/pi"],"type":"Rz"}},
+            {"args": [["q", [0]]], "op": {"params": ["3.141596/pi", "alpha", "0.7853981633974483/pi"], "type": "TK1"}}
         ],
         "created_qubits": [],
         "discarded_qubits": [],
@@ -188,17 +189,17 @@ fn circ_measure_ancilla() -> Circuit {
 
 #[fixture]
 fn circ_add_angles_symbolic() -> Circuit {
-    let input_t = vec![QB_T, FLOAT64_TYPE, FLOAT64_TYPE];
+    let input_t = vec![QB_T, ROTATION_TYPE, ROTATION_TYPE];
     let output_t = vec![QB_T];
     let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
     let [qb, f1, f2] = h.input_wires_arr();
     let [f12] = h
-        .add_dataflow_op(Tk2Op::AngleAdd, [f1, f2])
+        .add_dataflow_op(RotationOp::radd, [f1, f2])
         .unwrap()
         .outputs_arr();
     let [qb] = h
-        .add_dataflow_op(Tk2Op::RxF64, [qb, f12])
+        .add_dataflow_op(Tk2Op::Rx, [qb, f12])
         .unwrap()
         .outputs_arr();
 
@@ -212,17 +213,45 @@ fn circ_add_angles_constants() -> Circuit {
 
     let qb = h.input_wires().next().unwrap();
 
-    let point2 = h.add_load_value(ConstF64::new(0.2 * std::f64::consts::PI));
-    let point3 = h.add_load_value(ConstF64::new(0.3 * std::f64::consts::PI));
+    let point2 = h.add_load_value(ConstRotation::new(0.2).unwrap());
+    let point3 = h.add_load_value(ConstRotation::new(0.3).unwrap());
     let point5 = h
-        .add_dataflow_op(Tk2Op::AngleAdd, [point2, point3])
+        .add_dataflow_op(RotationOp::radd, [point2, point3])
         .unwrap()
         .out_wire(0);
 
     let qbs = h
-        .add_dataflow_op(Tk2Op::RxF64, [qb, point5])
+        .add_dataflow_op(Tk2Op::Rx, [qb, point5])
         .unwrap()
         .outputs();
+    h.finish_hugr_with_outputs(qbs, &REGISTRY).unwrap().into()
+}
+
+#[fixture]
+/// An Rx operation using some complex ops to compute its angle `cos(pi) + 1`.
+fn circ_complex_angle_computation() -> Circuit {
+    let qb_row = vec![QB_T];
+    let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), qb_row)).unwrap();
+
+    let qb = h.input_wires().next().unwrap();
+
+    let point2 = h.add_load_value(ConstRotation::new(0.2).unwrap());
+    let sympy = h
+        .add_dataflow_op(SympyOpDef.with_expr("cos(pi)".to_string()), [])
+        .unwrap()
+        .out_wire(0);
+    let final_rot = h
+        .add_dataflow_op(RotationOp::radd, [sympy, point2])
+        .unwrap()
+        .out_wire(0);
+
+    // TODO: Mix in some float ops. This requires unwrapping the result of `RotationOp::from_halfturns`.
+
+    let qbs = h
+        .add_dataflow_op(Tk2Op::Rx, [qb, final_rot])
+        .unwrap()
+        .outputs();
+
     h.finish_hugr_with_outputs(qbs, &REGISTRY).unwrap().into()
 }
 
@@ -289,8 +318,9 @@ fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
 /// converted back to circuit inputs. This would require parsing symbolic
 /// expressions.
 #[rstest]
-#[case::symbolic(circ_add_angles_symbolic(), "f0 + f1")]
-#[case::constants(circ_add_angles_constants(), "0.2 + 0.3")]
+#[case::symbolic(circ_add_angles_symbolic(), "(f0 + f1)")]
+#[case::constants(circ_add_angles_constants(), "(0.2 + 0.3)")]
+#[case::complex(circ_complex_angle_computation(), "(cos(pi) + 0.2)")]
 fn test_add_angle_serialise(#[case] circ_add_angles: Circuit, #[case] param_str: &str) {
     let ser: SerialCircuit = SerialCircuit::encode(&circ_add_angles).unwrap();
     assert_eq!(ser.commands.len(), 1);

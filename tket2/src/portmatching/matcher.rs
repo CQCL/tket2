@@ -8,11 +8,12 @@ use std::{
 };
 
 use super::{CircuitPattern, NodeID, PEdge, PNode};
+use derive_more::{Display, Error, From};
 use hugr::hugr::views::sibling_subgraph::{
     InvalidReplacement, InvalidSubgraph, InvalidSubgraphBoundary, TopoConvexChecker,
 };
 use hugr::hugr::views::SiblingSubgraph;
-use hugr::ops::{CustomOp, NamedOp, OpType};
+use hugr::ops::{NamedOp, OpType};
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex};
 use itertools::Itertools;
 use portgraph::algorithms::ConvexChecker;
@@ -21,7 +22,6 @@ use portmatching::{
     EdgeProperty, PatternID,
 };
 use smol_str::SmolStr;
-use thiserror::Error;
 
 use crate::{
     circuit::Circuit,
@@ -57,16 +57,13 @@ impl From<OpType> for MatchOp {
 fn encode_op(op: OpType) -> Option<Vec<u8>> {
     match op {
         OpType::Module(_) => None,
-        OpType::CustomOp(op) => {
-            let opaque = match op {
-                CustomOp::Extension(ext_op) => ext_op.make_opaque(),
-                CustomOp::Opaque(opaque) => *opaque,
-            };
+        OpType::ExtensionOp(op) => encode_op(OpType::OpaqueOp(op.make_opaque())),
+        OpType::OpaqueOp(op) => {
             let mut encoded: Vec<u8> = Vec::new();
             // Ignore irrelevant fields
-            rmp_serde::encode::write(&mut encoded, opaque.extension()).ok()?;
-            rmp_serde::encode::write(&mut encoded, opaque.name()).ok()?;
-            rmp_serde::encode::write(&mut encoded, opaque.args()).ok()?;
+            rmp_serde::encode::write(&mut encoded, op.extension()).ok()?;
+            rmp_serde::encode::write(&mut encoded, &op.name()).ok()?;
+            rmp_serde::encode::write(&mut encoded, op.args()).ok()?;
             Some(encoded)
         }
         _ => rmp_serde::encode::to_vec(&op).ok(),
@@ -374,42 +371,43 @@ impl PatternMatcher {
 }
 
 /// Errors that can occur when constructing matches.
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Display, Clone, PartialEq, Eq, Error)]
+#[non_exhaustive]
 pub enum InvalidPatternMatch {
     /// The match is not convex.
-    #[error("match is not convex")]
+    #[display("match is not convex")]
     NotConvex,
     /// The subcircuit does not match the pattern.
-    #[error("invalid circuit region")]
+    #[display("invalid circuit region")]
     MatchNotFound,
     /// The subcircuit matched is not valid.
     ///
     /// This is typically a logic error in the code.
-    #[error("invalid circuit region")]
+    #[display("invalid circuit region")]
     InvalidSubcircuit,
     /// Empty matches are not supported.
     ///
     /// This should never happen is the pattern is not itself empty (in which
     /// case an error would have been raised earlier on).
-    #[error("empty match")]
+    #[display("empty match")]
     EmptyMatch,
-    #[error(transparent)]
     #[allow(missing_docs)]
     Other(InvalidSubgraph),
 }
 
 /// Errors that can occur when (de)serialising a matcher.
-#[derive(Debug, Error)]
+#[derive(Debug, Display, Error, From)]
+#[non_exhaustive]
 pub enum MatcherSerialisationError {
     /// An IO error occurred
-    #[error("IO error: {0}")]
-    Io(#[from] io::Error),
+    #[display("IO error: {_0}")]
+    Io(io::Error),
     /// An error occurred during deserialisation
-    #[error("Deserialisation error: {0}")]
-    Deserialisation(#[from] rmp_serde::decode::Error),
+    #[display("Deserialisation error: {_0}")]
+    Deserialisation(rmp_serde::decode::Error),
     /// An error occurred during serialisation
-    #[error("Serialisation error: {0}")]
-    Serialisation(#[from] rmp_serde::encode::Error),
+    #[display("Serialisation error: {_0}")]
+    Serialisation(rmp_serde::encode::Error),
 }
 
 impl From<InvalidSubgraph> for InvalidPatternMatch {

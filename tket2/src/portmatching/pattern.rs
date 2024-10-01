@@ -1,11 +1,11 @@
 //! Circuit Patterns for pattern matching
 
+use derive_more::{Display, Error};
 use hugr::{HugrView, IncomingPort};
 use hugr::{Node, Port};
 use itertools::Itertools;
 use portmatching::{patterns::NoRootFound, HashMap, Pattern, SinglePatternMatcher};
 use std::fmt::Debug;
-use thiserror::Error;
 
 use super::{
     matcher::{validate_circuit_edge, validate_circuit_node},
@@ -133,22 +133,25 @@ impl Debug for CircuitPattern {
 }
 
 /// Conversion error from circuit to pattern.
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Display, Debug, Error, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum InvalidPattern {
     /// An empty circuit cannot be a pattern.
-    #[error("Empty circuits are not allowed as patterns")]
+    #[display("Empty circuits are not allowed as patterns")]
     EmptyCircuit,
     /// Patterns must be connected circuits.
-    #[error("The pattern is not connected")]
+    #[display("The pattern is not connected")]
     NotConnected,
     /// Patterns cannot include empty wires.
-    #[error("The pattern contains an empty wire between {from_node}:{from_port} and {to_node}:{to_port}")]
-    #[allow(missing_docs)]
+    #[display("The pattern contains an empty wire between {from_node}, {from_port} and {to_node}, {to_port}")]
     EmptyWire {
+        /// The source node
         from_node: Node,
+        /// The source port
         from_port: Port,
+        /// The target node
         to_node: Node,
+        /// The target port
         to_port: Port,
     },
 }
@@ -168,9 +171,9 @@ mod tests {
     use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
     use hugr::extension::prelude::QB_T;
     use hugr::ops::OpType;
-    use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
     use hugr::types::Signature;
 
+    use crate::extension::rotation::ROTATION_TYPE;
     use crate::extension::REGISTRY;
     use crate::utils::build_simple_circuit;
     use crate::Tk2Op;
@@ -188,7 +191,7 @@ mod tests {
 
     /// A circuit with two rotation gates in sequence, sharing a param
     fn circ_with_copy() -> Circuit {
-        let input_t = vec![QB_T, FLOAT64_TYPE];
+        let input_t = vec![QB_T, ROTATION_TYPE];
         let output_t = vec![QB_T];
         let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
@@ -196,9 +199,9 @@ mod tests {
         let qb = inps.next().unwrap();
         let f = inps.next().unwrap();
 
-        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb, f]).unwrap();
         let qb = res.outputs().next().unwrap();
-        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb, f]).unwrap();
         let qb = res.outputs().next().unwrap();
 
         h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap().into()
@@ -206,7 +209,7 @@ mod tests {
 
     /// A circuit with two rotation gates in parallel, sharing a param
     fn circ_with_copy_disconnected() -> Circuit {
-        let input_t = vec![QB_T, QB_T, FLOAT64_TYPE];
+        let input_t = vec![QB_T, QB_T, ROTATION_TYPE];
         let output_t = vec![QB_T, QB_T];
         let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
@@ -215,9 +218,9 @@ mod tests {
         let qb2 = inps.next().unwrap();
         let f = inps.next().unwrap();
 
-        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb1, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb1, f]).unwrap();
         let qb1 = res.outputs().next().unwrap();
-        let res = h.add_dataflow_op(Tk2Op::RxF64, [qb2, f]).unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb2, f]).unwrap();
         let qb2 = res.outputs().next().unwrap();
 
         h.finish_hugr_with_outputs([qb1, qb2], &REGISTRY)
@@ -293,7 +296,7 @@ mod tests {
         let circ = circ_with_copy();
         let pattern = CircuitPattern::try_from_circuit(&circ).unwrap();
         let edges = pattern.pattern.edges().unwrap();
-        let rx_ns = get_nodes_by_tk2op(&circ, Tk2Op::RxF64);
+        let rx_ns = get_nodes_by_tk2op(&circ, Tk2Op::Rx);
         let inp = circ.input_node();
         for rx_n in rx_ns {
             assert!(edges.iter().any(|e| {

@@ -1,5 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
+use derive_more::{Display, Error, From};
 use hugr::hugr::{hugrmut::HugrMut, HugrError, Rewrite};
 use hugr::{CircuitUnit, Direction, HugrView, Node, Port, PortIndex};
 use itertools::Itertools;
@@ -10,8 +11,6 @@ use crate::{
     circuit::command::Command,
     ops::{Pauli, Tk2Op},
 };
-
-use thiserror::Error;
 
 type Qb = crate::circuit::units::LinearUnit;
 
@@ -100,8 +99,7 @@ fn load_slices(circ: &Circuit<impl HugrView>) -> SliceVec {
 
 /// check if node is one we want to put in to a slice.
 fn is_slice_op(h: &impl HugrView, node: Node) -> bool {
-    let op: Result<Tk2Op, _> = h.get_optype(node).try_into();
-    op.is_ok()
+    h.get_optype(node).cast::<Tk2Op>().is_some()
 }
 
 /// Starting from starting_index, work back along slices to check for the
@@ -156,12 +154,12 @@ fn commutes_at_slice(
 
         let port = command.port_of_qb(q, Direction::Incoming)?;
 
-        let op: Tk2Op = circ.hugr().get_optype(command.node()).try_into().ok()?;
+        let op: Tk2Op = circ.hugr().get_optype(command.node()).cast()?;
         // TODO: if not tk2op, might still have serialized commutation data we
         // can use.
         let pauli = commutation_on_port(&op.qubit_commutation(), port)?;
 
-        let other_op: Tk2Op = circ.hugr().get_optype(other_com.node()).try_into().ok()?;
+        let other_op: Tk2Op = circ.hugr().get_optype(other_com.node()).cast()?;
         let other_pauli = commutation_on_port(
             &other_op.qubit_commutation(),
             other_com.port_of_qb(q, Direction::Outgoing)?,
@@ -184,18 +182,25 @@ fn commutation_on_port(comms: &[(usize, Pauli)], port: Port) -> Option<Pauli> {
 }
 
 /// Error from a `PullForward` operation.
-#[derive(Debug, Clone, Error, PartialEq, Eq)]
-#[allow(missing_docs)]
+#[derive(Debug, Display, Clone, Error, PartialEq, Eq, From)]
+#[non_exhaustive]
 pub enum PullForwardError {
-    // Error in hugr mutation.
-    #[error("Hugr mutation error: {0:?}")]
-    HugrError(#[from] HugrError),
-
-    #[error("Qubit {0} not found in command.")]
-    NoQbInCommand(usize),
-
-    #[error("No subsequent command found for qubit {0}")]
-    NoCommandForQb(usize),
+    /// Error in hugr mutation.
+    #[display("Hugr mutation error: {_0}")]
+    #[from]
+    HugrError(HugrError),
+    /// Qubit not found in command.
+    #[display("Qubit {qubit} not found in command.")]
+    NoQbInCommand {
+        /// The qubit index
+        qubit: usize,
+    },
+    /// No command for qubit
+    #[display("No subsequent command found for qubit {qubit}")]
+    NoCommandForQb {
+        /// The qubit index
+        qubit: usize,
+    },
 }
 
 struct PullForward {
@@ -220,7 +225,7 @@ impl Rewrite for PullForward {
         let qb_port = |command: &ComCommand, qb, direction| {
             command
                 .port_of_qb(qb, direction)
-                .ok_or(PullForwardError::NoQbInCommand(qb.index()))
+                .ok_or(PullForwardError::NoQbInCommand { qubit: qb.index() })
         };
         // for each qubit, disconnect node and reconnect at destination.
         for qb in command.qubits() {
@@ -239,7 +244,7 @@ impl Rewrite for PullForward {
                 .unwrap();
 
             let Some(new_neighbour_com) = new_nexts.get(&qb) else {
-                return Err(PullForwardError::NoCommandForQb(qb.index()));
+                return Err(PullForwardError::NoCommandForQb { qubit: qb.index() });
             };
             if new_neighbour_com == &command {
                 // do not need to commute along this qubit.
@@ -326,11 +331,14 @@ pub fn apply_greedy_commutation(circ: &mut Circuit) -> Result<u32, PullForwardEr
 #[cfg(test)]
 mod test {
 
-    use crate::{extension::REGISTRY, ops::test::t2_bell_circuit, utils::build_simple_circuit};
+    use crate::{
+        extension::{rotation::ROTATION_TYPE, REGISTRY},
+        ops::test::t2_bell_circuit,
+        utils::build_simple_circuit,
+    };
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::{BOOL_T, QB_T},
-        std_extensions::arithmetic::float_types::FLOAT64_TYPE,
         type_row,
         types::Signature,
     };
@@ -436,7 +444,7 @@ mod test {
     fn non_linear_inputs() -> Circuit {
         let build = || {
             let mut dfg = DFGBuilder::new(Signature::new(
-                type_row![QB_T, QB_T, FLOAT64_TYPE],
+                type_row![QB_T, QB_T, ROTATION_TYPE],
                 type_row![QB_T, QB_T],
             ))?;
 
@@ -446,7 +454,7 @@ mod test {
 
             circ.append(Tk2Op::H, [1])?;
             circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append_and_consume(Tk2Op::RzF64, [CircuitUnit::Linear(0), CircuitUnit::Wire(f)])?;
+            circ.append_and_consume(Tk2Op::Rz, [CircuitUnit::Linear(0), CircuitUnit::Wire(f)])?;
             let qbs = circ.finish();
             dfg.finish_hugr_with_outputs(qbs, &REGISTRY)
         };

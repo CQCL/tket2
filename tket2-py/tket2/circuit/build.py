@@ -1,9 +1,11 @@
 from __future__ import annotations
-from hugr.hugr import Hugr
+from typing import Iterable
+
 from hugr import tys, ops
+from hugr.ext import Package, Extension
 from hugr.ops import ComWire, Command
 from hugr.std.float import FLOAT_T
-from hugr.tracked_dfg import TrackedDfg
+from hugr.build.tracked_dfg import TrackedDfg
 from tket2.circuit import Tk2Circuit
 
 from dataclasses import dataclass
@@ -17,10 +19,35 @@ class CircBuild(TrackedDfg):
     def with_nqb(cls, n_qb: int) -> CircBuild:
         return cls(*[tys.Qubit] * n_qb, track_inputs=True)
 
-    def finish(self) -> Tk2Circuit:
+    def finish_package(
+        self, other_extensions: Iterable[Extension] | None = None
+    ) -> Package:
+        """Finish building the package by setting all the qubits as the output
+        and wrap it in a hugr package with the required extensions.
+
+        Args:
+            other_extensions: Other extensions to include in the package.
+        Returns:
+            The finished package.
+        """
+        import tket2.extensions as ext
+
+        extensions = [
+            ext.rotation(),
+            ext.futures(),
+            ext.hseries(),
+            ext.quantum(),
+            ext.result(),
+            *(other_extensions or []),
+        ]
+
+        return Package(modules=[self.hugr], extensions=extensions)
+
+    def finish(self, other_extensions: list[Extension] | None = None) -> Tk2Circuit:
         """Finish building the circuit by setting all the qubits as the output
         and validate."""
-        return load_hugr(self.hugr)
+
+        return load_hugr_pkg(self.finish_package(other_extensions))
 
 
 def from_coms(*args: Command) -> Tk2Circuit:
@@ -40,17 +67,17 @@ def from_coms(*args: Command) -> Tk2Circuit:
     return build.finish()
 
 
-def load_hugr(h: Hugr) -> Tk2Circuit:
-    return Tk2Circuit.from_hugr_json(h.to_serial().model_dump_json())
+def load_hugr_pkg(package: Package) -> Tk2Circuit:
+    return Tk2Circuit.from_hugr_json(package.to_json())
 
 
 def load_custom(serialized: bytes) -> ops.Custom:
-    import hugr.serialization.ops as sops
+    import hugr._serialization.ops as sops
     import json
 
-    dct = json.loads(serialized)
-    dct["parent"] = -1
-    return sops.CustomOp(**dct).deserialize()
+    # TODO: We should return an "ExtOp" instead
+    ext = json.loads(serialized)
+    return sops.ExtensionOp(**ext).deserialize()
 
 
 def id_circ(n_qb: int) -> Tk2Circuit:
@@ -61,7 +88,7 @@ def id_circ(n_qb: int) -> Tk2Circuit:
 
 @dataclass(frozen=True)
 class QuantumOps(ops.Custom):
-    extension: tys.ExtensionId = "quantum.tket2"
+    extension: tys.ExtensionId = "tket2.quantum"
 
 
 _OneQbSig = tys.FunctionType.endo([tys.Qubit])
@@ -69,7 +96,7 @@ _OneQbSig = tys.FunctionType.endo([tys.Qubit])
 
 @dataclass(frozen=True)
 class OneQbGate(QuantumOps):
-    name: str  # type: ignore[misc] # no-default fields follows one with a default
+    op_name: str  # type: ignore[misc] # no-default fields follows one with a default
     num_out: int = 1
     signature: tys.FunctionType = _OneQbSig
 
@@ -87,7 +114,7 @@ _TwoQbSig = tys.FunctionType.endo([tys.Qubit] * 2)
 
 @dataclass(frozen=True)
 class TwoQbGate(QuantumOps):
-    name: str  # type: ignore[misc] # no-default fields follows one with a default
+    op_name: str  # type: ignore[misc] # no-default fields follows one with a default
     num_out: int = 2
     signature: tys.FunctionType = _TwoQbSig
 
@@ -102,7 +129,7 @@ _MeasSig = tys.FunctionType([tys.Qubit], [tys.Qubit, tys.Bool])
 
 @dataclass(frozen=True)
 class MeasureDef(QuantumOps):
-    name: str = "Measure"
+    op_name: str = "Measure"
     num_out: int = 2
     signature: tys.FunctionType = _MeasSig
 
@@ -112,13 +139,13 @@ class MeasureDef(QuantumOps):
 
 Measure = MeasureDef()
 
-
+# TODO use angle type once extension is serialised.
 _RzSig = tys.FunctionType([tys.Qubit, FLOAT_T], [tys.Qubit])
 
 
 @dataclass(frozen=True)
 class RzDef(QuantumOps):
-    name: str = "Rz"
+    op_name: str = "Rz"
     num_out: int = 1
     signature: tys.FunctionType = _RzSig
 
@@ -134,7 +161,7 @@ _QallocSig = tys.FunctionType([], [tys.Qubit])
 
 @dataclass(frozen=True)
 class QAllocDef(QuantumOps):
-    name: str = "QAlloc"
+    op_name: str = "QAlloc"
     num_out: int = 1
     signature: tys.FunctionType = _QallocSig
 
@@ -150,7 +177,7 @@ _QfreeSig = tys.FunctionType([tys.Qubit], [])
 
 @dataclass(frozen=True)
 class QFreeDef(QuantumOps):
-    name: str = "QFree"
+    op_name: str = "QFree"
     num_out: int = 0
     signature: tys.FunctionType = _QfreeSig
 

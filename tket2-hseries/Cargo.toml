@@ -1,6 +1,6 @@
 [package]
 name = "tket2-hseries"
-version = "0.1.1"
+version = "0.4.0"
 edition.workspace = true
 rust-version.workspace = true
 
@@ -13,21 +13,37 @@ description = "TKET2 tool for preparing and validating `Hugr`s for compilation t
 keywords = ["Quantum", "Quantinuum"]
 categories = ["compilers"]
 
+[features]
+default = ["cli"]
+cli = ["dep:clap", "dep:hugr-cli"]
+
+[[bin]]
+name = "tket2-hseries"
+required-features = ["cli"]
+
 [dependencies]
 hugr.workspace = true
-tket2 = { path = "../tket2", version = "0.1.1" }
+tket2 = { path = "../tket2", version = "0.4.0" }
 lazy_static.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 smol_str.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
-thiserror.workspace = true
 itertools.workspace = true
+clap = { workspace = true, optional = true }
+hugr-cli = { workspace = true, optional = true }
+derive_more = { workspace = true, features = [
+    "error",
+    "display",
+    "from",
+    "into",
+] }
 
 [dev-dependencies]
 cool_asserts.workspace = true
 petgraph.workspace = true
+rstest.workspace = true
 
 [lints]
 workspace = true

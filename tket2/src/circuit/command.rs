@@ -42,7 +42,7 @@ impl<'circ, T: HugrView> Command<'circ, T> {
 
     /// Returns the [`OpType`] of the command.
     #[inline]
-    pub fn optype(&self) -> &OpType {
+    pub fn optype(&self) -> &'circ OpType {
         self.circ.hugr().get_optype(self.node)
     }
 
@@ -479,14 +479,13 @@ mod test {
     use hugr::hugr::hugrmut::HugrMut;
     use hugr::ops::handle::NodeHandle;
     use hugr::ops::{NamedOp, Value};
-    use hugr::std_extensions::arithmetic::float_ops::FLOAT_OPS_REGISTRY;
-    use hugr::std_extensions::arithmetic::float_types::ConstF64;
     use hugr::types::Signature;
     use itertools::Itertools;
     use rstest::{fixture, rstest};
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
+    use crate::extension::rotation::ConstRotation;
     use crate::extension::REGISTRY;
     use crate::utils::{build_module_with_circuit, build_simple_circuit};
     use crate::Tk2Op;
@@ -591,14 +590,12 @@ mod test {
         let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), qb_row)).unwrap();
         let [q_in] = h.input_wires_arr();
 
-        let constant = h.add_constant(Value::extension(ConstF64::new(0.5)));
+        let constant = h.add_constant(Value::extension(ConstRotation::PI_2));
         let loaded_const = h.load_const(&constant);
-        let rz = h
-            .add_dataflow_op(Tk2Op::RzF64, [q_in, loaded_const])
-            .unwrap();
+        let rz = h.add_dataflow_op(Tk2Op::Rz, [q_in, loaded_const]).unwrap();
 
         let circ: Circuit = h
-            .finish_hugr_with_outputs(rz.outputs(), &FLOAT_OPS_REGISTRY)
+            .finish_hugr_with_outputs(rz.outputs(), &REGISTRY)
             .unwrap()
             .into();
 
@@ -608,7 +605,7 @@ mod test {
         // First command is the constant definition.
         // It has a single output.
         let const_cmd = commands.next().unwrap();
-        assert_eq!(const_cmd.optype().name().as_str(), "const:custom:f64(0.5)");
+        assert_eq!(const_cmd.optype().name().as_str(), "const:custom:a(π*0.5)");
         assert_eq_iter!(const_cmd.inputs().map(|(u, _, _)| u), [],);
         assert_eq_iter!(
             const_cmd.outputs().map(|(u, _, _)| u),
@@ -619,7 +616,7 @@ mod test {
         // It has a single input and a single output.
         let load_const_cmd = commands.next().unwrap();
         let load_const_node = load_const_cmd.node();
-        assert_eq!(load_const_cmd.optype().name().as_str(), "LoadConstant");
+        assert!(load_const_cmd.optype().is_load_constant());
         assert_eq_iter!(
             load_const_cmd.inputs().map(|(u, _, _)| u),
             [CircuitUnit::Wire(Wire::new(constant.node(), 0))],
@@ -632,7 +629,7 @@ mod test {
         // Finally, the rz command.
         // It has the qubit and loaded constant as input and a single output.
         let rz_cmd = commands.next().unwrap();
-        assert_eq!(rz_cmd.optype().name().as_str(), "quantum.tket2.RzF64");
+        assert_eq!(rz_cmd.optype().cast(), Some(Tk2Op::Rz));
         assert_eq_iter!(
             rz_cmd.inputs().map(|(u, _, _)| u),
             [

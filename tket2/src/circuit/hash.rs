@@ -2,12 +2,12 @@
 
 use std::hash::{Hash, Hasher};
 
+use derive_more::{Display, Error};
 use fxhash::{FxHashMap, FxHasher64};
 use hugr::hugr::views::{HierarchyView, SiblingGraph};
 use hugr::ops::{NamedOp, OpType};
 use hugr::{HugrView, Node};
 use petgraph::visit::{self as pg, Walker};
-use thiserror::Error;
 
 use super::Circuit;
 
@@ -90,8 +90,15 @@ impl HashState {
 /// Returns a hashable representation of an operation.
 fn hashable_op(op: &OpType) -> impl Hash {
     match op {
-        OpType::CustomOp(op) if !op.args().is_empty() => {
+        OpType::ExtensionOp(op) if !op.args().is_empty() => {
             // TODO: Require hashing for TypeParams?
+            format!(
+                "{}[{}]",
+                op.name(),
+                serde_json::to_string(op.args()).unwrap()
+            )
+        }
+        OpType::OpaqueOp(op) if !op.args().is_empty() => {
             format!(
                 "{}[{}]",
                 op.name(),
@@ -139,13 +146,14 @@ fn hash_node(circ: &impl HugrView, node: Node, state: &mut HashState) -> Result<
 }
 
 /// Errors that can occur while hashing a hugr.
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Display, Clone, PartialEq, Eq, Error)]
+#[non_exhaustive]
 pub enum HashError {
     /// The circuit contains a cycle.
-    #[error("The circuit contains a cycle.")]
+    #[display("The circuit contains a cycle.")]
     CyclicCircuit,
     /// The hashed hugr is not a DFG.
-    #[error("Tried to hash a non-dfg hugr.")]
+    #[display("Tried to hash a non-dfg hugr.")]
     NotADfg,
 }
 

@@ -15,6 +15,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - [**breaking**] Renamed `LexicographicCostFunction::default_cx()` to `LexicographicCostFunction::default_cx_strategy()`.
 
+## [0.4.0](https://github.com/CQCL/tket2/compare/tket2-v0.3.0...tket2-v0.4.0) - 2024-09-16
+
+### Bug Fixes
+
+- angle type docstring to say 2pi ([#607](https://github.com/CQCL/tket2/pull/607))
+- Fix broken ConstAngle::TAU ([#609](https://github.com/CQCL/tket2/pull/609))
+
+### New Features
+
+- [**breaking**] simplify angle extension in to a half turns rotation type ([#611](https://github.com/CQCL/tket2/pull/611))
+
+## [0.3.0](https://github.com/CQCL/tket2/compare/tket2-v0.2.0...tket2-v0.3.0) - 2024-09-09
+
+### Bug Fixes
+
+- extension ops checking against incorrect name ([#593](https://github.com/CQCL/tket2/pull/593))
+- [**breaking**] remove TryFrom for extension ops use `cast` ([#592](https://github.com/CQCL/tket2/pull/592))
+- don't load angle extensions on to quantum ([#597](https://github.com/CQCL/tket2/pull/597))
+
+### New Features
+
+- [**breaking**] move angle types + and ops to new "tket2.angle" extension ([#591](https://github.com/CQCL/tket2/pull/591))
+- dataflow builder methods for angle ops ([#596](https://github.com/CQCL/tket2/pull/596))
+- lowering tk2ops -> hseriesops ([#579](https://github.com/CQCL/tket2/pull/579))
+
+## [0.2.0](https://github.com/CQCL/tket2/compare/tket2-v0.1.1...tket2-v0.2.0) - 2024-09-04
+
+### Bug Fixes
+- [**breaking**] quantum extension name wrong way round ([#582](https://github.com/CQCL/tket2/pull/582))
+
+### New Features
+- Extend Command::optype lifetime ([#562](https://github.com/CQCL/tket2/pull/562))
+- [**breaking**] Update rust hugr dependency to `0.12.0`, and python hugr to `0.8.0` ([#568](https://github.com/CQCL/tket2/pull/568))
+- [**breaking**] remove Tk2Op::AngleAdd ([#567](https://github.com/CQCL/tket2/pull/567))
+- [**breaking**] angle type no longer parametric. ([#577](https://github.com/CQCL/tket2/pull/577))
+- [**breaking**] HSeries ops ([#573](https://github.com/CQCL/tket2/pull/573))
+- [**breaking**] replace f64 with angle type for tk2 ops ([#578](https://github.com/CQCL/tket2/pull/578))
+- more angle ops (construct, deconstruct, radians, equality) ([#581](https://github.com/CQCL/tket2/pull/581))
+
 ## [0.1.1](https://github.com/CQCL/tket2/compare/tket2-v0.1.0...tket2-v0.1.1) - 2024-08-15
 
 ### New Features

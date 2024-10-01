@@ -1,24 +1,22 @@
-use crate::extension::{
-    SYM_OP_ID, TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID,
-};
+use crate::extension::rotation::ROTATION_TYPE;
+use crate::extension::sympy::SympyOpDef;
+use crate::extension::{SYM_OP_ID, TKET2_EXTENSION_ID as EXTENSION_ID};
 use hugr::ops::custom::ExtensionOp;
 use hugr::ops::NamedOp;
 use hugr::{
     extension::{
         prelude::{BOOL_T, QB_T},
-        simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp},
+        simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionId, OpDef, SignatureFunc,
     },
-    ops::{CustomOp, OpType},
-    std_extensions::arithmetic::float_types::FLOAT64_TYPE,
+    ops::OpType,
     type_row,
     types::{type_param::TypeArg, Signature},
 };
 
+use derive_more::{Display, Error};
 use serde::{Deserialize, Serialize};
-
-use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
-use thiserror::Error;
+use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
 use crate::extension::REGISTRY;
 
@@ -43,22 +41,21 @@ use crate::extension::REGISTRY;
 pub enum Tk2Op {
     H,
     CX,
+    CY,
+    CZ,
+    CRz,
     T,
+    Tdg,
     S,
+    Sdg,
     X,
     Y,
     Z,
-    Tdg,
-    Sdg,
-    ZZMax,
+    Rx,
+    Ry,
+    Rz,
+    Toffoli,
     Measure,
-    RzF64,
-    RxF64,
-    PhasedX,
-    ZZPhase,
-    AngleAdd,
-    CZ,
-    TK1,
     QAlloc,
     QFree,
     Reset,
@@ -94,8 +91,8 @@ pub enum Pauli {
     Z,
 }
 
-#[derive(Debug, Error, PartialEq, Clone)]
-#[error("{} is not a Tk2Op.", op.name())]
+#[derive(Display, Debug, Error, PartialEq, Clone)]
+#[display("{} is not a Tk2Op.", op.name())]
 pub struct NotTk2Op {
     /// The offending operation.
     pub op: OpType,
@@ -111,24 +108,13 @@ impl MakeOpDef for Tk2Op {
     fn signature(&self) -> SignatureFunc {
         use Tk2Op::*;
         let one_qb_row = type_row![QB_T];
-        let two_qb_row = type_row![QB_T, QB_T];
         match self {
-            H | T | S | X | Y | Z | Tdg | Sdg | Reset => {
-                Signature::new(one_qb_row.clone(), one_qb_row)
-            }
-            CX | ZZMax | CZ => Signature::new(two_qb_row.clone(), two_qb_row),
-            ZZPhase => Signature::new(type_row![QB_T, QB_T, FLOAT64_TYPE], two_qb_row),
+            H | T | S | X | Y | Z | Tdg | Sdg | Reset => Signature::new_endo(one_qb_row),
+            CX | CZ | CY => Signature::new_endo(type_row![QB_T; 2]),
+            Toffoli => Signature::new_endo(type_row![QB_T; 3]),
             Measure => Signature::new(one_qb_row, type_row![QB_T, BOOL_T]),
-            RzF64 | RxF64 => Signature::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
-            PhasedX => Signature::new(type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE], one_qb_row),
-            AngleAdd => Signature::new(
-                type_row![FLOAT64_TYPE, FLOAT64_TYPE],
-                type_row![FLOAT64_TYPE],
-            ),
-            TK1 => Signature::new(
-                type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE, FLOAT64_TYPE],
-                one_qb_row,
-            ),
+            Rz | Rx | Ry => Signature::new(type_row![QB_T, ROTATION_TYPE], one_qb_row),
+            CRz => Signature::new(type_row![QB_T, QB_T, ROTATION_TYPE], type_row![QB_T; 2]),
             QAlloc => Signature::new(type_row![], one_qb_row),
             QFree => Signature::new(one_qb_row, type_row![]),
         }
@@ -147,7 +133,7 @@ impl MakeOpDef for Tk2Op {
     }
 
     fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
-        try_from_name(op_def.name(), &EXTENSION_ID)
+        try_from_name(op_def.name(), op_def.extension())
     }
 }
 
@@ -166,11 +152,11 @@ impl Tk2Op {
         use Tk2Op::*;
 
         match self {
-            X | RxF64 => vec![(0, Pauli::X)],
+            X | Rx => vec![(0, Pauli::X)],
             Y => vec![(0, Pauli::Y)],
-            T | Z | S | Tdg | Sdg | RzF64 | Measure => vec![(0, Pauli::Z)],
+            T | Z | S | Tdg | Sdg | Rz | Measure => vec![(0, Pauli::Z)],
             CX => vec![(0, Pauli::Z), (1, Pauli::X)],
-            ZZMax | ZZPhase | CZ => vec![(0, Pauli::Z), (1, Pauli::Z)],
+            CZ => vec![(0, Pauli::Z), (1, Pauli::Z)],
             // by default, no commutation
             _ => vec![],
         }
@@ -180,19 +166,15 @@ impl Tk2Op {
     pub fn is_quantum(&self) -> bool {
         use Tk2Op::*;
         match self {
-            H | CX | T | S | X | Y | Z | Tdg | Sdg | ZZMax | RzF64 | RxF64 | PhasedX | ZZPhase
-            | CZ | TK1 => true,
-            AngleAdd | Measure | QAlloc | QFree | Reset => false,
+            H | CX | T | S | X | Y | Z | Tdg | Sdg | Rz | Rx | Toffoli | Ry | CZ | CY | CRz => true,
+            Measure | QAlloc | QFree | Reset => false,
         }
     }
 }
 
 /// Initialize a new custom symbolic expression constant op from a string.
 pub fn symbolic_constant_op(arg: String) -> OpType {
-    EXTENSION
-        .instantiate_extension_op(&SYM_OP_ID, vec![arg.into()], &REGISTRY)
-        .unwrap()
-        .into()
+    SympyOpDef.with_expr(arg).into()
 }
 
 /// match against a symbolic constant
@@ -207,38 +189,14 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<String> {
             .unwrap_or_else(|| panic!("Found an invalid type arg in a symbolic operation node."))
     };
 
-    if let OpType::CustomOp(custom_op) = op {
-        match custom_op {
-            CustomOp::Extension(e)
-                if e.def().name() == &SYM_OP_ID && e.def().extension() == &EXTENSION_ID =>
-            {
-                Some(symbol_from_typeargs(e.args()))
-            }
-            CustomOp::Opaque(e) if e.name() == &SYM_OP_ID && e.extension() == &EXTENSION_ID => {
-                Some(symbol_from_typeargs(e.args()))
-            }
-            _ => None,
+    if let OpType::ExtensionOp(e) = op {
+        if e.def().name() == &SYM_OP_ID && e.def().extension() == &EXTENSION_ID {
+            Some(symbol_from_typeargs(e.args()))
+        } else {
+            None
         }
     } else {
         None
-    }
-}
-
-impl TryFrom<&OpType> for Tk2Op {
-    type Error = NotTk2Op;
-
-    fn try_from(op: &OpType) -> Result<Self, Self::Error> {
-        {
-            let OpType::CustomOp(custom_op) = op else {
-                return Err(NotTk2Op { op: op.clone() });
-            };
-
-            match custom_op {
-                CustomOp::Extension(ext) => Tk2Op::from_extension_op(ext).ok(),
-                CustomOp::Opaque(opaque) => try_from_name(opaque.name(), &EXTENSION_ID).ok(),
-            }
-            .ok_or_else(|| NotTk2Op { op: op.clone() })
-        }
     }
 }
 
@@ -313,7 +271,7 @@ pub(crate) mod test {
     #[test]
     fn tk2op_properties() {
         for op in Tk2Op::iter() {
-            // The exposed name should start with "quantum.tket2."
+            // The exposed name should start with "tket2.quantum."
             assert!(op.exposed_name().starts_with(&EXTENSION_ID.to_string()));
 
             let ext_op = op.into_extension_op();

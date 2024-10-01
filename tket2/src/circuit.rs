@@ -6,21 +6,24 @@ mod extract_dfg;
 mod hash;
 pub mod units;
 
+use std::collections::HashSet;
 use std::iter::Sum;
 
 pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
+use hugr::extension::prelude::{LiftDef, NoopDef, TupleOpDef};
 use hugr::hugr::views::{DescendantsGraph, ExtractHugr, HierarchyView};
 use itertools::Either::{Left, Right};
 
+use derive_more::{Display, Error, From};
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::dataflow::IOTrait;
-use hugr::ops::{Input, NamedOp, OpParent, OpTag, OpTrait, Output};
+use hugr::ops::{Input, NamedOp, OpName, OpParent, OpTag, OpTrait, Output};
 use hugr::types::{PolyFuncType, Signature};
 use hugr::{Hugr, PortIndex};
 use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
-use thiserror::Error;
+use lazy_static::lazy_static;
 
 pub use hugr::ops::OpType;
 pub use hugr::types::{EdgeKind, Type, TypeRow};
@@ -47,6 +50,25 @@ impl<T: Default + HugrView> Default for Circuit<T> {
     }
 }
 
+lazy_static! {
+    /// Most [`Optype::ExtensionOp`]s are counted as operations in the circuit, except for
+    /// some special ones like tuple pack/unpack and the Noop operation.
+    ///
+    /// We have to insert the extension id manually due to
+    /// https://github.com/CQCL/hugr/issues/1496
+    static ref IGNORED_EXTENSION_OPS: HashSet<OpName> = {
+        let mut set = HashSet::new();
+        set.insert(format!("prelude.{}", NoopDef.name()).into());
+        set.insert(format!("prelude.{}", TupleOpDef::MakeTuple.name()).into());
+        set.insert(format!("prelude.{}", TupleOpDef::UnpackTuple.name()).into());
+        set.insert(format!("prelude.{}", LiftDef.name()).into());
+        set
+    };
+}
+#[test]
+fn issue_1496_remains() {
+    assert_eq!("Noop", NoopDef.name())
+}
 impl<T: HugrView> Circuit<T> {
     /// Create a new circuit from a HUGR and a node.
     ///
@@ -170,7 +192,9 @@ impl<T: HugrView> Circuit<T> {
         while let Some(node) = roots.pop() {
             for child in self.hugr().children(node) {
                 let optype = self.hugr().get_optype(child);
-                if optype.is_custom_op() {
+                if matches!(optype, OpType::ExtensionOp(_) | OpType::OpaqueOp(_))
+                    && !IGNORED_EXTENSION_OPS.contains(&optype.name())
+                {
                     count += 1;
                 } else if OpTag::DataflowParent.is_superset(optype.tag()) {
                     roots.push(child);
@@ -250,7 +274,9 @@ impl<T: HugrView> Circuit<T> {
         Self: Sized,
     {
         // Traverse the circuit in topological order.
-        self.commands().filter(|cmd| cmd.optype().is_custom_op())
+        self.commands().filter(|cmd| {
+            cmd.optype().is_extension_op() && !IGNORED_EXTENSION_OPS.contains(&cmd.optype().name())
+        })
     }
 
     /// Compute the cost of the circuit based on a per-operation cost function.
@@ -382,15 +408,24 @@ pub(crate) fn remove_empty_wire(
 
     let [inp, out] = hugr.get_io(parent).expect("no IO nodes found at parent");
     if input_port >= hugr.num_outputs(inp) {
-        return Err(CircuitMutError::InvalidPortOffset(input_port));
+        return Err(CircuitMutError::InvalidPortOffset {
+            input_port,
+            dataflow_node: parent,
+        });
     }
     let input_port = OutgoingPort::from(input_port);
     let link = hugr
         .linked_inputs(inp, input_port)
         .at_most_one()
-        .map_err(|_| CircuitMutError::DeleteNonEmptyWire(input_port.index()))?;
+        .map_err(|_| CircuitMutError::DeleteNonEmptyWire {
+            input_port: input_port.index(),
+            dataflow_node: parent,
+        })?;
     if link.is_some() && link.unwrap().0 != out {
-        return Err(CircuitMutError::DeleteNonEmptyWire(input_port.index()));
+        return Err(CircuitMutError::DeleteNonEmptyWire {
+            input_port: input_port.index(),
+            dataflow_node: parent,
+        });
     }
     if link.is_some() {
         hugr.disconnect(inp, input_port);
@@ -418,17 +453,18 @@ pub(crate) fn remove_empty_wire(
 }
 
 /// Errors that can occur when mutating a circuit.
-#[derive(Debug, Clone, Error, PartialEq)]
+#[derive(Display, Debug, Clone, Error, PartialEq)]
+#[non_exhaustive]
 pub enum CircuitError {
     /// The parent node for the circuit does not exist in the HUGR.
-    #[error("{parent} cannot define a circuit as it is not present in the HUGR.")]
+    #[display("{parent} cannot define a circuit as it is not present in the HUGR.")]
     MissingParentNode {
         /// The node that was used as the parent.
         parent: Node,
     },
     /// Circuit parents must have a concrete signature.
-    #[error(
-        "{} node {parent} cannot be used as a circuit parent. Circuits must have a concrete signature, but the node has signature '{}'.",
+    #[display(
+        "{parent} with op {} cannot be used as a circuit parent. Circuits must have a concrete signature, but the node has signature '{}'.",
         optype.name(),
         signature
     )]
@@ -441,8 +477,8 @@ pub enum CircuitError {
         signature: PolyFuncType,
     },
     /// The parent node for the circuit has an invalid optype.
-    #[error(
-        "{} node {parent} cannot be used as a circuit parent. Only 'DFG', 'DataflowBlock', or 'FuncDefn' operations are allowed.",
+    #[display(
+        "{parent} with op {} cannot be used as a circuit parent. Only 'DFG', 'DataflowBlock', or 'FuncDefn' operations are allowed.",
         optype.name()
     )]
     InvalidParentOp {
@@ -454,22 +490,31 @@ pub enum CircuitError {
 }
 
 /// Errors that can occur when mutating a circuit.
-#[derive(Debug, Clone, Error, PartialEq)]
+#[derive(Display, Debug, Clone, Error, PartialEq, From)]
+#[non_exhaustive]
 pub enum CircuitMutError {
     /// A Hugr error occurred.
-    #[error("Hugr error: {0:?}")]
-    HugrError(#[from] hugr::hugr::HugrError),
+    #[from]
+    HugrError(hugr::hugr::HugrError),
     /// A circuit validation error occurred.
-    #[error("transparent")]
-    CircuitError(#[from] CircuitError),
+    #[from]
+    CircuitError(CircuitError),
     /// The wire to be deleted is not empty.
-    #[from(ignore)]
-    #[error("Wire {0} cannot be deleted: not empty")]
-    DeleteNonEmptyWire(usize),
-    /// The wire does not exist.
-    #[from(ignore)]
-    #[error("Wire {0} does not exist")]
-    InvalidPortOffset(usize),
+    #[display("Tried to delete non-empty input wire with offset {input_port} on dataflow node {dataflow_node}")]
+    DeleteNonEmptyWire {
+        /// The input port offset
+        input_port: usize,
+        /// The port's node
+        dataflow_node: Node,
+    },
+    /// Invalid dataflow input offset
+    #[display("Dataflow node {dataflow_node} does not have an input with offset {input_port}")]
+    InvalidPortOffset {
+        /// The input port offset
+        input_port: usize,
+        /// The port's node
+        dataflow_node: Node,
+    },
 }
 
 /// Shift ports in range (free_port + 1 .. max_ind) by -1.
@@ -595,7 +640,6 @@ fn update_signature(
 #[cfg(test)]
 mod tests {
     use cool_asserts::assert_matches;
-    use hugr::std_extensions::arithmetic::float_types::ConstF64;
     use hugr::CircuitUnit;
     use rstest::{fixture, rstest};
 
@@ -606,6 +650,7 @@ mod tests {
     };
 
     use super::*;
+    use crate::extension::rotation::ConstRotation;
     use crate::serialize::load_tk1_json_str;
     use crate::utils::{build_module_with_circuit, build_simple_circuit};
     use crate::Tk2Op;
@@ -635,9 +680,9 @@ mod tests {
         build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::H, [0])?;
             circ.append(Tk2Op::CX, [0, 1])?;
-            let angle = circ.add_constant(ConstF64::new(0.5));
+            let angle = circ.add_constant(ConstRotation::PI_2);
             circ.append_and_consume(
-                Tk2Op::RzF64,
+                Tk2Op::Rz,
                 [CircuitUnit::Linear(1), CircuitUnit::Wire(angle)],
             )?;
             Ok(())
@@ -694,7 +739,10 @@ mod tests {
         assert_eq!(circ.qubit_count(), 1);
         assert_eq!(
             remove_empty_wire(&mut circ, 0).unwrap_err(),
-            CircuitMutError::DeleteNonEmptyWire(0)
+            CircuitMutError::DeleteNonEmptyWire {
+                input_port: 0,
+                dataflow_node: circ.parent()
+            }
         );
     }
 
@@ -721,7 +769,10 @@ mod tests {
         assert_eq!(circ.units().count(), 0);
         assert_eq!(
             remove_empty_wire(&mut circ, 2).unwrap_err(),
-            CircuitMutError::InvalidPortOffset(2)
+            CircuitMutError::InvalidPortOffset {
+                input_port: 2,
+                dataflow_node: circ.parent()
+            }
         );
     }
 }
