@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/CQCL/tket2/compare/tket2-v0.4.0...tket2-v0.5.0) - 2024-09-30
+
+### Bug Fixes
+
+- Support hugr packages, fix the notebooks ([#622](https://github.com/CQCL/tket2/pull/622))
+
+### New Features
+
+- Add an explicit struct for the tket2 sympy op ([#616](https://github.com/CQCL/tket2/pull/616))
+- Support encoding float and sympy ops ([#618](https://github.com/CQCL/tket2/pull/618))
+
 ## [0.4.0](https://github.com/CQCL/tket2/compare/tket2-v0.3.0...tket2-v0.4.0) - 2024-09-16
 
 ### Bug Fixes
