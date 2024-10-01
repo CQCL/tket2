@@ -1,10 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### Features
-- `BadgerOptimiser.load_precompiled`, `BadgerOptimiser.compile_eccs` and `passes.badger_pass` now take an optional `cost_fn` parameter to specify the cost function to minimise. Supported values are `'cx'` (default behaviour) and `'rz'`.
-
 ## [0.3.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.2.1...tket2-py-v0.3.0) (2024-09-04)
 
 
