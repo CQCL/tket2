@@ -369,7 +369,7 @@ impl LexicographicCostFunction<fn(&OpType) -> usize, 2> {
     pub fn rz_count() -> Self {
         Self {
             cost_fns: [
-                |op| op_matches(op, Tk2Op::RzF64) as usize,
+                |op| op_matches(op, Tk2Op::Rz) as usize,
                 |op| is_quantum(op) as usize,
             ],
         }
