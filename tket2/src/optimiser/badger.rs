@@ -518,7 +518,7 @@ mod badger_default {
         /// A sane default optimiser using the given ECC sets.
         pub fn default_with_eccs_json_file(eccs_path: impl AsRef<Path>) -> io::Result<Self> {
             let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
-            let strategy = LexicographicCostFunction::default_cx();
+            let strategy = LexicographicCostFunction::default_cx_strategy();
             Ok(BadgerOptimiser::new(rewriter, strategy))
         }
 
@@ -528,7 +528,24 @@ mod badger_default {
             rewriter_path: impl AsRef<Path>,
         ) -> Result<Self, RewriterSerialisationError> {
             let rewriter = ECCRewriter::load_binary(rewriter_path)?;
-            let strategy = LexicographicCostFunction::default_cx();
+            let strategy = LexicographicCostFunction::default_cx_strategy();
+            Ok(BadgerOptimiser::new(rewriter, strategy))
+        }
+
+        /// An optimiser minimising Rz gate count using the given ECC sets.
+        pub fn rz_opt_with_eccs_json_file(eccs_path: impl AsRef<Path>) -> io::Result<Self> {
+            let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
+            let strategy = LexicographicCostFunction::rz_count().into_greedy_strategy();
+            Ok(BadgerOptimiser::new(rewriter, strategy))
+        }
+
+        /// An optimiser minimising Rz gate count using a precompiled binary rewriter.
+        #[cfg(feature = "binary-eccs")]
+        pub fn rz_opt_with_rewriter_binary(
+            rewriter_path: impl AsRef<Path>,
+        ) -> Result<Self, RewriterSerialisationError> {
+            let rewriter = ECCRewriter::load_binary(rewriter_path)?;
+            let strategy = LexicographicCostFunction::rz_count().into_greedy_strategy();
             Ok(BadgerOptimiser::new(rewriter, strategy))
         }
     }

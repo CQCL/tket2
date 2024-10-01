@@ -16,7 +16,7 @@
 //!      not increase some coarse cost function (e.g. CX count), whilst
 //!      ordering them according to a lexicographic ordering of finer cost
 //!      functions (e.g. total gate count). See
-//!      [`LexicographicCostFunction::default_cx`]) for a default implementation.
+//!      [`LexicographicCostFunction::default_cx_strategy`]) for a default implementation.
 //!    - [`GammaStrategyCost`] ignores rewrites that increase the cost
 //!      function beyond a percentage given by a f64 parameter gamma.
 
@@ -29,7 +29,7 @@ use hugr::HugrView;
 use itertools::Itertools;
 
 use crate::circuit::cost::{is_cx, is_quantum, CircuitCost, CostDelta, LexicographicCost};
-use crate::Circuit;
+use crate::{op_matches, Circuit, Tk2Op};
 
 use super::trace::RewriteTrace;
 use super::CircuitRewrite;
@@ -345,12 +345,66 @@ impl LexicographicCostFunction<fn(&OpType) -> usize, 2> {
     /// is used to rank circuits with equal CX count.
     ///
     /// This is probably a good default for NISQ-y circuit optimisation.
-    #[inline]
+    pub fn default_cx_strategy() -> ExhaustiveGreedyStrategy<Self> {
+        Self::cx_count().into_greedy_strategy()
+    }
+
+    /// Non-increasing rewrite strategy based on CX count.
+    ///
+    /// A fine-grained cost function given by the total number of quantum gates
+    /// is used to rank circuits with equal CX count.
+    ///
+    /// This is probably a good default for NISQ-y circuit optimisation.
+    ///
+    /// Deprecated: Use `default_cx_strategy` instead.
+    // TODO: Remove this method in the next breaking release.
+    #[deprecated(since = "0.5.1", note = "Use `default_cx_strategy` instead.")]
     pub fn default_cx() -> ExhaustiveGreedyStrategy<Self> {
+        Self::default_cx_strategy()
+    }
+
+    /// Non-increasing rewrite cost function based on CX gate count.
+    ///
+    /// A fine-grained cost function given by the total number of quantum gates
+    /// is used to rank circuits with equal Rz gate count.
+    #[inline]
+    pub fn cx_count() -> Self {
         Self {
             cost_fns: [|op| is_cx(op) as usize, |op| is_quantum(op) as usize],
         }
-        .into()
+    }
+
+    // TODO: Ideally, do not count Clifford rotations in the cost function.
+    /// Non-increasing rewrite cost function based on Rz gate count.
+    ///
+    /// A fine-grained cost function given by the total number of quantum gates
+    /// is used to rank circuits with equal Rz gate count.
+    #[inline]
+    pub fn rz_count() -> Self {
+        Self {
+            cost_fns: [
+                |op| op_matches(op, Tk2Op::Rz) as usize,
+                |op| is_quantum(op) as usize,
+            ],
+        }
+    }
+
+    /// Consume the cost function and create a greedy rewrite strategy out of
+    /// it.
+    pub fn into_greedy_strategy(self) -> ExhaustiveGreedyStrategy<Self> {
+        ExhaustiveGreedyStrategy { strat_cost: self }
+    }
+
+    /// Consume the cost function and create a threshold rewrite strategy out
+    /// of it.
+    pub fn into_threshold_strategy(self) -> ExhaustiveThresholdStrategy<Self> {
+        ExhaustiveThresholdStrategy { strat_cost: self }
+    }
+}
+
+impl Default for LexicographicCostFunction<fn(&OpType) -> usize, 2> {
+    fn default() -> Self {
+        LexicographicCostFunction::cx_count()
     }
 }
 
@@ -440,7 +494,6 @@ mod tests {
         circuit::Circuit,
         rewrite::{CircuitRewrite, Subcircuit},
         utils::build_simple_circuit,
-        Tk2Op,
     };
 
     fn n_cx(n_gates: usize) -> Circuit {
@@ -512,7 +565,7 @@ mod tests {
             rw_to_empty(&circ, cx_gates[9..10].to_vec()),
         ];
 
-        let strategy = LexicographicCostFunction::default_cx();
+        let strategy = LexicographicCostFunction::cx_count().into_greedy_strategy();
         let rewritten = strategy.apply_rewrites(rws, &circ).collect_vec();
         let exp_circ_lens = HashSet::from_iter([3, 7, 9]);
         let circ_lens: HashSet<_> = rewritten.iter().map(|r| r.circ.num_operations()).collect();
@@ -557,7 +610,7 @@ mod tests {
 
     #[test]
     fn test_exhaustive_default_cx_cost() {
-        let strat = LexicographicCostFunction::default_cx();
+        let strat = LexicographicCostFunction::cx_count().into_greedy_strategy();
         let circ = n_cx(3);
         assert_eq!(strat.circuit_cost(&circ), (3, 3).into());
         let circ = build_simple_circuit(2, |circ| {
@@ -572,7 +625,7 @@ mod tests {
 
     #[test]
     fn test_exhaustive_default_cx_threshold() {
-        let strat = LexicographicCostFunction::default_cx().strat_cost;
+        let strat = LexicographicCostFunction::cx_count();
         assert!(strat.under_threshold(&(3, 0).into(), &(3, 0).into()));
         assert!(strat.under_threshold(&(3, 0).into(), &(3, 5).into()));
         assert!(!strat.under_threshold(&(3, 10).into(), &(4, 0).into()));
