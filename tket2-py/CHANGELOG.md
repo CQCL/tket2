@@ -5,32 +5,18 @@
 
 ### ⚠ BREAKING CHANGES
 
-* Made all errors `non_exhaustive`, and renamed some fields for clarity.
 * "tket2.angle" extension replaced with "tket2.rotation" extension with rotation type and simplified set of operations.
-* TryFrom implementations for extension op structs removed, use `cast`
 
 ### Features
 
 * `BadgerOptimiser.load_precompiled`, `BadgerOptimiser.compile_eccs` and `passes.badger_pass` now take an optional `cost_fn` parameter to specify the cost function to minimise. Supported values are `'cx'` (default behaviour) and `'rz'`. ([83ebfcb](https://github.com/CQCL/tket2/commit/83ebfcb9156fb5516f877155939062d11c7196d5))
 * simplify angle extension in to a half turns rotation type ([#611](https://github.com/CQCL/tket2/issues/611)) ([0723937](https://github.com/CQCL/tket2/commit/0723937a8aed69302359fbd2383a01a77adc6b36))
-* Support encoding float and sympy ops ([#618](https://github.com/CQCL/tket2/issues/618)) ([74dcbf7](https://github.com/CQCL/tket2/commit/74dcbf757c1c2ae57bf313c61296df270167ee7d))
-* **tket2-hseries:** cli extension dumping ([#584](https://github.com/CQCL/tket2/issues/584)) ([abf292f](https://github.com/CQCL/tket2/commit/abf292f82b858840eeb067394105dbc62feb3230))
 
 
 ### Bug Fixes
 
-* remove TryFrom for extension ops use `cast` ([#592](https://github.com/CQCL/tket2/issues/592)) ([5ca29af](https://github.com/CQCL/tket2/commit/5ca29af3a7cc6ce6d8b3261b342015da94f4aab0))
 * Support hugr packages, fix the notebooks ([#622](https://github.com/CQCL/tket2/issues/622)) ([1cf9dcb](https://github.com/CQCL/tket2/commit/1cf9dcb7ba80dd236916bcf86a1fa0f5459fd349))
 
-
-### Documentation
-
-* Add tket2-py module docstring ([#539](https://github.com/CQCL/tket2/issues/539)) ([8ef7a57](https://github.com/CQCL/tket2/commit/8ef7a5736294cf462b0694c235f0d10316c68f68))
-
-
-### Miscellaneous Chores
-
-* Replace thiserror with derive_more 1.0 ([#624](https://github.com/CQCL/tket2/issues/624)) ([2250ce7](https://github.com/CQCL/tket2/commit/2250ce76f3019deee1d7e1206aa7843a745fe988))
 
 ## [0.3.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.2.1...tket2-py-v0.3.0) (2024-09-04)
 
