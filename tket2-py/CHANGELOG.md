@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.3.0...tket2-py-v0.4.0) (2024-10-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* "tket2.angle" extension replaced with "tket2.rotation" extension with rotation type and simplified set of operations.
+
+### Features
+
+* `BadgerOptimiser.load_precompiled`, `BadgerOptimiser.compile_eccs` and `passes.badger_pass` now take an optional `cost_fn` parameter to specify the cost function to minimise. Supported values are `'cx'` (default behaviour) and `'rz'`. ([83ebfcb](https://github.com/CQCL/tket2/commit/83ebfcb9156fb5516f877155939062d11c7196d5))
+* simplify angle extension in to a half turns rotation type ([#611](https://github.com/CQCL/tket2/issues/611)) ([0723937](https://github.com/CQCL/tket2/commit/0723937a8aed69302359fbd2383a01a77adc6b36))
+
+
+### Bug Fixes
+
+* Support hugr packages, fix the notebooks ([#622](https://github.com/CQCL/tket2/issues/622)) ([1cf9dcb](https://github.com/CQCL/tket2/commit/1cf9dcb7ba80dd236916bcf86a1fa0f5459fd349))
+
+
 ## [0.3.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.2.1...tket2-py-v0.3.0) (2024-09-04)
 
 
