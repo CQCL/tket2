@@ -19,6 +19,8 @@ env:
   CI: true # insta snapshots behave differently on ci
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: "sccache"
+  # Pinned version for the uv package manager
+  UV_VERSION: "0.4.18"
 
 jobs:
   # Check if changes were made to the relevant files.
@@ -85,7 +87,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v3
         with:
-          version: "0.4.18"
+          version: ${{ env.UV_VERSION }}
           enable-cache: true
       - name: Install Python 3.12
         run: uv python install 3.12
@@ -227,7 +229,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v3
         with:
-          version: "0.4.18"
+          version: ${{ env.UV_VERSION }}
           enable-cache: true
       - name: Install Python 3.10
         run: uv python install 3.10
