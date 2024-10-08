@@ -21,7 +21,7 @@ use pest_derive::Parser;
 //       Either by implementing a parser, or calling out to python.
 //       For now, we just create a [`SympyOp`].
 #[derive(Debug, Clone, PartialEq)]
-pub(in crate::serialize::pytket) enum PytketParam<'a> {
+pub enum PytketParam<'a> {
     /// A constant value that can be loaded directly.
     Constant(f64),
     /// A variable that should be routed as an input.
@@ -44,7 +44,7 @@ pub(in crate::serialize::pytket) enum PytketParam<'a> {
 /// Angle parameters in TKET1 are encoded as a number of half-turns,
 /// whereas HUGR uses radians.
 #[inline]
-pub(in crate::serialize::pytket) fn parse_pytket_param(param: &str) -> PytketParam<'_> {
+pub fn parse_pytket_param(param: &str) -> PytketParam<'_> {
     let Ok(mut parsed) = ParamParser::parse(Rule::parameter, param) else {
         // The parameter could not be parsed, so we just return it as an opaque sympy expression.
         return PytketParam::Sympy(param);

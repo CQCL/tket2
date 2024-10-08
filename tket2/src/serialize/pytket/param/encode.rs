@@ -14,10 +14,7 @@ use crate::ops::match_symb_const_op;
 /// The folded op must have a single string output.
 ///
 /// Returns `None` if the operation cannot be folded.
-pub(in crate::serialize::pytket) fn fold_param_op(
-    optype: &OpType,
-    inputs: &[&str],
-) -> Option<String> {
+pub fn fold_param_op(optype: &OpType, inputs: &[&str]) -> Option<String> {
     let param = match optype {
         OpType::Const(const_op) => {
             // New constant, register it if it can be interpreted as a parameter.
