@@ -579,8 +579,6 @@ impl ParameterTracker {
         let input_count = if let Some(signature) = optype.dataflow_signature() {
             // Only consider commands where all inputs and some outputs are
             // parameters that we can track.
-            //
-            // TODO: We should track Option<T> parameters too, `RotationOp::from_halfturns` returns options.
             const TRACKED_PARAMS: [Type; 2] = [ROTATION_TYPE, FLOAT64_TYPE];
             let all_inputs = signature
                 .input()
@@ -691,7 +689,9 @@ impl ParameterTracker {
             // Note that the tracked parameter strings are always written in half-turns,
             // so the conversion here is a no-op.
             RotationOp::to_halfturns => inputs[0].clone(),
-            RotationOp::from_halfturns => inputs[0].clone(),
+            RotationOp::from_halfturns_unchecked => inputs[0].clone(),
+            // The checked conversion returns an option, which we do not support.
+            RotationOp::from_halfturns => return None,
         };
         Some(s)
     }
