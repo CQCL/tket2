@@ -6,7 +6,8 @@ use hugr::builder::{Container, Dataflow, DataflowHugr, FunctionBuilder};
 use hugr::extension::prelude::{BOOL_T, QB_T};
 
 use hugr::ops::handle::NodeHandle;
-use hugr::ops::OpType;
+use hugr::ops::{OpType, Value};
+use hugr::std_extensions::arithmetic::float_types::ConstF64;
 use hugr::types::Signature;
 use hugr::{Hugr, Wire};
 
@@ -16,11 +17,13 @@ use tket_json_rs::circuit_json;
 use tket_json_rs::circuit_json::SerialCircuit;
 
 use super::op::Tk1Op;
+use super::param::decode::{parse_pytket_param, PytketParam};
 use super::{
-    try_param_to_constant, OpConvertError, RegisterHash, TK1ConvertError,
-    METADATA_B_OUTPUT_REGISTERS, METADATA_B_REGISTERS, METADATA_OPGROUP, METADATA_PHASE,
-    METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
+    OpConvertError, RegisterHash, TK1ConvertError, METADATA_B_OUTPUT_REGISTERS,
+    METADATA_B_REGISTERS, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS,
+    METADATA_Q_REGISTERS,
 };
+use crate::extension::rotation::RotationOp;
 use crate::extension::{REGISTRY, TKET1_EXTENSION_ID};
 use crate::symbolic_constant_op;
 
@@ -256,17 +259,53 @@ impl Tk1Decoder {
     ///
     /// If the parameter is a constant, a constant definition is added to the Hugr.
     ///
-    /// TODO: If the parameter is a variable, returns the corresponding wire from the input.
+    /// The returned wires always have float type.
+    ///
+    /// TODO: Keep both float and rotation parameter wires, to avoid unnecessary conversions.
     fn create_param_wire(&mut self, param: String) -> Wire {
-        match try_param_to_constant(&param) {
-            Some(const_op) => self.hugr.add_load_const(const_op),
-            None => {
-                // store string in custom op.
-                let symb_op = symbolic_constant_op(param);
-                let o = self.hugr.add_dataflow_op(symb_op, []).unwrap();
-                o.out_wire(0)
+        fn process(hugr: &mut FunctionBuilder<Hugr>, parsed: PytketParam, param: &str) -> Wire {
+            match parsed {
+                PytketParam::Constant(half_turns) => {
+                    let value: Value = ConstF64::new(half_turns).into();
+                    hugr.add_load_const(value)
+                }
+                PytketParam::Sympy(expr) => {
+                    // store string in custom op.
+                    let symb_op = symbolic_constant_op(expr);
+                    let rotation = hugr.add_dataflow_op(symb_op, []).unwrap().out_wire(0);
+                    hugr.add_dataflow_op(RotationOp::to_halfturns, [rotation])
+                        .unwrap()
+                        .out_wire(0)
+                }
+                PytketParam::InputVariable { name } => {
+                    // TODO: Special case the name "pi", and insert a `ConstRotation::PI` instead.
+
+                    // TODO: We need to add a `FunctionBuilder::add_input` function on the hugr side.
+                    //       Here we just add an opaque sympy box instead.
+                    process(hugr, PytketParam::Sympy(name), param)
+                }
+                PytketParam::Operation { op, args } => {
+                    let input_wires = args
+                        .into_iter()
+                        .map(|arg| process(hugr, arg, param))
+                        .collect_vec();
+                    let res = hugr.add_dataflow_op(op, input_wires).unwrap_or_else(|e| {
+                        panic!("Error while decoding pytket operation parameter \"{param}\". {e}",)
+                    });
+                    // TODO: https://github.com/CQCL/hugr/pull/1560
+                    assert_eq!(res.outputs().count(), 1, "An operation decoded from the pytket op parameter \"{param}\" had {} outputs", res.outputs().count());
+                    res.out_wire(0)
+                }
             }
         }
+
+        let parsed = parse_pytket_param(&param);
+        let float_wire = process(&mut self.hugr, parsed, &param);
+        // See TODO about float vs rotation wires in the fn docs.
+        self.hugr
+            .add_dataflow_op(RotationOp::from_halfturns_unchecked, [float_wire])
+            .unwrap()
+            .out_wire(0)
     }
 
     /// Return the [`Wire`] associated with a register.

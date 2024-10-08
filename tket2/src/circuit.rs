@@ -717,8 +717,6 @@ mod tests {
         assert_eq!(circ.circuit_signature().input_count(), qubits + bits);
         assert_eq!(circ.circuit_signature().output_count(), qubits + bits);
         assert_eq!(circ.qubit_count(), qubits);
-        assert_eq!(circ.num_operations(), 3);
-        assert_eq!(circ.operations().count(), 3);
 
         assert_eq!(circ.units().count(), qubits + bits);
         assert_eq!(circ.nonlinear_units().count(), bits);

@@ -1,0 +1,34 @@
+//! A parser grammar for pytket operation parameters
+//!
+//! The grammar is a subset of sympy expressions,
+//! unrecognised expressions will be boxed opaquely.
+
+// operation and variable identifiers
+ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" )* }
+variable = _{ ident }
+
+// Explicit numeric constants.
+num = @{
+    "-"?
+    ~ ("0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*)
+    ~ ("." ~ ASCII_DIGIT*)?
+    ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+}
+
+// Operation can either be infix (e.g. `2 + 2`),
+infix_operator = _{ add | subtract | multiply | divide | power }
+    add       = { "+" }
+    subtract  = { "-" }
+    multiply  = { "*" }
+    divide    = { "/" }
+    power     = { "**" }
+// or function calls like (`max(2,4)`)
+function_call = { ident ~ "(" ~ expr ~ ("," ~ expr)* ~ ","? ~ ")" }
+
+
+expr = { term ~ (infix_operator ~ term)* }
+term = _{ "(" ~ expr ~ ")" | num | function_call | variable }
+
+parameter = _{ SOI ~ expr ~ EOI }
+
+WHITESPACE = _{ " " | "\t" }

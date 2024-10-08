@@ -68,6 +68,8 @@ chrono = { workspace = true }
 bytemuck = { workspace = true }
 crossbeam-channel = { workspace = true }
 tracing = { workspace = true }
+pest = { workspace = true }
+pest_derive = { workspace = true }
 zstd = { workspace = true, optional = true }
 # Required to acces the `Package` type.
 # Remove once https://github.com/CQCL/hugr/issues/1530 is fixed.
