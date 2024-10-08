@@ -1,4 +1,6 @@
-//! Definitions for decoding parameter expressions from pytket operations
+//! Definitions for decoding parameter expressions from pytket operations.
+//!
+//! This is based on the `pest` grammar defined in `param.pest`.
 
 use hugr::ops::OpType;
 
