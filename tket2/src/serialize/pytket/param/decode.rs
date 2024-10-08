@@ -112,6 +112,10 @@ fn parse_term(pair: Pair<'_, Rule>) -> PytketParam<'_> {
     match pair.as_rule() {
         Rule::expr => parse_infix_ops(pair.into_inner()),
         Rule::num => parse_number(pair),
+        Rule::unary_minus => PytketParam::Operation {
+            op: FloatOps::fneg.into(),
+            args: vec![parse_term(pair.into_inner().next().unwrap())],
+        },
         Rule::function_call => parse_function_call(pair),
         Rule::ident => PytketParam::InputVariable {
             name: pair.as_str(),
@@ -182,6 +186,10 @@ mod test {
     #[case::max("max(42, f64)", PytketParam::Operation {
         op: FloatOps::fmax.into(),
         args: vec![PytketParam::Constant(42.), PytketParam::InputVariable{name: "f64"}]
+    })]
+    #[case::minus("-f64", PytketParam::Operation {
+        op: FloatOps::fneg.into(),
+        args: vec![PytketParam::InputVariable{name: "f64"}]
     })]
     #[case::unknown("unknown_op(42, f64)", PytketParam::Sympy("unknown_op(42, f64)"))]
     #[case::nested("max(42, unknown_op(37))", PytketParam::Operation {

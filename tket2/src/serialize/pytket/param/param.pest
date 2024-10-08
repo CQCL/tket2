@@ -15,19 +15,21 @@ num = @{
     ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)?
 }
 
-// Operation can either be infix (e.g. `2 + 2`),
+/// Infix operations (e.g. `2 + 2`),
 infix_operator = _{ add | subtract | multiply | divide | power }
     add       = { "+" }
     subtract  = { "-" }
     multiply  = { "*" }
     divide    = { "/" }
     power     = { "**" }
-// or function calls like (`max(2,4)`)
+/// Function calls like (`max(2,4)`)
 function_call = { ident ~ "(" ~ expr ~ ("," ~ expr)* ~ ","? ~ ")" }
+/// Unary negation, with a special identifier
+unary_minus = { "-" ~ term }
 
-
+/// Expressions are sequences of terms and infix operators
 expr = { term ~ (infix_operator ~ term)* }
-term = _{ "(" ~ expr ~ ")" | num | function_call | variable }
+term = _{ "(" ~ expr ~ ")" | num | unary_minus | function_call | variable }
 
 parameter = _{ SOI ~ expr ~ EOI }
 
