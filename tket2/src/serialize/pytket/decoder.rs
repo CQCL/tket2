@@ -24,7 +24,7 @@ use super::{
     METADATA_B_REGISTERS, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS,
     METADATA_Q_REGISTERS,
 };
-use crate::extension::rotation::{ConstRotation, RotationOp};
+use crate::extension::rotation::RotationOp;
 use crate::extension::{REGISTRY, TKET1_EXTENSION_ID};
 use crate::symbolic_constant_op;
 
@@ -282,13 +282,15 @@ impl Tk1Decoder {
                 PytketParam::InputVariable { name } => {
                     // Special case for the name "pi", inserts a `ConstRotation::PI` instead.
                     if name == "pi" {
-                        let value: Value = ConstRotation::PI.into();
+                        let value: Value = ConstF64::new(std::f64::consts::PI).into();
                         let wire = hugr.add_load_const(value);
-                        return LoadedParameter::rotation(wire);
+                        return LoadedParameter::float(wire);
                     }
 
                     // TODO: We need to add a `FunctionBuilder::add_input` function on the hugr side.
                     //       Here we just add an opaque sympy box instead.
+                    //       https://github.com/CQCL/hugr/issues/1562
+                    //       https://github.com/CQCL/tket2/issues/628
                     process(hugr, PytketParam::Sympy(name), param)
                 }
                 PytketParam::Operation { op, args } => {
