@@ -11,6 +11,7 @@ use hugr::std_extensions::arithmetic::float_types::ConstF64;
 use hugr::types::Signature;
 use hugr::{Hugr, Wire};
 
+use derive_more::Display;
 use itertools::{EitherOrBoth, Itertools};
 use serde_json::json;
 use tket_json_rs::circuit_json;
@@ -23,7 +24,7 @@ use super::{
     METADATA_B_REGISTERS, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS,
     METADATA_Q_REGISTERS,
 };
-use crate::extension::rotation::RotationOp;
+use crate::extension::rotation::{ConstRotation, RotationOp};
 use crate::extension::{REGISTRY, TKET1_EXTENSION_ID};
 use crate::symbolic_constant_op;
 
@@ -249,7 +250,7 @@ impl Tk1Decoder {
             tk1op
                 .param_ports()
                 .zip(params)
-                .map(|(_port, param)| self.create_param_wire(param)),
+                .map(|(_port, param)| self.load_parameter(param)),
         );
 
         Ok((inputs, outputs))
@@ -260,52 +261,57 @@ impl Tk1Decoder {
     /// If the parameter is a constant, a constant definition is added to the Hugr.
     ///
     /// The returned wires always have float type.
-    ///
-    /// TODO: Keep both float and rotation parameter wires, to avoid unnecessary conversions.
-    fn create_param_wire(&mut self, param: String) -> Wire {
-        fn process(hugr: &mut FunctionBuilder<Hugr>, parsed: PytketParam, param: &str) -> Wire {
+    fn load_parameter(&mut self, param: String) -> Wire {
+        fn process(
+            hugr: &mut FunctionBuilder<Hugr>,
+            parsed: PytketParam,
+            param: &str,
+        ) -> LoadedParameter {
             match parsed {
                 PytketParam::Constant(half_turns) => {
                     let value: Value = ConstF64::new(half_turns).into();
-                    hugr.add_load_const(value)
+                    let wire = hugr.add_load_const(value);
+                    LoadedParameter::float(wire)
                 }
                 PytketParam::Sympy(expr) => {
                     // store string in custom op.
                     let symb_op = symbolic_constant_op(expr);
-                    let rotation = hugr.add_dataflow_op(symb_op, []).unwrap().out_wire(0);
-                    hugr.add_dataflow_op(RotationOp::to_halfturns, [rotation])
-                        .unwrap()
-                        .out_wire(0)
+                    let wire = hugr.add_dataflow_op(symb_op, []).unwrap().out_wire(0);
+                    LoadedParameter::rotation(wire)
                 }
                 PytketParam::InputVariable { name } => {
-                    // TODO: Special case the name "pi", and insert a `ConstRotation::PI` instead.
+                    // Special case for the name "pi", inserts a `ConstRotation::PI` instead.
+                    if name == "pi" {
+                        let value: Value = ConstRotation::PI.into();
+                        let wire = hugr.add_load_const(value);
+                        return LoadedParameter::rotation(wire);
+                    }
 
                     // TODO: We need to add a `FunctionBuilder::add_input` function on the hugr side.
                     //       Here we just add an opaque sympy box instead.
                     process(hugr, PytketParam::Sympy(name), param)
                 }
                 PytketParam::Operation { op, args } => {
+                    // We assume all operations take float inputs.
                     let input_wires = args
                         .into_iter()
-                        .map(|arg| process(hugr, arg, param))
+                        .map(|arg| process(hugr, arg, param).as_float(hugr).wire)
                         .collect_vec();
                     let res = hugr.add_dataflow_op(op, input_wires).unwrap_or_else(|e| {
                         panic!("Error while decoding pytket operation parameter \"{param}\". {e}",)
                     });
-                    // TODO: https://github.com/CQCL/hugr/pull/1560
+                    // TODO: Replace with `res.num_value_outputs`
+                    // https://github.com/CQCL/hugr/pull/1560
                     assert_eq!(res.outputs().count(), 1, "An operation decoded from the pytket op parameter \"{param}\" had {} outputs", res.outputs().count());
-                    res.out_wire(0)
+                    LoadedParameter::float(res.out_wire(0))
                 }
             }
         }
 
         let parsed = parse_pytket_param(&param);
-        let float_wire = process(&mut self.hugr, parsed, &param);
-        // See TODO about float vs rotation wires in the fn docs.
-        self.hugr
-            .add_dataflow_op(RotationOp::from_halfturns_unchecked, [float_wire])
-            .unwrap()
-            .out_wire(0)
+        process(&mut self.hugr, parsed, &param)
+            .as_rotation(&mut self.hugr)
+            .wire
     }
 
     /// Return the [`Wire`] associated with a register.
@@ -332,5 +338,83 @@ fn check_register(register: &circuit_json::Register) -> Result<(), TK1ConvertErr
         })
     } else {
         Ok(())
+    }
+}
+
+/// The type of a loaded parameter in the Hugr.
+#[derive(Debug, Display, Clone, Copy, Hash, PartialEq, Eq)]
+enum LoadedParameterType {
+    Float,
+    Rotation,
+}
+
+/// A loaded parameter in the Hugr.
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+struct LoadedParameter {
+    /// The type of the parameter.
+    pub typ: LoadedParameterType,
+    /// The wire where the parameter is loaded.
+    pub wire: Wire,
+}
+
+impl LoadedParameter {
+    /// Returns a `LoadedParameter` for a float param.
+    pub fn float(wire: Wire) -> LoadedParameter {
+        LoadedParameter {
+            typ: LoadedParameterType::Float,
+            wire,
+        }
+    }
+
+    /// Returns a `LoadedParameter` for a rotation param.
+    pub fn rotation(wire: Wire) -> LoadedParameter {
+        LoadedParameter {
+            typ: LoadedParameterType::Rotation,
+            wire,
+        }
+    }
+
+    /// Convert the parameter into a given type, if necessary.
+    ///
+    /// Adds the necessary operations to the Hugr and returns a new wire.
+    pub fn as_type(
+        &self,
+        typ: LoadedParameterType,
+        hugr: &mut FunctionBuilder<Hugr>,
+    ) -> LoadedParameter {
+        if self.typ == typ {
+            return *self;
+        }
+        match (self.typ, typ) {
+            (LoadedParameterType::Float, LoadedParameterType::Rotation) => {
+                let wire = hugr
+                    .add_dataflow_op(RotationOp::from_halfturns_unchecked, [self.wire])
+                    .unwrap()
+                    .out_wire(0);
+                LoadedParameter::rotation(wire)
+            }
+            (LoadedParameterType::Rotation, LoadedParameterType::Float) => {
+                let wire = hugr
+                    .add_dataflow_op(RotationOp::to_halfturns, [self.wire])
+                    .unwrap()
+                    .out_wire(0);
+                LoadedParameter::float(wire)
+            }
+            _ => unreachable!("cannot convert {} to {}", self.typ, typ),
+        }
+    }
+
+    /// Convert the parameter into a float, if necessary.
+    ///
+    /// Adds the necessary operations to the Hugr and returns a new wire.
+    pub fn as_float(&self, hugr: &mut FunctionBuilder<Hugr>) -> LoadedParameter {
+        self.as_type(LoadedParameterType::Float, hugr)
+    }
+
+    /// Convert the parameter into a rotation, if necessary.
+    ///
+    /// Adds the necessary operations to the Hugr and returns a new wire.
+    pub fn as_rotation(&self, hugr: &mut FunctionBuilder<Hugr>) -> LoadedParameter {
+        self.as_type(LoadedParameterType::Rotation, hugr)
     }
 }

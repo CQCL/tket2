@@ -17,10 +17,6 @@ use pest_derive::Parser;
 /// unrecognized sympy expression.
 ///
 /// Return type of [`parse_pytket_param`].
-//
-// TODO: We have to decide how to parse non-trivial sympy expressions.
-//       Either by implementing a parser, or calling out to python.
-//       For now, we just create a [`SympyOp`].
 #[derive(Debug, Display, Clone, PartialEq)]
 pub enum PytketParam<'a> {
     /// A constant value that can be loaded directly.

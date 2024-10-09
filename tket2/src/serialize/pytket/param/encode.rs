@@ -62,6 +62,17 @@ pub fn fold_param_op(optype: &OpType, inputs: &[&str]) -> Option<String> {
 #[inline]
 fn try_constant_to_param(val: &Value) -> Option<String> {
     if let Some(const_angle) = val.get_custom_value::<ConstRotation>() {
+        // Special case for pi rotations
+        if const_angle == &ConstRotation::PI {
+            return Some("pi".to_string());
+        } else if const_angle == &ConstRotation::PI_2 {
+            return Some("pi/2".to_string());
+        } else if const_angle == &ConstRotation::PI_4 {
+            return Some("pi/4".to_string());
+        } else if const_angle == &ConstRotation::TAU {
+            return Some("2pi".to_string());
+        }
+
         let half_turns = const_angle.half_turns();
         Some(half_turns.to_string())
     } else if let Some(const_float) = val.get_custom_value::<ConstF64>() {
