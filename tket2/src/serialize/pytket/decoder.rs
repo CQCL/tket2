@@ -275,7 +275,7 @@ impl Tk1Decoder {
                 }
                 PytketParam::Sympy(expr) => {
                     // store string in custom op.
-                    let symb_op = symbolic_constant_op(expr);
+                    let symb_op = symbolic_constant_op(expr.to_string());
                     let wire = hugr.add_dataflow_op(symb_op, []).unwrap().out_wire(0);
                     LoadedParameter::rotation(wire)
                 }

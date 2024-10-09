@@ -173,8 +173,8 @@ impl Tk2Op {
 }
 
 /// Initialize a new custom symbolic expression constant op from a string.
-pub fn symbolic_constant_op(arg: &str) -> OpType {
-    SympyOpDef.with_expr(arg.to_string()).into()
+pub fn symbolic_constant_op(arg: String) -> OpType {
+    SympyOpDef.with_expr(arg).into()
 }
 
 /// match against a symbolic constant
