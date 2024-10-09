@@ -385,9 +385,6 @@ impl LoadedParameter {
         typ: LoadedParameterType,
         hugr: &mut FunctionBuilder<Hugr>,
     ) -> LoadedParameter {
-        if self.typ == typ {
-            return *self;
-        }
         match (self.typ, typ) {
             (LoadedParameterType::Float, LoadedParameterType::Rotation) => {
                 let wire = hugr
@@ -403,7 +400,10 @@ impl LoadedParameter {
                     .out_wire(0);
                 LoadedParameter::float(wire)
             }
-            _ => unreachable!("cannot convert {} to {}", self.typ, typ),
+            _ => {
+                debug_assert_eq!(self.typ, typ, "cannot convert {} to {}", self.typ, typ);
+                *self
+            }
         }
     }
 
