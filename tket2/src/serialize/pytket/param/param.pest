@@ -23,12 +23,12 @@ num = @{
 /// Infix operations (e.g. `2 + 2`),
 ///
 /// The rust parser defines the operator precedence between these.
-infix_operator = _{ add | subtract | multiply | divide | power }
+infix_operator = _{ add | subtract | power | multiply | divide }
     add       = { "+" }
     subtract  = { "-" }
+    power     = { "**" }
     multiply  = { "*" }
     divide    = { "/" }
-    power     = { "**" }
 
 /// Function calls like (`max(2,4)`)
 function_call = { ident ~ ( "()" | "(" ~ expr ~ ("," ~ expr)* ~ ","? ~ ")") }

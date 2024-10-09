@@ -206,7 +206,7 @@ mod test {
         op: FloatOps::fmax.into(),
         args: vec![PytketParam::Constant(42.), PytketParam::Sympy("unknown_op(37)")]
     })]
-    #[case::precedence("5-2/3x+4", PytketParam::Operation {
+    #[case::precedence("5-2/3x+4**6", PytketParam::Operation {
         op: FloatOps::fadd.into(),
         args: vec![
             PytketParam::Operation {
@@ -222,7 +222,23 @@ mod test {
                     ]}
                 ]
             },
-            PytketParam::Constant(4.)
+            PytketParam::Operation { op: FloatOps::fpow.into(), args: vec![
+                PytketParam::Constant(4.),
+                PytketParam::Constant(6.),
+            ]}
+        ]
+    })]
+    #[case::associativity("1-2-3+4", PytketParam::Operation {
+        op: FloatOps::fadd.into(),
+        args: vec![
+            PytketParam::Operation { op: FloatOps::fsub.into(), args: vec![
+                PytketParam::Operation { op: FloatOps::fsub.into(), args: vec![
+                    PytketParam::Constant(1.),
+                    PytketParam::Constant(2.),
+                ]},
+                PytketParam::Constant(3.),
+            ]},
+            PytketParam::Constant(4.),
         ]
     })]
     fn parse_param(#[case] param: &str, #[case] expected: PytketParam) {
