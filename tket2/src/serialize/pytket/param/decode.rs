@@ -40,10 +40,7 @@ pub enum PytketParam<'a> {
     },
 }
 
-/// Parse a TKET1 parameter, add
-///
-/// Angle parameters in TKET1 are encoded as a number of half-turns,
-/// whereas HUGR uses radians.
+/// Parse a TKET1 operation parameter, and return an AST representing the expression.
 #[inline]
 pub fn parse_pytket_param(param: &str) -> PytketParam<'_> {
     let Ok(mut parsed) = ParamParser::parse(Rule::parameter, param) else {
