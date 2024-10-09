@@ -25,7 +25,7 @@ infix_operator = _{ add | subtract | multiply | divide | power }
     divide    = { "/" }
     power     = { "**" }
 /// Function calls like (`max(2,4)`)
-function_call = { ident ~ "(" ~ expr ~ ("," ~ expr)* ~ ","? ~ ")" }
+function_call = { ident ~ ( "()" | "(" ~ expr ~ ("," ~ expr)* ~ ","? ~ ")") }
 /// Unary negation, with a special identifier
 unary_minus = { "-" ~ term }
 /// Implicit multiplication lets us write expressions like `2x`.

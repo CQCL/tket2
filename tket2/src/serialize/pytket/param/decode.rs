@@ -224,6 +224,7 @@ mod test {
         args: vec![PytketParam::InputVariable{name: "f64"}]
     })]
     #[case::unknown("unknown_op(42, f64)", PytketParam::Sympy("unknown_op(42, f64)"))]
+    #[case::unknown_no_params("unknown_op()", PytketParam::Sympy("unknown_op()"))]
     #[case::nested("max(42, unknown_op(37))", PytketParam::Operation {
         op: FloatOps::fmax.into(),
         args: vec![PytketParam::Constant(42.), PytketParam::Sympy("unknown_op(37)")]
