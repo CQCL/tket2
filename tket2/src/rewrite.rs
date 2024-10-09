@@ -13,6 +13,7 @@ use derive_more::{From, Into};
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::views::sibling_subgraph::{InvalidReplacement, InvalidSubgraph};
 use hugr::hugr::views::ExtractHugr;
+use hugr::ops::OpType;
 use hugr::types::Signature;
 use hugr::{
     hugr::{views::SiblingSubgraph, Rewrite, SimpleReplacementError},
@@ -131,7 +132,10 @@ impl CircuitRewrite {
 
     /// Apply the rewrite rule to a circuit.
     #[inline]
-    pub fn apply(self, circ: &mut Circuit<impl HugrMut>) -> Result<(), SimpleReplacementError> {
+    pub fn apply(
+        self,
+        circ: &mut Circuit<impl HugrMut>,
+    ) -> Result<Vec<(Node, OpType)>, SimpleReplacementError> {
         circ.add_rewrite_trace(&self);
         self.0.apply(circ.hugr_mut())
     }
@@ -141,7 +145,7 @@ impl CircuitRewrite {
     pub fn apply_notrace(
         self,
         circ: &mut Circuit<impl HugrMut>,
-    ) -> Result<(), SimpleReplacementError> {
+    ) -> Result<Vec<(Node, OpType)>, SimpleReplacementError> {
         self.0.apply(circ.hugr_mut())
     }
 }
