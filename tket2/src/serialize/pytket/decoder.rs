@@ -349,6 +349,9 @@ enum LoadedParameterType {
 }
 
 /// A loaded parameter in the Hugr.
+///
+/// Tracking the type of the wire lets us delay conversion between the types
+/// until they are actually needed.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 struct LoadedParameter {
     /// The type of the parameter.

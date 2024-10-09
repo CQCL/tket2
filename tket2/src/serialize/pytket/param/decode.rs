@@ -54,13 +54,6 @@ pub fn parse_pytket_param(param: &str) -> PytketParam<'_> {
         .next()
         .expect("The `parameter` rule can only be matched once.");
 
-    assert_eq!(
-        parsed.as_rule(),
-        Rule::expr,
-        "`parameter` does not contain rule {:?}",
-        parsed.as_rule()
-    );
-
     parse_infix_ops(parsed.into_inner())
 }
 
