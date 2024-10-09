@@ -143,29 +143,20 @@ fn parse_function_call(pair: Pair<'_, Rule>) -> PytketParam<'_> {
         .next()
         .expect("Function call must have a name")
         .as_str();
-    let Some(op) = get_optype(name) else {
+    let op = match name {
+        "max" => FloatOps::fmax.into(),
+        "min" => FloatOps::fmin.into(),
+        "abs" => FloatOps::fabs.into(),
+        "floor" => FloatOps::ffloor.into(),
+        "ceil" => FloatOps::fceil.into(),
+        "round" => FloatOps::fround.into(),
         // Unrecognized function name.
         // Treat it as an opaque sympy expression.
-        return PytketParam::Sympy(pair_str);
+        _ => return PytketParam::Sympy(pair_str),
     };
 
     let args = args.map(|arg| parse_term(arg)).collect::<Vec<_>>();
     PytketParam::Operation { op, args }
-}
-
-/// Returns the optype given a function name.
-///
-/// If the function name is not recognized, returns `None`.
-fn get_optype(name: &str) -> Option<OpType> {
-    match name {
-        "max" => Some(FloatOps::fmax.into()),
-        "min" => Some(FloatOps::fmin.into()),
-        "abs" => Some(FloatOps::fabs.into()),
-        "floor" => Some(FloatOps::ffloor.into()),
-        "ceil" => Some(FloatOps::fceil.into()),
-        "round" => Some(FloatOps::fround.into()),
-        _ => None,
-    }
 }
 
 #[cfg(test)]
