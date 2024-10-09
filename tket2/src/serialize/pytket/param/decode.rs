@@ -2,9 +2,10 @@
 //!
 //! This is based on the `pest` grammar defined in `param.pest`.
 
-use hugr::ops::OpType;
-
+use derive_more::Display;
+use hugr::ops::{NamedOp, OpType};
 use hugr::std_extensions::arithmetic::float_ops::FloatOps;
+use itertools::Itertools;
 use pest::iterators::{Pair, Pairs};
 use pest::pratt_parser::PrattParser;
 use pest::Parser;
@@ -20,19 +21,23 @@ use pest_derive::Parser;
 // TODO: We have to decide how to parse non-trivial sympy expressions.
 //       Either by implementing a parser, or calling out to python.
 //       For now, we just create a [`SympyOp`].
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Display, Clone, PartialEq)]
 pub enum PytketParam<'a> {
     /// A constant value that can be loaded directly.
+    #[display("{_0}")]
     Constant(f64),
     /// A variable that should be routed as an input.
+    #[display("\"{name}\"")]
     InputVariable {
         /// The variable name.
         name: &'a str,
     },
     /// Unrecognized sympy expression.
     /// Will be emitted as a [`SympyOp`].
+    #[display("Sympy(\"{_0}\")")]
     Sympy(&'a str),
     /// An operation on some nested expressions.
+    #[display("{}({})", op.name(), args.iter().map(|a| a.to_string()).join(", "))]
     Operation {
         op: OpType,
         args: Vec<PytketParam<'a>>,
@@ -113,6 +118,15 @@ fn parse_infix_ops(pairs: Pairs<'_, Rule>) -> PytketParam<'_> {
 fn parse_term(pair: Pair<'_, Rule>) -> PytketParam<'_> {
     match pair.as_rule() {
         Rule::expr => parse_infix_ops(pair.into_inner()),
+        Rule::implicit_multiply => {
+            let mut pairs = pair.into_inner();
+            let lhs = parse_term(pairs.next().unwrap());
+            let rhs = parse_term(pairs.next().unwrap());
+            PytketParam::Operation {
+                op: FloatOps::fmul.into(),
+                args: vec![lhs, rhs],
+            }
+        }
         Rule::num => parse_number(pair),
         Rule::unary_minus => PytketParam::Operation {
             op: FloatOps::fneg.into(),
@@ -185,6 +199,22 @@ mod test {
         op: FloatOps::fadd.into(),
         args: vec![PytketParam::Constant(42.), PytketParam::InputVariable{name: "f64"}]
     })]
+    #[case::sub("42 - 2", PytketParam::Operation {
+        op: FloatOps::fsub.into(),
+        args: vec![PytketParam::Constant(42.), PytketParam::Constant(2.)]
+    })]
+    #[case::product_implicit("42 f64", PytketParam::Operation {
+        op: FloatOps::fmul.into(),
+        args: vec![PytketParam::Constant(42.), PytketParam::InputVariable{name: "f64"}]
+    })]
+    #[case::product_implicit2("42f64", PytketParam::Operation {
+        op: FloatOps::fmul.into(),
+        args: vec![PytketParam::Constant(42.), PytketParam::InputVariable{name: "f64"}]
+    })]
+    #[case::product_implicit3("42 e4", PytketParam::Operation {
+        op: FloatOps::fmul.into(),
+        args: vec![PytketParam::Constant(42.), PytketParam::InputVariable{name: "e4"}]
+    })]
     #[case::max("max(42, f64)", PytketParam::Operation {
         op: FloatOps::fmax.into(),
         args: vec![PytketParam::Constant(42.), PytketParam::InputVariable{name: "f64"}]
@@ -198,8 +228,29 @@ mod test {
         op: FloatOps::fmax.into(),
         args: vec![PytketParam::Constant(42.), PytketParam::Sympy("unknown_op(37)")]
     })]
+    #[case::precedence("5-2/3x+4", PytketParam::Operation {
+        op: FloatOps::fadd.into(),
+        args: vec![
+            PytketParam::Operation {
+                op: FloatOps::fsub.into(),
+                args: vec![
+                    PytketParam::Constant(5.),
+                    PytketParam::Operation { op: FloatOps::fdiv.into(), args: vec![
+                        PytketParam::Constant(2.),
+                        PytketParam::Operation { op: FloatOps::fmul.into(), args: vec![
+                            PytketParam::Constant(3.),
+                            PytketParam::InputVariable{name: "x"},
+                        ]}
+                    ]}
+                ]
+            },
+            PytketParam::Constant(4.)
+        ]
+    })]
     fn parse_param(#[case] param: &str, #[case] expected: PytketParam) {
         let parsed = parse_pytket_param(param);
-        assert_eq!(parsed, expected)
+        if parsed != expected {
+            panic!("Incorrect parameter parsing\n\texpression: \"{param}\"\n\tparsed: {parsed}\n\texpected: {expected}");
+        }
     }
 }
