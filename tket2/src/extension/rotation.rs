@@ -1,7 +1,7 @@
 use hugr::builder::{BuildError, Dataflow};
 use hugr::extension::simple_op::{MakeOpDef, MakeRegisteredOp};
 use hugr::extension::{prelude::option_type, ExtensionId, ExtensionSet, Version};
-use hugr::ops::constant::{downcast_equal_consts, CustomConst};
+use hugr::ops::constant::{downcast_equal_consts, CustomConst, TryHash};
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::{type_row, Wire};
 use hugr::{
@@ -86,6 +86,7 @@ impl ConstRotation {
         self.half_turns
     }
 }
+impl TryHash for ConstRotation {}
 
 #[typetag::serde]
 impl CustomConst for ConstRotation {
