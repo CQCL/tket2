@@ -3,8 +3,8 @@
 mod decoder;
 mod encoder;
 mod op;
+mod param;
 
-use hugr::std_extensions::arithmetic::float_types::ConstF64;
 use hugr::types::Type;
 
 use hugr::Node;
@@ -20,14 +20,13 @@ use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::{fs, io};
 
-use hugr::ops::{NamedOp, OpType, Value};
+use hugr::ops::{NamedOp, OpType};
 
 use derive_more::{Display, Error, From};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::optype::OpType as SerialOpType;
 
 use crate::circuit::Circuit;
-use crate::extension::rotation::ConstRotation;
 
 use self::decoder::Tk1Decoder;
 use self::encoder::Tk1Encoder;
@@ -280,48 +279,6 @@ pub enum TK1ConvertError {
     #[display("Unable to load pytket json file. {_0}")]
     #[from]
     FileLoadError(io::Error),
-}
-
-/// Try to interpret a TKET1 parameter as a constant value.
-///
-/// Angle parameters in TKET1 are encoded as a number of half-turns,
-/// whereas HUGR uses radians.
-#[inline]
-fn try_param_to_constant(param: &str) -> Option<Value> {
-    fn parse_val(n: &str) -> Option<f64> {
-        n.parse::<f64>().ok()
-    }
-
-    let half_turns = if let Some(f) = parse_val(param) {
-        f
-    } else if param.split('/').count() == 2 {
-        // TODO: Use the rational types from `Hugr::extensions::rotation`
-        let (n, d) = param.split_once('/').unwrap();
-        let n = parse_val(n)?;
-        let d = parse_val(d)?;
-        n / d
-    } else {
-        return None;
-    };
-
-    ConstRotation::new(half_turns).ok().map(Into::into)
-}
-
-/// Convert a HUGR rotation or float constant to a TKET1 parameter.
-///
-/// Angle parameters in TKET1 are encoded as a number of half-turns,
-/// whereas HUGR uses radians.
-#[inline]
-fn try_constant_to_param(val: &Value) -> Option<String> {
-    if let Some(const_angle) = val.get_custom_value::<ConstRotation>() {
-        let half_turns = const_angle.half_turns();
-        Some(half_turns.to_string())
-    } else if let Some(const_float) = val.get_custom_value::<ConstF64>() {
-        let float = const_float.value();
-        Some(float.to_string())
-    } else {
-        None
-    }
 }
 
 /// A hashed register, used to identify registers in the [`Tk1Decoder::register_wire`] map,

@@ -3,6 +3,7 @@
 use hugr::extension::prelude::{Noop, BOOL_T, QB_T};
 
 use hugr::ops::{OpTrait, OpType};
+use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::types::Signature;
 
 use hugr::IncomingPort;
@@ -159,7 +160,7 @@ impl NativeOp {
             let types = sig.input_types().to_owned();
             sig.input_ports()
                 .zip(types)
-                .filter(|(_, ty)| ty == &ROTATION_TYPE)
+                .filter(|(_, ty)| [ROTATION_TYPE, FLOAT64_TYPE].contains(ty))
                 .map(|(port, _)| port)
         })
     }
@@ -179,7 +180,7 @@ impl NativeOp {
                 self.input_qubits += 1;
             } else if ty == &BOOL_T {
                 self.input_bits += 1;
-            } else if ty == &ROTATION_TYPE {
+            } else if [ROTATION_TYPE, FLOAT64_TYPE].contains(ty) {
                 self.num_params += 1;
             }
         }

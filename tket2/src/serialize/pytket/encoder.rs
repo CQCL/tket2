@@ -5,7 +5,6 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use hugr::extension::prelude::{BOOL_T, QB_T};
 use hugr::ops::{OpTrait, OpType};
-use hugr::std_extensions::arithmetic::float_ops::FloatOps;
 use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::types::Type;
 use hugr::{HugrView, Wire};
@@ -15,17 +14,15 @@ use tket_json_rs::circuit_json::{self, SerialCircuit};
 
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
-use crate::extension::rotation::{RotationOp, ROTATION_TYPE};
-use crate::extension::sympy::SympyOp;
-use crate::ops::match_symb_const_op;
+use crate::extension::rotation::ROTATION_TYPE;
 use crate::serialize::pytket::RegisterHash;
 use crate::Tk2Op;
 
 use super::op::Tk1Op;
+use super::param::encode::fold_param_op;
 use super::{
-    try_constant_to_param, OpConvertError, TK1ConvertError, METADATA_B_OUTPUT_REGISTERS,
-    METADATA_B_REGISTERS, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS,
-    METADATA_Q_REGISTERS,
+    OpConvertError, TK1ConvertError, METADATA_B_OUTPUT_REGISTERS, METADATA_B_REGISTERS,
+    METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
 };
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
@@ -53,7 +50,7 @@ impl Tk1Encoder {
 
         // Check for unsupported input types.
         for (_, _, typ) in circ.units() {
-            if ![ROTATION_TYPE, QB_T, BOOL_T].contains(&typ) {
+            if ![ROTATION_TYPE, FLOAT64_TYPE, QB_T, BOOL_T].contains(&typ) {
                 return Err(TK1ConvertError::NonSerializableInputs { typ });
             }
         }
@@ -129,7 +126,7 @@ impl Tk1Encoder {
                     )
                 });
                 bit_args.push(reg);
-            } else if ty == ROTATION_TYPE {
+            } else if [ROTATION_TYPE, FLOAT64_TYPE].contains(&ty) {
                 let CircuitUnit::Wire(param_wire) = unit else {
                     unreachable!("Angle types are not linear.")
                 };
@@ -557,7 +554,7 @@ impl ParameterTracker {
         let mut tracker = ParameterTracker::default();
 
         let angle_input_wires = circ.units().filter_map(|u| match u {
-            (CircuitUnit::Wire(w), _, ty) if ty == ROTATION_TYPE => Some(w),
+            (CircuitUnit::Wire(w), _, ty) if [ROTATION_TYPE, FLOAT64_TYPE].contains(&ty) => Some(w),
             _ => None,
         });
 
@@ -615,50 +612,11 @@ impl ParameterTracker {
                     node: command.node(),
                 });
             };
-            inputs.push(param);
+            inputs.push(param.as_str());
         }
 
-        let param = match optype {
-            OpType::Const(const_op) => {
-                // New constant, register it if it can be interpreted as a parameter.
-                match try_constant_to_param(const_op.value()) {
-                    Some(param) => param,
-                    None => return Ok(false),
-                }
-            }
-            OpType::LoadConstant(_op_type) => {
-                // Re-use the parameter from the input.
-                inputs[0].clone()
-            }
-            // Encode some angle and float operations directly as strings using
-            // the already encoded inputs. Fail if the operation is not
-            // supported, and let the operation encoding process it instead.
-            OpType::ExtensionOp(_) => {
-                if let Some(s) = optype
-                    .cast::<RotationOp>()
-                    .and_then(|op| self.encode_rotation_op(&op, inputs.as_slice()))
-                {
-                    s
-                } else if let Some(s) = optype
-                    .cast::<FloatOps>()
-                    .and_then(|op| self.encode_float_op(&op, inputs.as_slice()))
-                {
-                    s
-                } else if let Some(s) = optype
-                    .cast::<SympyOp>()
-                    .and_then(|op| self.encode_sympy_op(&op, inputs.as_slice()))
-                {
-                    s
-                } else {
-                    return Ok(false);
-                }
-            }
-            _ => {
-                let Some(s) = match_symb_const_op(optype) else {
-                    return Ok(false);
-                };
-                s.to_string()
-            }
+        let Some(param) = fold_param_op(optype, &inputs) else {
+            return Ok(false);
         };
 
         for (unit, _, _) in command.outputs() {
@@ -677,54 +635,6 @@ impl ParameterTracker {
     /// Returns the parameter expression for a wire, if it exists.
     fn get(&self, wire: &Wire) -> Option<&String> {
         self.parameters.get(wire)
-    }
-
-    /// Encode an [`RotationOp`]s as a string, given its encoded inputs.
-    ///
-    /// `inputs` contains the expressions to compute each input.
-    fn encode_rotation_op(&self, op: &RotationOp, inputs: &[&String]) -> Option<String> {
-        let s = match op {
-            RotationOp::radd => format!("({} + {})", inputs[0], inputs[1]),
-            // Encode/decode the rotation as pytket parameters, expressed as half-turns.
-            // Note that the tracked parameter strings are always written in half-turns,
-            // so the conversion here is a no-op.
-            RotationOp::to_halfturns => inputs[0].clone(),
-            RotationOp::from_halfturns_unchecked => inputs[0].clone(),
-            // The checked conversion returns an option, which we do not support.
-            RotationOp::from_halfturns => return None,
-        };
-        Some(s)
-    }
-
-    /// Encode an [`FloatOps`] as a string, given its encoded inputs.
-    fn encode_float_op(&self, op: &FloatOps, inputs: &[&String]) -> Option<String> {
-        let s = match op {
-            FloatOps::fadd => format!("({} + {})", inputs[0], inputs[1]),
-            FloatOps::fsub => format!("({} - {})", inputs[0], inputs[1]),
-            FloatOps::fneg => format!("(-{})", inputs[0]),
-            FloatOps::fmul => format!("({} * {})", inputs[0], inputs[1]),
-            FloatOps::fdiv => format!("({} / {})", inputs[0], inputs[1]),
-            FloatOps::fpow => format!("({} ** {})", inputs[0], inputs[1]),
-            FloatOps::ffloor => format!("floor({})", inputs[0]),
-            FloatOps::fceil => format!("ceil({})", inputs[0]),
-            FloatOps::fround => format!("round({})", inputs[0]),
-            FloatOps::fmax => format!("max({}, {})", inputs[0], inputs[1]),
-            FloatOps::fmin => format!("min({}, {})", inputs[0], inputs[1]),
-            FloatOps::fabs => format!("abs({})", inputs[0]),
-            _ => return None,
-        };
-        Some(s)
-    }
-
-    /// Encode a [`SympyOp`]s as a string.
-    ///
-    /// Note that the sympy operation does not have any inputs.
-    fn encode_sympy_op(&self, op: &SympyOp, inputs: &[&String]) -> Option<String> {
-        if !inputs.is_empty() {
-            return None;
-        }
-
-        Some(op.expr.clone())
     }
 }
 
