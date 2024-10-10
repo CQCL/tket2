@@ -1,6 +1,6 @@
 [project]
 name = "tket2_eccs"
-version = "0.1.0"
+version = "0.2.0"
 requires-python = ">=3.10,<3.13"
 description = "Precompiled rewrite sets for the tket 2 compiler"
 license = { file = "LICENCE" }
