@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/CQCL/tket2/compare/tket2-v0.5.0...tket2-v0.6.0) - 2024-10-09
+
+### New Features
+
+- *(badger)* `cx` and `rz` const functions and strategies for `LexicographicCostFunction` ([#625](https://github.com/CQCL/tket2/pull/625))
+- Add `tket2.rotation.from_halfturns_unchecked` op ([#640](https://github.com/CQCL/tket2/pull/640))
+- [**breaking**] update to hugr 0.13.0 ([#645](https://github.com/CQCL/tket2/pull/645))
+
 ## [0.5.0](https://github.com/CQCL/tket2/compare/tket2-v0.4.0...tket2-v0.5.0) - 2024-09-30
 
 ### Bug Fixes
