@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.4.0...tket2-py-v0.4.1) (2024-10-10)
+
+
+### Features
+
+* Add `tket2.rotation.from_halfturns_unchecked` op ([#640](https://github.com/CQCL/tket2/issues/640)) ([86ffe64](https://github.com/CQCL/tket2/commit/86ffe64fa455fc19a60999a7edb71803d615d77b))
+
 ## [0.4.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.3.0...tket2-py-v0.4.0) (2024-10-01)
 
 
