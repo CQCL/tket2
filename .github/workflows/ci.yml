@@ -20,7 +20,10 @@ env:
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: "sccache"
   # Pinned version for the uv package manager
-  UV_VERSION: "0.4.18"
+  UV_VERSION: "0.4.20"
+  # The highest and lowest supported Python versions, used for testing
+  PYTHON_HIGHEST: "3.13"
+  PYTHON_LOWEST: "3.10"
 
 jobs:
   # Check if changes were made to the relevant files.
@@ -89,10 +92,10 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-      - name: Install Python 3.13
-        run: uv python install 3.13
+      - name: Install Python ${{ env.PYTHON_HIGHEST }}
+        run: uv python install ${{ env.PYTHON_HIGHEST }}
       - name: Setup dependencies
-        run: uv sync --locked
+        run: uv sync --locked --python ${{ env.PYTHON_HIGHEST }}
       - name: Type check with mypy
         run: uv run mypy .
       - name: Check formatting with ruff
@@ -231,10 +234,10 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-      - name: Install Python 3.10
-        run: uv python install 3.10
+      - name: Install Python ${{ env.PYTHON_LOWEST }}
+        run: uv python install ${{ env.PYTHON_LOWEST }}
       - name: Setup dependencies
-        run: uv sync --locked
+        run: uv sync --locked --python ${{ env.PYTHON_LOWEST }}
       - name: Run python tests with coverage instrumentation
         run: uv run pytest --cov=./ --cov-report=xml
       - name: Upload coverage output artifact
