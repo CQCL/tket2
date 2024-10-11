@@ -89,8 +89,8 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-      - name: Install Python 3.12
-        run: uv python install 3.12
+      - name: Install Python 3.13
+        run: uv python install 3.13
       - name: Setup dependencies
         run: uv sync --locked
       - name: Type check with mypy
