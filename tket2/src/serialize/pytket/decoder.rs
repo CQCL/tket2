@@ -302,9 +302,7 @@ impl Tk1Decoder {
                     let res = hugr.add_dataflow_op(op, input_wires).unwrap_or_else(|e| {
                         panic!("Error while decoding pytket operation parameter \"{param}\". {e}",)
                     });
-                    // TODO: Replace with `res.num_value_outputs`
-                    // https://github.com/CQCL/hugr/pull/1560
-                    assert_eq!(res.outputs().count(), 1, "An operation decoded from the pytket op parameter \"{param}\" had {} outputs", res.outputs().count());
+                    assert_eq!(res.num_value_outputs(), 1, "An operation decoded from the pytket op parameter \"{param}\" had {} outputs", res.num_value_outputs());
                     LoadedParameter::float(res.out_wire(0))
                 }
             }
