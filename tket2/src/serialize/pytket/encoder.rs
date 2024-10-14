@@ -22,7 +22,8 @@ use super::op::Tk1Op;
 use super::param::encode::fold_param_op;
 use super::{
     OpConvertError, TK1ConvertError, METADATA_B_OUTPUT_REGISTERS, METADATA_B_REGISTERS,
-    METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
+    METADATA_INPUT_PARAMETERS, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS,
+    METADATA_Q_REGISTERS,
 };
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
@@ -558,8 +559,17 @@ impl ParameterTracker {
             _ => None,
         });
 
-        for (i, wire) in angle_input_wires.enumerate() {
-            tracker.add_parameter(wire, format!("f{i}"));
+        // The input parameter names may be specified in the metadata.
+        let fixed_input_names: Vec<String> = circ
+            .hugr()
+            .get_metadata(circ.parent(), METADATA_INPUT_PARAMETERS)
+            .and_then(|params| serde_json::from_value(params.clone()).ok())
+            .unwrap_or_default();
+        let extra_names = (fixed_input_names.len()..).map(|i| format!("f{i}"));
+        let mut param_name = fixed_input_names.into_iter().chain(extra_names);
+
+        for wire in angle_input_wires {
+            tracker.add_parameter(wire, param_name.next().unwrap());
         }
 
         tracker

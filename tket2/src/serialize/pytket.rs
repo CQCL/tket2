@@ -47,6 +47,8 @@ const METADATA_B_REGISTERS: &str = "TKET1.bit_registers";
 const METADATA_B_OUTPUT_REGISTERS: &str = "TKET1.bit_output_registers";
 /// A tket1 operation "opgroup" field.
 const METADATA_OPGROUP: &str = "TKET1.opgroup";
+/// Explicit names for the input parameter wires.
+const METADATA_INPUT_PARAMETERS: &str = "TKET1.input_parameters";
 
 /// A serialized representation of a [`Circuit`].
 ///
