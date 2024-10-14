@@ -14,7 +14,7 @@ use rstest::{fixture, rstest};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::optype;
 
-use super::{TKETDecode, METADATA_Q_OUTPUT_REGISTERS};
+use super::{TKETDecode, METADATA_INPUT_PARAMETERS, METADATA_Q_OUTPUT_REGISTERS};
 use crate::circuit::Circuit;
 use crate::extension::rotation::{ConstRotation, RotationOp, ROTATION_TYPE};
 use crate::extension::sympy::SympyOpDef;
@@ -153,6 +153,31 @@ fn circ_preset_qubits() -> Circuit {
         hugr.root(),
         METADATA_Q_OUTPUT_REGISTERS,
         serde_json::json!([["q", [1]]]),
+    );
+
+    hugr.into()
+}
+
+/// A simple circuit with some input parameters
+#[fixture]
+fn circ_parameterized() -> Circuit {
+    let input_t = vec![QB_T, ROTATION_TYPE, ROTATION_TYPE, ROTATION_TYPE];
+    let output_t = vec![QB_T];
+    let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
+
+    let [q, r0, r1, r2] = h.input_wires_arr();
+
+    let [q] = h.add_dataflow_op(Tk2Op::Rx, [q, r0]).unwrap().outputs_arr();
+    let [q] = h.add_dataflow_op(Tk2Op::Ry, [q, r1]).unwrap().outputs_arr();
+    let [q] = h.add_dataflow_op(Tk2Op::Rz, [q, r2]).unwrap().outputs_arr();
+
+    let mut hugr = h.finish_hugr_with_outputs([q], &REGISTRY).unwrap();
+
+    // Preset names for some of the inputs
+    hugr.set_metadata(
+        hugr.root(),
+        METADATA_INPUT_PARAMETERS,
+        serde_json::json!(["alpha", "beta"]),
     );
 
     hugr.into()
@@ -318,6 +343,7 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
 #[rstest]
 #[case::meas_ancilla(circ_measure_ancilla(), Signature::new_endo(vec![QB_T, QB_T, BOOL_T, BOOL_T]))]
 #[case::preset_qubits(circ_preset_qubits(), Signature::new_endo(vec![QB_T, QB_T, QB_T]))]
+#[case::preset_parameterized(circ_parameterized(), Signature::new(vec![QB_T, ROTATION_TYPE, ROTATION_TYPE, ROTATION_TYPE], vec![QB_T]))]
 fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
     let ser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
     let deser: Circuit = ser.clone().decode().unwrap();
