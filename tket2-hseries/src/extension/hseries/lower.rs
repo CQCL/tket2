@@ -111,7 +111,7 @@ fn build_to_radians(b: &mut DFGBuilder<Hugr>, rotation: Wire) -> Result<Wire, Bu
 
 /// Lower `Tk2Op` operations to `HSeriesOp` operations.
 pub fn lower_tk2_op(hugr: &mut impl HugrMut) -> Result<Vec<hugr::Node>, LowerTk2Error> {
-    let replaced_nodes = lower_direct(hugr)?;
+    let mut replaced_nodes = lower_direct(hugr)?;
     let mut hugr_map: HashMap<Tk2Op, Hugr> = HashMap::new();
     for op in Tk2Op::iter() {
         match op_to_hugr(op) {
@@ -122,9 +122,12 @@ pub fn lower_tk2_op(hugr: &mut impl HugrMut) -> Result<Vec<hugr::Node>, LowerTk2
         };
     }
 
-    let lowered_nodes = hugr::algorithms::lower_ops(hugr, |op| hugr_map.get(&op.cast()?).cloned())?;
+    let lowered_nodes = hugr::algorithms::lower_ops(hugr, |op| hugr_map.get(&op.cast()?).cloned())?
+        .into_iter()
+        .map(|(n, _)| n);
 
-    Ok([replaced_nodes, lowered_nodes].concat())
+    replaced_nodes.extend(lowered_nodes);
+    Ok(replaced_nodes)
 }
 
 fn lower_direct(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
