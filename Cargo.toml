@@ -26,9 +26,9 @@ missing_docs = "warn"
 [workspace.dependencies]
 
 # Make sure to run `just recompile-eccs` if the hugr serialisation format changes.
-hugr = "0.13.0"
-hugr-core = "0.10.0"
-hugr-cli = "0.6.0"
+hugr = "0.13.1"
+hugr-core = "0.13.1"
+hugr-cli = "0.13.1"
 portgraph = "0.12"
 pyo3 = "0.21.2"
 itertools = "0.13.0"
