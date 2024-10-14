@@ -22,7 +22,7 @@ env:
   # Pinned version for the uv package manager
   UV_VERSION: "0.4.20"
   # The highest and lowest supported Python versions, used for testing
-  PYTHON_HIGHEST: "3.13"
+  PYTHON_HIGHEST: "3.12"
   PYTHON_LOWEST: "3.10"
 
 jobs:
