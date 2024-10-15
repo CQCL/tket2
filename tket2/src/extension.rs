@@ -21,9 +21,6 @@ pub mod rotation;
 pub mod sympy;
 
 use sympy::SympyOpDef;
-/// Backwards compatible exports.
-/// TODO: Remove in a breaking release.
-pub use sympy::{SYM_EXPR_NAME, SYM_EXPR_T, SYM_OP_ID};
 
 /// The ID of the TKET1 extension.
 pub const TKET1_EXTENSION_ID: ExtensionId = IdentList::new_unchecked("TKET1");
