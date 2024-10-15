@@ -112,15 +112,13 @@ impl<T: HugrMut> Circuit<T> {
     /// Returns the traces of rewrites applied to the circuit.
     ///
     /// Returns `None` if rewrite tracing is not enabled for this circuit.
-    //
-    // TODO return an `impl Iterator` once rust 1.75 lands.
     #[inline]
-    pub fn rewrite_trace(&self) -> Option<Vec<RewriteTrace>> {
+    pub fn rewrite_trace(&self) -> Option<impl Iterator<Item = RewriteTrace> + '_> {
         if !REWRITE_TRACING_ENABLED {
             return None;
         }
         let meta = self.hugr().get_metadata(self.parent(), METADATA_REWRITES)?;
         let rewrites = meta.as_array()?;
-        Some(rewrites.iter().map_into().collect_vec())
+        Some(rewrites.iter().map_into())
     }
 }

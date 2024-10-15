@@ -514,11 +514,11 @@ mod tests {
         let mut circ = n_cx(10);
         let cx_gates = circ.commands().map(|cmd| cmd.node()).collect_vec();
 
-        assert_eq!(circ.rewrite_trace(), None);
+        assert!(circ.rewrite_trace().is_none());
         circ.enable_rewrite_tracing();
         match REWRITE_TRACING_ENABLED {
-            true => assert_eq!(circ.rewrite_trace(), Some(vec![])),
-            false => assert_eq!(circ.rewrite_trace(), None),
+            true => assert_eq!(circ.rewrite_trace().unwrap().collect_vec(), []),
+            false => assert!(circ.rewrite_trace().is_none()),
         }
 
         let rws = [
@@ -534,7 +534,7 @@ mod tests {
         assert_eq!(rewritten[0].circ.num_operations(), 5);
 
         if REWRITE_TRACING_ENABLED {
-            assert_eq!(rewritten[0].circ.rewrite_trace().unwrap().len(), 3);
+            assert_eq!(rewritten[0].circ.rewrite_trace().unwrap().count(), 3);
         }
     }
 
@@ -561,15 +561,15 @@ mod tests {
             // Each strategy branch applies a single rewrite, composed of
             // multiple individual elements from `rws`.
             assert_eq!(
-                rewritten[0].circ.rewrite_trace().unwrap(),
+                rewritten[0].circ.rewrite_trace().unwrap().collect_vec(),
                 vec![RewriteTrace::new(3)]
             );
             assert_eq!(
-                rewritten[1].circ.rewrite_trace().unwrap(),
+                rewritten[1].circ.rewrite_trace().unwrap().collect_vec(),
                 vec![RewriteTrace::new(2)]
             );
             assert_eq!(
-                rewritten[2].circ.rewrite_trace().unwrap(),
+                rewritten[2].circ.rewrite_trace().unwrap().collect_vec(),
                 vec![RewriteTrace::new(1)]
             );
         }
