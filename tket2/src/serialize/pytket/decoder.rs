@@ -12,6 +12,7 @@ use hugr::types::Signature;
 use hugr::{Hugr, Wire};
 
 use derive_more::Display;
+use indexmap::IndexMap;
 use itertools::{EitherOrBoth, Itertools};
 use serde_json::json;
 use tket_json_rs::circuit_json;
@@ -24,14 +25,15 @@ use super::{
     METADATA_B_REGISTERS, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS,
     METADATA_Q_REGISTERS,
 };
-use crate::extension::rotation::RotationOp;
+use crate::extension::rotation::{RotationOp, ROTATION_TYPE};
 use crate::extension::{REGISTRY, TKET1_EXTENSION_ID};
+use crate::serialize::pytket::METADATA_INPUT_PARAMETERS;
 use crate::symbolic_constant_op;
 
 /// The state of an in-progress [`FunctionBuilder`] being built from a [`SerialCircuit`].
 ///
 /// Mostly used to define helper internal methods.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone)]
 pub(super) struct Tk1Decoder {
     /// The Hugr being built.
     pub hugr: FunctionBuilder<Hugr>,
@@ -41,6 +43,8 @@ pub(super) struct Tk1Decoder {
     ordered_registers: Vec<RegisterHash>,
     /// A set of registers that encode qubits.
     qubit_registers: HashSet<RegisterHash>,
+    /// An ordered set of parameters found in operation arguments, and added as inputs.
+    parameters: IndexMap<String, LoadedParameter>,
 }
 
 impl Tk1Decoder {
@@ -116,6 +120,7 @@ impl Tk1Decoder {
             register_wires,
             ordered_registers,
             qubit_registers,
+            parameters: IndexMap::new(),
         })
     }
 
@@ -131,6 +136,13 @@ impl Tk1Decoder {
             self.register_wires.is_empty(),
             "Some output wires were not associated with a register."
         );
+
+        // Store the name for the input parameter wires
+        if !self.parameters.is_empty() {
+            let params = self.parameters.keys().cloned().collect_vec();
+            self.hugr
+                .set_metadata(METADATA_INPUT_PARAMETERS, json!(params));
+        }
 
         self.hugr
             .finish_hugr_with_outputs(outputs, &REGISTRY)
@@ -264,6 +276,7 @@ impl Tk1Decoder {
     fn load_parameter(&mut self, param: String) -> Wire {
         fn process(
             hugr: &mut FunctionBuilder<Hugr>,
+            input_params: &mut IndexMap<String, LoadedParameter>,
             parsed: PytketParam,
             param: &str,
         ) -> LoadedParameter {
@@ -286,18 +299,17 @@ impl Tk1Decoder {
                         let wire = hugr.add_load_const(value);
                         return LoadedParameter::float(wire);
                     }
-
-                    // TODO: We need to add a `FunctionBuilder::add_input` function on the hugr side.
-                    //       Here we just add an opaque sympy box instead.
-                    //       https://github.com/CQCL/hugr/issues/1562
-                    //       https://github.com/CQCL/tket2/issues/628
-                    process(hugr, PytketParam::Sympy(name), param)
+                    // Look it up in the input parameters to the circuit, and add a new wire if needed.
+                    *input_params.entry(name.to_string()).or_insert_with(|| {
+                        let wire = hugr.add_input(ROTATION_TYPE);
+                        LoadedParameter::rotation(wire)
+                    })
                 }
                 PytketParam::Operation { op, args } => {
                     // We assume all operations take float inputs.
                     let input_wires = args
                         .into_iter()
-                        .map(|arg| process(hugr, arg, param).as_float(hugr).wire)
+                        .map(|arg| process(hugr, input_params, arg, param).as_float(hugr).wire)
                         .collect_vec();
                     let res = hugr.add_dataflow_op(op, input_wires).unwrap_or_else(|e| {
                         panic!("Error while decoding pytket operation parameter \"{param}\". {e}",)
@@ -309,7 +321,7 @@ impl Tk1Decoder {
         }
 
         let parsed = parse_pytket_param(&param);
-        process(&mut self.hugr, parsed, &param)
+        process(&mut self.hugr, &mut self.parameters, parsed, &param)
             .as_rotation(&mut self.hugr)
             .wire
     }

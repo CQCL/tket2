@@ -2054,6 +2054,7 @@ dependencies = [
  "hugr",
  "hugr-cli",
  "hugr-core",
+ "indexmap",
  "itertools 0.13.0",
  "lazy_static",
  "num-complex",
