@@ -1,6 +1,6 @@
 use crate::extension::rotation::ROTATION_TYPE;
-use crate::extension::sympy::SympyOpDef;
-use crate::extension::{SYM_OP_ID, TKET2_EXTENSION_ID as EXTENSION_ID};
+use crate::extension::sympy::{SympyOpDef, SYM_OP_ID};
+use crate::extension::TKET2_EXTENSION_ID as EXTENSION_ID;
 use hugr::ops::custom::ExtensionOp;
 use hugr::ops::NamedOp;
 use hugr::{

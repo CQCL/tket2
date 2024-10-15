@@ -349,20 +349,6 @@ impl LexicographicCostFunction<fn(&OpType) -> usize, 2> {
         Self::cx_count().into_greedy_strategy()
     }
 
-    /// Non-increasing rewrite strategy based on CX count.
-    ///
-    /// A fine-grained cost function given by the total number of quantum gates
-    /// is used to rank circuits with equal CX count.
-    ///
-    /// This is probably a good default for NISQ-y circuit optimisation.
-    ///
-    /// Deprecated: Use `default_cx_strategy` instead.
-    // TODO: Remove this method in the next breaking release.
-    #[deprecated(since = "0.5.1", note = "Use `default_cx_strategy` instead.")]
-    pub fn default_cx() -> ExhaustiveGreedyStrategy<Self> {
-        Self::default_cx_strategy()
-    }
-
     /// Non-increasing rewrite cost function based on CX gate count.
     ///
     /// A fine-grained cost function given by the total number of quantum gates
