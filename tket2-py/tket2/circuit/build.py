@@ -2,7 +2,8 @@ from __future__ import annotations
 from typing import Iterable
 
 from hugr import tys, ops
-from hugr.ext import Package, Extension
+from hugr.package import Package
+from hugr.ext import Extension
 from hugr.ops import ComWire, Command
 from hugr.std.float import FLOAT_T
 from hugr.build.tracked_dfg import TrackedDfg

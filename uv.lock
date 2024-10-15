@@ -156,7 +156,7 @@ wheels = [
 
 [[package]]
 name = "hugr"
-version = "0.8.0"
+version = "0.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "graphviz" },
@@ -164,9 +164,9 @@ dependencies = [
     { name = "pydantic-extra-types" },
     { name = "semver" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fc/6b/cf9f2d423bfe6c1fd9055b0cefe9a23d77be1cbbc91c68aba575ccae8d34/hugr-0.8.0.tar.gz", hash = "sha256:6340a5014735414115795e798723ca2fbef29b249c20c2d3cab161d3e0797145", size = 124123 }
+sdist = { url = "https://files.pythonhosted.org/packages/7a/ea/faf7545e3d3ffd4bc725bfcd622c60303e8cde0e33d847b0c7bcf1a3bb7c/hugr-0.9.0.tar.gz", hash = "sha256:ddb5adc674192520499e624e8f4650f465e059ab3f9048550c9c147fc9bf239a", size = 126531 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/24/09/c14abb6c5b1b60c9e17c9a8781ad915e8d1813ba89dc92115ef37276b046/hugr-0.8.0-py3-none-any.whl", hash = "sha256:b059f3fe92bdeab576f60f2dd01120ff10f125eea61393e014ac18a07fe2d9ac", size = 77637 },
+    { url = "https://files.pythonhosted.org/packages/08/ad/b82f6cb95452699c29582cef3daaa2c281f86efd91d1d8d88895c47bb5b8/hugr-0.9.0-py3-none-any.whl", hash = "sha256:703da84a1b2fdb192f4ddce6daf9446dac24fb2377b3b259cced6899733530a5", size = 80011 },
 ]
 
 [[package]]
@@ -790,7 +790,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "hugr", specifier = ">=0.8.0,<0.9" },
+    { name = "hugr", specifier = ">=0.9.0,<0.10" },
     { name = "pytket", specifier = ">=1.29.2,<2" },
     { name = "tket2-eccs", editable = "tket2-eccs" },
 ]
