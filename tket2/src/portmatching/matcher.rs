@@ -1,52 +1,47 @@
 //! Pattern and matcher objects for circuit matching
 
-use std::{
-    fmt::Debug,
-    fs::File,
-    io,
-    path::{Path, PathBuf},
-};
-
-use super::{CircuitPattern, NodeID, PEdge, PNode};
-use derive_more::{Display, Error, From};
-use hugr::hugr::views::sibling_subgraph::{
-    InvalidReplacement, InvalidSubgraph, InvalidSubgraphBoundary, TopoConvexChecker,
-};
-use hugr::hugr::views::SiblingSubgraph;
+// use super::{CircuitPattern, NodeID, PEdge, PNode};
+use derive_more::{Debug, From};
 use hugr::ops::{NamedOp, OpType};
-use hugr::{HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex};
-use itertools::Itertools;
-use portgraph::algorithms::ConvexChecker;
-use portmatching::{
-    automaton::{LineBuilder, ScopeAutomaton},
-    EdgeProperty, PatternID,
-};
+use hugr::Node;
+use portmatching::PatternID;
 use smol_str::SmolStr;
 
-use crate::{
-    circuit::Circuit,
-    rewrite::{CircuitRewrite, Subcircuit},
-};
+use crate::{rewrite::Subcircuit, Tk2Op};
 
 /// Matchable operations in a circuit.
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
-pub(crate) struct MatchOp {
+pub struct MatchOp {
     /// The operation identifier
     op_name: SmolStr,
     /// The encoded operation, if necessary for comparisons.
     ///
     /// This as a temporary hack for comparing parametric operations, since
     /// OpType doesn't implement Eq, Hash, or Ord.
+    #[debug(skip)]
     encoded: Option<Vec<u8>>,
 }
 
 impl From<OpType> for MatchOp {
     fn from(op: OpType) -> Self {
+        Self::from(&op)
+    }
+}
+
+impl From<&OpType> for MatchOp {
+    fn from(op: &OpType) -> Self {
         let op_name = op.name();
         let encoded = encode_op(op);
         Self { op_name, encoded }
+    }
+}
+
+impl From<Tk2Op> for MatchOp {
+    fn from(value: Tk2Op) -> Self {
+        let op: OpType = value.into();
+        op.into()
     }
 }
 
@@ -54,10 +49,10 @@ impl From<OpType> for MatchOp {
 ///
 /// Avoids encoding some data if we know the operation can be uniquely
 /// identified by their name.
-fn encode_op(op: OpType) -> Option<Vec<u8>> {
+fn encode_op(op: &OpType) -> Option<Vec<u8>> {
     match op {
         OpType::Module(_) => None,
-        OpType::ExtensionOp(op) => encode_op(OpType::OpaqueOp(op.make_opaque())),
+        OpType::ExtensionOp(op) => encode_op(&OpType::OpaqueOp(op.make_opaque())),
         OpType::OpaqueOp(op) => {
             let mut encoded: Vec<u8> = Vec::new();
             // Ignore irrelevant fields
@@ -84,6 +79,8 @@ pub struct PatternMatch {
     /// representation of the match useful for `PyPatternMatch` or serialisation.
     pub(super) root: Node,
 }
+
+/*
 
 impl PatternMatch {
     /// The matched pattern ID.
@@ -237,7 +234,7 @@ impl Debug for PatternMatch {
 /// simultaneously.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PatternMatcher {
-    automaton: ScopeAutomaton<PNode, PEdge, Port>,
+    automaton: ConstraintAutomaton,
     patterns: Vec<CircuitPattern>,
 }
 
@@ -575,3 +572,4 @@ mod tests {
         assert_eq!(matches.len(), 0);
     }
 }
+*/

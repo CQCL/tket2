@@ -1,17 +1,18 @@
 //! Transform circuits using rewrite rules.
 
-#[cfg(feature = "portmatching")]
-pub mod ecc_rewriter;
+// #[cfg(feature = "portmatching")]
+// pub mod ecc_rewriter;
 pub mod strategy;
 pub mod trace;
 
 use bytemuck::TransparentWrapper;
-#[cfg(feature = "portmatching")]
-pub use ecc_rewriter::ECCRewriter;
+// #[cfg(feature = "portmatching")]
+// pub use ecc_rewriter::ECCRewriter;
 
 use derive_more::{From, Into};
 use hugr::hugr::hugrmut::HugrMut;
-use hugr::hugr::views::sibling_subgraph::{InvalidReplacement, InvalidSubgraph};
+use hugr::hugr::views::sibling_subgraph::InvalidReplacement;
+pub use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::hugr::views::ExtractHugr;
 use hugr::ops::OpType;
 use hugr::types::Signature;
