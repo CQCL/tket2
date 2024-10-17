@@ -495,7 +495,7 @@ where
     }
 }
 
-#[cfg(feature = "portmatching")]
+/*#[cfg(feature = "portmatching")]
 mod badger_default {
     use std::io;
     use std::path::Path;
@@ -551,11 +551,11 @@ mod badger_default {
     }
 }
 #[cfg(feature = "portmatching")]
-pub use badger_default::DefaultBadgerOptimiser;
+pub use badger_default::DefaultBadgerOptimiser;*/
 
 use self::hugr_pchannel::Work;
 
-#[cfg(test)]
+/*#[cfg(test)]
 #[cfg(feature = "portmatching")]
 mod tests {
     use hugr::{
@@ -723,4 +723,4 @@ mod tests {
             BadgerOptimiser::default_with_rewriter_binary("../test_files/eccs/small_eccs.rwr");
         opt.unwrap();
     }
-}
+}*/

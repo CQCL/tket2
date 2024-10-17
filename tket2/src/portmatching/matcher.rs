@@ -17,10 +17,7 @@ use hugr::ops::{NamedOp, OpType};
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex};
 use itertools::Itertools;
 use portgraph::algorithms::ConvexChecker;
-use portmatching::{
-    automaton::{LineBuilder, ScopeAutomaton},
-    EdgeProperty, PatternID,
-};
+use portmatching::{automaton::ConstraintAutomaton, PatternID};
 use smol_str::SmolStr;
 
 use crate::{
@@ -237,7 +234,7 @@ impl Debug for PatternMatch {
 /// simultaneously.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PatternMatcher {
-    automaton: ScopeAutomaton<PNode, PEdge, Port>,
+    automaton: ConstraintAutomaton,
     patterns: Vec<CircuitPattern>,
 }
 
