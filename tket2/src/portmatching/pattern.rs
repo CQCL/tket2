@@ -5,6 +5,7 @@ use std::fmt::Debug;
 
 use derive_more::{Display, Error};
 use hugr::hugr::views::SiblingSubgraph;
+use hugr::ops::OpTrait;
 use hugr::types::EdgeKind;
 use hugr::HugrView;
 use itertools::{Either, Itertools};
@@ -96,7 +97,18 @@ impl CircuitPattern {
             for (&(node1, port1), &(node2, port2)) in ports.iter().tuple_windows() {
                 let vals = [(node1, port1).into(), (node2, port2).into()];
                 let vars = vals.map(|val| var_map[&val]);
-                let pred = Predicate::ShareEdge(port1, port2);
+
+                // Create either a copyable or linear wire predicate
+                let pred = if is_copyable(circuit, node1, port1) {
+                    Predicate::CopyableWire(port1, port2)
+                } else {
+                    let (out_port, in_port) = match (port1.as_directed(), port2.as_directed()) {
+                        (Either::Left(in_port), Either::Right(out_port)) => (out_port, in_port),
+                        (Either::Right(out_port), Either::Left(in_port)) => (out_port, in_port),
+                        _ => panic!("expected one incoming and one outgoing port for linear wire"),
+                    };
+                    Predicate::LinearWire(out_port, in_port)
+                };
                 constraints.push(Constraint::try_new(pred, vars.to_vec()).unwrap());
             }
         }
@@ -417,6 +429,17 @@ fn filtered_node_inputs(
     filter_ports(ports, node, hugr)
 }
 
+fn is_copyable(circuit: &Circuit<impl HugrView>, node: hugr::Node, port: hugr::Port) -> bool {
+    circuit
+        .hugr()
+        .get_optype(node)
+        .dataflow_signature()
+        .unwrap()
+        .port_type(port)
+        .unwrap()
+        .copyable()
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -498,12 +521,12 @@ mod tests {
         let edge_constraint = p
             .constraints
             .iter()
-            .filter(|cons| matches!(cons.predicate(), &Predicate::ShareEdge { .. }))
+            .filter(|cons| matches!(cons.predicate(), &Predicate::LinearWire { .. }))
             .exactly_one()
             .unwrap();
         assert!(matches!(
             edge_constraint.predicate(),
-            Predicate::ShareEdge { .. }
+            Predicate::LinearWire { .. }
         ));
         assert!(matches!(
             edge_constraint.required_bindings()[0],
@@ -577,16 +600,35 @@ mod tests {
         assert!(nodes.contains(&HugrNodeID::Root));
 
         // Assert the edge constraints
-        let (c1, c2) = pattern
+        let constraints = pattern
             .constraints
             .iter()
-            .filter(|cons| matches!(cons.predicate(), &Predicate::ShareEdge { .. }))
-            .collect_tuple()
-            .expect("expected two constraints");
-        assert!(matches!(c1.predicate(), Predicate::ShareEdge { .. }));
-        assert!(matches!(c2.predicate(), Predicate::ShareEdge { .. }));
-        // one of c1, c2 should have only incoming ports
-        assert!([c1, c2].iter().any(|constraint| {
+            .filter(|cons| {
+                matches!(
+                    cons.predicate(),
+                    Predicate::CopyableWire(..) | Predicate::LinearWire(..)
+                )
+            })
+            .collect_vec();
+
+        assert_eq!(constraints.len(), 2);
+
+        // one of the constraints should be a linear wire predicate, with
+        // one incoming and one outgoing port
+        assert!(constraints.iter().any(|constraint| {
+            matches!(
+                constraint.required_bindings()[0],
+                HugrVariableID::Port(HugrPortID::Outgoing { .. })
+            ) || matches!(
+                constraint.required_bindings()[1],
+                HugrVariableID::Port(HugrPortID::Incoming { .. })
+            ) || matches!(constraint.predicate(), Predicate::LinearWire(..))
+        }));
+
+        // one of the constraints should be a copyable wire predicate and only
+        // have incoming ports
+        assert!(constraints.iter().any(|constraint| {
+            matches!(constraint.predicate(), Predicate::CopyableWire(..));
             matches!(
                 constraint.required_bindings()[0],
                 HugrVariableID::Port(HugrPortID::Incoming { .. })
