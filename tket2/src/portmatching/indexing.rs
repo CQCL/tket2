@@ -6,22 +6,34 @@
 
 use std::collections::BTreeMap;
 
-use derive_more::From;
+use derive_more::{Display, Error, From};
 use hugr::HugrView;
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use portmatching as pm;
 
 use crate::Circuit;
 
 mod path;
-use path::HugrPath;
+pub(super) use path::{HugrPath, HugrPathBuilder};
 
 ////////////////////////////////////////////////////////////////////////////////
 //////////////////// Variable Naming scheme used for Hugrs /////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
 /// Variables refer to either a node or a port in the hugr.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, From)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    From,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum HugrVariableID {
     /// A variable that binds to a node.
     Node(HugrNodeID),
@@ -75,7 +87,9 @@ pub type HugrBindMap = BTreeMap<HugrVariableID, HugrVariableValue>;
 /// - An outgoing port ID is given by the opposite incoming port ID. This defines
 ///   the outgoing port uniquely as there is a one-to-many outgoing port to
 ///   incoming port relationship.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Serialize, serde::Deserialize,
+)]
 pub enum HugrPortID {
     /// A port variable that binds to an outgoing port.
     Outgoing {
@@ -113,8 +127,12 @@ impl HugrPortID {
         }
     }
 
-    fn new_incoming(path_from_root: HugrPath) -> Self {
+    pub(crate) fn new_incoming(path_from_root: HugrPath) -> Self {
         Self::Incoming { path_from_root }
+    }
+
+    pub(crate) fn new_outgoing(opposite_port: HugrPath) -> Self {
+        Self::Outgoing { opposite_port }
     }
 }
 
@@ -122,7 +140,9 @@ impl HugrPortID {
 ///
 /// The root is a special case that must be handled separately, as it might not
 /// have any ports.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Serialize, serde::Deserialize,
+)]
 pub enum HugrNodeID {
     /// Variable that binds to the root node.
     Root,
@@ -145,6 +165,95 @@ impl HugrNodeID {
                 let node = bindings.get(&(*incident_port).into())?.node();
                 HugrVariableValue::Node(node).into()
             }
+        }
+    }
+}
+
+impl From<(hugr::Node, hugr::Port)> for HugrVariableValue {
+    fn from((node, port): (hugr::Node, hugr::Port)) -> Self {
+        match port.as_directed() {
+            Either::Left(in_port) => HugrVariableValue::IncomingPort(node, in_port),
+            Either::Right(out_port) => HugrVariableValue::OutgoingPort(node, out_port),
+        }
+    }
+}
+
+impl From<(hugr::Node, hugr::IncomingPort)> for HugrVariableValue {
+    fn from((node, port): (hugr::Node, hugr::IncomingPort)) -> Self {
+        HugrVariableValue::IncomingPort(node, port)
+    }
+}
+
+impl From<(hugr::Node, hugr::OutgoingPort)> for HugrVariableValue {
+    fn from((node, port): (hugr::Node, hugr::OutgoingPort)) -> Self {
+        HugrVariableValue::OutgoingPort(node, port)
+    }
+}
+
+impl From<hugr::Node> for HugrVariableValue {
+    fn from(node: hugr::Node) -> Self {
+        HugrVariableValue::Node(node)
+    }
+}
+
+/// Conversion error of HugrVariableValue to native Hugr types
+#[derive(Debug, Error, Display)]
+pub enum UnexpectedValueType {
+    /// Unexpected value type: Node
+    #[display("unexpected value type: Node")]
+    Node,
+    /// Unexpected value type: IncomingPort
+    #[display("unexpected value type: IncomingPort")]
+    IncomingPort,
+    /// Unexpected value type: OutgoingPort
+    #[display("unexpected value type: OutgoingPort")]
+    OutgoingPort,
+}
+
+impl TryFrom<HugrVariableValue> for (hugr::Node, hugr::Port) {
+    type Error = UnexpectedValueType;
+
+    fn try_from(value: HugrVariableValue) -> Result<Self, Self::Error> {
+        match value {
+            HugrVariableValue::Node(..) => Err(UnexpectedValueType::Node),
+            HugrVariableValue::IncomingPort(node, in_port) => Ok((node, in_port.into())),
+            HugrVariableValue::OutgoingPort(node, out_port) => Ok((node, out_port.into())),
+        }
+    }
+}
+
+impl TryFrom<HugrVariableValue> for (hugr::Node, hugr::IncomingPort) {
+    type Error = UnexpectedValueType;
+
+    fn try_from(value: HugrVariableValue) -> Result<Self, Self::Error> {
+        match value {
+            HugrVariableValue::Node(..) => Err(UnexpectedValueType::Node),
+            HugrVariableValue::IncomingPort(node, in_port) => Ok((node, in_port)),
+            HugrVariableValue::OutgoingPort(..) => Err(UnexpectedValueType::OutgoingPort),
+        }
+    }
+}
+
+impl TryFrom<HugrVariableValue> for (hugr::Node, hugr::OutgoingPort) {
+    type Error = UnexpectedValueType;
+
+    fn try_from(value: HugrVariableValue) -> Result<Self, Self::Error> {
+        match value {
+            HugrVariableValue::Node(..) => Err(UnexpectedValueType::Node),
+            HugrVariableValue::IncomingPort(..) => Err(UnexpectedValueType::IncomingPort),
+            HugrVariableValue::OutgoingPort(node, out_port) => Ok((node, out_port)),
+        }
+    }
+}
+
+impl TryFrom<HugrVariableValue> for hugr::Node {
+    type Error = UnexpectedValueType;
+
+    fn try_from(value: HugrVariableValue) -> Result<Self, Self::Error> {
+        match value {
+            HugrVariableValue::Node(node) => Ok(node),
+            HugrVariableValue::IncomingPort(..) => Err(UnexpectedValueType::IncomingPort),
+            HugrVariableValue::OutgoingPort(..) => Err(UnexpectedValueType::OutgoingPort),
         }
     }
 }
@@ -210,7 +319,7 @@ impl<H: HugrView> pm::IndexedData for Circuit<H> {
                     .collect()
             }
             // Otherwise, resolves uniquely
-            key @ _ => Vec::from_iter(key.resolve(known_bindings, self.hugr())),
+            key => Vec::from_iter(key.resolve(known_bindings, self.hugr())),
         }
     }
 }

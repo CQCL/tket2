@@ -1,7 +1,8 @@
 //! Path encodings for the indexing scheme.
 
-use std::{fmt::Debug, usize};
+use std::fmt::Debug;
 
+use derive_more::Into;
 use hugr::{Direction, HugrView, PortIndex};
 use itertools::Either;
 
@@ -38,7 +39,7 @@ const MAX_BITS: usize = usize::BITS as usize;
 ///
 /// ## Bit encoding
 /// We encode each tuple `(p, i)` as a bitstring
-/// ```
+/// ```plaintext
 /// +------ one bit --------+-- (p.offset + 1) bits ---+-- (i + 1) bits --+
 /// | matches!(p, Outgoing) | p.offset (unary flipped) |     i (unary)    |
 /// +-----------------------+--------------------------+------------------+
@@ -54,7 +55,9 @@ const MAX_BITS: usize = usize::BITS as usize;
 /// Unary flipped means that the binary encoding of the integer is flipped.
 /// Flipping one of the unary encodings means that a tuple can never be all
 /// 0, thus differentiating between tuples and zero padding.
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, Into, serde::Serialize, serde::Deserialize,
+)]
 pub struct HugrPath(usize);
 
 /// An error that occurs when a path is too long to encode in a HugrPath.
@@ -158,17 +161,17 @@ impl HugrPath {
             starts.push(bit_pos);
 
             // consume incoming/outgoing bit
-            val = val << 1;
+            val <<= 1;
             bit_pos += 1;
 
             // consume offset (regex: 0*1)
             bit_pos += consume(false, &mut val);
-            val = val << 1;
+            val <<= 1;
             bit_pos += 1;
 
             // consume index (regex: 1*0)
             bit_pos += consume(true, &mut val);
-            val = val << 1;
+            val <<= 1;
             bit_pos += 1;
         }
         starts
@@ -187,14 +190,14 @@ impl TryFrom<&[(hugr::Port, usize)]> for HugrPath {
     }
 }
 
-#[derive(Debug, Clone)]
-struct HugrPathBuilder {
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct HugrPathBuilder {
     encoded: usize,
     bits_used: usize,
 }
 
 impl HugrPathBuilder {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         HugrPathBuilder {
             encoded: 0,
             bits_used: 0,
@@ -225,7 +228,11 @@ impl HugrPathBuilder {
         self.write_bit(off_bit)
     }
 
-    fn push(&mut self, port: hugr::Port, index: usize) -> Result<(), PathEncodeOverflow> {
+    pub(crate) fn push(
+        &mut self,
+        port: hugr::Port,
+        index: usize,
+    ) -> Result<(), PathEncodeOverflow> {
         // Encode port direction (1 bit)
         let direction_bit = port.direction() == Direction::Outgoing;
         self.write_bit(direction_bit)?;
@@ -239,7 +246,11 @@ impl HugrPathBuilder {
         Ok(())
     }
 
-    fn finish(self) -> HugrPath {
+    pub(crate) fn finish(self) -> HugrPath {
+        if self.encoded == 0 {
+            // Empty paths have no well-defined meaning
+            panic!("HugrPath is empty");
+        }
         HugrPath(self.encoded)
     }
 }
@@ -259,7 +270,7 @@ fn consume(bit: bool, val: &mut usize) -> usize {
     };
     let mut bit_pos = 0;
     while cond(*val) {
-        *val = *val << 1;
+        *val <<= 1;
         bit_pos += 1;
     }
     bit_pos
@@ -290,7 +301,7 @@ fn read_unary(val: usize, start_i: usize, flipped: bool) -> usize {
 impl Debug for HugrPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut tuples = vec![];
-        let mut curr = Some(self.clone());
+        let mut curr = Some(*self);
         while let Some(curr_some) = curr {
             let (parent, port, index) = curr_some.uncons();
             tuples.push((port, index));
