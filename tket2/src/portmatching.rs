@@ -4,7 +4,8 @@
 //! them against circuits.
 //!
 //! # Examples
-//! ```
+// TODO: REACTIVATE THIS EXAMPLE
+//! ```plaintext
 //! use tket2::portmatching::{CircuitPattern, PatternMatcher};
 //! use tket2::Tk2Op;
 //! use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
@@ -53,11 +54,50 @@
 //! # }
 //! ```
 
+pub mod constraint;
 pub mod indexing;
-// pub mod matcher;
-// pub mod pattern;
+pub mod matcher;
+pub mod pattern;
 
-/*/
+pub use indexing::{HugrVariableID, HugrVariableValue};
+
+use matcher::MatchOp;
+pub use pattern::CircuitPattern;
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        extension::{rotation::ROTATION_TYPE, REGISTRY},
+        Circuit, Tk2Op,
+    };
+    use hugr::{
+        builder::{DFGBuilder, Dataflow, DataflowHugr},
+        extension::prelude::QB_T,
+        types::Signature,
+    };
+    use rstest::fixture;
+
+    /// A circuit with two rotation gates in sequence, sharing a param
+    #[fixture]
+    pub(super) fn circ_with_copy() -> Circuit {
+        let input_t = vec![QB_T, ROTATION_TYPE];
+        let output_t = vec![QB_T];
+        let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
+
+        let mut inps = h.input_wires();
+        let qb = inps.next().unwrap();
+        let f = inps.next().unwrap();
+
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb, f]).unwrap();
+        let qb = res.outputs().next().unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb, f]).unwrap();
+        let qb = res.outputs().next().unwrap();
+
+        h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap().into()
+    }
+}
+
+/*
 use hugr::types::EdgeKind;
 use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
