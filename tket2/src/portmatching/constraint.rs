@@ -5,6 +5,7 @@ use std::fmt::Debug;
 
 use hugr::HugrView;
 use itertools::Either;
+use itertools::Itertools;
 use portmatching as pm;
 
 use crate::Circuit;
@@ -17,15 +18,30 @@ use super::MatchOp;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub enum Predicate {
     /// Unary predicate checking the node OpType
+    ///
+    /// Constraint variable must be of type [`HugrVariableID::Node`].
     NodeOp(MatchOp),
+    /// Unary predicate checking the port offset.
+    ///
+    /// Constraint variable must be of type [`HugrVariableID::Port`].
+    PortOffset(hugr::Port),
     /// Binary predicate checking that two ports are attached to the same wire.
     ///
+    /// Constraint variables must be of type [`HugrVariableID::Port`].
     /// Either port may be incoming or outgoing, (but every wire has at most one
     /// outgoing port)
-    CopyableWire(hugr::Port, hugr::Port),
+    CopyableWire,
     /// Binary predicate checking the two ports of a linear wire.
-    LinearWire(hugr::OutgoingPort, hugr::IncomingPort),
+    ///
+    /// Every linear wire has two ports, one outgoing and one incoming.
+    /// Hence one argument must be the outgoing port of the linear wire, the
+    /// other the incoming port.
+    ///
+    /// Constraint variables must be of type [`HugrVariableID::Port`].
+    LinearWire,
     /// The node is not equal to any of the other `n_other` nodes
+    ///
+    /// Constraint variables must be of type [`HugrVariableID::Node`].
     IsNotEqual {
         /// The number of other nodes, determining the predicate arity.
         n_other: usize,
@@ -38,8 +54,8 @@ pub type Constraint = pm::Constraint<HugrVariableID, Predicate>;
 impl pm::ArityPredicate for Predicate {
     fn arity(&self) -> usize {
         match *self {
-            Predicate::NodeOp(_) => 1,
-            Predicate::CopyableWire(..) | Predicate::LinearWire(..) => 2,
+            Predicate::NodeOp(_) | Predicate::PortOffset(_) => 1,
+            Predicate::CopyableWire | Predicate::LinearWire => 2,
             Predicate::IsNotEqual { n_other } => n_other + 1,
         }
     }
@@ -47,21 +63,39 @@ impl pm::ArityPredicate for Predicate {
 
 impl<H: HugrView> pm::Predicate<Circuit<H>> for Predicate {
     fn check(&self, data: &Circuit<H>, args: &[impl Borrow<HugrVariableValue>]) -> bool {
+        let hugr = data.hugr();
         match self {
             Predicate::NodeOp(exp_match_op) => {
+                // Get the native hugr node value
                 let vals = unwrap_to_hugr_values::<hugr::Node, _>(args);
-                let node = vals[0];
-                let match_op: MatchOp = data.hugr().get_optype(node).into();
+                let node = vals.into_iter().exactly_one().expect("one variable");
+
+                let match_op: MatchOp = hugr.get_optype(node).into();
                 exp_match_op == &match_op
             }
-            &Predicate::CopyableWire(exp_port1, exp_port2) => {
-                check_ports(args, data.hugr(), exp_port1, exp_port2)
+            Predicate::PortOffset(exp_port) => {
+                // Get the native hugr port value
+                let vals = unwrap_to_hugr_values::<(hugr::Node, hugr::Port), _>(args);
+                let (_, port) = vals.into_iter().exactly_one().expect("one variable");
+
+                // Check that the port offset is correct
+                exp_port == &port
             }
-            &Predicate::LinearWire(exp_port1, exp_port2) => {
-                check_ports(args, data.hugr(), exp_port1.into(), exp_port2.into())
+            Predicate::CopyableWire | Predicate::LinearWire => {
+                // Get the native hugr values
+                let (arg1, arg2) = unwrap_to_hugr_values::<(hugr::Node, hugr::Port), _>(args)
+                    .into_iter()
+                    .collect_tuple()
+                    .expect("two variables");
+
+                // Convert all ports to Outgoing ports, as they are unique
+                let out1 = to_out_port(hugr, arg1);
+                let out2 = to_out_port(hugr, arg2);
+
+                out1 == out2
             }
             Predicate::IsNotEqual { .. } => {
-                // Get the native hugr values
+                // Get the native hugr node values
                 let vals = unwrap_to_hugr_values::<hugr::Node, _>(args);
                 let first_val = vals[0];
                 vals[1..].iter().all(|&v| v != first_val)
@@ -70,30 +104,20 @@ impl<H: HugrView> pm::Predicate<Circuit<H>> for Predicate {
     }
 }
 
-/// Check `args` correspond to `exp_port1` and `exp_port2` in `hugr`.
-fn check_ports(
-    args: &[impl Borrow<HugrVariableValue>],
+/// Convert a port to its unique outgoing port.
+///
+/// If the port is outgoing, leave it unchanged, otherwise find the unique
+/// outgoing port that it is attached to.
+fn to_out_port(
     hugr: &impl HugrView,
-    exp_port1: hugr::Port,
-    exp_port2: hugr::Port,
-) -> bool {
-    // Get the native hugr values
-    let vals = unwrap_to_hugr_values::<(hugr::Node, hugr::Port), _>(args);
-
-    // Check that the port offsets are correct
-    if vals[0].1 != exp_port1 || vals[1].1 != exp_port2 {
-        return false;
-    }
-
-    // Convert all ports to Outgoing ports, as they are unique
-    let to_out_port = |(node, port): (hugr::Node, hugr::Port)| match port.as_directed() {
+    (node, port): (hugr::Node, hugr::Port),
+) -> (hugr::Node, hugr::OutgoingPort) {
+    match port.as_directed() {
         Either::Left(in_port) => hugr
             .single_linked_output(node, in_port)
             .expect("not a single outgoing port"),
         Either::Right(out_port) => (node, out_port),
-    };
-
-    to_out_port(vals[0]) == to_out_port(vals[1])
+    }
 }
 
 fn unwrap_to_hugr_values<'b, V, B>(args: impl IntoIterator<Item = &'b B>) -> Vec<V>
@@ -115,7 +139,7 @@ mod tests {
     use crate::{portmatching::tests::circ_with_copy, Tk2Op};
 
     use super::*;
-    use hugr::{ops::OpType, IncomingPort, Node, OutgoingPort};
+    use hugr::{ops::OpType, IncomingPort, Node, OutgoingPort, Port};
     use itertools::Itertools;
     use portmatching::Predicate;
     use rstest::rstest;
@@ -142,12 +166,12 @@ mod tests {
         let rx_ops = get_nodes_by_tk2op(&circ_with_copy, Tk2Op::Rx);
 
         // valid edges
-        let edges = [
+        let edges: [(Port, Port); 2] = [
             (OutgoingPort::from(0).into(), IncomingPort::from(0).into()),
             (IncomingPort::from(1).into(), IncomingPort::from(1).into()),
         ];
         for (p1, p2) in edges {
-            let pred = super::Predicate::CopyableWire(p1, p2);
+            let pred = super::Predicate::CopyableWire;
             let vals = rx_ops
                 .iter()
                 .copied()
@@ -157,13 +181,23 @@ mod tests {
             assert!(pred.check(&circ_with_copy, vals.as_slice()));
         }
 
+        // Check port offset predicate
+        for (n, &p) in edges
+            .iter()
+            .flat_map(|(p1, p2)| [(rx_ops[0], p1), (rx_ops[1], p2)])
+        {
+            let pred = super::Predicate::PortOffset(p);
+            let val = HugrVariableValue::from((n, p));
+            assert!(pred.check(&circ_with_copy, &[&val]));
+        }
+
         // invalid edges
-        let edges = [
+        let edges: [(Port, Port); 2] = [
             (OutgoingPort::from(1).into(), IncomingPort::from(0).into()),
             (OutgoingPort::from(1).into(), OutgoingPort::from(10).into()),
         ];
         for (p1, p2) in edges {
-            let pred = super::Predicate::CopyableWire(p1, p2);
+            let pred = super::Predicate::CopyableWire;
             let vals = rx_ops
                 .iter()
                 .copied()

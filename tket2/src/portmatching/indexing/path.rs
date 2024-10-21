@@ -146,7 +146,7 @@ impl HugrPath {
         }
     }
 
-    fn last_port_direction(&self) -> Direction {
+    pub(in crate::portmatching) fn last_port_direction(&self) -> Direction {
         let (_, port, _) = self.uncons();
         port.direction()
     }

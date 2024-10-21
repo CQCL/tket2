@@ -7,7 +7,7 @@ use derive_more::{Display, Error};
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::OpTrait;
 use hugr::types::EdgeKind;
-use hugr::HugrView;
+use hugr::{Direction, HugrView};
 use itertools::{Either, Itertools};
 use portmatching as pm;
 use priority_queue::PriorityQueue;
@@ -92,7 +92,41 @@ impl CircuitPattern {
             constraints.push(Constraint::try_new(pred, vec![var]).unwrap());
         }
 
-        // 2. Add Edge constraints
+        // 2. Add offset constraints for incoming ports
+        for (val, var) in &var_map {
+            let &HugrVariableValue::IncomingPort(_, port) = val else {
+                continue;
+            };
+            let HugrVariableID::Port(HugrPortID::Incoming { path_from_root }) = var else {
+                panic!("invalid variable ID type");
+            };
+            if path_from_root.last_port_direction() == Direction::Incoming {
+                // We do not need to check the port offset, it is satisfied
+                // by definition of the port path
+                continue;
+            }
+            let pred = Predicate::PortOffset(port.into());
+            constraints.push(Constraint::try_new(pred, vec![var.clone()]).unwrap());
+        }
+
+        // 3. Add offset constraints for outgoing ports
+        for (val, var) in &var_map {
+            let &HugrVariableValue::OutgoingPort(_, port) = val else {
+                continue;
+            };
+            let HugrVariableID::Port(HugrPortID::Outgoing { opposite_port }) = var else {
+                panic!("invalid variable ID type");
+            };
+            if opposite_port.last_port_direction() == Direction::Outgoing {
+                // We do not need to check the port offset, it is satisfied
+                // by definition of the port path
+                continue;
+            }
+            let pred = Predicate::PortOffset(port.into());
+            constraints.push(Constraint::try_new(pred, vec![var.clone()]).unwrap());
+        }
+
+        // 4. Add Edge constraints
         for ports in all_circuit_values(circuit) {
             for (&(node1, port1), &(node2, port2)) in ports.iter().tuple_windows() {
                 let vals = [(node1, port1).into(), (node2, port2).into()];
@@ -100,20 +134,15 @@ impl CircuitPattern {
 
                 // Create either a copyable or linear wire predicate
                 let pred = if is_copyable(circuit, node1, port1) {
-                    Predicate::CopyableWire(port1, port2)
+                    Predicate::CopyableWire
                 } else {
-                    let (out_port, in_port) = match (port1.as_directed(), port2.as_directed()) {
-                        (Either::Left(in_port), Either::Right(out_port)) => (out_port, in_port),
-                        (Either::Right(out_port), Either::Left(in_port)) => (out_port, in_port),
-                        _ => panic!("expected one incoming and one outgoing port for linear wire"),
-                    };
-                    Predicate::LinearWire(out_port, in_port)
+                    Predicate::LinearWire
                 };
                 constraints.push(Constraint::try_new(pred, vars.to_vec()).unwrap());
             }
         }
 
-        // 3. Add NotEqual constraints (for injectivity of pattern match)
+        // 5. Add NotEqual constraints (for injectivity of pattern match)
         let mut vars = VecDeque::new();
         for node in circuit.commands().map(|cmd| cmd.node()) {
             let var = var_map[&node.into()];
@@ -521,13 +550,10 @@ mod tests {
         let edge_constraint = p
             .constraints
             .iter()
-            .filter(|cons| matches!(cons.predicate(), &Predicate::LinearWire { .. }))
+            .filter(|cons| matches!(cons.predicate(), Predicate::LinearWire))
             .exactly_one()
             .unwrap();
-        assert!(matches!(
-            edge_constraint.predicate(),
-            Predicate::LinearWire { .. }
-        ));
+        assert!(matches!(edge_constraint.predicate(), Predicate::LinearWire));
         assert!(matches!(
             edge_constraint.required_bindings()[0],
             HugrVariableID::Port(HugrPortID::Incoming { .. })
@@ -606,7 +632,7 @@ mod tests {
             .filter(|cons| {
                 matches!(
                     cons.predicate(),
-                    Predicate::CopyableWire(..) | Predicate::LinearWire(..)
+                    Predicate::CopyableWire | Predicate::LinearWire
                 )
             })
             .collect_vec();
@@ -616,26 +642,27 @@ mod tests {
         // one of the constraints should be a linear wire predicate, with
         // one incoming and one outgoing port
         assert!(constraints.iter().any(|constraint| {
-            matches!(
-                constraint.required_bindings()[0],
-                HugrVariableID::Port(HugrPortID::Outgoing { .. })
-            ) || matches!(
-                constraint.required_bindings()[1],
-                HugrVariableID::Port(HugrPortID::Incoming { .. })
-            ) || matches!(constraint.predicate(), Predicate::LinearWire(..))
+            let has_outgoing = constraint
+                .required_bindings()
+                .iter()
+                .any(|b| matches!(b, HugrVariableID::Port(HugrPortID::Outgoing { .. })));
+            let has_incoming = constraint
+                .required_bindings()
+                .iter()
+                .any(|b| matches!(b, HugrVariableID::Port(HugrPortID::Incoming { .. })));
+            let is_linear = matches!(constraint.predicate(), Predicate::LinearWire);
+            has_outgoing && has_incoming && is_linear
         }));
 
         // one of the constraints should be a copyable wire predicate and only
         // have incoming ports
         assert!(constraints.iter().any(|constraint| {
-            matches!(constraint.predicate(), Predicate::CopyableWire(..));
-            matches!(
-                constraint.required_bindings()[0],
-                HugrVariableID::Port(HugrPortID::Incoming { .. })
-            ) || matches!(
-                constraint.required_bindings()[1],
-                HugrVariableID::Port(HugrPortID::Incoming { .. })
-            )
+            let is_copyable = matches!(constraint.predicate(), Predicate::CopyableWire);
+            let all_incoming = constraint
+                .required_bindings()
+                .iter()
+                .all(|b| matches!(b, HugrVariableID::Port(HugrPortID::Incoming { .. })));
+            is_copyable && all_incoming
         }));
     }
 
