@@ -228,6 +228,7 @@ impl Tk1Encoder {
             qubits,
             bits,
             implicit_permutation,
+            number_of_ws: None,
         }
     }
 
@@ -320,7 +321,7 @@ impl QubitTracker {
     pub fn finish(
         mut self,
         _circ: &Circuit<impl HugrView>,
-    ) -> (Vec<RegisterUnit>, Vec<circuit_json::Permutation>) {
+    ) -> (Vec<RegisterUnit>, Vec<circuit_json::ImplicitPermutation>) {
         // Ensure the input and output lists have the same registers.
         let mut outputs = self.outputs.unwrap_or_default();
         let mut input_regs: HashSet<RegisterHash> =
@@ -354,7 +355,7 @@ impl QubitTracker {
         let permutation = outputs
             .into_iter()
             .zip(&self.inputs)
-            .map(|(out, inp)| circuit_json::Permutation(inp.clone(), out))
+            .map(|(out, inp)| circuit_json::ImplicitPermutation(inp.clone(), out))
             .collect_vec();
 
         (self.inputs, permutation)
@@ -470,7 +471,7 @@ impl BitTracker {
     pub fn finish(
         mut self,
         circ: &Circuit<impl HugrView>,
-    ) -> (Vec<RegisterUnit>, Vec<circuit_json::Permutation>) {
+    ) -> (Vec<RegisterUnit>, Vec<circuit_json::ImplicitPermutation>) {
         let mut circuit_output_order: Vec<RegisterUnit> = Vec::with_capacity(self.inputs.len());
         for (node, port) in circ.hugr().all_linked_outputs(circ.output_node()) {
             let wire = Wire::new(node, port);
@@ -534,7 +535,7 @@ impl BitTracker {
         let permutation = original_permutation
             .into_iter()
             .map(|(inp, out)| {
-                circuit_json::Permutation(inp, circuit_permutation.remove(&out).unwrap())
+                circuit_json::ImplicitPermutation(inp, circuit_permutation.remove(&out).unwrap())
             })
             .collect_vec();
 

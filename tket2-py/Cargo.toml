@@ -28,7 +28,7 @@ serde_json = { workspace = true }
 tket-json-rs = { workspace = true, features = ["pyo3"] }
 hugr = { workspace = true }
 portgraph = { workspace = true, features = ["serde"] }
-pyo3 = { workspace = true }
+pyo3 = { workspace = true, features = ["py-clone"] }
 num_cpus = { workspace = true }
 derive_more = { workspace = true, features = ["into", "from"] }
 itertools = { workspace = true }
