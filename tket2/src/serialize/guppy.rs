@@ -1,12 +1,12 @@
 //! Load pre-compiled guppy functions.
 
 use std::path::Path;
-use std::{fs, io, mem};
+use std::{fs, io};
 
 use derive_more::{Display, Error, From};
 use hugr::ops::{NamedOp, OpTag, OpTrait, OpType};
+use hugr::package::{Package, PackageValidationError};
 use hugr::{Hugr, HugrView};
-use hugr_cli::Package;
 use itertools::Itertools;
 
 use crate::extension::REGISTRY;
@@ -33,12 +33,12 @@ pub fn load_guppy_json_reader(
     reader: impl io::Read,
     function: &str,
 ) -> Result<Circuit, CircuitLoadError> {
-    let pkg: Package = serde_json::from_reader(reader)?;
-    let mut hugrs = pkg.validate(&mut REGISTRY.clone())?;
-    if hugrs.len() != 1 {
-        return Err(CircuitLoadError::InvalidNumHugrs { count: hugrs.len() });
-    }
-    let hugr = mem::take(&mut hugrs[0]);
+    let mut pkg: Package = serde_json::from_reader(reader)?;
+    pkg.update_validate(&mut REGISTRY.clone())?;
+    let count = pkg.modules.len();
+    let Ok(hugr) = pkg.modules.into_iter().exactly_one() else {
+        return Err(CircuitLoadError::InvalidNumHugrs { count });
+    };
     find_function(hugr, function)
 }
 
@@ -151,9 +151,8 @@ pub enum CircuitLoadError {
     #[from]
     CircuitLoadError(CircuitError),
     /// Error validating the loaded circuit.
-    #[display("{_0}")]
     #[from]
-    ValError(hugr_cli::validate::ValError),
+    PackageError(PackageValidationError),
     /// The encoded HUGR package must have a single HUGR.
     #[display("The encoded HUGR package must have a single HUGR, but it has {count} HUGRs.")]
     InvalidNumHugrs {
