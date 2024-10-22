@@ -11,7 +11,8 @@ use bytemuck::TransparentWrapper;
 
 use derive_more::{From, Into};
 use hugr::hugr::hugrmut::HugrMut;
-use hugr::hugr::views::sibling_subgraph::{InvalidReplacement, InvalidSubgraph};
+use hugr::hugr::views::sibling_subgraph::InvalidReplacement;
+pub use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::hugr::views::ExtractHugr;
 use hugr::ops::OpType;
 use hugr::types::Signature;

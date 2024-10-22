@@ -54,6 +54,7 @@ derive_more = { workspace = true, features = [
     "display",
     "from",
     "into",
+    "debug",
 ] }
 hugr = { workspace = true }
 hugr-core = { workspace = true }
