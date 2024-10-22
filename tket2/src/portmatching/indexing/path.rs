@@ -1,6 +1,6 @@
 //! Path encodings for the indexing scheme.
 
-use std::fmt::Debug;
+use std::{cmp::Ordering, fmt::Debug};
 
 use derive_more::Into;
 use hugr::{Direction, HugrView, PortIndex};
@@ -55,9 +55,7 @@ const MAX_BITS: usize = usize::BITS as usize;
 /// Unary flipped means that the binary encoding of the integer is flipped.
 /// Flipping one of the unary encodings means that a tuple can never be all
 /// 0, thus differentiating between tuples and zero padding.
-#[derive(
-    Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, Into, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq, Into, serde::Serialize, serde::Deserialize)]
 pub struct HugrPath(usize);
 
 /// An error that occurs when a path is too long to encode in a HugrPath.
@@ -176,6 +174,10 @@ impl HugrPath {
         }
         starts
     }
+
+    fn len(&self) -> usize {
+        self.tuple_starts().len()
+    }
 }
 
 impl TryFrom<&[(hugr::Port, usize)]> for HugrPath {
@@ -187,6 +189,28 @@ impl TryFrom<&[(hugr::Port, usize)]> for HugrPath {
             builder.push(port, index)?;
         }
         Ok(builder.finish())
+    }
+}
+
+impl PartialOrd for HugrPath {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for HugrPath {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let len_self = self.len();
+        let len_other = other.len();
+        if len_self != len_other {
+            len_self.cmp(&len_other)
+        } else {
+            let (parent_self, port_self, index_self) = self.uncons();
+            let (parent_other, port_other, index_other) = other.uncons();
+            (port_self, index_self)
+                .cmp(&(port_other, index_other))
+                .then_with(|| parent_self.cmp(&parent_other))
+        }
     }
 }
 
@@ -400,5 +424,17 @@ mod tests {
             panic!("non-empty root");
         };
         assert_eq!((port, index), ports[0]);
+    }
+
+    #[test]
+    fn test_path_cmp() {
+        let path1 = vec![(hugr::Port::new(Direction::Incoming, 2), 2)];
+        let path2 = vec![
+            (hugr::Port::new(Direction::Incoming, 3), 3),
+            (hugr::Port::new(Direction::Incoming, 3), 3),
+        ];
+        let a = HugrPath::try_from(path1.as_slice()).unwrap();
+        let b = HugrPath::try_from(path2.as_slice()).unwrap();
+        assert!(a < b);
     }
 }
