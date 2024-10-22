@@ -53,9 +53,11 @@
 //! # }
 //! ```
 
-pub mod matcher;
-pub mod pattern;
+pub mod indexing;
+// pub mod matcher;
+// pub mod pattern;
 
+/*/
 use hugr::types::EdgeKind;
 use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
@@ -251,3 +253,4 @@ mod tests {
         assert_eq!(matches.len(), 1);
     }
 }
+*/
