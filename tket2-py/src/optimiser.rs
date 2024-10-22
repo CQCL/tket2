@@ -36,7 +36,7 @@ pub enum BadgerCostFunction {
 }
 
 impl<'py> FromPyObject<'py> for BadgerCostFunction {
-    fn extract(ob: &'py PyAny) -> PyResult<Self> {
+    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
         let str = ob.extract::<&str>()?;
         match str {
             "cx" => Ok(BadgerCostFunction::CXCount),
@@ -53,6 +53,7 @@ impl<'py> FromPyObject<'py> for BadgerCostFunction {
 impl PyBadgerOptimiser {
     /// Create a new [`PyDefaultBadgerOptimiser`] from a precompiled rewriter.
     #[staticmethod]
+    #[pyo3(signature = (path, cost_fn=None))]
     pub fn load_precompiled(path: PathBuf, cost_fn: Option<BadgerCostFunction>) -> Self {
         let opt = match cost_fn.unwrap_or_default() {
             BadgerCostFunction::CXCount => {
@@ -69,6 +70,7 @@ impl PyBadgerOptimiser {
     ///
     /// This will compile the rewriter from the provided ECC JSON file.
     #[staticmethod]
+    #[pyo3(signature = (path, cost_fn=None))]
     pub fn compile_eccs(path: &str, cost_fn: Option<BadgerCostFunction>) -> Self {
         let opt = match cost_fn.unwrap_or_default() {
             BadgerCostFunction::CXCount => {
@@ -130,6 +132,7 @@ impl PyBadgerOptimiser {
     ///
     #[pyo3(name = "optimise")]
     #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (circ, timeout=None, progress_timeout=None, max_circuit_count=None, n_threads=None, split_circ=None, queue_size=None, log_progress=None))]
     pub fn py_optimise<'py>(
         &self,
         circ: &Bound<'py, PyAny>,

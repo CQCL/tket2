@@ -237,7 +237,7 @@ impl Tk2Circuit {
     /// Tries to extract a Tk2Circuit from a python object.
     ///
     /// Returns an error if the py object is not a Tk2Circuit.
-    pub fn try_extract(circ: &PyAny) -> PyResult<Self> {
+    pub fn try_extract(circ: &Bound<PyAny>) -> PyResult<Self> {
         circ.extract::<Tk2Circuit>()
     }
 }

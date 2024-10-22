@@ -17,7 +17,7 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
 }
 
 /// Bounds on the valid operations on a type in a HUGR program.
-#[pyclass]
+#[pyclass(eq, eq_int)]
 #[pyo3(name = "TypeBound")]
 #[derive(PartialEq, Clone, Debug)]
 pub enum PyTypeBound {
