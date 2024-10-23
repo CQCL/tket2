@@ -24,6 +24,11 @@ pub(super) fn rewrite_into_dfg(circ: &mut Circuit) -> Result<(), CircuitMutError
         _ => signature,
     };
 
+    circ.hugr.set_num_ports(
+        circ.parent(),
+        signature.input_count() + 1,
+        signature.input_count() + 1,
+    );
     circ.hugr.replace_op(circ.parent(), DFG { signature })?;
 
     Ok(())
