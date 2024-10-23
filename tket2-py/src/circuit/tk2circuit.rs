@@ -8,8 +8,8 @@ use hugr::extension::prelude::QB_T;
 use hugr::extension::{ExtensionRegistry, EMPTY_REG};
 use hugr::ops::handle::NodeHandle;
 use hugr::ops::{ExtensionOp, NamedOp, OpType};
+use hugr::package::Package;
 use hugr::types::Type;
-use hugr_cli::Package;
 use itertools::Itertools;
 use pyo3::exceptions::{PyAttributeError, PyValueError};
 use pyo3::types::{PyAnyMethods, PyModule, PyString, PyTypeMethods};
@@ -97,20 +97,18 @@ impl Tk2Circuit {
     /// Decode a HUGR json string to a circuit.
     #[staticmethod]
     pub fn from_hugr_json(json: &str) -> PyResult<Self> {
-        let pkg: Package = serde_json::from_str(json)
+        let mut pkg: Package = serde_json::from_str(json)
             .map_err(|e| PyErr::new::<PyAttributeError, _>(format!("Invalid encoded HUGR: {e}")))?;
         let mut reg = REGISTRY.clone();
-        let mut hugrs = pkg.validate(&mut reg).map_err(|e| {
+        pkg.update_validate(&mut reg).map_err(|e| {
             PyErr::new::<PyAttributeError, _>(format!("Invalid encoded circuit: {e}"))
         })?;
-        if hugrs.len() != 1 {
+        let Ok(hugr) = pkg.modules.into_iter().exactly_one() else {
             return Err(PyValueError::new_err(
                 "Invalid HUGR json: Package must contain exactly one hugr.",
             ));
-        }
-        Ok(Tk2Circuit {
-            circ: mem::take(&mut hugrs[0]).into(),
-        })
+        };
+        Ok(Tk2Circuit { circ: hugr.into() })
     }
 
     /// Load a function from a compiled guppy module, encoded as a json string.
