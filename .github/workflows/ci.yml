@@ -23,7 +23,7 @@ env:
   UV_VERSION: "0.4.20"
   UV_FROZEN: 1
   # The highest and lowest supported Python versions, used for testing
-  PYTHON_HIGHEST: "3.12"
+  PYTHON_HIGHEST: "3.13"
   PYTHON_LOWEST: "3.10"
 
 jobs:
