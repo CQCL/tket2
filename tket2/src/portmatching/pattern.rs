@@ -7,9 +7,9 @@ use derive_more::{Display, Error};
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::OpTrait;
 use hugr::types::EdgeKind;
-use hugr::{Direction, HugrView};
-use itertools::{Either, Itertools};
-use portmatching as pm;
+use hugr::HugrView;
+use itertools::Itertools;
+use portmatching::{self as pm, ArityPredicate};
 use priority_queue::PriorityQueue;
 
 use super::constraint::{Constraint, Predicate};
@@ -19,7 +19,7 @@ use crate::rewrite::{InvalidSubgraph, Subcircuit};
 use crate::Circuit;
 
 /// The single source of truth for the VariableMap, mapping incoming ports to paths
-type InPortToPathMap = BTreeMap<(hugr::Node, hugr::IncomingPort), HugrPath>;
+type NodeToPathMap = BTreeMap<hugr::Node, HugrPath>;
 /// The inverse of `HugrBindMap`
 type VariableMap = BTreeMap<HugrVariableValue, HugrVariableID>;
 /// The IO boundary of a pattern
@@ -70,14 +70,21 @@ pub enum InvalidPattern {
         /// The target port
         to_port: hugr::Port,
     },
+    /// A non-linear output port.
+    #[display("Found unsupported non-linear pattern output at ({node:?}, {port:?})")]
+    NonLinearOutput {
+        node: hugr::Node,
+        port: hugr::OutgoingPort,
+    },
 }
 
 impl CircuitPattern {
     /// Construct a pattern from a circuit.
     pub fn try_from_circuit<H: HugrView>(circuit: &Circuit<H>) -> Result<Self, InvalidPattern> {
         // Find the best map from hugr values to variables
-        let (root, port_map) = get_in_port_to_path_map(circuit)?;
-        let var_map = into_variable_map(port_map, root, circuit)?;
+        let path_map = get_node_to_path_map(circuit)?;
+        let var_map = into_variable_map(path_map, circuit);
+        let nodes: BTreeSet<_> = circuit.commands().map(|cmd| cmd.node()).collect();
 
         check_no_empty_wire(circuit)?;
 
@@ -92,57 +99,38 @@ impl CircuitPattern {
             constraints.push(Constraint::try_new(pred, vec![var]).unwrap());
         }
 
-        // 2. Add offset constraints for incoming ports
-        for (val, var) in &var_map {
-            let &HugrVariableValue::IncomingPort(_, port) = val else {
-                continue;
+        // 2. Add Edge constraints
+        for (out_port, in_ports) in all_circuit_values(circuit) {
+            // Filter out ports that are not in the pattern
+            let out_val: Option<HugrVariableValue> = if nodes.contains(&out_port.0) {
+                Some(out_port.into())
+            } else {
+                None
             };
-            let HugrVariableID::Port(HugrPortID::Incoming { path_from_root }) = var else {
-                panic!("invalid variable ID type");
-            };
-            if path_from_root.last_port_direction() == Direction::Incoming {
-                // We do not need to check the port offset, it is satisfied
-                // by definition of the port path
-                continue;
-            }
-            let pred = Predicate::PortOffset(port.into());
-            constraints.push(Constraint::try_new(pred, vec![var.clone()]).unwrap());
-        }
+            let in_vals = in_ports
+                .into_iter()
+                .filter(|(n, _)| nodes.contains(n))
+                .map_into()
+                .collect_vec();
 
-        // 3. Add offset constraints for outgoing ports
-        for (val, var) in &var_map {
-            let &HugrVariableValue::OutgoingPort(_, port) = val else {
-                continue;
+            // Create the predicate
+            let n_in_ports = in_vals.len();
+            let has_out_port = out_val.is_some();
+            let pred = Predicate::Wire {
+                has_out_port,
+                n_in_ports,
             };
-            let HugrVariableID::Port(HugrPortID::Outgoing { opposite_port }) = var else {
-                panic!("invalid variable ID type");
-            };
-            if opposite_port.last_port_direction() == Direction::Outgoing {
-                // We do not need to check the port offset, it is satisfied
-                // by definition of the port path
+            if pred.arity() < 2 {
+                // This is a tautology
                 continue;
             }
-            let pred = Predicate::PortOffset(port.into());
-            constraints.push(Constraint::try_new(pred, vec![var.clone()]).unwrap());
+
+            // Create the constraint
+            let vars = out_val.into_iter().chain(in_vals).map(|val| var_map[&val]);
+            constraints.push(Constraint::try_new(pred, vars.collect()).unwrap());
         }
 
-        // 4. Add Edge constraints
-        for ports in all_circuit_values(circuit) {
-            for (&(node1, port1), &(node2, port2)) in ports.iter().tuple_windows() {
-                let vals = [(node1, port1).into(), (node2, port2).into()];
-                let vars = vals.map(|val| var_map[&val]);
-
-                // Create either a copyable or linear wire predicate
-                let pred = if is_copyable(circuit, node1, port1) {
-                    Predicate::CopyableWire
-                } else {
-                    Predicate::LinearWire
-                };
-                constraints.push(Constraint::try_new(pred, vars.to_vec()).unwrap());
-            }
-        }
-
-        // 5. Add NotEqual constraints (for injectivity of pattern match)
+        // 3. Add NotEqual constraints (for injectivity of pattern match)
         let mut vars = VecDeque::new();
         for node in circuit.commands().map(|cmd| cmd.node()) {
             let var = var_map[&node.into()];
@@ -155,7 +143,7 @@ impl CircuitPattern {
         }
 
         // Finally, figure out the input and output ports
-        let (input_ports, output_ports) = get_io_boundary(circuit, &var_map);
+        let (input_ports, output_ports) = get_io_boundary(circuit, &var_map)?;
 
         Ok(Self {
             constraints,
@@ -188,7 +176,7 @@ impl CircuitPattern {
 fn get_io_boundary(
     circuit: &Circuit<impl HugrView>,
     var_map: &BTreeMap<HugrVariableValue, HugrVariableID>,
-) -> Boundary {
+) -> Result<Boundary, InvalidPattern> {
     let [inp, out] = circuit.io_nodes();
     let hugr = circuit.hugr();
 
@@ -207,13 +195,28 @@ fn get_io_boundary(
         .collect();
     let output_ports = filtered_node_inputs(out, hugr)
         .map(|in_port| {
-            let out_port = hugr
+            let (out_node, out_port) = hugr
                 .single_linked_output(out, in_port)
                 .expect("disconnected input port");
-            convert_to_port_var(out_port.into())
+            if is_copyable(circuit, out_node, out_port.into()) {
+                Err(InvalidPattern::NonLinearOutput {
+                    node: out_node,
+                    port: out_port,
+                })
+            } else {
+                Ok(convert_to_port_var((out_node, out_port).into()))
+            }
         })
-        .collect();
-    (input_ports, output_ports)
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok((input_ports, output_ports))
+}
+
+/// Key for sorting constraints.
+///
+/// Sort by largest variable first, then break ties by predicate.
+fn constraint_key(constraint: &Constraint) -> (HugrVariableID, Predicate) {
+    let &max_var = constraint.required_bindings().iter().max().unwrap();
+    (max_var, constraint.predicate().clone())
 }
 
 fn check_no_empty_wire(circuit: &Circuit<impl HugrView>) -> Result<(), InvalidPattern> {
@@ -236,172 +239,123 @@ fn check_no_empty_wire(circuit: &Circuit<impl HugrView>) -> Result<(), InvalidPa
     Ok(())
 }
 
-/// Turn a path map for incoming ports into a map of every variable in `hugr`.
-fn into_variable_map(
-    port_map: InPortToPathMap,
-    root: hugr::Node,
-    circuit: &Circuit<impl HugrView>,
-) -> Result<VariableMap, InvalidPattern> {
+/// Turn a path map for nodes into a map for every variable in `hugr`.
+///
+/// All non-IO nodes in hugr must be bound in `path_map`.
+fn into_variable_map(path_map: NodeToPathMap, circuit: &Circuit<impl HugrView>) -> VariableMap {
     let hugr = circuit.hugr();
     let mut ret = BTreeMap::new();
+    let all_nodes = circuit.commands().map(|cmd| cmd.node()).collect_vec();
 
-    // 1. Add incoming ports
-    let all_incoming_ports = hugr
-        .nodes()
-        .flat_map(|n| filtered_node_inputs(n, hugr).map(move |p| (n, p)));
-    for (node, port) in all_incoming_ports {
-        let path = port_map[&(node, port)];
-        let var = HugrPortID::new_incoming(path).into();
-        let val = HugrVariableValue::IncomingPort(node, port);
-        ret.insert(val, var);
-    }
-
-    // 2. Add outgoing ports
-    let all_outgoing_ports = hugr
-        .nodes()
-        .flat_map(|n| hugr.node_outputs(n).map(move |p| (n, p)));
-    for (node, port) in all_outgoing_ports {
-        let Some((node, in_port)) = hugr.linked_inputs(node, port).next() else {
-            // Ignore ports that are not connected to an input
-            continue;
-        };
-        let opposite_port = port_map[&(node, in_port)];
-        let var = HugrPortID::new_outgoing(opposite_port).into();
-        let val = HugrVariableValue::OutgoingPort(node, port);
-        ret.insert(val, var);
-    }
-
-    // 3. Add nodes
-    let all_nodes = circuit.commands().map(|cmd| cmd.node());
-    for node in all_nodes {
+    // 1. Add nodes
+    for &node in &all_nodes {
+        let path = path_map[&node];
         let val = HugrVariableValue::Node(node);
-        let var = get_node_var(node, root, hugr, &port_map)?;
+        let var = HugrNodeID::new(path);
         ret.insert(val, var.into());
     }
-    Ok(ret)
-}
 
-/// Get the variable ID for a node.
-fn get_node_var(
-    node: hugr::Node,
-    root: hugr::Node,
-    hugr: &impl HugrView,
-    port_map: &InPortToPathMap,
-) -> Result<HugrNodeID, InvalidPattern> {
-    if node == root {
-        Ok(HugrNodeID::Root)
-    } else {
-        let in_ports = filtered_node_inputs(node, hugr).map_into();
-        let connected_out_ports = hugr
-            .node_outputs(node)
-            .filter(|&p| hugr.is_linked(node, p))
-            .map_into();
-        // Any incident port (there must be one as node is not root)
-        let incident_port: hugr::Port = in_ports
-            .chain(connected_out_ports)
-            .next()
-            .ok_or(InvalidPattern::NotConnected)?;
-        // Map port to a variable ID
-        let incident_port = match incident_port.as_directed() {
-            Either::Left(in_port) => {
-                let path = port_map[&(node, in_port)];
-                HugrPortID::new_incoming(path)
-            }
-            Either::Right(out_port) => {
-                let in_port = hugr
-                    .linked_inputs(node, out_port)
-                    .next()
-                    .expect("checked above: port is connected");
-                let path = port_map[&in_port];
-                HugrPortID::new_outgoing(path)
-            }
-        };
-        Ok(HugrNodeID::NonRoot { incident_port })
+    // 2. Add ports
+    let in_ports = all_nodes
+        .iter()
+        .flat_map(|&n| filtered_node_inputs(n, hugr).map(move |p| (n, hugr::Port::from(p))));
+    let out_ports = all_nodes
+        .iter()
+        .flat_map(|&n| filtered_node_outputs(n, hugr).map(move |p| (n, hugr::Port::from(p))));
+    let ports = in_ports.chain(out_ports);
+    for (node, port) in ports {
+        let path = HugrNodeID::new(path_map[&node]);
+        let var = HugrPortID::new(path, port);
+        let val = (node, port);
+        ret.insert(val.into(), var.into());
     }
+
+    ret
 }
 
 /// Fix the incoming port names (i.e. their path)
 ///
 /// Choose the root that minimises the maximum path length.
-fn get_in_port_to_path_map(
-    circuit: &Circuit<impl HugrView>,
-) -> Result<(hugr::Node, InPortToPathMap), InvalidPattern> {
+fn get_node_to_path_map(circuit: &Circuit<impl HugrView>) -> Result<NodeToPathMap, InvalidPattern> {
     if circuit.num_operations() == 0 {
         return Err(InvalidPattern::EmptyCircuit);
     }
     let nodes = circuit.commands().map(|cmd| cmd.node());
     let mut best_map = None;
-    let mut best_root = None;
-    let max_path = |map: &BTreeMap<_, _>| {
-        map.values()
-            .map(|path: &HugrPath| -> usize { (*path).into() })
-            .max()
-            .unwrap()
-    };
+    let max_path = |map: &BTreeMap<_, _>| map.values().max().copied().unwrap();
     for root in nodes {
         // Use Dijkstra to find all shortest paths from root
-        let Some(map) = dijkstra_all_shortest_paths(root, circuit.hugr()) else {
+        let Some(map) = dijkstra_all_shortest_paths(root, circuit) else {
             continue;
         };
         if best_map.is_none() || max_path(&map) < max_path(best_map.as_ref().unwrap()) {
             best_map = Some(map);
-            best_root = Some(root);
         }
     }
-    let Some(best_root) = best_root else {
+    let Some(best_map) = best_map else {
         return Err(InvalidPattern::NotConnected);
     };
-    let best_map = best_map.unwrap();
-    Ok((best_root, best_map))
+    Ok(best_map)
 }
 
 /// Compute the minimum paths from the root to all nodes.
 ///
-/// The returned map is a valid InPortToPathMap, i.e. it has a key for every
-/// input port in `hugr`.
-fn dijkstra_all_shortest_paths(root: hugr::Node, hugr: &impl HugrView) -> Option<InPortToPathMap> {
-    // Iterate over all incoming ports i) at `node` and ii) at successors of `node`.
-    let iter_incoming = |node| {
-        let self_in_ports = filtered_node_inputs(node, hugr).map(move |p| (node, p, 0));
-        let next_in_ports = hugr
-            .node_outputs(node)
-            .enumerate()
-            .flat_map(move |(i, p)| hugr.linked_inputs(node, p).map(move |(n, p)| (n, p, i)));
-        self_in_ports.chain(next_in_ports)
+/// The returned map is a valid [`NodeToPathMap`], i.e. it has a key for every
+/// node in `hugr`.
+fn dijkstra_all_shortest_paths(
+    root: hugr::Node,
+    circuit: &Circuit<impl HugrView>,
+) -> Option<NodeToPathMap> {
+    let hugr = circuit.hugr();
+    let all_nodes: BTreeSet<_> = circuit.commands().map(|cmd| cmd.node()).collect();
+
+    // All neighbours of `node`
+    let neighbours = |node| {
+        let in_neighbours = filtered_node_inputs(node, hugr).flat_map(|in_port| {
+            let (out_node, _) = hugr.single_linked_output(node, in_port)?;
+            if !all_nodes.contains(&out_node) {
+                return None;
+            }
+            let traverse = hugr::Port::from(in_port);
+            Some((traverse, out_node, 0))
+        });
+        let out_neighbours = filtered_node_outputs(node, hugr).flat_map(|out_port| {
+            let traverse = hugr::Port::from(out_port);
+            hugr.linked_inputs(node, out_port)
+                .filter(|(n, _)| all_nodes.contains(n))
+                .enumerate()
+                .map(move |(i, (in_node, _))| (traverse, in_node, i))
+        });
+        in_neighbours.chain(out_neighbours).collect_vec()
     };
-    // Enqueue all ports for `node`.
-    let enqueue = |pq: &mut PriorityQueue<_, _, _>,
-                   ret: &BTreeMap<_, _>,
-                   node,
-                   path_builder: HugrPathBuilder| {
-        for (node, port, index) in iter_incoming(node) {
+    // Enqueue all unvisited neighbours of `node`.
+    let enqueue_neighbours = |pq: &mut PriorityQueue<_, _, _>,
+                              ret: &BTreeMap<_, _>,
+                              node,
+                              path_builder: HugrPathBuilder| {
+        for (traverse_port, node, index) in neighbours(node) {
             let mut path_builder = path_builder.clone();
             // ignore errors, check at the end if all ports have found a path
-            if path_builder.push(port.into(), index).is_ok() && !ret.contains_key(&(node, port)) {
-                pq.push_decrease((node, port), path_builder);
+            if path_builder.push(traverse_port, index).is_ok() && !ret.contains_key(&node) {
+                pq.push_decrease(node, path_builder);
             }
         }
     };
 
     let mut ret = BTreeMap::new();
     let mut pqueue = PriorityQueue::new();
-    enqueue(&mut pqueue, &ret, root, HugrPathBuilder::new());
+    pqueue.push(root, HugrPathBuilder::new());
 
-    while let Some(((node, port), path_builder)) = pqueue.pop() {
+    while let Some((node, path_builder)) = pqueue.pop() {
         let new_path = path_builder.clone().finish();
-        let success = ret.insert((node, port), new_path).is_none();
+        let success = ret.insert(node, new_path).is_none();
         debug_assert!(success);
-        enqueue(&mut pqueue, &ret, node, path_builder);
+        enqueue_neighbours(&mut pqueue, &ret, node, path_builder);
     }
 
-    // Check that all input ports have been assigned a path.
-    let all_in_ports = hugr
-        .nodes()
-        .flat_map(|n| filtered_node_inputs(n, hugr).map(move |p| (n, p)));
-    for (node, port) in all_in_ports {
-        if !ret.contains_key(&(node, port)) {
-            return None;
-        }
+    // Check that all nodes have been assigned a path.
+    if !all_nodes.iter().all(|node| ret.contains_key(node)) {
+        return None;
     }
 
     Some(ret)
@@ -412,22 +366,19 @@ fn dijkstra_all_shortest_paths(root: hugr::Node, hugr: &impl HugrView) -> Option
 /// For each edge, return the ports of the edge on ops of the circuits (i.e. nodes minus input/output).
 fn all_circuit_values(
     circ: &Circuit<impl HugrView>,
-) -> impl Iterator<Item = Vec<(hugr::Node, hugr::Port)>> + '_ {
+) -> impl Iterator<
+    Item = (
+        (hugr::Node, hugr::OutgoingPort),
+        Vec<(hugr::Node, hugr::IncomingPort)>,
+    ),
+> + '_ {
     let all_outgoing_ports = circ
         .hugr()
         .nodes()
-        .flat_map(|n| circ.hugr().node_outputs(n).map(move |p| (n, p)));
-    let op_nodes: BTreeSet<_> = circ.commands().map(|cmd| cmd.node()).collect();
-    // this assumes that there is a one-to-many mapping between outgoing ports and incoming ports (i.e. copy fan-out)
+        .flat_map(|n| filtered_node_outputs(n, circ.hugr()).map(move |p| (n, p)));
     all_outgoing_ports.map(move |(out_node, out_port)| {
-        let in_ports = circ
-            .hugr()
-            .linked_inputs(out_node, out_port)
-            .map(|(n, p)| (n, p.into()));
-        let ports = in_ports
-            .chain([(out_node, out_port.into())])
-            .filter(|(n, _)| op_nodes.contains(n));
-        ports.collect()
+        let in_ports = circ.hugr().linked_inputs(out_node, out_port).collect();
+        ((out_node, out_port), in_ports)
     })
 }
 
@@ -458,6 +409,14 @@ fn filtered_node_inputs(
     filter_ports(ports, node, hugr)
 }
 
+fn filtered_node_outputs(
+    node: hugr::Node,
+    hugr: &impl HugrView,
+) -> impl Iterator<Item = hugr::OutgoingPort> + '_ {
+    let ports = hugr.node_outputs(node);
+    filter_ports(ports, node, hugr)
+}
+
 fn is_copyable(circuit: &Circuit<impl HugrView>, node: hugr::Node, port: hugr::Port) -> bool {
     circuit
         .hugr()
@@ -478,6 +437,7 @@ mod tests {
     use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
     use hugr::extension::prelude::QB_T;
     use hugr::types::Signature;
+    use hugr::Direction;
     use rstest::rstest;
 
     use crate::extension::rotation::ROTATION_TYPE;
@@ -540,28 +500,30 @@ mod tests {
             })
             .collect();
         assert_eq!(op_map.len(), 2);
-        assert_eq!(op_map[&Tk2Op::CX.into()], HugrNodeID::Root);
-        assert!(matches!(
-            op_map[&Tk2Op::H.into()],
-            HugrNodeID::NonRoot { .. }
-        ));
+        assert_eq!(op_map[&Tk2Op::H.into()], HugrNodeID::root());
+        assert!(matches!(op_map[&Tk2Op::CX.into()], HugrNodeID { .. }));
 
         // Assert the edge constraints
+        let linear_wire_pred = Predicate::Wire {
+            has_out_port: true,
+            n_in_ports: 1,
+        };
         let edge_constraint = p
             .constraints
             .iter()
-            .filter(|cons| matches!(cons.predicate(), Predicate::LinearWire))
+            .filter(|cons| cons.predicate() == &linear_wire_pred)
             .exactly_one()
             .unwrap();
-        assert!(matches!(edge_constraint.predicate(), Predicate::LinearWire));
-        assert!(matches!(
-            edge_constraint.required_bindings()[0],
-            HugrVariableID::Port(HugrPortID::Incoming { .. })
-        ));
-        assert!(matches!(
-            edge_constraint.required_bindings()[1],
-            HugrVariableID::Port(HugrPortID::Outgoing { .. })
-        ));
+        let HugrVariableID::Port(HugrPortID { port, .. }) = edge_constraint.required_bindings()[0]
+        else {
+            panic!("invalid var type");
+        };
+        assert_eq!(port.direction(), Direction::Outgoing);
+        let HugrVariableID::Port(HugrPortID { port, .. }) = edge_constraint.required_bindings()[1]
+        else {
+            panic!("invalid var type");
+        };
+        assert_eq!(port.direction(), Direction::Incoming);
     }
 
     #[test]
@@ -623,18 +585,13 @@ mod tests {
             })
             .collect();
         assert_eq!(nodes.len(), 2);
-        assert!(nodes.contains(&HugrNodeID::Root));
+        assert!(nodes.contains(&HugrNodeID::root()));
 
         // Assert the edge constraints
         let constraints = pattern
             .constraints
             .iter()
-            .filter(|cons| {
-                matches!(
-                    cons.predicate(),
-                    Predicate::CopyableWire | Predicate::LinearWire
-                )
-            })
+            .filter(|cons| matches!(cons.predicate(), Predicate::Wire { .. }))
             .collect_vec();
 
         assert_eq!(constraints.len(), 2);
@@ -642,26 +599,40 @@ mod tests {
         // one of the constraints should be a linear wire predicate, with
         // one incoming and one outgoing port
         assert!(constraints.iter().any(|constraint| {
-            let has_outgoing = constraint
-                .required_bindings()
-                .iter()
-                .any(|b| matches!(b, HugrVariableID::Port(HugrPortID::Outgoing { .. })));
-            let has_incoming = constraint
-                .required_bindings()
-                .iter()
-                .any(|b| matches!(b, HugrVariableID::Port(HugrPortID::Incoming { .. })));
-            let is_linear = matches!(constraint.predicate(), Predicate::LinearWire);
+            let has_outgoing = constraint.required_bindings().iter().any(|b| {
+                let HugrVariableID::Port(HugrPortID { port, .. }) = b else {
+                    return false;
+                };
+                port.direction() == Direction::Outgoing
+            });
+            let has_incoming = constraint.required_bindings().iter().any(|b| {
+                let HugrVariableID::Port(HugrPortID { port, .. }) = b else {
+                    return false;
+                };
+                port.direction() == Direction::Incoming
+            });
+            let linear_wire_pred = Predicate::Wire {
+                has_out_port: true,
+                n_in_ports: 1,
+            };
+            let is_linear = constraint.predicate() == &linear_wire_pred;
             has_outgoing && has_incoming && is_linear
         }));
 
         // one of the constraints should be a copyable wire predicate and only
         // have incoming ports
+        let copyable_wire_pred = Predicate::Wire {
+            has_out_port: false,
+            n_in_ports: 2,
+        };
         assert!(constraints.iter().any(|constraint| {
-            let is_copyable = matches!(constraint.predicate(), Predicate::CopyableWire);
-            let all_incoming = constraint
-                .required_bindings()
-                .iter()
-                .all(|b| matches!(b, HugrVariableID::Port(HugrPortID::Incoming { .. })));
+            let is_copyable = constraint.predicate() == &copyable_wire_pred;
+            let all_incoming = constraint.required_bindings().iter().all(|b| {
+                let HugrVariableID::Port(HugrPortID { port, .. }) = b else {
+                    return false;
+                };
+                port.direction() == Direction::Incoming
+            });
             is_copyable && all_incoming
         }));
     }
