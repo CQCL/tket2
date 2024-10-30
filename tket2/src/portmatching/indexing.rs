@@ -64,7 +64,7 @@ pub struct HugrPortID {
 }
 
 impl HugrPortID {
-    pub(super) fn new(node: HugrNodeID, port: hugr::Port) -> Self {
+    pub fn new(node: HugrNodeID, port: hugr::Port) -> Self {
         Self { node, port }
     }
 
