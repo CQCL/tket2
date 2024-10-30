@@ -59,7 +59,7 @@ pub type HugrBindMap = BTreeMap<HugrVariableID, HugrVariableValue>;
 pub struct HugrPortID {
     /// The node that the port belongs to.
     pub node: HugrNodeID,
-    /// The port offset.
+    /// The port index.
     pub port: hugr::Port,
 }
 
