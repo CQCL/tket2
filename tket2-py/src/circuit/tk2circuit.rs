@@ -1,6 +1,7 @@
 //! Rust-backed representation of circuits
 
 use std::borrow::{Borrow, Cow};
+use std::fmt::Display;
 use std::mem;
 
 use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
@@ -91,7 +92,13 @@ impl Tk2Circuit {
     //
     // TODO: Bind a messagepack encoder/decoder too.
     pub fn to_hugr_json(&self) -> PyResult<String> {
-        Ok(serde_json::to_string(self.circ.hugr()).unwrap())
+        fn err(e: impl Display) -> PyErr {
+            PyErr::new::<PyAttributeError, _>(format!("Could not encode pytket circuit: {e}"))
+        };
+        let mut buf = Vec::new();
+        self.circ.to_hugr_writer(&mut buf).map_err(err)?;
+        let res = std::str::from_utf8(&buf).map_err(err)?;
+        Ok(res.to_string())
     }
 
     /// Decode a HUGR json string to a circuit.
@@ -109,15 +116,6 @@ impl Tk2Circuit {
             ));
         };
         Ok(Tk2Circuit { circ: hugr.into() })
-    }
-
-    /// Load a function from a compiled guppy module, encoded as a json string.
-    #[staticmethod]
-    pub fn from_guppy_json(json: &str, function: &str) -> PyResult<Self> {
-        let circ = tket2::serialize::load_guppy_json_str(json, function).map_err(|e| {
-            PyErr::new::<PyAttributeError, _>(format!("Invalid encoded circuit: {e}"))
-        })?;
-        Ok(Tk2Circuit { circ })
     }
 
     /// Encode the circuit as a tket1 json string.
