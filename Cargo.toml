@@ -23,6 +23,11 @@ license = "Apache-2.0"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci_run)'] }
 missing_docs = "warn"
 
+[patch.crates-io]
+hugr-core = { git = "https://github.com/CQCL/hugr.git", branch = "ab/package-from-hugr" }
+hugr = { git = "https://github.com/CQCL/hugr.git", branch = "ab/package-from-hugr" }
+hugr-cli = { git = "https://github.com/CQCL/hugr.git", branch = "ab/package-from-hugr" }
+
 [workspace.dependencies]
 
 # Make sure to run `just recompile-eccs` if the hugr serialisation format changes.

@@ -70,7 +70,8 @@ impl<T: AsRef<Hugr>> Circuit<T> {
         //
         // This restriction may be relaxed once `METADATA_ENTRYPOINT` is implemented.
         let circuit_is_at_root = self.parent() == hugr.root();
-        let circuit_is_fn_at_module_root = hugr.get_optype(hugr.root()).tag() < OpTag::ModuleRoot
+        let circuit_is_fn_at_module_root = OpTag::ModuleRoot
+            .is_superset(hugr.get_optype(hugr.root()).tag())
             && hugr.get_parent(self.parent()) == Some(hugr.root());
         if !circuit_is_at_root && !circuit_is_fn_at_module_root {
             return Err(CircuitStoreError::NonRootCircuit {
@@ -300,4 +301,70 @@ fn find_function(hugr: Hugr, function_name: &str) -> Result<Circuit, CircuitLoad
 
     let circ = Circuit::try_new(hugr, function)?;
     Ok(circ)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Tk2Op;
+
+    use super::*;
+    use std::io::Cursor;
+
+    use hugr::builder::{
+        Container, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer, HugrBuilder,
+        ModuleBuilder,
+    };
+    use hugr::extension::prelude::QB_T;
+    use hugr::ops::handle::NodeHandle;
+    use hugr::types::Signature;
+    use rstest::{fixture, rstest};
+
+    #[fixture]
+    fn root_circ() -> Circuit {
+        let mut h = DFGBuilder::new(Signature::new(vec![], vec![QB_T])).unwrap();
+
+        let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
+        let q = res.out_wire(0);
+
+        h.finish_hugr_with_outputs([q], &REGISTRY).unwrap().into()
+    }
+
+    #[fixture]
+    fn function_circ() -> Circuit {
+        let mut h = ModuleBuilder::new();
+
+        let mut f = h
+            .define_function("banana", Signature::new(vec![], vec![QB_T]))
+            .unwrap();
+        let res = f.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
+        let q = res.out_wire(0);
+        let func_node = f.finish_with_outputs([q]).unwrap().handle().node();
+
+        Circuit::new(h.finish_hugr(&REGISTRY).unwrap(), func_node)
+    }
+
+    /// Test roundtrips of a circuit with a root parent.
+    #[rstest]
+    fn root_circuit_store(root_circ: Circuit) {
+        let mut buf = Vec::new();
+        root_circ.to_hugr_writer(&mut buf).unwrap();
+        let circ2 = Circuit::load_hugr_reader(Cursor::new(buf)).unwrap();
+        assert_eq!(root_circ, circ2);
+
+        let mut buf = Vec::new();
+        root_circ.to_package_writer(&mut buf).unwrap();
+        let circ2 = Circuit::load_function_reader(Cursor::new(buf), "main").unwrap();
+        let extracted_circ2 = circ2.extract_dfg().unwrap();
+
+        assert_eq!(root_circ, extracted_circ2);
+    }
+
+    #[rstest]
+    fn func_circuit_store(function_circ: Circuit) {
+        let mut buf = Vec::new();
+        function_circ.to_package_writer(&mut buf).unwrap();
+        let circ2 = Circuit::load_function_reader(Cursor::new(buf), "banana").unwrap();
+
+        assert_eq!(function_circ, circ2);
+    }
 }

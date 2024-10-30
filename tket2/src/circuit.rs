@@ -36,7 +36,7 @@ use crate::extension;
 use self::units::{filter, LinearUnit, Units};
 
 /// A quantum circuit, represented as a function in a HUGR.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Circuit<T = Hugr> {
     /// The HUGR containing the circuit.
     hugr: T,
@@ -61,6 +61,15 @@ impl<T: Default + HugrView> Default for Circuit<T> {
             hugr,
             parent,
             required_extensions: None,
+        }
+    }
+}
+
+impl<T: HugrView> PartialEq for Circuit<T> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self.circuit_hash(), other.circuit_hash()) {
+            (Ok(hash1), Ok(hash2)) => hash1 == hash2,
+            _ => false,
         }
     }
 }
