@@ -284,8 +284,7 @@ impl Debug for HugrPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut tuples = vec![];
         let mut curr = *self;
-        while !curr.is_empty() {
-            let (parent, port, index) = curr.uncons().unwrap();
+        while let Some((parent, port, index)) = curr.uncons() {
             tuples.push((port, index));
             curr = parent;
         }
