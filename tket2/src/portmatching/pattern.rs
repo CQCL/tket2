@@ -39,11 +39,13 @@ pub struct CircuitPattern {
 }
 
 impl pm::Pattern for CircuitPattern {
-    type Constraint = Constraint;
-
+    type Key = HugrVariableID;
+    type Predicate = Predicate;
     type Error = ();
 
-    fn try_to_constraint_vec(&self) -> Result<Vec<Self::Constraint>, Self::Error> {
+    fn try_to_constraint_vec(
+        &self,
+    ) -> Result<Vec<pm::Constraint<Self::Key, Self::Predicate>>, Self::Error> {
         Ok(self.constraints.clone())
     }
 }
@@ -299,6 +301,9 @@ fn get_node_to_path_map(circuit: &Circuit<impl HugrView>) -> Result<NodeToPathMa
 }
 
 /// Compute the minimum paths from the root to all nodes.
+///
+/// This is a slightly tweaked version of Dijkstra's algorithm, in which we
+/// keep track of the builder object obtained along the shortest path.
 ///
 /// The returned map is a valid [`NodeToPathMap`], i.e. it has a key for every
 /// node in `hugr`.

@@ -3,6 +3,7 @@
 use std::borrow::Borrow;
 use std::fmt::Debug;
 
+use derive_more::{Display, Error};
 use hugr::HugrView;
 use itertools::Either;
 use itertools::Itertools;
@@ -63,29 +64,49 @@ impl pm::ArityPredicate for Predicate {
     }
 }
 
+/// Error type for invalid predicates.
+#[derive(Debug, Clone, Copy, Error, Display)]
+pub enum InvalidPredicateError {
+    /// The variable type is invalid.
+    #[display("Invalid variable type")]
+    InvalidVariableType,
+    /// The predicate arity is invalid.
+    #[display("Invalid predicate arity")]
+    InvalidArity,
+}
+
 impl<H: HugrView> pm::Predicate<Circuit<H>> for Predicate {
-    fn check(&self, data: &Circuit<H>, args: &[impl Borrow<HugrVariableValue>]) -> bool {
+    type InvalidPredicateError = InvalidPredicateError;
+
+    fn check(
+        &self,
+        data: &Circuit<H>,
+        args: &[impl Borrow<HugrVariableValue>],
+    ) -> Result<bool, InvalidPredicateError> {
         let hugr = data.hugr();
         match self {
             Predicate::NodeOp(exp_match_op) => {
                 // Get the native hugr node value
-                let vals = unwrap_to_hugr_values::<hugr::Node, _>(args);
+                let vals = to_hugr_values::<hugr::Node, _>(args)?;
                 let node = vals.into_iter().exactly_one().expect("one variable");
 
                 let match_op: MatchOp = hugr.get_optype(node).into();
-                exp_match_op == &match_op
+                Ok(exp_match_op == &match_op)
             }
             &Predicate::Wire { has_out_port, .. } => {
                 // Get the native hugr values
-                let vals = unwrap_to_hugr_values::<(hugr::Node, hugr::Port), _>(args);
+                let vals = to_hugr_values::<(hugr::Node, hugr::Port), _>(args)?;
 
                 if has_out_port {
                     // In this case, the wire in the pattern must match exactly
                     // with the wire in the circuit.
 
                     // Get the outgoing port
-                    let &(out_node, out_port) = vals.first().expect("outgoing port");
-                    let out_port = out_port.as_outgoing().expect("wrong port type");
+                    let &(out_node, out_port) =
+                        vals.first().ok_or(InvalidPredicateError::InvalidArity)?;
+                    let out_port = out_port
+                        .as_outgoing()
+                        .map_err(|_| InvalidPredicateError::InvalidVariableType)?;
 
                     // Get the incoming ports
                     let exp_in_ports = vals[1..]
@@ -96,38 +117,40 @@ impl<H: HugrView> pm::Predicate<Circuit<H>> for Predicate {
                     // Get the actual incoming ports in the hugr
                     let actual_in_ports = hugr.linked_inputs(out_node, out_port).sorted();
 
-                    exp_in_ports.eq(actual_in_ports)
+                    Ok(exp_in_ports.eq(actual_in_ports))
                 } else {
                     // In this case we just need to check that the incoming
                     // ports are all connected to the same wire.
 
                     // nothing to do if there is just one port
                     if vals.len() <= 1 {
-                        return true;
+                        return Ok(true);
                     }
 
                     // The outgoing port of a wire is unique, so check that it
                     // is the same for all the incoming ports.
                     let mut first_out_port = None;
                     for (node, port) in vals {
-                        let in_port = port.as_incoming().expect("wrong port type");
+                        let in_port = port
+                            .as_incoming()
+                            .map_err(|_| InvalidPredicateError::InvalidVariableType)?;
                         let Some(out_port) = hugr.single_linked_output(node, in_port) else {
-                            return false;
+                            return Ok(false);
                         };
                         if first_out_port.is_none() {
                             first_out_port = Some(out_port);
                         } else if out_port != first_out_port.unwrap() {
-                            return false;
+                            return Ok(false);
                         }
                     }
-                    true
+                    Ok(true)
                 }
             }
             Predicate::IsNotEqual { .. } => {
                 // Get the native hugr node values
-                let vals = unwrap_to_hugr_values::<hugr::Node, _>(args);
+                let vals = to_hugr_values::<hugr::Node, _>(args)?;
                 let first_val = vals[0];
-                vals[1..].iter().all(|&v| v != first_val)
+                Ok(vals[1..].iter().all(|&v| v != first_val))
             }
         }
     }
@@ -149,7 +172,9 @@ fn to_out_port(
     }
 }
 
-fn unwrap_to_hugr_values<'b, V, B>(args: impl IntoIterator<Item = &'b B>) -> Vec<V>
+fn to_hugr_values<'b, V, B>(
+    args: impl IntoIterator<Item = &'b B>,
+) -> Result<Vec<V>, InvalidPredicateError>
 where
     B: Borrow<HugrVariableValue> + 'b,
     V: TryFrom<HugrVariableValue>,
@@ -158,7 +183,8 @@ where
     args.into_iter()
         .map(|arg| {
             let var = arg.borrow().clone();
-            var.try_into().expect("invalid variable binding type")
+            var.try_into()
+                .map_err(|_| InvalidPredicateError::InvalidVariableType)
         })
         .collect()
 }
@@ -186,7 +212,9 @@ mod tests {
         let pred = super::Predicate::NodeOp(Tk2Op::Rx.into());
         let rx_ops = get_nodes_by_tk2op(&circ_with_copy, Tk2Op::Rx);
         for rx in rx_ops {
-            assert!(pred.check(&circ_with_copy, &[&HugrVariableValue::Node(rx)]));
+            assert!(pred
+                .check(&circ_with_copy, &[&HugrVariableValue::Node(rx)])
+                .unwrap());
         }
     }
 
@@ -215,7 +243,7 @@ mod tests {
                 .zip([p1, p2])
                 .map(HugrVariableValue::from)
                 .collect_vec();
-            assert!(pred.check(&circ_with_copy, vals.as_slice()));
+            assert!(pred.check(&circ_with_copy, vals.as_slice()).unwrap());
         }
 
         // invalid edges
@@ -231,7 +259,7 @@ mod tests {
                 .zip([p1, p2])
                 .map(HugrVariableValue::from)
                 .collect_vec();
-            assert!(!pred.check(&circ_with_copy, vals.as_slice()));
+            assert!(!pred.check(&circ_with_copy, vals.as_slice()).unwrap());
         }
     }
 }
