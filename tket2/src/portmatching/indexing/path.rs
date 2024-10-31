@@ -377,4 +377,16 @@ mod tests {
         assert_eq!(empty, HugrPath::empty());
         assert_eq!((port, index), ports[0]);
     }
+
+    #[test]
+    fn test_path_cmp() {
+        let path1 = vec![(hugr::Port::new(Direction::Incoming, 2), 2)];
+        let path2 = vec![
+            (hugr::Port::new(Direction::Incoming, 3), 3),
+            (hugr::Port::new(Direction::Incoming, 3), 3),
+        ];
+        let a = HugrPath::try_from(path1.as_slice()).unwrap();
+        let b = HugrPath::try_from(path2.as_slice()).unwrap();
+        assert!(a < b);
+    }
 }
