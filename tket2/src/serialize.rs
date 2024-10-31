@@ -310,6 +310,7 @@ mod tests {
     use super::*;
     use std::io::Cursor;
 
+    use cool_asserts::assert_matches;
     use hugr::builder::{
         Container, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer, HugrBuilder,
         ModuleBuilder,
@@ -317,6 +318,7 @@ mod tests {
     use hugr::extension::prelude::QB_T;
     use hugr::ops::handle::NodeHandle;
     use hugr::types::Signature;
+    use itertools::Itertools;
     use rstest::{fixture, rstest};
 
     #[fixture]
@@ -343,6 +345,30 @@ mod tests {
         Circuit::new(h.finish_hugr(&REGISTRY).unwrap(), func_node)
     }
 
+    #[fixture]
+    fn multi_module_pkg() -> Package {
+        fn define(name: &str, h: &mut ModuleBuilder<Hugr>) -> Node {
+            let f = h
+                .define_function(name, Signature::new(vec![QB_T], vec![QB_T]))
+                .unwrap();
+            let inputs = f.input_wires().collect_vec();
+            f.finish_with_outputs(inputs).unwrap().handle().node()
+        }
+
+        let mut mod1 = ModuleBuilder::new();
+        define("apple", &mut mod1);
+        define("banana", &mut mod1);
+        let mod1 = mod1.finish_prelude_hugr().unwrap();
+
+        let mut mod2 = ModuleBuilder::new();
+        define("foo", &mut mod2);
+        define("bar", &mut mod2);
+        define("banana", &mut mod2);
+        let mod2 = mod2.finish_prelude_hugr().unwrap();
+
+        Package::new([mod1, mod2], []).unwrap()
+    }
+
     /// Test roundtrips of a circuit with a root parent.
     #[rstest]
     fn root_circuit_store(root_circ: Circuit) {
@@ -366,5 +392,30 @@ mod tests {
         let circ2 = Circuit::load_function_reader(Cursor::new(buf), "banana").unwrap();
 
         assert_eq!(function_circ, circ2);
+    }
+
+    #[rstest]
+    fn serialize_errors(multi_module_pkg: Package) {
+        let pkg_json = multi_module_pkg.to_json().unwrap();
+
+        match Circuit::load_function_reader(Cursor::new(&pkg_json), "not_found") {
+            Err(CircuitLoadError::FunctionNotFound {
+                function,
+                available_functions,
+            }) => {
+                assert_eq!(function, "not_found");
+                assert_eq!(
+                    available_functions,
+                    ["apple", "banana", "foo", "bar", "banana"]
+                );
+            }
+            Err(e) => panic!("Expected FunctionNotFound error got {e}."),
+            Ok(_) => panic!("Expected an error."),
+        };
+
+        assert_matches!(
+            Circuit::load_function_reader(Cursor::new(&pkg_json), "banana"),
+            Ok(_)
+        )
     }
 }
