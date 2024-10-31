@@ -1,11 +1,12 @@
 from __future__ import annotations
 from typing import Iterable
 
-from hugr import tys, ops
+from hugr import Hugr, tys, ops
 from hugr.package import Package
 from hugr.ext import Extension
 from hugr.ops import ComWire, Command
 from hugr.std.float import FLOAT_T
+from hugr.build.function import Module
 from hugr.build.tracked_dfg import TrackedDfg
 from tket2.circuit import Tk2Circuit
 
@@ -20,17 +21,33 @@ class CircBuild(TrackedDfg):
     def with_nqb(cls, n_qb: int) -> CircBuild:
         return cls(*[tys.Qubit] * n_qb, track_inputs=True)
 
+    def finish_hugr(self) -> Hugr:
+        """Finish building the package by setting all the qubits as the output
+        and wrap it in a hugr package with the required extensions.
+
+        Returns:
+            The finished Hugr.
+        """
+        return self.hugr
+
     def finish_package(
-        self, other_extensions: Iterable[Extension] | None = None
+        self,
+        *,
+        other_extensions: Iterable[Extension] | None = None,
+        function_name="main",
     ) -> Package:
         """Finish building the package by setting all the qubits as the output
         and wrap it in a hugr package with the required extensions.
 
         Args:
             other_extensions: Other extensions to include in the package.
+            function_name: The name of the function containing the circuit in
+                the package's module. Defaults to "main".
         Returns:
             The finished package.
         """
+        # TODO: Replace with `finish_hugr` once extensions are included in the hugr itself.
+        # See https://github.com/CQCL/hugr/pull/1621
         import tket2.extensions as ext
 
         extensions = [
@@ -42,13 +59,26 @@ class CircBuild(TrackedDfg):
             *(other_extensions or []),
         ]
 
-        return Package(modules=[self.hugr], extensions=extensions)
+        # Convert the DFG into a Function definition
+        dfg_op = self.hugr[self.hugr.root].op
+        assert type(dfg_op) is ops.DFG, "CircBuild must have a Dfg root"
+        self.hugr[self.hugr.root].op = ops.FuncDefn(
+            function_name, inputs=dfg_op.inputs, _outputs=dfg_op.outputs
+        )
+
+        # Insert it into a module, as required by the package.
+        module = Module()
+        module.hugr.insert_hugr(self.hugr)
+
+        return Package(modules=[module.hugr], extensions=extensions)
 
     def finish(self, other_extensions: list[Extension] | None = None) -> Tk2Circuit:
         """Finish building the circuit by setting all the qubits as the output
         and validate."""
 
-        return load_hugr_pkg(self.finish_package(other_extensions))
+        return Tk2Circuit.from_package_json(
+            self.finish_package(other_extensions=other_extensions).to_json()
+        )
 
 
 def from_coms(*args: Command) -> Tk2Circuit:
@@ -66,10 +96,6 @@ def from_coms(*args: Command) -> Tk2Circuit:
     build.extend(*commands)
     build.set_tracked_outputs()
     return build.finish()
-
-
-def load_hugr_pkg(package: Package) -> Tk2Circuit:
-    return Tk2Circuit.from_hugr_json(package.to_json())
 
 
 def load_custom(serialized: bytes) -> ops.Custom:
