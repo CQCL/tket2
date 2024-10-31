@@ -3,10 +3,8 @@
 use std::{cmp::Ordering, fmt::Debug};
 
 use derive_more::Into;
-use hugr::{Direction, HugrView, PortIndex};
-use itertools::Either;
+use hugr::{Direction, PortIndex};
 
-use super::{HugrBindMap, HugrNodeID, HugrPortID, HugrVariableValue};
 use derive_more::{Display, Error};
 
 const MAX_BITS: usize = usize::BITS as usize;
@@ -64,25 +62,28 @@ pub struct HugrPath(usize);
 pub struct PathEncodeOverflow;
 
 impl HugrPath {
-    /// Returns the parent path and the last tuple (port, index).
+    /// The empty path.
+    pub(super) fn empty() -> Self {
+        Self(0)
+    }
+
+    /// Return the parent path and the last tuple (port, index).
     ///
-    /// Panicks if the path is empty.
-    fn uncons(&self) -> (Option<Self>, hugr::Port, usize) {
+    /// If self is empty, return None.
+    pub(super) fn uncons(&self) -> Option<(Self, hugr::Port, usize)> {
         let mut starts = self.tuple_starts();
-        let Some(last_start) = starts.pop() else {
-            panic!("path is empty");
-        };
+        let last_start = starts.pop()?;
         let parent = {
             if last_start == 0 {
-                None
+                Self::empty()
             } else {
                 // Remove all but the `last_start` MSBs
                 let mask = n_ones_msb(last_start);
-                Some(HugrPath(self.0 & mask))
+                HugrPath(self.0 & mask)
             }
         };
         let (port, index) = self.read_tuple(last_start);
-        (parent, port, index)
+        (parent, port, index).into()
     }
 
     fn read_tuple(&self, start: usize) -> (hugr::Port, usize) {
@@ -97,56 +98,7 @@ impl HugrPath {
     }
 
     pub(super) fn parent(&self) -> Option<Self> {
-        self.uncons().0
-    }
-
-    pub(super) fn list_bind_options(
-        &self,
-        known_bindings: &HugrBindMap,
-        hugr: &impl HugrView,
-    ) -> Vec<(hugr::Node, hugr::IncomingPort)> {
-        let (parent, port, index) = self.uncons();
-        let incident_node = if let Some(parent) = parent {
-            let parent_var = HugrPortID::new_incoming(parent).into();
-            let Some(parent_binding) = known_bindings.get(&parent_var) else {
-                return vec![];
-            };
-            let &HugrVariableValue::IncomingPort(parent_node, parent_port) = parent_binding else {
-                panic!("parent port must be an incoming port");
-            };
-            if parent.last_port_direction() == Direction::Outgoing {
-                parent_node
-            } else {
-                let Some((node, _)) = hugr.single_linked_output(parent_node, parent_port) else {
-                    return vec![];
-                };
-                node
-            }
-        } else {
-            let root_var = HugrNodeID::Root.into();
-            let Some(&HugrVariableValue::Node(root_node)) = known_bindings.get(&root_var) else {
-                return vec![];
-            };
-            root_node
-        };
-        match port.as_directed() {
-            Either::Left(port) => {
-                // there can only be one port binding
-                assert_eq!(index, 0);
-                // Return the port if it exists
-                if hugr.num_inputs(incident_node) > port.index() {
-                    vec![(incident_node, port)]
-                } else {
-                    vec![]
-                }
-            }
-            Either::Right(port) => hugr.linked_inputs(incident_node, port).collect(),
-        }
-    }
-
-    fn last_port_direction(&self) -> Direction {
-        let (_, port, _) = self.uncons();
-        port.direction()
+        Some(self.uncons()?.0)
     }
 
     /// Returns the start bit position of each tuple in the path.
@@ -178,6 +130,10 @@ impl HugrPath {
     fn len(&self) -> usize {
         self.tuple_starts().len()
     }
+
+    fn is_empty(&self) -> bool {
+        self.0 == 0
+    }
 }
 
 impl TryFrom<&[(hugr::Port, usize)]> for HugrPath {
@@ -189,6 +145,14 @@ impl TryFrom<&[(hugr::Port, usize)]> for HugrPath {
             builder.push(port, index)?;
         }
         Ok(builder.finish())
+    }
+}
+
+impl<const N: usize> TryFrom<&[(hugr::Port, usize); N]> for HugrPath {
+    type Error = PathEncodeOverflow;
+
+    fn try_from(value: &[(hugr::Port, usize); N]) -> Result<Self, Self::Error> {
+        value.as_slice().try_into()
     }
 }
 
@@ -205,11 +169,9 @@ impl Ord for HugrPath {
         if len_self != len_other {
             len_self.cmp(&len_other)
         } else {
-            let (parent_self, port_self, index_self) = self.uncons();
-            let (parent_other, port_other, index_other) = other.uncons();
-            (port_self, index_self)
-                .cmp(&(port_other, index_other))
-                .then_with(|| parent_self.cmp(&parent_other))
+            let key =
+                |path: &HugrPath| path.uncons().map(|(path, port, index)| (port, index, path));
+            key(self).cmp(&key(other))
         }
     }
 }
@@ -271,10 +233,6 @@ impl HugrPathBuilder {
     }
 
     pub(crate) fn finish(self) -> HugrPath {
-        if self.encoded == 0 {
-            // Empty paths have no well-defined meaning
-            panic!("HugrPath is empty");
-        }
         HugrPath(self.encoded)
     }
 }
@@ -325,9 +283,8 @@ fn read_unary(val: usize, start_i: usize, flipped: bool) -> usize {
 impl Debug for HugrPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut tuples = vec![];
-        let mut curr = Some(*self);
-        while let Some(curr_some) = curr {
-            let (parent, port, index) = curr_some.uncons();
+        let mut curr = *self;
+        while let Some((parent, port, index)) = curr.uncons() {
             tuples.push((port, index));
             curr = parent;
         }
@@ -408,21 +365,16 @@ mod tests {
         }
         let (exp_grandparent, exp_parent, path) = exp_paths.into_iter().collect_tuple().unwrap();
 
-        let (Some(parent), port, index) = path.uncons() else {
-            panic!("invalid parent");
-        };
+        let (parent, port, index) = path.uncons().expect("invalid parent");
         assert_eq!(parent, exp_parent);
         assert_eq!((port, index), ports[2]);
 
-        let (Some(grandparent), port, index) = parent.uncons() else {
-            panic!("invalid grandparent");
-        };
+        let (grandparent, port, index) = parent.uncons().expect("invalid grandparent");
         assert_eq!(grandparent, exp_grandparent);
         assert_eq!((port, index), ports[1]);
 
-        let (None, port, index) = grandparent.uncons() else {
-            panic!("non-empty root");
-        };
+        let (empty, port, index) = grandparent.uncons().expect("non-empty root");
+        assert_eq!(empty, HugrPath::empty());
         assert_eq!((port, index), ports[0]);
     }
 

@@ -1347,8 +1347,7 @@ dependencies = [
 [[package]]
 name = "petgraph"
 version = "0.6.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
+source = "git+https://github.com/lmondada/petgraph?rev=10cf0f2#10cf0f2bd25daef18e3c177793978a7aa6dfa660"
 dependencies = [
  "fixedbitset",
  "indexmap",
@@ -1426,7 +1425,7 @@ dependencies = [
 [[package]]
 name = "portmatching"
 version = "0.4.0-rc.3"
-source = "git+https://github.com/lmondada/portmatching.git?rev=8425afa96#8425afa969e9cbc6d3b663216f8fe6fc82af87b3"
+source = "git+https://github.com/lmondada/portmatching.git?rev=5703c8e2#5703c8e28785fd6ad3cb46ce66a3a9a726eef4c4"
 dependencies = [
  "bimap",
  "bitvec",
