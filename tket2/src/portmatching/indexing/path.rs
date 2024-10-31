@@ -53,7 +53,7 @@ const MAX_BITS: usize = usize::BITS as usize;
 /// Unary flipped means that the binary encoding of the integer is flipped.
 /// Flipping one of the unary encodings means that a tuple can never be all
 /// 0, thus differentiating between tuples and zero padding.
-#[derive(Clone, Copy, Eq, Hash, PartialEq, Into, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct HugrPath(usize);
 
 /// An error that occurs when a path is too long to encode in a HugrPath.
@@ -129,10 +129,6 @@ impl HugrPath {
 
     fn len(&self) -> usize {
         self.tuple_starts().len()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0 == 0
     }
 }
 
@@ -274,7 +270,7 @@ fn ith_msb(val: usize, i: usize) -> bool {
 fn read_unary(val: usize, start_i: usize, flipped: bool) -> usize {
     let on_bit = !flipped;
     let mut count = 0;
-    while ith_msb(val, start_i + count) == on_bit {
+    while start_i + count < MAX_BITS && ith_msb(val, start_i + count) == on_bit {
         count += 1;
     }
     count

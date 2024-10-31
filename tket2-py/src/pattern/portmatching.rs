@@ -9,7 +9,10 @@ use pyo3::{prelude::*, types::PyIterator};
 
 use tket2::portmatching::{CircuitPattern, PatternMatch, PatternMatcher};
 
-use crate::circuit::{try_with_circ, with_circ, PyNode};
+use crate::{
+    circuit::{try_with_circ, with_circ},
+    rewrite::PySubcircuit,
+};
 
 /// A pattern that match a circuit exactly
 ///
@@ -81,7 +84,7 @@ impl PyPatternMatcher {
     /// Find one convex match in a circuit.
     pub fn find_match(&self, circ: &Bound<PyAny>) -> PyResult<Option<PyPatternMatch>> {
         with_circ(circ, |circ, _| {
-            self.matcher.find_matches_iter(&circ).next().map(Into::into)
+            self.matcher.find_matches(&circ).next().map(Into::into)
         })
     }
 
@@ -113,12 +116,12 @@ pub struct PyPatternMatch {
 impl PyPatternMatch {
     /// The matched pattern ID.
     pub fn pattern_id(&self) -> PyPatternID {
-        self.pmatch.pattern_id().into()
+        self.pmatch.pattern.into()
     }
 
-    /// Returns the root of the pattern in the circuit.
-    pub fn root(&self) -> PyNode {
-        self.pmatch.root().into()
+    /// Returns the subcircuit that matches the pattern.
+    pub fn subcircuit(&self) -> PySubcircuit {
+        self.pmatch.subcircuit.clone().into()
     }
 
     /// A string representation of the pattern.

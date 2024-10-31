@@ -4,8 +4,7 @@
 //! them against circuits.
 //!
 //! # Examples
-// TODO: REACTIVATE THIS EXAMPLE
-//! ```plaintext
+//! ```
 //! use tket2::portmatching::{CircuitPattern, PatternMatcher};
 //! use tket2::Tk2Op;
 //! use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
@@ -46,10 +45,10 @@
 //!
 //! // Create a pattern matcher and find matches.
 //! let matcher = PatternMatcher::from_patterns(vec![pattern]);
-//! let matches = matcher.find_matches(&circuit);
+//! let matches = matcher.find_matches(&circuit).collect::<Vec<_>>();
 //!
 //! assert_eq!(matches.len(), 1);
-//! assert_eq!(matches[0].nodes(), [alloc_node]);
+//! assert_eq!(matches[0].subcircuit.nodes(), [alloc_node]);
 //! # Ok(())
 //! # }
 //! ```
@@ -72,7 +71,7 @@ pub use predicate::Predicate;
 
 type Constraint = pm::Constraint<HugrVariableID, Predicate>;
 
-use matcher::MatchOp;
+pub use matcher::{MatchOp, PatternID, PatternMatch, PatternMatcher};
 pub use pattern::CircuitPattern;
 
 fn to_hugr_values_tuple<'b, V1, V2, B>(

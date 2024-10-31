@@ -12,6 +12,7 @@
 //! to generate such a file is to use the `gen_ecc_set.sh` script at the root
 //! of the Quartz repository.
 
+use delegate::delegate;
 use derive_more::{Display, Error, From, Into};
 use hugr::extension::resolution::ExtensionResolutionError;
 use hugr::{Hugr, HugrView, PortIndex};
@@ -182,15 +183,24 @@ impl ECCRewriter {
             .iter_mut()
             .try_for_each(|hugr| hugr.resolve_extension_defs(&REGISTRY))
     }
+
+    delegate! {
+        to self.matcher {
+            /// Get the number of states in the rewriter.
+            pub fn n_states(&self) -> usize;
+
+            /// Get a dot string representation of the rewriter.
+            pub fn dot_string(&self) -> String;
+        }
+    }
 }
 
 impl Rewriter for ECCRewriter {
     fn get_rewrites(&self, circ: &Circuit<impl HugrView>) -> Vec<CircuitRewrite> {
         let matches = self.matcher.find_matches(circ);
         matches
-            .into_iter()
             .flat_map(|m| {
-                let pattern_id = m.pattern_id();
+                let pattern_id = m.pattern;
                 self.get_targets(pattern_id).map(move |repl| {
                     let mut repl = repl.to_owned();
                     for &empty_qb in self.empty_wires[pattern_id.0].iter().rev() {

@@ -36,6 +36,8 @@ petgraph = { git = "https://github.com/petgraph/petgraph.git", rev = "4505389", 
 [workspace.dependencies]
 
 # Make sure to run `just recompile-eccs` if the hugr serialisation format changes.
+
+pest = "2.7.15"
 hugr = "0.14.1"
 hugr-core = "0.14.1"
 hugr-cli = "0.14.1"
@@ -62,7 +64,6 @@ num-complex = "0.4"
 num-rational = "0.4"
 num_cpus = "1.16.0"
 peak_alloc = "0.2.0"
-pest = "2.7.15"
 pest_derive = "2.7.15"
 petgraph = { git = "https://github.com/petgraph/petgraph.git", rev = "4505389", default-features = false }
 priority-queue = "2.1.1"

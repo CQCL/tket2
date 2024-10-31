@@ -155,6 +155,7 @@ pub struct HugrPortID {
 }
 
 impl HugrPortID {
+    /// Create a new port ID from a hugr node and a port.
     pub fn new(node: HugrNodeID, port: hugr::Port) -> Self {
         Self { node, port }
     }
@@ -194,6 +195,7 @@ impl HugrNodeID {
         Self { path_from_root }
     }
 
+    #[cfg(test)]
     pub(super) fn root() -> Self {
         Self::new(HugrPath::empty())
     }
@@ -280,7 +282,7 @@ impl TryFrom<HugrVariableValue> for hugr::Wire {
 ////////////////////////////////////////////////////////////////////////////////
 
 /// An indexing scheme for hugrs
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct HugrIndexingScheme;
 
 impl pm::IndexingScheme for HugrIndexingScheme {

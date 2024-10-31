@@ -99,7 +99,7 @@ impl RuleMatcher {
 
     pub fn find_match(&self, target: &Tk2Circuit) -> PyResult<Option<PyCircuitRewrite>> {
         let circ = &target.circ;
-        if let Some(pmatch) = self.matcher.find_matches_iter(circ).next() {
+        if let Some(pmatch) = self.matcher.find_matches(circ).next() {
             Ok(Some(self.match_to_rewrite(pmatch, circ)?))
         } else {
             Ok(None)
@@ -109,7 +109,7 @@ impl RuleMatcher {
     pub fn find_matches(&self, target: &Tk2Circuit) -> PyResult<Vec<PyCircuitRewrite>> {
         let circ = &target.circ;
         self.matcher
-            .find_matches_iter(circ)
+            .find_matches(circ)
             .map(|m| self.match_to_rewrite(m, circ))
             .collect()
     }
@@ -121,7 +121,7 @@ impl RuleMatcher {
         pmatch: PatternMatch,
         target: &Circuit<impl HugrView>,
     ) -> PyResult<PyCircuitRewrite> {
-        let r = self.rights.get(pmatch.pattern_id().0).unwrap().clone();
+        let r = self.rights.get(pmatch.pattern.0).unwrap().clone();
         let rw = pmatch.to_rewrite(target, r).convert_pyerrs()?;
         Ok(rw.into())
     }

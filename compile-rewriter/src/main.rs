@@ -52,6 +52,18 @@ fn main() {
         );
         exit(1);
     };
+    println!("N states: {:?}", rewriter.n_states());
+    {
+        // Save dot string representation to a file
+        let dot_string = rewriter.dot_string();
+        let mut dot_file = output_path.to_path_buf();
+        dot_file = dot_file.join("matcher.dot");
+        println!("Saving dot string representation to {:?}", dot_file);
+        match fs::write(&dot_file, dot_string) {
+            Ok(_) => println!("Dot string saved successfully"),
+            Err(e) => eprintln!("Error saving dot string: {}", e),
+        }
+    }
     print!("Saving to file...");
     let output_file = if output_path.is_dir() {
         output_path.join("matcher.rwr")
