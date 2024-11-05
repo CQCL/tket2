@@ -1,4 +1,4 @@
-"""Hugr extension definitions for tket2 circuits."""
+"""HUGR extension definitions for tket2 circuits."""
 
 import pkgutil
 import functools
