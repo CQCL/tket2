@@ -8,7 +8,8 @@
   [py-version]: https://img.shields.io/pypi/pyversions/tket2-exts
   [pypi]: https://img.shields.io/pypi/v/tket2-exts
 
-This is an auxiliary Python package containing HUGR extension definitions for `tket2`.
+This is an auxiliary Python package containing HUGR extension definitions for `tket2`
+operations and types.
 
 This package is intended to be used as an internal dependency for `tket2`.
 See https://pypi.org/project/tket2/ for the main package.
