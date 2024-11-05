@@ -52,14 +52,15 @@ jobs:
         if: ${{ steps.check-tag.outputs.run == 'true' }}
         uses: mozilla-actions/sccache-action@v0.0.6
 
-
       - name: Set up uv
+        if: ${{ steps.check-tag.outputs.run == 'true' }}
         uses: astral-sh/setup-uv@v3
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
       - name: Install Python 3.13
         run: uv python install 3.13
+        if: ${{ steps.check-tag.outputs.run == 'true' }}
 
       - name: Build sdist and wheels
         if: ${{ steps.check-tag.outputs.run == 'true' }}
@@ -83,7 +84,7 @@ jobs:
           uv run -f dist --with ${{ matrix.target.name }} --refresh-package ${{ matrix.target.name }} --no-project -- python -c "import ${{ matrix.target.name }}"
           uvx twine check --strict dist/*
 
-      - name: Report 
+      - name: Report
         if: ${{ (github.event_name == 'release' && github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.dir)) ) || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.dir)) ) }}
         run: |
           echo "Publishing to PyPI..."
