@@ -1,4 +1,5 @@
 {
     "tket2-py": "0.4.1",
-    "tket2-eccs": "0.2.0"
+    "tket2-eccs": "0.2.0",
+    "tket2-exts": "0.1.0"
 }
