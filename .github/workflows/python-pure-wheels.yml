@@ -93,6 +93,7 @@ jobs:
           echo "  - ref: ${{ github.ref }}"
 
       - name: Publish package distributions to PyPI
+        if: ${{ (github.event_name == 'release' && github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.dir)) ) || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.dir)) ) }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           verbose: true
