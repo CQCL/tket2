@@ -26,11 +26,15 @@ jobs:
   build-publish:
     name: Package and publish wheels
     runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      # IMPORTANT: this permission is mandatory for trusted publishing
+      id-token: write
     strategy:
       matrix:
         target:
-          - { dir: tket2-eccs, name: tket2_eccs, key_secret: PYPI_PUBLISH_TKET2_ECCS }
-          - { dir: tket2-exts, name: tket2_exts, key_secret: PYPI_PUBLISH_TKET2_EXTS }
+          - { dir: tket2-eccs, name: tket2_eccs}
+          - { dir: tket2-exts, name: tket2_exts}
     steps:
       # Check the release tag against the package name
       #
@@ -79,7 +83,7 @@ jobs:
           uv run -f dist --with ${{ matrix.target.name }} --refresh-package ${{ matrix.target.name }} --no-project -- python -c "import ${{ matrix.target.name }}"
           uvx twine check --strict dist/*
 
-      - name: Publish to PyPI
+      - name: Report 
         if: ${{ (github.event_name == 'release' && github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.dir)) ) || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.dir)) ) }}
         run: |
           echo "Publishing to PyPI..."
@@ -87,8 +91,9 @@ jobs:
           echo "  - event_name: ${{ github.event_name }}"
           echo "  - ref_type: ${{ github.ref_type }}"
           echo "  - ref: ${{ github.ref }}"
-          uvx twine upload --skip-existing --verbose dist/*
-        env:
-          TWINE_NON_INTERACTIVE: 1
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets[matrix.target.key_secret] }}
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
+          skip-existing: true
