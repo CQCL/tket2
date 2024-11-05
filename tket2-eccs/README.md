@@ -1,12 +1,12 @@
 # tket2-eccs
 
-[![pypi][]](https://pypi.org/project/tket2/)
+[![pypi][]](https://pypi.org/project/tket2-eccs/)
 [![codecov][]](https://codecov.io/gh/CQCL/tket2)
-[![py-version][]](https://pypi.org/project/tket2/)
+[![py-version][]](https://pypi.org/project/tket2--eccs/)
 
   [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket2?logo=codecov
-  [py-version]: https://img.shields.io/pypi/pyversions/tket2
-  [pypi]: https://img.shields.io/pypi/v/tket2
+  [py-version]: https://img.shields.io/pypi/pyversions/tket2-eccs
+  [pypi]: https://img.shields.io/pypi/v/tket2-eccs
 
 This is an auxiliary Python package containing compiler rewrite sets used for `tket2`'s optimisation passes.
 

@@ -1,12 +1,12 @@
 # tket2-exts
 
-[![pypi][]](https://pypi.org/project/tket2/)
+[![pypi][]](https://pypi.org/project/tket2-exts/)
 [![codecov][]](https://codecov.io/gh/CQCL/tket2)
-[![py-version][]](https://pypi.org/project/tket2/)
+[![py-version][]](https://pypi.org/project/tket2-exts/)
 
   [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket2?logo=codecov
-  [py-version]: https://img.shields.io/pypi/pyversions/tket2
-  [pypi]: https://img.shields.io/pypi/v/tket2
+  [py-version]: https://img.shields.io/pypi/pyversions/tket2-exts
+  [pypi]: https://img.shields.io/pypi/v/tket2-exts
 
 This is an auxiliary Python package containing HUGR extension definitions for `tket2`.
 
