@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = ["tket2-py", "tket2-eccs"]
+members = ["tket2-py", "tket2-eccs", "tket2-exts"]
 
 [tool.uv]
 
