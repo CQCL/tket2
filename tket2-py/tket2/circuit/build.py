@@ -22,8 +22,7 @@ class CircBuild(TrackedDfg):
         return cls(*[tys.Qubit] * n_qb, track_inputs=True)
 
     def finish_hugr(self) -> Hugr:
-        """Finish building the package by setting all the qubits as the output
-        and wrap it in a hugr package with the required extensions.
+        """Finish building the hugr by setting all the qubits as the output.
 
         Returns:
             The finished Hugr.

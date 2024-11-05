@@ -129,7 +129,7 @@ impl Circuit<Hugr> {
     }
 }
 
-/// Error type for conversion between `Op` and `OpType`.
+/// Error type for serialization operations on [`Circuit`]s.
 #[derive(Debug, Display, Error, From)]
 #[non_exhaustive]
 pub enum CircuitStoreError {
@@ -148,7 +148,7 @@ pub enum CircuitStoreError {
     },
 }
 
-/// Error type for conversion between `Op` and `OpType`.
+/// Error type for deserialization operations on [`Circuit`]s.
 #[derive(Debug, Display, Error, From)]
 #[non_exhaustive]
 pub enum CircuitLoadError {
@@ -277,7 +277,7 @@ fn find_function(hugr: Hugr, function_name: &str) -> Result<Circuit, CircuitLoad
         });
     }
 
-    // Find the function declaration.
+    // Find the function definition.
     fn func_name(op: &OpType) -> &str {
         match op {
             OpType::FuncDefn(decl) => &decl.name,
