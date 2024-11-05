@@ -9,6 +9,7 @@ resolution-markers = [
 members = [
     "tket2",
     "tket2-eccs",
+    "tket2-exts",
 ]
 requirements = [
     { name = "graphviz", specifier = ">=0.20,<0.21" },
@@ -795,6 +796,7 @@ dependencies = [
     { name = "hugr" },
     { name = "pytket" },
     { name = "tket2-eccs" },
+    { name = "tket2-exts" },
 ]
 
 [package.metadata]
@@ -802,12 +804,24 @@ requires-dist = [
     { name = "hugr", specifier = ">=0.9.0,<0.10" },
     { name = "pytket", specifier = ">=1.34,<2" },
     { name = "tket2-eccs", editable = "tket2-eccs" },
+    { name = "tket2-exts", editable = "tket2-exts" },
 ]
 
 [[package]]
 name = "tket2-eccs"
 version = "0.2.0"
 source = { editable = "tket2-eccs" }
+
+[[package]]
+name = "tket2-exts"
+version = "0.1.0"
+source = { editable = "tket2-exts" }
+dependencies = [
+    { name = "hugr" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "hugr", specifier = ">=0.9.0" }]
 
 [[package]]
 name = "tomli"

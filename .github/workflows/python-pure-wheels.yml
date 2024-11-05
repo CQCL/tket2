@@ -30,6 +30,7 @@ jobs:
       matrix:
         target:
           - { dir: tket2-eccs, name: tket2_eccs, key_secret: PYPI_PUBLISH_TKET2_ECCS }
+          - { dir: tket2-exts, name: tket2_exts, key_secret: PYPI_PUBLISH_TKET2_EXTS }
     steps:
       # Check the release tag against the package name
       #
