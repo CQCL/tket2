@@ -258,7 +258,7 @@ jobs:
     name: Upload Python coverage 🐍
     needs: [changes, tests-py, check-py]
     # Run only if there are changes in the relevant files and the check job passed or was skipped
-    if: always() && !failure() && !cancelled() && needs.changes.outputs.python == 'true' && github.event_name != 'merge_group'
+    if: needs.changes.outputs.python == 'true' && github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -269,9 +269,12 @@ jobs:
       - name: Upload python coverage to codecov.io
         uses: codecov/codecov-action@v4
         with:
-          files: coverage.xml
+          files: ./coverage.xml
+          # Avoids matching against a "coverage.xml" directory from the artifact download
+          disable_search: true
           name: python
           flags: python
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
   # Ensure that serialized extensions match rust implementation
