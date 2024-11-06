@@ -24,16 +24,18 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci_run)'] }
 missing_docs = "warn"
 
 [patch.crates-io]
-hugr-core = { git = "https://github.com/CQCL/hugr.git", branch = "ab/package-from-hugr" }
-hugr = { git = "https://github.com/CQCL/hugr.git", branch = "ab/package-from-hugr" }
-hugr-cli = { git = "https://github.com/CQCL/hugr.git", branch = "ab/package-from-hugr" }
+
+# Uncomment to use unreleased versions of hugr
+#hugr-core = { git = "https://github.com/CQCL/hugr.git" }
+#hugr = { git = "https://github.com/CQCL/hugr.git" }
+#hugr-cli = { git = "https://github.com/CQCL/hugr.git" }
 
 [workspace.dependencies]
 
 # Make sure to run `just recompile-eccs` if the hugr serialisation format changes.
-hugr = "0.13.2"
-hugr-core = "0.13.2"
-hugr-cli = "0.13.2"
+hugr = "0.13.3"
+hugr-core = "0.13.3"
+hugr-cli = "0.13.3"
 portgraph = "0.12"
 pyo3 = "0.22.5"
 itertools = "0.13.0"
