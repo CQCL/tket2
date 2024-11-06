@@ -290,10 +290,12 @@ jobs:
         run: just gen-extensions
       - name: Check if the declarations are up to date
         run: |
-          git diff --exit-code --name-only tket2-py/tket2/extensions/_json_defs
+          git diff --exit-code --name-only tket2-exts/src/tket2_exts/data
           if [ $? -ne 0 ]; then
             echo "The serialized standard extensions are not up to date"
-            echo "Please run 'just gen-extensions' and commit the changes"
+            echo "Please run 'just gen-extensions' and commit the changes.
+            Bump the version of tket2-exts according to semver.
+            "
             exit 1
           fi
 

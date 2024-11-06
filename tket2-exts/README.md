@@ -1,14 +1,15 @@
-# tket2-eccs
+# tket2-exts
 
-[![pypi][]](https://pypi.org/project/tket2-eccs/)
+[![pypi][]](https://pypi.org/project/tket2-exts/)
 [![codecov][]](https://codecov.io/gh/CQCL/tket2)
-[![py-version][]](https://pypi.org/project/tket2--eccs/)
+[![py-version][]](https://pypi.org/project/tket2-exts/)
 
   [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket2?logo=codecov
-  [py-version]: https://img.shields.io/pypi/pyversions/tket2-eccs
-  [pypi]: https://img.shields.io/pypi/v/tket2-eccs
+  [py-version]: https://img.shields.io/pypi/pyversions/tket2-exts
+  [pypi]: https://img.shields.io/pypi/v/tket2-exts
 
-This is an auxiliary Python package containing compiler rewrite sets used for `tket2`'s optimisation passes.
+This is an auxiliary Python package containing HUGR extension definitions for `tket2`
+operations and types.
 
 This package is intended to be used as an internal dependency for `tket2`.
 See https://pypi.org/project/tket2/ for the main package.
@@ -16,10 +17,10 @@ See https://pypi.org/project/tket2/ for the main package.
 
 ## Install
 
-TKET2-eccs can be installed via `pip`.
+TKET2-exts can be installed via `pip`.
 
 ```sh
-pip install tket2_eccs
+pip install tket2_exts
 ```
 
 ## Development

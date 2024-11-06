@@ -46,7 +46,7 @@ recompile-eccs:
 
 # Generate serialized declarations for the tket2 extensions
 gen-extensions:
-    cargo run -p tket2-hseries gen-extensions -o tket2-py/tket2/extensions/_json_defs
+    cargo run -p tket2-hseries gen-extensions -o tket2-exts/src/tket2_exts/data
 
 # Runs a rust and a python command, depending on the `language` variable.
 #

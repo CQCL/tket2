@@ -24,3 +24,4 @@ lcov.info
 
 # local cargo config
 /.cargo/config.toml
+.envrc

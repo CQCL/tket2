@@ -29,6 +29,7 @@ updates:
       - "/"
       - "/tket2-py"
       - "/tket2-eccs"
+      - "/tket2-exts"
     schedule:
       interval: "weekly"
     commit-message:

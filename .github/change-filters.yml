@@ -16,5 +16,6 @@ python:
   - *rust-core
   - "tket2-py/**"
   - "tket2-eccs/**"
+  - "tket2-exts/**"
   - "pyproject.toml"
   - "uv.lock"
