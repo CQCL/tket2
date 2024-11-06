@@ -799,9 +799,14 @@ mod tests {
         })
         .unwrap();
 
+        let orig_circ = circ.clone();
+        assert_eq!(circ, orig_circ);
+
         assert_eq!(circ.qubit_count(), 2);
         assert!(remove_empty_wire(&mut circ, 1).is_ok());
         assert_eq!(circ.qubit_count(), 1);
+        assert_ne!(circ, orig_circ);
+
         assert_eq!(
             remove_empty_wire(&mut circ, 0).unwrap_err(),
             CircuitMutError::DeleteNonEmptyWire {

@@ -317,10 +317,12 @@ mod tests {
     };
     use hugr::extension::prelude::QB_T;
     use hugr::ops::handle::NodeHandle;
+    use hugr::type_row;
     use hugr::types::Signature;
     use itertools::Itertools;
     use rstest::{fixture, rstest};
 
+    /// A circuit based on a DFG-rooted HUGR.
     #[fixture]
     fn root_circ() -> Circuit {
         let mut h = DFGBuilder::new(Signature::new(vec![], vec![QB_T])).unwrap();
@@ -343,6 +345,30 @@ mod tests {
         let func_node = f.finish_with_outputs([q]).unwrap().handle().node();
 
         Circuit::new(h.finish_hugr(&REGISTRY).unwrap(), func_node)
+    }
+
+    /// A circuit located inside a function in a module.
+    #[fixture]
+    fn nested_circ() -> Circuit {
+        let mut h = ModuleBuilder::new();
+
+        let mut f = h
+            .define_function("banana", Signature::new(vec![], vec![QB_T]))
+            .unwrap();
+        let dfg = {
+            let mut dfg = f
+                .dfg_builder(Signature::new(vec![], type_row![QB_T]), [])
+                .unwrap();
+            let res = dfg.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
+            let q = res.out_wire(0);
+            dfg.finish_with_outputs([q]).unwrap()
+        };
+        f.finish_with_outputs(dfg.outputs())
+            .unwrap()
+            .handle()
+            .node();
+
+        Circuit::new(h.finish_hugr(&REGISTRY).unwrap(), dfg.node())
     }
 
     #[fixture]
@@ -395,7 +421,7 @@ mod tests {
     }
 
     #[rstest]
-    fn serialize_errors(multi_module_pkg: Package) {
+    fn serialize_package_errors(multi_module_pkg: Package) {
         let pkg_json = multi_module_pkg.to_json().unwrap();
 
         match Circuit::load_function_reader(Cursor::new(&pkg_json), "not_found") {
@@ -417,5 +443,22 @@ mod tests {
             Circuit::load_function_reader(Cursor::new(&pkg_json), "banana"),
             Ok(_)
         )
+    }
+
+    #[rstest]
+    fn root_errors(function_circ: Circuit, nested_circ: Circuit) {
+        // Trying to store a non-root circuit as a hugr.
+        let mut buf = Vec::new();
+        assert_matches!(
+            function_circ.to_hugr_writer(&mut buf),
+            Err(CircuitStoreError::NonRootCircuit { .. })
+        );
+
+        // Trying to store a non-root (and non-function-in-a-module) circuit as a package.
+        let mut buf = Vec::new();
+        assert_matches!(
+            nested_circ.to_package_writer(&mut buf),
+            Err(CircuitStoreError::NonRootCircuit { .. })
+        );
     }
 }
