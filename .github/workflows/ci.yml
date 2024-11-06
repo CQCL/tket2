@@ -218,6 +218,7 @@ jobs:
           files: coverage.json
           name: rust
           flags: rust
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
   rs-semver-checks:
