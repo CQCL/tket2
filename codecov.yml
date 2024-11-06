@@ -1,0 +1,15 @@
+# Codecov coverage report configuration
+
+# Ignore tests and binaries
+ignore:
+  - "tket2-py/test"
+  - "scripts"
+  - "test_files"
+
+# Coverage groups config
+flag_management:
+  default_rules: # the rules that will be followed for any flag added, generally
+    # Use previous coverage if one is not available for the current commit.
+    #
+    # (E.g. if the PR doesn't modify a subproject, we don't submit a coverage report for it.)
+    carryforward: true
