@@ -218,6 +218,7 @@ jobs:
           files: coverage.json
           name: rust
           flags: rust
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
   rs-semver-checks:
@@ -231,7 +232,7 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.python == 'true' }}
     runs-on: ubuntu-latest
-    name: tests (Python)
+    name: tests (Python, coverage)
     steps:
       - uses: actions/checkout@v4
       - uses: mozilla-actions/sccache-action@v0.0.6
@@ -248,30 +249,16 @@ jobs:
         run: uv sync --python ${{ env.PYTHON_LOWEST }}
       - name: Run python tests with coverage instrumentation
         run: uv run pytest --cov=./ --cov-report=xml
-      - name: Upload coverage output artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: py-coverage
-          path: coverage.xml
-
-  coverage-py:
-    name: Upload Python coverage 🐍
-    needs: [changes, tests-py, check-py]
-    # Run only if there are changes in the relevant files and the check job passed or was skipped
-    if: always() && !failure() && !cancelled() && needs.changes.outputs.python == 'true' && github.event_name != 'merge_group'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: py-coverage
-          path: coverage.xml
       - name: Upload python coverage to codecov.io
+        if: github.event_name != 'merge_group'
         uses: codecov/codecov-action@v4
         with:
-          files: coverage.xml
+          files: ./coverage.xml
+          # Ensures we only upload this file
+          disable_search: true
           name: python
           flags: python
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
   # Ensure that serialized extensions match rust implementation
