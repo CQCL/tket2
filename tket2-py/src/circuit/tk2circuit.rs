@@ -1,6 +1,7 @@
 //! Rust-backed representation of circuits
 
 use std::borrow::{Borrow, Cow};
+use std::fmt::Display;
 use std::mem;
 
 use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
@@ -91,32 +92,54 @@ impl Tk2Circuit {
     //
     // TODO: Bind a messagepack encoder/decoder too.
     pub fn to_hugr_json(&self) -> PyResult<String> {
-        Ok(serde_json::to_string(self.circ.hugr()).unwrap())
+        fn err(e: impl Display) -> PyErr {
+            PyErr::new::<PyAttributeError, _>(format!("Could not encode circuit: {e}"))
+        };
+        let mut buf = Vec::new();
+        self.circ.to_hugr_writer(&mut buf).map_err(err)?;
+        let res = std::str::from_utf8(&buf).map_err(err)?;
+        Ok(res.to_string())
     }
 
-    /// Decode a HUGR json string to a circuit.
+    /// Encode the circuit as a Hugr Package json string.
+    //
+    // TODO: Bind a messagepack encoder/decoder too.
+    pub fn to_package_json(&self) -> PyResult<String> {
+        fn err(e: impl Display) -> PyErr {
+            PyErr::new::<PyAttributeError, _>(format!("Could not encode circuit: {e}"))
+        };
+        let mut buf = Vec::new();
+        self.circ.to_package_writer(&mut buf).map_err(err)?;
+        let res = std::str::from_utf8(&buf).map_err(err)?;
+        Ok(res.to_string())
+    }
+
+    /// Decode a HUGR json to a circuit.
     #[staticmethod]
     pub fn from_hugr_json(json: &str) -> PyResult<Self> {
-        let mut pkg: Package = serde_json::from_str(json)
-            .map_err(|e| PyErr::new::<PyAttributeError, _>(format!("Invalid encoded HUGR: {e}")))?;
-        let mut reg = REGISTRY.clone();
-        pkg.update_validate(&mut reg).map_err(|e| {
-            PyErr::new::<PyAttributeError, _>(format!("Invalid encoded circuit: {e}"))
-        })?;
-        let Ok(hugr) = pkg.modules.into_iter().exactly_one() else {
-            return Err(PyValueError::new_err(
-                "Invalid HUGR json: Package must contain exactly one hugr.",
-            ));
+        fn err(e: impl Display) -> PyErr {
+            PyErr::new::<PyAttributeError, _>(format!("Could not read hugr: {e}"))
         };
-        Ok(Tk2Circuit { circ: hugr.into() })
+        let circ = Circuit::load_hugr_reader(json.as_bytes()).map_err(err)?;
+        Ok(Tk2Circuit { circ })
     }
 
-    /// Load a function from a compiled guppy module, encoded as a json string.
+    /// Decode a HUGR Package json to a circuit.
+    ///
+    /// Traverses the package's modules in order until it finds one containing a
+    /// function named `function_name`, and loads it as a circuit.
+    ///
+    /// If the json is a hugr json, it will be decoded as a `main` function in an empty module.
+    ///
+    /// When `function_name` is not given, it defaults to `main`.
     #[staticmethod]
-    pub fn from_guppy_json(json: &str, function: &str) -> PyResult<Self> {
-        let circ = tket2::serialize::load_guppy_json_str(json, function).map_err(|e| {
-            PyErr::new::<PyAttributeError, _>(format!("Invalid encoded circuit: {e}"))
-        })?;
+    #[pyo3(signature = (json, function_name = None))]
+    pub fn from_package_json(json: &str, function_name: Option<String>) -> PyResult<Self> {
+        fn err(e: impl Display) -> PyErr {
+            PyErr::new::<PyAttributeError, _>(format!("Could not read package: {e}"))
+        };
+        let name = function_name.unwrap_or_else(|| "main".to_string());
+        let circ = Circuit::load_function_reader(json.as_bytes(), &name).map_err(err)?;
         Ok(Tk2Circuit { circ })
     }
 

@@ -54,18 +54,31 @@ class Tk2Circuit:
         """The output node of the circuit."""
 
     def to_hugr_json(self) -> str:
-        """Encode the circuit as a HUGR json string."""
+        """Encode the circuit as a HUGR json."""
+
+    def to_package_json(self) -> str:
+        """Encode the circuit as a HUGR Package json."""
 
     @staticmethod
     def from_hugr_json(json: str) -> Tk2Circuit:
         """Decode a HUGR json string to a Tk2Circuit."""
 
-    def to_tket1_json(self) -> str:
-        """Encode the circuit as a pytket json string."""
-
     @staticmethod
-    def from_guppy_json(json: str, function: str) -> Tk2Circuit:
-        """Load a function from a compiled guppy module, encoded as a json string."""
+    def from_package_json(json: str, function_name: str | None = None) -> Tk2Circuit:
+        """Decode a HUGR Package json to a circuit.
+
+        Traverses the package's modules in order until it finds one containing a
+        function named `function_name`, and loads it as a circuit.
+
+        If the json is a hugr json, it will be decoded as a `main` function in an empty module.
+
+        When `function_name` is not given, it defaults to `main`.
+        """
+
+    def to_tket1_json(
+        self,
+    ) -> str:
+        """Encode the circuit as a pytket json string."""
 
     @staticmethod
     def from_tket1_json(json: str) -> Tk2Circuit:
