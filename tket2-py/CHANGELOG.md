@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.4.1...tket2-py-v0.5.0) (2024-11-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* Removed `load_guppy_*` methods. Use
+
+### Features
+
+* move extensions to auxillary package ([#682](https://github.com/CQCL/tket2/issues/682)) ([dd78f9a](https://github.com/CQCL/tket2/commit/dd78f9a571905407bcf74131a54f4aefbca740c4))
+* Track circuit extensions and read/write packages ([#680](https://github.com/CQCL/tket2/issues/680)) ([5e87dd9](https://github.com/CQCL/tket2/commit/5e87dd94f216a87f4d27dee44d178578d40e7ace))
+
+
+### Reverts
+
+* "Support python 3.13 ([#653](https://github.com/CQCL/tket2/issues/653))" ([#657](https://github.com/CQCL/tket2/issues/657)) ([3fb67ac](https://github.com/CQCL/tket2/commit/3fb67acf5e860fba8f8e1b9e6c5836846a0fcb7d))
+
 ## [0.4.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.4.0...tket2-py-v0.4.1) (2024-10-10)
 
 
