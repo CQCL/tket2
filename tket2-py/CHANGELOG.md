@@ -13,10 +13,6 @@
 * Track circuit extensions and read/write packages ([#680](https://github.com/CQCL/tket2/issues/680)) ([5e87dd9](https://github.com/CQCL/tket2/commit/5e87dd94f216a87f4d27dee44d178578d40e7ace))
 
 
-### Reverts
-
-* "Support python 3.13 ([#653](https://github.com/CQCL/tket2/issues/653))" ([#657](https://github.com/CQCL/tket2/issues/657)) ([3fb67ac](https://github.com/CQCL/tket2/commit/3fb67acf5e860fba8f8e1b9e6c5836846a0fcb7d))
-
 ## [0.4.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.4.0...tket2-py-v0.4.1) (2024-10-10)
 
 
