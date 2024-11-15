@@ -6,7 +6,7 @@ on:
       - main
   pull_request:
     branches:
-      - main
+      - '*'
   merge_group:
     types: [checks_requested]
   workflow_dispatch: {}
@@ -220,13 +220,6 @@ jobs:
           flags: rust
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
-
-  rs-semver-checks:
-    needs: [changes, check-rs]
-    if: ${{ needs.changes.outputs.rust == 'true' && github.event_name == 'pull_request' }}
-    uses: CQCL/hugrverse-actions/.github/workflows/rs-semver-checks.yml@main
-    secrets:
-      GITHUB_PAT: ${{ secrets.HUGRBOT_PAT }}
 
   tests-py:
     needs: changes
