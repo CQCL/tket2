@@ -5,7 +5,7 @@
 
 ### ⚠ BREAKING CHANGES
 
-* Removed `load_guppy_*` methods. Use
+* Removed `load_guppy_*` methods. Use Circuit::load_function_reader instead.
 
 ### Features
 
