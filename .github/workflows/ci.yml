@@ -213,7 +213,7 @@ jobs:
       - name: Generate coverage report
         run: cargo llvm-cov --all-features report --codecov --output-path coverage.json
       - name: Upload coverage to codecov.io
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: coverage.json
           name: rust
@@ -244,7 +244,7 @@ jobs:
         run: uv run pytest --cov=./ --cov-report=xml
       - name: Upload python coverage to codecov.io
         if: github.event_name != 'merge_group'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
           # Ensures we only upload this file
