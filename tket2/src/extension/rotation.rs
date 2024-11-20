@@ -15,6 +15,9 @@ use strum::{EnumIter, EnumString, IntoStaticStr};
 
 use lazy_static::lazy_static;
 
+#[cfg(feature = "llvm")]
+pub mod llvm;
+
 /// Name of tket 2 rotation extension.
 pub const ROTATION_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.rotation");
 

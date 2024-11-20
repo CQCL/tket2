@@ -82,6 +82,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.93"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c95c10ba0b00a02636238b814946408b1322d5ac4760326e6fb8ec956d85775"
+
+[[package]]
 name = "approx"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -861,6 +867,7 @@ version = "0.13.3"
 source = "git+https://github.com/CQCL/hugr.git#bcac68d3c147e960b921927f58b2fca8c86ccdc7"
 dependencies = [
  "hugr-core",
+ "hugr-llvm",
  "hugr-passes",
 ]
 
@@ -909,6 +916,22 @@ dependencies = [
  "strum_macros",
  "thiserror 1.0.69",
  "typetag",
+]
+
+[[package]]
+name = "hugr-llvm"
+version = "0.13.3"
+source = "git+https://github.com/CQCL/hugr.git?branch=doug/init-hugr-llvm-subtree#377b19a74e5b5ad3a01869d223510199843b1fc1"
+dependencies = [
+ "anyhow",
+ "delegate 0.13.1",
+ "downcast-rs",
+ "hugr-core",
+ "inkwell",
+ "itertools 0.13.0",
+ "lazy_static",
+ "petgraph",
+ "strum",
 ]
 
 [[package]]
@@ -1109,6 +1132,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b248f5224d1d606005e02c97f5aa4e88eeb230488bcc03bc9ca4d7991399f2b5"
 
 [[package]]
+name = "inkwell"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b597a7b2cdf279aeef6d7149071e35e4bc87c2cf05a5b7f2d731300bffe587ea"
+dependencies = [
+ "either",
+ "inkwell_internals",
+ "libc",
+ "llvm-sys",
+ "once_cell",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "inkwell_internals"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fa4d8d74483041a882adaa9a29f633253a66dde85055f0495c121620ac484b2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.87",
+]
+
+[[package]]
 name = "inventory"
 version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1218,6 +1266,19 @@ name = "litemap"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ee93343901ab17bd981295f2cf0026d4ad018c7c31ba84549a4ddbb47a45104"
+
+[[package]]
+name = "llvm-sys"
+version = "140.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3dc78e9857c0231ec11e3bdccf63870493fdc7d0570b0ea7d50bf5df0cb1a0c"
+dependencies = [
+ "cc",
+ "lazy_static",
+ "libc",
+ "regex",
+ "semver",
+]
 
 [[package]]
 name = "log"
@@ -2149,6 +2210,7 @@ dependencies = [
 name = "tket2"
 version = "0.6.0"
 dependencies = [
+ "anyhow",
  "bytemuck",
  "cgmath",
  "chrono",
@@ -2163,6 +2225,7 @@ dependencies = [
  "hugr",
  "hugr-core",
  "indexmap",
+ "inkwell",
  "itertools 0.13.0",
  "lazy_static",
  "num-complex",
