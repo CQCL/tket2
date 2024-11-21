@@ -78,8 +78,6 @@ urlencoding = "2.1.2"
 webbrowser = "1.0.2"
 cool_asserts = "2.0.3"
 zstd = "0.13.2"
-inkwell = { version = "0.4.0", default-features = false }
-anyhow = "1.0.83"
 
 [profile.release.package.tket2-py]
 # Some configurations to reduce the size of tket2 wheels

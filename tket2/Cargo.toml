@@ -25,7 +25,7 @@ path = "src/lib.rs"
 # Enables search and replace optimisation passes using the `portmatching` crate.
 portmatching = ["dep:portmatching", "dep:rmp-serde"]
 # Enables lowering of some extensions to LLVM IR using the `hugr` crate.
-llvm = ["hugr/llvm", "inkwell"]
+hugr_llvm = ["hugr/llvm"]
 
 # Stores a trace of the applied rewrites
 rewrite-tracing = []
@@ -74,8 +74,6 @@ tracing = { workspace = true }
 pest = { workspace = true }
 pest_derive = { workspace = true }
 zstd = { workspace = true, optional = true }
-inkwell = { workspace = true, optional = true }
-anyhow = { workspace = true }
 
 [dev-dependencies]
 rstest = { workspace = true }

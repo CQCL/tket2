@@ -1153,7 +1153,7 @@ checksum = "4fa4d8d74483041a882adaa9a29f633253a66dde85055f0495c121620ac484b2"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.87",
+ "syn 2.0.89",
 ]
 
 [[package]]
@@ -2210,7 +2210,6 @@ dependencies = [
 name = "tket2"
 version = "0.6.0"
 dependencies = [
- "anyhow",
  "bytemuck",
  "cgmath",
  "chrono",
@@ -2225,7 +2224,6 @@ dependencies = [
  "hugr",
  "hugr-core",
  "indexmap",
- "inkwell",
  "itertools 0.13.0",
  "lazy_static",
  "num-complex",
