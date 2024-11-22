@@ -57,6 +57,7 @@ pub enum Tk2Op {
     Rz,
     Toffoli,
     Measure,
+    MeasureFree,
     QAlloc,
     TryQAlloc,
     QFree,
@@ -115,6 +116,7 @@ impl MakeOpDef for Tk2Op {
             CX | CZ | CY => Signature::new_endo(type_row![QB_T; 2]),
             Toffoli => Signature::new_endo(type_row![QB_T; 3]),
             Measure => Signature::new(one_qb_row, type_row![QB_T, BOOL_T]),
+            MeasureFree => Signature::new(one_qb_row, type_row![BOOL_T]),
             Rz | Rx | Ry => Signature::new(type_row![QB_T, ROTATION_TYPE], one_qb_row),
             CRz => Signature::new(type_row![QB_T, QB_T, ROTATION_TYPE], type_row![QB_T; 2]),
             QAlloc => Signature::new(type_row![], one_qb_row),
@@ -170,7 +172,7 @@ impl Tk2Op {
         use Tk2Op::*;
         match self {
             H | CX | T | S | X | Y | Z | Tdg | Sdg | Rz | Rx | Toffoli | Ry | CZ | CY | CRz => true,
-            Measure | QAlloc | TryQAlloc | QFree | Reset => false,
+            Measure | MeasureFree | QAlloc | TryQAlloc | QFree | Reset => false,
         }
     }
 }
@@ -210,7 +212,7 @@ pub(crate) mod test {
     use std::sync::Arc;
 
     use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
-    use hugr::extension::prelude::{option_type, QB_T};
+    use hugr::extension::prelude::{option_type, BOOL_T, QB_T};
     use hugr::extension::simple_op::MakeOpDef;
     use hugr::extension::{prelude::UnwrapBuilder as _, OpDef};
     use hugr::ops::NamedOp;
@@ -277,14 +279,18 @@ pub(crate) mod test {
     }
 
     #[test]
-    fn try_qalloc() {
-        let mut b = DFGBuilder::new(Signature::new(type_row![], QB_T)).unwrap();
+    fn try_qalloc_measure_free() {
+        let mut b = DFGBuilder::new(Signature::new(type_row![], BOOL_T)).unwrap();
 
         let try_q = b.add_dataflow_op(Tk2Op::TryQAlloc, []).unwrap().out_wire(0);
         let [q] = b
             .build_unwrap_sum(&REGISTRY, 1, option_type(QB_T), try_q)
             .unwrap();
-        b.finish_hugr_with_outputs([q], &REGISTRY).unwrap();
+        let measured = b
+            .add_dataflow_op(Tk2Op::MeasureFree, [q])
+            .unwrap()
+            .out_wire(0);
+        b.finish_hugr_with_outputs([measured], &REGISTRY).unwrap();
     }
     #[test]
     fn tk2op_properties() {
