@@ -73,6 +73,7 @@ impl CircuitPattern {
             .map(|p| {
                 hugr.linked_ports(out, p)
                     .exactly_one()
+                    .ok()
                     .expect("invalid circuit")
             })
             .collect_vec();
