@@ -71,7 +71,7 @@ impl NativeOp {
             Tk2Op::Reset => Tk1OpType::Reset,
             Tk2Op::Measure => Tk1OpType::Measure,
             // These operations do not have a direct pytket counterpart.
-            Tk2Op::QAlloc | Tk2Op::QFree => {
+            Tk2Op::QAlloc | Tk2Op::QFree | Tk2Op::TryQAlloc => {
                 // These operations are implicitly supported by the encoding,
                 // they do not create an explicit pytket operation but instead
                 // add new qubits to the circuit input/output.

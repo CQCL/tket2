@@ -3,9 +3,10 @@ use crate::extension::sympy::{SympyOpDef, SYM_OP_ID};
 use crate::extension::TKET2_EXTENSION_ID as EXTENSION_ID;
 use hugr::ops::custom::ExtensionOp;
 use hugr::ops::NamedOp;
+use hugr::types::Type;
 use hugr::{
     extension::{
-        prelude::{BOOL_T, QB_T},
+        prelude::{option_type, BOOL_T, QB_T},
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionId, OpDef, SignatureFunc,
     },
@@ -57,6 +58,7 @@ pub enum Tk2Op {
     Toffoli,
     Measure,
     QAlloc,
+    TryQAlloc,
     QFree,
     Reset,
 }
@@ -116,6 +118,7 @@ impl MakeOpDef for Tk2Op {
             Rz | Rx | Ry => Signature::new(type_row![QB_T, ROTATION_TYPE], one_qb_row),
             CRz => Signature::new(type_row![QB_T, QB_T, ROTATION_TYPE], type_row![QB_T; 2]),
             QAlloc => Signature::new(type_row![], one_qb_row),
+            TryQAlloc => Signature::new(type_row![], Type::from(option_type(one_qb_row))),
             QFree => Signature::new(one_qb_row, type_row![]),
         }
         .into()
@@ -167,7 +170,7 @@ impl Tk2Op {
         use Tk2Op::*;
         match self {
             H | CX | T | S | X | Y | Z | Tdg | Sdg | Rz | Rx | Toffoli | Ry | CZ | CY | CRz => true,
-            Measure | QAlloc | QFree | Reset => false,
+            Measure | QAlloc | TryQAlloc | QFree | Reset => false,
         }
     }
 }
@@ -206,16 +209,21 @@ pub(crate) mod test {
     use std::str::FromStr;
     use std::sync::Arc;
 
+    use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
+    use hugr::extension::prelude::{option_type, QB_T};
     use hugr::extension::simple_op::MakeOpDef;
-    use hugr::extension::OpDef;
+    use hugr::extension::{prelude::UnwrapBuilder as _, OpDef};
     use hugr::ops::NamedOp;
-    use hugr::CircuitUnit;
+    use hugr::types::Signature;
+    use hugr::{type_row, CircuitUnit};
     use rstest::{fixture, rstest};
     use strum::IntoEnumIterator;
 
     use super::Tk2Op;
     use crate::circuit::Circuit;
-    use crate::extension::{TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID};
+    use crate::extension::{
+        REGISTRY, TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID,
+    };
     use crate::utils::build_simple_circuit;
     use crate::Pauli;
     fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
@@ -268,6 +276,16 @@ pub(crate) mod test {
         assert_eq!(h.commands().count(), 5);
     }
 
+    #[test]
+    fn try_qalloc() {
+        let mut b = DFGBuilder::new(Signature::new(type_row![], QB_T)).unwrap();
+
+        let try_q = b.add_dataflow_op(Tk2Op::TryQAlloc, []).unwrap().out_wire(0);
+        let [q] = b
+            .build_unwrap_sum(&REGISTRY, 1, option_type(QB_T), try_q)
+            .unwrap();
+        b.finish_hugr_with_outputs([q], &REGISTRY).unwrap();
+    }
     #[test]
     fn tk2op_properties() {
         for op in Tk2Op::iter() {
