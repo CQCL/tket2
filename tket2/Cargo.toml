@@ -24,8 +24,9 @@ path = "src/lib.rs"
 [features]
 # Enables search and replace optimisation passes using the `portmatching` crate.
 portmatching = ["dep:portmatching", "dep:rmp-serde"]
-# Enables lowering of some extensions to LLVM IR using the `hugr` crate.
-hugr_llvm = ["hugr/llvm"]
+# Re-export hugr llvm lowering functionality
+hugr-llvm = ["hugr/llvm"]
+hugr-llvm-test = ["hugr-llvm", "hugr/llvm-test"]
 
 # Stores a trace of the applied rewrites
 rewrite-tracing = []
