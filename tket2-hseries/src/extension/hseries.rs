@@ -9,7 +9,7 @@ use std::sync::Arc;
 use hugr::{
     builder::{BuildError, Dataflow, DataflowSubContainer, SubContainer},
     extension::{
-        prelude::{BOOL_T, QB_T},
+        prelude::{option_type, UnwrapBuilder, BOOL_T, QB_T},
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version, PRELUDE,
     },
@@ -19,7 +19,7 @@ use hugr::{
         float_types::{ConstF64, EXTENSION as FLOAT_TYPES, FLOAT64_TYPE},
     },
     type_row,
-    types::Signature,
+    types::{Signature, Type},
     Extension, Wire,
 };
 
@@ -86,7 +86,7 @@ pub enum HSeriesOp {
     PhasedX,
     ZZMax,
     ZZPhase,
-    QAlloc,
+    TryQAlloc,
     QFree,
     Reset,
     MeasureReset,
@@ -105,7 +105,7 @@ impl MakeOpDef for HSeriesOp {
             Measure => Signature::new(one_qb_row, type_row![BOOL_T]),
             Rz => Signature::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
             PhasedX => Signature::new(type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE], one_qb_row),
-            QAlloc => Signature::new(type_row![], one_qb_row),
+            TryQAlloc => Signature::new(type_row![], Type::from(option_type(one_qb_row))),
             QFree => Signature::new(one_qb_row, type_row![]),
             MeasureReset => Signature::new(one_qb_row.clone(), type_row![QB_T, BOOL_T]),
         }
@@ -128,7 +128,7 @@ impl MakeOpDef for HSeriesOp {
             HSeriesOp::PhasedX => "PhasedX gate.",
             HSeriesOp::ZZMax => "Maximally entangling ZZ gate.",
             HSeriesOp::ZZPhase => "ZZ gate with an angle.",
-            HSeriesOp::QAlloc => "Allocate a qubit in the Z |0> eigenstate.",
+            HSeriesOp::TryQAlloc => "Allocate a qubit in the Z |0> eigenstate.",
             HSeriesOp::QFree => "Free a qubit (lose track of it).",
             HSeriesOp::Reset => "Reset a qubit to the Z |0> eigenstate.",
             HSeriesOp::MeasureReset => "Measure a qubit and reset it to the Z |0> eigenstate.",
@@ -149,7 +149,7 @@ impl MakeRegisteredOp for HSeriesOp {
 
 /// An extension trait for [Dataflow] providing methods to add
 /// "tket2.hseries" operations.
-pub trait HSeriesOpBuilder: Dataflow {
+pub trait HSeriesOpBuilder: Dataflow + UnwrapBuilder {
     /// Add a "tket2.hseries.LazyMeasure" op.
     fn add_lazy_measure(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
@@ -195,9 +195,9 @@ pub trait HSeriesOpBuilder: Dataflow {
             .out_wire(0))
     }
 
-    /// Add a "tket2.hseries.QAlloc" op.
-    fn add_qalloc(&mut self) -> Result<Wire, BuildError> {
-        Ok(self.add_dataflow_op(HSeriesOp::QAlloc, [])?.out_wire(0))
+    /// Add a "tket2.hseries.TryQAlloc" op.
+    fn add_try_alloc(&mut self) -> Result<Wire, BuildError> {
+        Ok(self.add_dataflow_op(HSeriesOp::TryQAlloc, [])?.out_wire(0))
     }
 
     /// Add a "tket2.hseries.QFree" op.
@@ -392,6 +392,13 @@ pub trait HSeriesOpBuilder: Dataflow {
         let [qb] = conditional.finish_sub_container()?.outputs_arr();
         Ok([qb, b])
     }
+
+    /// Build a qalloc operation that panics on failure.
+    fn build_qalloc(&mut self) -> Result<Wire, BuildError> {
+        let maybe_qb = self.add_try_alloc()?;
+        let [qb] = self.build_unwrap_sum(&REGISTRY, 1, option_type(QB_T), maybe_qb)?;
+        Ok(qb)
+    }
 }
 
 impl<D: Dataflow> HSeriesOpBuilder for D {}
@@ -445,7 +452,7 @@ mod test {
             )
             .unwrap();
             let [q0, angle] = func_builder.input_wires_arr();
-            let q1 = func_builder.add_qalloc().unwrap();
+            let q1 = func_builder.build_qalloc().unwrap();
             let q0 = func_builder.add_reset(q0).unwrap();
             let q1 = func_builder.add_phased_x(q1, angle, angle).unwrap();
             let [q0, q1] = func_builder.add_zz_max(q0, q1).unwrap();

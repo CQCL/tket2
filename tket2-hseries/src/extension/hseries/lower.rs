@@ -78,6 +78,7 @@ fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
         (Tk2Op::T, [q]) => vec![b.build_t(*q)?],
         (Tk2Op::Tdg, [q]) => vec![b.build_tdg(*q)?],
         (Tk2Op::Measure, [q]) => b.build_measure_flip(*q)?.into(),
+        (Tk2Op::QAlloc, []) => vec![b.build_qalloc()?],
         (Tk2Op::CX, [c, t]) => b.build_cx(*c, *t)?.into(),
         (Tk2Op::CY, [c, t]) => b.build_cy(*c, *t)?.into(),
         (Tk2Op::CZ, [c, t]) => b.build_cz(*c, *t)?.into(),
@@ -135,7 +136,7 @@ fn lower_direct(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
     Ok(hugr::algorithms::replace_many_ops(hugr, |op| {
         let op: Tk2Op = op.cast()?;
         Some(match op {
-            Tk2Op::QAlloc => HSeriesOp::QAlloc,
+            Tk2Op::TryQAlloc => HSeriesOp::TryQAlloc,
             Tk2Op::QFree => HSeriesOp::QFree,
             Tk2Op::Reset => HSeriesOp::Reset,
             Tk2Op::MeasureFree => HSeriesOp::Measure,
@@ -203,7 +204,11 @@ impl LowerTket2ToHSeriesPass {
 
 #[cfg(test)]
 mod test {
-    use hugr::{builder::FunctionBuilder, extension::prelude::BOOL_T, type_row, HugrView};
+    use hugr::{
+        builder::FunctionBuilder,
+        extension::prelude::{option_type, UnwrapBuilder as _, BOOL_T, QB_T},
+        type_row, HugrView,
+    };
     use tket2::{extension::rotation::ROTATION_TYPE, Circuit};
 
     use super::*;
@@ -212,30 +217,44 @@ mod test {
     #[test]
     fn test_lower_direct() {
         let mut b = FunctionBuilder::new("circuit", Signature::new_endo(type_row![])).unwrap();
-        let [q] = b.add_dataflow_op(Tk2Op::QAlloc, []).unwrap().outputs_arr();
+        let [maybe_q] = b
+            .add_dataflow_op(Tk2Op::TryQAlloc, [])
+            .unwrap()
+            .outputs_arr();
+        let [q] = b
+            .build_unwrap_sum(&REGISTRY, 1, option_type(QB_T), maybe_q)
+            .unwrap();
         let [q] = b.add_dataflow_op(Tk2Op::Reset, [q]).unwrap().outputs_arr();
         b.add_dataflow_op(Tk2Op::QFree, [q]).unwrap();
-        let [q] = b.add_dataflow_op(Tk2Op::QAlloc, []).unwrap().outputs_arr();
+        let [maybe_q] = b
+            .add_dataflow_op(Tk2Op::TryQAlloc, [])
+            .unwrap()
+            .outputs_arr();
+        let [q] = b
+            .build_unwrap_sum(&REGISTRY, 1, option_type(QB_T), maybe_q)
+            .unwrap();
 
         let [_] = b
             .add_dataflow_op(Tk2Op::MeasureFree, [q])
             .unwrap()
             .outputs_arr();
-        let mut h = b.finish_hugr_with_outputs([], &REGISTRY).unwrap();
+        let mut h = b
+            .finish_hugr_with_outputs([], &REGISTRY)
+            .unwrap_or_else(|e| panic!("{}", e));
 
         let lowered = lower_direct(&mut h).unwrap();
         assert_eq!(lowered.len(), 5);
         let circ = Circuit::new(&h, h.root());
         let ops: Vec<HSeriesOp> = circ
             .commands()
-            .map(|com| com.optype().cast().unwrap())
+            .filter_map(|com| com.optype().cast())
             .collect();
         assert_eq!(
             ops,
             vec![
-                HSeriesOp::QAlloc,
+                HSeriesOp::TryQAlloc,
                 HSeriesOp::Measure,
-                HSeriesOp::QAlloc,
+                HSeriesOp::TryQAlloc,
                 HSeriesOp::Reset,
                 HSeriesOp::QFree,
             ]
@@ -263,6 +282,7 @@ mod test {
     #[case(Tk2Op::Toffoli, None)]
     // conditional doesn't fit in to commands
     #[case(Tk2Op::Measure, None)]
+    #[case(Tk2Op::QAlloc, None)]
     fn test_lower(#[case] t2op: Tk2Op, #[case] hseries_ops: Option<Vec<HSeriesOp>>) {
         // build dfg with just the op
 
@@ -299,10 +319,10 @@ mod test {
 
         let lowered = lower_tk2_op(&mut h).unwrap();
         assert_eq!(lowered.len(), 5);
-        // dfg, input, output, alloc, phasedx, rz, toturns, fmul, phasedx, free +
+        // dfg, input, output, alloc + (10 for unwrap), phasedx, rz, toturns, fmul, phasedx, free +
         // 5x(float + load), measure_reset, conditional, case(input, output) * 2, flip
         // (phasedx + 2*(float + load))
-        assert_eq!(h.node_count(), 33);
+        assert_eq!(h.node_count(), 43);
         assert_eq!(check_lowered(&h), Ok(()));
     }
 }
