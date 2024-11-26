@@ -37,7 +37,7 @@ pub use lower::{check_lowered, lower_tk2_op, LowerTk2Error, LowerTket2ToHSeriesP
 /// The "tket2.hseries" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.hseries");
 /// The "tket2.hseries" extension version.
-pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+pub const EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
     /// The "tket2.hseries" extension.

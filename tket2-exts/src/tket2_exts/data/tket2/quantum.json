@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.1.1",
   "name": "tket2.quantum",
   "extension_reqs": [],
   "types": {},
@@ -203,6 +203,33 @@
             {
               "t": "Q"
             },
+            {
+              "t": "Sum",
+              "s": "Unit",
+              "size": 2
+            }
+          ],
+          "extension_reqs": []
+        }
+      },
+      "binary": false
+    },
+    "MeasureFree": {
+      "extension": "tket2.quantum",
+      "name": "MeasureFree",
+      "description": "MeasureFree",
+      "misc": {
+        "commutation": []
+      },
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Q"
+            }
+          ],
+          "output": [
             {
               "t": "Sum",
               "s": "Unit",
@@ -537,6 +564,36 @@
             },
             {
               "t": "Q"
+            }
+          ],
+          "extension_reqs": []
+        }
+      },
+      "binary": false
+    },
+    "TryQAlloc": {
+      "extension": "tket2.quantum",
+      "name": "TryQAlloc",
+      "description": "TryQAlloc",
+      "misc": {
+        "commutation": []
+      },
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [],
+          "output": [
+            {
+              "t": "Sum",
+              "s": "General",
+              "rows": [
+                [],
+                [
+                  {
+                    "t": "Q"
+                  }
+                ]
+              ]
             }
           ],
           "extension_reqs": []
