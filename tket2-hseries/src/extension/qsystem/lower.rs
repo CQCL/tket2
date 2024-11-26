@@ -176,10 +176,10 @@ pub fn check_lowered(hugr: &impl HugrView) -> Result<(), Vec<Node>> {
 /// Invokes [lower_tk2_op]. If validation is enabled the resulting HUGR is
 /// checked with [check_lowered].
 #[derive(Default, Debug, Clone)]
-pub struct LowerTket2ToHSeriesPass(ValidationLevel);
+pub struct LowerTket2ToQSystemPass(ValidationLevel);
 
-impl LowerTket2ToHSeriesPass {
-    /// Run `LowerTket2ToHSeriesPass` on the given [HugrMut]. `registry` is used
+impl LowerTket2ToQSystemPass {
+    /// Run `LowerTket2ToQSystemPass` on the given [HugrMut]. `registry` is used
     /// for validation, if enabled.
     pub fn run(
         &self,
@@ -196,7 +196,7 @@ impl LowerTket2ToHSeriesPass {
         })
     }
 
-    /// Returns a new `LowerTket2ToHSeriesPass` with the given [ValidationLevel].
+    /// Returns a new `LowerTket2ToQSystemPass` with the given [ValidationLevel].
     pub fn with_validation_level(&self, level: ValidationLevel) -> Self {
         Self(level)
     }
@@ -283,7 +283,7 @@ mod test {
     // conditional doesn't fit in to commands
     #[case(Tk2Op::Measure, None)]
     #[case(Tk2Op::QAlloc, None)]
-    fn test_lower(#[case] t2op: Tk2Op, #[case] hseries_ops: Option<Vec<QSystemOp>>) {
+    fn test_lower(#[case] t2op: Tk2Op, #[case] qsystem_ops: Option<Vec<QSystemOp>>) {
         // build dfg with just the op
 
         let h = op_to_hugr(t2op).unwrap();
@@ -292,8 +292,8 @@ mod test {
             .commands()
             .filter_map(|com| com.optype().cast())
             .collect();
-        if let Some(hseries_ops) = hseries_ops {
-            assert_eq!(ops, hseries_ops);
+        if let Some(qsystem_ops) = qsystem_ops {
+            assert_eq!(ops, qsystem_ops);
         }
 
         assert_eq!(check_lowered(&h), Ok(()));

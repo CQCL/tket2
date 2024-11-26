@@ -32,7 +32,7 @@ use super::futures::future_type;
 
 mod lower;
 use lower::pi_mul_f64;
-pub use lower::{check_lowered, lower_tk2_op, LowerTk2Error, LowerTket2ToHSeriesPass};
+pub use lower::{check_lowered, lower_tk2_op, LowerTk2Error, LowerTket2ToQSystemPass};
 
 /// The "tket2.qsystem" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.qsystem");
