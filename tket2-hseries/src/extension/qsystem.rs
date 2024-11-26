@@ -149,64 +149,64 @@ impl MakeRegisteredOp for QSystemOp {
 
 /// An extension trait for [Dataflow] providing methods to add
 /// "tket2.qsystem" operations.
-pub trait HSeriesOpBuilder: Dataflow + UnwrapBuilder {
-    /// Add a "tket2.hseries.LazyMeasure" op.
+pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
+    /// Add a "tket2.qsystem.LazyMeasure" op.
     fn add_lazy_measure(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::LazyMeasure, [qb])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.hseries.Measure" op.
+    /// Add a "tket2.qsystem.Measure" op.
     fn add_measure(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         Ok(self.add_dataflow_op(QSystemOp::Measure, [qb])?.out_wire(0))
     }
 
-    /// Add a "tket2.hseries.Reset" op.
+    /// Add a "tket2.qsystem.Reset" op.
     fn add_reset(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         Ok(self.add_dataflow_op(QSystemOp::Reset, [qb])?.out_wire(0))
     }
 
-    /// Add a "tket2.hseries.ZZMax" op.
+    /// Add a "tket2.qsystem.ZZMax" op.
     fn add_zz_max(&mut self, qb1: Wire, qb2: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::ZZMax, [qb1, qb2])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.hseries.ZZPhase" op.
+    /// Add a "tket2.qsystem.ZZPhase" op.
     fn add_zz_phase(&mut self, qb1: Wire, qb2: Wire, angle: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::ZZPhase, [qb1, qb2, angle])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.hseries.PhasedX" op.
+    /// Add a "tket2.qsystem.PhasedX" op.
     fn add_phased_x(&mut self, qb: Wire, angle1: Wire, angle2: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::PhasedX, [qb, angle1, angle2])?
             .out_wire(0))
     }
 
-    /// Add a "tket2.hseries.Rz" op.
+    /// Add a "tket2.qsystem.Rz" op.
     fn add_rz(&mut self, qb: Wire, angle: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::Rz, [qb, angle])?
             .out_wire(0))
     }
 
-    /// Add a "tket2.hseries.TryQAlloc" op.
+    /// Add a "tket2.qsystem.TryQAlloc" op.
     fn add_try_alloc(&mut self) -> Result<Wire, BuildError> {
         Ok(self.add_dataflow_op(QSystemOp::TryQAlloc, [])?.out_wire(0))
     }
 
-    /// Add a "tket2.hseries.QFree" op.
+    /// Add a "tket2.qsystem.QFree" op.
     fn add_qfree(&mut self, qb: Wire) -> Result<(), BuildError> {
         self.add_dataflow_op(QSystemOp::QFree, [qb])?;
         Ok(())
     }
 
-    /// Add a "tket2.hseries.MeasureReset" op.
+    /// Add a "tket2.qsystem.MeasureReset" op.
     /// This operation is equivalent to a `Measure` followed by a `Reset`.
     fn add_measure_reset(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
@@ -214,7 +214,7 @@ pub trait HSeriesOpBuilder: Dataflow + UnwrapBuilder {
             .outputs_arr())
     }
 
-    /// Build a hadamard gate in terms of HSeries primitives.
+    /// Build a hadamard gate in terms of QSystem primitives.
     fn build_h(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         let pi = pi_mul_f64(self, 1.0);
         let pi_2 = pi_mul_f64(self, 0.5);
@@ -224,51 +224,51 @@ pub trait HSeriesOpBuilder: Dataflow + UnwrapBuilder {
         self.add_rz(q, pi)
     }
 
-    /// Build an X gate in terms of HSeries primitives.
+    /// Build an X gate in terms of QSystem primitives.
     fn build_x(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         let pi = pi_mul_f64(self, 1.0);
         let zero = pi_mul_f64(self, 0.0);
         self.add_phased_x(qb, pi, zero)
     }
 
-    /// Build a Y gate in terms of HSeries primitives.
+    /// Build a Y gate in terms of QSystem primitives.
     fn build_y(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         let pi = pi_mul_f64(self, 1.0);
         let pi_2 = pi_mul_f64(self, 0.5);
         self.add_phased_x(qb, pi, pi_2)
     }
 
-    /// Build a Z gate in terms of HSeries primitives.
+    /// Build a Z gate in terms of QSystem primitives.
     fn build_z(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         let pi = pi_mul_f64(self, 1.0);
         self.add_rz(qb, pi)
     }
 
-    /// Build an S gate in terms of HSeries primitives.
+    /// Build an S gate in terms of QSystem primitives.
     fn build_s(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         let pi_2 = pi_mul_f64(self, 0.5);
         self.add_rz(qb, pi_2)
     }
 
-    /// Build an Sdg gate in terms of HSeries primitives.
+    /// Build an Sdg gate in terms of QSystem primitives.
     fn build_sdg(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         let pi_minus_2 = pi_mul_f64(self, -0.5);
         self.add_rz(qb, pi_minus_2)
     }
 
-    /// Build a T gate in terms of HSeries primitives.
+    /// Build a T gate in terms of QSystem primitives.
     fn build_t(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         let pi_4 = pi_mul_f64(self, 0.25);
         self.add_rz(qb, pi_4)
     }
 
-    /// Build a Tdg gate in terms of HSeries primitives.
+    /// Build a Tdg gate in terms of QSystem primitives.
     fn build_tdg(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         let pi_minus_4 = pi_mul_f64(self, -0.25);
         self.add_rz(qb, pi_minus_4)
     }
 
-    /// Build a CNOT gate in terms of HSeries primitives.
+    /// Build a CNOT gate in terms of QSystem primitives.
     fn build_cx(&mut self, c: Wire, t: Wire) -> Result<[Wire; 2], BuildError> {
         let pi = pi_mul_f64(self, 1.0);
         let pi_2 = pi_mul_f64(self, 0.5);
@@ -283,7 +283,7 @@ pub trait HSeriesOpBuilder: Dataflow + UnwrapBuilder {
         Ok([c, t])
     }
 
-    /// Build a CY gate in terms of HSeries primitives.
+    /// Build a CY gate in terms of QSystem primitives.
     fn build_cy(&mut self, a: Wire, b: Wire) -> Result<[Wire; 2], BuildError> {
         let pi_2 = pi_mul_f64(self, 0.5);
         let pi_minus_2 = pi_mul_f64(self, -0.5);
@@ -297,7 +297,7 @@ pub trait HSeriesOpBuilder: Dataflow + UnwrapBuilder {
         Ok([a, b])
     }
 
-    /// Build a CZ gate in terms of HSeries primitives.
+    /// Build a CZ gate in terms of QSystem primitives.
     fn build_cz(&mut self, a: Wire, b: Wire) -> Result<[Wire; 2], BuildError> {
         let pi = pi_mul_f64(self, 1.0);
         let pi_2 = pi_mul_f64(self, 0.5);
@@ -312,19 +312,19 @@ pub trait HSeriesOpBuilder: Dataflow + UnwrapBuilder {
         Ok([a, b])
     }
 
-    /// Build a RX gate in terms of HSeries primitives.
+    /// Build a RX gate in terms of QSystem primitives.
     fn build_rx(&mut self, qb: Wire, theta: Wire) -> Result<Wire, BuildError> {
         let zero = pi_mul_f64(self, 0.0);
         self.add_phased_x(qb, theta, zero)
     }
 
-    /// Build a RY gate in terms of HSeries primitives.
+    /// Build a RY gate in terms of QSystem primitives.
     fn build_ry(&mut self, qb: Wire, theta: Wire) -> Result<Wire, BuildError> {
         let pi_2 = pi_mul_f64(self, 0.5);
         self.add_phased_x(qb, theta, pi_2)
     }
 
-    /// Build a CRZ gate in terms of HSeries primitives.
+    /// Build a CRZ gate in terms of QSystem primitives.
     fn build_crz(&mut self, a: Wire, b: Wire, lambda: Wire) -> Result<[Wire; 2], BuildError> {
         let two = self.add_load_const(Value::from(ConstF64::new(2.0)));
         let lambda_2 = self
@@ -339,7 +339,7 @@ pub trait HSeriesOpBuilder: Dataflow + UnwrapBuilder {
         Ok([a, b])
     }
 
-    /// Build a Toffoli (CCX) gate in terms of HSeries primitives.
+    /// Build a Toffoli (CCX) gate in terms of QSystem primitives.
     fn build_toffoli(&mut self, a: Wire, b: Wire, c: Wire) -> Result<[Wire; 3], BuildError> {
         let pi = pi_mul_f64(self, 1.0);
         let pi_2 = pi_mul_f64(self, 0.5);
@@ -401,7 +401,7 @@ pub trait HSeriesOpBuilder: Dataflow + UnwrapBuilder {
     }
 }
 
-impl<D: Dataflow> HSeriesOpBuilder for D {}
+impl<D: Dataflow> QSystemOpBuilder for D {}
 
 #[cfg(test)]
 mod test {

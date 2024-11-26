@@ -15,10 +15,10 @@ use std::collections::HashMap;
 use strum::IntoEnumIterator;
 use tket2::{extension::rotation::RotationOpBuilder, Tk2Op};
 
-use crate::extension::qsystem::{self, HSeriesOpBuilder, QSystemOp};
+use crate::extension::qsystem::{self, QSystemOp, QSystemOpBuilder};
 
 lazy_static! {
-    /// Extension registry including [crate::extension::hseries::REGISTRY] and
+    /// Extension registry including [crate::extension::qsystem::REGISTRY] and
     /// [tket2::extension::rotation::ROTATION_EXTENSION].
     pub static ref REGISTRY: ExtensionRegistry = {
         let mut registry = qsystem::REGISTRY.to_owned();
@@ -111,7 +111,7 @@ fn build_to_radians(b: &mut DFGBuilder<Hugr>, rotation: Wire) -> Result<Wire, Bu
     Ok(float)
 }
 
-/// Lower `Tk2Op` operations to `HSeriesOp` operations.
+/// Lower `Tk2Op` operations to `QSystemOp` operations.
 pub fn lower_tk2_op(hugr: &mut impl HugrMut) -> Result<Vec<hugr::Node>, LowerTk2Error> {
     let mut replaced_nodes = lower_direct(hugr)?;
     let mut hugr_map: HashMap<Tk2Op, Hugr> = HashMap::new();
@@ -171,7 +171,7 @@ pub fn check_lowered(hugr: &impl HugrView) -> Result<(), Vec<Node>> {
 }
 
 /// A `Hugr -> Hugr` pass that replaces [tket2::Tk2Op] nodes to
-/// equivalent graphs made of [HSeriesOp]s.
+/// equivalent graphs made of [QSystemOp]s.
 ///
 /// Invokes [lower_tk2_op]. If validation is enabled the resulting HUGR is
 /// checked with [check_lowered].
