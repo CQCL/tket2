@@ -17,8 +17,8 @@ def futures() -> Extension:
 
 
 @functools.cache
-def hseries() -> Extension:
-    return load_extension("tket2.hseries")
+def qsystem() -> Extension:
+    return load_extension("tket2.qsystem")
 
 
 @functools.cache
