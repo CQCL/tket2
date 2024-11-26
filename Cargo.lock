@@ -858,8 +858,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.13.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51c5f880029c2ec70b4884f69cd5fd55c628e58830e9225a82bcea7f776ac963"
+source = "git+https://github.com/CQCL/hugr.git#c5c8a6fed22fb8aad6ac689632e0952dfcb8b94e"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -868,8 +867,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.13.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "617a0bf998c9f809eb634a8381896a60a4d7ae418d3db2eb1c661a083c3dd16f"
+source = "git+https://github.com/CQCL/hugr.git#c5c8a6fed22fb8aad6ac689632e0952dfcb8b94e"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -884,13 +882,11 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.13.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d6428f0512a92cc3495e70c709383464bf1deef7ac566f812575e28dad52273"
+source = "git+https://github.com/CQCL/hugr.git#c5c8a6fed22fb8aad6ac689632e0952dfcb8b94e"
 dependencies = [
  "bitvec",
  "bumpalo",
  "cgmath",
- "context-iterators",
  "delegate 0.13.1",
  "derive_more 1.0.0",
  "downcast-rs",
@@ -918,8 +914,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.13.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4ae6bd670bc95f716d153049574e6420fed970edde63ea228529a8df0df2838"
+source = "git+https://github.com/CQCL/hugr.git#c5c8a6fed22fb8aad6ac689632e0952dfcb8b94e"
 dependencies = [
  "hugr-core",
  "itertools 0.13.0",
