@@ -15,13 +15,13 @@ use std::collections::HashMap;
 use strum::IntoEnumIterator;
 use tket2::{extension::rotation::RotationOpBuilder, Tk2Op};
 
-use crate::extension::hseries::{HSeriesOp, HSeriesOpBuilder};
+use crate::extension::qsystem::{self, HSeriesOp, HSeriesOpBuilder};
 
 lazy_static! {
     /// Extension registry including [crate::extension::hseries::REGISTRY] and
     /// [tket2::extension::rotation::ROTATION_EXTENSION].
     pub static ref REGISTRY: ExtensionRegistry = {
-        let mut registry = super::REGISTRY.to_owned();
+        let mut registry = qsystem::REGISTRY.to_owned();
         registry.register(tket2::extension::rotation::ROTATION_EXTENSION.to_owned()).unwrap();
         registry
     };

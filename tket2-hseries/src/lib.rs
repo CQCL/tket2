@@ -13,7 +13,7 @@ use tket2::Tk2Op;
 
 use extension::{
     futures::FutureOpDef,
-    hseries::{HSeriesOp, LowerTk2Error, LowerTket2ToHSeriesPass},
+    qsystem::{HSeriesOp, LowerTk2Error, LowerTket2ToHSeriesPass},
 };
 use lazify_measure::{LazifyMeasurePass, LazifyMeasurePassError};
 
@@ -105,7 +105,7 @@ mod test {
     use petgraph::visit::{Topo, Walker as _};
 
     use crate::{
-        extension::{futures::FutureOpDef, hseries::HSeriesOp},
+        extension::{futures::FutureOpDef, qsystem::HSeriesOp},
         HSeriesPass,
     };
 
