@@ -3,6 +3,8 @@
 //! `Future<t>` is a linear type representing a value that will be available in
 //! the future.  It can be consumed by `Read`, returning a `t`.  It can be
 //! duplicated by `Dup`, and discarded with `Free`.
+use std::sync::Arc;
+
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
@@ -29,12 +31,12 @@ pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
     /// The "tket2.futures" extension.
-    pub static ref EXTENSION: Extension = {
+    pub static ref EXTENSION: Arc<Extension>  = {
         let mut ext = Extension::new(EXTENSION_ID, EXTENSION_VERSION);
         let _ = add_future_type_def(&mut ext).unwrap();
 
         FutureOpDef::load_all_ops(&mut ext).unwrap();
-        ext
+        Arc::new(ext)
     };
 
     /// Extension registry including the "tket2.futures" extension.

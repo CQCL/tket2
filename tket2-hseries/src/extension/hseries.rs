@@ -4,6 +4,8 @@
 //! In the case of lazy operations,
 //! laziness is represented by returning `tket2.futures.Future` classical
 //! values. Qubits are never lazy.
+use std::sync::Arc;
+
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
@@ -39,14 +41,14 @@ pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
     /// The "tket2.hseries" extension.
-    pub static ref EXTENSION: Extension = {
+    pub static ref EXTENSION: Arc<Extension> = {
         let mut ext = Extension::new(EXTENSION_ID, EXTENSION_VERSION).with_reqs(ExtensionSet::from_iter([
             futures::EXTENSION.name(),
             PRELUDE.name(),
             FLOAT_TYPES.name(),
         ].into_iter().cloned()));
         HSeriesOp::load_all_ops(&mut ext).unwrap();
-        ext
+        Arc::new(ext)
     };
 
     /// Extension registry including the "tket2.hseries" extension and
