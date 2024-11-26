@@ -113,8 +113,7 @@ mod test {
     fn hseries_pass() {
         let registry = &tket2::extension::REGISTRY;
         let (mut hugr, [call_node, h_node, f_node, rx_node]) = {
-            let mut builder =
-                DFGBuilder::new(Signature::new(QB_T, vec![QB_T, BOOL_T, BOOL_T])).unwrap();
+            let mut builder = DFGBuilder::new(Signature::new(QB_T, vec![BOOL_T, BOOL_T])).unwrap();
             let func = builder
                 .define_function("func", Signature::new_endo(type_row![]))
                 .unwrap()
@@ -150,13 +149,13 @@ mod test {
             // the Measure node will be removed. A Lazy Measure and two Future
             // Reads will be added.  The Lazy Measure will be lifted and the
             // reads will be sunk.
-            let [qb, measure_result] = builder
+            let [measure_result] = builder
                 .add_dataflow_op(HSeriesOp::Measure, [qb])
                 .unwrap()
                 .outputs_arr();
 
             let hugr = builder
-                .finish_hugr_with_outputs([qb, measure_result, measure_result], registry)
+                .finish_hugr_with_outputs([measure_result, measure_result], registry)
                 .unwrap();
             (hugr, [call_node, h_node, f_node, rx_node])
         };

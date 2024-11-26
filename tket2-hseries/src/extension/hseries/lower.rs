@@ -77,6 +77,7 @@ fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
         (Tk2Op::Sdg, [q]) => vec![b.build_sdg(*q)?],
         (Tk2Op::T, [q]) => vec![b.build_t(*q)?],
         (Tk2Op::Tdg, [q]) => vec![b.build_tdg(*q)?],
+        (Tk2Op::Measure, [q]) => b.build_measure_flip(*q)?.into(),
         (Tk2Op::CX, [c, t]) => b.build_cx(*c, *t)?.into(),
         (Tk2Op::CY, [c, t]) => b.build_cy(*c, *t)?.into(),
         (Tk2Op::CZ, [c, t]) => b.build_cz(*c, *t)?.into(),
@@ -137,7 +138,7 @@ fn lower_direct(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
             Tk2Op::QAlloc => HSeriesOp::QAlloc,
             Tk2Op::QFree => HSeriesOp::QFree,
             Tk2Op::Reset => HSeriesOp::Reset,
-            Tk2Op::Measure => HSeriesOp::Measure,
+            Tk2Op::MeasureFree => HSeriesOp::Measure,
             _ => return None,
         })
     })?
@@ -202,7 +203,7 @@ impl LowerTket2ToHSeriesPass {
 
 #[cfg(test)]
 mod test {
-    use hugr::{builder::FunctionBuilder, type_row, HugrView};
+    use hugr::{builder::FunctionBuilder, extension::prelude::BOOL_T, type_row, HugrView};
     use tket2::{extension::rotation::ROTATION_TYPE, Circuit};
 
     use super::*;
@@ -213,15 +214,17 @@ mod test {
         let mut b = FunctionBuilder::new("circuit", Signature::new_endo(type_row![])).unwrap();
         let [q] = b.add_dataflow_op(Tk2Op::QAlloc, []).unwrap().outputs_arr();
         let [q] = b.add_dataflow_op(Tk2Op::Reset, [q]).unwrap().outputs_arr();
-        let [q, _] = b
-            .add_dataflow_op(Tk2Op::Measure, [q])
+        b.add_dataflow_op(Tk2Op::QFree, [q]).unwrap();
+        let [q] = b.add_dataflow_op(Tk2Op::QAlloc, []).unwrap().outputs_arr();
+
+        let [_] = b
+            .add_dataflow_op(Tk2Op::MeasureFree, [q])
             .unwrap()
             .outputs_arr();
-        b.add_dataflow_op(Tk2Op::QFree, [q]).unwrap();
         let mut h = b.finish_hugr_with_outputs([], &REGISTRY).unwrap();
 
         let lowered = lower_direct(&mut h).unwrap();
-        assert_eq!(lowered.len(), 4);
+        assert_eq!(lowered.len(), 5);
         let circ = Circuit::new(&h, h.root());
         let ops: Vec<HSeriesOp> = circ
             .commands()
@@ -231,9 +234,10 @@ mod test {
             ops,
             vec![
                 HSeriesOp::QAlloc,
-                HSeriesOp::Reset,
                 HSeriesOp::Measure,
-                HSeriesOp::QFree
+                HSeriesOp::QAlloc,
+                HSeriesOp::Reset,
+                HSeriesOp::QFree,
             ]
         );
         assert_eq!(check_lowered(&h), Ok(()));
@@ -257,6 +261,8 @@ mod test {
     #[case(Tk2Op::CZ, None)]
     #[case(Tk2Op::CRz, None)]
     #[case(Tk2Op::Toffoli, None)]
+    // conditional doesn't fit in to commands
+    #[case(Tk2Op::Measure, None)]
     fn test_lower(#[case] t2op: Tk2Op, #[case] hseries_ops: Option<Vec<HSeriesOp>>) {
         // build dfg with just the op
 
@@ -275,7 +281,8 @@ mod test {
 
     #[test]
     fn test_mixed() {
-        let mut b = DFGBuilder::new(Signature::new(type_row![ROTATION_TYPE], type_row![])).unwrap();
+        let mut b =
+            DFGBuilder::new(Signature::new(type_row![ROTATION_TYPE], type_row![BOOL_T])).unwrap();
         let [angle] = b.input_wires_arr();
         let [q] = b.add_dataflow_op(Tk2Op::QAlloc, []).unwrap().outputs_arr();
         let [q] = b.add_dataflow_op(Tk2Op::H, [q]).unwrap().outputs_arr();
@@ -283,13 +290,19 @@ mod test {
             .add_dataflow_op(Tk2Op::Rx, [q, angle])
             .unwrap()
             .outputs_arr();
+        let [q, bool] = b
+            .add_dataflow_op(Tk2Op::Measure, [q])
+            .unwrap()
+            .outputs_arr();
         b.add_dataflow_op(Tk2Op::QFree, [q]).unwrap();
-        let mut h = b.finish_hugr_with_outputs([], &REGISTRY).unwrap();
+        let mut h = b.finish_hugr_with_outputs([bool], &REGISTRY).unwrap();
 
         let lowered = lower_tk2_op(&mut h).unwrap();
-        assert_eq!(lowered.len(), 4);
-        // dfg, input, output, alloc, phasedx, rz, toturns, fmul, phasedx, free + 5x(float + load)
-        assert_eq!(h.node_count(), 20);
+        assert_eq!(lowered.len(), 5);
+        // dfg, input, output, alloc, phasedx, rz, toturns, fmul, phasedx, free +
+        // 5x(float + load), measure_reset, conditional, case(input, output) * 2, flip
+        // (phasedx + 2*(float + load))
+        assert_eq!(h.node_count(), 33);
         assert_eq!(check_lowered(&h), Ok(()));
     }
 }
