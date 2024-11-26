@@ -1,6 +1,6 @@
 {
   "version": "0.2.0",
-  "name": "tket2.hseries",
+  "name": "tket2.qsystem",
   "extension_reqs": [
     "arithmetic.float.types",
     "prelude",
@@ -10,7 +10,7 @@
   "values": {},
   "operations": {
     "LazyMeasure": {
-      "extension": "tket2.hseries",
+      "extension": "tket2.qsystem",
       "name": "LazyMeasure",
       "description": "Lazily measure a qubit and lose it.",
       "signature": {
@@ -48,7 +48,7 @@
       "binary": false
     },
     "Measure": {
-      "extension": "tket2.hseries",
+      "extension": "tket2.qsystem",
       "name": "Measure",
       "description": "Measure a qubit and lose it.",
       "signature": {
@@ -72,7 +72,7 @@
       "binary": false
     },
     "MeasureReset": {
-      "extension": "tket2.hseries",
+      "extension": "tket2.qsystem",
       "name": "MeasureReset",
       "description": "Measure a qubit and reset it to the Z |0> eigenstate.",
       "signature": {
@@ -99,7 +99,7 @@
       "binary": false
     },
     "PhasedX": {
-      "extension": "tket2.hseries",
+      "extension": "tket2.qsystem",
       "name": "PhasedX",
       "description": "PhasedX gate.",
       "signature": {
@@ -135,7 +135,7 @@
       "binary": false
     },
     "QFree": {
-      "extension": "tket2.hseries",
+      "extension": "tket2.qsystem",
       "name": "QFree",
       "description": "Free a qubit (lose track of it).",
       "signature": {
@@ -153,7 +153,7 @@
       "binary": false
     },
     "Reset": {
-      "extension": "tket2.hseries",
+      "extension": "tket2.qsystem",
       "name": "Reset",
       "description": "Reset a qubit to the Z |0> eigenstate.",
       "signature": {
@@ -175,7 +175,7 @@
       "binary": false
     },
     "Rz": {
-      "extension": "tket2.hseries",
+      "extension": "tket2.qsystem",
       "name": "Rz",
       "description": "Rotate a qubit around the Z axis. Not physical.",
       "signature": {
@@ -204,7 +204,7 @@
       "binary": false
     },
     "TryQAlloc": {
-      "extension": "tket2.hseries",
+      "extension": "tket2.qsystem",
       "name": "TryQAlloc",
       "description": "Allocate a qubit in the Z |0> eigenstate.",
       "signature": {
@@ -231,7 +231,7 @@
       "binary": false
     },
     "ZZMax": {
-      "extension": "tket2.hseries",
+      "extension": "tket2.qsystem",
       "name": "ZZMax",
       "description": "Maximally entangling ZZ gate.",
       "signature": {
@@ -259,7 +259,7 @@
       "binary": false
     },
     "ZZPhase": {
-      "extension": "tket2.hseries",
+      "extension": "tket2.qsystem",
       "name": "ZZPhase",
       "description": "ZZ gate with an angle.",
       "signature": {
