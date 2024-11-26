@@ -2,6 +2,8 @@
 //!
 //! This includes a extension for the opaque TKET1 operations.
 
+use std::sync::Arc;
+
 use crate::serialize::pytket::OpaqueTk1Op;
 use crate::Tk2Op;
 use hugr::extension::simple_op::MakeOpDef;
@@ -40,7 +42,7 @@ pub static ref TKET1_OP_PAYLOAD : CustomType =
     TKET1_EXTENSION.get_type(&TKET1_PAYLOAD_NAME).unwrap().instantiate([]).unwrap();
 
 /// The TKET1 extension, containing the opaque TKET1 operations.
-pub static ref TKET1_EXTENSION: Extension = {
+pub static ref TKET1_EXTENSION: Arc<Extension>  = {
     let mut res = Extension::new(TKET1_EXTENSION_ID, TKET1_EXTENSION_VERSION);
 
     let tket1_op_payload = TypeParam::String;
@@ -50,7 +52,7 @@ pub static ref TKET1_EXTENSION: Extension = {
         Tk1Signature([tket1_op_payload])
     ).unwrap();
 
-    res
+    Arc::new(res)
 };
 
 /// Extension registry including the prelude, std, TKET1, and Tk2Ops extensions.
@@ -94,10 +96,10 @@ pub const TKET2_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
 /// The extension definition for TKET2 ops and types.
-pub static ref TKET2_EXTENSION: Extension = {
+pub static ref TKET2_EXTENSION: Arc<Extension> = {
     let mut e = Extension::new(TKET2_EXTENSION_ID, TKET2_EXTENSION_VERSION);
     Tk2Op::load_all_ops(&mut e).expect("add fail");
     SympyOpDef.add_to_extension(&mut e).unwrap();
-    e
+   Arc::new(e)
 };
 }

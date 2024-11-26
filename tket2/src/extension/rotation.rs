@@ -10,6 +10,7 @@ use hugr::{
 };
 use smol_str::SmolStr;
 use std::f64::consts::PI;
+use std::sync::Arc;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
 use lazy_static::lazy_static;
@@ -22,10 +23,10 @@ pub const ROTATION_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
     /// The extension definition for TKET2 rotation type and ops.
-    pub static ref ROTATION_EXTENSION: Extension = {
+    pub static ref ROTATION_EXTENSION: Arc<Extension> = {
         let mut e = Extension::new(ROTATION_EXTENSION_ID, ROTATION_EXTENSION_VERSION);
         add_to_extension(&mut e);
-        e
+        Arc::new(e)
     };
 }
 

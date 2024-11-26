@@ -1,6 +1,8 @@
 //! This module defines the Hugr extension used to represent result reporting operations,
 //! with static string tags.
 //!
+use std::sync::Arc;
+
 use hugr::types::Signature;
 use hugr::{
     builder::{BuildError, Dataflow},
@@ -35,10 +37,10 @@ pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
     /// The "tket2.result" extension.
-    pub static ref EXTENSION: Extension = {
+    pub static ref EXTENSION: Arc<Extension> = {
         let mut ext = Extension::new(EXTENSION_ID, EXTENSION_VERSION).with_reqs(ExtensionSet::from_iter([INT_EXTENSION_ID, FLOAT_EXTENSION_ID]));
         ResultOpDef::load_all_ops(&mut ext).unwrap();
-        ext
+        Arc::new(ext)
     };
 
     /// Extension registry including the "tket2.result" extension and

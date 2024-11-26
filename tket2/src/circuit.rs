@@ -50,7 +50,7 @@ pub struct Circuit<T = Hugr> {
     /// Wrapped in an Arc to allow sharing between circuits, specially for borrowed circuits.
     ///
     /// Defaults to an standard set of quantum extensions and Hugr's std set.
-    required_extensions: Option<Arc<Vec<Extension>>>,
+    required_extensions: Option<Vec<Arc<Extension>>>,
 }
 
 impl<T: Default + HugrView> Default for Circuit<T> {
@@ -94,7 +94,7 @@ lazy_static! {
     ///
     /// We should be able to drop this once hugrs embed their required extensions.
     /// See https://github.com/CQCL/hugr/issues/1613
-    static ref DEFAULT_REQUIRED_EXTENSIONS: Vec<Extension> = extension::REGISTRY.iter().map(|(_, ext)| ext.clone()).collect();
+    static ref DEFAULT_REQUIRED_EXTENSIONS: Vec<Arc<Extension>> = extension::REGISTRY.iter().map(|(_, ext)| ext.to_owned()).collect();
 }
 /// The [IGNORED_EXTENSION_OPS] definition depends on the buggy behaviour of [`NamedOp::name`], which returns bare names instead of scoped names on some cases.
 /// Once this test starts failing it should be time to drop the `format!("prelude.{}", ...)`.
@@ -160,7 +160,7 @@ impl<T: HugrView> Circuit<T> {
     /// Note: This API is not currently public. We expect hugrs to embed their required extensions in the future,
     /// at which point this method will be removed.
     /// See https://github.com/CQCL/hugr/issues/1613
-    pub(crate) fn required_extensions(&self) -> &[Extension] {
+    pub(crate) fn required_extensions(&self) -> &[Arc<Extension>] {
         self.required_extensions
             .as_deref()
             .unwrap_or_else(|| &DEFAULT_REQUIRED_EXTENSIONS)
@@ -175,8 +175,8 @@ impl<T: HugrView> Circuit<T> {
     /// See https://github.com/CQCL/hugr/issues/1613
     pub(crate) fn set_required_extensions(
         &mut self,
-        extensions: Arc<Vec<Extension>>,
-    ) -> Option<Arc<Vec<Extension>>> {
+        extensions: Vec<Arc<Extension>>,
+    ) -> Option<Vec<Arc<Extension>>> {
         mem::replace(&mut self.required_extensions, Some(extensions))
     }
 
