@@ -223,7 +223,7 @@ mod test {
 
     use crate::extension::{
         futures::{self, FutureOpDef},
-        qsystem::HSeriesOp,
+        qsystem::QSystemOp,
     };
 
     use super::*;
@@ -260,7 +260,7 @@ mod test {
             let ot = hugr.get_optype(n);
             if let Some(FutureOpDef::Read) = ot.cast() {
                 num_read += 1;
-            } else if let Some(HSeriesOp::LazyMeasure) = ot.cast() {
+            } else if let Some(QSystemOp::LazyMeasure) = ot.cast() {
                 num_lazy_measure += 1;
             } else {
                 assert_eq!(ot.cast::<Tk2Op>(), None)

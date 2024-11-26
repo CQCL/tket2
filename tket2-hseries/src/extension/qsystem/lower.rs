@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use strum::IntoEnumIterator;
 use tket2::{extension::rotation::RotationOpBuilder, Tk2Op};
 
-use crate::extension::qsystem::{self, HSeriesOp, HSeriesOpBuilder};
+use crate::extension::qsystem::{self, HSeriesOpBuilder, QSystemOp};
 
 lazy_static! {
     /// Extension registry including [crate::extension::hseries::REGISTRY] and
@@ -136,10 +136,10 @@ fn lower_direct(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
     Ok(hugr::algorithms::replace_many_ops(hugr, |op| {
         let op: Tk2Op = op.cast()?;
         Some(match op {
-            Tk2Op::TryQAlloc => HSeriesOp::TryQAlloc,
-            Tk2Op::QFree => HSeriesOp::QFree,
-            Tk2Op::Reset => HSeriesOp::Reset,
-            Tk2Op::MeasureFree => HSeriesOp::Measure,
+            Tk2Op::TryQAlloc => QSystemOp::TryQAlloc,
+            Tk2Op::QFree => QSystemOp::QFree,
+            Tk2Op::Reset => QSystemOp::Reset,
+            Tk2Op::MeasureFree => QSystemOp::Measure,
             _ => return None,
         })
     })?
@@ -245,35 +245,35 @@ mod test {
         let lowered = lower_direct(&mut h).unwrap();
         assert_eq!(lowered.len(), 5);
         let circ = Circuit::new(&h, h.root());
-        let ops: Vec<HSeriesOp> = circ
+        let ops: Vec<QSystemOp> = circ
             .commands()
             .filter_map(|com| com.optype().cast())
             .collect();
         assert_eq!(
             ops,
             vec![
-                HSeriesOp::TryQAlloc,
-                HSeriesOp::Measure,
-                HSeriesOp::TryQAlloc,
-                HSeriesOp::Reset,
-                HSeriesOp::QFree,
+                QSystemOp::TryQAlloc,
+                QSystemOp::Measure,
+                QSystemOp::TryQAlloc,
+                QSystemOp::Reset,
+                QSystemOp::QFree,
             ]
         );
         assert_eq!(check_lowered(&h), Ok(()));
     }
 
     #[rstest]
-    #[case(Tk2Op::H, Some(vec![HSeriesOp::PhasedX, HSeriesOp::Rz]))]
-    #[case(Tk2Op::X, Some(vec![HSeriesOp::PhasedX]))]
-    #[case(Tk2Op::Y, Some(vec![HSeriesOp::PhasedX]))]
-    #[case(Tk2Op::Z, Some(vec![HSeriesOp::Rz]))]
-    #[case(Tk2Op::S, Some(vec![HSeriesOp::Rz]))]
-    #[case(Tk2Op::Sdg, Some(vec![HSeriesOp::Rz]))]
-    #[case(Tk2Op::T, Some(vec![HSeriesOp::Rz]))]
-    #[case(Tk2Op::Tdg, Some(vec![HSeriesOp::Rz]))]
-    #[case(Tk2Op::Rx, Some(vec![HSeriesOp::PhasedX]))]
-    #[case(Tk2Op::Ry, Some(vec![HSeriesOp::PhasedX]))]
-    #[case(Tk2Op::Rz, Some(vec![HSeriesOp::Rz]))]
+    #[case(Tk2Op::H, Some(vec![QSystemOp::PhasedX, QSystemOp::Rz]))]
+    #[case(Tk2Op::X, Some(vec![QSystemOp::PhasedX]))]
+    #[case(Tk2Op::Y, Some(vec![QSystemOp::PhasedX]))]
+    #[case(Tk2Op::Z, Some(vec![QSystemOp::Rz]))]
+    #[case(Tk2Op::S, Some(vec![QSystemOp::Rz]))]
+    #[case(Tk2Op::Sdg, Some(vec![QSystemOp::Rz]))]
+    #[case(Tk2Op::T, Some(vec![QSystemOp::Rz]))]
+    #[case(Tk2Op::Tdg, Some(vec![QSystemOp::Rz]))]
+    #[case(Tk2Op::Rx, Some(vec![QSystemOp::PhasedX]))]
+    #[case(Tk2Op::Ry, Some(vec![QSystemOp::PhasedX]))]
+    #[case(Tk2Op::Rz, Some(vec![QSystemOp::Rz]))]
     // multi qubit ordering is not deterministic
     #[case(Tk2Op::CX, None)]
     #[case(Tk2Op::CY, None)]
@@ -283,12 +283,12 @@ mod test {
     // conditional doesn't fit in to commands
     #[case(Tk2Op::Measure, None)]
     #[case(Tk2Op::QAlloc, None)]
-    fn test_lower(#[case] t2op: Tk2Op, #[case] hseries_ops: Option<Vec<HSeriesOp>>) {
+    fn test_lower(#[case] t2op: Tk2Op, #[case] hseries_ops: Option<Vec<QSystemOp>>) {
         // build dfg with just the op
 
         let h = op_to_hugr(t2op).unwrap();
         let circ = Circuit::new(&h, h.root());
-        let ops: Vec<HSeriesOp> = circ
+        let ops: Vec<QSystemOp> = circ
             .commands()
             .filter_map(|com| com.optype().cast())
             .collect();

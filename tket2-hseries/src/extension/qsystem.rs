@@ -34,13 +34,13 @@ mod lower;
 use lower::pi_mul_f64;
 pub use lower::{check_lowered, lower_tk2_op, LowerTk2Error, LowerTket2ToHSeriesPass};
 
-/// The "tket2.hseries" extension id.
+/// The "tket2.qsystem" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.qsystem");
-/// The "tket2.hseries" extension version.
+/// The "tket2.qsystem" extension version.
 pub const EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
-    /// The "tket2.hseries" extension.
+    /// The "tket2.qsystem" extension.
     pub static ref EXTENSION: Arc<Extension> = {
          Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
             ext.add_requirements(ExtensionSet::from_iter([
@@ -48,11 +48,11 @@ lazy_static! {
                 PRELUDE.name(),
                 FLOAT_TYPES.name(),
             ].into_iter().cloned()));
-            HSeriesOp::load_all_ops( ext, ext_ref).unwrap();
+            QSystemOp::load_all_ops( ext, ext_ref).unwrap();
         })
     };
 
-    /// Extension registry including the "tket2.hseries" extension and
+    /// Extension registry including the "tket2.qsystem" extension and
     /// dependencies.
     pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
         EXTENSION.to_owned(),
@@ -79,7 +79,7 @@ lazy_static! {
 )]
 #[allow(missing_docs)]
 #[non_exhaustive]
-pub enum HSeriesOp {
+pub enum QSystemOp {
     Measure,
     LazyMeasure,
     Rz,
@@ -92,9 +92,9 @@ pub enum HSeriesOp {
     MeasureReset,
 }
 
-impl MakeOpDef for HSeriesOp {
+impl MakeOpDef for QSystemOp {
     fn signature(&self) -> SignatureFunc {
-        use HSeriesOp::*;
+        use QSystemOp::*;
         let one_qb_row = type_row![QB_T];
         let two_qb_row = type_row![QB_T, QB_T];
         match self {
@@ -122,22 +122,22 @@ impl MakeOpDef for HSeriesOp {
 
     fn description(&self) -> String {
         match self {
-            HSeriesOp::Measure => "Measure a qubit and lose it.",
-            HSeriesOp::LazyMeasure => "Lazily measure a qubit and lose it.",
-            HSeriesOp::Rz => "Rotate a qubit around the Z axis. Not physical.",
-            HSeriesOp::PhasedX => "PhasedX gate.",
-            HSeriesOp::ZZMax => "Maximally entangling ZZ gate.",
-            HSeriesOp::ZZPhase => "ZZ gate with an angle.",
-            HSeriesOp::TryQAlloc => "Allocate a qubit in the Z |0> eigenstate.",
-            HSeriesOp::QFree => "Free a qubit (lose track of it).",
-            HSeriesOp::Reset => "Reset a qubit to the Z |0> eigenstate.",
-            HSeriesOp::MeasureReset => "Measure a qubit and reset it to the Z |0> eigenstate.",
+            QSystemOp::Measure => "Measure a qubit and lose it.",
+            QSystemOp::LazyMeasure => "Lazily measure a qubit and lose it.",
+            QSystemOp::Rz => "Rotate a qubit around the Z axis. Not physical.",
+            QSystemOp::PhasedX => "PhasedX gate.",
+            QSystemOp::ZZMax => "Maximally entangling ZZ gate.",
+            QSystemOp::ZZPhase => "ZZ gate with an angle.",
+            QSystemOp::TryQAlloc => "Allocate a qubit in the Z |0> eigenstate.",
+            QSystemOp::QFree => "Free a qubit (lose track of it).",
+            QSystemOp::Reset => "Reset a qubit to the Z |0> eigenstate.",
+            QSystemOp::MeasureReset => "Measure a qubit and reset it to the Z |0> eigenstate.",
         }
         .to_string()
     }
 }
 
-impl MakeRegisteredOp for HSeriesOp {
+impl MakeRegisteredOp for QSystemOp {
     fn extension_id(&self) -> ExtensionId {
         EXTENSION_ID
     }
@@ -148,61 +148,61 @@ impl MakeRegisteredOp for HSeriesOp {
 }
 
 /// An extension trait for [Dataflow] providing methods to add
-/// "tket2.hseries" operations.
+/// "tket2.qsystem" operations.
 pub trait HSeriesOpBuilder: Dataflow + UnwrapBuilder {
     /// Add a "tket2.hseries.LazyMeasure" op.
     fn add_lazy_measure(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
-            .add_dataflow_op(HSeriesOp::LazyMeasure, [qb])?
+            .add_dataflow_op(QSystemOp::LazyMeasure, [qb])?
             .outputs_arr())
     }
 
     /// Add a "tket2.hseries.Measure" op.
     fn add_measure(&mut self, qb: Wire) -> Result<Wire, BuildError> {
-        Ok(self.add_dataflow_op(HSeriesOp::Measure, [qb])?.out_wire(0))
+        Ok(self.add_dataflow_op(QSystemOp::Measure, [qb])?.out_wire(0))
     }
 
     /// Add a "tket2.hseries.Reset" op.
     fn add_reset(&mut self, qb: Wire) -> Result<Wire, BuildError> {
-        Ok(self.add_dataflow_op(HSeriesOp::Reset, [qb])?.out_wire(0))
+        Ok(self.add_dataflow_op(QSystemOp::Reset, [qb])?.out_wire(0))
     }
 
     /// Add a "tket2.hseries.ZZMax" op.
     fn add_zz_max(&mut self, qb1: Wire, qb2: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
-            .add_dataflow_op(HSeriesOp::ZZMax, [qb1, qb2])?
+            .add_dataflow_op(QSystemOp::ZZMax, [qb1, qb2])?
             .outputs_arr())
     }
 
     /// Add a "tket2.hseries.ZZPhase" op.
     fn add_zz_phase(&mut self, qb1: Wire, qb2: Wire, angle: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
-            .add_dataflow_op(HSeriesOp::ZZPhase, [qb1, qb2, angle])?
+            .add_dataflow_op(QSystemOp::ZZPhase, [qb1, qb2, angle])?
             .outputs_arr())
     }
 
     /// Add a "tket2.hseries.PhasedX" op.
     fn add_phased_x(&mut self, qb: Wire, angle1: Wire, angle2: Wire) -> Result<Wire, BuildError> {
         Ok(self
-            .add_dataflow_op(HSeriesOp::PhasedX, [qb, angle1, angle2])?
+            .add_dataflow_op(QSystemOp::PhasedX, [qb, angle1, angle2])?
             .out_wire(0))
     }
 
     /// Add a "tket2.hseries.Rz" op.
     fn add_rz(&mut self, qb: Wire, angle: Wire) -> Result<Wire, BuildError> {
         Ok(self
-            .add_dataflow_op(HSeriesOp::Rz, [qb, angle])?
+            .add_dataflow_op(QSystemOp::Rz, [qb, angle])?
             .out_wire(0))
     }
 
     /// Add a "tket2.hseries.TryQAlloc" op.
     fn add_try_alloc(&mut self) -> Result<Wire, BuildError> {
-        Ok(self.add_dataflow_op(HSeriesOp::TryQAlloc, [])?.out_wire(0))
+        Ok(self.add_dataflow_op(QSystemOp::TryQAlloc, [])?.out_wire(0))
     }
 
     /// Add a "tket2.hseries.QFree" op.
     fn add_qfree(&mut self, qb: Wire) -> Result<(), BuildError> {
-        self.add_dataflow_op(HSeriesOp::QFree, [qb])?;
+        self.add_dataflow_op(QSystemOp::QFree, [qb])?;
         Ok(())
     }
 
@@ -210,7 +210,7 @@ pub trait HSeriesOpBuilder: Dataflow + UnwrapBuilder {
     /// This operation is equivalent to a `Measure` followed by a `Reset`.
     fn add_measure_reset(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
-            .add_dataflow_op(HSeriesOp::MeasureReset, [qb])?
+            .add_dataflow_op(QSystemOp::MeasureReset, [qb])?
             .outputs_arr())
     }
 
@@ -423,8 +423,8 @@ mod test {
     fn create_extension() {
         assert_eq!(EXTENSION.name(), &EXTENSION_ID);
 
-        for o in HSeriesOp::iter() {
-            assert_eq!(HSeriesOp::from_def(get_opdef(o).unwrap()), Ok(o));
+        for o in QSystemOp::iter() {
+            assert_eq!(QSystemOp::from_def(get_opdef(o).unwrap()), Ok(o));
         }
     }
 
@@ -471,9 +471,9 @@ mod test {
     #[test]
     fn test_cast() {
         // test overlapping names don't cause cast errors
-        for op in HSeriesOp::iter() {
+        for op in QSystemOp::iter() {
             let optype: OpType = op.into();
-            let new_op: HSeriesOp = optype.cast().unwrap();
+            let new_op: QSystemOp = optype.cast().unwrap();
             assert_eq!(op, new_op);
             assert_eq!(optype.cast::<tket2::Tk2Op>(), None);
         }

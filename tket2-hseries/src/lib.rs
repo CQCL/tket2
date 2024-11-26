@@ -13,7 +13,7 @@ use tket2::Tk2Op;
 
 use extension::{
     futures::FutureOpDef,
-    qsystem::{HSeriesOp, LowerTk2Error, LowerTket2ToHSeriesPass},
+    qsystem::{LowerTk2Error, LowerTket2ToHSeriesPass, QSystemOp},
 };
 use lazify_measure::{LazifyMeasurePass, LazifyMeasurePassError};
 
@@ -60,7 +60,7 @@ impl HSeriesPass {
             .run_validated_pass(hugr, registry, |hugr, _| {
                 force_order(hugr, hugr.root(), |hugr, node| {
                     let optype = hugr.get_optype(node);
-                    if optype.cast::<Tk2Op>().is_some() || optype.cast::<HSeriesOp>().is_some() {
+                    if optype.cast::<Tk2Op>().is_some() || optype.cast::<QSystemOp>().is_some() {
                         // quantum ops are lifted as early as possible
                         -1
                     } else if let Some(FutureOpDef::Read) = hugr.get_optype(node).cast() {
@@ -105,7 +105,7 @@ mod test {
     use petgraph::visit::{Topo, Walker as _};
 
     use crate::{
-        extension::{futures::FutureOpDef, qsystem::HSeriesOp},
+        extension::{futures::FutureOpDef, qsystem::QSystemOp},
         HSeriesPass,
     };
 
@@ -134,14 +134,14 @@ mod test {
 
             // with no dependencies, this Reset should be lifted to the start
             let [qb] = builder
-                .add_dataflow_op(HSeriesOp::Reset, [qb])
+                .add_dataflow_op(QSystemOp::Reset, [qb])
                 .unwrap()
                 .outputs_arr();
             let h_node = qb.node();
 
             // depending on the angle means this op can't be lifted above the angle ops
             let [qb] = builder
-                .add_dataflow_op(HSeriesOp::Rz, [qb, angle])
+                .add_dataflow_op(QSystemOp::Rz, [qb, angle])
                 .unwrap()
                 .outputs_arr();
             let rx_node = qb.node();
@@ -150,7 +150,7 @@ mod test {
             // Reads will be added.  The Lazy Measure will be lifted and the
             // reads will be sunk.
             let [measure_result] = builder
-                .add_dataflow_op(HSeriesOp::Measure, [qb])
+                .add_dataflow_op(QSystemOp::Measure, [qb])
                 .unwrap()
                 .outputs_arr();
 
