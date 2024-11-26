@@ -47,7 +47,9 @@ class Tk2Op(Enum):
     Ry = auto()
     Toffoli = auto()
     Measure = auto()
+    MeasureFree = auto()
     QAlloc = auto()
+    TryQAlloc = auto()
     QFree = auto()
     Reset = auto()
 
