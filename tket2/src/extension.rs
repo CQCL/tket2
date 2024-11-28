@@ -43,16 +43,14 @@ pub static ref TKET1_OP_PAYLOAD : CustomType =
 
 /// The TKET1 extension, containing the opaque TKET1 operations.
 pub static ref TKET1_EXTENSION: Arc<Extension>  = {
-    let mut res = Extension::new(TKET1_EXTENSION_ID, TKET1_EXTENSION_VERSION);
-
-    let tket1_op_payload = TypeParam::String;
-    res.add_op(
-        TKET1_OP_NAME,
-        "An opaque TKET1 operation.".into(),
-        Tk1Signature([tket1_op_payload])
-    ).unwrap();
-
-    Arc::new(res)
+    Extension::new_arc(TKET1_EXTENSION_ID, TKET1_EXTENSION_VERSION, |res, ext_ref| {
+        res.add_op(
+            TKET1_OP_NAME,
+            "An opaque TKET1 operation.".into(),
+            Tk1Signature([TypeParam::String]),
+            ext_ref
+        ).unwrap();
+    })
 };
 
 /// Extension registry including the prelude, std, TKET1, and Tk2Ops extensions.
@@ -95,11 +93,11 @@ pub const TKET2_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.qu
 pub const TKET2_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
-/// The extension definition for TKET2 ops and types.
-pub static ref TKET2_EXTENSION: Arc<Extension> = {
-    let mut e = Extension::new(TKET2_EXTENSION_ID, TKET2_EXTENSION_VERSION);
-    Tk2Op::load_all_ops(&mut e).expect("add fail");
-    SympyOpDef.add_to_extension(&mut e).unwrap();
-   Arc::new(e)
-};
+    /// The extension definition for TKET2 ops and types.
+    pub static ref TKET2_EXTENSION: Arc<Extension> = {
+        Extension::new_arc(TKET2_EXTENSION_ID, TKET2_EXTENSION_VERSION, |res, ext_ref| {
+            Tk2Op::load_all_ops(res, ext_ref).expect("add_fail");
+            SympyOpDef.add_to_extension(res, ext_ref).unwrap();
+        })
+    };
 }

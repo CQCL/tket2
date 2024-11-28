@@ -38,9 +38,10 @@ pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 lazy_static! {
     /// The "tket2.result" extension.
     pub static ref EXTENSION: Arc<Extension> = {
-        let mut ext = Extension::new(EXTENSION_ID, EXTENSION_VERSION).with_reqs(ExtensionSet::from_iter([INT_EXTENSION_ID, FLOAT_EXTENSION_ID]));
-        ResultOpDef::load_all_ops(&mut ext).unwrap();
-        Arc::new(ext)
+        Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
+            ext.add_requirements(ExtensionSet::from_iter([INT_EXTENSION_ID, FLOAT_EXTENSION_ID]));
+            ResultOpDef::load_all_ops(ext, ext_ref).unwrap();
+        })
     };
 
     /// Extension registry including the "tket2.result" extension and
@@ -196,7 +197,7 @@ impl MakeOpDef for ResultOpDef {
     }
 
     fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
-        try_from_name(op_def.name(), op_def.extension())
+        try_from_name(op_def.name(), op_def.extension_id())
     }
 
     fn extension(&self) -> ExtensionId {
