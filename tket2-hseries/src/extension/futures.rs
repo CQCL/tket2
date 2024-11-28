@@ -148,7 +148,7 @@ impl HasConcrete for FutureOpDef {
     }
 }
 
-impl<'a> From<&'a FutureOp> for &'static str {
+impl From<&FutureOp> for &'static str {
     fn from(value: &FutureOp) -> Self {
         value.op.into()
     }

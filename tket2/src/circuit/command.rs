@@ -163,7 +163,7 @@ impl<'circ, T: HugrView> Command<'circ, T> {
     }
 }
 
-impl<'a, 'circ, T: HugrView> UnitLabeller for &'a Command<'circ, T> {
+impl<T: HugrView> UnitLabeller for &Command<'_, T> {
     #[inline]
     fn assign_linear(&self, _: Node, port: Port, _linear_count: usize) -> LinearUnit {
         let units = match port.direction() {
@@ -190,7 +190,7 @@ impl<'a, 'circ, T: HugrView> UnitLabeller for &'a Command<'circ, T> {
     }
 }
 
-impl<'circ, T: HugrView> std::fmt::Debug for Command<'circ, T> {
+impl<T: HugrView> std::fmt::Debug for Command<'_, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Command")
             .field("circuit name", &self.circ.name())
@@ -201,7 +201,7 @@ impl<'circ, T: HugrView> std::fmt::Debug for Command<'circ, T> {
     }
 }
 
-impl<'circ, T: HugrView> PartialEq for Command<'circ, T> {
+impl<T: HugrView> PartialEq for Command<'_, T> {
     fn eq(&self, other: &Self) -> bool {
         self.node == other.node
             && self.input_linear_units == other.input_linear_units
@@ -209,9 +209,9 @@ impl<'circ, T: HugrView> PartialEq for Command<'circ, T> {
     }
 }
 
-impl<'circ, T: HugrView> Eq for Command<'circ, T> {}
+impl<T: HugrView> Eq for Command<'_, T> {}
 
-impl<'circ, T: HugrView> Clone for Command<'circ, T> {
+impl<T: HugrView> Clone for Command<'_, T> {
     fn clone(&self) -> Self {
         Self {
             circ: self.circ,
@@ -222,7 +222,7 @@ impl<'circ, T: HugrView> Clone for Command<'circ, T> {
     }
 }
 
-impl<'circ, T: HugrView> std::hash::Hash for Command<'circ, T> {
+impl<T: HugrView> std::hash::Hash for Command<'_, T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.node.hash(state);
         self.input_linear_units.hash(state);
@@ -460,9 +460,9 @@ impl<'circ, T: HugrView> Iterator for CommandIterator<'circ, T> {
     }
 }
 
-impl<'circ, T: HugrView> FusedIterator for CommandIterator<'circ, T> {}
+impl<T: HugrView> FusedIterator for CommandIterator<'_, T> {}
 
-impl<'circ, T: HugrView> std::fmt::Debug for CommandIterator<'circ, T> {
+impl<T: HugrView> std::fmt::Debug for CommandIterator<'_, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CommandIterator")
             .field("circuit name", &self.circ.name())

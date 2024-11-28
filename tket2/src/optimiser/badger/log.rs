@@ -11,7 +11,7 @@ pub struct BadgerLogger<'w> {
     branching_factor: UsizeAverage,
 }
 
-impl<'w> Default for BadgerLogger<'w> {
+impl Default for BadgerLogger<'_> {
     fn default() -> Self {
         Self {
             circ_candidates_csv: Default::default(),

@@ -1,3 +1,4 @@
+//! Tests for the Badger optimiser termination conditions.
 #![cfg(feature = "portmatching")]
 
 use rstest::{fixture, rstest};
