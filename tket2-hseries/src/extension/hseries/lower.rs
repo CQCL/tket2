@@ -156,7 +156,7 @@ pub fn check_lowered(hugr: &impl HugrView) -> Result<(), Vec<Node>> {
         .filter_map(|node| {
             let optype = hugr.get_optype(node);
             optype.as_extension_op().and_then(|ext| {
-                (ext.def().extension() == &tket2::extension::TKET2_EXTENSION_ID).then_some(node)
+                (ext.def().extension_id() == &tket2::extension::TKET2_EXTENSION_ID).then_some(node)
             })
         })
         .collect();

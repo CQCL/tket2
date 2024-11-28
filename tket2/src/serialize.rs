@@ -4,7 +4,6 @@
 pub mod pytket;
 
 use std::io;
-use std::sync::Arc;
 
 use hugr::extension::ExtensionRegistryError;
 use hugr::hugr::ValidationError;
@@ -107,7 +106,7 @@ impl Circuit<Hugr> {
 
         let (_module_idx, mut circ) = find_function_in_modules(modules, function_name.as_ref())?;
         if !extensions.is_empty() {
-            circ.set_required_extensions(Arc::new(extensions));
+            circ.set_required_extensions(extensions);
         }
         Ok(circ)
     }

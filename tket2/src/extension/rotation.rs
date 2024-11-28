@@ -10,6 +10,7 @@ use hugr::{
 };
 use smol_str::SmolStr;
 use std::f64::consts::PI;
+use std::sync::{Arc, Weak};
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
 use lazy_static::lazy_static;
@@ -22,11 +23,11 @@ pub const ROTATION_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
     /// The extension definition for TKET2 rotation type and ops.
-    pub static ref ROTATION_EXTENSION: Extension = {
-        let mut e = Extension::new(ROTATION_EXTENSION_ID, ROTATION_EXTENSION_VERSION);
-        add_to_extension(&mut e);
-        e
-    };
+    pub static ref ROTATION_EXTENSION: Arc<Extension> =  {
+            Extension::new_arc(ROTATION_EXTENSION_ID, ROTATION_EXTENSION_VERSION, |e, extension_ref| {
+                add_to_extension(e, extension_ref);
+            }
+    )};
 }
 
 /// Identifier for the rotation type.
@@ -131,7 +132,7 @@ impl MakeOpDef for RotationOp {
     where
         Self: Sized,
     {
-        hugr::extension::simple_op::try_from_name(op_def.name(), op_def.extension())
+        hugr::extension::simple_op::try_from_name(op_def.name(), op_def.extension_id())
     }
 
     fn signature(&self) -> hugr::extension::SignatureFunc {
@@ -188,17 +189,18 @@ impl MakeRegisteredOp for RotationOp {
     }
 }
 
-pub(super) fn add_to_extension(extension: &mut Extension) {
+pub(super) fn add_to_extension(extension: &mut Extension, extension_ref: &Weak<Extension>) {
     extension
         .add_type(
             ROTATION_TYPE_ID,
             vec![],
             "rotation type expressed as number of half turns".to_owned(),
             TypeBound::Copyable.into(),
+            extension_ref,
         )
         .unwrap();
 
-    RotationOp::load_all_ops(extension).expect("add fail");
+    RotationOp::load_all_ops(extension, extension_ref).expect("add fail");
 }
 
 /// An extension trait for [Dataflow] providing methods to add

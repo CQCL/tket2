@@ -3,6 +3,8 @@
 //! `Future<t>` is a linear type representing a value that will be available in
 //! the future.  It can be consumed by `Read`, returning a `t`.  It can be
 //! duplicated by `Dup`, and discarded with `Free`.
+use std::sync::{Arc, Weak};
+
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
@@ -29,12 +31,12 @@ pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
     /// The "tket2.futures" extension.
-    pub static ref EXTENSION: Extension = {
-        let mut ext = Extension::new(EXTENSION_ID, EXTENSION_VERSION);
-        let _ = add_future_type_def(&mut ext).unwrap();
+    pub static ref EXTENSION: Arc<Extension>  = {
+        Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
+            let _ = add_future_type_def(ext, ext_ref.clone()).unwrap();
 
-        FutureOpDef::load_all_ops(&mut ext).unwrap();
-        ext
+            FutureOpDef::load_all_ops( ext, ext_ref).unwrap();
+        })
     };
 
     /// Extension registry including the "tket2.futures" extension.
@@ -46,12 +48,16 @@ lazy_static! {
     pub static ref FUTURE_TYPE_NAME: SmolStr = SmolStr::new_inline("Future");
 }
 
-fn add_future_type_def(ext: &mut Extension) -> Result<&TypeDef, ExtensionBuildError> {
+fn add_future_type_def(
+    ext: &mut Extension,
+    extension_ref: Weak<Extension>,
+) -> Result<&TypeDef, ExtensionBuildError> {
     ext.add_type(
         FUTURE_TYPE_NAME.to_owned(),
         vec![TypeBound::Any.into()],
         "A value that is computed asynchronously".into(),
         TypeBound::Any.into(),
+        &extension_ref,
     )
 }
 
@@ -119,7 +125,7 @@ impl MakeOpDef for FutureOpDef {
     }
 
     fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
-        try_from_name(op_def.name(), op_def.extension())
+        try_from_name(op_def.name(), op_def.extension_id())
     }
 
     fn description(&self) -> String {

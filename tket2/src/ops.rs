@@ -133,7 +133,7 @@ impl MakeOpDef for Tk2Op {
     }
 
     fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
-        try_from_name(op_def.name(), op_def.extension())
+        try_from_name(op_def.name(), op_def.extension_id())
     }
 }
 
@@ -190,7 +190,7 @@ pub(crate) fn match_symb_const_op(op: &OpType) -> Option<String> {
     };
 
     if let OpType::ExtensionOp(e) = op {
-        if e.def().name() == &SYM_OP_ID && e.def().extension() == &EXTENSION_ID {
+        if e.def().name() == &SYM_OP_ID && e.def().extension_id() == &EXTENSION_ID {
             Some(symbol_from_typeargs(e.args()))
         } else {
             None
@@ -276,7 +276,7 @@ pub(crate) mod test {
 
             let ext_op = op.into_extension_op();
             assert_eq!(ext_op.args(), &[]);
-            assert_eq!(ext_op.def().extension(), &EXTENSION_ID);
+            assert_eq!(ext_op.def().extension_id(), &EXTENSION_ID);
             let name = ext_op.def().name();
             assert_eq!(Tk2Op::from_str(name), Ok(op));
         }
