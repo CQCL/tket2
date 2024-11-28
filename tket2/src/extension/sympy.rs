@@ -64,7 +64,7 @@ impl MakeOpDef for SympyOpDef {
     where
         Self: Sized,
     {
-        try_from_name(op_def.name(), op_def.extension())
+        try_from_name(op_def.name(), op_def.extension_id())
     }
 
     fn signature(&self) -> hugr::extension::SignatureFunc {
