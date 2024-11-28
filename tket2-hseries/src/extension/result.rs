@@ -319,7 +319,7 @@ fn concrete_result_op_type_args(
     }
 }
 
-impl<'a> From<&'a ResultOp> for &'static str {
+impl From<&ResultOp> for &'static str {
     fn from(value: &ResultOp) -> Self {
         value.result_op.into()
     }
