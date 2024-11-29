@@ -15,8 +15,8 @@ use itertools::Itertools;
 use pyo3::exceptions::{PyAttributeError, PyValueError};
 use pyo3::types::{PyAnyMethods, PyModule, PyString, PyTypeMethods};
 use pyo3::{
-    pyclass, pymethods, Bound, FromPyObject, PyAny, PyErr, PyObject, PyRef, PyRefMut, PyResult,
-    PyTypeInfo, Python, ToPyObject,
+    pyclass, pymethods, Bound, FromPyObject, IntoPyObject, PyAny, PyErr, PyObject, PyRef, PyRefMut,
+    PyResult, PyTypeInfo, Python,
 };
 
 use derive_more::From;
@@ -177,9 +177,7 @@ impl Tk2Circuit {
             };
             let tk2_py_op = PyTk2Op::from(tk2_op);
             let cost = cost_fn.call1((tk2_py_op,))?;
-            Ok(PyCircuitCost {
-                cost: cost.to_object(py),
-            })
+            Ok(PyCircuitCost { cost: cost.into() })
         };
         let circ_cost = self.circ.circuit_cost(cost_fn)?;
         Ok(circ_cost.cost.into_bound(py))

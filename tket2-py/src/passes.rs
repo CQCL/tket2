@@ -20,16 +20,13 @@ use crate::{
 ///
 /// This module is re-exported from the python module with the same name.
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
-    let m = PyModule::new_bound(py, "passes")?;
+    let m = PyModule::new(py, "passes")?;
     m.add_function(wrap_pyfunction!(greedy_depth_reduce, &m)?)?;
     m.add_function(wrap_pyfunction!(lower_to_pytket, &m)?)?;
     m.add_function(wrap_pyfunction!(badger_optimise, &m)?)?;
     m.add_class::<self::chunks::PyCircuitChunks>()?;
     m.add_function(wrap_pyfunction!(self::chunks::chunks, &m)?)?;
-    m.add(
-        "PullForwardError",
-        py.get_type_bound::<PyPullForwardError>(),
-    )?;
+    m.add("PullForwardError", py.get_type::<PyPullForwardError>())?;
     Ok(m)
 }
 
@@ -66,11 +63,11 @@ fn greedy_depth_reduce<'py>(circ: &Bound<'py, PyAny>) -> PyResult<(Bound<'py, Py
 fn rebase_nam(circ: &Bound<PyAny>) -> PyResult<()> {
     let py = circ.py();
     let auto_rebase = py
-        .import_bound("pytket.passes.auto_rebase")?
+        .import("pytket.passes.auto_rebase")?
         .getattr("auto_rebase_pass")?;
-    let optype = py.import_bound("pytket")?.getattr("OpType")?;
-    let locals = [("OpType", &optype)].into_py_dict_bound(py);
-    let op_set = py.eval_bound("{OpType.CX, OpType.Rz, OpType.H}", None, Some(&locals))?;
+    let optype = py.import("pytket")?.getattr("OpType")?;
+    let locals = [("OpType", &optype)].into_py_dict(py)?;
+    let op_set = py.eval(c"{OpType.CX, OpType.Rz, OpType.H}", None, Some(&locals))?;
     let rebase_pass = auto_rebase.call1((op_set,))?.getattr("apply")?;
     rebase_pass.call1((circ,)).map(|_| ())
 }

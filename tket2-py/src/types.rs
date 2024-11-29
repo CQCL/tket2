@@ -9,7 +9,7 @@ use std::fmt;
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
-    let m = PyModule::new_bound(py, "types")?;
+    let m = PyModule::new(py, "types")?;
     m.add_class::<PyHugrType>()?;
     m.add_class::<PyTypeBound>()?;
 

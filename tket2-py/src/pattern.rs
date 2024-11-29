@@ -13,7 +13,7 @@ use tket2::Circuit;
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
-    let m = PyModule::new_bound(py, "pattern")?;
+    let m = PyModule::new(py, "pattern")?;
     m.add_class::<Rule>()?;
     m.add_class::<RuleMatcher>()?;
     m.add_class::<self::portmatching::PyCircuitPattern>()?;
@@ -23,11 +23,11 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
 
     m.add(
         "InvalidPatternError",
-        py.get_type_bound::<PyInvalidPatternError>(),
+        py.get_type::<PyInvalidPatternError>(),
     )?;
     m.add(
         "InvalidReplacementError",
-        py.get_type_bound::<PyInvalidReplacementError>(),
+        py.get_type::<PyInvalidReplacementError>(),
     )?;
 
     Ok(m)

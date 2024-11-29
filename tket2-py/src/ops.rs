@@ -14,7 +14,7 @@ use crate::types::PyHugrType;
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
-    let m = PyModule::new_bound(py, "ops")?;
+    let m = PyModule::new(py, "ops")?;
     m.add_class::<PyTk2Op>()?;
     m.add_class::<PyPauli>()?;
     m.add_class::<PyExtensionOp>()?;
