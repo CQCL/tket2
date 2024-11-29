@@ -9,8 +9,8 @@ use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
 use hugr::types::Type;
 use hugr::{HugrView, Wire};
 use itertools::Itertools;
-use tket_json_rs::circuit_json::Register as RegisterUnit;
 use tket_json_rs::circuit_json::{self, SerialCircuit};
+use tket_json_rs::register::ElementId as RegisterUnit;
 
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
@@ -221,15 +221,14 @@ impl Tk1Encoder {
         let mut implicit_permutation = qubits_permutation;
         implicit_permutation.append(&mut bits_permutation);
 
-        SerialCircuit {
-            name: self.name,
-            phase: self.phase,
-            commands: self.commands,
-            qubits,
-            bits,
-            implicit_permutation,
-            number_of_ws: None,
-        }
+        let mut ser = SerialCircuit::new(self.name, self.phase);
+
+        ser.commands = self.commands;
+        ser.qubits = qubits.into_iter().map_into().collect();
+        ser.bits = bits.into_iter().map_into().collect();
+        ser.implicit_permutation = implicit_permutation;
+        ser.number_of_ws = None;
+        ser
     }
 
     /// Translate a linear [`CircuitUnit`] into a [`RegisterUnit`], if possible.
@@ -355,7 +354,7 @@ impl QubitTracker {
         let permutation = outputs
             .into_iter()
             .zip(&self.inputs)
-            .map(|(out, inp)| circuit_json::ImplicitPermutation(inp.clone(), out))
+            .map(|(out, inp)| circuit_json::ImplicitPermutation(inp.clone().into(), out.into()))
             .collect_vec();
 
         (self.inputs, permutation)
@@ -535,7 +534,10 @@ impl BitTracker {
         let permutation = original_permutation
             .into_iter()
             .map(|(inp, out)| {
-                circuit_json::ImplicitPermutation(inp, circuit_permutation.remove(&out).unwrap())
+                circuit_json::ImplicitPermutation(
+                    inp.into(),
+                    circuit_permutation.remove(&out).unwrap().into(),
+                )
             })
             .collect_vec();
 
