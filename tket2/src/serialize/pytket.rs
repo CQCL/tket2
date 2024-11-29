@@ -23,8 +23,9 @@ use std::{fs, io};
 use hugr::ops::{NamedOp, OpType};
 
 use derive_more::{Display, Error, From};
-use tket_json_rs::circuit_json::{self, SerialCircuit};
+use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::optype::OpType as SerialOpType;
+use tket_json_rs::register::{Bit, ElementId, Qubit};
 
 use crate::circuit::Circuit;
 
@@ -244,7 +245,7 @@ pub enum OpConvertError {
         /// The expected number of bits.
         expected_bits: usize,
         /// The given of parameters.
-        args: Vec<circuit_json::Register>,
+        args: Vec<ElementId>,
     },
 }
 
@@ -290,8 +291,28 @@ struct RegisterHash {
     hash: u64,
 }
 
-impl From<&circuit_json::Register> for RegisterHash {
-    fn from(reg: &circuit_json::Register) -> Self {
+impl From<&ElementId> for RegisterHash {
+    fn from(reg: &ElementId) -> Self {
+        let mut hasher = DefaultHasher::new();
+        reg.hash(&mut hasher);
+        Self {
+            hash: hasher.finish(),
+        }
+    }
+}
+
+impl From<&Qubit> for RegisterHash {
+    fn from(reg: &Qubit) -> Self {
+        let mut hasher = DefaultHasher::new();
+        reg.hash(&mut hasher);
+        Self {
+            hash: hasher.finish(),
+        }
+    }
+}
+
+impl From<&Bit> for RegisterHash {
+    fn from(reg: &Bit) -> Self {
         let mut hasher = DefaultHasher::new();
         reg.hash(&mut hasher);
         Self {

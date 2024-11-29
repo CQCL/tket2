@@ -17,6 +17,7 @@ use itertools::{EitherOrBoth, Itertools};
 use serde_json::json;
 use tket_json_rs::circuit_json;
 use tket_json_rs::circuit_json::SerialCircuit;
+use tket_json_rs::register;
 
 use super::op::Tk1Op;
 use super::param::decode::{parse_pytket_param, PytketParam};
@@ -80,18 +81,18 @@ impl Tk1Decoder {
         // named 2, at position 1 the register originally named 0, and so on.
         let mut output_qubits = Vec::with_capacity(serialcirc.qubits.len());
         let mut output_bits = Vec::with_capacity(serialcirc.bits.len());
-        let output_to_input: HashMap<circuit_json::Register, circuit_json::Register> = serialcirc
+        let output_to_input: HashMap<register::ElementId, register::ElementId> = serialcirc
             .implicit_permutation
             .iter()
-            .map(|p| (p.1.clone(), p.0.clone()))
+            .map(|p| (p.1.clone().id, p.0.clone().id))
             .collect();
         for qubit in &serialcirc.qubits {
             // For each output position, find the input register that should be there.
-            output_qubits.push(output_to_input.get(qubit).unwrap_or(qubit).clone());
+            output_qubits.push(output_to_input.get(&qubit.id).unwrap_or(&qubit.id).clone());
         }
         for bit in &serialcirc.bits {
             // For each output position, find the input register that should be there.
-            output_bits.push(output_to_input.get(bit).unwrap_or(bit).clone());
+            output_bits.push(output_to_input.get(&bit.id).unwrap_or(&bit.id).clone());
         }
         dfg.set_metadata(METADATA_Q_OUTPUT_REGISTERS, json!(output_qubits));
         dfg.set_metadata(METADATA_B_OUTPUT_REGISTERS, json!(output_bits));
@@ -101,7 +102,8 @@ impl Tk1Decoder {
         let ordered_registers = serialcirc
             .qubits
             .iter()
-            .chain(&serialcirc.bits)
+            .map(|qb| &qb.id)
+            .chain(serialcirc.bits.iter().map(|bit| &bit.id))
             .map(|reg| {
                 check_register(reg)?;
                 Ok(RegisterHash::from(reg))
@@ -192,7 +194,7 @@ impl Tk1Decoder {
     fn get_op_wires(
         &mut self,
         tk1op: &Tk1Op,
-        args: &[circuit_json::Register],
+        args: &[register::ElementId],
         params: Vec<String>,
     ) -> Result<(Vec<Wire>, Vec<RegisterHash>), OpConvertError> {
         // Arguments are always ordered with qubits first, and then bits.
@@ -343,7 +345,7 @@ impl Tk1Decoder {
 }
 
 /// Only single-indexed registers are supported.
-fn check_register(register: &circuit_json::Register) -> Result<(), TK1ConvertError> {
+fn check_register(register: &register::ElementId) -> Result<(), TK1ConvertError> {
     if register.1.len() != 1 {
         Err(TK1ConvertError::MultiIndexedRegister {
             register: register.0.clone(),
