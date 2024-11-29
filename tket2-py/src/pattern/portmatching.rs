@@ -64,7 +64,7 @@ impl PyPatternMatcher {
     pub fn py_from_patterns(patterns: &Bound<PyIterator>) -> PyResult<Self> {
         Ok(PatternMatcher::from_patterns(
             patterns
-                .iter()?
+                .try_iter()?
                 .map(|p| {
                     let py_pattern = p?.extract::<PyCircuitPattern>()?;
                     Ok(py_pattern.pattern)

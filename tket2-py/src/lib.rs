@@ -32,7 +32,7 @@ fn add_submodule(py: Python, parent: &Bound<PyModule>, submodule: Bound<PyModule
     // See [https://github.com/PyO3/pyo3/issues/759]
     let parent_name = parent.name()?;
     let submodule_name = submodule.name()?;
-    let modules = py.import_bound("sys")?.getattr("modules")?;
+    let modules = py.import("sys")?.getattr("modules")?;
     modules.set_item(format!("{parent_name}.{submodule_name}"), submodule)?;
     Ok(())
 }

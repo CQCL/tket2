@@ -30,7 +30,7 @@ pub use tket2::{Pauli, Tk2Op};
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
-    let m = PyModule::new_bound(py, "circuit")?;
+    let m = PyModule::new(py, "circuit")?;
     m.add_class::<Tk2Circuit>()?;
     m.add_class::<PyNode>()?;
     m.add_class::<PyWire>()?;
@@ -40,14 +40,14 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     m.add_function(wrap_pyfunction!(render_circuit_dot, &m)?)?;
     m.add_function(wrap_pyfunction!(render_circuit_mermaid, &m)?)?;
 
-    m.add("HugrError", py.get_type_bound::<PyHugrError>())?;
-    m.add("BuildError", py.get_type_bound::<PyBuildError>())?;
-    m.add("ValidationError", py.get_type_bound::<PyValidationError>())?;
+    m.add("HugrError", py.get_type::<PyHugrError>())?;
+    m.add("BuildError", py.get_type::<PyBuildError>())?;
+    m.add("ValidationError", py.get_type::<PyValidationError>())?;
     m.add(
         "HUGRSerializationError",
-        py.get_type_bound::<PyHUGRSerializationError>(),
+        py.get_type::<PyHUGRSerializationError>(),
     )?;
-    m.add("TK1ConvertError", py.get_type_bound::<PyTK1ConvertError>())?;
+    m.add("TK1ConvertError", py.get_type::<PyTK1ConvertError>())?;
 
     Ok(m)
 }

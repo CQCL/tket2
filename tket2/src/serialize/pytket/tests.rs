@@ -13,6 +13,7 @@ use hugr::HugrView;
 use rstest::{fixture, rstest};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::optype;
+use tket_json_rs::register;
 
 use super::{TKETDecode, METADATA_INPUT_PARAMETERS, METADATA_Q_OUTPUT_REGISTERS};
 use crate::circuit::Circuit;
@@ -77,21 +78,24 @@ fn validate_serial_circ(circ: &SerialCircuit) {
     for command in &circ.commands {
         for arg in &command.args {
             assert!(
-                circ.qubits.contains(arg) || circ.bits.contains(arg),
+                circ.qubits.contains(&register::Qubit::from(arg.clone()))
+                    || circ.bits.contains(&register::Bit::from(arg.clone())),
                 "Circuit command {command:?} has an invalid argument '{arg:?}'"
             );
         }
     }
 
     // Check that the implicit permutation is valid.
-    let perm: HashMap<circuit_json::Register, circuit_json::Register> = circ
+    let perm: HashMap<register::ElementId, register::ElementId> = circ
         .implicit_permutation
         .iter()
-        .map(|p| (p.0.clone(), p.1.clone()))
+        .map(|p| (p.0.clone().id, p.1.clone().id))
         .collect();
     for (key, value) in &perm {
-        let valid_qubits = circ.qubits.contains(key) && circ.qubits.contains(value);
-        let valid_bits = circ.bits.contains(key) && circ.bits.contains(value);
+        let valid_qubits = circ.qubits.contains(&register::Qubit::from(key.clone()))
+            && circ.qubits.contains(&register::Qubit::from(value.clone()));
+        let valid_bits = circ.bits.contains(&register::Bit::from(key.clone()))
+            && circ.bits.contains(&register::Bit::from(value.clone()));
         assert!(
             valid_qubits || valid_bits,
             "Circuit has an invalid permutation '{key:?} -> {value:?}'"
@@ -103,7 +107,7 @@ fn validate_serial_circ(circ: &SerialCircuit) {
         "Circuit has duplicate permutations",
     );
     assert_eq!(
-        HashSet::<&circuit_json::Register>::from_iter(perm.values()).len(),
+        HashSet::<&register::ElementId>::from_iter(perm.values()).len(),
         perm.len(),
         "Circuit has duplicate values in permutations"
     );
