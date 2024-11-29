@@ -16,4 +16,4 @@ __all__ = ["circuit", "ops", "optimiser", "passes", "pattern", "rewrite"]
 
 # This is updated by our release-please workflow, triggered by this
 # annotation: x-release-please-version
-__version__ = "0.5.0"
+__version__ = "0.5.1"
