@@ -1,5 +1,12 @@
 # Changelog
 
+
+## [0.5.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.5.0...tket2-py-v0.5.1) (2024-11-29)
+
+### Bug Fixes
+- Remove use of removed auto_rebase_pass ([#708](https://github.com/CQCL/tket2/issues/708))
+
+
 ## [0.5.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.4.1...tket2-py-v0.5.0) (2024-11-11)
 
 
