@@ -59,15 +59,13 @@ fn greedy_depth_reduce<'py>(circ: &Bound<'py, PyAny>) -> PyResult<(Bound<'py, Py
 ///
 /// Equivalent to running the following code:
 /// ```python
-/// from pytket.passes.auto_rebase import auto_rebase_pass
+/// from pytket.passes import AutoRebase
 /// from pytket import OpType
-/// auto_rebase_pass({OpType.CX, OpType.Rz, OpType.H}).apply(circ)"
+/// AutoRebase({OpType.CX, OpType.Rz, OpType.H}).apply(circ)"
 // ```
 fn rebase_nam(circ: &Bound<PyAny>) -> PyResult<()> {
     let py = circ.py();
-    let auto_rebase = py
-        .import_bound("pytket.passes.auto_rebase")?
-        .getattr("auto_rebase_pass")?;
+    let auto_rebase = py.import_bound("pytket.passes")?.getattr("AutoRebase")?;
     let optype = py.import_bound("pytket")?.getattr("OpType")?;
     let locals = [("OpType", &optype)].into_py_dict_bound(py);
     let op_set = py.eval_bound("{OpType.CX, OpType.Rz, OpType.H}", None, Some(&locals))?;
