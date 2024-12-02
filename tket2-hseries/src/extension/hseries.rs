@@ -123,7 +123,7 @@ impl MakeOpDef for HSeriesOp {
     fn description(&self) -> String {
         match self {
             HSeriesOp::Measure => "Measure a qubit and lose it.",
-            HSeriesOp::LazyMeasure => "Lazily Measure a qubit and lose it.",
+            HSeriesOp::LazyMeasure => "Lazily measure a qubit and lose it.",
             HSeriesOp::Rz => "Rotate a qubit around the Z axis. Not physical.",
             HSeriesOp::PhasedX => "PhasedX gate.",
             HSeriesOp::ZZMax => "Maximally entangling ZZ gate.",

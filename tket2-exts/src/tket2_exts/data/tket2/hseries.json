@@ -12,7 +12,7 @@
     "LazyMeasure": {
       "extension": "tket2.hseries",
       "name": "LazyMeasure",
-      "description": "Lazily Measure a qubit and lose it.",
+      "description": "Lazily measure a qubit and lose it.",
       "signature": {
         "params": [],
         "body": {
