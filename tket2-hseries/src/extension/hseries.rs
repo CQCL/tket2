@@ -7,9 +7,9 @@
 use std::sync::Arc;
 
 use hugr::{
-    builder::{BuildError, Dataflow},
+    builder::{BuildError, Dataflow, DataflowSubContainer, SubContainer},
     extension::{
-        prelude::{BOOL_T, QB_T},
+        prelude::{option_type, UnwrapBuilder, BOOL_T, QB_T},
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version, PRELUDE,
     },
@@ -19,7 +19,7 @@ use hugr::{
         float_types::{ConstF64, EXTENSION as FLOAT_TYPES, FLOAT64_TYPE},
     },
     type_row,
-    types::Signature,
+    types::{Signature, Type},
     Extension, Wire,
 };
 
@@ -37,7 +37,7 @@ pub use lower::{check_lowered, lower_tk2_op, LowerTk2Error, LowerTket2ToHSeriesP
 /// The "tket2.hseries" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.hseries");
 /// The "tket2.hseries" extension version.
-pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+pub const EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
     /// The "tket2.hseries" extension.
@@ -86,9 +86,10 @@ pub enum HSeriesOp {
     PhasedX,
     ZZMax,
     ZZPhase,
-    QAlloc,
+    TryQAlloc,
     QFree,
     Reset,
+    MeasureReset,
 }
 
 impl MakeOpDef for HSeriesOp {
@@ -101,11 +102,12 @@ impl MakeOpDef for HSeriesOp {
             Reset => Signature::new(one_qb_row.clone(), one_qb_row),
             ZZMax => Signature::new(two_qb_row.clone(), two_qb_row),
             ZZPhase => Signature::new(type_row![QB_T, QB_T, FLOAT64_TYPE], two_qb_row),
-            Measure => Signature::new(one_qb_row, type_row![QB_T, BOOL_T]),
+            Measure => Signature::new(one_qb_row, type_row![BOOL_T]),
             Rz => Signature::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
             PhasedX => Signature::new(type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE], one_qb_row),
-            QAlloc => Signature::new(type_row![], one_qb_row),
+            TryQAlloc => Signature::new(type_row![], Type::from(option_type(one_qb_row))),
             QFree => Signature::new(one_qb_row, type_row![]),
+            MeasureReset => Signature::new(one_qb_row.clone(), type_row![QB_T, BOOL_T]),
         }
         .into()
     }
@@ -116,6 +118,22 @@ impl MakeOpDef for HSeriesOp {
 
     fn extension(&self) -> ExtensionId {
         EXTENSION_ID
+    }
+
+    fn description(&self) -> String {
+        match self {
+            HSeriesOp::Measure => "Measure a qubit and lose it.",
+            HSeriesOp::LazyMeasure => "Lazily measure a qubit and lose it.",
+            HSeriesOp::Rz => "Rotate a qubit around the Z axis. Not physical.",
+            HSeriesOp::PhasedX => "PhasedX gate.",
+            HSeriesOp::ZZMax => "Maximally entangling ZZ gate.",
+            HSeriesOp::ZZPhase => "ZZ gate with an angle.",
+            HSeriesOp::TryQAlloc => "Allocate a qubit in the Z |0> eigenstate.",
+            HSeriesOp::QFree => "Free a qubit (lose track of it).",
+            HSeriesOp::Reset => "Reset a qubit to the Z |0> eigenstate.",
+            HSeriesOp::MeasureReset => "Measure a qubit and reset it to the Z |0> eigenstate.",
+        }
+        .to_string()
     }
 }
 
@@ -131,7 +149,7 @@ impl MakeRegisteredOp for HSeriesOp {
 
 /// An extension trait for [Dataflow] providing methods to add
 /// "tket2.hseries" operations.
-pub trait HSeriesOpBuilder: Dataflow {
+pub trait HSeriesOpBuilder: Dataflow + UnwrapBuilder {
     /// Add a "tket2.hseries.LazyMeasure" op.
     fn add_lazy_measure(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
@@ -140,10 +158,8 @@ pub trait HSeriesOpBuilder: Dataflow {
     }
 
     /// Add a "tket2.hseries.Measure" op.
-    fn add_measure(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
-        Ok(self
-            .add_dataflow_op(HSeriesOp::Measure, [qb])?
-            .outputs_arr())
+    fn add_measure(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        Ok(self.add_dataflow_op(HSeriesOp::Measure, [qb])?.out_wire(0))
     }
 
     /// Add a "tket2.hseries.Reset" op.
@@ -179,15 +195,23 @@ pub trait HSeriesOpBuilder: Dataflow {
             .out_wire(0))
     }
 
-    /// Add a "tket2.hseries.QAlloc" op.
-    fn add_qalloc(&mut self) -> Result<Wire, BuildError> {
-        Ok(self.add_dataflow_op(HSeriesOp::QAlloc, [])?.out_wire(0))
+    /// Add a "tket2.hseries.TryQAlloc" op.
+    fn add_try_alloc(&mut self) -> Result<Wire, BuildError> {
+        Ok(self.add_dataflow_op(HSeriesOp::TryQAlloc, [])?.out_wire(0))
     }
 
     /// Add a "tket2.hseries.QFree" op.
     fn add_qfree(&mut self, qb: Wire) -> Result<(), BuildError> {
         self.add_dataflow_op(HSeriesOp::QFree, [qb])?;
         Ok(())
+    }
+
+    /// Add a "tket2.hseries.MeasureReset" op.
+    /// This operation is equivalent to a `Measure` followed by a `Reset`.
+    fn add_measure_reset(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
+        Ok(self
+            .add_dataflow_op(HSeriesOp::MeasureReset, [qb])?
+            .outputs_arr())
     }
 
     /// Build a hadamard gate in terms of HSeries primitives.
@@ -344,6 +368,37 @@ pub trait HSeriesOpBuilder: Dataflow {
 
         Ok([a, b, c])
     }
+
+    /// Build a projective measurement with a conditional flip.
+    fn build_measure_flip(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
+        let [qb, b] = self.add_measure_reset(qb)?;
+        let mut conditional = self.conditional_builder(
+            ([type_row![], type_row![]], b),
+            [(QB_T, qb)],
+            type_row![QB_T],
+        )?;
+
+        // case 0: 0 state measured, leave alone
+        let case0 = conditional.case_builder(0)?;
+        let [qb] = case0.input_wires_arr();
+        case0.finish_with_outputs([qb])?;
+
+        // case 1: 1 state measured, flip
+        let mut case1 = conditional.case_builder(1)?;
+        let [qb] = case1.input_wires_arr();
+        let qb = case1.build_x(qb)?;
+        case1.finish_with_outputs([qb])?;
+
+        let [qb] = conditional.finish_sub_container()?.outputs_arr();
+        Ok([qb, b])
+    }
+
+    /// Build a qalloc operation that panics on failure.
+    fn build_qalloc(&mut self) -> Result<Wire, BuildError> {
+        let maybe_qb = self.add_try_alloc()?;
+        let [qb] = self.build_unwrap_sum(&REGISTRY, 1, option_type(QB_T), maybe_qb)?;
+        Ok(qb)
+    }
 }
 
 impl<D: Dataflow> HSeriesOpBuilder for D {}
@@ -393,20 +448,21 @@ mod test {
         let hugr = {
             let mut func_builder = FunctionBuilder::new(
                 "all_ops",
-                Signature::new(vec![QB_T, FLOAT64_TYPE], vec![QB_T, BOOL_T]),
+                Signature::new(vec![QB_T, FLOAT64_TYPE], vec![BOOL_T]),
             )
             .unwrap();
             let [q0, angle] = func_builder.input_wires_arr();
-            let q1 = func_builder.add_qalloc().unwrap();
+            let q1 = func_builder.build_qalloc().unwrap();
             let q0 = func_builder.add_reset(q0).unwrap();
             let q1 = func_builder.add_phased_x(q1, angle, angle).unwrap();
             let [q0, q1] = func_builder.add_zz_max(q0, q1).unwrap();
             let [q0, q1] = func_builder.add_zz_phase(q0, q1, angle).unwrap();
             let q0 = func_builder.add_rz(q0, angle).unwrap();
-            let [q0, b] = func_builder.add_measure(q0).unwrap();
+            let [q0, _b] = func_builder.add_measure_reset(q0).unwrap();
+            let b = func_builder.add_measure(q0).unwrap();
             func_builder.add_qfree(q1).unwrap();
             func_builder
-                .finish_hugr_with_outputs([q0, b], &REGISTRY)
+                .finish_hugr_with_outputs([b], &REGISTRY)
                 .unwrap()
         };
         assert_matches!(hugr.validate(&REGISTRY), Ok(_));

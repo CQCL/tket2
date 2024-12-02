@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "name": "tket2.hseries",
   "extension_reqs": [
     "arithmetic.float.types",
@@ -12,7 +12,7 @@
     "LazyMeasure": {
       "extension": "tket2.hseries",
       "name": "LazyMeasure",
-      "description": "LazyMeasure",
+      "description": "Lazily measure a qubit and lose it.",
       "signature": {
         "params": [],
         "body": {
@@ -50,7 +50,31 @@
     "Measure": {
       "extension": "tket2.hseries",
       "name": "Measure",
-      "description": "Measure",
+      "description": "Measure a qubit and lose it.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Q"
+            }
+          ],
+          "output": [
+            {
+              "t": "Sum",
+              "s": "Unit",
+              "size": 2
+            }
+          ],
+          "extension_reqs": []
+        }
+      },
+      "binary": false
+    },
+    "MeasureReset": {
+      "extension": "tket2.hseries",
+      "name": "MeasureReset",
+      "description": "Measure a qubit and reset it to the Z |0> eigenstate.",
       "signature": {
         "params": [],
         "body": {
@@ -77,7 +101,7 @@
     "PhasedX": {
       "extension": "tket2.hseries",
       "name": "PhasedX",
-      "description": "PhasedX",
+      "description": "PhasedX gate.",
       "signature": {
         "params": [],
         "body": {
@@ -110,28 +134,10 @@
       },
       "binary": false
     },
-    "QAlloc": {
-      "extension": "tket2.hseries",
-      "name": "QAlloc",
-      "description": "QAlloc",
-      "signature": {
-        "params": [],
-        "body": {
-          "input": [],
-          "output": [
-            {
-              "t": "Q"
-            }
-          ],
-          "extension_reqs": []
-        }
-      },
-      "binary": false
-    },
     "QFree": {
       "extension": "tket2.hseries",
       "name": "QFree",
-      "description": "QFree",
+      "description": "Free a qubit (lose track of it).",
       "signature": {
         "params": [],
         "body": {
@@ -149,7 +155,7 @@
     "Reset": {
       "extension": "tket2.hseries",
       "name": "Reset",
-      "description": "Reset",
+      "description": "Reset a qubit to the Z |0> eigenstate.",
       "signature": {
         "params": [],
         "body": {
@@ -171,7 +177,7 @@
     "Rz": {
       "extension": "tket2.hseries",
       "name": "Rz",
-      "description": "Rz",
+      "description": "Rotate a qubit around the Z axis. Not physical.",
       "signature": {
         "params": [],
         "body": {
@@ -197,10 +203,37 @@
       },
       "binary": false
     },
+    "TryQAlloc": {
+      "extension": "tket2.hseries",
+      "name": "TryQAlloc",
+      "description": "Allocate a qubit in the Z |0> eigenstate.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [],
+          "output": [
+            {
+              "t": "Sum",
+              "s": "General",
+              "rows": [
+                [],
+                [
+                  {
+                    "t": "Q"
+                  }
+                ]
+              ]
+            }
+          ],
+          "extension_reqs": []
+        }
+      },
+      "binary": false
+    },
     "ZZMax": {
       "extension": "tket2.hseries",
       "name": "ZZMax",
-      "description": "ZZMax",
+      "description": "Maximally entangling ZZ gate.",
       "signature": {
         "params": [],
         "body": {
@@ -228,7 +261,7 @@
     "ZZPhase": {
       "extension": "tket2.hseries",
       "name": "ZZPhase",
-      "description": "ZZPhase",
+      "description": "ZZ gate with an angle.",
       "signature": {
         "params": [],
         "body": {
