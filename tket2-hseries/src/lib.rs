@@ -13,7 +13,7 @@ use tket2::Tk2Op;
 
 use extension::{
     futures::FutureOpDef,
-    hseries::{HSeriesOp, LowerTk2Error, LowerTket2ToHSeriesPass},
+    qsystem::{LowerTk2Error, LowerTket2ToQSystemPass, QSystemOp},
 };
 use lazify_measure::{LazifyMeasurePass, LazifyMeasurePassError};
 
@@ -23,44 +23,44 @@ pub mod extension;
 
 pub mod lazify_measure;
 
-/// Modify a [hugr::Hugr] into a form that is acceptable for ingress into an H-series.
+/// Modify a [hugr::Hugr] into a form that is acceptable for ingress into a Q-System.
 /// Returns an error if this cannot be done.
 ///
-/// To construct a `HSeriesPass` use [Default::default].
+/// To construct a `QSystemPass` use [Default::default].
 #[derive(Debug, Clone, Copy, Default)]
-pub struct HSeriesPass {
+pub struct QSystemPass {
     validation_level: ValidationLevel,
 }
 
 #[derive(Error, Debug, Display, From)]
 #[non_exhaustive]
-/// An error reported from [HSeriesPass].
-pub enum HSeriesPassError {
+/// An error reported from [QSystemPass].
+pub enum QSystemPassError {
     /// The [hugr::Hugr] was invalid either before or after a pass ran.
     ValidationError(ValidatePassError),
     /// An error from the component [LazifyMeasurePass].
     LazyMeasureError(LazifyMeasurePassError),
     /// An error from the component [force_order()] pass.
     ForceOrderError(HugrError),
-    /// An error from the component [LowerTket2ToHSeriesPass] pass.
+    /// An error from the component [LowerTket2ToQSystemPass] pass.
     LowerTk2Error(LowerTk2Error),
 }
 
-impl HSeriesPass {
-    /// Run `HSeriesPass` on the given [HugrMut]. `registry` is used for
+impl QSystemPass {
+    /// Run `QSystemPass` on the given [HugrMut]. `registry` is used for
     /// validation, if enabled.
     pub fn run(
         &self,
         hugr: &mut impl HugrMut,
         registry: &ExtensionRegistry,
-    ) -> Result<(), HSeriesPassError> {
+    ) -> Result<(), QSystemPassError> {
         self.lower_tk2().run(hugr, registry)?;
         self.lazify_measure().run(hugr, registry)?;
         self.validation_level
             .run_validated_pass(hugr, registry, |hugr, _| {
                 force_order(hugr, hugr.root(), |hugr, node| {
                     let optype = hugr.get_optype(node);
-                    if optype.cast::<Tk2Op>().is_some() || optype.cast::<HSeriesOp>().is_some() {
+                    if optype.cast::<Tk2Op>().is_some() || optype.cast::<QSystemOp>().is_some() {
                         // quantum ops are lifted as early as possible
                         -1
                     } else if let Some(FutureOpDef::Read) = hugr.get_optype(node).cast() {
@@ -70,20 +70,20 @@ impl HSeriesPass {
                         0
                     }
                 })?;
-                Ok::<_, HSeriesPassError>(())
+                Ok::<_, QSystemPassError>(())
             })?;
         Ok(())
     }
 
-    fn lower_tk2(&self) -> LowerTket2ToHSeriesPass {
-        LowerTket2ToHSeriesPass::default().with_validation_level(self.validation_level)
+    fn lower_tk2(&self) -> LowerTket2ToQSystemPass {
+        LowerTket2ToQSystemPass::default().with_validation_level(self.validation_level)
     }
 
     fn lazify_measure(&self) -> LazifyMeasurePass {
         LazifyMeasurePass::default().with_validation_level(self.validation_level)
     }
 
-    /// Returns a new `HSeriesPass` with the given [ValidationLevel].
+    /// Returns a new `QSystemPass` with the given [ValidationLevel].
     pub fn with_validation_level(mut self, level: ValidationLevel) -> Self {
         self.validation_level = level;
         self
@@ -105,12 +105,12 @@ mod test {
     use petgraph::visit::{Topo, Walker as _};
 
     use crate::{
-        extension::{futures::FutureOpDef, hseries::HSeriesOp},
-        HSeriesPass,
+        extension::{futures::FutureOpDef, qsystem::QSystemOp},
+        QSystemPass,
     };
 
     #[test]
-    fn hseries_pass() {
+    fn qsystem_pass() {
         let registry = &tket2::extension::REGISTRY;
         let (mut hugr, [call_node, h_node, f_node, rx_node]) = {
             let mut builder = DFGBuilder::new(Signature::new(QB_T, vec![BOOL_T, BOOL_T])).unwrap();
@@ -134,14 +134,14 @@ mod test {
 
             // with no dependencies, this Reset should be lifted to the start
             let [qb] = builder
-                .add_dataflow_op(HSeriesOp::Reset, [qb])
+                .add_dataflow_op(QSystemOp::Reset, [qb])
                 .unwrap()
                 .outputs_arr();
             let h_node = qb.node();
 
             // depending on the angle means this op can't be lifted above the angle ops
             let [qb] = builder
-                .add_dataflow_op(HSeriesOp::Rz, [qb, angle])
+                .add_dataflow_op(QSystemOp::Rz, [qb, angle])
                 .unwrap()
                 .outputs_arr();
             let rx_node = qb.node();
@@ -150,7 +150,7 @@ mod test {
             // Reads will be added.  The Lazy Measure will be lifted and the
             // reads will be sunk.
             let [measure_result] = builder
-                .add_dataflow_op(HSeriesOp::Measure, [qb])
+                .add_dataflow_op(QSystemOp::Measure, [qb])
                 .unwrap()
                 .outputs_arr();
 
@@ -160,7 +160,7 @@ mod test {
             (hugr, [call_node, h_node, f_node, rx_node])
         };
 
-        HSeriesPass::default().run(&mut hugr, registry).unwrap();
+        QSystemPass::default().run(&mut hugr, registry).unwrap();
 
         let topo_sorted = Topo::new(&hugr.as_petgraph())
             .iter(&hugr.as_petgraph())

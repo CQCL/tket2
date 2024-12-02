@@ -1,8 +1,8 @@
 //! Provides `LazifyMeasurePass` which replaces [Tket2Op::Measure] nodes with
-//! [HSeriesOp::Measure] nodes.
+//! [QSystemOp::Measure] nodes.
 //!
 //! [Tket2Op::Measure]: tket2::Tk2Op::Measure
-//! [HSeriesOp::Measure]: crate::extension::hseries::HSeriesOp::Measure
+//! [QSystemOp::Measure]: crate::extension::qsystem::QSystemOp::Measure
 use std::collections::{HashMap, HashSet};
 
 use derive_more::{Display, Error, From};
@@ -27,11 +27,11 @@ use lazy_static::lazy_static;
 
 use crate::extension::{
     futures::FutureOpBuilder,
-    hseries::{self, HSeriesOpBuilder},
+    qsystem::{self, QSystemOpBuilder},
 };
 
 /// A `Hugr -> Hugr` pass that replaces [tket2::Tk2Op::Measure] nodes with
-/// [hseries::HSeriesOp::Measure] nodes. To construct a `LazifyMeasurePass` use
+/// [qsystem::QSystemOp::Measure] nodes. To construct a `LazifyMeasurePass` use
 /// [Default::default].
 ///
 /// The `Hugr` must not contain any non-local edges. If validation is enabled,
@@ -114,7 +114,7 @@ lazy_static! {
         let [qb, lazy_r] = builder.add_lazy_measure(qb).unwrap();
         let [r] = builder.add_read(lazy_r, BOOL_T).unwrap();
         builder
-            .finish_hugr_with_outputs([qb, r], &hseries::REGISTRY)
+            .finish_hugr_with_outputs([qb, r], &qsystem::REGISTRY)
             .unwrap()
     };
 }
@@ -146,7 +146,7 @@ fn measure_replacement(num_dups: usize) -> Hugr {
     assert_eq!(num_out_types, rs.len());
     assert_eq!(num_out_types, num_dups + 1);
     builder
-        .finish_hugr_with_outputs(rs, &hseries::REGISTRY)
+        .finish_hugr_with_outputs(rs, &qsystem::REGISTRY)
         .unwrap()
 }
 
@@ -223,14 +223,14 @@ mod test {
 
     use crate::extension::{
         futures::{self, FutureOpDef},
-        hseries::HSeriesOp,
+        qsystem::QSystemOp,
     };
 
     use super::*;
 
     lazy_static! {
         pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
-            hseries::EXTENSION.to_owned(),
+            qsystem::EXTENSION.to_owned(),
             futures::EXTENSION.to_owned(),
             TKET2_EXTENSION.to_owned(),
             PRELUDE.to_owned(),
@@ -260,7 +260,7 @@ mod test {
             let ot = hugr.get_optype(n);
             if let Some(FutureOpDef::Read) = ot.cast() {
                 num_read += 1;
-            } else if let Some(HSeriesOp::LazyMeasure) = ot.cast() {
+            } else if let Some(QSystemOp::LazyMeasure) = ot.cast() {
                 num_lazy_measure += 1;
             } else {
                 assert_eq!(ot.cast::<Tk2Op>(), None)

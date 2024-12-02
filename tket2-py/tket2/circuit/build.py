@@ -52,7 +52,7 @@ class CircBuild(TrackedDfg):
         extensions = [
             ext.rotation(),
             ext.futures(),
-            ext.hseries(),
+            ext.qsystem(),
             ext.quantum(),
             ext.result(),
             *(other_extensions or []),
