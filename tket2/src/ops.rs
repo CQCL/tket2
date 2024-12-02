@@ -217,7 +217,8 @@ pub(crate) mod test {
     use hugr::extension::{prelude::UnwrapBuilder as _, OpDef};
     use hugr::ops::NamedOp;
     use hugr::types::Signature;
-    use hugr::{type_row, CircuitUnit};
+    use hugr::{type_row, CircuitUnit, HugrView};
+    use itertools::Itertools;
     use rstest::{fixture, rstest};
     use strum::IntoEnumIterator;
 
@@ -290,7 +291,21 @@ pub(crate) mod test {
             .add_dataflow_op(Tk2Op::MeasureFree, [q])
             .unwrap()
             .out_wire(0);
-        b.finish_hugr_with_outputs([measured], &REGISTRY).unwrap();
+        let h = b.finish_hugr_with_outputs([measured], &REGISTRY).unwrap();
+
+        let top_ops = h.children(h.root()).map(|n| h.get_optype(n)).collect_vec();
+
+        assert_eq!(top_ops.len(), 5);
+        // first two are I/O
+        assert_eq!(
+            Tk2Op::from_op(top_ops[2].as_extension_op().unwrap()).unwrap(),
+            Tk2Op::TryQAlloc
+        );
+        assert!(top_ops[3].is_conditional());
+        assert_eq!(
+            Tk2Op::from_op(top_ops[4].as_extension_op().unwrap()).unwrap(),
+            Tk2Op::MeasureFree
+        );
     }
     #[test]
     fn tk2op_properties() {
