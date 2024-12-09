@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.6.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.5.1...tket2-py-v0.6.0) (2024-12-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* all references to "hseries" including extension, modules and structs renamed to "qsystem"
+* hseries qalloc op replaced with fallible TryQalloc
+
+### Features
+
+* update measurement and alloc operations ([#702](https://github.com/CQCL/tket2/issues/702)) ([a7a0201](https://github.com/CQCL/tket2/commit/a7a020116f42bfeb89c356d08816a2f3ce1b5226))
+
+
+### Code Refactoring
+
+* rename hseries to qsystem ([#703](https://github.com/CQCL/tket2/issues/703)) ([1e90173](https://github.com/CQCL/tket2/commit/1e90173872e73c44a6321fe400ae6f2e4e115220))
+
 ## [0.5.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.5.0...tket2-py-v0.5.1) (2024-11-29)
 
 
