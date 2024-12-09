@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.1](https://github.com/CQCL/tket2/compare/tket2-eccs-v0.2.0...tket2-eccs-v0.2.1) (2024-12-09)
+
+
+### Features
+
+* move extensions to auxillary package ([#682](https://github.com/CQCL/tket2/issues/682)) ([dd78f9a](https://github.com/CQCL/tket2/commit/dd78f9a571905407bcf74131a54f4aefbca740c4))
+
+
+### Reverts
+
+* "Support python 3.13 ([#653](https://github.com/CQCL/tket2/issues/653))" ([#657](https://github.com/CQCL/tket2/issues/657)) ([3fb67ac](https://github.com/CQCL/tket2/commit/3fb67acf5e860fba8f8e1b9e6c5836846a0fcb7d))
+
 ## [0.2.0](https://github.com/CQCL/tket2/compare/tket2-eccs-v0.1.0...tket2-eccs-v0.2.0) (2024-10-10)
 
 
