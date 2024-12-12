@@ -13,7 +13,7 @@
 //! of the Quartz repository.
 
 use derive_more::{Display, Error, From, Into};
-use hugr::ops::custom::{resolve_extension_ops, OpaqueOpError};
+use hugr::ops::custom::OpaqueOpError;
 use hugr::{Hugr, HugrView, PortIndex};
 use itertools::Itertools;
 use portmatching::PatternID;
@@ -24,7 +24,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::extension::REGISTRY;
 use crate::{
     circuit::{remove_empty_wire, Circuit},
     optimiser::badger::{load_eccs_json_file, EqCircClass},
@@ -137,8 +136,8 @@ impl ECCRewriter {
     #[cfg(feature = "binary-eccs")]
     pub fn load_binary_io<R: io::Read>(reader: R) -> Result<Self, RewriterSerialisationError> {
         let data = zstd::decode_all(reader)?;
-        let mut eccs: Self = rmp_serde::decode::from_slice(&data)?;
-        eccs.resolve_extension_ops()?;
+        let eccs: Self = rmp_serde::decode::from_slice(&data)?;
+        // eccs.resolve_extension_ops()?;
         Ok(eccs)
     }
 
@@ -175,13 +174,13 @@ impl ECCRewriter {
         Self::load_binary_io(&mut file)
     }
 
-    /// When the ECC gets loaded, all custom operations are an instance of `OpaqueOp`.
-    /// We need to resolve them into `ExtensionOp`s by validating the definitions.
-    fn resolve_extension_ops(&mut self) -> Result<(), OpaqueOpError> {
-        self.targets
-            .iter_mut()
-            .try_for_each(|hugr| resolve_extension_ops(hugr, &REGISTRY))
-    }
+    //// When the ECC gets loaded, all custom operations are an instance of `OpaqueOp`.
+    //// We need to resolve them into `ExtensionOp`s by validating the definitions.
+    // fn resolve_extension_ops(&mut self) -> Result<(), OpaqueOpError> {
+    //     self.targets
+    //         .iter_mut()
+    //         .try_for_each(|hugr| resolve_extension_ops(hugr, &REGISTRY))
+    // }
 }
 
 impl Rewriter for ECCRewriter {

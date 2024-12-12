@@ -293,7 +293,7 @@ impl CircuitChunks {
             chunks.push(Chunk::extract(circ, commands, &convex_checker));
         }
         Self {
-            signature,
+            signature: signature.into_owned(),
             root_meta,
             input_connections,
             output_connections,
@@ -488,7 +488,7 @@ impl<'data> IntoParallelRefMutIterator<'data> for CircuitChunks {
 #[cfg(test)]
 mod test {
     use crate::circuit::CircuitHash;
-    use crate::extension::REGISTRY;
+    
     use crate::utils::build_simple_circuit;
     use crate::Tk2Op;
 
@@ -514,7 +514,7 @@ mod test {
 
         let mut reassembled = chunks.reassemble().unwrap();
 
-        reassembled.hugr_mut().update_validate(&REGISTRY).unwrap();
+        reassembled.hugr_mut().validate().unwrap();
         assert_eq!(circ.circuit_hash(), reassembled.circuit_hash());
     }
 
@@ -544,7 +544,7 @@ mod test {
 
         let mut reassembled = chunks.reassemble().unwrap();
 
-        reassembled.hugr_mut().update_validate(&REGISTRY).unwrap();
+        reassembled.hugr_mut().validate().unwrap();
 
         assert_eq!(reassembled.commands().count(), 1);
         let h = reassembled.commands().next().unwrap().node();

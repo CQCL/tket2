@@ -1,12 +1,14 @@
-use crate::extension::rotation::ROTATION_TYPE;
+use std::sync::{Arc, Weak};
+
+use crate::extension::rotation::rotation_type;
 use crate::extension::sympy::{SympyOpDef, SYM_OP_ID};
-use crate::extension::TKET2_EXTENSION_ID as EXTENSION_ID;
+use crate::extension::{TKET2_EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID};
 use hugr::ops::custom::ExtensionOp;
 use hugr::ops::NamedOp;
 use hugr::types::Type;
 use hugr::{
     extension::{
-        prelude::{option_type, BOOL_T, QB_T},
+        prelude::{bool_t, option_type, qb_t},
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionId, OpDef, SignatureFunc,
     },
@@ -108,20 +110,19 @@ impl Pauli {
     }
 }
 impl MakeOpDef for Tk2Op {
-    fn signature(&self) -> SignatureFunc {
+    fn init_signature(&self, _extension_ref: &std::sync::Weak<hugr::Extension>) -> SignatureFunc {
         use Tk2Op::*;
-        let one_qb_row = type_row![QB_T];
         match self {
-            H | T | S | X | Y | Z | Tdg | Sdg | Reset => Signature::new_endo(one_qb_row),
-            CX | CZ | CY => Signature::new_endo(type_row![QB_T; 2]),
-            Toffoli => Signature::new_endo(type_row![QB_T; 3]),
-            Measure => Signature::new(one_qb_row, type_row![QB_T, BOOL_T]),
-            MeasureFree => Signature::new(one_qb_row, type_row![BOOL_T]),
-            Rz | Rx | Ry => Signature::new(type_row![QB_T, ROTATION_TYPE], one_qb_row),
-            CRz => Signature::new(type_row![QB_T, QB_T, ROTATION_TYPE], type_row![QB_T; 2]),
-            QAlloc => Signature::new(type_row![], one_qb_row),
-            TryQAlloc => Signature::new(type_row![], Type::from(option_type(one_qb_row))),
-            QFree => Signature::new(one_qb_row, type_row![]),
+            H | T | S | X | Y | Z | Tdg | Sdg | Reset => Signature::new_endo(qb_t()),
+            CX | CZ | CY => Signature::new_endo(vec![qb_t(); 2]),
+            Toffoli => Signature::new_endo(vec![qb_t(); 3]),
+            Measure => Signature::new(qb_t(), vec![qb_t(), bool_t()]),
+            MeasureFree => Signature::new(qb_t(), bool_t()),
+            Rz | Rx | Ry => Signature::new(vec![qb_t(), rotation_type()], qb_t()),
+            CRz => Signature::new(vec![qb_t(), qb_t(), rotation_type()], vec![qb_t(); 2]),
+            QAlloc => Signature::new(type_row![], qb_t()),
+            TryQAlloc => Signature::new(type_row![], Type::from(option_type(qb_t()))),
+            QFree => Signature::new(qb_t(), type_row![]),
         }
         .into()
     }
@@ -139,6 +140,10 @@ impl MakeOpDef for Tk2Op {
 
     fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
         try_from_name(op_def.name(), op_def.extension_id())
+    }
+
+    fn extension_ref(&self) -> Weak<hugr::Extension> {
+        Arc::downgrade(&TKET2_EXTENSION)
     }
 }
 
@@ -212,7 +217,7 @@ pub(crate) mod test {
     use std::sync::Arc;
 
     use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
-    use hugr::extension::prelude::{option_type, BOOL_T, QB_T};
+    use hugr::extension::prelude::{bool_t, option_type, qb_t};
     use hugr::extension::simple_op::MakeOpDef;
     use hugr::extension::{prelude::UnwrapBuilder as _, OpDef};
     use hugr::ops::NamedOp;
@@ -281,17 +286,17 @@ pub(crate) mod test {
 
     #[test]
     fn try_qalloc_measure_free() {
-        let mut b = DFGBuilder::new(Signature::new(type_row![], BOOL_T)).unwrap();
+        let mut b = DFGBuilder::new(Signature::new(type_row![], bool_t())).unwrap();
 
         let try_q = b.add_dataflow_op(Tk2Op::TryQAlloc, []).unwrap().out_wire(0);
         let [q] = b
-            .build_unwrap_sum(&REGISTRY, 1, option_type(QB_T), try_q)
+            .build_unwrap_sum(&REGISTRY, 1, option_type(qb_t()), try_q)
             .unwrap();
         let measured = b
             .add_dataflow_op(Tk2Op::MeasureFree, [q])
             .unwrap()
             .out_wire(0);
-        let h = b.finish_hugr_with_outputs([measured], &REGISTRY).unwrap();
+        let h = b.finish_hugr_with_outputs([measured]).unwrap();
 
         let top_ops = h.children(h.root()).map(|n| h.get_optype(n)).collect_vec();
 

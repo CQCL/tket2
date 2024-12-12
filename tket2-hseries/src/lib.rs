@@ -6,7 +6,6 @@ use hugr::{
         force_order,
         validation::{ValidatePassError, ValidationLevel},
     },
-    extension::ExtensionRegistry,
     hugr::{hugrmut::HugrMut, HugrError},
 };
 use tket2::Tk2Op;
@@ -49,29 +48,24 @@ pub enum QSystemPassError {
 impl QSystemPass {
     /// Run `QSystemPass` on the given [HugrMut]. `registry` is used for
     /// validation, if enabled.
-    pub fn run(
-        &self,
-        hugr: &mut impl HugrMut,
-        registry: &ExtensionRegistry,
-    ) -> Result<(), QSystemPassError> {
-        self.lower_tk2().run(hugr, registry)?;
-        self.lazify_measure().run(hugr, registry)?;
-        self.validation_level
-            .run_validated_pass(hugr, registry, |hugr, _| {
-                force_order(hugr, hugr.root(), |hugr, node| {
-                    let optype = hugr.get_optype(node);
-                    if optype.cast::<Tk2Op>().is_some() || optype.cast::<QSystemOp>().is_some() {
-                        // quantum ops are lifted as early as possible
-                        -1
-                    } else if let Some(FutureOpDef::Read) = hugr.get_optype(node).cast() {
-                        // read ops are sunk as late as possible
-                        1
-                    } else {
-                        0
-                    }
-                })?;
-                Ok::<_, QSystemPassError>(())
+    pub fn run(&self, hugr: &mut impl HugrMut) -> Result<(), QSystemPassError> {
+        self.lower_tk2().run(hugr)?;
+        self.lazify_measure().run(hugr)?;
+        self.validation_level.run_validated_pass(hugr, |hugr, _| {
+            force_order(hugr, hugr.root(), |hugr, node| {
+                let optype = hugr.get_optype(node);
+                if optype.cast::<Tk2Op>().is_some() || optype.cast::<QSystemOp>().is_some() {
+                    // quantum ops are lifted as early as possible
+                    -1
+                } else if let Some(FutureOpDef::Read) = hugr.get_optype(node).cast() {
+                    // read ops are sunk as late as possible
+                    1
+                } else {
+                    0
+                }
             })?;
+            Ok::<_, QSystemPassError>(())
+        })?;
         Ok(())
     }
 
@@ -94,7 +88,7 @@ impl QSystemPass {
 mod test {
     use hugr::{
         builder::{Container, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer},
-        extension::prelude::{BOOL_T, QB_T},
+        extension::prelude::{bool_t, qb_t},
         ops::handle::NodeHandle,
         std_extensions::arithmetic::float_types::ConstF64,
         type_row,
@@ -111,9 +105,9 @@ mod test {
 
     #[test]
     fn qsystem_pass() {
-        let registry = &tket2::extension::REGISTRY;
         let (mut hugr, [call_node, h_node, f_node, rx_node]) = {
-            let mut builder = DFGBuilder::new(Signature::new(QB_T, vec![BOOL_T, BOOL_T])).unwrap();
+            let mut builder =
+                DFGBuilder::new(Signature::new(qb_t(), vec![bool_t(), bool_t()])).unwrap();
             let func = builder
                 .define_function("func", Signature::new_endo(type_row![]))
                 .unwrap()
@@ -123,10 +117,7 @@ mod test {
 
             // This call node has no dependencies, so it should be lifted above
             // Future Reads and sunk below quantum ops.
-            let call_node = builder
-                .call(func.handle(), &[], [], registry)
-                .unwrap()
-                .node();
+            let call_node = builder.call(func.handle(), &[], []).unwrap().node();
 
             // this LoadConstant should be pushed below the quantum ops where possible
             let angle = builder.add_load_value(ConstF64::new(0.0));
@@ -155,12 +146,12 @@ mod test {
                 .outputs_arr();
 
             let hugr = builder
-                .finish_hugr_with_outputs([measure_result, measure_result], registry)
+                .finish_hugr_with_outputs([measure_result, measure_result])
                 .unwrap();
             (hugr, [call_node, h_node, f_node, rx_node])
         };
 
-        QSystemPass::default().run(&mut hugr, registry).unwrap();
+        QSystemPass::default().run(&mut hugr).unwrap();
 
         let topo_sorted = Topo::new(&hugr.as_petgraph())
             .iter(&hugr.as_petgraph())

@@ -153,7 +153,7 @@ where
     fn init_types<T: HugrView>(circuit: &Circuit<T>, node: Node, direction: Direction) -> TypeRow {
         let hugr = circuit.hugr();
         let optype = hugr.get_optype(node);
-        let sig = hugr.signature(node).unwrap_or_default();
+        let sig = hugr.signature(node).unwrap_or_default().into_owned();
         let mut types = match direction {
             Direction::Outgoing => sig.output,
             Direction::Incoming => sig.input,

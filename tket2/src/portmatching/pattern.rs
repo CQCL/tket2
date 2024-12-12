@@ -170,12 +170,12 @@ mod tests {
 
     use cool_asserts::assert_matches;
     use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
-    use hugr::extension::prelude::QB_T;
+    use hugr::extension::prelude::qb_t;
     use hugr::ops::OpType;
     use hugr::types::Signature;
 
-    use crate::extension::rotation::ROTATION_TYPE;
-    use crate::extension::REGISTRY;
+    use crate::extension::rotation::rotation_type;
+    
     use crate::utils::build_simple_circuit;
     use crate::Tk2Op;
 
@@ -192,8 +192,8 @@ mod tests {
 
     /// A circuit with two rotation gates in sequence, sharing a param
     fn circ_with_copy() -> Circuit {
-        let input_t = vec![QB_T, ROTATION_TYPE];
-        let output_t = vec![QB_T];
+        let input_t = vec![qb_t(), rotation_type()];
+        let output_t = vec![qb_t()];
         let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
         let mut inps = h.input_wires();
@@ -205,13 +205,13 @@ mod tests {
         let res = h.add_dataflow_op(Tk2Op::Rx, [qb, f]).unwrap();
         let qb = res.outputs().next().unwrap();
 
-        h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap().into()
+        h.finish_hugr_with_outputs([qb]).unwrap().into()
     }
 
     /// A circuit with two rotation gates in parallel, sharing a param
     fn circ_with_copy_disconnected() -> Circuit {
-        let input_t = vec![QB_T, QB_T, ROTATION_TYPE];
-        let output_t = vec![QB_T, QB_T];
+        let input_t = vec![qb_t(), qb_t(), rotation_type()];
+        let output_t = vec![qb_t(), qb_t()];
         let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
         let mut inps = h.input_wires();
@@ -224,9 +224,7 @@ mod tests {
         let res = h.add_dataflow_op(Tk2Op::Rx, [qb2, f]).unwrap();
         let qb2 = res.outputs().next().unwrap();
 
-        h.finish_hugr_with_outputs([qb1, qb2], &REGISTRY)
-            .unwrap()
-            .into()
+        h.finish_hugr_with_outputs([qb1, qb2]).unwrap().into()
     }
 
     #[test]

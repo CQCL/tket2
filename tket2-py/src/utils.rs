@@ -58,7 +58,7 @@ pub(crate) mod test {
         BuildError, CircuitBuilder, Container, Dataflow, DataflowSubContainer, FunctionBuilder,
         HugrBuilder, ModuleBuilder,
     };
-    use hugr::extension::prelude::QB_T;
+    use hugr::extension::prelude::qb_t;
     use hugr::extension::PRELUDE_REGISTRY;
     use hugr::ops::handle::NodeHandle;
     use hugr::types::FunctionType;
@@ -76,7 +76,7 @@ pub(crate) mod test {
     {
         let mut builder = ModuleBuilder::new();
         let circ = {
-            let qb_row = vec![QB_T; num_qubits];
+            let qb_row = vec![qb_t(); num_qubits];
             let circ_signature = FunctionType::new(qb_row.clone(), qb_row);
             let mut dfg = builder.define_function("main", circ_signature.into())?;
             let mut circ = dfg.as_circuit(dfg.input_wires());
@@ -84,7 +84,7 @@ pub(crate) mod test {
             let qbs = circ.finish();
             dfg.finish_with_outputs(qbs)?
         };
-        let hugr = builder.finish_hugr(&PRELUDE_REGISTRY)?;
+        let hugr = builder.finish_hugr()?;
         Ok(Circuit::new(hugr, circ.node()))
     }
 

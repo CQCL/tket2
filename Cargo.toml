@@ -26,9 +26,11 @@ missing_docs = "warn"
 [patch.crates-io]
 
 # Uncomment to use unreleased versions of hugr
-hugr-core = { git = "https://github.com/CQCL/hugr.git" , rev = "7177c5f26c2ddf506d9987c84cf1899275d391d6"}
-hugr = { git = "https://github.com/CQCL/hugr.git" , rev = "7177c5f26c2ddf506d9987c84cf1899275d391d6"}
-hugr-cli = { git = "https://github.com/CQCL/hugr.git" , rev = "7177c5f26c2ddf506d9987c84cf1899275d391d6"}
+hugr = { git = "https://github.com/CQCL/hugr", branch = "acl/monomorphize" }
+hugr-core = { git = "https://github.com/CQCL/hugr", branch = "acl/monomorphize" }
+hugr-passes = { git = "https://github.com/CQCL/hugr", branch = "acl/monomorphize" }
+hugr-cli = { git = "https://github.com/CQCL/hugr", branch = "acl/monomorphize" }
+hugr-model = { git = "https://github.com/CQCL/hugr", branch = "acl/monomorphize" }
 
 [workspace.dependencies]
 
@@ -82,3 +84,4 @@ zstd = "0.13.2"
 [profile.release.package.tket2-py]
 # Some configurations to reduce the size of tket2 wheels
 strip = true
+

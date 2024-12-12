@@ -3,18 +3,19 @@
 //!
 use std::sync::Arc;
 
+use hugr::std_extensions::collections;
 use hugr::types::Signature;
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
-        prelude::{self, BOOL_T, PRELUDE},
+        prelude::{bool_t, PRELUDE},
         simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp, OpLoadError},
         ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version,
     },
     ops::{NamedOp, OpType},
     std_extensions::arithmetic::{
         float_types::{
-            EXTENSION as FLOAT_EXTENSION, EXTENSION_ID as FLOAT_EXTENSION_ID, FLOAT64_TYPE,
+            float64_type, EXTENSION as FLOAT_EXTENSION, EXTENSION_ID as FLOAT_EXTENSION_ID,
         },
         int_types::{
             int_type, EXTENSION as INT_EXTENSION, EXTENSION_ID as INT_EXTENSION_ID,
@@ -39,19 +40,20 @@ lazy_static! {
     /// The "tket2.result" extension.
     pub static ref EXTENSION: Arc<Extension> = {
         Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
-            ext.add_requirements(ExtensionSet::from_iter([INT_EXTENSION_ID, FLOAT_EXTENSION_ID]));
+            ext.add_requirements(ExtensionSet::from_iter([INT_EXTENSION_ID, FLOAT_EXTENSION_ID, collections::array::EXTENSION_ID]));
             ResultOpDef::load_all_ops(ext, ext_ref).unwrap();
         })
     };
 
     /// Extension registry including the "tket2.result" extension and
     /// dependencies.
-    pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
+    pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new([
         EXTENSION.to_owned(),
         INT_EXTENSION.to_owned(),
         FLOAT_EXTENSION.to_owned(),
+        collections::array::EXTENSION.to_owned(),
         PRELUDE.to_owned()
-    ]).unwrap();
+    ]);
 }
 
 #[derive(
@@ -106,14 +108,14 @@ impl ResultOpDef {
     /// Type of the argument to the result operation.
     pub fn arg_type(&self) -> Type {
         match self {
-            Self::Bool => BOOL_T,
+            Self::Bool => bool_t(),
             Self::Int | Self::UInt => int_tv(1),
-            Self::F64 => FLOAT64_TYPE,
+            Self::F64 => float64_type(),
             Self::ArrBool | Self::ArrF64 => {
                 let inner_t = self.simple_type_op().arg_type();
-                array_type(inner_t)
+                array_arg_type(inner_t)
             }
-            Self::ArrInt | Self::ArrUInt => array_type(int_tv(2)),
+            Self::ArrInt | Self::ArrUInt => array_arg_type(int_tv(2)),
         }
     }
 
@@ -183,8 +185,12 @@ impl ResultOpDef {
     }
 }
 
-fn array_type(inner_t: Type) -> Type {
-    prelude::array_type(TypeArg::new_var_use(1, TypeParam::max_nat()), inner_t)
+fn array_arg_type(inner_t: Type) -> Type {
+    collections::array::array_type_parametric(
+        TypeArg::new_var_use(1, TypeParam::max_nat()),
+        inner_t,
+    )
+    .unwrap()
 }
 
 fn int_tv(int_tv_idx: usize) -> Type {
@@ -192,7 +198,7 @@ fn int_tv(int_tv_idx: usize) -> Type {
 }
 
 impl MakeOpDef for ResultOpDef {
-    fn signature(&self) -> SignatureFunc {
+    fn init_signature(&self, _extension_ref: &std::sync::Weak<Extension>) -> SignatureFunc {
         self.result_signature()
     }
 
@@ -216,6 +222,10 @@ impl MakeOpDef for ResultOpDef {
             Self::ArrF64 => "Report an array of floating-point results.",
         }
         .to_string()
+    }
+
+    fn extension_ref(&self) -> std::sync::Weak<Extension> {
+        Arc::downgrade(&EXTENSION)
     }
 }
 
@@ -403,9 +413,9 @@ pub(crate) mod test {
     use hugr::types::Signature;
     use hugr::{
         builder::{Dataflow, DataflowHugr, FunctionBuilder},
-        extension::prelude::array_type,
         ops::NamedOp,
         std_extensions::arithmetic::int_types::INT_TYPES,
+        std_extensions::collections::array::array_type,
     };
     use std::sync::Arc;
     use strum::IntoEnumIterator;
@@ -429,8 +439,8 @@ pub(crate) mod test {
     fn circuit() {
         const ARR_SIZE: u64 = 20;
         let in_row = vec![
-            BOOL_T,
-            FLOAT64_TYPE,
+            bool_t(),
+            float64_type(),
             INT_TYPES[5].clone(),
             INT_TYPES[6].clone(),
         ];
@@ -438,7 +448,7 @@ pub(crate) mod test {
             in_row.clone(),
             in_row
                 .into_iter()
-                .map(|t| array_type(TypeArg::BoundedNat { n: ARR_SIZE }, t))
+                .map(|t| array_type(ARR_SIZE, t))
                 .collect(),
         ]
         .concat();
@@ -478,10 +488,8 @@ pub(crate) mod test {
                     .unwrap();
             }
 
-            func_builder
-                .finish_hugr_with_outputs([], &REGISTRY)
-                .unwrap()
+            func_builder.finish_hugr_with_outputs([]).unwrap()
         };
-        assert_matches!(hugr.validate(&REGISTRY), Ok(_));
+        assert_matches!(hugr.validate(), Ok(_));
     }
 }

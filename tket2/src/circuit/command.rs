@@ -475,7 +475,7 @@ impl<T: HugrView> std::fmt::Debug for CommandIterator<'_, T> {
 #[cfg(test)]
 mod test {
     use hugr::builder::{Container, DFGBuilder, Dataflow, DataflowHugr};
-    use hugr::extension::prelude::QB_T;
+    use hugr::extension::prelude::qb_t;
     use hugr::hugr::hugrmut::HugrMut;
     use hugr::ops::handle::NodeHandle;
     use hugr::ops::{NamedOp, Value};
@@ -486,7 +486,7 @@ mod test {
     use std::hash::{Hash, Hasher};
 
     use crate::extension::rotation::ConstRotation;
-    use crate::extension::REGISTRY;
+    
     use crate::utils::{build_module_with_circuit, build_simple_circuit};
     use crate::Tk2Op;
 
@@ -586,7 +586,7 @@ mod test {
     /// Commands iterator with non-linear wires.
     #[test]
     fn commands_nonlinear() {
-        let qb_row = vec![QB_T; 1];
+        let qb_row = vec![qb_t(); 1];
         let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), qb_row)).unwrap();
         let [q_in] = h.input_wires_arr();
 
@@ -594,10 +594,7 @@ mod test {
         let loaded_const = h.load_const(&constant);
         let rz = h.add_dataflow_op(Tk2Op::Rz, [q_in, loaded_const]).unwrap();
 
-        let circ: Circuit = h
-            .finish_hugr_with_outputs(rz.outputs(), &REGISTRY)
-            .unwrap()
-            .into();
+        let circ: Circuit = h.finish_hugr_with_outputs(rz.outputs()).unwrap().into();
 
         assert_eq!(CommandIterator::new(&circ).count(), 3);
         let mut commands = CommandIterator::new(&circ);
@@ -655,7 +652,7 @@ mod test {
     /// computes input/output units.
     #[test]
     fn alloc_free() -> Result<(), Box<dyn std::error::Error>> {
-        let qb_row = vec![QB_T; 1];
+        let qb_row = vec![qb_t(); 1];
         let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), qb_row))?;
 
         let [q_in] = h.input_wires_arr();
@@ -668,7 +665,7 @@ mod test {
 
         let free = h.add_dataflow_op(Tk2Op::QFree, [q_in])?;
 
-        let circ: Circuit = h.finish_hugr_with_outputs([q_new], &REGISTRY)?.into();
+        let circ: Circuit = h.finish_hugr_with_outputs([q_new])?.into();
 
         let mut cmds = circ.commands();
 
@@ -711,11 +708,11 @@ mod test {
     /// Test the manual trait implementations of `Command`.
     #[test]
     fn test_impls() -> Result<(), Box<dyn std::error::Error>> {
-        let qb_row = vec![QB_T; 1];
+        let qb_row = vec![qb_t(); 1];
         let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), vec![]))?;
         let [q_in] = h.input_wires_arr();
         h.add_dataflow_op(Tk2Op::QFree, [q_in])?;
-        let circ: Circuit = h.finish_hugr_with_outputs([], &REGISTRY)?.into();
+        let circ: Circuit = h.finish_hugr_with_outputs([])?.into();
 
         let cmd1 = circ.commands().next().unwrap();
         let cmd2 = circ.commands().next().unwrap();

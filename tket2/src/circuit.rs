@@ -6,6 +6,7 @@ mod extract_dfg;
 mod hash;
 pub mod units;
 
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::iter::Sum;
 use std::mem;
@@ -94,7 +95,7 @@ lazy_static! {
     ///
     /// We should be able to drop this once hugrs embed their required extensions.
     /// See https://github.com/CQCL/hugr/issues/1613
-    static ref DEFAULT_REQUIRED_EXTENSIONS: Vec<Arc<Extension>> = extension::REGISTRY.iter().map(|(_, ext)| ext.to_owned()).collect();
+    static ref DEFAULT_REQUIRED_EXTENSIONS: Vec<Arc<Extension>> = extension::REGISTRY.iter().map(|ext| ext.to_owned()).collect();
 }
 /// The [IGNORED_EXTENSION_OPS] definition depends on the buggy behaviour of [`NamedOp::name`], which returns bare names instead of scoped names on some cases.
 /// Once this test starts failing it should be time to drop the `format!("prelude.{}", ...)`.
@@ -212,7 +213,7 @@ impl<T: HugrView> Circuit<T> {
 
     /// Returns the function type of the circuit.
     #[inline]
-    pub fn circuit_signature(&self) -> Signature {
+    pub fn circuit_signature(&self) -> Cow<'_, Signature> {
         let op = self.hugr.get_optype(self.parent);
         op.inner_function_type()
             .unwrap_or_else(|| panic!("{} is an invalid circuit parent type.", op.name()))
@@ -713,7 +714,7 @@ mod tests {
     use hugr::types::Signature;
     use hugr::{
         builder::{DFGBuilder, DataflowHugr},
-        extension::{prelude::BOOL_T, PRELUDE_REGISTRY},
+        extension::prelude::bool_t,
     };
 
     use super::*;
@@ -828,11 +829,8 @@ mod tests {
 
     #[test]
     fn remove_bit() {
-        let h = DFGBuilder::new(Signature::new(vec![BOOL_T], vec![])).unwrap();
-        let mut circ: Circuit = h
-            .finish_hugr_with_outputs([], &PRELUDE_REGISTRY)
-            .unwrap()
-            .into();
+        let h = DFGBuilder::new(Signature::new(vec![bool_t()], vec![])).unwrap();
+        let mut circ: Circuit = h.finish_hugr_with_outputs([]).unwrap().into();
 
         assert_eq!(circ.units().count(), 1);
         assert!(remove_empty_wire(&mut circ, 0).is_ok());

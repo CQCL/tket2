@@ -63,7 +63,7 @@ pub enum LowerTk2Error {
 }
 
 fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
-    let sig = op.into_extension_op().signature();
+    let sig = op.into_extension_op().signature().into_owned();
     let sig = Signature::new(sig.input, sig.output); // ignore extension delta
     let mut b = DFGBuilder::new(sig)?;
     let inputs: Vec<_> = b.input_wires().collect();
@@ -101,7 +101,7 @@ fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
         (Tk2Op::Toffoli, [a, b_, c]) => b.build_toffoli(*a, *b_, *c)?.into(),
         _ => return Err(LowerTk2Error::UnknownOp(op, inputs.len())), // non-exhaustive
     };
-    Ok(b.finish_hugr_with_outputs(outputs, &REGISTRY)?)
+    Ok(b.finish_hugr_with_outputs(outputs)?)
 }
 
 fn build_to_radians(b: &mut DFGBuilder<Hugr>, rotation: Wire) -> Result<Wire, BuildError> {
@@ -181,12 +181,8 @@ pub struct LowerTket2ToQSystemPass(ValidationLevel);
 impl LowerTket2ToQSystemPass {
     /// Run `LowerTket2ToQSystemPass` on the given [HugrMut]. `registry` is used
     /// for validation, if enabled.
-    pub fn run(
-        &self,
-        hugr: &mut impl HugrMut,
-        registry: &ExtensionRegistry,
-    ) -> Result<(), LowerTk2Error> {
-        self.0.run_validated_pass(hugr, registry, |hugr, level| {
+    pub fn run(&self, hugr: &mut impl HugrMut) -> Result<(), LowerTk2Error> {
+        self.0.run_validated_pass(hugr, |hugr, level| {
             lower_tk2_op(hugr)?;
             if *level != ValidationLevel::None {
                 check_lowered(hugr)
@@ -206,10 +202,10 @@ impl LowerTket2ToQSystemPass {
 mod test {
     use hugr::{
         builder::FunctionBuilder,
-        extension::prelude::{option_type, UnwrapBuilder as _, BOOL_T, QB_T},
+        extension::prelude::{bool_t, option_type, qb_t, UnwrapBuilder as _},
         type_row, HugrView,
     };
-    use tket2::{extension::rotation::ROTATION_TYPE, Circuit};
+    use tket2::{extension::rotation::rotation_type, Circuit};
 
     use super::*;
     use rstest::rstest;
@@ -222,7 +218,7 @@ mod test {
             .unwrap()
             .outputs_arr();
         let [q] = b
-            .build_unwrap_sum(&REGISTRY, 1, option_type(QB_T), maybe_q)
+            .build_unwrap_sum(&REGISTRY, 1, option_type(qb_t()), maybe_q)
             .unwrap();
         let [q] = b.add_dataflow_op(Tk2Op::Reset, [q]).unwrap().outputs_arr();
         b.add_dataflow_op(Tk2Op::QFree, [q]).unwrap();
@@ -231,7 +227,7 @@ mod test {
             .unwrap()
             .outputs_arr();
         let [q] = b
-            .build_unwrap_sum(&REGISTRY, 1, option_type(QB_T), maybe_q)
+            .build_unwrap_sum(&REGISTRY, 1, option_type(qb_t()), maybe_q)
             .unwrap();
 
         let [_] = b
@@ -239,7 +235,7 @@ mod test {
             .unwrap()
             .outputs_arr();
         let mut h = b
-            .finish_hugr_with_outputs([], &REGISTRY)
+            .finish_hugr_with_outputs([])
             .unwrap_or_else(|e| panic!("{}", e));
 
         let lowered = lower_direct(&mut h).unwrap();
@@ -301,8 +297,7 @@ mod test {
 
     #[test]
     fn test_mixed() {
-        let mut b =
-            DFGBuilder::new(Signature::new(type_row![ROTATION_TYPE], type_row![BOOL_T])).unwrap();
+        let mut b = DFGBuilder::new(Signature::new(rotation_type(), bool_t())).unwrap();
         let [angle] = b.input_wires_arr();
         let [q] = b.add_dataflow_op(Tk2Op::QAlloc, []).unwrap().outputs_arr();
         let [q] = b.add_dataflow_op(Tk2Op::H, [q]).unwrap().outputs_arr();
@@ -315,7 +310,7 @@ mod test {
             .unwrap()
             .outputs_arr();
         b.add_dataflow_op(Tk2Op::QFree, [q]).unwrap();
-        let mut h = b.finish_hugr_with_outputs([bool], &REGISTRY).unwrap();
+        let mut h = b.finish_hugr_with_outputs([bool]).unwrap();
 
         let lowered = lower_tk2_op(&mut h).unwrap();
         assert_eq!(lowered.len(), 5);

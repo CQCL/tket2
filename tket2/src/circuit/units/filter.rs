@@ -23,7 +23,7 @@ pub fn filter_linear<P>(item: (CircuitUnit, P, Type)) -> Option<(LinearUnit, P, 
 /// A unit filter that return only qubits, a subset of [`filter_linear`].
 pub fn filter_qubit<P>(item: (CircuitUnit, P, Type)) -> Option<(LinearUnit, P, Type)> {
     match item {
-        (CircuitUnit::Linear(unit), port, typ) if typ == prelude::QB_T => {
+        (CircuitUnit::Linear(unit), port, typ) if typ == prelude::qb_t() => {
             Some((LinearUnit::new(unit), port, typ))
         }
         _ => None,

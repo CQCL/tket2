@@ -3,14 +3,14 @@ use std::io;
 use std::path::Path;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
-use hugr::extension::prelude::QB_T;
+use hugr::extension::prelude::qb_t;
 use hugr::ops::OpType as Op;
 use hugr::types::{Signature, Type};
 use hugr::{CircuitUnit, Hugr};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::extension::rotation::{RotationOp, ROTATION_TYPE};
+use crate::extension::rotation::{rotation_type, RotationOp};
 use crate::{Circuit, Tk2Op};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -63,8 +63,8 @@ fn map_op(opstr: &str) -> Op {
 // TODO change to TryFrom
 impl From<RepCircData> for Circuit<Hugr> {
     fn from(RepCircData { circ: rc, meta }: RepCircData) -> Self {
-        let qb_types: Vec<Type> = vec![QB_T; meta.n_qb];
-        let param_types: Vec<Type> = vec![ROTATION_TYPE; meta.n_input_param];
+        let qb_types: Vec<Type> = vec![qb_t(); meta.n_qb];
+        let param_types: Vec<Type> = vec![rotation_type(); meta.n_input_param];
         let mut builder = DFGBuilder::new(Signature::new(
             [qb_types.clone(), param_types].concat(),
             qb_types,
@@ -106,7 +106,7 @@ impl From<RepCircData> for Circuit<Hugr> {
 
         let circ_outputs = circ.finish();
         builder
-            .finish_hugr_with_outputs(circ_outputs, &crate::extension::REGISTRY)
+            .finish_hugr_with_outputs(circ_outputs)
             .unwrap()
             .into()
     }

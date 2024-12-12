@@ -1,6 +1,5 @@
 use hugr::builder::{BuildError, CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
-use hugr::extension::prelude::QB_T;
-use hugr::extension::PRELUDE_REGISTRY;
+use hugr::extension::prelude::qb_t;
 use hugr::types::Signature;
 use hugr::Hugr;
 use tket2::Tk2Op;
@@ -12,7 +11,7 @@ pub fn build_simple_circuit(
     num_qubits: usize,
     f: impl FnOnce(&mut CircuitBuilder<DFGBuilder<Hugr>>) -> Result<(), BuildError>,
 ) -> Result<Hugr, BuildError> {
-    let qb_row = vec![QB_T; num_qubits];
+    let qb_row = vec![qb_t(); num_qubits];
     let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), qb_row))?;
 
     let qbs = h.input_wires();
@@ -22,7 +21,7 @@ pub fn build_simple_circuit(
     f(&mut circ)?;
 
     let qbs = circ.finish();
-    h.finish_hugr_with_outputs(qbs, &PRELUDE_REGISTRY)
+    h.finish_hugr_with_outputs(qbs)
 }
 
 /// Create a circuit with layers of CNOTs.

@@ -5,7 +5,7 @@ pub mod pytket;
 
 use std::io;
 
-use hugr::extension::ExtensionRegistryError;
+use hugr::extension::{ExtensionRegistry, ExtensionRegistryError};
 use hugr::hugr::ValidationError;
 pub use pytket::{
     load_tk1_json_file, load_tk1_json_reader, load_tk1_json_str, save_tk1_json_file,
@@ -30,7 +30,7 @@ use crate::{Circuit, CircuitError};
 #[allow(unused)]
 const METADATA_ENTRYPOINT: &str = "TKET2.entrypoint";
 
-impl<T: AsRef<Hugr>> Circuit<T> {
+impl<T: HugrView> Circuit<T> {
     /// Store the circuit as a HUGR in json format.
     ///
     /// # Errors
@@ -40,7 +40,7 @@ impl<T: AsRef<Hugr>> Circuit<T> {
     // TODO: Store the path pointer on `METADATA_ENTRYPOINT`.
     // We may need mutable access to `T` to avoid cloning the HUGR to add the entry.
     pub fn to_hugr_writer(&self, writer: impl io::Write) -> Result<(), CircuitStoreError> {
-        let hugr = self.hugr().as_ref();
+        let hugr = self.hugr();
 
         if self.parent() != hugr.root() {
             return Err(CircuitStoreError::NonRootCircuit {
@@ -48,7 +48,7 @@ impl<T: AsRef<Hugr>> Circuit<T> {
             });
         }
 
-        Ok(serde_json::to_writer(writer, hugr)?)
+        Ok(serde_json::to_writer(writer, hugr.base_hugr())?)
     }
 
     /// Store the circuit as a package in json format.
@@ -63,7 +63,7 @@ impl<T: AsRef<Hugr>> Circuit<T> {
     ///
     // TODO: Store the path pointer on `METADATA_ENTRYPOINT` instead.
     pub fn to_package_writer(&self, writer: impl io::Write) -> Result<(), CircuitStoreError> {
-        let hugr = self.hugr().as_ref();
+        let hugr = self.hugr();
 
         // Check if we support storing the circuit as a package.
         //
@@ -78,8 +78,8 @@ impl<T: AsRef<Hugr>> Circuit<T> {
             });
         }
 
-        let mut pkg = Package::from_hugr(hugr.clone())?;
-        pkg.extensions = self.required_extensions().to_owned();
+        let mut pkg = Package::from_hugr(hugr.base_hugr().clone())?;
+        pkg.extensions = ExtensionRegistry::new(self.required_extensions().iter().cloned());
 
         Ok(pkg.to_json_writer(writer)?)
     }
@@ -97,8 +97,8 @@ impl Circuit<Hugr> {
         json: impl io::Read,
         function_name: impl AsRef<str>,
     ) -> Result<Self, CircuitLoadError> {
-        let mut pkg = Package::from_json_reader(json)?;
-        pkg.update_validate(&mut REGISTRY.clone())?;
+        let pkg = Package::from_json_reader(json, &REGISTRY)?;
+        pkg.validate()?;
         let Package {
             modules,
             extensions,
@@ -106,7 +106,7 @@ impl Circuit<Hugr> {
 
         let (_module_idx, mut circ) = find_function_in_modules(modules, function_name.as_ref())?;
         if !extensions.is_empty() {
-            circ.set_required_extensions(extensions);
+            circ.set_required_extensions(extensions.iter().cloned().collect());
         }
         Ok(circ)
     }
@@ -121,7 +121,9 @@ impl Circuit<Hugr> {
     /// - If the target circuit root is not a dataflow container.
     pub fn load_hugr_reader(json: impl io::Read) -> Result<Self, CircuitLoadError> {
         let mut hugr: Hugr = serde_json::from_reader(json)?;
-        hugr.update_validate(&REGISTRY.clone())?;
+        hugr.resolve_extension_defs(&REGISTRY)
+            .map_err(PackageEncodingError::from)?;
+        hugr.validate()?;
         // TODO: Read the entrypoint from the metadata.
         let root = hugr.root();
         Ok(Circuit::try_new(hugr, root)?)
@@ -222,7 +224,7 @@ impl From<PackageValidationError> for CircuitLoadError {
     fn from(e: PackageValidationError) -> Self {
         match e {
             PackageValidationError::Validation(e) => CircuitLoadError::ValidationError(e),
-            PackageValidationError::Extension(e) => CircuitLoadError::ExtensionError(e),
+            PackageValidationError::MissingExtension { .. } => panic!("lol"),
             _ => panic!("Unexpected package validation error: {e}"),
         }
     }
@@ -314,9 +316,9 @@ mod tests {
         Container, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer, HugrBuilder,
         ModuleBuilder,
     };
-    use hugr::extension::prelude::QB_T;
+    use hugr::extension::prelude::qb_t;
     use hugr::ops::handle::NodeHandle;
-    use hugr::type_row;
+    
     use hugr::types::Signature;
     use itertools::Itertools;
     use rstest::{fixture, rstest};
@@ -324,12 +326,12 @@ mod tests {
     /// A circuit based on a DFG-rooted HUGR.
     #[fixture]
     fn root_circ() -> Circuit {
-        let mut h = DFGBuilder::new(Signature::new(vec![], vec![QB_T])).unwrap();
+        let mut h = DFGBuilder::new(Signature::new(vec![], vec![qb_t()])).unwrap();
 
         let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
         let q = res.out_wire(0);
 
-        h.finish_hugr_with_outputs([q], &REGISTRY).unwrap().into()
+        h.finish_hugr_with_outputs([q]).unwrap().into()
     }
 
     #[fixture]
@@ -337,13 +339,13 @@ mod tests {
         let mut h = ModuleBuilder::new();
 
         let mut f = h
-            .define_function("banana", Signature::new(vec![], vec![QB_T]))
+            .define_function("banana", Signature::new(vec![], vec![qb_t()]))
             .unwrap();
         let res = f.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
         let q = res.out_wire(0);
         let func_node = f.finish_with_outputs([q]).unwrap().handle().node();
 
-        Circuit::new(h.finish_hugr(&REGISTRY).unwrap(), func_node)
+        Circuit::new(h.finish_hugr().unwrap(), func_node)
     }
 
     /// A circuit located inside a function in a module.
@@ -352,11 +354,11 @@ mod tests {
         let mut h = ModuleBuilder::new();
 
         let mut f = h
-            .define_function("banana", Signature::new(vec![], vec![QB_T]))
+            .define_function("banana", Signature::new(vec![], vec![qb_t()]))
             .unwrap();
         let dfg = {
             let mut dfg = f
-                .dfg_builder(Signature::new(vec![], type_row![QB_T]), [])
+                .dfg_builder(Signature::new(vec![], vec![qb_t()]), [])
                 .unwrap();
             let res = dfg.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
             let q = res.out_wire(0);
@@ -367,14 +369,14 @@ mod tests {
             .handle()
             .node();
 
-        Circuit::new(h.finish_hugr(&REGISTRY).unwrap(), dfg.node())
+        Circuit::new(h.finish_hugr().unwrap(), dfg.node())
     }
 
     #[fixture]
     fn multi_module_pkg() -> Package {
         fn define(name: &str, h: &mut ModuleBuilder<Hugr>) -> Node {
             let f = h
-                .define_function(name, Signature::new(vec![QB_T], vec![QB_T]))
+                .define_function(name, Signature::new(vec![qb_t()], vec![qb_t()]))
                 .unwrap();
             let inputs = f.input_wires().collect_vec();
             f.finish_with_outputs(inputs).unwrap().handle().node()
@@ -383,15 +385,15 @@ mod tests {
         let mut mod1 = ModuleBuilder::new();
         define("apple", &mut mod1);
         define("banana", &mut mod1);
-        let mod1 = mod1.finish_prelude_hugr().unwrap();
+        let mod1 = mod1.finish_hugr().unwrap();
 
         let mut mod2 = ModuleBuilder::new();
         define("foo", &mut mod2);
         define("bar", &mut mod2);
         define("banana", &mut mod2);
-        let mod2 = mod2.finish_prelude_hugr().unwrap();
+        let mod2 = mod2.finish_hugr().unwrap();
 
-        Package::new([mod1, mod2], []).unwrap()
+        Package::new([mod1, mod2]).unwrap()
     }
 
     /// Test roundtrips of a circuit with a root parent.

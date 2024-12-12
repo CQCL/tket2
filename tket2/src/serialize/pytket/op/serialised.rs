@@ -1,6 +1,6 @@
 //! Wrapper over pytket operations that cannot be represented naturally in tket2.
 
-use hugr::extension::prelude::{BOOL_T, QB_T};
+use hugr::extension::prelude::{bool_t, qb_t};
 
 use hugr::ops::custom::ExtensionOp;
 use hugr::ops::{NamedOp, OpType};
@@ -10,7 +10,7 @@ use hugr::IncomingPort;
 use serde::de::Error;
 use tket_json_rs::circuit_json;
 
-use crate::extension::rotation::ROTATION_TYPE;
+use crate::extension::rotation::rotation_type;
 use crate::extension::{REGISTRY, TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME};
 use crate::serialize::pytket::OpConvertError;
 
@@ -38,7 +38,7 @@ pub struct OpaqueTk1Op {
     /// instead stored purely as metadata for the `Operation`.
     param_inputs: Vec<Option<IncomingPort>>,
     /// The number of non-None inputs in `param_inputs`, corresponding to the
-    /// ROTATION_TYPE inputs to the Hugr operation.
+    /// rotation_type() inputs to the Hugr operation.
     pub num_params: usize,
 }
 
@@ -108,11 +108,11 @@ impl OpaqueTk1Op {
     #[inline]
     pub fn signature(&self) -> Signature {
         let linear = [
-            vec![QB_T; self.num_qubits],
-            vec![BOOL_T.clone(); self.num_bits],
+            vec![qb_t(); self.num_qubits],
+            vec![bool_t().clone(); self.num_bits],
         ]
         .concat();
-        let params = vec![ROTATION_TYPE; self.num_params];
+        let params = vec![rotation_type(); self.num_params];
         Signature::new([linear.clone(), params].concat(), linear)
             .with_extension_delta(TKET1_EXTENSION_ID)
     }

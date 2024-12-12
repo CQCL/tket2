@@ -2,8 +2,8 @@ use hugr::builder::{BuildError, Dataflow};
 use hugr::extension::simple_op::{MakeOpDef, MakeRegisteredOp};
 use hugr::extension::{prelude::option_type, ExtensionId, ExtensionSet, Version};
 use hugr::ops::constant::{downcast_equal_consts, CustomConst, TryHash};
-use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
-use hugr::{type_row, Wire};
+use hugr::std_extensions::arithmetic::float_types::float64_type;
+use hugr::Wire;
 use hugr::{
     types::{ConstTypeError, CustomType, Signature, Type, TypeBound},
     Extension,
@@ -33,11 +33,20 @@ lazy_static! {
 /// Identifier for the rotation type.
 const ROTATION_TYPE_ID: SmolStr = SmolStr::new_inline("rotation");
 /// Rotation type (as [CustomType])
-pub const ROTATION_CUSTOM_TYPE: CustomType =
-    CustomType::new_simple(ROTATION_TYPE_ID, ROTATION_EXTENSION_ID, TypeBound::Copyable);
+pub fn rotation_custom_type(extension_ref: &Weak<Extension>) -> CustomType {
+    CustomType::new(
+        ROTATION_TYPE_ID,
+        [],
+        ROTATION_EXTENSION_ID,
+        TypeBound::Copyable,
+        extension_ref,
+    )
+}
 
 /// Type representing a rotation that is a number of half turns (as [Type])
-pub const ROTATION_TYPE: Type = Type::new_extension(ROTATION_CUSTOM_TYPE);
+pub fn rotation_type() -> Type {
+    rotation_custom_type(&Arc::downgrade(&ROTATION_EXTENSION)).into()
+}
 
 /// A rotation
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -96,14 +105,14 @@ impl CustomConst for ConstRotation {
     }
 
     fn get_type(&self) -> Type {
-        ROTATION_TYPE
+        rotation_type()
     }
 
     fn equal_consts(&self, other: &dyn CustomConst) -> bool {
         downcast_equal_consts(self, other)
     }
     fn extension_reqs(&self) -> ExtensionSet {
-        ExtensionSet::singleton(&ROTATION_EXTENSION_ID)
+        ExtensionSet::singleton(ROTATION_EXTENSION_ID)
     }
 }
 
@@ -135,21 +144,20 @@ impl MakeOpDef for RotationOp {
         hugr::extension::simple_op::try_from_name(op_def.name(), op_def.extension_id())
     }
 
-    fn signature(&self) -> hugr::extension::SignatureFunc {
+    fn init_signature(&self, extension_ref: &Weak<Extension>) -> hugr::extension::SignatureFunc {
+        let rotation_type = Type::new_extension(rotation_custom_type(extension_ref));
         match self {
             RotationOp::from_halfturns => Signature::new(
-                type_row![FLOAT64_TYPE],
-                Type::from(option_type(type_row![ROTATION_TYPE])),
+                float64_type(),
+                Type::from(option_type(rotation_type.clone())),
             ),
             RotationOp::from_halfturns_unchecked => {
-                Signature::new(type_row![FLOAT64_TYPE], type_row![ROTATION_TYPE])
+                Signature::new(float64_type(), rotation_type.clone())
             }
-            RotationOp::to_halfturns => {
-                Signature::new(type_row![ROTATION_TYPE], type_row![FLOAT64_TYPE])
-            }
+            RotationOp::to_halfturns => Signature::new(rotation_type.clone(), float64_type()),
             RotationOp::radd => Signature::new(
-                type_row![ROTATION_TYPE, ROTATION_TYPE],
-                type_row![ROTATION_TYPE],
+                vec![rotation_type.clone(), rotation_type.clone()],
+                rotation_type,
             ),
         }
         .into()
@@ -173,6 +181,10 @@ impl MakeOpDef for RotationOp {
 
     fn extension(&self) -> hugr::extension::ExtensionId {
         ROTATION_EXTENSION_ID
+    }
+
+    fn extension_ref(&self) -> Weak<Extension> {
+        Arc::downgrade(&ROTATION_EXTENSION)
     }
 
     // TODO constant folding
@@ -238,7 +250,7 @@ mod test {
     };
     use strum::IntoEnumIterator;
 
-    use crate::extension::REGISTRY;
+    
 
     use super::*;
 
@@ -251,7 +263,7 @@ mod test {
         assert_ne!(const_57, const_256);
         assert_eq!(const_57, ConstRotation::new(5.7).unwrap());
 
-        assert_eq!(const_57.get_type(), ROTATION_TYPE);
+        assert_eq!(const_57.get_type(), rotation_type());
         assert!(matches!(
             ConstRotation::new(f64::INFINITY),
             Err(ConstTypeError::CustomCheckFail(_))
@@ -281,8 +293,8 @@ mod test {
     #[test]
     fn test_builder() {
         let mut builder = DFGBuilder::new(Signature::new(
-            ROTATION_TYPE,
-            vec![Type::from(option_type(ROTATION_TYPE)), ROTATION_TYPE],
+            rotation_type(),
+            vec![Type::from(option_type(rotation_type())), rotation_type()],
         ))
         .unwrap();
 
@@ -291,7 +303,7 @@ mod test {
         let mb_rotation = builder.add_from_halfturns(turns).unwrap();
         let unwrapped_rotation = builder.add_from_halfturns_unchecked(turns).unwrap();
         let _hugr = builder
-            .finish_hugr_with_outputs([mb_rotation, unwrapped_rotation], &REGISTRY)
+            .finish_hugr_with_outputs([mb_rotation, unwrapped_rotation])
             .unwrap();
     }
 

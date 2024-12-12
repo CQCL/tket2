@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from tket2._tket2.types import HugrType, TypeBound
 
-__all__ = ["HugrType", "TypeBound", "QB_T", "BOOL_T"]
+__all__ = ["HugrType", "TypeBound", "qb_t()", "bool_t()"]
 
 
-QB_T = HugrType.qubit()
-BOOL_T = HugrType.bool()
+qb_t() = HugrType.qubit()
+bool_t() = HugrType.bool()

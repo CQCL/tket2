@@ -3,9 +3,9 @@
 use core::panic;
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use hugr::extension::prelude::{BOOL_T, QB_T};
+use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::ops::{OpTrait, OpType};
-use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
+use hugr::std_extensions::arithmetic::float_types::float64_type;
 use hugr::types::Type;
 use hugr::{HugrView, Wire};
 use itertools::Itertools;
@@ -14,7 +14,7 @@ use tket_json_rs::register::ElementId as RegisterUnit;
 
 use crate::circuit::command::{CircuitUnit, Command};
 use crate::circuit::Circuit;
-use crate::extension::rotation::ROTATION_TYPE;
+use crate::extension::rotation::rotation_type;
 use crate::serialize::pytket::RegisterHash;
 use crate::Tk2Op;
 
@@ -51,7 +51,7 @@ impl Tk1Encoder {
 
         // Check for unsupported input types.
         for (_, _, typ) in circ.units() {
-            if ![ROTATION_TYPE, FLOAT64_TYPE, QB_T, BOOL_T].contains(&typ) {
+            if ![rotation_type(), float64_type(), qb_t(), bool_t()].contains(&typ) {
                 return Err(TK1ConvertError::NonSerializableInputs { typ });
             }
         }
@@ -111,7 +111,7 @@ impl Tk1Encoder {
         let mut bit_args = Vec::with_capacity(tk1op.bit_inputs());
         let mut params = Vec::with_capacity(tk1op.num_params());
         for (unit, _, ty) in command.inputs() {
-            if ty == QB_T {
+            if ty == qb_t() {
                 let reg = self.unit_to_register(unit).unwrap_or_else(|| {
                     panic!(
                         "No register found for qubit input {unit} in node {}.",
@@ -119,7 +119,7 @@ impl Tk1Encoder {
                     )
                 });
                 qubit_args.push(reg);
-            } else if ty == BOOL_T {
+            } else if ty == bool_t() {
                 let reg = self.unit_to_register(unit).unwrap_or_else(|| {
                     panic!(
                         "No register found for bit input {unit} in node {}.",
@@ -127,7 +127,7 @@ impl Tk1Encoder {
                     )
                 });
                 bit_args.push(reg);
-            } else if [ROTATION_TYPE, FLOAT64_TYPE].contains(&ty) {
+            } else if [rotation_type(), float64_type()].contains(&ty) {
                 let CircuitUnit::Wire(param_wire) = unit else {
                     unreachable!("Angle types are not linear.")
                 };
@@ -142,7 +142,7 @@ impl Tk1Encoder {
         }
 
         for (unit, _, ty) in command.outputs() {
-            if ty == QB_T {
+            if ty == qb_t() {
                 // If the qubit is not already in the qubit tracker, add it as a
                 // new register.
                 let CircuitUnit::Linear(unit_id) = unit else {
@@ -152,7 +152,7 @@ impl Tk1Encoder {
                     let reg = self.qubits.add_qubit_register(unit_id);
                     qubit_args.push(reg.clone());
                 }
-            } else if ty == BOOL_T {
+            } else if ty == bool_t() {
                 // If the operation has any bit outputs, create a new one bit
                 // register.
                 //
@@ -288,7 +288,7 @@ impl QubitTracker {
                 .chain(tracker.outputs.iter().flatten()),
         );
 
-        let qubit_count = circ.units().filter(|(_, _, ty)| ty == &QB_T).count();
+        let qubit_count = circ.units().filter(|(_, _, ty)| ty == &qb_t()).count();
 
         for i in 0..qubit_count {
             // Use the given input register names if available, or create new ones.
@@ -416,7 +416,7 @@ impl BitTracker {
         );
 
         let bit_input_wires = circ.units().filter_map(|u| match u {
-            (CircuitUnit::Wire(w), _, ty) if ty == BOOL_T => Some(w),
+            (CircuitUnit::Wire(w), _, ty) if ty == bool_t() => Some(w),
             _ => None,
         });
 
@@ -558,7 +558,9 @@ impl ParameterTracker {
         let mut tracker = ParameterTracker::default();
 
         let angle_input_wires = circ.units().filter_map(|u| match u {
-            (CircuitUnit::Wire(w), _, ty) if [ROTATION_TYPE, FLOAT64_TYPE].contains(&ty) => Some(w),
+            (CircuitUnit::Wire(w), _, ty) if [rotation_type(), float64_type()].contains(&ty) => {
+                Some(w)
+            }
             _ => None,
         });
 
@@ -589,15 +591,15 @@ impl ParameterTracker {
         let input_count = if let Some(signature) = optype.dataflow_signature() {
             // Only consider commands where all inputs and some outputs are
             // parameters that we can track.
-            const TRACKED_PARAMS: [Type; 2] = [ROTATION_TYPE, FLOAT64_TYPE];
+            let tracked_params: [Type; 2] = [rotation_type(), float64_type()];
             let all_inputs = signature
                 .input()
                 .iter()
-                .all(|ty| TRACKED_PARAMS.contains(ty));
+                .all(|ty| tracked_params.contains(ty));
             let some_output = signature
                 .output()
                 .iter()
-                .any(|ty| TRACKED_PARAMS.contains(ty));
+                .any(|ty| tracked_params.contains(ty));
             if !all_inputs || !some_output {
                 return Ok(false);
             }
@@ -618,7 +620,7 @@ impl ParameterTracker {
                 panic!("Angle types are not linear")
             };
             let Some(param) = self.parameters.get(&wire) else {
-                let typ = ROTATION_TYPE;
+                let typ = rotation_type();
                 return Err(OpConvertError::UnresolvedParamInput {
                     typ,
                     optype: optype.clone(),

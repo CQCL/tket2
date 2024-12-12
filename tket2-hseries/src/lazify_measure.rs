@@ -13,10 +13,7 @@ use hugr::{
         validation::{ValidatePassError, ValidationLevel},
     },
     builder::{DFGBuilder, Dataflow, DataflowHugr},
-    extension::{
-        prelude::{BOOL_T, QB_T},
-        ExtensionRegistry,
-    },
+    extension::prelude::{bool_t, qb_t},
     hugr::{hugrmut::HugrMut, views::SiblingSubgraph, Rewrite, SimpleReplacementError},
     types::Signature,
     Hugr, HugrView, IncomingPort, Node, OutgoingPort, SimpleReplacement,
@@ -27,7 +24,7 @@ use lazy_static::lazy_static;
 
 use crate::extension::{
     futures::FutureOpBuilder,
-    qsystem::{self, QSystemOpBuilder},
+    qsystem::{QSystemOpBuilder},
 };
 
 /// A `Hugr -> Hugr` pass that replaces [tket2::Tk2Op::Measure] nodes with
@@ -54,27 +51,20 @@ pub enum LazifyMeasurePassError {
 impl LazifyMeasurePass {
     /// Run `LazifyMeasurePass` on the given [HugrMut]. `registry` is used for
     /// validation, if enabled.
-    pub fn run(
-        &self,
-        hugr: &mut impl HugrMut,
-        registry: &ExtensionRegistry,
-    ) -> Result<(), LazifyMeasurePassError> {
-        self.0
-            .run_validated_pass(hugr, registry, |hugr, validation_level| {
-                if validation_level != &ValidationLevel::None {
-                    ensure_no_nonlocal_edges(hugr)?;
-                }
-                let mut state =
-                    State::new(
-                        hugr.nodes()
-                            .filter_map(|n| match hugr.get_optype(n).cast() {
-                                Some(Tk2Op::Measure) => Some(WorkItem::ReplaceMeasure(n)),
-                                _ => None,
-                            }),
-                    );
-                while state.work_one(hugr)? {}
-                Ok(())
-            })
+    pub fn run(&self, hugr: &mut impl HugrMut) -> Result<(), LazifyMeasurePassError> {
+        self.0.run_validated_pass(hugr, |hugr, validation_level| {
+            if validation_level != &ValidationLevel::None {
+                ensure_no_nonlocal_edges(hugr)?;
+            }
+            let mut state = State::new(hugr.nodes().filter_map(
+                |n| match hugr.get_optype(n).cast() {
+                    Some(Tk2Op::Measure) => Some(WorkItem::ReplaceMeasure(n)),
+                    _ => None,
+                },
+            ));
+            while state.work_one(hugr)? {}
+            Ok(())
+        })
     }
 
     /// Returns a new `LazifyMeasurePass` with the given [ValidationLevel].
@@ -109,45 +99,41 @@ impl State {
 
 lazy_static! {
     static ref MEASURE_READ_HUGR: Hugr = {
-        let mut builder = DFGBuilder::new(Signature::new(QB_T, vec![QB_T, BOOL_T])).unwrap();
+        let mut builder = DFGBuilder::new(Signature::new(qb_t(), vec![qb_t(), bool_t()])).unwrap();
         let [qb] = builder.input_wires_arr();
         let [qb, lazy_r] = builder.add_lazy_measure(qb).unwrap();
-        let [r] = builder.add_read(lazy_r, BOOL_T).unwrap();
-        builder
-            .finish_hugr_with_outputs([qb, r], &qsystem::REGISTRY)
-            .unwrap()
+        let [r] = builder.add_read(lazy_r, bool_t()).unwrap();
+        builder.finish_hugr_with_outputs([qb, r]).unwrap()
     };
 }
 
 fn measure_replacement(num_dups: usize) -> Hugr {
-    let mut out_types = vec![QB_T];
-    out_types.extend((0..num_dups).map(|_| BOOL_T));
+    let mut out_types = vec![qb_t()];
+    out_types.extend((0..num_dups).map(|_| bool_t()));
     let num_out_types = out_types.len();
-    let mut builder = DFGBuilder::new(Signature::new(QB_T, out_types)).unwrap();
+    let mut builder = DFGBuilder::new(Signature::new(qb_t(), out_types)).unwrap();
     let [qb] = builder.input_wires_arr();
     let [qb, mut future_r] = builder.add_lazy_measure(qb).unwrap();
     let mut future_rs = vec![];
     if num_dups > 0 {
         for _ in 0..num_dups - 1 {
-            let [r1, r2] = builder.add_dup(future_r, BOOL_T).unwrap();
+            let [r1, r2] = builder.add_dup(future_r, bool_t()).unwrap();
             future_rs.push(r1);
             future_r = r2;
         }
         future_rs.push(future_r)
     } else {
-        builder.add_free(future_r, BOOL_T).unwrap();
+        builder.add_free(future_r, bool_t()).unwrap();
     }
     let mut rs = vec![qb];
     rs.extend(
         future_rs
             .into_iter()
-            .map(|r| builder.add_read(r, BOOL_T).unwrap()[0]),
+            .map(|r| builder.add_read(r, bool_t()).unwrap()[0]),
     );
     assert_eq!(num_out_types, rs.len());
     assert_eq!(num_out_types, num_dups + 1);
-    builder
-        .finish_hugr_with_outputs(rs, &qsystem::REGISTRY)
-        .unwrap()
+    builder.finish_hugr_with_outputs(rs).unwrap()
 }
 
 fn simple_replace_measure(
@@ -216,44 +202,42 @@ impl WorkItem {
 mod test {
 
     use hugr::{
-        extension::{ExtensionRegistry, EMPTY_REG, PRELUDE},
+        extension::{ExtensionRegistry, PRELUDE},
         std_extensions::arithmetic::float_types,
     };
     use tket2::extension::TKET2_EXTENSION;
 
     use crate::extension::{
         futures::{self, FutureOpDef},
-        qsystem::QSystemOp,
+        qsystem::{self, QSystemOp},
     };
 
     use super::*;
 
     lazy_static! {
-        pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
+        pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new([
             qsystem::EXTENSION.to_owned(),
             futures::EXTENSION.to_owned(),
             TKET2_EXTENSION.to_owned(),
             PRELUDE.to_owned(),
             float_types::EXTENSION.clone(),
-        ])
-        .unwrap();
+        ]);
     }
     #[test]
     fn simple() {
         let mut hugr = {
-            let mut builder = DFGBuilder::new(Signature::new(QB_T, vec![QB_T, BOOL_T])).unwrap();
+            let mut builder =
+                DFGBuilder::new(Signature::new(qb_t(), vec![qb_t(), bool_t()])).unwrap();
             let [qb] = builder.input_wires_arr();
             let outs = builder
                 .add_dataflow_op(Tk2Op::Measure, [qb])
                 .unwrap()
                 .outputs();
-            builder.finish_hugr_with_outputs(outs, &REGISTRY).unwrap()
+            builder.finish_hugr_with_outputs(outs).unwrap()
         };
-        assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
-        LazifyMeasurePass::default()
-            .run(&mut hugr, &EMPTY_REG)
-            .unwrap();
-        assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
+        assert!(hugr.validate_no_extensions().is_ok());
+        LazifyMeasurePass::default().run(&mut hugr).unwrap();
+        assert!(hugr.validate_no_extensions().is_ok());
         let mut num_read = 0;
         let mut num_lazy_measure = 0;
         for n in hugr.nodes() {
@@ -274,37 +258,31 @@ mod test {
     #[test]
     fn multiple_uses() {
         let mut builder =
-            DFGBuilder::new(Signature::new(QB_T, vec![QB_T, BOOL_T, BOOL_T])).unwrap();
+            DFGBuilder::new(Signature::new(qb_t(), vec![qb_t(), bool_t(), bool_t()])).unwrap();
         let [qb] = builder.input_wires_arr();
         let [qb, bool] = builder
             .add_dataflow_op(Tk2Op::Measure, [qb])
             .unwrap()
             .outputs_arr();
-        let mut hugr = builder
-            .finish_hugr_with_outputs([qb, bool, bool], &REGISTRY)
-            .unwrap();
+        let mut hugr = builder.finish_hugr_with_outputs([qb, bool, bool]).unwrap();
 
-        assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
-        LazifyMeasurePass::default()
-            .run(&mut hugr, &EMPTY_REG)
-            .unwrap();
-        assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
+        assert!(hugr.validate_no_extensions().is_ok());
+        LazifyMeasurePass::default().run(&mut hugr).unwrap();
+        assert!(hugr.validate_no_extensions().is_ok());
     }
 
     #[test]
     fn no_uses() {
-        let mut builder = DFGBuilder::new(Signature::new_endo(QB_T)).unwrap();
+        let mut builder = DFGBuilder::new(Signature::new_endo(qb_t())).unwrap();
         let [qb] = builder.input_wires_arr();
         let [qb, _] = builder
             .add_dataflow_op(Tk2Op::Measure, [qb])
             .unwrap()
             .outputs_arr();
-        let mut hugr = builder.finish_hugr_with_outputs([qb], &REGISTRY).unwrap();
+        let mut hugr = builder.finish_hugr_with_outputs([qb]).unwrap();
 
-        assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
-        LazifyMeasurePass::default()
-            .run(&mut hugr, &EMPTY_REG)
-            .unwrap();
-        assert!(hugr.validate_no_extensions(&REGISTRY).is_ok());
+        assert!(hugr.validate_no_extensions().is_ok());
+        LazifyMeasurePass::default().run(&mut hugr).unwrap();
+        assert!(hugr.validate_no_extensions().is_ok());
     }
 }

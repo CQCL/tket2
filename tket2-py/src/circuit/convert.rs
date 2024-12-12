@@ -3,7 +3,7 @@
 use std::borrow::Borrow;
 
 use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
-use hugr::extension::prelude::QB_T;
+use hugr::extension::prelude::qb_t;
 use hugr::ops::handle::NodeHandle;
 use hugr::ops::OpType;
 use hugr::types::Type;

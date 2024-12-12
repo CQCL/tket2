@@ -327,14 +327,13 @@ pub fn apply_greedy_commutation(circ: &mut Circuit) -> Result<u32, PullForwardEr
 mod test {
 
     use crate::{
-        extension::{rotation::ROTATION_TYPE, REGISTRY},
+        extension::rotation::rotation_type,
         ops::test::t2_bell_circuit,
         utils::build_simple_circuit,
     };
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
-        extension::prelude::{BOOL_T, QB_T},
-        type_row,
+        extension::prelude::{bool_t, qb_t},
         types::Signature,
     };
     use rstest::{fixture, rstest};
@@ -439,8 +438,8 @@ mod test {
     fn non_linear_inputs() -> Circuit {
         let build = || {
             let mut dfg = DFGBuilder::new(Signature::new(
-                type_row![QB_T, QB_T, ROTATION_TYPE],
-                type_row![QB_T, QB_T],
+                vec![qb_t(), qb_t(), rotation_type()],
+                vec![qb_t(), qb_t()],
             ))?;
 
             let [q0, q1, f] = dfg.input_wires_arr();
@@ -451,7 +450,7 @@ mod test {
             circ.append(Tk2Op::CX, [0, 1])?;
             circ.append_and_consume(Tk2Op::Rz, [CircuitUnit::Linear(0), CircuitUnit::Wire(f)])?;
             let qbs = circ.finish();
-            dfg.finish_hugr_with_outputs(qbs, &REGISTRY)
+            dfg.finish_hugr_with_outputs(qbs)
         };
         build().unwrap().into()
     }
@@ -461,8 +460,8 @@ mod test {
     fn non_linear_outputs() -> Circuit {
         let build = || {
             let mut dfg = DFGBuilder::new(Signature::new(
-                type_row![QB_T, QB_T],
-                type_row![QB_T, QB_T, BOOL_T],
+                vec![qb_t(), qb_t()],
+                vec![qb_t(), qb_t(), bool_t()],
             ))?;
 
             let [q0, q1] = dfg.input_wires_arr();
@@ -474,7 +473,7 @@ mod test {
             let measured = circ.append_with_outputs(Tk2Op::Measure, [0])?;
             let mut outs = circ.finish();
             outs.extend(measured);
-            dfg.finish_hugr_with_outputs(outs, &REGISTRY)
+            dfg.finish_hugr_with_outputs(outs)
         };
         build().unwrap().into()
     }
@@ -603,7 +602,7 @@ mod test {
         let node_count = case.hugr().node_count();
         let depth_before = depth(&case);
         let move_count = apply_greedy_commutation(&mut case).unwrap();
-        case.hugr_mut().update_validate(&REGISTRY).unwrap();
+        case.hugr_mut().validate().unwrap();
 
         assert_eq!(
             move_count, expected_moves,

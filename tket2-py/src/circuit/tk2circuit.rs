@@ -5,7 +5,7 @@ use std::fmt::Display;
 use std::mem;
 
 use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
-use hugr::extension::prelude::QB_T;
+use hugr::extension::prelude::qb_t;
 use hugr::extension::{ExtensionRegistry, EMPTY_REG};
 use hugr::ops::handle::NodeHandle;
 use hugr::ops::{ExtensionOp, NamedOp, OpType};
