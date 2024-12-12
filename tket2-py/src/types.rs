@@ -60,6 +60,7 @@ impl fmt::Debug for PyHugrType {
 #[pymethods]
 impl PyHugrType {
     #[new]
+    #[allow(unused)] // REMOVE ME
     fn new(extension: &str, type_name: &str, bound: PyTypeBound) -> Self {
         todo!()
         // Self(Type::new_extension(CustomType::new_simple(
