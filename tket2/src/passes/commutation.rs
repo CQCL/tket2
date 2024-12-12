@@ -327,9 +327,7 @@ pub fn apply_greedy_commutation(circ: &mut Circuit) -> Result<u32, PullForwardEr
 mod test {
 
     use crate::{
-        extension::rotation::rotation_type,
-        ops::test::t2_bell_circuit,
-        utils::build_simple_circuit,
+        extension::rotation::rotation_type, ops::test::t2_bell_circuit, utils::build_simple_circuit,
     };
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},

@@ -151,7 +151,7 @@ fn remove_pack_unpack<T: HugrView>(
 mod test {
     use super::*;
     use hugr::extension::prelude::{bool_t, qb_t, UnpackTuple};
-    
+
     use hugr::types::Signature;
     use rstest::{fixture, rstest};
 

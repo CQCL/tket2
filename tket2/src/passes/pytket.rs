@@ -44,7 +44,7 @@ pub enum PytketLoweringError {
 
 #[cfg(test)]
 mod test {
-    
+
     use crate::Tk2Op;
 
     use super::*;
@@ -52,7 +52,7 @@ mod test {
         Container, Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder, SubContainer,
     };
     use hugr::extension::prelude::{qb_t, MakeTuple, UnpackTuple};
-    
+
     use hugr::ops::handle::NodeHandle;
     use hugr::ops::{OpType, Tag};
     use hugr::types::{Signature, TypeRow};

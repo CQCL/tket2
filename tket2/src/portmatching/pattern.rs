@@ -175,7 +175,7 @@ mod tests {
     use hugr::types::Signature;
 
     use crate::extension::rotation::rotation_type;
-    
+
     use crate::utils::build_simple_circuit;
     use crate::Tk2Op;
 

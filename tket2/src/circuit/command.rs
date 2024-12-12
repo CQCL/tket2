@@ -486,7 +486,7 @@ mod test {
     use std::hash::{Hash, Hasher};
 
     use crate::extension::rotation::ConstRotation;
-    
+
     use crate::utils::{build_module_with_circuit, build_simple_circuit};
     use crate::Tk2Op;
 

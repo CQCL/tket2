@@ -22,10 +22,7 @@ use tket2::Tk2Op;
 
 use lazy_static::lazy_static;
 
-use crate::extension::{
-    futures::FutureOpBuilder,
-    qsystem::{QSystemOpBuilder},
-};
+use crate::extension::{futures::FutureOpBuilder, qsystem::QSystemOpBuilder};
 
 /// A `Hugr -> Hugr` pass that replaces [tket2::Tk2Op::Measure] nodes with
 /// [qsystem::QSystemOp::Measure] nodes. To construct a `LazifyMeasurePass` use

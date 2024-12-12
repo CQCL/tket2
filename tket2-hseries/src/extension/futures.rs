@@ -260,7 +260,7 @@ impl<D: Dataflow> FutureOpBuilder for D {}
 
 #[cfg(test)]
 pub(crate) mod test {
-    
+
     use hugr::{
         builder::{Dataflow, DataflowHugr, FunctionBuilder},
         ops::NamedOp,

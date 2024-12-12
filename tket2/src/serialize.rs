@@ -318,7 +318,7 @@ mod tests {
     };
     use hugr::extension::prelude::qb_t;
     use hugr::ops::handle::NodeHandle;
-    
+
     use hugr::types::Signature;
     use itertools::Itertools;
     use rstest::{fixture, rstest};

@@ -250,8 +250,6 @@ mod test {
     };
     use strum::IntoEnumIterator;
 
-    
-
     use super::*;
 
     #[test]
