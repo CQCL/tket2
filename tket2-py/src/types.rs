@@ -44,7 +44,11 @@ impl From<TypeBound> for PyTypeBound {
     }
 }
 
-/// A HUGR type
+/// A HUGR type.
+//
+// TODO: These can no longer be constructed from Python. Since `hugr-rs 0.14`
+// we need an extension to defines these.
+// If fixing this, make sure to fix `PyExtensionOp` too.
 #[pyclass]
 #[pyo3(name = "HugrType")]
 #[repr(transparent)]
@@ -59,16 +63,6 @@ impl fmt::Debug for PyHugrType {
 
 #[pymethods]
 impl PyHugrType {
-    #[new]
-    #[allow(unused)] // REMOVE ME
-    fn new(extension: &str, type_name: &str, bound: PyTypeBound) -> Self {
-        todo!()
-        // Self(Type::new_extension(CustomType::new_simple(
-        //     type_name.into(),
-        //     IdentList::new(extension).unwrap(),
-        //     bound.into(),
-        // )))
-    }
     #[staticmethod]
     fn qubit() -> Self {
         Self(qb_t())
@@ -81,6 +75,6 @@ impl PyHugrType {
 
     /// A string representation of the type.
     pub fn __repr__(&self) -> String {
-        format!("{:?}", self)
+        format!("{}", self.0)
     }
 }

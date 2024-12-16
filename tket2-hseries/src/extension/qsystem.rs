@@ -120,6 +120,10 @@ impl MakeOpDef for QSystemOp {
         EXTENSION_ID
     }
 
+    fn extension_ref(&self) -> std::sync::Weak<Extension> {
+        Arc::downgrade(&EXTENSION)
+    }
+
     fn description(&self) -> String {
         match self {
             QSystemOp::Measure => "Measure a qubit and lose it.",
@@ -134,10 +138,6 @@ impl MakeOpDef for QSystemOp {
             QSystemOp::MeasureReset => "Measure a qubit and reset it to the Z |0> eigenstate.",
         }
         .to_string()
-    }
-
-    fn extension_ref(&self) -> std::sync::Weak<Extension> {
-        todo!()
     }
 }
 
