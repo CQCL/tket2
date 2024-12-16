@@ -175,8 +175,8 @@ impl ECCRewriter {
         Self::load_binary_io(&mut file)
     }
 
-    //// When the ECC gets loaded, all custom operations are an instance of `OpaqueOp`.
-    //// We need to resolve them into `ExtensionOp`s by validating the definitions.
+    /// When the ECC gets loaded, all custom operations are an instance of `OpaqueOp`.
+    /// We need to resolve them into `ExtensionOp`s by validating the definitions.
     fn resolve_extension_ops(&mut self) -> Result<(), ExtensionResolutionError> {
         self.targets
             .iter_mut()
