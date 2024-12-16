@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.6.0...tket2-hseries-v0.7.0) - 2024-12-16
+
+### New Features
+
+- [**breaking**] update measurement and alloc operations (#702)
+
+### Refactor
+
+- [**breaking**] update to hugr 0.14 (#700)
+- [**breaking**] rename hseries to qsystem (#703)
+
 ## [0.4.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.3.0...tket2-hseries-v0.4.0) - 2024-09-16
 
 ### New Features
