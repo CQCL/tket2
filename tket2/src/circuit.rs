@@ -9,8 +9,6 @@ pub mod units;
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::iter::Sum;
-use std::mem;
-use std::sync::Arc;
 
 pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
@@ -23,7 +21,7 @@ use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::dataflow::IOTrait;
 use hugr::ops::{Input, NamedOp, OpName, OpParent, OpTag, OpTrait, Output};
 use hugr::types::{PolyFuncType, Signature};
-use hugr::{Extension, Hugr, PortIndex};
+use hugr::{Hugr, PortIndex};
 use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
 use lazy_static::lazy_static;
@@ -31,8 +29,6 @@ use lazy_static::lazy_static;
 pub use hugr::ops::OpType;
 pub use hugr::types::{EdgeKind, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
-
-use crate::extension;
 
 use self::units::{filter, LinearUnit, Units};
 
@@ -45,24 +41,13 @@ pub struct Circuit<T = Hugr> {
     ///
     /// This is checked at runtime to ensure that the node is a DFG node.
     parent: Node,
-    /// An optional set of extensions required to validate the circuit,
-    /// not including the prelude.
-    ///
-    /// Wrapped in an Arc to allow sharing between circuits, specially for borrowed circuits.
-    ///
-    /// Defaults to an standard set of quantum extensions and Hugr's std set.
-    required_extensions: Option<Vec<Arc<Extension>>>,
 }
 
 impl<T: Default + HugrView> Default for Circuit<T> {
     fn default() -> Self {
         let hugr = T::default();
         let parent = hugr.root();
-        Self {
-            hugr,
-            parent,
-            required_extensions: None,
-        }
+        Self { hugr, parent }
     }
 }
 
@@ -106,11 +91,7 @@ impl<T: HugrView> Circuit<T> {
     /// Returns an error if the parent node is not a DFG node in the HUGR.
     pub fn try_new(hugr: T, parent: Node) -> Result<Self, CircuitError> {
         check_hugr(&hugr, parent)?;
-        Ok(Self {
-            hugr,
-            parent,
-            required_extensions: None,
-        })
+        Ok(Self { hugr, parent })
     }
 
     /// Create a new circuit from a HUGR and a node.
@@ -147,27 +128,12 @@ impl<T: HugrView> Circuit<T> {
         &mut self.hugr
     }
 
-    /// Set the required extension set for the circuit.
-    ///
-    /// Returns the previous set of required extensions, if any.
-    ///
-    /// Note: This API is not currently public. We expect hugrs to embed their required extensions in the future,
-    /// at which point this method will be removed.
-    /// See https://github.com/CQCL/hugr/issues/1613
-    pub(crate) fn set_required_extensions(
-        &mut self,
-        extensions: Vec<Arc<Extension>>,
-    ) -> Option<Vec<Arc<Extension>>> {
-        mem::replace(&mut self.required_extensions, Some(extensions))
-    }
-
     /// Ensures the circuit contains an owned HUGR.
     pub fn to_owned(&self) -> Circuit<Hugr> {
         let hugr = self.hugr.base_hugr().clone();
         Circuit {
             hugr,
             parent: self.parent,
-            required_extensions: self.required_extensions.clone(),
         }
     }
 

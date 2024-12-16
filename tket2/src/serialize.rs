@@ -5,7 +5,7 @@ pub mod pytket;
 
 use std::io;
 
-use hugr::extension::{ExtensionRegistry, ExtensionRegistryError};
+use hugr::extension::ExtensionRegistryError;
 use hugr::hugr::ValidationError;
 pub use pytket::{
     load_tk1_json_file, load_tk1_json_reader, load_tk1_json_str, save_tk1_json_file,
@@ -79,7 +79,7 @@ impl<T: HugrView> Circuit<T> {
         }
 
         let mut pkg = Package::from_hugr(hugr.base_hugr().clone())?;
-        pkg.extensions = ExtensionRegistry::new(self.required_extensions().iter().cloned());
+        pkg.extensions = self.hugr().extensions().clone();
 
         Ok(pkg.to_json_writer(writer)?)
     }
@@ -101,13 +101,10 @@ impl Circuit<Hugr> {
         pkg.validate()?;
         let Package {
             modules,
-            extensions,
+            extensions: _,
         } = pkg;
 
-        let (_module_idx, mut circ) = find_function_in_modules(modules, function_name.as_ref())?;
-        if !extensions.is_empty() {
-            circ.set_required_extensions(extensions.iter().cloned().collect());
-        }
+        let (_module_idx, circ) = find_function_in_modules(modules, function_name.as_ref())?;
         Ok(circ)
     }
 

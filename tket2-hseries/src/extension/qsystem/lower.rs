@@ -217,18 +217,14 @@ mod test {
             .add_dataflow_op(Tk2Op::TryQAlloc, [])
             .unwrap()
             .outputs_arr();
-        let [q] = b
-            .build_unwrap_sum(&REGISTRY, 1, option_type(qb_t()), maybe_q)
-            .unwrap();
+        let [q] = b.build_unwrap_sum(1, option_type(qb_t()), maybe_q).unwrap();
         let [q] = b.add_dataflow_op(Tk2Op::Reset, [q]).unwrap().outputs_arr();
         b.add_dataflow_op(Tk2Op::QFree, [q]).unwrap();
         let [maybe_q] = b
             .add_dataflow_op(Tk2Op::TryQAlloc, [])
             .unwrap()
             .outputs_arr();
-        let [q] = b
-            .build_unwrap_sum(&REGISTRY, 1, option_type(qb_t()), maybe_q)
-            .unwrap();
+        let [q] = b.build_unwrap_sum(1, option_type(qb_t()), maybe_q).unwrap();
 
         let [_] = b
             .add_dataflow_op(Tk2Op::MeasureFree, [q])

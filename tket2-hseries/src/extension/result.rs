@@ -8,19 +8,14 @@ use hugr::types::Signature;
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
-        prelude::{bool_t, PRELUDE},
+        prelude::bool_t,
         simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp, OpLoadError},
-        ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version,
+        ExtensionId, ExtensionSet, OpDef, SignatureFunc, Version,
     },
     ops::{NamedOp, OpType},
     std_extensions::arithmetic::{
-        float_types::{
-            float64_type, EXTENSION as FLOAT_EXTENSION, EXTENSION_ID as FLOAT_EXTENSION_ID,
-        },
-        int_types::{
-            int_type, EXTENSION as INT_EXTENSION, EXTENSION_ID as INT_EXTENSION_ID,
-            LOG_WIDTH_TYPE_PARAM,
-        },
+        float_types::{float64_type, EXTENSION_ID as FLOAT_EXTENSION_ID},
+        int_types::{int_type, EXTENSION_ID as INT_EXTENSION_ID, LOG_WIDTH_TYPE_PARAM},
     },
     type_row,
     types::{type_param::TypeParam, PolyFuncType, Type, TypeArg},

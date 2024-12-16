@@ -162,16 +162,12 @@ wheels = [
 [[package]]
 name = "hugr"
 version = "0.9.0"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/CQCL/hugr?subdirectory=hugr-py&rev=cc05e942423a#cc05e942423a1f412fd7f719964f4ed3d35a2aba" }
 dependencies = [
     { name = "graphviz" },
     { name = "pydantic" },
     { name = "pydantic-extra-types" },
     { name = "semver" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/7a/ea/faf7545e3d3ffd4bc725bfcd622c60303e8cde0e33d847b0c7bcf1a3bb7c/hugr-0.9.0.tar.gz", hash = "sha256:ddb5adc674192520499e624e8f4650f465e059ab3f9048550c9c147fc9bf239a", size = 126531 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/08/ad/b82f6cb95452699c29582cef3daaa2c281f86efd91d1d8d88895c47bb5b8/hugr-0.9.0-py3-none-any.whl", hash = "sha256:703da84a1b2fdb192f4ddce6daf9446dac24fb2377b3b259cced6899733530a5", size = 80011 },
 ]
 
 [[package]]
@@ -801,7 +797,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "hugr", specifier = ">=0.9.0,<0.10" },
+    { name = "hugr", git = "https://github.com/CQCL/hugr?subdirectory=hugr-py&rev=cc05e942423a" },
     { name = "pytket", specifier = ">=1.34,<2" },
     { name = "tket2-eccs", editable = "tket2-eccs" },
     { name = "tket2-exts", editable = "tket2-exts" },
@@ -821,7 +817,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "hugr", specifier = ">=0.9.0" }]
+requires-dist = [{ name = "hugr", git = "https://github.com/CQCL/hugr?subdirectory=hugr-py&rev=cc05e942423a" }]
 
 [[package]]
 name = "tomli"

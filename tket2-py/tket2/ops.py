@@ -6,7 +6,7 @@ from typing import Protocol
 import tket2
 
 from tket2._tket2.ops import CustomOp
-from tket2.types import qb_t()
+from tket2.types import QB_T
 
 __all__ = ["CustomOp", "ToCustomOp", "Tk2Op", "Pauli"]
 
@@ -91,7 +91,7 @@ class Pauli(Enum):
     def to_custom(self) -> CustomOp:
         extension_name = "tket2.quantum"
         gate_name = self.name
-        return CustomOp(extension_name, gate_name, [qb_t()], [qb_t()])
+        return CustomOp(extension_name, gate_name, [QB_T], [QB_T])
 
     def _to_rs(self) -> tket2._tket2.ops.Pauli:
         """Convert to the Rust-backed Pauli representation."""

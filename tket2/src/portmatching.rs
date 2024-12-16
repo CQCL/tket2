@@ -8,7 +8,7 @@
 //! use tket2::portmatching::{CircuitPattern, PatternMatcher};
 //! use tket2::Tk2Op;
 //! use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
-//! use hugr::extension::prelude::qb_t();
+//! use hugr::extension::prelude::qb_t;
 //! use hugr::ops::handle::NodeHandle;
 //! use hugr::types::Signature;
 //!
@@ -17,7 +17,7 @@
 //! let circuit_pattern = {
 //!     let mut dfg = DFGBuilder::new(Signature::new(vec![], vec![qb_t()]))?;
 //!     let alloc = dfg.add_dataflow_op(Tk2Op::QAlloc, [])?;
-//!     dfg.finish_hugr_with_outputs(alloc.outputs(), &tket2::extension::REGISTRY)
+//!     dfg.finish_hugr_with_outputs(alloc.outputs())
 //! }?.into();
 //! let pattern = CircuitPattern::try_from_circuit(&circuit_pattern)?;
 //!
@@ -39,7 +39,7 @@
 //!         .append(Tk2Op::CX, [1, 0])?;
 //!     let outputs = circuit.finish();
 //!
-//!     let circuit = dfg.finish_hugr_with_outputs(outputs, &tket2::extension::REGISTRY)?.into();
+//!     let circuit = dfg.finish_hugr_with_outputs(outputs)?.into();
 //!     (circuit, alloc.node())
 //! };
 //!

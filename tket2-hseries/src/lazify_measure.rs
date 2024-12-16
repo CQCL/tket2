@@ -198,16 +198,7 @@ impl WorkItem {
 #[cfg(test)]
 mod test {
 
-    use hugr::{
-        extension::{ExtensionRegistry, PRELUDE},
-        std_extensions::arithmetic::float_types,
-    };
-    use tket2::extension::TKET2_EXTENSION;
-
-    use crate::extension::{
-        futures::{self, FutureOpDef},
-        qsystem::{self, QSystemOp},
-    };
+    use crate::extension::{futures::FutureOpDef, qsystem::QSystemOp};
 
     use super::*;
 

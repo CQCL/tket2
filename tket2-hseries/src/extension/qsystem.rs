@@ -400,7 +400,7 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
     /// Build a qalloc operation that panics on failure.
     fn build_qalloc(&mut self) -> Result<Wire, BuildError> {
         let maybe_qb = self.add_try_alloc()?;
-        let [qb] = self.build_unwrap_sum(&REGISTRY, 1, option_type(qb_t()), maybe_qb)?;
+        let [qb] = self.build_unwrap_sum(1, option_type(qb_t()), maybe_qb)?;
         Ok(qb)
     }
 }

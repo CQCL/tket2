@@ -227,9 +227,7 @@ pub(crate) mod test {
 
     use super::Tk2Op;
     use crate::circuit::Circuit;
-    use crate::extension::{
-        REGISTRY, TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID,
-    };
+    use crate::extension::{TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID};
     use crate::utils::build_simple_circuit;
     use crate::Pauli;
     fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
@@ -287,9 +285,7 @@ pub(crate) mod test {
         let mut b = DFGBuilder::new(Signature::new(type_row![], bool_t())).unwrap();
 
         let try_q = b.add_dataflow_op(Tk2Op::TryQAlloc, []).unwrap().out_wire(0);
-        let [q] = b
-            .build_unwrap_sum(&REGISTRY, 1, option_type(qb_t()), try_q)
-            .unwrap();
+        let [q] = b.build_unwrap_sum(1, option_type(qb_t()), try_q).unwrap();
         let measured = b
             .add_dataflow_op(Tk2Op::MeasureFree, [q])
             .unwrap()
