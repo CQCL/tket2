@@ -4,7 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0](https://github.com/CQCL/tket2/compare/tket2-v0.6.0...tket2-v0.7.0) - 2024-12-16
+
+### ⚠ BREAKING CHANGES
+
+- Removed `load_guppy_*` methods. Use `Circuit::load_function_reader` instead.
+- Extension definitions and registries now use `Arc`s for sharing
+
+### New Features
+
+- [**breaking**] Track circuit extensions and read/write packages (#680)
+- [**breaking**] update measurement and alloc operations (#702)
+
+### Refactor
+
+- [**breaking**] update to hugr 0.14 (#700)
 
 ## [0.6.0](https://github.com/CQCL/tket2/compare/tket2-v0.5.0...tket2-v0.6.0) - 2024-10-15
 
