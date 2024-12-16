@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.6.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.5.1...tket2-py-v0.6.0) (2024-12-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* Updated `hugr-rs` to `0.14.0` / `hugr-py 0.10.0`. Extension are now defined in `hugr 0.14`-compatible format.
+
+### Features
+
+* update measurement and alloc operations ([#702](https://github.com/CQCL/tket2/issues/702)) ([a7a0201](https://github.com/CQCL/tket2/commit/a7a020116f42bfeb89c356d08816a2f3ce1b5226))
+
+
+### Miscellaneous Chores
+
+* Update to next version of hugr ([#720](https://github.com/CQCL/tket2/issues/720)) ([4a3a5a5](https://github.com/CQCL/tket2/commit/4a3a5a5e38252d4ee709e7e97bb5a1e90bd9fff4))
+
+
 ## [0.5.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.5.0...tket2-py-v0.5.1) (2024-11-29)
 
 
