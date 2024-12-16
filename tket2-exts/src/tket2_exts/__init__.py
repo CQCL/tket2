@@ -6,6 +6,11 @@ import functools
 from hugr.ext import Extension
 
 
+# This is updated by our release-please workflow, triggered by this
+# annotation: x-release-please-version
+__version__ = "0.3.0"
+
+
 @functools.cache
 def rotation() -> Extension:
     return load_extension("tket2.rotation")

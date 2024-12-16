@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.0](https://github.com/CQCL/tket2/compare/tket2-exts-v0.2.0...tket2-exts-v0.3.0) (2024-12-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* Updated `hugr` rust dependency to `0.14.0`. Extension are now defined in `hugr 0.14` style.
+
+### Miscellaneous Chores
+
+* Update to next version of hugr ([#720](https://github.com/CQCL/tket2/issues/720)) ([4a3a5a5](https://github.com/CQCL/tket2/commit/4a3a5a5e38252d4ee709e7e97bb5a1e90bd9fff4))
+
 ## [0.2.0](https://github.com/CQCL/tket2/compare/tket2-exts-v0.1.1...tket2-exts-v0.2.0) (2024-12-02)
 
 
