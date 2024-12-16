@@ -1,9 +1,10 @@
 {
   "version": "0.1.0",
   "name": "tket2.result",
-  "extension_reqs": [
+  "runtime_reqs": [
     "arithmetic.float.types",
-    "arithmetic.int.types"
+    "arithmetic.int.types",
+    "collections.array"
   ],
   "types": {},
   "values": {},
@@ -26,7 +27,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "prelude",
+              "extension": "collections.array",
               "id": "array",
               "args": [
                 {
@@ -50,7 +51,7 @@
             }
           ],
           "output": [],
-          "extension_reqs": []
+          "runtime_reqs": []
         }
       },
       "binary": false
@@ -73,7 +74,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "prelude",
+              "extension": "collections.array",
               "id": "array",
               "args": [
                 {
@@ -99,7 +100,7 @@
             }
           ],
           "output": [],
-          "extension_reqs": []
+          "runtime_reqs": []
         }
       },
       "binary": false
@@ -126,7 +127,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "prelude",
+              "extension": "collections.array",
               "id": "array",
               "args": [
                 {
@@ -161,7 +162,7 @@
             }
           ],
           "output": [],
-          "extension_reqs": []
+          "runtime_reqs": []
         }
       },
       "binary": false
@@ -188,7 +189,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "prelude",
+              "extension": "collections.array",
               "id": "array",
               "args": [
                 {
@@ -223,7 +224,7 @@
             }
           ],
           "output": [],
-          "extension_reqs": []
+          "runtime_reqs": []
         }
       },
       "binary": false
@@ -247,7 +248,7 @@
             }
           ],
           "output": [],
-          "extension_reqs": []
+          "runtime_reqs": []
         }
       },
       "binary": false
@@ -273,7 +274,7 @@
             }
           ],
           "output": [],
-          "extension_reqs": []
+          "runtime_reqs": []
         }
       },
       "binary": false
@@ -312,7 +313,7 @@
             }
           ],
           "output": [],
-          "extension_reqs": []
+          "runtime_reqs": []
         }
       },
       "binary": false
@@ -351,7 +352,7 @@
             }
           ],
           "output": [],
-          "extension_reqs": []
+          "runtime_reqs": []
         }
       },
       "binary": false

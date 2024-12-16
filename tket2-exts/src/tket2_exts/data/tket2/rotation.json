@@ -1,7 +1,7 @@
 {
   "version": "0.1.0",
   "name": "tket2.rotation",
-  "extension_reqs": [],
+  "runtime_reqs": [],
   "types": {
     "rotation": {
       "extension": "tket2.rotation",
@@ -50,7 +50,7 @@
               ]
             }
           ],
-          "extension_reqs": []
+          "runtime_reqs": []
         }
       },
       "binary": false
@@ -80,7 +80,7 @@
               "bound": "C"
             }
           ],
-          "extension_reqs": []
+          "runtime_reqs": []
         }
       },
       "binary": false
@@ -117,7 +117,7 @@
               "bound": "C"
             }
           ],
-          "extension_reqs": []
+          "runtime_reqs": []
         }
       },
       "binary": false
@@ -147,7 +147,7 @@
               "bound": "C"
             }
           ],
-          "extension_reqs": []
+          "runtime_reqs": []
         }
       },
       "binary": false

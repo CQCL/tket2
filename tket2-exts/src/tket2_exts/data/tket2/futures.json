@@ -1,7 +1,7 @@
 {
   "version": "0.1.0",
   "name": "tket2.futures",
-  "extension_reqs": [],
+  "runtime_reqs": [],
   "types": {
     "Future": {
       "extension": "tket2.futures",
@@ -85,7 +85,7 @@
               "bound": "A"
             }
           ],
-          "extension_reqs": []
+          "runtime_reqs": []
         }
       },
       "binary": false
@@ -121,7 +121,7 @@
             }
           ],
           "output": [],
-          "extension_reqs": []
+          "runtime_reqs": []
         }
       },
       "binary": false
@@ -163,7 +163,7 @@
               "b": "A"
             }
           ],
-          "extension_reqs": []
+          "runtime_reqs": []
         }
       },
       "binary": false
