@@ -5,9 +5,7 @@
 
 ### ⚠ BREAKING CHANGES
 
-* Updated `hugr` rust dependency to `0.14.0` Extension are now defined in `hugr 0.14` style. Replaced the `ROTATION_TYPE` with a method call, and dropped the per-extension registry definitions.
-* all references to "hseries" including extension, modules and structs renamed to "qsystem"
-* hseries qalloc op replaced with fallible TryQalloc
+* Updated `hugr-rs` to `0.14.0` / `hugr-py 0.10.0`. Extension are now defined in `hugr 0.14`-compatible format.
 
 ### Features
 
@@ -18,10 +16,6 @@
 
 * Update to next version of hugr ([#720](https://github.com/CQCL/tket2/issues/720)) ([4a3a5a5](https://github.com/CQCL/tket2/commit/4a3a5a5e38252d4ee709e7e97bb5a1e90bd9fff4))
 
-
-### Code Refactoring
-
-* rename hseries to qsystem ([#703](https://github.com/CQCL/tket2/issues/703)) ([1e90173](https://github.com/CQCL/tket2/commit/1e90173872e73c44a6321fe400ae6f2e4e115220))
 
 ## [0.5.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.5.0...tket2-py-v0.5.1) (2024-11-29)
 
