@@ -24,12 +24,15 @@ use lazy_static::lazy_static;
 
 use crate::extension::{futures::FutureOpBuilder, qsystem::QSystemOpBuilder};
 
-/// A `Hugr -> Hugr` pass that replaces [tket2::Tk2Op::Measure] nodes with
-/// [qsystem::QSystemOp::Measure] nodes. To construct a `LazifyMeasurePass` use
+/// A `Hugr -> Hugr` pass that replaces [Tk2Op::Measure] nodes with
+/// [QSystemOp::Measure] nodes. To construct a `LazifyMeasurePass` use
 /// [Default::default].
 ///
 /// The `Hugr` must not contain any non-local edges. If validation is enabled,
 /// this precondition will be verified.
+///
+/// [Tket2Op::Measure]: tket2::Tk2Op::Measure
+/// [QSystemOp::Measure]: crate::extension::qsystem::QSystemOp::Measure
 #[derive(Default)]
 pub struct LazifyMeasurePass(ValidationLevel);
 
