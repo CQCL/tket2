@@ -5,7 +5,7 @@
 
 ### ⚠ BREAKING CHANGES
 
-* Updated `hugr` rust dependency to `0.14.0` Extension are now defined in `hugr 0.14` style. Replaced the `ROTATION_TYPE` with a method call, and dropped the per-extension registry definitions.
+* Updated `hugr` rust dependency to `0.14.0`. Extension are now defined in `hugr 0.14` style.
 
 ### Miscellaneous Chores
 
