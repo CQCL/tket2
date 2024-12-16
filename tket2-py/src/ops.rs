@@ -215,7 +215,7 @@ impl PyPauliIter {
 
 /// A wrapped custom operation.
 //
-// TODO: These can no longer be constructed from Python. Since `hugr-rs 0.12`
+// TODO: These can no longer be constructed from Python. Since `hugr-rs 0.14`
 // we need an extension and `OpDef` to defines these.
 // If fixing this, make sure to fix `PyHugrType` too.
 #[pyclass]
