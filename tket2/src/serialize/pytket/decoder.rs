@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use hugr::builder::{Container, Dataflow, DataflowHugr, FunctionBuilder};
-use hugr::extension::prelude::{BOOL_T, QB_T};
+use hugr::extension::prelude::{bool_t, qb_t};
 
 use hugr::ops::handle::NodeHandle;
 use hugr::ops::{OpType, Value};
@@ -26,8 +26,8 @@ use super::{
     METADATA_B_REGISTERS, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS,
     METADATA_Q_REGISTERS,
 };
-use crate::extension::rotation::{RotationOp, ROTATION_TYPE};
-use crate::extension::{REGISTRY, TKET1_EXTENSION_ID};
+use crate::extension::rotation::{rotation_type, RotationOp};
+use crate::extension::TKET1_EXTENSION_ID;
 use crate::serialize::pytket::METADATA_INPUT_PARAMETERS;
 use crate::symbolic_constant_op;
 
@@ -53,8 +53,9 @@ impl Tk1Decoder {
     pub fn try_new(serialcirc: &SerialCircuit) -> Result<Self, TK1ConvertError> {
         let num_qubits = serialcirc.qubits.len();
         let num_bits = serialcirc.bits.len();
-        let sig = Signature::new_endo([vec![QB_T; num_qubits], vec![BOOL_T; num_bits]].concat())
-            .with_extension_delta(TKET1_EXTENSION_ID);
+        let sig =
+            Signature::new_endo([vec![qb_t(); num_qubits], vec![bool_t(); num_bits]].concat())
+                .with_extension_delta(TKET1_EXTENSION_ID);
 
         let name = serialcirc.name.clone().unwrap_or_default();
         let mut dfg = FunctionBuilder::new(name, sig).unwrap();
@@ -146,9 +147,7 @@ impl Tk1Decoder {
                 .set_metadata(METADATA_INPUT_PARAMETERS, json!(params));
         }
 
-        self.hugr
-            .finish_hugr_with_outputs(outputs, &REGISTRY)
-            .unwrap()
+        self.hugr.finish_hugr_with_outputs(outputs).unwrap()
     }
 
     /// Add a tket1 [`circuit_json::Command`] from the serial circuit to the
@@ -303,7 +302,7 @@ impl Tk1Decoder {
                     }
                     // Look it up in the input parameters to the circuit, and add a new wire if needed.
                     *input_params.entry(name.to_string()).or_insert_with(|| {
-                        let wire = hugr.add_input(ROTATION_TYPE);
+                        let wire = hugr.add_input(rotation_type());
                         LoadedParameter::rotation(wire)
                     })
                 }

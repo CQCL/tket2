@@ -1,9 +1,8 @@
 //! Hugr types
 
 use derive_more::{From, Into};
-use hugr::extension::prelude::{BOOL_T, QB_T};
-use hugr::hugr::IdentList;
-use hugr::types::{CustomType, Type, TypeBound};
+use hugr::extension::prelude::{bool_t, qb_t};
+use hugr::types::{Type, TypeBound};
 use pyo3::prelude::*;
 use std::fmt;
 
@@ -45,7 +44,11 @@ impl From<TypeBound> for PyTypeBound {
     }
 }
 
-/// A HUGR type
+/// A HUGR type.
+//
+// TODO: These can no longer be constructed from Python. Since `hugr-rs 0.14`
+// we need an extension to defines these.
+// If fixing this, make sure to fix `PyExtensionOp` too.
 #[pyclass]
 #[pyo3(name = "HugrType")]
 #[repr(transparent)]
@@ -60,26 +63,18 @@ impl fmt::Debug for PyHugrType {
 
 #[pymethods]
 impl PyHugrType {
-    #[new]
-    fn new(extension: &str, type_name: &str, bound: PyTypeBound) -> Self {
-        Self(Type::new_extension(CustomType::new_simple(
-            type_name.into(),
-            IdentList::new(extension).unwrap(),
-            bound.into(),
-        )))
-    }
     #[staticmethod]
     fn qubit() -> Self {
-        Self(QB_T)
+        Self(qb_t())
     }
 
     #[staticmethod]
     fn bool() -> Self {
-        Self(BOOL_T)
+        Self(bool_t())
     }
 
     /// A string representation of the type.
     pub fn __repr__(&self) -> String {
-        format!("{:?}", self)
+        format!("{}", self.0)
     }
 }

@@ -5,7 +5,7 @@ use std::fmt::Display;
 use std::mem;
 
 use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
-use hugr::extension::prelude::QB_T;
+use hugr::extension::prelude::qb_t;
 use hugr::extension::{ExtensionRegistry, EMPTY_REG};
 use hugr::ops::handle::NodeHandle;
 use hugr::ops::{ExtensionOp, NamedOp, OpType};
@@ -23,7 +23,6 @@ use derive_more::From;
 use hugr::{Hugr, HugrView, Wire};
 use serde::Serialize;
 use tket2::circuit::CircuitHash;
-use tket2::extension::REGISTRY;
 use tket2::passes::pytket::lower_to_pytket;
 use tket2::passes::CircuitChunks;
 use tket2::serialize::TKETDecode;

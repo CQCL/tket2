@@ -4,22 +4,22 @@
 //! In the case of lazy operations,
 //! laziness is represented by returning `tket2.futures.Future` classical
 //! values. Qubits are never lazy.
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use hugr::{
     builder::{BuildError, Dataflow, DataflowSubContainer, SubContainer},
     extension::{
-        prelude::{option_type, UnwrapBuilder, BOOL_T, QB_T},
+        prelude::{bool_t, option_type, qb_t, UnwrapBuilder},
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version, PRELUDE,
     },
     ops::Value,
     std_extensions::arithmetic::{
         float_ops::FloatOps,
-        float_types::{ConstF64, EXTENSION as FLOAT_TYPES, FLOAT64_TYPE},
+        float_types::{float64_type, ConstF64, EXTENSION as FLOAT_TYPES},
     },
     type_row,
-    types::{Signature, Type},
+    types::{Signature, Type, TypeRow},
     Extension, Wire,
 };
 
@@ -54,12 +54,12 @@ lazy_static! {
 
     /// Extension registry including the "tket2.qsystem" extension and
     /// dependencies.
-    pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
+    pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new([
         EXTENSION.to_owned(),
         futures::EXTENSION.to_owned(),
         PRELUDE.to_owned(),
         FLOAT_TYPES.to_owned(),
-    ]).unwrap();
+    ]);
 }
 
 #[derive(
@@ -93,21 +93,21 @@ pub enum QSystemOp {
 }
 
 impl MakeOpDef for QSystemOp {
-    fn signature(&self) -> SignatureFunc {
+    fn init_signature(&self, _extension_ref: &std::sync::Weak<Extension>) -> SignatureFunc {
         use QSystemOp::*;
-        let one_qb_row = type_row![QB_T];
-        let two_qb_row = type_row![QB_T, QB_T];
+        let one_qb_row = TypeRow::from(vec![qb_t()]);
+        let two_qb_row = TypeRow::from(vec![qb_t(), qb_t()]);
         match self {
-            LazyMeasure => Signature::new(QB_T, vec![QB_T, future_type(BOOL_T)]),
+            LazyMeasure => Signature::new(qb_t(), vec![qb_t(), future_type(bool_t())]),
             Reset => Signature::new(one_qb_row.clone(), one_qb_row),
             ZZMax => Signature::new(two_qb_row.clone(), two_qb_row),
-            ZZPhase => Signature::new(type_row![QB_T, QB_T, FLOAT64_TYPE], two_qb_row),
-            Measure => Signature::new(one_qb_row, type_row![BOOL_T]),
-            Rz => Signature::new(type_row![QB_T, FLOAT64_TYPE], one_qb_row),
-            PhasedX => Signature::new(type_row![QB_T, FLOAT64_TYPE, FLOAT64_TYPE], one_qb_row),
+            ZZPhase => Signature::new(vec![qb_t(), qb_t(), float64_type()], two_qb_row),
+            Measure => Signature::new(one_qb_row, bool_t()),
+            Rz => Signature::new(vec![qb_t(), float64_type()], one_qb_row),
+            PhasedX => Signature::new(vec![qb_t(), float64_type(), float64_type()], one_qb_row),
             TryQAlloc => Signature::new(type_row![], Type::from(option_type(one_qb_row))),
             QFree => Signature::new(one_qb_row, type_row![]),
-            MeasureReset => Signature::new(one_qb_row.clone(), type_row![QB_T, BOOL_T]),
+            MeasureReset => Signature::new(one_qb_row.clone(), vec![qb_t(), bool_t()]),
         }
         .into()
     }
@@ -118,6 +118,10 @@ impl MakeOpDef for QSystemOp {
 
     fn extension(&self) -> ExtensionId {
         EXTENSION_ID
+    }
+
+    fn extension_ref(&self) -> std::sync::Weak<Extension> {
+        Arc::downgrade(&EXTENSION)
     }
 
     fn description(&self) -> String {
@@ -142,8 +146,8 @@ impl MakeRegisteredOp for QSystemOp {
         EXTENSION_ID
     }
 
-    fn registry<'s, 'r: 's>(&'s self) -> &'r ExtensionRegistry {
-        &REGISTRY
+    fn extension_ref(&self) -> Weak<Extension> {
+        Arc::downgrade(&EXTENSION)
     }
 }
 
@@ -374,8 +378,8 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
         let [qb, b] = self.add_measure_reset(qb)?;
         let mut conditional = self.conditional_builder(
             ([type_row![], type_row![]], b),
-            [(QB_T, qb)],
-            type_row![QB_T],
+            [(qb_t(), qb)],
+            vec![qb_t()].into(),
         )?;
 
         // case 0: 0 state measured, leave alone
@@ -396,7 +400,7 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
     /// Build a qalloc operation that panics on failure.
     fn build_qalloc(&mut self) -> Result<Wire, BuildError> {
         let maybe_qb = self.add_try_alloc()?;
-        let [qb] = self.build_unwrap_sum(&REGISTRY, 1, option_type(QB_T), maybe_qb)?;
+        let [qb] = self.build_unwrap_sum(1, option_type(qb_t()), maybe_qb)?;
         Ok(qb)
     }
 }
@@ -432,15 +436,14 @@ mod test {
     fn lazy_circuit() {
         let hugr = {
             let mut func_builder =
-                FunctionBuilder::new("circuit", Signature::new(QB_T, vec![QB_T, BOOL_T])).unwrap();
+                FunctionBuilder::new("circuit", Signature::new(qb_t(), vec![qb_t(), bool_t()]))
+                    .unwrap();
             let [qb] = func_builder.input_wires_arr();
             let [qb, lazy_b] = func_builder.add_lazy_measure(qb).unwrap();
-            let [b] = func_builder.add_read(lazy_b, BOOL_T).unwrap();
-            func_builder
-                .finish_hugr_with_outputs([qb, b], &REGISTRY)
-                .unwrap()
+            let [b] = func_builder.add_read(lazy_b, bool_t()).unwrap();
+            func_builder.finish_hugr_with_outputs([qb, b]).unwrap()
         };
-        assert_matches!(hugr.validate(&REGISTRY), Ok(_));
+        assert_matches!(hugr.validate(), Ok(_));
     }
 
     #[test]
@@ -448,7 +451,7 @@ mod test {
         let hugr = {
             let mut func_builder = FunctionBuilder::new(
                 "all_ops",
-                Signature::new(vec![QB_T, FLOAT64_TYPE], vec![BOOL_T]),
+                Signature::new(vec![qb_t(), float64_type()], vec![bool_t()]),
             )
             .unwrap();
             let [q0, angle] = func_builder.input_wires_arr();
@@ -461,11 +464,9 @@ mod test {
             let [q0, _b] = func_builder.add_measure_reset(q0).unwrap();
             let b = func_builder.add_measure(q0).unwrap();
             func_builder.add_qfree(q1).unwrap();
-            func_builder
-                .finish_hugr_with_outputs([b], &REGISTRY)
-                .unwrap()
+            func_builder.finish_hugr_with_outputs([b]).unwrap()
         };
-        assert_matches!(hugr.validate(&REGISTRY), Ok(_));
+        hugr.validate().unwrap()
     }
 
     #[test]

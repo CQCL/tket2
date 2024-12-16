@@ -44,19 +44,19 @@ pub enum PytketLoweringError {
 
 #[cfg(test)]
 mod test {
-    use crate::extension::REGISTRY;
+
     use crate::Tk2Op;
 
     use super::*;
     use hugr::builder::{
         Container, Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder, SubContainer,
     };
-    use hugr::extension::prelude::{MakeTuple, UnpackTuple, QB_T};
-    use hugr::extension::PRELUDE_REGISTRY;
+    use hugr::extension::prelude::{qb_t, MakeTuple, UnpackTuple};
+
     use hugr::ops::handle::NodeHandle;
     use hugr::ops::{OpType, Tag};
     use hugr::types::{Signature, TypeRow};
-    use hugr::{type_row, HugrView};
+    use hugr::HugrView;
     use rstest::{fixture, rstest};
 
     /// Builds a circuit in the style of guppy's output.
@@ -67,7 +67,7 @@ mod test {
     #[fixture]
     fn guppy_like_circuit() -> Circuit {
         fn build() -> Result<Circuit, hugr::builder::BuildError> {
-            let two_qbs = type_row![QB_T, QB_T];
+            let two_qbs = TypeRow::from(vec![qb_t(), qb_t()]);
             let circ_signature = Signature::new_endo(two_qbs.clone());
             let circ;
 
@@ -77,7 +77,8 @@ mod test {
                 let [q1, q2] = func.input_wires_arr();
 
                 let cfg = {
-                    let mut cfg = func.cfg_builder([(QB_T, q1), (QB_T, q2)], two_qbs.clone())?;
+                    let mut cfg =
+                        func.cfg_builder([(qb_t(), q1), (qb_t(), q2)], two_qbs.clone())?;
 
                     circ = {
                         let mut dfg = cfg.simple_entry_builder(two_qbs.clone(), 1)?;
@@ -109,7 +110,7 @@ mod test {
                 func.finish_with_outputs([q1, q2])?
             };
 
-            let hugr = builder.finish_hugr(&PRELUDE_REGISTRY)?;
+            let hugr = builder.finish_hugr()?;
             Ok(Circuit::new(hugr, circ.node()))
         }
         build().unwrap()
@@ -121,7 +122,7 @@ mod test {
         use cool_asserts::assert_matches;
 
         let lowered_circ = lower_to_pytket(&circ).unwrap();
-        lowered_circ.hugr().validate(&REGISTRY).unwrap();
+        lowered_circ.hugr().validate().unwrap();
 
         assert_eq!(lowered_circ.parent(), lowered_circ.hugr().root());
         assert_matches!(

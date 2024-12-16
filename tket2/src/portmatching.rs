@@ -8,16 +8,16 @@
 //! use tket2::portmatching::{CircuitPattern, PatternMatcher};
 //! use tket2::Tk2Op;
 //! use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
-//! use hugr::extension::prelude::QB_T;
+//! use hugr::extension::prelude::qb_t;
 //! use hugr::ops::handle::NodeHandle;
 //! use hugr::types::Signature;
 //!
 //! # fn doctest() -> Result<(), Box<dyn std::error::Error>> {
 //! // Define a simple pattern that matches a single qubit allocation.
 //! let circuit_pattern = {
-//!     let mut dfg = DFGBuilder::new(Signature::new(vec![], vec![QB_T]))?;
+//!     let mut dfg = DFGBuilder::new(Signature::new(vec![], vec![qb_t()]))?;
 //!     let alloc = dfg.add_dataflow_op(Tk2Op::QAlloc, [])?;
-//!     dfg.finish_hugr_with_outputs(alloc.outputs(), &tket2::extension::REGISTRY)
+//!     dfg.finish_hugr_with_outputs(alloc.outputs())
 //! }?.into();
 //! let pattern = CircuitPattern::try_from_circuit(&circuit_pattern)?;
 //!
@@ -27,7 +27,7 @@
 //! //           |
 //! //  0|--[Z]--o---
 //! let (circuit, alloc_node) = {
-//!     let mut dfg = DFGBuilder::new(Signature::new(vec![QB_T], vec![QB_T, QB_T]))?;
+//!     let mut dfg = DFGBuilder::new(Signature::new(vec![qb_t()], vec![qb_t(), qb_t()]))?;
 //!     let [input_wire] = dfg.input_wires_arr();
 //!     let alloc = dfg.add_dataflow_op(Tk2Op::QAlloc, [])?;
 //!     let [alloc_wire] = alloc.outputs_arr();
@@ -39,7 +39,7 @@
 //!         .append(Tk2Op::CX, [1, 0])?;
 //!     let outputs = circuit.finish();
 //!
-//!     let circuit = dfg.finish_hugr_with_outputs(outputs, &tket2::extension::REGISTRY)?.into();
+//!     let circuit = dfg.finish_hugr_with_outputs(outputs)?.into();
 //!     (circuit, alloc.node())
 //! };
 //!
@@ -205,7 +205,7 @@ mod tests {
     use crate::{Circuit, Tk2Op};
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
-        extension::{prelude::QB_T, PRELUDE_REGISTRY},
+        extension::prelude::qb_t,
         types::Signature,
     };
     use rstest::{fixture, rstest};
@@ -214,19 +214,17 @@ mod tests {
 
     #[fixture]
     fn lhs() -> Circuit {
-        let mut h = DFGBuilder::new(Signature::new(vec![], vec![QB_T])).unwrap();
+        let mut h = DFGBuilder::new(Signature::new(vec![], vec![qb_t()])).unwrap();
 
         let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
         let q = res.out_wire(0);
 
-        h.finish_hugr_with_outputs([q], &PRELUDE_REGISTRY)
-            .unwrap()
-            .into()
+        h.finish_hugr_with_outputs([q]).unwrap().into()
     }
 
     #[fixture]
     pub fn circ() -> Circuit {
-        let mut h = DFGBuilder::new(Signature::new(vec![QB_T], vec![QB_T])).unwrap();
+        let mut h = DFGBuilder::new(Signature::new(vec![qb_t()], vec![qb_t()])).unwrap();
         let mut inps = h.input_wires();
         let q_in = inps.next().unwrap();
 
@@ -237,9 +235,7 @@ mod tests {
         let q_out = res.out_wire(1);
         h.add_dataflow_op(Tk2Op::QFree, [q_in]).unwrap();
 
-        h.finish_hugr_with_outputs([q_out], &PRELUDE_REGISTRY)
-            .unwrap()
-            .into()
+        h.finish_hugr_with_outputs([q_out]).unwrap().into()
     }
 
     #[rstest]

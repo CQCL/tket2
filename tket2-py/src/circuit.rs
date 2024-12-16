@@ -6,7 +6,7 @@ mod cost;
 mod tk2circuit;
 
 use derive_more::{From, Into};
-use hugr::extension::prelude::{BOOL_T, QB_T};
+use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::hugr::IdentList;
 use hugr::ops::custom::{ExtensionOp, OpaqueOp};
 use hugr::ops::{NamedOp, OpName, OpType};
@@ -15,7 +15,6 @@ use pyo3::prelude::*;
 use std::fmt;
 
 use hugr::{type_row, Hugr, HugrView, PortIndex};
-use tket2::extension::REGISTRY;
 use tket2::rewrite::CircuitRewrite;
 use tket2::serialize::TKETDecode;
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -85,7 +84,7 @@ create_py_exception!(
 /// Run the validation checks on a circuit.
 #[pyfunction]
 pub fn validate_circuit(c: &Bound<PyAny>) -> PyResult<()> {
-    try_with_circ(c, |circ, _| circ.hugr().validate(&REGISTRY))
+    try_with_circ(c, |circ, _| circ.hugr().validate())
 }
 
 /// Return a Graphviz DOT string representation of the circuit.

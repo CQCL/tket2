@@ -18,7 +18,7 @@ pub(super) fn rewrite_into_dfg(circ: &mut Circuit) -> Result<(), CircuitMutError
     }
 
     // If the region was a cfg with a single successor, unpack the output sum type.
-    let signature = circ.circuit_signature();
+    let signature = circ.circuit_signature().into_owned();
     let signature = match old_optype {
         OpType::DataflowBlock(_) => remove_cfg_empty_output_tuple(circ, signature)?,
         _ => signature,

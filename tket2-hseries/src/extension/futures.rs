@@ -12,8 +12,7 @@ use hugr::{
             try_from_name, HasConcrete, HasDef, MakeExtensionOp, MakeOpDef, MakeRegisteredOp,
             OpLoadError,
         },
-        ExtensionBuildError, ExtensionId, ExtensionRegistry, OpDef, SignatureError, SignatureFunc,
-        TypeDef, Version,
+        ExtensionBuildError, ExtensionId, OpDef, SignatureError, SignatureFunc, TypeDef, Version,
     },
     ops::{custom::ExtensionOp, NamedOp, OpType},
     types::{type_param::TypeParam, CustomType, PolyFuncType, Signature, Type, TypeArg, TypeBound},
@@ -39,11 +38,6 @@ lazy_static! {
         })
     };
 
-    /// Extension registry including the "tket2.futures" extension.
-    pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new([
-        EXTENSION.to_owned()
-    ]).unwrap();
-
     /// The name of the `Future` type.
     pub static ref FUTURE_TYPE_NAME: SmolStr = SmolStr::new_inline("Future");
 }
@@ -62,18 +56,19 @@ fn add_future_type_def(
 }
 
 /// Returns a `Future<t>` [CustomType].
-pub fn future_custom_type(t: Type) -> CustomType {
+pub fn future_custom_type(t: Type, extension_ref: &Weak<Extension>) -> CustomType {
     CustomType::new(
         FUTURE_TYPE_NAME.to_owned(),
         vec![t.into()],
         EXTENSION_ID,
         TypeBound::Any,
+        extension_ref,
     )
 }
 
 /// Returns a `Future<t>` [Type].
 pub fn future_type(t: Type) -> Type {
-    future_custom_type(t).into()
+    future_custom_type(t, &Arc::downgrade(&EXTENSION)).into()
 }
 
 #[derive(
@@ -101,10 +96,10 @@ pub enum FutureOpDef {
 }
 
 impl MakeOpDef for FutureOpDef {
-    fn signature(&self) -> SignatureFunc {
+    fn init_signature(&self, extension_ref: &Weak<Extension>) -> SignatureFunc {
         let t_param = TypeParam::from(TypeBound::Any);
         let t_type = Type::new_var_use(0, TypeBound::Any);
-        let future_type = future_type(t_type.clone());
+        let future_type = Type::new_extension(future_custom_type(t_type.clone(), extension_ref));
         match self {
             FutureOpDef::Read => {
                 PolyFuncType::new([t_param], Signature::new(future_type, t_type)).into()
@@ -137,6 +132,10 @@ impl MakeOpDef for FutureOpDef {
             }
             FutureOpDef::Free => "Consume a future without reading it.".into(),
         }
+    }
+
+    fn extension_ref(&self) -> Weak<Extension> {
+        Arc::downgrade(&EXTENSION)
     }
 }
 
@@ -187,8 +186,8 @@ impl MakeRegisteredOp for FutureOp {
         EXTENSION_ID
     }
 
-    fn registry<'s, 'r: 's>(&'s self) -> &'r ExtensionRegistry {
-        &REGISTRY
+    fn extension_ref(&self) -> Weak<Extension> {
+        Arc::downgrade(&EXTENSION)
     }
 }
 
@@ -255,7 +254,7 @@ impl<D: Dataflow> FutureOpBuilder for D {}
 
 #[cfg(test)]
 pub(crate) mod test {
-    use cool_asserts::assert_matches;
+
     use hugr::{
         builder::{Dataflow, DataflowHugr, FunctionBuilder},
         ops::NamedOp,
@@ -307,10 +306,8 @@ pub(crate) mod test {
             let [future_w, lazy_dup_w] = func_builder.add_dup(future_w, t.clone()).unwrap();
             func_builder.add_free(future_w, t.clone()).unwrap();
             let [t_w] = func_builder.add_read(lazy_dup_w, t).unwrap();
-            func_builder
-                .finish_hugr_with_outputs([t_w], &REGISTRY)
-                .unwrap()
+            func_builder.finish_hugr_with_outputs([t_w]).unwrap()
         };
-        assert_matches!(hugr.validate(&REGISTRY), Ok(_));
+        hugr.validate().unwrap();
     }
 }

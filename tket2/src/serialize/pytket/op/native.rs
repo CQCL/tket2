@@ -1,16 +1,18 @@
 //! Operations that have corresponding representations in both `pytket` and `tket2`.
 
-use hugr::extension::prelude::{Noop, BOOL_T, QB_T};
+use std::borrow::Cow;
+
+use hugr::extension::prelude::{bool_t, qb_t, Noop};
 
 use hugr::ops::{OpTrait, OpType};
-use hugr::std_extensions::arithmetic::float_types::FLOAT64_TYPE;
+use hugr::std_extensions::arithmetic::float_types::float64_type;
 use hugr::types::Signature;
 
 use hugr::IncomingPort;
 use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as Tk1OpType;
 
-use crate::extension::rotation::ROTATION_TYPE;
+use crate::extension::rotation::rotation_type;
 use crate::Tk2Op;
 
 /// An operation with a native TKET2 counterpart.
@@ -104,7 +106,7 @@ impl NativeOp {
             Tk1OpType::CCX => Tk2Op::Toffoli.into(),
             Tk1OpType::Reset => Tk2Op::Reset.into(),
             Tk1OpType::Measure => Tk2Op::Measure.into(),
-            Tk1OpType::noop => Noop::new(QB_T).into(),
+            Tk1OpType::noop => Noop::new(qb_t()).into(),
             _ => {
                 return None;
             }
@@ -133,7 +135,7 @@ impl NativeOp {
     }
 
     /// Returns the dataflow signature for this operation.
-    pub fn signature(&self) -> Option<Signature> {
+    pub fn signature(&self) -> Option<Cow<'_, Signature>> {
         self.op.dataflow_signature()
     }
 
@@ -161,7 +163,7 @@ impl NativeOp {
             let types = sig.input_types().to_owned();
             sig.input_ports()
                 .zip(types)
-                .filter(|(_, ty)| [ROTATION_TYPE, FLOAT64_TYPE].contains(ty))
+                .filter(|(_, ty)| [rotation_type(), float64_type()].contains(ty))
                 .map(|(port, _)| port)
         })
     }
@@ -173,22 +175,22 @@ impl NativeOp {
         self.num_params = 0;
         self.output_bits = 0;
         self.output_qubits = 0;
-        let Some(sig) = self.signature() else {
+        let Some(sig) = self.signature().map(Cow::into_owned) else {
             return;
         };
         for ty in sig.input_types() {
-            if ty == &QB_T {
+            if ty == &qb_t() {
                 self.input_qubits += 1;
-            } else if ty == &BOOL_T {
+            } else if ty == &bool_t() {
                 self.input_bits += 1;
-            } else if [ROTATION_TYPE, FLOAT64_TYPE].contains(ty) {
+            } else if [rotation_type(), float64_type()].contains(ty) {
                 self.num_params += 1;
             }
         }
         for ty in sig.output_types() {
-            if ty == &QB_T {
+            if ty == &qb_t() {
                 self.output_qubits += 1;
-            } else if ty == &BOOL_T {
+            } else if ty == &bool_t() {
                 self.output_bits += 1;
             }
         }

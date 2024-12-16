@@ -134,7 +134,7 @@ fn remove_pack_unpack<T: HugrView>(
     }
 
     let replacement = replacement
-        .finish_prelude_hugr_with_outputs(outputs)
+        .finish_hugr_with_outputs(outputs)
         .unwrap_or_else(|e| {
             panic!("Failed to create replacement for removing tuple pack/unpack operations. {e}")
         })
@@ -150,8 +150,8 @@ fn remove_pack_unpack<T: HugrView>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use hugr::extension::prelude::{UnpackTuple, BOOL_T, QB_T};
-    use hugr::type_row;
+    use hugr::extension::prelude::{bool_t, qb_t, UnpackTuple};
+
     use hugr::types::Signature;
     use rstest::{fixture, rstest};
 
@@ -160,20 +160,17 @@ mod test {
     /// These can be removed entirely.
     #[fixture]
     fn simple_pack_unpack() -> Circuit {
-        let mut h = DFGBuilder::new(Signature::new_endo(type_row![QB_T, BOOL_T])).unwrap();
+        let mut h = DFGBuilder::new(Signature::new_endo(vec![qb_t(), bool_t()])).unwrap();
         let mut inps = h.input_wires();
         let qb1 = inps.next().unwrap();
         let b2 = inps.next().unwrap();
 
-        let op = MakeTuple::new(type_row![QB_T, BOOL_T]);
-        let [tuple] = h.add_dataflow_op(op, [qb1, b2]).unwrap().outputs_arr();
+        let tuple = h.make_tuple([qb1, b2]).unwrap();
 
-        let op = UnpackTuple::new(type_row![QB_T, BOOL_T]);
+        let op = UnpackTuple::new(vec![qb_t(), bool_t()].into());
         let [qb1, b2] = h.add_dataflow_op(op, [tuple]).unwrap().outputs_arr();
 
-        h.finish_prelude_hugr_with_outputs([qb1, b2])
-            .unwrap()
-            .into()
+        h.finish_hugr_with_outputs([qb1, b2]).unwrap().into()
     }
 
     /// A pack operation followed by two unpack operations from the same tuple.
@@ -182,26 +179,23 @@ mod test {
     #[fixture]
     fn multi_unpack() -> Circuit {
         let mut h = DFGBuilder::new(Signature::new(
-            type_row![BOOL_T, BOOL_T],
-            type_row![BOOL_T, BOOL_T, BOOL_T, BOOL_T],
+            vec![bool_t(), bool_t()],
+            vec![bool_t(), bool_t(), bool_t(), bool_t()],
         ))
         .unwrap();
         let mut inps = h.input_wires();
         let b1 = inps.next().unwrap();
         let b2 = inps.next().unwrap();
 
-        let op = MakeTuple::new(type_row![BOOL_T, BOOL_T]);
-        let [tuple] = h.add_dataflow_op(op, [b1, b2]).unwrap().outputs_arr();
+        let tuple = h.make_tuple([b1, b2]).unwrap();
 
-        let op = UnpackTuple::new(type_row![BOOL_T, BOOL_T]);
+        let op = UnpackTuple::new(vec![bool_t(), bool_t()].into());
         let [b1, b2] = h.add_dataflow_op(op, [tuple]).unwrap().outputs_arr();
 
-        let op = UnpackTuple::new(type_row![BOOL_T, BOOL_T]);
+        let op = UnpackTuple::new(vec![bool_t(), bool_t()].into());
         let [b3, b4] = h.add_dataflow_op(op, [tuple]).unwrap().outputs_arr();
 
-        h.finish_prelude_hugr_with_outputs([b1, b2, b3, b4])
-            .unwrap()
-            .into()
+        h.finish_hugr_with_outputs([b1, b2, b3, b4]).unwrap().into()
     }
 
     /// A pack operation followed by an unpack operation, where the tuple is also returned.
@@ -210,23 +204,24 @@ mod test {
     #[fixture]
     fn partial_unpack() -> Circuit {
         let mut h = DFGBuilder::new(Signature::new(
-            type_row![BOOL_T, BOOL_T],
-            vec![BOOL_T, BOOL_T, Type::new_tuple(type_row![BOOL_T, BOOL_T])],
+            vec![bool_t(), bool_t()],
+            vec![
+                bool_t(),
+                bool_t(),
+                Type::new_tuple(vec![bool_t(), bool_t()]),
+            ],
         ))
         .unwrap();
         let mut inps = h.input_wires();
         let b1 = inps.next().unwrap();
         let b2 = inps.next().unwrap();
 
-        let op = MakeTuple::new(type_row![BOOL_T, BOOL_T]);
-        let [tuple] = h.add_dataflow_op(op, [b1, b2]).unwrap().outputs_arr();
+        let tuple = h.make_tuple([b1, b2]).unwrap();
 
-        let op = UnpackTuple::new(type_row![BOOL_T, BOOL_T]);
+        let op = UnpackTuple::new(vec![bool_t(), bool_t()].into());
         let [b1, b2] = h.add_dataflow_op(op, [tuple]).unwrap().outputs_arr();
 
-        h.finish_prelude_hugr_with_outputs([b1, b2, tuple])
-            .unwrap()
-            .into()
+        h.finish_hugr_with_outputs([b1, b2, tuple]).unwrap().into()
     }
 
     #[rstest]

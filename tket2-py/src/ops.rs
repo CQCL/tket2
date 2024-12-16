@@ -10,8 +10,6 @@ use strum::IntoEnumIterator;
 use hugr::ops::{NamedOp, OpType};
 use tket2::{Pauli, Tk2Op};
 
-use crate::types::PyHugrType;
-
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let m = PyModule::new(py, "ops")?;
@@ -216,6 +214,10 @@ impl PyPauliIter {
 }
 
 /// A wrapped custom operation.
+//
+// TODO: These can no longer be constructed from Python. Since `hugr-rs 0.14`
+// we need an extension and `OpDef` to defines these.
+// If fixing this, make sure to fix `PyHugrType` too.
 #[pyclass]
 #[pyo3(name = "CustomOp")]
 #[repr(transparent)]
@@ -236,26 +238,6 @@ impl From<PyExtensionOp> for OpType {
 
 #[pymethods]
 impl PyExtensionOp {
-    #[new]
-    #[allow(unused)]
-    fn new(
-        extension: &str,
-        op_name: &str,
-        input_types: Vec<PyHugrType>,
-        output_types: Vec<PyHugrType>,
-    ) -> PyResult<Self> {
-        // FIXME: Broken during the update to hugr 0.12
-        // Operations must now always be backed by an opDef, so the old way
-        // of creating `PyOpaqueOp`s on the fly is no longer possible.
-        unimplemented!("Python Extension Ops need an operation definition")
-        //let opdef = todo!();
-        //Ok(ExtensionOp::new(
-        //    opdef,
-        //    [],
-        //    Signature::new(into_vec(input_types), into_vec(output_types)),
-        //))
-    }
-
     fn to_custom(&self) -> Self {
         self.clone()
     }

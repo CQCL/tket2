@@ -13,7 +13,7 @@
 //! of the Quartz repository.
 
 use derive_more::{Display, Error, From, Into};
-use hugr::ops::custom::{resolve_extension_ops, OpaqueOpError};
+use hugr::extension::resolution::ExtensionResolutionError;
 use hugr::{Hugr, HugrView, PortIndex};
 use itertools::Itertools;
 use portmatching::PatternID;
@@ -177,10 +177,10 @@ impl ECCRewriter {
 
     /// When the ECC gets loaded, all custom operations are an instance of `OpaqueOp`.
     /// We need to resolve them into `ExtensionOp`s by validating the definitions.
-    fn resolve_extension_ops(&mut self) -> Result<(), OpaqueOpError> {
+    fn resolve_extension_ops(&mut self) -> Result<(), ExtensionResolutionError> {
         self.targets
             .iter_mut()
-            .try_for_each(|hugr| resolve_extension_ops(hugr, &REGISTRY))
+            .try_for_each(|hugr| hugr.resolve_extension_defs(&REGISTRY))
     }
 }
 
@@ -216,9 +216,9 @@ pub enum RewriterSerialisationError {
     /// An error occurred during serialisation
     #[display("Serialisation error: {_0}")]
     Serialisation(rmp_serde::encode::Error),
-    /// An error occurred during resolving extension ops
-    #[display("Resolving extension ops error: {_0}")]
-    OpaqueOp(OpaqueOpError),
+    /// An error occurred while resolving the extension ops
+    /// in the deserialised rewrite set.
+    ExtensionResolutionError(ExtensionResolutionError),
 }
 
 fn into_targets(rep_sets: Vec<EqCircClass>) -> Vec<Hugr> {

@@ -26,16 +26,18 @@ missing_docs = "warn"
 [patch.crates-io]
 
 # Uncomment to use unreleased versions of hugr
-hugr-core = { git = "https://github.com/CQCL/hugr.git" , rev = "7177c5f26c2ddf506d9987c84cf1899275d391d6"}
-hugr = { git = "https://github.com/CQCL/hugr.git" , rev = "7177c5f26c2ddf506d9987c84cf1899275d391d6"}
-hugr-cli = { git = "https://github.com/CQCL/hugr.git" , rev = "7177c5f26c2ddf506d9987c84cf1899275d391d6"}
+#hugr = { git = "https://github.com/CQCL/hugr", ref = "b517dc3530c3f01d854579e210da51d7a63e3036" }
+#hugr-core = { git = "https://github.com/CQCL/hugr", ref = "b517dc3530c3f01d854579e210da51d7a63e3036" }
+#hugr-passes = { git = "https://github.com/CQCL/hugr", ref = "b517dc3530c3f01d854579e210da51d7a63e3036" }
+#hugr-cli = { git = "https://github.com/CQCL/hugr", ref = "b517dc3530c3f01d854579e210da51d7a63e3036" }
+#hugr-model = { git = "https://github.com/CQCL/hugr", ref = "b517dc3530c3f01d854579e210da51d7a63e3036" }
 
 [workspace.dependencies]
 
 # Make sure to run `just recompile-eccs` if the hugr serialisation format changes.
-hugr = "0.13.3"
-hugr-core = "0.13.3"
-hugr-cli = "0.13.3"
+hugr = "0.14.0"
+hugr-core = "0.14.0"
+hugr-cli = "0.14.0"
 portgraph = "0.12"
 pyo3 = "0.23.3"
 itertools = "0.13.0"

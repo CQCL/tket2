@@ -560,21 +560,21 @@ use self::hugr_pchannel::Work;
 mod tests {
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
-        extension::prelude::QB_T,
+        extension::prelude::qb_t,
         types::Signature,
     };
     use rstest::{fixture, rstest};
 
     use crate::serialize::load_tk1_json_str;
-    use crate::{extension::rotation::ROTATION_TYPE, optimiser::badger::BadgerOptions};
-    use crate::{extension::REGISTRY, Circuit, Tk2Op};
+    use crate::{extension::rotation::rotation_type, optimiser::badger::BadgerOptions};
+    use crate::{Circuit, Tk2Op};
 
     use super::{BadgerOptimiser, DefaultBadgerOptimiser};
 
     #[fixture]
     fn rz_rz() -> Circuit {
-        let input_t = vec![QB_T, ROTATION_TYPE, ROTATION_TYPE];
-        let output_t = vec![QB_T];
+        let input_t = vec![qb_t(), rotation_type(), rotation_type()];
+        let output_t = vec![qb_t()];
         let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
         let mut inps = h.input_wires();
@@ -587,7 +587,7 @@ mod tests {
         let res = h.add_dataflow_op(Tk2Op::Rz, [qb, f2]).unwrap();
         let qb = res.outputs().next().unwrap();
 
-        h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap().into()
+        h.finish_hugr_with_outputs([qb]).unwrap().into()
     }
 
     /// This hugr corresponds to the qasm circuit:
@@ -666,7 +666,7 @@ mod tests {
     #[case::compiled(badger_opt_compiled())]
     #[case::json(badger_opt_json())]
     fn rz_rz_cancellation_parallel(rz_rz: Circuit, #[case] badger_opt: DefaultBadgerOptimiser) {
-        let mut opt_rz = badger_opt.optimise(
+        let opt_rz = badger_opt.optimise(
             &rz_rz,
             BadgerOptions {
                 timeout: Some(0),
@@ -675,7 +675,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        opt_rz.hugr_mut().update_validate(&REGISTRY).unwrap();
+        opt_rz.hugr().validate().unwrap();
     }
 
     #[rstest]
@@ -685,7 +685,7 @@ mod tests {
         rz_rz: Circuit,
         #[case] badger_opt: DefaultBadgerOptimiser,
     ) {
-        let mut opt_rz = badger_opt.optimise(
+        let opt_rz = badger_opt.optimise(
             &rz_rz,
             BadgerOptions {
                 timeout: Some(0),
@@ -695,7 +695,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        opt_rz.hugr_mut().update_validate(&REGISTRY).unwrap();
+        opt_rz.hugr().validate().unwrap();
         assert_eq!(opt_rz.commands().count(), 2);
     }
 
@@ -705,7 +705,7 @@ mod tests {
         non_composable_rw_hugr: Circuit,
         badger_opt_full: DefaultBadgerOptimiser,
     ) {
-        let mut opt = badger_opt_full.optimise(
+        let opt = badger_opt_full.optimise(
             &non_composable_rw_hugr,
             BadgerOptions {
                 timeout: Some(0),
@@ -714,7 +714,7 @@ mod tests {
             },
         );
         // No rewrites applied.
-        opt.hugr_mut().update_validate(&REGISTRY).unwrap();
+        opt.hugr().validate().unwrap();
     }
 
     #[test]

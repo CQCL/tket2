@@ -6,10 +6,9 @@ mod extract_dfg;
 mod hash;
 pub mod units;
 
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::iter::Sum;
-use std::mem;
-use std::sync::Arc;
 
 pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
@@ -22,7 +21,7 @@ use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::dataflow::IOTrait;
 use hugr::ops::{Input, NamedOp, OpName, OpParent, OpTag, OpTrait, Output};
 use hugr::types::{PolyFuncType, Signature};
-use hugr::{Extension, Hugr, PortIndex};
+use hugr::{Hugr, PortIndex};
 use hugr::{HugrView, OutgoingPort};
 use itertools::Itertools;
 use lazy_static::lazy_static;
@@ -30,8 +29,6 @@ use lazy_static::lazy_static;
 pub use hugr::ops::OpType;
 pub use hugr::types::{EdgeKind, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
-
-use crate::extension;
 
 use self::units::{filter, LinearUnit, Units};
 
@@ -44,24 +41,13 @@ pub struct Circuit<T = Hugr> {
     ///
     /// This is checked at runtime to ensure that the node is a DFG node.
     parent: Node,
-    /// An optional set of extensions required to validate the circuit,
-    /// not including the prelude.
-    ///
-    /// Wrapped in an Arc to allow sharing between circuits, specially for borrowed circuits.
-    ///
-    /// Defaults to an standard set of quantum extensions and Hugr's std set.
-    required_extensions: Option<Vec<Arc<Extension>>>,
 }
 
 impl<T: Default + HugrView> Default for Circuit<T> {
     fn default() -> Self {
         let hugr = T::default();
         let parent = hugr.root();
-        Self {
-            hugr,
-            parent,
-            required_extensions: None,
-        }
+        Self { hugr, parent }
     }
 }
 
@@ -88,13 +74,6 @@ lazy_static! {
         set.insert(format!("prelude.{}", LiftDef.name()).into());
         set
     };
-
-    /// A default set of required extensions for a circuit,
-    /// used when loading with hugr with no pre-defined extension set.
-    ///
-    /// We should be able to drop this once hugrs embed their required extensions.
-    /// See https://github.com/CQCL/hugr/issues/1613
-    static ref DEFAULT_REQUIRED_EXTENSIONS: Vec<Arc<Extension>> = extension::REGISTRY.iter().map(|(_, ext)| ext.to_owned()).collect();
 }
 /// The [IGNORED_EXTENSION_OPS] definition depends on the buggy behaviour of [`NamedOp::name`], which returns bare names instead of scoped names on some cases.
 /// Once this test starts failing it should be time to drop the `format!("prelude.{}", ...)`.
@@ -112,11 +91,7 @@ impl<T: HugrView> Circuit<T> {
     /// Returns an error if the parent node is not a DFG node in the HUGR.
     pub fn try_new(hugr: T, parent: Node) -> Result<Self, CircuitError> {
         check_hugr(&hugr, parent)?;
-        Ok(Self {
-            hugr,
-            parent,
-            required_extensions: None,
-        })
+        Ok(Self { hugr, parent })
     }
 
     /// Create a new circuit from a HUGR and a node.
@@ -153,40 +128,12 @@ impl<T: HugrView> Circuit<T> {
         &mut self.hugr
     }
 
-    /// Get the required extensions for the circuit.
-    ///
-    /// If no extension set was defined, returns the default set of quantum extensions and Hugr's std set.
-    ///
-    /// Note: This API is not currently public. We expect hugrs to embed their required extensions in the future,
-    /// at which point this method will be removed.
-    /// See https://github.com/CQCL/hugr/issues/1613
-    pub(crate) fn required_extensions(&self) -> &[Arc<Extension>] {
-        self.required_extensions
-            .as_deref()
-            .unwrap_or_else(|| &DEFAULT_REQUIRED_EXTENSIONS)
-    }
-
-    /// Set the required extension set for the circuit.
-    ///
-    /// Returns the previous set of required extensions, if any.
-    ///
-    /// Note: This API is not currently public. We expect hugrs to embed their required extensions in the future,
-    /// at which point this method will be removed.
-    /// See https://github.com/CQCL/hugr/issues/1613
-    pub(crate) fn set_required_extensions(
-        &mut self,
-        extensions: Vec<Arc<Extension>>,
-    ) -> Option<Vec<Arc<Extension>>> {
-        mem::replace(&mut self.required_extensions, Some(extensions))
-    }
-
     /// Ensures the circuit contains an owned HUGR.
     pub fn to_owned(&self) -> Circuit<Hugr> {
         let hugr = self.hugr.base_hugr().clone();
         Circuit {
             hugr,
             parent: self.parent,
-            required_extensions: self.required_extensions.clone(),
         }
     }
 
@@ -212,7 +159,7 @@ impl<T: HugrView> Circuit<T> {
 
     /// Returns the function type of the circuit.
     #[inline]
-    pub fn circuit_signature(&self) -> Signature {
+    pub fn circuit_signature(&self) -> Cow<'_, Signature> {
         let op = self.hugr.get_optype(self.parent);
         op.inner_function_type()
             .unwrap_or_else(|| panic!("{} is an invalid circuit parent type.", op.name()))
@@ -713,7 +660,7 @@ mod tests {
     use hugr::types::Signature;
     use hugr::{
         builder::{DFGBuilder, DataflowHugr},
-        extension::{prelude::BOOL_T, PRELUDE_REGISTRY},
+        extension::prelude::bool_t,
     };
 
     use super::*;
@@ -828,11 +775,8 @@ mod tests {
 
     #[test]
     fn remove_bit() {
-        let h = DFGBuilder::new(Signature::new(vec![BOOL_T], vec![])).unwrap();
-        let mut circ: Circuit = h
-            .finish_hugr_with_outputs([], &PRELUDE_REGISTRY)
-            .unwrap()
-            .into();
+        let h = DFGBuilder::new(Signature::new(vec![bool_t()], vec![])).unwrap();
+        let mut circ: Circuit = h.finish_hugr_with_outputs([]).unwrap().into();
 
         assert_eq!(circ.units().count(), 1);
         assert!(remove_empty_wire(&mut circ, 0).is_ok());

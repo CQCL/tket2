@@ -3,22 +3,23 @@
 //! Part of the TKET2 extension.
 
 use std::str::FromStr;
+use std::sync::{Arc, Weak};
 
 use hugr::extension::simple_op::{
     try_from_name, HasConcrete, HasDef, MakeExtensionOp, MakeOpDef, MakeRegisteredOp, OpLoadError,
 };
-use hugr::extension::{ExtensionId, ExtensionRegistry, SignatureError};
+use hugr::extension::{ExtensionId, SignatureError, SignatureFunc};
 use hugr::ops::{ExtensionOp, NamedOp, OpName};
-use hugr::type_row;
 use hugr::types::type_param::TypeParam;
 use hugr::types::{CustomType, PolyFuncType, Signature, TypeArg};
+use hugr::{type_row, Extension};
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
 
 use crate::extension::TKET2_EXTENSION;
 
-use super::rotation::ROTATION_TYPE;
-use super::{REGISTRY, TKET2_EXTENSION_ID};
+use super::rotation::rotation_type;
+use super::TKET2_EXTENSION_ID;
 
 /// The name of the symbolic expression opaque type arg.
 pub const SYM_EXPR_NAME: SmolStr = SmolStr::new_inline("SymExpr");
@@ -67,10 +68,10 @@ impl MakeOpDef for SympyOpDef {
         try_from_name(op_def.name(), op_def.extension_id())
     }
 
-    fn signature(&self) -> hugr::extension::SignatureFunc {
+    fn init_signature(&self, _extension_ref: &Weak<Extension>) -> SignatureFunc {
         PolyFuncType::new(
             vec![TypeParam::String],
-            Signature::new(type_row![], type_row![ROTATION_TYPE]),
+            Signature::new(type_row![], vec![rotation_type()]),
         )
         .into()
     }
@@ -81,6 +82,10 @@ impl MakeOpDef for SympyOpDef {
 
     fn extension(&self) -> hugr::extension::ExtensionId {
         TKET2_EXTENSION_ID
+    }
+
+    fn extension_ref(&self) -> Weak<Extension> {
+        Arc::downgrade(&TKET2_EXTENSION)
     }
 }
 
@@ -115,8 +120,8 @@ impl MakeRegisteredOp for SympyOp {
         TKET2_EXTENSION_ID.to_owned()
     }
 
-    fn registry<'s, 'r: 's>(&'s self) -> &'r ExtensionRegistry {
-        &REGISTRY
+    fn extension_ref(&self) -> Weak<Extension> {
+        Arc::downgrade(&TKET2_EXTENSION)
     }
 }
 

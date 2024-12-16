@@ -3,7 +3,7 @@
 from hugr import Hugr
 from tket2.passes import lower_to_pytket
 from tket2.circuit import Tk2Circuit
-from guppylang.definition.function import RawFunctionDef  # type: ignore[import-untyped, import-not-found, unused-ignore]  # noqa: F401
+from typing import Any
 
 
 def setup_jupyter_rendering():
@@ -25,7 +25,8 @@ def setup_jupyter_rendering():
 
 
 # TODO: Should this be part of the guppy API? Or tket2?
-def guppy_to_circuit(func_def: RawFunctionDef) -> Tk2Circuit:
+# Takes a RawFunctionDef and converts it to a Tk2Circuit
+def guppy_to_circuit(func_def: Any) -> Tk2Circuit:
     """Convert a Guppy function definition to a `Tk2Circuit`."""
     module = func_def.id.module
     assert module is not None, "Function definition must belong to a module"

@@ -54,12 +54,12 @@ pub static ref TKET1_EXTENSION: Arc<Extension>  = {
 };
 
 /// Extension registry including the prelude, std, TKET1, and Tk2Ops extensions.
-pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::try_new(
-    STD_REG.iter().map(|(_, e)| e.to_owned()).chain([
+pub(crate) static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new(
+    STD_REG.iter().map(|e| e.to_owned()).chain([
     TKET1_EXTENSION.to_owned(),
     TKET2_EXTENSION.to_owned(),
     rotation::ROTATION_EXTENSION.to_owned()
-])).unwrap();
+]));
 
 }
 
@@ -70,7 +70,6 @@ impl CustomSignatureFunc for Tk1Signature {
         &'a self,
         arg_values: &[TypeArg],
         _def: &'o hugr::extension::OpDef,
-        _extension_registry: &ExtensionRegistry,
     ) -> Result<PolyFuncTypeRV, SignatureError> {
         let [TypeArg::String { arg }] = arg_values else {
             // This should have already been checked.

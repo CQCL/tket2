@@ -3,7 +3,7 @@
 use std::borrow::Borrow;
 
 use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
-use hugr::extension::prelude::QB_T;
+use hugr::extension::prelude::qb_t;
 use hugr::ops::handle::NodeHandle;
 use hugr::ops::OpType;
 use hugr::types::Type;
@@ -19,7 +19,6 @@ use derive_more::From;
 use hugr::{Hugr, HugrView, Wire};
 use serde::Serialize;
 use tket2::circuit::CircuitHash;
-use tket2::extension::REGISTRY;
 use tket2::passes::CircuitChunks;
 use tket2::serialize::TKETDecode;
 use tket2::{Circuit, Tk2Op};

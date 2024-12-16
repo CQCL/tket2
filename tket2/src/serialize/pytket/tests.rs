@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::BufReader;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
-use hugr::extension::prelude::{BOOL_T, QB_T};
+use hugr::extension::prelude::{bool_t, qb_t};
 
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::std_extensions::arithmetic::float_ops::FloatOps;
@@ -17,9 +17,8 @@ use tket_json_rs::register;
 
 use super::{TKETDecode, METADATA_INPUT_PARAMETERS, METADATA_Q_OUTPUT_REGISTERS};
 use crate::circuit::Circuit;
-use crate::extension::rotation::{ConstRotation, RotationOp, ROTATION_TYPE};
+use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp};
 use crate::extension::sympy::SympyOpDef;
-use crate::extension::REGISTRY;
 use crate::Tk2Op;
 
 const SIMPLE_JSON: &str = r#"{
@@ -138,8 +137,8 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
 /// A simple circuit with some preset qubit registers
 #[fixture]
 fn circ_preset_qubits() -> Circuit {
-    let input_t = vec![QB_T];
-    let output_t = vec![QB_T, QB_T];
+    let input_t = vec![qb_t()];
+    let output_t = vec![qb_t(), qb_t()];
     let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
     let [qb0] = h.input_wires_arr();
@@ -150,7 +149,7 @@ fn circ_preset_qubits() -> Circuit {
         .unwrap()
         .outputs_arr();
 
-    let mut hugr = h.finish_hugr_with_outputs([qb0, qb1], &REGISTRY).unwrap();
+    let mut hugr = h.finish_hugr_with_outputs([qb0, qb1]).unwrap();
 
     // A preset register for the first qubit output
     hugr.set_metadata(
@@ -165,8 +164,8 @@ fn circ_preset_qubits() -> Circuit {
 /// A simple circuit with some input parameters
 #[fixture]
 fn circ_parameterized() -> Circuit {
-    let input_t = vec![QB_T, ROTATION_TYPE, ROTATION_TYPE, ROTATION_TYPE];
-    let output_t = vec![QB_T];
+    let input_t = vec![qb_t(), rotation_type(), rotation_type(), rotation_type()];
+    let output_t = vec![qb_t()];
     let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
     let [q, r0, r1, r2] = h.input_wires_arr();
@@ -175,7 +174,7 @@ fn circ_parameterized() -> Circuit {
     let [q] = h.add_dataflow_op(Tk2Op::Ry, [q, r1]).unwrap().outputs_arr();
     let [q] = h.add_dataflow_op(Tk2Op::Rz, [q, r2]).unwrap().outputs_arr();
 
-    let mut hugr = h.finish_hugr_with_outputs([q], &REGISTRY).unwrap();
+    let mut hugr = h.finish_hugr_with_outputs([q]).unwrap();
 
     // Preset names for some of the inputs
     hugr.set_metadata(
@@ -190,8 +189,8 @@ fn circ_parameterized() -> Circuit {
 /// A simple circuit with ancillae
 #[fixture]
 fn circ_measure_ancilla() -> Circuit {
-    let input_t = vec![QB_T];
-    let output_t = vec![BOOL_T, BOOL_T];
+    let input_t = vec![qb_t()];
+    let output_t = vec![bool_t(), bool_t()];
     let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
     let [qb] = h.input_wires_arr();
@@ -212,15 +211,15 @@ fn circ_measure_ancilla() -> Circuit {
         .unwrap()
         .outputs_arr();
 
-    h.finish_hugr_with_outputs([meas_qb, meas_anc], &REGISTRY)
+    h.finish_hugr_with_outputs([meas_qb, meas_anc])
         .unwrap()
         .into()
 }
 
 #[fixture]
 fn circ_add_angles_symbolic() -> (Circuit, String) {
-    let input_t = vec![QB_T, ROTATION_TYPE, ROTATION_TYPE];
-    let output_t = vec![QB_T];
+    let input_t = vec![qb_t(), rotation_type(), rotation_type()];
+    let output_t = vec![qb_t()];
     let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
     let [qb, f1, f2] = h.input_wires_arr();
@@ -233,13 +232,13 @@ fn circ_add_angles_symbolic() -> (Circuit, String) {
         .unwrap()
         .outputs_arr();
 
-    let circ = h.finish_hugr_with_outputs([qb], &REGISTRY).unwrap().into();
+    let circ = h.finish_hugr_with_outputs([qb]).unwrap().into();
     (circ, "(f0 + f1)".to_string())
 }
 
 #[fixture]
 fn circ_add_angles_constants() -> (Circuit, String) {
-    let qb_row = vec![QB_T];
+    let qb_row = vec![qb_t()];
     let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), qb_row)).unwrap();
 
     let qb = h.input_wires().next().unwrap();
@@ -255,15 +254,15 @@ fn circ_add_angles_constants() -> (Circuit, String) {
         .add_dataflow_op(Tk2Op::Rx, [qb, point5])
         .unwrap()
         .outputs();
-    let circ = h.finish_hugr_with_outputs(qbs, &REGISTRY).unwrap().into();
+    let circ = h.finish_hugr_with_outputs(qbs).unwrap().into();
     (circ, "(0.2 + 0.3)".to_string())
 }
 
 #[fixture]
 /// An Rx operation using some complex ops to compute its angle.
 fn circ_complex_angle_computation() -> (Circuit, String) {
-    let input_t = vec![QB_T, ROTATION_TYPE, ROTATION_TYPE];
-    let output_t = vec![QB_T];
+    let input_t = vec![qb_t(), rotation_type(), rotation_type()];
+    let output_t = vec![qb_t()];
     let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
     let [qb, r0, r1] = h.input_wires_arr();
@@ -307,7 +306,7 @@ fn circ_complex_angle_computation() -> (Circuit, String) {
         .unwrap()
         .outputs();
 
-    let circ = h.finish_hugr_with_outputs(qbs, &REGISTRY).unwrap().into();
+    let circ = h.finish_hugr_with_outputs(qbs).unwrap().into();
     (circ, "((f0 ** f1) + (cos(pi) + 0.2))".to_string())
 }
 
@@ -345,9 +344,9 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
 ///
 /// Note: this is not a pure roundtrip as the encoder may add internal qubits/bits to the circuit.
 #[rstest]
-#[case::meas_ancilla(circ_measure_ancilla(), Signature::new_endo(vec![QB_T, QB_T, BOOL_T, BOOL_T]))]
-#[case::preset_qubits(circ_preset_qubits(), Signature::new_endo(vec![QB_T, QB_T, QB_T]))]
-#[case::preset_parameterized(circ_parameterized(), Signature::new(vec![QB_T, ROTATION_TYPE, ROTATION_TYPE, ROTATION_TYPE], vec![QB_T]))]
+#[case::meas_ancilla(circ_measure_ancilla(), Signature::new_endo(vec![qb_t(), qb_t(), bool_t(), bool_t()]))]
+#[case::preset_qubits(circ_preset_qubits(), Signature::new_endo(vec![qb_t(), qb_t(), qb_t()]))]
+#[case::preset_parameterized(circ_parameterized(), Signature::new(vec![qb_t(), rotation_type(), rotation_type(), rotation_type()], vec![qb_t()]))]
 fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
     let ser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
     let deser: Circuit = ser.clone().decode().unwrap();
