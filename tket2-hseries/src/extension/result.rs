@@ -1,7 +1,7 @@
 //! This module defines the Hugr extension used to represent result reporting operations,
 //! with static string tags.
 //!
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use hugr::std_extensions::collections;
 use hugr::types::Signature;
@@ -44,16 +44,6 @@ lazy_static! {
             ResultOpDef::load_all_ops(ext, ext_ref).unwrap();
         })
     };
-
-    /// Extension registry including the "tket2.result" extension and
-    /// dependencies.
-    pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new([
-        EXTENSION.to_owned(),
-        INT_EXTENSION.to_owned(),
-        FLOAT_EXTENSION.to_owned(),
-        collections::array::EXTENSION.to_owned(),
-        PRELUDE.to_owned()
-    ]);
 }
 
 #[derive(
@@ -377,8 +367,8 @@ impl MakeRegisteredOp for ResultOp {
         EXTENSION_ID
     }
 
-    fn registry<'s, 'r: 's>(&'s self) -> &'r ExtensionRegistry {
-        &REGISTRY
+    fn extension_ref(&self) -> Weak<Extension> {
+        Arc::downgrade(&EXTENSION)
     }
 }
 

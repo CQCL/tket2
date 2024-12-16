@@ -59,9 +59,7 @@ pub(crate) mod test {
         HugrBuilder, ModuleBuilder,
     };
     use hugr::extension::prelude::qb_t;
-    use hugr::extension::PRELUDE_REGISTRY;
     use hugr::ops::handle::NodeHandle;
-    use hugr::types::FunctionType;
     use hugr::Hugr;
     use pyo3::{Bound, PyResult, Python};
     use tket2::Circuit;

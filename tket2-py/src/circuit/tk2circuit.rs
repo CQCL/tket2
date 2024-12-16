@@ -23,7 +23,6 @@ use derive_more::From;
 use hugr::{Hugr, HugrView, Wire};
 use serde::Serialize;
 use tket2::circuit::CircuitHash;
-use tket2::extension::REGISTRY;
 use tket2::passes::pytket::lower_to_pytket;
 use tket2::passes::CircuitChunks;
 use tket2::serialize::TKETDecode;

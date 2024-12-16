@@ -39,11 +39,6 @@ lazy_static! {
         })
     };
 
-    /// Extension registry including the "tket2.futures" extension.
-    pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new([
-        EXTENSION.to_owned()
-    ]);
-
     /// The name of the `Future` type.
     pub static ref FUTURE_TYPE_NAME: SmolStr = SmolStr::new_inline("Future");
 }
@@ -192,8 +187,8 @@ impl MakeRegisteredOp for FutureOp {
         EXTENSION_ID
     }
 
-    fn registry<'s, 'r: 's>(&'s self) -> &'r ExtensionRegistry {
-        &REGISTRY
+    fn extension_ref(&self) -> Weak<Extension> {
+        Arc::downgrade(&EXTENSION)
     }
 }
 

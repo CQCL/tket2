@@ -4,7 +4,7 @@
 //! In the case of lazy operations,
 //! laziness is represented by returning `tket2.futures.Future` classical
 //! values. Qubits are never lazy.
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use hugr::{
     builder::{BuildError, Dataflow, DataflowSubContainer, SubContainer},
@@ -146,8 +146,8 @@ impl MakeRegisteredOp for QSystemOp {
         EXTENSION_ID
     }
 
-    fn registry<'s, 'r: 's>(&'s self) -> &'r ExtensionRegistry {
-        &REGISTRY
+    fn extension_ref(&self) -> Weak<Extension> {
+        Arc::downgrade(&EXTENSION)
     }
 }
 

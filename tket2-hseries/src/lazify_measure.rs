@@ -211,15 +211,6 @@ mod test {
 
     use super::*;
 
-    lazy_static! {
-        pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new([
-            qsystem::EXTENSION.to_owned(),
-            futures::EXTENSION.to_owned(),
-            TKET2_EXTENSION.to_owned(),
-            PRELUDE.to_owned(),
-            float_types::EXTENSION.clone(),
-        ]);
-    }
     #[test]
     fn simple() {
         let mut hugr = {

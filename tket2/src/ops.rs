@@ -21,8 +21,6 @@ use derive_more::{Display, Error};
 use serde::{Deserialize, Serialize};
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
-use crate::extension::REGISTRY;
-
 #[derive(
     Clone,
     Copy,
@@ -152,8 +150,8 @@ impl MakeRegisteredOp for Tk2Op {
         EXTENSION_ID.to_owned()
     }
 
-    fn registry<'s, 'r: 's>(&'s self) -> &'r hugr::extension::ExtensionRegistry {
-        &REGISTRY
+    fn extension_ref(&self) -> Weak<hugr::Extension> {
+        Arc::<hugr::Extension>::downgrade(&TKET2_EXTENSION)
     }
 }
 

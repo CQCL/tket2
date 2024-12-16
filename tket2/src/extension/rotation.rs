@@ -196,8 +196,8 @@ impl MakeRegisteredOp for RotationOp {
         ROTATION_EXTENSION_ID
     }
 
-    fn registry<'s, 'r: 's>(&'s self) -> &'r hugr::extension::ExtensionRegistry {
-        &super::REGISTRY
+    fn extension_ref(&self) -> Weak<Extension> {
+        Arc::downgrade(&ROTATION_EXTENSION)
     }
 }
 

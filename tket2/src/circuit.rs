@@ -89,13 +89,6 @@ lazy_static! {
         set.insert(format!("prelude.{}", LiftDef.name()).into());
         set
     };
-
-    /// A default set of required extensions for a circuit,
-    /// used when loading with hugr with no pre-defined extension set.
-    ///
-    /// We should be able to drop this once hugrs embed their required extensions.
-    /// See https://github.com/CQCL/hugr/issues/1613
-    static ref DEFAULT_REQUIRED_EXTENSIONS: Vec<Arc<Extension>> = extension::REGISTRY.iter().map(|ext| ext.to_owned()).collect();
 }
 /// The [IGNORED_EXTENSION_OPS] definition depends on the buggy behaviour of [`NamedOp::name`], which returns bare names instead of scoped names on some cases.
 /// Once this test starts failing it should be time to drop the `format!("prelude.{}", ...)`.
@@ -152,19 +145,6 @@ impl<T: HugrView> Circuit<T> {
     /// by changing the node's type to a non-DFG node or by removing it.
     pub fn hugr_mut(&mut self) -> &mut T {
         &mut self.hugr
-    }
-
-    /// Get the required extensions for the circuit.
-    ///
-    /// If no extension set was defined, returns the default set of quantum extensions and Hugr's std set.
-    ///
-    /// Note: This API is not currently public. We expect hugrs to embed their required extensions in the future,
-    /// at which point this method will be removed.
-    /// See https://github.com/CQCL/hugr/issues/1613
-    pub(crate) fn required_extensions(&self) -> &[Arc<Extension>] {
-        self.required_extensions
-            .as_deref()
-            .unwrap_or_else(|| &DEFAULT_REQUIRED_EXTENSIONS)
     }
 
     /// Set the required extension set for the circuit.

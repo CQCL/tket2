@@ -8,7 +8,7 @@ use std::sync::{Arc, Weak};
 use hugr::extension::simple_op::{
     try_from_name, HasConcrete, HasDef, MakeExtensionOp, MakeOpDef, MakeRegisteredOp, OpLoadError,
 };
-use hugr::extension::{ExtensionId, ExtensionRegistry, SignatureError, SignatureFunc};
+use hugr::extension::{ExtensionId, SignatureError, SignatureFunc};
 use hugr::ops::{ExtensionOp, NamedOp, OpName};
 use hugr::types::type_param::TypeParam;
 use hugr::types::{CustomType, PolyFuncType, Signature, TypeArg};
@@ -19,7 +19,7 @@ use smol_str::SmolStr;
 use crate::extension::TKET2_EXTENSION;
 
 use super::rotation::rotation_type;
-use super::{REGISTRY, TKET2_EXTENSION_ID};
+use super::TKET2_EXTENSION_ID;
 
 /// The name of the symbolic expression opaque type arg.
 pub const SYM_EXPR_NAME: SmolStr = SmolStr::new_inline("SymExpr");
@@ -120,8 +120,8 @@ impl MakeRegisteredOp for SympyOp {
         TKET2_EXTENSION_ID.to_owned()
     }
 
-    fn registry<'s, 'r: 's>(&'s self) -> &'r ExtensionRegistry {
-        &REGISTRY
+    fn extension_ref(&self) -> Weak<Extension> {
+        Arc::downgrade(&TKET2_EXTENSION)
     }
 }
 

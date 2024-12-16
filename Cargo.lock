@@ -969,7 +969,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.13.3"
-source = "git+https://github.com/CQCL/hugr?branch=acl/monomorphize#4bde01d22506f9fa24cde0306b8508c1fb796154"
+source = "git+https://github.com/CQCL/hugr#b517dc3530c3f01d854579e210da51d7a63e3036"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -978,7 +978,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.13.3"
-source = "git+https://github.com/CQCL/hugr?branch=acl/monomorphize#4bde01d22506f9fa24cde0306b8508c1fb796154"
+source = "git+https://github.com/CQCL/hugr#b517dc3530c3f01d854579e210da51d7a63e3036"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -993,7 +993,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.13.3"
-source = "git+https://github.com/CQCL/hugr?branch=acl/monomorphize#4bde01d22506f9fa24cde0306b8508c1fb796154"
+source = "git+https://github.com/CQCL/hugr#b517dc3530c3f01d854579e210da51d7a63e3036"
 dependencies = [
  "bitvec",
  "bumpalo",
@@ -1025,7 +1025,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.13.3"
-source = "git+https://github.com/CQCL/hugr?branch=acl/monomorphize#4bde01d22506f9fa24cde0306b8508c1fb796154"
+source = "git+https://github.com/CQCL/hugr#b517dc3530c3f01d854579e210da51d7a63e3036"
 dependencies = [
  "ascent",
  "hugr-core",
@@ -3052,4 +3052,4 @@ dependencies = [
 [[patch.unused]]
 name = "hugr-model"
 version = "0.14.0"
-source = "git+https://github.com/CQCL/hugr?branch=acl/monomorphize#4bde01d22506f9fa24cde0306b8508c1fb796154"
+source = "git+https://github.com/CQCL/hugr#b517dc3530c3f01d854579e210da51d7a63e3036"

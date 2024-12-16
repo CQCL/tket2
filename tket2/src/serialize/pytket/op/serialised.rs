@@ -11,7 +11,7 @@ use serde::de::Error;
 use tket_json_rs::circuit_json;
 
 use crate::extension::rotation::rotation_type;
-use crate::extension::{REGISTRY, TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME};
+use crate::extension::{TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME};
 use crate::serialize::pytket::OpConvertError;
 
 /// A serialized operation, containing the operation type and all its attributes.
@@ -133,7 +133,7 @@ impl OpaqueTk1Op {
             arg: serde_json::to_string(self).unwrap(),
         };
         let op_def = TKET1_EXTENSION.get_op(&TKET1_OP_NAME).unwrap();
-        ExtensionOp::new(op_def.clone(), vec![payload], &REGISTRY).unwrap_or_else(|e| panic!("{e}"))
+        ExtensionOp::new(op_def.clone(), vec![payload]).unwrap_or_else(|e| panic!("{e}"))
     }
 
     /// Compute the `parameter_input` and `num_params` fields by looking for
