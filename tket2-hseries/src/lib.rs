@@ -1,5 +1,7 @@
 //! Provides a preparation and validation workflow for Hugrs targeting
 //! Quantinuum H-series quantum computers.
+use std::mem;
+
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
@@ -62,12 +64,15 @@ pub enum QSystemPassError {
 }
 
 impl QSystemPass {
-    /// Run `QSystemPass` on the given [HugrMut]. `registry` is used for
+    /// Run `QSystemPass` on the given [Hugr]. `registry` is used for
     /// validation, if enabled.
     pub fn run(&self, hugr: &mut Hugr) -> Result<(), QSystemPassError> {
         if self.monomorphize {
             self.validation_level.run_validated_pass(hugr, |hugr, _| {
-                *hugr = remove_polyfuncs(monomorphize(hugr.clone()));
+                let mut owned_hugr = Hugr::default();
+                mem::swap(&mut owned_hugr, hugr);
+                owned_hugr = remove_polyfuncs(monomorphize(owned_hugr));
+                mem::swap(&mut owned_hugr, hugr);
 
                 Ok::<_, QSystemPassError>(())
             })?;
