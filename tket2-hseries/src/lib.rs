@@ -3,10 +3,12 @@
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
-        force_order,
+        const_fold::{ConstFoldError, ConstantFoldPass},
+        force_order, monomorphize, remove_polyfuncs,
         validation::{ValidatePassError, ValidationLevel},
     },
-    hugr::{hugrmut::HugrMut, HugrError},
+    hugr::HugrError,
+    Hugr, HugrView,
 };
 use tket2::Tk2Op;
 
@@ -26,9 +28,21 @@ pub mod lazify_measure;
 /// Returns an error if this cannot be done.
 ///
 /// To construct a `QSystemPass` use [Default::default].
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct QSystemPass {
     validation_level: ValidationLevel,
+    constant_fold: bool,
+    monomorphize: bool,
+}
+
+impl Default for QSystemPass {
+    fn default() -> Self {
+        Self {
+            validation_level: ValidationLevel::default(),
+            constant_fold: false,
+            monomorphize: true,
+        }
+    }
 }
 
 #[derive(Error, Debug, Display, From)]
@@ -43,12 +57,25 @@ pub enum QSystemPassError {
     ForceOrderError(HugrError),
     /// An error from the component [LowerTket2ToQSystemPass] pass.
     LowerTk2Error(LowerTk2Error),
+    /// An error from the component [ConstantFoldErrorPass] pass.
+    ConstantFoldError(ConstFoldError),
 }
 
 impl QSystemPass {
     /// Run `QSystemPass` on the given [HugrMut]. `registry` is used for
     /// validation, if enabled.
-    pub fn run(&self, hugr: &mut impl HugrMut) -> Result<(), QSystemPassError> {
+    pub fn run(&self, hugr: &mut Hugr) -> Result<(), QSystemPassError> {
+        if self.monomorphize {
+            self.validation_level.run_validated_pass(hugr, |hugr, _| {
+                *hugr = remove_polyfuncs(monomorphize(hugr.clone()));
+
+                Ok::<_, QSystemPassError>(())
+            })?;
+        }
+
+        if self.constant_fold {
+            self.constant_fold().run(hugr)?;
+        }
         self.lower_tk2().run(hugr)?;
         self.lazify_measure().run(hugr)?;
         self.validation_level.run_validated_pass(hugr, |hugr, _| {
@@ -77,9 +104,27 @@ impl QSystemPass {
         LazifyMeasurePass::default().with_validation_level(self.validation_level)
     }
 
+    fn constant_fold(&self) -> ConstantFoldPass {
+        ConstantFoldPass::default().validation_level(self.validation_level)
+    }
+
     /// Returns a new `QSystemPass` with the given [ValidationLevel].
     pub fn with_validation_level(mut self, level: ValidationLevel) -> Self {
         self.validation_level = level;
+        self
+    }
+
+    /// Returns a new `QSystemPass` with constant folding enabled according to
+    /// `constant_fold`.
+    pub fn with_constant_fold(mut self, constant_fold: bool) -> Self {
+        self.constant_fold = constant_fold;
+        self
+    }
+
+    /// Returns a new `QSystemPass` with monomorphization enabled according to
+    /// `monomorphsze`.
+    pub fn with_monormophize(mut self, monomorphize: bool) -> Self {
+        self.monomorphize = monomorphize;
         self
     }
 }
