@@ -122,7 +122,7 @@ impl QSystemPass {
     }
 
     /// Returns a new `QSystemPass` with monomorphization enabled according to
-    /// `monomorphsze`.
+    /// `monomorphize`.
     pub fn with_monormophize(mut self, monomorphize: bool) -> Self {
         self.monomorphize = monomorphize;
         self
