@@ -15,7 +15,7 @@ categories = ["compilers"]
 
 [features]
 default = ["cli"]
-cli = ["dep:clap"]
+cli = ["dep:clap", "dep:hugr-cli"]
 
 [[bin]]
 name = "tket2-hseries"
@@ -32,6 +32,7 @@ strum.workspace = true
 strum_macros.workspace = true
 itertools.workspace = true
 clap = { workspace = true, optional = true }
+hugr-cli = { workspace = true, optional = true }
 derive_more = { workspace = true, features = [
     "error",
     "display",

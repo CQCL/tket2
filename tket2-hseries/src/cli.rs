@@ -10,5 +10,5 @@ use clap::Parser;
 #[non_exhaustive]
 pub enum CliArgs {
     /// Generate serialized extensions.
-    GenExtensions(tket2::hugr::cli::extensions::ExtArgs),
+    GenExtensions(hugr_cli::extensions::ExtArgs),
 }
