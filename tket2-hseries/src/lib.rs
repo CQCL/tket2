@@ -59,7 +59,7 @@ pub enum QSystemPassError {
     ForceOrderError(HugrError),
     /// An error from the component [LowerTket2ToQSystemPass] pass.
     LowerTk2Error(LowerTk2Error),
-    /// An error from the component [ConstantFoldErrorPass] pass.
+    /// An error from the component [ConstantFoldPass] pass.
     ConstantFoldError(ConstFoldError),
 }
 
