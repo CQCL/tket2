@@ -1,13 +1,15 @@
 //! Provides a preparation and validation workflow for Hugrs targeting
 //! Quantinuum H-series quantum computers.
+
 use std::mem;
 
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
         const_fold::{ConstFoldError, ConstantFoldPass},
-        force_order, monomorphize, remove_polyfuncs,
+        force_order, remove_polyfuncs,
         validation::{ValidatePassError, ValidationLevel},
+        MonomorphizeError, MonomorphizePass,
     },
     hugr::HugrError,
     Hugr, HugrView,
@@ -61,6 +63,8 @@ pub enum QSystemPassError {
     LowerTk2Error(LowerTk2Error),
     /// An error from the component [ConstantFoldPass] pass.
     ConstantFoldError(ConstFoldError),
+    /// An error from the component [MonomorphizePass] pass.
+    MonomorphizeError(MonomorphizeError),
 }
 
 impl QSystemPass {
@@ -68,12 +72,12 @@ impl QSystemPass {
     /// validation, if enabled.
     pub fn run(&self, hugr: &mut Hugr) -> Result<(), QSystemPassError> {
         if self.monomorphize {
+            self.monomorphization().run(hugr)?;
             self.validation_level.run_validated_pass(hugr, |hugr, _| {
                 let mut owned_hugr = Hugr::default();
                 mem::swap(&mut owned_hugr, hugr);
-                owned_hugr = remove_polyfuncs(monomorphize(owned_hugr));
+                owned_hugr = remove_polyfuncs(owned_hugr);
                 mem::swap(&mut owned_hugr, hugr);
-
                 Ok::<_, QSystemPassError>(())
             })?;
         }
@@ -111,6 +115,10 @@ impl QSystemPass {
 
     fn constant_fold(&self) -> ConstantFoldPass {
         ConstantFoldPass::default().validation_level(self.validation_level)
+    }
+
+    fn monomorphization(&self) -> MonomorphizePass {
+        MonomorphizePass::default().validation_level(self.validation_level)
     }
 
     /// Returns a new `QSystemPass` with the given [ValidationLevel].
