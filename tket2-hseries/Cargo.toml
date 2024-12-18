@@ -23,7 +23,7 @@ required-features = ["cli"]
 
 [dependencies]
 hugr.workspace = true
-tket2 = { path = "../tket2", version = "0.7.1" }
+tket2 = { path = "../tket2", version = "0.7.0" }
 lazy_static.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
