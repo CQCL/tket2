@@ -968,8 +968,9 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.14.0"
-source = "git+https://github.com/CQCL/hugr#ab94518ed2812abca615bfbfb5a822f67c115be8"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1c8f4a7f778b70a6528fb620f9df31931d9eaad518287d7d25faabba8714f3f"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -977,8 +978,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-cli"
-version = "0.14.0"
-source = "git+https://github.com/CQCL/hugr#ab94518ed2812abca615bfbfb5a822f67c115be8"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5906f571c65f74ec9f7aac92d1d52bf1a1837d736d4bd131d3d81b13c057068"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -990,8 +992,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.14.0"
-source = "git+https://github.com/CQCL/hugr#ab94518ed2812abca615bfbfb5a822f67c115be8"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "967ce11e97050617c536d37c5b12d2b0eecb2f9f6da24e4bc5d19faf5cf1fafa"
 dependencies = [
  "bitvec",
  "bumpalo",
@@ -1022,8 +1025,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.14.0"
-source = "git+https://github.com/CQCL/hugr#ab94518ed2812abca615bfbfb5a822f67c115be8"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a12944d441477c4f086c106891fa22e5a29ac2fd011c0caf898e4d28aeb2a05"
 dependencies = [
  "ascent",
  "hugr-core",
@@ -3046,8 +3050,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "hugr-model"
-version = "0.15.0"
-source = "git+https://github.com/CQCL/hugr#ab94518ed2812abca615bfbfb5a822f67c115be8"
