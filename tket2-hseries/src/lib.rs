@@ -1,11 +1,13 @@
 //! Provides a preparation and validation workflow for Hugrs targeting
 //! Quantinuum H-series quantum computers.
 
+use std::mem;
+
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
         const_fold::{ConstFoldError, ConstantFoldPass},
-        force_order,
+        force_order, remove_polyfuncs,
         validation::{ValidatePassError, ValidationLevel},
         MonomorphizeError, MonomorphizePass,
     },
@@ -71,6 +73,13 @@ impl QSystemPass {
     pub fn run(&self, hugr: &mut Hugr) -> Result<(), QSystemPassError> {
         if self.monomorphize {
             self.monomorphization().run(hugr)?;
+            self.validation_level.run_validated_pass(hugr, |hugr, _| {
+                let mut owned_hugr = Hugr::default();
+                mem::swap(&mut owned_hugr, hugr);
+                owned_hugr = remove_polyfuncs(owned_hugr);
+                mem::swap(&mut owned_hugr, hugr);
+                Ok::<_, QSystemPassError>(())
+            })?;
         }
 
         if self.constant_fold {
