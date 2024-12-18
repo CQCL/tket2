@@ -7,7 +7,7 @@ use hugr::{
         const_fold::{ConstFoldError, ConstantFoldPass},
         force_order,
         validation::{ValidatePassError, ValidationLevel},
-        MonomorphizePass,
+        MonomorphizeError, MonomorphizePass,
     },
     hugr::HugrError,
     Hugr, HugrView,
@@ -61,8 +61,8 @@ pub enum QSystemPassError {
     LowerTk2Error(LowerTk2Error),
     /// An error from the component [ConstantFoldPass] pass.
     ConstantFoldError(ConstFoldError),
-    /// An error from the component [MoomorphizePass] pass.
-    MonomorphizeError(hugr::algorithms::MonomorphizeError),
+    /// An error from the component [MonomorphizePass] pass.
+    MonomorphizeError(MonomorphizeError),
 }
 
 impl QSystemPass {
