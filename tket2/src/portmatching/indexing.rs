@@ -1,56 +1,95 @@
 //! Indexing schemes for pattern matching with portmatching.
 //!
-//! Indexing schemes assign a unique variable name for every variable (i.e every
-//! port and node in the hugr). This is used by the portmatcher to express
-//! constraints to be checked whilst matching.
-
-use std::collections::BTreeMap;
+//! Indexing schemes assign a unique variable names (keys) for every element
+//! in the hugr that is being matched. We currently match dataflow wires
+//! (uniquely identified by their outgoing port) and nodes.
+//!
+//! The important part of indexing schemes is that the variable names are
+//! "canonical" in some sense: that is, multiple patterns that overlap should
+//! as much as possible be using the same variable names. Thus, the overlap
+//! between constraints between different patterns is maximised.
 
 use derive_more::{Display, Error, From};
 use hugr::{HugrView, PortIndex};
 use itertools::{Either, Itertools};
-use portmatching as pm;
+use map::HugrBindMap;
+use portmatching::{self as pm, BindMap};
 
 use crate::Circuit;
 
+mod map;
 mod path;
-pub(super) use path::{HugrPath, HugrPathBuilder};
+pub(super) use path::HugrPath;
 
 ////////////////////////////////////////////////////////////////////////////////
 //////////////////// Variable Naming scheme used for Hugrs /////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Variables refer to either a node or a port in the hugr.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, From, serde::Serialize, serde::Deserialize)]
+/// Symbols used as keys that bind to hugr entities at pattern matching time.
+///
+/// A "match" is then a mapping from these keys to values in the hugr being
+/// matched.
+#[derive(
+    Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub enum HugrVariableID {
-    /// A variable that binds to a node.
-    Node(HugrNodeID),
-    /// A variable that binds to a port.
-    Port(HugrPortID),
+    /// A variable that binds to a hugr node.
+    Op(HugrNodeID),
+    /// A variable that binds to a copyable hugr value.
+    ///
+    /// We identify a wire by the "smallest" port it is attached to, according
+    /// to some canonical port ordering.
+    CopyableWire(HugrPortID),
+    /// A variable that binds to a linear hugr value.
+    ///
+    /// It is useful to distinguish between linear and copyable wires, as
+    /// constraints on linear types have stronger guarantees (e.g. there may
+    /// be at most one incoming port connected to it).
+    ///
+    /// We identify a wire by the "smallest" port it is attached to, according
+    /// to some canonical port ordering.
+    LinearWire(HugrPortID),
+}
+
+impl From<HugrNodeID> for HugrVariableID {
+    fn from(node: HugrNodeID) -> Self {
+        Self::Op(node)
+    }
 }
 
 impl HugrVariableID {
     fn path(&self) -> HugrPath {
         match self {
-            HugrVariableID::Node(node) => node.path_from_root,
-            HugrVariableID::Port(port) => port.node.path_from_root,
+            HugrVariableID::Op(node) => node.path_from_root,
+            HugrVariableID::CopyableWire(port) => port.node.path_from_root,
+            HugrVariableID::LinearWire(port) => port.node.path_from_root,
         }
     }
 }
 
-/// The value of a variable in the indexing scheme, either a node or a port.
+/// The values that variables can be bound to, either a node or a wire,
+/// represented by the unique outgoing port on that wire.
+///
+/// This representation assumes that there is always a unique outgoing port for
+/// every wire.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum HugrVariableValue {
     /// The value of a HugrVariableID::Node variable.
     Node(hugr::Node),
-    /// The value of a HugrVariableID::Port(HugrPortID::Incoming) variable.
-    IncomingPort(hugr::Node, hugr::IncomingPort),
-    /// The value of a HugrVariableID::Port(HugrPortID::Outgoing) variable.
-    OutgoingPort(hugr::Node, hugr::OutgoingPort),
+    /// The value of a HugrVariableID::{Copyable, Linear}Wire variable,
+    /// identified by the outgoing port.
+    Wire(hugr::Wire),
 }
 
-/// A map to store bindings for variables in a hugr.
-pub type HugrBindMap = BTreeMap<HugrVariableID, HugrVariableValue>;
+impl HugrVariableValue {
+    fn new_wire(node: hugr::Node, port: impl Into<hugr::OutgoingPort>) -> Self {
+        Self::Wire(hugr::Wire::new(node, port))
+    }
+
+    fn new_node(node: hugr::Node) -> Self {
+        Self::Node(node)
+    }
+}
 
 /// A port variable ID, given by a node ID and a port offset.
 #[derive(
@@ -68,20 +107,23 @@ impl HugrPortID {
         Self { node, port }
     }
 
-    /// Resolve an outgoing port ID given `bindings` that specify the opposite port.
+    /// Resolve a port ID given `bindings` that contains a binding for the node.
     ///
-    /// Returns a HugrVariableValue::OutgoingPort variant. Calling this on an
-    /// incoming port ID will result in a panic.
+    /// Returns a HugrVariableValue::OutgoingPort variant. If the port is an
+    /// incoming port, then the connected outgoing port is returned.
     fn resolve(&self, bindings: &HugrBindMap, hugr: &impl HugrView) -> Option<HugrVariableValue> {
-        let &HugrVariableValue::Node(node) = bindings.get(&self.node.into())? else {
-            panic!("expected node to be bound");
-        };
+        let node = bindings.get_node(self.node)?;
         match self.port.as_directed() {
             Either::Left(in_port) if hugr.num_inputs(node) > in_port.index() => {
-                Some(HugrVariableValue::IncomingPort(node, in_port))
+                let (node, out_port) = hugr
+                    .linked_outputs(node, in_port)
+                    .exactly_one()
+                    .ok()
+                    .expect("indexing does not handle wires with zero or multiple outputs");
+                Some(HugrVariableValue::new_wire(node, out_port))
             }
             Either::Right(out_port) if hugr.num_outputs(node) > out_port.index() => {
-                Some(HugrVariableValue::OutgoingPort(node, out_port))
+                Some(HugrVariableValue::new_wire(node, out_port))
             }
             _ => None,
         }
@@ -109,24 +151,9 @@ impl HugrNodeID {
     }
 }
 
-impl From<(hugr::Node, hugr::Port)> for HugrVariableValue {
-    fn from((node, port): (hugr::Node, hugr::Port)) -> Self {
-        match port.as_directed() {
-            Either::Left(in_port) => HugrVariableValue::IncomingPort(node, in_port),
-            Either::Right(out_port) => HugrVariableValue::OutgoingPort(node, out_port),
-        }
-    }
-}
-
-impl From<(hugr::Node, hugr::IncomingPort)> for HugrVariableValue {
-    fn from((node, port): (hugr::Node, hugr::IncomingPort)) -> Self {
-        HugrVariableValue::IncomingPort(node, port)
-    }
-}
-
 impl From<(hugr::Node, hugr::OutgoingPort)> for HugrVariableValue {
     fn from((node, port): (hugr::Node, hugr::OutgoingPort)) -> Self {
-        HugrVariableValue::OutgoingPort(node, port)
+        HugrVariableValue::new_wire(node, port)
     }
 }
 
@@ -136,66 +163,15 @@ impl From<hugr::Node> for HugrVariableValue {
     }
 }
 
-impl PartialOrd for HugrVariableID {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for HugrVariableID {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let self_path = self.path();
-        let other_path = other.path();
-
-        // Compare paths, break ties with variable type
-        self_path.cmp(&other_path).then_with(|| {
-            use HugrVariableID::*;
-            match (self, other) {
-                (Node(..), Port(..)) => std::cmp::Ordering::Less,
-                (Port(..), Node(..)) => std::cmp::Ordering::Greater,
-                (Port(self_port), Port(other_port)) => self_port.cmp(&other_port),
-                (Node(..), Node(..)) => std::cmp::Ordering::Equal,
-            }
-        })
-    }
-}
-
 /// Conversion error of HugrVariableValue to native Hugr types
 #[derive(Debug, Error, Display)]
 pub enum UnexpectedValueType {
     /// Unexpected value type: Node
     #[display("unexpected value type: Node")]
     Node,
-    /// Unexpected value type: IncomingPort
-    #[display("unexpected value type: IncomingPort")]
-    IncomingPort,
     /// Unexpected value type: OutgoingPort
     #[display("unexpected value type: OutgoingPort")]
     OutgoingPort,
-}
-
-impl TryFrom<HugrVariableValue> for (hugr::Node, hugr::Port) {
-    type Error = UnexpectedValueType;
-
-    fn try_from(value: HugrVariableValue) -> Result<Self, Self::Error> {
-        match value {
-            HugrVariableValue::Node(..) => Err(UnexpectedValueType::Node),
-            HugrVariableValue::IncomingPort(node, in_port) => Ok((node, in_port.into())),
-            HugrVariableValue::OutgoingPort(node, out_port) => Ok((node, out_port.into())),
-        }
-    }
-}
-
-impl TryFrom<HugrVariableValue> for (hugr::Node, hugr::IncomingPort) {
-    type Error = UnexpectedValueType;
-
-    fn try_from(value: HugrVariableValue) -> Result<Self, Self::Error> {
-        match value {
-            HugrVariableValue::Node(..) => Err(UnexpectedValueType::Node),
-            HugrVariableValue::IncomingPort(node, in_port) => Ok((node, in_port)),
-            HugrVariableValue::OutgoingPort(..) => Err(UnexpectedValueType::OutgoingPort),
-        }
-    }
 }
 
 impl TryFrom<HugrVariableValue> for (hugr::Node, hugr::OutgoingPort) {
@@ -204,8 +180,7 @@ impl TryFrom<HugrVariableValue> for (hugr::Node, hugr::OutgoingPort) {
     fn try_from(value: HugrVariableValue) -> Result<Self, Self::Error> {
         match value {
             HugrVariableValue::Node(..) => Err(UnexpectedValueType::Node),
-            HugrVariableValue::IncomingPort(..) => Err(UnexpectedValueType::IncomingPort),
-            HugrVariableValue::OutgoingPort(node, out_port) => Ok((node, out_port)),
+            HugrVariableValue::Wire(wire) => Ok((wire.node(), wire.source())),
         }
     }
 }
@@ -216,8 +191,7 @@ impl TryFrom<HugrVariableValue> for hugr::Node {
     fn try_from(value: HugrVariableValue) -> Result<Self, Self::Error> {
         match value {
             HugrVariableValue::Node(node) => Ok(node),
-            HugrVariableValue::IncomingPort(..) => Err(UnexpectedValueType::IncomingPort),
-            HugrVariableValue::OutgoingPort(..) => Err(UnexpectedValueType::OutgoingPort),
+            HugrVariableValue::Wire(..) => Err(UnexpectedValueType::OutgoingPort),
         }
     }
 }
@@ -226,16 +200,20 @@ impl TryFrom<HugrVariableValue> for hugr::Node {
 ////////////// Indexing scheme: resolve variable IDs to values /////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-/// An indexing scheme for hugrs that does not handle hierarchy.
+/// An indexing scheme for hugrs
 #[derive(Clone, Debug, Default)]
-pub struct FlatHugrIndexingScheme;
+pub struct HugrIndexingScheme;
 
-impl pm::IndexingScheme for FlatHugrIndexingScheme {
+impl pm::IndexingScheme for HugrIndexingScheme {
     type BindMap = HugrBindMap;
+    type Key = <HugrBindMap as BindMap>::Key;
+    type Value = <HugrBindMap as BindMap>::Value;
 
     fn required_bindings(&self, key: &HugrVariableID) -> Vec<HugrVariableID> {
+        use HugrVariableID::*;
+
         match key {
-            HugrVariableID::Node(node) => {
+            Op(node) => {
                 if let Some(parent_path) = node.path_from_root.parent() {
                     vec![HugrNodeID::new(parent_path).into()]
                 } else {
@@ -243,26 +221,27 @@ impl pm::IndexingScheme for FlatHugrIndexingScheme {
                     vec![]
                 }
             }
-            HugrVariableID::Port(port) => vec![port.node.into()],
+            CopyableWire(port) | LinearWire(port) => vec![port.node.into()],
         }
     }
 }
 
-impl<H: HugrView> pm::IndexedData for Circuit<H> {
-    type IndexingScheme = FlatHugrIndexingScheme;
+impl<H: HugrView> pm::IndexedData<HugrVariableID> for Circuit<H> {
+    type IndexingScheme = HugrIndexingScheme;
+    type Value = <HugrIndexingScheme as pm::IndexingScheme>::Value;
+    type BindMap = <HugrIndexingScheme as pm::IndexingScheme>::BindMap;
 
     fn list_bind_options(
         &self,
         key: &HugrVariableID,
         known_bindings: &HugrBindMap,
     ) -> Vec<HugrVariableValue> {
+        use HugrVariableID::*;
         match key {
-            &HugrVariableID::Node(node) => {
+            Op(node) => {
                 if let Some((parent_path, port, _)) = node.path_from_root.uncons() {
                     let parent_node_id = HugrNodeID::new(parent_path);
-                    let Some(&HugrVariableValue::Node(parent)) =
-                        known_bindings.get(&parent_node_id.into())
-                    else {
+                    let Some(parent) = known_bindings.get_node(parent_node_id) else {
                         return vec![];
                     };
                     follow_port(parent, port, self.hugr()).map_into().collect()
@@ -272,38 +251,36 @@ impl<H: HugrView> pm::IndexedData for Circuit<H> {
                     nodes.map(HugrVariableValue::Node).map_into().collect()
                 }
             }
-            HugrVariableID::Port(port) => port
-                .resolve(known_bindings, self.hugr())
-                .into_iter()
-                .collect(),
+            CopyableWire(port) | LinearWire(port) => {
+                let Some(val) = port.resolve(known_bindings, self.hugr()) else {
+                    return vec![];
+                };
+                vec![val]
+            }
         }
     }
 }
 
+/// Iterator over the nodes reachable from `parent` through `port`
 fn follow_port(
     parent: hugr::Node,
     port: hugr::Port,
     hugr: &impl HugrView,
 ) -> impl Iterator<Item = hugr::Node> + '_ {
-    let linked_ports = match port.as_directed() {
-        Either::Left(in_port) if hugr.num_inputs(parent) > in_port.index() => {
-            Some(hugr.linked_ports(parent, in_port))
-        }
-        Either::Right(out_port) if hugr.num_outputs(parent) > out_port.index() => {
-            Some(hugr.linked_ports(parent, out_port))
-        }
-        _ => None,
-    };
-    linked_ports.into_iter().flatten().map(|(n, _)| n)
+    if hugr.num_ports(parent, port.direction()) <= port.index() {
+        return None.into_iter().flatten();
+    }
+    let linked_ports = hugr.linked_ports(parent, port);
+    Some(linked_ports.map(|(n, _)| n)).into_iter().flatten()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::extension::rotation::ROTATION_TYPE;
+    use crate::extension::rotation::rotation_type;
     use crate::Tk2Op;
     use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
-    use hugr::extension::prelude::QB_T;
+    use hugr::extension::prelude::qb_t;
     use hugr::ops::handle::NodeHandle;
     use hugr::types::Signature;
     use hugr::{Direction, Port};
@@ -311,7 +288,7 @@ mod tests {
 
     fn create_test_circuit() -> (Circuit<impl HugrView>, hugr::Node) {
         let mut hrz =
-            DFGBuilder::new(Signature::new(vec![QB_T, ROTATION_TYPE], vec![QB_T])).unwrap();
+            DFGBuilder::new(Signature::new(vec![qb_t(), rotation_type()], vec![qb_t()])).unwrap();
         let [q_in, angle_in] = hrz.input_wires_arr();
 
         let res = hrz.add_dataflow_op(Tk2Op::H, [q_in]).unwrap();
@@ -324,10 +301,7 @@ mod tests {
         let res = hrz.add_dataflow_op(Tk2Op::Rz, [q, angle_in]).unwrap();
         let q = res.out_wire(0);
 
-        let res = hrz
-            .finish_hugr_with_outputs([q], &crate::extension::REGISTRY)
-            .unwrap()
-            .into();
+        let res = hrz.finish_hugr_with_outputs([q]).unwrap().into();
         (res, fst_rz)
     }
 
@@ -335,21 +309,23 @@ mod tests {
     fn test_list_bind_options() {
         let (circuit, root_choice) = create_test_circuit();
         let mut known_bindings = HugrBindMap::new();
-        let scheme = FlatHugrIndexingScheme;
+        let scheme = HugrIndexingScheme;
 
         // Test for root node
         assert!(scheme
-            .required_bindings(&HugrVariableID::Node(HugrNodeID::root()))
+            .required_bindings(&HugrVariableID::Op(HugrNodeID::root()))
             .is_empty());
         let root_options =
-            circuit.list_bind_options(&HugrVariableID::Node(HugrNodeID::root()), &known_bindings);
+            circuit.list_bind_options(&HugrVariableID::Op(HugrNodeID::root()), &known_bindings);
         assert_eq!(root_options.len(), 3); // H gate, and 2x Rz nodes
 
         // Bind the root node
-        known_bindings.insert(
-            HugrVariableID::Node(HugrNodeID::root()),
-            HugrVariableValue::Node(root_choice),
-        );
+        known_bindings
+            .bind(
+                HugrVariableID::Op(HugrNodeID::root()),
+                HugrVariableValue::Node(root_choice),
+            )
+            .unwrap();
 
         // Test for incoming port
         let ports = [
@@ -377,36 +353,34 @@ mod tests {
                 panic!("Expected node");
             };
             assert_eq!(circuit.hugr().get_optype(n), &optypes[i - 1]);
-            known_bindings.insert(var, sole_option);
+            known_bindings.bind(var, sole_option).unwrap();
         }
 
         // The last port along the path should have two options
         // (the two uses of the rotation angle)
         let path = HugrPath::try_from(&ports as &[_]).unwrap();
-        let var: HugrVariableID = HugrNodeID {
-            path_from_root: path,
-        }
-        .into();
+        let var: HugrVariableID = HugrNodeID::new(path).into();
         let options = circuit.list_bind_options(&var, &known_bindings);
         assert_eq!(options.len(), 2);
         for option in &options {
             let &HugrVariableValue::Node(n) = option else {
-                panic!("Expected incoming port");
+                panic!("Expected node");
             };
             assert_eq!(circuit.hugr().get_optype(n), &Tk2Op::Rz.into());
             if n != root_choice {
                 // Bind the second Rz node
-                known_bindings.insert(var, option.clone());
+                known_bindings.bind(var, option.clone()).unwrap();
             }
         }
+        assert!(known_bindings.get_node(HugrNodeID::new(path)).is_some());
 
         // Test for ports
         let ports = [
-            Port::new(Direction::Outgoing, 1),
+            Port::new(Direction::Outgoing, 0),
             Port::new(Direction::Incoming, 0),
         ];
         for port in ports {
-            let port_var = HugrVariableID::Port(HugrPortID {
+            let port_var = HugrVariableID::CopyableWire(HugrPortID {
                 node: HugrNodeID::new(path),
                 port,
             });
@@ -415,43 +389,33 @@ mod tests {
                 .into_iter()
                 .exactly_one()
                 .expect("expected exactly one option");
-            let (n, p): (hugr::Node, hugr::Port) = match port.direction() {
+            match port.direction() {
                 Direction::Incoming => {
-                    let &HugrVariableValue::IncomingPort(n, p) = &sole_option else {
-                        panic!("Expected incoming port");
+                    let &HugrVariableValue::Wire(wire) = &sole_option else {
+                        panic!("Expected wire");
                     };
-                    (n, p.into())
+                    // (n, p) is opposite `port`, so at the previous rotation
+                    println!("1");
+                    assert_eq!(wire.node(), root_choice);
+                    assert_eq!(wire.source(), 0.into());
                 }
                 Direction::Outgoing => {
-                    let &HugrVariableValue::OutgoingPort(n, p) = &sole_option else {
+                    let &HugrVariableValue::Wire(wire) = &sole_option else {
                         panic!("Expected outgoing port");
                     };
-                    (n, p.into())
+                    println!("2");
+                    assert_eq!(circuit.hugr().get_optype(wire.node()), &Tk2Op::Rz.into());
+                    assert_eq!(wire.source(), port.as_outgoing().unwrap());
+                    assert_ne!(wire.node(), root_choice);
+                    assert_eq!(
+                        circuit
+                            .hugr()
+                            .linked_inputs(wire.node(), wire.source())
+                            .count(),
+                        1
+                    );
                 }
-            };
-            assert_eq!(circuit.hugr().get_optype(n), &Tk2Op::Rz.into());
-            assert_eq!(p, port);
-            assert_ne!(n, root_choice);
+            }
         }
-    }
-
-    #[test]
-    fn test_var_ord() {
-        let path = HugrPath::try_from(&[(Port::new(Direction::Incoming, 0), 0)]).unwrap();
-        let node = HugrNodeID::new(path);
-        let inp = HugrPortID {
-            node,
-            port: Port::new(Direction::Incoming, 0),
-        };
-        let out = HugrPortID {
-            node,
-            port: Port::new(Direction::Outgoing, 0),
-        };
-
-        assert!(inp < out);
-
-        let var_in: HugrVariableID = inp.into();
-        let var_out: HugrVariableID = out.into();
-        assert!(var_in < var_out);
     }
 }

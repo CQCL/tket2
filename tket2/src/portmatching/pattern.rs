@@ -183,7 +183,7 @@ fn get_io_boundary(
     let hugr = circuit.hugr();
 
     let convert_to_port_var = |val: HugrVariableValue| -> HugrPortID {
-        let HugrVariableID::Port(port) = var_map[&val] else {
+        let HugrVariableID::CopyableWire(port) = var_map[&val] else {
             panic!("Invalid variable ID");
         };
         port
@@ -493,7 +493,7 @@ mod tests {
             .iter()
             .filter_map(|cons| {
                 if let Predicate::NodeOp(op) = cons.predicate() {
-                    let HugrVariableID::Node(node) = cons.required_bindings()[0] else {
+                    let HugrVariableID::Op(node) = cons.required_bindings()[0] else {
                         panic!("Invalid variable ID");
                     };
                     Some((op.clone(), node))
@@ -517,12 +517,14 @@ mod tests {
             .filter(|cons| cons.predicate() == &linear_wire_pred)
             .exactly_one()
             .unwrap();
-        let HugrVariableID::Port(HugrPortID { port, .. }) = edge_constraint.required_bindings()[0]
+        let HugrVariableID::CopyableWire(HugrPortID { port, .. }) =
+            edge_constraint.required_bindings()[0]
         else {
             panic!("invalid var type");
         };
         assert_eq!(port.direction(), Direction::Outgoing);
-        let HugrVariableID::Port(HugrPortID { port, .. }) = edge_constraint.required_bindings()[1]
+        let HugrVariableID::CopyableWire(HugrPortID { port, .. }) =
+            edge_constraint.required_bindings()[1]
         else {
             panic!("invalid var type");
         };
@@ -578,7 +580,7 @@ mod tests {
             .filter_map(|cons| {
                 if let Predicate::NodeOp(op) = cons.predicate() {
                     assert_eq!(op, &Tk2Op::Rx.into());
-                    let HugrVariableID::Node(node) = cons.required_bindings()[0] else {
+                    let HugrVariableID::Op(node) = cons.required_bindings()[0] else {
                         panic!("Invalid variable ID");
                     };
                     Some(node)
@@ -603,13 +605,13 @@ mod tests {
         // one incoming and one outgoing port
         assert!(constraints.iter().any(|constraint| {
             let has_outgoing = constraint.required_bindings().iter().any(|b| {
-                let HugrVariableID::Port(HugrPortID { port, .. }) = b else {
+                let HugrVariableID::CopyableWire(HugrPortID { port, .. }) = b else {
                     return false;
                 };
                 port.direction() == Direction::Outgoing
             });
             let has_incoming = constraint.required_bindings().iter().any(|b| {
-                let HugrVariableID::Port(HugrPortID { port, .. }) = b else {
+                let HugrVariableID::CopyableWire(HugrPortID { port, .. }) = b else {
                     return false;
                 };
                 port.direction() == Direction::Incoming
@@ -631,7 +633,7 @@ mod tests {
         assert!(constraints.iter().any(|constraint| {
             let is_copyable = constraint.predicate() == &copyable_wire_pred;
             let all_incoming = constraint.required_bindings().iter().all(|b| {
-                let HugrVariableID::Port(HugrPortID { port, .. }) = b else {
+                let HugrVariableID::CopyableWire(HugrPortID { port, .. }) = b else {
                     return false;
                 };
                 port.direction() == Direction::Incoming

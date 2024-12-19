@@ -24,6 +24,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci_run)'] }
 missing_docs = "warn"
 
 [patch.crates-io]
+petgraph = { git = "https://github.com/petgraph/petgraph.git", rev = "4505389", default-features = false }
 
 # Uncomment to use unreleased versions of hugr
 # hugr = { git = "https://github.com/CQCL/hugr", ref = "1e9eee2" }
