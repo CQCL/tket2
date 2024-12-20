@@ -54,16 +54,65 @@
 //! # }
 //! ```
 
-// pub mod constraint;
+pub mod branch;
 pub mod indexing;
-// pub mod matcher;
-// pub mod pattern;
-// pub mod predicate;
+pub mod matcher;
+pub mod pattern;
+pub mod predicate;
 
-pub use indexing::{HugrVariableID, HugrVariableValue};
+use std::borrow::Borrow;
+
+use itertools::Itertools;
+use portmatching as pm;
+
+use branch::BranchClass;
+use indexing::{HugrBindMap, HugrVariableID, HugrVariableValue};
+use predicate::InvalidPredicateError;
+pub use predicate::Predicate;
+
+type Constraint = pm::Constraint<HugrVariableID, Predicate>;
 
 // use matcher::MatchOp;
 // pub use pattern::CircuitPattern;
+
+fn to_hugr_values_tuple<'b, V1, V2, B>(
+    args: impl IntoIterator<Item = &'b B>,
+) -> Result<(V1, V2), InvalidPredicateError>
+where
+    B: Borrow<HugrVariableValue> + 'b,
+    V1: TryFrom<HugrVariableValue>,
+    V2: TryFrom<HugrVariableValue>,
+{
+    let (v1, v2) = args
+        .into_iter()
+        .collect_tuple()
+        .ok_or(InvalidPredicateError::InvalidArity)?;
+    let v1 = v1.borrow().clone();
+    let v2 = v2.borrow().clone();
+    let v1 = v1
+        .try_into()
+        .map_err(|_| InvalidPredicateError::InvalidVariableType)?;
+    let v2 = v2
+        .try_into()
+        .map_err(|_| InvalidPredicateError::InvalidVariableType)?;
+    Ok((v1, v2))
+}
+
+fn to_hugr_values_vec<'b, V, B>(
+    args: impl IntoIterator<Item = &'b B>,
+) -> Result<Vec<V>, InvalidPredicateError>
+where
+    B: Borrow<HugrVariableValue> + 'b,
+    V: TryFrom<HugrVariableValue>,
+{
+    args.into_iter()
+        .map(|arg| {
+            let var = arg.borrow().clone();
+            var.try_into()
+                .map_err(|_| InvalidPredicateError::InvalidVariableType)
+        })
+        .collect()
+}
 
 #[cfg(test)]
 mod tests {

@@ -1,0 +1,248 @@
+//! Implements predicate logic necessary to construct correct pattern matchers
+//! as well as to evaluate predicates efficiently.
+//!
+//! Concretely, this module provides three things:
+//!  1. Specifies the branch classes that cluster predicates into groups that can
+//!     be evaluated together (e.g. mutually exclusive predicates)
+//!  2. Implements [`pm::predicate::ConstraintLogic`] to provide the logic to
+//!     simplify predicates when conditioned on other predicates
+//!  3. Provides a branch selector to evaluate predicates that are in the same
+//!     class efficiently in batches.
+//!
+//! 1. and 2. are necessary to construct a pattern matcher, while 3. is necessary
+//! to evaluate predicates efficiently when traversing it.
+
+use std::{cmp, collections::BTreeSet};
+
+use hugr::Hugr;
+use itertools::Itertools;
+use portmatching::{self as pm, pattern::Satisfiable};
+
+use super::{
+    indexing::{HugrNodeID, HugrPortID},
+    matcher::MatchOp,
+    to_hugr_values_vec, HugrVariableID, HugrVariableValue, Predicate,
+};
+
+/// The branch classes that cluster hugr [`Predicate`]s into groups that can be
+/// evaluated and constructed together.
+///
+/// These dictate the set of available transitions within a pattern matcher: all
+/// outgoing transitions at any one state will share one branch class.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum BranchClass {
+    /// The class of all [`Predicate::IsOpEqual`] predicates.
+    ///
+    /// The class is parametrised on the node the predicate applies to. Any two
+    /// constraints in the same class must have the same MatchOp or are mutually
+    /// exclusive.
+    IsOpEqualClass(HugrNodeID),
+    /// The class of all [`Predicate::IsDistinctFrom`] predicates.
+    ///
+    /// The class is parametrised by the first node of the predicate -- the one
+    /// that is distinct from all others. The logical relationship between two
+    /// constraints of the same class is given by the relationship between the
+    /// sets of all but the first predicate argument: e.g. if one's set is a
+    /// subset of another, then there is a logical implication from the second
+    /// to the first.
+    IsDistinctFromClass(HugrNodeID),
+    /// One of two classes for [`Predicate::IsWireSource`].
+    ///
+    /// The class is parametrised by the node and port the wire is connected to.
+    /// There can only be one wire at any one port. Hence any two constraints
+    /// in the same class must be connected to the same wire or be mutually
+    /// exclusive.
+    OccupyOutgoingPortClass(HugrNodeID, hugr::OutgoingPort),
+    /// One of up to two classes for [`Predicate::IsWireSink`].
+    ///
+    /// The class is parametrised by the node and port the wire is connected to.
+    /// There can only be one wire at any one port. Hence any two constraints
+    /// in the same class must be connected to the same wire or be mutually
+    /// exclusive.
+    OccupyIncomingPortClass(HugrNodeID, hugr::IncomingPort),
+    /// The second class for [`Predicate::IsWireSource`].
+    ///
+    /// The class is parametrised by the wire this predicate refers to. The source
+    /// of a wire is always unique. Hence any two constraints on the source of
+    /// the same wire must be for the same node and port or be mutually
+    /// exclusive.
+    IsWireSourceClass(HugrPortID),
+    /// The second class for [`Predicate::IsWireSource`].
+    ///
+    /// This class only applies if the wire type is linear ([`HugrVariableID::LinearWire`]).
+    /// The class is parametrised by the wire this predicate refers to. The sink
+    /// of a linear wire is always unique. Hence any two constraints on the sink of
+    /// the same wire must be for the same node and port or be mutually
+    /// exclusive.
+    IsLinearWireSinkClass(HugrPortID),
+}
+
+impl Predicate {
+    fn to_constraint(&self, keys: Vec<HugrVariableID>) -> pm::Constraint<HugrVariableID, Self> {
+        pm::Constraint::try_new(self.clone(), keys).unwrap()
+    }
+}
+
+impl pm::predicate::ConstraintLogic<HugrVariableID> for Predicate {
+    type BranchClass = BranchClass;
+
+    fn get_classes(&self, keys: &[HugrVariableID]) -> Vec<Self::BranchClass> {
+        use HugrVariableID::*;
+        use Predicate::*;
+
+        match *self {
+            IsOpEqual(_) => {
+                let HugrVariableID::Op(node) = keys[0] else {
+                    panic!("invalid key type");
+                };
+                vec![BranchClass::IsOpEqualClass(node)]
+            }
+            IsWireSource(out_port) => {
+                let HugrVariableID::Op(node) = keys[0] else {
+                    panic!("invalid key type");
+                };
+                let wire = match keys[1] {
+                    CopyableWire(wire) | LinearWire(wire) => wire,
+                    Op(_) => panic!("invalid key type"),
+                };
+                vec![
+                    BranchClass::IsWireSourceClass(wire),
+                    BranchClass::OccupyOutgoingPortClass(node, out_port),
+                ]
+            }
+            IsWireSink(in_port) => {
+                let HugrVariableID::Op(node) = keys[0] else {
+                    panic!("invalid key type");
+                };
+                match keys[1] {
+                    Op(_) => panic!("invalid key type"),
+                    CopyableWire(_) => vec![BranchClass::OccupyIncomingPortClass(node, in_port)],
+                    LinearWire(wire) => vec![
+                        BranchClass::IsLinearWireSinkClass(wire),
+                        BranchClass::OccupyIncomingPortClass(node, in_port),
+                    ],
+                }
+            }
+            IsDistinctFrom { .. } => {
+                let HugrVariableID::Op(node) = keys[0] else {
+                    panic!("invalid key type");
+                };
+                vec![BranchClass::IsDistinctFromClass(node)]
+            }
+        }
+    }
+
+    fn condition_on(
+        &self,
+        keys: &[HugrVariableID],
+        known_constraints: &BTreeSet<pm::Constraint<HugrVariableID, Self>>,
+        prev_constraints: &[pm::Constraint<HugrVariableID, Self>],
+    ) -> pm::pattern::Satisfiable<pm::Constraint<HugrVariableID, Self>> {
+        match self {
+            Predicate::IsOpEqual(op) => {
+                let HugrVariableID::Op(node) = keys[0] else {
+                    panic!("invalid key type");
+                };
+                for prev_op in find_op_equal(node, prev_constraints) {
+                    if prev_op == op {
+                        // Already satisfied previously
+                        return Satisfiable::No;
+                    }
+                }
+                let Some(known_op) = find_op_equal(node, known_constraints).next() else {
+                    // No existing constraint
+                    return Satisfiable::Yes(self.to_constraint(keys.to_vec()));
+                };
+                if known_op == op {
+                    // Already satisfied
+                    Satisfiable::Tautology
+                } else {
+                    // Contradicting constraint already satisfied
+                    Satisfiable::No
+                }
+            }
+            Predicate::IsDistinctFrom { .. } => {
+                let HugrVariableID::Op(fst_node) = keys[0] else {
+                    panic!("invalid key type");
+                };
+
+                let mut other_nodes = keys[1..]
+                    .iter()
+                    .map(|key| {
+                        let HugrVariableID::Op(node) = key else {
+                            panic!("invalid key type");
+                        };
+                        *node
+                    })
+                    .collect_vec();
+
+                if contains_superset_distinct_predicate(fst_node, &other_nodes, prev_constraints) {
+                    // We would have stopped at the first satisfied constraint
+                    return Satisfiable::No;
+                }
+                remove_redundant_nodes(&mut other_nodes, known_constraints);
+
+                if other_nodes.is_empty() {
+                    return Satisfiable::Tautology;
+                }
+                let new_pred = Predicate::IsDistinctFrom {
+                    n_other: cmp::Reverse(other_nodes.len()),
+                };
+                let new_keys = other_nodes
+                    .into_iter()
+                    .map(HugrVariableID::Op)
+                    .collect_vec();
+                let new_constraint = pm::Constraint::try_new(new_pred, new_keys).unwrap();
+
+                Satisfiable::Yes(new_constraint)
+            }
+            Predicate::IsWireSource(_) => {
+                let self_constraint = self.to_constraint(keys.to_vec());
+                if prev_constraints.contains(&self_constraint) {
+                    // Already satisfied previously
+                    return Satisfiable::No;
+                }
+                todo!()
+            }
+            Predicate::IsWireSink(_) => {
+                let self_constraint = self.to_constraint(keys.to_vec());
+                if prev_constraints.contains(&self_constraint) {
+                    // Already satisfied previously
+                    return Satisfiable::No;
+                }
+                todo!()
+            }
+        }
+    }
+}
+
+fn remove_redundant_nodes(
+    other_nodes: &mut Vec<HugrNodeID>,
+    known_constraints: &BTreeSet<portmatching::Constraint<HugrVariableID, Predicate>>,
+) {
+    todo!()
+}
+
+fn contains_superset_distinct_predicate(
+    fst_node: HugrNodeID,
+    other_nodes: &[HugrNodeID],
+    prev_constraints: &[portmatching::Constraint<HugrVariableID, Predicate>],
+) -> bool {
+    todo!()
+}
+
+fn find_op_equal<'c>(
+    node: HugrNodeID,
+    known_constraints: impl IntoIterator<Item = &'c pm::Constraint<HugrVariableID, Predicate>> + 'c,
+) -> impl Iterator<Item = &'c MatchOp> + 'c {
+    known_constraints.into_iter().filter_map(move |c| {
+        let Predicate::IsOpEqual(op) = c.predicate() else {
+            return None;
+        };
+        if c.required_bindings()[0] == HugrVariableID::Op(node) {
+            Some(op)
+        } else {
+            None
+        }
+    })
+}

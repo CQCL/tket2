@@ -1,5 +1,9 @@
 //! Circuit Patterns for pattern matching
 
+mod logic;
+mod uf;
+use logic::PatternLogic;
+
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt::Debug;
 
@@ -12,9 +16,8 @@ use itertools::Itertools;
 use portmatching::{self as pm, ArityPredicate};
 use priority_queue::PriorityQueue;
 
-use super::constraint::{Constraint, Predicate};
-use super::indexing::{HugrBindMap, HugrNodeID, HugrPath, HugrPathBuilder, HugrPortID};
-use super::{HugrVariableID, HugrVariableValue};
+use super::indexing::{HugrNodeID, HugrPath, HugrPortID};
+use super::{Constraint, HugrBindMap, HugrVariableID, HugrVariableValue, Predicate};
 use crate::rewrite::{InvalidSubgraph, Subcircuit};
 use crate::Circuit;
 
@@ -40,16 +43,18 @@ pub struct CircuitPattern {
 
 impl pm::Pattern for CircuitPattern {
     type Key = HugrVariableID;
-    type Predicate = Predicate;
-    type Error = ();
+    type Logic = PatternLogic;
+    type Constraint = Constraint;
 
-    fn try_to_constraint_vec(
-        &self,
-    ) -> Result<Vec<pm::Constraint<Self::Key, Self::Predicate>>, Self::Error> {
-        Ok(self.constraints.clone())
+    fn required_bindings(&self) -> Vec<Self::Key> {
+        todo!()
+    }
+
+    fn into_logic(self) -> Self::Logic {
+        todo!()
     }
 }
-
+/*
 /// Conversion error from circuit to pattern.
 #[derive(Display, Debug, Error, PartialEq, Eq)]
 #[non_exhaustive]
@@ -97,7 +102,7 @@ impl CircuitPattern {
             let op = cmd.optype().clone();
             let val = cmd.node().into();
             let var = var_map[&val];
-            let pred = Predicate::NodeOp(op.into());
+            let pred = Predicate::IsOpEqual(op.into());
             constraints.push(Constraint::try_new(pred, vec![var]).unwrap());
         }
 
@@ -163,7 +168,14 @@ impl CircuitPattern {
         let incoming = self
             .input_ports
             .iter()
-            .map(|ports| ports.iter().map(|&p| map_port(p, bind_map)).collect_vec())
+            .map(|ports| {
+                ports
+                    .iter()
+                    .map(|&p| {
+                        let (out_node, out_port) = map_port(p, bind_map);
+                    })
+                    .collect_vec()
+            })
             .collect();
         let outgoing = self
             .output_ports
@@ -651,3 +663,4 @@ mod tests {
         );
     }
 }
+*/

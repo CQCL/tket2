@@ -12,7 +12,7 @@
 use derive_more::{Display, Error, From};
 use hugr::{HugrView, PortIndex};
 use itertools::{Either, Itertools};
-use map::HugrBindMap;
+pub(super) use map::HugrBindMap;
 use portmatching::{self as pm, BindMap};
 
 use crate::Circuit;
@@ -82,13 +82,41 @@ pub enum HugrVariableValue {
 }
 
 impl HugrVariableValue {
-    fn new_wire(node: hugr::Node, port: impl Into<hugr::OutgoingPort>) -> Self {
+    pub(crate) fn new_wire_from_source(
+        node: hugr::Node,
+        port: impl Into<hugr::OutgoingPort>,
+    ) -> Self {
         Self::Wire(hugr::Wire::new(node, port))
     }
 
-    fn new_node(node: hugr::Node) -> Self {
+    pub(crate) fn new_wire_from_sink(
+        node: hugr::Node,
+        port: impl Into<hugr::IncomingPort>,
+        hugr: &impl HugrView,
+    ) -> Self {
+        let (out_node, out_port) = find_source(node, port.into(), hugr).unwrap();
+        Self::new_wire_from_source(out_node, out_port)
+    }
+
+    pub(crate) fn new_node(node: hugr::Node) -> Self {
         Self::Node(node)
     }
+}
+
+pub(super) fn find_source(
+    node: hugr::Node,
+    port: hugr::IncomingPort,
+    hugr: &impl HugrView,
+) -> Option<(hugr::Node, hugr::OutgoingPort)> {
+    if hugr.num_inputs(node) <= port.index() {
+        return None;
+    }
+    let res = hugr
+        .linked_outputs(node, port)
+        .exactly_one()
+        .ok()
+        .expect("indexing does not handle wires with zero or multiple outputs");
+    Some(res)
 }
 
 /// A port variable ID, given by a node ID and a port offset.
@@ -114,16 +142,12 @@ impl HugrPortID {
     fn resolve(&self, bindings: &HugrBindMap, hugr: &impl HugrView) -> Option<HugrVariableValue> {
         let node = bindings.get_node(self.node)?;
         match self.port.as_directed() {
-            Either::Left(in_port) if hugr.num_inputs(node) > in_port.index() => {
-                let (node, out_port) = hugr
-                    .linked_outputs(node, in_port)
-                    .exactly_one()
-                    .ok()
-                    .expect("indexing does not handle wires with zero or multiple outputs");
-                Some(HugrVariableValue::new_wire(node, out_port))
+            Either::Left(in_port) => {
+                let (node, out_port) = find_source(node, in_port, hugr)?;
+                Some(HugrVariableValue::new_wire_from_source(node, out_port))
             }
             Either::Right(out_port) if hugr.num_outputs(node) > out_port.index() => {
-                Some(HugrVariableValue::new_wire(node, out_port))
+                Some(HugrVariableValue::new_wire_from_source(node, out_port))
             }
             _ => None,
         }
@@ -153,7 +177,7 @@ impl HugrNodeID {
 
 impl From<(hugr::Node, hugr::OutgoingPort)> for HugrVariableValue {
     fn from((node, port): (hugr::Node, hugr::OutgoingPort)) -> Self {
-        HugrVariableValue::new_wire(node, port)
+        HugrVariableValue::new_wire_from_source(node, port)
     }
 }
 
