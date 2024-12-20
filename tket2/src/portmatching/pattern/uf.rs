@@ -6,8 +6,26 @@ use portmatching::pattern::Satisfiable;
 type PortConnections<W> = BTreeMap<hugr::Port, W>;
 type WireConnections<N> = Vec<(hugr::Port, N)>;
 
+/// Two-in-One Union find data structures to store node and wire identities.
+///
+/// Tracks which nodes and wires are known to be equal, or known to be unequal.
+/// This is more complex than having two traditional UF data structure for two
+/// reasons:
+///  1. uniting two classes of equivalent nodes potentially required to merge
+///     classes of wires too (and vice versa).
+///  2. we also track pairs of nodes and wires known to be unequal.
+///
+/// Wires may be marked as linear, in which case we can make stronger
+/// implications from known equalities/inequalities.
+///
+/// ## Important note on usage:
+/// The public facing functions return a [`Satisfiable`] enum that indicates
+/// whether the new fact was added, was already known or would have introduced
+/// a contradiction. When the latter happens, the data structure is no longer
+/// in a valid state. I repeat: do not use the data structure after receiving
+/// a [`Satisfiable::No`] response.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) struct Uf<N, W> {
+pub(super) struct Uf<N, W, Op> {
     node_roots: BTreeMap<N, N>,
     wire_roots: BTreeMap<W, W>,
 
@@ -19,6 +37,10 @@ pub(super) struct Uf<N, W> {
     ///
     /// Any non-root node is None
     node_inequality: BTreeMap<N, Option<BTreeSet<N>>>,
+    /// Map nodes to their operation
+    ///
+    /// Any non-root node is None -- roots may be None too.
+    node_op: BTreeMap<N, Option<Op>>,
 
     /// Map wires to its adjacent nodes and their ports, along with whether
     /// the wire is linear
@@ -31,22 +53,37 @@ pub(super) struct Uf<N, W> {
     wire_inequality: BTreeMap<W, Option<BTreeSet<W>>>,
 }
 
-impl<N, W> Default for Uf<N, W> {
+impl<N, W, Op> Default for Uf<N, W, Op> {
     fn default() -> Self {
         Uf {
             node_roots: BTreeMap::new(),
             wire_roots: BTreeMap::new(),
             node_connected_wires: BTreeMap::new(),
-            wire_connected_nodes: BTreeMap::new(),
             node_inequality: BTreeMap::new(),
+            node_op: BTreeMap::new(),
+            wire_connected_nodes: BTreeMap::new(),
             wire_inequality: BTreeMap::new(),
         }
     }
 }
 
-impl<N: Ord + Copy, W: Ord + Copy> Uf<N, W> {
+impl<N: Ord + Copy, W: Ord + Copy, Op: Eq> Uf<N, W, Op> {
     pub(super) fn new() -> Self {
         Uf::default()
+    }
+
+    #[must_use]
+    pub(super) fn set_op(&mut self, node: N, op: Op) -> Satisfiable {
+        self.ensure_node_exists(node);
+        let node = self.root_node(node);
+        match self.node_op[&node].as_ref() {
+            Some(curr_op) if curr_op == &op => return Satisfiable::Tautology,
+            Some(_) => return Satisfiable::No,
+            None => {
+                self.node_op.insert(node, Some(op));
+                Satisfiable::Yes(())
+            }
+        }
     }
 
     #[must_use]
@@ -139,22 +176,35 @@ impl<N: Ord + Copy, W: Ord + Copy> Uf<N, W> {
         if self.node_inequalities(node1).contains(&node2) {
             return Satisfiable::No;
         }
+        match (&self.node_op[&node1], &self.node_op[&node2]) {
+            (Some(op1), Some(op2)) if op1 != op2 => return Satisfiable::No,
+            _ => {}
+        }
 
         // We (choose to) merge node1 into node2
         self.node_roots.insert(node1, node2);
 
         // Remove node1 as root
-        let (conn1, ineq1) = self.remove_node_root(node1);
+        let (conn1, ineq1, op) = self.remove_node_root(node1);
+
+        // Set node op if known in node1
+        if let Some(op) = op {
+            self.node_op.insert(node2, Some(op));
+        }
 
         // Insert wires from node1 into node2
         for (port, wire) in conn1 {
             let is_linear = self.is_linear(wire);
-            self.set_link(node2, wire, port, is_linear);
+            if self.set_link(node2, wire, port, is_linear) == Satisfiable::No {
+                return Satisfiable::No;
+            }
         }
 
         // Insert node inequalitites from node1 into node2
         for n in ineq1 {
-            self.set_nodes_not_equal(node2, n);
+            if self.set_nodes_not_equal(node2, n) == Satisfiable::No {
+                return Satisfiable::No;
+            }
         }
 
         Satisfiable::Yes(())
@@ -258,7 +308,7 @@ impl<N: Ord + Copy, W: Ord + Copy> Uf<N, W> {
     }
 }
 
-impl<N: Ord + Copy, W: Ord + Copy> Uf<N, W> {
+impl<N: Ord + Copy, W: Ord + Copy, Op: Eq> Uf<N, W, Op> {
     fn is_linear(&mut self, w: W) -> bool {
         let root = self.root_wire(w);
         self.wire_connected_nodes[&root].as_ref().unwrap().0
@@ -286,7 +336,7 @@ impl<N: Ord + Copy, W: Ord + Copy> Uf<N, W> {
         })
     }
 
-    fn remove_node_root(&mut self, root: N) -> (PortConnections<W>, BTreeSet<N>) {
+    fn remove_node_root(&mut self, root: N) -> (PortConnections<W>, BTreeSet<N>, Option<Op>) {
         let conn_wires = self
             .node_connected_wires
             .get_mut(&root)
@@ -294,6 +344,7 @@ impl<N: Ord + Copy, W: Ord + Copy> Uf<N, W> {
             .take()
             .unwrap();
         let ineq = self.node_inequality.get_mut(&root).unwrap().take().unwrap();
+        let op = self.node_op.get_mut(&root).unwrap().take();
 
         // Remove connections to `root` at the wires
         for (p, w) in &conn_wires {
@@ -310,7 +361,7 @@ impl<N: Ord + Copy, W: Ord + Copy> Uf<N, W> {
             self.node_inequalities_mut(n).remove(&root);
         }
 
-        (conn_wires, ineq)
+        (conn_wires, ineq, op)
     }
 
     fn remove_wire_root(&mut self, root: W) -> (WireConnections<N>, BTreeSet<W>) {
@@ -343,6 +394,7 @@ impl<N: Ord + Copy, W: Ord + Copy> Uf<N, W> {
             self.node_connected_wires
                 .insert(node, Some(Default::default()));
             self.node_inequality.insert(node, Some(Default::default()));
+            self.node_op.insert(node, None);
         }
     }
 
@@ -405,6 +457,7 @@ impl<N: Ord + Copy, W: Ord + Copy> Uf<N, W> {
         &self.wire_connected_nodes[&wire].as_ref().unwrap().1
     }
 
+    #[cfg(test)]
     fn linked_wire(&mut self, node: N, port: hugr::Port) -> Option<W> {
         let root = self.root_node(node);
         self.connected_wires(root).get(&port).copied()
@@ -436,7 +489,7 @@ mod tests {
 
     use super::*;
 
-    type TestUf = Uf<isize, isize>;
+    type TestUf = Uf<isize, isize, ()>;
 
     #[test]
     fn test_union_nodes() {
@@ -444,7 +497,7 @@ mod tests {
         let node2 = 1;
         let node3 = 2;
 
-        let mut uf = Uf::<isize, isize>::new();
+        let mut uf = TestUf::new();
         assert_eq!(uf.set_nodes_equal(node1, node2), Satisfiable::Yes(()));
         assert_eq!(uf.set_nodes_equal(node2, node3), Satisfiable::Yes(()));
 
@@ -467,6 +520,23 @@ mod tests {
         assert_eq!(uf.set_nodes_equal(1, 2), Satisfiable::Yes(()));
 
         assert_eq!(uf.linked_wire(2, out0), Some(w));
+    }
+
+    #[test]
+    fn test_union_nodes_op_prop_1() {
+        let mut uf = Uf::<isize, isize, bool>::new();
+        assert_eq!(uf.set_op(0, false), Satisfiable::Yes(()));
+        assert_eq!(uf.set_nodes_equal(0, 1), Satisfiable::Yes(()));
+        assert_eq!(uf.set_op(1, true), Satisfiable::No);
+    }
+
+    #[test]
+    fn test_union_nodes_op_prop_2() {
+        let mut uf = Uf::<isize, isize, bool>::new();
+        assert_eq!(uf.set_op(0, false), Satisfiable::Yes(()));
+        assert_eq!(uf.set_nodes_equal(0, 1), Satisfiable::Yes(()));
+        assert_eq!(uf.set_op(2, true), Satisfiable::Yes(()));
+        assert_eq!(uf.set_nodes_equal(0, 2), Satisfiable::No);
     }
 
     #[test]
@@ -493,7 +563,7 @@ mod tests {
 
     impl<N: Copy + Ord, W: Copy + Ord> Instruction<N, W> {
         #[must_use]
-        fn apply(&self, uf: &mut Uf<N, W>) -> Satisfiable {
+        fn apply(&self, uf: &mut Uf<N, W, ()>) -> Satisfiable {
             match *self {
                 Instruction::NodeEq(n1, n2) => uf.set_nodes_equal(n1, n2),
                 Instruction::WireEq(w1, w2, is_linear) => uf.set_wires_equal(w1, w2, is_linear),
