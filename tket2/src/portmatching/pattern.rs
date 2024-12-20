@@ -3,6 +3,7 @@
 mod logic;
 mod uf;
 use logic::PatternLogic;
+use uf::Uf;
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt::Debug;
@@ -36,7 +37,7 @@ type Boundary = (
 /// A pattern that matches a circuit exactly
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CircuitPattern {
-    constraints: Vec<Constraint>,
+    constraints: BTreeSet<Constraint>,
     input_ports: Vec<Vec<HugrPortID>>,
     output_ports: Vec<HugrPortID>,
 }
@@ -51,7 +52,7 @@ impl pm::Pattern for CircuitPattern {
     }
 
     fn into_logic(self) -> Self::Logic {
-        todo!()
+        PatternLogic::from_constraints(self.constraints)
     }
 }
 /*

@@ -91,13 +91,14 @@ impl<N: Ord + Copy, W: Ord + Copy, Op: Eq> Uf<N, W, Op> {
         &mut self,
         node: N,
         wire: W,
-        port: hugr::Port,
+        port: impl Into<hugr::Port>,
         is_linear: bool,
     ) -> Satisfiable {
         self.ensure_node_exists(node);
         self.ensure_wire_exists(wire, is_linear);
         let node = self.root_node(node);
         let wire = self.root_wire(wire);
+        let port = port.into();
 
         let nodes_conn = self
             .node_connected_wires

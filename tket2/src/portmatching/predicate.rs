@@ -45,16 +45,16 @@ pub enum Predicate {
     /// [`HugrVariableID::CopyableWire`] or [`HugrVariableID::LinearWire`].
     IsWireSink(hugr::IncomingPort),
 
-    /// 1 + `n_other` arity Predicate checking injectivity (i.e. nodes are
-    /// distinct).
+    /// 1 + `n_other` arity Predicate checking injectivity of wires (i.e. wires
+    /// are distinct).
     ///
-    /// Given a node and `n_other` other nodes, check that the first node is
-    /// distinct from all the other nodes. This is not checking all-to-all
+    /// Given a wire and `n_other` other wires, check that the first wire is
+    /// distinct from all the other wires. This is not checking all-to-all
     /// distinctness: this is so that the predicate is closed under AND (when
     /// the first argument is identical).
     ///
-    /// All `n_other` + 1 constraint variables must be of type
-    /// [`HugrVariableID::Op`].
+    /// All `n_other` + 1 constraint variables must be of the same wire type,
+    /// either [`HugrVariableID::CopyableWire`] or [`HugrVariableID::LinearWire`].
     IsDistinctFrom {
         /// The number of other nodes, determining the predicate arity.
         n_other: cmp::Reverse<usize>,
@@ -116,7 +116,7 @@ impl<H: HugrView> pm::Predicate<Circuit<H>, HugrVariableValue> for Predicate {
             }
             Predicate::IsDistinctFrom { .. } => {
                 // Get the native hugr node values
-                let vals = to_hugr_values_vec::<hugr::Node, _>(args).unwrap();
+                let vals = to_hugr_values_vec::<(hugr::Node, hugr::OutgoingPort), _>(args).unwrap();
                 let first_val = vals[0];
                 vals[1..].iter().all(|&v| v != first_val)
             }

@@ -57,6 +57,30 @@ impl From<HugrNodeID> for HugrVariableID {
     }
 }
 
+impl TryFrom<HugrVariableID> for HugrNodeID {
+    type Error = UnexpectedVariableType;
+
+    fn try_from(value: HugrVariableID) -> Result<Self, Self::Error> {
+        match value {
+            HugrVariableID::Op(node) => Ok(node),
+            HugrVariableID::CopyableWire(_) => Err(UnexpectedVariableType::CopyableWire),
+            HugrVariableID::LinearWire(_) => Err(UnexpectedVariableType::LinearWire),
+        }
+    }
+}
+
+impl TryFrom<HugrVariableID> for HugrPortID {
+    type Error = UnexpectedVariableType;
+
+    fn try_from(value: HugrVariableID) -> Result<Self, Self::Error> {
+        use HugrVariableID::*;
+        match value {
+            Op(_) => Err(UnexpectedVariableType::Node),
+            CopyableWire(port) | LinearWire(port) => Ok(port),
+        }
+    }
+}
+
 impl HugrVariableID {
     fn path(&self) -> HugrPath {
         match self {
@@ -196,6 +220,20 @@ pub enum UnexpectedValueType {
     /// Unexpected value type: OutgoingPort
     #[display("unexpected value type: OutgoingPort")]
     OutgoingPort,
+}
+
+/// Conversion error of HugrVariableValue to native Hugr types
+#[derive(Debug, Error, Display)]
+pub enum UnexpectedVariableType {
+    /// Unexpected value type: Node
+    #[display("unexpected variable type: Node")]
+    Node,
+    /// Unexpected value type: CopyableWire
+    #[display("unexpected variable type: CopyableWire")]
+    CopyableWire,
+    /// Unexpected value type: LinearWire
+    #[display("unexpected variable type: LinearWire")]
+    LinearWire,
 }
 
 impl TryFrom<HugrVariableValue> for (hugr::Node, hugr::OutgoingPort) {

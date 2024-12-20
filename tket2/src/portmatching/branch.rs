@@ -39,13 +39,13 @@ pub enum BranchClass {
     IsOpEqualClass(HugrNodeID),
     /// The class of all [`Predicate::IsDistinctFrom`] predicates.
     ///
-    /// The class is parametrised by the first node of the predicate -- the one
+    /// The class is parametrised by the first wire of the predicate -- the one
     /// that is distinct from all others. The logical relationship between two
     /// constraints of the same class is given by the relationship between the
     /// sets of all but the first predicate argument: e.g. if one's set is a
     /// subset of another, then there is a logical implication from the second
     /// to the first.
-    IsDistinctFromClass(HugrNodeID),
+    IsDistinctFromClass(HugrPortID),
     /// One of two classes for [`Predicate::IsWireSource`].
     ///
     /// The class is parametrised by the node and port the wire is connected to.
@@ -77,33 +77,44 @@ pub enum BranchClass {
     IsLinearWireSinkClass(HugrPortID),
 }
 
+impl BranchClass {
+    pub(super) fn get_rank(&self) -> pm::pattern::ClassRank {
+        use BranchClass::*;
+        match self {
+            IsOpEqualClass(_) => 0.3,
+            IsDistinctFromClass(_) => 0.7,
+            OccupyOutgoingPortClass(_, _) => 0.1,
+            OccupyIncomingPortClass(_, _) => 0.1,
+            IsWireSourceClass(_) => 0.1,
+            IsLinearWireSinkClass(_) => 0.1,
+        }
+    }
+}
+
 impl Predicate {
     fn to_constraint(&self, keys: Vec<HugrVariableID>) -> pm::Constraint<HugrVariableID, Self> {
         pm::Constraint::try_new(self.clone(), keys).unwrap()
     }
 }
 
-impl pm::predicate::ConstraintLogic<HugrVariableID> for Predicate {
-    type BranchClass = BranchClass;
-
-    fn get_classes(&self, keys: &[HugrVariableID]) -> Vec<Self::BranchClass> {
+impl Predicate {
+    pub(super) fn get_classes(&self, keys: &[HugrVariableID]) -> Vec<BranchClass> {
         use HugrVariableID::*;
         use Predicate::*;
 
         match *self {
             IsOpEqual(_) => {
-                let HugrVariableID::Op(node) = keys[0] else {
+                let Ok(node) = keys[0].try_into() else {
                     panic!("invalid key type");
                 };
                 vec![BranchClass::IsOpEqualClass(node)]
             }
             IsWireSource(out_port) => {
-                let HugrVariableID::Op(node) = keys[0] else {
+                let Ok(node) = keys[0].try_into() else {
                     panic!("invalid key type");
                 };
-                let wire = match keys[1] {
-                    CopyableWire(wire) | LinearWire(wire) => wire,
-                    Op(_) => panic!("invalid key type"),
+                let Ok(wire) = keys[1].try_into() else {
+                    panic!("invalid key type")
                 };
                 vec![
                     BranchClass::IsWireSourceClass(wire),
@@ -111,7 +122,7 @@ impl pm::predicate::ConstraintLogic<HugrVariableID> for Predicate {
                 ]
             }
             IsWireSink(in_port) => {
-                let HugrVariableID::Op(node) = keys[0] else {
+                let Ok(node) = keys[0].try_into() else {
                     panic!("invalid key type");
                 };
                 match keys[1] {
@@ -124,14 +135,15 @@ impl pm::predicate::ConstraintLogic<HugrVariableID> for Predicate {
                 }
             }
             IsDistinctFrom { .. } => {
-                let HugrVariableID::Op(node) = keys[0] else {
+                let Ok(port) = keys[0].try_into() else {
                     panic!("invalid key type");
                 };
-                vec![BranchClass::IsDistinctFromClass(node)]
+                vec![BranchClass::IsDistinctFromClass(port)]
             }
         }
     }
 
+    /*
     fn condition_on(
         &self,
         keys: &[HugrVariableID],
@@ -213,7 +225,7 @@ impl pm::predicate::ConstraintLogic<HugrVariableID> for Predicate {
                 todo!()
             }
         }
-    }
+    }*/
 }
 
 fn remove_redundant_nodes(
