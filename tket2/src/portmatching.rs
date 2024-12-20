@@ -72,8 +72,8 @@ pub use predicate::Predicate;
 
 type Constraint = pm::Constraint<HugrVariableID, Predicate>;
 
-// use matcher::MatchOp;
-// pub use pattern::CircuitPattern;
+use matcher::MatchOp;
+pub use pattern::CircuitPattern;
 
 fn to_hugr_values_tuple<'b, V1, V2, B>(
     args: impl IntoIterator<Item = &'b B>,

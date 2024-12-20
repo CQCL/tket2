@@ -4,15 +4,15 @@ use std::fmt::Debug;
 use std::{borrow::Borrow, cmp};
 
 use derive_more::{Display, Error};
-use hugr::{HugrView, PortIndex};
+use hugr::HugrView;
 use itertools::Itertools;
 use portmatching as pm;
 
 use crate::Circuit;
 
 use super::{
-    indexing::find_source, matcher::MatchOp, to_hugr_values_tuple, to_hugr_values_vec,
-    HugrVariableID, HugrVariableValue,
+    indexing::find_source, to_hugr_values_tuple, to_hugr_values_vec, HugrVariableID,
+    HugrVariableValue, MatchOp,
 };
 
 /// Predicate for pattern matching on flat hugrs.
@@ -59,6 +59,14 @@ pub enum Predicate {
         /// The number of other nodes, determining the predicate arity.
         n_other: cmp::Reverse<usize>,
     },
+}
+
+impl Predicate {
+    pub fn new_is_distinct_from(n_other: usize) -> Self {
+        Predicate::IsDistinctFrom {
+            n_other: cmp::Reverse(n_other),
+        }
+    }
 }
 
 /// A constraint to define patterns on flat hugrs.

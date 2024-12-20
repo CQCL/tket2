@@ -1,16 +1,11 @@
 use std::collections::BTreeSet;
 
 use itertools::Itertools;
-use portmatching::{
-    self as pm,
-    pattern::{self, Satisfiable},
-};
+use portmatching::{self as pm, pattern::Satisfiable};
 
 use crate::portmatching::{
-    branch::BranchClass,
     indexing::{HugrNodeID, HugrPortID},
-    matcher::MatchOp,
-    Constraint, HugrVariableID, Predicate,
+    BranchClass, Constraint, HugrVariableID, MatchOp, Predicate,
 };
 
 use super::Uf;

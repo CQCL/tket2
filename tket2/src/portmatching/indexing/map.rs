@@ -17,6 +17,8 @@ impl HugrBindMap {
         to self.0 {
             pub(crate) fn len(&self) -> usize;
             pub(crate) fn is_empty(&self) -> bool;
+            pub(crate) fn iter(&self) -> impl Iterator<Item = (&HugrVariableID, &Option<HugrVariableValue>)>;
+            pub(crate) fn keys(&self) -> impl Iterator<Item = &HugrVariableID>;
         }
     }
 

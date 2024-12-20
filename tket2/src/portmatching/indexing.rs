@@ -19,7 +19,7 @@ use crate::Circuit;
 
 mod map;
 mod path;
-pub(super) use path::HugrPath;
+pub(super) use path::{HugrPath, HugrPathBuilder};
 
 ////////////////////////////////////////////////////////////////////////////////
 //////////////////// Variable Naming scheme used for Hugrs /////////////////////
@@ -205,6 +205,12 @@ impl From<(hugr::Node, hugr::OutgoingPort)> for HugrVariableValue {
     }
 }
 
+impl From<hugr::Wire> for HugrVariableValue {
+    fn from(wire: hugr::Wire) -> Self {
+        HugrVariableValue::new_wire_from_source(wire.node(), wire.source())
+    }
+}
+
 impl From<hugr::Node> for HugrVariableValue {
     fn from(node: hugr::Node) -> Self {
         HugrVariableValue::Node(node)
@@ -254,6 +260,17 @@ impl TryFrom<HugrVariableValue> for hugr::Node {
         match value {
             HugrVariableValue::Node(node) => Ok(node),
             HugrVariableValue::Wire(..) => Err(UnexpectedValueType::OutgoingPort),
+        }
+    }
+}
+
+impl TryFrom<HugrVariableValue> for hugr::Wire {
+    type Error = UnexpectedValueType;
+
+    fn try_from(value: HugrVariableValue) -> Result<Self, Self::Error> {
+        match value {
+            HugrVariableValue::Node(..) => Err(UnexpectedValueType::Node),
+            HugrVariableValue::Wire(wire) => Ok(wire),
         }
     }
 }
