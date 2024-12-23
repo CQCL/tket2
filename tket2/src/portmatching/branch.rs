@@ -12,16 +12,14 @@
 //! 1. and 2. are necessary to construct a pattern matcher, while 3. is necessary
 //! to evaluate predicates efficiently when traversing it.
 
-use std::{cmp, collections::BTreeSet};
+use hugr::HugrView;
+use portmatching as pm;
 
-use hugr::Hugr;
-use itertools::Itertools;
-use portmatching::{self as pm, pattern::Satisfiable};
+use crate::Circuit;
 
 use super::{
     indexing::{HugrNodeID, HugrPortID},
-    matcher::MatchOp,
-    to_hugr_values_vec, HugrVariableID, HugrVariableValue, Predicate,
+    Constraint, HugrVariableID, HugrVariableValue, Predicate,
 };
 
 /// The branch classes that cluster hugr [`Predicate`]s into groups that can be
@@ -141,5 +139,107 @@ impl Predicate {
                 vec![BranchClass::IsDistinctFromClass(port)]
             }
         }
+    }
+}
+
+/// A branch selector for Hugr [`Constraint`]s.
+pub struct BranchSelector {
+    branch_class: BranchClass,
+    binding_indices: Vec<Vec<usize>>,
+    predicates: Vec<Predicate>,
+    all_required_bindings: Vec<HugrVariableID>,
+}
+
+impl BranchSelector {
+    /// Construct a branch selector from an iterator of constraints.
+    pub fn from_constraints<'c>(constraints: impl IntoIterator<Item = &'c Constraint>) -> Self {
+        let transitions = constraints.into_iter();
+        let size_hint = transitions.size_hint().0;
+
+        let mut predicates = Vec::with_capacity(size_hint);
+        let mut all_required_bindings = Vec::new();
+        let mut binding_indices = Vec::with_capacity(size_hint);
+        let mut valid_branch_classes: Option<Vec<_>> = None;
+
+        for constraint in transitions {
+            let pred = constraint.predicate().clone();
+
+            // Populate required indices
+            let mut indices = Vec::new();
+            let reqs = constraint.required_bindings();
+            indices.reserve(reqs.len());
+            for &req in reqs {
+                let pos = all_required_bindings.iter().position(|&k| k == req);
+                if let Some(pos) = pos {
+                    indices.push(pos);
+                } else {
+                    all_required_bindings.push(req);
+                    indices.push(all_required_bindings.len() - 1);
+                }
+            }
+
+            // Filter valid branch classes
+            let c_classes = constraint
+                .predicate()
+                .get_classes(&constraint.required_bindings());
+            if let Some(valid_branch_classes) = valid_branch_classes.as_mut() {
+                valid_branch_classes.retain(|c| c_classes.contains(c));
+            } else {
+                valid_branch_classes = Some(
+                    constraint
+                        .predicate()
+                        .get_classes(&constraint.required_bindings()),
+                );
+            }
+
+            binding_indices.push(indices);
+            predicates.push(pred);
+        }
+
+        let branch_class = valid_branch_classes
+            .expect("empty branch selector")
+            .pop()
+            .expect("no shared branch class in selector");
+
+        Self {
+            predicates,
+            all_required_bindings,
+            binding_indices,
+            branch_class,
+        }
+    }
+}
+
+impl pm::BranchSelector for BranchSelector {
+    type Key = HugrVariableID;
+
+    fn required_bindings(&self) -> &[Self::Key] {
+        &self.all_required_bindings
+    }
+}
+
+impl<H: HugrView> pm::EvaluateBranchSelector<Circuit<H>, HugrVariableValue> for BranchSelector {
+    fn eval(&self, bindings: &[Option<HugrVariableValue>], data: &Circuit<H>) -> Vec<usize> {
+        let opt_ind =
+            self.predicates
+                .iter()
+                .zip(&self.binding_indices)
+                .position(|(predicate, indices)| {
+                    let Ok(bindings) = indices
+                        .iter()
+                        .map(|&i| bindings[i].as_ref().ok_or(()))
+                        .collect::<Result<Vec<_>, _>>()
+                    else {
+                        return false;
+                    };
+                    <Predicate as pm::Predicate<_, _>>::check(predicate, &bindings, data)
+                });
+        opt_ind.into_iter().collect()
+    }
+}
+
+impl pm::CreateBranchSelector<Constraint> for BranchSelector {
+    fn create_branch_selector(constraints: Vec<Constraint>) -> Self {
+        Self::from_constraints(&constraints)
     }
 }
