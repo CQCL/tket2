@@ -476,7 +476,6 @@ mod tests {
                         panic!("Expected wire");
                     };
                     // (n, p) is opposite `port`, so at the previous rotation
-                    println!("1");
                     assert_eq!(wire.node(), root_choice);
                     assert_eq!(wire.source(), 0.into());
                 }
@@ -484,7 +483,6 @@ mod tests {
                     let &HugrVariableValue::Wire(wire) = &sole_option else {
                         panic!("Expected outgoing port");
                     };
-                    println!("2");
                     assert_eq!(circuit.hugr().get_optype(wire.node()), &Tk2Op::Rz.into());
                     assert_eq!(wire.source(), port.as_outgoing().unwrap());
                     assert_ne!(wire.node(), root_choice);

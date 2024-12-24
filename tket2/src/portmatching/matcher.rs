@@ -18,8 +18,9 @@ use crate::rewrite::{CircuitRewrite, InvalidReplacement};
 use crate::Circuit;
 use crate::{rewrite::Subcircuit, Tk2Op};
 
-use super::constraint::Predicate;
-use super::indexing::FlatHugrIndexingScheme;
+use super::BranchSelector;
+use super::HugrIndexingScheme;
+use super::Predicate;
 use super::{CircuitPattern, HugrVariableID};
 
 pub use pm::PatternID;
@@ -105,16 +106,12 @@ fn encode_op(op: &OpType) -> Option<Vec<u8>> {
 /// This uses a state automaton internally to match against a set of patterns
 /// simultaneously.
 #[derive(Debug, Clone, From, Into, serde::Serialize, serde::Deserialize)]
-pub struct PatternMatcher(
-    pm::ManyMatcher<CircuitPattern, HugrVariableID, Predicate, FlatHugrIndexingScheme>,
-);
+pub struct PatternMatcher(pm::ManyMatcher<CircuitPattern, HugrVariableID, BranchSelector>);
 
 impl PatternMatcher {
     /// Construct a matcher from a set of patterns
     pub fn from_patterns(patterns: Vec<CircuitPattern>) -> Self {
-        pm::ManyMatcher::try_from_patterns(patterns, Default::default())
-            .expect("CircuitPattern conversions dont fail")
-            .into()
+        pm::ManyMatcher::from_patterns::<HugrIndexingScheme>(patterns).into()
     }
 
     /// Find all pattern matches in a circuit.
@@ -148,7 +145,7 @@ impl PatternMatcher {
             /// Get the number of patterns in the matcher.
             pub fn n_patterns(&self) -> usize;
 
-            /// Get a dot string representation of the matcher.
+            /// Get a string representation of the matcher automaton.
             pub fn dot_string(&self) -> String;
         }
     }
@@ -221,15 +218,14 @@ mod tests {
     use std::path::Path;
 
     use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
-    use hugr::extension::prelude::QB_T;
+    use hugr::extension::prelude::qb_t;
     use hugr::types::Signature;
     use hugr::{IncomingPort, Node, OutgoingPort};
     use itertools::Itertools;
     use portgraph::NodeIndex;
     use rstest::{fixture, rstest};
 
-    use crate::extension::rotation::ROTATION_TYPE;
-    use crate::extension::REGISTRY;
+    use crate::extension::rotation::rotation_type;
     use crate::rewrite::{ECCRewriter, Rewriter};
     use crate::utils::build_simple_circuit;
     use crate::{Circuit, Tk2Op};
@@ -316,8 +312,8 @@ mod tests {
 
     #[fixture]
     fn cx_rz() -> Circuit {
-        let input_t = vec![QB_T, QB_T, ROTATION_TYPE];
-        let output_t = vec![QB_T, QB_T];
+        let input_t = vec![qb_t(), qb_t(), rotation_type()];
+        let output_t = vec![qb_t(), qb_t()];
         let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
         let (qb1, qb2, f) = h.input_wires().collect_tuple().unwrap();
@@ -327,9 +323,7 @@ mod tests {
         let res = h.add_dataflow_op(Tk2Op::Rz, [qb2, f]).unwrap();
         let qb2 = res.outputs().next().unwrap();
 
-        h.finish_hugr_with_outputs([qb1, qb2], &REGISTRY)
-            .unwrap()
-            .into()
+        h.finish_hugr_with_outputs([qb1, qb2]).unwrap().into()
     }
 
     #[rstest]

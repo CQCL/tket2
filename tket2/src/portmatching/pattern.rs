@@ -2,6 +2,7 @@
 
 mod logic;
 mod uf;
+use hugr::hugr::views::sibling_subgraph::TopoConvexChecker;
 use logic::PatternLogic;
 use portmatching::indexing::Binding;
 use uf::Uf;
@@ -183,17 +184,19 @@ impl CircuitPattern {
         })
     }
 
-    /// The matched subcircuit given a pattern match.
+    /// The matched subcircuit given a pattern match, using a pre-computed
+    /// convexity checker.
     ///
     /// Matches may only require a subset of the avaiable incoming and outgoing
     /// wires. Thus, strictly speaking, may have different boundaries. This is
     /// dealt with at the incoming boundary by leaving empty vectors of incoming
     /// ports, but currently raises an error if it arises at the outgoing
     /// boundary.
-    pub fn get_subcircuit(
+    pub fn get_subcircuit_with_checker<H: HugrView>(
         &self,
         bind_map: &HugrBindMap,
-        circuit: &Circuit<impl HugrView>,
+        circuit: &Circuit<H>,
+        checker: &TopoConvexChecker<H>,
     ) -> Result<Subcircuit, InvalidPatternMatch> {
         let port_to_wire = get_port_to_wire_map(&self.constraints, bind_map)?;
         let hugr = circuit.hugr();
@@ -209,11 +212,11 @@ impl CircuitPattern {
                 get_value(HugrVariableID::Op(node), bind_map)
                     .ok_or(InvalidPatternMatch::MissingNodeBinding)
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<BTreeSet<_>, _>>()?;
 
         let mut incoming = vec![vec![]; self.incoming_wires.len()];
 
-        for (node, in_port) in unbound_incoming_wires(&nodes, &port_to_wire, hugr) {
+        for (node, in_port) in unbound_incoming_wires(&nodes, hugr) {
             let Some(&wire_id) = port_to_wire.get(&(node, in_port.into())) else {
                 return Err(InvalidPatternMatch::UnexpectedPort);
             };
@@ -226,7 +229,7 @@ impl CircuitPattern {
         }
 
         let mut outgoing = vec![None; self.outgoing_wires.len()];
-        for (node, out_port) in unbound_outgoing_wires(&nodes, &port_to_wire, hugr) {
+        for (node, out_port) in unbound_outgoing_wires(&nodes, hugr) {
             let Some(&wire_id) = port_to_wire.get(&(node, out_port.into())) else {
                 return Err(InvalidPatternMatch::UnexpectedPort);
             };
@@ -242,24 +245,47 @@ impl CircuitPattern {
         }
 
         if outgoing.iter().any(|p| p.is_none()) {
-            unimplemented!("Discarding pattern outputs is not supported at the moment, but would be easy to add :)");
+            // TODO: handle discarding classical outputs
+            return Err(InvalidPatternMatch::InvalidSubgraph(
+                InvalidSubgraph::NotConvex,
+            ));
         }
         let outgoing = outgoing.into_iter().map(|p| p.unwrap()).collect_vec();
 
-        let subgraph = SiblingSubgraph::try_new(incoming, outgoing, hugr)?;
+        let subgraph = SiblingSubgraph::try_new_with_checker(incoming, outgoing, hugr, checker)?;
         Ok(subgraph.into())
+    }
+
+    /// The matched subcircuit given a pattern match.
+    ///
+    /// Matches may only require a subset of the avaiable incoming and outgoing
+    /// wires. Thus, strictly speaking, may have different boundaries. This is
+    /// dealt with at the incoming boundary by leaving empty vectors of incoming
+    /// ports, but currently raises an error if it arises at the outgoing
+    /// boundary.
+    pub fn get_subcircuit(
+        &self,
+        bind_map: &HugrBindMap,
+        circuit: &Circuit<impl HugrView>,
+    ) -> Result<Subcircuit, InvalidPatternMatch> {
+        let checker = TopoConvexChecker::new(circuit.hugr());
+        self.get_subcircuit_with_checker(bind_map, circuit, &checker)
+    }
+
+    /// The number of constraints in the pattern
+    pub fn n_constraints(&self) -> usize {
+        self.constraints.len()
     }
 }
 
 /// All incoming ports attached to a boundary wire (i.e. a wire whose output
 /// port is not in the pattern)
 fn unbound_incoming_wires<'a>(
-    nodes: impl IntoIterator<Item = &'a hugr::Node> + 'a,
-    port_to_wire: &'a PortWireMap,
+    nodes: &'a BTreeSet<hugr::Node>,
     hugr: &'a impl HugrView,
 ) -> impl Iterator<Item = (hugr::Node, hugr::IncomingPort)> + 'a {
     let all_in_ports = nodes
-        .into_iter()
+        .iter()
         .flat_map(|&node| hugr.node_inputs(node).map(move |p| (node, p)));
 
     all_in_ports.filter(|&(node, in_port)| {
@@ -268,18 +294,17 @@ fn unbound_incoming_wires<'a>(
             .at_most_one()
             .ok()
             .expect("assuming wires are uniquely identified by output port");
-        let Some((out_node, out_port)) = out_port else {
+        let Some((out_node, _)) = out_port else {
             return false;
         };
-        !port_to_wire.contains_key(&(out_node, out_port.into()))
+        !nodes.contains(&out_node)
     })
 }
 
 /// All outgoing ports attached to a boundary wire (i.e. a wire with at least
 /// one input port not in the pattern)
 fn unbound_outgoing_wires<'a>(
-    nodes: impl IntoIterator<Item = &'a hugr::Node> + 'a,
-    port_to_wire: &'a PortWireMap,
+    nodes: &'a BTreeSet<hugr::Node>,
     hugr: &'a impl HugrView,
 ) -> impl Iterator<Item = (hugr::Node, hugr::OutgoingPort)> + 'a {
     let all_out_ports = nodes
@@ -288,7 +313,7 @@ fn unbound_outgoing_wires<'a>(
 
     all_out_ports.filter(|&(node, out_port)| {
         let mut in_ports = hugr.linked_inputs(node, out_port);
-        in_ports.any(|(in_node, in_port)| !port_to_wire.contains_key(&(in_node, in_port.into())))
+        in_ports.any(|(in_node, _)| !nodes.contains(&in_node))
     })
 }
 /// Errors that can occur when constructing a circuit match from bindings

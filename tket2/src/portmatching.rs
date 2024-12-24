@@ -64,8 +64,8 @@ use std::borrow::Borrow;
 use itertools::Itertools;
 use portmatching as pm;
 
-use branch::BranchClass;
-use indexing::{HugrBindMap, HugrVariableID, HugrVariableValue};
+use branch::{BranchClass, BranchSelector};
+use indexing::{HugrBindMap, HugrIndexingScheme, HugrVariableID, HugrVariableValue};
 use predicate::InvalidPredicateError;
 pub use predicate::Predicate;
 

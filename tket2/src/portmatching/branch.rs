@@ -27,7 +27,9 @@ use super::{
 ///
 /// These dictate the set of available transitions within a pattern matcher: all
 /// outgoing transitions at any one state will share one branch class.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum BranchClass {
     /// The class of all [`Predicate::IsOpEqual`] predicates.
     ///
@@ -143,6 +145,7 @@ impl Predicate {
 }
 
 /// A branch selector for Hugr [`Constraint`]s.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BranchSelector {
     branch_class: BranchClass,
     binding_indices: Vec<Vec<usize>>,
@@ -241,5 +244,15 @@ impl<H: HugrView> pm::EvaluateBranchSelector<Circuit<H>, HugrVariableValue> for 
 impl pm::CreateBranchSelector<Constraint> for BranchSelector {
     fn create_branch_selector(constraints: Vec<Constraint>) -> Self {
         Self::from_constraints(&constraints)
+    }
+}
+
+impl pm::branch_selector::DisplayBranchSelector for BranchSelector {
+    fn fmt_class(&self) -> String {
+        format!("{:?}", self.branch_class)
+    }
+
+    fn fmt_nth_constraint(&self, n: usize) -> String {
+        format!("{:?}", self.predicates[n])
     }
 }
