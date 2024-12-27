@@ -2069,6 +2069,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "tket2",
+ "typetag",
 ]
 
 [[package]]

@@ -211,7 +211,7 @@ impl TryFrom<&OpType> for FutureOpDef {
 /// operations.
 pub trait FutureOpBuilder: Dataflow {
     /// Add a "tket2.futures.Read" op.
-    fn add_read(&mut self, lifted: Wire, typ: Type) -> Result<[Wire; 1], BuildError> {
+    fn add_read(&mut self, lifted: Wire, typ: Type) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(
                 FutureOp {
@@ -220,7 +220,7 @@ pub trait FutureOpBuilder: Dataflow {
                 },
                 [lifted],
             )?
-            .outputs_arr())
+            .out_wire(0))
     }
 
     /// Add a "tket2.futures.Dup" op.
@@ -305,7 +305,7 @@ pub(crate) mod test {
             let [future_w] = func_builder.input_wires_arr();
             let [future_w, lazy_dup_w] = func_builder.add_dup(future_w, t.clone()).unwrap();
             func_builder.add_free(future_w, t.clone()).unwrap();
-            let [t_w] = func_builder.add_read(lazy_dup_w, t).unwrap();
+            let t_w = func_builder.add_read(lazy_dup_w, t).unwrap();
             func_builder.finish_hugr_with_outputs([t_w]).unwrap()
         };
         hugr.validate().unwrap();

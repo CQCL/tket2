@@ -102,7 +102,7 @@ lazy_static! {
         let mut builder = DFGBuilder::new(Signature::new(qb_t(), vec![qb_t(), bool_t()])).unwrap();
         let [qb] = builder.input_wires_arr();
         let [qb, lazy_r] = builder.add_lazy_measure(qb).unwrap();
-        let [r] = builder.add_read(lazy_r, bool_t()).unwrap();
+        let r = builder.add_read(lazy_r, bool_t()).unwrap();
         builder.finish_hugr_with_outputs([qb, r]).unwrap()
     };
 }
@@ -129,7 +129,7 @@ fn measure_replacement(num_dups: usize) -> Hugr {
     rs.extend(
         future_rs
             .into_iter()
-            .map(|r| builder.add_read(r, bool_t()).unwrap()[0]),
+            .map(|r| builder.add_read(r, bool_t()).unwrap()),
     );
     assert_eq!(num_out_types, rs.len());
     assert_eq!(num_out_types, num_dups + 1);

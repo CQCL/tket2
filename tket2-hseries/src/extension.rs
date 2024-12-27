@@ -2,3 +2,4 @@
 pub mod futures;
 pub mod qsystem;
 pub mod result;
+pub mod wasm;
