@@ -484,7 +484,7 @@ impl HasConcrete for WasmOpDef {
                     }))?
                 };
 
-                let Some(outputs) = type_arg_into_type_row_rv(inputs_arg.clone()) else {
+                let Some(outputs) = type_arg_into_type_row_rv(outputs_arg.clone()) else {
                     Err(SignatureError::from(TypeArgError::TypeMismatch {
                         param: INPUTS_PARAM.to_owned(),
                         arg: outputs_arg,
@@ -513,7 +513,7 @@ impl HasConcrete for WasmOpDef {
                     }))?
                 };
 
-                let Some(outputs) = type_arg_into_type_row_rv(inputs_arg.clone()) else {
+                let Some(outputs) = type_arg_into_type_row_rv(outputs_arg.clone()) else {
                     Err(SignatureError::from(TypeArgError::TypeMismatch {
                         param: INPUTS_PARAM.to_owned(),
                         arg: outputs_arg,
@@ -750,6 +750,57 @@ mod test {
     use rstest::rstest;
 
     use super::*;
+
+    #[test]
+    fn const_wasm_module() {
+        let m1 = ConstWasmModule {
+            name: "test_mod".to_string(),
+            hash: 1,
+        };
+        let m2 = ConstWasmModule {
+            name: "test_mod".to_string(),
+            hash: 1,
+        };
+        assert_eq!(m1.name(), "wasm:test_mod");
+        assert!(m1.equal_consts(&m2));
+        assert_eq!(m1.extension_reqs(), ExtensionSet::singleton(EXTENSION_ID));
+    }
+
+    #[test]
+    fn wasm_op_def_instantiate() {
+        assert_eq!(
+            WasmOpDef::get_context.instantiate(&[]),
+            Ok(WasmOp::GetContext)
+        );
+        assert_eq!(
+            WasmOpDef::dispose_context.instantiate(&[]),
+            Ok(WasmOp::DisposeContext)
+        );
+        assert_eq!(
+            WasmOpDef::lookup.instantiate(&[
+                "lookup_name".into(),
+                TypeArg::new_var_use(
+                    0,
+                    TypeParam::List {
+                        param: Box::new(TypeBound::Any.into())
+                    }
+                ),
+                vec![].into()
+            ]),
+            Ok(WasmOp::Lookup {
+                name: "lookup_name".to_string(),
+                inputs: vec![TypeRV::new_row_var_use(0, TypeBound::Any)].into(),
+                outputs: TypeRowRV::from(Vec::<TypeRV>::new())
+            })
+        );
+        assert_eq!(
+            WasmOpDef::call.instantiate(&[vec![Type::UNIT.into()].into(), vec![].into()]),
+            Ok(WasmOp::Call {
+                inputs: vec![Type::UNIT].into(),
+                outputs: vec![].into()
+            })
+        );
+    }
 
     #[rstest]
     #[case::concrete(type_row![], type_row![])]
