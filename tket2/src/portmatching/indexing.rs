@@ -19,7 +19,8 @@ use crate::Circuit;
 
 mod map;
 mod path;
-pub(super) use path::{HugrPath, HugrPathBuilder};
+mod unary_packed;
+pub(super) use path::HugrPath;
 
 ////////////////////////////////////////////////////////////////////////////////
 //////////////////// Variable Naming scheme used for Hugrs /////////////////////
@@ -320,7 +321,7 @@ impl<H: HugrView> pm::IndexedData<HugrVariableID> for Circuit<H> {
         use HugrVariableID::*;
         match key {
             Op(node) => {
-                if let Some((parent_path, port, _)) = node.path_from_root.uncons() {
+                if let Some((parent_path, port, _)) = node.path_from_root.split_back() {
                     let parent_node_id = HugrNodeID::new(parent_path);
                     let Some(parent) = known_bindings.get_node(parent_node_id) else {
                         return vec![];

@@ -7,6 +7,8 @@ use hugr::{Direction, PortIndex};
 
 use derive_more::{Display, Error};
 
+use super::unary_packed::{PackOverflow, UnaryPacked};
+
 const MAX_BITS: usize = usize::BITS as usize;
 
 /// A compact encoding for a path from a root node to an incoming port.
@@ -53,255 +55,78 @@ const MAX_BITS: usize = usize::BITS as usize;
 /// Unary flipped means that the binary encoding of the integer is flipped.
 /// Flipping one of the unary encodings means that a tuple can never be all
 /// 0, thus differentiating between tuples and zero padding.
-#[derive(Clone, Copy, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct HugrPath(usize);
-
-/// An error that occurs when a path is too long to encode in a HugrPath.
-#[derive(Error, Debug, Display)]
-#[display("path is too long to encode in HugrPath")]
-pub struct PathEncodeOverflow;
+#[derive(
+    Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+pub struct HugrPath(UnaryPacked);
 
 impl HugrPath {
     /// The empty path.
-    pub(super) fn empty() -> Self {
-        Self(0)
+    pub fn empty() -> Self {
+        Self(UnaryPacked::empty())
+    }
+
+    #[must_use]
+    pub fn push(&mut self, port: hugr::Port, index: usize) -> Result<(), PackOverflow> {
+        let is_outgoing = port.direction() == Direction::Outgoing;
+        self.0.push_back(is_outgoing as u32)?;
+        self.0.push_back(port.index() as u32)?;
+        self.0.push_back(index as u32)?;
+        Ok(())
     }
 
     /// Return the parent path and the last tuple (port, index).
     ///
     /// If self is empty, return None.
-    pub(super) fn uncons(&self) -> Option<(Self, hugr::Port, usize)> {
-        let mut starts = self.tuple_starts();
-        let last_start = starts.pop()?;
-        let parent = {
-            if last_start == 0 {
-                Self::empty()
-            } else {
-                // Remove all but the `last_start` MSBs
-                let mask = n_ones_msb(last_start);
-                HugrPath(self.0 & mask)
-            }
-        };
-        let (port, index) = self.read_tuple(last_start);
-        (parent, port, index).into()
-    }
+    pub(super) fn split_back(&self) -> Option<(Self, hugr::Port, usize)> {
+        let mut self_copy = *self;
+        let front_index = self_copy.0.pop_back()?;
+        let front_port_offset = self_copy.0.pop_back().unwrap();
+        let front_is_outgoing = self_copy.0.pop_back().unwrap();
 
-    fn read_tuple(&self, start: usize) -> (hugr::Port, usize) {
-        let dir = if ith_msb(self.0, start) {
-            Direction::Outgoing
-        } else {
-            Direction::Incoming
-        };
-        let offset = read_unary(self.0, start + 1, true);
-        let index = read_unary(self.0, start + offset + 2, false);
-        (hugr::Port::new(dir, offset), index)
+        let port = hugr::Port::new(
+            if front_is_outgoing == 0 {
+                Direction::Incoming
+            } else {
+                Direction::Outgoing
+            },
+            front_port_offset as usize,
+        );
+        let index = front_index as usize;
+
+        (self_copy, port, index).into()
     }
 
     pub(super) fn parent(&self) -> Option<Self> {
-        Some(self.uncons()?.0)
-    }
-
-    /// Returns the start bit position of each tuple in the path.
-    fn tuple_starts(&self) -> Vec<usize> {
-        let mut starts = vec![];
-        let mut val = self.0;
-
-        let mut bit_pos = 0;
-        while val > 0 {
-            starts.push(bit_pos);
-
-            // consume incoming/outgoing bit
-            val <<= 1;
-            bit_pos += 1;
-
-            // consume offset (regex: 0*1)
-            bit_pos += consume(false, &mut val);
-            val <<= 1;
-            bit_pos += 1;
-
-            // consume index (regex: 1*0)
-            bit_pos += consume(true, &mut val);
-            val <<= 1;
-            bit_pos += 1;
-        }
-        starts
-    }
-
-    fn len(&self) -> usize {
-        let mut len = 0;
-        let mut val = self.0;
-
-        let mut bit_pos = 0;
-        while val > 0 {
-            len += 1;
-
-            // consume incoming/outgoing bit
-            val <<= 1;
-            bit_pos += 1;
-
-            // consume offset (regex: 0*1)
-            bit_pos += consume(false, &mut val);
-            val <<= 1;
-            bit_pos += 1;
-
-            // consume index (regex: 1*0)
-            bit_pos += consume(true, &mut val);
-            val <<= 1;
-            bit_pos += 1;
-        }
-        len
+        Some(self.split_back()?.0)
     }
 }
 
 impl TryFrom<&[(hugr::Port, usize)]> for HugrPath {
-    type Error = PathEncodeOverflow;
+    type Error = PackOverflow;
 
     fn try_from(value: &[(hugr::Port, usize)]) -> Result<Self, Self::Error> {
-        let mut builder = HugrPathBuilder::new();
+        let mut path = HugrPath::empty();
         for &(port, index) in value.iter() {
-            builder.push(port, index)?;
+            path.push(port, index)?;
         }
-        Ok(builder.finish())
+        Ok(path)
     }
 }
 
 impl<const N: usize> TryFrom<&[(hugr::Port, usize); N]> for HugrPath {
-    type Error = PathEncodeOverflow;
+    type Error = PackOverflow;
 
     fn try_from(value: &[(hugr::Port, usize); N]) -> Result<Self, Self::Error> {
         value.as_slice().try_into()
     }
 }
 
-impl PartialOrd for HugrPath {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for HugrPath {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let len_self = self.len();
-        let len_other = other.len();
-        if len_self != len_other {
-            len_self.cmp(&len_other)
-        } else {
-            let key =
-                |path: &HugrPath| path.uncons().map(|(path, port, index)| (port, index, path));
-            key(self).cmp(&key(other))
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct HugrPathBuilder {
-    encoded: usize,
-    bits_used: usize,
-}
-
-impl HugrPathBuilder {
-    pub(crate) fn new() -> Self {
-        HugrPathBuilder {
-            encoded: 0,
-            bits_used: 0,
-        }
-    }
-
-    fn write_bit(&mut self, bit: bool) -> Result<(), PathEncodeOverflow> {
-        if bit {
-            if self.bits_used >= MAX_BITS {
-                return Err(PathEncodeOverflow);
-            }
-            self.encoded |= 1 << (MAX_BITS - self.bits_used - 1);
-        }
-        self.bits_used += 1;
-        Ok(())
-    }
-
-    fn encode_unary(&mut self, value: usize, flipped: bool) -> Result<(), PathEncodeOverflow> {
-        let (on_bit, off_bit) = if flipped {
-            (false, true)
-        } else {
-            (true, false)
-        };
-
-        for _ in 0..value {
-            self.write_bit(on_bit)?;
-        }
-        self.write_bit(off_bit)
-    }
-
-    pub(crate) fn push(
-        &mut self,
-        port: hugr::Port,
-        index: usize,
-    ) -> Result<(), PathEncodeOverflow> {
-        // Encode port direction (1 bit)
-        let direction_bit = port.direction() == Direction::Outgoing;
-        self.write_bit(direction_bit)?;
-
-        // Encode port offset (unary flipped)
-        self.encode_unary(port.index(), true)?;
-
-        // Encode index (unary)
-        self.encode_unary(index, false)?;
-
-        Ok(())
-    }
-
-    pub(crate) fn finish(self) -> HugrPath {
-        HugrPath(self.encoded)
-    }
-}
-
-// Left shit as long as the MSB is bit
-fn consume(bit: bool, val: &mut usize) -> usize {
-    // Whether MSB is == bit
-    let cond = |val: usize| {
-        if val == 0 {
-            return false;
-        }
-        if (val >> 63) > 0usize {
-            bit
-        } else {
-            !bit
-        }
-    };
-    let mut bit_pos = 0;
-    while cond(*val) {
-        *val <<= 1;
-        bit_pos += 1;
-    }
-    bit_pos
-}
-
-/// Returns a number whose binary representation is `n` ones at the MSB.
-fn n_ones_msb(n: usize) -> usize {
-    let val = usize::MAX;
-    let shift = MAX_BITS - n;
-    (val >> shift) << shift
-}
-
-fn ith_msb(val: usize, i: usize) -> bool {
-    assert!(i < MAX_BITS);
-    let mask = 1 << (MAX_BITS - 1 - i);
-    val & mask > 0
-}
-
-fn read_unary(val: usize, start_i: usize, flipped: bool) -> usize {
-    let on_bit = !flipped;
-    let mut count = 0;
-    while start_i + count < MAX_BITS && ith_msb(val, start_i + count) == on_bit {
-        count += 1;
-    }
-    count
-}
-
 impl Debug for HugrPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut tuples = vec![];
         let mut curr = *self;
-        while let Some((parent, port, index)) = curr.uncons() {
+        while let Some((parent, port, index)) = curr.split_back() {
             tuples.push((port, index));
             curr = parent;
         }
@@ -317,57 +142,6 @@ mod tests {
     use itertools::Itertools;
 
     #[test]
-    fn test_hugr_path_builder() {
-        let mut builder = HugrPathBuilder::new();
-
-        // Push an incoming port with index 0 and child index 2
-        builder
-            .push(hugr::Port::new(Direction::Incoming, 0), 2)
-            .unwrap();
-
-        // Push an outgoing port with index 1 and child index 0
-        builder
-            .push(hugr::Port::new(Direction::Outgoing, 1), 0)
-            .unwrap();
-
-        // Push another incoming port with index 2 and child index 1
-        builder
-            .push(hugr::Port::new(Direction::Incoming, 2), 1)
-            .unwrap();
-
-        let path = builder.finish();
-
-        // The expected encoding should be:
-        // 0 (incoming) + 1 (port index 0) + 110 (child index 2)
-        // + 1 (outgoing) + 01 (port index 1) + 0 (child index 0)
-        // + 0 (incoming) + 001 (port index 2) + 10 (child index 1)
-        // = 011101010000110
-        let exp = 0b011101010000110 << 49;
-
-        assert_eq!(path.0, exp);
-    }
-
-    #[test]
-    fn test_hugr_path_builder_overflow() {
-        let mut builder = HugrPathBuilder::new();
-
-        // Try to push exactly MAX_BITS worth of data
-        builder
-            .push(hugr::Port::new(Direction::Incoming, 59), 3)
-            .unwrap();
-        // the last bit is a zero, so this does not overflow
-        assert_eq!(builder.bits_used, MAX_BITS + 1);
-        let val = builder.finish();
-        assert_eq!(val.0, 0b1111);
-
-        let mut builder = HugrPathBuilder::new();
-        // Try to push more than MAX_BITS worth of data
-        builder
-            .push(hugr::Port::new(Direction::Incoming, 60), 3)
-            .unwrap_err();
-    }
-
-    #[test]
     fn test_hugr_path_parent() {
         let ports = [
             (hugr::Port::new(Direction::Incoming, 0), 2),
@@ -375,22 +149,22 @@ mod tests {
             (hugr::Port::new(Direction::Incoming, 2), 1),
         ];
         let mut exp_paths = Vec::new();
-        let mut builder = HugrPathBuilder::new();
+        let mut path = HugrPath::empty();
         for &(port, index) in ports.iter() {
-            builder.push(port, index).unwrap();
-            exp_paths.push(builder.clone().finish());
+            path.push(port, index).unwrap();
+            exp_paths.push(path.clone());
         }
         let (exp_grandparent, exp_parent, path) = exp_paths.into_iter().collect_tuple().unwrap();
 
-        let (parent, port, index) = path.uncons().expect("invalid parent");
+        let (parent, port, index) = path.split_back().expect("invalid parent");
         assert_eq!(parent, exp_parent);
         assert_eq!((port, index), ports[2]);
 
-        let (grandparent, port, index) = parent.uncons().expect("invalid grandparent");
+        let (grandparent, port, index) = parent.split_back().expect("invalid grandparent");
         assert_eq!(grandparent, exp_grandparent);
         assert_eq!((port, index), ports[1]);
 
-        let (empty, port, index) = grandparent.uncons().expect("non-empty root");
+        let (empty, port, index) = grandparent.split_back().expect("non-empty root");
         assert_eq!(empty, HugrPath::empty());
         assert_eq!((port, index), ports[0]);
     }
@@ -405,5 +179,14 @@ mod tests {
         let a = HugrPath::try_from(path1.as_slice()).unwrap();
         let b = HugrPath::try_from(path2.as_slice()).unwrap();
         assert!(a < b);
+    }
+
+    #[test]
+    fn test_debug_fmt() {
+        let path = vec![
+            (hugr::Port::new(Direction::Incoming, 3), 3),
+            (hugr::Port::new(Direction::Outgoing, 1), 2),
+        ];
+        insta::assert_debug_snapshot!(path);
     }
 }

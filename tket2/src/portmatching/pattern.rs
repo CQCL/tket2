@@ -19,7 +19,7 @@ use itertools::{Either, Itertools};
 use portmatching::{self as pm, BindMap};
 use priority_queue::PriorityQueue;
 
-use super::indexing::{HugrNodeID, HugrPath, HugrPathBuilder, HugrPortID};
+use super::indexing::{HugrNodeID, HugrPath, HugrPortID};
 use super::{Constraint, HugrBindMap, HugrVariableID, HugrVariableValue, Predicate};
 use crate::rewrite::{InvalidSubgraph, Subcircuit};
 use crate::utils::type_is_linear;
@@ -525,28 +525,25 @@ fn dijkstra_all_shortest_paths(
         in_neighbours.chain(out_neighbours).collect_vec()
     };
     // Enqueue all unvisited neighbours of `node`.
-    let enqueue_neighbours = |pq: &mut PriorityQueue<_, _, _>,
-                              ret: &BTreeMap<_, _>,
-                              node,
-                              path_builder: HugrPathBuilder| {
-        for (traverse_port, node, index) in neighbours(node) {
-            let mut path_builder = path_builder.clone();
-            // ignore errors, check at the end if all ports have found a path
-            if path_builder.push(traverse_port, index).is_ok() && !ret.contains_key(&node) {
-                pq.push_decrease(node, path_builder);
+    let enqueue_neighbours =
+        |pq: &mut PriorityQueue<_, _, _>, ret: &BTreeMap<_, _>, node, path: HugrPath| {
+            for (traverse_port, node, index) in neighbours(node) {
+                let mut path = path.clone();
+                // ignore errors, check at the end if all ports have found a path
+                if path.push(traverse_port, index).is_ok() && !ret.contains_key(&node) {
+                    pq.push_decrease(node, path);
+                }
             }
-        }
-    };
+        };
 
     let mut ret = BTreeMap::new();
     let mut pqueue = PriorityQueue::new();
-    pqueue.push(root, HugrPathBuilder::new());
+    pqueue.push(root, HugrPath::empty());
 
-    while let Some((node, path_builder)) = pqueue.pop() {
-        let new_path = path_builder.clone().finish();
+    while let Some((node, new_path)) = pqueue.pop() {
         let success = ret.insert(node, new_path).is_none();
         debug_assert!(success);
-        enqueue_neighbours(&mut pqueue, &ret, node, path_builder);
+        enqueue_neighbours(&mut pqueue, &ret, node, new_path);
     }
 
     // Check that all nodes have been assigned a path.
