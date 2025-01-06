@@ -249,6 +249,15 @@ mod tests {
         })
         .unwrap()
     }
+    fn cx_times_3() -> Circuit {
+        build_simple_circuit(2, |circ| {
+            circ.append(Tk2Op::CX, [0, 1]).unwrap();
+            circ.append(Tk2Op::CX, [0, 1]).unwrap();
+            circ.append(Tk2Op::CX, [0, 1]).unwrap();
+            Ok(())
+        })
+        .unwrap()
+    }
 
     #[fixture]
     fn cx_cx_3() -> Circuit {
@@ -270,15 +279,27 @@ mod tests {
         .unwrap()
     }
 
-    #[test]
-    fn construct_matcher() {
-        let circ = h_cx();
+    #[rstest]
+    #[case(vec![h_cx()])]
+    #[case(vec![h_cx(), cx_xc()])]
+    #[case(vec![h_cx(), cx_xc(), cx_times_3()])]
+    fn construct_matcher(#[case] circuits: Vec<Circuit>) {
+        let patterns = circuits
+            .iter()
+            .map(|circ| CircuitPattern::try_from_circuit(circ).unwrap())
+            .collect_vec();
 
-        let p = CircuitPattern::try_from_circuit(&circ).unwrap();
-        let m = PatternMatcher::from_patterns(vec![p]);
+        let m = PatternMatcher::from_patterns(patterns);
 
-        let matches = m.find_matches(&circ);
-        assert_eq!(matches.count(), 1);
+        // println!("{}", m.dot_string());
+
+        for circ in &circuits {
+            let matches = m.find_matches(circ);
+            assert_eq!(matches.count(), 1);
+        }
+        if circuits.len() > 2 {
+            panic!("just fail")
+        }
     }
 
     #[test]
@@ -292,6 +313,7 @@ mod tests {
         // Estimate the size of the buffer based on the number of patterns and the size of each pattern
         let mut buf = Vec::with_capacity(patterns.iter().map(|p| p.n_constraints()).sum());
         let m = PatternMatcher::from_patterns(patterns);
+
         m.save_binary_io(&mut buf).unwrap();
 
         let m2 = PatternMatcher::load_binary_io(&mut buf.as_slice()).unwrap();
@@ -328,20 +350,18 @@ mod tests {
 
     #[rstest]
     fn cx_rz_replace_to_id(cx_rz: Circuit) {
-        // let p = CircuitPattern::try_from_circuit(&cx_rz).unwrap();
-        // let m = PatternMatcher::from_patterns(vec![p]);
-        let rewriter =
-            ECCRewriter::try_from_eccs_json_file(Path::new("../test_eccs.json")).unwrap();
+        let p = CircuitPattern::try_from_circuit(&cx_rz).unwrap();
+        let m = PatternMatcher::from_patterns(vec![p]);
         // println!("{}", rewriter.dot_string());
         // println!("{}", m.dot_string());
 
-        // let matches = m.find_matches(&cx_rz);
-        // assert_eq!(matches.count(), 1);
+        let matches = m.find_matches(&cx_rz);
+        assert_eq!(matches.count(), 1);
 
         // panic!();
 
-        let matches = rewriter.get_rewrites(&cx_rz);
-        assert_eq!(matches.len(), 1);
+        // let matches = rewriter.get_rewrites(&cx_rz);
+        // assert_eq!(matches.len(), 1);
     }
 
     #[rstest]

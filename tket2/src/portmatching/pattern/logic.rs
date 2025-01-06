@@ -98,17 +98,28 @@ impl PatternLogic {
     ///
     /// Call this after modifying known constraints.
     ///
-    /// Panics if the pattern is not satisfiable.
-    fn update_constraints(&mut self) {
-        let clone = self.clone();
+    fn update_constraints(&mut self) -> Satisfiable {
+        let mut clone = self.clone();
+        let mut satisfiable = true;
         self.pattern_constraints.retain(|constraint| {
-            let mut clone = clone.clone();
             match clone.add_known_constraint(constraint) {
                 Satisfiable::Yes(()) => true,
-                Satisfiable::No => panic!("cannot update constraints: pattern not satisfiable"),
+                Satisfiable::No => {
+                    satisfiable = false;
+                    false
+                }
                 Satisfiable::Tautology => false,
             }
         });
+
+        if !satisfiable {
+            return Satisfiable::No;
+        }
+        if self.is_satisifed() {
+            return Satisfiable::Tautology;
+        }
+
+        Satisfiable::Yes(())
     }
 
     /// Whether all pattern constraints are satisfied
@@ -122,15 +133,21 @@ impl pm::PatternLogic for PatternLogic {
 
     type BranchClass = BranchClass;
 
+    type Key = HugrVariableID;
+
     fn rank_classes(
         &self,
+        known_bindings: &[Self::Key],
     ) -> impl Iterator<Item = (Self::BranchClass, portmatching::pattern::ClassRank)> {
-        let branches = self
-            .pattern_constraints
-            .iter()
-            .flat_map(|c| c.predicate().get_classes(c.required_bindings()))
-            .unique();
-        branches.map(|cls| (cls, cls.get_rank()))
+        // Class rank * number of new bindings required for constraint
+        self.pattern_constraints.iter().flat_map(|c| {
+            let reqs = c.required_bindings();
+            let n_new_bindings = reqs.iter().filter(|k| !known_bindings.contains(k)).count() as i32;
+            c.predicate()
+                .get_classes(c.required_bindings())
+                .into_iter()
+                .map(move |cls| (cls, cls.get_rank() * (2_f64.powi(n_new_bindings))))
+        })
     }
 
     fn nominate(&self, cls: &Self::BranchClass) -> BTreeSet<Self::Constraint> {
@@ -149,16 +166,13 @@ impl pm::PatternLogic for PatternLogic {
             .iter()
             .map(|constraint| {
                 let mut clone = self.clone();
-                match clone.add_known_constraint(constraint) {
+                if matches!(clone.add_known_constraint(constraint), Satisfiable::No) {
+                    return Satisfiable::No;
+                }
+                match clone.update_constraints() {
+                    Satisfiable::Yes(()) => Satisfiable::Yes(clone),
                     Satisfiable::No => Satisfiable::No,
-                    Satisfiable::Yes(()) | Satisfiable::Tautology => {
-                        clone.update_constraints();
-                        if clone.is_satisifed() {
-                            Satisfiable::Tautology
-                        } else {
-                            Satisfiable::Yes(clone)
-                        }
-                    }
+                    Satisfiable::Tautology => Satisfiable::Tautology,
                 }
             })
             .collect()

@@ -81,12 +81,21 @@ impl BranchClass {
     pub(super) fn get_rank(&self) -> pm::pattern::ClassRank {
         use BranchClass::*;
         match self {
-            IsOpEqualClass(_) => 0.3,
-            IsDistinctFromClass(_) => 0.7,
-            OccupyOutgoingPortClass(_, _) => 0.1,
-            OccupyIncomingPortClass(_, _) => 0.1,
-            IsWireSourceClass(_) => 0.1,
-            IsLinearWireSinkClass(_) => 0.1,
+            // Always evaluate first: any two different constraints in the same
+            // class are always mutually exclusive
+            IsOpEqualClass(_) => 0.1,
+            // Evaluate second: if ports are different, then they are mutually
+            // exclusive. If nodes are different, then must still prove that the
+            // two nodes are actually different
+            IsWireSourceClass(_) => 0.13,
+            IsLinearWireSinkClass(_) => 0.13,
+            // Evaluate third: if wires are different, then must still prove that
+            // the two wires are actually different
+            OccupyOutgoingPortClass(_, _) => 0.16,
+            OccupyIncomingPortClass(_, _) => 0.16,
+            // Evaluate last, but before considering other constraints on
+            // unknown keys
+            IsDistinctFromClass(_) => 0.19,
         }
     }
 }
