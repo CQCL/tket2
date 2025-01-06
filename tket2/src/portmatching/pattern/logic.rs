@@ -1,7 +1,10 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, VecDeque};
 
 use itertools::Itertools;
-use portmatching::{self as pm, pattern::Satisfiable};
+use portmatching::{
+    self as pm,
+    pattern::{self, ClassRank, Satisfiable},
+};
 
 use crate::portmatching::{
     indexing::{HugrNodeID, HugrPortID},
@@ -14,13 +17,23 @@ use super::Uf;
 pub struct PatternLogic {
     known_constraints: Uf<HugrNodeID, HugrPortID, MatchOp>,
     pattern_constraints: BTreeSet<Constraint>,
+
+    /// All linear wires in the pattern
+    all_linear_wires: BTreeSet<HugrPortID>,
+    /// The subset of `all_linear_wires` that are known to be distinct
+    known_distinct_wires: BTreeSet<HugrPortID>,
 }
 
 impl PatternLogic {
-    pub fn from_constraints(pattern_constraints: BTreeSet<Constraint>) -> Self {
+    pub fn new(
+        pattern_constraints: BTreeSet<Constraint>,
+        all_linear_wires: BTreeSet<HugrPortID>,
+    ) -> Self {
         Self {
             known_constraints: Uf::new(),
             pattern_constraints,
+            known_distinct_wires: BTreeSet::new(),
+            all_linear_wires,
         }
     }
 
@@ -85,6 +98,18 @@ impl PatternLogic {
                         Satisfiable::Tautology => (),
                     }
                 }
+
+                // Update known distinct wires
+                if !self.known_distinct_wires.contains(&fst_port) {
+                    let all_not_equal = self
+                        .known_distinct_wires
+                        .iter()
+                        .all(|&w| self.known_constraints.check_wires_not_equal(fst_port, w));
+                    if all_not_equal {
+                        self.known_distinct_wires.insert(fst_port);
+                    }
+                }
+
                 if all_tautology {
                     return Satisfiable::Tautology;
                 } else {
@@ -98,7 +123,7 @@ impl PatternLogic {
     ///
     /// Call this after modifying known constraints.
     ///
-    fn update_constraints(&mut self) -> Satisfiable {
+    fn update_pattern_constraints(&mut self) -> Satisfiable {
         let mut clone = self.clone();
         let mut satisfiable = true;
         self.pattern_constraints.retain(|constraint| {
@@ -122,9 +147,21 @@ impl PatternLogic {
         Satisfiable::Yes(())
     }
 
-    /// Whether all pattern constraints are satisfied
+    /// Whether all constraints of the pattern are satisfied
     fn is_satisifed(&self) -> bool {
-        self.pattern_constraints.is_empty()
+        self.pattern_constraints.is_empty() && self.are_all_wires_known()
+    }
+
+    /// Whether all wires in the pattern are known to be pairwise distinct
+    fn are_all_wires_known(&self) -> bool {
+        self.all_wires()
+            .all(|w| self.known_distinct_wires.contains(&w))
+    }
+
+    fn all_wires(&self) -> impl Iterator<Item = HugrPortID> + '_ {
+        self.all_linear_wires
+            .iter()
+            .filter_map(|&v| HugrPortID::try_from(v).ok())
     }
 }
 
@@ -138,27 +175,48 @@ impl pm::PatternLogic for PatternLogic {
     fn rank_classes(
         &self,
         known_bindings: &[Self::Key],
-    ) -> impl Iterator<Item = (Self::BranchClass, portmatching::pattern::ClassRank)> {
+    ) -> impl Iterator<Item = (Self::BranchClass, ClassRank)> {
         // Class rank * number of new bindings required for constraint
-        self.pattern_constraints.iter().flat_map(|c| {
+        let pattern_classes = self.pattern_constraints.iter().flat_map(|c| {
             let reqs = c.required_bindings();
             let n_new_bindings = reqs.iter().filter(|k| !known_bindings.contains(k)).count() as i32;
             c.predicate()
                 .get_classes(c.required_bindings())
                 .into_iter()
-                .map(move |cls| (cls, cls.get_rank() * (2_f64.powi(n_new_bindings))))
-        })
+                .map(move |cls| (cls, compute_class_rank(cls, n_new_bindings)))
+        });
+        let distinct_from_classes =
+            get_distinct_from_classes(known_bindings, &self.known_distinct_wires, self.all_wires())
+                .collect_vec();
+
+        pattern_classes.chain(distinct_from_classes)
     }
 
     fn nominate(&self, cls: &Self::BranchClass) -> BTreeSet<Self::Constraint> {
-        self.pattern_constraints
+        let mut constraints: BTreeSet<_> = self
+            .pattern_constraints
             .iter()
             .filter(|c| {
                 let classes = c.predicate().get_classes(c.required_bindings());
                 classes.iter().any(|c_cls| c_cls == cls)
             })
             .cloned()
-            .collect()
+            .collect();
+
+        // Nominate an IsDistinctFrom constraint if applicable
+        if let &BranchClass::IsDistinctFromClass(w) = cls {
+            if self.all_linear_wires.contains(&w) && !self.known_distinct_wires.contains(&w) {
+                let pred = Predicate::new_is_distinct_from(self.known_distinct_wires.len());
+                let all_wires = [w]
+                    .into_iter()
+                    .chain(self.known_distinct_wires.iter().copied());
+                let args = all_wires.map(HugrVariableID::LinearWire).collect();
+                let constraint = Constraint::try_new(pred, args).unwrap();
+                constraints.insert(constraint);
+            }
+        }
+
+        constraints
     }
 
     fn apply_transitions(&self, transitions: &[Self::Constraint]) -> Vec<Satisfiable<Self>> {
@@ -169,7 +227,7 @@ impl pm::PatternLogic for PatternLogic {
                 if matches!(clone.add_known_constraint(constraint), Satisfiable::No) {
                     return Satisfiable::No;
                 }
-                match clone.update_constraints() {
+                match clone.update_pattern_constraints() {
                     Satisfiable::Yes(()) => Satisfiable::Yes(clone),
                     Satisfiable::No => Satisfiable::No,
                     Satisfiable::Tautology => Satisfiable::Tautology,
@@ -185,4 +243,34 @@ impl pm::PatternLogic for PatternLogic {
             Satisfiable::Yes(())
         }
     }
+}
+
+fn compute_class_rank(cls: BranchClass, n_new_bindings: i32) -> f64 {
+    cls.get_rank() * (2_f64.powi(n_new_bindings))
+}
+
+/// Find wires that we'd like to check are distinct from all known distinct
+/// wires
+fn get_distinct_from_classes<'a>(
+    known_bindings: &'a [HugrVariableID],
+    known_distinct_wires: &'a BTreeSet<HugrPortID>,
+    all_wires: impl Iterator<Item = HugrPortID> + 'a,
+) -> impl Iterator<Item = (BranchClass, ClassRank)> + 'a {
+    // The ports already bound
+    let known_ports: BTreeSet<_> = known_bindings
+        .iter()
+        .filter_map(|&k| HugrPortID::try_from(k).ok())
+        .collect();
+
+    all_wires
+        .filter(|w| !known_distinct_wires.contains(w))
+        .map(move |w| {
+            let cls = BranchClass::IsDistinctFromClass(w);
+
+            let args = known_distinct_wires.iter().chain([&w]);
+            let n_new_bindings = args.filter(|w| !known_ports.contains(w)).count() as i32;
+
+            let rank = compute_class_rank(cls, n_new_bindings);
+            (cls, rank)
+        })
 }

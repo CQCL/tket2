@@ -291,14 +291,9 @@ mod tests {
 
         let m = PatternMatcher::from_patterns(patterns);
 
-        // println!("{}", m.dot_string());
-
         for circ in &circuits {
             let matches = m.find_matches(circ);
             assert_eq!(matches.count(), 1);
-        }
-        if circuits.len() > 2 {
-            panic!("just fail")
         }
     }
 

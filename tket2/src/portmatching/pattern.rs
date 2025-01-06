@@ -37,6 +37,7 @@ pub struct CircuitPattern {
     incoming_wires: Vec<HugrPortID>,
     outgoing_wires: Vec<HugrPortID>,
     nodes: Vec<HugrNodeID>,
+    linear_wires: BTreeSet<HugrPortID>,
 }
 
 impl pm::Pattern for CircuitPattern {
@@ -50,7 +51,7 @@ impl pm::Pattern for CircuitPattern {
     }
 
     fn into_logic(self) -> Self::Logic {
-        PatternLogic::from_constraints(self.constraints)
+        PatternLogic::new(self.constraints, self.linear_wires)
     }
 }
 
@@ -155,14 +156,9 @@ impl CircuitPattern {
                 continue;
             }
 
-            // Linear wires must all be distinct
-            if linear_wires.len() > 0 {
-                let pred = Predicate::new_is_distinct_from(linear_wires.len());
-                let mut args = vec![wire_id];
-                args.extend(linear_wires.clone());
-                let constraint = Constraint::try_new(pred, args).unwrap();
-                constraints.insert(constraint);
-            }
+            let HugrVariableID::LinearWire(wire_id) = wire_id else {
+                panic!("Invalid key type");
+            };
             linear_wires.insert(wire_id);
         }
 
@@ -181,6 +177,7 @@ impl CircuitPattern {
             incoming_wires,
             outgoing_wires,
             nodes,
+            linear_wires,
         })
     }
 

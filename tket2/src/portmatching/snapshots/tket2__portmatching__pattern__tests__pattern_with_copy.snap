@@ -12,8 +12,6 @@ CircuitPattern {
         IsWireSink(IncomingPort(0))(Op(HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }), LinearWire(HugrPortID { node: HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }, port: Port(Incoming, 0) })),
         IsWireSink(IncomingPort(1))(Op(HugrNodeID { path_from_root: HugrPath([]) }), CopyableWire(HugrPortID { node: HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }, port: Port(Incoming, 1) })),
         IsWireSink(IncomingPort(1))(Op(HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }), CopyableWire(HugrPortID { node: HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }, port: Port(Incoming, 1) })),
-        IsDistinctFrom { n_other: Reverse(2) }(LinearWire(HugrPortID { node: HugrNodeID { path_from_root: HugrPath([]) }, port: Port(Outgoing, 0) }), LinearWire(HugrPortID { node: HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }, port: Port(Incoming, 0) }), LinearWire(HugrPortID { node: HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }, port: Port(Outgoing, 0) })),
-        IsDistinctFrom { n_other: Reverse(1) }(LinearWire(HugrPortID { node: HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }, port: Port(Outgoing, 0) }), LinearWire(HugrPortID { node: HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }, port: Port(Incoming, 0) })),
     },
     incoming_wires: [
         HugrPortID {
@@ -88,4 +86,55 @@ CircuitPattern {
             ),
         },
     ],
+    linear_wires: {
+        HugrPortID {
+            node: HugrNodeID {
+                path_from_root: HugrPath(
+                    [],
+                ),
+            },
+            port: Port(
+                Outgoing,
+                0,
+            ),
+        },
+        HugrPortID {
+            node: HugrNodeID {
+                path_from_root: HugrPath(
+                    [
+                        (
+                            Port(
+                                Incoming,
+                                0,
+                            ),
+                            0,
+                        ),
+                    ],
+                ),
+            },
+            port: Port(
+                Incoming,
+                0,
+            ),
+        },
+        HugrPortID {
+            node: HugrNodeID {
+                path_from_root: HugrPath(
+                    [
+                        (
+                            Port(
+                                Incoming,
+                                0,
+                            ),
+                            0,
+                        ),
+                    ],
+                ),
+            },
+            port: Port(
+                Outgoing,
+                0,
+            ),
+        },
+    },
 }

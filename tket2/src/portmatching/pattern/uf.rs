@@ -307,6 +307,17 @@ impl<N: Ord + Copy, W: Ord + Copy, Op: Eq> Uf<N, W, Op> {
 
         Satisfiable::Yes(())
     }
+
+    /// Whether two wires are known to be distinct
+    pub(super) fn check_wires_not_equal(&mut self, wire1: W, wire2: W) -> bool {
+        let wire1 = self.root_wire(wire1);
+        let wire2 = self.root_wire(wire2);
+
+        if wire1 == wire2 {
+            return false;
+        }
+        self.wire_inequalities(wire1).contains(&wire2)
+    }
 }
 
 impl<N: Ord + Copy, W: Ord + Copy, Op: Eq> Uf<N, W, Op> {
