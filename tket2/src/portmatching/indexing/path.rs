@@ -128,7 +128,28 @@ impl HugrPath {
     }
 
     fn len(&self) -> usize {
-        self.tuple_starts().len()
+        let mut len = 0;
+        let mut val = self.0;
+
+        let mut bit_pos = 0;
+        while val > 0 {
+            len += 1;
+
+            // consume incoming/outgoing bit
+            val <<= 1;
+            bit_pos += 1;
+
+            // consume offset (regex: 0*1)
+            bit_pos += consume(false, &mut val);
+            val <<= 1;
+            bit_pos += 1;
+
+            // consume index (regex: 1*0)
+            bit_pos += consume(true, &mut val);
+            val <<= 1;
+            bit_pos += 1;
+        }
+        len
     }
 }
 
