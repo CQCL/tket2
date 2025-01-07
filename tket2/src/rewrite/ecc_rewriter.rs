@@ -301,7 +301,11 @@ fn empty_wires(circ: &Circuit<impl HugrView>) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{portmatching::CircuitPatternFast, utils::build_simple_circuit, Tk2Op};
+    use crate::{
+        serialize::{load_tk1_json_str, save_tk1_json_str},
+        utils::build_simple_circuit,
+        Tk2Op,
+    };
 
     use super::*;
 
@@ -433,5 +437,30 @@ mod tests {
         assert_eq!(rewriter.targets, loaded_rewriter.targets);
         assert_eq!(rewriter.rewrite_rules, loaded_rewriter.rewrite_rules);
         assert_eq!(rewriter.empty_wires, loaded_rewriter.empty_wires);
+    }
+
+    #[test]
+    fn phase_gadget_flip() {
+        let rewriter =
+            ECCRewriter::try_from_eccs_json_file("../test_files/eccs/gadget_flip.json").unwrap();
+        let circ = load_tk1_json_str(r#"{"phase":"0.0","commands":[{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[2]],["q",[10]]]},{"op":{"type":"Rz","n_qb":1,"params":["0.25"],"signature":["Q"]},"args":[["q",[10]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[2]],["q",[10]]]},{"op":{"type":"Rz","n_qb":1,"params":["1.75"],"signature":["Q"]},"args":[["q",[10]]]}],"qubits":[["q",[10]],["q",[2]]],"bits":[],"implicit_permutation":[[["q",[10]],["q",[10]]],[["q",[2]],["q",[2]]]]}"#).unwrap();
+        let rewrites = rewriter.get_rewrites(&circ);
+
+        assert_eq!(rewrites.len(), 2);
+
+        let (rw1, rw2) = rewrites.into_iter().collect_tuple().unwrap();
+
+        let mut circ1 = circ.clone();
+        rw1.apply(&mut circ1).unwrap();
+        let circ1_str = save_tk1_json_str(&circ1).unwrap();
+
+        let mut circ2 = circ.clone();
+        rw2.apply(&mut circ2).unwrap();
+        let circ2_str = save_tk1_json_str(&circ2).unwrap();
+
+        // Both rewrites are mirrors of each other
+        assert_eq!(circ1_str, circ2_str);
+
+        insta::assert_snapshot!(circ1_str);
     }
 }

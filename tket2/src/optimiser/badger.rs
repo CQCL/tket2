@@ -567,7 +567,9 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use crate::serialize::load_tk1_json_str;
-    use crate::{extension::rotation::rotation_type, optimiser::badger::BadgerOptions};
+    use crate::{
+        extension::rotation::rotation_type, optimiser::badger::BadgerOptions, rewrite::Rewriter,
+    };
     use crate::{Circuit, Tk2Op};
 
     use super::{BadgerOptimiser, DefaultBadgerOptimiser};
