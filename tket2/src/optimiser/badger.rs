@@ -502,7 +502,6 @@ mod badger_default {
 
     use hugr::ops::OpType;
 
-    use crate::portmatching::CircuitPatternFast;
     use crate::rewrite::ecc_rewriter::RewriterSerialisationError;
     use crate::rewrite::strategy::{ExhaustiveGreedyStrategy, LexicographicCostFunction};
     use crate::rewrite::ECCRewriter;
@@ -513,7 +512,7 @@ mod badger_default {
 
     /// The default Badger optimiser using ECC sets.
     pub type DefaultBadgerOptimiser =
-        BadgerOptimiser<ECCRewriter<CircuitPatternFast>, ExhaustiveGreedyStrategy<StrategyCost>>;
+        BadgerOptimiser<ECCRewriter, ExhaustiveGreedyStrategy<StrategyCost>>;
 
     impl DefaultBadgerOptimiser {
         /// A sane default optimiser using the given ECC sets.

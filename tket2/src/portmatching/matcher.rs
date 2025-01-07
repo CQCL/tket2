@@ -17,10 +17,10 @@ use crate::rewrite::{CircuitRewrite, InvalidReplacement};
 use crate::Circuit;
 use crate::{rewrite::Subcircuit, Tk2Op};
 
-use super::pattern::CircuitPattern;
-use super::BranchSelector;
+use super::pattern::{BranchSelectorFast, CircuitPattern};
 use super::HugrIndexingScheme;
 use super::HugrVariableID;
+use super::{BranchSelector, CircuitPatternFast};
 
 pub use pm::PatternID;
 
@@ -105,11 +105,11 @@ fn encode_op(op: &OpType) -> Option<Vec<u8>> {
 /// This uses a state automaton internally to match against a set of patterns
 /// simultaneously.
 #[derive(Debug, Clone, From, Into, serde::Serialize, serde::Deserialize)]
-pub struct PatternMatcher<P>(pm::ManyMatcher<P, HugrVariableID, BranchSelector>);
+pub struct PatternMatcher(pm::ManyMatcher<CircuitPatternFast, HugrVariableID, BranchSelectorFast>);
 
-impl<P: CircuitPattern> PatternMatcher<P> {
+impl PatternMatcher {
     /// Construct a matcher from a set of patterns
-    pub fn from_patterns(patterns: Vec<P>) -> Self {
+    pub fn from_patterns(patterns: Vec<CircuitPatternFast>) -> Self {
         pm::ManyMatcher::from_patterns::<HugrIndexingScheme>(patterns).into()
     }
 
@@ -136,7 +136,7 @@ impl<P: CircuitPattern> PatternMatcher<P> {
     delegate! {
         to self.0 {
             /// Get a pattern by its ID.
-            pub fn get_pattern(&self, id: PatternID) -> Option<&P>;
+            pub fn get_pattern(&self, id: PatternID) -> Option<&CircuitPatternFast>;
 
             /// Get the number of states in the automaton.
             pub fn n_states(&self) -> usize;
@@ -226,7 +226,7 @@ mod tests {
 
     use crate::extension::rotation::rotation_type;
     use crate::portmatching::pattern::CircuitPattern;
-    use crate::portmatching::CircuitPatternUf;
+    use crate::portmatching::{CircuitPatternFast, CircuitPatternUf};
     use crate::rewrite::{ECCRewriter, Rewriter};
     use crate::utils::build_simple_circuit;
     use crate::{Circuit, Tk2Op};
@@ -285,9 +285,11 @@ mod tests {
     #[case(vec![h_cx(), cx_xc()])]
     #[case(vec![h_cx(), cx_xc(), cx_times_3()])]
     fn construct_matcher(#[case] circuits: Vec<Circuit>) {
+        use crate::portmatching::CircuitPatternFast;
+
         let patterns = circuits
             .iter()
-            .map(|circ| CircuitPatternUf::try_from_circuit(circ).unwrap())
+            .map(|circ| CircuitPatternFast::try_from_circuit(circ).unwrap())
             .collect_vec();
 
         let m = PatternMatcher::from_patterns(patterns);
@@ -303,7 +305,7 @@ mod tests {
         let circs = [h_cx(), cx_xc()];
         let patterns = circs
             .iter()
-            .map(|circ| CircuitPatternUf::try_from_circuit(circ).unwrap())
+            .map(|circ| CircuitPatternFast::try_from_circuit(circ).unwrap())
             .collect_vec();
 
         // Estimate the size of the buffer based on the number of patterns and the size of each pattern
@@ -312,7 +314,7 @@ mod tests {
 
         m.save_binary_io(&mut buf).unwrap();
 
-        let m2 = PatternMatcher::<CircuitPatternUf>::load_binary_io(&mut buf.as_slice()).unwrap();
+        let m2 = PatternMatcher::load_binary_io(&mut buf.as_slice()).unwrap();
         let mut buf2 = Vec::with_capacity(buf.len());
         m2.save_binary_io(&mut buf2).unwrap();
 
@@ -321,7 +323,7 @@ mod tests {
 
     #[rstest]
     fn cx_cx_replace_to_id(cx_cx: Circuit, cx_cx_3: Circuit) {
-        let p = CircuitPatternUf::try_from_circuit(&cx_cx_3).unwrap();
+        let p = CircuitPatternFast::try_from_circuit(&cx_cx_3).unwrap();
         let m = PatternMatcher::from_patterns(vec![p]);
 
         let matches = m.find_matches(&cx_cx);
@@ -346,7 +348,7 @@ mod tests {
 
     #[rstest]
     fn cx_rz_replace_to_id(cx_rz: Circuit) {
-        let p = CircuitPatternUf::try_from_circuit(&cx_rz).unwrap();
+        let p = CircuitPatternFast::try_from_circuit(&cx_rz).unwrap();
         let m = PatternMatcher::from_patterns(vec![p]);
         // println!("{}", rewriter.dot_string());
         // println!("{}", m.dot_string());
@@ -375,7 +377,7 @@ mod tests {
         })
         .unwrap();
 
-        let p = CircuitPatternUf::try_from_circuit(&cx).unwrap();
+        let p = CircuitPatternFast::try_from_circuit(&cx).unwrap();
         let matcher = PatternMatcher::from_patterns(vec![p]);
 
         let m = matcher.find_matches(&xc).exactly_one().ok().unwrap();

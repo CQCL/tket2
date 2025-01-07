@@ -81,7 +81,7 @@ impl Rule {
 }
 #[pyclass]
 struct RuleMatcher {
-    matcher: PatternMatcher<CircuitPatternFast>,
+    matcher: PatternMatcher,
     rights: Vec<Circuit>,
 }
 

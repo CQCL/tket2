@@ -2,6 +2,8 @@
 
 mod data_structure;
 mod logic;
+mod selector;
+
 use data_structure::Uf;
 use logic::PatternLogic;
 

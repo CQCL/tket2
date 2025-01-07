@@ -12,8 +12,11 @@
 //! 1. and 2. are necessary to construct a pattern matcher, while 3. is necessary
 //! to evaluate predicates efficiently when traversing it.
 
+use std::collections::BTreeSet;
+
 use hugr::HugrView;
-use portmatching as pm;
+use itertools::Itertools;
+use portmatching::{self as pm};
 
 use crate::Circuit;
 
@@ -101,12 +104,6 @@ impl BranchClass {
 }
 
 impl Predicate {
-    fn to_constraint(&self, keys: Vec<HugrVariableID>) -> pm::Constraint<HugrVariableID, Self> {
-        pm::Constraint::try_new(self.clone(), keys).unwrap()
-    }
-}
-
-impl Predicate {
     pub(super) fn get_classes(&self, keys: &[HugrVariableID]) -> Vec<BranchClass> {
         use HugrVariableID::*;
         use Predicate::*;
@@ -155,88 +152,91 @@ impl Predicate {
 
 /// A branch selector for Hugr [`Constraint`]s.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct BranchSelector {
-    branch_class: BranchClass,
-    binding_indices: Vec<Vec<usize>>,
-    predicates: Vec<Predicate>,
-    all_required_bindings: Vec<HugrVariableID>,
+pub enum BranchSelector {
+    Det {
+        branch_class: BranchClass,
+        binding_indices: Vec<Vec<usize>>,
+        predicates: Vec<Predicate>,
+        all_required_bindings: Vec<HugrVariableID>,
+    },
+    NonDet {
+        branch_class: BranchClass,
+        binding_indices: Vec<Vec<usize>>,
+        predicates: Vec<Predicate>,
+        all_required_bindings: Vec<HugrVariableID>,
+    },
+    DominantDistinct {
+        all_required_bindings: Vec<HugrVariableID>,
+        target_ind: usize,
+        other_wire_sets: Vec<BTreeSet<usize>>,
+    },
 }
 
 impl BranchSelector {
-    /// Construct a branch selector from an iterator of constraints.
-    pub fn from_constraints<'c>(constraints: impl IntoIterator<Item = &'c Constraint>) -> Self {
-        let transitions = constraints.into_iter();
-        let size_hint = transitions.size_hint().0;
+    pub fn new_det(constraints: &[Constraint]) -> Self {
+        Self::new_det_or_non_det(constraints, true)
+    }
 
-        let mut predicates = Vec::with_capacity(size_hint);
-        let mut all_required_bindings = Vec::new();
-        let mut binding_indices = Vec::with_capacity(size_hint);
-        let mut valid_branch_classes: Option<Vec<_>> = None;
+    pub fn new_non_det(constraints: &[Constraint]) -> Self {
+        Self::new_det_or_non_det(constraints, false)
+    }
 
-        for constraint in transitions {
-            let pred = constraint.predicate().clone();
+    pub fn new_dominant(constraints: &[Constraint]) -> Self {
+        assert!(!constraints.is_empty());
+        assert!(constraints
+            .iter()
+            .all(|c| matches!(c.predicate(), Predicate::IsDistinctFrom { .. })));
 
-            // Populate required indices
-            let mut indices = Vec::new();
-            let reqs = constraint.required_bindings();
-            indices.reserve(reqs.len());
-            for &req in reqs {
-                let pos = all_required_bindings.iter().position(|&k| k == req);
-                if let Some(pos) = pos {
-                    indices.push(pos);
-                } else {
-                    all_required_bindings.push(req);
-                    indices.push(all_required_bindings.len() - 1);
-                }
-            }
+        let (all_required_bindings, binding_indices) = get_required_bindings(constraints);
+        let target_ind = binding_indices[0][0];
+        assert!(binding_indices.iter().all(|i| i[0] == target_ind));
 
-            // Filter valid branch classes
-            let c_classes = constraint
-                .predicate()
-                .get_classes(&constraint.required_bindings());
-            if let Some(valid_branch_classes) = valid_branch_classes.as_mut() {
-                valid_branch_classes.retain(|c| c_classes.contains(c));
-            } else {
-                valid_branch_classes = Some(
-                    constraint
-                        .predicate()
-                        .get_classes(&constraint.required_bindings()),
-                );
-            }
+        let other_wire_sets = binding_indices
+            .iter()
+            .map(|bindings| BTreeSet::from_iter(bindings[1..].iter().copied()))
+            .collect_vec();
 
-            binding_indices.push(indices);
-            predicates.push(pred);
-        }
-
-        let branch_class = valid_branch_classes
-            .expect("empty branch selector")
-            .pop()
-            .expect("no shared branch class in selector");
-
-        Self {
-            predicates,
+        Self::DominantDistinct {
             all_required_bindings,
-            binding_indices,
-            branch_class,
+            target_ind,
+            other_wire_sets,
         }
     }
-}
 
-impl pm::BranchSelector for BranchSelector {
-    type Key = HugrVariableID;
+    /// Construct a det or non-det branch selector from an iterator of constraints.
+    pub fn new_det_or_non_det(transitions: &[Constraint], is_det: bool) -> Self {
+        let predicates = transitions.iter().map(|c| c.predicate().clone()).collect();
+        let (all_required_bindings, binding_indices) = get_required_bindings(transitions);
+        let branch_class =
+            find_shared_class(transitions).expect("no shared branch class in selector");
 
-    fn required_bindings(&self) -> &[Self::Key] {
-        &self.all_required_bindings
+        match is_det {
+            true => Self::Det {
+                predicates,
+                all_required_bindings,
+                binding_indices,
+                branch_class,
+            },
+            false => Self::NonDet {
+                predicates,
+                all_required_bindings,
+                binding_indices,
+                branch_class,
+            },
+        }
     }
-}
 
-impl<H: HugrView> pm::EvaluateBranchSelector<Circuit<H>, HugrVariableValue> for BranchSelector {
-    fn eval(&self, bindings: &[Option<HugrVariableValue>], data: &Circuit<H>) -> Vec<usize> {
-        let opt_ind =
-            self.predicates
-                .iter()
-                .zip(&self.binding_indices)
-                .position(|(predicate, indices)| {
+    /// Indices of all constraints that are satisfied by the given bindings.
+    ///
+    /// Panics if called on a DominantDistinct branch selector
+    pub(crate) fn all_satisfied_positions(
+        &self,
+        bindings: &[Option<HugrVariableValue>],
+        data: &Circuit<impl HugrView>,
+    ) -> Vec<usize> {
+        match self {
+            Self::Det { .. } | Self::NonDet { .. } => {
+                let ret = self.zip_predicates().positions(|(predicate, indices)| {
                     let Ok(bindings) = indices
                         .iter()
                         .map(|&i| bindings[i].as_ref().ok_or(()))
@@ -246,22 +246,168 @@ impl<H: HugrView> pm::EvaluateBranchSelector<Circuit<H>, HugrVariableValue> for 
                     };
                     <Predicate as pm::Predicate<_, _>>::check(predicate, &bindings, data)
                 });
-        opt_ind.into_iter().collect()
+                ret.collect()
+            }
+            Self::DominantDistinct {
+                other_wire_sets,
+                target_ind,
+                ..
+            } => {
+                let ret = other_wire_sets.iter().positions(|other_wires| {
+                    let indices = [target_ind].into_iter().chain(other_wires);
+                    let Ok(bindings) = indices
+                        .map(|&i| bindings[i].as_ref().ok_or(()))
+                        .collect::<Result<Vec<_>, _>>()
+                    else {
+                        return false;
+                    };
+                    let predicate = Predicate::new_is_distinct_from(other_wires.len());
+                    <Predicate as pm::Predicate<_, _>>::check(&predicate, &bindings, data)
+                });
+                ret.collect()
+            }
+        }
+    }
+
+    fn zip_predicates(&self) -> impl Iterator<Item = (&Predicate, &Vec<usize>)> {
+        let (predicates, binding_indices) = match self {
+            Self::Det {
+                predicates,
+                binding_indices,
+                ..
+            } => (predicates, binding_indices),
+            Self::NonDet {
+                predicates,
+                binding_indices,
+                ..
+            } => (predicates, binding_indices),
+            Self::DominantDistinct { .. } => panic!("DominantDistinct has no predicate list"),
+        };
+        predicates.iter().zip(binding_indices)
+    }
+
+    fn branch_class(&self) -> BranchClass {
+        match self {
+            Self::Det { branch_class, .. } => *branch_class,
+            Self::NonDet { branch_class, .. } => *branch_class,
+            Self::DominantDistinct {
+                all_required_bindings,
+                target_ind,
+                ..
+            } => {
+                let wire = all_required_bindings[*target_ind];
+                BranchClass::IsDistinctFromClass(wire.try_into().unwrap())
+            }
+        }
+    }
+
+    fn predicate(&self, i: usize) -> Predicate {
+        match self {
+            Self::Det { predicates, .. } => predicates[i].clone(),
+            Self::NonDet { predicates, .. } => predicates[i].clone(),
+            Self::DominantDistinct {
+                other_wire_sets, ..
+            } => {
+                let n_other = other_wire_sets[i].len();
+                Predicate::new_is_distinct_from(n_other)
+            }
+        }
     }
 }
 
-impl pm::CreateBranchSelector<Constraint> for BranchSelector {
-    fn create_branch_selector(constraints: Vec<Constraint>) -> Self {
-        Self::from_constraints(&constraints)
+impl pm::BranchSelector for BranchSelector {
+    type Key = HugrVariableID;
+
+    fn required_bindings(&self) -> &[Self::Key] {
+        match self {
+            Self::Det {
+                all_required_bindings,
+                ..
+            } => all_required_bindings,
+            Self::NonDet {
+                all_required_bindings,
+                ..
+            } => all_required_bindings,
+            Self::DominantDistinct {
+                all_required_bindings,
+                ..
+            } => all_required_bindings,
+        }
     }
 }
 
 impl pm::branch_selector::DisplayBranchSelector for BranchSelector {
     fn fmt_class(&self) -> String {
-        format!("{:?}", self.branch_class)
+        format!("{:?}", self.branch_class())
     }
 
     fn fmt_nth_constraint(&self, n: usize) -> String {
-        format!("{:?}", self.predicates[n])
+        format!("{:?}", self.predicate(n))
     }
+}
+
+impl<H: HugrView> pm::EvaluateBranchSelector<Circuit<H>, HugrVariableValue> for BranchSelector {
+    fn eval(&self, bindings: &[Option<HugrVariableValue>], data: &Circuit<H>) -> Vec<usize> {
+        match self {
+            Self::Det { .. } => {
+                let first_satisifed = self
+                    .all_satisfied_positions(bindings, data)
+                    .first()
+                    .copied();
+                first_satisifed.into_iter().collect()
+            }
+            Self::NonDet { .. } => self.all_satisfied_positions(bindings, data),
+            Self::DominantDistinct {
+                other_wire_sets, ..
+            } => {
+                let all_satisfied = self.all_satisfied_positions(bindings, data);
+                let mut retained = all_satisfied.clone();
+                // TODO: this is asymptotically quite inefficient, would be faster
+                // using a graph data structure
+                retained.retain(|&i| {
+                    !all_satisfied
+                        .iter()
+                        .any(|&j| j != i && other_wire_sets[i].is_subset(&other_wire_sets[j]))
+                });
+                retained
+            }
+        }
+    }
+}
+
+pub(super) fn find_shared_class(transitions: &[Constraint]) -> Option<BranchClass> {
+    let all_classes = transitions.iter().map(|c| {
+        c.predicate()
+            .get_classes(c.required_bindings())
+            .into_iter()
+            .collect::<BTreeSet<_>>()
+    });
+    all_classes
+        .reduce(|acc, classes| acc.intersection(&classes).cloned().collect())
+        .and_then(|common_classes| common_classes.into_iter().next())
+}
+
+fn get_required_bindings(transitions: &[Constraint]) -> (Vec<HugrVariableID>, Vec<Vec<usize>>) {
+    let mut all_required_bindings = Vec::new();
+    let mut binding_indices = Vec::with_capacity(transitions.len());
+
+    for constraint in transitions {
+        // Populate required indices
+        let mut indices = Vec::new();
+        let reqs = constraint.required_bindings();
+        indices.reserve(reqs.len());
+        for &req in reqs {
+            let pos = all_required_bindings.iter().position(|&k| k == req);
+            if let Some(pos) = pos {
+                indices.push(pos);
+            } else {
+                all_required_bindings.push(req);
+                indices.push(all_required_bindings.len() - 1);
+            }
+        }
+
+        binding_indices.push(indices);
+    }
+
+    (all_required_bindings, binding_indices)
 }

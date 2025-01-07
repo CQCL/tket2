@@ -1,0 +1,197 @@
+---
+source: tket2/src/portmatching/pattern/fast.rs
+expression: p
+---
+CircuitPatternFast {
+    constraints: {
+        IsOpEqual(MatchOp { op_name: "tket2.quantum.CX", .. })(Op(HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) })),
+        IsOpEqual(MatchOp { op_name: "tket2.quantum.H", .. })(Op(HugrNodeID { path_from_root: HugrPath([]) })),
+        IsWireSource(OutgoingPort(0))(Op(HugrNodeID { path_from_root: HugrPath([]) }), LinearWire(HugrPortID { node: HugrNodeID { path_from_root: HugrPath([]) }, port: Port(Outgoing, 0) })),
+        IsWireSource(OutgoingPort(0))(Op(HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }), LinearWire(HugrPortID { node: HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }, port: Port(Outgoing, 0) })),
+        IsWireSource(OutgoingPort(1))(Op(HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }), LinearWire(HugrPortID { node: HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }, port: Port(Outgoing, 1) })),
+        IsWireSink(IncomingPort(0))(Op(HugrNodeID { path_from_root: HugrPath([]) }), LinearWire(HugrPortID { node: HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }, port: Port(Outgoing, 0) })),
+        IsWireSink(IncomingPort(0))(Op(HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }), LinearWire(HugrPortID { node: HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }, port: Port(Incoming, 0) })),
+        IsWireSink(IncomingPort(1))(Op(HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }), LinearWire(HugrPortID { node: HugrNodeID { path_from_root: HugrPath([(Port(Incoming, 0), 0)]) }, port: Port(Incoming, 1) })),
+    },
+    incoming_wires: [
+        HugrPortID {
+            node: HugrNodeID {
+                path_from_root: HugrPath(
+                    [
+                        (
+                            Port(
+                                Incoming,
+                                0,
+                            ),
+                            0,
+                        ),
+                    ],
+                ),
+            },
+            port: Port(
+                Incoming,
+                0,
+            ),
+        },
+        HugrPortID {
+            node: HugrNodeID {
+                path_from_root: HugrPath(
+                    [
+                        (
+                            Port(
+                                Incoming,
+                                0,
+                            ),
+                            0,
+                        ),
+                    ],
+                ),
+            },
+            port: Port(
+                Incoming,
+                1,
+            ),
+        },
+    ],
+    outgoing_wires: [
+        HugrPortID {
+            node: HugrNodeID {
+                path_from_root: HugrPath(
+                    [
+                        (
+                            Port(
+                                Incoming,
+                                0,
+                            ),
+                            0,
+                        ),
+                    ],
+                ),
+            },
+            port: Port(
+                Outgoing,
+                1,
+            ),
+        },
+        HugrPortID {
+            node: HugrNodeID {
+                path_from_root: HugrPath(
+                    [],
+                ),
+            },
+            port: Port(
+                Outgoing,
+                0,
+            ),
+        },
+    ],
+    nodes: [
+        HugrNodeID {
+            path_from_root: HugrPath(
+                [
+                    (
+                        Port(
+                            Incoming,
+                            0,
+                        ),
+                        0,
+                    ),
+                ],
+            ),
+        },
+        HugrNodeID {
+            path_from_root: HugrPath(
+                [],
+            ),
+        },
+    ],
+    linear_wires: {
+        HugrPortID {
+            node: HugrNodeID {
+                path_from_root: HugrPath(
+                    [],
+                ),
+            },
+            port: Port(
+                Outgoing,
+                0,
+            ),
+        },
+        HugrPortID {
+            node: HugrNodeID {
+                path_from_root: HugrPath(
+                    [
+                        (
+                            Port(
+                                Incoming,
+                                0,
+                            ),
+                            0,
+                        ),
+                    ],
+                ),
+            },
+            port: Port(
+                Incoming,
+                0,
+            ),
+        },
+        HugrPortID {
+            node: HugrNodeID {
+                path_from_root: HugrPath(
+                    [
+                        (
+                            Port(
+                                Incoming,
+                                0,
+                            ),
+                            0,
+                        ),
+                    ],
+                ),
+            },
+            port: Port(
+                Incoming,
+                1,
+            ),
+        },
+        HugrPortID {
+            node: HugrNodeID {
+                path_from_root: HugrPath(
+                    [
+                        (
+                            Port(
+                                Incoming,
+                                0,
+                            ),
+                            0,
+                        ),
+                    ],
+                ),
+            },
+            port: Port(
+                Outgoing,
+                0,
+            ),
+        },
+        HugrPortID {
+            node: HugrNodeID {
+                path_from_root: HugrPath(
+                    [
+                        (
+                            Port(
+                                Incoming,
+                                0,
+                            ),
+                            0,
+                        ),
+                    ],
+                ),
+            },
+            port: Port(
+                Outgoing,
+                1,
+            ),
+        },
+    },
+}

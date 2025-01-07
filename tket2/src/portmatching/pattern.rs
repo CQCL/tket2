@@ -12,7 +12,7 @@ mod fast;
 mod pattern_trait;
 mod uf;
 
-pub use fast::CircuitPatternFast;
+pub use fast::{BranchSelectorFast, CircuitPatternFast};
 pub use pattern_trait::CircuitPattern;
 pub use uf::CircuitPatternUf;
 

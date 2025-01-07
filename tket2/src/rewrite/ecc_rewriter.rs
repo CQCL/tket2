@@ -45,9 +45,9 @@ struct TargetID(usize);
 /// or a representative circuit into any of the equivalent non-representative
 /// circuits.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ECCRewriter<P> {
+pub struct ECCRewriter {
     /// Matcher for finding patterns.
-    matcher: PatternMatcher<P>,
+    matcher: PatternMatcher,
     /// Targets of some rewrite rules.
     targets: Vec<Hugr>,
     /// Rewrites, stored as a map from the source PatternID to possibly multiple
@@ -59,7 +59,7 @@ pub struct ECCRewriter<P> {
     empty_wires: Vec<Vec<usize>>,
 }
 
-impl<P: CircuitPattern> ECCRewriter<P> {
+impl ECCRewriter {
     /// Create a new rewriter from equivalent circuit classes in JSON file.
     ///
     /// This uses the Quartz JSON file format to store equivalent circuit classes.
@@ -196,7 +196,7 @@ impl<P: CircuitPattern> ECCRewriter<P> {
     }
 }
 
-impl<P: CircuitPattern> Rewriter for ECCRewriter<P> {
+impl Rewriter for ECCRewriter {
     fn get_rewrites(&self, circ: &Circuit<impl HugrView>) -> Vec<CircuitRewrite> {
         let matches = self.matcher.find_matches(circ);
         matches
@@ -350,7 +350,7 @@ mod tests {
     fn small_ecc_rewriter() {
         let ecc1 = EqCircClass::new(h_h(), vec![empty(), cx_cx()]);
         let ecc2 = EqCircClass::new(cx_x(), vec![x_cx()]);
-        let rewriter = ECCRewriter::<CircuitPatternFast>::from_eccs(vec![ecc1, ecc2]);
+        let rewriter = ECCRewriter::from_eccs(vec![ecc1, ecc2]);
         assert_eq!(rewriter.targets.len(), 5);
         assert_eq!(
             rewriter.rewrite_rules,
@@ -375,8 +375,7 @@ mod tests {
         // In this example, all circuits are valid patterns, thus
         // PatternID == TargetID.
         let test_file = "../test_files/eccs/small_eccs.json";
-        let rewriter =
-            ECCRewriter::<CircuitPatternFast>::try_from_eccs_json_file(test_file).unwrap();
+        let rewriter = ECCRewriter::try_from_eccs_json_file(test_file).unwrap();
         assert_eq!(rewriter.rewrite_rules.len(), rewriter.matcher.n_patterns());
         assert_eq!(rewriter.targets.len(), 5 * 4 + 5 * 3);
 
@@ -411,8 +410,7 @@ mod tests {
     #[test]
     fn ecc_rewriter_empty_params() {
         let test_file = "../test_files/cx_cx_eccs.json";
-        let rewriter =
-            ECCRewriter::<CircuitPatternFast>::try_from_eccs_json_file(test_file).unwrap();
+        let rewriter = ECCRewriter::try_from_eccs_json_file(test_file).unwrap();
 
         let cx_cx = cx_cx();
         assert_eq!(rewriter.get_rewrites(&cx_cx).len(), 1);
@@ -422,12 +420,11 @@ mod tests {
     #[cfg(feature = "binary-eccs")]
     fn ecc_file_roundtrip() {
         let ecc = EqCircClass::new(h_h(), vec![empty(), cx_cx()]);
-        let rewriter = ECCRewriter::<CircuitPatternFast>::from_eccs([ecc]);
+        let rewriter = ECCRewriter::from_eccs([ecc]);
 
         let mut data: Vec<u8> = Vec::new();
         rewriter.save_binary_io(&mut data).unwrap();
-        let loaded_rewriter =
-            ECCRewriter::<CircuitPatternFast>::load_binary_io(data.as_slice()).unwrap();
+        let loaded_rewriter = ECCRewriter::load_binary_io(data.as_slice()).unwrap();
 
         assert_eq!(
             rewriter.matcher.n_patterns(),

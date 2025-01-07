@@ -59,7 +59,7 @@ impl PyCircuitPattern {
 #[derive(Debug, Clone, From)]
 pub struct PyPatternMatcher {
     /// Rust representation of the matcher
-    pub matcher: PatternMatcher<CircuitPatternFast>,
+    pub matcher: PatternMatcher,
 }
 
 #[pymethods]

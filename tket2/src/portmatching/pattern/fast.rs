@@ -1,6 +1,10 @@
 //! Circuit Pattern with faster decomposition for pattern matching
 
 mod logic;
+mod selector;
+
+pub use selector::BranchSelectorFast;
+
 use logic::PatternLogic;
 
 use std::collections::BTreeSet;
