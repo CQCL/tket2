@@ -82,16 +82,6 @@ impl TryFrom<HugrVariableID> for HugrPortID {
     }
 }
 
-impl HugrVariableID {
-    fn path(&self) -> HugrPath {
-        match self {
-            HugrVariableID::Op(node) => node.path_from_root,
-            HugrVariableID::CopyableWire(port) => port.node.path_from_root,
-            HugrVariableID::LinearWire(port) => port.node.path_from_root,
-        }
-    }
-}
-
 /// The values that variables can be bound to, either a node or a wire,
 /// represented by the unique outgoing port on that wire.
 ///
@@ -122,10 +112,6 @@ impl HugrVariableValue {
         let (out_node, out_port) = find_source(node, port.into(), hugr).unwrap();
         Self::new_wire_from_source(out_node, out_port)
     }
-
-    pub(crate) fn new_node(node: hugr::Node) -> Self {
-        Self::Node(node)
-    }
 }
 
 pub(super) fn find_source(
@@ -136,12 +122,7 @@ pub(super) fn find_source(
     if hugr.num_inputs(node) <= port.index() {
         return None;
     }
-    let res = hugr
-        .linked_outputs(node, port)
-        .exactly_one()
-        .ok()
-        .expect("indexing does not handle wires with zero or multiple outputs");
-    Some(res)
+    hugr.single_linked_output(node, port)
 }
 
 /// A port variable ID, given by a node ID and a port offset.
