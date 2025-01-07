@@ -5,7 +5,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use delegate::delegate;
-// use super::{CircuitPattern, NodeID, PEdge, PNode};
 use derive_more::{Debug, Display, Error, From, Into};
 use hugr::hugr::views::sibling_subgraph::TopoConvexChecker;
 use hugr::hugr::views::ExtractHugr;
@@ -21,7 +20,7 @@ use crate::{rewrite::Subcircuit, Tk2Op};
 use super::BranchSelector;
 use super::HugrIndexingScheme;
 use super::Predicate;
-use super::{CircuitPattern, HugrVariableID};
+use super::{CircuitPatternUf, HugrVariableID};
 
 pub use pm::PatternID;
 
@@ -106,11 +105,11 @@ fn encode_op(op: &OpType) -> Option<Vec<u8>> {
 /// This uses a state automaton internally to match against a set of patterns
 /// simultaneously.
 #[derive(Debug, Clone, From, Into, serde::Serialize, serde::Deserialize)]
-pub struct PatternMatcher(pm::ManyMatcher<CircuitPattern, HugrVariableID, BranchSelector>);
+pub struct PatternMatcher(pm::ManyMatcher<CircuitPatternUf, HugrVariableID, BranchSelector>);
 
 impl PatternMatcher {
     /// Construct a matcher from a set of patterns
-    pub fn from_patterns(patterns: Vec<CircuitPattern>) -> Self {
+    pub fn from_patterns(patterns: Vec<CircuitPatternUf>) -> Self {
         pm::ManyMatcher::from_patterns::<HugrIndexingScheme>(patterns).into()
     }
 
@@ -137,7 +136,7 @@ impl PatternMatcher {
     delegate! {
         to self.0 {
             /// Get a pattern by its ID.
-            pub fn get_pattern(&self, id: PatternID) -> Option<&CircuitPattern>;
+            pub fn get_pattern(&self, id: PatternID) -> Option<&CircuitPatternUf>;
 
             /// Get the number of states in the automaton.
             pub fn n_states(&self) -> usize;
@@ -230,7 +229,7 @@ mod tests {
     use crate::utils::build_simple_circuit;
     use crate::{Circuit, Tk2Op};
 
-    use super::{CircuitPattern, PatternMatcher};
+    use super::{CircuitPatternUf, PatternMatcher};
 
     fn h_cx() -> Circuit {
         build_simple_circuit(2, |circ| {
@@ -286,7 +285,7 @@ mod tests {
     fn construct_matcher(#[case] circuits: Vec<Circuit>) {
         let patterns = circuits
             .iter()
-            .map(|circ| CircuitPattern::try_from_circuit(circ).unwrap())
+            .map(|circ| CircuitPatternUf::try_from_circuit(circ).unwrap())
             .collect_vec();
 
         let m = PatternMatcher::from_patterns(patterns);
@@ -302,7 +301,7 @@ mod tests {
         let circs = [h_cx(), cx_xc()];
         let patterns = circs
             .iter()
-            .map(|circ| CircuitPattern::try_from_circuit(circ).unwrap())
+            .map(|circ| CircuitPatternUf::try_from_circuit(circ).unwrap())
             .collect_vec();
 
         // Estimate the size of the buffer based on the number of patterns and the size of each pattern
@@ -320,7 +319,7 @@ mod tests {
 
     #[rstest]
     fn cx_cx_replace_to_id(cx_cx: Circuit, cx_cx_3: Circuit) {
-        let p = CircuitPattern::try_from_circuit(&cx_cx_3).unwrap();
+        let p = CircuitPatternUf::try_from_circuit(&cx_cx_3).unwrap();
         let m = PatternMatcher::from_patterns(vec![p]);
 
         let matches = m.find_matches(&cx_cx);
@@ -345,7 +344,7 @@ mod tests {
 
     #[rstest]
     fn cx_rz_replace_to_id(cx_rz: Circuit) {
-        let p = CircuitPattern::try_from_circuit(&cx_rz).unwrap();
+        let p = CircuitPatternUf::try_from_circuit(&cx_rz).unwrap();
         let m = PatternMatcher::from_patterns(vec![p]);
         // println!("{}", rewriter.dot_string());
         // println!("{}", m.dot_string());
@@ -374,7 +373,7 @@ mod tests {
         })
         .unwrap();
 
-        let p = CircuitPattern::try_from_circuit(&cx).unwrap();
+        let p = CircuitPatternUf::try_from_circuit(&cx).unwrap();
         let matcher = PatternMatcher::from_patterns(vec![p]);
 
         let m = matcher.find_matches(&xc).exactly_one().ok().unwrap();

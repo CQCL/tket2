@@ -72,7 +72,7 @@ pub use predicate::Predicate;
 type Constraint = pm::Constraint<HugrVariableID, Predicate>;
 
 pub use matcher::{MatchOp, PatternID, PatternMatch, PatternMatcher};
-pub use pattern::CircuitPattern;
+pub use pattern::CircuitPatternUf;
 
 fn to_hugr_values_tuple<'b, V1, V2, B>(
     args: impl IntoIterator<Item = &'b B>,

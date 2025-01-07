@@ -11,18 +11,18 @@ use super::unary_packed::{PackOverflow, UnaryPacked};
 
 const MAX_BITS: usize = usize::BITS as usize;
 
-/// A compact encoding for a path from a root node to an incoming port.
+/// A compact encoding for a path from a root node to a port.
 ///
-/// This compactly defines an incoming port relative to the choice of a root
+/// This identifies a port relative to the choice of a root
 /// node by specifying the path from the root to the port. The path may not
 /// specify the port uniquely in the case of multi-ports. In this case, the
 /// matcher will choose one/explore every valid binding.
 ///
 /// ## Path encoding
 /// The path is encoded as a sequence of tuples `(hugr::Port, i)` where i is a
-/// non-negative integer. The incoming port that is associated with a sequence
+/// non-negative integer. The port that is associated with a sequence
 /// `[(p1, i1), .., (pn, in)]` can be determined inductively:
-///  - `[(p1, i1)]` is an incoming port on the edge attached to `p1` at the root
+///  - `[(p1, i1)]` is the incoming port on the edge attached to `p1` at the root
 ///    node. The index `i1` has no semantic meaning but serves to distinguish
 ///    between multiple incoming ports on the same node. Which index is associated
 ///    to which incoming port may be chosen arbitrarily.

@@ -7,7 +7,7 @@ use itertools::Itertools;
 use portmatching::PatternID;
 use pyo3::{prelude::*, types::PyIterator};
 
-use tket2::portmatching::{CircuitPattern, PatternMatch, PatternMatcher};
+use tket2::portmatching::{CircuitPatternUf, PatternMatch, PatternMatcher};
 
 use crate::{
     circuit::{try_with_circ, with_circ},
@@ -25,7 +25,7 @@ use crate::{
 #[derive(Debug, Clone, From)]
 pub struct PyCircuitPattern {
     /// Rust representation of the pattern
-    pub pattern: CircuitPattern,
+    pub pattern: CircuitPatternUf,
 }
 
 #[pymethods]
@@ -33,7 +33,7 @@ impl PyCircuitPattern {
     /// Construct a pattern from a TKET1 circuit
     #[new]
     pub fn from_circuit(circ: &Bound<PyAny>) -> PyResult<Self> {
-        let pattern = try_with_circ(circ, |circ, _| CircuitPattern::try_from_circuit(&circ))?;
+        let pattern = try_with_circ(circ, |circ, _| CircuitPatternUf::try_from_circuit(&circ))?;
         Ok(pattern.into())
     }
 

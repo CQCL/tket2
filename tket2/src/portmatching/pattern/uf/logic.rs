@@ -1,9 +1,9 @@
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::BTreeSet;
 
 use itertools::Itertools;
 use portmatching::{
     self as pm,
-    pattern::{self, ClassRank, Satisfiable},
+    pattern::{ClassRank, Satisfiable},
 };
 
 use crate::portmatching::{
@@ -163,6 +163,41 @@ impl PatternLogic {
             .iter()
             .filter_map(|&v| HugrPortID::try_from(v).ok())
     }
+
+    /// A "partial distinct from" constraint is a constraint with [Predicate::IsDistinctFrom]
+    /// that does not contain enough information for us to conclude that all
+    /// wires we are interested in are distinct.
+    ///
+    /// For example, consider the following constraint:
+    /// ```text
+    /// IsDistinctFrom(w1, w2, w3)
+    /// ```
+    /// asserting that w1 != w2 and w1 != w3. If `self.known_distinct_wires`
+    /// is [w2, w3, w4], then we cannot conclude that w1 is distinct from all
+    /// other wires as w1 ?= w4. In this case we ignore the constraint (and
+    /// count on the fact that a stricter constraint is being added, too).
+    ///
+    /// We ignore such constraints to avoid blowing up the state space we keep
+    /// track of.
+    fn is_partial_distinct_from(&self, constraint: &Constraint) -> bool {
+        if !matches!(constraint.predicate(), Predicate::IsDistinctFrom { .. }) {
+            return false;
+        }
+        let target: HugrPortID = constraint.required_bindings()[0].try_into().unwrap();
+        if self.known_distinct_wires.contains(&target) {
+            return false;
+        }
+        if !self.all_linear_wires.contains(&target) {
+            return false;
+        }
+        let other_wires: BTreeSet<HugrPortID> = constraint.required_bindings()[1..]
+            .iter()
+            .map(|&w| w.try_into().unwrap())
+            .collect();
+        self.known_distinct_wires
+            .iter()
+            .any(|&w| !other_wires.contains(&w))
+    }
 }
 
 impl pm::PatternLogic for PatternLogic {
@@ -220,11 +255,15 @@ impl pm::PatternLogic for PatternLogic {
     }
 
     fn apply_transitions(&self, transitions: &[Self::Constraint]) -> Vec<Satisfiable<Self>> {
-        transitions
+        let ret = transitions
             .iter()
             .map(|constraint| {
                 let mut clone = self.clone();
                 if matches!(clone.add_known_constraint(constraint), Satisfiable::No) {
+                    return Satisfiable::No;
+                }
+                // Do not propagate to DistinctFrom predicates that only match partially
+                if self.is_partial_distinct_from(constraint) {
                     return Satisfiable::No;
                 }
                 match clone.update_pattern_constraints() {
@@ -233,7 +272,17 @@ impl pm::PatternLogic for PatternLogic {
                     Satisfiable::Tautology => Satisfiable::Tautology,
                 }
             })
-            .collect()
+            .collect_vec();
+        let cnt = ret
+            .iter()
+            .filter(|sat| matches!(sat, Satisfiable::Yes(_)))
+            .count();
+        if cnt > 1 {
+            dbg!(&transitions);
+            println!("increased to {cnt}");
+        }
+
+        ret
     }
 
     fn is_satisfiable(&self) -> portmatching::pattern::Satisfiable {

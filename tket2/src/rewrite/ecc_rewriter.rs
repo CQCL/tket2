@@ -29,7 +29,7 @@ use crate::extension::REGISTRY;
 use crate::{
     circuit::{remove_empty_wire, Circuit},
     optimiser::badger::{load_eccs_json_file, EqCircClass},
-    portmatching::{CircuitPattern, PatternMatcher},
+    portmatching::{CircuitPatternUf, PatternMatcher},
 };
 
 use super::{CircuitRewrite, Rewriter};
@@ -258,7 +258,7 @@ fn get_rewrite_rules(rep_sets: &[EqCircClass]) -> Vec<Vec<TargetID>> {
 
 /// For an equivalence class, return all valid patterns together with the
 /// indices of the wires that have been removed in the pattern circuit.
-fn get_patterns(rep_sets: &[EqCircClass]) -> Vec<Option<(CircuitPattern, Vec<usize>)>> {
+fn get_patterns(rep_sets: &[EqCircClass]) -> Vec<Option<(CircuitPatternUf, Vec<usize>)>> {
     rep_sets
         .iter()
         .flat_map(|rs| rs.circuits())
@@ -268,7 +268,7 @@ fn get_patterns(rep_sets: &[EqCircClass]) -> Vec<Option<(CircuitPattern, Vec<usi
             for &qb in empty_qbs.iter().rev() {
                 remove_empty_wire(&mut circ, qb).unwrap();
             }
-            CircuitPattern::try_from_circuit(&circ)
+            CircuitPatternUf::try_from_circuit(&circ)
                 .ok()
                 .map(|circ| (circ, empty_qbs))
         })
