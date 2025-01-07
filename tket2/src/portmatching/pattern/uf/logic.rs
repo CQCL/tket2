@@ -8,6 +8,7 @@ use portmatching::{
 
 use crate::portmatching::{
     indexing::{HugrNodeID, HugrPortID},
+    pattern::{compute_class_rank, get_distinct_from_classes},
     BranchClass, Constraint, HugrVariableID, MatchOp, Predicate,
 };
 
@@ -292,34 +293,4 @@ impl pm::PatternLogic for PatternLogic {
             Satisfiable::Yes(())
         }
     }
-}
-
-fn compute_class_rank(cls: BranchClass, n_new_bindings: i32) -> f64 {
-    cls.get_rank() * (2_f64.powi(n_new_bindings))
-}
-
-/// Find wires that we'd like to check are distinct from all known distinct
-/// wires
-fn get_distinct_from_classes<'a>(
-    known_bindings: &'a [HugrVariableID],
-    known_distinct_wires: &'a BTreeSet<HugrPortID>,
-    all_wires: impl Iterator<Item = HugrPortID> + 'a,
-) -> impl Iterator<Item = (BranchClass, ClassRank)> + 'a {
-    // The ports already bound
-    let known_ports: BTreeSet<_> = known_bindings
-        .iter()
-        .filter_map(|&k| HugrPortID::try_from(k).ok())
-        .collect();
-
-    all_wires
-        .filter(|w| !known_distinct_wires.contains(w))
-        .map(move |w| {
-            let cls = BranchClass::IsDistinctFromClass(w);
-
-            let args = known_distinct_wires.iter().chain([&w]);
-            let n_new_bindings = args.filter(|w| !known_ports.contains(w)).count() as i32;
-
-            let rank = compute_class_rank(cls, n_new_bindings);
-            (cls, rank)
-        })
 }

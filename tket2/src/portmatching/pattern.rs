@@ -13,6 +13,7 @@ mod pattern_trait;
 mod uf;
 
 pub use pattern_trait::CircuitPattern;
+use portmatching::pattern::ClassRank;
 pub use uf::CircuitPatternUf;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -24,6 +25,7 @@ use priority_queue::PriorityQueue;
 use derive_more::{Display, Error};
 
 use super::{
+    branch::BranchClass,
     indexing::{HugrNodeID, HugrPath, HugrPortID, HugrVariableID, HugrVariableValue},
     Constraint, Predicate,
 };
@@ -417,4 +419,34 @@ fn filtered_node_outputs(
 ) -> impl Iterator<Item = hugr::OutgoingPort> + '_ {
     let ports = hugr.node_outputs(node);
     filter_ports(ports, node, hugr)
+}
+
+fn compute_class_rank(cls: BranchClass, n_new_bindings: i32) -> f64 {
+    cls.get_rank() * (2_f64.powi(n_new_bindings))
+}
+
+/// Find wires that we'd like to check are distinct from all known distinct
+/// wires
+fn get_distinct_from_classes<'a>(
+    known_bindings: &'a [HugrVariableID],
+    known_distinct_wires: &'a BTreeSet<HugrPortID>,
+    all_wires: impl Iterator<Item = HugrPortID> + 'a,
+) -> impl Iterator<Item = (BranchClass, ClassRank)> + 'a {
+    // The ports already bound
+    let known_ports: BTreeSet<_> = known_bindings
+        .iter()
+        .filter_map(|&k| HugrPortID::try_from(k).ok())
+        .collect();
+
+    all_wires
+        .filter(|w| !known_distinct_wires.contains(w))
+        .map(move |w| {
+            let cls = BranchClass::IsDistinctFromClass(w);
+
+            let args = known_distinct_wires.iter().chain([&w]);
+            let n_new_bindings = args.filter(|w| !known_ports.contains(w)).count() as i32;
+
+            let rank = compute_class_rank(cls, n_new_bindings);
+            (cls, rank)
+        })
 }

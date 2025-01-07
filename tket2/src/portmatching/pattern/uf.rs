@@ -1,28 +1,23 @@
-//! Circuit Patterns for pattern matching
+//! Circuit Pattern using Union-Find for pattern matching
 
 mod data_structure;
 mod logic;
 use data_structure::Uf;
-use hugr::hugr::views::sibling_subgraph::TopoConvexChecker;
 use logic::PatternLogic;
-use portmatching::indexing::Binding;
 
-use std::borrow::Borrow;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 
-use hugr::hugr::views::SiblingSubgraph;
 use hugr::HugrView;
 use itertools::Itertools;
-use portmatching::{self as pm, BindMap};
+use portmatching as pm;
 
 use super::super::indexing::{HugrNodeID, HugrPortID};
-use super::super::{Constraint, HugrBindMap, HugrVariableID, HugrVariableValue, Predicate};
+use super::super::{Constraint, HugrVariableID};
 use super::{
     all_linear_wires, canonical_var_map, check_no_empty_wire, decompose_to_constraints,
-    get_io_boundary, InvalidPattern, InvalidPatternMatch,
+    get_io_boundary, InvalidPattern,
 };
-use crate::rewrite::{InvalidSubgraph, Subcircuit};
 use crate::Circuit;
 
 /// A pattern that matches a circuit exactly
@@ -111,6 +106,7 @@ mod tests {
     use crate::extension::rotation::rotation_type;
     use crate::portmatching::pattern::CircuitPattern;
     use crate::portmatching::tests::circ_with_copy;
+    use crate::portmatching::Predicate;
     use crate::utils::build_simple_circuit;
     use crate::Tk2Op;
 
