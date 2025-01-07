@@ -17,6 +17,7 @@ use crate::rewrite::{CircuitRewrite, InvalidReplacement};
 use crate::Circuit;
 use crate::{rewrite::Subcircuit, Tk2Op};
 
+use super::pattern::CircuitPattern;
 use super::BranchSelector;
 use super::HugrIndexingScheme;
 use super::Predicate;
@@ -225,6 +226,7 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use crate::extension::rotation::rotation_type;
+    use crate::portmatching::pattern::CircuitPattern;
     use crate::rewrite::{ECCRewriter, Rewriter};
     use crate::utils::build_simple_circuit;
     use crate::{Circuit, Tk2Op};

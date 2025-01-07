@@ -9,14 +9,17 @@
 //!
 
 mod fast;
+mod pattern_trait;
 mod uf;
+
+pub use pattern_trait::CircuitPattern;
+pub use uf::CircuitPatternUf;
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use hugr::{hugr::views::sibling_subgraph::InvalidSubgraph, types::EdgeKind, HugrView};
 use itertools::{Either, Itertools};
 use priority_queue::PriorityQueue;
-pub use uf::CircuitPatternUf;
 
 use derive_more::{Display, Error};
 

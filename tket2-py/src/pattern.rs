@@ -8,6 +8,7 @@ use crate::utils::{create_py_exception, ConvertPyErr};
 
 use hugr::HugrView;
 use pyo3::prelude::*;
+use tket2::portmatching::pattern::CircuitPattern;
 use tket2::portmatching::{CircuitPatternUf, PatternMatch, PatternMatcher};
 use tket2::Circuit;
 

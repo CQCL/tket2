@@ -26,6 +26,7 @@ use std::{
 };
 
 use crate::extension::REGISTRY;
+use crate::portmatching::pattern::CircuitPattern;
 use crate::{
     circuit::{remove_empty_wire, Circuit},
     optimiser::badger::{load_eccs_json_file, EqCircClass},

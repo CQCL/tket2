@@ -7,7 +7,9 @@ use itertools::Itertools;
 use portmatching::PatternID;
 use pyo3::{prelude::*, types::PyIterator};
 
-use tket2::portmatching::{CircuitPatternUf, PatternMatch, PatternMatcher};
+use tket2::portmatching::{
+    pattern::CircuitPattern, CircuitPatternUf, PatternMatch, PatternMatcher,
+};
 
 use crate::{
     circuit::{try_with_circ, with_circ},
