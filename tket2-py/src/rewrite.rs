@@ -4,7 +4,10 @@ use derive_more::From;
 use itertools::Itertools;
 use pyo3::prelude::*;
 use std::path::PathBuf;
-use tket2::rewrite::{CircuitRewrite, ECCRewriter, Rewriter, Subcircuit};
+use tket2::{
+    portmatching::CircuitPatternFast,
+    rewrite::{CircuitRewrite, ECCRewriter, Rewriter, Subcircuit},
+};
 
 use crate::circuit::{PyNode, Tk2Circuit};
 
@@ -92,7 +95,7 @@ impl PySubcircuit {
 /// Valid rewrites turn a non-representative circuit into its representative,
 /// or a representative circuit into any of the equivalent non-representative
 #[pyclass(name = "ECCRewriter")]
-pub struct PyECCRewriter(ECCRewriter);
+pub struct PyECCRewriter(ECCRewriter<CircuitPatternFast>);
 
 #[pymethods]
 impl PyECCRewriter {

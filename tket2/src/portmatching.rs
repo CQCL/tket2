@@ -65,14 +65,14 @@ use itertools::Itertools;
 use portmatching as pm;
 
 use branch::{BranchClass, BranchSelector};
-use indexing::{HugrBindMap, HugrIndexingScheme, HugrVariableID, HugrVariableValue};
+use indexing::{HugrIndexingScheme, HugrVariableID, HugrVariableValue};
 use predicate::InvalidPredicateError;
 pub use predicate::Predicate;
 
 type Constraint = pm::Constraint<HugrVariableID, Predicate>;
 
 pub use matcher::{MatchOp, PatternID, PatternMatch, PatternMatcher};
-pub use pattern::CircuitPatternUf;
+pub use pattern::{CircuitPattern, CircuitPatternFast, CircuitPatternUf};
 
 fn to_hugr_values_tuple<'b, V1, V2, B>(
     args: impl IntoIterator<Item = &'b B>,

@@ -12,17 +12,17 @@ mod fast;
 mod pattern_trait;
 mod uf;
 
+pub use fast::CircuitPatternFast;
 pub use pattern_trait::CircuitPattern;
-use portmatching::pattern::ClassRank;
 pub use uf::CircuitPatternUf;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use derive_more::{Display, Error};
 use hugr::{hugr::views::sibling_subgraph::InvalidSubgraph, types::EdgeKind, HugrView};
 use itertools::{Either, Itertools};
+use portmatching::pattern::ClassRank;
 use priority_queue::PriorityQueue;
-
-use derive_more::{Display, Error};
 
 use super::{
     branch::BranchClass,

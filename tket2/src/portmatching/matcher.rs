@@ -20,8 +20,7 @@ use crate::{rewrite::Subcircuit, Tk2Op};
 use super::pattern::CircuitPattern;
 use super::BranchSelector;
 use super::HugrIndexingScheme;
-use super::Predicate;
-use super::{CircuitPatternUf, HugrVariableID};
+use super::HugrVariableID;
 
 pub use pm::PatternID;
 
@@ -106,11 +105,11 @@ fn encode_op(op: &OpType) -> Option<Vec<u8>> {
 /// This uses a state automaton internally to match against a set of patterns
 /// simultaneously.
 #[derive(Debug, Clone, From, Into, serde::Serialize, serde::Deserialize)]
-pub struct PatternMatcher(pm::ManyMatcher<CircuitPatternUf, HugrVariableID, BranchSelector>);
+pub struct PatternMatcher<P>(pm::ManyMatcher<P, HugrVariableID, BranchSelector>);
 
-impl PatternMatcher {
+impl<P: CircuitPattern> PatternMatcher<P> {
     /// Construct a matcher from a set of patterns
-    pub fn from_patterns(patterns: Vec<CircuitPatternUf>) -> Self {
+    pub fn from_patterns(patterns: Vec<P>) -> Self {
         pm::ManyMatcher::from_patterns::<HugrIndexingScheme>(patterns).into()
     }
 
@@ -137,7 +136,7 @@ impl PatternMatcher {
     delegate! {
         to self.0 {
             /// Get a pattern by its ID.
-            pub fn get_pattern(&self, id: PatternID) -> Option<&CircuitPatternUf>;
+            pub fn get_pattern(&self, id: PatternID) -> Option<&P>;
 
             /// Get the number of states in the automaton.
             pub fn n_states(&self) -> usize;
@@ -227,11 +226,12 @@ mod tests {
 
     use crate::extension::rotation::rotation_type;
     use crate::portmatching::pattern::CircuitPattern;
+    use crate::portmatching::CircuitPatternUf;
     use crate::rewrite::{ECCRewriter, Rewriter};
     use crate::utils::build_simple_circuit;
     use crate::{Circuit, Tk2Op};
 
-    use super::{CircuitPatternUf, PatternMatcher};
+    use super::PatternMatcher;
 
     fn h_cx() -> Circuit {
         build_simple_circuit(2, |circ| {
@@ -312,7 +312,7 @@ mod tests {
 
         m.save_binary_io(&mut buf).unwrap();
 
-        let m2 = PatternMatcher::load_binary_io(&mut buf.as_slice()).unwrap();
+        let m2 = PatternMatcher::<CircuitPatternUf>::load_binary_io(&mut buf.as_slice()).unwrap();
         let mut buf2 = Vec::with_capacity(buf.len());
         m2.save_binary_io(&mut buf2).unwrap();
 
