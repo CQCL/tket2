@@ -221,20 +221,20 @@ mod test {
         LazifyMeasurePass::default().run(&mut hugr).unwrap();
         assert!(hugr.validate_no_extensions().is_ok());
         let mut num_read = 0;
-        let mut num_lazy_measure = 0;
+        let mut num_lazy_measure_reset = 0;
         for n in hugr.nodes() {
             let ot = hugr.get_optype(n);
             if let Some(FutureOpDef::Read) = ot.cast() {
                 num_read += 1;
-            } else if let Some(QSystemOp::LazyMeasure) = ot.cast() {
-                num_lazy_measure += 1;
+            } else if let Some(QSystemOp::LazyMeasureReset) = ot.cast() {
+                num_lazy_measure_reset += 1;
             } else {
                 assert_eq!(ot.cast::<Tk2Op>(), None)
             }
         }
 
         assert_eq!(1, num_read);
-        assert_eq!(1, num_lazy_measure);
+        assert_eq!(1, num_lazy_measure_reset);
     }
 
     #[test]
