@@ -19,7 +19,7 @@
     "from_halfturns": {
       "extension": "tket2.rotation",
       "name": "from_halfturns",
-      "description": "Construct rotation from number of half-turns (would be multiples of π in radians). Returns None if the float is non-finite.",
+      "description": "Construct rotation from number of half-turns (would be multiples of PI in radians). Returns None if the float is non-finite.",
       "signature": {
         "params": [],
         "body": {
@@ -58,7 +58,7 @@
     "from_halfturns_unchecked": {
       "extension": "tket2.rotation",
       "name": "from_halfturns_unchecked",
-      "description": "Construct rotation from number of half-turns (would be multiples of π in radians). Panics if the float is non-finite.",
+      "description": "Construct rotation from number of half-turns (would be multiples of PI in radians). Panics if the float is non-finite.",
       "signature": {
         "params": [],
         "body": {
@@ -125,7 +125,7 @@
     "to_halfturns": {
       "extension": "tket2.rotation",
       "name": "to_halfturns",
-      "description": "Convert rotation to number of half-turns (would be multiples of π in radians).",
+      "description": "Convert rotation to number of half-turns (would be multiples of PI in radians).",
       "signature": {
         "params": [],
         "body": {
