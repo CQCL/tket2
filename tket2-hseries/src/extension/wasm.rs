@@ -24,8 +24,8 @@
 //!  `get_context` op and not `dispose_context`ed.
 //!
 //!  `tket2.wasm.func` is a type representing a handle to a function in a
-//!  `tket2.wasm.module`. It carries type args defining it's signature, but not
-//!  it's name.
+//!  `tket2.wasm.module`. It carries type args defining its signature, but not
+//!  its name.
 //!
 //!  A `tket2.wasm.func` is obtained from a `tket2.wasm.lookup` op, which takes
 //!  a compile-time name and signature, and a runtime module. TODO Likely the
