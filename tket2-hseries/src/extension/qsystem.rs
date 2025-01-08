@@ -138,7 +138,9 @@ impl MakeOpDef for QSystemOp {
             QSystemOp::QFree => "Free a qubit (lose track of it).",
             QSystemOp::Reset => "Reset a qubit to the Z |0> eigenstate.",
             QSystemOp::MeasureReset => "Measure a qubit and reset it to the Z |0> eigenstate.",
-            QSystemOp::LazyMeasureReset => "Lazily measure a qubit and reset it to the Z |0> eigenstate.",
+            QSystemOp::LazyMeasureReset => {
+                "Lazily measure a qubit and reset it to the Z |0> eigenstate."
+            }
         }
         .to_string()
     }
