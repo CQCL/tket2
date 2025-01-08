@@ -23,6 +23,41 @@
           ],
           "output": [
             {
+              "t": "Opaque",
+              "extension": "tket2.futures",
+              "id": "Future",
+              "args": [
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Sum",
+                    "s": "Unit",
+                    "size": 2
+                  }
+                }
+              ],
+              "bound": "A"
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
+    },
+    "LazyMeasureReset": {
+      "extension": "tket2.qsystem",
+      "name": "LazyMeasureReset",
+      "description": "Lazily measure a qubit and reset it to the Z |0> eigenstate.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Q"
+            }
+          ],
+          "output": [
+            {
               "t": "Q"
             },
             {
