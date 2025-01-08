@@ -18,9 +18,9 @@ use crate::Circuit;
 use crate::{rewrite::Subcircuit, Tk2Op};
 
 use super::pattern::{BranchSelectorFast, CircuitPattern};
+use super::CircuitPatternFast;
 use super::HugrIndexingScheme;
 use super::HugrVariableID;
-use super::{BranchSelector, CircuitPatternFast};
 
 pub use pm::PatternID;
 
@@ -104,6 +104,7 @@ fn encode_op(op: &OpType) -> Option<Vec<u8>> {
 ///
 /// This uses a state automaton internally to match against a set of patterns
 /// simultaneously.
+// TODO: Generic over pattern type
 #[derive(Debug, Clone, From, Into, serde::Serialize, serde::Deserialize)]
 pub struct PatternMatcher(pm::ManyMatcher<CircuitPatternFast, HugrVariableID, BranchSelectorFast>);
 
@@ -214,8 +215,6 @@ pub enum MatcherSerialisationError {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
     use hugr::extension::prelude::qb_t;
     use hugr::types::Signature;
@@ -226,8 +225,7 @@ mod tests {
 
     use crate::extension::rotation::rotation_type;
     use crate::portmatching::pattern::CircuitPattern;
-    use crate::portmatching::{CircuitPatternFast, CircuitPatternUf};
-    use crate::rewrite::{ECCRewriter, Rewriter};
+    use crate::portmatching::CircuitPatternFast;
     use crate::utils::build_simple_circuit;
     use crate::{Circuit, Tk2Op};
 

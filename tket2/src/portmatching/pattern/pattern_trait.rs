@@ -142,7 +142,7 @@ pub trait CircuitPattern:
     }
 }
 
-/// All incoming ports attached to a boundary wire (i.e. a wire whose output
+/// All incoming ports attached to a boundary wire (i.e. a wire whose outgoing
 /// port is not in the pattern)
 fn unbound_incoming_wires<'a>(
     nodes: &'a BTreeSet<hugr::Node>,

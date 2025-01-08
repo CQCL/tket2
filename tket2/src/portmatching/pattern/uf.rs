@@ -57,7 +57,7 @@ impl super::CircuitPattern for CircuitPatternUf {
         let nodes: BTreeSet<_> = circuit.commands().map(|cmd| cmd.node()).collect();
 
         let constraints = decompose_to_constraints(circuit, &var_map);
-        let (incoming_wires, outgoing_wires) = get_io_boundary(circuit, &var_map);
+        let (incoming_wires, outgoing_wires) = get_io_boundary(circuit, &var_map)?;
         let linear_wires = all_linear_wires(circuit, &var_map);
 
         let nodes = nodes

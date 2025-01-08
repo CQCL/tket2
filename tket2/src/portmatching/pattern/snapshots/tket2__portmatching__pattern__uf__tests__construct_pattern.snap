@@ -57,6 +57,17 @@ CircuitPatternUf {
         HugrPortID {
             node: HugrNodeID {
                 path_from_root: HugrPath(
+                    [],
+                ),
+            },
+            port: Port(
+                Outgoing,
+                0,
+            ),
+        },
+        HugrPortID {
+            node: HugrNodeID {
+                path_from_root: HugrPath(
                     [
                         (
                             Port(
@@ -71,17 +82,6 @@ CircuitPatternUf {
             port: Port(
                 Outgoing,
                 1,
-            ),
-        },
-        HugrPortID {
-            node: HugrNodeID {
-                path_from_root: HugrPath(
-                    [],
-                ),
-            },
-            port: Port(
-                Outgoing,
-                0,
             ),
         },
     ],

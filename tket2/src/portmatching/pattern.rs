@@ -19,7 +19,7 @@ pub use uf::CircuitPatternUf;
 use std::collections::{BTreeMap, BTreeSet};
 
 use derive_more::{Display, Error};
-use hugr::{hugr::views::sibling_subgraph::InvalidSubgraph, types::EdgeKind, HugrView};
+use hugr::{hugr::views::sibling_subgraph::InvalidSubgraph, types::EdgeKind, HugrView, PortIndex};
 use itertools::{Either, Itertools};
 use portmatching::pattern::ClassRank;
 use priority_queue::PriorityQueue;
@@ -92,34 +92,46 @@ fn decompose_to_constraints(
 fn get_io_boundary(
     circuit: &Circuit<impl HugrView>,
     var_map: &VariableMap,
-) -> (Vec<HugrPortID>, Vec<HugrPortID>) {
-    let nodes: BTreeSet<_> = circuit.commands().map(|cmd| cmd.node()).collect();
+) -> Result<(Vec<HugrPortID>, Vec<HugrPortID>), InvalidPattern> {
+    let [inp, out] = circuit.io_nodes();
 
-    let mut incoming_wires = Vec::new();
-    let mut outgoing_wires = Vec::new();
+    // The order of the incoming and outgoing wires must match the order of the
+    // wires on the io nodes.
+    // TODO: for classical wires, it might be useful to register them as outputs
+    // even if they are not linked to the output node, otherwise there is the
+    // risk that in the match these output will be used but won't be available
+    // in the boundary.
+    let mut incoming_wires = vec![None; circuit.circuit_signature().input_count()];
+    let mut outgoing_wires = vec![None; circuit.circuit_signature().output_count()];
 
     for (wire, in_ports) in all_circuit_wires(circuit) {
         let wire_id = var_map[&wire.into()];
         let out_node = wire.node();
 
-        if !nodes.contains(&out_node) {
+        if out_node == inp {
+            let inp_pos = wire.source().index();
             // This is an input wire
-            incoming_wires.push(wire_id.try_into().unwrap());
+            incoming_wires[inp_pos] = Some(wire_id.try_into().unwrap());
         }
 
-        if in_ports
-            .iter()
-            .any(|(in_node, _)| !nodes.contains(&in_node))
-        {
-            // TODO: for classical wires, it might be useful to register them
-            // as outputs even if they are not used as such in the pattern,
-            // otherwise there is the risk that in the match these output will
-            // be used but won't be available in the boundary.
-            outgoing_wires.push(wire_id.try_into().unwrap());
+        if let Some(&(_, in_port)) = in_ports.iter().find(|&&(in_node, _)| in_node == out) {
+            let out_pos = in_port.index();
+            outgoing_wires[out_pos] = Some(wire_id.try_into().unwrap());
         }
     }
 
-    (incoming_wires, outgoing_wires)
+    let incoming_wires = incoming_wires
+        .into_iter()
+        .map(|opt| opt.ok_or(()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| InvalidPattern::InvalidBoundary)?;
+    let outgoing_wires = outgoing_wires
+        .into_iter()
+        .map(|opt| opt.ok_or(()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| InvalidPattern::InvalidBoundary)?;
+
+    Ok((incoming_wires, outgoing_wires))
 }
 
 fn all_linear_wires(
@@ -151,13 +163,15 @@ fn all_linear_wires(
 #[non_exhaustive]
 pub enum InvalidPattern {
     /// An empty circuit cannot be a pattern.
-    #[display("Empty circuits are not allowed as patterns")]
+    #[display("empty circuits not allowed as patterns")]
     EmptyCircuit,
     /// Patterns must be connected circuits.
-    #[display("The pattern is not connected")]
+    #[display("pattern must be connected")]
     NotConnected,
     /// Patterns cannot include empty wires.
-    #[display("The pattern contains an empty wire between {from_node}, {from_port} and {to_node}, {to_port}")]
+    #[display(
+        "pattern contains an empty wire between {from_node}, {from_port} and {to_node}, {to_port}"
+    )]
     EmptyWire {
         /// The source node
         from_node: hugr::Node,
@@ -169,13 +183,16 @@ pub enum InvalidPattern {
         to_port: hugr::Port,
     },
     /// A non-linear output port.
-    #[display("Found unsupported non-linear pattern output at ({node:?}, {port:?})")]
+    #[display("unsupported non-linear pattern output at ({node:?}, {port:?})")]
     NonLinearOutput {
         /// The output node
         node: hugr::Node,
         /// The output port
         port: hugr::OutgoingPort,
     },
+    /// Pattern boundary does not match IO nodes.
+    #[display("pattern boundary does not match io")]
+    InvalidBoundary,
 }
 
 /// Errors that can occur when constructing a circuit match from bindings
