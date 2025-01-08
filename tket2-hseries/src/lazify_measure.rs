@@ -110,6 +110,9 @@ pub fn replace_measure_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LazifyM
 /// The signatures must match, excepting that `replacement` may
 /// have outgoing ports with type `tket2.futures.future<bool>` where `node`.
 /// has `bool`.
+///
+/// Applying this rewrite will panic if replacement is not one of
+/// [QSystemOp::LazyMeasure] or [QSystemOp::LazyMeasureReset].
 pub struct LazifyMeasureRewrite {
     /// The node that will be replaced by the rewrite.
     pub node: Node,
@@ -123,6 +126,12 @@ impl LazifyMeasureRewrite {
         hugr: &mut impl HugrMut,
         new_node: Node,
     ) -> Result<(), LazifyMeasurePassError> {
+        // We will insert and wire up self.replacement, then future.dup or free any
+        // future<bool> outputs as necessary. We will then insert one future.read op
+        // per future<bool> wire and connect those read ops to the outputs of self.node.
+        //
+        // We do not use a SimpleReplacement here because the replacement of
+        // self.node has a different signature. We instead use HugrMut directly.
         for inport in hugr.node_inputs(self.node).collect_vec() {
             if let Some((linked_node, outport)) = hugr.single_linked_output(self.node, inport) {
                 hugr.disconnect(self.node, inport);
@@ -130,16 +139,21 @@ impl LazifyMeasureRewrite {
             }
         }
 
+        // the outports of the new node that have had their type changed
+        // from <bool> -> future<bool>
         let future_ports = self.future_ports(hugr.get_optype(self.node))?;
 
         for outport in hugr.node_outputs(self.node).collect_vec() {
             let uses = hugr.linked_inputs(self.node, outport).collect_vec();
             hugr.disconnect(self.node, outport);
             if !future_ports.contains(&outport) {
+                // This case is for outports whose type has not changed
                 for (linked_node, inport) in uses {
                     hugr.connect(new_node, outport, linked_node, inport);
                 }
             } else if uses.is_empty() {
+                // This case is for outports whose type has changed and which
+                // have no linked inports.
                 let free_node = hugr.add_node_after(
                     new_node,
                     FutureOpDef::Free
@@ -148,7 +162,12 @@ impl LazifyMeasureRewrite {
                 );
                 hugr.connect(new_node, outport, free_node, 0);
             } else {
+                // This case is for outports whose type has change and which
+                // have one or more uses.
+
+                // First we create enough future outports for our uses.
                 let mut future_wires = vec![(new_node, outport)];
+
                 for i in 1..uses.len() {
                     let prev_wire = &mut future_wires[i - 1];
                     let dup_node = hugr.add_node_after(
@@ -172,6 +191,9 @@ impl LazifyMeasureRewrite {
                         future_wires
                     );
                 }
+
+                // we consume each future wire by reading and connecting it to a
+                // use
                 for (i, (linked_node, inport)) in uses.into_iter().enumerate() {
                     let read_node = hugr.add_node_after(
                         linked_node,
@@ -188,6 +210,10 @@ impl LazifyMeasureRewrite {
     }
 
     fn replacement_for_op(optype: &OpType) -> Option<QSystemOp> {
+        // We don't lazify Tk2Op::Measure because there is no benefit.
+        // Implementing the semantics of that op with QSystemOps requires
+        // immediately branching on the value of the measurement, defeating any
+        // lazyness. See QSystemOpBuilder::build_measure_flip.
         if let Some(Tk2Op::MeasureFree) = optype.cast() {
             Some(QSystemOp::LazyMeasure)
         } else if let Some(QSystemOp::Measure) = optype.cast() {
