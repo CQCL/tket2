@@ -33,7 +33,7 @@
 //!  extension-op-static-edges to do this properly.
 //!
 //!  `tket.wasm.func`s are called via the `tket2.wasm.call` op. This op takes:
-//!   - a `tket2.wasm.context` identifying where the call will exectue;
+//!   - a `tket2.wasm.context` identifying where the call will execute;
 //!   - a `tket2.wasm.func` identifying the function to call;
 //!   - Input arguments as specified by the type of the `tket2.wasm.func`.
 //!
