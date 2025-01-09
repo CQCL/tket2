@@ -121,13 +121,13 @@ impl CustomConst for ConstRotation {
 #[non_exhaustive]
 /// Rotation operations
 pub enum RotationOp {
-    /// Construct rotation from a floating point number of half-turns (would be multiples of π in radians).
+    /// Construct rotation from a floating point number of half-turns (would be multiples of PI in radians).
     /// Returns an Option, failing when the input is NaN or infinite.
     from_halfturns,
-    /// Construct rotation from a floating point number of half-turns (would be multiples of π in radians).
+    /// Construct rotation from a floating point number of half-turns (would be multiples of PI in radians).
     /// Panics if the input is NaN or infinite.
     from_halfturns_unchecked,
-    /// Convert rotation to number of half-turns (would be multiples of π in radians).
+    /// Convert rotation to number of half-turns (would be multiples of PI in radians).
     to_halfturns,
     /// Add two angles together (experimental, may be removed, use float addition
     /// first instead if possible).
@@ -166,13 +166,13 @@ impl MakeOpDef for RotationOp {
     fn description(&self) -> String {
         match self {
             RotationOp::from_halfturns => {
-                "Construct rotation from number of half-turns (would be multiples of π in radians). Returns None if the float is non-finite."
+                "Construct rotation from number of half-turns (would be multiples of PI in radians). Returns None if the float is non-finite."
             }
             RotationOp::from_halfturns_unchecked => {
-                "Construct rotation from number of half-turns (would be multiples of π in radians). Panics if the float is non-finite."
+                "Construct rotation from number of half-turns (would be multiples of PI in radians). Panics if the float is non-finite."
             }
             RotationOp::to_halfturns => {
-                "Convert rotation to number of half-turns (would be multiples of π in radians)."
+                "Convert rotation to number of half-turns (would be multiples of PI in radians)."
             }
             RotationOp::radd => "Add two angles together (experimental).",
         }
