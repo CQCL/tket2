@@ -153,7 +153,7 @@ impl<'circ, T: HugrView> Command<'circ, T> {
     pub fn is_linear_port(&self, port: Port) -> bool {
         self.optype()
             .port_kind(port)
-            .map_or(false, |kind| kind.is_linear())
+            .is_some_and(|kind| kind.is_linear())
     }
 
     /// Returns a metadata value associated with the command's node.
