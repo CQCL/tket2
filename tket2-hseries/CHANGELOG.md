@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.7.1...tket2-hseries-v0.8.0) - 2025-01-10
+
+### New Features
+
+- *(tket2-hseries)* [**breaking**] Redefine `QSystemOp::LazyMeasure` and introduce `QSystemOp::LazyMeasureReset` (#741)
+- *(tket2-hseries)* Lazify more flavours of measure ops (#742)
+
 ## [0.7.1](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.7.0...tket2-hseries-v0.7.1) - 2024-12-18
 
 ### New Features
