@@ -18,10 +18,7 @@ pub fn fold_param_op(optype: &OpType, inputs: &[&str]) -> Option<String> {
     let param = match optype {
         OpType::Const(const_op) => {
             // New constant, register it if it can be interpreted as a parameter.
-            match try_constant_to_param(const_op.value()) {
-                Some(param) => param,
-                None => return None,
-            }
+            try_constant_to_param(const_op.value())?
         }
         OpType::LoadConstant(_op_type) => {
             // Re-use the parameter from the input.
