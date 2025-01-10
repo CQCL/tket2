@@ -23,10 +23,7 @@ use hugr::{
 use itertools::Itertools as _;
 use tket2::Tk2Op;
 
-use crate::extension::{
-    futures::FutureOpBuilder as _,
-    qsystem::QSystemOp,
-};
+use crate::extension::{futures::FutureOpBuilder as _, qsystem::QSystemOp};
 
 /// A HUGR -> HUGR pass that replaces measurement ops with lazy `tket2.qsystem`
 /// measurement ops.
@@ -240,7 +237,10 @@ impl LazifyMeasureRewrite {
         match qsystem_op {
             QSystemOp::LazyMeasure => {
                 let expected_signature = Signature::new(qb_t(), bool_t());
-                if Some(&expected_signature) != actual_signature.as_ref() {
+                if actual_signature
+                    .as_ref()
+                    .map_or(true, |x| x.io() != expected_signature.io())
+                {
                     Err(LazifyMeasurePassError::InvalidOp {
                         node,
                         expected_signature,
@@ -250,7 +250,10 @@ impl LazifyMeasureRewrite {
             }
             QSystemOp::LazyMeasureReset => {
                 let expected_signature = Signature::new(qb_t(), vec![qb_t(), bool_t()]);
-                if Some(&expected_signature) != actual_signature.as_ref() {
+                if actual_signature
+                    .as_ref()
+                    .map_or(true, |x| x.io() != expected_signature.io())
+                {
                     Err(LazifyMeasurePassError::InvalidOp {
                         node,
                         expected_signature,
