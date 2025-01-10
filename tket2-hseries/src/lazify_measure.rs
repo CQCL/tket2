@@ -237,9 +237,9 @@ impl LazifyMeasureRewrite {
         match qsystem_op {
             QSystemOp::LazyMeasure => {
                 let expected_signature = Signature::new(qb_t(), bool_t());
-                if actual_signature
+                if !actual_signature
                     .as_ref()
-                    .map_or(true, |x| x.io() != expected_signature.io())
+                    .is_some_and(|x| x.io() == expected_signature.io())
                 {
                     Err(LazifyMeasurePassError::InvalidOp {
                         node,
