@@ -101,7 +101,7 @@ lazy_static! {
     static ref MEASURE_READ_HUGR: Hugr = {
         let mut builder = DFGBuilder::new(Signature::new(qb_t(), vec![qb_t(), bool_t()])).unwrap();
         let [qb] = builder.input_wires_arr();
-        let [qb, lazy_r] = builder.add_lazy_measure(qb).unwrap();
+        let [qb, lazy_r] = builder.add_lazy_measure_reset(qb).unwrap();
         let [r] = builder.add_read(lazy_r, bool_t()).unwrap();
         builder.finish_hugr_with_outputs([qb, r]).unwrap()
     };
@@ -113,7 +113,7 @@ fn measure_replacement(num_dups: usize) -> Hugr {
     let num_out_types = out_types.len();
     let mut builder = DFGBuilder::new(Signature::new(qb_t(), out_types)).unwrap();
     let [qb] = builder.input_wires_arr();
-    let [qb, mut future_r] = builder.add_lazy_measure(qb).unwrap();
+    let [qb, mut future_r] = builder.add_lazy_measure_reset(qb).unwrap();
     let mut future_rs = vec![];
     if num_dups > 0 {
         for _ in 0..num_dups - 1 {
@@ -221,20 +221,20 @@ mod test {
         LazifyMeasurePass::default().run(&mut hugr).unwrap();
         assert!(hugr.validate_no_extensions().is_ok());
         let mut num_read = 0;
-        let mut num_lazy_measure = 0;
+        let mut num_lazy_measure_reset = 0;
         for n in hugr.nodes() {
             let ot = hugr.get_optype(n);
             if let Some(FutureOpDef::Read) = ot.cast() {
                 num_read += 1;
-            } else if let Some(QSystemOp::LazyMeasure) = ot.cast() {
-                num_lazy_measure += 1;
+            } else if let Some(QSystemOp::LazyMeasureReset) = ot.cast() {
+                num_lazy_measure_reset += 1;
             } else {
                 assert_eq!(ot.cast::<Tk2Op>(), None)
             }
         }
 
         assert_eq!(1, num_read);
-        assert_eq!(1, num_lazy_measure);
+        assert_eq!(1, num_lazy_measure_reset);
     }
 
     #[test]
