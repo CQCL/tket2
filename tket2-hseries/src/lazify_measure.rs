@@ -47,8 +47,8 @@ pub enum LazifyMeasurePassError {
     ValidationError(ValidatePassError),
     /// The HUGR was found to contain non-local edges.
     NonLocalEdgesError(NonLocalEdgesError),
-    /// A [LazyMeasureRewrite] was constructed targetting an invalid op.
-    #[display("A LazyMeasureRewrite was constructed for node {node} with an invalid signature.\nExpected: {expected_signature}\nActual: {}", actual_signature.as_ref().map_or("None".to_string(), |x| format!("{x}")))]
+    /// A [LazifyMeasureRewrite] was constructed targetting an invalid op.
+    #[display("A LazifyMeasureRewrite was constructed for node {node} with an invalid signature.\nExpected: {expected_signature}\nActual: {}", actual_signature.as_ref().map_or("None".to_string(), |x| format!("{x}")))]
     #[allow(missing_docs)]
     InvalidOp {
         node: Node,
@@ -110,7 +110,7 @@ pub fn replace_measure_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LazifyM
 }
 
 /// A rewrite used in [LazifyMeasurePass] to replace strict measure ops with
-/// either [QSystem::LazyMeasure] or [QSystem::LazyMeasureReset].
+/// either [QSystemOp::LazyMeasure] or [QSystemOp::LazyMeasureReset].
 pub struct LazifyMeasureRewrite(SimpleReplacement);
 
 impl LazifyMeasureRewrite {
