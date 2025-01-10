@@ -14,12 +14,9 @@ use hugr::{
         validation::{ValidatePassError, ValidationLevel},
     },
     builder::{DFGBuilder, Dataflow, DataflowHugr as _},
-    extension::{
-        prelude::{bool_t, qb_t},
-        simple_op::MakeRegisteredOp as _,
-    },
+    extension::prelude::{bool_t, qb_t},
     hugr::{hugrmut::HugrMut, views::SiblingSubgraph, Rewrite, SimpleReplacementError},
-    ops::{handle::NodeHandle as _, DataflowOpTrait as _, OpTrait as _},
+    ops::{handle::NodeHandle as _, OpTrait as _},
     types::Signature,
     HugrView, Node, SimpleReplacement, Wire,
 };
@@ -27,7 +24,7 @@ use itertools::Itertools as _;
 use tket2::Tk2Op;
 
 use crate::extension::{
-    futures::{future_type, FutureOpBuilder as _},
+    futures::FutureOpBuilder as _,
     qsystem::QSystemOp,
 };
 
@@ -89,7 +86,7 @@ impl LazifyMeasurePass {
 ///
 /// No validation is done here.
 pub fn replace_measure_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LazifyMeasurePassError> {
-    let mut nodes_and_rewrites = hugr
+    let nodes_and_rewrites = hugr
         .nodes()
         .filter_map(|n| {
             let optype = hugr.get_optype(n);
@@ -105,8 +102,6 @@ pub fn replace_measure_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LazifyM
             .map(|x| x.map(|y| (n, y)))
         })
         .collect::<Result<Vec<_>, _>>()?;
-
-    nodes_and_rewrites.sort_by_key(|x| x.0);
 
     nodes_and_rewrites
         .into_iter()
@@ -133,11 +128,7 @@ impl LazifyMeasureRewrite {
         Self::check_signature(node, QSystemOp::LazyMeasure, hugr.get_optype(node))?;
 
         let subgraph = SiblingSubgraph::from_node(node, &hugr);
-        let uses = {
-            let mut v = hugr.linked_inputs(node, 0).collect_vec();
-            v.sort();
-            v
-        };
+        let uses = hugr.linked_inputs(node, 0).collect_vec();
         let (lazy_measure_node, replacement) = {
             let bool_uses = uses.len();
             let mut builder =
@@ -177,11 +168,7 @@ impl LazifyMeasureRewrite {
         Self::check_signature(node, QSystemOp::LazyMeasureReset, hugr.get_optype(node))?;
 
         let subgraph = SiblingSubgraph::from_node(node, &hugr);
-        let uses = {
-            let mut v = hugr.linked_inputs(node, 1).collect_vec();
-            v.sort();
-            v
-        };
+        let uses = hugr.linked_inputs(node, 1).collect_vec();
         let (lazy_measure_reset_node, replacement) = {
             let bool_uses = uses.len();
             let mut builder = {
@@ -239,33 +226,41 @@ impl LazifyMeasureRewrite {
             .collect_vec()
     }
 
+    // We check that the signature of `op_to_replace` is correct, given the
+    // `qsystem_op` we intend to replace it with.
+    //
+    // Note that calling this private function with a non-sensical `qsystem_op`
+    // (i.e.  not LazyMeasure or LazyMeasureReset) will panic.
     fn check_signature(
         node: Node,
         qsystem_op: QSystemOp,
         op_to_replace: &hugr::ops::OpType,
     ) -> Result<(), LazifyMeasurePassError> {
-        let expected_signature = qsystem_op
-            .to_extension_op()
-            .unwrap()
-            .signature()
-            .into_owned();
-        let actual_signature = op_to_replace
-            .dataflow_signature()
-            .map(std::borrow::Cow::into_owned);
-        if let Some(sig) = &actual_signature {
-            if expected_signature.input() == sig.input()
-                && expected_signature.output().len() == sig.output().len()
-                && itertools::zip_eq(expected_signature.output().iter(), sig.output().iter())
-                    .all(|(e, s)| e == s || e == &future_type(bool_t()) && s == &bool_t())
-            {
-                return Ok(());
+        let actual_signature = op_to_replace.dataflow_signature().map(|x| x.into_owned());
+        match qsystem_op {
+            QSystemOp::LazyMeasure => {
+                let expected_signature = Signature::new(qb_t(), bool_t());
+                if Some(&expected_signature) != actual_signature.as_ref() {
+                    Err(LazifyMeasurePassError::InvalidOp {
+                        node,
+                        expected_signature,
+                        actual_signature,
+                    })?
+                }
             }
+            QSystemOp::LazyMeasureReset => {
+                let expected_signature = Signature::new(qb_t(), vec![qb_t(), bool_t()]);
+                if Some(&expected_signature) != actual_signature.as_ref() {
+                    Err(LazifyMeasurePassError::InvalidOp {
+                        node,
+                        expected_signature,
+                        actual_signature,
+                    })?
+                }
+            }
+            op => panic!("bug: {op} is unsupported"),
         }
-        Err(LazifyMeasurePassError::InvalidOp {
-            node,
-            expected_signature,
-            actual_signature,
-        })
+        Ok(())
     }
 }
 
