@@ -1,12 +1,11 @@
 use derive_more::{Display, Error, From};
-use hugr::ops::NamedOp;
+use hugr::ops::{DataflowOpTrait, NamedOp};
 use hugr::{
     algorithms::validation::{ValidatePassError, ValidationLevel},
     builder::{BuildError, DFGBuilder, Dataflow, DataflowHugr},
     extension::ExtensionRegistry,
     hugr::{hugrmut::HugrMut, HugrError},
-    ops::{self, DataflowOpTrait},
-    std_extensions::arithmetic::{float_ops::FloatOps, float_types::ConstF64},
+    std_extensions::arithmetic::float_ops::FloatOps,
     types::Signature,
     Hugr, HugrView, Node, Wire,
 };
@@ -15,7 +14,9 @@ use std::collections::HashMap;
 use strum::IntoEnumIterator;
 use tket2::{extension::rotation::RotationOpBuilder, Tk2Op};
 
-use crate::extension::qsystem::{self, QSystemOp, QSystemOpBuilder};
+use crate::extension::qsystem::{self, QSystemOp};
+
+use super::QSystemOpBuilder;
 
 lazy_static! {
     /// Extension registry including [crate::extension::qsystem::REGISTRY] and
@@ -25,14 +26,6 @@ lazy_static! {
         registry.register(tket2::extension::rotation::ROTATION_EXTENSION.to_owned()).unwrap();
         registry
     };
-}
-
-pub(super) fn pi_mul_f64<T: Dataflow + ?Sized>(builder: &mut T, multiplier: f64) -> Wire {
-    const_f64(builder, multiplier * std::f64::consts::PI)
-}
-
-fn const_f64<T: Dataflow + ?Sized>(builder: &mut T, value: f64) -> Wire {
-    builder.add_load_const(ops::Const::new(ConstF64::new(value).into()))
 }
 
 /// Errors produced by lowering [Tk2Op]s.
@@ -65,7 +58,7 @@ pub enum LowerTk2Error {
 fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
     let sig = op.into_extension_op().signature().into_owned();
     let sig = Signature::new(sig.input, sig.output); // ignore extension delta
-    let mut b = DFGBuilder::new(sig)?;
+    let mut b: QSystemOpBuilder<_> = DFGBuilder::new(sig)?.into();
     let inputs: Vec<_> = b.input_wires().collect();
 
     let outputs = match (op, inputs.as_slice()) {
@@ -104,9 +97,12 @@ fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
     Ok(b.finish_hugr_with_outputs(outputs)?)
 }
 
-fn build_to_radians(b: &mut DFGBuilder<Hugr>, rotation: Wire) -> Result<Wire, BuildError> {
+fn build_to_radians<T: Dataflow>(
+    b: &mut QSystemOpBuilder<T>,
+    rotation: Wire,
+) -> Result<Wire, BuildError> {
     let turns = b.add_to_halfturns(rotation)?;
-    let pi = pi_mul_f64(b, 1.0);
+    let pi = b.pi_div(1, 1);
     let float = b.add_dataflow_op(FloatOps::fmul, [turns, pi])?.out_wire(0);
     Ok(float)
 }

@@ -2056,6 +2056,7 @@ version = "0.7.1"
 dependencies = [
  "clap",
  "cool_asserts",
+ "delegate 0.13.1",
  "derive_more 1.0.0",
  "hugr",
  "hugr-cli",

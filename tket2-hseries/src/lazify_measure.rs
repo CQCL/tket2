@@ -99,7 +99,10 @@ impl State {
 
 lazy_static! {
     static ref MEASURE_READ_HUGR: Hugr = {
-        let mut builder = DFGBuilder::new(Signature::new(qb_t(), vec![qb_t(), bool_t()])).unwrap();
+        let mut builder: QSystemOpBuilder<_> =
+            DFGBuilder::new(Signature::new(qb_t(), vec![qb_t(), bool_t()]))
+                .unwrap()
+                .into();
         let [qb] = builder.input_wires_arr();
         let [qb, lazy_r] = builder.add_lazy_measure(qb).unwrap();
         let [r] = builder.add_read(lazy_r, bool_t()).unwrap();
@@ -111,7 +114,9 @@ fn measure_replacement(num_dups: usize) -> Hugr {
     let mut out_types = vec![qb_t()];
     out_types.extend((0..num_dups).map(|_| bool_t()));
     let num_out_types = out_types.len();
-    let mut builder = DFGBuilder::new(Signature::new(qb_t(), out_types)).unwrap();
+    let mut builder: QSystemOpBuilder<_> = DFGBuilder::new(Signature::new(qb_t(), out_types))
+        .unwrap()
+        .into();
     let [qb] = builder.input_wires_arr();
     let [qb, mut future_r] = builder.add_lazy_measure(qb).unwrap();
     let mut future_rs = vec![];

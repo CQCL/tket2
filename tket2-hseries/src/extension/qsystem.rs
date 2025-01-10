@@ -4,23 +4,28 @@
 //! In the case of lazy operations,
 //! laziness is represented by returning `tket2.futures.Future` classical
 //! values. Qubits are never lazy.
-use std::sync::{Arc, Weak};
+use delegate::delegate;
+
+use std::{
+    collections::HashMap,
+    sync::{Arc, Weak},
+};
 
 use hugr::{
-    builder::{BuildError, Dataflow, DataflowSubContainer, SubContainer},
+    builder::{BuildError, Container, Dataflow, DataflowSubContainer, HugrBuilder, SubContainer},
     extension::{
         prelude::{bool_t, option_type, qb_t, UnwrapBuilder},
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version, PRELUDE,
     },
-    ops::Value,
+    ops::{self, Value},
     std_extensions::arithmetic::{
         float_ops::FloatOps,
         float_types::{float64_type, ConstF64, EXTENSION as FLOAT_TYPES},
     },
     type_row,
     types::{Signature, Type, TypeRow},
-    Extension, Wire,
+    Extension, Hugr, Node, Wire,
 };
 
 use lazy_static::lazy_static;
@@ -31,7 +36,6 @@ use crate::extension::futures;
 use super::futures::future_type;
 
 mod lower;
-use lower::pi_mul_f64;
 pub use lower::{check_lowered, lower_tk2_op, LowerTk2Error, LowerTket2ToQSystemPass};
 
 /// The "tket2.qsystem" extension id.
@@ -151,132 +155,206 @@ impl MakeRegisteredOp for QSystemOp {
     }
 }
 
-/// An extension trait for [Dataflow] providing methods to add
+/// A wrapper for [Dataflow] providing methods to add
 /// "tket2.qsystem" operations.
-pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
+pub struct QSystemOpBuilder<T> {
+    inner: T,
+    pi_consts_map: HashMap<(i64, u64), Wire>,
+}
+
+impl<T: Container> Container for QSystemOpBuilder<T> {
+    delegate! {
+        to self.inner {
+            fn container_node(&self) -> Node;
+            fn hugr_mut(&mut self) -> &mut Hugr;
+            fn hugr(&self) -> &Hugr;
+        }
+    }
+}
+impl<T: Dataflow> Dataflow for QSystemOpBuilder<T> {
+    fn num_inputs(&self) -> usize {
+        self.inner.num_inputs()
+    }
+}
+
+impl<T: HugrBuilder> HugrBuilder for QSystemOpBuilder<T> {
+    delegate! {
+        to self.inner {
+            fn finish_hugr(self) -> Result<Hugr, hugr::hugr::ValidationError>;
+        }
+    }
+}
+impl<T: SubContainer> SubContainer for QSystemOpBuilder<T> {
+    type ContainerHandle = T::ContainerHandle;
+
+    delegate! {
+        to self.inner {
+
+            fn finish_sub_container(self) -> Result<Self::ContainerHandle, BuildError>;
+        }
+    }
+}
+impl<T> From<T> for QSystemOpBuilder<T> {
+    fn from(inner: T) -> Self {
+        Self {
+            inner,
+            pi_consts_map: Default::default(),
+        }
+    }
+}
+
+impl<T: Dataflow> QSystemOpBuilder<T> {
+    pub(super) fn pi_div(&mut self, num: i64, denom: u64) -> Wire {
+        let key = (num, denom);
+        if let Some(wire) = self.pi_consts_map.get(&key) {
+            panic!("pi_div: key {:?} already exists in pi_consts_map", key);
+            *wire
+        } else {
+            let wire = self.const_f64((num as f64) * std::f64::consts::PI / denom as f64);
+            self.pi_consts_map.insert(key, wire);
+            wire
+        }
+    }
+
+    fn const_f64(&mut self, value: f64) -> Wire {
+        self.add_load_const(ops::Const::new(ConstF64::new(value).into()))
+    }
+}
+
+impl<T: Dataflow + UnwrapBuilder> QSystemOpBuilder<T> {
     /// Add a "tket2.qsystem.LazyMeasure" op.
-    fn add_lazy_measure(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
+    pub fn add_lazy_measure(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::LazyMeasure, [qb])?
             .outputs_arr())
     }
 
     /// Add a "tket2.qsystem.Measure" op.
-    fn add_measure(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+    pub fn add_measure(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         Ok(self.add_dataflow_op(QSystemOp::Measure, [qb])?.out_wire(0))
     }
 
     /// Add a "tket2.qsystem.Reset" op.
-    fn add_reset(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+    pub fn add_reset(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         Ok(self.add_dataflow_op(QSystemOp::Reset, [qb])?.out_wire(0))
     }
 
     /// Add a "tket2.qsystem.ZZMax" op.
-    fn add_zz_max(&mut self, qb1: Wire, qb2: Wire) -> Result<[Wire; 2], BuildError> {
+    pub fn add_zz_max(&mut self, qb1: Wire, qb2: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::ZZMax, [qb1, qb2])?
             .outputs_arr())
     }
 
     /// Add a "tket2.qsystem.ZZPhase" op.
-    fn add_zz_phase(&mut self, qb1: Wire, qb2: Wire, angle: Wire) -> Result<[Wire; 2], BuildError> {
+    pub fn add_zz_phase(
+        &mut self,
+        qb1: Wire,
+        qb2: Wire,
+        angle: Wire,
+    ) -> Result<[Wire; 2], BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::ZZPhase, [qb1, qb2, angle])?
             .outputs_arr())
     }
 
     /// Add a "tket2.qsystem.PhasedX" op.
-    fn add_phased_x(&mut self, qb: Wire, angle1: Wire, angle2: Wire) -> Result<Wire, BuildError> {
+    pub fn add_phased_x(
+        &mut self,
+        qb: Wire,
+        angle1: Wire,
+        angle2: Wire,
+    ) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::PhasedX, [qb, angle1, angle2])?
             .out_wire(0))
     }
 
     /// Add a "tket2.qsystem.Rz" op.
-    fn add_rz(&mut self, qb: Wire, angle: Wire) -> Result<Wire, BuildError> {
+    pub fn add_rz(&mut self, qb: Wire, angle: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::Rz, [qb, angle])?
             .out_wire(0))
     }
 
     /// Add a "tket2.qsystem.TryQAlloc" op.
-    fn add_try_alloc(&mut self) -> Result<Wire, BuildError> {
+    pub fn add_try_alloc(&mut self) -> Result<Wire, BuildError> {
         Ok(self.add_dataflow_op(QSystemOp::TryQAlloc, [])?.out_wire(0))
     }
 
     /// Add a "tket2.qsystem.QFree" op.
-    fn add_qfree(&mut self, qb: Wire) -> Result<(), BuildError> {
+    pub fn add_qfree(&mut self, qb: Wire) -> Result<(), BuildError> {
         self.add_dataflow_op(QSystemOp::QFree, [qb])?;
         Ok(())
     }
 
     /// Add a "tket2.qsystem.MeasureReset" op.
     /// This operation is equivalent to a `Measure` followed by a `Reset`.
-    fn add_measure_reset(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
+    pub fn add_measure_reset(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::MeasureReset, [qb])?
             .outputs_arr())
     }
 
     /// Build a hadamard gate in terms of QSystem primitives.
-    fn build_h(&mut self, qb: Wire) -> Result<Wire, BuildError> {
-        let pi = pi_mul_f64(self, 1.0);
-        let pi_2 = pi_mul_f64(self, 0.5);
-        let pi_minus_2 = pi_mul_f64(self, -0.5);
+    pub fn build_h(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi = self.pi_div(1, 1);
+        let pi_2 = self.pi_div(1, 2);
+        let pi_minus_2 = self.pi_div(-1, 2);
 
         let q = self.add_phased_x(qb, pi_2, pi_minus_2)?;
         self.add_rz(q, pi)
     }
 
     /// Build an X gate in terms of QSystem primitives.
-    fn build_x(&mut self, qb: Wire) -> Result<Wire, BuildError> {
-        let pi = pi_mul_f64(self, 1.0);
-        let zero = pi_mul_f64(self, 0.0);
+    pub fn build_x(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi = self.pi_div(1, 1);
+        let zero = self.pi_div(0, 1);
         self.add_phased_x(qb, pi, zero)
     }
 
     /// Build a Y gate in terms of QSystem primitives.
-    fn build_y(&mut self, qb: Wire) -> Result<Wire, BuildError> {
-        let pi = pi_mul_f64(self, 1.0);
-        let pi_2 = pi_mul_f64(self, 0.5);
+    pub fn build_y(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi = self.pi_div(1, 1);
+        let pi_2 = self.pi_div(1, 2);
         self.add_phased_x(qb, pi, pi_2)
     }
 
     /// Build a Z gate in terms of QSystem primitives.
-    fn build_z(&mut self, qb: Wire) -> Result<Wire, BuildError> {
-        let pi = pi_mul_f64(self, 1.0);
+    pub fn build_z(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi = self.pi_div(1, 1);
         self.add_rz(qb, pi)
     }
 
     /// Build an S gate in terms of QSystem primitives.
-    fn build_s(&mut self, qb: Wire) -> Result<Wire, BuildError> {
-        let pi_2 = pi_mul_f64(self, 0.5);
+    pub fn build_s(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi_2 = self.pi_div(1, 2);
         self.add_rz(qb, pi_2)
     }
 
     /// Build an Sdg gate in terms of QSystem primitives.
-    fn build_sdg(&mut self, qb: Wire) -> Result<Wire, BuildError> {
-        let pi_minus_2 = pi_mul_f64(self, -0.5);
+    pub fn build_sdg(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi_minus_2 = self.pi_div(-1, 2);
         self.add_rz(qb, pi_minus_2)
     }
 
     /// Build a T gate in terms of QSystem primitives.
-    fn build_t(&mut self, qb: Wire) -> Result<Wire, BuildError> {
-        let pi_4 = pi_mul_f64(self, 0.25);
+    pub fn build_t(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi_4 = self.pi_div(1, 4);
         self.add_rz(qb, pi_4)
     }
 
     /// Build a Tdg gate in terms of QSystem primitives.
-    fn build_tdg(&mut self, qb: Wire) -> Result<Wire, BuildError> {
-        let pi_minus_4 = pi_mul_f64(self, -0.25);
+    pub fn build_tdg(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi_minus_4 = self.pi_div(-1, 4);
         self.add_rz(qb, pi_minus_4)
     }
 
     /// Build a CNOT gate in terms of QSystem primitives.
-    fn build_cx(&mut self, c: Wire, t: Wire) -> Result<[Wire; 2], BuildError> {
-        let pi = pi_mul_f64(self, 1.0);
-        let pi_2 = pi_mul_f64(self, 0.5);
-        let pi_minus_2 = pi_mul_f64(self, -0.5);
+    pub fn build_cx(&mut self, c: Wire, t: Wire) -> Result<[Wire; 2], BuildError> {
+        let pi = self.pi_div(1, 1);
+        let pi_2 = self.pi_div(1, 2);
+        let pi_minus_2 = self.pi_div(-1, 2);
 
         let t = self.add_phased_x(t, pi_minus_2, pi_2)?;
         let [c, t] = self.add_zz_max(c, t)?;
@@ -288,10 +366,10 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
     }
 
     /// Build a CY gate in terms of QSystem primitives.
-    fn build_cy(&mut self, a: Wire, b: Wire) -> Result<[Wire; 2], BuildError> {
-        let pi_2 = pi_mul_f64(self, 0.5);
-        let pi_minus_2 = pi_mul_f64(self, -0.5);
-        let zero = pi_mul_f64(self, 0.0);
+    pub fn build_cy(&mut self, a: Wire, b: Wire) -> Result<[Wire; 2], BuildError> {
+        let pi_2 = self.pi_div(1, 2);
+        let pi_minus_2 = self.pi_div(-1, 2);
+        let zero = self.pi_div(0, 1);
 
         let a = self.add_phased_x(a, pi_minus_2, zero)?;
         let [a, b] = self.add_zz_max(a, b)?;
@@ -302,10 +380,10 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
     }
 
     /// Build a CZ gate in terms of QSystem primitives.
-    fn build_cz(&mut self, a: Wire, b: Wire) -> Result<[Wire; 2], BuildError> {
-        let pi = pi_mul_f64(self, 1.0);
-        let pi_2 = pi_mul_f64(self, 0.5);
-        let pi_minus_2 = pi_mul_f64(self, -0.5);
+    pub fn build_cz(&mut self, a: Wire, b: Wire) -> Result<[Wire; 2], BuildError> {
+        let pi = self.pi_div(1, 1);
+        let pi_2 = self.pi_div(1, 2);
+        let pi_minus_2 = self.pi_div(-1, 2);
 
         let a = self.add_phased_x(a, pi, pi)?;
         let [a, b] = self.add_zz_max(a, b)?;
@@ -317,19 +395,19 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
     }
 
     /// Build a RX gate in terms of QSystem primitives.
-    fn build_rx(&mut self, qb: Wire, theta: Wire) -> Result<Wire, BuildError> {
-        let zero = pi_mul_f64(self, 0.0);
+    pub fn build_rx(&mut self, qb: Wire, theta: Wire) -> Result<Wire, BuildError> {
+        let zero = self.pi_div(0, 1);
         self.add_phased_x(qb, theta, zero)
     }
 
     /// Build a RY gate in terms of QSystem primitives.
-    fn build_ry(&mut self, qb: Wire, theta: Wire) -> Result<Wire, BuildError> {
-        let pi_2 = pi_mul_f64(self, 0.5);
+    pub fn build_ry(&mut self, qb: Wire, theta: Wire) -> Result<Wire, BuildError> {
+        let pi_2 = self.pi_div(1, 2);
         self.add_phased_x(qb, theta, pi_2)
     }
 
     /// Build a CRZ gate in terms of QSystem primitives.
-    fn build_crz(&mut self, a: Wire, b: Wire, lambda: Wire) -> Result<[Wire; 2], BuildError> {
+    pub fn build_crz(&mut self, a: Wire, b: Wire, lambda: Wire) -> Result<[Wire; 2], BuildError> {
         let two = self.add_load_const(Value::from(ConstF64::new(2.0)));
         let lambda_2 = self
             .add_dataflow_op(FloatOps::fdiv, [lambda, two])?
@@ -344,14 +422,14 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
     }
 
     /// Build a Toffoli (CCX) gate in terms of QSystem primitives.
-    fn build_toffoli(&mut self, a: Wire, b: Wire, c: Wire) -> Result<[Wire; 3], BuildError> {
-        let pi = pi_mul_f64(self, 1.0);
-        let pi_2 = pi_mul_f64(self, 0.5);
-        let pi_minus_2 = pi_mul_f64(self, -0.5);
-        let pi_4 = pi_mul_f64(self, 0.25);
-        let pi_minus_4 = pi_mul_f64(self, -0.25);
-        let pi_minus_3_4 = pi_mul_f64(self, -0.75);
-        let zero = pi_mul_f64(self, 0.0);
+    pub fn build_toffoli(&mut self, a: Wire, b: Wire, c: Wire) -> Result<[Wire; 3], BuildError> {
+        let pi = self.pi_div(1, 1);
+        let pi_2 = self.pi_div(1, 2);
+        let pi_minus_2 = self.pi_div(-1, 2);
+        let pi_4 = self.pi_div(1, 4);
+        let pi_minus_4 = self.pi_div(-1, 4);
+        let pi_minus_3_4 = self.pi_div(-3, 4);
+        let zero = self.pi_div(0, 1);
 
         let c = self.add_phased_x(c, pi, pi)?;
         let [b, c] = self.add_zz_max(b, c)?;
@@ -374,7 +452,7 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
     }
 
     /// Build a projective measurement with a conditional flip.
-    fn build_measure_flip(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
+    pub fn build_measure_flip(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         let [qb, b] = self.add_measure_reset(qb)?;
         let mut conditional = self.conditional_builder(
             ([type_row![], type_row![]], b),
@@ -388,8 +466,9 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
         case0.finish_with_outputs([qb])?;
 
         // case 1: 1 state measured, flip
-        let mut case1 = conditional.case_builder(1)?;
+        let mut case1: QSystemOpBuilder<_> = conditional.case_builder(1)?.into();
         let [qb] = case1.input_wires_arr();
+
         let qb = case1.build_x(qb)?;
         case1.finish_with_outputs([qb])?;
 
@@ -398,14 +477,12 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
     }
 
     /// Build a qalloc operation that panics on failure.
-    fn build_qalloc(&mut self) -> Result<Wire, BuildError> {
+    pub fn build_qalloc(&mut self) -> Result<Wire, BuildError> {
         let maybe_qb = self.add_try_alloc()?;
         let [qb] = self.build_unwrap_sum(1, option_type(qb_t()), maybe_qb)?;
         Ok(qb)
     }
 }
-
-impl<D: Dataflow> QSystemOpBuilder for D {}
 
 #[cfg(test)]
 mod test {
@@ -435,9 +512,10 @@ mod test {
     #[test]
     fn lazy_circuit() {
         let hugr = {
-            let mut func_builder =
+            let mut func_builder: QSystemOpBuilder<_> =
                 FunctionBuilder::new("circuit", Signature::new(qb_t(), vec![qb_t(), bool_t()]))
-                    .unwrap();
+                    .unwrap()
+                    .into();
             let [qb] = func_builder.input_wires_arr();
             let [qb, lazy_b] = func_builder.add_lazy_measure(qb).unwrap();
             let [b] = func_builder.add_read(lazy_b, bool_t()).unwrap();
@@ -449,11 +527,12 @@ mod test {
     #[test]
     fn all_ops() {
         let hugr = {
-            let mut func_builder = FunctionBuilder::new(
+            let mut func_builder: QSystemOpBuilder<_> = FunctionBuilder::new(
                 "all_ops",
                 Signature::new(vec![qb_t(), float64_type()], vec![bool_t()]),
             )
-            .unwrap();
+            .unwrap()
+            .into();
             let [q0, angle] = func_builder.input_wires_arr();
             let q1 = func_builder.build_qalloc().unwrap();
             let q0 = func_builder.add_reset(q0).unwrap();

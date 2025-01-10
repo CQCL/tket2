@@ -31,6 +31,7 @@ smol_str.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
 itertools.workspace = true
+delegate.workspace = true
 clap = { workspace = true, optional = true }
 hugr-cli = { workspace = true, optional = true }
 derive_more = { workspace = true, features = [
