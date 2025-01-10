@@ -141,6 +141,8 @@ impl QSystemPass {
 
     /// Returns a new `QSystemPass` with constant folding enabled according to
     /// `constant_fold`.
+    ///
+    /// Off by default.
     pub fn with_constant_fold(mut self, constant_fold: bool) -> Self {
         self.constant_fold = constant_fold;
         self
@@ -148,18 +150,31 @@ impl QSystemPass {
 
     /// Returns a new `QSystemPass` with monomorphization enabled according to
     /// `monomorphize`.
+    ///
+    /// On by default.
     pub fn with_monormophize(mut self, monomorphize: bool) -> Self {
         self.monomorphize = monomorphize;
         self
     }
 
-    /// TODO docs
+    /// Returns a new `QSystemPass` with forcing the HUGR to have
+    /// totally-ordered ops enabled according to `force_order`.
+    ///
+    /// On by default.
+    ///
+    /// When enabled, we push quantum ops as early as possible, and we push
+    /// `tket2.futures.read` ops as late as possible.
     pub fn with_force_order(mut self, force_order: bool) -> Self {
         self.force_order = force_order;
         self
     }
 
-    /// TODO docs
+    /// Returns a new `QSystemPass` with lazification enabled according to `lazify`.
+    ///
+    /// On by default.
+    ///
+    /// When enabled we replace strict measurement ops with lazy equivalents
+    /// from `tket2.qsystem`.
     pub fn with_lazify(mut self, lazify: bool) -> Self {
         self.lazify = lazify;
         self
