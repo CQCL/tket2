@@ -23,6 +23,7 @@ use hugr::{
     Extension, Wire,
 };
 
+use derive_more::Display;
 use lazy_static::lazy_static;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
@@ -76,6 +77,7 @@ lazy_static! {
     EnumIter,
     IntoStaticStr,
     EnumString,
+    Display,
 )]
 #[allow(missing_docs)]
 #[non_exhaustive]
