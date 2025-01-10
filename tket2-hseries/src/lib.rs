@@ -37,6 +37,8 @@ pub struct QSystemPass {
     validation_level: ValidationLevel,
     constant_fold: bool,
     monomorphize: bool,
+    force_order: bool,
+    lazify: bool,
 }
 
 impl Default for QSystemPass {
@@ -45,6 +47,8 @@ impl Default for QSystemPass {
             validation_level: ValidationLevel::default(),
             constant_fold: false,
             monomorphize: true,
+            force_order: true,
+            lazify: true,
         }
     }
 }
@@ -86,7 +90,16 @@ impl QSystemPass {
             self.constant_fold().run(hugr)?;
         }
         self.lower_tk2().run(hugr)?;
-        self.lazify_measure().run(hugr)?;
+        if self.lazify {
+            self.lazify_measure().run(hugr)?;
+        }
+        if self.force_order {
+            self.force_order(hugr)?;
+        }
+        Ok(())
+    }
+
+    fn force_order(&self, hugr: &mut Hugr) -> Result<(), QSystemPassError> {
         self.validation_level.run_validated_pass(hugr, |hugr, _| {
             force_order(hugr, hugr.root(), |hugr, node| {
                 let optype = hugr.get_optype(node);
@@ -101,8 +114,7 @@ impl QSystemPass {
                 }
             })?;
             Ok::<_, QSystemPassError>(())
-        })?;
-        Ok(())
+        })
     }
 
     fn lower_tk2(&self) -> LowerTket2ToQSystemPass {
@@ -138,6 +150,18 @@ impl QSystemPass {
     /// `monomorphize`.
     pub fn with_monormophize(mut self, monomorphize: bool) -> Self {
         self.monomorphize = monomorphize;
+        self
+    }
+
+    /// TODO docs
+    pub fn with_force_order(mut self, force_order: bool) -> Self {
+        self.force_order = force_order;
+        self
+    }
+
+    /// TODO docs
+    pub fn with_lazify(mut self, lazify: bool) -> Self {
+        self.lazify = lazify;
         self
     }
 }

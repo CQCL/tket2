@@ -80,7 +80,7 @@ impl LazifyMeasurePass {
 ///
 /// No validation is done here.
 pub fn replace_measure_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LazifyMeasurePassError> {
-    let (nodes, rewrites): (Vec<_>, Vec<_>) = hugr
+    let mut nodes_and_rewrites = hugr
         .nodes()
         .filter_map(|n| {
             LazifyMeasureRewrite::replacement_for_op(hugr.get_optype(n)).map(|r| {
@@ -92,14 +92,14 @@ pub fn replace_measure_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LazifyM
                     },
                 )
             })
-        })
-        .unzip();
+        }).collect_vec();
+    nodes_and_rewrites.sort_by_key(|x| x.0);
 
-    for rw in rewrites {
+
+    nodes_and_rewrites.into_iter().map(|(n,rw)| {
         hugr.apply_rewrite(rw)?;
-    }
-
-    Ok(nodes)
+        Ok(n)
+    }).try_collect()
 }
 
 /// A rewrite used in [LazifyMeasurePass]
@@ -143,8 +143,17 @@ impl LazifyMeasureRewrite {
         // from <bool> -> future<bool>
         let future_ports = self.future_ports(hugr.get_optype(self.node))?;
 
-        for outport in hugr.node_outputs(self.node).collect_vec() {
-            let uses = hugr.linked_inputs(self.node, outport).collect_vec();
+        let outports = {
+            let mut v = hugr.node_outputs(self.node).collect_vec();
+            v.sort();
+            v
+        };
+        for outport in outports {
+            let uses = {
+                let mut v = hugr.linked_inputs(self.node, outport).collect_vec();
+                v.sort();
+                v
+            };
             hugr.disconnect(self.node, outport);
             if !future_ports.contains(&outport) {
                 // This case is for outports whose type has not changed
