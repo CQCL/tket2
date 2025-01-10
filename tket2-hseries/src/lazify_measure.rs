@@ -26,7 +26,10 @@ use hugr::{
 use itertools::Itertools as _;
 use tket2::Tk2Op;
 
-use crate::extension::{futures::FutureOpBuilder as _, qsystem::QSystemOp};
+use crate::extension::{
+    futures::{future_type, FutureOpBuilder as _},
+    qsystem::QSystemOp,
+};
 
 /// A HUGR -> HUGR pass that replaces measurement ops with lazy `tket2.qsystem`
 /// measurement ops.
@@ -250,8 +253,10 @@ impl LazifyMeasureRewrite {
             .dataflow_signature()
             .map(std::borrow::Cow::into_owned);
         if let Some(sig) = &actual_signature {
-            if (expected_signature.input(), expected_signature.output())
-                == (sig.input(), sig.output())
+            if expected_signature.input() == sig.input()
+                && expected_signature.output().len() == sig.output().len()
+                && itertools::zip_eq(expected_signature.output().iter(), sig.output().iter())
+                    .all(|(e, s)| e == s || e == &future_type(bool_t()) && s == &bool_t())
             {
                 return Ok(());
             }
