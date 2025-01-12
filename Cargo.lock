@@ -147,7 +147,7 @@ dependencies = [
  "duplicate",
  "itertools 0.12.1",
  "lazy_static",
- "petgraph",
+ "petgraph 0.6.5",
  "proc-macro2",
  "quote",
  "syn",
@@ -963,7 +963,7 @@ dependencies = [
  "lazy_static",
  "num-rational",
  "paste",
- "petgraph",
+ "petgraph 0.6.5",
  "portgraph",
  "regex",
  "semver",
@@ -987,7 +987,7 @@ dependencies = [
  "itertools 0.13.0",
  "lazy_static",
  "paste",
- "petgraph",
+ "petgraph 0.6.5",
  "portgraph",
  "thiserror 2.0.8",
 ]
@@ -1358,6 +1358,16 @@ source = "git+https://github.com/petgraph/petgraph.git?rev=4505389#45053893f3ef7
 dependencies = [
  "fixedbitset",
  "indexmap",
+]
+
+[[package]]
+name = "petgraph"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
+dependencies = [
+ "fixedbitset",
+ "indexmap",
  "serde",
  "serde_derive",
 ]
@@ -1424,7 +1434,7 @@ dependencies = [
  "context-iterators",
  "delegate 0.13.1",
  "itertools 0.13.0",
- "petgraph",
+ "petgraph 0.6.5",
  "serde",
  "thiserror 2.0.8",
 ]
@@ -1439,7 +1449,7 @@ dependencies = [
  "derive-where",
  "derive_more 0.99.18",
  "itertools 0.10.5",
- "petgraph",
+ "petgraph 0.7.1",
  "portgraph",
  "rustc-hash",
  "serde",
@@ -2058,7 +2068,7 @@ dependencies = [
  "num-rational",
  "pest",
  "pest_derive",
- "petgraph",
+ "petgraph 0.6.5",
  "portgraph",
  "portmatching",
  "priority-queue",
@@ -2088,7 +2098,7 @@ dependencies = [
  "hugr-cli",
  "itertools 0.13.0",
  "lazy_static",
- "petgraph",
+ "petgraph 0.6.5",
  "rstest",
  "serde",
  "serde_json",
