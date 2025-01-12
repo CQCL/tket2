@@ -26,11 +26,11 @@ missing_docs = "warn"
 [patch.crates-io]
 
 # Uncomment to use unreleased versions of hugr
-# hugr = { git = "https://github.com/CQCL/hugr", ref = "1e9eee2" }
-# hugr-core = { git = "https://github.com/CQCL/hugr", ref = "1e9eee2" }
-# hugr-passes = { git = "https://github.com/CQCL/hugr", ref = "1e9eee2" }
-# hugr-cli = { git = "https://github.com/CQCL/hugr", ref = "1e9eee2" }
-# hugr-model = { git = "https://github.com/CQCL/hugr", ref = "1e9eee2" }
+hugr = { git = "https://github.com/CQCL/hugr", ref = "ad285f5f3840488ca7522a32f1b6b0140ea04bb8" }
+hugr-core = { git = "https://github.com/CQCL/hugr", ref = "ad285f5f3840488ca7522a32f1b6b0140ea04bb8" }
+hugr-passes = { git = "https://github.com/CQCL/hugr", ref = "ad285f5f3840488ca7522a32f1b6b0140ea04bb8" }
+hugr-cli = { git = "https://github.com/CQCL/hugr", ref = "ad285f5f3840488ca7522a32f1b6b0140ea04bb8" }
+hugr-model = { git = "https://github.com/CQCL/hugr", ref = "ad285f5f3840488ca7522a32f1b6b0140ea04bb8" }
 
 [workspace.dependencies]
 
@@ -38,12 +38,12 @@ missing_docs = "warn"
 hugr = "0.14.1"
 hugr-core = "0.14.1"
 hugr-cli = "0.14.1"
-portgraph = "0.12"
+portgraph = "0.13"
 pyo3 = "0.23.4"
 itertools = "0.13.0"
 tket-json-rs = "0.7.1"
 tracing = "0.1.37"
-portmatching = "0.3.1"
+portmatching = "0.4.0-rc.4"
 bytemuck = "1.21.0"
 cgmath = "0.18.0"
 chrono = "0.4.39"
@@ -63,7 +63,7 @@ num_cpus = "1.16.0"
 peak_alloc = "0.2.0"
 pest = "2.7.15"
 pest_derive = "2.7.15"
-petgraph = { version = "0.6.3", default-features = false }
+petgraph = { version = "0.7.0", default-features = false }
 priority-queue = "2.1.1"
 rayon = "1.5"
 rmp-serde = "1.1.2"

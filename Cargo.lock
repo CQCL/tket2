@@ -147,10 +147,10 @@ dependencies = [
  "duplicate",
  "itertools 0.12.1",
  "lazy_static",
- "petgraph",
+ "petgraph 0.6.5",
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
 ]
 
 [[package]]
@@ -365,7 +365,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
 ]
 
 [[package]]
@@ -404,12 +404,6 @@ dependencies = [
  "itertools 0.13.0",
  "tket2",
 ]
-
-[[package]]
-name = "context-iterators"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07ec5b69614ae4dbce88efe2684f4526e3a5aeb0a68326d1424f69c98f3040d2"
 
 [[package]]
 name = "convert_case"
@@ -564,13 +558,13 @@ dependencies = [
 
 [[package]]
 name = "delegate"
-version = "0.10.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ee5df75c70b95bd3aacc8e2fd098797692fb1d54121019c4de481e42f04c8a1"
+checksum = "4e018fccbeeb50ff26562ece792ed06659b9c2dae79ece77c4456bb10d9bf79b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn",
 ]
 
 [[package]]
@@ -581,7 +575,7 @@ checksum = "297806318ef30ad066b15792a8372858020ae3ca2e414ee6c2133b1eb9e9e945"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
 ]
 
 [[package]]
@@ -601,7 +595,18 @@ checksum = "d65d7ce8132b7c0e54497a4d9a55a1c2a0912a0d786cf894472ba818fba45762"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
+]
+
+[[package]]
+name = "derive-where"
+version = "1.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62d671cc41a825ebabc75757b62d3d168c577f9149b2d49ece1dad1f72119d25"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -614,7 +619,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustc_version",
- "syn 2.0.90",
+ "syn",
 ]
 
 [[package]]
@@ -634,7 +639,7 @@ checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
  "unicode-xid",
 ]
 
@@ -675,7 +680,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
 ]
 
 [[package]]
@@ -715,6 +720,12 @@ name = "fixedbitset"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
+
+[[package]]
+name = "fixedbitset"
+version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
 
 [[package]]
 name = "funty"
@@ -778,7 +789,7 @@ checksum = "162ee34ebcb7c64a8abebc059ce0fee27c2262618d7b60ed8faf72fef13c3650"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
 ]
 
 [[package]]
@@ -898,9 +909,8 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1c8f4a7f778b70a6528fb620f9df31931d9eaad518287d7d25faabba8714f3f"
+version = "0.14.2"
+source = "git+https://github.com/CQCL/hugr#9cad7986a0564cc5fd9ca03e96cea4f608b06c61"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -908,9 +918,8 @@ dependencies = [
 
 [[package]]
 name = "hugr-cli"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5906f571c65f74ec9f7aac92d1d52bf1a1837d736d4bd131d3d81b13c057068"
+version = "0.14.2"
+source = "git+https://github.com/CQCL/hugr#9cad7986a0564cc5fd9ca03e96cea4f608b06c61"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -922,9 +931,8 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "967ce11e97050617c536d37c5b12d2b0eecb2f9f6da24e4bc5d19faf5cf1fafa"
+version = "0.14.2"
+source = "git+https://github.com/CQCL/hugr#9cad7986a0564cc5fd9ca03e96cea4f608b06c61"
 dependencies = [
  "bitvec",
  "bumpalo",
@@ -936,12 +944,12 @@ dependencies = [
  "fxhash",
  "html-escape",
  "indexmap",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "lazy_static",
  "num-rational",
  "paste",
- "petgraph",
- "portgraph 0.12.3",
+ "petgraph 0.7.1",
+ "portgraph",
  "regex",
  "semver",
  "serde",
@@ -955,17 +963,16 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a12944d441477c4f086c106891fa22e5a29ac2fd011c0caf898e4d28aeb2a05"
+version = "0.14.2"
+source = "git+https://github.com/CQCL/hugr#9cad7986a0564cc5fd9ca03e96cea4f608b06c61"
 dependencies = [
  "ascent",
  "hugr-core",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "lazy_static",
  "paste",
- "petgraph",
- "portgraph 0.12.3",
+ "petgraph 0.7.1",
+ "portgraph",
  "thiserror 2.0.8",
 ]
 
@@ -1069,6 +1076,15 @@ name = "itertools"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
 ]
@@ -1296,7 +1312,7 @@ dependencies = [
  "pest_meta",
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
 ]
 
 [[package]]
@@ -1316,8 +1332,20 @@ version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
- "fixedbitset",
+ "fixedbitset 0.4.2",
  "indexmap",
+]
+
+[[package]]
+name = "petgraph"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
+dependencies = [
+ "fixedbitset 0.5.7",
+ "indexmap",
+ "serde",
+ "serde_derive",
 ]
 
 [[package]]
@@ -1374,48 +1402,37 @@ checksum = "280dc24453071f1b63954171985a0b0d30058d287960968b9b2aca264c8d4ee6"
 
 [[package]]
 name = "portgraph"
-version = "0.8.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a3c679569bff588a2df17852572353597b1848ead7e8b7fd93e4db065df50df"
+checksum = "66fcb76974f489d449dce2409cd132171194e3c75b67f69ecfa533ac761b77b3"
 dependencies = [
  "bitvec",
- "context-iterators",
- "delegate 0.10.0",
- "petgraph",
- "serde",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "portgraph"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bfec2c00343ab6227cb3da08a1c9bed2d79fc379d040ce98582e81e825f96d1"
-dependencies = [
- "bitvec",
- "context-iterators",
  "delegate 0.13.2",
- "itertools 0.13.0",
- "petgraph",
+ "itertools 0.14.0",
+ "petgraph 0.7.1",
  "serde",
  "thiserror 2.0.8",
 ]
 
 [[package]]
 name = "portmatching"
-version = "0.3.1"
+version = "0.4.0-rc.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bab3142803b8b889862f7dddbc0b308b5ec59dd015ce706276572dbf23aedb9a"
+checksum = "57650eb0175cc9693c1fc4c9d49b38fe2c0fd227fe1e6304ee05688470c5eec9"
 dependencies = [
  "bimap",
  "bitvec",
+ "delegate 0.12.0",
+ "derive-where",
  "derive_more 0.99.18",
  "itertools 0.10.5",
- "petgraph",
- "portgraph 0.8.0",
+ "petgraph 0.7.1",
+ "portgraph",
  "rustc-hash",
  "serde",
  "smallvec",
+ "thiserror 1.0.69",
+ "union-find",
 ]
 
 [[package]]
@@ -1500,7 +1517,7 @@ dependencies = [
  "proc-macro2",
  "pyo3-macros-backend",
  "quote",
- "syn 2.0.90",
+ "syn",
 ]
 
 [[package]]
@@ -1513,7 +1530,7 @@ dependencies = [
  "proc-macro2",
  "pyo3-build-config",
  "quote",
- "syn 2.0.90",
+ "syn",
 ]
 
 [[package]]
@@ -1653,7 +1670,7 @@ dependencies = [
  "regex",
  "relative-path",
  "rustc_version",
- "syn 2.0.90",
+ "syn",
  "unicode-ident",
 ]
 
@@ -1738,7 +1755,7 @@ checksum = "5a9bf7cf98d04a2b28aead066b7496853d4779c9cc183c440dbac457641e19a0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
 ]
 
 [[package]]
@@ -1832,18 +1849,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.90",
-]
-
-[[package]]
-name = "syn"
-version = "1.0.109"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237"
-dependencies = [
- "proc-macro2",
- "quote",
- "unicode-ident",
+ "syn",
 ]
 
 [[package]]
@@ -1908,7 +1914,7 @@ checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
 ]
 
 [[package]]
@@ -1919,7 +1925,7 @@ checksum = "f2f357fcec90b3caef6623a099691be676d033b40a058ac95d2a6ade6fa0c943"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
 ]
 
 [[package]]
@@ -2032,8 +2038,8 @@ dependencies = [
  "num-rational",
  "pest",
  "pest_derive",
- "petgraph",
- "portgraph 0.12.3",
+ "petgraph 0.7.1",
+ "portgraph",
  "portmatching",
  "priority-queue",
  "rayon",
@@ -2062,7 +2068,7 @@ dependencies = [
  "hugr-cli",
  "itertools 0.13.0",
  "lazy_static",
- "petgraph",
+ "petgraph 0.7.1",
  "rstest",
  "serde",
  "serde_json",
@@ -2082,7 +2088,7 @@ dependencies = [
  "hugr",
  "itertools 0.13.0",
  "num_cpus",
- "portgraph 0.12.3",
+ "portgraph",
  "portmatching",
  "pyo3",
  "rstest",
@@ -2141,7 +2147,7 @@ checksum = "395ae124c09f9e6918a2310af6038fba074bcf474ac352496d5910dd59a2226d"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
 ]
 
 [[package]]
@@ -2212,7 +2218,7 @@ checksum = "d9d30226ac9cbd2d1ff775f74e8febdab985dab14fb14aa2582c29a92d5555dc"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
 ]
 
 [[package]]
@@ -2238,6 +2244,12 @@ name = "unindent"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7de7d73e1754487cb58364ee906a499937a0dfabd86bcb980fa99ec8c8fa2ce"
+
+[[package]]
+name = "union-find"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "039142448432983c34b64739f8526f8f233a1eec7a66e61b6ab29acfa781194e"
 
 [[package]]
 name = "utf8-width"
@@ -2303,7 +2315,7 @@ dependencies = [
  "log",
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
  "wasm-bindgen-shared",
 ]
 
@@ -2325,7 +2337,7 @@ checksum = "30d7a95b763d3c45903ed6c81f156801839e5ee968bb07e534c44df0fcd330c2"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -2560,7 +2572,7 @@ checksum = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.90",
+ "syn",
 ]
 
 [[package]]
@@ -2590,3 +2602,8 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "hugr-model"
+version = "0.17.0"
+source = "git+https://github.com/CQCL/hugr#9cad7986a0564cc5fd9ca03e96cea4f608b06c61"
