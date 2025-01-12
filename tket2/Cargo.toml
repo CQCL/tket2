@@ -78,6 +78,7 @@ zstd = { workspace = true, optional = true }
 rstest = { workspace = true }
 criterion = { workspace = true, features = ["html_reports"] }
 cool_asserts = { workspace = true }
+insta = { version = "1.42" }
 
 [[bench]]
 name = "bench_main"
