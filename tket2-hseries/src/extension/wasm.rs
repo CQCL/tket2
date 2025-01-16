@@ -302,23 +302,11 @@ impl TryFrom<CustomType> for WasmType {
     }
 }
 
-/// Fallibly convert a [TypeArg] to a [Type].
-///
-/// This will fail if `arg` is of non-type kind (e.g. String),
-/// or if `arg` contains row variables.
-/// TODO move this to `impl TypeArg` in `hugr-core`
-pub fn type_arg_into_type(arg: impl Into<TypeArg>) -> Option<Type> {
-    if let TypeArg::Type { ty } = arg.into() {
-        Some(ty)
-    } else {
-        None
-    }
-}
-
 /// Fallibly convert a [TypeArg] to a [TypeRV].
 ///
 /// This will fail if `arg` is of non-type kind (e.g. String).
 /// TODO move this to `impl TypeArg` in `hugr-core`
+/// <https://github.com/CQCL/hugr/issues/1837>
 pub fn type_arg_into_type_rv(arg: impl Into<TypeArg>) -> Option<TypeRV> {
     match arg.into() {
         TypeArg::Type { ty } => Some(ty.into()),
@@ -337,7 +325,7 @@ pub fn type_arg_into_type_row(arg: impl Into<TypeArg>) -> Option<TypeRow> {
     match arg.into() {
         TypeArg::Sequence { elems } => elems
             .into_iter()
-            .map(type_arg_into_type)
+            .map(|ta| ta.as_type())
             .collect::<Option<Vec<_>>>()
             .map(|x| x.into()),
         _ => None,
@@ -380,12 +368,15 @@ impl MakeOpDef for WasmOpDef {
         let context_type = WasmType::Context.get_type(extension_ref);
         let module_type = WasmType::Module.get_type(extension_ref);
         match self {
+            // [usize] -> [Context]
             Self::get_context => Signature::new(
                 usize_t(),
                 Type::from(WasmOp::get_context_return_type(extension_ref)),
             )
             .into(),
+            // [Context] -> []
             Self::dispose_context => Signature::new(context_type, type_row![]).into(),
+            // <name: String, inputs: TypeRow, outputs: TypeRow> [Module] -> [WasmType::Func { inputs, outputs }]
             Self::lookup => {
                 let inputs = TypeRV::new_row_var_use(1, TypeBound::Copyable);
                 let outputs = TypeRV::new_row_var_use(2, TypeBound::Copyable);
@@ -401,6 +392,7 @@ impl MakeOpDef for WasmOpDef {
                 )
                 .into()
             }
+            // <inputs: TypeRow, outputs: TypeRow> [Context, WasmType::Func { inputs, outputs }, inputs] -> [Context, future<tuple<outputs>>>]
             Self::call => {
                 let context_type: TypeRV = context_type.into();
                 let inputs = TypeRV::new_row_var_use(0, TypeBound::Copyable);
@@ -463,6 +455,7 @@ impl HasConcrete for WasmOpDef {
                 };
                 Ok(WasmOp::DisposeContext)
             }
+            // <String,in_row,out_row> [] -> []
             WasmOpDef::lookup => {
                 let Some([name_arg, inputs_arg, outputs_arg]): Option<[_; 3]> =
                     type_args.to_vec().try_into().ok()
