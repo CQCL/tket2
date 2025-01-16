@@ -23,6 +23,7 @@ use hugr::{
     Extension, Wire,
 };
 
+use derive_more::Display;
 use lazy_static::lazy_static;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
@@ -76,12 +77,14 @@ lazy_static! {
     EnumIter,
     IntoStaticStr,
     EnumString,
+    Display,
 )]
 #[allow(missing_docs)]
 #[non_exhaustive]
 pub enum QSystemOp {
     Measure,
     LazyMeasure,
+    LazyMeasureReset,
     Rz,
     PhasedX,
     ZZMax,
@@ -98,7 +101,8 @@ impl MakeOpDef for QSystemOp {
         let one_qb_row = TypeRow::from(vec![qb_t()]);
         let two_qb_row = TypeRow::from(vec![qb_t(), qb_t()]);
         match self {
-            LazyMeasure => Signature::new(qb_t(), vec![qb_t(), future_type(bool_t())]),
+            LazyMeasure => Signature::new(qb_t(), future_type(bool_t())),
+            LazyMeasureReset => Signature::new(qb_t(), vec![qb_t(), future_type(bool_t())]),
             Reset => Signature::new(one_qb_row.clone(), one_qb_row),
             ZZMax => Signature::new(two_qb_row.clone(), two_qb_row),
             ZZPhase => Signature::new(vec![qb_t(), qb_t(), float64_type()], two_qb_row),
@@ -136,6 +140,9 @@ impl MakeOpDef for QSystemOp {
             QSystemOp::QFree => "Free a qubit (lose track of it).",
             QSystemOp::Reset => "Reset a qubit to the Z |0> eigenstate.",
             QSystemOp::MeasureReset => "Measure a qubit and reset it to the Z |0> eigenstate.",
+            QSystemOp::LazyMeasureReset => {
+                "Lazily measure a qubit and reset it to the Z |0> eigenstate."
+            }
         }
         .to_string()
     }
@@ -155,9 +162,16 @@ impl MakeRegisteredOp for QSystemOp {
 /// "tket2.qsystem" operations.
 pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
     /// Add a "tket2.qsystem.LazyMeasure" op.
-    fn add_lazy_measure(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
+    fn add_lazy_measure(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::LazyMeasure, [qb])?
+            .out_wire(0))
+    }
+
+    /// Add a "tket2.qsystem.LazyMeasureReset" op.
+    fn add_lazy_measure_reset(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
+        Ok(self
+            .add_dataflow_op(QSystemOp::LazyMeasureReset, [qb])?
             .outputs_arr())
     }
 

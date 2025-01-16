@@ -7,7 +7,9 @@ members = [
     "tket2-eccs",
     "tket2-exts",
 ]
-requirements = [
+
+[manifest.dependency-groups]
+dev = [
     { name = "graphviz", specifier = ">=0.20,<0.21" },
     { name = "hypothesis", specifier = ">=6.111.1,<7" },
     { name = "maturin", specifier = ">=1.7.0,<2" },

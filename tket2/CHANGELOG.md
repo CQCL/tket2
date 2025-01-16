@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1](https://github.com/CQCL/tket2/compare/tket2-v0.7.0...tket2-v0.7.1) - 2025-01-10
+
+### Bug Fixes
+
+- remove unicode pi symbols in rotation extension (#743)
+
 ## [0.7.0](https://github.com/CQCL/tket2/compare/tket2-v0.6.0...tket2-v0.7.0) - 2024-12-16
 
 ### ⚠ BREAKING CHANGES
