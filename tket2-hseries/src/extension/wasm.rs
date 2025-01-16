@@ -870,7 +870,7 @@ mod test {
 
             let results = {
                 let tuple_ty = Type::new_tuple(out_types.clone());
-                let results_tuple = builder.add_read(results_future, tuple_ty).unwrap();
+                let [results_tuple] = builder.add_read(results_future, tuple_ty).unwrap();
                 builder
                     .add_dataflow_op(UnpackTuple::new(out_types), [results_tuple])
                     .unwrap()

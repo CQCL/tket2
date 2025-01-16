@@ -453,8 +453,8 @@ mod test {
                 FunctionBuilder::new("circuit", Signature::new(qb_t(), vec![qb_t(), bool_t()]))
                     .unwrap();
             let [qb] = func_builder.input_wires_arr();
-            let [qb, lazy_b] = func_builder.add_lazy_measure(qb).unwrap();
-            let b = func_builder.add_read(lazy_b, bool_t()).unwrap();
+            let [qb, lazy_b] = func_builder.add_lazy_measure_reset(qb).unwrap();
+            let [b] = func_builder.add_read(lazy_b, bool_t()).unwrap();
             func_builder.finish_hugr_with_outputs([qb, b]).unwrap()
         };
         assert_matches!(hugr.validate(), Ok(_));
