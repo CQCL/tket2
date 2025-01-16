@@ -775,7 +775,7 @@ mod test {
     #[case(WasmType::Context)]
     #[case(WasmType::new_func(type_row![], type_row![]))]
     #[case(WasmType::new_func(vec![TypeRV::new_row_var_use(0, TypeBound::Any)], vec![bool_t()]))]
-      fn wasm_type(#[case] wasm_t: WasmType) {
+    fn wasm_type(#[case] wasm_t: WasmType) {
         let hugr_t: Type = wasm_t.clone().into();
         let roundtripped_t = hugr_t.try_into().unwrap();
         assert_eq!(wasm_t, roundtripped_t);
