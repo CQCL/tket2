@@ -89,7 +89,8 @@ pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
     /// The `tket2.wasm` extension.
-    pub static ref EXTENSION: Arc<Extension> = Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
+    pub static ref EXTENSION: Arc<Extension> =
+        Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
         ext.add_requirements(ExtensionSet::from_iter([futures::EXTENSION_ID, PRELUDE_ID]));
         add_wasm_type_defs(ext, ext_ref).unwrap();
         WasmOpDef::load_all_ops(ext, ext_ref, ).unwrap();
@@ -116,9 +117,11 @@ lazy_static! {
     /// The [TypeParam] of `tket2.wasm.lookup` specifying the name of the function.
     pub static ref NAME_PARAM: TypeParam = TypeParam::String;
     /// The [TypeParam] of various types and ops specifying the input signature of a function.
-    pub static ref INPUTS_PARAM: TypeParam = TypeParam::List { param: Box::new(TypeBound::Any.into()) };
+    pub static ref INPUTS_PARAM: TypeParam =
+        TypeParam::List { param: Box::new(TypeBound::Any.into()) };
     /// The [TypeParam] of various types and ops specifying the output signature of a function.
-    pub static ref OUTPUTS_PARAM: TypeParam = TypeParam::List { param: Box::new(TypeBound::Any.into()) };
+    pub static ref OUTPUTS_PARAM: TypeParam =
+        TypeParam::List { param: Box::new(TypeBound::Any.into()) };
 }
 
 fn add_wasm_type_defs(
@@ -329,6 +332,7 @@ pub fn type_arg_into_type_rv(arg: impl Into<TypeArg>) -> Option<TypeRV> {
 /// This will fail if `arg` is of non-sequence kind (e.g. Type)
 /// or if the sequence contains row variables.
 /// TODO move this to `impl TypeArg` in `hugr-core`
+/// <https://github.com/CQCL/hugr/issues/1837>
 pub fn type_arg_into_type_row(arg: impl Into<TypeArg>) -> Option<TypeRow> {
     match arg.into() {
         TypeArg::Sequence { elems } => elems
@@ -344,6 +348,7 @@ pub fn type_arg_into_type_row(arg: impl Into<TypeArg>) -> Option<TypeRow> {
 ///
 /// This will fail if `arg` is of non-sequence kind (e.g. Type).
 /// TODO move this to `impl TypeArg` in `hugr-core`
+/// <https://github.com/CQCL/hugr/issues/1837>
 pub fn type_arg_into_type_row_rv(arg: impl Into<TypeArg>) -> Option<TypeRowRV> {
     match arg.into() {
         TypeArg::Sequence { elems } => elems
@@ -358,14 +363,12 @@ pub fn type_arg_into_type_row_rv(arg: impl Into<TypeArg>) -> Option<TypeRowRV> {
     }
 }
 
-/// TODO move this to `impl TypeArg` in `hugr-core`
 fn type_row_into_type_arg(row: TypeRow) -> TypeArg {
     TypeArg::Sequence {
         elems: row.into_owned().into_iter().map_into().collect(),
     }
 }
 
-/// TODO move this to `impl TypeArg` in `hugr-core`
 fn type_row_rv_into_type_arg(row: TypeRowRV) -> TypeArg {
     TypeArg::Sequence {
         elems: row.into_owned().into_iter().map_into().collect(),
