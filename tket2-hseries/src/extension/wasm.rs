@@ -199,6 +199,14 @@ pub enum WasmType {
 }
 
 impl WasmType {
+    /// Construct a new `tket2.wasm.func` type.
+    pub fn new_func(inputs: impl Into<TypeRowRV>, outputs: impl Into<TypeRowRV>) -> Self {
+        Self::Func {
+            inputs: inputs.into(),
+            outputs: outputs.into(),
+        }
+    }
+
     fn get_type(&self, extension_ref: &Weak<Extension>) -> Type {
         self.custom_type(extension_ref).into()
     }
@@ -742,7 +750,7 @@ impl<T: Dataflow> WasmOpBuilder for T {}
 
 #[cfg(test)]
 mod test {
-    use hugr::{builder::DFGBuilder, ops::DataflowOpTrait as _};
+    use hugr::{builder::DFGBuilder, extension::prelude::bool_t, ops::DataflowOpTrait as _};
     use rstest::rstest;
 
     use super::*;
@@ -760,6 +768,17 @@ mod test {
         assert_eq!(m1.name(), "wasm:test_mod");
         assert!(m1.equal_consts(&m2));
         assert_eq!(m1.extension_reqs(), ExtensionSet::singleton(EXTENSION_ID));
+    }
+
+    #[rstest]
+    #[case(WasmType::Module)]
+    #[case(WasmType::Context)]
+    #[case(WasmType::new_func(type_row![], type_row![]))]
+    #[case(WasmType::new_func(vec![TypeRV::new_row_var_use(0, TypeBound::Any)], vec![bool_t()]))]
+      fn wasm_type(#[case] wasm_t: WasmType) {
+        let hugr_t: Type = wasm_t.clone().into();
+        let roundtripped_t = hugr_t.try_into().unwrap();
+        assert_eq!(wasm_t, roundtripped_t);
     }
 
     #[test]
