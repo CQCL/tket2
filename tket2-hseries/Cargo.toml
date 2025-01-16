@@ -39,6 +39,7 @@ derive_more = { workspace = true, features = [
     "from",
     "into",
 ] }
+typetag.workspace = true
 delegate.workspace = true
 
 [dev-dependencies]

@@ -13,6 +13,7 @@ fn main() {
                 tket2_hseries::extension::qsystem::EXTENSION.to_owned(),
                 tket2_hseries::extension::futures::EXTENSION.to_owned(),
                 tket2_hseries::extension::result::EXTENSION.to_owned(),
+                tket2_hseries::extension::wasm::EXTENSION.to_owned(),
             ]);
 
             args.run_dump(&reg);
