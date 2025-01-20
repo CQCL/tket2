@@ -7,20 +7,16 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{CircuitPattern, NodeID, PEdge, PNode};
+use super::CircuitPattern;
 use derive_more::{Display, Error, From};
 use hugr::hugr::views::sibling_subgraph::{
     InvalidReplacement, InvalidSubgraph, InvalidSubgraphBoundary, TopoConvexChecker,
 };
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::{NamedOp, OpType};
-use hugr::{HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex};
-use itertools::Itertools;
+use hugr::{HugrView, IncomingPort, Node, OutgoingPort};
 use portgraph::algorithms::ConvexChecker;
-use portmatching::{
-    automaton::{LineBuilder, ScopeAutomaton},
-    EdgeProperty, PatternID,
-};
+use portmatching::{automaton::ConstraintAutomaton, PatternID};
 use smol_str::SmolStr;
 
 use crate::{
@@ -136,33 +132,34 @@ impl PatternMatch {
     ///
     /// See [`PatternMatch::try_from_root_match`] for more details.
     pub fn try_from_root_match_with_checker(
-        root: Node,
-        pattern: PatternID,
-        circ: &Circuit<impl HugrView>,
-        matcher: &PatternMatcher,
-        checker: &impl ConvexChecker,
+        _root: Node,
+        _pattern: PatternID,
+        _circ: &Circuit<impl HugrView>,
+        _matcher: &PatternMatcher,
+        _checker: &impl ConvexChecker,
     ) -> Result<Self, InvalidPatternMatch> {
-        let pattern_ref = matcher
-            .get_pattern(pattern)
-            .ok_or(InvalidPatternMatch::MatchNotFound)?;
-        let map = pattern_ref
-            .get_match_map(root, circ)
-            .ok_or(InvalidPatternMatch::MatchNotFound)?;
-        let inputs = pattern_ref
-            .inputs
-            .iter()
-            .map(|ps| {
-                ps.iter()
-                    .map(|(n, p)| (map[n], p.as_incoming().unwrap()))
-                    .collect_vec()
-            })
-            .collect_vec();
-        let outputs = pattern_ref
-            .outputs
-            .iter()
-            .map(|(n, p)| (map[n], p.as_outgoing().unwrap()))
-            .collect_vec();
-        Self::try_from_io_with_checker(root, pattern, circ, inputs, outputs, checker)
+        // let pattern_ref = matcher
+        //     .get_pattern(pattern)
+        //     .ok_or(InvalidPatternMatch::MatchNotFound)?;
+        // let map = pattern_ref
+        //     .get_match_map(root, circ)
+        //     .ok_or(InvalidPatternMatch::MatchNotFound)?;
+        // let inputs = pattern_ref
+        //     .inputs
+        //     .iter()
+        //     .map(|ps| {
+        //         ps.iter()
+        //             .map(|(n, p)| (map[n], p.as_incoming().unwrap()))
+        //             .collect_vec()
+        //     })
+        //     .collect_vec();
+        // let outputs = pattern_ref
+        //     .outputs
+        //     .iter()
+        //     .map(|(n, p)| (map[n], p.as_outgoing().unwrap()))
+        //     .collect_vec();
+        // Self::try_from_io_with_checker(root, pattern, circ, inputs, outputs, checker)
+        todo!()
     }
 
     /// Create a pattern match from the subcircuit boundaries.
@@ -237,7 +234,7 @@ impl Debug for PatternMatch {
 /// simultaneously.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PatternMatcher {
-    automaton: ScopeAutomaton<PNode, PEdge, Port>,
+    automaton: ConstraintAutomaton<(), ()>,
     patterns: Vec<CircuitPattern>,
 }
 
@@ -251,23 +248,8 @@ impl Debug for PatternMatcher {
 
 impl PatternMatcher {
     /// Construct a matcher from a set of patterns
-    pub fn from_patterns(patterns: impl Into<Vec<CircuitPattern>>) -> Self {
-        let patterns = patterns.into();
-        let line_patterns = patterns
-            .iter()
-            .map(|p| {
-                p.pattern
-                    .clone()
-                    .try_into_line_pattern(compatible_offsets)
-                    .expect("Failed to express pattern as line pattern")
-            })
-            .collect_vec();
-        let builder = LineBuilder::from_patterns(line_patterns);
-        let automaton = builder.build();
-        Self {
-            automaton,
-            patterns,
-        }
+    pub fn from_patterns(_patterns: impl Into<Vec<CircuitPattern>>) -> Self {
+        todo!()
     }
 
     /// Find all convex pattern matches in a circuit.
@@ -289,27 +271,22 @@ impl PatternMatcher {
     /// Find all convex pattern matches in a circuit rooted at a given node.
     fn find_rooted_matches(
         &self,
-        circ: &Circuit<impl HugrView>,
-        root: Node,
-        checker: &impl ConvexChecker,
+        _circ: &Circuit<impl HugrView>,
+        _root: Node,
+        _checker: &impl ConvexChecker,
     ) -> Vec<PatternMatch> {
-        self.automaton
-            .run(
-                root.into(),
-                // Node weights (none)
-                validate_circuit_node(circ),
-                // Check edge exist
-                validate_circuit_edge(circ),
-            )
-            .filter_map(|pattern_id| {
-                handle_match_error(
-                    PatternMatch::try_from_root_match_with_checker(
-                        root, pattern_id, circ, self, checker,
-                    ),
-                    root,
-                )
-            })
-            .collect()
+        // self.automaton
+        //     .run(root.into())
+        //     .filter_map(|pattern_id| {
+        //         handle_match_error(
+        //             PatternMatch::try_from_root_match_with_checker(
+        //                 root, pattern_id, circ, self, checker,
+        //             ),
+        //             root,
+        //         )
+        //     })
+        //     .collect()
+        todo!()
     }
 
     /// Get a pattern by ID.
@@ -426,65 +403,6 @@ impl From<InvalidSubgraph> for InvalidPatternMatch {
             other => InvalidPatternMatch::Other(other),
         }
     }
-}
-
-fn compatible_offsets(e1: &PEdge, e2: &PEdge) -> bool {
-    let PEdge::InternalEdge { dst: dst1, .. } = e1 else {
-        return false;
-    };
-    let src2 = e2.offset_id();
-    dst1.direction() != src2.direction() && dst1.index() == src2.index()
-}
-
-/// Returns a predicate checking that an edge at `src` satisfies `prop` in `circ`.
-pub(super) fn validate_circuit_edge(
-    circ: &Circuit<impl HugrView>,
-) -> impl for<'a> Fn(NodeID, &'a PEdge) -> Option<NodeID> + '_ {
-    move |src, &prop| {
-        let NodeID::HugrNode(src) = src else {
-            return None;
-        };
-        let hugr = circ.hugr();
-        match prop {
-            PEdge::InternalEdge {
-                src: src_port,
-                dst: dst_port,
-                ..
-            } => {
-                let (next_node, next_port) = hugr.linked_ports(src, src_port).exactly_one().ok()?;
-                (dst_port == next_port).then_some(NodeID::HugrNode(next_node))
-            }
-            PEdge::InputEdge { src: src_port } => {
-                let (next_node, next_port) = hugr.linked_ports(src, src_port).exactly_one().ok()?;
-                Some(NodeID::CopyNode(next_node, next_port))
-            }
-        }
-    }
-}
-
-/// Returns a predicate checking that `node` satisfies `prop` in `circ`.
-pub(crate) fn validate_circuit_node(
-    circ: &Circuit<impl HugrView>,
-) -> impl for<'a> Fn(NodeID, &PNode) -> bool + '_ {
-    move |node, prop| {
-        let NodeID::HugrNode(node) = node else {
-            return false;
-        };
-        &MatchOp::from(circ.hugr().get_optype(node).clone()) == prop
-    }
-}
-
-/// Unwraps match errors, ignoring benign errors and panicking otherwise.
-///
-/// Benign errors are non-convex matches, which are expected to occur.
-/// Other errors are considered logic errors and should never occur.
-fn handle_match_error<T>(match_res: Result<T, InvalidPatternMatch>, root: Node) -> Option<T> {
-    match_res
-        .map_err(|err| match err {
-            InvalidPatternMatch::NotConvex => InvalidPatternMatch::NotConvex,
-            other => panic!("invalid match at root node {root:?}: {other}"),
-        })
-        .ok()
 }
 
 #[cfg(test)]

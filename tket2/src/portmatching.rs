@@ -56,22 +56,10 @@
 pub mod matcher;
 pub mod pattern;
 
-use hugr::types::EdgeKind;
-use hugr::{HugrView, OutgoingPort};
-use itertools::Itertools;
 pub use matcher::{PatternMatch, PatternMatcher};
 pub use pattern::CircuitPattern;
 
-use derive_more::{Display, Error};
-use hugr::{
-    ops::{OpTag, OpTrait},
-    Node, Port,
-};
-use matcher::MatchOp;
-
-use crate::{circuit::Circuit, utils::type_is_linear};
-
-type PNode = MatchOp;
+use hugr::{Node, Port};
 
 /// An edge property in a circuit pattern.
 ///
@@ -98,79 +86,6 @@ enum PEdge {
     InputEdge { src: Port },
 }
 
-#[derive(Debug, Clone, Error, Display)]
-#[non_exhaustive]
-enum InvalidEdgeProperty {
-    /// The port is linked to multiple edges.
-    #[display("{port} in {node} is linked to multiple edges")]
-    AmbiguousEdge { port: Port, node: Node },
-    /// The port is not linked to any edge.
-    #[display("{port} in {node} is not linked to any edge")]
-    NoLinkedEdge { port: Port, node: Node },
-    /// The port does not have a type.
-    #[display("{port} in {node} does not have a type")]
-    UntypedPort { port: Port, node: Node },
-}
-
-impl PEdge {
-    fn try_from_port(node: Node, port: Port, circ: &Circuit) -> Result<Self, InvalidEdgeProperty> {
-        let hugr = circ.hugr();
-        let src = port;
-        let (dst_node, dst) = hugr
-            .linked_ports(node, src)
-            .exactly_one()
-            .map_err(|mut e| {
-                if e.next().is_some() {
-                    InvalidEdgeProperty::AmbiguousEdge { port: src, node }
-                } else {
-                    InvalidEdgeProperty::NoLinkedEdge { port: src, node }
-                }
-            })?;
-        if hugr.get_optype(dst_node).tag() == OpTag::Input {
-            return Ok(Self::InputEdge { src });
-        }
-
-        // Get the port type for either value or constant ports.
-        let port_type = match hugr.get_optype(node).port_kind(src) {
-            Some(EdgeKind::Value(typ)) => typ,
-            Some(EdgeKind::Const(typ)) => typ,
-            _ => return Err(InvalidEdgeProperty::UntypedPort { node, port: src }),
-        };
-        let is_reversible = type_is_linear(&port_type);
-        Ok(Self::InternalEdge {
-            src,
-            dst,
-            is_reversible,
-        })
-    }
-}
-
-impl portmatching::EdgeProperty for PEdge {
-    type OffsetID = Port;
-
-    fn reverse(&self) -> Option<Self> {
-        match *self {
-            Self::InternalEdge {
-                src,
-                dst,
-                is_reversible,
-            } => is_reversible.then_some(Self::InternalEdge {
-                src: dst,
-                dst: src,
-                is_reversible,
-            }),
-            Self::InputEdge { .. } => None,
-        }
-    }
-
-    fn offset_id(&self) -> Self::OffsetID {
-        match *self {
-            Self::InternalEdge { src, .. } => src,
-            Self::InputEdge { src, .. } => src,
-        }
-    }
-}
-
 /// A node in a pattern.
 ///
 /// A node is either a real node in the HUGR graph or a hidden copy node
@@ -184,14 +99,6 @@ impl portmatching::EdgeProperty for PEdge {
 pub(super) enum NodeID {
     HugrNode(Node),
     CopyNode(Node, Port),
-}
-
-impl NodeID {
-    /// Create a new copy NodeID.
-    pub fn new_copy(node: Node, port: impl Into<OutgoingPort>) -> Self {
-        let port: OutgoingPort = port.into();
-        Self::CopyNode(node, port.into())
-    }
 }
 
 impl From<Node> for NodeID {
@@ -209,8 +116,6 @@ mod tests {
         types::Signature,
     };
     use rstest::{fixture, rstest};
-
-    use super::{CircuitPattern, PatternMatcher};
 
     #[fixture]
     fn lhs() -> Circuit {
@@ -239,11 +144,12 @@ mod tests {
     }
 
     #[rstest]
-    fn simple_match(circ: Circuit, lhs: Circuit) {
-        let p = CircuitPattern::try_from_circuit(&lhs).unwrap();
-        let m = PatternMatcher::from_patterns(vec![p]);
+    fn simple_match(_circ: Circuit, _lhs: Circuit) {
+        // let p = CircuitPattern::try_from_circuit(&lhs).unwrap();
+        // let m = PatternMatcher::from_patterns(vec![p]);
 
-        let matches = m.find_matches(&circ);
-        assert_eq!(matches.len(), 1);
+        // let matches = m.find_matches(&circ);
+        // assert_eq!(matches.len(), 1);
+        todo!()
     }
 }
