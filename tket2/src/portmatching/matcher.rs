@@ -22,13 +22,14 @@ use smol_str::SmolStr;
 use crate::{
     circuit::Circuit,
     rewrite::{CircuitRewrite, Subcircuit},
+    Tk2Op,
 };
 
 /// Matchable operations in a circuit.
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
-pub(crate) struct MatchOp {
+pub struct MatchOp {
     /// The operation identifier
     op_name: SmolStr,
     /// The encoded operation, if necessary for comparisons.
@@ -41,8 +42,23 @@ pub(crate) struct MatchOp {
 impl From<OpType> for MatchOp {
     fn from(op: OpType) -> Self {
         let op_name = op.name();
+        let encoded = encode_op(&op);
+        Self { op_name, encoded }
+    }
+}
+
+impl From<&OpType> for MatchOp {
+    fn from(op: &OpType) -> Self {
+        let op_name = op.name();
         let encoded = encode_op(op);
         Self { op_name, encoded }
+    }
+}
+
+impl From<Tk2Op> for MatchOp {
+    fn from(value: Tk2Op) -> Self {
+        let op: OpType = value.into();
+        op.into()
     }
 }
 
@@ -50,10 +66,10 @@ impl From<OpType> for MatchOp {
 ///
 /// Avoids encoding some data if we know the operation can be uniquely
 /// identified by their name.
-fn encode_op(op: OpType) -> Option<Vec<u8>> {
+fn encode_op(op: &OpType) -> Option<Vec<u8>> {
     match op {
         OpType::Module(_) => None,
-        OpType::ExtensionOp(op) => encode_op(OpType::OpaqueOp(op.make_opaque())),
+        OpType::ExtensionOp(op) => encode_op(&OpType::OpaqueOp(op.make_opaque())),
         OpType::OpaqueOp(op) => {
             let mut encoded: Vec<u8> = Vec::new();
             // Ignore irrelevant fields
