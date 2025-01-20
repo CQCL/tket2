@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.8.0...tket2-hseries-v0.8.1) - 2025-01-20
+
+### New Features
+
+- *(tket2-hseries)* Add `tket2.wasm` extension (#737)
+
 ## [0.8.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.7.1...tket2-hseries-v0.8.0) - 2025-01-10
 
 ### New Features
