@@ -964,7 +964,7 @@ dependencies = [
  "num-rational",
  "paste",
  "petgraph 0.6.5",
- "portgraph",
+ "portgraph 0.12.3",
  "regex",
  "semver",
  "serde",
@@ -988,7 +988,7 @@ dependencies = [
  "lazy_static",
  "paste",
  "petgraph 0.6.5",
- "portgraph",
+ "portgraph 0.12.3",
  "thiserror 2.0.8",
 ]
 
@@ -1104,6 +1104,15 @@ name = "itertools"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
 ]
@@ -1440,8 +1449,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "portgraph"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66fcb76974f489d449dce2409cd132171194e3c75b67f69ecfa533ac761b77b3"
+dependencies = [
+ "bitvec",
+ "delegate 0.13.1",
+ "itertools 0.14.0",
+ "petgraph 0.7.1",
+ "serde",
+ "thiserror 2.0.8",
+]
+
+[[package]]
 name = "portmatching"
-version = "0.4.0-rc.3"
+version = "0.4.0-rc.4"
 dependencies = [
  "bimap",
  "bitvec",
@@ -1450,7 +1473,7 @@ dependencies = [
  "derive_more 0.99.18",
  "itertools 0.10.5",
  "petgraph 0.7.1",
- "portgraph",
+ "portgraph 0.13.1",
  "rustc-hash",
  "serde",
  "smallvec",
@@ -2069,7 +2092,7 @@ dependencies = [
  "pest",
  "pest_derive",
  "petgraph 0.6.5",
- "portgraph",
+ "portgraph 0.12.3",
  "portmatching",
  "priority-queue",
  "rayon",
@@ -2117,7 +2140,7 @@ dependencies = [
  "hugr",
  "itertools 0.13.0",
  "num_cpus",
- "portgraph",
+ "portgraph 0.12.3",
  "portmatching",
  "pyo3",
  "rstest",

@@ -122,7 +122,10 @@ mod tests {
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         types::Signature,
     };
-    use rstest::fixture;
+    use itertools::Itertools;
+    use rstest::{fixture, rstest};
+
+    use super::{CircuitPattern, PatternMatcher};
 
     /// A circuit with two rotation gates in sequence, sharing a param
     #[fixture]
@@ -141,6 +144,41 @@ mod tests {
         let qb = res.outputs().next().unwrap();
 
         h.finish_hugr_with_outputs([qb]).unwrap().into()
+    }
+
+    #[fixture]
+    fn lhs() -> Circuit {
+        let mut h = DFGBuilder::new(Signature::new(vec![], vec![qb_t()])).unwrap();
+
+        let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
+        let q = res.out_wire(0);
+
+        h.finish_hugr_with_outputs([q]).unwrap().into()
+    }
+
+    #[fixture]
+    pub fn circ() -> Circuit {
+        let mut h = DFGBuilder::new(Signature::new(vec![qb_t()], vec![qb_t()])).unwrap();
+        let mut inps = h.input_wires();
+        let q_in = inps.next().unwrap();
+
+        let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
+        let q_out = res.out_wire(0);
+        let res = h.add_dataflow_op(Tk2Op::CZ, [q_in, q_out]).unwrap();
+        let q_in = res.out_wire(0);
+        let q_out = res.out_wire(1);
+        h.add_dataflow_op(Tk2Op::QFree, [q_in]).unwrap();
+
+        h.finish_hugr_with_outputs([q_out]).unwrap().into()
+    }
+
+    #[rstest]
+    fn simple_match(circ: Circuit, lhs: Circuit) {
+        let p = CircuitPattern::try_from_circuit(&lhs).unwrap();
+        let m = PatternMatcher::from_patterns(vec![p]);
+
+        let matches = m.find_matches(&circ).collect_vec();
+        assert_eq!(matches.len(), 1);
     }
 }
 
