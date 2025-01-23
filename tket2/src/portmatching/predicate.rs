@@ -161,7 +161,7 @@ pub enum InvalidPredicateError {
     InvalidArity,
 }
 
-impl<H: HugrView> pm::Predicate<Circuit<H>, HugrVariableValue> for Predicate {
+impl<H: HugrView> pm::EvaluatePredicate<Circuit<H>, HugrVariableValue> for Predicate {
     fn check(&self, args: &[impl Borrow<HugrVariableValue>], data: &Circuit<H>) -> bool {
         let hugr = data.hugr();
         match self {
@@ -210,6 +210,7 @@ mod tests {
     use super::*;
     use hugr::{ops::OpType, IncomingPort, Node, OutgoingPort, Port};
     use itertools::Either;
+    use portmatching::EvaluatePredicate;
     use rstest::rstest;
 
     fn get_nodes_by_tk2op(circ: &Circuit, t2_op: Tk2Op) -> Vec<Node> {
@@ -225,11 +226,7 @@ mod tests {
         let pred = Predicate::IsOpEqual(Tk2Op::Rx.into());
         let rx_ops = get_nodes_by_tk2op(&circ_with_copy, Tk2Op::Rx);
         for rx in rx_ops {
-            assert!(<Predicate as pm::Predicate<_, _>>::check(
-                &pred,
-                &[&HugrVariableValue::Node(rx)],
-                &circ_with_copy,
-            ));
+            assert!(pred.check(&[&HugrVariableValue::Node(rx)], &circ_with_copy,));
         }
     }
 
@@ -284,19 +281,8 @@ mod tests {
                 }
             };
 
-            assert!(<Predicate as pm::Predicate::<_, _>>::check(
-                &pred1,
-                &[&node1, &wire],
-                &circ_with_copy
-            ));
-            assert_eq!(
-                <Predicate as pm::Predicate::<_, _>>::check(
-                    &pred2,
-                    &[&node2, &wire],
-                    &circ_with_copy
-                ),
-                is_valid
-            );
+            assert!(pred1.check(&[&node1, &wire], &circ_with_copy));
+            assert_eq!(pred2.check(&[&node2, &wire], &circ_with_copy), is_valid);
         }
     }
 }
