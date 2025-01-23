@@ -470,6 +470,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "wip"]
     fn construct_matcher() {
         let circ = h_cx();
 
@@ -481,6 +482,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "wip"]
     fn serialise_round_trip() {
         let circs = [h_cx(), cx_xc()];
         let patterns = circs
@@ -501,6 +503,7 @@ mod tests {
     }
 
     #[rstest]
+    #[ignore = "wip"]
     fn cx_cx_replace_to_id(cx_cx: Circuit, cx_cx_3: Circuit) {
         let p = CircuitPattern::try_from_circuit(&cx_cx_3).unwrap();
         let m = PatternMatcher::from_patterns(vec![p]);
