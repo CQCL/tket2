@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::{borrow::Borrow, cmp};
 
 use derive_more::{Display, Error};
-use hugr::HugrView;
+use hugr::{HugrView, PortIndex};
 use itertools::Itertools;
 use portmatching as pm;
 
@@ -185,6 +185,9 @@ impl<H: HugrView> pm::EvaluatePredicate<Circuit<H>, HugrVariableValue> for Predi
                 else {
                     panic!("ill-formed constraint");
                 };
+                if data.hugr().num_inputs(node) <= exp_in_port.index() {
+                    return false;
+                }
                 let Some((exp_out_node, exp_out_port)) =
                     data.hugr().single_linked_output(node, exp_in_port)
                 else {
