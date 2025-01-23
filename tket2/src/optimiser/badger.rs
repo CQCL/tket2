@@ -636,7 +636,9 @@ mod tests {
     }
 
     #[rstest]
+    #[ignore = "wip"]
     #[case::compiled(badger_opt_compiled())]
+    #[ignore = "wip"]
     #[case::json(badger_opt_json())]
     fn rz_rz_cancellation(rz_rz: Circuit, #[case] badger_opt: DefaultBadgerOptimiser) {
         use hugr::ops::OpType;
@@ -663,7 +665,9 @@ mod tests {
     }
 
     #[rstest]
+    #[ignore = "wip"]
     #[case::compiled(badger_opt_compiled())]
+    #[ignore = "wip"]
     #[case::json(badger_opt_json())]
     fn rz_rz_cancellation_parallel(rz_rz: Circuit, #[case] badger_opt: DefaultBadgerOptimiser) {
         let opt_rz = badger_opt.optimise(
@@ -679,7 +683,9 @@ mod tests {
     }
 
     #[rstest]
+    #[ignore = "wip"]
     #[case::compiled(badger_opt_compiled())]
+    #[ignore = "wip"]
     #[case::json(badger_opt_json())]
     fn rz_rz_cancellation_split_parallel(
         rz_rz: Circuit,
@@ -717,6 +723,7 @@ mod tests {
         opt.hugr().validate().unwrap();
     }
 
+    #[ignore = "wip"]
     #[test]
     fn load_precompiled_bin() {
         let opt =

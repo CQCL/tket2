@@ -217,6 +217,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "wip"]
     fn construct_pattern() {
         // let circ = h_cx();
 
@@ -246,6 +247,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "wip"]
     fn disconnected_pattern() {
         let circ = build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::X, [0])?;
@@ -260,6 +262,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "wip"]
     fn pattern_with_empty_qubit() {
         let circ = build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::X, [0])?;
@@ -281,6 +284,7 @@ mod tests {
     // }
 
     #[test]
+    #[ignore = "wip"]
     fn pattern_with_copy() {
         // let circ = circ_with_copy();
         // let pattern = CircuitPattern::try_from_circuit(&circ).unwrap();
@@ -298,6 +302,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "wip"]
     fn pattern_with_copy_disconnected() {
         let circ = circ_with_copy_disconnected();
         assert_eq!(

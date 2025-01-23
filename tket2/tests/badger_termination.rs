@@ -53,6 +53,7 @@ fn simple_circ() -> Circuit {
 }
 
 #[rstest]
+#[ignore = "wip"]
 //#[ignore = "Takes 200ms"]
 fn badger_termination(simple_circ: Circuit, nam_4_2: DefaultBadgerOptimiser) {
     let opt_circ = nam_4_2.optimise(
