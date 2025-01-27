@@ -7,13 +7,14 @@ use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
         const_fold::{ConstFoldError, ConstantFoldPass},
-        force_order, remove_polyfuncs,
+        force_order,
         validation::{ValidatePassError, ValidationLevel},
         MonomorphizeError, MonomorphizePass,
     },
     hugr::HugrError,
     Hugr, HugrView,
 };
+use hugr_passes::RemoveDeadFuncsPass;
 use tket2::Tk2Op;
 
 use extension::{
@@ -80,7 +81,7 @@ impl QSystemPass {
             self.validation_level.run_validated_pass(hugr, |hugr, _| {
                 let mut owned_hugr = Hugr::default();
                 mem::swap(&mut owned_hugr, hugr);
-                owned_hugr = remove_polyfuncs(owned_hugr);
+                RemoveDeadFuncsPass::default().run(&mut owned_hugr).unwrap();
                 mem::swap(&mut owned_hugr, hugr);
                 Ok::<_, QSystemPassError>(())
             })?;
