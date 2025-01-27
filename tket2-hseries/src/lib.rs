@@ -81,6 +81,8 @@ impl QSystemPass {
             self.validation_level.run_validated_pass(hugr, |hugr, _| {
                 let mut owned_hugr = Hugr::default();
                 mem::swap(&mut owned_hugr, hugr);
+                // TODO Remove `unwrap()` once we have a release with
+                // https://github.com/CQCL/hugr/pull/1883
                 RemoveDeadFuncsPass::default().run(&mut owned_hugr).unwrap();
                 mem::swap(&mut owned_hugr, hugr);
                 Ok::<_, QSystemPassError>(())
