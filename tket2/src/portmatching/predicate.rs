@@ -71,14 +71,19 @@ pub enum Predicate {
     },
 }
 
-/// The valid "signatures" of predicates, useful for argument parsing.
+// The signatures of each of the predicates, useful for argument parsing.
+type IsOpEqualSignature = (hugr::Node,);
+type IsWireSourceSignature = (hugr::Node, hugr::Wire);
+type IsWireSinkSignature = (hugr::Node, hugr::Wire);
+type IsDistinctFromSignature = Vec<hugr::Node>;
+
+/// All valid signatures of predicates.
+#[allow(clippy::enum_variant_names)]
 enum PredicateArguments {
-    /// Argument for a [`Predicate::IsOpEqual`] predicate.
-    Node(hugr::Node),
-    /// Arguments for a [`Predicate::IsWireSource`] or [`Predicate::IsWireSink`] predicate.
-    NodeAndWire(hugr::Node, hugr::Wire),
-    /// Arguments for a [`Predicate::IsDistinctFrom`] predicate.
-    ManyNodes(Vec<hugr::Node>),
+    IsOpEqual(IsOpEqualSignature),
+    IsWireSource(IsWireSourceSignature),
+    IsWireSink(IsWireSinkSignature),
+    IsDistinctFrom(IsDistinctFromSignature),
 }
 
 impl Predicate {
@@ -90,6 +95,9 @@ impl Predicate {
     }
 
     /// Parse predicate arguments into constraint values of the expected types
+    ///
+    /// Return the variant of [`PredicateArguments`] that corresponds to the
+    /// predicate variant.
     fn parse_arguments<'b, B>(
         &self,
         args: impl IntoIterator<Item = &'b B>,
@@ -106,7 +114,7 @@ impl Predicate {
                 let node = (*arg0.borrow())
                     .try_into()
                     .map_err(|_| InvalidPredicateError::InvalidVariableType)?;
-                Ok(PredicateArguments::Node(node))
+                Ok(PredicateArguments::IsOpEqual((node,)))
             }
             Predicate::IsWireSource(..) | Predicate::IsWireSink(..) => {
                 let (arg0, arg1) = args
@@ -118,10 +126,17 @@ impl Predicate {
                 let (out_node, out_port) = (*arg1.borrow())
                     .try_into()
                     .map_err(|_| InvalidPredicateError::InvalidVariableType)?;
-                Ok(PredicateArguments::NodeAndWire(
-                    node,
-                    hugr::Wire::new(out_node, out_port),
-                ))
+                if matches!(self, Predicate::IsWireSource(..)) {
+                    Ok(PredicateArguments::IsWireSource((
+                        node,
+                        hugr::Wire::new(out_node, out_port),
+                    )))
+                } else {
+                    Ok(PredicateArguments::IsWireSink((
+                        node,
+                        hugr::Wire::new(out_node, out_port),
+                    )))
+                }
             }
             Predicate::IsDistinctFrom { .. } => {
                 let nodes = args
@@ -132,7 +147,7 @@ impl Predicate {
                             .map_err(|_| InvalidPredicateError::InvalidVariableType)
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                Ok(PredicateArguments::ManyNodes(nodes))
+                Ok(PredicateArguments::IsDistinctFrom(nodes))
             }
         }
     }
@@ -166,24 +181,24 @@ impl<H: HugrView> pm::EvaluatePredicate<Circuit<H>, HugrVariableValue> for Predi
         let hugr = data.hugr();
         match self {
             Predicate::IsOpEqual(exp_match_op) => {
-                let Ok(PredicateArguments::Node(node)) = self.parse_arguments(args) else {
-                    panic!("ill-formed constraint");
+                let Ok(PredicateArguments::IsOpEqual((node,))) = self.parse_arguments(args) else {
+                    panic!("invalid argument parse");
                 };
 
                 let match_op: MatchOp = hugr.get_optype(node).into();
                 exp_match_op == &match_op
             }
             &Predicate::IsWireSource(exp_out_port) => {
-                let Ok(PredicateArguments::NodeAndWire(node, wire)) = self.parse_arguments(args)
+                let Ok(PredicateArguments::IsWireSource((node, wire))) = self.parse_arguments(args)
                 else {
-                    panic!("ill-formed constraint");
+                    panic!("invalid argument parse");
                 };
                 wire.source() == exp_out_port && node == wire.node()
             }
             &Predicate::IsWireSink(exp_in_port) => {
-                let Ok(PredicateArguments::NodeAndWire(node, wire)) = self.parse_arguments(args)
+                let Ok(PredicateArguments::IsWireSink((node, wire))) = self.parse_arguments(args)
                 else {
-                    panic!("ill-formed constraint");
+                    panic!("invalid argument parse");
                 };
                 if data.hugr().num_inputs(node) <= exp_in_port.index() {
                     return false;
@@ -196,8 +211,9 @@ impl<H: HugrView> pm::EvaluatePredicate<Circuit<H>, HugrVariableValue> for Predi
                 exp_out_node == wire.node() && exp_out_port == wire.source()
             }
             Predicate::IsDistinctFrom { .. } => {
-                let Ok(PredicateArguments::ManyNodes(nodes)) = self.parse_arguments(args) else {
-                    panic!("ill-formed constraint");
+                let Ok(PredicateArguments::IsDistinctFrom(nodes)) = self.parse_arguments(args)
+                else {
+                    panic!("invalid argument parse");
                 };
                 let first_node = nodes[0];
                 nodes[1..].iter().all(|&n| n != first_node)
@@ -230,6 +246,40 @@ mod tests {
         let rx_ops = get_nodes_by_tk2op(&circ_with_copy, Tk2Op::Rx);
         for rx in rx_ops {
             assert!(pred.check(&[&HugrVariableValue::Node(rx)], &circ_with_copy,));
+        }
+    }
+
+    #[rstest]
+    fn test_check_distinct(circ_with_copy: Circuit) {
+        let nodes = circ_with_copy
+            .hugr()
+            .nodes()
+            .map(HugrVariableValue::Node)
+            .collect_vec();
+        let distinct_pred = Predicate::new_is_distinct_from(nodes.len() - 1);
+        assert!(distinct_pred.check(&nodes, &circ_with_copy));
+    }
+
+    #[rstest]
+    fn test_check_wire_predicates(circ_with_copy: Circuit) {
+        for node in circ_with_copy.hugr().nodes() {
+            for in_port in circ_with_copy.hugr().node_inputs(node) {
+                let Some((out_node, out_port)) =
+                    circ_with_copy.hugr().single_linked_output(node, in_port)
+                else {
+                    continue;
+                };
+                let wire = HugrVariableValue::new_wire_from_outgoing(out_node, out_port);
+                let sink_wire_pred = Predicate::IsWireSink(in_port);
+                let source_wire_pred = Predicate::IsWireSource(out_port);
+                assert!(
+                    sink_wire_pred.check(&[&HugrVariableValue::Node(node), &wire], &circ_with_copy)
+                );
+                assert!(source_wire_pred.check(
+                    &[&HugrVariableValue::Node(out_node), &wire],
+                    &circ_with_copy
+                ));
+            }
         }
     }
 
