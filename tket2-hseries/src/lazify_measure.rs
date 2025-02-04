@@ -125,7 +125,8 @@ impl LazifyMeasureRewrite {
         Self::check_signature(node, QSystemOp::LazyMeasure, hugr.get_optype(node))?;
 
         let subgraph = SiblingSubgraph::from_node(node, &hugr);
-        let uses = hugr.linked_inputs(node, 0).collect_vec();
+        let mut uses = hugr.linked_inputs(node, 0).collect_vec();
+        uses.sort();
         let (lazy_measure_node, replacement) = {
             let bool_uses = uses.len();
             let mut builder =
@@ -165,7 +166,8 @@ impl LazifyMeasureRewrite {
         Self::check_signature(node, QSystemOp::LazyMeasureReset, hugr.get_optype(node))?;
 
         let subgraph = SiblingSubgraph::from_node(node, &hugr);
-        let uses = hugr.linked_inputs(node, 1).collect_vec();
+        let mut uses = hugr.linked_inputs(node, 1).collect_vec();
+        uses.sort();
         let (lazy_measure_reset_node, replacement) = {
             let bool_uses = uses.len();
             let mut builder = {
