@@ -2,7 +2,7 @@
 //! Quantinuum H-series quantum computers.
 
 use derive_more::{Display, Error, From};
-use hugr::algorithms::RemoveDeadFuncsError;
+use hugr::algorithms::{RemoveDeadFuncsError, RemoveDeadFuncsPass};
 use hugr::{
     algorithms::{
         const_fold::{ConstFoldError, ConstantFoldPass},
@@ -73,6 +73,9 @@ pub enum QSystemPassError {
     ///
     ///  [RemoveDeadFuncsPass]: hugr::algorithms::RemoveDeadFuncsError
     DCEError(RemoveDeadFuncsError),
+    /// No [FuncDefn] named "main" in [Module].
+    #[display("No function named 'main' in module.")]
+    NoMain,
 }
 
 impl QSystemPass {
@@ -82,11 +85,21 @@ impl QSystemPass {
         if self.monomorphize {
             self.monomorphization().run(hugr)?;
 
-            // TODO: Remove the monomorphised dead functions. This requires us
-            //to know the entry points to the hugr.
-            //    RemoveDeadFuncsPass::default()
-            //    .validation_level(self.validation_level)
-            //    .with_module_entry_points(entry_points) .run(hugr)?;
+            let mut rdfp = RemoveDeadFuncsPass::default();
+            if hugr.get_optype(hugr.root()).is_module() {
+                let main_node = hugr
+                    .nodes()
+                    .find(|&n| {
+                        hugr.get_parent(n) == Some(hugr.root())
+                            && hugr
+                                .get_optype(n)
+                                .as_func_defn()
+                                .is_some_and(|fd| fd.name == "main")
+                    })
+                    .ok_or(QSystemPassError::NoMain)?;
+                rdfp = rdfp.with_module_entry_points([main_node]);
+            }
+            rdfp.run(hugr)?
         }
 
         if self.constant_fold {
