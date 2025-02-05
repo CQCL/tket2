@@ -26,20 +26,20 @@ missing_docs = "warn"
 [patch.crates-io]
 
 # Uncomment to use unreleased versions of hugr
-hugr = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
-hugr-core = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
-hugr-passes = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
-hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
-hugr-model = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
-portgraph = { git = "https://github.com/CQCL/portgraph", rev = "68b96ac737e0c285d8c543b2d74a7aa80a18202c" }
+# hugr = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
+# hugr-core = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
+# hugr-passes = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
+# hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
+# hugr-model = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
+# portgraph = { git = "https://github.com/CQCL/portgraph", rev = "68b96ac737e0c285d8c543b2d74a7aa80a18202c" }
 
 [workspace.dependencies]
 
 # Make sure to run `just recompile-eccs` if the hugr serialisation format changes.
-hugr = "0.14.2"
-hugr-core = "0.14.2"
-hugr-cli = "0.14.2"
-portgraph = "0.13.0"
+hugr = "0.14.3"
+hugr-core = "0.14.3"
+hugr-cli = "0.14.3"
+portgraph = "0.13.1"
 pyo3 = "0.23.4"
 itertools = "0.13.0"
 tket-json-rs = "0.7.1"

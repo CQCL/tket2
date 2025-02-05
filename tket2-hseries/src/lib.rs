@@ -2,13 +2,12 @@
 //! Quantinuum H-series quantum computers.
 
 use derive_more::{Display, Error, From};
-use hugr::algorithms::{RemoveDeadFuncsError, RemoveDeadFuncsPass};
 use hugr::{
     algorithms::{
         const_fold::{ConstFoldError, ConstantFoldPass},
         force_order,
         validation::{ValidatePassError, ValidationLevel},
-        MonomorphizeError, MonomorphizePass,
+        MonomorphizeError, MonomorphizePass, RemoveDeadFuncsError, RemoveDeadFuncsPass,
     },
     hugr::HugrError,
     Hugr, HugrView,
