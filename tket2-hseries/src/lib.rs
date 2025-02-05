@@ -7,7 +7,7 @@ use hugr::{
         const_fold::{ConstFoldError, ConstantFoldPass},
         force_order,
         validation::{ValidatePassError, ValidationLevel},
-        MonomorphizeError, MonomorphizePass, RemoveDeadFuncsError,
+        MonomorphizeError, MonomorphizePass, RemoveDeadFuncsError, RemoveDeadFuncsPass,
     },
     hugr::HugrError,
     Hugr, HugrView,
@@ -72,6 +72,12 @@ pub enum QSystemPassError {
     ///
     ///  [RemoveDeadFuncsPass]: hugr::algorithms::RemoveDeadFuncsError
     DCEError(RemoveDeadFuncsError),
+    /// No [FuncDefn] named "main" in [Module].
+    ///
+    /// [FuncDefn]: hugr::ops::FuncDefn
+    /// [Module]: hugr::ops::Module
+    #[display("No function named 'main' in module.")]
+    NoMain,
 }
 
 impl QSystemPass {
@@ -81,11 +87,19 @@ impl QSystemPass {
         if self.monomorphize {
             self.monomorphization().run(hugr)?;
 
-            // TODO: Remove the monomorphised dead functions. This requires us
-            //to know the entry points to the hugr.
-            //    RemoveDeadFuncsPass::default()
-            //    .validation_level(self.validation_level)
-            //    .with_module_entry_points(entry_points) .run(hugr)?;
+            let mut rdfp = RemoveDeadFuncsPass::default();
+            if hugr.get_optype(hugr.root()).is_module() {
+                let main_node = hugr
+                    .children(hugr.root())
+                    .find(|&n| {
+                        hugr.get_optype(n)
+                            .as_func_defn()
+                            .is_some_and(|fd| fd.name == "main")
+                    })
+                    .ok_or(QSystemPassError::NoMain)?;
+                rdfp = rdfp.with_module_entry_points([main_node]);
+            }
+            rdfp.run(hugr)?
         }
 
         if self.constant_fold {
