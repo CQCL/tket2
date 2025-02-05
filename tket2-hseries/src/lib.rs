@@ -117,8 +117,9 @@ impl QSystemPass {
                 let is_read = optype.cast() == Some(FutureOpDef::Read);
 
                 // HACK: for now qallocs and qfrees are not adequately ordered,
-                // see TODO. To mitigate this we push qfrees as early as possible
-                // and qallocs as late as possible
+                // see <https://github.com/CQCL/guppylang/issues/778>. To
+                // mitigate this we push qfrees as early as possible and qallocs
+                // as late as possible
                 //
                 // To maximise lazyness we push quantum ops (including
                 // LazyMeasure) as early as possible and Future::Read as late as
