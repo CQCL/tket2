@@ -73,6 +73,9 @@ pub enum QSystemPassError {
     ///  [RemoveDeadFuncsPass]: hugr::algorithms::RemoveDeadFuncsError
     DCEError(RemoveDeadFuncsError),
     /// No [FuncDefn] named "main" in [Module].
+    ///
+    /// [FuncDefn]: hugr::ops::FuncDefn
+    /// [Module]: hugr::ops::Module
     #[display("No function named 'main' in module.")]
     NoMain,
 }
