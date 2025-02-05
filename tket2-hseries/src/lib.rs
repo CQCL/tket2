@@ -107,10 +107,13 @@ impl QSystemPass {
             force_order(hugr, hugr.root(), |hugr, node| {
                 let optype = hugr.get_optype(node);
 
-                let is_quantum = optype.cast::<Tk2Op>().is_some() || optype.cast::<QSystemOp>().is_some();
-                let is_qalloc = matches!(optype.cast(), Some(Tk2Op::QAlloc) | Some(Tk2Op::TryQAlloc)) ||
-                    optype.cast()== Some(QSystemOp::TryQAlloc);
-                let is_qfree = optype.cast() == Some(Tk2Op::QFree) || optype.cast() == Some(QSystemOp::QFree);
+                let is_quantum =
+                    optype.cast::<Tk2Op>().is_some() || optype.cast::<QSystemOp>().is_some();
+                let is_qalloc =
+                    matches!(optype.cast(), Some(Tk2Op::QAlloc) | Some(Tk2Op::TryQAlloc))
+                        || optype.cast() == Some(QSystemOp::TryQAlloc);
+                let is_qfree =
+                    optype.cast() == Some(Tk2Op::QFree) || optype.cast() == Some(QSystemOp::QFree);
                 let is_read = optype.cast() == Some(FutureOpDef::Read);
 
                 // HACK: for now qallocs and qfrees are not adequately ordered,
