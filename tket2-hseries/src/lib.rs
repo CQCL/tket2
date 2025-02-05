@@ -106,14 +106,37 @@ impl QSystemPass {
         self.validation_level.run_validated_pass(hugr, |hugr, _| {
             force_order(hugr, hugr.root(), |hugr, node| {
                 let optype = hugr.get_optype(node);
-                if optype.cast::<Tk2Op>().is_some() || optype.cast::<QSystemOp>().is_some() {
-                    // quantum ops are lifted as early as possible
+
+                let is_quantum =
+                    optype.cast::<Tk2Op>().is_some() || optype.cast::<QSystemOp>().is_some();
+                let is_qalloc =
+                    matches!(optype.cast(), Some(Tk2Op::QAlloc) | Some(Tk2Op::TryQAlloc))
+                        || optype.cast() == Some(QSystemOp::TryQAlloc);
+                let is_qfree =
+                    optype.cast() == Some(Tk2Op::QFree) || optype.cast() == Some(QSystemOp::QFree);
+                let is_read = optype.cast() == Some(FutureOpDef::Read);
+
+                // HACK: for now qallocs and qfrees are not adequately ordered,
+                // see <https://github.com/CQCL/guppylang/issues/778>. To
+                // mitigate this we push qfrees as early as possible and qallocs
+                // as late as possible
+                //
+                // To maximise lazyness we push quantum ops (including
+                // LazyMeasure) as early as possible and Future::Read as late as
+                // possible.
+                if is_qfree {
+                    -3
+                } else if is_quantum && !is_qalloc {
+                    // non-qalloc quantum ops
+                    -2
+                } else if is_qalloc {
                     -1
-                } else if let Some(FutureOpDef::Read) = hugr.get_optype(node).cast() {
-                    // read ops are sunk as late as possible
-                    1
-                } else {
+                } else if !is_read {
+                    // all other ops
                     0
+                } else {
+                    // Future::Read ops
+                    1
                 }
             })?;
             Ok::<_, QSystemPassError>(())
