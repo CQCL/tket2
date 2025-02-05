@@ -88,13 +88,11 @@ impl QSystemPass {
             let mut rdfp = RemoveDeadFuncsPass::default();
             if hugr.get_optype(hugr.root()).is_module() {
                 let main_node = hugr
-                    .nodes()
+                    .children(hugr.root())
                     .find(|&n| {
-                        hugr.get_parent(n) == Some(hugr.root())
-                            && hugr
-                                .get_optype(n)
-                                .as_func_defn()
-                                .is_some_and(|fd| fd.name == "main")
+                        hugr.get_optype(n)
+                            .as_func_defn()
+                            .is_some_and(|fd| fd.name == "main")
                     })
                     .ok_or(QSystemPassError::NoMain)?;
                 rdfp = rdfp.with_module_entry_points([main_node]);
