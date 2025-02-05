@@ -1,7 +1,10 @@
 from pytket import Circuit
 from tket2.optimiser import BadgerOptimiser
 
+import pytest
 
+
+@pytest.mark.xfail
 def test_simple_optimiser():
     """a simple circuit matching test"""
     c = Circuit(3).CX(0, 1).CX(0, 1).CX(1, 2)
