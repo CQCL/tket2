@@ -1,20 +1,17 @@
 //! Provides a preparation and validation workflow for Hugrs targeting
 //! Quantinuum H-series quantum computers.
 
-use std::mem;
-
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
         const_fold::{ConstFoldError, ConstantFoldPass},
         force_order,
         validation::{ValidatePassError, ValidationLevel},
-        MonomorphizeError, MonomorphizePass,
+        MonomorphizeError, MonomorphizePass, RemoveDeadFuncsError, RemoveDeadFuncsPass,
     },
     hugr::HugrError,
     Hugr, HugrView,
 };
-use hugr_passes::RemoveDeadFuncsPass;
 use tket2::Tk2Op;
 
 use extension::{
@@ -70,6 +67,17 @@ pub enum QSystemPassError {
     ConstantFoldError(ConstFoldError),
     /// An error from the component [MonomorphizePass] pass.
     MonomorphizeError(MonomorphizeError),
+    /// An error when running [RemoveDeadFuncsPass] after the monomorphisation
+    /// pass.
+    ///
+    ///  [RemoveDeadFuncsPass]: hugr::algorithms::RemoveDeadFuncsError
+    DCEError(RemoveDeadFuncsError),
+    /// No [FuncDefn] named "main" in [Module].
+    ///
+    /// [FuncDefn]: hugr::ops::FuncDefn
+    /// [Module]: hugr::ops::Module
+    #[display("No function named 'main' in module.")]
+    NoMain,
 }
 
 impl QSystemPass {
@@ -78,15 +86,20 @@ impl QSystemPass {
     pub fn run(&self, hugr: &mut Hugr) -> Result<(), QSystemPassError> {
         if self.monomorphize {
             self.monomorphization().run(hugr)?;
-            self.validation_level.run_validated_pass(hugr, |hugr, _| {
-                let mut owned_hugr = Hugr::default();
-                mem::swap(&mut owned_hugr, hugr);
-                // TODO Remove `unwrap()` once we have a release with
-                // https://github.com/CQCL/hugr/pull/1883
-                RemoveDeadFuncsPass::default().run(&mut owned_hugr).unwrap();
-                mem::swap(&mut owned_hugr, hugr);
-                Ok::<_, QSystemPassError>(())
-            })?;
+
+            let mut rdfp = RemoveDeadFuncsPass::default();
+            if hugr.get_optype(hugr.root()).is_module() {
+                let main_node = hugr
+                    .children(hugr.root())
+                    .find(|&n| {
+                        hugr.get_optype(n)
+                            .as_func_defn()
+                            .is_some_and(|fd| fd.name == "main")
+                    })
+                    .ok_or(QSystemPassError::NoMain)?;
+                rdfp = rdfp.with_module_entry_points([main_node]);
+            }
+            rdfp.run(hugr)?
         }
 
         if self.constant_fold {
