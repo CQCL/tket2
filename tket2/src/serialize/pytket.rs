@@ -2,15 +2,16 @@
 
 mod decoder;
 mod encoder;
-mod op;
-mod param;
+pub mod extension;
 
+pub use encoder::{default_encoder_config, Tk1EncoderConfig, Tk1EncoderContext};
+pub use extension::PytketEmitter;
+
+use hugr::core::HugrNode;
 use hugr::types::Type;
 
-use hugr::Node;
+use hugr::Wire;
 use itertools::Itertools;
-// Required for serialising ops in the tket1 hugr extension.
-pub(crate) use op::serialised::OpaqueTk1Op;
 
 #[cfg(test)]
 mod tests;
@@ -29,8 +30,7 @@ use tket_json_rs::register::{Bit, ElementId, Qubit};
 
 use crate::circuit::Circuit;
 
-use self::decoder::Tk1Decoder;
-use self::encoder::Tk1Encoder;
+use self::decoder::Tk1DecoderContext;
 
 pub use crate::passes::pytket::lower_to_pytket;
 
@@ -66,11 +66,11 @@ pub trait TKETDecode: Sized {
 }
 
 impl TKETDecode for SerialCircuit {
-    type DecodeError = TK1ConvertError;
-    type EncodeError = TK1ConvertError;
+    type DecodeError = Tk1ConvertError;
+    type EncodeError = Tk1ConvertError;
 
     fn decode(self) -> Result<Circuit, Self::DecodeError> {
-        let mut decoder = Tk1Decoder::try_new(&self)?;
+        let mut decoder = Tk1DecoderContext::try_new(&self)?;
 
         if !self.phase.is_empty() {
             // TODO - add a phase gate
@@ -85,31 +85,29 @@ impl TKETDecode for SerialCircuit {
     }
 
     fn encode(circ: &Circuit) -> Result<Self, Self::EncodeError> {
-        let mut encoder = Tk1Encoder::new(circ)?;
-        for com in circ.commands() {
-            let optype = com.optype();
-            encoder.add_command(com.clone(), optype)?;
-        }
-        Ok(encoder.finish(circ))
+        let config = default_encoder_config();
+        let mut encoder = Tk1EncoderContext::new(circ, config)?;
+        encoder.run_encoder(circ)?;
+        encoder.finish(circ)
     }
 }
 
 /// Load a TKET1 circuit from a JSON file.
-pub fn load_tk1_json_file(path: impl AsRef<Path>) -> Result<Circuit, TK1ConvertError> {
+pub fn load_tk1_json_file(path: impl AsRef<Path>) -> Result<Circuit, Tk1ConvertError> {
     let file = fs::File::open(path)?;
     let reader = io::BufReader::new(file);
     load_tk1_json_reader(reader)
 }
 
 /// Load a TKET1 circuit from a JSON reader.
-pub fn load_tk1_json_reader(json: impl io::Read) -> Result<Circuit, TK1ConvertError> {
+pub fn load_tk1_json_reader(json: impl io::Read) -> Result<Circuit, Tk1ConvertError> {
     let ser: SerialCircuit = serde_json::from_reader(json)?;
     let circ: Circuit = ser.decode()?;
     Ok(circ)
 }
 
 /// Load a TKET1 circuit from a JSON string.
-pub fn load_tk1_json_str(json: &str) -> Result<Circuit, TK1ConvertError> {
+pub fn load_tk1_json_str(json: &str) -> Result<Circuit, Tk1ConvertError> {
     let reader = json.as_bytes();
     load_tk1_json_reader(reader)
 }
@@ -122,7 +120,7 @@ pub fn load_tk1_json_str(json: &str) -> Result<Circuit, TK1ConvertError> {
 ///
 /// Returns an error if the circuit is not flat or if it contains operations not
 /// supported by pytket.
-pub fn save_tk1_json_file(circ: &Circuit, path: impl AsRef<Path>) -> Result<(), TK1ConvertError> {
+pub fn save_tk1_json_file(circ: &Circuit, path: impl AsRef<Path>) -> Result<(), Tk1ConvertError> {
     let file = fs::File::create(path)?;
     let writer = io::BufWriter::new(file);
     save_tk1_json_writer(circ, writer)
@@ -136,7 +134,7 @@ pub fn save_tk1_json_file(circ: &Circuit, path: impl AsRef<Path>) -> Result<(), 
 ///
 /// Returns an error if the circuit is not flat or if it contains operations not
 /// supported by pytket.
-pub fn save_tk1_json_writer(circ: &Circuit, w: impl io::Write) -> Result<(), TK1ConvertError> {
+pub fn save_tk1_json_writer(circ: &Circuit, w: impl io::Write) -> Result<(), Tk1ConvertError> {
     let serial_circ = SerialCircuit::encode(circ)?;
     serde_json::to_writer(w, &serial_circ)?;
     Ok(())
@@ -150,25 +148,30 @@ pub fn save_tk1_json_writer(circ: &Circuit, w: impl io::Write) -> Result<(), TK1
 ///
 /// Returns an error if the circuit is not flat or if it contains operations not
 /// supported by pytket.
-pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, TK1ConvertError> {
+pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, Tk1ConvertError> {
     let mut buf = io::BufWriter::new(Vec::new());
     save_tk1_json_writer(circ, &mut buf)?;
     let bytes = buf.into_inner().unwrap();
     Ok(String::from_utf8(bytes)?)
 }
 
-/// Error type for conversion between `Op` and `OpType`.
-#[derive(Display, Debug, Error, From)]
+/// Error type for conversion between pytket operations and tket2 ops.
+#[derive(Display, derive_more::Debug, Error, From)]
 #[non_exhaustive]
-pub enum OpConvertError {
+#[debug(bounds(N: HugrNode))]
+pub enum OpConvertError<N = hugr::Node> {
     /// The serialized operation is not supported.
-    #[display("Unsupported serialized pytket operation: {_0:?}")]
-    #[error(ignore)] // `_0` is not the error source
-    UnsupportedSerializedOp(SerialOpType),
+    #[display("Unsupported serialized pytket operation: {op:?}")]
+    UnsupportedSerializedOp {
+        /// The serialized operation.
+        op: SerialOpType,
+    },
     /// The serialized operation is not supported.
-    #[display("Cannot serialize tket2 operation: {_0:?}")]
-    #[error(ignore)] // `_0` is not the error source
-    UnsupportedOpSerialization(OpType),
+    #[display("Cannot serialize tket2 operation: {op}")]
+    UnsupportedOpSerialization {
+        /// The operation.
+        op: OpType,
+    },
     /// The operation has non-serializable inputs.
     #[display(
         "Operation {} in {node} has an unsupported input of type {typ}.",
@@ -180,7 +183,7 @@ pub enum OpConvertError {
         /// The operation name.
         optype: OpType,
         /// The node.
-        node: Node,
+        node: N,
     },
     /// The operation has non-serializable outputs.
     #[display(
@@ -193,7 +196,7 @@ pub enum OpConvertError {
         /// The operation name.
         optype: OpType,
         /// The node.
-        node: Node,
+        node: N,
     },
     /// A parameter input could not be evaluated.
     #[display(
@@ -206,7 +209,7 @@ pub enum OpConvertError {
         /// The operation with the missing input param.
         optype: OpType,
         /// The node.
-        node: Node,
+        node: N,
     },
     /// The operation has output-only qubits.
     /// This is not currently supported by the encoder.
@@ -217,7 +220,7 @@ pub enum OpConvertError {
         /// The operation name.
         optype: OpType,
         /// The node.
-        node: Node,
+        node: N,
     },
     /// The opaque tket1 operation had an invalid type parameter.
     #[display("Opaque TKET1 operation had an invalid type parameter. {error}")]
@@ -256,15 +259,42 @@ pub enum OpConvertError {
         /// The given of parameters.
         args: Vec<ElementId>,
     },
+    /// A node parameter output could not be evaluated.
+    #[display("Could not compute output parameter #{out_index} for operation {} given inputs [{}].", op.name(), params.iter().join(", "))]
+    CannotComputeParams {
+        /// The operation being encoded
+        op: OpType,
+        /// The input parameters.
+        params: Vec<String>,
+        /// The output index that could not be computed.
+        out_index: usize,
+    },
+    /// Tried to query the values associated with an unexplored wire.
+    ///
+    /// This reflects a bug in the operation encoding logic of an operation.
+    #[display("Could not find values associated with wire {wire}.")]
+    WireHasNoValues {
+        /// The wire that has no values.
+        wire: Wire<N>,
+    },
+    /// Tried to add values to an already registered wire.
+    ///
+    /// This reflects a bug in the operation encoding logic of an operation.
+    #[display("Tried to register values for wire {wire}, but it already has associated values.")]
+    WireAlreadyHasValues {
+        /// The wire that already has values.
+        wire: Wire<N>,
+    },
 }
 
-/// Error type for conversion between `Op` and `OpType`.
-#[derive(Debug, Display, Error, From)]
+/// Error type for conversion between tket2 ops and pytket operations.
+#[derive(derive_more::Debug, Display, Error, From)]
 #[non_exhaustive]
-pub enum TK1ConvertError {
+#[debug(bounds(N: HugrNode))]
+pub enum Tk1ConvertError<N = hugr::Node> {
     /// Operation conversion error.
     #[from]
-    OpConversionError(OpConvertError),
+    OpConversionError(OpConvertError<N>),
     /// The circuit has non-serializable inputs.
     #[display("Circuit contains non-serializable input of type {typ}.")]
     NonSerializableInputs {
@@ -291,6 +321,19 @@ pub enum TK1ConvertError {
     #[display("Unable to load pytket json file. {_0}")]
     #[from]
     FileLoadError(io::Error),
+    /// Custom user-defined error raised while encoding an operation.
+    #[display("Error while encoding operation: {msg}")]
+    CustomError {
+        /// The custom error message
+        msg: String,
+    },
+}
+
+impl<N> Tk1ConvertError<N> {
+    /// Create a new error with a custom message.
+    pub fn custom(msg: impl Into<String>) -> Self {
+        Self::CustomError { msg: msg.into() }
+    }
 }
 
 /// A hashed register, used to identify registers in the [`Tk1Decoder::register_wire`] map,

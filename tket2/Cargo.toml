@@ -50,14 +50,17 @@ itertools = { workspace = true }
 petgraph = { workspace = true }
 portmatching = { workspace = true, optional = true, features = ["serde"] }
 derive_more = { workspace = true, features = [
-    "error",
+    "debug",
     "display",
+    "error",
     "from",
     "into",
+    "sum",
+    "add",
 ] }
 hugr = { workspace = true }
 hugr-core = { workspace = true }
-portgraph = { workspace = true, features = ["serde"] }
+portgraph = { workspace = true, features = ["serde", "petgraph"] }
 strum = { workspace = true, features = ["derive"] }
 fxhash = { workspace = true }
 indexmap = { workspace = true }

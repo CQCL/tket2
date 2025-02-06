@@ -1,18 +1,63 @@
-//! Wrapper over pytket operations that cannot be represented naturally in tket2.
+//! Encoder for pytket operations that cannot be represented naturally in tket2.
 
 use hugr::extension::prelude::{bool_t, qb_t};
 
-use hugr::ops::custom::ExtensionOp;
-use hugr::ops::OpType;
-use hugr::types::{Signature, TypeArg};
-
-use hugr::IncomingPort;
-use serde::de::Error;
-use tket_json_rs::circuit_json;
-
 use crate::extension::rotation::rotation_type;
 use crate::extension::{TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME};
-use crate::serialize::pytket::OpConvertError;
+use crate::serialize::pytket::{Tk1ConvertError, Tk1EncoderContext};
+use crate::Circuit;
+
+use super::PytketEmitter;
+use hugr::extension::prelude::{bool_t, qb_t};
+use hugr::extension::ExtensionId;
+use hugr::ops::{ExtensionOp, NamedOp};
+use hugr::types::{Signature, TypeArg};
+use hugr::{HugrView, IncomingPort};
+use tket_json_rs::circuit_json;
+
+/// Encoder for [TKET1_EXTENSION] operations.
+///
+/// That is, operations originating from a pytket circuit that did not have a
+/// native HUGR representation and were instead serialized as opaque black-box
+/// operations.
+#[derive(Debug, Clone, Default)]
+pub struct Tk1Emitter;
+
+impl<H: HugrView> PytketEmitter<H> for Tk1Emitter {
+    fn extensions(&self) -> Option<Vec<ExtensionId>> {
+        Some(vec![TKET1_EXTENSION_ID])
+    }
+
+    fn op_to_pytket(
+        &self,
+        node: H::Node,
+        op: &ExtensionOp,
+        circ: &Circuit<H>,
+        encoder: &mut Tk1EncoderContext<H>,
+    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+        if op.name() != format!("{TKET1_EXTENSION_ID}.{TKET1_OP_NAME}") {
+            return Ok(false);
+        }
+        let Some(TypeArg::String { arg }) = op.args().first() else {
+            return Err(Tk1ConvertError::custom(
+                "Opaque TKET1 operation did not have a json-encoded type argument.",
+            ));
+        };
+        let op: OpaqueTk1Op = serde_json::from_str(arg)?;
+
+        // Most operations map directly to a pytket one.
+        encoder.emit_node_command(
+            node,
+            circ,
+            // We don't support opaque pytket operations with parameter outputs.
+            |_args| Vec::new(),
+            // Emit the pre-defined pytket operation stored in the metadata.
+            move |_, _, _| op.serialised_op,
+        )?;
+
+        Ok(true)
+    }
+}
 
 /// A serialized operation, containing the operation type and all its attributes.
 ///
@@ -27,7 +72,8 @@ use crate::serialize::pytket::OpConvertError;
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct OpaqueTk1Op {
     /// Internal operation data.
-    op: circuit_json::Operation,
+    #[serde(rename = "op")]
+    pub serialised_op: circuit_json::Operation,
     /// Number of qubits declared by the operation.
     pub num_qubits: usize,
     /// Number of bits declared by the operation.
@@ -36,7 +82,7 @@ pub struct OpaqueTk1Op {
     ///
     /// If the input is `None`, the parameter does not use a Hugr port and is
     /// instead stored purely as metadata for the `Operation`.
-    param_inputs: Vec<Option<IncomingPort>>,
+    pub param_inputs: Vec<Option<IncomingPort>>,
     /// The number of non-None inputs in `param_inputs`, corresponding to the
     /// rotation_type() inputs to the Hugr operation.
     pub num_params: usize,
@@ -58,7 +104,7 @@ impl OpaqueTk1Op {
                 Some([vec!["Q".into(); num_qubits], vec!["B".into(); num_bits]].concat());
         }
         let mut op = Self {
-            op,
+            serialised_op: op,
             num_qubits,
             num_bits,
             param_inputs: Vec::new(),
@@ -66,38 +112,6 @@ impl OpaqueTk1Op {
         };
         op.compute_param_fields();
         op
-    }
-
-    /// Try to convert a tket2 operation into a `OpaqueTk1Op`.
-    ///
-    /// Only succeeds if the operation is a [`CustomOp`] containing a tket1 operation
-    /// from the [`TKET1_EXTENSION_ID`] extension. Returns `None` if the operation
-    /// is not a tket1 operation.
-    ///
-    /// # Errors
-    ///
-    /// Returns an [`OpConvertError`] if the operation is a tket1 operation, but it
-    /// contains invalid data.
-    pub fn try_from_tket2(op: &OpType) -> Result<Option<Self>, OpConvertError> {
-        // TODO: Check `extensions.contains(&TKET1_EXTENSION_ID)`?
-        if op.to_string() != format!("{TKET1_EXTENSION_ID}.{TKET1_OP_NAME}") {
-            return Ok(None);
-        }
-        let OpType::ExtensionOp(custom_op) = op else {
-            assert!(
-                !matches!(op, OpType::OpaqueOp(_)),
-                "Opaque Ops should have been resolved into ExtensionOps"
-            );
-            return Ok(None);
-        };
-        let Some(TypeArg::String { arg }) = custom_op.args().first() else {
-            return Err(serde_json::Error::custom(
-                "Opaque TKET1 operation did not have a json-encoded type argument.",
-            )
-            .into());
-        };
-        let op = serde_json::from_str(arg)?;
-        Ok(Some(op))
     }
 
     /// Compute the signature of the operation.
@@ -121,11 +135,6 @@ impl OpaqueTk1Op {
         self.param_inputs.iter().filter_map(|&i| i)
     }
 
-    /// Returns the lower level `circuit_json::Operation` contained by this struct.
-    pub fn serialised_op(&self) -> &circuit_json::Operation {
-        &self.op
-    }
-
     /// Wraps the op into a [`TKET1_OP_NAME`] opaque operation.
     pub fn as_extension_op(&self) -> ExtensionOp {
         let payload = TypeArg::String {
@@ -140,7 +149,7 @@ impl OpaqueTk1Op {
     ///
     /// Updates the internal `num_params` and `param_inputs` fields.
     fn compute_param_fields(&mut self) {
-        let Some(params) = self.op.params.as_ref() else {
+        let Some(params) = self.serialised_op.params.as_ref() else {
             self.param_inputs = vec![];
             self.num_params = 0;
             return;

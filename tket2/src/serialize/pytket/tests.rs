@@ -15,7 +15,9 @@ use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::optype;
 use tket_json_rs::register;
 
-use super::{TKETDecode, METADATA_INPUT_PARAMETERS, METADATA_Q_OUTPUT_REGISTERS};
+use super::{
+    TKETDecode, METADATA_INPUT_PARAMETERS, METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
+};
 use crate::circuit::Circuit;
 use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp};
 use crate::extension::sympy::SympyOpDef;
@@ -119,18 +121,30 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
     assert_eq!(&a.bits, &b.bits);
     assert_eq!(a.commands.len(), b.commands.len());
 
-    // This comparison only works if both serial circuits share a topological
-    // ordering of commands.
+    // We ignore the commands order here, as two encodings may swap
+    // non-dependant operations.
     //
-    // We also cannot compare the arguments directly, since we may permute them
-    // internally.
+    // The correct thing here would be to run a deterministic toposort and
+    // compare the commands in that order. This is just a quick check that
+    // everything is present, ignoring wire dependencies.
+    //
+    // Another problem is that `Command` is not `Eq` nor `Hash`, and neither are
+    // some of its fields. So here we just serialize the commands and compare
+    // the JSON instead.
     //
     // TODO: Do a proper comparison independent of the toposort ordering, and
     // track register reordering.
-    for (a, b) in a.commands.iter().zip(b.commands.iter()) {
-        assert_eq!(a.op.op_type, b.op.op_type);
-        assert_eq!(a.op.params, b.op.params);
-        assert_eq!(a.args.len(), b.args.len());
+    let b_commands: HashSet<_> = b
+        .commands
+        .iter()
+        .map(|c| serde_json::to_string(c).unwrap())
+        .collect();
+    for b in &b.commands {
+        let c = serde_json::to_string(b).unwrap();
+        assert!(
+            b_commands.contains(&c),
+            "Command {b:?} not found in the other circuit"
+        );
     }
 }
 
@@ -154,8 +168,14 @@ fn circ_preset_qubits() -> Circuit {
     // A preset register for the first qubit output
     hugr.set_metadata(
         hugr.entrypoint(),
+        METADATA_Q_REGISTERS,
+        serde_json::json!([["q", [2]], ["q", [10]], ["q", [8]]]),
+    );
+    // A preset register for the first qubit output
+    hugr.set_metadata(
+        hugr.entrypoint(),
         METADATA_Q_OUTPUT_REGISTERS,
-        serde_json::json!([["q", [1]]]),
+        serde_json::json!([["q", [10]]]),
     );
 
     hugr.into()
@@ -353,14 +373,14 @@ fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
 
     let deser_sig = deser.circuit_signature();
     assert_eq!(
-        &deser_sig.input, &decoded_sig.input,
+        &decoded_sig.input, &deser_sig.input,
         "Input signature mismatch\n  Expected: {}\n  Actual:   {}",
-        &deser_sig, &decoded_sig
+        &decoded_sig, &deser_sig
     );
     assert_eq!(
-        &deser_sig.output, &decoded_sig.output,
+        &decoded_sig.output, &deser_sig.output,
         "Output signature mismatch\n  Expected: {}\n  Actual:   {}",
-        &deser_sig, &decoded_sig
+        &decoded_sig, &deser_sig
     );
 
     let reser = SerialCircuit::encode(&deser).unwrap();
