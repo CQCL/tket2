@@ -129,7 +129,7 @@ impl LazifyMeasureRewrite {
             // SimpleReplacement adds edges in a nondeterministic order.  This
             // results in linked_inputs returning items in a nondeterministic
             // order. We sort them here to restore determinism.
-            let mut v = hugr.linked_inputs(node, 1).collect_vec();
+            let mut v = hugr.linked_inputs(node, 0).collect_vec();
             v.sort();
             v
         };
