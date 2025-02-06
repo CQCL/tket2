@@ -125,8 +125,14 @@ impl LazifyMeasureRewrite {
         Self::check_signature(node, QSystemOp::LazyMeasure, hugr.get_optype(node))?;
 
         let subgraph = SiblingSubgraph::from_node(node, &hugr);
-        let mut uses = hugr.linked_inputs(node, 0).collect_vec();
-        uses.sort();
+        let uses = {
+            // SimpleReplacement adds edges in a nondeterministic order.  This
+            // results in linked_inputs returning items in a nondeterministic
+            // order. We sort them here to restore determinism.
+            let mut v = hugr.linked_inputs(node, 1).collect_vec();
+            v.sort();
+            v
+        };
         let (lazy_measure_node, replacement) = {
             let bool_uses = uses.len();
             let mut builder =
@@ -166,8 +172,12 @@ impl LazifyMeasureRewrite {
         Self::check_signature(node, QSystemOp::LazyMeasureReset, hugr.get_optype(node))?;
 
         let subgraph = SiblingSubgraph::from_node(node, &hugr);
-        let mut uses = hugr.linked_inputs(node, 1).collect_vec();
-        uses.sort();
+        let uses = {
+            // See comment in try_new_measure
+            let mut v = hugr.linked_inputs(node, 1).collect_vec();
+            v.sort();
+            v
+        };
         let (lazy_measure_reset_node, replacement) = {
             let bool_uses = uses.len();
             let mut builder = {
