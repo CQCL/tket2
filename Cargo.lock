@@ -917,6 +917,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.14.3"
+source = "git+https://github.com/CQCL/hugr?branch=doug/un-non-local#cd2348d576a7d45ff576677a3a7d262273f100d3"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -925,6 +926,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.14.3"
+source = "git+https://github.com/CQCL/hugr?branch=doug/un-non-local#cd2348d576a7d45ff576677a3a7d262273f100d3"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -937,6 +939,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.14.3"
+source = "git+https://github.com/CQCL/hugr?branch=doug/un-non-local#cd2348d576a7d45ff576677a3a7d262273f100d3"
 dependencies = [
  "bitvec",
  "bumpalo",
@@ -968,6 +971,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.14.3"
+source = "git+https://github.com/CQCL/hugr?branch=doug/un-non-local#cd2348d576a7d45ff576677a3a7d262273f100d3"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
