@@ -4,10 +4,7 @@
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
-        const_fold::{ConstFoldError, ConstantFoldPass},
-        force_order,
-        validation::{ValidatePassError, ValidationLevel},
-        MonomorphizeError, MonomorphizePass, RemoveDeadFuncsError, RemoveDeadFuncsPass,
+        const_fold::{ConstFoldError, ConstantFoldPass}, force_order, non_local::{NonLocalEdgesError, UnNonLocalPass}, validation::{ValidatePassError, ValidationLevel}, MonomorphizeError, MonomorphizePass, RemoveDeadFuncsError, RemoveDeadFuncsPass
     },
     hugr::HugrError,
     Hugr, HugrView,
@@ -37,6 +34,7 @@ pub struct QSystemPass {
     monomorphize: bool,
     force_order: bool,
     lazify: bool,
+    unnonlocal: bool,
 }
 
 impl Default for QSystemPass {
@@ -47,6 +45,7 @@ impl Default for QSystemPass {
             monomorphize: true,
             force_order: true,
             lazify: true,
+            unnonlocal: true,
         }
     }
 }
@@ -72,6 +71,8 @@ pub enum QSystemPassError {
     ///
     ///  [RemoveDeadFuncsPass]: hugr::algorithms::RemoveDeadFuncsError
     DCEError(RemoveDeadFuncsError),
+    /// TODO docs
+    UnNonLocalError(NonLocalEdgesError),
     /// No [FuncDefn] named "main" in [Module].
     ///
     /// [FuncDefn]: hugr::ops::FuncDefn
@@ -84,6 +85,10 @@ impl QSystemPass {
     /// Run `QSystemPass` on the given [Hugr]. `registry` is used for
     /// validation, if enabled.
     pub fn run(&self, hugr: &mut Hugr) -> Result<(), QSystemPassError> {
+        if self.unnonlocal {
+            self.unnonlocal().run(hugr)?;
+        }
+
         if self.monomorphize {
             self.monomorphization().run(hugr)?;
 
@@ -172,6 +177,12 @@ impl QSystemPass {
         MonomorphizePass::default().validation_level(self.validation_level)
     }
 
+    fn unnonlocal(&self) -> UnNonLocalPass {
+        UnNonLocalPass::default().validation_level(self.validation_level)
+    }
+
+
+
     /// Returns a new `QSystemPass` with the given [ValidationLevel].
     pub fn with_validation_level(mut self, level: ValidationLevel) -> Self {
         self.validation_level = level;
@@ -217,6 +228,14 @@ impl QSystemPass {
     pub fn with_lazify(mut self, lazify: bool) -> Self {
         self.lazify = lazify;
         self
+    }
+
+    /// TODO docs
+    pub fn with_unnonlocal(self, unnonlocal: bool) -> Self {
+        Self {
+            unnonlocal,
+            ..self
+        }
     }
 }
 
