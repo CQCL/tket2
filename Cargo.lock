@@ -166,7 +166,7 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "hugr",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "peak_alloc",
  "serde_json",
  "tikv-jemallocator",
@@ -402,7 +402,7 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "hugr",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "tket2",
 ]
 
@@ -1087,15 +1087,6 @@ name = "itertools"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
 dependencies = [
  "either",
 ]
@@ -2072,7 +2063,7 @@ dependencies = [
  "hugr",
  "hugr-core",
  "indexmap",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "lazy_static",
  "num-complex",
  "num-rational",
@@ -2106,7 +2097,7 @@ dependencies = [
  "derive_more 1.0.0",
  "hugr",
  "hugr-cli",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "lazy_static",
  "petgraph 0.7.1",
  "rstest",
@@ -2126,7 +2117,7 @@ dependencies = [
  "cool_asserts",
  "derive_more 1.0.0",
  "hugr",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "num_cpus",
  "portgraph 0.13.1",
  "portmatching",
