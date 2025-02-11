@@ -33,7 +33,6 @@ impl HugrBindMap {
             Binding::Bound(_) => panic!("invalid value type in HugrBindMap"),
         }
     }
-
 }
 
 impl pm::BindMap for HugrBindMap {
