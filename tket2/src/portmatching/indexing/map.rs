@@ -34,13 +34,6 @@ impl HugrBindMap {
         }
     }
 
-    // pub(crate) fn get_port(&self, port: HugrPortID) -> Option<(hugr::Node, hugr::OutgoingPort)> {
-    //     match self.0.get_binding(&port).borrowed() {
-    //         Binding::Bound(&HugrVariableValue::OutgoingPort(node, port)) => Some((node, port)),
-    //         Binding::Unbound | Binding::Failed => None,
-    //         Binding::Bound(_) => panic!("invalid value type in HugrBindMap"),
-    //     }
-    // }
 }
 
 impl pm::BindMap for HugrBindMap {
