@@ -317,7 +317,7 @@ impl pm::IndexingScheme for HugrIndexingScheme {
         use HugrVariableID::*;
 
         match key {
-            Op(node) => {
+            Op(node) =>  node.path_from_root.parent().into_iter().map_into().collect()
                 if let Some(parent_path) = node.path_from_root.parent() {
                     vec![HugrNodeID::new(parent_path).into()]
                 } else {
