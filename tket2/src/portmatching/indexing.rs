@@ -356,8 +356,7 @@ impl<H: HugrView> pm::IndexedData<HugrVariableID> for Circuit<H> {
                     follow_port(parent, port, self.hugr()).map_into().collect()
                 } else {
                     // Every hugr node is a valid binding for the root node.
-                    let nodes = self.commands().map(|cmd| cmd.node());
-                    nodes.map(HugrVariableValue::Node).map_into().collect()
+                    self.commands().map(|cmd| cmd.node().into()).collect()
                 }
             }
             CopyableWire(port) | LinearWire(port) => {
