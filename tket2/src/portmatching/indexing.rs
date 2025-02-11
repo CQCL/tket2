@@ -293,7 +293,7 @@ impl TryFrom<HugrVariableValue> for hugr::Wire {
 ///  - any other node can have as many possible bindings as there are ports
 ///    connected to the previous node at the specified port. E.g if the variable
 ///    path specifies that the last node is reached from its parent node through
-///    OutgoingPort(1), then the node can be bound to any node that is connected
+///    `OutgoingPort(1)`, then the node can be bound to any node that is connected
 ///    to the parent node at outgoing 1. If the wire is linear or the specified
 ///    port is an incoming port, then there can be at most one valid binding.
 ///  - any binding may fail if the specified node or port does not exist in a
