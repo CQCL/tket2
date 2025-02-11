@@ -333,7 +333,7 @@ impl pm::IndexingScheme for HugrIndexingScheme {
 /// How variable names are resolved to hugr nodes and wires for particular
 /// circuits.
 ///
-/// This is currently limited to Circuits, but could in the future be extended
+/// This is currently limited to [Circuit]s, but could in the future be extended
 /// to any [HugrView].
 impl<H: HugrView> pm::IndexedData<HugrVariableID> for Circuit<H> {
     type IndexingScheme = HugrIndexingScheme;
