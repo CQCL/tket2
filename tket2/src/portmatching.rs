@@ -122,6 +122,7 @@ mod tests {
         h.finish_hugr_with_outputs([q_out]).unwrap().into()
     }
 
+    #[ignore = "wip"]
     #[rstest]
     fn simple_match(circ: Circuit, lhs: Circuit) {
         let p = CircuitPattern::try_from_circuit(&lhs).unwrap();

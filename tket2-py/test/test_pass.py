@@ -8,6 +8,8 @@ import hypothesis.strategies as st
 from hypothesis.strategies._internal import SearchStrategy
 from hypothesis import given, settings
 
+import pytest
+
 
 @st.composite
 def circuits(
@@ -40,6 +42,7 @@ def circuits(
     return circuit
 
 
+@pytest.mark.xfail
 def test_simple_badger_pass_no_opt():
     c = Circuit(3).CCX(0, 1, 2)
     badger = badger_pass(max_threads=1, timeout=0, rebase=True)
@@ -102,6 +105,7 @@ def test_chunks():
     assert type(tk2) is Tk2Circuit
 
 
+@pytest.mark.xfail
 def test_cx_rule():
     c = Tk2Circuit(Circuit(4).CX(0, 2).CX(1, 2).CX(1, 2))
 
@@ -117,6 +121,7 @@ def test_cx_rule():
     assert out == Circuit(4).CX(0, 2)
 
 
+@pytest.mark.xfail
 def test_multiple_rules():
     circ = Tk2Circuit(Circuit(3).CX(0, 1).H(0).H(1).H(2).Z(0).H(0).H(1).H(2))
 

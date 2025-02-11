@@ -38,6 +38,7 @@ hugr-model = { git = "https://github.com/CQCL/hugr", ref = "ad285f5f3840488ca752
 hugr = "0.14.1"
 hugr-core = "0.14.1"
 hugr-cli = "0.14.1"
+hugr-passes = "0.14.1"
 portgraph = "0.13"
 pyo3 = "0.23.4"
 itertools = "0.13.0"

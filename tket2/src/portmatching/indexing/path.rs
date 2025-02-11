@@ -2,66 +2,46 @@
 
 use std::fmt::Debug;
 
+use delegate::delegate;
 use derive_more::Into;
 use hugr::{Direction, PortIndex};
 
 use super::unary_packed::{PackOverflow, UnaryPacked};
 
-/// A compact encoding for a path from a root node to a port.
+/// A path traversing a HUGR, relative to a start (root) node.
 ///
-/// This identifies a port relative to the choice of a root
-/// node by specifying the path from the root to the port. The path may not
-/// specify the port uniquely in the case of multi-ports. In this case, the
-/// matcher will choose one/explore every valid binding.
+/// This identifies a [`hugr::Node`] relative to the choice of a root
+/// node by specifying the path from the root to the node. Note that the path
+/// may not specify the node uniquely in the existence of multi-ports, i.e.
+/// multiple wires connected to the same port. In this case, it is up to the
+/// matcher to make sure every valid binding is considered, or choose a
+/// canonical one.
 ///
 /// ## Path encoding
-/// The path is encoded as a sequence of tuples `(hugr::Port, i)` where i is a
-/// non-negative integer. The port that is associated with a sequence
-/// `[(p1, i1), .., (pn, in)]` can be determined inductively:
-///  - `[(p1, i1)]` is the incoming port on the edge attached to `p1` at the root
-///    node. The index `i1` has no semantic meaning but serves to distinguish
-///    between multiple incoming ports on the same node. Which index is associated
-///    to which incoming port may be chosen arbitrarily.
-///  - to find the incoming port for `[(p1, i1), .., (pn, in)]`, we first associate
-///    `[(p1, i1), .., (pn-1, in-1)]` with a node: if p1 is an outgoing port, then
-///    the node is the node that the port `[(p1, i1), .., (pn-1, in-1)]` is
-///    incident to. Otherwise, it is the node at the other end of the edge attached
-///    to port `[(p1, i1), .., (pn-1, in-1)]` (this is unique as we assume outgoing
-///    ports are unique). The port associated with `[(p1, i1), .., (pn, in)]`
-///    is then one of the incoming ports on the edge at `pn` at the associated node.
-///
-/// Note that if we associate `[]` with the root node, then the second criterion
-/// above is sufficient as a definition.
-///
-/// ## Bit encoding
-/// We encode each tuple `(p, i)` as a bitstring
-/// ```plaintext
-/// +------ one bit --------+-- (p.offset + 1) bits ---+-- (i + 1) bits --+
-/// | matches!(p, Outgoing) | p.offset (unary flipped) |     i (unary)    |
-/// +-----------------------+--------------------------+------------------+
-/// ```
-/// The first bit indicates whether `p` is an incoming or outgoing port, the
-/// other two fields are the offset and index. We use unary encoding for the
-/// integers, i.e. 0 -> 0, 1 -> 10, 2 -> 110, etc. This makes small integers very
-/// compact to encode, without fixing a maximum value.
-/// The rest of the bits are zeroed, so that the last bit of `i` is also
-/// the first bit of the zero padding (which can be omitted if running out of
-/// space).
-///
-/// Unary flipped means that the binary encoding of the integer is flipped.
-/// Flipping one of the unary encodings means that a tuple can never be all
-/// 0, thus differentiating between tuples and zero padding.
+/// The path is encoded as a sequence of tuples `(hugr::Port, i)`. The sequence
+/// of ports indicate the path from the root to the node, while the indices `i`
+/// are integers. They are assigned values 0, 1, ... as required to distinguish
+/// multiple (distinct) nodes that may be reached by the same port sequence,
+/// which occurs when multiple wires are connected to the same port.
 #[derive(
     Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-pub struct HugrPath(UnaryPacked);
+pub struct HugrPath(UnaryPacked<u64>);
 
 impl HugrPath {
+    delegate! {
+        to self.0 {
+            /// Whether the path is empty.
+            pub fn is_empty(&self) -> bool;
+        }
+    }
+
     /// The empty path.
     pub fn empty() -> Self {
         Self(UnaryPacked::empty())
     }
 
+    /// Append a port and index to the path.
     pub fn push(&mut self, port: hugr::Port, index: usize) -> Result<(), PackOverflow> {
         let is_outgoing = port.direction() == Direction::Outgoing;
         self.0.push_back(is_outgoing as u32)?;
@@ -73,11 +53,10 @@ impl HugrPath {
     /// Return the parent path and the last tuple (port, index).
     ///
     /// If self is empty, return None.
-    pub(super) fn split_back(&self) -> Option<(Self, hugr::Port, usize)> {
-        let mut self_copy = *self;
-        let front_index = self_copy.0.pop_back()?;
-        let front_port_offset = self_copy.0.pop_back().unwrap();
-        let front_is_outgoing = self_copy.0.pop_back().unwrap();
+    pub(super) fn split_back(mut self) -> Option<(Self, hugr::Port, usize)> {
+        let front_index = self.0.pop_back()?;
+        let front_port_offset = self.0.pop_back().unwrap();
+        let front_is_outgoing = self.0.pop_back().unwrap();
 
         let port = hugr::Port::new(
             if front_is_outgoing == 0 {
@@ -89,7 +68,7 @@ impl HugrPath {
         );
         let index = front_index as usize;
 
-        (self_copy, port, index).into()
+        (self, port, index).into()
     }
 
     pub(super) fn parent(&self) -> Option<Self> {
