@@ -334,7 +334,7 @@ impl pm::IndexingScheme for HugrIndexingScheme {
 /// circuits.
 ///
 /// This is currently limited to Circuits, but could in the future be extended
-/// to any HugrView.
+/// to any [HugrView].
 impl<H: HugrView> pm::IndexedData<HugrVariableID> for Circuit<H> {
     type IndexingScheme = HugrIndexingScheme;
     type Value = <HugrIndexingScheme as pm::IndexingScheme>::Value;
