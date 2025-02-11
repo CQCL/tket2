@@ -54,6 +54,7 @@ derive_more = { workspace = true, features = [
     "display",
     "from",
     "into",
+    "try_into",
 ] }
 hugr = { workspace = true }
 hugr-core = { workspace = true }
@@ -78,6 +79,7 @@ zstd = { workspace = true, optional = true }
 rstest = { workspace = true }
 criterion = { workspace = true, features = ["html_reports"] }
 cool_asserts = { workspace = true }
+insta = { version = "1.42" }
 
 [[bench]]
 name = "bench_main"

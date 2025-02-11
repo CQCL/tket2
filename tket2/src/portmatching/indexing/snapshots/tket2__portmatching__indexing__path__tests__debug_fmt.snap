@@ -1,0 +1,20 @@
+---
+source: tket2/src/portmatching/indexing/path.rs
+expression: path
+---
+[
+    (
+        Port(
+            Incoming,
+            3,
+        ),
+        3,
+    ),
+    (
+        Port(
+            Outgoing,
+            1,
+        ),
+        2,
+    ),
+]
