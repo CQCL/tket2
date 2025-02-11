@@ -302,6 +302,7 @@ impl TryFrom<HugrVariableValue> for hugr::Wire {
 /// ## Current limitations
 /// Currently, the indexing scheme assumes that every incoming wire is connected to  a
 /// unique outgoing port. This is the case in DFGs, but may not handle arbitrary
+/// CFGs.
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct HugrIndexingScheme;
 
