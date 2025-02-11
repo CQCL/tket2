@@ -375,11 +375,7 @@ fn follow_port(
     port: hugr::Port,
     hugr: &impl HugrView,
 ) -> impl Iterator<Item = hugr::Node> + '_ {
-    if hugr.num_ports(parent, port.direction()) <= port.index() {
-        return None.into_iter().flatten();
-    }
-    let linked_ports = hugr.linked_ports(parent, port);
-    Some(linked_ports.map(|(n, _)| n)).into_iter().flatten()
+    (hugr.num_ports(parent, port.direction()) <= port.index()).then(|| hugr.linked_ports(parent, port).map(|(n,_)|n)).into_iter().flatten()
 }
 
 #[cfg(test)]
