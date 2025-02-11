@@ -87,7 +87,7 @@ impl TryFrom<HugrVariableID> for HugrPortID {
 
 /// The hugr entities that variables can be bound to, either a node or a wire.
 /// Wires are represented by the unique outgoing port on that wire.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum HugrVariableValue {
     /// The value of a HugrVariableID::Node variable.
     Node(hugr::Node),
@@ -478,7 +478,7 @@ mod tests {
             assert_eq!(circuit.hugr().get_optype(n), &Tk2Op::Rz.into());
             if n != root_choice {
                 // Bind the second Rz node
-                known_bindings.bind(var, option.clone()).unwrap();
+                known_bindings.bind(var, *option).unwrap();
             }
         }
         assert!(known_bindings.get_node(HugrNodeID::new(path)).is_some());

@@ -56,67 +56,45 @@
 pub mod indexing;
 pub mod matcher;
 pub mod pattern;
+pub mod predicate;
 
-pub use matcher::{PatternMatch, PatternMatcher};
+pub use indexing::{HugrVariableID, HugrVariableValue};
+pub use matcher::{MatchOp, PatternMatch, PatternMatcher};
 pub use pattern::CircuitPattern;
-
-use hugr::{Node, Port};
-
-/// An edge property in a circuit pattern.
-///
-/// Edges are
-/// Edges are reversible if the edge type is linear.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
-)]
-enum PEdge {
-    /// A "normal" edge between src and dst within a pattern.
-    InternalEdge {
-        src: Port,
-        dst: Port,
-        is_reversible: bool,
-    },
-    /// An edge from a copied input to src.
-    ///
-    /// Edges from inputs are typically not matched as part of the pattern,
-    /// unless a single input is copied multiple times. In this case, an
-    /// InputEdge is used to link the source port to the (usually hidden)
-    /// copy node.
-    ///
-    /// Input edges are always irreversible.
-    InputEdge { src: Port },
-}
-
-/// A node in a pattern.
-///
-/// A node is either a real node in the HUGR graph or a hidden copy node
-/// that is identified by its node and outgoing port.
-///
-/// A NodeID::CopyNode can only be found as a target of a PEdge::InputEdge
-/// property. Furthermore, a NodeID::CopyNode never has a node property.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
-)]
-pub(super) enum NodeID {
-    HugrNode(Node),
-    CopyNode(Node, Port),
-}
-
-impl From<Node> for NodeID {
-    fn from(node: Node) -> Self {
-        Self::HugrNode(node)
-    }
-}
+pub use predicate::{Constraint, Predicate};
 
 #[cfg(test)]
 mod tests {
+    use crate::extension::rotation::rotation_type;
     use crate::{Circuit, Tk2Op};
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::qb_t,
         types::Signature,
     };
-    use rstest::{fixture, rstest};
+    use rstest::fixture;
+
+    /// A circuit with two rotation gates in sequence, sharing a param
+    #[fixture]
+    pub(super) fn circ_with_copy() -> Circuit {
+        let input_t = vec![qb_t(), rotation_type()];
+        let output_t = vec![qb_t()];
+        let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
+
+        let mut inps = h.input_wires();
+        let qb = inps.next().unwrap();
+        let f = inps.next().unwrap();
+
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb, f]).unwrap();
+        let qb = res.outputs().next().unwrap();
+        let res = h.add_dataflow_op(Tk2Op::Rx, [qb, f]).unwrap();
+        let qb = res.outputs().next().unwrap();
+
+        h.finish_hugr_with_outputs([qb]).unwrap().into()
+    }
+
+    /*
+    TODO: REACTIVATE THESE TESTS ONCE MATCHERS ARE UPDATED
 
     #[fixture]
     fn lhs() -> Circuit {
@@ -146,12 +124,11 @@ mod tests {
 
     #[ignore = "wip"]
     #[rstest]
-    fn simple_match(_circ: Circuit, _lhs: Circuit) {
-        // let p = CircuitPattern::try_from_circuit(&lhs).unwrap();
-        // let m = PatternMatcher::from_patterns(vec![p]);
+    fn simple_match(circ: Circuit, lhs: Circuit) {
+        let p = CircuitPattern::try_from_circuit(&lhs).unwrap();
+        let m = PatternMatcher::from_patterns(vec![p]);
 
-        // let matches = m.find_matches(&circ);
-        // assert_eq!(matches.len(), 1);
-        todo!()
-    }
+        let matches = m.find_matches(&circ).collect_vec();
+        assert_eq!(matches.len(), 1);
+    }*/
 }
