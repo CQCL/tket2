@@ -463,6 +463,22 @@ where
     }
 }
 
+impl pm::CreateBranchSelector<super::Constraint> for BranchSelector<HugrVariableID, Predicate> {
+    fn create_branch_selector(constraints: Vec<super::Constraint>) -> Self {
+        let class = find_shared_class(&constraints).expect("no shared branch class");
+
+        use crate::portmatching::branch::ConstraintClass::*;
+        match class {
+            IsOpEqualClass(_) => BranchSelector::new_det(&constraints),
+            IsLinearWireSinkClass(_)
+            | OccupyOutgoingPortClass(_, _)
+            | OccupyIncomingPortClass(_, _)
+            | IsWireSourceClass(_) => BranchSelector::new_non_det(&constraints),
+            IsDistinctFromClass(_) => BranchSelector::new_dominant(&constraints),
+        }
+    }
+}
+
 pub(super) fn find_shared_class<K: IndexKey, P: PredicateImplication<K>>(
     transitions: &[pm::Constraint<K, P>],
 ) -> Option<P::ConstraintClass>
