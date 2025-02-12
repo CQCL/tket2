@@ -36,6 +36,7 @@ missing_docs = "warn"
 # hugr-passes = { git = "https://github.com/CQCL/hugr", rev = "4e6b6d8" }
 # hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "4e6b6d8" }
 # portgraph = { git = "https://github.com/CQCL/portgraph", rev = "68b96ac737e0c285d8c543b2d74a7aa80a18202c" }
+petgraph = { git = "https://github.com/petgraph/petgraph", rev = "a49bc40" }
 
 [workspace.dependencies]
 
