@@ -342,7 +342,7 @@ impl<H: HugrView> pm::IndexedData<HugrVariableID> for Circuit<H> {
     type Value = <HugrIndexingScheme as pm::IndexingScheme>::Value;
     type BindMap = <HugrIndexingScheme as pm::IndexingScheme>::BindMap;
 
-    fn list_bind_options(
+    fn bind_options(
         &self,
         key: &HugrVariableID,
         known_bindings: &HugrBindMap,
@@ -415,7 +415,7 @@ mod tests {
     }
 
     #[test]
-    fn test_list_bind_options() {
+    fn test_bind_options() {
         let (circuit, root_choice) = create_test_circuit();
         let mut known_bindings = HugrBindMap::new();
         let scheme = HugrIndexingScheme;
@@ -425,7 +425,7 @@ mod tests {
             .required_bindings(&HugrVariableID::Op(HugrNodeID::root()))
             .is_empty());
         let root_options =
-            circuit.list_bind_options(&HugrVariableID::Op(HugrNodeID::root()), &known_bindings);
+            circuit.bind_options(&HugrVariableID::Op(HugrNodeID::root()), &known_bindings);
         assert_eq!(root_options.len(), 3); // H gate, and 2x Rz nodes
 
         // Bind the root node
@@ -456,7 +456,7 @@ mod tests {
             }
             .into();
             assert_eq!(scheme.required_bindings(&var).len(), 1);
-            let options = circuit.list_bind_options(&var, &known_bindings);
+            let options = circuit.bind_options(&var, &known_bindings);
             let sole_option = options.into_iter().exactly_one().unwrap();
             let &HugrVariableValue::Node(n) = &sole_option else {
                 panic!("Expected node");
@@ -469,7 +469,7 @@ mod tests {
         // (the two uses of the rotation angle)
         let path = HugrPath::try_from(&ports as &[_]).unwrap();
         let var: HugrVariableID = HugrNodeID::new(path).into();
-        let options = circuit.list_bind_options(&var, &known_bindings);
+        let options = circuit.bind_options(&var, &known_bindings);
         assert_eq!(options.len(), 2);
         for option in &options {
             let &HugrVariableValue::Node(n) = option else {
@@ -494,7 +494,7 @@ mod tests {
                 port,
             });
             let sole_option = circuit
-                .list_bind_options(&port_var, &known_bindings)
+                .bind_options(&port_var, &known_bindings)
                 .into_iter()
                 .exactly_one()
                 .expect("expected exactly one option");
