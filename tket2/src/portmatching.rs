@@ -53,6 +53,7 @@
 //! # }
 //! ```
 
+pub mod branch;
 pub mod indexing;
 pub mod matcher;
 pub mod pattern;
