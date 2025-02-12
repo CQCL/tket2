@@ -227,7 +227,33 @@ impl pm::GetConstraintClass<HugrVariableID> for Predicate {
     type ConstraintClass = ConstraintClass;
 }
 
-/// An evaluation strategy for constraint selectors
+/// A branch selector for Hugr [`Predicate`]s.
+///
+/// This is used to evaluate constraints "in batches", i.e. to evaluate
+/// which constraints are satisfied from a list of constraints.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct BranchSelector<K, P: pm::GetConstraintClass<K>> {
+    /// The branch class all constraints belong to
+    constraint_class: P::ConstraintClass,
+    /// The indices into `all_required_bindings` for the keys of each
+    /// constraint.
+    ///
+    /// The i-th constraint requires the bindings `all_required_bindings[j]`
+    /// for j in binding_indices[i].
+    binding_indices: Vec<Vec<usize>>,
+    /// The predicates of each constraint
+    predicates: Vec<P>,
+    /// All bindings required for the evaluation of the constraints
+    all_required_bindings: Vec<K>,
+    /// The evaluation strategy for the constraints
+    ///
+    /// This determines which subset of satisfied constraints should be
+    /// returned by the branch selector. For example, in the determinstic
+    /// strategy, only the first constraint that is satisfied is returned.
+    evaluation_strategy: EvaluationStrategy,
+}
+
+/// An evaluation strategy for [`BranchSelector`]
 ///
 /// There are multiple possible evaluation strategies:
 ///  - in "deterministic" evaluation, constraints are evaluated in order up
@@ -256,7 +282,10 @@ enum EvaluationStrategy {
 /// A trait to capture the implication relation between two constraints.
 ///
 /// Required for most [`BranchSelector`] methods, as it is used in the
-/// [`EvaluationStrategy::DominantDistinct`] evaluation strategy.
+/// `EvaluationStrategy::DominantDistinct` evaluation strategy.
+///
+/// We provide an implementation for [`Predicate`], which should cover most
+/// users needs.
 pub trait PredicateImplication<K>: Clone + pm::ArityPredicate + pm::GetConstraintClass<K> {
     /// Check if `self` implies `other` given the keys of the constraints.
     ///
@@ -293,28 +322,6 @@ impl PredicateImplication<HugrVariableID> for Predicate {
     fn supports_implication(&self) -> bool {
         matches!(self, Predicate::IsDistinctFrom { .. })
     }
-}
-
-/// A branch selector for Hugr [`Predicate`]s.
-///
-/// This is used to evaluate constraints "in batches", i.e. to evaluate
-/// which constraints are satisfied from a list of constraints.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct BranchSelector<K, P: pm::GetConstraintClass<K>> {
-    /// The branch class all constraints belong to
-    constraint_class: P::ConstraintClass,
-    /// The indices into `all_required_bindings` for the keys of each
-    /// constraint.
-    ///
-    /// The i-th constraint requires the bindings `all_required_bindings[j]`
-    /// for j in binding_indices[i].
-    binding_indices: Vec<Vec<usize>>,
-    /// The predicates of each constraint
-    predicates: Vec<P>,
-    /// All bindings required for the evaluation of the constraints
-    all_required_bindings: Vec<K>,
-    /// The evaluation strategy for the constraints
-    evaluation_strategy: EvaluationStrategy,
 }
 
 impl<K, P> BranchSelector<K, P>
