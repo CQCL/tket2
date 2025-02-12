@@ -12,8 +12,7 @@ This is an auxiliary Python package containing HUGR extension definitions for `t
 operations and types.
 
 This package is intended to be used as an internal dependency for `tket2`.
-See https://pypi.org/project/tket2/ for the main package.
-
+See <https://pypi.org/project/tket2/> for the main package.
 
 ## Install
 
@@ -29,9 +28,8 @@ See [DEVELOPMENT.md] information on how to develop and contribute to this packag
 
   [DEVELOPMENT.md]: https://github.com/CQCL/tket2/blob/main/DEVELOPMENT.md
 
-
 ## License
 
-This project is licensed under Apache License, Version 2.0 ([LICENCE][] or http://www.apache.org/licenses/LICENSE-2.0).
+This project is licensed under Apache License, Version 2.0 ([LICENCE][] or <http://www.apache.org/licenses/LICENSE-2.0>).
 
   [LICENCE]: https://github.com/CQCL/tket2/blob/main/LICENCE

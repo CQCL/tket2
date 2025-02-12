@@ -1,0 +1,29 @@
+{
+  "version": "0.1.0",
+  "name": "tket2.qsystem.utils",
+  "runtime_reqs": [
+    "prelude"
+  ],
+  "types": {},
+  "values": {},
+  "operations": {
+    "GetCurrentShot": {
+      "extension": "tket2.qsystem.utils",
+      "name": "GetCurrentShot",
+      "description": "Get current shot number.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [],
+          "output": [
+            {
+              "t": "I"
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
+    }
+  }
+}
