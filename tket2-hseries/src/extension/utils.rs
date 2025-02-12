@@ -110,12 +110,6 @@ pub trait UtilsOpBuilder: Dataflow + UnwrapBuilder {
             .add_dataflow_op(UtilsOp::GetCurrentShot, [])?
             .out_wire(0))
     }
-
-    /// Build a get_current_shot op.
-    fn build_get_current_shot(&mut self) -> Result<Wire, BuildError> {
-        let shot_num = self.add_get_current_shot()?;
-        Ok(shot_num)
-    }
 }
 
 impl<D: Dataflow> UtilsOpBuilder for D {}
@@ -149,7 +143,7 @@ mod test {
             let mut func_builder =
                 FunctionBuilder::new("get_current_shot", Signature::new(vec![], vec![usize_t()]))
                     .unwrap();
-            let shot = func_builder.build_get_current_shot().unwrap();
+            let shot = func_builder.add_get_current_shot().unwrap();
             func_builder.finish_hugr_with_outputs([shot]).unwrap()
         };
         hugr.validate().unwrap()
