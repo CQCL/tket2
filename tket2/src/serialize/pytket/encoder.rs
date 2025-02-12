@@ -3,6 +3,7 @@
 mod bit_tracker;
 mod param_tracker;
 mod qubit_tracker;
+mod unsupported_tracker;
 
 use core::panic;
 
@@ -34,9 +35,12 @@ use super::{
 pub(super) struct Tk1Encoder {
     /// The name of the circuit being encoded.
     name: Option<String>,
-    /// Global phase value. Defaults to "0"
+    /// Global phase value.
+    ///
+    /// Defaults to "0" unless the circuit has a [METADATA_PHASE] metadata
+    /// entry.
     phase: String,
-    /// The current serialised commands
+    /// The already-encoded serialised pytket commands.
     commands: Vec<circuit_json::Command>,
     /// A tracker for the qubits used in the circuit.
     qubits: QubitTracker,
