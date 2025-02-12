@@ -6,10 +6,11 @@ use derive_more::derive::Display;
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
-        prelude::{usize_t, UnwrapBuilder},
+        prelude::UnwrapBuilder,
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version, PRELUDE,
     },
+    std_extensions::arithmetic::int_types::int_type,
     type_row,
     types::Signature,
     Extension, Wire,
@@ -66,7 +67,7 @@ pub enum UtilsOp {
 impl MakeOpDef for UtilsOp {
     fn init_signature(&self, _extension_ref: &std::sync::Weak<Extension>) -> SignatureFunc {
         match self {
-            UtilsOp::GetCurrentShot => Signature::new(type_row![], usize_t()),
+            UtilsOp::GetCurrentShot => Signature::new(type_row![], int_type(6)),
         }
         .into()
     }
@@ -140,9 +141,11 @@ mod test {
     #[test]
     fn get_current_shot() {
         let hugr = {
-            let mut func_builder =
-                FunctionBuilder::new("get_current_shot", Signature::new(vec![], vec![usize_t()]))
-                    .unwrap();
+            let mut func_builder = FunctionBuilder::new(
+                "get_current_shot",
+                Signature::new(vec![], vec![int_type(6)]),
+            )
+            .unwrap();
             let shot = func_builder.add_get_current_shot().unwrap();
             func_builder.finish_hugr_with_outputs([shot]).unwrap()
         };

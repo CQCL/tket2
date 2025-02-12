@@ -17,7 +17,16 @@
           "input": [],
           "output": [
             {
-              "t": "I"
+              "t": "Opaque",
+              "extension": "arithmetic.int.types",
+              "id": "int",
+              "args": [
+                {
+                  "tya": "BoundedNat",
+                  "n": 6
+                }
+              ],
+              "bound": "C"
             }
           ],
           "runtime_reqs": []
