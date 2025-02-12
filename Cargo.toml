@@ -26,10 +26,10 @@ missing_docs = "warn"
 [patch.crates-io]
 
 # Uncomment to use unreleased versions of hugr
-hugr = { git = "https://github.com/CQCL/hugr", branch = "doug/un-non-local"}
-hugr-core = { git = "https://github.com/CQCL/hugr", branch = "doug/un-non-local"}
-hugr-passes = { git = "https://github.com/CQCL/hugr", branch = "doug/un-non-local"}
-hugr-cli = { git = "https://github.com/CQCL/hugr", branch = "doug/un-non-local"}
+# hugr = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
+# hugr-core = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
+# hugr-passes = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
+# hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
 # hugr-model = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
 # portgraph = { git = "https://github.com/CQCL/portgraph", rev = "68b96ac737e0c285d8c543b2d74a7aa80a18202c" }
 
