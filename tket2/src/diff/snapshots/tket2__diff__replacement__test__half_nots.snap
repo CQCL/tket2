@@ -1,0 +1,77 @@
+---
+source: tket2/src/diff/replacement.rs
+expression: new_diff
+---
+CircuitDiff {
+    circuit_hash: RelRcHash(
+        15176284829904878961,
+    ),
+    equivalent_wires: WireEquivalence {
+        input_to_parent: {
+            Wire {
+                node: 1,
+                port: OutgoingPort(
+                    0,
+                ),
+            }: ParentWire {
+                incoming_index: 0,
+                wire: Wire {
+                    node: 1,
+                    port: OutgoingPort(
+                        0,
+                    ),
+                },
+            },
+        },
+        output_to_parent: {
+            Wire {
+                node: 1,
+                port: OutgoingPort(
+                    0,
+                ),
+            }: {
+                ParentWire {
+                    incoming_index: 0,
+                    wire: Wire {
+                        node: 4,
+                        port: OutgoingPort(
+                            0,
+                        ),
+                    },
+                },
+            },
+            Wire {
+                node: 3,
+                port: OutgoingPort(
+                    0,
+                ),
+            }: {
+                ParentWire {
+                    incoming_index: 0,
+                    wire: Wire {
+                        node: 3,
+                        port: OutgoingPort(
+                            0,
+                        ),
+                    },
+                },
+            },
+        },
+        ..
+    },
+    parents: [
+        (
+            RelRcHash(
+                9614548391637460773,
+            ),
+            {
+                Node(
+                    3,
+                ),
+                Node(
+                    4,
+                ),
+            },
+        ),
+    ],
+}

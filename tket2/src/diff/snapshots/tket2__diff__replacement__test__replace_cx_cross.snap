@@ -1,0 +1,91 @@
+---
+source: tket2/src/diff/replacement.rs
+expression: new_diff
+---
+CircuitDiff {
+    circuit_hash: RelRcHash(
+        10919018007635435470,
+    ),
+    equivalent_wires: WireEquivalence {
+        input_to_parent: {
+            Wire {
+                node: 1,
+                port: OutgoingPort(
+                    0,
+                ),
+            }: ParentWire {
+                incoming_index: 0,
+                wire: Wire {
+                    node: 1,
+                    port: OutgoingPort(
+                        0,
+                    ),
+                },
+            },
+            Wire {
+                node: 1,
+                port: OutgoingPort(
+                    1,
+                ),
+            }: ParentWire {
+                incoming_index: 0,
+                wire: Wire {
+                    node: 1,
+                    port: OutgoingPort(
+                        1,
+                    ),
+                },
+            },
+        },
+        output_to_parent: {
+            Wire {
+                node: 4,
+                port: OutgoingPort(
+                    0,
+                ),
+            }: {
+                ParentWire {
+                    incoming_index: 0,
+                    wire: Wire {
+                        node: 4,
+                        port: OutgoingPort(
+                            0,
+                        ),
+                    },
+                },
+            },
+            Wire {
+                node: 4,
+                port: OutgoingPort(
+                    1,
+                ),
+            }: {
+                ParentWire {
+                    incoming_index: 0,
+                    wire: Wire {
+                        node: 4,
+                        port: OutgoingPort(
+                            1,
+                        ),
+                    },
+                },
+            },
+        },
+        ..
+    },
+    parents: [
+        (
+            RelRcHash(
+                8225194817086263817,
+            ),
+            {
+                Node(
+                    3,
+                ),
+                Node(
+                    4,
+                ),
+            },
+        ),
+    ],
+}

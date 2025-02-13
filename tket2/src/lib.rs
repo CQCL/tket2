@@ -44,6 +44,7 @@
 //! [quantinuum-hugr]: https://lib.rs/crates/quantinuum-hugr
 
 pub mod circuit;
+pub mod diff;
 pub mod extension;
 pub(crate) mod ops;
 pub mod optimiser;

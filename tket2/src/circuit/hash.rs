@@ -6,7 +6,7 @@ use derive_more::{Display, Error};
 use fxhash::{FxHashMap, FxHasher64};
 use hugr::hugr::views::{HierarchyView, SiblingGraph};
 use hugr::ops::{NamedOp, OpType};
-use hugr::{HugrView, Node};
+use hugr::{Hugr, HugrView, Node};
 use petgraph::visit::{self as pg, Walker};
 
 use super::Circuit;
@@ -59,6 +59,46 @@ where
         node_hashes
             .node_hash(output_node)
             .ok_or(HashError::CyclicCircuit)
+    }
+}
+
+/// A hashed circuit.
+///
+/// Unlike [`Circuit`], this wrapper type implements [`Hash`] by precomputing
+/// the hash and caching it.
+///
+/// Converting a [`Circuit`] to a [`HashedCircuit`] is done using its [`TryFrom`]
+/// implementation.
+#[derive(Clone, Debug)]
+pub struct HashedCircuit<H = Hugr> {
+    circuit: Circuit<H>,
+    hash: u64,
+}
+
+impl<H: HugrView> HashedCircuit<H> {
+    /// Get the underlying circuit.
+    pub fn circuit(&self) -> &Circuit<H> {
+        &self.circuit
+    }
+
+    /// Get the hash of the circuit.
+    pub fn hash(&self) -> u64 {
+        self.hash
+    }
+}
+
+impl<H: HugrView> TryFrom<Circuit<H>> for HashedCircuit<H> {
+    type Error = HashError;
+
+    fn try_from(circuit: Circuit<H>) -> Result<Self, Self::Error> {
+        let hash = circuit.circuit_hash()?;
+        Ok(Self { circuit, hash })
+    }
+}
+
+impl<H: HugrView> Hash for HashedCircuit<H> {
+    fn hash<Hasher: std::hash::Hasher>(&self, state: &mut Hasher) {
+        state.write_u64(self.hash);
     }
 }
 

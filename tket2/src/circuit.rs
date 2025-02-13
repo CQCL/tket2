@@ -11,7 +11,7 @@ use std::collections::HashSet;
 use std::iter::Sum;
 
 pub use command::{Command, CommandIterator};
-pub use hash::CircuitHash;
+pub use hash::{CircuitHash, HashError, HashedCircuit};
 use hugr::extension::prelude::{LiftDef, NoopDef, TupleOpDef};
 use hugr::hugr::views::{DescendantsGraph, ExtractHugr, HierarchyView};
 use itertools::Either::{Left, Right};
