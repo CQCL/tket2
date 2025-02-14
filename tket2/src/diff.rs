@@ -81,6 +81,9 @@ struct ParentWire {
 }
 
 #[derive(Clone)]
+// TODO: RelRc currently implements Hash based on pointer values, might need
+// to change this in the future (see https://github.com/lmondada/relrc/issues/4)
+#[allow(clippy::derived_hash_with_manual_eq)]
 #[derive_where(Hash)]
 struct ChildWire<H> {
     /// Edge to the child node
