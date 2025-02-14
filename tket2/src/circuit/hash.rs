@@ -264,4 +264,21 @@ mod test {
         }
         assert_ne!(all_hashes[0], all_hashes[1]);
     }
+
+    #[test]
+    fn hashed_circuit_hash() {
+        let circ = build_simple_circuit(2, |circ| {
+            circ.append(Tk2Op::H, [0])?;
+            circ.append(Tk2Op::CX, [0, 1])?;
+            circ.append(Tk2Op::T, [1])?;
+            Ok(())
+        })
+        .unwrap();
+
+        let direct_hash = circ.circuit_hash().unwrap();
+        let hashed_circ = HashedCircuit::try_from(circ).unwrap();
+
+        // Check the cached hash matches direct computation
+        assert_eq!(direct_hash, hashed_circ.hash());
+    }
 }
