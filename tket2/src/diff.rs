@@ -81,7 +81,6 @@ struct ParentWire {
 }
 
 #[derive(Clone)]
-#[derive_where(Hash)]
 struct ChildWire<H> {
     /// Edge to the child node
     // (always use weak references to children)
@@ -90,6 +89,19 @@ struct ChildWire<H> {
     wire: Wire,
 }
 
+// TODO: RelRc currently implements Hash based on pointer values, might need
+// to change this in the future (see https://github.com/lmondada/relrc/issues/4)
+// Cannot use `derive_where` because clippy linting fails within the macro, so
+// cannot be allowed
+impl<H> std::hash::Hash for ChildWire<H> {
+    fn hash<St>(&self, state: &mut St)
+    where
+        St: std::hash::Hasher,
+    {
+        self.edge.hash(state);
+        self.wire.hash(state);
+    }
+}
 impl<H: HugrView> PartialEq for ChildWire<H> {
     fn eq(&self, other: &Self) -> bool {
         self.edge.ptr_eq(&other.edge) && self.wire == other.wire

@@ -12,7 +12,7 @@ use hugr::{
 use itertools::{izip, Either, Itertools};
 use petgraph::visit::{depth_first_search, Control};
 
-use crate::Circuit;
+use crate::{rewrite::CircuitRewrite, Circuit};
 
 use super::{CircuitDiff, CircuitDiffData, CircuitDiffError, ParentWire, WireEquivalence};
 
@@ -21,10 +21,8 @@ impl CircuitDiff {
     ///
     /// The result is returned as a new diff that is a child of the
     /// current diff.
-    pub fn apply_replacement(
-        &self,
-        replacement: SimpleReplacement,
-    ) -> Result<Self, CircuitDiffError> {
+    pub fn apply_rewrite(&self, replacement: CircuitRewrite) -> Result<Self, CircuitDiffError> {
+        let replacement: SimpleReplacement = replacement.into();
         replacement.is_valid_rewrite(self.as_hugr())?;
 
         let equivalent_wires = self.compute_wire_equivalence(&replacement)?;
@@ -399,7 +397,7 @@ mod test {
             nu_out,
         );
         let diff = CircuitDiff::try_from_circuit(simple_hugr).unwrap();
-        let new_diff = diff.apply_replacement(r).unwrap();
+        let new_diff = diff.apply_rewrite(r.into()).unwrap();
         // Expect [DFG] to be replaced with:
         // ┌───┐┌───┐
         // ┤ H ├┤ H ├──■──
@@ -472,7 +470,7 @@ mod test {
             nu_out,
         );
         let diff = CircuitDiff::try_from_circuit(simple_hugr).unwrap();
-        let new_diff = diff.apply_replacement(r).unwrap();
+        let new_diff = diff.apply_rewrite(r.into()).unwrap();
         // Expect [DFG] to be replaced with:
         // ┌───┐┌───┐
         // ┤ H ├┤ H ├
@@ -533,7 +531,7 @@ mod test {
             outputs,
         );
         let diff = CircuitDiff::try_from_circuit(circ.clone()).unwrap();
-        let new_diff = diff.apply_replacement(r).unwrap();
+        let new_diff = diff.apply_rewrite(r.into()).unwrap();
 
         insta::assert_debug_snapshot!(new_diff);
     }
@@ -593,7 +591,7 @@ mod test {
         let circ_root = h.root();
         let circ = Circuit::new(h, circ_root);
         let diff = CircuitDiff::try_from_circuit(circ).unwrap();
-        let new_diff = diff.apply_replacement(r).unwrap();
+        let new_diff = diff.apply_rewrite(r.into()).unwrap();
 
         insta::assert_debug_snapshot!(new_diff);
     }
@@ -647,7 +645,7 @@ mod test {
         let circ_root = hugr.root();
         let circ = Circuit::new(hugr, circ_root);
         let diff = CircuitDiff::try_from_circuit(circ).unwrap();
-        let new_diff = diff.apply_replacement(r).unwrap();
+        let new_diff = diff.apply_rewrite(r.into()).unwrap();
 
         insta::assert_debug_snapshot!(new_diff);
     }
@@ -702,7 +700,7 @@ mod test {
         let circ_root = hugr.root();
         let circ = Circuit::new(hugr, circ_root);
         let diff = CircuitDiff::try_from_circuit(circ).unwrap();
-        let new_diff = diff.apply_replacement(r).unwrap();
+        let new_diff = diff.apply_rewrite(r.into()).unwrap();
 
         insta::assert_debug_snapshot!(new_diff);
     }
