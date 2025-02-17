@@ -27,7 +27,7 @@ def qsystem() -> Extension:
 
 
 @functools.cache
-def utils() -> Extension:
+def qsystem_utils() -> Extension:
     return load_extension("tket2.qsystem.utils")
 
 
