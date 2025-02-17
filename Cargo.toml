@@ -26,11 +26,11 @@ missing_docs = "warn"
 [patch.crates-io]
 
 # Uncomment to use unreleased versions of hugr
-# hugr = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
-# hugr-core = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
-# hugr-passes = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
-# hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
-# hugr-model = { git = "https://github.com/CQCL/hugr", rev = "09bd748398ce5afb39f5628d838756ccc03fc775" }
+hugr = { git = "https://github.com/CQCL/hugr", rev = "0efc806f" }
+hugr-core = { git = "https://github.com/CQCL/hugr", rev = "0efc806f" }
+hugr-passes = { git = "https://github.com/CQCL/hugr", rev = "0efc806f" }
+hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "0efc806f" }
+hugr-model = { git = "https://github.com/CQCL/hugr", rev = "0efc806f" }
 # portgraph = { git = "https://github.com/CQCL/portgraph", rev = "68b96ac737e0c285d8c543b2d74a7aa80a18202c" }
 
 [workspace.dependencies]
@@ -54,9 +54,11 @@ crossbeam-channel = "0.5.14"
 csv = "1.3.1"
 delegate = "0.13.2"
 derive_more = "1.0.0"
+derive-where = "1.2.7"
 downcast-rs = "2.0.1"
 fxhash = "0.2.1"
 indexmap = "2.7.1"
+insta = "1.42.1"
 lazy_static = "1.5.0"
 num-complex = "0.4"
 num-rational = "0.4"
@@ -67,6 +69,7 @@ pest_derive = "2.7.15"
 petgraph = { version = "0.7.1", default-features = false }
 priority-queue = "2.1.2"
 rayon = "1.5"
+relrc = "0.3.0"
 rmp-serde = "1.1.2"
 rstest = "0.23.0"
 serde = "1.0"
