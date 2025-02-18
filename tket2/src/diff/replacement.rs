@@ -7,14 +7,16 @@ use hugr::{
         rewrite::{HostPort, ReplacementPort},
         views::PetgraphWrapper,
     },
-    HugrView, Node, Port, SimpleReplacement, Wire,
+    HugrView, Node, Port, SimpleReplacement,
 };
-use itertools::{izip, Either, Itertools};
+use itertools::{izip, Itertools};
 use petgraph::visit::{depth_first_search, Control};
 
 use crate::{rewrite::CircuitRewrite, Circuit};
 
-use super::{CircuitDiff, CircuitDiffData, CircuitDiffError, ParentWire, WireEquivalence};
+use super::{
+    port_to_wire, CircuitDiff, CircuitDiffData, CircuitDiffError, ParentWire, WireEquivalence,
+};
 
 impl CircuitDiff {
     /// Apply a simple replacement.
@@ -52,7 +54,7 @@ impl CircuitDiff {
         let mut equivalent_wires = WireEquivalence::new();
         let to_parent_wire = |port: HostPort<Port>| -> Result<ParentWire, CircuitDiffError> {
             let HostPort(node, port) = port;
-            let wire = to_wire(node, port, self.as_hugr())?;
+            let wire = port_to_wire(node, port, self.as_hugr())?;
             let parent_wire = ParentWire {
                 incoming_index: 0, // `self` is the unique parent
                 wire,
@@ -64,7 +66,7 @@ impl CircuitDiff {
         for (src, tgt) in replacement.incoming_boundary(self.as_hugr()) {
             let src_parent_wire = to_parent_wire(src.into())?;
             let ReplacementPort(tgt_node, tgt_port) = tgt;
-            let tgt_child_wire = to_wire(tgt_node, tgt_port, replacement.replacement())?;
+            let tgt_child_wire = port_to_wire(tgt_node, tgt_port, replacement.replacement())?;
             let ret = equivalent_wires
                 .input_to_parent
                 .insert(tgt_child_wire, src_parent_wire);
@@ -74,7 +76,7 @@ impl CircuitDiff {
         // 2. Add equivalences for replacement output wires
         for (src, tgt) in replacement.outgoing_boundary(self.as_hugr()) {
             let ReplacementPort(src_node, src_port) = src;
-            let src_child_wire = to_wire(src_node, src_port, replacement.replacement())?;
+            let src_child_wire = port_to_wire(src_node, src_port, replacement.replacement())?;
             let tgt_parent_wire = to_parent_wire(tgt.into())?;
             equivalent_wires
                 .output_to_parent
@@ -93,7 +95,7 @@ impl CircuitDiff {
                 .expect("invalid host to host edge");
             let src_parent_wire = to_parent_wire(src.into())?;
             let tgt_parent_wire = to_parent_wire(tgt.into())?;
-            let io_child_wire = to_wire(rep_output, incoming, replacement.replacement())?;
+            let io_child_wire = port_to_wire(rep_output, incoming, replacement.replacement())?;
             let ret = equivalent_wires
                 .input_to_parent
                 .insert(io_child_wire, src_parent_wire);
@@ -109,23 +111,6 @@ impl CircuitDiff {
         }
 
         Ok(equivalent_wires)
-    }
-}
-
-fn to_wire(
-    node: Node,
-    port: impl Into<Port>,
-    hugr: &impl HugrView,
-) -> Result<Wire, CircuitDiffError> {
-    let port: Port = port.into();
-    match port.as_directed() {
-        Either::Left(incoming) => {
-            let (node, outgoing) = hugr
-                .single_linked_output(node, incoming)
-                .ok_or(CircuitDiffError::NoUniqueOutput(node, incoming))?;
-            Ok(Wire::new(node, outgoing))
-        }
-        Either::Right(outgoing) => Ok(Wire::new(node, outgoing)),
     }
 }
 
