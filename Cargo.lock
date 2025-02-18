@@ -946,7 +946,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.14.3"
-source = "git+https://github.com/CQCL/hugr?rev=0efc806f#0efc806f99888e64a0da6f639e4dbb83afebd4bf"
+source = "git+https://github.com/CQCL/hugr?rev=739cf944#739cf94404d45622ee196b1c68de6bec6a2b28d8"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -955,7 +955,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.14.3"
-source = "git+https://github.com/CQCL/hugr?rev=0efc806f#0efc806f99888e64a0da6f639e4dbb83afebd4bf"
+source = "git+https://github.com/CQCL/hugr?rev=739cf944#739cf94404d45622ee196b1c68de6bec6a2b28d8"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -968,7 +968,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.14.3"
-source = "git+https://github.com/CQCL/hugr?rev=0efc806f#0efc806f99888e64a0da6f639e4dbb83afebd4bf"
+source = "git+https://github.com/CQCL/hugr?rev=739cf944#739cf94404d45622ee196b1c68de6bec6a2b28d8"
 dependencies = [
  "bitvec",
  "bumpalo",
@@ -1000,7 +1000,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.14.3"
-source = "git+https://github.com/CQCL/hugr?rev=0efc806f#0efc806f99888e64a0da6f639e4dbb83afebd4bf"
+source = "git+https://github.com/CQCL/hugr?rev=739cf944#739cf94404d45622ee196b1c68de6bec6a2b28d8"
 dependencies = [
  "ascent",
  "hugr-core",
@@ -2730,4 +2730,4 @@ dependencies = [
 [[patch.unused]]
 name = "hugr-model"
 version = "0.17.1"
-source = "git+https://github.com/CQCL/hugr?rev=0efc806f#0efc806f99888e64a0da6f639e4dbb83afebd4bf"
+source = "git+https://github.com/CQCL/hugr?rev=739cf944#739cf94404d45622ee196b1c68de6bec6a2b28d8"
