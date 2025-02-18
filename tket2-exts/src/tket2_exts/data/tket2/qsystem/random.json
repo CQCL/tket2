@@ -1,0 +1,229 @@
+{
+  "version": "0.1.0",
+  "name": "tket2.qsystem.random",
+  "runtime_reqs": [
+    "prelude"
+  ],
+  "types": {
+    "context": {
+      "extension": "tket2.qsystem.random",
+      "name": "context",
+      "params": [],
+      "description": "RNGContext",
+      "bound": {
+        "b": "Explicit",
+        "bound": "A"
+      }
+    }
+  },
+  "values": {},
+  "operations": {
+    "GetContext": {
+      "extension": "tket2.qsystem.random",
+      "name": "GetContext",
+      "description": "Get the RNG context.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [],
+          "output": [
+            {
+              "t": "Sum",
+              "s": "General",
+              "rows": [
+                [],
+                [
+                  {
+                    "t": "Opaque",
+                    "extension": "tket2.qsystem.random",
+                    "id": "module",
+                    "args": [
+                      {
+                        "tya": "Type",
+                        "ty": {
+                          "t": "Opaque",
+                          "extension": "arithmetic.int.types",
+                          "id": "int",
+                          "args": [
+                            {
+                              "tya": "BoundedNat",
+                              "n": 7
+                            }
+                          ],
+                          "bound": "C"
+                        }
+                      }
+                    ],
+                    "bound": "C"
+                  }
+                ]
+              ]
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
+    },
+    "RandomFloat": {
+      "extension": "tket2.qsystem.random",
+      "name": "RandomFloat",
+      "description": "Generate a random float.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.qsystem.random",
+              "id": "module",
+              "args": [
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Opaque",
+                    "extension": "arithmetic.int.types",
+                    "id": "int",
+                    "args": [
+                      {
+                        "tya": "BoundedNat",
+                        "n": 7
+                      }
+                    ],
+                    "bound": "C"
+                  }
+                }
+              ],
+              "bound": "C"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "arithmetic.float.types",
+              "id": "float64",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
+    },
+    "RandomInt": {
+      "extension": "tket2.qsystem.random",
+      "name": "RandomInt",
+      "description": "Generate a random integer.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.qsystem.random",
+              "id": "module",
+              "args": [
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Opaque",
+                    "extension": "arithmetic.int.types",
+                    "id": "int",
+                    "args": [
+                      {
+                        "tya": "BoundedNat",
+                        "n": 7
+                      }
+                    ],
+                    "bound": "C"
+                  }
+                }
+              ],
+              "bound": "C"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "arithmetic.int.types",
+              "id": "int",
+              "args": [
+                {
+                  "tya": "BoundedNat",
+                  "n": 6
+                }
+              ],
+              "bound": "C"
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
+    },
+    "RandomIntInRange": {
+      "extension": "tket2.qsystem.random",
+      "name": "RandomIntInRange",
+      "description": "Generate a random integer in the range [0, bound).",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.qsystem.random",
+              "id": "module",
+              "args": [
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Opaque",
+                    "extension": "arithmetic.int.types",
+                    "id": "int",
+                    "args": [
+                      {
+                        "tya": "BoundedNat",
+                        "n": 7
+                      }
+                    ],
+                    "bound": "C"
+                  }
+                }
+              ],
+              "bound": "C"
+            },
+            {
+              "t": "Opaque",
+              "extension": "arithmetic.int.types",
+              "id": "int",
+              "args": [
+                {
+                  "tya": "BoundedNat",
+                  "n": 6
+                }
+              ],
+              "bound": "C"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "arithmetic.int.types",
+              "id": "int",
+              "args": [
+                {
+                  "tya": "BoundedNat",
+                  "n": 6
+                }
+              ],
+              "bound": "C"
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
+    }
+  }
+}
