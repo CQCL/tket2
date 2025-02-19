@@ -103,15 +103,15 @@ impl RandomType {
 )]
 /// The operations provided by the random extension.
 pub enum RandomOp {
-    /// fn random_int(RNGContext) -> (RNGContext, u32)
+    /// `fn random_int(RNGContext) -> (RNGContext, u32)`
     RandomInt,
-    /// fn random_float(RNGContext) -> (RNGContext, f32)
+    /// `fn random_float(RNGContext) -> (RNGContext, f32)`
     RandomFloat,
-    /// fn random_int_bounded(RNGContext, bound: u32) -> (RNGContext, u32)
+    /// `fn random_int_bounded(RNGContext, bound: u32) -> (RNGContext, u32)`
     RandomIntBounded,
-    /// fn new_rng_context(seed: u64) -> Option<RNGContext> // return None on second call
+    /// `fn new_rng_context(seed: u64) -> Option<RNGContext>` // return None on second call
     NewContext,
-    /// fn delete_rng_context(RNGContext) -> ()
+    /// `fn delete_rng_context(RNGContext) -> ()`
     DeleteContext,
 }
 

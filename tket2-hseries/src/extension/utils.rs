@@ -61,7 +61,7 @@ lazy_static! {
 )]
 /// The operations provided by the utils extension.
 pub enum UtilsOp {
-    /// fn get_current_shot() -> usize
+    /// `fn get_current_shot() -> usize`
     GetCurrentShot,
 }
 
