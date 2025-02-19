@@ -8,7 +8,12 @@
     "context": {
       "extension": "tket2.qsystem.random",
       "name": "context",
-      "params": [],
+      "params": [
+        {
+          "tp": "Type",
+          "b": "A"
+        }
+      ],
       "description": "RNGContext",
       "bound": {
         "b": "Explicit",
@@ -18,14 +23,65 @@
   },
   "values": {},
   "operations": {
-    "GetContext": {
+    "DeleteContext": {
       "extension": "tket2.qsystem.random",
-      "name": "GetContext",
-      "description": "Get the RNG context.",
+      "name": "DeleteContext",
+      "description": "Discard RNG context.",
       "signature": {
         "params": [],
         "body": {
-          "input": [],
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.qsystem.random",
+              "id": "context",
+              "args": [
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Opaque",
+                    "extension": "arithmetic.int.types",
+                    "id": "int",
+                    "args": [
+                      {
+                        "tya": "BoundedNat",
+                        "n": 6
+                      }
+                    ],
+                    "bound": "C"
+                  }
+                }
+              ],
+              "bound": "A"
+            }
+          ],
+          "output": [],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
+    },
+    "NewContext": {
+      "extension": "tket2.qsystem.random",
+      "name": "NewContext",
+      "description": "Get a new RNG context with a seed.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "arithmetic.int.types",
+              "id": "int",
+              "args": [
+                {
+                  "tya": "BoundedNat",
+                  "n": 6
+                }
+              ],
+              "bound": "C"
+            }
+          ],
           "output": [
             {
               "t": "Sum",
@@ -36,7 +92,7 @@
                   {
                     "t": "Opaque",
                     "extension": "tket2.qsystem.random",
-                    "id": "module",
+                    "id": "context",
                     "args": [
                       {
                         "tya": "Type",
@@ -47,14 +103,14 @@
                           "args": [
                             {
                               "tya": "BoundedNat",
-                              "n": 7
+                              "n": 6
                             }
                           ],
                           "bound": "C"
                         }
                       }
                     ],
-                    "bound": "C"
+                    "bound": "A"
                   }
                 ]
               ]
@@ -76,7 +132,7 @@
             {
               "t": "Opaque",
               "extension": "tket2.qsystem.random",
-              "id": "module",
+              "id": "context",
               "args": [
                 {
                   "tya": "Type",
@@ -87,17 +143,40 @@
                     "args": [
                       {
                         "tya": "BoundedNat",
-                        "n": 7
+                        "n": 6
                       }
                     ],
                     "bound": "C"
                   }
                 }
               ],
-              "bound": "C"
+              "bound": "A"
             }
           ],
           "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.qsystem.random",
+              "id": "context",
+              "args": [
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Opaque",
+                    "extension": "arithmetic.int.types",
+                    "id": "int",
+                    "args": [
+                      {
+                        "tya": "BoundedNat",
+                        "n": 6
+                      }
+                    ],
+                    "bound": "C"
+                  }
+                }
+              ],
+              "bound": "A"
+            },
             {
               "t": "Opaque",
               "extension": "arithmetic.float.types",
@@ -122,7 +201,7 @@
             {
               "t": "Opaque",
               "extension": "tket2.qsystem.random",
-              "id": "module",
+              "id": "context",
               "args": [
                 {
                   "tya": "Type",
@@ -133,17 +212,40 @@
                     "args": [
                       {
                         "tya": "BoundedNat",
-                        "n": 7
+                        "n": 6
                       }
                     ],
                     "bound": "C"
                   }
                 }
               ],
-              "bound": "C"
+              "bound": "A"
             }
           ],
           "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.qsystem.random",
+              "id": "context",
+              "args": [
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Opaque",
+                    "extension": "arithmetic.int.types",
+                    "id": "int",
+                    "args": [
+                      {
+                        "tya": "BoundedNat",
+                        "n": 6
+                      }
+                    ],
+                    "bound": "C"
+                  }
+                }
+              ],
+              "bound": "A"
+            },
             {
               "t": "Opaque",
               "extension": "arithmetic.int.types",
@@ -151,7 +253,7 @@
               "args": [
                 {
                   "tya": "BoundedNat",
-                  "n": 6
+                  "n": 5
                 }
               ],
               "bound": "C"
@@ -162,10 +264,10 @@
       },
       "binary": false
     },
-    "RandomIntInRange": {
+    "RandomIntBounded": {
       "extension": "tket2.qsystem.random",
-      "name": "RandomIntInRange",
-      "description": "Generate a random integer in the range [0, bound).",
+      "name": "RandomIntBounded",
+      "description": "Generate a random integer within the range [0, bound).",
       "signature": {
         "params": [],
         "body": {
@@ -173,7 +275,7 @@
             {
               "t": "Opaque",
               "extension": "tket2.qsystem.random",
-              "id": "module",
+              "id": "context",
               "args": [
                 {
                   "tya": "Type",
@@ -184,14 +286,14 @@
                     "args": [
                       {
                         "tya": "BoundedNat",
-                        "n": 7
+                        "n": 6
                       }
                     ],
                     "bound": "C"
                   }
                 }
               ],
-              "bound": "C"
+              "bound": "A"
             },
             {
               "t": "Opaque",
@@ -200,7 +302,7 @@
               "args": [
                 {
                   "tya": "BoundedNat",
-                  "n": 6
+                  "n": 5
                 }
               ],
               "bound": "C"
@@ -209,12 +311,35 @@
           "output": [
             {
               "t": "Opaque",
+              "extension": "tket2.qsystem.random",
+              "id": "context",
+              "args": [
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Opaque",
+                    "extension": "arithmetic.int.types",
+                    "id": "int",
+                    "args": [
+                      {
+                        "tya": "BoundedNat",
+                        "n": 6
+                      }
+                    ],
+                    "bound": "C"
+                  }
+                }
+              ],
+              "bound": "A"
+            },
+            {
+              "t": "Opaque",
               "extension": "arithmetic.int.types",
               "id": "int",
               "args": [
                 {
                   "tya": "BoundedNat",
-                  "n": 6
+                  "n": 5
                 }
               ],
               "bound": "C"

@@ -27,6 +27,11 @@ def qsystem() -> Extension:
 
 
 @functools.cache
+def qsystem_random() -> Extension:
+    return load_extension("tket2.qsystem.random")
+
+
+@functools.cache
 def qsystem_utils() -> Extension:
     return load_extension("tket2.qsystem.utils")
 
