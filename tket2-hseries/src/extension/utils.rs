@@ -1,4 +1,5 @@
-//! This module contains utility functions for Quantinuum systems.
+//! This module defines the "tket2.qsystem.utils" extension, which includes the
+//! utility functions available for Quantinuum systems.
 
 use std::sync::{Arc, Weak};
 
@@ -60,7 +61,7 @@ lazy_static! {
 )]
 /// The operations provided by the utils extension.
 pub enum UtilsOp {
-    /// fn get_current_shot() -> usize
+    /// `fn get_current_shot() -> usize`
     GetCurrentShot,
 }
 
