@@ -193,7 +193,7 @@
     "RandomInt": {
       "extension": "tket2.qsystem.random",
       "name": "RandomInt",
-      "description": "Generates a random 32-bit unsigned integer.",
+      "description": "Generate a random 32-bit unsigned integer.",
       "signature": {
         "params": [],
         "body": {
@@ -267,7 +267,7 @@
     "RandomIntBounded": {
       "extension": "tket2.qsystem.random",
       "name": "RandomIntBounded",
-      "description": "Generates a 32-bit unsigned integer less than `bound`.",
+      "description": "Generate a random 32-bit unsigned integer less than `bound`.",
       "signature": {
         "params": [],
         "body": {
