@@ -158,11 +158,11 @@ impl MakeOpDef for RandomOp {
 
     fn description(&self) -> String {
         match self {
-            RandomOp::RandomInt => "Generates a pseudorandom 32-bit unsigned integer.",
+            RandomOp::RandomInt => "Generates a random 32-bit unsigned integer.",
             RandomOp::RandomFloat => "Generate a random floating point value in the range [0,1).",
             RandomOp::RandomIntBounded => "Generates a 32-bit unsigned integer less than `bound`.",
             RandomOp::NewRNGContext => {
-                "Seed the RNG and return a new RNG context. Required before using other RNG ops."
+                "Seed the RNG and return a new RNG context. Required before using other RNG ops, can be called only once."
             }
             RandomOp::DeleteRNGContext => "Discard the given RNG context.",
         }

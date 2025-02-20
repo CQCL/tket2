@@ -64,7 +64,7 @@
     "NewRNGContext": {
       "extension": "tket2.qsystem.random",
       "name": "NewRNGContext",
-      "description": "Seed the RNG and return a new RNG context. Required before using other RNG ops.",
+      "description": "Seed the RNG and return a new RNG context. Required before using other RNG ops, can be called only once.",
       "signature": {
         "params": [],
         "body": {
@@ -193,7 +193,7 @@
     "RandomInt": {
       "extension": "tket2.qsystem.random",
       "name": "RandomInt",
-      "description": "Generates a pseudorandom 32-bit unsigned integer.",
+      "description": "Generates a random 32-bit unsigned integer.",
       "signature": {
         "params": [],
         "body": {
