@@ -1,4 +1,4 @@
-//! This module defines the "tket2.qsystem.utils" extension that includes the
+//! This module defines the "tket2.qsystem.utils" extension, which includes the
 //! utility functions available for Quantinuum systems.
 
 use std::sync::{Arc, Weak};

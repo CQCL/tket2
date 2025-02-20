@@ -1,4 +1,4 @@
-//! This module defines the "tket2.qsystem.random" extension that includes
+//! This module defines the "tket2.qsystem.random" extension, which includes
 //! random number generation (RNG) functions available for Quantinuum systems.
 
 use std::sync::{Arc, Weak};
@@ -57,7 +57,7 @@ fn add_random_type_defs(
     extension.add_type(
         CONTEXT_TYPE_NAME.to_owned(),
         vec![SEED.to_owned()],
-        "RNGContext".into(),
+        "The linear RNG context type".into(),
         TypeDefBound::any(),
         extension_ref,
     )?;
@@ -110,9 +110,9 @@ pub enum RandomOp {
     /// `fn random_int_bounded(RNGContext, bound: u32) -> (RNGContext, u32)`
     RandomIntBounded,
     /// `fn new_rng_context(seed: u64) -> Option<RNGContext>` // return None on second call
-    NewContext,
+    NewRNGContext,
     /// `fn delete_rng_context(RNGContext) -> ()`
-    DeleteContext,
+    DeleteRNGContext,
 }
 
 impl MakeOpDef for RandomOp {
@@ -133,11 +133,11 @@ impl MakeOpDef for RandomOp {
                 vec![RandomType::RNGContext.get_type(extension_ref), int_type(5)],
                 vec![RandomType::RNGContext.get_type(extension_ref), int_type(5)],
             ),
-            RandomOp::NewContext => Signature::new(
+            RandomOp::NewRNGContext => Signature::new(
                 vec![int_type(6)],
                 Type::from(option_type(RandomType::RNGContext.get_type(extension_ref))),
             ),
-            RandomOp::DeleteContext => {
+            RandomOp::DeleteRNGContext => {
                 Signature::new(vec![RandomType::RNGContext.get_type(extension_ref)], vec![])
             }
         }
@@ -158,11 +158,13 @@ impl MakeOpDef for RandomOp {
 
     fn description(&self) -> String {
         match self {
-            RandomOp::RandomInt => "Generate a random integer.",
-            RandomOp::RandomFloat => "Generate a random float.",
-            RandomOp::RandomIntBounded => "Generate a random integer within the range [0, bound).",
-            RandomOp::NewContext => "Get a new RNG context with a seed.",
-            RandomOp::DeleteContext => "Discard RNG context.",
+            RandomOp::RandomInt => "Generates a pseudorandom 32-bit unsigned integer.",
+            RandomOp::RandomFloat => "Generate a random floating point value in the range [0,1).",
+            RandomOp::RandomIntBounded => "Generates a 32-bit unsigned integer less than `bound`.",
+            RandomOp::NewRNGContext => {
+                "Seed the RNG and return a new RNG context. Required before using other RNG ops."
+            }
+            RandomOp::DeleteRNGContext => "Discard the given RNG context.",
         }
         .to_string()
     }
@@ -205,13 +207,13 @@ pub trait RandomOpBuilder: Dataflow + UnwrapBuilder {
     /// Add a "tket2.qsystem.random.new_rng_context" op.
     fn add_new_rng_context(&mut self, seed: Wire) -> Result<Wire, BuildError> {
         Ok(self
-            .add_dataflow_op(RandomOp::NewContext, [seed])?
+            .add_dataflow_op(RandomOp::NewRNGContext, [seed])?
             .out_wire(0))
     }
 
     /// Add a "tket2.qsystem.random.delete_rng_context" op.
     fn add_delete_rng_context(&mut self, ctx: Wire) -> Result<(), BuildError> {
-        self.add_dataflow_op(RandomOp::DeleteContext, [ctx])?;
+        self.add_dataflow_op(RandomOp::DeleteRNGContext, [ctx])?;
         Ok(())
     }
 }

@@ -14,7 +14,7 @@
           "b": "A"
         }
       ],
-      "description": "RNGContext",
+      "description": "The linear RNG context type",
       "bound": {
         "b": "Explicit",
         "bound": "A"
@@ -23,10 +23,10 @@
   },
   "values": {},
   "operations": {
-    "DeleteContext": {
+    "DeleteRNGContext": {
       "extension": "tket2.qsystem.random",
-      "name": "DeleteContext",
-      "description": "Discard RNG context.",
+      "name": "DeleteRNGContext",
+      "description": "Discard the given RNG context.",
       "signature": {
         "params": [],
         "body": {
@@ -61,10 +61,10 @@
       },
       "binary": false
     },
-    "NewContext": {
+    "NewRNGContext": {
       "extension": "tket2.qsystem.random",
-      "name": "NewContext",
-      "description": "Get a new RNG context with a seed.",
+      "name": "NewRNGContext",
+      "description": "Seed the RNG and return a new RNG context. Required before using other RNG ops.",
       "signature": {
         "params": [],
         "body": {
@@ -124,7 +124,7 @@
     "RandomFloat": {
       "extension": "tket2.qsystem.random",
       "name": "RandomFloat",
-      "description": "Generate a random float.",
+      "description": "Generate a random floating point value in the range [0,1).",
       "signature": {
         "params": [],
         "body": {
@@ -193,7 +193,7 @@
     "RandomInt": {
       "extension": "tket2.qsystem.random",
       "name": "RandomInt",
-      "description": "Generate a random integer.",
+      "description": "Generates a pseudorandom 32-bit unsigned integer.",
       "signature": {
         "params": [],
         "body": {
@@ -267,7 +267,7 @@
     "RandomIntBounded": {
       "extension": "tket2.qsystem.random",
       "name": "RandomIntBounded",
-      "description": "Generate a random integer within the range [0, bound).",
+      "description": "Generates a 32-bit unsigned integer less than `bound`.",
       "signature": {
         "params": [],
         "body": {
