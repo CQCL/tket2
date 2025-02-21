@@ -72,12 +72,14 @@ tracing = { workspace = true }
 pest = { workspace = true }
 pest_derive = { workspace = true }
 zstd = { workspace = true, optional = true }
-
+derive-where = { workspace = true }
+relrc = { workspace = true }
 
 [dev-dependencies]
 rstest = { workspace = true }
 criterion = { workspace = true, features = ["html_reports"] }
 cool_asserts = { workspace = true }
+insta = { workspace = true }
 
 [[bench]]
 name = "bench_main"
