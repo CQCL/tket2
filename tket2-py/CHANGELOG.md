@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.6.0...tket2-py-v0.6.1) (2025-02-21)
+
+
+### Features
+
+* add a `tket2.qsystem.utils` extension with `GetCurrentShot` ([#772](https://github.com/CQCL/tket2/issues/772)) ([175a02d](https://github.com/CQCL/tket2/commit/175a02da2ce8a0065c265cdae7518c1b5284cff3)), closes [#767](https://github.com/CQCL/tket2/issues/767)
+
+
+### Bug Fixes
+
+* include RNG extension in tket2-py, bump tket2-exts constraint ([#781](https://github.com/CQCL/tket2/issues/781)) ([9eb8897](https://github.com/CQCL/tket2/commit/9eb8897fe5eed96070700b2f43461da1fd1346ee))
+
 ## [0.6.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.5.1...tket2-py-v0.6.0) (2024-12-16)
 
 
