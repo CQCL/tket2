@@ -1,0 +1,23 @@
+---
+source: tket2/src/diff/history.rs
+expression: history.extract_hugr().mermaid_string()
+---
+graph LR
+    subgraph 0 ["(0) DFG"]
+        direction LR
+        1["(1) Input"]
+        2["(2) Output"]
+        3["(3) tket2.quantum.Rz"]
+        4["(4) tket2.rotation.radd"]
+        5["(5) tket2.rotation.radd"]
+        6["(6) tket2.quantum.Rz"]
+        1--"0:0<br>qubit"-->6
+        1--"1:0<br>rotation"-->4
+        1--"1:0<br>rotation"-->5
+        1--"1:1<br>rotation"-->5
+        1--"2:1<br>rotation"-->4
+        3--"0:0<br>qubit"-->2
+        4--"0:1<br>rotation"-->3
+        5--"0:1<br>rotation"-->6
+        6--"0:0<br>qubit"-->3
+    end
