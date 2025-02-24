@@ -965,7 +965,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smol_str",
- "strum 0.27.1",
+ "strum",
  "thiserror 2.0.11",
  "typetag",
 ]
@@ -1844,33 +1844,11 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "strum"
-version = "0.26.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
-dependencies = [
- "strum_macros 0.26.4",
-]
-
-[[package]]
-name = "strum"
 version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f64def088c51c9510a8579e3c5d67c65349dcf755e5479ad3d010aa6454e2c32"
 dependencies = [
- "strum_macros 0.27.1",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.26.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
-dependencies = [
- "heck",
- "proc-macro2",
- "quote",
- "rustversion",
- "syn 2.0.96",
+ "strum_macros",
 ]
 
 [[package]]
@@ -2047,16 +2025,16 @@ dependencies = [
 
 [[package]]
 name = "tket-json-rs"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbce51b8204122752da67c65d5cf13a9b8f09f10664d1fb40aa03f94bebdd1cb"
+checksum = "9bfe7204f13ca09d56b4048ab662df9268b79954b5f07329e2a882eef7de71a3"
 dependencies = [
  "derive_more 1.0.0",
  "pyo3",
  "pythonize",
  "serde",
  "serde_json",
- "strum 0.26.3",
+ "strum",
  "uuid",
 ]
 
@@ -2094,7 +2072,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smol_str",
- "strum 0.27.1",
+ "strum",
  "tket-json-rs",
  "tracing",
  "typetag",
@@ -2118,7 +2096,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smol_str",
- "strum 0.27.1",
+ "strum",
  "tket2",
  "typetag",
 ]
@@ -2138,7 +2116,7 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
- "strum 0.27.1",
+ "strum",
  "tket-json-rs",
  "tket2",
 ]
@@ -2303,9 +2281,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "1.12.0"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "744018581f9a3454a9e15beb8a33b017183f1e7c0cd170232a2d1453b23a51c4"
+checksum = "93d59ca99a559661b96bf898d8fce28ed87935fd2bea9f05983c1464dd6c71b1"
 dependencies = [
  "serde",
 ]
