@@ -8,7 +8,7 @@ from hugr.ext import Extension
 
 # This is updated by our release-please workflow, triggered by this
 # annotation: x-release-please-version
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 
 @functools.cache
@@ -24,6 +24,16 @@ def futures() -> Extension:
 @functools.cache
 def qsystem() -> Extension:
     return load_extension("tket2.qsystem")
+
+
+@functools.cache
+def qsystem_random() -> Extension:
+    return load_extension("tket2.qsystem.random")
+
+
+@functools.cache
+def qsystem_utils() -> Extension:
+    return load_extension("tket2.qsystem.utils")
 
 
 @functools.cache

@@ -77,9 +77,12 @@ relrc = { workspace = true }
 
 [dev-dependencies]
 rstest = { workspace = true }
-criterion = { workspace = true, features = ["html_reports"] }
 cool_asserts = { workspace = true }
 insta = { workspace = true }
+
+# Defined here so it can be overridden by the codspeed CI job
+# using `cargo add`.
+criterion = { version = "0.5.1", features = ["html_reports"] }
 
 [[bench]]
 name = "bench_main"
