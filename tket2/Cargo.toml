@@ -58,8 +58,7 @@ derive_more = { workspace = true, features = [
 hugr = { workspace = true }
 hugr-core = { workspace = true }
 portgraph = { workspace = true, features = ["serde"] }
-strum_macros = { workspace = true }
-strum = { workspace = true }
+strum = { workspace = true, features = ["derive"]}
 fxhash = { workspace = true }
 indexmap = { workspace = true }
 rmp-serde = { workspace = true, optional = true }

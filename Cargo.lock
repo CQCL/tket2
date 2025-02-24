@@ -917,8 +917,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.14.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65e8fb919d87dd5b9c1ba077a289c765b6e184c832768fb4a5dc9e1e05793564"
+source = "git+https://github.com/CQCL/hugr?rev=7e4562c#7e4562cf2a1b43556e9f3c6a04936e5d5aee2d8f"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -927,8 +926,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.14.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "207ce216fc76a3f2e56bb27483502468d6b8758e6c7a8a777cdf8d64459043cf"
+source = "git+https://github.com/CQCL/hugr?rev=7e4562c#7e4562cf2a1b43556e9f3c6a04936e5d5aee2d8f"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -941,8 +939,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.14.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79da6020b18a6c63bd81acb9b86370820ba63062519b9d10ed75a0561f3143d1"
+source = "git+https://github.com/CQCL/hugr?rev=7e4562c#7e4562cf2a1b43556e9f3c6a04936e5d5aee2d8f"
 dependencies = [
  "bitvec",
  "bumpalo",
@@ -965,8 +962,8 @@ dependencies = [
  "serde",
  "serde_json",
  "smol_str",
- "strum",
- "strum_macros",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "thiserror 2.0.11",
  "typetag",
 ]
@@ -974,8 +971,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.14.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86dff9354c0133cddd4f9060af2f4ec531dc479c1a65ed5474785f5b39478422"
+source = "git+https://github.com/CQCL/hugr?rev=7e4562c#7e4562cf2a1b43556e9f3c6a04936e5d5aee2d8f"
 dependencies = [
  "ascent",
  "hugr-core",
@@ -1849,7 +1845,16 @@ version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
 dependencies = [
- "strum_macros",
+ "strum_macros 0.26.4",
+]
+
+[[package]]
+name = "strum"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f64def088c51c9510a8579e3c5d67c65349dcf755e5479ad3d010aa6454e2c32"
+dependencies = [
+ "strum_macros 0.27.1",
 ]
 
 [[package]]
@@ -1857,6 +1862,19 @@ name = "strum_macros"
 version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.96",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c77a8c5abcaf0f9ce05d62342b7d298c346515365c36b673df4ebe3ced01fde8"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -2035,7 +2053,7 @@ dependencies = [
  "pythonize",
  "serde",
  "serde_json",
- "strum",
+ "strum 0.26.3",
  "uuid",
 ]
 
@@ -2073,8 +2091,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smol_str",
- "strum",
- "strum_macros",
+ "strum 0.27.1",
  "tket-json-rs",
  "tracing",
  "typetag",
@@ -2098,8 +2115,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smol_str",
- "strum",
- "strum_macros",
+ "strum 0.27.1",
  "tket2",
  "typetag",
 ]
@@ -2119,7 +2135,7 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
- "strum",
+ "strum 0.27.1",
  "tket-json-rs",
  "tket2",
 ]
@@ -2631,3 +2647,8 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "hugr-model"
+version = "0.17.1"
+source = "git+https://github.com/CQCL/hugr?rev=7e4562c#7e4562cf2a1b43556e9f3c6a04936e5d5aee2d8f"

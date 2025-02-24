@@ -7,7 +7,9 @@ members = [
     "tket2-eccs",
     "tket2-exts",
 ]
-requirements = [
+
+[manifest.dependency-groups]
+dev = [
     { name = "graphviz", specifier = ">=0.20,<0.21" },
     { name = "hypothesis", specifier = ">=6.111.1,<7" },
     { name = "maturin", specifier = ">=1.7.0,<2" },
@@ -823,7 +825,7 @@ wheels = [
 
 [[package]]
 name = "tket2"
-version = "0.6.0"
+version = "0.6.1"
 source = { editable = "tket2-py" }
 dependencies = [
     { name = "hugr" },
@@ -847,7 +849,7 @@ source = { editable = "tket2-eccs" }
 
 [[package]]
 name = "tket2-exts"
-version = "0.3.0"
+version = "0.4.0"
 source = { editable = "tket2-exts" }
 dependencies = [
     { name = "hugr" },

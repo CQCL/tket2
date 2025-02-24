@@ -21,7 +21,7 @@ use hugr::{
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
-use strum_macros::{EnumIter, EnumString, IntoStaticStr};
+use strum::{EnumIter, EnumString, IntoStaticStr};
 
 /// The ID of the `tket2.futures` extension.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.futures");
