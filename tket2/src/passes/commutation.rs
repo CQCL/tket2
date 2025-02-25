@@ -26,7 +26,7 @@ struct ComCommand {
     inputs: Vec<CircuitUnit>,
 }
 
-impl<'c, T: HugrView> From<Command<'c, T>> for ComCommand {
+impl<'c, T: HugrView<Node = Node>> From<Command<'c, T>> for ComCommand {
     fn from(com: Command<'c, T>) -> Self {
         ComCommand {
             node: com.node(),
@@ -66,7 +66,7 @@ fn add_to_slice(slice: &mut Slice, com: Rc<ComCommand>) {
     }
 }
 
-fn load_slices(circ: &Circuit<impl HugrView>) -> SliceVec {
+fn load_slices(circ: &Circuit<impl HugrView<Node = Node>>) -> SliceVec {
     let mut slices = vec![];
 
     let n_qbs = circ.qubit_count();
@@ -98,7 +98,7 @@ fn load_slices(circ: &Circuit<impl HugrView>) -> SliceVec {
 }
 
 /// check if node is one we want to put in to a slice.
-fn is_slice_op(h: &impl HugrView, node: Node) -> bool {
+fn is_slice_op<H: HugrView>(h: &H, node: H::Node) -> bool {
     h.get_optype(node).cast::<Tk2Op>().is_some()
 }
 

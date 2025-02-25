@@ -10,7 +10,7 @@ use hugr::{
         MonomorphizeError, MonomorphizePass, RemoveDeadFuncsError, RemoveDeadFuncsPass,
     },
     hugr::HugrError,
-    Hugr, HugrView,
+    Hugr, HugrView, Node,
 };
 use tket2::Tk2Op;
 
@@ -54,11 +54,11 @@ impl Default for QSystemPass {
 #[derive(Error, Debug, Display, From)]
 #[non_exhaustive]
 /// An error reported from [QSystemPass].
-pub enum QSystemPassError {
+pub enum QSystemPassError<N = Node> {
     /// The [hugr::Hugr] was invalid either before or after a pass ran.
     ValidationError(ValidatePassError),
     /// An error from the component [LazifyMeasurePass].
-    LazyMeasureError(LazifyMeasurePassError),
+    LazyMeasureError(LazifyMeasurePassError<N>),
     /// An error from the component [force_order()] pass.
     ForceOrderError(HugrError),
     /// An error from the component [LowerTket2ToQSystemPass] pass.

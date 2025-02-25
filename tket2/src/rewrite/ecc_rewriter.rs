@@ -14,7 +14,7 @@
 
 use derive_more::{Display, Error, From, Into};
 use hugr::extension::resolution::ExtensionResolutionError;
-use hugr::{Hugr, HugrView, PortIndex};
+use hugr::{Hugr, HugrView, Node, PortIndex};
 use itertools::Itertools;
 use portmatching::PatternID;
 use std::{
@@ -185,7 +185,7 @@ impl ECCRewriter {
 }
 
 impl Rewriter for ECCRewriter {
-    fn get_rewrites(&self, circ: &Circuit<impl HugrView>) -> Vec<CircuitRewrite> {
+    fn get_rewrites(&self, circ: &Circuit<impl HugrView<Node = Node>>) -> Vec<CircuitRewrite> {
         let matches = self.matcher.find_matches(circ);
         matches
             .into_iter()
@@ -266,7 +266,7 @@ fn get_patterns(rep_sets: &[EqCircClass]) -> Vec<Option<(CircuitPattern, Vec<usi
 }
 
 /// The port offsets of wires that are empty.
-fn empty_wires(circ: &Circuit<impl HugrView>) -> Vec<usize> {
+fn empty_wires(circ: &Circuit<impl HugrView<Node = Node>>) -> Vec<usize> {
     let hugr = circ.hugr();
     let input = circ.input_node();
     let input_sig = hugr.signature(input).unwrap();

@@ -33,7 +33,7 @@ pub struct Command<'circ, T> {
     output_linear_units: Vec<LinearUnit>,
 }
 
-impl<'circ, T: HugrView> Command<'circ, T> {
+impl<'circ, T: HugrView<Node = Node>> Command<'circ, T> {
     /// Returns the node corresponding to this command.
     #[inline]
     pub fn node(&self) -> Node {
@@ -88,7 +88,7 @@ impl<'circ, T: HugrView> Command<'circ, T> {
 
     /// Returns the output units of this command. See [`Command::units`].
     #[inline]
-    pub fn outputs(&self) -> Units<OutgoingPort, &'_ Self> {
+    pub fn outputs(&self) -> Units<OutgoingPort, Node, &'_ Self> {
         Units::new_outgoing(self.circ, self.node, self)
     }
 
@@ -109,7 +109,7 @@ impl<'circ, T: HugrView> Command<'circ, T> {
 
     /// Returns the output units of this command.
     #[inline]
-    pub fn inputs(&self) -> Units<IncomingPort, &'_ Self> {
+    pub fn inputs(&self) -> Units<IncomingPort, Node, &'_ Self> {
         Units::new_incoming(self.circ, self.node, self)
     }
 
@@ -163,7 +163,7 @@ impl<'circ, T: HugrView> Command<'circ, T> {
     }
 }
 
-impl<T: HugrView> UnitLabeller for &Command<'_, T> {
+impl<T: HugrView<Node = Node>> UnitLabeller<Node> for &Command<'_, T> {
     #[inline]
     fn assign_linear(&self, _: Node, port: Port, _linear_count: usize) -> LinearUnit {
         let units = match port.direction() {
@@ -190,7 +190,7 @@ impl<T: HugrView> UnitLabeller for &Command<'_, T> {
     }
 }
 
-impl<T: HugrView> std::fmt::Debug for Command<'_, T> {
+impl<T: HugrView<Node = Node>> std::fmt::Debug for Command<'_, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Command")
             .field("circuit name", &self.circ.name())
@@ -234,6 +234,8 @@ impl<T: HugrView> std::hash::Hash for Command<'_, T> {
 type NodeWalker = pv::Topo<Node, HashSet<Node>>;
 
 /// An iterator over the commands of a circuit.
+// TODO: this can only be made generic over node type once `SiblingGraph` is
+// generic over node type. See https://github.com/CQCL/hugr/issues/1926
 #[derive(Clone)]
 pub struct CommandIterator<'circ, T> {
     /// The circuit.
@@ -266,7 +268,7 @@ pub struct CommandIterator<'circ, T> {
     delayed_node: Option<Node>,
 }
 
-impl<'circ, T: HugrView> CommandIterator<'circ, T> {
+impl<'circ, T: HugrView<Node = Node>> CommandIterator<'circ, T> {
     /// Create a new iterator over the commands of a circuit.
     pub(super) fn new(circ: &'circ Circuit<T>) -> Self {
         // Initialize the map assigning linear units to the input's linear
@@ -434,7 +436,7 @@ impl<'circ, T: HugrView> CommandIterator<'circ, T> {
     }
 }
 
-impl<'circ, T: HugrView> Iterator for CommandIterator<'circ, T> {
+impl<'circ, T: HugrView<Node = Node>> Iterator for CommandIterator<'circ, T> {
     type Item = Command<'circ, T>;
 
     #[inline]
@@ -460,9 +462,9 @@ impl<'circ, T: HugrView> Iterator for CommandIterator<'circ, T> {
     }
 }
 
-impl<T: HugrView> FusedIterator for CommandIterator<'_, T> {}
+impl<T: HugrView<Node = Node>> FusedIterator for CommandIterator<'_, T> {}
 
-impl<T: HugrView> std::fmt::Debug for CommandIterator<'_, T> {
+impl<T: HugrView<Node = Node>> std::fmt::Debug for CommandIterator<'_, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CommandIterator")
             .field("circuit name", &self.circ.name())

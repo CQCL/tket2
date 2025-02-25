@@ -103,7 +103,7 @@ impl CircuitPattern {
     pub fn get_match_map(
         &self,
         root: Node,
-        circ: &Circuit<impl HugrView>,
+        circ: &Circuit<impl HugrView<Node = Node>>,
     ) -> Option<HashMap<Node, Node>> {
         let single_matcher = SinglePatternMatcher::from_pattern(self.pattern.clone());
         single_matcher
