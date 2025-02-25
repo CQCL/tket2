@@ -14,6 +14,7 @@ use hugr::{
         validation::{ValidatePassError, ValidationLevel},
     },
     builder::{DFGBuilder, Dataflow, DataflowHugr as _},
+    core::HugrNode,
     extension::prelude::{bool_t, qb_t},
     hugr::{hugrmut::HugrMut, views::SiblingSubgraph, Rewrite, SimpleReplacementError},
     ops::{handle::NodeHandle as _, OpTrait as _},
@@ -42,16 +43,16 @@ pub struct LazifyMeasurePass(ValidationLevel);
 #[derive(Error, Debug, Display, From)]
 #[non_exhaustive]
 /// An error reported from [LazifyMeasurePass].
-pub enum LazifyMeasurePassError {
+pub enum LazifyMeasurePassError<N> {
     /// The HUGR was invalid either before or after a pass ran.
     ValidationError(ValidatePassError),
     /// The HUGR was found to contain non-local edges.
-    NonLocalEdgesError(NonLocalEdgesError),
+    NonLocalEdgesError(NonLocalEdgesError<N>),
     /// A [LazifyMeasureRewrite] was constructed targetting an invalid op.
     #[display("A LazifyMeasureRewrite was constructed for node {node} with an invalid signature.\nExpected: {expected_signature}\nActual: {}", actual_signature.as_ref().map_or("None".to_string(), |x| format!("{x}")))]
     #[allow(missing_docs)]
     InvalidOp {
-        node: Node,
+        node: N,
         expected_signature: Signature,
         actual_signature: Option<Signature>,
     },
@@ -62,7 +63,7 @@ pub enum LazifyMeasurePassError {
 impl LazifyMeasurePass {
     /// Run `LazifyMeasurePass` on the given [HugrMut]. `registry` is used for
     /// validation, if enabled.
-    pub fn run(&self, hugr: &mut impl HugrMut) -> Result<(), LazifyMeasurePassError> {
+    pub fn run(&self, hugr: &mut impl HugrMut) -> Result<(), LazifyMeasurePassError<Node>> {
         self.0.run_validated_pass(hugr, |hugr, level| {
             if *level != ValidationLevel::None {
                 ensure_no_nonlocal_edges(hugr)?;
@@ -82,7 +83,9 @@ impl LazifyMeasurePass {
 /// Implementation of [LazifyMeasurePass].
 ///
 /// No validation is done here.
-pub fn replace_measure_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LazifyMeasurePassError> {
+pub fn replace_measure_ops(
+    hugr: &mut impl HugrMut,
+) -> Result<Vec<Node>, LazifyMeasurePassError<Node>> {
     let nodes_and_rewrites = hugr
         .nodes()
         .filter_map(|n| {
@@ -111,17 +114,17 @@ pub fn replace_measure_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LazifyM
 
 /// A rewrite used in [LazifyMeasurePass] to replace strict measure ops with
 /// either [QSystemOp::LazyMeasure] or [QSystemOp::LazyMeasureReset].
-pub struct LazifyMeasureRewrite(SimpleReplacement);
+pub struct LazifyMeasureRewrite<N = Node>(SimpleReplacement<N>);
 
-impl LazifyMeasureRewrite {
+impl<N: HugrNode> LazifyMeasureRewrite<N> {
     /// Construct a new `LazifyMeasureRewrite` replacing `node` with a
     /// [QSystemOp::LazyMeasure].
     ///
     /// Fails if node does not have signature `[QB] -> [BOOL]`
     pub fn try_new_measure(
-        node: Node,
-        hugr: impl HugrView,
-    ) -> Result<Self, LazifyMeasurePassError> {
+        node: N,
+        hugr: impl HugrView<Node = N>,
+    ) -> Result<Self, LazifyMeasurePassError<N>> {
         Self::check_signature(node, QSystemOp::LazyMeasure, hugr.get_optype(node))?;
 
         let subgraph = SiblingSubgraph::from_node(node, &hugr);
@@ -162,9 +165,9 @@ impl LazifyMeasureRewrite {
     ///
     /// Fails if node does not have signature `[QB] -> [QB,BOOL]`
     pub fn try_new_measure_reset(
-        node: Node,
-        hugr: impl HugrView,
-    ) -> Result<Self, LazifyMeasurePassError> {
+        node: N,
+        hugr: impl HugrView<Node = N>,
+    ) -> Result<Self, LazifyMeasurePassError<N>> {
         Self::check_signature(node, QSystemOp::LazyMeasureReset, hugr.get_optype(node))?;
 
         let subgraph = SiblingSubgraph::from_node(node, &hugr);
@@ -233,10 +236,10 @@ impl LazifyMeasureRewrite {
     // Note that calling this private function with a non-sensical `qsystem_op`
     // (i.e.  not LazyMeasure or LazyMeasureReset) will panic.
     fn check_signature(
-        node: Node,
+        node: N,
         qsystem_op: QSystemOp,
         op_to_replace: &hugr::ops::OpType,
-    ) -> Result<(), LazifyMeasurePassError> {
+    ) -> Result<(), LazifyMeasurePassError<N>> {
         let actual_signature = op_to_replace.dataflow_signature().map(|x| x.into_owned());
         match qsystem_op {
             QSystemOp::LazyMeasure => {
@@ -279,7 +282,7 @@ impl Rewrite for LazifyMeasureRewrite {
     delegate! {
         to self.0 {
             fn apply(self, hugr: &mut impl HugrMut) -> Result<Self::ApplyResult, Self::Error>;
-            fn verify(&self, h: &impl HugrView) -> Result<(), Self::Error>;
+            fn verify(&self, h: &impl HugrView<Node = Node>) -> Result<(), Self::Error>;
             fn invalidation_set(&self) -> impl Iterator<Item = Node>;
         }
     }

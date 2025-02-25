@@ -152,8 +152,8 @@ fn lower_direct(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
 ///
 /// # Errors
 /// Returns vector of nodes that are not lowered.
-pub fn check_lowered(hugr: &impl HugrView) -> Result<(), Vec<Node>> {
-    let unlowered: Vec<Node> = hugr
+pub fn check_lowered<H: HugrView>(hugr: &H) -> Result<(), Vec<H::Node>> {
+    let unlowered: Vec<H::Node> = hugr
         .nodes()
         .filter_map(|node| {
             let optype = hugr.get_optype(node);

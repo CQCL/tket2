@@ -26,7 +26,7 @@ pub trait CircuitHash {
     fn circuit_hash(&self) -> Result<u64, HashError>;
 }
 
-impl<T: HugrView> CircuitHash for Circuit<T> {
+impl<T: HugrView<Node = Node>> CircuitHash for Circuit<T> {
     fn circuit_hash(&self) -> Result<u64, HashError> {
         let hugr = self.hugr();
         let container: SiblingGraph = SiblingGraph::try_new(hugr, self.parent()).unwrap();
@@ -36,7 +36,7 @@ impl<T: HugrView> CircuitHash for Circuit<T> {
 
 impl<T> CircuitHash for T
 where
-    T: HugrView,
+    T: HugrView<Node = Node>,
 {
     fn circuit_hash(&self) -> Result<u64, HashError> {
         let Some([_, output_node]) = self.get_io(self.root()) else {
@@ -156,7 +156,11 @@ fn hashable_op(op: &OpType) -> impl Hash {
 /// # Panics
 /// - If the command is a container node, or if it is a parametric CustomOp.
 /// - If the hash of any of its predecessors has not been set.
-fn hash_node(circ: &impl HugrView, node: Node, state: &mut HashState) -> Result<u64, HashError> {
+fn hash_node(
+    circ: &impl HugrView<Node = Node>,
+    node: Node,
+    state: &mut HashState,
+) -> Result<u64, HashError> {
     let op = circ.get_optype(node);
     let mut hasher = FxHasher64::default();
 

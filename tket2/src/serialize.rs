@@ -30,7 +30,7 @@ use crate::{Circuit, CircuitError};
 #[allow(unused)]
 const METADATA_ENTRYPOINT: &str = "TKET2.entrypoint";
 
-impl<T: HugrView> Circuit<T> {
+impl<T: HugrView> Circuit<T, T::Node> {
     /// Store the circuit as a HUGR in json format.
     ///
     /// # Errors
@@ -39,7 +39,7 @@ impl<T: HugrView> Circuit<T> {
     ///
     // TODO: Store the path pointer on `METADATA_ENTRYPOINT`.
     // We may need mutable access to `T` to avoid cloning the HUGR to add the entry.
-    pub fn to_hugr_writer(&self, writer: impl io::Write) -> Result<(), CircuitStoreError> {
+    pub fn to_hugr_writer(&self, writer: impl io::Write) -> Result<(), CircuitStoreError<T::Node>> {
         let hugr = self.hugr();
 
         if self.parent() != hugr.root() {
@@ -62,7 +62,10 @@ impl<T: HugrView> Circuit<T> {
     ///   the root's module.
     ///
     // TODO: Store the path pointer on `METADATA_ENTRYPOINT` instead.
-    pub fn to_package_writer(&self, writer: impl io::Write) -> Result<(), CircuitStoreError> {
+    pub fn to_package_writer(
+        &self,
+        writer: impl io::Write,
+    ) -> Result<(), CircuitStoreError<T::Node>> {
         let hugr = self.hugr();
 
         // Check if we support storing the circuit as a package.
@@ -128,9 +131,9 @@ impl Circuit<Hugr> {
 }
 
 /// Error type for serialization operations on [`Circuit`]s.
-#[derive(Debug, Display, Error, From)]
+#[derive(Debug, Display, Error)]
 #[non_exhaustive]
-pub enum CircuitStoreError {
+pub enum CircuitStoreError<N = Node> {
     /// Could not encode the hugr json.
     EncodingError(serde_json::Error),
     /// Cannot load the circuit file.
@@ -142,8 +145,26 @@ pub enum CircuitStoreError {
     #[display("The circuit's parent {parent} is not the root of the HUGR.")]
     NonRootCircuit {
         /// The parent node.
-        parent: Node,
+        parent: N,
     },
+}
+
+impl<N> From<serde_json::Error> for CircuitStoreError<N> {
+    fn from(e: serde_json::Error) -> Self {
+        CircuitStoreError::EncodingError(e)
+    }
+}
+
+impl<N> From<io::Error> for CircuitStoreError<N> {
+    fn from(e: io::Error) -> Self {
+        CircuitStoreError::InvalidFile(e)
+    }
+}
+
+impl<N> From<PackageError> for CircuitStoreError<N> {
+    fn from(e: PackageError) -> Self {
+        CircuitStoreError::PackageStore(e)
+    }
 }
 
 /// Error type for deserialization operations on [`Circuit`]s.
@@ -206,7 +227,7 @@ pub enum CircuitLoadError {
     },
 }
 
-impl From<PackageEncodingError> for CircuitStoreError {
+impl<N> From<PackageEncodingError> for CircuitStoreError<N> {
     fn from(e: PackageEncodingError) -> Self {
         match e {
             PackageEncodingError::Package(e) => CircuitStoreError::PackageStore(e),

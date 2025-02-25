@@ -7,7 +7,7 @@ use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::ops::{OpTrait, OpType};
 use hugr::std_extensions::arithmetic::float_types::float64_type;
 use hugr::types::Type;
-use hugr::{HugrView, Wire};
+use hugr::{HugrView, Node, Wire};
 use itertools::Itertools;
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::register::ElementId as RegisterUnit;
@@ -45,7 +45,7 @@ pub(super) struct Tk1Encoder {
 
 impl Tk1Encoder {
     /// Create a new [`JsonEncoder`] from a [`Circuit`].
-    pub fn new(circ: &Circuit<impl HugrView>) -> Result<Self, TK1ConvertError> {
+    pub fn new(circ: &Circuit<impl HugrView<Node = Node>>) -> Result<Self, TK1ConvertError> {
         let name = circ.name().map(str::to_string);
         let hugr = circ.hugr();
 
@@ -78,7 +78,7 @@ impl Tk1Encoder {
     }
 
     /// Add a circuit command to the serialization.
-    pub fn add_command<T: HugrView>(
+    pub fn add_command<T: HugrView<Node = Node>>(
         &mut self,
         command: Command<'_, T>,
         optype: &OpType,
@@ -214,7 +214,7 @@ impl Tk1Encoder {
     }
 
     /// Finish building and return the final [`SerialCircuit`].
-    pub fn finish(self, circ: &Circuit<impl HugrView>) -> SerialCircuit {
+    pub fn finish(self, circ: &Circuit<impl HugrView<Node = Node>>) -> SerialCircuit {
         let (qubits, qubits_permutation) = self.qubits.finish(circ);
         let (bits, mut bits_permutation) = self.bits.finish(circ);
 
@@ -263,7 +263,7 @@ impl QubitTracker {
     ///
     /// If the circuit contains more qubit inputs than the provided list,
     /// new registers are created for the remaining qubits.
-    pub fn new(circ: &Circuit<impl HugrView>) -> Self {
+    pub fn new(circ: &Circuit<impl HugrView<Node = Node>>) -> Self {
         let mut tracker = QubitTracker::default();
 
         if let Some(input_regs) = circ
@@ -319,7 +319,7 @@ impl QubitTracker {
     /// with the final permutation of the outputs.
     pub fn finish(
         mut self,
-        _circ: &Circuit<impl HugrView>,
+        _circ: &Circuit<impl HugrView<Node = Node>>,
     ) -> (Vec<RegisterUnit>, Vec<circuit_json::ImplicitPermutation>) {
         // Ensure the input and output lists have the same registers.
         let mut outputs = self.outputs.unwrap_or_default();
@@ -390,7 +390,7 @@ impl BitTracker {
     /// new registers are created for the remaining bits.
     ///
     /// TODO: Compute output bit permutations when finishing the circuit.
-    pub fn new(circ: &Circuit<impl HugrView>) -> Self {
+    pub fn new(circ: &Circuit<impl HugrView<Node = Node>>) -> Self {
         let mut tracker = BitTracker::default();
 
         if let Some(input_regs) = circ
@@ -469,7 +469,7 @@ impl BitTracker {
     /// with the final permutation of the outputs.
     pub fn finish(
         mut self,
-        circ: &Circuit<impl HugrView>,
+        circ: &Circuit<impl HugrView<Node = Node>>,
     ) -> (Vec<RegisterUnit>, Vec<circuit_json::ImplicitPermutation>) {
         let mut circuit_output_order: Vec<RegisterUnit> = Vec::with_capacity(self.inputs.len());
         for (node, port) in circ.hugr().all_linked_outputs(circ.output_node()) {
@@ -554,7 +554,7 @@ struct ParameterTracker {
 
 impl ParameterTracker {
     /// Create a new [`ParameterTracker`] from the input parameters of a [`Circuit`].
-    fn new(circ: &Circuit<impl HugrView>) -> Self {
+    fn new(circ: &Circuit<impl HugrView<Node = Node>>) -> Self {
         let mut tracker = ParameterTracker::default();
 
         let angle_input_wires = circ.units().filter_map(|u| match u {
@@ -583,7 +583,7 @@ impl ParameterTracker {
     /// Record any output of the command that can be used as a TKET1 parameter.
     /// Returns whether parameters were recorded.
     /// Associates the output wires with the parameter expression.
-    fn record_parameters<T: HugrView>(
+    fn record_parameters<T: HugrView<Node = Node>>(
         &mut self,
         command: &Command<'_, T>,
         optype: &OpType,

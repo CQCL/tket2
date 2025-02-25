@@ -22,7 +22,7 @@ use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 use fxhash::FxHashSet;
 use hugr::hugr::HugrError;
-use hugr::HugrView;
+use hugr::{HugrView, Node};
 pub use log::BadgerLogger;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
@@ -122,7 +122,7 @@ impl<R, S> BadgerOptimiser<R, S> {
         Self { rewriter, strategy }
     }
 
-    fn cost(&self, circ: &Circuit<impl HugrView>) -> S::Cost
+    fn cost(&self, circ: &Circuit<impl HugrView<Node = Node>>) -> S::Cost
     where
         S: RewriteStrategy,
     {
@@ -139,7 +139,11 @@ where
     /// Run the Badger optimiser on a circuit.
     ///
     /// A timeout (in seconds) can be provided.
-    pub fn optimise(&self, circ: &Circuit<impl HugrView>, options: BadgerOptions) -> Circuit {
+    pub fn optimise(
+        &self,
+        circ: &Circuit<impl HugrView<Node = Node>>,
+        options: BadgerOptions,
+    ) -> Circuit {
         self.optimise_with_log(circ, Default::default(), options)
     }
 
@@ -148,7 +152,7 @@ where
     /// A timeout (in seconds) can be provided.
     pub fn optimise_with_log(
         &self,
-        circ: &Circuit<impl HugrView>,
+        circ: &Circuit<impl HugrView<Node = Node>>,
         log_config: BadgerLogger,
         options: BadgerOptions,
     ) -> Circuit {
@@ -169,7 +173,7 @@ where
     #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
     fn badger(
         &self,
-        circ: &Circuit<impl HugrView>,
+        circ: &Circuit<impl HugrView<Node = Node>>,
         mut logger: BadgerLogger,
         opt: BadgerOptions,
     ) -> Circuit {
@@ -278,7 +282,7 @@ where
     #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
     fn badger_multithreaded(
         &self,
-        circ: &Circuit<impl HugrView>,
+        circ: &Circuit<impl HugrView<Node = Node>>,
         mut logger: BadgerLogger,
         opt: BadgerOptions,
     ) -> Circuit {
@@ -422,7 +426,7 @@ where
     #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
     fn badger_split_multithreaded(
         &self,
-        circ: &Circuit<impl HugrView>,
+        circ: &Circuit<impl HugrView<Node = Node>>,
         mut logger: BadgerLogger,
         opt: BadgerOptions,
     ) -> Result<Circuit, HugrError> {

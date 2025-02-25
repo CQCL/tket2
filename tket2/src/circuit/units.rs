@@ -17,6 +17,7 @@ pub mod filter;
 use std::iter::FusedIterator;
 use std::marker::PhantomData;
 
+use hugr::core::HugrNode;
 use hugr::types::{EdgeKind, Type, TypeRow};
 use hugr::{CircuitUnit, HugrView, IncomingPort, OutgoingPort};
 use hugr::{Direction, Node, Port, Wire};
@@ -59,9 +60,9 @@ impl TryFrom<CircuitUnit> for LinearUnit {
 }
 /// An iterator over the units in the input or output boundary of a [Node].
 #[derive(Clone, Debug)]
-pub struct Units<P, UL = DefaultUnitLabeller> {
+pub struct Units<P, N = Node, UL = DefaultUnitLabeller> {
     /// The node of the circuit.
-    node: Node,
+    node: N,
     /// The types of the boundary.
     types: TypeRow,
     /// The current index in the type row.
@@ -77,57 +78,57 @@ pub struct Units<P, UL = DefaultUnitLabeller> {
     _port: PhantomData<P>,
 }
 
-impl Units<OutgoingPort, DefaultUnitLabeller> {
+impl<N: HugrNode> Units<OutgoingPort, N, DefaultUnitLabeller> {
     /// Create a new iterator over the input units of a circuit.
     ///
     /// This iterator will yield all units originating from the circuit's input
     /// node.
     #[inline]
-    pub(super) fn new_circ_input<T: HugrView>(circuit: &Circuit<T>) -> Self {
+    pub(super) fn new_circ_input<T: HugrView<Node = N>>(circuit: &Circuit<T, N>) -> Self {
         Self::new_outgoing(circuit, circuit.input_node(), DefaultUnitLabeller)
     }
 }
 
-impl<UL> Units<OutgoingPort, UL>
+impl<N: HugrNode, UL> Units<OutgoingPort, N, UL>
 where
-    UL: UnitLabeller,
+    UL: UnitLabeller<N>,
 {
     /// Create a new iterator over the units originating from node.
     #[inline]
-    pub(super) fn new_outgoing<T: HugrView>(
-        circuit: &Circuit<T>,
-        node: Node,
+    pub(super) fn new_outgoing<T: HugrView<Node = N>>(
+        circuit: &Circuit<T, N>,
+        node: N,
         unit_labeller: UL,
     ) -> Self {
         Self::new_with_dir(circuit, node, Direction::Outgoing, unit_labeller)
     }
 }
 
-impl<UL> Units<IncomingPort, UL>
+impl<N: HugrNode, UL> Units<IncomingPort, N, UL>
 where
-    UL: UnitLabeller,
+    UL: UnitLabeller<N>,
 {
     /// Create a new iterator over the units terminating on the node.
     #[inline]
-    pub(super) fn new_incoming<T: HugrView>(
-        circuit: &Circuit<T>,
-        node: Node,
+    pub(super) fn new_incoming<T: HugrView<Node = N>>(
+        circuit: &Circuit<T, N>,
+        node: N,
         unit_labeller: UL,
     ) -> Self {
         Self::new_with_dir(circuit, node, Direction::Incoming, unit_labeller)
     }
 }
 
-impl<P, UL> Units<P, UL>
+impl<P, N: HugrNode, UL> Units<P, N, UL>
 where
     P: Into<Port> + Copy,
-    UL: UnitLabeller,
+    UL: UnitLabeller<N>,
 {
     /// Create a new iterator over the units of a node.
     #[inline]
-    fn new_with_dir<T: HugrView>(
-        circuit: &Circuit<T>,
-        node: Node,
+    fn new_with_dir<T: HugrView<Node = N>>(
+        circuit: &Circuit<T, N>,
+        node: N,
         direction: Direction,
         unit_labeller: UL,
     ) -> Self {
@@ -150,7 +151,11 @@ where
     // We should revisit it once this is reworked on the HUGR side.
     //
     // TODO: EdgeKind::Function is not currently supported.
-    fn init_types<T: HugrView>(circuit: &Circuit<T>, node: Node, direction: Direction) -> TypeRow {
+    fn init_types<T: HugrView<Node = N>>(
+        circuit: &Circuit<T, N>,
+        node: N,
+        direction: Direction,
+    ) -> TypeRow {
         let hugr = circuit.hugr();
         let optype = hugr.get_optype(node);
         let sig = hugr.signature(node).unwrap_or_default().into_owned();
@@ -172,7 +177,7 @@ where
     /// Calls [`UnitLabeller::assign_linear`] to assign a linear unit id to the linear ports.
     /// Non-linear ports are assigned [`CircuitUnit::Wire`]s via [`UnitLabeller::assign_wire`].
     #[inline]
-    fn make_value(&self, typ: &Type, port: P) -> Option<(CircuitUnit, P, Type)> {
+    fn make_value(&self, typ: &Type, port: P) -> Option<(CircuitUnit<N>, P, Type)> {
         let unit = if type_is_linear(typ) {
             let linear_unit =
                 self.unit_labeller
@@ -186,7 +191,7 @@ where
     }
 
     /// Advances the iterator and returns the next value.
-    fn next_generic(&mut self) -> Option<(CircuitUnit, P, Type)>
+    fn next_generic(&mut self) -> Option<(CircuitUnit<N>, P, Type)>
     where
         P: From<usize>,
     {
@@ -204,11 +209,11 @@ where
     }
 }
 
-impl<UL> Iterator for Units<OutgoingPort, UL>
+impl<N: HugrNode, UL> Iterator for Units<OutgoingPort, N, UL>
 where
-    UL: UnitLabeller,
+    UL: UnitLabeller<N>,
 {
-    type Item = (CircuitUnit, OutgoingPort, Type);
+    type Item = (CircuitUnit<N>, OutgoingPort, Type);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -221,11 +226,11 @@ where
     }
 }
 
-impl<UL> Iterator for Units<IncomingPort, UL>
+impl<N: HugrNode, UL> Iterator for Units<IncomingPort, N, UL>
 where
-    UL: UnitLabeller,
+    UL: UnitLabeller<N>,
 {
-    type Item = (CircuitUnit, IncomingPort, Type);
+    type Item = (CircuitUnit<N>, IncomingPort, Type);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -241,25 +246,25 @@ where
     }
 }
 
-impl<UL> FusedIterator for Units<OutgoingPort, UL> where UL: UnitLabeller {}
-impl<UL> FusedIterator for Units<IncomingPort, UL> where UL: UnitLabeller {}
+impl<N: HugrNode, UL> FusedIterator for Units<OutgoingPort, N, UL> where UL: UnitLabeller<N> {}
+impl<N: HugrNode, UL> FusedIterator for Units<IncomingPort, N, UL> where UL: UnitLabeller<N> {}
 
 /// A trait for assigning linear unit ids and wires to ports of a node.
-pub trait UnitLabeller {
+pub trait UnitLabeller<N> {
     /// Assign a linear unit id to an port.
     ///
     /// # Parameters
     /// - node: The node in the circuit.
     /// - port: The node's port in the node.
     /// - linear_count: The number of linear units yielded so far.
-    fn assign_linear(&self, node: Node, port: Port, linear_count: usize) -> LinearUnit;
+    fn assign_linear(&self, node: N, port: Port, linear_count: usize) -> LinearUnit;
 
     /// Assign a wire to a port, if possible.
     ///
     /// # Parameters
     /// - node: The node in the circuit.
     /// - port: The node's port in the node.
-    fn assign_wire(&self, node: Node, port: Port) -> Option<Wire>;
+    fn assign_wire(&self, node: N, port: Port) -> Option<Wire<N>>;
 }
 
 /// The default [`UnitLabeller`] that assigns new linear unit ids
@@ -268,14 +273,14 @@ pub trait UnitLabeller {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct DefaultUnitLabeller;
 
-impl UnitLabeller for DefaultUnitLabeller {
+impl<N: HugrNode> UnitLabeller<N> for DefaultUnitLabeller {
     #[inline]
-    fn assign_linear(&self, _: Node, _: Port, linear_count: usize) -> LinearUnit {
+    fn assign_linear(&self, _: N, _: Port, linear_count: usize) -> LinearUnit {
         LinearUnit(linear_count)
     }
 
     #[inline]
-    fn assign_wire(&self, node: Node, port: Port) -> Option<Wire> {
+    fn assign_wire(&self, node: N, port: Port) -> Option<Wire<N>> {
         let port = port.as_outgoing().ok()?;
         Some(Wire::new(node, port))
     }
