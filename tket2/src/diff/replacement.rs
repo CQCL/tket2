@@ -39,7 +39,11 @@ impl CircuitDiff {
 
         let parent = (
             self.clone(),
-            invalid_nodes.into_iter().exactly_one().expect("one parent"),
+            invalid_nodes
+                .into_iter()
+                .exactly_one()
+                .expect("one parent")
+                .into(),
         );
 
         let new_child = Self::with_parents(data, [parent]);
@@ -52,7 +56,7 @@ impl CircuitDiff {
         replacement: &SimpleReplacement,
     ) -> Result<WireEquivalence, CircuitDiffError> {
         let mut equivalent_wires = WireEquivalence::new();
-        let to_parent_wire = |port: HostPort<Port>| -> Result<ParentWire, CircuitDiffError> {
+        let to_parent_wire = |port: HostPort<Node, Port>| -> Result<ParentWire, CircuitDiffError> {
             let HostPort(node, port) = port;
             let wire = port_to_wire(node, port, self.as_hugr())?;
             let parent_wire = ParentWire {

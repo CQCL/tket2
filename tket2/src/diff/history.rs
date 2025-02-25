@@ -73,8 +73,8 @@ impl<H: HugrView<Node = Node>> CircuitHistory<H> {
             return Err(CircuitDiffError::DistinctRoots);
         }
         self.diffs.merge(other.diffs, |_, self_edges, other_edges| {
-            let self_invalidated = self_edges.iter().flat_map(|e| e.value());
-            let other_invalidated = other_edges.iter().flat_map(|e| e.value());
+            let self_invalidated = self_edges.iter().flat_map(|e| &e.value().0);
+            let other_invalidated = other_edges.iter().flat_map(|e| &e.value().0);
             let mut invalidated = self_invalidated.chain(other_invalidated);
             if invalidated.all_unique() {
                 Ok(())
@@ -115,7 +115,7 @@ impl<H: HugrView<Node = Node>> CircuitHistory<H> {
             let target = e.target();
             self.contains_diff(&CircuitDiff(target.clone()))
         });
-        out_edges.all(|e| !e.value().contains(&node))
+        out_edges.all(|e| !e.value().0.contains(&node))
     }
 
     /// Get the valid ports opposite to a given port in `self`

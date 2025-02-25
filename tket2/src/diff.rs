@@ -10,9 +10,16 @@
 
 pub mod experimental;
 mod history;
+mod persistent;
 mod replacement;
+mod sync;
 
+use bytemuck::TransparentWrapper;
 pub use history::CircuitHistory;
+pub use persistent::{DetachedDiff, DiffUnitValue, DiffValue, PersistentCircuit};
+pub use sync::{n_empty_queues, DetachedQueue, NoSync, QueueSync, SyncProtocol};
+#[cfg(feature = "mpi")]
+pub use sync::{MPIRank, MPISync};
 
 use std::{
     cell::RefCell,
@@ -21,7 +28,7 @@ use std::{
     fmt,
 };
 
-use derive_more::{Display, Error, From};
+use derive_more::{Display, Error, From, Into};
 use derive_where::derive_where;
 use hugr::{
     hugr::SimpleReplacementError, Direction, Hugr, HugrView, IncomingPort, Node, Port, Wire,
@@ -44,14 +51,17 @@ use crate::{
 /// Use [`CircuitDiff::try_from_circuit`] to create a new "root" diff, i.e.
 /// without any parents, and use [`CircuitDiff::apply_replacement`] to create
 /// new diffs as children of the current diff.
+#[repr(transparent)]
 #[derive(From)]
 #[derive_where(Clone)]
 pub struct CircuitDiff<H = Hugr>(RelRc<CircuitDiffData<H>, InvalidNodes>);
 
+unsafe impl<H> TransparentWrapper<RelRc<CircuitDiffData<H>, InvalidNodes>> for CircuitDiff<H> {}
+
 #[derive(Clone)]
 #[derive_where(Hash; H: HugrView)]
 #[derive_where(Debug; H: HugrView + fmt::Debug)]
-struct CircuitDiffData<H> {
+pub struct CircuitDiffData<H> {
     circuit: HashedCircuit<H>,
     equivalent_wires: WireEquivalence<H>,
 }
@@ -75,7 +85,8 @@ impl<H: HugrView> fmt::Debug for CircuitDiff<H> {
 }
 
 /// Nodes that have been invalidated by the parent-child rewrite
-pub type InvalidNodes = BTreeSet<Node>;
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, From, Into)]
+pub struct InvalidNodes(BTreeSet<Node>);
 
 type WeakEdge<H> = relrc::WeakEdge<CircuitDiffData<H>, InvalidNodes>;
 

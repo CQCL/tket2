@@ -184,6 +184,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230c5f1ca6a325a32553f8640d31ac9b49f2411e901e427570154868b46da4f7"
 
 [[package]]
+name = "bindgen"
+version = "0.69.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "271383c67ccabffb7381723dea0672a673f292304fcb45c01cc648c7a8d58088"
+dependencies = [
+ "bitflags",
+ "cexpr",
+ "clang-sys",
+ "itertools 0.12.1",
+ "lazy_static",
+ "lazycell",
+ "log",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash",
+ "shlex",
+ "syn 2.0.96",
+ "which",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -227,6 +250,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38c99613cb3cd7429889a08dfcf651721ca971c86afa30798461f8eee994de47"
 
 [[package]]
+name = "build-probe-mpi"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3234fa6de2f6e0e338c7183ba09ae68c8f2bd6919d8763362597627362b7f8fe"
+dependencies = [
+ "pkg-config",
+ "shell-words",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -259,6 +292,15 @@ dependencies = [
  "jobserver",
  "libc",
  "shlex",
+]
+
+[[package]]
+name = "cexpr"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fac387a98bb7c37292057cffc56d62ecb629900026402633ae9160df93a8766"
+dependencies = [
+ "nom",
 ]
 
 [[package]]
@@ -323,6 +365,17 @@ checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
 dependencies = [
  "ciborium-io",
  "half",
+]
+
+[[package]]
+name = "clang-sys"
+version = "1.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b023947811758c97c59bf9d1c188fd619ad4718dcaa767947df1cadb14f39f4"
+dependencies = [
+ "glob",
+ "libc",
+ "libloading",
 ]
 
 [[package]]
@@ -423,6 +476,15 @@ name = "context-iterators"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07ec5b69614ae4dbce88efe2684f4526e3a5aeb0a68326d1424f69c98f3040d2"
+
+[[package]]
+name = "conv"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78ff10625fd0ac447827aa30ea8b861fead473bb60aeb73af6c1c58caf0d1299"
+dependencies = [
+ "custom_derive",
+]
 
 [[package]]
 name = "convert_case"
@@ -560,6 +622,12 @@ checksum = "5efa2b3d7902f4b634a20cae3c9c4e6209dc4779feb6863329607560143efa70"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "custom_derive"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef8ae57c4978a2acd8b869ce6b9ca1dfe817bff704c220209fdef2c0b75a01b9"
 
 [[package]]
 name = "dashmap"
@@ -935,6 +1003,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbf6a919d6cf397374f7dfeeea91d974c7c0a7221d0d0f4f20d859d329e53fcc"
 
 [[package]]
+name = "home"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "589533453244b0995c858700322199b2becb13b627df2851f64a2775d024abcf"
+dependencies = [
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "html-escape"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -946,7 +1023,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.14.3"
-source = "git+https://github.com/CQCL/hugr?rev=739cf944#739cf94404d45622ee196b1c68de6bec6a2b28d8"
+source = "git+https://github.com/CQCL/hugr?rev=4f911490#4f9114907dfe8a98ae441790c4ecce3421a04a80"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -955,7 +1032,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.14.3"
-source = "git+https://github.com/CQCL/hugr?rev=739cf944#739cf94404d45622ee196b1c68de6bec6a2b28d8"
+source = "git+https://github.com/CQCL/hugr?rev=4f911490#4f9114907dfe8a98ae441790c4ecce3421a04a80"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -968,7 +1045,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.14.3"
-source = "git+https://github.com/CQCL/hugr?rev=739cf944#739cf94404d45622ee196b1c68de6bec6a2b28d8"
+source = "git+https://github.com/CQCL/hugr?rev=4f911490#4f9114907dfe8a98ae441790c4ecce3421a04a80"
 dependencies = [
  "bitvec",
  "bumpalo",
@@ -1000,7 +1077,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.14.3"
-source = "git+https://github.com/CQCL/hugr?rev=739cf944#739cf94404d45622ee196b1c68de6bec6a2b28d8"
+source = "git+https://github.com/CQCL/hugr?rev=4f911490#4f9114907dfe8a98ae441790c4ecce3421a04a80"
 dependencies = [
  "ascent",
  "hugr-core",
@@ -1173,10 +1250,45 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
+name = "lazycell"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
+
+[[package]]
 name = "libc"
 version = "0.2.169"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5aba8db14291edd000dfcc4d620c7ebfb122c613afb886ca8803fa4e128a20a"
+
+[[package]]
+name = "libffi"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce826c243048e3d5cec441799724de52e2d42f820468431fc3fceee2341871e2"
+dependencies = [
+ "libc",
+ "libffi-sys",
+]
+
+[[package]]
+name = "libffi-sys"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f36115160c57e8529781b4183c2bb51fdc1f6d6d1ed345591d84be7703befb3c"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "libloading"
+version = "0.8.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
+dependencies = [
+ "cfg-if",
+ "windows-targets",
+]
 
 [[package]]
 name = "linked-hash-map"
@@ -1219,6 +1331,48 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "minimal-lexical"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
+
+[[package]]
+name = "mpi"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "677762a4bde2c81158fc566a69b97d11b0c3358694e64f4f922ac5189be311cc"
+dependencies = [
+ "build-probe-mpi",
+ "conv",
+ "libffi",
+ "mpi-sys",
+ "once_cell",
+ "smallvec",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "mpi-sys"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f35fdd7bdb38959515f008d12598065631de9624f6d42c11caef19e8e0d10de"
+dependencies = [
+ "bindgen",
+ "build-probe-mpi",
+ "cc",
+]
+
+[[package]]
+name = "nom"
+version = "7.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
+dependencies = [
+ "memchr",
+ "minimal-lexical",
 ]
 
 [[package]]
@@ -1528,6 +1682,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 
 [[package]]
+name = "prettyplease"
+version = "0.2.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6924ced06e1f7dfe3fa48d57b9f74f55d8915f5036121bef647ef4b204895fac"
+dependencies = [
+ "proc-macro2",
+ "syn 2.0.96",
+]
+
+[[package]]
 name = "priority-queue"
 version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1716,8 +1880,10 @@ checksum = "3ee99f3cea31d4505a7e5f4c3a925c414e508d1318a71a849736350602609e31"
 dependencies = [
  "derive-where",
  "derive_more 0.99.18",
+ "futures",
  "fxhash",
  "itertools 0.13.0",
+ "mpi",
  "thiserror 1.0.69",
 ]
 
@@ -1888,6 +2054,12 @@ checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
 ]
+
+[[package]]
+name = "shell-words"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24188a676b6ae68c3b2cb3a01be17fbf7240ce009799bb56d5b1409051e78fde"
 
 [[package]]
 name = "shlex"
@@ -2146,6 +2318,7 @@ dependencies = [
  "derive-where",
  "derive_more 1.0.0",
  "downcast-rs",
+ "futures",
  "fxhash",
  "hugr",
  "hugr-core",
@@ -2153,6 +2326,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "lazy_static",
+ "mpi",
  "num-complex",
  "num-rational",
  "pest",
@@ -2483,6 +2657,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "which"
+version = "4.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87ba24419a2078cd2b0f2ede2691b6c66d8e47836da3b6db8265ebad47afbfc7"
+dependencies = [
+ "either",
+ "home",
+ "once_cell",
+ "rustix",
+]
+
+[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2730,4 +2916,4 @@ dependencies = [
 [[patch.unused]]
 name = "hugr-model"
 version = "0.17.1"
-source = "git+https://github.com/CQCL/hugr?rev=739cf944#739cf94404d45622ee196b1c68de6bec6a2b28d8"
+source = "git+https://github.com/CQCL/hugr?rev=4f911490#4f9114907dfe8a98ae441790c4ecce3421a04a80"

@@ -24,6 +24,7 @@ path = "src/lib.rs"
 [features]
 # Enables search and replace optimisation passes using the `portmatching` crate.
 portmatching = ["dep:portmatching", "dep:rmp-serde"]
+mpi = ["dep:mpi", "dep:futures", "relrc/mpi"]
 
 # Stores a trace of the applied rewrites
 rewrite-tracing = []
@@ -74,7 +75,8 @@ pest_derive = { workspace = true }
 zstd = { workspace = true, optional = true }
 derive-where = { workspace = true }
 relrc = { workspace = true }
-
+mpi = { workspace = true, optional = true }
+futures = { workspace = true, optional = true, default-features = false }
 [dev-dependencies]
 rstest = { workspace = true }
 criterion = { workspace = true, features = ["html_reports"] }
