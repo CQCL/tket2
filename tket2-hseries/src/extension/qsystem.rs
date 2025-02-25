@@ -25,7 +25,7 @@ use hugr::{
 
 use derive_more::Display;
 use lazy_static::lazy_static;
-use strum_macros::{EnumIter, EnumString, IntoStaticStr};
+use strum::{EnumIter, EnumString, IntoStaticStr};
 
 use crate::extension::futures;
 

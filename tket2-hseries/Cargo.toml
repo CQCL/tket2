@@ -26,10 +26,8 @@ hugr.workspace = true
 tket2 = { path = "../tket2", version = "0.7.2" }
 lazy_static.workspace = true
 serde = { workspace = true, features = ["derive"] }
-serde_json.workspace = true
 smol_str.workspace = true
-strum.workspace = true
-strum_macros.workspace = true
+strum = { workspace = true, features = ["derive"]}
 itertools.workspace = true
 clap = { workspace = true, optional = true }
 hugr-cli = { workspace = true, optional = true }

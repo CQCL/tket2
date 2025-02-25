@@ -19,7 +19,7 @@ use hugr::{
 
 use derive_more::{Display, Error};
 use serde::{Deserialize, Serialize};
-use strum_macros::{EnumIter, EnumString, IntoStaticStr};
+use strum::{EnumIter, EnumString, IntoStaticStr};
 
 #[derive(
     Clone,

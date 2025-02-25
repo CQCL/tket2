@@ -24,7 +24,7 @@ use hugr::{
 
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use strum_macros::{EnumIter, EnumString, IntoStaticStr};
+use strum::{EnumIter, EnumString, IntoStaticStr};
 
 /// The "tket2.result" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.result");
