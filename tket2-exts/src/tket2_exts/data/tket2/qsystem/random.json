@@ -145,7 +145,7 @@
               "args": [
                 {
                   "tya": "BoundedNat",
-                  "n": 5
+                  "n": 6
                 }
               ],
               "bound": "C"
@@ -185,7 +185,7 @@
               "args": [
                 {
                   "tya": "BoundedNat",
-                  "n": 5
+                  "n": 6
                 }
               ],
               "bound": "C"
@@ -199,7 +199,7 @@
               "args": [
                 {
                   "tya": "BoundedNat",
-                  "n": 5
+                  "n": 6
                 }
               ],
               "bound": "C"
