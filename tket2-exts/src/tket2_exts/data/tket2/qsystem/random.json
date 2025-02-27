@@ -103,17 +103,17 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket2.qsystem.random",
-              "id": "context",
-              "args": [],
-              "bound": "A"
-            },
-            {
-              "t": "Opaque",
               "extension": "arithmetic.float.types",
               "id": "float64",
               "args": [],
               "bound": "C"
+            },
+            {
+              "t": "Opaque",
+              "extension": "tket2.qsystem.random",
+              "id": "context",
+              "args": [],
+              "bound": "A"
             }
           ],
           "runtime_reqs": []
@@ -140,13 +140,6 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket2.qsystem.random",
-              "id": "context",
-              "args": [],
-              "bound": "A"
-            },
-            {
-              "t": "Opaque",
               "extension": "arithmetic.int.types",
               "id": "int",
               "args": [
@@ -156,6 +149,13 @@
                 }
               ],
               "bound": "C"
+            },
+            {
+              "t": "Opaque",
+              "extension": "tket2.qsystem.random",
+              "id": "context",
+              "args": [],
+              "bound": "A"
             }
           ],
           "runtime_reqs": []
@@ -194,13 +194,6 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket2.qsystem.random",
-              "id": "context",
-              "args": [],
-              "bound": "A"
-            },
-            {
-              "t": "Opaque",
               "extension": "arithmetic.int.types",
               "id": "int",
               "args": [
@@ -210,6 +203,13 @@
                 }
               ],
               "bound": "C"
+            },
+            {
+              "t": "Opaque",
+              "extension": "tket2.qsystem.random",
+              "id": "context",
+              "args": [],
+              "bound": "A"
             }
           ],
           "runtime_reqs": []

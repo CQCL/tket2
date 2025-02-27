@@ -99,11 +99,11 @@ impl RandomType {
 )]
 /// The operations provided by the random extension.
 pub enum RandomOp {
-    /// `fn random_int(RNGContext) -> (RNGContext, u32)`
+    /// `fn random_int(RNGContext) -> (u32, RNGContext)`
     RandomInt,
-    /// `fn random_float(RNGContext) -> (RNGContext, f32)`
+    /// `fn random_float(RNGContext) -> (f32, RNGContext)`
     RandomFloat,
-    /// `fn random_int_bounded(RNGContext, bound: u32) -> (RNGContext, u32)`
+    /// `fn random_int_bounded(RNGContext, bound: u32) -> (u32, RNGContext)`
     RandomIntBounded,
     /// `fn new_rng_context(seed: u64) -> Option<RNGContext>` // return None on second call
     NewRNGContext,
@@ -116,18 +116,18 @@ impl MakeOpDef for RandomOp {
         match self {
             RandomOp::RandomInt => Signature::new(
                 vec![RandomType::RNGContext.get_type(extension_ref)],
-                vec![RandomType::RNGContext.get_type(extension_ref), int_type(5)],
+                vec![int_type(5), RandomType::RNGContext.get_type(extension_ref)],
             ),
             RandomOp::RandomFloat => Signature::new(
                 vec![RandomType::RNGContext.get_type(extension_ref)],
                 vec![
-                    RandomType::RNGContext.get_type(extension_ref),
                     float64_type(),
+                    RandomType::RNGContext.get_type(extension_ref),
                 ],
             ),
             RandomOp::RandomIntBounded => Signature::new(
                 vec![RandomType::RNGContext.get_type(extension_ref), int_type(5)],
-                vec![RandomType::RNGContext.get_type(extension_ref), int_type(5)],
+                vec![int_type(5), RandomType::RNGContext.get_type(extension_ref)],
             ),
             RandomOp::NewRNGContext => Signature::new(
                 vec![int_type(6)],
@@ -258,9 +258,9 @@ mod test {
                 )
                 .unwrap();
             let bound = func_builder.add_load_const(Value::from(ConstInt::new_u(5, 100).unwrap()));
-            let [ctx, _] = func_builder.add_random_int_bounded(ctx, bound).unwrap();
-            let [ctx, _] = func_builder.add_random_float(ctx).unwrap();
-            let [ctx, rnd] = func_builder.add_random_int(ctx).unwrap();
+            let [_, ctx] = func_builder.add_random_int_bounded(ctx, bound).unwrap();
+            let [_, ctx] = func_builder.add_random_float(ctx).unwrap();
+            let [rnd, ctx] = func_builder.add_random_int(ctx).unwrap();
             func_builder.add_delete_rng_context(ctx).unwrap();
             func_builder.finish_hugr_with_outputs([rnd]).unwrap()
         };
