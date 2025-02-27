@@ -8,12 +8,7 @@
     "context": {
       "extension": "tket2.qsystem.random",
       "name": "context",
-      "params": [
-        {
-          "tp": "Type",
-          "b": "A"
-        }
-      ],
+      "params": [],
       "description": "The linear RNG context type",
       "bound": {
         "b": "Explicit",
@@ -35,23 +30,7 @@
               "t": "Opaque",
               "extension": "tket2.qsystem.random",
               "id": "context",
-              "args": [
-                {
-                  "tya": "Type",
-                  "ty": {
-                    "t": "Opaque",
-                    "extension": "arithmetic.int.types",
-                    "id": "int",
-                    "args": [
-                      {
-                        "tya": "BoundedNat",
-                        "n": 6
-                      }
-                    ],
-                    "bound": "C"
-                  }
-                }
-              ],
+              "args": [],
               "bound": "A"
             }
           ],
@@ -93,23 +72,7 @@
                     "t": "Opaque",
                     "extension": "tket2.qsystem.random",
                     "id": "context",
-                    "args": [
-                      {
-                        "tya": "Type",
-                        "ty": {
-                          "t": "Opaque",
-                          "extension": "arithmetic.int.types",
-                          "id": "int",
-                          "args": [
-                            {
-                              "tya": "BoundedNat",
-                              "n": 6
-                            }
-                          ],
-                          "bound": "C"
-                        }
-                      }
-                    ],
+                    "args": [],
                     "bound": "A"
                   }
                 ]
@@ -133,23 +96,7 @@
               "t": "Opaque",
               "extension": "tket2.qsystem.random",
               "id": "context",
-              "args": [
-                {
-                  "tya": "Type",
-                  "ty": {
-                    "t": "Opaque",
-                    "extension": "arithmetic.int.types",
-                    "id": "int",
-                    "args": [
-                      {
-                        "tya": "BoundedNat",
-                        "n": 6
-                      }
-                    ],
-                    "bound": "C"
-                  }
-                }
-              ],
+              "args": [],
               "bound": "A"
             }
           ],
@@ -158,23 +105,7 @@
               "t": "Opaque",
               "extension": "tket2.qsystem.random",
               "id": "context",
-              "args": [
-                {
-                  "tya": "Type",
-                  "ty": {
-                    "t": "Opaque",
-                    "extension": "arithmetic.int.types",
-                    "id": "int",
-                    "args": [
-                      {
-                        "tya": "BoundedNat",
-                        "n": 6
-                      }
-                    ],
-                    "bound": "C"
-                  }
-                }
-              ],
+              "args": [],
               "bound": "A"
             },
             {
@@ -202,23 +133,7 @@
               "t": "Opaque",
               "extension": "tket2.qsystem.random",
               "id": "context",
-              "args": [
-                {
-                  "tya": "Type",
-                  "ty": {
-                    "t": "Opaque",
-                    "extension": "arithmetic.int.types",
-                    "id": "int",
-                    "args": [
-                      {
-                        "tya": "BoundedNat",
-                        "n": 6
-                      }
-                    ],
-                    "bound": "C"
-                  }
-                }
-              ],
+              "args": [],
               "bound": "A"
             }
           ],
@@ -227,23 +142,7 @@
               "t": "Opaque",
               "extension": "tket2.qsystem.random",
               "id": "context",
-              "args": [
-                {
-                  "tya": "Type",
-                  "ty": {
-                    "t": "Opaque",
-                    "extension": "arithmetic.int.types",
-                    "id": "int",
-                    "args": [
-                      {
-                        "tya": "BoundedNat",
-                        "n": 6
-                      }
-                    ],
-                    "bound": "C"
-                  }
-                }
-              ],
+              "args": [],
               "bound": "A"
             },
             {
@@ -276,23 +175,7 @@
               "t": "Opaque",
               "extension": "tket2.qsystem.random",
               "id": "context",
-              "args": [
-                {
-                  "tya": "Type",
-                  "ty": {
-                    "t": "Opaque",
-                    "extension": "arithmetic.int.types",
-                    "id": "int",
-                    "args": [
-                      {
-                        "tya": "BoundedNat",
-                        "n": 6
-                      }
-                    ],
-                    "bound": "C"
-                  }
-                }
-              ],
+              "args": [],
               "bound": "A"
             },
             {
@@ -313,23 +196,7 @@
               "t": "Opaque",
               "extension": "tket2.qsystem.random",
               "id": "context",
-              "args": [
-                {
-                  "tya": "Type",
-                  "ty": {
-                    "t": "Opaque",
-                    "extension": "arithmetic.int.types",
-                    "id": "int",
-                    "args": [
-                      {
-                        "tya": "BoundedNat",
-                        "n": 6
-                      }
-                    ],
-                    "bound": "C"
-                  }
-                }
-              ],
+              "args": [],
               "bound": "A"
             },
             {

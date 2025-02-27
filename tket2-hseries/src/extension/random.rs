@@ -13,7 +13,7 @@ use hugr::{
         TypeDefBound, Version, PRELUDE,
     },
     std_extensions::arithmetic::{float_types::float64_type, int_types::int_type},
-    types::{type_param::TypeParam, CustomType, Signature, Type, TypeBound},
+    types::{CustomType, Signature, Type, TypeBound},
     Extension, Wire,
 };
 use lazy_static::lazy_static;
@@ -44,10 +44,6 @@ lazy_static! {
 
     /// The name of the `tket2.qsystem.random.context` type.
     pub static ref CONTEXT_TYPE_NAME: SmolStr = SmolStr::new_inline("context");
-
-    /// The type parameter for the seed of the RNG.
-    pub static ref SEED: TypeParam =
-    TypeParam::Type { b: TypeBound::Any };
 }
 
 fn add_random_type_defs(
@@ -56,7 +52,7 @@ fn add_random_type_defs(
 ) -> Result<(), ExtensionBuildError> {
     extension.add_type(
         CONTEXT_TYPE_NAME.to_owned(),
-        vec![SEED.to_owned()],
+        vec![],
         "The linear RNG context type".into(),
         TypeDefBound::any(),
         extension_ref,
@@ -75,7 +71,7 @@ impl RandomType {
         match self {
             Self::RNGContext { .. } => CustomType::new(
                 CONTEXT_TYPE_NAME.to_owned(),
-                vec![int_type(6).into()],
+                vec![],
                 EXTENSION_ID,
                 TypeBound::Any,
                 extension_ref,
