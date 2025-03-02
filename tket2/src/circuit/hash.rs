@@ -87,7 +87,7 @@ impl<H: HugrView> HashedCircuit<H> {
     }
 }
 
-impl<H: HugrView> TryFrom<Circuit<H>> for HashedCircuit<H> {
+impl<H: HugrView<Node = Node>> TryFrom<Circuit<H>> for HashedCircuit<H> {
     type Error = HashError;
 
     fn try_from(circuit: Circuit<H>) -> Result<Self, Self::Error> {

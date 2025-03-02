@@ -50,7 +50,7 @@ use super::CircuitHistory;
 #[derive(Clone, From, Into)]
 pub struct ExperimentalHugrWrapper<H: HugrView>(pub CircuitHistory<H>);
 
-impl<H: HugrView> ExperimentalHugrWrapper<H> {
+impl<H: HugrView<Node = Node>> ExperimentalHugrWrapper<H> {
     /// View the history as a circuit
     pub fn as_circuit(&self) -> Circuit<&ExperimentalHugrWrapper<H>> {
         Circuit::new(self, self.root())
@@ -91,7 +91,7 @@ impl<H: HugrView> ExperimentalHugrWrapper<H> {
     }
 }
 
-impl<H: HugrView> HugrView for ExperimentalHugrWrapper<H> {
+impl<H: HugrView<Node = Node>> HugrView for ExperimentalHugrWrapper<H> {
     fn contains_node(&self, node: Node) -> bool {
         let node: CircuitHistoryNode = node.into();
         // Get the diff_index-th element from all_nodes()
@@ -210,12 +210,12 @@ impl<H: HugrView> HugrView for ExperimentalHugrWrapper<H> {
 /// Iterator over all nodes in the graph, using a simple depth-first search
 #[derive_where(Clone)]
 struct NodesIter<'h, H: HugrView> {
-    visited: BTreeSet<Node>,
-    current: Vec<Node>,
+    visited: BTreeSet<H::Node>,
+    current: Vec<H::Node>,
     history: &'h ExperimentalHugrWrapper<H>,
 }
 
-impl<'h, H: HugrView> Iterator for NodesIter<'h, H> {
+impl<'h, H: HugrView<Node = Node>> Iterator for NodesIter<'h, H> {
     type Item = Node;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -235,8 +235,9 @@ impl<'h, H: HugrView> Iterator for NodesIter<'h, H> {
     }
 }
 
-impl<H: HugrView> HugrInternals for ExperimentalHugrWrapper<H> {
+impl<H: HugrView<Node = Node>> HugrInternals for ExperimentalHugrWrapper<H> {
     type Portgraph<'p> = H::Portgraph<'p> where Self: 'p;
+    type Node = Node;
 
     fn portgraph(&self) -> Self::Portgraph<'_> {
         unimplemented!("no single portgraph for history")
@@ -252,9 +253,17 @@ impl<H: HugrView> HugrInternals for ExperimentalHugrWrapper<H> {
             .expect("diff_index or node_index too large for CircuitHistoryNode");
         node.into()
     }
+
+    fn to_pg_index(&self, node: Self::Node) -> portgraph::NodeIndex {
+        portgraph::NodeIndex::new(node.index())
+    }
+
+    fn to_node(&self, index: portgraph::NodeIndex) -> Self::Node {
+        index.into()
+    }
 }
 
-impl<H: HugrView> ExtractHugr for ExperimentalHugrWrapper<H> {
+impl<H: HugrView<Node = Node>> ExtractHugr for ExperimentalHugrWrapper<H> {
     fn extract_hugr(self) -> Hugr {
         self.0.extract_hugr()
     }
@@ -288,7 +297,10 @@ impl CircuitHistoryNode {
         Node::from(portgraph::NodeIndex::new(self.node_index as usize))
     }
 
-    fn diff<H: HugrView>(&self, history: &ExperimentalHugrWrapper<H>) -> CircuitDiff<H> {
+    fn diff<H: HugrView<Node = Node>>(
+        &self,
+        history: &ExperimentalHugrWrapper<H>,
+    ) -> CircuitDiff<H> {
         history.get_diff(self.diff_index as usize)
     }
 }

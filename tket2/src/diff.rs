@@ -168,7 +168,7 @@ impl<H> CircuitDiff<H> {
     }
 }
 
-impl<H: HugrView> CircuitDiff<H> {
+impl<H: HugrView<Node = Node>> CircuitDiff<H> {
     /// Create a new circuit diff from a circuit
     pub fn try_from_circuit(circuit: Circuit<H>) -> Result<Self, HashError> {
         let data = CircuitDiffData {
@@ -386,7 +386,7 @@ pub enum CircuitDiffError {
 fn port_to_wire(
     node: Node,
     port: impl Into<Port>,
-    hugr: &impl HugrView,
+    hugr: &impl HugrView<Node = Node>,
 ) -> Result<Wire, CircuitDiffError> {
     let port: Port = port.into();
 
@@ -405,7 +405,7 @@ fn port_to_wire(
 fn wire_to_ports(
     wire: Wire,
     dir: Direction,
-    hugr: &impl HugrView,
+    hugr: &impl HugrView<Node = Node>,
 ) -> impl Iterator<Item = (Node, Port)> + '_ {
     use itertools::Either::{Left, Right};
     let iter = match dir {

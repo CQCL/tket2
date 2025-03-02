@@ -23,7 +23,7 @@ pub struct CircuitHistory<H> {
     pub(super) diffs: RelRcGraph<CircuitDiffData<H>, InvalidNodes>,
 }
 
-impl<H: HugrView> CircuitHistory<H> {
+impl<H: HugrView<Node = Node>> CircuitHistory<H> {
     /// Create a (trivial) history from a circuit
     ///
     /// This will fail if the conversion from circuit to diff fails.
@@ -224,7 +224,9 @@ fn get_key<H>(node_port: &Owned<H, (Node, Port)>) -> (CircuitDiffPtr<H>, Node, P
     (node_port.owner.as_ptr(), node_port.data.0, node_port.data.1)
 }
 
-impl<H: HugrView, F: FnMut(&CircuitDiff<H>) -> bool> Iterator for EquivalentPortsIter<H, F> {
+impl<H: HugrView<Node = Node>, F: FnMut(&CircuitDiff<H>) -> bool> Iterator
+    for EquivalentPortsIter<H, F>
+{
     type Item = Owned<H, (Node, Port)>;
 
     fn next(&mut self) -> Option<Self::Item> {

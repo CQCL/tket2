@@ -122,7 +122,7 @@ impl WireEquivalence {
     ///  - the replacement uses the value AND it is a linear value
     fn invalidated_nodes(
         &self,
-        parents: &[&impl HugrView],
+        parents: &[&impl HugrView<Node = Node>],
     ) -> Result<Vec<BTreeSet<Node>>, CircuitDiffError> {
         let mut invalidation_start = vec![BTreeSet::default(); parents.len()];
         let mut invalidation_end = vec![BTreeSet::default(); parents.len()];
