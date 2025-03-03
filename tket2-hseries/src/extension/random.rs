@@ -116,8 +116,7 @@ impl MakeOpDef for RandomOp {
         match self {
             RandomOp::RandomInt => Signature::new(
                 vec![RandomType::RNGContext.get_type(extension_ref)],
-                // NOTE: The output type is u32, not u64, but guppy only has 64-bit ints.
-                vec![int_type(6), RandomType::RNGContext.get_type(extension_ref)],
+                vec![int_type(5), RandomType::RNGContext.get_type(extension_ref)],
             ),
             RandomOp::RandomFloat => Signature::new(
                 vec![RandomType::RNGContext.get_type(extension_ref)],
@@ -127,10 +126,8 @@ impl MakeOpDef for RandomOp {
                 ],
             ),
             RandomOp::RandomIntBounded => Signature::new(
-                // NOTE: The type for `bound` is u32, not u64, but guppy only has 64-bit ints.
-                vec![RandomType::RNGContext.get_type(extension_ref), int_type(6)],
-                // NOTE: Same output type as `RandomInt` above.
-                vec![int_type(6), RandomType::RNGContext.get_type(extension_ref)],
+                vec![RandomType::RNGContext.get_type(extension_ref), int_type(5)],
+                vec![int_type(5), RandomType::RNGContext.get_type(extension_ref)],
             ),
             RandomOp::NewRNGContext => Signature::new(
                 vec![int_type(6)],
@@ -246,7 +243,7 @@ mod test {
         let hugr = {
             let mut func_builder = FunctionBuilder::new(
                 "random_op_builder",
-                Signature::new(vec![], vec![int_type(6)]),
+                Signature::new(vec![], vec![int_type(5)]),
             )
             .unwrap();
 
@@ -260,7 +257,7 @@ mod test {
                     maybe_ctx,
                 )
                 .unwrap();
-            let bound = func_builder.add_load_const(Value::from(ConstInt::new_u(6, 100).unwrap()));
+            let bound = func_builder.add_load_const(Value::from(ConstInt::new_u(5, 100).unwrap()));
             let [_, ctx] = func_builder.add_random_int_bounded(ctx, bound).unwrap();
             let [_, ctx] = func_builder.add_random_float(ctx).unwrap();
             let [rnd, ctx] = func_builder.add_random_int(ctx).unwrap();
