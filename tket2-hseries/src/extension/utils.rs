@@ -11,10 +11,7 @@ use hugr::{
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version, PRELUDE,
     },
-    std_extensions::{
-        arithmetic::int_types::int_type,
-        collections::array::array_type,
-    },
+    std_extensions::{arithmetic::int_types::int_type, collections::array::array_type},
     type_row,
     types::Signature,
     Extension, Wire,
