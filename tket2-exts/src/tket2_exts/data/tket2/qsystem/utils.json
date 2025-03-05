@@ -33,6 +33,58 @@
         }
       },
       "binary": false
+    },
+    "OrderInZones": {
+      "extension": "tket2.qsystem.utils",
+      "name": "OrderInZones",
+      "description": "Order qubits in gating zones.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "collections.array",
+              "id": "array",
+              "args": [
+                {
+                  "tya": "BoundedNat",
+                  "n": 16
+                },
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Q"
+                  }
+                }
+              ],
+              "bound": "A"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "collections.array",
+              "id": "array",
+              "args": [
+                {
+                  "tya": "BoundedNat",
+                  "n": 16
+                },
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Q"
+                  }
+                }
+              ],
+              "bound": "A"
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
     }
   }
 }
