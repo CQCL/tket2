@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.9.1...tket2-hseries-v0.10.0) - 2025-03-06
+
+### Bug Fixes
+
+- [**breaking**] remove type argument from `RNGContext` type, swap returns ([#786](https://github.com/CQCL/tket2/pull/786))
+
+### New Features
+
+- *(tket2-hseries)* [**breaking**] Add order_in_zones extension op ([#792](https://github.com/CQCL/tket2/pull/792))
+
 ## [0.9.1](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.9.0...tket2-hseries-v0.9.1) - 2025-02-25
 
 ### New Features
