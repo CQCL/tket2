@@ -33,6 +33,58 @@
         }
       },
       "binary": false
+    },
+    "OrderInZones": {
+      "extension": "tket2.qsystem.utils",
+      "name": "OrderInZones",
+      "description": "Order qubits in gating zones. The qubits are assigned in pairs, the first element of the pair goes to the left of the zone and the second goes to the right. Pairs are assigned to zones from left to right: `UG1,...,UG4`, and then `DG1,...,DG4`.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "collections.array",
+              "id": "array",
+              "args": [
+                {
+                  "tya": "BoundedNat",
+                  "n": 16
+                },
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Q"
+                  }
+                }
+              ],
+              "bound": "A"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "collections.array",
+              "id": "array",
+              "args": [
+                {
+                  "tya": "BoundedNat",
+                  "n": 16
+                },
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Q"
+                  }
+                }
+              ],
+              "bound": "A"
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
     }
   }
 }
