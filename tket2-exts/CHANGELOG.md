@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/CQCL/tket2/compare/tket2-exts-v0.5.0...tket2-exts-v0.5.1) (2025-03-06)
+
+
+### Features
+
+* Add order_in_zones extension op ([3ec7f5d](https://github.com/CQCL/tket2/commit/3ec7f5d5e0a7d07254e1b09976cddea98cd83702))
+
 ## [0.5.0](https://github.com/CQCL/tket2/compare/tket2-exts-v0.4.0...tket2-exts-v0.5.0) (2025-03-04)
 
 
