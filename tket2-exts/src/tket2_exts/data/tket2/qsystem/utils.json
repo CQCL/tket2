@@ -37,7 +37,7 @@
     "OrderInZones": {
       "extension": "tket2.qsystem.utils",
       "name": "OrderInZones",
-      "description": "Order qubits in gating zones.",
+      "description": "Order qubits in gating zones. The qubits are assigned in pairs, the first element of the pair goes to the left of the zone and the second goes to the right. Pairs are assigned to zones from left to right: `UG1,...,UG4`, and then `DG1,...,DG4`.",
       "signature": {
         "params": [],
         "body": {
