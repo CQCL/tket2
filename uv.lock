@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.10"
 
 [manifest]
@@ -849,7 +850,7 @@ source = { editable = "tket2-eccs" }
 
 [[package]]
 name = "tket2-exts"
-version = "0.4.0"
+version = "0.5.1"
 source = { editable = "tket2-exts" }
 dependencies = [
     { name = "hugr" },
