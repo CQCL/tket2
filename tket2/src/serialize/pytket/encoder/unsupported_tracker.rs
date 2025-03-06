@@ -2,7 +2,8 @@
 
 use std::collections::HashMap;
 
-use hugr::{HugrView, Node};
+use hugr::core::HugrNode;
+use hugr::HugrView;
 use petgraph::unionfind::UnionFind;
 
 use crate::Circuit;
@@ -14,11 +15,11 @@ use crate::Circuit;
 /// cannot be grown further, each component is encoded as a single TKET1 barrier
 /// containing the unsupported operations as metadata.
 #[derive(Debug, Clone)]
-pub struct UnsupportedTracker {
+pub struct UnsupportedTracker<N> {
     /// Unsupported nodes in the hugr.
     ///
     /// Stores the index each node in [`Self::components`].
-    nodes: HashMap<Node, UnsupportedNode>,
+    nodes: HashMap<N, UnsupportedNode>,
     /// A UnionFind structure for tracking connected components of `Self::nodes`.
     components: UnionFind<usize>,
 }
@@ -40,7 +41,7 @@ struct UnsupportedNode {
     extracted: bool,
 }
 
-impl UnsupportedTracker {
+impl<N: HugrNode> UnsupportedTracker<N> {
     /// Create a new [`UnsupportedTracker`].
     pub fn new(_circ: &Circuit<impl HugrView>) -> Self {
         Self {
@@ -50,7 +51,7 @@ impl UnsupportedTracker {
     }
 
     /// Record an unsupported node in the hugr.
-    pub fn record_node(&mut self, node: Node, circ: &Circuit<impl HugrView>) {
+    pub fn record_node(&mut self, node: N, circ: &Circuit<impl HugrView<Node = N>>) {
         let node_data = UnsupportedNode {
             component: self.components.new_set(),
             extracted: false,
@@ -78,7 +79,7 @@ impl UnsupportedTracker {
     /// Once a component has been extracted, no new nodes can be added to it and
     /// calling [`UnsupportedTracker::record_node`] will use a new component
     /// instead.
-    pub fn extract_component(&mut self, node: Node) -> Vec<Node> {
+    pub fn extract_component(&mut self, node: N) -> Vec<N> {
         let node_data = self.nodes.get_mut(&node).unwrap();
         node_data.extracted = true;
         let component = node_data.component;
@@ -106,7 +107,7 @@ impl UnsupportedTracker {
     }
 }
 
-impl Default for UnsupportedTracker {
+impl<N> Default for UnsupportedTracker<N> {
     fn default() -> Self {
         Self {
             nodes: HashMap::new(),

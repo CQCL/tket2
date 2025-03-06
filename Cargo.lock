@@ -912,8 +912,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61f76ba415cbd86242348c74abd0c67459f6d0e7fd26fb439c31e747d9aa45c8"
+source = "git+https://github.com/CQCL/hugr?rev=b5705aec#b5705aec7e8eb1bc4e488a3dd7398ecf2cd4e5be"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -922,8 +921,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2177be2f581e4a0cc65da513e7dc9e08c133e1a0abeb1877bbe482f2d737f77"
+source = "git+https://github.com/CQCL/hugr?rev=b5705aec#b5705aec7e8eb1bc4e488a3dd7398ecf2cd4e5be"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -936,8 +934,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ee45725211e15e414492d279be7bd84fdff0c4fad55aa1608ed40b47b7ad524"
+source = "git+https://github.com/CQCL/hugr?rev=b5705aec#b5705aec7e8eb1bc4e488a3dd7398ecf2cd4e5be"
 dependencies = [
  "cgmath",
  "delegate 0.13.3",
@@ -967,8 +964,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5ff7529467118342f26c30bf37079d30000d1542400eda435fc3758903ee820"
+source = "git+https://github.com/CQCL/hugr?rev=b5705aec#b5705aec7e8eb1bc4e488a3dd7398ecf2cd4e5be"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",

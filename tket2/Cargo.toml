@@ -47,15 +47,18 @@ itertools = { workspace = true }
 petgraph = { workspace = true }
 portmatching = { workspace = true, optional = true, features = ["serde"] }
 derive_more = { workspace = true, features = [
-    "error",
+    "debug",
     "display",
+    "error",
     "from",
     "into",
+    "sum",
+    "add",
 ] }
 hugr = { workspace = true }
 hugr-core = { workspace = true }
 portgraph = { workspace = true, features = ["serde"] }
-strum = { workspace = true, features = ["derive"]}
+strum = { workspace = true, features = ["derive"] }
 fxhash = { workspace = true }
 indexmap = { workspace = true }
 rmp-serde = { workspace = true, optional = true }

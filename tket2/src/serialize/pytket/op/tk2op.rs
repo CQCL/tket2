@@ -1,19 +1,82 @@
-//! Operations that have corresponding representations in both `pytket` and `tket2`.
+//! Encoder and decoder for tket2 operations with native pytket counterparts.
 
 use std::borrow::Cow;
 
+use hugr::core::HugrNode;
 use hugr::extension::prelude::{bool_t, qb_t, Noop};
 
+use hugr::extension::ExtensionId;
 use hugr::ops::{OpTrait, OpType};
 use hugr::std_extensions::arithmetic::float_types::float64_type;
 use hugr::types::Signature;
 
-use hugr::IncomingPort;
+use hugr::{HugrView, IncomingPort};
+use rmp_serde::encode;
 use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as Tk1OpType;
 
 use crate::extension::rotation::rotation_type;
+use crate::extension::TKET2_EXTENSION;
+use crate::serialize::pytket::encoder::{make_tk1_operation, Tk1EncoderContext};
+use crate::serialize::pytket::OpConvertError;
 use crate::Tk2Op;
+
+use super::Tk1Encoder;
+
+/// Encoder for [Tk2Op] operations.
+#[derive(Debug, Clone, Default)]
+pub struct Tk2OpEncoder;
+
+impl<H: HugrView> Tk1Encoder<H> for Tk2OpEncoder {
+    fn extensions(&self) -> Vec<Cow<'_, ExtensionId>> {
+        vec![Cow::Borrowed(TKET2_EXTENSION.name())]
+    }
+
+    fn op_to_pytket(
+        &self,
+        _node: H::Node,
+        op: &OpType,
+        _hugr: &H,
+        encoder: &mut Tk1EncoderContext<H>,
+    ) -> Result<bool, OpConvertError> {
+        let Some(tk2op): Option<Tk2Op> = op.cast() else {
+            return Ok(false);
+        };
+
+        // Some operations don't produce new commands in the encoder, but instead modify the unit trackers.
+        if encode_non_unitary_op(tk2op, encoder)? {
+            return Ok(true);
+        }
+
+        Ok(true)
+    }
+}
+
+/// Encode a qubit allocation / measurement operation.
+///
+/// Return `true` if the operation was successfully encoded,
+/// or `false` if it was not supported.
+fn encode_non_unitary_op<H: HugrView>(
+    op: Tk2Op,
+    encoder: &mut Tk1EncoderContext<H>,
+) -> Result<bool, OpConvertError> {
+    match op {
+        // These operations do not have a direct pytket counterpart.
+        Tk2Op::MeasureFree => {
+            // TODO TODO TODO
+            let operation = make_tk1_operation(tk1_optype, qubit_count, bit_count, params);
+            encoder.emit_command(operation)
+        }
+        Tk2Op::QAlloc | Tk2Op::QFree | Tk2Op::TryQAlloc => {
+            // These operations are implicitly supported by the encoding,
+            // they do not create an explicit pytket operation but instead
+            // add new qubits to the circuit input/output.
+            return Some(Self::new(tk2op.into(), None));
+        }
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
 
 /// An operation with a native TKET2 counterpart.
 ///
