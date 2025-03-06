@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/CQCL/tket2/compare/tket2-exts-v0.4.0...tket2-exts-v0.5.0) (2025-03-04)
+
+
+### ⚠ BREAKING CHANGES
+
+* To be compatible with Guppy's convention of implicitly returning `self` as the second value of the tuple, the following signatures are updated: ```diff
+    -    /// `fn random_int(RNGContext) -> (RNGContext, u32)`
+    +   /// `fn random_int(RNGContext) -> (u32, RNGContext)`
+
+### Bug Fixes
+
+* remove type argument from `RNGContext` type, swap returns ([#786](https://github.com/CQCL/tket2/issues/786)) ([633ebd7](https://github.com/CQCL/tket2/commit/633ebd74d71ba81f5b71d6db757b08ea3c959a5d))
+
 ## [0.4.0](https://github.com/CQCL/tket2/compare/tket2-exts-v0.3.0...tket2-exts-v0.4.0) (2025-02-20)
 
 
