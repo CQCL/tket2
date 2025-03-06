@@ -7,11 +7,11 @@ use derive_more::derive::Display;
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
-        prelude::{qb_t, UnwrapBuilder},
+        prelude::UnwrapBuilder,
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version, PRELUDE,
     },
-    std_extensions::{arithmetic::int_types::int_type, collections::array::array_type},
+    std_extensions::arithmetic::int_types::int_type,
     type_row,
     types::Signature,
     Extension, Wire,
@@ -22,9 +22,7 @@ use strum::{EnumIter, EnumString, IntoStaticStr};
 /// The extension ID for the utils extension.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.qsystem.utils");
 /// The version of the "tket2.qsystem.utils" extension.
-pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
-/// The size of the qubit array to be passed the "OrderInZones" operation.
-pub const ORDER_LENGTH: u64 = 16;
+pub const EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
     /// The "tket2.qsystem.utils" extension.
@@ -61,22 +59,17 @@ lazy_static! {
     EnumString,
     Display,
 )]
+#[non_exhaustive]
 /// The operations provided by the utils extension.
 pub enum UtilsOp {
     /// `fn get_current_shot() -> usize`
     GetCurrentShot,
-    /// `fn order_in_zones(array_type(ORDER_WIDTH, qb_t))`
-    OrderInZones,
 }
 
 impl MakeOpDef for UtilsOp {
     fn init_signature(&self, _extension_ref: &std::sync::Weak<Extension>) -> SignatureFunc {
         match self {
             UtilsOp::GetCurrentShot => Signature::new(type_row![], int_type(6)),
-            UtilsOp::OrderInZones => Signature::new(
-                array_type(ORDER_LENGTH, qb_t()),
-                array_type(ORDER_LENGTH, qb_t()),
-            ),
         }
         .into()
     }
@@ -96,7 +89,6 @@ impl MakeOpDef for UtilsOp {
     fn description(&self) -> String {
         match self {
             UtilsOp::GetCurrentShot => "Get current shot number.",
-            UtilsOp::OrderInZones => "Order qubits in gating zones. The qubits are assigned in pairs, the first element of the pair goes to the left of the zone and the second goes to the right. Pairs are assigned to zones from left to right: `UG1,...,UG4`, and then `DG1,...,DG4`.",
         }
         .to_string()
     }
@@ -119,13 +111,6 @@ pub trait UtilsOpBuilder: Dataflow + UnwrapBuilder {
     fn add_get_current_shot(&mut self) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(UtilsOp::GetCurrentShot, [])?
-            .out_wire(0))
-    }
-
-    /// Add a "tket2.qsystem.utils.OrderInZones" op.
-    fn add_order_in_zones(&mut self, qubits: Wire) -> Result<Wire, BuildError> {
-        Ok(self
-            .add_dataflow_op(UtilsOp::OrderInZones, [qubits])?
             .out_wire(0))
     }
 }
@@ -165,24 +150,6 @@ mod test {
             .unwrap();
             let shot = func_builder.add_get_current_shot().unwrap();
             func_builder.finish_hugr_with_outputs([shot]).unwrap()
-        };
-        hugr.validate().unwrap()
-    }
-
-    #[test]
-    fn order_in_zones() {
-        let hugr = {
-            let mut func_builder = FunctionBuilder::new(
-                "order_in_zones",
-                Signature::new(
-                    vec![array_type(ORDER_LENGTH, qb_t())],
-                    vec![array_type(ORDER_LENGTH, qb_t())],
-                ),
-            )
-            .unwrap();
-            let [qubits_in] = func_builder.input_wires_arr();
-            let qubits_out = func_builder.add_order_in_zones(qubits_in).unwrap();
-            func_builder.finish_hugr_with_outputs([qubits_out]).unwrap()
         };
         hugr.validate().unwrap()
     }
