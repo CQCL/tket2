@@ -23,6 +23,8 @@ use strum::{EnumIter, EnumString, IntoStaticStr};
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.qsystem.utils");
 /// The version of the "tket2.qsystem.utils" extension.
 pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+/// The size of the qubit array to be passed the "OrderInZones" operation.
+pub const ORDER_LENGTH: u64 = 16;
 
 lazy_static! {
     /// The "tket2.qsystem.utils" extension.
@@ -63,7 +65,7 @@ lazy_static! {
 pub enum UtilsOp {
     /// `fn get_current_shot() -> usize`
     GetCurrentShot,
-    /// `fn order_in_zones(array_type(16, qb_t))`
+    /// `fn order_in_zones(array_type(ORDER_WIDTH, qb_t))`
     OrderInZones,
 }
 
@@ -71,7 +73,10 @@ impl MakeOpDef for UtilsOp {
     fn init_signature(&self, _extension_ref: &std::sync::Weak<Extension>) -> SignatureFunc {
         match self {
             UtilsOp::GetCurrentShot => Signature::new(type_row![], int_type(6)),
-            UtilsOp::OrderInZones => Signature::new(array_type(16, qb_t()), array_type(16, qb_t())),
+            UtilsOp::OrderInZones => Signature::new(
+                array_type(ORDER_LENGTH, qb_t()),
+                array_type(ORDER_LENGTH, qb_t()),
+            ),
         }
         .into()
     }
@@ -169,7 +174,10 @@ mod test {
         let hugr = {
             let mut func_builder = FunctionBuilder::new(
                 "order_in_zones",
-                Signature::new(vec![array_type(16, qb_t())], vec![array_type(16, qb_t())]),
+                Signature::new(
+                    vec![array_type(ORDER_LENGTH, qb_t())],
+                    vec![array_type(ORDER_LENGTH, qb_t())],
+                ),
             )
             .unwrap();
             let [qubits_in] = func_builder.input_wires_arr();
