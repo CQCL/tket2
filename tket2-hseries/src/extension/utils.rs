@@ -96,7 +96,7 @@ impl MakeOpDef for UtilsOp {
     fn description(&self) -> String {
         match self {
             UtilsOp::GetCurrentShot => "Get current shot number.",
-            UtilsOp::OrderInZones => "Order qubits in gating zones.",
+            UtilsOp::OrderInZones => "Order qubits in gating zones. The qubits are assigned in pairs, the first element of the pair goes to the left of the zone and the second goes to the right. Pairs are assigned to zones from left to right: `UG1,...,UG4`, and then `DG1,...,DG4`.",
         }
         .to_string()
     }
