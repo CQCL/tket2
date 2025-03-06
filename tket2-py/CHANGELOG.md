@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.7.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.6.1...tket2-py-v0.7.0) (2025-03-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* **tket2-py:** Adds `OrderInZones` to `tket2.qsystem.utils`
+
+### Features
+
+* **tket2-py:** bump tket2_exts constraint ([#794](https://github.com/CQCL/tket2/issues/794)) ([520e950](https://github.com/CQCL/tket2/commit/520e9505630d1bc166472fb1af1095bb39e8b414))
+
 ## [0.6.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.6.0...tket2-py-v0.6.1) (2025-02-21)
 
 
