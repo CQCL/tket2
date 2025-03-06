@@ -4,12 +4,10 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use hugr::extension::prelude::bool_t;
 use hugr::{CircuitUnit, HugrView, Wire};
-use itertools::Itertools;
 use tket_json_rs::circuit_json;
 use tket_json_rs::register::ElementId as RegisterUnit;
 
 use crate::circuit::Circuit;
-use crate::serialize::pytket::RegisterHash;
 
 use super::{RegisterUnitGenerator, METADATA_B_OUTPUT_REGISTERS, METADATA_B_REGISTERS};
 
@@ -40,8 +38,6 @@ impl BitTracker {
     ///
     /// If the circuit contains more bit inputs than the provided list,
     /// new registers are created for the remaining bits.
-    ///
-    /// TODO: Compute output bit permutations when finishing the circuit.
     pub fn new(circ: &Circuit<impl HugrView>) -> Self {
         let mut tracker = BitTracker::default();
 
@@ -113,14 +109,14 @@ impl BitTracker {
     }
 
     /// Returns the register unit for a bit wire, if it exists.
-    pub fn get(&self, wire: &Wire) -> Option<&RegisterUnit> {
-        self.bit_to_reg.get(wire)
+    pub fn get(&self, wire: Wire) -> Option<&RegisterUnit> {
+        self.bit_to_reg.get(&wire)
     }
 
     /// Consumes the tracker and returns the final list of bit registers, along
     /// with the final permutation of the outputs.
     pub fn finish(
-        mut self,
+        self,
         circ: &Circuit<impl HugrView>,
     ) -> (Vec<RegisterUnit>, Vec<circuit_json::ImplicitPermutation>) {
         let mut circuit_output_order: Vec<RegisterUnit> = Vec::with_capacity(self.inputs.len());
@@ -131,68 +127,11 @@ impl BitTracker {
             }
         }
 
-        // Ensure the input and output lists have the same registers.
-        let mut outputs = self.outputs.unwrap_or_default();
-        let mut input_regs: HashSet<RegisterHash> =
-            self.inputs.iter().map(RegisterHash::from).collect();
-        let output_regs: HashSet<RegisterHash> = outputs.iter().map(RegisterHash::from).collect();
-
-        for inp in &self.inputs {
-            if !output_regs.contains(&inp.into()) {
-                outputs.push(inp.clone());
-            }
-        }
-        for out in &outputs {
-            if !input_regs.contains(&out.into()) {
-                self.inputs.push(out.clone());
-            }
-        }
-        input_regs.extend(output_regs);
-
-        // Add registers defined mid-circuit to both ends.
-        for reg in self.bit_to_reg.into_values() {
-            if !input_regs.contains(&(&reg).into()) {
-                self.inputs.push(reg.clone());
-                outputs.push(reg);
-            }
-        }
-
-        // And ensure `circuit_output_order` has all virtual registers added too.
-        let circuit_outputs: HashSet<RegisterHash> = circuit_output_order
-            .iter()
-            .map(RegisterHash::from)
-            .collect();
-        for out in &outputs {
-            if !circuit_outputs.contains(&out.into()) {
-                circuit_output_order.push(out.clone());
-            }
-        }
-
-        // Compute the final permutation. This is a combination of two mappings:
-        // - First, the original implicit permutation for the circuit, if this was decoded from pytket.
-        let original_permutation: HashMap<RegisterUnit, RegisterHash> = self
-            .inputs
-            .iter()
-            .zip(&outputs)
-            .map(|(inp, out)| (inp.clone(), RegisterHash::from(out)))
-            .collect();
-        // - Second, the actual reordering of outputs seen at the circuit's output node.
-        let mut circuit_permutation: HashMap<RegisterHash, RegisterUnit> = outputs
-            .iter()
-            .zip(circuit_output_order)
-            .map(|(out, circ_out)| (RegisterHash::from(out), circ_out))
-            .collect();
-        // The final permutation is the composition of these two mappings.
-        let permutation = original_permutation
-            .into_iter()
-            .map(|(inp, out)| {
-                circuit_json::ImplicitPermutation(
-                    inp.into(),
-                    circuit_permutation.remove(&out).unwrap().into(),
-                )
-            })
-            .collect_vec();
-
-        (self.inputs, permutation)
+        super::qubit_tracker::compute_permutation(
+            circuit_output_order,
+            self.inputs,
+            self.outputs.unwrap_or_default(),
+            self.bit_to_reg.into_values().collect(),
+        )
     }
 }

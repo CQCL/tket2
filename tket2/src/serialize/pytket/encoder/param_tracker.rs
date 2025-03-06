@@ -116,7 +116,7 @@ impl ParameterTracker {
     }
 
     /// Returns the parameter expression for a wire, if it exists.
-    pub fn get(&self, wire: &Wire) -> Option<&String> {
-        self.parameters.get(wire)
+    pub fn get(&self, wire: Wire) -> Option<&str> {
+        self.parameters.get(&wire).map(|s| s.as_str())
     }
 }

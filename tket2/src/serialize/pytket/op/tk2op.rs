@@ -1,9 +1,10 @@
-//! Operations that have corresponding representations in both `pytket` and `tket2`.
+//! Encoder and decoder for tket2 operations with native pytket counterparts.
 
 use std::borrow::Cow;
 
 use hugr::extension::prelude::{bool_t, qb_t, Noop};
 
+use hugr::extension::ExtensionId;
 use hugr::ops::{OpTrait, OpType};
 use hugr::std_extensions::arithmetic::float_types::float64_type;
 use hugr::types::Signature;
@@ -13,7 +14,52 @@ use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as Tk1OpType;
 
 use crate::extension::rotation::rotation_type;
+use crate::extension::TKET2_EXTENSION;
+use crate::serialize::pytket::encoder::Tk1EncoderContext;
+use crate::serialize::pytket::OpConvertError;
 use crate::Tk2Op;
+
+use super::Tk1Encoder;
+
+/// Encoder for [Tk2Op] operations.
+#[derive(Debug, Clone, Default)]
+pub struct Tk2OpEncoder;
+
+impl Tk1Encoder for Tk2OpEncoder {
+    fn extension(&self) -> &ExtensionId {
+        TKET2_EXTENSION.name()
+    }
+
+    fn op_to_pytket(
+        &self,
+        node: hugr::Node,
+        op: &OpType,
+        encoder: &mut Tk1EncoderContext,
+    ) -> Result<bool, OpConvertError> {
+        let Some(tk2op): Option<Tk2Op> = op.cast() else {
+            return Ok(false);
+        };
+
+        // Some operations don't produce new commands in the encoder, but instead modify the unit trackers.
+
+        Ok(true)
+    }
+}
+
+/// Encode a qubit allocation / measurement operation.
+fn encode_non_unitary_op(op: Tk2Op, encoder: &mut Tk1EncoderContext) -> Result<(), OpConvertError> {
+    match tk2op {
+        // These operations do not have a direct pytket counterpart.
+        Tk2Op::MeasureFree => return Ok(()),
+        Tk2Op::QAlloc | Tk2Op::QFree | Tk2Op::TryQAlloc => {
+            // These operations are implicitly supported by the encoding,
+            // they do not create an explicit pytket operation but instead
+            // add new qubits to the circuit input/output.
+            return Some(Self::new(tk2op.into(), None));
+        }
+        _ => Err(OpConvertError::UnsupportedOpSerialization { op: op.into() }),
+    }
+}
 
 /// An operation with a native TKET2 counterpart.
 ///

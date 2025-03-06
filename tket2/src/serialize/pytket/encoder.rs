@@ -8,31 +8,32 @@ mod unsupported_tracker;
 use core::panic;
 
 use bit_tracker::BitTracker;
+use hugr::hugr::views::{HierarchyView, SiblingGraph};
 use param_tracker::ParameterTracker;
 use qubit_tracker::QubitTracker;
 
 use hugr::extension::prelude::{bool_t, qb_t};
-use hugr::ops::OpType;
 use hugr::std_extensions::arithmetic::float_types::float64_type;
-use hugr::HugrView;
+use hugr::{HugrView, Node, Wire};
 use itertools::Itertools;
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::register::ElementId as RegisterUnit;
+use unsupported_tracker::UnsupportedTracker;
 
-use crate::circuit::command::{CircuitUnit, Command};
+use crate::circuit::command::CircuitUnit;
 use crate::circuit::Circuit;
 use crate::extension::rotation::rotation_type;
 use crate::Tk2Op;
 
-use super::op::Tk1Op;
+use super::op::Tk1Encoder;
 use super::{
-    OpConvertError, TK1ConvertError, METADATA_B_OUTPUT_REGISTERS, METADATA_B_REGISTERS,
+    OpConvertError, Tk1ConvertError, METADATA_B_OUTPUT_REGISTERS, METADATA_B_REGISTERS,
     METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
 };
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
-#[derive(Debug, Clone)]
-pub(super) struct Tk1Encoder {
+#[derive(derive_more::Debug)]
+pub struct Tk1EncoderContext {
     /// The name of the circuit being encoded.
     name: Option<String>,
     /// Global phase value.
@@ -48,18 +49,23 @@ pub(super) struct Tk1Encoder {
     bits: BitTracker,
     /// A tracker for the operation parameters used in the circuit.
     parameters: ParameterTracker,
+    /// A tracker for unsupported regions of the circuit.
+    unsupported: UnsupportedTracker,
+    /// Operation encoders
+    #[debug("{:?}", encoders.iter().map(|e| e.extension()).collect::<Vec<_>>())]
+    encoders: Vec<Box<dyn Tk1Encoder>>,
 }
 
-impl Tk1Encoder {
+impl Tk1EncoderContext {
     /// Create a new [`JsonEncoder`] from a [`Circuit`].
-    pub fn new(circ: &Circuit<impl HugrView<Node = Node>>) -> Result<Self, TK1ConvertError> {
+    pub(super) fn new(circ: &Circuit<impl HugrView<Node = Node>>) -> Result<Self, Tk1ConvertError> {
         let name = circ.name().map(str::to_string);
         let hugr = circ.hugr();
 
         // Check for unsupported input types.
         for (_, _, typ) in circ.units() {
             if ![rotation_type(), float64_type(), qb_t(), bool_t()].contains(&typ) {
-                return Err(TK1ConvertError::NonSerializableInputs { typ });
+                return Err(Tk1ConvertError::NonSerializableInputs { typ });
             }
         }
 
@@ -70,26 +76,110 @@ impl Tk1Encoder {
             None => "0".to_string(),
         };
 
-        let qubit_tracker = QubitTracker::new(circ);
-        let bit_tracker = BitTracker::new(circ);
-        let parameter_tracker = ParameterTracker::new(circ);
-
         Ok(Self {
             name,
             phase,
             commands: vec![],
-            qubits: qubit_tracker,
-            bits: bit_tracker,
-            parameters: parameter_tracker,
+            qubits: QubitTracker::new(circ),
+            bits: BitTracker::new(circ),
+            parameters: ParameterTracker::new(circ),
+            unsupported: UnsupportedTracker::new(circ),
+            encoders: vec![],
         })
     }
 
-    /// Add a circuit command to the serialization.
-    pub fn add_command<T: HugrView<Node = Node>>(
+    /// Add an extension operation to the encoder.
+    ///
+    /// This should be called before [`Self::run_encoder`]
+    pub(super) fn add_op_encoder(&mut self, encoder: impl Tk1Encoder + 'static) {
+        self.encoders.push(Box::new(encoder));
+    }
+
+    /// Traverse the circuit in topological order, encoding the nodes as pytket commands.
+    ///
+    /// Returns the final [`SerialCircuit`] if successful.
+    pub(super) fn run_encoder(
         &mut self,
-        command: Command<'_, T>,
-        optype: &OpType,
-    ) -> Result<(), OpConvertError> {
+        circ: &Circuit<impl HugrView<Node = Node>>,
+    ) -> Result<(), Tk1ConvertError> {
+        let region: SiblingGraph = SiblingGraph::try_new(circ.hugr(), circ.parent()).unwrap();
+        let mut nodes = petgraph::visit::Topo::new(&region.as_petgraph());
+        while let Some(node) = nodes.next(&region.as_petgraph()) {
+            // Try to encode the single node as pytket commands.
+            // If it cannot be encoded, track it as part of an unsupported region.
+            if !self.try_encode_node(node, circ)? {
+                self.unsupported.record_node(node, circ);
+            }
+        }
+        Ok(())
+    }
+
+    /// Finish building and return the final [`SerialCircuit`].
+    pub(super) fn finish(self, circ: &Circuit<impl HugrView>) -> SerialCircuit {
+        let (qubits, qubits_permutation) = self.qubits.finish(circ);
+        let (bits, mut bits_permutation) = self.bits.finish(circ);
+
+        let mut implicit_permutation = qubits_permutation;
+        implicit_permutation.append(&mut bits_permutation);
+
+        let mut ser = SerialCircuit::new(self.name, self.phase);
+
+        ser.commands = self.commands;
+        ser.qubits = qubits.into_iter().map_into().collect();
+        ser.bits = bits.into_iter().map_into().collect();
+        ser.implicit_permutation = implicit_permutation;
+        ser.number_of_ws = None;
+        ser
+    }
+
+    /// Update the [Wire] associated with a qubit register, and return the register.
+    ///
+    /// Returns `None` if the wire is not associated with a qubit register.
+    pub fn update_qubit(&mut self, wire: Wire, updated_wire: Wire) -> Option<&RegisterUnit> {
+        self.qubits.update(wire, updated_wire)
+    }
+
+    /// Return the register associated with a bit wire.
+    pub fn get_bit_register(&self, wire: Wire) -> Option<&RegisterUnit> {
+        self.bits.get(wire)
+    }
+
+    /// Allocate a new bit register for the pytket circuit.
+    pub fn add_bit_register(&mut self, wire: Wire) -> &RegisterUnit {
+        self.bits.add_bit_register(wire)
+    }
+
+    /// Return the parameter expression associated with a wire.
+    pub fn get_parameter(&self, wire: Wire) -> Option<&str> {
+        self.parameters.get(wire)
+    }
+
+    /// Associate a parameter expression with a wire.
+    pub fn add_parameter(&mut self, wire: Wire, param: String) {
+        self.parameters.add_parameter(wire, param);
+    }
+
+    /// Encode a single circuit node into pytket commands and update the encoder.
+    ///
+    /// Returns `true` if the node was successfully encoded, or `false` if it is
+    /// an unsupported operation.
+    fn try_encode_node(
+        &mut self,
+        node: Node,
+        circ: &Circuit<impl HugrView>,
+    ) -> Result<bool, Tk1ConvertError> {
+        let optype = circ.hugr().get_optype(node);
+
+        // Try to encode the operation using each of the registered encoders.
+        //
+        // If none of the encoders can handle the operation, we just add it to
+        // the unsupported tracker and move on.
+        for encoder in &mut self.encoders {
+            if encoder.try_to_pytket(node, optype, self).is_ok() {
+                return Ok(true);
+            }
+        }
+
         // Register any output of the command that can be used as a TKET1 parameter.
         if self.parameters.record_parameters(&command, optype)? {
             // for now all ops that record parameters should be ignored (are
@@ -179,7 +269,8 @@ impl Tk1Encoder {
                     typ: ty.clone(),
                     optype: optype.clone(),
                     node: command.node(),
-                });
+                })
+                .into();
             }
         }
 
@@ -217,33 +308,7 @@ impl Tk1Encoder {
         };
         self.commands.push(command);
 
-        Ok(())
-    }
-
-    /// Finish building and return the final [`SerialCircuit`].
-    pub fn finish(self, circ: &Circuit<impl HugrView<Node = Node>>) -> SerialCircuit {
-        let (qubits, qubits_permutation) = self.qubits.finish(circ);
-        let (bits, mut bits_permutation) = self.bits.finish(circ);
-
-        let mut implicit_permutation = qubits_permutation;
-        implicit_permutation.append(&mut bits_permutation);
-
-        let mut ser = SerialCircuit::new(self.name, self.phase);
-
-        ser.commands = self.commands;
-        ser.qubits = qubits.into_iter().map_into().collect();
-        ser.bits = bits.into_iter().map_into().collect();
-        ser.implicit_permutation = implicit_permutation;
-        ser.number_of_ws = None;
-        ser
-    }
-
-    /// Translate a linear [`CircuitUnit`] into a [`RegisterUnit`], if possible.
-    fn unit_to_register(&self, unit: CircuitUnit) -> Option<RegisterUnit> {
-        match unit {
-            CircuitUnit::Linear(i) => self.qubits.get(i).cloned(),
-            CircuitUnit::Wire(wire) => self.bits.get(&wire).cloned(),
-        }
+        Ok(true)
     }
 }
 
