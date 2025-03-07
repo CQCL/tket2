@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.1.1",
   "name": "tket2.qsystem.utils",
   "runtime_reqs": [
     "prelude"
@@ -79,6 +79,76 @@
                 }
               ],
               "bound": "A"
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
+    },
+    "RPC": {
+      "extension": "tket2.qsystem.utils",
+      "name": "RPC",
+      "description": "Remote Procedure Call. The input array encodes the request and the output the response from the server.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "collections.array",
+              "id": "array",
+              "args": [
+                {
+                  "tya": "BoundedNat",
+                  "n": 50
+                },
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Opaque",
+                    "extension": "arithmetic.int.types",
+                    "id": "int",
+                    "args": [
+                      {
+                        "tya": "BoundedNat",
+                        "n": 6
+                      }
+                    ],
+                    "bound": "C"
+                  }
+                }
+              ],
+              "bound": "C"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "collections.array",
+              "id": "array",
+              "args": [
+                {
+                  "tya": "BoundedNat",
+                  "n": 50
+                },
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Opaque",
+                    "extension": "arithmetic.int.types",
+                    "id": "int",
+                    "args": [
+                      {
+                        "tya": "BoundedNat",
+                        "n": 6
+                      }
+                    ],
+                    "bound": "C"
+                  }
+                }
+              ],
+              "bound": "C"
             }
           ],
           "runtime_reqs": []

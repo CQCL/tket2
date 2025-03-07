@@ -22,9 +22,11 @@ use strum::{EnumIter, EnumString, IntoStaticStr};
 /// The extension ID for the utils extension.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.qsystem.utils");
 /// The version of the "tket2.qsystem.utils" extension.
-pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
-/// The size of the qubit array to be passed the "OrderInZones" operation.
+pub const EXTENSION_VERSION: Version = Version::new(0, 1, 1);
+/// The size of the qubit array to be passed to the `OrderInZones` operation.
 pub const ORDER_LENGTH: u64 = 16;
+/// The size of the array to be passed in and out of the `RPC` operation.
+pub const RPC_LENGTH: u64 = 50;
 
 lazy_static! {
     /// The "tket2.qsystem.utils" extension.
@@ -61,12 +63,15 @@ lazy_static! {
     EnumString,
     Display,
 )]
+#[non_exhaustive]
 /// The operations provided by the utils extension.
 pub enum UtilsOp {
     /// `fn get_current_shot() -> usize`
     GetCurrentShot,
-    /// `fn order_in_zones(array_type(ORDER_WIDTH, qb_t))`
+    /// `fn order_in_zones(array[qubit, 16]) -> None`
     OrderInZones,
+    /// `fn rpc(array[int, 50]) -> array[int, 50]`
+    RPC,
 }
 
 impl MakeOpDef for UtilsOp {
@@ -76,6 +81,10 @@ impl MakeOpDef for UtilsOp {
             UtilsOp::OrderInZones => Signature::new(
                 array_type(ORDER_LENGTH, qb_t()),
                 array_type(ORDER_LENGTH, qb_t()),
+            ),
+            UtilsOp::RPC => Signature::new(
+                array_type(RPC_LENGTH, int_type(6)),
+                array_type(RPC_LENGTH, int_type(6)),
             ),
         }
         .into()
@@ -97,6 +106,7 @@ impl MakeOpDef for UtilsOp {
         match self {
             UtilsOp::GetCurrentShot => "Get current shot number.",
             UtilsOp::OrderInZones => "Order qubits in gating zones. The qubits are assigned in pairs, the first element of the pair goes to the left of the zone and the second goes to the right. Pairs are assigned to zones from left to right: `UG1,...,UG4`, and then `DG1,...,DG4`.",
+            UtilsOp::RPC => "Remote Procedure Call. The input array encodes the request and the output the response from the server.",
         }
         .to_string()
     }
@@ -127,6 +137,11 @@ pub trait UtilsOpBuilder: Dataflow + UnwrapBuilder {
         Ok(self
             .add_dataflow_op(UtilsOp::OrderInZones, [qubits])?
             .out_wire(0))
+    }
+
+    /// Add a "tket2.qsystem.utils.RPC" op.
+    fn add_rpc(&mut self, request: Wire) -> Result<Wire, BuildError> {
+        Ok(self.add_dataflow_op(UtilsOp::RPC, [request])?.out_wire(0))
     }
 }
 
@@ -183,6 +198,24 @@ mod test {
             let [qubits_in] = func_builder.input_wires_arr();
             let qubits_out = func_builder.add_order_in_zones(qubits_in).unwrap();
             func_builder.finish_hugr_with_outputs([qubits_out]).unwrap()
+        };
+        hugr.validate().unwrap()
+    }
+
+    #[test]
+    fn rpc() {
+        let hugr = {
+            let mut func_builder = FunctionBuilder::new(
+                "rpc",
+                Signature::new(
+                    vec![array_type(RPC_LENGTH, int_type(6))],
+                    vec![array_type(RPC_LENGTH, int_type(6))],
+                ),
+            )
+            .unwrap();
+            let [request] = func_builder.input_wires_arr();
+            let response = func_builder.add_rpc(request).unwrap();
+            func_builder.finish_hugr_with_outputs([response]).unwrap()
         };
         hugr.validate().unwrap()
     }
