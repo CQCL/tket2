@@ -12,7 +12,7 @@ use std::iter::Sum;
 
 pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
-use hugr::extension::prelude::{LiftDef, NoopDef, TupleOpDef};
+use hugr::extension::prelude::{NoopDef, TupleOpDef};
 use hugr::hugr::views::{DescendantsGraph, ExtractHugr, HierarchyView};
 use itertools::Either::{Left, Right};
 
@@ -71,7 +71,6 @@ lazy_static! {
         set.insert(format!("prelude.{}", NoopDef.name()).into());
         set.insert(format!("prelude.{}", TupleOpDef::MakeTuple.name()).into());
         set.insert(format!("prelude.{}", TupleOpDef::UnpackTuple.name()).into());
-        set.insert(format!("prelude.{}", LiftDef.name()).into());
         set
     };
 }
