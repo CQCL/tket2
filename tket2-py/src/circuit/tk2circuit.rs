@@ -158,6 +158,22 @@ impl Tk2Circuit {
         Ok(Tk2Circuit { circ })
     }
 
+    /// Encode the circuit as a tket1 json utf8 bytes.
+    pub fn to_tket1_json_bytes(&self) -> PyResult<Vec<u8>> {
+        // Try to simplify tuple pack-unpack pairs, and other operations not supported by pytket.
+        let circ = lower_to_pytket(&self.circ).convert_pyerrs()?;
+        Ok(serde_json::to_vec(&SerialCircuit::encode(&circ).convert_pyerrs()?).unwrap())
+    }
+
+    /// Decode a tket1 json utf8 bytes to a circuit.
+    #[staticmethod]
+    pub fn from_tket1_json_bytes(json: &[u8]) -> PyResult<Self> {
+        let circ = tket2::serialize::load_tk1_json_reader(json).map_err(|e| {
+            PyErr::new::<PyAttributeError, _>(format!("Could not load pytket circuit: {e}"))
+        })?;
+        Ok(Tk2Circuit { circ })
+    }
+
     /// Compute the cost of the circuit based on a per-operation cost function.
     ///
     /// :param cost_fn: A function that takes a `Tk2Op` and returns an arbitrary cost.
