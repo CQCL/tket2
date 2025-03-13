@@ -146,15 +146,9 @@ impl Tk2Circuit {
     pub fn to_tket1_json(&self) -> PyResult<String> {
         // Try to simplify tuple pack-unpack pairs, and other operations not supported by pytket.
         let circ = lower_to_pytket(&self.circ).convert_pyerrs()?;
-        Ok(
-            serde_json::to_string(&SerialCircuit::encode(&circ).convert_pyerrs()?).map_err(
-                |e| {
-                    PyErr::new::<PyValueError, _>(format!(
-                        "Could not encode pytket circuit to str: {e}"
-                    ))
-                },
-            )?,
-        )
+        serde_json::to_string(&SerialCircuit::encode(&circ).convert_pyerrs()?).map_err(|e| {
+            PyErr::new::<PyValueError, _>(format!("Could not encode pytket circuit to str: {e}"))
+        })
     }
 
     /// Decode a tket1 json string to a circuit.
@@ -170,13 +164,9 @@ impl Tk2Circuit {
     pub fn to_tket1_json_bytes(&self) -> PyResult<Vec<u8>> {
         // Try to simplify tuple pack-unpack pairs, and other operations not supported by pytket.
         let circ = lower_to_pytket(&self.circ).convert_pyerrs()?;
-        Ok(
-            serde_json::to_vec(&SerialCircuit::encode(&circ).convert_pyerrs()?).map_err(|e| {
-                PyErr::new::<PyValueError, _>(format!(
-                    "Could not encode pytket circuit to bytes: {e}"
-                ))
-            })?,
-        )
+        serde_json::to_vec(&SerialCircuit::encode(&circ).convert_pyerrs()?).map_err(|e| {
+            PyErr::new::<PyValueError, _>(format!("Could not encode pytket circuit to bytes: {e}"))
+        })
     }
 
     /// Decode a tket1 json utf8 bytes to a circuit.
