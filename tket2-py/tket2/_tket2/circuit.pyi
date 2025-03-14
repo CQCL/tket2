@@ -2,6 +2,17 @@ from typing import Any, Callable
 from pytket._tket.circuit import Circuit as Tk1Circuit
 
 from tket2._tket2.ops import Tk2Op
+from hugr.envelope import EnvelopeConfig
+
+try:
+    from warnings import deprecated  # type: ignore[attr-defined]
+except ImportError:
+    # Python < 3.13
+    def deprecated(_msg):  # type: ignore[no-redef]
+        def _deprecated(func):
+            return func
+
+        return _deprecated
 
 class Tk2Circuit:
     """Rust representation of a TKET2 circuit."""
@@ -56,14 +67,69 @@ class Tk2Circuit:
     def to_hugr_json(self) -> str:
         """Encode the circuit as a HUGR json."""
 
-    def to_package_json(self) -> str:
-        """Encode the circuit as a HUGR Package json."""
-
     @staticmethod
     def from_hugr_json(json: str) -> Tk2Circuit:
         """Decode a HUGR json string to a Tk2Circuit."""
 
+    def to_bytes(self, config: EnvelopeConfig) -> bytes:
+        """Encode the circuit as a HUGR envelope, according to the given config.
+
+        Some envelope formats can be encoded into a string. See :meth:`to_str`.
+
+        Args:
+            config: The envelope configuration to use.
+        """
+
+    def to_str(self, config: EnvelopeConfig | None = None) -> str:
+        """Encode the circuit as a HUGR envelope string.
+
+        Not all envelope formats can be encoded into a string.
+        See :meth:`to_bytes` for a more general method.
+
+        Args:
+            config: The envelope configuration to use.
+                If not given, uses the default textual encoding.
+        """
+
     @staticmethod
+    def from_bytes(envelope: bytes, function_name: str | None = None) -> Tk2Circuit:
+        """Load a Circuit from a HUGR envelope.
+
+        Some envelope formats can be read from a string. See :meth:`from_str`.
+
+        Args:
+            envelope: The byte string representing a Package.
+            function_name: The name of the function in the envelope's module to load.
+                Defaults to `main`.
+
+        Returns:
+            The loaded circuit.
+        """
+
+    @staticmethod
+    def from_str(envelope: str, function_name: str | None = None) -> Tk2Circuit:
+        """Load a Circuit from a HUGR envelope string.
+
+        Not all envelope formats can be represented as strings.
+        See :meth:`from_bytes` for a more general method.
+
+        Args:
+            envelope: The string representing a Package.
+            function_name: The name of the function in the envelope's module to load.
+                Defaults to `main`.
+
+        Returns:
+            The loaded circuit.
+        """
+
+    @deprecated("Use HUGR envelopes instead. See the `to_bytes` and `to_str` methods.")
+    def to_package_json(self) -> str:
+        """Encode the circuit as a HUGR Package json."""
+
+    @staticmethod
+    @deprecated(
+        "Use HUGR envelopes instead. See the `from_bytes` and `from_str` methods."
+    )
     def from_package_json(json: str, function_name: str | None = None) -> Tk2Circuit:
         """Decode a HUGR Package json to a circuit.
 

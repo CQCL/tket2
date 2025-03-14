@@ -3,8 +3,10 @@
 use std::borrow::{Borrow, Cow};
 use std::fmt::Display;
 use std::mem;
+use std::num::{NonZero, NonZeroU8};
 
 use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
+use hugr::envelope::{EnvelopeConfig, EnvelopeFormat, ZstdConfig};
 use hugr::extension::prelude::qb_t;
 use hugr::extension::{ExtensionRegistry, EMPTY_REG};
 use hugr::ops::handle::NodeHandle;
@@ -95,20 +97,7 @@ impl Tk2Circuit {
             PyErr::new::<PyAttributeError, _>(format!("Could not encode circuit: {e}"))
         };
         let mut buf = Vec::new();
-        self.circ.to_hugr_writer(&mut buf).map_err(err)?;
-        let res = std::str::from_utf8(&buf).map_err(err)?;
-        Ok(res.to_string())
-    }
-
-    /// Encode the circuit as a Hugr Package json string.
-    //
-    // TODO: Bind a messagepack encoder/decoder too.
-    pub fn to_package_json(&self) -> PyResult<String> {
-        fn err(e: impl Display) -> PyErr {
-            PyErr::new::<PyAttributeError, _>(format!("Could not encode circuit: {e}"))
-        };
-        let mut buf = Vec::new();
-        self.circ.to_package_writer(&mut buf).map_err(err)?;
+        self.circ.store_hugr(&mut buf).map_err(err)?;
         let res = std::str::from_utf8(&buf).map_err(err)?;
         Ok(res.to_string())
     }
@@ -119,8 +108,69 @@ impl Tk2Circuit {
         fn err(e: impl Display) -> PyErr {
             PyErr::new::<PyAttributeError, _>(format!("Could not read hugr: {e}"))
         };
-        let circ = Circuit::load_hugr_reader(json.as_bytes()).map_err(err)?;
+        let circ = Circuit::load_hugr(json.as_bytes()).map_err(err)?;
         Ok(Tk2Circuit { circ })
+    }
+
+    /// Encode the circuit as a HUGR envelope.
+    pub fn to_bytes(&self, config: Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
+        fn err(e: impl Display) -> PyErr {
+            PyErr::new::<PyAttributeError, _>(format!("Could not encode circuit: {e}"))
+        };
+        let config = envelope_config_from_py(config)?;
+        let mut buf = Vec::new();
+        self.circ.store(&mut buf, config).map_err(err)?;
+        Ok(buf)
+    }
+
+    /// Encode the circuit as a HUGR envelope.
+    ///
+    /// If no config is given, it defaults to the default text envelope.
+    #[pyo3(signature = (config = None))]
+    pub fn to_str(&self, config: Option<Bound<'_, PyAny>>) -> PyResult<Vec<u8>> {
+        fn err(e: impl Display) -> PyErr {
+            PyErr::new::<PyAttributeError, _>(format!("Could not encode circuit: {e}"))
+        };
+        let config = match config {
+            Some(cfg) => envelope_config_from_py(cfg)?,
+            None => EnvelopeConfig::text(),
+        };
+        let mut buf = Vec::new();
+        self.circ.store(&mut buf, config).map_err(err)?;
+        Ok(buf)
+    }
+
+    /// Loads a circuit from a HUGR envelope.
+    #[staticmethod]
+    #[pyo3(signature = (bytes, function_name = None))]
+    pub fn from_bytes(bytes: &[u8], function_name: Option<String>) -> PyResult<Self> {
+        fn err(e: impl Display) -> PyErr {
+            PyErr::new::<PyAttributeError, _>(format!("Could not read envelope: {e}"))
+        };
+        let name = function_name.unwrap_or_else(|| "main".to_string());
+        let circ = Circuit::load_function(bytes, name).map_err(err)?;
+        Ok(Tk2Circuit { circ })
+    }
+
+    /// Loads a circuit from a HUGR envelope string.
+    #[staticmethod]
+    #[pyo3(signature = (envelope, function_name = None))]
+    pub fn from_str(envelope: &str, function_name: Option<String>) -> PyResult<Self> {
+        fn err(e: impl Display) -> PyErr {
+            PyErr::new::<PyAttributeError, _>(format!("Could not read envelope: {e}"))
+        };
+        let name = function_name.unwrap_or_else(|| "main".to_string());
+        let circ = Circuit::load_function_str(envelope, name).map_err(err)?;
+        Ok(Tk2Circuit { circ })
+    }
+
+    /// Encode the circuit as a Hugr Package json string.
+    //#[deprecated(note = "Use HUGR envelopes instead. See `to_bytes` and `to_str`")] // Commented out since pyo3's macros still use it and cause warnings.
+    pub fn to_package_json(&self) -> PyResult<String> {
+        fn err(e: impl Display) -> PyErr {
+            PyErr::new::<PyAttributeError, _>(format!("Could not encode circuit: {e}"))
+        };
+        self.circ.store_str().map_err(err)
     }
 
     /// Decode a HUGR Package json to a circuit.
@@ -133,12 +183,13 @@ impl Tk2Circuit {
     /// When `function_name` is not given, it defaults to `main`.
     #[staticmethod]
     #[pyo3(signature = (json, function_name = None))]
+    //#[deprecated(note = "Use HUGR envelopes instead. See `from_bytes` and `from_str`")] // Commented out since pyo3's macros still use it and cause warnings.
     pub fn from_package_json(json: &str, function_name: Option<String>) -> PyResult<Self> {
         fn err(e: impl Display) -> PyErr {
             PyErr::new::<PyAttributeError, _>(format!("Could not read package: {e}"))
         };
         let name = function_name.unwrap_or_else(|| "main".to_string());
-        let circ = Circuit::load_function_reader(json.as_bytes(), name).map_err(err)?;
+        let circ = Circuit::load_function_str(json, name).map_err(err)?;
         Ok(Tk2Circuit { circ })
     }
 
@@ -278,4 +329,28 @@ impl Tk2Circuit {
     pub fn try_extract(circ: &Bound<PyAny>) -> PyResult<Self> {
         circ.extract::<Tk2Circuit>()
     }
+}
+
+/// Converts a python `hugr.envelope.EnvelopeConfig` into a rust-based [`EnvelopeConfig`].
+pub fn envelope_config_from_py(config: Bound<'_, PyAny>) -> PyResult<EnvelopeConfig> {
+    let mut res = EnvelopeConfig::default();
+
+    let format = config.getattr("format")?;
+    let format_ident: usize = format.getattr("value")?.extract()?;
+    res.format = EnvelopeFormat::from_repr(format_ident).ok_or_else(|| {
+        PyErr::new::<PyValueError, _>(format!("Invalid envelope format: {format_ident}"))
+    })?;
+
+    let zstd: Option<usize> = config.getattr("zstd")?.extract()?;
+    res.zstd = zstd.map(|level| {
+        let mut z = ZstdConfig::default();
+        // Compression level 0 means default compression.
+        // We represent that as `None` on the rust struct.
+        if level > 0 && level < u8::MAX as usize {
+            z.level = Some(NonZeroU8::new(level as u8).unwrap());
+        }
+        z
+    });
+
+    Ok(res)
 }
