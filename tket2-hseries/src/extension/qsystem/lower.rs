@@ -8,7 +8,7 @@ use hugr::{
     ops::{self, DataflowOpTrait, OpTag, ValidateOp},
     std_extensions::arithmetic::{float_ops::FloatOps, float_types::ConstF64},
     types::Signature,
-    Direction, Hugr, HugrView, Node, Wire,
+    Direction, Hugr, HugrView, Node, PortIndex, Wire,
 };
 use lazy_static::lazy_static;
 use std::collections::btree_map::Entry;
@@ -136,7 +136,7 @@ fn lower_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
             .map_err(LowerTk2Error::OpReplacement)?;
 
         // add an input for the Call static input
-        hugr.add_ports(node, Direction::Incoming, 1);
+        hugr.insert_ports(node, Direction::Incoming, call_static_port.index(), 1);
 
         // connect the function to the call
         hugr.connect(func_node, 0, node, call_static_port);
