@@ -99,7 +99,7 @@ impl Circuit<Hugr> {
     /// Otherwise, the json must encode a module-rooted HUGR containing the
     /// named function.
     pub fn load_function_reader(
-        json: impl std::io::BufRead,
+        json: impl io::BufRead,
         function_name: impl AsRef<str>,
     ) -> Result<Self, CircuitLoadError> {
         let pkg = Package::load(json, Some(&REGISTRY))?;
