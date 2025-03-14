@@ -66,104 +66,87 @@ pub enum LowerTk2Error {
     InvalidFuncDefn(#[error(ignore)] hugr::ops::OpType),
 }
 
-/// Helper struct for lowering [Tk2Op]s to [QSystemOp]s.
-/// Holds lazy function definitions for each [Tk2Op].
-struct LowerToCalls<'h, H> {
-    hugr: &'h mut H,
-    funcs: BTreeMap<Tk2Op, Node>,
-}
+/// Lower all [Tk2Op]s to [QSystemOp]s in the Hugr
+/// by lazily defining and calling functions that implement the decomposition.
+/// Returns the nodes that were replaced.
+///
+/// # Errors
+/// Returns an error if the replacement fails, which could be if the root
+/// operation cannot have children of type [OpTag::FuncDefn].
+fn lower_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
+    let mut funcs: BTreeMap<Tk2Op, Node> = BTreeMap::new();
 
-impl<'h, H: HugrMut> LowerToCalls<'h, H> {
-    fn new(hugr: &'h mut H) -> Self {
-        Self {
-            hugr,
-            funcs: BTreeMap::new(),
-        }
+    let root_op = hugr.get_optype(hugr.root());
+    if !root_op
+        .validity_flags()
+        .allowed_children
+        .is_superset(OpTag::FuncDefn)
+    {
+        return Err(LowerTk2Error::InvalidFuncDefn(root_op.clone()));
     }
 
-    /// Lower all [Tk2Op]s to [QSystemOp]s in the Hugr
-    /// by lazily defining and calling functions that implement the decomposition.
-    /// Returns the nodes that were replaced.
-    ///
-    /// # Errors
-    /// Returns an error if the replacement fails, which could be if the root
-    /// operation cannot have children of type [OpTag::FuncDefn].
-    fn lower_ops(&mut self) -> Result<Vec<Node>, LowerTk2Error> {
-        let root_op = self.hugr.get_optype(self.hugr.root());
-        if !root_op
-            .validity_flags()
-            .allowed_children
-            .is_superset(OpTag::FuncDefn)
-        {
-            return Err(LowerTk2Error::InvalidFuncDefn(root_op.clone()));
-        }
+    let replacements: Vec<_> = hugr
+        .nodes()
+        .filter_map(|n| {
+            let op: Tk2Op = hugr.get_optype(n).cast()?;
+            Some((n, op))
+        })
+        .collect();
 
-        let replacements: Vec<_> = self
-            .hugr
-            .nodes()
-            .filter_map(|n| {
-                let op: Tk2Op = self.hugr.get_optype(n).cast()?;
-                Some((n, op))
-            })
-            .collect();
+    let mut replaced_nodes = Vec::new();
 
-        let mut replaced_nodes = Vec::new();
-
-        for (node, op) in replacements {
-            // retrrieve or build the function
-            let func_node = match self.funcs.entry(op) {
-                Entry::Occupied(f) => *f.get(),
-                Entry::Vacant(entry) => {
-                    let h = build_func(op)?;
-                    let inserted = self.hugr.insert_hugr(self.hugr.root(), h);
-                    entry.insert(inserted.new_root);
-                    inserted.new_root
-                }
-            };
-            let call_op: hugr::ops::OpType = hugr::ops::Call::try_new(
-                self.hugr
-                    .get_optype(func_node)
-                    .as_func_defn()
-                    .expect("should be a function definition")
-                    .signature
-                    .clone(),
-                [], // no polymorphic ops functions expected.
-            )
-            .expect("signature should be valid")
-            .into();
-
-            let call_static_port = call_op
-                .static_input_port()
-                .expect("Call should have static input");
-            let other_port = call_op
-                .other_input_port()
-                .expect("Call can have state order input");
-            // replace the tk2op with the function call
-            self.hugr
-                .replace_op(node, call_op)
-                .map_err(LowerTk2Error::OpReplacement)?;
-
-            // add an input for the Call static input
-            let num_inputs = self.hugr.num_inputs(node);
-            let num_outputs = self.hugr.num_outputs(node);
-            self.hugr.set_num_ports(node, num_inputs + 1, num_outputs);
-
-            let state_links: Vec<_> = self.hugr.linked_outputs(node, call_static_port).collect();
-            if !state_links.is_empty() {
-                // state order input is occupying port and needs to shift by 1
-                self.hugr.disconnect(node, call_static_port);
-                for (nei, out_p) in state_links {
-                    self.hugr.connect(nei, out_p, node, other_port);
-                }
+    for (node, op) in replacements {
+        // retrrieve or build the function
+        let func_node = match funcs.entry(op) {
+            Entry::Occupied(f) => *f.get(),
+            Entry::Vacant(entry) => {
+                let h = build_func(op)?;
+                let inserted = hugr.insert_hugr(hugr.root(), h);
+                entry.insert(inserted.new_root);
+                inserted.new_root
             }
-            // connect the function to the call
-            self.hugr.connect(func_node, 0, node, call_static_port);
+        };
+        let call_op: hugr::ops::OpType = hugr::ops::Call::try_new(
+            hugr.get_optype(func_node)
+                .as_func_defn()
+                .expect("should be a function definition")
+                .signature
+                .clone(),
+            [], // no polymorphic ops functions expected.
+        )
+        .expect("signature should be valid")
+        .into();
 
-            replaced_nodes.push(node);
+        let call_static_port = call_op
+            .static_input_port()
+            .expect("Call should have static input");
+        let other_port = call_op
+            .other_input_port()
+            .expect("Call can have state order input");
+        // replace the tk2op with the function call
+        hugr.replace_op(node, call_op)
+            .map_err(LowerTk2Error::OpReplacement)?;
+
+        // add an input for the Call static input
+        let num_inputs = hugr.num_inputs(node);
+        let num_outputs = hugr.num_outputs(node);
+        hugr.set_num_ports(node, num_inputs + 1, num_outputs);
+
+        let state_links: Vec<_> = hugr.linked_outputs(node, call_static_port).collect();
+        if !state_links.is_empty() {
+            // state order input is occupying port and needs to shift by 1
+            hugr.disconnect(node, call_static_port);
+            for (nei, out_p) in state_links {
+                hugr.connect(nei, out_p, node, other_port);
+            }
         }
+        // connect the function to the call
+        hugr.connect(func_node, 0, node, call_static_port);
 
-        Ok(replaced_nodes)
+        replaced_nodes.push(node);
     }
+
+    Ok(replaced_nodes)
 }
 
 fn build_func(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
@@ -227,8 +210,7 @@ pub fn lower_tk2_op(hugr: &mut impl HugrMut) -> Result<Vec<hugr::Node>, LowerTk2
             Err(e) => return Err(e),
         };
     }
-    let called_nodes = LowerToCalls::new(hugr).lower_ops()?;
-    replaced_nodes.extend(called_nodes);
+    replaced_nodes.extend(lower_ops(hugr)?);
     Ok(replaced_nodes)
 }
 
