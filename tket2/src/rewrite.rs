@@ -10,6 +10,7 @@ use bytemuck::TransparentWrapper;
 pub use ecc_rewriter::ECCRewriter;
 
 use derive_more::{From, Into};
+use hugr::core::HugrNode;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::views::sibling_subgraph::{InvalidReplacement, InvalidSubgraph};
 use hugr::hugr::views::ExtractHugr;
@@ -26,24 +27,24 @@ use crate::circuit::Circuit;
 /// A subcircuit of a circuit.
 #[derive(Debug, Clone, From, Into)]
 #[repr(transparent)]
-pub struct Subcircuit {
-    pub(crate) subgraph: SiblingSubgraph,
+pub struct Subcircuit<N = Node> {
+    pub(crate) subgraph: SiblingSubgraph<N>,
 }
 
-unsafe impl TransparentWrapper<SiblingSubgraph> for Subcircuit {}
+unsafe impl<N> TransparentWrapper<SiblingSubgraph<N>> for Subcircuit<N> {}
 
-impl Subcircuit {
+impl<N: HugrNode> Subcircuit<N> {
     /// Create a new subcircuit induced from a set of nodes.
     pub fn try_from_nodes(
-        nodes: impl Into<Vec<Node>>,
-        circ: &Circuit<impl HugrView>,
-    ) -> Result<Self, InvalidSubgraph> {
+        nodes: impl Into<Vec<N>>,
+        circ: &Circuit<impl HugrView<Node = N>, N>,
+    ) -> Result<Self, InvalidSubgraph<N>> {
         let subgraph = SiblingSubgraph::try_from_nodes(nodes, circ.hugr())?;
         Ok(Self { subgraph })
     }
 
     /// Nodes in the subcircuit.
-    pub fn nodes(&self) -> &[Node] {
+    pub fn nodes(&self) -> &[N] {
         self.subgraph.nodes()
     }
 
@@ -53,10 +54,12 @@ impl Subcircuit {
     }
 
     /// The signature of the subcircuit.
-    pub fn signature(&self, circ: &Circuit<impl HugrView>) -> Signature {
+    pub fn signature(&self, circ: &Circuit<impl HugrView<Node = N>, N>) -> Signature {
         self.subgraph.signature(circ.hugr())
     }
+}
 
+impl Subcircuit<Node> {
     /// Create a rewrite rule to replace the subcircuit with a new circuit.
     ///
     /// # Parameters
@@ -64,8 +67,8 @@ impl Subcircuit {
     /// * `replacement` - The new circuit to replace the subcircuit with.
     pub fn create_rewrite(
         &self,
-        circuit: &Circuit<impl HugrView>,
-        replacement: Circuit<impl ExtractHugr>,
+        circuit: &Circuit<impl HugrView<Node = Node>>,
+        replacement: Circuit<impl ExtractHugr<Node = Node>>,
     ) -> Result<CircuitRewrite, InvalidReplacement> {
         // The replacement must be a Dfg rooted hugr.
         let replacement = replacement
@@ -81,14 +84,14 @@ impl Subcircuit {
 
 /// A rewrite rule for circuits.
 #[derive(Debug, Clone, From, Into)]
-pub struct CircuitRewrite(SimpleReplacement);
+pub struct CircuitRewrite<N = Node>(SimpleReplacement<N>);
 
 impl CircuitRewrite {
     /// Create a new rewrite rule.
     pub fn try_new(
         circuit_position: &Subcircuit,
-        circuit: &Circuit<impl HugrView>,
-        replacement: Circuit<impl ExtractHugr>,
+        circuit: &Circuit<impl HugrView<Node = Node>>,
+        replacement: Circuit<impl ExtractHugr<Node = Node>>,
     ) -> Result<Self, InvalidReplacement> {
         let replacement = replacement
             .extract_dfg()
@@ -153,5 +156,5 @@ impl CircuitRewrite {
 /// Generate rewrite rules for circuits.
 pub trait Rewriter {
     /// Get the rewrite rules for a circuit.
-    fn get_rewrites(&self, circ: &Circuit<impl HugrView>) -> Vec<CircuitRewrite>;
+    fn get_rewrites(&self, circ: &Circuit<impl HugrView<Node = Node>>) -> Vec<CircuitRewrite>;
 }

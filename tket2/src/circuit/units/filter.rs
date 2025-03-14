@@ -13,7 +13,7 @@ use hugr::Wire;
 use super::LinearUnit;
 
 /// A unit filter that return only linear units.
-pub fn filter_linear<P>(item: (CircuitUnit, P, Type)) -> Option<(LinearUnit, P, Type)> {
+pub fn filter_linear<N, P>(item: (CircuitUnit<N>, P, Type)) -> Option<(LinearUnit, P, Type)> {
     match item {
         (CircuitUnit::Linear(unit), port, typ) => Some((LinearUnit::new(unit), port, typ)),
         _ => None,
@@ -21,7 +21,7 @@ pub fn filter_linear<P>(item: (CircuitUnit, P, Type)) -> Option<(LinearUnit, P, 
 }
 
 /// A unit filter that return only qubits, a subset of [`filter_linear`].
-pub fn filter_qubit<P>(item: (CircuitUnit, P, Type)) -> Option<(LinearUnit, P, Type)> {
+pub fn filter_qubit<N, P>(item: (CircuitUnit<N>, P, Type)) -> Option<(LinearUnit, P, Type)> {
     match item {
         (CircuitUnit::Linear(unit), port, typ) if typ == prelude::qb_t() => {
             Some((LinearUnit::new(unit), port, typ))
@@ -31,7 +31,7 @@ pub fn filter_qubit<P>(item: (CircuitUnit, P, Type)) -> Option<(LinearUnit, P, T
 }
 
 /// A unit filter that return only non-linear units.
-pub fn filter_non_linear<P>(item: (CircuitUnit, P, Type)) -> Option<(Wire, P, Type)> {
+pub fn filter_non_linear<N, P>(item: (CircuitUnit<N>, P, Type)) -> Option<(Wire<N>, P, Type)> {
     match item {
         (CircuitUnit::Wire(wire), port, typ) => Some((wire, port, typ)),
         _ => None,

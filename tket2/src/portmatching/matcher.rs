@@ -138,7 +138,7 @@ impl PatternMatch {
     pub fn try_from_root_match_with_checker(
         root: Node,
         pattern: PatternID,
-        circ: &Circuit<impl HugrView>,
+        circ: &Circuit<impl HugrView<Node = Node>>,
         matcher: &PatternMatcher,
         checker: &impl ConvexChecker,
     ) -> Result<Self, InvalidPatternMatch> {
@@ -198,7 +198,7 @@ impl PatternMatch {
     pub fn try_from_io_with_checker(
         root: Node,
         pattern: PatternID,
-        circ: &Circuit<impl HugrView>,
+        circ: &Circuit<impl HugrView<Node = Node>>,
         inputs: Vec<Vec<(Node, IncomingPort)>>,
         outputs: Vec<(Node, OutgoingPort)>,
         checker: &impl ConvexChecker,
@@ -215,7 +215,7 @@ impl PatternMatch {
     /// Construct a rewrite to replace `self` with `repl`.
     pub fn to_rewrite(
         &self,
-        source: &Circuit<impl HugrView>,
+        source: &Circuit<impl HugrView<Node = Node>>,
         target: Circuit,
     ) -> Result<CircuitRewrite, InvalidReplacement> {
         CircuitRewrite::try_new(&self.position, source, target)
@@ -273,7 +273,7 @@ impl PatternMatcher {
     /// Find all convex pattern matches in a circuit.
     pub fn find_matches_iter<'a, 'c: 'a>(
         &'a self,
-        circuit: &'c Circuit<impl HugrView>,
+        circuit: &'c Circuit<impl HugrView<Node = Node>>,
     ) -> impl Iterator<Item = PatternMatch> + 'a {
         let checker = TopoConvexChecker::new(circuit.hugr());
         circuit
@@ -282,14 +282,14 @@ impl PatternMatcher {
     }
 
     /// Find all convex pattern matches in a circuit.and collect in to a vector
-    pub fn find_matches(&self, circuit: &Circuit<impl HugrView>) -> Vec<PatternMatch> {
+    pub fn find_matches(&self, circuit: &Circuit<impl HugrView<Node = Node>>) -> Vec<PatternMatch> {
         self.find_matches_iter(circuit).collect()
     }
 
     /// Find all convex pattern matches in a circuit rooted at a given node.
     fn find_rooted_matches(
         &self,
-        circ: &Circuit<impl HugrView>,
+        circ: &Circuit<impl HugrView<Node = Node>>,
         root: Node,
         checker: &impl ConvexChecker,
     ) -> Vec<PatternMatch> {
@@ -438,7 +438,7 @@ fn compatible_offsets(e1: &PEdge, e2: &PEdge) -> bool {
 
 /// Returns a predicate checking that an edge at `src` satisfies `prop` in `circ`.
 pub(super) fn validate_circuit_edge(
-    circ: &Circuit<impl HugrView>,
+    circ: &Circuit<impl HugrView<Node = Node>>,
 ) -> impl for<'a> Fn(NodeID, &'a PEdge) -> Option<NodeID> + '_ {
     move |src, &prop| {
         let NodeID::HugrNode(src) = src else {
@@ -464,7 +464,7 @@ pub(super) fn validate_circuit_edge(
 
 /// Returns a predicate checking that `node` satisfies `prop` in `circ`.
 pub(crate) fn validate_circuit_node(
-    circ: &Circuit<impl HugrView>,
+    circ: &Circuit<impl HugrView<Node = Node>>,
 ) -> impl for<'a> Fn(NodeID, &PNode) -> bool + '_ {
     move |node, prop| {
         let NodeID::HugrNode(node) = node else {

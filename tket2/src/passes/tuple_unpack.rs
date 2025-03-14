@@ -16,7 +16,7 @@ use crate::Circuit;
 /// Find tuple pack operations followed by tuple unpack operations
 /// and generate rewrites to remove them.
 pub fn find_tuple_unpack_rewrites(
-    circ: &Circuit<impl HugrView>,
+    circ: &Circuit<impl HugrView<Node = Node>>,
 ) -> impl Iterator<Item = CircuitRewrite> + '_ {
     circ.commands().filter_map(|cmd| make_rewrite(circ, cmd))
 }
@@ -35,7 +35,10 @@ fn is_unpack_tuple(optype: &OpType) -> bool {
     optype.name() == format!("prelude.{}", TupleOpDef::UnpackTuple.name())
 }
 
-fn make_rewrite<T: HugrView>(circ: &Circuit<T>, cmd: Command<T>) -> Option<CircuitRewrite> {
+fn make_rewrite<T: HugrView<Node = Node>>(
+    circ: &Circuit<T>,
+    cmd: Command<T>,
+) -> Option<CircuitRewrite> {
     let cmd_optype = cmd.optype();
     let tuple_node = cmd.node();
     if !is_make_tuple(cmd_optype) {
@@ -86,7 +89,7 @@ fn make_rewrite<T: HugrView>(circ: &Circuit<T>, cmd: Command<T>) -> Option<Circu
 
 /// Returns a rewrite to remove a tuple pack operation that's followed by unpack operations,
 /// and `other_tuple_links` other operations.
-fn remove_pack_unpack<T: HugrView>(
+fn remove_pack_unpack<T: HugrView<Node = Node>>(
     circ: &Circuit<T>,
     tuple_types: &[Type],
     pack_node: Node,

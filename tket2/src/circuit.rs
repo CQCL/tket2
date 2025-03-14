@@ -12,7 +12,7 @@ use std::iter::Sum;
 
 pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
-use hugr::extension::prelude::{LiftDef, NoopDef, TupleOpDef};
+use hugr::extension::prelude::{NoopDef, TupleOpDef};
 use hugr::hugr::views::{DescendantsGraph, ExtractHugr, HierarchyView};
 use itertools::Either::{Left, Right};
 
@@ -34,16 +34,16 @@ use self::units::{filter, LinearUnit, Units};
 
 /// A quantum circuit, represented as a function in a HUGR.
 #[derive(Debug, Clone)]
-pub struct Circuit<T = Hugr> {
+pub struct Circuit<T = Hugr, N = Node> {
     /// The HUGR containing the circuit.
     hugr: T,
     /// The parent node of the circuit.
     ///
     /// This is checked at runtime to ensure that the node is a DFG node.
-    parent: Node,
+    parent: N,
 }
 
-impl<T: Default + HugrView> Default for Circuit<T> {
+impl<T: Default + HugrView> Default for Circuit<T, T::Node> {
     fn default() -> Self {
         let hugr = T::default();
         let parent = hugr.root();
@@ -51,7 +51,7 @@ impl<T: Default + HugrView> Default for Circuit<T> {
     }
 }
 
-impl<T: HugrView> PartialEq for Circuit<T> {
+impl<T: HugrView<Node = Node>> PartialEq for Circuit<T> {
     fn eq(&self, other: &Self) -> bool {
         match (self.circuit_hash(), other.circuit_hash()) {
             (Ok(hash1), Ok(hash2)) => hash1 == hash2,
@@ -71,7 +71,6 @@ lazy_static! {
         set.insert(format!("prelude.{}", NoopDef.name()).into());
         set.insert(format!("prelude.{}", TupleOpDef::MakeTuple.name()).into());
         set.insert(format!("prelude.{}", TupleOpDef::UnpackTuple.name()).into());
-        set.insert(format!("prelude.{}", LiftDef.name()).into());
         set
     };
 }
@@ -83,13 +82,13 @@ fn issue_1496_remains() {
     assert_eq!("Noop", NoopDef.name())
 }
 
-impl<T: HugrView> Circuit<T> {
+impl<T: HugrView> Circuit<T, T::Node> {
     /// Create a new circuit from a HUGR and a node.
     ///
     /// # Errors
     ///
     /// Returns an error if the parent node is not a DFG node in the HUGR.
-    pub fn try_new(hugr: T, parent: Node) -> Result<Self, CircuitError> {
+    pub fn try_new(hugr: T, parent: T::Node) -> Result<Self, CircuitError<T::Node>> {
         check_hugr(&hugr, parent)?;
         Ok(Self { hugr, parent })
     }
@@ -101,12 +100,12 @@ impl<T: HugrView> Circuit<T> {
     /// # Panics
     ///
     /// Panics if the parent node is not a DFG node in the HUGR.
-    pub fn new(hugr: T, parent: Node) -> Self {
+    pub fn new(hugr: T, parent: T::Node) -> Self {
         Self::try_new(hugr, parent).unwrap_or_else(|e| panic!("{}", e))
     }
 
     /// Returns the node containing the circuit definition.
-    pub fn parent(&self) -> Node {
+    pub fn parent(&self) -> T::Node {
         self.parent
     }
 
@@ -126,15 +125,6 @@ impl<T: HugrView> Circuit<T> {
     /// by changing the node's type to a non-DFG node or by removing it.
     pub fn hugr_mut(&mut self) -> &mut T {
         &mut self.hugr
-    }
-
-    /// Ensures the circuit contains an owned HUGR.
-    pub fn to_owned(&self) -> Circuit<Hugr> {
-        let hugr = self.hugr.base_hugr().clone();
-        Circuit {
-            hugr,
-            parent: self.parent,
-        }
     }
 
     /// Return the name of the circuit
@@ -167,7 +157,7 @@ impl<T: HugrView> Circuit<T> {
 
     /// Returns the input node to the circuit.
     #[inline]
-    pub fn input_node(&self) -> Node {
+    pub fn input_node(&self) -> T::Node {
         self.hugr
             .get_io(self.parent)
             .expect("Circuit has no input node")[0]
@@ -175,7 +165,7 @@ impl<T: HugrView> Circuit<T> {
 
     /// Returns the output node to the circuit.
     #[inline]
-    pub fn output_node(&self) -> Node {
+    pub fn output_node(&self) -> T::Node {
         self.hugr
             .get_io(self.parent)
             .expect("Circuit has no output node")[1]
@@ -183,7 +173,7 @@ impl<T: HugrView> Circuit<T> {
 
     /// Returns the input and output nodes of the circuit.
     #[inline]
-    pub fn io_nodes(&self) -> [Node; 2] {
+    pub fn io_nodes(&self) -> [T::Node; 2] {
         self.hugr
             .get_io(self.parent)
             .expect("Circuit has no I/O nodes")
@@ -229,7 +219,7 @@ impl<T: HugrView> Circuit<T> {
 
     /// Get the input units of the circuit and their types.
     #[inline]
-    pub fn units(&self) -> Units<OutgoingPort>
+    pub fn units(&self) -> Units<OutgoingPort, T::Node>
     where
         Self: Sized,
     {
@@ -247,7 +237,7 @@ impl<T: HugrView> Circuit<T> {
 
     /// Get the non-linear input units of the circuit and their types.
     #[inline]
-    pub fn nonlinear_units(&self) -> impl Iterator<Item = (Wire, OutgoingPort, Type)> + '_
+    pub fn nonlinear_units(&self) -> impl Iterator<Item = (Wire<T::Node>, OutgoingPort, Type)> + '_
     where
         Self: Sized,
     {
@@ -261,6 +251,52 @@ impl<T: HugrView> Circuit<T> {
         Self: Sized,
     {
         self.units().filter_map(filter::filter_qubit)
+    }
+
+    /// Compute the cost of a group of nodes in a circuit based on a
+    /// per-operation cost function.
+    #[inline]
+    pub fn nodes_cost<F, C>(&self, nodes: impl IntoIterator<Item = T::Node>, op_cost: F) -> C
+    where
+        C: Sum,
+        F: Fn(&OpType) -> C,
+    {
+        nodes
+            .into_iter()
+            .map(|n| op_cost(self.hugr.get_optype(n)))
+            .sum()
+    }
+
+    /// Return the graphviz representation of the underlying graph and hierarchy side by side.
+    ///
+    /// For a simpler representation, use the [`Circuit::mermaid_string`] format instead.
+    pub fn dot_string(&self) -> String {
+        // TODO: This will print the whole HUGR without identifying the circuit container.
+        // Should we add some extra formatting for that?
+        self.hugr.dot_string()
+    }
+
+    /// Return the mermaid representation of the underlying hierarchical graph.
+    ///
+    /// The hierarchy is represented using subgraphs. Edges are labelled with
+    /// their source and target ports.
+    ///
+    /// For a more detailed representation, use the [`Circuit::dot_string`]
+    /// format instead.
+    pub fn mermaid_string(&self) -> String {
+        // TODO: See comment in `dot_string`.
+        self.hugr.mermaid_string()
+    }
+}
+
+impl<T: HugrView<Node = Node>> Circuit<T, Node> {
+    /// Ensures the circuit contains an owned HUGR.
+    pub fn to_owned(&self) -> Circuit<Hugr> {
+        let hugr = self.hugr.base_hugr().clone();
+        Circuit {
+            hugr,
+            parent: self.parent,
+        }
     }
 
     /// Returns all the commands in the circuit, in some topological order.
@@ -293,52 +329,6 @@ impl<T: HugrView> Circuit<T> {
         })
     }
 
-    /// Compute the cost of the circuit based on a per-operation cost function.
-    #[inline]
-    pub fn circuit_cost<F, C>(&self, op_cost: F) -> C
-    where
-        Self: Sized,
-        C: Sum,
-        F: Fn(&OpType) -> C,
-    {
-        self.commands().map(|cmd| op_cost(cmd.optype())).sum()
-    }
-
-    /// Compute the cost of a group of nodes in a circuit based on a
-    /// per-operation cost function.
-    #[inline]
-    pub fn nodes_cost<F, C>(&self, nodes: impl IntoIterator<Item = Node>, op_cost: F) -> C
-    where
-        C: Sum,
-        F: Fn(&OpType) -> C,
-    {
-        nodes
-            .into_iter()
-            .map(|n| op_cost(self.hugr.get_optype(n)))
-            .sum()
-    }
-
-    /// Return the graphviz representation of the underlying graph and hierarchy side by side.
-    ///
-    /// For a simpler representation, use the [`Circuit::mermaid_string`] format instead.
-    pub fn dot_string(&self) -> String {
-        // TODO: This will print the whole HUGR without identifying the circuit container.
-        // Should we add some extra formatting for that?
-        self.hugr.dot_string()
-    }
-
-    /// Return the mermaid representation of the underlying hierarchical graph.
-    ///
-    /// The hierarchy is represented using subgraphs. Edges are labelled with
-    /// their source and target ports.
-    ///
-    /// For a more detailed representation, use the [`Circuit::dot_string`]
-    /// format instead.
-    pub fn mermaid_string(&self) -> String {
-        // TODO: See comment in `dot_string`.
-        self.hugr.mermaid_string()
-    }
-
     /// Extracts the circuit into a new owned HUGR containing the circuit at the root.
     /// Replaces the circuit container operation with an [`OpType::DFG`].
     ///
@@ -359,9 +349,20 @@ impl<T: HugrView> Circuit<T> {
         extract_dfg::rewrite_into_dfg(&mut circ)?;
         Ok(circ)
     }
+
+    /// Compute the cost of the circuit based on a per-operation cost function.
+    #[inline]
+    pub fn circuit_cost<F, C>(&self, op_cost: F) -> C
+    where
+        Self: Sized,
+        C: Sum,
+        F: Fn(&OpType) -> C,
+    {
+        self.commands().map(|cmd| op_cost(cmd.optype())).sum()
+    }
 }
 
-impl<T: HugrView> From<T> for Circuit<T> {
+impl<T: HugrView> From<T> for Circuit<T, T::Node> {
     fn from(hugr: T) -> Self {
         let parent = hugr.root();
         Self::new(hugr, parent)
@@ -370,7 +371,7 @@ impl<T: HugrView> From<T> for Circuit<T> {
 
 /// Checks if the passed hugr is a valid circuit,
 /// and return [`CircuitError`] if not.
-fn check_hugr(hugr: &impl HugrView, parent: Node) -> Result<(), CircuitError> {
+fn check_hugr<H: HugrView>(hugr: &H, parent: H::Node) -> Result<(), CircuitError<H::Node>> {
     if !hugr.contains_node(parent) {
         return Err(CircuitError::MissingParentNode { parent });
     }
@@ -469,12 +470,12 @@ pub(crate) fn remove_empty_wire(
 /// Errors that can occur when mutating a circuit.
 #[derive(Display, Debug, Clone, Error, PartialEq)]
 #[non_exhaustive]
-pub enum CircuitError {
+pub enum CircuitError<N = Node> {
     /// The parent node for the circuit does not exist in the HUGR.
     #[display("{parent} cannot define a circuit as it is not present in the HUGR.")]
     MissingParentNode {
         /// The node that was used as the parent.
-        parent: Node,
+        parent: N,
     },
     /// Circuit parents must have a concrete signature.
     #[display(
@@ -484,7 +485,7 @@ pub enum CircuitError {
     )]
     ParametricSignature {
         /// The node that was used as the parent.
-        parent: Node,
+        parent: N,
         /// The parent optype.
         optype: OpType,
         /// The parent signature.
@@ -497,7 +498,7 @@ pub enum CircuitError {
     )]
     InvalidParentOp {
         /// The node that was used as the parent.
-        parent: Node,
+        parent: N,
         /// The parent optype.
         optype: OpType,
     },

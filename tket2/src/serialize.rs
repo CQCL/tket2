@@ -12,6 +12,8 @@ pub use pytket::{
     save_tk1_json_str, save_tk1_json_writer, TKETDecode,
 };
 
+use hugr::envelope::{EnvelopeConfig, EnvelopeError};
+
 use derive_more::{Display, Error, From};
 use hugr::ops::{NamedOp, OpTag, OpTrait, OpType};
 use hugr::package::{Package, PackageEncodingError, PackageError, PackageValidationError};
@@ -30,7 +32,7 @@ use crate::{Circuit, CircuitError};
 #[allow(unused)]
 const METADATA_ENTRYPOINT: &str = "TKET2.entrypoint";
 
-impl<T: HugrView> Circuit<T> {
+impl<T: HugrView> Circuit<T, T::Node> {
     /// Store the circuit as a HUGR in json format.
     ///
     /// # Errors
@@ -39,7 +41,7 @@ impl<T: HugrView> Circuit<T> {
     ///
     // TODO: Store the path pointer on `METADATA_ENTRYPOINT`.
     // We may need mutable access to `T` to avoid cloning the HUGR to add the entry.
-    pub fn to_hugr_writer(&self, writer: impl io::Write) -> Result<(), CircuitStoreError> {
+    pub fn to_hugr_writer(&self, writer: impl io::Write) -> Result<(), CircuitStoreError<T::Node>> {
         let hugr = self.hugr();
 
         if self.parent() != hugr.root() {
@@ -62,7 +64,10 @@ impl<T: HugrView> Circuit<T> {
     ///   the root's module.
     ///
     // TODO: Store the path pointer on `METADATA_ENTRYPOINT` instead.
-    pub fn to_package_writer(&self, writer: impl io::Write) -> Result<(), CircuitStoreError> {
+    pub fn to_package_writer(
+        &self,
+        writer: impl io::Write,
+    ) -> Result<(), CircuitStoreError<T::Node>> {
         let hugr = self.hugr();
 
         // Check if we support storing the circuit as a package.
@@ -81,7 +86,7 @@ impl<T: HugrView> Circuit<T> {
         let mut pkg = Package::from_hugr(hugr.base_hugr().clone())?;
         pkg.extensions = self.hugr().extensions().clone();
 
-        Ok(pkg.to_json_writer(writer)?)
+        Ok(pkg.store(writer, EnvelopeConfig::text())?)
     }
 }
 
@@ -94,10 +99,10 @@ impl Circuit<Hugr> {
     /// Otherwise, the json must encode a module-rooted HUGR containing the
     /// named function.
     pub fn load_function_reader(
-        json: impl io::Read,
+        json: impl io::BufRead,
         function_name: impl AsRef<str>,
     ) -> Result<Self, CircuitLoadError> {
-        let pkg = Package::from_json_reader(json, &REGISTRY)?;
+        let pkg = Package::load(json, Some(&REGISTRY))?;
         pkg.validate()?;
         let Package {
             modules,
@@ -128,11 +133,13 @@ impl Circuit<Hugr> {
 }
 
 /// Error type for serialization operations on [`Circuit`]s.
-#[derive(Debug, Display, Error, From)]
+#[derive(Debug, Display, Error)]
 #[non_exhaustive]
-pub enum CircuitStoreError {
+pub enum CircuitStoreError<N = Node> {
     /// Could not encode the hugr json.
     EncodingError(serde_json::Error),
+    /// Error writing envelope.
+    EnvelopeError(EnvelopeError),
     /// Cannot load the circuit file.
     #[display("Cannot write to the circuit file: {_0}")]
     InvalidFile(io::Error),
@@ -142,8 +149,32 @@ pub enum CircuitStoreError {
     #[display("The circuit's parent {parent} is not the root of the HUGR.")]
     NonRootCircuit {
         /// The parent node.
-        parent: Node,
+        parent: N,
     },
+}
+
+impl<N> From<serde_json::Error> for CircuitStoreError<N> {
+    fn from(e: serde_json::Error) -> Self {
+        CircuitStoreError::EncodingError(e)
+    }
+}
+
+impl<N> From<io::Error> for CircuitStoreError<N> {
+    fn from(e: io::Error) -> Self {
+        CircuitStoreError::InvalidFile(e)
+    }
+}
+
+impl<N> From<PackageError> for CircuitStoreError<N> {
+    fn from(e: PackageError) -> Self {
+        CircuitStoreError::PackageStore(e)
+    }
+}
+
+impl<N> From<EnvelopeError> for CircuitStoreError<N> {
+    fn from(e: EnvelopeError) -> Self {
+        CircuitStoreError::EnvelopeError(e)
+    }
 }
 
 /// Error type for deserialization operations on [`Circuit`]s.
@@ -192,6 +223,9 @@ pub enum CircuitLoadError {
     #[from]
     PackageError(PackageEncodingError),
 
+    #[from]
+    /// Error loading an envelope.
+    EnvelopeError(EnvelopeError),
     /// Error validating the loaded circuit.
     #[from]
     ValidationError(ValidationError),
@@ -206,7 +240,7 @@ pub enum CircuitLoadError {
     },
 }
 
-impl From<PackageEncodingError> for CircuitStoreError {
+impl<N> From<PackageEncodingError> for CircuitStoreError<N> {
     fn from(e: PackageEncodingError) -> Self {
         match e {
             PackageEncodingError::Package(e) => CircuitStoreError::PackageStore(e),
@@ -420,7 +454,7 @@ mod tests {
 
     #[rstest]
     fn serialize_package_errors(multi_module_pkg: Package) {
-        let pkg_json = multi_module_pkg.to_json().unwrap();
+        let pkg_json = multi_module_pkg.store_str(EnvelopeConfig::text()).unwrap();
 
         match Circuit::load_function_reader(Cursor::new(&pkg_json), "not_found") {
             Err(CircuitLoadError::FunctionNotFound {

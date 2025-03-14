@@ -25,7 +25,7 @@ use std::{collections::HashSet, fmt::Debug};
 
 use derive_more::From;
 use hugr::ops::OpType;
-use hugr::HugrView;
+use hugr::{HugrView, Node};
 use itertools::Itertools;
 
 use crate::circuit::cost::{is_cx, is_quantum, CircuitCost, CostDelta, LexicographicCost};
@@ -59,7 +59,7 @@ pub trait RewriteStrategy {
 
     /// The cost of a circuit using this strategy's cost function.
     #[inline]
-    fn circuit_cost(&self, circ: &Circuit<impl HugrView>) -> Self::Cost {
+    fn circuit_cost(&self, circ: &Circuit<impl HugrView<Node = Node>>) -> Self::Cost {
         circ.circuit_cost(|op| self.op_cost(op))
     }
 
@@ -86,7 +86,9 @@ pub struct RewriteResult<C: CircuitCost> {
     pub cost_delta: C::CostDelta,
 }
 
-impl<C: CircuitCost, T: HugrView> From<(Circuit<T>, C::CostDelta)> for RewriteResult<C> {
+impl<C: CircuitCost, T: HugrView<Node = Node>> From<(Circuit<T>, C::CostDelta)>
+    for RewriteResult<C>
+{
     #[inline]
     fn from((circ, cost_delta): (Circuit<T>, C::CostDelta)) -> Self {
         Self {
@@ -143,7 +145,7 @@ impl RewriteStrategy for GreedyRewriteStrategy {
         iter::once((circ, cost_delta).into())
     }
 
-    fn circuit_cost(&self, circ: &Circuit<impl HugrView>) -> Self::Cost {
+    fn circuit_cost(&self, circ: &Circuit<impl HugrView<Node = Node>>) -> Self::Cost {
         circ.num_operations()
     }
 

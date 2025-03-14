@@ -5,6 +5,7 @@
 
 use derive_more::{Display, Error, From};
 use hugr::hugr::views::ExtractHugr;
+use hugr::Node;
 use itertools::Itertools;
 
 use crate::serialize::pytket::OpConvertError;
@@ -13,7 +14,9 @@ use crate::Circuit;
 use super::find_tuple_unpack_rewrites;
 
 /// Try to lower a circuit to a form that can be encoded as a pytket legacy circuit.
-pub fn lower_to_pytket<T: ExtractHugr>(circ: &Circuit<T>) -> Result<Circuit, PytketLoweringError> {
+pub fn lower_to_pytket<T: ExtractHugr<Node = Node>>(
+    circ: &Circuit<T>,
+) -> Result<Circuit, PytketLoweringError> {
     let mut circ = circ
         .extract_dfg()
         .map_err(|_| PytketLoweringError::NonLocalOperations)?;
