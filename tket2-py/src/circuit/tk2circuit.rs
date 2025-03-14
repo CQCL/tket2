@@ -138,7 +138,7 @@ impl Tk2Circuit {
             PyErr::new::<PyAttributeError, _>(format!("Could not read package: {e}"))
         };
         let name = function_name.unwrap_or_else(|| "main".to_string());
-        let circ = Circuit::load_function_reader(json.as_bytes(), &name).map_err(err)?;
+        let circ = Circuit::load_function_reader(json.as_bytes(), name).map_err(err)?;
         Ok(Tk2Circuit { circ })
     }
 

@@ -723,8 +723,7 @@ pub trait WasmOpBuilder: Dataflow {
             // TODO Add an Error variant to BuildError for: Input wire has wrong type
             panic!("func wire is not a func type: {func_wire_type}")
         };
-        let type_row_norv = |tr| TypeRow::try_from(tr);
-        let (in_types, out_types) = (type_row_norv(in_types)?, type_row_norv(out_types)?);
+        let (in_types, out_types) = (TypeRow::try_from(in_types)?, TypeRow::try_from(out_types)?);
 
         Ok(self
             .add_dataflow_op(
