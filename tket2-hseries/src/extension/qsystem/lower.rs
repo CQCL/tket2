@@ -156,7 +156,8 @@ fn build_func(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
     let sig = op.into_extension_op().signature().into_owned();
     let sig = Signature::new(sig.input, sig.output); // ignore extension delta
                                                      // TODO check generated names are namespaced enough
-    let mut b = FunctionBuilder::new(op.name(), sig)?;
+    let f_name = format!("__tk2_{}", op.name().to_lowercase());
+    let mut b = FunctionBuilder::new(f_name, sig)?;
     let inputs: Vec<_> = b.input_wires().collect();
     let outputs = match (op, inputs.as_slice()) {
         (Tk2Op::H, [q]) => vec![b.build_h(*q)?],
@@ -392,7 +393,6 @@ mod test {
         // (phasedx + 2*(float + load))
         assert_eq!(h.node_count(), 59);
         assert_eq!(check_lowered(&h), Ok(()));
-
         if let Err(e) = h.validate() {
             panic!("{}", e);
         }
