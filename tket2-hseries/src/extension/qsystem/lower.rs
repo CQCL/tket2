@@ -95,15 +95,6 @@ fn lower_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
     let mut replaced_nodes = Vec::new();
 
     for (node, op) in replacements {
-        let opty: hugr::ops::OpType = op.into();
-        let other_input = opty
-            .other_input_port()
-            .expect("dataflow ops have state order input");
-        let state_links: Vec<_> = hugr.linked_outputs(node, other_input).collect();
-
-        // disconnect the state order links if they exist
-        hugr.disconnect(node, other_input);
-
         // retrrieve or build the function
         let func_node = match funcs.entry(op) {
             Entry::Occupied(f) => *f.get(),
@@ -128,23 +119,16 @@ fn lower_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
         let call_static_port = call_op
             .static_input_port()
             .expect("Call should have static input");
-        let other_port = call_op
-            .other_input_port()
-            .expect("Call can have state order input");
+
         // replace the tk2op with the function call
         hugr.replace_op(node, call_op)
             .map_err(LowerTk2Error::OpReplacement)?;
 
-        // add an input for the Call static input
+        // insert an input for the Call static input
         hugr.insert_ports(node, Direction::Incoming, call_static_port.index(), 1);
 
         // connect the function to the call
         hugr.connect(func_node, 0, node, call_static_port);
-
-        // reconnect state order links
-        for (nei, out_p) in state_links {
-            hugr.connect(nei, out_p, node, other_port);
-        }
 
         replaced_nodes.push(node);
     }
