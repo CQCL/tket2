@@ -8,6 +8,7 @@ from hugr.ops import ComWire, Command
 from hugr.std.float import FLOAT_T
 from hugr.build.function import Module
 from hugr.build.tracked_dfg import TrackedDfg
+from hugr.envelope import EnvelopeConfig
 from tket2.circuit import Tk2Circuit
 
 from dataclasses import dataclass
@@ -76,7 +77,9 @@ class CircBuild(TrackedDfg):
         and validate."""
 
         return Tk2Circuit.from_package_json(
-            self.finish_package(other_extensions=other_extensions).to_json()
+            self.finish_package(other_extensions=other_extensions).to_str(
+                EnvelopeConfig.TEXT
+            )
         )
 
 
