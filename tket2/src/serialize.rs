@@ -12,6 +12,8 @@ pub use pytket::{
     save_tk1_json_str, save_tk1_json_writer, TKETDecode,
 };
 
+use hugr::envelope::{EnvelopeConfig, EnvelopeError};
+
 use derive_more::{Display, Error, From};
 use hugr::ops::{NamedOp, OpTag, OpTrait, OpType};
 use hugr::package::{Package, PackageEncodingError, PackageError, PackageValidationError};
@@ -84,7 +86,7 @@ impl<T: HugrView> Circuit<T, T::Node> {
         let mut pkg = Package::from_hugr(hugr.base_hugr().clone())?;
         pkg.extensions = self.hugr().extensions().clone();
 
-        Ok(pkg.to_json_writer(writer)?)
+        Ok(pkg.store(writer, EnvelopeConfig::text())?)
     }
 }
 
@@ -97,10 +99,10 @@ impl Circuit<Hugr> {
     /// Otherwise, the json must encode a module-rooted HUGR containing the
     /// named function.
     pub fn load_function_reader(
-        json: impl io::Read,
+        json: impl std::io::BufRead,
         function_name: impl AsRef<str>,
     ) -> Result<Self, CircuitLoadError> {
-        let pkg = Package::from_json_reader(json, &REGISTRY)?;
+        let pkg = Package::load(json, Some(&REGISTRY))?;
         pkg.validate()?;
         let Package {
             modules,
@@ -136,6 +138,8 @@ impl Circuit<Hugr> {
 pub enum CircuitStoreError<N = Node> {
     /// Could not encode the hugr json.
     EncodingError(serde_json::Error),
+    /// Error writing envelope.
+    EnvelopeError(EnvelopeError),
     /// Cannot load the circuit file.
     #[display("Cannot write to the circuit file: {_0}")]
     InvalidFile(io::Error),
@@ -164,6 +168,12 @@ impl<N> From<io::Error> for CircuitStoreError<N> {
 impl<N> From<PackageError> for CircuitStoreError<N> {
     fn from(e: PackageError) -> Self {
         CircuitStoreError::PackageStore(e)
+    }
+}
+
+impl<N> From<EnvelopeError> for CircuitStoreError<N> {
+    fn from(e: EnvelopeError) -> Self {
+        CircuitStoreError::EnvelopeError(e)
     }
 }
 
@@ -213,6 +223,9 @@ pub enum CircuitLoadError {
     #[from]
     PackageError(PackageEncodingError),
 
+    #[from]
+    /// Error loading an envelope.
+    EnvelopeError(EnvelopeError),
     /// Error validating the loaded circuit.
     #[from]
     ValidationError(ValidationError),
@@ -441,7 +454,7 @@ mod tests {
 
     #[rstest]
     fn serialize_package_errors(multi_module_pkg: Package) {
-        let pkg_json = multi_module_pkg.to_json().unwrap();
+        let pkg_json = multi_module_pkg.store_str(EnvelopeConfig::text()).unwrap();
 
         match Circuit::load_function_reader(Cursor::new(&pkg_json), "not_found") {
             Err(CircuitLoadError::FunctionNotFound {
