@@ -76,7 +76,7 @@ class CircBuild(TrackedDfg):
         """Finish building the circuit by setting all the qubits as the output
         and validate."""
 
-        return Tk2Circuit.from_package_json(
+        return Tk2Circuit.from_str(
             self.finish_package(other_extensions=other_extensions).to_str(
                 EnvelopeConfig.TEXT
             )
