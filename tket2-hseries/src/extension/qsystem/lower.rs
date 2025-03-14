@@ -2,16 +2,17 @@ use derive_more::{Display, Error, From};
 use hugr::ops::NamedOp;
 use hugr::{
     algorithms::validation::{ValidatePassError, ValidationLevel},
-    builder::{BuildError, DFGBuilder, Dataflow, DataflowHugr},
+    builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder},
     extension::ExtensionRegistry,
     hugr::{hugrmut::HugrMut, HugrError},
-    ops::{self, DataflowOpTrait},
+    ops::{self, DataflowOpTrait, OpTag, ValidateOp},
     std_extensions::arithmetic::{float_ops::FloatOps, float_types::ConstF64},
     types::Signature,
     Hugr, HugrView, Node, Wire,
 };
 use lazy_static::lazy_static;
-use std::collections::HashMap;
+use std::collections::btree_map::Entry;
+use std::collections::{BTreeMap, HashMap};
 use strum::IntoEnumIterator;
 use tket2::{extension::rotation::RotationOpBuilder, Tk2Op};
 
@@ -60,14 +61,117 @@ pub enum LowerTk2Error {
     },
     /// Validation error in the final hugr.
     ValidationError(ValidatePassError),
+    /// Non-module HUGR can't be lowered.
+    #[display("HUGR root cannot have FuncDefn, has type: {}", _0.name())]
+    InvalidFuncDefn(#[error(ignore)] hugr::ops::OpType),
 }
 
-fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
+/// Helper struct for lowering [Tk2Op]s to [QSystemOp]s.
+/// Holds lazy function definitions for each [Tk2Op].
+struct LowerToCalls<'h, H> {
+    hugr: &'h mut H,
+    funcs: BTreeMap<Tk2Op, Node>,
+}
+
+impl<'h, H: HugrMut> LowerToCalls<'h, H> {
+    fn new(hugr: &'h mut H) -> Self {
+        Self {
+            hugr,
+            funcs: BTreeMap::new(),
+        }
+    }
+
+    /// Lower all [Tk2Op]s to [QSystemOp]s in the Hugr
+    /// by lazily defining and calling functions that implement the decomposition.
+    /// Returns the nodes that were replaced.
+    ///
+    /// # Errors
+    /// Returns an error if the replacement fails, which could be if the root
+    /// operation cannot have children of type [OpTag::FuncDefn].
+    fn lower_ops(&mut self) -> Result<Vec<Node>, LowerTk2Error> {
+        let root_op = self.hugr.get_optype(self.hugr.root());
+        if !root_op
+            .validity_flags()
+            .allowed_children
+            .is_superset(OpTag::FuncDefn)
+        {
+            return Err(LowerTk2Error::InvalidFuncDefn(root_op.clone()));
+        }
+
+        let replacements: Vec<_> = self
+            .hugr
+            .nodes()
+            .filter_map(|n| {
+                let op: Tk2Op = self.hugr.get_optype(n).cast()?;
+                Some((n, op))
+            })
+            .collect();
+
+        let mut replaced_nodes = Vec::new();
+
+        for (node, op) in replacements {
+            // retrrieve or build the function
+            let func_node = match self.funcs.entry(op) {
+                Entry::Occupied(f) => *f.get(),
+                Entry::Vacant(entry) => {
+                    let h = build_func(op)?;
+                    let inserted = self.hugr.insert_hugr(self.hugr.root(), h);
+                    entry.insert(inserted.new_root);
+                    inserted.new_root
+                }
+            };
+            let call_op: hugr::ops::OpType = hugr::ops::Call::try_new(
+                self.hugr
+                    .get_optype(func_node)
+                    .as_func_defn()
+                    .expect("should be a function definition")
+                    .signature
+                    .clone(),
+                [], // no polymorphic ops functions expected.
+            )
+            .expect("signature should be valid")
+            .into();
+
+            let call_static_port = call_op
+                .static_input_port()
+                .expect("Call should have static input");
+            let other_port = call_op
+                .other_input_port()
+                .expect("Call can have state order input");
+            // replace the tk2op with the function call
+            self.hugr
+                .replace_op(node, call_op)
+                .map_err(LowerTk2Error::OpReplacement)?;
+
+            // add an input for the Call static input
+            let num_inputs = self.hugr.num_inputs(node);
+            let num_outputs = self.hugr.num_outputs(node);
+            self.hugr.set_num_ports(node, num_inputs + 1, num_outputs);
+
+            let state_links: Vec<_> = self.hugr.linked_outputs(node, call_static_port).collect();
+            if !state_links.is_empty() {
+                // state order input is occupying port and needs to shift by 1
+                self.hugr.disconnect(node, call_static_port);
+                for (nei, out_p) in state_links {
+                    self.hugr.connect(nei, out_p, node, other_port);
+                }
+            }
+            // connect the function to the call
+            self.hugr.connect(func_node, 0, node, call_static_port);
+
+            replaced_nodes.push(node);
+        }
+
+        Ok(replaced_nodes)
+    }
+}
+
+fn build_func(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
     let sig = op.into_extension_op().signature().into_owned();
     let sig = Signature::new(sig.input, sig.output); // ignore extension delta
-    let mut b = DFGBuilder::new(sig)?;
+                                                     // TODO check generated names are namespaced enough
+    let mut b = FunctionBuilder::new(op.name(), sig)?;
     let inputs: Vec<_> = b.input_wires().collect();
-
     let outputs = match (op, inputs.as_slice()) {
         (Tk2Op::H, [q]) => vec![b.build_h(*q)?],
         (Tk2Op::X, [q]) => vec![b.build_x(*q)?],
@@ -104,7 +208,7 @@ fn op_to_hugr(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
     Ok(b.finish_hugr_with_outputs(outputs)?)
 }
 
-fn build_to_radians(b: &mut DFGBuilder<Hugr>, rotation: Wire) -> Result<Wire, BuildError> {
+fn build_to_radians(b: &mut FunctionBuilder<Hugr>, rotation: Wire) -> Result<Wire, BuildError> {
     let turns = b.add_to_halfturns(rotation)?;
     let pi = pi_mul_f64(b, 1.0);
     let float = b.add_dataflow_op(FloatOps::fmul, [turns, pi])?.out_wire(0);
@@ -116,19 +220,15 @@ pub fn lower_tk2_op(hugr: &mut impl HugrMut) -> Result<Vec<hugr::Node>, LowerTk2
     let mut replaced_nodes = lower_direct(hugr)?;
     let mut hugr_map: HashMap<Tk2Op, Hugr> = HashMap::new();
     for op in Tk2Op::iter() {
-        match op_to_hugr(op) {
+        match build_func(op) {
             Ok(h) => hugr_map.insert(op, h),
             // filter out unknown ops, includes those covered by direct lowering
             Err(LowerTk2Error::UnknownOp(_, _)) => continue,
             Err(e) => return Err(e),
         };
     }
-
-    let lowered_nodes = hugr::algorithms::lower_ops(hugr, |op| hugr_map.get(&op.cast()?).cloned())?
-        .into_iter()
-        .map(|(n, _)| n);
-
-    replaced_nodes.extend(lowered_nodes);
+    let called_nodes = LowerToCalls::new(hugr).lower_ops()?;
+    replaced_nodes.extend(called_nodes);
     Ok(replaced_nodes)
 }
 
@@ -201,7 +301,7 @@ impl LowerTket2ToQSystemPass {
 #[cfg(test)]
 mod test {
     use hugr::{
-        builder::FunctionBuilder,
+        builder::{DFGBuilder, FunctionBuilder},
         extension::prelude::{bool_t, option_type, qb_t, UnwrapBuilder as _},
         type_row, HugrView,
     };
@@ -278,7 +378,7 @@ mod test {
     fn test_lower(#[case] t2op: Tk2Op, #[case] qsystem_ops: Option<Vec<QSystemOp>>) {
         // build dfg with just the op
 
-        let h = op_to_hugr(t2op).unwrap();
+        let h = build_func(t2op).unwrap();
         let circ = Circuit::new(&h, h.root());
         let ops: Vec<QSystemOp> = circ
             .commands()
@@ -295,17 +395,18 @@ mod test {
     fn test_mixed() {
         let mut b = DFGBuilder::new(Signature::new(rotation_type(), bool_t())).unwrap();
         let [angle] = b.input_wires_arr();
-        let [q] = b.add_dataflow_op(Tk2Op::QAlloc, []).unwrap().outputs_arr();
+        let qalloc = b.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
+        let [q] = qalloc.outputs_arr();
         let [q] = b.add_dataflow_op(Tk2Op::H, [q]).unwrap().outputs_arr();
-        let [q] = b
-            .add_dataflow_op(Tk2Op::Rx, [q, angle])
-            .unwrap()
-            .outputs_arr();
+        let rx = b.add_dataflow_op(Tk2Op::Rx, [q, angle]).unwrap();
+        let [q] = rx.outputs_arr();
         let [q, bool] = b
             .add_dataflow_op(Tk2Op::Measure, [q])
             .unwrap()
             .outputs_arr();
-        b.add_dataflow_op(Tk2Op::QFree, [q]).unwrap();
+        let qfree = b.add_dataflow_op(Tk2Op::QFree, [q]).unwrap();
+        b.set_order(&qalloc, &rx);
+        b.set_order(&rx, &qfree);
         let mut h = b.finish_hugr_with_outputs([bool]).unwrap();
 
         let lowered = lower_tk2_op(&mut h).unwrap();
@@ -313,7 +414,12 @@ mod test {
         // dfg, input, output, alloc + (10 for unwrap), phasedx, rz, toturns, fmul, phasedx, free +
         // 5x(float + load), measure_reset, conditional, case(input, output) * 2, flip
         // (phasedx + 2*(float + load))
-        assert_eq!(h.node_count(), 43);
+        assert_eq!(h.node_count(), 59);
         assert_eq!(check_lowered(&h), Ok(()));
+        println!("{}", h.mermaid_string());
+
+        if let Err(e) = h.validate() {
+            panic!("{}", e);
+        }
     }
 }
