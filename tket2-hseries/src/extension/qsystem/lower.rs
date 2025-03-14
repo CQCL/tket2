@@ -8,12 +8,11 @@ use hugr::{
     ops::{self, DataflowOpTrait, OpTag, ValidateOp},
     std_extensions::arithmetic::{float_ops::FloatOps, float_types::ConstF64},
     types::Signature,
-    Hugr, HugrView, Node, Wire,
+    Direction, Hugr, HugrView, Node, Wire,
 };
 use lazy_static::lazy_static;
 use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, HashMap};
-use strum::IntoEnumIterator;
+use std::collections::BTreeMap;
 use tket2::{extension::rotation::RotationOpBuilder, Tk2Op};
 
 use crate::extension::qsystem::{self, QSystemOp, QSystemOpBuilder};
@@ -96,6 +95,15 @@ fn lower_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
     let mut replaced_nodes = Vec::new();
 
     for (node, op) in replacements {
+        let opty: hugr::ops::OpType = op.into();
+        let other_input = opty
+            .other_input_port()
+            .expect("dataflow ops have state order input");
+        let state_links: Vec<_> = hugr.linked_outputs(node, other_input).collect();
+
+        // disconnect the state order links if they exist
+        hugr.disconnect(node, other_input);
+
         // retrrieve or build the function
         let func_node = match funcs.entry(op) {
             Entry::Occupied(f) => *f.get(),
@@ -128,20 +136,15 @@ fn lower_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
             .map_err(LowerTk2Error::OpReplacement)?;
 
         // add an input for the Call static input
-        let num_inputs = hugr.num_inputs(node);
-        let num_outputs = hugr.num_outputs(node);
-        hugr.set_num_ports(node, num_inputs + 1, num_outputs);
+        hugr.add_ports(node, Direction::Incoming, 1);
 
-        let state_links: Vec<_> = hugr.linked_outputs(node, call_static_port).collect();
-        if !state_links.is_empty() {
-            // state order input is occupying port and needs to shift by 1
-            hugr.disconnect(node, call_static_port);
-            for (nei, out_p) in state_links {
-                hugr.connect(nei, out_p, node, other_port);
-            }
-        }
         // connect the function to the call
         hugr.connect(func_node, 0, node, call_static_port);
+
+        // reconnect state order links
+        for (nei, out_p) in state_links {
+            hugr.connect(nei, out_p, node, other_port);
+        }
 
         replaced_nodes.push(node);
     }
@@ -191,7 +194,7 @@ fn build_func(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
     Ok(b.finish_hugr_with_outputs(outputs)?)
 }
 
-fn build_to_radians(b: &mut FunctionBuilder<Hugr>, rotation: Wire) -> Result<Wire, BuildError> {
+fn build_to_radians(b: &mut impl Dataflow, rotation: Wire) -> Result<Wire, BuildError> {
     let turns = b.add_to_halfturns(rotation)?;
     let pi = pi_mul_f64(b, 1.0);
     let float = b.add_dataflow_op(FloatOps::fmul, [turns, pi])?.out_wire(0);
@@ -201,15 +204,6 @@ fn build_to_radians(b: &mut FunctionBuilder<Hugr>, rotation: Wire) -> Result<Wir
 /// Lower `Tk2Op` operations to `QSystemOp` operations.
 pub fn lower_tk2_op(hugr: &mut impl HugrMut) -> Result<Vec<hugr::Node>, LowerTk2Error> {
     let mut replaced_nodes = lower_direct(hugr)?;
-    let mut hugr_map: HashMap<Tk2Op, Hugr> = HashMap::new();
-    for op in Tk2Op::iter() {
-        match build_func(op) {
-            Ok(h) => hugr_map.insert(op, h),
-            // filter out unknown ops, includes those covered by direct lowering
-            Err(LowerTk2Error::UnknownOp(_, _)) => continue,
-            Err(e) => return Err(e),
-        };
-    }
     replaced_nodes.extend(lower_ops(hugr)?);
     Ok(replaced_nodes)
 }
@@ -398,7 +392,6 @@ mod test {
         // (phasedx + 2*(float + load))
         assert_eq!(h.node_count(), 59);
         assert_eq!(check_lowered(&h), Ok(()));
-        println!("{}", h.mermaid_string());
 
         if let Err(e) = h.validate() {
             panic!("{}", e);
