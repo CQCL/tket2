@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.8.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.7.0...tket2-py-v0.8.0) (2025-03-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* pre-envelope `Circuit` serialisation functions are deprecated.
+* `Node` is now an associated type of `HugrView` `Circuit::load_function_reader` takes a `BufRead` rather than `Read`
+* **tket2-hseries:** Make `UtilsOp` enum `non_exhaustive` so that future additions are not considered API-breaking.
+
+### Features
+
+* Add methods to en/decode from bytes ([#807](https://github.com/CQCL/tket2/issues/807)) ([3e76fd2](https://github.com/CQCL/tket2/commit/3e76fd2fb981889542b06cd218dfce9ad925cf29))
+* Use hugr envelopes to store/load circuits ([#813](https://github.com/CQCL/tket2/issues/813)) ([2940b2e](https://github.com/CQCL/tket2/commit/2940b2e0c9b270259259690b83dbdf261543d26d))
+
+
+### Bug Fixes
+
+* **tket2-hseries:** rm unneeded ext, make `UtilsOp` enum `non_exhaustive` ([#797](https://github.com/CQCL/tket2/issues/797)) ([8c3ee89](https://github.com/CQCL/tket2/commit/8c3ee8971b9f095ccdb0522cf0751a2ff20b89a5))
+
+
+### Miscellaneous Chores
+
+* bump to hugr-rs 0.15 and hugr-py 0.11 ([#806](https://github.com/CQCL/tket2/issues/806)) ([f3bfaae](https://github.com/CQCL/tket2/commit/f3bfaae0b6e4b8fd934a62343317b85ccb8f96ee))
+
 ## [0.7.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.6.1...tket2-py-v0.7.0) (2025-03-06)
 
 
