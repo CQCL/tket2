@@ -273,7 +273,7 @@ jobs:
       - uses: mozilla-actions/sccache-action@v0.0.8
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
-      - uses: extractions/setup-just@v2
+      - uses: extractions/setup-just@v3
       - name: Generate the updated definitions
         run: just gen-extensions
       - name: Check if the declarations are up to date
