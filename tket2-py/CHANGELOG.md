@@ -6,18 +6,11 @@
 ### ⚠ BREAKING CHANGES
 
 * pre-envelope `Circuit` serialisation functions are deprecated.
-* `Node` is now an associated type of `HugrView` `Circuit::load_function_reader` takes a `BufRead` rather than `Read`
-* **tket2-hseries:** Make `UtilsOp` enum `non_exhaustive` so that future additions are not considered API-breaking.
 
 ### Features
 
 * Add methods to en/decode from bytes ([#807](https://github.com/CQCL/tket2/issues/807)) ([3e76fd2](https://github.com/CQCL/tket2/commit/3e76fd2fb981889542b06cd218dfce9ad925cf29))
 * Use hugr envelopes to store/load circuits ([#813](https://github.com/CQCL/tket2/issues/813)) ([2940b2e](https://github.com/CQCL/tket2/commit/2940b2e0c9b270259259690b83dbdf261543d26d))
-
-
-### Bug Fixes
-
-* **tket2-hseries:** rm unneeded ext, make `UtilsOp` enum `non_exhaustive` ([#797](https://github.com/CQCL/tket2/issues/797)) ([8c3ee89](https://github.com/CQCL/tket2/commit/8c3ee8971b9f095ccdb0522cf0751a2ff20b89a5))
 
 
 ### Miscellaneous Chores
