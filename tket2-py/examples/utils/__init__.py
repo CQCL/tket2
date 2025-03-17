@@ -35,6 +35,6 @@ def guppy_to_circuit(func_def: Any) -> Tk2Circuit:
     pkg = module.compile()
 
     json = pkg.package.to_str(EnvelopeConfig.TEXT)
-    circ = Tk2Circuit.from_package_json(json, func_def.name)
+    circ = Tk2Circuit.from_str(json, func_def.name)
 
     return lower_to_pytket(circ)
