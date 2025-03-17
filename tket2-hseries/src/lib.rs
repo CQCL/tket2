@@ -309,6 +309,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(miri,ignore)] // File::open is not supported in miri
     fn ordered_qalloc() {
         let file = std::fs::File::open("../test_files/ordered_qalloc.json").unwrap();
         let reg = ExtensionRegistry::new([
