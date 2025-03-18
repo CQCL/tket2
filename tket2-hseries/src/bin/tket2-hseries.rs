@@ -11,6 +11,7 @@ fn main() {
                 tket2::extension::TKET2_EXTENSION.to_owned(),
                 tket2::extension::rotation::ROTATION_EXTENSION.to_owned(),
                 tket2_hseries::extension::qsystem::EXTENSION.to_owned(),
+                tket2_hseries::extension::bool::EXTENSION.to_owned(),
                 tket2_hseries::extension::futures::EXTENSION.to_owned(),
                 tket2_hseries::extension::random::EXTENSION.to_owned(),
                 tket2_hseries::extension::result::EXTENSION.to_owned(),
