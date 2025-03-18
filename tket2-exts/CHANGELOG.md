@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.0](https://github.com/CQCL/tket2/compare/tket2-exts-v0.5.1...tket2-exts-v0.6.0) (2025-03-18)
+
+
+### ⚠ BREAKING CHANGES
+
+* Removed `OrderInZones` operation from `tket2.qsystem.utils`.
+
+
+### Removed
+
+* Removed `OrderInZones` operation from `tket2.qsystem.utils`. ([#797](https://github.com/CQCL/tket2/issues/797)) ([8c3ee89](https://github.com/CQCL/tket2/commit/8c3ee8971b9f095ccdb0522cf0751a2ff20b89a5))
+
+
 ## [0.5.1](https://github.com/CQCL/tket2/compare/tket2-exts-v0.5.0...tket2-exts-v0.5.1) (2025-03-06)
 
 
