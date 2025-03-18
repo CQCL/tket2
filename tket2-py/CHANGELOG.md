@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.8.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.8.0...tket2-py-v0.8.1) (2025-03-18)
+
+
+### Features
+
+* Update `tket2-exts` extension to `0.6.0`
+  ([e358bb1](https://github.com/CQCL/tket2/commit/e358bb1a1641153cd718995da09888f98f0ffe35))
+* Loosen pytket dependency to allow >=1.34
+
 ## [0.8.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.7.0...tket2-py-v0.8.0) (2025-03-17)
 
 

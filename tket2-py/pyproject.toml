@@ -1,6 +1,6 @@
 [project]
 name = "tket2"
-version = "0.8.0"
+version = "0.8.1"
 requires-python = ">=3.10"
 description = "Quantinuum's TKET2 Quantum Compiler"
 license = { file = "LICENCE" }
@@ -27,8 +27,8 @@ classifiers = [
 ]
 
 dependencies = [
-    'pytket >= 2.0, < 3',
     'hugr ~= 0.11.1',
+    "pytket>=1.34,<3",
     'tket2_eccs >= 0.3.0, < 0.4',
     'tket2_exts >= 0.6.0, < 0.7',
 ]
