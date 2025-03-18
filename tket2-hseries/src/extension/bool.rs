@@ -2,11 +2,12 @@
 use std::sync::{Arc, Weak};
 
 use hugr::{
-    extension::{ExtensionBuildError, ExtensionId, ExtensionSet, TypeDef, Version},
+    extension::{simple_op::{try_from_name, MakeOpDef}, ExtensionBuildError, ExtensionId, ExtensionSet, SignatureFunc, TypeDef, Version},
     ops::constant::{CustomConst, ValueName},
-    types::{CustomType, Type, TypeBound},
+    types::{CustomType, PolyFuncType, Signature, Type, TypeBound, TypeRV},
     Extension,
 };
+use strum::{EnumIter, EnumString, IntoStaticStr};
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
 
@@ -89,4 +90,75 @@ impl CustomConst for ConstBool {
     fn get_type(&self) -> Type {
         bool_type()
     }
+}
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumIter,
+    IntoStaticStr,
+    EnumString,
+)]
+#[allow(missing_docs)]
+#[non_exhaustive]
+/// Simple enum of "tket2.bool" operations.
+pub enum BoolOpDef {
+	BoolToSum,
+	SumToBool,
+    //Eq,
+    //Not,
+    //And,
+    //Or,
+    //Xor,
+}
+
+impl MakeOpDef for BoolOpDef {
+    fn init_signature(&self, extension_ref: &Weak<Extension>) -> SignatureFunc {
+        let bool_type = Type::new_extension(bool_custom_type(extension_ref));
+        let sum_type = Type::new_unit_sum(2);
+        match self {
+            BoolOpDef::BoolToSum => {
+                PolyFuncType::new(
+                    vec![],
+                    Signature::new(bool_type, sum_type),
+                )
+                .into()
+            }
+            BoolOpDef::SumToBool => {
+                PolyFuncType::new(
+                    vec![],
+                    Signature::new(sum_type, bool_type),
+                )
+                .into()
+            }
+        }
+    }
+
+    fn from_def(op_def: &hugr::extension::OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
+        try_from_name(op_def.name(), op_def.extension_id())
+    }
+
+    fn extension(&self) -> ExtensionId {
+        EXTENSION_ID
+    }
+
+    fn description(&self) -> String {
+        match self {
+            BoolOpDef::BoolToSum => "Convert a Guppy bool into a Hugr unit sum.".into(),
+            BoolOpDef::SumToBool => "Convert a Hugr unit sum into a Guppy bool.".into(),
+        }
+    }
+
+    fn extension_ref(&self) -> Weak<Extension> {
+        Arc::downgrade(&EXTENSION)
+    }
+
 }
