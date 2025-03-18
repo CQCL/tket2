@@ -8,11 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Bug Fixes
 
-- *(tket2-hseries)* [**breaking**] rm unneeded ext, make `UtilsOp` enum `non_exhaustive` ([#797](https://github.com/CQCL/tket2/pull/797))
+- [**breaking**] Remove `OrderInZones` operation. Make `UtilsOp` enum `non_exhaustive` ([#797](https://github.com/CQCL/tket2/pull/797))
 
 ### New Features
 
-- *(tket-hseries)* lower tk2 ops using function calls ([#812](https://github.com/CQCL/tket2/pull/812))
+- Lower tk2 ops using function calls ([#812](https://github.com/CQCL/tket2/pull/812))
 
 ## [0.10.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.9.1...tket2-hseries-v0.10.0) - 2025-03-06
 
