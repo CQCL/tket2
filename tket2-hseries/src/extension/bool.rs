@@ -2,14 +2,22 @@
 use std::sync::{Arc, Weak};
 
 use hugr::{
-    extension::{simple_op::{try_from_name, HasConcrete, HasDef, MakeExtensionOp, MakeOpDef}, ExtensionBuildError, ExtensionId, ExtensionSet, SignatureFunc, TypeDef, Version},
-    ops::{constant::{CustomConst, ValueName}, ExtensionOp, NamedOp, OpName},
+    extension::{
+        simple_op::{
+            try_from_name, HasConcrete, HasDef, MakeExtensionOp, MakeOpDef, MakeRegisteredOp,
+        },
+        ExtensionBuildError, ExtensionId, ExtensionSet, SignatureFunc, TypeDef, Version,
+    },
+    ops::{
+        constant::{CustomConst, ValueName},
+        ExtensionOp, NamedOp, OpName,
+    },
     types::{CustomType, PolyFuncType, Signature, Type, TypeBound},
     Extension,
 };
-use strum::{EnumIter, EnumString, IntoStaticStr};
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
+use strum::{EnumIter, EnumString, IntoStaticStr};
 
 /// The ID of the `tket2.bool` extension.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.bool");
@@ -112,7 +120,7 @@ impl CustomConst for ConstBool {
 /// Simple enum of "tket2.bool" operations.
 pub enum BoolOpDef {
     BoolToSum,
-	SumToBool,
+    SumToBool,
     Eq,
     Not,
     And,
@@ -126,37 +134,27 @@ impl MakeOpDef for BoolOpDef {
         let sum_type = Type::new_unit_sum(2);
         match self {
             BoolOpDef::BoolToSum => {
-                        PolyFuncType::new(
-                            vec![],
-                            Signature::new(bool_type, sum_type),
-                        )
-                        .into()
-                    }
+                PolyFuncType::new(vec![], Signature::new(bool_type, sum_type)).into()
+            }
             BoolOpDef::SumToBool => {
-                        PolyFuncType::new(
-                            vec![],
-                            Signature::new(sum_type, bool_type),
-                        )
-                        .into()
-                    }
-            BoolOpDef::Not => {
-                PolyFuncType::new(
-                    vec![],
-                    Signature::new(bool_type.clone(), vec![bool_type.clone()]),
-                )
-                .into()
+                PolyFuncType::new(vec![], Signature::new(sum_type, bool_type)).into()
             }
-            BoolOpDef::Eq | BoolOpDef::And | BoolOpDef::Or | BoolOpDef::Xor => {
-                PolyFuncType::new(
-                    vec![],
-                    Signature::new(bool_type.clone(), vec![bool_type.clone(), bool_type]),
-                )
-                .into()
-            }
+            BoolOpDef::Not => PolyFuncType::new(
+                vec![],
+                Signature::new(bool_type.clone(), vec![bool_type.clone()]),
+            )
+            .into(),
+            BoolOpDef::Eq | BoolOpDef::And | BoolOpDef::Or | BoolOpDef::Xor => PolyFuncType::new(
+                vec![],
+                Signature::new(bool_type.clone(), vec![bool_type.clone(), bool_type]),
+            )
+            .into(),
         }
     }
 
-    fn from_def(op_def: &hugr::extension::OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
+    fn from_def(
+        op_def: &hugr::extension::OpDef,
+    ) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
         try_from_name(op_def.name(), op_def.extension_id())
     }
 
@@ -179,13 +177,15 @@ impl MakeOpDef for BoolOpDef {
     fn extension_ref(&self) -> Weak<Extension> {
         Arc::downgrade(&EXTENSION)
     }
-
 }
 
 impl HasConcrete for BoolOpDef {
     type Concrete = BoolOp;
 
-    fn instantiate(&self, _type_args: &[hugr::types::TypeArg]) -> Result<Self::Concrete, hugr::extension::simple_op::OpLoadError> {
+    fn instantiate(
+        &self,
+        _type_args: &[hugr::types::TypeArg],
+    ) -> Result<Self::Concrete, hugr::extension::simple_op::OpLoadError> {
         Ok(match self {
             BoolOpDef::BoolToSum => BoolOp::BoolToSum,
             BoolOpDef::SumToBool => BoolOp::SumToBool,
@@ -244,11 +244,56 @@ impl HasDef for BoolOp {
 }
 
 impl MakeExtensionOp for BoolOp {
-    fn from_extension_op(ext_op: &ExtensionOp) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
+    fn from_extension_op(
+        ext_op: &ExtensionOp,
+    ) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
         BoolOpDef::from_def(ext_op.def())?.instantiate(ext_op.args())
     }
 
     fn type_args(&self) -> Vec<hugr::types::TypeArg> {
         vec![]
+    }
+}
+
+impl MakeRegisteredOp for BoolOp {
+    fn extension_id(&self) -> ExtensionId {
+        EXTENSION_ID
+    }
+
+    fn extension_ref(&self) -> Weak<Extension> {
+        Arc::downgrade(&EXTENSION)
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod test {
+    use super::*;
+    use hugr::builder::{Dataflow, DataflowHugr, FunctionBuilder};
+
+    #[test]
+    fn bool_op_from_def() {
+        assert_eq!(Ok(BoolOp::Not), BoolOpDef::Not.instantiate(&[]))
+    }
+
+    #[test]
+    fn test_bool_to_sum() {
+        let bool_type = bool_type();
+        let sum_type = Type::new_unit_sum(2);
+
+        let op = BoolOp::BoolToSum;
+
+        let hugr = {
+            let mut func_builder = FunctionBuilder::new(
+                "bool_to_sum",
+                PolyFuncType::new(vec![], Signature::new(bool_type, sum_type)),
+            )
+            .unwrap();
+            let [input] = func_builder.input_wires_arr();
+            let output = func_builder.add_dataflow_op(op.clone(), [input]).unwrap();
+            func_builder
+                .finish_hugr_with_outputs(output.outputs())
+                .unwrap()
+        };
+        hugr.validate().unwrap();
     }
 }
