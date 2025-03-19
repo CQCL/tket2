@@ -2,9 +2,9 @@
 use std::sync::{Arc, Weak};
 
 use hugr::{
-    extension::{simple_op::{try_from_name, MakeOpDef}, ExtensionBuildError, ExtensionId, ExtensionSet, SignatureFunc, TypeDef, Version},
-    ops::constant::{CustomConst, ValueName},
-    types::{CustomType, PolyFuncType, Signature, Type, TypeBound, TypeRV},
+    extension::{simple_op::{try_from_name, HasConcrete, HasDef, MakeExtensionOp, MakeOpDef}, ExtensionBuildError, ExtensionId, ExtensionSet, SignatureFunc, TypeDef, Version},
+    ops::{constant::{CustomConst, ValueName}, ExtensionOp, NamedOp, OpName},
+    types::{CustomType, PolyFuncType, Signature, Type, TypeBound},
     Extension,
 };
 use strum::{EnumIter, EnumString, IntoStaticStr};
@@ -111,13 +111,13 @@ impl CustomConst for ConstBool {
 #[non_exhaustive]
 /// Simple enum of "tket2.bool" operations.
 pub enum BoolOpDef {
-	BoolToSum,
+    BoolToSum,
 	SumToBool,
-    //Eq,
-    //Not,
-    //And,
-    //Or,
-    //Xor,
+    Eq,
+    Not,
+    And,
+    Or,
+    Xor,
 }
 
 impl MakeOpDef for BoolOpDef {
@@ -126,16 +126,30 @@ impl MakeOpDef for BoolOpDef {
         let sum_type = Type::new_unit_sum(2);
         match self {
             BoolOpDef::BoolToSum => {
+                        PolyFuncType::new(
+                            vec![],
+                            Signature::new(bool_type, sum_type),
+                        )
+                        .into()
+                    }
+            BoolOpDef::SumToBool => {
+                        PolyFuncType::new(
+                            vec![],
+                            Signature::new(sum_type, bool_type),
+                        )
+                        .into()
+                    }
+            BoolOpDef::Not => {
                 PolyFuncType::new(
                     vec![],
-                    Signature::new(bool_type, sum_type),
+                    Signature::new(bool_type.clone(), vec![bool_type.clone()]),
                 )
                 .into()
             }
-            BoolOpDef::SumToBool => {
+            BoolOpDef::Eq | BoolOpDef::And | BoolOpDef::Or | BoolOpDef::Xor => {
                 PolyFuncType::new(
                     vec![],
-                    Signature::new(sum_type, bool_type),
+                    Signature::new(bool_type.clone(), vec![bool_type.clone(), bool_type]),
                 )
                 .into()
             }
@@ -154,6 +168,11 @@ impl MakeOpDef for BoolOpDef {
         match self {
             BoolOpDef::BoolToSum => "Convert a Guppy bool into a Hugr unit sum.".into(),
             BoolOpDef::SumToBool => "Convert a Hugr unit sum into a Guppy bool.".into(),
+            BoolOpDef::Eq => "Equality between two Guppy bools.".into(),
+            BoolOpDef::Not => "Negation of a Guppy bool.".into(),
+            BoolOpDef::And => "Logical AND between two Guppy bools.".into(),
+            BoolOpDef::Or => "Logical OR between two Guppy bools.".into(),
+            BoolOpDef::Xor => "Logical XOR between two Guppy bools.".into(),
         }
     }
 
@@ -161,4 +180,75 @@ impl MakeOpDef for BoolOpDef {
         Arc::downgrade(&EXTENSION)
     }
 
+}
+
+impl HasConcrete for BoolOpDef {
+    type Concrete = BoolOp;
+
+    fn instantiate(&self, _type_args: &[hugr::types::TypeArg]) -> Result<Self::Concrete, hugr::extension::simple_op::OpLoadError> {
+        Ok(match self {
+            BoolOpDef::BoolToSum => BoolOp::BoolToSum,
+            BoolOpDef::SumToBool => BoolOp::SumToBool,
+            BoolOpDef::Eq => BoolOp::Eq,
+            BoolOpDef::Not => BoolOp::Not,
+            BoolOpDef::And => BoolOp::And,
+            BoolOpDef::Or => BoolOp::Or,
+            BoolOpDef::Xor => BoolOp::Xor,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Concrete instances of a "tket2.bool" operations.
+pub enum BoolOp {
+    /// A `tket2.bool.bool_to_sum` op.
+    BoolToSum,
+    /// A `tket2.bool.sum_to_bool` op.
+    SumToBool,
+    /// A `tket2.bool.eq` op.
+    Eq,
+    /// A `tket2.bool.not` op.
+    Not,
+    /// A `tket2.bool.and` op.
+    And,
+    /// A `tket2.bool.or` op.
+    Or,
+    /// A `tket2.bool.xor` op.
+    Xor,
+}
+
+impl BoolOp {
+    /// Returns the `BoolOpDef` for this operation.
+    pub fn bool_op_def(&self) -> BoolOpDef {
+        match self {
+            BoolOp::BoolToSum => BoolOpDef::BoolToSum,
+            BoolOp::SumToBool => BoolOpDef::SumToBool,
+            BoolOp::Eq => BoolOpDef::Eq,
+            BoolOp::Not => BoolOpDef::Not,
+            BoolOp::And => BoolOpDef::And,
+            BoolOp::Or => BoolOpDef::Or,
+            BoolOp::Xor => BoolOpDef::Xor,
+        }
+    }
+}
+
+impl NamedOp for BoolOp {
+    fn name(&self) -> OpName {
+        let n: &'static str = self.bool_op_def().into();
+        n.into()
+    }
+}
+
+impl HasDef for BoolOp {
+    type Def = BoolOpDef;
+}
+
+impl MakeExtensionOp for BoolOp {
+    fn from_extension_op(ext_op: &ExtensionOp) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
+        BoolOpDef::from_def(ext_op.def())?.instantiate(ext_op.args())
+    }
+
+    fn type_args(&self) -> Vec<hugr::types::TypeArg> {
+        vec![]
+    }
 }
