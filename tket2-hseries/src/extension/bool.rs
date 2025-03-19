@@ -29,6 +29,7 @@ lazy_static! {
     pub static ref EXTENSION: Arc<Extension>  = {
         Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
             let _ = add_bool_type_def(ext, ext_ref.clone()).unwrap();
+            BoolOpDef::load_all_ops(ext, ext_ref).unwrap();
         })
     };
 
@@ -268,7 +269,21 @@ impl MakeRegisteredOp for BoolOp {
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
-    use hugr::builder::{Dataflow, DataflowHugr, FunctionBuilder};
+    use hugr::{builder::{Dataflow, DataflowHugr, FunctionBuilder}, extension::OpDef};
+    use strum::IntoEnumIterator;
+
+    fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
+        EXTENSION.get_op(&op.name())
+    }
+
+    #[test]
+    fn create_extension() {
+        assert_eq!(EXTENSION.name(), &EXTENSION_ID);
+
+        for o in BoolOpDef::iter() {
+            assert_eq!(BoolOpDef::from_def(get_opdef(o).unwrap()), Ok(o));
+        }
+    }
 
     #[test]
     fn bool_op_from_def() {
@@ -285,7 +300,7 @@ pub(crate) mod test {
         let hugr = {
             let mut func_builder = FunctionBuilder::new(
                 "bool_to_sum",
-                PolyFuncType::new(vec![], Signature::new(bool_type, sum_type)),
+                Signature::new(bool_type, sum_type),
             )
             .unwrap();
             let [input] = func_builder.input_wires_arr();
