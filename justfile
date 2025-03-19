@@ -40,6 +40,10 @@ coverage language="[rust|python]": (_run_lang language \
         "uv run maturin develop && uv run pytest --cov=./ --cov-report=html"
     )
 
+# Run Rust unsoundness checks using miri
+miri *TEST_ARGS:
+    PROPTEST_DISABLE_FAILURE_PERSISTENCE=true MIRIFLAGS='-Zmiri-env-forward=PROPTEST_DISABLE_FAILURE_PERSISTENCE' cargo +nightly miri test {{TEST_ARGS}}
+
 # Runs `compile-rewriter` on the ECCs in `test_files/eccs`
 recompile-eccs:
     scripts/compile-test-eccs.sh
