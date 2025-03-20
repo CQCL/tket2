@@ -7,7 +7,7 @@
       "extension": "tket2.bool",
       "name": "bool",
       "params": [],
-      "description": "The Guppy bool type",
+      "description": "An opaque bool type",
       "bound": {
         "b": "Explicit",
         "bound": "C"
@@ -16,10 +16,10 @@
   },
   "values": {},
   "operations": {
-    "And": {
+    "and": {
       "extension": "tket2.bool",
-      "name": "And",
-      "description": "Logical AND between two Guppy bools.",
+      "name": "and",
+      "description": "Logical AND between two tket2.bools.",
       "signature": {
         "params": [],
         "body": {
@@ -53,10 +53,10 @@
       },
       "binary": false
     },
-    "BoolToSum": {
+    "bool_to_sum": {
       "extension": "tket2.bool",
-      "name": "BoolToSum",
-      "description": "Convert a Guppy bool into a Hugr unit sum.",
+      "name": "bool_to_sum",
+      "description": "Convert a tket2.bool into a Hugr unit sum.",
       "signature": {
         "params": [],
         "body": {
@@ -81,10 +81,10 @@
       },
       "binary": false
     },
-    "Eq": {
+    "eq": {
       "extension": "tket2.bool",
-      "name": "Eq",
-      "description": "Equality between two Guppy bools.",
+      "name": "eq",
+      "description": "Equality between two tket2.bools.",
       "signature": {
         "params": [],
         "body": {
@@ -118,10 +118,10 @@
       },
       "binary": false
     },
-    "Not": {
+    "not": {
       "extension": "tket2.bool",
-      "name": "Not",
-      "description": "Negation of a Guppy bool.",
+      "name": "not",
+      "description": "Negation of a tket2.bool.",
       "signature": {
         "params": [],
         "body": {
@@ -148,10 +148,10 @@
       },
       "binary": false
     },
-    "Or": {
+    "or": {
       "extension": "tket2.bool",
-      "name": "Or",
-      "description": "Logical OR between two Guppy bools.",
+      "name": "or",
+      "description": "Logical OR between two tket2.bools.",
       "signature": {
         "params": [],
         "body": {
@@ -185,10 +185,10 @@
       },
       "binary": false
     },
-    "SumToBool": {
+    "sum_to_bool": {
       "extension": "tket2.bool",
-      "name": "SumToBool",
-      "description": "Convert a Hugr unit sum into a Guppy bool.",
+      "name": "sum_to_bool",
+      "description": "Convert a Hugr unit sum into an tket2.bool.",
       "signature": {
         "params": [],
         "body": {
@@ -213,10 +213,10 @@
       },
       "binary": false
     },
-    "Xor": {
+    "xor": {
       "extension": "tket2.bool",
-      "name": "Xor",
-      "description": "Logical XOR between two Guppy bools.",
+      "name": "xor",
+      "description": "Logical XOR between two tket2.bools.",
       "signature": {
         "params": [],
         "body": {
