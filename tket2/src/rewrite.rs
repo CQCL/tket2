@@ -37,7 +37,7 @@ impl<N: HugrNode> Subcircuit<N> {
     /// Create a new subcircuit induced from a set of nodes.
     pub fn try_from_nodes(
         nodes: impl Into<Vec<N>>,
-        circ: &Circuit<impl HugrView<Node = N>, N>,
+        circ: &Circuit<impl HugrView<Node = N>>,
     ) -> Result<Self, InvalidSubgraph<N>> {
         let subgraph = SiblingSubgraph::try_from_nodes(nodes, circ.hugr())?;
         Ok(Self { subgraph })
@@ -54,7 +54,7 @@ impl<N: HugrNode> Subcircuit<N> {
     }
 
     /// The signature of the subcircuit.
-    pub fn signature(&self, circ: &Circuit<impl HugrView<Node = N>, N>) -> Signature {
+    pub fn signature(&self, circ: &Circuit<impl HugrView<Node = N>>) -> Signature {
         self.subgraph.signature(circ.hugr())
     }
 }
