@@ -137,10 +137,12 @@ impl MakeOpDef for BoolOpDef {
         match self {
             BoolOpDef::BoolToSum => Signature::new(bool_type, sum_type).into(),
             BoolOpDef::SumToBool => Signature::new(sum_type, bool_type).into(),
-            BoolOpDef::Not => Signature::new(bool_type.clone(), vec![bool_type.clone()]).into(),
-            BoolOpDef::Eq | BoolOpDef::And | BoolOpDef::Or | BoolOpDef::Xor => {
-                Signature::new(bool_type.clone(), vec![bool_type.clone(), bool_type]).into()
-            }
+            BoolOpDef::Not => Signature::new(bool_type.clone(), bool_type.clone()).into(),
+            BoolOpDef::Eq | BoolOpDef::And | BoolOpDef::Or | BoolOpDef::Xor => Signature::new(
+                vec![bool_type.clone(), bool_type.clone()],
+                bool_type.clone(),
+            )
+            .into(),
         }
     }
 

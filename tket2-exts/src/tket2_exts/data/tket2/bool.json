@@ -30,16 +30,16 @@
               "id": "bool",
               "args": [],
               "bound": "C"
-            }
-          ],
-          "output": [
+            },
             {
               "t": "Opaque",
               "extension": "tket2.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
-            },
+            }
+          ],
+          "output": [
             {
               "t": "Opaque",
               "extension": "tket2.bool",
@@ -95,16 +95,16 @@
               "id": "bool",
               "args": [],
               "bound": "C"
-            }
-          ],
-          "output": [
+            },
             {
               "t": "Opaque",
               "extension": "tket2.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
-            },
+            }
+          ],
+          "output": [
             {
               "t": "Opaque",
               "extension": "tket2.bool",
@@ -162,16 +162,16 @@
               "id": "bool",
               "args": [],
               "bound": "C"
-            }
-          ],
-          "output": [
+            },
             {
               "t": "Opaque",
               "extension": "tket2.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
-            },
+            }
+          ],
+          "output": [
             {
               "t": "Opaque",
               "extension": "tket2.bool",
@@ -227,16 +227,16 @@
               "id": "bool",
               "args": [],
               "bound": "C"
-            }
-          ],
-          "output": [
+            },
             {
               "t": "Opaque",
               "extension": "tket2.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
-            },
+            }
+          ],
+          "output": [
             {
               "t": "Opaque",
               "extension": "tket2.bool",
