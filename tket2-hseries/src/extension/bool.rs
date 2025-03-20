@@ -2,6 +2,7 @@
 use std::sync::{Arc, Weak};
 
 use hugr::{
+    builder::{BuildError, Dataflow},
     extension::{
         simple_op::{
             try_from_name, HasConcrete, HasDef, MakeExtensionOp, MakeOpDef, MakeRegisteredOp,
@@ -12,8 +13,8 @@ use hugr::{
         constant::{CustomConst, ValueName},
         ExtensionOp, NamedOp, OpName,
     },
-    types::{CustomType, PolyFuncType, Signature, Type, TypeBound},
-    Extension,
+    types::{CustomType, Signature, Type, TypeBound},
+    Extension, Wire,
 };
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
@@ -43,7 +44,7 @@ fn add_bool_type_def(
 ) -> Result<&TypeDef, ExtensionBuildError> {
     ext.add_type(
         BOOL_TYPE_NAME.to_owned(),
-        vec![TypeBound::Copyable.into()],
+        vec![],
         "The Guppy bool type".into(),
         TypeBound::Copyable.into(),
         &extension_ref,
@@ -134,22 +135,12 @@ impl MakeOpDef for BoolOpDef {
         let bool_type = Type::new_extension(bool_custom_type(extension_ref));
         let sum_type = Type::new_unit_sum(2);
         match self {
-            BoolOpDef::BoolToSum => {
-                PolyFuncType::new(vec![], Signature::new(bool_type, sum_type)).into()
+            BoolOpDef::BoolToSum => Signature::new(bool_type, sum_type).into(),
+            BoolOpDef::SumToBool => Signature::new(sum_type, bool_type).into(),
+            BoolOpDef::Not => Signature::new(bool_type.clone(), vec![bool_type.clone()]).into(),
+            BoolOpDef::Eq | BoolOpDef::And | BoolOpDef::Or | BoolOpDef::Xor => {
+                Signature::new(bool_type.clone(), vec![bool_type.clone(), bool_type]).into()
             }
-            BoolOpDef::SumToBool => {
-                PolyFuncType::new(vec![], Signature::new(sum_type, bool_type)).into()
-            }
-            BoolOpDef::Not => PolyFuncType::new(
-                vec![],
-                Signature::new(bool_type.clone(), vec![bool_type.clone()]),
-            )
-            .into(),
-            BoolOpDef::Eq | BoolOpDef::And | BoolOpDef::Or | BoolOpDef::Xor => PolyFuncType::new(
-                vec![],
-                Signature::new(bool_type.clone(), vec![bool_type.clone(), bool_type]),
-            )
-            .into(),
         }
     }
 
@@ -265,11 +256,68 @@ impl MakeRegisteredOp for BoolOp {
         Arc::downgrade(&EXTENSION)
     }
 }
+/// An extension trait for [Dataflow] providing methods to add "tket2.bool"
+/// operations.
+pub trait BoolOpBuilder: Dataflow {
+    /// Add a "tket2.bool.BoolToSum" op.
+    fn add_bool_to_sum(&mut self, bool_input: Wire) -> Result<[Wire; 1], BuildError> {
+        Ok(self
+            .add_dataflow_op(BoolOp::BoolToSum, [bool_input])?
+            .outputs_arr())
+    }
+
+    /// Add a "tket2.bool.SumToBool" op.
+    fn add_sum_to_bool(&mut self, sum_input: Wire) -> Result<[Wire; 1], BuildError> {
+        Ok(self
+            .add_dataflow_op(BoolOp::SumToBool, [sum_input])?
+            .outputs_arr())
+    }
+
+    /// Add a "tket2.bool.Eq" op.
+    fn add_eq(&mut self, bool1: Wire, bool2: Wire) -> Result<[Wire; 1], BuildError> {
+        Ok(self
+            .add_dataflow_op(BoolOp::Eq, [bool1, bool2])?
+            .outputs_arr())
+    }
+
+    /// Add a "tket2.bool.Not" op.
+    fn add_not(&mut self, bool_input: Wire) -> Result<[Wire; 1], BuildError> {
+        Ok(self
+            .add_dataflow_op(BoolOp::Not, [bool_input])?
+            .outputs_arr())
+    }
+
+    /// Add a "tket2.bool.And" op.
+    fn add_and(&mut self, bool1: Wire, bool2: Wire) -> Result<[Wire; 1], BuildError> {
+        Ok(self
+            .add_dataflow_op(BoolOp::And, [bool1, bool2])?
+            .outputs_arr())
+    }
+
+    /// Add a "tket2.bool.Or" op.   
+    fn add_or(&mut self, bool1: Wire, bool2: Wire) -> Result<[Wire; 1], BuildError> {
+        Ok(self
+            .add_dataflow_op(BoolOp::Or, [bool1, bool2])?
+            .outputs_arr())
+    }
+
+    /// Add a "tket2.bool.Xor" op.          
+    fn add_xor(&mut self, bool1: Wire, bool2: Wire) -> Result<[Wire; 1], BuildError> {
+        Ok(self
+            .add_dataflow_op(BoolOp::Xor, [bool1, bool2])?
+            .outputs_arr())
+    }
+}
+
+impl<D: Dataflow> BoolOpBuilder for D {}
 
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
-    use hugr::{builder::{Dataflow, DataflowHugr, FunctionBuilder}, extension::OpDef};
+    use hugr::{
+        builder::{DFGBuilder, Dataflow, DataflowHugr},
+        extension::OpDef,
+    };
     use strum::IntoEnumIterator;
 
     fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
@@ -291,23 +339,45 @@ pub(crate) mod test {
     }
 
     #[test]
+    fn test_bool_type() {
+        let bool_custom_type = EXTENSION
+            .get_type(&BOOL_TYPE_NAME)
+            .unwrap()
+            .instantiate([])
+            .unwrap();
+        let bool_ty = Type::new_extension(bool_custom_type);
+        assert_eq!(bool_ty, bool_type());
+        let bool_const = ConstBool::new(true);
+        assert_eq!(bool_const.value(), &true);
+        assert_eq!(bool_const.get_type(), bool_ty);
+        assert!(bool_const.extension_reqs().contains(&EXTENSION_ID));
+        assert!(bool_const.validate().is_ok());
+    }
+
+    #[test]
     fn test_bool_to_sum() {
         let bool_type = bool_type();
         let sum_type = Type::new_unit_sum(2);
 
-        let op = BoolOp::BoolToSum;
+        let hugr = {
+            let mut builder = DFGBuilder::new(Signature::new(bool_type, sum_type)).unwrap();
+            let [input] = builder.input_wires_arr();
+            let output = builder.add_bool_to_sum(input).unwrap();
+            builder.finish_hugr_with_outputs(output).unwrap()
+        };
+        hugr.validate().unwrap();
+    }
+
+    #[test]
+    fn test_sum_to_bool() {
+        let bool_type = bool_type();
+        let sum_type = Type::new_unit_sum(2);
 
         let hugr = {
-            let mut func_builder = FunctionBuilder::new(
-                "bool_to_sum",
-                Signature::new(bool_type, sum_type),
-            )
-            .unwrap();
-            let [input] = func_builder.input_wires_arr();
-            let output = func_builder.add_dataflow_op(op.clone(), [input]).unwrap();
-            func_builder
-                .finish_hugr_with_outputs(output.outputs())
-                .unwrap()
+            let mut builder = DFGBuilder::new(Signature::new(sum_type, bool_type)).unwrap();
+            let [input] = builder.input_wires_arr();
+            let output = builder.add_sum_to_bool(input).unwrap();
+            builder.finish_hugr_with_outputs(output).unwrap()
         };
         hugr.validate().unwrap();
     }
