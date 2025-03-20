@@ -26,7 +26,7 @@ pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.bool");
 pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
-    /// The "tket2.futures" extension.
+    /// The "tket2.bool" extension.
     pub static ref EXTENSION: Arc<Extension>  = {
         Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
             let _ = add_bool_type_def(ext, ext_ref.clone()).unwrap();
