@@ -12,7 +12,7 @@ __version__ = "0.6.0"
 
 
 @functools.cache
-def bool() -> Extension:
+def opaque_bool() -> Extension:
     return load_extension("tket2.bool")
 
 
