@@ -1,0 +1,254 @@
+{
+  "version": "0.1.0",
+  "name": "tket2.bool",
+  "runtime_reqs": [],
+  "types": {
+    "bool": {
+      "extension": "tket2.bool",
+      "name": "bool",
+      "params": [],
+      "description": "The Guppy bool type",
+      "bound": {
+        "b": "Explicit",
+        "bound": "C"
+      }
+    }
+  },
+  "values": {},
+  "operations": {
+    "And": {
+      "extension": "tket2.bool",
+      "name": "And",
+      "description": "Logical AND between two Guppy bools.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            },
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
+    },
+    "BoolToSum": {
+      "extension": "tket2.bool",
+      "name": "BoolToSum",
+      "description": "Convert a Guppy bool into a Hugr unit sum.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "output": [
+            {
+              "t": "Sum",
+              "s": "Unit",
+              "size": 2
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
+    },
+    "Eq": {
+      "extension": "tket2.bool",
+      "name": "Eq",
+      "description": "Equality between two Guppy bools.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            },
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
+    },
+    "Not": {
+      "extension": "tket2.bool",
+      "name": "Not",
+      "description": "Negation of a Guppy bool.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
+    },
+    "Or": {
+      "extension": "tket2.bool",
+      "name": "Or",
+      "description": "Logical OR between two Guppy bools.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            },
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
+    },
+    "SumToBool": {
+      "extension": "tket2.bool",
+      "name": "SumToBool",
+      "description": "Convert a Hugr unit sum into a Guppy bool.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Sum",
+              "s": "Unit",
+              "size": 2
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
+    },
+    "Xor": {
+      "extension": "tket2.bool",
+      "name": "Xor",
+      "description": "Logical XOR between two Guppy bools.",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            },
+            {
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "runtime_reqs": []
+        }
+      },
+      "binary": false
+    }
+  }
+}
