@@ -269,8 +269,8 @@ pub(crate) mod test {
         let bool_ty = Type::new_extension(bool_custom_type);
         assert_eq!(bool_ty, bool_type());
         let bool_const = ConstBool::new(true);
-        assert_eq!(bool_const.value(), true);
         assert_eq!(bool_const.get_type(), bool_ty);
+        assert!(bool_const.value());
         assert!(bool_const.extension_reqs().contains(&BOOL_EXTENSION_ID));
         assert!(bool_const.validate().is_ok());
     }
