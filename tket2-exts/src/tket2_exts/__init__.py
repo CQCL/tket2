@@ -12,6 +12,11 @@ __version__ = "0.6.0"
 
 
 @functools.cache
+def bool() -> Extension:
+    return load_extension("tket2.bool")
+
+
+@functools.cache
 def rotation() -> Extension:
     return load_extension("tket2.rotation")
 
@@ -44,6 +49,11 @@ def quantum() -> Extension:
 @functools.cache
 def result() -> Extension:
     return load_extension("tket2.result")
+
+
+@functools.cache
+def wasm() -> Extension:
+    return load_extension("tket2.wasm")
 
 
 def load_extension(name: str) -> Extension:

@@ -1,18 +1,17 @@
-//! This module defines the Hugr extension used to represent bools in Guppy.
+//! This module defines a Hugr extension used to represent bools as an opaque type.
+//!
+//! This type is meant to be lowered to a sum that is either a unit sum (i.e. the
+//! standard bool representation in Hugr) or a future in order to enable lazier
+//! measurements.
 use std::sync::{Arc, Weak};
 
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
-        simple_op::{
-            try_from_name, HasConcrete, HasDef, MakeExtensionOp, MakeOpDef, MakeRegisteredOp,
-        },
+        simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionBuildError, ExtensionId, ExtensionSet, SignatureFunc, TypeDef, Version,
     },
-    ops::{
-        constant::{CustomConst, ValueName},
-        ExtensionOp, NamedOp, OpName,
-    },
+    ops::constant::{CustomConst, ValueName},
     types::{CustomType, Signature, Type, TypeBound},
     Extension, Wire,
 };
@@ -21,16 +20,16 @@ use smol_str::SmolStr;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
 /// The ID of the `tket2.bool` extension.
-pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.bool");
+pub const BOOL_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.bool");
 /// The "tket2.bool" extension version
-pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+pub const BOOL_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
     /// The "tket2.bool" extension.
-    pub static ref EXTENSION: Arc<Extension>  = {
-        Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
+    pub static ref BOOL_EXTENSION: Arc<Extension>  = {
+        Extension::new_arc(BOOL_EXTENSION_ID, BOOL_EXTENSION_VERSION, |ext, ext_ref| {
             let _ = add_bool_type_def(ext, ext_ref.clone()).unwrap();
-            BoolOpDef::load_all_ops(ext, ext_ref).unwrap();
+            BoolOp::load_all_ops(ext, ext_ref).unwrap();
         })
     };
 
@@ -45,18 +44,18 @@ fn add_bool_type_def(
     ext.add_type(
         BOOL_TYPE_NAME.to_owned(),
         vec![],
-        "The Guppy bool type".into(),
+        "An opaque bool type".into(),
         TypeBound::Copyable.into(),
         &extension_ref,
     )
 }
 
-/// Returns a `bool` [CustomType].
+/// Returns a `tket2.bool` [CustomType].
 pub fn bool_custom_type(extension_ref: &Weak<Extension>) -> CustomType {
     CustomType::new(
         BOOL_TYPE_NAME.to_owned(),
         vec![],
-        EXTENSION_ID,
+        BOOL_EXTENSION_ID,
         TypeBound::Copyable,
         extension_ref,
     )
@@ -64,11 +63,11 @@ pub fn bool_custom_type(extension_ref: &Weak<Extension>) -> CustomType {
 
 /// Returns a `bool` [Type].
 pub fn bool_type() -> Type {
-    bool_custom_type(&Arc::downgrade(&EXTENSION)).into()
+    bool_custom_type(&Arc::downgrade(&BOOL_EXTENSION)).into()
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
-/// Structure for holding constant bool values.
+/// Structure for holding constant `tket.bool` values.
 pub struct ConstBool(bool);
 
 impl ConstBool {
@@ -78,15 +77,15 @@ impl ConstBool {
     }
 
     /// Returns the value of the constant.
-    pub fn value(&self) -> &bool {
-        &self.0
+    pub fn value(&self) -> bool {
+        self.0
     }
 }
 
 #[typetag::serde]
 impl CustomConst for ConstBool {
     fn name(&self) -> ValueName {
-        format!("ConstBool({:?})", self.0).into()
+        format!("ConstBool({})", self.0).into()
     }
 
     fn equal_consts(&self, other: &dyn CustomConst) -> bool {
@@ -94,7 +93,7 @@ impl CustomConst for ConstBool {
     }
 
     fn extension_reqs(&self) -> ExtensionSet {
-        ExtensionSet::singleton(EXTENSION_ID)
+        ExtensionSet::singleton(BOOL_EXTENSION_ID)
     }
 
     fn get_type(&self) -> Type {
@@ -117,28 +116,28 @@ impl CustomConst for ConstBool {
     IntoStaticStr,
     EnumString,
 )]
-#[allow(missing_docs)]
+#[allow(missing_docs, non_camel_case_types)]
 #[non_exhaustive]
 /// Simple enum of "tket2.bool" operations.
-pub enum BoolOpDef {
-    BoolToSum,
-    SumToBool,
-    Eq,
-    Not,
-    And,
-    Or,
-    Xor,
+pub enum BoolOp {
+    bool_to_sum,
+    sum_to_bool,
+    eq,
+    not,
+    and,
+    or,
+    xor,
 }
 
-impl MakeOpDef for BoolOpDef {
+impl MakeOpDef for BoolOp {
     fn init_signature(&self, extension_ref: &Weak<Extension>) -> SignatureFunc {
         let bool_type = Type::new_extension(bool_custom_type(extension_ref));
         let sum_type = Type::new_unit_sum(2);
         match self {
-            BoolOpDef::BoolToSum => Signature::new(bool_type, sum_type).into(),
-            BoolOpDef::SumToBool => Signature::new(sum_type, bool_type).into(),
-            BoolOpDef::Not => Signature::new(bool_type.clone(), bool_type.clone()).into(),
-            BoolOpDef::Eq | BoolOpDef::And | BoolOpDef::Or | BoolOpDef::Xor => Signature::new(
+            BoolOp::bool_to_sum => Signature::new(bool_type, sum_type).into(),
+            BoolOp::sum_to_bool => Signature::new(sum_type, bool_type).into(),
+            BoolOp::not => Signature::new(bool_type.clone(), bool_type.clone()).into(),
+            BoolOp::eq | BoolOp::and | BoolOp::or | BoolOp::xor => Signature::new(
                 vec![bool_type.clone(), bool_type.clone()],
                 bool_type.clone(),
             )
@@ -153,109 +152,33 @@ impl MakeOpDef for BoolOpDef {
     }
 
     fn extension(&self) -> ExtensionId {
-        EXTENSION_ID
+        BOOL_EXTENSION_ID
     }
 
     fn description(&self) -> String {
         match self {
-            BoolOpDef::BoolToSum => "Convert a Guppy bool into a Hugr unit sum.".into(),
-            BoolOpDef::SumToBool => "Convert a Hugr unit sum into a Guppy bool.".into(),
-            BoolOpDef::Eq => "Equality between two Guppy bools.".into(),
-            BoolOpDef::Not => "Negation of a Guppy bool.".into(),
-            BoolOpDef::And => "Logical AND between two Guppy bools.".into(),
-            BoolOpDef::Or => "Logical OR between two Guppy bools.".into(),
-            BoolOpDef::Xor => "Logical XOR between two Guppy bools.".into(),
+            BoolOp::bool_to_sum => "Convert a tket2.bool into a Hugr unit sum.".into(),
+            BoolOp::sum_to_bool => "Convert a Hugr unit sum into an tket2.bool.".into(),
+            BoolOp::eq => "Equality between two tket2.bools.".into(),
+            BoolOp::not => "Negation of a tket2.bool.".into(),
+            BoolOp::and => "Logical AND between two tket2.bools.".into(),
+            BoolOp::or => "Logical OR between two tket2.bools.".into(),
+            BoolOp::xor => "Logical XOR between two tket2.bools.".into(),
         }
     }
 
     fn extension_ref(&self) -> Weak<Extension> {
-        Arc::downgrade(&EXTENSION)
-    }
-}
-
-impl HasConcrete for BoolOpDef {
-    type Concrete = BoolOp;
-
-    fn instantiate(
-        &self,
-        _type_args: &[hugr::types::TypeArg],
-    ) -> Result<Self::Concrete, hugr::extension::simple_op::OpLoadError> {
-        Ok(match self {
-            BoolOpDef::BoolToSum => BoolOp::BoolToSum,
-            BoolOpDef::SumToBool => BoolOp::SumToBool,
-            BoolOpDef::Eq => BoolOp::Eq,
-            BoolOpDef::Not => BoolOp::Not,
-            BoolOpDef::And => BoolOp::And,
-            BoolOpDef::Or => BoolOp::Or,
-            BoolOpDef::Xor => BoolOp::Xor,
-        })
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-/// Concrete instances of a "tket2.bool" operations.
-pub enum BoolOp {
-    /// A `tket2.bool.bool_to_sum` op.
-    BoolToSum,
-    /// A `tket2.bool.sum_to_bool` op.
-    SumToBool,
-    /// A `tket2.bool.eq` op.
-    Eq,
-    /// A `tket2.bool.not` op.
-    Not,
-    /// A `tket2.bool.and` op.
-    And,
-    /// A `tket2.bool.or` op.
-    Or,
-    /// A `tket2.bool.xor` op.
-    Xor,
-}
-
-impl BoolOp {
-    /// Returns the `BoolOpDef` for this operation.
-    pub fn bool_op_def(&self) -> BoolOpDef {
-        match self {
-            BoolOp::BoolToSum => BoolOpDef::BoolToSum,
-            BoolOp::SumToBool => BoolOpDef::SumToBool,
-            BoolOp::Eq => BoolOpDef::Eq,
-            BoolOp::Not => BoolOpDef::Not,
-            BoolOp::And => BoolOpDef::And,
-            BoolOp::Or => BoolOpDef::Or,
-            BoolOp::Xor => BoolOpDef::Xor,
-        }
-    }
-}
-
-impl NamedOp for BoolOp {
-    fn name(&self) -> OpName {
-        let n: &'static str = self.bool_op_def().into();
-        n.into()
-    }
-}
-
-impl HasDef for BoolOp {
-    type Def = BoolOpDef;
-}
-
-impl MakeExtensionOp for BoolOp {
-    fn from_extension_op(
-        ext_op: &ExtensionOp,
-    ) -> Result<Self, hugr::extension::simple_op::OpLoadError> {
-        BoolOpDef::from_def(ext_op.def())?.instantiate(ext_op.args())
-    }
-
-    fn type_args(&self) -> Vec<hugr::types::TypeArg> {
-        vec![]
+        Arc::downgrade(&BOOL_EXTENSION)
     }
 }
 
 impl MakeRegisteredOp for BoolOp {
     fn extension_id(&self) -> ExtensionId {
-        EXTENSION_ID
+        BOOL_EXTENSION_ID
     }
 
     fn extension_ref(&self) -> Weak<Extension> {
-        Arc::downgrade(&EXTENSION)
+        Arc::downgrade(&BOOL_EXTENSION)
     }
 }
 /// An extension trait for [Dataflow] providing methods to add "tket2.bool"
@@ -264,49 +187,49 @@ pub trait BoolOpBuilder: Dataflow {
     /// Add a "tket2.bool.BoolToSum" op.
     fn add_bool_to_sum(&mut self, bool_input: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
-            .add_dataflow_op(BoolOp::BoolToSum, [bool_input])?
+            .add_dataflow_op(BoolOp::bool_to_sum, [bool_input])?
             .outputs_arr())
     }
 
     /// Add a "tket2.bool.SumToBool" op.
     fn add_sum_to_bool(&mut self, sum_input: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
-            .add_dataflow_op(BoolOp::SumToBool, [sum_input])?
+            .add_dataflow_op(BoolOp::sum_to_bool, [sum_input])?
             .outputs_arr())
     }
 
     /// Add a "tket2.bool.Eq" op.
     fn add_eq(&mut self, bool1: Wire, bool2: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
-            .add_dataflow_op(BoolOp::Eq, [bool1, bool2])?
+            .add_dataflow_op(BoolOp::eq, [bool1, bool2])?
             .outputs_arr())
     }
 
     /// Add a "tket2.bool.Not" op.
     fn add_not(&mut self, bool_input: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
-            .add_dataflow_op(BoolOp::Not, [bool_input])?
+            .add_dataflow_op(BoolOp::not, [bool_input])?
             .outputs_arr())
     }
 
     /// Add a "tket2.bool.And" op.
     fn add_and(&mut self, bool1: Wire, bool2: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
-            .add_dataflow_op(BoolOp::And, [bool1, bool2])?
+            .add_dataflow_op(BoolOp::and, [bool1, bool2])?
             .outputs_arr())
     }
 
     /// Add a "tket2.bool.Or" op.   
     fn add_or(&mut self, bool1: Wire, bool2: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
-            .add_dataflow_op(BoolOp::Or, [bool1, bool2])?
+            .add_dataflow_op(BoolOp::or, [bool1, bool2])?
             .outputs_arr())
     }
 
     /// Add a "tket2.bool.Xor" op.          
     fn add_xor(&mut self, bool1: Wire, bool2: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
-            .add_dataflow_op(BoolOp::Xor, [bool1, bool2])?
+            .add_dataflow_op(BoolOp::xor, [bool1, bool2])?
             .outputs_arr())
     }
 }
@@ -319,30 +242,26 @@ pub(crate) mod test {
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::OpDef,
+        ops::NamedOp,
     };
     use strum::IntoEnumIterator;
 
     fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
-        EXTENSION.get_op(&op.name())
+        BOOL_EXTENSION.get_op(&op.name())
     }
 
     #[test]
     fn create_extension() {
-        assert_eq!(EXTENSION.name(), &EXTENSION_ID);
+        assert_eq!(BOOL_EXTENSION.name(), &BOOL_EXTENSION_ID);
 
-        for o in BoolOpDef::iter() {
-            assert_eq!(BoolOpDef::from_def(get_opdef(o).unwrap()), Ok(o));
+        for o in BoolOp::iter() {
+            assert_eq!(BoolOp::from_def(get_opdef(o).unwrap()), Ok(o));
         }
     }
 
     #[test]
-    fn bool_op_from_def() {
-        assert_eq!(Ok(BoolOp::Not), BoolOpDef::Not.instantiate(&[]))
-    }
-
-    #[test]
     fn test_bool_type() {
-        let bool_custom_type = EXTENSION
+        let bool_custom_type = BOOL_EXTENSION
             .get_type(&BOOL_TYPE_NAME)
             .unwrap()
             .instantiate([])
@@ -350,9 +269,9 @@ pub(crate) mod test {
         let bool_ty = Type::new_extension(bool_custom_type);
         assert_eq!(bool_ty, bool_type());
         let bool_const = ConstBool::new(true);
-        assert_eq!(bool_const.value(), &true);
+        assert_eq!(bool_const.value(), true);
         assert_eq!(bool_const.get_type(), bool_ty);
-        assert!(bool_const.extension_reqs().contains(&EXTENSION_ID));
+        assert!(bool_const.extension_reqs().contains(&BOOL_EXTENSION_ID));
         assert!(bool_const.validate().is_ok());
     }
 
