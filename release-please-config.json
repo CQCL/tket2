@@ -14,7 +14,14 @@
             "include-component-in-tag": true,
             "draft": false,
             "prerelease": false,
-            "draft-pull-request": true
+            "draft-pull-request": true,
+            "extra-files": [
+                {
+                    "type": "toml",
+                    "path": "uv.lock",
+                    "jsonpath": "$.package[?(@.name.value=='tket2')].version"
+                }
+            ]
         },
         "tket2-eccs": {
             "release-type": "python",
@@ -23,7 +30,14 @@
             "include-component-in-tag": true,
             "draft": false,
             "prerelease": false,
-            "draft-pull-request": true
+            "draft-pull-request": true,
+            "extra-files": [
+                {
+                    "type": "toml",
+                    "path": "uv.lock",
+                    "jsonpath": "$.package[?(@.name.value=='tket2_eccs')].version"
+                }
+            ]
         },
         "tket2-exts": {
             "release-type": "python",
@@ -32,7 +46,14 @@
             "include-component-in-tag": true,
             "draft": false,
             "prerelease": false,
-            "draft-pull-request": true
+            "draft-pull-request": true,
+            "extra-files": [
+                {
+                    "type": "toml",
+                    "path": "uv.lock",
+                    "jsonpath": "$.package[?(@.name.value=='tket2_exts')].version"
+                }
+            ]
         }
     },
     "changelog-sections": [
