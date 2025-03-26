@@ -18,6 +18,8 @@ use hugr::Extension;
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
 
+/// Definition for bool type and ops.
+pub mod bool;
 /// Definition for Angle ops and types.
 pub mod rotation;
 pub mod sympy;
@@ -58,6 +60,7 @@ pub(crate) static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new(
     STD_REG.iter().map(|e| e.to_owned()).chain([
     TKET1_EXTENSION.to_owned(),
     TKET2_EXTENSION.to_owned(),
+    bool::BOOL_EXTENSION.to_owned(),
     rotation::ROTATION_EXTENSION.to_owned()
 ]));
 
