@@ -22,7 +22,7 @@ pub use hugr::types::{EdgeKind, Type, TypeRow};
 pub use hugr::{CircuitUnit, Direction, Node, Port, PortIndex, Wire};
 
 /// An operation applied to specific wires.
-pub struct Command<'circ, T> {
+pub struct Command<'circ, T: HugrView> {
     /// The circuit.
     circ: &'circ Circuit<T>,
     /// The operation node.
@@ -237,7 +237,7 @@ type NodeWalker = pv::Topo<Node, HashSet<Node>>;
 // TODO: this can only be made generic over node type once `SiblingGraph` is
 // generic over node type. See https://github.com/CQCL/hugr/issues/1926
 #[derive(Clone)]
-pub struct CommandIterator<'circ, T> {
+pub struct CommandIterator<'circ, T: HugrView> {
     /// The circuit.
     circ: &'circ Circuit<T>,
     /// A view of the top-level region of the circuit.
