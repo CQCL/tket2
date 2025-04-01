@@ -323,9 +323,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.32"
+version = "4.5.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6088f3ae8c3608d19260cd7445411865a485688711b78b5be70d78cd96136f83"
+checksum = "e958897981290da2a852763fe9cdb89cd36977a5d729023127095fa94d95e2ff"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -343,9 +343,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.32"
+version = "4.5.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22a7ef7f676155edfb82daa97f99441f3ebf4a58d5e32f295a56259f1b6facc8"
+checksum = "83b0f35019843db2160b5bb19ae09b4e6411ac33fc6a712003c33e03090e2489"
 dependencies = [
  "anstream",
  "anstyle",
@@ -570,9 +570,9 @@ dependencies = [
 
 [[package]]
 name = "delegate"
-version = "0.13.2"
+version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "297806318ef30ad066b15792a8372858020ae3ca2e414ee6c2133b1eb9e9e945"
+checksum = "b9b6483c2bbed26f97861cf57651d4f2b731964a28cd2257f934a4b452480d21"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -940,7 +940,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e81979bfda3765878e0812eded1f4ad68f72b9c830deba59f101fccff619e524"
 dependencies = [
  "cgmath",
- "delegate 0.13.2",
+ "delegate 0.13.3",
  "derive_more 1.0.0",
  "downcast-rs",
  "enum_dispatch",
@@ -1376,7 +1376,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "395d61e69996c0fe4b187149ab0e610a6be2af1b37bd13df8a567ae629f7359f"
 dependencies = [
  "bitvec",
- "delegate 0.13.2",
+ "delegate 0.13.3",
  "itertools 0.14.0",
  "petgraph 0.7.1",
  "serde",
@@ -2014,7 +2014,7 @@ dependencies = [
  "criterion",
  "crossbeam-channel",
  "csv",
- "delegate 0.13.2",
+ "delegate 0.13.3",
  "derive_more 1.0.0",
  "fxhash",
  "hugr",
@@ -2047,7 +2047,7 @@ version = "0.11.0"
 dependencies = [
  "clap",
  "cool_asserts",
- "delegate 0.13.2",
+ "delegate 0.13.3",
  "derive_more 1.0.0",
  "hugr",
  "hugr-cli",
