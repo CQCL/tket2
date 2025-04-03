@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/CQCL/tket2/compare/tket2-exts-v0.6.0...tket2-exts-v0.6.1) (2025-04-03)
+
+
+### Features
+
+* Add `tket2.bool` extension ([#823](https://github.com/CQCL/tket2/issues/823)) ([8818d2f](https://github.com/CQCL/tket2/commit/8818d2f122ec3911366d02c18e347752a427fad9))
+
 ## [0.6.0](https://github.com/CQCL/tket2/compare/tket2-exts-v0.5.1...tket2-exts-v0.6.0) (2025-03-18)
 
 
