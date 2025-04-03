@@ -219,14 +219,14 @@ pub trait BoolOpBuilder: Dataflow {
             .outputs_arr())
     }
 
-    /// Add a "tket2.bool.Or" op.   
+    /// Add a "tket2.bool.Or" op.
     fn add_or(&mut self, bool1: Wire, bool2: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
             .add_dataflow_op(BoolOp::or, [bool1, bool2])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.bool.Xor" op.          
+    /// Add a "tket2.bool.Xor" op.
     fn add_xor(&mut self, bool1: Wire, bool2: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
             .add_dataflow_op(BoolOp::xor, [bool1, bool2])?
