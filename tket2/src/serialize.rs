@@ -32,7 +32,7 @@ use crate::{Circuit, CircuitError};
 #[allow(unused)]
 const METADATA_ENTRYPOINT: &str = "TKET2.entrypoint";
 
-impl<T: HugrView> Circuit<T, T::Node> {
+impl<T: HugrView> Circuit<T> {
     /// Store the circuit as a HUGR envelope, using the given configuration.
     ///
     /// If the circuit is not a function in a module-rooted HUGR, a new module
