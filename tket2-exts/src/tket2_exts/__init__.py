@@ -15,9 +15,11 @@ __version__ = "0.6.0"
 def opaque_bool() -> Extension:
     return load_extension("tket2.bool")
 
+
 @functools.cache
 def debug() -> Extension:
     return load_extension("tket2.debug")
+
 
 @functools.cache
 def rotation() -> Extension:
