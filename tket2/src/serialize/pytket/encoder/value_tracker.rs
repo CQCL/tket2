@@ -20,7 +20,7 @@ use tket_json_rs::register::ElementId as RegisterUnit;
 
 use crate::circuit::Circuit;
 use crate::serialize::pytket::{
-    RegisterHash, Tk1ConvertError, METADATA_B_REGISTERS, METADATA_INPUT_PARAMETERS,
+    OpConvertError, RegisterHash, Tk1ConvertError, METADATA_B_REGISTERS, METADATA_INPUT_PARAMETERS,
 };
 
 use super::unit_generator::RegisterUnitGenerator;
@@ -100,7 +100,7 @@ pub struct TrackedParam(usize);
 /// A lightweight identifier for a qubit/bit/parameter value.
 ///
 /// Contains an index into the corresponding value array in [`ValueTracker`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, derive_more::From)]
 pub enum TrackedValue {
     /// A qubit value.
     ///
@@ -183,9 +183,9 @@ impl<N: HugrNode> ValueTracker<N> {
     /// - `METADATA_B_OUTPUT_REGISTERS`: The reordered bit output register names.
     /// - `METADATA_INPUT_PARAMETERS`: The input parameter names.
     ///
-    pub fn new<H: HugrView<Node = N>>(
+    pub(super) fn new<H: HugrView<Node = N>>(
         circ: &Circuit<H>,
-        config: Tk1EncoderConfig<H>,
+        config: &Tk1EncoderConfig<H>,
     ) -> Result<Self, Tk1ConvertError> {
         let mut tracker = ValueTracker {
             qubits: read_metadata_json_list(circ, METADATA_Q_REGISTERS),
@@ -206,10 +206,14 @@ impl<N: HugrNode> ValueTracker<N> {
         // Register the circuit's inputs with the tracker.
         let inp_node = circ.input_node();
         let signature = circ.circuit_signature();
-        for (port, typ) in circ.hugr().node_outputs(inp_node).zip(signature.input()) {
+        for (port, typ) in circ
+            .hugr()
+            .node_outputs(inp_node)
+            .zip(signature.input().iter())
+        {
             let wire = Wire::new(inp_node, port);
             let Some(count) = config.type_to_pytket(typ)? else {
-                return Err(Tk1ConvertError::NonSerializableInputs { typ });
+                return Err(Tk1ConvertError::NonSerializableInputs { typ: typ.clone() });
             };
 
             let mut wire_values = Vec::with_capacity(count.total());
@@ -267,7 +271,7 @@ impl<N: HugrNode> ValueTracker<N> {
     pub fn new_param(&mut self) -> TrackedParam {
         if self.counts.params >= self.params.len() {
             debug_assert_eq!(self.counts.params, self.params.len());
-            let param = "x" + &self.counts.params.to_string();
+            let param = ["x", &self.counts.params.to_string()].join("");
             self.params.push(param);
         };
         let param = TrackedParam(self.counts.params);
@@ -277,25 +281,31 @@ impl<N: HugrNode> ValueTracker<N> {
 
     /// Associate a list of values with a wire.
     ///
+    /// Linear qubit IDs can be reused to mark the new position of the qubit in the
+    /// circuit.
+    /// Bit types are not linear, so each [`TrackedBit`] is associated with a unique bit
+    /// state in the circuit. The IDs may only be reused when
+    ///
     /// ### Panics
     ///
     /// If the wire is already associated with a different set of values.
-    pub fn register_values(
+    pub fn register_values<Val: Into<TrackedValue>>(
         &mut self,
         wire: Wire<N>,
-        values: Vec<TrackedValue>,
+        values: impl IntoIterator<Item = Val>,
         circ: &Circuit<impl HugrView<Node = N>>,
-    ) {
+    ) -> Result<(), OpConvertError<N>> {
         let unexplored_neighbours = circ.hugr().linked_ports(wire.node(), wire.source()).count();
         let present = self.wires.insert(
             wire,
             TrackedWire {
-                values,
+                values: values.into_iter().map(|v| v.into()).collect(),
                 unexplored_neighbours,
             },
         );
-        if present.is_some() {
-            panic!("Wire {:?} already has values associated with it", wire);
+        match present {
+            Some(_) => Ok(()),
+            None => Err(OpConvertError::WireAlreadyHasValues { wire }),
         }
     }
 
@@ -307,18 +317,20 @@ impl<N: HugrNode> ValueTracker<N> {
     /// To avoid this use `peek_wire_values` instead.
     ///
     /// Returns `None` if the wire is not present in the tracker.
-    pub fn wire_values(&mut self, wire: Wire<N>) -> Option<Cow<'_, [TrackedValue]>> {
-        let values = self.wires.get_mut(&wire)?;
-        match values.unexplored_neighbours {
-            1 => {
-                let values = self.wires.remove(&wire).unwrap();
-                Some(Cow::Owned(values.values))
-            }
-            _ => {
-                values.unexplored_neighbours -= 1;
-                Some(Cow::Borrowed(&values.values))
-            }
+    pub fn wire_values(
+        &mut self,
+        wire: Wire<N>,
+    ) -> Result<Cow<'_, [TrackedValue]>, OpConvertError<N>> {
+        let Some(values) = self.wires.get(&wire) else {
+            return Err(OpConvertError::WireHasNoValues { wire });
+        };
+        if values.unexplored_neighbours != 1 {
+            let values = self.wires.get_mut(&wire).unwrap();
+            values.unexplored_neighbours -= 1;
+            return Ok(Cow::Borrowed(&values.values));
         }
+        let values = self.wires.remove(&wire).unwrap();
+        Ok(Cow::Owned(values.values))
     }
 
     /// Returns the values associated with a wire.
@@ -327,9 +339,11 @@ impl<N: HugrNode> ValueTracker<N> {
     /// [`ValueTracker::wire_values`] once per wire connection.
     ///
     /// Returns `None` if the wire is not present in the tracker.
-    pub fn peek_wire_values(&self, wire: Wire<N>) -> Option<&[TrackedValue]> {
-        let values = self.wires.get(&wire)?;
-        Some(&values.values)
+    pub fn peek_wire_values(&self, wire: Wire<N>) -> Result<&[TrackedValue], OpConvertError<N>> {
+        match self.wires.get(&wire) {
+            Some(values) => Ok(&values.values),
+            None => Err(OpConvertError::WireHasNoValues { wire }),
+        }
     }
 
     /// Returns the qubit register associated with a qubit value.
@@ -342,31 +356,31 @@ impl<N: HugrNode> ValueTracker<N> {
         &self.bits[bit.0]
     }
 
-    /// Returns the string-encoded parameter associated with a parameter value.
-    pub fn param_name(&self, param: TrackedParam) -> &str {
+    /// Returns the string-encoded parameter expression associated with a parameter value.
+    pub fn param_expression(&self, param: TrackedParam) -> &str {
         &self.params[param.0]
     }
 
     /// Finish the tracker and return the final list of qubit and bit registers.
     ///
     /// Looks at the circuit's output node to determine the final order of output.
-    pub fn finish(self, circ: &Circuit<impl HugrView<Node = N>>) -> ValueTrackerResult {
+    pub(super) fn finish(
+        self,
+        circ: &Circuit<impl HugrView<Node = N>>,
+    ) -> Result<ValueTrackerResult, OpConvertError<N>> {
         // Ordered list of qubits and bits at the output of the circuit.
         let mut qubit_outputs = Vec::with_capacity(self.counts.qubits);
         let mut bit_outputs = Vec::with_capacity(self.counts.bits);
         for (node, port) in circ.hugr().all_linked_outputs(circ.output_node()) {
             let wire = Wire::new(node, port);
-            if let Some(values) = self.peek_wire_values(wire) {
-                for value in values {
-                    match value {
-                        TrackedValue::Qubit(qb) => {
-                            qubit_outputs.push(self.qubit_register(*qb).clone())
-                        }
-                        TrackedValue::Bit(bit) => bit_outputs.push(self.bit_register(*bit).clone()),
-                        TrackedValue::Param(_) => {
-                            // Parameters are not part of a pytket circuit output.
-                            // We ignore them here.
-                        }
+            let values = self.peek_wire_values(wire)?;
+            for value in values {
+                match value {
+                    TrackedValue::Qubit(qb) => qubit_outputs.push(self.qubit_register(*qb).clone()),
+                    TrackedValue::Bit(bit) => bit_outputs.push(self.bit_register(*bit).clone()),
+                    TrackedValue::Param(_) => {
+                        // Parameters are not part of a pytket circuit output.
+                        // We ignore them here.
                     }
                 }
             }
@@ -380,12 +394,12 @@ impl<N: HugrNode> ValueTracker<N> {
         let (bit_outputs, bit_permutation) =
             compute_final_permutation(bit_outputs, used_bits, &self.output_bits);
 
-        ValueTrackerResult {
+        Ok(ValueTrackerResult {
             qubits: qubit_outputs,
             bits: bit_outputs,
             qubit_permutation,
             bit_permutation,
-        }
+        })
     }
 }
 
@@ -445,8 +459,10 @@ pub(super) fn compute_final_permutation(
     declared_outputs: &[RegisterUnit],
 ) -> (Vec<RegisterUnit>, Vec<circuit_json::ImplicitPermutation>) {
     let mut declared_outputs: Vec<&RegisterUnit> = declared_outputs.iter().collect();
-    let mut declared_outputs_hashes: HashSet<RegisterHash> =
-        declared_outputs.iter().map(RegisterHash::from).collect();
+    let mut declared_outputs_hashes: HashSet<RegisterHash> = declared_outputs
+        .iter()
+        .map(|&reg| RegisterHash::from(reg))
+        .collect();
     let mut actual_outputs_hashes: HashSet<RegisterHash> =
         actual_outputs.iter().map(RegisterHash::from).collect();
     let mut input_hashes: HashMap<RegisterHash, usize> = HashMap::default();

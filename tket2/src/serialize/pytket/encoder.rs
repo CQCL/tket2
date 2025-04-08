@@ -1,46 +1,35 @@
 //! Intermediate structure for encoding [`Circuit`]s into [`SerialCircuit`]s.
 
-mod bit_tracker;
-mod param_tracker;
-mod qubit_tracker;
 mod unit_generator;
 mod unsupported_tracker;
 mod value_tracker;
 
-use core::panic;
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::f64::consts::E;
-use std::fmt::{Debug, Display};
-use std::hash::Hash;
 
-use bit_tracker::BitTracker;
-use hugr::core::HugrNode;
 use hugr::extension::ExtensionId;
-use hugr::hugr::views::{HierarchyView, SiblingGraph};
 use hugr::ops::OpType;
-use hugr::types::{CustomType, Type, TypeBase, TypeEnum};
-use param_tracker::ParameterTracker;
-use portgraph::MultiPortGraph;
-use qubit_tracker::QubitTracker;
+use hugr::types::{CustomType, Type, TypeEnum};
 
-use hugr::extension::prelude::{bool_t, qb_t};
-use hugr::std_extensions::arithmetic::float_types::float64_type;
-use hugr::{HugrView, Node, Wire};
+use hugr::extension::prelude::bool_t;
+use hugr::{HugrView, Wire};
 use itertools::Itertools;
 use tket_json_rs::circuit_json::{self, SerialCircuit};
-use tket_json_rs::register::ElementId as RegisterUnit;
 use unsupported_tracker::UnsupportedTracker;
-use value_tracker::{RegisterCount, ValueTracker};
+use value_tracker::{
+    RegisterCount, TrackedBit, TrackedParam, TrackedQubit, TrackedValue, ValueTracker,
+};
 
 use super::{
-    OpConvertError, Tk1ConvertError, METADATA_B_OUTPUT_REGISTERS, METADATA_B_REGISTERS,
-    METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
+    OpConvertError, Tk1ConvertError, METADATA_B_OUTPUT_REGISTERS, METADATA_OPGROUP, METADATA_PHASE,
+    METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
 };
-use crate::circuit::command::CircuitUnit;
 use crate::circuit::Circuit;
-use crate::extension::rotation::rotation_type;
-use crate::Tk2Op;
+
+pub fn default_encoder_config<H: HugrView>() -> Tk1EncoderConfig<H> {
+    // TODO: Add prelude & tket2 encoders
+    Tk1EncoderConfig::new()
+}
 
 /// An encoder of HUGR operations and types that transform them
 /// into pytket primitives.
@@ -62,9 +51,9 @@ pub trait Tk1Encoder<H: HugrView> {
         &self,
         node: H::Node,
         op: &OpType,
-        hugr: &H,
+        circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, OpConvertError>;
+    ) -> Result<bool, Tk1ConvertError<H::Node>>;
 
     /// Given a HUGR type, return the number of qubits, bits, and sympy
     /// parameters of its pytket counterpart.
@@ -73,7 +62,7 @@ pub trait Tk1Encoder<H: HugrView> {
     fn type_to_pytket(
         &self,
         #[allow(unused)] op: &CustomType,
-    ) -> Result<Option<RegisterCount>, OpConvertError> {
+    ) -> Result<Option<RegisterCount>, Tk1ConvertError<H::Node>> {
         Ok(None)
     }
 }
@@ -139,8 +128,17 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
                     }));
                 }
                 if let Some(tuple) = sum.as_tuple() {
-                    let count = tuple.iter().map(|t| self.type_to_pytket(t.)).sum();
-                    return Ok(Some(count));
+                    let count: Result<Option<RegisterCount>, OpConvertError> = tuple
+                        .iter()
+                        .map(|ty| {
+                            match ty.try_into() {
+                                Ok(ty) => Ok(self.type_to_pytket(ty)?),
+                                // Sum types with row variables (variable tuple lengths) are not supported.
+                                Err(_) => Ok(None),
+                            }
+                        })
+                        .sum();
+                    return count;
                 }
             }
             TypeEnum::Extension(custom) => {
@@ -171,7 +169,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
 #[derive(derive_more::Debug)]
 #[debug(bounds(H: HugrView))]
-struct Tk1EncoderContext<H: HugrView> {
+pub(super) struct Tk1EncoderContext<H: HugrView> {
     /// The name of the circuit being encoded.
     name: Option<String>,
     /// Global phase value.
@@ -182,7 +180,9 @@ struct Tk1EncoderContext<H: HugrView> {
     /// The already-encoded serialised pytket commands.
     commands: Vec<circuit_json::Command>,
     /// A tracker for qubit/bit/parameter values associated with the circuit's wires.
-    values: ValueTracker<H::Node>,
+    ///
+    /// Contains methods to update the registers in the circuit being built.
+    pub values: ValueTracker<H::Node>,
     /// A tracker for unsupported regions of the circuit.
     unsupported: UnsupportedTracker<H::Node>,
     /// Configuration for the encoding.
@@ -200,13 +200,6 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         let name = circ.name().map(str::to_string);
         let hugr = circ.hugr();
 
-        // Check for unsupported input types. TODO
-        //for (_, _, typ) in circ.units() {
-        //    if ![rotation_type(), float64_type(), qb_t(), bool_t()].contains(&typ) {
-        //        return Err(Tk1ConvertError::NonSerializableInputs { typ });
-        //    }
-        //}
-
         // Recover other parameters stored in the metadata
         let phase = match hugr.get_metadata(circ.parent(), METADATA_PHASE) {
             Some(p) => p.as_str().unwrap().to_string(),
@@ -217,7 +210,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             name,
             phase,
             commands: vec![],
-            values: ValueTracker::new(circ, config),
+            values: ValueTracker::new(circ, &config)?,
             unsupported: UnsupportedTracker::new(circ),
             config,
         })
@@ -226,7 +219,10 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// Traverse the circuit in topological order, encoding the nodes as pytket commands.
     ///
     /// Returns the final [`SerialCircuit`] if successful.
-    pub(super) fn run_encoder(&mut self, circ: &Circuit<H>) -> Result<(), Tk1ConvertError> {
+    pub(super) fn run_encoder(
+        &mut self,
+        circ: &Circuit<H>,
+    ) -> Result<(), Tk1ConvertError<H::Node>> {
         // Normally we'd use `SiblingGraph` here, but it doesn't support generic node types.
         // See https://github.com/CQCL/hugr/issues/2010
         let hugr = circ.hugr();
@@ -248,79 +244,129 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     }
 
     /// Finish building and return the final [`SerialCircuit`].
-    pub(super) fn finish(self, circ: &Circuit<H>) -> SerialCircuit {
-        let (qubits, qubits_permutation) = self.qubits.finish(circ);
-        let (bits, mut bits_permutation) = self.bits.finish(circ);
+    pub(super) fn finish(
+        self,
+        circ: &Circuit<H>,
+    ) -> Result<SerialCircuit, Tk1ConvertError<H::Node>> {
+        let mut final_values = self.values.finish(circ)?;
 
-        let mut implicit_permutation = qubits_permutation;
-        implicit_permutation.append(&mut bits_permutation);
+        let mut implicit_permutation = final_values.qubit_permutation;
+        implicit_permutation.append(&mut final_values.bit_permutation);
 
         let mut ser = SerialCircuit::new(self.name, self.phase);
 
         ser.commands = self.commands;
-        ser.qubits = qubits.into_iter().map_into().collect();
-        ser.bits = bits.into_iter().map_into().collect();
+        ser.qubits = final_values.qubits.into_iter().map_into().collect();
+        ser.bits = final_values.bits.into_iter().map_into().collect();
         ser.implicit_permutation = implicit_permutation;
         ser.number_of_ws = None;
-        ser
-    }
-
-    /// Update the [Wire] associated with a qubit register, and return the register.
-    ///
-    /// Returns `None` if the wire is not associated with a qubit register.
-    pub fn update_qubit(
-        &mut self,
-        wire: Wire<H::Node>,
-        updated_wire: Wire<H::Node>,
-    ) -> Option<&RegisterUnit> {
-        self.qubits.update(wire, updated_wire)
-    }
-
-    /// Return the register associated with a bit wire.
-    pub fn get_bit_register(&self, wire: Wire<H::Node>) -> Option<&RegisterUnit> {
-        self.bits.get(wire)
-    }
-
-    /// Allocate a new bit register for the pytket circuit.
-    pub fn add_bit_register(&mut self, wire: Wire<H::Node>) -> &RegisterUnit {
-        self.bits.add_bit_register(wire)
-    }
-
-    /// Return the parameter expression associated with a wire.
-    pub fn get_parameter(&self, wire: Wire<H::Node>) -> Option<&str> {
-        self.parameters.get(wire)
-    }
-
-    /// Associate a parameter expression with a wire.
-    pub fn add_parameter(&mut self, wire: Wire<H::Node>, param: String) {
-        self.parameters.add_parameter(wire, param);
+        Ok(ser)
     }
 
     /// Helper to emit a new tket1 command corresponding to a single HUGR node.
     ///
-    /// Use [`Tk1EncoderContext::emit_command`] for more general cases.
+    /// This call will fail if the node has parameter outputs. Use
+    /// [`Tk1EncoderContext::emit_command_for_node_with_params`] instead.
+    ///
+    /// See [`Tk1EncoderContext::emit_command`] for more general cases.
     ///
     /// ## Arguments
     ///
-    /// - `tk1_operation`: The tket1 operation to emit.
-    ///  See [`make_tk1_operation`] for a helper function to create it.
-    /// - `node`: The HUGR for which to emit the command.
-    ///   Qubits and bits are automatically retrieved from the node's inputs/outputs.
+    /// - `tk1_operation`: The tket1 operation type to emit.
+    /// - `node`: The HUGR for which to emit the command. Qubits and bits are
+    ///   automatically retrieved from the node's inputs/outputs.
     /// - `circ`: The circuit containing the node.
     pub fn emit_command_for_node(
         &mut self,
-        tk1_operation: circuit_json::Operation,
+        tk1_optype: tket_json_rs::OpType,
         node: H::Node,
         circ: &Circuit<H>,
-    ) -> Result<bool, Tk1ConvertError> {
-        // TODO: Compute qubits and bits (and opgroup from metadata)
-        self.emit_command(
-            command.op.clone(),
-            command.inputs(),
-            command.outputs(),
-            None,
-        );
-        Ok(true)
+    ) -> Result<(), Tk1ConvertError<H::Node>> {
+        self.emit_command_for_node_with_params(tk1_optype, node, circ, |_, _| None)
+    }
+
+    /// Helper to emit a new tket1 command corresponding to a single HUGR node,
+    /// with parameter outputs. Use [`Tk1EncoderContext::emit_command_for_node`]
+    /// for nodes that don't require computing parameter outputs.
+    ///
+    /// See [`Tk1EncoderContext::emit_command`] for more general cases.
+    ///
+    /// ## Arguments
+    ///
+    /// - `tk1_operation`: The tket1 operation type to emit.
+    /// - `node`: The HUGR for which to emit the command. Qubits and bits are
+    ///   automatically retrieved from the node's inputs/outputs.
+    /// - `circ`: The circuit containing the node.
+    /// - `param_map`: A function that given a parameter index and the list of
+    ///   input parameter values returns the string expression to use for the
+    ///   parameter output. Returning `None` will abort the encoding.
+    pub fn emit_command_for_node_with_params<'p>(
+        &mut self,
+        tk1_optype: tket_json_rs::OpType,
+        node: H::Node,
+        circ: &Circuit<H>,
+        param_map: impl FnMut(usize, &'p [&'p str]) -> Option<&'p str>,
+    ) -> Result<(), Tk1ConvertError<H::Node>> {
+        let mut qubits: Vec<TrackedQubit> = Vec::new();
+        let mut bits: Vec<TrackedBit> = Vec::new();
+        let mut params: Vec<TrackedParam> = Vec::new();
+
+        let optype = circ.hugr().get_optype(node);
+        let other_input_port = optype.other_input_port();
+        for input in circ.hugr().node_inputs(node) {
+            // Ignore order edges.
+            if Some(input) == other_input_port {
+                continue;
+            }
+            // Dataflow ports should have a single linked neighbour.
+            let Some((neigh, neigh_out)) = circ.hugr().single_linked_output(node, input) else {
+                return Err(
+                    OpConvertError::UnsupportedOpSerialization { op: optype.clone() }.into(),
+                );
+            };
+            let wire = Wire::new(neigh, neigh_out);
+            for value in self.values.wire_values(wire)?.iter() {
+                match value {
+                    TrackedValue::Qubit(qb) => qubits.push(*qb),
+                    TrackedValue::Bit(b) => bits.push(*b),
+                    TrackedValue::Param(p) => params.push(*p),
+                }
+            }
+        }
+        let params: Vec<String> = params
+            .into_iter()
+            .map(|p| self.values.param_expression(p).to_owned())
+            .collect();
+
+        // Update the values in the node's outputs.
+        //
+        // We preserve the order of linear values in the input
+        let other_output_port = optype.other_output_port();
+        let mut qubit_iterator = qubits.iter();
+        let mut bits_iterator = bits.iter();
+        for output in circ.hugr().node_outputs(node) {
+            // Ignore order edges.
+            if Some(output) == other_output_port {
+                continue;
+            }
+            let wire = Wire::new(node, output);
+            // Each output of the node may consume multiple values. We
+            //let output_counts = self.config.type_to_pytket();
+
+            // TODO TODO TODO
+            // Fetch the type of each output port
+        }
+
+        // Preserve the pytket opgroup, if it got stored in the metadata.
+        let opgroup: Option<String> = circ
+            .hugr()
+            .get_metadata(node, METADATA_OPGROUP)
+            .and_then(serde_json::Value::as_str)
+            .map(ToString::to_string);
+
+        let op = make_tk1_operation(tk1_optype, qubits.len(), bits.len(), params);
+        self.emit_command(op, &qubits, &bits, opgroup);
+        Ok(())
     }
 
     /// Emit a new tket1 command.
@@ -339,13 +385,15 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     pub fn emit_command(
         &mut self,
         tk1_operation: circuit_json::Operation,
-        qubits: Vec<RegisterUnit>,
-        bits: Vec<RegisterUnit>,
+        qubits: &[TrackedQubit],
+        bits: &[TrackedBit],
         opgroup: Option<String>,
     ) {
+        let qubit_regs = qubits.iter().map(|&qb| self.values.qubit_register(qb));
+        let bit_regs = bits.iter().map(|&b| self.values.bit_register(b));
         let command = circuit_json::Command {
             op: tk1_operation,
-            args: qubits.into_iter().chain(bits.into_iter()).collect(),
+            args: qubit_regs.chain(bit_regs).cloned().collect(),
             opgroup,
         };
 
@@ -360,7 +408,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     ///
     /// Returns `true` if the node was successfully encoded, or `false` if none
     /// of the encoders could process it.
-    fn try_encode_node<H: HugrView<Node = N>>(
+    fn try_encode_node(
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
@@ -371,12 +419,16 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         //
         // If none of the encoders can handle the operation, we just add it to
         // the unsupported tracker and move on.
-        for encoder in &mut self.encoders {
-            if encoder.op_to_pytket(node, optype, self).is_ok() {
+        for encoder in &mut self.config.encoders {
+            if encoder
+                .op_to_pytket(node, optype, circ.hugr(), self)
+                .is_ok()
+            {
                 return Ok(true);
             }
         }
 
+        /*
         // Register any output of the command that can be used as a TKET1 parameter.
         if self.parameters.record_parameters(&command, optype)? {
             // for now all ops that record parameters should be ignored (are
@@ -504,6 +556,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             opgroup,
         };
         self.commands.push(command);
+        */
 
         Ok(true)
     }

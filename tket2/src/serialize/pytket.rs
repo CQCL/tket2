@@ -5,9 +5,11 @@ mod encoder;
 mod op;
 mod param;
 
-use encoder::Tk1EncoderContext;
+use encoder::{default_encoder_config, Tk1EncoderContext};
+use hugr::core::HugrNode;
 use hugr::types::Type;
 
+use hugr::Wire;
 use itertools::Itertools;
 // Required for serialising ops in the tket1 hugr extension.
 pub(crate) use op::serialised::OpaqueTk1Op;
@@ -84,9 +86,10 @@ impl TKETDecode for SerialCircuit {
     }
 
     fn encode(circ: &Circuit) -> Result<Self, Self::EncodeError> {
-        let mut encoder = Tk1EncoderContext::new(circ)?;
+        let config = default_encoder_config();
+        let mut encoder = Tk1EncoderContext::new(circ, config)?;
         encoder.run_encoder(circ)?;
-        Ok(encoder.finish(circ))
+        Ok(encoder.finish(circ)?)
     }
 }
 
@@ -154,8 +157,9 @@ pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, Tk1ConvertError> {
 }
 
 /// Error type for conversion between pytket operations and tket2 ops.
-#[derive(Display, Debug, Error, From)]
+#[derive(Display, derive_more::Debug, Error, From)]
 #[non_exhaustive]
+#[debug(bounds(N: HugrNode))]
 pub enum OpConvertError<N = hugr::Node> {
     /// The serialized operation is not supported.
     #[display("Unsupported serialized pytket operation: {op:?}")]
@@ -241,14 +245,41 @@ pub enum OpConvertError<N = hugr::Node> {
         /// The given of parameters.
         args: Vec<ElementId>,
     },
+    /// A node parameter output could not be evaluated.
+    #[display("Could not compute output parameter #{out_index} for operation {} given inputs [{}].", op.name(), params.iter().join(", "))]
+    CannotComputeParams {
+        /// The operation being encoded
+        op: OpType,
+        /// The input parameters.
+        params: Vec<String>,
+        /// The output index that could not be computed.
+        out_index: usize,
+    },
+    /// Tried to query the values associated with an unexplored wire.
+    ///
+    /// This reflects a bug in the operation encoding logic of an operation.
+    #[display("Could not find values associated with wire {wire}.")]
+    WireHasNoValues {
+        /// The wire that has no values.
+        wire: Wire<N>,
+    },
+    /// Tried to add values to an already registered wire.
+    ///
+    /// This reflects a bug in the operation encoding logic of an operation.
+    #[display("Tried to register values for wire {wire}, but it already has associated values.")]
+    WireAlreadyHasValues {
+        /// The wire that already has values.
+        wire: Wire<N>,
+    },
 }
 
 /// Error type for conversion between tket2 ops and pytket operations.
-#[derive(Debug, Display, Error, From)]
+#[derive(derive_more::Debug, Display, Error, From)]
 #[non_exhaustive]
-pub enum Tk1ConvertError {
+#[debug(bounds(N: HugrNode))]
+pub enum Tk1ConvertError<N = hugr::Node> {
     /// Operation conversion error.
-    OpConversionError(OpConvertError),
+    OpConversionError(OpConvertError<N>),
     /// The circuit has non-serializable inputs.
     #[display("Circuit contains non-serializable input of type {typ}.")]
     NonSerializableInputs {

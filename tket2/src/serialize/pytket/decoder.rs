@@ -19,6 +19,7 @@ use tket_json_rs::circuit_json;
 use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::register;
 
+use super::op::Tk1Op;
 use super::param::decode::{parse_pytket_param, PytketParam};
 use super::{
     OpConvertError, RegisterHash, Tk1ConvertError, METADATA_B_OUTPUT_REGISTERS,
@@ -29,6 +30,17 @@ use crate::extension::rotation::{rotation_type, RotationOp};
 use crate::extension::TKET1_EXTENSION_ID;
 use crate::serialize::pytket::METADATA_INPUT_PARAMETERS;
 use crate::symbolic_constant_op;
+
+/// An encoder of HUGR operations and types that transform them
+/// into pytket primitives.
+pub trait Tk1Decoder {
+    /// Given a pytket operation, try to convert it to a HUGR operation of this type.
+    fn op_from_pytket(
+        &self,
+        op: &tket_json_rs::circuit_json::Operation,
+        encoder: &Tk1DecoderContext,
+    ) -> Result<bool, OpConvertError>;
+}
 
 /// The state of an in-progress [`FunctionBuilder`] being built from a [`SerialCircuit`].
 ///
