@@ -31,11 +31,11 @@ missing_docs = "warn"
 [patch.crates-io]
 
 # Uncomment to use unreleased versions of hugr
-hugr = { git = "https://github.com/CQCL/hugr", rev = "bb8cda1" }
-hugr-core = { git = "https://github.com/CQCL/hugr", rev = "bb8cda1" }
-hugr-passes = { git = "https://github.com/CQCL/hugr", rev = "bb8cda1" }
-hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "bb8cda1" }
-#portgraph = { git = "https://github.com/CQCL/portgraph", rev = "dbfc549" }
+hugr = { git = "https://github.com/CQCL/hugr", rev = "7626797" }
+hugr-core = { git = "https://github.com/CQCL/hugr", rev = "7626797" }
+hugr-passes = { git = "https://github.com/CQCL/hugr", rev = "7626797" }
+hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "7626797" }
+#portgraph = { git = "https://github.com/CQCL/portgraph", rev = "4b152df61dee24c38d9f7262ada0c6b1e511967c" }
 #petgraph = { git = "https://github.com/petgraph/petgraph", rev = "a49bc40" }
 
 [workspace.dependencies]

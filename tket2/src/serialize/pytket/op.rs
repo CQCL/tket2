@@ -14,14 +14,14 @@ use tket_json_rs::circuit_json;
 use super::OpaqueTk1Op;
 
 pub(crate) mod serialised;
-mod tk2op;
+pub mod tk2op;
 
 /// An intermediary artifact when converting between TKET1 and TKET2 operations.
 ///
 /// This enum represents either operations that can be represented natively in TKET2,
 /// or operations that must be serialised as opaque TKET1 operations.
 #[derive(Clone, Debug, PartialEq, derive_more::From)]
-pub enum Tk1Op {
+pub(crate) enum Tk1Op {
     /// An operation with a native TKET2 counterpart.
     Native(NativeOp),
     /// An operation without a native TKET2 counterpart.

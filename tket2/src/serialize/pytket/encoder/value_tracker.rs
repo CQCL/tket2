@@ -118,7 +118,7 @@ pub enum TrackedValue {
 
 /// Data associated with a tracked wire in the hugr.
 #[derive(Debug, Clone)]
-struct TrackedWire {
+pub struct TrackedWire {
     /// The values associated with the wire.
     ///
     /// This is a list of [`TrackedValue`]s, which can be qubits, bits, or
@@ -186,11 +186,13 @@ impl<N: HugrNode> ValueTracker<N> {
     pub(super) fn new<H: HugrView<Node = N>>(
         circ: &Circuit<H>,
         config: &Tk1EncoderConfig<H>,
-    ) -> Result<Self, Tk1ConvertError> {
+    ) -> Result<Self, Tk1ConvertError<N>> {
+        let param_variable_names: Vec<String> =
+            read_metadata_json_list(circ, METADATA_INPUT_PARAMETERS);
         let mut tracker = ValueTracker {
             qubits: read_metadata_json_list(circ, METADATA_Q_REGISTERS),
             bits: read_metadata_json_list(circ, METADATA_B_REGISTERS),
-            params: read_metadata_json_list(circ, METADATA_INPUT_PARAMETERS),
+            params: Vec::with_capacity(param_variable_names.len()),
             counts: RegisterCount::default(),
             wires: BTreeMap::new(),
             output_qubits: read_metadata_json_list(circ, METADATA_Q_OUTPUT_REGISTERS),
@@ -202,6 +204,14 @@ impl<N: HugrNode> ValueTracker<N> {
         // Associate each input wire with a qubit/bit/parameter value.
         tracker.qubit_reg_generator = RegisterUnitGenerator::new("q", tracker.qubits.iter());
         tracker.bit_reg_generator = RegisterUnitGenerator::new("c", tracker.bits.iter());
+
+        // Generator of input parameter variable names.
+        let existing_param_vars: HashSet<String> = param_variable_names.iter().cloned().collect();
+        let mut param_gen = param_variable_names.into_iter().chain(
+            (0..)
+                .map(|i| format!("x{}", i))
+                .filter(|name| !existing_param_vars.contains(name)),
+        );
 
         // Register the circuit's inputs with the tracker.
         let inp_node = circ.input_node();
@@ -226,11 +236,11 @@ impl<N: HugrNode> ValueTracker<N> {
                 wire_values.push(TrackedValue::Bit(bit));
             }
             for _ in 0..count.params {
-                let param = tracker.new_param();
+                let param = tracker.new_param(param_gen.next().unwrap());
                 wire_values.push(TrackedValue::Param(param));
             }
 
-            tracker.register_values(wire, wire_values, circ);
+            tracker.register_values(wire, wire_values, circ)?;
         }
 
         Ok(tracker)
@@ -264,16 +274,11 @@ impl<N: HugrNode> ValueTracker<N> {
         bit
     }
 
-    /// Create a fresh parameter variable.
+    /// Register a new parameter string expression.
     ///
-    /// Picks unused names from the `params` list, if available, or generates
-    /// a new one formated as `x##`.
-    pub fn new_param(&mut self) -> TrackedParam {
-        if self.counts.params >= self.params.len() {
-            debug_assert_eq!(self.counts.params, self.params.len());
-            let param = ["x", &self.counts.params.to_string()].join("");
-            self.params.push(param);
-        };
+    /// Returns a unique identifier for the expression.
+    pub fn new_param(&mut self, expression: impl ToString) -> TrackedParam {
+        self.params.push(expression.to_string());
         let param = TrackedParam(self.counts.params);
         self.counts.params += 1;
         param
@@ -434,10 +439,7 @@ fn read_metadata_json_list<T: serde::de::DeserializeOwned>(
         return vec![];
     };
 
-    match serde_json::from_value::<Vec<T>>(value.clone()) {
-        Ok(registers) => registers,
-        Err(_) => vec![],
-    }
+    serde_json::from_value::<Vec<T>>(value.clone()).unwrap_or_default()
 }
 
 /// Compute the final unit permutation for a circuit.

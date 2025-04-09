@@ -1,4 +1,5 @@
 //! Definitions for encoding hugr graphs into pytket op parameters.
+#![allow(unused)]
 
 use hugr::ops::{OpType, Value};
 use hugr::std_extensions::arithmetic::float_ops::FloatOps;

@@ -4,8 +4,9 @@ use std::borrow::Cow;
 
 use hugr::extension::prelude::{bool_t, qb_t, Noop};
 
+use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
-use hugr::ops::{OpTrait, OpType};
+use hugr::ops::{ExtensionOp, OpTrait, OpType};
 use hugr::std_extensions::arithmetic::float_types::float64_type;
 use hugr::types::Signature;
 
@@ -13,7 +14,7 @@ use hugr::{HugrView, IncomingPort, Wire};
 use tket_json_rs::optype::OpType as Tk1OpType;
 
 use crate::extension::rotation::rotation_type;
-use crate::extension::TKET2_EXTENSION;
+use crate::extension::TKET2_EXTENSION_ID;
 use crate::serialize::pytket::encoder::{Tk1Encoder, Tk1EncoderContext};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::{Circuit, Tk2Op};
@@ -23,18 +24,18 @@ use crate::{Circuit, Tk2Op};
 pub struct Tk2OpEncoder;
 
 impl<H: HugrView> Tk1Encoder<H> for Tk2OpEncoder {
-    fn extensions(&self) -> Vec<Cow<'_, ExtensionId>> {
-        vec![Cow::Borrowed(TKET2_EXTENSION.name())]
+    fn extensions(&self) -> Vec<ExtensionId> {
+        vec![TKET2_EXTENSION_ID]
     }
 
     fn op_to_pytket(
         &self,
         node: H::Node,
-        op: &OpType,
+        op: &ExtensionOp,
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
     ) -> Result<bool, Tk1ConvertError<H::Node>> {
-        let Some(tk2op): Option<Tk2Op> = op.cast() else {
+        let Ok(tk2op) = Tk2Op::from_extension_op(op) else {
             return Ok(false);
         };
 
@@ -82,7 +83,7 @@ impl<H: HugrView> Tk1Encoder<H> for Tk2OpEncoder {
         };
 
         // Most operations map directly to a pytket one.
-        encoder.emit_command_for_node(serial_op, node, circ)?;
+        encoder.emit_node(serial_op, node, circ)?;
 
         Ok(true)
     }
@@ -92,7 +93,7 @@ impl<H: HugrView> Tk1Encoder<H> for Tk2OpEncoder {
 ///
 /// Note that the signature of the native and serialised operations may differ.
 #[derive(Clone, Debug, PartialEq, Default)]
-pub struct NativeOp {
+pub(crate) struct NativeOp {
     /// The tket2 optype.
     op: OpType,
     /// The corresponding serialised optype.

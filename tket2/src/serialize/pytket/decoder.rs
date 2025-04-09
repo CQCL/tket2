@@ -31,17 +31,6 @@ use crate::extension::TKET1_EXTENSION_ID;
 use crate::serialize::pytket::METADATA_INPUT_PARAMETERS;
 use crate::symbolic_constant_op;
 
-/// An encoder of HUGR operations and types that transform them
-/// into pytket primitives.
-pub trait Tk1Decoder {
-    /// Given a pytket operation, try to convert it to a HUGR operation of this type.
-    fn op_from_pytket(
-        &self,
-        op: &tket_json_rs::circuit_json::Operation,
-        encoder: &Tk1DecoderContext,
-    ) -> Result<bool, OpConvertError>;
-}
-
 /// The state of an in-progress [`FunctionBuilder`] being built from a [`SerialCircuit`].
 ///
 /// Mostly used to define helper internal methods.

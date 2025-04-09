@@ -1,19 +1,21 @@
 //! Intermediate structure for encoding [`Circuit`]s into [`SerialCircuit`]s.
 
+mod config;
 mod unit_generator;
 mod unsupported_tracker;
 mod value_tracker;
 
-use std::borrow::Cow;
-use std::collections::HashMap;
+pub use config::{default_encoder_config, Tk1Encoder, Tk1EncoderConfig};
+use hugr::ops::{NamedOp, OpTrait, OpType};
+use hugr::types::EdgeKind;
 
-use hugr::extension::ExtensionId;
-use hugr::ops::OpType;
-use hugr::types::{CustomType, Type, TypeEnum};
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
-use hugr::extension::prelude::bool_t;
-use hugr::{HugrView, Wire};
+use hugr::{Direction, HugrView, Wire};
 use itertools::Itertools;
+use portgraph::algorithms::TopoSort;
+use portgraph::LinkView;
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 use unsupported_tracker::UnsupportedTracker;
 use value_tracker::{
@@ -26,150 +28,10 @@ use super::{
 };
 use crate::circuit::Circuit;
 
-pub fn default_encoder_config<H: HugrView>() -> Tk1EncoderConfig<H> {
-    // TODO: Add prelude & tket2 encoders
-    Tk1EncoderConfig::new()
-}
-
-/// An encoder of HUGR operations and types that transform them
-/// into pytket primitives.
-pub trait Tk1Encoder<H: HugrView> {
-    /// The name of the extension this encoder/decoder is for.
-    ///
-    /// [`Tk1Encoder::op_to_pytket`] and [`Tk1Encoder::type_to_pytket`] will
-    /// only be called for operations/types of these extensions.
-    fn extensions(&self) -> Vec<Cow<'_, ExtensionId>>;
-
-    /// Given a node in the HUGR circuit and its operation type, try to convert
-    /// it to a pytket operation and add it to the pytket encoder.
-    ///
-    /// Returns `true` if the operation was successfully converted. If that is
-    /// the case, no further encoders will be called.
-    ///
-    /// If the operation is not supported by the encoder, return `false`.
-    fn op_to_pytket(
-        &self,
-        node: H::Node,
-        op: &OpType,
-        circ: &Circuit<H>,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>>;
-
-    /// Given a HUGR type, return the number of qubits, bits, and sympy
-    /// parameters of its pytket counterpart.
-    ///
-    /// If the type is not supported by the encoder, return `None`.
-    fn type_to_pytket(
-        &self,
-        #[allow(unused)] op: &CustomType,
-    ) -> Result<Option<RegisterCount>, Tk1ConvertError<H::Node>> {
-        Ok(None)
-    }
-}
-
-/// Configuration for converting [`Circuit`] into [`SerialCircuit`].
-///
-/// Contains custom encoders that define translations for HUGR operations and types
-/// into pytket primitives.
-#[derive(derive_more::Debug)]
-#[debug(bounds(H: HugrView))]
-struct Tk1EncoderConfig<H: HugrView> {
-    /// Operation encoders
-    #[debug(skip)]
-    encoders: Vec<Box<dyn Tk1Encoder<H>>>,
-    /// Pre-computed map from extension ids to corresponding encoders in
-    /// `encoders`, identified by their index.
-    #[debug("{:?}", extension_encoders.keys().collect_vec())]
-    extension_encoders: HashMap<ExtensionId, Vec<usize>>,
-}
-
-impl<H: HugrView> Tk1EncoderConfig<H> {
-    /// Create a new [`Tk1EncoderConfig`] with no encoders.
-    pub fn new() -> Self {
-        Self {
-            encoders: vec![],
-            extension_encoders: HashMap::new(),
-        }
-    }
-
-    /// Add an encoder to the configuration.
-    pub fn add_encoder(&mut self, encoder: impl Tk1Encoder<H> + 'static) {
-        let idx = self.encoders.len();
-
-        for ext in encoder.extensions() {
-            self.extension_encoders
-                .entry(ext.into_owned())
-                .or_default()
-                .push(idx);
-        }
-        self.encoders.push(Box::new(encoder));
-    }
-
-    /// List the extensions supported by the encoders.
-    ///
-    /// Use [`Tk1EncoderConfig::add_encoder`] to extend this list.
-    pub fn supported_extensions(&self) -> impl Iterator<Item = &ExtensionId> {
-        self.extension_encoders.keys()
-    }
-
-    /// Translate a HUGR type into a count of qubits, bits, and parameters,
-    /// using the registered custom encodes.
-    ///
-    /// Only tuple sums, bools, and custom types are supported.
-    /// Other types will return `None`.
-    pub fn type_to_pytket(&self, typ: &Type) -> Result<Option<RegisterCount>, OpConvertError> {
-        match typ.as_type_enum() {
-            TypeEnum::Sum(sum) => {
-                if sum == bool_t() {
-                    return Ok(Some(RegisterCount {
-                        qubits: 0,
-                        bits: 1,
-                        params: 0,
-                    }));
-                }
-                if let Some(tuple) = sum.as_tuple() {
-                    let count: Result<Option<RegisterCount>, OpConvertError> = tuple
-                        .iter()
-                        .map(|ty| {
-                            match ty.try_into() {
-                                Ok(ty) => Ok(self.type_to_pytket(ty)?),
-                                // Sum types with row variables (variable tuple lengths) are not supported.
-                                Err(_) => Ok(None),
-                            }
-                        })
-                        .sum();
-                    return count;
-                }
-            }
-            TypeEnum::Extension(custom) => {
-                let type_ext = custom.extension();
-                for encoder in self.encoders_for_extension(type_ext) {
-                    if let Some(count) = encoder.type_to_pytket(custom)? {
-                        return Ok(Some(count));
-                    }
-                }
-            }
-            _ => {}
-        }
-        Ok(None)
-    }
-
-    /// Lists the encoders that can handle a given extension.
-    fn encoders_for_extension(
-        &self,
-        ext: &ExtensionId,
-    ) -> impl Iterator<Item = &Box<dyn Tk1Encoder<H>>> {
-        self.extension_encoders
-            .get(ext)
-            .into_iter()
-            .flat_map(move |idxs| idxs.iter().map(move |idx| &self.encoders[*idx]))
-    }
-}
-
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
 #[derive(derive_more::Debug)]
 #[debug(bounds(H: HugrView))]
-pub(super) struct Tk1EncoderContext<H: HugrView> {
+pub struct Tk1EncoderContext<H: HugrView> {
     /// The name of the circuit being encoded.
     name: Option<String>,
     /// Global phase value.
@@ -188,7 +50,7 @@ pub(super) struct Tk1EncoderContext<H: HugrView> {
     /// Configuration for the encoding.
     ///
     /// Contains custom operation/type encoders.
-    config: Tk1EncoderConfig<H>,
+    config: Arc<Tk1EncoderConfig<H>>,
 }
 
 impl<H: HugrView> Tk1EncoderContext<H> {
@@ -196,7 +58,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     pub(super) fn new(
         circ: &Circuit<H>,
         config: Tk1EncoderConfig<H>,
-    ) -> Result<Self, Tk1ConvertError> {
+    ) -> Result<Self, Tk1ConvertError<H::Node>> {
         let name = circ.name().map(str::to_string);
         let hugr = circ.hugr();
 
@@ -212,7 +74,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             commands: vec![],
             values: ValueTracker::new(circ, &config)?,
             unsupported: UnsupportedTracker::new(circ),
-            config,
+            config: Arc::new(config),
         })
     }
 
@@ -227,18 +89,32 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         // See https://github.com/CQCL/hugr/issues/2010
         let hugr = circ.hugr();
         let root = circ.parent();
-        let region = portgraph::view::FlatRegion::new(
-            &hugr.portgraph(),
-            &hugr.hierarchy(),
-            hugr.get_pg_index(root),
-        );
-        let mut nodes = petgraph::visit::Topo::new(&region);
-        while let Some(node) = nodes.next(&region) {
-            // Try to encode the single node as pytket commands.
-            // If it cannot be encoded, track it as part of an unsupported region.
-            if !self.try_encode_node(node, circ)? {
-                self.unsupported.record_node(node, circ);
+        let portgraph = hugr.portgraph();
+        let hierarchy = hugr.hierarchy();
+        let region =
+            portgraph::view::FlatRegion::new(&portgraph, &hierarchy, hugr.get_pg_index(root));
+
+        // Collect al initial nodes in the region (nodes with no predecessors).
+        // Also compute a map from portgraph indices into `H::Node`s.
+        //
+        // TODO: Ideally we'd have a `hugr.from_pg_index` method, and avoid computing the map.
+        // We should revisit this once the `base_hugr` refactor is done.
+        // <https://github.com/CQCL/hugr/issues/1926>
+        let mut initials = Vec::new();
+        let mut from_pg_index = HashMap::new();
+        for node in hugr.children(root) {
+            let pg_node = hugr.get_pg_index(node);
+            from_pg_index.insert(pg_node, node);
+            if region.input_links(pg_node).next().is_none() {
+                initials.push(pg_node);
             }
+        }
+
+        let topo: TopoSort<'_, _, HashSet<_>> =
+            portgraph::algorithms::toposort(region, initials, portgraph::Direction::Outgoing);
+        for pg_node in topo {
+            let node = from_pg_index[&pg_node];
+            self.try_encode_node(node, circ)?;
         }
         Ok(())
     }
@@ -263,50 +139,19 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         Ok(ser)
     }
 
-    /// Helper to emit a new tket1 command corresponding to a single HUGR node.
+    /// Given a node in the HUGR, returns all the [`TrackedValue`]s associated
+    /// with its inputs.
     ///
-    /// This call will fail if the node has parameter outputs. Use
-    /// [`Tk1EncoderContext::emit_command_for_node_with_params`] instead.
-    ///
-    /// See [`Tk1EncoderContext::emit_command`] for more general cases.
-    ///
-    /// ## Arguments
-    ///
-    /// - `tk1_operation`: The tket1 operation type to emit.
-    /// - `node`: The HUGR for which to emit the command. Qubits and bits are
-    ///   automatically retrieved from the node's inputs/outputs.
-    /// - `circ`: The circuit containing the node.
-    pub fn emit_command_for_node(
+    /// These values can be used with the [`Tk1EncoderContext::values`] tracker
+    /// to retrieve the corresponding pytket registers and parameter
+    /// expressions. See [`ValueTracker::qubit_register`],
+    /// [`ValueTracker::bit_register`], and [`ValueTracker::param_expression`].
+    pub fn get_input_values(
         &mut self,
-        tk1_optype: tket_json_rs::OpType,
         node: H::Node,
         circ: &Circuit<H>,
-    ) -> Result<(), Tk1ConvertError<H::Node>> {
-        self.emit_command_for_node_with_params(tk1_optype, node, circ, |_, _| None)
-    }
-
-    /// Helper to emit a new tket1 command corresponding to a single HUGR node,
-    /// with parameter outputs. Use [`Tk1EncoderContext::emit_command_for_node`]
-    /// for nodes that don't require computing parameter outputs.
-    ///
-    /// See [`Tk1EncoderContext::emit_command`] for more general cases.
-    ///
-    /// ## Arguments
-    ///
-    /// - `tk1_operation`: The tket1 operation type to emit.
-    /// - `node`: The HUGR for which to emit the command. Qubits and bits are
-    ///   automatically retrieved from the node's inputs/outputs.
-    /// - `circ`: The circuit containing the node.
-    /// - `param_map`: A function that given a parameter index and the list of
-    ///   input parameter values returns the string expression to use for the
-    ///   parameter output. Returning `None` will abort the encoding.
-    pub fn emit_command_for_node_with_params<'p>(
-        &mut self,
-        tk1_optype: tket_json_rs::OpType,
-        node: H::Node,
-        circ: &Circuit<H>,
-        param_map: impl FnMut(usize, &'p [&'p str]) -> Option<&'p str>,
-    ) -> Result<(), Tk1ConvertError<H::Node>> {
+    ) -> Result<(Vec<TrackedQubit>, Vec<TrackedBit>, Vec<TrackedParam>), Tk1ConvertError<H::Node>>
+    {
         let mut qubits: Vec<TrackedQubit> = Vec::new();
         let mut bits: Vec<TrackedBit> = Vec::new();
         let mut params: Vec<TrackedParam> = Vec::new();
@@ -333,6 +178,91 @@ impl<H: HugrView> Tk1EncoderContext<H> {
                 }
             }
         }
+        Ok((qubits, bits, params))
+    }
+
+    /// Helper to emit a new tket1 command corresponding to a single HUGR node.
+    ///
+    /// This call will fail if the node has parameter outputs. Use
+    /// [`Tk1EncoderContext::emit_node_with_out_params`] instead.
+    ///
+    /// See [`Tk1EncoderContext::emit_command`] for more general cases.
+    ///
+    /// ## Arguments
+    ///
+    /// - `tk1_operation`: The tket1 operation type to emit.
+    /// - `node`: The HUGR for which to emit the command. Qubits and bits are
+    ///   automatically retrieved from the node's inputs/outputs.
+    /// - `circ`: The circuit containing the node.
+    pub fn emit_node(
+        &mut self,
+        tk1_optype: tket_json_rs::OpType,
+        node: H::Node,
+        circ: &Circuit<H>,
+    ) -> Result<(), Tk1ConvertError<H::Node>> {
+        self.emit_node_with_out_params(tk1_optype, node, circ, |_, _| None)
+    }
+
+    /// Helper to emit a new tket1 command corresponding to a single HUGR node,
+    /// with parameter outputs. Use [`Tk1EncoderContext::emit_node`]
+    /// for nodes that don't require computing parameter outputs.
+    ///
+    /// See [`Tk1EncoderContext::emit_command`] for more general cases.
+    ///
+    /// ## Arguments
+    ///
+    /// - `tk1_operation`: The tket1 operation type to emit.
+    /// - `node`: The HUGR for which to emit the command. Qubits and bits are
+    ///   automatically retrieved from the node's inputs/outputs.
+    /// - `circ`: The circuit containing the node.
+    /// - `param_map`: A function that given a parameter index and the list of
+    ///   input parameter values returns the string expression to use for the
+    ///   parameter output. Returning `None` will abort the encoding.
+    pub fn emit_node_with_out_params(
+        &mut self,
+        tk1_optype: tket_json_rs::OpType,
+        node: H::Node,
+        circ: &Circuit<H>,
+        param_map: impl FnMut(usize, &[String]) -> Option<String>,
+    ) -> Result<(), Tk1ConvertError<H::Node>> {
+        self.emit_node_command(
+            node,
+            circ,
+            param_map,
+            move |qubit_count, bit_count, params| {
+                make_tk1_operation(tk1_optype, qubit_count, bit_count, params)
+            },
+        )
+    }
+
+    /// Helper to emit a new tket1 command corresponding to a single HUGR node,
+    /// using a custom operation generator and computing output parameter
+    /// expressions. Use [`Tk1EncoderContext::emit_node`] or
+    /// [`Tk1EncoderContext::emit_node_with_out_params`] when pytket operation
+    /// can be defined directly from a [`tket_json_rs::OpType`].
+    ///
+    /// See [`Tk1EncoderContext::emit_command`] for a general case emitter.
+    ///
+    /// ## Arguments
+    ///
+    /// - `tk1_operation`: The tket1 operation type to emit.
+    /// - `node`: The HUGR for which to emit the command. Qubits and bits are
+    ///   automatically retrieved from the node's inputs/outputs.
+    /// - `circ`: The circuit containing the node.
+    /// - `param_map`: A function that given a parameter index and the list of
+    ///   input parameter values returns the string expression to use for the
+    ///   parameter output. Returning `None` will abort the encoding.
+    /// - `make_operation`: A function that takes the number of qubits, bits, and
+    ///   the list of input parameter expressions and returns a pytket operation.
+    ///   See [`make_tk1_operation`] for a helper function to create it.
+    pub fn emit_node_command(
+        &mut self,
+        node: H::Node,
+        circ: &Circuit<H>,
+        mut param_map: impl FnMut(usize, &[String]) -> Option<String>,
+        make_operation: impl FnOnce(usize, usize, &[String]) -> tket_json_rs::circuit_json::Operation,
+    ) -> Result<(), Tk1ConvertError<H::Node>> {
+        let (qubits, bits, params) = self.get_input_values(node, circ)?;
         let params: Vec<String> = params
             .into_iter()
             .map(|p| self.values.param_expression(p).to_owned())
@@ -341,20 +271,63 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         // Update the values in the node's outputs.
         //
         // We preserve the order of linear values in the input
+        let optype = circ.hugr().get_optype(node);
+        let sig = optype.dataflow_signature();
         let other_output_port = optype.other_output_port();
         let mut qubit_iterator = qubits.iter();
-        let mut bits_iterator = bits.iter();
+        let mut param_counter = 0;
         for output in circ.hugr().node_outputs(node) {
             // Ignore order edges.
             if Some(output) == other_output_port {
                 continue;
             }
-            let wire = Wire::new(node, output);
-            // Each output of the node may consume multiple values. We
-            //let output_counts = self.config.type_to_pytket();
+            let type_counts: RegisterCount =
+                match sig.as_ref().and_then(|s| s.out_port_type(output)) {
+                    Some(ty) => self.config.type_to_pytket(ty)?,
+                    None => {
+                        // It must be a static type.
+                        debug_assert_eq!(
+                            Some(output),
+                            optype.static_output_port(),
+                            "Failed to get output type of port {output} in op {}",
+                            optype.name()
+                        );
+                        match optype.static_port_kind(Direction::Outgoing).unwrap() {
+                            EdgeKind::Const(ty) => self.config.type_to_pytket(&ty)?,
+                            // Unsupported wire type, no pytket types to track.
+                            _ => None,
+                        }
+                    }
+                }
+                .unwrap_or_default();
 
-            // TODO TODO TODO
-            // Fetch the type of each output port
+            // Collect the values associated with the output wire.
+            let out_wire = Wire::new(node, output);
+            let mut out_wire_values = Vec::with_capacity(type_counts.total());
+            for _ in 0..type_counts.qubits {
+                let qb = match qubit_iterator.next() {
+                    Some(qb) => *qb,
+                    None => {
+                        // If we already have a matching output for all input qubits,
+                        // generate a fresh ID.
+                        self.values.new_qubit()
+                    }
+                };
+                out_wire_values.push(TrackedValue::Qubit(qb));
+            }
+            for _ in 0..type_counts.bits {
+                let b = self.values.new_bit();
+                out_wire_values.push(TrackedValue::Bit(b));
+            }
+            for _ in 0..type_counts.params {
+                if let Some(out_param_expression) = param_map(param_counter, &params) {
+                    let p = self.values.new_param(out_param_expression);
+                    out_wire_values.push(TrackedValue::Param(p));
+                }
+                param_counter += 1;
+            }
+            self.values
+                .register_values(out_wire, out_wire_values, circ)?;
         }
 
         // Preserve the pytket opgroup, if it got stored in the metadata.
@@ -364,23 +337,32 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             .and_then(serde_json::Value::as_str)
             .map(ToString::to_string);
 
-        let op = make_tk1_operation(tk1_optype, qubits.len(), bits.len(), params);
+        let op = make_operation(qubits.len(), bits.len(), &params);
         self.emit_command(op, &qubits, &bits, opgroup);
         Ok(())
     }
 
     /// Emit a new tket1 command.
     ///
-    /// When
+    /// This is a general-purpose command that can be used to emit any tket1
+    /// operation, not necessarily corresponding to a specific HUGR node.
+    ///
+    /// In general you should prefer using [`Tk1EncoderContext::emit_node`] or
+    /// [`Tk1EncoderContext::emit_node_with_out_params`] as they automatically
+    /// compute the input qubits and bits from the HUGR node, and ensure that
+    /// output wires get their new values registered on the
+    /// [`Tk1EncoderContext::values`] tracker.
     ///
     /// ## Arguments
     ///
-    /// - `tk1_operation`: The tket1 operation to emit.
-    ///   See [`make_tk1_operation`] for a helper function to create it.
-    /// - `qubits`: The qubit registers to use as inputs/outputs.
-    ///   See [`Tk1EncoderContext::update_qubit`].
-    /// - `bits`: The bit registers to use as inputs/outputs.
-    ///   See [`Tk1EncoderContext::get_bit_register`].
+    /// - `tk1_operation`: The tket1 operation to emit. See
+    ///   [`make_tk1_operation`] for a helper function to create it.
+    /// - `qubits`: The qubit registers to use as inputs/outputs of the pytket op.
+    ///   Normally obtained from a HUGR node's inputs using [`Tk1EncoderContext::get_input_values`]
+    ///   or allocated via [`ValueTracker::new_qubit`].
+    /// - `bits`: The bit registers to use as inputs/outputs of the pytket op.
+    ///   Normally obtained from a HUGR node's inputs using [`Tk1EncoderContext::get_input_values`]
+    ///   or allocated via [`ValueTracker::new_bit`].
     /// - `opgroup`: A tket1 operation group identifier, if any.
     pub fn emit_command(
         &mut self,
@@ -407,158 +389,33 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// successfully encodes the operation.
     ///
     /// Returns `true` if the node was successfully encoded, or `false` if none
-    /// of the encoders could process it.
+    /// of the encoders could process it and the node got added to the
+    /// unsupported set.
     fn try_encode_node(
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-    ) -> Result<bool, Tk1ConvertError> {
+    ) -> Result<bool, Tk1ConvertError<H::Node>> {
         let optype = circ.hugr().get_optype(node);
+
+        // TODO: Boxes and non-custom optypes
 
         // Try to encode the operation using each of the registered encoders.
         //
         // If none of the encoders can handle the operation, we just add it to
         // the unsupported tracker and move on.
-        for encoder in &mut self.config.encoders {
-            if encoder
-                .op_to_pytket(node, optype, circ.hugr(), self)
-                .is_ok()
-            {
-                return Ok(true);
-            }
-        }
-
-        /*
-        // Register any output of the command that can be used as a TKET1 parameter.
-        if self.parameters.record_parameters(&command, optype)? {
-            // for now all ops that record parameters should be ignored (are
-            // just constants)
-            return Ok(());
-        }
-
-        // Special case for the QAlloc operation.
-        // This does not translate to a TKET1 operation, we just start tracking a new qubit register.
-        if optype == &Tk2Op::QAlloc.into() {
-            let Some((CircuitUnit::Linear(unit_id), _, _)) = command.outputs().next() else {
-                panic!("QAlloc should have a single qubit output.")
-            };
-            debug_assert!(self.qubits.get(unit_id).is_none());
-            self.qubits.add_qubit_register(unit_id);
-            return Ok(());
-        }
-
-        let Some(tk1op) = Tk1Op::try_from_optype(optype.clone())? else {
-            // This command should be ignored.
-            return Ok(());
-        };
-
-        // Get the registers and wires associated with the operation's inputs.
-        let mut qubit_args = Vec::with_capacity(tk1op.qubit_inputs());
-        let mut bit_args = Vec::with_capacity(tk1op.bit_inputs());
-        let mut params = Vec::with_capacity(tk1op.num_params());
-        for (unit, _, ty) in command.inputs() {
-            if ty == qb_t() {
-                let reg = self.unit_to_register(unit).unwrap_or_else(|| {
-                    panic!(
-                        "No register found for qubit input {unit} in node {}.",
-                        command.node(),
-                    )
-                });
-                qubit_args.push(reg);
-            } else if ty == bool_t() {
-                let reg = self.unit_to_register(unit).unwrap_or_else(|| {
-                    panic!(
-                        "No register found for bit input {unit} in node {}.",
-                        command.node(),
-                    )
-                });
-                bit_args.push(reg);
-            } else if [rotation_type(), float64_type()].contains(&ty) {
-                let CircuitUnit::Wire(param_wire) = unit else {
-                    unreachable!("Angle types are not linear.")
-                };
-                params.push(param_wire);
-            } else {
-                return Err(OpConvertError::UnsupportedInputType {
-                    typ: ty.clone(),
-                    optype: optype.clone(),
-                    node: command.node(),
-                });
-            }
-        }
-
-        for (unit, _, ty) in command.outputs() {
-            if ty == qb_t() {
-                // If the qubit is not already in the qubit tracker, add it as a
-                // new register.
-                let CircuitUnit::Linear(unit_id) = unit else {
-                    panic!("Qubit types are linear.")
-                };
-                if self.qubits.get(unit_id).is_none() {
-                    let reg = self.qubits.add_qubit_register(unit_id);
-                    qubit_args.push(reg.clone());
+        match optype {
+            OpType::ExtensionOp(op) => {
+                let config = Arc::clone(&self.config);
+                if config.op_to_pytket(node, op, circ, self)? {
+                    return Ok(true);
                 }
-            } else if ty == bool_t() {
-                // If the operation has any bit outputs, create a new one bit
-                // register.
-                //
-                // Note that we do not reassign input registers to the new
-                // output wires as we do not know if the bit value was modified
-                // by the operation, and the old value may be needed later.
-                //
-                // This may cause register duplication for opaque operations
-                // with input bits.
-                let CircuitUnit::Wire(wire) = unit else {
-                    panic!("Bool types are not linear.")
-                };
-                let reg = self.bits.add_bit_register(wire);
-                bit_args.push(reg.clone());
-            } else {
-                return Err(OpConvertError::UnsupportedOutputType {
-                    typ: ty.clone(),
-                    optype: optype.clone(),
-                    node: command.node(),
-                })
-                .into();
             }
+            _ => {}
         }
 
-        let opgroup: Option<String> = command
-            .metadata(METADATA_OPGROUP)
-            .and_then(serde_json::Value::as_str)
-            .map(ToString::to_string);
-
-        // Convert the command's operator to a pytket serialized one. This will
-        // return an error for operations that should have been caught by the
-        // `record_parameters` branch above (in addition to other unsupported
-        // ops).
-        let mut serial_op: circuit_json::Operation = tk1op
-            .serialised_op()
-            .ok_or_else(|| OpConvertError::UnsupportedOpSerialization(optype.clone()))?;
-
-        if !params.is_empty() {
-            serial_op.params = Some(
-                params
-                    .into_iter()
-                    .filter_map(|w| self.parameters.get(&w))
-                    .cloned()
-                    .collect(),
-            )
-        }
-        // TODO: ops that contain free variables.
-        // (update decoder to ignore them too, but store them in the wrapped op)
-
-        let mut args = qubit_args;
-        args.append(&mut bit_args);
-        let command = circuit_json::Command {
-            op: serial_op,
-            args,
-            opgroup,
-        };
-        self.commands.push(command);
-        */
-
-        Ok(true)
+        self.unsupported.record_node(node, circ);
+        Ok(false)
     }
 }
 
@@ -575,13 +432,13 @@ pub fn make_tk1_operation(
     tk1_optype: tket_json_rs::OpType,
     qubit_count: usize,
     bit_count: usize,
-    params: Vec<String>,
+    params: &[String],
 ) -> circuit_json::Operation {
     let mut op = circuit_json::Operation::default();
     op.op_type = tk1_optype;
     op.n_qb = Some(qubit_count as u32);
     op.params = match params.is_empty() {
-        false => Some(params),
+        false => Some(params.to_owned()),
         true => None,
     };
     op.signature = Some([vec!["Q".into(); qubit_count], vec!["B".into(); bit_count]].concat());

@@ -5,7 +5,8 @@ mod encoder;
 mod op;
 mod param;
 
-use encoder::{default_encoder_config, Tk1EncoderContext};
+pub use encoder::{default_encoder_config, Tk1Encoder, Tk1EncoderConfig, Tk1EncoderContext};
+
 use hugr::core::HugrNode;
 use hugr::types::Type;
 
@@ -89,7 +90,7 @@ impl TKETDecode for SerialCircuit {
         let config = default_encoder_config();
         let mut encoder = Tk1EncoderContext::new(circ, config)?;
         encoder.run_encoder(circ)?;
-        Ok(encoder.finish(circ)?)
+        encoder.finish(circ)
     }
 }
 
@@ -163,10 +164,16 @@ pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, Tk1ConvertError> {
 pub enum OpConvertError<N = hugr::Node> {
     /// The serialized operation is not supported.
     #[display("Unsupported serialized pytket operation: {op:?}")]
-    UnsupportedSerializedOp { op: SerialOpType },
+    UnsupportedSerializedOp {
+        /// The serialized operation.
+        op: SerialOpType,
+    },
     /// The serialized operation is not supported.
     #[display("Cannot serialize tket2 operation: {op}")]
-    UnsupportedOpSerialization { op: OpType },
+    UnsupportedOpSerialization {
+        /// The operation.
+        op: OpType,
+    },
     /// The operation has non-serializable inputs.
     #[display("Operation {} in {node} has an unsupported input of type {typ}.", optype.name())]
     UnsupportedInputType {
@@ -279,6 +286,7 @@ pub enum OpConvertError<N = hugr::Node> {
 #[debug(bounds(N: HugrNode))]
 pub enum Tk1ConvertError<N = hugr::Node> {
     /// Operation conversion error.
+    #[from]
     OpConversionError(OpConvertError<N>),
     /// The circuit has non-serializable inputs.
     #[display("Circuit contains non-serializable input of type {typ}.")]
@@ -296,13 +304,22 @@ pub enum Tk1ConvertError<N = hugr::Node> {
     },
     /// Invalid JSON,
     #[display("Invalid pytket JSON. {_0}")]
+    #[from]
     InvalidJson(serde_json::Error),
     /// Invalid JSON,
     #[display("Invalid JSON encoding. {_0}")]
+    #[from]
     InvalidJsonEncoding(std::string::FromUtf8Error),
     /// File not found.,
     #[display("Unable to load pytket json file. {_0}")]
+    #[from]
     FileLoadError(io::Error),
+    /// Custom user-defined error raised while encoding an operation.
+    #[display("Error while encoding operation: {msg}")]
+    CustomError {
+        /// The custom error message
+        msg: String,
+    },
 }
 
 /// A hashed register, used to identify registers in the [`Tk1Decoder::register_wire`] map,
