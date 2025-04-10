@@ -116,6 +116,17 @@ pub enum TrackedValue {
     Param(TrackedParam),
 }
 
+/// Lists of tracked values, separated by type.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct TrackedValues {
+    /// Tracked qubit values.
+    pub qubits: Vec<TrackedQubit>,
+    /// Tracked bit values.
+    pub bits: Vec<TrackedBit>,
+    /// Tracked parameter values.
+    pub params: Vec<TrackedParam>,
+}
+
 /// Data associated with a tracked wire in the hugr.
 #[derive(Debug, Clone)]
 pub struct TrackedWire {
@@ -322,20 +333,15 @@ impl<N: HugrNode> ValueTracker<N> {
     /// To avoid this use `peek_wire_values` instead.
     ///
     /// Returns `None` if the wire is not present in the tracker.
-    pub fn wire_values(
-        &mut self,
-        wire: Wire<N>,
-    ) -> Result<Cow<'_, [TrackedValue]>, OpConvertError<N>> {
-        let Some(values) = self.wires.get(&wire) else {
-            return Err(OpConvertError::WireHasNoValues { wire });
-        };
+    pub(super) fn wire_values(&mut self, wire: Wire<N>) -> Option<Cow<'_, [TrackedValue]>> {
+        let values = self.wires.get(&wire)?;
         if values.unexplored_neighbours != 1 {
             let values = self.wires.get_mut(&wire).unwrap();
             values.unexplored_neighbours -= 1;
-            return Ok(Cow::Borrowed(&values.values));
+            return Some(Cow::Borrowed(&values.values));
         }
         let values = self.wires.remove(&wire).unwrap();
-        Ok(Cow::Owned(values.values))
+        Some(Cow::Owned(values.values))
     }
 
     /// Returns the values associated with a wire.
@@ -344,11 +350,8 @@ impl<N: HugrNode> ValueTracker<N> {
     /// [`ValueTracker::wire_values`] once per wire connection.
     ///
     /// Returns `None` if the wire is not present in the tracker.
-    pub fn peek_wire_values(&self, wire: Wire<N>) -> Result<&[TrackedValue], OpConvertError<N>> {
-        match self.wires.get(&wire) {
-            Some(values) => Ok(&values.values),
-            None => Err(OpConvertError::WireHasNoValues { wire }),
-        }
+    pub(super) fn peek_wire_values(&self, wire: Wire<N>) -> Option<&[TrackedValue]> {
+        self.wires.get(&wire).map(|v| &v.values[..])
     }
 
     /// Returns the qubit register associated with a qubit value.
@@ -378,7 +381,9 @@ impl<N: HugrNode> ValueTracker<N> {
         let mut bit_outputs = Vec::with_capacity(self.counts.bits);
         for (node, port) in circ.hugr().all_linked_outputs(circ.output_node()) {
             let wire = Wire::new(node, port);
-            let values = self.peek_wire_values(wire)?;
+            let values = self
+                .peek_wire_values(wire)
+                .ok_or_else(|| OpConvertError::WireHasNoValues { wire })?;
             for value in values {
                 match value {
                     TrackedValue::Qubit(qb) => qubit_outputs.push(self.qubit_register(*qb).clone()),

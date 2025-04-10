@@ -6,9 +6,18 @@ mod unsupported_tracker;
 mod value_tracker;
 
 pub use config::{default_encoder_config, Tk1Encoder, Tk1EncoderConfig};
+use hugr::envelope::EnvelopeConfig;
+use hugr::hugr::views::SiblingSubgraph;
+use hugr::package::Package;
+pub use value_tracker::{
+    RegisterCount, TrackedBit, TrackedParam, TrackedQubit, TrackedValue, TrackedValues,
+    ValueTracker,
+};
+
 use hugr::ops::{NamedOp, OpTrait, OpType};
 use hugr::types::EdgeKind;
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -18,9 +27,6 @@ use portgraph::algorithms::TopoSort;
 use portgraph::LinkView;
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 use unsupported_tracker::UnsupportedTracker;
-use value_tracker::{
-    RegisterCount, TrackedBit, TrackedParam, TrackedQubit, TrackedValue, ValueTracker,
-};
 
 use super::{
     OpConvertError, Tk1ConvertError, METADATA_B_OUTPUT_REGISTERS, METADATA_OPGROUP, METADATA_PHASE,
@@ -112,8 +118,16 @@ impl<H: HugrView> Tk1EncoderContext<H> {
 
         let topo: TopoSort<'_, _, HashSet<_>> =
             portgraph::algorithms::toposort(region, initials, portgraph::Direction::Outgoing);
+        let io_nodes = circ.io_nodes();
+        // TODO: Use weighted topological sort to try and explore unsupported
+        // ops first (that is, ops with no available encoder in `self.config`),
+        // to ensure we group them as much as possible.
         for pg_node in topo {
             let node = from_pg_index[&pg_node];
+            if io_nodes.contains(&node) {
+                // I/O nodes are handled by `new` and `finish`.
+                continue;
+            }
             self.try_encode_node(node, circ)?;
         }
         Ok(())
@@ -124,6 +138,8 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         self,
         circ: &Circuit<H>,
     ) -> Result<SerialCircuit, Tk1ConvertError<H::Node>> {
+        // TODO: Add any remaining unsupported nodes
+
         let mut final_values = self.values.finish(circ)?;
 
         let mut implicit_permutation = final_values.qubit_permutation;
@@ -139,6 +155,39 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         Ok(ser)
     }
 
+    /// Returns the values associated with a wire.
+    ///
+    /// Marks the port connection as explored. When all ports connected to the
+    /// wire have been explored, the wire is removed from the tracker.
+    ///
+    /// If the input wire is the output of an unsupported node, a subgraph of
+    /// unsupported nodes containing it will be emitted as a pytket barrier.
+    ///
+    /// ### Errors
+    ///
+    /// - [`OpConvertError::WireHasNoValues`] if the wire is not tracked.
+    pub fn get_wire_values(
+        &mut self,
+        wire: Wire<H::Node>,
+        circ: &Circuit<H>,
+    ) -> Result<Cow<'_, [TrackedValue]>, Tk1ConvertError<H::Node>> {
+        if self.values.peek_wire_values(wire).is_some() {
+            return Ok(self.values.wire_values(wire).unwrap());
+        }
+
+        // If the wire values have not been registered yet, it may be because
+        // the wire is the output of an unsupported node group.
+        //
+        // We need to emit the unsupported node here before returning the values.
+        if self.unsupported.is_unsupported(wire.node()) {
+            let unsupported_subgraph = self.unsupported.extract_component(wire.node());
+            self.emit_unsupported(unsupported_subgraph, circ)?;
+            return self.get_wire_values(wire, circ);
+        }
+
+        Err(OpConvertError::WireHasNoValues { wire }.into())
+    }
+
     /// Given a node in the HUGR, returns all the [`TrackedValue`]s associated
     /// with its inputs.
     ///
@@ -150,8 +199,23 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-    ) -> Result<(Vec<TrackedQubit>, Vec<TrackedBit>, Vec<TrackedParam>), Tk1ConvertError<H::Node>>
-    {
+    ) -> Result<TrackedValues, Tk1ConvertError<H::Node>> {
+        self.get_input_values_internal(node, circ, |_| true)
+    }
+
+    /// Auxiliary function used to collect the input values of a node.
+    /// See [`Tk1EncoderContext::get_input_values`].
+    ///
+    /// Given a node in the HUGR, returns all the [`TrackedValue`]s associated
+    /// with its inputs. Calls
+    ///
+    /// Includes a filter to decide which incoming wires to include.
+    fn get_input_values_internal(
+        &mut self,
+        node: H::Node,
+        circ: &Circuit<H>,
+        wire_filter: impl Fn(Wire<H::Node>) -> bool,
+    ) -> Result<TrackedValues, Tk1ConvertError<H::Node>> {
         let mut qubits: Vec<TrackedQubit> = Vec::new();
         let mut bits: Vec<TrackedBit> = Vec::new();
         let mut params: Vec<TrackedParam> = Vec::new();
@@ -170,7 +234,11 @@ impl<H: HugrView> Tk1EncoderContext<H> {
                 );
             };
             let wire = Wire::new(neigh, neigh_out);
-            for value in self.values.wire_values(wire)?.iter() {
+            if !wire_filter(wire) {
+                continue;
+            }
+
+            for value in self.get_wire_values(wire, circ)?.iter() {
                 match value {
                     TrackedValue::Qubit(qb) => qubits.push(*qb),
                     TrackedValue::Bit(b) => bits.push(*b),
@@ -178,7 +246,11 @@ impl<H: HugrView> Tk1EncoderContext<H> {
                 }
             }
         }
-        Ok((qubits, bits, params))
+        Ok(TrackedValues {
+            qubits,
+            bits,
+            params,
+        })
     }
 
     /// Helper to emit a new tket1 command corresponding to a single HUGR node.
@@ -259,10 +331,14 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-        mut param_map: impl FnMut(usize, &[String]) -> Option<String>,
+        param_map: impl FnMut(usize, &[String]) -> Option<String>,
         make_operation: impl FnOnce(usize, usize, &[String]) -> tket_json_rs::circuit_json::Operation,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
-        let (qubits, bits, params) = self.get_input_values(node, circ)?;
+        let TrackedValues {
+            qubits,
+            bits,
+            params,
+        } = self.get_input_values(node, circ)?;
         let params: Vec<String> = params
             .into_iter()
             .map(|p| self.values.param_expression(p).to_owned())
@@ -270,65 +346,11 @@ impl<H: HugrView> Tk1EncoderContext<H> {
 
         // Update the values in the node's outputs.
         //
-        // We preserve the order of linear values in the input
-        let optype = circ.hugr().get_optype(node);
-        let sig = optype.dataflow_signature();
-        let other_output_port = optype.other_output_port();
-        let mut qubit_iterator = qubits.iter();
-        let mut param_counter = 0;
-        for output in circ.hugr().node_outputs(node) {
-            // Ignore order edges.
-            if Some(output) == other_output_port {
-                continue;
-            }
-            let type_counts: RegisterCount =
-                match sig.as_ref().and_then(|s| s.out_port_type(output)) {
-                    Some(ty) => self.config.type_to_pytket(ty)?,
-                    None => {
-                        // It must be a static type.
-                        debug_assert_eq!(
-                            Some(output),
-                            optype.static_output_port(),
-                            "Failed to get output type of port {output} in op {}",
-                            optype.name()
-                        );
-                        match optype.static_port_kind(Direction::Outgoing).unwrap() {
-                            EdgeKind::Const(ty) => self.config.type_to_pytket(&ty)?,
-                            // Unsupported wire type, no pytket types to track.
-                            _ => None,
-                        }
-                    }
-                }
-                .unwrap_or_default();
-
-            // Collect the values associated with the output wire.
-            let out_wire = Wire::new(node, output);
-            let mut out_wire_values = Vec::with_capacity(type_counts.total());
-            for _ in 0..type_counts.qubits {
-                let qb = match qubit_iterator.next() {
-                    Some(qb) => *qb,
-                    None => {
-                        // If we already have a matching output for all input qubits,
-                        // generate a fresh ID.
-                        self.values.new_qubit()
-                    }
-                };
-                out_wire_values.push(TrackedValue::Qubit(qb));
-            }
-            for _ in 0..type_counts.bits {
-                let b = self.values.new_bit();
-                out_wire_values.push(TrackedValue::Bit(b));
-            }
-            for _ in 0..type_counts.params {
-                if let Some(out_param_expression) = param_map(param_counter, &params) {
-                    let p = self.values.new_param(out_param_expression);
-                    out_wire_values.push(TrackedValue::Param(p));
-                }
-                param_counter += 1;
-            }
-            self.values
-                .register_values(out_wire, out_wire_values, circ)?;
-        }
+        // We preserve the order of linear values in the input.
+        let mut qubit_iterator = qubits.iter().copied();
+        self.register_node_outputs(node, circ, &mut qubit_iterator, &params, param_map, |_| {
+            true
+        })?;
 
         // Preserve the pytket opgroup, if it got stored in the metadata.
         let opgroup: Option<String> = circ
@@ -340,6 +362,76 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         let op = make_operation(qubits.len(), bits.len(), &params);
         self.emit_command(op, &qubits, &bits, opgroup);
         Ok(())
+    }
+
+    /// Helper to emit a new tket1 command corresponding to subgraph of unsupported nodes,
+    /// encoded inside a pytket barrier.
+    ///
+    /// ## Arguments
+    ///
+    /// - `unsupported_nodes`: The list of nodes to encode as an unsupported subgraph.
+    fn emit_unsupported(
+        &mut self,
+        unsupported_nodes: Vec<H::Node>,
+        circ: &Circuit<H>,
+    ) -> Result<(), Tk1ConvertError<H::Node>> {
+        let unsupported: HashSet<H::Node> = HashSet::from_iter(unsupported_nodes.iter().copied());
+        let subcircuit_id = format!("tk{}", unsupported.iter().min().unwrap().to_string());
+
+        let subgraph = SiblingSubgraph::try_from_nodes(unsupported_nodes, circ.hugr())
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Failed to create subgraph from unsupported nodes [{}]",
+                    unsupported.iter().join(", ")
+                )
+            });
+        let input_nodes: HashSet<_> = subgraph
+            .incoming_ports()
+            .iter()
+            .flat_map(|inp| inp.iter().map(|(n, _)| *n))
+            .collect();
+        let output_nodes: HashSet<_> = subgraph.outgoing_ports().iter().map(|(n, _)| *n).collect();
+
+        let unsupported_hugr = subgraph.extract_subgraph(circ.hugr(), &subcircuit_id);
+        let payload = Package::from_hugr(unsupported_hugr)
+            .unwrap()
+            .store_str(EnvelopeConfig::text())
+            .unwrap();
+
+        // Collects the input values for the subgraph.
+        //
+        // The [`UnsupportedTracker`] ensures that at this point all input wires must come from
+        // already-encoded nodes, and not from other unsupported nodes not in `unsupported_nodes`.
+        let mut input_values = TrackedValues::default();
+        for node in &input_nodes {
+            let node_vals =
+                self.get_input_values_internal(*node, circ, |w| unsupported.contains(&w.node()))?;
+            input_values.qubits.extend(node_vals.qubits);
+            input_values.bits.extend(node_vals.bits);
+            input_values.params.extend(node_vals.params);
+        }
+
+        // Update the values in the node's outputs.
+        //
+        // Output parameters are mapped to a fresh variable, that can be tracked
+        // back to the encoded subcircuit's function name.
+        let mut qubit_iterator = input_values.qubits.iter().copied();
+        for &node in &output_nodes {
+            self.register_node_outputs(
+                node,
+                circ,
+                &mut qubit_iterator,
+                &[],
+                |i, _| Some(format!("{subcircuit_id}_out{i}")),
+                |_| true,
+            )?;
+        }
+
+        // TODO: Create pytket operation
+        //
+        // TODO: Make sure the operation includes output qubits generated by `register_node_outputs` too.
+
+        todo!()
     }
 
     /// Emit a new tket1 command.
@@ -404,18 +496,90 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         //
         // If none of the encoders can handle the operation, we just add it to
         // the unsupported tracker and move on.
-        match optype {
-            OpType::ExtensionOp(op) => {
-                let config = Arc::clone(&self.config);
-                if config.op_to_pytket(node, op, circ, self)? {
-                    return Ok(true);
-                }
+        if let OpType::ExtensionOp(op) = optype {
+            let config = Arc::clone(&self.config);
+            if config.op_to_pytket(node, op, circ, self)? {
+                return Ok(true);
             }
-            _ => {}
         }
 
         self.unsupported.record_node(node, circ);
         Ok(false)
+    }
+
+    /// Helper to register values for a node's output wires.
+    fn register_node_outputs(
+        &mut self,
+        node: H::Node,
+        circ: &Circuit<H>,
+        qubit_values: &mut impl Iterator<Item = TrackedQubit>,
+        input_params: &[String],
+        mut param_map: impl FnMut(usize, &[String]) -> Option<String>,
+        wire_filter: impl Fn(Wire<H::Node>) -> bool,
+    ) -> Result<(), Tk1ConvertError<H::Node>> {
+        // Update the values in the node's outputs.
+        //
+        // We preserve the order of linear values in the input
+        let optype = circ.hugr().get_optype(node);
+        let sig = optype.dataflow_signature();
+        let other_output_port = optype.other_output_port();
+        let mut param_counter = 0;
+        for output in circ.hugr().node_outputs(node) {
+            // Ignore order edges.
+            if Some(output) == other_output_port {
+                continue;
+            }
+            let type_counts: RegisterCount =
+                match sig.as_ref().and_then(|s| s.out_port_type(output)) {
+                    Some(ty) => self.config.type_to_pytket(ty)?,
+                    None => {
+                        // It must be a static type.
+                        debug_assert_eq!(
+                            Some(output),
+                            optype.static_output_port(),
+                            "Failed to get output type of port {output} in op {}",
+                            optype.name()
+                        );
+                        match optype.static_port_kind(Direction::Outgoing).unwrap() {
+                            EdgeKind::Const(ty) => self.config.type_to_pytket(&ty)?,
+                            // Unsupported wire type, no pytket types to track.
+                            _ => None,
+                        }
+                    }
+                }
+                .unwrap_or_default();
+
+            // Collect the values associated with the output wire.
+            let out_wire = Wire::new(node, output);
+            if !wire_filter(out_wire) {
+                continue;
+            }
+
+            let mut out_wire_values = Vec::with_capacity(type_counts.total());
+            for _ in 0..type_counts.qubits {
+                let qb = qubit_values.next().unwrap_or_else(|| {
+                    // If we already have a matching output for all input qubits,
+                    // generate a fresh ID.
+                    self.values.new_qubit()
+                });
+                out_wire_values.push(TrackedValue::Qubit(qb));
+            }
+            for _ in 0..type_counts.bits {
+                let b = self.values.new_bit();
+                out_wire_values.push(TrackedValue::Bit(b));
+            }
+            for _ in 0..type_counts.params {
+                if let Some(out_param_expression) = param_map(param_counter, &input_params) {
+                    let p = self.values.new_param(out_param_expression);
+                    out_wire_values.push(TrackedValue::Param(p));
+                }
+                param_counter += 1;
+            }
+            self.values
+                .register_values(out_wire, out_wire_values, circ)?;
+        }
+
+        Ok(())
     }
 }
 

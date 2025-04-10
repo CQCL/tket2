@@ -36,7 +36,10 @@ pub trait Tk1Encoder<H: HugrView> {
     ///
     /// [`Tk1Encoder::op_to_pytket`] and [`Tk1Encoder::type_to_pytket`] will
     /// only be called for operations/types of these extensions.
-    fn extensions(&self) -> Vec<ExtensionId>;
+    ///
+    /// If the function returns `None`, the encoder will be called for all
+    /// operations/types irrespective of their extension.
+    fn extensions(&self) -> Option<Vec<ExtensionId>>;
 
     /// Given a node in the HUGR circuit and its operation type, try to convert
     /// it to a pytket operation and add it to the pytket encoder.
@@ -79,6 +82,8 @@ pub struct Tk1EncoderConfig<H: HugrView> {
     /// `encoders`, identified by their index.
     #[debug("{:?}", extension_encoders.keys().collect_vec())]
     extension_encoders: HashMap<ExtensionId, Vec<usize>>,
+    /// Extensions that request to be called for all operations.
+    no_extension_encoders: Vec<usize>,
 }
 
 impl<H: HugrView> Tk1EncoderConfig<H> {
@@ -87,6 +92,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
         Self {
             encoders: vec![],
             extension_encoders: HashMap::new(),
+            no_extension_encoders: vec![],
         }
     }
 
@@ -94,13 +100,24 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
     pub fn add_encoder(&mut self, encoder: impl Tk1Encoder<H> + 'static) {
         let idx = self.encoders.len();
 
-        for ext in encoder.extensions() {
-            self.extension_encoders.entry(ext).or_default().push(idx);
+        match encoder.extensions() {
+            Some(extensions) => {
+                for ext in extensions {
+                    self.extension_encoders.entry(ext).or_default().push(idx);
+                }
+            }
+            // If the encoder does not specify an extension, it will be called
+            // for all operations.
+            None => self.no_extension_encoders.push(idx),
         }
+
         self.encoders.push(Box::new(encoder));
     }
 
     /// List the extensions supported by the encoders.
+    ///
+    /// Some encoders may not specify an extension, in which case they will be called
+    /// for all operations irrespectively of the list returned here.
     ///
     /// Use [`Tk1EncoderConfig::add_encoder`] to extend this list.
     pub fn supported_extensions(&self) -> impl Iterator<Item = &ExtensionId> {
@@ -181,7 +198,9 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
         self.extension_encoders
             .get(ext)
             .into_iter()
-            .flat_map(move |idxs| idxs.iter().map(move |idx| &self.encoders[*idx]))
+            .flatten()
+            .chain(self.no_extension_encoders.iter())
+            .map(move |idx| &self.encoders[*idx])
     }
 }
 
@@ -190,6 +209,7 @@ impl<H: HugrView> Default for Tk1EncoderConfig<H> {
         Self {
             encoders: Default::default(),
             extension_encoders: Default::default(),
+            no_extension_encoders: Default::default(),
         }
     }
 }

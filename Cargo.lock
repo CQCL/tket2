@@ -923,7 +923,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.15.3"
-source = "git+https://github.com/CQCL/hugr?rev=7626797#7626797017c95783964dd171b18ce9097e265a33"
+source = "git+https://github.com/CQCL/hugr?rev=c443becad#c443becadd6476c8ac64c09ccad69ae14971e11c"
 dependencies = [
  "hugr-core",
  "hugr-passes",
@@ -932,7 +932,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.15.3"
-source = "git+https://github.com/CQCL/hugr?rev=7626797#7626797017c95783964dd171b18ce9097e265a33"
+source = "git+https://github.com/CQCL/hugr?rev=c443becad#c443becadd6476c8ac64c09ccad69ae14971e11c"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -945,7 +945,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.15.3"
-source = "git+https://github.com/CQCL/hugr?rev=7626797#7626797017c95783964dd171b18ce9097e265a33"
+source = "git+https://github.com/CQCL/hugr?rev=c443becad#c443becadd6476c8ac64c09ccad69ae14971e11c"
 dependencies = [
  "cgmath",
  "delegate 0.13.3",
@@ -975,7 +975,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.15.3"
-source = "git+https://github.com/CQCL/hugr?rev=7626797#7626797017c95783964dd171b18ce9097e265a33"
+source = "git+https://github.com/CQCL/hugr?rev=c443becad#c443becadd6476c8ac64c09ccad69ae14971e11c"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",

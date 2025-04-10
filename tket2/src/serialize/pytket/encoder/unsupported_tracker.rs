@@ -50,6 +50,11 @@ impl<N: HugrNode> UnsupportedTracker<N> {
         }
     }
 
+    /// Returns `true` if the node is tracked as unsupported.
+    pub fn is_unsupported(&self, node: N) -> bool {
+        self.nodes.contains_key(&node)
+    }
+
     /// Record an unsupported node in the hugr.
     pub fn record_node(&mut self, node: N, circ: &Circuit<impl HugrView<Node = N>>) {
         let node_data = UnsupportedNode {

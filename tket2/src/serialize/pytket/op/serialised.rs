@@ -20,8 +20,8 @@ use crate::Circuit;
 pub struct Tk2OpEncoder;
 
 impl<H: HugrView> Tk1Encoder<H> for Tk2OpEncoder {
-    fn extensions(&self) -> Vec<ExtensionId> {
-        vec![TKET1_EXTENSION_ID]
+    fn extensions(&self) -> Option<Vec<ExtensionId>> {
+        Some(vec![TKET1_EXTENSION_ID])
     }
 
     fn op_to_pytket(
