@@ -322,6 +322,13 @@ pub enum Tk1ConvertError<N = hugr::Node> {
     },
 }
 
+impl<N> Tk1ConvertError<N> {
+    /// Create a new error with a custom message.
+    pub fn custom(msg: impl Into<String>) -> Self {
+        Self::CustomError { msg: msg.into() }
+    }
+}
+
 /// A hashed register, used to identify registers in the [`Tk1Decoder::register_wire`] map,
 /// avoiding string and vector clones on lookup.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

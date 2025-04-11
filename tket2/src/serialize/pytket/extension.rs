@@ -9,9 +9,11 @@
 //! creates a configuration with the decoders for the standard library and tket2
 //! extension.
 
+mod prelude;
 mod tk1;
 mod tk2;
 
+pub use prelude::PreludeEncoder;
 pub use tk1::Tk1OpEncoder;
 pub use tk2::Tk2OpEncoder;
 
@@ -53,14 +55,17 @@ pub trait Tk1Encoder<H: HugrView> {
         encoder: &mut Tk1EncoderContext<H>,
     ) -> Result<bool, Tk1ConvertError<H::Node>>;
 
-    /// Given a HUGR type, return the number of qubits, bits, and sympy
-    /// parameters of its pytket counterpart.
+    /// Given a HUGR type, return the number of qubits, bits, and parameter
+    /// expressions of its pytket counterpart.
     ///
-    /// If the type is not supported by the encoder, return `None`.
+    /// If the type cannot be translated into a list of the aforementioned
+    /// values, return `None`. Operations dealing with such types will be
+    /// marked as unsupported will be serialized as opaque operations.
     fn type_to_pytket(
         &self,
-        #[allow(unused)] op: &CustomType,
+        typ: &CustomType,
     ) -> Result<Option<RegisterCount>, Tk1ConvertError<H::Node>> {
+        let _ = typ;
         Ok(None)
     }
 }

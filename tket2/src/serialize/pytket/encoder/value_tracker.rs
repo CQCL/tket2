@@ -129,17 +129,20 @@ pub struct TrackedValues {
 
 /// Data associated with a tracked wire in the hugr.
 #[derive(Debug, Clone)]
-pub struct TrackedWire {
+struct TrackedWire {
     /// The values associated with the wire.
     ///
     /// This is a list of [`TrackedValue`]s, which can be qubits, bits, or
     /// parameters.
-    pub values: Vec<TrackedValue>,
+    ///
+    /// If the wire type was not translatable to pytket values, this attribute
+    /// will be `None`.
+    pub(self) values: Option<Vec<TrackedValue>>,
     /// The number of unexplored neighbours of the wire.
     ///
     /// This is used to prune the [`ValueTracker::wires`] map once the wire is
     /// fully explored.
-    pub unexplored_neighbours: usize,
+    pub(self) unexplored_neighbours: usize,
 }
 
 /// The number of pytket qubits, bits, and sympy parameters corresponding to a
@@ -160,6 +163,7 @@ pub struct TrackedWire {
     derive_more::Sum,
 )]
 #[display("{qubits} qubits, {bits} bits, {params} parameters")]
+#[non_exhaustive]
 pub struct RegisterCount {
     pub qubits: usize,
     pub bits: usize,
@@ -319,7 +323,7 @@ impl<N: HugrNode> ValueTracker<N> {
         let values = values.into_iter().map(|v| v.into()).collect_vec();
         let unexplored_neighbours = circ.hugr().linked_ports(wire.node(), wire.source()).count();
         let tracked = TrackedWire {
-            values,
+            values: Some(values),
             unexplored_neighbours,
         };
         match self.wires.insert(wire, tracked) {
@@ -336,16 +340,19 @@ impl<N: HugrNode> ValueTracker<N> {
     ///
     /// To avoid this use `peek_wire_values` instead.
     ///
-    /// Returns `None` if the wire is not present in the tracker.
+    /// Returns `None` if the wire did not have any values associated with it,
+    /// or if it had a type that cannot be translated into pytket values.
     pub(super) fn wire_values(&mut self, wire: Wire<N>) -> Option<Cow<'_, [TrackedValue]>> {
         let values = self.wires.get(&wire)?;
         if values.unexplored_neighbours != 1 {
-            let values = self.wires.get_mut(&wire).unwrap();
-            values.unexplored_neighbours -= 1;
-            return Some(Cow::Borrowed(&values.values));
+            let wire = self.wires.get_mut(&wire).unwrap();
+            wire.unexplored_neighbours -= 1;
+            let values = wire.values.as_ref()?;
+            return Some(Cow::Borrowed(&values));
         }
-        let values = self.wires.remove(&wire).unwrap();
-        Some(Cow::Owned(values.values))
+        let wire = self.wires.remove(&wire).unwrap();
+        let values = wire.values?;
+        Some(Cow::Owned(values))
     }
 
     /// Returns the values associated with a wire.
@@ -353,9 +360,12 @@ impl<N: HugrNode> ValueTracker<N> {
     /// The wire is not marked as explored. To improve performance, make sure to call
     /// [`ValueTracker::wire_values`] once per wire connection.
     ///
-    /// Returns `None` if the wire is not present in the tracker.
+    /// Returns `None` if the wire did not have any values associated with it,
+    /// or if it had a type that cannot be translated into pytket values.
     pub(super) fn peek_wire_values(&self, wire: Wire<N>) -> Option<&[TrackedValue]> {
-        self.wires.get(&wire).map(|v| &v.values[..])
+        let wire = self.wires.get(&wire)?;
+        let values = wire.values.as_ref()?;
+        Some(&values[..])
     }
 
     /// Returns the qubit register associated with a qubit value.
@@ -417,24 +427,45 @@ impl<N: HugrNode> ValueTracker<N> {
     }
 }
 
-impl TrackedWire {
-    /// Returns the number of qubits, bits, and parameters associated with the wire.
-    pub fn count(&self) -> RegisterCount {
-        let mut count = RegisterCount::default();
-        for value in &self.values {
-            match value {
-                TrackedValue::Qubit(_) => count.qubits += 1,
-                TrackedValue::Bit(_) => count.bits += 1,
-                TrackedValue::Param(_) => count.params += 1,
-            }
-        }
-        count
-    }
-}
-
 impl RegisterCount {
+    /// Create a new [`RegisterCount`] from the number of qubits, bits, and parameters.
+    pub const fn new(qubits: usize, bits: usize, params: usize) -> Self {
+        RegisterCount {
+            qubits,
+            bits,
+            params,
+        }
+    }
+
+    /// Create a new [`RegisterCount`] containing only qubits.
+    pub const fn only_qubits(qubits: usize) -> Self {
+        RegisterCount {
+            qubits,
+            bits: 0,
+            params: 0,
+        }
+    }
+
+    /// Create a new [`RegisterCount`] containing only bits.
+    pub const fn only_bits(bits: usize) -> Self {
+        RegisterCount {
+            qubits: 0,
+            bits,
+            params: 0,
+        }
+    }
+
+    /// Create a new [`RegisterCount`] containing only parameters.
+    pub const fn only_params(params: usize) -> Self {
+        RegisterCount {
+            qubits: 0,
+            bits: 0,
+            params,
+        }
+    }
+
     /// Returns the number of qubits, bits, and parameters associated with the wire.
-    pub fn total(&self) -> usize {
+    pub const fn total(&self) -> usize {
         self.qubits + self.bits + self.params
     }
 }

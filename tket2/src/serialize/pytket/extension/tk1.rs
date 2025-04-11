@@ -37,10 +37,9 @@ impl<H: HugrView> Tk1Encoder<H> for Tk1OpEncoder {
             return Ok(false);
         }
         let Some(TypeArg::String { arg }) = op.args().first() else {
-            return Err(Tk1ConvertError::CustomError {
-                msg: "Opaque TKET1 operation did not have a json-encoded type argument."
-                    .to_string(),
-            });
+            return Err(Tk1ConvertError::custom(
+                "Opaque TKET1 operation did not have a json-encoded type argument.",
+            ));
         };
         let op: OpaqueTk1Op = serde_json::from_str(arg)?;
 

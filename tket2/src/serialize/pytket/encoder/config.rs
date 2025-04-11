@@ -9,7 +9,7 @@ use hugr::extension::ExtensionId;
 use hugr::ops::ExtensionOp;
 use hugr::types::{Type, TypeEnum};
 
-use crate::serialize::pytket::extension::Tk2OpEncoder;
+use crate::serialize::pytket::extension::{PreludeEncoder, Tk1OpEncoder, Tk2OpEncoder};
 use crate::serialize::pytket::{Tk1ConvertError, Tk1Encoder};
 use crate::Circuit;
 
@@ -25,6 +25,8 @@ use itertools::Itertools;
 pub fn default_encoder_config<H: HugrView>() -> Tk1EncoderConfig<H> {
     // TODO: Add std & tket2 encoders
     let mut config = Tk1EncoderConfig::new();
+    config.add_encoder(PreludeEncoder);
+    config.add_encoder(Tk1OpEncoder);
     config.add_encoder(Tk2OpEncoder);
     config
 }

@@ -157,6 +157,11 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         Ok(ser)
     }
 
+    /// Returns a reference to this encoder's configuration.
+    pub fn config(&self) -> &Tk1EncoderConfig<H> {
+        &self.config
+    }
+
     /// Returns the values associated with a wire.
     ///
     /// Marks the port connection as explored. When all ports connected to the
@@ -165,9 +170,16 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// If the input wire is the output of an unsupported node, a subgraph of
     /// unsupported nodes containing it will be emitted as a pytket barrier.
     ///
+    /// This function SHOULD NOT be called before determining that the target
+    /// operation is supported, as it will mark the wire as explored and
+    /// potentially remove it from the tracker. To determine if a wire type is
+    /// supported, use [`Tk1EncoderConfig::type_to_pytket`] on the encoder
+    /// context's [`Tk1EncoderContext::config`].
+    ///
     /// ### Errors
     ///
-    /// - [`OpConvertError::WireHasNoValues`] if the wire is not tracked.
+    /// - [`OpConvertError::WireHasNoValues`] if the wire is not tracked or has
+    ///   a type that cannot be converted to pytket values.
     pub fn get_wire_values(
         &mut self,
         wire: Wire<H::Node>,
@@ -184,6 +196,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         if self.unsupported.is_unsupported(wire.node()) {
             let unsupported_subgraph = self.unsupported.extract_component(wire.node());
             self.emit_unsupported(unsupported_subgraph, circ)?;
+            debug_assert!(!self.unsupported.is_unsupported(wire.node()));
             return self.get_wire_values(wire, circ);
         }
 
@@ -462,22 +475,28 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// This is a general-purpose command that can be used to emit any tket1
     /// operation, not necessarily corresponding to a specific HUGR node.
     ///
+    /// Ensure that any output wires from the node being processed gets the
+    /// appropriate values registered by calling
+    /// [`ValueTracker::register_values`] on the context's
+    /// [`Tk1EncoderContext::values`] tracker.
+    ///
     /// In general you should prefer using [`Tk1EncoderContext::emit_node`] or
     /// [`Tk1EncoderContext::emit_node_with_out_params`] as they automatically
     /// compute the input qubits and bits from the HUGR node, and ensure that
-    /// output wires get their new values registered on the
-    /// [`Tk1EncoderContext::values`] tracker.
+    /// output wires get their new values registered on the tracker.
     ///
     /// ## Arguments
     ///
     /// - `tk1_operation`: The tket1 operation to emit. See
     ///   [`make_tk1_operation`] for a helper function to create it.
-    /// - `qubits`: The qubit registers to use as inputs/outputs of the pytket op.
-    ///   Normally obtained from a HUGR node's inputs using [`Tk1EncoderContext::get_input_values`]
-    ///   or allocated via [`ValueTracker::new_qubit`].
+    /// - `qubits`: The qubit registers to use as inputs/outputs of the pytket
+    ///   op. Normally obtained from a HUGR node's inputs using
+    ///   [`Tk1EncoderContext::get_input_values`] or allocated via
+    ///   [`ValueTracker::new_qubit`].
     /// - `bits`: The bit registers to use as inputs/outputs of the pytket op.
-    ///   Normally obtained from a HUGR node's inputs using [`Tk1EncoderContext::get_input_values`]
-    ///   or allocated via [`ValueTracker::new_bit`].
+    ///   Normally obtained from a HUGR node's inputs using
+    ///   [`Tk1EncoderContext::get_input_values`] or allocated via
+    ///   [`ValueTracker::new_bit`].
     /// - `opgroup`: A tket1 operation group identifier, if any.
     pub fn emit_command(
         &mut self,
