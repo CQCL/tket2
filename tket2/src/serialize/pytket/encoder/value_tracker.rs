@@ -10,7 +10,7 @@
 //! Extensions can define which elements they map to
 
 use std::borrow::Cow;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use hugr::core::HugrNode;
 use hugr::{HugrView, Wire};
@@ -43,12 +43,6 @@ pub struct ValueTracker<N> {
     bits: Vec<RegisterUnit>,
     /// List of seen parameters.
     params: Vec<String>,
-    /// Counts of used qubits/bits/parameters.
-    ///
-    /// If these are less than the number of entries in `qubits` and `bits`,
-    /// we'll use the remaining ones when allocating new registers before
-    /// generating fresh names with the `RegisterUnitGenerator`s.
-    counts: RegisterCount,
 
     /// The tracked data for a wire in the hugr.
     ///
@@ -68,7 +62,19 @@ pub struct ValueTracker<N> {
     ///
     /// When a circuit gets decoded from pytket, we store the order in a
     /// [`METADATA_B_OUTPUT_REGISTERS`] metadata entry.
+    #[allow(unused)]
     output_bits: Vec<RegisterUnit>,
+
+    /// Qubits in `qubits` that are not currently registered to any wire.
+    ///
+    /// We draw names from here when a new qubit name is needed, before
+    /// resorting to the `qubit_reg_generator`.
+    unused_qubits: BTreeSet<TrackedQubit>,
+    /// Bits in `bits` that are not currently registered to any wire.
+    ///
+    /// We draw names from here when a new bit name is needed, before
+    /// resorting to the `bit_reg_generator`.
+    unused_bits: BTreeSet<TrackedBit>,
 
     /// A generator of new registers units to use for qubit wires.
     qubit_reg_generator: RegisterUnitGenerator,
@@ -79,28 +85,45 @@ pub struct ValueTracker<N> {
 /// A lightweight identifier for a qubit value.
 ///
 /// Contains an index into the `qubits` array of [`ValueTracker`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, derive_more::Display)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, derive_more::Display,
+)]
 #[display("qubit#{}", self.0)]
 pub struct TrackedQubit(usize);
 
 /// A lightweight identifier for a bit value.
 ///
 /// Contains an index into the `bits` array of [`ValueTracker`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, derive_more::Display)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, derive_more::Display,
+)]
 #[display("bit#{}", self.0)]
 pub struct TrackedBit(usize);
 
 /// A lightweight identifier for a parameter value.
 ///
 /// Contains an index into the `params` array of [`ValueTracker`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, derive_more::Display)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, derive_more::Display,
+)]
 #[display("param#{}", self.0)]
 pub struct TrackedParam(usize);
 
 /// A lightweight identifier for a qubit/bit/parameter value.
 ///
 /// Contains an index into the corresponding value array in [`ValueTracker`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, derive_more::From, derive_more::Display)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    derive_more::From,
+    derive_more::Display,
+)]
 pub enum TrackedValue {
     /// A qubit value.
     ///
@@ -182,8 +205,6 @@ pub struct ValueTrackerResult {
     pub bits: Vec<RegisterUnit>,
     /// The implicit permutation of the qubit registers.
     pub qubit_permutation: Vec<circuit_json::ImplicitPermutation>,
-    /// The implicit permutation of the bit registers.
-    pub bit_permutation: Vec<circuit_json::ImplicitPermutation>,
 }
 
 impl<N: HugrNode> ValueTracker<N> {
@@ -208,15 +229,16 @@ impl<N: HugrNode> ValueTracker<N> {
             qubits: read_metadata_json_list(circ, METADATA_Q_REGISTERS),
             bits: read_metadata_json_list(circ, METADATA_B_REGISTERS),
             params: Vec::with_capacity(param_variable_names.len()),
-            counts: RegisterCount::default(),
             wires: BTreeMap::new(),
             output_qubits: read_metadata_json_list(circ, METADATA_Q_OUTPUT_REGISTERS),
             output_bits: read_metadata_json_list(circ, METADATA_B_OUTPUT_REGISTERS),
+            unused_qubits: BTreeSet::new(),
+            unused_bits: BTreeSet::new(),
             qubit_reg_generator: RegisterUnitGenerator::default(),
             bit_reg_generator: RegisterUnitGenerator::default(),
         };
-
-        // Associate each input wire with a qubit/bit/parameter value.
+        tracker.unused_qubits = (0..tracker.qubits.len()).map(TrackedQubit).collect();
+        tracker.unused_bits = (0..tracker.bits.len()).map(TrackedBit).collect();
         tracker.qubit_reg_generator = RegisterUnitGenerator::new("q", tracker.qubits.iter());
         tracker.bit_reg_generator = RegisterUnitGenerator::new("c", tracker.bits.iter());
 
@@ -260,7 +282,7 @@ impl<N: HugrNode> ValueTracker<N> {
                 wire_values.push(TrackedValue::Param(param));
             }
 
-            tracker.register_values(wire, wire_values, circ)?;
+            tracker.register_wire(wire, wire_values, circ)?;
         }
 
         Ok(tracker)
@@ -271,13 +293,10 @@ impl<N: HugrNode> ValueTracker<N> {
     /// Picks unused names from the `qubits` list, if available, or generates
     /// a new one with the internal [`RegisterUnitGenerator`].
     pub fn new_qubit(&mut self) -> TrackedQubit {
-        if self.counts.qubits >= self.qubits.len() {
-            debug_assert_eq!(self.counts.qubits, self.qubits.len());
+        self.unused_qubits.pop_first().unwrap_or_else(|| {
             self.qubits.push(self.qubit_reg_generator.next());
-        };
-        let qubit = TrackedQubit(self.counts.qubits);
-        self.counts.qubits += 1;
-        qubit
+            TrackedQubit(self.qubits.len() - 1)
+        })
     }
 
     /// Create a new bit register name.
@@ -285,13 +304,10 @@ impl<N: HugrNode> ValueTracker<N> {
     /// Picks unused names from the `bits` list, if available, or generates
     /// a new one with the internal [`RegisterUnitGenerator`].
     pub fn new_bit(&mut self) -> TrackedBit {
-        if self.counts.bits >= self.bits.len() {
-            debug_assert_eq!(self.counts.bits, self.bits.len());
+        self.unused_bits.pop_first().unwrap_or_else(|| {
             self.bits.push(self.bit_reg_generator.next());
-        };
-        let bit = TrackedBit(self.counts.bits);
-        self.counts.bits += 1;
-        bit
+            TrackedBit(self.bits.len() - 1)
+        })
     }
 
     /// Register a new parameter string expression.
@@ -299,9 +315,7 @@ impl<N: HugrNode> ValueTracker<N> {
     /// Returns a unique identifier for the expression.
     pub fn new_param(&mut self, expression: impl ToString) -> TrackedParam {
         self.params.push(expression.to_string());
-        let param = TrackedParam(self.counts.params);
-        self.counts.params += 1;
-        param
+        TrackedParam(self.params.len() - 1)
     }
 
     /// Associate a list of values with a wire.
@@ -309,28 +323,50 @@ impl<N: HugrNode> ValueTracker<N> {
     /// Linear qubit IDs can be reused to mark the new position of the qubit in the
     /// circuit.
     /// Bit types are not linear, so each [`TrackedBit`] is associated with a unique bit
-    /// state in the circuit. The IDs may only be reused when
+    /// state in the circuit. The IDs may only be reused when no more users of the bit are
+    /// present in the circuit.
     ///
     /// ### Panics
     ///
     /// If the wire is already associated with a different set of values.
-    pub fn register_values<Val: Into<TrackedValue>>(
+    pub fn register_wire<Val: Into<TrackedValue>>(
         &mut self,
         wire: Wire<N>,
         values: impl IntoIterator<Item = Val>,
         circ: &Circuit<impl HugrView<Node = N>>,
     ) -> Result<(), OpConvertError<N>> {
         let values = values.into_iter().map(|v| v.into()).collect_vec();
+
+        // Remove any qubit/bit used here from the unused set.
+        for value in &values {
+            match value {
+                TrackedValue::Qubit(qb) => {
+                    self.unused_qubits.remove(qb);
+                }
+                TrackedValue::Bit(bit) => {
+                    self.unused_bits.remove(bit);
+                }
+                TrackedValue::Param(_) => {}
+            }
+        }
+
         let unexplored_neighbours = circ.hugr().linked_ports(wire.node(), wire.source()).count();
         let tracked = TrackedWire {
             values: Some(values),
             unexplored_neighbours,
         };
-        match self.wires.insert(wire, tracked) {
-            // Ensure there were no values already associated with the wire.
-            Some(_) => Err(OpConvertError::WireAlreadyHasValues { wire }),
-            None => Ok(()),
+        if self.wires.insert(wire, tracked).is_some() {
+            return Err(OpConvertError::WireAlreadyHasValues { wire });
         }
+
+        if unexplored_neighbours == 0 {
+            // We can unregister the wire immediately, since it has no unexplored
+            // neighbours. This will free up the qubit and bit registers associated with it.
+            self.unregister_wire(wire)
+                .expect("Wire should be registered in the tracker");
+        }
+
+        Ok(())
     }
 
     /// Returns the values associated with a wire.
@@ -350,8 +386,7 @@ impl<N: HugrNode> ValueTracker<N> {
             let values = wire.values.as_ref()?;
             return Some(Cow::Borrowed(&values));
         }
-        let wire = self.wires.remove(&wire).unwrap();
-        let values = wire.values?;
+        let values = self.unregister_wire(wire)?;
         Some(Cow::Owned(values))
     }
 
@@ -366,6 +401,29 @@ impl<N: HugrNode> ValueTracker<N> {
         let wire = self.wires.get(&wire)?;
         let values = wire.values.as_ref()?;
         Some(&values[..])
+    }
+
+    /// Unregister a wire, freeing up the qubit and bit registers associated with it.
+    ///
+    /// Panics if the wire is not registered.
+    fn unregister_wire(&mut self, wire: Wire<N>) -> Option<Vec<TrackedValue>> {
+        let wire = self.wires.remove(&wire).unwrap();
+        let values = wire.values?;
+
+        // Free up the qubit and bit registers associated with the wire.
+        for value in &values {
+            match value {
+                TrackedValue::Qubit(qb) => {
+                    self.unused_qubits.insert(*qb);
+                }
+                TrackedValue::Bit(bit) => {
+                    self.unused_bits.insert(*bit);
+                }
+                TrackedValue::Param(_) => {}
+            }
+        }
+
+        Some(values)
     }
 
     /// Returns the qubit register associated with a qubit value.
@@ -391,8 +449,8 @@ impl<N: HugrNode> ValueTracker<N> {
         circ: &Circuit<impl HugrView<Node = N>>,
     ) -> Result<ValueTrackerResult, OpConvertError<N>> {
         // Ordered list of qubits and bits at the output of the circuit.
-        let mut qubit_outputs = Vec::with_capacity(self.counts.qubits);
-        let mut bit_outputs = Vec::with_capacity(self.counts.bits);
+        let mut qubit_outputs = Vec::with_capacity(self.qubits.len() - self.unused_qubits.len());
+        let mut bit_outputs = Vec::with_capacity(self.bits.len() - self.unused_bits.len());
         for (node, port) in circ.hugr().all_linked_outputs(circ.output_node()) {
             let wire = Wire::new(node, port);
             let values = self
@@ -411,18 +469,13 @@ impl<N: HugrNode> ValueTracker<N> {
         }
 
         // Compute the final register permutations.
-        let used_qubits = &self.qubits[..self.counts.qubits];
         let (qubit_outputs, qubit_permutation) =
-            compute_final_permutation(qubit_outputs, used_qubits, &self.output_qubits);
-        let used_bits = &self.bits[..self.counts.bits];
-        let (bit_outputs, bit_permutation) =
-            compute_final_permutation(bit_outputs, used_bits, &self.output_bits);
+            compute_final_permutation(qubit_outputs, &self.qubits, &self.output_qubits);
 
         Ok(ValueTrackerResult {
             qubits: qubit_outputs,
             bits: bit_outputs,
             qubit_permutation,
-            bit_permutation,
         })
     }
 }

@@ -124,7 +124,7 @@ impl PreludeEncoder {
                 };
                 values.push(param.into());
             }
-            encoder.values.register_values(wire, values, circ)?;
+            encoder.values.register_wire(wire, values, circ)?;
         }
 
         Ok(true)

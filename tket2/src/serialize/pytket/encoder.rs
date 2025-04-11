@@ -142,17 +142,14 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             self.emit_unsupported(unsupported_subgraph, circ)?;
         }
 
-        let mut final_values = self.values.finish(circ)?;
-
-        let mut implicit_permutation = final_values.qubit_permutation;
-        implicit_permutation.append(&mut final_values.bit_permutation);
+        let final_values = self.values.finish(circ)?;
 
         let mut ser = SerialCircuit::new(self.name, self.phase);
 
         ser.commands = self.commands;
         ser.qubits = final_values.qubits.into_iter().map_into().collect();
         ser.bits = final_values.bits.into_iter().map_into().collect();
-        ser.implicit_permutation = implicit_permutation;
+        ser.implicit_permutation = final_values.qubit_permutation;
         ser.number_of_ws = None;
         Ok(ser)
     }
@@ -400,6 +397,9 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         let unsupported: HashSet<H::Node> = HashSet::from_iter(unsupported_nodes.iter().copied());
         let subcircuit_id = format!("tk{}", unsupported.iter().min().unwrap());
 
+        // TODO: Use a cached topo checker here instead of traversing the full graph each time we create a `SiblingSubgraph`.
+        //
+        // TopoConvexChecker likes to borrow the hugr, so it'd be too invasive to store in the `Context`.
         let subgraph = SiblingSubgraph::try_from_nodes(unsupported_nodes, circ.hugr())
             .unwrap_or_else(|_| {
                 panic!(
@@ -476,9 +476,8 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// operation, not necessarily corresponding to a specific HUGR node.
     ///
     /// Ensure that any output wires from the node being processed gets the
-    /// appropriate values registered by calling
-    /// [`ValueTracker::register_values`] on the context's
-    /// [`Tk1EncoderContext::values`] tracker.
+    /// appropriate values registered by calling [`ValueTracker::register_wire`]
+    /// on the context's [`Tk1EncoderContext::values`] tracker.
     ///
     /// In general you should prefer using [`Tk1EncoderContext::emit_node`] or
     /// [`Tk1EncoderContext::emit_node_with_out_params`] as they automatically
@@ -635,8 +634,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
                 new_outputs.params.push(p);
                 out_wire_values.push(TrackedValue::Param(p));
             }
-            self.values
-                .register_values(out_wire, out_wire_values, circ)?;
+            self.values.register_wire(out_wire, out_wire_values, circ)?;
         }
 
         Ok(new_outputs)

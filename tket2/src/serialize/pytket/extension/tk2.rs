@@ -60,7 +60,7 @@ impl<H: HugrView> Tk1Encoder<H> for Tk2OpEncoder {
                 let out_port = circ.hugr().node_outputs(node).next().unwrap();
                 let wire = Wire::new(node, out_port);
                 let qb = encoder.values.new_qubit();
-                encoder.values.register_values(wire, [qb], circ)?;
+                encoder.values.register_wire(wire, [qb], circ)?;
                 return Ok(true);
             }
             // Since the qubit still gets connected at the end of the circuit,
