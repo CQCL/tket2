@@ -100,7 +100,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         let region =
             portgraph::view::FlatRegion::new(&portgraph, &hierarchy, hugr.get_pg_index(root));
 
-        // Collect al initial nodes in the region (nodes with no predecessors).
+        // Collect all initial nodes in the region (nodes with no predecessors).
         let initials: Vec<_> = hugr
             .children(root)
             .filter_map(|node| {
@@ -452,7 +452,8 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         );
         tk1_op.data = Some(payload);
 
-        self.emit_command(tk1_op, &op_values.qubits, &op_values.bits, None);
+        let opgroup = Some("tket2".to_string());
+        self.emit_command(tk1_op, &op_values.qubits, &op_values.bits, opgroup);
         Ok(())
     }
 

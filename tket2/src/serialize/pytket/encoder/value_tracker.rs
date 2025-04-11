@@ -100,7 +100,7 @@ pub struct TrackedParam(usize);
 /// A lightweight identifier for a qubit/bit/parameter value.
 ///
 /// Contains an index into the corresponding value array in [`ValueTracker`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, derive_more::From)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, derive_more::From, derive_more::Display)]
 pub enum TrackedValue {
     /// A qubit value.
     ///
@@ -234,7 +234,12 @@ impl<N: HugrNode> ValueTracker<N> {
         {
             let wire = Wire::new(inp_node, port);
             let Some(count) = config.type_to_pytket(typ)? else {
-                return Err(Tk1ConvertError::NonSerializableInputs { typ: typ.clone() });
+                // If the input has a non-serializable type, it gets skipped.
+                //
+                // TODO: We should store the original signature somewhere in the circuit,
+                // so it can be reconstructed later.
+                tracker.register_values::<TrackedValue>(wire, [], circ)?;
+                continue;
             };
 
             let mut wire_values = Vec::with_capacity(count.total());
@@ -311,17 +316,16 @@ impl<N: HugrNode> ValueTracker<N> {
         values: impl IntoIterator<Item = Val>,
         circ: &Circuit<impl HugrView<Node = N>>,
     ) -> Result<(), OpConvertError<N>> {
+        let values = values.into_iter().map(|v| v.into()).collect_vec();
         let unexplored_neighbours = circ.hugr().linked_ports(wire.node(), wire.source()).count();
-        let present = self.wires.insert(
-            wire,
-            TrackedWire {
-                values: values.into_iter().map(|v| v.into()).collect(),
-                unexplored_neighbours,
-            },
-        );
-        match present {
-            Some(_) => Ok(()),
-            None => Err(OpConvertError::WireAlreadyHasValues { wire }),
+        let tracked = TrackedWire {
+            values,
+            unexplored_neighbours,
+        };
+        match self.wires.insert(wire, tracked) {
+            // Ensure there were no values already associated with the wire.
+            Some(_) => Err(OpConvertError::WireAlreadyHasValues { wire }),
+            None => Ok(()),
         }
     }
 
