@@ -18,7 +18,7 @@ use hugr::ops::{NamedOp, OpTrait, OpType};
 use hugr::types::EdgeKind;
 
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use hugr::{Direction, HugrView, Wire};
@@ -101,20 +101,17 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             portgraph::view::FlatRegion::new(&portgraph, &hierarchy, hugr.get_pg_index(root));
 
         // Collect al initial nodes in the region (nodes with no predecessors).
-        // Also compute a map from portgraph indices into `H::Node`s.
-        //
-        // TODO: Ideally we'd have a `hugr.from_pg_index` method, and avoid computing the map.
-        // We should revisit this once the `base_hugr` refactor is done.
-        // <https://github.com/CQCL/hugr/issues/1926>
-        let mut initials = Vec::new();
-        let mut from_pg_index = HashMap::new();
-        for node in hugr.children(root) {
-            let pg_node = hugr.get_pg_index(node);
-            from_pg_index.insert(pg_node, node);
-            if region.input_links(pg_node).next().is_none() {
-                initials.push(pg_node);
-            }
-        }
+        let initials: Vec<_> = hugr
+            .children(root)
+            .filter_map(|node| {
+                let pg_node = hugr.get_pg_index(node);
+                region
+                    .input_links(pg_node)
+                    .next()
+                    .is_none()
+                    .then_some(pg_node)
+            })
+            .collect();
 
         let topo: TopoSort<'_, _, HashSet<_>> =
             portgraph::algorithms::toposort(region, initials, portgraph::Direction::Outgoing);
@@ -123,7 +120,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         // ops first (that is, ops with no available encoder in `self.config`),
         // to ensure we group them as much as possible.
         for pg_node in topo {
-            let node = from_pg_index[&pg_node];
+            let node = hugr.get_node(pg_node);
             if io_nodes.contains(&node) {
                 // I/O nodes are handled by `new` and `finish`.
                 continue;
@@ -135,10 +132,15 @@ impl<H: HugrView> Tk1EncoderContext<H> {
 
     /// Finish building and return the final [`SerialCircuit`].
     pub(super) fn finish(
-        self,
+        mut self,
         circ: &Circuit<H>,
     ) -> Result<SerialCircuit, Tk1ConvertError<H::Node>> {
-        // TODO: Add any remaining unsupported nodes
+        // Add any remaining unsupported nodes
+        while !self.unsupported.is_empty() {
+            let node = self.unsupported.iter().next().unwrap();
+            let unsupported_subgraph = self.unsupported.extract_component(node);
+            self.emit_unsupported(unsupported_subgraph, circ)?;
+        }
 
         let mut final_values = self.values.finish(circ)?;
 
@@ -287,7 +289,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// - `node`: The HUGR for which to emit the command. Qubits and bits are
     ///   automatically retrieved from the node's inputs/outputs.
     /// - `circ`: The circuit containing the node.
-    /// - `param_map`: A function that given a parameter index and the list of
+    /// - `output_param`: A function that given a parameter index and the list of
     ///   input parameter values returns the string expression to use for the
     ///   parameter output. Returning `None` will abort the encoding.
     pub fn emit_node_with_out_params(
@@ -295,12 +297,12 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         tk1_optype: tket_json_rs::OpType,
         node: H::Node,
         circ: &Circuit<H>,
-        param_map: impl FnMut(usize, &[String]) -> Option<String>,
+        output_param: impl FnMut(usize, &[String]) -> Option<String>,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
         self.emit_node_command(
             node,
             circ,
-            param_map,
+            output_param,
             move |qubit_count, bit_count, params| {
                 make_tk1_operation(tk1_optype, qubit_count, bit_count, params)
             },
@@ -321,7 +323,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// - `node`: The HUGR for which to emit the command. Qubits and bits are
     ///   automatically retrieved from the node's inputs/outputs.
     /// - `circ`: The circuit containing the node.
-    /// - `param_map`: A function that given a parameter index and the list of
+    /// - `output_param`: A function that given a parameter index and the list of
     ///   input parameter values returns the string expression to use for the
     ///   parameter output. Returning `None` will abort the encoding.
     /// - `make_operation`: A function that takes the number of qubits, bits, and
@@ -331,12 +333,12 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-        param_map: impl FnMut(usize, &[String]) -> Option<String>,
+        output_param: impl FnMut(usize, &[String]) -> Option<String>,
         make_operation: impl FnOnce(usize, usize, &[String]) -> tket_json_rs::circuit_json::Operation,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
         let TrackedValues {
-            qubits,
-            bits,
+            mut qubits,
+            mut bits,
             params,
         } = self.get_input_values(node, circ)?;
         let params: Vec<String> = params
@@ -348,9 +350,16 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         //
         // We preserve the order of linear values in the input.
         let mut qubit_iterator = qubits.iter().copied();
-        self.register_node_outputs(node, circ, &mut qubit_iterator, &params, param_map, |_| {
-            true
-        })?;
+        let new_outputs = self.register_node_outputs(
+            node,
+            circ,
+            &mut qubit_iterator,
+            &params,
+            output_param,
+            |_| true,
+        )?;
+        qubits.extend(new_outputs.qubits);
+        bits.extend(new_outputs.bits);
 
         // Preserve the pytket opgroup, if it got stored in the metadata.
         let opgroup: Option<String> = circ
@@ -376,7 +385,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         circ: &Circuit<H>,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
         let unsupported: HashSet<H::Node> = HashSet::from_iter(unsupported_nodes.iter().copied());
-        let subcircuit_id = format!("tk{}", unsupported.iter().min().unwrap().to_string());
+        let subcircuit_id = format!("tk{}", unsupported.iter().min().unwrap());
 
         let subgraph = SiblingSubgraph::try_from_nodes(unsupported_nodes, circ.hugr())
             .unwrap_or_else(|_| {
@@ -402,36 +411,49 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         //
         // The [`UnsupportedTracker`] ensures that at this point all input wires must come from
         // already-encoded nodes, and not from other unsupported nodes not in `unsupported_nodes`.
-        let mut input_values = TrackedValues::default();
+        let mut op_values = TrackedValues::default();
         for node in &input_nodes {
             let node_vals =
                 self.get_input_values_internal(*node, circ, |w| unsupported.contains(&w.node()))?;
-            input_values.qubits.extend(node_vals.qubits);
-            input_values.bits.extend(node_vals.bits);
-            input_values.params.extend(node_vals.params);
+            op_values.qubits.extend(node_vals.qubits);
+            op_values.bits.extend(node_vals.bits);
+            op_values.params.extend(node_vals.params);
         }
+        let input_param_exprs: Vec<String> = std::mem::take(&mut op_values.params)
+            .into_iter()
+            .map(|p| self.values.param_expression(p).to_owned())
+            .collect();
 
-        // Update the values in the node's outputs.
+        // Update the values in the node's outputs, and extend `op_values` with
+        // any new output values.
         //
         // Output parameters are mapped to a fresh variable, that can be tracked
         // back to the encoded subcircuit's function name.
-        let mut qubit_iterator = input_values.qubits.iter().copied();
+        let mut input_qubits = op_values.qubits.clone().into_iter();
         for &node in &output_nodes {
-            self.register_node_outputs(
+            let new_outputs = self.register_node_outputs(
                 node,
                 circ,
-                &mut qubit_iterator,
+                &mut input_qubits,
                 &[],
                 |i, _| Some(format!("{subcircuit_id}_out{i}")),
                 |_| true,
             )?;
+            op_values.qubits.extend(new_outputs.qubits);
+            op_values.bits.extend(new_outputs.bits);
         }
 
-        // TODO: Create pytket operation
-        //
-        // TODO: Make sure the operation includes output qubits generated by `register_node_outputs` too.
+        // Create pytket operation, and add the subcircuit as hugr
+        let mut tk1_op = make_tk1_operation(
+            tket_json_rs::OpType::Barrier,
+            op_values.qubits.len(),
+            op_values.bits.len(),
+            &input_param_exprs,
+        );
+        tk1_op.data = Some(payload);
 
-        todo!()
+        self.emit_command(tk1_op, &op_values.qubits, &op_values.bits, None);
+        Ok(())
     }
 
     /// Emit a new tket1 command.
@@ -508,22 +530,37 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     }
 
     /// Helper to register values for a node's output wires.
+    ///
+    /// Returns any new value associated with the output wires.
+    ///
+    /// ## Arguments
+    ///
+    /// - `node`: The node to register the outputs for.
+    /// - `circ`: The circuit containing the node.
+    /// - `qubit_values`: An iterator of existing qubit ids to re-use for the output.
+    ///   Once all qubits have been used, new qubit ids will be generated.
+    /// - `input_params`: The list of input parameter expressions.
+    /// - `output_param`: A function that takes the index of the output parameter
+    ///   and the list of input parameter expressions, and returns the string
+    ///   expression to use for the output parameter.
+    /// - `wire_filter`: A function that takes a wire and returns true if the wire
+    ///   at the output of the `node` should be registered.
     fn register_node_outputs(
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
         qubit_values: &mut impl Iterator<Item = TrackedQubit>,
         input_params: &[String],
-        mut param_map: impl FnMut(usize, &[String]) -> Option<String>,
+        mut output_param: impl FnMut(usize, &[String]) -> Option<String>,
         wire_filter: impl Fn(Wire<H::Node>) -> bool,
-    ) -> Result<(), Tk1ConvertError<H::Node>> {
+    ) -> Result<TrackedValues, Tk1ConvertError<H::Node>> {
         // Update the values in the node's outputs.
         //
         // We preserve the order of linear values in the input
         let optype = circ.hugr().get_optype(node);
         let sig = optype.dataflow_signature();
         let other_output_port = optype.other_output_port();
-        let mut param_counter = 0;
+        let mut new_outputs = TrackedValues::default();
         for output in circ.hugr().node_outputs(node) {
             // Ignore order edges.
             if Some(output) == other_output_port {
@@ -560,26 +597,29 @@ impl<H: HugrView> Tk1EncoderContext<H> {
                 let qb = qubit_values.next().unwrap_or_else(|| {
                     // If we already have a matching output for all input qubits,
                     // generate a fresh ID.
-                    self.values.new_qubit()
+                    let qb = self.values.new_qubit();
+                    new_outputs.qubits.push(qb);
+                    qb
                 });
                 out_wire_values.push(TrackedValue::Qubit(qb));
             }
             for _ in 0..type_counts.bits {
                 let b = self.values.new_bit();
+                new_outputs.bits.push(b);
                 out_wire_values.push(TrackedValue::Bit(b));
             }
             for _ in 0..type_counts.params {
-                if let Some(out_param_expression) = param_map(param_counter, &input_params) {
-                    let p = self.values.new_param(out_param_expression);
-                    out_wire_values.push(TrackedValue::Param(p));
-                }
-                param_counter += 1;
+                let out_param_expression =
+                    output_param(new_outputs.params.len(), input_params).unwrap_or("0".into());
+                let p = self.values.new_param(out_param_expression);
+                new_outputs.params.push(p);
+                out_wire_values.push(TrackedValue::Param(p));
             }
             self.values
                 .register_values(out_wire, out_wire_values, circ)?;
         }
 
-        Ok(())
+        Ok(new_outputs)
     }
 }
 

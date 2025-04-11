@@ -19,6 +19,8 @@ pub struct UnsupportedTracker<N> {
     /// Unsupported nodes in the hugr.
     ///
     /// Stores the index each node in [`Self::components`].
+    ///
+    /// Once a node has been extracted, it is removed from this map.
     nodes: HashMap<N, UnsupportedNode>,
     /// A UnionFind structure for tracking connected components of `Self::nodes`.
     components: UnionFind<usize>,
@@ -34,11 +36,6 @@ type ComponentId = usize;
 struct UnsupportedNode {
     /// The index of the node in [`UnsupportedTracker::components`].
     component: ComponentId,
-    /// Whether the node's component has been extracted already.
-    ///
-    /// Once that happens, we can no longer add new elements to the component
-    /// and must instead extract a separate set of operations.
-    extracted: bool,
 }
 
 impl<N: HugrNode> UnsupportedTracker<N> {
@@ -59,7 +56,6 @@ impl<N: HugrNode> UnsupportedTracker<N> {
     pub fn record_node(&mut self, node: N, circ: &Circuit<impl HugrView<Node = N>>) {
         let node_data = UnsupportedNode {
             component: self.components.new_set(),
-            extracted: false,
         };
         self.nodes.insert(node, node_data);
 
@@ -67,11 +63,6 @@ impl<N: HugrNode> UnsupportedTracker<N> {
         // neighbour.
         for neighbour in circ.hugr().input_neighbours(node) {
             if let Some(neigh_data) = self.nodes.get(&neighbour) {
-                // Once a node's component has been extracted, we cannot add new
-                // nodes to it.
-                if neigh_data.extracted {
-                    continue;
-                }
                 self.components
                     .union(neigh_data.component, node_data.component);
             }
@@ -85,18 +76,16 @@ impl<N: HugrNode> UnsupportedTracker<N> {
     /// calling [`UnsupportedTracker::record_node`] will use a new component
     /// instead.
     pub fn extract_component(&mut self, node: N) -> Vec<N> {
-        let node_data = self.nodes.get_mut(&node).unwrap();
-        node_data.extracted = true;
+        let node_data = self.nodes.remove(&node).unwrap();
         let component = node_data.component;
 
         // Compute the nodes in the component, and mark them as extracted.
         //
         // TODO: Implement efficient iteration over the nodes in a component on petgraph,
-        // and use it here. For now we do a BFS.
+        // and use it here. For now we just traverse all unextracted nodes.
         let mut nodes = vec![];
         let mut queue = vec![node];
         while let Some(node) = queue.pop() {
-            self.nodes.get_mut(&node).unwrap().extracted = true;
             nodes.push(node);
             for neighbour in self.nodes.keys() {
                 if self
@@ -109,6 +98,16 @@ impl<N: HugrNode> UnsupportedTracker<N> {
         }
 
         nodes
+    }
+
+    /// Returns an iterator over the unextracted nodes in the tracker.
+    pub fn iter(&self) -> impl Iterator<Item = N> + '_ {
+        self.nodes.keys().copied()
+    }
+
+    /// Returns `true` if there are no unextracted components in the tracker.
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
     }
 }
 
