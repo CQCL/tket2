@@ -5,7 +5,7 @@ mod unit_generator;
 mod unsupported_tracker;
 mod value_tracker;
 
-pub use config::{default_encoder_config, Tk1Encoder, Tk1EncoderConfig};
+pub use config::{default_encoder_config, Tk1EncoderConfig};
 use hugr::envelope::EnvelopeConfig;
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::package::Package;

@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crate::serialize::pytket::OpaqueTk1Op;
+use crate::serialize::pytket::extension::OpaqueTk1Op;
 use crate::Tk2Op;
 use hugr::extension::simple_op::MakeOpDef;
 use hugr::extension::{

@@ -1,25 +1,27 @@
-//! Wrapper over pytket operations that cannot be represented naturally in tket2.
-
-use hugr::extension::prelude::{bool_t, qb_t};
-
-use hugr::extension::ExtensionId;
-use hugr::ops::custom::ExtensionOp;
-use hugr::ops::NamedOp;
-use hugr::types::{Signature, TypeArg};
-
-use hugr::{HugrView, IncomingPort};
-use tket_json_rs::circuit_json;
+//! Encoder for pytket operations that cannot be represented naturally in tket2.
 
 use crate::extension::rotation::rotation_type;
 use crate::extension::{TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME};
-use crate::serialize::pytket::{Tk1ConvertError, Tk1Encoder, Tk1EncoderContext};
+use crate::serialize::pytket::{Tk1ConvertError, Tk1EncoderContext};
 use crate::Circuit;
 
-/// Encoder for [Tk2Op] operations.
-#[derive(Debug, Clone, Default)]
-pub struct Tk2OpEncoder;
+use super::Tk1Encoder;
+use hugr::extension::prelude::{bool_t, qb_t};
+use hugr::extension::ExtensionId;
+use hugr::ops::{ExtensionOp, NamedOp};
+use hugr::types::{Signature, TypeArg};
+use hugr::{HugrView, IncomingPort};
+use tket_json_rs::circuit_json;
 
-impl<H: HugrView> Tk1Encoder<H> for Tk2OpEncoder {
+/// Encoder for [TKET1_EXTENSION] operations.
+///
+/// That is, operations originating from a pytket circuit that did not have a
+/// native HUGR representation and were instead serialized as opaque black-box
+/// operations.
+#[derive(Debug, Clone, Default)]
+pub struct Tk1OpEncoder;
+
+impl<H: HugrView> Tk1Encoder<H> for Tk1OpEncoder {
     fn extensions(&self) -> Option<Vec<ExtensionId>> {
         Some(vec![TKET1_EXTENSION_ID])
     }

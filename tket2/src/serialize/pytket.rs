@@ -2,18 +2,18 @@
 
 mod decoder;
 mod encoder;
+pub mod extension;
 mod op;
 mod param;
 
-pub use encoder::{default_encoder_config, Tk1Encoder, Tk1EncoderConfig, Tk1EncoderContext};
+pub use encoder::{default_encoder_config, Tk1EncoderConfig, Tk1EncoderContext};
+pub use extension::Tk1Encoder;
 
 use hugr::core::HugrNode;
 use hugr::types::Type;
 
 use hugr::Wire;
 use itertools::Itertools;
-// Required for serialising ops in the tket1 hugr extension.
-pub(crate) use op::serialised::OpaqueTk1Op;
 
 #[cfg(test)]
 mod tests;

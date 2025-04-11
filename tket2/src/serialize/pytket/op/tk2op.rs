@@ -4,90 +4,15 @@ use std::borrow::Cow;
 
 use hugr::extension::prelude::{bool_t, qb_t, Noop};
 
-use hugr::extension::simple_op::MakeExtensionOp;
-use hugr::extension::ExtensionId;
-use hugr::ops::{ExtensionOp, OpTrait, OpType};
+use hugr::ops::{OpTrait, OpType};
 use hugr::std_extensions::arithmetic::float_types::float64_type;
 use hugr::types::Signature;
 
-use hugr::{HugrView, IncomingPort, Wire};
+use hugr::IncomingPort;
 use tket_json_rs::optype::OpType as Tk1OpType;
 
 use crate::extension::rotation::rotation_type;
-use crate::extension::TKET2_EXTENSION_ID;
-use crate::serialize::pytket::encoder::{Tk1Encoder, Tk1EncoderContext};
-use crate::serialize::pytket::Tk1ConvertError;
-use crate::{Circuit, Tk2Op};
-
-/// Encoder for [Tk2Op] operations.
-#[derive(Debug, Clone, Default)]
-pub struct Tk2OpEncoder;
-
-impl<H: HugrView> Tk1Encoder<H> for Tk2OpEncoder {
-    fn extensions(&self) -> Option<Vec<ExtensionId>> {
-        Some(vec![TKET2_EXTENSION_ID])
-    }
-
-    fn op_to_pytket(
-        &self,
-        node: H::Node,
-        op: &ExtensionOp,
-        circ: &Circuit<H>,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>> {
-        let Ok(tk2op) = Tk2Op::from_extension_op(op) else {
-            return Ok(false);
-        };
-
-        let serial_op = match tk2op {
-            Tk2Op::H => Tk1OpType::H,
-            Tk2Op::CX => Tk1OpType::CX,
-            Tk2Op::CY => Tk1OpType::CY,
-            Tk2Op::CZ => Tk1OpType::CZ,
-            Tk2Op::CRz => Tk1OpType::CRz,
-            Tk2Op::T => Tk1OpType::T,
-            Tk2Op::Tdg => Tk1OpType::Tdg,
-            Tk2Op::S => Tk1OpType::S,
-            Tk2Op::Sdg => Tk1OpType::Sdg,
-            Tk2Op::X => Tk1OpType::X,
-            Tk2Op::Y => Tk1OpType::Y,
-            Tk2Op::Z => Tk1OpType::Z,
-            Tk2Op::Rx => Tk1OpType::Rx,
-            Tk2Op::Rz => Tk1OpType::Rz,
-            Tk2Op::Ry => Tk1OpType::Ry,
-            Tk2Op::Toffoli => Tk1OpType::CCX,
-            Tk2Op::Reset => Tk1OpType::Reset,
-            Tk2Op::Measure => Tk1OpType::Measure,
-            // We translate `MeasureFree` the same way as a `Measure` operation.
-            // Since the node does not have outputs the qubit/bit will simply be ignored,
-            // but will appear when collecting the final pytket registers.
-            Tk2Op::MeasureFree => Tk1OpType::Measure,
-            // These operations are implicitly supported by the encoding,
-            // they do not create a new command but just modify the value trackers.
-            Tk2Op::QAlloc => {
-                let out_port = circ.hugr().node_outputs(node).next().unwrap();
-                let wire = Wire::new(node, out_port);
-                let qb = encoder.values.new_qubit();
-                encoder.values.register_values(wire, [qb], circ)?;
-                return Ok(true);
-            }
-            // Since the qubit still gets connected at the end of the circuit,
-            // `QFree` is a no-op.
-            Tk2Op::QFree => {
-                return Ok(true);
-            }
-            // Unsupported
-            Tk2Op::TryQAlloc => {
-                return Ok(false);
-            }
-        };
-
-        // Most operations map directly to a pytket one.
-        encoder.emit_node(serial_op, node, circ)?;
-
-        Ok(true)
-    }
-}
+use crate::Tk2Op;
 
 /// An operation with a native TKET2 counterpart.
 ///

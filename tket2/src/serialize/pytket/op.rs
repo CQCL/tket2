@@ -11,9 +11,8 @@ use hugr::IncomingPort;
 use tk2op::NativeOp;
 use tket_json_rs::circuit_json;
 
-use super::OpaqueTk1Op;
+use super::extension::OpaqueTk1Op;
 
-pub(crate) mod serialised;
 pub mod tk2op;
 
 /// An intermediary artifact when converting between TKET1 and TKET2 operations.

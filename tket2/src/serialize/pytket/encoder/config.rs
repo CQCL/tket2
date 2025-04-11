@@ -7,10 +7,10 @@ use std::collections::HashMap;
 
 use hugr::extension::ExtensionId;
 use hugr::ops::ExtensionOp;
-use hugr::types::{CustomType, Type, TypeEnum};
+use hugr::types::{Type, TypeEnum};
 
-use crate::serialize::pytket::op::tk2op::Tk2OpEncoder;
-use crate::serialize::pytket::Tk1ConvertError;
+use crate::serialize::pytket::extension::Tk2OpEncoder;
+use crate::serialize::pytket::{Tk1ConvertError, Tk1Encoder};
 use crate::Circuit;
 
 use super::value_tracker::RegisterCount;
@@ -27,45 +27,6 @@ pub fn default_encoder_config<H: HugrView>() -> Tk1EncoderConfig<H> {
     let mut config = Tk1EncoderConfig::new();
     config.add_encoder(Tk2OpEncoder);
     config
-}
-
-/// An encoder of HUGR operations and types that transform them
-/// into pytket primitives.
-pub trait Tk1Encoder<H: HugrView> {
-    /// The name of the extension this encoder/decoder is for.
-    ///
-    /// [`Tk1Encoder::op_to_pytket`] and [`Tk1Encoder::type_to_pytket`] will
-    /// only be called for operations/types of these extensions.
-    ///
-    /// If the function returns `None`, the encoder will be called for all
-    /// operations/types irrespective of their extension.
-    fn extensions(&self) -> Option<Vec<ExtensionId>>;
-
-    /// Given a node in the HUGR circuit and its operation type, try to convert
-    /// it to a pytket operation and add it to the pytket encoder.
-    ///
-    /// Returns `true` if the operation was successfully converted. If that is
-    /// the case, no further encoders will be called.
-    ///
-    /// If the operation is not supported by the encoder, return `false`.
-    fn op_to_pytket(
-        &self,
-        node: H::Node,
-        op: &ExtensionOp,
-        circ: &Circuit<H>,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>>;
-
-    /// Given a HUGR type, return the number of qubits, bits, and sympy
-    /// parameters of its pytket counterpart.
-    ///
-    /// If the type is not supported by the encoder, return `None`.
-    fn type_to_pytket(
-        &self,
-        #[allow(unused)] op: &CustomType,
-    ) -> Result<Option<RegisterCount>, Tk1ConvertError<H::Node>> {
-        Ok(None)
-    }
 }
 
 /// Configuration for converting [`Circuit`] into [`SerialCircuit`].
