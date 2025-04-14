@@ -18,7 +18,7 @@ use hugr::ops::{NamedOp, OpTrait, OpType};
 use hugr::types::EdgeKind;
 
 use std::borrow::Cow;
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 
 use hugr::{Direction, HugrView, Wire};
@@ -136,6 +136,9 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         circ: &Circuit<H>,
     ) -> Result<SerialCircuit, Tk1ConvertError<H::Node>> {
         // Add any remaining unsupported nodes
+        //
+        // TODO: Test that unsupported subgraphs that don't affect any qubit/bit registers
+        // are correctly encoded in pytket commands.
         while !self.unsupported.is_empty() {
             let node = self.unsupported.iter().next().unwrap();
             let unsupported_subgraph = self.unsupported.extract_component(node);
@@ -329,7 +332,6 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     ///
     /// ## Arguments
     ///
-    /// - `tk1_operation`: The tket1 operation type to emit.
     /// - `node`: The HUGR for which to emit the command. Qubits and bits are
     ///   automatically retrieved from the node's inputs/outputs.
     /// - `circ`: The circuit containing the node.
@@ -383,6 +385,118 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         Ok(())
     }
 
+    /// Helper to emit a node that transparently forwards its inputs to its
+    /// outputs, resulting in no pytket operation.
+    ///
+    /// It registers the node's input qubits and bits to the output
+    /// wires, without modifying the tket1 circuit being constructed.
+    /// Output parameters are more flexible, and output expressions can be
+    /// computed from the input parameters via the `output_param` function.
+    ///
+    /// The node's inputs should have exactly the same number of qubits and
+    /// bits. This method will return an error if that is not the case.
+    ///
+    /// You must also ensure that all input and output types are supported by
+    /// the encoder. Otherwise, the function will return an error.
+    ///
+    /// ## Arguments
+    ///
+    /// - `node`: The HUGR for which to emit the command. Qubits and bits are
+    ///   automatically retrieved from the node's inputs/outputs.
+    /// - `circ`: The circuit containing the node.
+    /// - `output_param`: A function that given a parameter index and the list
+    ///   of input parameter values returns the string expression to use for the
+    ///   parameter output. Returning `None` will abort the encoding.
+    pub fn emit_transparent_node(
+        &mut self,
+        node: H::Node,
+        circ: &Circuit<H>,
+        mut output_param: impl FnMut(usize, &[String]) -> Option<String>,
+    ) -> Result<(), Tk1ConvertError<H::Node>> {
+        // Now we can gather all inputs and assign them to the node outputs transparently.
+        //
+        // Once we call `get_input_values`, the wires get marked as explored so if we find
+        // in the rest of the function that we cannot emit the node, we will not be able to
+        // revert the state of the tracker and must return an error instead.
+        let input_values = self.get_input_values(node, circ)?;
+        let mut qubits = input_values.qubits.into_iter();
+        let mut bits = input_values.bits.into_iter();
+
+        let params: Vec<String> = input_values
+            .params
+            .into_iter()
+            .map(|p| self.values.param_expression(p).to_owned())
+            .collect_vec();
+
+        let op = circ.hugr().get_optype(node);
+        let signature = op.dataflow_signature();
+        let static_output = op.static_output_port();
+        let other_output = op.other_output_port();
+        for out_port in circ.hugr().node_outputs(node) {
+            let ty = if Some(out_port) == other_output {
+                continue;
+            } else if Some(out_port) == static_output {
+                let EdgeKind::Const(ty) = op.static_output().unwrap() else {
+                    return Err(Tk1ConvertError::custom(format!(
+                        "Cannot emit a static output for a {}.",
+                        op.name()
+                    )));
+                };
+                ty
+            } else {
+                let Some(ty) = signature
+                    .as_ref()
+                    .and_then(|s| s.out_port_type(out_port).cloned())
+                else {
+                    return Err(Tk1ConvertError::custom(
+                        "Cannot emit a transparent node without a dataflow signature.",
+                    ));
+                };
+                ty
+            };
+
+            let wire = hugr::Wire::new(node, out_port);
+            let Some(count) = self.config().type_to_pytket(&ty)? else {
+                return Err(Tk1ConvertError::custom(format!(
+                    "Found an unsupported type while encoding a {}.",
+                    op.name()
+                )));
+            };
+            let mut values: Vec<TrackedValue> = Vec::with_capacity(count.total());
+            for _ in 0..count.qubits {
+                let Some(qb) = qubits.next() else {
+                    return Err(Tk1ConvertError::custom(format!(
+                        "Not enough qubits in the input values for a {}.",
+                        op.name()
+                    )));
+                };
+                values.push(qb.into());
+            }
+            for _ in 0..count.bits {
+                let Some(bit) = bits.next() else {
+                    return Err(Tk1ConvertError::custom(format!(
+                        "Not enough bits in the input values for a {}.",
+                        op.name()
+                    )));
+                };
+                values.push(bit.into());
+            }
+            for i in 0..count.params {
+                let Some(out) = output_param(i, &params) else {
+                    return Err(Tk1ConvertError::custom(format!(
+                        "Cannot encode output parameter #{i} for a {}.",
+                        op.name()
+                    )));
+                };
+                let p = self.values.new_param(out);
+                values.push(p.into());
+            }
+            self.values.register_wire(wire, values, circ)?;
+        }
+
+        Ok(())
+    }
+
     /// Helper to emit a new tket1 command corresponding to subgraph of unsupported nodes,
     /// encoded inside a pytket barrier.
     ///
@@ -391,22 +505,24 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// - `unsupported_nodes`: The list of nodes to encode as an unsupported subgraph.
     fn emit_unsupported(
         &mut self,
-        unsupported_nodes: Vec<H::Node>,
+        unsupported_nodes: BTreeSet<H::Node>,
         circ: &Circuit<H>,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
-        let unsupported: HashSet<H::Node> = HashSet::from_iter(unsupported_nodes.iter().copied());
-        let subcircuit_id = format!("tk{}", unsupported.iter().min().unwrap());
+        let subcircuit_id = format!("tk{}", unsupported_nodes.iter().min().unwrap());
 
         // TODO: Use a cached topo checker here instead of traversing the full graph each time we create a `SiblingSubgraph`.
         //
         // TopoConvexChecker likes to borrow the hugr, so it'd be too invasive to store in the `Context`.
-        let subgraph = SiblingSubgraph::try_from_nodes(unsupported_nodes, circ.hugr())
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Failed to create subgraph from unsupported nodes [{}]",
-                    unsupported.iter().join(", ")
-                )
-            });
+        let subgraph = SiblingSubgraph::try_from_nodes(
+            unsupported_nodes.iter().cloned().collect_vec(),
+            circ.hugr(),
+        )
+        .unwrap_or_else(|_| {
+            panic!(
+                "Failed to create subgraph from unsupported nodes [{}]",
+                unsupported_nodes.iter().join(", ")
+            )
+        });
         let input_nodes: HashSet<_> = subgraph
             .incoming_ports()
             .iter()
@@ -426,11 +542,10 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         // already-encoded nodes, and not from other unsupported nodes not in `unsupported_nodes`.
         let mut op_values = TrackedValues::default();
         for node in &input_nodes {
-            let node_vals =
-                self.get_input_values_internal(*node, circ, |w| unsupported.contains(&w.node()))?;
-            op_values.qubits.extend(node_vals.qubits);
-            op_values.bits.extend(node_vals.bits);
-            op_values.params.extend(node_vals.params);
+            let node_vals = self.get_input_values_internal(*node, circ, |w| {
+                unsupported_nodes.contains(&w.node())
+            })?;
+            op_values.append(node_vals);
         }
         let input_param_exprs: Vec<String> = std::mem::take(&mut op_values.params)
             .into_iter()
@@ -452,8 +567,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
                 |i, _| Some(format!("{subcircuit_id}_out{i}")),
                 |_| true,
             )?;
-            op_values.qubits.extend(new_outputs.qubits);
-            op_values.bits.extend(new_outputs.bits);
+            op_values.append(new_outputs);
         }
 
         // Create pytket operation, and add the subcircuit as hugr
@@ -537,11 +651,26 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         //
         // If none of the encoders can handle the operation, we just add it to
         // the unsupported tracker and move on.
-        if let OpType::ExtensionOp(op) = optype {
-            let config = Arc::clone(&self.config);
-            if config.op_to_pytket(node, op, circ, self)? {
+        match optype {
+            OpType::ExtensionOp(op) => {
+                let config = Arc::clone(&self.config);
+                if config.op_to_pytket(node, op, circ, self)? {
+                    return Ok(true);
+                }
+            }
+            OpType::LoadConstant(_) => {
+                self.emit_transparent_node(node, circ, |i, ps| Some(ps[i].clone()))?;
                 return Ok(true);
             }
+            OpType::Const(op) => {
+                let config = Arc::clone(&self.config);
+                if let Some(values) = config.const_to_pytket(&op.value, self)? {
+                    let wire = Wire::new(node, 0);
+                    self.values.register_wire(wire, values.into_iter(), circ)?;
+                    return Ok(true);
+                }
+            }
+            _ => {}
         }
 
         self.unsupported.record_node(node, circ);

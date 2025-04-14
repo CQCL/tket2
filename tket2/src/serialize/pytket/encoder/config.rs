@@ -3,18 +3,20 @@
 //! A configuration struct contains a list of custom encoders that define translations
 //! of HUGR operations and types into pytket primitives.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap, VecDeque};
 
-use hugr::extension::ExtensionId;
-use hugr::ops::ExtensionOp;
-use hugr::types::{Type, TypeEnum};
+use hugr::extension::{ExtensionId, ExtensionSet};
+use hugr::ops::{ExtensionOp, Value};
+use hugr::types::{SumType, Type, TypeEnum};
 
-use crate::serialize::pytket::extension::{PreludeEncoder, Tk1OpEncoder, Tk2OpEncoder};
+use crate::serialize::pytket::extension::{
+    FloatEncoder, PreludeEncoder, RotationEncoder, Tk1OpEncoder, Tk2OpEncoder,
+};
 use crate::serialize::pytket::{Tk1ConvertError, Tk1Encoder};
 use crate::Circuit;
 
 use super::value_tracker::RegisterCount;
-use super::Tk1EncoderContext;
+use super::{Tk1EncoderContext, TrackedValues};
 use hugr::extension::prelude::bool_t;
 use hugr::HugrView;
 use itertools::Itertools;
@@ -26,6 +28,8 @@ pub fn default_encoder_config<H: HugrView>() -> Tk1EncoderConfig<H> {
     // TODO: Add std & tket2 encoders
     let mut config = Tk1EncoderConfig::new();
     config.add_encoder(PreludeEncoder);
+    config.add_encoder(FloatEncoder);
+    config.add_encoder(RotationEncoder);
     config.add_encoder(Tk1OpEncoder);
     config.add_encoder(Tk2OpEncoder);
     config
@@ -90,7 +94,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
     /// Encode a HUGR operation using the registered custom encoders.
     ///
     /// Returns `true` if the operation was successfully converted. If that is
-    pub fn op_to_pytket(
+    pub(super) fn op_to_pytket(
         &self,
         node: H::Node,
         op: &ExtensionOp,
@@ -153,6 +157,51 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
         Ok(None)
     }
 
+    /// Encode a const value into the pytket context using the registered custom
+    /// encoders.
+    ///
+    /// Returns the values associated to the loaded constant, or `None` if the
+    /// constant could not be encoded.
+    pub(super) fn const_to_pytket(
+        &self,
+        value: &Value,
+        encoder: &mut Tk1EncoderContext<H>,
+    ) -> Result<Option<TrackedValues>, Tk1ConvertError<H::Node>> {
+        let mut values = TrackedValues::default();
+        let mut queue = VecDeque::from([value]);
+        while let Some(value) = queue.pop_front() {
+            match value {
+                Value::Sum(sum) => {
+                    if sum.sum_type == SumType::new_unary(2) {
+                        //TODO: Add a bit and sets its value based on sum.tag
+                        return Ok(None);
+                    }
+                    if sum.sum_type.as_tuple().is_some() {
+                        for v in sum.values.iter() {
+                            queue.push_back(v);
+                        }
+                    }
+                }
+                Value::Extension { e: opaque } => {
+                    let type_exts = opaque.extension_reqs();
+                    let mut encoded = false;
+                    for e in self.encoders_for_extensions(&type_exts) {
+                        if let Some(vs) = e.const_to_pytket(opaque, encoder)? {
+                            values.append(vs);
+                            encoded = true;
+                            break;
+                        }
+                    }
+                    if !encoded {
+                        return Ok(None);
+                    }
+                }
+                _ => return Ok(None),
+            }
+        }
+        Ok(Some(values))
+    }
+
     /// Lists the encoders that can handle a given extension.
     fn encoders_for_extension(
         &self,
@@ -164,6 +213,20 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
             .flatten()
             .chain(self.no_extension_encoders.iter())
             .map(move |idx| &self.encoders[*idx])
+    }
+
+    /// Lists the encoders that can handle a given set extensions.
+    fn encoders_for_extensions(
+        &self,
+        exts: &ExtensionSet,
+    ) -> impl Iterator<Item = &Box<dyn Tk1Encoder<H>>> {
+        let encoder_ids: BTreeSet<usize> = exts
+            .iter()
+            .flat_map(|ext| self.extension_encoders.get(ext).into_iter().flatten())
+            .chain(self.no_extension_encoders.iter())
+            .copied()
+            .collect();
+        encoder_ids.into_iter().map(move |idx| &self.encoders[idx])
     }
 }
 

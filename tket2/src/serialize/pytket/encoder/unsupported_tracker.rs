@@ -1,6 +1,6 @@
 //! Tracking of subgraphs of unsupported nodes in the hugr.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use hugr::core::HugrNode;
 use hugr::HugrView;
@@ -75,26 +75,24 @@ impl<N: HugrNode> UnsupportedTracker<N> {
     /// Once a component has been extracted, no new nodes can be added to it and
     /// calling [`UnsupportedTracker::record_node`] will use a new component
     /// instead.
-    pub fn extract_component(&mut self, node: N) -> Vec<N> {
+    pub fn extract_component(&mut self, node: N) -> BTreeSet<N> {
         let node_data = self.nodes.remove(&node).unwrap();
         let component = node_data.component;
+        let representative = self.components.find_mut(component);
 
         // Compute the nodes in the component, and mark them as extracted.
         //
         // TODO: Implement efficient iteration over the nodes in a component on petgraph,
         // and use it here. For now we just traverse all unextracted nodes.
-        let mut nodes = vec![];
-        let mut queue = vec![node];
-        while let Some(node) = queue.pop() {
-            nodes.push(node);
-            for neighbour in self.nodes.keys() {
-                if self
-                    .components
-                    .equiv(self.nodes[neighbour].component, component)
-                {
-                    queue.push(*neighbour);
-                }
+        let mut nodes = BTreeSet::new();
+        nodes.insert(node);
+        for (&n, data) in &self.nodes {
+            if self.components.find_mut(data.component) == representative {
+                nodes.insert(n);
             }
+        }
+        for n in &nodes {
+            self.nodes.remove(n);
         }
 
         nodes

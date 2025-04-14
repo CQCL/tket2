@@ -1,6 +1,7 @@
 //! Encoder and decoder for tket2 operations with native pytket counterparts.
 
 use super::Tk1Encoder;
+use crate::extension::sympy::SympyOp;
 use crate::extension::TKET2_EXTENSION_ID;
 use crate::serialize::pytket::encoder::Tk1EncoderContext;
 use crate::serialize::pytket::Tk1ConvertError;
@@ -27,10 +28,25 @@ impl<H: HugrView> Tk1Encoder<H> for Tk2OpEncoder {
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
     ) -> Result<bool, Tk1ConvertError<H::Node>> {
-        let Ok(tk2op) = Tk2Op::from_extension_op(op) else {
-            return Ok(false);
-        };
+        if let Ok(tk2op) = Tk2Op::from_extension_op(op) {
+            self.encode_tk2_op(node, tk2op, circ, encoder)
+        } else if let Ok(sympy_op) = SympyOp::from_extension_op(op) {
+            self.encode_sympy_op(node, sympy_op, circ, encoder)
+        } else {
+            Ok(false)
+        }
+    }
+}
 
+impl Tk2OpEncoder {
+    /// Encode a tket2 operation into a pytket operation.
+    fn encode_tk2_op<H: HugrView>(
+        &self,
+        node: H::Node,
+        tk2op: Tk2Op,
+        circ: &Circuit<H>,
+        encoder: &mut Tk1EncoderContext<H>,
+    ) -> Result<bool, Tk1ConvertError<H::Node>> {
         let serial_op = match tk2op {
             Tk2Op::H => Tk1OpType::H,
             Tk2Op::CX => Tk1OpType::CX,
@@ -77,6 +93,18 @@ impl<H: HugrView> Tk1Encoder<H> for Tk2OpEncoder {
         // Most operations map directly to a pytket one.
         encoder.emit_node(serial_op, node, circ)?;
 
+        Ok(true)
+    }
+
+    /// Encode a tket2 sympy operation into a pytket operation.
+    fn encode_sympy_op<H: HugrView>(
+        &self,
+        node: H::Node,
+        sympy_op: SympyOp,
+        circ: &Circuit<H>,
+        encoder: &mut Tk1EncoderContext<H>,
+    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+        encoder.emit_transparent_node(node, circ, |_, _| Some(sympy_op.expr.clone()))?;
         Ok(true)
     }
 }

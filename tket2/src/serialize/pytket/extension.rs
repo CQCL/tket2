@@ -9,17 +9,22 @@
 //! creates a configuration with the decoders for the standard library and tket2
 //! extension.
 
+mod float;
 mod prelude;
+mod rotation;
 mod tk1;
 mod tk2;
 
+pub use float::FloatEncoder;
+use hugr::ops::constant::OpaqueValue;
 pub use prelude::PreludeEncoder;
+pub use rotation::RotationEncoder;
 pub use tk1::Tk1OpEncoder;
 pub use tk2::Tk2OpEncoder;
 
 pub(crate) use tk1::OpaqueTk1Op;
 
-use super::encoder::RegisterCount;
+use super::encoder::{RegisterCount, TrackedValues};
 use super::Tk1EncoderContext;
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
@@ -28,8 +33,14 @@ use hugr::ops::ExtensionOp;
 use hugr::types::CustomType;
 use hugr::HugrView;
 
-/// An encoder of HUGR operations and types that transform them
-/// into pytket primitives.
+/// An encoder of HUGR operations and types that transform them into pytket
+/// primitives.
+///
+/// An [encoder configuration](crate::serialize::pytket::Tk1EncoderConfig)
+/// contains a list of such encoders. When encountering a type, operation, or
+/// constant in the HUGR being encoded, the configuration will call each of
+/// the encoders declaring support for the specific extension sequentially until
+/// one of them indicates a successful conversion.
 pub trait Tk1Encoder<H: HugrView> {
     /// The name of the extension this encoder/decoder is for.
     ///
@@ -46,14 +57,19 @@ pub trait Tk1Encoder<H: HugrView> {
     /// Returns `true` if the operation was successfully converted. If that is
     /// the case, no further encoders will be called.
     ///
-    /// If the operation is not supported by the encoder, return `false`.
+    /// If the operation is not supported by the encoder, return `false`. It's
+    /// important not to modify the `encoder` in this case, as that may
+    /// invalidate the context for other encoders that may be called afterwards.
     fn op_to_pytket(
         &self,
         node: H::Node,
         op: &ExtensionOp,
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>>;
+    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+        let _ = (node, op, circ, encoder);
+        Ok(false)
+    }
 
     /// Given a HUGR type, return the number of qubits, bits, and parameter
     /// expressions of its pytket counterpart.
@@ -66,6 +82,17 @@ pub trait Tk1Encoder<H: HugrView> {
         typ: &CustomType,
     ) -> Result<Option<RegisterCount>, Tk1ConvertError<H::Node>> {
         let _ = typ;
+        Ok(None)
+    }
+
+    /// Given an opaque constant value, add it to the pytket encoder and return
+    /// the values to associate to the loaded constant.
+    fn const_to_pytket(
+        &self,
+        value: &OpaqueValue,
+        encoder: &mut Tk1EncoderContext<H>,
+    ) -> Result<Option<TrackedValues>, Tk1ConvertError<H::Node>> {
+        let _ = (value, encoder);
         Ok(None)
     }
 }

@@ -15,7 +15,9 @@ use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::optype;
 use tket_json_rs::register;
 
-use super::{TKETDecode, METADATA_INPUT_PARAMETERS, METADATA_Q_OUTPUT_REGISTERS};
+use super::{
+    TKETDecode, METADATA_INPUT_PARAMETERS, METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
+};
 use crate::circuit::Circuit;
 use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp};
 use crate::extension::sympy::SympyOpDef;
@@ -166,8 +168,14 @@ fn circ_preset_qubits() -> Circuit {
     // A preset register for the first qubit output
     hugr.set_metadata(
         hugr.root(),
+        METADATA_Q_REGISTERS,
+        serde_json::json!([["q", [2]], ["q", [10]], ["q", [8]]]),
+    );
+    // A preset register for the first qubit output
+    hugr.set_metadata(
+        hugr.root(),
         METADATA_Q_OUTPUT_REGISTERS,
-        serde_json::json!([["q", [1]]]),
+        serde_json::json!([["q", [10]]]),
     );
 
     hugr.into()
@@ -365,14 +373,14 @@ fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
 
     let deser_sig = deser.circuit_signature();
     assert_eq!(
-        &deser_sig.input, &decoded_sig.input,
+        &decoded_sig.input, &deser_sig.input,
         "Input signature mismatch\n  Expected: {}\n  Actual:   {}",
-        &deser_sig, &decoded_sig
+        &decoded_sig, &deser_sig
     );
     assert_eq!(
-        &deser_sig.output, &decoded_sig.output,
+        &decoded_sig.output, &deser_sig.output,
         "Output signature mismatch\n  Expected: {}\n  Actual:   {}",
-        &deser_sig, &decoded_sig
+        &decoded_sig, &deser_sig
     );
 
     let reser = SerialCircuit::encode(&deser).unwrap();

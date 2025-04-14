@@ -1,13 +1,13 @@
 //! Encoder and decoder for tket2 operations with native pytket counterparts.
 
 use super::Tk1Encoder;
-use crate::serialize::pytket::encoder::{RegisterCount, Tk1EncoderContext, TrackedValue};
+use crate::serialize::pytket::encoder::{RegisterCount, Tk1EncoderContext};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
 use hugr::extension::prelude::{TupleOpDef, PRELUDE_ID};
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
-use hugr::ops::{DataflowOpTrait, ExtensionOp};
+use hugr::ops::ExtensionOp;
 use hugr::types::TypeArg;
 use hugr::HugrView;
 
@@ -30,8 +30,7 @@ impl<H: HugrView> Tk1Encoder<H> for PreludeEncoder {
         if let Ok(tuple_op) = TupleOpDef::from_extension_op(op) {
             return self.tuple_op_to_pytket(node, op, &tuple_op, circ, encoder);
         };
-
-        return Ok(false);
+        Ok(false)
     }
 
     fn type_to_pytket(
@@ -86,46 +85,7 @@ impl PreludeEncoder {
         };
 
         // Now we can gather all inputs and assign them to the node outputs transparently.
-        let input_values = encoder.get_input_values(node, circ)?;
-        let mut qubits = input_values.qubits.into_iter();
-        let mut bits = input_values.bits.into_iter();
-        let mut params = input_values.params.into_iter();
-
-        let signature = op.signature();
-        for (out_port, ty) in circ.hugr().node_outputs(node).zip(signature.output.iter()) {
-            let wire = hugr::Wire::new(node, out_port);
-            let Some(count) = encoder.config().type_to_pytket(ty)? else {
-                return Err(Tk1ConvertError::custom(
-                    "Found an unsupported type while encoding a TupleOp.",
-                ));
-            };
-            let mut values: Vec<TrackedValue> = Vec::with_capacity(count.total());
-            for _ in 0..count.qubits {
-                let Some(qb) = qubits.next() else {
-                    return Err(Tk1ConvertError::custom(
-                        "Not enough qubits in the input values for a TupleOp.",
-                    ));
-                };
-                values.push(qb.into());
-            }
-            for _ in 0..count.bits {
-                let Some(bit) = bits.next() else {
-                    return Err(Tk1ConvertError::custom(
-                        "Not enough bits in the input values for a TupleOp.",
-                    ));
-                };
-                values.push(bit.into());
-            }
-            for _ in 0..count.params {
-                let Some(param) = params.next() else {
-                    return Err(Tk1ConvertError::custom(
-                        "Not enough parameters in the input values for a TupleOp.",
-                    ));
-                };
-                values.push(param.into());
-            }
-            encoder.values.register_wire(wire, values, circ)?;
-        }
+        encoder.emit_transparent_node(node, circ, |i, ps| ps.get(i).cloned())?;
 
         Ok(true)
     }

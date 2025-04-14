@@ -124,6 +124,7 @@ pub struct TrackedParam(usize);
     derive_more::From,
     derive_more::Display,
 )]
+#[non_exhaustive]
 pub enum TrackedValue {
     /// A qubit value.
     ///
@@ -141,6 +142,7 @@ pub enum TrackedValue {
 
 /// Lists of tracked values, separated by type.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct TrackedValues {
     /// Tracked qubit values.
     pub qubits: Vec<TrackedQubit>,
@@ -237,6 +239,15 @@ impl<N: HugrNode> ValueTracker<N> {
             qubit_reg_generator: RegisterUnitGenerator::default(),
             bit_reg_generator: RegisterUnitGenerator::default(),
         };
+
+        if !tracker.output_qubits.is_empty() {
+            let inputs: HashSet<_> = tracker.qubits.iter().cloned().collect();
+            for q in &tracker.output_qubits {
+                if !inputs.contains(q) {
+                    tracker.qubits.push(q.clone());
+                }
+            }
+        }
         tracker.unused_qubits = (0..tracker.qubits.len()).map(TrackedQubit).collect();
         tracker.unused_bits = (0..tracker.bits.len()).map(TrackedBit).collect();
         tracker.qubit_reg_generator = RegisterUnitGenerator::new("q", tracker.qubits.iter());
@@ -246,7 +257,7 @@ impl<N: HugrNode> ValueTracker<N> {
         let existing_param_vars: HashSet<String> = param_variable_names.iter().cloned().collect();
         let mut param_gen = param_variable_names.into_iter().chain(
             (0..)
-                .map(|i| format!("x{}", i))
+                .map(|i| format!("f{}", i))
                 .filter(|name| !existing_param_vars.contains(name)),
         );
 
@@ -264,7 +275,7 @@ impl<N: HugrNode> ValueTracker<N> {
                 //
                 // TODO: We should store the original signature somewhere in the circuit,
                 // so it can be reconstructed later.
-                tracker.register_values::<TrackedValue>(wire, [], circ)?;
+                tracker.register_wire::<TrackedValue>(wire, [], circ)?;
                 continue;
             };
 
@@ -384,7 +395,7 @@ impl<N: HugrNode> ValueTracker<N> {
             let wire = self.wires.get_mut(&wire).unwrap();
             wire.unexplored_neighbours -= 1;
             let values = wire.values.as_ref()?;
-            return Some(Cow::Borrowed(&values));
+            return Some(Cow::Borrowed(values));
         }
         let values = self.unregister_wire(wire)?;
         Some(Cow::Owned(values))
@@ -468,6 +479,16 @@ impl<N: HugrNode> ValueTracker<N> {
             }
         }
 
+        // Ensure that all original outputs are present in the pytket circuit.
+        if qubit_outputs.len() < self.output_qubits.len() {
+            let qbs = self
+                .unused_qubits
+                .iter()
+                .take(self.output_qubits.len() - qubit_outputs.len())
+                .map(|&qb| self.qubit_register(qb).clone());
+            qubit_outputs.extend(qbs);
+        }
+
         // Compute the final register permutations.
         let (qubit_outputs, qubit_permutation) =
             compute_final_permutation(qubit_outputs, &self.qubits, &self.output_qubits);
@@ -477,6 +498,38 @@ impl<N: HugrNode> ValueTracker<N> {
             bits: bit_outputs,
             qubit_permutation,
         })
+    }
+}
+
+impl TrackedValues {
+    /// Returns the number of qubits, bits, and parameters in the list.
+    pub fn count(&self) -> RegisterCount {
+        RegisterCount::new(self.qubits.len(), self.bits.len(), self.params.len())
+    }
+
+    /// Iterate over the values in the list.
+    pub fn into_iter(self) -> impl Iterator<Item = TrackedValue> {
+        self.qubits
+            .into_iter()
+            .map(TrackedValue::Qubit)
+            .chain(self.bits.into_iter().map(TrackedValue::Bit))
+            .chain(self.params.into_iter().map(TrackedValue::Param))
+    }
+
+    /// Iterate over the values in the list.
+    pub fn iter(&self) -> impl Iterator<Item = TrackedValue> + '_ {
+        self.qubits
+            .iter()
+            .map(|&qb| TrackedValue::Qubit(qb))
+            .chain(self.bits.iter().map(|&bit| TrackedValue::Bit(bit)))
+            .chain(self.params.iter().map(|&param| TrackedValue::Param(param)))
+    }
+
+    /// Append tracked values to the list.
+    pub fn append(&mut self, other: TrackedValues) {
+        self.qubits.extend(other.qubits);
+        self.bits.extend(other.bits);
+        self.params.extend(other.params);
     }
 }
 
