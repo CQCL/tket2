@@ -26,6 +26,8 @@ pub mod extension;
 
 pub mod lazify_measure;
 
+pub mod replace_bools;
+
 /// Modify a [hugr::Hugr] into a form that is acceptable for ingress into a Q-System.
 /// Returns an error if this cannot be done.
 ///
