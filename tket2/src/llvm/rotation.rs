@@ -1,3 +1,5 @@
+//! `hugr-llvm` codegen extension for `tket2.rotation`.
+
 use hugr::extension::prelude::{option_type, ConstError};
 use hugr::llvm::emit::{emit_value, EmitFuncContext, EmitOpArgs};
 use hugr::llvm::extension::{DefaultPreludeCodegen, PreludeCodegen};
