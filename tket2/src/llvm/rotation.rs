@@ -212,7 +212,7 @@ impl<PCG: PreludeCodegen> CodegenExtension for RotationCodegenExtension<PCG> {
 #[cfg(test)]
 mod test {
 
-    use extension::rotation::{rotation_type, RotationOpBuilder as _};
+    use crate::extension::rotation::{rotation_type, RotationOpBuilder as _};
     use hugr::builder::{Dataflow, DataflowSubContainer as _, SubContainer};
     use hugr::extension::prelude::UnwrapBuilder;
     use hugr::extension::ExtensionSet;
