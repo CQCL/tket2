@@ -31,8 +31,7 @@ rewrite-tracing = []
 # Support compressed binary encoded ECC files
 binary-eccs = ["dep:zstd"]
 
-llvm = ["hugr/llvm", "dep:anyhow"]
-llvm-test = ["llvm", "hugr/llvm-test"]
+llvm = ["hugr/llvm", "hugr/llvm-test", "dep:anyhow"]
 
 default = ["binary-eccs"]
 
@@ -77,7 +76,6 @@ anyhow = { version = "1.0.98", optional = true }
 [dev-dependencies]
 rstest = { workspace = true }
 cool_asserts = { workspace = true }
-tket2 = { path = ".", features = ["llvm-test"] }
 
 
 # Defined here so it can be overridden by the codspeed CI job

@@ -184,7 +184,6 @@ impl<PCG: PreludeCodegen> RotationCodegenExtension<PCG> {
 
                 args.outputs.finish(builder, [half_turns.into()])
             }
-            op => bail!("Unsupported op: {op:?}"),
         }
     }
 }
