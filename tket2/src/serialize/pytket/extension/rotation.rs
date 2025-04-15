@@ -12,6 +12,7 @@ use hugr::extension::ExtensionId;
 use hugr::ops::constant::OpaqueValue;
 use hugr::ops::ExtensionOp;
 use hugr::HugrView;
+use itertools::Itertools;
 
 /// Encoder for [prelude](hugr::extension::prelude) operations.
 #[derive(Debug, Clone, Default)]
@@ -35,7 +36,7 @@ impl<H: HugrView> PytketEmitter<H> for RotationEmitter {
 
         match rot_op {
             RotationOp::from_halfturns_unchecked | RotationOp::to_halfturns => {
-                encoder.emit_transparent_node(node, circ, |_, ps| ps.first().cloned())?;
+                encoder.emit_transparent_node(node, circ, |ps| vec![ps.input_params[0].clone()])?;
                 Ok(true)
             }
             RotationOp::from_halfturns => {
@@ -43,8 +44,10 @@ impl<H: HugrView> PytketEmitter<H> for RotationEmitter {
                 Ok(false)
             }
             _ => {
-                encoder.emit_transparent_node(node, circ, |_, ps| {
-                    RotationEmitter::encode_rotation_op(&rot_op, ps)
+                encoder.emit_transparent_node(node, circ, |ps| {
+                    RotationEmitter::encode_rotation_op(&rot_op, ps.input_params)
+                        .into_iter()
+                        .collect_vec()
                 })?;
                 Ok(true)
             }

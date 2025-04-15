@@ -48,7 +48,7 @@ impl<H: HugrView> PytketEmitter<H> for Tk1Emitter {
             node,
             circ,
             // We don't support opaque pytket operations with parameter outputs.
-            |_i, _params| None,
+            |_args| Vec::new(),
             // Emit the pre-defined pytket operation stored in the metadata.
             move |_, _, _| op.serialised_op,
         )?;

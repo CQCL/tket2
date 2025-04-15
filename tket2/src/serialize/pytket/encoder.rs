@@ -21,7 +21,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 
-use hugr::{Direction, HugrView, Wire};
+use hugr::{HugrView, Wire};
 use itertools::Itertools;
 use portgraph::algorithms::TopoSort;
 use portgraph::LinkView;
@@ -287,12 +287,12 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         node: H::Node,
         circ: &Circuit<H>,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
-        self.emit_node_with_out_params(tk1_optype, node, circ, |_, _| None)
+        self.emit_node_with_out_params(tk1_optype, node, circ, |_| Vec::new())
     }
 
     /// Helper to emit a new tket1 command corresponding to a single HUGR node,
-    /// with parameter outputs. Use [`Tk1EncoderContext::emit_node`]
-    /// for nodes that don't require computing parameter outputs.
+    /// with parameter outputs. Use [`Tk1EncoderContext::emit_node`] for nodes
+    /// that don't require computing parameter outputs.
     ///
     /// See [`Tk1EncoderContext::emit_command`] for more general cases.
     ///
@@ -302,20 +302,20 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// - `node`: The HUGR for which to emit the command. Qubits and bits are
     ///   automatically retrieved from the node's inputs/outputs.
     /// - `circ`: The circuit containing the node.
-    /// - `output_param`: A function that given a parameter index and the list of
-    ///   input parameter values returns the string expression to use for the
-    ///   parameter output. Returning `None` will abort the encoding.
+    /// - `output_params`: A function that computes the output parameter
+    ///   expressions from the list of input parameters. If the number of parameters
+    ///   does not match the expected number, the encoding will fail.
     pub fn emit_node_with_out_params(
         &mut self,
         tk1_optype: tket_json_rs::OpType,
         node: H::Node,
         circ: &Circuit<H>,
-        output_param: impl FnMut(usize, &[String]) -> Option<String>,
+        output_params: impl FnOnce(OutputParamArgs) -> Vec<String>,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
         self.emit_node_command(
             node,
             circ,
-            output_param,
+            output_params,
             move |qubit_count, bit_count, params| {
                 make_tk1_operation(tk1_optype, qubit_count, bit_count, params)
             },
@@ -335,9 +335,9 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// - `node`: The HUGR for which to emit the command. Qubits and bits are
     ///   automatically retrieved from the node's inputs/outputs.
     /// - `circ`: The circuit containing the node.
-    /// - `output_param`: A function that given a parameter index and the list of
-    ///   input parameter values returns the string expression to use for the
-    ///   parameter output. Returning `None` will abort the encoding.
+    /// - `output_params`: A function that computes the output parameter
+    ///   expressions from the list of input parameters. If the number of parameters
+    ///   does not match the expected number, the encoding will fail.
     /// - `make_operation`: A function that takes the number of qubits, bits, and
     ///   the list of input parameter expressions and returns a pytket operation.
     ///   See [`make_tk1_operation`] for a helper function to create it.
@@ -345,7 +345,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-        output_param: impl FnMut(usize, &[String]) -> Option<String>,
+        output_params: impl FnOnce(OutputParamArgs) -> Vec<String>,
         make_operation: impl FnOnce(usize, usize, &[String]) -> tket_json_rs::circuit_json::Operation,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
         let TrackedValues {
@@ -367,7 +367,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             circ,
             &mut qubit_iterator,
             &params,
-            output_param,
+            output_params,
             |_| true,
         )?;
         qubits.extend(new_outputs.qubits);
@@ -391,7 +391,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// It registers the node's input qubits and bits to the output
     /// wires, without modifying the tket1 circuit being constructed.
     /// Output parameters are more flexible, and output expressions can be
-    /// computed from the input parameters via the `output_param` function.
+    /// computed from the input parameters via the `output_params` function.
     ///
     /// The node's inputs should have exactly the same number of qubits and
     /// bits. This method will return an error if that is not the case.
@@ -404,92 +404,66 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// - `node`: The HUGR for which to emit the command. Qubits and bits are
     ///   automatically retrieved from the node's inputs/outputs.
     /// - `circ`: The circuit containing the node.
-    /// - `output_param`: A function that given a parameter index and the list
-    ///   of input parameter values returns the string expression to use for the
-    ///   parameter output. Returning `None` will abort the encoding.
+    /// - `output_params`: A function that computes the output parameter
+    ///   expressions from the list of input parameters. If the number of parameters
+    ///   does not match the expected number, the encoding will fail.
     pub fn emit_transparent_node(
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-        mut output_param: impl FnMut(usize, &[String]) -> Option<String>,
+        output_params: impl FnOnce(OutputParamArgs) -> Vec<String>,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
-        // Now we can gather all inputs and assign them to the node outputs transparently.
-        //
-        // Once we call `get_input_values`, the wires get marked as explored so if we find
-        // in the rest of the function that we cannot emit the node, we will not be able to
-        // revert the state of the tracker and must return an error instead.
         let input_values = self.get_input_values(node, circ)?;
-        let mut qubits = input_values.qubits.into_iter();
-        let mut bits = input_values.bits.into_iter();
+        let output_counts = self.node_output_values(node, circ)?;
+        let total_out_count: RegisterCount = output_counts.iter().map(|(_, c)| *c).sum();
 
-        let params: Vec<String> = input_values
+        // Compute all the output parameters at once
+        let input_params: Vec<String> = input_values
             .params
             .into_iter()
             .map(|p| self.values.param_expression(p).to_owned())
             .collect_vec();
+        let out_params = output_params(OutputParamArgs {
+            expected_count: total_out_count.params,
+            input_params: &input_params,
+        });
 
-        let op = circ.hugr().get_optype(node);
-        let signature = op.dataflow_signature();
-        let static_output = op.static_output_port();
-        let other_output = op.other_output_port();
-        for out_port in circ.hugr().node_outputs(node) {
-            let ty = if Some(out_port) == other_output {
-                continue;
-            } else if Some(out_port) == static_output {
-                let EdgeKind::Const(ty) = op.static_output().unwrap() else {
-                    return Err(Tk1ConvertError::custom(format!(
-                        "Cannot emit a static output for a {}.",
-                        op.name()
-                    )));
-                };
-                ty
-            } else {
-                let Some(ty) = signature
-                    .as_ref()
-                    .and_then(|s| s.out_port_type(out_port).cloned())
-                else {
-                    return Err(Tk1ConvertError::custom(
-                        "Cannot emit a transparent node without a dataflow signature.",
-                    ));
-                };
-                ty
-            };
+        // Check that we got the expected number of outputs.
+        if input_values.qubits.len() != total_out_count.qubits {
+            return Err(Tk1ConvertError::custom(format!(
+                "Mismatched number of input and output qubits while trying to emit a transparent operation for {}. We have {} inputs but {} outputs.",
+                circ.hugr().get_optype(node).name(),
+                input_values.qubits.len(),
+                total_out_count.qubits,
+            )));
+        }
+        if input_values.bits.len() != total_out_count.bits {
+            return Err(Tk1ConvertError::custom(format!(
+                "Mismatched number of input and output bits while trying to emit a transparent operation for {}. We have {} inputs but {} outputs.",
+                circ.hugr().get_optype(node).name(),
+                input_values.bits.len(),
+                total_out_count.bits,
+            )));
+        }
+        if out_params.len() != total_out_count.params {
+            return Err(Tk1ConvertError::custom(format!(
+                "Not enough parameters in the input values for a {}. Expected {} but got {}.",
+                circ.hugr().get_optype(node).name(),
+                total_out_count.params,
+                out_params.len()
+            )));
+        }
 
-            let wire = hugr::Wire::new(node, out_port);
-            let Some(count) = self.config().type_to_pytket(&ty)? else {
-                return Err(Tk1ConvertError::custom(format!(
-                    "Found an unsupported type while encoding a {}.",
-                    op.name()
-                )));
-            };
+        // Now we can gather all inputs and assign them to the node outputs transparently.
+        let mut qubits = input_values.qubits.into_iter();
+        let mut bits = input_values.bits.into_iter();
+        let mut params = out_params.into_iter();
+        for (wire, count) in output_counts {
             let mut values: Vec<TrackedValue> = Vec::with_capacity(count.total());
-            for _ in 0..count.qubits {
-                let Some(qb) = qubits.next() else {
-                    return Err(Tk1ConvertError::custom(format!(
-                        "Not enough qubits in the input values for a {}.",
-                        op.name()
-                    )));
-                };
-                values.push(qb.into());
-            }
-            for _ in 0..count.bits {
-                let Some(bit) = bits.next() else {
-                    return Err(Tk1ConvertError::custom(format!(
-                        "Not enough bits in the input values for a {}.",
-                        op.name()
-                    )));
-                };
-                values.push(bit.into());
-            }
-            for i in 0..count.params {
-                let Some(out) = output_param(i, &params) else {
-                    return Err(Tk1ConvertError::custom(format!(
-                        "Cannot encode output parameter #{i} for a {}.",
-                        op.name()
-                    )));
-                };
-                let p = self.values.new_param(out);
-                values.push(p.into());
+            values.extend(qubits.by_ref().take(count.qubits).map(TrackedValue::Qubit));
+            values.extend(bits.by_ref().take(count.bits).map(TrackedValue::Bit));
+            for p in params.by_ref().take(count.params) {
+                values.push(self.values.new_param(p).into());
             }
             self.values.register_wire(wire, values, circ)?;
         }
@@ -564,7 +538,11 @@ impl<H: HugrView> Tk1EncoderContext<H> {
                 circ,
                 &mut input_qubits,
                 &[],
-                |i, _| Some(format!("{subcircuit_id}_out{i}")),
+                |p| {
+                    (0..p.expected_count)
+                        .map(|i| format!("{subcircuit_id}_out{i}"))
+                        .collect_vec()
+                },
                 |_| true,
             )?;
             op_values.append(new_outputs);
@@ -659,7 +637,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
                 }
             }
             OpType::LoadConstant(_) => {
-                self.emit_transparent_node(node, circ, |i, ps| Some(ps[i].clone()))?;
+                self.emit_transparent_node(node, circ, |ps| ps.input_params.to_owned())?;
                 return Ok(true);
             }
             OpType::Const(op) => {
@@ -688,86 +666,130 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// - `qubit_values`: An iterator of existing qubit ids to re-use for the output.
     ///   Once all qubits have been used, new qubit ids will be generated.
     /// - `input_params`: The list of input parameter expressions.
-    /// - `output_param`: A function that takes the index of the output parameter
-    ///   and the list of input parameter expressions, and returns the string
-    ///   expression to use for the output parameter.
+    /// - `output_params`: A function that computes the output parameter
+    ///   expressions from the list of input parameters. If the number of parameters
+    ///   does not match the expected number, the encoding will fail.
     /// - `wire_filter`: A function that takes a wire and returns true if the wire
     ///   at the output of the `node` should be registered.
     fn register_node_outputs(
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-        qubit_values: &mut impl Iterator<Item = TrackedQubit>,
+        qubits: &mut impl Iterator<Item = TrackedQubit>,
         input_params: &[String],
-        mut output_param: impl FnMut(usize, &[String]) -> Option<String>,
+        output_params: impl FnOnce(OutputParamArgs) -> Vec<String>,
         wire_filter: impl Fn(Wire<H::Node>) -> bool,
     ) -> Result<TrackedValues, Tk1ConvertError<H::Node>> {
+        let output_counts = self.node_output_values(node, circ)?;
+        let total_out_count: RegisterCount = output_counts.iter().map(|(_, c)| *c).sum();
+
+        // Compute all the output parameters at once
+        let out_params = output_params(OutputParamArgs {
+            expected_count: total_out_count.params,
+            input_params,
+        });
+
+        // Check that we got the expected number of outputs.
+        if out_params.len() != total_out_count.params {
+            return Err(Tk1ConvertError::custom(format!(
+                "Not enough parameters in the input values for a {}. Expected {} but got {}.",
+                circ.hugr().get_optype(node).name(),
+                total_out_count.params,
+                out_params.len()
+            )));
+        }
+
         // Update the values in the node's outputs.
         //
-        // We preserve the order of linear values in the input
-        let optype = circ.hugr().get_optype(node);
-        let sig = optype.dataflow_signature();
-        let other_output_port = optype.other_output_port();
+        // We preserve the order of linear values in thpe input
+        let mut params = out_params.into_iter();
         let mut new_outputs = TrackedValues::default();
-        for output in circ.hugr().node_outputs(node) {
-            // Ignore order edges.
-            if Some(output) == other_output_port {
-                continue;
-            }
-            let type_counts: RegisterCount =
-                match sig.as_ref().and_then(|s| s.out_port_type(output)) {
-                    Some(ty) => self.config.type_to_pytket(ty)?,
-                    None => {
-                        // It must be a static type.
-                        debug_assert_eq!(
-                            Some(output),
-                            optype.static_output_port(),
-                            "Failed to get output type of port {output} in op {}",
-                            optype.name()
-                        );
-                        match optype.static_port_kind(Direction::Outgoing).unwrap() {
-                            EdgeKind::Const(ty) => self.config.type_to_pytket(&ty)?,
-                            // Unsupported wire type, no pytket types to track.
-                            _ => None,
-                        }
-                    }
-                }
-                .unwrap_or_default();
-
-            // Collect the values associated with the output wire.
-            let out_wire = Wire::new(node, output);
-            if !wire_filter(out_wire) {
+        for (wire, count) in output_counts {
+            if !wire_filter(wire) {
                 continue;
             }
 
-            let mut out_wire_values = Vec::with_capacity(type_counts.total());
-            for _ in 0..type_counts.qubits {
-                let qb = qubit_values.next().unwrap_or_else(|| {
-                    // If we already have a matching output for all input qubits,
-                    // generate a fresh ID.
-                    let qb = self.values.new_qubit();
-                    new_outputs.qubits.push(qb);
-                    qb
-                });
+            let mut out_wire_values = Vec::with_capacity(count.total());
+            out_wire_values.extend(qubits.by_ref().take(count.qubits).map(TrackedValue::Qubit));
+            for _ in out_wire_values.len()..count.qubits {
+                // If we already assigned all input qubit ids, get a fresh one.
+                let qb = self.values.new_qubit();
+                new_outputs.qubits.push(qb);
                 out_wire_values.push(TrackedValue::Qubit(qb));
             }
-            for _ in 0..type_counts.bits {
+            for _ in 0..count.bits {
                 let b = self.values.new_bit();
                 new_outputs.bits.push(b);
                 out_wire_values.push(TrackedValue::Bit(b));
             }
-            for _ in 0..type_counts.params {
-                let out_param_expression =
-                    output_param(new_outputs.params.len(), input_params).unwrap_or("0".into());
-                let p = self.values.new_param(out_param_expression);
+            for expr in params.by_ref().take(count.params) {
+                let p = self.values.new_param(expr);
                 new_outputs.params.push(p);
-                out_wire_values.push(TrackedValue::Param(p));
+                out_wire_values.push(p.into());
             }
-            self.values.register_wire(out_wire, out_wire_values, circ)?;
+            self.values.register_wire(wire, out_wire_values, circ)?;
         }
 
         Ok(new_outputs)
     }
+
+    /// Return the output wires of a node that have an associated pytket [`RegisterCount`].
+    #[allow(clippy::type_complexity)]
+    fn node_output_values(
+        &self,
+        node: H::Node,
+        circ: &Circuit<H>,
+    ) -> Result<Vec<(Wire<H::Node>, RegisterCount)>, Tk1ConvertError<H::Node>> {
+        let op = circ.hugr().get_optype(node);
+        let signature = op.dataflow_signature();
+        let static_output = op.static_output_port();
+        let other_output = op.other_output_port();
+        let mut wire_counts = Vec::with_capacity(circ.hugr().num_outputs(node));
+        for out_port in circ.hugr().node_outputs(node) {
+            let ty = if Some(out_port) == other_output {
+                // Ignore order edges
+                continue;
+            } else if Some(out_port) == static_output {
+                let EdgeKind::Const(ty) = op.static_output().unwrap() else {
+                    return Err(Tk1ConvertError::custom(format!(
+                        "Cannot emit a static output for a {}.",
+                        op.name()
+                    )));
+                };
+                ty
+            } else {
+                let Some(ty) = signature
+                    .as_ref()
+                    .and_then(|s| s.out_port_type(out_port).cloned())
+                else {
+                    return Err(Tk1ConvertError::custom(
+                        "Cannot emit a transparent node without a dataflow signature.",
+                    ));
+                };
+                ty
+            };
+
+            let wire = hugr::Wire::new(node, out_port);
+            let Some(count) = self.config().type_to_pytket(&ty)? else {
+                return Err(Tk1ConvertError::custom(format!(
+                    "Found an unsupported type while encoding a {}.",
+                    op.name()
+                )));
+            };
+            wire_counts.push((wire, count));
+        }
+        Ok(wire_counts)
+    }
+}
+
+/// Input passed to the output parameter computation methods in the emitting
+/// functions of [`Tk1EncoderContext`].
+#[derive(Clone, Copy, Debug)]
+pub struct OutputParamArgs<'a> {
+    /// The expected number of output parameters.
+    pub expected_count: usize,
+    /// The list of input parameter expressions.
+    pub input_params: &'a [String],
 }
 
 /// Initialize a tket1 [Operation](circuit_json::Operation) to pass to

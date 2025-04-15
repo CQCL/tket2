@@ -85,7 +85,7 @@ impl PreludeEmitter {
         };
 
         // Now we can gather all inputs and assign them to the node outputs transparently.
-        encoder.emit_transparent_node(node, circ, |i, ps| ps.get(i).cloned())?;
+        encoder.emit_transparent_node(node, circ, |ps| ps.input_params.to_owned())?;
 
         Ok(true)
     }

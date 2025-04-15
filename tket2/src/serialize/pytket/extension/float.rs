@@ -45,8 +45,11 @@ impl<H: HugrView> PytketEmitter<H> for FloatEmitter {
             | FloatOps::fmax
             | FloatOps::fmin
             | FloatOps::fabs => {
-                encoder.emit_transparent_node(node, circ, |_, ps| {
-                    FloatEmitter::encode_rotation_op(&rot_op, ps)
+                encoder.emit_transparent_node(node, circ, |ps| {
+                    match FloatEmitter::encode_rotation_op(&rot_op, ps.input_params) {
+                        Some(s) => vec![s],
+                        None => Vec::new(),
+                    }
                 })?;
                 Ok(true)
             }

@@ -104,7 +104,7 @@ impl Tk2Emitter {
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
     ) -> Result<bool, Tk1ConvertError<H::Node>> {
-        encoder.emit_transparent_node(node, circ, |_, _| Some(sympy_op.expr.clone()))?;
+        encoder.emit_transparent_node(node, circ, |_| vec![sympy_op.expr.clone()])?;
         Ok(true)
     }
 }
