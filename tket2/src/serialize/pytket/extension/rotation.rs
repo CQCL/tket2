@@ -1,6 +1,6 @@
 //! Encoder and decoder for rotation operations.
 
-use super::Tk1Encoder;
+use super::PytketEmitter;
 use crate::extension::rotation::{
     ConstRotation, RotationOp, ROTATION_EXTENSION_ID, ROTATION_TYPE_ID,
 };
@@ -15,9 +15,9 @@ use hugr::HugrView;
 
 /// Encoder for [prelude](hugr::extension::prelude) operations.
 #[derive(Debug, Clone, Default)]
-pub struct RotationEncoder;
+pub struct RotationEmitter;
 
-impl<H: HugrView> Tk1Encoder<H> for RotationEncoder {
+impl<H: HugrView> PytketEmitter<H> for RotationEmitter {
     fn extensions(&self) -> Option<Vec<ExtensionId>> {
         Some(vec![ROTATION_EXTENSION_ID])
     }
@@ -44,7 +44,7 @@ impl<H: HugrView> Tk1Encoder<H> for RotationEncoder {
             }
             _ => {
                 encoder.emit_transparent_node(node, circ, |_, ps| {
-                    RotationEncoder::encode_rotation_op(&rot_op, ps)
+                    RotationEmitter::encode_rotation_op(&rot_op, ps)
                 })?;
                 Ok(true)
             }
@@ -78,7 +78,7 @@ impl<H: HugrView> Tk1Encoder<H> for RotationEncoder {
     }
 }
 
-impl RotationEncoder {
+impl RotationEmitter {
     /// Encode a rotation operation into a pytket param expression.
     fn encode_rotation_op(op: &RotationOp, inputs: &[String]) -> Option<String> {
         let s = match op {

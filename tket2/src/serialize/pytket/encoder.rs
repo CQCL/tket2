@@ -55,12 +55,12 @@ pub struct Tk1EncoderContext<H: HugrView> {
     unsupported: UnsupportedTracker<H::Node>,
     /// Configuration for the encoding.
     ///
-    /// Contains custom operation/type encoders.
+    /// Contains custom operation/type/const emitters.
     config: Arc<Tk1EncoderConfig<H>>,
 }
 
 impl<H: HugrView> Tk1EncoderContext<H> {
-    /// Create a new [`JsonEncoder`] from a [`Circuit`].
+    /// Create a new [`Tk1EncoderContext`] from a [`Circuit`].
     pub(super) fn new(
         circ: &Circuit<H>,
         config: Tk1EncoderConfig<H>,
@@ -117,7 +117,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             portgraph::algorithms::toposort(region, initials, portgraph::Direction::Outgoing);
         let io_nodes = circ.io_nodes();
         // TODO: Use weighted topological sort to try and explore unsupported
-        // ops first (that is, ops with no available encoder in `self.config`),
+        // ops first (that is, ops with no available emitter in `self.config`),
         // to ensure we group them as much as possible.
         for pg_node in topo {
             let node = hugr.get_node(pg_node);
@@ -771,7 +771,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
 }
 
 /// Initialize a tket1 [Operation](circuit_json::Operation) to pass to
-/// [`Tk1Encoder::emit_command`].
+/// [`Tk1EncoderContext::emit_command`].
 ///
 /// ## Arguments
 /// - `tk1_optype`: The operation type to use.

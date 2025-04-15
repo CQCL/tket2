@@ -11,7 +11,7 @@ use hugr::IncomingPort;
 use tk2op::NativeOp;
 use tket_json_rs::circuit_json;
 
-use super::extension::OpaqueTk1Op;
+use super::super::extension::OpaqueTk1Op;
 
 pub mod tk2op;
 

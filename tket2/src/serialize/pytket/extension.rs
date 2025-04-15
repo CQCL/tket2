@@ -1,6 +1,6 @@
 //! Extension encoder/decoders for the tket2 <-> `pytket` conversion.
 //!
-//! To add a new extension encoder, implement the [`Tk1Encoder`] trait and add
+//! To add a new extension encoder, implement the [`PytketEmitter`] trait and add
 //! it to the [`Tk1EncoderConfig`](crate::serialize::pytket::Tk1EncoderConfig)
 //! used for decoding.
 //!
@@ -15,12 +15,12 @@ mod rotation;
 mod tk1;
 mod tk2;
 
-pub use float::FloatEncoder;
+pub use float::FloatEmitter;
 use hugr::ops::constant::OpaqueValue;
-pub use prelude::PreludeEncoder;
-pub use rotation::RotationEncoder;
-pub use tk1::Tk1OpEncoder;
-pub use tk2::Tk2OpEncoder;
+pub use prelude::PreludeEmitter;
+pub use rotation::RotationEmitter;
+pub use tk1::Tk1Emitter;
+pub use tk2::Tk2Emitter;
 
 pub(crate) use tk1::OpaqueTk1Op;
 
@@ -41,10 +41,10 @@ use hugr::HugrView;
 /// constant in the HUGR being encoded, the configuration will call each of
 /// the encoders declaring support for the specific extension sequentially until
 /// one of them indicates a successful conversion.
-pub trait Tk1Encoder<H: HugrView> {
+pub trait PytketEmitter<H: HugrView> {
     /// The name of the extension this encoder/decoder is for.
     ///
-    /// [`Tk1Encoder::op_to_pytket`] and [`Tk1Encoder::type_to_pytket`] will
+    /// [`PytketEmitter::op_to_pytket`] and [`PytketEmitter::type_to_pytket`] will
     /// only be called for operations/types of these extensions.
     ///
     /// If the function returns `None`, the encoder will be called for all

@@ -5,7 +5,7 @@ use crate::extension::{TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME};
 use crate::serialize::pytket::{Tk1ConvertError, Tk1EncoderContext};
 use crate::Circuit;
 
-use super::Tk1Encoder;
+use super::PytketEmitter;
 use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::extension::ExtensionId;
 use hugr::ops::{ExtensionOp, NamedOp};
@@ -19,9 +19,9 @@ use tket_json_rs::circuit_json;
 /// native HUGR representation and were instead serialized as opaque black-box
 /// operations.
 #[derive(Debug, Clone, Default)]
-pub struct Tk1OpEncoder;
+pub struct Tk1Emitter;
 
-impl<H: HugrView> Tk1Encoder<H> for Tk1OpEncoder {
+impl<H: HugrView> PytketEmitter<H> for Tk1Emitter {
     fn extensions(&self) -> Option<Vec<ExtensionId>> {
         Some(vec![TKET1_EXTENSION_ID])
     }

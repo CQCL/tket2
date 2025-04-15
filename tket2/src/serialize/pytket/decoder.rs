@@ -1,5 +1,8 @@
 //! Intermediate structure for decoding [`SerialCircuit`]s into [`Hugr`]s.
 
+mod op;
+mod param;
+
 use std::collections::{HashMap, HashSet};
 
 use hugr::builder::{Container, Dataflow, DataflowHugr, FunctionBuilder};
@@ -19,8 +22,6 @@ use tket_json_rs::circuit_json;
 use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::register;
 
-use super::op::Tk1Op;
-use super::param::decode::{parse_pytket_param, PytketParam};
 use super::{
     OpConvertError, RegisterHash, Tk1ConvertError, METADATA_B_OUTPUT_REGISTERS,
     METADATA_B_REGISTERS, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS,
@@ -30,6 +31,8 @@ use crate::extension::rotation::{rotation_type, RotationOp};
 use crate::extension::TKET1_EXTENSION_ID;
 use crate::serialize::pytket::METADATA_INPUT_PARAMETERS;
 use crate::symbolic_constant_op;
+use op::Tk1Op;
+use param::{parse_pytket_param, PytketParam};
 
 /// The state of an in-progress [`FunctionBuilder`] being built from a [`SerialCircuit`].
 ///

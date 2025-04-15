@@ -173,7 +173,7 @@ struct TrackedWire {
 /// The number of pytket qubits, bits, and sympy parameters corresponding to a
 /// HUGR type.
 ///
-/// Used as return value for [`Tk1Encoder::type_to_pytket`](`super::Tk1Encoder::type_to_pytket`).
+/// Used as return value for [`PytketEmitter::type_to_pytket`](`super::PytketEmitter::type_to_pytket`).
 #[derive(
     Clone,
     Copy,

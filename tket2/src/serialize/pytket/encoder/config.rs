@@ -1,6 +1,6 @@
 //! Configuration for converting [`Circuit`]s into [`SerialCircuit`]
 //!
-//! A configuration struct contains a list of custom encoders that define translations
+//! A configuration struct contains a list of custom emitters that define translations
 //! of HUGR operations and types into pytket primitives.
 
 use std::collections::{BTreeSet, HashMap, VecDeque};
@@ -10,9 +10,9 @@ use hugr::ops::{ExtensionOp, Value};
 use hugr::types::{SumType, Type, TypeEnum};
 
 use crate::serialize::pytket::extension::{
-    FloatEncoder, PreludeEncoder, RotationEncoder, Tk1OpEncoder, Tk2OpEncoder,
+    FloatEmitter, PreludeEmitter, RotationEmitter, Tk1Emitter, Tk2Emitter,
 };
-use crate::serialize::pytket::{Tk1ConvertError, Tk1Encoder};
+use crate::serialize::pytket::{PytketEmitter, Tk1ConvertError};
 use crate::Circuit;
 
 use super::value_tracker::RegisterCount;
@@ -23,62 +23,61 @@ use itertools::Itertools;
 
 /// Default encoder configuration for [`Circuit`]s.
 ///
-/// Contains encoders for std and tket2 operations.
+/// Contains emitters for std and tket2 operations.
 pub fn default_encoder_config<H: HugrView>() -> Tk1EncoderConfig<H> {
-    // TODO: Add std & tket2 encoders
     let mut config = Tk1EncoderConfig::new();
-    config.add_encoder(PreludeEncoder);
-    config.add_encoder(FloatEncoder);
-    config.add_encoder(RotationEncoder);
-    config.add_encoder(Tk1OpEncoder);
-    config.add_encoder(Tk2OpEncoder);
+    config.add_emitter(PreludeEmitter);
+    config.add_emitter(FloatEmitter);
+    config.add_emitter(RotationEmitter);
+    config.add_emitter(Tk1Emitter);
+    config.add_emitter(Tk2Emitter);
     config
 }
 
 /// Configuration for converting [`Circuit`] into [`SerialCircuit`].
 ///
-/// Contains custom encoders that define translations for HUGR operations and types
-/// into pytket primitives.
+/// Contains custom emitters that define translations for HUGR operations,
+/// types, and consts into pytket primitives.
 #[derive(derive_more::Debug)]
 #[debug(bounds(H: HugrView))]
 pub struct Tk1EncoderConfig<H: HugrView> {
-    /// Operation encoders
+    /// Operation emitters
     #[debug(skip)]
-    pub(super) encoders: Vec<Box<dyn Tk1Encoder<H>>>,
-    /// Pre-computed map from extension ids to corresponding encoders in
-    /// `encoders`, identified by their index.
-    #[debug("{:?}", extension_encoders.keys().collect_vec())]
-    extension_encoders: HashMap<ExtensionId, Vec<usize>>,
-    /// Extensions that request to be called for all operations.
-    no_extension_encoders: Vec<usize>,
+    pub(super) enmitters: Vec<Box<dyn PytketEmitter<H>>>,
+    /// Pre-computed map from extension ids to corresponding emitters in
+    /// `emitters`, identified by their index.
+    #[debug("{:?}", extension_emitters.keys().collect_vec())]
+    extension_emitters: HashMap<ExtensionId, Vec<usize>>,
+    /// Emitters that request to be called for all operations.
+    no_extension_emitters: Vec<usize>,
 }
 
 impl<H: HugrView> Tk1EncoderConfig<H> {
     /// Create a new [`Tk1EncoderConfig`] with no encoders.
     pub fn new() -> Self {
         Self {
-            encoders: vec![],
-            extension_encoders: HashMap::new(),
-            no_extension_encoders: vec![],
+            enmitters: vec![],
+            extension_emitters: HashMap::new(),
+            no_extension_emitters: vec![],
         }
     }
 
     /// Add an encoder to the configuration.
-    pub fn add_encoder(&mut self, encoder: impl Tk1Encoder<H> + 'static) {
-        let idx = self.encoders.len();
+    pub fn add_emitter(&mut self, encoder: impl PytketEmitter<H> + 'static) {
+        let idx = self.enmitters.len();
 
         match encoder.extensions() {
             Some(extensions) => {
                 for ext in extensions {
-                    self.extension_encoders.entry(ext).or_default().push(idx);
+                    self.extension_emitters.entry(ext).or_default().push(idx);
                 }
             }
             // If the encoder does not specify an extension, it will be called
             // for all operations.
-            None => self.no_extension_encoders.push(idx),
+            None => self.no_extension_emitters.push(idx),
         }
 
-        self.encoders.push(Box::new(encoder));
+        self.enmitters.push(Box::new(encoder));
     }
 
     /// List the extensions supported by the encoders.
@@ -88,7 +87,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
     ///
     /// Use [`Tk1EncoderConfig::add_encoder`] to extend this list.
     pub fn supported_extensions(&self) -> impl Iterator<Item = &ExtensionId> {
-        self.extension_encoders.keys()
+        self.extension_emitters.keys()
     }
 
     /// Encode a HUGR operation using the registered custom encoders.
@@ -103,7 +102,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
     ) -> Result<bool, Tk1ConvertError<H::Node>> {
         let mut result = false;
         let extension = op.def().extension_id();
-        for enc in self.encoders_for_extension(extension) {
+        for enc in self.emitters_for_extension(extension) {
             if enc.op_to_pytket(node, op, circ, encoder)? {
                 result = true;
                 break;
@@ -146,7 +145,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
             }
             TypeEnum::Extension(custom) => {
                 let type_ext = custom.extension();
-                for encoder in self.encoders_for_extension(type_ext) {
+                for encoder in self.emitters_for_extension(type_ext) {
                     if let Some(count) = encoder.type_to_pytket(custom)? {
                         return Ok(Some(count));
                     }
@@ -185,7 +184,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
                 Value::Extension { e: opaque } => {
                     let type_exts = opaque.extension_reqs();
                     let mut encoded = false;
-                    for e in self.encoders_for_extensions(&type_exts) {
+                    for e in self.emitters_for_extensions(&type_exts) {
                         if let Some(vs) = e.const_to_pytket(opaque, encoder)? {
                             values.append(vs);
                             encoded = true;
@@ -202,40 +201,40 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
         Ok(Some(values))
     }
 
-    /// Lists the encoders that can handle a given extension.
-    fn encoders_for_extension(
+    /// Lists the emitters that can handle a given extension.
+    fn emitters_for_extension(
         &self,
         ext: &ExtensionId,
-    ) -> impl Iterator<Item = &Box<dyn Tk1Encoder<H>>> {
-        self.extension_encoders
+    ) -> impl Iterator<Item = &Box<dyn PytketEmitter<H>>> {
+        self.extension_emitters
             .get(ext)
             .into_iter()
             .flatten()
-            .chain(self.no_extension_encoders.iter())
-            .map(move |idx| &self.encoders[*idx])
+            .chain(self.no_extension_emitters.iter())
+            .map(move |idx| &self.enmitters[*idx])
     }
 
-    /// Lists the encoders that can handle a given set extensions.
-    fn encoders_for_extensions(
+    /// Lists the emitters that can handle a given set extensions.
+    fn emitters_for_extensions(
         &self,
         exts: &ExtensionSet,
-    ) -> impl Iterator<Item = &Box<dyn Tk1Encoder<H>>> {
-        let encoder_ids: BTreeSet<usize> = exts
+    ) -> impl Iterator<Item = &Box<dyn PytketEmitter<H>>> {
+        let emitter_ids: BTreeSet<usize> = exts
             .iter()
-            .flat_map(|ext| self.extension_encoders.get(ext).into_iter().flatten())
-            .chain(self.no_extension_encoders.iter())
+            .flat_map(|ext| self.extension_emitters.get(ext).into_iter().flatten())
+            .chain(self.no_extension_emitters.iter())
             .copied()
             .collect();
-        encoder_ids.into_iter().map(move |idx| &self.encoders[idx])
+        emitter_ids.into_iter().map(move |idx| &self.enmitters[idx])
     }
 }
 
 impl<H: HugrView> Default for Tk1EncoderConfig<H> {
     fn default() -> Self {
         Self {
-            encoders: Default::default(),
-            extension_encoders: Default::default(),
-            no_extension_encoders: Default::default(),
+            enmitters: Default::default(),
+            extension_emitters: Default::default(),
+            no_extension_emitters: Default::default(),
         }
     }
 }

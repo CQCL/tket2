@@ -1,6 +1,6 @@
 //! Encoder and decoder for floating point operations.
 
-use super::Tk1Encoder;
+use super::PytketEmitter;
 use crate::serialize::pytket::encoder::{RegisterCount, Tk1EncoderContext, TrackedValues};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
@@ -14,9 +14,9 @@ use hugr::HugrView;
 
 /// Encoder for [prelude](hugr::extension::prelude) operations.
 #[derive(Debug, Clone, Default)]
-pub struct FloatEncoder;
+pub struct FloatEmitter;
 
-impl<H: HugrView> Tk1Encoder<H> for FloatEncoder {
+impl<H: HugrView> PytketEmitter<H> for FloatEmitter {
     fn extensions(&self) -> Option<Vec<ExtensionId>> {
         Some(vec![float_ops::EXTENSION_ID, float_types::EXTENSION_ID])
     }
@@ -46,7 +46,7 @@ impl<H: HugrView> Tk1Encoder<H> for FloatEncoder {
             | FloatOps::fmin
             | FloatOps::fabs => {
                 encoder.emit_transparent_node(node, circ, |_, ps| {
-                    FloatEncoder::encode_rotation_op(&rot_op, ps)
+                    FloatEmitter::encode_rotation_op(&rot_op, ps)
                 })?;
                 Ok(true)
             }
@@ -81,7 +81,7 @@ impl<H: HugrView> Tk1Encoder<H> for FloatEncoder {
     }
 }
 
-impl FloatEncoder {
+impl FloatEmitter {
     /// Encode a rotation operation into a pytket param expression.
     fn encode_rotation_op(op: &FloatOps, inputs: &[String]) -> Option<String> {
         let s = match op {

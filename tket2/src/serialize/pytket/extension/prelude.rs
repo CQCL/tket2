@@ -1,6 +1,6 @@
 //! Encoder and decoder for tket2 operations with native pytket counterparts.
 
-use super::Tk1Encoder;
+use super::PytketEmitter;
 use crate::serialize::pytket::encoder::{RegisterCount, Tk1EncoderContext};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
@@ -13,9 +13,9 @@ use hugr::HugrView;
 
 /// Encoder for [prelude](hugr::extension::prelude) operations.
 #[derive(Debug, Clone, Default)]
-pub struct PreludeEncoder;
+pub struct PreludeEmitter;
 
-impl<H: HugrView> Tk1Encoder<H> for PreludeEncoder {
+impl<H: HugrView> PytketEmitter<H> for PreludeEmitter {
     fn extensions(&self) -> Option<Vec<ExtensionId>> {
         Some(vec![PRELUDE_ID])
     }
@@ -45,7 +45,7 @@ impl<H: HugrView> Tk1Encoder<H> for PreludeEncoder {
     }
 }
 
-impl PreludeEncoder {
+impl PreludeEmitter {
     /// Encode a prelude tuple operation.
     ///
     /// These just bundle/unbundle the values of the inputs/outputs. Since

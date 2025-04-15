@@ -1,6 +1,6 @@
 //! Encoder and decoder for tket2 operations with native pytket counterparts.
 
-use super::Tk1Encoder;
+use super::PytketEmitter;
 use crate::extension::sympy::SympyOp;
 use crate::extension::TKET2_EXTENSION_ID;
 use crate::serialize::pytket::encoder::Tk1EncoderContext;
@@ -14,9 +14,9 @@ use tket_json_rs::optype::OpType as Tk1OpType;
 
 /// Encoder for [Tk2Op] operations.
 #[derive(Debug, Clone, Default)]
-pub struct Tk2OpEncoder;
+pub struct Tk2Emitter;
 
-impl<H: HugrView> Tk1Encoder<H> for Tk2OpEncoder {
+impl<H: HugrView> PytketEmitter<H> for Tk2Emitter {
     fn extensions(&self) -> Option<Vec<ExtensionId>> {
         Some(vec![TKET2_EXTENSION_ID])
     }
@@ -38,7 +38,7 @@ impl<H: HugrView> Tk1Encoder<H> for Tk2OpEncoder {
     }
 }
 
-impl Tk2OpEncoder {
+impl Tk2Emitter {
     /// Encode a tket2 operation into a pytket operation.
     fn encode_tk2_op<H: HugrView>(
         &self,

@@ -3,11 +3,9 @@
 mod decoder;
 mod encoder;
 pub mod extension;
-mod op;
-mod param;
 
 pub use encoder::{default_encoder_config, Tk1EncoderConfig, Tk1EncoderContext};
-pub use extension::Tk1Encoder;
+pub use extension::PytketEmitter;
 
 use hugr::core::HugrNode;
 use hugr::types::Type;
