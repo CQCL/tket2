@@ -265,34 +265,6 @@
       },
       "binary": false
     },
-    "ZZMax": {
-      "extension": "tket2.qsystem",
-      "name": "ZZMax",
-      "description": "Maximally entangling ZZ gate.",
-      "signature": {
-        "params": [],
-        "body": {
-          "input": [
-            {
-              "t": "Q"
-            },
-            {
-              "t": "Q"
-            }
-          ],
-          "output": [
-            {
-              "t": "Q"
-            },
-            {
-              "t": "Q"
-            }
-          ],
-          "runtime_reqs": []
-        }
-      },
-      "binary": false
-    },
     "ZZPhase": {
       "extension": "tket2.qsystem",
       "name": "ZZPhase",

@@ -87,7 +87,6 @@ pub enum QSystemOp {
     LazyMeasureReset,
     Rz,
     PhasedX,
-    ZZMax,
     ZZPhase,
     TryQAlloc,
     QFree,
@@ -104,7 +103,6 @@ impl MakeOpDef for QSystemOp {
             LazyMeasure => Signature::new(qb_t(), future_type(bool_t())),
             LazyMeasureReset => Signature::new(qb_t(), vec![qb_t(), future_type(bool_t())]),
             Reset => Signature::new(one_qb_row.clone(), one_qb_row),
-            ZZMax => Signature::new(two_qb_row.clone(), two_qb_row),
             ZZPhase => Signature::new(vec![qb_t(), qb_t(), float64_type()], two_qb_row),
             Measure => Signature::new(one_qb_row, bool_t()),
             Rz => Signature::new(vec![qb_t(), float64_type()], one_qb_row),
@@ -134,7 +132,6 @@ impl MakeOpDef for QSystemOp {
             QSystemOp::LazyMeasure => "Lazily measure a qubit and lose it.",
             QSystemOp::Rz => "Rotate a qubit around the Z axis. Not physical.",
             QSystemOp::PhasedX => "PhasedX gate.",
-            QSystemOp::ZZMax => "Maximally entangling ZZ gate.",
             QSystemOp::ZZPhase => "ZZ gate with an angle.",
             QSystemOp::TryQAlloc => "Allocate a qubit in the Z |0> eigenstate.",
             QSystemOp::QFree => "Free a qubit (lose track of it).",
@@ -185,11 +182,10 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
         Ok(self.add_dataflow_op(QSystemOp::Reset, [qb])?.out_wire(0))
     }
 
-    /// Add a "tket2.qsystem.ZZMax" op.
-    fn add_zz_max(&mut self, qb1: Wire, qb2: Wire) -> Result<[Wire; 2], BuildError> {
-        Ok(self
-            .add_dataflow_op(QSystemOp::ZZMax, [qb1, qb2])?
-            .outputs_arr())
+    /// Add a maximally entangling "tket2.qsystem.ZZPhase(pi/2)" op.
+    fn build_zz_max(&mut self, qb1: Wire, qb2: Wire) -> Result<[Wire; 2], BuildError> {
+        let pi_2 = pi_mul_f64(self, 0.5);
+        self.add_zz_phase(qb1, qb2, pi_2)
     }
 
     /// Add a "tket2.qsystem.ZZPhase" op.
@@ -293,7 +289,7 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
         let pi_minus_2 = pi_mul_f64(self, -0.5);
 
         let t = self.add_phased_x(t, pi_minus_2, pi_2)?;
-        let [c, t] = self.add_zz_max(c, t)?;
+        let [c, t] = self.build_zz_max(c, t)?;
         let c = self.add_rz(c, pi_minus_2)?;
         let t = self.add_phased_x(t, pi_2, pi)?;
         let t = self.add_rz(t, pi_minus_2)?;
@@ -308,7 +304,7 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
         let zero = pi_mul_f64(self, 0.0);
 
         let a = self.add_phased_x(a, pi_minus_2, zero)?;
-        let [a, b] = self.add_zz_max(a, b)?;
+        let [a, b] = self.build_zz_max(a, b)?;
         let a = self.add_rz(a, pi_2)?;
         let b = self.add_phased_x(b, pi_2, pi_2)?;
         let b = self.add_rz(b, pi_minus_2)?;
@@ -322,7 +318,7 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
         let pi_minus_2 = pi_mul_f64(self, -0.5);
 
         let a = self.add_phased_x(a, pi, pi)?;
-        let [a, b] = self.add_zz_max(a, b)?;
+        let [a, b] = self.build_zz_max(a, b)?;
         let a = self.add_phased_x(a, pi, pi_2)?;
         let b = self.add_rz(b, pi_2)?;
         let a = self.add_rz(a, pi_minus_2)?;
@@ -368,18 +364,18 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
         let zero = pi_mul_f64(self, 0.0);
 
         let c = self.add_phased_x(c, pi, pi)?;
-        let [b, c] = self.add_zz_max(b, c)?;
+        let [b, c] = self.build_zz_max(b, c)?;
         let c = self.add_phased_x(c, pi_4, pi_minus_2)?;
-        let [a, c] = self.add_zz_max(a, c)?;
+        let [a, c] = self.build_zz_max(a, c)?;
         let c = self.add_phased_x(c, pi_minus_4, zero)?;
-        let [b, c] = self.add_zz_max(b, c)?;
+        let [b, c] = self.build_zz_max(b, c)?;
         let b = self.add_phased_x(b, pi_minus_2, pi_4)?;
         let c = self.add_phased_x(c, pi_4, pi_2)?;
-        let [a, c] = self.add_zz_max(a, c)?;
-        let [a, b] = self.add_zz_max(a, b)?;
+        let [a, c] = self.build_zz_max(a, c)?;
+        let [a, b] = self.build_zz_max(a, b)?;
         let c = self.add_phased_x(c, pi_minus_3_4, zero)?;
         let b = self.add_phased_x(b, pi_4, pi_4)?;
-        let [a, b] = self.add_zz_max(a, b)?;
+        let [a, b] = self.build_zz_max(a, b)?;
         let a = self.add_rz(a, pi_4)?;
         let b = self.add_phased_x(b, pi_minus_2, pi_4)?;
         let b = self.add_rz(b, pi_4)?;
@@ -474,7 +470,7 @@ mod test {
             let q1 = func_builder.build_qalloc().unwrap();
             let q0 = func_builder.add_reset(q0).unwrap();
             let q1 = func_builder.add_phased_x(q1, angle, angle).unwrap();
-            let [q0, q1] = func_builder.add_zz_max(q0, q1).unwrap();
+            let [q0, q1] = func_builder.build_zz_max(q0, q1).unwrap();
             let [q0, q1] = func_builder.add_zz_phase(q0, q1, angle).unwrap();
             let q0 = func_builder.add_rz(q0, angle).unwrap();
             let [q0, _b] = func_builder.add_measure_reset(q0).unwrap();
