@@ -212,21 +212,21 @@ impl<PCG: PreludeCodegen> CodegenExtension for RotationCodegenExtension<PCG> {
 #[cfg(test)]
 mod test {
 
+    use extension::rotation::{rotation_type, RotationOpBuilder as _};
+    use hugr::builder::{Dataflow, DataflowSubContainer as _, SubContainer};
+    use hugr::extension::prelude::UnwrapBuilder;
+    use hugr::extension::ExtensionSet;
     use hugr::llvm::check_emission;
     use hugr::llvm::emit::test::SimpleHugrConfig;
     use hugr::llvm::extension::DefaultPreludeCodegen;
     use hugr::llvm::test::{exec_ctx, llvm_ctx, TestContext};
     use hugr::llvm::types::HugrType;
+    use hugr::ops::constant::{CustomConst, TryHash};
+    use hugr::ops::OpName;
+    use hugr::std_extensions::arithmetic::float_types::{self, float64_type, ConstF64};
     use hugr::Node;
     use inkwell::values::BasicValueEnum;
     use rstest::rstest;
-    use tket2::extension::rotation::{rotation_type, RotationOpBuilder as _};
-    use tket2::hugr::builder::{Dataflow, DataflowSubContainer as _, SubContainer};
-    use tket2::hugr::extension::prelude::UnwrapBuilder;
-    use tket2::hugr::extension::ExtensionSet;
-    use tket2::hugr::ops::constant::{CustomConst, TryHash};
-    use tket2::hugr::ops::OpName;
-    use tket2::hugr::std_extensions::arithmetic::float_types::{self, float64_type, ConstF64};
 
     use super::*;
 
@@ -377,7 +377,7 @@ mod test {
         #[case] halfturns: f64,
         #[case] expected_halfturns: Option<f64>,
     ) {
-        use tket2::hugr::ops::Value;
+        use hugr::ops::Value;
 
         let hugr = SimpleHugrConfig::new()
             .with_outs(float64_type())
