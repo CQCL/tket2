@@ -1,20 +1,20 @@
-use hugr::llvm::inkwell;
+use hugr::extension::prelude::{option_type, ConstError};
 use hugr::llvm::emit::{emit_value, EmitFuncContext, EmitOpArgs};
 use hugr::llvm::extension::{DefaultPreludeCodegen, PreludeCodegen};
+use hugr::llvm::inkwell;
 use hugr::llvm::types::TypingSession;
 use hugr::llvm::{CodegenExtension, CodegenExtsBuilder};
-use hugr::Node;
-use hugr::extension::prelude::{option_type, ConstError};
 use hugr::ops::ExtensionOp;
 use hugr::types::TypeName;
 use hugr::HugrView;
+use hugr::Node;
 
+use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp, ROTATION_EXTENSION_ID};
 use anyhow::{anyhow, bail, Result};
 use inkwell::types::FloatType;
 use inkwell::values::{FloatValue, IntValue};
 use inkwell::FloatPredicate;
 use lazy_static::lazy_static;
-use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp, ROTATION_EXTENSION_ID};
 const ROTATION_TYPE_ID: TypeName = TypeName::new_inline("rotation");
 
 /// A codegen extension for the `tket2.rotation` extension.

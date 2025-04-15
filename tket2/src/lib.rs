@@ -58,7 +58,6 @@ pub mod portmatching;
 #[cfg(feature = "llvm")]
 pub mod llvm;
 
-
 mod utils;
 
 pub use circuit::{Circuit, CircuitError, CircuitMutError};
