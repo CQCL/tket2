@@ -228,6 +228,10 @@ jobs:
           # Nightly is required to count doctests coverage
           toolchain: 'nightly'
           components: llvm-tools-preview
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: ${{ env.LLVM_VERSION }}
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Run tests with coverage instrumentation
