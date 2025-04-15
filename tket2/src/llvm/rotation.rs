@@ -12,7 +12,7 @@ use hugr::HugrView;
 use hugr::Node;
 
 use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp, ROTATION_EXTENSION_ID};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use inkwell::types::FloatType;
 use inkwell::values::{FloatValue, IntValue};
 use inkwell::FloatPredicate;
