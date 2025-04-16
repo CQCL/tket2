@@ -26,6 +26,7 @@ use hugr::{
 use derive_more::Display;
 use lazy_static::lazy_static;
 use strum::{EnumIter, EnumString, IntoStaticStr};
+use tket2::extension::bool::{bool_type, BoolOp};
 
 use crate::extension::futures;
 
@@ -103,12 +104,12 @@ impl MakeOpDef for QSystemOp {
             LazyMeasureReset => Signature::new(qb_t(), vec![qb_t(), future_type(bool_t())]),
             Reset => Signature::new(one_qb_row.clone(), one_qb_row),
             ZZPhase => Signature::new(vec![qb_t(), qb_t(), float64_type()], two_qb_row),
-            Measure => Signature::new(one_qb_row, bool_t()),
+            Measure => Signature::new(one_qb_row, bool_type()),
             Rz => Signature::new(vec![qb_t(), float64_type()], one_qb_row),
             PhasedX => Signature::new(vec![qb_t(), float64_type(), float64_type()], one_qb_row),
             TryQAlloc => Signature::new(type_row![], Type::from(option_type(one_qb_row))),
             QFree => Signature::new(one_qb_row, type_row![]),
-            MeasureReset => Signature::new(one_qb_row.clone(), vec![qb_t(), bool_t()]),
+            MeasureReset => Signature::new(one_qb_row.clone(), vec![qb_t(), bool_type()]),
         }
         .into()
     }
@@ -385,8 +386,9 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
     /// Build a projective measurement with a conditional flip.
     fn build_measure_flip(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         let [qb, b] = self.add_measure_reset(qb)?;
+        let sum_b = self.add_dataflow_op(BoolOp::read, [b]).unwrap().out_wire(0);
         let mut conditional = self.conditional_builder(
-            ([type_row![], type_row![]], b),
+            ([type_row![], type_row![]], sum_b),
             [(qb_t(), qb)],
             vec![qb_t()].into(),
         )?;
@@ -403,7 +405,7 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
         case1.finish_with_outputs([qb])?;
 
         let [qb] = conditional.finish_sub_container()?.outputs_arr();
-        Ok([qb, b])
+        Ok([qb, sum_b])
     }
 
     /// Build a qalloc operation that panics on failure.
@@ -464,7 +466,7 @@ mod test {
         let hugr = {
             let mut func_builder = FunctionBuilder::new(
                 "all_ops",
-                Signature::new(vec![qb_t(), float64_type()], vec![bool_t()]),
+                Signature::new(vec![qb_t(), float64_type()], vec![bool_type()]),
             )
             .unwrap();
             let [q0, angle] = func_builder.input_wires_arr();

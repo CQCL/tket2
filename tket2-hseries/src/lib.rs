@@ -13,19 +13,17 @@ use hugr::{
     hugr::HugrError,
     Hugr, HugrView, Node,
 };
+use replace_bools::{ReplaceBoolPass, ReplaceBoolPassError};
 use tket2::Tk2Op;
 
 use extension::{
     futures::FutureOpDef,
     qsystem::{LowerTk2Error, LowerTket2ToQSystemPass, QSystemOp},
 };
-use lazify_measure::{LazifyMeasurePass, LazifyMeasurePassError};
 
 #[cfg(feature = "cli")]
 pub mod cli;
 pub mod extension;
-
-pub mod lazify_measure;
 
 pub mod replace_bools;
 
@@ -56,8 +54,8 @@ impl Default for QSystemPass {
 #[non_exhaustive]
 /// An error reported from [QSystemPass].
 pub enum QSystemPassError<N = Node> {
-    /// An error from the component [LazifyMeasurePass].
-    LazyMeasureError(LazifyMeasurePassError<N>),
+    /// An error from the component [ReplaceBoolPass].
+    ReplaceBoolError(ReplaceBoolPassError<N>),
     /// An error from the component [force_order()] pass.
     ForceOrderError(HugrError),
     /// An error from the component [LowerTket2ToQSystemPass] pass.
@@ -157,8 +155,8 @@ impl QSystemPass {
         LowerTket2ToQSystemPass
     }
 
-    fn lazify_measure(&self) -> LazifyMeasurePass {
-        LazifyMeasurePass
+    fn lazify_measure(&self) -> ReplaceBoolPass {
+        ReplaceBoolPass
     }
 
     fn constant_fold(&self) -> ConstantFoldPass {
@@ -222,7 +220,7 @@ mod test {
     use hugr::extension::ExtensionRegistry;
     use hugr::{
         builder::{Container, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer},
-        extension::prelude::{bool_t, qb_t},
+        extension::prelude::qb_t,
         ops::handle::NodeHandle,
         std_extensions::arithmetic::float_types::ConstF64,
         type_row,
@@ -232,6 +230,7 @@ mod test {
 
     use itertools::Itertools as _;
     use petgraph::visit::{Topo, Walker as _};
+    use tket2::extension::bool::bool_type;
 
     use crate::{
         extension::{futures::FutureOpDef, qsystem::QSystemOp},
@@ -242,7 +241,7 @@ mod test {
     fn qsystem_pass() {
         let (mut hugr, [call_node, h_node, f_node, rx_node]) = {
             let mut builder =
-                DFGBuilder::new(Signature::new(qb_t(), vec![bool_t(), bool_t()])).unwrap();
+                DFGBuilder::new(Signature::new(qb_t(), vec![bool_type(), bool_type()])).unwrap();
             let func = builder
                 .define_function("func", Signature::new_endo(type_row![]))
                 .unwrap()

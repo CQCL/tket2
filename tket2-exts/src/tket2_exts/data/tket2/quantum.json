@@ -223,9 +223,11 @@
           ],
           "output": [
             {
-              "t": "Sum",
-              "s": "Unit",
-              "size": 2
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
             }
           ]
         }
