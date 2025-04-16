@@ -34,16 +34,16 @@ use self::units::{filter, LinearUnit, Units};
 
 /// A quantum circuit, represented as a function in a HUGR.
 #[derive(Debug, Clone)]
-pub struct Circuit<T = Hugr, N = Node> {
+pub struct Circuit<T: HugrView = Hugr> {
     /// The HUGR containing the circuit.
     hugr: T,
     /// The parent node of the circuit.
     ///
     /// This is checked at runtime to ensure that the node is a DFG node.
-    parent: N,
+    parent: T::Node,
 }
 
-impl<T: Default + HugrView> Default for Circuit<T, T::Node> {
+impl<T: Default + HugrView> Default for Circuit<T> {
     fn default() -> Self {
         let hugr = T::default();
         let parent = hugr.root();
@@ -82,7 +82,7 @@ fn issue_1496_remains() {
     assert_eq!("Noop", NoopDef.name())
 }
 
-impl<T: HugrView> Circuit<T, T::Node> {
+impl<T: HugrView> Circuit<T> {
     /// Create a new circuit from a HUGR and a node.
     ///
     /// # Errors
@@ -289,7 +289,7 @@ impl<T: HugrView> Circuit<T, T::Node> {
     }
 }
 
-impl<T: HugrView<Node = Node>> Circuit<T, Node> {
+impl<T: HugrView<Node = Node>> Circuit<T> {
     /// Ensures the circuit contains an owned HUGR.
     pub fn to_owned(&self) -> Circuit<Hugr> {
         let hugr = self.hugr.base_hugr().clone();
@@ -362,7 +362,7 @@ impl<T: HugrView<Node = Node>> Circuit<T, Node> {
     }
 }
 
-impl<T: HugrView> From<T> for Circuit<T, T::Node> {
+impl<T: HugrView> From<T> for Circuit<T> {
     fn from(hugr: T) -> Self {
         let parent = hugr.root();
         Self::new(hugr, parent)
@@ -535,7 +535,7 @@ pub enum CircuitMutError {
 /// Shift ports in range (free_port + 1 .. max_ind) by -1.
 fn shift_ports<C: HugrMut + ?Sized>(
     circ: &mut C,
-    node: Node,
+    node: C::Node,
     free_port: impl Into<Port>,
     max_ind: usize,
 ) -> Result<Port, hugr::hugr::HugrError> {

@@ -84,7 +84,7 @@ impl<N: HugrNode> Units<OutgoingPort, N, DefaultUnitLabeller> {
     /// This iterator will yield all units originating from the circuit's input
     /// node.
     #[inline]
-    pub(super) fn new_circ_input<T: HugrView<Node = N>>(circuit: &Circuit<T, N>) -> Self {
+    pub(super) fn new_circ_input<T: HugrView<Node = N>>(circuit: &Circuit<T>) -> Self {
         Self::new_outgoing(circuit, circuit.input_node(), DefaultUnitLabeller)
     }
 }
@@ -96,7 +96,7 @@ where
     /// Create a new iterator over the units originating from node.
     #[inline]
     pub(super) fn new_outgoing<T: HugrView<Node = N>>(
-        circuit: &Circuit<T, N>,
+        circuit: &Circuit<T>,
         node: N,
         unit_labeller: UL,
     ) -> Self {
@@ -111,7 +111,7 @@ where
     /// Create a new iterator over the units terminating on the node.
     #[inline]
     pub(super) fn new_incoming<T: HugrView<Node = N>>(
-        circuit: &Circuit<T, N>,
+        circuit: &Circuit<T>,
         node: N,
         unit_labeller: UL,
     ) -> Self {
@@ -127,7 +127,7 @@ where
     /// Create a new iterator over the units of a node.
     #[inline]
     fn new_with_dir<T: HugrView<Node = N>>(
-        circuit: &Circuit<T, N>,
+        circuit: &Circuit<T>,
         node: N,
         direction: Direction,
         unit_labeller: UL,
@@ -151,9 +151,9 @@ where
     // We should revisit it once this is reworked on the HUGR side.
     //
     // TODO: EdgeKind::Function is not currently supported.
-    fn init_types<T: HugrView<Node = N>>(
-        circuit: &Circuit<T, N>,
-        node: N,
+    fn init_types<T: HugrView>(
+        circuit: &Circuit<T>,
+        node: T::Node,
         direction: Direction,
     ) -> TypeRow {
         let hugr = circuit.hugr();
