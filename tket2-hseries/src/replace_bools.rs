@@ -161,7 +161,7 @@ mod test {
     fn test_bool_to_sum() {
         let mut dfb = DFGBuilder::new(inout_sig(vec![tket2_bool_t()], vec![bool_t()])).unwrap();
         let [b] = dfb.input_wires_arr();
-        let output = dfb.add_bool_to_sum(b).unwrap();
+        let output = dfb.add_bool_read(b).unwrap();
         let mut h = dfb.finish_hugr_with_outputs(output).unwrap();
 
         let pass = ReplaceBoolPass::default();
@@ -176,7 +176,7 @@ mod test {
     fn test_sum_to_bool() {
         let mut dfb = DFGBuilder::new(inout_sig(vec![bool_t()], vec![tket2_bool_t()])).unwrap();
         let [b] = dfb.input_wires_arr();
-        let output = dfb.add_sum_to_bool(b).unwrap();
+        let output = dfb.add_make_bool_opaque(b).unwrap();
         let mut h = dfb.finish_hugr_with_outputs(output).unwrap();
 
         let pass = ReplaceBoolPass::default();
