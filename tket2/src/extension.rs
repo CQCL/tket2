@@ -20,6 +20,8 @@ use smol_str::SmolStr;
 
 /// Definition for bool type and ops.
 pub mod bool;
+/// Definition for debug ops.
+pub mod debug;
 /// Definition for Angle ops and types.
 pub mod rotation;
 pub mod sympy;
@@ -61,6 +63,7 @@ pub(crate) static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new(
     TKET1_EXTENSION.to_owned(),
     TKET2_EXTENSION.to_owned(),
     bool::BOOL_EXTENSION.to_owned(),
+    debug::DEBUG_EXTENSION.to_owned(),
     rotation::ROTATION_EXTENSION.to_owned()
 ]));
 
