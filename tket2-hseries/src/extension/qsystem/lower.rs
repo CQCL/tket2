@@ -374,8 +374,8 @@ mod test {
         assert_eq!(lowered.len(), 5);
         // dfg, input, output, alloc + (10 for unwrap), phasedx, rz, toturns, fmul, phasedx, free +
         // 5x(float + load), measure_reset, conditional, case(input, output) * 2, flip
-        // (phasedx + 2*(float + load))
-        assert_eq!(h.node_count(), 59);
+        // (phasedx + 2*(float + load)), tket2.read
+        assert_eq!(h.node_count(), 60);
         assert_eq!(check_lowered(&h), Ok(()));
         if let Err(e) = h.validate() {
             panic!("{}", e);

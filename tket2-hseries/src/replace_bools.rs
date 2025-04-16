@@ -1,3 +1,5 @@
+//! Provides `ReplaceBoolPass` which replaces tket2.bools as well as [Tket2Op::Measure]
+//! nodes with [QSystemOp::Measure] nodes.
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
@@ -21,9 +23,9 @@ use hugr::{
     types::{SumType, Type},
     Hugr, Node, Wire,
 };
-use tket2::extension::bool::{bool_type, BOOL_EXTENSION};
+use tket2::extension::{bool::{bool_type, BOOL_EXTENSION}, TKET2_EXTENSION};
 
-use crate::extension::futures::{future_type, FutureOpBuilder};
+use crate::extension::{futures::{future_type, FutureOpBuilder}, qsystem};
 
 #[derive(Error, Debug, Display, From)]
 #[non_exhaustive]
@@ -165,7 +167,7 @@ fn lowerer() -> ReplaceTypes {
     // Replace tket2.bool type.
     lw.replace_type(bool_type().as_extension().unwrap().clone(), bool_dest());
 
-    // Replace al tket2.bool ops.
+    // Replace all tket2.bool ops.
     let read_op = ExtensionOp::new(
         BOOL_EXTENSION.get_op("read").unwrap().clone(),
         vec![],
@@ -185,18 +187,46 @@ fn lowerer() -> ReplaceTypes {
     let not_op = ExtensionOp::new(BOOL_EXTENSION.get_op("not").unwrap().clone(), vec![]).unwrap();
     lw.replace_op(&not_op, not_op_dest());
 
-    // TODO: Replace measure ops with lazy versions.
+    // Replace measure ops with lazy versions.
+    let tket2_measure_free = ExtensionOp::new(
+        TKET2_EXTENSION.get_op("MeasureFree").unwrap().clone(),
+        vec![],
+    )
+    .unwrap();
+    let qsystem_measure = ExtensionOp::new(
+        qsystem::EXTENSION.get_op("Measure").unwrap().clone(),
+        vec![],
+    )
+    .unwrap();
+    let qsystem_measure_reset = ExtensionOp::new(
+        qsystem::EXTENSION.get_op("MeasureReset").unwrap().clone(),
+        vec![],
+    )
+    .unwrap();
+    let lazy_measure = ExtensionOp::new(
+        qsystem::EXTENSION.get_op("LazyMeasure").unwrap().clone(),
+        vec![],
+    )
+    .unwrap();
+    let lazy_measure_reset = ExtensionOp::new(
+        qsystem::EXTENSION.get_op("LazyMeasureReset").unwrap().clone(),
+        vec![],
+    )
+    .unwrap();
+    lw.replace_op(&tket2_measure_free, NodeTemplate::SingleOp(lazy_measure.clone().into()));
+    lw.replace_op(&qsystem_measure, NodeTemplate::SingleOp(lazy_measure.into()));
+    lw.replace_op(&qsystem_measure_reset, NodeTemplate::SingleOp(lazy_measure_reset.into()));
 
     lw
 }
 
 #[cfg(test)]
 mod test {
+    use crate::extension::qsystem::QSystemOpBuilder;
+
     use super::*;
     use hugr::{
-        builder::{inout_sig, DFGBuilder, Dataflow, DataflowHugr},
-        types::TypeRow,
-        HugrView,
+        builder::{inout_sig, DFGBuilder, Dataflow, DataflowHugr}, extension::prelude::qb_t, types::TypeRow, HugrView
     };
     use tket2::extension::bool::{BoolOp, BoolOpBuilder};
 
@@ -250,6 +280,20 @@ mod test {
 
         let sig = h.signature(h.root()).unwrap();
         assert_eq!(sig.input(), &TypeRow::from(vec![bool_dest(), bool_dest()]));
+        assert_eq!(sig.output(), &TypeRow::from(vec![bool_dest()]));
+    }
+
+    #[test]
+    fn test_measure() {
+        let mut dfb = DFGBuilder::new(inout_sig(vec![qb_t()], vec![bool_type()])).unwrap();
+        let [q] = dfb.input_wires_arr();
+        let output = dfb.add_measure(q).unwrap();
+        let mut h = dfb.finish_hugr_with_outputs([output]).unwrap();
+
+        let pass = ReplaceBoolPass::default();
+        pass.run(&mut h).unwrap();
+
+        let sig = h.signature(h.root()).unwrap();
         assert_eq!(sig.output(), &TypeRow::from(vec![bool_dest()]));
     }
 }
