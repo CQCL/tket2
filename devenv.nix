@@ -10,7 +10,7 @@ in {
     pkgs.just
     pkgs.cargo-insta
 
-    # These are required for to be able to link to llvm.
+    # These are required to be able to link to llvm.
     pkgs.libffi
     pkgs.libxml2
     pkgs.zlib
