@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "name": "tket2.qsystem",
   "runtime_reqs": [
     "arithmetic.float.types",
@@ -258,34 +258,6 @@
                   }
                 ]
               ]
-            }
-          ],
-          "runtime_reqs": []
-        }
-      },
-      "binary": false
-    },
-    "ZZMax": {
-      "extension": "tket2.qsystem",
-      "name": "ZZMax",
-      "description": "Maximally entangling ZZ gate.",
-      "signature": {
-        "params": [],
-        "body": {
-          "input": [
-            {
-              "t": "Q"
-            },
-            {
-              "t": "Q"
-            }
-          ],
-          "output": [
-            {
-              "t": "Q"
-            },
-            {
-              "t": "Q"
             }
           ],
           "runtime_reqs": []
