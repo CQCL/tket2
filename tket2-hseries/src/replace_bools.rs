@@ -1,6 +1,5 @@
-//! Provides `ReplaceBoolPass` which replaces tket2.bools as well as [Tket2Op::Measure]
-//! nodes with [QSystemOp::Measure] nodes.
-
+//! Provides a `ReplaceBoolPass` which replaces the tket2.bool type with
+//! `bool_t+future(bool_t)` and then lazifies measure operations.
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
@@ -11,22 +10,25 @@ use hugr::{
         ReplaceTypes,
     },
     builder::{
-        inout_sig, BuildHandle, DFGBuilder, Dataflow, DataflowHugr,
-        DataflowSubContainer, SubContainer,
+        inout_sig, BuildHandle, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer,
+        SubContainer,
     },
     extension::prelude::bool_t,
     hugr::hugrmut::HugrMut,
-    ops::{
-        handle::ConditionalID,
-        ExtensionOp, Tag,
-    },
+    ops::{handle::ConditionalID, ExtensionOp, Tag},
     std_extensions::logic::LogicOp,
     types::{SumType, Type, TypeArg},
     Hugr, Node, Wire,
 };
-use tket2::extension::{bool::{bool_type, BOOL_EXTENSION}, TKET2_EXTENSION};
+use tket2::extension::{
+    bool::{bool_type, BOOL_EXTENSION},
+    TKET2_EXTENSION,
+};
 
-use crate::extension::{futures::{self, future_type, FutureOpBuilder}, qsystem};
+use crate::extension::{
+    futures::{self, future_type, FutureOpBuilder},
+    qsystem,
+};
 
 #[derive(Error, Debug, Display, From)]
 #[non_exhaustive]
@@ -40,8 +42,8 @@ pub enum ReplaceBoolPassError<N> {
     ReplacementError(ReplaceTypesError),
 }
 
-/// A HUGR -> HUGR pass that replaces the tket2.bool type with a sum type of bool_t and
-/// future (bool_t) in order to enable lazy measurements.
+/// A HUGR -> HUGR pass which replaces the tket2.bool type with `bool_t+future(bool_t)`
+/// and then lazifies measure operations.
 #[derive(Default)]
 pub struct ReplaceBoolPass(ValidationLevel);
 
@@ -167,30 +169,29 @@ fn lowerer() -> ReplaceTypes {
 
     // Replace tket2.bool type.
     lw.replace_type(bool_type().as_extension().unwrap().clone(), bool_dest());
-    let bool_arg = TypeArg::Type { ty: bool_t().clone()};
+    let bool_arg = TypeArg::Type {
+        ty: bool_t().clone(),
+    };
     let dup_op = ExtensionOp::new(
         futures::EXTENSION.get_op("Dup").unwrap().clone(),
         [bool_arg.clone()],
     )
     .unwrap();
     let free_op = ExtensionOp::new(
-    futures::EXTENSION.get_op("Free").unwrap().clone(),
-    [bool_arg.clone()],
+        futures::EXTENSION.get_op("Free").unwrap().clone(),
+        [bool_arg.clone()],
     )
     .unwrap();
-    lw.linearizer().register_simple(
-        future_type(bool_t()).as_extension().unwrap().clone(), 
-        NodeTemplate::SingleOp(dup_op.into()), 
-        NodeTemplate::SingleOp(free_op.into()),
-    )
-    .unwrap();
+    lw.linearizer()
+        .register_simple(
+            future_type(bool_t()).as_extension().unwrap().clone(),
+            NodeTemplate::SingleOp(dup_op.into()),
+            NodeTemplate::SingleOp(free_op.into()),
+        )
+        .unwrap();
 
     // Replace all tket2.bool ops.
-    let read_op = ExtensionOp::new(
-        BOOL_EXTENSION.get_op("read").unwrap().clone(),
-        vec![],
-    )
-    .unwrap();
+    let read_op = ExtensionOp::new(BOOL_EXTENSION.get_op("read").unwrap().clone(), vec![]).unwrap();
     lw.replace_op(&read_op, read_op_dest());
     let make_opaque_op = ExtensionOp::new(
         BOOL_EXTENSION.get_op("make_opaque").unwrap().clone(),
@@ -227,26 +228,47 @@ fn lowerer() -> ReplaceTypes {
     )
     .unwrap();
     let lazy_measure_reset = ExtensionOp::new(
-        qsystem::EXTENSION.get_op("LazyMeasureReset").unwrap().clone(),
+        qsystem::EXTENSION
+            .get_op("LazyMeasureReset")
+            .unwrap()
+            .clone(),
         vec![],
     )
     .unwrap();
-    lw.replace_op(&tket2_measure_free, NodeTemplate::SingleOp(lazy_measure.clone().into()));
-    lw.replace_op(&qsystem_measure, NodeTemplate::SingleOp(lazy_measure.into()));
-    lw.replace_op(&qsystem_measure_reset, NodeTemplate::SingleOp(lazy_measure_reset.into()));
+    lw.replace_op(
+        &tket2_measure_free,
+        NodeTemplate::SingleOp(lazy_measure.clone().into()),
+    );
+    lw.replace_op(
+        &qsystem_measure,
+        NodeTemplate::SingleOp(lazy_measure.into()),
+    );
+    lw.replace_op(
+        &qsystem_measure_reset,
+        NodeTemplate::SingleOp(lazy_measure_reset.into()),
+    );
 
     lw
 }
 
 #[cfg(test)]
 mod test {
-    use crate::extension::qsystem::QSystemOpBuilder;
+    use crate::extension::qsystem::{QSystemOp, QSystemOpBuilder};
 
     use super::*;
+    use hugr::ops::OpType;
     use hugr::{
-        builder::{inout_sig, DFGBuilder, Dataflow, DataflowHugr}, extension::prelude::qb_t, types::TypeRow, HugrView
+        builder::{inout_sig, DFGBuilder, Dataflow, DataflowHugr},
+        extension::prelude::qb_t,
+        types::TypeRow,
+        HugrView,
     };
-    use tket2::extension::bool::{BoolOp, BoolOpBuilder};
+    use itertools::Itertools;
+    use rstest::rstest;
+    use tket2::{
+        extension::bool::{BoolOp, BoolOpBuilder},
+        Tk2Op,
+    };
 
     fn tket2_bool_t() -> Type {
         bool_type().clone()
@@ -259,12 +281,16 @@ mod test {
         let output = dfb.add_bool_read(b).unwrap();
         let mut h = dfb.finish_hugr_with_outputs(output).unwrap();
 
+        assert_eq!(h.node_count(), 4);
+
         let pass = ReplaceBoolPass::default();
         pass.run(&mut h).unwrap();
 
         let sig = h.signature(h.root()).unwrap();
         assert_eq!(sig.input(), &TypeRow::from(vec![bool_dest()]));
         assert_eq!(sig.output(), &TypeRow::from(vec![bool_t()]));
+
+        assert_eq!(h.node_count(), 14);
     }
 
     #[test]
@@ -274,23 +300,31 @@ mod test {
         let output = dfb.add_make_bool_opaque(b).unwrap();
         let mut h = dfb.finish_hugr_with_outputs(output).unwrap();
 
+        assert_eq!(h.node_count(), 4);
+
         let pass = ReplaceBoolPass::default();
         pass.run(&mut h).unwrap();
 
         let sig = h.signature(h.root()).unwrap();
         assert_eq!(sig.input(), &TypeRow::from(vec![bool_t()]));
         assert_eq!(sig.output(), &TypeRow::from(vec![bool_dest()]));
+
+        assert_eq!(h.node_count(), 7);
     }
 
-    #[test]
-    fn test_logic() {
+    #[rstest]
+    #[case(BoolOp::eq)]
+    #[case(BoolOp::and)]
+    #[case(BoolOp::or)]
+    #[case(BoolOp::xor)]
+    fn test_logic(#[case] logic_op: BoolOp) {
         let mut dfb = DFGBuilder::new(inout_sig(
             vec![tket2_bool_t(), tket2_bool_t()],
             vec![tket2_bool_t()],
         ))
         .unwrap();
         let [b1, b2] = dfb.input_wires_arr();
-        let result = dfb.add_dataflow_op(BoolOp::xor, [b1, b2]).unwrap();
+        let result = dfb.add_dataflow_op(logic_op, [b1, b2]).unwrap();
         let mut h = dfb.finish_hugr_with_outputs(result.outputs()).unwrap();
 
         let pass = ReplaceBoolPass::default();
@@ -302,16 +336,66 @@ mod test {
     }
 
     #[test]
-    fn test_measure() {
+    fn test_not() {
+        let mut dfb =
+            DFGBuilder::new(inout_sig(vec![tket2_bool_t()], vec![tket2_bool_t()])).unwrap();
+        let [b] = dfb.input_wires_arr();
+        let result = dfb.add_dataflow_op(BoolOp::not, [b]).unwrap();
+        let mut h = dfb.finish_hugr_with_outputs(result.outputs()).unwrap();
+
+        let pass = ReplaceBoolPass::default();
+        pass.run(&mut h).unwrap();
+
+        let sig = h.signature(h.root()).unwrap();
+        assert_eq!(sig.input(), &TypeRow::from(vec![bool_dest()]));
+        assert_eq!(sig.output(), &TypeRow::from(vec![bool_dest()]));
+    }
+
+    #[rstest]
+    #[case(Tk2Op::MeasureFree)]
+    #[case(QSystemOp::Measure)]
+    fn test_measure<T: Into<OpType>>(#[case] measure_op: T) {
         let mut dfb = DFGBuilder::new(inout_sig(vec![qb_t()], vec![bool_type()])).unwrap();
         let [q] = dfb.input_wires_arr();
-        let output = dfb.add_measure(q).unwrap();
-        let mut h = dfb.finish_hugr_with_outputs([output]).unwrap();
+        let output = dfb.add_dataflow_op(measure_op, [q]).unwrap();
+        let mut h = dfb.finish_hugr_with_outputs(output.outputs()).unwrap();
 
         let pass = ReplaceBoolPass::default();
         pass.run(&mut h).unwrap();
 
         let sig = h.signature(h.root()).unwrap();
         assert_eq!(sig.output(), &TypeRow::from(vec![bool_dest()]));
+
+        let top_ops = h.children(h.root()).map(|n| h.get_optype(n)).collect_vec();
+        assert!(top_ops.iter().any(|op| {
+            if let Some(ext_op) = op.as_extension_op() {
+                ext_op.def().name() == "LazyMeasure"
+            } else {
+                false
+            }
+        }));
+    }
+
+    #[test]
+    fn test_measure_reset() {
+        let mut dfb = DFGBuilder::new(inout_sig(vec![qb_t()], vec![qb_t(), bool_type()])).unwrap();
+        let [q] = dfb.input_wires_arr();
+        let output = dfb.add_measure_reset(q).unwrap();
+        let mut h = dfb.finish_hugr_with_outputs(output).unwrap();
+
+        let pass = ReplaceBoolPass::default();
+        pass.run(&mut h).unwrap();
+
+        let sig = h.signature(h.root()).unwrap();
+        assert_eq!(sig.output(), &TypeRow::from(vec![qb_t(), bool_dest()]));
+
+        let top_ops = h.children(h.root()).map(|n| h.get_optype(n)).collect_vec();
+        assert!(top_ops.iter().any(|op| {
+            if let Some(ext_op) = op.as_extension_op() {
+                ext_op.def().name() == "LazyMeasureReset"
+            } else {
+                false
+            }
+        }));
     }
 }
