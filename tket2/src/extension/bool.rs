@@ -9,7 +9,7 @@ use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
-        ExtensionBuildError, ExtensionId, SignatureFunc, TypeDef, Version,
+        ExtensionBuildError, ExtensionId, ExtensionSet, SignatureFunc, TypeDef, Version,
     },
     ops::constant::{CustomConst, ValueName},
     types::{CustomType, Signature, Type, TypeBound},
