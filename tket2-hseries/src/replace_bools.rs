@@ -1,5 +1,6 @@
 //! Provides `ReplaceBoolPass` which replaces tket2.bools as well as [Tket2Op::Measure]
 //! nodes with [QSystemOp::Measure] nodes.
+
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
@@ -15,7 +16,7 @@ use hugr::{
     hugr::hugrmut::HugrMut,
     ops::{handle::ConditionalID, ExtensionOp, Tag},
     std_extensions::logic::LogicOp,
-    types::{SumType, Type},
+    types::{SumType, Type, TypeArg},
     Hugr, Node, Wire,
 };
 use tket2::extension::{
@@ -23,10 +24,7 @@ use tket2::extension::{
     TKET2_EXTENSION,
 };
 
-use crate::extension::{
-    futures::{future_type, FutureOpBuilder},
-    qsystem,
-};
+use crate::extension::{futures::{self, future_type, FutureOpBuilder}, qsystem};
 
 #[derive(Error, Debug, Display, From)]
 #[non_exhaustive]
@@ -159,6 +157,23 @@ fn lowerer() -> ReplaceTypes {
 
     // Replace tket2.bool type.
     lw.replace_type(bool_type().as_extension().unwrap().clone(), bool_dest());
+    let bool_arg = TypeArg::Type { ty: bool_t().clone()};
+    let dup_op = ExtensionOp::new(
+        futures::EXTENSION.get_op("Dup").unwrap().clone(),
+        [bool_arg.clone()],
+    )
+    .unwrap();
+    let free_op = ExtensionOp::new(
+    futures::EXTENSION.get_op("Free").unwrap().clone(),
+    [bool_arg.clone()],
+    )
+    .unwrap();
+    lw.linearizer().register_simple(
+        future_type(bool_t()).as_extension().unwrap().clone(), 
+        NodeTemplate::SingleOp(dup_op.into()), 
+        NodeTemplate::SingleOp(free_op.into()),
+    )
+    .unwrap();
 
     // Replace all tket2.bool ops.
     let read_op = ExtensionOp::new(BOOL_EXTENSION.get_op("read").unwrap().clone(), vec![]).unwrap();

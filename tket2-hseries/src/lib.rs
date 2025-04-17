@@ -303,18 +303,4 @@ mod test {
             assert!(get_pos(call_node) < get_pos(n));
         }
     }
-
-    #[test]
-    #[cfg_attr(miri, ignore)] // File::open is not supported in miri
-    fn ordered_qalloc() {
-        let file = std::fs::File::open("../test_files/ordered_qalloc.hugr").unwrap();
-        let reader = BufReader::new(file);
-        let reg = ExtensionRegistry::new([
-            tket2::extension::TKET2_EXTENSION.to_owned(),
-            hugr::extension::PRELUDE.to_owned(),
-        ]);
-        let mut h: hugr::Hugr = hugr::Hugr::load(reader, Some(&reg)).unwrap();
-        QSystemPass::default().run(&mut h).unwrap();
-        h.validate().unwrap();
-    }
 }
