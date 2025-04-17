@@ -96,9 +96,11 @@
           ],
           "output": [
             {
-              "t": "Sum",
-              "s": "Unit",
-              "size": 2
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
             }
           ],
           "runtime_reqs": []
@@ -123,9 +125,11 @@
               "t": "Q"
             },
             {
-              "t": "Sum",
-              "s": "Unit",
-              "size": 2
+              "t": "Opaque",
+              "extension": "tket2.bool",
+              "id": "bool",
+              "args": [],
+              "bound": "C"
             }
           ],
           "runtime_reqs": []
