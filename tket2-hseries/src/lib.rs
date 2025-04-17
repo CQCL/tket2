@@ -222,7 +222,6 @@ impl QSystemPass {
 
 #[cfg(test)]
 mod test {
-    use hugr::extension::ExtensionRegistry;
     use hugr::{
         builder::{Container, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer},
         extension::prelude::qb_t,
