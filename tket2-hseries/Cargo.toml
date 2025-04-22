@@ -16,6 +16,7 @@ categories = ["compilers"]
 [features]
 default = ["cli"]
 cli = ["dep:clap", "dep:hugr-cli"]
+llvm = ["tket2/llvm", "dep:anyhow"]
 
 [[bin]]
 name = "tket2-hseries"
@@ -40,6 +41,7 @@ derive_more = { workspace = true, features = [
 typetag.workspace = true
 delegate.workspace = true
 indexmap.workspace = true
+anyhow = { workspace = true, optional = true }
 
 [dev-dependencies]
 cool_asserts.workspace = true
