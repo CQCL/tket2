@@ -2289,6 +2289,7 @@ dependencies = [
 name = "tket2-hseries"
 version = "0.14.0"
 dependencies = [
+ "anyhow",
  "clap",
  "cool_asserts",
  "delegate 0.13.3",
