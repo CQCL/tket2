@@ -70,7 +70,7 @@ tracing = { workspace = true }
 pest = { workspace = true }
 pest_derive = { workspace = true }
 zstd = { workspace = true, optional = true }
-anyhow = { version = "1.0.98", optional = true }
+anyhow = { workspace = true, optional = true }
 
 
 [dev-dependencies]

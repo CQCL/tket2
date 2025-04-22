@@ -23,6 +23,8 @@ use lazify_measure::{LazifyMeasurePass, LazifyMeasurePassError};
 #[cfg(feature = "cli")]
 pub mod cli;
 pub mod extension;
+#[cfg(feature="llvm")]
+pub mod llvm;
 
 pub mod lazify_measure;
 
