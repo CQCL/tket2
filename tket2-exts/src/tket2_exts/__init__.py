@@ -17,6 +17,11 @@ def opaque_bool() -> Extension:
 
 
 @functools.cache
+def debug() -> Extension:
+    return load_extension("tket2.debug")
+
+
+@functools.cache
 def rotation() -> Extension:
     return load_extension("tket2.rotation")
 
