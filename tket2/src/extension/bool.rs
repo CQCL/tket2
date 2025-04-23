@@ -194,7 +194,7 @@ pub trait BoolOpBuilder: Dataflow {
     }
 
     /// Add a "tket2.bool.make_opaque" op.
-    fn add_make_bool_opaque(&mut self, sum_input: Wire) -> Result<[Wire; 1], BuildError> {
+    fn add_bool_make_opaque(&mut self, sum_input: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
             .add_dataflow_op(BoolOp::make_opaque, [sum_input])?
             .outputs_arr())
@@ -298,7 +298,7 @@ pub(crate) mod test {
         let hugr = {
             let mut builder = DFGBuilder::new(Signature::new(sum_type, bool_type)).unwrap();
             let [input] = builder.input_wires_arr();
-            let output = builder.add_make_bool_opaque(input).unwrap();
+            let output = builder.add_bool_make_opaque(input).unwrap();
             builder.finish_hugr_with_outputs(output).unwrap()
         };
         hugr.validate().unwrap();

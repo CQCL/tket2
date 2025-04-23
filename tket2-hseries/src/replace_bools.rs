@@ -1,5 +1,5 @@
-//! Provides a `ReplaceBoolPass` which replaces the tket2.bool type with
-//! `bool_t+future(bool_t)` and then lazifies measure operations.
+//! Provides a `ReplaceBoolPass` which replaces the tket2.bool type and
+//! lazifies measure operations.
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
@@ -38,8 +38,16 @@ pub enum ReplaceBoolPassError<N> {
     ReplacementError(ReplaceTypesError),
 }
 
-/// A HUGR -> HUGR pass which replaces the tket2.bool type with `bool_t+future(bool_t)`
-/// and then lazifies measure operations.
+/// A HUGR -> HUGR pass which replaces the `tket2.bool`, enabling lazifying of measure
+/// operations.
+///
+/// The `tket2.bool` type is replaced by a sum type of `bool_t` (the standard
+/// HUGR bool type represented by a unit sum) and `future(bool_t)`, with its operations
+/// being turned into conditionals that read the future if necessary.
+///
+/// [Tk2Op::Measure], [QSystemOp::Measure], and [QSystemOp::MeasureReset] nodes
+/// are replaced by [QSystemOp::LazyMeasure] and [QSystemOp::LazyMeasureReset]
+/// nodes.
 #[derive(Default, Debug, Clone)]
 pub struct ReplaceBoolPass;
 
@@ -159,9 +167,7 @@ fn lowerer() -> ReplaceTypes {
 
     // Replace tket2.bool type.
     lw.replace_type(bool_type().as_extension().unwrap().clone(), bool_dest());
-    let bool_arg = TypeArg::Type {
-        ty: bool_t().clone(),
-    };
+    let bool_arg: TypeArg = bool_t().clone().into();
     let dup_op = ExtensionOp::new(
         futures::EXTENSION.get_op("Dup").unwrap().clone(),
         [bool_arg.clone()],
@@ -287,7 +293,7 @@ mod test {
     fn test_make_opaque() {
         let mut dfb = DFGBuilder::new(inout_sig(vec![bool_t()], vec![tket2_bool_t()])).unwrap();
         let [b] = dfb.input_wires_arr();
-        let output = dfb.add_make_bool_opaque(b).unwrap();
+        let output = dfb.add_bool_make_opaque(b).unwrap();
         let mut h = dfb.finish_hugr_with_outputs(output).unwrap();
 
         assert_eq!(h.num_nodes(), 4);
