@@ -505,7 +505,7 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
 }
 
 /// Build a pop left operation on an array and unwrap the resulting option.
-fn pop_unwrap<T: ArrayOpBuilder>(
+pub(crate) fn pop_unwrap<T: ArrayOpBuilder>(
     builder: &mut T,
     q_arr: Wire,
     size: u64,
@@ -522,7 +522,7 @@ fn pop_unwrap<T: ArrayOpBuilder>(
     )
 }
 /// Unpack all elements of an array and discard the empty array.
-fn pop_all<T: ArrayOpBuilder>(
+pub(crate) fn pop_all<T: ArrayOpBuilder>(
     builder: &mut T,
     mut arr: Wire,
     size: u64,
