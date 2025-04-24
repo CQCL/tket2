@@ -292,10 +292,7 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
 
     /// Add a "tket2.qsystem.RuntimeBarrier" op.
     fn add_runtime_barrier(&mut self, qbs: Wire, array_size: u64) -> Result<Wire, BuildError> {
-        let op = ExtensionOp::new(
-            EXTENSION.get_op(&RUNTIME_BARRIER_NAME).unwrap().clone(),
-            [TypeArg::BoundedNat { n: array_size }],
-        )?;
+        let op = runtime_barrier_ext_op(array_size)?;
         Ok(self.add_dataflow_op(op, [qbs])?.out_wire(0))
     }
 
@@ -502,6 +499,14 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
 
         pop_all(self, q_arr, size, qb_t())
     }
+}
+
+/// Build a runtime barrier operation on an array of qubits given its size.
+pub(crate) fn runtime_barrier_ext_op(array_size: u64) -> Result<ExtensionOp, hugr::extension::SignatureError> {
+    ExtensionOp::new(
+        EXTENSION.get_op(&RUNTIME_BARRIER_NAME).unwrap().clone(),
+        [TypeArg::BoundedNat { n: array_size }],
+    )
 }
 
 /// Build a pop left operation on an array and unwrap the resulting option.

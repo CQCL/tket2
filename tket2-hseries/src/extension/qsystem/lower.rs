@@ -1,6 +1,8 @@
 use derive_more::{Display, Error, From};
-use hugr::extension::prelude::Barrier;
+use hugr::builder::DFGBuilder;
+use hugr::extension::prelude::{qb_t, Barrier};
 use hugr::ops::NamedOp;
+use hugr::OutgoingPort;
 use hugr::{
     algorithms::validation::{ValidatePassError, ValidationLevel},
     builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder},
@@ -105,11 +107,10 @@ fn lower_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
         .collect();
 
     let mut replaced_nodes = Vec::new();
-
     for (node, op) in replacements {
         match op {
             ReplaceOps::Tk2(op) => tk2_to_call(hugr, &mut funcs, node, op)?,
-            ReplaceOps::Barrier(_op) => todo!(),
+            ReplaceOps::Barrier(barrier) => insert_runtime_barrier(hugr, node, barrier)?,
         }
         replaced_nodes.push(node);
     }
@@ -154,6 +155,43 @@ fn tk2_to_call(
         .map_err(LowerTk2Error::OpReplacement)?;
     hugr.insert_ports(node, Direction::Incoming, call_static_port.index(), 1);
     hugr.connect(func_node, 0, node, call_static_port);
+    Ok(())
+}
+
+/// Insert [RuntimeBarrier] after every [Barrier] in the Hugr.
+fn insert_runtime_barrier(
+    hugr: &mut impl HugrMut,
+    node: Node,
+    barrier: Barrier,
+) -> Result<(), LowerTk2Error> {
+    let qubit_ports: Vec<_> = barrier
+        .type_row
+        .iter()
+        .enumerate()
+        .filter_map(|(i, ty)| (ty == &qb_t()).then_some(i))
+        .collect();
+    // TODO extend with unpacked array ports
+    let targets: Vec<Vec<_>> = qubit_ports
+        .iter()
+        .map(|i| hugr.linked_inputs(node, OutgoingPort::from(*i)).collect())
+        .collect();
+
+    let mut barr_builder = DFGBuilder::new(Signature::new_endo(vec![qb_t(); qubit_ports.len()]))?;
+    let outs = barr_builder.build_wrapped_barrier(barr_builder.input_wires())?;
+    let barr_hugr = barr_builder.finish_hugr_with_outputs(outs)?;
+
+    let parent = hugr.get_parent(node).expect("Barrier can't be root.");
+    let insert_res = hugr.insert_hugr(parent, barr_hugr);
+    let r_bar_n = insert_res.new_root;
+
+    for (r_bar_port, (&bar_out, targets)) in qubit_ports.iter().zip(targets).enumerate() {
+        hugr.connect(node, bar_out, r_bar_n, r_bar_port);
+        for (targ_n, targ_p) in targets {
+            hugr.disconnect(targ_n, targ_p);
+            hugr.connect(r_bar_n, r_bar_port, targ_n, targ_p);
+        }
+    }
+
     Ok(())
 }
 
@@ -285,9 +323,12 @@ mod test {
     use hugr::{
         builder::{DFGBuilder, FunctionBuilder},
         extension::prelude::{bool_t, option_type, qb_t, UnwrapBuilder as _},
+        ops::handle::NodeHandle,
         type_row, HugrView,
     };
     use tket2::{extension::rotation::rotation_type, Circuit};
+
+    use crate::extension::qsystem::runtime_barrier_ext_op;
 
     use super::*;
     use rstest::rstest;
@@ -382,6 +423,7 @@ mod test {
         let [q] = b.add_dataflow_op(Tk2Op::H, [q]).unwrap().outputs_arr();
         let rx = b.add_dataflow_op(Tk2Op::Rx, [q, angle]).unwrap();
         let [q] = rx.outputs_arr();
+        let q = b.add_barrier([q]).unwrap().out_wire(0);
         let [q, bool] = b
             .add_dataflow_op(Tk2Op::Measure, [q])
             .unwrap()
@@ -392,11 +434,12 @@ mod test {
         let mut h = b.finish_hugr_with_outputs([bool]).unwrap();
 
         let lowered = lower_tk2_op(&mut h).unwrap();
-        assert_eq!(lowered.len(), 5);
+        assert_eq!(lowered.len(), 6);
         // dfg, input, output, alloc + (10 for unwrap), phasedx, rz, toturns, fmul, phasedx, free +
         // 5x(float + load), measure_reset, conditional, case(input, output) * 2, flip
         // (phasedx + 2*(float + load))
-        assert_eq!(h.node_count(), 59);
+        // + 22 for the barrier array wrapping, popping and option unwrapping
+        assert_eq!(h.node_count(), 77);
         assert_eq!(check_lowered(&h), Ok(()));
         if let Err(e) = h.validate() {
             panic!("{}", e);
@@ -405,14 +448,36 @@ mod test {
 
     #[test]
     fn test_barrier() {
-        let mut b = DFGBuilder::new(Signature::new_endo(vec![qb_t(); 2])).unwrap();
+        // build a dfg with a barrier
+        let (mut h, barr_n) = {
+            let mut b =
+                DFGBuilder::new(Signature::new_endo(vec![qb_t(), qb_t(), bool_t()])).unwrap();
 
-        let [q1, q2] = b.input_wires_arr();
-        let outs = b.add_barrier([q1, q2]).unwrap().outputs();
+            let [q1, q2, bool] = b.input_wires_arr();
 
-        let mut h = b.finish_hugr_with_outputs(outs).unwrap();
+            let barr_n = b.add_barrier([q1, q2, bool]).unwrap();
 
-        let lowered = lower_tk2_op(&mut h).unwrap();
+            (
+                b.finish_hugr_with_outputs(barr_n.outputs()).unwrap(),
+                barr_n.node(),
+            )
+        };
 
+        // lower barrier to barrier + runtime barrier
+        let lowered = lower_tk2_op(&mut h).unwrap_or_else(|e| panic!("{}", e));
+        h.validate().unwrap_or_else(|e| panic!("{}", e));
+        assert!(matches!(&lowered[..], [n] if barr_n == *n));
+
+        let _barr_op: Barrier = h.get_optype(barr_n).cast().unwrap();
+
+        // dfg containing runtime barrier wrapped by array construction/destruction
+        let dfg = h.output_neighbours(barr_n).next().unwrap();
+        assert!(h.get_optype(dfg).is_dfg());
+
+        let r_barr = h.children(dfg).nth(3).unwrap(); // I, O, new_array, barrier
+        assert_eq!(
+            h.get_optype(r_barr).as_extension_op().unwrap(),
+            &runtime_barrier_ext_op(2).unwrap()
+        );
     }
 }
