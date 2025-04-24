@@ -402,4 +402,17 @@ mod test {
             panic!("{}", e);
         }
     }
+
+    #[test]
+    fn test_barrier() {
+        let mut b = DFGBuilder::new(Signature::new_endo(vec![qb_t(); 2])).unwrap();
+
+        let [q1, q2] = b.input_wires_arr();
+        let outs = b.add_barrier([q1, q2]).unwrap().outputs();
+
+        let mut h = b.finish_hugr_with_outputs(outs).unwrap();
+
+        let lowered = lower_tk2_op(&mut h).unwrap();
+
+    }
 }
