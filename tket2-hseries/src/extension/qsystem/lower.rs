@@ -1,4 +1,5 @@
 use derive_more::{Display, Error, From};
+use hugr::extension::prelude::Barrier;
 use hugr::ops::NamedOp;
 use hugr::{
     algorithms::validation::{ValidatePassError, ValidationLevel},
@@ -65,6 +66,11 @@ pub enum LowerTk2Error {
     InvalidFuncDefn(#[error(ignore)] hugr::ops::OpType),
 }
 
+enum ReplaceOps {
+    Tk2(Tk2Op),
+    Barrier(Barrier),
+}
+
 /// Lower all [Tk2Op]s to [QSystemOp]s in the Hugr
 /// by lazily defining and calling functions that implement the decomposition.
 /// Returns the nodes that were replaced.
@@ -87,16 +93,24 @@ fn lower_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
     let replacements: Vec<_> = hugr
         .nodes()
         .filter_map(|n| {
-            let op: Tk2Op = hugr.get_optype(n).cast()?;
-            Some((n, op))
+            let optype = hugr.get_optype(n);
+            if let Some(op) = optype.cast::<Tk2Op>() {
+                Some((n, ReplaceOps::Tk2(op)))
+            } else {
+                optype
+                    .cast::<Barrier>()
+                    .map(|op| (n, ReplaceOps::Barrier(op)))
+            }
         })
         .collect();
 
     let mut replaced_nodes = Vec::new();
 
     for (node, op) in replacements {
-        tk2_to_call(hugr, &mut funcs, node, op)?;
-
+        match op {
+            ReplaceOps::Tk2(op) => tk2_to_call(hugr, &mut funcs, node, op)?,
+            ReplaceOps::Barrier(_op) => todo!(),
+        }
         replaced_nodes.push(node);
     }
 
