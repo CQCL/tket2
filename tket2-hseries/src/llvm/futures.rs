@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use itertools::Itertools as _;
 use tket2::hugr::{self, llvm::{self as hugr_llvm, inkwell}};
 use hugr_llvm::CodegenExtsBuilder;
 use hugr_llvm::custom::CodegenExtension;
@@ -8,17 +9,58 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::types::{BasicTypeEnum, IntType};
 use inkwell::values::FunctionValue;
-use hugr::extension::prelude::bool_t;
+use hugr::{extension::{prelude::bool_t, simple_op::MakeRegisteredOp as _}, llvm::{inkwell::values::BasicValueEnum, types::TypingSession}, ops::DataflowOpTrait};
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::ops::{ExtensionOp, Value};
 use hugr::types::TypeArg;
 use hugr::{HugrView, Node};
 use crate::extension::futures::{self, FUTURE_TYPE_NAME, FutureOp, FutureOpDef};
 
-/// Codegen extension for futures
-pub struct FuturesCodegenExtension;
+pub trait FuturesCodegen {
+    fn future_type<'c>(&self, session: TypingSession<'c,'_>) -> BasicTypeEnum<'c> {
+        session.iw_context().i64_type().into()
+    }
 
-impl CodegenExtension for FuturesCodegenExtension {
+    fn inc_refcount_symbol(&self) -> String {
+        "___inc_future_refcount".into()
+    }
+
+    fn dec_refcount_symbol(&self) -> String {
+        "___inc_future_refcount".into()
+    }
+
+    fn read_symbol(&self) -> String {
+        "___read_future_bool".into()
+    }
+
+    fn emit<'c, H: HugrView<Node=Node>>(&self, context: &mut EmitFuncContext<'c, '_, H>, args: EmitOpArgs<'c, '_, ExtensionOp, H>, op: FutureOp) -> Result<()>{
+        let FutureOp { op, typ } = op;
+        let dec_sym = self.dec_refcount_symbol();
+        let dec_sig = FutureOp { op: FutureOpDef::Free, typ }.to_extension_op().map(|x| x.signature()).ok_or_else(|| anyhow!("Failed to get signature for tket2.futures.free"))?;
+        let op_sig = args.node().as_ref().signature();
+        match op {
+            FutureOpDef::Read => {
+                let func = context.get_extern_func(self.read_symbol(), op_sig)?;
+                let builder = context.builder();
+                let args = args.inputs.into_iter().map_into().collect_vec();
+                let result = builder.build_call(func, &args, "furure_read")?.try_as_basic_value().unwrap_left();
+                builder.build_call(, args, name)
+
+            }
+
+            
+            FutureOpDef::Dup => todo!(),
+            FutureOpDef::Free => todo!(),
+        }
+
+    }
+}
+
+/// Codegen extension for futures
+#[derive(derive_more::From)]
+pub struct FuturesCodegenExtension<FCG>(FCG);
+
+impl<FCG: FuturesCodegen> CodegenExtension for FuturesCodegenExtension<FCG> {
     fn add_extension<'a, H: HugrView<Node = Node> + 'a>(
         self,
         builder: CodegenExtsBuilder<'a, H>,
@@ -52,8 +94,6 @@ pub fn future_type(context: &Context) -> BasicTypeEnum {
     // The runtime represent a future handle as an i64
     context.i64_type().into()
 }
-
-struct FuturesEmitter<'c, 'd, 'e, H: HugrView<Node = Node>>(&'d mut EmitFuncContext<'c, 'e, H>);
 
 impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
     fn iw_context(&self) -> &'c Context {
