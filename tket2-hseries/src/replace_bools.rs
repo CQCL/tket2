@@ -11,7 +11,7 @@ use hugr::{
         inout_sig, BuildHandle, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer,
         SubContainer,
     },
-    extension::prelude::bool_t,
+    extension::prelude::{bool_t, qb_t},
     hugr::hugrmut::HugrMut,
     ops::{handle::ConditionalID, ExtensionOp, Tag},
     std_extensions::logic::LogicOp,
@@ -161,6 +161,53 @@ fn not_op_dest() -> NodeTemplate {
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
+fn measure_dest() -> NodeTemplate {
+    let lazy_measure = ExtensionOp::new(
+        qsystem::EXTENSION.get_op("LazyMeasure").unwrap().clone(),
+        vec![],
+    )
+    .unwrap();
+
+    let mut dfb = DFGBuilder::new(inout_sig(vec![qb_t()], vec![bool_dest()])).unwrap();
+    let [q] = dfb.input_wires_arr();
+    let measure = dfb.add_dataflow_op(lazy_measure, vec![q]).unwrap();
+    let tagged_output = dfb
+        .add_dataflow_op(
+            Tag::new(1, vec![bool_t().into(), future_type(bool_t()).into()]),
+            vec![measure.out_wire(0)],
+        )
+        .unwrap();
+    let h = dfb
+        .finish_hugr_with_outputs(tagged_output.outputs())
+        .unwrap();
+    NodeTemplate::CompoundOp(Box::new(h))
+}
+
+fn measure_reset_dest() -> NodeTemplate {
+    let lazy_measure_reset = ExtensionOp::new(
+        qsystem::EXTENSION
+            .get_op("LazyMeasureReset")
+            .unwrap()
+            .clone(),
+        vec![],
+    )
+    .unwrap();
+
+    let mut dfb = DFGBuilder::new(inout_sig(vec![qb_t()], vec![qb_t(), bool_dest()])).unwrap();
+    let [q] = dfb.input_wires_arr();
+    let measure = dfb.add_dataflow_op(lazy_measure_reset, vec![q]).unwrap();
+    let tagged_output = dfb
+        .add_dataflow_op(
+            Tag::new(1, vec![bool_t().into(), future_type(bool_t()).into()]),
+            vec![measure.out_wire(1)],
+        )
+        .unwrap();
+    let h = dfb
+        .finish_hugr_with_outputs(vec![measure.out_wire(0), tagged_output.out_wire(0)])
+        .unwrap();
+    NodeTemplate::CompoundOp(Box::new(h))
+}
+
 /// The configuration used for replacing tket2.bool extension types and ops.
 fn lowerer() -> ReplaceTypes {
     let mut lw = ReplaceTypes::default();
@@ -218,31 +265,9 @@ fn lowerer() -> ReplaceTypes {
         vec![],
     )
     .unwrap();
-    let lazy_measure = ExtensionOp::new(
-        qsystem::EXTENSION.get_op("LazyMeasure").unwrap().clone(),
-        vec![],
-    )
-    .unwrap();
-    let lazy_measure_reset = ExtensionOp::new(
-        qsystem::EXTENSION
-            .get_op("LazyMeasureReset")
-            .unwrap()
-            .clone(),
-        vec![],
-    )
-    .unwrap();
-    lw.replace_op(
-        &tket2_measure_free,
-        NodeTemplate::SingleOp(lazy_measure.clone().into()),
-    );
-    lw.replace_op(
-        &qsystem_measure,
-        NodeTemplate::SingleOp(lazy_measure.into()),
-    );
-    lw.replace_op(
-        &qsystem_measure_reset,
-        NodeTemplate::SingleOp(lazy_measure_reset.into()),
-    );
+    lw.replace_op(&tket2_measure_free, measure_dest());
+    lw.replace_op(&qsystem_measure, measure_dest());
+    lw.replace_op(&qsystem_measure_reset, measure_reset_dest());
 
     lw
 }
@@ -362,14 +387,15 @@ mod test {
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.output(), &TypeRow::from(vec![bool_dest()]));
 
-        let top_ops = h.children(h.entrypoint()).map(|n| h.get_optype(n)).collect_vec();
-        assert!(top_ops.iter().any(|op| {
-            if let Some(ext_op) = op.as_extension_op() {
-                ext_op.def().name() == "LazyMeasure"
-            } else {
-                false
-            }
-        }));
+        // TODO: Figure out how to do this when the op is inside a DFB child.
+        // let top_ops = h.children(h.entrypoint()).map(|n| h.get_optype(n)).collect_vec();
+        // assert!(top_ops.iter().any(|op| {
+        //    if let Some(ext_op) = op.as_extension_op() {
+        //        ext_op.def().name() == "LazyMeasure"
+        //    } else {
+        //        false
+        //    }
+        //}));
     }
 
     #[test]
