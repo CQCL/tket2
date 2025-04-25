@@ -502,7 +502,9 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
 }
 
 /// Build a runtime barrier operation on an array of qubits given its size.
-pub(crate) fn runtime_barrier_ext_op(array_size: u64) -> Result<ExtensionOp, hugr::extension::SignatureError> {
+pub(crate) fn runtime_barrier_ext_op(
+    array_size: u64,
+) -> Result<ExtensionOp, hugr::extension::SignatureError> {
     ExtensionOp::new(
         EXTENSION.get_op(&RUNTIME_BARRIER_NAME).unwrap().clone(),
         [TypeArg::BoundedNat { n: array_size }],
@@ -533,6 +535,7 @@ pub(crate) fn pop_all<T: ArrayOpBuilder>(
     size: u64,
     elem_ty: Type,
 ) -> Result<Vec<Wire>, BuildError> {
+    // TODO use unwrap op when available https://github.com/CQCL/hugr/issues/1947
     let mut result = Vec::with_capacity(size as usize);
     for ar_size in (1..size + 1).rev() {
         let [qb, new_arr] = pop_unwrap(builder, arr, ar_size, elem_ty.clone())?;

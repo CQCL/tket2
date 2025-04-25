@@ -180,6 +180,7 @@ fn insert_runtime_barrier(
     let outs = barr_builder.build_wrapped_barrier(barr_builder.input_wires())?;
     let barr_hugr = barr_builder.finish_hugr_with_outputs(outs)?;
 
+    // TODO use SimpleReplace once order bug fixed https://github.com/CQCL/hugr/issues/1974
     let parent = hugr.get_parent(node).expect("Barrier can't be root.");
     let insert_res = hugr.insert_hugr(parent, barr_hugr);
     let r_bar_n = insert_res.new_root;
