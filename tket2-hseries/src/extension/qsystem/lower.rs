@@ -329,8 +329,6 @@ mod test {
     };
     use tket2::{extension::rotation::rotation_type, Circuit};
 
-    use crate::extension::qsystem::runtime_barrier_ext_op;
-
     use super::*;
     use rstest::rstest;
 
@@ -447,16 +445,15 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_barrier() {
+    #[rstest]
+    #[case(vec![qb_t(), qb_t()])]
+    #[case(vec![qb_t(), qb_t(), bool_t()])]
+    fn test_barrier(#[case] type_row: Vec<hugr::types::Type>) {
         // build a dfg with a barrier
         let (mut h, barr_n) = {
-            let mut b =
-                DFGBuilder::new(Signature::new_endo(vec![qb_t(), qb_t(), bool_t()])).unwrap();
+            let mut b = DFGBuilder::new(Signature::new_endo(type_row)).unwrap();
 
-            let [q1, q2, bool] = b.input_wires_arr();
-
-            let barr_n = b.add_barrier([q1, q2, bool]).unwrap();
+            let barr_n = b.add_barrier(b.input_wires()).unwrap();
 
             (
                 b.finish_hugr_with_outputs(barr_n.outputs()).unwrap(),
@@ -476,9 +473,11 @@ mod test {
         assert!(h.get_optype(dfg).is_dfg());
 
         let r_barr = h.children(dfg).nth(3).unwrap(); // I, O, new_array, barrier
-        assert_eq!(
-            h.get_optype(r_barr).as_extension_op().unwrap(),
-            &runtime_barrier_ext_op(2).unwrap()
-        );
+        assert!(h
+            .get_optype(r_barr)
+            .as_extension_op()
+            .unwrap()
+            .name()
+            .contains(qsystem::RUNTIME_BARRIER_NAME.as_str()));
     }
 }
