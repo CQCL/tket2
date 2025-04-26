@@ -44,7 +44,7 @@ fn is_qubit_container(ty: &Type) -> bool {
 
     if let Some(ext) = ty.as_extension() {
         if let Some((_, elem_ty)) = array_args(ext) {
-            return is_qubit_container(&elem_ty);
+            return is_qubit_container(elem_ty);
         }
     }
 
@@ -70,14 +70,12 @@ fn is_opt_qb(sum: &SumType) -> bool {
 }
 
 /// If a custom type is an array, return size and element type.
-fn array_args(ext: &hugr::types::CustomType) -> Option<(u64, Type)> {
+fn array_args(ext: &hugr::types::CustomType) -> Option<(u64, &Type)> {
     array::array_type_def()
         .check_custom(ext)
         .ok()
         .and_then(|_| match ext.args() {
-            [TypeArg::BoundedNat { n }, TypeArg::Type { ty: elem_ty }] => {
-                Some((*n, elem_ty.clone()))
-            }
+            [TypeArg::BoundedNat { n }, TypeArg::Type { ty: elem_ty }] => Some((*n, elem_ty)),
             _ => None,
         })
 }
@@ -229,12 +227,12 @@ fn unpack_container<H: HugrMut>(
     }
     if let Some(ext) = typ.as_extension() {
         if let Some((n, elem_ty)) = array_args(ext) {
-            let unpacked_dfg = build_unpack_array(hugr, container_wire, n, &elem_ty)?;
+            let unpacked_dfg = build_unpack_array(hugr, container_wire, n, elem_ty)?;
 
             let children = (0..n as usize)
                 .map(|i| {
                     let elem_wire = Wire::new(unpacked_dfg, i);
-                    unpack_container(hugr, &elem_ty, elem_wire, barrier_funcs)
+                    unpack_container(hugr, elem_ty, elem_wire, barrier_funcs)
                 })
                 .collect::<Result<_, _>>()?;
             let tree = WireTree::Array(elem_ty.clone(), children);
@@ -276,7 +274,7 @@ fn build_unpack_tuple(
     };
     let parent = hugr.get_parent(tuple_wire.node()).expect("missing parent.");
 
-    let res = insert_hugr_with_wires(hugr, unpack_hugr, parent, &[tuple_wire]);
+    let res = insert_hugr_with_wires(hugr, unpack_hugr, parent, [tuple_wire]);
     Ok(res.new_root)
 }
 
@@ -296,7 +294,7 @@ fn build_unpack_array(
         dfg_b.finish_hugr_with_outputs(unpacked_wires)?
     };
     let parent = hugr.get_parent(array_wire.node()).expect("missing parent.");
-    let res = insert_hugr_with_wires(hugr, unpack_hugr, parent, &[array_wire]);
+    let res = insert_hugr_with_wires(hugr, unpack_hugr, parent, [array_wire]);
 
     Ok(res.new_root)
 }
@@ -344,7 +342,7 @@ fn build_new_tuple(
         let new_tuple = dfg_b.make_tuple(dfg_b.input_wires())?;
         dfg_b.finish_hugr_with_outputs([new_tuple])?
     };
-    let new_tuple = insert_hugr_with_wires(hugr, pack_hugr, barrier_parent, &child_wires).new_root;
+    let new_tuple = insert_hugr_with_wires(hugr, pack_hugr, barrier_parent, child_wires).new_root;
     let tuple_wire = Wire::new(new_tuple, 0);
     Ok(tuple_wire)
 }
@@ -365,7 +363,7 @@ fn build_new_array(
         let new_arr = dfg_b.add_new_array(elem_ty, dfg_b.input_wires())?;
         dfg_b.finish_hugr_with_outputs([new_arr])?
     };
-    let new_array = insert_hugr_with_wires(hugr, pack_hugr, barrier_parent, &elem_wires).new_root;
+    let new_array = insert_hugr_with_wires(hugr, pack_hugr, barrier_parent, elem_wires).new_root;
     let array_wire = Wire::new(new_array, 0);
     Ok(array_wire)
 }
@@ -374,11 +372,11 @@ fn insert_hugr_with_wires(
     base_hugr: &mut impl HugrMut,
     new_hugr: Hugr,
     parent: Node,
-    in_wires: &[Wire],
+    in_wires: impl IntoIterator<Item = Wire>,
 ) -> InsertionResult {
     let res = base_hugr.insert_hugr(parent, new_hugr);
 
-    for (in_port, wire) in in_wires.iter().enumerate() {
+    for (in_port, wire) in in_wires.into_iter().enumerate() {
         base_hugr.connect(wire.node(), wire.source(), res.new_root, in_port);
     }
 
@@ -387,12 +385,41 @@ fn insert_hugr_with_wires(
 /// Insert [RuntimeBarrier] after every [Barrier] in the Hugr.
 pub(super) fn insert_runtime_barrier(
     hugr: &mut impl HugrMut,
-    node: Node,
+    b_node: Node,
     barrier: Barrier,
     barrier_funcs: &BarrierFuncs,
 ) -> Result<(), LowerTk2Error> {
+    if barrier.type_row.is_empty() {
+        return Ok(());
+    }
     // 1. Find all qubit containing types in the barrier.
-    let qubit_containers = filter_qubit_containers(hugr, &barrier, node);
+    let qubit_containers = filter_qubit_containers(hugr, &barrier, b_node);
+
+    let parent = hugr.get_parent(b_node).expect("Barrier can't be root.");
+
+    if let [QubitContainer {
+        typ,
+        barrier_port,
+        target: (targ_n, targ_p),
+    }] = qubit_containers.as_slice()
+    {
+        // If the barrier is over a single array of qubits
+        // we can insert a runtime barrier op directly.
+        let shortcut = typ
+            .as_extension()
+            .and_then(|ext| array_args(ext))
+            .and_then(|(size, elem_ty)| (elem_ty == &qb_t()).then_some(size))
+            .map(|size| {
+                let bar_out = Wire::new(b_node, *barrier_port);
+                let r_bar_n = insert_runtime_barrier_op(hugr, parent, bar_out, size)?;
+                hugr.disconnect(*targ_n, *targ_p);
+                hugr.connect(r_bar_n, 0, *targ_n, *targ_p);
+                Ok(())
+            });
+        if let Some(res) = shortcut {
+            return res;
+        }
+    }
 
     // 2. Unpack qubits from wires leaving the [Barrier] and record in a tree.
     let mut wire_trees: Vec<WireTree> = qubit_containers
@@ -401,7 +428,7 @@ pub(super) fn insert_runtime_barrier(
             unpack_container(
                 hugr,
                 &qc.typ,
-                Wire::new(node, qc.barrier_port),
+                Wire::new(b_node, qc.barrier_port),
                 barrier_funcs,
             )
         })
@@ -413,18 +440,14 @@ pub(super) fn insert_runtime_barrier(
         .flat_map(|tree| tree.qubit_wires())
         .collect();
 
+    let n_qbs = qubit_wires.len();
+
     // 4. Insert a new [RuntimeBarrier] with the qubit wires as inputs.
-    let barr_hugr = {
-        let mut barr_builder =
-            DFGBuilder::new(Signature::new_endo(vec![qb_t(); qubit_wires.len()]))?;
-        let outs = barr_builder.build_wrapped_barrier(barr_builder.input_wires())?;
-        barr_builder.finish_hugr_with_outputs(outs)?
-    };
-    let parent = hugr.get_parent(node).expect("Barrier can't be root.");
-    let r_bar_n = insert_hugr_with_wires(hugr, barr_hugr, parent, &qubit_wires).new_root;
+
+    let r_bar_n = insert_wrapped_runtime_barrier(hugr, parent, qubit_wires)?;
 
     // 5. Update the tree with wires leaving the [RuntimeBarrier].
-    let mut r_bar_wires = (0..qubit_wires.len()).map(|p| Wire::new(r_bar_n, p));
+    let mut r_bar_wires = (0..n_qbs).map(|p| Wire::new(r_bar_n, p));
     for tree in wire_trees.iter_mut() {
         tree.update_wires(&mut r_bar_wires);
     }
@@ -443,6 +466,38 @@ pub(super) fn insert_runtime_barrier(
     }
 
     Ok(())
+}
+
+fn insert_wrapped_runtime_barrier(
+    hugr: &mut impl HugrMut,
+    parent: Node,
+    qubit_wires: Vec<Wire>,
+) -> Result<Node, LowerTk2Error> {
+    let barr_hugr = {
+        let mut barr_builder =
+            DFGBuilder::new(Signature::new_endo(vec![qb_t(); qubit_wires.len()]))?;
+        let outs = barr_builder.build_wrapped_barrier(barr_builder.input_wires())?;
+        barr_builder.finish_hugr_with_outputs(outs)?
+    };
+    let res = insert_hugr_with_wires(hugr, barr_hugr, parent, qubit_wires);
+    Ok(res.new_root)
+}
+
+fn insert_runtime_barrier_op(
+    hugr: &mut impl HugrMut,
+    parent: Node,
+    in_wire: Wire,
+    array_size: u64,
+) -> Result<Node, LowerTk2Error> {
+    let barr_hugr = {
+        let mut barr_builder =
+            DFGBuilder::new(Signature::new_endo(array_type(array_size, qb_t())))?;
+        let array_wire = barr_builder.input().out_wire(0);
+        let out = barr_builder.add_runtime_barrier(array_wire, array_size)?;
+        barr_builder.finish_hugr_with_outputs([out])?
+    };
+    let res = insert_hugr_with_wires(hugr, barr_hugr, parent, [in_wire]);
+    Ok(res.new_root)
 }
 
 #[cfg(test)]
@@ -466,7 +521,8 @@ mod test {
     #[case(vec![qb_t(), qb_t(), bool_t()], 2)]
     #[case(vec![qb_t(), opt_q_arr(2)], 3)]
     #[case(vec![array_type(2, bool_t())], 0)]
-    #[case(vec![array_type(3, qb_t())], 3)]
+    // special case, single array of qubits is passed directly to op without unpacking
+    #[case(vec![array_type(3, qb_t())], 1)]
     #[case(vec![qb_t(), array_type(2, qb_t()), array_type(2, array_type(2, qb_t()))], 7)]
     #[case(vec![Type::new_tuple(vec![bool_t(), qb_t()]), qb_t()], 2)]
     #[case(vec![Type::new_tuple(vec![bool_t(), qb_t(), opt_q_arr(2)]), qb_t()], 4)]
