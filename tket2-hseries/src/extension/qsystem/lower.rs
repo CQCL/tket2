@@ -1,6 +1,8 @@
 use derive_more::{Display, Error, From};
-use hugr::extension::prelude::Barrier;
+use hugr::extension::prelude::{option_type, qb_t, Barrier, UnwrapBuilder};
 use hugr::ops::NamedOp;
+use hugr::type_row;
+use hugr::types::Type;
 use hugr::{
     algorithms::validation::{ValidatePassError, ValidationLevel},
     builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder},
@@ -67,6 +69,48 @@ pub enum LowerTk2Error {
     InvalidFuncDefn(#[error(ignore)] hugr::ops::OpType),
 }
 
+pub(super) struct BarrierFuncs {
+    pub unwrap: Node,
+    pub wrap: Node,
+}
+
+impl BarrierFuncs {
+    /// Signature for a function that unwraps an option type.
+    pub(super) fn unwrap_opt_sig(ty: Type) -> Signature {
+        Signature::new(Type::from(option_type(ty.clone())), ty)
+    }
+
+    /// Signature for a function that wraps an option type in to Some.
+    pub(super) fn wrap_opt_sig(ty: Type) -> Signature {
+        Signature::new(ty.clone(), Type::from(option_type(ty)))
+    }
+    fn new(hugr: &mut impl HugrMut) -> Result<Self, LowerTk2Error> {
+        let unwrap_h = {
+            let mut b =
+                FunctionBuilder::new("__tk2_lower_option_qb_unwrap", Self::unwrap_opt_sig(qb_t()))?;
+            let [in_wire] = b.input_wires_arr();
+            let [out_wire] = b.build_unwrap_sum(1, option_type(qb_t()), in_wire)?;
+            b.finish_hugr_with_outputs([out_wire])?
+        };
+
+        let wrap_h = {
+            let mut b =
+                FunctionBuilder::new("__tk2_lower_option_qb_tag", Self::wrap_opt_sig(qb_t()))?;
+            let [in_wire] = b.input_wires_arr();
+            let out_wire = b.make_sum(1, vec![type_row![], vec![qb_t()].into()], [in_wire])?;
+            b.finish_hugr_with_outputs([out_wire])?
+        };
+
+        debug_assert!(hugr
+            .root_type()
+            .validity_flags()
+            .allowed_children
+            .is_superset(OpTag::FuncDefn));
+        let unwrap = hugr.insert_hugr(hugr.root(), unwrap_h).new_root;
+        let wrap = hugr.insert_hugr(hugr.root(), wrap_h).new_root;
+        Ok(Self { unwrap, wrap })
+    }
+}
 enum ReplaceOps {
     Tk2(Tk2Op),
     Barrier(Barrier),
@@ -106,10 +150,16 @@ pub(super) fn lower_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Er
         .collect();
 
     let mut replaced_nodes = Vec::new();
+    let mut barrier_funcs = None;
     for (node, op) in replacements {
         match op {
             ReplaceOps::Tk2(op) => tk2_to_call(hugr, &mut funcs, node, op)?,
-            ReplaceOps::Barrier(barrier) => insert_runtime_barrier(hugr, node, barrier)?,
+            ReplaceOps::Barrier(barrier) => {
+                let barrier_funcs = barrier_funcs.get_or_insert_with(|| {
+                    BarrierFuncs::new(hugr).expect("failed to create barrier functions")
+                });
+                insert_runtime_barrier(hugr, node, barrier, barrier_funcs)?
+            }
         }
         replaced_nodes.push(node);
     }
@@ -397,8 +447,8 @@ mod test {
         // dfg, input, output, alloc + (10 for unwrap), phasedx, rz, toturns, fmul, phasedx, free +
         // 5x(float + load), measure_reset, conditional, case(input, output) * 2, flip
         // (phasedx + 2*(float + load))
-        // + 22 for the barrier array wrapping, popping and option unwrapping
-        assert_eq!(h.node_count(), 77);
+        // + 39 for the barrier array wrapping, popping and option unwrapping
+        assert_eq!(h.node_count(), 94);
         assert_eq!(check_lowered(&h), Ok(()));
         if let Err(e) = h.validate() {
             panic!("{}", e);
