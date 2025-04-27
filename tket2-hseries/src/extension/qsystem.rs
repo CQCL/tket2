@@ -166,6 +166,7 @@ impl MakeRegisteredOp for QSystemOp {
 pub const RUNTIME_BARRIER_NAME: OpName = OpName::new_inline("RuntimeBarrier");
 
 /// Helper struct for the "tket2.qsystem.RuntimeBarrier" operation definition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RuntimeBarrierDef;
 
 impl NamedOp for RuntimeBarrierDef {
