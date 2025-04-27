@@ -31,6 +31,10 @@ fn is_qubit_container(ty: &Type) -> bool {
     if let Some(sum) = ty.as_sum() {
         if is_opt_qb(sum) {
             // Special case for Option[Qubit] since it is used in guppy qubit arrays.
+            // Will fail if a user passes None to a barrier. expecting Option[Qubit],
+            // which can be surprising if you don't know how runtime barriers work.
+            // Not sure how this can be handled without runtime barrier being able to
+            // take a compile time unknown number of qubits.
             return true;
         }
 
@@ -172,7 +176,10 @@ impl BarrierFuncs {
             let mut b =
                 FunctionBuilder::new("__tk2_lower_option_qb_unwrap", Self::unwrap_opt_sig(qb_t()))?;
             let [in_wire] = b.input_wires_arr();
-            let [out_wire] = b.build_unwrap_sum(1, option_type(qb_t()), in_wire)?;
+            let [out_wire] = b.build_expect_sum(1, option_type(qb_t()), in_wire, |_| {
+                "Value of type Option<qubit> is None so cannot apply runtime barrier to qubit."
+                    .to_string()
+            })?;
             b.finish_hugr_with_outputs([out_wire])?
         };
 
@@ -563,6 +570,8 @@ mod test {
             .unwrap();
 
         let run_bar_dfg = h.get_parent(run_barr_n).unwrap();
+
+        assert!(h.get_optype(run_bar_dfg).is_dfg());
 
         assert_eq!(h.all_linked_inputs(run_bar_dfg).count(), num_qb);
     }
