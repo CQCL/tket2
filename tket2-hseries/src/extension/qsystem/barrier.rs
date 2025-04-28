@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use hugr::builder::{BuildError, DataflowSubContainer, FunctionBuilder, SubContainer};
+use hugr::builder::{BuildError, DataflowSubContainer, FunctionBuilder};
 use hugr::extension::prelude::{self, option_type, UnwrapBuilder};
-use hugr::hugr::hugrmut::InsertionResult;
 use hugr::hugr::rewrite::inline_dfg::InlineDFG;
 use hugr::hugr::{IdentList, Rewrite};
-use hugr::ops::handle::{FuncID, NodeHandle};
-use hugr::ops::{ExtensionOp, NamedOp, OpName, OpTag, ValidateOp};
+use hugr::ops::handle::NodeHandle;
+use hugr::ops::{ExtensionOp, OpName};
 use hugr::std_extensions::collections::array::{self, array_type, ArrayOpBuilder};
 use hugr::types::{SumType, TypeArg, TypeRV, TypeRow};
 use hugr::{
@@ -17,7 +16,7 @@ use hugr::{
     types::{Signature, Type},
     HugrView, IncomingPort, Node, OutgoingPort, Wire,
 };
-use hugr::{ops, type_row, Extension, Hugr};
+use hugr::{type_row, Extension, Hugr};
 
 use super::{LowerTk2Error, QSystemOpBuilder};
 
@@ -87,14 +86,14 @@ fn array_args(ext: &hugr::types::CustomType) -> Option<(u64, &Type)> {
         })
 }
 
-type QubitContainer<H: HugrView> = (Type, (H::Node, IncomingPort));
+type QubitContainer = (Type, (Node, IncomingPort));
 
 /// Filter out types in the generic barrier that contain qubits.
-fn filter_qubit_containers<H: HugrView>(
+fn filter_qubit_containers<H: HugrMut>(
     hugr: &H,
     barrier: &Barrier,
     node: H::Node,
-) -> Vec<QubitContainer<H>> {
+) -> Vec<QubitContainer> {
     barrier
         .type_row
         .iter()
@@ -336,44 +335,6 @@ fn unpack_container(
     Ok(WireTree::Leaf(WireLeaf::Other(container_wire)))
 }
 
-fn build_unpack_tuple(
-    hugr: &mut impl HugrMut,
-    tuple_wire: Wire,
-    row: TypeRow,
-) -> Result<Node, LowerTk2Error> {
-    let unpack_hugr = {
-        let mut dfg_b = DFGBuilder::new(Signature::new(Type::new_tuple(row.clone()), row.clone()))?;
-        let inp = dfg_b.input().out_wire(0);
-        let unpack = dfg_b.add_dataflow_op(prelude::UnpackTuple::new(row), [inp])?;
-        dfg_b.finish_hugr_with_outputs(unpack.outputs())?
-    };
-    let parent = hugr.get_parent(tuple_wire.node()).expect("missing parent.");
-
-    let res = insert_hugr_with_wires(hugr, unpack_hugr, parent, [tuple_wire]);
-    Ok(res.new_root)
-}
-
-fn build_unpack_array(
-    hugr: &mut impl HugrMut,
-    array_wire: Wire,
-    n: u64,
-    elem_ty: &Type,
-) -> Result<Node, LowerTk2Error> {
-    let unpack_hugr = {
-        let mut dfg_b = DFGBuilder::new(Signature::new(
-            array_type(n, elem_ty.clone()),
-            vec![elem_ty.clone(); n as usize],
-        ))?;
-        let inp = dfg_b.input().out_wire(0);
-        let unpacked_wires = super::pop_all(&mut dfg_b, inp, n, elem_ty.clone())?;
-        dfg_b.finish_hugr_with_outputs(unpacked_wires)?
-    };
-    let parent = hugr.get_parent(array_wire.node()).expect("missing parent.");
-    let res = insert_hugr_with_wires(hugr, unpack_hugr, parent, [array_wire]);
-
-    Ok(res.new_root)
-}
-
 /// Repack a container given an updated [WireTree].
 fn repack_container(
     builder: &mut impl Dataflow,
@@ -404,58 +365,6 @@ fn repack_container(
     }
 }
 
-fn build_new_tuple(
-    hugr: &mut impl HugrMut,
-    barrier_parent: Node,
-    row: TypeRow,
-    child_wires: Vec<Wire>,
-) -> Result<Wire, LowerTk2Error> {
-    let pack_hugr = {
-        let mut dfg_b = DFGBuilder::new(Signature::new(row.clone(), Type::new_tuple(row)))?;
-
-        let new_tuple = dfg_b.make_tuple(dfg_b.input_wires())?;
-        dfg_b.finish_hugr_with_outputs([new_tuple])?
-    };
-    let new_tuple = insert_hugr_with_wires(hugr, pack_hugr, barrier_parent, child_wires).new_root;
-    let tuple_wire = Wire::new(new_tuple, 0);
-    Ok(tuple_wire)
-}
-
-fn build_new_array(
-    hugr: &mut impl HugrMut,
-    barrier_parent: Node,
-    elem_ty: Type,
-    elem_wires: Vec<Wire>,
-) -> Result<Wire, LowerTk2Error> {
-    let size = elem_wires.len();
-    let pack_hugr = {
-        let mut dfg_b = DFGBuilder::new(Signature::new(
-            vec![elem_ty.clone(); size],
-            array::array_type(size as u64, elem_ty.clone()),
-        ))?;
-
-        let new_arr = dfg_b.add_new_array(elem_ty, dfg_b.input_wires())?;
-        dfg_b.finish_hugr_with_outputs([new_arr])?
-    };
-    let new_array = insert_hugr_with_wires(hugr, pack_hugr, barrier_parent, elem_wires).new_root;
-    let array_wire = Wire::new(new_array, 0);
-    Ok(array_wire)
-}
-
-fn insert_hugr_with_wires(
-    base_hugr: &mut impl HugrMut,
-    new_hugr: Hugr,
-    parent: Node,
-    in_wires: impl IntoIterator<Item = Wire>,
-) -> InsertionResult {
-    let res = base_hugr.insert_hugr(parent, new_hugr);
-
-    for (in_port, wire) in in_wires.into_iter().enumerate() {
-        base_hugr.connect(wire.node(), wire.source(), res.new_root, in_port);
-    }
-
-    res
-}
 /// Insert [RuntimeBarrier] after every [Barrier] in the Hugr.
 pub(super) fn insert_runtime_barrier(
     hugr: &mut impl HugrMut,
