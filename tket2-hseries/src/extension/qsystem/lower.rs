@@ -125,12 +125,23 @@ pub(super) fn lower_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Er
             }
             ReplaceOps::Barrier(barrier) => {
                 let barrier_funcs = barrier_funcs.get_or_insert_with(|| {
-                    BarrierFuncs::new(hugr).expect("failed to create barrier functions")
+                    BarrierFuncs::new().expect("failed to create barrier functions")
                 });
                 insert_runtime_barrier(hugr, node, barrier, barrier_funcs)?
             }
         }
         replaced_nodes.push(node);
+    }
+
+    if let Some(barrier_funcs) = barrier_funcs {
+        for qsystem::barrier::CallData { func_def, op_nodes } in
+            barrier_funcs.call_data.into_values()
+        {
+            let func_node = hugr.insert_hugr(hugr.root(), func_def).new_root;
+            for op_node in op_nodes {
+                lower_to_call(hugr, func_node, op_node)?;
+            }
+        }
     }
 
     Ok(replaced_nodes)

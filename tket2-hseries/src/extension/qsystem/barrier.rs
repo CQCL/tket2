@@ -1,10 +1,13 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use hugr::builder::{BuildError, DataflowSubContainer, FunctionBuilder, SubContainer};
 use hugr::extension::prelude::{self, option_type, UnwrapBuilder};
 use hugr::hugr::hugrmut::InsertionResult;
 use hugr::hugr::rewrite::inline_dfg::InlineDFG;
-use hugr::hugr::Rewrite;
+use hugr::hugr::{IdentList, Rewrite};
 use hugr::ops::handle::{FuncID, NodeHandle};
-use hugr::ops::{NamedOp, OpTag, ValidateOp};
+use hugr::ops::{ExtensionOp, NamedOp, OpName, OpTag, ValidateOp};
 use hugr::std_extensions::collections::array::{self, array_type, ArrayOpBuilder};
 use hugr::types::{SumType, TypeArg, TypeRV, TypeRow};
 use hugr::{
@@ -14,7 +17,7 @@ use hugr::{
     types::{Signature, Type},
     HugrView, IncomingPort, Node, OutgoingPort, Wire,
 };
-use hugr::{ops, type_row, Hugr};
+use hugr::{ops, type_row, Extension, Hugr};
 
 use super::{LowerTk2Error, QSystemOpBuilder};
 
@@ -153,12 +156,37 @@ impl WireTree {
     }
 }
 
+// copied from
+// https://github.com/CQCL/hugr/blob/c8090ca9089368de1a2de25e0071458ce5222d70/hugr-passes/src/monomorphize.rs#L353-L356
+fn escape_dollar(str: impl AsRef<str>) -> String {
+    str.as_ref().replace("$", "\\$")
+}
+fn mangle_name(name: &str, typ: &Type) -> String {
+    let name = escape_dollar(name);
+    format!("${name}${}", escape_dollar(typ.to_string()))
+}
+
+pub(super) struct CallData {
+    pub func_def: Hugr,
+    pub op_nodes: Vec<Node>,
+}
+
+impl CallData {
+    fn new(func_def: Hugr) -> Self {
+        Self {
+            func_def,
+            op_nodes: vec![],
+        }
+    }
+}
 pub(super) struct BarrierFuncs {
-    pub unwrap: FuncID<true>,
-    pub wrap: FuncID<true>,
+    pub extension: Arc<Extension>,
+    pub call_data: HashMap<OpName, CallData>,
 }
 
 impl BarrierFuncs {
+    const UNWRAP_OPT: OpName = OpName::new_static("__tk2_lower_option_qb_unwrap");
+    const TAG_OPT: OpName = OpName::new_static("__tk2_lower_option_qb_tag");
     /// Signature for a function that unwraps an option type.
     pub(super) fn unwrap_opt_sig(ty: Type) -> Signature {
         Signature::new(Type::from(option_type(ty.clone())), ty)
@@ -169,10 +197,9 @@ impl BarrierFuncs {
         Signature::new(ty.clone(), Type::from(option_type(ty)))
     }
 
-    pub(super) fn new(hugr: &mut impl HugrMut) -> Result<Self, LowerTk2Error> {
+    pub(super) fn new() -> Result<Self, LowerTk2Error> {
         let unwrap_h = {
-            let mut b =
-                FunctionBuilder::new("__tk2_lower_option_qb_unwrap", Self::unwrap_opt_sig(qb_t()))?;
+            let mut b = FunctionBuilder::new(Self::UNWRAP_OPT, Self::unwrap_opt_sig(qb_t()))?;
             let [in_wire] = b.input_wires_arr();
             let [out_wire] = b.build_expect_sum(1, option_type(qb_t()), in_wire, |_| {
                 "Value of type Option<qubit> is None so cannot apply runtime barrier to qubit."
@@ -182,24 +209,53 @@ impl BarrierFuncs {
         };
 
         let wrap_h = {
-            let mut b =
-                FunctionBuilder::new("__tk2_lower_option_qb_tag", Self::wrap_opt_sig(qb_t()))?;
+            let mut b = FunctionBuilder::new(Self::TAG_OPT, Self::wrap_opt_sig(qb_t()))?;
             let [in_wire] = b.input_wires_arr();
             let out_wire = b.make_sum(1, vec![type_row![], vec![qb_t()].into()], [in_wire])?;
             b.finish_hugr_with_outputs([out_wire])?
         };
 
-        debug_assert!(hugr
-            .root_type()
-            .validity_flags()
-            .allowed_children
-            .is_superset(OpTag::FuncDefn));
-        let unwrap = hugr.insert_hugr(hugr.root(), unwrap_h).new_root.into();
-        let wrap = hugr.insert_hugr(hugr.root(), wrap_h).new_root.into();
-        Ok(Self { unwrap, wrap })
+        let extension = Extension::new_arc(
+            IdentList::new_static_unchecked("__tket2.barrier.temp"),
+            hugr::extension::Version::new(0, 0, 0),
+            |ext, ext_ref| {
+                ext.add_op(
+                    Self::UNWRAP_OPT,
+                    Default::default(),
+                    Self::unwrap_opt_sig(qb_t()),
+                    ext_ref,
+                )
+                .unwrap();
+                ext.add_op(
+                    Self::TAG_OPT,
+                    Default::default(),
+                    Self::wrap_opt_sig(qb_t()),
+                    ext_ref,
+                )
+                .unwrap();
+            },
+        );
+
+        let ext_nodes = HashMap::from_iter([
+            (Self::UNWRAP_OPT, CallData::new(unwrap_h)),
+            (Self::TAG_OPT, CallData::new(wrap_h)),
+        ]);
+
+        Ok(Self {
+            extension,
+            call_data: ext_nodes,
+        })
     }
 
-    fn call_unwrap(&self, builder: &mut impl Dataflow, opt_wire: Wire) -> Result<Wire, BuildError> {
+    fn get_op(&self, name: &OpName) -> Option<ExtensionOp> {
+        ExtensionOp::new(self.extension.get_op(name)?.clone(), []).ok()
+    }
+
+    fn call_unwrap(
+        &mut self,
+        builder: &mut impl Dataflow,
+        opt_wire: Wire,
+    ) -> Result<Wire, BuildError> {
         // let call = ops::Call::try_new(BarrierFuncs::unwrap_opt_sig(qb_t()).into(), [])
         //     .expect("simple call");
         // let call_port = call.called_function_port();
@@ -207,14 +263,17 @@ impl BarrierFuncs {
         // hugr.connect(opt_wire.node(), opt_wire.source(), call_n, 0);
         // hugr.connect(self.unwrap, 0, call_n, call_port);
         // Wire::new(call_n, 0)
-        let opt =builder.hugr().get_optype(self.unwrap.node());
-        dbg!(opt.name());
-        assert!(opt.is_func_defn());
-        let call = builder.call(&self.unwrap, &[], [opt_wire])?;
+
+        let call = builder.add_dataflow_op(self.get_op(&Self::UNWRAP_OPT).unwrap(), [opt_wire])?;
+        self.call_data
+            .get_mut(&Self::UNWRAP_OPT)
+            .unwrap()
+            .op_nodes
+            .push(call.node());
         Ok(call.out_wire(0))
     }
 
-    fn call_wrap(&self, builder: &mut impl Dataflow, wire: Wire) -> Result<Wire, BuildError> {
+    fn call_wrap(&mut self, builder: &mut impl Dataflow, wire: Wire) -> Result<Wire, BuildError> {
         // let call =
         //     ops::Call::try_new(BarrierFuncs::wrap_opt_sig(qb_t()).into(), []).expect("simple call");
         // let call_port = call.called_function_port();
@@ -222,7 +281,14 @@ impl BarrierFuncs {
         // hugr.connect(wire.node(), wire.source(), call_n, 0);
         // hugr.connect(self.wrap, 0, call_n, call_port);
         // Wire::new(call_n, 0)
-        let call = builder.call(&self.wrap, &[], [wire])?;
+        // let call = builder.call(&self.wrap, &[], [wire])?;
+        // Ok(call.out_wire(0)
+        let call = builder.add_dataflow_op(self.get_op(&Self::TAG_OPT).unwrap(), [wire])?;
+        self.call_data
+            .get_mut(&Self::TAG_OPT)
+            .unwrap()
+            .op_nodes
+            .push(call.node());
         Ok(call.out_wire(0))
     }
 }
@@ -232,7 +298,7 @@ fn unpack_container(
     builder: &mut impl Dataflow,
     typ: &Type,
     container_wire: Wire,
-    barrier_funcs: &BarrierFuncs,
+    barrier_funcs: &mut BarrierFuncs,
 ) -> Result<WireTree, LowerTk2Error> {
     if typ == &qb_t() {
         return Ok(WireTree::Leaf(WireLeaf::Qubit(container_wire)));
@@ -312,7 +378,7 @@ fn build_unpack_array(
 fn repack_container(
     builder: &mut impl Dataflow,
     wire_tree: &WireTree,
-    barrier_funcs: &BarrierFuncs,
+    barrier_funcs: &mut BarrierFuncs,
 ) -> Result<Wire, LowerTk2Error> {
     match wire_tree {
         WireTree::Leaf(leaf) => match leaf {
@@ -395,7 +461,7 @@ pub(super) fn insert_runtime_barrier(
     hugr: &mut impl HugrMut,
     b_node: Node,
     barrier: Barrier,
-    barrier_funcs: &BarrierFuncs,
+    barrier_funcs: &mut BarrierFuncs,
 ) -> Result<(), LowerTk2Error> {
     if barrier.type_row.is_empty() {
         return Ok(());
@@ -439,28 +505,29 @@ pub(super) fn insert_runtime_barrier(
         insertion: insert_hugr,
     };
 
-    inserter
+    let node_map = inserter
         .apply(hugr)
         // TODO handle error
         .expect("failed to insert runtime barrier");
-    // 7. Disconnect the targets of the original wire and connect the new container wires.
-    // for (old_container, new_wire) in qubit_containers.into_iter().zip(new_container_wires) {
-    //     let (targ_n, targ_p) = old_container.target;
-    //     hugr.disconnect(targ_n, targ_p);
-    //     hugr.connect(new_wire.node(), new_wire.source(), targ_n, targ_p);
-    // }
+
+    for CallData { op_nodes, .. } in barrier_funcs.call_data.values_mut() {
+        for node in op_nodes {
+            let new_node = node_map.get(node).expect("node missing in map");
+            *node = *new_node;
+        }
+    }
 
     Ok(())
 }
 
 fn packing_hugr(
-    barrier_funcs: &BarrierFuncs,
+    barrier_funcs: &mut BarrierFuncs,
     container_row: Vec<Type>,
 ) -> Result<Hugr, LowerTk2Error> {
     // let row: Vec<_> = qubit_containers.iter().map(|qc| qc.typ.clone()).collect();
     let mut dfg_b = DFGBuilder::new(Signature::new_endo(container_row.clone()))?;
     let input = dfg_b.input();
-    let mut wire_trees: Vec<WireTree> = container_row 
+    let mut wire_trees: Vec<WireTree> = container_row
         .iter()
         .enumerate()
         .map(|(port, ty)| unpack_container(&mut dfg_b, ty, input.out_wire(port), barrier_funcs))
@@ -519,9 +586,10 @@ struct InsertCut {
 }
 
 impl InsertCut {
-    fn apply(self, h: &mut impl HugrMut) -> Result<(), ()> {
+    fn apply(self, h: &mut impl HugrMut) -> Result<HashMap<Node, Node>, ()> {
         assert!(self.insertion.root_type().is_dfg());
-        let inserted_root = h.insert_hugr(self.parent, self.insertion).new_root;
+        let insert_res = h.insert_hugr(self.parent, self.insertion);
+        let inserted_root = insert_res.new_root;
         for (i, (target, port)) in self.targets.into_iter().enumerate() {
             let (src_n, src_p) = h
                 .single_linked_output(target, port)
@@ -533,7 +601,7 @@ impl InsertCut {
         let inline = InlineDFG(inserted_root.into());
 
         inline.apply(h).expect("inline failed");
-        Ok(())
+        Ok(insert_res.node_map)
     }
 }
 
