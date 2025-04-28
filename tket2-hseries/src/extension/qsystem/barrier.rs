@@ -1,4 +1,4 @@
-use hugr::builder::FunctionBuilder;
+use hugr::builder::{BuildError, FunctionBuilder};
 use hugr::extension::prelude::{self, option_type, UnwrapBuilder};
 use hugr::hugr::hugrmut::InsertionResult;
 use hugr::hugr::rewrite::inline_dfg::InlineDFG;
@@ -404,8 +404,8 @@ pub(super) fn insert_runtime_barrier(
 
     if let [QubitContainer {
         typ,
-        barrier_port,
         target: (targ_n, targ_p),
+        ..
     }] = qubit_containers.as_slice()
     {
         // If the barrier is over a single array of qubits
@@ -415,10 +415,17 @@ pub(super) fn insert_runtime_barrier(
             .and_then(|ext| array_args(ext))
             .and_then(|(size, elem_ty)| (elem_ty == &qb_t()).then_some(size))
             .map(|size| {
-                let bar_out = Wire::new(b_node, *barrier_port);
-                let r_bar_n = insert_runtime_barrier_op(hugr, parent, bar_out, size)?;
-                hugr.disconnect(*targ_n, *targ_p);
-                hugr.connect(r_bar_n, 0, *targ_n, *targ_p);
+                let barr_hugr = build_runtime_barrier_op(size)?;
+
+                let insert = InsertCut {
+                    parent,
+                    targets: vec![(*targ_n, *targ_p)],
+                    insertion: barr_hugr,
+                };
+                insert
+                    .apply(hugr)
+                    // TODO handle error
+                    .expect("failed to insert runtime barrier");
                 Ok(())
             });
         if let Some(res) = shortcut {
@@ -488,21 +495,11 @@ fn insert_wrapped_runtime_barrier(
     Ok(res.new_root)
 }
 
-fn insert_runtime_barrier_op(
-    hugr: &mut impl HugrMut,
-    parent: Node,
-    in_wire: Wire,
-    array_size: u64,
-) -> Result<Node, LowerTk2Error> {
-    let barr_hugr = {
-        let mut barr_builder =
-            DFGBuilder::new(Signature::new_endo(array_type(array_size, qb_t())))?;
-        let array_wire = barr_builder.input().out_wire(0);
-        let out = barr_builder.add_runtime_barrier(array_wire, array_size)?;
-        barr_builder.finish_hugr_with_outputs([out])?
-    };
-    let res = insert_hugr_with_wires(hugr, barr_hugr, parent, [in_wire]);
-    Ok(res.new_root)
+fn build_runtime_barrier_op(array_size: u64) -> Result<Hugr, BuildError> {
+    let mut barr_builder = DFGBuilder::new(Signature::new_endo(array_type(array_size, qb_t())))?;
+    let array_wire = barr_builder.input().out_wire(0);
+    let out = barr_builder.add_runtime_barrier(array_wire, array_size)?;
+    barr_builder.finish_hugr_with_outputs([out])
 }
 
 struct InsertCut {
@@ -547,20 +544,24 @@ mod test {
     }
 
     #[rstest]
-    #[case(vec![qb_t(), qb_t()], 2)]
-    #[case(vec![qb_t(), qb_t(), bool_t()], 2)]
+    #[case(vec![qb_t(), qb_t()], 2, false)]
+    #[case(vec![qb_t(), qb_t(), bool_t()], 2, false)]
     // special case, array of option qubit is unwrapped and unpacked
-    #[case(vec![qb_t(), opt_q_arr(2)], 3)]
+    #[case(vec![qb_t(), opt_q_arr(2)], 3, false)]
     // bare option of qubit is ignored
-    #[case(vec![qb_t(), option_type(qb_t()).into()], 1)]
-    #[case(vec![array_type(2, bool_t())], 0)]
+    #[case(vec![qb_t(), option_type(qb_t()).into()], 1, false)]
+    #[case(vec![array_type(2, bool_t())], 0, false)]
     // special case, single array of qubits is passed directly to op without unpacking
-    #[case(vec![array_type(3, qb_t())], 1)]
-    #[case(vec![qb_t(), array_type(2, qb_t()), array_type(2, array_type(2, qb_t()))], 7)]
-    #[case(vec![Type::new_tuple(vec![bool_t(), qb_t()]), qb_t()], 2)]
-    #[case(vec![Type::new_tuple(vec![bool_t(), qb_t(), opt_q_arr(2)]), qb_t()], 4)]
-    #[case(vec![Type::new_tuple(vec![bool_t(), qb_t(), array_type(2, Type::new_tuple(vec![bool_t(), qb_t()]))]), qb_t()], 4)]
-    fn test_barrier(#[case] type_row: Vec<hugr::types::Type>, #[case] num_qb: usize) {
+    #[case(vec![array_type(3, qb_t())], 1, true)]
+    #[case(vec![qb_t(), array_type(2, qb_t()), array_type(2, array_type(2, qb_t()))], 7, false)]
+    #[case(vec![Type::new_tuple(vec![bool_t(), qb_t()]), qb_t()], 2, false)]
+    #[case(vec![Type::new_tuple(vec![bool_t(), qb_t(), opt_q_arr(2)]), qb_t()], 4, false)]
+    #[case(vec![Type::new_tuple(vec![bool_t(), qb_t(), array_type(2, Type::new_tuple(vec![bool_t(), qb_t()]))]), qb_t()], 4, false)]
+    fn test_barrier(
+        #[case] type_row: Vec<hugr::types::Type>,
+        #[case] num_qb: usize,
+        #[case] no_parent: bool,
+    ) {
         // build a dfg with a generic barrier
         use hugr::{
             ops::{handle::NodeHandle, NamedOp},
@@ -595,10 +596,14 @@ mod test {
             .ok()
             .unwrap();
 
-        let run_bar_dfg = h.get_parent(run_barr_n).unwrap();
+        let run_bar_n = if no_parent {
+            run_barr_n
+        } else {
+            let par = h.get_parent(run_barr_n).unwrap();
+            assert!(h.get_optype(par).is_dfg());
+            par
+        };
 
-        assert!(h.get_optype(run_bar_dfg).is_dfg());
-
-        assert_eq!(h.all_linked_inputs(run_bar_dfg).count(), num_qb);
+        assert_eq!(h.all_linked_inputs(run_bar_n).count(), num_qb);
     }
 }
