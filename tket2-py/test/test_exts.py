@@ -1,10 +1,10 @@
-from tket2.extensions import opaque_bool
-from tket2.extensions import debug
-from tket2.extensions import rotation
-from tket2.extensions import futures
-from tket2.extensions import qsystem
-from tket2.extensions import qsystem_random
-from tket2.extensions import qsystem_utils
-from tket2.extensions import quantum
-from tket2.extensions import result
-from tket2.extensions import wasm
+from tket2.extensions import opaque_bool  # noqa: F401
+from tket2.extensions import debug  # noqa: F401
+from tket2.extensions import rotation  # noqa: F401
+from tket2.extensions import futures  # noqa: F401
+from tket2.extensions import qsystem  # noqa: F401
+from tket2.extensions import qsystem_random  # noqa: F401
+from tket2.extensions import qsystem_utils  # noqa: F401
+from tket2.extensions import quantum  # noqa: F401
+from tket2.extensions import result  # noqa: F401
+from tket2.extensions import wasm  # noqa: F401
