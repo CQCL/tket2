@@ -29,15 +29,6 @@ fn is_qubit_container(ty: &Type) -> bool {
     }
 
     if let Some(sum) = ty.as_sum() {
-        if is_opt_qb(sum) {
-            // Special case for Option[Qubit] since it is used in guppy qubit arrays.
-            // Will fail if a user passes None to a barrier. expecting Option[Qubit],
-            // which can be surprising if you don't know how runtime barriers work.
-            // Not sure how this can be handled without runtime barrier being able to
-            // take a compile time unknown number of qubits.
-            return true;
-        }
-
         if let Some(row) = sum.as_tuple() {
             return row.iter().any(|t| {
                 is_qubit_container(&t.clone().try_into_type().expect("unexpected row variable."))
@@ -48,7 +39,11 @@ fn is_qubit_container(ty: &Type) -> bool {
 
     if let Some(ext) = ty.as_extension() {
         if let Some((_, elem_ty)) = array_args(ext) {
-            return is_qubit_container(elem_ty);
+            // Special case for Option[Qubit] since it is used in guppy qubit arrays.
+            // Fragile - would be better with dediccated guppy array type.
+            // Not sure how this can be improved without runtime barrier being able to
+            // take a compile time unknown number of qubits.
+            return is_opt_qb(elem_ty) || is_qubit_container(elem_ty);
         }
     }
 
@@ -65,10 +60,12 @@ fn as_unary_option(sum: &SumType) -> Option<&TypeRV> {
     }
 }
 
-/// If a sum is an option of qubit.
-fn is_opt_qb(sum: &SumType) -> bool {
-    if let Some(inner) = as_unary_option(sum) {
-        return inner == &qb_t();
+/// If a type is an option of qubit.
+fn is_opt_qb(ty: &Type) -> bool {
+    if let Some(sum) = ty.as_sum() {
+        if let Some(inner) = as_unary_option(sum) {
+            return inner == &qb_t();
+        }
     }
     false
 }
@@ -232,6 +229,10 @@ fn unpack_container<H: HugrMut>(
     if typ == &qb_t() {
         return Ok(WireTree::Leaf(WireLeaf::Qubit(container_wire)));
     }
+    if is_opt_qb(typ) {
+        let unwrapped = barrier_funcs.call_unwrap(hugr, container_wire);
+        return Ok(WireTree::Leaf(WireLeaf::OptQb(unwrapped)));
+    }
     if let Some(ext) = typ.as_extension() {
         if let Some((n, elem_ty)) = array_args(ext) {
             let unpacked_dfg = build_unpack_array(hugr, container_wire, n, elem_ty)?;
@@ -257,11 +258,6 @@ fn unpack_container<H: HugrMut>(
                 .map(|(i, t)| unpack_container(hugr, t, Wire::new(unpacked_dfg, i), barrier_funcs))
                 .collect::<Result<Vec<_>, _>>()?;
             return Ok(WireTree::Tuple(row, children));
-        }
-
-        if is_opt_qb(sum) {
-            let unwrapped = barrier_funcs.call_unwrap(hugr, container_wire);
-            return Ok(WireTree::Leaf(WireLeaf::OptQb(unwrapped)));
         }
     }
     // No need to unpack if the type is not a qubit container.
@@ -526,7 +522,10 @@ mod test {
     #[rstest]
     #[case(vec![qb_t(), qb_t()], 2)]
     #[case(vec![qb_t(), qb_t(), bool_t()], 2)]
+    // special case, array of option qubit is unwrapped and unpacked
     #[case(vec![qb_t(), opt_q_arr(2)], 3)]
+    // bare option of qubit is ignored
+    #[case(vec![qb_t(), option_type(qb_t()).into()], 1)]
     #[case(vec![array_type(2, bool_t())], 0)]
     // special case, single array of qubits is passed directly to op without unpacking
     #[case(vec![array_type(3, qb_t())], 1)]
