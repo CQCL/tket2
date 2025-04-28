@@ -20,13 +20,6 @@ use hugr::{type_row, Extension, Hugr};
 
 use super::{LowerTk2Error, QSystemOpBuilder};
 
-// /// A [Barrier] output port for a qubit containing type.
-// struct QubitContainer<H: HugrView> {
-//     typ: Type,
-//     barrier_port: OutgoingPort,
-//     target: (H::Node, IncomingPort),
-// }
-
 /// Check if the type tree contains any qubits.
 fn is_qubit_container(ty: &Type) -> bool {
     if ty == &qb_t() {
@@ -255,14 +248,6 @@ impl BarrierFuncs {
         builder: &mut impl Dataflow,
         opt_wire: Wire,
     ) -> Result<Wire, BuildError> {
-        // let call = ops::Call::try_new(BarrierFuncs::unwrap_opt_sig(qb_t()).into(), [])
-        //     .expect("simple call");
-        // let call_port = call.called_function_port();
-        // let call_n = hugr.add_node_after(opt_wire.node(), call);
-        // hugr.connect(opt_wire.node(), opt_wire.source(), call_n, 0);
-        // hugr.connect(self.unwrap, 0, call_n, call_port);
-        // Wire::new(call_n, 0)
-
         let call = builder.add_dataflow_op(self.get_op(&Self::UNWRAP_OPT).unwrap(), [opt_wire])?;
         self.call_data
             .get_mut(&Self::UNWRAP_OPT)
@@ -273,15 +258,6 @@ impl BarrierFuncs {
     }
 
     fn call_wrap(&mut self, builder: &mut impl Dataflow, wire: Wire) -> Result<Wire, BuildError> {
-        // let call =
-        //     ops::Call::try_new(BarrierFuncs::wrap_opt_sig(qb_t()).into(), []).expect("simple call");
-        // let call_port = call.called_function_port();
-        // let call_n = hugr.add_node_after(wire.node(), call);
-        // hugr.connect(wire.node(), wire.source(), call_n, 0);
-        // hugr.connect(self.wrap, 0, call_n, call_port);
-        // Wire::new(call_n, 0)
-        // let call = builder.call(&self.wrap, &[], [wire])?;
-        // Ok(call.out_wire(0)
         let call = builder.add_dataflow_op(self.get_op(&Self::TAG_OPT).unwrap(), [wire])?;
         self.call_data
             .get_mut(&Self::TAG_OPT)
@@ -433,7 +409,7 @@ fn packing_hugr(
     barrier_funcs: &mut BarrierFuncs,
     container_row: Vec<Type>,
 ) -> Result<Hugr, LowerTk2Error> {
-    // let row: Vec<_> = qubit_containers.iter().map(|qc| qc.typ.clone()).collect();
+    // TODO add comments for steps
     let mut dfg_b = DFGBuilder::new(Signature::new_endo(container_row.clone()))?;
     let input = dfg_b.input();
     let mut wire_trees: Vec<WireTree> = container_row
@@ -470,15 +446,6 @@ fn insert_wrapped_runtime_barrier(
     let dfg_n = dfg_b.finish_with_outputs(outs)?;
 
     Ok(dfg_n.node())
-
-    // let barr_hugr = {
-    //     let mut barr_builder =
-    //         DFGBuilder::new(Signature::new_endo(vec![qb_t(); qubit_wires.len()]))?;
-    //     let outs = barr_builder.build_wrapped_barrier(barr_builder.input_wires())?;
-    //     barr_builder.finish_hugr_with_outputs(outs)?
-    // };
-    // let res = insert_hugr_with_wires(hugr, barr_hugr, parent, qubit_wires);
-    // Ok(res.new_root)
 }
 
 fn build_runtime_barrier_op(array_size: u64) -> Result<Hugr, BuildError> {
@@ -488,6 +455,7 @@ fn build_runtime_barrier_op(array_size: u64) -> Result<Hugr, BuildError> {
     barr_builder.finish_hugr_with_outputs([out])
 }
 
+// TODO upstream to hugr rewrite
 struct InsertCut {
     parent: Node,
     targets: Vec<(Node, IncomingPort)>,
