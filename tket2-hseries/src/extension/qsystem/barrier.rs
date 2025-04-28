@@ -1,6 +1,8 @@
 use hugr::builder::FunctionBuilder;
 use hugr::extension::prelude::{self, option_type, UnwrapBuilder};
 use hugr::hugr::hugrmut::InsertionResult;
+use hugr::hugr::rewrite::inline_dfg::InlineDFG;
+use hugr::hugr::Rewrite;
 use hugr::ops::{OpTag, ValidateOp};
 use hugr::std_extensions::collections::array::{self, array_type, ArrayOpBuilder};
 use hugr::types::{SumType, TypeArg, TypeRV, TypeRow};
@@ -501,6 +503,31 @@ fn insert_runtime_barrier_op(
     };
     let res = insert_hugr_with_wires(hugr, barr_hugr, parent, [in_wire]);
     Ok(res.new_root)
+}
+
+struct InsertCut {
+    parent: Node,
+    targets: Vec<(Node, IncomingPort)>,
+    insertion: Hugr,
+}
+
+impl InsertCut {
+    fn apply(self, h: &mut impl HugrMut) -> Result<(), ()> {
+        assert!(self.insertion.root_type().is_dfg());
+        let inserted_root = h.insert_hugr(self.parent, self.insertion).new_root;
+        for (i, (target, port)) in self.targets.into_iter().enumerate() {
+            let (src_n, src_p) = h
+                .single_linked_output(target, port)
+                .expect("Incoming value edge has single connection.");
+            h.connect(src_n, src_p, inserted_root, i);
+            h.disconnect(target, port);
+            h.connect(inserted_root, i, target, port);
+        }
+        let inline = InlineDFG(inserted_root.into());
+
+        inline.apply(h).expect("inline failed");
+        Ok(())
+    }
 }
 
 #[cfg(test)]
