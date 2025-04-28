@@ -111,7 +111,18 @@ pub(super) fn lower_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Er
     let mut barrier_funcs = None;
     for (node, op) in replacements {
         match op {
-            ReplaceOps::Tk2(op) => tk2_to_call(hugr, &mut funcs, node, op)?,
+            ReplaceOps::Tk2(op) => {
+                let func_node = match funcs.entry(op) {
+                    Entry::Occupied(f) => *f.get(),
+                    Entry::Vacant(entry) => {
+                        let h = build_func(op)?;
+                        let inserted = hugr.insert_hugr(hugr.root(), h);
+                        entry.insert(inserted.new_root);
+                        inserted.new_root
+                    }
+                };
+                lower_to_call(hugr, func_node, node)?
+            }
             ReplaceOps::Barrier(barrier) => {
                 let barrier_funcs = barrier_funcs.get_or_insert_with(|| {
                     BarrierFuncs::new(hugr).expect("failed to create barrier functions")
@@ -125,26 +136,15 @@ pub(super) fn lower_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Er
     Ok(replaced_nodes)
 }
 
-/// Replace a [Tk2Op] with a call to a function that implements the
+/// Replace an operation with a call to a function that implements the
 /// decomposition of the operation.
 ///
-/// If the function is not already defined, it will be lazily defined and
-/// inserted into the Hugr.
-fn tk2_to_call(
+// TODO replace with NodeTemplate after hugr 0.16 is released with https://github.com/CQCL/hugr/pull/2094
+fn lower_to_call(
     hugr: &mut impl HugrMut,
-    funcs: &mut BTreeMap<Tk2Op, Node>,
-    node: Node,
-    op: Tk2Op,
+    func_node: Node,
+    op_node: Node,
 ) -> Result<(), LowerTk2Error> {
-    let func_node = match funcs.entry(op) {
-        Entry::Occupied(f) => *f.get(),
-        Entry::Vacant(entry) => {
-            let h = build_func(op)?;
-            let inserted = hugr.insert_hugr(hugr.root(), h);
-            entry.insert(inserted.new_root);
-            inserted.new_root
-        }
-    };
     let call_op: hugr::ops::OpType = hugr::ops::Call::try_new(
         hugr.get_optype(func_node)
             .as_func_defn()
@@ -158,10 +158,10 @@ fn tk2_to_call(
     let call_static_port = call_op
         .static_input_port()
         .expect("Call should have static input");
-    hugr.replace_op(node, call_op)
+    hugr.replace_op(op_node, call_op)
         .map_err(LowerTk2Error::OpReplacement)?;
-    hugr.insert_ports(node, Direction::Incoming, call_static_port.index(), 1);
-    hugr.connect(func_node, 0, node, call_static_port);
+    hugr.insert_ports(op_node, Direction::Incoming, call_static_port.index(), 1);
+    hugr.connect(func_node, 0, op_node, call_static_port);
     Ok(())
 }
 
