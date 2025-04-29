@@ -407,52 +407,51 @@ impl BarrierFuncs {
                     .flat_map(|call| call.op_nodes.iter_mut()),
             )
     }
-}
 
-/// Unpack a qubit containing type until all qubit wires are found.
-fn unpack_container(
-    builder: &mut impl Dataflow,
-    typ: &Type,
-    container_wire: Wire,
-    barrier_funcs: &mut BarrierFuncs,
-) -> Result<WireTree, LowerTk2Error> {
-    if typ == &qb_t() {
-        return Ok(WireTree::Leaf(WireLeaf::Qubit(container_wire)));
-    }
-    if is_opt_qb(typ) {
-        let unwrapped = barrier_funcs.call_unwrap(builder, container_wire)?;
-        return Ok(WireTree::Leaf(WireLeaf::OptQb(unwrapped)));
-    }
-    if let Some(ext) = typ.as_extension() {
-        if let Some((n, elem_ty)) = array_args(ext) {
-            // let unpacked = super::pop_all(builder, container_wire, n, elem_ty.clone())?;
-            let unpacked =
-                barrier_funcs.call_unpack_array(builder, container_wire, n, elem_ty.clone())?;
-            let children = unpacked
-                .into_iter()
-                .map(|elem_wire| unpack_container(builder, elem_ty, elem_wire, barrier_funcs))
-                .collect::<Result<_, _>>()?;
-            let tree = WireTree::Array(elem_ty.clone(), children);
-            return Ok(tree);
+    /// Unpack a qubit containing type until all qubit wires are found.
+    fn unpack_container(
+        &mut self,
+        builder: &mut impl Dataflow,
+        typ: &Type,
+        container_wire: Wire,
+    ) -> Result<WireTree, LowerTk2Error> {
+        if typ == &qb_t() {
+            return Ok(WireTree::Leaf(WireLeaf::Qubit(container_wire)));
         }
-    }
-    if let Some(sum) = typ.as_sum() {
-        if let Some(row) = sum.as_tuple() {
-            let row: TypeRow = row.clone().try_into().expect("unexpected row variable.");
-            let unpacked = builder
-                .add_dataflow_op(prelude::UnpackTuple::new(row.clone()), [container_wire])?;
-            let children = row
-                .iter()
-                .enumerate()
-                .map(|(i, t)| unpack_container(builder, t, unpacked.out_wire(i), barrier_funcs))
-                .collect::<Result<Vec<_>, _>>()?;
-            return Ok(WireTree::Tuple(children));
+        if is_opt_qb(typ) {
+            let unwrapped = self.call_unwrap(builder, container_wire)?;
+            return Ok(WireTree::Leaf(WireLeaf::OptQb(unwrapped)));
         }
+        if let Some(ext) = typ.as_extension() {
+            if let Some((n, elem_ty)) = array_args(ext) {
+                // let unpacked = super::pop_all(builder, container_wire, n, elem_ty.clone())?;
+                let unpacked =
+                    self.call_unpack_array(builder, container_wire, n, elem_ty.clone())?;
+                let children = unpacked
+                    .into_iter()
+                    .map(|elem_wire| self.unpack_container(builder, elem_ty, elem_wire))
+                    .collect::<Result<_, _>>()?;
+                let tree = WireTree::Array(elem_ty.clone(), children);
+                return Ok(tree);
+            }
+        }
+        if let Some(sum) = typ.as_sum() {
+            if let Some(row) = sum.as_tuple() {
+                let row: TypeRow = row.clone().try_into().expect("unexpected row variable.");
+                let unpacked = builder
+                    .add_dataflow_op(prelude::UnpackTuple::new(row.clone()), [container_wire])?;
+                let children = row
+                    .iter()
+                    .enumerate()
+                    .map(|(i, t)| self.unpack_container(builder, t, unpacked.out_wire(i)))
+                    .collect::<Result<Vec<_>, _>>()?;
+                return Ok(WireTree::Tuple(children));
+            }
+        }
+        // No need to unpack if the type is not a qubit container.
+        Ok(WireTree::Leaf(WireLeaf::Other(container_wire)))
     }
-    // No need to unpack if the type is not a qubit container.
-    Ok(WireTree::Leaf(WireLeaf::Other(container_wire)))
 }
-
 /// Repack a container given an updated [WireTree].
 fn repack_container(
     builder: &mut impl Dataflow,
@@ -556,7 +555,7 @@ fn packing_hugr(
     let mut wire_trees: Vec<WireTree> = container_row
         .iter()
         .enumerate()
-        .map(|(port, ty)| unpack_container(&mut dfg_b, ty, input.out_wire(port), barrier_funcs))
+        .map(|(port, ty)| barrier_funcs.unpack_container(&mut dfg_b, ty, input.out_wire(port)))
         .collect::<Result<_, _>>()?;
     let qubit_wires: Vec<_> = wire_trees
         .iter()
