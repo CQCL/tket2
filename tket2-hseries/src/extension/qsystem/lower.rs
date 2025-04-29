@@ -134,9 +134,7 @@ pub(super) fn lower_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Er
     }
 
     if let Some(barrier_funcs) = barrier_funcs {
-        for qsystem::barrier::CallData { func_def, op_nodes } in
-            barrier_funcs.call_data.into_values()
-        {
+        for qsystem::barrier::CallData { func_def, op_nodes } in barrier_funcs.into_calls() {
             let func_node = hugr.insert_hugr(hugr.root(), func_def).new_root;
             for op_node in op_nodes {
                 lower_to_call(hugr, func_node, op_node)?;
@@ -416,8 +414,8 @@ mod test {
         // dfg, input, output, alloc + (10 for unwrap), phasedx, rz, toturns, fmul, phasedx, free +
         // 5x(float + load), measure_reset, conditional, case(input, output) * 2, flip
         // (phasedx + 2*(float + load))
-        // + 39 for the barrier array wrapping, popping and option unwrapping
-        assert_eq!(h.node_count(), 94);
+        // + 40 for the barrier array wrapping, popping and option unwrapping
+        assert_eq!(h.node_count(), 95);
         assert_eq!(check_lowered(&h), Ok(()));
         if let Err(e) = h.validate() {
             panic!("{}", e);

@@ -1,14 +1,16 @@
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use hugr::builder::{BuildError, DataflowSubContainer, FunctionBuilder};
+use hugr::builder::{BuildError, BuildHandle, DataflowSubContainer, FunctionBuilder};
 use hugr::extension::prelude::{self, option_type, UnwrapBuilder};
 use hugr::hugr::rewrite::inline_dfg::InlineDFG;
 use hugr::hugr::{IdentList, Rewrite};
-use hugr::ops::handle::NodeHandle;
+use hugr::ops::handle::{DataflowOpID, NodeHandle};
 use hugr::ops::{ExtensionOp, OpName};
 use hugr::std_extensions::collections::array::{self, array_type, ArrayOpBuilder};
-use hugr::types::{SumType, TypeArg, TypeRV, TypeRow};
+use hugr::types::type_param::TypeParam;
+use hugr::types::{FuncValueType, PolyFuncTypeRV, SumType, TypeArg, TypeBound, TypeRV, TypeRow};
 use hugr::{
     builder::{DFGBuilder, Dataflow, DataflowHugr},
     extension::prelude::{qb_t, Barrier},
@@ -173,12 +175,16 @@ impl CallData {
 }
 pub(super) struct BarrierFuncs {
     pub extension: Arc<Extension>,
-    pub call_data: HashMap<OpName, CallData>,
+    pub unwwrap: CallData,
+    pub wrap: CallData,
+    pub wrapped_barrier: HashMap<usize, CallData>,
 }
 
 impl BarrierFuncs {
     const UNWRAP_OPT: OpName = OpName::new_static("__tk2_lower_option_qb_unwrap");
     const TAG_OPT: OpName = OpName::new_static("__tk2_lower_option_qb_tag");
+    const WRAPPED_BARRIER: OpName = OpName::new_static("__tk2_lower_wrapped_barrier");
+
     /// Signature for a function that unwraps an option type.
     pub(super) fn unwrap_opt_sig(ty: Type) -> Signature {
         Signature::new(Type::from(option_type(ty.clone())), ty)
@@ -225,22 +231,29 @@ impl BarrierFuncs {
                     ext_ref,
                 )
                 .unwrap();
+                ext.add_op(
+                    Self::WRAPPED_BARRIER,
+                    Default::default(),
+                    PolyFuncTypeRV::new(
+                        vec![TypeParam::new_list(TypeBound::Any)],
+                        FuncValueType::new_endo(TypeRV::new_row_var_use(0, TypeBound::Any)),
+                    ),
+                    ext_ref,
+                )
+                .unwrap();
             },
         );
 
-        let ext_nodes = HashMap::from_iter([
-            (Self::UNWRAP_OPT, CallData::new(unwrap_h)),
-            (Self::TAG_OPT, CallData::new(wrap_h)),
-        ]);
-
         Ok(Self {
             extension,
-            call_data: ext_nodes,
+            unwwrap: CallData::new(unwrap_h),
+            wrap: CallData::new(wrap_h),
+            wrapped_barrier: HashMap::new(),
         })
     }
 
-    fn get_op(&self, name: &OpName) -> Option<ExtensionOp> {
-        ExtensionOp::new(self.extension.get_op(name)?.clone(), []).ok()
+    fn get_op(&self, name: &OpName, args: impl Into<Vec<TypeArg>>) -> Option<ExtensionOp> {
+        ExtensionOp::new(self.extension.get_op(name)?.clone(), args).ok()
     }
 
     fn call_unwrap(
@@ -248,23 +261,76 @@ impl BarrierFuncs {
         builder: &mut impl Dataflow,
         opt_wire: Wire,
     ) -> Result<Wire, BuildError> {
-        let call = builder.add_dataflow_op(self.get_op(&Self::UNWRAP_OPT).unwrap(), [opt_wire])?;
-        self.call_data
-            .get_mut(&Self::UNWRAP_OPT)
-            .unwrap()
-            .op_nodes
-            .push(call.node());
+        let call =
+            builder.add_dataflow_op(self.get_op(&Self::UNWRAP_OPT, []).unwrap(), [opt_wire])?;
+        self.unwwrap.op_nodes.push(call.node());
         Ok(call.out_wire(0))
     }
 
     fn call_wrap(&mut self, builder: &mut impl Dataflow, wire: Wire) -> Result<Wire, BuildError> {
-        let call = builder.add_dataflow_op(self.get_op(&Self::TAG_OPT).unwrap(), [wire])?;
-        self.call_data
-            .get_mut(&Self::TAG_OPT)
-            .unwrap()
-            .op_nodes
-            .push(call.node());
+        let call = builder.add_dataflow_op(self.get_op(&Self::TAG_OPT, []).unwrap(), [wire])?;
+        self.wrap.op_nodes.push(call.node());
         Ok(call.out_wire(0))
+    }
+
+    fn call_wrapped_runtime_barrier(
+        &mut self,
+        builder: &mut impl Dataflow,
+        qubit_wires: Vec<Wire>,
+    ) -> Result<BuildHandle<DataflowOpID>, BuildError> {
+        let size = qubit_wires.len();
+        let qb_row = vec![qb_t(); size];
+
+        let op = self
+            .get_op(
+                &Self::WRAPPED_BARRIER,
+                [TypeArg::Sequence {
+                    elems: qb_row
+                        .clone()
+                        .into_iter()
+                        .map(|ty| TypeArg::Type { ty })
+                        .collect(),
+                }],
+            )
+            .unwrap();
+
+        let handle = builder.add_dataflow_op(op, qubit_wires)?;
+        match self.wrapped_barrier.entry(size) {
+            Entry::Occupied(mut ent) => ent.get_mut().op_nodes.push(handle.node()),
+            Entry::Vacant(ent) => {
+                let func_def: Hugr = {
+                    let sig = Signature::new_endo(qb_row.clone());
+                    let mut name = Self::WRAPPED_BARRIER.to_string();
+                    name.push_str(&format!("${}", size));
+                    let mut func_b = FunctionBuilder::new(name, sig.clone())?;
+                    let outs = func_b.build_wrapped_barrier(func_b.input_wires())?;
+                    func_b.finish_hugr_with_outputs(outs)?
+                };
+                ent.insert(CallData::new(func_def))
+                    .op_nodes
+                    .push(handle.node());
+            }
+        };
+
+        Ok(handle)
+    }
+
+    pub(super) fn into_calls(self) -> impl Iterator<Item = CallData> {
+        [self.unwwrap, self.wrap]
+            .into_iter()
+            .chain(self.wrapped_barrier.into_values())
+    }
+
+    fn nodes_mut(&mut self) -> impl Iterator<Item = &mut Node> {
+        self.unwwrap
+            .op_nodes
+            .iter_mut()
+            .chain(self.wrap.op_nodes.iter_mut())
+            .chain(
+                self.wrapped_barrier
+                    .values_mut()
+                    .flat_map(|call| call.op_nodes.iter_mut()),
+            )
     }
 }
 
@@ -395,11 +461,10 @@ pub(super) fn insert_runtime_barrier(
         // TODO handle error
         .expect("failed to insert runtime barrier");
 
-    for CallData { op_nodes, .. } in barrier_funcs.call_data.values_mut() {
-        for node in op_nodes {
-            let new_node = node_map.get(node).expect("node missing in map");
-            *node = *new_node;
-        }
+    // update all the extension op nodes that will be lowered later
+    for node in barrier_funcs.nodes_mut() {
+        let new_node = node_map.get(node).expect("node missing in map");
+        *node = *new_node;
     }
 
     Ok(())
@@ -421,9 +486,9 @@ fn packing_hugr(
         .iter()
         .flat_map(|tree| tree.qubit_wires())
         .collect();
-    let n_qbs = qubit_wires.len();
-    let r_bar_n = insert_wrapped_runtime_barrier(&mut dfg_b, qubit_wires)?;
-    let mut r_bar_wires = (0..n_qbs).map(|p| Wire::new(r_bar_n, p));
+    // let r_bar_n = insert_wrapped_runtime_barrier(&mut dfg_b, qubit_wires)?;
+    let r_bar_h = barrier_funcs.call_wrapped_runtime_barrier(&mut dfg_b, qubit_wires)?;
+    let mut r_bar_wires = r_bar_h.outputs();
     for tree in wire_trees.iter_mut() {
         tree.update_wires(&mut r_bar_wires);
     }
@@ -540,23 +605,28 @@ mod test {
 
         let _barr_op: Barrier = h.get_optype(barr_n).cast().unwrap();
 
-        let run_barr_n = h
-            .nodes()
-            .filter(|&r_barr_n| {
-                h.get_optype(r_barr_n)
-                    .as_extension_op()
-                    .is_some_and(|op| op.name().contains(qsystem::RUNTIME_BARRIER_NAME.as_str()))
-            })
-            .exactly_one()
-            .ok()
-            .unwrap();
-
         let run_bar_n = if no_parent {
-            run_barr_n
+            h.nodes()
+                .filter(|&r_barr_n| {
+                    h.get_optype(r_barr_n).as_extension_op().is_some_and(|op| {
+                        op.name().contains(qsystem::RUNTIME_BARRIER_NAME.as_str())
+                    })
+                })
+                .exactly_one()
+                .ok()
+                .unwrap()
         } else {
-            let par = h.get_parent(run_barr_n).unwrap();
-            assert!(h.get_optype(par).is_dfg());
-            par
+            let run_barr_func_n = h
+            .children(h.root())
+            .find(|&r_barr_n| {
+                h.get_optype(r_barr_n).as_func_defn().is_some_and(|op| {
+                        op.name.contains(BarrierFuncs::WRAPPED_BARRIER.as_str())
+                    })
+                })
+                // .exactly_one()
+                // .ok()
+                .unwrap();
+            h.single_linked_input(run_barr_func_n, 0).unwrap().0
         };
 
         assert_eq!(h.all_linked_inputs(run_bar_n).count(), num_qb);
