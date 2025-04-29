@@ -89,7 +89,11 @@ fn array_args(ext: &hugr::types::CustomType) -> Option<(u64, &Type)> {
         })
 }
 
-type QubitContainer = (Type, (Node, IncomingPort));
+struct QubitContainer {
+    typ: Type,
+    n_qb: u64,
+    target: (Node, IncomingPort),
+}
 
 /// Filter out types in the generic barrier that contain qubits.
 fn filter_qubit_containers<H: HugrMut>(
@@ -101,13 +105,19 @@ fn filter_qubit_containers<H: HugrMut>(
         .type_row
         .iter()
         .enumerate()
-        .filter(|&(_, ty)| num_contained_qubits(ty) > 0)
-        .map(|(i, ty)| {
-            let barrier_port = OutgoingPort::from(i);
-            let target = hugr
-                .single_linked_input(node, barrier_port)
-                .expect("linearity violation.");
-            (ty.clone(), target)
+        .filter_map(|(i, typ)| {
+            let n_qb = num_contained_qubits(typ);
+            (n_qb > 0).then(|| {
+                let port = OutgoingPort::from(i);
+                let target = hugr
+                    .single_linked_input(node, port)
+                    .expect("linearity violation.");
+                QubitContainer {
+                    typ: typ.clone(),
+                    n_qb,
+                    target,
+                }
+            })
         })
         .collect()
 }
@@ -501,7 +511,12 @@ pub(super) fn insert_runtime_barrier(
 
     let parent = hugr.get_parent(b_node).expect("Barrier can't be root.");
 
-    if let [(typ, (targ_n, targ_p))] = qubit_containers.as_slice() {
+    if let [QubitContainer {
+        typ,
+        target: (targ_n, targ_p),
+        ..
+    }] = qubit_containers.as_slice()
+    {
         // If the barrier is over a single array of qubits
         // we can insert a runtime barrier op directly.
         let shortcut = typ
@@ -526,7 +541,10 @@ pub(super) fn insert_runtime_barrier(
             return res;
         }
     }
-    let (row, targets) = qubit_containers.into_iter().unzip();
+    let (row, targets) = qubit_containers
+        .into_iter()
+        .map(|qc| (qc.typ, qc.target))
+        .unzip();
     let insert_hugr: Hugr = packing_hugr(barrier_funcs, row)?;
 
     let inserter = InsertCut {
