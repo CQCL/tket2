@@ -26,32 +26,36 @@ use hugr::{type_row, Extension, Hugr};
 
 use super::{LowerTk2Error, QSystemOpBuilder};
 
-/// Check if the type tree contains any qubits.
-fn is_qubit_container(ty: &Type) -> bool {
+/// Count how many qubits are contained in a type.
+fn num_contained_qubits(ty: &Type) -> u64 {
     if ty == &qb_t() {
-        return true;
+        return 1;
     }
 
-    if let Some(sum) = ty.as_sum() {
-        if let Some(row) = sum.as_tuple() {
-            return row.iter().any(|t| {
-                is_qubit_container(&t.clone().try_into_type().expect("unexpected row variable."))
-            });
-        }
+    if let Some(row) = ty.as_sum().and_then(SumType::as_tuple) {
+        return row
+            .iter()
+            .map(|t| {
+                num_contained_qubits(&t.clone().try_into_type().expect("unexpected row variable."))
+            })
+            .sum();
         // TODO should other sums containing qubits raise an error?
     }
 
-    if let Some(ext) = ty.as_extension() {
-        if let Some((_, elem_ty)) = array_args(ext) {
-            // Special case for Option[Qubit] since it is used in guppy qubit arrays.
-            // Fragile - would be better with dediccated guppy array type.
-            // Not sure how this can be improved without runtime barrier being able to
-            // take a compile time unknown number of qubits.
-            return is_opt_qb(elem_ty) || is_qubit_container(elem_ty);
-        }
+    if let Some((size, elem_ty)) = ty.as_extension().and_then(array_args) {
+        // Special case for Option[Qubit] since it is used in guppy qubit arrays.
+        // Fragile - would be better with dediccated guppy array type.
+        // Not sure how this can be improved without runtime barrier being able to
+        // take a compile time unknown number of qubits.
+        return size
+            * if is_opt_qb(elem_ty) {
+                1
+            } else {
+                num_contained_qubits(elem_ty)
+            };
     }
 
-    false
+    0
 }
 
 /// If a sum is an option of a single type, return the type.
@@ -91,13 +95,13 @@ type QubitContainer = (Type, (Node, IncomingPort));
 fn filter_qubit_containers<H: HugrMut>(
     hugr: &H,
     barrier: &Barrier,
-    node: H::Node,
+    node: Node,
 ) -> Vec<QubitContainer> {
     barrier
         .type_row
         .iter()
         .enumerate()
-        .filter(|&(_, ty)| is_qubit_container(ty))
+        .filter(|&(_, ty)| num_contained_qubits(ty) > 0)
         .map(|(i, ty)| {
             let barrier_port = OutgoingPort::from(i);
             let target = hugr
@@ -616,9 +620,12 @@ mod test {
         extension::prelude::{bool_t, option_type, qb_t},
         std_extensions::collections::array::array_type,
     };
+    use hugr::{
+        ops::{handle::NodeHandle, NamedOp},
+        HugrView,
+    };
     use itertools::Itertools;
     use rstest::rstest;
-
     fn opt_q_arr(size: u64) -> Type {
         array_type(size, option_type(qb_t()).into())
     }
@@ -638,16 +645,19 @@ mod test {
     #[case(vec![Type::new_tuple(vec![bool_t(), qb_t(), opt_q_arr(2)]), qb_t()], 4, false)]
     #[case(vec![Type::new_tuple(vec![bool_t(), qb_t(), array_type(2, Type::new_tuple(vec![bool_t(), qb_t()]))]), qb_t()], 4, false)]
     fn test_barrier(
-        #[case] type_row: Vec<hugr::types::Type>,
+        #[case] type_row: Vec<Type>,
         #[case] num_qb: usize,
+        // whether it is the array[qubit] special case
         #[case] no_parent: bool,
     ) {
+        if !no_parent {
+            // check qubit number is expected value for row
+            assert_eq!(
+                num_contained_qubits(&Type::new_tuple(type_row.clone())),
+                num_qb as u64
+            );
+        }
         // build a dfg with a generic barrier
-        use hugr::{
-            ops::{handle::NodeHandle, NamedOp},
-            HugrView,
-        };
-
         let (mut h, barr_n) = {
             let mut b = DFGBuilder::new(Signature::new_endo(type_row)).unwrap();
 
@@ -678,13 +688,13 @@ mod test {
         } else {
             let run_barr_func_n = h
                 .children(h.root())
-                .find(|&r_barr_n| {
+                .filter(|&r_barr_n| {
                     h.get_optype(r_barr_n)
                         .as_func_defn()
                         .is_some_and(|op| op.name.contains(BarrierFuncs::WRAPPED_BARRIER.as_str()))
                 })
-                // .exactly_one()
-                // .ok()
+                .exactly_one()
+                .ok()
                 .unwrap();
             h.single_linked_input(run_barr_func_n, 0).unwrap().0
         };
