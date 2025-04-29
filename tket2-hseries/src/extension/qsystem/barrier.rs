@@ -1,14 +1,18 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 
-use hugr::builder::{BuildError, BuildHandle, DataflowSubContainer, FunctionBuilder};
+use hugr::builder::handle::Outputs;
+use hugr::builder::{BuildError, FunctionBuilder};
 use hugr::extension::prelude::{self, option_type, UnwrapBuilder};
 use hugr::hugr::rewrite::inline_dfg::InlineDFG;
 use hugr::hugr::{IdentList, Rewrite};
-use hugr::ops::handle::{DataflowOpID, NodeHandle};
-use hugr::ops::{ExtensionOp, OpName};
-use hugr::std_extensions::collections::array::{self, array_type, ArrayOpBuilder};
+use hugr::ops::handle::NodeHandle;
+use hugr::ops::{DataflowOpTrait, ExtensionOp, OpName};
+use hugr::std_extensions::collections::array::{
+    self, array_type, array_type_parametric, ArrayOpBuilder,
+};
 use hugr::types::type_param::TypeParam;
 use hugr::types::{FuncValueType, PolyFuncTypeRV, SumType, TypeArg, TypeBound, TypeRV, TypeRow};
 use hugr::{
@@ -155,10 +159,6 @@ impl WireTree {
 fn escape_dollar(str: impl AsRef<str>) -> String {
     str.as_ref().replace("$", "\\$")
 }
-fn mangle_name(name: &str, typ: &Type) -> String {
-    let name = escape_dollar(name);
-    format!("${name}${}", escape_dollar(typ.to_string()))
-}
 
 pub(super) struct CallData {
     pub func_def: Hugr,
@@ -178,13 +178,14 @@ pub(super) struct BarrierFuncs {
     pub unwwrap: CallData,
     pub wrap: CallData,
     pub wrapped_barrier: HashMap<usize, CallData>,
+    pub unpack_array: HashMap<(u64, Type), CallData>,
 }
 
 impl BarrierFuncs {
     const UNWRAP_OPT: OpName = OpName::new_static("__tk2_lower_option_qb_unwrap");
     const TAG_OPT: OpName = OpName::new_static("__tk2_lower_option_qb_tag");
     const WRAPPED_BARRIER: OpName = OpName::new_static("__tk2_lower_wrapped_barrier");
-
+    const ARRAY_UNPACK: OpName = OpName::new_static("__tk2_lower_array_unpack");
     /// Signature for a function that unwraps an option type.
     pub(super) fn unwrap_opt_sig(ty: Type) -> Signature {
         Signature::new(Type::from(option_type(ty.clone())), ty)
@@ -241,6 +242,27 @@ impl BarrierFuncs {
                     ext_ref,
                 )
                 .unwrap();
+                ext.add_op(
+                    Self::ARRAY_UNPACK,
+                    Default::default(),
+                    PolyFuncTypeRV::new(
+                        vec![
+                            TypeParam::max_nat(),
+                            TypeParam::Type { b: TypeBound::Any },
+                            TypeParam::new_list(TypeBound::Any),
+                        ],
+                        FuncValueType::new(
+                            array_type_parametric(
+                                TypeArg::new_var_use(0, TypeParam::max_nat()),
+                                Type::new_var_use(1, TypeBound::Any),
+                            )
+                            .unwrap(),
+                            TypeRV::new_row_var_use(2, TypeBound::Any),
+                        ),
+                    ),
+                    ext_ref,
+                )
+                .unwrap();
             },
         );
 
@@ -249,6 +271,7 @@ impl BarrierFuncs {
             unwwrap: CallData::new(unwrap_h),
             wrap: CallData::new(wrap_h),
             wrapped_barrier: HashMap::new(),
+            unpack_array: HashMap::new(),
         })
     }
 
@@ -273,11 +296,33 @@ impl BarrierFuncs {
         Ok(call.out_wire(0))
     }
 
+    fn call_hashed_func<K: std::hash::Hash + Eq + Clone>(
+        builder: &mut impl Dataflow,
+        in_wires: impl IntoIterator<Item = Wire>,
+        op: ExtensionOp,
+        func_builder: impl FnOnce(Signature) -> Result<Hugr, BuildError>,
+        func_cache: &mut HashMap<K, CallData>,
+        key: K,
+    ) -> Result<Outputs, BuildError> {
+        let sig = op.signature().deref().clone();
+        let handle = builder.add_dataflow_op(op, in_wires)?;
+        match func_cache.entry(key.clone()) {
+            Entry::Occupied(mut ent) => ent.get_mut().op_nodes.push(handle.node()),
+            Entry::Vacant(ent) => {
+                let func_def: Hugr = func_builder(sig)?;
+                ent.insert(CallData::new(func_def))
+                    .op_nodes
+                    .push(handle.node());
+            }
+        };
+
+        Ok(handle.outputs())
+    }
     fn call_wrapped_runtime_barrier(
         &mut self,
         builder: &mut impl Dataflow,
         qubit_wires: Vec<Wire>,
-    ) -> Result<BuildHandle<DataflowOpID>, BuildError> {
+    ) -> Result<Outputs, BuildError> {
         let size = qubit_wires.len();
         let qb_row = vec![qb_t(); size];
 
@@ -285,40 +330,69 @@ impl BarrierFuncs {
             .get_op(
                 &Self::WRAPPED_BARRIER,
                 [TypeArg::Sequence {
-                    elems: qb_row
-                        .clone()
-                        .into_iter()
-                        .map(|ty| TypeArg::Type { ty })
-                        .collect(),
+                    elems: qb_row.clone().into_iter().map(Into::into).collect(),
                 }],
             )
             .unwrap();
+        Self::call_hashed_func(
+            builder,
+            qubit_wires,
+            op,
+            |sig| {
+                let mut name = Self::WRAPPED_BARRIER.to_string();
+                name.push_str(&format!("${}", size));
+                let mut func_b = FunctionBuilder::new(name, sig)?;
+                let outs = func_b.build_wrapped_barrier(func_b.input_wires())?;
+                func_b.finish_hugr_with_outputs(outs)
+            },
+            &mut self.wrapped_barrier,
+            size,
+        )
+    }
 
-        let handle = builder.add_dataflow_op(op, qubit_wires)?;
-        match self.wrapped_barrier.entry(size) {
-            Entry::Occupied(mut ent) => ent.get_mut().op_nodes.push(handle.node()),
-            Entry::Vacant(ent) => {
-                let func_def: Hugr = {
-                    let sig = Signature::new_endo(qb_row.clone());
-                    let mut name = Self::WRAPPED_BARRIER.to_string();
-                    name.push_str(&format!("${}", size));
-                    let mut func_b = FunctionBuilder::new(name, sig.clone())?;
-                    let outs = func_b.build_wrapped_barrier(func_b.input_wires())?;
-                    func_b.finish_hugr_with_outputs(outs)?
-                };
-                ent.insert(CallData::new(func_def))
-                    .op_nodes
-                    .push(handle.node());
-            }
-        };
-
-        Ok(handle)
+    fn call_unpack_array(
+        &mut self,
+        builder: &mut impl Dataflow,
+        array_wire: Wire,
+        size: u64,
+        elem_ty: Type,
+    ) -> Result<Outputs, BuildError> {
+        let op = self
+            .get_op(
+                &Self::ARRAY_UNPACK,
+                [
+                    size.into(),
+                    elem_ty.clone().into(),
+                    TypeArg::Sequence {
+                        elems: vec![elem_ty.clone().into(); size as usize],
+                    },
+                ],
+            )
+            .unwrap();
+        let elem_name = escape_dollar(elem_ty.to_string());
+        let ty_clone = elem_ty.clone();
+        Self::call_hashed_func(
+            builder,
+            [array_wire],
+            op,
+            |sig| {
+                let mut name = Self::ARRAY_UNPACK.to_string();
+                name.push_str(&format!("${}${}", size, elem_name));
+                let mut func_b = FunctionBuilder::new(name, sig)?;
+                let w = func_b.input().out_wire(0);
+                let outs = super::pop_all(&mut func_b, w, size, elem_ty)?;
+                func_b.finish_hugr_with_outputs(outs)
+            },
+            &mut self.unpack_array,
+            (size, ty_clone),
+        )
     }
 
     pub(super) fn into_calls(self) -> impl Iterator<Item = CallData> {
         [self.unwwrap, self.wrap]
             .into_iter()
             .chain(self.wrapped_barrier.into_values())
+            .chain(self.unpack_array.into_values())
     }
 
     fn nodes_mut(&mut self) -> impl Iterator<Item = &mut Node> {
@@ -329,6 +403,7 @@ impl BarrierFuncs {
             .chain(
                 self.wrapped_barrier
                     .values_mut()
+                    .chain(self.unpack_array.values_mut())
                     .flat_map(|call| call.op_nodes.iter_mut()),
             )
     }
@@ -350,8 +425,9 @@ fn unpack_container(
     }
     if let Some(ext) = typ.as_extension() {
         if let Some((n, elem_ty)) = array_args(ext) {
-            let unpacked = super::pop_all(builder, container_wire, n, elem_ty.clone())?;
-
+            // let unpacked = super::pop_all(builder, container_wire, n, elem_ty.clone())?;
+            let unpacked =
+                barrier_funcs.call_unpack_array(builder, container_wire, n, elem_ty.clone())?;
             let children = unpacked
                 .into_iter()
                 .map(|elem_wire| unpack_container(builder, elem_ty, elem_wire, barrier_funcs))
@@ -487,8 +563,7 @@ fn packing_hugr(
         .flat_map(|tree| tree.qubit_wires())
         .collect();
     // let r_bar_n = insert_wrapped_runtime_barrier(&mut dfg_b, qubit_wires)?;
-    let r_bar_h = barrier_funcs.call_wrapped_runtime_barrier(&mut dfg_b, qubit_wires)?;
-    let mut r_bar_wires = r_bar_h.outputs();
+    let mut r_bar_wires = barrier_funcs.call_wrapped_runtime_barrier(&mut dfg_b, qubit_wires)?;
     for tree in wire_trees.iter_mut() {
         tree.update_wires(&mut r_bar_wires);
     }
@@ -497,20 +572,6 @@ fn packing_hugr(
         .map(|tree| repack_container(&mut dfg_b, tree, barrier_funcs))
         .collect::<Result<_, _>>()?;
     Ok(dfg_b.finish_hugr_with_outputs(new_container_wires)?)
-}
-
-fn insert_wrapped_runtime_barrier(
-    builder: &mut impl Dataflow,
-    qubit_wires: Vec<Wire>,
-) -> Result<Node, LowerTk2Error> {
-    let mut dfg_b = builder.dfg_builder(
-        Signature::new_endo(vec![qb_t(); qubit_wires.len()]),
-        qubit_wires,
-    )?;
-    let outs = dfg_b.build_wrapped_barrier(dfg_b.input_wires())?;
-    let dfg_n = dfg_b.finish_with_outputs(outs)?;
-
-    Ok(dfg_n.node())
 }
 
 fn build_runtime_barrier_op(array_size: u64) -> Result<Hugr, BuildError> {
@@ -617,11 +678,11 @@ mod test {
                 .unwrap()
         } else {
             let run_barr_func_n = h
-            .children(h.root())
-            .find(|&r_barr_n| {
-                h.get_optype(r_barr_n).as_func_defn().is_some_and(|op| {
-                        op.name.contains(BarrierFuncs::WRAPPED_BARRIER.as_str())
-                    })
+                .children(h.root())
+                .find(|&r_barr_n| {
+                    h.get_optype(r_barr_n)
+                        .as_func_defn()
+                        .is_some_and(|op| op.name.contains(BarrierFuncs::WRAPPED_BARRIER.as_str()))
                 })
                 // .exactly_one()
                 // .ok()
