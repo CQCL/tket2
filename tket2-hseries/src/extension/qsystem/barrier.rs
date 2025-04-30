@@ -92,15 +92,16 @@ fn array_args(ext: &hugr::types::CustomType) -> Option<(u64, &Type)> {
 struct QubitContainer {
     typ: Type,
     n_qb: u64,
-    target: (Node, IncomingPort),
 }
+
+type Target = (Node, IncomingPort);
 
 /// Filter out types in the generic barrier that contain qubits.
 fn filter_qubit_containers<H: HugrMut>(
     hugr: &H,
     barrier: &Barrier,
     node: Node,
-) -> Vec<QubitContainer> {
+) -> Vec<(QubitContainer, Target)> {
     barrier
         .type_row
         .iter()
@@ -112,11 +113,13 @@ fn filter_qubit_containers<H: HugrMut>(
                 let target = hugr
                     .single_linked_input(node, port)
                     .expect("linearity violation.");
-                QubitContainer {
-                    typ: typ.clone(),
-                    n_qb,
+                (
+                    QubitContainer {
+                        typ: typ.clone(),
+                        n_qb,
+                    },
                     target,
-                }
+                )
             })
         })
         .collect()
@@ -507,16 +510,11 @@ pub(super) fn insert_runtime_barrier(
         return Ok(());
     }
     // 1. Find all qubit containing types in the barrier.
-    let qubit_containers = filter_qubit_containers(hugr, &barrier, b_node);
+    let filtered_qbs = filter_qubit_containers(hugr, &barrier, b_node);
 
     let parent = hugr.get_parent(b_node).expect("Barrier can't be root.");
 
-    if let [QubitContainer {
-        typ,
-        target: (targ_n, targ_p),
-        ..
-    }] = qubit_containers.as_slice()
-    {
+    if let [(QubitContainer { typ, .. }, (targ_n, targ_p))] = filtered_qbs.as_slice() {
         // If the barrier is over a single array of qubits
         // we can insert a runtime barrier op directly.
         let shortcut = typ
@@ -541,11 +539,8 @@ pub(super) fn insert_runtime_barrier(
             return res;
         }
     }
-    let (row, targets) = qubit_containers
-        .into_iter()
-        .map(|qc| (qc.typ, qc.target))
-        .unzip();
-    let insert_hugr: Hugr = packing_hugr(barrier_funcs, row)?;
+    let (qubit_containers, targets) = filtered_qbs.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+    let insert_hugr: Hugr = packing_hugr(barrier_funcs, &qubit_containers)?;
 
     let inserter = InsertCut {
         parent,
@@ -569,8 +564,12 @@ pub(super) fn insert_runtime_barrier(
 
 fn packing_hugr(
     barrier_funcs: &mut BarrierFuncs,
-    container_row: Vec<Type>,
+    containers: &[QubitContainer],
 ) -> Result<Hugr, LowerTk2Error> {
+    let container_row: Vec<_> = containers
+        .iter()
+        .map(|container| container.typ.clone())
+        .collect();
     // TODO add comments for steps
     let mut dfg_b = DFGBuilder::new(Signature::new_endo(container_row.clone()))?;
     let input = dfg_b.input();
