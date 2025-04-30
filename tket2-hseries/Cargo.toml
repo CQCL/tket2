@@ -39,6 +39,7 @@ derive_more = { workspace = true, features = [
 ] }
 typetag.workspace = true
 delegate.workspace = true
+bitvec = "1.0.1"
 
 [dev-dependencies]
 cool_asserts.workspace = true

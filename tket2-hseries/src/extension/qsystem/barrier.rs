@@ -1,17 +1,14 @@
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
-use std::ops::Deref;
-use std::sync::Arc;
-
+use bitvec::prelude::*;
 use hugr::builder::handle::Outputs;
 use hugr::builder::{BuildError, FunctionBuilder};
-use hugr::extension::prelude::{self, option_type, UnwrapBuilder};
+use hugr::extension::prelude::{self, option_type, Noop, UnwrapBuilder};
+use hugr::extension::simple_op::HasConcrete;
 use hugr::hugr::rewrite::inline_dfg::InlineDFG;
 use hugr::hugr::{IdentList, Rewrite};
 use hugr::ops::handle::NodeHandle;
-use hugr::ops::{DataflowOpTrait, ExtensionOp, OpName};
+use hugr::ops::{DataflowOpTrait, ExtensionOp, OpName, OpType};
 use hugr::std_extensions::collections::array::{
-    self, array_type, array_type_parametric, ArrayOpBuilder,
+    self, array_type, array_type_parametric, new_array_op, ArrayOp, ArrayOpBuilder, ArrayOpDef,
 };
 use hugr::types::type_param::TypeParam;
 use hugr::types::{FuncValueType, PolyFuncTypeRV, SumType, TypeArg, TypeBound, TypeRV, TypeRow};
@@ -23,11 +20,16 @@ use hugr::{
     HugrView, IncomingPort, Node, OutgoingPort, Wire,
 };
 use hugr::{type_row, Extension, Hugr};
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+use std::ops::Deref;
+use std::sync::Arc;
 
 use super::{LowerTk2Error, QSystemOpBuilder};
 
 /// Count how many qubits are contained in a type.
 fn num_contained_qubits(ty: &Type) -> u64 {
+    // TODO is this number used
     if ty == &qb_t() {
         return 1;
     }
@@ -300,11 +302,11 @@ impl BarrierFuncs {
         &mut self,
         builder: &mut impl Dataflow,
         opt_wire: Wire,
-    ) -> Result<Wire, BuildError> {
+    ) -> Result<(Node, ExtensionOp), BuildError> {
         let call =
             builder.add_dataflow_op(self.get_op(&Self::UNWRAP_OPT, []).unwrap(), [opt_wire])?;
         self.unwwrap.op_nodes.push(call.node());
-        Ok(call.out_wire(0))
+        Ok((call.node(), self.get_op(&Self::TAG_OPT, []).unwrap()))
     }
 
     fn call_wrap(&mut self, builder: &mut impl Dataflow, wire: Wire) -> Result<Wire, BuildError> {
@@ -320,7 +322,7 @@ impl BarrierFuncs {
         func_builder: impl FnOnce(Signature) -> Result<Hugr, BuildError>,
         func_cache: &mut HashMap<K, CallData>,
         key: K,
-    ) -> Result<Outputs, BuildError> {
+    ) -> Result<Node, BuildError> {
         let sig = op.signature().deref().clone();
         let handle = builder.add_dataflow_op(op, in_wires)?;
         match func_cache.entry(key.clone()) {
@@ -333,13 +335,13 @@ impl BarrierFuncs {
             }
         };
 
-        Ok(handle.outputs())
+        Ok(handle.node())
     }
     fn call_wrapped_runtime_barrier(
         &mut self,
         builder: &mut impl Dataflow,
         qubit_wires: Vec<Wire>,
-    ) -> Result<Outputs, BuildError> {
+    ) -> Result<Node, BuildError> {
         let size = qubit_wires.len();
         let qb_row = vec![qb_t(); size];
 
@@ -373,7 +375,7 @@ impl BarrierFuncs {
         array_wire: Wire,
         size: u64,
         elem_ty: Type,
-    ) -> Result<Outputs, BuildError> {
+    ) -> Result<Unpacked, BuildError> {
         let op = self
             .get_op(
                 &Self::ARRAY_UNPACK,
@@ -381,28 +383,45 @@ impl BarrierFuncs {
                     size.into(),
                     elem_ty.clone().into(),
                     TypeArg::Sequence {
-                        elems: vec![elem_ty.clone().into(); size as usize],
+                        elems: vec![qb_t().into(); size as usize],
                     },
                 ],
             )
             .unwrap();
         let elem_name = escape_dollar(elem_ty.to_string());
-        let ty_clone = elem_ty.clone();
-        Self::call_hashed_func(
-            builder,
-            [array_wire],
-            op,
-            |sig| {
-                let mut name = Self::ARRAY_UNPACK.to_string();
-                name.push_str(&format!("${}${}", size, elem_name));
-                let mut func_b = FunctionBuilder::new(name, sig)?;
-                let w = func_b.input().out_wire(0);
-                let outs = super::pop_all(&mut func_b, w, size, elem_ty)?;
-                func_b.finish_hugr_with_outputs(outs)
-            },
-            &mut self.unpack_array,
-            (size, ty_clone),
-        )
+        let key = (size, elem_ty.clone());
+        let sig = op.signature().deref().clone();
+        let handle = builder.add_dataflow_op(op, [array_wire])?;
+        let node = {
+            match self.unpack_array.entry(key.clone()) {
+                Entry::Occupied(mut ent) => ent.get_mut().op_nodes.push(handle.node()),
+                Entry::Vacant(ent) => {
+                    let func_def: Hugr = (|sig| {
+                        let mut name = Self::ARRAY_UNPACK.to_string();
+                        name.push_str(&format!("${}${}", size, elem_name));
+                        let mut func_b = FunctionBuilder::new(name, sig)?;
+                        let w = func_b.input().out_wire(0);
+                        let elems = super::pop_all(&mut func_b, w, size, elem_ty.clone())?;
+                        let unpacked: Vec<_> = elems
+                            .into_iter()
+                            .map(|wire| self.unpack_container(&mut func_b, &elem_ty, wire))
+                            .collect::<Result<Vec<_>, _>>()?;
+                        let outs = unpacked.into_iter().flat_map(|unp| {
+                            (0..unp.is_qb.len()).map(move |i| Wire::new(unp.node, i))
+                        });
+                        func_b.finish_hugr_with_outputs(outs)
+                    })(sig)?;
+                    ent.insert(CallData::new(func_def))
+                        .op_nodes
+                        .push(handle.node());
+                }
+            };
+
+            Ok(handle.node())
+        }?;
+
+        let repack_op = new_array_op(elem_ty, size);
+        Ok(Unpacked::array(node, size, repack_op.into()))
     }
 
     pub(super) fn into_calls(self) -> impl Iterator<Item = CallData> {
@@ -431,25 +450,29 @@ impl BarrierFuncs {
         builder: &mut impl Dataflow,
         typ: &Type,
         container_wire: Wire,
-    ) -> Result<WireTree, LowerTk2Error> {
+    ) -> Result<Unpacked, BuildError> {
         if typ == &qb_t() {
-            return Ok(WireTree::Leaf(WireLeaf::Qubit(container_wire)));
+            let n = builder
+                .add_dataflow_op(Noop::new(qb_t()), [container_wire])?
+                .node();
+            return Ok(Unpacked::qubit(n));
         }
         if is_opt_qb(typ) {
-            let unwrapped = self.call_unwrap(builder, container_wire)?;
-            return Ok(WireTree::Leaf(WireLeaf::OptQb(unwrapped)));
+            let (node, repack) = self.call_unwrap(builder, container_wire)?;
+            return Ok(Unpacked::option(node, repack.into()));
         }
         if let Some(ext) = typ.as_extension() {
             if let Some((n, elem_ty)) = array_args(ext) {
                 // let unpacked = super::pop_all(builder, container_wire, n, elem_ty.clone())?;
                 let unpacked =
                     self.call_unpack_array(builder, container_wire, n, elem_ty.clone())?;
-                let children = unpacked
-                    .into_iter()
-                    .map(|elem_wire| self.unpack_container(builder, elem_ty, elem_wire))
-                    .collect::<Result<_, _>>()?;
-                let tree = WireTree::Array(elem_ty.clone(), children);
-                return Ok(tree);
+                // let children = unpacked
+                //     .into_iter()
+                //     .map(|elem_wire| self.unpack_container(builder, elem_ty, elem_wire))
+                //     .collect::<Result<_, _>>()?;
+                // let tree = WireTree::Array(elem_ty.clone(), children);
+                // return Ok(tree);
+                return Ok(unpacked);
             }
         }
         if let Some(sum) = typ.as_sum() {
@@ -462,13 +485,71 @@ impl BarrierFuncs {
                     .enumerate()
                     .map(|(i, t)| self.unpack_container(builder, t, unpacked.out_wire(i)))
                     .collect::<Result<Vec<_>, _>>()?;
-                return Ok(WireTree::Tuple(children));
+                // return Ok(WireTree::Tuple(children));
+                return todo!();
             }
         }
+        let n = builder
+            .add_dataflow_op(Noop::new(typ.clone()), [container_wire])?
+            .node();
         // No need to unpack if the type is not a qubit container.
-        Ok(WireTree::Leaf(WireLeaf::Other(container_wire)))
+        Ok(Unpacked::other(n, typ))
     }
 }
+
+struct Unpacked {
+    is_qb: BitVec,
+    repack_op: OpType,
+    node: Node,
+}
+
+impl Unpacked {
+    fn qubit(node: Node) -> Self {
+        Self {
+            is_qb: bitvec![1],
+            repack_op: Noop::new(qb_t()).into(),
+            node,
+        }
+    }
+    fn other(node: Node, ty: &Type) -> Self {
+        Self {
+            is_qb: bitvec![0],
+            repack_op: Noop::new(ty.clone()).into(),
+            node,
+        }
+    }
+
+    fn tuple(node: Node, is_qb: BitVec, repack_op: OpType) -> Self {
+        Self {
+            is_qb,
+            repack_op,
+            node,
+        }
+    }
+
+    fn array(node: Node, size: u64, repack_op: OpType) -> Self {
+        Self {
+            is_qb: bitvec![1; size as usize],
+            repack_op,
+            node,
+        }
+    }
+
+    fn option(node: Node, repack_op: OpType) -> Self {
+        Self {
+            is_qb: bitvec![1],
+            repack_op,
+            node,
+        }
+    }
+    fn all_wires(&self) -> impl IntoIterator<Item = Wire> + use<'_> {
+        (0..self.is_qb.len()).map(|i| Wire::new(self.node, i))
+    }
+    fn qubit_wires(&self) -> impl IntoIterator<Item = Wire> + use<'_> {
+        self.is_qb.iter_ones().map(|i| Wire::new(self.node, i))
+    }
+}
+
 /// Repack a container given an updated [WireTree].
 fn repack_container(
     builder: &mut impl Dataflow,
@@ -573,24 +654,51 @@ fn packing_hugr(
     // TODO add comments for steps
     let mut dfg_b = DFGBuilder::new(Signature::new_endo(container_row.clone()))?;
     let input = dfg_b.input();
-    let mut wire_trees: Vec<WireTree> = container_row
-        .iter()
-        .enumerate()
-        .map(|(port, ty)| barrier_funcs.unpack_container(&mut dfg_b, ty, input.out_wire(port)))
-        .collect::<Result<_, _>>()?;
-    let qubit_wires: Vec<_> = wire_trees
-        .iter()
-        .flat_map(|tree| tree.qubit_wires())
-        .collect();
+    let tuple = dfg_b.make_tuple(input.outputs())?;
+    let unpacked = barrier_funcs.unpack_container(
+        &mut dfg_b,
+        &Type::new_tuple(container_row.clone()),
+        tuple,
+    )?;
+
+    // let mut wire_trees: Vec<Unpacked> = container_row
+    //     .iter()
+    //     .enumerate()
+    //     .map(|(port, ty)| barrier_funcs.unpack_container(&mut dfg_b, ty, input.out_wire(port)))
+    //     .collect::<Result<_, _>>()?;
+    // let qubit_wires: Vec<_> = wire_trees
+    //     .iter()
+    //     .flat_map(|tree| tree.qubit_wires())
+    //     .collect();
     // let r_bar_n = insert_wrapped_runtime_barrier(&mut dfg_b, qubit_wires)?;
-    let mut r_bar_wires = barrier_funcs.call_wrapped_runtime_barrier(&mut dfg_b, qubit_wires)?;
-    for tree in wire_trees.iter_mut() {
-        tree.update_wires(&mut r_bar_wires);
-    }
-    let new_container_wires: Vec<Wire> = wire_trees
-        .iter()
-        .map(|tree| repack_container(&mut dfg_b, tree, barrier_funcs))
-        .collect::<Result<_, _>>()?;
+    let qubit_wires = unpacked.qubit_wires().into_iter().collect();
+    let r_bar_node = barrier_funcs.call_wrapped_runtime_barrier(&mut dfg_b, qubit_wires)?;
+    // for tree in wire_trees.iter_mut() {
+    //     tree.update_wires(&mut r_bar_wires);
+    // }
+    // let new_container_wires: Vec<Wire> = wire_trees
+    //     .iter()
+    //     .map(|tree| repack_container(&mut dfg_b, tree, barrier_funcs))
+    //     .collect::<Result<_, _>>()?;
+    let all_wires: Vec<Wire> = unpacked.all_wires().into_iter().collect();
+    let Unpacked {
+        is_qb, repack_op, ..
+    } = unpacked;
+    let mut r_bar_wires = (0..).map(|i| Wire::new(r_bar_node, i));
+    let repack_wires = is_qb.into_iter().enumerate().map(|(i, is_qb)| {
+        if is_qb {
+            r_bar_wires.next().unwrap()
+        } else {
+            all_wires[i]
+        }
+    });
+    let repacked = dfg_b.add_dataflow_op(repack_op, repack_wires)?.out_wire(0);
+    let new_container_wires = dfg_b
+        .add_dataflow_op(
+            prelude::UnpackTuple::new(container_row.clone().into()),
+            [repacked],
+        )?
+        .outputs();
     Ok(dfg_b.finish_hugr_with_outputs(new_container_wires)?)
 }
 
