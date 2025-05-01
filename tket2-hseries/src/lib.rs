@@ -147,11 +147,11 @@ impl QSystemPass {
     }
 
     fn lower_tk2(&self) -> LowerTket2ToQSystemPass {
-        LowerTket2ToQSystemPass::default()
+        LowerTket2ToQSystemPass
     }
 
     fn lazify_measure(&self) -> LazifyMeasurePass {
-        LazifyMeasurePass::default()
+        LazifyMeasurePass
     }
 
     fn constant_fold(&self) -> ConstantFoldPass {

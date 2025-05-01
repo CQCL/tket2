@@ -313,7 +313,7 @@ mod test {
             let _r3 = builder.add_measure(qb2).unwrap();
             builder.finish_hugr_with_outputs([r1]).unwrap()
         };
-        LazifyMeasurePass::default().run(&mut hugr).unwrap();
+        LazifyMeasurePass.run(&mut hugr).unwrap();
         hugr.validate().unwrap();
 
         let mut num_read = 0;
@@ -347,7 +347,7 @@ mod test {
             .unwrap()
             .outputs_arr();
         let mut hugr = builder.finish_hugr_with_outputs([bool, bool]).unwrap();
-        LazifyMeasurePass::default().run(&mut hugr).unwrap();
+        LazifyMeasurePass.run(&mut hugr).unwrap();
         hugr.validate().unwrap();
     }
 
@@ -360,7 +360,7 @@ mod test {
             .unwrap()
             .outputs_arr();
         let mut hugr = builder.finish_hugr_with_outputs([qb]).unwrap();
-        LazifyMeasurePass::default().run(&mut hugr).unwrap();
+        LazifyMeasurePass.run(&mut hugr).unwrap();
         assert!(hugr.validate_no_extensions().is_ok());
     }
 }

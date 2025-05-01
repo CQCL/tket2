@@ -426,7 +426,7 @@ impl CircuitChunks {
             }
         }
 
-        *reassembled.node_metadata_map_mut(root) = self.root_meta.unwrap_or(Default::default());
+        *reassembled.node_metadata_map_mut(root) = self.root_meta.unwrap_or_default();
         Ok(reassembled.into())
     }
 
