@@ -4,10 +4,7 @@
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
-        const_fold::{ConstFoldError, ConstantFoldPass},
-        force_order,
-        validation::{ValidatePassError, ValidationLevel},
-        MonomorphizeError, MonomorphizePass, RemoveDeadFuncsError, RemoveDeadFuncsPass,
+        const_fold::{ConstFoldError, ConstantFoldPass}, force_order, ComposablePass as _, MonomorphizePass, RemoveDeadFuncsError, RemoveDeadFuncsPass
     },
     hugr::HugrError,
     Hugr, HugrView, Node,
@@ -32,7 +29,6 @@ pub mod lazify_measure;
 /// To construct a `QSystemPass` use [Default::default].
 #[derive(Debug, Clone, Copy)]
 pub struct QSystemPass {
-    validation_level: ValidationLevel,
     constant_fold: bool,
     monomorphize: bool,
     force_order: bool,
@@ -42,7 +38,6 @@ pub struct QSystemPass {
 impl Default for QSystemPass {
     fn default() -> Self {
         Self {
-            validation_level: ValidationLevel::default(),
             constant_fold: false,
             monomorphize: true,
             force_order: true,
@@ -55,8 +50,6 @@ impl Default for QSystemPass {
 #[non_exhaustive]
 /// An error reported from [QSystemPass].
 pub enum QSystemPassError<N = Node> {
-    /// The [hugr::Hugr] was invalid either before or after a pass ran.
-    ValidationError(ValidatePassError),
     /// An error from the component [LazifyMeasurePass].
     LazyMeasureError(LazifyMeasurePassError<N>),
     /// An error from the component [force_order()] pass.
@@ -65,8 +58,6 @@ pub enum QSystemPassError<N = Node> {
     LowerTk2Error(LowerTk2Error),
     /// An error from the component [ConstantFoldPass] pass.
     ConstantFoldError(ConstFoldError),
-    /// An error from the component [MonomorphizePass] pass.
-    MonomorphizeError(MonomorphizeError),
     /// An error when running [RemoveDeadFuncsPass] after the monomorphisation
     /// pass.
     ///
@@ -85,7 +76,9 @@ impl QSystemPass {
     /// validation, if enabled.
     pub fn run(&self, hugr: &mut Hugr) -> Result<(), QSystemPassError> {
         if self.monomorphize {
-            self.monomorphization().run(hugr)?;
+            match self.monomorphization().run(hugr) {
+                Ok(()) => ()
+            };
 
             let mut rdfp = RemoveDeadFuncsPass::default();
             if hugr.get_optype(hugr.root()).is_module() {
@@ -116,66 +109,58 @@ impl QSystemPass {
     }
 
     fn force_order(&self, hugr: &mut Hugr) -> Result<(), QSystemPassError> {
-        self.validation_level.run_validated_pass(hugr, |hugr, _| {
-            force_order(hugr, hugr.root(), |hugr, node| {
-                let optype = hugr.get_optype(node);
+        force_order(hugr, hugr.root(), |hugr, node| {
+            let optype = hugr.get_optype(node);
 
-                let is_quantum =
-                    optype.cast::<Tk2Op>().is_some() || optype.cast::<QSystemOp>().is_some();
-                let is_qalloc =
-                    matches!(optype.cast(), Some(Tk2Op::QAlloc) | Some(Tk2Op::TryQAlloc))
-                        || optype.cast() == Some(QSystemOp::TryQAlloc);
-                let is_qfree =
-                    optype.cast() == Some(Tk2Op::QFree) || optype.cast() == Some(QSystemOp::QFree);
-                let is_read = optype.cast() == Some(FutureOpDef::Read);
+            let is_quantum =
+                optype.cast::<Tk2Op>().is_some() || optype.cast::<QSystemOp>().is_some();
+            let is_qalloc =
+                matches!(optype.cast(), Some(Tk2Op::QAlloc) | Some(Tk2Op::TryQAlloc))
+                    || optype.cast() == Some(QSystemOp::TryQAlloc);
+            let is_qfree =
+                optype.cast() == Some(Tk2Op::QFree) || optype.cast() == Some(QSystemOp::QFree);
+            let is_read = optype.cast() == Some(FutureOpDef::Read);
 
-                // HACK: for now qallocs and qfrees are not adequately ordered,
-                // see <https://github.com/CQCL/guppylang/issues/778>. To
-                // mitigate this we push qfrees as early as possible and qallocs
-                // as late as possible
-                //
-                // To maximise laziness we push quantum ops (including
-                // LazyMeasure) as early as possible and Future::Read as late as
-                // possible.
-                if is_qfree {
-                    -3
-                } else if is_quantum && !is_qalloc {
-                    // non-qalloc quantum ops
-                    -2
-                } else if is_qalloc {
-                    -1
-                } else if !is_read {
-                    // all other ops
-                    0
-                } else {
-                    // Future::Read ops
-                    1
-                }
-            })?;
-            Ok::<_, QSystemPassError>(())
-        })
+            // HACK: for now qallocs and qfrees are not adequately ordered,
+            // see <https://github.com/CQCL/guppylang/issues/778>. To
+            // mitigate this we push qfrees as early as possible and qallocs
+            // as late as possible
+            //
+            // To maximise laziness we push quantum ops (including
+            // LazyMeasure) as early as possible and Future::Read as late as
+            // possible.
+            if is_qfree {
+                -3
+            } else if is_quantum && !is_qalloc {
+                // non-qalloc quantum ops
+                -2
+            } else if is_qalloc {
+                -1
+            } else if !is_read {
+                // all other ops
+                0
+            } else {
+                // Future::Read ops
+                1
+            }
+        })?;
+        Ok::<_, QSystemPassError>(())
     }
 
     fn lower_tk2(&self) -> LowerTket2ToQSystemPass {
-        LowerTket2ToQSystemPass::default().with_validation_level(self.validation_level)
+        LowerTket2ToQSystemPass::default()
     }
 
     fn lazify_measure(&self) -> LazifyMeasurePass {
-        LazifyMeasurePass::default().with_validation_level(self.validation_level)
+        LazifyMeasurePass::default()
     }
 
     fn constant_fold(&self) -> ConstantFoldPass {
-        ConstantFoldPass::default().validation_level(self.validation_level)
+        ConstantFoldPass::default()
     }
 
     fn monomorphization(&self) -> MonomorphizePass {
-        MonomorphizePass::default().validation_level(self.validation_level)
-    }
-
-    /// Returns a new `QSystemPass` with the given [ValidationLevel].
-    pub fn with_validation_level(mut self, level: ValidationLevel) -> Self {
-        self.validation_level = level;
-        self
+        MonomorphizePass
     }
 
     /// Returns a new `QSystemPass` with constant folding enabled according to

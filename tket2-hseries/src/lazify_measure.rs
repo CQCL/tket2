@@ -9,9 +9,8 @@ use delegate::delegate;
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
-        ensure_no_nonlocal_edges,
-        non_local::NonLocalEdgesError,
-        validation::{ValidatePassError, ValidationLevel},
+        // ensure_no_nonlocal_edges,
+        non_local::NonLocalEdgesError, ComposablePass,
     },
     builder::{DFGBuilder, Dataflow, DataflowHugr as _},
     core::HugrNode,
@@ -37,15 +36,28 @@ use crate::extension::{futures::FutureOpBuilder as _, qsystem::QSystemOp};
 ///
 /// The HUGR must not contain any non-local edges. If validation is enabled,
 /// this precondition will be verified.
-#[derive(Default)]
-pub struct LazifyMeasurePass(ValidationLevel);
+#[derive(Default, Debug, Clone)]
+pub struct LazifyMeasurePass;
+
+impl ComposablePass for LazifyMeasurePass {
+    type Error = LazifyMeasurePassError<Node>;
+    type Node = Node;
+    type Result = ();
+
+    fn run(&self, hugr: &mut impl HugrMut<Node=Node>) -> Result<(), LazifyMeasurePassError<Node>> {
+        // TODO uncomment once https://github.com/CQCL/hugr/issues/1234 is complete
+        // ensure_no_nonlocal_edges(hugr)?;
+        replace_measure_ops(hugr)?;
+        Ok(())
+    }
+
+
+}
 
 #[derive(Error, Debug, Display, From)]
 #[non_exhaustive]
 /// An error reported from [LazifyMeasurePass].
 pub enum LazifyMeasurePassError<N> {
-    /// The HUGR was invalid either before or after a pass ran.
-    ValidationError(ValidatePassError),
     /// The HUGR was found to contain non-local edges.
     NonLocalEdgesError(NonLocalEdgesError<N>),
     /// A [LazifyMeasureRewrite] was constructed targetting an invalid op.
@@ -60,31 +72,11 @@ pub enum LazifyMeasurePassError<N> {
     SimpleReplacementError(SimpleReplacementError),
 }
 
-impl LazifyMeasurePass {
-    /// Run `LazifyMeasurePass` on the given [HugrMut]. `registry` is used for
-    /// validation, if enabled.
-    pub fn run(&self, hugr: &mut impl HugrMut) -> Result<(), LazifyMeasurePassError<Node>> {
-        self.0.run_validated_pass(hugr, |hugr, level| {
-            if *level != ValidationLevel::None {
-                ensure_no_nonlocal_edges(hugr)?;
-            }
-            replace_measure_ops(hugr)?;
-            Ok(())
-        })
-    }
-
-    /// Returns a new `LazifyMeasurePass` with the given [ValidationLevel].
-    pub fn with_validation_level(mut self, level: ValidationLevel) -> Self {
-        self.0 = level;
-        self
-    }
-}
-
 /// Implementation of [LazifyMeasurePass].
 ///
 /// No validation is done here.
 pub fn replace_measure_ops(
-    hugr: &mut impl HugrMut,
+    hugr: &mut impl HugrMut<Node=Node>,
 ) -> Result<Vec<Node>, LazifyMeasurePassError<Node>> {
     let nodes_and_rewrites = hugr
         .nodes()
@@ -275,13 +267,14 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
 }
 
 impl Rewrite for LazifyMeasureRewrite {
+    type Node = Node;
     type ApplyResult = <SimpleReplacement as Rewrite>::ApplyResult;
     type Error = <SimpleReplacement as Rewrite>::Error;
     const UNCHANGED_ON_FAILURE: bool = <SimpleReplacement as Rewrite>::UNCHANGED_ON_FAILURE;
 
     delegate! {
         to self.0 {
-            fn apply(self, hugr: &mut impl HugrMut) -> Result<Self::ApplyResult, Self::Error>;
+            fn apply(self, hugr: &mut impl HugrMut<Node=Node>) -> Result<Self::ApplyResult, Self::Error>;
             fn verify(&self, h: &impl HugrView<Node = Node>) -> Result<(), Self::Error>;
             fn invalidation_set(&self) -> impl Iterator<Item = Node>;
         }

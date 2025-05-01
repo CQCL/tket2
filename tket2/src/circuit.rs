@@ -415,7 +415,7 @@ fn check_hugr<H: HugrView>(hugr: &H, parent: H::Node) -> Result<(), CircuitError
 /// occurs.
 #[allow(dead_code)]
 pub(crate) fn remove_empty_wire(
-    circ: &mut Circuit<impl HugrMut>,
+    circ: &mut Circuit<impl HugrMut<Node=Node>>,
     input_port: usize,
 ) -> Result<(), CircuitMutError> {
     let parent = circ.parent();
@@ -567,7 +567,7 @@ fn shift_ports<C: HugrMut + ?Sized>(
 // Update the signature of circ when removing the in_index-th input wire and
 // the out_index-th output wire.
 fn update_signature(
-    hugr: &mut impl HugrMut,
+    hugr: &mut impl HugrMut<Node=Node>,
     parent: Node,
     in_index: usize,
     out_index: Option<usize>,
@@ -584,7 +584,7 @@ fn update_signature(
         types.remove(in_index);
         types.into()
     };
-    hugr.replace_op(inp, Input::new(inp_types.clone())).unwrap();
+    hugr.replace_op(inp, Input::new(inp_types.clone()));
 
     // Update output node if necessary.
     let out_types = out_index.map(|out_index| {
@@ -597,8 +597,7 @@ fn update_signature(
             types.remove(out_index);
             types.into()
         };
-        hugr.replace_op(out, Output::new(out_types.clone()))
-            .unwrap();
+        hugr.replace_op(out, Output::new(out_types.clone()));
         out_types
     });
 
@@ -647,7 +646,7 @@ fn update_signature(
         })?,
     }
 
-    hugr.replace_op(parent, optype)?;
+    hugr.replace_op(parent, optype);
 
     Ok(())
 }

@@ -137,7 +137,7 @@ impl CircuitRewrite {
     #[inline]
     pub fn apply(
         self,
-        circ: &mut Circuit<impl HugrMut>,
+        circ: &mut Circuit<impl HugrMut<Node=Node>>,
     ) -> Result<Vec<(Node, OpType)>, SimpleReplacementError> {
         circ.add_rewrite_trace(&self);
         self.0.apply(circ.hugr_mut())
@@ -147,7 +147,7 @@ impl CircuitRewrite {
     #[inline]
     pub fn apply_notrace(
         self,
-        circ: &mut Circuit<impl HugrMut>,
+        circ: &mut Circuit<impl HugrMut<Node=Node>>,
     ) -> Result<Vec<(Node, OpType)>, SimpleReplacementError> {
         self.0.apply(circ.hugr_mut())
     }

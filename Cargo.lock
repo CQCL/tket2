@@ -116,6 +116,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "arrayvec"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
+
+[[package]]
 name = "ascent"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -178,6 +184,12 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
 ]
+
+[[package]]
+name = "base64"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "bimap"
@@ -245,6 +257,15 @@ name = "byteorder"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
+
+[[package]]
+name = "capnp"
+version = "0.20.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "053b81915c2ce1629b8fb964f578b18cb39b23ef9d5b24120d0dfc959569a1d9"
+dependencies = [
+ "embedded-io",
+]
 
 [[package]]
 name = "cast"
@@ -680,6 +701,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
+name = "embedded-io"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
+
+[[package]]
 name = "encode_unicode"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -884,19 +911,18 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61f76ba415cbd86242348c74abd0c67459f6d0e7fd26fb439c31e747d9aa45c8"
+source = "git+https://github.com/CQCL/hugr?branch=release-rs-v0.16.0#6ca12580c26d353cbe418f64d866db6600c045eb"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
+ "hugr-model",
  "hugr-passes",
 ]
 
 [[package]]
 name = "hugr-cli"
 version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2177be2f581e4a0cc65da513e7dc9e08c133e1a0abeb1877bbe482f2d737f77"
+source = "git+https://github.com/CQCL/hugr?branch=release-rs-v0.16.0#6ca12580c26d353cbe418f64d866db6600c045eb"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -909,8 +935,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ee45725211e15e414492d279be7bd84fdff0c4fad55aa1608ed40b47b7ad524"
+source = "git+https://github.com/CQCL/hugr?branch=release-rs-v0.16.0#6ca12580c26d353cbe418f64d866db6600c045eb"
 dependencies = [
  "cgmath",
  "delegate 0.13.3",
@@ -919,6 +944,7 @@ dependencies = [
  "enum_dispatch",
  "fxhash",
  "html-escape",
+ "hugr-model",
  "indexmap",
  "itertools 0.14.0",
  "lazy_static",
@@ -940,8 +966,7 @@ dependencies = [
 [[package]]
 name = "hugr-llvm"
 version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5afd73a43099c83749085631d9e1080a079f10c52a69980b909d8863d00d174"
+source = "git+https://github.com/CQCL/hugr?branch=release-rs-v0.16.0#6ca12580c26d353cbe418f64d866db6600c045eb"
 dependencies = [
  "anyhow",
  "delegate 0.13.3",
@@ -958,10 +983,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "hugr-model"
+version = "0.19.0"
+source = "git+https://github.com/CQCL/hugr?branch=release-rs-v0.16.0#6ca12580c26d353cbe418f64d866db6600c045eb"
+dependencies = [
+ "base64",
+ "bumpalo",
+ "capnp",
+ "derive_more 1.0.0",
+ "fxhash",
+ "indexmap",
+ "itertools 0.14.0",
+ "ordered-float",
+ "pest",
+ "pest_derive",
+ "pretty",
+ "smol_str",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "hugr-passes"
 version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5ff7529467118342f26c30bf37079d30000d1542400eda435fc3758903ee820"
+source = "git+https://github.com/CQCL/hugr?branch=release-rs-v0.16.0#6ca12580c26d353cbe418f64d866db6600c045eb"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
@@ -1262,6 +1306,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
 
 [[package]]
+name = "ordered-float"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2c1f9f56e534ac6a9b8a4600bdf0f530fb393b5f393e7b4d03489c3cf0c3f01"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "overload"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1479,6 +1532,17 @@ name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
+
+[[package]]
+name = "pretty"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac98773b7109bc75f475ab5a134c9b64b87e59d776d31098d8f346922396a477"
+dependencies = [
+ "arrayvec",
+ "typed-arena",
+ "unicode-width",
+]
 
 [[package]]
 name = "priority-queue"
@@ -2254,6 +2318,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "typed-arena"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6af6ae20167a9ece4bcb41af5b80f8a1f1df981f6391189ce00fd257af04126a"
+
+[[package]]
 name = "typeid"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2300,6 +2370,12 @@ name = "unicode-ident"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a5f39404a5da50712a4c1eecf25e90dd62b613502b7e925fd4e4d19b5c96512"
+
+[[package]]
+name = "unicode-width"
+version = "0.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
 
 [[package]]
 name = "unicode-xid"
