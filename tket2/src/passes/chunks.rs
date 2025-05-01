@@ -94,7 +94,11 @@ impl Chunk {
     }
 
     /// Insert the chunk back into a circuit.
-    pub(self) fn insert(&self, circ: &mut impl HugrMut<Node=Node>, root: Node) -> ChunkInsertResult {
+    pub(self) fn insert(
+        &self,
+        circ: &mut impl HugrMut<Node = Node>,
+        root: Node,
+    ) -> ChunkInsertResult {
         let chunk = self.circ.hugr();
         let chunk_root = chunk.root();
         if chunk.children(self.circ.parent()).nth(2).is_none() {
@@ -106,8 +110,9 @@ impl Chunk {
         let chunk_sg: SiblingGraph<'_, DataflowParentID> =
             SiblingGraph::try_new(&chunk, chunk_root).unwrap();
         // Insert the chunk circuit into the original circuit.
-        let subgraph = SiblingSubgraph::<Node>::try_new_dataflow_subgraph::<_,DataflowParentID>(&chunk_sg)
-            .unwrap_or_else(|e| panic!("The chunk circuit is no longer a dataflow graph: {e}"));
+        let subgraph =
+            SiblingSubgraph::<Node>::try_new_dataflow_subgraph::<_, DataflowParentID>(&chunk_sg)
+                .unwrap_or_else(|e| panic!("The chunk circuit is no longer a dataflow graph: {e}"));
         let node_map = circ.insert_subgraph(root, &chunk, &subgraph);
 
         let mut input_map = HashMap::with_capacity(self.inputs.len());

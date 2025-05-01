@@ -415,7 +415,7 @@ fn check_hugr<H: HugrView>(hugr: &H, parent: H::Node) -> Result<(), CircuitError
 /// occurs.
 #[allow(dead_code)]
 pub(crate) fn remove_empty_wire(
-    circ: &mut Circuit<impl HugrMut<Node=Node>>,
+    circ: &mut Circuit<impl HugrMut<Node = Node>>,
     input_port: usize,
 ) -> Result<(), CircuitMutError> {
     let parent = circ.parent();
@@ -567,7 +567,7 @@ fn shift_ports<C: HugrMut + ?Sized>(
 // Update the signature of circ when removing the in_index-th input wire and
 // the out_index-th output wire.
 fn update_signature(
-    hugr: &mut impl HugrMut<Node=Node>,
+    hugr: &mut impl HugrMut<Node = Node>,
     parent: Node,
     in_index: usize,
     out_index: Option<usize>,

@@ -4,7 +4,9 @@
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
-        const_fold::{ConstFoldError, ConstantFoldPass}, force_order, ComposablePass as _, MonomorphizePass, RemoveDeadFuncsError, RemoveDeadFuncsPass
+        const_fold::{ConstFoldError, ConstantFoldPass},
+        force_order, ComposablePass as _, MonomorphizePass, RemoveDeadFuncsError,
+        RemoveDeadFuncsPass,
     },
     hugr::HugrError,
     Hugr, HugrView, Node,
@@ -77,7 +79,7 @@ impl QSystemPass {
     pub fn run(&self, hugr: &mut Hugr) -> Result<(), QSystemPassError> {
         if self.monomorphize {
             match self.monomorphization().run(hugr) {
-                Ok(()) => ()
+                Ok(()) => (),
             };
 
             let mut rdfp = RemoveDeadFuncsPass::default();
@@ -114,9 +116,8 @@ impl QSystemPass {
 
             let is_quantum =
                 optype.cast::<Tk2Op>().is_some() || optype.cast::<QSystemOp>().is_some();
-            let is_qalloc =
-                matches!(optype.cast(), Some(Tk2Op::QAlloc) | Some(Tk2Op::TryQAlloc))
-                    || optype.cast() == Some(QSystemOp::TryQAlloc);
+            let is_qalloc = matches!(optype.cast(), Some(Tk2Op::QAlloc) | Some(Tk2Op::TryQAlloc))
+                || optype.cast() == Some(QSystemOp::TryQAlloc);
             let is_qfree =
                 optype.cast() == Some(Tk2Op::QFree) || optype.cast() == Some(QSystemOp::QFree);
             let is_read = optype.cast() == Some(FutureOpDef::Read);

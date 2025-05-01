@@ -220,7 +220,7 @@ impl Rewrite for PullForward {
         unimplemented!()
     }
 
-    fn apply(self, h: &mut impl HugrMut<Node=Node>) -> Result<Self::ApplyResult, Self::Error> {
+    fn apply(self, h: &mut impl HugrMut<Node = Node>) -> Result<Self::ApplyResult, Self::Error> {
         let Self { command, new_nexts } = self;
 
         let qb_port = |command: &ComCommand, qb, direction| {

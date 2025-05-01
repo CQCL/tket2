@@ -10,7 +10,8 @@ use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
         // ensure_no_nonlocal_edges,
-        non_local::NonLocalEdgesError, ComposablePass,
+        non_local::NonLocalEdgesError,
+        ComposablePass,
     },
     builder::{DFGBuilder, Dataflow, DataflowHugr as _},
     core::HugrNode,
@@ -44,14 +45,15 @@ impl ComposablePass for LazifyMeasurePass {
     type Node = Node;
     type Result = ();
 
-    fn run(&self, hugr: &mut impl HugrMut<Node=Node>) -> Result<(), LazifyMeasurePassError<Node>> {
+    fn run(
+        &self,
+        hugr: &mut impl HugrMut<Node = Node>,
+    ) -> Result<(), LazifyMeasurePassError<Node>> {
         // TODO uncomment once https://github.com/CQCL/hugr/issues/1234 is complete
         // ensure_no_nonlocal_edges(hugr)?;
         replace_measure_ops(hugr)?;
         Ok(())
     }
-
-
 }
 
 #[derive(Error, Debug, Display, From)]
@@ -76,7 +78,7 @@ pub enum LazifyMeasurePassError<N> {
 ///
 /// No validation is done here.
 pub fn replace_measure_ops(
-    hugr: &mut impl HugrMut<Node=Node>,
+    hugr: &mut impl HugrMut<Node = Node>,
 ) -> Result<Vec<Node>, LazifyMeasurePassError<Node>> {
     let nodes_and_rewrites = hugr
         .nodes()

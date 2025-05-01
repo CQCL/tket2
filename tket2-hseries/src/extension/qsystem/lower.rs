@@ -70,7 +70,7 @@ pub enum LowerTk2Error {
 /// # Errors
 /// Returns an error if the replacement fails, which could be if the root
 /// operation cannot have children of type [OpTag::FuncDefn].
-fn lower_ops(hugr: &mut impl HugrMut<Node=Node>) -> Result<Vec<Node>, LowerTk2Error> {
+fn lower_ops(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, LowerTk2Error> {
     let mut funcs: BTreeMap<Tk2Op, Node> = BTreeMap::new();
 
     let root_op = hugr.get_optype(hugr.root());
@@ -184,13 +184,15 @@ fn build_to_radians(b: &mut impl Dataflow, rotation: Wire) -> Result<Wire, Build
 }
 
 /// Lower `Tk2Op` operations to `QSystemOp` operations.
-pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node=Node>) -> Result<Vec<hugr::Node>, LowerTk2Error> {
+pub fn lower_tk2_op(
+    hugr: &mut impl HugrMut<Node = Node>,
+) -> Result<Vec<hugr::Node>, LowerTk2Error> {
     let mut replaced_nodes = lower_direct(hugr)?;
     replaced_nodes.extend(lower_ops(hugr)?);
     Ok(replaced_nodes)
 }
 
-fn lower_direct(hugr: &mut impl HugrMut<Node=Node>) -> Result<Vec<Node>, LowerTk2Error> {
+fn lower_direct(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, LowerTk2Error> {
     Ok(hugr::algorithms::replace_many_ops(hugr, |op| {
         let op: Tk2Op = op.cast()?;
         Some(match op {
@@ -241,11 +243,10 @@ impl ComposablePass for LowerTket2ToQSystemPass {
     type Result = ();
     type Node = Node;
 
-    fn run(&self, hugr: &mut impl HugrMut<Node=Node>) -> Result<(), LowerTk2Error> {
+    fn run(&self, hugr: &mut impl HugrMut<Node = Node>) -> Result<(), LowerTk2Error> {
         lower_tk2_op(hugr)?;
         #[cfg(test)]
-        check_lowered(hugr)
-            .map_err(|missing_ops| LowerTk2Error::Unlowered { missing_ops })?;
+        check_lowered(hugr).map_err(|missing_ops| LowerTk2Error::Unlowered { missing_ops })?;
         Ok(())
     }
 }
