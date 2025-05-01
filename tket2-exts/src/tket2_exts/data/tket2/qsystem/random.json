@@ -16,7 +16,6 @@
       }
     }
   },
-  "values": {},
   "operations": {
     "DeleteRNGContext": {
       "extension": "tket2.qsystem.random",

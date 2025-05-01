@@ -7,7 +7,6 @@
     "tket2.futures"
   ],
   "types": {},
-  "values": {},
   "operations": {
     "LazyMeasure": {
       "extension": "tket2.qsystem",

@@ -14,7 +14,6 @@
       }
     }
   },
-  "values": {},
   "operations": {
     "and": {
       "extension": "tket2.bool",
