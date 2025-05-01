@@ -78,9 +78,7 @@ impl QSystemPass {
     /// validation, if enabled.
     pub fn run(&self, hugr: &mut Hugr) -> Result<(), QSystemPassError> {
         if self.monomorphize {
-            match self.monomorphization().run(hugr) {
-                Ok(()) => (),
-            };
+            self.monomorphization().run(hugr).unwrap();
 
             let mut rdfp = RemoveDeadFuncsPass::default();
             if hugr.get_optype(hugr.root()).is_module() {
