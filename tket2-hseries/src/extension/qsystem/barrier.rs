@@ -78,18 +78,24 @@ impl std::hash::Hash for OpHashWrapper {
     }
 }
 
+/// Helper struct to record how a type is unpacked.
 #[derive(Clone, Hash, PartialEq, Eq)]
 enum UnpackedRow {
+    /// No internal qubits, so not unpacked.
     Other(Type),
+    /// Qubit container, unpacked to a row of types.
     QbContainer(Vec<Type>),
 }
 impl UnpackedRow {
+    /// Number of wires in the unpacked row.
     fn num_wires(&self) -> usize {
         match self {
             UnpackedRow::Other(_) => 1,
             UnpackedRow::QbContainer(row) => row.len(),
         }
     }
+
+    /// Row produced when unpacked.
     fn into_row(self) -> Vec<Type> {
         match self {
             UnpackedRow::Other(ty) => vec![ty],
@@ -107,12 +113,18 @@ impl UnpackedRow {
 }
 
 // TODO pull out a trait for lowering-via-temp-extension
+/// Insert runtime barriers by using temporary extension operations
+/// that get lowered to function calls.
 pub(super) struct BarrierFuncs {
+    /// Temporary extension used for placeholder operations.
     extension: Arc<Extension>,
+    /// Function definitions for each instance of the operations.
     funcs: HashMap<OpHashWrapper, Hugr>,
+    /// Cache of unpacked types.
     qubit_ports: HashMap<Type, UnpackedRow>,
 }
 
+/// Invert the signature of a function type.
 fn invert_sig(sig: &PolyFuncTypeRV) -> PolyFuncTypeRV {
     let body = FuncValueType::new(sig.body().output().clone(), sig.body().input().clone());
     PolyFuncTypeRV::new(sig.params(), body)
@@ -121,6 +133,7 @@ fn invert_sig(sig: &PolyFuncTypeRV) -> PolyFuncTypeRV {
 static TEMP_EXT_NAME: IdentList = IdentList::new_static_unchecked("__tket2.barrier.temp");
 
 impl BarrierFuncs {
+    // Temporary operation names.
     const UNWRAP_OPT: OpName = OpName::new_static("option_qb_unwrap");
     const TAG_OPT: OpName = OpName::new_static("option_qb_tag");
     const WRAPPED_BARRIER: OpName = OpName::new_static("wrapped_barrier");
@@ -138,6 +151,7 @@ impl BarrierFuncs {
         Signature::new(ty.clone(), Type::from(option_type(ty)))
     }
 
+    /// Create a new instance of the [BarrierFuncs] struct.
     pub(super) fn new() -> Result<Self, LowerTk2Error> {
         let unwrap_h = {
             let mut b = FunctionBuilder::new(Self::UNWRAP_OPT, Self::unwrap_opt_sig(qb_t()))?;
@@ -160,6 +174,7 @@ impl BarrierFuncs {
             TEMP_EXT_NAME.clone(),
             hugr::extension::Version::new(0, 0, 0),
             |ext, ext_ref| {
+                // unwrap option of qubit
                 ext.add_op(
                     Self::UNWRAP_OPT,
                     Default::default(),
@@ -167,6 +182,7 @@ impl BarrierFuncs {
                     ext_ref,
                 )
                 .unwrap();
+                // produce option of qubit
                 ext.add_op(
                     Self::TAG_OPT,
                     Default::default(),
@@ -174,6 +190,7 @@ impl BarrierFuncs {
                     ext_ref,
                 )
                 .unwrap();
+                // version of runtime barrier that takes a variable number of qubits
                 ext.add_op(
                     Self::WRAPPED_BARRIER,
                     Default::default(),
@@ -199,6 +216,7 @@ impl BarrierFuncs {
                         TypeRV::new_row_var_use(2, TypeBound::Any),
                     ),
                 );
+                // pack some wires in to an array
                 ext.add_op(
                     Self::ARRAY_REPACK,
                     Default::default(),
@@ -206,6 +224,7 @@ impl BarrierFuncs {
                     ext_ref,
                 )
                 .unwrap();
+                // unpack an array in to some wires
                 ext.add_op(
                     Self::ARRAY_UNPACK,
                     Default::default(),
@@ -226,6 +245,7 @@ impl BarrierFuncs {
                         TypeRV::new_row_var_use(1, TypeBound::Any),
                     ),
                 );
+                // pack some wires in to a tuple
                 ext.add_op(
                     Self::TUPLE_REPACK,
                     Default::default(),
@@ -233,6 +253,7 @@ impl BarrierFuncs {
                     ext_ref,
                 )
                 .unwrap();
+                // unpack a tuple in to some wires
                 ext.add_op(
                     Self::TUPLE_UNPACK,
                     Default::default(),
@@ -260,6 +281,7 @@ impl BarrierFuncs {
     fn get_op(&self, name: &OpName, args: impl Into<Vec<TypeArg>>) -> Option<ExtensionOp> {
         ExtensionOp::new(self.extension.get_op(name)?.clone(), args).ok()
     }
+
     /// Filter out types in the generic barrier that contain qubits.
     fn filter_qubit_containers<H: HugrMut<Node = Node>>(
         &mut self,
@@ -287,6 +309,7 @@ impl BarrierFuncs {
             })
             .collect()
     }
+
     /// Compute the row produced when a type is unpacked.
     /// Uses memoization to avoid recomputing the same type.
     fn unpack_type(&mut self, ty: &Type) -> UnpackedRow {
@@ -345,6 +368,7 @@ impl BarrierFuncs {
         UnpackedRow::Other(ty.clone())
     }
 
+    /// Insert an option unwrap.
     fn call_unwrap(
         &mut self,
         builder: &mut impl Dataflow,
@@ -355,11 +379,13 @@ impl BarrierFuncs {
         Ok(call.out_wire(0))
     }
 
+    /// Insert an option construction.
     fn call_wrap(&mut self, builder: &mut impl Dataflow, wire: Wire) -> Result<Wire, BuildError> {
         let call = builder.add_dataflow_op(self.get_op(&Self::TAG_OPT, []).unwrap(), [wire])?;
         Ok(call.out_wire(0))
     }
 
+    /// Cache a function definition for a given operation.
     fn cache_function(
         &mut self,
         op: &ExtensionOp,
@@ -375,6 +401,8 @@ impl BarrierFuncs {
 
         Ok(())
     }
+
+    /// Insert a runtime barrier operation across some qubit wires.
     fn call_wrapped_runtime_barrier(
         &mut self,
         builder: &mut impl Dataflow,
@@ -405,6 +433,7 @@ impl BarrierFuncs {
         Ok(builder.add_dataflow_op(op, qubit_wires)?.outputs())
     }
 
+    /// Unpack an array in to wires.
     fn call_unpack_array(
         &mut self,
         builder: &mut impl Dataflow,
@@ -471,6 +500,7 @@ impl BarrierFuncs {
         Ok(outputs)
     }
 
+    /// Repack an array from wires.
     fn call_repack_array(
         &mut self,
         builder: &mut impl Dataflow,
@@ -503,17 +533,7 @@ impl BarrierFuncs {
         Ok(repack_call.out_wire(0))
     }
 
-    pub fn lower(
-        self,
-        hugr: &mut impl HugrMut<Node = Node>,
-        lowerer: &mut ReplaceTypes,
-    ) -> Result<(), LowerTk2Error> {
-        for (op, func_def) in self.funcs {
-            let func_node = insert_function(hugr, func_def);
-            lowerer.replace_op(&op.0, NodeTemplate::Call(func_node, vec![]));
-        }
-        Ok(())
-    }
+    /// Unpack a tuple in to wires.
     fn call_unpack_tuple(
         &mut self,
         builder: &mut impl Dataflow,
@@ -583,6 +603,7 @@ impl BarrierFuncs {
         Ok(outputs)
     }
 
+    /// Repack a tuple from wires.
     fn call_repack_tuple(
         &mut self,
         builder: &mut impl Dataflow,
@@ -665,7 +686,7 @@ impl BarrierFuncs {
         Ok(unpacked_wires[0])
     }
 
-    /// Insert [RuntimeBarrier] after every [Barrier] in the Hugr.
+    /// Insert [RuntimeBarrier] after a [Barrier] in the Hugr.
     pub(super) fn insert_runtime_barrier(
         &mut self,
         hugr: &mut impl HugrMut<Node = Node>,
@@ -708,15 +729,20 @@ impl BarrierFuncs {
         Ok(())
     }
 
+    /// Construct the endofunction HUGR to unpack types, apply the runtime barrier across qubits, and repack.
     fn packing_hugr(&mut self, container_row: Vec<Type>) -> Result<Hugr, LowerTk2Error> {
-        // TODO add comments for steps
         let mut dfg_b = DFGBuilder::new(Signature::new_endo(container_row.clone()))?;
+
+        // pack the container row in to a tuple to use the tuple unpacking logic.
         let tuple_type = Type::new_tuple(container_row.clone());
 
         let input = dfg_b.input();
         let tuple = dfg_b.make_tuple(input.outputs())?;
 
+        // unpack the tuple in to wires
         let unpacked_wires = self.unpack_container(&mut dfg_b, &tuple_type, tuple)?;
+
+        // tag the qubit wires
         let tagged_wires: Vec<(bool, Wire)> = unpacked_wires
             .into_iter()
             .map(|wire| {
@@ -734,8 +760,11 @@ impl BarrierFuncs {
             .filter(|(is_qb, _)| *is_qb)
             .map(|(_, w)| *w)
             .collect();
+
+        // call the runtime barrier no all the wires
         let mut r_bar_outs = self.call_wrapped_runtime_barrier(&mut dfg_b, qubit_wires)?;
 
+        // replace the qubit wires with the runtime barrier outputs
         let repack_wires = tagged_wires
             .into_iter()
             .map(|(is_qb, w)| {
@@ -749,8 +778,10 @@ impl BarrierFuncs {
             })
             .collect::<Vec<_>>();
 
+        // repack the wires in to a tuple
         let repacked_tuple = self.repack_container(&mut dfg_b, &tuple_type, repack_wires)?;
 
+        // separate back in to a row
         let new_container_wires = dfg_b
             .add_dataflow_op(
                 prelude::UnpackTuple::new(container_row.clone().into()),
@@ -758,6 +789,19 @@ impl BarrierFuncs {
             )?
             .outputs();
         Ok(dfg_b.finish_hugr_with_outputs(new_container_wires)?)
+    }
+
+    /// Record that temporary extension operations can be lowered to function calls.
+    pub fn lower(
+        self,
+        hugr: &mut impl HugrMut<Node = Node>,
+        lowerer: &mut ReplaceTypes,
+    ) -> Result<(), LowerTk2Error> {
+        for (op, func_def) in self.funcs {
+            let func_node = insert_function(hugr, func_def);
+            lowerer.replace_op(&op.0, NodeTemplate::Call(func_node, vec![]));
+        }
+        Ok(())
     }
 }
 
