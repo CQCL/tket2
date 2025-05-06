@@ -9,7 +9,7 @@ use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
-        ExtensionBuildError, ExtensionId, ExtensionSet, SignatureFunc, TypeDef, Version,
+        ExtensionBuildError, ExtensionId, SignatureFunc, TypeDef, Version,
     },
     ops::constant::{CustomConst, ValueName},
     types::{CustomType, Signature, Type, TypeBound},
@@ -90,10 +90,6 @@ impl CustomConst for ConstBool {
 
     fn equal_consts(&self, other: &dyn CustomConst) -> bool {
         hugr::ops::constant::downcast_equal_consts(self, other)
-    }
-
-    fn extension_reqs(&self) -> ExtensionSet {
-        ExtensionSet::singleton(BOOL_EXTENSION_ID)
     }
 
     fn get_type(&self) -> Type {
@@ -271,7 +267,6 @@ pub(crate) mod test {
         let bool_const = ConstBool::new(true);
         assert_eq!(bool_const.get_type(), bool_ty);
         assert!(bool_const.value());
-        assert!(bool_const.extension_reqs().contains(&BOOL_EXTENSION_ID));
         assert!(bool_const.validate().is_ok());
     }
 

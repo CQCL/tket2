@@ -52,13 +52,13 @@ use std::sync::{Arc, Weak};
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
-        prelude::{option_type, usize_t, PRELUDE_ID},
+        prelude::{option_type, usize_t},
         simple_op::{
             try_from_name, HasConcrete, HasDef, MakeExtensionOp, MakeOpDef, MakeRegisteredOp,
             OpLoadError,
         },
-        ExtensionBuildError, ExtensionId, ExtensionRegistry, ExtensionSet, SignatureError,
-        SignatureFunc, TypeDefBound, Version, PRELUDE,
+        ExtensionBuildError, ExtensionId, ExtensionRegistry, SignatureError, SignatureFunc,
+        TypeDefBound, Version, PRELUDE,
     },
     ops::{
         constant::{downcast_equal_consts, CustomConst, ValueName},
@@ -91,7 +91,6 @@ lazy_static! {
     /// The `tket2.wasm` extension.
     pub static ref EXTENSION: Arc<Extension> =
         Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
-        ext.add_requirements(ExtensionSet::from_iter([futures::EXTENSION_ID, PRELUDE_ID]));
         add_wasm_type_defs(ext, ext_ref).unwrap();
         WasmOpDef::load_all_ops(ext, ext_ref, ).unwrap();
     });
@@ -661,10 +660,6 @@ impl CustomConst for ConstWasmModule {
         downcast_equal_consts(self, other)
     }
 
-    fn extension_reqs(&self) -> ExtensionSet {
-        ExtensionSet::singleton(EXTENSION_ID)
-    }
-
     fn get_type(&self) -> Type {
         WasmType::Module.get_type(&EXTENSION_REF)
     }
@@ -766,7 +761,6 @@ mod test {
         };
         assert_eq!(m1.name(), "wasm:test_mod");
         assert!(m1.equal_consts(&m2));
-        assert_eq!(m1.extension_reqs(), ExtensionSet::singleton(EXTENSION_ID));
     }
 
     #[rstest]
@@ -848,7 +842,7 @@ mod test {
         ));
         assert_eq!(
             op.to_extension_op().unwrap().signature(),
-            Signature::new(module_ty, func_ty).with_extension_delta(EXTENSION_ID)
+            Signature::new(module_ty, func_ty)
         );
     }
 

@@ -11,7 +11,6 @@ use hugr::{
 };
 
 use crate::circuit::Circuit;
-use crate::extension::TKET2_EXTENSION_ID;
 
 pub(crate) fn type_is_linear(typ: &Type) -> bool {
     !TypeBound::Copyable.contains(typ.least_upper_bound())
@@ -24,7 +23,7 @@ where
     F: FnOnce(&mut CircuitBuilder<FunctionBuilder<Hugr>>) -> Result<(), BuildError>,
 {
     let qb_row = vec![qb_t(); num_qubits];
-    let signature = Signature::new(qb_row.clone(), qb_row).with_extension_delta(TKET2_EXTENSION_ID);
+    let signature = Signature::new(qb_row.clone(), qb_row);
     let mut h = FunctionBuilder::new("main", signature)?;
 
     let qbs = h.input_wires();

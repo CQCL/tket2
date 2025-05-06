@@ -16,7 +16,7 @@ use hugr::ops::handle::DataflowParentID;
 use hugr::ops::OpType;
 use hugr::types::Signature;
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
-use hugr_core::hugr::internal::HugrMutInternals as _;
+use hugr_core::hugr::internal::{HugrInternals, HugrMutInternals as _};
 use itertools::Itertools;
 use portgraph::algorithms::ConvexChecker;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
@@ -268,7 +268,7 @@ impl CircuitChunks {
         op_cost: impl Fn(&OpType) -> C,
     ) -> Self {
         let hugr = circ.hugr();
-        let root_meta = hugr.get_node_metadata(circ.parent()).cloned();
+        let root_meta = hugr.node_metadata_map(circ.parent()).clone();
         let signature = circ.circuit_signature().clone();
 
         let [circ_input, circ_output] = circ.io_nodes();
@@ -300,7 +300,7 @@ impl CircuitChunks {
         }
         Self {
             signature: signature.into_owned(),
-            root_meta,
+            root_meta: Some(root_meta),
             input_connections,
             output_connections,
             chunks,

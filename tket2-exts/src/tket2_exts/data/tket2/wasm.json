@@ -1,10 +1,6 @@
 {
   "version": "0.1.0",
   "name": "tket2.wasm",
-  "runtime_reqs": [
-    "prelude",
-    "tket2.futures"
-  ],
   "types": {
     "context": {
       "extension": "tket2.wasm",
@@ -161,8 +157,7 @@
               ],
               "bound": "A"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -183,8 +178,7 @@
               "bound": "A"
             }
           ],
-          "output": [],
-          "runtime_reqs": []
+          "output": []
         }
       },
       "binary": false
@@ -218,8 +212,7 @@
                 ]
               ]
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -299,8 +292,7 @@
               ],
               "bound": "C"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false

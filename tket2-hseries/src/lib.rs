@@ -5,8 +5,8 @@ use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
         const_fold::{ConstFoldError, ConstantFoldPass},
-        force_order, ComposablePass as _, MonomorphizePass, RemoveDeadFuncsError,
-        RemoveDeadFuncsPass,
+        force_order, ComposablePass as _, LinearizeArrayPass, MonomorphizePass,
+        RemoveDeadFuncsError, RemoveDeadFuncsPass,
     },
     hugr::HugrError,
     Hugr, HugrView, Node,
@@ -95,6 +95,7 @@ impl QSystemPass {
             rdfp.run(hugr)?
         }
 
+        self.linearize_arrays();
         if self.constant_fold {
             self.constant_fold().run(hugr)?;
         }
@@ -160,6 +161,10 @@ impl QSystemPass {
 
     fn monomorphization(&self) -> MonomorphizePass {
         MonomorphizePass
+    }
+
+    fn linearize_arrays(&self) -> LinearizeArrayPass {
+        LinearizeArrayPass::default()
     }
 
     /// Returns a new `QSystemPass` with constant folding enabled according to

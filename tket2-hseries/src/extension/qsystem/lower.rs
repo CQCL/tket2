@@ -375,7 +375,7 @@ mod test {
         // 5x(float + load), measure_reset, conditional, case(input, output) * 2, flip
         // (phasedx + 2*(float + load))
         // + 52 for the barrier array wrapping, popping and option unwrapping
-        assert_eq!(h.node_count(), 107);
+        assert_eq!(h.num_nodes(), 107);
         assert_eq!(check_lowered(&h), Ok(()));
         if let Err(e) = h.validate() {
             panic!("{}", e);

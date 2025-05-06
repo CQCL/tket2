@@ -1,11 +1,6 @@
 {
   "version": "0.1.0",
   "name": "tket2.result",
-  "runtime_reqs": [
-    "arithmetic.float.types",
-    "arithmetic.int.types",
-    "collections.array"
-  ],
   "types": {},
   "operations": {
     "result_array_bool": {
@@ -46,11 +41,10 @@
                   }
                 }
               ],
-              "bound": "C"
+              "bound": "A"
             }
           ],
-          "output": [],
-          "runtime_reqs": []
+          "output": []
         }
       },
       "binary": false
@@ -95,11 +89,10 @@
                   }
                 }
               ],
-              "bound": "C"
+              "bound": "A"
             }
           ],
-          "output": [],
-          "runtime_reqs": []
+          "output": []
         }
       },
       "binary": false
@@ -157,11 +150,10 @@
                   }
                 }
               ],
-              "bound": "C"
+              "bound": "A"
             }
           ],
-          "output": [],
-          "runtime_reqs": []
+          "output": []
         }
       },
       "binary": false
@@ -219,11 +211,10 @@
                   }
                 }
               ],
-              "bound": "C"
+              "bound": "A"
             }
           ],
-          "output": [],
-          "runtime_reqs": []
+          "output": []
         }
       },
       "binary": false
@@ -246,8 +237,7 @@
               "size": 2
             }
           ],
-          "output": [],
-          "runtime_reqs": []
+          "output": []
         }
       },
       "binary": false
@@ -272,8 +262,7 @@
               "bound": "C"
             }
           ],
-          "output": [],
-          "runtime_reqs": []
+          "output": []
         }
       },
       "binary": false
@@ -311,8 +300,7 @@
               "bound": "C"
             }
           ],
-          "output": [],
-          "runtime_reqs": []
+          "output": []
         }
       },
       "binary": false
@@ -350,8 +338,7 @@
               "bound": "C"
             }
           ],
-          "output": [],
-          "runtime_reqs": []
+          "output": []
         }
       },
       "binary": false

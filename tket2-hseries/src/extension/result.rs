@@ -10,12 +10,12 @@ use hugr::{
     extension::{
         prelude::bool_t,
         simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp, OpLoadError},
-        ExtensionId, ExtensionSet, OpDef, SignatureFunc, Version,
+        ExtensionId, OpDef, SignatureFunc, Version,
     },
     ops::{NamedOp, OpType},
     std_extensions::arithmetic::{
-        float_types::{float64_type, EXTENSION_ID as FLOAT_EXTENSION_ID},
-        int_types::{int_type, EXTENSION_ID as INT_EXTENSION_ID, LOG_WIDTH_TYPE_PARAM},
+        float_types::float64_type,
+        int_types::{int_type, LOG_WIDTH_TYPE_PARAM},
     },
     type_row,
     types::{type_param::TypeParam, PolyFuncType, Type, TypeArg},
@@ -35,7 +35,6 @@ lazy_static! {
     /// The "tket2.result" extension.
     pub static ref EXTENSION: Arc<Extension> = {
         Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
-            ext.add_requirements(ExtensionSet::from_iter([INT_EXTENSION_ID, FLOAT_EXTENSION_ID, collections::array::EXTENSION_ID]));
             ResultOpDef::load_all_ops(ext, ext_ref).unwrap();
         })
     };

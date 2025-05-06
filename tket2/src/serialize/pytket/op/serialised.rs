@@ -114,7 +114,6 @@ impl OpaqueTk1Op {
         .concat();
         let params = vec![rotation_type(); self.num_params];
         Signature::new([linear.clone(), params].concat(), linear)
-            .with_extension_delta(TKET1_EXTENSION_ID)
     }
 
     /// Returns the ports corresponding to parameters for this operation.

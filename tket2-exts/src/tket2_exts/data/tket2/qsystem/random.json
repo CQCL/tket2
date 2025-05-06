@@ -1,9 +1,6 @@
 {
   "version": "0.1.0",
   "name": "tket2.qsystem.random",
-  "runtime_reqs": [
-    "prelude"
-  ],
   "types": {
     "context": {
       "extension": "tket2.qsystem.random",
@@ -33,8 +30,7 @@
               "bound": "A"
             }
           ],
-          "output": [],
-          "runtime_reqs": []
+          "output": []
         }
       },
       "binary": false
@@ -77,8 +73,7 @@
                 ]
               ]
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -114,8 +109,7 @@
               "args": [],
               "bound": "A"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -156,8 +150,7 @@
               "args": [],
               "bound": "A"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -210,8 +203,7 @@
               "args": [],
               "bound": "A"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
