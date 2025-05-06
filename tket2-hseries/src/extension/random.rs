@@ -7,10 +7,10 @@ use derive_more::derive::Display;
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
-        prelude::{option_type, UnwrapBuilder, PRELUDE_ID},
+        prelude::{option_type, UnwrapBuilder},
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
-        ExtensionBuildError, ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc,
-        TypeDefBound, Version, PRELUDE,
+        ExtensionBuildError, ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, TypeDefBound,
+        Version, PRELUDE,
     },
     std_extensions::arithmetic::{float_types::float64_type, int_types::int_type},
     types::{CustomType, Signature, Type, TypeBound},
@@ -29,7 +29,6 @@ lazy_static! {
     /// The "tket2.qsystem.random" extension.
     pub static ref EXTENSION: Arc<Extension> = {
          Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
-            ext.add_requirements(ExtensionSet::from_iter([PRELUDE_ID]));
             add_random_type_defs(ext, ext_ref).unwrap();
             RandomOp::load_all_ops( ext, ext_ref).unwrap();
         })

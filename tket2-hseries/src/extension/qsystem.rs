@@ -11,7 +11,7 @@ use hugr::{
     extension::{
         prelude::{bool_t, option_type, qb_t, UnwrapBuilder},
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
-        ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version, PRELUDE,
+        ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, Version, PRELUDE,
     },
     ops::Value,
     std_extensions::arithmetic::{
@@ -44,11 +44,6 @@ lazy_static! {
     /// The "tket2.qsystem" extension.
     pub static ref EXTENSION: Arc<Extension> = {
          Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
-            ext.add_requirements(ExtensionSet::from_iter([
-                futures::EXTENSION.name(),
-                PRELUDE.name(),
-                FLOAT_TYPES.name(),
-            ].into_iter().cloned()));
             QSystemOp::load_all_ops( ext, ext_ref).unwrap();
         })
     };

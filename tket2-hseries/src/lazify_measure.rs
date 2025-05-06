@@ -16,7 +16,10 @@ use hugr::{
     builder::{DFGBuilder, Dataflow, DataflowHugr as _},
     core::HugrNode,
     extension::prelude::{bool_t, qb_t},
-    hugr::{hugrmut::HugrMut, views::SiblingSubgraph, Rewrite, SimpleReplacementError},
+    hugr::{
+        hugrmut::HugrMut, patch::PatchVerification, views::SiblingSubgraph, Patch,
+        SimpleReplacementError,
+    },
     ops::{handle::NodeHandle as _, OpTrait as _},
     types::Signature,
     HugrView, Node, SimpleReplacement, Wire,
@@ -100,7 +103,7 @@ pub fn replace_measure_ops(
     nodes_and_rewrites
         .into_iter()
         .map(|(n, rw)| {
-            hugr.apply_rewrite(rw)?;
+            hugr.apply_patch(rw)?;
             Ok(n)
         })
         .try_collect()
@@ -144,7 +147,7 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
             )
         };
         let nu_inp = HashMap::from_iter([((lazy_measure_node, 0.into()), (node, 0.into()))]);
-        let nu_out = iter::zip(uses, (0..).map_into()).collect();
+        let nu_out: HashMap<_, _> = iter::zip(uses, (0..).map_into()).collect();
 
         Ok(Self(SimpleReplacement::new(
             subgraph,
@@ -192,7 +195,8 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
         };
         let nu_inp = HashMap::from_iter([((lazy_measure_reset_node, 0.into()), (node, 0.into()))]);
         let qb_use = hugr.single_linked_input(node, 0).unwrap(); // qubit is linear so this can't fail
-        let nu_out = iter::zip(iter::once(qb_use).chain(uses), (0..).map_into()).collect();
+        let nu_out: HashMap<_, _> =
+            iter::zip(iter::once(qb_use).chain(uses), (0..).map_into()).collect();
 
         Ok(Self(SimpleReplacement::new(
             subgraph,
@@ -268,17 +272,26 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
     }
 }
 
-impl Rewrite for LazifyMeasureRewrite {
+impl PatchVerification for LazifyMeasureRewrite {
     type Node = Node;
-    type ApplyResult = <SimpleReplacement as Rewrite>::ApplyResult;
-    type Error = <SimpleReplacement as Rewrite>::Error;
-    const UNCHANGED_ON_FAILURE: bool = <SimpleReplacement as Rewrite>::UNCHANGED_ON_FAILURE;
+    type Error = <SimpleReplacement as PatchVerification>::Error;
 
     delegate! {
         to self.0 {
-            fn apply(self, hugr: &mut impl HugrMut<Node=Node>) -> Result<Self::ApplyResult, Self::Error>;
             fn verify(&self, h: &impl HugrView<Node = Node>) -> Result<(), Self::Error>;
             fn invalidation_set(&self) -> impl Iterator<Item = Node>;
+        }
+    }
+}
+
+impl<H: HugrMut<Node = Node>> Patch<H> for LazifyMeasureRewrite {
+    type Outcome = <SimpleReplacement as Patch<H>>::Outcome;
+
+    const UNCHANGED_ON_FAILURE: bool = <SimpleReplacement as Patch<H>>::UNCHANGED_ON_FAILURE;
+
+    delegate! {
+        to self.0 {
+            fn apply(self, hugr: &mut H) -> Result<Self::Outcome, Self::Error>;
         }
     }
 }
@@ -361,6 +374,6 @@ mod test {
             .outputs_arr();
         let mut hugr = builder.finish_hugr_with_outputs([qb]).unwrap();
         LazifyMeasurePass.run(&mut hugr).unwrap();
-        assert!(hugr.validate_no_extensions().is_ok());
+        assert!(hugr.validate().is_ok());
     }
 }

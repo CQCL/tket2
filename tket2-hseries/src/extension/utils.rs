@@ -9,7 +9,7 @@ use hugr::{
     extension::{
         prelude::UnwrapBuilder,
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
-        ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version, PRELUDE,
+        ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, Version, PRELUDE,
     },
     std_extensions::arithmetic::int_types::int_type,
     type_row,
@@ -28,9 +28,6 @@ lazy_static! {
     /// The "tket2.qsystem.utils" extension.
     pub static ref EXTENSION: Arc<Extension> = {
          Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
-            ext.add_requirements(ExtensionSet::from_iter([
-                PRELUDE.name(),
-            ].into_iter().cloned()));
             UtilsOp::load_all_ops( ext, ext_ref).unwrap();
         })
     };

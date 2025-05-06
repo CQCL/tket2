@@ -281,7 +281,7 @@ impl<'circ, T: HugrView<Node = Node>> CommandIterator<'circ, T> {
             .collect();
 
         let region: SiblingGraph = SiblingGraph::try_new(circ.hugr(), circ.parent()).unwrap();
-        let node_count = region.node_count();
+        let node_count = region.num_nodes();
         let nodes = pv::Topo::new(&region.as_petgraph());
         Self {
             circ,
