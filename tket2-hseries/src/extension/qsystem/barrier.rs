@@ -272,7 +272,7 @@ impl BarrierFuncs {
             .iter()
             .enumerate()
             .filter_map(|(i, typ)| {
-                let wc = self.num_unpacked_wires(typ);
+                let wc = self.unpack_type(typ);
 
                 match wc {
                     UnpackedRow::Other(_) => None,
@@ -287,18 +287,20 @@ impl BarrierFuncs {
             })
             .collect()
     }
-    /// Count how many qubits are contained in a type.
-    fn num_unpacked_wires(&mut self, ty: &Type) -> UnpackedRow {
+    /// Compute the row produced when a type is unpacked.
+    /// Uses memoization to avoid recomputing the same type.
+    fn unpack_type(&mut self, ty: &Type) -> UnpackedRow {
         match self.qubit_ports.get(ty) {
             Some(count) => count.clone(),
             None => {
-                let qb = self._num_unpacked_wires(ty);
+                let qb = self._new_unpack_type(ty);
                 self.qubit_ports.insert(ty.clone(), qb.clone());
                 qb
             }
         }
     }
-    fn _num_unpacked_wires(&mut self, ty: &Type) -> UnpackedRow {
+    /// Compute the row produced when a type is unpacked for the first time.
+    fn _new_unpack_type(&mut self, ty: &Type) -> UnpackedRow {
         if ty == &qb_t() {
             return UnpackedRow::QbContainer(vec![qb_t()]);
         }
@@ -307,9 +309,7 @@ impl BarrierFuncs {
             let inner_unpacked = row
                 .iter()
                 .map(|t| {
-                    self.num_unpacked_wires(
-                        &t.clone().try_into_type().expect("unexpected row variable."),
-                    )
+                    self.unpack_type(&t.clone().try_into_type().expect("unexpected row variable."))
                 })
                 .collect::<Vec<_>>();
             if inner_unpacked.iter().any(UnpackedRow::is_qb_container) {
@@ -332,7 +332,7 @@ impl BarrierFuncs {
             if is_opt_qb(elem_ty) {
                 return UnpackedRow::QbContainer(vec![qb_t(); size as usize]);
             } else {
-                let elem_wc = self.num_unpacked_wires(elem_ty);
+                let elem_wc = self.unpack_type(elem_ty);
                 return match elem_wc {
                     UnpackedRow::Other(_) => UnpackedRow::Other(ty.clone()),
                     UnpackedRow::QbContainer(inner) => {
@@ -413,14 +413,14 @@ impl BarrierFuncs {
         elem_ty: &Type,
     ) -> Result<Vec<Wire>, BuildError> {
         let row = if let UnpackedRow::QbContainer(row) =
-            self.num_unpacked_wires(&array_type(size, elem_ty.clone()))
+            self.unpack_type(&array_type(size, elem_ty.clone()))
         {
             row
         } else {
             return Ok(vec![array_wire]);
         };
 
-        let inner_row_len = self.num_unpacked_wires(elem_ty).num_wires();
+        let inner_row_len = self.unpack_type(elem_ty).num_wires();
         let args = [
             size.into(),
             elem_ty.clone().into(),
@@ -479,7 +479,7 @@ impl BarrierFuncs {
         elem_ty: &Type,
     ) -> Result<Wire, BuildError> {
         let row = if let UnpackedRow::QbContainer(row) =
-            self.num_unpacked_wires(&array_type(size, elem_ty.clone()))
+            self.unpack_type(&array_type(size, elem_ty.clone()))
         {
             row
         } else {
@@ -522,7 +522,7 @@ impl BarrierFuncs {
     ) -> Result<Vec<Wire>, BuildError> {
         let tuple_row: Vec<_> = tuple_row.to_vec();
         let unpacked_row = if let UnpackedRow::QbContainer(row) =
-            self.num_unpacked_wires(&Type::new_tuple(tuple_row.clone()))
+            self.unpack_type(&Type::new_tuple(tuple_row.clone()))
         {
             row
         } else {
@@ -562,7 +562,7 @@ impl BarrierFuncs {
         let repack_op = self.get_op(&Self::TUPLE_REPACK, args.clone()).unwrap();
         let elem_num_wires: Vec<_> = tuple_row
             .iter()
-            .map(|t| self.num_unpacked_wires(t).num_wires())
+            .map(|t| self.unpack_type(t).num_wires())
             .collect();
         self.cache_function(&repack_op, |funcs| {
             let name = mangle_name(repack_op.def().name(), &args[..1]);
@@ -591,7 +591,7 @@ impl BarrierFuncs {
     ) -> Result<Wire, BuildError> {
         let tuple_row: Vec<_> = tuple_row.to_vec();
         let unpacked_row = if let UnpackedRow::QbContainer(row) =
-            self.num_unpacked_wires(&Type::new_tuple(tuple_row.clone()))
+            self.unpack_type(&Type::new_tuple(tuple_row.clone()))
         {
             row
         } else {
@@ -850,10 +850,7 @@ mod test {
                 // make sure it is because there are no qubits in the barrier
                 let mut bf = BarrierFuncs::new().unwrap();
                 let tuple_type = Type::new_tuple(type_row);
-                assert!(matches!(
-                    bf.num_unpacked_wires(&tuple_type),
-                    UnpackedRow::Other(_)
-                ));
+                assert!(matches!(bf.unpack_type(&tuple_type), UnpackedRow::Other(_)));
                 return;
             }
             h.single_linked_input(run_barr_func_n.unwrap(), 0)
