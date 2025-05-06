@@ -1,8 +1,8 @@
 use derive_more::{Display, Error, From};
+use hugr::algorithms::ComposablePass;
 use hugr::extension::prelude::Barrier;
 use hugr::ops::NamedOp;
 use hugr::{
-    algorithms::validation::{ValidatePassError, ValidationLevel},
     builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder},
     extension::ExtensionRegistry,
     hugr::{hugrmut::HugrMut, HugrError},
@@ -62,8 +62,6 @@ pub enum LowerTk2Error {
         /// The list of nodes that were not lowered.
         missing_ops: Vec<Node>,
     },
-    /// Validation error in the final hugr.
-    ValidationError(ValidatePassError),
     /// Non-module HUGR can't be lowered.
     #[display("HUGR root cannot have FuncDefn, has type: {}", _0.name())]
     InvalidFuncDefn(#[error(ignore)] hugr::ops::OpType),
@@ -81,7 +79,7 @@ enum ReplaceOps {
 /// # Errors
 /// Returns an error if the replacement fails, which could be if the root
 /// operation cannot have children of type [OpTag::FuncDefn].
-pub(super) fn lower_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
+pub(super) fn lower_ops(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, LowerTk2Error> {
     let mut funcs: BTreeMap<Tk2Op, Node> = BTreeMap::new();
 
     let root_op = hugr.get_optype(hugr.root());
@@ -145,7 +143,7 @@ pub(super) fn lower_ops(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Er
 ///
 // TODO replace with NodeTemplate after hugr 0.16 is released with https://github.com/CQCL/hugr/pull/2094
 pub(super) fn lower_to_call(
-    hugr: &mut impl HugrMut,
+    hugr: &mut impl HugrMut<Node = Node>,
     func_node: Node,
     op_node: Node,
 ) -> Result<(), LowerTk2Error> {
@@ -159,12 +157,18 @@ pub(super) fn lower_to_call(
     )
     .expect("signature should be valid")
     .into();
+
     let call_static_port = call_op
         .static_input_port()
         .expect("Call should have static input");
-    hugr.replace_op(op_node, call_op)
-        .map_err(LowerTk2Error::OpReplacement)?;
+
+    // replace the tk2op with the function call
+    hugr.replace_op(op_node, call_op);
+
+    // insert an input for the Call static input
     hugr.insert_ports(op_node, Direction::Incoming, call_static_port.index(), 1);
+
+    // connect the function to the call
     hugr.connect(func_node, 0, op_node, call_static_port);
     Ok(())
 }
@@ -220,13 +224,15 @@ fn build_to_radians(b: &mut impl Dataflow, rotation: Wire) -> Result<Wire, Build
 }
 
 /// Lower `Tk2Op` operations to `QSystemOp` operations.
-pub fn lower_tk2_op(hugr: &mut impl HugrMut) -> Result<Vec<hugr::Node>, LowerTk2Error> {
+pub fn lower_tk2_op(
+    hugr: &mut impl HugrMut<Node = Node>,
+) -> Result<Vec<hugr::Node>, LowerTk2Error> {
     let mut replaced_nodes = lower_direct(hugr)?;
     replaced_nodes.extend(lower_ops(hugr)?);
     Ok(replaced_nodes)
 }
 
-fn lower_direct(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
+fn lower_direct(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, LowerTk2Error> {
     Ok(hugr::algorithms::replace_many_ops(hugr, |op| {
         let op: Tk2Op = op.cast()?;
         Some(match op {
@@ -236,7 +242,7 @@ fn lower_direct(hugr: &mut impl HugrMut) -> Result<Vec<Node>, LowerTk2Error> {
             Tk2Op::MeasureFree => QSystemOp::Measure,
             _ => return None,
         })
-    })?
+    })
     .into_iter()
     .map(|(node, _)| node)
     .collect())
@@ -270,25 +276,18 @@ pub fn check_lowered<H: HugrView>(hugr: &H) -> Result<(), Vec<H::Node>> {
 /// Invokes [lower_tk2_op]. If validation is enabled the resulting HUGR is
 /// checked with [check_lowered].
 #[derive(Default, Debug, Clone)]
-pub struct LowerTket2ToQSystemPass(ValidationLevel);
+pub struct LowerTket2ToQSystemPass;
 
-impl LowerTket2ToQSystemPass {
-    /// Run `LowerTket2ToQSystemPass` on the given [HugrMut]. `registry` is used
-    /// for validation, if enabled.
-    pub fn run(&self, hugr: &mut impl HugrMut) -> Result<(), LowerTk2Error> {
-        self.0.run_validated_pass(hugr, |hugr, level| {
-            lower_tk2_op(hugr)?;
-            if *level != ValidationLevel::None {
-                check_lowered(hugr)
-                    .map_err(|missing_ops| LowerTk2Error::Unlowered { missing_ops })?;
-            }
-            Ok(())
-        })
-    }
+impl ComposablePass for LowerTket2ToQSystemPass {
+    type Error = LowerTk2Error;
+    type Result = ();
+    type Node = Node;
 
-    /// Returns a new `LowerTket2ToQSystemPass` with the given [ValidationLevel].
-    pub fn with_validation_level(&self, level: ValidationLevel) -> Self {
-        Self(level)
+    fn run(&self, hugr: &mut impl HugrMut<Node = Node>) -> Result<(), LowerTk2Error> {
+        lower_tk2_op(hugr)?;
+        #[cfg(test)]
+        check_lowered(hugr).map_err(|missing_ops| LowerTk2Error::Unlowered { missing_ops })?;
+        Ok(())
     }
 }
 

@@ -29,7 +29,7 @@ pub(super) fn rewrite_into_dfg(circ: &mut Circuit) -> Result<(), CircuitMutError
         signature.input_count() + 1,
         signature.input_count() + 1,
     );
-    circ.hugr.replace_op(circ.parent(), DFG { signature })?;
+    circ.hugr.replace_op(circ.parent(), DFG { signature });
 
     Ok(())
 }

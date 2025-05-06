@@ -52,7 +52,6 @@
       }
     }
   },
-  "values": {},
   "operations": {
     "call": {
       "extension": "tket2.wasm",

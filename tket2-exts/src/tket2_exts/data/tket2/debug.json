@@ -3,7 +3,6 @@
   "name": "tket2.debug",
   "runtime_reqs": [],
   "types": {},
-  "values": {},
   "operations": {
     "StateResult": {
       "extension": "tket2.debug",

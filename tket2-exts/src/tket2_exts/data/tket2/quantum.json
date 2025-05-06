@@ -3,7 +3,6 @@
   "name": "tket2.quantum",
   "runtime_reqs": [],
   "types": {},
-  "values": {},
   "operations": {
     "CRz": {
       "extension": "tket2.quantum",

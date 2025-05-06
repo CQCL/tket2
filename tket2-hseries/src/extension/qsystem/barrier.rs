@@ -318,7 +318,7 @@ impl BarrierFuncs {
         ExtensionOp::new(self.extension.get_op(name)?.clone(), args).ok()
     }
     /// Filter out types in the generic barrier that contain qubits.
-    fn filter_qubit_containers<H: HugrMut>(
+    fn filter_qubit_containers<H: HugrMut<Node = Node>>(
         &mut self,
         hugr: &H,
         barrier: &Barrier,
@@ -560,7 +560,7 @@ impl BarrierFuncs {
         Ok(repack_call.out_wire(0))
     }
 
-    pub(super) fn lower(self, hugr: &mut impl HugrMut) -> Result<(), LowerTk2Error> {
+    pub(super) fn lower(self, hugr: &mut impl HugrMut<Node = Node>) -> Result<(), LowerTk2Error> {
         // TODO use NodeTemplate lowering
         let node_hash: HashMap<OpHashWrapper, Node> = self
             .funcs
@@ -737,7 +737,7 @@ impl BarrierFuncs {
 
 /// Insert [RuntimeBarrier] after every [Barrier] in the Hugr.
 pub(super) fn insert_runtime_barrier(
-    hugr: &mut impl HugrMut,
+    hugr: &mut impl HugrMut<Node = Node>,
     b_node: Node,
     barrier: Barrier,
     barrier_funcs: &mut BarrierFuncs,
@@ -862,7 +862,7 @@ struct InsertCut {
 }
 
 impl InsertCut {
-    fn apply(self, h: &mut impl HugrMut) -> Result<HashMap<Node, Node>, ()> {
+    fn apply(self, h: &mut impl HugrMut<Node = Node>) -> Result<HashMap<Node, Node>, ()> {
         assert!(self.insertion.root_type().is_dfg());
         let insert_res = h.insert_hugr(self.parent, self.insertion);
         let inserted_root = insert_res.new_root;

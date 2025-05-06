@@ -19,7 +19,6 @@
       }
     }
   },
-  "values": {},
   "operations": {
     "Dup": {
       "extension": "tket2.futures",

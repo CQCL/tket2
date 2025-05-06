@@ -7,7 +7,6 @@
     "collections.array"
   ],
   "types": {},
-  "values": {},
   "operations": {
     "result_array_bool": {
       "extension": "tket2.result",
