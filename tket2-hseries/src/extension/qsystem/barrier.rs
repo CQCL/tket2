@@ -3,8 +3,9 @@ use hugr::algorithms::{mangle_name, ReplaceTypes};
 use hugr::builder::handle::Outputs;
 use hugr::builder::{BuildError, Container, FunctionBuilder};
 use hugr::extension::prelude::{self, option_type, UnwrapBuilder};
-use hugr::hugr::patch::inline_dfg::InlineDFG;
-use hugr::hugr::{IdentList, Patch};
+use hugr::hugr::patch::insert_cut::InsertCut;
+use hugr::hugr::patch::PatchHugrMut;
+use hugr::hugr::IdentList;
 use hugr::ops::{DataflowOpTrait, ExtensionOp, OpName, OpTrait};
 use hugr::std_extensions::collections::array::{
     self, array_type, array_type_parametric, ArrayOpBuilder,
@@ -689,15 +690,8 @@ impl BarrierFuncs {
                 .map(|size| {
                     let barr_hugr = build_runtime_barrier_op(size)?;
 
-                    let insert = InsertCut {
-                        parent,
-                        targets: vec![(*targ_n, *targ_p)],
-                        insertion: barr_hugr,
-                    };
-                    insert
-                        .apply(hugr)
-                        // TODO handle error
-                        .expect("failed to insert runtime barrier");
+                    let insert = InsertCut::new(parent, vec![(*targ_n, *targ_p)], barr_hugr);
+                    insert.apply_hugr_mut(hugr)?;
                     Ok(())
                 });
             if let Some(res) = shortcut {
@@ -707,16 +701,9 @@ impl BarrierFuncs {
         let (row, targets) = filtered_qbs.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
         let insert_hugr: Hugr = self.packing_hugr(row)?;
 
-        let inserter = InsertCut {
-            parent,
-            targets,
-            insertion: insert_hugr,
-        };
+        let inserter = InsertCut::new(parent, targets, insert_hugr);
 
-        inserter
-            .apply(hugr)
-            // TODO handle error
-            .expect("failed to insert runtime barrier");
+        inserter.apply_hugr_mut(hugr)?;
 
         Ok(())
     }
@@ -779,33 +766,6 @@ fn build_runtime_barrier_op(array_size: u64) -> Result<Hugr, BuildError> {
     let array_wire = barr_builder.input().out_wire(0);
     let out = barr_builder.add_runtime_barrier(array_wire, array_size)?;
     barr_builder.finish_hugr_with_outputs([out])
-}
-
-// TODO upstream to hugr rewrite
-struct InsertCut {
-    parent: Node,
-    targets: Vec<(Node, IncomingPort)>,
-    insertion: Hugr,
-}
-
-impl InsertCut {
-    fn apply(self, h: &mut impl HugrMut<Node = Node>) -> Result<HashMap<Node, Node>, ()> {
-        assert!(self.insertion.root_optype().is_dfg());
-        let insert_res = h.insert_hugr(self.parent, self.insertion);
-        let inserted_root = insert_res.new_root;
-        for (i, (target, port)) in self.targets.into_iter().enumerate() {
-            let (src_n, src_p) = h
-                .single_linked_output(target, port)
-                .expect("Incoming value edge has single connection.");
-            h.disconnect(target, port);
-            h.connect(src_n, src_p, inserted_root, i);
-            h.connect(inserted_root, i, target, port);
-        }
-        let inline = InlineDFG(inserted_root.into());
-
-        inline.apply(h).expect("inline failed");
-        Ok(insert_res.node_map)
-    }
 }
 
 #[cfg(test)]

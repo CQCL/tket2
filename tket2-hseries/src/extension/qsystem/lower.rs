@@ -2,6 +2,7 @@ use derive_more::{Display, Error, From};
 use hugr::algorithms::replace_types::{NodeTemplate, ReplaceTypesError};
 use hugr::algorithms::{ComposablePass, ReplaceTypes};
 use hugr::extension::prelude::Barrier;
+use hugr::hugr::patch::insert_cut::InsertCutError;
 use hugr::ops::NamedOp;
 use hugr::{
     builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder},
@@ -66,6 +67,10 @@ pub enum LowerTk2Error {
     InvalidFuncDefn(#[error(ignore)] hugr::ops::OpType),
     /// Error when using [`ReplaceTypes`] to lower operations.
     ReplaceTypesError(#[from] ReplaceTypesError),
+
+    /// Error when inserting a runtime barrier.
+    #[display("Error when inserting a runtime barrier: {_0}")]
+    RuntimeBarrierError(#[from] InsertCutError),
 }
 
 enum ReplaceOps {
