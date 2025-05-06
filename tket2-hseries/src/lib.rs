@@ -4,9 +4,7 @@
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
-        const_fold::{ConstFoldError, ConstantFoldPass},
-        force_order, ComposablePass as _, LinearizeArrayPass, MonomorphizePass,
-        RemoveDeadFuncsError, RemoveDeadFuncsPass,
+        const_fold::{ConstFoldError, ConstantFoldPass}, force_order, replace_types::ReplaceTypesError, ComposablePass as _, LinearizeArrayPass, MonomorphizePass, RemoveDeadFuncsError, RemoveDeadFuncsPass
     },
     hugr::HugrError,
     Hugr, HugrView, Node,
@@ -60,6 +58,8 @@ pub enum QSystemPassError<N = Node> {
     LowerTk2Error(LowerTk2Error),
     /// An error from the component [ConstantFoldPass] pass.
     ConstantFoldError(ConstFoldError),
+    /// An error from the component [LinearizeArrayPass] pass.
+    LinearizeArrayError(ReplaceTypesError),
     /// An error when running [RemoveDeadFuncsPass] after the monomorphisation
     /// pass.
     ///
@@ -95,7 +95,7 @@ impl QSystemPass {
             rdfp.run(hugr)?
         }
 
-        self.linearize_arrays();
+        self.linearize_arrays().run(hugr)?;
         if self.constant_fold {
             self.constant_fold().run(hugr)?;
         }
