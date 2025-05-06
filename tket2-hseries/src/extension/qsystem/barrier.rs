@@ -1,7 +1,8 @@
+use hugr::algorithms::replace_types::NodeTemplate;
+use hugr::algorithms::ReplaceTypes;
 use hugr::builder::handle::Outputs;
 use hugr::builder::{BuildError, Container, FunctionBuilder};
 use hugr::extension::prelude::{self, option_type, UnwrapBuilder};
-use hugr::extension::ExtensionId;
 use hugr::hugr::rewrite::inline_dfg::InlineDFG;
 use hugr::hugr::{IdentList, Rewrite};
 use hugr::ops::{DataflowOpTrait, ExtensionOp, OpName, OpTrait};
@@ -23,6 +24,7 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use super::lower::insert_function;
 use super::{LowerTk2Error, QSystemOpBuilder};
 
 /// If a sum is an option of a single type, return the type.
@@ -78,11 +80,11 @@ mod mangle {
         }
     }
 
-    pub fn escape_dollar(str: impl AsRef<str>) -> String {
+    fn escape_dollar(str: impl AsRef<str>) -> String {
         str.as_ref().replace("$", "\\$")
     }
 
-    pub fn write_type_arg_str(arg: &TypeArg, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn write_type_arg_str(arg: &TypeArg, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match arg {
             TypeArg::Type { ty } => {
                 f.write_fmt(format_args!("t({})", escape_dollar(ty.to_string())))
@@ -121,20 +123,20 @@ mod mangle {
     }
 }
 
-#[derive(Clone, Hash, PartialEq, Eq)]
-struct OpHashWrapper {
-    ext_name: ExtensionId,
-    op_name: String, // Only because SmolStr not in hugr-passes yet
-    args: Vec<TypeArg>,
+#[derive(Clone, PartialEq, Eq)]
+struct OpHashWrapper(ExtensionOp);
+
+impl From<ExtensionOp> for OpHashWrapper {
+    fn from(op: ExtensionOp) -> Self {
+        Self(op)
+    }
 }
 
-impl From<&ExtensionOp> for OpHashWrapper {
-    fn from(op: &ExtensionOp) -> Self {
-        Self {
-            ext_name: op.def().extension_id().clone(),
-            op_name: op.def().name().to_string(),
-            args: op.args().to_vec(),
-        }
+impl std::hash::Hash for OpHashWrapper {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.extension_id().hash(state);
+        self.0.def().name().hash(state);
+        self.0.args().hash(state);
     }
 }
 
@@ -177,6 +179,9 @@ fn invert_sig(sig: &PolyFuncTypeRV) -> PolyFuncTypeRV {
     let body = FuncValueType::new(sig.body().output().clone(), sig.body().input().clone());
     PolyFuncTypeRV::new(sig.params(), body)
 }
+
+static TEMP_EXT_NAME: IdentList = IdentList::new_static_unchecked("__tket2.barrier.temp");
+
 impl BarrierFuncs {
     const UNWRAP_OPT: OpName = OpName::new_static("option_qb_unwrap");
     const TAG_OPT: OpName = OpName::new_static("option_qb_tag");
@@ -186,12 +191,12 @@ impl BarrierFuncs {
     const TUPLE_UNPACK: OpName = OpName::new_static("tuple_unpack");
     const TUPLE_REPACK: OpName = OpName::new_static("tuple_repack");
     /// Signature for a function that unwraps an option type.
-    pub(super) fn unwrap_opt_sig(ty: Type) -> Signature {
+    fn unwrap_opt_sig(ty: Type) -> Signature {
         Signature::new(Type::from(option_type(ty.clone())), ty)
     }
 
     /// Signature for a function that wraps an option type in to Some.
-    pub(super) fn wrap_opt_sig(ty: Type) -> Signature {
+    fn wrap_opt_sig(ty: Type) -> Signature {
         Signature::new(ty.clone(), Type::from(option_type(ty)))
     }
 
@@ -214,7 +219,7 @@ impl BarrierFuncs {
         };
 
         let extension = Extension::new_arc(
-            IdentList::new_static_unchecked("__tket2.barrier.temp"),
+            TEMP_EXT_NAME.clone(),
             hugr::extension::Version::new(0, 0, 0),
             |ext, ext_ref| {
                 ext.add_op(
@@ -301,10 +306,10 @@ impl BarrierFuncs {
         );
 
         let unwrap_op: OpHashWrapper =
-            (&ExtensionOp::new(extension.get_op(&Self::UNWRAP_OPT).unwrap().clone(), []).unwrap())
+            (ExtensionOp::new(extension.get_op(&Self::UNWRAP_OPT).unwrap().clone(), []).unwrap())
                 .into();
         let tag_op: OpHashWrapper =
-            (&ExtensionOp::new(extension.get_op(&Self::TAG_OPT).unwrap().clone(), []).unwrap())
+            (ExtensionOp::new(extension.get_op(&Self::TAG_OPT).unwrap().clone(), []).unwrap())
                 .into();
 
         Ok(Self {
@@ -422,7 +427,7 @@ impl BarrierFuncs {
         op: &ExtensionOp,
         func_builder: impl FnOnce(&mut Self) -> Result<Hugr, BuildError>,
     ) -> Result<(), BuildError> {
-        let key = op.into();
+        let key = op.clone().into();
         // clippy's suggested fix does not make the borrow checker happy
         #[allow(clippy::map_entry)]
         if !self.funcs.contains_key(&key) {
@@ -560,26 +565,14 @@ impl BarrierFuncs {
         Ok(repack_call.out_wire(0))
     }
 
-    pub(super) fn lower(self, hugr: &mut impl HugrMut<Node = Node>) -> Result<(), LowerTk2Error> {
-        // TODO use NodeTemplate lowering
-        let node_hash: HashMap<OpHashWrapper, Node> = self
-            .funcs
-            .into_iter()
-            .map(|(k, f)| {
-                let func_node = hugr.insert_hugr(hugr.root(), f).new_root;
-                (k, func_node)
-            })
-            .collect();
-        let calls: Vec<_> = hugr
-            .nodes()
-            .filter_map(|op_node| {
-                let ext = hugr.get_optype(op_node).as_extension_op()?;
-                let func_node = node_hash.get(&(ext.into()))?;
-                Some((op_node, *func_node))
-            })
-            .collect();
-        for (op_node, func_node) in calls {
-            super::lower::lower_to_call(hugr, func_node, op_node)?;
+    pub fn lower(
+        self,
+        hugr: &mut impl HugrMut<Node = Node>,
+        lowerer: &mut ReplaceTypes,
+    ) -> Result<(), LowerTk2Error> {
+        for (op, func_def) in self.funcs {
+            let func_node = insert_function(hugr, func_def);
+            lowerer.replace_op(&op.0, NodeTemplate::Call(func_node, vec![]));
         }
         Ok(())
     }
@@ -733,118 +726,115 @@ impl BarrierFuncs {
         debug_assert!(unpacked_wires.len() == 1);
         Ok(unpacked_wires[0])
     }
-}
 
-/// Insert [RuntimeBarrier] after every [Barrier] in the Hugr.
-pub(super) fn insert_runtime_barrier(
-    hugr: &mut impl HugrMut<Node = Node>,
-    b_node: Node,
-    barrier: Barrier,
-    barrier_funcs: &mut BarrierFuncs,
-) -> Result<(), LowerTk2Error> {
-    // 1. Find all qubit containing types in the barrier.
-    let filtered_qbs = barrier_funcs.filter_qubit_containers(hugr, &barrier, b_node);
+    /// Insert [RuntimeBarrier] after every [Barrier] in the Hugr.
+    pub(super) fn insert_runtime_barrier(
+        &mut self,
+        hugr: &mut impl HugrMut<Node = Node>,
+        b_node: Node,
+        barrier: Barrier,
+    ) -> Result<(), LowerTk2Error> {
+        // 1. Find all qubit containing types in the barrier.
+        let filtered_qbs = self.filter_qubit_containers(hugr, &barrier, b_node);
 
-    if filtered_qbs.is_empty() {
-        return Ok(());
-    }
-    let parent = hugr.get_parent(b_node).expect("Barrier can't be root.");
-
-    if let [(typ, (targ_n, targ_p))] = filtered_qbs.as_slice() {
-        // If the barrier is over a single array of qubits
-        // we can insert a runtime barrier op directly.
-        let shortcut = typ
-            .as_extension()
-            .and_then(|ext| array_args(ext))
-            .and_then(|(size, elem_ty)| (elem_ty == &qb_t()).then_some(size))
-            .map(|size| {
-                let barr_hugr = build_runtime_barrier_op(size)?;
-
-                let insert = InsertCut {
-                    parent,
-                    targets: vec![(*targ_n, *targ_p)],
-                    insertion: barr_hugr,
-                };
-                insert
-                    .apply(hugr)
-                    // TODO handle error
-                    .expect("failed to insert runtime barrier");
-                Ok(())
-            });
-        if let Some(res) = shortcut {
-            return res;
+        if filtered_qbs.is_empty() {
+            return Ok(());
         }
-    }
-    let (row, targets) = filtered_qbs.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
-    let insert_hugr: Hugr = packing_hugr(barrier_funcs, row)?;
+        let parent = hugr.get_parent(b_node).expect("Barrier can't be root.");
 
-    let inserter = InsertCut {
-        parent,
-        targets,
-        insertion: insert_hugr,
-    };
+        if let [(typ, (targ_n, targ_p))] = filtered_qbs.as_slice() {
+            // If the barrier is over a single array of qubits
+            // we can insert a runtime barrier op directly.
+            let shortcut = typ
+                .as_extension()
+                .and_then(|ext| array_args(ext))
+                .and_then(|(size, elem_ty)| (elem_ty == &qb_t()).then_some(size))
+                .map(|size| {
+                    let barr_hugr = build_runtime_barrier_op(size)?;
 
-    inserter
-        .apply(hugr)
-        // TODO handle error
-        .expect("failed to insert runtime barrier");
-
-    Ok(())
-}
-
-fn packing_hugr(
-    barrier_funcs: &mut BarrierFuncs,
-    container_row: Vec<Type>,
-) -> Result<Hugr, LowerTk2Error> {
-    // TODO add comments for steps
-    let mut dfg_b = DFGBuilder::new(Signature::new_endo(container_row.clone()))?;
-    let tuple_type = Type::new_tuple(container_row.clone());
-
-    let input = dfg_b.input();
-    let tuple = dfg_b.make_tuple(input.outputs())?;
-
-    let unpacked_wires = barrier_funcs.unpack_container(&mut dfg_b, &tuple_type, tuple)?;
-    let tagged_wires: Vec<(bool, Wire)> = unpacked_wires
-        .into_iter()
-        .map(|wire| {
-            let node_sig = dfg_b
-                .hugr()
-                .get_optype(wire.node())
-                .dataflow_signature()
-                .unwrap();
-            (node_sig.port_type(wire.source()) == Some(&qb_t()), wire)
-        })
-        .collect();
-
-    let qubit_wires = tagged_wires
-        .iter()
-        .filter(|(is_qb, _)| *is_qb)
-        .map(|(_, w)| *w)
-        .collect();
-    let mut r_bar_outs = barrier_funcs.call_wrapped_runtime_barrier(&mut dfg_b, qubit_wires)?;
-
-    let repack_wires = tagged_wires
-        .into_iter()
-        .map(|(is_qb, w)| {
-            if is_qb {
-                r_bar_outs
-                    .next()
-                    .expect("Not enough runtime barrier outputs.")
-            } else {
-                w
+                    let insert = InsertCut {
+                        parent,
+                        targets: vec![(*targ_n, *targ_p)],
+                        insertion: barr_hugr,
+                    };
+                    insert
+                        .apply(hugr)
+                        // TODO handle error
+                        .expect("failed to insert runtime barrier");
+                    Ok(())
+                });
+            if let Some(res) = shortcut {
+                return res;
             }
-        })
-        .collect::<Vec<_>>();
+        }
+        let (row, targets) = filtered_qbs.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
+        let insert_hugr: Hugr = self.packing_hugr(row)?;
 
-    let repacked_tuple = barrier_funcs.repack_container(&mut dfg_b, &tuple_type, repack_wires)?;
+        let inserter = InsertCut {
+            parent,
+            targets,
+            insertion: insert_hugr,
+        };
 
-    let new_container_wires = dfg_b
-        .add_dataflow_op(
-            prelude::UnpackTuple::new(container_row.clone().into()),
-            [repacked_tuple],
-        )?
-        .outputs();
-    Ok(dfg_b.finish_hugr_with_outputs(new_container_wires)?)
+        inserter
+            .apply(hugr)
+            // TODO handle error
+            .expect("failed to insert runtime barrier");
+
+        Ok(())
+    }
+
+    fn packing_hugr(&mut self, container_row: Vec<Type>) -> Result<Hugr, LowerTk2Error> {
+        // TODO add comments for steps
+        let mut dfg_b = DFGBuilder::new(Signature::new_endo(container_row.clone()))?;
+        let tuple_type = Type::new_tuple(container_row.clone());
+
+        let input = dfg_b.input();
+        let tuple = dfg_b.make_tuple(input.outputs())?;
+
+        let unpacked_wires = self.unpack_container(&mut dfg_b, &tuple_type, tuple)?;
+        let tagged_wires: Vec<(bool, Wire)> = unpacked_wires
+            .into_iter()
+            .map(|wire| {
+                let node_sig = dfg_b
+                    .hugr()
+                    .get_optype(wire.node())
+                    .dataflow_signature()
+                    .unwrap();
+                (node_sig.port_type(wire.source()) == Some(&qb_t()), wire)
+            })
+            .collect();
+
+        let qubit_wires = tagged_wires
+            .iter()
+            .filter(|(is_qb, _)| *is_qb)
+            .map(|(_, w)| *w)
+            .collect();
+        let mut r_bar_outs = self.call_wrapped_runtime_barrier(&mut dfg_b, qubit_wires)?;
+
+        let repack_wires = tagged_wires
+            .into_iter()
+            .map(|(is_qb, w)| {
+                if is_qb {
+                    r_bar_outs
+                        .next()
+                        .expect("Not enough runtime barrier outputs.")
+                } else {
+                    w
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let repacked_tuple = self.repack_container(&mut dfg_b, &tuple_type, repack_wires)?;
+
+        let new_container_wires = dfg_b
+            .add_dataflow_op(
+                prelude::UnpackTuple::new(container_row.clone().into()),
+                [repacked_tuple],
+            )?
+            .outputs();
+        Ok(dfg_b.finish_hugr_with_outputs(new_container_wires)?)
+    }
 }
 
 fn build_runtime_barrier_op(array_size: u64) -> Result<Hugr, BuildError> {
@@ -975,5 +965,11 @@ mod test {
         };
 
         assert_eq!(h.all_linked_inputs(run_bar_n).count(), num_qb);
+
+        // Check all temporary ops are removed
+        assert!(h.nodes().all(|n| h
+            .get_optype(n)
+            .as_extension_op()
+            .is_none_or(|op| op.extension_id() != &TEMP_EXT_NAME)));
     }
 }
