@@ -1,9 +1,6 @@
 {
   "version": "0.2.0",
   "name": "tket2.qsystem.utils",
-  "runtime_reqs": [
-    "prelude"
-  ],
   "types": {},
   "operations": {
     "GetCurrentShot": {
@@ -27,8 +24,7 @@
               ],
               "bound": "C"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
