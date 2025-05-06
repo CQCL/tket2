@@ -1,10 +1,10 @@
 use hugr::algorithms::replace_types::NodeTemplate;
-use hugr::algorithms::ReplaceTypes;
+use hugr::algorithms::{mangle_name, ReplaceTypes};
 use hugr::builder::handle::Outputs;
 use hugr::builder::{BuildError, Container, FunctionBuilder};
 use hugr::extension::prelude::{self, option_type, UnwrapBuilder};
-use hugr::hugr::rewrite::inline_dfg::InlineDFG;
-use hugr::hugr::{IdentList, Rewrite};
+use hugr::hugr::patch::inline_dfg::InlineDFG;
+use hugr::hugr::{IdentList, Patch};
 use hugr::ops::{DataflowOpTrait, ExtensionOp, OpName, OpTrait};
 use hugr::std_extensions::collections::array::{
     self, array_type, array_type_parametric, ArrayOpBuilder,
@@ -59,69 +59,6 @@ fn array_args(ext: &hugr::types::CustomType) -> Option<(u64, &Type)> {
 }
 
 type Target = (Node, IncomingPort);
-
-// copied from
-// https://github.com/CQCL/hugr/blob/c8090ca9089368de1a2de25e0071458ce5222d70/hugr-passes/src/monomorphize.rs#L353-L356
-mod mangle {
-    use std::fmt::Write;
-
-    use itertools::Itertools;
-
-    use super::*;
-    struct TypeArgsList<'a>(&'a [TypeArg]);
-
-    impl std::fmt::Display for TypeArgsList<'_> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            for arg in self.0 {
-                f.write_char('$')?;
-                write_type_arg_str(arg, f)?;
-            }
-            Ok(())
-        }
-    }
-
-    fn escape_dollar(str: impl AsRef<str>) -> String {
-        str.as_ref().replace("$", "\\$")
-    }
-
-    fn write_type_arg_str(arg: &TypeArg, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match arg {
-            TypeArg::Type { ty } => {
-                f.write_fmt(format_args!("t({})", escape_dollar(ty.to_string())))
-            }
-            TypeArg::BoundedNat { n } => f.write_fmt(format_args!("n({n})")),
-            TypeArg::String { arg } => f.write_fmt(format_args!("s({})", escape_dollar(arg))),
-            TypeArg::Sequence { elems } => {
-                f.write_fmt(format_args!("seq({})", TypeArgsList(elems)))
-            }
-            TypeArg::Extensions { es } => f.write_fmt(format_args!(
-                "es({})",
-                es.iter().map(|x| x.deref()).join(",")
-            )),
-            // We are monomorphizing. We will never monomorphize to a signature
-            // containing a variable.
-            TypeArg::Variable { .. } => panic!("type_arg_str variable: {arg}"),
-            _ => panic!("unknown type arg: {arg}"),
-        }
-    }
-
-    /// We do our best to generate unique names. Our strategy is to pick out '$' as
-    /// a special character.
-    ///
-    /// We:
-    ///  - construct a new name of the form `{func_name}$$arg0$arg1$arg2` etc
-    ///  - replace any existing `$` in the function name or type args string
-    ///    representation with `r"\$"`
-    ///  - We depend on the `Display` impl of `Type` to generate the string
-    ///    representation of a `TypeArg::Type`. For other constructors we do the
-    ///    simple obvious thing.
-    ///  - For all TypeArg Constructors we choose a short prefix (e.g. `t` for type)
-    ///    and use "t({arg})" as the string representation of that arg.
-    pub fn mangle_name(name: &str, type_args: impl AsRef<[TypeArg]>) -> String {
-        let name = escape_dollar(name);
-        format!("${name}${}", TypeArgsList(type_args.as_ref()))
-    }
-}
 
 #[derive(Clone, PartialEq, Eq)]
 struct OpHashWrapper(ExtensionOp);
@@ -455,7 +392,7 @@ impl BarrierFuncs {
             .unwrap();
         let sig = op.signature().deref().clone();
         self.cache_function(&op, |_| {
-            let name = mangle::mangle_name(
+            let name = mangle_name(
                 &Self::WRAPPED_BARRIER,
                 [TypeArg::BoundedNat { n: size as u64 }],
             );
@@ -492,7 +429,7 @@ impl BarrierFuncs {
         ];
         let op = self.get_op(&Self::ARRAY_UNPACK, args.clone()).unwrap();
         self.cache_function(&op, |funcs| {
-            let name = mangle::mangle_name(op.def().name(), &args[..2]);
+            let name = mangle_name(op.def().name(), &args[..2]);
             let sig = op.signature().deref().clone();
             let mut func_b = FunctionBuilder::new(name, sig)?;
             let w = func_b.input().out_wire(0);
@@ -513,7 +450,7 @@ impl BarrierFuncs {
         let repack_op = self.get_op(&Self::ARRAY_REPACK, args.clone()).unwrap();
 
         self.cache_function(&repack_op, |funcs| {
-            let name = mangle::mangle_name(repack_op.def().name(), &args[..2]);
+            let name = mangle_name(repack_op.def().name(), &args[..2]);
             let sig = repack_op.signature().deref().clone();
             let mut func_b = FunctionBuilder::new(name, sig)?;
             let input = func_b.input();
@@ -600,7 +537,7 @@ impl BarrierFuncs {
         ];
         let op = self.get_op(&Self::TUPLE_UNPACK, args.clone()).unwrap();
         self.cache_function(&op, |funcs| {
-            let name = mangle::mangle_name(op.def().name(), &args[..1]);
+            let name = mangle_name(op.def().name(), &args[..1]);
             let sig = op.signature().deref().clone();
             let mut func_b = FunctionBuilder::new(name, sig)?;
             let w = func_b.input().out_wire(0);
@@ -627,7 +564,7 @@ impl BarrierFuncs {
             .map(|t| self.num_unpacked_wires(t).num_wires())
             .collect();
         self.cache_function(&repack_op, |funcs| {
-            let name = mangle::mangle_name(repack_op.def().name(), &args[..1]);
+            let name = mangle_name(repack_op.def().name(), &args[..1]);
             let sig = repack_op.signature().deref().clone();
             let mut func_b = FunctionBuilder::new(name, sig)?;
             let mut in_wires = func_b.input().outputs();
@@ -853,7 +790,7 @@ struct InsertCut {
 
 impl InsertCut {
     fn apply(self, h: &mut impl HugrMut<Node = Node>) -> Result<HashMap<Node, Node>, ()> {
-        assert!(self.insertion.root_type().is_dfg());
+        assert!(self.insertion.root_optype().is_dfg());
         let insert_res = h.insert_hugr(self.parent, self.insertion);
         let inserted_root = insert_res.new_root;
         for (i, (target, port)) in self.targets.into_iter().enumerate() {
