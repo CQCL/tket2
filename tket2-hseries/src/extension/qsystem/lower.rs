@@ -2,6 +2,7 @@ use derive_more::{Display, Error, From};
 use hugr::algorithms::replace_types::{NodeTemplate, ReplaceTypesError};
 use hugr::algorithms::{ComposablePass, ReplaceTypes};
 use hugr::extension::prelude::Barrier;
+use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::hugr::patch::insert_cut::InsertCutError;
 use hugr::{
     builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder},
@@ -122,29 +123,38 @@ pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, L
 
     let mut replaced_nodes = Vec::with_capacity(replacements.len());
     for (node, op) in replacements {
+        replaced_nodes.push(node);
+
         match op {
             ReplaceOps::Tk2(tk2op) => {
-                let replacement = if let Some(direct) = direct_map(tk2op) {
-                    NodeTemplate::SingleOp(direct.into())
-                } else {
-                    let func_node = match funcs.entry(tk2op) {
-                        Entry::Occupied(f) => *f.get(),
-                        Entry::Vacant(entry) => {
-                            let h = build_func(tk2op)?;
-                            let inserted = hugr.insert_hugr(hugr.root(), h);
-                            entry.insert(inserted.new_root);
-                            inserted.new_root
-                        }
-                    };
-                    NodeTemplate::Call(func_node, vec![])
+                // Handle Tk2Op replacements
+                if let Some(direct) = direct_map(tk2op) {
+                    lowerer.replace_op(
+                        &tk2op.into_extension_op(),
+                        NodeTemplate::SingleOp(direct.into()),
+                    );
+                    continue;
+                }
+
+                // Need to get or create function definition
+                let func_node = match funcs.entry(tk2op) {
+                    Entry::Occupied(e) => *e.get(),
+                    Entry::Vacant(e) => {
+                        let h = build_func(tk2op)?;
+                        let inserted = insert_function(hugr, h);
+                        *e.insert(inserted)
+                    }
                 };
-                lowerer.replace_op(&(tk2op.into_extension_op()), replacement);
+                lowerer.replace_op(
+                    &tk2op.into_extension_op(),
+                    NodeTemplate::Call(func_node, vec![]),
+                );
             }
             ReplaceOps::Barrier(barrier) => {
-                barrier_funcs.insert_runtime_barrier(hugr, node, barrier)?
+                // Handle barrier replacements
+                barrier_funcs.insert_runtime_barrier(hugr, node, barrier)?;
             }
-        };
-        replaced_nodes.push(node);
+        }
     }
 
     barrier_funcs.register_operation_replacements(hugr, &mut lowerer);
@@ -157,7 +167,7 @@ fn build_func(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
     let sig = op.into_extension_op().signature().into_owned();
     let sig = Signature::new(sig.input, sig.output); // ignore extension delta
                                                      // TODO check generated names are namespaced enough
-    let f_name = format!("__tk2_{}", op.exposed_name().to_lowercase());
+    let f_name = format!("__tk2_{}", op.op_id().to_lowercase());
     let mut b = FunctionBuilder::new(f_name, sig)?;
     let inputs: Vec<_> = b.input_wires().collect();
     let outputs = match (op, inputs.as_slice()) {
