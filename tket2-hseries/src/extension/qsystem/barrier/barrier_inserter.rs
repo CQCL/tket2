@@ -210,3 +210,140 @@ impl Default for BarrierInserter {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use hugr::{
+        builder::BuildError,
+        extension::{prelude::bool_t, simple_op::MakeExtensionOp},
+        ops::handle::NodeHandle,
+        std_extensions::collections::array::array_type,
+    };
+
+    use super::*;
+
+    fn create_test_hugr() -> Result<(Hugr, Node), BuildError> {
+        // Create a dataflow graph with two qubits as input and output
+        let mut builder = DFGBuilder::new(Signature::new_endo(vec![qb_t(), bool_t()]))?;
+        let [qb1, qb2] = builder.input_wires_arr();
+
+        // Create a barrier with two qubits
+        let barrier_node =
+            builder.add_dataflow_op(Barrier::new(vec![qb_t(), bool_t()]), [qb1, qb2])?;
+
+        let outputs = barrier_node.outputs().collect::<Vec<_>>();
+        let h = builder.finish_hugr_with_outputs(outputs)?;
+        Ok((h, barrier_node.node()))
+    }
+
+    #[test]
+    fn test_barrier_insertion() -> Result<(), LowerTk2Error> {
+        let (mut hugr, barrier_node) = create_test_hugr().unwrap();
+        let barrier = hugr.get_optype(barrier_node).as_extension_op().unwrap();
+
+        let barrier = Barrier::from_extension_op(barrier).unwrap();
+
+        let node_count_before = hugr.num_nodes();
+        let mut inserter = BarrierInserter::new();
+        inserter.insert_runtime_barrier(&mut hugr, barrier_node, barrier)?;
+
+        // Verify the barrier was inserted
+        let node_count_after = hugr.num_nodes();
+        assert!(
+            node_count_after > node_count_before,
+            "Should have inserted barrier nodes"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_qubit_array_barrier() -> Result<(), LowerTk2Error> {
+        // Create a dataflow graph with a qubit array as input and output
+        let array_size = 3;
+        let array_ty = array_type(array_size, qb_t());
+        let mut builder = DFGBuilder::new(Signature::new_endo(vec![array_ty.clone()]))?;
+
+        let input = builder.input();
+        let array = input.out_wire(0);
+
+        // Create a barrier with qubit array
+        let barrier_node = builder.add_dataflow_op(Barrier::new(vec![array_ty]), [array])?;
+
+        let outputs = barrier_node.outputs().collect::<Vec<_>>();
+        let mut hugr = builder.finish_hugr_with_outputs(outputs)?;
+        let barrier = hugr
+            .get_optype(barrier_node.node())
+            .as_extension_op()
+            .unwrap();
+
+        let barrier = Barrier::from_extension_op(barrier).unwrap();
+
+        let mut inserter = BarrierInserter::new();
+        inserter.insert_runtime_barrier(&mut hugr, barrier_node.node(), barrier)?;
+
+        // The array shortcut should have been used
+        assert!(inserter.op_factory.funcs.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_empty_barrier() -> Result<(), LowerTk2Error> {
+        let mut builder = DFGBuilder::new(Signature::new_endo(vec![]))?;
+
+        // Create a barrier with no qubits
+        let barrier_node = builder.add_dataflow_op(Barrier::new(vec![]), [])?;
+
+        let outputs = barrier_node.outputs().collect::<Vec<_>>();
+        let mut hugr = builder.finish_hugr_with_outputs(outputs)?;
+        let barrier = hugr
+            .get_optype(barrier_node.node())
+            .as_extension_op()
+            .unwrap();
+
+        let barrier = Barrier::from_extension_op(barrier).unwrap();
+        let node_count_before = hugr.num_nodes();
+
+        let mut inserter = BarrierInserter::new();
+        inserter.insert_runtime_barrier(&mut hugr, barrier_node.node(), barrier)?;
+
+        // Check that no nodes were added
+        assert_eq!(
+            hugr.num_nodes(),
+            node_count_before,
+            "No nodes should be added for empty barrier"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_packing_hugr() -> Result<(), LowerTk2Error> {
+        let mut inserter = BarrierInserter::new();
+
+        // Test with mixed types: qubit, bool, qubit array
+        let array_size = 2;
+        let array_ty = array_type(array_size, qb_t());
+        let container_row = vec![qb_t(), bool_t(), array_ty];
+
+        let hugr = inserter.build_packing_hugr(container_row.clone())?;
+
+        // Check the signature matches what we expect
+        assert_eq!(
+            hugr.root_optype().dataflow_signature().unwrap(),
+            Signature::new_endo(container_row),
+            "Packing HUGR should have matching signature"
+        );
+
+        // Check that the HUGR is valid
+        assert!(hugr.validate().is_ok(), "Generated HUGR should be valid");
+
+        // Check that we've registered operations in the factory
+        assert_eq!(
+            inserter.op_factory.funcs.len(),
+            5, // runtime barrier + 2 for array + 2 for tuple
+        );
+
+        Ok(())
+    }
+}
