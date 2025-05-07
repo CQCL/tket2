@@ -141,6 +141,9 @@ impl BarrierFuncs {
     const ARRAY_REPACK: OpName = OpName::new_static("array_repack");
     const TUPLE_UNPACK: OpName = OpName::new_static("tuple_unpack");
     const TUPLE_REPACK: OpName = OpName::new_static("tuple_repack");
+
+    // SECTION: Construction and Initialization
+
     /// Signature for a function that unwraps an option type.
     fn unwrap_opt_sig(ty: Type) -> Signature {
         Signature::new(Type::from(option_type(ty.clone())), ty)
@@ -278,37 +281,73 @@ impl BarrierFuncs {
         })
     }
 
+    // SECTION: Core Extension and Operation Management
+
+    /// Get an operation from the extension.
     fn get_op(&self, name: &OpName, args: impl Into<Vec<TypeArg>>) -> Option<ExtensionOp> {
         ExtensionOp::new(self.extension.get_op(name)?.clone(), args).ok()
     }
 
-    /// Filter out types in the generic barrier that contain qubits.
-    fn filter_qubit_containers<H: HugrMut<Node = Node>>(
+    /// Cache a function definition for a given operation.
+    fn cache_function(
         &mut self,
-        hugr: &H,
-        barrier: &Barrier,
-        node: Node,
-    ) -> Vec<(Type, Target)> {
-        barrier
-            .type_row
-            .iter()
-            .enumerate()
-            .filter_map(|(i, typ)| {
-                let wc = self.unpack_type(typ);
+        op: &ExtensionOp,
+        mangle_args: &[TypeArg],
+        func_builder: impl FnOnce(
+            &mut Self,
+            &mut FunctionBuilder<Hugr>,
+        ) -> Result<Vec<Wire>, BuildError>,
+    ) -> Result<(), BuildError> {
+        let key = op.clone().into();
+        // clippy's suggested fix does not make the borrow checker happy
+        #[allow(clippy::map_entry)]
+        if !self.funcs.contains_key(&key) {
+            let name = mangle_name(op.def().name(), mangle_args);
+            let sig = op.signature().deref().clone();
+            let mut func_b = FunctionBuilder::new(name, sig)?;
+            let outs = func_builder(self, &mut func_b)?;
+            let func_def = func_b.finish_hugr_with_outputs(outs)?;
+            self.funcs.insert(key, func_def);
+        }
 
-                match wc {
-                    UnpackedRow::Other(_) => None,
-                    UnpackedRow::QbContainer(_) => {
-                        let port = OutgoingPort::from(i);
-                        let target = hugr
-                            .single_linked_input(node, port)
-                            .expect("linearity violation.");
-                        Some((typ.clone(), target))
-                    }
-                }
-            })
-            .collect()
+        Ok(())
     }
+
+    /// Apply a cached operation with the given name and arguments
+    fn apply_cached_operation<I>(
+        &mut self,
+        builder: &mut impl Dataflow,
+        op_name: &OpName,
+        args: impl Into<Vec<TypeArg>>,
+        mangle_args: &[TypeArg],
+        inputs: I,
+        func_builder: impl FnOnce(
+            &mut Self,
+            &mut FunctionBuilder<Hugr>,
+        ) -> Result<Vec<Wire>, BuildError>,
+    ) -> Result<Outputs, BuildError>
+    where
+        I: IntoIterator<Item = Wire>,
+    {
+        let op = self.get_op(op_name, args).unwrap();
+        self.cache_function(&op, mangle_args, func_builder)?;
+        Ok(builder.add_dataflow_op(op, inputs)?.outputs())
+    }
+
+    /// Record that temporary extension operations can be lowered to function calls.
+    pub fn lower(
+        self,
+        hugr: &mut impl HugrMut<Node = Node>,
+        lowerer: &mut ReplaceTypes,
+    ) -> Result<(), LowerTk2Error> {
+        for (op, func_def) in self.funcs {
+            let func_node = insert_function(hugr, func_def);
+            lowerer.replace_op(&op.0, NodeTemplate::Call(func_node, vec![]));
+        }
+        Ok(())
+    }
+
+    // SECTION: Type Analysis and Unpacking Logic
 
     /// Compute the row produced when a type is unpacked.
     /// Uses memoization to avoid recomputing the same type.
@@ -322,6 +361,7 @@ impl BarrierFuncs {
             }
         }
     }
+
     /// Compute the row produced when a type is unpacked for the first time.
     fn _new_unpack_type(&mut self, ty: &Type) -> UnpackedRow {
         if ty == &qb_t() {
@@ -368,26 +408,35 @@ impl BarrierFuncs {
         UnpackedRow::Other(ty.clone())
     }
 
-    /// Apply a cached operation with the given name and arguments
-    fn apply_cached_operation<I>(
+    /// Filter out types in the generic barrier that contain qubits.
+    fn filter_qubit_containers<H: HugrMut<Node = Node>>(
         &mut self,
-        builder: &mut impl Dataflow,
-        op_name: &OpName,
-        args: impl Into<Vec<TypeArg>>,
-        mangle_args: &[TypeArg],
-        inputs: I,
-        func_builder: impl FnOnce(
-            &mut Self,
-            &mut FunctionBuilder<Hugr>,
-        ) -> Result<Vec<Wire>, BuildError>,
-    ) -> Result<Outputs, BuildError>
-    where
-        I: IntoIterator<Item = Wire>,
-    {
-        let op = self.get_op(op_name, args).unwrap();
-        self.cache_function(&op, mangle_args, func_builder)?;
-        Ok(builder.add_dataflow_op(op, inputs)?.outputs())
+        hugr: &H,
+        barrier: &Barrier,
+        node: Node,
+    ) -> Vec<(Type, Target)> {
+        barrier
+            .type_row
+            .iter()
+            .enumerate()
+            .filter_map(|(i, typ)| {
+                let wc = self.unpack_type(typ);
+
+                match wc {
+                    UnpackedRow::Other(_) => None,
+                    UnpackedRow::QbContainer(_) => {
+                        let port = OutgoingPort::from(i);
+                        let target = hugr
+                            .single_linked_input(node, port)
+                            .expect("linearity violation.");
+                        Some((typ.clone(), target))
+                    }
+                }
+            })
+            .collect()
     }
+
+    // SECTION: Basic Operation Calls
 
     /// Insert an option unwrap.
     fn call_unwrap(
@@ -404,31 +453,6 @@ impl BarrierFuncs {
     fn call_wrap(&mut self, builder: &mut impl Dataflow, wire: Wire) -> Result<Wire, BuildError> {
         let call = builder.add_dataflow_op(self.get_op(&Self::TAG_OPT, []).unwrap(), [wire])?;
         Ok(call.out_wire(0))
-    }
-
-    /// Cache a function definition for a given operation.
-    fn cache_function(
-        &mut self,
-        op: &ExtensionOp,
-        mangle_args: &[TypeArg],
-        func_builder: impl FnOnce(
-            &mut Self,
-            &mut FunctionBuilder<Hugr>,
-        ) -> Result<Vec<Wire>, BuildError>,
-    ) -> Result<(), BuildError> {
-        let key = op.clone().into();
-        // clippy's suggested fix does not make the borrow checker happy
-        #[allow(clippy::map_entry)]
-        if !self.funcs.contains_key(&key) {
-            let name = mangle_name(op.def().name(), mangle_args);
-            let sig = op.signature().deref().clone();
-            let mut func_b = FunctionBuilder::new(name, sig)?;
-            let outs = func_builder(self, &mut func_b)?;
-            let func_def = func_b.finish_hugr_with_outputs(outs)?;
-            self.funcs.insert(key, func_def);
-        }
-
-        Ok(())
     }
 
     /// Insert a runtime barrier operation across some qubit wires.
@@ -452,6 +476,8 @@ impl BarrierFuncs {
             |_, func_b| func_b.build_wrapped_barrier(func_b.input_wires()),
         )
     }
+
+    // SECTION: Container Handling
 
     /// Unpack an array in to wires.
     fn call_unpack_array(
@@ -689,6 +715,8 @@ impl BarrierFuncs {
         Ok(unpacked_wires[0])
     }
 
+    // SECTION: Barrier Operations
+
     /// Insert [RuntimeBarrier] after a [Barrier] in the Hugr.
     pub(super) fn insert_runtime_barrier(
         &mut self,
@@ -792,19 +820,6 @@ impl BarrierFuncs {
             )?
             .outputs();
         Ok(dfg_b.finish_hugr_with_outputs(new_container_wires)?)
-    }
-
-    /// Record that temporary extension operations can be lowered to function calls.
-    pub fn lower(
-        self,
-        hugr: &mut impl HugrMut<Node = Node>,
-        lowerer: &mut ReplaceTypes,
-    ) -> Result<(), LowerTk2Error> {
-        for (op, func_def) in self.funcs {
-            let func_node = insert_function(hugr, func_def);
-            lowerer.replace_op(&op.0, NodeTemplate::Call(func_node, vec![]));
-        }
-        Ok(())
     }
 }
 
