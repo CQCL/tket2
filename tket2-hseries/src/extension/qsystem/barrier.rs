@@ -120,9 +120,9 @@ fn invert_sig(sig: &PolyFuncTypeRV) -> PolyFuncTypeRV {
     PolyFuncTypeRV::new(sig.params(), body)
 }
 
-static TEMP_EXT_NAME: IdentList = IdentList::new_static_unchecked("__tket2.barrier.temp");
-
 impl BarrierFuncs {
+    /// Temporary extension name.
+    const TEMP_EXT_NAME: IdentList = IdentList::new_static_unchecked("__tket2.barrier.temp");
     // Temporary operation names.
     const UNWRAP_OPT: OpName = OpName::new_static("option_qb_unwrap");
     const TAG_OPT: OpName = OpName::new_static("option_qb_tag");
@@ -163,8 +163,25 @@ impl BarrierFuncs {
             b.finish_hugr_with_outputs([out_wire])?
         };
 
+        let extension = Self::build_extension();
+
+        let unwrap_op: OpHashWrapper =
+            (ExtensionOp::new(extension.get_op(&Self::UNWRAP_OPT).unwrap().clone(), []).unwrap())
+                .into();
+        let tag_op: OpHashWrapper =
+            (ExtensionOp::new(extension.get_op(&Self::TAG_OPT).unwrap().clone(), []).unwrap())
+                .into();
+
+        Ok(Self {
+            extension,
+            funcs: HashMap::from_iter([(unwrap_op, unwrap_h), (tag_op, wrap_h)]),
+            qubit_ports: HashMap::new(),
+        })
+    }
+
+    fn build_extension() -> Arc<Extension> {
         let extension = Extension::new_arc(
-            TEMP_EXT_NAME.clone(),
+            Self::TEMP_EXT_NAME,
             hugr::extension::Version::new(0, 0, 0),
             |ext, ext_ref| {
                 // unwrap option of qubit
@@ -256,21 +273,8 @@ impl BarrierFuncs {
                 .unwrap();
             },
         );
-
-        let unwrap_op: OpHashWrapper =
-            (ExtensionOp::new(extension.get_op(&Self::UNWRAP_OPT).unwrap().clone(), []).unwrap())
-                .into();
-        let tag_op: OpHashWrapper =
-            (ExtensionOp::new(extension.get_op(&Self::TAG_OPT).unwrap().clone(), []).unwrap())
-                .into();
-
-        Ok(Self {
-            extension,
-            funcs: HashMap::from_iter([(unwrap_op, unwrap_h), (tag_op, wrap_h)]),
-            qubit_ports: HashMap::new(),
-        })
+        extension
     }
-
     // SECTION: Core Extension and Operation Management
 
     /// Get an operation from the extension.
@@ -915,6 +919,6 @@ mod test {
         assert!(h.nodes().all(|n| h
             .get_optype(n)
             .as_extension_op()
-            .is_none_or(|op| op.extension_id() != &TEMP_EXT_NAME)));
+            .is_none_or(|op| op.extension_id() != &BarrierFuncs::TEMP_EXT_NAME)));
     }
 }
