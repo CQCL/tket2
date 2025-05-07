@@ -64,6 +64,10 @@ pub enum UtilsOp {
 }
 
 impl MakeOpDef for UtilsOp {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        <&'static str>::from(self).into()
+    }
+
     fn init_signature(&self, _extension_ref: &std::sync::Weak<Extension>) -> SignatureFunc {
         match self {
             UtilsOp::GetCurrentShot => Signature::new(type_row![], int_type(6)),
@@ -118,14 +122,16 @@ impl<D: Dataflow> UtilsOpBuilder for D {}
 mod test {
     use std::sync::Arc;
 
-    use hugr::builder::{DataflowHugr, FunctionBuilder};
-    use hugr::ops::NamedOp;
+    use hugr::{
+        builder::{DataflowHugr, FunctionBuilder},
+        extension::simple_op::MakeExtensionOp,
+    };
     use strum::IntoEnumIterator;
 
     use super::*;
 
-    fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
-        EXTENSION.get_op(&op.name())
+    fn get_opdef(op: UtilsOp) -> Option<&'static Arc<OpDef>> {
+        EXTENSION.get_op(&op.op_id())
     }
 
     #[test]

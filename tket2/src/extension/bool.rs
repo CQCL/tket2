@@ -126,6 +126,10 @@ pub enum BoolOp {
 }
 
 impl MakeOpDef for BoolOp {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        <&'static str>::from(self).into()
+    }
+
     fn init_signature(&self, extension_ref: &Weak<Extension>) -> SignatureFunc {
         let bool_type = Type::new_extension(bool_custom_type(extension_ref));
         let sum_type = Type::new_unit_sum(2);
@@ -237,13 +241,12 @@ pub(crate) mod test {
     use super::*;
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
-        extension::OpDef,
-        ops::NamedOp,
+        extension::{simple_op::MakeExtensionOp, OpDef},
     };
     use strum::IntoEnumIterator;
 
-    fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
-        BOOL_EXTENSION.get_op(&op.name())
+    fn get_opdef(op: BoolOp) -> Option<&'static Arc<OpDef>> {
+        BOOL_EXTENSION.get_op(&op.op_id())
     }
 
     #[test]

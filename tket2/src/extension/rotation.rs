@@ -132,6 +132,10 @@ pub enum RotationOp {
 }
 
 impl MakeOpDef for RotationOp {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        <&'static str>::from(self).into()
+    }
+
     fn from_def(
         op_def: &hugr::extension::OpDef,
     ) -> Result<Self, hugr::extension::simple_op::OpLoadError>

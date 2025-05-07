@@ -5,7 +5,7 @@ use std::hash::{Hash, Hasher};
 use derive_more::{Display, Error};
 use fxhash::{FxHashMap, FxHasher64};
 use hugr::hugr::views::{HierarchyView, SiblingGraph};
-use hugr::ops::{NamedOp, OpType};
+use hugr::ops::OpType;
 use hugr::{HugrView, Node};
 use petgraph::visit::{self as pg, Walker};
 
@@ -94,18 +94,18 @@ fn hashable_op(op: &OpType) -> impl Hash {
             // TODO: Require hashing for TypeParams?
             format!(
                 "{}[{}]",
-                op.name(),
+                op.def().name(),
                 serde_json::to_string(op.args()).unwrap()
             )
         }
         OpType::OpaqueOp(op) if !op.args().is_empty() => {
             format!(
                 "{}[{}]",
-                op.name(),
+                op.qualified_id(),
                 serde_json::to_string(op.args()).unwrap()
             )
         }
-        _ => op.name().to_string(),
+        _ => op.to_string(),
     }
 }
 

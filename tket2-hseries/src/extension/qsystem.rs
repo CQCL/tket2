@@ -90,6 +90,10 @@ pub enum QSystemOp {
 }
 
 impl MakeOpDef for QSystemOp {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        <&'static str>::from(self).into()
+    }
+
     fn init_signature(&self, _extension_ref: &std::sync::Weak<Extension>) -> SignatureFunc {
         use QSystemOp::*;
         let one_qb_row = TypeRow::from(vec![qb_t()]);
@@ -421,13 +425,14 @@ mod test {
     use cool_asserts::assert_matches;
     use futures::FutureOpBuilder as _;
     use hugr::builder::{DataflowHugr, FunctionBuilder};
-    use hugr::ops::{NamedOp, OpType};
+    use hugr::extension::simple_op::MakeExtensionOp;
+    use hugr::ops::OpType;
     use strum::IntoEnumIterator as _;
 
     use super::*;
 
-    fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
-        EXTENSION.get_op(&op.name())
+    fn get_opdef(op: QSystemOp) -> Option<&'static Arc<OpDef>> {
+        EXTENSION.get_op(&op.op_id())
     }
 
     #[test]

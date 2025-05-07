@@ -62,7 +62,7 @@ use hugr::{
     },
     ops::{
         constant::{downcast_equal_consts, CustomConst, ValueName},
-        ExtensionOp, NamedOp, OpName, OpType,
+        ExtensionOp, OpName, OpType,
     },
     type_row,
     types::{
@@ -371,6 +371,10 @@ fn type_row_rv_into_type_arg(row: TypeRowRV) -> TypeArg {
 }
 
 impl MakeOpDef for WasmOpDef {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        <&'static str>::from(self).into()
+    }
+
     fn init_signature(&self, extension_ref: &Weak<Extension>) -> SignatureFunc {
         let context_type = WasmType::Context.get_type(extension_ref);
         let module_type = WasmType::Module.get_type(extension_ref);
@@ -539,7 +543,7 @@ impl TryFrom<&OpType> for WasmOpDef {
         Self::from_op(
             value
                 .as_extension_op()
-                .ok_or(OpLoadError::NotMember(value.name().into()))?,
+                .ok_or(OpLoadError::NotMember(value.to_string()))?,
         )
     }
 }
@@ -590,18 +594,15 @@ impl WasmOp {
     }
 }
 
-impl NamedOp for WasmOp {
-    fn name(&self) -> OpName {
-        let n: &'static str = self.wasm_op_def().into();
-        n.into()
-    }
-}
-
 impl HasDef for WasmOp {
     type Def = WasmOpDef;
 }
 
 impl MakeExtensionOp for WasmOp {
+    fn op_id(&self) -> OpName {
+        self.wasm_op_def().opdef_id()
+    }
+
     fn from_extension_op(ext_op: &ExtensionOp) -> Result<Self, OpLoadError>
     where
         Self: Sized,

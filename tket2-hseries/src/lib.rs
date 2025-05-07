@@ -4,7 +4,11 @@
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
-        const_fold::{ConstFoldError, ConstantFoldPass}, force_order, replace_types::ReplaceTypesError, ComposablePass as _, LinearizeArrayPass, MonomorphizePass, RemoveDeadFuncsError, RemoveDeadFuncsPass
+        const_fold::{ConstFoldError, ConstantFoldPass},
+        force_order,
+        replace_types::ReplaceTypesError,
+        ComposablePass as _, LinearizeArrayPass, MonomorphizePass, RemoveDeadFuncsError,
+        RemoveDeadFuncsPass,
     },
     hugr::HugrError,
     Hugr, HugrView, Node,

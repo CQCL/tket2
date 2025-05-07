@@ -13,13 +13,14 @@ use std::iter::Sum;
 pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
 use hugr::extension::prelude::{NoopDef, TupleOpDef};
+use hugr::extension::simple_op::MakeOpDef;
 use hugr::hugr::views::{DescendantsGraph, ExtractHugr, HierarchyView};
 use itertools::Either::{Left, Right};
 
 use derive_more::{Display, Error, From};
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::dataflow::IOTrait;
-use hugr::ops::{Input, NamedOp, OpName, OpParent, OpTag, OpTrait, Output};
+use hugr::ops::{Input, OpName, OpParent, OpTag, OpTrait, Output};
 use hugr::types::{PolyFuncType, Signature};
 use hugr::{Hugr, PortIndex};
 use hugr::{HugrView, OutgoingPort};
@@ -29,6 +30,7 @@ use lazy_static::lazy_static;
 pub use hugr::ops::OpType;
 pub use hugr::types::{EdgeKind, Type, TypeRow};
 pub use hugr::{Node, Port, Wire};
+use smol_str::ToSmolStr;
 
 use self::units::{filter, LinearUnit, Units};
 
@@ -68,9 +70,9 @@ lazy_static! {
     /// https://github.com/CQCL/hugr/issues/1496
     static ref IGNORED_EXTENSION_OPS: HashSet<OpName> = {
         let mut set = HashSet::new();
-        set.insert(format!("prelude.{}", NoopDef.name()).into());
-        set.insert(format!("prelude.{}", TupleOpDef::MakeTuple.name()).into());
-        set.insert(format!("prelude.{}", TupleOpDef::UnpackTuple.name()).into());
+        set.insert(format!("prelude.{}", NoopDef.opdef_id()).into());
+        set.insert(format!("prelude.{}", TupleOpDef::MakeTuple.opdef_id()).into());
+        set.insert(format!("prelude.{}", TupleOpDef::UnpackTuple.opdef_id()).into());
         set
     };
 }
@@ -79,7 +81,7 @@ lazy_static! {
 /// https://github.com/CQCL/hugr/issues/1496
 #[test]
 fn issue_1496_remains() {
-    assert_eq!("Noop", NoopDef.name())
+    assert_eq!("Noop", NoopDef.opdef_id())
 }
 
 impl<T: HugrView> Circuit<T> {
@@ -152,7 +154,7 @@ impl<T: HugrView> Circuit<T> {
     pub fn circuit_signature(&self) -> Cow<'_, Signature> {
         let op = self.hugr.get_optype(self.parent);
         op.inner_function_type()
-            .unwrap_or_else(|| panic!("{} is an invalid circuit parent type.", op.name()))
+            .unwrap_or_else(|| panic!("{} is an invalid circuit parent type.", op))
     }
 
     /// Returns the input node to the circuit.
@@ -197,7 +199,7 @@ impl<T: HugrView> Circuit<T> {
             for child in self.hugr().children(node) {
                 let optype = self.hugr().get_optype(child);
                 if matches!(optype, OpType::ExtensionOp(_) | OpType::OpaqueOp(_))
-                    && !IGNORED_EXTENSION_OPS.contains(&optype.name())
+                    && !IGNORED_EXTENSION_OPS.contains(&optype.to_smolstr())
                 {
                     count += 1;
                 } else if OpTag::DataflowParent.is_superset(optype.tag()) {
@@ -325,7 +327,8 @@ impl<T: HugrView<Node = Node>> Circuit<T> {
     {
         // Traverse the circuit in topological order.
         self.commands().filter(|cmd| {
-            cmd.optype().is_extension_op() && !IGNORED_EXTENSION_OPS.contains(&cmd.optype().name())
+            cmd.optype().is_extension_op()
+                && !IGNORED_EXTENSION_OPS.contains(&cmd.optype().to_smolstr())
         })
     }
 
@@ -480,7 +483,7 @@ pub enum CircuitError<N = Node> {
     /// Circuit parents must have a concrete signature.
     #[display(
         "{parent} with op {} cannot be used as a circuit parent. Circuits must have a concrete signature, but the node has signature '{}'.",
-        optype.name(),
+        optype,
         signature
     )]
     ParametricSignature {
@@ -494,7 +497,7 @@ pub enum CircuitError<N = Node> {
     /// The parent node for the circuit has an invalid optype.
     #[display(
         "{parent} with op {} cannot be used as a circuit parent. Only 'DFG', 'DataflowBlock', or 'FuncDefn' operations are allowed.",
-        optype.name()
+        optype
     )]
     InvalidParentOp {
         /// The node that was used as the parent.
