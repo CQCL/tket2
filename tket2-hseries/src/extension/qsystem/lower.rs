@@ -18,7 +18,7 @@ use tket2::{extension::rotation::RotationOpBuilder, Tk2Op};
 
 use crate::extension::qsystem::{self, QSystemOp, QSystemOpBuilder};
 
-use super::barrier::BarrierFuncs;
+use super::barrier::BarrierInserter;
 
 lazy_static! {
     /// Extension registry including [crate::extension::qsystem::REGISTRY] and
@@ -95,7 +95,7 @@ pub(super) fn insert_function(hugr: &mut impl HugrMut<Node = Node>, func_def: Hu
 pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, LowerTk2Error> {
     let mut funcs: HashMap<Tk2Op, Node> = HashMap::new();
     let mut lowerer = ReplaceTypes::new_empty();
-    let mut barrier_funcs = BarrierFuncs::new();
+    let mut barrier_funcs = BarrierInserter::new();
 
     let root_op = hugr.get_optype(hugr.root());
     if !root_op
@@ -147,7 +147,7 @@ pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, L
         replaced_nodes.push(node);
     }
 
-    barrier_funcs.load_lowerer(hugr, &mut lowerer);
+    barrier_funcs.register_operation_replacements(hugr, &mut lowerer);
     lowerer.run(hugr)?;
 
     Ok(replaced_nodes)
