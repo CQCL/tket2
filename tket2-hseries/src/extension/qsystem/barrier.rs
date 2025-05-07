@@ -368,6 +368,27 @@ impl BarrierFuncs {
         UnpackedRow::Other(ty.clone())
     }
 
+    /// Apply a cached operation with the given name and arguments
+    fn apply_cached_operation<I>(
+        &mut self,
+        builder: &mut impl Dataflow,
+        op_name: &OpName,
+        args: impl Into<Vec<TypeArg>>,
+        mangle_args: &[TypeArg],
+        inputs: I,
+        func_builder: impl FnOnce(
+            &mut Self,
+            &mut FunctionBuilder<Hugr>,
+        ) -> Result<Vec<Wire>, BuildError>,
+    ) -> Result<Outputs, BuildError>
+    where
+        I: IntoIterator<Item = Wire>,
+    {
+        let op = self.get_op(op_name, args).unwrap();
+        self.cache_function(&op, mangle_args, func_builder)?;
+        Ok(builder.add_dataflow_op(op, inputs)?.outputs())
+    }
+
     /// Insert an option unwrap.
     fn call_unwrap(
         &mut self,
@@ -389,13 +410,21 @@ impl BarrierFuncs {
     fn cache_function(
         &mut self,
         op: &ExtensionOp,
-        func_builder: impl FnOnce(&mut Self) -> Result<Hugr, BuildError>,
+        mangle_args: &[TypeArg],
+        func_builder: impl FnOnce(
+            &mut Self,
+            &mut FunctionBuilder<Hugr>,
+        ) -> Result<Vec<Wire>, BuildError>,
     ) -> Result<(), BuildError> {
         let key = op.clone().into();
         // clippy's suggested fix does not make the borrow checker happy
         #[allow(clippy::map_entry)]
         if !self.funcs.contains_key(&key) {
-            let func_def: Hugr = func_builder(self)?;
+            let name = mangle_name(op.def().name(), mangle_args);
+            let sig = op.signature().deref().clone();
+            let mut func_b = FunctionBuilder::new(name, sig)?;
+            let outs = func_builder(self, &mut func_b)?;
+            let func_def = func_b.finish_hugr_with_outputs(outs)?;
             self.funcs.insert(key, func_def);
         }
 
@@ -410,27 +439,18 @@ impl BarrierFuncs {
     ) -> Result<Outputs, BuildError> {
         let size = qubit_wires.len();
         let qb_row = vec![qb_t(); size];
+        let args = [TypeArg::Sequence {
+            elems: qb_row.clone().into_iter().map(Into::into).collect(),
+        }];
 
-        let op = self
-            .get_op(
-                &Self::WRAPPED_BARRIER,
-                [TypeArg::Sequence {
-                    elems: qb_row.clone().into_iter().map(Into::into).collect(),
-                }],
-            )
-            .unwrap();
-        let sig = op.signature().deref().clone();
-        self.cache_function(&op, |_| {
-            let name = mangle_name(
-                &Self::WRAPPED_BARRIER,
-                [TypeArg::BoundedNat { n: size as u64 }],
-            );
-            let mut func_b = FunctionBuilder::new(name, sig)?;
-            let outs = func_b.build_wrapped_barrier(func_b.input_wires())?;
-            func_b.finish_hugr_with_outputs(outs)
-        })?;
-
-        Ok(builder.add_dataflow_op(op, qubit_wires)?.outputs())
+        self.apply_cached_operation(
+            builder,
+            &Self::WRAPPED_BARRIER,
+            args,
+            &[TypeArg::BoundedNat { n: size as u64 }],
+            qubit_wires,
+            |_, func_b| func_b.build_wrapped_barrier(func_b.input_wires()),
+        )
     }
 
     /// Unpack an array in to wires.
@@ -441,15 +461,36 @@ impl BarrierFuncs {
         size: u64,
         elem_ty: &Type,
     ) -> Result<Vec<Wire>, BuildError> {
-        let row = if let UnpackedRow::QbContainer(row) =
-            self.unpack_type(&array_type(size, elem_ty.clone()))
-        {
-            row
-        } else {
+        let Ok(args) = self.array_args(size, elem_ty) else {
             return Ok(vec![array_wire]);
         };
 
-        let inner_row_len = self.unpack_type(elem_ty).num_wires();
+        let outputs = self.apply_cached_operation(
+            builder,
+            &Self::ARRAY_UNPACK,
+            args.clone(),
+            &args[..2],
+            [array_wire],
+            |slf, func_b| {
+                let w = func_b.input().out_wire(0);
+                let elems = super::pop_all(func_b, w, size, elem_ty.clone())?;
+                let unpacked: Vec<_> = elems
+                    .into_iter()
+                    .map(|wire| slf.unpack_container(func_b, elem_ty, wire))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .concat();
+                Ok(unpacked)
+            },
+        )?;
+
+        Ok(outputs.collect_vec())
+    }
+
+    fn array_args(&mut self, size: u64, elem_ty: &Type) -> Result<[TypeArg; 3], ()> {
+        let row = match self.unpack_type(&array_type(size, elem_ty.clone())) {
+            UnpackedRow::QbContainer(row) => row,
+            _ => return Err(()),
+        };
         let args = [
             size.into(),
             elem_ty.clone().into(),
@@ -457,47 +498,7 @@ impl BarrierFuncs {
                 elems: row.into_iter().map_into().collect(),
             },
         ];
-        let op = self.get_op(&Self::ARRAY_UNPACK, args.clone()).unwrap();
-        self.cache_function(&op, |funcs| {
-            let name = mangle_name(op.def().name(), &args[..2]);
-            let sig = op.signature().deref().clone();
-            let mut func_b = FunctionBuilder::new(name, sig)?;
-            let w = func_b.input().out_wire(0);
-            let elems = super::pop_all(&mut func_b, w, size, elem_ty.clone())?;
-            let unpacked: Vec<_> = elems
-                .into_iter()
-                .map(|wire| funcs.unpack_container(&mut func_b, elem_ty, wire))
-                .collect::<Result<Vec<_>, _>>()?
-                .concat();
-            func_b.finish_hugr_with_outputs(unpacked)
-        })?;
-
-        let outputs = builder
-            .add_dataflow_op(op, [array_wire])?
-            .outputs()
-            .collect();
-
-        let repack_op = self.get_op(&Self::ARRAY_REPACK, args.clone()).unwrap();
-
-        self.cache_function(&repack_op, |funcs| {
-            let name = mangle_name(repack_op.def().name(), &args[..2]);
-            let sig = repack_op.signature().deref().clone();
-            let mut func_b = FunctionBuilder::new(name, sig)?;
-            let input = func_b.input();
-            let elems: Result<Vec<_>, _> = input
-                .outputs()
-                .chunks(inner_row_len)
-                .into_iter()
-                .map(|chunk| {
-                    let chunk = chunk.collect_vec();
-                    funcs.repack_container(&mut func_b, elem_ty, chunk)
-                })
-                .collect();
-            let array_wire = func_b.add_new_array(elem_ty.clone(), elems?)?;
-            func_b.finish_hugr_with_outputs([array_wire])
-        })?;
-
-        Ok(outputs)
+        Ok(args)
     }
 
     /// Repack an array from wires.
@@ -508,29 +509,39 @@ impl BarrierFuncs {
         size: u64,
         elem_ty: &Type,
     ) -> Result<Wire, BuildError> {
-        let row = if let UnpackedRow::QbContainer(row) =
-            self.unpack_type(&array_type(size, elem_ty.clone()))
-        {
-            row
-        } else {
+        let Ok(args) = self.array_args(size, elem_ty) else {
             return Ok(elem_wires
                 .into_iter()
                 .next()
                 .expect("Non-qubit container should only have one wire."));
         };
 
-        let args = [
-            size.into(),
-            elem_ty.clone().into(),
-            TypeArg::Sequence {
-                elems: row.into_iter().map_into().collect(),
-            },
-        ];
+        let inner_row_len = self.unpack_type(elem_ty).num_wires();
 
-        // TODO common up with pack up to this point
-        let repack_op = self.get_op(&Self::ARRAY_REPACK, args.clone()).unwrap();
-        let repack_call = builder.add_dataflow_op(repack_op, elem_wires)?;
-        Ok(repack_call.out_wire(0))
+        let mut outputs = self.apply_cached_operation(
+            builder,
+            &Self::ARRAY_REPACK,
+            args.clone(),
+            &args[..2],
+            elem_wires,
+            |slf, func_b| {
+                let input = func_b.input();
+                let elems: Result<Vec<_>, _> = input
+                    .outputs()
+                    .chunks(inner_row_len)
+                    .into_iter()
+                    .map(|chunk| {
+                        let chunk = chunk.collect_vec();
+                        slf.repack_container(func_b, elem_ty, chunk)
+                    })
+                    .collect();
+                let array_wire = func_b.add_new_array(elem_ty.clone(), elems?)?;
+
+                Ok(vec![array_wire])
+            },
+        )?;
+
+        Ok(outputs.next().unwrap())
     }
 
     /// Unpack a tuple in to wires.
@@ -541,12 +552,38 @@ impl BarrierFuncs {
         tuple_row: &[Type],
     ) -> Result<Vec<Wire>, BuildError> {
         let tuple_row: Vec<_> = tuple_row.to_vec();
-        let unpacked_row = if let UnpackedRow::QbContainer(row) =
-            self.unpack_type(&Type::new_tuple(tuple_row.clone()))
-        {
-            row
-        } else {
+        let Ok(args) = self.tuple_args(tuple_row.as_slice()) else {
             return Ok(vec![tuple_wire]);
+        };
+
+        let outputs = self.apply_cached_operation(
+            builder,
+            &Self::TUPLE_UNPACK,
+            args.clone(),
+            &args[..1],
+            [tuple_wire],
+            |slf, func_b| {
+                let w = func_b.input().out_wire(0);
+                let unpacked_wires = func_b
+                    .add_dataflow_op(prelude::UnpackTuple::new(tuple_row.clone().into()), [w])?
+                    .outputs();
+                let unpacked: Vec<_> = unpacked_wires
+                    .into_iter()
+                    .zip(tuple_row.clone())
+                    .map(|(wire, elem_ty)| slf.unpack_container(func_b, &elem_ty, wire))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .concat();
+                Ok(unpacked)
+            },
+        )?;
+
+        Ok(outputs.collect_vec())
+    }
+
+    fn tuple_args(&mut self, tuple_row: &[Type]) -> Result<[TypeArg; 2], ()> {
+        let unpacked_row = match self.unpack_type(&Type::new_tuple(tuple_row.to_vec())) {
+            UnpackedRow::QbContainer(row) => row,
+            _ => return Err(()),
         };
         let args = [
             TypeArg::Sequence {
@@ -556,51 +593,7 @@ impl BarrierFuncs {
                 elems: unpacked_row.into_iter().map_into().collect(),
             },
         ];
-        let op = self.get_op(&Self::TUPLE_UNPACK, args.clone()).unwrap();
-        self.cache_function(&op, |funcs| {
-            let name = mangle_name(op.def().name(), &args[..1]);
-            let sig = op.signature().deref().clone();
-            let mut func_b = FunctionBuilder::new(name, sig)?;
-            let w = func_b.input().out_wire(0);
-            let unpacked_wires = func_b
-                .add_dataflow_op(prelude::UnpackTuple::new(tuple_row.clone().into()), [w])?
-                .outputs();
-            let unpacked: Vec<_> = unpacked_wires
-                .into_iter()
-                .zip(tuple_row.clone())
-                .map(|(wire, elem_ty)| funcs.unpack_container(&mut func_b, &elem_ty, wire))
-                .collect::<Result<Vec<_>, _>>()?
-                .concat();
-            func_b.finish_hugr_with_outputs(unpacked)
-        })?;
-
-        let outputs = builder
-            .add_dataflow_op(op, [tuple_wire])?
-            .outputs()
-            .collect();
-
-        let repack_op = self.get_op(&Self::TUPLE_REPACK, args.clone()).unwrap();
-        let elem_num_wires: Vec<_> = tuple_row
-            .iter()
-            .map(|t| self.unpack_type(t).num_wires())
-            .collect();
-        self.cache_function(&repack_op, |funcs| {
-            let name = mangle_name(repack_op.def().name(), &args[..1]);
-            let sig = repack_op.signature().deref().clone();
-            let mut func_b = FunctionBuilder::new(name, sig)?;
-            let mut in_wires = func_b.input().outputs();
-            let mut elem_out_wires = Vec::with_capacity(tuple_row.len());
-            for (elem_ty, num_wires) in tuple_row.iter().zip(elem_num_wires) {
-                let elem_in_wires = in_wires.by_ref().take(num_wires).collect();
-                let repacked = funcs.repack_container(&mut func_b, elem_ty, elem_in_wires)?;
-                elem_out_wires.push(repacked);
-            }
-
-            let tuple_wire = func_b.make_tuple(elem_out_wires)?;
-
-            func_b.finish_hugr_with_outputs([tuple_wire])
-        })?;
-        Ok(outputs)
+        Ok(args)
     }
 
     /// Repack a tuple from wires.
@@ -611,27 +604,37 @@ impl BarrierFuncs {
         tuple_row: &[Type],
     ) -> Result<Wire, BuildError> {
         let tuple_row: Vec<_> = tuple_row.to_vec();
-        let unpacked_row = if let UnpackedRow::QbContainer(row) =
-            self.unpack_type(&Type::new_tuple(tuple_row.clone()))
-        {
-            row
-        } else {
+        let Ok(args) = self.tuple_args(tuple_row.as_slice()) else {
             return Ok(elem_wires
                 .into_iter()
                 .next()
                 .expect("Non-qubit container should only have one wire."));
         };
-        let args = [
-            TypeArg::Sequence {
-                elems: tuple_row.iter().cloned().map_into().collect(),
+
+        let elem_num_wires: Vec<_> = tuple_row
+            .iter()
+            .map(|t| self.unpack_type(t).num_wires())
+            .collect();
+        let mut outputs = self.apply_cached_operation(
+            builder,
+            &Self::TUPLE_REPACK,
+            args.clone(),
+            &args[..1],
+            elem_wires,
+            |slf, func_b| {
+                let mut in_wires = func_b.input().outputs();
+                let mut elem_out_wires = Vec::with_capacity(tuple_row.len());
+                for (elem_ty, num_wires) in tuple_row.iter().zip(elem_num_wires) {
+                    let elem_in_wires = in_wires.by_ref().take(num_wires).collect();
+                    let repacked = slf.repack_container(func_b, elem_ty, elem_in_wires)?;
+                    elem_out_wires.push(repacked);
+                }
+
+                let tuple_wire = func_b.make_tuple(elem_out_wires)?;
+                Ok(vec![tuple_wire])
             },
-            TypeArg::Sequence {
-                elems: unpacked_row.into_iter().map_into().collect(),
-            },
-        ];
-        let repack_op = self.get_op(&Self::TUPLE_REPACK, args.clone()).unwrap();
-        let repack_call = builder.add_dataflow_op(repack_op, elem_wires)?;
-        Ok(repack_call.out_wire(0))
+        )?;
+        Ok(outputs.next().unwrap())
     }
 
     /// Unpack a qubit containing type until all qubit wires are found.
