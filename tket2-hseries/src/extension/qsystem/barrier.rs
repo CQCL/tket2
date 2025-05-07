@@ -839,10 +839,7 @@ mod test {
         extension::prelude::{bool_t, option_type, qb_t},
         std_extensions::collections::array::array_type,
     };
-    use hugr::{
-        ops::{handle::NodeHandle, NamedOp},
-        HugrView,
-    };
+    use hugr::{ops::handle::NodeHandle, HugrView};
     use itertools::Itertools;
     use rstest::rstest;
     fn opt_q_arr(size: u64) -> Type {
@@ -891,7 +888,9 @@ mod test {
             h.nodes()
                 .filter(|&r_barr_n| {
                     h.get_optype(r_barr_n).as_extension_op().is_some_and(|op| {
-                        op.name().contains(qsystem::RUNTIME_BARRIER_NAME.as_str())
+                        op.def()
+                            .name()
+                            .contains(qsystem::RUNTIME_BARRIER_NAME.as_str())
                     })
                 })
                 .exactly_one()

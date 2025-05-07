@@ -10,7 +10,7 @@ use hugr::envelope::{EnvelopeConfig, EnvelopeFormat, ZstdConfig};
 use hugr::extension::prelude::qb_t;
 use hugr::extension::{ExtensionRegistry, EMPTY_REG};
 use hugr::ops::handle::NodeHandle;
-use hugr::ops::{ExtensionOp, NamedOp, OpType};
+use hugr::ops::{ExtensionOp, OpType};
 use hugr::package::Package;
 use hugr::types::Type;
 use itertools::Itertools;
@@ -240,7 +240,7 @@ impl Tk2Circuit {
         let py = cost_fn.py();
         let cost_fn = |op: &OpType| -> PyResult<PyCircuitCost> {
             let Some(tk2_op) = op.cast::<Tk2Op>() else {
-                let op_name = op.name();
+                let op_name = op.to_string();
                 return Err(PyErr::new::<PyValueError, _>(format!(
                     "Could not convert circuit operation to a `Tk2Op`: {op_name}"
                 )));

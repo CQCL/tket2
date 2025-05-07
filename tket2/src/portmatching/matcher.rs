@@ -13,7 +13,7 @@ use hugr::hugr::views::sibling_subgraph::{
     InvalidReplacement, InvalidSubgraph, InvalidSubgraphBoundary, TopoConvexChecker,
 };
 use hugr::hugr::views::SiblingSubgraph;
-use hugr::ops::{NamedOp, OpType};
+use hugr::ops::OpType;
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex};
 use itertools::Itertools;
 use portgraph::algorithms::ConvexChecker;
@@ -44,7 +44,7 @@ pub(crate) struct MatchOp {
 
 impl From<OpType> for MatchOp {
     fn from(op: OpType) -> Self {
-        let op_name = op.name();
+        let op_name = op.to_string().into();
         let encoded = encode_op(op);
         Self { op_name, encoded }
     }
@@ -62,7 +62,7 @@ fn encode_op(op: OpType) -> Option<Vec<u8>> {
             let mut encoded: Vec<u8> = Vec::new();
             // Ignore irrelevant fields
             rmp_serde::encode::write(&mut encoded, op.extension()).ok()?;
-            rmp_serde::encode::write(&mut encoded, &op.name()).ok()?;
+            rmp_serde::encode::write(&mut encoded, &op.unqualified_id()).ok()?;
             rmp_serde::encode::write(&mut encoded, op.args()).ok()?;
             Some(encoded)
         }

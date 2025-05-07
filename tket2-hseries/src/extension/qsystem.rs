@@ -16,7 +16,7 @@ use hugr::{
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, Version, PRELUDE,
     },
-    ops::{ExtensionOp, NamedOp, OpName, Value},
+    ops::{ExtensionOp, OpName, Value},
     std_extensions::{
         arithmetic::{
             float_ops::FloatOps,
@@ -97,6 +97,10 @@ pub enum QSystemOp {
 }
 
 impl MakeOpDef for QSystemOp {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        <&'static str>::from(self).into()
+    }
+
     fn init_signature(&self, _extension_ref: &std::sync::Weak<Extension>) -> SignatureFunc {
         use QSystemOp::*;
         let one_qb_row = TypeRow::from(vec![qb_t()]);
@@ -164,17 +168,11 @@ pub const RUNTIME_BARRIER_NAME: OpName = OpName::new_inline("RuntimeBarrier");
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RuntimeBarrierDef;
 
-impl NamedOp for RuntimeBarrierDef {
-    fn name(&self) -> OpName {
-        RUNTIME_BARRIER_NAME
-    }
-}
-
 impl FromStr for RuntimeBarrierDef {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == RuntimeBarrierDef.name() {
+        if s == RuntimeBarrierDef.opdef_id().as_str() {
             Ok(Self)
         } else {
             Err(())
@@ -211,6 +209,10 @@ impl MakeOpDef for RuntimeBarrierDef {
 
     fn description(&self) -> String {
         "Acts as a runtime barrier between operations on argument qubits.".to_string()
+    }
+
+    fn opdef_id(&self) -> OpName {
+        RUNTIME_BARRIER_NAME
     }
 }
 
@@ -551,13 +553,14 @@ mod test {
     use cool_asserts::assert_matches;
     use futures::FutureOpBuilder as _;
     use hugr::builder::{DataflowHugr, FunctionBuilder};
-    use hugr::ops::{NamedOp, OpType};
+    use hugr::extension::simple_op::MakeExtensionOp;
+    use hugr::ops::OpType;
     use strum::IntoEnumIterator as _;
 
     use super::*;
 
-    fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
-        EXTENSION.get_op(&op.name())
+    fn get_opdef(op: QSystemOp) -> Option<&'static Arc<OpDef>> {
+        EXTENSION.get_op(&op.op_id())
     }
 
     #[test]

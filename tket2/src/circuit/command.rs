@@ -480,7 +480,7 @@ mod test {
     use hugr::extension::prelude::qb_t;
     use hugr::hugr::hugrmut::HugrMut;
     use hugr::ops::handle::NodeHandle;
-    use hugr::ops::{NamedOp, Value};
+    use hugr::ops::Value;
     use hugr::types::Signature;
     use itertools::Itertools;
     use rstest::{fixture, rstest};
@@ -550,7 +550,7 @@ mod test {
         assert_eq!(commands.size_hint(), (0, Some(3)));
 
         let hadamard = commands.next().unwrap();
-        assert_eq!(hadamard.optype().name().as_str(), tk2op_name(Tk2Op::H));
+        assert_eq!(hadamard.optype().to_string(), tk2op_name(Tk2Op::H));
         assert_eq_iter!(
             hadamard.inputs().map(|(u, _, _)| u),
             [CircuitUnit::Linear(0)],
@@ -561,7 +561,7 @@ mod test {
         );
 
         let cx = commands.next().unwrap();
-        assert_eq!(cx.optype().name().as_str(), tk2op_name(Tk2Op::CX));
+        assert_eq!(cx.optype().to_string(), tk2op_name(Tk2Op::CX));
         assert_eq_iter!(
             cx.inputs().map(|(unit, _, _)| unit),
             [CircuitUnit::Linear(0), CircuitUnit::Linear(1)],
@@ -572,7 +572,7 @@ mod test {
         );
 
         let t = commands.next().unwrap();
-        assert_eq!(t.optype().name().as_str(), tk2op_name(Tk2Op::T));
+        assert_eq!(t.optype().to_string(), tk2op_name(Tk2Op::T));
         assert_eq_iter!(
             t.inputs().map(|(unit, _, _)| unit),
             [CircuitUnit::Linear(1)],
@@ -604,7 +604,7 @@ mod test {
         // First command is the constant definition.
         // It has a single output.
         let const_cmd = commands.next().unwrap();
-        assert_eq!(const_cmd.optype().name().as_str(), "const:custom:a(π*0.5)");
+        assert_eq!(const_cmd.optype().to_string(), "const:custom:a(π*0.5)");
         assert_eq_iter!(const_cmd.inputs().map(|(u, _, _)| u), [],);
         assert_eq_iter!(
             const_cmd.outputs().map(|(u, _, _)| u),

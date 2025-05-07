@@ -20,7 +20,7 @@ use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::{fs, io};
 
-use hugr::ops::{NamedOp, OpType};
+use hugr::ops::OpType;
 
 use derive_more::{Display, Error, From};
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -170,7 +170,10 @@ pub enum OpConvertError {
     #[error(ignore)] // `_0` is not the error source
     UnsupportedOpSerialization(OpType),
     /// The operation has non-serializable inputs.
-    #[display("Operation {} in {node} has an unsupported input of type {typ}.", optype.name())]
+    #[display(
+        "Operation {} in {node} has an unsupported input of type {typ}.",
+        optype
+    )]
     UnsupportedInputType {
         /// The unsupported type.
         typ: Type,
@@ -180,7 +183,10 @@ pub enum OpConvertError {
         node: Node,
     },
     /// The operation has non-serializable outputs.
-    #[display("Operation {} in {node} has an unsupported output of type {typ}.", optype.name())]
+    #[display(
+        "Operation {} in {node} has an unsupported output of type {typ}.",
+        optype
+    )]
     UnsupportedOutputType {
         /// The unsupported type.
         typ: Type,
@@ -190,7 +196,10 @@ pub enum OpConvertError {
         node: Node,
     },
     /// A parameter input could not be evaluated.
-    #[display("The {typ} parameter input for operation {} in {node} could not be resolved.", optype.name())]
+    #[display(
+        "The {typ} parameter input for operation {} in {node} could not be resolved.",
+        optype
+    )]
     UnresolvedParamInput {
         /// The parameter type.
         typ: Type,
@@ -201,7 +210,7 @@ pub enum OpConvertError {
     },
     /// The operation has output-only qubits.
     /// This is not currently supported by the encoder.
-    #[display("Operation {} in {node} has more output qubits than inputs.", optype.name())]
+    #[display("Operation {} in {node} has more output qubits than inputs.", optype)]
     TooManyOutputQubits {
         /// The unsupported type.
         typ: Type,
@@ -221,7 +230,7 @@ pub enum OpConvertError {
     /// Tried to decode a tket1 operation with not enough parameters.
     #[display(
         "Operation {} is missing encoded parameters. Expected at least {expected} but only \"{}\" were specified.",
-        optype.name(),
+        optype,
         params.iter().join(", "),
     )]
     MissingSerialisedParams {
@@ -235,7 +244,7 @@ pub enum OpConvertError {
     /// Tried to decode a tket1 operation with not enough qubit/bit arguments.
     #[display(
         "Operation {} is missing encoded arguments. Expected {expected_qubits} and {expected_bits}, but only \"{args:?}\" were specified.",
-        optype.name(),
+        optype,
     )]
     MissingSerialisedArguments {
         /// The operation name.

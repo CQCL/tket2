@@ -9,7 +9,7 @@ use derive_more::{From, Into};
 use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::hugr::IdentList;
 use hugr::ops::custom::{ExtensionOp, OpaqueOp};
-use hugr::ops::{NamedOp, OpName, OpType};
+use hugr::ops::{OpName, OpType};
 use hugr::types::{CustomType, Type, TypeBound};
 use pyo3::prelude::*;
 use std::fmt;

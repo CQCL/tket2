@@ -3,7 +3,6 @@ use hugr::algorithms::replace_types::{NodeTemplate, ReplaceTypesError};
 use hugr::algorithms::{ComposablePass, ReplaceTypes};
 use hugr::extension::prelude::Barrier;
 use hugr::hugr::patch::insert_cut::InsertCutError;
-use hugr::ops::NamedOp;
 use hugr::{
     builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder},
     extension::ExtensionRegistry,
@@ -47,7 +46,7 @@ pub enum LowerTk2Error {
     #[display("Error when building the circuit: {_0}")]
     BuildError(BuildError),
     /// Found an unrecognised operation.
-    #[display("Unrecognised operation: {} with {_1} inputs", _0.name())]
+    #[display("Unrecognised operation: {} with {_1} inputs", _0.exposed_name())]
     UnknownOp(Tk2Op, usize),
     /// An error raised when replacing an operation.
     #[display("Error when replacing op: {_0}")]
@@ -63,7 +62,7 @@ pub enum LowerTk2Error {
         missing_ops: Vec<Node>,
     },
     /// Non-module HUGR can't be lowered.
-    #[display("HUGR root cannot have FuncDefn, has type: {}", _0.name())]
+    #[display("HUGR root cannot have FuncDefn, has type: {}", _0)]
     InvalidFuncDefn(#[error(ignore)] hugr::ops::OpType),
     /// Error when using [`ReplaceTypes`] to lower operations.
     ReplaceTypesError(#[from] ReplaceTypesError),
@@ -163,7 +162,7 @@ fn build_func(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
     let sig = op.into_extension_op().signature().into_owned();
     let sig = Signature::new(sig.input, sig.output); // ignore extension delta
                                                      // TODO check generated names are namespaced enough
-    let f_name = format!("__tk2_{}", op.name().to_lowercase());
+    let f_name = format!("__tk2_{}", op.exposed_name().to_lowercase());
     let mut b = FunctionBuilder::new(f_name, sig)?;
     let inputs: Vec<_> = b.input_wires().collect();
     let outputs = match (op, inputs.as_slice()) {

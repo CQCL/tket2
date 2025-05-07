@@ -11,7 +11,7 @@ use hugr::{
         },
         ExtensionId, SignatureError, SignatureFunc, Version,
     },
-    ops::{NamedOp, OpName},
+    ops::OpName,
     std_extensions::collections::array::array_type_parametric,
     types::{type_param::TypeParam, FuncValueType, PolyFuncTypeRV, TypeArg},
     Extension,
@@ -38,17 +38,12 @@ pub struct StateResultDef;
 
 /// Name of the `tket2.StateResult` operation.
 pub const STATE_RESULT_OP_ID: OpName = OpName::new_inline("StateResult");
-impl NamedOp for StateResultDef {
-    fn name(&self) -> OpName {
-        STATE_RESULT_OP_ID
-    }
-}
 
 impl std::str::FromStr for StateResultDef {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == StateResultDef.name() {
+        if s == StateResultDef.opdef_id() {
             Ok(Self)
         } else {
             Err(())
@@ -57,6 +52,10 @@ impl std::str::FromStr for StateResultDef {
 }
 
 impl MakeOpDef for StateResultDef {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        STATE_RESULT_OP_ID
+    }
+
     fn init_signature(&self, _extension_ref: &Weak<Extension>) -> SignatureFunc {
         PolyFuncTypeRV::new(
             vec![TypeParam::String, TypeParam::max_nat()],
@@ -110,13 +109,11 @@ impl StateResult {
     }
 }
 
-impl NamedOp for StateResult {
-    fn name(&self) -> OpName {
+impl MakeExtensionOp for StateResult {
+    fn op_id(&self) -> OpName {
         STATE_RESULT_OP_ID
     }
-}
 
-impl MakeExtensionOp for StateResult {
     fn from_extension_op(ext_op: &hugr::ops::ExtensionOp) -> Result<Self, OpLoadError>
     where
         Self: Sized,

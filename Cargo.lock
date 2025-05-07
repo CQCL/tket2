@@ -921,8 +921,8 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.15.3"
-source = "git+https://github.com/CQCL/hugr?rev=ec16c63#ec16c6376daf475eace20b5c33fa9bc5b17b7151"
+version = "0.15.4"
+source = "git+https://github.com/CQCL/hugr?rev=2c71bf5#2c71bf5af1d135e4207184da38991d80178306d5"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -932,8 +932,8 @@ dependencies = [
 
 [[package]]
 name = "hugr-cli"
-version = "0.15.3"
-source = "git+https://github.com/CQCL/hugr?rev=ec16c63#ec16c6376daf475eace20b5c33fa9bc5b17b7151"
+version = "0.15.4"
+source = "git+https://github.com/CQCL/hugr?rev=2c71bf5#2c71bf5af1d135e4207184da38991d80178306d5"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -945,8 +945,8 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.15.3"
-source = "git+https://github.com/CQCL/hugr?rev=ec16c63#ec16c6376daf475eace20b5c33fa9bc5b17b7151"
+version = "0.15.4"
+source = "git+https://github.com/CQCL/hugr?rev=2c71bf5#2c71bf5af1d135e4207184da38991d80178306d5"
 dependencies = [
  "cgmath",
  "delegate 0.13.3",
@@ -976,8 +976,8 @@ dependencies = [
 
 [[package]]
 name = "hugr-llvm"
-version = "0.15.3"
-source = "git+https://github.com/CQCL/hugr?rev=ec16c63#ec16c6376daf475eace20b5c33fa9bc5b17b7151"
+version = "0.15.4"
+source = "git+https://github.com/CQCL/hugr?rev=2c71bf5#2c71bf5af1d135e4207184da38991d80178306d5"
 dependencies = [
  "anyhow",
  "delegate 0.13.3",
@@ -995,8 +995,8 @@ dependencies = [
 
 [[package]]
 name = "hugr-model"
-version = "0.19.0"
-source = "git+https://github.com/CQCL/hugr?rev=ec16c63#ec16c6376daf475eace20b5c33fa9bc5b17b7151"
+version = "0.19.1"
+source = "git+https://github.com/CQCL/hugr?rev=2c71bf5#2c71bf5af1d135e4207184da38991d80178306d5"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1015,8 +1015,8 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.15.3"
-source = "git+https://github.com/CQCL/hugr?rev=ec16c63#ec16c6376daf475eace20b5c33fa9bc5b17b7151"
+version = "0.15.4"
+source = "git+https://github.com/CQCL/hugr?rev=2c71bf5#2c71bf5af1d135e4207184da38991d80178306d5"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",

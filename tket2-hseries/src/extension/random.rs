@@ -111,6 +111,10 @@ pub enum RandomOp {
 }
 
 impl MakeOpDef for RandomOp {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        <&'static str>::from(self).into()
+    }
+
     fn init_signature(&self, extension_ref: &std::sync::Weak<Extension>) -> SignatureFunc {
         match self {
             RandomOp::RandomInt => Signature::new(
@@ -217,7 +221,8 @@ impl<D: Dataflow> RandomOpBuilder for D {}
 
 #[cfg(test)]
 mod test {
-    use hugr::ops::{NamedOp, Value};
+    use hugr::extension::simple_op::MakeExtensionOp;
+    use hugr::ops::Value;
     use hugr::std_extensions::arithmetic::int_types::ConstInt;
 
     use hugr::builder::{DataflowHugr, FunctionBuilder};
@@ -231,7 +236,7 @@ mod test {
 
         for o in RandomOp::iter() {
             assert_eq!(
-                RandomOp::from_def(EXTENSION.get_op(&o.name()).unwrap()),
+                RandomOp::from_def(EXTENSION.get_op(&o.op_id()).unwrap()),
                 Ok(o)
             );
         }

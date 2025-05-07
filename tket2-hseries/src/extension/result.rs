@@ -12,7 +12,7 @@ use hugr::{
         simple_op::{try_from_name, MakeExtensionOp, MakeOpDef, MakeRegisteredOp, OpLoadError},
         ExtensionId, OpDef, SignatureFunc, Version,
     },
-    ops::{NamedOp, OpType},
+    ops::OpType,
     std_extensions::arithmetic::{
         float_types::float64_type,
         int_types::{int_type, LOG_WIDTH_TYPE_PARAM},
@@ -182,6 +182,10 @@ fn int_tv(int_tv_idx: usize) -> Type {
 }
 
 impl MakeOpDef for ResultOpDef {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        <&'static str>::from(self).into()
+    }
+
     fn init_signature(&self, _extension_ref: &std::sync::Weak<Extension>) -> SignatureFunc {
         self.result_signature()
     }
@@ -323,6 +327,10 @@ impl From<&ResultOp> for &'static str {
 }
 
 impl MakeExtensionOp for ResultOp {
+    fn op_id(&self) -> hugr::ops::OpName {
+        self.result_op.opdef_id()
+    }
+
     fn from_extension_op(
         ext_op: &hugr::ops::custom::ExtensionOp,
     ) -> Result<Self, hugr::extension::simple_op::OpLoadError>
@@ -371,7 +379,7 @@ impl TryFrom<&OpType> for ResultOpDef {
 
     fn try_from(value: &OpType) -> Result<Self, Self::Error> {
         let Some(ext) = value.as_extension_op() else {
-            Err(OpLoadError::NotMember(value.name().into()))?
+            Err(OpLoadError::NotMember(value.to_string()))?
         };
         Self::from_extension_op(ext)
     }
@@ -397,7 +405,6 @@ pub(crate) mod test {
     use hugr::types::Signature;
     use hugr::{
         builder::{Dataflow, DataflowHugr, FunctionBuilder},
-        ops::NamedOp,
         std_extensions::arithmetic::int_types::INT_TYPES,
         std_extensions::collections::array::array_type,
     };
@@ -406,8 +413,8 @@ pub(crate) mod test {
 
     use super::*;
 
-    fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
-        EXTENSION.get_op(&op.name())
+    fn get_opdef(op: ResultOpDef) -> Option<&'static Arc<OpDef>> {
+        EXTENSION.get_op(&op.op_id())
     }
 
     #[test]
