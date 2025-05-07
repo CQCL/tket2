@@ -95,6 +95,7 @@ pub(super) fn insert_function(hugr: &mut impl HugrMut<Node = Node>, func_def: Hu
 pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, LowerTk2Error> {
     let mut funcs: HashMap<Tk2Op, Node> = HashMap::new();
     let mut lowerer = ReplaceTypes::new_empty();
+    let mut barrier_funcs = BarrierFuncs::new();
 
     let root_op = hugr.get_optype(hugr.root());
     if !root_op
@@ -120,7 +121,6 @@ pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, L
         .collect();
 
     let mut replaced_nodes = Vec::with_capacity(replacements.len());
-    let mut barrier_funcs = None;
     for (node, op) in replacements {
         match op {
             ReplaceOps::Tk2(tk2op) => {
@@ -141,18 +141,13 @@ pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, L
                 lowerer.replace_op(&(tk2op.into_extension_op()), replacement);
             }
             ReplaceOps::Barrier(barrier) => {
-                let barrier_funcs = barrier_funcs.get_or_insert_with(|| {
-                    BarrierFuncs::new().expect("failed to create barrier functions")
-                });
                 barrier_funcs.insert_runtime_barrier(hugr, node, barrier)?
             }
         };
         replaced_nodes.push(node);
     }
 
-    if let Some(barrier_funcs) = barrier_funcs {
-        barrier_funcs.lower(hugr, &mut lowerer)?;
-    }
+    barrier_funcs.load_lowerer(hugr, &mut lowerer);
     lowerer.run(hugr)?;
 
     Ok(replaced_nodes)
@@ -378,8 +373,8 @@ mod test {
         // dfg, input, output, alloc + (10 for unwrap), phasedx, rz, toturns, fmul, phasedx, free +
         // 5x(float + load), measure_reset, conditional, case(input, output) * 2, flip
         // (phasedx + 2*(float + load))
-        // + 52 for the barrier array wrapping, popping and option unwrapping
-        assert_eq!(h.num_nodes(), 107);
+        // + 33 for the barrier array wrapping, popping and option unwrapping
+        assert_eq!(h.num_nodes(), 90);
         assert_eq!(check_lowered(&h), Ok(()));
         if let Err(e) = h.validate() {
             panic!("{}", e);

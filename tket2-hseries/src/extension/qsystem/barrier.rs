@@ -1,29 +1,35 @@
-use hugr::algorithms::replace_types::NodeTemplate;
-use hugr::algorithms::{mangle_name, ReplaceTypes};
-use hugr::builder::handle::Outputs;
-use hugr::builder::{BuildError, Container, FunctionBuilder};
-use hugr::extension::prelude::{self, option_type, UnwrapBuilder};
-use hugr::hugr::patch::insert_cut::InsertCut;
-use hugr::hugr::patch::PatchHugrMut;
-use hugr::hugr::IdentList;
-use hugr::ops::{DataflowOpTrait, ExtensionOp, OpName, OpTrait};
-use hugr::std_extensions::collections::array::{
-    self, array_type, array_type_parametric, ArrayOpBuilder,
-};
-use hugr::types::type_param::TypeParam;
-use hugr::types::{FuncValueType, PolyFuncTypeRV, SumType, TypeArg, TypeBound, TypeRV, TypeRow};
-use hugr::{
-    builder::{DFGBuilder, Dataflow, DataflowHugr},
-    extension::prelude::{qb_t, Barrier},
-    hugr::hugrmut::HugrMut,
-    types::{Signature, Type},
-    HugrView, IncomingPort, Node, OutgoingPort, Wire,
-};
-use hugr::{type_row, Extension, Hugr};
-use itertools::Itertools;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
+
+use hugr::{
+    algorithms::{
+        mangle_name,
+        replace_types::{NodeTemplate, ReplaceTypes},
+    },
+    builder::{
+        handle::Outputs, BuildError, Container, DFGBuilder, Dataflow, DataflowHugr, FunctionBuilder,
+    },
+    extension::{
+        prelude::{self, option_type, qb_t, Barrier, UnwrapBuilder},
+        Extension,
+    },
+    hugr::{
+        hugrmut::HugrMut,
+        patch::{insert_cut::InsertCut, PatchHugrMut},
+        IdentList,
+    },
+    ops::{DataflowOpTrait, ExtensionOp, OpName, OpTrait},
+    std_extensions::collections::array::{self, array_type, array_type_parametric, ArrayOpBuilder},
+    type_row,
+    types::{
+        type_param::TypeParam, FuncValueType, PolyFuncTypeRV, Signature, SumType, Type, TypeArg,
+        TypeBound, TypeRV, TypeRow,
+    },
+    Hugr, HugrView, IncomingPort, Node, OutgoingPort, Wire,
+};
+
+use itertools::Itertools;
 
 use super::lower::insert_function;
 use super::{LowerTk2Error, QSystemOpBuilder};
@@ -47,6 +53,13 @@ fn array_args(ext: &hugr::types::CustomType) -> Option<(u64, &Type)> {
             [TypeArg::BoundedNat { n }, TypeArg::Type { ty: elem_ty }] => Some((*n, elem_ty)),
             _ => None,
         })
+}
+
+fn build_runtime_barrier_op(array_size: u64) -> Result<Hugr, BuildError> {
+    let mut barr_builder = DFGBuilder::new(Signature::new_endo(array_type(array_size, qb_t())))?;
+    let array_wire = barr_builder.input().out_wire(0);
+    let out = barr_builder.add_runtime_barrier(array_wire, array_size)?;
+    barr_builder.finish_hugr_with_outputs([out])
 }
 
 type Target = (Node, IncomingPort);
@@ -102,7 +115,6 @@ impl UnpackedRow {
     }
 }
 
-// TODO pull out a trait for lowering-via-temp-extension
 /// Insert runtime barriers by using temporary extension operations
 /// that get lowered to function calls.
 pub(super) struct BarrierFuncs {
@@ -132,71 +144,34 @@ impl BarrierFuncs {
     const TUPLE_UNPACK: OpName = OpName::new_static("tuple_unpack");
     const TUPLE_REPACK: OpName = OpName::new_static("tuple_repack");
 
-    // SECTION: Construction and Initialization
-
-    /// Signature for a function that unwraps an option type.
-    fn unwrap_opt_sig(ty: Type) -> Signature {
-        Signature::new(Type::from(option_type(ty.clone())), ty)
-    }
-
-    /// Signature for a function that wraps an option type in to Some.
-    fn wrap_opt_sig(ty: Type) -> Signature {
-        Signature::new(ty.clone(), Type::from(option_type(ty)))
-    }
-
     /// Create a new instance of the [BarrierFuncs] struct.
-    pub(super) fn new() -> Result<Self, LowerTk2Error> {
-        let unwrap_h = {
-            let mut b = FunctionBuilder::new(Self::UNWRAP_OPT, Self::unwrap_opt_sig(qb_t()))?;
-            let [in_wire] = b.input_wires_arr();
-            let [out_wire] = b.build_expect_sum(1, option_type(qb_t()), in_wire, |_| {
-                "Value of type Option<qubit> is None so cannot apply runtime barrier to qubit."
-                    .to_string()
-            })?;
-            b.finish_hugr_with_outputs([out_wire])?
-        };
-
-        let wrap_h = {
-            let mut b = FunctionBuilder::new(Self::TAG_OPT, Self::wrap_opt_sig(qb_t()))?;
-            let [in_wire] = b.input_wires_arr();
-            let out_wire = b.make_sum(1, vec![type_row![], vec![qb_t()].into()], [in_wire])?;
-            b.finish_hugr_with_outputs([out_wire])?
-        };
-
-        let extension = Self::build_extension();
-
-        let unwrap_op: OpHashWrapper =
-            (ExtensionOp::new(extension.get_op(&Self::UNWRAP_OPT).unwrap().clone(), []).unwrap())
-                .into();
-        let tag_op: OpHashWrapper =
-            (ExtensionOp::new(extension.get_op(&Self::TAG_OPT).unwrap().clone(), []).unwrap())
-                .into();
-
-        Ok(Self {
-            extension,
-            funcs: HashMap::from_iter([(unwrap_op, unwrap_h), (tag_op, wrap_h)]),
+    pub(super) fn new() -> Self {
+        Self {
+            extension: Self::build_extension(),
+            funcs: HashMap::new(),
             qubit_ports: HashMap::new(),
-        })
+        }
     }
 
     fn build_extension() -> Arc<Extension> {
-        let extension = Extension::new_arc(
+        Extension::new_arc(
             Self::TEMP_EXT_NAME,
             hugr::extension::Version::new(0, 0, 0),
             |ext, ext_ref| {
-                // unwrap option of qubit
-                ext.add_op(
-                    Self::UNWRAP_OPT,
-                    Default::default(),
-                    Self::unwrap_opt_sig(qb_t()),
-                    ext_ref,
-                )
-                .unwrap();
+                let opt_unwrap_sig = Signature::new(Type::from(option_type(qb_t())), qb_t());
                 // produce option of qubit
                 ext.add_op(
                     Self::TAG_OPT,
                     Default::default(),
-                    Self::wrap_opt_sig(qb_t()),
+                    invert_sig(&PolyFuncTypeRV::new([], opt_unwrap_sig.clone())),
+                    ext_ref,
+                )
+                .unwrap();
+                // unwrap option of qubit
+                ext.add_op(
+                    Self::UNWRAP_OPT,
+                    Default::default(),
+                    opt_unwrap_sig,
                     ext_ref,
                 )
                 .unwrap();
@@ -272,8 +247,7 @@ impl BarrierFuncs {
                 )
                 .unwrap();
             },
-        );
-        extension
+        )
     }
     // SECTION: Core Extension and Operation Management
 
@@ -283,15 +257,15 @@ impl BarrierFuncs {
     }
 
     /// Cache a function definition for a given operation.
-    fn cache_function(
+    fn cache_function<F>(
         &mut self,
         op: &ExtensionOp,
         mangle_args: &[TypeArg],
-        func_builder: impl FnOnce(
-            &mut Self,
-            &mut FunctionBuilder<Hugr>,
-        ) -> Result<Vec<Wire>, BuildError>,
-    ) -> Result<(), BuildError> {
+        func_builder: F,
+    ) -> Result<(), BuildError>
+    where
+        F: FnOnce(&mut Self, &mut FunctionBuilder<Hugr>) -> Result<Vec<Wire>, BuildError>,
+    {
         let key = op.clone().into();
         // clippy's suggested fix does not make the borrow checker happy
         #[allow(clippy::map_entry)]
@@ -308,20 +282,18 @@ impl BarrierFuncs {
     }
 
     /// Apply a cached operation with the given name and arguments
-    fn apply_cached_operation<I>(
+    fn apply_cached_operation<I, F>(
         &mut self,
         builder: &mut impl Dataflow,
         op_name: &OpName,
         args: impl Into<Vec<TypeArg>>,
         mangle_args: &[TypeArg],
         inputs: I,
-        func_builder: impl FnOnce(
-            &mut Self,
-            &mut FunctionBuilder<Hugr>,
-        ) -> Result<Vec<Wire>, BuildError>,
+        func_builder: F,
     ) -> Result<Outputs, BuildError>
     where
         I: IntoIterator<Item = Wire>,
+        F: FnOnce(&mut Self, &mut FunctionBuilder<Hugr>) -> Result<Vec<Wire>, BuildError>,
     {
         let op = self.get_op(op_name, args).unwrap();
         self.cache_function(&op, mangle_args, func_builder)?;
@@ -329,16 +301,11 @@ impl BarrierFuncs {
     }
 
     /// Record that temporary extension operations can be lowered to function calls.
-    pub fn lower(
-        self,
-        hugr: &mut impl HugrMut<Node = Node>,
-        lowerer: &mut ReplaceTypes,
-    ) -> Result<(), LowerTk2Error> {
+    pub fn load_lowerer(self, hugr: &mut impl HugrMut<Node = Node>, lowerer: &mut ReplaceTypes) {
         for (op, func_def) in self.funcs {
             let func_node = insert_function(hugr, func_def);
             lowerer.replace_op(&op.0, NodeTemplate::Call(func_node, vec![]));
         }
-        Ok(())
     }
 
     // SECTION: Type Analysis and Unpacking Logic
@@ -377,7 +344,7 @@ impl BarrierFuncs {
                 return UnpackedRow::QbContainer(unpacked_row);
             }
 
-            // TODO should other sums containing qubits raise an error?
+            // other sums containing qubits are ignored.
         }
 
         if let Some((size, elem_ty)) = ty.as_extension().and_then(array_args) {
@@ -438,15 +405,34 @@ impl BarrierFuncs {
         builder: &mut impl Dataflow,
         opt_wire: Wire,
     ) -> Result<Wire, BuildError> {
-        let call =
-            builder.add_dataflow_op(self.get_op(&Self::UNWRAP_OPT, []).unwrap(), [opt_wire])?;
-        Ok(call.out_wire(0))
+        let mut outputs = self.apply_cached_operation(
+            builder,
+            &Self::UNWRAP_OPT,
+            [],
+            &[],
+            [opt_wire],
+            |_, func_b| {
+                let [in_wire] = func_b.input_wires_arr();
+                let [out_wire] = func_b.build_expect_sum(1, option_type(qb_t()), in_wire, |_| {
+                    "Value of type Option<qubit> is None so cannot apply runtime barrier to qubit."
+                        .to_string()
+                })?;
+                Ok(vec![out_wire])
+            },
+        )?;
+        Ok(outputs.next().unwrap())
     }
 
     /// Insert an option construction.
     fn call_wrap(&mut self, builder: &mut impl Dataflow, wire: Wire) -> Result<Wire, BuildError> {
-        let call = builder.add_dataflow_op(self.get_op(&Self::TAG_OPT, []).unwrap(), [wire])?;
-        Ok(call.out_wire(0))
+        let mut outputs =
+            self.apply_cached_operation(builder, &Self::TAG_OPT, [], &[], [wire], |_, func_b| {
+                let [in_wire] = func_b.input_wires_arr();
+                let out_wire =
+                    func_b.make_sum(1, vec![type_row![], vec![qb_t()].into()], [in_wire])?;
+                Ok(vec![out_wire])
+            })?;
+        Ok(outputs.next().unwrap())
     }
 
     /// Insert a runtime barrier operation across some qubit wires.
@@ -817,13 +803,6 @@ impl BarrierFuncs {
     }
 }
 
-fn build_runtime_barrier_op(array_size: u64) -> Result<Hugr, BuildError> {
-    let mut barr_builder = DFGBuilder::new(Signature::new_endo(array_type(array_size, qb_t())))?;
-    let array_wire = barr_builder.input().out_wire(0);
-    let out = barr_builder.add_runtime_barrier(array_wire, array_size)?;
-    barr_builder.finish_hugr_with_outputs([out])
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -903,7 +882,7 @@ mod test {
             if run_barr_func_n.is_none() {
                 // if the runtime barrier function is never called
                 // make sure it is because there are no qubits in the barrier
-                let mut bf = BarrierFuncs::new().unwrap();
+                let mut bf = BarrierFuncs::new();
                 let tuple_type = Type::new_tuple(type_row);
                 assert!(matches!(bf.unpack_type(&tuple_type), UnpackedRow::Other(_)));
                 return;
