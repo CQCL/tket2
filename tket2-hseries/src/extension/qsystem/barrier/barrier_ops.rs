@@ -24,6 +24,9 @@ use crate::extension::qsystem::{
 };
 
 use super::qtype_analyzer::{array_args, is_opt_qb};
+// use hugr::builder::{BuildError, DFGBuilder};
+// use hugr::types::{FuncType, TypeRow};
+// use hugr::{hugr, type_row};
 
 /// Wrapper for ExtensionOp that implements Hash
 #[derive(Clone, PartialEq, Eq)]
@@ -70,8 +73,8 @@ impl BarrierOperationFactory {
     pub(super) const TEMP_EXT_NAME: hugr::hugr::IdentList =
         hugr::hugr::IdentList::new_static_unchecked("__tket2.barrier.temp");
     // Temporary operation names.
-    pub(super) const UNWRAP_OPT: OpName = OpName::new_static("option_qb_unwrap");
-    pub(super) const TAG_OPT: OpName = OpName::new_static("option_qb_tag");
+    pub(super) const UNPACK_OPT: OpName = OpName::new_static("option_qb_unwrap");
+    pub(super) const REPACK_OPT: OpName = OpName::new_static("option_qb_tag");
     pub(super) const WRAPPED_BARRIER: OpName = OpName::new_static("wrapped_barrier");
     pub(super) const ARRAY_UNPACK: OpName = OpName::new_static("array_unpack");
     pub(super) const ARRAY_REPACK: OpName = OpName::new_static("array_repack");
@@ -100,7 +103,7 @@ impl BarrierOperationFactory {
                 let opt_unwrap_sig = Signature::new(Type::from(option_type(qb_t())), qb_t());
                 // produce option of qubit
                 ext.add_op(
-                    Self::TAG_OPT,
+                    Self::REPACK_OPT,
                     Default::default(),
                     invert_sig(&PolyFuncTypeRV::new([], opt_unwrap_sig.clone())),
                     ext_ref,
@@ -108,7 +111,7 @@ impl BarrierOperationFactory {
                 .unwrap();
                 // unwrap option of qubit
                 ext.add_op(
-                    Self::UNWRAP_OPT,
+                    Self::UNPACK_OPT,
                     Default::default(),
                     opt_unwrap_sig,
                     ext_ref,
@@ -239,14 +242,14 @@ impl BarrierOperationFactory {
     }
 
     /// Insert an option unwrap operation.
-    pub fn unwrap_option(
+    pub fn unpack_option(
         &mut self,
         builder: &mut impl Dataflow,
         opt_wire: Wire,
     ) -> Result<Wire, BuildError> {
         let mut outputs = self.apply_cached_operation(
             builder,
-            &Self::UNWRAP_OPT,
+            &Self::UNPACK_OPT,
             [],
             &[],
             [opt_wire],
@@ -263,18 +266,24 @@ impl BarrierOperationFactory {
     }
 
     /// Insert an option construction operation.
-    pub fn wrap_option(
+    pub fn repack_option(
         &mut self,
         builder: &mut impl Dataflow,
         wire: Wire,
     ) -> Result<Wire, BuildError> {
-        let mut outputs =
-            self.apply_cached_operation(builder, &Self::TAG_OPT, [], &[], [wire], |_, func_b| {
+        let mut outputs = self.apply_cached_operation(
+            builder,
+            &Self::REPACK_OPT,
+            [],
+            &[],
+            [wire],
+            |_, func_b| {
                 let [in_wire] = func_b.input_wires_arr();
                 let out_wire =
                     func_b.make_sum(1, vec![hugr::type_row![], vec![qb_t()].into()], [in_wire])?;
                 Ok(vec![out_wire])
-            })?;
+            },
+        )?;
         Ok(outputs.next().unwrap())
     }
 
@@ -516,7 +525,7 @@ impl BarrierOperationFactory {
             return Ok(vec![container_wire]);
         }
         if is_opt_qb(typ) {
-            return Ok(vec![self.unwrap_option(builder, container_wire)?]);
+            return Ok(vec![self.unpack_option(builder, container_wire)?]);
         }
         if let Some((n, elem_ty)) = typ.as_extension().and_then(array_args) {
             return self.unpack_array(builder, container_wire, n, elem_ty);
@@ -544,7 +553,7 @@ impl BarrierOperationFactory {
         }
         if is_opt_qb(typ) {
             debug_assert!(unpacked_wires.len() == 1);
-            return self.wrap_option(builder, unpacked_wires[0]);
+            return self.repack_option(builder, unpacked_wires[0]);
         }
         if let Some((n, elem_ty)) = typ.as_extension().and_then(array_args) {
             return self.repack_array(builder, unpacked_wires, n, elem_ty);
@@ -572,4 +581,88 @@ pub fn build_runtime_barrier_op(array_size: u64) -> Result<Hugr, BuildError> {
     let array_wire = barr_builder.input().out_wire(0);
     let out = barr_builder.add_runtime_barrier(array_wire, array_size)?;
     barr_builder.finish_hugr_with_outputs([out])
+}
+
+#[cfg(test)]
+mod tests {
+    use hugr::extension::prelude::bool_t;
+
+    use super::*;
+
+    #[test]
+    fn test_barrier_op_factory_creation() {
+        let factory = BarrierOperationFactory::new();
+        assert_eq!(factory.funcs.len(), 0);
+    }
+
+    #[test]
+    fn test_option_unwrap_wrap() -> Result<(), BuildError> {
+        let mut factory = BarrierOperationFactory::new();
+        let mut builder = DFGBuilder::new(Signature::new_endo(Type::from(option_type(qb_t()))))?;
+
+        let input = builder.input().out_wire(0);
+        let unwrapped = factory.unpack_option(&mut builder, input)?;
+        let wrapped = factory.repack_option(&mut builder, unwrapped)?;
+
+        let hugr = builder.finish_hugr_with_outputs([wrapped])?;
+        assert!(hugr.validate().is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn test_array_unpack_repack() -> Result<(), BuildError> {
+        let mut factory = BarrierOperationFactory::new();
+        let array_size = 3;
+        let array_type = array_type(array_size, qb_t());
+
+        let mut builder = DFGBuilder::new(Signature::new_endo(array_type))?;
+
+        let input = builder.input().out_wire(0);
+        let unpacked = factory.unpack_array(&mut builder, input, array_size, &qb_t())?;
+        assert_eq!(unpacked.len(), array_size as usize);
+
+        let repacked = factory.repack_array(&mut builder, unpacked, array_size, &qb_t())?;
+        let hugr = builder.finish_hugr_with_outputs([repacked])?;
+        assert!(hugr.validate().is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn test_tuple_unpack_repack() -> Result<(), BuildError> {
+        let mut factory = BarrierOperationFactory::new();
+        let tuple_row = vec![qb_t(), bool_t()];
+        let tuple_type = Type::new_tuple(tuple_row.clone());
+
+        let mut builder = DFGBuilder::new(Signature::new_endo(tuple_type))?;
+
+        let input = builder.input().out_wire(0);
+        let unpacked = factory.unpack_tuple(&mut builder, input, &tuple_row)?;
+        assert_eq!(unpacked.len(), tuple_row.len());
+
+        let repacked = factory.repack_tuple(&mut builder, unpacked, &tuple_row)?;
+        let hugr = builder.finish_hugr_with_outputs([repacked])?;
+        assert!(hugr.validate().is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_barrier() -> Result<(), BuildError> {
+        let mut factory = BarrierOperationFactory::new();
+        let mut builder = DFGBuilder::new(Signature::new_endo(vec![qb_t(), qb_t(), qb_t()]))?;
+
+        let inputs = builder.input().outputs().collect::<Vec<_>>();
+        let outputs = factory.build_runtime_barrier(&mut builder, inputs)?;
+
+        let hugr = builder.finish_hugr_with_outputs(outputs)?;
+        assert!(hugr.validate().is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_runtime_barrier_op() -> Result<(), BuildError> {
+        let array_size = 4;
+        let hugr = build_runtime_barrier_op(array_size)?;
+        assert!(hugr.validate().is_ok());
+        Ok(())
+    }
 }
