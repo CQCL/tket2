@@ -28,20 +28,10 @@ use std::sync::Arc;
 use super::lower::insert_function;
 use super::{LowerTk2Error, QSystemOpBuilder};
 
-/// If a sum is an option of a single type, return the type.
-fn as_unary_option(sum: &SumType) -> Option<&TypeRV> {
-    // TODO upstream to impl SumType
-    let vars: Vec<_> = sum.variants().collect();
-    match &vars[..] {
-        [x, y] if x.is_empty() && y.len() == 1 => Some(&y[0]),
-        _ => None,
-    }
-}
-
 /// If a type is an option of qubit.
 fn is_opt_qb(ty: &Type) -> bool {
     if let Some(sum) = ty.as_sum() {
-        if let Some(inner) = as_unary_option(sum) {
+        if let Some(inner) = sum.as_unary_option() {
             return inner == &qb_t();
         }
     }
