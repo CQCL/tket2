@@ -62,6 +62,25 @@ fn build_runtime_barrier_op(array_size: u64) -> Result<Hugr, BuildError> {
     barr_builder.finish_hugr_with_outputs([out])
 }
 
+/// If the type is an array of qubits, insert a runtime barrier operation
+fn array_barrier_shortcut(
+    hugr: &mut impl HugrMut<Node = Node>,
+    parent: Node,
+    typ: &Type,
+    target: Target,
+) -> Option<Result<(), LowerTk2Error>> {
+    typ.as_extension()
+        .and_then(|ext| array_args(ext))
+        .and_then(|(size, elem_ty)| (elem_ty == &qb_t()).then_some(size))
+        .map(|size| {
+            let barr_hugr = build_runtime_barrier_op(size)?;
+
+            let insert = InsertCut::new(parent, vec![target], barr_hugr);
+            insert.apply_hugr_mut(hugr)?;
+            Ok(())
+        })
+}
+
 type Target = (Node, IncomingPort);
 
 #[derive(Clone, PartialEq, Eq)]
@@ -380,19 +399,13 @@ impl BarrierFuncs {
             .type_row
             .iter()
             .enumerate()
-            .filter_map(|(i, typ)| {
-                let wc = self.unpack_type(typ);
-
-                match wc {
-                    UnpackedRow::Other(_) => None,
-                    UnpackedRow::QbContainer(_) => {
-                        let port = OutgoingPort::from(i);
-                        let target = hugr
-                            .single_linked_input(node, port)
-                            .expect("linearity violation.");
-                        Some((typ.clone(), target))
-                    }
-                }
+            .filter(|&(_, typ)| self.unpack_type(typ).is_qb_container())
+            .map(|(i, typ)| {
+                let port = OutgoingPort::from(i);
+                let target = hugr
+                    .single_linked_input(node, port)
+                    .expect("linearity violation.");
+                (typ.clone(), target)
             })
             .collect()
     }
@@ -467,7 +480,7 @@ impl BarrierFuncs {
         size: u64,
         elem_ty: &Type,
     ) -> Result<Vec<Wire>, BuildError> {
-        let Ok(args) = self.array_args(size, elem_ty) else {
+        let Some(args) = self.array_op_args(size, elem_ty) else {
             return Ok(vec![array_wire]);
         };
 
@@ -492,19 +505,18 @@ impl BarrierFuncs {
         Ok(outputs.collect_vec())
     }
 
-    fn array_args(&mut self, size: u64, elem_ty: &Type) -> Result<[TypeArg; 3], ()> {
-        let row = match self.unpack_type(&array_type(size, elem_ty.clone())) {
-            UnpackedRow::QbContainer(row) => row,
-            _ => return Err(()),
-        };
-        let args = [
-            size.into(),
-            elem_ty.clone().into(),
-            TypeArg::Sequence {
-                elems: row.into_iter().map_into().collect(),
-            },
-        ];
-        Ok(args)
+    /// If array row contains qubits return type args for the packing operations.
+    fn array_op_args(&mut self, size: u64, elem_ty: &Type) -> Option<[TypeArg; 3]> {
+        match self.unpack_type(&array_type(size, elem_ty.clone())) {
+            UnpackedRow::QbContainer(row) => Some([
+                size.into(),
+                elem_ty.clone().into(),
+                TypeArg::Sequence {
+                    elems: row.into_iter().map_into().collect(),
+                },
+            ]),
+            _ => None,
+        }
     }
 
     /// Repack an array from wires.
@@ -515,7 +527,7 @@ impl BarrierFuncs {
         size: u64,
         elem_ty: &Type,
     ) -> Result<Wire, BuildError> {
-        let Ok(args) = self.array_args(size, elem_ty) else {
+        let Some(args) = self.array_op_args(size, elem_ty) else {
             return Ok(elem_wires
                 .into_iter()
                 .next()
@@ -558,7 +570,7 @@ impl BarrierFuncs {
         tuple_row: &[Type],
     ) -> Result<Vec<Wire>, BuildError> {
         let tuple_row: Vec<_> = tuple_row.to_vec();
-        let Ok(args) = self.tuple_args(tuple_row.as_slice()) else {
+        let Some(args) = self.tuple_op_args(tuple_row.as_slice()) else {
             return Ok(vec![tuple_wire]);
         };
 
@@ -586,20 +598,19 @@ impl BarrierFuncs {
         Ok(outputs.collect_vec())
     }
 
-    fn tuple_args(&mut self, tuple_row: &[Type]) -> Result<[TypeArg; 2], ()> {
-        let unpacked_row = match self.unpack_type(&Type::new_tuple(tuple_row.to_vec())) {
-            UnpackedRow::QbContainer(row) => row,
-            _ => return Err(()),
-        };
-        let args = [
-            TypeArg::Sequence {
-                elems: tuple_row.iter().cloned().map_into().collect(),
-            },
-            TypeArg::Sequence {
-                elems: unpacked_row.into_iter().map_into().collect(),
-            },
-        ];
-        Ok(args)
+    /// If tuple row contains qubits return type args for the packing operations.
+    fn tuple_op_args(&mut self, tuple_row: &[Type]) -> Option<[TypeArg; 2]> {
+        match self.unpack_type(&Type::new_tuple(tuple_row.to_vec())) {
+            UnpackedRow::QbContainer(row) => Some([
+                TypeArg::Sequence {
+                    elems: tuple_row.iter().cloned().map_into().collect(),
+                },
+                TypeArg::Sequence {
+                    elems: row.into_iter().map_into().collect(),
+                },
+            ]),
+            _ => None,
+        }
     }
 
     /// Repack a tuple from wires.
@@ -610,7 +621,7 @@ impl BarrierFuncs {
         tuple_row: &[Type],
     ) -> Result<Wire, BuildError> {
         let tuple_row: Vec<_> = tuple_row.to_vec();
-        let Ok(args) = self.tuple_args(tuple_row.as_slice()) else {
+        let Some(args) = self.tuple_op_args(tuple_row.as_slice()) else {
             return Ok(elem_wires
                 .into_iter()
                 .next()
@@ -712,21 +723,10 @@ impl BarrierFuncs {
         }
         let parent = hugr.get_parent(b_node).expect("Barrier can't be root.");
 
-        if let [(typ, (targ_n, targ_p))] = filtered_qbs.as_slice() {
+        if let [(typ, target)] = filtered_qbs.as_slice() {
             // If the barrier is over a single array of qubits
             // we can insert a runtime barrier op directly.
-            let shortcut = typ
-                .as_extension()
-                .and_then(|ext| array_args(ext))
-                .and_then(|(size, elem_ty)| (elem_ty == &qb_t()).then_some(size))
-                .map(|size| {
-                    let barr_hugr = build_runtime_barrier_op(size)?;
-
-                    let insert = InsertCut::new(parent, vec![(*targ_n, *targ_p)], barr_hugr);
-                    insert.apply_hugr_mut(hugr)?;
-                    Ok(())
-                });
-            if let Some(res) = shortcut {
+            if let Some(res) = array_barrier_shortcut(hugr, parent, typ, *target) {
                 return res;
             }
         }
@@ -766,13 +766,13 @@ impl BarrierFuncs {
             })
             .collect();
 
-        let qubit_wires = tagged_wires
+        let qubit_wires: Vec<_> = tagged_wires
             .iter()
             .filter(|(is_qb, _)| *is_qb)
             .map(|(_, w)| *w)
             .collect();
 
-        // call the runtime barrier no all the wires
+        // call the runtime barrier on all the wires
         let mut r_bar_outs = self.call_wrapped_runtime_barrier(&mut dfg_b, qubit_wires)?;
 
         // replace the qubit wires with the runtime barrier outputs
