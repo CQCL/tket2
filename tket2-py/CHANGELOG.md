@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/CQCL/tket2/compare/tket2-py-v0.8.1...tket2-py-v0.8.2) (2025-05-08)
+
+
+### Features
+
+* **tket2-py:** Expose new modules in python ([#860](https://github.com/CQCL/tket2/issues/860)) ([4bfb3ff](https://github.com/CQCL/tket2/commit/4bfb3ff26f42b8dbf8e3fe29b4d451201cfbc989))
+
 ## [0.8.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.8.0...tket2-py-v0.8.1) (2025-03-18)
 
 
