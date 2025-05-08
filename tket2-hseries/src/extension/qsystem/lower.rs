@@ -383,8 +383,8 @@ mod test {
         // dfg, input, output, alloc + (10 for unwrap), phasedx, rz, toturns, fmul, phasedx, free +
         // 5x(float + load), measure_reset, conditional, case(input, output) * 2, flip
         // (phasedx + 2*(float + load))
-        // + 33 for the barrier array wrapping, popping and option unwrapping
-        assert_eq!(h.num_nodes(), 90);
+        // + 21 for the barrier array wrapping, popping and option unwrapping
+        assert_eq!(h.num_nodes(), 78);
         assert_eq!(check_lowered(&h), Ok(()));
         if let Err(e) = h.validate() {
             panic!("{}", e);

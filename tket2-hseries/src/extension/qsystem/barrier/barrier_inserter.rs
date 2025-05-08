@@ -1,6 +1,6 @@
 use hugr::algorithms::replace_types::NodeTemplate;
 use hugr::builder::{Container, DataflowHugr};
-use hugr::extension::prelude::{qb_t, UnpackTuple};
+use hugr::extension::prelude::qb_t;
 use hugr::ops::OpTrait;
 use hugr::types::{Signature, Type};
 use hugr::{
@@ -89,16 +89,11 @@ impl BarrierInserter {
         // Create a signature for an endofunction on the container row
         let mut dfg_b = DFGBuilder::new(Signature::new_endo(container_row.clone()))?;
 
-        // Pack the container row in to a tuple to use the tuple unpacking logic
-        let tuple_type = Type::new_tuple(container_row.clone());
-
-        let input = dfg_b.input();
-        let tuple = dfg_b.make_tuple(input.outputs())?;
-
-        // Unpack the tuple into wires
+        // Unpack the container row directly into wires
+        let inputs = dfg_b.input_wires();
         let unpacked_wires = self
             .op_factory
-            .unpack_container(&mut dfg_b, &tuple_type, tuple)?;
+            .unpack_row(&mut dfg_b, &container_row, inputs)?;
 
         // Tag the qubit wires
         let tagged_wires: Vec<(bool, Wire)> = unpacked_wires
@@ -126,33 +121,22 @@ impl BarrierInserter {
             .build_runtime_barrier(&mut dfg_b, qubit_wires)?;
 
         // Replace the qubit wires with the runtime barrier outputs
-        let repack_wires = tagged_wires
-            .into_iter()
-            .map(|(is_qb, w)| {
-                if is_qb {
-                    barrier_outputs
-                        .next()
-                        .expect("Not enough runtime barrier outputs.")
-                } else {
-                    w
-                }
-            })
-            .collect();
+        let repack_wires = tagged_wires.into_iter().map(|(is_qb, w)| {
+            if is_qb {
+                barrier_outputs
+                    .next()
+                    .expect("Not enough runtime barrier outputs.")
+            } else {
+                w
+            }
+        });
 
-        // Repack the wires into a tuple
-        let repacked_tuple =
+        // Repack the wires directly into the container row
+        let repacked_container_wires =
             self.op_factory
-                .repack_container(&mut dfg_b, &tuple_type, repack_wires)?;
+                .repack_row(&mut dfg_b, &container_row, repack_wires)?;
 
-        // Separate back into a row
-        let new_container_wires = dfg_b
-            .add_dataflow_op(
-                UnpackTuple::new(container_row.clone().into()),
-                [repacked_tuple],
-            )?
-            .outputs();
-
-        let h = dfg_b.finish_hugr_with_outputs(new_container_wires)?;
+        let h = dfg_b.finish_hugr_with_outputs(repacked_container_wires)?;
         Ok(h)
     }
 
@@ -341,7 +325,7 @@ mod tests {
         // Check that we've registered operations in the factory
         assert_eq!(
             inserter.op_factory.funcs.len(),
-            5, // runtime barrier + 2 for array + 2 for tuple
+            3, // runtime barrier + array unpack + array repack
         );
 
         Ok(())

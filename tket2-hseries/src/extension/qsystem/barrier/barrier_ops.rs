@@ -426,6 +426,42 @@ impl BarrierOperationFactory {
         Some(args)
     }
 
+    /// Unpack a row of types into a flat list of wires containing all qubits and remaining types
+    pub fn unpack_row(
+        &mut self,
+        builder: &mut impl Dataflow,
+        types: &[Type],
+        wires: impl IntoIterator<Item = Wire>,
+    ) -> Result<Vec<Wire>, BuildError> {
+        // Process each type in the row with its corresponding wire
+        let unpacked: Result<Vec<_>, _> = types
+            .iter()
+            .zip(wires)
+            .map(|(typ, wire)| self.unpack_container(builder, typ, wire))
+            .collect();
+
+        // Flatten the nested vector of wires
+        Ok(unpacked?.concat())
+    }
+
+    /// Repack a flat list of wires into a row of structured types
+    pub fn repack_row(
+        &mut self,
+        builder: &mut impl Dataflow,
+        types: &[Type],
+        wires: impl IntoIterator<Item = Wire>,
+    ) -> Result<Vec<Wire>, BuildError> {
+        let mut wires = wires.into_iter();
+        types
+            .iter()
+            .map(|typ| {
+                let wire_count = self.type_analyzer.unpack_type(typ).num_wires();
+                let type_wires = wires.by_ref().take(wire_count).collect();
+                self.repack_container(builder, typ, type_wires)
+            })
+            .collect()
+    }
+
     /// Unpack a tuple into individual wires
     pub fn unpack_tuple(
         &mut self,
@@ -447,15 +483,12 @@ impl BarrierOperationFactory {
             [tuple_wire],
             |slf, func_b| {
                 let w = func_b.input().out_wire(0);
-                let unpacked_wires = func_b
+                let unpacked_tuple_wires = func_b
                     .add_dataflow_op(UnpackTuple::new(tuple_row.clone().into()), [w])?
-                    .outputs();
-                let unpacked: Vec<_> = unpacked_wires
-                    .into_iter()
-                    .zip(tuple_row.clone())
-                    .map(|(wire, elem_ty)| slf.unpack_container(func_b, &elem_ty, wire))
-                    .collect::<Result<Vec<_>, _>>()?
-                    .concat();
+                    .outputs()
+                    .collect::<Vec<_>>();
+
+                let unpacked = slf.unpack_row(func_b, &tuple_row, unpacked_tuple_wires)?;
                 Ok(unpacked)
             },
         )?;
@@ -481,11 +514,6 @@ impl BarrierOperationFactory {
             }
         };
 
-        let elem_num_wires: Vec<_> = tuple_row
-            .iter()
-            .map(|t| self.type_analyzer.unpack_type(t).num_wires())
-            .collect();
-
         let mut outputs = self.apply_cached_operation(
             builder,
             &Self::TUPLE_REPACK,
@@ -494,19 +522,10 @@ impl BarrierOperationFactory {
             elem_wires,
             |slf, func_b| {
                 let in_wires = func_b.input().outputs().collect::<Vec<_>>();
-                let mut elem_out_wires = Vec::with_capacity(tuple_row.len());
-                let mut start_idx = 0;
 
-                for (elem_ty, num_wires) in tuple_row.iter().zip(elem_num_wires) {
-                    let end_idx = start_idx + num_wires;
-                    let elem_in_wires = in_wires[start_idx..end_idx].to_vec();
-                    start_idx = end_idx;
+                let repacked_elem_wires = slf.repack_row(func_b, &tuple_row, in_wires)?;
+                let tuple_wire = func_b.make_tuple(repacked_elem_wires)?;
 
-                    let repacked = slf.repack_container(func_b, elem_ty, elem_in_wires)?;
-                    elem_out_wires.push(repacked);
-                }
-
-                let tuple_wire = func_b.make_tuple(elem_out_wires)?;
                 Ok(vec![tuple_wire])
             },
         )?;
