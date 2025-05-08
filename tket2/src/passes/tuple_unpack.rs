@@ -133,7 +133,7 @@ fn remove_pack_unpack<T: HugrView<Node = Node>>(
             .add_dataflow_op(op, replacement.input_wires())
             .unwrap()
             .outputs_arr();
-        outputs.extend(std::iter::repeat(tuple).take(num_other_outputs))
+        outputs.extend(std::iter::repeat_n(tuple, num_other_outputs))
     }
 
     let replacement = replacement
