@@ -68,7 +68,7 @@ See [DEVELOPMENT.md][] for instructions on setting up the development environmen
 This project is licensed under Apache License, Version 2.0 ([LICENSE][] or http://www.apache.org/licenses/LICENSE-2.0).
 
   [build_status]: https://github.com/CQCL/tket2/workflows/Continuous%20integration/badge.svg?branch=main
-  [msrv]: https://img.shields.io/badge/rust-1.75.0%2B-blue.svg
+  [msrv]: https://img.shields.io/crates/msrv/tket2
   [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket2?logo=codecov
   [hugr]: https://lib.rs/crates/hugr
   [hugr Builder]: https://docs.rs/hugr/latest/hugr/builder/index.html
