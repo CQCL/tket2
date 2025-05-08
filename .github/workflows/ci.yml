@@ -190,7 +190,7 @@ jobs:
       matrix:
         # Stable is covered by `tests-stable-no-features` and `tests-stable-all-features`
         # Nightly is covered by `tests-nightly-coverage`
-        rust: ['1.75', beta]
+        rust: ['1.85', beta]
     name: tests (Rust ${{ matrix.rust }})
     steps:
       - uses: actions/checkout@v4
