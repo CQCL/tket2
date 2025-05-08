@@ -1,13 +1,13 @@
 //! Bindings for rust-defined operations
 
 use derive_more::{From, Into};
-use hugr::ops::custom::ExtensionOp;
+use hugr::{extension::simple_op::MakeExtensionOp, ops::custom::ExtensionOp};
 use pyo3::prelude::*;
 use std::fmt;
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 
-use hugr::ops::{NamedOp, OpType};
+use hugr::ops::OpType;
 use tket2::{Pauli, Tk2Op};
 
 /// The module definition
@@ -53,7 +53,7 @@ impl PyTk2Op {
     /// Get the string name of the operation.
     #[getter]
     pub fn name(&self) -> String {
-        self.op.name().to_string()
+        self.op.op_id().to_string()
     }
 
     /// Get the qualified name of the operation, including the extension.
@@ -249,6 +249,6 @@ impl PyExtensionOp {
 
     #[getter]
     fn name(&self) -> String {
-        self.0.name().to_string()
+        self.0.def().name().to_string()
     }
 }

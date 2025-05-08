@@ -27,7 +27,6 @@ use super::{
     METADATA_Q_REGISTERS,
 };
 use crate::extension::rotation::{rotation_type, RotationOp};
-use crate::extension::TKET1_EXTENSION_ID;
 use crate::serialize::pytket::METADATA_INPUT_PARAMETERS;
 use crate::symbolic_constant_op;
 
@@ -54,8 +53,7 @@ impl Tk1Decoder {
         let num_qubits = serialcirc.qubits.len();
         let num_bits = serialcirc.bits.len();
         let sig =
-            Signature::new_endo([vec![qb_t(); num_qubits], vec![bool_t(); num_bits]].concat())
-                .with_extension_delta(TKET1_EXTENSION_ID);
+            Signature::new_endo([vec![qb_t(); num_qubits], vec![bool_t(); num_bits]].concat());
 
         let name = serialcirc.name.clone().unwrap_or_default();
         let mut dfg = FunctionBuilder::new(name, sig).unwrap();

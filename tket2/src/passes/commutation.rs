@@ -1,7 +1,9 @@
 use std::{collections::HashMap, rc::Rc};
 
 use derive_more::{Display, Error, From};
-use hugr::hugr::{hugrmut::HugrMut, HugrError, Rewrite};
+use hugr::hugr::patch::PatchVerification;
+use hugr::hugr::Patch;
+use hugr::hugr::{hugrmut::HugrMut, HugrError};
 use hugr::{CircuitUnit, Direction, HugrView, Node, Port, PortIndex};
 use itertools::Itertools;
 use portgraph::PortOffset;
@@ -208,18 +210,27 @@ struct PullForward {
     new_nexts: HashMap<Qb, Rc<ComCommand>>,
 }
 
-impl Rewrite for PullForward {
+impl PatchVerification for PullForward {
+    type Node = Node;
     type Error = PullForwardError;
-
-    type ApplyResult = ();
-
-    const UNCHANGED_ON_FAILURE: bool = false;
 
     fn verify(&self, _h: &impl HugrView) -> Result<(), Self::Error> {
         unimplemented!()
     }
 
-    fn apply(self, h: &mut impl HugrMut) -> Result<Self::ApplyResult, Self::Error> {
+    fn invalidation_set(&self) -> impl Iterator<Item = Node> {
+        let cmd_node = std::iter::once(self.command.node());
+        let next_nodes = self.new_nexts.values().map(|c| c.node());
+        cmd_node.chain(next_nodes)
+    }
+}
+
+impl<H: HugrMut<Node = Node>> Patch<H> for PullForward {
+    type Outcome = ();
+
+    const UNCHANGED_ON_FAILURE: bool = false;
+
+    fn apply(self, h: &mut H) -> Result<Self::Outcome, Self::Error> {
         let Self { command, new_nexts } = self;
 
         let qb_port = |command: &ComCommand, qb, direction| {
@@ -279,12 +290,6 @@ impl Rewrite for PullForward {
         }
         Ok(())
     }
-
-    fn invalidation_set(&self) -> impl Iterator<Item = Node> {
-        let cmd_node = std::iter::once(self.command.node());
-        let next_nodes = self.new_nexts.values().map(|c| c.node());
-        cmd_node.chain(next_nodes)
-    }
 }
 
 /// Pass which greedily commutes operations forwards in order to reduce depth.
@@ -316,7 +321,7 @@ pub fn apply_greedy_commutation(circ: &mut Circuit) -> Result<u32, PullForwardEr
                 slice_vec[destination][q.index()] = com;
             }
             let rewrite = PullForward { command, new_nexts };
-            circ.hugr_mut().apply_rewrite(rewrite)?;
+            circ.hugr_mut().apply_patch(rewrite)?;
             count += 1;
         }
     }
@@ -597,7 +602,7 @@ mod test {
         #[case] should_reduce: bool,
         #[case] expected_moves: u32,
     ) {
-        let node_count = case.hugr().node_count();
+        let node_count = case.hugr().num_nodes();
         let depth_before = depth(&case);
         let move_count = apply_greedy_commutation(&mut case).unwrap();
         case.hugr_mut().validate().unwrap();
@@ -618,7 +623,7 @@ mod test {
         }
 
         assert_eq!(
-            case.hugr().node_count(),
+            case.hugr().num_nodes(),
             node_count,
             "depth optimisation should not change the number of nodes."
         )

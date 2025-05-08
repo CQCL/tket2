@@ -3,7 +3,7 @@
 use hugr::extension::prelude::{bool_t, qb_t};
 
 use hugr::ops::custom::ExtensionOp;
-use hugr::ops::{NamedOp, OpType};
+use hugr::ops::OpType;
 use hugr::types::{Signature, TypeArg};
 
 use hugr::IncomingPort;
@@ -80,7 +80,7 @@ impl OpaqueTk1Op {
     /// contains invalid data.
     pub fn try_from_tket2(op: &OpType) -> Result<Option<Self>, OpConvertError> {
         // TODO: Check `extensions.contains(&TKET1_EXTENSION_ID)`?
-        if op.name() != format!("{TKET1_EXTENSION_ID}.{TKET1_OP_NAME}") {
+        if op.to_string() != format!("{TKET1_EXTENSION_ID}.{TKET1_OP_NAME}") {
             return Ok(None);
         }
         let OpType::ExtensionOp(custom_op) = op else {
@@ -114,7 +114,6 @@ impl OpaqueTk1Op {
         .concat();
         let params = vec![rotation_type(); self.num_params];
         Signature::new([linear.clone(), params].concat(), linear)
-            .with_extension_delta(TKET1_EXTENSION_ID)
     }
 
     /// Returns the ports corresponding to parameters for this operation.

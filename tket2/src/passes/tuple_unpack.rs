@@ -4,7 +4,8 @@ use core::panic;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::{MakeTuple, TupleOpDef};
-use hugr::ops::{NamedOp, OpTrait, OpType};
+use hugr::extension::simple_op::MakeExtensionOp;
+use hugr::ops::{OpTrait, OpType};
 use hugr::types::Type;
 use hugr::{HugrView, Node};
 use itertools::Itertools;
@@ -25,14 +26,14 @@ pub fn find_tuple_unpack_rewrites(
 ///
 /// Boilerplate required due to https://github.com/CQCL/hugr/issues/1496
 fn is_make_tuple(optype: &OpType) -> bool {
-    optype.name() == format!("prelude.{}", TupleOpDef::MakeTuple.name())
+    optype.to_string() == format!("prelude.{}", TupleOpDef::MakeTuple.op_id())
 }
 
 /// Returns true if the given optype is an UnpackTuple operation.
 ///
 /// Boilerplate required due to https://github.com/CQCL/hugr/issues/1496
 fn is_unpack_tuple(optype: &OpType) -> bool {
-    optype.name() == format!("prelude.{}", TupleOpDef::UnpackTuple.name())
+    optype.to_string() == format!("prelude.{}", TupleOpDef::UnpackTuple.op_id())
 }
 
 fn make_rewrite<T: HugrView<Node = Node>>(

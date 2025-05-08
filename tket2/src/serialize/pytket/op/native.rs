@@ -200,7 +200,6 @@ impl NativeOp {
 #[cfg(test)]
 mod cfg {
     use super::*;
-    use hugr::ops::NamedOp;
     use rstest::rstest;
     use strum::IntoEnumIterator;
 
@@ -221,7 +220,7 @@ mod cfg {
             let Some(native_op2) = NativeOp::try_from_serial_optype(serial_op.clone()) else {
                 panic!(
                     "{} serialises into {serial_op:?}, but failed to be deserialised.",
-                    tk2op.name()
+                    tk2op.exposed_name()
                 )
             };
 

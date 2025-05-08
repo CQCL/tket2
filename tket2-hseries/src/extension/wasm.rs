@@ -52,17 +52,17 @@ use std::sync::{Arc, Weak};
 use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
-        prelude::{option_type, usize_t, PRELUDE_ID},
+        prelude::{option_type, usize_t},
         simple_op::{
             try_from_name, HasConcrete, HasDef, MakeExtensionOp, MakeOpDef, MakeRegisteredOp,
             OpLoadError,
         },
-        ExtensionBuildError, ExtensionId, ExtensionRegistry, ExtensionSet, SignatureError,
-        SignatureFunc, TypeDefBound, Version, PRELUDE,
+        ExtensionBuildError, ExtensionId, ExtensionRegistry, SignatureError, SignatureFunc,
+        TypeDefBound, Version, PRELUDE,
     },
     ops::{
         constant::{downcast_equal_consts, CustomConst, ValueName},
-        ExtensionOp, NamedOp, OpName, OpType,
+        ExtensionOp, OpName, OpType,
     },
     type_row,
     types::{
@@ -91,7 +91,6 @@ lazy_static! {
     /// The `tket2.wasm` extension.
     pub static ref EXTENSION: Arc<Extension> =
         Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
-        ext.add_requirements(ExtensionSet::from_iter([futures::EXTENSION_ID, PRELUDE_ID]));
         add_wasm_type_defs(ext, ext_ref).unwrap();
         WasmOpDef::load_all_ops(ext, ext_ref, ).unwrap();
     });
@@ -372,6 +371,10 @@ fn type_row_rv_into_type_arg(row: TypeRowRV) -> TypeArg {
 }
 
 impl MakeOpDef for WasmOpDef {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        <&'static str>::from(self).into()
+    }
+
     fn init_signature(&self, extension_ref: &Weak<Extension>) -> SignatureFunc {
         let context_type = WasmType::Context.get_type(extension_ref);
         let module_type = WasmType::Module.get_type(extension_ref);
@@ -540,7 +543,7 @@ impl TryFrom<&OpType> for WasmOpDef {
         Self::from_op(
             value
                 .as_extension_op()
-                .ok_or(OpLoadError::NotMember(value.name().into()))?,
+                .ok_or(OpLoadError::NotMember(value.to_string()))?,
         )
     }
 }
@@ -591,18 +594,15 @@ impl WasmOp {
     }
 }
 
-impl NamedOp for WasmOp {
-    fn name(&self) -> OpName {
-        let n: &'static str = self.wasm_op_def().into();
-        n.into()
-    }
-}
-
 impl HasDef for WasmOp {
     type Def = WasmOpDef;
 }
 
 impl MakeExtensionOp for WasmOp {
+    fn op_id(&self) -> OpName {
+        self.wasm_op_def().opdef_id()
+    }
+
     fn from_extension_op(ext_op: &ExtensionOp) -> Result<Self, OpLoadError>
     where
         Self: Sized,
@@ -659,10 +659,6 @@ impl CustomConst for ConstWasmModule {
     }
     fn equal_consts(&self, other: &dyn CustomConst) -> bool {
         downcast_equal_consts(self, other)
-    }
-
-    fn extension_reqs(&self) -> ExtensionSet {
-        ExtensionSet::singleton(EXTENSION_ID)
     }
 
     fn get_type(&self) -> Type {
@@ -766,7 +762,6 @@ mod test {
         };
         assert_eq!(m1.name(), "wasm:test_mod");
         assert!(m1.equal_consts(&m2));
-        assert_eq!(m1.extension_reqs(), ExtensionSet::singleton(EXTENSION_ID));
     }
 
     #[rstest]
@@ -848,7 +843,7 @@ mod test {
         ));
         assert_eq!(
             op.to_extension_op().unwrap().signature(),
-            Signature::new(module_ty, func_ty).with_extension_delta(EXTENSION_ID)
+            Signature::new(module_ty, func_ty)
         );
     }
 

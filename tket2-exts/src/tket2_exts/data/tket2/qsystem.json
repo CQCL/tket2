@@ -1,13 +1,7 @@
 {
   "version": "0.3.0",
   "name": "tket2.qsystem",
-  "runtime_reqs": [
-    "arithmetic.float.types",
-    "prelude",
-    "tket2.futures"
-  ],
   "types": {},
-  "values": {},
   "operations": {
     "LazyMeasure": {
       "extension": "tket2.qsystem",
@@ -38,8 +32,7 @@
               ],
               "bound": "A"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -76,8 +69,7 @@
               ],
               "bound": "A"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -100,8 +92,7 @@
               "s": "Unit",
               "size": 2
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -127,8 +118,7 @@
               "s": "Unit",
               "size": 2
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -163,8 +153,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -181,8 +170,7 @@
               "t": "Q"
             }
           ],
-          "output": [],
-          "runtime_reqs": []
+          "output": []
         }
       },
       "binary": false
@@ -203,8 +191,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -232,8 +219,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -259,8 +245,7 @@
                 ]
               ]
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -294,8 +279,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false

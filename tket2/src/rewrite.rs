@@ -12,12 +12,13 @@ pub use ecc_rewriter::ECCRewriter;
 use derive_more::{From, Into};
 use hugr::core::HugrNode;
 use hugr::hugr::hugrmut::HugrMut;
+use hugr::hugr::patch::{simple_replace, PatchVerification};
 use hugr::hugr::views::sibling_subgraph::{InvalidReplacement, InvalidSubgraph};
 use hugr::hugr::views::ExtractHugr;
-use hugr::ops::OpType;
+use hugr::hugr::Patch;
 use hugr::types::Signature;
 use hugr::{
-    hugr::{views::SiblingSubgraph, Rewrite, SimpleReplacementError},
+    hugr::{views::SiblingSubgraph, SimpleReplacementError},
     SimpleReplacement,
 };
 use hugr::{Hugr, HugrView, Node};
@@ -137,8 +138,8 @@ impl CircuitRewrite {
     #[inline]
     pub fn apply(
         self,
-        circ: &mut Circuit<impl HugrMut>,
-    ) -> Result<Vec<(Node, OpType)>, SimpleReplacementError> {
+        circ: &mut Circuit<impl HugrMut<Node = Node>>,
+    ) -> Result<simple_replace::Outcome<Node>, SimpleReplacementError> {
         circ.add_rewrite_trace(&self);
         self.0.apply(circ.hugr_mut())
     }
@@ -147,8 +148,8 @@ impl CircuitRewrite {
     #[inline]
     pub fn apply_notrace(
         self,
-        circ: &mut Circuit<impl HugrMut>,
-    ) -> Result<Vec<(Node, OpType)>, SimpleReplacementError> {
+        circ: &mut Circuit<impl HugrMut<Node = Node>>,
+    ) -> Result<simple_replace::Outcome<Node>, SimpleReplacementError> {
         self.0.apply(circ.hugr_mut())
     }
 }

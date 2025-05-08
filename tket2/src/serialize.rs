@@ -15,7 +15,7 @@ pub use pytket::{
 };
 
 use derive_more::{Display, Error, From};
-use hugr::ops::{NamedOp, OpTag, OpTrait, OpType};
+use hugr::ops::{OpTag, OpTrait, OpType};
 use hugr::package::{Package, PackageEncodingError, PackageError, PackageValidationError};
 use hugr::{Hugr, HugrView, Node};
 
@@ -83,7 +83,7 @@ impl<T: HugrView> Circuit<T> {
                 parent: self.parent(),
             });
         }
-
+        #[expect(deprecated)]
         serde_json::to_writer(writer, hugr.base_hugr())?;
         Ok(())
     }
@@ -151,7 +151,7 @@ impl<T: HugrView> Circuit<T> {
                 parent: self.parent(),
             });
         }
-
+        #[expect(deprecated)]
         Ok(Package::from_hugr(hugr.base_hugr().clone())?)
     }
 }
@@ -312,7 +312,7 @@ pub enum CircuitLoadError {
     /// The root node is not a module operation.
     #[display(
         "Expected a HUGR with a module at the root, but found a {} instead.",
-        root_op.name()
+        root_op
     )]
     NonModuleRoot {
         /// The root operation.

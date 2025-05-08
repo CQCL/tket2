@@ -216,7 +216,6 @@ mod test {
     use crate::extension::rotation::{rotation_type, RotationOpBuilder as _};
     use hugr::builder::{Dataflow, DataflowSubContainer as _, SubContainer};
     use hugr::extension::prelude::UnwrapBuilder;
-    use hugr::extension::ExtensionSet;
     use hugr::llvm::check_emission;
     use hugr::llvm::emit::test::SimpleHugrConfig;
     use hugr::llvm::extension::DefaultPreludeCodegen;
@@ -224,7 +223,7 @@ mod test {
     use hugr::llvm::types::HugrType;
     use hugr::ops::constant::{CustomConst, TryHash};
     use hugr::ops::OpName;
-    use hugr::std_extensions::arithmetic::float_types::{self, float64_type, ConstF64};
+    use hugr::std_extensions::arithmetic::float_types::{float64_type, ConstF64};
     use hugr::Node;
     use inkwell::values::BasicValueEnum;
     use rstest::rstest;
@@ -336,10 +335,6 @@ mod test {
     impl CustomConst for NonFiniteConst64 {
         fn name(&self) -> OpName {
             "NonFiniteConst64".into()
-        }
-
-        fn extension_reqs(&self) -> ExtensionSet {
-            float_types::EXTENSION_ID.into()
         }
 
         fn get_type(&self) -> HugrType {

@@ -1,7 +1,6 @@
 {
   "version": "0.1.0",
   "name": "tket2.bool",
-  "runtime_reqs": [],
   "types": {
     "bool": {
       "extension": "tket2.bool",
@@ -14,7 +13,6 @@
       }
     }
   },
-  "values": {},
   "operations": {
     "and": {
       "extension": "tket2.bool",
@@ -47,8 +45,7 @@
               "args": [],
               "bound": "C"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -75,8 +72,7 @@
               "s": "Unit",
               "size": 2
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -112,8 +108,7 @@
               "args": [],
               "bound": "C"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -142,8 +137,7 @@
               "args": [],
               "bound": "C"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -179,8 +173,7 @@
               "args": [],
               "bound": "C"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -207,8 +200,7 @@
               "args": [],
               "bound": "C"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -244,8 +236,7 @@
               "args": [],
               "bound": "C"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false

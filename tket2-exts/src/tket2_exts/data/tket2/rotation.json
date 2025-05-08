@@ -1,7 +1,6 @@
 {
   "version": "0.1.0",
   "name": "tket2.rotation",
-  "runtime_reqs": [],
   "types": {
     "rotation": {
       "extension": "tket2.rotation",
@@ -14,7 +13,6 @@
       }
     }
   },
-  "values": {},
   "operations": {
     "from_halfturns": {
       "extension": "tket2.rotation",
@@ -49,8 +47,7 @@
                 ]
               ]
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -79,8 +76,7 @@
               "args": [],
               "bound": "C"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -116,8 +112,7 @@
               "args": [],
               "bound": "C"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -146,8 +141,7 @@
               "args": [],
               "bound": "C"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false

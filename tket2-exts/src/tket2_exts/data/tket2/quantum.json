@@ -1,9 +1,7 @@
 {
   "version": "0.1.1",
   "name": "tket2.quantum",
-  "runtime_reqs": [],
   "types": {},
-  "values": {},
   "operations": {
     "CRz": {
       "extension": "tket2.quantum",
@@ -37,8 +35,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -77,8 +74,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -108,8 +104,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -148,8 +143,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -173,8 +167,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -208,8 +201,7 @@
               "s": "Unit",
               "size": 2
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -235,8 +227,7 @@
               "s": "Unit",
               "size": 2
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -256,8 +247,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -277,8 +267,7 @@
               "t": "Q"
             }
           ],
-          "output": [],
-          "runtime_reqs": []
+          "output": []
         }
       },
       "binary": false
@@ -302,8 +291,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -339,8 +327,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -371,8 +358,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -408,8 +394,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -438,8 +423,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -468,8 +452,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -498,8 +481,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -528,8 +510,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -565,8 +546,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -595,8 +575,7 @@
                 ]
               ]
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -625,8 +604,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -655,8 +633,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -685,8 +662,7 @@
             {
               "t": "Q"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false
@@ -711,8 +687,7 @@
               "args": [],
               "bound": "C"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false

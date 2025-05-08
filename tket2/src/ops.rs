@@ -4,7 +4,6 @@ use crate::extension::rotation::rotation_type;
 use crate::extension::sympy::{SympyOpDef, SYM_OP_ID};
 use crate::extension::{TKET2_EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID};
 use hugr::ops::custom::ExtensionOp;
-use hugr::ops::NamedOp;
 use hugr::types::Type;
 use hugr::{
     extension::{
@@ -19,6 +18,7 @@ use hugr::{
 
 use derive_more::{Display, Error};
 use serde::{Deserialize, Serialize};
+use smol_str::ToSmolStr;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
 #[derive(
@@ -67,7 +67,7 @@ pub enum Tk2Op {
 impl Tk2Op {
     /// Expose the operation names directly in Tk2Op
     pub fn exposed_name(&self) -> smol_str::SmolStr {
-        <Tk2Op as Into<OpType>>::into(*self).name()
+        <Tk2Op as Into<OpType>>::into(*self).to_smolstr()
     }
 
     /// Wraps the operation in an [`ExtensionOp`]
@@ -79,7 +79,7 @@ impl Tk2Op {
 
 /// Whether an op is a given Tk2Op.
 pub fn op_matches(op: &OpType, tk2op: Tk2Op) -> bool {
-    op.name() == tk2op.exposed_name()
+    op.to_string() == tk2op.exposed_name()
 }
 
 #[derive(
@@ -95,7 +95,7 @@ pub enum Pauli {
 }
 
 #[derive(Display, Debug, Error, PartialEq, Clone)]
-#[display("{} is not a Tk2Op.", op.name())]
+#[display("{} is not a Tk2Op.", op)]
 pub struct NotTk2Op {
     /// The offending operation.
     pub op: OpType,
@@ -108,6 +108,10 @@ impl Pauli {
     }
 }
 impl MakeOpDef for Tk2Op {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        <&'static str>::from(self).into()
+    }
+
     fn init_signature(&self, _extension_ref: &std::sync::Weak<hugr::Extension>) -> SignatureFunc {
         use Tk2Op::*;
         match self {
@@ -216,9 +220,8 @@ pub(crate) mod test {
 
     use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
     use hugr::extension::prelude::{bool_t, option_type, qb_t};
-    use hugr::extension::simple_op::MakeOpDef;
+    use hugr::extension::simple_op::{MakeExtensionOp, MakeOpDef};
     use hugr::extension::{prelude::UnwrapBuilder as _, OpDef};
-    use hugr::ops::NamedOp;
     use hugr::types::Signature;
     use hugr::{type_row, CircuitUnit, HugrView};
     use itertools::Itertools;
@@ -230,8 +233,8 @@ pub(crate) mod test {
     use crate::extension::{TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID};
     use crate::utils::build_simple_circuit;
     use crate::Pauli;
-    fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
-        EXTENSION.get_op(&op.name())
+    fn get_opdef(op: Tk2Op) -> Option<&'static Arc<OpDef>> {
+        EXTENSION.get_op(&op.op_id())
     }
     #[test]
     fn create_extension() {
