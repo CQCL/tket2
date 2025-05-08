@@ -29,7 +29,7 @@ shell by setting up [direnv](https://devenv.sh/automatic-shell-activation/).
 To setup the environment manually you will need:
 
 - Just: <https://just.systems/>
-- Rust `>=1.75`: <https://www.rust-lang.org/tools/install>
+- Rust `>=1.85`: <https://www.rust-lang.org/tools/install>
 - uv `>=0.3`: docs.astral.sh/uv/getting-started/installation
 
 Once you have these installed, install the required python dependencies and setup pre-commit hooks with:

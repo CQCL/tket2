@@ -294,6 +294,7 @@ impl<T: HugrView> Circuit<T> {
 impl<T: HugrView<Node = Node>> Circuit<T> {
     /// Ensures the circuit contains an owned HUGR.
     pub fn to_owned(&self) -> Circuit<Hugr> {
+        #[expect(deprecated)]
         let hugr = self.hugr.base_hugr().clone();
         Circuit {
             hugr,

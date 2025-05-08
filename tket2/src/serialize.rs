@@ -83,7 +83,7 @@ impl<T: HugrView> Circuit<T> {
                 parent: self.parent(),
             });
         }
-
+        #[expect(deprecated)]
         serde_json::to_writer(writer, hugr.base_hugr())?;
         Ok(())
     }
@@ -151,7 +151,7 @@ impl<T: HugrView> Circuit<T> {
                 parent: self.parent(),
             });
         }
-
+        #[expect(deprecated)]
         Ok(Package::from_hugr(hugr.base_hugr().clone())?)
     }
 }

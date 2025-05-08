@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.11.0...tket2-hseries-v0.12.0) - 2025-05-06
+
+### New Features
+
+- Add `tket2.bool` extension ([#823](https://github.com/CQCL/tket2/pull/823))
+- *(hseries)* [**breaking**] remove ZZMax operation from Qsystem extension ([#852](https://github.com/CQCL/tket2/pull/852))
+- Add debug extension with state result op ([#843](https://github.com/CQCL/tket2/pull/843))
+
+### Refactor
+
+- Better error message on allocation failure. ([#827](https://github.com/CQCL/tket2/pull/827))
+
 ## [0.11.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.10.0...tket2-hseries-v0.11.0) - 2025-03-17
 
 ### Bug Fixes
