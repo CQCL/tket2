@@ -20,6 +20,8 @@ use crate::extension::qsystem::barrier::barrier_ops::{
 use crate::extension::qsystem::lower::insert_function;
 use crate::extension::qsystem::LowerTk2Error;
 
+use super::qtype_analyzer::is_qubit_array;
+
 type Target = (Node, IncomingPort);
 
 /// Responsible for inserting runtime barriers into the HUGR
@@ -47,18 +49,13 @@ impl BarrierInserter {
             .type_row
             .iter()
             .enumerate()
-            .filter_map(|(i, typ)| {
-                let wc = self.op_factory.type_analyzer().unpack_type(typ);
-
-                if wc.is_qb_container() {
-                    let port = OutgoingPort::from(i);
-                    let target = hugr
-                        .single_linked_input(node, port)
-                        .expect("linearity violation.");
-                    Some((typ.clone(), target))
-                } else {
-                    None
-                }
+            .filter(|(_, typ)| self.op_factory.type_analyzer().is_qubit_container(typ))
+            .map(|(i, typ)| {
+                let port = OutgoingPort::from(i);
+                let target = hugr
+                    .single_linked_input(node, port)
+                    .expect("linearity violation.");
+                (typ.clone(), target)
             })
             .collect()
     }
@@ -72,7 +69,7 @@ impl BarrierInserter {
         target: Target,
     ) -> Option<Result<(), LowerTk2Error>> {
         // Check if this is an array of qubits
-        let size = self.op_factory.type_analyzer().is_qubit_array(typ)?;
+        let size = is_qubit_array(typ)?;
 
         // Build and insert the barrier
         Some(match build_runtime_barrier_op(size) {

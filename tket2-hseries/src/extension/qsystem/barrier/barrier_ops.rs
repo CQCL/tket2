@@ -18,10 +18,7 @@ use hugr::{
     Hugr, Wire,
 };
 
-use crate::extension::qsystem::{
-    barrier::qtype_analyzer::{QTypeAnalyzer, UnpackedRow},
-    QSystemOpBuilder,
-};
+use crate::extension::qsystem::{barrier::qtype_analyzer::QTypeAnalyzer, QSystemOpBuilder};
 
 use super::qtype_analyzer::{array_args, is_opt_qb};
 // use hugr::builder::{BuildError, DFGBuilder};
@@ -346,12 +343,9 @@ impl BarrierOperationFactory {
 
     /// Helper function for array arguments
     fn array_args(&mut self, size: u64, elem_ty: &Type) -> Option<[TypeArg; 3]> {
-        let UnpackedRow::QbContainer(row) = self
+        let row = self
             .type_analyzer
-            .unpack_type(&array_type(size, elem_ty.clone()))
-        else {
-            return None;
-        };
+            .unpack_type(&array_type(size, elem_ty.clone()))?;
         let args = [
             size.into(),
             elem_ty.clone().into(),
@@ -380,7 +374,7 @@ impl BarrierOperationFactory {
             }
         };
 
-        let inner_row_len = self.type_analyzer.unpack_type(elem_ty).num_wires();
+        let inner_row_len = self.type_analyzer.num_unpacked_wires(elem_ty);
 
         let mut outputs = self.apply_cached_operation(
             builder,
@@ -407,12 +401,9 @@ impl BarrierOperationFactory {
 
     /// Generate tuple arguments
     fn tuple_args(&mut self, tuple_row: &[Type]) -> Option<[TypeArg; 2]> {
-        let UnpackedRow::QbContainer(unpacked_row) = self
+        let unpacked_row = self
             .type_analyzer
-            .unpack_type(&Type::new_tuple(tuple_row.to_vec()))
-        else {
-            return None;
-        };
+            .unpack_type(&Type::new_tuple(tuple_row.to_vec()))?;
 
         let args = [
             TypeArg::Sequence {
@@ -455,7 +446,7 @@ impl BarrierOperationFactory {
         types
             .iter()
             .map(|typ| {
-                let wire_count = self.type_analyzer.unpack_type(typ).num_wires();
+                let wire_count = self.type_analyzer.num_unpacked_wires(typ);
                 let type_wires = wires.by_ref().take(wire_count).collect();
                 self.repack_container(builder, typ, type_wires)
             })

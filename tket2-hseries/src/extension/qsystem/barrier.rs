@@ -92,7 +92,7 @@ mod test {
                 // make sure it is because there are no qubits in the barrier
                 let mut analyzer = QTypeAnalyzer::new();
                 let tuple_type = hugr::types::Type::new_tuple(type_row);
-                assert!(!analyzer.unpack_type(&tuple_type).is_qb_container());
+                assert!(!analyzer.is_qubit_container(&tuple_type));
                 return;
             }
             h.single_linked_input(run_barr_func_n.unwrap(), 0)

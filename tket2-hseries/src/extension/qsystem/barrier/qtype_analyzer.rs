@@ -1,43 +1,7 @@
 use hugr::extension::prelude::qb_t;
 use hugr::std_extensions::collections::array::{self};
 use hugr::types::{CustomType, SumType, Type, TypeArg};
-use itertools::Itertools;
 use std::collections::HashMap;
-
-/// Helper struct to record how a type is unpacked.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub(crate) enum UnpackedRow {
-    /// No internal qubits, so not unpacked.
-    Other(Type),
-    /// Qubit container, unpacked to a row of types.
-    QbContainer(Vec<Type>),
-}
-
-impl UnpackedRow {
-    /// Number of wires in the unpacked row.
-    pub fn num_wires(&self) -> usize {
-        match self {
-            UnpackedRow::Other(_) => 1,
-            UnpackedRow::QbContainer(row) => row.len(),
-        }
-    }
-
-    /// Row produced when unpacked.
-    pub fn into_row(self) -> Vec<Type> {
-        match self {
-            UnpackedRow::Other(ty) => vec![ty],
-            UnpackedRow::QbContainer(row) => row,
-        }
-    }
-
-    /// Returns `true` if the unpacked row is [`QbContainer`].
-    ///
-    /// [`QbContainer`]: UnpackedRow::QbContainer
-    #[must_use]
-    pub fn is_qb_container(&self) -> bool {
-        matches!(self, Self::QbContainer(..))
-    }
-}
 
 /// If a type is an option of qubit.
 pub(crate) fn is_opt_qb(ty: &Type) -> bool {
@@ -64,7 +28,7 @@ pub(crate) fn array_args(ext: &CustomType) -> Option<(u64, &Type)> {
 /// for barrier insertion.
 pub(crate) struct QTypeAnalyzer {
     /// Cache of unpacked types.
-    qubit_ports: HashMap<Type, UnpackedRow>,
+    qubit_ports: HashMap<Type, Option<Vec<Type>>>,
 }
 
 impl QTypeAnalyzer {
@@ -77,7 +41,8 @@ impl QTypeAnalyzer {
 
     /// Compute the row produced when a type is unpacked.
     /// Uses memoization to avoid recomputing the same type.
-    pub fn unpack_type(&mut self, ty: &Type) -> UnpackedRow {
+    /// `None` if the type does not contain qubits.
+    pub fn unpack_type(&mut self, ty: &Type) -> Option<Vec<Type>> {
         match self.qubit_ports.get(ty) {
             Some(unpacked) => unpacked.clone(),
             None => {
@@ -89,71 +54,78 @@ impl QTypeAnalyzer {
     }
 
     /// Compute the row produced when a type is unpacked for the first time.
-    fn _new_unpack_type(&mut self, ty: &Type) -> UnpackedRow {
+    fn _new_unpack_type(&mut self, ty: &Type) -> Option<Vec<Type>> {
         if ty == &qb_t() {
-            return UnpackedRow::QbContainer(vec![qb_t()]);
+            return Some(vec![qb_t()]);
         }
 
         if let Some(row) = ty.as_sum().and_then(SumType::as_tuple) {
-            let inner_unpacked = row
+            let mut any_qb = false;
+            let unpacked_row = row
                 .iter()
-                .map(|t| {
-                    self.unpack_type(&t.clone().try_into_type().expect("unexpected row variable."))
+                .flat_map(|t| {
+                    let t = &t.clone().try_into_type().expect("unexpected row variable.");
+                    match self.unpack_type(t) {
+                        Some(inner) => {
+                            any_qb = true;
+                            inner
+                        }
+                        None => vec![t.clone()],
+                    }
                 })
                 .collect::<Vec<_>>();
-            if inner_unpacked.iter().any(UnpackedRow::is_qb_container) {
-                let unpacked_row: Vec<_> = inner_unpacked
-                    .into_iter()
-                    .map(UnpackedRow::into_row)
-                    .collect_vec()
-                    .concat();
-                return UnpackedRow::QbContainer(unpacked_row);
-            }
+            any_qb.then_some(unpacked_row)
 
             // other sums containing qubits are ignored.
-        }
-
-        if let Some((size, elem_ty)) = ty.as_extension().and_then(array_args) {
+        } else if let Some((size, elem_ty)) = ty.as_extension().and_then(array_args) {
             // Special case for Option[Qubit] since it is used in guppy qubit arrays.
             // Fragile - would be better with dedicated guppy array type.
             // Not sure how this can be improved without runtime barrier being able to
             // take a compile time unknown number of qubits.
-
             if is_opt_qb(elem_ty) {
-                return UnpackedRow::QbContainer(vec![qb_t(); size as usize]);
+                Some(vec![qb_t(); size as usize])
             } else {
-                let elem_wc = self.unpack_type(elem_ty);
-                return match elem_wc {
-                    UnpackedRow::Other(_) => UnpackedRow::Other(ty.clone()),
-                    UnpackedRow::QbContainer(inner) => {
-                        return UnpackedRow::QbContainer(vec![inner; size as usize].concat());
+                self.unpack_type(elem_ty).map(|inner| {
+                    let total_size = size as usize * inner.len();
+                    let mut result = Vec::with_capacity(total_size);
+                    for _ in 0..size {
+                        result.extend_from_slice(&inner);
                     }
-                };
-            };
+                    result
+                })
+            }
+        } else {
+            None
         }
-
-        UnpackedRow::Other(ty.clone())
     }
 
-    /// Check if a type is an array with the given element type
-    pub fn is_array_of(&self, typ: &Type, elem_type: &Type) -> Option<u64> {
-        typ.as_extension()
-            .and_then(array_args)
-            .and_then(|(size, e_ty)| (e_ty == elem_type).then_some(size))
+    /// Count the number of wires in a row in an unpacked type.
+    pub fn num_unpacked_wires(&mut self, ty: &Type) -> usize {
+        self.unpack_type(ty).as_ref().map_or(1, Vec::len)
     }
 
-    /// Check if a type is specifically an array of qubits
-    pub fn is_qubit_array(&self, typ: &Type) -> Option<u64> {
-        self.is_array_of(typ, &qb_t())
+    /// Report if a type contains qubits.
+    pub fn is_qubit_container(&mut self, ty: &Type) -> bool {
+        self.unpack_type(ty).is_some()
     }
 }
 
+/// Check if a type is an array with the given element type
+pub fn is_array_of(typ: &Type, elem_type: &Type) -> Option<u64> {
+    typ.as_extension()
+        .and_then(array_args)
+        .and_then(|(size, e_ty)| (e_ty == elem_type).then_some(size))
+}
+
+/// Check if a type is specifically an array of qubits
+pub fn is_qubit_array(typ: &Type) -> Option<u64> {
+    is_array_of(typ, &qb_t())
+}
 impl Default for QTypeAnalyzer {
     fn default() -> Self {
         Self::new()
     }
 }
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -164,20 +136,13 @@ mod test {
     fn test_primitive_types() {
         let mut analyzer = QTypeAnalyzer::new();
 
-        // Qubit should be a container
         let qubit_result = analyzer.unpack_type(&qb_t());
-        assert!(qubit_result.is_qb_container());
-        match qubit_result {
-            UnpackedRow::QbContainer(types) => {
-                assert_eq!(types.len(), 1);
-                assert_eq!(types[0], qb_t());
-            }
-            _ => panic!("Expected QbContainer"),
-        }
+        let types = qubit_result.unwrap();
+        assert_eq!(types.len(), 1);
+        assert_eq!(types[0], qb_t());
 
         // Non-quantum types should not be containers
-        let bool_result = analyzer.unpack_type(&bool_t());
-        assert!(!bool_result.is_qb_container());
+        assert!(!analyzer.is_qubit_container(&bool_t()));
     }
 
     #[test]
@@ -187,31 +152,22 @@ mod test {
         // Array of qubits should be a container with that many qubits
         let qubit_array = array_type(3, qb_t());
         let result = analyzer.unpack_type(&qubit_array);
-        assert!(result.is_qb_container());
-        match result {
-            UnpackedRow::QbContainer(types) => {
-                assert_eq!(types.len(), 3);
-                assert!(types.iter().all(|t| t == &qb_t()));
-            }
-            _ => panic!("Expected QbContainer"),
-        }
+
+        let types = result.unwrap();
+        assert_eq!(types.len(), 3);
+        assert!(types.iter().all(|t| t == &qb_t()));
 
         // Array of non-quantum types should not be a container
         let bool_array = array_type(5, bool_t());
-        let result = analyzer.unpack_type(&bool_array);
-        assert!(!result.is_qb_container());
+        assert!(!analyzer.is_qubit_container(&bool_array));
 
         // Nested arrays of qubits
         let nested_array = array_type(2, array_type(3, qb_t()));
         let result = analyzer.unpack_type(&nested_array);
-        assert!(result.is_qb_container());
-        match result {
-            UnpackedRow::QbContainer(types) => {
-                assert_eq!(types.len(), 6); // 2 arrays of 3 qubits each
-                assert!(types.iter().all(|t| t == &qb_t()));
-            }
-            _ => panic!("Expected QbContainer"),
-        }
+
+        let types = result.unwrap();
+        assert_eq!(types.len(), 6); // 2 arrays of 3 qubits each
+        assert!(types.iter().all(|t| t == &qb_t()));
     }
 
     #[test]
@@ -220,25 +176,19 @@ mod test {
 
         // Option<qubit> by itself should NOT be a container
         let opt_qubit = option_type(qb_t()).into();
-        let result = analyzer.unpack_type(&opt_qubit);
-        assert!(!result.is_qb_container());
+        assert!(!analyzer.is_qubit_container(&opt_qubit));
 
         // Array of Option<qubit> should be a special case (a container with that many qubits)
         let opt_qubit_array = array_type(4, option_type(qb_t()).into());
         let result = analyzer.unpack_type(&opt_qubit_array);
-        assert!(result.is_qb_container());
-        match result {
-            UnpackedRow::QbContainer(types) => {
-                assert_eq!(types.len(), 4);
-                assert!(types.iter().all(|t| t == &qb_t()));
-            }
-            _ => panic!("Expected QbContainer"),
-        }
+
+        let types = result.unwrap();
+        assert_eq!(types.len(), 4);
+        assert!(types.iter().all(|t| t == &qb_t()));
 
         // Option of non-quantum types should not be a container
         let opt_bool = option_type(bool_t()).into();
-        let result = analyzer.unpack_type(&opt_bool);
-        assert!(!result.is_qb_container());
+        assert!(!analyzer.is_qubit_container(&opt_bool));
     }
 
     #[test]
@@ -247,33 +197,24 @@ mod test {
 
         // Tuple with no qubits
         let no_qubit_tuple = Type::new_tuple(vec![bool_t(), usize_t()]);
-        let result = analyzer.unpack_type(&no_qubit_tuple);
-        assert!(!result.is_qb_container());
+        assert!(!analyzer.is_qubit_container(&no_qubit_tuple));
 
         // Tuple with qubits
         let qubit_tuple = Type::new_tuple(vec![bool_t(), qb_t(), usize_t()]);
         let result = analyzer.unpack_type(&qubit_tuple);
-        assert!(result.is_qb_container());
-        match result {
-            UnpackedRow::QbContainer(types) => {
-                assert_eq!(types.len(), 3); // Only one qubit in the tuple
-                assert_eq!(types[1], qb_t());
-            }
-            _ => panic!("Expected QbContainer"),
-        }
+
+        let types = result.unwrap();
+        assert_eq!(types.len(), 3); // Only one qubit in the tuple
+        assert_eq!(types[1], qb_t());
 
         // Tuple with multiple qubits
         let multi_qubit_tuple = Type::new_tuple(vec![qb_t(), bool_t(), qb_t()]);
         let result = analyzer.unpack_type(&multi_qubit_tuple);
-        assert!(result.is_qb_container());
-        match result {
-            UnpackedRow::QbContainer(types) => {
-                assert_eq!(types.len(), 3);
-                assert_eq!(types[0], qb_t());
-                assert_eq!(types[2], qb_t());
-            }
-            _ => panic!("Expected QbContainer"),
-        }
+
+        let types = result.unwrap();
+        assert_eq!(types.len(), 3);
+        assert_eq!(types[0], qb_t());
+        assert_eq!(types[2], qb_t());
 
         // Nested tuple with qubits
         let nested_tuple = Type::new_tuple(vec![
@@ -282,14 +223,10 @@ mod test {
             usize_t(),
         ]);
         let result = analyzer.unpack_type(&nested_tuple);
-        assert!(result.is_qb_container());
-        match result {
-            UnpackedRow::QbContainer(types) => {
-                assert_eq!(types.len(), 4);
-                assert_eq!(types[2], qb_t());
-            }
-            _ => panic!("Expected QbContainer"),
-        }
+
+        let types = result.unwrap();
+        assert_eq!(types.len(), 4);
+        assert_eq!(types[2], qb_t());
     }
 
     #[test]
@@ -299,25 +236,17 @@ mod test {
         // Array of tuples containing qubits
         let complex_type = array_type(2, Type::new_tuple(vec![bool_t(), qb_t()]));
         let result = analyzer.unpack_type(&complex_type);
-        assert!(result.is_qb_container());
-        match result {
-            UnpackedRow::QbContainer(types) => {
-                assert_eq!(types.len(), 4); // 2 arrays, each with one qubit in the tuple
-            }
-            _ => panic!("Expected QbContainer"),
-        }
+
+        let types = result.unwrap();
+        assert_eq!(types.len(), 4); // 2 arrays, each with one qubit in the tuple
 
         // Tuple containing array of qubits and standalone qubit
         let complex_type = Type::new_tuple(vec![array_type(3, qb_t()), qb_t()]);
         let result = analyzer.unpack_type(&complex_type);
-        assert!(result.is_qb_container());
-        match result {
-            UnpackedRow::QbContainer(types) => {
-                assert_eq!(types.len(), 4); // 3 from array + 1 standalone
-                assert!(types.iter().all(|t| t == &qb_t()));
-            }
-            _ => panic!("Expected QbContainer"),
-        }
+
+        let types = result.unwrap();
+        assert_eq!(types.len(), 4); // 3 from array + 1 standalone
+        assert!(types.iter().all(|t| t == &qb_t()));
 
         // Super nested complex example
         let complex_type = Type::new_tuple(vec![
@@ -329,30 +258,25 @@ mod test {
             qb_t(),
         ]);
         let result = analyzer.unpack_type(&complex_type);
-        assert!(result.is_qb_container());
-        match result {
-            UnpackedRow::QbContainer(types) => {
-                assert_eq!(types.len(), 10); // 1 + 2*(1 + 3) + 1 = 10 wires total
-            }
-            _ => panic!("Expected QbContainer"),
-        }
+
+        let types = result.unwrap();
+        assert_eq!(types.len(), 10); // 1 + 2*(1 + 3) + 1 = 10 wires total
     }
 
     #[test]
-    fn test_helper_methods() {
+    fn test_helper_functions() {
         let mut analyzer = QTypeAnalyzer::new();
-
-        // Test contains_qubits
-        assert!(analyzer.unpack_type(&qb_t()).is_qb_container());
-        assert!(analyzer
-            .unpack_type(&array_type(2, qb_t()))
-            .is_qb_container());
-        assert!(!analyzer.unpack_type(&bool_t()).is_qb_container());
+        // Test unpacked_wires
+        assert_eq!(analyzer.num_unpacked_wires(&bool_t()), 1);
+        assert_eq!(
+            analyzer.num_unpacked_wires(&Type::new_tuple(vec![qb_t(), bool_t(), qb_t()])),
+            3
+        );
 
         // Test is_qubit_array
-        assert_eq!(analyzer.is_qubit_array(&array_type(5, qb_t())), Some(5));
-        assert_eq!(analyzer.is_qubit_array(&qb_t()), None);
-        assert_eq!(analyzer.is_qubit_array(&array_type(3, bool_t())), None);
+        assert_eq!(is_qubit_array(&array_type(5, qb_t())), Some(5));
+        assert_eq!(is_qubit_array(&qb_t()), None);
+        assert_eq!(is_qubit_array(&array_type(3, bool_t())), None);
     }
 
     #[test]
@@ -374,12 +298,8 @@ mod test {
         assert_eq!(result1, result2);
 
         // Both should be correct
-        match result1 {
-            UnpackedRow::QbContainer(types) => {
-                assert_eq!(types.len(), 13); // 10 from array + 3 from tuple
-                assert!(types.iter().all(|t| t == &qb_t()));
-            }
-            _ => panic!("Expected QbContainer"),
-        }
+        let types = result1.unwrap();
+        assert_eq!(types.len(), 13); // 10 from array + 3 from tuple
+        assert!(types.iter().all(|t| t == &qb_t()));
     }
 }
