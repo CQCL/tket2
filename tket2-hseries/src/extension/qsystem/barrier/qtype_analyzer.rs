@@ -111,14 +111,14 @@ impl QTypeAnalyzer {
 }
 
 /// Check if a type is an array with the given element type
-pub fn is_array_of(typ: &Type, elem_type: &Type) -> Option<u64> {
+pub(crate) fn is_array_of(typ: &Type, elem_type: &Type) -> Option<u64> {
     typ.as_extension()
         .and_then(array_args)
         .and_then(|(size, e_ty)| (e_ty == elem_type).then_some(size))
 }
 
 /// Check if a type is specifically an array of qubits
-pub fn is_qubit_array(typ: &Type) -> Option<u64> {
+pub(crate) fn is_qubit_array(typ: &Type) -> Option<u64> {
     is_array_of(typ, &qb_t())
 }
 impl Default for QTypeAnalyzer {

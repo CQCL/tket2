@@ -21,9 +21,6 @@ use hugr::{
 use crate::extension::qsystem::{barrier::qtype_analyzer::QTypeAnalyzer, QSystemOpBuilder};
 
 use super::qtype_analyzer::{array_args, is_opt_qb};
-// use hugr::builder::{BuildError, DFGBuilder};
-// use hugr::types::{FuncType, TypeRow};
-// use hugr::{hugr, type_row};
 
 /// Wrapper for ExtensionOp that implements Hash
 #[derive(Clone, PartialEq, Eq)]
@@ -140,7 +137,7 @@ impl BarrierOperationFactory {
                         TypeRV::new_row_var_use(2, TypeBound::Any),
                     ),
                 );
-                // pack some wires in to an array
+                // pack some wires into an array
                 ext.add_op(
                     Self::ARRAY_REPACK,
                     Default::default(),
@@ -148,7 +145,7 @@ impl BarrierOperationFactory {
                     ext_ref,
                 )
                 .unwrap();
-                // unpack an array in to some wires
+                // unpack an array into some wires
                 ext.add_op(
                     Self::ARRAY_UNPACK,
                     Default::default(),
@@ -169,7 +166,7 @@ impl BarrierOperationFactory {
                         TypeRV::new_row_var_use(1, TypeBound::Any),
                     ),
                 );
-                // pack some wires in to a tuple
+                // pack some wires into a tuple
                 ext.add_op(
                     Self::TUPLE_REPACK,
                     Default::default(),
@@ -177,7 +174,7 @@ impl BarrierOperationFactory {
                     ext_ref,
                 )
                 .unwrap();
-                // unpack a tuple in to some wires
+                // unpack a tuple into some wires
                 ext.add_op(
                     Self::TUPLE_UNPACK,
                     Default::default(),
