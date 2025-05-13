@@ -295,7 +295,10 @@ pub(crate) mod test {
             .out_wire(0);
         let h = b.finish_hugr_with_outputs([measured]).unwrap();
 
-        let top_ops = h.children(h.root()).map(|n| h.get_optype(n)).collect_vec();
+        let top_ops = h
+            .children(h.entrypoint())
+            .map(|n| h.get_optype(n))
+            .collect_vec();
 
         assert_eq!(top_ops.len(), 5);
         // first two are I/O

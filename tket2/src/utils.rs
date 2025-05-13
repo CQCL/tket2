@@ -1,7 +1,6 @@
 //! Utility functions for the library.
 
-use hugr::builder::{Container, DataflowSubContainer, FunctionBuilder, HugrBuilder, ModuleBuilder};
-use hugr::ops::handle::NodeHandle;
+use hugr::builder::FunctionBuilder;
 use hugr::types::{Type, TypeBound};
 use hugr::Hugr;
 use hugr::{
@@ -20,7 +19,7 @@ pub(crate) fn type_is_linear(typ: &Type) -> bool {
 #[allow(unused)]
 pub(crate) fn build_simple_circuit<F>(num_qubits: usize, f: F) -> Result<Circuit, BuildError>
 where
-    F: FnOnce(&mut CircuitBuilder<FunctionBuilder<Hugr>>) -> Result<(), BuildError>,
+    F: FnOnce(&mut CircuitBuilder<'_, FunctionBuilder<Hugr>>) -> Result<(), BuildError>,
 {
     let qb_row = vec![qb_t(); num_qubits];
     let signature = Signature::new(qb_row.clone(), qb_row);
@@ -36,24 +35,4 @@ where
 
     let hugr = h.finish_hugr_with_outputs(qbs)?;
     Ok(hugr.into())
-}
-
-/// Utility for building a module with a single circuit definition.
-#[allow(unused)]
-pub(crate) fn build_module_with_circuit<F>(num_qubits: usize, f: F) -> Result<Circuit, BuildError>
-where
-    F: FnOnce(&mut CircuitBuilder<FunctionBuilder<&mut Hugr>>) -> Result<(), BuildError>,
-{
-    let mut builder = ModuleBuilder::new();
-    let circ = {
-        let qb_row = vec![qb_t(); num_qubits];
-        let circ_signature = Signature::new(qb_row.clone(), qb_row);
-        let mut dfg = builder.define_function("main", circ_signature)?;
-        let mut circ = dfg.as_circuit(dfg.input_wires());
-        f(&mut circ)?;
-        let qbs = circ.finish();
-        dfg.finish_with_outputs(qbs)?
-    };
-    let hugr = builder.finish_hugr()?;
-    Ok(Circuit::new(hugr, circ.node()))
 }

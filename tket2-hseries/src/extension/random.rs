@@ -226,6 +226,7 @@ mod test {
     use hugr::std_extensions::arithmetic::int_types::ConstInt;
 
     use hugr::builder::{DataflowHugr, FunctionBuilder};
+    use hugr::HugrView;
     use strum::IntoEnumIterator;
 
     use super::*;

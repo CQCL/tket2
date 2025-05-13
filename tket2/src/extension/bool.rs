@@ -239,6 +239,7 @@ impl<D: Dataflow> BoolOpBuilder for D {}
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
+    use hugr::HugrView;
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::{simple_op::MakeExtensionOp, OpDef},

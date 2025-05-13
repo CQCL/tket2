@@ -6,13 +6,14 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::iter::FusedIterator;
 
-use hugr::hugr::views::{HierarchyView, SiblingGraph};
 use hugr::hugr::NodeMetadata;
 use hugr::ops::{OpTag, OpTrait};
 use hugr::{HugrView, IncomingPort, OutgoingPort};
+use hugr_core::hugr::internal::{HugrInternals, PortgraphNodeMap};
 use itertools::Either::{self, Left, Right};
 use itertools::{EitherOrBoth, Itertools};
 use petgraph::visit as pv;
+use portgraph::PortView;
 
 use super::units::{filter, DefaultUnitLabeller, LinearUnit, UnitLabeller, Units};
 use super::Circuit;
@@ -231,7 +232,10 @@ impl<T: HugrView> std::hash::Hash for Command<'_, T> {
 }
 
 /// A non-borrowing topological walker over the nodes of a circuit.
-type NodeWalker = pv::Topo<Node, HashSet<Node>>;
+type NodeWalker<'circ, T> = pv::Topo<
+    portgraph::NodeIndex,
+    <portgraph::view::FlatRegion<'circ, <T as HugrInternals>::RegionPortgraph<'circ>> as petgraph::visit::Visitable>::Map,
+>;
 
 /// An iterator over the commands of a circuit.
 // TODO: this can only be made generic over node type once `SiblingGraph` is
@@ -241,9 +245,11 @@ pub struct CommandIterator<'circ, T: HugrView> {
     /// The circuit.
     circ: &'circ Circuit<T>,
     /// A view of the top-level region of the circuit.
-    region: SiblingGraph<'circ>,
+    region: portgraph::view::FlatRegion<'circ, T::RegionPortgraph<'circ>>,
+    /// A map between portgraph nodes in [`CommandIterator::region`] and circuit nodes.
+    region_node_map: T::RegionPortgraphNodes,
     /// Toposorted nodes.
-    nodes: NodeWalker,
+    nodes: NodeWalker<'circ, T>,
     /// Last wire for each [`LinearUnit`] in the circuit.
     wire_unit: HashMap<Wire, usize>,
     /// Maximum number of remaining commands, not counting I/O nodes nor root nodes.
@@ -280,12 +286,13 @@ impl<'circ, T: HugrView<Node = Node>> CommandIterator<'circ, T> {
             .map(|(linear_unit, port, _)| (Wire::new(circ.input_node(), port), linear_unit.index()))
             .collect();
 
-        let region: SiblingGraph = SiblingGraph::try_new(circ.hugr(), circ.parent()).unwrap();
-        let node_count = region.num_nodes();
-        let nodes = pv::Topo::new(&region.as_petgraph());
+        let (region, region_node_map) = circ.hugr().region_portgraph(circ.parent());
+        let node_count = region.node_count();
+        let nodes = pv::Topo::new(&region);
         Self {
             circ,
             region,
+            region_node_map,
             nodes,
             wire_unit,
             // Ignore the input and output nodes, and the root.
@@ -301,10 +308,10 @@ impl<'circ, T: HugrView<Node = Node>> CommandIterator<'circ, T> {
     /// If the next node in the topological order is a constant or load const node,
     /// delay it until its consumers are processed.
     fn next_node(&mut self) -> Option<Node> {
-        let node = self
-            .delayed_node
-            .take()
-            .or_else(|| self.nodes.next(&self.region.as_petgraph()))?;
+        let node = self.delayed_node.take().or_else(|| {
+            let pg_node = self.nodes.next(&self.region)?;
+            Some(self.region_node_map.from_portgraph(pg_node))
+        })?;
         if node == self.circ.parent() {
             // Ignore the root of the circuit.
             // This will only happen once.
@@ -489,7 +496,7 @@ mod test {
 
     use crate::extension::rotation::ConstRotation;
 
-    use crate::utils::{build_module_with_circuit, build_simple_circuit};
+    use crate::utils::build_simple_circuit;
     use crate::Tk2Op;
 
     use super::*;
@@ -517,7 +524,7 @@ mod test {
     /// defined inside a module.
     #[fixture]
     fn simple_module() -> Circuit {
-        build_module_with_circuit(2, |circ| {
+        build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::H, [0])?;
             circ.append(Tk2Op::CX, [0, 1])?;
             circ.append(Tk2Op::T, [1])?;
@@ -533,7 +540,7 @@ mod test {
         let mut module = simple_module();
         let other_circ = simple_circuit();
         let hugr = module.hugr_mut();
-        hugr.insert_hugr(hugr.root(), other_circ.into_hugr());
+        hugr.insert_hugr(hugr.entrypoint(), other_circ.into_hugr());
         return module;
     }
 

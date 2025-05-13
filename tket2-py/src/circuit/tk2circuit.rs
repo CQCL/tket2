@@ -89,29 +89,6 @@ impl Tk2Circuit {
         rw.rewrite.apply(&mut self.circ).expect("Apply error.");
     }
 
-    /// Encode the circuit as a HUGR json string.
-    //
-    // TODO: Bind a messagepack encoder/decoder too.
-    pub fn to_hugr_json(&self) -> PyResult<String> {
-        fn err(e: impl Display) -> PyErr {
-            PyErr::new::<PyAttributeError, _>(format!("Could not encode circuit: {e}"))
-        };
-        let mut buf = Vec::new();
-        self.circ.store_hugr(&mut buf).map_err(err)?;
-        let res = std::str::from_utf8(&buf).map_err(err)?;
-        Ok(res.to_string())
-    }
-
-    /// Decode a HUGR json to a circuit.
-    #[staticmethod]
-    pub fn from_hugr_json(json: &str) -> PyResult<Self> {
-        fn err(e: impl Display) -> PyErr {
-            PyErr::new::<PyAttributeError, _>(format!("Could not read hugr: {e}"))
-        };
-        let circ = Circuit::load_hugr(json.as_bytes()).map_err(err)?;
-        Ok(Tk2Circuit { circ })
-    }
-
     /// Encode the circuit as a HUGR envelope.
     pub fn to_bytes(&self, config: Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
         fn err(e: impl Display) -> PyErr {
@@ -141,55 +118,34 @@ impl Tk2Circuit {
     }
 
     /// Loads a circuit from a HUGR envelope.
+    ///
+    /// If the name is not given, uses the encoded entrypoint.
     #[staticmethod]
     #[pyo3(signature = (bytes, function_name = None))]
     pub fn from_bytes(bytes: &[u8], function_name: Option<String>) -> PyResult<Self> {
         fn err(e: impl Display) -> PyErr {
             PyErr::new::<PyAttributeError, _>(format!("Could not read envelope: {e}"))
         };
-        let name = function_name.unwrap_or_else(|| "main".to_string());
-        let circ = Circuit::load_function(bytes, name).map_err(err)?;
+        let circ = match function_name {
+            Some(name) => Circuit::load_function(bytes, name).map_err(err)?,
+            None => Circuit::load(bytes, None).map_err(err)?,
+        };
         Ok(Tk2Circuit { circ })
     }
 
     /// Loads a circuit from a HUGR envelope string.
+    ///
+    /// If the name is not given, uses the encoded entrypoint.
     #[staticmethod]
     #[pyo3(signature = (envelope, function_name = None))]
     pub fn from_str(envelope: &str, function_name: Option<String>) -> PyResult<Self> {
         fn err(e: impl Display) -> PyErr {
             PyErr::new::<PyAttributeError, _>(format!("Could not read envelope: {e}"))
         };
-        let name = function_name.unwrap_or_else(|| "main".to_string());
-        let circ = Circuit::load_function_str(envelope, name).map_err(err)?;
-        Ok(Tk2Circuit { circ })
-    }
-
-    /// Encode the circuit as a Hugr Package json string.
-    //#[deprecated(note = "Use HUGR envelopes instead. See `to_bytes` and `to_str`")] // Commented out since pyo3's macros still use it and cause warnings.
-    pub fn to_package_json(&self) -> PyResult<String> {
-        fn err(e: impl Display) -> PyErr {
-            PyErr::new::<PyAttributeError, _>(format!("Could not encode circuit: {e}"))
+        let circ = match function_name {
+            Some(name) => Circuit::load_function_str(envelope, name).map_err(err)?,
+            None => Circuit::load_str(envelope, None).map_err(err)?,
         };
-        self.circ.store_str().map_err(err)
-    }
-
-    /// Decode a HUGR Package json to a circuit.
-    ///
-    /// Traverses the package's modules in order until it finds one containing a
-    /// function named `function_name`, and loads it as a circuit.
-    ///
-    /// If the json is a hugr json, it will be decoded as a `main` function in an empty module.
-    ///
-    /// When `function_name` is not given, it defaults to `main`.
-    #[staticmethod]
-    #[pyo3(signature = (json, function_name = None))]
-    //#[deprecated(note = "Use HUGR envelopes instead. See `from_bytes` and `from_str`")] // Commented out since pyo3's macros still use it and cause warnings.
-    pub fn from_package_json(json: &str, function_name: Option<String>) -> PyResult<Self> {
-        fn err(e: impl Display) -> PyErr {
-            PyErr::new::<PyAttributeError, _>(format!("Could not read package: {e}"))
-        };
-        let name = function_name.unwrap_or_else(|| "main".to_string());
-        let circ = Circuit::load_function_str(json, name).map_err(err)?;
         Ok(Tk2Circuit { circ })
     }
 

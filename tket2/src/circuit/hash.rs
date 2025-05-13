@@ -4,7 +4,6 @@ use std::hash::{Hash, Hasher};
 
 use derive_more::{Display, Error};
 use fxhash::{FxHashMap, FxHasher64};
-use hugr::hugr::views::{HierarchyView, SiblingGraph};
 use hugr::ops::OpType;
 use hugr::{HugrView, Node};
 use petgraph::visit::{self as pg, Walker};
@@ -28,9 +27,7 @@ pub trait CircuitHash {
 
 impl<T: HugrView<Node = Node>> CircuitHash for Circuit<T> {
     fn circuit_hash(&self) -> Result<u64, HashError> {
-        let hugr = self.hugr();
-        let container: SiblingGraph = SiblingGraph::try_new(hugr, self.parent()).unwrap();
-        container.circuit_hash()
+        self.hugr().circuit_hash()
     }
 }
 
@@ -39,7 +36,7 @@ where
     T: HugrView<Node = Node>,
 {
     fn circuit_hash(&self) -> Result<u64, HashError> {
-        let Some([_, output_node]) = self.get_io(self.root()) else {
+        let Some([_, output_node]) = self.get_io(self.entrypoint()) else {
             return Err(HashError::NotADfg);
         };
 
@@ -47,7 +44,7 @@ where
 
         for node in pg::Topo::new(&self.as_petgraph())
             .iter(&self.as_petgraph())
-            .filter(|&n| n != self.root())
+            .filter(|&n| n != self.entrypoint())
         {
             let hash = hash_node(self, node, &mut node_hashes)?;
             if node_hashes.set_hash(node, hash).is_some() {
@@ -126,8 +123,7 @@ fn hash_node(
 
     // Hash the node children
     if circ.children(node).count() > 0 {
-        let container: SiblingGraph = SiblingGraph::try_new(circ, node).unwrap();
-        container.circuit_hash()?.hash(&mut hasher);
+        circ.with_entrypoint(node).circuit_hash()?.hash(&mut hasher);
     }
 
     // Hash the node operation

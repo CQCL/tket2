@@ -14,7 +14,7 @@ pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
 use hugr::extension::prelude::{NoopDef, TupleOpDef};
 use hugr::extension::simple_op::MakeOpDef;
-use hugr::hugr::views::{DescendantsGraph, ExtractHugr, HierarchyView};
+use hugr::hugr::views::ExtractionResult;
 use itertools::Either::{Left, Right};
 
 use derive_more::{Display, Error, From};
@@ -39,17 +39,12 @@ use self::units::{filter, LinearUnit, Units};
 pub struct Circuit<T: HugrView = Hugr> {
     /// The HUGR containing the circuit.
     hugr: T,
-    /// The parent node of the circuit.
-    ///
-    /// This is checked at runtime to ensure that the node is a DFG node.
-    parent: T::Node,
 }
 
 impl<T: Default + HugrView> Default for Circuit<T> {
     fn default() -> Self {
         let hugr = T::default();
-        let parent = hugr.root();
-        Self { hugr, parent }
+        Self { hugr }
     }
 }
 
@@ -85,30 +80,30 @@ fn issue_1496_remains() {
 }
 
 impl<T: HugrView> Circuit<T> {
-    /// Create a new circuit from a HUGR and a node.
+    /// Create a new circuit from a HUGR and its entrypoint.
     ///
     /// # Errors
     ///
-    /// Returns an error if the parent node is not a DFG node in the HUGR.
-    pub fn try_new(hugr: T, parent: T::Node) -> Result<Self, CircuitError<T::Node>> {
-        check_hugr(&hugr, parent)?;
-        Ok(Self { hugr, parent })
+    /// Returns an error if the HUGR entrypoint is not a DFG node.
+    pub fn try_new(hugr: T) -> Result<Self, CircuitError<T::Node>> {
+        check_hugr(&hugr)?;
+        Ok(Self { hugr })
     }
 
-    /// Create a new circuit from a HUGR and a node.
+    /// Create a new circuit from a HUGR and its entrypoint.
     ///
     /// See [`Circuit::try_new`] for a version that returns an error.
     ///
     /// # Panics
     ///
-    /// Panics if the parent node is not a DFG node in the HUGR.
-    pub fn new(hugr: T, parent: T::Node) -> Self {
-        Self::try_new(hugr, parent).unwrap_or_else(|e| panic!("{}", e))
+    /// Panics if the HUGR entrypoint is not a DFG node.
+    pub fn new(hugr: T) -> Self {
+        Self::try_new(hugr).unwrap_or_else(|e| panic!("{}", e))
     }
 
     /// Returns the node containing the circuit definition.
     pub fn parent(&self) -> T::Node {
-        self.parent
+        self.hugr.entrypoint()
     }
 
     /// Get a reference to the HUGR containing the circuit.
@@ -138,7 +133,7 @@ impl<T: HugrView> Circuit<T> {
     /// `None`.
     #[inline]
     pub fn name(&self) -> Option<&str> {
-        let op = self.hugr.get_optype(self.parent);
+        let op = self.hugr.get_optype(self.parent());
         let name = match op {
             OpType::FuncDefn(defn) => &defn.name,
             _ => return None,
@@ -152,7 +147,7 @@ impl<T: HugrView> Circuit<T> {
     /// Returns the function type of the circuit.
     #[inline]
     pub fn circuit_signature(&self) -> Cow<'_, Signature> {
-        let op = self.hugr.get_optype(self.parent);
+        let op = self.hugr.get_optype(self.parent());
         op.inner_function_type()
             .unwrap_or_else(|| panic!("{} is an invalid circuit parent type.", op))
     }
@@ -161,7 +156,7 @@ impl<T: HugrView> Circuit<T> {
     #[inline]
     pub fn input_node(&self) -> T::Node {
         self.hugr
-            .get_io(self.parent)
+            .get_io(self.parent())
             .expect("Circuit has no input node")[0]
     }
 
@@ -169,7 +164,7 @@ impl<T: HugrView> Circuit<T> {
     #[inline]
     pub fn output_node(&self) -> T::Node {
         self.hugr
-            .get_io(self.parent)
+            .get_io(self.parent())
             .expect("Circuit has no output node")[1]
     }
 
@@ -177,7 +172,7 @@ impl<T: HugrView> Circuit<T> {
     #[inline]
     pub fn io_nodes(&self) -> [T::Node; 2] {
         self.hugr
-            .get_io(self.parent)
+            .get_io(self.parent())
             .expect("Circuit has no I/O nodes")
     }
 
@@ -194,7 +189,7 @@ impl<T: HugrView> Circuit<T> {
         Self: Sized,
     {
         let mut count = 0;
-        let mut roots = vec![self.parent];
+        let mut roots = vec![self.parent()];
         while let Some(node) = roots.pop() {
             for child in self.hugr().children(node) {
                 let optype = self.hugr().get_optype(child);
@@ -291,17 +286,17 @@ impl<T: HugrView> Circuit<T> {
     }
 }
 
-impl<T: HugrView<Node = Node>> Circuit<T> {
+impl<T: HugrView> Circuit<T> {
     /// Ensures the circuit contains an owned HUGR.
     pub fn to_owned(&self) -> Circuit<Hugr> {
-        #[expect(deprecated)]
-        let hugr = self.hugr.base_hugr().clone();
-        Circuit {
-            hugr,
-            parent: self.parent,
-        }
+        let (mut hugr, map) = self.hugr.extract_hugr(self.hugr.module_root());
+        let parent = map.extracted_node(self.parent());
+        hugr.set_entrypoint(parent);
+        Circuit { hugr }
     }
+}
 
+impl<T: HugrView<Node = Node>> Circuit<T> {
     /// Returns all the commands in the circuit, in some topological order.
     ///
     /// Ignores the Input and Output nodes.
@@ -339,18 +334,10 @@ impl<T: HugrView<Node = Node>> Circuit<T> {
     /// Regions that are not descendants of the parent node are not included in the new HUGR.
     /// This may invalidate calls to functions defined elsewhere. Make sure to inline any
     /// external functions before calling this method.
-    pub fn extract_dfg(&self) -> Result<Circuit<Hugr>, CircuitMutError>
-    where
-        T: ExtractHugr,
-    {
-        let mut circ = if self.parent == self.hugr.root() {
-            self.to_owned()
-        } else {
-            let view: DescendantsGraph = DescendantsGraph::try_new(&self.hugr, self.parent)
-                .expect("Circuit parent was not a dataflow container.");
-            view.extract_hugr().into()
-        };
-        extract_dfg::rewrite_into_dfg(&mut circ)?;
+    pub fn extract_dfg(&self) -> Result<Circuit<Hugr>, CircuitMutError> {
+        let circ = self.to_owned();
+        // TODO: Can we just ignore this now?
+        //extract_dfg::rewrite_into_dfg(&mut circ)?;
         Ok(circ)
     }
 
@@ -368,18 +355,14 @@ impl<T: HugrView<Node = Node>> Circuit<T> {
 
 impl<T: HugrView> From<T> for Circuit<T> {
     fn from(hugr: T) -> Self {
-        let parent = hugr.root();
-        Self::new(hugr, parent)
+        Self::new(hugr)
     }
 }
 
 /// Checks if the passed hugr is a valid circuit,
 /// and return [`CircuitError`] if not.
-fn check_hugr<H: HugrView>(hugr: &H, parent: H::Node) -> Result<(), CircuitError<H::Node>> {
-    if !hugr.contains_node(parent) {
-        return Err(CircuitError::MissingParentNode { parent });
-    }
-    let optype = hugr.get_optype(parent);
+fn check_hugr<H: HugrView>(hugr: &H) -> Result<(), CircuitError<H::Node>> {
+    let optype = hugr.entrypoint_optype();
     match optype {
         // Dataflow nodes are always valid.
         OpType::DFG(_) => Ok(()),
@@ -387,7 +370,7 @@ fn check_hugr<H: HugrView>(hugr: &H, parent: H::Node) -> Result<(), CircuitError
         OpType::FuncDefn(defn) => match defn.signature.params().is_empty() {
             true => Ok(()),
             false => Err(CircuitError::ParametricSignature {
-                parent,
+                parent: hugr.entrypoint(),
                 optype: optype.clone(),
                 signature: defn.signature.clone(),
             }),
@@ -398,7 +381,7 @@ fn check_hugr<H: HugrView>(hugr: &H, parent: H::Node) -> Result<(), CircuitError
         _ => {
             debug_assert_eq!(None, optype.tag().partial_cmp(&OpTag::DataflowParent),);
             Err(CircuitError::InvalidParentOp {
-                parent,
+                parent: hugr.entrypoint(),
                 optype: optype.clone(),
             })
         }
@@ -543,7 +526,7 @@ fn shift_ports<C: HugrMut + ?Sized>(
     free_port: impl Into<Port>,
     max_ind: usize,
 ) -> Result<Port, hugr::hugr::HugrError> {
-    let mut free_port = free_port.into();
+    let mut free_port: Port = free_port.into();
     let dir = free_port.direction();
     let port_range = (free_port.index() + 1..max_ind).map(|p| Port::new(dir, p));
     for port in port_range {
@@ -670,7 +653,7 @@ mod tests {
     use super::*;
     use crate::extension::rotation::ConstRotation;
     use crate::serialize::load_tk1_json_str;
-    use crate::utils::{build_module_with_circuit, build_simple_circuit};
+    use crate::utils::build_simple_circuit;
     use crate::Tk2Op;
 
     #[fixture]
@@ -712,7 +695,7 @@ mod tests {
     /// defined inside a module.
     #[fixture]
     fn simple_module() -> Circuit {
-        build_module_with_circuit(2, |circ| {
+        build_simple_circuit(2, |circ| {
             circ.append(Tk2Op::H, [0])?;
             circ.append(Tk2Op::CX, [0, 1])?;
             circ.append(Tk2Op::X, [1])?;
@@ -772,7 +755,7 @@ mod tests {
         let hugr = Hugr::default();
 
         assert_matches!(
-            Circuit::try_new(hugr.clone(), hugr.root()),
+            Circuit::try_new(hugr.clone()),
             Err(CircuitError::InvalidParentOp { .. }),
         );
     }

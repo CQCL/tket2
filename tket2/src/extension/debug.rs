@@ -162,6 +162,7 @@ impl HasConcrete for StateResultDef {
 
 #[cfg(test)]
 pub(crate) mod test {
+    use hugr::HugrView;
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         ops::OpType,

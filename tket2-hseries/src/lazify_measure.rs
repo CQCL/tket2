@@ -43,15 +43,11 @@ use crate::extension::{futures::FutureOpBuilder as _, qsystem::QSystemOp};
 #[derive(Default, Debug, Clone)]
 pub struct LazifyMeasurePass;
 
-impl ComposablePass for LazifyMeasurePass {
+impl<H: HugrMut<Node = Node>> ComposablePass<H> for LazifyMeasurePass {
     type Error = LazifyMeasurePassError<Node>;
-    type Node = Node;
     type Result = ();
 
-    fn run(
-        &self,
-        hugr: &mut impl HugrMut<Node = Node>,
-    ) -> Result<(), LazifyMeasurePassError<Node>> {
+    fn run(&self, hugr: &mut H) -> Result<(), LazifyMeasurePassError<Node>> {
         // TODO uncomment once https://github.com/CQCL/hugr/issues/1234 is complete
         // ensure_no_nonlocal_edges(hugr)?;
         replace_measure_ops(hugr)?;

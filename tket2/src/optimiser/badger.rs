@@ -566,6 +566,7 @@ mod tests {
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::qb_t,
         types::Signature,
+        HugrView,
     };
     use rstest::{fixture, rstest};
 

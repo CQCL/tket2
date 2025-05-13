@@ -1,8 +1,10 @@
 use std::io;
 use std::path::Path;
 
+use hugr::envelope::serde_with::AsStringEnvelope;
 use hugr::Hugr;
 use itertools::Itertools;
+use serde_with::serde_as;
 
 use crate::circuit::Circuit;
 
@@ -17,10 +19,15 @@ pub enum EqCircClassError {
 ///
 /// The set contains a distinguished circuit called the representative circuit,
 /// typically chosen to be the smallest circuit in the set.
+#[serde_as]
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct EqCircClass {
+    // TODO: Encode envelopes in binary format.
+    // This requires adding a new `AsBinaryEnvelope` adaptor in `hugr`.
+    #[serde_as(as = "AsStringEnvelope")]
     rep_circ: Hugr,
     /// Other equivalent circuits to the representative.
+    #[serde_as(as = "Vec<AsStringEnvelope>")]
     other_circs: Vec<Hugr>,
 }
 

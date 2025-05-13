@@ -10,15 +10,14 @@ use derive_more::From;
 use hugr::builder::{Container, FunctionBuilder};
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::views::sibling_subgraph::TopoConvexChecker;
-use hugr::hugr::views::{HierarchyView, SiblingGraph, SiblingSubgraph};
+use hugr::hugr::views::SiblingSubgraph;
 use hugr::hugr::{HugrError, NodeMetadataMap};
 use hugr::ops::handle::DataflowParentID;
 use hugr::ops::OpType;
 use hugr::types::Signature;
-use hugr::{HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
+use hugr::{Hugr, HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 use hugr_core::hugr::internal::{HugrInternals, HugrMutInternals as _};
 use itertools::Itertools;
-use portgraph::algorithms::ConvexChecker;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rayon::slice::ParallelSliceMut;
 
@@ -53,7 +52,7 @@ impl Chunk {
     pub(self) fn extract(
         circ: &Circuit,
         nodes: impl IntoIterator<Item = Node>,
-        checker: &impl ConvexChecker,
+        checker: &TopoConvexChecker<'_, Hugr>,
     ) -> Self {
         let subgraph = SiblingSubgraph::try_from_nodes_with_checker(
             nodes.into_iter().collect_vec(),
@@ -100,18 +99,16 @@ impl Chunk {
         root: Node,
     ) -> ChunkInsertResult {
         let chunk = self.circ.hugr();
-        let chunk_root = chunk.root();
+        let chunk_root = chunk.entrypoint();
         if chunk.children(self.circ.parent()).nth(2).is_none() {
             // The chunk is empty. We don't need to insert anything.
             return self.empty_chunk_insert_result();
         }
 
         let [chunk_inp, chunk_out] = chunk.get_io(chunk_root).unwrap();
-        let chunk_sg: SiblingGraph<'_, DataflowParentID> =
-            SiblingGraph::try_new(&chunk, chunk_root).unwrap();
         // Insert the chunk circuit into the original circuit.
         let subgraph =
-            SiblingSubgraph::<Node>::try_new_dataflow_subgraph::<_, DataflowParentID>(&chunk_sg)
+            SiblingSubgraph::<Node>::try_new_dataflow_subgraph::<_, DataflowParentID>(&chunk)
                 .unwrap_or_else(|e| panic!("The chunk circuit is no longer a dataflow graph: {e}"));
         let node_map = circ.insert_subgraph(root, &chunk, &subgraph);
 
@@ -283,7 +280,7 @@ impl CircuitChunks {
             .collect();
 
         let mut chunks = Vec::new();
-        let convex_checker = TopoConvexChecker::new(circ.hugr());
+        let convex_checker = TopoConvexChecker::new(circ.hugr(), circ.parent());
         let mut running_cost = C::default();
         let mut current_group = 0;
         for (_, commands) in &circ.commands().map(|cmd| cmd.node()).chunk_by(|&node| {
@@ -320,7 +317,7 @@ impl CircuitChunks {
         // Take the unfinished Hugr from the builder, to avoid unnecessary
         // validation checks that require connecting the inputs an outputs.
         let mut reassembled = mem::take(builder.hugr_mut());
-        let root = reassembled.root();
+        let root = reassembled.entrypoint();
         let [reassembled_input, reassembled_output] = reassembled.get_io(root).unwrap();
 
         // The chunks input and outputs are each identified with a

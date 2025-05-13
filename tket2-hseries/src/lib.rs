@@ -85,9 +85,9 @@ impl QSystemPass {
             self.monomorphization().run(hugr).unwrap();
 
             let mut rdfp = RemoveDeadFuncsPass::default();
-            if hugr.get_optype(hugr.root()).is_module() {
+            if hugr.entrypoint_optype().is_module() {
                 let main_node = hugr
-                    .children(hugr.root())
+                    .children(hugr.entrypoint())
                     .find(|&n| {
                         hugr.get_optype(n)
                             .as_func_defn()
@@ -114,7 +114,7 @@ impl QSystemPass {
     }
 
     fn force_order(&self, hugr: &mut Hugr) -> Result<(), QSystemPassError> {
-        force_order(hugr, hugr.root(), |hugr, node| {
+        force_order(hugr, hugr.entrypoint(), |hugr, node| {
             let optype = hugr.get_optype(node);
 
             let is_quantum =
@@ -215,6 +215,8 @@ impl QSystemPass {
 
 #[cfg(test)]
 mod test {
+    use std::io::BufReader;
+
     use hugr::extension::ExtensionRegistry;
     use hugr::{
         builder::{Container, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer},
@@ -305,11 +307,12 @@ mod test {
     #[cfg_attr(miri, ignore)] // File::open is not supported in miri
     fn ordered_qalloc() {
         let file = std::fs::File::open("../test_files/ordered_qalloc.json").unwrap();
+        let reader = BufReader::new(file);
         let reg = ExtensionRegistry::new([
             tket2::extension::TKET2_EXTENSION.to_owned(),
             hugr::extension::PRELUDE.to_owned(),
         ]);
-        let mut h: hugr::Hugr = hugr::Hugr::load_json(file, &reg).unwrap();
+        let mut h: hugr::Hugr = hugr::Hugr::load(reader, Some(&reg)).unwrap();
         QSystemPass::default().run(&mut h).unwrap();
         h.validate().unwrap();
     }

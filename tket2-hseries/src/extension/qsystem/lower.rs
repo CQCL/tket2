@@ -73,9 +73,9 @@ pub enum LowerTk2Error {
 fn lower_ops(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, LowerTk2Error> {
     let mut funcs: BTreeMap<Tk2Op, Node> = BTreeMap::new();
 
-    let root_op = hugr.get_optype(hugr.root());
+    let root_op = hugr.entrypoint_optype();
     if !root_op
-        .validity_flags()
+        .validity_flags::<Node>()
         .allowed_children
         .is_superset(OpTag::FuncDefn)
     {
@@ -93,14 +93,14 @@ fn lower_ops(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, LowerTk2
     let mut replaced_nodes = Vec::new();
 
     for (node, op) in replacements {
-        // retrrieve or build the function
+        // retrieve or build the function
         let func_node = match funcs.entry(op) {
             Entry::Occupied(f) => *f.get(),
             Entry::Vacant(entry) => {
                 let h = build_func(op)?;
-                let inserted = hugr.insert_hugr(hugr.root(), h);
-                entry.insert(inserted.new_root);
-                inserted.new_root
+                let inserted = hugr.insert_hugr(hugr.entrypoint(), h);
+                entry.insert(inserted.inserted_entrypoint);
+                inserted.inserted_entrypoint
             }
         };
         let call_op: hugr::ops::OpType = hugr::ops::Call::try_new(
@@ -238,12 +238,11 @@ pub fn check_lowered<H: HugrView>(hugr: &H) -> Result<(), Vec<H::Node>> {
 #[derive(Default, Debug, Clone)]
 pub struct LowerTket2ToQSystemPass;
 
-impl ComposablePass for LowerTket2ToQSystemPass {
+impl<H: HugrMut<Node = Node>> ComposablePass<H> for LowerTket2ToQSystemPass {
     type Error = LowerTk2Error;
     type Result = ();
-    type Node = Node;
 
-    fn run(&self, hugr: &mut impl HugrMut<Node = Node>) -> Result<(), LowerTk2Error> {
+    fn run(&self, hugr: &mut H) -> Result<(), LowerTk2Error> {
         lower_tk2_op(hugr)?;
         #[cfg(test)]
         check_lowered(hugr).map_err(|missing_ops| LowerTk2Error::Unlowered { missing_ops })?;
@@ -289,7 +288,7 @@ mod test {
 
         let lowered = lower_direct(&mut h).unwrap();
         assert_eq!(lowered.len(), 5);
-        let circ = Circuit::new(&h, h.root());
+        let circ = Circuit::new(&h);
         let ops: Vec<QSystemOp> = circ
             .commands()
             .filter_map(|com| com.optype().cast())
@@ -332,7 +331,7 @@ mod test {
         // build dfg with just the op
 
         let h = build_func(t2op).unwrap();
-        let circ = Circuit::new(&h, h.root());
+        let circ = Circuit::new(&h);
         let ops: Vec<QSystemOp> = circ
             .commands()
             .filter_map(|com| com.optype().cast())
