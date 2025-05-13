@@ -517,7 +517,10 @@ mod test {
         let mut reassembled = chunks.reassemble().unwrap();
 
         reassembled.hugr_mut().validate().unwrap();
-        assert_eq!(circ.circuit_hash(), reassembled.circuit_hash());
+        assert_eq!(
+            circ.circuit_hash(circ.parent()),
+            reassembled.circuit_hash(reassembled.parent())
+        );
     }
 
     #[test]

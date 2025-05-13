@@ -48,12 +48,12 @@ impl<T: HugrView> Circuit<T> {
     /// Store the circuit as a String in HUGR envelope format.
     pub fn store_str(&self) -> Result<String, EnvelopeError> {
         let pkg = self.wrap_package()?;
-        Ok(pkg.store_str(EnvelopeConfig::text())?)
+        pkg.store_str(EnvelopeConfig::text())
     }
 
     /// Wrap the circuit in a package.
     fn wrap_package(&self) -> Result<Package, EnvelopeError> {
-        let hugr = Circuit::to_owned(&self).into_hugr();
+        let hugr = Circuit::to_owned(self).into_hugr();
         Ok(Package::from_hugr(hugr))
     }
 }

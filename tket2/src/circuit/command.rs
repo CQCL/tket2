@@ -296,7 +296,7 @@ impl<'circ, T: HugrView<Node = Node>> CommandIterator<'circ, T> {
             nodes,
             wire_unit,
             // Ignore the input and output nodes, and the root.
-            max_remaining: node_count - 3,
+            max_remaining: node_count - 2,
             delayed_consts: HashSet::new(),
             delayed_consumers: HashMap::new(),
             delayed_node: None,
@@ -540,7 +540,7 @@ mod test {
         let mut module = simple_module();
         let other_circ = simple_circuit();
         let hugr = module.hugr_mut();
-        hugr.insert_hugr(hugr.entrypoint(), other_circ.into_hugr());
+        hugr.insert_hugr(hugr.module_root(), other_circ.into_hugr());
         return module;
     }
 
