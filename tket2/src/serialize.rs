@@ -272,14 +272,15 @@ fn find_function(mut hugr: Hugr, function_name: &str) -> Result<Circuit, Circuit
 
 #[cfg(test)]
 mod tests {
+    use crate::circuit::CircuitHash;
     use crate::Tk2Op;
 
     use super::*;
 
     use cool_asserts::assert_matches;
     use hugr::builder::{
-        Container, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer, FunctionBuilder,
-        HugrBuilder, ModuleBuilder,
+        Container, Dataflow, DataflowHugr, DataflowSubContainer, FunctionBuilder, HugrBuilder,
+        ModuleBuilder,
     };
     use hugr::extension::prelude::qb_t;
     use hugr::ops::handle::NodeHandle;
@@ -291,7 +292,7 @@ mod tests {
     /// A circuit based on a DFG-rooted HUGR.
     #[fixture]
     fn root_circ() -> Circuit {
-        let mut h = DFGBuilder::new(Signature::new(vec![], vec![qb_t()])).unwrap();
+        let mut h = FunctionBuilder::new("main", Signature::new(vec![], vec![qb_t()])).unwrap();
 
         let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
         let q = res.out_wire(0);
@@ -356,13 +357,17 @@ mod tests {
         let mut buf = Vec::new();
         root_circ.store(&mut buf, EnvelopeConfig::text()).unwrap();
         let circ = Circuit::load(buf.as_slice(), None).unwrap();
-        let extracted_circ = circ.extract_dfg().unwrap();
-        assert_eq!(root_circ, extracted_circ);
+        assert_eq!(
+            root_circ.circuit_hash(root_circ.parent()),
+            circ.circuit_hash(circ.parent())
+        );
 
         let envelope = root_circ.store_str().unwrap();
         let circ = Circuit::load_function_str(envelope, "main").unwrap();
-        let extracted_circ = circ.extract_dfg().unwrap();
-        assert_eq!(root_circ, extracted_circ);
+        assert_eq!(
+            root_circ.circuit_hash(root_circ.parent()),
+            circ.circuit_hash(circ.parent())
+        );
     }
 
     #[rstest]

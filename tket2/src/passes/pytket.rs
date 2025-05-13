@@ -55,7 +55,7 @@ mod test {
 
     use hugr::hugr::hugrmut::HugrMut;
     use hugr::ops::handle::NodeHandle;
-    use hugr::ops::{OpType, Tag};
+    use hugr::ops::{OpTag, OpTrait, OpType, Tag};
     use hugr::types::{Signature, TypeRow};
     use hugr::HugrView;
     use rstest::{fixture, rstest};
@@ -109,10 +109,8 @@ mod test {
         let lowered_circ = lower_to_pytket(&circ).unwrap();
         lowered_circ.hugr().validate().unwrap();
 
-        assert_matches!(
-            lowered_circ.hugr().get_optype(lowered_circ.parent()),
-            OpType::DFG(_)
-        );
+        let parent_tag = lowered_circ.hugr().entrypoint_optype().tag();
+        assert!(OpTag::DataflowParent.is_superset(parent_tag));
         assert_matches!(
             lowered_circ.hugr().get_optype(lowered_circ.input_node()),
             OpType::Input(_)

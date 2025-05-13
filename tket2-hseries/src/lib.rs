@@ -306,7 +306,7 @@ mod test {
     #[test]
     #[cfg_attr(miri, ignore)] // File::open is not supported in miri
     fn ordered_qalloc() {
-        let file = std::fs::File::open("../test_files/ordered_qalloc.json").unwrap();
+        let file = std::fs::File::open("../test_files/ordered_qalloc.hugr").unwrap();
         let reader = BufReader::new(file);
         let reg = ExtensionRegistry::new([
             tket2::extension::TKET2_EXTENSION.to_owned(),
