@@ -50,7 +50,10 @@ impl<T: Default + HugrView> Default for Circuit<T> {
 
 impl<T: HugrView<Node = Node>> PartialEq for Circuit<T> {
     fn eq(&self, other: &Self) -> bool {
-        match (self.circuit_hash(), other.circuit_hash()) {
+        match (
+            self.circuit_hash(self.parent()),
+            other.circuit_hash(other.parent()),
+        ) {
             (Ok(hash1), Ok(hash2)) => hash1 == hash2,
             _ => false,
         }

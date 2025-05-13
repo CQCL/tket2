@@ -220,7 +220,7 @@ impl Tk2Circuit {
 
     /// Returns a hash of the circuit.
     pub fn hash(&self) -> u64 {
-        self.circ.circuit_hash().unwrap()
+        self.circ.circuit_hash(self.circ.parent()).unwrap()
     }
 
     /// Hash the circuit
