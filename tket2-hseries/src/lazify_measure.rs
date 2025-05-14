@@ -3,7 +3,7 @@
 //!
 //! [Tket2Op::Measure]: tket2::Tk2Op::Measure
 //! [QSystemOp::Measure]: crate::extension::qsystem::QSystemOp::Measure
-use std::{collections::HashMap, iter};
+use std::iter;
 
 use delegate::delegate;
 use derive_more::{Display, Error, From};
@@ -120,13 +120,25 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
     ) -> Result<Self, LazifyMeasurePassError<N>> {
         Self::check_signature(node, QSystemOp::LazyMeasure, hugr.get_optype(node))?;
 
-        let subgraph = SiblingSubgraph::from_node(node, &hugr);
         // SimpleReplacement adds edges in a nondeterministic order.  This
         // results in linked_inputs returning items in a nondeterministic
         // order. We sort them here to restore determinism.
         let uses = hugr.linked_inputs(node, 0).sorted().collect_vec();
+        let bool_uses = uses.len();
+        let subgraph = {
+            let mut subg = SiblingSubgraph::from_node(node, &hugr);
+            if let Some(&outport) = subg.outgoing_ports().first() {
+                subg.set_outgoing_ports(vec![outport; bool_uses], &hugr)
+                    .expect("valid output ports");
+            } else {
+                assert_eq!(bool_uses, 0, "there is an output if bool_uses > 0");
+                subg.set_outgoing_ports(vec![], &hugr)
+                    .expect("valid output ports");
+            }
+            subg
+        };
+
         let replacement = {
-            let bool_uses = uses.len();
             let mut builder =
                 DFGBuilder::new(Signature::new(qb_t(), vec![bool_t(); bool_uses])).unwrap();
             let [qb] = builder.input_wires_arr();
@@ -140,10 +152,11 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
             builder.finish_hugr_with_outputs(out_wires).unwrap()
         };
 
-        Ok(Self(
-            SimpleReplacement::try_new(subgraph, &hugr, replacement)
-                .unwrap_or_else(|e| panic!("{e}")),
-        ))
+        // TODO: SimpleReplacement::try_new fails here if there are order edges,
+        Ok(Self(SimpleReplacement::new_unchecked(
+            subgraph,
+            replacement,
+        )))
     }
 
     /// Construct a new `LazifyMeasureRewrite` replacing `node` with a
@@ -156,11 +169,23 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
     ) -> Result<Self, LazifyMeasurePassError<N>> {
         Self::check_signature(node, QSystemOp::LazyMeasureReset, hugr.get_optype(node))?;
 
-        let subgraph = SiblingSubgraph::from_node(node, &hugr);
         // See comment in try_new_measure
         let uses = hugr.linked_inputs(node, 1).sorted().collect_vec();
+        let bool_uses = uses.len();
+        let subgraph = {
+            let mut subg = SiblingSubgraph::from_node(node, &hugr);
+            let &qb_out = subg.outgoing_ports().first().expect("QB output");
+            let mut new_outgoing = vec![qb_out];
+            if let Some(&bool_out) = subg.outgoing_ports().get(1) {
+                new_outgoing.extend(itertools::repeat_n(bool_out, bool_uses));
+            } else {
+                assert_eq!(bool_uses, 0, "there is an output if bool_uses > 0");
+            }
+            subg.set_outgoing_ports(new_outgoing, &hugr)
+                .expect("valid output ports");
+            subg
+        };
         let replacement = {
-            let bool_uses = uses.len();
             let mut builder = {
                 let outputs = iter::once(qb_t())
                     .chain(itertools::repeat_n(bool_t(), bool_uses))
@@ -180,11 +205,11 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
                 .unwrap()
         };
 
-        Ok(Self(
-            SimpleReplacement::try_new(subgraph, &hugr, replacement)
-                //.expect("replacement should be valid"),
-                .unwrap_or_else(|e| panic!("{e}")),
-        ))
+        // TODO: SimpleReplacement::try_new fails here if there are order edges,
+        Ok(Self(SimpleReplacement::new_unchecked(
+            subgraph,
+            replacement,
+        )))
     }
 
     fn build_futures_gadget(builder: &mut impl Dataflow, wire: Wire, num_uses: usize) -> Vec<Wire> {
