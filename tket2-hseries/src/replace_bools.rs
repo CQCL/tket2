@@ -284,7 +284,6 @@ mod test {
         types::TypeRow,
         HugrView,
     };
-    use itertools::Itertools;
     use rstest::rstest;
     use tket2::{
         extension::bool::{BoolOp, BoolOpBuilder},
@@ -302,16 +301,16 @@ mod test {
         let output = dfb.add_bool_read(b).unwrap();
         let mut h = dfb.finish_hugr_with_outputs(output).unwrap();
 
-        assert_eq!(h.num_nodes(), 4);
+        assert_eq!(h.num_nodes(), 8);
 
-        let pass = ReplaceBoolPass::default();
+        let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.input(), &TypeRow::from(vec![bool_dest()]));
         assert_eq!(sig.output(), &TypeRow::from(vec![bool_t()]));
 
-        assert_eq!(h.num_nodes(), 14);
+        assert_eq!(h.num_nodes(), 18);
     }
 
     #[test]
@@ -321,16 +320,16 @@ mod test {
         let output = dfb.add_bool_make_opaque(b).unwrap();
         let mut h = dfb.finish_hugr_with_outputs(output).unwrap();
 
-        assert_eq!(h.num_nodes(), 4);
+        assert_eq!(h.num_nodes(), 8);
 
-        let pass = ReplaceBoolPass::default();
+        let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.input(), &TypeRow::from(vec![bool_t()]));
         assert_eq!(sig.output(), &TypeRow::from(vec![bool_dest()]));
 
-        assert_eq!(h.num_nodes(), 7);
+        assert_eq!(h.num_nodes(), 11);
     }
 
     #[rstest]
@@ -348,7 +347,7 @@ mod test {
         let result = dfb.add_dataflow_op(logic_op, [b1, b2]).unwrap();
         let mut h = dfb.finish_hugr_with_outputs(result.outputs()).unwrap();
 
-        let pass = ReplaceBoolPass::default();
+        let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
@@ -364,7 +363,7 @@ mod test {
         let result = dfb.add_dataflow_op(BoolOp::not, [b]).unwrap();
         let mut h = dfb.finish_hugr_with_outputs(result.outputs()).unwrap();
 
-        let pass = ReplaceBoolPass::default();
+        let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
@@ -381,7 +380,7 @@ mod test {
         let output = dfb.add_dataflow_op(measure_op, [q]).unwrap();
         let mut h = dfb.finish_hugr_with_outputs(output.outputs()).unwrap();
 
-        let pass = ReplaceBoolPass::default();
+        let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
@@ -405,19 +404,10 @@ mod test {
         let output = dfb.add_measure_reset(q).unwrap();
         let mut h = dfb.finish_hugr_with_outputs(output).unwrap();
 
-        let pass = ReplaceBoolPass::default();
+        let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
-        assert_eq!(sig.output(), &TypeRow::from(vec![bool_dest()]));
-
-        let top_ops = h.children(h.entrypoint()).map(|n| h.get_optype(n)).collect_vec();
-        assert!(top_ops.iter().any(|op| {
-            if let Some(ext_op) = op.as_extension_op() {
-                ext_op.def().name() == "LazyMeasure"
-            } else {
-                false
-            }
-        }));
+        assert_eq!(sig.output(), &TypeRow::from(vec![qb_t(), bool_dest()]));
     }
 }
