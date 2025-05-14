@@ -14,7 +14,6 @@ use hugr::core::HugrNode;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::patch::{simple_replace, PatchVerification};
 use hugr::hugr::views::sibling_subgraph::{InvalidReplacement, InvalidSubgraph};
-use hugr::hugr::views::ExtractHugr;
 use hugr::hugr::Patch;
 use hugr::types::Signature;
 use hugr::{
@@ -69,7 +68,7 @@ impl Subcircuit<Node> {
     pub fn create_rewrite(
         &self,
         circuit: &Circuit<impl HugrView<Node = Node>>,
-        replacement: Circuit<impl ExtractHugr<Node = Node>>,
+        replacement: Circuit<impl HugrView<Node = Node>>,
     ) -> Result<CircuitRewrite, InvalidReplacement> {
         // The replacement must be a Dfg rooted hugr.
         let replacement = replacement
@@ -92,7 +91,7 @@ impl CircuitRewrite {
     pub fn try_new(
         circuit_position: &Subcircuit,
         circuit: &Circuit<impl HugrView<Node = Node>>,
-        replacement: Circuit<impl ExtractHugr<Node = Node>>,
+        replacement: Circuit<impl HugrView<Node = Node>>,
     ) -> Result<Self, InvalidReplacement> {
         let replacement = replacement
             .extract_dfg()

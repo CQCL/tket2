@@ -14,7 +14,7 @@ use hugr::types::{CustomType, Type, TypeBound};
 use pyo3::prelude::*;
 use std::fmt;
 
-use hugr::{type_row, Hugr, HugrView, PortIndex};
+use hugr::{type_row, Hugr, HugrView, Node, PortIndex};
 use tket2::rewrite::CircuitRewrite;
 use tket2::serialize::TKETDecode;
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -64,7 +64,7 @@ create_py_exception!(
 );
 
 create_py_exception!(
-    hugr::hugr::validate::ValidationError,
+    hugr::hugr::validate::ValidationError<Node>,
     PyValidationError,
     "Errors that can occur while validating a Hugr."
 );

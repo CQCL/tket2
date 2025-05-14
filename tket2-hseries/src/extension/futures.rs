@@ -264,6 +264,7 @@ impl<D: Dataflow> FutureOpBuilder for D {}
 pub(crate) mod test {
 
     use hugr::builder::{Dataflow, DataflowHugr, FunctionBuilder};
+    use hugr::HugrView;
     use std::sync::Arc;
     use strum::IntoEnumIterator;
 

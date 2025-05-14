@@ -8,7 +8,7 @@ use hugr::{
     builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder},
     extension::ExtensionRegistry,
     hugr::{hugrmut::HugrMut, HugrError},
-    ops::{self, DataflowOpTrait, OpTag, ValidateOp},
+    ops::{self, DataflowOpTrait},
     std_extensions::arithmetic::{float_ops::FloatOps, float_types::ConstF64},
     types::Signature,
     Hugr, HugrView, Node, Wire,
@@ -79,9 +79,8 @@ enum ReplaceOps {
 }
 
 pub(super) fn insert_function(hugr: &mut impl HugrMut<Node = Node>, func_def: Hugr) -> Node {
-    // TODO check root is valid?
-    let inserted = hugr.insert_hugr(hugr.root(), func_def);
-    inserted.new_root
+    let inserted = hugr.insert_hugr(hugr.module_root(), func_def);
+    inserted.inserted_entrypoint
 }
 
 /// Lower [`Tk2Op`] operations to [`QSystemOp`] operations.
@@ -97,15 +96,6 @@ pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, L
     let mut funcs: HashMap<Tk2Op, Node> = HashMap::new();
     let mut lowerer = ReplaceTypes::new_empty();
     let mut barrier_funcs = BarrierInserter::new();
-
-    let root_op = hugr.get_optype(hugr.root());
-    if !root_op
-        .validity_flags()
-        .allowed_children
-        .is_superset(OpTag::FuncDefn)
-    {
-        return Err(LowerTk2Error::InvalidFuncDefn(root_op.clone()));
-    }
 
     let replacements: Vec<_> = hugr
         .nodes()
@@ -158,7 +148,14 @@ pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, L
     }
 
     barrier_funcs.register_operation_replacements(hugr, &mut lowerer);
+
+    // functions inserted at module root level so lowerer needs to be
+    // run with module root as entrypoint
+    let old_entrypoint = hugr.entrypoint();
+    hugr.set_entrypoint(hugr.module_root());
     lowerer.run(hugr)?;
+    // restore entrypoint
+    hugr.set_entrypoint(old_entrypoint);
 
     Ok(replaced_nodes)
 }
@@ -253,12 +250,11 @@ pub fn check_lowered<H: HugrView>(hugr: &H) -> Result<(), Vec<H::Node>> {
 #[derive(Default, Debug, Clone)]
 pub struct LowerTket2ToQSystemPass;
 
-impl ComposablePass for LowerTket2ToQSystemPass {
+impl<H: HugrMut<Node = Node>> ComposablePass<H> for LowerTket2ToQSystemPass {
     type Error = LowerTk2Error;
     type Result = ();
-    type Node = Node;
 
-    fn run(&self, hugr: &mut impl HugrMut<Node = Node>) -> Result<(), LowerTk2Error> {
+    fn run(&self, hugr: &mut H) -> Result<(), LowerTk2Error> {
         lower_tk2_op(hugr)?;
         #[cfg(test)]
         check_lowered(hugr).map_err(|missing_ops| LowerTk2Error::Unlowered { missing_ops })?;
@@ -304,7 +300,7 @@ mod test {
 
         let lowered = lower_tk2_op(&mut h).unwrap();
         assert_eq!(lowered.len(), 5);
-        let circ = Circuit::new(&h, h.root());
+        let circ = Circuit::new(&h);
         let ops: Vec<QSystemOp> = circ
             .commands()
             .filter_map(|com| com.optype().cast())
@@ -347,7 +343,7 @@ mod test {
         // build dfg with just the op
 
         let h = build_func(t2op).unwrap();
-        let circ = Circuit::new(&h, h.root());
+        let circ = Circuit::new(&h);
         let ops: Vec<QSystemOp> = circ
             .commands()
             .filter_map(|com| com.optype().cast())
@@ -384,7 +380,7 @@ mod test {
         // 5x(float + load), measure_reset, conditional, case(input, output) * 2, flip
         // (phasedx + 2*(float + load))
         // + 19 for the barrier array wrapping, popping and option unwrapping
-        assert_eq!(h.num_nodes(), 78);
+        assert_eq!(h.descendants(h.module_root()).count(), 82);
         assert_eq!(check_lowered(&h), Ok(()));
         if let Err(e) = h.validate() {
             panic!("{}", e);

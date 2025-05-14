@@ -4,8 +4,7 @@
 //! This is a best-effort attempt, and may not always succeed.
 
 use derive_more::{Display, Error, From};
-use hugr::hugr::views::ExtractHugr;
-use hugr::Node;
+use hugr::{HugrView, Node};
 use itertools::Itertools;
 
 use crate::serialize::pytket::OpConvertError;
@@ -14,7 +13,7 @@ use crate::Circuit;
 use super::find_tuple_unpack_rewrites;
 
 /// Try to lower a circuit to a form that can be encoded as a pytket legacy circuit.
-pub fn lower_to_pytket<T: ExtractHugr<Node = Node>>(
+pub fn lower_to_pytket<T: HugrView<Node = Node>>(
     circ: &Circuit<T>,
 ) -> Result<Circuit, PytketLoweringError> {
     let mut circ = circ
@@ -51,13 +50,12 @@ mod test {
     use crate::Tk2Op;
 
     use super::*;
-    use hugr::builder::{
-        Container, Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder, SubContainer,
-    };
+    use hugr::builder::{CFGBuilder, Dataflow, HugrBuilder};
     use hugr::extension::prelude::{qb_t, MakeTuple, UnpackTuple};
 
+    use hugr::hugr::hugrmut::HugrMut;
     use hugr::ops::handle::NodeHandle;
-    use hugr::ops::{OpType, Tag};
+    use hugr::ops::{OpTag, OpTrait, OpType, Tag};
     use hugr::types::{Signature, TypeRow};
     use hugr::HugrView;
     use rstest::{fixture, rstest};
@@ -72,49 +70,33 @@ mod test {
         fn build() -> Result<Circuit, hugr::builder::BuildError> {
             let two_qbs = TypeRow::from(vec![qb_t(), qb_t()]);
             let circ_signature = Signature::new_endo(two_qbs.clone());
-            let circ;
+            let mut cfg = CFGBuilder::new(circ_signature)?;
+            let circ = {
+                let mut dfg = cfg.simple_entry_builder(two_qbs.clone(), 1)?;
+                let [q1, q2] = dfg.input_wires_arr();
 
-            let mut builder = ModuleBuilder::new();
-            let _func = {
-                let mut func = builder.define_function("main", circ_signature)?;
-                let [q1, q2] = func.input_wires_arr();
+                let [q1] = dfg.add_dataflow_op(Tk2Op::H, [q1])?.outputs_arr();
+                let [q1, q2] = dfg.add_dataflow_op(Tk2Op::CX, [q1, q2])?.outputs_arr();
 
-                let cfg = {
-                    let mut cfg =
-                        func.cfg_builder([(qb_t(), q1), (qb_t(), q2)], two_qbs.clone())?;
+                let [tup] = dfg
+                    .add_dataflow_op(MakeTuple::new(two_qbs.clone()), [q1, q2])?
+                    .outputs_arr();
+                let [q1, q2] = dfg
+                    .add_dataflow_op(UnpackTuple::new(two_qbs), [tup])?
+                    .outputs_arr();
 
-                    circ = {
-                        let mut dfg = cfg.simple_entry_builder(two_qbs.clone(), 1)?;
-                        let [q1, q2] = dfg.input_wires_arr();
+                // Adds an empty Unit branch.
+                let [branch] = dfg
+                    .add_dataflow_op(Tag::new(0, vec![TypeRow::new()]), [])?
+                    .outputs_arr();
 
-                        let [q1] = dfg.add_dataflow_op(Tk2Op::H, [q1])?.outputs_arr();
-                        let [q1, q2] = dfg.add_dataflow_op(Tk2Op::CX, [q1, q2])?.outputs_arr();
-
-                        let [tup] = dfg
-                            .add_dataflow_op(MakeTuple::new(two_qbs.clone()), [q1, q2])?
-                            .outputs_arr();
-                        let [q1, q2] = dfg
-                            .add_dataflow_op(UnpackTuple::new(two_qbs), [tup])?
-                            .outputs_arr();
-
-                        // Adds an empty Unit branch.
-                        let [branch] = dfg
-                            .add_dataflow_op(Tag::new(0, vec![TypeRow::new()]), [])?
-                            .outputs_arr();
-
-                        dfg.finish_with_outputs(branch, [q1, q2])?
-                    };
-                    cfg.branch(&circ, 0, &cfg.exit_block())?;
-
-                    cfg.finish_sub_container()?
-                };
-                let [q1, q2] = cfg.outputs_arr();
-
-                func.finish_with_outputs([q1, q2])?
+                dfg.finish_with_outputs(branch, [q1, q2])?
             };
+            cfg.branch(&circ, 0, &cfg.exit_block())?;
 
-            let hugr = builder.finish_hugr()?;
-            Ok(Circuit::new(hugr, circ.node()))
+            let mut hugr = cfg.finish_hugr()?;
+            hugr.set_entrypoint(circ.node());
+            Ok(Circuit::new(hugr))
         }
         build().unwrap()
     }
@@ -127,11 +109,8 @@ mod test {
         let lowered_circ = lower_to_pytket(&circ).unwrap();
         lowered_circ.hugr().validate().unwrap();
 
-        assert_eq!(lowered_circ.parent(), lowered_circ.hugr().root());
-        assert_matches!(
-            lowered_circ.hugr().get_optype(lowered_circ.parent()),
-            OpType::DFG(_)
-        );
+        let parent_tag = lowered_circ.hugr().entrypoint_optype().tag();
+        assert!(OpTag::DataflowParent.is_superset(parent_tag));
         assert_matches!(
             lowered_circ.hugr().get_optype(lowered_circ.input_node()),
             OpType::Input(_)

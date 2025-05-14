@@ -54,7 +54,7 @@ impl<P: Ord, C> HugrPQ<P, C> {
     where
         C: Fn(&Circuit) -> P,
     {
-        let hash = circ.circuit_hash().unwrap();
+        let hash = circ.circuit_hash(circ.parent()).unwrap();
         let cost = (self.cost_fn)(&circ);
         self.push_unchecked(circ, hash, cost);
     }

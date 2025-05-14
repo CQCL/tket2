@@ -77,9 +77,10 @@ class CircBuild(TrackedDfg):
         and validate."""
 
         return Tk2Circuit.from_str(
-            self.finish_package(other_extensions=other_extensions).to_str(
-                EnvelopeConfig.TEXT
-            )
+            self.finish_package(
+                other_extensions=other_extensions, function_name="main"
+            ).to_str(EnvelopeConfig.TEXT),
+            "main",
         )
 
 

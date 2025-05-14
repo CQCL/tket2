@@ -555,6 +555,7 @@ mod test {
     use hugr::builder::{DataflowHugr, FunctionBuilder};
     use hugr::extension::simple_op::MakeExtensionOp;
     use hugr::ops::OpType;
+    use hugr::HugrView;
     use strum::IntoEnumIterator as _;
 
     use super::*;

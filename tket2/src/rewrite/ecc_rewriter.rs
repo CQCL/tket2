@@ -13,10 +13,12 @@
 //! of the Quartz repository.
 
 use derive_more::{Display, Error, From, Into};
+use hugr::envelope::serde_with::impl_serde_as_string_envelope;
 use hugr::extension::resolution::ExtensionResolutionError;
 use hugr::{Hugr, HugrView, Node, PortIndex};
 use itertools::Itertools;
 use portmatching::PatternID;
+use serde_with::serde_as;
 use std::{
     collections::HashSet,
     fs::File,
@@ -36,17 +38,23 @@ use super::{CircuitRewrite, Rewriter};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, From, Into, serde::Serialize, serde::Deserialize)]
 struct TargetID(usize);
 
+struct AsStringTk2Envelope;
+
+impl_serde_as_string_envelope!(AsStringTk2Envelope, &REGISTRY);
+
 /// A rewriter based on circuit equivalence classes.
 ///
 /// In every equivalence class, one circuit is chosen as the representative.
 /// Valid rewrites turn a non-representative circuit into its representative,
 /// or a representative circuit into any of the equivalent non-representative
 /// circuits.
+#[serde_as]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ECCRewriter {
     /// Matcher for finding patterns.
     matcher: PatternMatcher,
     /// Targets of some rewrite rules.
+    #[serde_as(as = "Vec<AsStringTk2Envelope>")]
     targets: Vec<Hugr>,
     /// Rewrites, stored as a map from the source PatternID to possibly multiple
     /// target TargetIDs. The usize index of PatternID is used to index into

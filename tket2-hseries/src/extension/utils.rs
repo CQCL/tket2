@@ -122,6 +122,7 @@ impl<D: Dataflow> UtilsOpBuilder for D {}
 mod test {
     use std::sync::Arc;
 
+    use hugr::HugrView;
     use hugr::{
         builder::{DataflowHugr, FunctionBuilder},
         extension::simple_op::MakeExtensionOp,

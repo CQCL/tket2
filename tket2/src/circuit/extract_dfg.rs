@@ -10,6 +10,7 @@ use itertools::Itertools;
 use crate::{Circuit, CircuitMutError};
 
 /// Internal method used by [`extract_dfg`] to replace the parent node with a DFG node.
+#[expect(unused)] // TODO: Remove if things work without it
 pub(super) fn rewrite_into_dfg(circ: &mut Circuit) -> Result<(), CircuitMutError> {
     // Replace the parent node with a DFG node, if necessary.
     let old_optype = circ.hugr.get_optype(circ.parent());

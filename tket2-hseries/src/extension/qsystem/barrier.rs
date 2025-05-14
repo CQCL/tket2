@@ -78,7 +78,7 @@ mod test {
                 .unwrap()
         } else {
             let run_barr_func_n = h
-                .children(h.root())
+                .children(h.module_root())
                 .filter(|&r_barr_n| {
                     h.get_optype(r_barr_n).as_func_defn().is_some_and(|op| {
                         op.name
@@ -103,9 +103,16 @@ mod test {
         assert_eq!(h.all_linked_inputs(run_bar_n).count(), num_qb);
 
         // Check all temporary ops are removed
-        assert!(h.nodes().all(|n| h
-            .get_optype(n)
-            .as_extension_op()
-            .is_none_or(|op| op.extension_id() != &BarrierOperationFactory::TEMP_EXT_NAME)));
+        for n in h.nodes() {
+            if let Some(op) = h.get_optype(n).as_extension_op() {
+                assert_ne!(
+                    op.extension_id(),
+                    &BarrierOperationFactory::TEMP_EXT_NAME,
+                    "temporary op: {} {}",
+                    op.unqualified_id(),
+                    op.args().iter().map(|a| a.to_string()).join(","),
+                );
+            }
+        }
     }
 }

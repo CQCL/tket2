@@ -41,7 +41,7 @@ impl OpHashWrapper {
 impl std::hash::Hash for OpHashWrapper {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.extension_id().hash(state);
-        self.0.def().name().hash(state);
+        self.0.unqualified_id().hash(state);
         self.0.args().hash(state);
     }
 }
@@ -592,7 +592,7 @@ pub fn build_runtime_barrier_op(array_size: u64) -> Result<Hugr, BuildError> {
 
 #[cfg(test)]
 mod tests {
-    use hugr::extension::prelude::bool_t;
+    use hugr::{extension::prelude::bool_t, HugrView};
 
     use super::*;
 

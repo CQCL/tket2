@@ -403,6 +403,7 @@ impl<D: Dataflow> ResultOpBuilder for D {}
 pub(crate) mod test {
     use cool_asserts::assert_matches;
     use hugr::types::Signature;
+    use hugr::HugrView;
     use hugr::{
         builder::{Dataflow, DataflowHugr, FunctionBuilder},
         std_extensions::arithmetic::int_types::INT_TYPES,

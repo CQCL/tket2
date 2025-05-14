@@ -73,7 +73,7 @@ where
                         return None;
                     }
 
-                    let Ok(hash) = r.circ.circuit_hash() else {
+                    let Ok(hash) = r.circ.circuit_hash(r.circ.parent()) else {
                         // The composed rewrites were not valid.
                         //
                         // See [https://github.com/CQCL/tket2/discussions/242]

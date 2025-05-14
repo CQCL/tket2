@@ -4,10 +4,11 @@
 pub mod pytket;
 
 pub use hugr::envelope::{EnvelopeConfig, EnvelopeError};
+use hugr::hugr::hugrmut::HugrMut;
 
 use std::io;
 
-use hugr::extension::ExtensionRegistryError;
+use hugr::extension::{ExtensionRegistry, ExtensionRegistryError};
 use hugr::hugr::ValidationError;
 pub use pytket::{
     load_tk1_json_file, load_tk1_json_reader, load_tk1_json_str, save_tk1_json_file,
@@ -16,7 +17,7 @@ pub use pytket::{
 
 use derive_more::{Display, Error, From};
 use hugr::ops::{OpTag, OpTrait, OpType};
-use hugr::package::{Package, PackageEncodingError, PackageError, PackageValidationError};
+use hugr::package::{Package, PackageValidationError};
 use hugr::{Hugr, HugrView, Node};
 
 use crate::extension::REGISTRY;
@@ -34,132 +35,59 @@ const METADATA_ENTRYPOINT: &str = "TKET2.entrypoint";
 
 impl<T: HugrView> Circuit<T> {
     /// Store the circuit as a HUGR envelope, using the given configuration.
-    ///
-    /// If the circuit is not a function in a module-rooted HUGR, a new module
-    /// is created with a `main` function containing it.
-    ///
-    /// # Errors
-    ///
-    /// - If the circuit's parent is not the root of the HUGR or a function in
-    ///   the root's module.
-    ///
     pub fn store(
         &self,
         writer: impl io::Write,
         config: EnvelopeConfig,
-    ) -> Result<(), CircuitStoreError<T::Node>> {
+    ) -> Result<(), EnvelopeError> {
         let pkg = self.wrap_package()?;
         pkg.store(writer, config)?;
         Ok(())
     }
 
     /// Store the circuit as a String in HUGR envelope format.
-    ///
-    /// If the circuit is not a function in a module-rooted HUGR, a new module
-    /// is created with a `main` function containing it.
-    ///
-    /// # Errors
-    ///
-    /// - If the circuit's parent is not the root of the HUGR or a function in
-    ///   the root's module.
-    ///
-    pub fn store_str(&self) -> Result<String, CircuitStoreError<T::Node>> {
+    pub fn store_str(&self) -> Result<String, EnvelopeError> {
         let pkg = self.wrap_package()?;
-        Ok(pkg.store_str(EnvelopeConfig::text())?)
-    }
-
-    /// Store the circuit as a bare HUGR json.
-    ///
-    /// # Errors
-    ///
-    /// - If the circuit's parent is not the root of the HUGR. This will be relaxed in the future.
-    ///
-    // TODO: Update once hugrs support root pointers.
-    pub fn store_hugr(&self, writer: impl io::Write) -> Result<(), CircuitStoreError<T::Node>> {
-        let hugr = self.hugr();
-
-        if self.parent() != hugr.root() {
-            return Err(CircuitStoreError::NonRootCircuit {
-                parent: self.parent(),
-            });
-        }
-        #[expect(deprecated)]
-        serde_json::to_writer(writer, hugr.base_hugr())?;
-        Ok(())
-    }
-
-    /// Store the circuit as a HUGR in json format.
-    ///
-    /// # Errors
-    ///
-    /// - If the circuit's parent is not the root of the HUGR. This will be relaxed in the future.
-    ///
-    // TODO: Update once hugrs support root pointers.
-    #[deprecated(note = "Renamed to `Circuit::store_hugr`.", since = "0.8.0")]
-    #[cfg_attr(coverage_nightly, coverage(off))]
-    pub fn to_hugr_writer(&self, writer: impl io::Write) -> Result<(), CircuitStoreError<T::Node>> {
-        self.store_hugr(writer)
-    }
-
-    /// Store the circuit as a package in json format.
-    ///
-    /// If the circuit is not a function in a module-rooted HUGR, a new module
-    /// is created with a `main` function containing it.
-    ///
-    /// # Errors
-    ///
-    /// - If the circuit's parent is not the root of the HUGR or a function in
-    ///   the root's module.
-    ///
-    #[deprecated(
-        note = "Package JSON support will be removed. Use `Circuit::store` instead.",
-        since = "0.8.0"
-    )]
-    #[cfg_attr(coverage_nightly, coverage(off))]
-    pub fn to_package_writer(
-        &self,
-        writer: impl io::Write,
-    ) -> Result<(), CircuitStoreError<T::Node>> {
-        let pkg = self.wrap_package()?;
-
-        #[allow(deprecated)]
-        Ok(pkg.to_json_writer(writer)?)
+        pkg.store_str(EnvelopeConfig::text())
     }
 
     /// Wrap the circuit in a package.
-    ///
-    /// If the circuit is not a function in a module-rooted HUGR, a new module
-    /// is created with a `main` function containing it.
-    ///
-    /// # Errors
-    ///
-    /// - If the circuit's parent is not the root of the HUGR or a function in
-    ///   the root's module.
-    // TODO: Update once hugrs support root pointers.
-    fn wrap_package(&self) -> Result<Package, CircuitStoreError<T::Node>> {
-        let hugr = self.hugr();
-
-        // Check if we support storing the circuit as a package.
-        //
-        // This restriction may be relaxed once `METADATA_ENTRYPOINT` is implemented.
-        let circuit_is_at_root = self.parent() == hugr.root();
-        let circuit_is_fn_at_module_root = OpTag::ModuleRoot
-            .is_superset(hugr.get_optype(hugr.root()).tag())
-            && hugr.get_parent(self.parent()) == Some(hugr.root());
-        if !circuit_is_at_root && !circuit_is_fn_at_module_root {
-            return Err(CircuitStoreError::NonRootCircuit {
-                parent: self.parent(),
-            });
-        }
-        #[expect(deprecated)]
-        Ok(Package::from_hugr(hugr.base_hugr().clone())?)
+    fn wrap_package(&self) -> Result<Package, EnvelopeError> {
+        let hugr = Circuit::to_owned(self).into_hugr();
+        Ok(Package::from_hugr(hugr))
     }
 }
 
 impl Circuit<Hugr> {
     /// Load a circuit from a HUGR envelope.
     ///
-    /// The encoded HUGR must define a function named `function_name`.
+    /// Returns the first module in the encoded package, using the given entrypoint.
+    pub fn load(
+        reader: impl io::BufRead,
+        extensions: Option<&ExtensionRegistry>,
+    ) -> Result<Self, CircuitLoadError> {
+        let extensions = extensions.unwrap_or(&REGISTRY);
+        let hugr = Hugr::load(reader, Some(extensions))?;
+        hugr.validate()?;
+        Ok(Self::try_new(hugr)?)
+    }
+    /// Load a circuit from a string-encoded HUGR envelope.
+    ///
+    /// Returns the first module in the encoded package, using the given entrypoint.
+    pub fn load_str(
+        envelope: impl AsRef<str>,
+        extensions: Option<&ExtensionRegistry>,
+    ) -> Result<Self, CircuitLoadError> {
+        let extensions = extensions.unwrap_or(&REGISTRY);
+        let hugr = Hugr::load_str(envelope, Some(extensions))?;
+        hugr.validate()?;
+        Ok(Self::try_new(hugr)?)
+    }
+
+    /// Load a circuit from a HUGR envelope.
+    ///
+    /// Searches each module in the package for the function name, and return
+    /// the first match.
     pub fn load_function(
         reader: impl io::BufRead,
         function_name: impl AsRef<str>,
@@ -171,7 +99,8 @@ impl Circuit<Hugr> {
 
     /// Load a circuit from a String in HUGR envelope format.
     ///
-    /// The encoded HUGR must define a function named `function_name`.
+    /// Searches each module in the package for the function name, and return
+    /// the first match.
     pub fn load_function_str(
         envelope: impl AsRef<str>,
         function_name: impl AsRef<str>,
@@ -181,61 +110,10 @@ impl Circuit<Hugr> {
         Self::unwrap_package(pkg, function_name)
     }
 
-    /// Load a circuit from a hugr json.
+    /// Unwrap a circuit from a function in the package.
     ///
-    /// The circuit points to the Hugr's root or, if the `TKET2.entrypoint` metadata is present,
-    /// the indicated node.
-    ///
-    /// # Errors
-    ///
-    /// - If the target circuit root is not a dataflow container.
-    pub fn load_hugr(json: impl io::Read) -> Result<Self, CircuitLoadError> {
-        let mut hugr: Hugr = serde_json::from_reader(json)?;
-        hugr.resolve_extension_defs(&REGISTRY)
-            .map_err(PackageEncodingError::from)?;
-        hugr.validate()?;
-        // TODO: Read the entrypoint from the metadata.
-        let root = hugr.root();
-        Ok(Circuit::try_new(hugr, root)?)
-    }
-
-    /// Load a circuit from a hugr json.
-    ///
-    /// The circuit points to the Hugr's root or, if the `TKET2.entrypoint` metadata is present,
-    /// the indicated node.
-    ///
-    /// # Errors
-    ///
-    /// - If the target circuit root is not a dataflow container.
-    #[deprecated(note = "Renamed to `Circuit::load_hugr`.", since = "0.8.0")]
-    #[cfg_attr(coverage_nightly, coverage(off))]
-    pub fn load_hugr_reader(json: impl io::Read) -> Result<Self, CircuitLoadError> {
-        Self::load_hugr(json)
-    }
-
-    /// Load a circuit from a package or hugr json.
-    ///
-    /// If the json encodes a package, one of the modules must contain a
-    /// function called `function_name`.
-    ///
-    /// Otherwise, the json must encode a module-rooted HUGR containing the
-    /// named function.
-    #[deprecated(
-        note = "Use `Circuit::load_function` or `Circuit::load_hugr` instead.",
-        since = "0.8.0"
-    )]
-    #[cfg_attr(coverage_nightly, coverage(off))]
-    pub fn load_function_reader(
-        json: impl io::Read,
-        function_name: impl AsRef<str>,
-    ) -> Result<Self, CircuitLoadError> {
-        #[allow(deprecated)]
-        let pkg = Package::from_json_reader(json, &REGISTRY)?;
-        pkg.validate()?;
-        Self::unwrap_package(pkg, function_name)
-    }
-
-    /// Unwrap the circuit from the package.
+    /// Searches each module in the package for the function name, and return
+    /// the first match.
     fn unwrap_package(
         pkg: Package,
         function_name: impl AsRef<str>,
@@ -244,56 +122,8 @@ impl Circuit<Hugr> {
             modules,
             extensions: _,
         } = pkg;
-
         let (_module_idx, circ) = find_function_in_modules(modules, function_name.as_ref())?;
         Ok(circ)
-    }
-}
-
-/// Error type for serialization operations on [`Circuit`]s.
-#[derive(Debug, Display, Error)]
-#[non_exhaustive]
-pub enum CircuitStoreError<N = Node> {
-    /// Could not encode the hugr json.
-    EncodingError(serde_json::Error),
-    /// Error writing envelope.
-    EnvelopeError(EnvelopeError),
-    /// Cannot load the circuit file.
-    #[display("Cannot write to the circuit file: {_0}")]
-    InvalidFile(io::Error),
-    /// The circuit could not be stored as a package.
-    PackageStore(PackageError),
-    /// The circuit could not be stored as a HUGR envelope.
-    EnvelopeStore(EnvelopeError),
-    /// The circuit's parent is not the root of the HUGR.
-    #[display("The circuit's parent {parent} is not the root of the HUGR.")]
-    NonRootCircuit {
-        /// The parent node.
-        parent: N,
-    },
-}
-
-impl<N> From<serde_json::Error> for CircuitStoreError<N> {
-    fn from(e: serde_json::Error) -> Self {
-        CircuitStoreError::EncodingError(e)
-    }
-}
-
-impl<N> From<io::Error> for CircuitStoreError<N> {
-    fn from(e: io::Error) -> Self {
-        CircuitStoreError::InvalidFile(e)
-    }
-}
-
-impl<N> From<PackageError> for CircuitStoreError<N> {
-    fn from(e: PackageError) -> Self {
-        CircuitStoreError::PackageStore(e)
-    }
-}
-
-impl<N> From<EnvelopeError> for CircuitStoreError<N> {
-    fn from(e: EnvelopeError) -> Self {
-        CircuitStoreError::EnvelopeError(e)
     }
 }
 
@@ -339,16 +169,12 @@ pub enum CircuitLoadError {
     #[display("Error loading the circuit: {_0}")]
     #[from]
     CircuitLoadError(CircuitError),
-    /// Error loading the circuit.
-    #[from]
-    PackageError(PackageEncodingError),
-
-    #[from]
     /// Error loading an envelope.
+    #[from]
     EnvelopeError(EnvelopeError),
     /// Error validating the loaded circuit.
     #[from]
-    ValidationError(ValidationError),
+    ValidationError(ValidationError<Node>),
     /// An error that can occur in defining an extension registry while loading the circuit.
     #[from]
     ExtensionError(ExtensionRegistryError),
@@ -360,22 +186,10 @@ pub enum CircuitLoadError {
     },
 }
 
-impl<N> From<PackageEncodingError> for CircuitStoreError<N> {
-    fn from(e: PackageEncodingError) -> Self {
-        match e {
-            PackageEncodingError::Package(e) => CircuitStoreError::PackageStore(e),
-            PackageEncodingError::JsonEncoding(e) => CircuitStoreError::EncodingError(e),
-            PackageEncodingError::IOError(e) => CircuitStoreError::InvalidFile(e),
-            _ => panic!("Unexpected package encoding error: {e}"),
-        }
-    }
-}
-
 impl From<PackageValidationError> for CircuitLoadError {
     fn from(e: PackageValidationError) -> Self {
         match e {
             PackageValidationError::Validation(e) => CircuitLoadError::ValidationError(e),
-            PackageValidationError::MissingExtension { .. } => panic!("lol"),
             _ => panic!("Unexpected package validation error: {e}"),
         }
     }
@@ -420,9 +234,9 @@ fn find_function_in_modules(
 ///
 /// - If the root of the HUGR is not a module operation.
 /// - If the function is not found in the module.
-fn find_function(hugr: Hugr, function_name: &str) -> Result<Circuit, CircuitLoadError> {
+fn find_function(mut hugr: Hugr, function_name: &str) -> Result<Circuit, CircuitLoadError> {
     // Find the root module.
-    let module = hugr.root();
+    let module = hugr.module_root();
     if !OpTag::ModuleRoot.is_superset(hugr.get_optype(module).tag()) {
         return Err(CircuitLoadError::NonModuleRoot {
             root_op: hugr.get_optype(module).clone(),
@@ -451,19 +265,21 @@ fn find_function(hugr: Hugr, function_name: &str) -> Result<Circuit, CircuitLoad
         });
     };
 
-    let circ = Circuit::try_new(hugr, function)?;
+    hugr.set_entrypoint(function);
+    let circ = Circuit::try_new(hugr)?;
     Ok(circ)
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::circuit::CircuitHash;
     use crate::Tk2Op;
 
     use super::*;
 
     use cool_asserts::assert_matches;
     use hugr::builder::{
-        Container, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer, HugrBuilder,
+        Container, Dataflow, DataflowHugr, DataflowSubContainer, FunctionBuilder, HugrBuilder,
         ModuleBuilder,
     };
     use hugr::extension::prelude::qb_t;
@@ -476,7 +292,7 @@ mod tests {
     /// A circuit based on a DFG-rooted HUGR.
     #[fixture]
     fn root_circ() -> Circuit {
-        let mut h = DFGBuilder::new(Signature::new(vec![], vec![qb_t()])).unwrap();
+        let mut h = FunctionBuilder::new("main", Signature::new(vec![], vec![qb_t()])).unwrap();
 
         let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
         let q = res.out_wire(0);
@@ -486,26 +302,17 @@ mod tests {
 
     #[fixture]
     fn function_circ() -> Circuit {
-        let mut h = ModuleBuilder::new();
-
-        let mut f = h
-            .define_function("banana", Signature::new(vec![], vec![qb_t()]))
-            .unwrap();
+        let mut f = FunctionBuilder::new("banana", Signature::new(vec![], vec![qb_t()])).unwrap();
         let res = f.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
         let q = res.out_wire(0);
-        let func_node = f.finish_with_outputs([q]).unwrap().handle().node();
-
-        Circuit::new(h.finish_hugr().unwrap(), func_node)
+        let hugr = f.finish_hugr_with_outputs([q]).unwrap();
+        Circuit::new(hugr)
     }
 
     /// A circuit located inside a function in a module.
     #[fixture]
     fn nested_circ() -> Circuit {
-        let mut h = ModuleBuilder::new();
-
-        let mut f = h
-            .define_function("banana", Signature::new(vec![], vec![qb_t()]))
-            .unwrap();
+        let mut f = FunctionBuilder::new("banana", Signature::new(vec![], vec![qb_t()])).unwrap();
         let dfg = {
             let mut dfg = f
                 .dfg_builder(Signature::new(vec![], vec![qb_t()]), [])
@@ -514,12 +321,10 @@ mod tests {
             let q = res.out_wire(0);
             dfg.finish_with_outputs([q]).unwrap()
         };
-        f.finish_with_outputs(dfg.outputs())
-            .unwrap()
-            .handle()
-            .node();
+        let mut hugr = f.finish_hugr_with_outputs(dfg.outputs()).unwrap();
+        hugr.set_entrypoint(dfg.node());
 
-        Circuit::new(h.finish_hugr().unwrap(), dfg.node())
+        Circuit::new(hugr)
     }
 
     #[fixture]
@@ -543,27 +348,26 @@ mod tests {
         define("banana", &mut mod2);
         let mod2 = mod2.finish_hugr().unwrap();
 
-        Package::new([mod1, mod2]).unwrap()
+        Package::new([mod1, mod2])
     }
 
     /// Test roundtrips of a circuit with a root parent.
     #[rstest]
     fn root_circuit_store(root_circ: Circuit) {
         let mut buf = Vec::new();
-        root_circ.store_hugr(&mut buf).unwrap();
-        let circ = Circuit::load_hugr(buf.as_slice()).unwrap();
-        assert_eq!(root_circ, circ);
-
-        let mut buf = Vec::new();
         root_circ.store(&mut buf, EnvelopeConfig::text()).unwrap();
-        let circ = Circuit::load_function(buf.as_slice(), "main").unwrap();
-        let extracted_circ = circ.extract_dfg().unwrap();
-        assert_eq!(root_circ, extracted_circ);
+        let circ = Circuit::load(buf.as_slice(), None).unwrap();
+        assert_eq!(
+            root_circ.circuit_hash(root_circ.parent()),
+            circ.circuit_hash(circ.parent())
+        );
 
         let envelope = root_circ.store_str().unwrap();
         let circ = Circuit::load_function_str(envelope, "main").unwrap();
-        let extracted_circ = circ.extract_dfg().unwrap();
-        assert_eq!(root_circ, extracted_circ);
+        assert_eq!(
+            root_circ.circuit_hash(root_circ.parent()),
+            circ.circuit_hash(circ.parent())
+        );
     }
 
     #[rstest]
@@ -597,22 +401,5 @@ mod tests {
         };
 
         assert_matches!(Circuit::load_function_str(&pkg_json, "banana"), Ok(_))
-    }
-
-    #[rstest]
-    fn root_errors(function_circ: Circuit, nested_circ: Circuit) {
-        // Trying to store a non-root circuit as a hugr.
-        let mut buf = Vec::new();
-        assert_matches!(
-            function_circ.store_hugr(&mut buf),
-            Err(CircuitStoreError::NonRootCircuit { .. })
-        );
-
-        // Trying to store a non-root (and non-function-in-a-module) circuit as a package.
-        let mut buf = Vec::new();
-        assert_matches!(
-            nested_circ.store(&mut buf, EnvelopeConfig::text()),
-            Err(CircuitStoreError::NonRootCircuit { .. })
-        );
     }
 }
