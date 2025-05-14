@@ -125,32 +125,25 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
         // results in linked_inputs returning items in a nondeterministic
         // order. We sort them here to restore determinism.
         let uses = hugr.linked_inputs(node, 0).sorted().collect_vec();
-        let (lazy_measure_node, replacement) = {
+        let replacement = {
             let bool_uses = uses.len();
             let mut builder =
                 DFGBuilder::new(Signature::new(qb_t(), vec![bool_t(); bool_uses])).unwrap();
             let [qb] = builder.input_wires_arr();
-            let (lazy_measure_node, future_wire) = {
+            let (_lazy_measure_node, future_wire) = {
                 let handle = builder
                     .add_dataflow_op(QSystemOp::LazyMeasure, [qb])
                     .unwrap();
                 (handle.node(), handle.out_wire(0))
             };
             let out_wires = Self::build_futures_gadget(&mut builder, future_wire, bool_uses);
-            (
-                lazy_measure_node,
-                builder.finish_hugr_with_outputs(out_wires).unwrap(),
-            )
+            builder.finish_hugr_with_outputs(out_wires).unwrap()
         };
-        let nu_inp = HashMap::from_iter([((lazy_measure_node, 0.into()), (node, 0.into()))]);
-        let nu_out: HashMap<_, _> = iter::zip(uses, (0..).map_into()).collect();
 
-        Ok(Self(SimpleReplacement::new(
-            subgraph,
-            replacement,
-            nu_inp,
-            nu_out,
-        )))
+        Ok(Self(
+            SimpleReplacement::try_new(subgraph, &hugr, replacement)
+                .unwrap_or_else(|e| panic!("{e}")),
+        ))
     }
 
     /// Construct a new `LazifyMeasureRewrite` replacing `node` with a
@@ -166,7 +159,7 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
         let subgraph = SiblingSubgraph::from_node(node, &hugr);
         // See comment in try_new_measure
         let uses = hugr.linked_inputs(node, 1).sorted().collect_vec();
-        let (lazy_measure_reset_node, replacement) = {
+        let replacement = {
             let bool_uses = uses.len();
             let mut builder = {
                 let outputs = iter::once(qb_t())
@@ -175,31 +168,23 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
                 DFGBuilder::new(Signature::new(qb_t(), outputs)).unwrap()
             };
             let [qb] = builder.input_wires_arr();
-            let (lazy_measure_reset_node, [qb_wire, future_wire]) = {
+            let (_lazy_measure_reset_node, [qb_wire, future_wire]) = {
                 let handle = builder
                     .add_dataflow_op(QSystemOp::LazyMeasureReset, [qb])
                     .unwrap();
                 (handle.node(), handle.outputs_arr())
             };
             let out_wires = Self::build_futures_gadget(&mut builder, future_wire, bool_uses);
-            (
-                lazy_measure_reset_node,
-                builder
-                    .finish_hugr_with_outputs(iter::once(qb_wire).chain(out_wires))
-                    .unwrap(),
-            )
+            builder
+                .finish_hugr_with_outputs(iter::once(qb_wire).chain(out_wires))
+                .unwrap()
         };
-        let nu_inp = HashMap::from_iter([((lazy_measure_reset_node, 0.into()), (node, 0.into()))]);
-        let qb_use = hugr.single_linked_input(node, 0).unwrap(); // qubit is linear so this can't fail
-        let nu_out: HashMap<_, _> =
-            iter::zip(iter::once(qb_use).chain(uses), (0..).map_into()).collect();
 
-        Ok(Self(SimpleReplacement::new(
-            subgraph,
-            replacement,
-            nu_inp,
-            nu_out,
-        )))
+        Ok(Self(
+            SimpleReplacement::try_new(subgraph, &hugr, replacement)
+                //.expect("replacement should be valid"),
+                .unwrap_or_else(|e| panic!("{e}")),
+        ))
     }
 
     fn build_futures_gadget(builder: &mut impl Dataflow, wire: Wire, num_uses: usize) -> Vec<Wire> {

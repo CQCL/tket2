@@ -351,9 +351,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.37"
+version = "4.5.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eccb054f56cbd38340b380d4a8e69ef1f02f1af43db2f0cc817a4774d80ae071"
+checksum = "ed93b9805f8ba930df42c2590f05453d5ec36cbb85d018868a5b24d31f6ac000"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -371,9 +371,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.37"
+version = "4.5.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efd9466fac8543255d3b1fcad4762c5e116ffe808c8a3043d4263cd4fd4862a2"
+checksum = "379026ff283facf611b0ea629334361c4211d1b12ee01024eec1591133b04120"
 dependencies = [
  "anstream",
  "anstyle",
@@ -976,8 +976,8 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.15.4"
-source = "git+https://github.com/CQCL/hugr?rev=34701669#34701669b7ed2610cd6e53caaf2710baeab90721"
+version = "0.20.0-rc.0"
+source = "git+https://github.com/CQCL/hugr?rev=19e3216#19e32164df0f867ba55bfb4f3cdbdde7b62987ba"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -987,8 +987,8 @@ dependencies = [
 
 [[package]]
 name = "hugr-cli"
-version = "0.15.4"
-source = "git+https://github.com/CQCL/hugr?rev=34701669#34701669b7ed2610cd6e53caaf2710baeab90721"
+version = "0.20.0-rc.0"
+source = "git+https://github.com/CQCL/hugr?rev=19e3216#19e32164df0f867ba55bfb4f3cdbdde7b62987ba"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -1000,8 +1000,8 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.15.4"
-source = "git+https://github.com/CQCL/hugr?rev=34701669#34701669b7ed2610cd6e53caaf2710baeab90721"
+version = "0.20.0-rc.0"
+source = "git+https://github.com/CQCL/hugr?rev=19e3216#19e32164df0f867ba55bfb4f3cdbdde7b62987ba"
 dependencies = [
  "cgmath",
  "delegate 0.13.3",
@@ -1032,8 +1032,8 @@ dependencies = [
 
 [[package]]
 name = "hugr-llvm"
-version = "0.15.4"
-source = "git+https://github.com/CQCL/hugr?rev=34701669#34701669b7ed2610cd6e53caaf2710baeab90721"
+version = "0.20.0-rc.0"
+source = "git+https://github.com/CQCL/hugr?rev=19e3216#19e32164df0f867ba55bfb4f3cdbdde7b62987ba"
 dependencies = [
  "anyhow",
  "delegate 0.13.3",
@@ -1051,8 +1051,8 @@ dependencies = [
 
 [[package]]
 name = "hugr-model"
-version = "0.19.1"
-source = "git+https://github.com/CQCL/hugr?rev=34701669#34701669b7ed2610cd6e53caaf2710baeab90721"
+version = "0.20.0-rc.0"
+source = "git+https://github.com/CQCL/hugr?rev=19e3216#19e32164df0f867ba55bfb4f3cdbdde7b62987ba"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1071,8 +1071,8 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.15.4"
-source = "git+https://github.com/CQCL/hugr?rev=34701669#34701669b7ed2610cd6e53caaf2710baeab90721"
+version = "0.20.0-rc.0"
+source = "git+https://github.com/CQCL/hugr?rev=19e3216#19e32164df0f867ba55bfb4f3cdbdde7b62987ba"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
