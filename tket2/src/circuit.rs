@@ -138,7 +138,7 @@ impl<T: HugrView> Circuit<T> {
     pub fn name(&self) -> Option<&str> {
         let op = self.hugr.get_optype(self.parent());
         let name = match op {
-            OpType::FuncDefn(defn) => &defn.name,
+            OpType::FuncDefn(defn) => &defn.func_name(),
             _ => return None,
         };
         match name.as_str() {
@@ -370,12 +370,12 @@ fn check_hugr<H: HugrView>(hugr: &H) -> Result<(), CircuitError<H::Node>> {
         // Dataflow nodes are always valid.
         OpType::DFG(_) => Ok(()),
         // Function definitions are also valid, as long as they have a concrete signature.
-        OpType::FuncDefn(defn) => match defn.signature.params().is_empty() {
+        OpType::FuncDefn(defn) => match defn.signature().params().is_empty() {
             true => Ok(()),
             false => Err(CircuitError::ParametricSignature {
                 parent: hugr.entrypoint(),
                 optype: optype.clone(),
-                signature: defn.signature.clone(),
+                signature: defn.signature().clone(),
             }),
         },
         OpType::DataflowBlock(_) => Ok(()),
@@ -604,18 +604,18 @@ fn update_signature(
             }
         }
         OpType::FuncDefn(defn) => {
-            let mut sig: Signature = defn.signature.clone().try_into().map_err(|_| {
+            let mut sig: Signature = defn.signature().clone().try_into().map_err(|_| {
                 CircuitError::ParametricSignature {
                     parent,
                     optype: OpType::FuncDefn(defn.clone()),
-                    signature: defn.signature.clone(),
+                    signature: defn.signature().clone(),
                 }
             })?;
             sig.input = inp_types;
             if let Some(out_types) = out_types {
                 sig.output = out_types;
             }
-            defn.signature = sig.into();
+            *defn.signature_mut() = sig.into();
         }
         OpType::DataflowBlock(block) => {
             block.inputs = inp_types;

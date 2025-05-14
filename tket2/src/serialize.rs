@@ -246,7 +246,7 @@ fn find_function(mut hugr: Hugr, function_name: &str) -> Result<Circuit, Circuit
     // Find the function definition.
     fn func_name(op: &OpType) -> &str {
         match op {
-            OpType::FuncDefn(decl) => &decl.name,
+            OpType::FuncDefn(decl) => decl.func_name(),
             _ => "",
         }
     }

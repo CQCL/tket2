@@ -107,7 +107,7 @@ fn lower_ops(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, LowerTk2
             hugr.get_optype(func_node)
                 .as_func_defn()
                 .expect("should be a function definition")
-                .signature
+                .signature()
                 .clone(),
             [], // no polymorphic ops functions expected.
         )
