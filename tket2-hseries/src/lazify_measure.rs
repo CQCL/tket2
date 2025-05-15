@@ -267,8 +267,6 @@ impl<N: HugrNode + 'static> PatchHugrMut for LazifyMeasureRewrite<N> {
         // 4. Create the replacement graph
         let (repl_meas, replacement) = {
             let n_bools = sig.output_count() - matches!(self, Self::MeasureReset(_)) as usize;
-            dbg!(meas_node, n_bools);
-            dbg!(&outputs);
             let mut builder = DFGBuilder::new(sig).unwrap();
             let [qb] = builder.input_wires_arr();
             let (repl_meas, mut meas_out_wires) = {
