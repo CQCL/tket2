@@ -260,7 +260,7 @@ pub enum OpConvertError<N = hugr::Node> {
         args: Vec<ElementId>,
     },
     /// A node parameter output could not be evaluated.
-    #[display("Could not compute output parameter #{out_index} for operation {} given inputs [{}].", op.name(), params.iter().join(", "))]
+    #[display("Could not compute output parameter #{out_index} for operation {op} given inputs [{}].", params.iter().join(", "))]
     CannotComputeParams {
         /// The operation being encoded
         op: OpType,

@@ -9,12 +9,13 @@ pub use config::{default_encoder_config, Tk1EncoderConfig};
 use hugr::envelope::EnvelopeConfig;
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::package::Package;
+use hugr_core::hugr::internal::PortgraphNodeMap;
 pub use value_tracker::{
     RegisterCount, TrackedBit, TrackedParam, TrackedQubit, TrackedValue, TrackedValues,
     ValueTracker,
 };
 
-use hugr::ops::{NamedOp, OpTrait, OpType};
+use hugr::ops::{OpTrait, OpType};
 use hugr::types::EdgeKind;
 
 use std::borrow::Cow;
@@ -23,8 +24,6 @@ use std::sync::Arc;
 
 use hugr::{HugrView, Wire};
 use itertools::Itertools;
-use portgraph::algorithms::TopoSort;
-use portgraph::LinkView;
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 use unsupported_tracker::UnsupportedTracker;
 
@@ -93,34 +92,15 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     ) -> Result<(), Tk1ConvertError<H::Node>> {
         // Normally we'd use `SiblingGraph` here, but it doesn't support generic node types.
         // See https://github.com/CQCL/hugr/issues/2010
-        let hugr = circ.hugr();
-        let root = circ.parent();
-        let portgraph = hugr.portgraph();
-        let hierarchy = hugr.hierarchy();
-        let region =
-            portgraph::view::FlatRegion::new(&portgraph, &hierarchy, hugr.get_pg_index(root));
-
-        // Collect all initial nodes in the region (nodes with no predecessors).
-        let initials: Vec<_> = hugr
-            .children(root)
-            .filter_map(|node| {
-                let pg_node = hugr.get_pg_index(node);
-                region
-                    .input_links(pg_node)
-                    .next()
-                    .is_none()
-                    .then_some(pg_node)
-            })
-            .collect();
-
-        let topo: TopoSort<'_, _, HashSet<_>> =
-            portgraph::algorithms::toposort(region, initials, portgraph::Direction::Outgoing);
+        let (region, node_map) = circ.hugr().region_portgraph(circ.parent());
         let io_nodes = circ.io_nodes();
+
         // TODO: Use weighted topological sort to try and explore unsupported
         // ops first (that is, ops with no available emitter in `self.config`),
         // to ensure we group them as much as possible.
-        for pg_node in topo {
-            let node = hugr.get_node(pg_node);
+        let mut topo = petgraph::visit::Topo::new(&region);
+        while let Some(pg_node) = topo.next(&region) {
+            let node = node_map.from_portgraph(pg_node);
             if io_nodes.contains(&node) {
                 // I/O nodes are handled by `new` and `finish`.
                 continue;
@@ -310,7 +290,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         tk1_optype: tket_json_rs::OpType,
         node: H::Node,
         circ: &Circuit<H>,
-        output_params: impl FnOnce(OutputParamArgs) -> Vec<String>,
+        output_params: impl FnOnce(OutputParamArgs<'_>) -> Vec<String>,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
         self.emit_node_command(
             node,
@@ -345,7 +325,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-        output_params: impl FnOnce(OutputParamArgs) -> Vec<String>,
+        output_params: impl FnOnce(OutputParamArgs<'_>) -> Vec<String>,
         make_operation: impl FnOnce(usize, usize, &[String]) -> tket_json_rs::circuit_json::Operation,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
         let TrackedValues {
@@ -411,7 +391,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-        output_params: impl FnOnce(OutputParamArgs) -> Vec<String>,
+        output_params: impl FnOnce(OutputParamArgs<'_>) -> Vec<String>,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
         let input_values = self.get_input_values(node, circ)?;
         let output_counts = self.node_output_values(node, circ)?;
@@ -432,7 +412,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         if input_values.qubits.len() != total_out_count.qubits {
             return Err(Tk1ConvertError::custom(format!(
                 "Mismatched number of input and output qubits while trying to emit a transparent operation for {}. We have {} inputs but {} outputs.",
-                circ.hugr().get_optype(node).name(),
+                circ.hugr().get_optype(node),
                 input_values.qubits.len(),
                 total_out_count.qubits,
             )));
@@ -440,7 +420,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         if input_values.bits.len() != total_out_count.bits {
             return Err(Tk1ConvertError::custom(format!(
                 "Mismatched number of input and output bits while trying to emit a transparent operation for {}. We have {} inputs but {} outputs.",
-                circ.hugr().get_optype(node).name(),
+                circ.hugr().get_optype(node),
                 input_values.bits.len(),
                 total_out_count.bits,
             )));
@@ -448,7 +428,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         if out_params.len() != total_out_count.params {
             return Err(Tk1ConvertError::custom(format!(
                 "Not enough parameters in the input values for a {}. Expected {} but got {}.",
-                circ.hugr().get_optype(node).name(),
+                circ.hugr().get_optype(node),
                 total_out_count.params,
                 out_params.len()
             )));
@@ -506,7 +486,6 @@ impl<H: HugrView> Tk1EncoderContext<H> {
 
         let unsupported_hugr = subgraph.extract_subgraph(circ.hugr(), &subcircuit_id);
         let payload = Package::from_hugr(unsupported_hugr)
-            .unwrap()
             .store_str(EnvelopeConfig::text())
             .unwrap();
 
@@ -677,7 +656,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         circ: &Circuit<H>,
         qubits: &mut impl Iterator<Item = TrackedQubit>,
         input_params: &[String],
-        output_params: impl FnOnce(OutputParamArgs) -> Vec<String>,
+        output_params: impl FnOnce(OutputParamArgs<'_>) -> Vec<String>,
         wire_filter: impl Fn(Wire<H::Node>) -> bool,
     ) -> Result<TrackedValues, Tk1ConvertError<H::Node>> {
         let output_counts = self.node_output_values(node, circ)?;
@@ -693,7 +672,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         if out_params.len() != total_out_count.params {
             return Err(Tk1ConvertError::custom(format!(
                 "Not enough parameters in the input values for a {}. Expected {} but got {}.",
-                circ.hugr().get_optype(node).name(),
+                circ.hugr().get_optype(node),
                 total_out_count.params,
                 out_params.len()
             )));
@@ -752,8 +731,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             } else if Some(out_port) == static_output {
                 let EdgeKind::Const(ty) = op.static_output().unwrap() else {
                     return Err(Tk1ConvertError::custom(format!(
-                        "Cannot emit a static output for a {}.",
-                        op.name()
+                        "Cannot emit a static output for a {op}."
                     )));
                 };
                 ty
@@ -772,8 +750,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             let wire = hugr::Wire::new(node, out_port);
             let Some(count) = self.config().type_to_pytket(&ty)? else {
                 return Err(Tk1ConvertError::custom(format!(
-                    "Found an unsupported type while encoding a {}.",
-                    op.name()
+                    "Found an unsupported type while encoding a {op}."
                 )));
             };
             wire_counts.push((wire, count));

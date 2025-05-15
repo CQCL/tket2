@@ -118,8 +118,11 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
     assert_eq!(a.name, b.name);
     assert_eq!(a.phase, b.phase);
     assert_eq!(&a.qubits, &b.qubits);
-    assert_eq!(&a.bits, &b.bits);
     assert_eq!(a.commands.len(), b.commands.len());
+
+    let bits_a: HashSet<_> = a.bits.iter().collect();
+    let bits_b: HashSet<_> = b.bits.iter().collect();
+    assert_eq!(bits_a, bits_b);
 
     // We ignore the commands order here, as two encodings may swap
     // non-dependant operations.
