@@ -7,7 +7,7 @@ use std::collections::{BTreeSet, HashMap, VecDeque};
 
 use hugr::extension::{ExtensionId, ExtensionSet};
 use hugr::ops::{ExtensionOp, Value};
-use hugr::types::{SumType, Type, TypeEnum};
+use hugr::types::{Signature, SumType, Type, TypeEnum};
 
 use crate::serialize::pytket::extension::{
     FloatEmitter, PreludeEmitter, RotationEmitter, Tk1Emitter, Tk2Emitter,
@@ -182,9 +182,19 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
                     }
                 }
                 Value::Extension { e: opaque } => {
-                    let type_exts = opaque.extension_reqs();
+                    // Collect all extensions required to define the type.
+                    let typ = opaque.value().get_type();
+                    // TODO: Use Type::used_extensions once it gets published.
+                    // See <https://github.com/CQCL/hugr/pull/2224>
+                    let type_exts = Signature::new(vec![], vec![typ])
+                        .used_extensions()
+                        .unwrap_or_else(|e| {
+                            panic!("Tried to encode a type with partially extension. {e}");
+                        });
+                    let exts_set = ExtensionSet::from_iter(type_exts.ids().cloned());
+
                     let mut encoded = false;
-                    for e in self.emitters_for_extensions(&type_exts) {
+                    for e in self.emitters_for_extensions(&exts_set) {
                         if let Some(vs) = e.const_to_pytket(opaque, encoder)? {
                             values.append(vs);
                             encoded = true;

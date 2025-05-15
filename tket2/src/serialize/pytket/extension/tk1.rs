@@ -1,7 +1,5 @@
 //! Encoder for pytket operations that cannot be represented naturally in tket2.
 
-use hugr::extension::prelude::{bool_t, qb_t};
-
 use crate::extension::rotation::rotation_type;
 use crate::extension::{TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME};
 use crate::serialize::pytket::{Tk1ConvertError, Tk1EncoderContext};
@@ -10,7 +8,7 @@ use crate::Circuit;
 use super::PytketEmitter;
 use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::extension::ExtensionId;
-use hugr::ops::{ExtensionOp, NamedOp};
+use hugr::ops::ExtensionOp;
 use hugr::types::{Signature, TypeArg};
 use hugr::{HugrView, IncomingPort};
 use tket_json_rs::circuit_json;
@@ -35,7 +33,7 @@ impl<H: HugrView> PytketEmitter<H> for Tk1Emitter {
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
     ) -> Result<bool, Tk1ConvertError<H::Node>> {
-        if op.name() != format!("{TKET1_EXTENSION_ID}.{TKET1_OP_NAME}") {
+        if op.qualified_id() != format!("{TKET1_EXTENSION_ID}.{TKET1_OP_NAME}") {
             return Ok(false);
         }
         let Some(TypeArg::String { arg }) = op.args().first() else {
