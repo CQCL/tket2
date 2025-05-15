@@ -13,13 +13,13 @@ use hugr::{
     },
     extension::prelude::{bool_t, qb_t},
     hugr::hugrmut::HugrMut,
-    ops::{handle::ConditionalID, ExtensionOp, Tag},
+    ops::{handle::ConditionalID, ExtensionOp, Tag, Value},
     std_extensions::logic::LogicOp,
     types::{SumType, Type, TypeArg},
     Hugr, Node, Wire,
 };
 use tket2::extension::{
-    bool::{bool_type, BOOL_EXTENSION},
+    bool::{bool_type, ConstBool, BOOL_EXTENSION},
     TKET2_EXTENSION,
 };
 
@@ -233,6 +233,20 @@ fn lowerer() -> ReplaceTypes {
         )
         .unwrap();
 
+    // Replace tket2.bool constants.
+    lw.replace_consts(
+        bool_type().as_extension().unwrap().clone(),
+        |const_bool, _| {
+            Ok(Value::from_bool(
+                const_bool
+                    .value()
+                    .downcast_ref::<ConstBool>()
+                    .unwrap()
+                    .value(),
+            ))
+        },
+    );
+
     // Replace all tket2.bool ops.
     let read_op = ExtensionOp::new(BOOL_EXTENSION.get_op("read").unwrap().clone(), vec![]).unwrap();
     lw.replace_op(&read_op, read_op_dest());
@@ -292,6 +306,19 @@ mod test {
 
     fn tket2_bool_t() -> Type {
         bool_type().clone()
+    }
+
+    #[test]
+    fn test_consts() {
+        let mut dfb = DFGBuilder::new(inout_sig(vec![], vec![tket2_bool_t()])).unwrap();
+        let const_wire = dfb.add_load_value(ConstBool::new(true));
+        let mut h = dfb.finish_hugr_with_outputs([const_wire]).unwrap();
+
+        let pass = ReplaceBoolPass;
+        pass.run(&mut h).unwrap();
+
+        let sig = h.signature(h.entrypoint()).unwrap();
+        assert_eq!(sig.output(), &TypeRow::from(vec![bool_dest()]));
     }
 
     #[test]
