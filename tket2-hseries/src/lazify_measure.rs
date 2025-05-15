@@ -304,9 +304,25 @@ impl<N: HugrNode + 'static> PatchHugrMut for LazifyMeasureRewrite<N> {
             .get_io(replacement.entrypoint())
             .expect("valid dfg");
         for (pos, (dst_node, dst_port)) in outputs.into_iter().flatten().enumerate() {
-            let (src_node, src_port) = replacement
-                .single_linked_output(out_node, pos)
-                .expect("valid replacement signature");
+            let (src_node, src_port) = if let Some((repl_node, repl_port)) =
+                replacement.single_linked_output(out_node, pos)
+            {
+                (repl_node, repl_port)
+            } else {
+                // order edge
+                debug_assert_eq!(
+                    hugr.get_optype(dst_node).other_input_port(),
+                    Some(dst_port),
+                    "missing dataflow port in replacement"
+                );
+                (
+                    repl_meas,
+                    replacement
+                        .get_optype(repl_meas)
+                        .other_output_port()
+                        .expect("measure has other port"),
+                )
+            };
             hugr.connect(node_map[&src_node], src_port, dst_node, dst_port);
         }
 
