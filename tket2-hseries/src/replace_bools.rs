@@ -237,13 +237,25 @@ fn lowerer() -> ReplaceTypes {
     lw.replace_consts(
         bool_type().as_extension().unwrap().clone(),
         |const_bool, _| {
-            Ok(Value::from_bool(
-                const_bool
-                    .value()
-                    .downcast_ref::<ConstBool>()
-                    .unwrap()
-                    .value(),
-            ))
+            Ok(Value::sum(
+                0,
+                [Value::from_bool(
+                    const_bool
+                        .value()
+                        .downcast_ref::<ConstBool>()
+                        .unwrap()
+                        .value(),
+                )],
+                SumType::new([vec![bool_t()], vec![future_type(bool_t())]]),
+            )
+            .unwrap())
+            // Ok(Value::from_bool(
+            //     const_bool
+            //         .value()
+            //         .downcast_ref::<ConstBool>()
+            //         .unwrap()
+            //         .value(),
+            // ))
         },
     );
 
@@ -314,9 +326,10 @@ mod test {
         let const_wire = dfb.add_load_value(ConstBool::new(true));
         let mut h = dfb.finish_hugr_with_outputs([const_wire]).unwrap();
 
+        h.validate().unwrap();
         let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
-
+        h.validate().unwrap();
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.output(), &TypeRow::from(vec![bool_dest()]));
     }
