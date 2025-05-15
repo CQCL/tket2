@@ -18,7 +18,6 @@ use hugr::{
         hugrmut::HugrMut,
         patch::{PatchHugrMut, PatchVerification},
         views::{RootChecked, SiblingSubgraph},
-        SimpleReplacementError,
     },
     ops::{
         handle::{DfgID, NodeHandle as _},
@@ -72,8 +71,6 @@ pub enum LazifyMeasurePassError<N> {
         expected_signature: Signature,
         actual_signature: Option<Signature>,
     },
-    /// A [SimpleReplacement] failed during the running of the pass.
-    SimpleReplacementError(SimpleReplacementError),
 }
 
 /// Implementation of [LazifyMeasurePass].
