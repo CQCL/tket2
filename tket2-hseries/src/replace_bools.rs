@@ -249,13 +249,6 @@ fn lowerer() -> ReplaceTypes {
                 SumType::new([vec![bool_t()], vec![future_type(bool_t())]]),
             )
             .unwrap())
-            // Ok(Value::from_bool(
-            //     const_bool
-            //         .value()
-            //         .downcast_ref::<ConstBool>()
-            //         .unwrap()
-            //         .value(),
-            // ))
         },
     );
 
