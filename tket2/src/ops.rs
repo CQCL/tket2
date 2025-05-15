@@ -1,5 +1,6 @@
 use std::sync::{Arc, Weak};
 
+use crate::extension::bool::bool_type;
 use crate::extension::rotation::rotation_type;
 use crate::extension::sympy::{SympyOpDef, SYM_OP_ID};
 use crate::extension::{TKET2_EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID};
@@ -119,7 +120,7 @@ impl MakeOpDef for Tk2Op {
             CX | CZ | CY => Signature::new_endo(vec![qb_t(); 2]),
             Toffoli => Signature::new_endo(vec![qb_t(); 3]),
             Measure => Signature::new(qb_t(), vec![qb_t(), bool_t()]),
-            MeasureFree => Signature::new(qb_t(), bool_t()),
+            MeasureFree => Signature::new(qb_t(), bool_type()),
             Rz | Rx | Ry => Signature::new(vec![qb_t(), rotation_type()], qb_t()),
             CRz => Signature::new(vec![qb_t(), qb_t(), rotation_type()], vec![qb_t(); 2]),
             QAlloc => Signature::new(type_row![], qb_t()),
@@ -219,7 +220,7 @@ pub(crate) mod test {
     use std::sync::Arc;
 
     use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
-    use hugr::extension::prelude::{bool_t, option_type, qb_t};
+    use hugr::extension::prelude::{option_type, qb_t};
     use hugr::extension::simple_op::{MakeExtensionOp, MakeOpDef};
     use hugr::extension::{prelude::UnwrapBuilder as _, OpDef};
     use hugr::types::Signature;
@@ -230,6 +231,7 @@ pub(crate) mod test {
 
     use super::Tk2Op;
     use crate::circuit::Circuit;
+    use crate::extension::bool::bool_type;
     use crate::extension::{TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID};
     use crate::utils::build_simple_circuit;
     use crate::Pauli;
@@ -285,7 +287,7 @@ pub(crate) mod test {
 
     #[test]
     fn try_qalloc_measure_free() {
-        let mut b = DFGBuilder::new(Signature::new(type_row![], bool_t())).unwrap();
+        let mut b = DFGBuilder::new(Signature::new(type_row![], bool_type())).unwrap();
 
         let try_q = b.add_dataflow_op(Tk2Op::TryQAlloc, []).unwrap().out_wire(0);
         let [q] = b.build_unwrap_sum(1, option_type(qb_t()), try_q).unwrap();

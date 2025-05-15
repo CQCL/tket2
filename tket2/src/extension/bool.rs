@@ -116,8 +116,10 @@ impl CustomConst for ConstBool {
 #[non_exhaustive]
 /// Simple enum of "tket2.bool" operations.
 pub enum BoolOp {
-    bool_to_sum,
-    sum_to_bool,
+    // Gets a Hugr bool_t value from the opaque type.
+    read,
+    // Converts a Hugr bool_t value into the opaque type.
+    make_opaque,
     eq,
     not,
     and,
@@ -134,8 +136,8 @@ impl MakeOpDef for BoolOp {
         let bool_type = Type::new_extension(bool_custom_type(extension_ref));
         let sum_type = Type::new_unit_sum(2);
         match self {
-            BoolOp::bool_to_sum => Signature::new(bool_type, sum_type).into(),
-            BoolOp::sum_to_bool => Signature::new(sum_type, bool_type).into(),
+            BoolOp::read => Signature::new(bool_type, sum_type).into(),
+            BoolOp::make_opaque => Signature::new(sum_type, bool_type).into(),
             BoolOp::not => Signature::new(bool_type.clone(), bool_type.clone()).into(),
             BoolOp::eq | BoolOp::and | BoolOp::or | BoolOp::xor => Signature::new(
                 vec![bool_type.clone(), bool_type.clone()],
@@ -157,8 +159,8 @@ impl MakeOpDef for BoolOp {
 
     fn description(&self) -> String {
         match self {
-            BoolOp::bool_to_sum => "Convert a tket2.bool into a Hugr unit sum.".into(),
-            BoolOp::sum_to_bool => "Convert a Hugr unit sum into an tket2.bool.".into(),
+            BoolOp::read => "Convert a tket2.bool into a Hugr bool_t (a unit sum).".into(),
+            BoolOp::make_opaque => "Convert a Hugr bool_t (a unit sum) into an tket2.bool.".into(),
             BoolOp::eq => "Equality between two tket2.bools.".into(),
             BoolOp::not => "Negation of a tket2.bool.".into(),
             BoolOp::and => "Logical AND between two tket2.bools.".into(),
@@ -184,17 +186,17 @@ impl MakeRegisteredOp for BoolOp {
 /// An extension trait for [Dataflow] providing methods to add "tket2.bool"
 /// operations.
 pub trait BoolOpBuilder: Dataflow {
-    /// Add a "tket2.bool.BoolToSum" op.
-    fn add_bool_to_sum(&mut self, bool_input: Wire) -> Result<[Wire; 1], BuildError> {
+    /// Add a "tket2.bool.read" op.
+    fn add_bool_read(&mut self, bool_input: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
-            .add_dataflow_op(BoolOp::bool_to_sum, [bool_input])?
+            .add_dataflow_op(BoolOp::read, [bool_input])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.bool.SumToBool" op.
-    fn add_sum_to_bool(&mut self, sum_input: Wire) -> Result<[Wire; 1], BuildError> {
+    /// Add a "tket2.bool.make_opaque" op.
+    fn add_bool_make_opaque(&mut self, sum_input: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
-            .add_dataflow_op(BoolOp::sum_to_bool, [sum_input])?
+            .add_dataflow_op(BoolOp::make_opaque, [sum_input])?
             .outputs_arr())
     }
 
@@ -275,28 +277,28 @@ pub(crate) mod test {
     }
 
     #[test]
-    fn test_bool_to_sum() {
+    fn test_read() {
         let bool_type = bool_type();
         let sum_type = Type::new_unit_sum(2);
 
         let hugr = {
             let mut builder = DFGBuilder::new(Signature::new(bool_type, sum_type)).unwrap();
             let [input] = builder.input_wires_arr();
-            let output = builder.add_bool_to_sum(input).unwrap();
+            let output = builder.add_bool_read(input).unwrap();
             builder.finish_hugr_with_outputs(output).unwrap()
         };
         hugr.validate().unwrap();
     }
 
     #[test]
-    fn test_sum_to_bool() {
+    fn test_make_opaque() {
         let bool_type = bool_type();
         let sum_type = Type::new_unit_sum(2);
 
         let hugr = {
             let mut builder = DFGBuilder::new(Signature::new(sum_type, bool_type)).unwrap();
             let [input] = builder.input_wires_arr();
-            let output = builder.add_sum_to_bool(input).unwrap();
+            let output = builder.add_bool_make_opaque(input).unwrap();
             builder.finish_hugr_with_outputs(output).unwrap()
         };
         hugr.validate().unwrap();
