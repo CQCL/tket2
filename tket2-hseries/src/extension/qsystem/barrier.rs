@@ -81,7 +81,7 @@ mod test {
                 .children(h.module_root())
                 .filter(|&r_barr_n| {
                     h.get_optype(r_barr_n).as_func_defn().is_some_and(|op| {
-                        op.name
+                        op.func_name()
                             .contains(BarrierOperationFactory::WRAPPED_BARRIER.as_str())
                     })
                 })

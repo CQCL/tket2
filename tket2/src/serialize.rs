@@ -46,9 +46,9 @@ impl<T: HugrView> Circuit<T> {
     }
 
     /// Store the circuit as a String in HUGR envelope format.
-    pub fn store_str(&self) -> Result<String, EnvelopeError> {
+    pub fn store_str(&self, config: EnvelopeConfig) -> Result<String, EnvelopeError> {
         let pkg = self.wrap_package()?;
-        pkg.store_str(EnvelopeConfig::text())
+        pkg.store_str(config)
     }
 
     /// Wrap the circuit in a package.
@@ -246,7 +246,7 @@ fn find_function(mut hugr: Hugr, function_name: &str) -> Result<Circuit, Circuit
     // Find the function definition.
     fn func_name(op: &OpType) -> &str {
         match op {
-            OpType::FuncDefn(decl) => &decl.name,
+            OpType::FuncDefn(decl) => decl.func_name(),
             _ => "",
         }
     }
@@ -362,7 +362,7 @@ mod tests {
             circ.circuit_hash(circ.parent())
         );
 
-        let envelope = root_circ.store_str().unwrap();
+        let envelope = root_circ.store_str(EnvelopeConfig::text()).unwrap();
         let circ = Circuit::load_function_str(envelope, "main").unwrap();
         assert_eq!(
             root_circ.circuit_hash(root_circ.parent()),

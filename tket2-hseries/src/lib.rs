@@ -91,7 +91,7 @@ impl QSystemPass {
                     .find(|&n| {
                         hugr.get_optype(n)
                             .as_func_defn()
-                            .is_some_and(|fd| fd.name == "main")
+                            .is_some_and(|fd| fd.func_name() == "main")
                     })
                     .ok_or(QSystemPassError::NoMain)?;
                 rdfp = rdfp.with_module_entry_points([main_node]);

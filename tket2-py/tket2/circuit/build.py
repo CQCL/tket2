@@ -60,9 +60,9 @@ class CircBuild(TrackedDfg):
         ]
 
         # Convert the DFG into a Function definition
-        dfg_op = self.hugr[self.hugr.root].op
+        dfg_op = self.hugr[self.hugr.entrypoint].op
         assert type(dfg_op) is ops.DFG, "CircBuild must have a Dfg root"
-        self.hugr[self.hugr.root].op = ops.FuncDefn(
+        self.hugr[self.hugr.entrypoint].op = ops.FuncDefn(
             function_name, inputs=dfg_op.inputs, _outputs=dfg_op.outputs
         )
 

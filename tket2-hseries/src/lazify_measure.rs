@@ -3,9 +3,7 @@
 //!
 //! [Tket2Op::Measure]: tket2::Tk2Op::Measure
 //! [QSystemOp::Measure]: crate::extension::qsystem::QSystemOp::Measure
-use std::{collections::HashMap, iter};
 
-use delegate::delegate;
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
@@ -17,12 +15,16 @@ use hugr::{
     core::HugrNode,
     extension::prelude::{bool_t, qb_t},
     hugr::{
-        hugrmut::HugrMut, patch::PatchVerification, views::SiblingSubgraph, Patch,
-        SimpleReplacementError,
+        hugrmut::HugrMut,
+        patch::{PatchHugrMut, PatchVerification},
+        views::{RootChecked, SiblingSubgraph},
     },
-    ops::{handle::NodeHandle as _, OpTrait as _},
+    ops::{
+        handle::{DfgID, NodeHandle as _},
+        OpTrait as _,
+    },
     types::Signature,
-    HugrView, Node, SimpleReplacement, Wire,
+    HugrView, Node, Wire,
 };
 use itertools::Itertools as _;
 use tket2::Tk2Op;
@@ -61,7 +63,7 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for LazifyMeasurePass {
 pub enum LazifyMeasurePassError<N> {
     /// The HUGR was found to contain non-local edges.
     NonLocalEdgesError(NonLocalEdgesError<N>),
-    /// A [LazifyMeasureRewrite] was constructed targetting an invalid op.
+    /// A [LazifyMeasureRewrite] was constructed targeting an invalid op.
     #[display("A LazifyMeasureRewrite was constructed for node {node} with an invalid signature.\nExpected: {expected_signature}\nActual: {}", actual_signature.as_ref().map_or("None".to_string(), |x| format!("{x}")))]
     #[allow(missing_docs)]
     InvalidOp {
@@ -69,8 +71,6 @@ pub enum LazifyMeasurePassError<N> {
         expected_signature: Signature,
         actual_signature: Option<Signature>,
     },
-    /// A [SimpleReplacement] failed during the running of the pass.
-    SimpleReplacementError(SimpleReplacementError),
 }
 
 /// Implementation of [LazifyMeasurePass].
@@ -84,17 +84,17 @@ pub fn replace_measure_ops(
         .filter_map(|n| {
             let optype = hugr.get_optype(n);
             if let Some(Tk2Op::MeasureFree) = optype.cast() {
-                Some(LazifyMeasureRewrite::try_new_measure(n, &hugr))
+                Some(LazifyMeasureRewrite::Measure(n))
             } else if let Some(QSystemOp::Measure) = optype.cast() {
-                Some(LazifyMeasureRewrite::try_new_measure(n, &hugr))
+                Some(LazifyMeasureRewrite::Measure(n))
             } else if let Some(QSystemOp::MeasureReset) = optype.cast() {
-                Some(LazifyMeasureRewrite::try_new_measure_reset(n, &hugr))
+                Some(LazifyMeasureRewrite::MeasureReset(n))
             } else {
                 None
             }
-            .map(|x| x.map(|y| (n, y)))
+            .map(|x| (n, x))
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect_vec();
 
     nodes_and_rewrites
         .into_iter()
@@ -107,101 +107,14 @@ pub fn replace_measure_ops(
 
 /// A rewrite used in [LazifyMeasurePass] to replace strict measure ops with
 /// either [QSystemOp::LazyMeasure] or [QSystemOp::LazyMeasureReset].
-pub struct LazifyMeasureRewrite<N = Node>(SimpleReplacement<N>);
+pub enum LazifyMeasureRewrite<N = Node> {
+    /// Rewrite an op with signature `[QB] -> [BOOL]` to a `LazyMeasure`
+    Measure(N),
+    /// Rewrite an op with signature `[QB] -> [QB,BOOL]` to a `LazyMeasureReset`
+    MeasureReset(N),
+}
 
 impl<N: HugrNode> LazifyMeasureRewrite<N> {
-    /// Construct a new `LazifyMeasureRewrite` replacing `node` with a
-    /// [QSystemOp::LazyMeasure].
-    ///
-    /// Fails if node does not have signature `[QB] -> [BOOL]`
-    pub fn try_new_measure(
-        node: N,
-        hugr: impl HugrView<Node = N>,
-    ) -> Result<Self, LazifyMeasurePassError<N>> {
-        Self::check_signature(node, QSystemOp::LazyMeasure, hugr.get_optype(node))?;
-
-        let subgraph = SiblingSubgraph::from_node(node, &hugr);
-        // SimpleReplacement adds edges in a nondeterministic order.  This
-        // results in linked_inputs returning items in a nondeterministic
-        // order. We sort them here to restore determinism.
-        let uses = hugr.linked_inputs(node, 0).sorted().collect_vec();
-        let (lazy_measure_node, replacement) = {
-            let bool_uses = uses.len();
-            let mut builder =
-                DFGBuilder::new(Signature::new(qb_t(), vec![bool_t(); bool_uses])).unwrap();
-            let [qb] = builder.input_wires_arr();
-            let (lazy_measure_node, future_wire) = {
-                let handle = builder
-                    .add_dataflow_op(QSystemOp::LazyMeasure, [qb])
-                    .unwrap();
-                (handle.node(), handle.out_wire(0))
-            };
-            let out_wires = Self::build_futures_gadget(&mut builder, future_wire, bool_uses);
-            (
-                lazy_measure_node,
-                builder.finish_hugr_with_outputs(out_wires).unwrap(),
-            )
-        };
-        let nu_inp = HashMap::from_iter([((lazy_measure_node, 0.into()), (node, 0.into()))]);
-        let nu_out: HashMap<_, _> = iter::zip(uses, (0..).map_into()).collect();
-
-        Ok(Self(SimpleReplacement::new(
-            subgraph,
-            replacement,
-            nu_inp,
-            nu_out,
-        )))
-    }
-
-    /// Construct a new `LazifyMeasureRewrite` replacing `node` with a
-    /// [QSystemOp::LazyMeasureReset].
-    ///
-    /// Fails if node does not have signature `[QB] -> [QB,BOOL]`
-    pub fn try_new_measure_reset(
-        node: N,
-        hugr: impl HugrView<Node = N>,
-    ) -> Result<Self, LazifyMeasurePassError<N>> {
-        Self::check_signature(node, QSystemOp::LazyMeasureReset, hugr.get_optype(node))?;
-
-        let subgraph = SiblingSubgraph::from_node(node, &hugr);
-        // See comment in try_new_measure
-        let uses = hugr.linked_inputs(node, 1).sorted().collect_vec();
-        let (lazy_measure_reset_node, replacement) = {
-            let bool_uses = uses.len();
-            let mut builder = {
-                let outputs = iter::once(qb_t())
-                    .chain(itertools::repeat_n(bool_t(), bool_uses))
-                    .collect_vec();
-                DFGBuilder::new(Signature::new(qb_t(), outputs)).unwrap()
-            };
-            let [qb] = builder.input_wires_arr();
-            let (lazy_measure_reset_node, [qb_wire, future_wire]) = {
-                let handle = builder
-                    .add_dataflow_op(QSystemOp::LazyMeasureReset, [qb])
-                    .unwrap();
-                (handle.node(), handle.outputs_arr())
-            };
-            let out_wires = Self::build_futures_gadget(&mut builder, future_wire, bool_uses);
-            (
-                lazy_measure_reset_node,
-                builder
-                    .finish_hugr_with_outputs(iter::once(qb_wire).chain(out_wires))
-                    .unwrap(),
-            )
-        };
-        let nu_inp = HashMap::from_iter([((lazy_measure_reset_node, 0.into()), (node, 0.into()))]);
-        let qb_use = hugr.single_linked_input(node, 0).unwrap(); // qubit is linear so this can't fail
-        let nu_out: HashMap<_, _> =
-            iter::zip(iter::once(qb_use).chain(uses), (0..).map_into()).collect();
-
-        Ok(Self(SimpleReplacement::new(
-            subgraph,
-            replacement,
-            nu_inp,
-            nu_out,
-        )))
-    }
-
     fn build_futures_gadget(builder: &mut impl Dataflow, wire: Wire, num_uses: usize) -> Vec<Wire> {
         let future_wires = if num_uses == 0 {
             builder.add_free(wire, bool_t()).unwrap();
@@ -266,29 +179,164 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
         }
         Ok(())
     }
-}
 
-impl PatchVerification for LazifyMeasureRewrite {
-    type Node = Node;
-    type Error = <SimpleReplacement as PatchVerification>::Error;
-
-    delegate! {
-        to self.0 {
-            fn verify(&self, h: &impl HugrView<Node = Node>) -> Result<(), Self::Error>;
-            fn invalidation_set(&self) -> impl Iterator<Item = Node>;
+    fn get_measure_node(&self) -> N {
+        match *self {
+            Self::Measure(n) => n,
+            Self::MeasureReset(n) => n,
         }
+    }
+
+    fn get_lazy_measure_op(&self) -> QSystemOp {
+        match self {
+            Self::Measure(_) => QSystemOp::LazyMeasure,
+            Self::MeasureReset(_) => QSystemOp::LazyMeasureReset,
+        }
+    }
+
+    /// The signature of the replacement graph.
+    fn repl_signature(&self, h: &impl HugrView<Node = N>) -> Signature {
+        let inp_sig = vec![qb_t()];
+        let out_sig = match self {
+            Self::Measure(_) => {
+                let n_bools = h.linked_inputs(self.get_measure_node(), 0).count();
+                vec![bool_t(); n_bools]
+            }
+            Self::MeasureReset(_) => {
+                let n_bools = h.linked_inputs(self.get_measure_node(), 1).count();
+                let mut out_sig = Vec::with_capacity(n_bools + 1);
+                out_sig.push(qb_t());
+                out_sig.extend(itertools::repeat_n(bool_t(), n_bools));
+                out_sig
+            }
+        };
+        Signature::new(inp_sig, out_sig)
     }
 }
 
-impl<H: HugrMut<Node = Node>> Patch<H> for LazifyMeasureRewrite {
-    type Outcome = <SimpleReplacement as Patch<H>>::Outcome;
+impl<N: HugrNode + 'static> PatchVerification for LazifyMeasureRewrite<N> {
+    type Node = N;
+    type Error = LazifyMeasurePassError<N>;
 
-    const UNCHANGED_ON_FAILURE: bool = <SimpleReplacement as Patch<H>>::UNCHANGED_ON_FAILURE;
+    fn verify(&self, h: &impl HugrView<Node = Self::Node>) -> Result<(), Self::Error> {
+        let node = self.get_measure_node();
+        Self::check_signature(node, self.get_lazy_measure_op(), h.get_optype(node))
+    }
 
-    delegate! {
-        to self.0 {
-            fn apply(self, hugr: &mut H) -> Result<Self::Outcome, Self::Error>;
+    fn invalidation_set(&self) -> impl Iterator<Item = Self::Node> {
+        std::iter::once(self.get_measure_node())
+    }
+}
+
+impl<N: HugrNode + 'static> PatchHugrMut for LazifyMeasureRewrite<N> {
+    type Outcome = ();
+
+    const UNCHANGED_ON_FAILURE: bool = true;
+
+    fn apply_hugr_mut(
+        self,
+        hugr: &mut impl HugrMut<Node = Self::Node>,
+    ) -> Result<Self::Outcome, Self::Error> {
+        let meas_node = self.get_measure_node();
+
+        // 1. Check valid signature
+        Self::check_signature(
+            meas_node,
+            self.get_lazy_measure_op(),
+            hugr.get_optype(meas_node),
+        )?;
+
+        // 2. Store the ports `meas_node` is connected to
+        let inputs = hugr
+            .node_inputs(meas_node)
+            .map(|p| hugr.linked_outputs(meas_node, p).collect_vec())
+            .collect_vec();
+        let outputs = hugr
+            .node_outputs(meas_node)
+            .map(|p| hugr.linked_inputs(meas_node, p).collect_vec())
+            .collect_vec();
+        let sig = self.repl_signature(hugr);
+
+        // 3. Remove the `meas_node` from the HUGR (and store its parent)
+        let meas_parent = hugr.get_parent(meas_node).expect("measure has parent");
+        hugr.remove_node(meas_node);
+
+        // 4. Create the replacement graph
+        let (repl_meas, replacement) = {
+            let n_bools = sig.output_count() - matches!(self, Self::MeasureReset(_)) as usize;
+            let mut builder = DFGBuilder::new(sig).unwrap();
+            let [qb] = builder.input_wires_arr();
+            let (repl_meas, mut meas_out_wires) = {
+                let handle = builder
+                    .add_dataflow_op(self.get_lazy_measure_op(), [qb])
+                    .unwrap();
+                (handle.node(), handle.outputs().collect_vec())
+            };
+            let future_wire = meas_out_wires.pop().unwrap();
+            let out_wires = Self::build_futures_gadget(&mut builder, future_wire, n_bools);
+            (
+                repl_meas,
+                builder
+                    .finish_hugr_with_outputs(meas_out_wires.pop().into_iter().chain(out_wires))
+                    .unwrap(),
+            )
+        };
+
+        // 5. Insert the replacement graph into the HUGR (minus IO and root)
+        let node_map = hugr.insert_subgraph(
+            meas_parent,
+            &replacement,
+            &SiblingSubgraph::try_new_dataflow_subgraph(
+                RootChecked::<_, DfgID>::try_new(&replacement).unwrap(),
+            )
+            .unwrap(),
+        );
+
+        // 6. Connect old inputs to new `meas_node`
+        for (pos, host_nps) in inputs.into_iter().enumerate() {
+            for (src_node, src_port) in host_nps {
+                hugr.connect(src_node, src_port, node_map[&repl_meas], pos);
+            }
         }
+
+        // 7. Connect old outputs to replacement graph outputs
+        let [_, out_node] = replacement
+            .get_io(replacement.entrypoint())
+            .expect("valid dfg");
+        // flatten boolean outputs
+        let outputs = {
+            let bool_ind = matches!(self, Self::MeasureReset(_)) as usize;
+            let mut outputs = outputs;
+            let bools = outputs.remove(bool_ind);
+            outputs.splice(bool_ind..bool_ind, bools.into_iter().map(|x| vec![x]));
+            outputs
+        };
+        for (pos, dst_node_ports) in outputs.into_iter().enumerate() {
+            for (dst_node, dst_port) in dst_node_ports {
+                let (src_node, src_port) = if let Some((repl_node, repl_port)) =
+                    replacement.single_linked_output(out_node, pos)
+                {
+                    (repl_node, repl_port)
+                } else {
+                    // order edge
+                    debug_assert_eq!(
+                        hugr.get_optype(dst_node).other_input_port(),
+                        Some(dst_port),
+                        "missing dataflow port in replacement"
+                    );
+                    (
+                        repl_meas,
+                        replacement
+                            .get_optype(repl_meas)
+                            .other_output_port()
+                            .expect("measure has other port"),
+                    )
+                };
+                hugr.connect(node_map[&src_node], src_port, dst_node, dst_port);
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -371,5 +419,22 @@ mod test {
         let mut hugr = builder.finish_hugr_with_outputs([qb]).unwrap();
         LazifyMeasurePass.run(&mut hugr).unwrap();
         assert!(hugr.validate().is_ok());
+    }
+
+    #[test]
+    fn measure_with_order_edges() {
+        let mut hugr = {
+            let mut builder = DFGBuilder::new(Signature::new(vec![qb_t(); 4], vec![])).unwrap();
+            let [meas1, meas2, meas3, meas4] = builder
+                .input_wires_arr()
+                .map(|qb| builder.add_measure(qb).unwrap());
+            builder.set_order(&meas1.node(), &meas2.node());
+            builder.set_order(&meas2.node(), &meas3.node());
+            builder.set_order(&meas2.node(), &meas4.node());
+            builder.finish_hugr_with_outputs([]).unwrap()
+        };
+        hugr.validate().unwrap();
+        LazifyMeasurePass.run(&mut hugr).unwrap();
+        hugr.validate().unwrap();
     }
 }
