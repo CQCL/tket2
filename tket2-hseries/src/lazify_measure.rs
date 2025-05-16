@@ -303,27 +303,37 @@ impl<N: HugrNode + 'static> PatchHugrMut for LazifyMeasureRewrite<N> {
         let [_, out_node] = replacement
             .get_io(replacement.entrypoint())
             .expect("valid dfg");
-        for (pos, (dst_node, dst_port)) in outputs.into_iter().flatten().enumerate() {
-            let (src_node, src_port) = if let Some((repl_node, repl_port)) =
-                replacement.single_linked_output(out_node, pos)
-            {
-                (repl_node, repl_port)
-            } else {
-                // order edge
-                debug_assert_eq!(
-                    hugr.get_optype(dst_node).other_input_port(),
-                    Some(dst_port),
-                    "missing dataflow port in replacement"
-                );
-                (
-                    repl_meas,
-                    replacement
-                        .get_optype(repl_meas)
-                        .other_output_port()
-                        .expect("measure has other port"),
-                )
-            };
-            hugr.connect(node_map[&src_node], src_port, dst_node, dst_port);
+        // flatten boolean outputs
+        let outputs = {
+            let bool_ind = matches!(self, Self::MeasureReset(_)) as usize;
+            let mut outputs = outputs;
+            let bools = outputs.remove(bool_ind);
+            outputs.splice(bool_ind..bool_ind, bools.into_iter().map(|x| vec![x]));
+            outputs
+        };
+        for (pos, dst_node_ports) in outputs.into_iter().enumerate() {
+            for (dst_node, dst_port) in dst_node_ports {
+                let (src_node, src_port) = if let Some((repl_node, repl_port)) =
+                    replacement.single_linked_output(out_node, pos)
+                {
+                    (repl_node, repl_port)
+                } else {
+                    // order edge
+                    debug_assert_eq!(
+                        hugr.get_optype(dst_node).other_input_port(),
+                        Some(dst_port),
+                        "missing dataflow port in replacement"
+                    );
+                    (
+                        repl_meas,
+                        replacement
+                            .get_optype(repl_meas)
+                            .other_output_port()
+                            .expect("measure has other port"),
+                    )
+                };
+                hugr.connect(node_map[&src_node], src_port, dst_node, dst_port);
+            }
         }
 
         Ok(())
@@ -409,5 +419,22 @@ mod test {
         let mut hugr = builder.finish_hugr_with_outputs([qb]).unwrap();
         LazifyMeasurePass.run(&mut hugr).unwrap();
         assert!(hugr.validate().is_ok());
+    }
+
+    #[test]
+    fn measure_with_order_edges() {
+        let mut hugr = {
+            let mut builder = DFGBuilder::new(Signature::new(vec![qb_t(); 4], vec![])).unwrap();
+            let [meas1, meas2, meas3, meas4] = builder
+                .input_wires_arr()
+                .map(|qb| builder.add_measure(qb).unwrap());
+            builder.set_order(&meas1.node(), &meas2.node());
+            builder.set_order(&meas2.node(), &meas3.node());
+            builder.set_order(&meas2.node(), &meas4.node());
+            builder.finish_hugr_with_outputs([]).unwrap()
+        };
+        hugr.validate().unwrap();
+        LazifyMeasurePass.run(&mut hugr).unwrap();
+        hugr.validate().unwrap();
     }
 }

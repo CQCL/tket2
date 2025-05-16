@@ -316,30 +316,4 @@ mod test {
         QSystemPass::default().run(&mut h).unwrap();
         h.validate().unwrap();
     }
-
-    #[test]
-    #[cfg_attr(miri, ignore)] // File::open is not supported in miri
-    fn alloc_measure() {
-        let file = std::fs::File::open("../test_files/alloc_measure.hugr").unwrap();
-        let reader = BufReader::new(file);
-        let mut reg = ExtensionRegistry::new([tket2::extension::TKET2_EXTENSION.to_owned()]);
-        reg.extend(hugr::std_extensions::std_reg());
-
-        let mut h: hugr::Hugr = hugr::Hugr::load(reader, Some(&reg)).unwrap();
-        QSystemPass::default().run(&mut h).unwrap();
-        h.validate().unwrap();
-    }
-
-    #[test]
-    #[cfg_attr(miri, ignore)] // File::open is not supported in miri
-    fn two_layers_4_qubits() {
-        let file = std::fs::File::open("../test_files/2_layers_4_qubits.hugr").unwrap();
-        let reader = BufReader::new(file);
-        let mut reg = ExtensionRegistry::new([tket2::extension::TKET2_EXTENSION.to_owned()]);
-        reg.extend(hugr::std_extensions::std_reg());
-
-        let mut h: hugr::Hugr = hugr::Hugr::load(reader, Some(&reg)).unwrap();
-        QSystemPass::default().run(&mut h).unwrap();
-        h.validate().unwrap();
-    }
 }
