@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.7.0](https://github.com/CQCL/tket2/compare/tket2-exts-v0.6.0...tket2-exts-v0.7.0) (2025-05-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* bump to hugr 0.20
+* **hseries:** ZZMax removed from Qsystem extension. Use ZZPhase(pi/2).
+
+### Features
+
+* Add `tket2.bool` extension ([#823](https://github.com/CQCL/tket2/issues/823)) ([8818d2f](https://github.com/CQCL/tket2/commit/8818d2f122ec3911366d02c18e347752a427fad9))
+* Add debug extension with state result op ([#843](https://github.com/CQCL/tket2/issues/843)) ([64bbe88](https://github.com/CQCL/tket2/commit/64bbe88ddd0a214044d2636f3d4bd8262d6b05f5)), closes [#832](https://github.com/CQCL/tket2/issues/832)
+* **hseries:** remove ZZMax operation from Qsystem extension ([#852](https://github.com/CQCL/tket2/issues/852)) ([b488125](https://github.com/CQCL/tket2/commit/b4881256b2d6a5c21c1d7a69d91384c5d2cc9905))
+
+
+### Miscellaneous Chores
+
+* Bump to hugr-0.20 ([#862](https://github.com/CQCL/tket2/issues/862)) ([652a7d0](https://github.com/CQCL/tket2/commit/652a7d0b039bca62407f16f7548204e97f92ef5a))
+
 ## [0.6.0](https://github.com/CQCL/tket2/compare/tket2-exts-v0.5.1...tket2-exts-v0.6.0) (2025-03-18)
 
 
