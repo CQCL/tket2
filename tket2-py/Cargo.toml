@@ -19,7 +19,7 @@ test = false
 bench = false
 
 [dependencies]
-tket2 = { path = "../tket2", version = "0.9.0", features = [
+tket2 = { path = "../tket2", version = "0.10.0", features = [
     "portmatching",
     "binary-eccs",
 ] }
