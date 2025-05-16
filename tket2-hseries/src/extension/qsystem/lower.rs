@@ -90,8 +90,7 @@ pub(super) fn insert_function(hugr: &mut impl HugrMut<Node = Node>, func_def: Hu
 /// Returns the nodes that were replaced.
 ///
 /// # Errors
-/// Returns an error if the replacement fails, which could be if the root
-/// operation cannot have children of type [OpTag::FuncDefn].
+/// Returns an error if the replacement fails.
 pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, LowerTk2Error> {
     let mut funcs: HashMap<Tk2Op, Node> = HashMap::new();
     let mut lowerer = ReplaceTypes::new_empty();
