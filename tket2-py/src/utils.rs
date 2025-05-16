@@ -55,8 +55,8 @@ pub fn into_vec<T, S: From<T>>(v: impl IntoIterator<Item = T>) -> Vec<S> {
 #[cfg(test)]
 pub(crate) mod test {
     use hugr::builder::{
-        BuildError, CircuitBuilder, Container, Dataflow, DataflowSubContainer, FunctionBuilder,
-        HugrBuilder, ModuleBuilder,
+        BuildError, CircuitBuilder, Container, Dataflow, DataflowHugr, DataflowSubContainer,
+        FunctionBuilder, HugrBuilder, ModuleBuilder,
     };
     use hugr::extension::prelude::qb_t;
     use hugr::ops::handle::NodeHandle;
@@ -70,20 +70,16 @@ pub(crate) mod test {
     /// Utility for building a module with a single circuit definition.
     pub fn build_module_with_circuit<F>(num_qubits: usize, f: F) -> Result<Circuit, BuildError>
     where
-        F: FnOnce(&mut CircuitBuilder<FunctionBuilder<&mut Hugr>>) -> Result<(), BuildError>,
+        F: FnOnce(&mut CircuitBuilder<'_, FunctionBuilder<Hugr>>) -> Result<(), BuildError>,
     {
-        let mut builder = ModuleBuilder::new();
-        let circ = {
-            let qb_row = vec![qb_t(); num_qubits];
-            let circ_signature = FunctionType::new(qb_row.clone(), qb_row);
-            let mut dfg = builder.define_function("main", circ_signature.into())?;
-            let mut circ = dfg.as_circuit(dfg.input_wires());
-            f(&mut circ)?;
-            let qbs = circ.finish();
-            dfg.finish_with_outputs(qbs)?
-        };
-        let hugr = builder.finish_hugr()?;
-        Ok(Circuit::new(hugr, circ.node()))
+        let qb_row = vec![qb_t(); num_qubits];
+        let circ_signature = FunctionType::new(qb_row.clone(), qb_row);
+        let mut dfg = FunctionBuilder::new("main", circ_signature.into())?;
+        let mut circ = dfg.as_circuit(dfg.input_wires());
+        f(&mut circ)?;
+        let qbs = circ.finish();
+        let hugr = dfg.finish_hugr_with_outputs(qbs)?;
+        Ok(Circuit::new(hugr))
     }
 
     /// Generates a simple tket2 circuit for testing,

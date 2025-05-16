@@ -9,7 +9,7 @@ use hugr::{
     extension::{
         prelude::UnwrapBuilder,
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
-        ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version, PRELUDE,
+        ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, Version, PRELUDE,
     },
     std_extensions::arithmetic::int_types::int_type,
     type_row,
@@ -28,9 +28,6 @@ lazy_static! {
     /// The "tket2.qsystem.utils" extension.
     pub static ref EXTENSION: Arc<Extension> = {
          Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
-            ext.add_requirements(ExtensionSet::from_iter([
-                PRELUDE.name(),
-            ].into_iter().cloned()));
             UtilsOp::load_all_ops( ext, ext_ref).unwrap();
         })
     };
@@ -67,6 +64,10 @@ pub enum UtilsOp {
 }
 
 impl MakeOpDef for UtilsOp {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        <&'static str>::from(self).into()
+    }
+
     fn init_signature(&self, _extension_ref: &std::sync::Weak<Extension>) -> SignatureFunc {
         match self {
             UtilsOp::GetCurrentShot => Signature::new(type_row![], int_type(6)),
@@ -121,14 +122,17 @@ impl<D: Dataflow> UtilsOpBuilder for D {}
 mod test {
     use std::sync::Arc;
 
-    use hugr::builder::{DataflowHugr, FunctionBuilder};
-    use hugr::ops::NamedOp;
+    use hugr::HugrView;
+    use hugr::{
+        builder::{DataflowHugr, FunctionBuilder},
+        extension::simple_op::MakeExtensionOp,
+    };
     use strum::IntoEnumIterator;
 
     use super::*;
 
-    fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
-        EXTENSION.get_op(&op.name())
+    fn get_opdef(op: UtilsOp) -> Option<&'static Arc<OpDef>> {
+        EXTENSION.get_op(&op.op_id())
     }
 
     #[test]

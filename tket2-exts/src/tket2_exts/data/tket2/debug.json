@@ -1,9 +1,7 @@
 {
   "version": "0.1.0",
   "name": "tket2.debug",
-  "runtime_reqs": [],
   "types": {},
-  "values": {},
   "operations": {
     "StateResult": {
       "extension": "tket2.debug",
@@ -67,8 +65,7 @@
               ],
               "bound": "A"
             }
-          ],
-          "runtime_reqs": []
+          ]
         }
       },
       "binary": false

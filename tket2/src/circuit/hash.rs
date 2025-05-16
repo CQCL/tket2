@@ -4,33 +4,31 @@ use std::hash::{Hash, Hasher};
 
 use derive_more::{Display, Error};
 use fxhash::{FxHashMap, FxHasher64};
-use hugr::hugr::views::{HierarchyView, SiblingGraph};
-use hugr::ops::{NamedOp, OpType};
+use hugr::ops::OpType;
 use hugr::{HugrView, Node};
+use hugr_core::hugr::internal::PortgraphNodeMap;
 use petgraph::visit::{self as pg, Walker};
 
 use super::Circuit;
 
 /// Circuit hashing utilities.
 pub trait CircuitHash {
-    /// Compute hash of a circuit.
+    /// Compute the hash of a dataflow container node.
     ///
-    /// We compute a hash for each command from its operation and the hash of
-    /// its predecessors. The hash of the circuit corresponds to the hash of its
+    /// We compute a hash for each node from its operation and the hash of
+    /// the predecessors. The hash of the circuit corresponds to the hash of its
     /// output node.
     ///
     /// This hash is independent from the operation traversal order.
     ///
     /// Adapted from Quartz (Apache 2.0)
     /// <https://github.com/quantum-compiler/quartz/blob/2e13eb7ffb3c5c5fe96cf5b4246f4fd7512e111e/src/quartz/tasograph/tasograph.cpp#L410>
-    fn circuit_hash(&self) -> Result<u64, HashError>;
+    fn circuit_hash(&self, node: Node) -> Result<u64, HashError>;
 }
 
 impl<T: HugrView<Node = Node>> CircuitHash for Circuit<T> {
-    fn circuit_hash(&self) -> Result<u64, HashError> {
-        let hugr = self.hugr();
-        let container: SiblingGraph = SiblingGraph::try_new(hugr, self.parent()).unwrap();
-        container.circuit_hash()
+    fn circuit_hash(&self, node: Node) -> Result<u64, HashError> {
+        self.hugr().circuit_hash(node)
     }
 }
 
@@ -38,17 +36,16 @@ impl<T> CircuitHash for T
 where
     T: HugrView<Node = Node>,
 {
-    fn circuit_hash(&self) -> Result<u64, HashError> {
-        let Some([_, output_node]) = self.get_io(self.root()) else {
+    fn circuit_hash(&self, node: Node) -> Result<u64, HashError> {
+        let Some([_, output_node]) = self.get_io(node) else {
             return Err(HashError::NotADfg);
         };
 
         let mut node_hashes = HashState::default();
 
-        for node in pg::Topo::new(&self.as_petgraph())
-            .iter(&self.as_petgraph())
-            .filter(|&n| n != self.root())
-        {
+        let (region, node_map) = self.region_portgraph(node);
+        for pg_node in pg::Topo::new(&region).iter(&region) {
+            let node = node_map.from_portgraph(pg_node);
             let hash = hash_node(self, node, &mut node_hashes)?;
             if node_hashes.set_hash(node, hash).is_some() {
                 panic!("Hash already set for node {node}");
@@ -94,18 +91,18 @@ fn hashable_op(op: &OpType) -> impl Hash {
             // TODO: Require hashing for TypeParams?
             format!(
                 "{}[{}]",
-                op.name(),
+                op.def().name(),
                 serde_json::to_string(op.args()).unwrap()
             )
         }
         OpType::OpaqueOp(op) if !op.args().is_empty() => {
             format!(
                 "{}[{}]",
-                op.name(),
+                op.qualified_id(),
                 serde_json::to_string(op.args()).unwrap()
             )
         }
-        _ => op.name().to_string(),
+        _ => op.to_string(),
     }
 }
 
@@ -126,8 +123,7 @@ fn hash_node(
 
     // Hash the node children
     if circ.children(node).count() > 0 {
-        let container: SiblingGraph = SiblingGraph::try_new(circ, node).unwrap();
-        container.circuit_hash()?.hash(&mut hasher);
+        circ.circuit_hash(node)?.hash(&mut hasher);
     }
 
     // Hash the node operation
@@ -180,7 +176,7 @@ mod test {
             Ok(())
         })
         .unwrap();
-        let hash1 = circ1.circuit_hash().unwrap();
+        let hash1 = circ1.circuit_hash(circ1.parent()).unwrap();
 
         // A circuit built in a different order should have the same hash
         let circ2 = build_simple_circuit(2, |circ| {
@@ -190,7 +186,7 @@ mod test {
             Ok(())
         })
         .unwrap();
-        let hash2 = circ2.circuit_hash().unwrap();
+        let hash2 = circ2.circuit_hash(circ2.parent()).unwrap();
 
         assert_eq!(hash1, hash2);
 
@@ -202,7 +198,7 @@ mod test {
             Ok(())
         })
         .unwrap();
-        let hash3 = circ3.circuit_hash().unwrap();
+        let hash3 = circ3.circuit_hash(circ3.parent()).unwrap();
 
         assert_ne!(hash1, hash3);
     }
@@ -212,7 +208,7 @@ mod test {
         let c_str = r#"{"bits": [], "commands": [{"args": [["q", [0]]], "op": {"params": ["0.5"], "type": "Rz"}}], "created_qubits": [], "discarded_qubits": [], "implicit_permutation": [[["q", [0]], ["q", [0]]]], "phase": "0.0", "qubits": [["q", [0]]]}"#;
         let ser: circuit_json::SerialCircuit = serde_json::from_str(c_str).unwrap();
         let circ: Circuit = ser.decode().unwrap();
-        circ.circuit_hash().unwrap();
+        circ.circuit_hash(circ.parent()).unwrap();
     }
 
     #[test]
@@ -224,7 +220,7 @@ mod test {
         for c_str in [c_str1, c_str2] {
             let ser: circuit_json::SerialCircuit = serde_json::from_str(c_str).unwrap();
             let circ: Circuit = ser.decode().unwrap();
-            all_hashes.push(circ.circuit_hash().unwrap());
+            all_hashes.push(circ.circuit_hash(circ.parent()).unwrap());
         }
         assert_ne!(all_hashes[0], all_hashes[1]);
     }

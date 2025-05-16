@@ -187,7 +187,7 @@ where
         logger.log_best(&best_circ_cost, num_rewrites);
 
         // Hash of seen circuits. Dot not store circuits as this map gets huge
-        let hash = circ.circuit_hash().unwrap();
+        let hash = circ.circuit_hash(circ.parent()).unwrap();
         let mut seen_hashes = FxHashSet::default();
         seen_hashes.insert(hash);
 
@@ -228,7 +228,7 @@ where
                     continue;
                 }
 
-                let Ok(new_circ_hash) = r.circ.circuit_hash() else {
+                let Ok(new_circ_hash) = r.circ.circuit_hash(circ.parent()) else {
                     // The composed rewrites produced a loop.
                     //
                     // See [https://github.com/CQCL/tket2/discussions/242]
@@ -297,7 +297,7 @@ where
         };
         let (pq, rx_log) = HugrPriorityChannel::init(cost_fn.clone(), opt.queue_size);
 
-        let initial_circ_hash = circ.circuit_hash().unwrap();
+        let initial_circ_hash = circ.circuit_hash(circ.parent()).unwrap();
         let mut best_circ = circ.clone();
         let mut best_circ_cost = self.cost(&best_circ);
 
@@ -566,6 +566,7 @@ mod tests {
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::qb_t,
         types::Signature,
+        HugrView,
     };
     use rstest::{fixture, rstest};
 

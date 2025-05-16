@@ -9,7 +9,7 @@ use hugr::{
     builder::{BuildError, Dataflow},
     extension::{
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
-        ExtensionBuildError, ExtensionId, ExtensionSet, SignatureFunc, TypeDef, Version,
+        ExtensionBuildError, ExtensionId, SignatureFunc, TypeDef, Version,
     },
     ops::constant::{CustomConst, ValueName},
     types::{CustomType, Signature, Type, TypeBound},
@@ -92,10 +92,6 @@ impl CustomConst for ConstBool {
         hugr::ops::constant::downcast_equal_consts(self, other)
     }
 
-    fn extension_reqs(&self) -> ExtensionSet {
-        ExtensionSet::singleton(BOOL_EXTENSION_ID)
-    }
-
     fn get_type(&self) -> Type {
         bool_type()
     }
@@ -130,6 +126,10 @@ pub enum BoolOp {
 }
 
 impl MakeOpDef for BoolOp {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        <&'static str>::from(self).into()
+    }
+
     fn init_signature(&self, extension_ref: &Weak<Extension>) -> SignatureFunc {
         let bool_type = Type::new_extension(bool_custom_type(extension_ref));
         let sum_type = Type::new_unit_sum(2);
@@ -239,15 +239,15 @@ impl<D: Dataflow> BoolOpBuilder for D {}
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
+    use hugr::HugrView;
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
-        extension::OpDef,
-        ops::NamedOp,
+        extension::{simple_op::MakeExtensionOp, OpDef},
     };
     use strum::IntoEnumIterator;
 
-    fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
-        BOOL_EXTENSION.get_op(&op.name())
+    fn get_opdef(op: BoolOp) -> Option<&'static Arc<OpDef>> {
+        BOOL_EXTENSION.get_op(&op.op_id())
     }
 
     #[test]
@@ -271,7 +271,6 @@ pub(crate) mod test {
         let bool_const = ConstBool::new(true);
         assert_eq!(bool_const.get_type(), bool_ty);
         assert!(bool_const.value());
-        assert!(bool_const.extension_reqs().contains(&BOOL_EXTENSION_ID));
         assert!(bool_const.validate().is_ok());
     }
 

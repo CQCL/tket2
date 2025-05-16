@@ -11,7 +11,7 @@ use hugr::{
     extension::{
         prelude::{bool_t, option_type, qb_t, UnwrapBuilder},
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
-        ExtensionId, ExtensionRegistry, ExtensionSet, OpDef, SignatureFunc, Version, PRELUDE,
+        ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, Version, PRELUDE,
     },
     ops::Value,
     std_extensions::arithmetic::{
@@ -44,11 +44,6 @@ lazy_static! {
     /// The "tket2.qsystem" extension.
     pub static ref EXTENSION: Arc<Extension> = {
          Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
-            ext.add_requirements(ExtensionSet::from_iter([
-                futures::EXTENSION.name(),
-                PRELUDE.name(),
-                FLOAT_TYPES.name(),
-            ].into_iter().cloned()));
             QSystemOp::load_all_ops( ext, ext_ref).unwrap();
         })
     };
@@ -95,6 +90,10 @@ pub enum QSystemOp {
 }
 
 impl MakeOpDef for QSystemOp {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        <&'static str>::from(self).into()
+    }
+
     fn init_signature(&self, _extension_ref: &std::sync::Weak<Extension>) -> SignatureFunc {
         use QSystemOp::*;
         let one_qb_row = TypeRow::from(vec![qb_t()]);
@@ -426,13 +425,15 @@ mod test {
     use cool_asserts::assert_matches;
     use futures::FutureOpBuilder as _;
     use hugr::builder::{DataflowHugr, FunctionBuilder};
-    use hugr::ops::{NamedOp, OpType};
+    use hugr::extension::simple_op::MakeExtensionOp;
+    use hugr::ops::OpType;
+    use hugr::HugrView;
     use strum::IntoEnumIterator as _;
 
     use super::*;
 
-    fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
-        EXTENSION.get_op(&op.name())
+    fn get_opdef(op: QSystemOp) -> Option<&'static Arc<OpDef>> {
+        EXTENSION.get_op(&op.op_id())
     }
 
     #[test]

@@ -3,7 +3,7 @@
 //! This is based on the `pest` grammar defined in `param.pest`.
 
 use derive_more::Display;
-use hugr::ops::{NamedOp, OpType};
+use hugr::ops::OpType;
 use hugr::std_extensions::arithmetic::float_ops::FloatOps;
 use itertools::Itertools;
 use pest::iterators::{Pair, Pairs};
@@ -33,7 +33,7 @@ pub enum PytketParam<'a> {
     #[display("Sympy(\"{_0}\")")]
     Sympy(&'a str),
     /// An operation on some nested expressions.
-    #[display("{}({})", op.name(), args.iter().map(|a| a.to_string()).join(", "))]
+    #[display("{}({})", op.to_string(), args.iter().map(|a| a.to_string()).join(", "))]
     Operation {
         op: OpType,
         args: Vec<PytketParam<'a>>,

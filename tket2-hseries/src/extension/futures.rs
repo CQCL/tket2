@@ -14,7 +14,7 @@ use hugr::{
         },
         ExtensionBuildError, ExtensionId, OpDef, SignatureError, SignatureFunc, TypeDef, Version,
     },
-    ops::{custom::ExtensionOp, NamedOp, OpType},
+    ops::{custom::ExtensionOp, OpType},
     types::{type_param::TypeParam, CustomType, PolyFuncType, Signature, Type, TypeArg, TypeBound},
     Extension, Wire,
 };
@@ -96,6 +96,10 @@ pub enum FutureOpDef {
 }
 
 impl MakeOpDef for FutureOpDef {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        <&'static str>::from(self).into()
+    }
+
     fn init_signature(&self, extension_ref: &Weak<Extension>) -> SignatureFunc {
         let t_param = TypeParam::from(TypeBound::Any);
         let t_type = Type::new_var_use(0, TypeBound::Any);
@@ -169,6 +173,10 @@ pub struct FutureOp {
 }
 
 impl MakeExtensionOp for FutureOp {
+    fn op_id(&self) -> hugr::ops::OpName {
+        self.op.opdef_id()
+    }
+
     fn from_extension_op(ext_op: &ExtensionOp) -> Result<Self, OpLoadError>
     where
         Self: Sized,
@@ -202,7 +210,7 @@ impl TryFrom<&OpType> for FutureOpDef {
         Self::from_op(
             value
                 .as_extension_op()
-                .ok_or(OpLoadError::NotMember(value.name().into()))?,
+                .ok_or(OpLoadError::NotMember(value.to_string()))?,
         )
     }
 }
@@ -255,17 +263,15 @@ impl<D: Dataflow> FutureOpBuilder for D {}
 #[cfg(test)]
 pub(crate) mod test {
 
-    use hugr::{
-        builder::{Dataflow, DataflowHugr, FunctionBuilder},
-        ops::NamedOp,
-    };
+    use hugr::builder::{Dataflow, DataflowHugr, FunctionBuilder};
+    use hugr::HugrView;
     use std::sync::Arc;
     use strum::IntoEnumIterator;
 
     use super::*;
 
-    fn get_opdef(op: impl NamedOp) -> Option<&'static Arc<OpDef>> {
-        EXTENSION.get_op(&op.name())
+    fn get_opdef(op: FutureOpDef) -> Option<&'static Arc<OpDef>> {
+        EXTENSION.get_op(&op.opdef_id())
     }
 
     #[test]

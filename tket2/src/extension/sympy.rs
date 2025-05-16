@@ -9,7 +9,7 @@ use hugr::extension::simple_op::{
     try_from_name, HasConcrete, HasDef, MakeExtensionOp, MakeOpDef, MakeRegisteredOp, OpLoadError,
 };
 use hugr::extension::{ExtensionId, SignatureError, SignatureFunc};
-use hugr::ops::{ExtensionOp, NamedOp, OpName};
+use hugr::ops::{ExtensionOp, OpName};
 use hugr::types::type_param::TypeParam;
 use hugr::types::{CustomType, PolyFuncType, Signature, TypeArg};
 use hugr::{type_row, Extension};
@@ -40,12 +40,6 @@ impl SympyOpDef {
     }
 }
 
-impl NamedOp for SympyOpDef {
-    fn name(&self) -> hugr::ops::OpName {
-        SYM_OP_ID.to_owned()
-    }
-}
-
 impl FromStr for SympyOpDef {
     type Err = ();
 
@@ -59,6 +53,10 @@ impl FromStr for SympyOpDef {
 }
 
 impl MakeOpDef for SympyOpDef {
+    fn opdef_id(&self) -> hugr::ops::OpName {
+        SYM_OP_ID
+    }
+
     fn from_def(
         op_def: &hugr::extension::OpDef,
     ) -> Result<Self, hugr::extension::simple_op::OpLoadError>
@@ -98,13 +96,11 @@ pub struct SympyOp {
     pub expr: String,
 }
 
-impl NamedOp for SympyOp {
-    fn name(&self) -> OpName {
-        SYM_OP_ID.to_owned()
-    }
-}
-
 impl MakeExtensionOp for SympyOp {
+    fn op_id(&self) -> OpName {
+        SYM_OP_ID
+    }
+
     fn from_extension_op(ext_op: &ExtensionOp) -> Result<Self, OpLoadError> {
         let def = SympyOpDef::from_def(ext_op.def())?;
         def.instantiate(ext_op.args())
@@ -153,7 +149,6 @@ pub static ref SYM_EXPR_T: CustomType =
 #[cfg(test)]
 mod tests {
     use hugr::extension::simple_op::MakeOpDef;
-    use hugr::ops::NamedOp;
 
     use super::*;
     use crate::extension::TKET2_EXTENSION;
@@ -162,7 +157,7 @@ mod tests {
     fn test_extension() {
         assert_eq!(TKET2_EXTENSION.name(), &SympyOpDef.extension());
 
-        let opdef = TKET2_EXTENSION.get_op(&SympyOpDef.name());
+        let opdef = TKET2_EXTENSION.get_op(&SympyOpDef.opdef_id());
         assert_eq!(SympyOpDef::from_def(opdef.unwrap()), Ok(SympyOpDef));
     }
 

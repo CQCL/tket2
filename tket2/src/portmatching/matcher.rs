@@ -13,10 +13,9 @@ use hugr::hugr::views::sibling_subgraph::{
     InvalidReplacement, InvalidSubgraph, InvalidSubgraphBoundary, TopoConvexChecker,
 };
 use hugr::hugr::views::SiblingSubgraph;
-use hugr::ops::{NamedOp, OpType};
+use hugr::ops::OpType;
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex};
 use itertools::Itertools;
-use portgraph::algorithms::ConvexChecker;
 use portmatching::{
     automaton::{LineBuilder, ScopeAutomaton},
     EdgeProperty, PatternID,
@@ -44,7 +43,7 @@ pub(crate) struct MatchOp {
 
 impl From<OpType> for MatchOp {
     fn from(op: OpType) -> Self {
-        let op_name = op.name();
+        let op_name = op.to_string().into();
         let encoded = encode_op(op);
         Self { op_name, encoded }
     }
@@ -62,7 +61,7 @@ fn encode_op(op: OpType) -> Option<Vec<u8>> {
             let mut encoded: Vec<u8> = Vec::new();
             // Ignore irrelevant fields
             rmp_serde::encode::write(&mut encoded, op.extension()).ok()?;
-            rmp_serde::encode::write(&mut encoded, &op.name()).ok()?;
+            rmp_serde::encode::write(&mut encoded, &op.unqualified_id()).ok()?;
             rmp_serde::encode::write(&mut encoded, op.args()).ok()?;
             Some(encoded)
         }
@@ -125,7 +124,7 @@ impl PatternMatch {
         circ: &Circuit,
         matcher: &PatternMatcher,
     ) -> Result<Self, InvalidPatternMatch> {
-        let checker = TopoConvexChecker::new(circ.hugr());
+        let checker = TopoConvexChecker::new(circ.hugr(), circ.parent());
         Self::try_from_root_match_with_checker(root, pattern, circ, matcher, &checker)
     }
 
@@ -135,12 +134,12 @@ impl PatternMatch {
     /// checker object to speed up convexity checking.
     ///
     /// See [`PatternMatch::try_from_root_match`] for more details.
-    pub fn try_from_root_match_with_checker(
+    pub fn try_from_root_match_with_checker<H: HugrView<Node = Node>>(
         root: Node,
         pattern: PatternID,
-        circ: &Circuit<impl HugrView<Node = Node>>,
+        circ: &Circuit<H>,
         matcher: &PatternMatcher,
-        checker: &impl ConvexChecker,
+        checker: &TopoConvexChecker<'_, H>,
     ) -> Result<Self, InvalidPatternMatch> {
         let pattern_ref = matcher
             .get_pattern(pattern)
@@ -183,7 +182,7 @@ impl PatternMatch {
         inputs: Vec<Vec<(Node, IncomingPort)>>,
         outputs: Vec<(Node, OutgoingPort)>,
     ) -> Result<Self, InvalidPatternMatch> {
-        let checker = TopoConvexChecker::new(circ.hugr());
+        let checker = TopoConvexChecker::new(circ.hugr(), circ.parent());
         Self::try_from_io_with_checker(root, pattern, circ, inputs, outputs, &checker)
     }
 
@@ -195,13 +194,13 @@ impl PatternMatch {
     ///
     /// This checks at construction time that the match is convex. This will
     /// have runtime linear in the size of the circuit.
-    pub fn try_from_io_with_checker(
+    pub fn try_from_io_with_checker<H: HugrView<Node = Node>>(
         root: Node,
         pattern: PatternID,
-        circ: &Circuit<impl HugrView<Node = Node>>,
+        circ: &Circuit<H>,
         inputs: Vec<Vec<(Node, IncomingPort)>>,
         outputs: Vec<(Node, OutgoingPort)>,
-        checker: &impl ConvexChecker,
+        checker: &TopoConvexChecker<'_, H>,
     ) -> Result<Self, InvalidPatternMatch> {
         let subgraph =
             SiblingSubgraph::try_new_with_checker(inputs, outputs, circ.hugr(), checker)?;
@@ -252,7 +251,7 @@ impl Debug for PatternMatcher {
 impl PatternMatcher {
     /// Construct a matcher from a set of patterns
     pub fn from_patterns(patterns: impl Into<Vec<CircuitPattern>>) -> Self {
-        let patterns = patterns.into();
+        let patterns: Vec<CircuitPattern> = patterns.into();
         let line_patterns = patterns
             .iter()
             .map(|p| {
@@ -275,7 +274,7 @@ impl PatternMatcher {
         &'a self,
         circuit: &'c Circuit<impl HugrView<Node = Node>>,
     ) -> impl Iterator<Item = PatternMatch> + 'a {
-        let checker = TopoConvexChecker::new(circuit.hugr());
+        let checker = TopoConvexChecker::new(circuit.hugr(), circuit.parent());
         circuit
             .commands()
             .flat_map(move |cmd| self.find_rooted_matches(circuit, cmd.node(), &checker))
@@ -287,11 +286,11 @@ impl PatternMatcher {
     }
 
     /// Find all convex pattern matches in a circuit rooted at a given node.
-    fn find_rooted_matches(
+    fn find_rooted_matches<H: HugrView<Node = Node>>(
         &self,
-        circ: &Circuit<impl HugrView<Node = Node>>,
+        circ: &Circuit<H>,
         root: Node,
-        checker: &impl ConvexChecker,
+        checker: &TopoConvexChecker<'_, H>,
     ) -> Vec<PatternMatch> {
         self.automaton
             .run(
