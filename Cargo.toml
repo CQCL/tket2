@@ -28,6 +28,12 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 ] }
 missing_docs = "warn"
 
+[workspace.lints.clippy]
+
+# TODO: Reduce the size of error types.
+result_large_err = "allow"
+large_enum_variant = "allow"
+
 [patch.crates-io]
 
 # Uncomment to use unreleased versions of hugr
