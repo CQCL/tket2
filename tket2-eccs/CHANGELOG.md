@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.0](https://github.com/CQCL/tket2/compare/tket2-eccs-v0.3.0...tket2-eccs-v0.4.0) (2025-05-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* bump to hugr 0.20
+
+### Miscellaneous Chores
+
+* Bump to hugr-0.20 ([#862](https://github.com/CQCL/tket2/issues/862)) ([652a7d0](https://github.com/CQCL/tket2/commit/652a7d0b039bca62407f16f7548204e97f92ef5a))
+
 ## [0.3.0](https://github.com/CQCL/tket2/compare/tket2-eccs-v0.2.0...tket2-eccs-v0.3.0) (2024-12-16)
 
 
