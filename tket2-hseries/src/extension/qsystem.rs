@@ -4,7 +4,10 @@
 //! In the case of lazy operations,
 //! laziness is represented by returning `tket2.futures.Future` classical
 //! values. Qubits are never lazy.
-use std::sync::{Arc, Weak};
+use std::{
+    str::FromStr,
+    sync::{Arc, Weak},
+};
 
 use hugr::{
     builder::{BuildError, Dataflow, DataflowSubContainer, SubContainer},
@@ -13,24 +16,27 @@ use hugr::{
         simple_op::{try_from_name, MakeOpDef, MakeRegisteredOp},
         ExtensionId, ExtensionRegistry, OpDef, SignatureFunc, Version, PRELUDE,
     },
-    ops::Value,
-    std_extensions::arithmetic::{
-        float_ops::FloatOps,
-        float_types::{float64_type, ConstF64, EXTENSION as FLOAT_TYPES},
+    ops::{ExtensionOp, OpName, Value},
+    std_extensions::{
+        arithmetic::{
+            float_ops::FloatOps,
+            float_types::{float64_type, ConstF64, EXTENSION as FLOAT_TYPES},
+        },
+        collections::array::{array_type, array_type_parametric, ArrayOpBuilder},
     },
     type_row,
-    types::{Signature, Type, TypeRow},
+    types::{type_param::TypeParam, PolyFuncType, Signature, Type, TypeArg, TypeRow},
     Extension, Wire,
 };
 
+use crate::extension::futures;
 use derive_more::Display;
 use lazy_static::lazy_static;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
-use crate::extension::futures;
-
 use super::futures::future_type;
 
+mod barrier;
 mod lower;
 use lower::pi_mul_f64;
 pub use lower::{check_lowered, lower_tk2_op, LowerTk2Error, LowerTket2ToQSystemPass};
@@ -45,6 +51,7 @@ lazy_static! {
     pub static ref EXTENSION: Arc<Extension> = {
          Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
             QSystemOp::load_all_ops( ext, ext_ref).unwrap();
+            RuntimeBarrierDef.add_to_extension(ext, ext_ref).unwrap();
         })
     };
 
@@ -154,9 +161,64 @@ impl MakeRegisteredOp for QSystemOp {
     }
 }
 
+/// The name of the "tket2.qsystem.RuntimeBarrier" operation.
+pub const RUNTIME_BARRIER_NAME: OpName = OpName::new_inline("RuntimeBarrier");
+
+/// Helper struct for the "tket2.qsystem.RuntimeBarrier" operation definition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RuntimeBarrierDef;
+
+impl FromStr for RuntimeBarrierDef {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == RuntimeBarrierDef.opdef_id().as_str() {
+            Ok(Self)
+        } else {
+            Err(())
+        }
+    }
+}
+
+impl MakeOpDef for RuntimeBarrierDef {
+    fn from_def(op_def: &OpDef) -> Result<Self, hugr::extension::simple_op::OpLoadError>
+    where
+        Self: Sized,
+    {
+        try_from_name(op_def.name(), op_def.extension_id())
+    }
+
+    fn extension(&self) -> ExtensionId {
+        EXTENSION_ID
+    }
+
+    fn extension_ref(&self) -> std::sync::Weak<Extension> {
+        Arc::downgrade(&EXTENSION)
+    }
+
+    fn init_signature(&self, _extension_ref: &Weak<Extension>) -> SignatureFunc {
+        PolyFuncType::new(
+            [TypeParam::max_nat()],
+            Signature::new_endo(
+                array_type_parametric(TypeArg::new_var_use(0, TypeParam::max_nat()), qb_t())
+                    .unwrap(),
+            ),
+        )
+        .into()
+    }
+
+    fn description(&self) -> String {
+        "Acts as a runtime barrier between operations on argument qubits.".to_string()
+    }
+
+    fn opdef_id(&self) -> OpName {
+        RUNTIME_BARRIER_NAME
+    }
+}
+
 /// An extension trait for [Dataflow] providing methods to add
 /// "tket2.qsystem" operations.
-pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
+pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
     /// Add a "tket2.qsystem.LazyMeasure" op.
     fn add_lazy_measure(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         Ok(self
@@ -225,6 +287,12 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
         Ok(self
             .add_dataflow_op(QSystemOp::MeasureReset, [qb])?
             .outputs_arr())
+    }
+
+    /// Add a "tket2.qsystem.RuntimeBarrier" op.
+    fn add_runtime_barrier(&mut self, qbs: Wire, array_size: u64) -> Result<Wire, BuildError> {
+        let op = runtime_barrier_ext_op(array_size)?;
+        Ok(self.add_dataflow_op(op, [qbs])?.out_wire(0))
     }
 
     /// Build a hadamard gate in terms of QSystem primitives.
@@ -414,8 +482,68 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder {
         })?;
         Ok(qb)
     }
+
+    /// Build an array from qubit wires, apply a barrier, and unwrap the array afterwards.
+    fn build_wrapped_barrier(
+        &mut self,
+        qbs: impl IntoIterator<Item = Wire>,
+    ) -> Result<Vec<Wire>, BuildError>
+    where
+        Self: Sized,
+    {
+        let qbs: Vec<_> = qbs.into_iter().collect();
+        let size = qbs.len() as u64;
+        let q_arr = self.add_new_array(qb_t(), qbs)?;
+        let q_arr = self.add_runtime_barrier(q_arr, size)?;
+
+        pop_all(self, q_arr, size, qb_t())
+    }
 }
 
+/// Build a runtime barrier operation on an array of qubits given its size.
+pub(crate) fn runtime_barrier_ext_op(
+    array_size: u64,
+) -> Result<ExtensionOp, hugr::extension::SignatureError> {
+    ExtensionOp::new(
+        EXTENSION.get_op(&RUNTIME_BARRIER_NAME).unwrap().clone(),
+        [TypeArg::BoundedNat { n: array_size }],
+    )
+}
+
+/// Build a pop left operation on an array and unwrap the resulting option.
+pub(crate) fn pop_unwrap<T: ArrayOpBuilder>(
+    builder: &mut T,
+    q_arr: Wire,
+    size: u64,
+    elem_ty: Type,
+) -> Result<[Wire; 2], BuildError> {
+    debug_assert!(size > 0);
+    let r = builder
+        .add_array_pop_right(elem_ty.clone(), size, q_arr)
+        .unwrap();
+    builder.build_unwrap_sum(
+        1,
+        option_type(vec![elem_ty.clone(), array_type(size - 1, elem_ty)]),
+        r,
+    )
+}
+/// Unpack all elements of an array and discard the empty array.
+pub(crate) fn pop_all<T: ArrayOpBuilder>(
+    builder: &mut T,
+    mut arr: Wire,
+    size: u64,
+    elem_ty: Type,
+) -> Result<Vec<Wire>, BuildError> {
+    // TODO use unwrap op when available https://github.com/CQCL/hugr/issues/1947
+    let mut result = Vec::with_capacity(size as usize);
+    for ar_size in (1..size + 1).rev() {
+        let [qb, new_arr] = pop_unwrap(builder, arr, ar_size, elem_ty.clone())?;
+        result.push(qb);
+        arr = new_arr;
+    }
+    builder.add_array_discard_empty(elem_ty, arr)?;
+    Ok(result)
+}
 impl<D: Dataflow> QSystemOpBuilder for D {}
 
 #[cfg(test)]
@@ -473,10 +601,18 @@ mod test {
             let q1 = func_builder.add_phased_x(q1, angle, angle).unwrap();
             let [q0, q1] = func_builder.build_zz_max(q0, q1).unwrap();
             let [q0, q1] = func_builder.add_zz_phase(q0, q1, angle).unwrap();
+
+            let [q0, q1] = func_builder
+                .build_wrapped_barrier([q0, q1])
+                .unwrap()
+                .try_into()
+                .unwrap();
+
             let q0 = func_builder.add_rz(q0, angle).unwrap();
             let [q0, _b] = func_builder.add_measure_reset(q0).unwrap();
             let b = func_builder.add_measure(q0).unwrap();
             func_builder.add_qfree(q1).unwrap();
+
             func_builder.finish_hugr_with_outputs([b]).unwrap()
         };
         hugr.validate().unwrap()

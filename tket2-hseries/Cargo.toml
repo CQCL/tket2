@@ -27,7 +27,7 @@ tket2 = { path = "../tket2", version = "0.10.0" }
 lazy_static.workspace = true
 serde = { workspace = true, features = ["derive"] }
 smol_str.workspace = true
-strum = { workspace = true, features = ["derive"]}
+strum = { workspace = true, features = ["derive"] }
 itertools.workspace = true
 clap = { workspace = true, optional = true }
 hugr-cli = { workspace = true, optional = true }

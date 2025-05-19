@@ -63,7 +63,7 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for LazifyMeasurePass {
 pub enum LazifyMeasurePassError<N> {
     /// The HUGR was found to contain non-local edges.
     NonLocalEdgesError(NonLocalEdgesError<N>),
-    /// A [LazifyMeasureRewrite] was constructed targetting an invalid op.
+    /// A [LazifyMeasureRewrite] was constructed targeting an invalid op.
     #[display("A LazifyMeasureRewrite was constructed for node {node} with an invalid signature.\nExpected: {expected_signature}\nActual: {}", actual_signature.as_ref().map_or("None".to_string(), |x| format!("{x}")))]
     #[allow(missing_docs)]
     InvalidOp {
