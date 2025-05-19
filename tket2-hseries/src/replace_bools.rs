@@ -128,10 +128,8 @@ fn binary_logic_op_dest(op_name: &str) -> NodeTemplate {
         "or" => dfb
             .add_dataflow_op(LogicOp::Or, [cond1.out_wire(0), cond2.out_wire(0)])
             .unwrap(),
-        "xor" => dfb
-            .add_dataflow_op(LogicOp::Xor, [cond1.out_wire(0), cond2.out_wire(0)])
-            .unwrap(),
-        _ => panic!("Unknown op name"),
+
+        op => panic!("Unknown op name: {op}"),
     };
     let out = dfb
         .add_dataflow_op(

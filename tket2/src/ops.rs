@@ -220,7 +220,7 @@ pub(crate) mod test {
     use std::sync::Arc;
 
     use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
-    use hugr::extension::prelude::{bool_t, option_type, qb_t};
+    use hugr::extension::prelude::{option_type, qb_t};
     use hugr::extension::simple_op::{MakeExtensionOp, MakeOpDef};
     use hugr::extension::{prelude::UnwrapBuilder as _, OpDef};
     use hugr::types::Signature;

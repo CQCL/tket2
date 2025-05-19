@@ -454,7 +454,7 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
     /// Build a projective measurement with a conditional flip.
     fn build_measure_flip(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         let [qb, b] = self.add_measure_reset(qb)?;
-        let sum_b = self.add_dataflow_op(BoolOp::read, [b]).unwrap().out_wire(0);
+        let sum_b = self.add_dataflow_op(BoolOp::read, [b])?.out_wire(0);
         let mut conditional = self.conditional_builder(
             ([type_row![], type_row![]], sum_b),
             [(qb_t(), qb)],
