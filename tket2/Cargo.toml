@@ -1,6 +1,6 @@
 [package]
 name = "tket2"
-version = "0.9.0"
+version = "0.10.0"
 edition = { workspace = true }
 rust-version = { workspace = true }
 
@@ -81,7 +81,7 @@ cool_asserts = { workspace = true }
 
 # Defined here so it can be overridden by the codspeed CI job
 # using `cargo add`.
-criterion = { version = "0.5.1", features = ["html_reports"] }
+criterion = { version = "0.6.0", features = ["html_reports"] }
 
 [[bench]]
 name = "bench_main"

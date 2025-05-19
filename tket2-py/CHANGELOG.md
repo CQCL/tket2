@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.9.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.9.0...tket2-py-v0.9.1) (2025-05-19)
+
+
+### Bug Fixes
+
+* update exts and eccs dependencies ([aae0558](https://github.com/CQCL/tket2/commit/aae055870d51a554652400bbed04668b1c888e20))
+
+## [0.9.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.8.1...tket2-py-v0.9.0) (2025-05-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* bump to hugr 0.20
+
+### Features
+
+* **tket2-py:** Expose new modules in python ([#860](https://github.com/CQCL/tket2/issues/860)) ([4bfb3ff](https://github.com/CQCL/tket2/commit/4bfb3ff26f42b8dbf8e3fe29b4d451201cfbc989))
+
+
+### Miscellaneous Chores
+
+* Bump to hugr-0.20 ([#862](https://github.com/CQCL/tket2/issues/862)) ([652a7d0](https://github.com/CQCL/tket2/commit/652a7d0b039bca62407f16f7548204e97f92ef5a))
+
 ## [0.8.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.8.0...tket2-py-v0.8.1) (2025-03-18)
 
 

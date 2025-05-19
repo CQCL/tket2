@@ -104,7 +104,7 @@ impl Tk2Circuit {
     ///
     /// If no config is given, it defaults to the default text envelope.
     #[pyo3(signature = (config = None))]
-    pub fn to_str(&self, config: Option<Bound<'_, PyAny>>) -> PyResult<Vec<u8>> {
+    pub fn to_str(&self, config: Option<Bound<'_, PyAny>>) -> PyResult<String> {
         fn err(e: impl Display) -> PyErr {
             PyErr::new::<PyAttributeError, _>(format!("Could not encode circuit: {e}"))
         };
@@ -112,9 +112,7 @@ impl Tk2Circuit {
             Some(cfg) => envelope_config_from_py(cfg)?,
             None => EnvelopeConfig::text(),
         };
-        let mut buf = Vec::new();
-        self.circ.store(&mut buf, config).map_err(err)?;
-        Ok(buf)
+        self.circ.store_str(config).map_err(err)
     }
 
     /// Loads a circuit from a HUGR envelope.

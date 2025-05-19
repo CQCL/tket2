@@ -3,9 +3,8 @@
 //!
 //! [Tket2Op::Measure]: tket2::Tk2Op::Measure
 //! [QSystemOp::Measure]: crate::extension::qsystem::QSystemOp::Measure
-use std::iter;
+use std::{collections::HashMap, iter};
 
-use delegate::delegate;
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
@@ -16,13 +15,10 @@ use hugr::{
     builder::{DFGBuilder, Dataflow, DataflowHugr as _},
     core::HugrNode,
     extension::prelude::{bool_t, qb_t},
-    hugr::{
-        hugrmut::HugrMut, patch::PatchVerification, views::SiblingSubgraph, Patch,
-        SimpleReplacementError,
-    },
+    hugr::{hugrmut::HugrMut, views::SiblingSubgraph, Rewrite, SimpleReplacementError},
     ops::{handle::NodeHandle as _, OpTrait as _},
     types::Signature,
-    HugrView, Node, SimpleReplacement, Wire,
+    HugrView, Node, Wire,
 };
 use itertools::Itertools as _;
 use tket2::Tk2Op;
@@ -61,7 +57,7 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for LazifyMeasurePass {
 pub enum LazifyMeasurePassError<N> {
     /// The HUGR was found to contain non-local edges.
     NonLocalEdgesError(NonLocalEdgesError<N>),
-    /// A [LazifyMeasureRewrite] was constructed targetting an invalid op.
+    /// A [LazifyMeasureRewrite] was constructed targeting an invalid op.
     #[display("A LazifyMeasureRewrite was constructed for node {node} with an invalid signature.\nExpected: {expected_signature}\nActual: {}", actual_signature.as_ref().map_or("None".to_string(), |x| format!("{x}")))]
     #[allow(missing_docs)]
     InvalidOp {
@@ -71,6 +67,26 @@ pub enum LazifyMeasurePassError<N> {
     },
     /// A [SimpleReplacement] failed during the running of the pass.
     SimpleReplacementError(SimpleReplacementError),
+}
+
+impl LazifyMeasurePass {
+    /// Run `LazifyMeasurePass` on the given [HugrMut]. `registry` is used for
+    /// validation, if enabled.
+    pub fn run(&self, hugr: &mut impl HugrMut) -> Result<(), LazifyMeasurePassError<Node>> {
+        self.0.run_validated_pass(hugr, |hugr, level| {
+            if *level != ValidationLevel::None {
+                ensure_no_nonlocal_edges(hugr)?;
+            }
+            replace_measure_ops(hugr)?;
+            Ok(())
+        })
+    }
+
+    /// Returns a new `LazifyMeasurePass` with the given [ValidationLevel].
+    pub fn with_validation_level(mut self, level: ValidationLevel) -> Self {
+        self.0 = level;
+        self
+    }
 }
 
 /// Implementation of [LazifyMeasurePass].
@@ -84,17 +100,17 @@ pub fn replace_measure_ops(
         .filter_map(|n| {
             let optype = hugr.get_optype(n);
             if let Some(Tk2Op::MeasureFree) = optype.cast() {
-                Some(LazifyMeasureRewrite::try_new_measure(n, &hugr))
+                Some(LazifyMeasureRewrite::Measure(n))
             } else if let Some(QSystemOp::Measure) = optype.cast() {
-                Some(LazifyMeasureRewrite::try_new_measure(n, &hugr))
+                Some(LazifyMeasureRewrite::Measure(n))
             } else if let Some(QSystemOp::MeasureReset) = optype.cast() {
-                Some(LazifyMeasureRewrite::try_new_measure_reset(n, &hugr))
+                Some(LazifyMeasureRewrite::MeasureReset(n))
             } else {
                 None
             }
-            .map(|x| x.map(|y| (n, y)))
+            .map(|x| (n, x))
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect_vec();
 
     nodes_and_rewrites
         .into_iter()
@@ -107,7 +123,12 @@ pub fn replace_measure_ops(
 
 /// A rewrite used in [LazifyMeasurePass] to replace strict measure ops with
 /// either [QSystemOp::LazyMeasure] or [QSystemOp::LazyMeasureReset].
-pub struct LazifyMeasureRewrite<N = Node>(SimpleReplacement<N>);
+pub enum LazifyMeasureRewrite<N = Node> {
+    /// Rewrite an op with signature `[QB] -> [BOOL]` to a `LazyMeasure`
+    Measure(N),
+    /// Rewrite an op with signature `[QB] -> [QB,BOOL]` to a `LazyMeasureReset`
+    MeasureReset(N),
+}
 
 impl<N: HugrNode> LazifyMeasureRewrite<N> {
     /// Construct a new `LazifyMeasureRewrite` replacing `node` with a
@@ -120,42 +141,36 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
     ) -> Result<Self, LazifyMeasurePassError<N>> {
         Self::check_signature(node, QSystemOp::LazyMeasure, hugr.get_optype(node))?;
 
+        let subgraph = SiblingSubgraph::from_node(node, &hugr);
         // SimpleReplacement adds edges in a nondeterministic order.  This
         // results in linked_inputs returning items in a nondeterministic
         // order. We sort them here to restore determinism.
         let uses = hugr.linked_inputs(node, 0).sorted().collect_vec();
-        let bool_uses = uses.len();
-        let subgraph = {
-            let mut subg = SiblingSubgraph::from_node(node, &hugr);
-            if let Some(&outport) = subg.outgoing_ports().first() {
-                subg.set_outgoing_ports(vec![outport; bool_uses], &hugr)
-                    .expect("valid output ports");
-            } else {
-                assert_eq!(bool_uses, 0, "there is an output if bool_uses > 0");
-                subg.set_outgoing_ports(vec![], &hugr)
-                    .expect("valid output ports");
-            }
-            subg
-        };
-
-        let replacement = {
+        let (lazy_measure_node, replacement) = {
+            let bool_uses = uses.len();
             let mut builder =
                 DFGBuilder::new(Signature::new(qb_t(), vec![bool_t(); bool_uses])).unwrap();
             let [qb] = builder.input_wires_arr();
-            let (_lazy_measure_node, future_wire) = {
+            let (lazy_measure_node, future_wire) = {
                 let handle = builder
                     .add_dataflow_op(QSystemOp::LazyMeasure, [qb])
                     .unwrap();
                 (handle.node(), handle.out_wire(0))
             };
             let out_wires = Self::build_futures_gadget(&mut builder, future_wire, bool_uses);
-            builder.finish_hugr_with_outputs(out_wires).unwrap()
+            (
+                lazy_measure_node,
+                builder.finish_hugr_with_outputs(out_wires).unwrap(),
+            )
         };
+        let nu_inp = HashMap::from_iter([((lazy_measure_node, 0.into()), (node, 0.into()))]);
+        let nu_out = iter::zip(uses, (0..).map_into()).collect();
 
-        // TODO: SimpleReplacement::try_new fails here if there are order edges,
-        Ok(Self(SimpleReplacement::new_unchecked(
+        Ok(Self(SimpleReplacement::new(
             subgraph,
             replacement,
+            nu_inp,
+            nu_out,
         )))
     }
 
@@ -169,23 +184,11 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
     ) -> Result<Self, LazifyMeasurePassError<N>> {
         Self::check_signature(node, QSystemOp::LazyMeasureReset, hugr.get_optype(node))?;
 
+        let subgraph = SiblingSubgraph::from_node(node, &hugr);
         // See comment in try_new_measure
         let uses = hugr.linked_inputs(node, 1).sorted().collect_vec();
-        let bool_uses = uses.len();
-        let subgraph = {
-            let mut subg = SiblingSubgraph::from_node(node, &hugr);
-            let &qb_out = subg.outgoing_ports().first().expect("QB output");
-            let mut new_outgoing = vec![qb_out];
-            if let Some(&bool_out) = subg.outgoing_ports().get(1) {
-                new_outgoing.extend(itertools::repeat_n(bool_out, bool_uses));
-            } else {
-                assert_eq!(bool_uses, 0, "there is an output if bool_uses > 0");
-            }
-            subg.set_outgoing_ports(new_outgoing, &hugr)
-                .expect("valid output ports");
-            subg
-        };
-        let replacement = {
+        let (lazy_measure_reset_node, replacement) = {
+            let bool_uses = uses.len();
             let mut builder = {
                 let outputs = iter::once(qb_t())
                     .chain(itertools::repeat_n(bool_t(), bool_uses))
@@ -193,22 +196,29 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
                 DFGBuilder::new(Signature::new(qb_t(), outputs)).unwrap()
             };
             let [qb] = builder.input_wires_arr();
-            let (_lazy_measure_reset_node, [qb_wire, future_wire]) = {
+            let (lazy_measure_reset_node, [qb_wire, future_wire]) = {
                 let handle = builder
                     .add_dataflow_op(QSystemOp::LazyMeasureReset, [qb])
                     .unwrap();
                 (handle.node(), handle.outputs_arr())
             };
             let out_wires = Self::build_futures_gadget(&mut builder, future_wire, bool_uses);
-            builder
-                .finish_hugr_with_outputs(iter::once(qb_wire).chain(out_wires))
-                .unwrap()
+            (
+                lazy_measure_reset_node,
+                builder
+                    .finish_hugr_with_outputs(iter::once(qb_wire).chain(out_wires))
+                    .unwrap(),
+            )
         };
+        let nu_inp = HashMap::from_iter([((lazy_measure_reset_node, 0.into()), (node, 0.into()))]);
+        let qb_use = hugr.single_linked_input(node, 0).unwrap(); // qubit is linear so this can't fail
+        let nu_out = iter::zip(iter::once(qb_use).chain(uses), (0..).map_into()).collect();
 
-        // TODO: SimpleReplacement::try_new fails here if there are order edges,
-        Ok(Self(SimpleReplacement::new_unchecked(
+        Ok(Self(SimpleReplacement::new(
             subgraph,
             replacement,
+            nu_inp,
+            nu_out,
         )))
     }
 
@@ -278,12 +288,14 @@ impl<N: HugrNode> LazifyMeasureRewrite<N> {
     }
 }
 
-impl PatchVerification for LazifyMeasureRewrite {
-    type Node = Node;
-    type Error = <SimpleReplacement as PatchVerification>::Error;
+impl Rewrite for LazifyMeasureRewrite {
+    type ApplyResult = <SimpleReplacement as Rewrite>::ApplyResult;
+    type Error = <SimpleReplacement as Rewrite>::Error;
+    const UNCHANGED_ON_FAILURE: bool = <SimpleReplacement as Rewrite>::UNCHANGED_ON_FAILURE;
 
     delegate! {
         to self.0 {
+            fn apply(self, hugr: &mut impl HugrMut) -> Result<Self::ApplyResult, Self::Error>;
             fn verify(&self, h: &impl HugrView<Node = Node>) -> Result<(), Self::Error>;
             fn invalidation_set(&self) -> impl Iterator<Item = Node>;
         }
@@ -379,7 +391,7 @@ mod test {
             .unwrap()
             .outputs_arr();
         let mut hugr = builder.finish_hugr_with_outputs([qb]).unwrap();
-        LazifyMeasurePass.run(&mut hugr).unwrap();
-        assert!(hugr.validate().is_ok());
+        LazifyMeasurePass::default().run(&mut hugr).unwrap();
+        assert!(hugr.validate_no_extensions().is_ok());
     }
 }

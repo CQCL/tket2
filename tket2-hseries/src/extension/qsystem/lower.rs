@@ -1,21 +1,25 @@
 use derive_more::{Display, Error, From};
-use hugr::algorithms::ComposablePass;
+use hugr::algorithms::replace_types::{NodeTemplate, ReplaceTypesError};
+use hugr::algorithms::{ComposablePass, ReplaceTypes};
+use hugr::extension::prelude::Barrier;
 use hugr::extension::simple_op::MakeExtensionOp;
+use hugr::hugr::patch::insert_cut::InsertCutError;
 use hugr::{
     builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder},
     extension::ExtensionRegistry,
     hugr::{hugrmut::HugrMut, HugrError},
-    ops::{self, DataflowOpTrait, OpTag, ValidateOp},
+    ops::{self, DataflowOpTrait},
     std_extensions::arithmetic::{float_ops::FloatOps, float_types::ConstF64},
     types::Signature,
-    Direction, Hugr, HugrView, Node, PortIndex, Wire,
+    Hugr, HugrView, Node, Wire,
 };
 use lazy_static::lazy_static;
-use std::collections::btree_map::Entry;
-use std::collections::BTreeMap;
+use std::collections::hash_map::{Entry, HashMap};
 use tket2::{extension::rotation::RotationOpBuilder, Tk2Op};
 
 use crate::extension::qsystem::{self, QSystemOp, QSystemOpBuilder};
+
+use super::barrier::BarrierInserter;
 
 lazy_static! {
     /// Extension registry including [crate::extension::qsystem::REGISTRY] and
@@ -61,74 +65,96 @@ pub enum LowerTk2Error {
     /// Non-module HUGR can't be lowered.
     #[display("HUGR root cannot have FuncDefn, has type: {}", _0)]
     InvalidFuncDefn(#[error(ignore)] hugr::ops::OpType),
+    /// Error when using [`ReplaceTypes`] to lower operations.
+    ReplaceTypesError(#[from] ReplaceTypesError),
+
+    /// Error when inserting a runtime barrier.
+    #[display("Error when inserting a runtime barrier: {_0}")]
+    RuntimeBarrierError(#[from] InsertCutError),
 }
 
-/// Lower all [Tk2Op]s to [QSystemOp]s in the Hugr
+enum ReplaceOps {
+    Tk2(Tk2Op),
+    Barrier(Barrier),
+}
+
+pub(super) fn insert_function(hugr: &mut impl HugrMut<Node = Node>, func_def: Hugr) -> Node {
+    let inserted = hugr.insert_hugr(hugr.module_root(), func_def);
+    inserted.inserted_entrypoint
+}
+
+/// Lower [`Tk2Op`] operations to [`QSystemOp`] operations.
+///
+/// Single op replacements are done directly, while multi-op replacements are done
 /// by lazily defining and calling functions that implement the decomposition.
 /// Returns the nodes that were replaced.
 ///
 /// # Errors
-/// Returns an error if the replacement fails, which could be if the root
-/// operation cannot have children of type [OpTag::FuncDefn].
-fn lower_ops(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, LowerTk2Error> {
-    let mut funcs: BTreeMap<Tk2Op, Node> = BTreeMap::new();
-
-    let root_op = hugr.entrypoint_optype();
-    if !root_op
-        .validity_flags::<Node>()
-        .allowed_children
-        .is_superset(OpTag::FuncDefn)
-    {
-        return Err(LowerTk2Error::InvalidFuncDefn(root_op.clone()));
-    }
+/// Returns an error if the replacement fails.
+pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, LowerTk2Error> {
+    let mut funcs: HashMap<Tk2Op, Node> = HashMap::new();
+    let mut lowerer = ReplaceTypes::new_empty();
+    let mut barrier_funcs = BarrierInserter::new();
 
     let replacements: Vec<_> = hugr
         .nodes()
         .filter_map(|n| {
-            let op: Tk2Op = hugr.get_optype(n).cast()?;
-            Some((n, op))
+            let optype = hugr.get_optype(n);
+            if let Some(op) = optype.cast::<Tk2Op>() {
+                Some((n, ReplaceOps::Tk2(op)))
+            } else {
+                optype
+                    .cast::<Barrier>()
+                    .map(|op| (n, ReplaceOps::Barrier(op)))
+            }
         })
         .collect();
 
-    let mut replaced_nodes = Vec::new();
-
+    let mut replaced_nodes = Vec::with_capacity(replacements.len());
     for (node, op) in replacements {
-        // retrieve or build the function
-        let func_node = match funcs.entry(op) {
-            Entry::Occupied(f) => *f.get(),
-            Entry::Vacant(entry) => {
-                let h = build_func(op)?;
-                let inserted = hugr.insert_hugr(hugr.entrypoint(), h);
-                entry.insert(inserted.inserted_entrypoint);
-                inserted.inserted_entrypoint
-            }
-        };
-        let call_op: hugr::ops::OpType = hugr::ops::Call::try_new(
-            hugr.get_optype(func_node)
-                .as_func_defn()
-                .expect("should be a function definition")
-                .signature()
-                .clone(),
-            [], // no polymorphic ops functions expected.
-        )
-        .expect("signature should be valid")
-        .into();
-
-        let call_static_port = call_op
-            .static_input_port()
-            .expect("Call should have static input");
-
-        // replace the tk2op with the function call
-        hugr.replace_op(node, call_op);
-
-        // insert an input for the Call static input
-        hugr.insert_ports(node, Direction::Incoming, call_static_port.index(), 1);
-
-        // connect the function to the call
-        hugr.connect(func_node, 0, node, call_static_port);
-
         replaced_nodes.push(node);
+
+        match op {
+            ReplaceOps::Tk2(tk2op) => {
+                // Handle Tk2Op replacements
+                if let Some(direct) = direct_map(tk2op) {
+                    lowerer.replace_op(
+                        &tk2op.into_extension_op(),
+                        NodeTemplate::SingleOp(direct.into()),
+                    );
+                    continue;
+                }
+
+                // Need to get or create function definition
+                let func_node = match funcs.entry(tk2op) {
+                    Entry::Occupied(e) => *e.get(),
+                    Entry::Vacant(e) => {
+                        let h = build_func(tk2op)?;
+                        let inserted = insert_function(hugr, h);
+                        *e.insert(inserted)
+                    }
+                };
+                lowerer.replace_op(
+                    &tk2op.into_extension_op(),
+                    NodeTemplate::Call(func_node, vec![]),
+                );
+            }
+            ReplaceOps::Barrier(barrier) => {
+                // Handle barrier replacements
+                barrier_funcs.insert_runtime_barrier(hugr, node, barrier)?;
+            }
+        }
     }
+
+    barrier_funcs.register_operation_replacements(hugr, &mut lowerer);
+
+    // functions inserted at module root level so lowerer needs to be
+    // run with module root as entrypoint
+    let old_entrypoint = hugr.entrypoint();
+    hugr.set_entrypoint(hugr.module_root());
+    lowerer.run(hugr)?;
+    // restore entrypoint
+    hugr.set_entrypoint(old_entrypoint);
 
     Ok(replaced_nodes)
 }
@@ -183,29 +209,14 @@ fn build_to_radians(b: &mut impl Dataflow, rotation: Wire) -> Result<Wire, Build
     Ok(float)
 }
 
-/// Lower `Tk2Op` operations to `QSystemOp` operations.
-pub fn lower_tk2_op(
-    hugr: &mut impl HugrMut<Node = Node>,
-) -> Result<Vec<hugr::Node>, LowerTk2Error> {
-    let mut replaced_nodes = lower_direct(hugr)?;
-    replaced_nodes.extend(lower_ops(hugr)?);
-    Ok(replaced_nodes)
-}
-
-fn lower_direct(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, LowerTk2Error> {
-    Ok(hugr::algorithms::replace_many_ops(hugr, |op| {
-        let op: Tk2Op = op.cast()?;
-        Some(match op {
-            Tk2Op::TryQAlloc => QSystemOp::TryQAlloc,
-            Tk2Op::QFree => QSystemOp::QFree,
-            Tk2Op::Reset => QSystemOp::Reset,
-            Tk2Op::MeasureFree => QSystemOp::Measure,
-            _ => return None,
-        })
+fn direct_map(op: Tk2Op) -> Option<QSystemOp> {
+    Some(match op {
+        Tk2Op::TryQAlloc => QSystemOp::TryQAlloc,
+        Tk2Op::QFree => QSystemOp::QFree,
+        Tk2Op::Reset => QSystemOp::Reset,
+        Tk2Op::MeasureFree => QSystemOp::Measure,
+        _ => return None,
     })
-    .into_iter()
-    .map(|(node, _)| node)
-    .collect())
 }
 
 /// Check there are no "tket2.quantum" ops left in the HUGR.
@@ -286,7 +297,7 @@ mod test {
             .finish_hugr_with_outputs([])
             .unwrap_or_else(|e| panic!("{}", e));
 
-        let lowered = lower_direct(&mut h).unwrap();
+        let lowered = lower_tk2_op(&mut h).unwrap();
         assert_eq!(lowered.len(), 5);
         let circ = Circuit::new(&h);
         let ops: Vec<QSystemOp> = circ
@@ -352,6 +363,7 @@ mod test {
         let [q] = b.add_dataflow_op(Tk2Op::H, [q]).unwrap().outputs_arr();
         let rx = b.add_dataflow_op(Tk2Op::Rx, [q, angle]).unwrap();
         let [q] = rx.outputs_arr();
+        let q = b.add_barrier([q]).unwrap().out_wire(0);
         let [q, bool] = b
             .add_dataflow_op(Tk2Op::Measure, [q])
             .unwrap()
@@ -362,11 +374,12 @@ mod test {
         let mut h = b.finish_hugr_with_outputs([bool]).unwrap();
 
         let lowered = lower_tk2_op(&mut h).unwrap();
-        assert_eq!(lowered.len(), 5);
+        assert_eq!(lowered.len(), 6);
         // dfg, input, output, alloc + (10 for unwrap), phasedx, rz, toturns, fmul, phasedx, free +
         // 5x(float + load), measure_reset, conditional, case(input, output) * 2, flip
         // (phasedx + 2*(float + load)), tket2.read
-        assert_eq!(h.entry_descendants().count(), 60);
+        // + 19 for the barrier array wrapping, popping and option unwrapping
+        assert_eq!(h.descendants(h.module_root()).count(), 83);
         assert_eq!(check_lowered(&h), Ok(()));
         if let Err(e) = h.validate() {
             panic!("{}", e);

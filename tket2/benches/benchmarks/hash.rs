@@ -1,4 +1,6 @@
-use criterion::{black_box, criterion_group, AxisScale, BenchmarkId, Criterion, PlotConfiguration};
+use std::hint::black_box;
+
+use criterion::{criterion_group, AxisScale, BenchmarkId, Criterion, PlotConfiguration};
 use hugr::HugrView;
 use tket2::circuit::CircuitHash;
 
