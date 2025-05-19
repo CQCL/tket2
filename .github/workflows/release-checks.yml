@@ -70,7 +70,9 @@ jobs:
         run: |
           uv sync --no-sources --no-install-workspace \
             --python ${{ env.PYTHON_HIGHEST }}
-          uv pip install --no-sources --no-deps ./tket2-py
+          uv pip install --no-sources tket2-exts
+          uv pip install --no-sources tket2-eccs
+          uv run --no-sync maturin develop
           echo "\nDone! Installed dependencies:"
           uv pip list
       - name: Lint with ruff
