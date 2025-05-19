@@ -11,21 +11,24 @@ use hugr::{
         inout_sig, BuildHandle, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer,
         SubContainer,
     },
-    extension::prelude::{bool_t, qb_t},
+    extension::{
+        prelude::{bool_t, qb_t},
+        simple_op::MakeRegisteredOp,
+    },
     hugr::hugrmut::HugrMut,
-    ops::{handle::ConditionalID, ExtensionOp, Tag, Value},
+    ops::{handle::ConditionalID, Tag, Value},
     std_extensions::logic::LogicOp,
-    types::{SumType, Type, TypeArg},
+    types::{SumType, Type},
     Hugr, Node, Wire,
 };
-use tket2::extension::{
-    bool::{bool_type, ConstBool, BOOL_EXTENSION},
-    TKET2_EXTENSION,
+use tket2::{
+    extension::bool::{bool_type, BoolOp, ConstBool},
+    Tk2Op,
 };
 
 use crate::extension::{
-    futures::{self, future_type, FutureOpBuilder},
-    qsystem,
+    futures::{future_type, FutureOp, FutureOpBuilder, FutureOpDef},
+    qsystem::QSystemOp,
 };
 
 #[derive(Error, Debug, Display, From)]
@@ -45,9 +48,15 @@ pub enum ReplaceBoolPassError<N> {
 /// HUGR bool type represented by a unit sum) and `future(bool_t)`, with its operations
 /// being turned into conditionals that read the future if necessary.
 ///
-/// [Tk2Op::Measure], [QSystemOp::Measure], and [QSystemOp::MeasureReset] nodes
+/// [Tket2Op::Measure], [QSystemOp::Measure], and [QSystemOp::MeasureReset] nodes
 /// are replaced by [QSystemOp::LazyMeasure] and [QSystemOp::LazyMeasureReset]
 /// nodes.
+///
+/// [Tket2Op::Measure]: tket2::Tk2Op::Measure
+/// [QSystemOp::Measure]: crate::extension::qsystem::QSystemOp::Measure
+/// [QSystemOp::MeasureReset]: crate::extension::qsystem::QSystemOp::MeasureReset
+/// [QSystemOp::LazyMeasure]: crate::extension::qsystem::QSystemOp::LazyMeasure
+/// [QSystemOp::LazyMeasureReset]: crate::extension::qsystem::QSystemOp::LazyMeasureReset
 #[derive(Default, Debug, Clone)]
 pub struct ReplaceBoolPass;
 
@@ -112,24 +121,24 @@ fn make_opaque_op_dest() -> NodeTemplate {
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
-fn binary_logic_op_dest(op_name: &str) -> NodeTemplate {
+fn binary_logic_op_dest(op: &BoolOp) -> NodeTemplate {
     let mut dfb =
         DFGBuilder::new(inout_sig(vec![bool_dest(), bool_dest()], vec![bool_dest()])).unwrap();
     let [sum_wire1, sum_wire2] = dfb.input_wires_arr();
     let cond1 = read_builder(&mut dfb, sum_wire1);
     let cond2 = read_builder(&mut dfb, sum_wire2);
-    let result = match op_name {
-        "eq" => dfb
+    let result = match op {
+        BoolOp::eq => dfb
             .add_dataflow_op(LogicOp::Eq, [cond1.out_wire(0), cond2.out_wire(0)])
             .unwrap(),
-        "and" => dfb
+        BoolOp::and => dfb
             .add_dataflow_op(LogicOp::And, [cond1.out_wire(0), cond2.out_wire(0)])
             .unwrap(),
-        "or" => dfb
+        BoolOp::or => dfb
             .add_dataflow_op(LogicOp::Or, [cond1.out_wire(0), cond2.out_wire(0)])
             .unwrap(),
 
-        op => panic!("Unknown op name: {op}"),
+        op => panic!("Unknown op name: {:?}", op),
     };
     let out = dfb
         .add_dataflow_op(
@@ -160,11 +169,7 @@ fn not_op_dest() -> NodeTemplate {
 }
 
 fn measure_dest() -> NodeTemplate {
-    let lazy_measure = ExtensionOp::new(
-        qsystem::EXTENSION.get_op("LazyMeasure").unwrap().clone(),
-        vec![],
-    )
-    .unwrap();
+    let lazy_measure = QSystemOp::LazyMeasure.to_extension_op().unwrap();
 
     let mut dfb = DFGBuilder::new(inout_sig(vec![qb_t()], vec![bool_dest()])).unwrap();
     let [q] = dfb.input_wires_arr();
@@ -182,14 +187,7 @@ fn measure_dest() -> NodeTemplate {
 }
 
 fn measure_reset_dest() -> NodeTemplate {
-    let lazy_measure_reset = ExtensionOp::new(
-        qsystem::EXTENSION
-            .get_op("LazyMeasureReset")
-            .unwrap()
-            .clone(),
-        vec![],
-    )
-    .unwrap();
+    let lazy_measure_reset = QSystemOp::LazyMeasureReset.to_extension_op().unwrap();
 
     let mut dfb = DFGBuilder::new(inout_sig(vec![qb_t()], vec![qb_t(), bool_dest()])).unwrap();
     let [q] = dfb.input_wires_arr();
@@ -212,16 +210,17 @@ fn lowerer() -> ReplaceTypes {
 
     // Replace tket2.bool type.
     lw.replace_type(bool_type().as_extension().unwrap().clone(), bool_dest());
-    let bool_arg: TypeArg = bool_t().clone().into();
-    let dup_op = ExtensionOp::new(
-        futures::EXTENSION.get_op("Dup").unwrap().clone(),
-        [bool_arg.clone()],
-    )
+    let dup_op = FutureOp {
+        op: FutureOpDef::Dup,
+        typ: bool_t(),
+    }
+    .to_extension_op()
     .unwrap();
-    let free_op = ExtensionOp::new(
-        futures::EXTENSION.get_op("Free").unwrap().clone(),
-        [bool_arg.clone()],
-    )
+    let free_op = FutureOp {
+        op: FutureOpDef::Free,
+        typ: bool_t(),
+    }
+    .to_extension_op()
     .unwrap();
     lw.linearizer()
         .register_simple(
@@ -251,37 +250,20 @@ fn lowerer() -> ReplaceTypes {
     );
 
     // Replace all tket2.bool ops.
-    let read_op = ExtensionOp::new(BOOL_EXTENSION.get_op("read").unwrap().clone(), vec![]).unwrap();
+    let read_op = BoolOp::read.to_extension_op().unwrap();
     lw.replace_op(&read_op, read_op_dest());
-    let make_opaque_op = ExtensionOp::new(
-        BOOL_EXTENSION.get_op("make_opaque").unwrap().clone(),
-        vec![],
-    )
-    .unwrap();
+    let make_opaque_op = BoolOp::make_opaque.to_extension_op().unwrap();
     lw.replace_op(&make_opaque_op, make_opaque_op_dest());
-    for op_name in ["eq", "and", "or", "xor"] {
-        let op = ExtensionOp::new(BOOL_EXTENSION.get_op(op_name).unwrap().clone(), vec![]).unwrap();
-        lw.replace_op(&op, binary_logic_op_dest(op_name));
+    for op in [BoolOp::eq, BoolOp::and, BoolOp::or, BoolOp::xor] {
+        lw.replace_op(&op.to_extension_op().unwrap(), binary_logic_op_dest(&op));
     }
-    let not_op = ExtensionOp::new(BOOL_EXTENSION.get_op("not").unwrap().clone(), vec![]).unwrap();
+    let not_op = BoolOp::not.to_extension_op().unwrap();
     lw.replace_op(&not_op, not_op_dest());
 
     // Replace measure ops with lazy versions.
-    let tket2_measure_free = ExtensionOp::new(
-        TKET2_EXTENSION.get_op("MeasureFree").unwrap().clone(),
-        vec![],
-    )
-    .unwrap();
-    let qsystem_measure = ExtensionOp::new(
-        qsystem::EXTENSION.get_op("Measure").unwrap().clone(),
-        vec![],
-    )
-    .unwrap();
-    let qsystem_measure_reset = ExtensionOp::new(
-        qsystem::EXTENSION.get_op("MeasureReset").unwrap().clone(),
-        vec![],
-    )
-    .unwrap();
+    let tket2_measure_free = Tk2Op::MeasureFree.to_extension_op().unwrap();
+    let qsystem_measure = QSystemOp::Measure.to_extension_op().unwrap();
+    let qsystem_measure_reset = QSystemOp::MeasureReset.to_extension_op().unwrap();
     lw.replace_op(&tket2_measure_free, measure_dest());
     lw.replace_op(&qsystem_measure, measure_dest());
     lw.replace_op(&qsystem_measure_reset, measure_reset_dest());

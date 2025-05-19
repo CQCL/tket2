@@ -101,7 +101,7 @@ impl QSystemPass {
 
         self.lower_tk2().run(hugr)?;
         if self.lazify {
-            self.lazify_measure().run(hugr)?;
+            self.replace_bools().run(hugr)?;
         }
         self.linearize_arrays().run(hugr)?;
         if self.constant_fold {
@@ -155,7 +155,7 @@ impl QSystemPass {
         LowerTket2ToQSystemPass
     }
 
-    fn lazify_measure(&self) -> ReplaceBoolPass {
+    fn replace_bools(&self) -> ReplaceBoolPass {
         ReplaceBoolPass
     }
 
