@@ -46,9 +46,6 @@ jobs:
           echo "rust=true" >> $GITHUB_OUTPUT
         else
           echo "Not a release PR"
-          # TODO: Remove after testing the PR
-          echo "py=true" >> $GITHUB_OUTPUT
-          echo "rust=true" >> $GITHUB_OUTPUT
         fi
 
   py-release:
