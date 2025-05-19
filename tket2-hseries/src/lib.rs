@@ -99,13 +99,13 @@ impl QSystemPass {
             rdfp.run(hugr)?
         }
 
-        self.linearize_arrays().run(hugr)?;
-        if self.constant_fold {
-            self.constant_fold().run(hugr)?;
-        }
         self.lower_tk2().run(hugr)?;
         if self.lazify {
             self.lazify_measure().run(hugr)?;
+        }
+        self.linearize_arrays().run(hugr)?;
+        if self.constant_fold {
+            self.constant_fold().run(hugr)?;
         }
         if self.force_order {
             self.force_order(hugr)?;
