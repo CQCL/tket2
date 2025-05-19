@@ -137,7 +137,9 @@ fn binary_logic_op_dest(op: &BoolOp) -> NodeTemplate {
         BoolOp::or => dfb
             .add_dataflow_op(LogicOp::Or, [cond1.out_wire(0), cond2.out_wire(0)])
             .unwrap(),
-
+        BoolOp::xor => dfb
+            .add_dataflow_op(LogicOp::Xor, [cond1.out_wire(0), cond2.out_wire(0)])
+            .unwrap(),
         op => panic!("Unknown op name: {:?}", op),
     };
     let out = dfb
