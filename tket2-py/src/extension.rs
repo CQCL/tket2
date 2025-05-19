@@ -1,7 +1,6 @@
 //! Extra stuff needed for using the extensions
 
 use delegate::delegate;
-use hugr::extension::ExtensionSet;
 use hugr::ops::constant::CustomConst;
 use hugr::ops::constant::ValueName;
 use hugr::types::Type;
@@ -31,7 +30,10 @@ impl PyConstWasmModule {
     #[new]
     pub fn new(file_name: String, file_hash: u64) -> Self {
         PyConstWasmModule {
-            module: ConstWasmModule { name: file_name, hash: file_hash },
+            module: ConstWasmModule {
+                name: file_name,
+                hash: file_hash,
+            },
         }
     }
 }
@@ -42,7 +44,6 @@ impl CustomConst for PyConstWasmModule {
         to self.module {
             fn name(&self) -> ValueName;
             fn equal_consts(&self, other: &dyn CustomConst) -> bool;
-            fn extension_reqs(&self) -> ExtensionSet;
             fn get_type(&self) -> Type;
         }
     }
