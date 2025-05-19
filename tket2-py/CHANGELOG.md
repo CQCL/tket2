@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.9.0...tket2-py-v0.9.1) (2025-05-19)
+
+
+### Bug Fixes
+
+* update exts and eccs dependencies ([aae0558](https://github.com/CQCL/tket2/commit/aae055870d51a554652400bbed04668b1c888e20))
+
 ## [0.9.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.8.1...tket2-py-v0.9.0) (2025-05-16)
 
 
