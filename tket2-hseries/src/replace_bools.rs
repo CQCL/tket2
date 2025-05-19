@@ -1,13 +1,14 @@
 //! Provides a `ReplaceBoolPass` which replaces the tket2.bool type and
 //! lazifies measure operations.
+mod static_array;
+
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
         non_local::NonLocalEdgesError,
         replace_types::{NodeTemplate, ReplaceTypesError},
         ComposablePass, ReplaceTypes,
-    },
-    builder::{
+    },  builder::{
         inout_sig, BuildHandle, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer,
         SubContainer,
     },
@@ -67,6 +68,7 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for ReplaceBoolPass {
     fn run(&self, hugr: &mut H) -> Result<(), Self::Error> {
         // TODO uncomment once https://github.com/CQCL/hugr/issues/1234 is complete
         // ensure_no_nonlocal_edges(hugr)?;
+        static_array_bool_lowerer().run(hugr)?;
         let lowerer = lowerer();
         lowerer.run(hugr)?;
         Ok(())
