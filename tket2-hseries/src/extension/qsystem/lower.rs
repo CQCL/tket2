@@ -14,7 +14,8 @@ use hugr::{
     Hugr, HugrView, Node, Wire,
 };
 use lazy_static::lazy_static;
-use std::collections::hash_map::{Entry, HashMap};
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 use tket2::{extension::rotation::RotationOpBuilder, Tk2Op};
 
 use crate::extension::qsystem::{self, QSystemOp, QSystemOpBuilder};
@@ -92,7 +93,7 @@ pub(super) fn insert_function(hugr: &mut impl HugrMut<Node = Node>, func_def: Hu
 /// # Errors
 /// Returns an error if the replacement fails.
 pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, LowerTk2Error> {
-    let mut funcs: HashMap<Tk2Op, Node> = HashMap::new();
+    let mut funcs: BTreeMap<Tk2Op, Node> = BTreeMap::new();
     let mut lowerer = ReplaceTypes::new_empty();
     let mut barrier_funcs = BarrierInserter::new();
 
