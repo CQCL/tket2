@@ -23,9 +23,9 @@ pub struct PyConstWasmModule {
 #[pymethods]
 impl PyConstWasmModule {
     #[new]
-    pub fn new(name: String, hash: u64) -> Self {
+    pub fn new(file_name: String, file_hash: u64) -> Self {
         PyConstWasmModule {
-            module: ConstWasmModule { name, hash },
+            module: ConstWasmModule { name: file_name, hash: file_hash },
         }
     }
 }
