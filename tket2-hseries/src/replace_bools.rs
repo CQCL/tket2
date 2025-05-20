@@ -322,6 +322,7 @@ mod test {
 
         let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
+        h.validate().unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.input(), &TypeRow::from(vec![bool_dest()]));
@@ -341,6 +342,7 @@ mod test {
 
         let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
+        h.validate().unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.input(), &TypeRow::from(vec![bool_t()]));
@@ -366,6 +368,7 @@ mod test {
 
         let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
+        h.validate().unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.input(), &TypeRow::from(vec![bool_dest(), bool_dest()]));
@@ -382,6 +385,7 @@ mod test {
 
         let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
+        h.validate().unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.input(), &TypeRow::from(vec![bool_dest()]));
@@ -399,6 +403,7 @@ mod test {
 
         let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
+        h.validate().unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.output(), &TypeRow::from(vec![bool_dest()]));
@@ -423,6 +428,7 @@ mod test {
 
         let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
+        h.validate().unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.output(), &TypeRow::from(vec![qb_t(), bool_dest()]));
