@@ -378,9 +378,9 @@ mod test {
         assert_eq!(lowered.len(), 6);
         // dfg, input, output, alloc + (10 for unwrap), phasedx, rz, toturns, fmul, phasedx, free +
         // 5x(float + load), measure_reset, conditional, case(input, output) * 2, flip
-        // (phasedx + 2*(float + load))
+        // (phasedx + 2*(float + load)), tket2.read
         // + 19 for the barrier array wrapping, popping and option unwrapping
-        assert_eq!(h.descendants(h.module_root()).count(), 82);
+        assert_eq!(h.descendants(h.module_root()).count(), 83);
         assert_eq!(check_lowered(&h), Ok(()));
         if let Err(e) = h.validate() {
             panic!("{}", e);

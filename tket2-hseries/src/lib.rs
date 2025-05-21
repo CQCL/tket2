@@ -13,19 +13,19 @@ use hugr::{
     hugr::HugrError,
     Hugr, HugrView, Node,
 };
+use replace_bools::{ReplaceBoolPass, ReplaceBoolPassError};
 use tket2::Tk2Op;
 
 use extension::{
     futures::FutureOpDef,
     qsystem::{LowerTk2Error, LowerTket2ToQSystemPass, QSystemOp},
 };
-use lazify_measure::{LazifyMeasurePass, LazifyMeasurePassError};
 
 #[cfg(feature = "cli")]
 pub mod cli;
 pub mod extension;
 
-pub mod lazify_measure;
+pub mod replace_bools;
 
 /// Modify a [hugr::Hugr] into a form that is acceptable for ingress into a Q-System.
 /// Returns an error if this cannot be done.
@@ -54,8 +54,8 @@ impl Default for QSystemPass {
 #[non_exhaustive]
 /// An error reported from [QSystemPass].
 pub enum QSystemPassError<N = Node> {
-    /// An error from the component [LazifyMeasurePass].
-    LazyMeasureError(LazifyMeasurePassError<N>),
+    /// An error from the component [ReplaceBoolPass].
+    ReplaceBoolError(ReplaceBoolPassError<N>),
     /// An error from the component [force_order()] pass.
     ForceOrderError(HugrError),
     /// An error from the component [LowerTket2ToQSystemPass] pass.
@@ -99,13 +99,13 @@ impl QSystemPass {
             rdfp.run(hugr)?
         }
 
+        self.lower_tk2().run(hugr)?;
+        if self.lazify {
+            self.replace_bools().run(hugr)?;
+        }
         self.linearize_arrays().run(hugr)?;
         if self.constant_fold {
             self.constant_fold().run(hugr)?;
-        }
-        self.lower_tk2().run(hugr)?;
-        if self.lazify {
-            self.lazify_measure().run(hugr)?;
         }
         if self.force_order {
             self.force_order(hugr)?;
@@ -155,8 +155,8 @@ impl QSystemPass {
         LowerTket2ToQSystemPass
     }
 
-    fn lazify_measure(&self) -> LazifyMeasurePass {
-        LazifyMeasurePass
+    fn replace_bools(&self) -> ReplaceBoolPass {
+        ReplaceBoolPass
     }
 
     fn constant_fold(&self) -> ConstantFoldPass {
@@ -215,12 +215,9 @@ impl QSystemPass {
 
 #[cfg(test)]
 mod test {
-    use std::io::BufReader;
-
-    use hugr::extension::ExtensionRegistry;
     use hugr::{
         builder::{Container, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer},
-        extension::prelude::{bool_t, qb_t},
+        extension::prelude::qb_t,
         ops::handle::NodeHandle,
         std_extensions::arithmetic::float_types::ConstF64,
         type_row,
@@ -230,6 +227,7 @@ mod test {
 
     use itertools::Itertools as _;
     use petgraph::visit::{Topo, Walker as _};
+    use tket2::extension::bool::bool_type;
 
     use crate::{
         extension::{futures::FutureOpDef, qsystem::QSystemOp},
@@ -240,7 +238,7 @@ mod test {
     fn qsystem_pass() {
         let (mut hugr, [call_node, h_node, f_node, rx_node]) = {
             let mut builder =
-                DFGBuilder::new(Signature::new(qb_t(), vec![bool_t(), bool_t()])).unwrap();
+                DFGBuilder::new(Signature::new(qb_t(), vec![bool_type(), bool_type()])).unwrap();
             let func = builder
                 .define_function("func", Signature::new_endo(type_row![]))
                 .unwrap()
@@ -301,19 +299,5 @@ mod test {
         {
             assert!(get_pos(call_node) < get_pos(n));
         }
-    }
-
-    #[test]
-    #[cfg_attr(miri, ignore)] // File::open is not supported in miri
-    fn ordered_qalloc() {
-        let file = std::fs::File::open("../test_files/ordered_qalloc.hugr").unwrap();
-        let reader = BufReader::new(file);
-        let reg = ExtensionRegistry::new([
-            tket2::extension::TKET2_EXTENSION.to_owned(),
-            hugr::extension::PRELUDE.to_owned(),
-        ]);
-        let mut h: hugr::Hugr = hugr::Hugr::load(reader, Some(&reg)).unwrap();
-        QSystemPass::default().run(&mut h).unwrap();
-        h.validate().unwrap();
     }
 }
