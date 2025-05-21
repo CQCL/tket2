@@ -385,11 +385,11 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
         let pi_2 = pi_mul_f64(self, 0.5);
         let pi_minus_2 = pi_mul_f64(self, -0.5);
 
-        let a = self.add_phased_x(a, pi, pi)?;
-        let [a, b] = self.build_zz_max(a, b)?;
         let a = self.add_phased_x(a, pi, pi_2)?;
+        let [a, b] = self.build_zz_max(a, b)?;
+        let a = self.add_phased_x(a, pi, pi_minus_2)?;
         let b = self.add_rz(b, pi_2)?;
-        let a = self.add_rz(a, pi_minus_2)?;
+        let a = self.add_rz(a, pi_2)?;
 
         Ok([a, b])
     }
@@ -431,22 +431,21 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
         let pi_minus_3_4 = pi_mul_f64(self, -0.75);
         let zero = pi_mul_f64(self, 0.0);
 
-        let c = self.add_phased_x(c, pi, pi)?;
+        let c = self.add_phased_x(c, pi, pi_minus_2)?;
+        let [b, c] = self.build_zz_max(b, c)?;
+        let c = self.add_phased_x(c, pi_4, pi_2)?;
+        let [a, c] = self.build_zz_max(a, c)?;
+        let c = self.add_phased_x(c, pi_4, zero)?;
         let [b, c] = self.build_zz_max(b, c)?;
         let c = self.add_phased_x(c, pi_4, pi_minus_2)?;
         let [a, c] = self.build_zz_max(a, c)?;
-        let c = self.add_phased_x(c, pi_minus_4, zero)?;
-        let [b, c] = self.build_zz_max(b, c)?;
-        let b = self.add_phased_x(b, pi_minus_2, pi_4)?;
-        let c = self.add_phased_x(c, pi_4, pi_2)?;
-        let [a, c] = self.build_zz_max(a, c)?;
-        let [a, b] = self.build_zz_max(a, b)?;
-        let c = self.add_phased_x(c, pi_minus_3_4, zero)?;
-        let b = self.add_phased_x(b, pi_4, pi_4)?;
-        let [a, b] = self.build_zz_max(a, b)?;
+        let a = self.add_phased_x(a, pi, pi_4)?;
+        let c = self.add_phased_x(c, pi_minus_3_4, pi)?;
+        let [a, b] = self.add_zz_phase(a, b, pi_4)?;
+        let c = self.add_rz(c, pi)?;
+        let a = self.add_phased_x(a, pi, pi_minus_4)?;
+        let b = self.add_rz(b, pi_minus_3_4)?;
         let a = self.add_rz(a, pi_4)?;
-        let b = self.add_phased_x(b, pi_minus_2, pi_4)?;
-        let b = self.add_rz(b, pi_4)?;
 
         Ok([a, b, c])
     }

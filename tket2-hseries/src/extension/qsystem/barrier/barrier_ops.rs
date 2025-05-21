@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -17,6 +16,7 @@ use hugr::{
     },
     Hugr, Wire,
 };
+use indexmap::IndexMap;
 
 use crate::extension::qsystem::{barrier::qtype_analyzer::QTypeAnalyzer, QSystemOpBuilder};
 
@@ -57,7 +57,7 @@ pub struct BarrierOperationFactory {
     /// Temporary extension used for placeholder operations.
     extension: Arc<Extension>,
     /// Function definitions for each instance of the operations.
-    pub(super) funcs: HashMap<OpHashWrapper, Hugr>,
+    pub(super) funcs: IndexMap<OpHashWrapper, Hugr>,
     /// Type analyzer for determining qubit types
     type_analyzer: QTypeAnalyzer,
 }
@@ -79,7 +79,7 @@ impl BarrierOperationFactory {
     pub fn new() -> Self {
         Self {
             extension: Self::build_extension(),
-            funcs: HashMap::new(),
+            funcs: IndexMap::new(),
             type_analyzer: QTypeAnalyzer::new(),
         }
     }

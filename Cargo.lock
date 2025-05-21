@@ -2295,6 +2295,7 @@ dependencies = [
  "derive_more 1.0.0",
  "hugr",
  "hugr-cli",
+ "indexmap 2.9.0",
  "itertools 0.14.0",
  "lazy_static",
  "petgraph 0.8.1",
