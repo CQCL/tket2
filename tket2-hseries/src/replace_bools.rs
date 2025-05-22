@@ -1,5 +1,7 @@
 //! Provides a `ReplaceBoolPass` which replaces the tket2.bool type and
 //! lazifies measure operations.
+mod static_array;
+
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
@@ -21,6 +23,7 @@ use hugr::{
     types::{SumType, Type},
     Hugr, Node, Wire,
 };
+use static_array::{ReplaceStaticArrayBoolPass, ReplaceStaticArrayBoolPassError};
 use tket2::{
     extension::bool::{bool_type, BoolOp, ConstBool},
     Tk2Op,
@@ -39,6 +42,9 @@ pub enum ReplaceBoolPassError<N> {
     NonLocalEdgesError(NonLocalEdgesError<N>),
     /// There was an error while replacing the type.
     ReplacementError(ReplaceTypesError),
+    /// There was an error while transforming static arrays containing tket.bool
+    /// to static arrays of bool_t.
+    ReplaceStaticArrayBoolPassError(ReplaceStaticArrayBoolPassError),
 }
 
 /// A HUGR -> HUGR pass which replaces the `tket2.bool`, enabling lazifying of measure
@@ -67,6 +73,7 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for ReplaceBoolPass {
     fn run(&self, hugr: &mut H) -> Result<(), Self::Error> {
         // TODO uncomment once https://github.com/CQCL/hugr/issues/1234 is complete
         // ensure_no_nonlocal_edges(hugr)?;
+        ReplaceStaticArrayBoolPass::default().run(hugr)?;
         let lowerer = lowerer();
         lowerer.run(hugr)?;
         Ok(())
@@ -320,6 +327,7 @@ mod test {
 
         let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
+        h.validate().unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.input(), &TypeRow::from(vec![bool_dest()]));
@@ -339,6 +347,7 @@ mod test {
 
         let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
+        h.validate().unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.input(), &TypeRow::from(vec![bool_t()]));
@@ -364,6 +373,7 @@ mod test {
 
         let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
+        h.validate().unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.input(), &TypeRow::from(vec![bool_dest(), bool_dest()]));
@@ -380,6 +390,7 @@ mod test {
 
         let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
+        h.validate().unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.input(), &TypeRow::from(vec![bool_dest()]));
@@ -397,6 +408,7 @@ mod test {
 
         let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
+        h.validate().unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.output(), &TypeRow::from(vec![bool_dest()]));
@@ -421,6 +433,7 @@ mod test {
 
         let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
+        h.validate().unwrap();
 
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.output(), &TypeRow::from(vec![qb_t(), bool_dest()]));
