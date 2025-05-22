@@ -1,3 +1,5 @@
+/// Provides a `ReplaceStaticArrayBoolPass` which replaces static arrays containing `tket2.bool` with
+/// static arrays containing `bool_t` values.
 use hugr::{
     algorithms::{
         replace_types::{NodeTemplate, ReplaceTypesError},
@@ -28,17 +30,19 @@ use tket2::extension::bool::{self, bool_type, BoolOpBuilder as _, ConstBool, BOO
 
 #[non_exhaustive]
 #[derive(Debug, derive_more::Error, derive_more::Display, derive_more::From)]
-pub enum LowerStaticArrayBoolPassError {
+pub enum ReplaceStaticArrayBoolPassError {
     ReplaceTypesError(ReplaceTypesError),
     BuildError(BuildError),
 }
 
-type Result<T> = std::result::Result<T, LowerStaticArrayBoolPassError>;
+type Result<T> = std::result::Result<T, ReplaceStaticArrayBoolPassError>;
 
-pub struct LowerStaticArrayBoolPass(ReplaceTypes);
+/// Provides a `ReplaceStaticArrayBoolPass` which replaces static arrays
+/// containing `tket2.bool` with static arrays containing `bool_t` values.
+pub struct ReplaceStaticArrayBoolPass(ReplaceTypes);
 
-impl<H: HugrMut<Node = Node>> ComposablePass<H> for LowerStaticArrayBoolPass {
-    type Error = LowerStaticArrayBoolPassError;
+impl<H: HugrMut<Node = Node>> ComposablePass<H> for ReplaceStaticArrayBoolPass {
+    type Error = ReplaceStaticArrayBoolPassError;
     type Result = bool;
 
     fn run(&self, hugr: &mut H) -> Result<bool> {
@@ -46,104 +50,138 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for LowerStaticArrayBoolPass {
     }
 }
 
-impl LowerStaticArrayBoolPass {
-    pub fn new() -> Self {
-        let inner = {
-            let mut inner = ReplaceTypes::default();
-            register_const_static_array(&mut inner, None);
-            inner.replace_type(bool_type().as_extension().unwrap().clone(), bool_t());
-            inner.replace_consts(
-                bool_type().as_extension().unwrap().clone(),
-                |const_bool, _| {
-                    let cb: &ConstBool = const_bool.value().downcast_ref::<ConstBool>().unwrap();
-                    Ok(Value::from_bool(cb.value()))
-                },
-            );
-            inner
-        };
-
-        let outer = {
-            let mut outer = ReplaceTypes::default();
-            register_const_static_array(&mut outer, Some(inner.clone()));
-
-            let static_array_typedef = static_array::EXTENSION
-                .get_type(&STATIC_ARRAY_TYPENAME)
-                .unwrap();
-            outer.replace_parametrized_type(static_array_typedef, {
-                let inner = inner.clone();
-                move |args| {
-                    let mut element_ty = {
-                        let [element_ty_arg] = args else {
-                            unreachable!()
-                        };
-                        element_ty_arg.as_type().unwrap()
-                    };
-                    let changed = element_ty.transform(&inner).unwrap();
-                    changed.then_some(static_array_type(element_ty))
-                }
-            });
-            outer.replace_parametrized_op(
-                static_array::EXTENSION
-                    .get_op(&StaticArrayOpDef::get.opdef_id())
-                    .unwrap(),
-                {
-                    let inner = inner.clone();
-                    move |args| {
-                        let [element_ty] = args else { unreachable!() };
-                        get_op_dest(&inner, element_ty.as_type().unwrap())
-                    }
-                },
-            );
-            outer.replace_parametrized_op(
-                static_array::EXTENSION
-                    .get_op(&StaticArrayOpDef::len.opdef_id())
-                    .unwrap(),
-                move |args| {
-                    let [element_ty] = args else { unreachable!() };
-                    len_op_dest(&inner, element_ty.as_type().unwrap())
-                },
-            );
-            outer
-        };
-        Self(outer)
+impl Default for ReplaceStaticArrayBoolPass {
+    fn default() -> Self {
+        Self(outer_replace_types())
     }
 }
 
-fn register_const_static_array(rt: &mut ReplaceTypes, inner_rt: Option<ReplaceTypes>) {
+// This `ReplaceTypes` is applied to types and values INSIDE a static_array.
+fn inner_replace_types() -> ReplaceTypes {
+    let mut inner = ReplaceTypes::default();
     let static_array_typedef = static_array::EXTENSION
         .get_type(&STATIC_ARRAY_TYPENAME)
         .unwrap();
-    rt.replace_consts_parametrized(static_array_typedef, move |opaque_val, rt| {
-        let rt = inner_rt.as_ref().unwrap_or(rt);
-        let Some(mut sav): Option<StaticArrayValue> = opaque_val
+    inner.replace_consts_parametrized(static_array_typedef, |opaque_val, rt| {
+        let Some(sav): Option<StaticArrayValue> = opaque_val
             .value()
             .downcast_ref::<StaticArrayValue>()
             .cloned()
         else {
             return Ok(None);
         };
-        let mut any_changed = false;
-        let values = sav
-            .value
-            .get_contents()
-            .iter()
-            .cloned()
-            .map(|mut v| {
-                any_changed |= rt.change_value(&mut v).unwrap();
-                v
-            })
-            .collect_vec();
-        if !any_changed {
-            return Ok(None);
-        }
-        let element_ty = {
-            let mut t = sav.get_element_type().clone();
-            t.transform(rt).unwrap();
-            t
-        };
-        sav.value = ArrayValue::new(element_ty, values);
-        Ok(Some(sav.into()))
+        replace_const_static_array(sav, rt)
     });
+    inner.replace_type(bool_type().as_extension().unwrap().clone(), bool_t());
+    inner.replace_consts(
+        bool_type().as_extension().unwrap().clone(),
+        |const_bool, _| {
+            let cb: &ConstBool = const_bool.value().downcast_ref::<ConstBool>().unwrap();
+            Ok(Value::from_bool(cb.value()))
+        },
+    );
+    inner
+}
+
+/// This `ReplaceTypes` is applied to an input HUGR.
+///
+/// It utilizes a second `ReplaceTypes` (`inner_replace_types`) to implement
+/// it's replacements.
+///
+/// `outer_replace_types`:
+///  * Replaces static array types that contain `tket2.bool` types
+///  * Replaces `StaticArrayValue`s that contain `ConstBool` values.
+///  * Replaces `collection.static_array.get` and `collection.static_array.len`
+///
+///  `inner_replace_types`:
+///  * Replaces `tket2.bool` with `bool_t`
+///  * Replaces `ConstBool` with `bool_t`
+///  * Replaces `StaticArrayValue`s that contain `ConstBool` values
+///
+/// We could not apply `inner_replace_types` to the HUGR directly, because we do not want
+/// to make these replacements over the whole HUGR, only inside a `static_array`
+fn outer_replace_types() -> ReplaceTypes {
+    let inner = inner_replace_types();
+    let mut outer = ReplaceTypes::default();
+    let static_array_typedef = static_array::EXTENSION
+        .get_type(&STATIC_ARRAY_TYPENAME)
+        .unwrap();
+    outer.replace_consts_parametrized(static_array_typedef, {
+        let inner = inner.clone();
+        move |opaque_val, _| {
+            let Some(sav): Option<StaticArrayValue> = opaque_val
+                .value()
+                .downcast_ref::<StaticArrayValue>()
+                .cloned()
+            else {
+                return Ok(None);
+            };
+            // We use `inner` here
+            replace_const_static_array(sav, &inner)
+        }
+    });
+    outer.replace_parametrized_type(static_array_typedef, {
+        let inner = inner.clone();
+        move |args| {
+            let mut element_ty = {
+                let [element_ty_arg] = args else {
+                    unreachable!()
+                };
+                element_ty_arg.as_type().unwrap()
+            };
+            let changed = element_ty.transform(&inner).unwrap();
+            changed.then_some(static_array_type(element_ty))
+        }
+    });
+    outer.replace_parametrized_op(
+        static_array::EXTENSION
+            .get_op(&StaticArrayOpDef::get.opdef_id())
+            .unwrap(),
+        {
+            let inner = inner.clone();
+            move |args| {
+                let [element_ty] = args else { unreachable!() };
+                get_op_dest(&inner, element_ty.as_type().unwrap())
+            }
+        },
+    );
+    outer.replace_parametrized_op(
+        static_array::EXTENSION
+            .get_op(&StaticArrayOpDef::len.opdef_id())
+            .unwrap(),
+        move |args| {
+            let [element_ty] = args else { unreachable!() };
+            len_op_dest(&inner, element_ty.as_type().unwrap())
+        },
+    );
+    outer
+}
+
+fn replace_const_static_array(
+    mut sav: StaticArrayValue,
+    rt: &ReplaceTypes,
+) -> std::result::Result<Option<Value>, ReplaceTypesError> {
+    let mut any_changed = false;
+    let values = sav
+        .value
+        .get_contents()
+        .iter()
+        .cloned()
+        .map(|mut v| {
+            any_changed |= rt.change_value(&mut v).unwrap();
+            v
+        })
+        .collect_vec();
+    if !any_changed {
+        return Ok(None);
+    }
+    let new_element_ty = {
+        let mut t = sav.get_element_type().clone();
+        t.transform(rt)?;
+        t
+    };
+    sav.value = ArrayValue::new(new_element_ty, values);
+    Ok(Some(sav.into()))
 }
 
 fn len_op_dest(rt: &ReplaceTypes, mut elem_ty: Type) -> Option<NodeTemplate> {
@@ -193,15 +231,13 @@ fn build_new_to_old(
                     .cloned()
                     .map(|x| x.try_into().unwrap())
                     .collect_vec();
-                let mut cond = builder
-                    .conditional_builder(
-                        (new_variants.iter().cloned(), val),
-                        [],
-                        vec![old_ty].into(),
-                    )
-                    .unwrap();
+                let mut cond = builder.conditional_builder(
+                    (new_variants.iter().cloned(), val),
+                    [],
+                    vec![old_ty].into(),
+                )?;
                 for (i, v) in old_variants.iter().enumerate() {
-                    let mut case = cond.case_builder(i).unwrap();
+                    let mut case = cond.case_builder(i)?;
                     let ws: Vec<_> = v
                         .iter()
                         .zip(case.input_wires())
@@ -216,12 +252,13 @@ fn build_new_to_old(
                 Ok(r)
             }
         }
-        _ => panic!("dougrulz"),
+        ty => panic!("build_new_to_old: Unsupported type: {ty}"),
     }
 }
 
 fn get_op_dest(rt: &ReplaceTypes, old_elem_ty: Type) -> Option<NodeTemplate> {
     let hugr = {
+        // first we build a hugr using the "old" (i.e. containing tket2.bool) types
         let mut hugr1 = {
             let mut dfb = DFGBuilder::new(inout_sig(
                 vec![static_array_type(old_elem_ty.clone()), usize_t()],
@@ -234,9 +271,14 @@ fn get_op_dest(rt: &ReplaceTypes, old_elem_ty: Type) -> Option<NodeTemplate> {
                 .unwrap();
             dfb.finish_hugr_with_outputs([r]).unwrap()
         };
+        // now we apply `rt` to remove tket2.bool types
         if !rt.run(&mut hugr1).unwrap() {
             None?
         }
+
+        // now we use build ops to convert the output to the old type, so that
+        // the resulting HUGR will fit where the get op was.
+
         let new_arr_ty = hugr1
             .entrypoint_optype()
             .dataflow_signature()
@@ -325,7 +367,9 @@ mod test {
             builder.finish_hugr_with_outputs([elem, len]).unwrap()
         };
 
-        LowerStaticArrayBoolPass::new().run(&mut hugr).unwrap();
+        ReplaceStaticArrayBoolPass::default()
+            .run(&mut hugr)
+            .unwrap();
         hugr.validate().unwrap_or_else(|e| panic!("{e}"));
     }
 }
