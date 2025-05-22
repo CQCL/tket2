@@ -170,10 +170,9 @@ struct TrackedWire {
     pub(self) unexplored_neighbours: usize,
 }
 
-/// The number of pytket qubits, bits, and sympy parameters corresponding to a
-/// HUGR type.
+/// A count of pytket qubits, bits, and sympy parameters.
 ///
-/// Used as return value for [`PytketEmitter::type_to_pytket`](`super::PytketEmitter::type_to_pytket`).
+/// Used as return value for [`TrackedValues::count`].
 #[derive(
     Clone,
     Copy,
@@ -190,8 +189,11 @@ struct TrackedWire {
 #[display("{qubits} qubits, {bits} bits, {params} parameters")]
 #[non_exhaustive]
 pub struct RegisterCount {
+    /// Amount of qubits.
     pub qubits: usize,
+    /// Amount of bits.
     pub bits: usize,
+    /// Amount of sympy parameters.
     pub params: usize,
 }
 
@@ -302,7 +304,7 @@ impl<N: HugrNode> ValueTracker<N> {
     /// Create a new qubit register name.
     ///
     /// Picks unused names from the `qubits` list, if available, or generates
-    /// a new one with the internal [`RegisterUnitGenerator`].
+    /// a new one with the internal generator.
     pub fn new_qubit(&mut self) -> TrackedQubit {
         self.unused_qubits.pop_first().unwrap_or_else(|| {
             self.qubits.push(self.qubit_reg_generator.next());
@@ -313,7 +315,7 @@ impl<N: HugrNode> ValueTracker<N> {
     /// Create a new bit register name.
     ///
     /// Picks unused names from the `bits` list, if available, or generates
-    /// a new one with the internal [`RegisterUnitGenerator`].
+    /// a new one with the internal generator.
     pub fn new_bit(&mut self) -> TrackedBit {
         self.unused_bits.pop_first().unwrap_or_else(|| {
             self.bits.push(self.bit_reg_generator.next());
@@ -508,15 +510,6 @@ impl TrackedValues {
     }
 
     /// Iterate over the values in the list.
-    pub fn into_iter(self) -> impl Iterator<Item = TrackedValue> {
-        self.qubits
-            .into_iter()
-            .map(TrackedValue::Qubit)
-            .chain(self.bits.into_iter().map(TrackedValue::Bit))
-            .chain(self.params.into_iter().map(TrackedValue::Param))
-    }
-
-    /// Iterate over the values in the list.
     pub fn iter(&self) -> impl Iterator<Item = TrackedValue> + '_ {
         self.qubits
             .iter()
@@ -530,6 +523,26 @@ impl TrackedValues {
         self.qubits.extend(other.qubits);
         self.bits.extend(other.bits);
         self.params.extend(other.params);
+    }
+}
+
+impl IntoIterator for TrackedValues {
+    type Item = TrackedValue;
+
+    type IntoIter = std::iter::Chain<
+        std::iter::Chain<
+            itertools::MapInto<std::vec::IntoIter<TrackedQubit>, TrackedValue>,
+            itertools::MapInto<std::vec::IntoIter<TrackedBit>, TrackedValue>,
+        >,
+        itertools::MapInto<std::vec::IntoIter<TrackedParam>, TrackedValue>,
+    >;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.qubits
+            .into_iter()
+            .map_into()
+            .chain(self.bits.into_iter().map_into())
+            .chain(self.params.into_iter().map_into())
     }
 }
 

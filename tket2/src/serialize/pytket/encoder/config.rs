@@ -1,7 +1,8 @@
-//! Configuration for converting [`Circuit`]s into [`SerialCircuit`]
+//! Configuration for converting [`Circuit`]s into
+//! [`tket_json_rs::circuit_json::SerialCircuit`]
 //!
-//! A configuration struct contains a list of custom emitters that define translations
-//! of HUGR operations and types into pytket primitives.
+//! A configuration struct contains a list of custom emitters that define
+//! translations of HUGR operations and types into pytket primitives.
 
 use std::collections::{BTreeSet, HashMap, VecDeque};
 
@@ -34,7 +35,8 @@ pub fn default_encoder_config<H: HugrView>() -> Tk1EncoderConfig<H> {
     config
 }
 
-/// Configuration for converting [`Circuit`] into [`SerialCircuit`].
+/// Configuration for converting [`Circuit`] into
+/// [`tket_json_rs::circuit_json::SerialCircuit`].
 ///
 /// Contains custom emitters that define translations for HUGR operations,
 /// types, and consts into pytket primitives.
@@ -43,7 +45,7 @@ pub fn default_encoder_config<H: HugrView>() -> Tk1EncoderConfig<H> {
 pub struct Tk1EncoderConfig<H: HugrView> {
     /// Operation emitters
     #[debug(skip)]
-    pub(super) enmitters: Vec<Box<dyn PytketEmitter<H>>>,
+    pub(super) emitters: Vec<Box<dyn PytketEmitter<H>>>,
     /// Pre-computed map from extension ids to corresponding emitters in
     /// `emitters`, identified by their index.
     #[debug("{:?}", extension_emitters.keys().collect_vec())]
@@ -56,7 +58,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
     /// Create a new [`Tk1EncoderConfig`] with no encoders.
     pub fn new() -> Self {
         Self {
-            enmitters: vec![],
+            emitters: vec![],
             extension_emitters: HashMap::new(),
             no_extension_emitters: vec![],
         }
@@ -64,7 +66,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
 
     /// Add an encoder to the configuration.
     pub fn add_emitter(&mut self, encoder: impl PytketEmitter<H> + 'static) {
-        let idx = self.enmitters.len();
+        let idx = self.emitters.len();
 
         match encoder.extensions() {
             Some(extensions) => {
@@ -77,7 +79,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
             None => self.no_extension_emitters.push(idx),
         }
 
-        self.enmitters.push(Box::new(encoder));
+        self.emitters.push(Box::new(encoder));
     }
 
     /// List the extensions supported by the encoders.
@@ -85,7 +87,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
     /// Some encoders may not specify an extension, in which case they will be called
     /// for all operations irrespectively of the list returned here.
     ///
-    /// Use [`Tk1EncoderConfig::add_encoder`] to extend this list.
+    /// Use [`Tk1EncoderConfig::add_emitter`] to extend this list.
     pub fn supported_extensions(&self) -> impl Iterator<Item = &ExtensionId> {
         self.extension_emitters.keys()
     }
@@ -221,7 +223,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
             .into_iter()
             .flatten()
             .chain(self.no_extension_emitters.iter())
-            .map(move |idx| &self.enmitters[*idx])
+            .map(move |idx| &self.emitters[*idx])
     }
 
     /// Lists the emitters that can handle a given set extensions.
@@ -235,14 +237,14 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
             .chain(self.no_extension_emitters.iter())
             .copied()
             .collect();
-        emitter_ids.into_iter().map(move |idx| &self.enmitters[idx])
+        emitter_ids.into_iter().map(move |idx| &self.emitters[idx])
     }
 }
 
 impl<H: HugrView> Default for Tk1EncoderConfig<H> {
     fn default() -> Self {
         Self {
-            enmitters: Default::default(),
+            emitters: Default::default(),
             extension_emitters: Default::default(),
             no_extension_emitters: Default::default(),
         }
