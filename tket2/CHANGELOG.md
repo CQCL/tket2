@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0](https://github.com/CQCL/tket2/compare/tket2-v0.10.0...tket2-v0.11.0) - 2025-05-22
+
+### New Features
+
+- [**breaking**] Add `ReplaceBoolPass` ([#854](https://github.com/CQCL/tket2/pull/854))
+
+### Refactor
+
+- Use black_box from standard library. ([#878](https://github.com/CQCL/tket2/pull/878))
+
 ## [0.10.0](https://github.com/CQCL/tket2/compare/tket2-v0.9.0...tket2-v0.10.0) - 2025-05-16
 
 ### New Features
