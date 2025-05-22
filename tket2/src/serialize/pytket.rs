@@ -8,7 +8,6 @@ pub use encoder::{default_encoder_config, Tk1EncoderConfig, Tk1EncoderContext};
 pub use extension::PytketEmitter;
 
 use hugr::core::HugrNode;
-use hugr::types::Type;
 
 use hugr::Wire;
 use itertools::Itertools;
@@ -25,7 +24,6 @@ use hugr::ops::OpType;
 
 use derive_more::{Display, Error, From};
 use tket_json_rs::circuit_json::SerialCircuit;
-use tket_json_rs::optype::OpType as SerialOpType;
 use tket_json_rs::register::{Bit, ElementId, Qubit};
 
 use crate::circuit::Circuit;
@@ -156,79 +154,15 @@ pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, Tk1ConvertError> {
 }
 
 /// Error type for conversion between pytket operations and tket2 ops.
-#[derive(Display, derive_more::Debug, Error, From)]
+#[derive(Display, derive_more::Debug, Error)]
 #[non_exhaustive]
 #[debug(bounds(N: HugrNode))]
 pub enum OpConvertError<N = hugr::Node> {
-    /// The serialized operation is not supported.
-    #[display("Unsupported serialized pytket operation: {op:?}")]
-    UnsupportedSerializedOp {
-        /// The serialized operation.
-        op: SerialOpType,
-    },
     /// The serialized operation is not supported.
     #[display("Cannot serialize tket2 operation: {op}")]
     UnsupportedOpSerialization {
         /// The operation.
         op: OpType,
-    },
-    /// The operation has non-serializable inputs.
-    #[display(
-        "Operation {} in {node} has an unsupported input of type {typ}.",
-        optype
-    )]
-    UnsupportedInputType {
-        /// The unsupported type.
-        typ: Type,
-        /// The operation name.
-        optype: OpType,
-        /// The node.
-        node: N,
-    },
-    /// The operation has non-serializable outputs.
-    #[display(
-        "Operation {} in {node} has an unsupported output of type {typ}.",
-        optype
-    )]
-    UnsupportedOutputType {
-        /// The unsupported type.
-        typ: Type,
-        /// The operation name.
-        optype: OpType,
-        /// The node.
-        node: N,
-    },
-    /// A parameter input could not be evaluated.
-    #[display(
-        "The {typ} parameter input for operation {} in {node} could not be resolved.",
-        optype
-    )]
-    UnresolvedParamInput {
-        /// The parameter type.
-        typ: Type,
-        /// The operation with the missing input param.
-        optype: OpType,
-        /// The node.
-        node: N,
-    },
-    /// The operation has output-only qubits.
-    /// This is not currently supported by the encoder.
-    #[display("Operation {} in {node} has more output qubits than inputs.", optype)]
-    TooManyOutputQubits {
-        /// The unsupported type.
-        typ: Type,
-        /// The operation name.
-        optype: OpType,
-        /// The node.
-        node: N,
-    },
-    /// The opaque tket1 operation had an invalid type parameter.
-    #[display("Opaque TKET1 operation had an invalid type parameter. {error}")]
-    #[from]
-    InvalidOpaqueTypeParam {
-        /// The serialization error.
-        #[error(source)]
-        error: serde_json::Error,
     },
     /// Tried to decode a tket1 operation with not enough parameters.
     #[display(
@@ -259,16 +193,6 @@ pub enum OpConvertError<N = hugr::Node> {
         /// The given of parameters.
         args: Vec<ElementId>,
     },
-    /// A node parameter output could not be evaluated.
-    #[display("Could not compute output parameter #{out_index} for operation {op} given inputs [{}].", params.iter().join(", "))]
-    CannotComputeParams {
-        /// The operation being encoded
-        op: OpType,
-        /// The input parameters.
-        params: Vec<String>,
-        /// The output index that could not be computed.
-        out_index: usize,
-    },
     /// Tried to query the values associated with an unexplored wire.
     ///
     /// This reflects a bug in the operation encoding logic of an operation.
@@ -295,12 +219,6 @@ pub enum Tk1ConvertError<N = hugr::Node> {
     /// Operation conversion error.
     #[from]
     OpConversionError(OpConvertError<N>),
-    /// The circuit has non-serializable inputs.
-    #[display("Circuit contains non-serializable input of type {typ}.")]
-    NonSerializableInputs {
-        /// The unsupported type.
-        typ: Type,
-    },
     /// The circuit uses multi-indexed registers.
     //
     // This could be supported in the future, if there is a need for it.
