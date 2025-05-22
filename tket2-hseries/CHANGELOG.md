@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.14.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.13.0...tket2-hseries-v0.14.0) - 2025-05-22
 
+### ⚠ BREAKING CHANGES
+
+- BoolOp::bool_to_sum / BoolOp::sum_to_bool renamed to BoolOp::read / BoolOp::make_opaque
+- QSystemOp:Measure and QSystemOp:MeasureReset now return tket2.bools
+
 ### Bug Fixes
 
 - *(tket2-hseries)* ensure deterministic lowering using maps ([#884](https://github.com/CQCL/tket2/pull/884))

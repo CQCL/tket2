@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.11.0](https://github.com/CQCL/tket2/compare/tket2-v0.10.0...tket2-v0.11.0) - 2025-05-22
 
+### ⚠ BREAKING CHANGES
+- Tk2Op::MeasureFree now returns a tket2.bool
+
 ### New Features
 
 - [**breaking**] Add `ReplaceBoolPass` ([#854](https://github.com/CQCL/tket2/pull/854))
