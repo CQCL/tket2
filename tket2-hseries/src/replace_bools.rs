@@ -22,6 +22,7 @@ use hugr::{
     types::{SumType, Type},
     Hugr, Node, Wire,
 };
+use static_array::{LowerStaticArrayBoolPass, LowerStaticArrayBoolPassError};
 use tket2::{
     extension::bool::{bool_type, BoolOp, ConstBool},
     Tk2Op,
@@ -40,6 +41,8 @@ pub enum ReplaceBoolPassError<N> {
     NonLocalEdgesError(NonLocalEdgesError<N>),
     /// There was an error while replacing the type.
     ReplacementError(ReplaceTypesError),
+    /// TODO docs
+    LowerStaticArrayBoolPassError(LowerStaticArrayBoolPassError),
 }
 
 /// A HUGR -> HUGR pass which replaces the `tket2.bool`, enabling lazifying of measure
@@ -68,7 +71,7 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for ReplaceBoolPass {
     fn run(&self, hugr: &mut H) -> Result<(), Self::Error> {
         // TODO uncomment once https://github.com/CQCL/hugr/issues/1234 is complete
         // ensure_no_nonlocal_edges(hugr)?;
-        static_array_bool_lowerer().run(hugr)?;
+        LowerStaticArrayBoolPass::new().run(hugr)?;
         let lowerer = lowerer();
         lowerer.run(hugr)?;
         Ok(())
