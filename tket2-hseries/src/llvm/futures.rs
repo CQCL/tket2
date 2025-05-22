@@ -1,19 +1,22 @@
-use anyhow::{Result, anyhow};
-use tket2::hugr::{self, llvm::{self as hugr_llvm, inkwell}};
-use hugr_llvm::CodegenExtsBuilder;
-use hugr_llvm::custom::CodegenExtension;
-use hugr_llvm::emit::func::EmitFuncContext;
-use hugr_llvm::emit::{EmitOpArgs, emit_value};
-use inkwell::builder::Builder;
-use inkwell::context::Context;
-use inkwell::types::{BasicTypeEnum, IntType};
-use inkwell::values::FunctionValue;
+use crate::extension::futures::{self, FutureOp, FutureOpDef, FUTURE_TYPE_NAME};
+use anyhow::{anyhow, Result};
 use hugr::extension::prelude::bool_t;
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::ops::{ExtensionOp, Value};
 use hugr::types::TypeArg;
 use hugr::{HugrView, Node};
-use crate::extension::futures::{self, FUTURE_TYPE_NAME, FutureOp, FutureOpDef};
+use hugr_llvm::custom::CodegenExtension;
+use hugr_llvm::emit::func::EmitFuncContext;
+use hugr_llvm::emit::{emit_value, EmitOpArgs};
+use hugr_llvm::CodegenExtsBuilder;
+use inkwell::builder::Builder;
+use inkwell::context::Context;
+use inkwell::types::{BasicTypeEnum, IntType};
+use inkwell::values::FunctionValue;
+use tket2::hugr::{
+    self,
+    llvm::{self as hugr_llvm, inkwell},
+};
 
 /// Codegen extension for futures
 pub struct FuturesCodegenExtension;
@@ -48,6 +51,7 @@ impl CodegenExtension for FuturesCodegenExtension {
     }
 }
 
+/// The LLVM type representing a future handle.
 pub fn future_type(context: &Context) -> BasicTypeEnum {
     // The runtime represent a future handle as an i64
     context.i64_type().into()
@@ -60,11 +64,11 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
         self.0.typing_session().iw_context()
     }
 
-    fn cl_future_type(&self) -> BasicTypeEnum<'c> {
+    fn ll_future_type(&self) -> BasicTypeEnum<'c> {
         future_type(self.iw_context())
     }
 
-    fn cl_bool_type(&self) -> IntType<'c> {
+    fn ll_bool_type(&self) -> IntType<'c> {
         self.iw_context().bool_type()
     }
 
@@ -76,7 +80,7 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
         let func_type = self
             .iw_context()
             .void_type()
-            .fn_type(&[self.cl_future_type().into()], false);
+            .fn_type(&[self.ll_future_type().into()], false);
         self.0.get_extern_func("___inc_future_refcount", func_type)
     }
 
@@ -84,19 +88,20 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
         let func_type = self
             .iw_context()
             .void_type()
-            .fn_type(&[self.cl_future_type().into()], false);
+            .fn_type(&[self.ll_future_type().into()], false);
         self.0.get_extern_func("___dec_future_refcount", func_type)
     }
 
     fn get_func_read_bool(&self) -> Result<FunctionValue<'c>> {
         let func_type = self
-            .cl_bool_type()
-            .fn_type(&[self.cl_future_type().into()], false);
+            .ll_bool_type()
+            .fn_type(&[self.ll_future_type().into()], false);
         self.0.get_extern_func("___read_future_bool", func_type)
     }
 
     fn emit(&mut self, args: EmitOpArgs<'c, '_, ExtensionOp, H>) -> Result<()> {
-        match FutureOp::from_optype(&args.node().generalise()).unwrap().op {
+        let op = FutureOp::from_optype(&args.node().generalise()).unwrap().op;
+        match op {
             FutureOpDef::Dup => {
                 let [arg] = args
                     .inputs
@@ -139,7 +144,6 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
                     .build_select(result_i1, true_val, false_val, "measure")?;
                 args.outputs.finish(self.builder(), [result])
             }
-            n => Err(anyhow!("Unknown op {:?}", n)),
         }
     }
 }
@@ -147,10 +151,10 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
 #[cfg(test)]
 mod test {
     use hugr::extension::simple_op::MakeRegisteredOp;
-    use hugr_llvm::test::llvm_ctx;
-    use hugr_llvm::test::TestContext;
-    use hugr_llvm::test::single_op_hugr;
     use hugr_llvm::check_emission;
+    use hugr_llvm::test::llvm_ctx;
+    use hugr_llvm::test::single_op_hugr;
+    use hugr_llvm::test::TestContext;
 
     use super::*;
     #[rstest::rstest]
@@ -162,11 +166,8 @@ mod test {
         #[with(_i)] mut llvm_ctx: TestContext,
         #[case] op: FutureOp,
     ) {
-        llvm_ctx.add_extensions(|ceb| {
-            ceb.add_extension(FuturesCodegenExtension)
-        });
+        llvm_ctx.add_extensions(|ceb| ceb.add_extension(FuturesCodegenExtension));
         let hugr = single_op_hugr(op.to_extension_op().unwrap().into());
         check_emission!(hugr, llvm_ctx);
     }
-
 }
