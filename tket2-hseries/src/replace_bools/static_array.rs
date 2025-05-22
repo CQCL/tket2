@@ -2,19 +2,26 @@ use hugr::{
     algorithms::{
         replace_types::{NodeTemplate, ReplaceTypesError},
         ComposablePass, ReplaceTypes,
-    }, builder::{
+    },
+    builder::{
         inout_sig, BuildError, DFGBuilder, Dataflow, DataflowHugr as _, DataflowSubContainer as _,
         SubContainer as _,
-    }, extension::{
+    },
+    extension::{
         prelude::{bool_t, option_type, usize_t},
         simple_op::{HasConcrete as _, MakeOpDef},
-    }, hugr::hugrmut::HugrMut, ops::{OpTrait as _, Tag, Value}, std_extensions::collections::{
+    },
+    hugr::hugrmut::HugrMut,
+    ops::{OpTrait as _, Tag, Value},
+    std_extensions::collections::{
         array::ArrayValue,
         static_array::{
             self, static_array_type, StaticArrayOpBuilder as _, StaticArrayOpDef, StaticArrayValue,
             STATIC_ARRAY_TYPENAME,
         },
-    }, types::{Transformable as _, Type, TypeEnum, TypeRow}, HugrView as _, Node, Wire
+    },
+    types::{Transformable as _, Type, TypeEnum, TypeRow},
+    HugrView as _, Node, Wire,
 };
 use itertools::Itertools as _;
 use tket2::extension::bool::{self, bool_type, BoolOpBuilder as _, ConstBool, BOOL_TYPE_NAME};
@@ -28,9 +35,9 @@ pub enum LowerStaticArrayBoolPassError {
 
 type Result<T> = std::result::Result<T, LowerStaticArrayBoolPassError>;
 
-pub struct LowerStaticArrayBoolPass (ReplaceTypes);
+pub struct LowerStaticArrayBoolPass(ReplaceTypes);
 
-impl<H: HugrMut<Node=Node>> ComposablePass<H> for LowerStaticArrayBoolPass {
+impl<H: HugrMut<Node = Node>> ComposablePass<H> for LowerStaticArrayBoolPass {
     type Error = LowerStaticArrayBoolPassError;
     type Result = bool;
 
@@ -65,25 +72,28 @@ impl LowerStaticArrayBoolPass {
             outer.replace_parametrized_type(static_array_typedef, {
                 let inner = inner.clone();
                 move |args| {
-                let mut element_ty = {
-                    let [element_ty_arg] = args else {
-                        unreachable!()
+                    let mut element_ty = {
+                        let [element_ty_arg] = args else {
+                            unreachable!()
+                        };
+                        element_ty_arg.as_type().unwrap()
                     };
-                    element_ty_arg.as_type().unwrap()
-                };
-                let changed = element_ty.transform(&inner).unwrap();
-                changed.then_some(static_array_type(element_ty))
-            }});
+                    let changed = element_ty.transform(&inner).unwrap();
+                    changed.then_some(static_array_type(element_ty))
+                }
+            });
             outer.replace_parametrized_op(
                 static_array::EXTENSION
                     .get_op(&StaticArrayOpDef::get.opdef_id())
-                    .unwrap(), {
-                        let inner = inner.clone();
+                    .unwrap(),
+                {
+                    let inner = inner.clone();
                     move |args| {
                         let [element_ty] = args else { unreachable!() };
                         get_op_dest(&inner, element_ty.as_type().unwrap())
                     }
-                    });
+                },
+            );
             outer.replace_parametrized_op(
                 static_array::EXTENSION
                     .get_op(&StaticArrayOpDef::len.opdef_id())
@@ -108,14 +118,21 @@ fn register_const_static_array(rt: &mut ReplaceTypes, inner_rt: Option<ReplaceTy
         let Some(mut sav): Option<StaticArrayValue> = opaque_val
             .value()
             .downcast_ref::<StaticArrayValue>()
-            .cloned() else {
-            return Ok(None)
+            .cloned()
+        else {
+            return Ok(None);
         };
         let mut any_changed = false;
-        let values = sav.value.get_contents().iter().cloned().map(|mut v| {
-            any_changed |= rt.change_value(&mut v).unwrap();
-            v
-        }).collect_vec();
+        let values = sav
+            .value
+            .get_contents()
+            .iter()
+            .cloned()
+            .map(|mut v| {
+                any_changed |= rt.change_value(&mut v).unwrap();
+                v
+            })
+            .collect_vec();
         if !any_changed {
             return Ok(None);
         }
@@ -139,7 +156,12 @@ fn len_op_dest(rt: &ReplaceTypes, mut elem_ty: Type) -> Option<NodeTemplate> {
     ))
 }
 
-fn build_new_to_old(rt: &ReplaceTypes, builder: &mut impl Dataflow, val: Wire, old_ty: Type) -> Result<Wire> {
+fn build_new_to_old(
+    rt: &ReplaceTypes,
+    builder: &mut impl Dataflow,
+    val: Wire,
+    old_ty: Type,
+) -> Result<Wire> {
     match old_ty.as_type_enum() {
         TypeEnum::Extension(custom_ty) => {
             if (custom_ty.extension(), custom_ty.name())
@@ -237,7 +259,6 @@ fn get_op_dest(rt: &ReplaceTypes, old_elem_ty: Type) -> Option<NodeTemplate> {
     };
     Some(NodeTemplate::CompoundOp(Box::new(hugr)))
 }
-
 
 #[cfg(test)]
 mod test {

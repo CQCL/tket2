@@ -8,7 +8,8 @@ use hugr::{
         non_local::NonLocalEdgesError,
         replace_types::{NodeTemplate, ReplaceTypesError},
         ComposablePass, ReplaceTypes,
-    },  builder::{
+    },
+    builder::{
         inout_sig, BuildHandle, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer,
         SubContainer,
     },
