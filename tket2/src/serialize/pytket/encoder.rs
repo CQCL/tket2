@@ -777,7 +777,7 @@ pub struct OutputParamArgs<'a> {
 /// - `qubit_count`: The number of qubits used by the operation.
 /// - `bit_count`: The number of linear bits used by the operation.
 /// - `params`: Parameters of the operation, expressed as string expressions.
-///   Normally obtained from [`Tk1EncoderContext::get_parameter`].
+///   Normally obtained from [`ValueTracker::param_expression`].
 pub fn make_tk1_operation(
     tk1_optype: tket_json_rs::OpType,
     qubit_count: usize,

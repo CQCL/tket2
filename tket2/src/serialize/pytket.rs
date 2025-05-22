@@ -1,7 +1,7 @@
 //! Serialization and deserialization of circuits using the `pytket` JSON format.
 
 mod decoder;
-mod encoder;
+pub mod encoder;
 pub mod extension;
 
 pub use encoder::{default_encoder_config, Tk1EncoderConfig, Tk1EncoderContext};
