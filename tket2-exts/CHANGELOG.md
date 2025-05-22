@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.0](https://github.com/CQCL/tket2/compare/tket2-exts-v0.7.0...tket2-exts-v0.8.0) (2025-05-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* (`tket2.bool` extension) `BoolOp::bool_to_sum` / `BoolOp::sum_to_bool` renamed to `BoolOp::read` / `BoolOp::make_opaque` `Tk2Op::MeasureFree` now returns a `tket2.bool` (`tket2-hseries.qsystem` extension) `QSystemOp:Measure` and `QSystemOp:MeasureReset` now return `tket2.bool`s
+* **tket2-hseries:** `QSystemOpBuilder` gained supertrait `ArrayOpBuilder`
+
+### Features
+
+* Add `ReplaceBoolPass` ([#854](https://github.com/CQCL/tket2/issues/854)) ([5ae0ab9](https://github.com/CQCL/tket2/commit/5ae0ab9d7046a73019bf8a7bc436a576bece1fa0))
+* **tket2-hseries:** insert RuntimeBarrier across qubits in a Barrier ([#866](https://github.com/CQCL/tket2/issues/866)) ([6bcc9d6](https://github.com/CQCL/tket2/commit/6bcc9d62d30accca91edc6255d42ec300763c263))
+
 ## [0.7.0](https://github.com/CQCL/tket2/compare/tket2-exts-v0.6.0...tket2-exts-v0.7.0) (2025-05-16)
 
 
