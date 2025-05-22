@@ -9,7 +9,7 @@ pub use extension::PytketEmitter;
 
 use hugr::core::HugrNode;
 
-use hugr::Wire;
+use hugr::{Hugr, Wire};
 use itertools::Itertools;
 
 #[cfg(test)]
@@ -59,8 +59,20 @@ pub trait TKETDecode: Sized {
     type EncodeError;
     /// Convert the serialized circuit to a circuit.
     fn decode(self) -> Result<Circuit, Self::DecodeError>;
-    /// Convert a circuit to a new serialized circuit.
+    /// Convert a circuit to a serialized pytket circuit.
+    ///
+    /// Uses a default set of emitters to translate operations.
+    /// If the circuit contains non-std operations or types,
+    /// use [`TKETDecode::encode_with_config`] instead.
     fn encode(circuit: &Circuit) -> Result<Self, Self::EncodeError>;
+    /// Convert a circuit to a serialized pytket circuit.
+    ///
+    /// You may use [`TKETDecode::encode`] if the circuit does not contain
+    /// non-std operations or types.
+    fn encode_with_config(
+        circuit: &Circuit,
+        config: Tk1EncoderConfig<Hugr>,
+    ) -> Result<Self, Self::EncodeError>;
 }
 
 impl TKETDecode for SerialCircuit {
@@ -82,11 +94,18 @@ impl TKETDecode for SerialCircuit {
         Ok(decoder.finish().into())
     }
 
-    fn encode(circ: &Circuit) -> Result<Self, Self::EncodeError> {
+    fn encode(circuit: &Circuit) -> Result<Self, Self::EncodeError> {
         let config = default_encoder_config();
-        let mut encoder = Tk1EncoderContext::new(circ, config)?;
-        encoder.run_encoder(circ)?;
-        encoder.finish(circ)
+        Self::encode_with_config(circuit, config)
+    }
+
+    fn encode_with_config(
+        circuit: &Circuit,
+        config: Tk1EncoderConfig<Hugr>,
+    ) -> Result<Self, Self::EncodeError> {
+        let mut encoder = Tk1EncoderContext::new(circuit, config)?;
+        encoder.run_encoder(circuit)?;
+        encoder.finish(circuit)
     }
 }
 
