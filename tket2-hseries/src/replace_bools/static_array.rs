@@ -297,7 +297,6 @@ fn get_op_dest(rt: &ReplaceTypes, old_elem_ty: Type) -> Option<NodeTemplate> {
 
         let old = build_new_to_old(rt, &mut dfb, val, res_ty.clone()).unwrap();
         dfb.finish_hugr_with_outputs([old]).unwrap()
-        // dfb.finish_hugr_with_outputs([val]).unwrap()
     };
     Some(NodeTemplate::CompoundOp(Box::new(hugr)))
 }
