@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.9.1...tket2-py-v0.10.0) (2025-05-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* In the `tket2.bool` extension, `BoolOp::bool_to_sum` / `BoolOp::sum_to_bool` renamed to `BoolOp::read` / `BoolOp::make_opaque` `Tk2Op::MeasureFree` now returns a `tket2.bool`
+
+### Features
+
+* Update `tket2-exts` dependency with breaking `tket2.bool` extension changes. ([b1cd078](https://github.com/CQCL/tket2/commit/b1cd0784cf34146a778b21a98a8ab26c822b34cf))
+
 ## [0.9.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.9.0...tket2-py-v0.9.1) (2025-05-19)
 
 
