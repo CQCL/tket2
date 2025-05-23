@@ -10,6 +10,7 @@ use hugr::hugr::hugrmut::HugrMut;
 use hugr::std_extensions::arithmetic::float_ops::FloatOps;
 use hugr::types::Signature;
 use hugr::HugrView;
+use itertools::Itertools;
 use rstest::{fixture, rstest};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::optype;
@@ -131,24 +132,40 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
     // compare the commands in that order. This is just a quick check that
     // everything is present, ignoring wire dependencies.
     //
-    // Another problem is that `Command` is not `Eq` nor `Hash`, and neither are
-    // some of its fields. So here we just serialize the commands and compare
-    // the JSON instead.
+    // Another problem is that `Command`s cannot be compared directly;
+    // - `command.op.signature`, and `n_qb` are optional and sometimes
+    //      unset in pytket-generated circs.
+    // - qubit arguments names may differ if they have been allocated inside the circuit,
+    //      as they depend on the traversal argument. Same with classical params.
+    // Here we define an ad-hoc subset that can be compared.
     //
     // TODO: Do a proper comparison independent of the toposort ordering, and
     // track register reordering.
-    let b_commands: HashSet<_> = b
-        .commands
-        .iter()
-        .map(|c| serde_json::to_string(c).unwrap())
-        .collect();
-    for b in &b.commands {
-        let c = serde_json::to_string(b).unwrap();
-        assert!(
-            b_commands.contains(&c),
-            "Command {b:?} not found in the other circuit"
+    #[derive(PartialEq, Eq, Hash, Debug)]
+    struct CommandInfo {
+        op_type: tket_json_rs::OpType,
+        n_args: usize,
+    }
+
+    impl From<&tket_json_rs::circuit_json::Command> for CommandInfo {
+        fn from(command: &tket_json_rs::circuit_json::Command) -> Self {
+            CommandInfo {
+                op_type: command.op.op_type.clone(),
+                n_args: command.args.len(),
+            }
+        }
+    }
+
+    let a_command_count: HashMap<CommandInfo, usize> = a.commands.iter().map_into().counts();
+    let b_command_count: HashMap<CommandInfo, usize> = b.commands.iter().map_into().counts();
+    for (a, &count_a) in &a_command_count {
+        let count_b = b_command_count.get(a).copied().unwrap_or_default();
+        assert_eq!(
+            count_a, count_b,
+            "command {a:?} appears {count_a} times in rhs and {count_b} times in lhs"
         );
     }
+    assert_eq!(a_command_count.len(), b_command_count.len());
 }
 
 /// A simple circuit with some preset qubit registers
