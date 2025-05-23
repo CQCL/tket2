@@ -33,7 +33,7 @@ use hugr::ops::ExtensionOp;
 use hugr::types::CustomType;
 use hugr::HugrView;
 
-/// An encoder of HUGR operations and types that transform them into pytket
+/// An encoder of HUGR operations and types that transforms them into pytket
 /// primitives.
 ///
 /// An [encoder configuration](crate::serialize::pytket::Tk1EncoderConfig)
@@ -76,7 +76,7 @@ pub trait PytketEmitter<H: HugrView> {
     ///
     /// If the type cannot be translated into a list of the aforementioned
     /// values, return `None`. Operations dealing with such types will be
-    /// marked as unsupported will be serialized as opaque operations.
+    /// marked as unsupported and will be serialized as opaque operations.
     fn type_to_pytket(
         &self,
         typ: &CustomType,

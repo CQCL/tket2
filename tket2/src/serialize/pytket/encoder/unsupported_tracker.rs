@@ -18,7 +18,7 @@ use crate::Circuit;
 pub struct UnsupportedTracker<N> {
     /// Unsupported nodes in the hugr.
     ///
-    /// Stores the index each node in [`Self::components`].
+    /// Stores the index of each node in [`Self::components`].
     ///
     /// Once a node has been extracted, it is removed from this map.
     nodes: HashMap<N, UnsupportedNode>,
