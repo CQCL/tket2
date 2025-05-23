@@ -114,7 +114,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
     }
 
     /// Translate a HUGR type into a count of qubits, bits, and parameters,
-    /// using the registered custom encodes.
+    /// using the registered custom encoders.
     ///
     /// Only tuple sums, bools, and custom types are supported.
     /// Other types will return `None`.
@@ -226,7 +226,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
             .map(move |idx| &self.emitters[*idx])
     }
 
-    /// Lists the emitters that can handle a given set extensions.
+    /// Lists the emitters that can handle a given set of extensions.
     fn emitters_for_extensions(
         &self,
         exts: &ExtensionSet,
