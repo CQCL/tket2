@@ -6,23 +6,21 @@
 //! circuits by ensuring they always define a signature, and computing the
 //! explicit count of qubits and linear bits.
 
-mod native;
-pub(crate) mod serialised;
-
 use hugr::ops::OpType;
 use hugr::IncomingPort;
+use tk2op::NativeOp;
 use tket_json_rs::circuit_json;
 
-use self::native::NativeOp;
-use self::serialised::OpaqueTk1Op;
-use super::OpConvertError;
+use super::super::extension::OpaqueTk1Op;
+
+pub mod tk2op;
 
 /// An intermediary artifact when converting between TKET1 and TKET2 operations.
 ///
 /// This enum represents either operations that can be represented natively in TKET2,
 /// or operations that must be serialised as opaque TKET1 operations.
 #[derive(Clone, Debug, PartialEq, derive_more::From)]
-pub enum Tk1Op {
+pub(crate) enum Tk1Op {
     /// An operation with a native TKET2 counterpart.
     Native(NativeOp),
     /// An operation without a native TKET2 counterpart.
@@ -30,32 +28,6 @@ pub enum Tk1Op {
 }
 
 impl Tk1Op {
-    /// Create a new `Tk1Op` from a hugr optype.
-    ///
-    /// Supports either native `Tk2Op`s or serialised tket1 `CustomOps`s.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the operation is not supported by the TKET1 serialization.
-    pub fn try_from_optype(op: OpType) -> Result<Option<Self>, OpConvertError> {
-        if let Some(tk2op) = op.cast() {
-            let native = NativeOp::try_from_tk2op(tk2op)
-                .ok_or_else(|| OpConvertError::UnsupportedOpSerialization(op))?;
-            // Skip serialisation for some special cases.
-            if native.serial_op().is_none() {
-                return Ok(None);
-            }
-            Ok(Some(Tk1Op::Native(native)))
-        } else {
-            // Unrecognised opaque operation. If it's an opaque tket1 op, return it.
-            // Otherwise, it's an unsupported operation and we should fail.
-            match OpaqueTk1Op::try_from_tket2(&op)? {
-                Some(opaque) => Ok(Some(Tk1Op::Opaque(opaque))),
-                None => Err(OpConvertError::UnsupportedOpSerialization(op.clone())),
-            }
-        }
-    }
-
     /// Create a new `Tk1Op` from a tket1 `circuit_json::Operation`.
     ///
     /// If `serial_op` defines a signature then `num_qubits` and `num_qubits` are ignored. Otherwise, a signature is synthesised from those parameters.
@@ -87,14 +59,6 @@ impl Tk1Op {
         match self {
             Tk1Op::Native(native_op) => native_op.into_optype(),
             Tk1Op::Opaque(json_op) => json_op.as_extension_op().into(),
-        }
-    }
-
-    /// Get the [`tket_json_rs::circuit_json::Operation`] for the operation.
-    pub fn serialised_op(&self) -> Option<circuit_json::Operation> {
-        match self {
-            Tk1Op::Native(native_op) => native_op.serialised_op(),
-            Tk1Op::Opaque(json_op) => Some(json_op.serialised_op().clone()),
         }
     }
 
