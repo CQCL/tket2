@@ -76,7 +76,15 @@ impl<H: HugrView> PytketEmitter<H> for FloatEmitter {
             return Ok(None);
         };
 
-        let param = encoder.values.new_param(const_f.value());
+        let float = const_f.value();
+        // Special case for pi rotations
+        let val = if float == std::f64::consts::PI {
+            "pi".to_string()
+        } else {
+            float.to_string()
+        };
+
+        let param = encoder.values.new_param(val);
 
         let mut values = TrackedValues::default();
         values.params.push(param);

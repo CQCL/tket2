@@ -144,6 +144,7 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
     #[derive(PartialEq, Eq, Hash, Debug)]
     struct CommandInfo {
         op_type: tket_json_rs::OpType,
+        params: Vec<String>,
         n_args: usize,
     }
 
@@ -151,6 +152,7 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
         fn from(command: &tket_json_rs::circuit_json::Command) -> Self {
             CommandInfo {
                 op_type: command.op.op_type.clone(),
+                params: command.op.params.clone().unwrap_or_default(),
                 n_args: command.args.len(),
             }
         }
