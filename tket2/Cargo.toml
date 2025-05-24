@@ -72,6 +72,7 @@ pest = { workspace = true }
 pest_derive = { workspace = true }
 zstd = { workspace = true, optional = true }
 anyhow = { version = "1.0.98", optional = true }
+z3 = { version = "0.12.1" }
 
 
 [dev-dependencies]
@@ -86,3 +87,6 @@ criterion = { version = "0.6.0", features = ["html_reports"] }
 [[bench]]
 name = "bench_main"
 harness = false
+
+[[test]]
+name = "rewrite_space_explorer"

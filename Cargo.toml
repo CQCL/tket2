@@ -9,6 +9,7 @@ members = [
     "compile-rewriter",
     "badger-optimiser",
     "tket2-hseries",
+    "hit",
 ]
 default-members = ["tket2", "tket2-hseries"]
 
@@ -37,10 +38,10 @@ large_enum_variant = "allow"
 [patch.crates-io]
 
 # Uncomment to use unreleased versions of hugr
-#hugr = { git = "https://github.com/CQCL/hugr", rev = "42ce05d" }
-#hugr-core = { git = "https://github.com/CQCL/hugr", rev = "42ce05d" }
-#hugr-passes = { git = "https://github.com/CQCL/hugr", rev = "42ce05d" }
-#hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "42ce05d" }
+hugr = { git = "https://github.com/CQCL/hugr", rev = "d411cdd6" }
+hugr-core = { git = "https://github.com/CQCL/hugr", rev = "d411cdd6" }
+hugr-passes = { git = "https://github.com/CQCL/hugr", rev = "d411cdd6" }
+hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "d411cdd6" }
 # portgraph = { git = "https://github.com/CQCL/portgraph", rev = "68b96ac737e0c285d8c543b2d74a7aa80a18202c" }
 
 [workspace.dependencies]

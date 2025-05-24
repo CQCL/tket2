@@ -17,14 +17,15 @@
 //! Python bindings for TKET2 are available in the `tket2` package on PyPi.
 //!
 //! # Example
-//!
 #![cfg_attr(not(miri), doc = "```")] // this doctest reads from the filesystem, so it fails with miri
 #![cfg_attr(miri, doc = "```ignore")]
 //! use tket2::Circuit;
 //! use hugr::HugrView;
 //!
 //! // Load a tket1 circuit.
-//! let mut circ: Circuit = tket2::serialize::load_tk1_json_file("../test_files/barenco_tof_5.json").unwrap();
+//! let mut circ: Circuit =
+//! tket2::serialize::load_tk1_json_file("../test_files/barenco_tof_5.json").
+//! unwrap();
 //!
 //! assert_eq!(circ.qubit_count(), 9);
 //! assert_eq!(circ.num_operations(), 170);
@@ -40,7 +41,7 @@
 //! // Optimise the circuit.
 //! tket2::passes::apply_greedy_commutation(&mut circ);
 //! ```
-//!
+//! 
 //! [quantinuum-hugr]: https://lib.rs/crates/quantinuum-hugr
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 
@@ -50,6 +51,7 @@ pub(crate) mod ops;
 pub mod optimiser;
 pub mod passes;
 pub mod rewrite;
+pub mod rewrite_space;
 pub mod serialize;
 
 #[cfg(feature = "portmatching")]
