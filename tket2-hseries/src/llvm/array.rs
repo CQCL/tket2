@@ -1,3 +1,7 @@
+//! LLVM lowering implementations for array operations.
+//! 
+//! This module provides helper functions for allocating and manipulating arrays in LLVM.
+
 use anyhow::Result;
 use hugr::llvm::inkwell;
 use inkwell::builder::{Builder, BuilderError};

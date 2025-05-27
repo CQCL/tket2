@@ -1,3 +1,5 @@
+//! LLVM lowering implementations for HUGR prelude operations.
+
 use std::hash::{DefaultHasher, Hash as _, Hasher as _};
 use tket2::hugr::{self, llvm::inkwell};
 
