@@ -49,3 +49,32 @@ fn emit_utils_op<H: HugrView<Node = Node>>(
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::extension::utils::UtilsOp;
+    use hugr::extension::simple_op::MakeRegisteredOp;
+    use hugr::llvm::check_emission;
+    use hugr::llvm::test::llvm_ctx;
+    use hugr::llvm::test::single_op_hugr;
+    use hugr::llvm::test::TestContext;
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::get_current_shot(1, UtilsOp::GetCurrentShot)]
+    fn emit_utils_codegen(
+        #[case] _i: i32,
+        #[with(_i)] mut llvm_ctx: TestContext,
+        #[case] op: UtilsOp,
+    ) {
+        llvm_ctx.add_extensions(|ceb| {
+            ceb.add_extension(UtilsCodegenExtension)
+                .add_default_int_extensions()
+        });
+        let ext_op = op.to_extension_op().unwrap().into();
+        let hugr = single_op_hugr(ext_op);
+        check_emission!(hugr, llvm_ctx);
+    }
+}
