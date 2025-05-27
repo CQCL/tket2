@@ -270,3 +270,49 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
         args.outputs.finish(self.builder(), [])
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::extension::result::ResultOp;
+
+    use hugr::extension::simple_op::MakeRegisteredOp;
+    use hugr::llvm::check_emission;
+    use hugr::llvm::extension::collections::array::{ArrayCodegenExtension, DefaultArrayCodegen};
+    use hugr::llvm::test::llvm_ctx;
+    use hugr::llvm::test::single_op_hugr;
+    use hugr::llvm::test::TestContext;
+
+    use crate::llvm::prelude::QISPreludeCodegen;
+
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::bool(1, ResultOp::new_bool("test_bool"))]
+    #[case::int(2, ResultOp::new_int("test_int", 6))]
+    #[case::uint(3, ResultOp::new_uint("test_uint", 6))]
+    #[case::f64(4, ResultOp::new_f64("test_f64"))]
+    // TODO fix error with array emission tests
+    // #[case::arr_bool(5, ResultOp::new_bool("test_arr_bool").array_op(10))]
+    // #[case::arr_int(6, ResultOp::new_int("test_arr_int", 6).array_op(10))]
+    // #[case::arr_uint(7, ResultOp::new_uint("test_arr_uint", 6).array_op(10))]
+    // #[case::arr_f64(8, ResultOp::new_f64("test_arr_f64").array_op(10))]
+    fn emit_result_codegen(
+        #[case] _i: i32,
+        #[with(_i)] mut llvm_ctx: TestContext,
+        #[case] op: ResultOp,
+    ) {
+        let pcg = QISPreludeCodegen;
+        llvm_ctx.add_extensions(move |ceb| {
+            ceb.add_extension(ResultsCodegenExtension)
+                .add_prelude_extensions(pcg.clone())
+                .add_extension(ArrayCodegenExtension::new(DefaultArrayCodegen))
+                .add_default_int_extensions()
+                .add_float_extensions()
+        });
+        let ext_op = op.to_extension_op().unwrap().into();
+        let hugr = single_op_hugr(ext_op);
+        check_emission!(hugr, llvm_ctx);
+    }
+}
