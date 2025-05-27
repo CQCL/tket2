@@ -142,3 +142,38 @@ impl<'c, H: HugrView<Node = Node>> RandomEmitter<'c, '_, '_, H> {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::extension::random::RandomOp;
+    use hugr::extension::simple_op::MakeRegisteredOp;
+    use hugr::llvm::check_emission;
+    use hugr::llvm::test::llvm_ctx;
+    use hugr::llvm::test::single_op_hugr;
+    use hugr::llvm::test::TestContext;
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::random_int(1, RandomOp::RandomInt)]
+    #[case::random_float(2, RandomOp::RandomFloat)]
+    #[case::random_int_bounded(3, RandomOp::RandomIntBounded)]
+    #[case::new_rng_context(4, RandomOp::NewRNGContext)]
+    #[case::delete_rng_context(5, RandomOp::DeleteRNGContext)]
+    fn emit_random_codegen(
+        #[case] _i: i32,
+        #[with(_i)] mut llvm_ctx: TestContext,
+        #[case] op: RandomOp,
+    ) {
+        llvm_ctx.add_extensions(|ceb| {
+            ceb.add_extension(RandomCodegenExtension)
+                .add_default_int_extensions()
+                .add_float_extensions()
+                .add_logic_extensions()
+        });
+        let ext_op = op.to_extension_op().unwrap().into();
+        let hugr = single_op_hugr(ext_op);
+        check_emission!(hugr, llvm_ctx);
+    }
+}
