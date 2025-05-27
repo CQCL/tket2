@@ -1,3 +1,5 @@
+//! LLVM lowering implementations for "tket2.results" extension.
+
 use crate::extension::result::{ResultArgs, ResultOp, ResultOpDef};
 use crate::llvm::prelude::emit_global_string;
 use anyhow::{anyhow, bail, Result};

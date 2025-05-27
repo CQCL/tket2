@@ -1,3 +1,5 @@
+//! LLVM lowering implementations for "tket2.futures" operations.
+
 use crate::extension::futures::{self, FutureOp, FutureOpDef, FUTURE_TYPE_NAME};
 use anyhow::{anyhow, Result};
 use hugr::extension::prelude::bool_t;

@@ -1,3 +1,5 @@
+//! LLVM lowering implementations for the "tket2.qsystem.random" extension.
+
 use tket2::hugr::{self, llvm::inkwell};
 
 use crate::extension::random::{self, RandomOp, CONTEXT_TYPE_NAME};

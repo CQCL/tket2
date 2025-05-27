@@ -1,3 +1,4 @@
+//! LLVM codegen for the `tket2.rotation` extension.
 use anyhow::{anyhow, bail, Result};
 use hugr::{self, llvm::inkwell};
 

@@ -1,3 +1,5 @@
+//! LLVM lowering implementations for "tket2.qystem" operations.
+
 use tket2::hugr::{self, llvm::inkwell};
 
 use crate::extension::qsystem::{self, QSystemOp};
