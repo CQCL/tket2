@@ -287,3 +287,51 @@ impl<'c, H: HugrView<Node = Node>> QSystemEmitter<'c, '_, '_, H> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::extension::qsystem::QSystemOp;
+
+    use hugr::extension::simple_op::MakeRegisteredOp;
+    use hugr::llvm::check_emission;
+    use hugr::llvm::test::llvm_ctx;
+    use hugr::llvm::test::single_op_hugr;
+    use hugr::llvm::test::TestContext;
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case::rz(1, QSystemOp::Rz)]
+    #[case::zzphase(2, QSystemOp::ZZPhase)]
+    #[case::phased_x(3, QSystemOp::PhasedX)]
+    #[case::measure(4, QSystemOp::Measure)]
+    #[case::lazy_measure(5, QSystemOp::LazyMeasure)]
+    #[case::try_qalloc(6, QSystemOp::TryQAlloc)]
+    #[case::qfree(7, QSystemOp::QFree)]
+    #[case::reset(8, QSystemOp::Reset)]
+    #[case::measure_reset(9, QSystemOp::MeasureReset)]
+    fn emit_qsystem_codegen(
+        #[case] _i: i32,
+        #[with(_i)] mut llvm_ctx: TestContext,
+        #[case] op: QSystemOp,
+    ) {
+        use hugr::algorithms::ComposablePass;
+
+        use crate::llvm::{futures::FuturesCodegenExtension, prelude::QISPreludeCodegen};
+
+        llvm_ctx.add_extensions(|ceb| {
+            ceb.add_extension(QSystemCodegenExtension)
+                .add_extension(FuturesCodegenExtension)
+                .add_prelude_extensions(QISPreludeCodegen)
+                .add_float_extensions()
+                .add_logic_extensions()
+        });
+        let ext_op = op.to_extension_op().unwrap().into();
+        let mut hugr = single_op_hugr(ext_op);
+        crate::replace_bools::ReplaceBoolPass
+            .run(&mut hugr)
+            .unwrap();
+        check_emission!(hugr, llvm_ctx);
+    }
+}
