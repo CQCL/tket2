@@ -24,7 +24,7 @@ use extension::{
 #[cfg(feature = "cli")]
 pub mod cli;
 pub mod extension;
-#[cfg(feature="llvm")]
+#[cfg(feature = "llvm")]
 pub mod llvm;
 
 pub mod replace_bools;
