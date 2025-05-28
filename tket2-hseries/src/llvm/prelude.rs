@@ -204,3 +204,83 @@ pub fn emit_global_string<'c, H: HugrView<Node = Node>>(
         )?
         .as_basic_value_enum())
 }
+
+#[cfg(test)]
+mod test {
+    use hugr::builder::{Dataflow, DataflowSubContainer};
+    use hugr::extension::prelude::{self, qb_t, ConstError, EXIT_OP_ID, PANIC_OP_ID};
+    use hugr::extension::PRELUDE;
+    use hugr::llvm::check_emission;
+    use hugr::llvm::emit::test::SimpleHugrConfig;
+
+    use hugr::llvm::test::llvm_ctx;
+    use hugr::types::TypeArg;
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    fn test_panic_emit() {
+        let mut llvm_ctx = llvm_ctx(0);
+        let prelude_codegen = QISPreludeCodegen;
+        llvm_ctx.add_extensions(move |ceb| ceb.add_prelude_extensions(prelude_codegen.clone()));
+
+        // Create a hugr that has a panic message
+        let error_val = ConstError::new(42, "PANIC");
+        let type_arg_q = TypeArg::Type { ty: qb_t() };
+        let type_arg_2q = TypeArg::Sequence {
+            elems: vec![type_arg_q.clone(), type_arg_q],
+        };
+        let panic_op = PRELUDE
+            .instantiate_extension_op(&PANIC_OP_ID, [type_arg_2q.clone(), type_arg_2q.clone()])
+            .unwrap();
+
+        let hugr = SimpleHugrConfig::new()
+            .with_ins(vec![qb_t(), qb_t()])
+            .with_outs(vec![qb_t(), qb_t()])
+            .with_extensions(prelude::PRELUDE_REGISTRY.to_owned())
+            .finish(|mut builder| {
+                let [q0, q1] = builder.input_wires_arr();
+                let err = builder.add_load_value(error_val);
+                let [q0, q1] = builder
+                    .add_dataflow_op(panic_op, [err, q0, q1])
+                    .unwrap()
+                    .outputs_arr();
+                builder.finish_with_outputs([q0, q1]).unwrap()
+            });
+
+        check_emission!(hugr, llvm_ctx);
+    }
+
+    #[rstest]
+    fn test_exit_emit() {
+        let mut llvm_ctx = llvm_ctx(0);
+        let prelude_codegen = QISPreludeCodegen;
+        llvm_ctx.add_extensions(move |ceb| ceb.add_prelude_extensions(prelude_codegen.clone()));
+
+        let error_val = ConstError::new(42, "EXIT");
+        let type_arg_q: TypeArg = TypeArg::Type { ty: qb_t() };
+        let type_arg_2q: TypeArg = TypeArg::Sequence {
+            elems: vec![type_arg_q.clone(), type_arg_q],
+        };
+        let exit_op = PRELUDE
+            .instantiate_extension_op(&EXIT_OP_ID, [type_arg_2q.clone(), type_arg_2q.clone()])
+            .unwrap();
+
+        let hugr = SimpleHugrConfig::new()
+            .with_ins(vec![qb_t(), qb_t()])
+            .with_outs(vec![qb_t(), qb_t()])
+            .with_extensions(prelude::PRELUDE_REGISTRY.to_owned())
+            .finish(|mut builder| {
+                let [q0, q1] = builder.input_wires_arr();
+                let err = builder.add_load_value(error_val);
+                let [q0, q1] = builder
+                    .add_dataflow_op(exit_op, [err, q0, q1])
+                    .unwrap()
+                    .outputs_arr();
+                builder.finish_with_outputs([q0, q1]).unwrap()
+            });
+
+        check_emission!(hugr, llvm_ctx);
+    }
+}
