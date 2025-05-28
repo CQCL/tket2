@@ -18,7 +18,7 @@ use tket2::hugr::extension::simple_op::MakeExtensionOp;
 use tket2::hugr::ops::ExtensionOp;
 use tket2::hugr::{HugrView, Node};
 
-use super::array_struct::{build_array_alloca, struct_1d_arr_alloc, struct_1d_arr_ptr_t, ElemType};
+use super::array_utils::{build_array_alloca, struct_1d_arr_alloc, struct_1d_arr_ptr_t, ElemType};
 
 /// Codegen extension for results
 pub struct ResultsCodegenExtension;
