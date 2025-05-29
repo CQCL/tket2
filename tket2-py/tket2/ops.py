@@ -39,6 +39,8 @@ class Tk2Op(Enum):
     Tdg = auto()
     S = auto()
     Sdg = auto()
+    V = auto()
+    Vdg = auto()
     X = auto()
     Y = auto()
     Z = auto()

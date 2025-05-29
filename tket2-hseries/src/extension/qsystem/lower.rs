@@ -174,6 +174,8 @@ fn build_func(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
         (Tk2Op::Z, [q]) => vec![b.build_z(*q)?],
         (Tk2Op::S, [q]) => vec![b.build_s(*q)?],
         (Tk2Op::Sdg, [q]) => vec![b.build_sdg(*q)?],
+        (Tk2Op::V, [q]) => vec![b.build_v(*q)?],
+        (Tk2Op::Vdg, [q]) => vec![b.build_vdg(*q)?],
         (Tk2Op::T, [q]) => vec![b.build_t(*q)?],
         (Tk2Op::Tdg, [q]) => vec![b.build_tdg(*q)?],
         (Tk2Op::Measure, [q]) => b.build_measure_flip(*q)?.into(),
@@ -325,6 +327,8 @@ mod test {
     #[case(Tk2Op::Z, Some(vec![QSystemOp::Rz]))]
     #[case(Tk2Op::S, Some(vec![QSystemOp::Rz]))]
     #[case(Tk2Op::Sdg, Some(vec![QSystemOp::Rz]))]
+    #[case(Tk2Op::V, Some(vec![QSystemOp::PhasedX]))]
+    #[case(Tk2Op::Vdg, Some(vec![QSystemOp::PhasedX]))]
     #[case(Tk2Op::T, Some(vec![QSystemOp::Rz]))]
     #[case(Tk2Op::Tdg, Some(vec![QSystemOp::Rz]))]
     #[case(Tk2Op::Rx, Some(vec![QSystemOp::PhasedX]))]

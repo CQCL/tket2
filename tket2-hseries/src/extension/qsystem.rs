@@ -338,6 +338,20 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
         self.add_rz(qb, pi_minus_2)
     }
 
+    /// Build a V gate in terms of QSystem primitives.
+    fn build_v(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi_2 = pi_mul_f64(self, 0.5);
+        let zero = pi_mul_f64(self, 0.0);
+        self.add_phased_x(qb, pi_2, zero)
+    }
+
+    /// Build a Vdg gate in terms of QSystem primitives.
+    fn build_vdg(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi_minus_2 = pi_mul_f64(self, -0.5);
+        let zero = pi_mul_f64(self, 0.0);
+        self.add_phased_x(qb, pi_minus_2, zero)
+    }
+
     /// Build a T gate in terms of QSystem primitives.
     fn build_t(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         let pi_4 = pi_mul_f64(self, 0.25);

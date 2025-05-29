@@ -50,6 +50,8 @@ pub enum Tk2Op {
     Tdg,
     S,
     Sdg,
+    V,
+    Vdg,
     X,
     Y,
     Z,
@@ -116,7 +118,7 @@ impl MakeOpDef for Tk2Op {
     fn init_signature(&self, _extension_ref: &std::sync::Weak<hugr::Extension>) -> SignatureFunc {
         use Tk2Op::*;
         match self {
-            H | T | S | X | Y | Z | Tdg | Sdg | Reset => Signature::new_endo(qb_t()),
+            H | T | S | V | X | Y | Z | Tdg | Sdg | Vdg | Reset => Signature::new_endo(qb_t()),
             CX | CZ | CY => Signature::new_endo(vec![qb_t(); 2]),
             Toffoli => Signature::new_endo(vec![qb_t(); 3]),
             Measure => Signature::new(qb_t(), vec![qb_t(), bool_t()]),
@@ -165,7 +167,7 @@ impl Tk2Op {
         use Tk2Op::*;
 
         match self {
-            X | Rx => vec![(0, Pauli::X)],
+            X | V | Vdg | Rx => vec![(0, Pauli::X)],
             Y => vec![(0, Pauli::Y)],
             T | Z | S | Tdg | Sdg | Rz | Measure => vec![(0, Pauli::Z)],
             CX => vec![(0, Pauli::Z), (1, Pauli::X)],
@@ -179,7 +181,8 @@ impl Tk2Op {
     pub fn is_quantum(&self) -> bool {
         use Tk2Op::*;
         match self {
-            H | CX | T | S | X | Y | Z | Tdg | Sdg | Rz | Rx | Toffoli | Ry | CZ | CY | CRz => true,
+            H | CX | T | S | V | X | Y | Z | Tdg | Sdg | Vdg | Rz | Rx | Toffoli | Ry | CZ | CY
+            | CRz => true,
             Measure | MeasureFree | QAlloc | TryQAlloc | QFree | Reset => false,
         }
     }
