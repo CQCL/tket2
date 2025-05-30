@@ -49,11 +49,13 @@ fn map_op(opstr: &str) -> Op {
         "cx" => Tk2Op::CX,
         "t" => Tk2Op::T,
         "s" => Tk2Op::S,
+        "v" => Tk2Op::V,
         "x" => Tk2Op::X,
         "y" => Tk2Op::Y,
         "z" => Tk2Op::Z,
         "tdg" => Tk2Op::Tdg,
         "sdg" => Tk2Op::Sdg,
+        "vdg" => Tk2Op::Vdg,
         "rz" => Tk2Op::Rz,
         x => panic!("unknown op {x}"),
     }
