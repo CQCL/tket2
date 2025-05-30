@@ -20,6 +20,8 @@ use tket2::hugr::{HugrView, Node};
 
 use super::array_utils::{build_array_alloca, struct_1d_arr_alloc, struct_1d_arr_ptr_t, ElemType};
 
+static TAG_PREFIX: &str = "USER:";
+
 /// Codegen extension for results
 pub struct ResultsCodegenExtension;
 
@@ -128,7 +130,7 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
             bail!("Empty result tag received");
         }
 
-        let tag_ptr = emit_global_string(self.0, tag, "res_", type_tag)?;
+        let tag_ptr = emit_global_string(self.0, tag, "res_", TAG_PREFIX, type_tag)?;
         let tag_len = {
             let mut l = self
                 .0
@@ -181,7 +183,7 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
         let print_fn = self.get_func_print(op)?;
         match op.result_op {
             ResultOpDef::Bool => {
-                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "BOOL").unwrap();
+                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "BOOL:").unwrap();
                 let [val] = args
                     .inputs
                     .try_into()
@@ -199,7 +201,7 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
                 )?;
             }
             ResultOpDef::Int => {
-                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "INT").unwrap();
+                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "INT:").unwrap();
                 let [val] = args
                     .inputs
                     .try_into()
@@ -211,7 +213,7 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
                 )?;
             }
             ResultOpDef::UInt => {
-                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "INT").unwrap();
+                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "INT:").unwrap();
                 let [val] = args
                     .inputs
                     .try_into()
@@ -223,7 +225,7 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
                 )?;
             }
             ResultOpDef::F64 => {
-                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "FLOAT").unwrap();
+                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "FLOAT:").unwrap();
                 let [val] = args
                     .inputs
                     .try_into()
@@ -235,7 +237,7 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
                 )?;
             }
             ResultOpDef::ArrBool => {
-                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "BOOLARR").unwrap();
+                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "BOOLARR:").unwrap();
                 let [val] = args
                     .inputs
                     .try_into()
@@ -243,7 +245,7 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
                 self.build_print_array_call(val, op, &ElemType::Bool, tag_ptr, tag_len)?;
             }
             ResultOpDef::ArrInt => {
-                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "INTARR").unwrap();
+                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "INTARR:").unwrap();
                 let [val] = args
                     .inputs
                     .try_into()
@@ -251,7 +253,7 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
                 self.build_print_array_call(val, op, &ElemType::Int, tag_ptr, tag_len)?;
             }
             ResultOpDef::ArrUInt => {
-                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "INTARR").unwrap();
+                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "INTARR:").unwrap();
                 let [val] = args
                     .inputs
                     .try_into()
@@ -259,7 +261,7 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
                 self.build_print_array_call(val, op, &ElemType::Uint, tag_ptr, tag_len)?;
             }
             ResultOpDef::ArrF64 => {
-                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "FLOATARR").unwrap();
+                let (tag_ptr, tag_len) = self.generate_global_tag(&args, "FLOATARR:").unwrap();
                 let [val] = args
                     .inputs
                     .try_into()
