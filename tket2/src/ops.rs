@@ -50,8 +50,6 @@ pub enum Tk2Op {
     Tdg,
     S,
     Sdg,
-    V,
-    Vdg,
     X,
     Y,
     Z,
@@ -65,6 +63,8 @@ pub enum Tk2Op {
     TryQAlloc,
     QFree,
     Reset,
+    V,
+    Vdg,
 }
 
 impl Tk2Op {

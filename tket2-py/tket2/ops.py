@@ -39,8 +39,6 @@ class Tk2Op(Enum):
     Tdg = auto()
     S = auto()
     Sdg = auto()
-    V = auto()
-    Vdg = auto()
     X = auto()
     Y = auto()
     Z = auto()
@@ -54,6 +52,8 @@ class Tk2Op(Enum):
     TryQAlloc = auto()
     QFree = auto()
     Reset = auto()
+    V = auto()
+    Vdg = auto()
 
     def to_custom(self) -> CustomOp:
         """Convert to a custom operation."""
