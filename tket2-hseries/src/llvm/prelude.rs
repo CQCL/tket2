@@ -4,8 +4,6 @@ use std::hash::{DefaultHasher, Hash as _, Hasher as _};
 use tket2::hugr::{self, llvm::inkwell};
 
 use anyhow::{anyhow, ensure, Result};
-use hugr::extension::prelude::ConstString;
-use hugr::llvm::emit::emit_value;
 use hugr::llvm::emit::func::EmitFuncContext;
 use hugr::llvm::extension::prelude::PreludeCodegen;
 use hugr::llvm::types::TypingSession;
@@ -96,7 +94,7 @@ impl PreludeCodegen for QISPreludeCodegen {
             .into_int_type()
             .const_int(u64::from(err.signal), false);
 
-        let message = emit_value(ctx, &ConstString::new(err.message.clone()).into())?;
+        let message = emit_global_string(ctx, &err.message, "e_", "EXIT:", "INT:")?;
         let err = err_ty.const_named_struct(&[signal.into(), message]);
         Ok(err.into())
     }
@@ -106,7 +104,7 @@ impl PreludeCodegen for QISPreludeCodegen {
         ctx: &mut EmitFuncContext<'c, '_, H>,
         str: &hugr::extension::prelude::ConstString,
     ) -> Result<BasicValueEnum<'c>> {
-        emit_global_string(ctx, str.value(), "s_", "INT")
+        emit_global_string(ctx, str.value(), "s_", "", "")
     }
 }
 
@@ -133,8 +131,6 @@ impl QISPreludeCodegen {
         Ok(f)
     }
 }
-// TODO check
-static TAG_PREFIX: &str = "USER";
 
 /// Emit a global string constant with a unique name.
 /// The string is prefixed with a tag and the type tag.
@@ -142,10 +138,16 @@ pub fn emit_global_string<'c, H: HugrView<Node = Node>>(
     ctx: &EmitFuncContext<'c, '_, H>,
     str: impl AsRef<str>,
     symbol_prefix: impl AsRef<str>,
+    tag_prefix: impl AsRef<str>,
     type_tag: impl AsRef<str>,
 ) -> Result<BasicValueEnum<'c>> {
-    let (str, symbol_prefix, type_tag) = (str.as_ref(), symbol_prefix.as_ref(), type_tag.as_ref());
-    let tagged_str = format!("{TAG_PREFIX}:{type_tag}:{str}");
+    let (str, symbol_prefix, tag_prefix, type_tag) = (
+        str.as_ref(),
+        symbol_prefix.as_ref(),
+        tag_prefix.as_ref(),
+        type_tag.as_ref(),
+    );
+    let tagged_str = format!("{tag_prefix}{type_tag}{str}");
     let tagged_str_bytes = tagged_str.as_bytes();
     let tagged_str_len = tagged_str_bytes.len();
     ensure!(
