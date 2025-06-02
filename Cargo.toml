@@ -42,7 +42,6 @@ large_enum_variant = "allow"
 #hugr-passes = { git = "https://github.com/CQCL/hugr", rev = "42ce05d" }
 #hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "42ce05d" }
 # portgraph = { git = "https://github.com/CQCL/portgraph", rev = "68b96ac737e0c285d8c543b2d74a7aa80a18202c" }
-tket-json-rs = { git = "https://github.com/CQCL/tket-json-rs", branch = "ss/pyo3-0.25" }
 [workspace.dependencies]
 
 # Make sure to run `just recompile-eccs` if the hugr serialisation format changes.
@@ -50,9 +49,9 @@ hugr = "0.20.0"
 hugr-core = "0.20.0"
 hugr-cli = "0.20.0"
 portgraph = "0.14.1"
-pyo3 = "0.25.0"
+pyo3 = ">= 0.23.4, < 0.26"
 itertools = "0.14.0"
-tket-json-rs = "0.7.2"
+tket-json-rs = "0.7.3"
 tracing = "0.1.37"
 portmatching = "0.3.1"
 bytemuck = "1.21.0"
