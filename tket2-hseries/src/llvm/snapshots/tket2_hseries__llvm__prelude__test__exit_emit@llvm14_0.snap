@@ -5,15 +5,15 @@ expression: mod_str
 ; ModuleID = 'test_context'
 source_filename = "test_context"
 
-@s_EXIT.1BABB200.0 = private constant [14 x i8] c"\0DUSER:INT:EXIT"
+@e_EXIT.2B78BC40.0 = private constant [14 x i8] c"\0DEXIT:INT:EXIT"
 
 define { i64, i64 } @_hl.main.1(i64 %0, i64 %1) {
 alloca_block:
   br label %entry_block
 
 entry_block:                                      ; preds = %alloca_block
-  %2 = extractvalue { i32, i8* } { i32 42, i8* getelementptr inbounds ([14 x i8], [14 x i8]* @s_EXIT.1BABB200.0, i32 0, i32 0) }, 0
-  %3 = extractvalue { i32, i8* } { i32 42, i8* getelementptr inbounds ([14 x i8], [14 x i8]* @s_EXIT.1BABB200.0, i32 0, i32 0) }, 1
+  %2 = extractvalue { i32, i8* } { i32 42, i8* getelementptr inbounds ([14 x i8], [14 x i8]* @e_EXIT.2B78BC40.0, i32 0, i32 0) }, 0
+  %3 = extractvalue { i32, i8* } { i32 42, i8* getelementptr inbounds ([14 x i8], [14 x i8]* @e_EXIT.2B78BC40.0, i32 0, i32 0) }, 1
   call void @panic(i32 %2, i8* %3)
   %mrv = insertvalue { i64, i64 } undef, i64 0, 0
   %mrv8 = insertvalue { i64, i64 } %mrv, i64 0, 1
