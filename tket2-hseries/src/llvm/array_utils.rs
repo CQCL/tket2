@@ -1,5 +1,7 @@
 //! Array codegen utilities.
 
+// TODO move to hugr-llvm crate
+// https://github.com/CQCL/tket2/issues/899
 use anyhow::Result;
 use hugr::llvm::inkwell;
 use inkwell::builder::{Builder, BuilderError};
@@ -140,4 +142,155 @@ pub fn struct_1d_arr_alloc<'a>(
     let out_arr = builder.build_load(out_arr_ptr, "")?.into_struct_value();
 
     Result::Ok((out_arr_ptr, out_arr))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hugr::llvm::inkwell::context::Context;
+
+    /// Test that build_array_alloca properly allocates an array.
+    #[test]
+    fn test_build_array_alloca() {
+        let context = Context::create();
+        let module = context.create_module("test_module");
+        let builder = context.create_builder();
+
+        make_bb(&context, &module, &builder);
+
+        let (ptr, array_ptr) =
+            build_array(&context, &builder).expect("Array allocation should succeed");
+
+        assert!(!ptr.is_null(), "Element pointer should not be null");
+        assert!(!array_ptr.is_null(), "Array pointer should not be null");
+
+        builder
+            .build_return(None)
+            .expect("Should be able to build return");
+
+        // Verify the generated code is valid
+        assert!(module.verify().is_ok(), "Module verification failed");
+    }
+
+    /// Helper function to create a basic block for testing.
+    fn make_bb<'c>(
+        context: &'c Context,
+        module: &inkwell::module::Module<'c>,
+        builder: &Builder<'c>,
+    ) {
+        let function_type = context.void_type().fn_type(&[], false);
+        let function = module.add_function("test_function", function_type, None);
+        let basic_block = context.append_basic_block(function, "entry");
+        builder.position_at_end(basic_block);
+    }
+
+    fn build_array<'c>(
+        context: &'c Context,
+        builder: &Builder<'c>,
+    ) -> Result<(PointerValue<'c>, PointerValue<'c>), BuilderError> {
+        // Create test array
+        let i32_type = context.i32_type();
+        let array =
+            i32_type.const_array(&[i32_type.const_int(1, false), i32_type.const_int(2, false)]);
+
+        build_array_alloca(builder, array)
+    }
+
+    /// Test that build_int_array_load properly loads an array.
+    #[test]
+    fn test_build_int_array_load() {
+        let context = Context::create();
+        let module = context.create_module("test_module");
+        let builder = context.create_builder();
+
+        make_bb(&context, &module, &builder);
+
+        let (array_ptr, _) =
+            build_array(&context, &builder).expect("Array allocation should succeed");
+        let i32_type = context.i32_type();
+        let array_length = 2;
+        let loaded_array = build_int_array_load(&builder, array_ptr, i32_type, array_length)
+            .expect("Array load should succeed");
+
+        assert_eq!(loaded_array.get_type().len(), array_length,);
+
+        builder.build_return(None).unwrap();
+
+        // Verify the generated code is valid
+        assert!(module.verify().is_ok(), "Module verification failed");
+    }
+
+    /// Test that struct_1d_arr_t creates the correct structure type.
+    #[test]
+    fn test_struct_1d_arr_t() {
+        let context = Context::create();
+
+        // Test for each element type
+        let int_struct = struct_1d_arr_t(&context, &ElemType::Int);
+        let uint_struct = struct_1d_arr_t(&context, &ElemType::Uint);
+        let float_struct = struct_1d_arr_t(&context, &ElemType::Float);
+        let bool_struct = struct_1d_arr_t(&context, &ElemType::Bool);
+
+        let structs = [int_struct, uint_struct, float_struct, bool_struct];
+
+        for s in &structs {
+            // All structs should have 4 fields
+            assert_eq!(s.get_field_types().len(), 4);
+
+            // Check the field types (first two fields should be i32 for all structs)
+            assert!(s.get_field_types()[0].is_int_type());
+            assert!(s.get_field_types()[1].is_int_type());
+
+            // Third field should be a pointer to the corresponding data type
+            assert!(s.get_field_types()[2].is_pointer_type());
+
+            // Fourth field should be a pointer to bool type for all structs
+            assert!(s.get_field_types()[3].is_pointer_type());
+        }
+    }
+
+    /// Test that struct_1d_arr_ptr_t returns the correct pointer type.
+    #[test]
+    fn test_struct_1d_arr_ptr_t() {
+        let context = Context::create();
+
+        // Test for each element type
+        let int_ptr = struct_1d_arr_ptr_t(&context, &ElemType::Int);
+        let uint_ptr = struct_1d_arr_ptr_t(&context, &ElemType::Uint);
+        let float_ptr = struct_1d_arr_ptr_t(&context, &ElemType::Float);
+        let bool_ptr = struct_1d_arr_ptr_t(&context, &ElemType::Bool);
+
+        // Test that all element types return struct pointer types
+        for ptr in [int_ptr, uint_ptr, float_ptr, bool_ptr] {
+            assert!(ptr.get_element_type().is_struct_type());
+        }
+    }
+
+    /// Test that struct_1d_arr_alloc properly allocates and initializes a dense array struct.
+    #[test]
+    fn test_struct_1d_arr_alloc() {
+        let context = Context::create();
+        let module = context.create_module("test_module");
+        let builder = context.create_builder();
+
+        make_bb(&context, &module, &builder);
+
+        let (array_ptr, _) = build_array(&context, &builder).unwrap();
+        // Test the function with different element types
+        let elem_types = [ElemType::Int, ElemType::Float, ElemType::Bool];
+
+        for elem_type in elem_types.iter() {
+            let (struct_ptr, _) =
+                struct_1d_arr_alloc(&context, &builder, 2, elem_type, array_ptr).unwrap();
+
+            assert!(!struct_ptr.is_null(), "Struct pointer should not be null");
+        }
+
+        builder
+            .build_return(None)
+            .expect("Should be able to build return");
+
+        // Verify the generated code is valid
+        assert!(module.verify().is_ok(), "Module verification failed");
+    }
 }
