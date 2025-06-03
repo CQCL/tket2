@@ -28,13 +28,7 @@ impl CodegenExtension for RandomCodegenExtension {
         builder
             .custom_type(
                 (random::EXTENSION_ID, CONTEXT_TYPE_NAME.to_owned()),
-                |session, hugr_type| match (hugr_type.name().as_str(), hugr_type.args()) {
-                    ("context", _) => Ok(rng_context_type(session.iw_context())),
-                    _ => Err(anyhow!(
-                        "RandomCodegenExtension: Unsupported type: {}",
-                        hugr_type
-                    )),
-                },
+                |session, _| Ok(rng_context_type(session.iw_context())),
             )
             .simple_extension_op(|context, args, op| RandomEmitter(context).emit(args, op))
     }
