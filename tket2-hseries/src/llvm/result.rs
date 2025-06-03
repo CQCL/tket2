@@ -119,10 +119,8 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
         &self,
         args: &EmitOpArgs<'c, '_, ExtensionOp, H>,
         type_tag: impl AsRef<str>,
-    ) -> Result<(
-        inkwell::values::BasicValueEnum<'_>,
-        inkwell::values::IntValue<'_>,
-    )> {
+    ) -> Result<(BasicValueEnum<'_>, IntValue<'_>)> {
+        let type_tag = type_tag.as_ref();
         let result_op = ResultOp::from_extension_op(args.node().as_ref())?;
 
         let tag = result_op.tag;
@@ -130,7 +128,7 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
             bail!("Empty result tag received");
         }
 
-        let tag_ptr = emit_global_string(self.0, tag, "res_", TAG_PREFIX, type_tag)?;
+        let tag_ptr = emit_global_string(self.0, tag, "res_", format!("{TAG_PREFIX}{type_tag}"))?;
         let tag_len = {
             let mut l = self
                 .0

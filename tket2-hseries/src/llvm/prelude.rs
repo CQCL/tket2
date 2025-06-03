@@ -94,7 +94,7 @@ impl PreludeCodegen for QISPreludeCodegen {
             .into_int_type()
             .const_int(u64::from(err.signal), false);
 
-        let message = emit_global_string(ctx, &err.message, "e_", "EXIT:", "INT:")?;
+        let message = emit_global_string(ctx, &err.message, "e_", "EXIT:INT:")?;
         let err = err_ty.const_named_struct(&[signal.into(), message]);
         Ok(err.into())
     }
@@ -104,7 +104,7 @@ impl PreludeCodegen for QISPreludeCodegen {
         ctx: &mut EmitFuncContext<'c, '_, H>,
         str: &hugr::extension::prelude::ConstString,
     ) -> Result<BasicValueEnum<'c>> {
-        emit_global_string(ctx, str.value(), "s_", "", "")
+        emit_global_string(ctx, str.value(), "s_", "")
     }
 }
 
@@ -133,21 +133,19 @@ impl QISPreludeCodegen {
 }
 
 /// Emit a global string constant with a unique name.
-/// The string is prefixed with a tag and the type tag.
+///
+/// The symbol name is constructed with `symbol_prefix` and ``str`.
+///
+/// The string is prefixed with `str_prefix`.
 pub fn emit_global_string<'c, H: HugrView<Node = Node>>(
     ctx: &EmitFuncContext<'c, '_, H>,
     str: impl AsRef<str>,
     symbol_prefix: impl AsRef<str>,
-    tag_prefix: impl AsRef<str>,
-    type_tag: impl AsRef<str>,
+    str_prefix: impl AsRef<str>,
 ) -> Result<BasicValueEnum<'c>> {
-    let (str, symbol_prefix, tag_prefix, type_tag) = (
-        str.as_ref(),
-        symbol_prefix.as_ref(),
-        tag_prefix.as_ref(),
-        type_tag.as_ref(),
-    );
-    let tagged_str = format!("{tag_prefix}{type_tag}{str}");
+    let (str, symbol_prefix, str_prefix) =
+        (str.as_ref(), symbol_prefix.as_ref(), str_prefix.as_ref());
+    let tagged_str = format!("{str_prefix}{str}");
     let tagged_str_bytes = tagged_str.as_bytes();
     let tagged_str_len = tagged_str_bytes.len();
     ensure!(
