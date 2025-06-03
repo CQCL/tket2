@@ -6,14 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.14.1](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.14.0...tket2-hseries-v0.14.1) - 2025-06-03
 
-### Bug Fixes
-
-- Bump version of quantum extension. ([#894](https://github.com/CQCL/tket2/pull/894))
-
 ### New Features
 
 - Add V and Vdg to quantum extension. ([#889](https://github.com/CQCL/tket2/pull/889))
-- *(tket2-hseries)* LLVM codegen for extensions ([#898](https://github.com/CQCL/tket2/pull/898))
+- LLVM codegen for extensions ([#898](https://github.com/CQCL/tket2/pull/898))
 
 ## [0.14.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.13.0...tket2-hseries-v0.14.0) - 2025-05-22
 
