@@ -11,7 +11,7 @@ use hugr::ops::{ExtensionOp, Value};
 use hugr::types::{SumType, Type, TypeEnum};
 
 use crate::serialize::pytket::extension::{
-    FloatEmitter, PreludeEmitter, RotationEmitter, Tk1Emitter, Tk2Emitter,
+    set_bits_op, BoolEmitter, FloatEmitter, PreludeEmitter, RotationEmitter, Tk1Emitter, Tk2Emitter,
 };
 use crate::serialize::pytket::{PytketEmitter, Tk1ConvertError};
 use crate::Circuit;
@@ -28,6 +28,7 @@ use itertools::Itertools;
 pub fn default_encoder_config<H: HugrView>() -> Tk1EncoderConfig<H> {
     let mut config = Tk1EncoderConfig::new();
     config.add_emitter(PreludeEmitter);
+    config.add_emitter(BoolEmitter);
     config.add_emitter(FloatEmitter);
     config.add_emitter(RotationEmitter);
     config.add_emitter(Tk1Emitter);
@@ -175,8 +176,12 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
             match value {
                 Value::Sum(sum) => {
                     if sum.sum_type == SumType::new_unary(2) {
-                        //TODO: Add a bit and sets its value based on sum.tag
-                        return Ok(None);
+                        let new_bit = encoder.values.new_bit();
+                        if value == &Value::true_val() {
+                            let op = set_bits_op(&[true]);
+                            encoder.emit_command(op, &[], &[new_bit], None);
+                        }
+                        return Ok(Some(TrackedValues::new_bits([new_bit])));
                     }
                     if sum.sum_type.as_tuple().is_some() {
                         for v in sum.values.iter() {
