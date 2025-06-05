@@ -94,7 +94,8 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
 
     /// Encode a HUGR operation using the registered custom encoders.
     ///
-    /// Returns `true` if the operation was successfully converted. If that is
+    /// Returns `true` if the operation was successfully converted and no further
+    /// encoders should be called.
     pub(super) fn op_to_pytket(
         &self,
         node: H::Node,
