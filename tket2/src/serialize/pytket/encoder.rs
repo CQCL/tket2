@@ -292,14 +292,9 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         circ: &Circuit<H>,
         output_params: impl FnOnce(OutputParamArgs<'_>) -> Vec<String>,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
-        self.emit_node_command(
-            node,
-            circ,
-            output_params,
-            move |qubit_count, bit_count, params| {
-                make_tk1_operation(tk1_optype, qubit_count, bit_count, params)
-            },
-        )
+        self.emit_node_command(node, circ, output_params, move |inputs| {
+            make_tk1_operation(tk1_optype, inputs)
+        })
     }
 
     /// Helper to emit a new tket1 command corresponding to a single HUGR node,
@@ -326,7 +321,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         node: H::Node,
         circ: &Circuit<H>,
         output_params: impl FnOnce(OutputParamArgs<'_>) -> Vec<String>,
-        make_operation: impl FnOnce(usize, usize, &[String]) -> tket_json_rs::circuit_json::Operation,
+        make_operation: impl FnOnce(MakeOperationArgs<'_>) -> tket_json_rs::circuit_json::Operation,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
         let TrackedValues {
             mut qubits,
@@ -360,7 +355,13 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             .and_then(serde_json::Value::as_str)
             .map(ToString::to_string);
 
-        let op = make_operation(qubits.len(), bits.len(), &params);
+        let args = MakeOperationArgs {
+            num_qubits: qubits.len(),
+            num_bits: bits.len(),
+            params: &params,
+        };
+        let op = make_operation(args);
+
         self.emit_command(op, &qubits, &bits, opgroup);
         Ok(())
     }
@@ -528,12 +529,12 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         }
 
         // Create pytket operation, and add the subcircuit as hugr
-        let mut tk1_op = make_tk1_operation(
-            tket_json_rs::OpType::Barrier,
-            op_values.qubits.len(),
-            op_values.bits.len(),
-            &input_param_exprs,
-        );
+        let args = MakeOperationArgs {
+            num_qubits: op_values.qubits.len(),
+            num_bits: op_values.bits.len(),
+            params: &input_param_exprs,
+        };
+        let mut tk1_op = make_tk1_operation(tket_json_rs::OpType::Barrier, args);
         tk1_op.data = Some(payload);
 
         let opgroup = Some("tket2".to_string());
@@ -759,7 +760,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     }
 }
 
-/// Input passed to the output parameter computation methods in the emitting
+/// Input arguments to the output parameter computation methods in the the emit_*
 /// functions of [`Tk1EncoderContext`].
 #[derive(Clone, Copy, Debug)]
 pub struct OutputParamArgs<'a> {
@@ -767,6 +768,20 @@ pub struct OutputParamArgs<'a> {
     pub expected_count: usize,
     /// The list of input parameter expressions.
     pub input_params: &'a [String],
+}
+
+/// Input arguments to the output parameter computation method in
+/// [`Tk1EncoderContext::emit_node_command`].
+///
+/// This can be passed
+#[derive(Clone, Copy, Debug)]
+pub struct MakeOperationArgs<'a> {
+    /// Number of input qubits.
+    pub num_qubits: usize,
+    /// Number of input bits.
+    pub num_bits: usize,
+    /// List of input parameter expressions.
+    pub params: &'a [String],
 }
 
 /// Initialize a tket1 [Operation](circuit_json::Operation) to pass to
@@ -780,17 +795,21 @@ pub struct OutputParamArgs<'a> {
 ///   Normally obtained from [`ValueTracker::param_expression`].
 pub fn make_tk1_operation(
     tk1_optype: tket_json_rs::OpType,
-    qubit_count: usize,
-    bit_count: usize,
-    params: &[String],
+    inputs: MakeOperationArgs<'_>,
 ) -> circuit_json::Operation {
     let mut op = circuit_json::Operation::default();
     op.op_type = tk1_optype;
-    op.n_qb = Some(qubit_count as u32);
-    op.params = match params.is_empty() {
-        false => Some(params.to_owned()),
+    op.n_qb = Some(inputs.num_qubits as u32);
+    op.params = match inputs.params.is_empty() {
+        false => Some(inputs.params.to_owned()),
         true => None,
     };
-    op.signature = Some([vec!["Q".into(); qubit_count], vec!["B".into(); bit_count]].concat());
+    op.signature = Some(
+        [
+            vec!["Q".into(); inputs.num_qubits],
+            vec!["B".into(); inputs.num_bits],
+        ]
+        .concat(),
+    );
     op
 }
