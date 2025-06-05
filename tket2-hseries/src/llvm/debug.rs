@@ -120,7 +120,6 @@ mod test {
 
     use super::*;
 
-
     #[rstest]
     #[case::state_result(1, StateResult::new("test_state_result".to_string(), 2))]
     fn emit_debug_codegen(
@@ -128,7 +127,6 @@ mod test {
         #[with(_i)] mut llvm_ctx: TestContext,
         #[case] op: StateResult,
     ) {
-
         let pcg = QISPreludeCodegen;
         llvm_ctx.add_extensions(move |ceb| {
             ceb.add_extension(DebugCodegenExtension)
