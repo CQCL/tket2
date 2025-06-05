@@ -90,8 +90,6 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &mut self,
         circ: &Circuit<H>,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
-        // Normally we'd use `SiblingGraph` here, but it doesn't support generic node types.
-        // See https://github.com/CQCL/hugr/issues/2010
         let (region, node_map) = circ.hugr().region_portgraph(circ.parent());
         let io_nodes = circ.io_nodes();
 
@@ -202,9 +200,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// See [`Tk1EncoderContext::get_input_values`].
     ///
     /// Given a node in the HUGR, returns all the [`TrackedValue`]s associated
-    /// with its inputs. Calls
-    ///
-    /// Includes a filter to decide which incoming wires to include.
+    /// with its inputs. Calls `wire_filter` to decide which incoming wires to include.
     fn get_input_values_internal(
         &mut self,
         node: H::Node,
@@ -257,8 +253,8 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     ///
     /// ## Arguments
     ///
-    /// - `tk1_operation`: The tket1 operation type to emit.
-    /// - `node`: The HUGR for which to emit the command. Qubits and bits are
+    /// - `tk1_optype`: The tket1 operation type to emit.
+    /// - `node`: The HUGR node for which to emit the command. Qubits and bits are
     ///   automatically retrieved from the node's inputs/outputs.
     /// - `circ`: The circuit containing the node.
     pub fn emit_node(
@@ -278,8 +274,8 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     ///
     /// ## Arguments
     ///
-    /// - `tk1_operation`: The tket1 operation type to emit.
-    /// - `node`: The HUGR for which to emit the command. Qubits and bits are
+    /// - `tk1_optype`: The tket1 operation type to emit.
+    /// - `node`: The HUGR node for which to emit the command. Qubits and bits are
     ///   automatically retrieved from the node's inputs/outputs.
     /// - `circ`: The circuit containing the node.
     /// - `output_params`: A function that computes the output parameter
@@ -307,7 +303,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     ///
     /// ## Arguments
     ///
-    /// - `node`: The HUGR for which to emit the command. Qubits and bits are
+    /// - `node`: The HUGR node for which to emit the command. Qubits and bits are
     ///   automatically retrieved from the node's inputs/outputs.
     /// - `circ`: The circuit containing the node.
     /// - `output_params`: A function that computes the output parameter
@@ -382,7 +378,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     ///
     /// ## Arguments
     ///
-    /// - `node`: The HUGR for which to emit the command. Qubits and bits are
+    /// - `node`: The HUGR node for which to emit the command. Qubits and bits are
     ///   automatically retrieved from the node's inputs/outputs.
     /// - `circ`: The circuit containing the node.
     /// - `output_params`: A function that computes the output parameter
@@ -428,9 +424,9 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         }
         if out_params.len() != total_out_count.params {
             return Err(Tk1ConvertError::custom(format!(
-                "Not enough parameters in the input values for a {}. Expected {} but got {}.",
-                circ.hugr().get_optype(node),
+                "Expected {} parameters in the input values for a {}, but got {}.",
                 total_out_count.params,
+                circ.hugr().get_optype(node),
                 out_params.len()
             )));
         }
@@ -643,7 +639,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     ///
     /// - `node`: The node to register the outputs for.
     /// - `circ`: The circuit containing the node.
-    /// - `qubit_values`: An iterator of existing qubit ids to re-use for the output.
+    /// - `qubit`: An iterator of existing qubit ids to re-use for the output.
     ///   Once all qubits have been used, new qubit ids will be generated.
     /// - `input_params`: The list of input parameter expressions.
     /// - `output_params`: A function that computes the output parameter
@@ -672,16 +668,16 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         // Check that we got the expected number of outputs.
         if out_params.len() != total_out_count.params {
             return Err(Tk1ConvertError::custom(format!(
-                "Not enough parameters in the input values for a {}. Expected {} but got {}.",
-                circ.hugr().get_optype(node),
+                "Expected {} parameters in the input values for a {}, but got {}.",
                 total_out_count.params,
+                circ.hugr().get_optype(node),
                 out_params.len()
             )));
         }
 
         // Update the values in the node's outputs.
         //
-        // We preserve the order of linear values in thpe input
+        // We preserve the order of linear values in the input
         let mut params = out_params.into_iter();
         let mut new_outputs = TrackedValues::default();
         for (wire, count) in output_counts {
