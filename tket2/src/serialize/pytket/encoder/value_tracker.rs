@@ -504,6 +504,36 @@ impl<N: HugrNode> ValueTracker<N> {
 }
 
 impl TrackedValues {
+    /// Return a new container with a list of tracked qubits.
+    pub fn new_qubits(qubits: impl IntoIterator<Item = TrackedQubit>) -> Self {
+        let qubits = qubits.into_iter().collect();
+        Self {
+            qubits,
+            bits: Vec::new(),
+            params: Vec::new(),
+        }
+    }
+
+    /// Return a new container with a list of tracked bits.
+    pub fn new_bits(bits: impl IntoIterator<Item = TrackedBit>) -> Self {
+        let bits = bits.into_iter().collect();
+        Self {
+            qubits: Vec::new(),
+            bits,
+            params: Vec::new(),
+        }
+    }
+
+    /// Return a new container with a list of tracked parameters.
+    pub fn new_params(params: impl IntoIterator<Item = TrackedParam>) -> Self {
+        let params = params.into_iter().collect();
+        Self {
+            qubits: Vec::new(),
+            bits: Vec::new(),
+            params,
+        }
+    }
+
     /// Returns the number of qubits, bits, and parameters in the list.
     pub fn count(&self) -> RegisterCount {
         RegisterCount::new(self.qubits.len(), self.bits.len(), self.params.len())

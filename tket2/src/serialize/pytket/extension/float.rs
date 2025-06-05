@@ -85,10 +85,7 @@ impl<H: HugrView> PytketEmitter<H> for FloatEmitter {
         };
 
         let param = encoder.values.new_param(val);
-
-        let mut values = TrackedValues::default();
-        values.params.push(param);
-        Ok(Some(values))
+        Ok(Some(TrackedValues::new_params([param])))
     }
 }
 
