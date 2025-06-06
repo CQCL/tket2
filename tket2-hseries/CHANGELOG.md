@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.2](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.14.1...tket2-hseries-v0.14.2) - 2025-06-06
+
+### Bug Fixes
+
+- *(tket2-hseries)* unicode-aware prefix in `emit_global_string` ([#902](https://github.com/CQCL/tket2/pull/902))
+
 ## [0.14.1](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.14.0...tket2-hseries-v0.14.1) - 2025-06-03
 
 ### New Features
