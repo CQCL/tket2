@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crate::serialize::pytket::OpaqueTk1Op;
+use crate::serialize::pytket::extension::OpaqueTk1Op;
 use crate::Tk2Op;
 use hugr::extension::simple_op::MakeOpDef;
 use hugr::extension::{
@@ -32,10 +32,10 @@ use sympy::SympyOpDef;
 pub const TKET1_EXTENSION_ID: ExtensionId = IdentList::new_unchecked("TKET1");
 
 /// The name for opaque TKET1 operations.
-pub const TKET1_OP_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Op");
+pub const TKET1_OP_NAME: SmolStr = SmolStr::new_inline("tk1op");
 
 /// The ID of an opaque TKET1 operation metadata.
-pub const TKET1_PAYLOAD_NAME: SmolStr = SmolStr::new_inline("TKET1 Json Payload");
+pub const TKET1_PAYLOAD_NAME: SmolStr = SmolStr::new_inline("TKET1-json-payload");
 
 /// Current version of the TKET 1 extension
 pub const TKET1_EXTENSION_VERSION: Version = Version::new(0, 1, 0);

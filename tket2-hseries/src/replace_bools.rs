@@ -5,7 +5,7 @@ mod static_array;
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
-        non_local::NonLocalEdgesError,
+        non_local::FindNonLocalEdgesError,
         replace_types::{NodeTemplate, ReplaceTypesError},
         ComposablePass, ReplaceTypes,
     },
@@ -39,7 +39,7 @@ use crate::extension::{
 /// An error reported from [ReplaceBoolPass].
 pub enum ReplaceBoolPassError<N> {
     /// The HUGR was found to contain non-local edges.
-    NonLocalEdgesError(NonLocalEdgesError<N>),
+    NonLocalEdgesError(FindNonLocalEdgesError<N>),
     /// There was an error while replacing the type.
     ReplacementError(ReplaceTypesError),
     /// There was an error while transforming static arrays containing tket.bool

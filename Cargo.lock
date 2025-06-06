@@ -673,6 +673,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive-where"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e73f2692d4bd3cac41dca28934a39894200c9fabf49586d77d0e5954af1d7902"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -973,9 +984,9 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.20.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aad1bc2addfbad9ba5d880f3c3b738db037306bf106ec67259d871b77ae0d26"
+checksum = "be90c2e1f9aba85bab9d5a0e7979a53fda07005fb7ace398df07be786d58e6ef"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -985,9 +996,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-cli"
-version = "0.20.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38eab5a917211fedc0c92f4a6027645798143d899df93738bb8bc54fc6de31b7"
+checksum = "6e6630cead0c1b5b34be3b8b42f828256bee4843818205edd4f7d8cb0f149d2c"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -999,9 +1010,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.20.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c49d907326cd616bb2c51dbf77761d39738021fbefa606fb991a4da2ec335d6"
+checksum = "6ed7f33e2c45ebccb95496ec609143f8d6a25ecfb6da60535df1d55eb88ecbf9"
 dependencies = [
  "cgmath",
  "delegate 0.13.3",
@@ -1018,6 +1029,7 @@ dependencies = [
  "petgraph 0.8.1",
  "portgraph 0.14.1",
  "regex",
+ "relrc",
  "semver",
  "serde",
  "serde_json",
@@ -1032,9 +1044,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-llvm"
-version = "0.20.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6034a0d1710941bfe3f861499bfaf907b08374a571b537f63271febe0675fb90"
+checksum = "424a3d73d558377f4cee0ce3320334d10b265c5357997730253e53b888620e7f"
 dependencies = [
  "anyhow",
  "delegate 0.13.3",
@@ -1052,9 +1064,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-model"
-version = "0.20.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb67b3bf1e4960754e461235f75c762d100b9d3a7c3f86763680a554661b446e"
+checksum = "97d27208d4076ea6f437c3dcf9d1466a9d6a1d7938a1296c4ebc3ccb76482bf1"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1073,9 +1085,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.20.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "552e4429a9526871dc1e93468c69ace6e23c48fdcc087fec4f35ebb18eefc257"
+checksum = "a9d141482c92df56834938b7e2bdd0b4a1bc48019e71a430ca6a65339775d5c4"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
@@ -1793,6 +1805,20 @@ name = "relative-path"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
+
+[[package]]
+name = "relrc"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65b9e2100a2ee7d9efb575064b2f9a552d7f9f60289d7b95b9c22175101c7c4a"
+dependencies = [
+ "derive-where",
+ "derive_more 0.99.20",
+ "fxhash",
+ "itertools 0.13.0",
+ "petgraph 0.8.1",
+ "thiserror 1.0.69",
+]
 
 [[package]]
 name = "rmp"

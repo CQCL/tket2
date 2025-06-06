@@ -1,5 +1,8 @@
 //! Intermediate structure for decoding [`SerialCircuit`]s into [`Hugr`]s.
 
+mod op;
+mod param;
+
 use std::collections::{HashMap, HashSet};
 
 use hugr::builder::{Container, Dataflow, DataflowHugr, FunctionBuilder};
@@ -19,22 +22,22 @@ use tket_json_rs::circuit_json;
 use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::register;
 
-use super::op::Tk1Op;
-use super::param::decode::{parse_pytket_param, PytketParam};
 use super::{
-    OpConvertError, RegisterHash, TK1ConvertError, METADATA_B_OUTPUT_REGISTERS,
+    OpConvertError, RegisterHash, Tk1ConvertError, METADATA_B_OUTPUT_REGISTERS,
     METADATA_B_REGISTERS, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS,
     METADATA_Q_REGISTERS,
 };
 use crate::extension::rotation::{rotation_type, RotationOp};
 use crate::serialize::pytket::METADATA_INPUT_PARAMETERS;
 use crate::symbolic_constant_op;
+use op::Tk1Op;
+use param::{parse_pytket_param, PytketParam};
 
 /// The state of an in-progress [`FunctionBuilder`] being built from a [`SerialCircuit`].
 ///
 /// Mostly used to define helper internal methods.
 #[derive(Debug, Clone)]
-pub(super) struct Tk1Decoder {
+pub(super) struct Tk1DecoderContext {
     /// The Hugr being built.
     pub hugr: FunctionBuilder<Hugr>,
     /// A map from the tracked pytket registers to the [`Wire`]s in the circuit.
@@ -47,9 +50,9 @@ pub(super) struct Tk1Decoder {
     parameters: IndexMap<String, LoadedParameter>,
 }
 
-impl Tk1Decoder {
+impl Tk1DecoderContext {
     /// Initialize a new [`Tk1Decoder`], using the metadata from a [`SerialCircuit`].
-    pub fn try_new(serialcirc: &SerialCircuit) -> Result<Self, TK1ConvertError> {
+    pub fn try_new(serialcirc: &SerialCircuit) -> Result<Self, Tk1ConvertError> {
         let num_qubits = serialcirc.qubits.len();
         let num_bits = serialcirc.bits.len();
         let sig =
@@ -107,7 +110,7 @@ impl Tk1Decoder {
                 check_register(reg)?;
                 Ok(RegisterHash::from(reg))
             })
-            .collect::<Result<Vec<RegisterHash>, TK1ConvertError>>()?;
+            .collect::<Result<Vec<RegisterHash>, Tk1ConvertError>>()?;
 
         // Map each register element to their starting wire.
         let register_wires: HashMap<RegisterHash, Wire> = ordered_registers
@@ -116,7 +119,7 @@ impl Tk1Decoder {
             .zip(dangling_wires)
             .collect();
 
-        Ok(Tk1Decoder {
+        Ok(Tk1DecoderContext {
             hugr: dfg,
             register_wires,
             ordered_registers,
@@ -342,9 +345,9 @@ impl Tk1Decoder {
 }
 
 /// Only single-indexed registers are supported.
-fn check_register(register: &register::ElementId) -> Result<(), TK1ConvertError> {
+fn check_register(register: &register::ElementId) -> Result<(), Tk1ConvertError> {
     if register.1.len() != 1 {
-        Err(TK1ConvertError::MultiIndexedRegister {
+        Err(Tk1ConvertError::MultiIndexedRegister {
             register: register.0.clone(),
         })
     } else {

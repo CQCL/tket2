@@ -31,7 +31,7 @@ lazy_static! {
 }
 
 /// Identifier for the rotation type.
-const ROTATION_TYPE_ID: SmolStr = SmolStr::new_inline("rotation");
+pub const ROTATION_TYPE_ID: SmolStr = SmolStr::new_inline("rotation");
 /// Rotation type (as [CustomType])
 pub fn rotation_custom_type(extension_ref: &Weak<Extension>) -> CustomType {
     CustomType::new(
