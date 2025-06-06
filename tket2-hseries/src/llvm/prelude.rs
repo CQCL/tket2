@@ -169,8 +169,9 @@ pub fn emit_global_string<'c, H: HugrView<Node = Node>>(
             let lower32 = h as u32;
             format!("{lower32:08X}")
         };
-        let str_len = str.len();
-        let name_prefix = format!("{symbol_prefix}{}.{hash}", &str[..10.min(str_len)]);
+        // Use unicode-aware character slicing to prevent slicing through multi-byte characters
+        let prefix_chars: String = str.chars().take(10).collect();
+        let name_prefix = format!("{symbol_prefix}{}.{hash}", prefix_chars);
 
         (0..)
             .find_map(|i| {
