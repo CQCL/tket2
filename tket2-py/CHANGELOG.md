@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.10.0...tket2-py-v0.10.1) (2025-06-06)
+
+
+### Features
+
+* Add V and Vdg to quantum extension. ([#889](https://github.com/CQCL/tket2/issues/889)) ([a8f1569](https://github.com/CQCL/tket2/commit/a8f156930ff3afc35af15a2afdd24fc65c8409b5))
+
 ## [0.10.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.9.1...tket2-py-v0.10.0) (2025-05-22)
 
 
