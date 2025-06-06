@@ -1,0 +1,25 @@
+# List the available commands
+help:
+    @just --list --justfile {{justfile()}}
+
+# Re-generate all hugr files and their mermaid diagrams.
+regenerate: regenerate-hugrs regenerate-mermaid
+
+# Re-generate all hugr files.
+regenerate-hugrs:
+    #!/usr/bin/env sh
+    @# Find all examples in subdirectories and re-run them.
+    for example in $(find . -type f -name "*.py"); do
+        echo "Re-generating $example"
+        uvx --with 'guppylang==0.19.1' python "$example"
+    done
+
+# Re-generate the mermaid diagrams from hugr files.
+regenerate-mermaid:
+    #!/usr/bin/env sh
+    echo "Re-generating hugr diagrams"
+    cargo install hugr-cli
+    for example in $(find . -type f -name "*.hugr"); do
+        echo "Re-generating mermaid diagrams $example"
+        hugr mermaid "$example" -o "${example%.hugr}.mmd"
+    done

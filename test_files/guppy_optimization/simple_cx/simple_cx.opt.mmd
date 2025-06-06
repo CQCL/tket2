@@ -1,0 +1,23 @@
+graph LR
+    subgraph 0 ["(0) [**Module**]"]
+        direction LR
+        style 0 stroke:#832561,stroke-width:3px
+        subgraph 1 ["(1) FuncDefn: #quot;main#quot;"]
+            direction LR
+            2["(2) Input"]
+            3["(3) Output"]
+            subgraph 4 ["(4) CFG"]
+                direction LR
+                subgraph 5 ["(5) DataflowBlock"]
+                    direction LR
+                    6["(6) Input"]
+                    7["(7) Output"]
+                    9["(9) Tag"]
+                    9--"0:0<br>Unit"-->7
+                end
+                8["(8) ExitBlock"]
+                5-."0:0".->8
+            end
+        end
+    end
+
