@@ -1,6 +1,5 @@
 ---
 source: tket2-hseries/src/llvm/debug.rs
-assertion_line: 142
 expression: mod_str
 ---
 ; ModuleID = 'test_context'
