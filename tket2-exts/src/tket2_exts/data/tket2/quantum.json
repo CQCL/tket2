@@ -582,6 +582,64 @@
       },
       "binary": false
     },
+    "V": {
+      "extension": "tket2.quantum",
+      "name": "V",
+      "description": "V",
+      "misc": {
+        "commutation": [
+          [
+            0,
+            "X"
+          ]
+        ]
+      },
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Q"
+            }
+          ],
+          "output": [
+            {
+              "t": "Q"
+            }
+          ]
+        }
+      },
+      "binary": false
+    },
+    "Vdg": {
+      "extension": "tket2.quantum",
+      "name": "Vdg",
+      "description": "Vdg",
+      "misc": {
+        "commutation": [
+          [
+            0,
+            "X"
+          ]
+        ]
+      },
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Q"
+            }
+          ],
+          "output": [
+            {
+              "t": "Q"
+            }
+          ]
+        }
+      },
+      "binary": false
+    },
     "X": {
       "extension": "tket2.quantum",
       "name": "X",

@@ -45,7 +45,7 @@ pub use lower::{check_lowered, lower_tk2_op, LowerTk2Error, LowerTket2ToQSystemP
 /// The "tket2.qsystem" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.qsystem");
 /// The "tket2.qsystem" extension version.
-pub const EXTENSION_VERSION: Version = Version::new(0, 3, 0);
+pub const EXTENSION_VERSION: Version = Version::new(0, 4, 0);
 
 lazy_static! {
     /// The "tket2.qsystem" extension.
@@ -336,6 +336,20 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
     fn build_sdg(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         let pi_minus_2 = pi_mul_f64(self, -0.5);
         self.add_rz(qb, pi_minus_2)
+    }
+
+    /// Build a V gate in terms of QSystem primitives.
+    fn build_v(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi_2 = pi_mul_f64(self, 0.5);
+        let zero = pi_mul_f64(self, 0.0);
+        self.add_phased_x(qb, pi_2, zero)
+    }
+
+    /// Build a Vdg gate in terms of QSystem primitives.
+    fn build_vdg(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        let pi_minus_2 = pi_mul_f64(self, -0.5);
+        let zero = pi_mul_f64(self, 0.0);
+        self.add_phased_x(qb, pi_minus_2, zero)
     }
 
     /// Build a T gate in terms of QSystem primitives.
