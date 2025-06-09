@@ -66,8 +66,8 @@ const PARAMETERIZED: &str = r#"{
         "commands": [
             {"args":[["q",[0]]],"op":{"type":"H"}},
             {"args":[["q",[1]],["q",[0]]],"op":{"type":"CX"}},
-            {"args":[["q",[0]]],"op":{"params":["(1.5707963267948966 / pi)"],"type":"Rz"}},
-            {"args": [["q", [0]]], "op": {"params": ["(3.141596 / pi)", "alpha", "(0.7853981633974483 / pi)"], "type": "TK1"}}
+            {"args":[["q",[0]]],"op":{"params":["(1.5707963267948966) / (pi)"],"type":"Rz"}},
+            {"args": [["q", [0]]], "op": {"params": ["(3.141596) / (pi)", "alpha", "(0.7853981633974483) / (pi)"], "type": "TK1"}}
         ],
         "created_qubits": [],
         "discarded_qubits": [],
@@ -275,7 +275,7 @@ fn circ_add_angles_symbolic() -> (Circuit, String) {
         .outputs_arr();
 
     let circ = h.finish_hugr_with_outputs([qb]).unwrap().into();
-    (circ, "(f0 + f1)".to_string())
+    (circ, "(f0) + (f1)".to_string())
 }
 
 #[fixture]
@@ -297,7 +297,7 @@ fn circ_add_angles_constants() -> (Circuit, String) {
         .unwrap()
         .outputs();
     let circ = h.finish_hugr_with_outputs(qbs).unwrap().into();
-    (circ, "(0.2 + 0.3)".to_string())
+    (circ, "(0.2) + (0.3)".to_string())
 }
 
 #[fixture]
@@ -349,7 +349,7 @@ fn circ_complex_angle_computation() -> (Circuit, String) {
         .outputs();
 
     let circ = h.finish_hugr_with_outputs(qbs).unwrap().into();
-    (circ, "((f0 ** f1) + (cos(pi) + 0.2))".to_string())
+    (circ, "((f0) ** (f1)) + ((cos(pi)) + (0.2))".to_string())
 }
 
 #[rstest]

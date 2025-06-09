@@ -93,12 +93,12 @@ impl FloatEmitter {
     /// Encode a rotation operation into a pytket param expression.
     fn encode_rotation_op(op: &FloatOps, inputs: &[String]) -> Option<String> {
         let s = match op {
-            FloatOps::fadd => format!("({} + {})", inputs[0], inputs[1]),
-            FloatOps::fsub => format!("({} - {})", inputs[0], inputs[1]),
-            FloatOps::fneg => format!("(-{})", inputs[0]),
-            FloatOps::fmul => format!("({} * {})", inputs[0], inputs[1]),
-            FloatOps::fdiv => format!("({} / {})", inputs[0], inputs[1]),
-            FloatOps::fpow => format!("({} ** {})", inputs[0], inputs[1]),
+            FloatOps::fadd => format!("({}) + ({})", inputs[0], inputs[1]),
+            FloatOps::fsub => format!("({}) - ({})", inputs[0], inputs[1]),
+            FloatOps::fneg => format!("-({})", inputs[0]),
+            FloatOps::fmul => format!("({}) * ({})", inputs[0], inputs[1]),
+            FloatOps::fdiv => format!("({}) / ({})", inputs[0], inputs[1]),
+            FloatOps::fpow => format!("({}) ** ({})", inputs[0], inputs[1]),
             FloatOps::ffloor => format!("floor({})", inputs[0]),
             FloatOps::fceil => format!("ceil({})", inputs[0]),
             FloatOps::fround => format!("round({})", inputs[0]),

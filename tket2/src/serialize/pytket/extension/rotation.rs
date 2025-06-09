@@ -82,7 +82,7 @@ impl RotationEmitter {
     /// Encode a rotation operation into a pytket param expression.
     fn encode_rotation_op(op: &RotationOp, inputs: &[String]) -> Option<String> {
         let s = match op {
-            RotationOp::radd => format!("({} + {})", inputs[0], inputs[1]),
+            RotationOp::radd => format!("({}) + ({})", inputs[0], inputs[1]),
             RotationOp::to_halfturns
             | RotationOp::from_halfturns_unchecked
             | RotationOp::from_halfturns => return None,
