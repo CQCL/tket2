@@ -10,12 +10,15 @@ use hugr::hugr::hugrmut::HugrMut;
 use hugr::std_extensions::arithmetic::float_ops::FloatOps;
 use hugr::types::Signature;
 use hugr::HugrView;
+use itertools::Itertools;
 use rstest::{fixture, rstest};
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::optype;
 use tket_json_rs::register;
 
-use super::{TKETDecode, METADATA_INPUT_PARAMETERS, METADATA_Q_OUTPUT_REGISTERS};
+use super::{
+    TKETDecode, METADATA_INPUT_PARAMETERS, METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
+};
 use crate::circuit::Circuit;
 use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp};
 use crate::extension::sympy::SympyOpDef;
@@ -63,8 +66,8 @@ const PARAMETERIZED: &str = r#"{
         "commands": [
             {"args":[["q",[0]]],"op":{"type":"H"}},
             {"args":[["q",[1]],["q",[0]]],"op":{"type":"CX"}},
-            {"args":[["q",[0]]],"op":{"params":["(1.5707963267948966 / pi)"],"type":"Rz"}},
-            {"args": [["q", [0]]], "op": {"params": ["(3.141596 / pi)", "alpha", "(0.7853981633974483 / pi)"], "type": "TK1"}}
+            {"args":[["q",[0]]],"op":{"params":["((pi) / (2)) / (pi)"],"type":"Rz"}},
+            {"args": [["q", [0]]], "op": {"params": ["(3.141596) / (pi)", "alpha", "((pi) / (4)) / (pi)"], "type": "TK1"}}
         ],
         "created_qubits": [],
         "discarded_qubits": [],
@@ -116,22 +119,55 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
     assert_eq!(a.name, b.name);
     assert_eq!(a.phase, b.phase);
     assert_eq!(&a.qubits, &b.qubits);
-    assert_eq!(&a.bits, &b.bits);
     assert_eq!(a.commands.len(), b.commands.len());
 
-    // This comparison only works if both serial circuits share a topological
-    // ordering of commands.
+    let bits_a: HashSet<_> = a.bits.iter().collect();
+    let bits_b: HashSet<_> = b.bits.iter().collect();
+    assert_eq!(bits_a, bits_b);
+
+    // We ignore the commands order here, as two encodings may swap
+    // non-dependant operations.
     //
-    // We also cannot compare the arguments directly, since we may permute them
-    // internally.
+    // The correct thing here would be to run a deterministic toposort and
+    // compare the commands in that order. This is just a quick check that
+    // everything is present, ignoring wire dependencies.
+    //
+    // Another problem is that `Command`s cannot be compared directly;
+    // - `command.op.signature`, and `n_qb` are optional and sometimes
+    //      unset in pytket-generated circs.
+    // - qubit arguments names may differ if they have been allocated inside the circuit,
+    //      as they depend on the traversal argument. Same with classical params.
+    // Here we define an ad-hoc subset that can be compared.
     //
     // TODO: Do a proper comparison independent of the toposort ordering, and
     // track register reordering.
-    for (a, b) in a.commands.iter().zip(b.commands.iter()) {
-        assert_eq!(a.op.op_type, b.op.op_type);
-        assert_eq!(a.op.params, b.op.params);
-        assert_eq!(a.args.len(), b.args.len());
+    #[derive(PartialEq, Eq, Hash, Debug)]
+    struct CommandInfo {
+        op_type: tket_json_rs::OpType,
+        params: Vec<String>,
+        n_args: usize,
     }
+
+    impl From<&tket_json_rs::circuit_json::Command> for CommandInfo {
+        fn from(command: &tket_json_rs::circuit_json::Command) -> Self {
+            CommandInfo {
+                op_type: command.op.op_type.clone(),
+                params: command.op.params.clone().unwrap_or_default(),
+                n_args: command.args.len(),
+            }
+        }
+    }
+
+    let a_command_count: HashMap<CommandInfo, usize> = a.commands.iter().map_into().counts();
+    let b_command_count: HashMap<CommandInfo, usize> = b.commands.iter().map_into().counts();
+    for (a, &count_a) in &a_command_count {
+        let count_b = b_command_count.get(a).copied().unwrap_or_default();
+        assert_eq!(
+            count_a, count_b,
+            "command {a:?} appears {count_a} times in rhs and {count_b} times in lhs"
+        );
+    }
+    assert_eq!(a_command_count.len(), b_command_count.len());
 }
 
 /// A simple circuit with some preset qubit registers
@@ -154,8 +190,14 @@ fn circ_preset_qubits() -> Circuit {
     // A preset register for the first qubit output
     hugr.set_metadata(
         hugr.entrypoint(),
+        METADATA_Q_REGISTERS,
+        serde_json::json!([["q", [2]], ["q", [10]], ["q", [8]]]),
+    );
+    // A preset register for the first qubit output
+    hugr.set_metadata(
+        hugr.entrypoint(),
         METADATA_Q_OUTPUT_REGISTERS,
-        serde_json::json!([["q", [1]]]),
+        serde_json::json!([["q", [10]]]),
     );
 
     hugr.into()
@@ -233,7 +275,7 @@ fn circ_add_angles_symbolic() -> (Circuit, String) {
         .outputs_arr();
 
     let circ = h.finish_hugr_with_outputs([qb]).unwrap().into();
-    (circ, "(f0 + f1)".to_string())
+    (circ, "(f0) + (f1)".to_string())
 }
 
 #[fixture]
@@ -255,7 +297,7 @@ fn circ_add_angles_constants() -> (Circuit, String) {
         .unwrap()
         .outputs();
     let circ = h.finish_hugr_with_outputs(qbs).unwrap().into();
-    (circ, "(0.2 + 0.3)".to_string())
+    (circ, "(0.2) + (0.3)".to_string())
 }
 
 #[fixture]
@@ -307,7 +349,7 @@ fn circ_complex_angle_computation() -> (Circuit, String) {
         .outputs();
 
     let circ = h.finish_hugr_with_outputs(qbs).unwrap().into();
-    (circ, "((f0 ** f1) + (cos(pi) + 0.2))".to_string())
+    (circ, "((f0) ** (f1)) + ((cos(pi)) + (0.2))".to_string())
 }
 
 #[rstest]
@@ -353,14 +395,14 @@ fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
 
     let deser_sig = deser.circuit_signature();
     assert_eq!(
-        &deser_sig.input, &decoded_sig.input,
+        &decoded_sig.input, &deser_sig.input,
         "Input signature mismatch\n  Expected: {}\n  Actual:   {}",
-        &deser_sig, &decoded_sig
+        &decoded_sig, &deser_sig
     );
     assert_eq!(
-        &deser_sig.output, &decoded_sig.output,
+        &decoded_sig.output, &deser_sig.output,
         "Output signature mismatch\n  Expected: {}\n  Actual:   {}",
-        &deser_sig, &decoded_sig
+        &decoded_sig, &deser_sig
     );
 
     let reser = SerialCircuit::encode(&deser).unwrap();

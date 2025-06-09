@@ -76,7 +76,7 @@ create_py_exception!(
 );
 
 create_py_exception!(
-    tket2::serialize::pytket::TK1ConvertError,
+    tket2::serialize::pytket::Tk1ConvertError,
     PyTK1ConvertError,
     "Error type for the conversion between tket2 and tket1 operations."
 );
