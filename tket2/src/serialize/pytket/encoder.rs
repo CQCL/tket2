@@ -769,7 +769,8 @@ pub struct OutputParamArgs<'a> {
 /// Input arguments to the output parameter computation method in
 /// [`Tk1EncoderContext::emit_node_command`].
 ///
-/// This can be passed
+/// This can be passed to [`make_tk1_operation`] to create a pytket
+/// [`circuit_json::Operation`].
 #[derive(Clone, Copy, Debug)]
 pub struct MakeOperationArgs<'a> {
     /// Number of input qubits.

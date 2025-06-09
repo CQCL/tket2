@@ -188,7 +188,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
                     // Collect all extensions required to define the type.
                     let typ = opaque.value().get_type();
                     let type_exts = typ.used_extensions().unwrap_or_else(|e| {
-                        panic!("Tried to encode a type with partially extension. {e}");
+                        panic!("Tried to encode a type with partially initialized extension. {e}");
                     });
                     let exts_set = ExtensionSet::from_iter(type_exts.ids().cloned());
 
