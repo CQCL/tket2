@@ -66,8 +66,8 @@ const PARAMETERIZED: &str = r#"{
         "commands": [
             {"args":[["q",[0]]],"op":{"type":"H"}},
             {"args":[["q",[1]],["q",[0]]],"op":{"type":"CX"}},
-            {"args":[["q",[0]]],"op":{"params":["(1.5707963267948966) / (pi)"],"type":"Rz"}},
-            {"args": [["q", [0]]], "op": {"params": ["(3.141596) / (pi)", "alpha", "(0.7853981633974483) / (pi)"], "type": "TK1"}}
+            {"args":[["q",[0]]],"op":{"params":["((pi) / (2)) / (pi)"],"type":"Rz"}},
+            {"args": [["q", [0]]], "op": {"params": ["(3.141596) / (pi)", "alpha", "((pi) / (4)) / (pi)"], "type": "TK1"}}
         ],
         "created_qubits": [],
         "discarded_qubits": [],

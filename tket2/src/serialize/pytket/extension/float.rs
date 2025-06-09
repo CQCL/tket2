@@ -72,19 +72,32 @@ impl<H: HugrView> PytketEmitter<H> for FloatEmitter {
         value: &OpaqueValue,
         encoder: &mut Tk1EncoderContext<H>,
     ) -> Result<Option<TrackedValues>, Tk1ConvertError<H::Node>> {
+        use std::f64::consts::PI;
+
         let Some(const_f) = value.value().downcast_ref::<float_types::ConstF64>() else {
             return Ok(None);
         };
 
         let float = const_f.value();
-        // Special case for pi rotations
-        let val = if float == std::f64::consts::PI {
-            "pi".to_string()
-        } else {
-            float.to_string()
-        };
+        // Special cases for pi rotations
+        let approx_eq = |a: f64, b: f64| (a - b).abs() < 1e-10;
+        const VALS: [(f64, &str); 7] = [
+            (PI, "pi"),
+            (PI / 2., "pi/2"),
+            (-PI / 2., "-pi/2"),
+            (PI / 4., "pi/4"),
+            (3. * PI / 4., "3pi/4"),
+            (-PI / 4., "-pi/4"),
+            (-3. * PI / 4., "-3pi/4"),
+        ];
+        for (val, name) in VALS.iter() {
+            if approx_eq(float, *val) {
+                let param = encoder.values.new_param(name.to_string());
+                return Ok(Some(TrackedValues::new_params([param])));
+            }
+        }
 
-        let param = encoder.values.new_param(val);
+        let param = encoder.values.new_param(float.to_string());
         Ok(Some(TrackedValues::new_params([param])))
     }
 }
