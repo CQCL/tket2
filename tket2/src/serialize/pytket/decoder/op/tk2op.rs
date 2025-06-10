@@ -1,4 +1,4 @@
-//! Operations that have corresponding representations in both `pytket` and `tket2`.
+//! Encoder and decoder for tket2 operations with native pytket counterparts.
 
 use std::borrow::Cow;
 
@@ -9,7 +9,6 @@ use hugr::std_extensions::arithmetic::float_types::float64_type;
 use hugr::types::Signature;
 
 use hugr::IncomingPort;
-use tket_json_rs::circuit_json;
 use tket_json_rs::optype::OpType as Tk1OpType;
 
 use crate::extension::rotation::rotation_type;
@@ -19,7 +18,7 @@ use crate::Tk2Op;
 ///
 /// Note that the signature of the native and serialised operations may differ.
 #[derive(Clone, Debug, PartialEq, Default)]
-pub struct NativeOp {
+pub(crate) struct NativeOp {
     /// The tket2 optype.
     op: OpType,
     /// The corresponding serialised optype.
@@ -49,42 +48,6 @@ impl NativeOp {
         };
         native_op.compute_counts();
         native_op
-    }
-
-    /// Create a new `NativeOp` from a `circuit_json::Operation`.
-    pub fn try_from_tk2op(tk2op: Tk2Op) -> Option<Self> {
-        let serial_op = match tk2op {
-            Tk2Op::H => Tk1OpType::H,
-            Tk2Op::CX => Tk1OpType::CX,
-            Tk2Op::CY => Tk1OpType::CY,
-            Tk2Op::CZ => Tk1OpType::CZ,
-            Tk2Op::CRz => Tk1OpType::CRz,
-            Tk2Op::T => Tk1OpType::T,
-            Tk2Op::Tdg => Tk1OpType::Tdg,
-            Tk2Op::S => Tk1OpType::S,
-            Tk2Op::Sdg => Tk1OpType::Sdg,
-            Tk2Op::V => Tk1OpType::V,
-            Tk2Op::Vdg => Tk1OpType::Vdg,
-            Tk2Op::X => Tk1OpType::X,
-            Tk2Op::Y => Tk1OpType::Y,
-            Tk2Op::Z => Tk1OpType::Z,
-            Tk2Op::Rx => Tk1OpType::Rx,
-            Tk2Op::Rz => Tk1OpType::Rz,
-            Tk2Op::Ry => Tk1OpType::Ry,
-            Tk2Op::Toffoli => Tk1OpType::CCX,
-            Tk2Op::Reset => Tk1OpType::Reset,
-            Tk2Op::Measure => Tk1OpType::Measure,
-            // These operations do not have a direct pytket counterpart.
-            Tk2Op::MeasureFree => return None,
-            Tk2Op::QAlloc | Tk2Op::QFree | Tk2Op::TryQAlloc => {
-                // These operations are implicitly supported by the encoding,
-                // they do not create an explicit pytket operation but instead
-                // add new qubits to the circuit input/output.
-                return Some(Self::new(tk2op.into(), None));
-            }
-        };
-
-        Some(Self::new(tk2op.into(), Some(serial_op)))
     }
 
     /// Returns the translated tket2 optype for this operation, if it exists.
@@ -118,37 +81,9 @@ impl NativeOp {
         Some(Self::new(op, Some(serial_op)))
     }
 
-    /// Converts this `NativeOp` into a tket_json_rs operation.
-    pub fn serialised_op(&self) -> Option<circuit_json::Operation> {
-        let serial_op = self.serial_op.clone()?;
-
-        // Since pytket operations are always linear,
-        // use the maximum of input and output bits/qubits.
-        let num_qubits = self.input_qubits.max(self.output_qubits);
-        let num_bits = self.input_bits.max(self.output_bits);
-        let num_params = self.num_params;
-
-        let params = (num_params > 0).then(|| vec!["".into(); num_params]);
-
-        let mut op = circuit_json::Operation::default();
-        op.op_type = serial_op;
-        op.n_qb = Some(num_qubits as u32);
-        op.params = params;
-        op.signature = Some([vec!["Q".into(); num_qubits], vec!["B".into(); num_bits]].concat());
-        Some(op)
-    }
-
     /// Returns the dataflow signature for this operation.
     pub fn signature(&self) -> Option<Cow<'_, Signature>> {
         self.op.dataflow_signature()
-    }
-
-    /// Returns the serial optype for this operation.
-    ///
-    /// Some special operations do not have a direct serialised counterpart, and
-    /// should be skipped during serialisation.
-    pub fn serial_op(&self) -> Option<&Tk1OpType> {
-        self.serial_op.as_ref()
     }
 
     /// Returns the tket2 optype for this operation.
@@ -197,38 +132,6 @@ impl NativeOp {
             } else if ty == &bool_t() {
                 self.output_bits += 1;
             }
-        }
-    }
-}
-
-#[cfg(test)]
-mod cfg {
-    use super::*;
-    use rstest::rstest;
-    use strum::IntoEnumIterator;
-
-    #[rstest]
-    fn tk2_optype_correspondence() {
-        for tk2op in Tk2Op::iter() {
-            let Some(native_op) = NativeOp::try_from_tk2op(tk2op) else {
-                // Ignore unsupported ops.
-                continue;
-            };
-
-            let Some(serial_op) = native_op.serial_op.clone() else {
-                // Ignore ops that do not have a serialised equivalent.
-                // (But are still handled by the encoder).
-                continue;
-            };
-
-            let Some(native_op2) = NativeOp::try_from_serial_optype(serial_op.clone()) else {
-                panic!(
-                    "{} serialises into {serial_op:?}, but failed to be deserialised.",
-                    tk2op.exposed_name()
-                )
-            };
-
-            assert_eq!(native_op, native_op2);
         }
     }
 }
