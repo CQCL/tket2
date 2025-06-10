@@ -14,12 +14,15 @@ regenerate-hugrs:
         uvx --with 'guppylang==0.19.1' python "$example"
     done
 
-# Re-generate the mermaid diagrams from hugr files.
+# Re-generate the mermaid diagrams from hugr files, for examples directories containing a `.generate_mmd` empty file.
 regenerate-mermaid:
     #!/usr/bin/env sh
     echo "Re-generating hugr diagrams"
     cargo install hugr-cli
-    for example in $(find . -type f -name "*.hugr"); do
-        echo "Re-generating mermaid diagrams $example"
-        hugr mermaid "$example" -o "${example%.hugr}.mmd"
+    # Find directories containing a `.generate_mmd` file
+    for dir in $(find . -type f -name ".generate_mmd" -exec dirname {} \;); do
+        echo "Re-generating mermaid diagrams in $dir"
+        for example in $(find "$dir" -type f -name "*.hugr"); do
+            hugr mermaid "$example" -o "${example%.hugr}.mmd"
+        done
     done
