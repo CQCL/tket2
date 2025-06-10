@@ -161,20 +161,13 @@ impl ResultOpDef {
     }
 
     fn result_signature(&self) -> SignatureFunc {
-        if self.is_array_result_op() {
-            // Arrays need to be returned to preserve no-implicit copy guarantees.
-            PolyFuncType::new(
-                [vec![TypeParam::String], self.type_params()].concat(),
-                Signature::new(self.arg_type(), vec![self.arg_type()]),
-            )
-            .into()
+        let sig = if self.is_array_result_op() {
+            // Do not consume input arrays to allow them to be not copyable.
+            Signature::new(self.arg_type(), self.arg_type())
         } else {
-            PolyFuncType::new(
-                [vec![TypeParam::String], self.type_params()].concat(),
-                Signature::new(self.arg_type(), type_row![]),
-            )
-            .into()
-        }
+            Signature::new(self.arg_type(), type_row![])
+        };
+        PolyFuncType::new([vec![TypeParam::String], self.type_params()].concat(), sig).into()
     }
 
     fn is_array_result_op(&self) -> bool {
