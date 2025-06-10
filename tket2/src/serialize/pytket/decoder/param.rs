@@ -55,7 +55,7 @@ pub fn parse_pytket_param(param: &str) -> PytketParam<'_> {
 }
 
 #[derive(Parser)]
-#[grammar = "serialize/pytket/param/param.pest"]
+#[grammar = "serialize/pytket/decoder/param.pest"]
 struct ParamParser;
 
 lazy_static::lazy_static! {

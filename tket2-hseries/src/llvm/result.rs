@@ -300,6 +300,15 @@ mod test {
     #[case::arr_int(6, ResultOp::new_int("test_arr_int", 6).array_op(10))]
     #[case::arr_uint(7, ResultOp::new_uint("test_arr_uint", 6).array_op(10))]
     #[case::arr_f64(8, ResultOp::new_f64("test_arr_f64").array_op(10))]
+    // test cases for various tags
+    #[case::unicode_tag(10, ResultOp::new_int("测试字符串", 6))]
+    #[case::special_chars(11, ResultOp::new_uint("test!@#$%^&*()", 6))]
+    #[should_panic(expected = "Constant string too long")]
+    #[case::very_long_tag(12, ResultOp::new_f64("x".repeat(256)))]
+    #[case::whitespace(13, ResultOp::new_bool("   spaces   tabs\t\t\tnewlines\n\n\n"))]
+    #[case::emoji(14, ResultOp::new_bool("🚀👨‍👩‍👧‍👦🌍"))]
+    #[should_panic(expected = "Empty result tag received")]
+    #[case::actually_empty(15, ResultOp::new_bool(""))]
     fn emit_result_codegen(
         #[case] _i: i32,
         #[with(_i)] mut llvm_ctx: TestContext,

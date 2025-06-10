@@ -2,7 +2,7 @@ use std::sync::{Arc, Weak};
 
 use crate::extension::bool::bool_type;
 use crate::extension::rotation::rotation_type;
-use crate::extension::sympy::{SympyOpDef, SYM_OP_ID};
+use crate::extension::sympy::SympyOpDef;
 use crate::extension::{TKET2_EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID};
 use hugr::ops::custom::ExtensionOp;
 use hugr::types::Type;
@@ -14,7 +14,7 @@ use hugr::{
     },
     ops::OpType,
     type_row,
-    types::{type_param::TypeArg, Signature},
+    types::Signature,
 };
 
 use derive_more::{Display, Error};
@@ -191,29 +191,6 @@ impl Tk2Op {
 /// Initialize a new custom symbolic expression constant op from a string.
 pub fn symbolic_constant_op(arg: String) -> OpType {
     SympyOpDef.with_expr(arg).into()
-}
-
-/// match against a symbolic constant
-pub(crate) fn match_symb_const_op(op: &OpType) -> Option<String> {
-    // Extract the symbol for a symbolic operation node.
-    let symbol_from_typeargs = |args: &[TypeArg]| -> String {
-        args.first()
-            .and_then(|arg| match arg {
-                TypeArg::String { arg } => Some(arg.clone()),
-                _ => None,
-            })
-            .unwrap_or_else(|| panic!("Found an invalid type arg in a symbolic operation node."))
-    };
-
-    if let OpType::ExtensionOp(e) = op {
-        if e.def().name() == &SYM_OP_ID && e.def().extension_id() == &EXTENSION_ID {
-            Some(symbol_from_typeargs(e.args()))
-        } else {
-            None
-        }
-    } else {
-        None
-    }
 }
 
 #[cfg(test)]
