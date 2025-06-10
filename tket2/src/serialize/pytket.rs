@@ -103,8 +103,8 @@ impl TKETDecode for SerialCircuit {
         circuit: &Circuit,
         config: Tk1EncoderConfig<Hugr>,
     ) -> Result<Self, Self::EncodeError> {
-        let mut encoder = Tk1EncoderContext::new(circuit, config)?;
-        encoder.run_encoder(circuit)?;
+        let mut encoder = Tk1EncoderContext::new(circuit, circuit.parent(), config)?;
+        encoder.run_encoder(circuit, circuit.parent())?;
         encoder.finish(circuit)
     }
 }
