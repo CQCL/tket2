@@ -43,7 +43,7 @@ impl DebugCodegenExtension {
         let iw_ctx = ctx.iw_context();
         let void_t = iw_ctx.void_type();
         let i8_ptr_t = iw_ctx.i8_type().ptr_type(AddressSpace::default());
-        let i64_t = iw_ctx.i64_type(); // cl_int
+        let i64_t = iw_ctx.i64_type();
 
         // Tag arguments.
         let state_result = StateResult::from_extension_op(args.node().as_ref())?;
@@ -69,13 +69,13 @@ impl DebugCodegenExtension {
             .try_into()
             .map_err(|_| anyhow!(format!("StateResult expects a qubit array argument")))?;
         assert!(qubits.is_array_value());
-        let (qubits_ptr, _) = build_array_alloca(builder, qubits.into_array_value())?;
-        let (cl_qubits_ptr, _) = struct_1d_arr_alloc(
+        let (qubits_array, _) = build_array_alloca(builder, qubits.into_array_value())?;
+        let (qubits_ptr, _) = struct_1d_arr_alloc(
             iw_ctx,
             builder,
             array_len.try_into()?,
             &ElemType::Int,
-            qubits_ptr,
+            qubits_array,
         )?;
 
         // Build the function call.
@@ -93,7 +93,7 @@ impl DebugCodegenExtension {
 
         builder.build_call(
             fn_state_result,
-            &[tag_ptr.into(), tag_len.into(), cl_qubits_ptr.into()],
+            &[tag_ptr.into(), tag_len.into(), qubits_ptr.into()],
             "print_state_result",
         )?;
         args.outputs.finish(builder, [qubits])
