@@ -845,7 +845,7 @@ pub fn make_tk1_classical_operation(
     op
 }
 
-/// Initialize a tket1 [Operation](circuit_json::Operation) that represent a
+/// Initialize a tket1 [Operation](circuit_json::Operation) that represents a
 /// classical expression.
 ///
 /// This method is specific to [`tket_json_rs::OpType::ClExpr`] /
