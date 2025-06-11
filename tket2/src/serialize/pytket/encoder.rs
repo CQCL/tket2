@@ -10,6 +10,7 @@ use hugr::envelope::EnvelopeConfig;
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::package::Package;
 use hugr_core::hugr::internal::PortgraphNodeMap;
+use tket_json_rs::clexpr::InputClRegister;
 pub use value_tracker::{
     RegisterCount, TrackedBit, TrackedParam, TrackedQubit, TrackedValue, TrackedValues,
     ValueTracker,
@@ -303,15 +304,17 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     ///
     /// ## Arguments
     ///
-    /// - `node`: The HUGR node for which to emit the command. Qubits and bits are
-    ///   automatically retrieved from the node's inputs/outputs.
+    /// - `node`: The HUGR node for which to emit the command. Qubits and bits
+    ///   are automatically retrieved from the node's inputs/outputs. Input
+    ///   arguments are listed in order, followed by output-only args.
     /// - `circ`: The circuit containing the node.
     /// - `output_params`: A function that computes the output parameter
-    ///   expressions from the list of input parameters. If the number of parameters
-    ///   does not match the expected number, the encoding will fail.
-    /// - `make_operation`: A function that takes the number of qubits, bits, and
-    ///   the list of input parameter expressions and returns a pytket operation.
-    ///   See [`make_tk1_operation`] for a helper function to create it.
+    ///   expressions from the list of input parameters. If the number of
+    ///   parameters does not match the expected number, the encoding will fail.
+    /// - `make_operation`: A function that takes the number of qubits, bits,
+    ///   and the list of input parameter expressions and returns a pytket
+    ///   operation. See [`make_tk1_operation`] for a helper function to create
+    ///   it.
     pub fn emit_node_command(
         &mut self,
         node: H::Node,
@@ -808,5 +811,83 @@ pub fn make_tk1_operation(
         ]
         .concat(),
     );
+    op
+}
+
+/// Initialize a tket1 [Operation](circuit_json::Operation) that only operates
+/// on classical values.
+///
+/// This method is specific to some classical operations in
+/// [`tket_json_rs::OpType`]. For the classical _expressions_ in
+/// [`tket_json_rs::OpType::ClExpr`] / [`tket_json_rs::clexpr::op::ClOp`] use
+/// [`make_tk1_classical_expression`].
+///
+/// This can be passed to [`Tk1EncoderContext::emit_command`].
+///
+/// See [`make_tk1_operation`] for a more general case.
+///
+/// ## Arguments
+/// - `tk1_optype`: The operation type to use.
+/// - `bit_count`: The number of linear bits used by the operation.
+/// - `classical`: The parameters to the classical operation.
+pub fn make_tk1_classical_operation(
+    tk1_optype: tket_json_rs::OpType,
+    bit_count: usize,
+    classical: tket_json_rs::circuit_json::Classical,
+) -> tket_json_rs::circuit_json::Operation {
+    let args = MakeOperationArgs {
+        num_qubits: 0,
+        num_bits: bit_count,
+        params: &[],
+    };
+    let mut op = make_tk1_operation(tk1_optype, args);
+    op.classical = Some(Box::new(classical));
+    op
+}
+
+/// Initialize a tket1 [Operation](circuit_json::Operation) that represents a
+/// classical expression.
+///
+/// This method is specific to [`tket_json_rs::OpType::ClExpr`] /
+/// [`tket_json_rs::clexpr::op::ClOp`]. For other classical operations in
+/// [`tket_json_rs::OpType`] use [`make_tk1_classical_operation`].
+///
+/// Classical expressions are a bit different from other operations in pytket as
+/// they refer to their inputs and outputs by their position in the operation's
+/// bit and register list. See the arguments below for more details.
+///
+/// This can be passed to [`Tk1EncoderContext::emit_command`]. See
+/// [`make_tk1_operation`] for a more general case.
+///
+/// ## Arguments
+/// - `bit_count`: The number of bits (both inputs and outputs) referenced by
+///   the operation. The operation will refer to the bits by an index in the
+///   range `0..bit_count`.
+/// - `output_bits`: Slice of bit indices in `0..bit_count` that are the outputs
+///   of the operation.
+/// - `registers`: groups of bits that are used as registers in the operation.
+///   Each group is a slice of bit indices in `0..bit_count`, plus a register
+///   identifier. The operation may refer to these registers.
+/// - `expression`: The classical expression, expressed in term of the local
+///   bit and register indices.
+pub fn make_tk1_classical_expression(
+    bit_count: usize,
+    output_bits: &[u32],
+    registers: &[InputClRegister],
+    expression: tket_json_rs::clexpr::operator::ClOperator,
+) -> tket_json_rs::circuit_json::Operation {
+    let mut clexpr = tket_json_rs::clexpr::ClExpr::default();
+    clexpr.bit_posn = (0..bit_count as u32).map(|i| (i, i)).collect();
+    clexpr.reg_posn = registers.to_vec();
+    clexpr.output_posn = tket_json_rs::clexpr::ClRegisterBits(output_bits.to_vec());
+    clexpr.expr = expression;
+
+    let args = MakeOperationArgs {
+        num_qubits: 0,
+        num_bits: bit_count,
+        params: &[],
+    };
+    let mut op = make_tk1_operation(tket_json_rs::OpType::ClExpr, args);
+    op.classical_expr = Some(clexpr);
     op
 }

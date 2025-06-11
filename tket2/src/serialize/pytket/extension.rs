@@ -9,19 +9,21 @@
 //! creates a configuration with the decoders for the standard library and tket2
 //! extension.
 
+mod bool;
 mod float;
 mod prelude;
 mod rotation;
 mod tk1;
 mod tk2;
 
+pub use bool::BoolEmitter;
 pub use float::FloatEmitter;
-use hugr::ops::constant::OpaqueValue;
 pub use prelude::PreludeEmitter;
 pub use rotation::RotationEmitter;
 pub use tk1::Tk1Emitter;
 pub use tk2::Tk2Emitter;
 
+pub(crate) use bool::set_bits_op;
 pub(crate) use tk1::OpaqueTk1Op;
 
 use super::encoder::{RegisterCount, TrackedValues};
@@ -29,6 +31,7 @@ use super::Tk1EncoderContext;
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
 use hugr::extension::ExtensionId;
+use hugr::ops::constant::OpaqueValue;
 use hugr::ops::ExtensionOp;
 use hugr::types::CustomType;
 use hugr::HugrView;
