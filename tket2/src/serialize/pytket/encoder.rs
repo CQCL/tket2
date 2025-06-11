@@ -885,7 +885,7 @@ pub fn make_tk1_classical_expression(
 
     let args = MakeOperationArgs {
         num_qubits: 0,
-        num_bits: 0,
+        num_bits: bit_count,
         params: &[],
     };
     let mut op = make_tk1_operation(tket_json_rs::OpType::ClExpr, args);
