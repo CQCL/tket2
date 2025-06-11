@@ -870,7 +870,6 @@ pub fn make_tk1_classical_operation(
 ///   identifier. The operation may refer to these registers.
 /// - `expression`: The classical expression, expressed in term of the local
 ///   bit and register indices.
-/// ```
 pub fn make_tk1_classical_expression(
     bit_count: usize,
     output_bits: &[u32],
