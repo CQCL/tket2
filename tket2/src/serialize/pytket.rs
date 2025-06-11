@@ -105,7 +105,8 @@ impl TKETDecode for SerialCircuit {
     ) -> Result<Self, Self::EncodeError> {
         let mut encoder = Tk1EncoderContext::new(circuit, circuit.parent(), config)?;
         encoder.run_encoder(circuit, circuit.parent())?;
-        encoder.finish(circuit)
+        let (serial, _) = encoder.finish(circuit, circuit.parent())?;
+        Ok(serial)
     }
 }
 
@@ -235,6 +236,14 @@ pub enum OpConvertError<N = hugr::Node> {
 #[non_exhaustive]
 #[debug(bounds(N: HugrNode))]
 pub enum Tk1ConvertError<N = hugr::Node> {
+    /// Tried to encode a non-dataflow region.
+    #[display("Cannot encode non-dataflow region at {region} with type {optype}.")]
+    NonDataflowRegion {
+        /// The region that is not a dataflow region.
+        region: N,
+        /// The operation type of the region.
+        optype: String,
+    },
     /// Operation conversion error.
     #[from]
     OpConversionError(OpConvertError<N>),
