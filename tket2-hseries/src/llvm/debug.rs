@@ -53,7 +53,7 @@ impl DebugCodegenExtension {
         if tag.is_empty() {
             bail!("Empty state result tag received");
         }
-        let tag_ptr = emit_global_string(ctx, tag, "res_", format!("{TAG_PREFIX}STATE"))?;
+        let tag_ptr = emit_global_string(ctx, tag, "res_", format!("{TAG_PREFIX}STATE:"))?;
         let tag_len = {
             let mut l = builder
                 .build_load(tag_ptr.into_pointer_value(), "tag_len")?
