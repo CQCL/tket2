@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.1](https://github.com/CQCL/tket2/compare/tket2-exts-v0.8.0...tket2-exts-v0.8.1) (2025-06-12)
+
+
+### Features
+
+* Add V and Vdg to quantum extension. ([#889](https://github.com/CQCL/tket2/issues/889)) ([a8f1569](https://github.com/CQCL/tket2/commit/a8f156930ff3afc35af15a2afdd24fc65c8409b5))
+
+
+### Bug Fixes
+
+* Bump version of quantum extension. ([#894](https://github.com/CQCL/tket2/issues/894)) ([beddb99](https://github.com/CQCL/tket2/commit/beddb99763e444c0c72853fc6111d4805e4625ea))
+
 ## [0.8.0](https://github.com/CQCL/tket2/compare/tket2-exts-v0.7.0...tket2-exts-v0.8.0) (2025-05-22)
 
 
