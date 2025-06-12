@@ -58,12 +58,10 @@ pub trait PytketEmitter<H: HugrView> {
     /// Given a node in the HUGR circuit and its operation type, try to convert
     /// it to a pytket operation and add it to the pytket encoder.
     ///
-    /// Returns `true` if the operation was successfully converted. If that is
-    /// the case, no further encoders will be called.
-    ///
-    /// If the operation is not supported by the encoder, return `false`. It's
-    /// important not to modify the `encoder` in this case, as that may
-    /// invalidate the context for other encoders that may be called afterwards.
+    /// Returns an [`EncodeStatus`] indicating if the operation was successfully
+    /// converted. If the operation is not supported by the encoder, it's
+    /// important to **not** the `encoder` context as that may invalidate the
+    /// context for other encoders that may be called afterwards.
     fn op_to_pytket(
         &self,
         node: H::Node,

@@ -909,7 +909,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
 
 /// Result of trying to encode a node in the Hugr.
 ///
-/// This is a flag that can indicate that either
+/// This flag indicates that either
 /// - The operation was successful encoded and is now registered on the
 ///   [`Tk1EncoderContext`]
 /// - The node cannot be encoded, and the context was left unchanged.
