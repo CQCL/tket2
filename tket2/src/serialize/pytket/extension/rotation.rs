@@ -4,7 +4,9 @@ use super::PytketEmitter;
 use crate::extension::rotation::{
     ConstRotation, RotationOp, ROTATION_EXTENSION_ID, ROTATION_TYPE_ID,
 };
-use crate::serialize::pytket::encoder::{RegisterCount, Tk1EncoderContext, TrackedValues};
+use crate::serialize::pytket::encoder::{
+    EncodeStatus, RegisterCount, Tk1EncoderContext, TrackedValues,
+};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
 use hugr::extension::simple_op::MakeExtensionOp;
@@ -29,19 +31,19 @@ impl<H: HugrView> PytketEmitter<H> for RotationEmitter {
         op: &ExtensionOp,
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
         let Ok(rot_op) = RotationOp::from_extension_op(op) else {
-            return Ok(false);
+            return Ok(EncodeStatus::Unsupported);
         };
 
         match rot_op {
             RotationOp::from_halfturns_unchecked | RotationOp::to_halfturns => {
                 encoder.emit_transparent_node(node, circ, |ps| vec![ps.input_params[0].clone()])?;
-                Ok(true)
+                Ok(EncodeStatus::Success)
             }
             RotationOp::from_halfturns => {
                 // Unsupported due to having an Option as output.
-                Ok(false)
+                Ok(EncodeStatus::Unsupported)
             }
             _ => {
                 encoder.emit_transparent_node(node, circ, |ps| {
@@ -49,7 +51,7 @@ impl<H: HugrView> PytketEmitter<H> for RotationEmitter {
                         .into_iter()
                         .collect_vec()
                 })?;
-                Ok(true)
+                Ok(EncodeStatus::Success)
             }
         }
     }

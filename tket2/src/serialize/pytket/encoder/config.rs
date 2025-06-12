@@ -10,6 +10,7 @@ use hugr::extension::{ExtensionId, ExtensionSet};
 use hugr::ops::{ExtensionOp, Value};
 use hugr::types::{SumType, Type, TypeEnum};
 
+use crate::serialize::pytket::encoder::EncodeStatus;
 use crate::serialize::pytket::extension::{
     set_bits_op, BoolEmitter, FloatEmitter, PreludeEmitter, RotationEmitter, Tk1Emitter, Tk2Emitter,
 };
@@ -103,12 +104,12 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
         op: &ExtensionOp,
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>> {
-        let mut result = false;
+    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+        let mut result = EncodeStatus::Unsupported;
         let extension = op.def().extension_id();
         for enc in self.emitters_for_extension(extension) {
-            if enc.op_to_pytket(node, op, circ, encoder)? {
-                result = true;
+            if enc.op_to_pytket(node, op, circ, encoder)? == EncodeStatus::Success {
+                result = EncodeStatus::Success;
                 break;
             }
         }

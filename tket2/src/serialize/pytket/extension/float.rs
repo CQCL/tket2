@@ -1,7 +1,9 @@
 //! Encoder and decoder for floating point operations.
 
 use super::PytketEmitter;
-use crate::serialize::pytket::encoder::{RegisterCount, Tk1EncoderContext, TrackedValues};
+use crate::serialize::pytket::encoder::{
+    EncodeStatus, RegisterCount, Tk1EncoderContext, TrackedValues,
+};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
 use hugr::extension::simple_op::MakeExtensionOp;
@@ -27,9 +29,9 @@ impl<H: HugrView> PytketEmitter<H> for FloatEmitter {
         op: &ExtensionOp,
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
         let Ok(rot_op) = FloatOps::from_extension_op(op) else {
-            return Ok(false);
+            return Ok(EncodeStatus::Unsupported);
         };
 
         match rot_op {
@@ -51,9 +53,9 @@ impl<H: HugrView> PytketEmitter<H> for FloatEmitter {
                         None => Vec::new(),
                     }
                 })?;
-                Ok(true)
+                Ok(EncodeStatus::Success)
             }
-            _ => Ok(false),
+            _ => Ok(EncodeStatus::Unsupported),
         }
     }
 

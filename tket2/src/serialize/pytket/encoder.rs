@@ -620,7 +620,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
         let config = Arc::clone(&self.config);
 
         // Recursively encode the sub-graph.
@@ -630,11 +630,11 @@ impl<H: HugrView> Tk1EncoderContext<H> {
 
         let (serial_subcirc, output_params) = subencoder.finish(circ, node)?;
         if !output_params.is_empty() {
-            return Ok(false);
+            return Ok(EncodeStatus::Unsupported);
         }
 
         self.emit_circ_box(node, serial_subcirc, circ)?;
-        Ok(true)
+        Ok(EncodeStatus::Success)
     }
 
     /// Helper to emit a `CircBox` tket1 command corresponding to a function definition in the Hugr.
@@ -652,19 +652,18 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         node: H::Node,
         function: H::Node,
         circ: &Circuit<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
         let cache = self.function_cache.read().ok();
         if let Some(encoded) = cache.as_ref().and_then(|c| c.get(&function)) {
             let encoded = encoded.clone();
             drop(cache);
-            let supported = match encoded {
+            match encoded {
                 CachedEncodedFunction::Encoded { serial_circuit } => {
                     self.emit_circ_box(node, serial_circuit, circ)?;
-                    true
+                    return Ok(EncodeStatus::Success);
                 }
-                CachedEncodedFunction::Unsupported => false,
+                CachedEncodedFunction::Unsupported => return Ok(EncodeStatus::Unsupported),
             };
-            return Ok(supported);
         }
         drop(cache);
 
@@ -677,25 +676,29 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         subencoder.run_encoder(circ, function)?;
         let (serial_subcirc, output_params) = subencoder.finish(circ, function)?;
 
-        let successful = output_params.is_empty();
-
-        // If the cache is poisoned, ignore it.
-        if let Ok(mut cache) = self.function_cache.write() {
-            // Cache the encoded subcircuit for future use.
-            let cached_fn = if successful {
+        let (result, cached_fn) = match output_params.is_empty() {
+            true => (
+                EncodeStatus::Success,
                 CachedEncodedFunction::Encoded {
                     serial_circuit: serial_subcirc.clone(),
-                }
-            } else {
-                CachedEncodedFunction::Unsupported
-            };
+                },
+            ),
+            false => (
+                EncodeStatus::Unsupported,
+                CachedEncodedFunction::Unsupported,
+            ),
+        };
+
+        // Cache the encoded subcircuit for future use.
+        // If the cache is poisoned, ignore it.
+        if let Ok(mut cache) = self.function_cache.write() {
             cache.insert(function, cached_fn);
         }
 
-        if successful {
+        if result == EncodeStatus::Success {
             self.emit_circ_box(node, serial_subcirc, circ)?;
         }
-        Ok(successful)
+        Ok(result)
     }
 
     /// Helper to emit a `CircBox` tket1 command from a Serialised circuit.
@@ -738,7 +741,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
         let optype = circ.hugr().get_optype(node);
 
         // Try to encode the operation using each of the registered encoders.
@@ -748,20 +751,20 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         match optype {
             OpType::ExtensionOp(op) => {
                 let config = Arc::clone(&self.config);
-                if config.op_to_pytket(node, op, circ, self)? {
-                    return Ok(true);
+                if config.op_to_pytket(node, op, circ, self)? == EncodeStatus::Success {
+                    return Ok(EncodeStatus::Success);
                 }
             }
             OpType::LoadConstant(_) => {
                 self.emit_transparent_node(node, circ, |ps| ps.input_params.to_owned())?;
-                return Ok(true);
+                return Ok(EncodeStatus::Success);
             }
             OpType::Const(op) => {
                 let config = Arc::clone(&self.config);
                 if let Some(values) = config.const_to_pytket(&op.value, self)? {
                     let wire = Wire::new(node, 0);
                     self.values.register_wire(wire, values.into_iter(), circ)?;
-                    return Ok(true);
+                    return Ok(EncodeStatus::Success);
                 }
             }
             OpType::DFG(_) => return self.emit_subcircuit(node, circ),
@@ -776,7 +779,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         }
 
         self.unsupported.record_node(node, circ);
-        Ok(false)
+        Ok(EncodeStatus::Unsupported)
     }
 
     /// Helper to register values for a node's output wires.
@@ -902,6 +905,23 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         }
         Ok(wire_counts)
     }
+}
+
+/// Result of trying to encode a node in the Hugr.
+///
+/// This is a flag that can indicate that either
+/// - The operation was successful encoded and is now registered on the
+///   [`Tk1EncoderContext`]
+/// - The node cannot be encoded, and the context was left unchanged.
+///
+/// The latter is a recoverable error, as it promises that the context wasn't
+/// modified. For non-recoverable errors, see [`Tk1ConvertError`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, derive_more::Display)]
+pub enum EncodeStatus {
+    /// The node was successfully encoded and registered in the context.
+    Success,
+    /// The node could not be encoded, and the context was left unchanged.
+    Unsupported,
 }
 
 /// Input arguments to the output parameter computation methods in the the emit_*

@@ -28,6 +28,7 @@ pub(crate) use tk1::OpaqueTk1Op;
 
 use super::encoder::{RegisterCount, TrackedValues};
 use super::Tk1EncoderContext;
+use crate::serialize::pytket::encoder::EncodeStatus;
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
 use hugr::extension::ExtensionId;
@@ -69,9 +70,9 @@ pub trait PytketEmitter<H: HugrView> {
         op: &ExtensionOp,
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
         let _ = (node, op, circ, encoder);
-        Ok(false)
+        Ok(EncodeStatus::Unsupported)
     }
 
     /// Given a HUGR type, return the number of qubits, bits, and parameter
