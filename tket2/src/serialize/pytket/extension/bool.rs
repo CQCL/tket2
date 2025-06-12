@@ -3,8 +3,8 @@
 use super::PytketEmitter;
 use crate::extension::bool::{BoolOp, ConstBool, BOOL_EXTENSION_ID, BOOL_TYPE_NAME};
 use crate::serialize::pytket::encoder::{
-    make_tk1_classical_expression, make_tk1_classical_operation, RegisterCount, Tk1EncoderContext,
-    TrackedValues,
+    make_tk1_classical_expression, make_tk1_classical_operation, EncodeStatus, RegisterCount,
+    Tk1EncoderContext, TrackedValues,
 };
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
@@ -32,9 +32,9 @@ impl<H: HugrView> PytketEmitter<H> for BoolEmitter {
         op: &ExtensionOp,
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
         let Ok(rot_op) = BoolOp::from_extension_op(op) else {
-            return Ok(false);
+            return Ok(EncodeStatus::Unsupported);
         };
 
         let (num_inputs, num_outputs, clop) = match rot_op {
@@ -42,7 +42,7 @@ impl<H: HugrView> PytketEmitter<H> for BoolEmitter {
             // Both are represented as a pytket bit, so this is a no-op.
             BoolOp::read | BoolOp::make_opaque => {
                 encoder.emit_transparent_node(node, circ, |_| Vec::new())?;
-                return Ok(true);
+                return Ok(EncodeStatus::Success);
             }
             BoolOp::eq => (2, 1, ClOp::BitEq),
             BoolOp::not => (1, 1, ClOp::BitNot),
@@ -64,7 +64,7 @@ impl<H: HugrView> PytketEmitter<H> for BoolEmitter {
 
         let op = make_tk1_classical_expression(bit_count, &output_bits, &[], expression);
         encoder.emit_node_command(node, circ, |_args| Vec::new(), move |_| op)?;
-        Ok(true)
+        Ok(EncodeStatus::Success)
     }
 
     fn type_to_pytket(

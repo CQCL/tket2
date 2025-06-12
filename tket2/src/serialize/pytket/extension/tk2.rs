@@ -3,7 +3,7 @@
 use super::PytketEmitter;
 use crate::extension::sympy::SympyOp;
 use crate::extension::TKET2_EXTENSION_ID;
-use crate::serialize::pytket::encoder::Tk1EncoderContext;
+use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::{Circuit, Tk2Op};
 use hugr::extension::simple_op::MakeExtensionOp;
@@ -27,13 +27,13 @@ impl<H: HugrView> PytketEmitter<H> for Tk2Emitter {
         op: &ExtensionOp,
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
         if let Ok(tk2op) = Tk2Op::from_extension_op(op) {
             self.encode_tk2_op(node, tk2op, circ, encoder)
         } else if let Ok(sympy_op) = SympyOp::from_extension_op(op) {
             self.encode_sympy_op(node, sympy_op, circ, encoder)
         } else {
-            Ok(false)
+            Ok(EncodeStatus::Unsupported)
         }
     }
 }
@@ -46,7 +46,7 @@ impl Tk2Emitter {
         tk2op: Tk2Op,
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
         let serial_op = match tk2op {
             Tk2Op::H => Tk1OpType::H,
             Tk2Op::CX => Tk1OpType::CX,
@@ -79,23 +79,23 @@ impl Tk2Emitter {
                 let wire = Wire::new(node, out_port);
                 let qb = encoder.values.new_qubit();
                 encoder.values.register_wire(wire, [qb], circ)?;
-                return Ok(true);
+                return Ok(EncodeStatus::Success);
             }
             // Since the qubit still gets connected at the end of the circuit,
             // `QFree` is a no-op.
             Tk2Op::QFree => {
-                return Ok(true);
+                return Ok(EncodeStatus::Success);
             }
             // Unsupported
             Tk2Op::TryQAlloc => {
-                return Ok(false);
+                return Ok(EncodeStatus::Unsupported);
             }
         };
 
         // Most operations map directly to a pytket one.
         encoder.emit_node(serial_op, node, circ)?;
 
-        Ok(true)
+        Ok(EncodeStatus::Success)
     }
 
     /// Encode a tket2 sympy operation into a pytket operation.
@@ -105,8 +105,8 @@ impl Tk2Emitter {
         sympy_op: SympyOp,
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
         encoder.emit_transparent_node(node, circ, |_| vec![sympy_op.expr.clone()])?;
-        Ok(true)
+        Ok(EncodeStatus::Success)
     }
 }

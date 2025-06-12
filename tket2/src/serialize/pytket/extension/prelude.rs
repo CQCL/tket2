@@ -1,7 +1,7 @@
 //! Encoder and decoder for tket2 operations with native pytket counterparts.
 
 use super::PytketEmitter;
-use crate::serialize::pytket::encoder::{RegisterCount, Tk1EncoderContext};
+use crate::serialize::pytket::encoder::{EncodeStatus, RegisterCount, Tk1EncoderContext};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
 use hugr::extension::prelude::{TupleOpDef, PRELUDE_ID};
@@ -26,11 +26,11 @@ impl<H: HugrView> PytketEmitter<H> for PreludeEmitter {
         op: &ExtensionOp,
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
         if let Ok(tuple_op) = TupleOpDef::from_extension_op(op) {
             return self.tuple_op_to_pytket(node, op, &tuple_op, circ, encoder);
         };
-        Ok(false)
+        Ok(EncodeStatus::Unsupported)
     }
 
     fn type_to_pytket(
@@ -58,10 +58,10 @@ impl PreludeEmitter {
         tuple_op: &TupleOpDef,
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
         if !matches!(tuple_op, TupleOpDef::MakeTuple | TupleOpDef::UnpackTuple) {
             // Unknown operation
-            return Ok(false);
+            return Ok(EncodeStatus::Unsupported);
         };
 
         // First, check if we are working with supported types.
@@ -73,20 +73,20 @@ impl PreludeEmitter {
             Some(TypeArg::Sequence { elems }) => {
                 for arg in elems {
                     let TypeArg::Type { ty } = arg else {
-                        return Ok(false);
+                        return Ok(EncodeStatus::Unsupported);
                     };
                     let count = encoder.config().type_to_pytket(ty)?;
                     if count.is_none() {
-                        return Ok(false);
+                        return Ok(EncodeStatus::Unsupported);
                     }
                 }
             }
-            _ => return Ok(false),
+            _ => return Ok(EncodeStatus::Unsupported),
         };
 
         // Now we can gather all inputs and assign them to the node outputs transparently.
         encoder.emit_transparent_node(node, circ, |ps| ps.input_params.to_owned())?;
 
-        Ok(true)
+        Ok(EncodeStatus::Success)
     }
 }

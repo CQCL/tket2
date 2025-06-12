@@ -28,6 +28,7 @@ pub(crate) use tk1::OpaqueTk1Op;
 
 use super::encoder::{RegisterCount, TrackedValues};
 use super::Tk1EncoderContext;
+use crate::serialize::pytket::encoder::EncodeStatus;
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
 use hugr::extension::ExtensionId;
@@ -57,21 +58,19 @@ pub trait PytketEmitter<H: HugrView> {
     /// Given a node in the HUGR circuit and its operation type, try to convert
     /// it to a pytket operation and add it to the pytket encoder.
     ///
-    /// Returns `true` if the operation was successfully converted. If that is
-    /// the case, no further encoders will be called.
-    ///
-    /// If the operation is not supported by the encoder, return `false`. It's
-    /// important not to modify the `encoder` in this case, as that may
-    /// invalidate the context for other encoders that may be called afterwards.
+    /// Returns an [`EncodeStatus`] indicating if the operation was successfully
+    /// converted. If the operation is not supported by the encoder, it's
+    /// important to **not** modify the `encoder` context as that may invalidate
+    /// the context for other encoders that may be called afterwards.
     fn op_to_pytket(
         &self,
         node: H::Node,
         op: &ExtensionOp,
         circ: &Circuit<H>,
         encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
         let _ = (node, op, circ, encoder);
-        Ok(false)
+        Ok(EncodeStatus::Unsupported)
     }
 
     /// Given a HUGR type, return the number of qubits, bits, and parameter
