@@ -325,7 +325,7 @@ impl BarrierOperationFactory {
             [array_wire],
             |slf, func_b| {
                 let w = func_b.input().out_wire(0);
-                let elems = crate::extension::qsystem::pop_all(func_b, w, size, elem_ty.clone())?;
+                let elems = func_b.add_array_unpack(elem_ty.clone(), size, w)?;
                 let unpacked: Vec<_> = elems
                     .into_iter()
                     .map(|wire| slf.unpack_container(func_b, elem_ty, wire))
