@@ -710,7 +710,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             circ,
             |args| {
                 // This should normally be detected when creating the serial circuit.
-                assert!(args.expected_count == 0);
+                debug_assert!(args.expected_count == 0);
                 Vec::new()
             },
             |args| {
