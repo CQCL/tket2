@@ -13,6 +13,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use hugr::core::HugrNode;
+use hugr::ops::OpParent;
 use hugr::{HugrView, Wire};
 use itertools::Itertools;
 use tket_json_rs::circuit_json;
@@ -207,6 +208,8 @@ pub struct ValueTrackerResult {
     pub qubits: Vec<RegisterUnit>,
     /// The final list of bit registers.
     pub bits: Vec<RegisterUnit>,
+    /// The final list of parameter expressions at the output.
+    pub params: Vec<String>,
     /// The implicit permutation of the qubit registers.
     pub qubit_permutation: Vec<circuit_json::ImplicitPermutation>,
 }
@@ -225,17 +228,18 @@ impl<N: HugrNode> ValueTracker<N> {
     ///
     pub(super) fn new<H: HugrView<Node = N>>(
         circ: &Circuit<H>,
+        region: N,
         config: &Tk1EncoderConfig<H>,
     ) -> Result<Self, Tk1ConvertError<N>> {
         let param_variable_names: Vec<String> =
-            read_metadata_json_list(circ, METADATA_INPUT_PARAMETERS);
+            read_metadata_json_list(circ, region, METADATA_INPUT_PARAMETERS);
         let mut tracker = ValueTracker {
-            qubits: read_metadata_json_list(circ, METADATA_Q_REGISTERS),
-            bits: read_metadata_json_list(circ, METADATA_B_REGISTERS),
+            qubits: read_metadata_json_list(circ, region, METADATA_Q_REGISTERS),
+            bits: read_metadata_json_list(circ, region, METADATA_B_REGISTERS),
             params: Vec::with_capacity(param_variable_names.len()),
             wires: BTreeMap::new(),
-            output_qubits: read_metadata_json_list(circ, METADATA_Q_OUTPUT_REGISTERS),
-            output_bits: read_metadata_json_list(circ, METADATA_B_OUTPUT_REGISTERS),
+            output_qubits: read_metadata_json_list(circ, region, METADATA_Q_OUTPUT_REGISTERS),
+            output_bits: read_metadata_json_list(circ, region, METADATA_B_OUTPUT_REGISTERS),
             unused_qubits: BTreeSet::new(),
             unused_bits: BTreeSet::new(),
             qubit_reg_generator: RegisterUnitGenerator::default(),
@@ -264,8 +268,12 @@ impl<N: HugrNode> ValueTracker<N> {
         );
 
         // Register the circuit's inputs with the tracker.
-        let inp_node = circ.input_node();
-        let signature = circ.circuit_signature();
+        let region_optype = circ.hugr().get_optype(region);
+        let signature = region_optype.inner_function_type().ok_or_else(|| {
+            let optype = circ.hugr().get_optype(region).to_string();
+            Tk1ConvertError::NonDataflowRegion { region, optype }
+        })?;
+        let inp_node = circ.hugr().get_io(region).unwrap()[0];
         for (port, typ) in circ
             .hugr()
             .node_outputs(inp_node)
@@ -460,11 +468,15 @@ impl<N: HugrNode> ValueTracker<N> {
     pub(super) fn finish(
         self,
         circ: &Circuit<impl HugrView<Node = N>>,
+        region: N,
     ) -> Result<ValueTrackerResult, OpConvertError<N>> {
+        let output_node = circ.hugr().get_io(region).unwrap()[1];
+
         // Ordered list of qubits and bits at the output of the circuit.
         let mut qubit_outputs = Vec::with_capacity(self.qubits.len() - self.unused_qubits.len());
         let mut bit_outputs = Vec::with_capacity(self.bits.len() - self.unused_bits.len());
-        for (node, port) in circ.hugr().all_linked_outputs(circ.output_node()) {
+        let mut param_outputs = Vec::new();
+        for (node, port) in circ.hugr().all_linked_outputs(output_node) {
             let wire = Wire::new(node, port);
             let values = self
                 .peek_wire_values(wire)
@@ -473,9 +485,8 @@ impl<N: HugrNode> ValueTracker<N> {
                 match value {
                     TrackedValue::Qubit(qb) => qubit_outputs.push(self.qubit_register(*qb).clone()),
                     TrackedValue::Bit(bit) => bit_outputs.push(self.bit_register(*bit).clone()),
-                    TrackedValue::Param(_) => {
-                        // Parameters are not part of a pytket circuit output.
-                        // We ignore them here.
+                    TrackedValue::Param(param) => {
+                        param_outputs.push(self.param_expression(*param).to_string())
                     }
                 }
             }
@@ -498,6 +509,7 @@ impl<N: HugrNode> ValueTracker<N> {
         Ok(ValueTrackerResult {
             qubits: qubit_outputs,
             bits: bit_outputs,
+            params: param_outputs,
             qubit_permutation,
         })
     }
@@ -620,11 +632,12 @@ impl RegisterCount {
 }
 
 /// Read a json-encoded vector of values from the circuit's root metadata.
-fn read_metadata_json_list<T: serde::de::DeserializeOwned>(
-    circ: &Circuit<impl HugrView>,
+fn read_metadata_json_list<T: serde::de::DeserializeOwned, H: HugrView>(
+    circ: &Circuit<H>,
+    region: H::Node,
     metadata_key: &str,
 ) -> Vec<T> {
-    let Some(value) = circ.hugr().get_metadata(circ.parent(), metadata_key) else {
+    let Some(value) = circ.hugr().get_metadata(region, metadata_key) else {
         return vec![];
     };
 

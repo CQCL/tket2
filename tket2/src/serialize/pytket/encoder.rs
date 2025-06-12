@@ -11,6 +11,7 @@ use hugr::hugr::views::SiblingSubgraph;
 use hugr::package::Package;
 use hugr_core::hugr::internal::PortgraphNodeMap;
 use tket_json_rs::clexpr::InputClRegister;
+use tket_json_rs::opbox::BoxID;
 pub use value_tracker::{
     RegisterCount, TrackedBit, TrackedParam, TrackedQubit, TrackedValue, TrackedValues,
     ValueTracker,
@@ -20,8 +21,8 @@ use hugr::ops::{OpTrait, OpType};
 use hugr::types::EdgeKind;
 
 use std::borrow::Cow;
-use std::collections::{BTreeSet, HashSet};
-use std::sync::Arc;
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::sync::{Arc, RwLock};
 
 use hugr::{HugrView, Wire};
 use itertools::Itertools;
@@ -57,19 +58,35 @@ pub struct Tk1EncoderContext<H: HugrView> {
     ///
     /// Contains custom operation/type/const emitters.
     config: Arc<Tk1EncoderConfig<H>>,
+    /// A cache of translated hugr functions, to be encoded as op boxes.
+    function_cache: Arc<RwLock<HashMap<H::Node, CachedEncodedFunction>>>,
 }
 
 impl<H: HugrView> Tk1EncoderContext<H> {
     /// Create a new [`Tk1EncoderContext`] from a [`Circuit`].
     pub(super) fn new(
         circ: &Circuit<H>,
+        region: H::Node,
         config: Tk1EncoderConfig<H>,
     ) -> Result<Self, Tk1ConvertError<H::Node>> {
-        let name = circ.name().map(str::to_string);
+        Self::new_arc(circ, region, Arc::new(config))
+    }
+
+    /// Create a new [`Tk1EncoderContext`] from a [`Circuit`].
+    ///
+    /// Expects an already-wrapped config Arc. See [`Tk1EncoderContext::new`].
+    fn new_arc(
+        circ: &Circuit<H>,
+        region: H::Node,
+        config: Arc<Tk1EncoderConfig<H>>,
+    ) -> Result<Self, Tk1ConvertError<H::Node>> {
         let hugr = circ.hugr();
+        let name = Circuit::new(hugr.with_entrypoint(region))
+            .name()
+            .map(str::to_string);
 
         // Recover other parameters stored in the metadata
-        let phase = match hugr.get_metadata(circ.parent(), METADATA_PHASE) {
+        let phase = match hugr.get_metadata(region, METADATA_PHASE) {
             Some(p) => p.as_str().unwrap().to_string(),
             None => "0".to_string(),
         };
@@ -78,20 +95,23 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             name,
             phase,
             commands: vec![],
-            values: ValueTracker::new(circ, &config)?,
+            values: ValueTracker::new(circ, region, &config)?,
             unsupported: UnsupportedTracker::new(circ),
-            config: Arc::new(config),
+            config,
+            function_cache: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
-    /// Traverse the circuit in topological order, encoding the nodes as pytket commands.
+    /// Traverse the circuit region in topological order, encoding the nodes as
+    /// pytket commands.
     ///
     /// Returns the final [`SerialCircuit`] if successful.
     pub(super) fn run_encoder(
         &mut self,
         circ: &Circuit<H>,
+        region: H::Node,
     ) -> Result<(), Tk1ConvertError<H::Node>> {
-        let (region, node_map) = circ.hugr().region_portgraph(circ.parent());
+        let (region, node_map) = circ.hugr().region_portgraph(region);
         let io_nodes = circ.io_nodes();
 
         // TODO: Use weighted topological sort to try and explore unsupported
@@ -109,11 +129,13 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         Ok(())
     }
 
-    /// Finish building and return the final [`SerialCircuit`].
+    /// Finish building and return the final [`SerialCircuit`],
+    /// as well as any parameter expressions at the circuit's output.
     pub(super) fn finish(
         mut self,
         circ: &Circuit<H>,
-    ) -> Result<SerialCircuit, Tk1ConvertError<H::Node>> {
+        region: H::Node,
+    ) -> Result<(SerialCircuit, Vec<String>), Tk1ConvertError<H::Node>> {
         // Add any remaining unsupported nodes
         //
         // TODO: Test that unsupported subgraphs that don't affect any qubit/bit registers
@@ -124,7 +146,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             self.emit_unsupported(unsupported_subgraph, circ)?;
         }
 
-        let final_values = self.values.finish(circ)?;
+        let final_values = self.values.finish(circ, region)?;
 
         let mut ser = SerialCircuit::new(self.name, self.phase);
 
@@ -133,7 +155,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         ser.bits = final_values.bits.into_iter().map_into().collect();
         ser.implicit_permutation = final_values.qubit_permutation;
         ser.number_of_ws = None;
-        Ok(ser)
+        Ok((ser, final_values.params))
     }
 
     /// Returns a reference to this encoder's configuration.
@@ -586,6 +608,123 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         self.commands.push(command);
     }
 
+    /// Helper to emit a `CircBox` tket1 command corresponding to a region of the Hugr.
+    ///
+    /// Returns a bool indicating whether the subcircuit was successfully emitted,
+    /// or should be encoded opaquely instead. This is the case when the subcircuit
+    /// contains output parameters.
+    ///
+    // TODO: Support output parameters in subcircuits. This may require
+    // substituting variables in the parameter expressions.
+    fn emit_subcircuit(
+        &mut self,
+        node: H::Node,
+        circ: &Circuit<H>,
+    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+        let config = Arc::clone(&self.config);
+
+        // Recursively encode the sub-graph.
+        let mut subencoder = Tk1EncoderContext::new_arc(circ, node, config)?;
+        subencoder.function_cache = self.function_cache.clone();
+        subencoder.run_encoder(circ, node)?;
+
+        let (serial_subcirc, output_params) = subencoder.finish(circ, node)?;
+        if !output_params.is_empty() {
+            return Ok(false);
+        }
+
+        self.emit_circ_box(node, serial_subcirc, circ)?;
+        Ok(true)
+    }
+
+    /// Helper to emit a `CircBox` tket1 command corresponding to a function definition in the Hugr.
+    ///
+    /// The function encoding is cached and reused if possible.
+    ///
+    /// Returns a bool indicating whether the subcircuit was successfully emitted,
+    /// or should be encoded opaquely instead. This is the case when the subcircuit
+    /// contains output parameters.
+    ///
+    // TODO: Support output parameters in subcircuits. This may require
+    // substituting variables in the parameter expressions.
+    fn emit_function_call(
+        &mut self,
+        node: H::Node,
+        function: H::Node,
+        circ: &Circuit<H>,
+    ) -> Result<bool, Tk1ConvertError<H::Node>> {
+        let cache = self.function_cache.read().ok();
+        if let Some(encoded) = cache.as_ref().and_then(|c| c.get(&function)) {
+            let encoded = encoded.clone();
+            drop(cache);
+            let supported = match encoded {
+                CachedEncodedFunction::Encoded { serial_circuit } => {
+                    self.emit_circ_box(node, serial_circuit, circ)?;
+                    true
+                }
+                CachedEncodedFunction::Unsupported => false,
+            };
+            return Ok(supported);
+        }
+        drop(cache);
+
+        // If the function is not cached, we need to encode it.
+        let config = Arc::clone(&self.config);
+
+        // Recursively encode the sub-graph.
+        let mut subencoder = Tk1EncoderContext::new_arc(circ, function, config)?;
+        subencoder.function_cache = self.function_cache.clone();
+        subencoder.run_encoder(circ, function)?;
+        let (serial_subcirc, output_params) = subencoder.finish(circ, function)?;
+
+        let successful = output_params.is_empty();
+
+        // If the cache is poisoned, ignore it.
+        if let Ok(mut cache) = self.function_cache.write() {
+            // Cache the encoded subcircuit for future use.
+            let cached_fn = if successful {
+                CachedEncodedFunction::Encoded {
+                    serial_circuit: serial_subcirc.clone(),
+                }
+            } else {
+                CachedEncodedFunction::Unsupported
+            };
+            cache.insert(function, cached_fn);
+        }
+
+        if successful {
+            self.emit_circ_box(node, serial_subcirc, circ)?;
+        }
+        Ok(successful)
+    }
+
+    /// Helper to emit a `CircBox` tket1 command from a Serialised circuit.
+    fn emit_circ_box(
+        &mut self,
+        node: H::Node,
+        boxed_circuit: SerialCircuit,
+        circ: &Circuit<H>,
+    ) -> Result<(), Tk1ConvertError<H::Node>> {
+        self.emit_node_command(
+            node,
+            circ,
+            |args| {
+                // This should normally be detected when creating the serial circuit.
+                debug_assert!(args.expected_count == 0);
+                Vec::new()
+            },
+            |args| {
+                let mut pytket_op = make_tk1_operation(tket_json_rs::OpType::CircBox, args);
+                pytket_op.op_box = Some(tket_json_rs::opbox::OpBox::CircBox {
+                    id: BoxID::new(),
+                    circuit: boxed_circuit,
+                });
+                pytket_op
+            },
+        )?;
+        Ok(())
+    }
+
     /// Encode a single circuit node into pytket commands and update the
     /// encoder.
     ///
@@ -601,8 +740,6 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         circ: &Circuit<H>,
     ) -> Result<bool, Tk1ConvertError<H::Node>> {
         let optype = circ.hugr().get_optype(node);
-
-        // TODO: Boxes and non-custom optypes
 
         // Try to encode the operation using each of the registered encoders.
         //
@@ -626,6 +763,14 @@ impl<H: HugrView> Tk1EncoderContext<H> {
                     self.values.register_wire(wire, values.into_iter(), circ)?;
                     return Ok(true);
                 }
+            }
+            OpType::DFG(_) => return self.emit_subcircuit(node, circ),
+            OpType::Call(call) => {
+                let (fn_node, _) = circ
+                    .hugr()
+                    .single_linked_output(node, call.called_function_port())
+                    .expect("Function call must be linked to a function");
+                return self.emit_function_call(node, fn_node, circ);
             }
             _ => {}
         }
@@ -782,6 +927,21 @@ pub struct MakeOperationArgs<'a> {
     pub num_bits: usize,
     /// List of input parameter expressions.
     pub params: &'a [String],
+}
+
+/// Cached value for a function encoding.
+///
+/// If the function contains output parameters, it is unsupported
+/// and should be emitted as an unsupported op instead.
+#[derive(Clone, Debug)]
+enum CachedEncodedFunction {
+    /// Successfully encoded function.
+    Encoded {
+        /// The serialised circuit for the function.
+        serial_circuit: SerialCircuit,
+    },
+    /// Unsupported function
+    Unsupported,
 }
 
 /// Initialize a tket1 [Operation](circuit_json::Operation) to pass to
