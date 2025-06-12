@@ -709,11 +709,8 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             node,
             circ,
             |args| {
-                // TODO: Catch this at serial circuit creation time, and flag the node as unsupported instead.
-                assert!(
-                    args.expected_count == 0,
-                    "Output parameters are not currently supported for circ boxes."
-                );
+                // This should normally be detected when creating the serial circuit.
+                assert!(args.expected_count == 0);
                 Vec::new()
             },
             |args| {
@@ -743,8 +740,6 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         circ: &Circuit<H>,
     ) -> Result<bool, Tk1ConvertError<H::Node>> {
         let optype = circ.hugr().get_optype(node);
-
-        // TODO: Boxes and non-custom optypes
 
         // Try to encode the operation using each of the registered encoders.
         //
