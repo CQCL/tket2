@@ -13,6 +13,8 @@ use tket2::extension::debug::{StateResult, DEBUG_EXTENSION_ID, STATE_RESULT_OP_I
 
 use super::array_utils::{build_array_alloca, struct_1d_arr_alloc, struct_1d_arr_ptr_t, ElemType};
 
+static TAG_PREFIX: &str = "USER:";
+
 /// Codegen extension for debug functionality.
 pub struct DebugCodegenExtension;
 
@@ -51,7 +53,7 @@ impl DebugCodegenExtension {
         if tag.is_empty() {
             bail!("Empty state result tag received");
         }
-        let tag_ptr = emit_global_string(ctx, tag, "res_", "STATE")?;
+        let tag_ptr = emit_global_string(ctx, tag, "res_", format!("{TAG_PREFIX}STATE"))?;
         let tag_len = {
             let mut l = builder
                 .build_load(tag_ptr.into_pointer_value(), "tag_len")?
