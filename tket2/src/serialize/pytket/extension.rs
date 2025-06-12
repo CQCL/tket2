@@ -60,8 +60,8 @@ pub trait PytketEmitter<H: HugrView> {
     ///
     /// Returns an [`EncodeStatus`] indicating if the operation was successfully
     /// converted. If the operation is not supported by the encoder, it's
-    /// important to **not** the `encoder` context as that may invalidate the
-    /// context for other encoders that may be called afterwards.
+    /// important to **not** modify the `encoder` context as that may invalidate
+    /// the context for other encoders that may be called afterwards.
     fn op_to_pytket(
         &self,
         node: H::Node,
