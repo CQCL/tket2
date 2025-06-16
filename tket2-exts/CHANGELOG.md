@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.9.0](https://github.com/CQCL/tket2/compare/tket2-exts-v0.8.0...tket2-exts-v0.9.0) (2025-06-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* `ResultOpDef::ArrBool`, `ResultOpDef::ArrInt`, `ResultOpDef::ArrUInt` and `ResultOpDef::ArrF64` signatures now return array results
+
+### Features
+
+* Add V and Vdg to quantum extension. ([#889](https://github.com/CQCL/tket2/issues/889)) ([a8f1569](https://github.com/CQCL/tket2/commit/a8f156930ff3afc35af15a2afdd24fc65c8409b5))
+
+
+### Bug Fixes
+
+* Bump version of quantum extension. ([#894](https://github.com/CQCL/tket2/issues/894)) ([beddb99](https://github.com/CQCL/tket2/commit/beddb99763e444c0c72853fc6111d4805e4625ea))
+* Change array result ops signature to return array result ([#888](https://github.com/CQCL/tket2/issues/888)) ([4bde6d9](https://github.com/CQCL/tket2/commit/4bde6d9d5906f355dd809b6a7fc804680f99ddeb))
+
 ## [0.8.0](https://github.com/CQCL/tket2/compare/tket2-exts-v0.7.0...tket2-exts-v0.8.0) (2025-05-22)
 
 
