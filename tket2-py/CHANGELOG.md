@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.11.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.10.0...tket2-py-v0.11.0) (2025-06-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* Removed some unused variants from `TK1ConvertError` and `OpConvertError`.
+
+### Features
+
+* Add V and Vdg to quantum extension. ([#889](https://github.com/CQCL/tket2/issues/889)) ([a8f1569](https://github.com/CQCL/tket2/commit/a8f156930ff3afc35af15a2afdd24fc65c8409b5))
+
+
+### Code Refactoring
+
+* More flexible pytket encoding ([#849](https://github.com/CQCL/tket2/issues/849)) ([1895f68](https://github.com/CQCL/tket2/commit/1895f6845efb6040cca45e81d1c71b4579e791b6))
+
 ## [0.10.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.9.1...tket2-py-v0.10.0) (2025-05-22)
 
 
