@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.14.1...tket2-hseries-v0.15.0) - 2025-06-16
+
+### Bug Fixes
+
+- *(tket2-hseries)* unicode-aware prefix in `emit_global_string` ([#902](https://github.com/CQCL/tket2/pull/902))
+- [**breaking**] Change array result ops signature to return array result ([#888](https://github.com/CQCL/tket2/pull/888))
+
+### New Features
+
+- Add llvm lowering for debug extension ([#900](https://github.com/CQCL/tket2/pull/900))
+
+### Refactor
+
+- [**breaking**] More flexible pytket encoding ([#849](https://github.com/CQCL/tket2/pull/849))
+
 ## [0.14.1](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.14.0...tket2-hseries-v0.14.1) - 2025-06-03
 
 ### New Features
