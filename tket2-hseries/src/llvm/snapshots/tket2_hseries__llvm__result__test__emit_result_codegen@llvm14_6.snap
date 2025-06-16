@@ -7,7 +7,7 @@ source_filename = "test_context"
 
 @res_test_arr_i.DFD30452.0 = private constant [25 x i8] c"\18USER:INTARR:test_arr_int"
 
-define void @_hl.main.1([10 x i64] %0) {
+define [10 x i64] @_hl.main.1([10 x i64] %0) {
 alloca_block:
   br label %entry_block
 
@@ -31,7 +31,7 @@ entry_block:                                      ; preds = %alloca_block
   store i1* %3, i1** %mask_ptr, align 8
   %5 = load <{ i32, i32, i64*, i1* }>, <{ i32, i32, i64*, i1* }>* %out_arr_alloca, align 1
   call void @print_int_arr(i8* getelementptr inbounds ([25 x i8], [25 x i8]* @res_test_arr_i.DFD30452.0, i32 0, i32 0), i64 %tag_len2, <{ i32, i32, i64*, i1* }>* %out_arr_alloca)
-  ret void
+  ret [10 x i64] %0
 }
 
 declare void @print_int_arr(i8*, i64, <{ i32, i32, i64*, i1* }>*)
