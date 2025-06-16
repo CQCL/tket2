@@ -242,11 +242,10 @@ impl<H: HugrView> Tk1EncoderContext<H> {
                 continue;
             }
             // Dataflow ports should have a single linked neighbour.
-            let Some((neigh, neigh_out)) = circ.hugr().single_linked_output(node, input) else {
-                return Err(
-                    OpConvertError::UnsupportedOpSerialization { op: optype.clone() }.into(),
-                );
-            };
+            let (neigh, neigh_out) = circ
+                .hugr()
+                .single_linked_output(node, input)
+                .expect("Dataflow input port should have a single neighbour");
             let wire = Wire::new(neigh, neigh_out);
             if !wire_filter(wire) {
                 continue;

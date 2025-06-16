@@ -1,6 +1,6 @@
 //! Serialization and deserialization of circuits using the `pytket` JSON format.
 
-mod decoder;
+pub mod decoder;
 pub mod encoder;
 pub mod extension;
 
@@ -9,6 +9,8 @@ pub use extension::PytketEmitter;
 
 use hugr::core::HugrNode;
 
+use hugr::hugr::hugrmut::HugrMut;
+use hugr::ops::handle::NodeHandle;
 use hugr::{Hugr, Wire};
 use itertools::Itertools;
 
@@ -27,6 +29,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::register::{Bit, ElementId, Qubit};
 
 use crate::circuit::Circuit;
+use crate::serialize::pytket::decoder::Tk1DecoderConfig;
 
 use self::decoder::Tk1DecoderContext;
 
@@ -53,12 +56,16 @@ const METADATA_INPUT_PARAMETERS: &str = "TKET1.input_parameters";
 ///
 /// Implemented by [`SerialCircuit`], the JSON format used by tket1's `pytket` library.
 pub trait TKETDecode: Sized {
-    /// The error type for decoding.
+    /// Error type of decoding errors.
     type DecodeError;
-    /// The error type for decoding.
+    /// Error type of encoding errors.
     type EncodeError;
     /// Convert the serialized circuit to a circuit.
+    ///
+    /// Uses a default set of extension decoders to translate operations.
     fn decode(self) -> Result<Circuit, Self::DecodeError>;
+    /// Convert the serialized circuit to a circuit.
+    fn decode_with_config(self, config: Tk1DecoderConfig) -> Result<Circuit, Self::DecodeError>;
     /// Convert a circuit to a serialized pytket circuit.
     ///
     /// Uses a default set of emitters to translate operations.
@@ -80,10 +87,18 @@ impl TKETDecode for SerialCircuit {
     type EncodeError = Tk1ConvertError;
 
     fn decode(self) -> Result<Circuit, Self::DecodeError> {
-        let mut decoder = Tk1DecoderContext::try_new(&self)?;
+        let config = decoder::default_decoder_config();
+        Self::decode_with_config(self, config)
+    }
+
+    fn decode_with_config(self, config: Tk1DecoderConfig) -> Result<Circuit, Self::DecodeError> {
+        let mut hugr = Hugr::new();
+
+        let mut decoder = Tk1DecoderContext::new(&self, &mut hugr, None, config)?;
 
         if !self.phase.is_empty() {
             // TODO - add a phase gate
+            // <https://github.com/CQCL/tket2/issues/598>
             // let phase = Param::new(serialcirc.phase);
             // decoder.add_phase(phase);
         }
@@ -91,7 +106,9 @@ impl TKETDecode for SerialCircuit {
         for com in self.commands {
             decoder.add_command(com)?;
         }
-        Ok(decoder.finish().into())
+        let main_func = decoder.finish()?;
+        hugr.set_entrypoint(main_func.node());
+        Ok(hugr.into())
     }
 
     fn encode(circuit: &Circuit) -> Result<Self, Self::EncodeError> {
@@ -178,12 +195,6 @@ pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, Tk1ConvertError> {
 #[non_exhaustive]
 #[debug(bounds(N: HugrNode))]
 pub enum OpConvertError<N = hugr::Node> {
-    /// The serialized operation is not supported.
-    #[display("Cannot serialize tket2 operation: {op}")]
-    UnsupportedOpSerialization {
-        /// The operation.
-        op: OpType,
-    },
     /// Tried to decode a tket1 operation with not enough parameters.
     #[display(
         "Operation {} is missing encoded parameters. Expected at least {expected} but only \"{}\" were specified.",
@@ -277,8 +288,10 @@ pub enum Tk1ConvertError<N = hugr::Node> {
 
 impl<N> Tk1ConvertError<N> {
     /// Create a new error with a custom message.
-    pub fn custom(msg: impl Into<String>) -> Self {
-        Self::CustomError { msg: msg.into() }
+    pub fn custom(msg: impl ToString) -> Self {
+        Self::CustomError {
+            msg: msg.to_string(),
+        }
     }
 }
 

@@ -27,15 +27,15 @@ pub(crate) use bool::set_bits_op;
 pub(crate) use tk1::OpaqueTk1Op;
 
 use super::encoder::{RegisterCount, TrackedValues};
-use super::Tk1EncoderContext;
-use crate::serialize::pytket::encoder::EncodeStatus;
+use crate::serialize::pytket::decoder::{DecodeStatus, Tk1DecoderContext};
+use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
 use hugr::extension::ExtensionId;
 use hugr::ops::constant::OpaqueValue;
 use hugr::ops::ExtensionOp;
 use hugr::types::CustomType;
-use hugr::HugrView;
+use hugr::{HugrView, Node};
 
 /// An encoder of HUGR operations and types that transforms them into pytket
 /// primitives.
@@ -45,8 +45,11 @@ use hugr::HugrView;
 /// constant in the HUGR being encoded, the configuration will call each of
 /// the encoders declaring support for the specific extension sequentially until
 /// one of them indicates a successful conversion.
+//
+// Note: The HugrView type needs to be fixed at the type level rather than on
+// the method signatures to ensure the trait is dyn compatible.
 pub trait PytketEmitter<H: HugrView> {
-    /// The name of the extension this encoder/decoder is for.
+    /// The name of the extension this encoder is for.
     ///
     /// [`PytketEmitter::op_to_pytket`] and [`PytketEmitter::type_to_pytket`] will
     /// only be called for operations/types of these extensions.
@@ -96,5 +99,43 @@ pub trait PytketEmitter<H: HugrView> {
     ) -> Result<Option<TrackedValues>, Tk1ConvertError<H::Node>> {
         let _ = (value, encoder);
         Ok(None)
+    }
+}
+
+/// A decoder of pytket operations and types that transforms them into HUGR
+/// primitives.
+///
+/// A [decoder configuration](crate::serialize::pytket::Tk1DecoderConfig)
+/// contains a list of such decoders.
+pub trait PytketDecoder {
+    /// The name of the extension this decoder is for.
+    ///
+    /// [`PytketDecoder::type_to_hugr`] will only be called for
+    /// operations/types of these extensions.
+    fn extensions(&self) -> Vec<ExtensionId>;
+
+    /// A list of pytket's [`tket_json_rs::OpType`] supported by this decoder.
+    ///
+    /// [`PytketDecoder::op_to_hugr`] will only be called for commands
+    /// containing these.
+    fn op_types(&self) -> Vec<tket_json_rs::OpType>;
+
+    /// Given a pytket [`tket_json_rs::circuit_json::Operation`] node in the
+    /// HUGR circuit and its operation type, try to convert it to a pytket
+    /// operation and add it to the pytket encoder.
+    ///
+    /// Returns an [`DecodeStatus`] indicating if the operation was successfully
+    /// converted. If the operation is not supported by the encoder, it's
+    /// important to **not** modify the `encoder` context as that may invalidate
+    /// the context for other encoders that may be called afterwards.
+    fn op_to_hugr(
+        &self,
+        op: &tket_json_rs::circuit_json::Operation,
+        args: &[tket_json_rs::register::ElementId],
+        opgroup: Option<&str>,
+        decoder: &mut Tk1DecoderContext<'_>,
+    ) -> Result<DecodeStatus, Tk1ConvertError<Node>> {
+        let _ = (op, args, opgroup, decoder);
+        Ok(DecodeStatus::Unsupported)
     }
 }
