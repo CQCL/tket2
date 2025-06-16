@@ -84,6 +84,7 @@ impl TKETDecode for SerialCircuit {
 
         if !self.phase.is_empty() {
             // TODO - add a phase gate
+            // <https://github.com/CQCL/tket2/issues/598>
             // let phase = Param::new(serialcirc.phase);
             // decoder.add_phase(phase);
         }
@@ -178,12 +179,6 @@ pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, Tk1ConvertError> {
 #[non_exhaustive]
 #[debug(bounds(N: HugrNode))]
 pub enum OpConvertError<N = hugr::Node> {
-    /// The serialized operation is not supported.
-    #[display("Cannot serialize tket2 operation: {op}")]
-    UnsupportedOpSerialization {
-        /// The operation.
-        op: OpType,
-    },
     /// Tried to decode a tket1 operation with not enough parameters.
     #[display(
         "Operation {} is missing encoded parameters. Expected at least {expected} but only \"{}\" were specified.",
@@ -277,8 +272,10 @@ pub enum Tk1ConvertError<N = hugr::Node> {
 
 impl<N> Tk1ConvertError<N> {
     /// Create a new error with a custom message.
-    pub fn custom(msg: impl Into<String>) -> Self {
-        Self::CustomError { msg: msg.into() }
+    pub fn custom(msg: impl ToString) -> Self {
+        Self::CustomError {
+            msg: msg.to_string(),
+        }
     }
 }
 
