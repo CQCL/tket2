@@ -56,6 +56,8 @@ pub mod subcircuit;
 
 #[cfg(feature = "portmatching")]
 pub mod portmatching;
+#[cfg(feature = "badgerv2_unstable")]
+pub mod rewrite_space;
 
 #[cfg(feature = "llvm")]
 pub mod llvm;

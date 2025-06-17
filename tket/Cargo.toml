@@ -24,6 +24,7 @@ path = "src/lib.rs"
 [features]
 # Enables search and replace optimisation passes using the `portmatching` crate.
 portmatching = ["dep:portmatching", "dep:rmp-serde"]
+badgerv2_unstable = ["hugr/persistent_unstable", "chrono/serde", "dep:z3"]
 
 # Stores a trace of the applied rewrites
 rewrite-tracing = []
@@ -78,6 +79,11 @@ zstd = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 num-rational = { workspace = true }
 
+[dependencies.z3] # Currently using a fork of z3.rs to install from GH releases
+git = "https://github.com/lmondada/z3.rs.git"
+rev = "d1ca853678c"
+features = ["gh-release"]
+optional = true
 
 [dev-dependencies]
 rstest = { workspace = true }
@@ -92,3 +98,7 @@ insta = "1.43.1"
 [[bench]]
 name = "bench_main"
 harness = false
+
+[[test]]
+name = "rewrite_space_explorer"
+required-features = ["badgerv2_unstable"]

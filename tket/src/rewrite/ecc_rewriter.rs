@@ -13,7 +13,6 @@
 //! of the Quartz repository.
 
 use derive_more::{Display, Error, From, Into};
-use hugr::envelope::serde_with::impl_serde_as_string_envelope;
 use hugr::extension::resolution::ExtensionResolutionError;
 use hugr::{Hugr, HugrView, Node, PortIndex};
 use itertools::Itertools;
@@ -32,16 +31,13 @@ use crate::{
     circuit::{remove_empty_wire, Circuit},
     optimiser::badger::{load_eccs_json_file, EqCircClass},
     portmatching::{CircuitPattern, PatternMatcher},
+    serialize::AsStringTk2Envelope,
 };
 
 use super::{CircuitRewrite, Rewriter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, From, Into, serde::Serialize, serde::Deserialize)]
 struct TargetID(usize);
-
-struct AsStringTk2Envelope;
-
-impl_serde_as_string_envelope!(AsStringTk2Envelope, &REGISTRY);
 
 /// A rewriter based on circuit equivalence classes.
 ///
