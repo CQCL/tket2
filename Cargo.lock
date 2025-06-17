@@ -1014,6 +1014,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
+name = "hit"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "enum_dispatch",
+ "hugr",
+ "hugr-core",
+ "itertools 0.14.0",
+ "serde",
+ "serde_json",
+ "tket2",
+ "toml",
+]
+
+[[package]]
 name = "html-escape"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1025,7 +1042,6 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1037,7 +1053,6 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
 dependencies = [
  "anyhow",
  "clap",
@@ -1054,7 +1069,6 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
 dependencies = [
  "base64",
  "cgmath",
@@ -1088,7 +1102,6 @@ dependencies = [
 [[package]]
 name = "hugr-llvm"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
 dependencies = [
  "anyhow",
  "delegate 0.13.3",
@@ -1107,7 +1120,6 @@ dependencies = [
 [[package]]
 name = "hugr-model"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1127,7 +1139,6 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
@@ -1144,7 +1155,6 @@ dependencies = [
 [[package]]
 name = "hugr-persistent"
 version = "0.1.0"
-source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
 dependencies = [
  "delegate 0.13.3",
  "derive_more 1.0.0",
@@ -2130,6 +2140,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_spanned"
+version = "0.6.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf41e0cfaf7226dca15e8197172c295a782857fcb97fad1808a166870dee75a3"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "serde_with"
 version = "3.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2511,10 +2530,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml"
+version = "0.8.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05ae329d1f08c4d17a59bed7ff5b5a769d062e64a62d34a3261b219e62cd5aae"
+dependencies = [
+ "serde",
+ "serde_spanned",
+ "toml_datetime",
+ "toml_edit",
+]
+
+[[package]]
 name = "toml_datetime"
 version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3da5db5a963e24bc68be8b17b6fa82814bb22ee8660f192bb182771d498f09a3"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "toml_edit"
@@ -2523,9 +2557,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "310068873db2c5b3e7659d2cc35d21855dbafa50d1ce336397c666e3cb08137e"
 dependencies = [
  "indexmap 2.9.0",
+ "serde",
+ "serde_spanned",
  "toml_datetime",
+ "toml_write",
  "winnow",
 ]
+
+[[package]]
+name = "toml_write"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
 name = "tracing"
@@ -3113,3 +3156,23 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "hugr"
+version = "0.20.1"
+source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
+
+[[patch.unused]]
+name = "hugr-cli"
+version = "0.20.1"
+source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
+
+[[patch.unused]]
+name = "hugr-core"
+version = "0.20.1"
+source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
+
+[[patch.unused]]
+name = "hugr-passes"
+version = "0.20.1"
+source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"

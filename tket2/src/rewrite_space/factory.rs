@@ -82,6 +82,9 @@ pub trait CommitFactory {
     /// Get the cost of an operation.
     fn op_cost(&self, op: &OpType) -> Option<Self::Cost>;
 
+    /// Get the name for a pattern match.
+    fn get_name(&self, pattern_match: &Self::PatternMatch, host: &PersistentHugr) -> String;
+
     /// Explore and expand the rewrite space.
     ///
     /// This method will iteratively explore the space, finding pattern matches
@@ -118,7 +121,7 @@ pub trait CommitFactory {
                 let new_replacement = new_commit.replacement().expect("not a base commit");
                 let cost = repl_cost(new_replacement, host, |op| self.op_cost(op));
                 let Some(new_commit_id) = space
-                    .add_rewrite(new_commit, cost)
+                    .add_rewrite(new_commit, cost, self.get_name(&pattern_match, host))
                     .expect("constructed invalid commit")
                 else {
                     continue;
@@ -165,7 +168,6 @@ pub trait CommitFactory {
                         Some((n, walker))
                     });
                     let nodes_walker_pairs = nodes_walker_pairs.collect_vec();
-                    // dbg!(&nodes_walker_pairs);
                     Either::Right(nodes_walker_pairs.into_iter())
                 };
 

@@ -45,18 +45,21 @@ impl<C> From<CommitStateSpace> for RewriteSpace<C> {
     }
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct CommitMetadata<C> {
     cost: C,
     timestamp: DateTime<Utc>,
+    name: String,
 }
 
 impl<C> CommitMetadata<C> {
-    /// Create new rewrite metadata with the given cost and current timestamp
-    fn with_current_time(rewrite_cost: C) -> Self {
+    /// Create new rewrite metadata with the given cost, name and current
+    /// timestamp
+    fn with_current_time(rewrite_cost: C, name: String) -> Self {
         Self {
             cost: rewrite_cost,
             timestamp: Utc::now(),
+            name,
         }
     }
 }
@@ -81,6 +84,11 @@ impl<C> RewriteSpace<C> {
         self.metadata.get(&commit_id).map(|m| m.timestamp)
     }
 
+    /// Get the name of a rewrite.
+    pub fn get_name(&self, commit_id: CommitId) -> Option<&str> {
+        self.metadata.get(&commit_id).map(|m| m.name.as_str())
+    }
+
     delegate! {
         to self.state_space {
             /// Get all commit IDs in the space.
@@ -103,10 +111,11 @@ impl<C: CostDelta> RewriteSpace<C> {
         &mut self,
         commit: Commit,
         cost: C,
+        name: String,
     ) -> Result<Option<CommitId>, InvalidCommit> {
         let commit_id = self.state_space.try_add_commit(commit)?;
         if let Entry::Vacant(e) = self.metadata.entry(commit_id) {
-            e.insert(CommitMetadata::with_current_time(cost));
+            e.insert(CommitMetadata::with_current_time(cost, name));
             Ok(Some(commit_id))
         } else {
             Ok(None)

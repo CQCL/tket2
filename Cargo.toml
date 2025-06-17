@@ -9,6 +9,7 @@ members = [
     "compile-rewriter",
     "badger-optimiser",
     "tket2-hseries",
+    "hit",
 ]
 default-members = ["tket2", "tket2-hseries"]
 
@@ -48,9 +49,12 @@ hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "19745e1b" }
 # hugr = "0.20.1"
 # hugr-core = "0.20.1"
 # hugr-cli = "0.20.1"
-hugr = { git = "https://github.com/CQCL/hugr", rev = "19745e1b" }
-hugr-core = { git = "https://github.com/CQCL/hugr", rev = "19745e1b" }
-hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "19745e1b" }
+# hugr = { git = "https://github.com/CQCL/hugr", rev = "19745e1b" }
+# hugr-core = { git = "https://github.com/CQCL/hugr", rev = "19745e1b" }
+# hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "19745e1b" }
+hugr.path = "../hugr/hugr"
+hugr-core.path = "../hugr/hugr-core"
+hugr-cli.path = "../hugr/hugr-cli"
 portgraph = "0.14.1"
 pyo3 = ">= 0.23.4, < 0.26"
 itertools = "0.14.0"
