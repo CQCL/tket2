@@ -103,12 +103,11 @@ impl CommuteCZ {
     /// The first of the two CZ gates
     fn out_node(&self, host: &PersistentHugr) -> PatchNode {
         self.wires()
-            .map(|w| w.single_outgoing_port(host).expect("is complete"))
+            .map(|w| w.single_outgoing_port(host).expect("is complete").0)
             .unique()
             .exactly_one()
             .ok()
             .expect("invalid CommuteCZ match")
-            .0
     }
 }
 
@@ -236,6 +235,31 @@ impl CommitFactory for CommuteCZFactory {
 
     fn op_cost(&self, op: &OpType) -> Option<Self::Cost> {
         op_matches(op, Tk2Op::CZ).then_some(1)
+    }
+
+    fn get_name(&self, pattern_match: &Self::PatternMatch, host: &PersistentHugr) -> String {
+        match pattern_match {
+            CommuteCZ::Swap(wire) => {
+                let out_node = pattern_match.out_node(host);
+                let (in_node, _) = wire.all_incoming_ports(host).exactly_one().ok().unwrap();
+                format!(
+                    "swap_cz_nodes({:?}@{}, {:?}@{})",
+                    out_node.1, out_node.0, in_node.1, in_node.0
+                )
+            }
+            CommuteCZ::Cancel(wires) => {
+                let out_node = pattern_match.out_node(host);
+                let (in_node, _) = wires[0]
+                    .all_incoming_ports(host)
+                    .exactly_one()
+                    .ok()
+                    .unwrap();
+                format!(
+                    "cancel_cz_nodes({:?}@{}, {:?}@{})",
+                    out_node.1, out_node.0, in_node.1, in_node.0
+                )
+            }
+        }
     }
 }
 
