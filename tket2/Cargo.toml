@@ -24,6 +24,7 @@ path = "src/lib.rs"
 [features]
 # Enables search and replace optimisation passes using the `portmatching` crate.
 portmatching = ["dep:portmatching", "dep:rmp-serde"]
+badgerv2_unstable = ["hugr/persistent_unstable", "chrono/serde"]
 
 # Stores a trace of the applied rewrites
 rewrite-tracing = []
@@ -75,6 +76,7 @@ pest = { workspace = true }
 pest_derive = { workspace = true }
 zstd = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
+z3 = { version = "0.12.1" }
 
 
 [dev-dependencies]
@@ -89,3 +91,7 @@ criterion = { version = "0.6.0", features = ["html_reports"] }
 [[bench]]
 name = "bench_main"
 harness = false
+
+[[test]]
+name = "rewrite_space_explorer"
+required-features = ["badgerv2_unstable"]
