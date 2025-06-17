@@ -198,6 +198,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230c5f1ca6a325a32553f8640d31ac9b49f2411e901e427570154868b46da4f7"
 
 [[package]]
+name = "bindgen"
+version = "0.66.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2b84e06fc203107bfbad243f4aba2af864eb7db3b1cf46ea0a023b0b433d2a7"
+dependencies = [
+ "bitflags",
+ "cexpr",
+ "clang-sys",
+ "lazy_static",
+ "lazycell",
+ "peeking_take_while",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash 1.1.0",
+ "shlex",
+ "syn 2.0.103",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -285,6 +305,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cexpr"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fac387a98bb7c37292057cffc56d62ecb629900026402633ae9160df93a8766"
+dependencies = [
+ "nom",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -347,6 +376,17 @@ checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
 dependencies = [
  "ciborium-io",
  "half",
+]
+
+[[package]]
+name = "clang-sys"
+version = "1.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b023947811758c97c59bf9d1c188fd619ad4718dcaa767947df1cadb14f39f4"
+dependencies = [
+ "glob",
+ "libc",
+ "libloading",
 ]
 
 [[package]]
@@ -673,6 +713,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive-where"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "510c292c8cf384b1a340b816a9a6cf2599eb8f566a44949024af88418000c50b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.103",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -974,18 +1025,19 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=225814a#225814ae74b9a3dfbc83e5b0c9762f46251f407b"
+source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
  "hugr-model",
  "hugr-passes",
+ "hugr-persistent",
 ]
 
 [[package]]
 name = "hugr-cli"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=225814a#225814ae74b9a3dfbc83e5b0c9762f46251f407b"
+source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
 dependencies = [
  "anyhow",
  "clap",
@@ -1002,7 +1054,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=225814a#225814ae74b9a3dfbc83e5b0c9762f46251f407b"
+source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
 dependencies = [
  "base64",
  "cgmath",
@@ -1036,7 +1088,7 @@ dependencies = [
 [[package]]
 name = "hugr-llvm"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=225814a#225814ae74b9a3dfbc83e5b0c9762f46251f407b"
+source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
 dependencies = [
  "anyhow",
  "delegate 0.13.3",
@@ -1055,7 +1107,7 @@ dependencies = [
 [[package]]
 name = "hugr-model"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=225814a#225814ae74b9a3dfbc83e5b0c9762f46251f407b"
+source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1075,7 +1127,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=225814a#225814ae74b9a3dfbc83e5b0c9762f46251f407b"
+source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
@@ -1087,6 +1139,24 @@ dependencies = [
  "portgraph 0.14.1",
  "strum",
  "thiserror 2.0.12",
+]
+
+[[package]]
+name = "hugr-persistent"
+version = "0.1.0"
+source = "git+https://github.com/CQCL/hugr?rev=19745e1b#19745e1bacdf8f00535df41d5abc0d81949509bc"
+dependencies = [
+ "delegate 0.13.3",
+ "derive_more 1.0.0",
+ "hugr-core",
+ "itertools 0.14.0",
+ "petgraph 0.8.2",
+ "portgraph 0.14.1",
+ "relrc",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "wyhash",
 ]
 
 [[package]]
@@ -1284,10 +1354,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
+name = "lazycell"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
+
+[[package]]
 name = "libc"
 version = "0.2.172"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa"
+
+[[package]]
+name = "libloading"
+version = "0.8.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
+dependencies = [
+ "cfg-if",
+ "windows-targets",
+]
 
 [[package]]
 name = "linux-raw-sys"
@@ -1337,6 +1423,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "minimal-lexical"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
+
+[[package]]
+name = "nom"
+version = "7.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
+dependencies = [
+ "memchr",
+ "minimal-lexical",
 ]
 
 [[package]]
@@ -1427,6 +1529,12 @@ name = "peak_alloc"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29c4e8e2dd832fd76346468f822e4e600d30ba4e5aa545a128abf12cfae7ea3e"
+
+[[package]]
+name = "peeking_take_while"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
 
 [[package]]
 name = "pest"
@@ -1737,7 +1845,7 @@ version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
 dependencies = [
- "rand_core",
+ "rand_core 0.6.4",
  "serde",
 ]
 
@@ -1749,6 +1857,12 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "rand_core"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38"
 
 [[package]]
 name = "rayon"
@@ -1833,6 +1947,21 @@ name = "relative-path"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
+
+[[package]]
+name = "relrc"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65b9e2100a2ee7d9efb575064b2f9a552d7f9f60289d7b95b9c22175101c7c4a"
+dependencies = [
+ "derive-where",
+ "derive_more 0.99.20",
+ "fxhash",
+ "itertools 0.13.0",
+ "petgraph 0.8.2",
+ "serde",
+ "thiserror 1.0.69",
+]
 
 [[package]]
 name = "rmp"
@@ -2335,6 +2464,7 @@ dependencies = [
  "tket-json-rs",
  "tracing",
  "typetag",
+ "z3",
  "zstd",
 ]
 
@@ -2900,12 +3030,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "wyhash"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca4d373340c479fd1e779f7a763acee85da3e423b1a9a9acccf97babcc92edbb"
+dependencies = [
+ "rand_core 0.9.3",
+]
+
+[[package]]
 name = "wyz"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05f360fc0b24296329c78fda852a1e9ae82de9cf7b27dae4b7f62f118f77b9ed"
 dependencies = [
  "tap",
+]
+
+[[package]]
+name = "z3"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a7ff5718c079e7b813378d67a5bed32ccc2086f151d6185074a7e24f4a565e8"
+dependencies = [
+ "log",
+ "z3-sys",
+]
+
+[[package]]
+name = "z3-sys"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7cf70fdbc0de3f42b404f49b0d4686a82562254ea29ff0a155eef2f5430f4b0"
+dependencies = [
+ "bindgen",
 ]
 
 [[package]]

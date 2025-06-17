@@ -3,6 +3,8 @@
 //! See [`crate::serialize::pytket`] for serialization to and from the legacy pytket format.
 pub mod pytket;
 
+use derive_more::derive::Into;
+use hugr::envelope::serde_with::impl_serde_as_string_envelope;
 pub use hugr::envelope::{EnvelopeConfig, EnvelopeError};
 use hugr::hugr::hugrmut::HugrMut;
 
@@ -19,6 +21,7 @@ use derive_more::{Display, Error, From};
 use hugr::ops::{OpTag, OpTrait, OpType};
 use hugr::package::{Package, PackageValidationError};
 use hugr::{Hugr, HugrView, Node};
+use serde_with::serde_as;
 
 use crate::extension::REGISTRY;
 use crate::{Circuit, CircuitError};
@@ -126,6 +129,16 @@ impl Circuit<Hugr> {
         Ok(circ)
     }
 }
+
+/// Envelope for serialization/deserialization with all TKET2 extensions.
+pub(crate) struct AsStringTk2Envelope;
+impl_serde_as_string_envelope!(AsStringTk2Envelope, &REGISTRY);
+
+/// A wrapped HUGR type that implements serialisation/deserialisation using all
+/// TKET2 extensions.
+#[serde_as]
+#[derive(Debug, Clone, From, Into, serde::Serialize, serde::Deserialize)]
+pub struct HugrWithExts(#[serde_as(as = "AsStringTk2Envelope")] Hugr);
 
 /// Error type for deserialization operations on [`Circuit`]s.
 #[derive(Debug, Display, Error, From)]
