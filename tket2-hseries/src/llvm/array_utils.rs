@@ -40,6 +40,14 @@ pub const DEFAULT_STACK_ARRAY_LOWERING: StackArrayLowering<stack_array::DefaultA
     StackArrayLowering(stack_array::DefaultArrayCodegen);
 
 #[allow(deprecated)]
+impl<ACG: stack_array::ArrayCodegen> StackArrayLowering<ACG> {
+    /// Creates a new [StackArrayLowering].
+    pub const fn new(array_codegen: ACG) -> Self {
+        Self(array_codegen)
+    }
+}
+
+#[allow(deprecated)]
 impl<ACG: stack_array::ArrayCodegen + Clone> ArrayLowering for StackArrayLowering<ACG> {
     fn codegen_extension(&self) -> impl CodegenExtension {
         stack_array::ArrayCodegenExtension::new(self.0.clone())
@@ -62,6 +70,13 @@ pub struct HeapArrayLowering<ACG: array::ArrayCodegen>(ACG);
 /// The default heap array lowering strategy using [array::DefaultArrayCodegen].
 pub const DEFAULT_HEAP_ARRAY_LOWERING: HeapArrayLowering<array::DefaultArrayCodegen> =
     HeapArrayLowering(array::DefaultArrayCodegen);
+
+impl<ACG: array::ArrayCodegen> HeapArrayLowering<ACG> {
+    /// Creates a new [HeapArrayLowering].
+    pub const fn new(array_codegen: ACG) -> Self {
+        Self(array_codegen)
+    }
+}
 
 impl<ACG: array::ArrayCodegen + Clone> ArrayLowering for HeapArrayLowering<ACG> {
     fn codegen_extension(&self) -> impl CodegenExtension {
