@@ -6,60 +6,76 @@ use anyhow::Result;
 use hugr::llvm::extension::collections::array::decompose_array_fat_pointer;
 use hugr::llvm::extension::collections::{array, stack_array};
 use hugr::llvm::inkwell::values::BasicValueEnum;
-use hugr::llvm::{inkwell, CodegenExtsBuilder};
-use hugr::{HugrView, Node};
+use hugr::llvm::{inkwell, CodegenExtension};
 use inkwell::builder::{Builder, BuilderError};
 use inkwell::context::Context;
 use inkwell::types::{IntType, PointerType, StructType};
 use inkwell::values::{ArrayValue, IntValue, PointerValue, StructValue};
 use inkwell::AddressSpace;
 
-/// Different array lowering strategies.
-#[derive(Clone, Copy, Debug, Default)]
-pub enum ArrayLowering {
-    /// The default array lowering on the heap as implemented in
-    /// [hugr::llvm::extension::collections::array].
-    #[default]
-    Heap,
-    /// Fall-back lowering of arrays as LLVM values allocated on the stack as implemented in
-    /// [hugr::llvm::extension::collections::stack_array].
-    Stack,
-}
-
-impl ArrayLowering {
-    /// Adds the corresponding array codegen extension to the [CodegenExtsBuilder].
-    pub fn add_codegen_extension<'a, H: HugrView<Node = Node> + 'a>(
-        &self,
-        builder: CodegenExtsBuilder<'a, H>,
-    ) -> CodegenExtsBuilder<'a, H> {
-        match self {
-            ArrayLowering::Heap => builder.add_extension(array::ArrayCodegenExtension::new(
-                array::DefaultArrayCodegen,
-            )),
-            #[allow(deprecated)]
-            ArrayLowering::Stack => builder.add_extension(stack_array::ArrayCodegenExtension::new(
-                stack_array::DefaultArrayCodegen,
-            )),
-        }
-    }
+/// Specifies different array lowering strategies.
+///
+/// See [DEFAULT_STACK_ARRAY_LOWERING] and [DEFAULT_HEAP_ARRAY_LOWERING] for the default
+/// array lowerings implementing this trait.
+pub trait ArrayLowering {
+    /// The [CodegenExtension] specifying the array lowering.
+    fn codegen_extension(&self) -> impl CodegenExtension;
 
     /// Turns an array value in the given lowering into a pointer to the first array element.
-    pub fn array_to_ptr<'c>(
+    fn array_to_ptr<'c>(
+        &self,
+        builder: &Builder<'c>,
+        val: BasicValueEnum<'c>,
+    ) -> Result<PointerValue<'c>>;
+}
+
+/// Array lowering via the stack as implemented in [stack_array].
+#[derive(Clone)]
+#[allow(deprecated)]
+pub struct StackArrayLowering<ACG: stack_array::ArrayCodegen>(ACG);
+
+/// The default stack array lowering strategy using [stack_array::DefaultArrayCodegen].
+#[allow(deprecated)]
+pub const DEFAULT_STACK_ARRAY_LOWERING: StackArrayLowering<stack_array::DefaultArrayCodegen> =
+    StackArrayLowering(stack_array::DefaultArrayCodegen);
+
+#[allow(deprecated)]
+impl<ACG: stack_array::ArrayCodegen + Clone> ArrayLowering for StackArrayLowering<ACG> {
+    fn codegen_extension(&self) -> impl CodegenExtension {
+        stack_array::ArrayCodegenExtension::new(self.0.clone())
+    }
+
+    fn array_to_ptr<'c>(
         &self,
         builder: &Builder<'c>,
         val: BasicValueEnum<'c>,
     ) -> Result<PointerValue<'c>> {
-        match self {
-            ArrayLowering::Heap => {
-                let (array_ptr, offset) = decompose_array_fat_pointer(builder, val)?;
-                let elem_ptr = unsafe { builder.build_in_bounds_gep(array_ptr, &[offset], "")? };
-                Ok(elem_ptr)
-            }
-            ArrayLowering::Stack => {
-                let (elem_ptr, _) = build_array_alloca(builder, val.into_array_value())?;
-                Ok(elem_ptr)
-            }
-        }
+        let (elem_ptr, _) = build_array_alloca(builder, val.into_array_value())?;
+        Ok(elem_ptr)
+    }
+}
+
+/// Array lowering via a heap as implemented in [array].
+#[derive(Clone)]
+pub struct HeapArrayLowering<ACG: array::ArrayCodegen>(ACG);
+
+/// The default heap array lowering strategy using [array::DefaultArrayCodegen].
+pub const DEFAULT_HEAP_ARRAY_LOWERING: HeapArrayLowering<array::DefaultArrayCodegen> =
+    HeapArrayLowering(array::DefaultArrayCodegen);
+
+impl<ACG: array::ArrayCodegen + Clone> ArrayLowering for HeapArrayLowering<ACG> {
+    fn codegen_extension(&self) -> impl CodegenExtension {
+        array::ArrayCodegenExtension::new(self.0.clone())
+    }
+
+    fn array_to_ptr<'c>(
+        &self,
+        builder: &Builder<'c>,
+        val: BasicValueEnum<'c>,
+    ) -> Result<PointerValue<'c>> {
+        let (array_ptr, offset) = decompose_array_fat_pointer(builder, val)?;
+        let elem_ptr = unsafe { builder.build_in_bounds_gep(array_ptr, &[offset], "")? };
+        Ok(elem_ptr)
     }
 }
 

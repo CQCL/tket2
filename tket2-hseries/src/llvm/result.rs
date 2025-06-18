@@ -24,18 +24,18 @@ static TAG_PREFIX: &str = "USER:";
 
 /// Codegen extension for results
 #[derive(Default)]
-pub struct ResultsCodegenExtension {
-    array_lowering: ArrayLowering,
+pub struct ResultsCodegenExtension<AL: ArrayLowering> {
+    array_lowering: AL,
 }
 
-impl ResultsCodegenExtension {
+impl<AL: ArrayLowering> ResultsCodegenExtension<AL> {
     /// Creates a new [ResultsCodegenExtension] with specified array lowering.
-    pub fn new(array_lowering: ArrayLowering) -> Self {
+    pub fn new(array_lowering: AL) -> Self {
         Self { array_lowering }
     }
 }
 
-impl CodegenExtension for ResultsCodegenExtension {
+impl<AL: ArrayLowering + Clone> CodegenExtension for ResultsCodegenExtension<AL> {
     fn add_extension<'a, H: HugrView<Node = Node> + 'a>(
         self,
         builder: CodegenExtsBuilder<'a, H>,
@@ -45,23 +45,19 @@ impl CodegenExtension for ResultsCodegenExtension {
     {
         builder.simple_extension_op::<ResultOpDef>(move |context, args, _op| {
             let op = ResultOp::from_extension_op(args.node().as_ref())?;
-            ResultEmitter(context, self.array_lowering).emit(args, &op)
+            ResultEmitter(context, self.array_lowering.clone()).emit(args, &op)
         })
     }
 }
 
-struct ResultEmitter<'c, 'd, 'e, H: HugrView<Node = Node>>(
+struct ResultEmitter<'c, 'd, 'e, H: HugrView<Node = Node>, AL: ArrayLowering>(
     &'d mut EmitFuncContext<'c, 'e, H>,
-    ArrayLowering,
+    AL,
 );
 
-impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
+impl<'c, H: HugrView<Node = Node>, AL: ArrayLowering + Clone> ResultEmitter<'c, '_, '_, H, AL> {
     fn iw_context(&self) -> &'c Context {
         self.0.typing_session().iw_context()
-    }
-
-    fn array_lowering(&self) -> ArrayLowering {
-        self.1
     }
 
     fn int_t(&self) -> IntType<'c> {
@@ -176,7 +172,7 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
         };
 
         let print_fn = self.get_func_print(op)?;
-        let array = self.array_lowering().array_to_ptr(self.builder(), val)?;
+        let array = self.1.array_to_ptr(self.builder(), val)?;
         let (array_ptr, _) = struct_1d_arr_alloc(
             self.iw_context(),
             self.builder(),
@@ -296,6 +292,8 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
 #[allow(deprecated)] // TODO remove after switching to new array lowering
 mod test {
     use crate::extension::result::ResultOp;
+    use crate::llvm::array_utils::DEFAULT_HEAP_ARRAY_LOWERING;
+    use crate::llvm::array_utils::DEFAULT_STACK_ARRAY_LOWERING;
 
     use hugr::extension::simple_op::MakeRegisteredOp;
     use hugr::llvm::check_emission;
@@ -310,41 +308,39 @@ mod test {
     use super::*;
 
     #[rstest]
-    #[case::bool(1, ResultOp::new_bool("test_bool"), None)]
-    #[case::int(2, ResultOp::new_int("test_int", 6), None)]
-    #[case::uint(3, ResultOp::new_uint("test_uint", 6), None)]
-    #[case::f64(4, ResultOp::new_f64("test_f64"), None)]
-    #[case::arr_bool(5, ResultOp::new_bool("test_arr_bool").array_op(10), Some(ArrayLowering::Heap))]
-    #[case::arr_bool(6, ResultOp::new_bool("test_arr_bool").array_op(10), Some(ArrayLowering::Stack))]
-    #[case::arr_int(7, ResultOp::new_int("test_arr_int", 6).array_op(10), Some(ArrayLowering::Heap))]
-    #[case::arr_int(8, ResultOp::new_int("test_arr_int", 6).array_op(10), Some(ArrayLowering::Stack))]
-    #[case::arr_uint(9, ResultOp::new_uint("test_arr_uint", 6).array_op(10), Some(ArrayLowering::Heap))]
-    #[case::arr_int(10, ResultOp::new_int("test_arr_int", 6).array_op(10), Some(ArrayLowering::Stack))]
-    #[case::arr_f64(11, ResultOp::new_f64("test_arr_f64").array_op(10), Some(ArrayLowering::Heap))]
+    #[case::bool(1, ResultOp::new_bool("test_bool"), &DEFAULT_STACK_ARRAY_LOWERING)]
+    #[case::int(2, ResultOp::new_int("test_int", 6), &DEFAULT_STACK_ARRAY_LOWERING)]
+    #[case::uint(3, ResultOp::new_uint("test_uint", 6), &DEFAULT_STACK_ARRAY_LOWERING)]
+    #[case::f64(4, ResultOp::new_f64("test_f64"), &DEFAULT_STACK_ARRAY_LOWERING)]
+    #[case::arr_bool(5, ResultOp::new_bool("test_arr_bool").array_op(10), &DEFAULT_HEAP_ARRAY_LOWERING)]
+    #[case::arr_bool(6, ResultOp::new_bool("test_arr_bool").array_op(10), &DEFAULT_STACK_ARRAY_LOWERING)]
+    #[case::arr_int(7, ResultOp::new_int("test_arr_int", 6).array_op(10), &DEFAULT_HEAP_ARRAY_LOWERING)]
+    #[case::arr_int(8, ResultOp::new_int("test_arr_int", 6).array_op(10), &DEFAULT_STACK_ARRAY_LOWERING)]
+    #[case::arr_uint(9, ResultOp::new_uint("test_arr_uint", 6).array_op(10), &DEFAULT_HEAP_ARRAY_LOWERING)]
+    #[case::arr_int(10, ResultOp::new_int("test_arr_int", 6).array_op(10), &DEFAULT_STACK_ARRAY_LOWERING)]
+    #[case::arr_f64(11, ResultOp::new_f64("test_arr_f64").array_op(10), &DEFAULT_HEAP_ARRAY_LOWERING)]
     // test cases for various tags
-    #[case::unicode_tag(12, ResultOp::new_int("测试字符串", 6), None)]
-    #[case::special_chars(13, ResultOp::new_uint("test!@#$%^&*()", 6), None)]
+    #[case::unicode_tag(12, ResultOp::new_int("测试字符串", 6), &DEFAULT_STACK_ARRAY_LOWERING)]
+    #[case::special_chars(13, ResultOp::new_uint("test!@#$%^&*()", 6), &DEFAULT_STACK_ARRAY_LOWERING)]
     #[should_panic(expected = "Constant string too long")]
-    #[case::very_long_tag(14, ResultOp::new_f64("x".repeat(256)), None)]
-    #[case::whitespace(15, ResultOp::new_bool("   spaces   tabs\t\t\tnewlines\n\n\n"), None)]
-    #[case::emoji(16, ResultOp::new_bool("🚀👨‍👩‍👧‍👦🌍"), None)]
+    #[case::very_long_tag(14, ResultOp::new_f64("x".repeat(256)), &DEFAULT_STACK_ARRAY_LOWERING)]
+    #[case::whitespace(15, ResultOp::new_bool("   spaces   tabs\t\t\tnewlines\n\n\n"), &DEFAULT_STACK_ARRAY_LOWERING)]
+    #[case::emoji(16, ResultOp::new_bool("🚀👨‍👩‍👧‍👦🌍"), &DEFAULT_STACK_ARRAY_LOWERING)]
     #[should_panic(expected = "Empty result tag received")]
-    #[case::actually_empty(17, ResultOp::new_bool(""), None)]
+    #[case::actually_empty(17, ResultOp::new_bool(""), &DEFAULT_STACK_ARRAY_LOWERING)]
     fn emit_result_codegen(
         #[case] _i: i32,
         #[with(_i)] mut llvm_ctx: TestContext,
         #[case] op: ResultOp,
-        #[case] array_lowering: Option<ArrayLowering>,
+        #[case] array_lowering: &'static (impl ArrayLowering + Clone),
     ) {
-        let array_lowering = array_lowering.unwrap_or_default();
         let pcg = QISPreludeCodegen;
         llvm_ctx.add_extensions(move |ceb| {
-            let ceb = ceb
-                .add_extension(ResultsCodegenExtension::new(array_lowering))
+            ceb.add_extension(ResultsCodegenExtension::new(array_lowering.clone()))
+                .add_extension(array_lowering.codegen_extension())
                 .add_prelude_extensions(pcg.clone())
                 .add_default_int_extensions()
-                .add_float_extensions();
-            array_lowering.add_codegen_extension(ceb)
+                .add_float_extensions()
         });
         let ext_op = op.to_extension_op().unwrap().into();
         let hugr = single_op_hugr(ext_op);

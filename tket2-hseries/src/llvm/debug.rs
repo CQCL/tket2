@@ -17,18 +17,18 @@ static TAG_PREFIX: &str = "USER:";
 
 /// Codegen extension for debug functionality.
 #[derive(Default)]
-pub struct DebugCodegenExtension {
-    array_lowering: ArrayLowering,
+pub struct DebugCodegenExtension<AL: ArrayLowering> {
+    array_lowering: AL,
 }
 
-impl DebugCodegenExtension {
+impl<AL: ArrayLowering> DebugCodegenExtension<AL> {
     /// Creates a new [DebugCodegenExtension] with specified array lowering.
-    pub fn new(array_lowering: ArrayLowering) -> Self {
+    pub fn new(array_lowering: AL) -> Self {
         Self { array_lowering }
     }
 }
 
-impl CodegenExtension for DebugCodegenExtension {
+impl<AL: ArrayLowering> CodegenExtension for DebugCodegenExtension<AL> {
     fn add_extension<'a, H: HugrView<Node = Node> + 'a>(
         self,
         builder: CodegenExtsBuilder<'a, H>,
@@ -42,7 +42,7 @@ impl CodegenExtension for DebugCodegenExtension {
     }
 }
 
-impl DebugCodegenExtension {
+impl<AL: ArrayLowering> DebugCodegenExtension<AL> {
     /// Lower the `debug` `StateResult` op.
     fn emit_state_result<'c, H: HugrView<Node = Node>>(
         &self,
@@ -122,6 +122,8 @@ mod test {
     use hugr::llvm::test::single_op_hugr;
     use hugr::llvm::test::TestContext;
 
+    use crate::llvm::array_utils::DEFAULT_HEAP_ARRAY_LOWERING;
+    use crate::llvm::array_utils::DEFAULT_STACK_ARRAY_LOWERING;
     use crate::llvm::prelude::QISPreludeCodegen;
 
     use rstest::rstest;
@@ -129,22 +131,21 @@ mod test {
     use super::*;
 
     #[rstest]
-    #[case::state_result(1, StateResult::new("test_state_result".to_string(), 2), ArrayLowering::Heap)]
-    #[case::state_result(2, StateResult::new("test_state_result".to_string(), 2), ArrayLowering::Stack)]
+    #[case::state_result(1, StateResult::new("test_state_result".to_string(), 2), &DEFAULT_HEAP_ARRAY_LOWERING)]
+    #[case::state_result(2, StateResult::new("test_state_result".to_string(), 2), &DEFAULT_STACK_ARRAY_LOWERING)]
     fn emit_debug_codegen(
         #[case] _i: i32,
         #[with(_i)] mut llvm_ctx: TestContext,
         #[case] op: StateResult,
-        #[case] array_lowering: ArrayLowering,
+        #[case] array_lowering: &'static (impl ArrayLowering + Clone),
     ) {
         let pcg = QISPreludeCodegen;
         llvm_ctx.add_extensions(move |ceb| {
-            let ceb = ceb
-                .add_extension(DebugCodegenExtension::new(array_lowering))
+            ceb.add_extension(DebugCodegenExtension::new(array_lowering.clone()))
+                .add_extension(array_lowering.codegen_extension())
                 .add_prelude_extensions(pcg.clone())
                 .add_default_int_extensions()
-                .add_float_extensions();
-            array_lowering.add_codegen_extension(ceb)
+                .add_float_extensions()
         });
         let ext_op = op.to_extension_op().unwrap().into();
         let hugr = single_op_hugr(ext_op);
