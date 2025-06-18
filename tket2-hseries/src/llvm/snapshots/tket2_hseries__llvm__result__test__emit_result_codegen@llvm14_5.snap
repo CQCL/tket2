@@ -7,7 +7,7 @@ source_filename = "test_context"
 
 @res_test_arr_b.866EEC87.0 = private constant [27 x i8] c"\1AUSER:BOOLARR:test_arr_bool"
 
-define [10 x i1] @_hl.main.1([10 x i1] %0) {
+define void @_hl.main.1([10 x i1] %0) {
 alloca_block:
   br label %entry_block
 
@@ -31,7 +31,7 @@ entry_block:                                      ; preds = %alloca_block
   store i1* %3, i1** %mask_ptr, align 8
   %5 = load <{ i32, i32, i1*, i1* }>, <{ i32, i32, i1*, i1* }>* %out_arr_alloca, align 1
   call void @print_bool_arr(i8* getelementptr inbounds ([27 x i8], [27 x i8]* @res_test_arr_b.866EEC87.0, i32 0, i32 0), i64 %tag_len2, <{ i32, i32, i1*, i1* }>* %out_arr_alloca)
-  ret [10 x i1] %0
+  ret void
 }
 
 declare void @print_bool_arr(i8*, i64, <{ i32, i32, i1*, i1* }>*)

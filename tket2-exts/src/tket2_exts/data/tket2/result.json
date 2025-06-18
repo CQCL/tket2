@@ -44,32 +44,7 @@
               "bound": "A"
             }
           ],
-          "output": [
-            {
-              "t": "Opaque",
-              "extension": "collections.array",
-              "id": "array",
-              "args": [
-                {
-                  "tya": "Variable",
-                  "idx": 1,
-                  "cached_decl": {
-                    "tp": "BoundedNat",
-                    "bound": null
-                  }
-                },
-                {
-                  "tya": "Type",
-                  "ty": {
-                    "t": "Sum",
-                    "s": "Unit",
-                    "size": 2
-                  }
-                }
-              ],
-              "bound": "A"
-            }
-          ]
+          "output": []
         }
       },
       "binary": false
@@ -117,34 +92,7 @@
               "bound": "A"
             }
           ],
-          "output": [
-            {
-              "t": "Opaque",
-              "extension": "collections.array",
-              "id": "array",
-              "args": [
-                {
-                  "tya": "Variable",
-                  "idx": 1,
-                  "cached_decl": {
-                    "tp": "BoundedNat",
-                    "bound": null
-                  }
-                },
-                {
-                  "tya": "Type",
-                  "ty": {
-                    "t": "Opaque",
-                    "extension": "arithmetic.float.types",
-                    "id": "float64",
-                    "args": [],
-                    "bound": "C"
-                  }
-                }
-              ],
-              "bound": "A"
-            }
-          ]
+          "output": []
         }
       },
       "binary": false
@@ -205,43 +153,7 @@
               "bound": "A"
             }
           ],
-          "output": [
-            {
-              "t": "Opaque",
-              "extension": "collections.array",
-              "id": "array",
-              "args": [
-                {
-                  "tya": "Variable",
-                  "idx": 1,
-                  "cached_decl": {
-                    "tp": "BoundedNat",
-                    "bound": null
-                  }
-                },
-                {
-                  "tya": "Type",
-                  "ty": {
-                    "t": "Opaque",
-                    "extension": "arithmetic.int.types",
-                    "id": "int",
-                    "args": [
-                      {
-                        "tya": "Variable",
-                        "idx": 2,
-                        "cached_decl": {
-                          "tp": "BoundedNat",
-                          "bound": 7
-                        }
-                      }
-                    ],
-                    "bound": "C"
-                  }
-                }
-              ],
-              "bound": "A"
-            }
-          ]
+          "output": []
         }
       },
       "binary": false
@@ -302,43 +214,7 @@
               "bound": "A"
             }
           ],
-          "output": [
-            {
-              "t": "Opaque",
-              "extension": "collections.array",
-              "id": "array",
-              "args": [
-                {
-                  "tya": "Variable",
-                  "idx": 1,
-                  "cached_decl": {
-                    "tp": "BoundedNat",
-                    "bound": null
-                  }
-                },
-                {
-                  "tya": "Type",
-                  "ty": {
-                    "t": "Opaque",
-                    "extension": "arithmetic.int.types",
-                    "id": "int",
-                    "args": [
-                      {
-                        "tya": "Variable",
-                        "idx": 2,
-                        "cached_decl": {
-                          "tp": "BoundedNat",
-                          "bound": 7
-                        }
-                      }
-                    ],
-                    "bound": "C"
-                  }
-                }
-              ],
-              "bound": "A"
-            }
-          ]
+          "output": []
         }
       },
       "binary": false
