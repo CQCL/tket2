@@ -63,7 +63,7 @@ impl<ACG: stack_array::ArrayCodegen + Clone> ArrayLowering for StackArrayLowerin
     }
 }
 
-/// Array lowering via a heap as implemented in [array].
+/// Array lowering via a heap as implemented in [mod@array].
 #[derive(Clone)]
 pub struct HeapArrayLowering<ACG: array::ArrayCodegen>(ACG);
 
