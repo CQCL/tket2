@@ -74,6 +74,20 @@ const PARAMETERIZED: &str = r#"{
         "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
     }"#;
 
+const BARRIER: &str = r#"{
+        "phase": "0.0",
+        "bits": [["c", [0]], ["c", [1]]],
+        "qubits": [["q", [0]], ["q", [1]], ["q", [2]]],
+        "commands": [
+            {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}},
+            {"args": [["q", [1]], ["q", [2]]], "op": {"type": "Barrier"}},
+            {"args": [["q", [2]], ["c", [1]]], "op": {"type": "Measure"}}
+        ],
+        "created_qubits": [],
+        "discarded_qubits": [],
+        "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]], [["q", [2]], ["q", [2]]]]
+    }"#;
+
 /// Check some properties of the serial circuit.
 fn validate_serial_circ(circ: &SerialCircuit) {
     // Check that all commands have valid arguments.
@@ -357,6 +371,7 @@ fn circ_complex_angle_computation() -> (Circuit, String) {
 #[case::simple(MULTI_REGISTER, 2, 3)]
 #[case::unknown_op(UNKNOWN_OP, 2, 3)]
 #[case::parametrized(PARAMETERIZED, 4, 2)]
+#[case::barrier(BARRIER, 3, 3)]
 fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num_qubits: usize) {
     let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), num_commands);
