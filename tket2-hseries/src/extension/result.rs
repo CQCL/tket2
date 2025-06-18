@@ -161,20 +161,11 @@ impl ResultOpDef {
     }
 
     fn result_signature(&self) -> SignatureFunc {
-        let sig = if self.is_array_result_op() {
-            // Do not consume input arrays to allow them to be not copyable.
-            Signature::new(self.arg_type(), self.arg_type())
-        } else {
-            Signature::new(self.arg_type(), type_row![])
-        };
-        PolyFuncType::new([vec![TypeParam::String], self.type_params()].concat(), sig).into()
-    }
-
-    fn is_array_result_op(&self) -> bool {
-        matches!(
-            self,
-            Self::ArrBool | Self::ArrF64 | Self::ArrInt | Self::ArrUInt
+        PolyFuncType::new(
+            [vec![TypeParam::String], self.type_params()].concat(),
+            Signature::new(self.arg_type(), type_row![]),
         )
+        .into()
     }
 }
 
@@ -399,23 +390,10 @@ impl TryFrom<&OpType> for ResultOpDef {
 pub trait ResultOpBuilder: Dataflow {
     /// Add a "tket2.result" op.
     fn add_result(&mut self, result_wire: Wire, op: ResultOp) -> Result<(), BuildError> {
-        debug_assert!(!op.result_op.is_array_result_op());
         let handle = self.add_dataflow_op(op, [result_wire])?;
 
         debug_assert_eq!(handle.outputs().len(), 0);
         Ok(())
-    }
-
-    /// Add a "tket2.result" op with array result type.
-    fn add_array_result(
-        &mut self,
-        result_wire: Wire,
-        op: ResultOp,
-    ) -> Result<[Wire; 1], BuildError> {
-        debug_assert!(op.result_op.is_array_result_op());
-        Ok(self
-            .add_dataflow_op(op.clone(), [result_wire])?
-            .outputs_arr())
     }
 }
 
@@ -424,7 +402,7 @@ impl<D: Dataflow> ResultOpBuilder for D {}
 #[cfg(test)]
 pub(crate) mod test {
     use cool_asserts::assert_matches;
-    use hugr::types::{NoRV, Signature, TypeBase};
+    use hugr::types::Signature;
     use hugr::HugrView;
     use hugr::{
         builder::{Dataflow, DataflowHugr, FunctionBuilder},
@@ -458,15 +436,17 @@ pub(crate) mod test {
             INT_TYPES[5].clone(),
             INT_TYPES[6].clone(),
         ];
-        let arrs: Vec<TypeBase<NoRV>> = in_row
-            .clone()
-            .into_iter()
-            .map(|t| array_type(ARR_SIZE, t))
-            .collect();
-        let in_row = [in_row.clone(), arrs.clone()].concat();
+        let in_row = [
+            in_row.clone(),
+            in_row
+                .into_iter()
+                .map(|t| array_type(ARR_SIZE, t))
+                .collect(),
+        ]
+        .concat();
         let hugr = {
             let mut func_builder =
-                FunctionBuilder::new("circuit", Signature::new(in_row, arrs)).unwrap();
+                FunctionBuilder::new("circuit", Signature::new(in_row, type_row![])).unwrap();
             let ops = [
                 ResultOp::new_bool("b"),
                 ResultOp::new_f64("f"),
@@ -494,15 +474,13 @@ pub(crate) mod test {
             for (w, op) in [b, f, i, u].iter().zip(ops.iter()) {
                 func_builder.add_result(*w, op.clone()).unwrap();
             }
-            let mut outputs = Vec::new();
             for (w, op) in [a_b, a_f, a_i, a_u].iter().zip(ops.iter()) {
-                let [out_w] = func_builder
-                    .add_array_result(*w, op.clone().array_op(ARR_SIZE))
+                func_builder
+                    .add_result(*w, op.clone().array_op(ARR_SIZE))
                     .unwrap();
-                outputs.push(out_w);
             }
 
-            func_builder.finish_hugr_with_outputs(outputs).unwrap()
+            func_builder.finish_hugr_with_outputs([]).unwrap()
         };
         assert_matches!(hugr.validate(), Ok(_));
     }

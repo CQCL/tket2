@@ -154,6 +154,7 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
         tag_ptr: BasicValueEnum,
         tag_len: IntValue,
     ) -> Result<()> {
+        // TODO update to return array after https://github.com/CQCL/tket2/issues/922
         let ResultArgs::Array(_, length) = op.args else {
             bail!("Expected array argument")
         };
@@ -240,8 +241,6 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
                     .try_into()
                     .map_err(|_| anyhow!("result_arr_bool expects one input"))?;
                 self.build_print_array_call(val, op, &ElemType::Bool, tag_ptr, tag_len)?;
-                // Array results need to output the input value again.
-                return args.outputs.finish(self.builder(), [val]);
             }
             ResultOpDef::ArrInt => {
                 let (tag_ptr, tag_len) = self.generate_global_tag(&args, "INTARR:").unwrap();
@@ -250,7 +249,6 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
                     .try_into()
                     .map_err(|_| anyhow!("result_arr_int expects one input"))?;
                 self.build_print_array_call(val, op, &ElemType::Int, tag_ptr, tag_len)?;
-                return args.outputs.finish(self.builder(), [val]);
             }
             ResultOpDef::ArrUInt => {
                 let (tag_ptr, tag_len) = self.generate_global_tag(&args, "INTARR:").unwrap();
@@ -259,7 +257,6 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
                     .try_into()
                     .map_err(|_| anyhow!("result_arr_uint expects one input"))?;
                 self.build_print_array_call(val, op, &ElemType::Uint, tag_ptr, tag_len)?;
-                return args.outputs.finish(self.builder(), [val]);
             }
             ResultOpDef::ArrF64 => {
                 let (tag_ptr, tag_len) = self.generate_global_tag(&args, "FLOATARR:").unwrap();
@@ -268,7 +265,6 @@ impl<'c, H: HugrView<Node = Node>> ResultEmitter<'c, '_, '_, H> {
                     .try_into()
                     .map_err(|_| anyhow!("result_arr_float expects one input"))?;
                 self.build_print_array_call(val, op, &ElemType::Float, tag_ptr, tag_len)?;
-                return args.outputs.finish(self.builder(), [val]);
             }
         }
         args.outputs.finish(self.builder(), [])
