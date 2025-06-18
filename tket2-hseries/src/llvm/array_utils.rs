@@ -3,12 +3,65 @@
 // TODO move to hugr-llvm crate
 // https://github.com/CQCL/tket2/issues/899
 use anyhow::Result;
-use hugr::llvm::inkwell;
+use hugr::llvm::extension::collections::array::decompose_array_fat_pointer;
+use hugr::llvm::extension::collections::{array, stack_array};
+use hugr::llvm::inkwell::values::BasicValueEnum;
+use hugr::llvm::{inkwell, CodegenExtsBuilder};
+use hugr::{HugrView, Node};
 use inkwell::builder::{Builder, BuilderError};
 use inkwell::context::Context;
 use inkwell::types::{IntType, PointerType, StructType};
 use inkwell::values::{ArrayValue, IntValue, PointerValue, StructValue};
 use inkwell::AddressSpace;
+
+/// Different array lowering strategies.
+#[derive(Clone, Copy, Debug, Default)]
+pub enum ArrayLowering {
+    /// The default array lowering on the heap as implemented in
+    /// [hugr::llvm::extension::collections::array].
+    #[default]
+    Heap,
+    /// Fall-back lowering of arrays as LLVM values allocated on the stack as implemented in
+    /// [hugr::llvm::extension::collections::stack_array].
+    Stack,
+}
+
+impl ArrayLowering {
+    /// Adds the corresponding array codegen extension to the [CodegenExtsBuilder].
+    pub fn add_codegen_extension<'a, H: HugrView<Node = Node> + 'a>(
+        &self,
+        builder: CodegenExtsBuilder<'a, H>,
+    ) -> CodegenExtsBuilder<'a, H> {
+        match self {
+            ArrayLowering::Heap => builder.add_extension(array::ArrayCodegenExtension::new(
+                array::DefaultArrayCodegen,
+            )),
+            #[allow(deprecated)]
+            ArrayLowering::Stack => builder.add_extension(stack_array::ArrayCodegenExtension::new(
+                stack_array::DefaultArrayCodegen,
+            )),
+        }
+    }
+
+    /// Turns an array value in the given lowering into a pointer to the first array element.
+    pub fn array_to_ptr<'c>(
+        &self,
+        builder: &Builder<'c>,
+        val: BasicValueEnum<'c>,
+    ) -> Result<PointerValue<'c>> {
+        match self {
+            ArrayLowering::Heap => {
+                let (array_ptr, offset) = decompose_array_fat_pointer(builder, val)?;
+                let elem_ptr = unsafe { builder.build_in_bounds_gep(array_ptr, &[offset], "")? };
+                Ok(elem_ptr)
+            }
+            ArrayLowering::Stack => {
+                let (elem_ptr, _) = build_array_alloca(builder, val.into_array_value())?;
+                Ok(elem_ptr)
+            }
+        }
+    }
+}
 
 /// Helper function to allocate an array on the stack.
 ///
