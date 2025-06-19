@@ -174,7 +174,6 @@ impl<PCG: PreludeCodegen> QSystemCodegenExtension<PCG> {
             //         .try_as_basic_value()
             //         .unwrap_left();
 
-
             //     args.outputs.finish(context.builder(), [result])
             // }
             // Measure qubit in Z basis
@@ -197,7 +196,9 @@ impl<PCG: PreludeCodegen> QSystemCodegenExtension<PCG> {
                     .into_int_value();
                 let result = match op {
                     QSystemOp::MeasureLeaked => result_i1,
-                    QSystemOp::Measure | QSystemOp::MeasureReset => builder.build_select(result_i1, true_val, false_val, "measure")
+                    QSystemOp::Measure | QSystemOp::MeasureReset => {
+                        builder.build_select(result_i1, true_val, false_val, "measure")
+                    }
                 }?;
                 match op {
                     QSystemOp::Measure | QSystemOp::MeasureLeaked => {
@@ -209,7 +210,7 @@ impl<PCG: PreludeCodegen> QSystemCodegenExtension<PCG> {
                             "qfree",
                         )?;
                         args.outputs.finish(builder, [result])
-                    },
+                    }
                     QSystemOp::MeasureReset => {
                         // MeasureReset will reset the qubit after measurement so safe to return
                         builder.build_call(
