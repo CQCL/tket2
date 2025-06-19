@@ -188,7 +188,12 @@ impl<PCG: PreludeCodegen> QSystemCodegenExtension<PCG> {
                         &[qb.into()],
                         "qfree",
                     )?;
-                    let result = builder.build_select(result_i1.into_int_value(), true_val, false_val, "measure")?;
+                    let result = builder.build_select(
+                        result_i1.into_int_value(),
+                        true_val,
+                        false_val,
+                        "measure",
+                    )?;
                     args.outputs.finish(builder, [result])
                 } else {
                     // MeasureReset will reset the qubit after measurement so safe to return
