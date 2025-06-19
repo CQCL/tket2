@@ -163,20 +163,6 @@ impl<PCG: PreludeCodegen> QSystemCodegenExtension<PCG> {
             QSystemOp::PhasedX => {
                 self.emit_impl(context, args, RuntimeFunction::Rxy, &[0, 1, 2], &[0])
             }
-            // QSystemOp::MeasureLeaked => {
-            //     let [qb] = args
-            //         .inputs
-            //         .try_into()
-            //         .map_err(|_| anyhow!("Measure expects one input"))?;
-            //     let func = self.runtime_func(context, RuntimeFunction::MeasureLeaked)?;
-            //     let result = context
-            //         .builder()
-            //         .build_call(func, &[qb.into()], "measure_leaked")?
-            //         .try_as_basic_value()
-            //         .unwrap_left();
-
-            //     args.outputs.finish(context.builder(), [result])
-            // }
             // Measure qubit in Z basis
             QSystemOp::Measure | QSystemOp::MeasureReset | QSystemOp::MeasureLeaked => {
                 let true_val = emit_value(context, &Value::true_val())?;
@@ -193,34 +179,25 @@ impl<PCG: PreludeCodegen> QSystemCodegenExtension<PCG> {
                         "measure_i1",
                     )?
                     .try_as_basic_value()
-                    .unwrap_left()
-                    .into_int_value();
-                let result = match op {
-                    QSystemOp::MeasureLeaked => result_i1,
-                    QSystemOp::Measure | QSystemOp::MeasureReset => {
-                        builder.build_select(result_i1, true_val, false_val, "measure")
-                    }
-                }?;
-                match op {
-                    QSystemOp::Measure | QSystemOp::MeasureLeaked => {
-                        // normal measure may put the qubit in invalid state, so assume
-                        // deallocation, don't return it
-                        builder.build_call(
-                            self.runtime_func(context, RuntimeFunction::QFree)?,
-                            &[qb.into()],
-                            "qfree",
-                        )?;
-                        args.outputs.finish(builder, [result])
-                    }
-                    QSystemOp::MeasureReset => {
-                        // MeasureReset will reset the qubit after measurement so safe to return
-                        builder.build_call(
-                            self.runtime_func(context, RuntimeFunction::Reset)?,
-                            &[qb.into()],
-                            "reset",
-                        )?;
-                        args.outputs.finish(builder, [qb, result])
-                    }
+                    .unwrap_left();
+                if op == QSystemOp::MeasureLeaked || op == QSystemOp::Measure {
+                    // normal measure may put the qubit in invalid state, so assume
+                    // deallocation, don't return it
+                    builder.build_call(
+                        self.runtime_func(context, RuntimeFunction::QFree)?,
+                        &[qb.into()],
+                        "qfree",
+                    )?;
+                    let result = builder.build_select(result_i1.into_int_value(), true_val, false_val, "measure")?;
+                    args.outputs.finish(builder, [result])
+                } else {
+                    // MeasureReset will reset the qubit after measurement so safe to return
+                    builder.build_call(
+                        self.runtime_func(context, RuntimeFunction::Reset)?,
+                        &[qb.into()],
+                        "reset",
+                    )?;
+                    args.outputs.finish(builder, [qb, result_i1])
                 }
             }
             // Measure qubit in Z basis, not forcing to a boolean
