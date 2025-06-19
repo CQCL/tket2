@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/CQCL/tket2/compare/tket2-exts-v0.9.0...tket2-exts-v0.9.1) (2025-06-19)
+
+
+### Bug Fixes
+
+* Revert "fix: Change array result ops signature to return array resul… ([#921](https://github.com/CQCL/tket2/issues/921)) ([abed4ed](https://github.com/CQCL/tket2/commit/abed4ed7fa2767e29c3a5fbfbaa977f1ab650844))
+
 ## [0.9.0](https://github.com/CQCL/tket2/compare/tket2-exts-v0.8.0...tket2-exts-v0.9.0) (2025-06-16)
 
 
