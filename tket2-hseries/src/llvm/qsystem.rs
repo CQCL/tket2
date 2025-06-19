@@ -52,6 +52,7 @@ enum RuntimeFunction {
     QAlloc,
     QFree,
     Measure,
+    MeasureLeaked,
     LazyMeasure,
     Reset,
 }
