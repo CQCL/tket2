@@ -21,6 +21,7 @@ use hugr::{
         arithmetic::{
             float_ops::FloatOps,
             float_types::{float64_type, ConstF64, EXTENSION as FLOAT_TYPES},
+            int_types::int_type,
         },
         collections::array::{array_type, array_type_parametric, ArrayOpBuilder},
     },
@@ -94,6 +95,7 @@ pub enum QSystemOp {
     TryQAlloc,
     QFree,
     Reset,
+    MeasureLeaked,
     MeasureReset,
 }
 
@@ -116,6 +118,7 @@ impl MakeOpDef for QSystemOp {
             PhasedX => Signature::new(vec![qb_t(), float64_type(), float64_type()], one_qb_row),
             TryQAlloc => Signature::new(type_row![], Type::from(option_type(one_qb_row))),
             QFree => Signature::new(one_qb_row, type_row![]),
+            MeasureLeaked => Signature::new(qb_t(), int_type(6)),
             MeasureReset => Signature::new(one_qb_row.clone(), vec![qb_t(), bool_type()]),
         }
         .into()
@@ -144,6 +147,7 @@ impl MakeOpDef for QSystemOp {
             QSystemOp::QFree => "Free a qubit (lose track of it).",
             QSystemOp::Reset => "Reset a qubit to the Z |0> eigenstate.",
             QSystemOp::MeasureReset => "Measure a qubit and reset it to the Z |0> eigenstate.",
+            QSystemOp::MeasureLeaked => "Measure a qubit (return 0 or 1) or detect leakage (return 2).",
             QSystemOp::LazyMeasureReset => {
                 "Lazily measure a qubit and reset it to the Z |0> eigenstate."
             }
@@ -280,6 +284,13 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
     fn add_qfree(&mut self, qb: Wire) -> Result<(), BuildError> {
         self.add_dataflow_op(QSystemOp::QFree, [qb])?;
         Ok(())
+    }
+
+    /// Add a "tket2.qsystem.MeasureLeaked" op.
+    fn add_measure_leaked(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        Ok(self
+            .add_dataflow_op(QSystemOp::MeasureLeaked, [qb])?
+            .out_wire(0))
     }
 
     /// Add a "tket2.qsystem.MeasureReset" op.
@@ -612,8 +623,10 @@ mod test {
             .unwrap();
             let [q0, angle] = func_builder.input_wires_arr();
             let q1 = func_builder.build_qalloc().unwrap();
+            let q2 = func_builder.build_qalloc().unwrap();
             let q0 = func_builder.add_reset(q0).unwrap();
             let q1 = func_builder.add_phased_x(q1, angle, angle).unwrap();
+            let _m2 = func_builder.add_measure_leaked(q2).unwrap();
             let [q0, q1] = func_builder.build_zz_max(q0, q1).unwrap();
             let [q0, q1] = func_builder.add_zz_phase(q0, q1, angle).unwrap();
 
