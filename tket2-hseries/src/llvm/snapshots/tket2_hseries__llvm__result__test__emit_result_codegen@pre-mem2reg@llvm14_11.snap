@@ -7,11 +7,9 @@ source_filename = "test_context"
 
 @res_test_arr_f.038B27BE.0 = private constant [27 x i8] c"\1AUSER:FLOATARR:test_arr_f64"
 
-define { double*, i64 } @_hl.main.1({ double*, i64 } %0) {
+define void @_hl.main.1({ double*, i64 } %0) {
 alloca_block:
-  %"0" = alloca { double*, i64 }, align 8
   %"2_0" = alloca { double*, i64 }, align 8
-  %"4_0" = alloca { double*, i64 }, align 8
   br label %entry_block
 
 entry_block:                                      ; preds = %alloca_block
@@ -36,11 +34,7 @@ entry_block:                                      ; preds = %alloca_block
   store i1* %2, i1** %mask_ptr, align 8
   %4 = load <{ i32, i32, double*, i1* }>, <{ i32, i32, double*, i1* }>* %out_arr_alloca, align 1
   call void @print_float_arr(i8* getelementptr inbounds ([27 x i8], [27 x i8]* @res_test_arr_f.038B27BE.0, i32 0, i32 0), i64 %tag_len2, <{ i32, i32, double*, i1* }>* %out_arr_alloca)
-  store { double*, i64 } %"2_01", { double*, i64 }* %"4_0", align 8
-  %"4_03" = load { double*, i64 }, { double*, i64 }* %"4_0", align 8
-  store { double*, i64 } %"4_03", { double*, i64 }* %"0", align 8
-  %"04" = load { double*, i64 }, { double*, i64 }* %"0", align 8
-  ret { double*, i64 } %"04"
+  ret void
 }
 
 declare void @print_float_arr(i8*, i64, <{ i32, i32, double*, i1* }>*)

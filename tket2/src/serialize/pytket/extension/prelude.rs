@@ -4,12 +4,13 @@ use super::PytketEmitter;
 use crate::serialize::pytket::encoder::{EncodeStatus, RegisterCount, Tk1EncoderContext};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
-use hugr::extension::prelude::{TupleOpDef, PRELUDE_ID};
+use hugr::extension::prelude::{BarrierDef, TupleOpDef, PRELUDE_ID};
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
 use hugr::ops::ExtensionOp;
 use hugr::types::TypeArg;
 use hugr::HugrView;
+use tket_json_rs::optype::OpType as Tk1OpType;
 
 /// Encoder for [prelude](hugr::extension::prelude) operations.
 #[derive(Debug, Clone, Default)]
@@ -29,6 +30,10 @@ impl<H: HugrView> PytketEmitter<H> for PreludeEmitter {
     ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
         if let Ok(tuple_op) = TupleOpDef::from_extension_op(op) {
             return self.tuple_op_to_pytket(node, op, &tuple_op, circ, encoder);
+        };
+        if let Ok(_barrier) = BarrierDef::from_extension_op(op) {
+            encoder.emit_node(Tk1OpType::Barrier, node, circ)?;
+            return Ok(EncodeStatus::Success);
         };
         Ok(EncodeStatus::Unsupported)
     }

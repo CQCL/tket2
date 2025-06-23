@@ -36,7 +36,9 @@ impl Tk1Op {
         num_qubits: usize,
         num_bits: usize,
     ) -> Self {
-        let op = if let Some(native) = NativeOp::try_from_serial_optype(serial_op.op_type.clone()) {
+        let op = if let Some(native) =
+            NativeOp::try_from_serial_optype(serial_op.op_type.clone(), num_qubits, num_bits)
+        {
             Tk1Op::Native(native)
         } else {
             Tk1Op::Opaque(OpaqueTk1Op::new_from_op(serial_op, num_qubits, num_bits))

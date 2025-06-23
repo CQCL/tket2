@@ -8,7 +8,7 @@ from hugr.ext import Extension
 
 # This is updated by our release-please workflow, triggered by this
 # annotation: x-release-please-version
-__version__ = "0.9.0"
+__version__ = "0.9.1"
 
 
 @functools.cache

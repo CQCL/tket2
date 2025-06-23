@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1](https://github.com/CQCL/tket2/compare/tket2-v0.12.0...tket2-v0.12.1) - 2025-06-18
+
+### New Features
+
+- *(pytket encoding)* Support prelude barriers ([#919](https://github.com/CQCL/tket2/pull/919))
+
 ## [0.12.0](https://github.com/CQCL/tket2/compare/tket2-v0.11.1...tket2-v0.12.0) - 2025-06-16
 
 ### New Features

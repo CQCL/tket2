@@ -9,6 +9,7 @@ use hugr::std_extensions::arithmetic::float_types::float64_type;
 use hugr::types::Signature;
 
 use hugr::IncomingPort;
+use itertools::Itertools;
 use tket_json_rs::optype::OpType as Tk1OpType;
 
 use crate::extension::rotation::rotation_type;
@@ -51,7 +52,11 @@ impl NativeOp {
     }
 
     /// Returns the translated tket2 optype for this operation, if it exists.
-    pub fn try_from_serial_optype(serial_op: Tk1OpType) -> Option<Self> {
+    pub fn try_from_serial_optype(
+        serial_op: Tk1OpType,
+        num_qubits: usize,
+        num_bits: usize,
+    ) -> Option<Self> {
         let op = match serial_op {
             Tk1OpType::H => Tk2Op::H.into(),
             Tk1OpType::CX => Tk2Op::CX.into(),
@@ -74,6 +79,12 @@ impl NativeOp {
             Tk1OpType::Reset => Tk2Op::Reset.into(),
             Tk1OpType::Measure => Tk2Op::Measure.into(),
             Tk1OpType::noop => Noop::new(qb_t()).into(),
+            Tk1OpType::Barrier => {
+                let qbs = std::iter::repeat_n(qb_t(), num_qubits);
+                let bs = std::iter::repeat_n(bool_t(), num_bits);
+                let types = qbs.chain(bs).collect_vec();
+                hugr::extension::prelude::Barrier::new(types).into()
+            }
             _ => {
                 return None;
             }
