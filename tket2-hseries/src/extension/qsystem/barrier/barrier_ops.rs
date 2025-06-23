@@ -116,7 +116,7 @@ impl BarrierOperationFactory {
                     Self::WRAPPED_BARRIER,
                     Default::default(),
                     PolyFuncTypeRV::new(
-                        vec![TypeParam::new_list(TypeBound::Any)],
+                        vec![TypeParam::new_list_type(TypeBound::Any)],
                         FuncValueType::new_endo(TypeRV::new_row_var_use(0, TypeBound::Any)),
                     ),
                     ext_ref,
@@ -124,13 +124,13 @@ impl BarrierOperationFactory {
                 .unwrap();
                 let array_unpack_sig = PolyFuncTypeRV::new(
                     vec![
-                        TypeParam::max_nat(),
-                        TypeParam::Type { b: TypeBound::Any },
-                        TypeParam::new_list(TypeBound::Any),
+                        TypeParam::max_nat_type(),
+                        TypeParam::RuntimeType(TypeBound::Any),
+                        TypeParam::new_list_type(TypeBound::Any),
                     ],
                     FuncValueType::new(
                         array_type_parametric(
-                            TypeArg::new_var_use(0, TypeParam::max_nat()),
+                            TypeArg::new_var_use(0, TypeParam::max_nat_type()),
                             Type::new_var_use(1, TypeBound::Any),
                         )
                         .unwrap(),
@@ -157,9 +157,9 @@ impl BarrierOperationFactory {
                 let tuple_unpack_sig = PolyFuncTypeRV::new(
                     vec![
                         // incoming tuple row
-                        TypeParam::new_list(TypeBound::Any),
+                        TypeParam::new_list_type(TypeBound::Any),
                         // unpacked row
-                        TypeParam::new_list(TypeBound::Any),
+                        TypeParam::new_list_type(TypeBound::Any),
                     ],
                     FuncValueType::new(
                         Type::new_tuple(TypeRV::new_row_var_use(0, TypeBound::Any)),
@@ -289,15 +289,15 @@ impl BarrierOperationFactory {
     ) -> Result<hugr::builder::handle::Outputs, BuildError> {
         let size = qubit_wires.len();
         let qb_row = vec![qb_t(); size];
-        let args = [TypeArg::Sequence {
-            elems: qb_row.clone().into_iter().map(Into::into).collect(),
-        }];
+        let args = [TypeArg::List(
+            qb_row.clone().into_iter().map(Into::into).collect(),
+        )];
 
         self.apply_cached_operation(
             builder,
             &Self::WRAPPED_BARRIER,
             args,
-            &[TypeArg::BoundedNat { n: size as u64 }],
+            &[TypeArg::BoundedNat(size as u64)],
             qubit_wires,
             |_, func_b| func_b.build_wrapped_barrier(func_b.input_wires()),
         )
@@ -346,9 +346,7 @@ impl BarrierOperationFactory {
         let args = [
             size.into(),
             elem_ty.clone().into(),
-            TypeArg::Sequence {
-                elems: row.into_iter().map(Into::into).collect(),
-            },
+            TypeArg::List(row.into_iter().map(Into::into).collect()),
         ];
         Some(args)
     }
@@ -403,12 +401,8 @@ impl BarrierOperationFactory {
             .unpack_type(&Type::new_tuple(tuple_row.to_vec()))?;
 
         let args = [
-            TypeArg::Sequence {
-                elems: tuple_row.iter().cloned().map(Into::into).collect(),
-            },
-            TypeArg::Sequence {
-                elems: unpacked_row.into_iter().map(Into::into).collect(),
-            },
+            TypeArg::List(tuple_row.iter().cloned().map(Into::into).collect()),
+            TypeArg::List(unpacked_row.into_iter().map(Into::into).collect()),
         ];
 
         Some(args)

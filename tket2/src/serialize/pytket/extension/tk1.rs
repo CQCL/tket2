@@ -37,7 +37,7 @@ impl<H: HugrView> PytketEmitter<H> for Tk1Emitter {
         if op.qualified_id() != format!("{TKET1_EXTENSION_ID}.{TKET1_OP_NAME}") {
             return Ok(EncodeStatus::Unsupported);
         }
-        let Some(TypeArg::String { arg }) = op.args().first() else {
+        let Some(TypeArg::String(arg)) = op.args().first() else {
             return Err(Tk1ConvertError::custom(
                 "Opaque TKET1 operation did not have a json-encoded type argument.",
             ));
@@ -136,9 +136,7 @@ impl OpaqueTk1Op {
 
     /// Wraps the op into a [`TKET1_OP_NAME`] opaque operation.
     pub fn as_extension_op(&self) -> ExtensionOp {
-        let payload = TypeArg::String {
-            arg: serde_json::to_string(self).unwrap(),
-        };
+        let payload = TypeArg::String(serde_json::to_string(self).unwrap());
         let op_def = TKET1_EXTENSION.get_op(&TKET1_OP_NAME).unwrap();
         ExtensionOp::new(op_def.clone(), vec![payload]).unwrap_or_else(|e| panic!("{e}"))
     }

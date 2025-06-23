@@ -214,7 +214,9 @@ impl<PCG: PreludeCodegen> CodegenExtension for RotationCodegenExtension<PCG> {
 mod test {
 
     use crate::extension::rotation::{rotation_type, RotationOpBuilder as _};
-    use hugr::builder::{Dataflow, DataflowSubContainer as _, SubContainer};
+    use hugr::builder::{
+        Dataflow, DataflowHugr, DataflowSubContainer as _, HugrBuilder, SubContainer,
+    };
     use hugr::extension::prelude::UnwrapBuilder;
     use hugr::llvm::check_emission;
     use hugr::llvm::emit::test::SimpleHugrConfig;
@@ -252,7 +254,7 @@ mod test {
                 let _ = builder
                     .add_dataflow_op(RotationOp::radd, [rot1, rot2])
                     .unwrap();
-                builder.finish_sub_container().unwrap()
+                builder.finish_hugr().unwrap()
             });
         llvm_ctx.add_extensions(move |cge| {
             cge.add_extension(RotationCodegenExtension::new(prelude.clone()))
@@ -282,7 +284,7 @@ mod test {
                     .out_wire(0);
                 let value = builder.add_to_halfturns(rot).unwrap();
 
-                builder.finish_with_outputs([value]).unwrap()
+                builder.finish_hugr_with_outputs([value]).unwrap()
             });
         exec_ctx.add_extensions(|cge| {
             cge.add_extension(DEFAULT_ROTATION_EXTENSION.to_owned())
@@ -312,7 +314,7 @@ mod test {
             .finish(|mut builder| {
                 let rot = builder.add_load_value(angle);
                 let halfturns = builder.add_to_halfturns(rot).unwrap();
-                builder.finish_with_outputs([halfturns]).unwrap()
+                builder.finish_hugr_with_outputs([halfturns]).unwrap()
             });
         exec_ctx.add_extensions(|cge| {
             cge.add_extension(DEFAULT_ROTATION_EXTENSION.to_owned())
@@ -406,7 +408,7 @@ mod test {
                     }
                     conditional.finish_sub_container().unwrap().out_wire(0)
                 };
-                builder.finish_with_outputs([halfturns]).unwrap()
+                builder.finish_hugr_with_outputs([halfturns]).unwrap()
             });
         exec_ctx.add_extensions(|cge| {
             add_nonfinite_const_extensions(

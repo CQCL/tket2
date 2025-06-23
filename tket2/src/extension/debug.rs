@@ -58,16 +58,18 @@ impl MakeOpDef for StateResultDef {
 
     fn init_signature(&self, _extension_ref: &Weak<Extension>) -> SignatureFunc {
         PolyFuncTypeRV::new(
-            vec![TypeParam::String, TypeParam::max_nat()],
+            vec![TypeParam::StringType, TypeParam::max_nat_type()],
             FuncValueType::new(
-                vec![
-                    array_type_parametric(TypeArg::new_var_use(1, TypeParam::max_nat()), qb_t())
-                        .unwrap(),
-                ],
-                vec![
-                    array_type_parametric(TypeArg::new_var_use(1, TypeParam::max_nat()), qb_t())
-                        .unwrap(),
-                ],
+                vec![array_type_parametric(
+                    TypeArg::new_var_use(1, TypeParam::max_nat_type()),
+                    qb_t(),
+                )
+                .unwrap()],
+                vec![array_type_parametric(
+                    TypeArg::new_var_use(1, TypeParam::max_nat_type()),
+                    qb_t(),
+                )
+                .unwrap()],
             ),
         )
         .into()
@@ -124,10 +126,8 @@ impl MakeExtensionOp for StateResult {
 
     fn type_args(&self) -> Vec<TypeArg> {
         vec![
-            TypeArg::String {
-                arg: self.tag.clone(),
-            },
-            TypeArg::BoundedNat { n: self.num_qubits },
+            TypeArg::String(self.tag.clone()),
+            TypeArg::BoundedNat(self.num_qubits),
         ]
     }
 }
@@ -150,7 +150,7 @@ impl HasConcrete for StateResultDef {
     type Concrete = StateResult;
 
     fn instantiate(&self, type_args: &[TypeArg]) -> Result<Self::Concrete, OpLoadError> {
-        let [TypeArg::String { arg }, TypeArg::BoundedNat { n }] = type_args else {
+        let [TypeArg::String(arg), TypeArg::BoundedNat(n)] = type_args else {
             return Err(SignatureError::InvalidTypeArgs)?;
         };
         Ok(StateResult {

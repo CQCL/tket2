@@ -218,7 +218,7 @@ impl QSystemPass {
 #[cfg(test)]
 mod test {
     use hugr::{
-        builder::{Container, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer},
+        builder::{DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer, HugrBuilder},
         extension::prelude::qb_t,
         ops::handle::NodeHandle,
         std_extensions::arithmetic::float_types::ConstF64,
@@ -242,6 +242,7 @@ mod test {
             let mut builder =
                 DFGBuilder::new(Signature::new(qb_t(), vec![bool_type(), bool_type()])).unwrap();
             let func = builder
+                .module_root_builder()
                 .define_function("func", Signature::new_endo(type_row![]))
                 .unwrap()
                 .finish_with_outputs([])

@@ -1,10 +1,11 @@
 //! CLI for tket2-hseries
 
+use anyhow::Result;
 use clap::Parser as _;
 use hugr::extension::ExtensionRegistry;
 use tket2_hseries::cli::CliArgs;
 
-fn main() {
+fn main() -> Result<()> {
     match CliArgs::parse() {
         CliArgs::GenExtensions(args) => {
             let reg = ExtensionRegistry::new([
@@ -20,11 +21,13 @@ fn main() {
                 tket2_hseries::extension::wasm::EXTENSION.to_owned(),
             ]);
 
-            args.run_dump(&reg);
+            args.run_dump(&reg)?;
         }
         _ => {
             eprintln!("Unknown command");
             std::process::exit(1);
         }
     };
+
+    Ok(())
 }

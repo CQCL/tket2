@@ -37,7 +37,7 @@ impl CodegenExtension for FuturesCodegenExtension {
                 |session, hugr_type| {
                     match (hugr_type.name().as_str(), hugr_type.args()) {
                         // For now, we only support future bools
-                        ("Future", [TypeArg::Type { ty }]) if *ty == bool_t() => {
+                        ("Future", [TypeArg::Runtime(ty)]) if *ty == bool_t() => {
                             Ok(future_type(session.iw_context()))
                         }
                         _ => Err(anyhow!(

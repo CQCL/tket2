@@ -12,7 +12,7 @@ pub use ecc_rewriter::ECCRewriter;
 use derive_more::{From, Into};
 use hugr::core::HugrNode;
 use hugr::hugr::hugrmut::HugrMut;
-use hugr::hugr::patch::{simple_replace, PatchVerification};
+use hugr::hugr::patch::simple_replace;
 use hugr::hugr::views::sibling_subgraph::{InvalidReplacement, InvalidSubgraph};
 use hugr::hugr::Patch;
 use hugr::types::Signature;

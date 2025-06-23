@@ -68,7 +68,7 @@ impl MakeOpDef for SympyOpDef {
 
     fn init_signature(&self, _extension_ref: &Weak<Extension>) -> SignatureFunc {
         PolyFuncType::new(
-            vec![TypeParam::String],
+            vec![TypeParam::StringType],
             Signature::new(type_row![], vec![rotation_type()]),
         )
         .into()
@@ -126,7 +126,7 @@ impl HasConcrete for SympyOpDef {
 
     fn instantiate(&self, type_args: &[TypeArg]) -> Result<Self::Concrete, OpLoadError> {
         let ty = match type_args {
-            [TypeArg::String { arg }] => arg.clone(),
+            [TypeArg::String(arg)] => arg.clone(),
             _ => return Err(SignatureError::InvalidTypeArgs.into()),
         };
 

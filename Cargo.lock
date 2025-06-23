@@ -974,7 +974,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=db6c9100#db6c9100c561cccaae1591ecbedc6bb631da641b"
+source = "git+https://github.com/CQCL/hugr?rev=225814a#225814ae74b9a3dfbc83e5b0c9762f46251f407b"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -985,7 +985,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=db6c9100#db6c9100c561cccaae1591ecbedc6bb631da641b"
+source = "git+https://github.com/CQCL/hugr?rev=225814a#225814ae74b9a3dfbc83e5b0c9762f46251f407b"
 dependencies = [
  "anyhow",
  "clap",
@@ -1002,7 +1002,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=db6c9100#db6c9100c561cccaae1591ecbedc6bb631da641b"
+source = "git+https://github.com/CQCL/hugr?rev=225814a#225814ae74b9a3dfbc83e5b0c9762f46251f407b"
 dependencies = [
  "base64",
  "cgmath",
@@ -1036,7 +1036,7 @@ dependencies = [
 [[package]]
 name = "hugr-llvm"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=db6c9100#db6c9100c561cccaae1591ecbedc6bb631da641b"
+source = "git+https://github.com/CQCL/hugr?rev=225814a#225814ae74b9a3dfbc83e5b0c9762f46251f407b"
 dependencies = [
  "anyhow",
  "delegate 0.13.3",
@@ -1055,7 +1055,7 @@ dependencies = [
 [[package]]
 name = "hugr-model"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=db6c9100#db6c9100c561cccaae1591ecbedc6bb631da641b"
+source = "git+https://github.com/CQCL/hugr?rev=225814a#225814ae74b9a3dfbc83e5b0c9762f46251f407b"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1075,7 +1075,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.20.1"
-source = "git+https://github.com/CQCL/hugr?rev=db6c9100#db6c9100c561cccaae1591ecbedc6bb631da641b"
+source = "git+https://github.com/CQCL/hugr?rev=225814a#225814ae74b9a3dfbc83e5b0c9762f46251f407b"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
