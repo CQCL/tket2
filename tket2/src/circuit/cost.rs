@@ -71,7 +71,7 @@ impl<const N: usize> serde::Serialize for LexicographicCost<usize, N> {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(&format!("{:?}", self))
+        serializer.serialize_str(&format!("{self:?}"))
     }
 }
 

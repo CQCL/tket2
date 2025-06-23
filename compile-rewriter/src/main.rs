@@ -47,8 +47,7 @@ fn main() {
     println!("Compiling rewriter...");
     let Ok(rewriter) = ECCRewriter::try_from_eccs_json_file(input_path) else {
         eprintln!(
-            "Unable to load ECC file {:?}. Is it a JSON file of Quartz-generated ECCs?",
-            input_path
+            "Unable to load ECC file {input_path:?}. Is it a JSON file of Quartz-generated ECCs?"
         );
         exit(1);
     };
@@ -62,12 +61,12 @@ fn main() {
     let output_file = rewriter.save_binary(output_file).unwrap();
     println!(" done in {:?}", write_time.elapsed());
 
-    println!("Written rewriter to {:?}", output_file);
+    println!("Written rewriter to {output_file:?}");
 
     // Print the file size of output_file in megabytes
     if let Ok(metadata) = fs::metadata(&output_file) {
         let file_size = metadata.len() as f64 / (1024.0 * 1024.0);
-        println!("File size: {:.2} MB", file_size);
+        println!("File size: {file_size:.2} MB");
     }
     let elapsed = start_time.elapsed();
     println!(
