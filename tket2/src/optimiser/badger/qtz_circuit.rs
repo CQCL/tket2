@@ -79,11 +79,11 @@ impl From<RepCircData> for Circuit<Hugr> {
         let param_wires = builder.input_wires().skip(meta.n_qb);
         let mut input_units: HashMap<String, CircuitUnit> =
             HashMap::with_capacity(builder.num_inputs());
-        input_units.extend((0..meta.n_qb).map(|i| (format!("Q{}", i), CircuitUnit::Linear(i))));
+        input_units.extend((0..meta.n_qb).map(|i| (format!("Q{i}"), CircuitUnit::Linear(i))));
         input_units.extend(
             param_wires
                 .enumerate()
-                .map(|(i, w)| (format!("P{}", i), CircuitUnit::Wire(w))),
+                .map(|(i, w)| (format!("P{i}"), CircuitUnit::Wire(w))),
         );
 
         let circ_inputs = builder.input_wires().take(meta.n_qb).collect_vec();

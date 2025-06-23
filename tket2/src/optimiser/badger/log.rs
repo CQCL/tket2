@@ -61,7 +61,7 @@ impl<'w> BadgerLogger<'w> {
             Some(rs) => self.log(format!(
                 "new best of size {best_cost:?} after {rs} rewrites"
             )),
-            None => self.log(format!("new best of size {:?}", best_cost)),
+            None => self.log(format!("new best of size {best_cost:?}")),
         }
         if let Some(csv_writer) = self.circ_candidates_csv.as_mut() {
             csv_writer.serialize(BestCircSer::new(best_cost)).unwrap();
@@ -94,7 +94,7 @@ impl<'w> BadgerLogger<'w> {
             None => self.log(format!("Processed {circuits_processed} circuits.")),
         }
         self.log_avg_branching_factor();
-        self.log(format!("---- END RESULT: {:?} ----", best_cost));
+        self.log(format!("---- END RESULT: {best_cost:?} ----"));
         if needs_joining {
             self.log("Joining worker threads.");
         }
@@ -118,7 +118,7 @@ impl<'w> BadgerLogger<'w> {
             if let Some(workqueue_len) = workqueue_len {
                 self.progress(format!("Queue size: {workqueue_len} circuits."));
             }
-            self.progress(format!("Total seen: {} circuits.", seen_hashes));
+            self.progress(format!("Total seen: {seen_hashes} circuits."));
         }
     }
 
@@ -148,7 +148,7 @@ impl<'w> BadgerLogger<'w> {
     /// Log the average branching factor so far.
     pub fn log_avg_branching_factor(&self) {
         if let Some(avg) = self.branching_factor.average() {
-            self.log(format!("Average branching factor: {}", avg));
+            self.log(format!("Average branching factor: {avg}"));
         }
     }
 }

@@ -171,7 +171,7 @@ pub fn emit_global_string<'c, H: HugrView<Node = Node>>(
         };
         // Use unicode-aware character slicing to prevent slicing through multi-byte characters
         let prefix_chars: String = str.chars().take(10).collect();
-        let name_prefix = format!("{symbol_prefix}{}.{hash}", prefix_chars);
+        let name_prefix = format!("{symbol_prefix}{prefix_chars}.{hash}");
 
         (0..)
             .find_map(|i| {

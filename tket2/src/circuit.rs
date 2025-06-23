@@ -152,7 +152,7 @@ impl<T: HugrView> Circuit<T> {
     pub fn circuit_signature(&self) -> Cow<'_, Signature> {
         let op = self.hugr.get_optype(self.parent());
         op.inner_function_type()
-            .unwrap_or_else(|| panic!("{} is an invalid circuit parent type.", op))
+            .unwrap_or_else(|| panic!("{op} is an invalid circuit parent type."))
     }
 
     /// Returns the input node to the circuit.
