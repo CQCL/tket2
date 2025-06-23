@@ -30,7 +30,7 @@ pub struct ResultsCodegenExtension<AL: ArrayLowering> {
 
 impl<AL: ArrayLowering> ResultsCodegenExtension<AL> {
     /// Creates a new [ResultsCodegenExtension] with specified array lowering.
-    pub fn new(array_lowering: AL) -> Self {
+    pub const fn new(array_lowering: AL) -> Self {
         Self { array_lowering }
     }
 }
