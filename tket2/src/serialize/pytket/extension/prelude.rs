@@ -75,9 +75,9 @@ impl PreludeEmitter {
         // false so the operation is marked as unsupported as a whole.
         let args = op.args().first();
         match args {
-            Some(TypeArg::Sequence { elems }) => {
+            Some(TypeArg::Tuple(elems)) | Some(TypeArg::List(elems)) => {
                 for arg in elems {
-                    let TypeArg::Type { ty } = arg else {
+                    let TypeArg::Runtime(ty) = arg else {
                         return Ok(EncodeStatus::Unsupported);
                     };
                     let count = encoder.config().type_to_pytket(ty)?;

@@ -51,7 +51,7 @@ pub static ref TKET1_EXTENSION: Arc<Extension>  = {
         res.add_op(
             TKET1_OP_NAME,
             "An opaque TKET1 operation.".into(),
-            Tk1Signature([TypeParam::String]),
+            Tk1Signature([TypeParam::StringType]),
             ext_ref
         ).unwrap();
     })
@@ -77,7 +77,7 @@ impl CustomSignatureFunc for Tk1Signature {
         arg_values: &[TypeArg],
         _def: &'o hugr::extension::OpDef,
     ) -> Result<PolyFuncTypeRV, SignatureError> {
-        let [TypeArg::String { arg }] = arg_values else {
+        let [TypeArg::String(arg)] = arg_values else {
             // This should have already been checked.
             panic!("Wrong number of arguments");
         };

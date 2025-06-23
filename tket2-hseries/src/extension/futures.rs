@@ -148,7 +148,7 @@ impl HasConcrete for FutureOpDef {
 
     fn instantiate(&self, type_args: &[TypeArg]) -> Result<Self::Concrete, OpLoadError> {
         match type_args {
-            [TypeArg::Type { ty }] => Ok(FutureOp {
+            [TypeArg::Runtime(ty)] => Ok(FutureOp {
                 op: *self,
                 typ: ty.clone(),
             }),
