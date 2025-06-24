@@ -31,7 +31,7 @@ env:
 
 jobs:
   # Check if changes were made to the relevant files.
-  # Always returns true if running on the default branch, to ensure all changes are throughly checked.
+  # Always returns true if running on the default branch, to ensure all changes are thoroughly checked.
   changes:
     name: Check for changes
     runs-on: ubuntu-latest
@@ -43,6 +43,7 @@ jobs:
     outputs:
       rust: ${{ steps.filter.outputs.rust == 'true' || steps.override.outputs.out == 'true' }}
       python: ${{ steps.filter.outputs.python == 'true' || steps.override.outputs.out == 'true' }}
+      extensions: ${{ steps.filter.outputs.extensions == 'true' || steps.override.outputs.out == 'true' }}
     steps:
     - uses: actions/checkout@v4
     - name: Override label
@@ -308,12 +309,36 @@ jobs:
             "
             exit 1
           fi
+  extension-versions:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: ${{ needs.changes.outputs.extensions == 'true' }}
+    name: Check extension versions
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history to compare with main
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Check if extension versions are updated
+        # check against latest tag on the target branch
+        # base_ref should be empty if not a pull request, so goes from HEAD
+        run: |
+            BASE_SHA=$(git rev-parse origin/${{ github.base_ref }})
+            LAST_TAG=$(git describe --abbrev=0 --match="tket2-*" $BASE_SHA)
+            echo "Latest tag on target: $LAST_TAG"
+            
+            python ./scripts/check_extension_versions.py $LAST_TAG
 
   # This is a meta job to mark successful completion of the required checks,
   # even if they are skipped due to no changes in the relevant files.
   required-checks:
     name: Required checks 🦀+🐍
-    needs: [changes, check-rs, check-py, tests-rs-stable-no-features, tests-rs-stable-all-features, tests-py, tket2-extensions]
+    needs: [changes, check-rs, check-py, tests-rs-stable-no-features, tests-rs-stable-all-features, tests-py, tket2-extensions, extension-versions]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
