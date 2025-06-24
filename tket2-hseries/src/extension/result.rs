@@ -200,7 +200,7 @@ impl MakeOpDef for ResultOpDef {
 
     fn description(&self) -> String {
         match self {
-            Self::Bool => " Report a boolean result.",
+            Self::Bool => "Report a boolean result.",
             Self::Int => "Report a signed integer result.",
             Self::UInt => "Report an unsigned integer result.",
             Self::F64 => "Report a floating-point result.",

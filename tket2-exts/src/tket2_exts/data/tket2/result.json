@@ -222,7 +222,7 @@
     "result_bool": {
       "extension": "tket2.result",
       "name": "result_bool",
-      "description": " Report a boolean result.",
+      "description": "Report a boolean result.",
       "signature": {
         "params": [
           {
