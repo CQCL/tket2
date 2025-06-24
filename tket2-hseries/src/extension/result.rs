@@ -29,7 +29,7 @@ use strum::{EnumIter, EnumString, IntoStaticStr};
 /// The "tket2.result" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.result");
 /// The "tket2.result" extension version.
-pub const EXTENSION_VERSION: Version = Version::new(0, 1, 1);
+pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
     /// The "tket2.result" extension.
