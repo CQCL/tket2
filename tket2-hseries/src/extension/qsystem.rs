@@ -88,6 +88,7 @@ lazy_static! {
 pub enum QSystemOp {
     Measure,
     LazyMeasure,
+    LazyMeasureLeaked,
     LazyMeasureReset,
     Rz,
     PhasedX,
@@ -95,7 +96,6 @@ pub enum QSystemOp {
     TryQAlloc,
     QFree,
     Reset,
-    MeasureLeaked,
     MeasureReset,
 }
 
@@ -110,6 +110,7 @@ impl MakeOpDef for QSystemOp {
         let two_qb_row = TypeRow::from(vec![qb_t(), qb_t()]);
         match self {
             LazyMeasure => Signature::new(qb_t(), future_type(bool_t())),
+            LazyMeasureLeaked => Signature::new(qb_t(), future_type(int_type(6))),
             LazyMeasureReset => Signature::new(qb_t(), vec![qb_t(), future_type(bool_t())]),
             Reset => Signature::new(one_qb_row.clone(), one_qb_row),
             ZZPhase => Signature::new(vec![qb_t(), qb_t(), float64_type()], two_qb_row),
@@ -118,7 +119,6 @@ impl MakeOpDef for QSystemOp {
             PhasedX => Signature::new(vec![qb_t(), float64_type(), float64_type()], one_qb_row),
             TryQAlloc => Signature::new(type_row![], Type::from(option_type(one_qb_row))),
             QFree => Signature::new(one_qb_row, type_row![]),
-            MeasureLeaked => Signature::new(qb_t(), int_type(6)),
             MeasureReset => Signature::new(one_qb_row.clone(), vec![qb_t(), bool_type()]),
         }
         .into()
@@ -147,7 +147,7 @@ impl MakeOpDef for QSystemOp {
             QSystemOp::QFree => "Free a qubit (lose track of it).",
             QSystemOp::Reset => "Reset a qubit to the Z |0> eigenstate.",
             QSystemOp::MeasureReset => "Measure a qubit and reset it to the Z |0> eigenstate.",
-            QSystemOp::MeasureLeaked => {
+            QSystemOp::LazyMeasureLeaked => {
                 "Measure a qubit (return 0 or 1) or detect leakage (return 2)."
             }
             QSystemOp::LazyMeasureReset => {
@@ -233,6 +233,13 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
             .out_wire(0))
     }
 
+    /// Add a "tket2.qsystem.LazyMeasureLeaked" op.
+    fn add_lazy_measure_leaked(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        Ok(self
+            .add_dataflow_op(QSystemOp::LazyMeasureLeaked, [qb])?
+            .out_wire(0))
+    }
+
     /// Add a "tket2.qsystem.LazyMeasureReset" op.
     fn add_lazy_measure_reset(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
@@ -286,13 +293,6 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
     fn add_qfree(&mut self, qb: Wire) -> Result<(), BuildError> {
         self.add_dataflow_op(QSystemOp::QFree, [qb])?;
         Ok(())
-    }
-
-    /// Add a "tket2.qsystem.MeasureLeaked" op.
-    fn add_measure_leaked(&mut self, qb: Wire) -> Result<Wire, BuildError> {
-        Ok(self
-            .add_dataflow_op(QSystemOp::MeasureLeaked, [qb])?
-            .out_wire(0))
     }
 
     /// Add a "tket2.qsystem.MeasureReset" op.
@@ -616,6 +616,20 @@ mod test {
     }
 
     #[test]
+    fn lazy_leaked_circuit() {
+        let hugr = {
+            let mut func_builder =
+                FunctionBuilder::new("circuit", Signature::new(qb_t(), int_type(6)))
+                    .unwrap();
+            let [qb] = func_builder.input_wires_arr();
+            let lazy_i = func_builder.add_lazy_measure_leaked(qb).unwrap();
+            // let [b] = func_builder.add_read(lazy_b, bool_t()).unwrap();
+            func_builder.finish_hugr_with_outputs([lazy_i]).unwrap()
+        };
+        assert_matches!(hugr.validate(), Ok(_));
+    }
+
+    #[test]
     fn all_ops() {
         let hugr = {
             let mut func_builder = FunctionBuilder::new(
@@ -625,10 +639,8 @@ mod test {
             .unwrap();
             let [q0, angle] = func_builder.input_wires_arr();
             let q1 = func_builder.build_qalloc().unwrap();
-            let q2 = func_builder.build_qalloc().unwrap();
             let q0 = func_builder.add_reset(q0).unwrap();
             let q1 = func_builder.add_phased_x(q1, angle, angle).unwrap();
-            let _m2 = func_builder.add_measure_leaked(q2).unwrap();
             let [q0, q1] = func_builder.build_zz_max(q0, q1).unwrap();
             let [q0, q1] = func_builder.add_zz_phase(q0, q1, angle).unwrap();
 
