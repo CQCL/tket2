@@ -11,14 +11,24 @@ use hugr::ops::ExtensionOp;
 use hugr::{HugrView, Node};
 use tket2::extension::debug::{StateResult, DEBUG_EXTENSION_ID, STATE_RESULT_OP_ID};
 
-use super::array_utils::{build_array_alloca, struct_1d_arr_alloc, struct_1d_arr_ptr_t, ElemType};
+use super::array_utils::{struct_1d_arr_alloc, struct_1d_arr_ptr_t, ArrayLowering, ElemType};
 
 static TAG_PREFIX: &str = "USER:";
 
 /// Codegen extension for debug functionality.
-pub struct DebugCodegenExtension;
+#[derive(Default)]
+pub struct DebugCodegenExtension<AL: ArrayLowering> {
+    array_lowering: AL,
+}
 
-impl CodegenExtension for DebugCodegenExtension {
+impl<AL: ArrayLowering> DebugCodegenExtension<AL> {
+    /// Creates a new [DebugCodegenExtension] with specified array lowering.
+    pub const fn new(array_lowering: AL) -> Self {
+        Self { array_lowering }
+    }
+}
+
+impl<AL: ArrayLowering> CodegenExtension for DebugCodegenExtension<AL> {
     fn add_extension<'a, H: HugrView<Node = Node> + 'a>(
         self,
         builder: CodegenExtsBuilder<'a, H>,
@@ -32,7 +42,7 @@ impl CodegenExtension for DebugCodegenExtension {
     }
 }
 
-impl DebugCodegenExtension {
+impl<AL: ArrayLowering> DebugCodegenExtension<AL> {
     /// Lower the `debug` `StateResult` op.
     fn emit_state_result<'c, H: HugrView<Node = Node>>(
         &self,
@@ -70,8 +80,7 @@ impl DebugCodegenExtension {
             .inputs
             .try_into()
             .map_err(|_| anyhow!(format!("StateResult expects a qubit array argument")))?;
-        assert!(qubits.is_array_value());
-        let (qubits_array, _) = build_array_alloca(builder, qubits.into_array_value())?;
+        let qubits_array = self.array_lowering.array_to_ptr(builder, qubits)?;
         let (qubits_ptr, _) = struct_1d_arr_alloc(
             iw_ctx,
             builder,
@@ -109,13 +118,12 @@ mod test {
 
     use hugr::extension::simple_op::MakeRegisteredOp;
     use hugr::llvm::check_emission;
-    use hugr::llvm::extension::collections::stack_array::{
-        ArrayCodegenExtension, DefaultArrayCodegen,
-    };
     use hugr::llvm::test::llvm_ctx;
     use hugr::llvm::test::single_op_hugr;
     use hugr::llvm::test::TestContext;
 
+    use crate::llvm::array_utils::DEFAULT_HEAP_ARRAY_LOWERING;
+    use crate::llvm::array_utils::DEFAULT_STACK_ARRAY_LOWERING;
     use crate::llvm::prelude::QISPreludeCodegen;
 
     use rstest::rstest;
@@ -123,17 +131,19 @@ mod test {
     use super::*;
 
     #[rstest]
-    #[case::state_result(1, StateResult::new("test_state_result".to_string(), 2))]
+    #[case::state_result(1, StateResult::new("test_state_result".to_string(), 2), &DEFAULT_STACK_ARRAY_LOWERING)]
+    #[case::state_result(2, StateResult::new("test_state_result".to_string(), 2), &DEFAULT_HEAP_ARRAY_LOWERING)]
     fn emit_debug_codegen(
         #[case] _i: i32,
         #[with(_i)] mut llvm_ctx: TestContext,
         #[case] op: StateResult,
+        #[case] array_lowering: &'static (impl ArrayLowering + Clone),
     ) {
         let pcg = QISPreludeCodegen;
         llvm_ctx.add_extensions(move |ceb| {
-            ceb.add_extension(DebugCodegenExtension)
+            ceb.add_extension(DebugCodegenExtension::new(array_lowering.clone()))
+                .add_extension(array_lowering.codegen_extension())
                 .add_prelude_extensions(pcg.clone())
-                .add_extension(ArrayCodegenExtension::new(DefaultArrayCodegen))
                 .add_default_int_extensions()
                 .add_float_extensions()
         });

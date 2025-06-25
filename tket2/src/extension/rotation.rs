@@ -73,8 +73,7 @@ impl ConstRotation {
         if half_turns.is_nan() || half_turns.is_infinite() {
             return Err(ConstTypeError::CustomCheckFail(
                 hugr::types::CustomCheckFailure::Message(format!(
-                    "Invalid rotation value {}.",
-                    half_turns
+                    "Invalid rotation value {half_turns}."
                 )),
             ));
         }

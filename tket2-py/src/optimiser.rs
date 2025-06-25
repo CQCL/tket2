@@ -42,8 +42,7 @@ impl<'py> FromPyObject<'py> for BadgerCostFunction {
             "cx" => Ok(BadgerCostFunction::CXCount),
             "rz" => Ok(BadgerCostFunction::RzCount),
             _ => Err(PyErr::new::<PyValueError, _>(format!(
-                "Invalid cost function: {}. Expected 'cx' or 'rz'.",
-                str
+                "Invalid cost function: {str}. Expected 'cx' or 'rz'."
             ))),
         }
     }

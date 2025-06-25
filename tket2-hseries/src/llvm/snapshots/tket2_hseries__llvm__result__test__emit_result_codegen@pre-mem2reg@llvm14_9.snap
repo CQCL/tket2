@@ -5,7 +5,7 @@ expression: mod_str
 ; ModuleID = 'test_context'
 source_filename = "test_context"
 
-@res_test_arr_i.DFD30452.0 = private constant [25 x i8] c"\18USER:INTARR:test_arr_int"
+@res_test_arr_u.3D1C515C.0 = private constant [26 x i8] c"\19USER:INTARR:test_arr_uint"
 
 define void @_hl.main.1({ i64*, i64 } %0) {
 alloca_block:
@@ -15,7 +15,7 @@ alloca_block:
 entry_block:                                      ; preds = %alloca_block
   store { i64*, i64 } %0, { i64*, i64 }* %"2_0", align 8
   %"2_01" = load { i64*, i64 }, { i64*, i64 }* %"2_0", align 8
-  %tag_len = load i8, i8* getelementptr inbounds ([25 x i8], [25 x i8]* @res_test_arr_i.DFD30452.0, i32 0, i32 0), align 1
+  %tag_len = load i8, i8* getelementptr inbounds ([26 x i8], [26 x i8]* @res_test_arr_u.3D1C515C.0, i32 0, i32 0), align 1
   %tag_len2 = zext i8 %tag_len to i64
   %array_ptr = extractvalue { i64*, i64 } %"2_01", 0
   %array_offset = extractvalue { i64*, i64 } %"2_01", 1
@@ -33,8 +33,8 @@ entry_block:                                      ; preds = %alloca_block
   store i64* %1, i64** %arr_ptr, align 8
   store i1* %2, i1** %mask_ptr, align 8
   %4 = load <{ i32, i32, i64*, i1* }>, <{ i32, i32, i64*, i1* }>* %out_arr_alloca, align 1
-  call void @print_int_arr(i8* getelementptr inbounds ([25 x i8], [25 x i8]* @res_test_arr_i.DFD30452.0, i32 0, i32 0), i64 %tag_len2, <{ i32, i32, i64*, i1* }>* %out_arr_alloca)
+  call void @print_uint_arr(i8* getelementptr inbounds ([26 x i8], [26 x i8]* @res_test_arr_u.3D1C515C.0, i32 0, i32 0), i64 %tag_len2, <{ i32, i32, i64*, i1* }>* %out_arr_alloca)
   ret void
 }
 
-declare void @print_int_arr(i8*, i64, <{ i32, i32, i64*, i1* }>*)
+declare void @print_uint_arr(i8*, i64, <{ i32, i32, i64*, i1* }>*)

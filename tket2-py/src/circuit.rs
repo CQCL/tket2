@@ -131,7 +131,7 @@ impl PyNode {
     }
     /// A string representation of the pattern.
     pub fn __repr__(&self) -> String {
-        format!("{:?}", self)
+        format!("{self:?}")
     }
 }
 
@@ -161,7 +161,7 @@ impl fmt::Debug for PyWire {
 impl PyWire {
     /// A string representation of the pattern.
     pub fn __repr__(&self) -> String {
-        format!("{:?}", self)
+        format!("{self:?}")
     }
 
     fn node(&self) -> PyNode {

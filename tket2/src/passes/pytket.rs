@@ -131,9 +131,7 @@ mod test {
             original_sig.output().len() as isize - lowered_sig.output().len() as isize;
         assert!(
             output_count_diff == 0 || output_count_diff == 1,
-            "Output count mismatch. Original: {}, Lowered: {}",
-            original_sig,
-            lowered_sig
+            "Output count mismatch. Original: {original_sig}, Lowered: {lowered_sig}"
         );
         assert_eq!(
             lowered_sig.output()[..],

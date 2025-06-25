@@ -454,7 +454,7 @@ where
                 let chunk_cx_cost = chunk.circuit_cost(|op| self.strategy.op_cost(op));
                 logger.log(format!("Chunk {i} has {chunk_cx_cost:?} CX gates",));
                 let join = thread::Builder::new()
-                    .name(format!("chunk-{}", i))
+                    .name(format!("chunk-{i}"))
                     .spawn(move || {
                         let res = badger.optimise(
                             &chunk,

@@ -244,7 +244,7 @@ impl PyExtensionOp {
 
     /// String representation of the operation.
     pub fn __repr__(&self) -> String {
-        format!("{:?}", self)
+        format!("{self:?}")
     }
 
     #[getter]

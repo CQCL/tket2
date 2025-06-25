@@ -263,7 +263,7 @@ impl<N: HugrNode> ValueTracker<N> {
         let existing_param_vars: HashSet<String> = param_variable_names.iter().cloned().collect();
         let mut param_gen = param_variable_names.into_iter().chain(
             (0..)
-                .map(|i| format!("f{}", i))
+                .map(|i| format!("f{i}"))
                 .filter(|name| !existing_param_vars.contains(name)),
         );
 
