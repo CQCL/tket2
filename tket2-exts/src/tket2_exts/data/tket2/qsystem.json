@@ -37,6 +37,47 @@
       },
       "binary": false
     },
+    "LazyMeasureLeaked": {
+      "extension": "tket2.qsystem",
+      "name": "LazyMeasureLeaked",
+      "description": "Measure a qubit (return 0 or 1) or detect leakage (return 2).",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Q"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.futures",
+              "id": "Future",
+              "args": [
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Opaque",
+                    "extension": "arithmetic.int.types",
+                    "id": "int",
+                    "args": [
+                      {
+                        "tya": "BoundedNat",
+                        "n": 6
+                      }
+                    ],
+                    "bound": "C"
+                  }
+                }
+              ],
+              "bound": "A"
+            }
+          ]
+        }
+      },
+      "binary": false
+    },
     "LazyMeasureReset": {
       "extension": "tket2.qsystem",
       "name": "LazyMeasureReset",
