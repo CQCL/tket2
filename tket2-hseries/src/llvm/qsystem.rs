@@ -96,7 +96,9 @@ impl RuntimeFunction {
             RuntimeFunction::QAlloc => qb_type.fn_type(&[], false),
             RuntimeFunction::QFree => iwc.void_type().fn_type(&[qb_type.into()], false),
             RuntimeFunction::Measure => iwc.bool_type().fn_type(&[qb_type.into()], false),
-            RuntimeFunction::LazyMeasureLeaked => future_type(iwc).fn_type(&[qb_type.into()], false),
+            RuntimeFunction::LazyMeasureLeaked => {
+                future_type(iwc).fn_type(&[qb_type.into()], false)
+            }
             RuntimeFunction::LazyMeasure => future_type(iwc).fn_type(&[qb_type.into()], false),
             RuntimeFunction::Reset => iwc.void_type().fn_type(&[qb_type.into()], false),
         }
