@@ -75,4 +75,4 @@ def badger_pass(
             rebase=rebase,
         )
 
-    return CustomPass(apply)
+    return CustomPass(apply, label="tket2.badger_pass")
