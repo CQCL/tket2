@@ -46,7 +46,7 @@ pub use lower::{check_lowered, lower_tk2_op, LowerTk2Error, LowerTket2ToQSystemP
 /// The "tket2.qsystem" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.qsystem");
 /// The "tket2.qsystem" extension version.
-pub const EXTENSION_VERSION: Version = Version::new(0, 4, 0);
+pub const EXTENSION_VERSION: Version = Version::new(0, 5, 0);
 
 lazy_static! {
     /// The "tket2.qsystem" extension.
@@ -611,20 +611,6 @@ mod test {
             let [qb, lazy_b] = func_builder.add_lazy_measure_reset(qb).unwrap();
             let [b] = func_builder.add_read(lazy_b, bool_t()).unwrap();
             func_builder.finish_hugr_with_outputs([qb, b]).unwrap()
-        };
-        assert_matches!(hugr.validate(), Ok(_));
-    }
-
-    #[test]
-    fn lazy_leaked_circuit() {
-        let hugr = {
-            let mut func_builder =
-                FunctionBuilder::new("circuit", Signature::new(qb_t(), int_type(6)))
-                    .unwrap();
-            let [qb] = func_builder.input_wires_arr();
-            let lazy_i = func_builder.add_lazy_measure_leaked(qb).unwrap();
-            // let [b] = func_builder.add_read(lazy_b, bool_t()).unwrap();
-            func_builder.finish_hugr_with_outputs([lazy_i]).unwrap()
         };
         assert_matches!(hugr.validate(), Ok(_));
     }
