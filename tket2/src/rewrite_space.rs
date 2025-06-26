@@ -23,8 +23,10 @@ pub type Walker<'a> = hugr::persistent::Walker<'a, Resolver>;
 /// The resolver used in [`RewriteSpace`].
 pub type Resolver = SerdeHashResolver<HugrWithExts>;
 
-type CommitStateSpace = hugr::persistent::CommitStateSpace<Resolver>;
-type PersistentHugr = hugr::persistent::PersistentHugr<Resolver>;
+/// The state space of all possible rewrites.
+pub type CommitStateSpace = hugr::persistent::CommitStateSpace<Resolver>;
+/// A persistent Hugr using the default TKET2 resolver.
+pub type PersistentHugr = hugr::persistent::PersistentHugr<Resolver>;
 
 /// A space of possible rewrites.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
