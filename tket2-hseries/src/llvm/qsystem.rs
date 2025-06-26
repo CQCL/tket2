@@ -363,6 +363,7 @@ mod test {
     #[case::qfree(7, QSystemOp::QFree)]
     #[case::reset(8, QSystemOp::Reset)]
     #[case::measure_reset(9, QSystemOp::MeasureReset)]
+    #[case::lazy_measure_leaked(1, QSystemOp::LazyMeasureLeaked)]
     fn emit_qsystem_codegen(
         #[case] _i: i32,
         #[with(_i)] mut llvm_ctx: TestContext,
