@@ -53,7 +53,7 @@ fn test_commute_cz() {
     let mut space = RewriteSpace::with_base(dfg_hugr());
 
     let opts = ExploreOptions {
-        max_rewrites: 20.into(),
+        max_rewrites: 60.into(),
     };
     explorer.explore(&mut space, &opts);
 

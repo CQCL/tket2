@@ -10,6 +10,7 @@ type Symbol = String;
 /// It will ensure that all constraints:
 ///  - a => b for all (a, b) in `self.implications`.
 ///  - ¬(a & b) for all (a, b) in `self.mutexes`.
+///
 /// are satisfied, whilst setting as many variables as possible to true.
 pub(super) struct MaxSATSolver {
     implications: Vec<(Symbol, Symbol)>,
