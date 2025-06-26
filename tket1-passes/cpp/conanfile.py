@@ -1,5 +1,5 @@
-from conan import ConanFile
-from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
+from conan import ConanFile  # type: ignore
+from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps  # type: ignore
 
 
 class Tket1PassesConan(ConanFile):

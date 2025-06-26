@@ -28,10 +28,10 @@ cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE"
 # Build the shared library
 make -j$(nproc 2>/dev/null || echo 4)
 
-# Copy the library for Rust usage
-make copy_to_lib_dir
+# Copy the library to lib/ for Rust usage
+make install
 
 echo "Build complete!"
 
-cd ..
+cd ../..
 echo "Dynamic library available at: $(pwd)/lib/libtket1-passes.dylib"

@@ -22,21 +22,15 @@ target_link_libraries(tket1-passes PRIVATE tket::tket)
 # Set the library properties for shared library creation
 set_target_properties(tket1-passes PROPERTIES
     VERSION 1.0.0
-    PUBLIC_HEADER "src/tket1-passes.h"
 )
 
 # Installation
 include(GNUInstallDirs)
+
+# Install the library to the lib directory in the parent (tket1-passes) directory
 install(TARGETS tket1-passes
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    LIBRARY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../lib
 )
 
-# Custom target to copy the library to a new lib location
-add_custom_target(copy_to_lib_dir
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_SOURCE_DIR}/lib
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tket1-passes> ${CMAKE_CURRENT_SOURCE_DIR}/lib/
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_LINKER_FILE:tket1-passes> ${CMAKE_CURRENT_SOURCE_DIR}/lib/
-    DEPENDS tket1-passes
-    COMMENT "Copying library and symlinks to lib directory"
-)
+# Create the lib directory if it doesn't exist
+install(DIRECTORY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../lib)

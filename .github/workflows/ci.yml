@@ -63,9 +63,31 @@ jobs:
       with:
         filters: .github/change-filters.yml
 
+
+  build-tket1-passes:
+    name: Build tket1-passes C++ library
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install conan
+        uses: turtlebrowser/get-conan@v1.2
+      - name: Set up conan
+        run: |
+          conan profile detect
+          conan remote add tket-libs https://quantinuumsw.jfrog.io/artifactory/api/conan/tket1-libs --index 0
+      - name: Build tket1-passes C++ library
+        run: |
+          cd tket1-passes/cpp
+          ./build.sh
+      - name: Upload tket1-passes C++ library as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tket1-passes-lib
+          path: tket1-passes/lib
+
   check-rs:
     name: Check Rust code 🦀
-    needs: changes
+    needs: [changes, build-tket1-passes]
     if: ${{ needs.changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     steps:
@@ -75,6 +97,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - name: Download tket1-passes C++ library
+        uses: actions/download-artifact@v4
+        with:
+          name: tket1-passes-lib
+          path: tket1-passes/lib
       - name: Check formatting
         run: cargo fmt -- --check
       - name: Install LLVM and Clang
@@ -153,13 +180,13 @@ jobs:
       - name: Configure default rust toolchain
         run: rustup override set ${{steps.toolchain.outputs.name}}
       - name: Build with no features
-        run: cargo test --verbose --workspace --no-default-features --no-run
+        run: cargo test --verbose -p tket2 -p tket2-py -p tket2-hseries --no-default-features --no-run
       - name: Tests with no features
-        run: cargo test --verbose --workspace --no-default-features
+        run: cargo test --verbose -p tket2 -p tket2-py -p tket2-hseries --no-default-features
 
   # Run tests on Rust stable
   tests-rs-stable-all-features:
-    needs: changes
+    needs: [changes, build-tket1-passes]
     if: ${{ needs.changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     name: tests (Rust stable, all features)
@@ -176,6 +203,11 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
+      - name: Download tket1-passes C++ library
+        uses: actions/download-artifact@v4
+        with:
+          name: tket1-passes-lib
+          path: tket1-passes/lib
       - name: Build with all features
         run: cargo test --verbose --workspace --all-features --no-run
       - name: Tests with all features
@@ -183,7 +215,7 @@ jobs:
 
   # Run tests on other toolchains
   tests-rs-other:
-    needs: changes
+    needs: [changes, build-tket1-passes]
     if: ${{ needs.changes.outputs.rust == 'true' && github.event_name != 'merge_group' }}
     runs-on: ubuntu-latest
     strategy:
@@ -204,6 +236,11 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
+      - name: Download tket1-passes C++ library
+        uses: actions/download-artifact@v4
+        with:
+          name: tket1-passes-lib
+          path: tket1-passes/lib
       - name: Configure default rust toolchain
         run: rustup override set ${{steps.toolchain.outputs.name}}
       - name: Build with no features
@@ -216,7 +253,7 @@ jobs:
         run: cargo test --verbose --workspace --all-features
 
   tests-nightly-coverage:
-    needs: changes
+    needs: [changes, build-tket1-passes]
     # Run only if there are changes in the relevant files
     if: ${{ needs.changes.outputs.rust == 'true' && github.event_name != 'merge_group' }}
     runs-on: ubuntu-latest
@@ -234,6 +271,11 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
+      - name: Download tket1-passes C++ library
+        uses: actions/download-artifact@v4
+        with:
+          name: tket1-passes-lib
+          path: tket1-passes/lib
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Run tests with coverage instrumentation

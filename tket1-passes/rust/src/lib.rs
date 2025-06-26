@@ -80,6 +80,7 @@ fn try_from_optype(optype: OpType) -> Result<ffi::TketTargetGate, PassError> {
 }
 
 /// A quantum circuit in TKET1's in-memory format
+#[derive(Debug)]
 pub struct Tket1Circuit {
     inner: *mut ffi::TketCircuit,
 }
@@ -186,20 +187,12 @@ impl Drop for Tket1Circuit {
     }
 }
 
-impl std::fmt::Debug for Tket1Circuit {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Circuit")
-            .field("inner", &self.inner)
-            .finish()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use rstest::*;
 
-    const CIRC_STR: &'static str = include_str!("../../../test_files/2cx.json");
+    const CIRC_STR: &str = include_str!("../../../test_files/2cx.json");
 
     #[fixture]
     fn circuit() -> SerialCircuit {

@@ -12,8 +12,9 @@ This requires standard modern C++ tooling:
 - CMake 3.23+
 - C++20 compiler
 
-as well as the GMP (GNU Multiple Precision Arithmetic Library). You must further
-set up `conan` to use the artifactory containing the tket package:
+as well as the GMP (GNU Multiple Precision Arithmetic Library). This is usually
+already installed on Linux; on macos you can use `brew install gmp`. You must
+further set up `conan` to use the artifactory containing the tket package:
 
 ```
 conan remote add tket-libs https://quantinuumsw.jfrog.io/artifactory/api/conan/tket1-libs --index 0
@@ -35,7 +36,7 @@ cd cpp
 ## Building the Rust library
 
 Upon successfully building the C++ library, the compiled library should be found
-in the `cpp/lib` directory. The Rust library can then be built using:
+in the `lib` directory. The Rust library can then be built using:
 
 ```bash
 cd rust

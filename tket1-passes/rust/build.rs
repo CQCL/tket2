@@ -6,14 +6,36 @@ use std::env;
 use std::path;
 use std::path::PathBuf;
 
+const LIB_NAME: &str = "tket1-passes";
+
+fn libtket1_passes_name() -> String {
+    let target = env::var("TARGET").unwrap();
+    match target.as_str() {
+        t if t.contains("windows") => format!("{LIB_NAME}.lib"),
+        t if t.contains("apple") => format!("lib{LIB_NAME}.dylib"),
+        _ => format!("lib{LIB_NAME}.so"),
+    }
+}
+
+fn is_macos() -> bool {
+    let target = env::var("TARGET").unwrap();
+    target.contains("apple")
+}
+
 fn main() {
-    let lib_path = PathBuf::from("../cpp/lib/libtket1-passes.dylib");
+    let lib_path = PathBuf::from("../lib/").join(libtket1_passes_name());
     let header_path = PathBuf::from("../cpp/src/tket1-passes.h");
+    let library_search_paths = if is_macos() {
+        vec!["/opt/homebrew/lib"]
+    } else {
+        vec![]
+    };
 
     // Check the required C++ files can be found
     assert!(
         lib_path.exists(),
-        "libtket1-passes.dylib not found. Ensure the C++ library has been compiled first."
+        "{} not found. Ensure the C++ library has been compiled first.",
+        libtket1_passes_name()
     );
     assert!(header_path.exists(), "tket1-passes.h not found.");
 
@@ -23,23 +45,26 @@ fn main() {
         .unwrap()
         .to_owned();
 
-    // Libraries to link in dynamically.
-    println!("cargo:rustc-link-lib=dylib=tket1-passes");
-    println!("cargo:rustc-link-lib=c++");
-    println!("cargo:rustc-link-lib=gmp");
-
-    // Configure where to find the dynamic libraries (tket1-passes and GMP).
-    println!("cargo:rustc-link-search=native={}", lib_dir.display());
-    println!("cargo:rustc-link-search=native=/opt/homebrew/opt/gmp/lib");
-
     // Configure when to rerun the build script
     println!("cargo:rerun-if-changed={}", lib_path.display());
     println!("cargo:rerun-if-changed={}", header_path.display());
 
-    // Configure the linker to find the dynamic libraries at runtime.
-    if cfg!(target_os = "macos") {
-        println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir.display());
+    // Configure where to find the dynamic libraries (tket1-passes and GMP).
+    println!("cargo:rustc-link-search=native={}", lib_dir.display());
+    for path in library_search_paths {
+        println!("cargo:rustc-link-search=native={path}");
     }
+
+    // Libraries to link in dynamically.
+    println!("cargo:rustc-link-lib=tket1-passes");
+    if is_macos() {
+        println!("cargo:rustc-link-lib=c++");
+    } else {
+        println!("cargo:rustc-link-lib=stdc++");
+    }
+
+    // Configure the linker to find the dynamic libraries at runtime.
+    println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir.display());
 
     // Generate bindings using bindgen
     let bindings = bindgen::Builder::default()
