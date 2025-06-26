@@ -333,7 +333,7 @@ jobs:
             else
               BASE_SHA=$(git rev-parse origin/$TARGET_REF)
             fi
-            LAST_TAG=$(git describe --abbrev=0 --match="tket2t c-*" $BASE_SHA)
+            LAST_TAG=$(git describe --abbrev=0 --match="tket2-*" $BASE_SHA)
             echo "Latest tag on target: $LAST_TAG"
 
             python ./scripts/check_extension_versions.py $LAST_TAG

@@ -218,7 +218,7 @@ impl QSystemPass {
 #[cfg(test)]
 mod test {
     use hugr::{
-        builder::{Container, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer},
+        builder::{Container, Dataflow, DataflowSubContainer, HugrBuilder},
         extension::prelude::qb_t,
         ops::handle::NodeHandle,
         std_extensions::arithmetic::float_types::ConstF64,
@@ -238,13 +238,19 @@ mod test {
 
     #[test]
     fn qsystem_pass() {
+        let mut mb = hugr::builder::ModuleBuilder::new();
+        let func = mb
+            .define_function("func", Signature::new_endo(type_row![]))
+            .unwrap()
+            .finish_with_outputs([])
+            .unwrap();
+
         let (mut hugr, [call_node, h_node, f_node, rx_node]) = {
-            let mut builder =
-                DFGBuilder::new(Signature::new(qb_t(), vec![bool_type(), bool_type()])).unwrap();
-            let func = builder
-                .define_function("func", Signature::new_endo(type_row![]))
-                .unwrap()
-                .finish_with_outputs([])
+            let mut builder = mb
+                .define_function(
+                    "main",
+                    Signature::new(qb_t(), vec![bool_type(), bool_type()]),
+                )
                 .unwrap();
             let [qb] = builder.input_wires_arr();
 
@@ -278,12 +284,12 @@ mod test {
                 .unwrap()
                 .outputs_arr();
 
-            let hugr = builder
-                .finish_hugr_with_outputs([measure_result, measure_result])
+            let _main_n = builder
+                .finish_with_outputs([measure_result, measure_result])
                 .unwrap();
+            let hugr = mb.finish_hugr().unwrap();
             (hugr, [call_node, h_node, f_node, rx_node])
         };
-
         QSystemPass::default().run(&mut hugr).unwrap();
 
         let topo_sorted = Topo::new(&hugr.as_petgraph())
