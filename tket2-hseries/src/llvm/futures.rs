@@ -3,6 +3,7 @@
 use crate::extension::futures::{self, FutureOp, FutureOpDef, FUTURE_TYPE_NAME};
 use anyhow::{anyhow, Result};
 use hugr::extension::prelude::bool_t;
+use hugr::std_extensions::arithmetic::int_types::INT_TYPES;
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::ops::{ExtensionOp, Value};
 use hugr::types::TypeArg;
@@ -37,7 +38,7 @@ impl CodegenExtension for FuturesCodegenExtension {
                 |session, hugr_type| {
                     match (hugr_type.name().as_str(), hugr_type.args()) {
                         // For now, we only support future bools
-                        ("Future", [TypeArg::Type { ty }]) if *ty == bool_t() => {
+                        ("Future", [TypeArg::Type { ty }]) if *ty == INT_TYPES[6] => {
                             Ok(future_type(session.iw_context()))
                         }
                         _ => Err(anyhow!(
@@ -74,6 +75,10 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
         self.iw_context().bool_type()
     }
 
+    fn ll_uint_type(&self) -> IntType<'c> {
+        self.iw_context().i64_type()
+    }
+
     fn builder(&self) -> &Builder<'c> {
         self.0.builder()
     }
@@ -101,8 +106,16 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
         self.0.get_extern_func("___read_future_bool", func_type)
     }
 
+    fn get_func_read_uint(&self) -> Result<FunctionValue<'c>> {
+        let func_type = self
+            .ll_uint_type()
+            .fn_type(&[self.ll_future_type().into()], false);
+        self.0.get_extern_func("___read_future_uint", func_type)
+    }
+
     fn emit(&mut self, args: EmitOpArgs<'c, '_, ExtensionOp, H>) -> Result<()> {
         let op = FutureOp::from_optype(&args.node().generalise()).unwrap().op;
+        println!("ASDF: {:?}", op);
         match op {
             FutureOpDef::Dup => {
                 let [arg] = args
@@ -129,10 +142,16 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
                     .inputs
                     .try_into()
                     .map_err(|_| anyhow!("Read expects a single input"))?;
-                let read_func = self.get_func_read_bool()?;
+                todo!("Read operation is not yet implemented in LLVM codegen");
+
+                // Logic here needs to change to call self.get_func_read_uint() or self.get_func_read_bool()
+                // But haven't identified where to match on "bool" vs "int" from the INT_TYPE[6] instance.
+                // let read_func = self.get_func_read_bool()?;
+                todo!();
+                
                 let result_i1 = self
                     .builder()
-                    .build_call(read_func, &[arg.into()], "read_bool")?
+                    .build_call(read_func, &[arg.into()], "read_val")?
                     .try_as_basic_value()
                     .unwrap_left()
                     .into_int_value();
@@ -160,9 +179,9 @@ mod test {
 
     use super::*;
     #[rstest::rstest]
-    #[case::read(1,FutureOp { op: FutureOpDef::Read, typ: bool_t() })]
-    #[case::dup(2,FutureOp { op: FutureOpDef::Dup, typ: bool_t() })]
-    #[case::free(3,FutureOp { op: FutureOpDef::Free, typ: bool_t() })]
+    #[case::read(1,FutureOp { op: FutureOpDef::Read, typ: bool_t().into() })]
+    #[case::dup(2,FutureOp { op: FutureOpDef::Dup, typ: bool_t().into() })]
+    #[case::free(3,FutureOp { op: FutureOpDef::Free, typ: bool_t().into() })]
     fn emit_futures_codegen(
         #[case] _i: i32,
         #[with(_i)] mut llvm_ctx: TestContext,
