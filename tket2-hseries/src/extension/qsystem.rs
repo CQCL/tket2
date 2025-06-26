@@ -23,7 +23,7 @@ use hugr::{
             float_types::{float64_type, ConstF64, EXTENSION as FLOAT_TYPES},
             int_types::int_type,
         },
-        collections::array::{array_type, array_type_parametric, ArrayOpBuilder},
+        collections::array::{array_type_parametric, ArrayOpBuilder},
     },
     type_row,
     types::{type_param::TypeParam, PolyFuncType, Signature, Type, TypeArg, TypeRow},
@@ -524,7 +524,7 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
         let q_arr = self.add_new_array(qb_t(), qbs)?;
         let q_arr = self.add_runtime_barrier(q_arr, size)?;
 
-        pop_all(self, q_arr, size, qb_t())
+        self.add_array_unpack(qb_t(), size, q_arr)
     }
 }
 
@@ -538,40 +538,6 @@ pub(crate) fn runtime_barrier_ext_op(
     )
 }
 
-/// Build a pop left operation on an array and unwrap the resulting option.
-pub(crate) fn pop_unwrap<T: ArrayOpBuilder>(
-    builder: &mut T,
-    q_arr: Wire,
-    size: u64,
-    elem_ty: Type,
-) -> Result<[Wire; 2], BuildError> {
-    debug_assert!(size > 0);
-    let r = builder
-        .add_array_pop_right(elem_ty.clone(), size, q_arr)
-        .unwrap();
-    builder.build_unwrap_sum(
-        1,
-        option_type(vec![elem_ty.clone(), array_type(size - 1, elem_ty)]),
-        r,
-    )
-}
-/// Unpack all elements of an array and discard the empty array.
-pub(crate) fn pop_all<T: ArrayOpBuilder>(
-    builder: &mut T,
-    mut arr: Wire,
-    size: u64,
-    elem_ty: Type,
-) -> Result<Vec<Wire>, BuildError> {
-    // TODO use unwrap op when available https://github.com/CQCL/hugr/issues/1947
-    let mut result = Vec::with_capacity(size as usize);
-    for ar_size in (1..size + 1).rev() {
-        let [qb, new_arr] = pop_unwrap(builder, arr, ar_size, elem_ty.clone())?;
-        result.push(qb);
-        arr = new_arr;
-    }
-    builder.add_array_discard_empty(elem_ty, arr)?;
-    Ok(result)
-}
 impl<D: Dataflow> QSystemOpBuilder for D {}
 
 #[cfg(test)]
