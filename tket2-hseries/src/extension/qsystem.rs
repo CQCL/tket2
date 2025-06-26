@@ -88,7 +88,6 @@ lazy_static! {
 pub enum QSystemOp {
     Measure,
     LazyMeasure,
-    LazyMeasureLeaked,
     LazyMeasureReset,
     Rz,
     PhasedX,
@@ -97,6 +96,7 @@ pub enum QSystemOp {
     QFree,
     Reset,
     MeasureReset,
+    LazyMeasureLeaked,
 }
 
 impl MakeOpDef for QSystemOp {
