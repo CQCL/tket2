@@ -1,5 +1,5 @@
 {
-  "version": "0.4.0",
+  "version": "0.4.1",
   "name": "tket2.qsystem",
   "types": {},
   "operations": {
@@ -27,6 +27,47 @@
                     "t": "Sum",
                     "s": "Unit",
                     "size": 2
+                  }
+                }
+              ],
+              "bound": "A"
+            }
+          ]
+        }
+      },
+      "binary": false
+    },
+    "LazyMeasureLeaked": {
+      "extension": "tket2.qsystem",
+      "name": "LazyMeasureLeaked",
+      "description": "Measure a qubit (return 0 or 1) or detect leakage (return 2).",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Q"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.futures",
+              "id": "Future",
+              "args": [
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Opaque",
+                    "extension": "arithmetic.int.types",
+                    "id": "int",
+                    "args": [
+                      {
+                        "tya": "BoundedNat",
+                        "n": 6
+                      }
+                    ],
+                    "bound": "C"
                   }
                 }
               ],
