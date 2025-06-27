@@ -1,0 +1,44 @@
+name: "Build/cache tket1-passes C++ library"
+description: "Retrieve cached tket1-passes C++ library or build if needed"
+
+runs:
+  using: composite
+  steps:
+    # Attempt to retrieve from cache
+    - name: Retrieve cached tket1-passes C++ library
+      uses: actions/cache/restore@v4
+      id: cache
+      with:
+        path: tket1-passes/lib
+        key: ${{ runner.os }}-${{ hashFiles('tket1-passes/cpp/**') }}
+
+    - name: DEBUG print cache hit value
+      shell: bash
+      run: |
+        echo "cache-hit: ${{ steps.cache.outputs.cache-hit }}"
+        echo "cache-primary-key: ${{ steps.cache.outputs.cache-primary-key }}"
+
+    # Build tket1-passes
+    - name: Install conan
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: turtlebrowser/get-conan@v1.2
+    - name: Set up conan
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        conan profile detect
+        conan remote add tket-libs https://quantinuumsw.jfrog.io/artifactory/api/conan/tket1-libs --index 0
+    - name: Build tket1-passes C++ library
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        cd tket1-passes/cpp
+        ./build.sh
+
+    # Upload cache
+    - name: Update tket1-passes C++ library cache
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: tket1-passes/lib
+        key: ${{ steps.cache.outputs.cache-primary-key }}
