@@ -1,11 +1,11 @@
 [package]
 name = "tket1-passes"
-version = "0.1.0"
+version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Rust interface for tket one-pass optimization library"
+description = "Rust interface for tket1-passes library"
 
 [lib]
 name = "tket1_passes"

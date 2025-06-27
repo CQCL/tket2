@@ -18,7 +18,8 @@ mod ffi {
 }
 
 /// Error types that can occur when using the tket library
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
+#[non_exhaustive]
 pub enum PassError {
     /// Null pointer provided
     #[error("Null pointer provided")]

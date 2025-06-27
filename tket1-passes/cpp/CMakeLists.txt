@@ -21,7 +21,7 @@ target_link_libraries(tket1-passes PRIVATE tket::tket)
 
 # Set the library properties for shared library creation
 set_target_properties(tket1-passes PROPERTIES
-    VERSION 1.0.0
+    VERSION 0.0.1
 )
 
 # Installation
