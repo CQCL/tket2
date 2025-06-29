@@ -93,7 +93,7 @@ impl CommuteCZ {
         }
     }
 
-    fn wires(&self) -> impl Iterator<Item = &PersistentWire> + '_ {
+    fn wires(&self) -> impl Iterator<Item = &PersistentWire> + Clone + '_ {
         match self {
             CommuteCZ::Cancel(wires) => Either::Left(wires.iter()),
             CommuteCZ::Swap(wire) => Either::Right(std::iter::once(wire)),

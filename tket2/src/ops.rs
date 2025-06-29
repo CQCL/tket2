@@ -186,6 +186,12 @@ impl Tk2Op {
             Measure | MeasureFree | QAlloc | TryQAlloc | QFree | Reset => false,
         }
     }
+
+    /// Check if this op is a Clifford quantum op.
+    pub fn is_clifford(&self) -> bool {
+        use Tk2Op::*;
+        matches!(self, H | CX | S | V | X | Y | Z | Sdg | Vdg | CZ | CY)
+    }
 }
 
 /// Initialize a new custom symbolic expression constant op from a string.
@@ -320,5 +326,17 @@ pub(crate) mod test {
         {
             assert_eq!(op.qubit_commutation(), &[(0, *pauli)]);
         }
+    }
+
+    #[test]
+    fn is_clifford() {
+        for op in Tk2Op::iter() {
+            if op.is_clifford() {
+                assert!(op.is_quantum());
+            }
+        }
+
+        assert!(Tk2Op::H.is_clifford());
+        assert!(!Tk2Op::T.is_clifford());
     }
 }

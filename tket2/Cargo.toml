@@ -23,9 +23,14 @@ path = "src/lib.rs"
 
 [features]
 # Enables search and replace optimisation passes using the `portmatching` crate.
-portmatching = ["dep:portmatching", "dep:rmp-serde"]
-badgerv2_unstable = ["hugr/persistent_unstable", "chrono/serde", "dep:z3"]
 
+badgerv2_unstable = [
+    "hugr/persistent_unstable",
+    "chrono/serde",
+    "dep:z3",
+    "tket1-passes",
+]
+portmatching = ["dep:portmatching", "dep:rmp-serde"]
 # Stores a trace of the applied rewrites
 rewrite-tracing = []
 
@@ -76,6 +81,7 @@ pest = { workspace = true }
 pest_derive = { workspace = true }
 zstd = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
+tket1-passes = { path = "../tket1-passes/rust", optional = true }
 
 [dependencies.z3] # Currently using a fork of z3.rs to install from GH releases
 git = "https://github.com/lmondada/z3.rs.git"
@@ -91,6 +97,7 @@ cool_asserts = { workspace = true }
 # Defined here so it can be overridden by the codspeed CI job
 # using `cargo add`.
 criterion = { version = "0.6.0", features = ["html_reports"] }
+
 
 [[bench]]
 name = "bench_main"

@@ -15,8 +15,8 @@ use crate::serialize::HugrWithExts;
 mod factory;
 mod max_sat;
 
+pub use factory::{CliffordSimpFactory, CliffordSubcircuit, CommuteCZ, CommuteCZFactory};
 pub use factory::{CommitFactory, ExploreOptions, IterMatched};
-pub use factory::{CommuteCZ, CommuteCZFactory};
 
 /// A walker over the rewrite space.
 pub type Walker<'a> = hugr::persistent::Walker<'a, Resolver>;

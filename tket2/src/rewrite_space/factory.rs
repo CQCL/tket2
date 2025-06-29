@@ -6,14 +6,16 @@ use hugr::persistent::{
     subgraph::InvalidPinnedSubgraph, PatchNode, PersistentWire, PinnedSubgraph,
 };
 use hugr::{ops::OpType, Hugr, HugrView, Port, SimpleReplacement};
-use hugr::{IncomingPort, OutgoingPort};
+use hugr::{Direction, IncomingPort, OutgoingPort};
 use itertools::{Either, Itertools};
 
 use crate::circuit::cost::CircuitCost;
 
 use super::{PersistentHugr, RewriteSpace, Walker};
 
+mod clifford;
 mod commute_cz;
+pub use clifford::{CliffordSimpFactory, CliffordSubcircuit};
 pub use commute_cz::{CommuteCZ, CommuteCZFactory};
 
 /// Options to control the exploration process within commit factories.
@@ -88,14 +90,14 @@ pub trait CommitFactory {
         let (inputs, outputs) = pattern_match.io_ports(host);
 
         match port.as_directed() {
-            Either::Left(incoming) => IncomingPort::from(
+            Either::Left(incoming) => OutgoingPort::from(
                 inputs
                     .iter()
                     .position(|vec| vec.iter().any(|&(n, p)| n == node && p == incoming))
                     .unwrap(),
             )
             .into(),
-            Either::Right(outgoing) => OutgoingPort::from(
+            Either::Right(outgoing) => IncomingPort::from(
                 outputs
                     .iter()
                     .position(|&(n, p)| n == node && p == outgoing)
@@ -242,11 +244,7 @@ fn new_nodes_within_radius<'a>(
             continue;
         }
 
-        for port in walker.as_hugr_view().all_node_ports(node) {
-            if !is_value_port(walker.as_hugr_view(), node, port) {
-                continue;
-            }
-
+        for port in value_ports(walker.as_hugr_view(), node, None) {
             let wire = walker.get_wire(node, port);
             let already_pinned: BTreeSet<_> = walker.wire_pinned_ports(&wire, None).collect();
             for new_walker in walker.expand(&wire, None) {
@@ -269,6 +267,18 @@ fn is_value_port<H: HugrView>(h: &H, node: H::Node, port: impl Into<Port>) -> bo
     h.get_optype(node)
         .port_kind(port)
         .is_some_and(|v| v.is_value())
+}
+
+fn value_ports<H: HugrView>(
+    host: &H,
+    node: H::Node,
+    dir: impl Into<Option<Direction>>,
+) -> impl Iterator<Item = Port> + '_ {
+    let ports = match dir.into() {
+        Some(dir) => Either::Left(host.node_ports(node, dir)),
+        None => Either::Right(host.all_node_ports(node)),
+    };
+    ports.filter(move |&port| is_value_port(host, node, port))
 }
 
 fn repl_cost<C: CircuitCost, H: HugrView>(

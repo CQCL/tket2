@@ -4,12 +4,13 @@ use anyhow::{anyhow, Context, Result};
 use std::fs;
 use std::io::BufReader;
 use std::path::PathBuf;
+use std::str::FromStr;
 use tket2::rewrite_space::{CommitFactory, ExploreOptions, RewriteSpace};
 use tket2::Circuit;
 
 use super::CommandExecutor;
 use crate::config::Config;
-use crate::factory::CommuteCZFactory;
+use crate::factory::SupportedFactory;
 use crate::storage::RewriteSpaceData;
 
 #[derive(Debug)]
@@ -44,19 +45,13 @@ impl CommandExecutor for RunCommand {
         };
 
         // Run explorer based on type
-        let factory = match self.factory.as_str() {
-            "CommuteCZ" => {
-                println!("Running CommuteCZ commit factory...");
-                CommuteCZFactory
-            }
-            // Add further explorers here
-            _ => {
-                return Err(anyhow!(
-                    "Unknown explorer type: {}. Currently only 'CommuteCZ' is supported.",
-                    self.factory
-                ));
-            }
+        let Ok(factory) = SupportedFactory::from_str(self.factory.as_str()) else {
+            return Err(anyhow!(
+                "Unknown factory type: {}. Currently 'CommuteCZ' and 'Clifford' are supported.",
+                self.factory
+            ));
         };
+        println!("Running {} commit factory...", factory);
         factory.explore(&mut space, &opts);
 
         let commit_count = space.all_commit_ids().count();

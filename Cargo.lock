@@ -1254,6 +1254,7 @@ dependencies = [
  "itertools 0.14.0",
  "serde",
  "serde_json",
+ "strum",
  "tket2",
  "toml",
 ]
@@ -3409,6 +3410,7 @@ dependencies = [
  "smol_str",
  "strum",
  "tket-json-rs",
+ "tket1-passes",
  "tracing",
  "typetag",
  "z3",
