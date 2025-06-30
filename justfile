@@ -52,6 +52,10 @@ recompile-eccs:
 gen-extensions:
     cargo run -p tket2-hseries gen-extensions -o tket2-exts/src/tket2_exts/data
 
+# Interactively update snapshot tests (requires `cargo-insta`)
+update-snapshots:
+    cargo insta review
+
 # Runs a rust and a python command, depending on the `language` variable.
 #
 # If `language` is set to `rust` or `python`, only run the command for that language.
