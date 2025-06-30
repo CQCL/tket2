@@ -39,38 +39,16 @@ jobs:
       with:
         filters: .github/change-filters.yml
 
-  build-tket1-passes:
-    name: Build tket1-passes C++ library
+  rs-semver-checks:
+    needs: [changes]
+    if: ${{ needs.changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install conan
-        uses: turtlebrowser/get-conan@v1.2
-      - name: Set up conan
+      - name: Install LLVM from apt
         run: |
-          conan profile detect
-          conan remote add tket-libs https://quantinuumsw.jfrog.io/artifactory/api/conan/tket1-libs --index 0
-      - name: Build tket1-passes C++ library
-        run: |
-          cd tket1-passes/cpp
-          ./build.sh
-      - name: Upload tket1-passes C++ library as artifact
-        uses: actions/upload-artifact@v4
+          echo "Installing apt dependencies: llvm-14"
+          sudo apt-get install -y llvm-14
+      - uses: CQCL/hugrverse-actions/.github/actions/rs-semver-checks@7fe1ade
         with:
-          name: tket1-passes-lib
-          path: tket1-passes/lib
+         token: ${{ secrets.HUGRBOT_PAT }}
 
-  rs-semver-checks:
-    needs: [changes, build-tket1-passes]
-    if: ${{ needs.changes.outputs.rust == 'true' }}
-    steps:
-      - name: Download tket1-passes C++ library
-        uses: actions/download-artifact@v4
-        with:
-          name: tket1-passes-lib
-          path: tket1-passes/lib
-      - uses: CQCL/hugrverse-actions/.github/workflows/rs-semver-checks.yml@main
-        with:
-          apt-dependencies: llvm-14
-        secrets:
-          GITHUB_PAT: ${{ secrets.HUGRBOT_PAT }}
