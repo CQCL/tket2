@@ -1,6 +1,6 @@
 name: Rust Semver Checks
 on:
-  pull_request_target:
+  pull_request:
     branches:
       - main
 
@@ -48,7 +48,7 @@ jobs:
         run: |
           echo "Installing apt dependencies: llvm-14"
           sudo apt-get install -y llvm-14
-      - uses: CQCL/hugrverse-actions/.github/actions/rs-semver-checks@7fe1ade
+      - uses: CQCL/hugrverse-actions/.github/actions/rs-semver-checks@7fe1ade2334f5127c4ca13e75ea7f82080a3fd40
         with:
          token: ${{ secrets.HUGRBOT_PAT }}
 
