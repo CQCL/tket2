@@ -48,11 +48,13 @@ def check_version_changes(changed_files: list[Path], target: str) -> list[str]:
 
                 if current_version == target_version:
                     errors.append(
-                        f"Error: {file_path} was modified but version {current_version} was not updated."
+                        f"Error: {file_path} was modified but version {current_version}"
+                        " was not updated."
                     )
                 else:
                     print(
-                        f"Version updated in {file_path}: {target_version} -> {current_version}"
+                        f"Version updated in {file_path}: {target_version}"
+                        f" -> {current_version}"
                     )
 
             else:
@@ -62,7 +64,6 @@ def check_version_changes(changed_files: list[Path], target: str) -> list[str]:
         except json.JSONDecodeError:
             # File is new or not valid JSON in target
             pass
-
     return errors
 
 
@@ -78,7 +79,7 @@ def main() -> int:
     errors = check_version_changes(changed_files, target)
     if errors:
         for error in errors:
-            print(error)
+            sys.stderr.write(error)
         return 1
 
     print("All changed extension files have updated versions.")
