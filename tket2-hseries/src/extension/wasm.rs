@@ -215,7 +215,7 @@ impl WasmType {
         extension_ref: &Weak<Extension>,
     ) -> CustomType {
         let row_to_arg =
-            |row: TypeRowRV| TypeArg::Tuple(row.into_owned().into_iter().map_into().collect());
+            |row: TypeRowRV| TypeArg::List(row.into_owned().into_iter().map_into().collect());
         CustomType::new(
             FUNC_TYPE_NAME.to_owned(),
             [row_to_arg(inputs.into()), row_to_arg(outputs.into())],

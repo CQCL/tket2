@@ -37,10 +37,10 @@ large_enum_variant = "allow"
 [patch.crates-io]
 
 # Uncomment to use unreleased versions of hugr
-hugr = { git = "https://github.com/CQCL/hugr", rev = "8982997a" }
-hugr-core = { git = "https://github.com/CQCL/hugr", rev = "8982997a" }
-hugr-passes = { git = "https://github.com/CQCL/hugr", rev = "8982997a" }
-hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "8982997a" }
+hugr = { git = "https://github.com/CQCL/hugr" }
+hugr-core = { git = "https://github.com/CQCL/hugr" }
+hugr-passes = { git = "https://github.com/CQCL/hugr" }
+hugr-cli = { git = "https://github.com/CQCL/hugr" }
 # portgraph = { git = "https://github.com/CQCL/portgraph", rev = "68b96ac737e0c285d8c543b2d74a7aa80a18202c" }
 [workspace.dependencies]
 
@@ -48,9 +48,9 @@ hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "8982997a" }
 # hugr = "0.20.1"
 # hugr-core = "0.20.1"
 # hugr-cli = "0.20.1"
-hugr = { git = "https://github.com/CQCL/hugr", rev = "8982997a" }
-hugr-core = { git = "https://github.com/CQCL/hugr", rev = "8982997a" }
-hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "8982997a" }
+hugr = { git = "https://github.com/CQCL/hugr" }
+hugr-core = { git = "https://github.com/CQCL/hugr" }
+hugr-cli = { git = "https://github.com/CQCL/hugr" }
 portgraph = "0.14.1"
 pyo3 = ">= 0.23.4, < 0.26"
 itertools = "0.14.0"
