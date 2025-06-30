@@ -1,8 +1,5 @@
 //! LLVM lowering implementations for "tket2.futures" operations.
 
-use std::fs::OpenOptions;
-use std::io::Write;
-
 use crate::extension::futures::{self, FutureOp, FutureOpDef, FUTURE_TYPE_NAME};
 use anyhow::{anyhow, Result};
 use hugr::extension::prelude::bool_t;
@@ -159,12 +156,6 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
                     .inputs
                     .try_into()
                     .map_err(|_| anyhow!("Read expects a single input"))?;
-                // HERE
-                let mut file = OpenOptions::new()
-                    .append(true)
-                    .create(true) // creates the file if it doesn't exist
-                    .open("/tmp/output.txt")?;
-                writeln!(file, "{:?}", typ)?; // Use {:?} for Debug
                 let read_func = self.get_func_read(typ)?;
                 let result_i1 = self
                     .builder()
