@@ -1,11 +1,15 @@
 //! LLVM lowering implementations for "tket2.futures" operations.
 
+use std::fs::OpenOptions;
+use std::io::Write;
+
 use crate::extension::futures::{self, FutureOp, FutureOpDef, FUTURE_TYPE_NAME};
 use anyhow::{anyhow, Result};
 use hugr::extension::prelude::bool_t;
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::ops::{ExtensionOp, Value};
 use hugr::types::TypeArg;
+use hugr::std_extensions::arithmetic::int_types::INT_TYPES;
 use hugr::{HugrView, Node};
 use hugr_llvm::custom::CodegenExtension;
 use hugr_llvm::emit::func::EmitFuncContext;
@@ -36,8 +40,11 @@ impl CodegenExtension for FuturesCodegenExtension {
                 (futures::EXTENSION_ID, FUTURE_TYPE_NAME.to_owned()),
                 |session, hugr_type| {
                     match (hugr_type.name().as_str(), hugr_type.args()) {
-                        // For now, we only support future bools
+                        // For now, we only support future bools and ints
                         ("Future", [TypeArg::Type { ty }]) if *ty == bool_t() => {
+                            Ok(future_type(session.iw_context()))
+                        }
+                        ("Future", [TypeArg::Type { ty }]) if *ty == INT_TYPES[6] => {
                             Ok(future_type(session.iw_context()))
                         }
                         _ => Err(anyhow!(
@@ -74,6 +81,10 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
         self.iw_context().bool_type()
     }
 
+    fn ll_uint_type(&self) -> IntType<'c> {
+        self.iw_context().i64_type()
+    }
+
     fn builder(&self) -> &Builder<'c> {
         self.0.builder()
     }
@@ -94,6 +105,14 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
         self.0.get_extern_func("___dec_future_refcount", func_type)
     }
 
+    fn get_func_read(&self, typ: &TypeArg) -> Result<FunctionValue<'c>> {
+        match typ {
+            TypeArg::Type { ty } if *ty == bool_t() => self.get_func_read_bool(),
+            TypeArg::Type { ty } if *ty == INT_TYPES[6] => self.get_func_read_uint(),
+            _ => Err(anyhow!("Unsupported future type: {}", typ)),
+        }
+    }
+
     fn get_func_read_bool(&self) -> Result<FunctionValue<'c>> {
         let func_type = self
             .ll_bool_type()
@@ -101,8 +120,18 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
         self.0.get_extern_func("___read_future_bool", func_type)
     }
 
+    fn get_func_read_uint(&self) -> Result<FunctionValue<'c>> {
+        let func_type = self
+            .ll_uint_type()
+            .fn_type(&[self.ll_future_type().into()], false);
+        self.0.get_extern_func("___read_future_uint", func_type)
+    }
+
     fn emit(&mut self, args: EmitOpArgs<'c, '_, ExtensionOp, H>) -> Result<()> {
-        let op = FutureOp::from_optype(&args.node().generalise()).unwrap().op;
+        // let op = FutureOp::from_optype(&args.node().generalise()).unwrap().op;
+        let future_op = FutureOp::from_optype(&args.node().generalise()).unwrap();
+        let op = &future_op.op;
+        let typ = &future_op.typ;
         match op {
             FutureOpDef::Dup => {
                 let [arg] = args
@@ -129,10 +158,17 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
                     .inputs
                     .try_into()
                     .map_err(|_| anyhow!("Read expects a single input"))?;
-                let read_func = self.get_func_read_bool()?;
+                // HERE
+                let mut file = OpenOptions::new()
+                    .append(true)
+                    .create(true) // creates the file if it doesn't exist
+                    .open("/tmp/output.txt")?;
+                writeln!(file, "{:?}", typ)?; // Use {:?} for Debug
+                let read_func = self.get_func_read(typ)?;
+                // let read_func = self.get_func_read_bool()?;
                 let result_i1 = self
                     .builder()
-                    .build_call(read_func, &[arg.into()], "read_bool")?
+                    .build_call(read_func, &[arg.into()], "read_value")?
                     .try_as_basic_value()
                     .unwrap_left()
                     .into_int_value();
