@@ -10,7 +10,7 @@ use hugr::{
         ComposablePass as _, LinearizeArrayPass, MonomorphizePass, RemoveDeadFuncsError,
         RemoveDeadFuncsPass,
     },
-    hugr::HugrError,
+    hugr::{hugrmut::HugrMut, HugrError},
     Hugr, HugrView, Node,
 };
 use replace_bools::{ReplaceBoolPass, ReplaceBoolPassError};
@@ -82,22 +82,28 @@ pub enum QSystemPassError<N = Node> {
 impl QSystemPass {
     /// Run `QSystemPass` on the given [Hugr]. `registry` is used for
     /// validation, if enabled.
+    /// Expects the HUGR to have a function entrypoint.
     pub fn run(&self, hugr: &mut Hugr) -> Result<(), QSystemPassError> {
+        let entrypoint = if hugr.entrypoint_optype().is_module() {
+            // backwards compatibility: if the entrypoint is a module, we look for
+            // a function named "main" in the module and use that as the entrypoint.
+            hugr.children(hugr.entrypoint())
+                .find(|&n| {
+                    hugr.get_optype(n)
+                        .as_func_defn()
+                        .is_some_and(|fd| fd.func_name() == "main")
+                })
+                .ok_or(QSystemPassError::NoMain)?
+        } else {
+            hugr.entrypoint()
+        };
+
+        // passes that run on whole module
+        hugr.set_entrypoint(hugr.module_root());
         if self.monomorphize {
             self.monomorphization().run(hugr).unwrap();
 
-            let mut rdfp = RemoveDeadFuncsPass::default();
-            if hugr.entrypoint_optype().is_module() {
-                let main_node = hugr
-                    .children(hugr.entrypoint())
-                    .find(|&n| {
-                        hugr.get_optype(n)
-                            .as_func_defn()
-                            .is_some_and(|fd| fd.func_name() == "main")
-                    })
-                    .ok_or(QSystemPassError::NoMain)?;
-                rdfp = rdfp.with_module_entry_points([main_node]);
-            }
+            let rdfp = RemoveDeadFuncsPass::default().with_module_entry_points([entrypoint]);
             rdfp.run(hugr)?
         }
 
@@ -112,6 +118,8 @@ impl QSystemPass {
         if self.force_order {
             self.force_order(hugr)?;
         }
+        // restore the entrypoint
+        hugr.set_entrypoint(entrypoint);
         Ok(())
     }
 
