@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.15.1...tket2-hseries-v0.16.0) - 2025-06-30
+
+### Bug Fixes
+
+- run QystemPass with module as entrypoint  ([#945](https://github.com/CQCL/tket2/pull/945))
+
+### New Features
+
+- [**breaking**] Make `ResultsCodegenExtension` and `DebugCodegenExtension` generic over used array lowering ([#920](https://github.com/CQCL/tket2/pull/920))
+
+### Refactor
+
+- *(hseries)* use array unpack operation ([#913](https://github.com/CQCL/tket2/pull/913))
+
 ## [0.15.1](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.14.1...tket2-hseries-v0.15.1) - 2025-06-18
 
 ### Bug Fixes
