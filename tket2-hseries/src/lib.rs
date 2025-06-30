@@ -228,6 +228,7 @@ mod test {
     use hugr::{
         builder::{Container, Dataflow, DataflowSubContainer, HugrBuilder},
         extension::prelude::qb_t,
+        hugr::hugrmut::HugrMut,
         ops::handle::NodeHandle,
         std_extensions::arithmetic::float_types::ConstF64,
         type_row,
@@ -237,6 +238,7 @@ mod test {
 
     use itertools::Itertools as _;
     use petgraph::visit::{Topo, Walker as _};
+    use rstest::rstest;
     use tket2::extension::bool::bool_type;
 
     use crate::{
@@ -244,8 +246,10 @@ mod test {
         QSystemPass,
     };
 
-    #[test]
-    fn qsystem_pass() {
+    #[rstest]
+    #[case(false)]
+    #[case(true)]
+    fn qsystem_pass(#[case] set_entrypoint: bool) {
         let mut mb = hugr::builder::ModuleBuilder::new();
         let func = mb
             .define_function("func", Signature::new_endo(type_row![]))
@@ -253,7 +257,7 @@ mod test {
             .finish_with_outputs([])
             .unwrap();
 
-        let (mut hugr, [call_node, h_node, f_node, rx_node]) = {
+        let (mut hugr, [call_node, h_node, f_node, rx_node, main_node]) = {
             let mut builder = mb
                 .define_function(
                     "main",
@@ -292,12 +296,18 @@ mod test {
                 .unwrap()
                 .outputs_arr();
 
-            let _main_n = builder
+            let main_n = builder
                 .finish_with_outputs([measure_result, measure_result])
-                .unwrap();
+                .unwrap()
+                .node();
             let hugr = mb.finish_hugr().unwrap();
-            (hugr, [call_node, h_node, f_node, rx_node])
+            (hugr, [call_node, h_node, f_node, rx_node, main_n])
         };
+        if set_entrypoint {
+            // set the entrypoint to the main function
+            // if this is not done the "backwards compatibility" code is triggered
+            hugr.set_entrypoint(main_node);
+        }
         QSystemPass::default().run(&mut hugr).unwrap();
 
         let topo_sorted = Topo::new(&hugr.as_petgraph())
