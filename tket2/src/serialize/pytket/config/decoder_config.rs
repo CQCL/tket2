@@ -4,62 +4,55 @@
 //! A configuration struct contains a list of custom decoders that define
 //! translations of legacy tket primitives into HUGR operations.
 
-use hugr::extension::ExtensionId;
+use hugr::types::Type;
 use hugr::Node;
 use itertools::Itertools;
 use std::collections::HashMap;
 
 use crate::serialize::pytket::decoder::{DecodeStatus, Tk1DecoderContext};
-use crate::serialize::pytket::extension::PytketDecoder;
+use crate::serialize::pytket::extension::{PytketDecoder, RegisterCount, TypeTranslator};
 use crate::serialize::pytket::Tk1ConvertError;
 
-/// Default pytket decoder configuration.
-///
-/// Contains a list of custom decoders that define translations of legacy tket
-/// primitives into HUGR operations.
-pub fn default_decoder_config<'h>() -> Tk1DecoderConfig {
-    let config = Tk1DecoderConfig::new();
-    // TODO: Add default decoders here.
-    config
-}
+use super::TypeTranslatorSet;
 
 /// Configuration for converting [`tket_json_rs::circuit_json::SerialCircuit`]
 /// into [`Circuit`]s.
 ///
 /// Contains custom decoders that define translations for HUGR operations,
 /// types, and consts into pytket primitives.
-#[derive(derive_more::Debug)]
+#[derive(Default, derive_more::Debug)]
 pub struct Tk1DecoderConfig {
     /// Operation emitters
     #[debug(skip)]
-    pub(super) decoders: Vec<Box<dyn PytketDecoder>>,
-    /// Pre-computed map from extension ids to corresponding decoders in
-    /// `decoders`, identified by their index.
-    #[debug("{:?}", extension_decoders.keys().collect_vec())]
-    extension_decoders: HashMap<ExtensionId, Vec<usize>>,
+    pub(super) decoders: Vec<Box<dyn PytketDecoder + Send + Sync>>,
     /// Pre-computed map from pytket optypes to corresponding decoders in
     /// `decoders`, identified by their index.
-    #[debug("{:?}", extension_decoders.keys().collect_vec())]
+    #[debug("{:?}", optype_decoders.keys().collect_vec())]
     optype_decoders: HashMap<tket_json_rs::OpType, Vec<usize>>,
+    /// Set of type translators used to translate HUGR types into pytket registers.
+    type_translators: TypeTranslatorSet,
 }
 
-impl<'h> Tk1DecoderConfig {
+fn test() {
+    fn send_sync<T: Send + Sync>() {}
+
+    send_sync::<Tk1DecoderConfig>();
+}
+
+impl Tk1DecoderConfig {
     /// Create a new [`Tk1DecoderConfig`] with no decoders.
     pub fn new() -> Self {
         Self {
             decoders: vec![],
-            extension_decoders: HashMap::new(),
             optype_decoders: HashMap::new(),
+            type_translators: TypeTranslatorSet::default(),
         }
     }
 
     /// Add a decoder to the configuration.
-    pub fn add_decoder(&mut self, decoder: impl PytketDecoder + 'static) {
+    pub fn add_decoder(&mut self, decoder: impl PytketDecoder + Send + Sync + 'static) {
         let idx = self.decoders.len();
 
-        for ext in decoder.extensions() {
-            self.extension_decoders.entry(ext).or_default().push(idx);
-        }
         for optype in decoder.op_types() {
             self.optype_decoders.entry(optype).or_default().push(idx);
         }
@@ -67,11 +60,9 @@ impl<'h> Tk1DecoderConfig {
         self.decoders.push(Box::new(decoder));
     }
 
-    /// List the extensions supported by the decoders.
-    ///
-    /// Use [`Tk1DecoderConfig::add_decoder`] to extend this list.
-    pub fn supported_extensions(&self) -> impl Iterator<Item = &ExtensionId> {
-        self.extension_decoders.keys()
+    /// Add a type translator to the configuration.
+    pub fn add_type_translator(&mut self, translator: impl TypeTranslator + Send + Sync + 'static) {
+        self.type_translators.add_type_translator(translator);
     }
 
     /// Encode a HUGR operation using the registered custom encoders.
@@ -83,7 +74,7 @@ impl<'h> Tk1DecoderConfig {
         op: &tket_json_rs::circuit_json::Operation,
         args: &[tket_json_rs::register::ElementId],
         opgroup: Option<&str>,
-        decoder: &mut Tk1DecoderContext<'h>,
+        decoder: &mut Tk1DecoderContext<'_>,
     ) -> Result<DecodeStatus, Tk1ConvertError<Node>> {
         let mut result = DecodeStatus::Unsupported;
         for enc in self.decoders_for_optype(&op.op_type) {
@@ -99,21 +90,20 @@ impl<'h> Tk1DecoderConfig {
     fn decoders_for_optype(
         &self,
         optype: &tket_json_rs::OpType,
-    ) -> impl Iterator<Item = &Box<dyn PytketDecoder>> {
+    ) -> impl Iterator<Item = &Box<dyn PytketDecoder + Send + Sync>> {
         self.optype_decoders
             .get(optype)
             .into_iter()
             .flatten()
             .map(move |idx| &self.decoders[*idx])
     }
-}
 
-impl<'h> Default for Tk1DecoderConfig {
-    fn default() -> Self {
-        Self {
-            decoders: Default::default(),
-            extension_decoders: Default::default(),
-            optype_decoders: Default::default(),
-        }
+    /// Translate a HUGR type into a count of qubits, bits, and parameters,
+    /// using the registered custom translator.
+    ///
+    /// Only tuple sums, bools, and custom types are supported.
+    /// Other types will return `None`.
+    pub fn type_to_pytket(&self, typ: &Type) -> Option<RegisterCount> {
+        self.type_translators.type_to_pytket(typ)
     }
 }

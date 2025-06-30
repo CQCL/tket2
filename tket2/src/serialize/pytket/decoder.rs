@@ -1,6 +1,5 @@
 //! Intermediate structure for decoding [`SerialCircuit`]s into [`Hugr`]s.
 
-mod config;
 mod op;
 mod param;
 
@@ -28,13 +27,12 @@ use super::{
     METADATA_Q_REGISTERS,
 };
 use crate::extension::rotation::rotation_type;
+use crate::serialize::pytket::config::Tk1DecoderConfig;
 use crate::serialize::pytket::METADATA_INPUT_PARAMETERS;
 use crate::symbolic_constant_op;
 use op::Tk1Op;
 use param::parser::{parse_pytket_param, PytketParam};
 use param::LoadedParameter;
-
-pub use config::{default_decoder_config, Tk1DecoderConfig};
 
 /// State of the tket circuit being decoded.
 ///
@@ -59,6 +57,7 @@ pub struct Tk1DecoderContext<'h> {
     ///
     /// Contains custom operation decoders, that define translation of legacy tket
     /// commands into HUGR operations.
+    #[expect(unused)]
     config: Arc<Tk1DecoderConfig>,
 }
 

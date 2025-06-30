@@ -3,9 +3,10 @@
 use super::PytketEmitter;
 use crate::extension::bool::{BoolOp, ConstBool, BOOL_EXTENSION_ID, BOOL_TYPE_NAME};
 use crate::serialize::pytket::encoder::{
-    make_tk1_classical_expression, make_tk1_classical_operation, EncodeStatus, RegisterCount,
-    Tk1EncoderContext, TrackedValues,
+    make_tk1_classical_expression, make_tk1_classical_operation, EncodeStatus, Tk1EncoderContext,
+    TrackedValues,
 };
+use crate::serialize::pytket::extension::{RegisterCount, TypeTranslator};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
 use hugr::extension::simple_op::MakeExtensionOp;
@@ -67,17 +68,6 @@ impl<H: HugrView> PytketEmitter<H> for BoolEmitter {
         Ok(EncodeStatus::Success)
     }
 
-    fn type_to_pytket(
-        &self,
-        typ: &hugr::types::CustomType,
-    ) -> Result<Option<RegisterCount>, Tk1ConvertError<<H>::Node>> {
-        if typ.name() == &*BOOL_TYPE_NAME {
-            Ok(Some(RegisterCount::only_bits(1)))
-        } else {
-            Ok(None)
-        }
-    }
-
     fn const_to_pytket(
         &self,
         value: &OpaqueValue,
@@ -94,6 +84,20 @@ impl<H: HugrView> PytketEmitter<H> for BoolEmitter {
         }
 
         Ok(Some(TrackedValues::new_bits([new_bit])))
+    }
+}
+
+impl TypeTranslator for BoolEmitter {
+    fn extensions(&self) -> Vec<ExtensionId> {
+        vec![BOOL_EXTENSION_ID]
+    }
+
+    fn type_to_pytket(&self, typ: &hugr::types::CustomType) -> Option<RegisterCount> {
+        if typ.name() == &*BOOL_TYPE_NAME {
+            Some(RegisterCount::only_bits(1))
+        } else {
+            None
+        }
     }
 }
 

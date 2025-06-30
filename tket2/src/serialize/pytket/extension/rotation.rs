@@ -4,9 +4,8 @@ use super::PytketEmitter;
 use crate::extension::rotation::{
     ConstRotation, RotationOp, ROTATION_EXTENSION_ID, ROTATION_TYPE_ID,
 };
-use crate::serialize::pytket::encoder::{
-    EncodeStatus, RegisterCount, Tk1EncoderContext, TrackedValues,
-};
+use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext, TrackedValues};
+use crate::serialize::pytket::extension::{RegisterCount, TypeTranslator};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
 use hugr::extension::simple_op::MakeExtensionOp;
@@ -56,16 +55,6 @@ impl<H: HugrView> PytketEmitter<H> for RotationEmitter {
         }
     }
 
-    fn type_to_pytket(
-        &self,
-        typ: &hugr::types::CustomType,
-    ) -> Result<Option<RegisterCount>, Tk1ConvertError<<H>::Node>> {
-        match typ.name() == &ROTATION_TYPE_ID {
-            true => Ok(Some(RegisterCount::only_params(1))),
-            false => Ok(None),
-        }
-    }
-
     fn const_to_pytket(
         &self,
         value: &OpaqueValue,
@@ -77,6 +66,19 @@ impl<H: HugrView> PytketEmitter<H> for RotationEmitter {
 
         let param = encoder.values.new_param(const_f.half_turns());
         Ok(Some(TrackedValues::new_params([param])))
+    }
+}
+
+impl TypeTranslator for RotationEmitter {
+    fn extensions(&self) -> Vec<ExtensionId> {
+        vec![ROTATION_EXTENSION_ID]
+    }
+
+    fn type_to_pytket(&self, typ: &hugr::types::CustomType) -> Option<RegisterCount> {
+        match typ.name() == &ROTATION_TYPE_ID {
+            true => Some(RegisterCount::only_params(1)),
+            false => None,
+        }
     }
 }
 

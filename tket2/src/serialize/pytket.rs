@@ -1,10 +1,11 @@
 //! Serialization and deserialization of circuits using the `pytket` JSON format.
 
+mod config;
 pub mod decoder;
 pub mod encoder;
 pub mod extension;
 
-pub use encoder::{default_encoder_config, Tk1EncoderConfig, Tk1EncoderContext};
+pub use encoder::Tk1EncoderContext;
 pub use extension::PytketEmitter;
 
 use hugr::core::HugrNode;
@@ -29,7 +30,9 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::register::{Bit, ElementId, Qubit};
 
 use crate::circuit::Circuit;
-use crate::serialize::pytket::decoder::Tk1DecoderConfig;
+use crate::serialize::pytket::config::{
+    default_decoder_config, default_encoder_config, Tk1DecoderConfig, Tk1EncoderConfig,
+};
 
 use self::decoder::Tk1DecoderContext;
 
@@ -87,7 +90,7 @@ impl TKETDecode for SerialCircuit {
     type EncodeError = Tk1ConvertError;
 
     fn decode(self) -> Result<Circuit, Self::DecodeError> {
-        let config = decoder::default_decoder_config();
+        let config = default_decoder_config();
         Self::decode_with_config(self, config)
     }
 

@@ -20,6 +20,7 @@ use tket_json_rs::circuit_json;
 use tket_json_rs::register::ElementId as RegisterUnit;
 
 use crate::circuit::Circuit;
+use crate::serialize::pytket::extension::RegisterCount;
 use crate::serialize::pytket::{
     OpConvertError, RegisterHash, Tk1ConvertError, METADATA_B_REGISTERS, METADATA_INPUT_PARAMETERS,
 };
@@ -171,33 +172,6 @@ struct TrackedWire {
     pub(self) unexplored_neighbours: usize,
 }
 
-/// A count of pytket qubits, bits, and sympy parameters.
-///
-/// Used as return value for [`TrackedValues::count`].
-#[derive(
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    Debug,
-    Default,
-    derive_more::Display,
-    derive_more::Add,
-    derive_more::Sub,
-    derive_more::Sum,
-)]
-#[display("{qubits} qubits, {bits} bits, {params} parameters")]
-#[non_exhaustive]
-pub struct RegisterCount {
-    /// Amount of qubits.
-    pub qubits: usize,
-    /// Amount of bits.
-    pub bits: usize,
-    /// Amount of sympy parameters.
-    pub params: usize,
-}
-
 /// The result finalizing the value tracker.
 ///
 /// Contains the final list of qubit and bit registers, and the implicit
@@ -280,7 +254,7 @@ impl<N: HugrNode> ValueTracker<N> {
             .zip(signature.input().iter())
         {
             let wire = Wire::new(inp_node, port);
-            let Some(count) = config.type_to_pytket(typ)? else {
+            let Some(count) = config.type_to_pytket(typ) else {
                 // If the input has a non-serializable type, it gets skipped.
                 //
                 // TODO: We should store the original signature somewhere in the circuit,
@@ -585,49 +559,6 @@ impl IntoIterator for TrackedValues {
             .map_into()
             .chain(self.bits.into_iter().map_into())
             .chain(self.params.into_iter().map_into())
-    }
-}
-
-impl RegisterCount {
-    /// Create a new [`RegisterCount`] from the number of qubits, bits, and parameters.
-    pub const fn new(qubits: usize, bits: usize, params: usize) -> Self {
-        RegisterCount {
-            qubits,
-            bits,
-            params,
-        }
-    }
-
-    /// Create a new [`RegisterCount`] containing only qubits.
-    pub const fn only_qubits(qubits: usize) -> Self {
-        RegisterCount {
-            qubits,
-            bits: 0,
-            params: 0,
-        }
-    }
-
-    /// Create a new [`RegisterCount`] containing only bits.
-    pub const fn only_bits(bits: usize) -> Self {
-        RegisterCount {
-            qubits: 0,
-            bits,
-            params: 0,
-        }
-    }
-
-    /// Create a new [`RegisterCount`] containing only parameters.
-    pub const fn only_params(params: usize) -> Self {
-        RegisterCount {
-            qubits: 0,
-            bits: 0,
-            params,
-        }
-    }
-
-    /// Returns the number of qubits, bits, and parameters associated with the wire.
-    pub const fn total(&self) -> usize {
-        self.qubits + self.bits + self.params
     }
 }
 
