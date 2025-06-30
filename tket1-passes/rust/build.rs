@@ -23,7 +23,8 @@ fn is_macos() -> bool {
 }
 
 fn main() {
-    let lib_path = PathBuf::from("../lib/").join(libtket1_passes_name());
+    let lib_path = PathBuf::from(env::var("TKET_LIB_PATH").unwrap_or("../lib".to_string()))
+        .join(libtket1_passes_name());
     let header_path = PathBuf::from("../cpp/src/tket1-passes.h");
     let library_search_paths = if is_macos() {
         vec!["/opt/homebrew/lib"]
@@ -31,10 +32,12 @@ fn main() {
         vec![]
     };
 
-    // Check the required C++ files can be found
+    // Check the required files can be found
     assert!(
         lib_path.exists(),
-        "{} not found. Ensure the C++ library has been compiled first.",
+        "{} not found. Ensure the C++ library has been compiled first. \
+         If using a non-default library path, you may set the environment \
+         variable TKET_LIB_PATH.",
         libtket1_passes_name()
     );
     assert!(header_path.exists(), "tket1-passes.h not found.");

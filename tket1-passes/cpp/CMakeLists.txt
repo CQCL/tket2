@@ -27,10 +27,17 @@ set_target_properties(tket1-passes PROPERTIES
 # Installation
 include(GNUInstallDirs)
 
+# Set the library destination based on environment variable or default
+if(DEFINED ENV{TKET_LIB_PATH})
+    set(LIB_DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/$ENV{TKET_LIB_PATH})
+else()
+    set(LIB_DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../lib)
+endif()
+
 # Install the library to the lib directory in the parent (tket1-passes) directory
 install(TARGETS tket1-passes
-    LIBRARY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../lib
+    LIBRARY DESTINATION ${LIB_DESTINATION}
 )
 
 # Create the lib directory if it doesn't exist
-install(DIRECTORY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../lib)
+install(DIRECTORY DESTINATION ${LIB_DESTINATION})

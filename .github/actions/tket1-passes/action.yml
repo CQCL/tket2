@@ -1,6 +1,12 @@
 name: "Build/cache tket1-passes C++ library"
 description: "Retrieve cached tket1-passes C++ library or build if needed"
 
+inputs:
+  lib-path:
+    description: "Path to the tket1-passes C++ library"
+    required: false
+    default: "../lib"
+
 runs:
   using: composite
   steps:
@@ -9,14 +15,8 @@ runs:
       uses: actions/cache/restore@v4
       id: cache
       with:
-        path: tket1-passes/lib
+        path: ${{ inputs.lib-path }}
         key: ${{ runner.os }}-${{ hashFiles('tket1-passes/cpp/**') }}
-
-    - name: DEBUG print cache hit value
-      shell: bash
-      run: |
-        echo "cache-hit: ${{ steps.cache.outputs.cache-hit }}"
-        echo "cache-primary-key: ${{ steps.cache.outputs.cache-primary-key }}"
 
     # Build tket1-passes
     - name: Install conan
@@ -31,6 +31,8 @@ runs:
     - name: Build tket1-passes C++ library
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
+      env:
+        TKET_LIB_PATH: "${{ inputs.lib-path }}"
       run: |
         cd tket1-passes/cpp
         ./build.sh
@@ -40,5 +42,5 @@ runs:
       if: steps.cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
-        path: tket1-passes/lib
+        path: tket1-passes/cpp/${{ inputs.lib-path }}
         key: ${{ steps.cache.outputs.cache-primary-key }}
