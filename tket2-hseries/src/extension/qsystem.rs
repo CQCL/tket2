@@ -582,6 +582,20 @@ mod test {
     }
 
     #[test]
+    fn leaked() {
+        let hugr = {
+            let mut func_builder =
+                FunctionBuilder::new("leaked", Signature::new(qb_t(), vec![int_type(6)]))
+                    .unwrap();
+            let [qb] = func_builder.input_wires_arr();
+            let lazy_i = func_builder.add_lazy_measure_leaked(qb).unwrap();
+            let [i] = func_builder.add_read(lazy_i, int_type(6)).unwrap();
+            func_builder.finish_hugr_with_outputs([i]).unwrap()
+        };
+        assert_matches!(hugr.validate(), Ok(_));
+    }
+
+    #[test]
     fn all_ops() {
         let hugr = {
             let mut func_builder = FunctionBuilder::new(
