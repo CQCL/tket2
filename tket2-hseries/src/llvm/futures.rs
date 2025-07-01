@@ -6,7 +6,7 @@ use hugr::extension::prelude::bool_t;
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::ops::{ExtensionOp, Value};
 use hugr::std_extensions::arithmetic::int_types::INT_TYPES;
-use hugr::types::{NoRV, TypeArg, TypeBase};
+use hugr::types::TypeArg;
 use hugr::{HugrView, Node};
 use hugr_llvm::custom::CodegenExtension;
 use hugr_llvm::emit::func::EmitFuncContext;
@@ -203,14 +203,17 @@ mod test {
     #[case::dup_bool(2,FutureOp { op: FutureOpDef::Dup, typ: bool_t() })]
     #[case::free_bool(3,FutureOp { op: FutureOpDef::Free, typ: bool_t() })]
     #[case::read_int(4,FutureOp { op: FutureOpDef::Read, typ: int_type(6) })]
-    #[case::dup_bool(5,FutureOp { op: FutureOpDef::Dup, typ: int_type(6) })]
-    #[case::free_bool(6,FutureOp { op: FutureOpDef::Free, typ: int_type(6) })]
+    #[case::dup_int(5,FutureOp { op: FutureOpDef::Dup, typ: int_type(6) })]
+    #[case::free_int(6,FutureOp { op: FutureOpDef::Free, typ: int_type(6) })]
     fn emit_futures_codegen(
         #[case] _i: i32,
         #[with(_i)] mut llvm_ctx: TestContext,
         #[case] op: FutureOp,
     ) {
-        llvm_ctx.add_extensions(|ceb| ceb.add_extension(FuturesCodegenExtension));
+        llvm_ctx.add_extensions(|ceb| {
+            ceb.add_extension(FuturesCodegenExtension)
+                .add_default_int_extensions()
+        });
         let hugr = single_op_hugr(op.to_extension_op().unwrap().into());
         check_emission!(hugr, llvm_ctx);
     }
