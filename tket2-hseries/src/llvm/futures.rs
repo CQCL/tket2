@@ -183,7 +183,7 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
                 "Unsupported future operation: {:?} with type: {}",
                 op,
                 typ
-            ))
+            )),
         }
     }
 }
@@ -191,11 +191,11 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
 #[cfg(test)]
 mod test {
     use hugr::extension::simple_op::MakeRegisteredOp;
+    use hugr::std_extensions::arithmetic::int_types::int_type;
     use hugr_llvm::check_emission;
     use hugr_llvm::test::llvm_ctx;
     use hugr_llvm::test::single_op_hugr;
     use hugr_llvm::test::TestContext;
-    use hugr::std_extensions::arithmetic::int_types::int_type;
 
     use super::*;
     #[rstest::rstest]
