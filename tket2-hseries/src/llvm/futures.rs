@@ -102,16 +102,6 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
         self.0.get_extern_func("___dec_future_refcount", func_type)
     }
 
-    fn get_func_read(&self, ty: &TypeBase<NoRV>) -> Result<FunctionValue<'c>> {
-        if *ty == bool_t() {
-            self.get_func_read_bool()
-        } else if *ty == INT_TYPES[6] {
-            self.get_func_read_uint()
-        } else {
-            Err(anyhow!("Unsupported future type: {}", ty))
-        }
-    }
-
     fn get_func_read_bool(&self) -> Result<FunctionValue<'c>> {
         let func_type = self
             .ll_bool_type()
@@ -130,8 +120,8 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
         let future_op = FutureOp::from_optype(&args.node().generalise()).unwrap();
         let op = &future_op.op;
         let typ = &future_op.typ;
-        match op {
-            FutureOpDef::Dup => {
+        match (op, typ) {
+            (FutureOpDef::Dup, _) => {
                 let [arg] = args
                     .inputs
                     .try_into()
@@ -141,7 +131,7 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
                     .build_call(func, &[arg.into()], "inc_refcount")?;
                 args.outputs.finish(self.builder(), [arg, arg])
             }
-            FutureOpDef::Free => {
+            (FutureOpDef::Free, _) => {
                 let [arg] = args
                     .inputs
                     .try_into()
@@ -151,15 +141,15 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
                     .build_call(func, &[arg.into()], "dec_refcount")?;
                 args.outputs.finish(self.builder(), [])
             }
-            FutureOpDef::Read => {
+            (FutureOpDef::Read, ty) if *ty == bool_t() => {
                 let [arg] = args
                     .inputs
                     .try_into()
                     .map_err(|_| anyhow!("Read expects a single input"))?;
-                let read_func = self.get_func_read(typ)?;
+                let read_func = self.get_func_read_bool()?;
                 let result_i1 = self
                     .builder()
-                    .build_call(read_func, &[arg.into()], "read_value")?
+                    .build_call(read_func, &[arg.into()], "read_bool")?
                     .try_as_basic_value()
                     .unwrap_left()
                     .into_int_value();
@@ -173,6 +163,27 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
                     .build_select(result_i1, true_val, false_val, "measure")?;
                 args.outputs.finish(self.builder(), [result])
             }
+            (FutureOpDef::Read, ty) if *ty == INT_TYPES[6] => {
+                let [arg] = args
+                    .inputs
+                    .try_into()
+                    .map_err(|_| anyhow!("Read expects a single input"))?;
+                let read_func = self.get_func_read_uint()?;
+                let result = self
+                    .builder()
+                    .build_call(read_func, &[arg.into()], "read_uint")?
+                    .try_as_basic_value()
+                    .unwrap_left();
+                let dec_refcount_func = self.get_func_dec_refcount()?;
+                self.builder()
+                    .build_call(dec_refcount_func, &[arg.into()], "dec_refcount")?;
+                args.outputs.finish(self.builder(), [result])
+            }
+            _ => Err(anyhow!(
+                "Unsupported future operation: {:?} with type: {}",
+                op,
+                typ
+            ))
         }
     }
 }
@@ -184,12 +195,16 @@ mod test {
     use hugr_llvm::test::llvm_ctx;
     use hugr_llvm::test::single_op_hugr;
     use hugr_llvm::test::TestContext;
+    use hugr::std_extensions::arithmetic::int_types::int_type;
 
     use super::*;
     #[rstest::rstest]
-    #[case::read(1,FutureOp { op: FutureOpDef::Read, typ: bool_t() })]
-    #[case::dup(2,FutureOp { op: FutureOpDef::Dup, typ: bool_t() })]
-    #[case::free(3,FutureOp { op: FutureOpDef::Free, typ: bool_t() })]
+    #[case::read_bool(1,FutureOp { op: FutureOpDef::Read, typ: bool_t() })]
+    #[case::dup_bool(2,FutureOp { op: FutureOpDef::Dup, typ: bool_t() })]
+    #[case::free_bool(3,FutureOp { op: FutureOpDef::Free, typ: bool_t() })]
+    #[case::read_int(4,FutureOp { op: FutureOpDef::Read, typ: int_type(6) })]
+    #[case::dup_bool(5,FutureOp { op: FutureOpDef::Dup, typ: int_type(6) })]
+    #[case::free_bool(6,FutureOp { op: FutureOpDef::Free, typ: int_type(6) })]
     fn emit_futures_codegen(
         #[case] _i: i32,
         #[with(_i)] mut llvm_ctx: TestContext,
