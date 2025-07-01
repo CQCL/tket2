@@ -5,7 +5,7 @@ inputs:
   lib-path:
     description: "Path to the tket1-passes C++ library"
     required: false
-    default: "../lib"
+    default: "tket1-passes/lib"
 
 runs:
   using: composite
@@ -42,5 +42,5 @@ runs:
       if: steps.cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
-        path: tket1-passes/cpp/${{ inputs.lib-path }}
+        path: ${{ inputs.lib-path }}
         key: ${{ steps.cache.outputs.cache-primary-key }}

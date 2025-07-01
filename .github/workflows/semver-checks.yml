@@ -1,4 +1,4 @@
-name: Rust Semver Checks (updated)
+name: Rust Semver Checks
 on:
   pull_request:
     branches:
@@ -19,25 +19,25 @@ jobs:
       rust: ${{ steps.filter.outputs.rust == 'true' || steps.override.outputs.out == 'true' }}
       python: ${{ steps.filter.outputs.python == 'true' || steps.override.outputs.out == 'true' }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Override label
-        id: override
-        run: |
-          echo "Label contains run-ci-checks: $OVERRIDE_LABEL"
-          if [ "$OVERRIDE_LABEL" == "true" ]; then
-            echo "Overriding due to label 'run-ci-checks'"
-            echo "out=true" >> $GITHUB_OUTPUT
-          elif [ "$DEFAULT_BRANCH" == "true" ]; then
-            echo "Overriding due to running on the default branch"
-            echo "out=true" >> $GITHUB_OUTPUT
-          fi
-        env:
-          OVERRIDE_LABEL: ${{ github.event_name == 'pull_request' && contains( github.event.pull_request.labels.*.name, 'run-ci-checks') }}
-          DEFAULT_BRANCH: ${{ github.ref_name == github.event.repository.default_branch }}
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: .github/change-filters.yml
+    - uses: actions/checkout@v4
+    - name: Override label
+      id: override
+      run: |
+        echo "Label contains run-ci-checks: $OVERRIDE_LABEL"
+        if [ "$OVERRIDE_LABEL" == "true" ]; then
+          echo "Overriding due to label 'run-ci-checks'"
+          echo "out=true" >> $GITHUB_OUTPUT
+        elif [ "$DEFAULT_BRANCH" == "true" ]; then
+          echo "Overriding due to running on the default branch"
+          echo "out=true" >> $GITHUB_OUTPUT
+        fi
+      env:
+        OVERRIDE_LABEL: ${{ github.event_name == 'pull_request' && contains( github.event.pull_request.labels.*.name, 'run-ci-checks') }}
+        DEFAULT_BRANCH: ${{ github.ref_name == github.event.repository.default_branch }}
+    - uses: dorny/paths-filter@v3
+      id: filter
+      with:
+        filters: .github/change-filters.yml
 
   rs-semver-checks:
     needs: [changes]
@@ -46,16 +46,16 @@ jobs:
     steps:
       - name: Checkout tket2
         uses: actions/checkout@v4
+      - name: Retrieve tket1-passes library
+        uses: ./.github/actions/tket1-passes
+        with:
+          lib-path: ${{ github.workspace }}/tket1-lib
       - name: Install LLVM from apt
         run: |
           echo "Installing apt dependencies: llvm-14"
           sudo apt-get install -y llvm-14
-      - name: Retrieve tket1-passes library
-        uses: .github/actions/tket1-passes
-        with:
-          lib-path: /lib
       - uses: CQCL/hugrverse-actions/.github/actions/rs-semver-checks@2a2f5ca8e000030636dc1511f6c935c1492204c3
         env:
-          TKET_LIB_PATH: /lib
+          TKET_LIB_PATH: ${{ github.workspace }}/tket1-lib
         with:
           token: ${{ secrets.HUGRBOT_PAT }}

@@ -24,8 +24,14 @@ include(GNUInstallDirs)
 
 # Set the library destination based on environment variable or default
 if(DEFINED ENV{TKET_LIB_PATH})
-    set(LIB_DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/$ENV{TKET_LIB_PATH})
+    if(IS_ABSOLUTE $ENV{TKET_LIB_PATH})
+        set(LIB_DESTINATION $ENV{TKET_LIB_PATH})
+    else()
+        # Path is given relative to the base directory of the repo
+        set(LIB_DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../../$ENV{TKET_LIB_PATH})
+    endif()
 else()
+    # Default path: tket1-passes/lib
     set(LIB_DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../lib)
 endif()
 

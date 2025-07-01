@@ -33,5 +33,16 @@ make install
 
 echo "Build complete!"
 
-cd ../..
-echo "Shared library tket1-passes available at: $(pwd)/lib"
+# Compute the library path
+cd ../../..
+if [ -n "$TKET_LIB_PATH" ]; then
+    if [[ "$TKET_LIB_PATH" = /* ]]; then
+        LIB_PATH="$TKET_LIB_PATH"
+    else
+        LIB_PATH="$(pwd)/$TKET_LIB_PATH"
+    fi
+else
+    LIB_PATH="$(pwd)/tket1-passes/lib"
+fi
+
+echo "Shared library tket1-passes available at: $LIB_PATH"

@@ -28,6 +28,8 @@ OpType convert_target_gate(TketTargetGate target_gate) {
     return OpType::CX;
   case TKET_TARGET_TK2:
     return OpType::TK2;
+  default:
+    throw std::invalid_argument("Invalid target gate");
   }
 }
 

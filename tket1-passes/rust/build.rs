@@ -3,8 +3,8 @@
 //! Use bindgen to generate Rust bindings for the C library.
 
 use std::env;
-use std::path;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 const LIB_NAME: &str = "tket1-passes";
 
@@ -23,8 +23,11 @@ fn is_macos() -> bool {
 }
 
 fn main() {
-    let lib_path = PathBuf::from(env::var("TKET_LIB_PATH").unwrap_or("../lib".to_string()))
-        .join(libtket1_passes_name());
+    let lib_dir = match env::var("TKET_LIB_PATH").unwrap_or("tket1-passes/lib".to_string()) {
+        abs_path if PathBuf::from(&abs_path).is_absolute() => PathBuf::from(abs_path),
+        rel_path => PathBuf::from_str("../..").unwrap().join(rel_path),
+    };
+    let lib_path = lib_dir.join(libtket1_passes_name());
     let header_path = PathBuf::from("../cpp/src/tket1-passes.h");
     let library_search_paths = if is_macos() {
         vec!["/opt/homebrew/lib"]
@@ -36,24 +39,21 @@ fn main() {
     assert!(
         lib_path.exists(),
         "{} not found. Ensure the C++ library has been compiled first. \
-         If using a non-default library path, you may set the environment \
-         variable TKET_LIB_PATH.",
-        libtket1_passes_name()
+         If using a non-default library path, you may indicate it using the \
+         environment variable TKET_LIB_PATH.",
+        lib_path.display()
     );
     assert!(header_path.exists(), "tket1-passes.h not found.");
-
-    let lib_dir = path::absolute(&lib_path)
-        .unwrap()
-        .parent()
-        .unwrap()
-        .to_owned();
 
     // Configure when to rerun the build script
     println!("cargo:rerun-if-changed={}", lib_path.display());
     println!("cargo:rerun-if-changed={}", header_path.display());
 
     // Configure where to find the dynamic libraries (tket1-passes and GMP).
-    println!("cargo:rustc-link-search=native={}", lib_dir.display());
+    println!(
+        "cargo:rustc-link-search=native={}",
+        lib_dir.canonicalize().unwrap().display()
+    );
     for path in library_search_paths {
         println!("cargo:rustc-link-search=native={path}");
     }
