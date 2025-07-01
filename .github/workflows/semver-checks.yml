@@ -1,5 +1,8 @@
-name: Rust Semver Checks
-on: pull_request
+name: Rust Semver Checks (updated)
+on:
+  pull_request:
+    branches:
+      - main
 
 jobs:
   # Check if changes were made to the relevant files.

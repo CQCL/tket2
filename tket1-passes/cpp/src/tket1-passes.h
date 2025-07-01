@@ -15,21 +15,19 @@ typedef struct TketCircuit TketCircuit;
 typedef enum {
   TKET_SUCCESS = 0,
   TKET_ERROR_NULL_POINTER = 1,
-  TKET_ERROR_INVALID_ARGUMENT = 2,
-  TKET_ERROR_CIRCUIT_INVALID = 3,
-  TKET_ERROR_MEMORY = 4,
-  TKET_ERROR_PARSE_JSON = 5,
-  TKET_ERROR_UNKNOWN = 6
+  TKET_ERROR_CIRCUIT_INVALID = 2,
 } TketError;
 
 // Target gate types for two_qubit_squash
 typedef enum { TKET_TARGET_CX = 0, TKET_TARGET_TK2 = 1 } TketTargetGate;
 
-// Circuit creation and destruction from JSON
-TketCircuit* tket_circuit_from_json(const char* json_str);
-TketError tket_circuit_to_json(const TketCircuit* circuit, char** json_str);
-void tket_circuit_destroy(TketCircuit* circuit);
-void tket_free_string(char* str);
+// Conversion between Circuit and c-string JSON
+TketCircuit *tket_circuit_from_json(const char *json_str);
+TketError tket_circuit_to_json(const TketCircuit *circuit, char **json_str);
+
+// Free memory
+void tket_free_circuit(TketCircuit *circuit);
+void tket_free_string(char *str);
 
 // Transform functions
 
@@ -45,12 +43,12 @@ void tket_free_string(char* str);
  * @param allow_swaps Whether to allow implicit wire swaps
  * @return TKET_SUCCESS if successful, error code otherwise
  */
-TketError tket_two_qubit_squash(
-    TketCircuit* circuit, TketTargetGate target_gate, double cx_fidelity,
-    bool allow_swaps);
+TketError tket_two_qubit_squash(TketCircuit *circuit,
+                                TketTargetGate target_gate, double cx_fidelity,
+                                bool allow_swaps);
 
 /**
- * Apply clifford_resynthesis transform to the circuit
+ * Apply TKET1's clifford_simp transform to the circuit
  *
  * Resynthesise all Clifford subcircuits and simplify using Clifford rules.
  * This can significantly reduce the two-qubit gate count for Clifford-heavy
@@ -60,13 +58,14 @@ TketError tket_two_qubit_squash(
  * @param allow_swaps Whether the rewriting may introduce wire swaps
  * @return TKET_SUCCESS if successful, error code otherwise
  */
-TketError tket_clifford_resynthesis(TketCircuit* circuit, bool allow_swaps);
+TketError tket_clifford_simp(TketCircuit *circuit, TketTargetGate target_gate,
+                             bool allow_swaps);
 
 // Utility functions
-const char* tket_error_string(TketError error);
+const char *tket_error_string(TketError error);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif  // TKET_ONE_PASSES_H
+#endif // TKET_ONE_PASSES_H

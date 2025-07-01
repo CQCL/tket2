@@ -19,11 +19,6 @@ add_library(tket1-passes SHARED
 # Link against tket and all its dependencies (since tket links them as PRIVATE)
 target_link_libraries(tket1-passes PRIVATE tket::tket)
 
-# Set the library properties for shared library creation
-set_target_properties(tket1-passes PROPERTIES
-    VERSION 0.0.1
-)
-
 # Installation
 include(GNUInstallDirs)
 
