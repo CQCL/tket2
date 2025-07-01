@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.23)
 project(tket1-passes C CXX)
 
-# Enable compile_commands.json generation for VSCode IntelliSense
+# Enable compile_commands.json generation for IDE integration
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_CXX_STANDARD 20)
