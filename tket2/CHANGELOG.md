@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.2](https://github.com/CQCL/tket2/compare/tket2-v0.12.1...tket2-v0.12.2) - 2025-06-30
+
+### Refactor
+
+- *(hseries)* use array unpack operation ([#913](https://github.com/CQCL/tket2/pull/913))
+
 ## [0.12.1](https://github.com/CQCL/tket2/compare/tket2-v0.12.0...tket2-v0.12.1) - 2025-06-18
 
 ### New Features
