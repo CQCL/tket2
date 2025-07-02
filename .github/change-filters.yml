@@ -11,6 +11,7 @@ rust:
   - "tket2-hseries/**"
   - "badger-optimiser/**"
   - "compile-rewriter/**"
+  - "tket1-passes/**"
 
 python:
   - *rust-core

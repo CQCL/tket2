@@ -42,8 +42,20 @@ jobs:
   rs-semver-checks:
     needs: [changes]
     if: ${{ needs.changes.outputs.rust == 'true' }}
-    uses: CQCL/hugrverse-actions/.github/workflows/rs-semver-checks.yml@main
-    with:
-      apt-dependencies: llvm-14
-    secrets:
-      GITHUB_PAT: ${{ secrets.HUGRBOT_PAT }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tket2
+        uses: actions/checkout@v4
+      - name: Retrieve tket1-passes library
+        uses: ./.github/actions/tket1-passes
+        with:
+          lib-path: ${{ github.workspace }}/tket1-lib
+      - name: Install LLVM from apt
+        run: |
+          echo "Installing apt dependencies: llvm-14"
+          sudo apt-get install -y llvm-14
+      - uses: CQCL/hugrverse-actions/rs-semver-checks@main
+        env:
+          TKET_LIB_PATH: ${{ github.workspace }}/tket1-lib
+        with:
+          token: ${{ secrets.HUGRBOT_PAT }}
