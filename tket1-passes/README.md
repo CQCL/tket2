@@ -33,15 +33,21 @@ cd cpp
 ./build.sh
 ```
 
+Upon successfully building the C++ library, the compiled library should be found
+in the `lib` directory. The location the library is installed to can be changed
+by setting the `TKET_LIB_PATH` environment variable.
+
 ## Building the Rust library
 
-Upon successfully building the C++ library, the compiled library should be found
-in the `lib` directory. The Rust library can then be built using:
+The Rust library can then be built using:
 
 ```bash
 cd rust
 cargo build
 ```
+
+If you are using a non-default library path, make sure to set the `TKET_LIB_PATH`
+environment variable accordingly.
 
 ## Currently supported TKET1 features
 
