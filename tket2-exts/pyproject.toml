@@ -1,6 +1,6 @@
 [project]
 name = "tket2-exts"
-version = "0.9.1"
+version = "0.9.2"
 requires-python = ">=3.10"
 description = "HUGR extension definitions for the tket2 compiler."
 license = { file = "LICENCE" }
