@@ -298,6 +298,47 @@ impl<N> Tk1ConvertError<N> {
     }
 }
 
+/// Error type for conversion between tket2 ops and pytket operations.
+#[derive(derive_more::Debug, Display, Error)]
+#[non_exhaustive]
+pub enum Tk1DecodeError {
+    /// The pytket circuit uses multi-indexed registers.
+    //
+    // This could be supported in the future, if there is a need for it.
+    #[display("Register {register} in the circuit has multiple indices. Tket2 does not support multi-indexed registers.")]
+    MultiIndexedRegister {
+        /// The register name.
+        register: String,
+    },
+    /// Found an unexpected number of input wires when decoding an operation.
+    #[display("Expected {expected} input wires when decoding a {operation}, but found {actual} with types {}.", types.iter().join(", "))]
+    UnexpectedInputWires {
+        /// The expected amount of input wires.
+        expected: usize,
+        /// The actual amount of input wires.
+        actual: usize,
+        /// The types of the input wires.
+        types: Vec<String>,
+        /// The operation type that was being decoded.
+        operation: String,
+    },
+    /// Custom user-defined error raised while encoding an operation.
+    #[display("Error while decoding operation: {msg}")]
+    CustomError {
+        /// The custom error message
+        msg: String,
+    },
+}
+
+impl Tk1DecodeError {
+    /// Create a new error with a custom message.
+    pub fn custom(msg: impl ToString) -> Self {
+        Self::CustomError {
+            msg: msg.to_string(),
+        }
+    }
+}
+
 /// A hashed register, used to identify registers in the [`Tk1Decoder::register_wire`] map,
 /// avoiding string and vector clones on lookup.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

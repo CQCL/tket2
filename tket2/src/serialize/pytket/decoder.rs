@@ -2,6 +2,9 @@
 
 mod op;
 mod param;
+mod wires;
+
+pub use wires::{InputWires, WireData};
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -44,7 +47,7 @@ use param::LoadedParameter;
 #[derive(Debug)]
 pub struct Tk1DecoderContext<'h> {
     /// The Hugr being built.
-    pub hugr: FunctionBuilder<&'h mut Hugr>,
+    pub builder: FunctionBuilder<&'h mut Hugr>,
     /// A map from the tracked pytket registers to the [`Wire`]s in the circuit.
     register_wires: HashMap<RegisterHash, Wire>,
     /// The ordered list of register to have at the output.
@@ -116,6 +119,41 @@ impl<'h> Tk1DecoderContext<'h> {
             FunctionBuilder::with_hugr(hugr, name, sig).unwrap();
         let dangling_wires = dfg.input_wires().collect::<Vec<_>>();
 
+        Self::init_metadata(&mut dfg, serialcirc);
+
+        let qubit_registers = serialcirc.qubits.iter().map(RegisterHash::from).collect();
+
+        let ordered_registers = serialcirc
+            .qubits
+            .iter()
+            .map(|qb| &qb.id)
+            .chain(serialcirc.bits.iter().map(|bit| &bit.id))
+            .map(|reg| {
+                check_register(reg)?;
+                Ok(RegisterHash::from(reg))
+            })
+            .collect::<Result<Vec<RegisterHash>, Tk1ConvertError>>()?;
+
+        // Map each register element to their starting wire.
+        let register_wires: HashMap<RegisterHash, Wire> = ordered_registers
+            .iter()
+            .copied()
+            .zip(dangling_wires)
+            .collect();
+
+        Ok(Tk1DecoderContext {
+            builder: dfg,
+            register_wires,
+            ordered_registers,
+            qubit_registers,
+            parameters: IndexMap::new(),
+            config,
+        })
+    }
+
+    /// Store the serialised circuit information as HUGR metadata,
+    /// so it can be reused later when re-encoding the circuit.
+    fn init_metadata(dfg: &mut FunctionBuilder<&mut Hugr>, serialcirc: &SerialCircuit) {
         // Metadata. The circuit requires "name", and we store other things that
         // should pass through the serialization roundtrip.
         dfg.set_metadata(METADATA_PHASE, json!(serialcirc.phase));
@@ -152,35 +190,6 @@ impl<'h> Tk1DecoderContext<'h> {
         }
         dfg.set_metadata(METADATA_Q_OUTPUT_REGISTERS, json!(output_qubits));
         dfg.set_metadata(METADATA_B_OUTPUT_REGISTERS, json!(output_bits));
-
-        let qubit_registers = serialcirc.qubits.iter().map(RegisterHash::from).collect();
-
-        let ordered_registers = serialcirc
-            .qubits
-            .iter()
-            .map(|qb| &qb.id)
-            .chain(serialcirc.bits.iter().map(|bit| &bit.id))
-            .map(|reg| {
-                check_register(reg)?;
-                Ok(RegisterHash::from(reg))
-            })
-            .collect::<Result<Vec<RegisterHash>, Tk1ConvertError>>()?;
-
-        // Map each register element to their starting wire.
-        let register_wires: HashMap<RegisterHash, Wire> = ordered_registers
-            .iter()
-            .copied()
-            .zip(dangling_wires)
-            .collect();
-
-        Ok(Tk1DecoderContext {
-            hugr: dfg,
-            register_wires,
-            ordered_registers,
-            qubit_registers,
-            parameters: IndexMap::new(),
-            config,
-        })
     }
 
     /// Finish building the function definition for the legacy tket circuit.
@@ -202,11 +211,11 @@ impl<'h> Tk1DecoderContext<'h> {
         // Store the name for the input parameter wires
         if !self.parameters.is_empty() {
             let params = self.parameters.keys().cloned().collect_vec();
-            self.hugr
+            self.builder
                 .set_metadata(METADATA_INPUT_PARAMETERS, json!(params));
         }
 
-        self.hugr
+        self.builder
             .finish_with_outputs(outputs)
             .map_err(Tk1ConvertError::custom)
     }
@@ -233,12 +242,12 @@ impl<'h> Tk1DecoderContext<'h> {
         let (input_wires, output_registers) = self.get_op_wires(&tk1op, &args, op_params)?;
         let op: OpType = (&tk1op).into();
 
-        let new_op = self.hugr.add_dataflow_op(op, input_wires).unwrap();
+        let new_op = self.builder.add_dataflow_op(op, input_wires).unwrap();
         let wires = new_op.outputs();
 
         // Store the opgroup metadata.
         if let Some(opgroup) = opgroup {
-            self.hugr
+            self.builder
                 .set_child_metadata(new_op.node(), METADATA_OPGROUP, json!(opgroup));
         }
 
@@ -386,8 +395,8 @@ impl<'h> Tk1DecoderContext<'h> {
         }
 
         let parsed = parse_pytket_param(&param);
-        process(&mut self.hugr, &mut self.parameters, parsed, &param)
-            .as_rotation(&mut self.hugr)
+        process(&mut self.builder, &mut self.parameters, parsed, &param)
+            .as_rotation(&mut self.builder)
             .wire
     }
 

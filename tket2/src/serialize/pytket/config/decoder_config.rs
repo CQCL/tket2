@@ -5,13 +5,12 @@
 //! translations of legacy tket primitives into HUGR operations.
 
 use hugr::types::Type;
-use hugr::Node;
 use itertools::Itertools;
 use std::collections::HashMap;
 
-use crate::serialize::pytket::decoder::{DecodeStatus, Tk1DecoderContext};
+use crate::serialize::pytket::decoder::{DecodeStatus, InputWires, Tk1DecoderContext};
 use crate::serialize::pytket::extension::{PytketDecoder, RegisterCount, TypeTranslator};
-use crate::serialize::pytket::Tk1ConvertError;
+use crate::serialize::pytket::Tk1DecodeError;
 
 use super::TypeTranslatorSet;
 
@@ -31,12 +30,6 @@ pub struct Tk1DecoderConfig {
     optype_decoders: HashMap<tket_json_rs::OpType, Vec<usize>>,
     /// Set of type translators used to translate HUGR types into pytket registers.
     type_translators: TypeTranslatorSet,
-}
-
-fn test() {
-    fn send_sync<T: Send + Sync>() {}
-
-    send_sync::<Tk1DecoderConfig>();
 }
 
 impl Tk1DecoderConfig {
@@ -69,16 +62,16 @@ impl Tk1DecoderConfig {
     ///
     /// Returns `true` if the operation was successfully converted and no further
     /// encoders should be called.
-    pub(super) fn op_to_hugr(
+    pub(super) fn op_to_hugr<'a>(
         &self,
         op: &tket_json_rs::circuit_json::Operation,
-        args: &[tket_json_rs::register::ElementId],
+        args: InputWires<'a>,
         opgroup: Option<&str>,
-        decoder: &mut Tk1DecoderContext<'_>,
-    ) -> Result<DecodeStatus, Tk1ConvertError<Node>> {
+        decoder: &mut Tk1DecoderContext<'a>,
+    ) -> Result<DecodeStatus, Tk1DecodeError> {
         let mut result = DecodeStatus::Unsupported;
         for enc in self.decoders_for_optype(&op.op_type) {
-            result = enc.op_to_hugr(op, args, opgroup, decoder)?;
+            result = enc.op_to_hugr(op, &args, opgroup, decoder)?;
             if result == DecodeStatus::Success {
                 break;
             }

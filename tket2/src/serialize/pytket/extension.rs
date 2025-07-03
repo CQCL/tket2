@@ -27,15 +27,15 @@ pub(crate) use bool::set_bits_op;
 pub(crate) use tk1::OpaqueTk1Op;
 
 use super::encoder::TrackedValues;
-use crate::serialize::pytket::decoder::{DecodeStatus, Tk1DecoderContext};
+use crate::serialize::pytket::decoder::{DecodeStatus, InputWires, Tk1DecoderContext};
 use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext};
-use crate::serialize::pytket::Tk1ConvertError;
+use crate::serialize::pytket::{Tk1ConvertError, Tk1DecodeError};
 use crate::Circuit;
 use hugr::extension::ExtensionId;
 use hugr::ops::constant::OpaqueValue;
 use hugr::ops::ExtensionOp;
 use hugr::types::CustomType;
-use hugr::{HugrView, Node};
+use hugr::HugrView;
 
 /// An encoder of HUGR operations and types that transforms them into pytket
 /// primitives.
@@ -108,14 +108,14 @@ pub trait PytketDecoder {
     /// converted. If the operation is not supported by the encoder, it's
     /// important to **not** modify the `encoder` context as that may invalidate
     /// the context for other encoders that may be called afterwards.
-    fn op_to_hugr(
+    fn op_to_hugr<'a>(
         &self,
         op: &tket_json_rs::circuit_json::Operation,
-        args: &[tket_json_rs::register::ElementId],
+        wires: &InputWires<'a>,
         opgroup: Option<&str>,
-        decoder: &mut Tk1DecoderContext<'_>,
-    ) -> Result<DecodeStatus, Tk1ConvertError<Node>> {
-        let _ = (op, args, opgroup, decoder);
+        decoder: &mut Tk1DecoderContext<'a>,
+    ) -> Result<DecodeStatus, Tk1DecodeError> {
+        let _ = (op, wires, opgroup, decoder);
         Ok(DecodeStatus::Unsupported)
     }
 }
