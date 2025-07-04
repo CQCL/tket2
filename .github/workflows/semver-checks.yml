@@ -1,6 +1,6 @@
 name: Rust Semver Checks
 on:
-  pull_request_target:
+  pull_request:
     branches:
       - main
 
@@ -57,8 +57,11 @@ jobs:
         run: |
           echo "Installing apt dependencies: llvm-14"
           sudo apt-get install -y llvm-14
+      - run: |
+          cp ${{ env.TKET_C_API_PATH }}/lib/libtket-c-api.so ${{ env.TKET_C_API_PATH }}/lib/libtket1-passes.so
       - uses: CQCL/hugrverse-actions/rs-semver-checks@main
         env:
           TKET_C_API_PATH: ${{ env.TKET_C_API_PATH }}
+          TKET_LIB_PATH: ${{ env.TKET_C_API_PATH }}/lib
         with:
           token: ${{ secrets.HUGRBOT_PAT }}
