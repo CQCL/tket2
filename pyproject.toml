@@ -35,6 +35,7 @@ exclude = '''(?x)(
     ^target/        # Build artifacts
     | ^notebooks/   # Examples
     | ^test_files/  # Test files
+    | ^tket1-passes/tket-c-api/ # Do not check conan files
 )'''
 
 # TODO: Fix the lint errors and enable this

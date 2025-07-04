@@ -179,7 +179,7 @@ mod tests {
     use super::*;
     use rstest::*;
 
-    const CIRC_STR: &str = include_str!("../../../test_files/2cx.json");
+    const CIRC_STR: &str = include_str!("../../test_files/2cx.json");
 
     #[fixture]
     fn circuit() -> SerialCircuit {

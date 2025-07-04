@@ -9,7 +9,7 @@ members = [
     "compile-rewriter",
     "badger-optimiser",
     "tket2-hseries",
-    "tket1-passes/rust",
+    "tket1-passes",
 ]
 default-members = ["tket2", "tket2-hseries"]
 
