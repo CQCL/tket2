@@ -29,6 +29,9 @@ env:
   LLVM_VERSION: "14.0"
   LLVM_FEATURE_NAME: "14-0"
 
+  TKET_C_API_PATH: "${{ github.workspace }}/tket-c-api"
+  LD_LIBRARY_PATH: ${{ github.workspace }}/tket-c-api/lib
+
 jobs:
   # Check if changes were made to the relevant files.
   # Always returns true if running on the default branch, to ensure all changes are thoroughly checked.
@@ -75,8 +78,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - name: Retrieve tket1-passes library
-        uses: ./.github/actions/tket1-passes
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
+        with:
+          install-path: ${{ env.TKET_C_API_PATH }}
       - name: Check formatting
         run: cargo fmt -- --check
       - name: Install LLVM and Clang
@@ -178,8 +183,10 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
-      - name: Retrieve tket1-passes library
-        uses: ./.github/actions/tket1-passes
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
+        with:
+          install-path: ${{ env.TKET_C_API_PATH }}
       - name: Build with all features
         run: cargo test --verbose --workspace --all-features --no-run
       - name: Tests with all features
@@ -208,8 +215,10 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
-      - name: Retrieve tket1-passes library
-        uses: ./.github/actions/tket1-passes
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
+        with:
+          install-path: ${{ env.TKET_C_API_PATH }}
       - name: Configure default rust toolchain
         run: rustup override set ${{steps.toolchain.outputs.name}}
       - name: Build with no features
@@ -240,8 +249,10 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
-      - name: Retrieve tket1-passes library
-        uses: ./.github/actions/tket1-passes
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
+        with:
+          install-path: ${{ env.TKET_C_API_PATH }}
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Run tests with coverage instrumentation

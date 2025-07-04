@@ -52,7 +52,3 @@ class TketCAPIRecipe(ConanFile):
 
     def requirements(self):
         self.requires("tket/2.1.28@tket/stable")
-
-
-    
-
