@@ -11,6 +11,7 @@ rust:
   - "tket2-hseries/**"
   - "badger-optimiser/**"
   - "compile-rewriter/**"
+  - "tket1-passes/**"
 
 python:
   - *rust-core
@@ -19,3 +20,6 @@ python:
   - "tket2-exts/**"
   - "pyproject.toml"
   - "uv.lock"
+
+extensions:
+  - "tket2-exts/src/tket2_exts/data/tket2/**"

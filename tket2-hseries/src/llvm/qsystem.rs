@@ -52,6 +52,7 @@ enum RuntimeFunction {
     QAlloc,
     QFree,
     Measure,
+    LazyMeasureLeaked,
     LazyMeasure,
     Reset,
 }
@@ -65,6 +66,7 @@ impl RuntimeFunction {
             RuntimeFunction::QAlloc => "___qalloc",
             RuntimeFunction::QFree => "___qfree",
             RuntimeFunction::Measure => "___measure",
+            RuntimeFunction::LazyMeasureLeaked => "___lazy_measure_leaked",
             RuntimeFunction::LazyMeasure => "___lazy_measure",
             RuntimeFunction::Reset => "___reset",
         }
@@ -94,6 +96,9 @@ impl RuntimeFunction {
             RuntimeFunction::QAlloc => qb_type.fn_type(&[], false),
             RuntimeFunction::QFree => iwc.void_type().fn_type(&[qb_type.into()], false),
             RuntimeFunction::Measure => iwc.bool_type().fn_type(&[qb_type.into()], false),
+            RuntimeFunction::LazyMeasureLeaked => {
+                future_type(iwc).fn_type(&[qb_type.into()], false)
+            }
             RuntimeFunction::LazyMeasure => future_type(iwc).fn_type(&[qb_type.into()], false),
             RuntimeFunction::Reset => iwc.void_type().fn_type(&[qb_type.into()], false),
         }
@@ -220,6 +225,28 @@ impl<PCG: PreludeCodegen> QSystemCodegenExtension<PCG> {
                 )?;
                 args.outputs.finish(builder, [result])
             }
+            // Measure qubit in Z basis or detect leakage, not forcing to a boolean
+            QSystemOp::LazyMeasureLeaked => {
+                let builder = context.builder();
+                let [qb] = args
+                    .inputs
+                    .try_into()
+                    .map_err(|_| anyhow!("LazyMeasureLeaked expects one input"))?;
+                let result = builder
+                    .build_call(
+                        self.runtime_func(context, RuntimeFunction::LazyMeasureLeaked)?,
+                        &[qb.into()],
+                        "lazy_measure_leaked",
+                    )?
+                    .try_as_basic_value()
+                    .unwrap_left();
+                builder.build_call(
+                    self.runtime_func(context, RuntimeFunction::QFree)?,
+                    &[qb.into()],
+                    "qfree",
+                )?;
+                args.outputs.finish(builder, [result])
+            }
             QSystemOp::LazyMeasureReset => {
                 let builder = context.builder();
                 let [qb] = args
@@ -336,6 +363,7 @@ mod test {
     #[case::qfree(7, QSystemOp::QFree)]
     #[case::reset(8, QSystemOp::Reset)]
     #[case::measure_reset(9, QSystemOp::MeasureReset)]
+    #[case::lazy_measure_leaked(10, QSystemOp::LazyMeasureLeaked)]
     fn emit_qsystem_codegen(
         #[case] _i: i32,
         #[with(_i)] mut llvm_ctx: TestContext,

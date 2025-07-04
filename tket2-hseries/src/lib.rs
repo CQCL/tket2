@@ -10,7 +10,7 @@ use hugr::{
         ComposablePass as _, LinearizeArrayPass, MonomorphizePass, RemoveDeadFuncsError,
         RemoveDeadFuncsPass,
     },
-    hugr::HugrError,
+    hugr::{hugrmut::HugrMut, HugrError},
     Hugr, HugrView, Node,
 };
 use replace_bools::{ReplaceBoolPass, ReplaceBoolPassError};
@@ -29,8 +29,8 @@ pub mod llvm;
 
 pub mod replace_bools;
 
-/// Modify a [hugr::Hugr] into a form that is acceptable for ingress into a Q-System.
-/// Returns an error if this cannot be done.
+/// Modify a [hugr::Hugr] into a form that is acceptable for ingress into a
+/// Q-System. Returns an error if this cannot be done.
 ///
 /// To construct a `QSystemPass` use [Default::default].
 #[derive(Debug, Clone, Copy)]
@@ -82,22 +82,28 @@ pub enum QSystemPassError<N = Node> {
 impl QSystemPass {
     /// Run `QSystemPass` on the given [Hugr]. `registry` is used for
     /// validation, if enabled.
+    /// Expects the HUGR to have a function entrypoint.
     pub fn run(&self, hugr: &mut Hugr) -> Result<(), QSystemPassError> {
+        let entrypoint = if hugr.entrypoint_optype().is_module() {
+            // backwards compatibility: if the entrypoint is a module, we look for
+            // a function named "main" in the module and use that as the entrypoint.
+            hugr.children(hugr.entrypoint())
+                .find(|&n| {
+                    hugr.get_optype(n)
+                        .as_func_defn()
+                        .is_some_and(|fd| fd.func_name() == "main")
+                })
+                .ok_or(QSystemPassError::NoMain)?
+        } else {
+            hugr.entrypoint()
+        };
+
+        // passes that run on whole module
+        hugr.set_entrypoint(hugr.module_root());
         if self.monomorphize {
             self.monomorphization().run(hugr).unwrap();
 
-            let mut rdfp = RemoveDeadFuncsPass::default();
-            if hugr.entrypoint_optype().is_module() {
-                let main_node = hugr
-                    .children(hugr.entrypoint())
-                    .find(|&n| {
-                        hugr.get_optype(n)
-                            .as_func_defn()
-                            .is_some_and(|fd| fd.func_name() == "main")
-                    })
-                    .ok_or(QSystemPassError::NoMain)?;
-                rdfp = rdfp.with_module_entry_points([main_node]);
-            }
+            let rdfp = RemoveDeadFuncsPass::default().with_module_entry_points([entrypoint]);
             rdfp.run(hugr)?
         }
 
@@ -112,6 +118,8 @@ impl QSystemPass {
         if self.force_order {
             self.force_order(hugr)?;
         }
+        // restore the entrypoint
+        hugr.set_entrypoint(entrypoint);
         Ok(())
     }
 
@@ -203,7 +211,8 @@ impl QSystemPass {
         self
     }
 
-    /// Returns a new `QSystemPass` with lazification enabled according to `lazify`.
+    /// Returns a new `QSystemPass` with lazification enabled according to
+    /// `lazify`.
     ///
     /// On by default.
     ///
@@ -218,8 +227,9 @@ impl QSystemPass {
 #[cfg(test)]
 mod test {
     use hugr::{
-        builder::{DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer, HugrBuilder},
+        builder::{Dataflow, DataflowSubContainer, HugrBuilder},
         extension::prelude::qb_t,
+        hugr::hugrmut::HugrMut,
         ops::handle::NodeHandle,
         std_extensions::arithmetic::float_types::ConstF64,
         type_row,
@@ -229,6 +239,7 @@ mod test {
 
     use itertools::Itertools as _;
     use petgraph::visit::{Topo, Walker as _};
+    use rstest::rstest;
     use tket2::extension::bool::bool_type;
 
     use crate::{
@@ -236,16 +247,23 @@ mod test {
         QSystemPass,
     };
 
-    #[test]
-    fn qsystem_pass() {
-        let (mut hugr, [call_node, h_node, f_node, rx_node]) = {
-            let mut builder =
-                DFGBuilder::new(Signature::new(qb_t(), vec![bool_type(), bool_type()])).unwrap();
-            let func = builder
-                .module_root_builder()
-                .define_function("func", Signature::new_endo(type_row![]))
-                .unwrap()
-                .finish_with_outputs([])
+    #[rstest]
+    #[case(false)]
+    #[case(true)]
+    fn qsystem_pass(#[case] set_entrypoint: bool) {
+        let mut mb = hugr::builder::ModuleBuilder::new();
+        let func = mb
+            .define_function("func", Signature::new_endo(type_row![]))
+            .unwrap()
+            .finish_with_outputs([])
+            .unwrap();
+
+        let (mut hugr, [call_node, h_node, f_node, rx_node, main_node]) = {
+            let mut builder = mb
+                .define_function(
+                    "main",
+                    Signature::new(qb_t(), vec![bool_type(), bool_type()]),
+                )
                 .unwrap();
             let [qb] = builder.input_wires_arr();
 
@@ -279,12 +297,18 @@ mod test {
                 .unwrap()
                 .outputs_arr();
 
-            let hugr = builder
-                .finish_hugr_with_outputs([measure_result, measure_result])
-                .unwrap();
-            (hugr, [call_node, h_node, f_node, rx_node])
+            let main_n = builder
+                .finish_with_outputs([measure_result, measure_result])
+                .unwrap()
+                .node();
+            let hugr = mb.finish_hugr().unwrap();
+            (hugr, [call_node, h_node, f_node, rx_node, main_n])
         };
-
+        if set_entrypoint {
+            // set the entrypoint to the main function
+            // if this is not done the "backwards compatibility" code is triggered
+            hugr.set_entrypoint(main_node);
+        }
         QSystemPass::default().run(&mut hugr).unwrap();
 
         let topo_sorted = Topo::new(&hugr.as_petgraph())

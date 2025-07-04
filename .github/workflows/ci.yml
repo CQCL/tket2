@@ -31,7 +31,7 @@ env:
 
 jobs:
   # Check if changes were made to the relevant files.
-  # Always returns true if running on the default branch, to ensure all changes are throughly checked.
+  # Always returns true if running on the default branch, to ensure all changes are thoroughly checked.
   changes:
     name: Check for changes
     runs-on: ubuntu-latest
@@ -43,6 +43,7 @@ jobs:
     outputs:
       rust: ${{ steps.filter.outputs.rust == 'true' || steps.override.outputs.out == 'true' }}
       python: ${{ steps.filter.outputs.python == 'true' || steps.override.outputs.out == 'true' }}
+      extensions: ${{ steps.filter.outputs.extensions == 'true' || steps.override.outputs.out == 'true' }}
     steps:
     - uses: actions/checkout@v4
     - name: Override label
@@ -64,7 +65,7 @@ jobs:
 
   check-rs:
     name: Check Rust code 🦀
-    needs: changes
+    needs: [changes]
     if: ${{ needs.changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     steps:
@@ -74,6 +75,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - name: Retrieve tket1-passes library
+        uses: ./.github/actions/tket1-passes
       - name: Check formatting
         run: cargo fmt -- --check
       - name: Install LLVM and Clang
@@ -152,13 +155,13 @@ jobs:
       - name: Configure default rust toolchain
         run: rustup override set ${{steps.toolchain.outputs.name}}
       - name: Build with no features
-        run: cargo test --verbose --workspace --no-default-features --no-run
+        run: cargo test --verbose -p tket2 -p tket2-py -p tket2-hseries --no-default-features --no-run
       - name: Tests with no features
-        run: cargo test --verbose --workspace --no-default-features
+        run: cargo test --verbose -p tket2 -p tket2-py -p tket2-hseries --no-default-features
 
   # Run tests on Rust stable
   tests-rs-stable-all-features:
-    needs: changes
+    needs: [changes]
     if: ${{ needs.changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     name: tests (Rust stable, all features)
@@ -168,13 +171,15 @@ jobs:
       - id: toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 'stable'
+          toolchain: "stable"
       - name: Configure default rust toolchain
         run: rustup override set ${{steps.toolchain.outputs.name}}
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
+      - name: Retrieve tket1-passes library
+        uses: ./.github/actions/tket1-passes
       - name: Build with all features
         run: cargo test --verbose --workspace --all-features --no-run
       - name: Tests with all features
@@ -182,7 +187,7 @@ jobs:
 
   # Run tests on other toolchains
   tests-rs-other:
-    needs: changes
+    needs: [changes]
     if: ${{ needs.changes.outputs.rust == 'true' && github.event_name != 'merge_group' }}
     runs-on: ubuntu-latest
     strategy:
@@ -203,6 +208,8 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
+      - name: Retrieve tket1-passes library
+        uses: ./.github/actions/tket1-passes
       - name: Configure default rust toolchain
         run: rustup override set ${{steps.toolchain.outputs.name}}
       - name: Build with no features
@@ -215,7 +222,7 @@ jobs:
         run: cargo test --verbose --workspace --all-features
 
   tests-nightly-coverage:
-    needs: changes
+    needs: [changes]
     # Run only if there are changes in the relevant files
     if: ${{ needs.changes.outputs.rust == 'true' && github.event_name != 'merge_group' }}
     runs-on: ubuntu-latest
@@ -233,6 +240,8 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
+      - name: Retrieve tket1-passes library
+        uses: ./.github/actions/tket1-passes
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Run tests with coverage instrumentation
@@ -308,12 +317,41 @@ jobs:
             "
             exit 1
           fi
+  extension-versions:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: ${{ needs.changes.outputs.extensions == 'true' }}
+    name: Check extension versions
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history to compare with main
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Check if extension versions are updated
+        run: |
+            # Check against latest tag on the target branch
+            # When not on a pull request, base_ref should be empty so we default to HEAD
+            if [ -z "$TARGET_REF" ]; then
+              BASE_SHA="HEAD~1"
+            else
+              BASE_SHA=$(git rev-parse origin/$TARGET_REF)
+            fi
+            echo "Comparing to ref: $BASE_SHA"
+
+            python ./scripts/check_extension_versions.py $BASE_SHA
+        env:
+          TARGET_REF: ${{ github.base_ref }}
 
   # This is a meta job to mark successful completion of the required checks,
   # even if they are skipped due to no changes in the relevant files.
   required-checks:
     name: Required checks 🦀+🐍
-    needs: [changes, check-rs, check-py, tests-rs-stable-no-features, tests-rs-stable-all-features, tests-py, tket2-extensions]
+    needs: [changes, check-rs, check-py, tests-rs-stable-no-features, tests-rs-stable-all-features, tests-py, tket2-extensions, extension-versions]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:

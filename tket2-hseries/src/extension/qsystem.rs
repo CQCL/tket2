@@ -21,8 +21,9 @@ use hugr::{
         arithmetic::{
             float_ops::FloatOps,
             float_types::{float64_type, ConstF64, EXTENSION as FLOAT_TYPES},
+            int_types::int_type,
         },
-        collections::array::{array_type, array_type_parametric, ArrayOpBuilder},
+        collections::array::{array_type_parametric, ArrayOpBuilder},
     },
     type_row,
     types::{type_param::TypeParam, PolyFuncType, Signature, Type, TypeArg, TypeRow},
@@ -45,7 +46,7 @@ pub use lower::{check_lowered, lower_tk2_op, LowerTk2Error, LowerTket2ToQSystemP
 /// The "tket2.qsystem" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.qsystem");
 /// The "tket2.qsystem" extension version.
-pub const EXTENSION_VERSION: Version = Version::new(0, 4, 0);
+pub const EXTENSION_VERSION: Version = Version::new(0, 4, 1);
 
 lazy_static! {
     /// The "tket2.qsystem" extension.
@@ -95,6 +96,7 @@ pub enum QSystemOp {
     QFree,
     Reset,
     MeasureReset,
+    LazyMeasureLeaked,
 }
 
 impl MakeOpDef for QSystemOp {
@@ -108,6 +110,7 @@ impl MakeOpDef for QSystemOp {
         let two_qb_row = TypeRow::from(vec![qb_t(), qb_t()]);
         match self {
             LazyMeasure => Signature::new(qb_t(), future_type(bool_t())),
+            LazyMeasureLeaked => Signature::new(qb_t(), future_type(int_type(6))),
             LazyMeasureReset => Signature::new(qb_t(), vec![qb_t(), future_type(bool_t())]),
             Reset => Signature::new(one_qb_row.clone(), one_qb_row),
             ZZPhase => Signature::new(vec![qb_t(), qb_t(), float64_type()], two_qb_row),
@@ -144,6 +147,9 @@ impl MakeOpDef for QSystemOp {
             QSystemOp::QFree => "Free a qubit (lose track of it).",
             QSystemOp::Reset => "Reset a qubit to the Z |0> eigenstate.",
             QSystemOp::MeasureReset => "Measure a qubit and reset it to the Z |0> eigenstate.",
+            QSystemOp::LazyMeasureLeaked => {
+                "Measure a qubit (return 0 or 1) or detect leakage (return 2)."
+            }
             QSystemOp::LazyMeasureReset => {
                 "Lazily measure a qubit and reset it to the Z |0> eigenstate."
             }
@@ -224,6 +230,13 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
     fn add_lazy_measure(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::LazyMeasure, [qb])?
+            .out_wire(0))
+    }
+
+    /// Add a "tket2.qsystem.LazyMeasureLeaked" op.
+    fn add_lazy_measure_leaked(&mut self, qb: Wire) -> Result<Wire, BuildError> {
+        Ok(self
+            .add_dataflow_op(QSystemOp::LazyMeasureLeaked, [qb])?
             .out_wire(0))
     }
 
@@ -511,7 +524,7 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
         let q_arr = self.add_new_array(qb_t(), qbs)?;
         let q_arr = self.add_runtime_barrier(q_arr, size)?;
 
-        pop_all(self, q_arr, size, qb_t())
+        self.add_array_unpack(qb_t(), size, q_arr)
     }
 }
 
@@ -525,40 +538,6 @@ pub(crate) fn runtime_barrier_ext_op(
     )
 }
 
-/// Build a pop left operation on an array and unwrap the resulting option.
-pub(crate) fn pop_unwrap<T: ArrayOpBuilder>(
-    builder: &mut T,
-    q_arr: Wire,
-    size: u64,
-    elem_ty: Type,
-) -> Result<[Wire; 2], BuildError> {
-    debug_assert!(size > 0);
-    let r = builder
-        .add_array_pop_right(elem_ty.clone(), size, q_arr)
-        .unwrap();
-    builder.build_unwrap_sum(
-        1,
-        option_type(vec![elem_ty.clone(), array_type(size - 1, elem_ty)]),
-        r,
-    )
-}
-/// Unpack all elements of an array and discard the empty array.
-pub(crate) fn pop_all<T: ArrayOpBuilder>(
-    builder: &mut T,
-    mut arr: Wire,
-    size: u64,
-    elem_ty: Type,
-) -> Result<Vec<Wire>, BuildError> {
-    // TODO use unwrap op when available https://github.com/CQCL/hugr/issues/1947
-    let mut result = Vec::with_capacity(size as usize);
-    for ar_size in (1..size + 1).rev() {
-        let [qb, new_arr] = pop_unwrap(builder, arr, ar_size, elem_ty.clone())?;
-        result.push(qb);
-        arr = new_arr;
-    }
-    builder.add_array_discard_empty(elem_ty, arr)?;
-    Ok(result)
-}
 impl<D: Dataflow> QSystemOpBuilder for D {}
 
 #[cfg(test)]
@@ -598,6 +577,19 @@ mod test {
             let [qb, lazy_b] = func_builder.add_lazy_measure_reset(qb).unwrap();
             let [b] = func_builder.add_read(lazy_b, bool_t()).unwrap();
             func_builder.finish_hugr_with_outputs([qb, b]).unwrap()
+        };
+        assert_matches!(hugr.validate(), Ok(_));
+    }
+
+    #[test]
+    fn leaked() {
+        let hugr = {
+            let mut func_builder =
+                FunctionBuilder::new("leaked", Signature::new(qb_t(), vec![int_type(6)])).unwrap();
+            let [qb] = func_builder.input_wires_arr();
+            let lazy_i = func_builder.add_lazy_measure_leaked(qb).unwrap();
+            let [i] = func_builder.add_read(lazy_i, int_type(6)).unwrap();
+            func_builder.finish_hugr_with_outputs([i]).unwrap()
         };
         assert_matches!(hugr.validate(), Ok(_));
     }
