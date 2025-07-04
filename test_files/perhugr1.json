@@ -1,0 +1,78 @@
+{
+  "state_space": {
+    "graph": {
+      "nodes": {
+        "8be885340a6343a4": {
+          "value": {
+            "Replacement": {
+              "subgraph": {
+                "nodes": [
+                  ["1f2468564499672f", 9],
+                  ["1f2468564499672f", 10]
+                ],
+                "inputs": [
+                  [
+                    [
+                      ["1f2468564499672f", 9],
+                      {
+                        "index": 0
+                      }
+                    ]
+                  ],
+                  [
+                    [
+                      ["1f2468564499672f", 9],
+                      {
+                        "index": 1
+                      }
+                    ]
+                  ],
+                  [
+                    [
+                      ["1f2468564499672f", 10],
+                      {
+                        "index": 0
+                      }
+                    ]
+                  ]
+                ],
+                "outputs": [
+                  [
+                    ["1f2468564499672f", 9],
+                    {
+                      "index": 0
+                    }
+                  ],
+                  [
+                    ["1f2468564499672f", 10],
+                    {
+                      "index": 0
+                    }
+                  ],
+                  [
+                    ["1f2468564499672f", 10],
+                    {
+                      "index": 1
+                    }
+                  ]
+                ]
+              },
+              "replacement": "HUGRiHJv?@{\"modules\":[{\"version\":\"live\",\"nodes\":[{\"parent\":0,\"op\":\"Module\"},{\"parent\":0,\"op\":\"FuncDefn\",\"name\":\"main\",\"signature\":{\"params\":[],\"body\":{\"input\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}],\"output\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}]}}},{\"parent\":1,\"op\":\"Input\",\"types\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}]},{\"parent\":1,\"op\":\"Output\",\"types\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}]},{\"parent\":1,\"op\":\"DFG\",\"signature\":{\"input\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}],\"output\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}]}},{\"parent\":4,\"op\":\"Input\",\"types\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}]},{\"parent\":4,\"op\":\"Output\",\"types\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}]},{\"parent\":4,\"op\":\"Extension\",\"extension\":\"tket2.quantum\",\"name\":\"CZ\",\"args\":[],\"signature\":{\"input\":[{\"t\":\"Q\"},{\"t\":\"Q\"}],\"output\":[{\"t\":\"Q\"},{\"t\":\"Q\"}]}},{\"parent\":4,\"op\":\"Extension\",\"extension\":\"tket2.quantum\",\"name\":\"CZ\",\"args\":[],\"signature\":{\"input\":[{\"t\":\"Q\"},{\"t\":\"Q\"}],\"output\":[{\"t\":\"Q\"},{\"t\":\"Q\"}]}}],\"edges\":[[[2,0],[4,0]],[[2,1],[4,1]],[[2,2],[4,2]],[[4,0],[3,0]],[[4,1],[3,1]],[[4,2],[3,2]],[[5,0],[8,1]],[[5,1],[7,0]],[[5,2],[7,1]],[[7,0],[8,0]],[[7,1],[6,1]],[[8,0],[6,2]],[[8,1],[6,0]]],\"metadata\":[null,null,null,null,null,null,null,null,null],\"encoder\":\"hugr-rs v0.20.2\",\"entrypoint\":4}],\"extensions\":[]}"
+            }
+          },
+          "incoming": [["1f2468564499672f", null]]
+        },
+        "1f2468564499672f": {
+          "value": {
+            "Base": "HUGRiHJv?@{\"modules\":[{\"version\":\"live\",\"nodes\":[{\"parent\":0,\"op\":\"Module\"},{\"parent\":0,\"op\":\"FuncDefn\",\"name\":\"main\",\"signature\":{\"params\":[],\"body\":{\"input\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}],\"output\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}]}}},{\"parent\":1,\"op\":\"Input\",\"types\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}]},{\"parent\":1,\"op\":\"Output\",\"types\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}]},{\"parent\":1,\"op\":\"DFG\",\"signature\":{\"input\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}],\"output\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}]}},{\"parent\":4,\"op\":\"Input\",\"types\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}]},{\"parent\":4,\"op\":\"Output\",\"types\":[{\"t\":\"Q\"},{\"t\":\"Q\"},{\"t\":\"Q\"}]},{\"parent\":4,\"op\":\"Extension\",\"extension\":\"tket2.quantum\",\"name\":\"CZ\",\"args\":[],\"signature\":{\"input\":[{\"t\":\"Q\"},{\"t\":\"Q\"}],\"output\":[{\"t\":\"Q\"},{\"t\":\"Q\"}]}},{\"parent\":4,\"op\":\"Extension\",\"extension\":\"tket2.quantum\",\"name\":\"CZ\",\"args\":[],\"signature\":{\"input\":[{\"t\":\"Q\"},{\"t\":\"Q\"}],\"output\":[{\"t\":\"Q\"},{\"t\":\"Q\"}]}},{\"parent\":4,\"op\":\"Extension\",\"extension\":\"tket2.quantum\",\"name\":\"CZ\",\"args\":[],\"signature\":{\"input\":[{\"t\":\"Q\"},{\"t\":\"Q\"}],\"output\":[{\"t\":\"Q\"},{\"t\":\"Q\"}]}},{\"parent\":4,\"op\":\"Extension\",\"extension\":\"tket2.quantum\",\"name\":\"CZ\",\"args\":[],\"signature\":{\"input\":[{\"t\":\"Q\"},{\"t\":\"Q\"}],\"output\":[{\"t\":\"Q\"},{\"t\":\"Q\"}]}},{\"parent\":4,\"op\":\"Extension\",\"extension\":\"tket2.quantum\",\"name\":\"CZ\",\"args\":[],\"signature\":{\"input\":[{\"t\":\"Q\"},{\"t\":\"Q\"}],\"output\":[{\"t\":\"Q\"},{\"t\":\"Q\"}]}},{\"parent\":4,\"op\":\"Extension\",\"extension\":\"tket2.quantum\",\"name\":\"CZ\",\"args\":[],\"signature\":{\"input\":[{\"t\":\"Q\"},{\"t\":\"Q\"}],\"output\":[{\"t\":\"Q\"},{\"t\":\"Q\"}]}}],\"edges\":[[[2,0],[4,0]],[[2,1],[4,1]],[[2,2],[4,2]],[[4,0],[3,0]],[[4,1],[3,1]],[[4,2],[3,2]],[[5,0],[7,0]],[[5,1],[7,1]],[[5,2],[8,1]],[[7,0],[8,0]],[[7,1],[9,0]],[[8,0],[10,0]],[[8,1],[9,1]],[[9,0],[11,1]],[[9,1],[10,1]],[[10,0],[11,0]],[[10,1],[12,1]],[[11,0],[6,0]],[[11,1],[12,0]],[[12,0],[6,1]],[[12,1],[6,2]]],\"metadata\":[null,null,null,null,null,null,null,null,null,null,null,null,null],\"encoder\":\"hugr-rs v0.20.2\",\"entrypoint\":4}],\"extensions\":[]}"
+          },
+          "incoming": []
+        }
+      },
+      "resolver_id": {
+        "id": "SerdeHashResolver"
+      }
+    },
+    "base_commit": "1f2468564499672f"
+  }
+}
