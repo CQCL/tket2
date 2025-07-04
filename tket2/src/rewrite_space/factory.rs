@@ -9,6 +9,7 @@ use crate::circuit::cost::CircuitCost;
 use super::{PersistentHugr, RewriteSpace, Walker};
 
 mod commute_cz;
+mod kak;
 pub use commute_cz::{CommuteCZ, CommuteCZFactory};
 
 /// Options to control the exploration process within commit factories.
