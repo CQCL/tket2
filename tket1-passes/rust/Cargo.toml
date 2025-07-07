@@ -20,7 +20,7 @@ tket-json-rs.workspace = true
 
 [build-dependencies]
 cc = "1.2"
-bindgen = "0.69"
+bindgen = "0.72"
 
 [dev-dependencies]
 rstest.workspace = true
