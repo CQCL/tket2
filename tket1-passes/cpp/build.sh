@@ -23,7 +23,7 @@ fi
 echo "Using toolchain file: $TOOLCHAIN_FILE"
 
 # Configure with CMake using Conan's generated files
-cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE" 
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE"
 
 # Build the shared library
 make
