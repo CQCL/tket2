@@ -19,7 +19,7 @@ serde_json.workspace = true
 tket-json-rs.workspace = true
 
 [build-dependencies]
-cc = "1.0"
+cc = "1.2"
 bindgen = "0.69"
 
 [dev-dependencies]
