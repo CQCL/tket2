@@ -9,7 +9,7 @@ use hugr::{
 use itertools::Itertools;
 use tket2::rewrite_space::CommuteCZFactory;
 use tket2::{
-    rewrite_space::{CommitFactory, ExploreOptions, RewriteSpace},
+    rewrite_space::{ExploreOptions, RewriteSpace},
     Tk2Op,
 };
 
@@ -50,13 +50,14 @@ fn dummy_test_to_save_hugr() {
 #[test]
 #[ignore = "takes 7sec in debug"]
 fn test_commute_cz() {
-    let explorer = CommuteCZFactory;
+    let factory = CommuteCZFactory;
     let mut space = RewriteSpace::with_base(dfg_hugr());
 
     let opts = ExploreOptions {
         max_rewrites: 60.into(),
+        ..Default::default()
     };
-    explorer.explore(&mut space, &opts);
+    space.explore(factory, &opts);
 
     ////////////////////////////////////////////////
     //  REMOVE below and un-pub state_space       //

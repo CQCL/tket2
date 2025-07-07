@@ -6,7 +6,6 @@
 //! Not a production explorer. Useful for testing only.
 
 use crate::{
-    op_matches,
     rewrite_space::{CommitFactory, IterMatched, PersistentHugr, Walker},
     Tk2Op,
 };
@@ -14,7 +13,6 @@ use hugr::{
     builder::{endo_sig, DFGBuilder, Dataflow, DataflowHugr},
     extension::prelude::qb_t,
     hugr::views::SiblingSubgraph,
-    ops::OpType,
     persistent::{PatchNode, PersistentWire},
     Direction, Hugr, HugrView, IncomingPort, OutgoingPort, Port, PortIndex,
 };
@@ -232,10 +230,6 @@ impl CommitFactory for CommuteCZFactory {
             }
         }
         matches.into_iter()
-    }
-
-    fn op_cost(&self, op: &OpType) -> Option<Self::Cost> {
-        op_matches(op, Tk2Op::CZ).then_some(1)
     }
 }
 

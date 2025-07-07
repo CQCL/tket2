@@ -15,7 +15,7 @@ use crate::serialize::HugrWithExts;
 mod factory;
 mod max_sat;
 
-pub use factory::{CommitFactory, ExploreOptions, IterMatched};
+pub use factory::{BoxedCommitFactory, CommitFactory, ExploreOptions, FindCommits, IterMatched};
 pub use factory::{CommuteCZ, CommuteCZFactory};
 
 /// A walker over the rewrite space.
@@ -95,9 +95,7 @@ impl<C> RewriteSpace<C> {
             pub fn base(&self) -> CommitId;
         }
     }
-}
 
-impl<C: CostDelta> RewriteSpace<C> {
     /// Add a new rewrite to the space.
     ///
     /// If the commit already existed in `self`, `None` is returned.
@@ -114,7 +112,9 @@ impl<C: CostDelta> RewriteSpace<C> {
             Ok(None)
         }
     }
+}
 
+impl<C: CostDelta> RewriteSpace<C> {
     /// Find the best sequence of rewrites to apply to the base Hugr.
     pub fn extract_best(&self) -> Option<PersistentHugr> {
         let mut opt = MaxSATSolver::new();
