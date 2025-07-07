@@ -2,6 +2,7 @@
 use crate::{
     rewrite_space::{CommitFactory, IterMatchedWires, PersistentHugr, Walker},
     Tk2Op,
+    ops::op_matches,
 };
 use hugr::persistent::{PatchNode, PersistentWire};
 use hugr::Direction;
@@ -11,7 +12,9 @@ use hugr::{
     ops::OpType,
     Hugr, HugrView, IncomingPort, OutgoingPort,
 };
+use rstest::{fixture, rstest};
 
+#[derive(Clone)]
 pub struct KAKResynthesis {
     wires: Vec<PersistentWire>,
 }
@@ -24,12 +27,17 @@ impl IterMatchedWires for KAKResynthesis {
 
 pub struct KAKFactory;
 
+#[derive(Clone)]
 struct SearchingWalker<'w> {
-    walker: Walker<'w>,                  // Initial state of walker.
-    frontier_wires: Vec<PersistentWire>, // Wires to be expanded.
-    pattern: KAKResynthesis,             // Current pattern.
-    two_qubit_node: Option<PatchNode>,   // If a 2q gate has been found along one wire,
-                                         // but not yet the other, then it is stored here.
+    // Initial state of walker.
+    walker: Walker<'w>,                  
+    // Wires to be expanded.
+    frontier_wires: Vec<PersistentWire>, 
+    // Current pattern.
+    pattern: KAKResynthesis,             
+    // If a 2q gate has been found along one wire,
+    // but not yet the other, then it is stored here.
+    two_qubit_node: Option<PatchNode>,   
 }
 
 impl CommitFactory for KAKFactory {
@@ -56,7 +64,7 @@ impl CommitFactory for KAKFactory {
         let mut searching_walker_list = Vec::new();
         // Create an initial searching walker, starting at the CZ gate discovered.
         searching_walker_list.push(SearchingWalker {
-            walker: walker,
+            walker: walker.clone(),
             frontier_wires: vec![
                 walker.get_wire(pattern_root, OutgoingPort::from(0)),
                 walker.get_wire(pattern_root, OutgoingPort::from(1)),
@@ -76,19 +84,18 @@ impl CommitFactory for KAKFactory {
 
             // Assuming now that there are wires to be searched, get
             // the input port of the wire. There should be exactly one.
-            let (frontier_node, _) = searching_walker
+            let (frontier_node, frontier_port) = searching_walker
                 .walker
-                .wire_pinned_inports(&wire_to_search)
-                .next()
+                .wire_pinned_outport(&wire_to_search)
                 .expect("error");
 
             // Expand the wire into the future
             for expanded_walker in searching_walker
-                .walker
-                .expand(&wire_to_search, Direction::Outgoing)
+                .walker//.clone()
+                .expand(&wire_to_search, Direction::Incoming)
             {
                 // Get the new expanded version of the wire to search along.
-                let expanded_wire = expanded_walker.get_wire(frontier_node, IncomingPort::from(0));
+                let expanded_wire = expanded_walker.get_wire(frontier_node, frontier_port);
 
                 // Get the node at the end of this newly expanded wire.
                 let (expanded_node, _) = expanded_walker
@@ -101,27 +108,34 @@ impl CommitFactory for KAKFactory {
                     .get_optype(expanded_node)
                     .as_extension_op()
                     .expect("Not extension op");
-                let tket2_op = Tk2Op::from_extension_op(ext_op).expect("Not TKET2 OP");
+                let Ok(tket2_op) = Tk2Op::from_extension_op(ext_op) else {
+                    searching_walker_list.push(searching_walker.clone());
+                    continue
+                };
 
                 // If it it not a quantum operation then there is no need to continue
                 // search as this is not a 2q sub circuit.
                 if !tket2_op.is_quantum() {
-                    continue;
-
+                    searching_walker_list.push(searching_walker.clone());
                 // If it is a one qubit operation then we should continue searching.
                 // We add the searching walker back to the queue, updated as required.
                 } else if n_qubits(expanded_node, expanded_walker.as_hugr_view()) == 1 {
-                    searching_walker.pattern.wires.push(expanded_wire);
-                    searching_walker
+                    let mut new_searching_walker = searching_walker.clone();
+                    new_searching_walker
+                        .pattern
+                        .wires
+                        .push(expanded_wire);
+                    new_searching_walker
                         .frontier_wires
                         .push(expanded_walker.get_wire(expanded_node, OutgoingPort::from(0)));
-                    searching_walker.walker = expanded_walker;
+                    new_searching_walker.walker = expanded_walker;
 
-                    searching_walker_list.push(searching_walker);
+                    searching_walker_list.push(new_searching_walker);
 
                 // If it is a 2q operation then the action depends on which
                 // qubits the gate acts on.
-                } else if walker.as_hugr_view().get_optype(expanded_node) == Tk2Op::CZ.into() {
+                // } else if walker.as_hugr_view().get_optype(expanded_node) == Tk2Op::CZ.into() {
+                } else if op_matches(walker.as_hugr_view().get_optype(expanded_node), Tk2Op::CZ){
                     // If a 2q gate has already been found by this searcher,
                     // then we need to check if we have found the same one again.
                     if let Some(two_qubit_node) = searching_walker.two_qubit_node {
@@ -133,18 +147,19 @@ impl CommitFactory for KAKFactory {
                         // If it is not the same then we don't need to do
                         // anything as this is not a 2q sub circuit.
                         if two_qubit_node == expanded_node {
-                            searching_walker.pattern.wires.push(expanded_wire);
+                            let mut new_searching_walker = searching_walker.clone();
+                            new_searching_walker.pattern.wires.push(expanded_wire);
 
-                            matches.push((searching_walker.pattern, searching_walker.walker));
+                            matches.push((new_searching_walker.pattern.clone(), new_searching_walker.walker.clone()));
 
-                            searching_walker.two_qubit_node = None;
-                            searching_walker.frontier_wires = vec![
+                            new_searching_walker.two_qubit_node = None;
+                            new_searching_walker.frontier_wires = vec![
                                 expanded_walker.get_wire(two_qubit_node, OutgoingPort::from(0)),
                                 expanded_walker.get_wire(two_qubit_node, OutgoingPort::from(1)),
                             ];
-                            searching_walker.walker = expanded_walker;
+                            new_searching_walker.walker = expanded_walker;
 
-                            searching_walker_list.push(searching_walker);
+                            searching_walker_list.push(new_searching_walker);
                         }
 
                     // If we have not found this 2q gate before then we need
@@ -153,7 +168,7 @@ impl CommitFactory for KAKFactory {
                     // back on the queue.
                     } else {
                         searching_walker.two_qubit_node = Some(expanded_node);
-                        searching_walker_list.push(searching_walker);
+                        searching_walker_list.push(searching_walker.clone());
                     }
                 }
             }
@@ -199,12 +214,14 @@ fn n_qubits<N: Copy>(node: N, hugr: &impl HugrView<Node = N>) -> usize {
     hugr.signature(node).unwrap().input_count()
 }
 
+#[fixture]
 fn empty_2qb_hugr() -> Hugr {
     let builder = DFGBuilder::new(endo_sig(vec![qb_t(), qb_t()])).unwrap();
     let [q0, q1] = builder.input_wires_arr();
     builder.finish_hugr_with_outputs(vec![q0, q1]).unwrap()
 }
 
+#[fixture]
 fn one_cz_2qb_hugr() -> Hugr {
     let mut builder = DFGBuilder::new(endo_sig(vec![qb_t(), qb_t()])).unwrap();
     let [q0, q1] = builder.input_wires_arr();
@@ -213,9 +230,21 @@ fn one_cz_2qb_hugr() -> Hugr {
     builder.finish_hugr_with_outputs(vec![q0, q1]).unwrap()
 }
 
-#[test]
-fn test_kak_resynthesis_init() {
-    let pers_hugr = PersistentHugr::with_base(one_cz_2qb_hugr());
+fn three_cz_hugr() -> Hugr {
+    let mut builder = DFGBuilder::new(endo_sig(vec![qb_t(); 3])).unwrap();
+    let [q0, q1, q2] = builder.input_wires_arr();
+    let cz1 = builder.add_dataflow_op(Tk2Op::CZ, vec![q0, q1]).unwrap();
+    let [q0, q1] = cz1.outputs_arr();
+    let cz2 = builder.add_dataflow_op(Tk2Op::CZ, vec![q0, q1]).unwrap();
+    let [q0, q1] = cz2.outputs_arr();
+    let cz3 = builder.add_dataflow_op(Tk2Op::CZ, vec![q0, q2]).unwrap();
+    let [q0, q2] = cz3.outputs_arr();
+    builder.finish_hugr_with_outputs(vec![q0, q1, q2]).unwrap()
+}
+
+#[rstest]
+fn test_kak_resynthesis_init(one_cz_2qb_hugr: Hugr) {
+    let pers_hugr = PersistentHugr::with_base(one_cz_2qb_hugr);
 
     for node in pers_hugr.nodes() {
         let walker = Walker::from_pinned_node(node, pers_hugr.as_state_space());
@@ -232,9 +261,9 @@ fn test_kak_resynthesis_init() {
     }
 }
 
-#[test]
-fn test_find_pattern_matches() {
-    let hugr = one_cz_2qb_hugr();
+#[rstest]
+fn test_find_pattern_matches(one_cz_2qb_hugr: Hugr) {
+    let hugr = one_cz_2qb_hugr;
 
     println!("{}", hugr.mermaid_string());
 
@@ -246,9 +275,4 @@ fn test_find_pattern_matches() {
         // walker.get_wire(node, OutgoingPort::from(0));
         factory.find_pattern_matches(node, walker);
     }
-}
-
-#[test]
-fn test_my_test() {
-    println!("hello world")
 }
