@@ -377,9 +377,9 @@ mod test {
         QSystemPass::default().run(&mut hugr).unwrap();
 
         // QSystemPass should have removed the const function
-        for n in hugr.entry_descendants() {
-            if let Some(konst) = hugr.get_optype(n).as_const() {
-                assert!(!matches!(konst.value(), Value::Function { .. }));
+        for n in hugr.descendants(hugr.module_root()) {
+            if hugr.get_optype(n).as_const().is_some() {
+                panic!("Const function is still there!");
             }
         }
     }
