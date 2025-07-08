@@ -1,7 +1,10 @@
 //! An adaptor for [`CircuitMatcher`]s that matches patterns in
 //! [`PersistentHugr`]s.
 
-use std::collections::VecDeque;
+use std::cell::RefCell;
+use std::collections::{BTreeSet, VecDeque};
+use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 
 use hugr::{
     persistent::{PatchNode, PersistentHugr, PersistentWire, PinnedSubgraph, Walker},
@@ -18,10 +21,40 @@ use crate::{
     Subcircuit,
 };
 
-use super::{CircuitMatcher, MatchOutcomeEnum};
+use super::{CircuitMatcher, MatchOutcomeEnum, MatchingOptions};
 
 mod resource_scope_cache;
-use resource_scope_cache::ResourceScopeCache;
+pub use resource_scope_cache::ResourceScopeCache;
+
+/// A walker that carries around a cache of recent [`ResourceScope`]s.
+#[derive(Clone)]
+pub struct CachedWalker<'w> {
+    pub(crate) walker: Walker<'w>,
+    pub(crate) cache: Rc<RefCell<ResourceScopeCache>>,
+}
+
+impl CachedWalker<'_> {
+    /// Get the underlying hugr view of the walker.
+    pub fn as_hugr_view(&self) -> &PersistentHugr {
+        self.walker.as_hugr_view()
+    }
+
+    /// Create a new `CachedWalker` with the same cache but a different walker.
+    pub fn with_walker<'a>(&self, new_walker: Walker<'a>) -> CachedWalker<'a> {
+        CachedWalker {
+            walker: new_walker,
+            cache: self.cache.clone(),
+        }
+    }
+}
+
+impl hugr::hugr::views::NodesIter for CachedWalker<'_> {
+    type Node = PatchNode;
+
+    fn nodes(&self) -> impl Iterator<Item = PatchNode> {
+        hugr::hugr::views::NodesIter::nodes(&self.walker)
+    }
+}
 
 /// An adaptor for [`CircuitMatcher`]s that matches patterns in
 /// [`RewriteSpace`]s.
@@ -94,6 +127,33 @@ impl<'a, PartialMatchInfo> MatchState<'a, PartialMatchInfo> {
 
         true
     }
+
+    /// Compute a hash of the state, invariant under reordering of the lines in
+    /// the subcircuit, matched wires, the active ports and the set of selected
+    /// commits in the walker.
+    fn fx_hash(
+        &self,
+        partial_match_hash: impl FnOnce(&PartialMatchInfo, &mut fxhash::FxHasher),
+    ) -> u64 {
+        let mut hasher = fxhash::FxHasher::default();
+        let mut intervals = self.subcircuit.intervals_iter().collect_vec();
+        let mut active_ports: Vec<_> = self.active_ports.clone().into();
+        let mut matched_wires = self.matched_wires.clone();
+        let mut selected_ids = self.walker.as_hugr_view().all_commit_ids().collect_vec();
+
+        intervals.sort_unstable_by_key(|l| l.resource_id());
+        active_ports.sort_unstable_by_key(|&(n, p)| (n, p));
+        matched_wires.sort_unstable();
+        selected_ids.sort_unstable();
+
+        intervals.hash(&mut hasher);
+        active_ports.hash(&mut hasher);
+        matched_wires.hash(&mut hasher);
+        selected_ids.hash(&mut hasher);
+        partial_match_hash(&self.match_info, &mut hasher);
+
+        hasher.finish()
+    }
 }
 
 pub struct ImMatchResult<MatchInfo> {
@@ -105,26 +165,101 @@ pub struct ImMatchResult<MatchInfo> {
 
 impl<'m, M: CircuitMatcher + ?Sized> ImMatchAdapter<'m, M> {
     /// Get all matching subcircuits within the [`RewriteSpace`].
-    pub fn get_all_matches<C>(&self, space: &RewriteSpace<C>) -> Vec<ImMatchResult<M::MatchInfo>> {
-        <RewriteSpace<C> as hugr::hugr::views::NodesIter>::nodes(space)
-            .flat_map(|n| {
-                let walker = Walker::from_pinned_node(n, space.state_space());
-                self.get_matches(walker, n)
-            })
-            .collect()
+    pub fn get_all_matches<C>(
+        &self,
+        space: &RewriteSpace<C>,
+        options: &MatchingOptions<M::PartialMatchInfo, M::MatchInfo>,
+    ) -> Vec<ImMatchResult<M::MatchInfo>> {
+        if options.only_maximal_matches {
+            eprintln!("ignoring unusupported option `only_maximal_matches`");
+        }
+
+        // hashes of complete matches, only used if deduplication is enabled
+        let mut dedup_complete_matches = options
+            .deduplicate_complete_matches
+            .as_ref()
+            .map(|_| BTreeSet::<u64>::new());
+
+        // hashes of visited states, only used if deduplication is enabled
+        let mut dedup_partial_matches = options
+            .deduplicate_partial_matches
+            .as_ref()
+            .map(|_| BTreeSet::<u64>::new());
+
+        let mut cache = ResourceScopeCache::new();
+        let all_matches: Vec<ImMatchResult<M::MatchInfo>> =
+            <RewriteSpace<C> as hugr::hugr::views::NodesIter>::nodes(space)
+                .flat_map(|n| {
+                    let walker = Walker::from_pinned_node(n, space.state_space());
+                    self.get_matches_with_dedup_maps(
+                        walker,
+                        n,
+                        options,
+                        &mut cache,
+                        &mut dedup_complete_matches,
+                        &mut dedup_partial_matches,
+                    )
+                })
+                .collect();
+
+        // Note: only_maximal_matches not implemented for ImMatchResult yet
+        // if options.only_maximal_matches {
+        //     remove_non_maximal_matches(&mut all_matches);
+        // }
+
+        all_matches
     }
 
     /// Get all matching subcircuits within the [`RewriteSpace`] with one of
     /// the given `root_nodes` as their root.
     pub fn get_matches(
         &self,
+        cached_walker: &CachedWalker,
+        root_node: PatchNode,
+        options: &MatchingOptions<M::PartialMatchInfo, M::MatchInfo>,
+    ) -> Vec<ImMatchResult<M::MatchInfo>> {
+        let walker = cached_walker.walker.clone();
+
+        if options.only_maximal_matches {
+            eprintln!("ignoring unusupported option `only_maximal_matches`");
+        }
+
+        // hashes of complete matches, only used if deduplication is enabled
+        let mut dedup_complete_matches = options
+            .deduplicate_complete_matches
+            .as_ref()
+            .map(|_| BTreeSet::<u64>::new());
+
+        // hashes of visited states, only used if deduplication is enabled
+        let mut dedup_partial_matches = options
+            .deduplicate_partial_matches
+            .as_ref()
+            .map(|_| BTreeSet::<u64>::new());
+
+        let all_matches = self.get_matches_with_dedup_maps(
+            walker,
+            root_node,
+            options,
+            &mut *cached_walker.cache.borrow_mut(),
+            &mut dedup_complete_matches,
+            &mut dedup_partial_matches,
+        );
+
+        all_matches
+    }
+
+    fn get_matches_with_dedup_maps(
+        &self,
         walker: Walker,
         root_node: PatchNode,
+        options: &MatchingOptions<M::PartialMatchInfo, M::MatchInfo>,
+        cache: &mut ResourceScopeCache,
+        dedup_complete_matches: &mut Option<BTreeSet<u64>>,
+        dedup_partial_matches: &mut Option<BTreeSet<u64>>,
     ) -> Vec<ImMatchResult<M::MatchInfo>> {
         let mut queue = VecDeque::new();
         let mut all_matches = Vec::new();
 
-        let mut cache = ResourceScopeCache::new();
         let scope = cache.init(&walker);
 
         // 1. Initialise queue
@@ -140,12 +275,23 @@ impl<'m, M: CircuitMatcher + ?Sized> ImMatchAdapter<'m, M> {
             };
 
             if let Some(complete) = outcome.complete {
-                all_matches.push(ImMatchResult {
+                let match_result = ImMatchResult {
                     subcircuit: Subcircuit::from_node(root_node, &scope),
                     subgraph: PinnedSubgraph::try_from_pinned([root_node], [], &walker).unwrap(),
                     hugr: scope.clone(),
                     match_info: complete,
-                });
+                };
+
+                // Check for deduplication of complete matches
+                if let Some(dedup_fn) = options.deduplicate_complete_matches.as_ref() {
+                    let hash = fx_hash_match_result(&match_result, dedup_fn);
+                    let complete_matches = dedup_complete_matches.as_mut().expect("enabled");
+                    if complete_matches.insert(hash) {
+                        all_matches.push(match_result);
+                    }
+                } else {
+                    all_matches.push(match_result);
+                }
             }
             if let Some(proceed) = outcome.proceed {
                 queue.push_back(MatchState {
@@ -162,16 +308,19 @@ impl<'m, M: CircuitMatcher + ?Sized> ImMatchAdapter<'m, M> {
 
         // 2. Find all matches
         while let Some(mut current_match) = queue.pop_front() {
+            if let Some(partial_match_hash) = options.deduplicate_partial_matches.as_ref() {
+                let hash = current_match.fx_hash(partial_match_hash);
+                let visited_states = dedup_partial_matches.as_mut().expect("enabled");
+                if !visited_states.insert(hash) {
+                    continue;
+                }
+            }
+
             let Some((node, port)) = current_match.active_ports.pop_front() else {
                 continue;
             };
 
             let wire = current_match.walker.get_wire(node, port);
-            if current_match.walker.is_complete(&wire, None) {
-                // nothing to do, can proceed without this wire
-                queue.push_back(current_match);
-                continue;
-            }
 
             for new_walker in current_match.walker.expand(&wire, None) {
                 let new_wire = new_walker.get_wire(node, port);
@@ -222,12 +371,25 @@ impl<'m, M: CircuitMatcher + ?Sized> ImMatchAdapter<'m, M> {
                                     continue;
                                 }
                             };
-                            all_matches.push(ImMatchResult {
+
+                            let match_result = ImMatchResult {
                                 subcircuit: new_match.subcircuit,
                                 subgraph,
                                 hugr: scope.clone(),
                                 match_info: complete,
-                            });
+                            };
+
+                            // Check for deduplication of complete matches
+                            if let Some(dedup_fn) = options.deduplicate_complete_matches.as_ref() {
+                                let hash = fx_hash_match_result(&match_result, dedup_fn);
+                                let complete_matches =
+                                    dedup_complete_matches.as_mut().expect("enabled");
+                                if complete_matches.insert(hash) {
+                                    all_matches.push(match_result);
+                                }
+                            } else {
+                                all_matches.push(match_result);
+                            }
                         }
                         MatchOutcomeEnum::Proceed(proceed) => {
                             let mut new_match = current_match.clone();
@@ -251,6 +413,21 @@ impl<'m, M: CircuitMatcher + ?Sized> ImMatchAdapter<'m, M> {
 
         all_matches
     }
+}
+
+fn fx_hash_match_result<I>(
+    match_result: &ImMatchResult<I>,
+    deduplicate_complete_matches: impl FnOnce(&I, &mut fxhash::FxHasher),
+) -> u64 {
+    let mut intervals = match_result.subcircuit.intervals_iter().collect_vec();
+    intervals.sort_unstable_by_key(|l| l.resource_id());
+
+    let mut hasher = fxhash::FxHasher::default();
+
+    intervals.hash(&mut hasher);
+    deduplicate_complete_matches(&match_result.match_info, &mut hasher);
+
+    hasher.finish()
 }
 
 fn match_node<M: CircuitMatcher + ?Sized, H: HugrView<Node = PatchNode>>(
@@ -353,10 +530,10 @@ mod tests {
         .unwrap();
 
         let rw1 = rewrite_space
-            .try_add_rewrite(rw1, 1, &circuit.as_ref())
+            .try_add_rewrite(rw1, 1.into(), &circuit.as_ref())
             .unwrap();
         let rw2 = rewrite_space
-            .try_add_rewrite(rw2, 1, &circuit.as_ref())
+            .try_add_rewrite(rw2, 1.into(), &circuit.as_ref())
             .unwrap();
 
         (
@@ -374,7 +551,7 @@ mod tests {
 
         let matcher = TestHadamardMatcher.as_rewrite_space_matcher();
         let found_match = matcher
-            .get_all_matches(&rewrite_space)
+            .get_all_matches(&rewrite_space, &MatchingOptions::default())
             .into_iter()
             .map(|ImMatchResult { subgraph, .. }| subgraph)
             .unique()

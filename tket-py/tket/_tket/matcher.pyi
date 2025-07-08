@@ -14,6 +14,7 @@ class MatchReplaceRewriter:
         self,
         matcher: CircuitMatcher,
         replacement: CircuitReplacer,
+        name: str | None = None,
     ) -> None:
         """
         Create a new rewriter.

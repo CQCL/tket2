@@ -11,6 +11,7 @@ members = [
     "tket-qsystem",
     "tket1-passes",
     "qis-compiler",
+    "hit",
 ]
 default-members = ["tket", "tket-qsystem"]
 

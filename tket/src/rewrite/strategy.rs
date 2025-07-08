@@ -487,6 +487,14 @@ impl<C: Fn(&OpType) -> usize> StrategyCost for GammaStrategyCost<C> {
     }
 }
 
+impl<C: Fn(&OpType) -> usize> StrategyCost for C {
+    type OpCost = usize;
+
+    fn op_cost(&self, op: &OpType) -> Self::OpCost {
+        (self)(op)
+    }
+}
+
 impl<C> GammaStrategyCost<C> {
     /// New exhaustive rewrite strategy with provided predicate.
     ///

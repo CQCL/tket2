@@ -6,7 +6,10 @@ use derive_more::derive::Error;
 use derive_more::derive::From;
 use derive_more::derive::Into;
 use hugr::hugr::views::NodesIter;
+use hugr::ops::OpTag;
+use hugr::ops::OpTrait;
 use hugr::persistent as hugr_im;
+use hugr::HugrView;
 use itertools::Itertools;
 use slotmap_fork_lmondada as slotmap;
 
@@ -23,6 +26,8 @@ use max_sat::MaxSATSolver;
 
 // mod factory;
 mod max_sat;
+mod serial;
+pub use serial::SerialRewriteSpace;
 
 /// A rewrite in a [`RewriteSpace`].
 #[derive(Debug, Clone, From, Into)]
@@ -34,21 +39,34 @@ pub struct RewriteSpace<C> {
     /// The state space of all possible rewrites.
     state_space: hugr_im::CommitStateSpace,
     /// The metadata for each commit in the state space.
-    metadata: RefCell<slotmap::SecondaryMap<hugr_im::CommitId, CommitMetadata<C>>>,
+    metadata: RefCell<slotmap::SecondaryMap<hugr_im::CommitId, RewriteMetadata<C>>>,
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
-struct CommitMetadata<C> {
-    cost: C,
-    timestamp: DateTime<Utc>,
+/// Metadata for a commit in a [`RewriteSpace`].
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
+pub struct RewriteMetadata<C> {
+    /// The cost of the rewrite
+    pub cost: C,
+    /// The creation time of the rewrite
+    pub timestamp: DateTime<Utc>,
+    /// The name describing the rewrite
+    pub name: Option<String>,
 }
 
-impl<C> CommitMetadata<C> {
+impl<C> From<C> for RewriteMetadata<C> {
+    fn from(value: C) -> Self {
+        Self::with_current_time(value)
+    }
+}
+
+impl<C> RewriteMetadata<C> {
     /// Create new rewrite metadata with the given cost and current timestamp
-    fn with_current_time(rewrite_cost: C) -> Self {
+    pub fn with_current_time(rewrite_cost: C) -> Self {
         Self {
             cost: rewrite_cost,
             timestamp: Utc::now(),
+            name: None,
         }
     }
 }
@@ -89,7 +107,7 @@ impl<C> RewriteSpace<C> {
         let cm = self.state_space.try_set_base(hugr)?;
         self.metadata
             .borrow_mut()
-            .insert(cm.id(), CommitMetadata::with_current_time(cost));
+            .insert(cm.id(), RewriteMetadata::with_current_time(cost));
         Some(cm.into())
     }
 
@@ -100,7 +118,7 @@ impl<C> RewriteSpace<C> {
     pub fn try_add_rewrite(
         &self,
         rewrite: CircuitRewrite<hugr_im::PatchNode>,
-        cost: C,
+        metadata: RewriteMetadata<C>,
         circuit: &ResourceScope<&hugr_im::PersistentHugr>,
     ) -> Result<CommittedRewrite<'_>, InvalidCommit> {
         if circuit.hugr().state_space() != &self.state_space {
@@ -108,9 +126,7 @@ impl<C> RewriteSpace<C> {
         }
         let rewrite = rewrite.to_simple_replacement(circuit);
         let commit = hugr_im::Commit::try_from_replacement(rewrite, &self.state_space)?;
-        self.metadata
-            .borrow_mut()
-            .insert(commit.id(), CommitMetadata::with_current_time(cost));
+        self.metadata.borrow_mut().insert(commit.id(), metadata);
         Ok(CommittedRewrite(commit))
     }
 
@@ -118,11 +134,9 @@ impl<C> RewriteSpace<C> {
     pub fn add_from_commit<'a>(
         &self,
         commit: hugr_im::Commit<'a>,
-        cost: C,
+        metadata: RewriteMetadata<C>,
     ) -> CommittedRewrite<'a> {
-        self.metadata
-            .borrow_mut()
-            .insert(commit.id(), CommitMetadata::with_current_time(cost));
+        self.metadata.borrow_mut().insert(commit.id(), metadata);
         CommittedRewrite(commit)
     }
 
@@ -137,6 +151,14 @@ impl<C> RewriteSpace<C> {
     /// Get the timestamp of a rewrite.
     pub fn get_timestamp(&self, commit_id: hugr_im::CommitId) -> Option<DateTime<Utc>> {
         self.metadata.borrow().get(commit_id).map(|m| m.timestamp)
+    }
+
+    /// Get the name of a rewrite
+    pub fn get_name(&self, commit_id: hugr_im::CommitId) -> Option<String> {
+        self.metadata
+            .borrow()
+            .get(commit_id)
+            .and_then(|m| m.name.clone())
     }
 
     /// Get the state space of the [`RewriteSpace`].
@@ -231,6 +253,13 @@ impl<C> RewriteSpace<C> {
 
         while let Some((node, walker, depth)) = new_walker_queue.pop_front() {
             if !seen.insert(node) {
+                continue;
+            }
+
+            if [OpTag::Input, OpTag::Output].contains(&walker.as_hugr_view().get_optype(node).tag())
+            {
+                // We do not traverse IO nodes (they are typically connected to
+                // loads of stuff and no currently allowed rewrite may replace them)
                 continue;
             }
 

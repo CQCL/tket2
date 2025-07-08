@@ -87,6 +87,74 @@ impl<const N: usize> serde::Serialize for LexicographicCost<isize, N> {
     }
 }
 
+impl<'de, const N: usize> serde::Deserialize<'de> for LexicographicCost<isize, N> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let mut s = String::deserialize(deserializer)?;
+        s = s.trim().to_string();
+        s = s.strip_prefix('[').unwrap_or(&s).to_string();
+        s = s.strip_suffix(']').unwrap_or(&s).to_string();
+
+        let values: Vec<isize> = s
+            .split(',')
+            .map(|x| x.trim().parse().map_err(serde::de::Error::custom))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if values.len() != N {
+            return Err(serde::de::Error::custom(format!(
+                "Expected {} values, got {}",
+                N,
+                values.len()
+            )));
+        }
+
+        let mut cost_array = [0isize; N];
+        for (i, &value) in values.iter().enumerate() {
+            cost_array[i] = value;
+        }
+
+        let cost = LexicographicCost(cost_array);
+
+        Ok(cost)
+    }
+}
+
+impl<'de, const N: usize> serde::Deserialize<'de> for LexicographicCost<usize, N> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let mut s = String::deserialize(deserializer)?;
+        s = s.trim().to_string();
+        s = s.strip_prefix('[').unwrap_or(&s).to_string();
+        s = s.strip_suffix(']').unwrap_or(&s).to_string();
+
+        let values: Vec<usize> = s
+            .split(',')
+            .map(|x| x.trim().parse().map_err(serde::de::Error::custom))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if values.len() != N {
+            return Err(serde::de::Error::custom(format!(
+                "Expected {} values, got {}",
+                N,
+                values.len()
+            )));
+        }
+
+        let mut cost_array = [0usize; N];
+        for (i, &value) in values.iter().enumerate() {
+            cost_array[i] = value;
+        }
+
+        let cost = LexicographicCost(cost_array);
+
+        Ok(cost)
+    }
+}
+
 impl<T: Debug, const N: usize> Debug for LexicographicCost<T, N> {
     // TODO: A nicer print for the logs
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
