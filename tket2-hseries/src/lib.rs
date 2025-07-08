@@ -120,6 +120,8 @@ impl QSystemPass {
         self.linearize_arrays().run(hugr)?;
         #[cfg(feature = "llvm")]
         {
+            // TODO: Remove "llvm" feature gate once `inline_constant_functions` is moved to
+            //  `hugr-passes`. See https://github.com/CQCL/hugr/issues/2419
             inline_constant_functions(hugr)?;
         }
         if self.constant_fold {
