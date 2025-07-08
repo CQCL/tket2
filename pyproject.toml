@@ -12,6 +12,7 @@ dev-dependencies = [
     "hypothesis >=6.111.1,<7",
     "graphviz >=0.20,<0.21",
     "pre-commit >=3.8.0,<4",
+    "conan >= 2.0.0,<3",
     # Required to run `maturin develop`
     "pip >=24",
 ]
@@ -35,6 +36,7 @@ exclude = '''(?x)(
     ^target/        # Build artifacts
     | ^notebooks/   # Examples
     | ^test_files/  # Test files
+    | ^tket1-passes/tket-c-api/ # Do not check conan files
 )'''
 
 # TODO: Fix the lint errors and enable this

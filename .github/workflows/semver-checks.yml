@@ -43,19 +43,22 @@ jobs:
     needs: [changes]
     if: ${{ needs.changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
+    env:
+      TKET_C_API_PATH: ${{ github.workspace }}/tket-c-api
+      LD_LIBRARY_PATH: ${{ github.workspace }}/tket-c-api/lib
     steps:
       - name: Checkout tket2
         uses: actions/checkout@v4
-      - name: Retrieve tket1-passes library
-        uses: ./.github/actions/tket1-passes
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
         with:
-          lib-path: ${{ github.workspace }}/tket1-lib
+          install-path: ${{ env.TKET_C_API_PATH }}
       - name: Install LLVM from apt
         run: |
           echo "Installing apt dependencies: llvm-14"
           sudo apt-get install -y llvm-14
       - uses: CQCL/hugrverse-actions/rs-semver-checks@main
         env:
-          TKET_LIB_PATH: ${{ github.workspace }}/tket1-lib
+          TKET_C_API_PATH: ${{ env.TKET_C_API_PATH }}
         with:
           token: ${{ secrets.HUGRBOT_PAT }}

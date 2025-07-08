@@ -1,5 +1,5 @@
 extern "C" {
-#include "tket1-passes.h"
+#include "tket-c-api.h"
 }
 
 #include <cstring>
