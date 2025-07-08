@@ -4,9 +4,14 @@ help:
 
 # Prepare the environment for development, installing all the dependencies and
 # setting up the pre-commit hooks.
-setup:
+setup: setup-tket-c-api
     uv sync
     [[ -n "${TKET2_JUST_INHIBIT_GIT_HOOKS:-}" ]] || uv run pre-commit install -t pre-commit
+
+# Configure the conan cache for tket-c-api.
+setup-tket-c-api:
+    uv run conan remote add -f tket-libs https://quantinuumsw.jfrog.io/artifactory/api/conan/tket1-libs --index 0
+    cd tket1-passes/tket-c-api && uv run conan create . --build=missing
 
 # Run the pre-commit checks.
 check:
