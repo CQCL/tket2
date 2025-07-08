@@ -84,25 +84,14 @@ impl CommitFactory for KAKFactory {
 
             dbg!("frontier wires", searching_walker.frontier_wires.clone());
 
-            // If there are no wires to be searched then the match gets pushed
-            // to the list of matches.
+            // If there are no wires to be searched then we cannot find any
+            // more subcircuits and we end here.
             let Some(wire_to_search) = searching_walker.frontier_wires.pop() else {
-                dbg!("Finished");
-                // matches.push((searching_walker.pattern, searching_walker.walker));
+                dbg!("Finished, no wires to search");
                 continue;
             };
 
             dbg!("wire_to_search", wire_to_search.clone());
-
-            // Assuming now that there are wires to be searched, get
-            // the input port of the wire. There should be exactly one.
-            let (frontier_node, frontier_port) = searching_walker
-                .walker
-                .wire_pinned_outport(&wire_to_search)
-                .expect("error");
-
-            dbg!("frontier node", frontier_node);
-            dbg!("frontier port", frontier_port);
 
             // Expand the wire into the future
             for expanded_walker in searching_walker
@@ -110,9 +99,8 @@ impl CommitFactory for KAKFactory {
                 .expand(&wire_to_search, Direction::Incoming)
             {
                 // Get the new expanded version of the wire to search along.
-                let expanded_wire = expanded_walker.get_wire(frontier_node, frontier_port);
+                let expanded_wire = wire_to_search.clone();
 
-                dbg!("expanded_wire", expanded_wire.clone());
 
                 // Get the node at the end of this newly expanded wire.
                 let (expanded_node, _) = expanded_walker
@@ -130,7 +118,6 @@ impl CommitFactory for KAKFactory {
                     searching_walker_list.push(searching_walker.clone());
                     continue
                 };
-                    // .expect("Not extension op");
                 
                 let Ok(tket2_op) = Tk2Op::from_extension_op(ext_op) else {
                     searching_walker_list.push(searching_walker.clone());
@@ -269,6 +256,8 @@ fn three_cz_hugr() -> Hugr {
     let [q0, q1, q2] = builder.input_wires_arr();
     let cz1 = builder.add_dataflow_op(Tk2Op::CZ, vec![q0, q1]).unwrap();
     let [q0, q1] = cz1.outputs_arr();
+    let x0 = builder.add_dataflow_op(Tk2Op::X, vec![q0]).unwrap();
+    let [q0] = x0.outputs_arr();
     let cz2 = builder.add_dataflow_op(Tk2Op::CZ, vec![q0, q1]).unwrap();
     let [q0, q1] = cz2.outputs_arr();
     let cz3 = builder.add_dataflow_op(Tk2Op::CZ, vec![q0, q2]).unwrap();
