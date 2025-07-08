@@ -10,6 +10,7 @@ members = [
     "badger-optimiser",
     "tket-qsystem",
     "tket1-passes",
+    "hit",
 ]
 default-members = ["tket", "tket-qsystem"]
 
