@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2](https://github.com/CQCL/tket2/compare/tket2-exts-v0.9.1...tket2-exts-v0.9.2) (2025-07-08)
+
+
+### Features
+
+* add qsystem op for measure leaked ([#924](https://github.com/CQCL/tket2/issues/924)) ([38d1c6f](https://github.com/CQCL/tket2/commit/38d1c6f51131b414e1000e5f63a66aae32a36f28))
+
 ## [0.9.1](https://github.com/CQCL/tket2/compare/tket2-exts-v0.8.0...tket2-exts-v0.9.1) (2025-06-19)
 
 
