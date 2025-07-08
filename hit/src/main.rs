@@ -1,0 +1,85 @@
+//! Hit: CLI tool for exploring rewrite spaces.
+
+mod commands;
+mod config;
+mod constants;
+mod display;
+mod storage;
+
+use anyhow::Result;
+use clap::{Parser, Subcommand};
+use std::path::PathBuf;
+
+use commands::{
+    CheckoutCommand, ChildrenCommand, Command, CommandExecutor, ExtractBestCommand, LoadCommand,
+    LogCommand, ParentsCommand, ShowCommand,
+};
+
+use crate::commands::show::ShowFormat;
+
+#[derive(Parser)]
+#[command(name = "hit")]
+#[command(about = "A CLI tool for constructing and exploring RewriteSpaces using commit factories")]
+struct Cli {
+    #[command(subcommand)]
+    command: CliCommands,
+}
+
+#[derive(Subcommand)]
+enum CliCommands {
+    /// Load a rewrite space from timestamp file
+    Load {
+        /// File to load
+        filepath: PathBuf,
+    },
+    /// Select commits for extraction
+    Checkout {
+        /// Commit IDs (can be abbreviated)
+        commits: Vec<String>,
+    },
+    /// Show selected commits and their ancestors
+    Log {
+        /// Show all commits instead of just selected ones and ancestors
+        #[arg(long)]
+        all: bool,
+    },
+    /// Show the current HUGR as a mermaid diagram
+    Show {
+        #[arg(short, long, default_value_t, value_enum)]
+        format: ShowFormat,
+    },
+    /// Extract the best rewrite sequence and select those commits
+    ExtractBest,
+    /// Show parent commits of a commit
+    Parents {
+        /// Commit ID (can be abbreviated)
+        commit_id: String,
+    },
+    /// Show child commits of a commit
+    Children {
+        /// Commit ID (can be abbreviated)
+        commit_id: String,
+    },
+}
+
+impl From<CliCommands> for Command {
+    fn from(cmd: CliCommands) -> Self {
+        match cmd {
+            CliCommands::Load { filepath } => Command::Load(LoadCommand { filepath }),
+            CliCommands::Checkout { commits } => Command::Checkout(CheckoutCommand { commits }),
+            CliCommands::Log { all } => Command::Log(LogCommand { all }),
+            CliCommands::Show { format } => Command::Show(ShowCommand { format }),
+            CliCommands::ExtractBest => Command::ExtractBest(ExtractBestCommand),
+            CliCommands::Parents { commit_id } => Command::Parents(ParentsCommand { commit_id }),
+            CliCommands::Children { commit_id } => Command::Children(ChildrenCommand { commit_id }),
+        }
+    }
+}
+
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    // Convert CLI command to our command enum and execute
+    let action: Command = cli.command.into();
+    action.execute()
+}

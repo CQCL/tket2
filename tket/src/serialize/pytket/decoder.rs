@@ -39,7 +39,8 @@ use crate::TketOp;
 
 /// State of the tket circuit being decoded.
 ///
-/// The state of an in-progress [`FunctionBuilder`] being built from a [`SerialCircuit`].
+/// The state of an in-progress [`FunctionBuilder`] being built from a
+/// [`SerialCircuit`].
 #[derive(Debug)]
 pub struct PytketDecoderContext<'h> {
     /// The Hugr being built.
@@ -48,8 +49,8 @@ pub struct PytketDecoderContext<'h> {
     pub(super) wire_tracker: WireTracker,
     /// Configuration for decoding commands.
     ///
-    /// Contains custom operation decoders, that define translation of legacy tket
-    /// commands into HUGR operations.
+    /// Contains custom operation decoders, that define translation of legacy
+    /// tket commands into HUGR operations.
     config: Arc<PytketDecoderConfig>,
 }
 
@@ -355,7 +356,8 @@ impl<'h> PytketDecoderContext<'h> {
     ) -> Result<(), PytketDecodeError> {
         let circuit_json::Command { op, args, opgroup } = command;
 
-        // Find the latest [`TrackedQubit`] and [`TrackedBit`] for the command registers.
+        // Find the latest [`TrackedQubit`] and [`TrackedBit`] for the command
+        // registers.
         let (qubits, bits) = self.wire_tracker.pytket_args_to_tracked_elems(args)?;
 
         // Collect the parameters used in the command.
@@ -385,7 +387,8 @@ impl<'h> PytketDecoderContext<'h> {
     }
 }
 
-/// Public API, used by the [`PytketDecoder`][super::extension::PytketDecoder] implementers.
+/// Public API, used by the [`PytketDecoder`][super::extension::PytketDecoder]
+/// implementers.
 impl<'h> PytketDecoderContext<'h> {
     /// Returns a new set of [TrackedWires] for a list of [`TrackedQubit`]s,
     /// [`TrackedBit`]s, and [`LoadedParameter`]s following the required types.
@@ -398,7 +401,8 @@ impl<'h> PytketDecoderContext<'h> {
     ///
     /// # Arguments
     ///
-    /// * `config` - The configuration for the decoder, used to count the qubits and bits required by each type.
+    /// * `config` - The configuration for the decoder, used to count the qubits
+    ///   and bits required by each type.
     /// * `hugr` - The hugr to load the parameters to.
     /// * `types` - The types of the arguments we require in the wires.
     /// * `qubit_args` - The list of tracked qubits we require in the wires.
@@ -721,7 +725,9 @@ pub enum DecodeStatus {
     Unsupported,
 }
 
-/// Helper to continue exhausting the iterators in [`PytketDecoderContext::register_node_outputs`] until we have the total number of elements to report.
+/// Helper to continue exhausting the iterators in
+/// [`PytketDecoderContext::register_node_outputs`] until we have the total
+/// number of elements to report.
 fn make_unexpected_node_out_error<'ty>(
     config: &PytketDecoderConfig,
     port_types: impl IntoIterator<Item = (OutgoingPort, &'ty Type)>,

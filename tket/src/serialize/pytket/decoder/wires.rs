@@ -1,5 +1,6 @@
-//! Structures to keep track of pytket [`ElementId`][tket_json_rs::register::ElementId]s and
-//! their correspondence to wires in the hugr being defined.
+//! Structures to keep track of pytket
+//! [`ElementId`][tket_json_rs::register::ElementId]s and their correspondence
+//! to wires in the hugr being defined.
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 
@@ -215,7 +216,8 @@ impl TrackedWires {
             .expect("check_len should have failed"))
     }
 
-    /// Returns the amount of qubits, bits, and parameters carried by this tracked wires.
+    /// Returns the amount of qubits, bits, and parameters carried by this
+    /// tracked wires.
     #[inline]
     #[must_use]
     pub fn register_count(&self) -> RegisterCount {
@@ -227,7 +229,8 @@ impl TrackedWires {
         counts
     }
 
-    /// Checks that we have the expected number of wires, and returns an error otherwise.
+    /// Checks that we have the expected number of wires, and returns an error
+    /// otherwise.
     ///
     /// # Arguments
     ///
@@ -254,13 +257,15 @@ impl TrackedWires {
         }
     }
 
-    /// Checks that we have the expected wire types, and returns an error otherwise.
+    /// Checks that we have the expected wire types, and returns an error
+    /// otherwise.
     ///
     /// # Arguments
     ///
     /// * `expected_values` - The expected types of the value wires.
-    /// * `expected_params` - The expected number of parameters. Note that these may be either `float` or `rotation`-typed.
-    ///   Use [`LoadedParameter::with_type`] to cast them as needed.
+    /// * `expected_params` - The expected number of parameters. Note that these
+    ///   may be either `float` or `rotation`-typed. Use
+    ///   [`LoadedParameter::with_type`] to cast them as needed.
     pub fn check_types(
         &self,
         expected_values: &[Type],
@@ -313,11 +318,13 @@ pub(crate) struct WireTracker {
     ///
     /// Indexed by [`TrackedBitId`].
     bits: Vec<TrackedBit>,
-    /// A map from pytket register hashes to the latest up-to-date [`TrackedQubit`] referencing it.
+    /// A map from pytket register hashes to the latest up-to-date
+    /// [`TrackedQubit`] referencing it.
     ///
     /// The map keys are kept in the order they were defined in the circuit.
     latest_qubit_tracker: IndexMap<RegisterHash, TrackedQubitId>,
-    /// A map from pytket register hashes to the latest up-to-date [`TrackedBit`] referencing it.
+    /// A map from pytket register hashes to the latest up-to-date
+    /// [`TrackedBit`] referencing it.
     ///
     /// The map keys are kept in the order they were defined in the circuit.
     latest_bit_tracker: IndexMap<RegisterHash, TrackedBitId>,
@@ -425,7 +432,8 @@ impl WireTracker {
         })
     }
 
-    /// Returns the list of known pytket bit registers, in the order they were registered.
+    /// Returns the list of known pytket bit registers, in the order they were
+    /// registered.
     pub(super) fn known_pytket_bits(&self) -> impl Iterator<Item = &TrackedBit> {
         self.latest_bit_tracker
             .iter()
@@ -480,18 +488,22 @@ impl WireTracker {
         Ok(self.get_bit(id))
     }
 
-    /// Mark a qubit as outdated, without adding a new wire containing the fresh value.
+    /// Mark a qubit as outdated, without adding a new wire containing the fresh
+    /// value.
     ///
-    /// This is used when a hugr operation consumes pytket registers as its inputs, but doesn't use them in the outputs.
+    /// This is used when a hugr operation consumes pytket registers as its
+    /// inputs, but doesn't use them in the outputs.
     pub fn mark_qubit_outdated(&mut self, mut qubit: TrackedQubit) -> TrackedQubit {
         self.qubits[qubit.id().0].mark_outdated();
         qubit.mark_outdated();
         qubit
     }
 
-    /// Mark a bit as outdated, without adding a new wire containing the fresh value.
+    /// Mark a bit as outdated, without adding a new wire containing the fresh
+    /// value.
     ///
-    /// This is used when a hugr operation consumes pytket registers as its inputs, but doesn't use them in the outputs.
+    /// This is used when a hugr operation consumes pytket registers as its
+    /// inputs, but doesn't use them in the outputs.
     pub fn mark_bit_outdated(&mut self, mut bit: TrackedBit) -> TrackedBit {
         self.bits[bit.id().0].mark_outdated();
         bit.mark_outdated();
@@ -502,7 +514,8 @@ impl WireTracker {
     ///
     /// Returns an error if the register is not known.
     ///
-    /// The returned element is guaranteed to be up to date (See [`TrackedQubit::is_outdated`]).
+    /// The returned element is guaranteed to be up to date (See
+    /// [`TrackedQubit::is_outdated`]).
     pub fn tracked_qubit_for_register(
         &self,
         register: &PytketRegister,
@@ -518,7 +531,8 @@ impl WireTracker {
     ///
     /// Returns an error if the register is not known.
     ///
-    /// The returned element is guaranteed to be up to date (See [`TrackedBit::is_outdated`]).
+    /// The returned element is guaranteed to be up to date (See
+    /// [`TrackedBit::is_outdated`]).
     pub fn tracked_bit_for_register(
         &self,
         register: &PytketRegister,
@@ -572,7 +586,8 @@ impl WireTracker {
     ///
     /// # Arguments
     ///
-    /// * `config` - The configuration for the decoder, used to count the qubits and bits required by each type.
+    /// * `config` - The configuration for the decoder, used to count the qubits
+    ///   and bits required by each type.
     /// * `hugr` - The hugr to load the parameters to.
     /// * `types` - The types of the arguments we require in the wires.
     /// * `qubit_args` - The list of tracked qubits we require in the wires.
@@ -758,7 +773,8 @@ impl WireTracker {
                             LoadedParameter::rotation(wire)
                         }
                         _ => {
-                            // Look it up in the input parameters to the circuit, and add a new float input if needed.
+                            // Look it up in the input parameters to the circuit, and add a new
+                            // float input if needed.
                             *input_params.entry(name.to_string()).or_insert_with(|| {
                                 param_vars.insert(name.to_string());
                                 match unused_param_inputs.pop_front() {
@@ -791,7 +807,8 @@ impl WireTracker {
                             param.with_type(param_ty, hugr).wire()
                         })
                         .collect_vec();
-                    // If any of the following asserts panics, it means we added invalid ops to the sympy parser.
+                    // If any of the following asserts panics, it means we added invalid ops to the
+                    // sympy parser.
                     let res = hugr.add_dataflow_op(op, input_wires).unwrap_or_else(|e| {
                         panic!("Error while decoding pytket operation parameter \"{param}\". {e}",)
                     });
@@ -962,7 +979,8 @@ mod tests {
         assert!(!tracked_qubit.is_outdated());
         assert_eq!(tracked_qubit, tracked_q_0);
 
-        // Track the same qubit again, it should add a new TrackedQubit and mark the previous one as outdated
+        // Track the same qubit again, it should add a new TrackedQubit and mark the
+        // previous one as outdated
         let tracked_q_1 = tracker
             .track_qubit(qubit_reg.clone(), None)
             .expect("Should track qubit again")

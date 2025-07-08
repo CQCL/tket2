@@ -15,7 +15,7 @@ use hugr::{
 };
 use itertools::Itertools;
 
-pub(super) struct ResourceScopeCache {
+pub struct ResourceScopeCache {
     cache: HashMap<u64, ResourceScope<PersistentHugr>>,
 }
 
@@ -29,8 +29,8 @@ impl ResourceScopeCache {
     pub fn init(&mut self, walker: &Walker) -> &ResourceScope<PersistentHugr> {
         let h = hash_from_walker(walker);
         self.cache
-            .insert(h, to_resource_scope(walker.as_hugr_view()));
-        self.cache.get(&h).unwrap()
+            .entry(h)
+            .or_insert_with(|| to_resource_scope(walker.as_hugr_view()))
     }
 
     pub fn update(
@@ -95,14 +95,14 @@ fn commits_in_topo_order<'a>(
 
 fn hash_from_walker(walker: &Walker) -> u64 {
     let mut hasher = FxHasher64::default();
-    for id in walker.as_hugr_view().all_commit_ids() {
+    for id in walker.as_hugr_view().all_commit_ids().sorted_unstable() {
         id.hash(&mut hasher);
     }
     hasher.finish()
 }
 
 pub(super) fn to_resource_scope(hugr: &PersistentHugr) -> ResourceScope<PersistentHugr> {
-    let mut all_nodes = HugrView::children(&hugr, hugr.entrypoint());
+    let mut all_nodes = HugrView::children(hugr, hugr.entrypoint());
     let [input, output] = (&mut all_nodes).take(2).collect_array().unwrap();
     let nodes = all_nodes.collect_vec();
     let incoming_ports = hugr
