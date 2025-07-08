@@ -21,6 +21,9 @@ use extension::{
     qsystem::{LowerTk2Error, LowerTket2ToQSystemPass, QSystemOp},
 };
 
+#[cfg(feature = "llvm")]
+use hugr::llvm::utils::inline_constant_functions;
+
 #[cfg(feature = "cli")]
 pub mod cli;
 pub mod extension;
@@ -66,8 +69,8 @@ pub enum QSystemPassError<N = Node> {
     ConstantFoldError(ConstFoldError),
     /// An error from the component [LinearizeArrayPass] pass.
     LinearizeArrayError(ReplaceTypesError),
-    /// An error from the component [inline_constant_functions()] pass.
     #[cfg(feature = "llvm")]
+    /// An error from the component [inline_constant_functions()] pass.
     InlineConstantFunctionsError(anyhow::Error),
     /// An error when running [RemoveDeadFuncsPass] after the monomorphisation
     /// pass.
@@ -117,7 +120,6 @@ impl QSystemPass {
         self.linearize_arrays().run(hugr)?;
         #[cfg(feature = "llvm")]
         {
-            use hugr::llvm::utils::inline_constant_functions;
             inline_constant_functions(hugr)?;
         }
         if self.constant_fold {
