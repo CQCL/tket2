@@ -10,7 +10,6 @@ setup: setup-tket-c-api
 
 # Configure the conan cache for tket-c-api.
 setup-tket-c-api:
-    #!/usr/bin/env bash
     uv run conan remote add -f tket-libs https://quantinuumsw.jfrog.io/artifactory/api/conan/tket1-libs --index 0
     cd tket1-passes/tket-c-api && uv run conan create . --build=missing
 
