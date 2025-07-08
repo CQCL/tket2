@@ -469,6 +469,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "conan2"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5ae39d3fc7a7a89c157af7076d57796380f82da57a54e1581da64f6f6079b53"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "console"
 version = "0.15.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2401,6 +2410,7 @@ version = "0.0.0"
 dependencies = [
  "bindgen",
  "cc",
+ "conan2",
  "libc",
  "rstest",
  "serde",

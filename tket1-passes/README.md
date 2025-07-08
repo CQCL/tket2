@@ -1,53 +1,31 @@
 # TKET1-Passes
 
-A bridge between C++ TKET1 and Rust land. The folder `cpp` provides a minimal
-C-interface to a subset of TKET1's functionality. The folder `rust` then wraps
-this interface into a Rust-friendly API.
+A bridge between C++ TKET1 and Rust land. The folder `tket-c-api`
+provides a minimal C-interface to a subset of TKET1's functionality. The
+crate in this directory then wraps this interface into a Rust-friendly
+API.
 
-## Building the C++ library
+## Building instructions
 
-This requires standard modern C++ tooling:
-
-- Conan 2.0+
-- CMake 3.23+
-- C++20 compiler
-
-as well as the GMP (GNU Multiple Precision Arithmetic Library). This is usually
-already installed on Linux; on macos you can use `brew install gmp`. You must
-further set up `conan` to use the artifactory containing the tket package:
+Building `tket1-passes` is done using `conan >= 2.0`. After installing `conan`,
+(`pip install conan` or use `pipx`), you must set up `conan` to use the
+artifactory containing the tket package:
 
 ```
 conan remote add tket-libs https://quantinuumsw.jfrog.io/artifactory/api/conan/tket1-libs --index 0
 ```
 
-Finally, if you have not used `conan` before, you will need to set up a profile:
+For the time being, one extra step is required to export `tket-c-api` to the conan cache:
 
 ```
-conan profile detect
+cd tket-c-api && conan create . --build=missing"
 ```
 
-Building the `tket1-passes` library is then as simple as running the following script:
+That's it! You can now build the library using `cargo build`.
 
-```bash
-cd cpp
-./build.sh
-```
-
-Upon successfully building the C++ library, the compiled library should be found
-in the `lib` directory. The location the library is installed to can be changed
-by setting the `TKET_LIB_PATH` environment variable.
-
-## Building the Rust library
-
-The Rust library can then be built using:
-
-```bash
-cd rust
-cargo build
-```
-
-If you are using a non-default library path, make sure to set the `TKET_LIB_PATH`
-environment variable accordingly.
+If conan is unable to fetch all dependencies as pre-compiled binaries, you will
+also need standard C++ tooling to compile the dependencies (i.e. a reasonably
+recent version of cmake and a C++ compiler).
 
 ## Currently supported TKET1 features
 
