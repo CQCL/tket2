@@ -123,7 +123,7 @@ fn return_dest(size: u64, elem_ty: Type) -> NodeTemplate {
         .build_unwrap_sum(1, either_type(result_ty.clone(), result_ty), result)
         .unwrap();
     // Will panic if the index wasn't previously empty (so retrieved element is not nothing).
-    let [_] = dfb
+    let [] = dfb
         .build_unwrap_sum(0, opt_elem_ty, nothing)
         .unwrap();
     let h = dfb.finish_hugr_with_outputs([out_arr]).unwrap();
@@ -131,7 +131,8 @@ fn return_dest(size: u64, elem_ty: Type) -> NodeTemplate {
 }
 
 fn discard_all_borrowed_dest(size: u64, elem_ty: Type) -> NodeTemplate {
-    let arr_type = array_type(size, option_type(elem_ty.clone()).into());
+    let opt_elem_ty = option_type(elem_ty.clone());
+    let arr_type = array_type(size, opt_elem_ty.clone().into());
     let mut dfb = DFGBuilder::new(inout_sig(vec![arr_type.clone()], vec![])).unwrap();
     let [arr] = dfb.input_wires_arr();
     // Pop each element from the array, panicking if it is not nothing.
@@ -139,28 +140,29 @@ fn discard_all_borrowed_dest(size: u64, elem_ty: Type) -> NodeTemplate {
     let current_size = size;
     for _ in 0..size {
         let result = dfb
-            .add_array_pop_left(elem_ty.clone(), current_size, current_arr)
+            .add_array_pop_left(opt_elem_ty.clone().into(), current_size, current_arr)
             .unwrap();
         let current_size = current_size - 1;
-        let arr_type = array_type(current_size, elem_ty.clone());
-        let result_ty = vec![option_type(elem_ty.clone()).into(), arr_type.clone()];
-        let [opt_elem, out_arr] = dfb
+        let new_arr_type = array_type(current_size, opt_elem_ty.clone().into());
+        let result_ty = vec![opt_elem_ty.clone().into(), new_arr_type.clone()];
+        let [nothing, out_arr] = dfb
             .build_unwrap_sum(1, option_type(result_ty), result)
             .unwrap();
         // Implicitly drop the nothing.
-        let [_] = dfb
-            .build_unwrap_sum(0, option_type(elem_ty.clone()), opt_elem)
+        let [] = dfb
+            .build_unwrap_sum(0, opt_elem_ty.clone().into(), nothing)
             .unwrap();
         current_arr = out_arr;
     }
     // Discard the array that is now of size 0.
-    dfb.add_array_discard_empty(elem_ty, current_arr).unwrap();
+    dfb.add_array_discard_empty(opt_elem_ty.into(), current_arr).unwrap();
     let h = dfb.finish_hugr_with_outputs([]).unwrap();
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
 fn new_all_borrowed_dest(size: u64, elem_ty: Type) -> NodeTemplate {
-    let arr_type = array_type(size, option_type(elem_ty.clone()).into());
+    let opt_elem_ty = option_type(elem_ty.clone());
+    let arr_type = array_type(size, opt_elem_ty.clone().into());
     let mut dfb = DFGBuilder::new(inout_sig(vec![], vec![arr_type.clone()])).unwrap();
     // Create a new array that contains `none` at each index.
     let mut nothings = vec![];
@@ -168,7 +170,7 @@ fn new_all_borrowed_dest(size: u64, elem_ty: Type) -> NodeTemplate {
         let nothing = dfb.add_load_value(const_none(elem_ty.clone()));
         nothings.push(nothing);
     }
-    let arr = dfb.add_new_array(elem_ty.clone(), nothings).unwrap();
+    let arr = dfb.add_new_array(opt_elem_ty.clone().into(), nothings).unwrap();
     let h = dfb.finish_hugr_with_outputs([arr]).unwrap();
     NodeTemplate::CompoundOp(Box::new(h))
 }
@@ -321,12 +323,30 @@ fn lowerer() -> ReplaceTypes {
 #[cfg(test)]
 mod tests {
     use hugr::{
-        extension::prelude::{qb_t, ConstUsize},
-        std_extensions::collections::borrow_array::{borrow_array_type, BArrayOpBuilder},
-        HugrView,
+        extension::prelude::{qb_t, ConstUsize}, std_extensions::collections::borrow_array::{borrow_array_type, BArrayOpBuilder}, types::Signature, HugrView
     };
 
     use super::*;
+
+    #[test]
+    fn test_array_type() {
+        let size = 4;
+        let elem_ty = qb_t();
+        let ba_ty = borrow_array_type(size, elem_ty.clone());
+        let dfb = DFGBuilder::new(inout_sig(vec![ba_ty.clone()], vec![ba_ty.clone()])).unwrap();
+        let [ba] = dfb.input_wires_arr();
+        let h = dfb.finish_hugr_with_outputs([ba]).unwrap();
+
+        let mut h = h;
+        let pass = ReplaceBorrowArrayPass;
+        pass.run(&mut h).unwrap();
+        h.validate().unwrap();
+
+        let expected_ty = array_type(size, option_type(elem_ty).into());
+        let sig = h.signature(h.entrypoint()).unwrap();
+        assert_eq!(sig.input(), &TypeRow::from(vec![expected_ty.clone()]));
+        assert_eq!(sig.output(), &TypeRow::from(vec![expected_ty]));
+    }
 
     #[test]
     fn test_borrow_and_return() {
@@ -335,20 +355,57 @@ mod tests {
         let ba_ty = borrow_array_type(size, elem_ty.clone());
         let mut dfb = DFGBuilder::new(inout_sig(vec![ba_ty.clone()], vec![ba_ty.clone()])).unwrap();
         let [ba] = dfb.input_wires_arr();
-        let idx1 = dfb.add_load_value(ConstUsize::new(11));
-        let idx2 = dfb.add_load_value(ConstUsize::new(11));
-        let (el, arr_with_take) = dfb
-            .add_borrow_array_borrow(elem_ty.clone(), size, ba, idx1)
+        let idx = dfb.add_load_value(ConstUsize::new(11));
+        let (el, arr_with_borrow) = dfb
+            .add_borrow_array_borrow(elem_ty.clone(), size, ba, idx)
             .unwrap();
-        let arr_with_put = dfb
-            .add_borrow_array_return(elem_ty, size, arr_with_take, idx2, el)
+        let arr_with_return = dfb
+            .add_borrow_array_return(elem_ty, size, arr_with_borrow, idx, el)
             .unwrap();
-        let mut h = dfb.finish_hugr_with_outputs([arr_with_put]).unwrap();
+        let mut h = dfb.finish_hugr_with_outputs([arr_with_return]).unwrap();
 
         let pass = ReplaceBorrowArrayPass;
         pass.run(&mut h).unwrap();
-        println!("{}", h.mermaid_string());
         h.validate().unwrap();
+    }
 
+    #[test]
+    fn test_discard_all_borrowed() {
+        let size = 1;
+        let elem_ty = qb_t();
+        let arr_ty = borrow_array_type(size, elem_ty.clone());
+        let mut builder = DFGBuilder::new(Signature::new(vec![arr_ty.clone()], vec![qb_t()])).unwrap();
+        let idx = builder.add_load_value(ConstUsize::new(0));
+        let [arr] = builder.input_wires_arr();
+        let (el, arr_with_borrowed) = builder
+            .add_borrow_array_borrow(elem_ty.clone(), size, arr, idx)
+            .unwrap();
+        builder
+            .add_discard_all_borrowed(elem_ty, size, arr_with_borrowed)
+            .unwrap();
+        let mut h =  builder.finish_hugr_with_outputs([el]).unwrap();
+
+        let pass = ReplaceBorrowArrayPass;
+        pass.run(&mut h).unwrap();
+        h.validate().unwrap();
+    }
+
+    #[test]
+    fn test_new_all_borrowed() {
+        let size = 5;
+        let elem_ty = usize_t();
+        let arr_ty = borrow_array_type(size, elem_ty.clone());
+        let mut builder = DFGBuilder::new(Signature::new(vec![], vec![arr_ty.clone()])).unwrap();
+        let arr = builder.add_new_all_borrowed(elem_ty.clone(), size).unwrap();
+        let idx = builder.add_load_value(ConstUsize::new(3));
+        let val = builder.add_load_value(ConstUsize::new(202));
+        let arr_with_return = builder
+            .add_borrow_array_return(elem_ty, size, arr, idx, val)
+            .unwrap();
+        let mut h = builder.finish_hugr_with_outputs([arr_with_return]).unwrap();
+
+        let pass = ReplaceBorrowArrayPass;
+        pass.run(&mut h).unwrap();
+        h.validate().unwrap();
     }
 }
