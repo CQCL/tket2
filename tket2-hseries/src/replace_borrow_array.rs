@@ -15,7 +15,7 @@ use hugr::{
         simple_op::MakeOpDef,
     },
     hugr::hugrmut::HugrMut,
-    ops::Value,
+    ops::{Tag, Value},
     std_extensions::collections::{
         array::{
             array_type, ArrayClone, ArrayDiscard, ArrayOpBuilder, ArrayRepeat, ArrayValue,
@@ -23,7 +23,7 @@ use hugr::{
         },
         borrow_array::{self, BArrayUnsafeOpDef, BArrayValue, BORROW_ARRAY_TYPENAME},
     },
-    types::{Type, TypeArg},
+    types::{Type, TypeArg, TypeRow},
     Node,
 };
 
@@ -75,7 +75,8 @@ fn replace_const_borrow_array(
 }
 
 fn borrow_dest(size: u64, elem_ty: Type) -> NodeTemplate {
-    let arr_type = array_type(size, elem_ty.clone());
+    let opt_elem_ty = option_type(elem_ty.clone());
+    let arr_type = array_type(size, opt_elem_ty.clone().into());
     let mut dfb = DFGBuilder::new(inout_sig(
         vec![arr_type.clone(), usize_t()],
         vec![elem_ty.clone(), arr_type.clone()],
@@ -85,48 +86,52 @@ fn borrow_dest(size: u64, elem_ty: Type) -> NodeTemplate {
     let nothing = dfb.add_load_value(const_none(elem_ty.clone()));
     // Get element (and modified array) and put nothing in its place in the array.
     let result = dfb
-        .add_array_set(elem_ty.clone(), size, arr, idx, nothing)
+        .add_array_set(opt_elem_ty.clone().into(), size, arr, idx, nothing)
         .unwrap();
     // Check operation was successful.
-    let result_ty = vec![option_type(elem_ty.clone()).into(), arr_type.clone()];
+    let result_ty = vec![opt_elem_ty.clone().into(), arr_type.clone()];
     let [opt_elem, out_arr] = dfb
         .build_unwrap_sum(1, either_type(result_ty.clone(), result_ty), result)
         .unwrap();
     // Will panic if the retrieved element has been borrowed before (so is nothing).
     let [out] = dfb
-        .build_unwrap_sum(1, option_type(elem_ty), opt_elem)
+        .build_unwrap_sum(1, opt_elem_ty.clone(), opt_elem)
         .unwrap();
     let h = dfb.finish_hugr_with_outputs([out, out_arr]).unwrap();
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
 fn return_dest(size: u64, elem_ty: Type) -> NodeTemplate {
-    let arr_type = array_type(size, elem_ty.clone());
+    let opt_elem_ty = option_type(elem_ty.clone());
+    let arr_type = array_type(size, opt_elem_ty.clone().into());
     let mut dfb = DFGBuilder::new(inout_sig(
         vec![arr_type.clone(), usize_t(), elem_ty.clone()],
         vec![arr_type.clone()],
     ))
     .unwrap();
     let [arr, idx, elem] = dfb.input_wires_arr();
-    // Put element into the array.
+    // Wrap element into an option and put into the array.
+    let opt_elem = dfb.add_dataflow_op(Tag::new(
+        1, vec![TypeRow::new(), elem_ty.clone().into()],
+    ), [elem]).unwrap().out_wire(0);
     let result = dfb
-        .add_array_set(elem_ty.clone(), size, arr, idx, elem)
+        .add_array_set(opt_elem_ty.clone().into(), size, arr, idx, opt_elem)
         .unwrap();
     // Check operation was successful.
-    let result_ty = vec![option_type(elem_ty.clone()).into(), arr_type.clone()];
-    let [opt_elem, out_arr] = dfb
+    let result_ty = vec![opt_elem_ty.clone().into(), arr_type.clone()];
+    let [nothing, out_arr] = dfb
         .build_unwrap_sum(1, either_type(result_ty.clone(), result_ty), result)
         .unwrap();
     // Will panic if the index wasn't previously empty (so retrieved element is not nothing).
     let [_] = dfb
-        .build_unwrap_sum(0, option_type(elem_ty), opt_elem)
+        .build_unwrap_sum(0, opt_elem_ty, nothing)
         .unwrap();
     let h = dfb.finish_hugr_with_outputs([out_arr]).unwrap();
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
 fn discard_all_borrowed_dest(size: u64, elem_ty: Type) -> NodeTemplate {
-    let arr_type = array_type(size, elem_ty.clone());
+    let arr_type = array_type(size, option_type(elem_ty.clone()).into());
     let mut dfb = DFGBuilder::new(inout_sig(vec![arr_type.clone()], vec![])).unwrap();
     let [arr] = dfb.input_wires_arr();
     // Pop each element from the array, panicking if it is not nothing.
@@ -155,9 +160,9 @@ fn discard_all_borrowed_dest(size: u64, elem_ty: Type) -> NodeTemplate {
 }
 
 fn new_all_borrowed_dest(size: u64, elem_ty: Type) -> NodeTemplate {
-    let arr_type = array_type(size, elem_ty.clone());
+    let arr_type = array_type(size, option_type(elem_ty.clone()).into());
     let mut dfb = DFGBuilder::new(inout_sig(vec![], vec![arr_type.clone()])).unwrap();
-    // Create a new array that only contains `none` at each index.
+    // Create a new array that contains `none` at each index.
     let mut nothings = vec![];
     for _ in 0..size {
         let nothing = dfb.add_load_value(const_none(elem_ty.clone()));
@@ -273,7 +278,7 @@ fn lowerer() -> ReplaceTypes {
                 unreachable!()
             };
             Some(NodeTemplate::SingleOp(
-                ArrayClone::new(elem_ty.as_runtime().unwrap(), size.as_nat().unwrap())
+                ArrayClone::new(option_type(elem_ty.as_runtime().unwrap()).into(), size.as_nat().unwrap())
                     .unwrap()
                     .into(),
             ))
@@ -288,7 +293,7 @@ fn lowerer() -> ReplaceTypes {
                 unreachable!()
             };
             Some(NodeTemplate::SingleOp(
-                ArrayDiscard::new(elem_ty.as_runtime().unwrap(), size.as_nat().unwrap())
+                ArrayDiscard::new(option_type(elem_ty.as_runtime().unwrap()).into(), size.as_nat().unwrap())
                     .unwrap()
                     .into(),
             ))
@@ -303,7 +308,7 @@ fn lowerer() -> ReplaceTypes {
                 unreachable!()
             };
             Some(NodeTemplate::SingleOp(
-                ArrayRepeat::new(elem_ty.as_runtime().unwrap(), size.as_nat().unwrap()).into(),
+                ArrayRepeat::new(option_type(elem_ty.as_runtime().unwrap()).into(), size.as_nat().unwrap()).into(),
             ))
         },
     );
@@ -342,6 +347,8 @@ mod tests {
 
         let pass = ReplaceBorrowArrayPass;
         pass.run(&mut h).unwrap();
+        println!("{}", h.mermaid_string());
         h.validate().unwrap();
+
     }
 }
