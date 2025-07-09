@@ -17,7 +17,7 @@ use hugr::{
     types::Signature,
 };
 
-use derive_more::{Display, Error};
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use smol_str::ToSmolStr;
 use strum::{EnumIter, EnumString, IntoStaticStr};
@@ -95,13 +95,6 @@ pub enum Pauli {
     X,
     Y,
     Z,
-}
-
-#[derive(Display, Debug, Error, PartialEq, Clone)]
-#[display("{} is not a Tk2Op.", op)]
-pub struct NotTk2Op {
-    /// The offending operation.
-    pub op: OpType,
 }
 
 impl Pauli {

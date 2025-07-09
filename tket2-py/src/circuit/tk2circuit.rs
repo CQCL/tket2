@@ -236,7 +236,7 @@ impl Tk2Circuit {
         Ok(self.clone())
     }
 
-    fn node_op(&self, node: PyNode) -> PyResult<Cow<[u8]>> {
+    fn node_op(&self, node: PyNode) -> PyResult<Cow<'_, [u8]>> {
         let custom: ExtensionOp = self
             .circ
             .hugr()

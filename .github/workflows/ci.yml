@@ -71,6 +71,9 @@ jobs:
     needs: [changes]
     if: ${{ needs.changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
+    env:
+      # Fail on rust compiler warnings.
+      RUSTFLAGS: -D warnings
     steps:
       - uses: actions/checkout@v4
       - uses: mozilla-actions/sccache-action@v0.0.9
