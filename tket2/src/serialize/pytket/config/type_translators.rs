@@ -4,6 +4,7 @@
 //! translate HUGR types into pytket primitives.
 
 use std::collections::HashMap;
+use std::sync::RwLock;
 
 use hugr::extension::prelude::bool_t;
 use hugr::extension::ExtensionId;
@@ -23,10 +24,15 @@ pub(super) struct TypeTranslatorSet {
     /// `type_translators`, identified by their index.
     #[debug("{:?}", extension_translators.keys().collect_vec())]
     extension_translators: HashMap<ExtensionId, Vec<usize>>,
+    /// A cache of translated types.
+    #[debug(skip)]
+    type_cache: RwLock<HashMap<Type, Option<RegisterCount>>>,
 }
 
 impl TypeTranslatorSet {
     /// Add a translator to the set.
+    ///
+    /// This operation invalidates the type translation cache.
     pub fn add_type_translator(&mut self, translator: impl TypeTranslator + Send + Sync + 'static) {
         let idx = self.type_translators.len();
 
@@ -35,6 +41,15 @@ impl TypeTranslatorSet {
         }
 
         self.type_translators.push(Box::new(translator));
+
+        // Clear the cache, or create a new one if it's poisoned.
+        let cache = self.type_cache.write();
+        if let Ok(mut cache) = cache {
+            cache.clear();
+        } else {
+            drop(cache);
+            self.type_cache = RwLock::new(HashMap::new());
+        }
     }
 
     /// Translate a HUGR type into a count of qubits, bits, and parameters,
@@ -43,7 +58,12 @@ impl TypeTranslatorSet {
     /// Only tuple sums, bools, and custom types are supported.
     /// Other types will return `None`.
     pub fn type_to_pytket(&self, typ: &Type) -> Option<RegisterCount> {
-        match typ.as_type_enum() {
+        let cache = self.type_cache.read().ok();
+        if let Some(count) = cache.and_then(|c| c.get(typ).cloned()) {
+            return count;
+        }
+
+        let res = match typ.as_type_enum() {
             TypeEnum::Sum(sum) => {
                 if typ == &bool_t() {
                     return Some(RegisterCount {
@@ -63,20 +83,29 @@ impl TypeTranslatorSet {
                             }
                         })
                         .sum();
-                    return count;
+                    count
+                } else {
+                    None
                 }
             }
-            TypeEnum::Extension(custom) => {
+            TypeEnum::Extension(custom) => 'outer: {
                 let type_ext = custom.extension();
                 for encoder in self.translators_for_extension(type_ext) {
                     if let Some(count) = encoder.type_to_pytket(custom) {
-                        return Some(count);
+                        break 'outer Some(count);
                     }
                 }
+                None
             }
-            _ => {}
+            _ => None,
+        };
+
+        // Insert the result into the cache. Ignoring it if it's poisoned.
+        if let Ok(mut cache) = self.type_cache.write() {
+            cache.insert(typ.clone(), res);
         }
-        None
+
+        res
     }
 
     /// Lists the translators that can handle a given extension.
