@@ -320,7 +320,7 @@ impl<T: HugrView<Node = Node>> Circuit<T> {
     ///
     ///   [`Tk2Op`]: crate::Tk2Op
     #[inline]
-    pub fn operations(&self) -> impl Iterator<Item = Command<T>> + '_
+    pub fn operations(&self) -> impl Iterator<Item = Command<'_, T>> + '_
     where
         Self: Sized,
     {
