@@ -22,6 +22,8 @@ use smol_str::SmolStr;
 pub mod bool;
 /// Definition for debug ops.
 pub mod debug;
+/// Definition for ops used by Guppy.
+pub mod guppy;
 /// Definition for Angle ops and types.
 pub mod rotation;
 pub mod sympy;
@@ -64,6 +66,7 @@ pub(crate) static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new(
     TKET2_EXTENSION.to_owned(),
     bool::BOOL_EXTENSION.to_owned(),
     debug::DEBUG_EXTENSION.to_owned(),
+    guppy::GUPPY_EXTENSION.to_owned(),
     rotation::ROTATION_EXTENSION.to_owned()
 ]));
 
