@@ -16,7 +16,8 @@ from tket2_exts import (
 __all__ = [
     "debug",
     "opaque_bool",
-    "guppy" "rotation",
+    "guppy",
+    "rotation",
     "futures",
     "qsystem",
     "qsystem_random",
