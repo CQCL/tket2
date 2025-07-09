@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.11.0...tket2-py-v0.11.1) (2025-07-09)
+
+
+### Features
+
+* Add CustomPass label to badger_pass ([#932](https://github.com/CQCL/tket2/issues/932)) ([9896524](https://github.com/CQCL/tket2/commit/98965241c3ca60e1e52852ed85d7609c1d38f397))
+
 ## [0.11.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.10.0...tket2-py-v0.11.0) (2025-06-16)
 
 ### Features
