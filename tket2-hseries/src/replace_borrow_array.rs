@@ -18,14 +18,14 @@ use hugr::{
     ops::{Tag, Value},
     std_extensions::collections::{
         array::{
-            array_type, ArrayClone, ArrayDiscard, ArrayOpBuilder, ArrayRepeat, ArrayValue,
-            ARRAY_CLONE_OP_ID, ARRAY_DISCARD_OP_ID, ARRAY_REPEAT_OP_ID,
+            array_type, ArrayClone, ArrayDiscard, ArrayOp, ArrayOpBuilder, ArrayOpDef, ArrayRepeat, ArrayScan, ArrayValue, ARRAY_CLONE_OP_ID, ARRAY_DISCARD_OP_ID, ARRAY_REPEAT_OP_ID, ARRAY_SCAN_OP_ID
         },
-        borrow_array::{self, BArrayUnsafeOpDef, BArrayValue, BORROW_ARRAY_TYPENAME},
+        borrow_array::{self, BArrayOpDef, BArrayUnsafeOpDef, BArrayValue, BORROW_ARRAY_TYPENAME},
     },
-    types::{Type, TypeArg, TypeRow},
+    types::{type_param::SeqPart, Term, Type, TypeArg, TypeRow},
     Node,
 };
+use strum::IntoEnumIterator;
 
 #[derive(Error, Debug, Display, From)]
 #[non_exhaustive]
@@ -286,6 +286,7 @@ fn lowerer() -> ReplaceTypes {
             ))
         },
     );
+
     lw.replace_parametrized_op(
         borrow_array::EXTENSION
             .get_op(ARRAY_DISCARD_OP_ID.as_str())
@@ -301,6 +302,7 @@ fn lowerer() -> ReplaceTypes {
             ))
         },
     );
+
     lw.replace_parametrized_op(
         borrow_array::EXTENSION
             .get_op(ARRAY_REPEAT_OP_ID.as_str())
@@ -314,8 +316,62 @@ fn lowerer() -> ReplaceTypes {
             ))
         },
     );
-    // TODO: Replace array scan (figure out how to treat list argument).
-    // TODO: Replace BArrayOpDef ops.
+
+    lw.replace_parametrized_op(
+        borrow_array::EXTENSION
+            .get_op(ARRAY_SCAN_OP_ID.as_str())
+            .unwrap(),
+        move |args| {
+            let [src_ty, tgt_ty, acc_tys, size] = args else {
+                unreachable!()
+            };
+            Some(NodeTemplate::SingleOp(
+                ArrayScan::new(
+                    option_type(src_ty.as_runtime().unwrap()).into(),
+                    option_type(tgt_ty.as_runtime().unwrap()).into(),
+                    acc_tys.clone()
+                        .into_list_parts()
+                        .map(|sp| match sp {
+                            SeqPart::Item(t) => t.as_runtime().unwrap(),
+                            _ => unreachable!("Expected SeqPart::Item"),
+                        })
+                        .collect(),
+                    size.as_nat().unwrap()).into(),
+            ))
+        },
+    );
+    
+    fn map_borrow_array_to_array_op(op: &BArrayOpDef) -> ArrayOpDef {
+        match op {
+            BArrayOpDef::new_array => ArrayOpDef::new_array,
+            BArrayOpDef::get => ArrayOpDef::get,
+            BArrayOpDef::set => ArrayOpDef::set,
+            BArrayOpDef::swap => ArrayOpDef::swap,
+            BArrayOpDef::pop_left => ArrayOpDef::pop_left,
+            BArrayOpDef::pop_right => ArrayOpDef::pop_right,
+            BArrayOpDef::discard_empty => ArrayOpDef::discard_empty,
+            BArrayOpDef::unpack => ArrayOpDef::unpack,
+            _ => panic!("Unsupported borrow array op: {:?}", op),
+        }
+    }
+    for op in borrow_array::BArrayOpDef::iter() {
+        let array_op = map_borrow_array_to_array_op(&op);
+        lw.replace_parametrized_op(
+            borrow_array::EXTENSION.get_op(&op.opdef_id()).unwrap(),
+            move |args| {
+                let [size, elem_ty] = args else {
+                    unreachable!()
+                };
+                Some(NodeTemplate::SingleOp(
+                    array_op.to_concrete(
+                        option_type(elem_ty.as_runtime().unwrap()).into(),
+                        size.as_nat().unwrap(),
+                    )
+                    .into(),
+                ))
+            },
+        );
+    }
 
     lw
 }
