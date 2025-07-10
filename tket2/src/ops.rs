@@ -65,6 +65,7 @@ pub enum Tk2Op {
     Reset,
     V,
     Vdg,
+    GlobalPhase,
 }
 
 impl Tk2Op {
@@ -121,6 +122,7 @@ impl MakeOpDef for Tk2Op {
             QAlloc => Signature::new(type_row![], qb_t()),
             TryQAlloc => Signature::new(type_row![], Type::from(option_type(qb_t()))),
             QFree => Signature::new(qb_t(), type_row![]),
+            GlobalPhase => Signature::new(vec![rotation_type()], type_row![]),
         }
         .into()
     }
@@ -175,7 +177,7 @@ impl Tk2Op {
         use Tk2Op::*;
         match self {
             H | CX | T | S | V | X | Y | Z | Tdg | Sdg | Vdg | Rz | Rx | Toffoli | Ry | CZ | CY
-            | CRz => true,
+            | CRz | GlobalPhase => true,
             Measure | MeasureFree | QAlloc | TryQAlloc | QFree | Reset => false,
         }
     }
@@ -197,7 +199,7 @@ pub(crate) mod test {
     use hugr::extension::simple_op::{MakeExtensionOp, MakeOpDef};
     use hugr::extension::{prelude::UnwrapBuilder as _, OpDef};
     use hugr::types::Signature;
-    use hugr::{type_row, CircuitUnit, HugrView};
+    use hugr::{CircuitUnit, HugrView};
     use itertools::Itertools;
     use rstest::{fixture, rstest};
     use strum::IntoEnumIterator;
@@ -205,6 +207,7 @@ pub(crate) mod test {
     use super::Tk2Op;
     use crate::circuit::Circuit;
     use crate::extension::bool::bool_type;
+    use crate::extension::rotation::rotation_type;
     use crate::extension::{TKET2_EXTENSION as EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID};
     use crate::utils::build_simple_circuit;
     use crate::Pauli;
@@ -260,10 +263,13 @@ pub(crate) mod test {
 
     #[test]
     fn try_qalloc_measure_free() {
-        let mut b = DFGBuilder::new(Signature::new(type_row![], bool_type())).unwrap();
+        let mut b = DFGBuilder::new(Signature::new(vec![rotation_type()], bool_type())).unwrap();
+        let [r] = b.input_wires_arr();
 
         let try_q = b.add_dataflow_op(Tk2Op::TryQAlloc, []).unwrap().out_wire(0);
         let [q] = b.build_unwrap_sum(1, option_type(qb_t()), try_q).unwrap();
+        let phase = b.add_dataflow_op(Tk2Op::GlobalPhase, [r]).unwrap();
+        b.set_order(&b.input(), &phase);
         let measured = b
             .add_dataflow_op(Tk2Op::MeasureFree, [q])
             .unwrap()
@@ -275,7 +281,7 @@ pub(crate) mod test {
             .map(|n| h.get_optype(n))
             .collect_vec();
 
-        assert_eq!(top_ops.len(), 5);
+        assert_eq!(top_ops.len(), 6);
         // first two are I/O
         assert_eq!(
             Tk2Op::from_op(top_ops[2].as_extension_op().unwrap()).unwrap(),
@@ -283,7 +289,7 @@ pub(crate) mod test {
         );
         assert!(top_ops[3].is_conditional());
         assert_eq!(
-            Tk2Op::from_op(top_ops[4].as_extension_op().unwrap()).unwrap(),
+            Tk2Op::from_op(top_ops[5].as_extension_op().unwrap()).unwrap(),
             Tk2Op::MeasureFree
         );
     }

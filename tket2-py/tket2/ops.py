@@ -54,6 +54,7 @@ class Tk2Op(Enum):
     Reset = auto()
     V = auto()
     Vdg = auto()
+    GlobalPhase = auto()
 
     def to_custom(self) -> CustomOp:
         """Convert to a custom operation."""

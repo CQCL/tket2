@@ -1,5 +1,5 @@
 {
-  "version": "0.1.1",
+  "version": "0.1.2",
   "name": "tket2.quantum",
   "types": {},
   "operations": {
@@ -144,6 +144,30 @@
               "t": "Q"
             }
           ]
+        }
+      },
+      "binary": false
+    },
+    "GlobalPhase": {
+      "extension": "tket2.quantum",
+      "name": "GlobalPhase",
+      "description": "GlobalPhase",
+      "misc": {
+        "commutation": []
+      },
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.rotation",
+              "id": "rotation",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "output": []
         }
       },
       "binary": false

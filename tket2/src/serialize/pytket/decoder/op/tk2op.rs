@@ -75,6 +75,7 @@ impl NativeOp {
             Tk1OpType::Rx => Tk2Op::Rx.into(),
             Tk1OpType::Ry => Tk2Op::Ry.into(),
             Tk1OpType::Rz => Tk2Op::Rz.into(),
+            Tk1OpType::Phase => Tk2Op::GlobalPhase.into(),
             Tk1OpType::CCX => Tk2Op::Toffoli.into(),
             Tk1OpType::Reset => Tk2Op::Reset.into(),
             Tk1OpType::Measure => Tk2Op::Measure.into(),

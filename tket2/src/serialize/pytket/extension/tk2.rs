@@ -67,6 +67,7 @@ impl Tk2Emitter {
             Tk2Op::Ry => Tk1OpType::Ry,
             Tk2Op::Toffoli => Tk1OpType::CCX,
             Tk2Op::Reset => Tk1OpType::Reset,
+            Tk2Op::GlobalPhase => Tk1OpType::Phase,
             Tk2Op::Measure => Tk1OpType::Measure,
             // We translate `MeasureFree` the same way as a `Measure` operation.
             // Since the node does not have outputs the qubit/bit will simply be ignored,

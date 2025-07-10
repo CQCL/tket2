@@ -30,7 +30,8 @@ const SIMPLE_JSON: &str = r#"{
         "qubits": [["q", [0]], ["q", [1]]],
         "commands": [
             {"args": [["q", [0]]], "op": {"type": "H"}},
-            {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}
+            {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}},
+            {"args": [], "op": {"params": ["1.4"], "type": "Phase"}}
         ],
         "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
     }"#;
@@ -367,7 +368,7 @@ fn circ_complex_angle_computation() -> (Circuit, String) {
 }
 
 #[rstest]
-#[case::simple(SIMPLE_JSON, 2, 2)]
+#[case::simple(SIMPLE_JSON, 3, 2)]
 #[case::simple(MULTI_REGISTER, 2, 3)]
 #[case::unknown_op(UNKNOWN_OP, 2, 3)]
 #[case::parametrized(PARAMETERIZED, 4, 2)]
