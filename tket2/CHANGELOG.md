@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0](https://github.com/CQCL/tket2/compare/tket2-v0.12.3...tket2-v0.13.0) - 2025-07-10
+
+### New Features
+
+- [**breaking**] Update to `hugr 0.21` ([#965](https://github.com/CQCL/tket2/pull/965))
+
 ## [0.12.3](https://github.com/CQCL/tket2/compare/tket2-v0.12.2...tket2-v0.12.3) - 2025-07-08
 
 ### New Features
