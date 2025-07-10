@@ -85,7 +85,7 @@ use super::futures::future_type;
 /// The "tket2.wasm" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.wasm");
 /// The "tket2.wasm" extension version.
-pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+pub const EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
     /// The `tket2.wasm` extension.

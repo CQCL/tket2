@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "name": "tket2.wasm",
   "types": {
     "context": {
@@ -85,7 +85,7 @@
               "id": "func",
               "args": [
                 {
-                  "tya": "Sequence",
+                  "tya": "List",
                   "elems": [
                     {
                       "tya": "Variable",
@@ -101,7 +101,7 @@
                   ]
                 },
                 {
-                  "tya": "Sequence",
+                  "tya": "List",
                   "elems": [
                     {
                       "tya": "Variable",
@@ -258,7 +258,7 @@
               "id": "func",
               "args": [
                 {
-                  "tya": "Sequence",
+                  "tya": "List",
                   "elems": [
                     {
                       "tya": "Variable",
@@ -274,7 +274,7 @@
                   ]
                 },
                 {
-                  "tya": "Sequence",
+                  "tya": "List",
                   "elems": [
                     {
                       "tya": "Variable",
