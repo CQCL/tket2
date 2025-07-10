@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.12.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.11.1...tket2-py-v0.12.0) (2025-07-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* Public `hugr` dependency updated to `0.21.0`.
+
+### Features
+
+* Update to `hugr 0.21` ([#965](https://github.com/CQCL/tket2/issues/965)) ([6017450](https://github.com/CQCL/tket2/commit/601745019579fc50461a43e02347304f37dc8d97))
+
 ## [0.11.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.11.0...tket2-py-v0.11.1) (2025-07-09)
 
 
