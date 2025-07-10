@@ -32,8 +32,8 @@ pub mod llvm;
 
 pub mod replace_bools;
 
-/// Modify a [hugr::Hugr] into a form that is acceptable for ingress into a Q-System.
-/// Returns an error if this cannot be done.
+/// Modify a [hugr::Hugr] into a form that is acceptable for ingress into a
+/// Q-System. Returns an error if this cannot be done.
 ///
 /// To construct a `QSystemPass` use [Default::default].
 #[derive(Debug, Clone, Copy)]
@@ -223,7 +223,8 @@ impl QSystemPass {
         self
     }
 
-    /// Returns a new `QSystemPass` with lazification enabled according to `lazify`.
+    /// Returns a new `QSystemPass` with lazification enabled according to
+    /// `lazify`.
     ///
     /// On by default.
     ///
@@ -238,7 +239,7 @@ impl QSystemPass {
 #[cfg(test)]
 mod test {
     use hugr::{
-        builder::{Container, Dataflow, DataflowSubContainer, HugrBuilder},
+        builder::{Dataflow, DataflowSubContainer, HugrBuilder},
         extension::prelude::qb_t,
         hugr::hugrmut::HugrMut,
         ops::handle::NodeHandle,
@@ -342,8 +343,7 @@ mod test {
     #[cfg(feature = "llvm")]
     #[test]
     fn const_function() {
-        use hugr::builder::DataflowHugr;
-        use hugr::builder::{DFGBuilder, ModuleBuilder};
+        use hugr::builder::{Container, DFGBuilder, DataflowHugr, ModuleBuilder};
         use hugr::ops::{CallIndirect, Value};
 
         let qb_sig: Signature = Signature::new_endo(qb_t());

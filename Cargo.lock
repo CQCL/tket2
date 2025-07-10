@@ -1033,9 +1033,9 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.20.2"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "462367504afb43961a4afe3a2fff746fef80f9f2f1ec2faecf245a562ab1d7ab"
+checksum = "55110940149b91e6bc0843ae30dc0a0c3793fe8d49d40df7d9985b6963fc9bca"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1045,9 +1045,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-cli"
-version = "0.20.2"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e7dd7d2eb5d95bbd8a64ff6c8c26b72074701698e0b8e83a3ad2c35d335ab52"
+checksum = "9c5d062da5abe43ce11a1a7b555bd1d3e8b86107ec1de380d6faca7407653d0e"
 dependencies = [
  "anyhow",
  "clap",
@@ -1057,14 +1057,17 @@ dependencies = [
  "hugr",
  "serde_json",
  "thiserror 2.0.12",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
 name = "hugr-core"
-version = "0.20.2"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "545209fd52be8f4af29b08595f6a065565aa16dd26b1e83f8af1058688353e5f"
+checksum = "9f9a3d30965c822bf4651f0e263e3f85e99dba4c2f69b4bb73ba2ecdff74536c"
 dependencies = [
+ "base64",
  "cgmath",
  "delegate 0.13.3",
  "derive_more 1.0.0",
@@ -1076,6 +1079,7 @@ dependencies = [
  "indexmap 2.10.0",
  "itertools 0.14.0",
  "lazy_static",
+ "ordered-float",
  "paste",
  "petgraph 0.8.2",
  "portgraph 0.14.1",
@@ -1085,19 +1089,21 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "smallvec",
  "smol_str",
  "static_assertions",
  "strum",
  "thiserror 2.0.12",
+ "tracing",
  "typetag",
  "zstd",
 ]
 
 [[package]]
 name = "hugr-llvm"
-version = "0.20.2"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94eb49c2cc4ae3f7d54c8c6f2c0a331465325eb89745385663538dccfca54d59"
+checksum = "48e9b976b11c6b60253995c3a973bc38f875b2c8e5d69d334f78047dfd8fb665"
 dependencies = [
  "anyhow",
  "delegate 0.13.3",
@@ -1115,9 +1121,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-model"
-version = "0.20.2"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13917825a242ef816337ce1a7939dd95589122b154f3c3e5f6b15e6025c109a"
+checksum = "3d1c962a94693c01ef4e9bbb772533c0988c405bd8c6e5432a7d3c6d065cf1a9"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1136,9 +1142,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.20.2"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "812103e60642aeabbd37b1e1fcf4c5cb595e9a0a2123a7d03c02b48e3216a848"
+checksum = "e5a573c600fd682494e2cc51d9e0e29937203d7e0b492961133a14793fa683e0"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
@@ -1482,6 +1488,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2c1f9f56e534ac6a9b8a4600bdf0f530fb393b5f393e7b4d03489c3cf0c3f01"
 dependencies = [
  "num-traits",
+ "rand",
+ "serde",
 ]
 
 [[package]]
@@ -1827,6 +1835,25 @@ name = "radium"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
+
+[[package]]
+name = "rand"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
+dependencies = [
+ "rand_core",
+ "serde",
+]
+
+[[package]]
+name = "rand_core"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "rayon"

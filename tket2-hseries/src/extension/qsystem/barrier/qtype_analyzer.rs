@@ -19,7 +19,7 @@ pub(crate) fn array_args(ext: &CustomType) -> Option<(u64, &Type)> {
         .check_custom(ext)
         .ok()
         .and_then(|_| match ext.args() {
-            [TypeArg::BoundedNat { n }, TypeArg::Type { ty: elem_ty }] => Some((*n, elem_ty)),
+            [TypeArg::BoundedNat(n), TypeArg::Runtime(elem_ty)] => Some((*n, elem_ty)),
             _ => None,
         })
 }

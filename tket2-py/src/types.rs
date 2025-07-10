@@ -21,7 +21,7 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
 #[derive(PartialEq, Clone, Debug)]
 pub enum PyTypeBound {
     /// No bound on the type.
-    Any,
+    Linear,
     /// The type can be copied in the program.
     Copyable,
 }
@@ -29,7 +29,7 @@ pub enum PyTypeBound {
 impl From<PyTypeBound> for TypeBound {
     fn from(bound: PyTypeBound) -> Self {
         match bound {
-            PyTypeBound::Any => TypeBound::Any,
+            PyTypeBound::Linear => TypeBound::Linear,
             PyTypeBound::Copyable => TypeBound::Copyable,
         }
     }
@@ -38,7 +38,7 @@ impl From<PyTypeBound> for TypeBound {
 impl From<TypeBound> for PyTypeBound {
     fn from(bound: TypeBound) -> Self {
         match bound {
-            TypeBound::Any => PyTypeBound::Any,
+            TypeBound::Linear => PyTypeBound::Linear,
             TypeBound::Copyable => PyTypeBound::Copyable,
         }
     }

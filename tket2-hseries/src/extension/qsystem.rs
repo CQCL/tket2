@@ -205,9 +205,9 @@ impl MakeOpDef for RuntimeBarrierDef {
 
     fn init_signature(&self, _extension_ref: &Weak<Extension>) -> SignatureFunc {
         PolyFuncType::new(
-            [TypeParam::max_nat()],
+            [TypeParam::max_nat_type()],
             Signature::new_endo(
-                array_type_parametric(TypeArg::new_var_use(0, TypeParam::max_nat()), qb_t())
+                array_type_parametric(TypeArg::new_var_use(0, TypeParam::max_nat_type()), qb_t())
                     .unwrap(),
             ),
         )
@@ -534,7 +534,7 @@ pub(crate) fn runtime_barrier_ext_op(
 ) -> Result<ExtensionOp, hugr::extension::SignatureError> {
     ExtensionOp::new(
         EXTENSION.get_op(&RUNTIME_BARRIER_NAME).unwrap().clone(),
-        [TypeArg::BoundedNat { n: array_size }],
+        [TypeArg::BoundedNat(array_size)],
     )
 }
 

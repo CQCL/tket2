@@ -127,7 +127,7 @@ fn outer_replace_types() -> ReplaceTypes {
                 let [element_ty_arg] = args else {
                     unreachable!()
                 };
-                element_ty_arg.as_type().unwrap()
+                element_ty_arg.as_runtime().unwrap()
             };
             let changed = element_ty.transform(&inner).unwrap();
             changed.then_some(static_array_type(element_ty))
@@ -141,7 +141,7 @@ fn outer_replace_types() -> ReplaceTypes {
             let inner = inner.clone();
             move |args| {
                 let [element_ty] = args else { unreachable!() };
-                get_op_dest(&inner, element_ty.as_type().unwrap())
+                get_op_dest(&inner, element_ty.as_runtime().unwrap())
             }
         },
     );
@@ -151,7 +151,7 @@ fn outer_replace_types() -> ReplaceTypes {
             .unwrap(),
         move |args| {
             let [element_ty] = args else { unreachable!() };
-            len_op_dest(&inner, element_ty.as_type().unwrap())
+            len_op_dest(&inner, element_ty.as_runtime().unwrap())
         },
     );
     outer
