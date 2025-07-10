@@ -1,6 +1,7 @@
 from tket2_exts import (
     opaque_bool,
     debug,
+    guppy,
     rotation,
     futures,
     qsystem,
@@ -15,6 +16,7 @@ from tket2_exts import (
 __all__ = [
     "debug",
     "opaque_bool",
+    "guppy",
     "rotation",
     "futures",
     "qsystem",

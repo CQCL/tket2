@@ -1,6 +1,7 @@
 from tket2.extensions import opaque_bool  # noqa: F401
 from tket2.extensions import debug  # noqa: F401
 from tket2.extensions import rotation  # noqa: F401
+from tket2.extensions import guppy  # noqa: F401
 from tket2.extensions import futures  # noqa: F401
 from tket2.extensions import qsystem  # noqa: F401
 from tket2.extensions import qsystem_random  # noqa: F401

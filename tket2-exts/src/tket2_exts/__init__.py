@@ -22,6 +22,11 @@ def debug() -> Extension:
 
 
 @functools.cache
+def guppy() -> Extension:
+    return load_extension("tket2.guppy")
+
+
+@functools.cache
 def rotation() -> Extension:
     return load_extension("tket2.rotation")
 
