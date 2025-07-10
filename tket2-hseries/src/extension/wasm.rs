@@ -117,9 +117,9 @@ lazy_static! {
     pub static ref NAME_PARAM: TypeParam = TypeParam::StringType;
     /// The [TypeParam] of various types and ops specifying the input signature of a function.
     pub static ref INPUTS_PARAM: TypeParam =
-        TypeParam::ListType(Box::new(TypeBound::Any.into()));
+        TypeParam::ListType(Box::new(TypeBound::Linear.into()));
     /// The [TypeParam] of various types and ops specifying the output signature of a function.
-    pub static ref OUTPUTS_PARAM: TypeParam = TypeParam::ListType(Box::new(TypeBound::Any.into()));
+    pub static ref OUTPUTS_PARAM: TypeParam = TypeParam::ListType(Box::new(TypeBound::Linear.into()));
 }
 
 fn add_wasm_type_defs(
@@ -238,7 +238,7 @@ impl WasmType {
                 CONTEXT_TYPE_NAME.to_owned(),
                 [],
                 EXTENSION_ID,
-                TypeBound::Any,
+                TypeBound::Linear,
                 extension_ref,
             ),
             s @ Self::Func { .. } => s.clone().into_custom_type(extension_ref),
@@ -427,22 +427,22 @@ impl HasConcrete for WasmOpDef {
 
                 let Some(name) = name_arg.as_string() else {
                     Err(SignatureError::from(TermTypeError::TypeMismatch {
-                        term: name_arg,
-                        type_: NAME_PARAM.to_owned(),
+                        term: Box::new(name_arg),
+                        type_: Box::new(NAME_PARAM.to_owned()),
                     }))?
                 };
 
                 let Ok(inputs) = TypeRowRV::try_from(inputs_arg.clone()) else {
                     Err(SignatureError::from(TermTypeError::TypeMismatch {
-                        term: inputs_arg,
-                        type_: INPUTS_PARAM.to_owned(),
+                        term: Box::new(inputs_arg),
+                        type_: Box::new(INPUTS_PARAM.to_owned()),
                     }))?
                 };
 
                 let Ok(outputs) = TypeRowRV::try_from(outputs_arg.clone()) else {
                     Err(SignatureError::from(TermTypeError::TypeMismatch {
-                        term: INPUTS_PARAM.to_owned(),
-                        type_: outputs_arg,
+                        term: Box::new(outputs_arg),
+                        type_: Box::new(OUTPUTS_PARAM.to_owned()),
                     }))?
                 };
                 Ok(WasmOp::Lookup {
@@ -463,15 +463,15 @@ impl HasConcrete for WasmOpDef {
 
                 let Ok(inputs) = TypeRowRV::try_from(inputs_arg.clone()) else {
                     Err(SignatureError::from(TermTypeError::TypeMismatch {
-                        term: inputs_arg,
-                        type_: INPUTS_PARAM.to_owned(),
+                        term: Box::new(inputs_arg),
+                        type_: Box::new(INPUTS_PARAM.to_owned()),
                     }))?
                 };
 
                 let Ok(outputs) = TypeRowRV::try_from(outputs_arg.clone()) else {
                     Err(SignatureError::from(TermTypeError::TypeMismatch {
-                        term: outputs_arg,
-                        type_: OUTPUTS_PARAM.to_owned(),
+                        term: Box::new(outputs_arg),
+                        type_: Box::new(OUTPUTS_PARAM.to_owned()),
                     }))?
                 };
 
@@ -718,7 +718,7 @@ mod test {
     #[case(WasmType::Module)]
     #[case(WasmType::Context)]
     #[case(WasmType::new_func(type_row![], type_row![]))]
-    #[case(WasmType::new_func(vec![TypeRV::new_row_var_use(0, TypeBound::Any)], vec![bool_t()]))]
+    #[case(WasmType::new_func(vec![TypeRV::new_row_var_use(0, TypeBound::Linear)], vec![bool_t()]))]
     fn wasm_type(#[case] wasm_t: WasmType) {
         let hugr_t: Type = wasm_t.clone().into();
         let roundtripped_t = hugr_t.try_into().unwrap();
@@ -738,12 +738,12 @@ mod test {
         assert_eq!(
             WasmOpDef::lookup.instantiate(&[
                 "lookup_name".into(),
-                TypeArg::new_var_use(0, TypeParam::ListType(Box::new(TypeBound::Any.into()))),
+                TypeArg::new_var_use(0, TypeParam::ListType(Box::new(TypeBound::Linear.into()))),
                 vec![].into()
             ]),
             Ok(WasmOp::Lookup {
                 name: "lookup_name".to_string(),
-                inputs: vec![TypeRV::new_row_var_use(0, TypeBound::Any)].into(),
+                inputs: vec![TypeRV::new_row_var_use(0, TypeBound::Linear)].into(),
                 outputs: TypeRowRV::from(Vec::<TypeRV>::new())
             })
         );

@@ -343,8 +343,7 @@ mod test {
     #[cfg(feature = "llvm")]
     #[test]
     fn const_function() {
-        use hugr::builder::DataflowHugr;
-        use hugr::builder::{DFGBuilder, ModuleBuilder};
+        use hugr::builder::{Container, DFGBuilder, DataflowHugr, ModuleBuilder};
         use hugr::ops::{CallIndirect, Value};
 
         let qb_sig: Signature = Signature::new_endo(qb_t());

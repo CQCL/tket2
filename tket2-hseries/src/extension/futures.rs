@@ -48,9 +48,9 @@ fn add_future_type_def(
 ) -> Result<&TypeDef, ExtensionBuildError> {
     ext.add_type(
         FUTURE_TYPE_NAME.to_owned(),
-        vec![TypeBound::Any.into()],
+        vec![TypeBound::Linear.into()],
         "A value that is computed asynchronously".into(),
-        TypeBound::Any.into(),
+        TypeBound::Linear.into(),
         &extension_ref,
     )
 }
@@ -61,7 +61,7 @@ pub fn future_custom_type(t: Type, extension_ref: &Weak<Extension>) -> CustomTyp
         FUTURE_TYPE_NAME.to_owned(),
         vec![t.into()],
         EXTENSION_ID,
-        TypeBound::Any,
+        TypeBound::Linear,
         extension_ref,
     )
 }
@@ -101,8 +101,8 @@ impl MakeOpDef for FutureOpDef {
     }
 
     fn init_signature(&self, extension_ref: &Weak<Extension>) -> SignatureFunc {
-        let t_param = TypeParam::from(TypeBound::Any);
-        let t_type = Type::new_var_use(0, TypeBound::Any);
+        let t_param = TypeParam::from(TypeBound::Linear);
+        let t_type = Type::new_var_use(0, TypeBound::Linear);
         let future_type = Type::new_extension(future_custom_type(t_type.clone(), extension_ref));
         match self {
             FutureOpDef::Read => {
@@ -298,8 +298,8 @@ pub(crate) mod test {
 
     #[test]
     fn circuit() {
-        let t_param = TypeParam::from(TypeBound::Any);
-        let t = Type::new_var_use(0, TypeBound::Any);
+        let t_param = TypeParam::from(TypeBound::Linear);
+        let t = Type::new_var_use(0, TypeBound::Linear);
         let future_type = future_type(t.clone());
 
         let hugr = {

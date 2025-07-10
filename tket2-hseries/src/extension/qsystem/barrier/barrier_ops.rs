@@ -116,8 +116,8 @@ impl BarrierOperationFactory {
                     Self::WRAPPED_BARRIER,
                     Default::default(),
                     PolyFuncTypeRV::new(
-                        vec![TypeParam::new_list_type(TypeBound::Any)],
-                        FuncValueType::new_endo(TypeRV::new_row_var_use(0, TypeBound::Any)),
+                        vec![TypeParam::new_list_type(TypeBound::Linear)],
+                        FuncValueType::new_endo(TypeRV::new_row_var_use(0, TypeBound::Linear)),
                     ),
                     ext_ref,
                 )
@@ -125,16 +125,16 @@ impl BarrierOperationFactory {
                 let array_unpack_sig = PolyFuncTypeRV::new(
                     vec![
                         TypeParam::max_nat_type(),
-                        TypeParam::RuntimeType(TypeBound::Any),
-                        TypeParam::new_list_type(TypeBound::Any),
+                        TypeParam::RuntimeType(TypeBound::Linear),
+                        TypeParam::new_list_type(TypeBound::Linear),
                     ],
                     FuncValueType::new(
                         array_type_parametric(
                             TypeArg::new_var_use(0, TypeParam::max_nat_type()),
-                            Type::new_var_use(1, TypeBound::Any),
+                            Type::new_var_use(1, TypeBound::Linear),
                         )
                         .unwrap(),
-                        TypeRV::new_row_var_use(2, TypeBound::Any),
+                        TypeRV::new_row_var_use(2, TypeBound::Linear),
                     ),
                 );
                 // pack some wires into an array
@@ -157,13 +157,13 @@ impl BarrierOperationFactory {
                 let tuple_unpack_sig = PolyFuncTypeRV::new(
                     vec![
                         // incoming tuple row
-                        TypeParam::new_list_type(TypeBound::Any),
+                        TypeParam::new_list_type(TypeBound::Linear),
                         // unpacked row
-                        TypeParam::new_list_type(TypeBound::Any),
+                        TypeParam::new_list_type(TypeBound::Linear),
                     ],
                     FuncValueType::new(
-                        Type::new_tuple(TypeRV::new_row_var_use(0, TypeBound::Any)),
-                        TypeRV::new_row_var_use(1, TypeBound::Any),
+                        Type::new_tuple(TypeRV::new_row_var_use(0, TypeBound::Linear)),
+                        TypeRV::new_row_var_use(1, TypeBound::Linear),
                     ),
                 );
                 // pack some wires into a tuple
