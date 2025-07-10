@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.3](https://github.com/CQCL/tket2/compare/tket2-v0.12.2...tket2-v0.12.3) - 2025-07-08
+
+### New Features
+
+- Add llvm codegen for `tket2.bool` ([#950](https://github.com/CQCL/tket2/pull/950))
+
 ## [0.12.2](https://github.com/CQCL/tket2/compare/tket2-v0.12.1...tket2-v0.12.2) - 2025-06-30
 
 ### Refactor

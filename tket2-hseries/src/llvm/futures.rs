@@ -58,7 +58,7 @@ impl CodegenExtension for FuturesCodegenExtension {
 }
 
 /// The LLVM type representing a future handle.
-pub fn future_type(context: &Context) -> BasicTypeEnum {
+pub fn future_type(context: &Context) -> BasicTypeEnum<'_> {
     // The runtime represent a future handle as an i64
     context.i64_type().into()
 }

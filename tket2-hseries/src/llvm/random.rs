@@ -34,7 +34,7 @@ impl CodegenExtension for RandomCodegenExtension {
     }
 }
 
-fn rng_context_type(context: &Context) -> BasicTypeEnum {
+fn rng_context_type(context: &Context) -> BasicTypeEnum<'_> {
     context.struct_type(&[], false).into()
 }
 
