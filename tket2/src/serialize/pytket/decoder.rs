@@ -31,6 +31,7 @@ use super::{
 };
 use crate::extension::rotation::rotation_type;
 use crate::serialize::pytket::config::Tk1DecoderConfig;
+use crate::serialize::pytket::decoder::wires::WireTracker;
 use crate::serialize::pytket::METADATA_INPUT_PARAMETERS;
 use crate::symbolic_constant_op;
 use op::Tk1Op;
@@ -56,6 +57,8 @@ pub struct Tk1DecoderContext<'h> {
     qubit_registers: HashSet<RegisterHash>,
     /// An ordered set of parameters found in operation arguments, and added as inputs.
     parameters: IndexMap<String, LoadedParameter>,
+    /// A tracker keeping track of the generated wires and their corresponding types.
+    wire_tracker: WireTracker<'h>,
     /// Configuration for decoding commands.
     ///
     /// Contains custom operation decoders, that define translation of legacy tket

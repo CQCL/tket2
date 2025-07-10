@@ -58,14 +58,18 @@ impl<'a> InputWires<'a> {
     /// This transformation packs/unpacks tuples, converts between bool types, etc.
     ///
     /// Any wires not specified by `new_types` will be left unchanged.
+    ///
+    /// The `operation` parameter is a user-friendly location name used when reporting errors.
     pub fn into_types<'op>(
         self,
         new_types: impl IntoIterator<Item = &'op Type>,
         operation: &str,
         decoder: &mut Tk1DecoderContext<'a>,
     ) -> Result<InputWires<'a>, Tk1DecodeError> {
-        let _ = (new_types, operation, decoder);
-        todo!()
+        let new_wires = decoder
+            .wire_tracker
+            .transform_wires(self.wires, new_types, operation, decoder)?;
+        Ok(InputWires { wires: new_wires })
     }
 
     /// Transform the current wires into a new set of wires with the given
@@ -96,7 +100,7 @@ impl<'a> InputWires<'a> {
     /// Returns an error otherwise.
     pub fn check_len(&self, expected: usize, operation: &str) -> Result<(), Tk1DecodeError> {
         if self.wires.len() != expected {
-            let types = self.wires.iter().map(|wd| wd.op.to_string()).collect_vec();
+            let types = self.wires.iter().map(|wd| wd.ty.to_string()).collect_vec();
             Err(Tk1DecodeError::UnexpectedInputWires {
                 expected,
                 actual: self.wires.len(),
@@ -124,12 +128,13 @@ pub struct WireData<'a> {
     /// The identifier in the hugr.
     pub wire: Wire,
     /// The type of the wire.
-    pub op: Arc<Type>,
+    pub ty: Arc<Type>,
     /// List of pytket arguments corresponding to this wire.
     pub args: Vec<&'a tket_json_rs::register::ElementId>,
 }
 
 /// Tracker for wires added to a hugr.
+#[derive(Debug, Clone)]
 pub struct WireTracker<'a> {
     phantom: std::marker::PhantomData<&'a ()>,
 }
@@ -138,16 +143,30 @@ impl<'a> WireTracker<'a> {
     /// Transform a list of wires into an equivalent set with the given types.
     ///
     /// This transformation packs/unpacks tuples, converts between bool types, etc.
+    ///
+    /// The `operation` parameter is a user-friendly location name used when reporting errors.
     pub fn transform_wires<'op>(
         wires: Vec<WireData<'a>>,
         new_types: impl IntoIterator<Item = &'op Type>,
         operation: &str,
         decoder: &mut Tk1DecoderContext<'a>,
     ) -> Result<Vec<WireData<'a>>, Tk1DecodeError> {
+        // If we already have the types, we can just return the wires.
+        let new_types = new_types.into_iter().collect_vec();
+        if wires
+            .iter()
+            .zip(new_types.iter())
+            .all(|(wd, new_type)| wd.ty.as_ref() == *new_type)
+        {
+            return Ok(wires);
+        }
+
         let new_types = new_types.into_iter();
         let new_wires: Vec<WireData> = Vec::with_capacity(new_types.size_hint().0);
-
-        let _ = (operation, decoder, new_wires, wires);
-        todo!();
+        let _ = (operation, decoder, new_wires);
+        // TODO: We need to implement the different mappings here.
+        // Check if we can use the memoized unpacking helper from
+        // [tket2_hseries::extension::qsystem::barrier].
+        todo!()
     }
 }
