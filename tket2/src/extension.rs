@@ -95,7 +95,7 @@ impl CustomSignatureFunc for Tk1Signature {
 pub const TKET2_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.quantum");
 
 /// Current version of the TKET 2 extension
-pub const TKET2_EXTENSION_VERSION: Version = Version::new(0, 1, 1);
+pub const TKET2_EXTENSION_VERSION: Version = Version::new(0, 1, 2);
 
 lazy_static! {
     /// The extension definition for TKET2 ops and types.
