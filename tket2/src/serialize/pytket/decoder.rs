@@ -2,19 +2,21 @@
 
 mod op;
 mod param;
+mod wires;
+
+pub use wires::{InputWires, WireData};
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
-use hugr::builder::{Container, Dataflow, DataflowHugr, FunctionBuilder};
+use hugr::builder::{BuildHandle, Container, Dataflow, DataflowSubContainer, FunctionBuilder};
 use hugr::extension::prelude::{bool_t, qb_t};
-
-use hugr::ops::handle::NodeHandle;
+use hugr::ops::handle::{FuncID, NodeHandle};
 use hugr::ops::{OpType, Value};
 use hugr::std_extensions::arithmetic::float_types::ConstF64;
 use hugr::types::Signature;
 use hugr::{Hugr, Wire};
 
-use derive_more::Display;
 use indexmap::IndexMap;
 use itertools::{EitherOrBoth, Itertools};
 use serde_json::json;
@@ -27,19 +29,26 @@ use super::{
     METADATA_B_REGISTERS, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS,
     METADATA_Q_REGISTERS,
 };
-use crate::extension::rotation::{rotation_type, RotationOp};
+use crate::extension::rotation::rotation_type;
+use crate::serialize::pytket::config::Tk1DecoderConfig;
+use crate::serialize::pytket::decoder::wires::WireTracker;
 use crate::serialize::pytket::METADATA_INPUT_PARAMETERS;
 use crate::symbolic_constant_op;
 use op::Tk1Op;
-use param::{parse_pytket_param, PytketParam};
+use param::parser::{parse_pytket_param, PytketParam};
+use param::LoadedParameter;
 
+/// State of the tket circuit being decoded.
+///
+/// This is passed to the extension decoders in [`PytketDecoder`] while
+///
 /// The state of an in-progress [`FunctionBuilder`] being built from a [`SerialCircuit`].
 ///
 /// Mostly used to define helper internal methods.
-#[derive(Debug, Clone)]
-pub(super) struct Tk1DecoderContext {
+#[derive(Debug)]
+pub struct Tk1DecoderContext<'h> {
     /// The Hugr being built.
-    pub hugr: FunctionBuilder<Hugr>,
+    pub builder: FunctionBuilder<&'h mut Hugr>,
     /// A map from the tracked pytket registers to the [`Wire`]s in the circuit.
     register_wires: HashMap<RegisterHash, Wire>,
     /// The ordered list of register to have at the output.
@@ -48,20 +57,106 @@ pub(super) struct Tk1DecoderContext {
     qubit_registers: HashSet<RegisterHash>,
     /// An ordered set of parameters found in operation arguments, and added as inputs.
     parameters: IndexMap<String, LoadedParameter>,
+    /// A tracker keeping track of the generated wires and their corresponding types.
+    wire_tracker: WireTracker<'h>,
+    /// Configuration for decoding commands.
+    ///
+    /// Contains custom operation decoders, that define translation of legacy tket
+    /// commands into HUGR operations.
+    #[expect(unused)]
+    config: Arc<Tk1DecoderConfig>,
 }
 
-impl Tk1DecoderContext {
-    /// Initialize a new [`Tk1Decoder`], using the metadata from a [`SerialCircuit`].
-    pub fn try_new(serialcirc: &SerialCircuit) -> Result<Self, Tk1ConvertError> {
+impl<'h> Tk1DecoderContext<'h> {
+    /// Initialize a new [`Tk1DecoderContext`], using the metadata from a
+    /// [`SerialCircuit`].
+    ///
+    /// The circuit will be defined as a new function in the HUGR.
+    ///
+    /// ### Parameters
+    ///
+    /// - `serialcirc`: The serialised circuit to decode.
+    /// - `hugr`: The [`Hugr`] to define the new function in.
+    /// - `fn_name`: The name of the function to create. If `None`, we will use
+    ///   the name of the circuit, or "main" if the circuit has no name.
+    /// - `config`: The configuration for the decoder, containing custom operation decoders.
+    pub(super) fn new(
+        serialcirc: &SerialCircuit,
+        hugr: &'h mut Hugr,
+        fn_name: Option<String>,
+        config: Tk1DecoderConfig,
+    ) -> Result<Self, Tk1ConvertError> {
+        let config = Arc::new(config);
+        Self::new_arc(serialcirc, hugr, fn_name, config)
+    }
+
+    /// Initialize a new [`Tk1DecoderContext`], using the metadata from a
+    /// [`SerialCircuit`].
+    ///
+    /// The circuit will be defined as a new function in the HUGR.
+    ///
+    /// ### Parameters
+    ///
+    /// - `serialcirc`: The serialised circuit to decode.
+    /// - `hugr`: The [`Hugr`] to define the new function in.
+    /// - `fn_name`: The name of the function to create. If `None`, we will use
+    ///   the name of the circuit, or "main" if the circuit has no name.
+    /// - `config`: The configuration for the decoder, containing custom operation decoders.
+    fn new_arc(
+        serialcirc: &SerialCircuit,
+        hugr: &'h mut Hugr,
+        fn_name: Option<String>,
+        config: Arc<Tk1DecoderConfig>,
+    ) -> Result<Self, Tk1ConvertError> {
         let num_qubits = serialcirc.qubits.len();
         let num_bits = serialcirc.bits.len();
         let sig =
             Signature::new_endo([vec![qb_t(); num_qubits], vec![bool_t(); num_bits]].concat());
 
-        let name = serialcirc.name.clone().unwrap_or_default();
-        let mut dfg = FunctionBuilder::new(name, sig).unwrap();
+        let name = match (fn_name, &serialcirc.name) {
+            (Some(name), _) => name,
+            (None, Some(serial_name)) => serial_name.clone(),
+            (None, None) => "main".to_string(),
+        };
+        let mut dfg: FunctionBuilder<&mut Hugr> =
+            FunctionBuilder::with_hugr(hugr, name, sig).unwrap();
         let dangling_wires = dfg.input_wires().collect::<Vec<_>>();
 
+        Self::init_metadata(&mut dfg, serialcirc);
+
+        let qubit_registers = serialcirc.qubits.iter().map(RegisterHash::from).collect();
+
+        let ordered_registers = serialcirc
+            .qubits
+            .iter()
+            .map(|qb| &qb.id)
+            .chain(serialcirc.bits.iter().map(|bit| &bit.id))
+            .map(|reg| {
+                check_register(reg)?;
+                Ok(RegisterHash::from(reg))
+            })
+            .collect::<Result<Vec<RegisterHash>, Tk1ConvertError>>()?;
+
+        // Map each register element to their starting wire.
+        let register_wires: HashMap<RegisterHash, Wire> = ordered_registers
+            .iter()
+            .copied()
+            .zip(dangling_wires)
+            .collect();
+
+        Ok(Tk1DecoderContext {
+            builder: dfg,
+            register_wires,
+            ordered_registers,
+            qubit_registers,
+            parameters: IndexMap::new(),
+            config,
+        })
+    }
+
+    /// Store the serialised circuit information as HUGR metadata,
+    /// so it can be reused later when re-encoding the circuit.
+    fn init_metadata(dfg: &mut FunctionBuilder<&mut Hugr>, serialcirc: &SerialCircuit) {
         // Metadata. The circuit requires "name", and we store other things that
         // should pass through the serialization roundtrip.
         dfg.set_metadata(METADATA_PHASE, json!(serialcirc.phase));
@@ -98,38 +193,13 @@ impl Tk1DecoderContext {
         }
         dfg.set_metadata(METADATA_Q_OUTPUT_REGISTERS, json!(output_qubits));
         dfg.set_metadata(METADATA_B_OUTPUT_REGISTERS, json!(output_bits));
-
-        let qubit_registers = serialcirc.qubits.iter().map(RegisterHash::from).collect();
-
-        let ordered_registers = serialcirc
-            .qubits
-            .iter()
-            .map(|qb| &qb.id)
-            .chain(serialcirc.bits.iter().map(|bit| &bit.id))
-            .map(|reg| {
-                check_register(reg)?;
-                Ok(RegisterHash::from(reg))
-            })
-            .collect::<Result<Vec<RegisterHash>, Tk1ConvertError>>()?;
-
-        // Map each register element to their starting wire.
-        let register_wires: HashMap<RegisterHash, Wire> = ordered_registers
-            .iter()
-            .copied()
-            .zip(dangling_wires)
-            .collect();
-
-        Ok(Tk1DecoderContext {
-            hugr: dfg,
-            register_wires,
-            ordered_registers,
-            qubit_registers,
-            parameters: IndexMap::new(),
-        })
     }
 
-    /// Finish building the [`Hugr`].
-    pub fn finish(mut self) -> Hugr {
+    /// Finish building the function definition for the legacy tket circuit.
+    ///
+    /// After this call, the HUGR passed to the [`Tk1DecoderContext::new`]
+    /// constructor will contain the fully defined function.
+    pub(super) fn finish(mut self) -> Result<BuildHandle<FuncID<true>>, Tk1ConvertError> {
         // Order the final wires according to the serial circuit register order.
         let mut outputs = Vec::with_capacity(self.ordered_registers.len());
         for register in self.ordered_registers {
@@ -144,16 +214,21 @@ impl Tk1DecoderContext {
         // Store the name for the input parameter wires
         if !self.parameters.is_empty() {
             let params = self.parameters.keys().cloned().collect_vec();
-            self.hugr
+            self.builder
                 .set_metadata(METADATA_INPUT_PARAMETERS, json!(params));
         }
 
-        self.hugr.finish_hugr_with_outputs(outputs).unwrap()
+        self.builder
+            .finish_with_outputs(outputs)
+            .map_err(Tk1ConvertError::custom)
     }
 
     /// Add a tket1 [`circuit_json::Command`] from the serial circuit to the
     /// decoder.
-    pub fn add_command(&mut self, command: circuit_json::Command) -> Result<(), OpConvertError> {
+    pub(super) fn add_command(
+        &mut self,
+        command: circuit_json::Command,
+    ) -> Result<(), OpConvertError> {
         let circuit_json::Command {
             op, args, opgroup, ..
         } = command;
@@ -170,12 +245,12 @@ impl Tk1DecoderContext {
         let (input_wires, output_registers) = self.get_op_wires(&tk1op, &args, op_params)?;
         let op: OpType = (&tk1op).into();
 
-        let new_op = self.hugr.add_dataflow_op(op, input_wires).unwrap();
+        let new_op = self.builder.add_dataflow_op(op, input_wires).unwrap();
         let wires = new_op.outputs();
 
         // Store the opgroup metadata.
         if let Some(opgroup) = opgroup {
-            self.hugr
+            self.builder
                 .set_child_metadata(new_op.node(), METADATA_OPGROUP, json!(opgroup));
         }
 
@@ -277,7 +352,7 @@ impl Tk1DecoderContext {
     /// The returned wires always have float type.
     fn load_parameter(&mut self, param: String) -> Wire {
         fn process(
-            hugr: &mut FunctionBuilder<Hugr>,
+            hugr: &mut FunctionBuilder<&mut Hugr>,
             input_params: &mut IndexMap<String, LoadedParameter>,
             parsed: PytketParam,
             param: &str,
@@ -323,8 +398,8 @@ impl Tk1DecoderContext {
         }
 
         let parsed = parse_pytket_param(&param);
-        process(&mut self.hugr, &mut self.parameters, parsed, &param)
-            .as_rotation(&mut self.hugr)
+        process(&mut self.builder, &mut self.parameters, parsed, &param)
+            .as_rotation(&mut self.builder)
             .wire
     }
 
@@ -344,6 +419,25 @@ impl Tk1DecoderContext {
     }
 }
 
+/// Result of trying to decode pytket operation into a HUGR definition.
+///
+/// This flag indicates that either
+/// - The operation was successful encoded and is now registered on the
+///   [`Tk1DecoderContext`]
+/// - The operation cannot be encoded, and the context was left unchanged.
+///
+/// The latter is a recoverable error, as it promises that the context wasn't
+/// modified. For non-recoverable errors, see [`Tk1ConvertError`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, derive_more::Display)]
+pub enum DecodeStatus {
+    /// The pytket operation was successfully encoded and registered in the
+    /// context.
+    Success,
+    /// The pytket operation could not be encoded, and the context was left
+    /// unchanged.
+    Unsupported,
+}
+
 /// Only single-indexed registers are supported.
 fn check_register(register: &register::ElementId) -> Result<(), Tk1ConvertError> {
     if register.1.len() != 1 {
@@ -352,86 +446,5 @@ fn check_register(register: &register::ElementId) -> Result<(), Tk1ConvertError>
         })
     } else {
         Ok(())
-    }
-}
-
-/// The type of a loaded parameter in the Hugr.
-#[derive(Debug, Display, Clone, Copy, Hash, PartialEq, Eq)]
-enum LoadedParameterType {
-    Float,
-    Rotation,
-}
-
-/// A loaded parameter in the Hugr.
-///
-/// Tracking the type of the wire lets us delay conversion between the types
-/// until they are actually needed.
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-struct LoadedParameter {
-    /// The type of the parameter.
-    pub typ: LoadedParameterType,
-    /// The wire where the parameter is loaded.
-    pub wire: Wire,
-}
-
-impl LoadedParameter {
-    /// Returns a `LoadedParameter` for a float param.
-    pub fn float(wire: Wire) -> LoadedParameter {
-        LoadedParameter {
-            typ: LoadedParameterType::Float,
-            wire,
-        }
-    }
-
-    /// Returns a `LoadedParameter` for a rotation param.
-    pub fn rotation(wire: Wire) -> LoadedParameter {
-        LoadedParameter {
-            typ: LoadedParameterType::Rotation,
-            wire,
-        }
-    }
-
-    /// Convert the parameter into a given type, if necessary.
-    ///
-    /// Adds the necessary operations to the Hugr and returns a new wire.
-    pub fn as_type(
-        &self,
-        typ: LoadedParameterType,
-        hugr: &mut FunctionBuilder<Hugr>,
-    ) -> LoadedParameter {
-        match (self.typ, typ) {
-            (LoadedParameterType::Float, LoadedParameterType::Rotation) => {
-                let wire = hugr
-                    .add_dataflow_op(RotationOp::from_halfturns_unchecked, [self.wire])
-                    .unwrap()
-                    .out_wire(0);
-                LoadedParameter::rotation(wire)
-            }
-            (LoadedParameterType::Rotation, LoadedParameterType::Float) => {
-                let wire = hugr
-                    .add_dataflow_op(RotationOp::to_halfturns, [self.wire])
-                    .unwrap()
-                    .out_wire(0);
-                LoadedParameter::float(wire)
-            }
-            _ => {
-                debug_assert_eq!(self.typ, typ, "cannot convert {} to {}", self.typ, typ);
-                *self
-            }
-        }
-    }
-
-    /// Convert the parameter into a float, if necessary.
-    ///
-    /// Adds the necessary operations to the Hugr and returns a new wire.
-    pub fn as_float(&self, hugr: &mut FunctionBuilder<Hugr>) -> LoadedParameter {
-        self.as_type(LoadedParameterType::Float, hugr)
-    }
-
-    /// Convert the parameter into a rotation, if necessary.
-    ///
-    /// Adds the necessary operations to the Hugr and returns a new wire.
-    pub fn as_rotation(&self, hugr: &mut FunctionBuilder<Hugr>) -> LoadedParameter {
-        self.as_type(LoadedParameterType::Rotation, hugr)
     }
 }

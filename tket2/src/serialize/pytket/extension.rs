@@ -27,8 +27,9 @@ pub(crate) use bool::set_bits_op;
 pub(crate) use tk1::OpaqueTk1Op;
 
 use super::encoder::TrackedValues;
+use crate::serialize::pytket::decoder::{DecodeStatus, InputWires, Tk1DecoderContext};
 use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext};
-use crate::serialize::pytket::Tk1ConvertError;
+use crate::serialize::pytket::{Tk1ConvertError, Tk1DecodeError};
 use crate::Circuit;
 use hugr::extension::ExtensionId;
 use hugr::ops::constant::OpaqueValue;
@@ -84,6 +85,38 @@ pub trait PytketEmitter<H: HugrView> {
     ) -> Result<Option<TrackedValues>, Tk1ConvertError<H::Node>> {
         let _ = (value, encoder);
         Ok(None)
+    }
+}
+
+/// A decoder of pytket operations and types that transforms them into HUGR
+/// primitives.
+///
+/// A [decoder configuration](crate::serialize::pytket::Tk1DecoderConfig)
+/// contains a list of such decoders.
+pub trait PytketDecoder {
+    /// A list of pytket's [`tket_json_rs::OpType`] supported by this decoder.
+    ///
+    /// [`PytketDecoder::op_to_hugr`] will only be called for commands
+    /// containing these.
+    fn op_types(&self) -> Vec<tket_json_rs::OpType>;
+
+    /// Given a pytket [`tket_json_rs::circuit_json::Operation`] node in the
+    /// HUGR circuit and its operation type, try to convert it to a pytket
+    /// operation and add it to the pytket encoder.
+    ///
+    /// Returns an [`DecodeStatus`] indicating if the operation was successfully
+    /// converted. If the operation is not supported by the encoder, it's
+    /// important to **not** modify the `encoder` context as that may invalidate
+    /// the context for other encoders that may be called afterwards.
+    fn op_to_hugr<'a>(
+        &self,
+        op: &tket_json_rs::circuit_json::Operation,
+        wires: &InputWires<'a>,
+        opgroup: Option<&str>,
+        decoder: &mut Tk1DecoderContext<'a>,
+    ) -> Result<DecodeStatus, Tk1DecodeError> {
+        let _ = (op, wires, opgroup, decoder);
+        Ok(DecodeStatus::Unsupported)
     }
 }
 
