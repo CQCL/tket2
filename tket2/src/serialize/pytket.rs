@@ -1,7 +1,7 @@
 //! Serialization and deserialization of circuits using the `pytket` JSON format.
 
 mod config;
-mod decoder;
+pub mod decoder;
 pub mod encoder;
 pub mod extension;
 
@@ -11,6 +11,8 @@ pub use extension::PytketEmitter;
 
 use hugr::core::HugrNode;
 
+use hugr::hugr::hugrmut::HugrMut;
+use hugr::ops::handle::NodeHandle;
 use hugr::{Hugr, Wire};
 use itertools::Itertools;
 
@@ -29,8 +31,12 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::register::{Bit, ElementId, Qubit};
 
 use crate::circuit::Circuit;
+use crate::serialize::pytket::config::{
+    default_decoder_config, default_encoder_config, Tk1DecoderConfig, Tk1EncoderConfig,
+};
 
 use self::decoder::Tk1DecoderContext;
+
 pub use crate::passes::pytket::lower_to_pytket;
 
 /// Prefix used for storing metadata in the hugr nodes.
@@ -59,7 +65,11 @@ pub trait TKETDecode: Sized {
     /// Error type of encoding errors.
     type EncodeError;
     /// Convert the serialized circuit to a circuit.
+    ///
+    /// Uses a default set of extension decoders to translate operations.
     fn decode(self) -> Result<Circuit, Self::DecodeError>;
+    /// Convert the serialized circuit to a circuit.
+    fn decode_with_config(self, config: Tk1DecoderConfig) -> Result<Circuit, Self::DecodeError>;
     /// Convert a circuit to a serialized pytket circuit.
     ///
     /// Uses a default set of emitters to translate operations.
@@ -81,10 +91,18 @@ impl TKETDecode for SerialCircuit {
     type EncodeError = Tk1ConvertError;
 
     fn decode(self) -> Result<Circuit, Self::DecodeError> {
-        let mut decoder = Tk1DecoderContext::try_new(&self)?;
+        let config = default_decoder_config();
+        Self::decode_with_config(self, config)
+    }
+
+    fn decode_with_config(self, config: Tk1DecoderConfig) -> Result<Circuit, Self::DecodeError> {
+        let mut hugr = Hugr::new();
+
+        let mut decoder = Tk1DecoderContext::new(&self, &mut hugr, None, config)?;
 
         if !self.phase.is_empty() {
             // TODO - add a phase gate
+            // <https://github.com/CQCL/tket2/issues/598>
             // let phase = Param::new(serialcirc.phase);
             // decoder.add_phase(phase);
         }
@@ -92,7 +110,9 @@ impl TKETDecode for SerialCircuit {
         for com in self.commands {
             decoder.add_command(com)?;
         }
-        Ok(decoder.finish().into())
+        let main_func = decoder.finish()?;
+        hugr.set_entrypoint(main_func.node());
+        Ok(hugr.into())
     }
 
     fn encode(circuit: &Circuit) -> Result<Self, Self::EncodeError> {
@@ -271,6 +291,47 @@ pub enum Tk1ConvertError<N = hugr::Node> {
 }
 
 impl<N> Tk1ConvertError<N> {
+    /// Create a new error with a custom message.
+    pub fn custom(msg: impl ToString) -> Self {
+        Self::CustomError {
+            msg: msg.to_string(),
+        }
+    }
+}
+
+/// Error type for conversion between tket2 ops and pytket operations.
+#[derive(derive_more::Debug, Display, Error)]
+#[non_exhaustive]
+pub enum Tk1DecodeError {
+    /// The pytket circuit uses multi-indexed registers.
+    //
+    // This could be supported in the future, if there is a need for it.
+    #[display("Register {register} in the circuit has multiple indices. Tket2 does not support multi-indexed registers.")]
+    MultiIndexedRegister {
+        /// The register name.
+        register: String,
+    },
+    /// Found an unexpected number of input wires when decoding an operation.
+    #[display("Expected {expected} input wires when decoding a {operation}, but found {actual} with types {}.", types.iter().join(", "))]
+    UnexpectedInputWires {
+        /// The expected amount of input wires.
+        expected: usize,
+        /// The actual amount of input wires.
+        actual: usize,
+        /// The types of the input wires.
+        types: Vec<String>,
+        /// The operation type that was being decoded.
+        operation: String,
+    },
+    /// Custom user-defined error raised while encoding an operation.
+    #[display("Error while decoding operation: {msg}")]
+    CustomError {
+        /// The custom error message
+        msg: String,
+    },
+}
+
+impl Tk1DecodeError {
     /// Create a new error with a custom message.
     pub fn custom(msg: impl ToString) -> Self {
         Self::CustomError {

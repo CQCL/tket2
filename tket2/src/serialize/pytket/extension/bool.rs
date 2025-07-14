@@ -2,13 +2,15 @@
 
 use super::PytketEmitter;
 use crate::extension::bool::{BoolOp, ConstBool, BOOL_EXTENSION_ID, BOOL_TYPE_NAME};
+use crate::serialize::pytket::decoder::{DecodeStatus, InputWires, Tk1DecoderContext};
 use crate::serialize::pytket::encoder::{
     make_tk1_classical_expression, make_tk1_classical_operation, EncodeStatus, Tk1EncoderContext,
     TrackedValues,
 };
-use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
-use crate::serialize::pytket::Tk1ConvertError;
+use crate::serialize::pytket::extension::{PytketDecoder, PytketTypeTranslator, RegisterCount};
+use crate::serialize::pytket::{Tk1ConvertError, Tk1DecodeError};
 use crate::Circuit;
+use hugr::extension::prelude::bool_t;
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
 use hugr::ops::constant::OpaqueValue;
@@ -98,6 +100,41 @@ impl PytketTypeTranslator for BoolEmitter {
         } else {
             None
         }
+    }
+}
+
+impl PytketDecoder for BoolEmitter {
+    fn op_types(&self) -> Vec<tket_json_rs::OpType> {
+        vec![tket_json_rs::OpType::ClExpr]
+    }
+
+    fn op_to_hugr<'a>(
+        &self,
+        op: &tket_json_rs::circuit_json::Operation,
+        wires: &InputWires<'a>,
+        _opgroup: Option<&str>,
+        decoder: &mut Tk1DecoderContext<'a>,
+    ) -> Result<DecodeStatus, Tk1DecodeError> {
+        let Some(clexpr) = &op.classical_expr else {
+            return Ok(DecodeStatus::Unsupported);
+        };
+
+        let res = match clexpr.expr.op {
+            ClOp::BitEq => {
+                wires.check_len(2, "BitEq")?;
+                let ([b1, b2], wires) =
+                    wires
+                        .clone()
+                        .into_types_array(&[bool_t(), bool_t()], "BitEq", decoder)?;
+
+                //let eq = decoder.add_op(BoolOp::eq.into(), [b1.wire, b2.wire]);
+                //decoder.register_wires(eq.node, )
+
+                DecodeStatus::Unsupported
+            }
+            _ => DecodeStatus::Unsupported,
+        };
+        Ok(res)
     }
 }
 

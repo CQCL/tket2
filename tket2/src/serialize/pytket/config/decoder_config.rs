@@ -1,0 +1,102 @@
+//! Configuration for converting [`tket_json_rs::circuit_json::SerialCircuit`]
+//! into [`Circuit`]s.
+//!
+//! A configuration struct contains a list of custom decoders that define
+//! translations of legacy tket primitives into HUGR operations.
+
+use hugr::types::Type;
+use itertools::Itertools;
+use std::collections::HashMap;
+
+use crate::serialize::pytket::decoder::{DecodeStatus, InputWires, Tk1DecoderContext};
+use crate::serialize::pytket::extension::{PytketDecoder, RegisterCount, TypeTranslator};
+use crate::serialize::pytket::Tk1DecodeError;
+
+use super::TypeTranslatorSet;
+
+/// Configuration for converting [`tket_json_rs::circuit_json::SerialCircuit`]
+/// into [`Circuit`]s.
+///
+/// Contains custom decoders that define translations for HUGR operations,
+/// types, and consts into pytket primitives.
+#[derive(Default, derive_more::Debug)]
+pub struct Tk1DecoderConfig {
+    /// Operation emitters
+    #[debug(skip)]
+    pub(super) decoders: Vec<Box<dyn PytketDecoder + Send + Sync>>,
+    /// Pre-computed map from pytket optypes to corresponding decoders in
+    /// `decoders`, identified by their index.
+    #[debug("{:?}", optype_decoders.keys().collect_vec())]
+    optype_decoders: HashMap<tket_json_rs::OpType, Vec<usize>>,
+    /// Set of type translators used to translate HUGR types into pytket registers.
+    type_translators: TypeTranslatorSet,
+}
+
+impl Tk1DecoderConfig {
+    /// Create a new [`Tk1DecoderConfig`] with no decoders.
+    pub fn new() -> Self {
+        Self {
+            decoders: vec![],
+            optype_decoders: HashMap::new(),
+            type_translators: TypeTranslatorSet::default(),
+        }
+    }
+
+    /// Add a decoder to the configuration.
+    pub fn add_decoder(&mut self, decoder: impl PytketDecoder + Send + Sync + 'static) {
+        let idx = self.decoders.len();
+
+        for optype in decoder.op_types() {
+            self.optype_decoders.entry(optype).or_default().push(idx);
+        }
+
+        self.decoders.push(Box::new(decoder));
+    }
+
+    /// Add a type translator to the configuration.
+    pub fn add_type_translator(&mut self, translator: impl TypeTranslator + Send + Sync + 'static) {
+        self.type_translators.add_type_translator(translator);
+    }
+
+    /// Encode a HUGR operation using the registered custom encoders.
+    ///
+    /// Returns `true` if the operation was successfully converted and no further
+    /// encoders should be called.
+    pub(super) fn op_to_hugr<'a>(
+        &self,
+        op: &tket_json_rs::circuit_json::Operation,
+        args: InputWires<'a>,
+        opgroup: Option<&str>,
+        decoder: &mut Tk1DecoderContext<'a>,
+    ) -> Result<DecodeStatus, Tk1DecodeError> {
+        let mut result = DecodeStatus::Unsupported;
+        for enc in self.decoders_for_optype(&op.op_type) {
+            result = enc.op_to_hugr(op, &args, opgroup, decoder)?;
+            if result == DecodeStatus::Success {
+                break;
+            }
+        }
+        Ok(result)
+    }
+
+    /// Lists the decoder that can handle a given pytket optype.
+    fn decoders_for_optype(
+        &self,
+        optype: &tket_json_rs::OpType,
+    ) -> impl Iterator<Item = &Box<dyn PytketDecoder + Send + Sync>> {
+        self.optype_decoders
+            .get(optype)
+            .into_iter()
+            .flatten()
+            .map(move |idx| &self.decoders[*idx])
+    }
+
+    /// Translate a HUGR type into a count of qubits, bits, and parameters,
+    /// using the registered custom translator.
+    ///
+    /// Only tuple sums, bools, and custom types are supported.
+    /// Other types will return `None`.
+    pub fn type_to_pytket(&self, typ: &Type) -> Option<RegisterCount> {
+        self.type_translators.type_to_pytket(typ)
+    }
+}
