@@ -15,7 +15,7 @@ categories = ["compilers"]
 
 [features]
 default = ["cli"]
-cli = ["dep:clap", "dep:hugr-cli"]
+cli = ["dep:clap", "dep:hugr-cli", "dep:anyhow"]
 llvm = ["tket2/llvm", "dep:anyhow"]
 
 [[bin]]

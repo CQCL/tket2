@@ -72,7 +72,7 @@ impl RandomType {
                 CONTEXT_TYPE_NAME.to_owned(),
                 vec![],
                 EXTENSION_ID,
-                TypeBound::Any,
+                TypeBound::Linear,
                 extension_ref,
             ),
         }

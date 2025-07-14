@@ -66,7 +66,7 @@ use hugr::{
     },
     type_row,
     types::{
-        type_param::{TypeArgError, TypeParam},
+        type_param::{TermTypeError, TypeParam},
         CustomType, FuncValueType, PolyFuncTypeRV, Signature, SumType, Type, TypeArg, TypeBound,
         TypeEnum, TypeRV, TypeRow, TypeRowRV,
     },
@@ -75,7 +75,7 @@ use hugr::{
 use itertools::Itertools as _;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use smol_str::SmolStr;
+use smol_str::{format_smolstr, SmolStr};
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
 use crate::extension::futures;
@@ -85,7 +85,7 @@ use super::futures::future_type;
 /// The "tket2.wasm" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.wasm");
 /// The "tket2.wasm" extension version.
-pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+pub const EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
     /// The `tket2.wasm` extension.
@@ -114,13 +114,12 @@ lazy_static! {
     pub static ref FUNC_TYPE_NAME: SmolStr = SmolStr::new_inline("func");
 
     /// The [TypeParam] of `tket2.wasm.lookup` specifying the name of the function.
-    pub static ref NAME_PARAM: TypeParam = TypeParam::String;
+    pub static ref NAME_PARAM: TypeParam = TypeParam::StringType;
     /// The [TypeParam] of various types and ops specifying the input signature of a function.
     pub static ref INPUTS_PARAM: TypeParam =
-        TypeParam::List { param: Box::new(TypeBound::Any.into()) };
+        TypeParam::ListType(Box::new(TypeBound::Linear.into()));
     /// The [TypeParam] of various types and ops specifying the output signature of a function.
-    pub static ref OUTPUTS_PARAM: TypeParam =
-        TypeParam::List { param: Box::new(TypeBound::Any.into()) };
+    pub static ref OUTPUTS_PARAM: TypeParam = TypeParam::ListType(Box::new(TypeBound::Linear.into()));
 }
 
 fn add_wasm_type_defs(
@@ -215,9 +214,8 @@ impl WasmType {
         outputs: impl Into<TypeRowRV>,
         extension_ref: &Weak<Extension>,
     ) -> CustomType {
-        let row_to_arg = |row: TypeRowRV| TypeArg::Sequence {
-            elems: row.into_owned().into_iter().map_into().collect(),
-        };
+        let row_to_arg =
+            |row: TypeRowRV| TypeArg::List(row.into_owned().into_iter().map_into().collect());
         CustomType::new(
             FUNC_TYPE_NAME.to_owned(),
             [row_to_arg(inputs.into()), row_to_arg(outputs.into())],
@@ -240,7 +238,7 @@ impl WasmType {
                 CONTEXT_TYPE_NAME.to_owned(),
                 [],
                 EXTENSION_ID,
-                TypeBound::Any,
+                TypeBound::Linear,
                 extension_ref,
             ),
             s @ Self::Func { .. } => s.clone().into_custom_type(extension_ref),
@@ -281,15 +279,18 @@ impl TryFrom<Type> for WasmType {
             Err(())?
         };
 
-        custom_type.to_owned().try_into()
+        custom_type.to_owned().try_into().map_err(|_| ())
     }
 }
 
 impl TryFrom<CustomType> for WasmType {
-    type Error = ();
+    type Error = SignatureError;
     fn try_from(value: CustomType) -> Result<Self, Self::Error> {
         if value.extension() != &EXTENSION_ID {
-            Err(())?
+            Err(SignatureError::ExtensionMismatch(
+                EXTENSION_ID,
+                value.extension().to_owned(),
+            ))?
         }
 
         match value.name() {
@@ -297,76 +298,23 @@ impl TryFrom<CustomType> for WasmType {
             n if *n == *CONTEXT_TYPE_NAME => Ok(WasmType::Context),
             n if *n == *FUNC_TYPE_NAME => {
                 let [inputs, outputs] = value.args() else {
-                    Err(())?
+                    Err(SignatureError::InvalidTypeArgs)?
                 };
-                let inputs = type_arg_into_type_row_rv(inputs.clone()).ok_or(())?;
-                let outputs = type_arg_into_type_row_rv(outputs.clone()).ok_or(())?;
+                let inputs = TypeRowRV::try_from(inputs.clone())?;
+                let outputs = TypeRowRV::try_from(outputs.clone())?;
 
                 Ok(WasmType::Func { inputs, outputs })
             }
-            _ => Err(()),
+            n => Err(SignatureError::NameMismatch(
+                format_smolstr!(
+                    "{}, {} or {}",
+                    MODULE_TYPE_NAME.as_str(),
+                    CONTEXT_TYPE_NAME.as_str(),
+                    FUNC_TYPE_NAME.as_str()
+                ),
+                n.to_owned(),
+            )),
         }
-    }
-}
-
-/// Fallibly convert a [TypeArg] to a [TypeRV].
-///
-/// This will fail if `arg` is of non-type kind (e.g. String).
-/// TODO move this to `impl TypeArg` in `hugr-core`
-/// <https://github.com/CQCL/hugr/issues/1837>
-pub fn type_arg_into_type_rv(arg: impl Into<TypeArg>) -> Option<TypeRV> {
-    match arg.into() {
-        TypeArg::Type { ty } => Some(ty.into()),
-        TypeArg::Variable { v } => Some(TypeRV::new_row_var_use(v.index(), v.bound_if_row_var()?)),
-        _ => None,
-    }
-}
-
-/// Fallibly convert a [TypeArg] to a [TypeRow].
-///
-/// This will fail if `arg` is of non-sequence kind (e.g. Type)
-/// or if the sequence contains row variables.
-/// TODO move this to `impl TypeArg` in `hugr-core`
-/// <https://github.com/CQCL/hugr/issues/1837>
-pub fn type_arg_into_type_row(arg: impl Into<TypeArg>) -> Option<TypeRow> {
-    match arg.into() {
-        TypeArg::Sequence { elems } => elems
-            .into_iter()
-            .map(|ta| ta.as_type())
-            .collect::<Option<Vec<_>>>()
-            .map(|x| x.into()),
-        _ => None,
-    }
-}
-
-/// Fallibly convert a [TypeArg] to a [TypeRowRV].
-///
-/// This will fail if `arg` is of non-sequence kind (e.g. Type).
-/// TODO move this to `impl TypeArg` in `hugr-core`
-/// <https://github.com/CQCL/hugr/issues/1837>
-pub fn type_arg_into_type_row_rv(arg: impl Into<TypeArg>) -> Option<TypeRowRV> {
-    match arg.into() {
-        TypeArg::Sequence { elems } => elems
-            .into_iter()
-            .map(type_arg_into_type_rv)
-            .collect::<Option<Vec<_>>>()
-            .map(|x| x.into()),
-        TypeArg::Variable { v } => {
-            Some(vec![TypeRV::new_row_var_use(v.index(), v.bound_if_row_var()?)].into())
-        }
-        _ => None,
-    }
-}
-
-fn type_row_into_type_arg(row: TypeRow) -> TypeArg {
-    TypeArg::Sequence {
-        elems: row.into_owned().into_iter().map_into().collect(),
-    }
-}
-
-fn type_row_rv_into_type_arg(row: TypeRowRV) -> TypeArg {
-    TypeArg::Sequence {
-        elems: row.into_owned().into_iter().map_into().collect(),
     }
 }
 
@@ -450,7 +398,7 @@ impl HasConcrete for WasmOpDef {
         match self {
             WasmOpDef::get_context => {
                 let [] = type_args else {
-                    Err(SignatureError::from(TypeArgError::WrongNumberArgs(
+                    Err(SignatureError::from(TermTypeError::WrongNumberArgs(
                         type_args.len(),
                         0,
                     )))?
@@ -459,7 +407,7 @@ impl HasConcrete for WasmOpDef {
             }
             WasmOpDef::dispose_context => {
                 let [] = type_args else {
-                    Err(SignatureError::from(TypeArgError::WrongNumberArgs(
+                    Err(SignatureError::from(TermTypeError::WrongNumberArgs(
                         type_args.len(),
                         0,
                     )))?
@@ -471,30 +419,30 @@ impl HasConcrete for WasmOpDef {
                 let Some([name_arg, inputs_arg, outputs_arg]): Option<[_; 3]> =
                     type_args.to_vec().try_into().ok()
                 else {
-                    Err(SignatureError::from(TypeArgError::WrongNumberArgs(
+                    Err(SignatureError::from(TermTypeError::WrongNumberArgs(
                         type_args.len(),
                         3,
                     )))?
                 };
 
                 let Some(name) = name_arg.as_string() else {
-                    Err(SignatureError::from(TypeArgError::TypeMismatch {
-                        param: NAME_PARAM.to_owned(),
-                        arg: name_arg,
+                    Err(SignatureError::from(TermTypeError::TypeMismatch {
+                        term: Box::new(name_arg),
+                        type_: Box::new(NAME_PARAM.to_owned()),
                     }))?
                 };
 
-                let Some(inputs) = type_arg_into_type_row_rv(inputs_arg.clone()) else {
-                    Err(SignatureError::from(TypeArgError::TypeMismatch {
-                        param: INPUTS_PARAM.to_owned(),
-                        arg: inputs_arg,
+                let Ok(inputs) = TypeRowRV::try_from(inputs_arg.clone()) else {
+                    Err(SignatureError::from(TermTypeError::TypeMismatch {
+                        term: Box::new(inputs_arg),
+                        type_: Box::new(INPUTS_PARAM.to_owned()),
                     }))?
                 };
 
-                let Some(outputs) = type_arg_into_type_row_rv(outputs_arg.clone()) else {
-                    Err(SignatureError::from(TypeArgError::TypeMismatch {
-                        param: INPUTS_PARAM.to_owned(),
-                        arg: outputs_arg,
+                let Ok(outputs) = TypeRowRV::try_from(outputs_arg.clone()) else {
+                    Err(SignatureError::from(TermTypeError::TypeMismatch {
+                        term: Box::new(outputs_arg),
+                        type_: Box::new(OUTPUTS_PARAM.to_owned()),
                     }))?
                 };
                 Ok(WasmOp::Lookup {
@@ -507,23 +455,23 @@ impl HasConcrete for WasmOpDef {
                 let Some([inputs_arg, outputs_arg]): Option<[_; 2]> =
                     type_args.to_vec().try_into().ok()
                 else {
-                    Err(SignatureError::from(TypeArgError::WrongNumberArgs(
+                    Err(SignatureError::from(TermTypeError::WrongNumberArgs(
                         type_args.len(),
                         2,
                     )))?
                 };
 
-                let Some(inputs) = type_arg_into_type_row_rv(inputs_arg.clone()) else {
-                    Err(SignatureError::from(TypeArgError::TypeMismatch {
-                        param: INPUTS_PARAM.to_owned(),
-                        arg: inputs_arg,
+                let Ok(inputs) = TypeRowRV::try_from(inputs_arg.clone()) else {
+                    Err(SignatureError::from(TermTypeError::TypeMismatch {
+                        term: Box::new(inputs_arg),
+                        type_: Box::new(INPUTS_PARAM.to_owned()),
                     }))?
                 };
 
-                let Some(outputs) = type_arg_into_type_row_rv(outputs_arg.clone()) else {
-                    Err(SignatureError::from(TypeArgError::TypeMismatch {
-                        param: INPUTS_PARAM.to_owned(),
-                        arg: outputs_arg,
+                let Ok(outputs) = TypeRowRV::try_from(outputs_arg.clone()) else {
+                    Err(SignatureError::from(TermTypeError::TypeMismatch {
+                        term: Box::new(outputs_arg),
+                        type_: Box::new(OUTPUTS_PARAM.to_owned()),
                     }))?
                 };
 
@@ -619,13 +567,13 @@ impl MakeExtensionOp for WasmOp {
                 inputs,
                 outputs,
             } => {
-                let inputs = type_row_rv_into_type_arg(inputs.clone());
-                let outputs = type_row_rv_into_type_arg(outputs.clone());
+                let inputs = TypeArg::from(inputs.clone());
+                let outputs = TypeArg::from(outputs.clone());
                 vec![name.clone().into(), inputs, outputs]
             }
             WasmOp::Call { inputs, outputs } => {
-                let inputs = type_row_into_type_arg(inputs.clone());
-                let outputs = type_row_into_type_arg(outputs.clone());
+                let inputs = TypeArg::from(inputs.clone());
+                let outputs = TypeArg::from(outputs.clone());
                 vec![inputs, outputs]
             }
         }
@@ -745,7 +693,9 @@ impl<T: Dataflow> WasmOpBuilder for T {}
 
 #[cfg(test)]
 mod test {
-    use hugr::{builder::DFGBuilder, extension::prelude::bool_t, ops::DataflowOpTrait as _};
+    use hugr::{
+        builder::DFGBuilder, extension::prelude::bool_t, ops::DataflowOpTrait as _, types::Term,
+    };
     use rstest::rstest;
 
     use super::*;
@@ -768,7 +718,7 @@ mod test {
     #[case(WasmType::Module)]
     #[case(WasmType::Context)]
     #[case(WasmType::new_func(type_row![], type_row![]))]
-    #[case(WasmType::new_func(vec![TypeRV::new_row_var_use(0, TypeBound::Any)], vec![bool_t()]))]
+    #[case(WasmType::new_func(vec![TypeRV::new_row_var_use(0, TypeBound::Linear)], vec![bool_t()]))]
     fn wasm_type(#[case] wasm_t: WasmType) {
         let hugr_t: Type = wasm_t.clone().into();
         let roundtripped_t = hugr_t.try_into().unwrap();
@@ -788,17 +738,12 @@ mod test {
         assert_eq!(
             WasmOpDef::lookup.instantiate(&[
                 "lookup_name".into(),
-                TypeArg::new_var_use(
-                    0,
-                    TypeParam::List {
-                        param: Box::new(TypeBound::Any.into())
-                    }
-                ),
+                TypeArg::new_var_use(0, TypeParam::ListType(Box::new(TypeBound::Linear.into()))),
                 vec![].into()
             ]),
             Ok(WasmOp::Lookup {
                 name: "lookup_name".to_string(),
-                inputs: vec![TypeRV::new_row_var_use(0, TypeBound::Any)].into(),
+                inputs: vec![TypeRV::new_row_var_use(0, TypeBound::Linear)].into(),
                 outputs: TypeRowRV::from(Vec::<TypeRV>::new())
             })
         );
@@ -816,14 +761,15 @@ mod test {
     #[case::row_vars1(
         vec![
             TypeRV::UNIT,
-            type_arg_into_type_rv(
+            TypeRV::try_from(
                 TypeArg::new_var_use(
                     0,
-                    TypeParam::List { param: Box::new(TypeBound::Copyable.into())}
+                    TypeParam::ListType (Box::new(TypeBound::Copyable.into()))
                 )
             ).unwrap()
-        ], type_arg_into_type_row_rv(
-            vec![TypeArg::from(Type::UNIT), TypeArg::from(usize_t())]).unwrap()
+        ], TypeRowRV::try_from(
+            Term::from(vec![TypeArg::from(Type::UNIT), TypeArg::from(usize_t())])
+        ).unwrap()
     )]
     fn lookup_signature(
         #[case] inputs: impl Into<TypeRowRV>,
@@ -849,7 +795,7 @@ mod test {
 
     #[rstest]
     #[case(type_row![], type_row![])]
-    #[case(vec![Type::UNIT], type_arg_into_type_row(vec![TypeArg::from(Type::UNIT),TypeArg::from(usize_t())]).unwrap())]
+    #[case(vec![Type::UNIT], TypeRow::try_from(Term::from(vec![TypeArg::from(Type::UNIT),TypeArg::from(usize_t())])).unwrap())]
     fn build_all(#[case] in_types: impl Into<TypeRow>, #[case] out_types: impl Into<TypeRow>) {
         use futures::FutureOpBuilder as _;
         use hugr::{

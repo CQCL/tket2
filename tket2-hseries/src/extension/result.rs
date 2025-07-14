@@ -129,7 +129,7 @@ impl ResultOpDef {
             Self::Bool | Self::F64 => vec![],
             Self::Int | Self::UInt => vec![LOG_WIDTH_TYPE_PARAM],
             _ => [
-                vec![TypeParam::max_nat()],
+                vec![TypeParam::max_nat_type()],
                 self.simple_type_op().type_params(),
             ]
             .concat(),
@@ -162,7 +162,7 @@ impl ResultOpDef {
 
     fn result_signature(&self) -> SignatureFunc {
         PolyFuncType::new(
-            [vec![TypeParam::String], self.type_params()].concat(),
+            [vec![TypeParam::StringType], self.type_params()].concat(),
             Signature::new(self.arg_type(), type_row![]),
         )
         .into()
@@ -171,7 +171,7 @@ impl ResultOpDef {
 
 fn array_arg_type(inner_t: Type) -> Type {
     collections::array::array_type_parametric(
-        TypeArg::new_var_use(1, TypeParam::max_nat()),
+        TypeArg::new_var_use(1, TypeParam::max_nat_type()),
         inner_t,
     )
     .unwrap()
@@ -306,13 +306,11 @@ fn concrete_result_op_type_args(
 ) -> Result<(String, Option<u64>, Option<u64>), OpLoadError> {
     let err = || hugr::extension::SignatureError::InvalidTypeArgs.into();
     match args {
-        [TypeArg::String { arg }] => Ok((arg.to_owned(), None, None)),
+        [TypeArg::String(arg)] => Ok((arg.to_owned(), None, None)),
 
-        [TypeArg::String { arg }, TypeArg::BoundedNat { n }] => {
-            Ok((arg.to_owned(), Some(*n), None))
-        }
+        [TypeArg::String(arg), TypeArg::BoundedNat(n)] => Ok((arg.to_owned(), Some(*n), None)),
 
-        [TypeArg::String { arg }, TypeArg::BoundedNat { n }, TypeArg::BoundedNat { n: m }] => {
+        [TypeArg::String(arg), TypeArg::BoundedNat(n), TypeArg::BoundedNat(m)] => {
             Ok((arg.to_owned(), Some(*n), Some(*m)))
         }
 
@@ -348,14 +346,14 @@ impl MakeExtensionOp for ResultOp {
         match self.args {
             ResultArgs::Simple(_) => {}
             ResultArgs::Array(_, size) => {
-                type_args.push(TypeArg::BoundedNat { n: size });
+                type_args.push(TypeArg::BoundedNat(size));
             }
         }
 
         match self.args {
             ResultArgs::Simple(SimpleArgs::Int(width))
             | ResultArgs::Array(SimpleArgs::Int(width), _) => {
-                type_args.push(TypeArg::BoundedNat { n: width as u64 });
+                type_args.push(TypeArg::BoundedNat(width as u64));
             }
             _ => {}
         }

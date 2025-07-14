@@ -279,8 +279,7 @@ mod tests {
 
     use cool_asserts::assert_matches;
     use hugr::builder::{
-        Container, Dataflow, DataflowHugr, DataflowSubContainer, FunctionBuilder, HugrBuilder,
-        ModuleBuilder,
+        Dataflow, DataflowHugr, DataflowSubContainer, FunctionBuilder, HugrBuilder, ModuleBuilder,
     };
     use hugr::extension::prelude::qb_t;
     use hugr::ops::handle::NodeHandle;

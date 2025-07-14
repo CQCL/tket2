@@ -208,7 +208,7 @@ pub fn emit_global_string<'c, H: HugrView<Node = Node>>(
 
 #[cfg(test)]
 mod test {
-    use hugr::builder::{Dataflow, DataflowSubContainer};
+    use hugr::builder::{Dataflow, DataflowHugr};
     use hugr::extension::prelude::{self, qb_t, ConstError, EXIT_OP_ID, PANIC_OP_ID};
     use hugr::extension::PRELUDE;
     use hugr::llvm::check_emission;
@@ -228,10 +228,8 @@ mod test {
 
         // Create a hugr that has a panic message
         let error_val = ConstError::new(42, "PANIC");
-        let type_arg_q = TypeArg::Type { ty: qb_t() };
-        let type_arg_2q = TypeArg::Sequence {
-            elems: vec![type_arg_q.clone(), type_arg_q],
-        };
+        let type_arg_q = TypeArg::Runtime(qb_t());
+        let type_arg_2q = TypeArg::List(vec![type_arg_q.clone(), type_arg_q]);
         let panic_op = PRELUDE
             .instantiate_extension_op(&PANIC_OP_ID, [type_arg_2q.clone(), type_arg_2q.clone()])
             .unwrap();
@@ -247,7 +245,7 @@ mod test {
                     .add_dataflow_op(panic_op, [err, q0, q1])
                     .unwrap()
                     .outputs_arr();
-                builder.finish_with_outputs([q0, q1]).unwrap()
+                builder.finish_hugr_with_outputs([q0, q1]).unwrap()
             });
 
         check_emission!(hugr, llvm_ctx);
@@ -260,10 +258,8 @@ mod test {
         llvm_ctx.add_extensions(move |ceb| ceb.add_prelude_extensions(prelude_codegen.clone()));
 
         let error_val = ConstError::new(42, "EXIT");
-        let type_arg_q: TypeArg = TypeArg::Type { ty: qb_t() };
-        let type_arg_2q: TypeArg = TypeArg::Sequence {
-            elems: vec![type_arg_q.clone(), type_arg_q],
-        };
+        let type_arg_q: TypeArg = TypeArg::Runtime(qb_t());
+        let type_arg_2q: TypeArg = TypeArg::List(vec![type_arg_q.clone(), type_arg_q]);
         let exit_op = PRELUDE
             .instantiate_extension_op(&EXIT_OP_ID, [type_arg_2q.clone(), type_arg_2q.clone()])
             .unwrap();
@@ -279,7 +275,7 @@ mod test {
                     .add_dataflow_op(exit_op, [err, q0, q1])
                     .unwrap()
                     .outputs_arr();
-                builder.finish_with_outputs([q0, q1]).unwrap()
+                builder.finish_hugr_with_outputs([q0, q1]).unwrap()
             });
 
         check_emission!(hugr, llvm_ctx);
