@@ -24,12 +24,12 @@ lazy_static! {
     pub static ref GUPPY_EXTENSION: Arc<Extension>  = {
         Extension::new_arc(GUPPY_EXTENSION_ID, GUPPY_EXTENSION_VERSION, |ext, ext_ref| {
             ext.add_op(DROP_OP_NAME,
-                "Drop the input wire.".into(),
+                "Drop the input wire. Applicable to guppy affine types only.".into(),
                 // drop<T: Any>(t: T) -> ()
                 PolyFuncTypeRV::new(
-                    [TypeBound::Any.into()],
+                    [TypeBound::Linear.into()],
                     FuncValueType::new(
-                        vec![Type::new_var_use(0, TypeBound::Any)],
+                        vec![Type::new_var_use(0, TypeBound::Linear)],
                         type_row![],
                     )
             ),

@@ -6,7 +6,7 @@
     "drop": {
       "extension": "tket2.guppy",
       "name": "drop",
-      "description": "Drop the input wire.",
+      "description": "Drop the input wire. Applicable to guppy affine types only.",
       "signature": {
         "params": [
           {
