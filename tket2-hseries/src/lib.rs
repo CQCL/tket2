@@ -31,6 +31,7 @@ pub mod extension;
 pub mod llvm;
 
 pub mod replace_bools;
+pub mod replace_borrow_arrays;
 
 /// Modify a [hugr::Hugr] into a form that is acceptable for ingress into a
 /// Q-System. Returns an error if this cannot be done.
