@@ -13,6 +13,7 @@ fn main() -> Result<()> {
                 tket2::extension::rotation::ROTATION_EXTENSION.to_owned(),
                 tket2::extension::bool::BOOL_EXTENSION.to_owned(),
                 tket2::extension::debug::DEBUG_EXTENSION.to_owned(),
+                tket2::extension::guppy::GUPPY_EXTENSION.to_owned(),
                 tket2_hseries::extension::qsystem::EXTENSION.to_owned(),
                 tket2_hseries::extension::futures::EXTENSION.to_owned(),
                 tket2_hseries::extension::random::EXTENSION.to_owned(),
