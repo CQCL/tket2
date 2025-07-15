@@ -450,12 +450,12 @@ mod tests {
         let elem_ty = emit_ctx.iw_context().i32_type().into();
         let size = 2;
 
-        let (array_ptr, _) = build_array(&emit_ctx.iw_context(), &emit_ctx.builder()).unwrap();
+        let (array_ptr, _) = build_array(emit_ctx.iw_context(), emit_ctx.builder()).unwrap();
         let array = array_lowering
             .array_from_ptr(&mut emit_ctx, array_ptr, elem_ty, size)
             .unwrap();
         let new_array_ptr = array_lowering
-            .array_to_ptr(&emit_ctx.builder(), array)
+            .array_to_ptr(emit_ctx.builder(), array)
             .unwrap();
         assert_eq!(array_ptr.get_type(), new_array_ptr.get_type());
         let new_array = array_lowering
