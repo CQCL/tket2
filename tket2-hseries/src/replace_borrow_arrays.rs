@@ -6,10 +6,10 @@ use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
         non_local::FindNonLocalEdgesError,
-        replace_types::{NodeTemplate, ReplaceTypesError},
+        replace_types::{handlers::copy_discard_array, NodeTemplate, ReplaceTypesError},
         ComposablePass, ReplaceTypes,
     },
-    builder::{inout_sig, DFGBuilder, Dataflow, DataflowHugr},
+    builder::{inout_sig, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer, SubContainer},
     extension::{
         prelude::{const_none, const_some, either_type, option_type, usize_t, UnwrapBuilder},
         simple_op::MakeOpDef,
@@ -18,16 +18,15 @@ use hugr::{
     ops::{Tag, Value},
     std_extensions::collections::{
         array::{
-            array_type, ArrayClone, ArrayDiscard, ArrayOpBuilder, ArrayOpDef, ArrayRepeat,
-            ArrayScan, ArrayValue, ARRAY_CLONE_OP_ID, ARRAY_DISCARD_OP_ID, ARRAY_REPEAT_OP_ID,
-            ARRAY_SCAN_OP_ID,
+            array_type, array_type_def, ArrayClone, ArrayDiscard, ArrayOpBuilder, ArrayOpDef,
+            ArrayRepeat, ArrayScan, ArrayValue, ARRAY_CLONE_OP_ID, ARRAY_DISCARD_OP_ID,
+            ARRAY_REPEAT_OP_ID, ARRAY_SCAN_OP_ID,
         },
         borrow_array::{self, BArrayOpDef, BArrayUnsafeOpDef, BArrayValue, BORROW_ARRAY_TYPENAME},
     },
     types::{type_param::SeqPart, Type, TypeArg, TypeRow},
-    Node,
+    Hugr, Node, Wire,
 };
-use strum::IntoEnumIterator;
 
 #[derive(Error, Debug, Display, From)]
 #[non_exhaustive]
@@ -67,6 +66,7 @@ fn replace_const_borrow_array(
     // constants that contain empty values. The borrow array extension however does not
     // guarantee this, so we should handle the case where the array contains empty
     // values on we add a more specific borrow array value that supports this.
+    // See https://github.com/CQCL/hugr/issues/2437.
     let option_values: Vec<_> = bav
         .get_contents()
         .into_iter()
@@ -84,21 +84,26 @@ fn borrow_dest(size: u64, elem_ty: Type) -> NodeTemplate {
         vec![elem_ty.clone(), arr_type.clone()],
     ))
     .unwrap();
+
     let [arr, idx] = dfb.input_wires_arr();
     let nothing = dfb.add_load_value(const_none(elem_ty.clone()));
-    // Get element (and modified array) and put nothing in its place in the array.
+
+    // Set the element at idx to none, retrieving the previous value.
     let result = dfb
         .add_array_set(opt_elem_ty.clone().into(), size, arr, idx, nothing)
         .unwrap();
-    // Check operation was successful.
+
+    // Unwrap the result: expect that the element was present.
     let result_ty = vec![opt_elem_ty.clone().into(), arr_type.clone()];
     let [opt_elem, out_arr] = dfb
         .build_unwrap_sum(1, either_type(result_ty.clone(), result_ty), result)
         .unwrap();
-    // Will panic if the retrieved element has been borrowed before (so is nothing).
+
+    // Panic if the element was already borrowed (none).
     let [out] = dfb
         .build_unwrap_sum(1, opt_elem_ty.clone(), opt_elem)
         .unwrap();
+
     let h = dfb.finish_hugr_with_outputs([out, out_arr]).unwrap();
     NodeTemplate::CompoundOp(Box::new(h))
 }
@@ -111,55 +116,61 @@ fn return_dest(size: u64, elem_ty: Type) -> NodeTemplate {
         vec![arr_type.clone()],
     ))
     .unwrap();
+
     let [arr, idx, elem] = dfb.input_wires_arr();
-    // Wrap element into an option and put into the array.
-    let opt_elem = dfb
-        .add_dataflow_op(
-            Tag::new(1, vec![TypeRow::new(), elem_ty.clone().into()]),
-            [elem],
-        )
-        .unwrap()
-        .out_wire(0);
+    let opt_elem = option_wrap(&mut dfb, elem, elem_ty);
+
+    // Set the element at idx to Some(elem), retrieving the previous value.
     let result = dfb
         .add_array_set(opt_elem_ty.clone().into(), size, arr, idx, opt_elem)
         .unwrap();
-    // Check operation was successful.
+
+    // Unwrap the result: expect that the slot was empty (none).
     let result_ty = vec![opt_elem_ty.clone().into(), arr_type.clone()];
     let [nothing, out_arr] = dfb
         .build_unwrap_sum(1, either_type(result_ty.clone(), result_ty), result)
         .unwrap();
-    // Will panic if the index wasn't previously empty (so retrieved element is not nothing).
+
+    // Panic if the slot was not empty (not none).
     let [] = dfb.build_unwrap_sum(0, opt_elem_ty, nothing).unwrap();
+
     let h = dfb.finish_hugr_with_outputs([out_arr]).unwrap();
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
 fn discard_all_borrowed_dest(size: u64, elem_ty: Type) -> NodeTemplate {
     let opt_elem_ty = option_type(elem_ty.clone());
-    let arr_type = array_type(size, opt_elem_ty.clone().into());
-    let mut dfb = DFGBuilder::new(inout_sig(vec![arr_type.clone()], vec![])).unwrap();
-    let [arr] = dfb.input_wires_arr();
-    // Pop each element from the array, panicking if it is not nothing.
-    let mut current_arr = arr;
-    let current_size = size;
+    let mut dfb = DFGBuilder::new(inout_sig(
+        vec![array_type(size, opt_elem_ty.clone().into())],
+        vec![],
+    ))
+    .unwrap();
+
+    let [mut arr] = dfb.input_wires_arr();
+    let mut curr_size = size;
+
     for _ in 0..size {
         let result = dfb
-            .add_array_pop_left(opt_elem_ty.clone().into(), current_size, current_arr)
+            .add_array_pop_left(opt_elem_ty.clone().into(), curr_size, arr)
             .unwrap();
-        let current_size = current_size - 1;
-        let new_arr_type = array_type(current_size, opt_elem_ty.clone().into());
+
+        curr_size -= 1;
+        let new_arr_type = array_type(curr_size, opt_elem_ty.clone().into());
         let result_ty = vec![opt_elem_ty.clone().into(), new_arr_type.clone()];
-        let [nothing, out_arr] = dfb
+
+        let [nothing, next_arr] = dfb
             .build_unwrap_sum(1, option_type(result_ty), result)
             .unwrap();
-        // Implicitly drop the nothing.
+
+        // Ensure value is none.
         let [] = dfb
             .build_unwrap_sum(0, opt_elem_ty.clone().into(), nothing)
             .unwrap();
-        current_arr = out_arr;
+
+        arr = next_arr;
     }
-    // Discard the array that is now of size 0.
-    dfb.add_array_discard_empty(opt_elem_ty.into(), current_arr)
+
+    dfb.add_array_discard_empty(opt_elem_ty.into(), arr)
         .unwrap();
     let h = dfb.finish_hugr_with_outputs([]).unwrap();
     NodeTemplate::CompoundOp(Box::new(h))
@@ -169,16 +180,208 @@ fn new_all_borrowed_dest(size: u64, elem_ty: Type) -> NodeTemplate {
     let opt_elem_ty = option_type(elem_ty.clone());
     let arr_type = array_type(size, opt_elem_ty.clone().into());
     let mut dfb = DFGBuilder::new(inout_sig(vec![], vec![arr_type.clone()])).unwrap();
-    // Create a new array that contains `none` at each index.
-    let mut nothings = vec![];
-    for _ in 0..size {
-        let nothing = dfb.add_load_value(const_none(elem_ty.clone()));
-        nothings.push(nothing);
-    }
+
+    // Fill array with nones.
+    let nothings: Vec<_> = (0..size)
+        .map(|_| dfb.add_load_value(const_none(elem_ty.clone())))
+        .collect();
+
     let arr = dfb
         .add_new_array(opt_elem_ty.clone().into(), nothings)
         .unwrap();
+
     let h = dfb.finish_hugr_with_outputs([arr]).unwrap();
+    NodeTemplate::CompoundOp(Box::new(h))
+}
+
+// Helper function to wrap an element in an option type.
+fn option_wrap(dfb: &mut DFGBuilder<Hugr>, elem_wire: Wire, elem_ty: Type) -> Wire {
+    dfb.add_dataflow_op(
+        Tag::new(1, vec![TypeRow::new(), elem_ty.clone().into()]),
+        [elem_wire],
+    )
+    .unwrap()
+    .out_wire(0)
+}
+
+fn new_array_dest(size: u64, elem_ty: Type) -> NodeTemplate {
+    let opt_elem_ty = option_type(elem_ty.clone());
+    let arr_type = array_type(size, opt_elem_ty.clone().into());
+    let mut dfb = DFGBuilder::new(inout_sig(
+        vec![elem_ty.clone(); size as usize],
+        vec![arr_type.clone()],
+    ))
+    .unwrap();
+
+    // Wrap all input elements in options and collect them.
+    let elems = dfb
+        .input_wires()
+        .map(|wire| option_wrap(&mut dfb, wire, elem_ty.clone()))
+        .collect::<Vec<_>>();
+
+    let arr = dfb.add_new_array(opt_elem_ty.into(), elems).unwrap();
+
+    let h = dfb.finish_hugr_with_outputs([arr]).unwrap();
+    NodeTemplate::CompoundOp(Box::new(h))
+}
+
+fn get_dest(size: u64, elem_ty: Type) -> NodeTemplate {
+    let opt_elem_ty = option_type(elem_ty.clone());
+    let arr_ty = array_type(size, opt_elem_ty.clone().into());
+    let mut dfb = DFGBuilder::new(inout_sig(
+        vec![arr_ty.clone(), usize_t()],
+        vec![opt_elem_ty.clone().into(), arr_ty.clone()],
+    ))
+    .unwrap();
+
+    let [arr, idx] = dfb.input_wires_arr();
+    let (opt_elem_result, arr_out) = dfb
+        .add_array_get(opt_elem_ty.clone().into(), size, arr, idx)
+        .unwrap();
+
+    let opt_opt_elem_ty = option_type(Type::from(opt_elem_ty.clone()));
+    let variant_types: Vec<TypeRow> = (0..opt_opt_elem_ty.num_variants())
+        .map(|i| {
+            let variant_row = opt_opt_elem_ty.get_variant(i).unwrap().to_owned();
+            TypeRow::try_from(variant_row)
+        })
+        .collect::<Result<_, _>>()
+        .unwrap();
+
+    let mut cond = dfb
+        .conditional_builder(
+            (variant_types, opt_elem_result),
+            [],
+            vec![opt_elem_ty.clone().into()].into(),
+        )
+        .unwrap();
+
+    // Case 0: Out of bounds, return none of element type.
+    let mut case_out_of_bounds = cond.case_builder(0).unwrap();
+    let none_elem = case_out_of_bounds.add_load_value(const_none(elem_ty.clone()));
+    case_out_of_bounds.finish_with_outputs([none_elem]).unwrap();
+
+    // Case 1: In bounds, return the optional element (treat inner optional as outer optional).
+    // Because this op should only be applied to copyable types, we can assume the option won't be none.
+    let case_in_bounds = cond.case_builder(1).unwrap();
+    let [opt_elem] = case_in_bounds.input_wires_arr();
+    case_in_bounds.finish_with_outputs([opt_elem]).unwrap();
+
+    let [elem_out] = cond.finish_sub_container().unwrap().outputs_arr();
+    let h = dfb.finish_hugr_with_outputs([elem_out, arr_out]).unwrap();
+    NodeTemplate::CompoundOp(Box::new(h))
+}
+
+fn set_dest(size: u64, elem_ty: Type) -> NodeTemplate {
+    let opt_elem_ty = option_type(elem_ty.clone());
+    let arr_type = array_type(size, opt_elem_ty.clone().into());
+    let mut dfb = DFGBuilder::new(inout_sig(
+        vec![arr_type.clone(), usize_t(), elem_ty.clone()],
+        vec![either_type(
+            vec![elem_ty.clone(), arr_type.clone()],
+            vec![elem_ty.clone(), arr_type.clone()],
+        )
+        .into()],
+    ))
+    .unwrap();
+
+    let [arr, idx, elem] = dfb.input_wires_arr();
+    let opt_elem = option_wrap(&mut dfb, elem, elem_ty.clone());
+
+    // Set the element at idx to Some(elem), retrieving the previous value.
+    let result = dfb
+        .add_array_set(opt_elem_ty.clone().into(), size, arr, idx, opt_elem)
+        .unwrap();
+
+    // Check whether the operation was successful or not.
+    let mut cond = dfb
+        .conditional_builder(
+            (
+                vec![
+                    TypeRow::from(vec![opt_elem_ty.clone().into(), arr_type.clone()]),
+                    TypeRow::from(vec![opt_elem_ty.clone().into(), arr_type.clone()]),
+                ],
+                result,
+            ),
+            [],
+            vec![either_type(
+                vec![elem_ty.clone(), arr_type.clone()],
+                vec![elem_ty.clone(), arr_type.clone()],
+            )
+            .into()]
+            .into(),
+        )
+        .unwrap();
+
+    // Case 0: Out of bounds, so return initial element and array after unwrapping.
+    let mut case0 = cond.case_builder(0).unwrap();
+    let [opt_elem, arr] = case0.input_wires_arr();
+    let [prev_elem] = case0
+        .build_unwrap_sum(1, opt_elem_ty.clone(), opt_elem)
+        .unwrap();
+    let either = case0
+        .add_dataflow_op(
+            Tag::new(
+                0,
+                vec![
+                    vec![elem_ty.clone(), arr_type.clone()].into(),
+                    vec![elem_ty.clone(), arr_type.clone()].into(),
+                ],
+            ),
+            [prev_elem, arr],
+        )
+        .unwrap()
+        .out_wire(0);
+    case0.finish_with_outputs([either]).unwrap();
+
+    // Case 1: Success, so return new element and array after unwrapping.
+    let mut case1 = cond.case_builder(1).unwrap();
+    let [opt_elem, arr] = case1.input_wires_arr();
+    let [new_elem] = case1
+        .build_unwrap_sum(1, opt_elem_ty.clone(), opt_elem)
+        .unwrap();
+    let either = case1
+        .add_dataflow_op(
+            Tag::new(
+                1,
+                vec![
+                    vec![elem_ty.clone(), arr_type.clone()].into(),
+                    vec![elem_ty.clone(), arr_type.clone()].into(),
+                ],
+            ),
+            [new_elem, arr],
+        )
+        .unwrap()
+        .out_wire(0);
+    case1.finish_with_outputs([either]).unwrap();
+
+    let [final_either] = cond.finish_sub_container().unwrap().outputs_arr();
+    let h = dfb.finish_hugr_with_outputs([final_either]).unwrap();
+    NodeTemplate::CompoundOp(Box::new(h))
+}
+
+fn unpack_dest(size: u64, elem_ty: Type) -> NodeTemplate {
+    let opt_elem_ty = option_type(elem_ty.clone());
+    let arr_type = array_type(size, opt_elem_ty.clone().into());
+    let mut dfb = DFGBuilder::new(inout_sig(
+        vec![arr_type.clone()],
+        vec![elem_ty.clone(); size as usize],
+    ))
+    .unwrap();
+
+    let [arr] = dfb.input_wires_arr();
+    let elems = dfb
+        .add_array_unpack(opt_elem_ty.clone().into(), size, arr)
+        .unwrap();
+
+    // Unwrap each option.
+    let mut unwrapped_elems = Vec::with_capacity(size as usize);
+    for elem in elems {
+        let [unwrapped] = dfb.build_unwrap_sum(1, opt_elem_ty.clone(), elem).unwrap();
+        unwrapped_elems.push(unwrapped);
+    }
+
+    let h = dfb.finish_hugr_with_outputs(unwrapped_elems).unwrap();
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
@@ -199,6 +402,10 @@ fn lowerer() -> ReplaceTypes {
             Some(array_type(*size, option_type(elem_ty.clone()).into()))
         }),
     );
+
+    // Register the array copy and discard ops.
+    lw.linearizer()
+        .register_callback(array_type_def(), copy_discard_array);
 
     // Replace constants.
     lw.replace_consts_parametrized(borrow_array_typedef, {
@@ -228,6 +435,7 @@ fn lowerer() -> ReplaceTypes {
             }
         },
     );
+
     lw.replace_parametrized_op(
         borrow_array::EXTENSION
             .get_op(&BArrayUnsafeOpDef::r#return.opdef_id())
@@ -244,6 +452,7 @@ fn lowerer() -> ReplaceTypes {
             }
         },
     );
+
     lw.replace_parametrized_op(
         borrow_array::EXTENSION
             .get_op(&BArrayUnsafeOpDef::discard_all_borrowed.opdef_id())
@@ -260,6 +469,7 @@ fn lowerer() -> ReplaceTypes {
             }
         },
     );
+
     lw.replace_parametrized_op(
         borrow_array::EXTENSION
             .get_op(&BArrayUnsafeOpDef::new_all_borrowed.opdef_id())
@@ -283,7 +493,7 @@ fn lowerer() -> ReplaceTypes {
             .get_op(ARRAY_CLONE_OP_ID.as_str())
             .unwrap(),
         move |args| {
-            let [elem_ty, size] = args else {
+            let [size, elem_ty] = args else {
                 unreachable!()
             };
             Some(NodeTemplate::SingleOp(
@@ -302,7 +512,7 @@ fn lowerer() -> ReplaceTypes {
             .get_op(ARRAY_DISCARD_OP_ID.as_str())
             .unwrap(),
         move |args| {
-            let [elem_ty, size] = args else {
+            let [size, elem_ty] = args else {
                 unreachable!()
             };
             Some(NodeTemplate::SingleOp(
@@ -316,30 +526,14 @@ fn lowerer() -> ReplaceTypes {
         },
     );
 
-    lw.replace_parametrized_op(
-        borrow_array::EXTENSION
-            .get_op(ARRAY_REPEAT_OP_ID.as_str())
-            .unwrap(),
-        move |args| {
-            let [elem_ty, size] = args else {
-                unreachable!()
-            };
-            Some(NodeTemplate::SingleOp(
-                ArrayRepeat::new(
-                    option_type(elem_ty.as_runtime().unwrap()).into(),
-                    size.as_nat().unwrap(),
-                )
-                .into(),
-            ))
-        },
-    );
+    // TODO: repeat
 
     lw.replace_parametrized_op(
         borrow_array::EXTENSION
             .get_op(ARRAY_SCAN_OP_ID.as_str())
             .unwrap(),
         move |args| {
-            let [src_ty, tgt_ty, acc_tys, size] = args else {
+            let [size, src_ty, tgt_ty, acc_tys] = args else {
                 unreachable!()
             };
             Some(NodeTemplate::SingleOp(
@@ -361,38 +555,110 @@ fn lowerer() -> ReplaceTypes {
         },
     );
 
-    fn map_borrow_array_to_array_op(op: &BArrayOpDef) -> ArrayOpDef {
-        match op {
-            BArrayOpDef::new_array => ArrayOpDef::new_array,
-            BArrayOpDef::get => ArrayOpDef::get,
-            BArrayOpDef::set => ArrayOpDef::set,
-            BArrayOpDef::swap => ArrayOpDef::swap,
-            BArrayOpDef::pop_left => ArrayOpDef::pop_left,
-            BArrayOpDef::pop_right => ArrayOpDef::pop_right,
-            BArrayOpDef::discard_empty => ArrayOpDef::discard_empty,
-            BArrayOpDef::unpack => ArrayOpDef::unpack,
-            _ => panic!("Unsupported borrow array op: {:?}", op),
-        }
-    }
-    for op in borrow_array::BArrayOpDef::iter() {
-        let array_op = map_borrow_array_to_array_op(&op);
-        lw.replace_parametrized_op(
-            borrow_array::EXTENSION.get_op(&op.opdef_id()).unwrap(),
+    lw.replace_parametrized_op(
+        borrow_array::EXTENSION
+            .get_op(&BArrayOpDef::new_array.opdef_id())
+            .unwrap(),
+        {
             move |args| {
                 let [size, elem_ty] = args else {
                     unreachable!()
                 };
-                Some(NodeTemplate::SingleOp(
-                    array_op
-                        .to_concrete(
-                            option_type(elem_ty.as_runtime().unwrap()).into(),
-                            size.as_nat().unwrap(),
-                        )
-                        .into(),
+                Some(new_array_dest(
+                    size.as_nat().unwrap(),
+                    elem_ty.as_runtime().unwrap(),
                 ))
-            },
-        );
-    }
+            }
+        },
+    );
+
+    lw.replace_parametrized_op(
+        borrow_array::EXTENSION
+            .get_op(&BArrayOpDef::get.opdef_id())
+            .unwrap(),
+        {
+            move |args| {
+                let [size, elem_ty] = args else {
+                    unreachable!()
+                };
+                Some(get_dest(
+                    size.as_nat().unwrap(),
+                    elem_ty.as_runtime().unwrap(),
+                ))
+            }
+        },
+    );
+
+    lw.replace_parametrized_op(
+        borrow_array::EXTENSION
+            .get_op(&BArrayOpDef::set.opdef_id())
+            .unwrap(),
+        {
+            move |args| {
+                let [size, elem_ty] = args else {
+                    unreachable!()
+                };
+                Some(set_dest(
+                    size.as_nat().unwrap(),
+                    elem_ty.as_runtime().unwrap(),
+                ))
+            }
+        },
+    );
+
+    lw.replace_parametrized_op(
+        borrow_array::EXTENSION
+            .get_op(&BArrayOpDef::swap.opdef_id())
+            .unwrap(),
+        move |args| {
+            let [size, elem_ty] = args else {
+                unreachable!()
+            };
+            Some(NodeTemplate::SingleOp(
+                ArrayOpDef::swap
+                    .to_concrete(
+                        option_type(elem_ty.as_runtime().unwrap()).into(),
+                        size.as_nat().unwrap(),
+                    )
+                    .into(),
+            ))
+        },
+    );
+
+    // TODO: pop_left
+
+    // TODO: pop_right
+
+    lw.replace_parametrized_op(
+        borrow_array::EXTENSION
+            .get_op(&BArrayOpDef::discard_empty.opdef_id())
+            .unwrap(),
+        move |args| {
+            let [elem_ty] = args else { unreachable!() };
+            Some(NodeTemplate::SingleOp(
+                ArrayOpDef::swap
+                    .to_concrete(option_type(elem_ty.as_runtime().unwrap()).into(), 0)
+                    .into(),
+            ))
+        },
+    );
+
+    lw.replace_parametrized_op(
+        borrow_array::EXTENSION
+            .get_op(&BArrayOpDef::unpack.opdef_id())
+            .unwrap(),
+        {
+            move |args| {
+                let [size, elem_ty] = args else {
+                    unreachable!()
+                };
+                Some(unpack_dest(
+                    size.as_nat().unwrap(),
+                    elem_ty.as_runtime().unwrap(),
+                ))
+            }
+        },
+    );
 
     lw
 }
@@ -400,8 +666,12 @@ fn lowerer() -> ReplaceTypes {
 #[cfg(test)]
 mod tests {
     use hugr::{
+        builder::HugrBuilder,
         extension::prelude::{qb_t, ConstUsize},
-        std_extensions::collections::borrow_array::{borrow_array_type, BArrayOpBuilder},
+        std_extensions::collections::{
+            array::op_builder::build_all_borrow_array_ops,
+            borrow_array::{borrow_array_type, BArrayOpBuilder},
+        },
         types::Signature,
         HugrView,
     };
@@ -489,4 +759,59 @@ mod tests {
         pass.run(&mut h).unwrap();
         h.validate().unwrap();
     }
+
+    #[test]
+    fn test_build_all_array_ops() {
+        let sig = Signature::new_endo(Type::EMPTY_TYPEROW);
+        let builder = DFGBuilder::new(sig).unwrap();
+        let mut h = build_all_borrow_array_ops(builder).finish_hugr().unwrap();
+
+        let pass = ReplaceBorrowArrayPass;
+        pass.run(&mut h).unwrap();
+
+        // print!("{}", h.mermaid_string());
+        h.validate().unwrap();
+    }
+
+    #[test]
+    fn test_clone_op() {
+        let size = 3;
+        let elem_ty = usize_t();
+        let arr_ty = borrow_array_type(size, elem_ty.clone());
+        let mut builder = DFGBuilder::new(Signature::new(
+            vec![arr_ty.clone()],
+            vec![arr_ty.clone(), arr_ty.clone()],
+        ))
+        .unwrap();
+        let [arr] = builder.input_wires_arr();
+        let (arr1, arr2) = builder
+            .add_borrow_array_clone(elem_ty.clone(), size, arr)
+            .unwrap();
+        let mut h = builder.finish_hugr_with_outputs([arr1, arr2]).unwrap();
+
+        let pass = ReplaceBorrowArrayPass;
+        pass.run(&mut h).unwrap();
+        h.validate().unwrap();
+    }
+
+    #[test]
+    fn test_discard_op() {
+        let size = 2;
+        let elem_ty = usize_t();
+        let arr_ty = borrow_array_type(size, elem_ty.clone());
+        let mut builder = DFGBuilder::new(Signature::new(vec![arr_ty.clone()], vec![])).unwrap();
+        let [arr] = builder.input_wires_arr();
+        builder
+            .add_borrow_array_discard(elem_ty.clone(), size, arr)
+            .unwrap();
+        let mut h = builder.finish_hugr_with_outputs([]).unwrap();
+
+        let pass = ReplaceBorrowArrayPass;
+        pass.run(&mut h).unwrap();
+        h.validate().unwrap();
+    }
+
+    // TODO: repeat test
+
+    // TODO: scan test
 }
