@@ -68,6 +68,9 @@ impl TypeTranslatorSet {
 
         let res = match typ.as_type_enum() {
             TypeEnum::Sum(sum) => {
+                if sum.num_variants() == 0 {
+                    return Some(RegisterCount::default());
+                }
                 if typ == &bool_t() {
                     return Some(RegisterCount::only_bits(1));
                 }
@@ -117,5 +120,53 @@ impl TypeTranslatorSet {
             .into_iter()
             .flatten()
             .map(move |idx| &self.type_translators[*idx])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use hugr::extension::prelude::{qb_t, PRELUDE_ID};
+    use hugr::types::SumType;
+
+    use crate::extension::bool::BOOL_EXTENSION_ID;
+
+    use super::*;
+
+    struct TestBoolTranslator;
+
+    impl PytketTypeTranslator for TestBoolTranslator {
+        fn extensions(&self) -> Vec<ExtensionId> {
+            vec![BOOL_EXTENSION_ID, PRELUDE_ID]
+        }
+
+        fn type_to_pytket(&self, typ: &hugr::types::CustomType) -> Option<RegisterCount> {
+            match typ.name().as_str() {
+                "usize" => Some(RegisterCount::only_bits(64)),
+                "qubit" => Some(RegisterCount::only_qubits(1)),
+                "bool" => Some(RegisterCount::only_bits(1)),
+                _ => None,
+            }
+        }
+    }
+
+    #[rstest::fixture]
+    fn translator_set() -> TypeTranslatorSet {
+        let mut set = TypeTranslatorSet::default();
+        set.add_type_translator(TestBoolTranslator);
+        set
+    }
+
+    #[rstest::rstest]
+    #[case::empty(SumType::new_unary(0).into(), Some(RegisterCount::default()))]
+    #[case::native_bool(SumType::new_unary(2).into(), Some(RegisterCount::only_bits(1)))]
+    #[case::simple(bool_t(), Some(RegisterCount::only_bits(1)))]
+    #[case::tuple(SumType::new_tuple(vec![bool_t(), qb_t(), bool_t()]).into(), Some(RegisterCount::new(1, 2, 0)))]
+    #[case::unsupported(SumType::new([vec![bool_t(), qb_t()], vec![bool_t()]]).into(), None)]
+    fn test_translations(
+        translator_set: TypeTranslatorSet,
+        #[case] typ: Type,
+        #[case] count: Option<RegisterCount>,
+    ) {
+        assert_eq!(translator_set.type_to_pytket(&typ), count);
     }
 }
