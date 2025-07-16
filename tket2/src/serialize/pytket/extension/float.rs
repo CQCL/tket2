@@ -1,9 +1,8 @@
 //! Encoder and decoder for floating point operations.
 
 use super::PytketEmitter;
-use crate::serialize::pytket::encoder::{
-    EncodeStatus, RegisterCount, Tk1EncoderContext, TrackedValues,
-};
+use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext, TrackedValues};
+use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
 use hugr::extension::simple_op::MakeExtensionOp;
@@ -59,16 +58,6 @@ impl<H: HugrView> PytketEmitter<H> for FloatEmitter {
         }
     }
 
-    fn type_to_pytket(
-        &self,
-        typ: &hugr::types::CustomType,
-    ) -> Result<Option<RegisterCount>, Tk1ConvertError<<H>::Node>> {
-        match typ.name() == &float_types::FLOAT_TYPE_ID {
-            true => Ok(Some(RegisterCount::only_params(1))),
-            false => Ok(None),
-        }
-    }
-
     fn const_to_pytket(
         &self,
         value: &OpaqueValue,
@@ -101,6 +90,19 @@ impl<H: HugrView> PytketEmitter<H> for FloatEmitter {
 
         let param = encoder.values.new_param(float.to_string());
         Ok(Some(TrackedValues::new_params([param])))
+    }
+}
+
+impl PytketTypeTranslator for FloatEmitter {
+    fn extensions(&self) -> Vec<ExtensionId> {
+        vec![float_types::EXTENSION_ID]
+    }
+
+    fn type_to_pytket(&self, typ: &hugr::types::CustomType) -> Option<RegisterCount> {
+        match typ.name() == &float_types::FLOAT_TYPE_ID {
+            true => Some(RegisterCount::only_params(1)),
+            false => None,
+        }
     }
 }
 

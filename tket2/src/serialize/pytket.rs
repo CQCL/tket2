@@ -1,10 +1,12 @@
 //! Serialization and deserialization of circuits using the `pytket` JSON format.
 
+mod config;
 mod decoder;
 pub mod encoder;
 pub mod extension;
 
-pub use encoder::{default_encoder_config, Tk1EncoderConfig, Tk1EncoderContext};
+pub use config::{default_encoder_config, Tk1EncoderConfig};
+pub use encoder::Tk1EncoderContext;
 pub use extension::PytketEmitter;
 
 use hugr::core::HugrNode;
@@ -29,7 +31,6 @@ use tket_json_rs::register::{Bit, ElementId, Qubit};
 use crate::circuit::Circuit;
 
 use self::decoder::Tk1DecoderContext;
-
 pub use crate::passes::pytket::lower_to_pytket;
 
 /// Prefix used for storing metadata in the hugr nodes.
@@ -53,9 +54,9 @@ const METADATA_INPUT_PARAMETERS: &str = "TKET1.input_parameters";
 ///
 /// Implemented by [`SerialCircuit`], the JSON format used by tket1's `pytket` library.
 pub trait TKETDecode: Sized {
-    /// The error type for decoding.
+    /// Error type of decoding errors.
     type DecodeError;
-    /// The error type for decoding.
+    /// Error type of encoding errors.
     type EncodeError;
     /// Convert the serialized circuit to a circuit.
     fn decode(self) -> Result<Circuit, Self::DecodeError>;
@@ -178,12 +179,6 @@ pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, Tk1ConvertError> {
 #[non_exhaustive]
 #[debug(bounds(N: HugrNode))]
 pub enum OpConvertError<N = hugr::Node> {
-    /// The serialized operation is not supported.
-    #[display("Cannot serialize tket2 operation: {op}")]
-    UnsupportedOpSerialization {
-        /// The operation.
-        op: OpType,
-    },
     /// Tried to decode a tket1 operation with not enough parameters.
     #[display(
         "Operation {} is missing encoded parameters. Expected at least {expected} but only \"{}\" were specified.",
@@ -277,8 +272,10 @@ pub enum Tk1ConvertError<N = hugr::Node> {
 
 impl<N> Tk1ConvertError<N> {
     /// Create a new error with a custom message.
-    pub fn custom(msg: impl Into<String>) -> Self {
-        Self::CustomError { msg: msg.into() }
+    pub fn custom(msg: impl ToString) -> Self {
+        Self::CustomError {
+            msg: msg.to_string(),
+        }
     }
 }
 

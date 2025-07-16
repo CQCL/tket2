@@ -1,7 +1,8 @@
 //! Encoder and decoder for tket2 operations with native pytket counterparts.
 
 use super::PytketEmitter;
-use crate::serialize::pytket::encoder::{EncodeStatus, RegisterCount, Tk1EncoderContext};
+use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext};
+use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
 use hugr::extension::prelude::{BarrierDef, TupleOpDef, PRELUDE_ID};
@@ -37,15 +38,18 @@ impl<H: HugrView> PytketEmitter<H> for PreludeEmitter {
         };
         Ok(EncodeStatus::Unsupported)
     }
+}
 
-    fn type_to_pytket(
-        &self,
-        typ: &hugr::types::CustomType,
-    ) -> Result<Option<RegisterCount>, Tk1ConvertError<<H>::Node>> {
+impl PytketTypeTranslator for PreludeEmitter {
+    fn extensions(&self) -> Vec<ExtensionId> {
+        vec![PRELUDE_ID]
+    }
+
+    fn type_to_pytket(&self, typ: &hugr::types::CustomType) -> Option<RegisterCount> {
         match typ.name().as_str() {
-            "usize" => Ok(Some(RegisterCount::only_bits(64))),
-            "qubit" => Ok(Some(RegisterCount::only_qubits(1))),
-            _ => Ok(None),
+            "usize" => Some(RegisterCount::only_bits(64)),
+            "qubit" => Some(RegisterCount::only_qubits(1)),
+            _ => None,
         }
     }
 }
@@ -80,7 +84,7 @@ impl PreludeEmitter {
                     let TypeArg::Runtime(ty) = arg else {
                         return Ok(EncodeStatus::Unsupported);
                     };
-                    let count = encoder.config().type_to_pytket(ty)?;
+                    let count = encoder.config().type_to_pytket(ty);
                     if count.is_none() {
                         return Ok(EncodeStatus::Unsupported);
                     }
