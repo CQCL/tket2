@@ -66,11 +66,7 @@ impl TypeTranslatorSet {
         let res = match typ.as_type_enum() {
             TypeEnum::Sum(sum) => {
                 if typ == &bool_t() {
-                    return Some(RegisterCount {
-                        qubits: 0,
-                        bits: 1,
-                        params: 0,
-                    });
+                    return Some(RegisterCount::only_bits(1);
                 }
                 if let Some(tuple) = sum.as_tuple() {
                     let count: Option<RegisterCount> = tuple
