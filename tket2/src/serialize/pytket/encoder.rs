@@ -1,11 +1,9 @@
 //! Intermediate structure for encoding [`Circuit`]s into [`SerialCircuit`]s.
 
-mod config;
 mod unit_generator;
 mod unsupported_tracker;
 mod value_tracker;
 
-pub use config::{default_encoder_config, Tk1EncoderConfig};
 use hugr::envelope::EnvelopeConfig;
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::package::Package;
@@ -13,8 +11,7 @@ use hugr_core::hugr::internal::PortgraphNodeMap;
 use tket_json_rs::clexpr::InputClRegister;
 use tket_json_rs::opbox::BoxID;
 pub use value_tracker::{
-    RegisterCount, TrackedBit, TrackedParam, TrackedQubit, TrackedValue, TrackedValues,
-    ValueTracker,
+    TrackedBit, TrackedParam, TrackedQubit, TrackedValue, TrackedValues, ValueTracker,
 };
 
 use hugr::ops::{OpTrait, OpType};
@@ -34,6 +31,8 @@ use super::{
     METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
 };
 use crate::circuit::Circuit;
+use crate::serialize::pytket::config::Tk1EncoderConfig;
+use crate::serialize::pytket::extension::RegisterCount;
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
 #[derive(derive_more::Debug)]
@@ -242,11 +241,10 @@ impl<H: HugrView> Tk1EncoderContext<H> {
                 continue;
             }
             // Dataflow ports should have a single linked neighbour.
-            let Some((neigh, neigh_out)) = circ.hugr().single_linked_output(node, input) else {
-                return Err(
-                    OpConvertError::UnsupportedOpSerialization { op: optype.clone() }.into(),
-                );
-            };
+            let (neigh, neigh_out) = circ
+                .hugr()
+                .single_linked_output(node, input)
+                .expect("Dataflow input port should have a single neighbour");
             let wire = Wire::new(neigh, neigh_out);
             if !wire_filter(wire) {
                 continue;
@@ -896,7 +894,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             };
 
             let wire = hugr::Wire::new(node, out_port);
-            let Some(count) = self.config().type_to_pytket(&ty)? else {
+            let Some(count) = self.config().type_to_pytket(&ty) else {
                 return Err(Tk1ConvertError::custom(format!(
                     "Found an unsupported type while encoding a {op}."
                 )));

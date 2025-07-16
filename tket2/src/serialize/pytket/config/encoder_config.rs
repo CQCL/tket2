@@ -8,34 +8,17 @@ use std::collections::{BTreeSet, HashMap, VecDeque};
 
 use hugr::extension::{ExtensionId, ExtensionSet};
 use hugr::ops::{ExtensionOp, Value};
-use hugr::types::{SumType, Type, TypeEnum};
+use hugr::types::{SumType, Type};
 
 use crate::serialize::pytket::encoder::EncodeStatus;
-use crate::serialize::pytket::extension::{
-    set_bits_op, BoolEmitter, FloatEmitter, PreludeEmitter, RotationEmitter, Tk1Emitter, Tk2Emitter,
-};
+use crate::serialize::pytket::extension::{set_bits_op, PytketTypeTranslator, RegisterCount};
 use crate::serialize::pytket::{PytketEmitter, Tk1ConvertError};
 use crate::Circuit;
 
-use super::value_tracker::RegisterCount;
-use super::{Tk1EncoderContext, TrackedValues};
-use hugr::extension::prelude::bool_t;
+use super::super::encoder::{Tk1EncoderContext, TrackedValues};
+use super::TypeTranslatorSet;
 use hugr::HugrView;
 use itertools::Itertools;
-
-/// Default encoder configuration for [`Circuit`]s.
-///
-/// Contains emitters for std and tket2 operations.
-pub fn default_encoder_config<H: HugrView>() -> Tk1EncoderConfig<H> {
-    let mut config = Tk1EncoderConfig::new();
-    config.add_emitter(PreludeEmitter);
-    config.add_emitter(BoolEmitter);
-    config.add_emitter(FloatEmitter);
-    config.add_emitter(RotationEmitter);
-    config.add_emitter(Tk1Emitter);
-    config.add_emitter(Tk2Emitter);
-    config
-}
 
 /// Configuration for converting [`Circuit`] into
 /// [`tket_json_rs::circuit_json::SerialCircuit`].
@@ -54,16 +37,14 @@ pub struct Tk1EncoderConfig<H: HugrView> {
     extension_emitters: HashMap<ExtensionId, Vec<usize>>,
     /// Emitters that request to be called for all operations.
     no_extension_emitters: Vec<usize>,
+    /// Set of type translators used to translate HUGR types into pytket registers.
+    type_translators: TypeTranslatorSet,
 }
 
 impl<H: HugrView> Tk1EncoderConfig<H> {
     /// Create a new [`Tk1EncoderConfig`] with no encoders.
     pub fn new() -> Self {
-        Self {
-            emitters: vec![],
-            extension_emitters: HashMap::new(),
-            no_extension_emitters: vec![],
-        }
+        Self::default()
     }
 
     /// Add an encoder to the configuration.
@@ -84,6 +65,14 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
         self.emitters.push(Box::new(encoder));
     }
 
+    /// Add a type translator to the configuration.
+    pub fn add_type_translator(
+        &mut self,
+        translator: impl PytketTypeTranslator + Send + Sync + 'static,
+    ) {
+        self.type_translators.add_type_translator(translator);
+    }
+
     /// List the extensions supported by the encoders.
     ///
     /// Some encoders may not specify an extension, in which case they will be called
@@ -98,7 +87,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
     ///
     /// Returns `true` if the operation was successfully converted and no further
     /// encoders should be called.
-    pub(super) fn op_to_pytket(
+    pub fn op_to_pytket(
         &self,
         node: H::Node,
         op: &ExtensionOp,
@@ -116,57 +105,12 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
         Ok(result)
     }
 
-    /// Translate a HUGR type into a count of qubits, bits, and parameters,
-    /// using the registered custom encoders.
-    ///
-    /// Only tuple sums, bools, and custom types are supported.
-    /// Other types will return `None`.
-    pub fn type_to_pytket(
-        &self,
-        typ: &Type,
-    ) -> Result<Option<RegisterCount>, Tk1ConvertError<H::Node>> {
-        match typ.as_type_enum() {
-            TypeEnum::Sum(sum) => {
-                if typ == &bool_t() {
-                    return Ok(Some(RegisterCount {
-                        qubits: 0,
-                        bits: 1,
-                        params: 0,
-                    }));
-                }
-                if let Some(tuple) = sum.as_tuple() {
-                    let count: Result<Option<RegisterCount>, Tk1ConvertError<H::Node>> = tuple
-                        .iter()
-                        .map(|ty| {
-                            match ty.clone().try_into() {
-                                Ok(ty) => Ok(self.type_to_pytket(&ty)?),
-                                // Sum types with row variables (variable tuple lengths) are not supported.
-                                Err(_) => Ok(None),
-                            }
-                        })
-                        .sum();
-                    return count;
-                }
-            }
-            TypeEnum::Extension(custom) => {
-                let type_ext = custom.extension();
-                for encoder in self.emitters_for_extension(type_ext) {
-                    if let Some(count) = encoder.type_to_pytket(custom)? {
-                        return Ok(Some(count));
-                    }
-                }
-            }
-            _ => {}
-        }
-        Ok(None)
-    }
-
     /// Encode a const value into the pytket context using the registered custom
     /// encoders.
     ///
     /// Returns the values associated to the loaded constant, or `None` if the
     /// constant could not be encoded.
-    pub(super) fn const_to_pytket(
+    pub fn const_to_pytket(
         &self,
         value: &Value,
         encoder: &mut Tk1EncoderContext<H>,
@@ -216,6 +160,15 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
         Ok(Some(values))
     }
 
+    /// Translate a HUGR type into a count of qubits, bits, and parameters,
+    /// using the registered custom translator.
+    ///
+    /// Only tuple sums, bools, and custom types are supported.
+    /// Other types will return `None`.
+    pub fn type_to_pytket(&self, typ: &Type) -> Option<RegisterCount> {
+        self.type_translators.type_to_pytket(typ)
+    }
+
     /// Lists the emitters that can handle a given extension.
     fn emitters_for_extension(
         &self,
@@ -250,6 +203,7 @@ impl<H: HugrView> Default for Tk1EncoderConfig<H> {
             emitters: Default::default(),
             extension_emitters: Default::default(),
             no_extension_emitters: Default::default(),
+            type_translators: TypeTranslatorSet::default(),
         }
     }
 }
