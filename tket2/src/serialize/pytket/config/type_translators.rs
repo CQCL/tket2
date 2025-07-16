@@ -11,15 +11,15 @@ use hugr::extension::ExtensionId;
 use hugr::types::{Type, TypeEnum};
 use itertools::Itertools;
 
-use crate::serialize::pytket::extension::{RegisterCount, TypeTranslator};
+use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
 
-/// A set of [`TypeTranslator`]s that can be used to translate HUGR types
+/// A set of [`PytketTypeTranslator`]s that can be used to translate HUGR types
 /// into pytket registers (qubits, bits, and parameter expressions).
 #[derive(Default, derive_more::Debug)]
 pub(super) struct TypeTranslatorSet {
     /// Registered type translators
     #[debug(skip)]
-    pub(super) type_translators: Vec<Box<dyn TypeTranslator + Send + Sync>>,
+    pub(super) type_translators: Vec<Box<dyn PytketTypeTranslator + Send + Sync>>,
     /// Pre-computed map from extension ids to corresponding type translators in
     /// `type_translators`, identified by their index.
     #[debug("{:?}", extension_translators.keys().collect_vec())]
@@ -33,7 +33,10 @@ impl TypeTranslatorSet {
     /// Add a translator to the set.
     ///
     /// This operation invalidates the type translation cache.
-    pub fn add_type_translator(&mut self, translator: impl TypeTranslator + Send + Sync + 'static) {
+    pub fn add_type_translator(
+        &mut self,
+        translator: impl PytketTypeTranslator + Send + Sync + 'static,
+    ) {
         let idx = self.type_translators.len();
 
         for ext in translator.extensions() {
@@ -66,7 +69,7 @@ impl TypeTranslatorSet {
         let res = match typ.as_type_enum() {
             TypeEnum::Sum(sum) => {
                 if typ == &bool_t() {
-                    return Some(RegisterCount::only_bits(1);
+                    return Some(RegisterCount::only_bits(1));
                 }
                 if let Some(tuple) = sum.as_tuple() {
                     let count: Option<RegisterCount> = tuple
@@ -108,7 +111,7 @@ impl TypeTranslatorSet {
     fn translators_for_extension(
         &self,
         ext: &ExtensionId,
-    ) -> impl Iterator<Item = &Box<dyn TypeTranslator + Send + Sync>> {
+    ) -> impl Iterator<Item = &Box<dyn PytketTypeTranslator + Send + Sync>> {
         self.extension_translators
             .get(ext)
             .into_iter()

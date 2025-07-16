@@ -11,7 +11,7 @@ use hugr::ops::{ExtensionOp, Value};
 use hugr::types::{SumType, Type};
 
 use crate::serialize::pytket::encoder::EncodeStatus;
-use crate::serialize::pytket::extension::{set_bits_op, RegisterCount, TypeTranslator};
+use crate::serialize::pytket::extension::{set_bits_op, PytketTypeTranslator, RegisterCount};
 use crate::serialize::pytket::{PytketEmitter, Tk1ConvertError};
 use crate::Circuit;
 
@@ -66,7 +66,10 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
     }
 
     /// Add a type translator to the configuration.
-    pub fn add_type_translator(&mut self, translator: impl TypeTranslator + Send + Sync + 'static) {
+    pub fn add_type_translator(
+        &mut self,
+        translator: impl PytketTypeTranslator + Send + Sync + 'static,
+    ) {
         self.type_translators.add_type_translator(translator);
     }
 

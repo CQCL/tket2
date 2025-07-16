@@ -2,7 +2,7 @@
 
 use super::PytketEmitter;
 use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext};
-use crate::serialize::pytket::extension::{RegisterCount, TypeTranslator};
+use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
 use hugr::extension::prelude::{BarrierDef, TupleOpDef, PRELUDE_ID};
@@ -40,7 +40,7 @@ impl<H: HugrView> PytketEmitter<H> for PreludeEmitter {
     }
 }
 
-impl TypeTranslator for PreludeEmitter {
+impl PytketTypeTranslator for PreludeEmitter {
     fn extensions(&self) -> Vec<ExtensionId> {
         vec![PRELUDE_ID]
     }

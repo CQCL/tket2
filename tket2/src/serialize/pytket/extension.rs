@@ -92,10 +92,10 @@ pub trait PytketEmitter<H: HugrView> {
 ///
 /// This is used both during encoding and decoding of pytket operations and
 /// types.
-pub trait TypeTranslator {
-    /// The name of the extensions this encoder is for.
+pub trait PytketTypeTranslator {
+    /// The name of the extensions this translator is for.
     ///
-    /// [`TypeTranslator::type_to_pytket`] will only be called for
+    /// [`PytketTypeTranslator::type_to_pytket`] will only be called for
     /// operations/types of these extensions.
     fn extensions(&self) -> Vec<ExtensionId>;
 

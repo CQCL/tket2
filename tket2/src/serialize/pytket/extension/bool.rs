@@ -6,7 +6,7 @@ use crate::serialize::pytket::encoder::{
     make_tk1_classical_expression, make_tk1_classical_operation, EncodeStatus, Tk1EncoderContext,
     TrackedValues,
 };
-use crate::serialize::pytket::extension::{RegisterCount, TypeTranslator};
+use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
 use hugr::extension::simple_op::MakeExtensionOp;
@@ -87,7 +87,7 @@ impl<H: HugrView> PytketEmitter<H> for BoolEmitter {
     }
 }
 
-impl TypeTranslator for BoolEmitter {
+impl PytketTypeTranslator for BoolEmitter {
     fn extensions(&self) -> Vec<ExtensionId> {
         vec![BOOL_EXTENSION_ID]
     }

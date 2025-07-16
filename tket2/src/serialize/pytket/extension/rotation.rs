@@ -5,7 +5,7 @@ use crate::extension::rotation::{
     ConstRotation, RotationOp, ROTATION_EXTENSION_ID, ROTATION_TYPE_ID,
 };
 use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext, TrackedValues};
-use crate::serialize::pytket::extension::{RegisterCount, TypeTranslator};
+use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
 use hugr::extension::simple_op::MakeExtensionOp;
@@ -69,7 +69,7 @@ impl<H: HugrView> PytketEmitter<H> for RotationEmitter {
     }
 }
 
-impl TypeTranslator for RotationEmitter {
+impl PytketTypeTranslator for RotationEmitter {
     fn extensions(&self) -> Vec<ExtensionId> {
         vec![ROTATION_EXTENSION_ID]
     }
