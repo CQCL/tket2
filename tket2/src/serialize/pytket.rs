@@ -5,6 +5,7 @@ mod decoder;
 pub mod encoder;
 pub mod extension;
 
+pub use config::{default_encoder_config, Tk1EncoderConfig};
 pub use encoder::Tk1EncoderContext;
 pub use extension::PytketEmitter;
 
@@ -28,7 +29,6 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::register::{Bit, ElementId, Qubit};
 
 use crate::circuit::Circuit;
-use crate::serialize::pytket::config::{default_encoder_config, Tk1EncoderConfig};
 
 use self::decoder::Tk1DecoderContext;
 pub use crate::passes::pytket::lower_to_pytket;

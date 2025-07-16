@@ -11,7 +11,7 @@ use crate::serialize::pytket::extension::{
 };
 use hugr::HugrView;
 
-/// Default encoder configuration for [`Circuit`]s.
+/// Default encoder configuration for [`Circuit`][crate::Circuit]s.
 ///
 /// Contains emitters for std and tket2 operations.
 pub fn default_encoder_config<H: HugrView>() -> Tk1EncoderConfig<H> {
