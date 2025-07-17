@@ -69,7 +69,7 @@ fn replace_const_borrow_array(
     // See https://github.com/CQCL/hugr/issues/2437.
     let option_values: Vec<_> = bav
         .get_contents()
-        .into_iter()
+        .iter()
         .map(|v| const_some(v.clone()))
         .collect();
     let array_value = ArrayValue::new(option_elem_ty.into(), option_values);
@@ -164,7 +164,7 @@ fn discard_all_borrowed_dest(size: u64, elem_ty: Type) -> NodeTemplate {
 
         // Ensure value is none.
         let [] = dfb
-            .build_unwrap_sum(0, opt_elem_ty.clone().into(), nothing)
+            .build_unwrap_sum(0, opt_elem_ty.clone(), nothing)
             .unwrap();
 
         arr = next_arr;
@@ -363,7 +363,7 @@ fn set_dest(size: u64, elem_ty: Type) -> NodeTemplate {
 fn pop_dest(size: u64, elem_ty: Type, left: bool) -> NodeTemplate {
     let opt_elem_ty = option_type(elem_ty.clone());
     let result_arr_ty = array_type(size - 1, opt_elem_ty.clone().into());
-    let opt_result_ty = option_type(vec![elem_ty.clone().into(), result_arr_ty.clone()]);
+    let opt_result_ty = option_type(vec![elem_ty.clone(), result_arr_ty.clone()]);
     let mut dfb = DFGBuilder::new(inout_sig(
         vec![array_type(size, opt_elem_ty.clone().into())],
         vec![opt_result_ty.clone().into()],
@@ -399,10 +399,7 @@ fn pop_dest(size: u64, elem_ty: Type, left: bool) -> NodeTemplate {
 
     // Case 0: Popping not successful, return none.
     let mut case0 = cond.case_builder(0).unwrap();
-    let none_elem = case0.add_load_value(const_none(vec![
-        elem_ty.clone().into(),
-        result_arr_ty.clone(),
-    ]));
+    let none_elem = case0.add_load_value(const_none(vec![elem_ty.clone(), result_arr_ty.clone()]));
     case0.finish_with_outputs([none_elem]).unwrap();
 
     // Case 1: Popping successful, unwrap the inner option (assume it is always some) and wrap the outer option again.
@@ -417,7 +414,7 @@ fn pop_dest(size: u64, elem_ty: Type, left: bool) -> NodeTemplate {
                 1,
                 vec![
                     TypeRow::new(),
-                    TypeRow::from(vec![elem_ty.clone().into(), result_arr_ty.clone()]),
+                    TypeRow::from(vec![elem_ty.clone(), result_arr_ty.clone()]),
                 ],
             ),
             [elem, arr],
@@ -470,15 +467,13 @@ fn repeat_dest(size: u64, elem_ty: Type) -> NodeTemplate {
 
     let [f] = dfb.input_wires_arr();
 
-    let repeat_op = ArrayRepeat::new(elem_ty.clone().into(), size);
+    let repeat_op = ArrayRepeat::new(elem_ty.clone(), size);
 
     // Call array_repeat to get array of elements without options.
     let arr = dfb.add_dataflow_op(repeat_op, [f]).unwrap().out_wire(0);
 
     // Unpack the array to get the elements as wires
-    let elems = dfb
-        .add_array_unpack(elem_ty.clone().into(), size, arr)
-        .unwrap();
+    let elems = dfb.add_array_unpack(elem_ty.clone(), size, arr).unwrap();
 
     // Wrap each element in option
     let opt_elems = elems
@@ -505,7 +500,7 @@ fn scan_dest(size: u64, src_ty: Type, tgt_ty: Type, acc_tys: Vec<Type>) -> NodeT
                 src_arr_type.clone(),
                 Type::new_function(FuncTypeBase::<RowVariable>::new(
                     {
-                        let mut args = vec![src_ty.clone().into()];
+                        let mut args = vec![src_ty.clone()];
                         args.extend(acc_tys.clone());
                         TypeRow::from(args)
                     },
@@ -514,8 +509,7 @@ fn scan_dest(size: u64, src_ty: Type, tgt_ty: Type, acc_tys: Vec<Type>) -> NodeT
                         rets.extend(acc_tys.clone());
                         TypeRow::from(rets)
                     },
-                ))
-                .into(),
+                )),
             ];
             v.extend(acc_tys.clone());
             TypeRow::from(v)
@@ -528,7 +522,7 @@ fn scan_dest(size: u64, src_ty: Type, tgt_ty: Type, acc_tys: Vec<Type>) -> NodeT
     ))
     .unwrap();
 
-    let mut inputs: Vec<Wire> = dfb.input_wires().into_iter().collect();
+    let mut inputs: Vec<Wire> = dfb.input_wires().collect();
 
     // Unwrap all the options in the input array.
     let elems = dfb
@@ -539,28 +533,20 @@ fn scan_dest(size: u64, src_ty: Type, tgt_ty: Type, acc_tys: Vec<Type>) -> NodeT
         let [unwrapped] = dfb.build_unwrap_sum(1, opt_src_ty.clone(), elem).unwrap();
         unwrapped_elems.push(unwrapped);
     }
-    let arr_unwrapped = dfb
-        .add_new_array(src_ty.clone().into(), unwrapped_elems)
-        .unwrap();
+    let arr_unwrapped = dfb.add_new_array(src_ty.clone(), unwrapped_elems).unwrap();
 
     // Add the scan operation on the unwrapped array.
-    let scan_op = ArrayScan::new(
-        src_ty.clone().into(),
-        tgt_ty.clone().into(),
-        acc_tys.clone().into(),
-        size,
-    );
+    let scan_op = ArrayScan::new(src_ty.clone(), tgt_ty.clone(), acc_tys.clone(), size);
     inputs[0] = arr_unwrapped;
     let mut outputs: Vec<Wire> = dfb
         .add_dataflow_op(scan_op, inputs)
         .unwrap()
         .outputs()
-        .into_iter()
         .collect();
 
     // Wrap each element in the output array in option again.
     let out_elems = dfb
-        .add_array_unpack(tgt_ty.clone().into(), size, outputs[0])
+        .add_array_unpack(tgt_ty.clone(), size, outputs[0])
         .unwrap();
     let opt_elems = out_elems
         .into_iter()
@@ -740,22 +726,19 @@ fn lowerer() -> ReplaceTypes {
             let [size, src_ty, tgt_ty, acc_tys] = args else {
                 unreachable!()
             };
-            Some(
-                scan_dest(
-                    size.as_nat().unwrap(),
-                    option_type(src_ty.as_runtime().unwrap()).into(),
-                    option_type(tgt_ty.as_runtime().unwrap()).into(),
-                    acc_tys
-                        .clone()
-                        .into_list_parts()
-                        .map(|sp| match sp {
-                            SeqPart::Item(t) => t.as_runtime().unwrap(),
-                            _ => unreachable!("Expected SeqPart::Item"),
-                        })
-                        .collect(),
-                )
-                .into(),
-            )
+            Some(scan_dest(
+                size.as_nat().unwrap(),
+                src_ty.as_runtime().unwrap(),
+                tgt_ty.as_runtime().unwrap(),
+                acc_tys
+                    .clone()
+                    .into_list_parts()
+                    .map(|sp| match sp {
+                        SeqPart::Item(t) => t.as_runtime().unwrap(),
+                        _ => unreachable!("Expected SeqPart::Item"),
+                    })
+                    .collect(),
+            ))
         },
     );
 
@@ -921,9 +904,8 @@ mod tests {
         let ba_ty = borrow_array_type(size, elem_ty.clone());
         let dfb = DFGBuilder::new(inout_sig(vec![ba_ty.clone()], vec![ba_ty.clone()])).unwrap();
         let [ba] = dfb.input_wires_arr();
-        let h = dfb.finish_hugr_with_outputs([ba]).unwrap();
+        let mut h = dfb.finish_hugr_with_outputs([ba]).unwrap();
 
-        let mut h = h;
         let pass = ReplaceBorrowArrayPass;
         pass.run(&mut h).unwrap();
         h.validate().unwrap();
@@ -1069,7 +1051,6 @@ mod tests {
 
         let pass = ReplaceBorrowArrayPass;
         pass.run(&mut h).unwrap();
-        print!("{}", h.mermaid_string());
         h.validate().unwrap();
     }
 
@@ -1109,7 +1090,6 @@ mod tests {
 
         let pass = ReplaceBorrowArrayPass;
         pass.run(&mut h).unwrap();
-        print!("{}", h.mermaid_string());
         h.validate().unwrap();
     }
 }
