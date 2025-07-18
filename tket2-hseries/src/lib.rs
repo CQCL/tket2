@@ -24,6 +24,8 @@ use extension::{
 #[cfg(feature = "llvm")]
 use hugr::llvm::utils::inline_constant_functions;
 
+use crate::replace_borrow_arrays::{ReplaceBorrowArrayPass, ReplaceBorrowArrayPassError};
+
 #[cfg(feature = "cli")]
 pub mod cli;
 pub mod extension;
@@ -31,6 +33,7 @@ pub mod extension;
 pub mod llvm;
 
 pub mod replace_bools;
+pub mod replace_borrow_arrays;
 
 /// Modify a [hugr::Hugr] into a form that is acceptable for ingress into a
 /// Q-System. Returns an error if this cannot be done.
@@ -42,6 +45,7 @@ pub struct QSystemPass {
     monomorphize: bool,
     force_order: bool,
     lazify: bool,
+    lower_borrow_arrays: bool,
 }
 
 impl Default for QSystemPass {
@@ -51,6 +55,7 @@ impl Default for QSystemPass {
             monomorphize: true,
             force_order: true,
             lazify: true,
+            lower_borrow_arrays: true,
         }
     }
 }
@@ -61,6 +66,8 @@ impl Default for QSystemPass {
 pub enum QSystemPassError<N = Node> {
     /// An error from the component [ReplaceBoolPass].
     ReplaceBoolError(ReplaceBoolPassError<N>),
+    /// An error from the component [ReplaceBorrowArrayPass].
+    ReplaceBorrowArrayError(ReplaceBorrowArrayPassError<N>),
     /// An error from the component [force_order()] pass.
     ForceOrderError(HugrError),
     /// An error from the component [LowerTket2ToQSystemPass] pass.
@@ -117,7 +124,10 @@ impl QSystemPass {
         if self.lazify {
             self.replace_bools().run(hugr)?;
         }
-        self.linearize_arrays().run(hugr)?;
+        if self.lower_borrow_arrays {
+            self.replace_borrow_arrays().run(hugr)?;
+        }
+        // self.linearize_arrays().run(hugr)?;
         #[cfg(feature = "llvm")]
         {
             // TODO: Remove "llvm" feature gate once `inline_constant_functions` is moved to
@@ -179,6 +189,10 @@ impl QSystemPass {
 
     fn replace_bools(&self) -> ReplaceBoolPass {
         ReplaceBoolPass
+    }
+
+    fn replace_borrow_arrays(&self) -> ReplaceBorrowArrayPass {
+        ReplaceBorrowArrayPass
     }
 
     fn constant_fold(&self) -> ConstantFoldPass {
