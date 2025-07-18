@@ -12,15 +12,12 @@
 //! whenever it gets too large.
 
 mod eq_circ_class;
-mod hugr_pchannel;
-mod hugr_pqueue;
 pub mod log;
 mod qtz_circuit;
 mod worker;
 
 use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
-use fxhash::FxHashSet;
 use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::hugr::HugrError;
 use hugr::{HugrView, Node};
@@ -33,12 +30,11 @@ use std::{mem, thread};
 
 use crate::circuit::cost::CircuitCost;
 use crate::circuit::CircuitHash;
-use crate::optimiser::badger::hugr_pchannel::{HugrPriorityChannel, PriorityChannelLog};
-use crate::optimiser::badger::hugr_pqueue::{Entry, HugrPQ};
 use crate::optimiser::badger::worker::BadgerWorker;
+use crate::optimiser::{pqueue_worker, BacktrackingOptimiser, Optimiser, State, StatePQWorker};
 use crate::passes::CircuitChunks;
 use crate::resource::ResourceScope;
-use crate::rewrite::strategy::RewriteStrategy;
+use crate::rewrite::strategy::{RewriteResult, RewriteStrategy};
 use crate::rewrite::{CircuitRewrite, Rewriter};
 use crate::Circuit;
 
@@ -155,6 +151,43 @@ impl<R, S> BadgerOptimiser<R, S> {
     }
 }
 
+/// A state in the Badger search space.
+#[derive(Clone, Debug)]
+struct BadgerState<C> {
+    /// The current circuit
+    circ: ResourceScope,
+    /// The circuit cost
+    cost: C,
+}
+
+impl<R: BadgerRewriter, S: BadgerRewriteStrategy> State<&BadgerOptimiser<R, S>>
+    for BadgerState<S::Cost>
+where
+    S::Cost: serde::Serialize,
+{
+    type Cost = S::Cost;
+
+    fn hash(&self, _context: &&BadgerOptimiser<R, S>) -> Option<u64> {
+        self.circ.circuit_hash(self.circ.parent()).ok()
+    }
+
+    fn cost(&self, _context: &&BadgerOptimiser<R, S>) -> Option<Self::Cost> {
+        Some(self.cost.clone())
+    }
+
+    fn next_states(&self, &mut context: &mut &BadgerOptimiser<R, S>) -> Vec<Self> {
+        let rewrites = context.rewriter.get_all_rewrites(&self.circ);
+        context
+            .strategy
+            .apply_rewrites(rewrites, &self.circ)
+            .map(|RewriteResult { circ, cost_delta }| BadgerState {
+                circ,
+                cost: self.cost.add_delta(&cost_delta),
+            })
+            .collect()
+    }
+}
+
 impl<R, S> BadgerOptimiser<R, S>
 where
     R: BadgerRewriter,
@@ -201,11 +234,9 @@ where
     fn badger(
         &self,
         circ: &Circuit<impl HugrView<Node = Node>>,
-        mut logger: BadgerLogger,
+        logger: BadgerLogger,
         opt: BadgerOptions,
     ) -> ResourceScope {
-        let start_time = Instant::now();
-        let mut last_best_time = Instant::now();
         let circ = circ.to_owned();
 
         if circ.try_to_subgraph() == Err(InvalidSubgraph::EmptySubgraph) {
@@ -213,99 +244,14 @@ where
             panic!("Empty circuit input not supported; no optimisation possible");
         }
 
+        let backtracking = BacktrackingOptimiser::with_badger_options(&opt);
         let circ = ResourceScope::from_circuit(circ);
-        let mut best_circ = circ.clone();
-        let mut best_circ_cost = self.cost(&circ);
-        let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.count());
-        logger.log_best(&best_circ_cost, num_rewrites);
-
-        // Hash of seen circuits. Dot not store circuits as this map gets huge
-        let hash = circ.circuit_hash(circ.parent()).unwrap();
-        let mut seen_hashes = FxHashSet::default();
-        seen_hashes.insert(hash);
-
-        // The priority queue of circuits to be processed (this should not get big)
-        let cost_fn = {
-            let strategy = self.strategy.clone();
-            move |circ: &'_ ResourceScope| strategy.circuit_cost(circ)
-        };
-        let cost = (cost_fn)(&circ);
-
-        let mut pq = HugrPQ::new(cost_fn, opt.queue_size);
-        pq.push_unchecked(circ.to_owned(), hash, cost);
-
-        let mut circ_cnt = 0;
-        let mut timeout_flag = false;
-        while let Some(Entry { circ, cost, .. }) = pq.pop() {
-            if cost < best_circ_cost {
-                best_circ = circ.clone();
-                best_circ_cost = cost.clone();
-                let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.count());
-                logger.log_best(&best_circ_cost, num_rewrites);
-                last_best_time = Instant::now();
-            }
-            circ_cnt += 1;
-
-            let rewrites = self.rewriter.get_all_rewrites(&circ);
-            logger.register_branching_factor(rewrites.len());
-
-            // Get combinations of rewrites that can be applied to the circuit,
-            // and filter them to keep only the ones that
-            //
-            // - Don't have a worse cost than the last candidate in the priority queue.
-            // - Do not invalidate the circuit by creating a loop.
-            // - We haven't seen yet.
-            for r in self.strategy.apply_rewrites(rewrites, &circ) {
-                let new_circ_cost = cost.add_delta(&r.cost_delta);
-                if !pq.check_accepted(&new_circ_cost) {
-                    continue;
-                }
-
-                let Ok(new_circ_hash) = r.circ.circuit_hash(circ.parent()) else {
-                    // The composed rewrites produced a loop.
-                    //
-                    // See [https://github.com/CQCL/tket2/discussions/242]
-                    continue;
-                };
-
-                if !seen_hashes.insert(new_circ_hash) {
-                    // Ignore this circuit: we've already seen it
-                    continue;
-                }
-
-                pq.push_unchecked(r.circ, new_circ_hash, new_circ_cost);
-                logger.log_progress(circ_cnt, Some(pq.len()), seen_hashes.len());
-            }
-
-            if let Some(timeout) = opt.timeout {
-                if start_time.elapsed().as_secs() > timeout {
-                    timeout_flag = true;
-                    break;
-                }
-            }
-            if let Some(p_timeout) = opt.progress_timeout {
-                if last_best_time.elapsed().as_secs() > p_timeout {
-                    timeout_flag = true;
-                    break;
-                }
-            }
-            if let Some(max_circuit_count) = opt.max_circuit_count {
-                if seen_hashes.len() >= max_circuit_count {
-                    timeout_flag = true;
-                    break;
-                }
-            }
-        }
-
-        logger.log_processing_end(
-            circ_cnt,
-            Some(seen_hashes.len()),
-            best_circ_cost,
-            false,
-            timeout_flag,
-            start_time.elapsed(),
-        );
-        best_circ
+        let cost = self.cost(&circ);
+        let init_state = BadgerState { circ, cost };
+        backtracking
+            .optimise_with_log(init_state, self, logger)
+            .expect("optimisation failed")
+            .circ
     }
 
     /// Run the Badger optimiser on a circuit, using multiple threads.
@@ -332,21 +278,17 @@ where
 
         // multi-consumer priority channel for queuing circuits to be processed by the
         // workers
-        let cost_fn = {
-            let strategy = self.strategy.clone();
-            move |circ: &'_ ResourceScope| strategy.circuit_cost(circ)
-        };
-        let (pq, rx_log) = HugrPriorityChannel::init(cost_fn.clone(), opt.queue_size);
+        let (pq, rx_log) = StatePQWorker::init(opt.queue_size);
 
         let initial_circ_hash = circ.circuit_hash(circ.parent()).unwrap();
         let mut best_circ = circ.clone();
         let mut best_circ_cost = self.cost(&best_circ);
 
         // Initialise the work channels and send the initial circuit.
-        pq.send(vec![Work {
+        pq.send(vec![pqueue_worker::Work {
             cost: best_circ_cost.clone(),
             hash: initial_circ_hash,
-            circ,
+            state: circ,
         }])
         .unwrap();
 
@@ -379,7 +321,7 @@ where
             select! {
                 recv(rx_log) -> msg => {
                     match msg {
-                        Ok(PriorityChannelLog::NewBestCircuit(circ, cost)) => {
+                        Ok(pqueue_worker::LogMessage::NewBestState(circ, cost)) => {
                             if cost < best_circ_cost {
                                 best_circ = circ;
                                 best_circ_cost = cost;
@@ -390,7 +332,7 @@ where
                                 }
                             }
                         },
-                        Ok(PriorityChannelLog::CircuitCount{processed_count: proc, seen_count: seen, queue_length}) => {
+                        Ok(pqueue_worker::LogMessage::StateCount{processed_count: proc, seen_count: seen, queue_length}) => {
                             processed_count = proc;
                             seen_count = seen;
                             if let Some(max_circuit_count) = opt.max_circuit_count {
@@ -428,7 +370,7 @@ where
         // Empty the log from the priority queue and store final circuit count.
         while let Ok(log) = rx_log.recv() {
             match log {
-                PriorityChannelLog::NewBestCircuit(circ, cost) => {
+                pqueue_worker::LogMessage::NewBestState(circ, cost) => {
                     if cost < best_circ_cost {
                         best_circ = circ;
                         best_circ_cost = cost;
@@ -436,7 +378,7 @@ where
                         logger.log_best(&best_circ_cost, num_rewrites);
                     }
                 }
-                PriorityChannelLog::CircuitCount {
+                pqueue_worker::LogMessage::StateCount {
                     processed_count: proc,
                     seen_count: seen,
                     queue_length,
@@ -632,8 +574,6 @@ mod badger_default {
 pub use badger_default::DefaultBadgerOptimiser;
 #[cfg(feature = "portmatching")]
 pub use badger_default::{DefaultBadgerStrategy, ECCBadgerOptimiser};
-
-use self::hugr_pchannel::Work;
 
 #[cfg(test)]
 #[cfg(feature = "portmatching")]
