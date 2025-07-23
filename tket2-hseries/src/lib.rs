@@ -127,7 +127,7 @@ impl QSystemPass {
         if self.lower_borrow_arrays {
             self.replace_borrow_arrays().run(hugr)?;
         }
-        // self.linearize_arrays().run(hugr)?;
+        self.linearize_arrays().run(hugr)?;
         #[cfg(feature = "llvm")]
         {
             // TODO: Remove "llvm" feature gate once `inline_constant_functions` is moved to
