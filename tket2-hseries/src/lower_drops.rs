@@ -1,5 +1,4 @@
 /// Contains a pass to lower "drop" ops from the Guppy extension
-
 use hugr::algorithms::replace_types::{
     handlers::copy_discard_array, NodeTemplate, ReplaceTypesError, ReplacementOptions,
 };
