@@ -11,6 +11,7 @@ use hugr::extension::prelude::qb_t;
 use hugr::llvm::custom::CodegenExtension;
 use hugr::llvm::emit::func::{build_option, EmitFuncContext};
 use hugr::llvm::emit::{emit_value, EmitOpArgs};
+use inkwell::module::Linkage;
 use inkwell::types::BasicType;
 use inkwell::values::{BasicValueEnum, FunctionValue, IntValue};
 use tket2::hugr::llvm::CodegenExtsBuilder;
@@ -105,7 +106,9 @@ impl RuntimeFunction {
         pcg: &impl PreludeCodegen,
     ) -> Result<FunctionValue<'c>> {
         let func_type = self.func_type(context, pcg);
-        context.get_extern_func(self.name(), func_type)
+        let func = context.get_extern_func(self.name(), func_type)?;
+        func.set_linkage(Linkage::Private);
+        Ok(func)
     }
 }
 
