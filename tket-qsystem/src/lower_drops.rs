@@ -1,3 +1,5 @@
+/// Contains a pass to lower "drop" ops from the Guppy extension
+
 use hugr::algorithms::replace_types::{
     handlers::copy_discard_array, NodeTemplate, ReplaceTypesError, ReplacementOptions,
 };
@@ -7,6 +9,7 @@ use hugr::types::{Signature, Term};
 use hugr::{hugr::hugrmut::HugrMut, std_extensions::collections::array::array_type_def, Node};
 use tket::extension::guppy::{DROP_OP_NAME, GUPPY_EXTENSION};
 
+/// A pass that lowers "drop" ops from [GUPPY_EXTENSION]
 #[derive(Default, Debug, Clone)]
 pub struct LowerDropsPass;
 
