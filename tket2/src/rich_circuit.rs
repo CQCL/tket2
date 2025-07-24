@@ -1,34 +1,54 @@
 pub mod control;
 pub mod dagger;
-pub mod flatten_modifier;
+pub mod modifier_call_graph;
+pub mod modifier_resolver;
 pub mod power;
+use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 
-use crate::{
-    extension::{TKET2_EXTENSION, TKET2_EXTENSION_ID as EXTENSION_ID},
-    rich_circuit::{control::ModifierControl, dagger::ModifierDagger, power::ModifierPower},
-};
+use crate::circuit::Circuit;
+use crate::rich_circuit::{control::ModifierControl, dagger::ModifierDagger, power::ModifierPower};
+use hugr::Node;
 use hugr::{
     extension::{
-        prelude::qb_t,
-        simple_op::{MakeExtensionOp, MakeOpDef, MakeRegisteredOp, OpLoadError},
-        ExtensionId, OpDef, SignatureError, SignatureFromArgs, SignatureFunc, TypeDef, Version,
+        simple_op::{MakeOpDef, OpLoadError},
+        ExtensionId, OpDef, SignatureFunc, Version,
     },
-    ops::{ExtensionOp, OpName, OpType},
-    types::{
-        type_param::TypeParam, FuncValueType, PolyFuncTypeRV, Signature, Type, TypeArg, TypeBound,
-        TypeRV,
-    },
-    Extension, Hugr, HugrView,
+    ops::OpName,
+    Extension,
 };
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use smol_str::ToSmolStr;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
-/// A circuit that possibly controlled by modifiers.
-///
-use crate::circuit::Circuit;
+/// Circuit with hash map of modifier informationj
+#[derive(Debug, Clone)]
+struct RichCircuit {
+    circ: Circuit,
+    modifier_map: HashMap<Node, Vec<Modifier>>,
+}
+
+/// Types of modifers.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Serialize,
+    Deserialize,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumIter,
+    IntoStaticStr,
+    EnumString,
+)]
+pub enum Modifier {
+    Control(usize),
+    Dagger,
+    Power(usize),
+}
 
 pub const MODIFIER_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("modifier");
 pub const MODIFIER_VERSION: Version = Version::new(0, 1, 0);
@@ -65,36 +85,12 @@ pub const CONTROL_OP_ID: OpName = OpName::new_inline("ControlOperator");
 pub const DAGGER_OP_ID: OpName = OpName::new_inline("DaggerOperator");
 pub const POWER_OP_ID: OpName = OpName::new_inline("PowerOperator");
 
-/// Types of modifers.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Serialize,
-    Deserialize,
-    Hash,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumIter,
-    IntoStaticStr,
-    EnumString,
-)]
-pub enum Modifier {
-    Control(u32),
-    Dagger,
-    Power,
-}
-
-impl Modifier {}
-
 impl MakeOpDef for Modifier {
     fn opdef_id(&self) -> OpName {
         match self {
             Modifier::Control(_) => CONTROL_OP_ID.clone(),
             Modifier::Dagger => DAGGER_OP_ID.clone(),
-            Modifier::Power => POWER_OP_ID.clone(),
+            Modifier::Power(_) => POWER_OP_ID.clone(),
         }
     }
 
@@ -110,7 +106,7 @@ impl MakeOpDef for Modifier {
         match self {
             Modifier::Control(_) => ModifierControl::signature(),
             Modifier::Dagger => ModifierDagger::signature(),
-            Modifier::Power => ModifierPower::signature(),
+            Modifier::Power(_) => ModifierPower::signature(),
         }
     }
 
@@ -126,12 +122,40 @@ impl MakeOpDef for Modifier {
         match self {
             Modifier::Control(_) => "Generates a quantum-controlled circuit from a circuit.".into(),
             Modifier::Dagger => "Dagger operation on a circuit.".into(),
-            Modifier::Power => "Generates a circuit that applies a circuit many times.".into(),
+            Modifier::Power(_) => "Generates a circuit that applies a circuit many times.".into(),
         }
     }
 
     // [TODO]: do we need this?
     // fn post_opdef(&self, _def: &mut OpDef);
+}
+
+pub struct CombinedModifier {
+    control: usize,
+    dagger: bool,
+    power: usize,
+}
+
+impl From<Vec<Modifier>> for CombinedModifier {
+    fn from(modifiers: Vec<Modifier>) -> Self {
+        let mut control = 0;
+        let mut dagger = false;
+        let mut power = 0;
+
+        for modifier in modifiers {
+            match modifier {
+                Modifier::Control(c) => control += c as usize,
+                Modifier::Dagger => dagger = true,
+                Modifier::Power(p) => power += p as usize,
+            }
+        }
+
+        CombinedModifier {
+            control,
+            dagger,
+            power,
+        }
+    }
 }
 
 #[cfg(test)]
