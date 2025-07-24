@@ -12,12 +12,10 @@ use std::sync::Arc;
 use hugr::builder::{BuildHandle, Container, Dataflow, DataflowSubContainer, FunctionBuilder};
 use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::ops::handle::{FuncID, NodeHandle};
-use hugr::ops::{OpType, Value};
-use hugr::std_extensions::arithmetic::float_types::ConstF64;
+use hugr::ops::OpType;
 use hugr::types::Signature;
 use hugr::{Hugr, Wire};
 
-use indexmap::IndexMap;
 use itertools::{EitherOrBoth, Itertools};
 use serde_json::json;
 use tket_json_rs::circuit_json;
@@ -25,17 +23,14 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::register;
 
 use super::{
-    OpConvertError, RegisterHash, Tk1ConvertError, METADATA_B_OUTPUT_REGISTERS,
-    METADATA_B_REGISTERS, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS,
-    METADATA_Q_REGISTERS,
+    OpConvertError, RegisterHash, Tk1DecodeError, METADATA_B_OUTPUT_REGISTERS,
+    METADATA_B_REGISTERS, METADATA_INPUT_PARAMETERS, METADATA_OPGROUP, METADATA_PHASE,
+    METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
 };
-use crate::extension::rotation::rotation_type;
 use crate::serialize::pytket::config::Tk1DecoderConfig;
 use crate::serialize::pytket::decoder::wires::WireTracker;
-use crate::serialize::pytket::METADATA_INPUT_PARAMETERS;
-use crate::symbolic_constant_op;
+use crate::serialize::pytket::extension::OpaqueTk1Op;
 use op::Tk1Op;
-use param::parser::{parse_pytket_param, PytketParam};
 use param::LoadedParameter;
 
 /// State of the tket circuit being decoded.
@@ -55,10 +50,8 @@ pub struct Tk1DecoderContext<'h> {
     ordered_registers: Vec<RegisterHash>,
     /// A set of registers that encode qubits.
     qubit_registers: HashSet<RegisterHash>,
-    /// An ordered set of parameters found in operation arguments, and added as inputs.
-    parameters: IndexMap<String, LoadedParameter>,
     /// A tracker keeping track of the generated wires and their corresponding types.
-    wire_tracker: WireTracker<'h>,
+    wire_tracker: WireTracker,
     /// Configuration for decoding commands.
     ///
     /// Contains custom operation decoders, that define translation of legacy tket
@@ -85,7 +78,7 @@ impl<'h> Tk1DecoderContext<'h> {
         hugr: &'h mut Hugr,
         fn_name: Option<String>,
         config: Tk1DecoderConfig,
-    ) -> Result<Self, Tk1ConvertError> {
+    ) -> Result<Self, Tk1DecodeError> {
         let config = Arc::new(config);
         Self::new_arc(serialcirc, hugr, fn_name, config)
     }
@@ -107,7 +100,7 @@ impl<'h> Tk1DecoderContext<'h> {
         hugr: &'h mut Hugr,
         fn_name: Option<String>,
         config: Arc<Tk1DecoderConfig>,
-    ) -> Result<Self, Tk1ConvertError> {
+    ) -> Result<Self, Tk1DecodeError> {
         let num_qubits = serialcirc.qubits.len();
         let num_bits = serialcirc.bits.len();
         let sig =
@@ -135,7 +128,7 @@ impl<'h> Tk1DecoderContext<'h> {
                 check_register(reg)?;
                 Ok(RegisterHash::from(reg))
             })
-            .collect::<Result<Vec<RegisterHash>, Tk1ConvertError>>()?;
+            .collect::<Result<Vec<RegisterHash>, Tk1DecodeError>>()?;
 
         // Map each register element to their starting wire.
         let register_wires: HashMap<RegisterHash, Wire> = ordered_registers
@@ -144,12 +137,21 @@ impl<'h> Tk1DecoderContext<'h> {
             .zip(dangling_wires)
             .collect();
 
+        let wire_tracker = WireTracker::new();
+
+        if !serialcirc.phase.is_empty() {
+            // TODO - add a phase gate
+            // <https://github.com/CQCL/tket2/issues/598>
+            // let phase = Param::new(serialcirc.phase);
+            // decoder.add_phase(phase);
+        }
+
         Ok(Tk1DecoderContext {
             builder: dfg,
             register_wires,
             ordered_registers,
             qubit_registers,
-            parameters: IndexMap::new(),
+            wire_tracker,
             config,
         })
     }
@@ -199,7 +201,10 @@ impl<'h> Tk1DecoderContext<'h> {
     ///
     /// After this call, the HUGR passed to the [`Tk1DecoderContext::new`]
     /// constructor will contain the fully defined function.
-    pub(super) fn finish(mut self) -> Result<BuildHandle<FuncID<true>>, Tk1ConvertError> {
+    ///
+    /// The original Hugr entrypoint is _not_ modified, it must be set by the
+    /// caller if required.
+    pub(super) fn finish(mut self) -> Result<BuildHandle<FuncID<true>>, Tk1DecodeError> {
         // Order the final wires according to the serial circuit register order.
         let mut outputs = Vec::with_capacity(self.ordered_registers.len());
         for register in self.ordered_registers {
@@ -212,20 +217,65 @@ impl<'h> Tk1DecoderContext<'h> {
         );
 
         // Store the name for the input parameter wires
-        if !self.parameters.is_empty() {
-            let params = self.parameters.keys().cloned().collect_vec();
+        let input_params = self.wire_tracker.finish();
+        if !input_params.is_empty() {
             self.builder
-                .set_metadata(METADATA_INPUT_PARAMETERS, json!(params));
+                .set_metadata(METADATA_INPUT_PARAMETERS, json!(input_params));
         }
 
         self.builder
             .finish_with_outputs(outputs)
-            .map_err(Tk1ConvertError::custom)
+            .map_err(Tk1DecodeError::custom)
+    }
+
+    /// Decode a list of pytket commands.
+    pub(super) fn run_decoder(
+        &mut self,
+        commands: Vec<circuit_json::Command>,
+    ) -> Result<(), Tk1DecodeError> {
+        let config = self.config.clone();
+        for com in commands {
+            self.process_command(com, config.as_ref())?;
+        }
+        Ok(())
     }
 
     /// Add a tket1 [`circuit_json::Command`] from the serial circuit to the
     /// decoder.
-    pub(super) fn add_command(
+    pub(super) fn process_command(
+        &mut self,
+        command: circuit_json::Command,
+        config: &Tk1DecoderConfig,
+    ) -> Result<(), Tk1DecodeError> {
+        let circuit_json::Command { op, args, opgroup } = command;
+        let input_wires = self
+            .wire_tracker
+            .wire_inputs_for_command(&mut self.builder, &args)?;
+        if config.op_to_hugr(&op, &input_wires, &opgroup, self)? == DecodeStatus::Success {
+            return Ok(());
+        };
+
+        // The command couldn't be translated into a native HUGR counterpart, so
+        // we generate an opaque `Tk1Op` instead.
+
+        // Interpret the serialised operation as a [`Tk1Op`].
+        let num_qubits = args
+            .iter()
+            .take_while(|&arg| self.is_qubit_register(arg))
+            .count();
+        let num_input_bits = args.len() - num_qubits;
+        let tk1op: OpType = OpaqueTk1Op::new_from_op(op, num_qubits, num_input_bits)
+            .as_extension_op()
+            .into();
+
+        // TODO: Add tk1op to the builder using `input_wires`
+
+        todo!()
+    }
+
+    /// Add a tket1 [`circuit_json::Command`] from the serial circuit to the
+    /// decoder.
+    pub(super) fn add_command_old(
         &mut self,
         command: circuit_json::Command,
     ) -> Result<(), OpConvertError> {
@@ -339,68 +389,10 @@ impl<'h> Tk1DecoderContext<'h> {
             tk1op
                 .param_ports()
                 .zip(params)
-                .map(|(_port, param)| self.load_parameter(param)),
+                .map(|(_port, param)| self.wire_tracker.load_parameter(&mut self.builder, param)),
         );
 
         Ok((inputs, outputs))
-    }
-
-    /// Returns the wire carrying a parameter.
-    ///
-    /// If the parameter is a constant, a constant definition is added to the Hugr.
-    ///
-    /// The returned wires always have float type.
-    fn load_parameter(&mut self, param: String) -> Wire {
-        fn process(
-            hugr: &mut FunctionBuilder<&mut Hugr>,
-            input_params: &mut IndexMap<String, LoadedParameter>,
-            parsed: PytketParam,
-            param: &str,
-        ) -> LoadedParameter {
-            match parsed {
-                PytketParam::Constant(half_turns) => {
-                    let value: Value = ConstF64::new(half_turns).into();
-                    let wire = hugr.add_load_const(value);
-                    LoadedParameter::float(wire)
-                }
-                PytketParam::Sympy(expr) => {
-                    // store string in custom op.
-                    let symb_op = symbolic_constant_op(expr.to_string());
-                    let wire = hugr.add_dataflow_op(symb_op, []).unwrap().out_wire(0);
-                    LoadedParameter::rotation(wire)
-                }
-                PytketParam::InputVariable { name } => {
-                    // Special case for the name "pi", inserts a `ConstRotation::PI` instead.
-                    if name == "pi" {
-                        let value: Value = ConstF64::new(std::f64::consts::PI).into();
-                        let wire = hugr.add_load_const(value);
-                        return LoadedParameter::float(wire);
-                    }
-                    // Look it up in the input parameters to the circuit, and add a new wire if needed.
-                    *input_params.entry(name.to_string()).or_insert_with(|| {
-                        let wire = hugr.add_input(rotation_type());
-                        LoadedParameter::rotation(wire)
-                    })
-                }
-                PytketParam::Operation { op, args } => {
-                    // We assume all operations take float inputs.
-                    let input_wires = args
-                        .into_iter()
-                        .map(|arg| process(hugr, input_params, arg, param).as_float(hugr).wire)
-                        .collect_vec();
-                    let res = hugr.add_dataflow_op(op, input_wires).unwrap_or_else(|e| {
-                        panic!("Error while decoding pytket operation parameter \"{param}\". {e}",)
-                    });
-                    assert_eq!(res.num_value_outputs(), 1, "An operation decoded from the pytket op parameter \"{param}\" had {} outputs", res.num_value_outputs());
-                    LoadedParameter::float(res.out_wire(0))
-                }
-            }
-        }
-
-        let parsed = parse_pytket_param(&param);
-        process(&mut self.builder, &mut self.parameters, parsed, &param)
-            .as_rotation(&mut self.builder)
-            .wire
     }
 
     /// Return the [`Wire`] associated with a register.
@@ -427,7 +419,7 @@ impl<'h> Tk1DecoderContext<'h> {
 /// - The operation cannot be encoded, and the context was left unchanged.
 ///
 /// The latter is a recoverable error, as it promises that the context wasn't
-/// modified. For non-recoverable errors, see [`Tk1ConvertError`].
+/// modified. For non-recoverable errors, see [`Tk1DecodeError`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, derive_more::Display)]
 pub enum DecodeStatus {
     /// The pytket operation was successfully encoded and registered in the
@@ -439,9 +431,9 @@ pub enum DecodeStatus {
 }
 
 /// Only single-indexed registers are supported.
-fn check_register(register: &register::ElementId) -> Result<(), Tk1ConvertError> {
+fn check_register(register: &register::ElementId) -> Result<(), Tk1DecodeError> {
     if register.1.len() != 1 {
-        Err(Tk1ConvertError::MultiIndexedRegister {
+        Err(Tk1DecodeError::MultiIndexedRegister {
             register: register.0.clone(),
         })
     } else {

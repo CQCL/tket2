@@ -42,7 +42,7 @@ impl<H: HugrView> PytketEmitter<H> for Tk1Emitter {
                 "Opaque TKET1 operation did not have a json-encoded type argument.",
             ));
         };
-        let op: OpaqueTk1Op = serde_json::from_str(arg)?;
+        let op: OpaqueTk1Op = serde_json::from_str(arg).map_err(|e| Tk1ConvertError::custom(e))?;
 
         // Most operations map directly to a pytket one.
         encoder.emit_node_command(

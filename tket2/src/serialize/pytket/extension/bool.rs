@@ -108,12 +108,12 @@ impl PytketDecoder for BoolEmitter {
         vec![tket_json_rs::OpType::ClExpr]
     }
 
-    fn op_to_hugr<'a>(
+    fn op_to_hugr<'h>(
         &self,
         op: &tket_json_rs::circuit_json::Operation,
-        wires: &InputWires<'a>,
+        wires: &InputWires,
         _opgroup: Option<&str>,
-        decoder: &mut Tk1DecoderContext<'a>,
+        decoder: &mut Tk1DecoderContext<'h>,
     ) -> Result<DecodeStatus, Tk1DecodeError> {
         let Some(clexpr) = &op.classical_expr else {
             return Ok(DecodeStatus::Unsupported);
@@ -122,7 +122,7 @@ impl PytketDecoder for BoolEmitter {
         let res = match clexpr.expr.op {
             ClOp::BitEq => {
                 wires.check_len(2, "BitEq")?;
-                let ([b1, b2], wires) =
+                let ([_b1, _b2], _wires) =
                     wires
                         .clone()
                         .into_types_array(&[bool_t(), bool_t()], "BitEq", decoder)?;

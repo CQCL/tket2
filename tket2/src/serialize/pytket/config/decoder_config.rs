@@ -9,7 +9,7 @@ use itertools::Itertools;
 use std::collections::HashMap;
 
 use crate::serialize::pytket::decoder::{DecodeStatus, InputWires, Tk1DecoderContext};
-use crate::serialize::pytket::extension::{PytketDecoder, RegisterCount, TypeTranslator};
+use crate::serialize::pytket::extension::{PytketDecoder, PytketTypeTranslator, RegisterCount};
 use crate::serialize::pytket::Tk1DecodeError;
 
 use super::TypeTranslatorSet;
@@ -54,7 +54,10 @@ impl Tk1DecoderConfig {
     }
 
     /// Add a type translator to the configuration.
-    pub fn add_type_translator(&mut self, translator: impl TypeTranslator + Send + Sync + 'static) {
+    pub fn add_type_translator(
+        &mut self,
+        translator: impl PytketTypeTranslator + Send + Sync + 'static,
+    ) {
         self.type_translators.add_type_translator(translator);
     }
 
@@ -62,14 +65,15 @@ impl Tk1DecoderConfig {
     ///
     /// Returns `true` if the operation was successfully converted and no further
     /// encoders should be called.
-    pub(super) fn op_to_hugr<'a>(
+    pub(in crate::serialize::pytket) fn op_to_hugr<'a>(
         &self,
         op: &tket_json_rs::circuit_json::Operation,
-        args: InputWires<'a>,
-        opgroup: Option<&str>,
+        args: &InputWires,
+        opgroup: &Option<String>,
         decoder: &mut Tk1DecoderContext<'a>,
     ) -> Result<DecodeStatus, Tk1DecodeError> {
         let mut result = DecodeStatus::Unsupported;
+        let opgroup = opgroup.as_deref();
         for enc in self.decoders_for_optype(&op.op_type) {
             result = enc.op_to_hugr(op, &args, opgroup, decoder)?;
             if result == DecodeStatus::Success {

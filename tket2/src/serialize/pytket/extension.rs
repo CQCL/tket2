@@ -108,12 +108,12 @@ pub trait PytketDecoder {
     /// converted. If the operation is not supported by the encoder, it's
     /// important to **not** modify the `encoder` context as that may invalidate
     /// the context for other encoders that may be called afterwards.
-    fn op_to_hugr<'a>(
+    fn op_to_hugr<'h>(
         &self,
         op: &tket_json_rs::circuit_json::Operation,
-        wires: &InputWires<'a>,
+        wires: &InputWires,
         opgroup: Option<&str>,
-        decoder: &mut Tk1DecoderContext<'a>,
+        decoder: &mut Tk1DecoderContext<'h>,
     ) -> Result<DecodeStatus, Tk1DecodeError> {
         let _ = (op, wires, opgroup, decoder);
         Ok(DecodeStatus::Unsupported)
