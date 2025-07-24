@@ -65,14 +65,15 @@ impl Tk1DecoderConfig {
     ///
     /// Returns `true` if the operation was successfully converted and no further
     /// encoders should be called.
-    pub(super) fn op_to_hugr<'a>(
+    pub(in crate::serialize::pytket) fn op_to_hugr<'a>(
         &self,
         op: &tket_json_rs::circuit_json::Operation,
-        args: InputWires<'a>,
-        opgroup: Option<&str>,
+        args: &InputWires,
+        opgroup: &Option<String>,
         decoder: &mut Tk1DecoderContext<'a>,
     ) -> Result<DecodeStatus, Tk1DecodeError> {
         let mut result = DecodeStatus::Unsupported;
+        let opgroup = opgroup.as_deref();
         for enc in self.decoders_for_optype(&op.op_type) {
             result = enc.op_to_hugr(op, &args, opgroup, decoder)?;
             if result == DecodeStatus::Success {

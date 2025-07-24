@@ -86,7 +86,7 @@ pub trait TKETDecode: Sized {
 }
 
 impl TKETDecode for SerialCircuit {
-    type DecodeError = Tk1ConvertError;
+    type DecodeError = Tk1DecodeError;
     type EncodeError = Tk1ConvertError;
 
     fn decode(self) -> Result<Circuit, Self::DecodeError> {
@@ -98,17 +98,7 @@ impl TKETDecode for SerialCircuit {
         let mut hugr = Hugr::new();
 
         let mut decoder = Tk1DecoderContext::new(&self, &mut hugr, None, config)?;
-
-        if !self.phase.is_empty() {
-            // TODO - add a phase gate
-            // <https://github.com/CQCL/tket2/issues/598>
-            // let phase = Param::new(serialcirc.phase);
-            // decoder.add_phase(phase);
-        }
-
-        for com in self.commands {
-            decoder.add_command(com)?;
-        }
+        decoder.run_decoder(self.commands)?;
         let main_func = decoder.finish()?;
         hugr.set_entrypoint(main_func.node());
         Ok(hugr.into())
@@ -131,21 +121,22 @@ impl TKETDecode for SerialCircuit {
 }
 
 /// Load a TKET1 circuit from a JSON file.
-pub fn load_tk1_json_file(path: impl AsRef<Path>) -> Result<Circuit, Tk1ConvertError> {
-    let file = fs::File::open(path)?;
+pub fn load_tk1_json_file(path: impl AsRef<Path>) -> Result<Circuit, Tk1DecodeError> {
+    let file = fs::File::open(path).map_err(|e| Tk1DecodeError::custom(e))?;
     let reader = io::BufReader::new(file);
     load_tk1_json_reader(reader)
 }
 
 /// Load a TKET1 circuit from a JSON reader.
-pub fn load_tk1_json_reader(json: impl io::Read) -> Result<Circuit, Tk1ConvertError> {
-    let ser: SerialCircuit = serde_json::from_reader(json)?;
+pub fn load_tk1_json_reader(json: impl io::Read) -> Result<Circuit, Tk1DecodeError> {
+    let ser: SerialCircuit =
+        serde_json::from_reader(json).map_err(|e| Tk1DecodeError::custom(e))?;
     let circ: Circuit = ser.decode()?;
     Ok(circ)
 }
 
 /// Load a TKET1 circuit from a JSON string.
-pub fn load_tk1_json_str(json: &str) -> Result<Circuit, Tk1ConvertError> {
+pub fn load_tk1_json_str(json: &str) -> Result<Circuit, Tk1DecodeError> {
     let reader = json.as_bytes();
     load_tk1_json_reader(reader)
 }
@@ -159,7 +150,7 @@ pub fn load_tk1_json_str(json: &str) -> Result<Circuit, Tk1ConvertError> {
 /// Returns an error if the circuit is not flat or if it contains operations not
 /// supported by pytket.
 pub fn save_tk1_json_file(circ: &Circuit, path: impl AsRef<Path>) -> Result<(), Tk1ConvertError> {
-    let file = fs::File::create(path)?;
+    let file = fs::File::create(path).map_err(|e| Tk1ConvertError::custom(e))?;
     let writer = io::BufWriter::new(file);
     save_tk1_json_writer(circ, writer)
 }
@@ -174,7 +165,7 @@ pub fn save_tk1_json_file(circ: &Circuit, path: impl AsRef<Path>) -> Result<(), 
 /// supported by pytket.
 pub fn save_tk1_json_writer(circ: &Circuit, w: impl io::Write) -> Result<(), Tk1ConvertError> {
     let serial_circ = SerialCircuit::encode(circ)?;
-    serde_json::to_writer(w, &serial_circ)?;
+    serde_json::to_writer(w, &serial_circ).map_err(|e| Tk1ConvertError::custom(e))?;
     Ok(())
 }
 
@@ -190,7 +181,7 @@ pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, Tk1ConvertError> {
     let mut buf = io::BufWriter::new(Vec::new());
     save_tk1_json_writer(circ, &mut buf)?;
     let bytes = buf.into_inner().unwrap();
-    Ok(String::from_utf8(bytes)?)
+    Ok(String::from_utf8(bytes).map_err(|e| Tk1ConvertError::custom(e))?)
 }
 
 /// Error type for conversion between pytket operations and tket ops.
@@ -261,26 +252,6 @@ pub enum Tk1ConvertError<N = hugr::Node> {
     /// Operation conversion error.
     #[from]
     OpConversionError(OpConvertError<N>),
-    /// The circuit uses multi-indexed registers.
-    //
-    // This could be supported in the future, if there is a need for it.
-    #[display("Register {register} in the circuit has multiple indices. Tket does not support multi-indexed registers.")]
-    MultiIndexedRegister {
-        /// The register name.
-        register: String,
-    },
-    /// Invalid JSON,
-    #[display("Invalid pytket JSON. {_0}")]
-    #[from]
-    InvalidJson(serde_json::Error),
-    /// Invalid JSON,
-    #[display("Invalid JSON encoding. {_0}")]
-    #[from]
-    InvalidJsonEncoding(std::string::FromUtf8Error),
-    /// File not found.,
-    #[display("Unable to load pytket json file. {_0}")]
-    #[from]
-    FileLoadError(io::Error),
     /// Custom user-defined error raised while encoding an operation.
     #[display("Error while encoding operation: {msg}")]
     CustomError {

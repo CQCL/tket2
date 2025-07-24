@@ -65,6 +65,9 @@ pub trait PytketEmitter<H: HugrView> {
     /// converted. If the operation is not supported by the encoder, it's
     /// important to **not** modify the `encoder` context as that may invalidate
     /// the context for other encoders that may be called afterwards.
+    ///
+    /// If [`PytketEmitter::extensions`] returns a list of extensions,
+    /// `op` will be a custom operation from one of them.
     fn op_to_pytket(
         &self,
         node: H::Node,
@@ -108,12 +111,15 @@ pub trait PytketDecoder {
     /// converted. If the operation is not supported by the encoder, it's
     /// important to **not** modify the `encoder` context as that may invalidate
     /// the context for other encoders that may be called afterwards.
-    fn op_to_hugr<'a>(
+    ///
+    /// `op` will always have one of the [`tket_json_rs::OpType`]s specified in
+    /// [`PytketDecoder::op_types`].
+    fn op_to_hugr<'h>(
         &self,
         op: &tket_json_rs::circuit_json::Operation,
-        wires: &InputWires<'a>,
+        wires: &InputWires,
         opgroup: Option<&str>,
-        decoder: &mut Tk1DecoderContext<'a>,
+        decoder: &mut Tk1DecoderContext<'h>,
     ) -> Result<DecodeStatus, Tk1DecodeError> {
         let _ = (op, wires, opgroup, decoder);
         Ok(DecodeStatus::Unsupported)
@@ -138,6 +144,9 @@ pub trait PytketTypeTranslator {
     /// If the type cannot be fully translated into a list of the aforementioned
     /// values, return `None`. Operations dealing with such types will be marked
     /// as unsupported and will be serialized as opaque operations.
+    ///
+    /// `typ` will always be a custom type from an extension listed in
+    /// [`PytketTypeTranslator::extensions`].
     fn type_to_pytket(&self, typ: &CustomType) -> Option<RegisterCount> {
         let _ = typ;
         None
