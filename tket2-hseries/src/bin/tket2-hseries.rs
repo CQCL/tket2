@@ -16,6 +16,7 @@ fn main() -> Result<()> {
                 tket2::extension::guppy::GUPPY_EXTENSION.to_owned(),
                 tket2_hseries::extension::qsystem::EXTENSION.to_owned(),
                 tket2_hseries::extension::futures::EXTENSION.to_owned(),
+                tket2_hseries::extension::gpu::EXTENSION.to_owned(),
                 tket2_hseries::extension::random::EXTENSION.to_owned(),
                 tket2_hseries::extension::result::EXTENSION.to_owned(),
                 tket2_hseries::extension::utils::EXTENSION.to_owned(),
