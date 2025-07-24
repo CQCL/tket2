@@ -663,8 +663,10 @@ mod test {
 
     use super::*;
 
-    #[test]
-    fn const_gpu_module() {
+    #[rstest]
+    #[case(None)]
+    #[case(Some("Lorem"))]
+    fn const_gpu_module(#[case] config: Option<&str>) {
         let m1 = ConstGpuModule {
             name: "test_mod".to_string(),
             hash: 1,
