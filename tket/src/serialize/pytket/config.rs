@@ -30,7 +30,6 @@ pub fn default_decoder_config() -> Tk1DecoderConfig {
 }
 
 /// Default encoder configuration for [`Circuit`][crate::Circuit]s.
-
 ///
 /// Contains emitters for std and tket operations.
 pub fn default_encoder_config<H: HugrView>() -> Tk1EncoderConfig<H> {

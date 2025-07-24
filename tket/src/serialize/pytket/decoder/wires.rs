@@ -3,26 +3,34 @@
 
 use std::sync::Arc;
 
+use hugr::builder::{Dataflow as _, FunctionBuilder};
+use hugr::ops::Value;
+use hugr::std_extensions::arithmetic::float_types::ConstF64;
 use hugr::types::Type;
-use hugr::Wire;
+use hugr::{Hugr, Wire};
+use indexmap::IndexMap;
 use itertools::Itertools;
+use tket_json_rs::register;
 
-use crate::serialize::pytket::decoder::Tk1DecoderContext;
+use crate::extension::rotation::rotation_type;
+use crate::serialize::pytket::decoder::param::parser::{parse_pytket_param, PytketParam};
+use crate::serialize::pytket::decoder::{LoadedParameter, Tk1DecoderContext};
 use crate::serialize::pytket::Tk1DecodeError;
+use crate::symbolic_constant_op;
 
 /// Input wires to a pytket circuit
 #[derive(Debug, Clone)]
-pub struct InputWires<'a> {
+pub struct InputWires {
     /// Computed list of wires corresponding to the arguments,
     /// along with their types.
-    wires: Vec<WireData<'a>>,
+    wires: Vec<WireData>,
 }
 
-impl<'a> InputWires<'a> {
+impl InputWires {
     /// Retrieve the wire data at the given index.
     ///
     /// Panics if the index is out of bounds. See [`InputWires::len`].
-    pub fn wire_data(&self, idx: usize) -> &WireData<'a> {
+    pub fn wire_data(&self, idx: usize) -> &WireData {
         self.wires.get(idx).unwrap_or_else(|| {
             panic!(
                 "Cannot get wire data at index {idx}, only {} wires are tracked",
@@ -48,7 +56,7 @@ impl<'a> InputWires<'a> {
     ///
     /// This returns the wires as-is, without any additional conversions.
     /// If you need to retrieve a specific wire type, use TODO
-    pub fn iter(&self) -> impl Iterator<Item = &'_ WireData<'a>> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = &'_ WireData> + '_ {
         self.wires.iter()
     }
 
@@ -64,10 +72,9 @@ impl<'a> InputWires<'a> {
         self,
         new_types: impl IntoIterator<Item = &'op Type>,
         operation: &str,
-        decoder: &mut Tk1DecoderContext<'a>,
-    ) -> Result<InputWires<'a>, Tk1DecodeError> {
-        let new_wires =
-            WireTracker::<'a>::transform_wires(self.wires, new_types, operation, decoder)?;
+        decoder: &mut Tk1DecoderContext<'_>,
+    ) -> Result<InputWires, Tk1DecodeError> {
+        let new_wires = WireTracker::transform_wires(self.wires, new_types, operation, decoder)?;
         Ok(InputWires { wires: new_wires })
     }
 
@@ -81,10 +88,10 @@ impl<'a> InputWires<'a> {
         self,
         new_types: &[Type; N],
         operation: &str,
-        decoder: &mut Tk1DecoderContext<'a>,
-    ) -> Result<([WireData<'a>; N], InputWires<'a>), Tk1DecodeError> {
+        decoder: &mut Tk1DecoderContext<'_>,
+    ) -> Result<([WireData; N], InputWires), Tk1DecodeError> {
         let new_wires = self.into_types(new_types, operation, decoder)?;
-        let wire_arr: [WireData<'a>; N] = new_wires.wires[..N]
+        let wire_arr: [WireData; N] = new_wires.wires[..N]
             .iter()
             .cloned()
             .collect_array()
@@ -112,8 +119,8 @@ impl<'a> InputWires<'a> {
     }
 }
 
-impl<'a> IntoIterator for InputWires<'a> {
-    type Item = WireData<'a>;
+impl<'a> IntoIterator for InputWires {
+    type Item = WireData;
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -123,33 +130,68 @@ impl<'a> IntoIterator for InputWires<'a> {
 
 /// Tracked data for a wire in [`InputWires`]
 #[derive(Debug, Clone, PartialEq)]
-pub struct WireData<'a> {
+pub struct WireData {
     /// The identifier in the hugr.
     pub wire: Wire,
     /// The type of the wire.
     pub ty: Arc<Type>,
     /// List of pytket arguments corresponding to this wire.
-    pub args: Vec<&'a tket_json_rs::register::ElementId>,
+    pub args: Vec<Arc<register::ElementId>>,
 }
 
 /// Tracker for wires added to a hugr.
+///
+/// The lifetime param
 #[derive(Debug, Clone)]
-pub struct WireTracker<'a> {
-    phantom: std::marker::PhantomData<&'a ()>,
+pub(super) struct WireTracker {
+    /// An ordered set of parameters found in operation arguments, and added as inputs.
+    parameters: IndexMap<String, LoadedParameter>,
+    /// A list of input variables added to the hugr.
+    ///
+    /// Ordered according to their order in the function input.
+    parameter_vars: Vec<String>,
 }
 
-impl<'a> WireTracker<'a> {
+impl WireTracker {
+    /// Returns a new WireTracker.
+    pub fn new() -> Self {
+        WireTracker {
+            parameters: IndexMap::new(),
+            parameter_vars: Vec::new(),
+        }
+    }
+
+    /// Closes the WireTracker.
+    ///
+    /// Returns:
+    /// - A list of input parameter added to the hugr, in order.
+    pub fn finish(self) -> Vec<String> {
+        self.parameter_vars
+    }
+
+    /// Returns a new set of [InputWires] for a list of
+    /// [`circuit_json::Command`][tket_json_rs::circuit_json::Command] inputs.
+    ///
+    /// If input registers are available directly from
+    pub(super) fn wire_inputs_for_command(
+        &mut self,
+        _hugr: &mut FunctionBuilder<&mut Hugr>,
+        _args: &[register::ElementId],
+    ) -> Result<InputWires, Tk1DecodeError> {
+        todo!()
+    }
+
     /// Transform a list of wires into an equivalent set with the given types.
     ///
     /// This transformation packs/unpacks tuples, converts between bool types, etc.
     ///
     /// The `operation` parameter is a user-friendly location name used when reporting errors.
     pub fn transform_wires<'op>(
-        wires: Vec<WireData<'a>>,
+        wires: Vec<WireData>,
         new_types: impl IntoIterator<Item = &'op Type>,
         operation: &str,
-        decoder: &mut Tk1DecoderContext<'a>,
-    ) -> Result<Vec<WireData<'a>>, Tk1DecodeError> {
+        decoder: &mut Tk1DecoderContext<'_>,
+    ) -> Result<Vec<WireData>, Tk1DecodeError> {
         // If we already have the types, we can just return the wires.
         let new_types = new_types.into_iter().collect_vec();
         if wires
@@ -167,5 +209,79 @@ impl<'a> WireTracker<'a> {
         // Check if we can use the memoized unpacking helper from
         // [tket2_hseries::extension::qsystem::barrier].
         todo!()
+    }
+
+    /// Returns the wire carrying a parameter.
+    ///
+    /// - If the parameter is a known algebraic operation, adds the required op and recurses on its inputs.
+    /// - If the parameter is a constant, a constant definition is added to the Hugr.
+    /// - If the parameter is a variable, adds a new `rotation` input to the region.
+    /// - If the parameter is a sympy expressions, adds it as a [`SympyOpDef`][crate::extension::sympy::SympyOpDef] black box.
+    ///
+    /// The returned wires always have float type.
+    pub fn load_parameter(&mut self, hugr: &mut FunctionBuilder<&mut Hugr>, param: String) -> Wire {
+        fn process(
+            hugr: &mut FunctionBuilder<&mut Hugr>,
+            input_params: &mut IndexMap<String, LoadedParameter>,
+            param_vars: &mut Vec<String>,
+            parsed: PytketParam,
+            param: &str,
+        ) -> LoadedParameter {
+            match parsed {
+                PytketParam::Constant(half_turns) => {
+                    let value: Value = ConstF64::new(half_turns).into();
+                    let wire = hugr.add_load_const(value);
+                    LoadedParameter::float(wire)
+                }
+                PytketParam::Sympy(expr) => {
+                    // store string in custom op.
+                    let symb_op = symbolic_constant_op(expr.to_string());
+                    let wire = hugr.add_dataflow_op(symb_op, []).unwrap().out_wire(0);
+                    LoadedParameter::rotation(wire)
+                }
+                PytketParam::InputVariable { name } => {
+                    // Special case for the name "pi", inserts a `ConstRotation::PI` instead.
+                    if name == "pi" {
+                        let value: Value = ConstF64::new(std::f64::consts::PI).into();
+                        let wire = hugr.add_load_const(value);
+                        return LoadedParameter::float(wire);
+                    }
+                    // Look it up in the input parameters to the circuit, and add a new wire if needed.
+                    *input_params.entry(name.to_string()).or_insert_with(|| {
+                        param_vars.push(name.to_string());
+                        let wire = hugr.add_input(rotation_type());
+                        LoadedParameter::rotation(wire)
+                    })
+                }
+                PytketParam::Operation { op, args } => {
+                    // We assume all operations take float inputs.
+                    let input_wires = args
+                        .into_iter()
+                        .map(|arg| {
+                            process(hugr, input_params, param_vars, arg, param)
+                                .as_float(hugr)
+                                .wire
+                        })
+                        .collect_vec();
+                    // If any of the following asserts panics, it means we added invalid ops to the sympy parser.
+                    let res = hugr.add_dataflow_op(op, input_wires).unwrap_or_else(|e| {
+                        panic!("Error while decoding pytket operation parameter \"{param}\". {e}",)
+                    });
+                    assert_eq!(res.num_value_outputs(), 1, "An operation decoded from the pytket op parameter \"{param}\" had {} outputs", res.num_value_outputs());
+                    LoadedParameter::float(res.out_wire(0))
+                }
+            }
+        }
+
+        let parsed = parse_pytket_param(&param);
+        process(
+            hugr,
+            &mut self.parameters,
+            &mut self.parameter_vars,
+            parsed,
+            &param,
+        )
+        .as_rotation(hugr)
+        .wire
     }
 }
