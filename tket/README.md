@@ -2,7 +2,7 @@
 
 [![build_status][]](https://github.com/CQCL/tket2/actions)
 ![msrv][]
-[![codecov][]](https://codecov.io/gh/CQCL/tket2)
+[![codecov][]](https://codecov.io/gh/CQCL/tket)
 
 TKET is an open source quantum compiler developed by Quantinuum. Central to
 TKET's design is its hardware agnosticism which allows researchers and quantum
@@ -68,8 +68,8 @@ See [DEVELOPMENT.md][] for instructions on setting up the development environmen
 This project is licensed under Apache License, Version 2.0 ([LICENSE][] or http://www.apache.org/licenses/LICENSE-2.0).
 
   [build_status]: https://github.com/CQCL/tket2/workflows/Continuous%20integration/badge.svg?branch=main
-  [msrv]: https://img.shields.io/crates/msrv/tket2
-  [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket2?logo=codecov
+  [msrv]: https://img.shields.io/crates/msrv/tket
+  [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket?logo=codecov
   [hugr]: https://lib.rs/crates/hugr
   [hugr Builder]: https://docs.rs/hugr/latest/hugr/builder/index.html
   [API documentation here]: https://docs.rs/tket/
@@ -77,5 +77,5 @@ This project is licensed under Apache License, Version 2.0 ([LICENSE][] or http:
   [`pytket`]: https://github.com/CQCL/tket
   [`portmatching`]: https://lib.rs/crates/portmatching
   [LICENSE]: https://github.com/CQCL/tket2/blob/main/LICENCE
-  [CHANGELOG]: https://github.com/CQCL/tket2/blob/main/tket2/CHANGELOG.md
+  [CHANGELOG]: https://github.com/CQCL/tket2/blob/main/tket/CHANGELOG.md
   [DEVELOPMENT.md]: https://github.com/CQCL/tket2/blob/main/DEVELOPMENT.md

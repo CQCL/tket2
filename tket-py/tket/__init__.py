@@ -6,7 +6,7 @@ for many different quantum architectures.
 
 This is the Python front-end for TKET, providing a high-level interface for
 working with quantum circuits. See also the Rust library with the same name on
-[crates.io](https://crates.io/crates/tket2).
+[crates.io](https://crates.io/crates/tket).
 """
 
 from . import circuit, ops, optimiser, passes, pattern, rewrite

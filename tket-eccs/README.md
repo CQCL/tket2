@@ -1,17 +1,17 @@
 # tket-eccs
 
-[![pypi][]](https://pypi.org/project/tket2-eccs/)
-[![codecov][]](https://codecov.io/gh/CQCL/tket2)
-[![py-version][]](https://pypi.org/project/tket2--eccs/)
+[![pypi][]](https://pypi.org/project/tket-eccs/)
+[![codecov][]](https://codecov.io/gh/CQCL/tket)
+[![py-version][]](https://pypi.org/project/tket--eccs/)
 
-  [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket2?logo=codecov
-  [py-version]: https://img.shields.io/pypi/pyversions/tket2-eccs
-  [pypi]: https://img.shields.io/pypi/v/tket2-eccs
+  [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket?logo=codecov
+  [py-version]: https://img.shields.io/pypi/pyversions/tket-eccs
+  [pypi]: https://img.shields.io/pypi/v/tket-eccs
 
 This is an auxiliary Python package containing compiler rewrite sets used for `tket`'s optimisation passes.
 
 This package is intended to be used as an internal dependency for `tket`.
-See https://pypi.org/project/tket2/ for the main package.
+See https://pypi.org/project/tket/ for the main package.
 
 
 ## Install

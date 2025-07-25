@@ -323,7 +323,7 @@ jobs:
         run: just gen-extensions
       - name: Check if the declarations are up to date
         run: |
-          git diff --exit-code --name-only tket-exts/src/tket2_exts/data
+          git diff --exit-code --name-only tket-exts/src/tket_exts/data
           if [ $? -ne 0 ]; then
             echo "The serialized standard extensions are not up to date"
             echo "Please run 'just gen-extensions' and commit the changes.

@@ -22,4 +22,4 @@ python:
   - "uv.lock"
 
 extensions:
-  - "tket-exts/src/tket2_exts/data/tket2/**"
+  - "tket-exts/src/tket_exts/data/tket/**"

@@ -25,7 +25,7 @@ def setup_jupyter_rendering():
     setattr(Tk2Circuit, "_repr_mimebundle_", _repr_tk2circ)
 
 
-# TODO: Should this be part of the guppy API? Or tket2?
+# TODO: Should this be part of the guppy API? Or tket?
 # Takes a RawFunctionDef and converts it to a Tk2Circuit
 def guppy_to_circuit(func_def: Any) -> Tk2Circuit:
     """Convert a Guppy function definition to a `Tk2Circuit`."""

@@ -1,12 +1,12 @@
 # tket
 
-[![pypi][]](https://pypi.org/project/tket2/)
-[![codecov][]](https://codecov.io/gh/CQCL/tket2)
-[![py-version][]](https://pypi.org/project/tket2/)
+[![pypi][]](https://pypi.org/project/tket/)
+[![codecov][]](https://codecov.io/gh/CQCL/tket)
+[![py-version][]](https://pypi.org/project/tket/)
 
-  [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket2?logo=codecov
-  [py-version]: https://img.shields.io/pypi/pyversions/tket2
-  [pypi]: https://img.shields.io/pypi/v/tket2
+  [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket?logo=codecov
+  [py-version]: https://img.shields.io/pypi/pyversions/tket
+  [pypi]: https://img.shields.io/pypi/v/tket
 
 TKET is an open source quantum compiler developed by Quantinuum. Central to
 TKET's design is its hardware agnosticism which allows researchers and quantum
@@ -14,7 +14,7 @@ software developers to take advantage of its powerful compilation for many
 different quantum architectures.
 
 This is the Python front-end for TKET, providing a high-level interface for working with quantum circuits.
-See also the Rust library with the same name on [crates.io](https://crates.io/crates/tket2).
+See also the Rust library with the same name on [crates.io](https://crates.io/crates/tket).
 
 
 ## Install
@@ -29,8 +29,8 @@ pip install tket
 
 See the [Getting Started][getting-started] guide and the other [examples].
 
-  [getting-started]: https://github.com/CQCL/tket2/blob/main/tket2-py/examples/1-Getting-Started.ipynb
-  [examples]: https://github.com/CQCL/tket2/blob/main/tket2-py/examples/
+  [getting-started]: https://github.com/CQCL/tket2/blob/main/tket-py/examples/1-Getting-Started.ipynb
+  [examples]: https://github.com/CQCL/tket2/blob/main/tket-py/examples/
 
 ## Development
 

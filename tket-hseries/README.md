@@ -28,7 +28,7 @@ See [DEVELOPMENT.md][] for instructions on setting up the development environmen
 
 This project is licensed under Apache License, Version 2.0 ([LICENSE][] or <http://www.apache.org/licenses/LICENSE-2.0>).
 
-  [msrv]: https://img.shields.io/crates/msrv/tket2-hseries
+  [msrv]: https://img.shields.io/crates/msrv/tket-hseries
   [LICENSE]: https://github.com/CQCL/tket2/blob/main/LICENCE
-  [CHANGELOG]: https://github.com/CQCL/tket2/blob/main/tket2-hseries/CHANGELOG.mdd
+  [CHANGELOG]: https://github.com/CQCL/tket2/blob/main/tket-hseries/CHANGELOG.mdd
   [DEVELOPMENT.md]: https://github.com/CQCL/tket2/blob/main/DEVELOPMENT.md

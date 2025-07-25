@@ -34,7 +34,7 @@ where
 
 macro_rules! create_py_exception {
     ($err:path, $py_err:ident, $doc:expr) => {
-        pyo3::create_exception!(tket2, $py_err, pyo3::exceptions::PyException, $doc);
+        pyo3::create_exception!(tket, $py_err, pyo3::exceptions::PyException, $doc);
 
         impl $crate::utils::ConvertPyErr for $err {
             type Output = pyo3::PyErr;
