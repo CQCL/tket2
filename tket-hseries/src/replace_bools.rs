@@ -42,7 +42,7 @@ pub enum ReplaceBoolPassError<N> {
     NonLocalEdgesError(FindNonLocalEdgesError<N>),
     /// There was an error while replacing the type.
     ReplacementError(ReplaceTypesError),
-    /// There was an error while transforming static arrays containing tket.bool
+    /// There was an error while transforming static arrays containing tket2.bool
     /// to static arrays of bool_t.
     ReplaceStaticArrayBoolPassError(ReplaceStaticArrayBoolPassError),
 }

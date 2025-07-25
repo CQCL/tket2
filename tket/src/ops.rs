@@ -39,7 +39,7 @@ use strum::{EnumIter, EnumString, IntoStaticStr};
 )]
 #[allow(missing_docs)]
 #[non_exhaustive]
-/// Simple enum of tket 2 quantum operations.
+/// Simple enum of tket quantum operations.
 pub enum Tk2Op {
     H,
     CX,

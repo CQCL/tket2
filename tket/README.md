@@ -16,8 +16,8 @@ Circuits are represented using the HUGR IR defined in the
 * A composable pass system for optimising circuits
 * A number of built-in rewrite utilities and passes for common optimisations
 
-This crate is interoperable with [`tket1`] circuits via its
-serial encoding.
+This crate is interoperable with legacy [`pytket`] circuits via its serial
+encoding.
 
 # Using TKET
 
@@ -74,7 +74,7 @@ This project is licensed under Apache License, Version 2.0 ([LICENSE][] or http:
   [hugr Builder]: https://docs.rs/hugr/latest/hugr/builder/index.html
   [API documentation here]: https://docs.rs/tket/
   [`Circuit`]: https://docs.rs/tket/latest/tket/trait.Circuit.html
-  [`tket1`]: https://github.com/CQCL/tket
+  [`pytket`]: https://github.com/CQCL/tket
   [`portmatching`]: https://lib.rs/crates/portmatching
   [LICENSE]: https://github.com/CQCL/tket2/blob/main/LICENCE
   [CHANGELOG]: https://github.com/CQCL/tket2/blob/main/tket2/CHANGELOG.md

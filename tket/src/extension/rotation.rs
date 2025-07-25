@@ -15,10 +15,10 @@ use strum::{EnumIter, EnumString, IntoStaticStr};
 
 use lazy_static::lazy_static;
 
-/// Name of tket 2 rotation extension.
+/// Name of tket rotation extension.
 pub const ROTATION_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.rotation");
 
-/// Current version of the TKET 2 rotation extension
+/// Current version of the TKET rotation extension
 pub const ROTATION_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {

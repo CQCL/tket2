@@ -67,7 +67,7 @@ pub fn bool_type() -> Type {
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
-/// Structure for holding constant `tket.bool` values.
+/// Structure for holding constant `tket2.bool` values.
 pub struct ConstBool(bool);
 
 impl ConstBool {
