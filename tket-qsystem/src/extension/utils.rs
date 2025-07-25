@@ -1,4 +1,4 @@
-//! This module defines the "tket2.qsystem.utils" extension, which includes the
+//! This module defines the "tket.qsystem.utils" extension, which includes the
 //! utility functions available for Quantinuum systems.
 
 use std::sync::{Arc, Weak};
@@ -20,19 +20,19 @@ use lazy_static::lazy_static;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
 /// The extension ID for the utils extension.
-pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.qsystem.utils");
-/// The version of the "tket2.qsystem.utils" extension.
+pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.qsystem.utils");
+/// The version of the "tket.qsystem.utils" extension.
 pub const EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
-    /// The "tket2.qsystem.utils" extension.
+    /// The "tket.qsystem.utils" extension.
     pub static ref EXTENSION: Arc<Extension> = {
          Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
             UtilsOp::load_all_ops( ext, ext_ref).unwrap();
         })
     };
 
-    /// Extension registry including the "tket2.qsystem.utils" extension and
+    /// Extension registry including the "tket.qsystem.utils" extension and
     /// dependencies.
     pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new([
         EXTENSION.to_owned(),
@@ -106,9 +106,9 @@ impl MakeRegisteredOp for UtilsOp {
 }
 
 /// An extension trait for [Dataflow] providing methods to add
-/// "tket2.qsystem.utils" operations.
+/// "tket.qsystem.utils" operations.
 pub trait UtilsOpBuilder: Dataflow + UnwrapBuilder {
-    /// Add a "tket2.qsystem.utils.GetCurrentShot" op.
+    /// Add a "tket.qsystem.utils.GetCurrentShot" op.
     fn add_get_current_shot(&mut self) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(UtilsOp::GetCurrentShot, [])?

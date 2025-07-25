@@ -219,7 +219,7 @@ impl QSystemPass {
     /// On by default.
     ///
     /// When enabled, we push quantum ops as early as possible, and we push
-    /// `tket2.futures.read` ops as late as possible.
+    /// `tket.futures.read` ops as late as possible.
     pub fn with_force_order(mut self, force_order: bool) -> Self {
         self.force_order = force_order;
         self
@@ -231,7 +231,7 @@ impl QSystemPass {
     /// On by default.
     ///
     /// When enabled we replace strict measurement ops with lazy equivalents
-    /// from `tket2.qsystem`.
+    /// from `tket.qsystem`.
     pub fn with_lazify(mut self, lazify: bool) -> Self {
         self.lazify = lazify;
         self

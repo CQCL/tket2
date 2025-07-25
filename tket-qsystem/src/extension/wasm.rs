@@ -1,51 +1,51 @@
-//! This module defines the `tket2.wasm` Hugr extension used to model calling
+//! This module defines the `tket.wasm` Hugr extension used to model calling
 //! into WebAssembly.
 //!
-//! It depends on the `tket2.futures` extension for handling async calls into
+//! It depends on the `tket.futures` extension for handling async calls into
 //! WebAssembly.
 //!
-//! 'tket2.wasm' provides the following types:
-//!  - `tket2.wasm.module`: A WebAssembly module.
-//!  - `tket2.wasm.context`: A WebAssembly context.
-//!  - `tket2.wasm.func`: A WebAssembly function.
+//! 'tket.wasm' provides the following types:
+//!  - `tket.wasm.module`: A WebAssembly module.
+//!  - `tket.wasm.context`: A WebAssembly context.
+//!  - `tket.wasm.func`: A WebAssembly function.
 //!
 //!  Each of which can be constructed in rust via [WasmType].
 //!
-//!  `tket2.wasm.context` is a linear type that orders runtime effects. It is
-//!  obtained via the `tket2.wasm.get_context` operation and destroyed via
-//!  `tket2.wasm.dispose_context`.
+//!  `tket.wasm.context` is a linear type that orders runtime effects. It is
+//!  obtained via the `tket.wasm.get_context` operation and destroyed via
+//!  `tket.wasm.dispose_context`.
 //!
-//!  A `tket2.wasm.module` is obtained by loading a `ConstWasmModule` constant.
+//!  A `tket.wasm.module` is obtained by loading a `ConstWasmModule` constant.
 //!  We assume that all modules are available in all contexts.
 //!
-//!  `tket2.wasm.get_context` takes a `prelude.usize`, allowing multiple independent
+//!  `tket.wasm.get_context` takes a `prelude.usize`, allowing multiple independent
 //!  contexts to exist simultaneously. `get_context` is fallible, returning
 //!  `None` if the specified context has already been obtained via an earlier
 //!  `get_context` op and not `dispose_context`ed.
 //!
-//!  `tket2.wasm.func` is a type representing a handle to a function in a
-//!  `tket2.wasm.module`. It carries type args defining its signature, but not
+//!  `tket.wasm.func` is a type representing a handle to a function in a
+//!  `tket.wasm.module`. It carries type args defining its signature, but not
 //!  its name.
 //!
-//!  A `tket2.wasm.func` is obtained from a `tket2.wasm.lookup` op, which takes
+//!  A `tket.wasm.func` is obtained from a `tket.wasm.lookup` op, which takes
 //!  a compile-time name and signature, and a runtime module. TODO Likely the
 //!  module should be compile time here, but I think we need
 //!  extension-op-static-edges to do this properly.
 //!
-//!  `tket2.wasm.func`s are called via the `tket2.wasm.call` op. This op takes:
-//!   - a `tket2.wasm.context` identifying where the call will execute;
-//!   - a `tket2.wasm.func` identifying the function to call;
-//!   - Input arguments as specified by the type of the `tket2.wasm.func`.
+//!  `tket.wasm.func`s are called via the `tket.wasm.call` op. This op takes:
+//!   - a `tket.wasm.context` identifying where the call will execute;
+//!   - a `tket.wasm.func` identifying the function to call;
+//!   - Input arguments as specified by the type of the `tket.wasm.func`.
 //!
-//!   It returns a `tket2.futures.future` holding a tuple of results as
-//!   specified by the type of the `tket2.wasm.func`.
+//!   It returns a `tket.futures.future` holding a tuple of results as
+//!   specified by the type of the `tket.wasm.func`.
 //!
 //!   We provide [WasmType] to assist in constructing and interpreting [Type]s.
 //!
 //!   We provide [WasmOp] to assist in constructing and interpreting [ExtensionOp]s.
 //!
 //!   We provide [WasmOpBuilder] to assist in building [hugr::Hugr]s using the
-//!   `tket2.wasm` extension.
+//!   `tket.wasm` extension.
 
 use std::sync::{Arc, Weak};
 
@@ -82,23 +82,23 @@ use crate::extension::futures;
 
 use super::futures::future_type;
 
-/// The "tket2.wasm" extension id.
-pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.wasm");
-/// The "tket2.wasm" extension version.
+/// The "tket.wasm" extension id.
+pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.wasm");
+/// The "tket.wasm" extension version.
 pub const EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
-    /// The `tket2.wasm` extension.
+    /// The `tket.wasm` extension.
     pub static ref EXTENSION: Arc<Extension> =
         Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
         add_wasm_type_defs(ext, ext_ref).unwrap();
         WasmOpDef::load_all_ops(ext, ext_ref, ).unwrap();
     });
 
-    /// A [Weak] reference to the `tket2.wasm` op.
+    /// A [Weak] reference to the `tket.wasm` op.
     pub static ref EXTENSION_REF: Weak<Extension> = Arc::downgrade(&EXTENSION);
 
-    /// Extension registry including the "tket2.wasm" extension and
+    /// Extension registry including the "tket.wasm" extension and
     /// dependencies.
     pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new([
         EXTENSION.to_owned(),
@@ -106,14 +106,14 @@ lazy_static! {
         PRELUDE.to_owned()
     ]);
 
-    /// The name of the `tket2.wasm.module` type.
+    /// The name of the `tket.wasm.module` type.
     pub static ref MODULE_TYPE_NAME: SmolStr = SmolStr::new_inline("module");
-    /// The name of the `tket2.wasm.context` type.
+    /// The name of the `tket.wasm.context` type.
     pub static ref CONTEXT_TYPE_NAME: SmolStr = SmolStr::new_inline("context");
-    /// The name of the `tket2.wasm.func` type.
+    /// The name of the `tket.wasm.func` type.
     pub static ref FUNC_TYPE_NAME: SmolStr = SmolStr::new_inline("func");
 
-    /// The [TypeParam] of `tket2.wasm.lookup` specifying the name of the function.
+    /// The [TypeParam] of `tket.wasm.lookup` specifying the name of the function.
     pub static ref NAME_PARAM: TypeParam = TypeParam::StringType;
     /// The [TypeParam] of various types and ops specifying the input signature of a function.
     pub static ref INPUTS_PARAM: TypeParam =
@@ -167,7 +167,7 @@ fn add_wasm_type_defs(
 )]
 #[allow(missing_docs, non_camel_case_types)]
 #[non_exhaustive]
-/// Simple enum of ops defined by the `tket2.wasm` extension.
+/// Simple enum of ops defined by the `tket.wasm` extension.
 pub enum WasmOpDef {
     get_context,
     dispose_context,
@@ -176,16 +176,16 @@ pub enum WasmOpDef {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-/// An enum of types defined by the `tket2.wasm` extension.
+/// An enum of types defined by the `tket.wasm` extension.
 ///
 /// We provide `impl From<WasmType>` for [CustomType] and [Type], and `impl
 /// TryFrom<CustomType>` and `impl TryFrom<CustomType>` for [WasmType].
 pub enum WasmType {
-    /// `tket2.wasm.module`
+    /// `tket.wasm.module`
     Module,
-    /// `tket2.wasm.context`
+    /// `tket.wasm.context`
     Context,
-    /// `tket2.wasm.func`
+    /// `tket.wasm.func`
     Func {
         /// The input signature of the function. Note that row variables are
         /// allowed.
@@ -197,7 +197,7 @@ pub enum WasmType {
 }
 
 impl WasmType {
-    /// Construct a new `tket2.wasm.func` type.
+    /// Construct a new `tket.wasm.func` type.
     pub fn new_func(inputs: impl Into<TypeRowRV>, outputs: impl Into<TypeRowRV>) -> Self {
         Self::Func {
             inputs: inputs.into(),
@@ -497,13 +497,13 @@ impl TryFrom<&OpType> for WasmOpDef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-/// Concrete instantiation(i.e. with type args applied) of a "tket2.wasm" operation.
+/// Concrete instantiation(i.e. with type args applied) of a "tket.wasm" operation.
 pub enum WasmOp {
-    /// A `tket2.wasm.get_context` op.
+    /// A `tket.wasm.get_context` op.
     GetContext,
-    /// A `tket2.wasm.dispose_context` op.
+    /// A `tket.wasm.dispose_context` op.
     DisposeContext,
-    /// A `tket2.wasm.lookup` op.
+    /// A `tket.wasm.lookup` op.
     Lookup {
         /// The name of the function to be looked up.
         name: String,
@@ -514,7 +514,7 @@ pub enum WasmOp {
         /// Note that row variables are allowed here.
         outputs: TypeRowRV,
     },
-    /// A `tket2.wasm.call` op.
+    /// A `tket.wasm.call` op.
     Call {
         /// The input signature of the function to be called
         /// Note that row variables are not allowed here.
@@ -592,7 +592,7 @@ impl MakeRegisteredOp for WasmOp {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 /// A Constant identifying a WebAssembly module.
-/// Loading this is the only way to obtain a value of `tket2.wasm.module` type.
+/// Loading this is the only way to obtain a value of `tket.wasm.module` type.
 pub struct ConstWasmModule {
     /// The name of the module.
     pub name: String,
@@ -614,22 +614,22 @@ impl CustomConst for ConstWasmModule {
     }
 }
 
-/// An extension trait for [Dataflow] providing methods to add "tket2.wasm"
+/// An extension trait for [Dataflow] providing methods to add "tket.wasm"
 /// operations and constants.
 pub trait WasmOpBuilder: Dataflow {
-    /// Add a `tket2.wasm.get_context` op.
+    /// Add a `tket.wasm.get_context` op.
     fn add_get_context(&mut self, id: Wire) -> Result<Wire, BuildError> {
         let op = self.add_dataflow_op(WasmOp::GetContext, vec![id])?;
         Ok(op.out_wire(0))
     }
 
-    /// Add a `tket2.wasm.dispose_context` op.
+    /// Add a `tket.wasm.dispose_context` op.
     fn add_dispose_context(&mut self, id: Wire) -> Result<(), BuildError> {
         let _ = self.add_dataflow_op(WasmOp::DisposeContext, vec![id])?;
         Ok(())
     }
 
-    /// Add a `tket2.wasm.lookup` op.
+    /// Add a `tket.wasm.lookup` op.
     fn add_lookup(
         &mut self,
         name: impl Into<String>,
@@ -649,7 +649,7 @@ pub trait WasmOpBuilder: Dataflow {
             .out_wire(0))
     }
 
-    /// Add a `tket2.wasm.call` op.
+    /// Add a `tket.wasm.call` op.
     ///
     /// We infer the signature from the type of the `func` wire.
     fn add_call(

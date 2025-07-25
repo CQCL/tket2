@@ -65,7 +65,7 @@ pub struct BarrierOperationFactory {
 impl BarrierOperationFactory {
     /// Temporary extension name.
     pub(super) const TEMP_EXT_NAME: hugr::hugr::IdentList =
-        hugr::hugr::IdentList::new_static_unchecked("__tket2.barrier.temp");
+        hugr::hugr::IdentList::new_static_unchecked("__tket.barrier.temp");
     // Temporary operation names.
     pub(super) const UNPACK_OPT: OpName = OpName::new_static("option_qb_unwrap");
     pub(super) const REPACK_OPT: OpName = OpName::new_static("option_qb_tag");

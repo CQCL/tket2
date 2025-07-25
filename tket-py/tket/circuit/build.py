@@ -118,7 +118,7 @@ def id_circ(n_qb: int) -> Tk2Circuit:
 
 @dataclass(frozen=True)
 class QuantumOps(ops.Custom):
-    extension: tys.ExtensionId = "tket2.quantum"
+    extension: tys.ExtensionId = "tket.quantum"
 
 
 _OneQbSig = tys.FunctionType.endo([tys.Qubit])

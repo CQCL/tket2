@@ -1,4 +1,4 @@
-//! Encoder and decoder for the tket2.bool extension
+//! Encoder and decoder for the tket.bool extension
 
 use super::PytketEmitter;
 use crate::extension::bool::{BoolOp, ConstBool, BOOL_EXTENSION_ID, BOOL_TYPE_NAME};
@@ -39,7 +39,7 @@ impl<H: HugrView> PytketEmitter<H> for BoolEmitter {
         };
 
         let (num_inputs, num_outputs, clop) = match rot_op {
-            // Conversion ops between native bools and `tket2.bool`.
+            // Conversion ops between native bools and `tket.bool`.
             // Both are represented as a pytket bit, so this is a no-op.
             BoolOp::read | BoolOp::make_opaque => {
                 encoder.emit_transparent_node(node, circ, |_| Vec::new())?;

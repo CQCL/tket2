@@ -222,7 +222,7 @@ fn direct_map(op: TketOp) -> Option<QSystemOp> {
     })
 }
 
-/// Check there are no "tket2.quantum" ops left in the HUGR.
+/// Check there are no "tket.quantum" ops left in the HUGR.
 ///
 /// # Errors
 /// Returns vector of nodes that are not lowered.
@@ -382,7 +382,7 @@ mod test {
         assert_eq!(lowered.len(), 6);
         // dfg, input, output, alloc + (10 for unwrap), phasedx, rz, toturns, fmul, phasedx, free +
         // 5x(float + load), measure_reset, conditional, case(input, output) * 2, flip
-        // (phasedx + 2*(float + load)), tket2.read
+        // (phasedx + 2*(float + load)), tket.read
         // + 10 for the barrier array wrapping, unwrapping and option unwrapping
         assert_eq!(h.descendants(h.module_root()).count(), 72);
         assert_eq!(check_lowered(&h), Ok(()));

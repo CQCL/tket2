@@ -26,13 +26,13 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
-/// The "tket2.result" extension id.
-pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.result");
-/// The "tket2.result" extension version.
+/// The "tket.result" extension id.
+pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.result");
+/// The "tket.result" extension version.
 pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
-    /// The "tket2.result" extension.
+    /// The "tket.result" extension.
     pub static ref EXTENSION: Arc<Extension> = {
         Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
             ResultOpDef::load_all_ops(ext, ext_ref).unwrap();
@@ -227,7 +227,7 @@ pub enum SimpleArgs {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Hash, PartialEq)]
-/// Arguments to a "tket2.result" operation.
+/// Arguments to a "tket.result" operation.
 pub enum ResultArgs {
     /// Simple result type, not an array.
     Simple(SimpleArgs),
@@ -236,7 +236,7 @@ pub enum ResultArgs {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Hash, PartialEq)]
-/// Concrete instantiation of a "tket2.result" operation.
+/// Concrete instantiation of a "tket.result" operation.
 pub struct ResultOp {
     /// Static string tag for the result.
     pub tag: String,
@@ -262,17 +262,17 @@ impl ResultOp {
             args: ResultArgs::Simple(SimpleArgs::Int(int_width)),
         }
     }
-    /// Create a new "tket2.result" operation for a boolean result.
+    /// Create a new "tket.result" operation for a boolean result.
     pub fn new_bool(tag: impl Into<String>) -> Self {
         Self::_new_basic(tag, ResultOpDef::Bool)
     }
 
-    /// Create a new "tket2.result" operation for a floating-point result.
+    /// Create a new "tket.result" operation for a floating-point result.
     pub fn new_f64(tag: impl Into<String>) -> Self {
         Self::_new_basic(tag, ResultOpDef::F64)
     }
 
-    /// Convert this "tket2.result" operation to an array result operation over the same inner type.
+    /// Convert this "tket.result" operation to an array result operation over the same inner type.
     /// The size of the array is set to the given value.
     /// If this operation is already an array result operation, its size is updated.
     pub fn array_op(mut self, size: u64) -> Self {
@@ -290,12 +290,12 @@ impl ResultOp {
         }
     }
 
-    /// Create a new "tket2.result" operation for a signed integer result of a given bit width.
+    /// Create a new "tket.result" operation for a signed integer result of a given bit width.
     pub fn new_int(tag: impl Into<String>, int_width: u8) -> Self {
         Self::_new_int(tag, int_width, ResultOpDef::Int)
     }
 
-    /// Create a new "tket2.result" operation for an unsigned integer result of a given bit width.
+    /// Create a new "tket.result" operation for an unsigned integer result of a given bit width.
     pub fn new_uint(tag: impl Into<String>, int_width: u8) -> Self {
         Self::_new_int(tag, int_width, ResultOpDef::UInt)
     }
@@ -383,10 +383,10 @@ impl TryFrom<&OpType> for ResultOpDef {
     }
 }
 
-/// An extension trait for [Dataflow] providing methods to add "tket2.result"
+/// An extension trait for [Dataflow] providing methods to add "tket.result"
 /// operations.
 pub trait ResultOpBuilder: Dataflow {
-    /// Add a "tket2.result" op.
+    /// Add a "tket.result" op.
     fn add_result(&mut self, result_wire: Wire, op: ResultOp) -> Result<(), BuildError> {
         let handle = self.add_dataflow_op(op, [result_wire])?;
 

@@ -1,4 +1,4 @@
-//! `hugr-llvm` codegen extension for `tket2.rotation`.
+//! `hugr-llvm` codegen extension for `tket.rotation`.
 
 use hugr::extension::prelude::{option_type, ConstError};
 use hugr::llvm::emit::{emit_value, EmitFuncContext, EmitOpArgs};
@@ -19,9 +19,9 @@ use inkwell::FloatPredicate;
 use lazy_static::lazy_static;
 const ROTATION_TYPE_ID: TypeName = TypeName::new_inline("rotation");
 
-/// A codegen extension for the `tket2.rotation` extension.
+/// A codegen extension for the `tket.rotation` extension.
 ///
-/// We lower `tket2.rotation.rotation` to an `f64`, representing a number of
+/// We lower `tket.rotation.rotation` to an `f64`, representing a number of
 /// half-turns.
 ///
 /// A `RotationCodegenExtension` carries a `PCG`, which should impl
@@ -34,10 +34,10 @@ pub struct RotationCodegenExtension<PCG> {
 
 lazy_static! {
     /// The error emitted when panicking in the lowering of
-    /// `tket2.rotation.from_halfturns_unchecked` by
+    /// `tket.rotation.from_halfturns_unchecked` by
     /// [DEFAULT_ROTATION_EXTENSION].
     pub static ref DEFAULT_FROM_HALFTURNS_ERROR: ConstError =
-        ConstError::new(1, "tket2.rotation.from_halfturns_unchecked failed");
+        ConstError::new(1, "tket.rotation.from_halfturns_unchecked failed");
 
     /// The codegen extension that is registered by
     /// [CodegenExtsBuilder::add_default_rotation_extensions].
@@ -60,7 +60,7 @@ impl<PCG: PreludeCodegen> RotationCodegenExtension<PCG> {
 
     /// Returns a new RotationCodegenExtension the given `from_halfturns_err`.
     ///
-    /// While lowering a `tket2.rotation.from_halfturns_unchecked` op we must
+    /// While lowering a `tket.rotation.from_halfturns_unchecked` op we must
     /// panic in some codepaths. This function allows customising the panic
     /// message. The default panic message is [static@DEFAULT_FROM_HALFTURNS_ERROR].
     #[allow(unused)]
