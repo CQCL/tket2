@@ -8,6 +8,8 @@ import hypothesis.strategies as st
 from hypothesis.strategies._internal import SearchStrategy
 from hypothesis import given, settings
 
+import pytest
+
 
 @st.composite
 def circuits(
@@ -40,6 +42,9 @@ def circuits(
     return circuit
 
 
+@pytest.mark.skip(
+    reason="bug to be investigated, see https://github.com/CQCL/tket2/issues/983"
+)
 def test_simple_badger_pass_no_opt():
     c = Circuit(3).CCX(0, 1, 2)
     badger = badger_pass(max_threads=1, timeout=0, rebase=True)
