@@ -227,3 +227,18 @@ ready, create a draft PR so that the release team can review it.
 The wheel building process and publication to PyPI is handled by the CI.
 Just create a [github release](https://github.com/CQCL/tket2/releases/new) from the **unmerged** branch.
 The release tag should follow the format used in the previous releases, e.g. `tket-py-v0.1.1`.
+
+## 🎫 TKET, pytket, and TKET2
+
+For historical reasons, the repository hosting this project is called `tket2`.
+
+`pytket` / `tket1` was the first version of the tket library, written in C++ and Python.
+`TKET2` was the grounds-up rewrite of the compiler, based on the HUGR IR and aimed at
+optimising quantum programs with complex classical control flow, type generics, etc.
+
+For simplicity, the `tket2` libraries were renamed to `tket`. Throughout the
+project we refer to the new codebase as _tket_, while the old codebase is
+referred to as _pytket_, _legacy tket_, or _tket1_ depending on the context.
+
+Some instances of the `tket2` have been left in the codebase to avoid breaking
+the API, but these may be removed in the future.
