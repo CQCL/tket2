@@ -35,3 +35,6 @@ repository = "https://github.com/CQCL/tket2/tree/main/tket2-exts"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uv.sources]
+hugr = { git = "https://github.com/CQCL/hugr", subdirectory = "hugr-py", rev = "f615037" }
