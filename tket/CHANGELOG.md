@@ -1,8 +1,14 @@
 # Changelog
-All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.13.0](https://github.com/CQCL/tket2/compare/tket2-v0.12.3...tket-v0.13.0) - 2025-07-25
+
+### New Features
+
+- [**breaking] Rename tket2.* HUGR extensions to tket.* ([#988](https://github.com/CQCL/tket2/pull/988))
+- [**breaking] Rename tket2* libs to tket* ([#987](https://github.com/CQCL/tket2/pull/987))
+- [**breaking**] Update to `hugr 0.21` ([#965](https://github.com/CQCL/tket2/pull/965))
+- Add guppy extension with drop operation ([#962](https://github.com/CQCL/tket2/pull/962))
+- [**breaking**] Split the pytket extension encoder trait ([#970](https://github.com/CQCL/tket2/pull/970))
 
 ## [0.12.3](https://github.com/CQCL/tket2/compare/tket2-v0.12.2...tket2-v0.12.3) - 2025-07-08
 
