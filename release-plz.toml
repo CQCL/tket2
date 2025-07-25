@@ -36,9 +36,9 @@ commit_parsers = [
 ]
 
 [[package]]
-name = "tket2"
+name = "tket"
 release = true
 
 [[package]]
-name = "tket2-hseries"
+name = "tket-hseries"
 release = true

@@ -1,6 +1,6 @@
-# Welcome to the tket2 development guide <!-- omit in toc -->
+# Welcome to the tket development guide <!-- omit in toc -->
 
-This guide is intended to help you get started with developing tket2.
+This guide is intended to help you get started with developing tket.
 
 If you find any errors or omissions in this document, please [open an issue](https://github.com/CQCL-DEV/tket2/issues/new)!
 
@@ -45,9 +45,9 @@ Once you have these installed, install the required python dependencies and setu
 just setup
 ```
 
-## 🚀 Local development using the tket2 python library
+## 🚀 Local development using the tket python library
 
-If you want to use the `tket2` python library directly from the repository, you can build it with:
+If you want to use the `tket` python library directly from the repository, you can build it with:
 
 ```bash
 just build
@@ -122,9 +122,9 @@ just coverage
 This will generate a coverage file that can be opened with your favourite coverage viewer. In VSCode, you can use
 [`coverage-gutters`](https://marketplace.visualstudio.com/items?itemName=ryanluker.vscode-coverage-gutters).
 
-## 🌐 Contributing to tket2
+## 🌐 Contributing to tket
 
-We welcome contributions to tket2! Please open [an issue](https://github.com/CQCL/tket2/issues/new) or [pull request](https://github.com/CQCL/tket2/compare) if you have any questions or suggestions.
+We welcome contributions to tket! Please open [an issue](https://github.com/CQCL/tket2/issues/new) or [pull request](https://github.com/CQCL/tket2/compare) if you have any questions or suggestions.
 
 PRs should be made against the `main` branch, and should pass all CI checks before being merged. This includes using the [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) format for the PR title.
 
@@ -226,4 +226,4 @@ ready, create a draft PR so that the release team can review it.
 
 The wheel building process and publication to PyPI is handled by the CI.
 Just create a [github release](https://github.com/CQCL/tket2/releases/new) from the **unmerged** branch.
-The release tag should follow the format used in the previous releases, e.g. `tket2-py-v0.1.1`.
+The release tag should follow the format used in the previous releases, e.g. `tket-py-v0.1.1`.

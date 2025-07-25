@@ -179,7 +179,7 @@ dependencies = [
  "clap",
  "peak_alloc",
  "tikv-jemallocator",
- "tket2",
+ "tket",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -465,7 +465,7 @@ name = "compile-rewriter"
 version = "0.0.0"
 dependencies = [
  "clap",
- "tket2",
+ "tket",
 ]
 
 [[package]]
@@ -2420,37 +2420,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tket-json-rs"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc84d7bd6b104cea080d51fb23ce5ec7c583fa1f676842c3c46a50ccd0e2000e"
-dependencies = [
- "derive_more 1.0.0",
- "pyo3",
- "pythonize",
- "serde",
- "serde_json",
- "strum",
- "uuid",
-]
-
-[[package]]
-name = "tket1-passes"
-version = "0.0.0"
-dependencies = [
- "bindgen",
- "cc",
- "conan2",
- "libc",
- "rstest",
- "serde",
- "serde_json",
- "thiserror 2.0.12",
- "tket-json-rs",
-]
-
-[[package]]
-name = "tket2"
+name = "tket"
 version = "0.12.3"
 dependencies = [
  "anyhow",
@@ -2490,7 +2460,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tket2-hseries"
+name = "tket-hseries"
 version = "0.16.1"
 dependencies = [
  "anyhow",
@@ -2508,12 +2478,27 @@ dependencies = [
  "serde",
  "smol_str",
  "strum",
- "tket2",
+ "tket",
  "typetag",
 ]
 
 [[package]]
-name = "tket2-py"
+name = "tket-json-rs"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc84d7bd6b104cea080d51fb23ce5ec7c583fa1f676842c3c46a50ccd0e2000e"
+dependencies = [
+ "derive_more 1.0.0",
+ "pyo3",
+ "pythonize",
+ "serde",
+ "serde_json",
+ "strum",
+ "uuid",
+]
+
+[[package]]
+name = "tket-py"
 version = "0.0.0"
 dependencies = [
  "cool_asserts",
@@ -2527,8 +2512,23 @@ dependencies = [
  "serde",
  "serde_json",
  "strum",
+ "tket",
  "tket-json-rs",
- "tket2",
+]
+
+[[package]]
+name = "tket1-passes"
+version = "0.0.0"
+dependencies = [
+ "bindgen",
+ "cc",
+ "conan2",
+ "libc",
+ "rstest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "tket-json-rs",
 ]
 
 [[package]]

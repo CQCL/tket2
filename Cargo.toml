@@ -4,14 +4,14 @@ lto = "thin"
 [workspace]
 resolver = "2"
 members = [
-    "tket2",
-    "tket2-py",
+    "tket",
+    "tket-py",
     "compile-rewriter",
     "badger-optimiser",
-    "tket2-hseries",
+    "tket-hseries",
     "tket1-passes",
 ]
-default-members = ["tket2", "tket2-hseries"]
+default-members = ["tket", "tket-hseries"]
 
 [workspace.package]
 rust-version = "1.85"
@@ -88,6 +88,6 @@ cool_asserts = "2.0.3"
 zstd = "0.13.3"
 anyhow = "1.0.98"
 
-[profile.release.package.tket2-py]
-# Some configurations to reduce the size of tket2 wheels
+[profile.release.package.tket-py]
+# Some configurations to reduce the size of tket wheels
 strip = true

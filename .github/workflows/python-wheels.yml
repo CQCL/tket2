@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 env:
-  MODULE_DIR: tket2-py
+  MODULE_DIR: tket-py
 
 jobs:
   # Check if the tag matches the package name,
