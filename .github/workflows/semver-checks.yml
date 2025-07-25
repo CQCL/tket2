@@ -28,7 +28,7 @@ jobs:
       TKET_C_API_PATH: ${{ github.workspace }}/tket-c-api
       LD_LIBRARY_PATH: ${{ github.workspace }}/tket-c-api/lib
     steps:
-      - name: Checkout tket2
+      - name: Checkout tket
         uses: actions/checkout@v4
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
