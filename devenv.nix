@@ -1,8 +1,10 @@
-{ pkgs, lib, ... }: let
+{ pkgs, lib, ... }:
+let
   llvmVersion = "14";
   llvmPackages = pkgs."llvmPackages_${llvmVersion}";
 
-in {
+in
+{
   # https://devenv.sh/packages/
   # on macos frameworks have to be explicitly specified
   # otherwise a linker error ocurs on rust packages
@@ -18,13 +20,7 @@ in {
   ]
   ++ lib.optionals pkgs.stdenv.isLinux [
     pkgs.stdenv.cc.cc.lib
-  ]
-  ++ lib.optionals pkgs.stdenv.isDarwin (
-    with pkgs.darwin.apple_sdk; [
-      frameworks.CoreServices
-      frameworks.CoreFoundation
-    ]
-  );
+  ];
 
 
   enterShell = ''
