@@ -2460,29 +2460,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tket-hseries"
-version = "0.16.1"
-dependencies = [
- "anyhow",
- "clap",
- "cool_asserts",
- "delegate 0.13.4",
- "derive_more 1.0.0",
- "hugr",
- "hugr-cli",
- "indexmap 2.10.0",
- "itertools 0.14.0",
- "lazy_static",
- "petgraph 0.8.2",
- "rstest",
- "serde",
- "smol_str",
- "strum",
- "tket",
- "typetag",
-]
-
-[[package]]
 name = "tket-json-rs"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2514,6 +2491,29 @@ dependencies = [
  "strum",
  "tket",
  "tket-json-rs",
+]
+
+[[package]]
+name = "tket-qsystem"
+version = "0.16.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "cool_asserts",
+ "delegate 0.13.4",
+ "derive_more 1.0.0",
+ "hugr",
+ "hugr-cli",
+ "indexmap 2.10.0",
+ "itertools 0.14.0",
+ "lazy_static",
+ "petgraph 0.8.2",
+ "rstest",
+ "serde",
+ "smol_str",
+ "strum",
+ "tket",
+ "typetag",
 ]
 
 [[package]]

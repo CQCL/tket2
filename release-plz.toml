@@ -40,5 +40,5 @@ name = "tket"
 release = true
 
 [[package]]
-name = "tket-hseries"
+name = "tket-qsystem"
 release = true

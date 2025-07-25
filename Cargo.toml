@@ -8,10 +8,10 @@ members = [
     "tket-py",
     "compile-rewriter",
     "badger-optimiser",
-    "tket-hseries",
+    "tket-qsystem",
     "tket1-passes",
 ]
-default-members = ["tket", "tket-hseries"]
+default-members = ["tket", "tket-qsystem"]
 
 [workspace.package]
 rust-version = "1.85"

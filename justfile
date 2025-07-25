@@ -55,7 +55,7 @@ recompile-eccs:
 
 # Generate serialized declarations for the tket extensions
 gen-extensions:
-    cargo run -p tket-hseries gen-extensions -o tket-exts/src/tket_exts/data
+    cargo run -p tket-qsystem gen-extensions -o tket-exts/src/tket_exts/data
 
 # Interactively update snapshot tests (requires `cargo-insta`)
 update-snapshots:
