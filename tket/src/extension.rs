@@ -40,7 +40,7 @@ pub const TKET1_OP_NAME: SmolStr = SmolStr::new_inline("tk1op");
 pub const TKET1_PAYLOAD_NAME: SmolStr = SmolStr::new_inline("TKET1-json-payload");
 
 /// Current version of the legacy TKET 1 extension
-pub const TKET1_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+pub const TKET1_EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
 /// A custom type for the encoded TKET1 operation
@@ -98,7 +98,7 @@ impl CustomSignatureFunc for Tk1Signature {
 pub const TKET_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.quantum");
 
 /// Current version of the TKET extension
-pub const TKET_EXTENSION_VERSION: Version = Version::new(0, 1, 1);
+pub const TKET_EXTENSION_VERSION: Version = Version::new(0, 2, 1);
 
 lazy_static! {
     /// The extension definition for TKET ops and types.

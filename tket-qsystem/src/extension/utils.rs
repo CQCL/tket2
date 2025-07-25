@@ -22,7 +22,7 @@ use strum::{EnumIter, EnumString, IntoStaticStr};
 /// The extension ID for the utils extension.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.qsystem.utils");
 /// The version of the "tket.qsystem.utils" extension.
-pub const EXTENSION_VERSION: Version = Version::new(0, 2, 0);
+pub const EXTENSION_VERSION: Version = Version::new(0, 3, 0);
 
 lazy_static! {
     /// The "tket.qsystem.utils" extension.

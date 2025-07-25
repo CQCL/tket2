@@ -14,7 +14,7 @@ use smol_str::SmolStr;
 /// The ID of the `tket.guppy` extension.
 pub const GUPPY_EXTENSION_ID: ExtensionId = IdentList::new_unchecked("tket.guppy");
 /// The "tket.guppy" extension version.
-pub const GUPPY_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+pub const GUPPY_EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 /// The drop operation, used to handle affine types in Guppy.
 pub const DROP_OP_NAME: SmolStr = SmolStr::new_inline("drop");

@@ -21,7 +21,7 @@ use lazy_static::lazy_static;
 /// The ID of the `tket.debug` extension.
 pub const DEBUG_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.debug");
 /// The "tket.debug" extension version
-pub const DEBUG_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+pub const DEBUG_EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
     /// The "tket.bool" extension.

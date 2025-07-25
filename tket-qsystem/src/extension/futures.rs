@@ -26,7 +26,7 @@ use strum::{EnumIter, EnumString, IntoStaticStr};
 /// The ID of the `tket.futures` extension.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.futures");
 /// The "tket.futures" extension version
-pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+pub const EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
     /// The "tket.futures" extension.

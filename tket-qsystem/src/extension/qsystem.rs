@@ -46,7 +46,7 @@ pub use lower::{check_lowered, lower_tk2_op, LowerTk2Error, LowerTketToQSystemPa
 /// The "tket.qsystem" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.qsystem");
 /// The "tket.qsystem" extension version.
-pub const EXTENSION_VERSION: Version = Version::new(0, 4, 1);
+pub const EXTENSION_VERSION: Version = Version::new(0, 5, 0);
 
 lazy_static! {
     /// The "tket.qsystem" extension.

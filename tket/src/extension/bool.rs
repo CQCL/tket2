@@ -22,7 +22,7 @@ use strum::{EnumIter, EnumString, IntoStaticStr};
 /// The ID of the `tket.bool` extension.
 pub const BOOL_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.bool");
 /// The "tket.bool" extension version
-pub const BOOL_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+pub const BOOL_EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
     /// The "tket.bool" extension.
