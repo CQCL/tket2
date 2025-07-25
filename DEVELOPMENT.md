@@ -232,7 +232,7 @@ The release tag should follow the format used in the previous releases, e.g. `tk
 
 For historical reasons, the repository hosting this project is called `tket2`.
 
-`pytket` / `tket1` was the first version of the tket library, written in C++ and Python.
+`pytket` / `tket` (a.k.a. `tket1`) was the first version of the tket library, written in C++ and Python.
 `TKET2` was the grounds-up rewrite of the compiler, based on the HUGR IR and aimed at
 optimising quantum programs with complex classical control flow, type generics, etc.
 
