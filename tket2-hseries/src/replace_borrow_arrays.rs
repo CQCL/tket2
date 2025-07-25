@@ -686,7 +686,7 @@ fn lowerer() -> ReplaceTypes {
                             discard_all_borrowed_dest(size, elem_ty)
                         }
                         BArrayUnsafeOpDef::new_all_borrowed => new_all_borrowed_dest(size, elem_ty),
-                        _ => panic!("Unsupported BArrayUnsafeOpDef variant: {:?}", op_def),
+                        _ => panic!("Unsupported BArrayUnsafeOpDef variant: {op_def:?}"),
                     })
                 }
             },
@@ -802,7 +802,7 @@ fn lowerer() -> ReplaceTypes {
                         BArrayOpDef::pop_left => pop_dest(size, elem_ty, true),
                         BArrayOpDef::pop_right => pop_dest(size, elem_ty, false),
                         BArrayOpDef::unpack => unpack_dest(size, elem_ty),
-                        _ => panic!("Unsupported BArrayOpDef variant {:?}", op_def),
+                        _ => panic!("Unsupported BArrayOpDef variant {op_def:?}"),
                     };
 
                     Some(node)
