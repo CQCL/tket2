@@ -2451,7 +2451,7 @@ dependencies = [
 
 [[package]]
 name = "tket2"
-version = "0.12.3"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2491,7 +2491,7 @@ dependencies = [
 
 [[package]]
 name = "tket2-hseries"
-version = "0.16.1"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "clap",
