@@ -19,7 +19,7 @@ outputs:
     description: "Rust files have changed"
     value: ${{ steps.override.outputs.out == 'true' || steps.change-filters.outputs.rust == 'true' }}
   rust-core:
-    description: "The main tket rust library has changes"
+    description: "The main tket rust library has changed"
     value: ${{ steps.override.outputs.out == 'true' || steps.change-filters.outputs.rust == 'true' }}
   python:
     description: "Python files have changed"
