@@ -2,7 +2,7 @@
 
 [![build_status][]](https://github.com/CQCL/tket2/actions)
 ![msrv][]
-[![codecov][]](https://codecov.io/gh/CQCL/tket)
+[![codecov][]](https://codecov.io/gh/CQCL/tket2)
 
 TKET is an open source quantum compiler developed by Quantinuum. Central to
 TKET's design is its hardware agnosticism which allows researchers and quantum

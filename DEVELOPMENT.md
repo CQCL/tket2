@@ -105,7 +105,7 @@ just fix python
 
 We run coverage checks on the CI. Once you submit a PR, you can review the
 line-by-line coverage report on
-[codecov](https://app.codecov.io/gh/CQCL/tket/commits?branch=All%20branches).
+[codecov](https://app.codecov.io/gh/CQCL/tket2/commits?branch=All%20branches).
 
 To run the coverage checks locally, first install `cargo-llvm-cov`.
 
