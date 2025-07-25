@@ -574,7 +574,7 @@ fn scan_dest(size: u64, src_ty: Type, tgt_ty: Type, acc_tys: Vec<Type>) -> NodeT
 fn to_array_dest(size: u64, elem_ty: Type) -> NodeTemplate {
     let opt_elem_ty = option_type(elem_ty.clone());
     let opt_arr_type = array_type(size, opt_elem_ty.clone().into());
-    let arr_type = array_type(size, elem_ty.clone().into());
+    let arr_type = array_type(size, elem_ty.clone());
 
     let mut dfb = DFGBuilder::new(inout_sig(
         vec![opt_arr_type.clone()],
@@ -609,7 +609,7 @@ fn to_array_dest(size: u64, elem_ty: Type) -> NodeTemplate {
 fn from_array_dest(size: u64, elem_ty: Type) -> NodeTemplate {
     let opt_elem_ty = option_type(elem_ty.clone());
     let opt_arr_type = array_type(size, opt_elem_ty.clone().into());
-    let arr_type = array_type(size, elem_ty.clone().into());
+    let arr_type = array_type(size, elem_ty.clone());
 
     let mut dfb = DFGBuilder::new(inout_sig(
         vec![arr_type.clone()],
@@ -1098,7 +1098,7 @@ mod tests {
     fn test_roundtrip_from_and_to_array() {
         let size = 2;
         let elem_ty = qb_t();
-        let standard_arr_ty = array_type(size, elem_ty.clone().into());
+        let standard_arr_ty = array_type(size, elem_ty.clone());
 
         let mut builder = DFGBuilder::new(Signature::new(
             vec![standard_arr_ty.clone()],
