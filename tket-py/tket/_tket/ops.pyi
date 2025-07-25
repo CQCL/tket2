@@ -3,14 +3,14 @@ from typing import Any, Iterable
 
 from tket._tket.types import HugrType
 
-class Tk2Op(Enum):
+class TketOp(Enum):
     """A rust-backed Tket built-in operation."""
 
     def __init__(self, op: str) -> None:
-        """Create a new Tk2Op from a string name."""
+        """Create a new TketOp from a string name."""
 
     @staticmethod
-    def values() -> Iterable[Tk2Op]:
+    def values() -> Iterable[TketOp]:
         """Iterate over all operation variants."""
 
     def to_custom(self) -> CustomOp:

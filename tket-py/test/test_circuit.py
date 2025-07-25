@@ -6,7 +6,7 @@ from tket.circuit import (
     Tk2Circuit,
     render_circuit_dot,
 )
-from tket.ops import Tk2Op
+from tket.ops import TketOp
 
 
 @dataclass
@@ -23,10 +23,10 @@ class CustomCost:
 def test_cost():
     circ = Tk2Circuit(Circuit(4).CX(0, 1).H(1).CX(1, 2).CX(0, 3).H(0))
 
-    print(circ.circuit_cost(lambda op: int(op == Tk2Op.CX)))
+    print(circ.circuit_cost(lambda op: int(op == TketOp.CX)))
 
-    assert circ.circuit_cost(lambda op: int(op == Tk2Op.CX)) == 3
-    assert circ.circuit_cost(lambda op: CustomCost(1, op == Tk2Op.H)) == CustomCost(
+    assert circ.circuit_cost(lambda op: int(op == TketOp.CX)) == 3
+    assert circ.circuit_cost(lambda op: CustomCost(1, op == TketOp.H)) == CustomCost(
         5, 2
     )
 

@@ -25,7 +25,7 @@ use crate::utils::ConvertPyErr;
 pub use self::convert::{try_update_circ, try_with_circ, update_circ, with_circ, CircuitType};
 pub use self::cost::PyCircuitCost;
 pub use self::tk2circuit::Tk2Circuit;
-pub use tket::{Pauli, Tk2Op};
+pub use tket::{Pauli, TketOp};
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {

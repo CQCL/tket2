@@ -7,7 +7,7 @@ use std::{cmp::min, convert::TryInto, fs, num::NonZeroUsize, path::PathBuf};
 use pyo3::{prelude::*, types::IntoPyDict};
 use tket::optimiser::badger::BadgerOptions;
 use tket::passes;
-use tket::{op_matches, Tk2Op};
+use tket::{op_matches, TketOp};
 
 use crate::circuit::CircuitType;
 use crate::utils::{create_py_exception, ConvertPyErr};
@@ -152,7 +152,7 @@ fn badger_optimise<'py>(
     try_update_circ(circ, |mut circ, _| {
         let n_cx = circ
             .commands()
-            .filter(|c| op_matches(c.optype(), Tk2Op::CX))
+            .filter(|c| op_matches(c.optype(), TketOp::CX))
             .count();
         let n_threads = min(
             (n_cx / 50).try_into().unwrap_or(1.try_into().unwrap()),

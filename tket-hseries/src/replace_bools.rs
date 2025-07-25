@@ -26,7 +26,7 @@ use hugr::{
 use static_array::{ReplaceStaticArrayBoolPass, ReplaceStaticArrayBoolPassError};
 use tket::{
     extension::bool::{bool_type, BoolOp, ConstBool},
-    Tk2Op,
+    TketOp,
 };
 
 use crate::extension::{
@@ -58,7 +58,7 @@ pub enum ReplaceBoolPassError<N> {
 /// are replaced by [QSystemOp::LazyMeasure] and [QSystemOp::LazyMeasureReset]
 /// nodes.
 ///
-/// [TketOp::Measure]: tket::Tk2Op::Measure
+/// [TketOp::Measure]: tket::TketOp::Measure
 /// [QSystemOp::Measure]: crate::extension::qsystem::QSystemOp::Measure
 /// [QSystemOp::MeasureReset]: crate::extension::qsystem::QSystemOp::MeasureReset
 /// [QSystemOp::LazyMeasure]: crate::extension::qsystem::QSystemOp::LazyMeasure
@@ -270,7 +270,7 @@ fn lowerer() -> ReplaceTypes {
     lw.replace_op(&not_op, not_op_dest());
 
     // Replace measure ops with lazy versions.
-    let tket_measure_free = Tk2Op::MeasureFree.to_extension_op().unwrap();
+    let tket_measure_free = TketOp::MeasureFree.to_extension_op().unwrap();
     let qsystem_measure = QSystemOp::Measure.to_extension_op().unwrap();
     let qsystem_measure_reset = QSystemOp::MeasureReset.to_extension_op().unwrap();
     lw.replace_op(&tket_measure_free, measure_dest());
@@ -295,7 +295,7 @@ mod test {
     use rstest::rstest;
     use tket::{
         extension::bool::{BoolOp, BoolOpBuilder},
-        Tk2Op,
+        TketOp,
     };
 
     fn tket_bool_t() -> Type {
@@ -397,7 +397,7 @@ mod test {
     }
 
     #[rstest]
-    #[case(Tk2Op::MeasureFree)]
+    #[case(TketOp::MeasureFree)]
     #[case(QSystemOp::Measure)]
     fn test_measure<T: Into<OpType>>(#[case] measure_op: T) {
         let mut dfb = DFGBuilder::new(inout_sig(vec![qb_t()], vec![bool_type()])).unwrap();

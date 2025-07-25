@@ -273,7 +273,7 @@ fn find_function(mut hugr: Hugr, function_name: &str) -> Result<Circuit, Circuit
 #[cfg(test)]
 mod tests {
     use crate::circuit::CircuitHash;
-    use crate::Tk2Op;
+    use crate::TketOp;
 
     use super::*;
 
@@ -293,7 +293,7 @@ mod tests {
     fn root_circ() -> Circuit {
         let mut h = FunctionBuilder::new("main", Signature::new(vec![], vec![qb_t()])).unwrap();
 
-        let res = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
+        let res = h.add_dataflow_op(TketOp::QAlloc, []).unwrap();
         let q = res.out_wire(0);
 
         h.finish_hugr_with_outputs([q]).unwrap().into()
@@ -302,7 +302,7 @@ mod tests {
     #[fixture]
     fn function_circ() -> Circuit {
         let mut f = FunctionBuilder::new("banana", Signature::new(vec![], vec![qb_t()])).unwrap();
-        let res = f.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
+        let res = f.add_dataflow_op(TketOp::QAlloc, []).unwrap();
         let q = res.out_wire(0);
         let hugr = f.finish_hugr_with_outputs([q]).unwrap();
         Circuit::new(hugr)
@@ -316,7 +316,7 @@ mod tests {
             let mut dfg = f
                 .dfg_builder(Signature::new(vec![], vec![qb_t()]), [])
                 .unwrap();
-            let res = dfg.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
+            let res = dfg.add_dataflow_op(TketOp::QAlloc, []).unwrap();
             let q = res.out_wire(0);
             dfg.finish_with_outputs([q]).unwrap()
         };

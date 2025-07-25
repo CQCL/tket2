@@ -29,7 +29,7 @@ use hugr::{HugrView, Node};
 use itertools::Itertools;
 
 use crate::circuit::cost::{is_cx, is_quantum, CircuitCost, CostDelta, LexicographicCost};
-use crate::{op_matches, Circuit, Tk2Op};
+use crate::{op_matches, Circuit, TketOp};
 
 use super::trace::RewriteTrace;
 use super::CircuitRewrite;
@@ -371,7 +371,7 @@ impl LexicographicCostFunction<fn(&OpType) -> usize, 2> {
     pub fn rz_count() -> Self {
         Self {
             cost_fns: [
-                |op| op_matches(op, Tk2Op::Rz) as usize,
+                |op| op_matches(op, TketOp::Rz) as usize,
                 |op| is_quantum(op) as usize,
             ],
         }
@@ -488,7 +488,7 @@ mod tests {
         let qbs = [0, 1];
         build_simple_circuit(2, |circ| {
             for _ in 0..n_gates {
-                circ.append(Tk2Op::CX, qbs).unwrap();
+                circ.append(TketOp::CX, qbs).unwrap();
             }
             Ok(())
         })
@@ -602,9 +602,9 @@ mod tests {
         let circ = n_cx(3);
         assert_eq!(strat.circuit_cost(&circ), (3, 3).into());
         let circ = build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append(Tk2Op::X, [0])?;
-            circ.append(Tk2Op::X, [1])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            circ.append(TketOp::X, [0])?;
+            circ.append(TketOp::X, [1])?;
             Ok(())
         })
         .unwrap();

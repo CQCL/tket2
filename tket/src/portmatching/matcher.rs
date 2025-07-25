@@ -492,14 +492,14 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use crate::utils::build_simple_circuit;
-    use crate::{Circuit, Tk2Op};
+    use crate::{Circuit, TketOp};
 
     use super::{CircuitPattern, PatternMatcher};
 
     fn h_cx() -> Circuit {
         build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::CX, [0, 1]).unwrap();
-            circ.append(Tk2Op::H, [0]).unwrap();
+            circ.append(TketOp::CX, [0, 1]).unwrap();
+            circ.append(TketOp::H, [0]).unwrap();
             Ok(())
         })
         .unwrap()
@@ -507,8 +507,8 @@ mod tests {
 
     fn cx_xc() -> Circuit {
         build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::CX, [0, 1]).unwrap();
-            circ.append(Tk2Op::CX, [1, 0]).unwrap();
+            circ.append(TketOp::CX, [0, 1]).unwrap();
+            circ.append(TketOp::CX, [1, 0]).unwrap();
             Ok(())
         })
         .unwrap()
@@ -517,8 +517,8 @@ mod tests {
     #[fixture]
     fn cx_cx_3() -> Circuit {
         build_simple_circuit(3, |circ| {
-            circ.append(Tk2Op::CX, [0, 1]).unwrap();
-            circ.append(Tk2Op::CX, [2, 1]).unwrap();
+            circ.append(TketOp::CX, [0, 1]).unwrap();
+            circ.append(TketOp::CX, [2, 1]).unwrap();
             Ok(())
         })
         .unwrap()
@@ -527,8 +527,8 @@ mod tests {
     #[fixture]
     fn cx_cx() -> Circuit {
         build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::CX, [0, 1]).unwrap();
-            circ.append(Tk2Op::CX, [0, 1]).unwrap();
+            circ.append(TketOp::CX, [0, 1]).unwrap();
+            circ.append(TketOp::CX, [0, 1]).unwrap();
             Ok(())
         })
         .unwrap()

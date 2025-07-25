@@ -63,7 +63,7 @@ pub(crate) mod test {
     use hugr::Hugr;
     use pyo3::{Bound, PyResult, Python};
     use tket::Circuit;
-    use tket::Tk2Op;
+    use tket::TketOp;
 
     use crate::circuit::Tk2Circuit;
 
@@ -86,9 +86,9 @@ pub(crate) mod test {
     /// defined as a function inside a module.
     pub fn make_module_tk2_circuit<'py>(py: Python<'py>) -> PyResult<Bound<'py, Tk2Circuit>> {
         let circ = build_module_with_circuit(2, |circ| {
-            circ.append(Tk2Op::H, [0])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append(Tk2Op::X, [1])?;
+            circ.append(TketOp::H, [0])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            circ.append(TketOp::X, [1])?;
             Ok(())
         })
         .unwrap();

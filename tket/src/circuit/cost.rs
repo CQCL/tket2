@@ -8,7 +8,7 @@ use std::num::NonZeroUsize;
 use std::ops::{Add, AddAssign};
 
 use crate::ops::op_matches;
-use crate::Tk2Op;
+use crate::TketOp;
 
 /// The cost for a group of operations in a circuit, each with cost `OpCost`.
 pub trait CircuitCost: Add<Output = Self> + Sum<Self> + Debug + Default + Clone + Ord {
@@ -191,12 +191,12 @@ impl CircuitCost for usize {
 
 /// Returns true if the operation is a controlled X operation.
 pub fn is_cx(op: &OpType) -> bool {
-    op_matches(op, Tk2Op::CX)
+    op_matches(op, TketOp::CX)
 }
 
 /// Returns true if the operation is a quantum operation.
 pub fn is_quantum(op: &OpType) -> bool {
-    let Some(op): Option<Tk2Op> = op.cast() else {
+    let Some(op): Option<TketOp> = op.cast() else {
         return false;
     };
     op.is_quantum()

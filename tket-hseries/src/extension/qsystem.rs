@@ -632,7 +632,7 @@ mod test {
             let optype: OpType = op.into();
             let new_op: QSystemOp = optype.cast().unwrap();
             assert_eq!(op, new_op);
-            assert_eq!(optype.cast::<tket::Tk2Op>(), None);
+            assert_eq!(optype.cast::<tket::TketOp>(), None);
         }
     }
 }

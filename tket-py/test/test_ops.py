@@ -1,13 +1,13 @@
 import tket
-from tket.ops import Tk2Op, Pauli
+from tket.ops import TketOp, Pauli
 
 
 def test_ops_roundtrip():
-    for op in Tk2Op:
-        assert Tk2Op._from_rs(op._to_rs()) == op
+    for op in TketOp:
+        assert TketOp._from_rs(op._to_rs()) == op
 
-    for op in tket._tket.ops.Tk2Op.values():
-        assert Tk2Op._from_rs(op)._to_rs() == op
+    for op in tket._tket.ops.TketOp.values():
+        assert TketOp._from_rs(op)._to_rs() == op
 
 
 def test_pauli_roundtrip():

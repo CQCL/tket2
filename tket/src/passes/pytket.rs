@@ -47,7 +47,7 @@ pub enum PytketLoweringError {
 #[cfg(test)]
 mod test {
 
-    use crate::Tk2Op;
+    use crate::TketOp;
 
     use super::*;
     use hugr::builder::{CFGBuilder, Dataflow, HugrBuilder};
@@ -75,8 +75,8 @@ mod test {
                 let mut dfg = cfg.simple_entry_builder(two_qbs.clone(), 1)?;
                 let [q1, q2] = dfg.input_wires_arr();
 
-                let [q1] = dfg.add_dataflow_op(Tk2Op::H, [q1])?.outputs_arr();
-                let [q1, q2] = dfg.add_dataflow_op(Tk2Op::CX, [q1, q2])?.outputs_arr();
+                let [q1] = dfg.add_dataflow_op(TketOp::H, [q1])?.outputs_arr();
+                let [q1, q2] = dfg.add_dataflow_op(TketOp::CX, [q1, q2])?.outputs_arr();
 
                 let [tup] = dfg
                     .add_dataflow_op(MakeTuple::new(two_qbs.clone()), [q1, q2])?

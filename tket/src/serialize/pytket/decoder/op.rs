@@ -8,12 +8,12 @@
 
 use hugr::ops::OpType;
 use hugr::IncomingPort;
-use tk2op::NativeOp;
 use tket_json_rs::circuit_json;
+use tket_op::NativeOp;
 
 use super::super::extension::OpaqueTk1Op;
 
-pub mod tk2op;
+pub mod tket_op;
 
 /// An intermediary artifact when converting between TKET1 and TKET operations.
 ///

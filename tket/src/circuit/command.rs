@@ -497,7 +497,7 @@ mod test {
     use crate::extension::rotation::ConstRotation;
 
     use crate::utils::build_simple_circuit;
-    use crate::Tk2Op;
+    use crate::TketOp;
 
     use super::*;
 
@@ -512,9 +512,9 @@ mod test {
     #[fixture]
     fn simple_circuit() -> Circuit {
         build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::H, [0])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append(Tk2Op::T, [1])?;
+            circ.append(TketOp::H, [0])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            circ.append(TketOp::T, [1])?;
             Ok(())
         })
         .unwrap()
@@ -525,9 +525,9 @@ mod test {
     #[fixture]
     fn simple_module() -> Circuit {
         build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::H, [0])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append(Tk2Op::T, [1])?;
+            circ.append(TketOp::H, [0])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            circ.append(TketOp::T, [1])?;
             Ok(())
         })
         .unwrap()
@@ -551,13 +551,13 @@ mod test {
     fn iterate_commands_simple(#[case] circ: Circuit) {
         assert_eq!(CommandIterator::new(&circ).count(), 3);
 
-        let tk2op_name = |op: Tk2Op| op.exposed_name();
+        let tket_op_name = |op: TketOp| op.exposed_name();
 
         let mut commands = CommandIterator::new(&circ);
         assert_eq!(commands.size_hint(), (0, Some(3)));
 
         let hadamard = commands.next().unwrap();
-        assert_eq!(hadamard.optype().to_string(), tk2op_name(Tk2Op::H));
+        assert_eq!(hadamard.optype().to_string(), tket_op_name(TketOp::H));
         assert_eq_iter!(
             hadamard.inputs().map(|(u, _, _)| u),
             [CircuitUnit::Linear(0)],
@@ -568,7 +568,7 @@ mod test {
         );
 
         let cx = commands.next().unwrap();
-        assert_eq!(cx.optype().to_string(), tk2op_name(Tk2Op::CX));
+        assert_eq!(cx.optype().to_string(), tket_op_name(TketOp::CX));
         assert_eq_iter!(
             cx.inputs().map(|(unit, _, _)| unit),
             [CircuitUnit::Linear(0), CircuitUnit::Linear(1)],
@@ -579,7 +579,7 @@ mod test {
         );
 
         let t = commands.next().unwrap();
-        assert_eq!(t.optype().to_string(), tk2op_name(Tk2Op::T));
+        assert_eq!(t.optype().to_string(), tket_op_name(TketOp::T));
         assert_eq_iter!(
             t.inputs().map(|(unit, _, _)| unit),
             [CircuitUnit::Linear(1)],
@@ -601,7 +601,7 @@ mod test {
 
         let constant = h.add_constant(Value::extension(ConstRotation::PI_2));
         let loaded_const = h.load_const(&constant);
-        let rz = h.add_dataflow_op(Tk2Op::Rz, [q_in, loaded_const]).unwrap();
+        let rz = h.add_dataflow_op(TketOp::Rz, [q_in, loaded_const]).unwrap();
 
         let circ: Circuit = h.finish_hugr_with_outputs(rz.outputs()).unwrap().into();
 
@@ -635,7 +635,7 @@ mod test {
         // Finally, the rz command.
         // It has the qubit and loaded constant as input and a single output.
         let rz_cmd = commands.next().unwrap();
-        assert_eq!(rz_cmd.optype().cast(), Some(Tk2Op::Rz));
+        assert_eq!(rz_cmd.optype().cast(), Some(TketOp::Rz));
         assert_eq_iter!(
             rz_cmd.inputs().map(|(u, _, _)| u),
             [
@@ -666,13 +666,13 @@ mod test {
 
         let [q_in] = h.input_wires_arr();
 
-        let alloc = h.add_dataflow_op(Tk2Op::QAlloc, [])?;
+        let alloc = h.add_dataflow_op(TketOp::QAlloc, [])?;
         let [q_new] = alloc.outputs_arr();
 
-        let cx = h.add_dataflow_op(Tk2Op::CX, [q_in, q_new])?;
+        let cx = h.add_dataflow_op(TketOp::CX, [q_in, q_new])?;
         let [q_in, q_new] = cx.outputs_arr();
 
-        let free = h.add_dataflow_op(Tk2Op::QFree, [q_in])?;
+        let free = h.add_dataflow_op(TketOp::QFree, [q_in])?;
 
         let circ: Circuit = h.finish_hugr_with_outputs([q_new])?.into();
 
@@ -720,7 +720,7 @@ mod test {
         let qb_row = vec![qb_t(); 1];
         let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), vec![]))?;
         let [q_in] = h.input_wires_arr();
-        h.add_dataflow_op(Tk2Op::QFree, [q_in])?;
+        h.add_dataflow_op(TketOp::QFree, [q_in])?;
         let circ: Circuit = h.finish_hugr_with_outputs([])?.into();
 
         let cmd1 = circ.commands().next().unwrap();

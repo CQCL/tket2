@@ -40,7 +40,7 @@ use strum::{EnumIter, EnumString, IntoStaticStr};
 #[allow(missing_docs)]
 #[non_exhaustive]
 /// Simple enum of tket quantum operations.
-pub enum Tk2Op {
+pub enum TketOp {
     H,
     CX,
     CY,
@@ -67,10 +67,10 @@ pub enum Tk2Op {
     Vdg,
 }
 
-impl Tk2Op {
-    /// Expose the operation names directly in Tk2Op
+impl TketOp {
+    /// Expose the operation names directly in TketOp
     pub fn exposed_name(&self) -> smol_str::SmolStr {
-        <Tk2Op as Into<OpType>>::into(*self).to_smolstr()
+        <TketOp as Into<OpType>>::into(*self).to_smolstr()
     }
 
     /// Wraps the operation in an [`ExtensionOp`]
@@ -80,9 +80,9 @@ impl Tk2Op {
     }
 }
 
-/// Whether an op is a given Tk2Op.
-pub fn op_matches(op: &OpType, tk2op: Tk2Op) -> bool {
-    op.to_string() == tk2op.exposed_name()
+/// Whether an op is a given TketOp.
+pub fn op_matches(op: &OpType, tket_op: TketOp) -> bool {
+    op.to_string() == tket_op.exposed_name()
 }
 
 #[derive(
@@ -103,13 +103,13 @@ impl Pauli {
         *self == Pauli::I || other == Pauli::I || *self == other
     }
 }
-impl MakeOpDef for Tk2Op {
+impl MakeOpDef for TketOp {
     fn opdef_id(&self) -> hugr::ops::OpName {
         <&'static str>::from(self).into()
     }
 
     fn init_signature(&self, _extension_ref: &std::sync::Weak<hugr::Extension>) -> SignatureFunc {
-        use Tk2Op::*;
+        use TketOp::*;
         match self {
             H | T | S | V | X | Y | Z | Tdg | Sdg | Vdg | Reset => Signature::new_endo(qb_t()),
             CX | CZ | CY => Signature::new_endo(vec![qb_t(); 2]),
@@ -145,7 +145,7 @@ impl MakeOpDef for Tk2Op {
     }
 }
 
-impl MakeRegisteredOp for Tk2Op {
+impl MakeRegisteredOp for TketOp {
     fn extension_id(&self) -> ExtensionId {
         EXTENSION_ID.to_owned()
     }
@@ -155,9 +155,9 @@ impl MakeRegisteredOp for Tk2Op {
     }
 }
 
-impl Tk2Op {
+impl TketOp {
     pub(crate) fn qubit_commutation(&self) -> Vec<(usize, Pauli)> {
-        use Tk2Op::*;
+        use TketOp::*;
 
         match self {
             X | V | Vdg | Rx => vec![(0, Pauli::X)],
@@ -172,7 +172,7 @@ impl Tk2Op {
 
     /// Check if this op is a quantum op.
     pub fn is_quantum(&self) -> bool {
-        use Tk2Op::*;
+        use TketOp::*;
         match self {
             H | CX | T | S | V | X | Y | Z | Tdg | Sdg | Vdg | Rz | Rx | Toffoli | Ry | CZ | CY
             | CRz => true,
@@ -202,29 +202,29 @@ pub(crate) mod test {
     use rstest::{fixture, rstest};
     use strum::IntoEnumIterator;
 
-    use super::Tk2Op;
+    use super::TketOp;
     use crate::circuit::Circuit;
     use crate::extension::bool::bool_type;
     use crate::extension::{TKET_EXTENSION as EXTENSION, TKET_EXTENSION_ID as EXTENSION_ID};
     use crate::utils::build_simple_circuit;
     use crate::Pauli;
-    fn get_opdef(op: Tk2Op) -> Option<&'static Arc<OpDef>> {
+    fn get_opdef(op: TketOp) -> Option<&'static Arc<OpDef>> {
         EXTENSION.get_op(&op.op_id())
     }
     #[test]
     fn create_extension() {
         assert_eq!(EXTENSION.name(), &EXTENSION_ID);
 
-        for o in Tk2Op::iter() {
-            assert_eq!(Tk2Op::from_def(get_opdef(o).unwrap()), Ok(o));
+        for o in TketOp::iter() {
+            assert_eq!(TketOp::from_def(get_opdef(o).unwrap()), Ok(o));
         }
     }
 
     #[fixture]
     pub(crate) fn t2_bell_circuit() -> Circuit {
         let h = build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::H, [0])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
+            circ.append(TketOp::H, [0])?;
+            circ.append(TketOp::CX, [0, 1])?;
             Ok(())
         });
 
@@ -240,15 +240,15 @@ pub(crate) mod test {
     fn ancilla_circ() {
         let h = build_simple_circuit(1, |circ| {
             let empty: [CircuitUnit; 0] = []; // requires type annotation
-            let ancilla = circ.append_with_outputs(Tk2Op::QAlloc, empty)?[0];
-            let ancilla = circ.append_with_outputs(Tk2Op::Reset, [ancilla])?[0];
+            let ancilla = circ.append_with_outputs(TketOp::QAlloc, empty)?[0];
+            let ancilla = circ.append_with_outputs(TketOp::Reset, [ancilla])?[0];
 
             let ancilla = circ.append_with_outputs(
-                Tk2Op::CX,
+                TketOp::CX,
                 [CircuitUnit::Linear(0), CircuitUnit::Wire(ancilla)],
             )?[0];
-            let ancilla = circ.append_with_outputs(Tk2Op::Measure, [ancilla])?[0];
-            circ.append_and_consume(Tk2Op::QFree, [ancilla])?;
+            let ancilla = circ.append_with_outputs(TketOp::Measure, [ancilla])?[0];
+            circ.append_and_consume(TketOp::QFree, [ancilla])?;
 
             Ok(())
         })
@@ -262,10 +262,13 @@ pub(crate) mod test {
     fn try_qalloc_measure_free() {
         let mut b = DFGBuilder::new(Signature::new(type_row![], bool_type())).unwrap();
 
-        let try_q = b.add_dataflow_op(Tk2Op::TryQAlloc, []).unwrap().out_wire(0);
+        let try_q = b
+            .add_dataflow_op(TketOp::TryQAlloc, [])
+            .unwrap()
+            .out_wire(0);
         let [q] = b.build_unwrap_sum(1, option_type(qb_t()), try_q).unwrap();
         let measured = b
-            .add_dataflow_op(Tk2Op::MeasureFree, [q])
+            .add_dataflow_op(TketOp::MeasureFree, [q])
             .unwrap()
             .out_wire(0);
         let h = b.finish_hugr_with_outputs([measured]).unwrap();
@@ -278,18 +281,18 @@ pub(crate) mod test {
         assert_eq!(top_ops.len(), 5);
         // first two are I/O
         assert_eq!(
-            Tk2Op::from_op(top_ops[2].as_extension_op().unwrap()).unwrap(),
-            Tk2Op::TryQAlloc
+            TketOp::from_op(top_ops[2].as_extension_op().unwrap()).unwrap(),
+            TketOp::TryQAlloc
         );
         assert!(top_ops[3].is_conditional());
         assert_eq!(
-            Tk2Op::from_op(top_ops[4].as_extension_op().unwrap()).unwrap(),
-            Tk2Op::MeasureFree
+            TketOp::from_op(top_ops[4].as_extension_op().unwrap()).unwrap(),
+            TketOp::MeasureFree
         );
     }
     #[test]
-    fn tk2op_properties() {
-        for op in Tk2Op::iter() {
+    fn tket_op_properties() {
+        for op in TketOp::iter() {
             // The exposed name should start with "tket2.quantum."
             assert!(op.exposed_name().starts_with(&EXTENSION_ID.to_string()));
 
@@ -297,17 +300,17 @@ pub(crate) mod test {
             assert_eq!(ext_op.args(), &[]);
             assert_eq!(ext_op.def().extension_id(), &EXTENSION_ID);
             let name = ext_op.def().name();
-            assert_eq!(Tk2Op::from_str(name), Ok(op));
+            assert_eq!(TketOp::from_str(name), Ok(op));
         }
 
         // Other calls
-        assert!(Tk2Op::H.is_quantum());
-        assert!(!Tk2Op::Measure.is_quantum());
+        assert!(TketOp::H.is_quantum());
+        assert!(!TketOp::Measure.is_quantum());
 
         for (op, pauli) in [
-            (Tk2Op::X, Pauli::X),
-            (Tk2Op::Y, Pauli::Y),
-            (Tk2Op::Z, Pauli::Z),
+            (TketOp::X, Pauli::X),
+            (TketOp::Y, Pauli::Y),
+            (TketOp::Z, Pauli::Z),
         ]
         .iter()
         {

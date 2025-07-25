@@ -13,7 +13,7 @@ use itertools::Itertools;
 use tket_json_rs::optype::OpType as Tk1OpType;
 
 use crate::extension::rotation::rotation_type;
-use crate::Tk2Op;
+use crate::TketOp;
 
 /// An operation with a native TKET counterpart.
 ///
@@ -58,26 +58,26 @@ impl NativeOp {
         num_bits: usize,
     ) -> Option<Self> {
         let op = match serial_op {
-            Tk1OpType::H => Tk2Op::H.into(),
-            Tk1OpType::CX => Tk2Op::CX.into(),
-            Tk1OpType::CY => Tk2Op::CY.into(),
-            Tk1OpType::CZ => Tk2Op::CZ.into(),
-            Tk1OpType::CRz => Tk2Op::CRz.into(),
-            Tk1OpType::T => Tk2Op::T.into(),
-            Tk1OpType::Tdg => Tk2Op::Tdg.into(),
-            Tk1OpType::S => Tk2Op::S.into(),
-            Tk1OpType::Sdg => Tk2Op::Sdg.into(),
-            Tk1OpType::V => Tk2Op::V.into(),
-            Tk1OpType::Vdg => Tk2Op::Vdg.into(),
-            Tk1OpType::X => Tk2Op::X.into(),
-            Tk1OpType::Y => Tk2Op::Y.into(),
-            Tk1OpType::Z => Tk2Op::Z.into(),
-            Tk1OpType::Rx => Tk2Op::Rx.into(),
-            Tk1OpType::Ry => Tk2Op::Ry.into(),
-            Tk1OpType::Rz => Tk2Op::Rz.into(),
-            Tk1OpType::CCX => Tk2Op::Toffoli.into(),
-            Tk1OpType::Reset => Tk2Op::Reset.into(),
-            Tk1OpType::Measure => Tk2Op::Measure.into(),
+            Tk1OpType::H => TketOp::H.into(),
+            Tk1OpType::CX => TketOp::CX.into(),
+            Tk1OpType::CY => TketOp::CY.into(),
+            Tk1OpType::CZ => TketOp::CZ.into(),
+            Tk1OpType::CRz => TketOp::CRz.into(),
+            Tk1OpType::T => TketOp::T.into(),
+            Tk1OpType::Tdg => TketOp::Tdg.into(),
+            Tk1OpType::S => TketOp::S.into(),
+            Tk1OpType::Sdg => TketOp::Sdg.into(),
+            Tk1OpType::V => TketOp::V.into(),
+            Tk1OpType::Vdg => TketOp::Vdg.into(),
+            Tk1OpType::X => TketOp::X.into(),
+            Tk1OpType::Y => TketOp::Y.into(),
+            Tk1OpType::Z => TketOp::Z.into(),
+            Tk1OpType::Rx => TketOp::Rx.into(),
+            Tk1OpType::Ry => TketOp::Ry.into(),
+            Tk1OpType::Rz => TketOp::Rz.into(),
+            Tk1OpType::CCX => TketOp::Toffoli.into(),
+            Tk1OpType::Reset => TketOp::Reset.into(),
+            Tk1OpType::Measure => TketOp::Measure.into(),
             Tk1OpType::noop => Noop::new(qb_t()).into(),
             Tk1OpType::Barrier => {
                 let qbs = std::iter::repeat_n(qb_t(), num_qubits);

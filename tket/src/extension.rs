@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use crate::serialize::pytket::extension::OpaqueTk1Op;
-use crate::Tk2Op;
+use crate::TketOp;
 use hugr::extension::simple_op::MakeOpDef;
 use hugr::extension::{
     CustomSignatureFunc, ExtensionId, ExtensionRegistry, SignatureError, Version,
@@ -59,7 +59,7 @@ pub static ref TKET1_EXTENSION: Arc<Extension>  = {
     })
 };
 
-/// Extension registry including the prelude, std, TKET1, and Tk2Ops extensions.
+/// Extension registry including the prelude, std, TKET1, and TketOps extensions.
 pub(crate) static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new(
     STD_REG.iter().map(|e| e.to_owned()).chain([
     TKET1_EXTENSION.to_owned(),
@@ -104,7 +104,7 @@ lazy_static! {
     /// The extension definition for TKET ops and types.
     pub static ref TKET_EXTENSION: Arc<Extension> = {
         Extension::new_arc(TKET_EXTENSION_ID, TKET_EXTENSION_VERSION, |res, ext_ref| {
-            Tk2Op::load_all_ops(res, ext_ref).expect("add_fail");
+            TketOp::load_all_ops(res, ext_ref).expect("add_fail");
             SympyOpDef.add_to_extension(res, ext_ref).unwrap();
         })
     };

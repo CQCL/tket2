@@ -28,10 +28,10 @@ use tket::circuit::CircuitHash;
 use tket::passes::pytket::lower_to_pytket;
 use tket::passes::CircuitChunks;
 use tket::serialize::TKETDecode;
-use tket::{Circuit, Tk2Op};
+use tket::{Circuit, TketOp};
 use tket_json_rs::circuit_json::SerialCircuit;
 
-use crate::ops::PyTk2Op;
+use crate::ops::PyTketOp;
 use crate::rewrite::PyCircuitRewrite;
 use crate::types::PyHugrType;
 use crate::utils::{into_vec, ConvertPyErr};
@@ -185,7 +185,7 @@ impl Tk2Circuit {
 
     /// Compute the cost of the circuit based on a per-operation cost function.
     ///
-    /// :param cost_fn: A function that takes a `Tk2Op` and returns an arbitrary cost.
+    /// :param cost_fn: A function that takes a `TketOp` and returns an arbitrary cost.
     ///     The cost must implement `__add__`, `__sub__`, `__lt__`,
     ///     `__eq__`, `__int__`, and integer `__div__`.
     ///
@@ -193,13 +193,13 @@ impl Tk2Circuit {
     pub fn circuit_cost<'py>(&self, cost_fn: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         let py = cost_fn.py();
         let cost_fn = |op: &OpType| -> PyResult<PyCircuitCost> {
-            let Some(tk2_op) = op.cast::<Tk2Op>() else {
+            let Some(tk2_op) = op.cast::<TketOp>() else {
                 let op_name = op.to_string();
                 return Err(PyErr::new::<PyValueError, _>(format!(
-                    "Could not convert circuit operation to a `Tk2Op`: {op_name}"
+                    "Could not convert circuit operation to a `TketOp`: {op_name}"
                 )));
             };
-            let tk2_py_op = PyTk2Op::from(tk2_op);
+            let tk2_py_op = PyTketOp::from(tk2_op);
             let cost = cost_fn.call1((tk2_py_op,))?;
             Ok(PyCircuitCost { cost: cost.into() })
         };
@@ -209,7 +209,7 @@ impl Tk2Circuit {
 
     /// Returns the number of operations in the circuit.
     ///
-    /// This includes [`Tk2Op`]s, pytket ops, and any other custom operations.
+    /// This includes [`TketOp`]s, pytket ops, and any other custom operations.
     ///
     /// Nested circuits are traversed to count their operations.
     pub fn num_operations(&self) -> usize {

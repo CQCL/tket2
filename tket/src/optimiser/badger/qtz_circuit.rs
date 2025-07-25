@@ -11,7 +11,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::extension::rotation::{rotation_type, RotationOp};
-use crate::{Circuit, Tk2Op};
+use crate::{Circuit, TketOp};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct RepCircOp {
@@ -45,18 +45,18 @@ fn map_op(opstr: &str) -> Op {
     }
     // TODO, more
     match opstr {
-        "h" => Tk2Op::H,
-        "cx" => Tk2Op::CX,
-        "t" => Tk2Op::T,
-        "s" => Tk2Op::S,
-        "v" => Tk2Op::V,
-        "x" => Tk2Op::X,
-        "y" => Tk2Op::Y,
-        "z" => Tk2Op::Z,
-        "tdg" => Tk2Op::Tdg,
-        "sdg" => Tk2Op::Sdg,
-        "vdg" => Tk2Op::Vdg,
-        "rz" => Tk2Op::Rz,
+        "h" => TketOp::H,
+        "cx" => TketOp::CX,
+        "t" => TketOp::T,
+        "s" => TketOp::S,
+        "v" => TketOp::V,
+        "x" => TketOp::X,
+        "y" => TketOp::Y,
+        "z" => TketOp::Z,
+        "tdg" => TketOp::Tdg,
+        "sdg" => TketOp::Sdg,
+        "vdg" => TketOp::Vdg,
+        "rz" => TketOp::Rz,
         x => panic!("unknown op {x}"),
     }
     .into()

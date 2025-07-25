@@ -181,11 +181,11 @@ impl<T: HugrView> Circuit<T> {
 
     /// The number of operations in the circuit.
     ///
-    /// This includes [`Tk2Op`]s, pytket ops, and any other custom operations.
+    /// This includes [`TketOp`]s, pytket ops, and any other custom operations.
     ///
     /// Nested circuits are traversed to count their operations.
     ///
-    ///   [`Tk2Op`]: crate::Tk2Op
+    ///   [`TketOp`]: crate::TketOp
     #[inline]
     pub fn num_operations(&self) -> usize
     where
@@ -316,9 +316,9 @@ impl<T: HugrView<Node = Node>> Circuit<T> {
     /// order.
     ///
     /// This is a subset of the commands returned by [`Circuit::commands`], only
-    /// including [`Tk2Op`]s, pytket ops, and any other custom operations.
+    /// including [`TketOp`]s, pytket ops, and any other custom operations.
     ///
-    ///   [`Tk2Op`]: crate::Tk2Op
+    ///   [`TketOp`]: crate::TketOp
     #[inline]
     pub fn operations(&self) -> impl Iterator<Item = Command<'_, T>> + '_
     where
@@ -657,7 +657,7 @@ mod tests {
     use crate::extension::rotation::ConstRotation;
     use crate::serialize::load_tk1_json_str;
     use crate::utils::build_simple_circuit;
-    use crate::Tk2Op;
+    use crate::TketOp;
 
     #[fixture]
     fn tk1_circuit() -> Circuit {
@@ -682,11 +682,11 @@ mod tests {
     #[fixture]
     fn simple_circuit() -> Circuit {
         build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::H, [0])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
+            circ.append(TketOp::H, [0])?;
+            circ.append(TketOp::CX, [0, 1])?;
             let angle = circ.add_constant(ConstRotation::PI_2);
             circ.append_and_consume(
-                Tk2Op::Rz,
+                TketOp::Rz,
                 [CircuitUnit::Linear(1), CircuitUnit::Wire(angle)],
             )?;
             Ok(())
@@ -699,9 +699,9 @@ mod tests {
     #[fixture]
     fn simple_module() -> Circuit {
         build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::H, [0])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append(Tk2Op::X, [1])?;
+            circ.append(TketOp::H, [0])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            circ.append(TketOp::X, [1])?;
             Ok(())
         })
         .unwrap()
@@ -731,7 +731,7 @@ mod tests {
     #[test]
     fn remove_qubit() {
         let mut circ = build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::X, [0])?;
+            circ.append(TketOp::X, [0])?;
             Ok(())
         })
         .unwrap();

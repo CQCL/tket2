@@ -22,7 +22,7 @@ use super::{
 use crate::circuit::Circuit;
 use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp};
 use crate::extension::sympy::SympyOpDef;
-use crate::Tk2Op;
+use crate::TketOp;
 
 const SIMPLE_JSON: &str = r#"{
         "phase": "0",
@@ -192,10 +192,10 @@ fn circ_preset_qubits() -> Circuit {
     let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
     let [qb0] = h.input_wires_arr();
-    let [qb1] = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap().outputs_arr();
+    let [qb1] = h.add_dataflow_op(TketOp::QAlloc, []).unwrap().outputs_arr();
 
     let [qb0, qb1] = h
-        .add_dataflow_op(Tk2Op::CZ, [qb0, qb1])
+        .add_dataflow_op(TketOp::CZ, [qb0, qb1])
         .unwrap()
         .outputs_arr();
 
@@ -226,9 +226,18 @@ fn circ_parameterized() -> Circuit {
 
     let [q, r0, r1, r2] = h.input_wires_arr();
 
-    let [q] = h.add_dataflow_op(Tk2Op::Rx, [q, r0]).unwrap().outputs_arr();
-    let [q] = h.add_dataflow_op(Tk2Op::Ry, [q, r1]).unwrap().outputs_arr();
-    let [q] = h.add_dataflow_op(Tk2Op::Rz, [q, r2]).unwrap().outputs_arr();
+    let [q] = h
+        .add_dataflow_op(TketOp::Rx, [q, r0])
+        .unwrap()
+        .outputs_arr();
+    let [q] = h
+        .add_dataflow_op(TketOp::Ry, [q, r1])
+        .unwrap()
+        .outputs_arr();
+    let [q] = h
+        .add_dataflow_op(TketOp::Rz, [q, r2])
+        .unwrap()
+        .outputs_arr();
 
     let mut hugr = h.finish_hugr_with_outputs([q]).unwrap();
 
@@ -250,20 +259,23 @@ fn circ_measure_ancilla() -> Circuit {
     let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
 
     let [qb] = h.input_wires_arr();
-    let [anc] = h.add_dataflow_op(Tk2Op::QAlloc, []).unwrap().outputs_arr();
+    let [anc] = h.add_dataflow_op(TketOp::QAlloc, []).unwrap().outputs_arr();
 
     let [qb, meas_qb] = h
-        .add_dataflow_op(Tk2Op::Measure, [qb])
+        .add_dataflow_op(TketOp::Measure, [qb])
         .unwrap()
         .outputs_arr();
     let [anc, meas_anc] = h
-        .add_dataflow_op(Tk2Op::Measure, [anc])
+        .add_dataflow_op(TketOp::Measure, [anc])
         .unwrap()
         .outputs_arr();
 
-    let [] = h.add_dataflow_op(Tk2Op::QFree, [qb]).unwrap().outputs_arr();
     let [] = h
-        .add_dataflow_op(Tk2Op::QFree, [anc])
+        .add_dataflow_op(TketOp::QFree, [qb])
+        .unwrap()
+        .outputs_arr();
+    let [] = h
+        .add_dataflow_op(TketOp::QFree, [anc])
         .unwrap()
         .outputs_arr();
 
@@ -284,7 +296,7 @@ fn circ_add_angles_symbolic() -> (Circuit, String) {
         .unwrap()
         .outputs_arr();
     let [qb] = h
-        .add_dataflow_op(Tk2Op::Rx, [qb, f12])
+        .add_dataflow_op(TketOp::Rx, [qb, f12])
         .unwrap()
         .outputs_arr();
 
@@ -307,7 +319,7 @@ fn circ_add_angles_constants() -> (Circuit, String) {
         .out_wire(0);
 
     let qbs = h
-        .add_dataflow_op(Tk2Op::Rx, [qb, point5])
+        .add_dataflow_op(TketOp::Rx, [qb, point5])
         .unwrap()
         .outputs();
     let circ = h.finish_hugr_with_outputs(qbs).unwrap().into();
@@ -358,7 +370,7 @@ fn circ_complex_angle_computation() -> (Circuit, String) {
         .out_wire(0);
 
     let qbs = h
-        .add_dataflow_op(Tk2Op::Rx, [qb, final_rot])
+        .add_dataflow_op(TketOp::Rx, [qb, final_rot])
         .unwrap()
         .outputs();
 

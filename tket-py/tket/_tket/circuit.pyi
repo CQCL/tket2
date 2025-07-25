@@ -1,7 +1,7 @@
 from typing import Any, Callable
 from pytket._tket.circuit import Circuit as Tk1Circuit
 
-from tket._tket.ops import Tk2Op
+from tket._tket.ops import TketOp
 from hugr.envelope import EnvelopeConfig
 
 try:
@@ -32,13 +32,13 @@ class Tk2Circuit:
     def hash(self) -> int:
         """Compute the circuit hash by traversal."""
 
-    def circuit_cost(self, cost_fn: Callable[[Tk2Op], Any]) -> int:
+    def circuit_cost(self, cost_fn: Callable[[TketOp], Any]) -> int:
         """Compute the cost of the circuit. Return value must implement __add__."""
 
     def num_operations(self) -> int:
         """The number of operations in the circuit.
 
-        This includes [`Tk2Op`]s, pytket ops, and any other custom operations.
+        This includes [`TketOp`]s, pytket ops, and any other custom operations.
 
         Nested circuits are traversed to count their operations.
         """

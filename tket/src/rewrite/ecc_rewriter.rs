@@ -298,7 +298,7 @@ fn empty_wires(circ: &Circuit<impl HugrView<Node = Node>>) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{utils::build_simple_circuit, Tk2Op};
+    use crate::{utils::build_simple_circuit, TketOp};
 
     use super::*;
 
@@ -308,9 +308,9 @@ mod tests {
 
     fn h_h() -> Circuit {
         build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::H, [0]).unwrap();
-            circ.append(Tk2Op::H, [0]).unwrap();
-            circ.append(Tk2Op::CX, [0, 1]).unwrap();
+            circ.append(TketOp::H, [0]).unwrap();
+            circ.append(TketOp::H, [0]).unwrap();
+            circ.append(TketOp::CX, [0, 1]).unwrap();
             Ok(())
         })
         .unwrap()
@@ -318,8 +318,8 @@ mod tests {
 
     fn cx_cx() -> Circuit {
         build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::CX, [0, 1]).unwrap();
-            circ.append(Tk2Op::CX, [0, 1]).unwrap();
+            circ.append(TketOp::CX, [0, 1]).unwrap();
+            circ.append(TketOp::CX, [0, 1]).unwrap();
             Ok(())
         })
         .unwrap()
@@ -327,8 +327,8 @@ mod tests {
 
     fn cx_x() -> Circuit {
         build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::CX, [0, 1]).unwrap();
-            circ.append(Tk2Op::X, [1]).unwrap();
+            circ.append(TketOp::CX, [0, 1]).unwrap();
+            circ.append(TketOp::X, [1]).unwrap();
             Ok(())
         })
         .unwrap()
@@ -336,8 +336,8 @@ mod tests {
 
     fn x_cx() -> Circuit {
         build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::X, [1]).unwrap();
-            circ.append(Tk2Op::CX, [0, 1]).unwrap();
+            circ.append(TketOp::X, [1]).unwrap();
+            circ.append(TketOp::CX, [0, 1]).unwrap();
             Ok(())
         })
         .unwrap()

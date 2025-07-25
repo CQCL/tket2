@@ -8,12 +8,12 @@ use std::str::FromStr;
 use strum::IntoEnumIterator;
 
 use hugr::ops::OpType;
-use tket::{Pauli, Tk2Op};
+use tket::{Pauli, TketOp};
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let m = PyModule::new(py, "ops")?;
-    m.add_class::<PyTk2Op>()?;
+    m.add_class::<PyTketOp>()?;
     m.add_class::<PyPauli>()?;
     m.add_class::<PyExtensionOp>()?;
     Ok(m)
@@ -21,33 +21,33 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
 
 /// Enum of Tket operations in hugr.
 ///
-/// Python equivalent of [`Tk2Op`].
+/// Python equivalent of [`TketOp`].
 ///
-/// [`Tk2Op`]: tket::ops::Tk2Op
+/// [`TketOp`]: tket::ops::TketOp
 #[pyclass]
-#[pyo3(name = "Tk2Op")]
+#[pyo3(name = "TketOp")]
 #[derive(Debug, Clone, From)]
 #[repr(transparent)]
-pub struct PyTk2Op {
+pub struct PyTketOp {
     /// Rust representation of the operation.
-    pub op: Tk2Op,
+    pub op: TketOp,
 }
 
 #[pymethods]
-impl PyTk2Op {
-    /// Initialize a new `PyTk2Op` from a python string.
+impl PyTketOp {
+    /// Initialize a new `PyTketOp` from a python string.
     #[new]
     fn new(op: &str) -> PyResult<Self> {
         Ok(Self {
-            op: Tk2Op::from_str(op)
+            op: TketOp::from_str(op)
                 .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
         })
     }
 
     /// Iterate over the operations.
     #[staticmethod]
-    pub fn values() -> PyTk2OpIter {
-        PyTk2OpIter { it: Tk2Op::iter() }
+    pub fn values() -> PyTketOpIter {
+        PyTketOpIter { it: TketOp::iter() }
     }
 
     /// Get the string name of the operation.
@@ -78,31 +78,31 @@ impl PyTk2Op {
     }
 
     /// Check if two operations are equal.
-    pub fn __eq__(&self, other: &PyTk2Op) -> bool {
+    pub fn __eq__(&self, other: &PyTketOp) -> bool {
         self.op == other.op
     }
 }
 
 /// Iterator over the operations.
 #[pyclass]
-#[pyo3(name = "Tk2OpIter")]
+#[pyo3(name = "TketOpIter")]
 #[derive(Debug, Clone)]
 #[repr(transparent)]
-pub struct PyTk2OpIter {
+pub struct PyTketOpIter {
     /// Iterator over the operations.
-    pub it: <Tk2Op as IntoEnumIterator>::Iterator,
+    pub it: <TketOp as IntoEnumIterator>::Iterator,
 }
 
 #[pymethods]
-impl PyTk2OpIter {
+impl PyTketOpIter {
     /// Iterate over the operations.
     fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
         slf
     }
 
     /// Get the next operation.
-    pub fn __next__(&mut self) -> Option<PyTk2Op> {
-        self.it.next().map(|op| PyTk2Op { op })
+    pub fn __next__(&mut self) -> Option<PyTketOp> {
+        self.it.next().map(|op| PyTketOp { op })
     }
 }
 

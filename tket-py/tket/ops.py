@@ -8,7 +8,7 @@ import tket
 from tket._tket.ops import CustomOp
 from tket.types import QB_T
 
-__all__ = ["CustomOp", "ToCustomOp", "Tk2Op", "Pauli"]
+__all__ = ["CustomOp", "ToCustomOp", "TketOp", "Pauli"]
 
 
 class ToCustomOp(Protocol):
@@ -24,7 +24,7 @@ class ToCustomOp(Protocol):
         ...
 
 
-class Tk2Op(Enum):
+class TketOp(Enum):
     """A Tket built-in operation.
 
     Implements the `ToCustomOp` protocol.
@@ -59,21 +59,21 @@ class Tk2Op(Enum):
         """Convert to a custom operation."""
         return self._to_rs().to_custom()
 
-    def _to_rs(self) -> tket._tket.ops.Tk2Op:
-        """Convert to the Rust-backed Tk2Op representation."""
-        return tket._tket.ops.Tk2Op(self.name)
+    def _to_rs(self) -> tket._tket.ops.TketOp:
+        """Convert to the Rust-backed TketOp representation."""
+        return tket._tket.ops.TketOp(self.name)
 
     @staticmethod
-    def _from_rs(op: tket._tket.ops.Tk2Op) -> "Tk2Op":
-        """Convert from the Rust-backed Tk2Op representation."""
-        return Tk2Op[op.name]
+    def _from_rs(op: tket._tket.ops.TketOp) -> "TketOp":
+        """Convert from the Rust-backed TketOp representation."""
+        return TketOp[op.name]
 
     def __eq__(self, other: object) -> bool:
-        """Check if two Tk2Ops are equal."""
-        if isinstance(other, Tk2Op):
+        """Check if two TketOps are equal."""
+        if isinstance(other, TketOp):
             return self.name == other.name
-        elif isinstance(other, tket._tket.ops.Tk2Op):
-            return self == Tk2Op._from_rs(other)
+        elif isinstance(other, tket._tket.ops.TketOp):
+            return self == TketOp._from_rs(other)
         elif isinstance(other, str):
             return self.name == other
         return False

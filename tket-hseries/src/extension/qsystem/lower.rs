@@ -16,7 +16,7 @@ use hugr::{
 use lazy_static::lazy_static;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
-use tket::{extension::rotation::RotationOpBuilder, Tk2Op};
+use tket::{extension::rotation::RotationOpBuilder, TketOp};
 
 use crate::extension::qsystem::{self, QSystemOp, QSystemOpBuilder};
 
@@ -40,7 +40,7 @@ fn const_f64<T: Dataflow + ?Sized>(builder: &mut T, value: f64) -> Wire {
     builder.add_load_const(ops::Const::new(ConstF64::new(value).into()))
 }
 
-/// Errors produced by lowering [Tk2Op]s.
+/// Errors produced by lowering [TketOp]s.
 #[derive(Debug, Display, Error, From)]
 #[non_exhaustive]
 pub enum LowerTk2Error {
@@ -49,15 +49,15 @@ pub enum LowerTk2Error {
     BuildError(BuildError),
     /// Found an unrecognised operation.
     #[display("Unrecognised operation: {} with {_1} inputs", _0.exposed_name())]
-    UnknownOp(Tk2Op, usize),
+    UnknownOp(TketOp, usize),
     /// An error raised when replacing an operation.
     #[display("Error when replacing op: {_0}")]
     OpReplacement(HugrError),
     /// An error raised when lowering operations.
     #[display("Error when lowering ops: {_0}")]
     CircuitReplacement(hugr::algorithms::lower::LowerError),
-    /// Tk2Ops were not lowered after the pass.
-    #[display("Tk2Ops were not lowered: {missing_ops:?}")]
+    /// TketOps were not lowered after the pass.
+    #[display("TketOps were not lowered: {missing_ops:?}")]
     #[from(ignore)]
     Unlowered {
         /// The list of nodes that were not lowered.
@@ -75,7 +75,7 @@ pub enum LowerTk2Error {
 }
 
 enum ReplaceOps {
-    Tk2(Tk2Op),
+    Tk2(TketOp),
     Barrier(Barrier),
 }
 
@@ -84,7 +84,7 @@ pub(super) fn insert_function(hugr: &mut impl HugrMut<Node = Node>, func_def: Hu
     inserted.inserted_entrypoint
 }
 
-/// Lower [`Tk2Op`] operations to [`QSystemOp`] operations.
+/// Lower [`TketOp`] operations to [`QSystemOp`] operations.
 ///
 /// Single op replacements are done directly, while multi-op replacements are done
 /// by lazily defining and calling functions that implement the decomposition.
@@ -93,7 +93,7 @@ pub(super) fn insert_function(hugr: &mut impl HugrMut<Node = Node>, func_def: Hu
 /// # Errors
 /// Returns an error if the replacement fails.
 pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, LowerTk2Error> {
-    let mut funcs: BTreeMap<Tk2Op, Node> = BTreeMap::new();
+    let mut funcs: BTreeMap<TketOp, Node> = BTreeMap::new();
     let mut lowerer = ReplaceTypes::new_empty();
     let mut barrier_funcs = BarrierInserter::new();
 
@@ -101,7 +101,7 @@ pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, L
         .nodes()
         .filter_map(|n| {
             let optype = hugr.get_optype(n);
-            if let Some(op) = optype.cast::<Tk2Op>() {
+            if let Some(op) = optype.cast::<TketOp>() {
                 Some((n, ReplaceOps::Tk2(op)))
             } else {
                 optype
@@ -116,27 +116,27 @@ pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, L
         replaced_nodes.push(node);
 
         match op {
-            ReplaceOps::Tk2(tk2op) => {
-                // Handle Tk2Op replacements
-                if let Some(direct) = direct_map(tk2op) {
+            ReplaceOps::Tk2(tket_op) => {
+                // Handle TketOp replacements
+                if let Some(direct) = direct_map(tket_op) {
                     lowerer.replace_op(
-                        &tk2op.into_extension_op(),
+                        &tket_op.into_extension_op(),
                         NodeTemplate::SingleOp(direct.into()),
                     );
                     continue;
                 }
 
                 // Need to get or create function definition
-                let func_node = match funcs.entry(tk2op) {
+                let func_node = match funcs.entry(tket_op) {
                     Entry::Occupied(e) => *e.get(),
                     Entry::Vacant(e) => {
-                        let h = build_func(tk2op)?;
+                        let h = build_func(tket_op)?;
                         let inserted = insert_function(hugr, h);
                         *e.insert(inserted)
                     }
                 };
                 lowerer.replace_op(
-                    &tk2op.into_extension_op(),
+                    &tket_op.into_extension_op(),
                     NodeTemplate::Call(func_node, vec![]),
                 );
             }
@@ -160,7 +160,7 @@ pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, L
     Ok(replaced_nodes)
 }
 
-fn build_func(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
+fn build_func(op: TketOp) -> Result<Hugr, LowerTk2Error> {
     let sig = op.into_extension_op().signature().into_owned();
     let sig = Signature::new(sig.input, sig.output); // ignore extension delta
                                                      // TODO check generated names are namespaced enough
@@ -168,38 +168,38 @@ fn build_func(op: Tk2Op) -> Result<Hugr, LowerTk2Error> {
     let mut b = FunctionBuilder::new(f_name, sig)?;
     let inputs: Vec<_> = b.input_wires().collect();
     let outputs = match (op, inputs.as_slice()) {
-        (Tk2Op::H, [q]) => vec![b.build_h(*q)?],
-        (Tk2Op::X, [q]) => vec![b.build_x(*q)?],
-        (Tk2Op::Y, [q]) => vec![b.build_y(*q)?],
-        (Tk2Op::Z, [q]) => vec![b.build_z(*q)?],
-        (Tk2Op::S, [q]) => vec![b.build_s(*q)?],
-        (Tk2Op::Sdg, [q]) => vec![b.build_sdg(*q)?],
-        (Tk2Op::V, [q]) => vec![b.build_v(*q)?],
-        (Tk2Op::Vdg, [q]) => vec![b.build_vdg(*q)?],
-        (Tk2Op::T, [q]) => vec![b.build_t(*q)?],
-        (Tk2Op::Tdg, [q]) => vec![b.build_tdg(*q)?],
-        (Tk2Op::Measure, [q]) => b.build_measure_flip(*q)?.into(),
-        (Tk2Op::QAlloc, []) => vec![b.build_qalloc()?],
-        (Tk2Op::CX, [c, t]) => b.build_cx(*c, *t)?.into(),
-        (Tk2Op::CY, [c, t]) => b.build_cy(*c, *t)?.into(),
-        (Tk2Op::CZ, [c, t]) => b.build_cz(*c, *t)?.into(),
-        (Tk2Op::Rx, [q, angle]) => {
+        (TketOp::H, [q]) => vec![b.build_h(*q)?],
+        (TketOp::X, [q]) => vec![b.build_x(*q)?],
+        (TketOp::Y, [q]) => vec![b.build_y(*q)?],
+        (TketOp::Z, [q]) => vec![b.build_z(*q)?],
+        (TketOp::S, [q]) => vec![b.build_s(*q)?],
+        (TketOp::Sdg, [q]) => vec![b.build_sdg(*q)?],
+        (TketOp::V, [q]) => vec![b.build_v(*q)?],
+        (TketOp::Vdg, [q]) => vec![b.build_vdg(*q)?],
+        (TketOp::T, [q]) => vec![b.build_t(*q)?],
+        (TketOp::Tdg, [q]) => vec![b.build_tdg(*q)?],
+        (TketOp::Measure, [q]) => b.build_measure_flip(*q)?.into(),
+        (TketOp::QAlloc, []) => vec![b.build_qalloc()?],
+        (TketOp::CX, [c, t]) => b.build_cx(*c, *t)?.into(),
+        (TketOp::CY, [c, t]) => b.build_cy(*c, *t)?.into(),
+        (TketOp::CZ, [c, t]) => b.build_cz(*c, *t)?.into(),
+        (TketOp::Rx, [q, angle]) => {
             let float = build_to_radians(&mut b, *angle)?;
             vec![b.build_rx(*q, float)?]
         }
-        (Tk2Op::Ry, [q, angle]) => {
+        (TketOp::Ry, [q, angle]) => {
             let float = build_to_radians(&mut b, *angle)?;
             vec![b.build_ry(*q, float)?]
         }
-        (Tk2Op::Rz, [q, angle]) => {
+        (TketOp::Rz, [q, angle]) => {
             let float = build_to_radians(&mut b, *angle)?;
             vec![b.add_rz(*q, float)?]
         }
-        (Tk2Op::CRz, [c, t, angle]) => {
+        (TketOp::CRz, [c, t, angle]) => {
             let float = build_to_radians(&mut b, *angle)?;
             b.build_crz(*c, *t, float)?.into()
         }
-        (Tk2Op::Toffoli, [a, b_, c]) => b.build_toffoli(*a, *b_, *c)?.into(),
+        (TketOp::Toffoli, [a, b_, c]) => b.build_toffoli(*a, *b_, *c)?.into(),
         _ => return Err(LowerTk2Error::UnknownOp(op, inputs.len())), // non-exhaustive
     };
     Ok(b.finish_hugr_with_outputs(outputs)?)
@@ -212,12 +212,12 @@ fn build_to_radians(b: &mut impl Dataflow, rotation: Wire) -> Result<Wire, Build
     Ok(float)
 }
 
-fn direct_map(op: Tk2Op) -> Option<QSystemOp> {
+fn direct_map(op: TketOp) -> Option<QSystemOp> {
     Some(match op {
-        Tk2Op::TryQAlloc => QSystemOp::TryQAlloc,
-        Tk2Op::QFree => QSystemOp::QFree,
-        Tk2Op::Reset => QSystemOp::Reset,
-        Tk2Op::MeasureFree => QSystemOp::Measure,
+        TketOp::TryQAlloc => QSystemOp::TryQAlloc,
+        TketOp::QFree => QSystemOp::QFree,
+        TketOp::Reset => QSystemOp::Reset,
+        TketOp::MeasureFree => QSystemOp::Measure,
         _ => return None,
     })
 }
@@ -244,7 +244,7 @@ pub fn check_lowered<H: HugrView>(hugr: &H) -> Result<(), Vec<H::Node>> {
     }
 }
 
-/// A `Hugr -> Hugr` pass that replaces [tket::Tk2Op] nodes to
+/// A `Hugr -> Hugr` pass that replaces [tket::TketOp] nodes to
 /// equivalent graphs made of [QSystemOp]s.
 ///
 /// Invokes [lower_tk2_op]. If validation is enabled the resulting HUGR is
@@ -280,20 +280,20 @@ mod test {
     fn test_lower_direct() {
         let mut b = FunctionBuilder::new("circuit", Signature::new_endo(type_row![])).unwrap();
         let [maybe_q] = b
-            .add_dataflow_op(Tk2Op::TryQAlloc, [])
+            .add_dataflow_op(TketOp::TryQAlloc, [])
             .unwrap()
             .outputs_arr();
         let [q] = b.build_unwrap_sum(1, option_type(qb_t()), maybe_q).unwrap();
-        let [q] = b.add_dataflow_op(Tk2Op::Reset, [q]).unwrap().outputs_arr();
-        b.add_dataflow_op(Tk2Op::QFree, [q]).unwrap();
+        let [q] = b.add_dataflow_op(TketOp::Reset, [q]).unwrap().outputs_arr();
+        b.add_dataflow_op(TketOp::QFree, [q]).unwrap();
         let [maybe_q] = b
-            .add_dataflow_op(Tk2Op::TryQAlloc, [])
+            .add_dataflow_op(TketOp::TryQAlloc, [])
             .unwrap()
             .outputs_arr();
         let [q] = b.build_unwrap_sum(1, option_type(qb_t()), maybe_q).unwrap();
 
         let [_] = b
-            .add_dataflow_op(Tk2Op::MeasureFree, [q])
+            .add_dataflow_op(TketOp::MeasureFree, [q])
             .unwrap()
             .outputs_arr();
         let mut h = b
@@ -321,29 +321,29 @@ mod test {
     }
 
     #[rstest]
-    #[case(Tk2Op::H, Some(vec![QSystemOp::PhasedX, QSystemOp::Rz]))]
-    #[case(Tk2Op::X, Some(vec![QSystemOp::PhasedX]))]
-    #[case(Tk2Op::Y, Some(vec![QSystemOp::PhasedX]))]
-    #[case(Tk2Op::Z, Some(vec![QSystemOp::Rz]))]
-    #[case(Tk2Op::S, Some(vec![QSystemOp::Rz]))]
-    #[case(Tk2Op::Sdg, Some(vec![QSystemOp::Rz]))]
-    #[case(Tk2Op::V, Some(vec![QSystemOp::PhasedX]))]
-    #[case(Tk2Op::Vdg, Some(vec![QSystemOp::PhasedX]))]
-    #[case(Tk2Op::T, Some(vec![QSystemOp::Rz]))]
-    #[case(Tk2Op::Tdg, Some(vec![QSystemOp::Rz]))]
-    #[case(Tk2Op::Rx, Some(vec![QSystemOp::PhasedX]))]
-    #[case(Tk2Op::Ry, Some(vec![QSystemOp::PhasedX]))]
-    #[case(Tk2Op::Rz, Some(vec![QSystemOp::Rz]))]
+    #[case(TketOp::H, Some(vec![QSystemOp::PhasedX, QSystemOp::Rz]))]
+    #[case(TketOp::X, Some(vec![QSystemOp::PhasedX]))]
+    #[case(TketOp::Y, Some(vec![QSystemOp::PhasedX]))]
+    #[case(TketOp::Z, Some(vec![QSystemOp::Rz]))]
+    #[case(TketOp::S, Some(vec![QSystemOp::Rz]))]
+    #[case(TketOp::Sdg, Some(vec![QSystemOp::Rz]))]
+    #[case(TketOp::V, Some(vec![QSystemOp::PhasedX]))]
+    #[case(TketOp::Vdg, Some(vec![QSystemOp::PhasedX]))]
+    #[case(TketOp::T, Some(vec![QSystemOp::Rz]))]
+    #[case(TketOp::Tdg, Some(vec![QSystemOp::Rz]))]
+    #[case(TketOp::Rx, Some(vec![QSystemOp::PhasedX]))]
+    #[case(TketOp::Ry, Some(vec![QSystemOp::PhasedX]))]
+    #[case(TketOp::Rz, Some(vec![QSystemOp::Rz]))]
     // multi qubit ordering is not deterministic
-    #[case(Tk2Op::CX, None)]
-    #[case(Tk2Op::CY, None)]
-    #[case(Tk2Op::CZ, None)]
-    #[case(Tk2Op::CRz, None)]
-    #[case(Tk2Op::Toffoli, None)]
+    #[case(TketOp::CX, None)]
+    #[case(TketOp::CY, None)]
+    #[case(TketOp::CZ, None)]
+    #[case(TketOp::CRz, None)]
+    #[case(TketOp::Toffoli, None)]
     // conditional doesn't fit in to commands
-    #[case(Tk2Op::Measure, None)]
-    #[case(Tk2Op::QAlloc, None)]
-    fn test_lower(#[case] t2op: Tk2Op, #[case] qsystem_ops: Option<Vec<QSystemOp>>) {
+    #[case(TketOp::Measure, None)]
+    #[case(TketOp::QAlloc, None)]
+    fn test_lower(#[case] t2op: TketOp, #[case] qsystem_ops: Option<Vec<QSystemOp>>) {
         // build dfg with just the op
 
         let h = build_func(t2op).unwrap();
@@ -363,17 +363,17 @@ mod test {
     fn test_mixed() {
         let mut b = DFGBuilder::new(Signature::new(rotation_type(), bool_t())).unwrap();
         let [angle] = b.input_wires_arr();
-        let qalloc = b.add_dataflow_op(Tk2Op::QAlloc, []).unwrap();
+        let qalloc = b.add_dataflow_op(TketOp::QAlloc, []).unwrap();
         let [q] = qalloc.outputs_arr();
-        let [q] = b.add_dataflow_op(Tk2Op::H, [q]).unwrap().outputs_arr();
-        let rx = b.add_dataflow_op(Tk2Op::Rx, [q, angle]).unwrap();
+        let [q] = b.add_dataflow_op(TketOp::H, [q]).unwrap().outputs_arr();
+        let rx = b.add_dataflow_op(TketOp::Rx, [q, angle]).unwrap();
         let [q] = rx.outputs_arr();
         let q = b.add_barrier([q]).unwrap().out_wire(0);
         let [q, bool] = b
-            .add_dataflow_op(Tk2Op::Measure, [q])
+            .add_dataflow_op(TketOp::Measure, [q])
             .unwrap()
             .outputs_arr();
-        let qfree = b.add_dataflow_op(Tk2Op::QFree, [q]).unwrap();
+        let qfree = b.add_dataflow_op(TketOp::QFree, [q]).unwrap();
         b.set_order(&qalloc, &rx);
         b.set_order(&rx, &qfree);
         let mut h = b.finish_hugr_with_outputs([bool]).unwrap();

@@ -11,7 +11,7 @@ use portgraph::PortOffset;
 use crate::Circuit;
 use crate::{
     circuit::command::Command,
-    ops::{Pauli, Tk2Op},
+    ops::{Pauli, TketOp},
 };
 
 type Qb = crate::circuit::units::LinearUnit;
@@ -101,7 +101,7 @@ fn load_slices(circ: &Circuit<impl HugrView<Node = Node>>) -> SliceVec {
 
 /// check if node is one we want to put in to a slice.
 fn is_slice_op<H: HugrView>(h: &H, node: H::Node) -> bool {
-    h.get_optype(node).cast::<Tk2Op>().is_some()
+    h.get_optype(node).cast::<TketOp>().is_some()
 }
 
 /// Starting from starting_index, work back along slices to check for the
@@ -156,12 +156,12 @@ fn commutes_at_slice(
 
         let port = command.port_of_qb(q, Direction::Incoming)?;
 
-        let op: Tk2Op = circ.hugr().get_optype(command.node()).cast()?;
-        // TODO: if not tk2op, might still have serialized commutation data we
+        let op: TketOp = circ.hugr().get_optype(command.node()).cast()?;
+        // TODO: if not tket_op, might still have serialized commutation data we
         // can use.
         let pauli = commutation_on_port(&op.qubit_commutation(), port)?;
 
-        let other_op: Tk2Op = circ.hugr().get_optype(other_com.node()).cast()?;
+        let other_op: TketOp = circ.hugr().get_optype(other_com.node()).cast()?;
         let other_pauli = commutation_on_port(
             &other_op.qubit_commutation(),
             other_com.port_of_qb(q, Direction::Outgoing)?,
@@ -347,9 +347,9 @@ mod test {
     // example circuit from original task
     fn example_cx() -> Circuit {
         build_simple_circuit(4, |circ| {
-            circ.append(Tk2Op::CX, [0, 2])?;
-            circ.append(Tk2Op::CX, [1, 2])?;
-            circ.append(Tk2Op::CX, [1, 3])?;
+            circ.append(TketOp::CX, [0, 2])?;
+            circ.append(TketOp::CX, [1, 2])?;
+            circ.append(TketOp::CX, [1, 3])?;
             Ok(())
         })
         .unwrap()
@@ -359,9 +359,9 @@ mod test {
     // example circuit from original task with lower depth
     fn example_cx_better() -> Circuit {
         build_simple_circuit(4, |circ| {
-            circ.append(Tk2Op::CX, [0, 2])?;
-            circ.append(Tk2Op::CX, [1, 3])?;
-            circ.append(Tk2Op::CX, [1, 2])?;
+            circ.append(TketOp::CX, [0, 2])?;
+            circ.append(TketOp::CX, [1, 3])?;
+            circ.append(TketOp::CX, [1, 2])?;
             Ok(())
         })
         .unwrap()
@@ -371,9 +371,9 @@ mod test {
     // can't commute anything here
     fn cant_commute() -> Circuit {
         build_simple_circuit(4, |circ| {
-            circ.append(Tk2Op::Z, [1])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append(Tk2Op::CX, [2, 1])?;
+            circ.append(TketOp::Z, [1])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            circ.append(TketOp::CX, [2, 1])?;
             Ok(())
         })
         .unwrap()
@@ -382,16 +382,16 @@ mod test {
     #[fixture]
     fn big_example() -> Circuit {
         build_simple_circuit(4, |circ| {
-            circ.append(Tk2Op::CX, [0, 3])?;
-            circ.append(Tk2Op::CX, [1, 2])?;
-            circ.append(Tk2Op::H, [0])?;
-            circ.append(Tk2Op::H, [3])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append(Tk2Op::CX, [2, 3])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append(Tk2Op::CX, [2, 3])?;
-            circ.append(Tk2Op::CX, [2, 1])?;
-            circ.append(Tk2Op::H, [1])?;
+            circ.append(TketOp::CX, [0, 3])?;
+            circ.append(TketOp::CX, [1, 2])?;
+            circ.append(TketOp::H, [0])?;
+            circ.append(TketOp::H, [3])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            circ.append(TketOp::CX, [2, 3])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            circ.append(TketOp::CX, [2, 3])?;
+            circ.append(TketOp::CX, [2, 1])?;
+            circ.append(TketOp::H, [1])?;
             Ok(())
         })
         .unwrap()
@@ -401,9 +401,9 @@ mod test {
     // commute a single qubit gate
     fn single_qb_commute() -> Circuit {
         build_simple_circuit(3, |circ| {
-            circ.append(Tk2Op::H, [1])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append(Tk2Op::Z, [0])?;
+            circ.append(TketOp::H, [1])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            circ.append(TketOp::Z, [0])?;
             Ok(())
         })
         .unwrap()
@@ -413,11 +413,11 @@ mod test {
     // commute 2 single qubit gates
     fn single_qb_commute_2() -> Circuit {
         build_simple_circuit(4, |circ| {
-            circ.append(Tk2Op::CX, [1, 2])?;
-            circ.append(Tk2Op::CX, [1, 0])?;
-            circ.append(Tk2Op::CX, [3, 2])?;
-            circ.append(Tk2Op::X, [0])?;
-            circ.append(Tk2Op::Z, [3])?;
+            circ.append(TketOp::CX, [1, 2])?;
+            circ.append(TketOp::CX, [1, 0])?;
+            circ.append(TketOp::CX, [3, 2])?;
+            circ.append(TketOp::X, [0])?;
+            circ.append(TketOp::Z, [3])?;
             Ok(())
         })
         .unwrap()
@@ -427,10 +427,10 @@ mod test {
     // A commutation forward exists but depth doesn't change
     fn commutes_but_same_depth() -> Circuit {
         build_simple_circuit(3, |circ| {
-            circ.append(Tk2Op::H, [1])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append(Tk2Op::Z, [0])?;
-            circ.append(Tk2Op::X, [1])?;
+            circ.append(TketOp::H, [1])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            circ.append(TketOp::Z, [0])?;
+            circ.append(TketOp::X, [1])?;
             Ok(())
         })
         .unwrap()
@@ -449,9 +449,9 @@ mod test {
 
             let mut circ = dfg.as_circuit(vec![q0, q1]);
 
-            circ.append(Tk2Op::H, [1])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append_and_consume(Tk2Op::Rz, [CircuitUnit::Linear(0), CircuitUnit::Wire(f)])?;
+            circ.append(TketOp::H, [1])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            circ.append_and_consume(TketOp::Rz, [CircuitUnit::Linear(0), CircuitUnit::Wire(f)])?;
             let qbs = circ.finish();
             dfg.finish_hugr_with_outputs(qbs)
         };
@@ -471,9 +471,9 @@ mod test {
 
             let mut circ = dfg.as_circuit(vec![q0, q1]);
 
-            circ.append(Tk2Op::H, [1])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
-            let measured = circ.append_with_outputs(Tk2Op::Measure, [0])?;
+            circ.append(TketOp::H, [1])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            let measured = circ.append_with_outputs(TketOp::Measure, [0])?;
             let mut outs = circ.finish();
             outs.extend(measured);
             dfg.finish_hugr_with_outputs(outs)
@@ -484,10 +484,10 @@ mod test {
     // bug https://github.com/CQCL/tket2/issues/253
     fn cx_commute_bug() -> Circuit {
         build_simple_circuit(3, |circ| {
-            circ.append(Tk2Op::H, [2])?;
-            circ.append(Tk2Op::CX, [2, 1])?;
-            circ.append(Tk2Op::CX, [0, 2])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
+            circ.append(TketOp::H, [2])?;
+            circ.append(TketOp::CX, [2, 1])?;
+            circ.append(TketOp::CX, [0, 2])?;
+            circ.append(TketOp::CX, [0, 1])?;
             Ok(())
         })
         .unwrap()

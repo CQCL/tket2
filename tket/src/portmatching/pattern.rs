@@ -177,14 +177,14 @@ mod tests {
     use crate::extension::rotation::rotation_type;
 
     use crate::utils::build_simple_circuit;
-    use crate::Tk2Op;
+    use crate::TketOp;
 
     use super::*;
 
     fn h_cx() -> Circuit {
         build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append(Tk2Op::H, [0])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            circ.append(TketOp::H, [0])?;
             Ok(())
         })
         .unwrap()
@@ -200,9 +200,9 @@ mod tests {
         let qb = inps.next().unwrap();
         let f = inps.next().unwrap();
 
-        let res = h.add_dataflow_op(Tk2Op::Rx, [qb, f]).unwrap();
+        let res = h.add_dataflow_op(TketOp::Rx, [qb, f]).unwrap();
         let qb = res.outputs().next().unwrap();
-        let res = h.add_dataflow_op(Tk2Op::Rx, [qb, f]).unwrap();
+        let res = h.add_dataflow_op(TketOp::Rx, [qb, f]).unwrap();
         let qb = res.outputs().next().unwrap();
 
         h.finish_hugr_with_outputs([qb]).unwrap().into()
@@ -219,9 +219,9 @@ mod tests {
         let qb2 = inps.next().unwrap();
         let f = inps.next().unwrap();
 
-        let res = h.add_dataflow_op(Tk2Op::Rx, [qb1, f]).unwrap();
+        let res = h.add_dataflow_op(TketOp::Rx, [qb1, f]).unwrap();
         let qb1 = res.outputs().next().unwrap();
-        let res = h.add_dataflow_op(Tk2Op::Rx, [qb2, f]).unwrap();
+        let res = h.add_dataflow_op(TketOp::Rx, [qb2, f]).unwrap();
         let qb2 = res.outputs().next().unwrap();
 
         h.finish_hugr_with_outputs([qb1, qb2]).unwrap().into()
@@ -241,8 +241,8 @@ mod tests {
             .map(|e| (e.source.unwrap(), e.target.unwrap()))
             .collect();
         let inp = circ.input_node();
-        let cx_gate = NodeID::HugrNode(get_nodes_by_tk2op(&circ, Tk2Op::CX)[0]);
-        let h_gate = NodeID::HugrNode(get_nodes_by_tk2op(&circ, Tk2Op::H)[0]);
+        let cx_gate = NodeID::HugrNode(get_nodes_by_tket_op(&circ, TketOp::CX)[0]);
+        let h_gate = NodeID::HugrNode(get_nodes_by_tket_op(&circ, TketOp::H)[0]);
         assert_eq!(
             edges,
             [
@@ -258,8 +258,8 @@ mod tests {
     #[test]
     fn disconnected_pattern() {
         let circ = build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::X, [0])?;
-            circ.append(Tk2Op::T, [1])?;
+            circ.append(TketOp::X, [0])?;
+            circ.append(TketOp::T, [1])?;
             Ok(())
         })
         .unwrap();
@@ -272,7 +272,7 @@ mod tests {
     #[test]
     fn pattern_with_empty_qubit() {
         let circ = build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::X, [0])?;
+            circ.append(TketOp::X, [0])?;
             Ok(())
         })
         .unwrap();
@@ -282,7 +282,7 @@ mod tests {
         );
     }
 
-    fn get_nodes_by_tk2op(circ: &Circuit, t2_op: Tk2Op) -> Vec<Node> {
+    fn get_nodes_by_tket_op(circ: &Circuit, t2_op: TketOp) -> Vec<Node> {
         let t2_op: OpType = t2_op.into();
         circ.hugr()
             .nodes()
@@ -295,7 +295,7 @@ mod tests {
         let circ = circ_with_copy();
         let pattern = CircuitPattern::try_from_circuit(&circ).unwrap();
         let edges = pattern.pattern.edges().unwrap();
-        let rx_ns = get_nodes_by_tk2op(&circ, Tk2Op::Rx);
+        let rx_ns = get_nodes_by_tket_op(&circ, TketOp::Rx);
         let inp = circ.input_node();
         for rx_n in rx_ns {
             assert!(edges.iter().any(|e| {

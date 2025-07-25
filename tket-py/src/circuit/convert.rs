@@ -21,7 +21,7 @@ use serde::Serialize;
 use tket::circuit::CircuitHash;
 use tket::passes::CircuitChunks;
 use tket::serialize::TKETDecode;
-use tket::{Circuit, Tk2Op};
+use tket::{Circuit, TketOp};
 use tket_json_rs::circuit_json::SerialCircuit;
 
 use crate::rewrite::PyCircuitRewrite;

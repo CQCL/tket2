@@ -2,7 +2,7 @@ use hugr::builder::{BuildError, CircuitBuilder, DFGBuilder, Dataflow, DataflowHu
 use hugr::extension::prelude::qb_t;
 use hugr::types::Signature;
 use hugr::Hugr;
-use tket::Tk2Op;
+use tket::TketOp;
 
 /// Helper function for building circuits.
 ///
@@ -46,7 +46,7 @@ pub fn make_cnot_layers(num_qubits: usize, layers: usize) -> Hugr {
             let cnot_count = (num_qubits - start) / 2;
             for i in 0..cnot_count {
                 let q = i * 2 + start;
-                circ.append(Tk2Op::CX, [q, q + 1])?;
+                circ.append(TketOp::CX, [q, q + 1])?;
             }
         }
         Ok(())

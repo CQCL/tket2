@@ -492,20 +492,20 @@ mod test {
     use crate::circuit::CircuitHash;
 
     use crate::utils::build_simple_circuit;
-    use crate::Tk2Op;
+    use crate::TketOp;
 
     use super::*;
 
     #[test]
     fn split_reassemble() {
         let circ = build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::H, [0])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append(Tk2Op::T, [1])?;
-            circ.append(Tk2Op::H, [0])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append(Tk2Op::H, [0])?;
-            circ.append(Tk2Op::CX, [0, 1])?;
+            circ.append(TketOp::H, [0])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            circ.append(TketOp::T, [1])?;
+            circ.append(TketOp::H, [0])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            circ.append(TketOp::H, [0])?;
+            circ.append(TketOp::CX, [0, 1])?;
             Ok(())
         })
         .unwrap();
@@ -526,16 +526,16 @@ mod test {
     #[test]
     fn reassemble_empty() {
         let circ = build_simple_circuit(3, |circ| {
-            circ.append(Tk2Op::CX, [0, 1])?;
-            circ.append(Tk2Op::H, [0])?;
-            circ.append(Tk2Op::H, [1])?;
+            circ.append(TketOp::CX, [0, 1])?;
+            circ.append(TketOp::H, [0])?;
+            circ.append(TketOp::H, [1])?;
             Ok(())
         })
         .unwrap();
 
         let circ_1q_id = build_simple_circuit(1, |_| Ok(())).unwrap();
         let circ_2q_id_h = build_simple_circuit(2, |circ| {
-            circ.append(Tk2Op::H, [0])?;
+            circ.append(TketOp::H, [0])?;
             Ok(())
         })
         .unwrap();

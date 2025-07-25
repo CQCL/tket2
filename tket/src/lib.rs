@@ -63,4 +63,4 @@ mod utils;
 pub use circuit::{Circuit, CircuitError, CircuitMutError};
 pub use hugr;
 pub use hugr::Hugr;
-pub use ops::{op_matches, symbolic_constant_op, Pauli, Tk2Op};
+pub use ops::{op_matches, symbolic_constant_op, Pauli, TketOp};
