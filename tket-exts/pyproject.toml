@@ -1,6 +1,6 @@
 [project]
 name = "tket-exts"
-version = "0.9.2"
+version = "0.10.0"
 requires-python = ">=3.10"
 description = "Precompiled rewrite sets for the tket compiler"
 license = { file = "LICENCE" }
