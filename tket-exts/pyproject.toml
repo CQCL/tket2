@@ -26,7 +26,7 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 
-dependencies = ['hugr ~= 0.12.0']
+dependencies = ['hugr >= 0.13.0rc1,<0.14']
 
 [project.urls]
 homepage = "https://github.com/CQCL/tket2/tree/main/tket-exts"
