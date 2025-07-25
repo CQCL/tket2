@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0](https://github.com/CQCL/tket2/compare/tket2-eccs-v0.4.0...tket2-eccs-v0.5.0) (2025-07-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* Updated public dependency `hugr` to `0.22.0`
+
+### Features
+
+* Update `hugr` dependency to `0.22.0` ([#980](https://github.com/CQCL/tket2/issues/980)) ([e12c9b2](https://github.com/CQCL/tket2/commit/e12c9b269cf9b2db92bd2e2b9dac2dfd54ed3738))
+
 ## [0.4.0](https://github.com/CQCL/tket2/compare/tket2-eccs-v0.3.0...tket2-eccs-v0.4.0) (2025-05-16)
 
 
