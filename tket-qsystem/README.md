@@ -30,5 +30,5 @@ This project is licensed under Apache License, Version 2.0 ([LICENSE][] or <http
 
   [msrv]: https://img.shields.io/crates/msrv/tket-qsystem
   [LICENSE]: https://github.com/CQCL/tket2/blob/main/LICENCE
-  [CHANGELOG]: https://github.com/CQCL/tket2/blob/main/tket-qsystem/CHANGELOG.mdd
+  [CHANGELOG]: https://github.com/CQCL/tket2/blob/main/tket-qsystem/CHANGELOG.md
   [DEVELOPMENT.md]: https://github.com/CQCL/tket2/blob/main/DEVELOPMENT.md
