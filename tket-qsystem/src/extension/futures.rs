@@ -23,13 +23,13 @@ use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
-/// The ID of the `tket2.futures` extension.
-pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.futures");
-/// The "tket2.futures" extension version
-pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+/// The ID of the `tket.futures` extension.
+pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.futures");
+/// The "tket.futures" extension version
+pub const EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
-    /// The "tket2.futures" extension.
+    /// The "tket.futures" extension.
     pub static ref EXTENSION: Arc<Extension>  = {
         Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
             let _ = add_future_type_def(ext, ext_ref.clone()).unwrap();
@@ -88,7 +88,7 @@ pub fn future_type(t: Type) -> Type {
 )]
 #[allow(missing_docs)]
 #[non_exhaustive]
-/// Simple enum of "tket2.futures" operations.
+/// Simple enum of "tket.futures" operations.
 pub enum FutureOpDef {
     Read,
     Dup,
@@ -163,7 +163,7 @@ impl From<&FutureOp> for &'static str {
     }
 }
 
-/// Concrete "tket2.futures" operations with type set.
+/// Concrete "tket.futures" operations with type set.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FutureOp {
     /// The `FutureOpDef` that defines this operation.
@@ -215,10 +215,10 @@ impl TryFrom<&OpType> for FutureOpDef {
     }
 }
 
-/// An extension trait for [Dataflow] providing methods to add "tket2.futures"
+/// An extension trait for [Dataflow] providing methods to add "tket.futures"
 /// operations.
 pub trait FutureOpBuilder: Dataflow {
-    /// Add a "tket2.futures.Read" op.
+    /// Add a "tket.futures.Read" op.
     fn add_read(&mut self, lifted: Wire, typ: Type) -> Result<[Wire; 1], BuildError> {
         Ok(self
             .add_dataflow_op(
@@ -231,7 +231,7 @@ pub trait FutureOpBuilder: Dataflow {
             .outputs_arr())
     }
 
-    /// Add a "tket2.futures.Dup" op.
+    /// Add a "tket.futures.Dup" op.
     fn add_dup(&mut self, lifted: Wire, typ: Type) -> Result<[Wire; 2], BuildError> {
         Ok(self
             .add_dataflow_op(
@@ -244,7 +244,7 @@ pub trait FutureOpBuilder: Dataflow {
             .outputs_arr())
     }
 
-    /// Add a "tket2.futures.Free" op.
+    /// Add a "tket.futures.Free" op.
     fn add_free(&mut self, lifted: Wire, typ: Type) -> Result<(), BuildError> {
         let op = self.add_dataflow_op(
             FutureOp {

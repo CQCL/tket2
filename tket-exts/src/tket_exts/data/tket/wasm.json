@@ -1,9 +1,9 @@
 {
-  "version": "0.2.0",
-  "name": "tket2.wasm",
+  "version": "0.3.0",
+  "name": "tket.wasm",
   "types": {
     "context": {
-      "extension": "tket2.wasm",
+      "extension": "tket.wasm",
       "name": "context",
       "params": [],
       "description": "wasm context",
@@ -13,7 +13,7 @@
       }
     },
     "func": {
-      "extension": "tket2.wasm",
+      "extension": "tket.wasm",
       "name": "func",
       "params": [
         {
@@ -38,7 +38,7 @@
       }
     },
     "module": {
-      "extension": "tket2.wasm",
+      "extension": "tket.wasm",
       "name": "module",
       "params": [],
       "description": "wasm module",
@@ -50,7 +50,7 @@
   },
   "operations": {
     "call": {
-      "extension": "tket2.wasm",
+      "extension": "tket.wasm",
       "name": "call",
       "description": "call",
       "signature": {
@@ -74,14 +74,14 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.wasm",
+              "extension": "tket.wasm",
               "id": "context",
               "args": [],
               "bound": "A"
             },
             {
               "t": "Opaque",
-              "extension": "tket2.wasm",
+              "extension": "tket.wasm",
               "id": "func",
               "args": [
                 {
@@ -128,14 +128,14 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket2.wasm",
+              "extension": "tket.wasm",
               "id": "context",
               "args": [],
               "bound": "A"
             },
             {
               "t": "Opaque",
-              "extension": "tket2.futures",
+              "extension": "tket.futures",
               "id": "Future",
               "args": [
                 {
@@ -163,7 +163,7 @@
       "binary": false
     },
     "dispose_context": {
-      "extension": "tket2.wasm",
+      "extension": "tket.wasm",
       "name": "dispose_context",
       "description": "dispose_context",
       "signature": {
@@ -172,7 +172,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.wasm",
+              "extension": "tket.wasm",
               "id": "context",
               "args": [],
               "bound": "A"
@@ -184,7 +184,7 @@
       "binary": false
     },
     "get_context": {
-      "extension": "tket2.wasm",
+      "extension": "tket.wasm",
       "name": "get_context",
       "description": "get_context",
       "signature": {
@@ -204,7 +204,7 @@
                 [
                   {
                     "t": "Opaque",
-                    "extension": "tket2.wasm",
+                    "extension": "tket.wasm",
                     "id": "context",
                     "args": [],
                     "bound": "A"
@@ -218,7 +218,7 @@
       "binary": false
     },
     "lookup": {
-      "extension": "tket2.wasm",
+      "extension": "tket.wasm",
       "name": "lookup",
       "description": "lookup",
       "signature": {
@@ -245,7 +245,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.wasm",
+              "extension": "tket.wasm",
               "id": "module",
               "args": [],
               "bound": "C"
@@ -254,7 +254,7 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket2.wasm",
+              "extension": "tket.wasm",
               "id": "func",
               "args": [
                 {

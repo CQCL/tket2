@@ -2,7 +2,7 @@
 //! quantum operations.
 //!
 //! In the case of lazy operations,
-//! laziness is represented by returning `tket2.futures.Future` classical
+//! laziness is represented by returning `tket.futures.Future` classical
 //! values. Qubits are never lazy.
 use std::{
     str::FromStr,
@@ -43,13 +43,13 @@ mod lower;
 use lower::pi_mul_f64;
 pub use lower::{check_lowered, lower_tk2_op, LowerTk2Error, LowerTketToQSystemPass};
 
-/// The "tket2.qsystem" extension id.
-pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.qsystem");
-/// The "tket2.qsystem" extension version.
-pub const EXTENSION_VERSION: Version = Version::new(0, 4, 1);
+/// The "tket.qsystem" extension id.
+pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.qsystem");
+/// The "tket.qsystem" extension version.
+pub const EXTENSION_VERSION: Version = Version::new(0, 5, 0);
 
 lazy_static! {
-    /// The "tket2.qsystem" extension.
+    /// The "tket.qsystem" extension.
     pub static ref EXTENSION: Arc<Extension> = {
          Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
             QSystemOp::load_all_ops( ext, ext_ref).unwrap();
@@ -57,7 +57,7 @@ lazy_static! {
         })
     };
 
-    /// Extension registry including the "tket2.qsystem" extension and
+    /// Extension registry including the "tket.qsystem" extension and
     /// dependencies.
     pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new([
         EXTENSION.to_owned(),
@@ -168,10 +168,10 @@ impl MakeRegisteredOp for QSystemOp {
     }
 }
 
-/// The name of the "tket2.qsystem.RuntimeBarrier" operation.
+/// The name of the "tket.qsystem.RuntimeBarrier" operation.
 pub const RUNTIME_BARRIER_NAME: OpName = OpName::new_inline("RuntimeBarrier");
 
-/// Helper struct for the "tket2.qsystem.RuntimeBarrier" operation definition.
+/// Helper struct for the "tket.qsystem.RuntimeBarrier" operation definition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RuntimeBarrierDef;
 
@@ -224,78 +224,78 @@ impl MakeOpDef for RuntimeBarrierDef {
 }
 
 /// An extension trait for [Dataflow] providing methods to add
-/// "tket2.qsystem" operations.
+/// "tket.qsystem" operations.
 pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
-    /// Add a "tket2.qsystem.LazyMeasure" op.
+    /// Add a "tket.qsystem.LazyMeasure" op.
     fn add_lazy_measure(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::LazyMeasure, [qb])?
             .out_wire(0))
     }
 
-    /// Add a "tket2.qsystem.LazyMeasureLeaked" op.
+    /// Add a "tket.qsystem.LazyMeasureLeaked" op.
     fn add_lazy_measure_leaked(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::LazyMeasureLeaked, [qb])?
             .out_wire(0))
     }
 
-    /// Add a "tket2.qsystem.LazyMeasureReset" op.
+    /// Add a "tket.qsystem.LazyMeasureReset" op.
     fn add_lazy_measure_reset(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::LazyMeasureReset, [qb])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.qsystem.Measure" op.
+    /// Add a "tket.qsystem.Measure" op.
     fn add_measure(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         Ok(self.add_dataflow_op(QSystemOp::Measure, [qb])?.out_wire(0))
     }
 
-    /// Add a "tket2.qsystem.Reset" op.
+    /// Add a "tket.qsystem.Reset" op.
     fn add_reset(&mut self, qb: Wire) -> Result<Wire, BuildError> {
         Ok(self.add_dataflow_op(QSystemOp::Reset, [qb])?.out_wire(0))
     }
 
-    /// Add a maximally entangling "tket2.qsystem.ZZPhase(pi/2)" op.
+    /// Add a maximally entangling "tket.qsystem.ZZPhase(pi/2)" op.
     fn build_zz_max(&mut self, qb1: Wire, qb2: Wire) -> Result<[Wire; 2], BuildError> {
         let pi_2 = pi_mul_f64(self, 0.5);
         self.add_zz_phase(qb1, qb2, pi_2)
     }
 
-    /// Add a "tket2.qsystem.ZZPhase" op.
+    /// Add a "tket.qsystem.ZZPhase" op.
     fn add_zz_phase(&mut self, qb1: Wire, qb2: Wire, angle: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::ZZPhase, [qb1, qb2, angle])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.qsystem.PhasedX" op.
+    /// Add a "tket.qsystem.PhasedX" op.
     fn add_phased_x(&mut self, qb: Wire, angle1: Wire, angle2: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::PhasedX, [qb, angle1, angle2])?
             .out_wire(0))
     }
 
-    /// Add a "tket2.qsystem.Rz" op.
+    /// Add a "tket.qsystem.Rz" op.
     fn add_rz(&mut self, qb: Wire, angle: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(QSystemOp::Rz, [qb, angle])?
             .out_wire(0))
     }
 
-    /// Add a "tket2.qsystem.TryQAlloc" op.
+    /// Add a "tket.qsystem.TryQAlloc" op.
     fn add_try_alloc(&mut self) -> Result<Wire, BuildError> {
         Ok(self.add_dataflow_op(QSystemOp::TryQAlloc, [])?.out_wire(0))
     }
 
-    /// Add a "tket2.qsystem.QFree" op.
+    /// Add a "tket.qsystem.QFree" op.
     fn add_qfree(&mut self, qb: Wire) -> Result<(), BuildError> {
         self.add_dataflow_op(QSystemOp::QFree, [qb])?;
         Ok(())
     }
 
-    /// Add a "tket2.qsystem.MeasureReset" op.
+    /// Add a "tket.qsystem.MeasureReset" op.
     /// This operation is equivalent to a `Measure` followed by a `Reset`.
     fn add_measure_reset(&mut self, qb: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
@@ -303,7 +303,7 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
             .outputs_arr())
     }
 
-    /// Add a "tket2.qsystem.RuntimeBarrier" op.
+    /// Add a "tket.qsystem.RuntimeBarrier" op.
     fn add_runtime_barrier(&mut self, qbs: Wire, array_size: u64) -> Result<Wire, BuildError> {
         let op = runtime_barrier_ext_op(array_size)?;
         Ok(self.add_dataflow_op(op, [qbs])?.out_wire(0))

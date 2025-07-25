@@ -1,4 +1,4 @@
-//! LLVM lowering implementations for the "tket2.qsystem.random" extension.
+//! LLVM lowering implementations for the "tket.qsystem.random" extension.
 
 use tket::hugr::{self, llvm::inkwell};
 
@@ -14,7 +14,7 @@ use inkwell::values::{BasicValueEnum, FunctionValue};
 use tket::hugr::ops::ExtensionOp;
 use tket::hugr::{HugrView, Node};
 
-/// Codegen extension for `tket2.qsystem.random` extension.
+/// Codegen extension for `tket.qsystem.random` extension.
 pub struct RandomCodegenExtension;
 
 impl CodegenExtension for RandomCodegenExtension {
@@ -38,7 +38,7 @@ fn rng_context_type(context: &Context) -> BasicTypeEnum<'_> {
     context.struct_type(&[], false).into()
 }
 
-/// Lower the `tket2.qsystem.random` extension.
+/// Lower the `tket.qsystem.random` extension.
 struct RandomEmitter<'c, 'd, 'e, H: HugrView<Node = Node>>(&'d mut EmitFuncContext<'c, 'e, H>);
 
 impl<'c, H: HugrView<Node = Node>> RandomEmitter<'c, '_, '_, H> {
@@ -92,7 +92,7 @@ impl<'c, H: HugrView<Node = Node>> RandomEmitter<'c, '_, '_, H> {
             .finish(self.builder(), [result, self.rng_context()])
     }
 
-    /// Function to help lower the `tket2.qsystem.random` extension.
+    /// Function to help lower the `tket.qsystem.random` extension.
     fn emit(&self, args: EmitOpArgs<'c, '_, ExtensionOp, H>, op: RandomOp) -> Result<()> {
         match op {
             RandomOp::RandomInt => {

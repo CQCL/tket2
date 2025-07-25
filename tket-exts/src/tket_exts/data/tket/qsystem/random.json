@@ -1,9 +1,9 @@
 {
-  "version": "0.1.0",
-  "name": "tket2.qsystem.random",
+  "version": "0.2.0",
+  "name": "tket.qsystem.random",
   "types": {
     "context": {
-      "extension": "tket2.qsystem.random",
+      "extension": "tket.qsystem.random",
       "name": "context",
       "params": [],
       "description": "The linear RNG context type",
@@ -15,7 +15,7 @@
   },
   "operations": {
     "DeleteRNGContext": {
-      "extension": "tket2.qsystem.random",
+      "extension": "tket.qsystem.random",
       "name": "DeleteRNGContext",
       "description": "Discard the given RNG context.",
       "signature": {
@@ -24,7 +24,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.qsystem.random",
+              "extension": "tket.qsystem.random",
               "id": "context",
               "args": [],
               "bound": "A"
@@ -36,7 +36,7 @@
       "binary": false
     },
     "NewRNGContext": {
-      "extension": "tket2.qsystem.random",
+      "extension": "tket.qsystem.random",
       "name": "NewRNGContext",
       "description": "Seed the RNG and return a new RNG context. Required before using other RNG ops, can be called only once.",
       "signature": {
@@ -65,7 +65,7 @@
                 [
                   {
                     "t": "Opaque",
-                    "extension": "tket2.qsystem.random",
+                    "extension": "tket.qsystem.random",
                     "id": "context",
                     "args": [],
                     "bound": "A"
@@ -79,7 +79,7 @@
       "binary": false
     },
     "RandomFloat": {
-      "extension": "tket2.qsystem.random",
+      "extension": "tket.qsystem.random",
       "name": "RandomFloat",
       "description": "Generate a random floating point value in the range [0,1).",
       "signature": {
@@ -88,7 +88,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.qsystem.random",
+              "extension": "tket.qsystem.random",
               "id": "context",
               "args": [],
               "bound": "A"
@@ -104,7 +104,7 @@
             },
             {
               "t": "Opaque",
-              "extension": "tket2.qsystem.random",
+              "extension": "tket.qsystem.random",
               "id": "context",
               "args": [],
               "bound": "A"
@@ -115,7 +115,7 @@
       "binary": false
     },
     "RandomInt": {
-      "extension": "tket2.qsystem.random",
+      "extension": "tket.qsystem.random",
       "name": "RandomInt",
       "description": "Generate a random 32-bit unsigned integer.",
       "signature": {
@@ -124,7 +124,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.qsystem.random",
+              "extension": "tket.qsystem.random",
               "id": "context",
               "args": [],
               "bound": "A"
@@ -145,7 +145,7 @@
             },
             {
               "t": "Opaque",
-              "extension": "tket2.qsystem.random",
+              "extension": "tket.qsystem.random",
               "id": "context",
               "args": [],
               "bound": "A"
@@ -156,7 +156,7 @@
       "binary": false
     },
     "RandomIntBounded": {
-      "extension": "tket2.qsystem.random",
+      "extension": "tket.qsystem.random",
       "name": "RandomIntBounded",
       "description": "Generate a random 32-bit unsigned integer less than `bound`.",
       "signature": {
@@ -165,7 +165,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.qsystem.random",
+              "extension": "tket.qsystem.random",
               "id": "context",
               "args": [],
               "bound": "A"
@@ -198,7 +198,7 @@
             },
             {
               "t": "Opaque",
-              "extension": "tket2.qsystem.random",
+              "extension": "tket.qsystem.random",
               "id": "context",
               "args": [],
               "bound": "A"

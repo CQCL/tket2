@@ -1,4 +1,4 @@
-//! LLVM lowering implementations for "tket2.debug" extension.
+//! LLVM lowering implementations for "tket.debug" extension.
 
 use crate::llvm::prelude::emit_global_string;
 use anyhow::{anyhow, bail, Result};

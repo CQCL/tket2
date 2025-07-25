@@ -1,4 +1,4 @@
-//! LLVM codegen for the `tket2.qsystem.utils` extension.
+//! LLVM codegen for the `tket.qsystem.utils` extension.
 use tket::hugr::{self};
 
 use crate::extension::utils::UtilsOp;

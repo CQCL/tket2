@@ -5,7 +5,7 @@ expression: mod_str
 ; ModuleID = 'test_context'
 source_filename = "test_context"
 
-@0 = private unnamed_addr constant [47 x i8] c"tket2.rotation.from_halfturns_unchecked failed\00", align 1
+@0 = private unnamed_addr constant [46 x i8] c"tket.rotation.from_halfturns_unchecked failed\00", align 1
 @prelude.panic_template = private unnamed_addr constant [34 x i8] c"Program panicked (signal %i): %s\0A\00", align 1
 @1 = private unnamed_addr constant [37 x i8] c"Expected variant 1 but got variant 0\00", align 1
 @prelude.panic_template.1 = private unnamed_addr constant [34 x i8] c"Program panicked (signal %i): %s\0A\00", align 1
@@ -24,7 +24,7 @@ entry_block:                                      ; preds = %alloca_block
   br i1 %6, label %9, label %7
 
 7:                                                ; preds = %entry_block
-  %8 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([34 x i8], [34 x i8]* @prelude.panic_template, i32 0, i32 0), i32 1, i8* getelementptr inbounds ([47 x i8], [47 x i8]* @0, i32 0, i32 0))
+  %8 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([34 x i8], [34 x i8]* @prelude.panic_template, i32 0, i32 0), i32 1, i8* getelementptr inbounds ([46 x i8], [46 x i8]* @0, i32 0, i32 0))
   call void @abort()
   unreachable
 

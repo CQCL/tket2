@@ -1,10 +1,10 @@
 {
-  "version": "0.1.0",
-  "name": "tket2.guppy",
+  "version": "0.2.0",
+  "name": "tket.guppy",
   "types": {},
   "operations": {
     "drop": {
-      "extension": "tket2.guppy",
+      "extension": "tket.guppy",
       "name": "drop",
       "description": "Drop the input wire. Applicable to guppy affine types only.",
       "signature": {

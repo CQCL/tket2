@@ -16,10 +16,10 @@ use strum::{EnumIter, EnumString, IntoStaticStr};
 use lazy_static::lazy_static;
 
 /// Name of tket rotation extension.
-pub const ROTATION_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.rotation");
+pub const ROTATION_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.rotation");
 
 /// Current version of the TKET rotation extension
-pub const ROTATION_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+pub const ROTATION_EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
     /// The extension definition for TKET rotation type and ops.
@@ -216,23 +216,23 @@ pub(super) fn add_to_extension(extension: &mut Extension, extension_ref: &Weak<E
 }
 
 /// An extension trait for [Dataflow] providing methods to add
-/// "tket2.rotation" operations.
+/// "tket.rotation" operations.
 pub trait RotationOpBuilder: Dataflow {
-    /// Add a "tket2.rotation.from_halfturns" op.
+    /// Add a "tket.rotation.from_halfturns" op.
     fn add_from_halfturns(&mut self, turns: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(RotationOp::from_halfturns, [turns])?
             .out_wire(0))
     }
 
-    /// Add a "tket2.rotation.from_halfturns_unchecked" op.
+    /// Add a "tket.rotation.from_halfturns_unchecked" op.
     fn add_from_halfturns_unchecked(&mut self, turns: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(RotationOp::from_halfturns_unchecked, [turns])?
             .out_wire(0))
     }
 
-    /// Add a "tket2.rotation.to_halfturns" op.
+    /// Add a "tket.rotation.to_halfturns" op.
     fn add_to_halfturns(&mut self, rotation: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(RotationOp::to_halfturns, [rotation])?

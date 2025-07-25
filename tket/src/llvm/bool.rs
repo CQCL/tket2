@@ -1,4 +1,4 @@
-//! `hugr-llvm` codegen extension for `tket2.bool`.
+//! `hugr-llvm` codegen extension for `tket.bool`.
 
 use hugr::llvm::emit::emit_value;
 use hugr::llvm::emit::func::EmitFuncContext;
@@ -25,7 +25,7 @@ fn llvm_bool_type<'c>(ts: &TypingSession<'c, '_>) -> IntType<'c> {
     ts.iw_context().bool_type()
 }
 
-/// A codegen extension for the `tket2.bool` extension.
+/// A codegen extension for the `tket.bool` extension.
 #[derive(Clone)]
 pub struct BoolCodegenExtension;
 

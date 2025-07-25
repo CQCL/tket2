@@ -1,10 +1,10 @@
 {
-  "version": "0.1.0",
-  "name": "tket2.result",
+  "version": "0.2.0",
+  "name": "tket.result",
   "types": {},
   "operations": {
     "result_array_bool": {
-      "extension": "tket2.result",
+      "extension": "tket.result",
       "name": "result_array_bool",
       "description": "Report an array of boolean results.",
       "signature": {
@@ -50,7 +50,7 @@
       "binary": false
     },
     "result_array_f64": {
-      "extension": "tket2.result",
+      "extension": "tket.result",
       "name": "result_array_f64",
       "description": "Report an array of floating-point results.",
       "signature": {
@@ -98,7 +98,7 @@
       "binary": false
     },
     "result_array_int": {
-      "extension": "tket2.result",
+      "extension": "tket.result",
       "name": "result_array_int",
       "description": "Report an array of signed integer results.",
       "signature": {
@@ -159,7 +159,7 @@
       "binary": false
     },
     "result_array_uint": {
-      "extension": "tket2.result",
+      "extension": "tket.result",
       "name": "result_array_uint",
       "description": "Report an array of unsigned integer results.",
       "signature": {
@@ -220,7 +220,7 @@
       "binary": false
     },
     "result_bool": {
-      "extension": "tket2.result",
+      "extension": "tket.result",
       "name": "result_bool",
       "description": "Report a boolean result.",
       "signature": {
@@ -243,7 +243,7 @@
       "binary": false
     },
     "result_f64": {
-      "extension": "tket2.result",
+      "extension": "tket.result",
       "name": "result_f64",
       "description": "Report a floating-point result.",
       "signature": {
@@ -268,7 +268,7 @@
       "binary": false
     },
     "result_int": {
-      "extension": "tket2.result",
+      "extension": "tket.result",
       "name": "result_int",
       "description": "Report a signed integer result.",
       "signature": {
@@ -306,7 +306,7 @@
       "binary": false
     },
     "result_uint": {
-      "extension": "tket2.result",
+      "extension": "tket.result",
       "name": "result_uint",
       "description": "Report an unsigned integer result.",
       "signature": {

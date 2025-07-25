@@ -1,4 +1,4 @@
-//! LLVM lowering implementations for "tket2.futures" operations.
+//! LLVM lowering implementations for "tket.futures" operations.
 
 use crate::extension::futures::{self, FutureOp, FutureOpDef, FUTURE_TYPE_NAME};
 use anyhow::{anyhow, Result};

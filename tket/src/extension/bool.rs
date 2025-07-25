@@ -19,13 +19,13 @@ use lazy_static::lazy_static;
 use smol_str::SmolStr;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
-/// The ID of the `tket2.bool` extension.
-pub const BOOL_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.bool");
-/// The "tket2.bool" extension version
-pub const BOOL_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+/// The ID of the `tket.bool` extension.
+pub const BOOL_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.bool");
+/// The "tket.bool" extension version
+pub const BOOL_EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
-    /// The "tket2.bool" extension.
+    /// The "tket.bool" extension.
     pub static ref BOOL_EXTENSION: Arc<Extension>  = {
         Extension::new_arc(BOOL_EXTENSION_ID, BOOL_EXTENSION_VERSION, |ext, ext_ref| {
             let _ = add_bool_type_def(ext, ext_ref.clone()).unwrap();
@@ -50,7 +50,7 @@ fn add_bool_type_def(
     )
 }
 
-/// Returns a `tket2.bool` [CustomType].
+/// Returns a `tket.bool` [CustomType].
 pub fn bool_custom_type(extension_ref: &Weak<Extension>) -> CustomType {
     CustomType::new(
         BOOL_TYPE_NAME.to_owned(),
@@ -67,7 +67,7 @@ pub fn bool_type() -> Type {
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
-/// Structure for holding constant `tket2.bool` values.
+/// Structure for holding constant `tket.bool` values.
 pub struct ConstBool(bool);
 
 impl ConstBool {
@@ -114,7 +114,7 @@ impl CustomConst for ConstBool {
 )]
 #[allow(missing_docs, non_camel_case_types)]
 #[non_exhaustive]
-/// Simple enum of "tket2.bool" operations.
+/// Simple enum of "tket.bool" operations.
 pub enum BoolOp {
     // Gets a Hugr bool_t value from the opaque type.
     read,
@@ -159,13 +159,13 @@ impl MakeOpDef for BoolOp {
 
     fn description(&self) -> String {
         match self {
-            BoolOp::read => "Convert a tket2.bool into a Hugr bool_t (a unit sum).".into(),
-            BoolOp::make_opaque => "Convert a Hugr bool_t (a unit sum) into an tket2.bool.".into(),
-            BoolOp::eq => "Equality between two tket2.bools.".into(),
-            BoolOp::not => "Negation of a tket2.bool.".into(),
-            BoolOp::and => "Logical AND between two tket2.bools.".into(),
-            BoolOp::or => "Logical OR between two tket2.bools.".into(),
-            BoolOp::xor => "Logical XOR between two tket2.bools.".into(),
+            BoolOp::read => "Convert a tket.bool into a Hugr bool_t (a unit sum).".into(),
+            BoolOp::make_opaque => "Convert a Hugr bool_t (a unit sum) into an tket.bool.".into(),
+            BoolOp::eq => "Equality between two tket.bools.".into(),
+            BoolOp::not => "Negation of a tket.bool.".into(),
+            BoolOp::and => "Logical AND between two tket.bools.".into(),
+            BoolOp::or => "Logical OR between two tket.bools.".into(),
+            BoolOp::xor => "Logical XOR between two tket.bools.".into(),
         }
     }
 
@@ -183,52 +183,52 @@ impl MakeRegisteredOp for BoolOp {
         Arc::downgrade(&BOOL_EXTENSION)
     }
 }
-/// An extension trait for [Dataflow] providing methods to add "tket2.bool"
+/// An extension trait for [Dataflow] providing methods to add "tket.bool"
 /// operations.
 pub trait BoolOpBuilder: Dataflow {
-    /// Add a "tket2.bool.read" op.
+    /// Add a "tket.bool.read" op.
     fn add_bool_read(&mut self, bool_input: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
             .add_dataflow_op(BoolOp::read, [bool_input])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.bool.make_opaque" op.
+    /// Add a "tket.bool.make_opaque" op.
     fn add_bool_make_opaque(&mut self, sum_input: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
             .add_dataflow_op(BoolOp::make_opaque, [sum_input])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.bool.Eq" op.
+    /// Add a "tket.bool.Eq" op.
     fn add_eq(&mut self, bool1: Wire, bool2: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
             .add_dataflow_op(BoolOp::eq, [bool1, bool2])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.bool.Not" op.
+    /// Add a "tket.bool.Not" op.
     fn add_not(&mut self, bool_input: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
             .add_dataflow_op(BoolOp::not, [bool_input])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.bool.And" op.
+    /// Add a "tket.bool.And" op.
     fn add_and(&mut self, bool1: Wire, bool2: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
             .add_dataflow_op(BoolOp::and, [bool1, bool2])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.bool.Or" op.
+    /// Add a "tket.bool.Or" op.
     fn add_or(&mut self, bool1: Wire, bool2: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
             .add_dataflow_op(BoolOp::or, [bool1, bool2])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.bool.Xor" op.
+    /// Add a "tket.bool.Xor" op.
     fn add_xor(&mut self, bool1: Wire, bool2: Wire) -> Result<[Wire; 1], BuildError> {
         Ok(self
             .add_dataflow_op(BoolOp::xor, [bool1, bool2])?

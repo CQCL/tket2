@@ -1,4 +1,4 @@
-//! LLVM lowering implementations for "tket2.qystem" operations.
+//! LLVM lowering implementations for "tket.qystem" operations.
 
 use hugr::llvm::extension::PreludeCodegen;
 use hugr::llvm::inkwell::types::FunctionType;
@@ -144,7 +144,7 @@ impl<PCG: PreludeCodegen> QSystemCodegenExtension<PCG> {
         args.outputs.finish(context.builder(), outputs)
     }
 
-    /// Function to help lower the `tket2.qsystem` extension.
+    /// Function to help lower the `tket.qsystem` extension.
     fn emit<'c, H: HugrView<Node = Node>>(
         &self,
         context: &mut EmitFuncContext<'c, '_, H>,

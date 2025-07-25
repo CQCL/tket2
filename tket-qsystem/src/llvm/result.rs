@@ -1,4 +1,4 @@
-//! LLVM lowering implementations for "tket2.results" extension.
+//! LLVM lowering implementations for "tket.results" extension.
 
 use crate::extension::result::{ResultArgs, ResultOp, ResultOpDef};
 use crate::llvm::prelude::emit_global_string;

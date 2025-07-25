@@ -1,9 +1,9 @@
 {
-  "version": "0.1.0",
-  "name": "tket2.futures",
+  "version": "0.2.0",
+  "name": "tket.futures",
   "types": {
     "Future": {
-      "extension": "tket2.futures",
+      "extension": "tket.futures",
       "name": "Future",
       "params": [
         {
@@ -20,7 +20,7 @@
   },
   "operations": {
     "Dup": {
-      "extension": "tket2.futures",
+      "extension": "tket.futures",
       "name": "Dup",
       "description": "Duplicate a Future. The original Future is consumed and two Futures are returned",
       "signature": {
@@ -34,7 +34,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.futures",
+              "extension": "tket.futures",
               "id": "Future",
               "args": [
                 {
@@ -52,7 +52,7 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket2.futures",
+              "extension": "tket.futures",
               "id": "Future",
               "args": [
                 {
@@ -68,7 +68,7 @@
             },
             {
               "t": "Opaque",
-              "extension": "tket2.futures",
+              "extension": "tket.futures",
               "id": "Future",
               "args": [
                 {
@@ -88,7 +88,7 @@
       "binary": false
     },
     "Free": {
-      "extension": "tket2.futures",
+      "extension": "tket.futures",
       "name": "Free",
       "description": "Consume a future without reading it.",
       "signature": {
@@ -102,7 +102,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.futures",
+              "extension": "tket.futures",
               "id": "Future",
               "args": [
                 {
@@ -123,7 +123,7 @@
       "binary": false
     },
     "Read": {
-      "extension": "tket2.futures",
+      "extension": "tket.futures",
       "name": "Read",
       "description": "Read a value from a Future, consuming it",
       "signature": {
@@ -137,7 +137,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.futures",
+              "extension": "tket.futures",
               "id": "Future",
               "args": [
                 {

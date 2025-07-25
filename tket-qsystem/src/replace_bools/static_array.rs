@@ -1,4 +1,4 @@
-/// Provides a `ReplaceStaticArrayBoolPass` which replaces static arrays containing `tket2.bool` with
+/// Provides a `ReplaceStaticArrayBoolPass` which replaces static arrays containing `tket.bool` with
 /// static arrays containing `bool_t` values.
 use hugr::{
     algorithms::{
@@ -38,7 +38,7 @@ pub enum ReplaceStaticArrayBoolPassError {
 type Result<T> = std::result::Result<T, ReplaceStaticArrayBoolPassError>;
 
 /// Provides a `ReplaceStaticArrayBoolPass` which replaces static arrays
-/// containing `tket2.bool` with static arrays containing `bool_t` values.
+/// containing `tket.bool` with static arrays containing `bool_t` values.
 pub struct ReplaceStaticArrayBoolPass(ReplaceTypes);
 
 impl<H: HugrMut<Node = Node>> ComposablePass<H> for ReplaceStaticArrayBoolPass {
@@ -89,12 +89,12 @@ fn inner_replace_types() -> ReplaceTypes {
 /// it's replacements.
 ///
 /// `outer_replace_types`:
-///  * Replaces static array types that contain `tket2.bool` types
+///  * Replaces static array types that contain `tket.bool` types
 ///  * Replaces `StaticArrayValue`s that contain `ConstBool` values.
 ///  * Replaces `collection.static_array.get` and `collection.static_array.len`
 ///
 ///  `inner_replace_types`:
-///  * Replaces `tket2.bool` with `bool_t`
+///  * Replaces `tket.bool` with `bool_t`
 ///  * Replaces `ConstBool` with `bool_t`
 ///  * Replaces `StaticArrayValue`s that contain `ConstBool` values
 ///
@@ -258,7 +258,7 @@ fn build_new_to_old(
 
 fn get_op_dest(rt: &ReplaceTypes, old_elem_ty: Type) -> Option<NodeTemplate> {
     let hugr = {
-        // first we build a hugr using the "old" (i.e. containing tket2.bool) types
+        // first we build a hugr using the "old" (i.e. containing tket.bool) types
         let mut hugr1 = {
             let mut dfb = DFGBuilder::new(inout_sig(
                 vec![static_array_type(old_elem_ty.clone()), usize_t()],
@@ -271,7 +271,7 @@ fn get_op_dest(rt: &ReplaceTypes, old_elem_ty: Type) -> Option<NodeTemplate> {
                 .unwrap();
             dfb.finish_hugr_with_outputs([r]).unwrap()
         };
-        // now we apply `rt` to remove tket2.bool types
+        // now we apply `rt` to remove tket.bool types
         if !rt.run(&mut hugr1).unwrap() {
             None?
         }

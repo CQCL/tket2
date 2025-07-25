@@ -1,9 +1,9 @@
 {
-  "version": "0.1.0",
-  "name": "tket2.bool",
+  "version": "0.2.0",
+  "name": "tket.bool",
   "types": {
     "bool": {
-      "extension": "tket2.bool",
+      "extension": "tket.bool",
       "name": "bool",
       "params": [],
       "description": "An opaque bool type",
@@ -15,23 +15,23 @@
   },
   "operations": {
     "and": {
-      "extension": "tket2.bool",
+      "extension": "tket.bool",
       "name": "and",
-      "description": "Logical AND between two tket2.bools.",
+      "description": "Logical AND between two tket.bools.",
       "signature": {
         "params": [],
         "body": {
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
             },
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
@@ -40,7 +40,7 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
@@ -51,23 +51,23 @@
       "binary": false
     },
     "eq": {
-      "extension": "tket2.bool",
+      "extension": "tket.bool",
       "name": "eq",
-      "description": "Equality between two tket2.bools.",
+      "description": "Equality between two tket.bools.",
       "signature": {
         "params": [],
         "body": {
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
             },
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
@@ -76,7 +76,7 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
@@ -87,9 +87,9 @@
       "binary": false
     },
     "make_opaque": {
-      "extension": "tket2.bool",
+      "extension": "tket.bool",
       "name": "make_opaque",
-      "description": "Convert a Hugr bool_t (a unit sum) into an tket2.bool.",
+      "description": "Convert a Hugr bool_t (a unit sum) into an tket.bool.",
       "signature": {
         "params": [],
         "body": {
@@ -103,7 +103,7 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
@@ -114,16 +114,16 @@
       "binary": false
     },
     "not": {
-      "extension": "tket2.bool",
+      "extension": "tket.bool",
       "name": "not",
-      "description": "Negation of a tket2.bool.",
+      "description": "Negation of a tket.bool.",
       "signature": {
         "params": [],
         "body": {
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
@@ -132,7 +132,7 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
@@ -143,23 +143,23 @@
       "binary": false
     },
     "or": {
-      "extension": "tket2.bool",
+      "extension": "tket.bool",
       "name": "or",
-      "description": "Logical OR between two tket2.bools.",
+      "description": "Logical OR between two tket.bools.",
       "signature": {
         "params": [],
         "body": {
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
             },
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
@@ -168,7 +168,7 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
@@ -179,16 +179,16 @@
       "binary": false
     },
     "read": {
-      "extension": "tket2.bool",
+      "extension": "tket.bool",
       "name": "read",
-      "description": "Convert a tket2.bool into a Hugr bool_t (a unit sum).",
+      "description": "Convert a tket.bool into a Hugr bool_t (a unit sum).",
       "signature": {
         "params": [],
         "body": {
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
@@ -206,23 +206,23 @@
       "binary": false
     },
     "xor": {
-      "extension": "tket2.bool",
+      "extension": "tket.bool",
       "name": "xor",
-      "description": "Logical XOR between two tket2.bools.",
+      "description": "Logical XOR between two tket.bools.",
       "signature": {
         "params": [],
         "body": {
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
             },
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"
@@ -231,7 +231,7 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket2.bool",
+              "extension": "tket.bool",
               "id": "bool",
               "args": [],
               "bound": "C"

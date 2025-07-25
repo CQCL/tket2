@@ -18,13 +18,13 @@ use hugr::{
 };
 use lazy_static::lazy_static;
 
-/// The ID of the `tket2.debug` extension.
-pub const DEBUG_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.debug");
-/// The "tket2.debug" extension version
-pub const DEBUG_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+/// The ID of the `tket.debug` extension.
+pub const DEBUG_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.debug");
+/// The "tket.debug" extension version
+pub const DEBUG_EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
-    /// The "tket2.bool" extension.
+    /// The "tket.bool" extension.
     pub static ref DEBUG_EXTENSION: Arc<Extension>  = {
         Extension::new_arc(DEBUG_EXTENSION_ID, DEBUG_EXTENSION_VERSION, |ext, ext_ref| {
             StateResultDef.add_to_extension(ext, ext_ref).unwrap();
@@ -33,10 +33,10 @@ lazy_static! {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-/// A `tket2.StateResult` operation definition.
+/// A `tket.StateResult` operation definition.
 pub struct StateResultDef;
 
-/// Name of the `tket2.StateResult` operation.
+/// Name of the `tket.StateResult` operation.
 pub const STATE_RESULT_OP_ID: OpName = OpName::new_inline("StateResult");
 
 impl std::str::FromStr for StateResultDef {

@@ -11,16 +11,16 @@ use hugr::{
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
 
-/// The ID of the `tket2.guppy` extension.
-pub const GUPPY_EXTENSION_ID: ExtensionId = IdentList::new_unchecked("tket2.guppy");
-/// The "tket2.guppy" extension version.
-pub const GUPPY_EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+/// The ID of the `tket.guppy` extension.
+pub const GUPPY_EXTENSION_ID: ExtensionId = IdentList::new_unchecked("tket.guppy");
+/// The "tket.guppy" extension version.
+pub const GUPPY_EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 /// The drop operation, used to handle affine types in Guppy.
 pub const DROP_OP_NAME: SmolStr = SmolStr::new_inline("drop");
 
 lazy_static! {
-    /// The "tket2.bool" extension.
+    /// The "tket.bool" extension.
     pub static ref GUPPY_EXTENSION: Arc<Extension>  = {
         Extension::new_arc(GUPPY_EXTENSION_ID, GUPPY_EXTENSION_VERSION, |ext, ext_ref| {
             ext.add_op(DROP_OP_NAME,

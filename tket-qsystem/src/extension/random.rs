@@ -1,4 +1,4 @@
-//! This module defines the "tket2.qsystem.random" extension, which includes
+//! This module defines the "tket.qsystem.random" extension, which includes
 //! random number generation (RNG) functions available for Quantinuum systems.
 
 use std::sync::{Arc, Weak};
@@ -21,12 +21,12 @@ use smol_str::SmolStr;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
 /// The extension ID for the RNG extension.
-pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.qsystem.random");
-/// The version of the "tket2.qsystem.random" extension.
-pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
+pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.qsystem.random");
+/// The version of the "tket.qsystem.random" extension.
+pub const EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
-    /// The "tket2.qsystem.random" extension.
+    /// The "tket.qsystem.random" extension.
     pub static ref EXTENSION: Arc<Extension> = {
          Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
             add_random_type_defs(ext, ext_ref).unwrap();
@@ -34,14 +34,14 @@ lazy_static! {
         })
     };
 
-    /// Extension registry including the "tket2.qsystem.random" extension and
+    /// Extension registry including the "tket.qsystem.random" extension and
     /// dependencies.
     pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new([
         EXTENSION.to_owned(),
         PRELUDE.to_owned(),
     ]);
 
-    /// The name of the `tket2.qsystem.random.context` type.
+    /// The name of the `tket.qsystem.random.context` type.
     pub static ref CONTEXT_TYPE_NAME: SmolStr = SmolStr::new_inline("context");
 }
 
@@ -180,37 +180,37 @@ impl MakeRegisteredOp for RandomOp {
 }
 
 /// An extension trait for [Dataflow] providing methods to add
-/// "tket2.qsystem.random" operations.
+/// "tket.qsystem.random" operations.
 pub trait RandomOpBuilder: Dataflow + UnwrapBuilder {
-    /// Add a "tket2.qsystem.random.random_int" op.
+    /// Add a "tket.qsystem.random.random_int" op.
     fn add_random_int(&mut self, ctx: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
             .add_dataflow_op(RandomOp::RandomInt, [ctx])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.qsystem.random.random_float" op.
+    /// Add a "tket.qsystem.random.random_float" op.
     fn add_random_float(&mut self, ctx: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
             .add_dataflow_op(RandomOp::RandomFloat, [ctx])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.qsystem.random.random_int_bounded" op.
+    /// Add a "tket.qsystem.random.random_int_bounded" op.
     fn add_random_int_bounded(&mut self, ctx: Wire, bound: Wire) -> Result<[Wire; 2], BuildError> {
         Ok(self
             .add_dataflow_op(RandomOp::RandomIntBounded, [ctx, bound])?
             .outputs_arr())
     }
 
-    /// Add a "tket2.qsystem.random.new_rng_context" op.
+    /// Add a "tket.qsystem.random.new_rng_context" op.
     fn add_new_rng_context(&mut self, seed: Wire) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(RandomOp::NewRNGContext, [seed])?
             .out_wire(0))
     }
 
-    /// Add a "tket2.qsystem.random.delete_rng_context" op.
+    /// Add a "tket.qsystem.random.delete_rng_context" op.
     fn add_delete_rng_context(&mut self, ctx: Wire) -> Result<(), BuildError> {
         self.add_dataflow_op(RandomOp::DeleteRNGContext, [ctx])?;
         Ok(())

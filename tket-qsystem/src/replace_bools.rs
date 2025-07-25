@@ -1,4 +1,4 @@
-//! Provides a `ReplaceBoolPass` which replaces the tket2.bool type and
+//! Provides a `ReplaceBoolPass` which replaces the tket.bool type and
 //! lazifies measure operations.
 mod static_array;
 
@@ -42,15 +42,15 @@ pub enum ReplaceBoolPassError<N> {
     NonLocalEdgesError(FindNonLocalEdgesError<N>),
     /// There was an error while replacing the type.
     ReplacementError(ReplaceTypesError),
-    /// There was an error while transforming static arrays containing tket2.bool
+    /// There was an error while transforming static arrays containing tket.bool
     /// to static arrays of bool_t.
     ReplaceStaticArrayBoolPassError(ReplaceStaticArrayBoolPassError),
 }
 
-/// A HUGR -> HUGR pass which replaces the `tket2.bool`, enabling lazifying of measure
+/// A HUGR -> HUGR pass which replaces the `tket.bool`, enabling lazifying of measure
 /// operations.
 ///
-/// The `tket2.bool` type is replaced by a sum type of `bool_t` (the standard
+/// The `tket.bool` type is replaced by a sum type of `bool_t` (the standard
 /// HUGR bool type represented by a unit sum) and `future(bool_t)`, with its operations
 /// being turned into conditionals that read the future if necessary.
 ///
@@ -80,7 +80,7 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for ReplaceBoolPass {
     }
 }
 
-/// The type each tket2.bool is replaced with.
+/// The type each tket.bool is replaced with.
 fn bool_dest() -> Type {
     SumType::new([bool_t(), future_type(bool_t())]).into()
 }
@@ -213,11 +213,11 @@ fn measure_reset_dest() -> NodeTemplate {
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
-/// The configuration used for replacing tket2.bool extension types and ops.
+/// The configuration used for replacing tket.bool extension types and ops.
 fn lowerer() -> ReplaceTypes {
     let mut lw = ReplaceTypes::default();
 
-    // Replace tket2.bool type.
+    // Replace tket.bool type.
     lw.replace_type(bool_type().as_extension().unwrap().clone(), bool_dest());
     let dup_op = FutureOp {
         op: FutureOpDef::Dup,
@@ -239,7 +239,7 @@ fn lowerer() -> ReplaceTypes {
         )
         .unwrap();
 
-    // Replace tket2.bool constants.
+    // Replace tket.bool constants.
     lw.replace_consts(
         bool_type().as_extension().unwrap().clone(),
         |const_bool, _| {
@@ -258,7 +258,7 @@ fn lowerer() -> ReplaceTypes {
         },
     );
 
-    // Replace all tket2.bool ops.
+    // Replace all tket.bool ops.
     let read_op = BoolOp::read.to_extension_op().unwrap();
     lw.replace_op(&read_op, read_op_dest());
     let make_opaque_op = BoolOp::make_opaque.to_extension_op().unwrap();

@@ -1,10 +1,10 @@
 {
-  "version": "0.2.0",
-  "name": "tket2.qsystem.utils",
+  "version": "0.3.0",
+  "name": "tket.qsystem.utils",
   "types": {},
   "operations": {
     "GetCurrentShot": {
-      "extension": "tket2.qsystem.utils",
+      "extension": "tket.qsystem.utils",
       "name": "GetCurrentShot",
       "description": "Get current shot number.",
       "signature": {
