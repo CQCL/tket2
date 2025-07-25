@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.12.0](https://github.com/CQCL/tket2/compare/tket2-py-v0.11.1...tket2-py-v0.12.0) (2025-07-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* Updated public dependency `hugr` to `0.22.0`
+* Public `hugr` dependency updated to `0.21.0`.
+
+### Features
+
+* Add guppy extension with drop operation ([#962](https://github.com/CQCL/tket2/issues/962)) ([6e1af12](https://github.com/CQCL/tket2/commit/6e1af12bfb1e103699aeedb4222ee26031268998))
+* Update `hugr` dependency to `0.22.0` ([#980](https://github.com/CQCL/tket2/issues/980)) ([e12c9b2](https://github.com/CQCL/tket2/commit/e12c9b269cf9b2db92bd2e2b9dac2dfd54ed3738))
+* Update to `hugr 0.21` ([#965](https://github.com/CQCL/tket2/issues/965)) ([6017450](https://github.com/CQCL/tket2/commit/601745019579fc50461a43e02347304f37dc8d97))
+
 ## [0.11.1](https://github.com/CQCL/tket2/compare/tket2-py-v0.11.0...tket2-py-v0.11.1) (2025-07-09)
 
 
