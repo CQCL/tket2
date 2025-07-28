@@ -11,6 +11,7 @@ use hugr::extension::prelude::qb_t;
 use hugr::llvm::custom::CodegenExtension;
 use hugr::llvm::emit::func::{build_option, EmitFuncContext};
 use hugr::llvm::emit::{emit_value, EmitOpArgs};
+use inkwell::module::Linkage;
 use inkwell::types::BasicType;
 use inkwell::values::{BasicValueEnum, FunctionValue, IntValue};
 use tket::hugr::llvm::CodegenExtsBuilder;
@@ -151,6 +152,8 @@ impl<PCG: PreludeCodegen> QSystemCodegenExtension<PCG> {
         args: EmitOpArgs<'c, '_, ExtensionOp, H>,
         op: QSystemOp,
     ) -> Result<()> {
+        // Set the function linkage to private for all operations
+        context.func().set_linkage(Linkage::Private);
         match op {
             // Rotation about Z
             QSystemOp::Rz => self.emit_impl(context, args, RuntimeFunction::Rz, &[0, 1], &[0]),
