@@ -78,6 +78,23 @@ impl Tk2Op {
         <Self as MakeRegisteredOp>::to_extension_op(self)
             .expect("Failed to convert to extension op.")
     }
+
+    /// The function signature of operation
+    pub fn fn_signature(&self) -> Signature {
+        use Tk2Op::*;
+        match self {
+            H | T | S | V | X | Y | Z | Tdg | Sdg | Vdg | Reset => Signature::new_endo(qb_t()),
+            CX | CZ | CY => Signature::new_endo(vec![qb_t(); 2]),
+            Toffoli => Signature::new_endo(vec![qb_t(); 3]),
+            Measure => Signature::new(qb_t(), vec![qb_t(), bool_t()]),
+            MeasureFree => Signature::new(qb_t(), bool_type()),
+            Rz | Rx | Ry => Signature::new(vec![qb_t(), rotation_type()], qb_t()),
+            CRz => Signature::new(vec![qb_t(), qb_t(), rotation_type()], vec![qb_t(); 2]),
+            QAlloc => Signature::new(type_row![], qb_t()),
+            TryQAlloc => Signature::new(type_row![], Type::from(option_type(qb_t()))),
+            QFree => Signature::new(qb_t(), type_row![]),
+        }
+    }
 }
 
 /// Whether an op is a given Tk2Op.
@@ -109,20 +126,7 @@ impl MakeOpDef for Tk2Op {
     }
 
     fn init_signature(&self, _extension_ref: &std::sync::Weak<hugr::Extension>) -> SignatureFunc {
-        use Tk2Op::*;
-        match self {
-            H | T | S | V | X | Y | Z | Tdg | Sdg | Vdg | Reset => Signature::new_endo(qb_t()),
-            CX | CZ | CY => Signature::new_endo(vec![qb_t(); 2]),
-            Toffoli => Signature::new_endo(vec![qb_t(); 3]),
-            Measure => Signature::new(qb_t(), vec![qb_t(), bool_t()]),
-            MeasureFree => Signature::new(qb_t(), bool_type()),
-            Rz | Rx | Ry => Signature::new(vec![qb_t(), rotation_type()], qb_t()),
-            CRz => Signature::new(vec![qb_t(), qb_t(), rotation_type()], vec![qb_t(); 2]),
-            QAlloc => Signature::new(type_row![], qb_t()),
-            TryQAlloc => Signature::new(type_row![], Type::from(option_type(qb_t()))),
-            QFree => Signature::new(qb_t(), type_row![]),
-        }
-        .into()
+        self.fn_signature().into()
     }
 
     fn extension(&self) -> ExtensionId {
