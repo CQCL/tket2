@@ -1,0 +1,301 @@
+{
+  "version": "0.1.0",
+  "name": "tket2.wasm",
+  "types": {
+    "context": {
+      "extension": "tket2.wasm",
+      "name": "context",
+      "params": [],
+      "description": "wasm context",
+      "bound": {
+        "b": "Explicit",
+        "bound": "A"
+      }
+    },
+    "func": {
+      "extension": "tket2.wasm",
+      "name": "func",
+      "params": [
+        {
+          "tp": "List",
+          "param": {
+            "tp": "Type",
+            "b": "A"
+          }
+        },
+        {
+          "tp": "List",
+          "param": {
+            "tp": "Type",
+            "b": "A"
+          }
+        }
+      ],
+      "description": "wasm func",
+      "bound": {
+        "b": "Explicit",
+        "bound": "C"
+      }
+    },
+    "module": {
+      "extension": "tket2.wasm",
+      "name": "module",
+      "params": [],
+      "description": "wasm module",
+      "bound": {
+        "b": "Explicit",
+        "bound": "C"
+      }
+    }
+  },
+  "operations": {
+    "call": {
+      "extension": "tket2.wasm",
+      "name": "call",
+      "description": "call",
+      "signature": {
+        "params": [
+          {
+            "tp": "List",
+            "param": {
+              "tp": "Type",
+              "b": "A"
+            }
+          },
+          {
+            "tp": "List",
+            "param": {
+              "tp": "Type",
+              "b": "A"
+            }
+          }
+        ],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.wasm",
+              "id": "context",
+              "args": [],
+              "bound": "A"
+            },
+            {
+              "t": "Opaque",
+              "extension": "tket2.wasm",
+              "id": "func",
+              "args": [
+                {
+                  "tya": "Sequence",
+                  "elems": [
+                    {
+                      "tya": "Variable",
+                      "idx": 0,
+                      "cached_decl": {
+                        "tp": "List",
+                        "param": {
+                          "tp": "Type",
+                          "b": "C"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "tya": "Sequence",
+                  "elems": [
+                    {
+                      "tya": "Variable",
+                      "idx": 1,
+                      "cached_decl": {
+                        "tp": "List",
+                        "param": {
+                          "tp": "Type",
+                          "b": "C"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "bound": "C"
+            },
+            {
+              "t": "R",
+              "i": 0,
+              "b": "C"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.wasm",
+              "id": "context",
+              "args": [],
+              "bound": "A"
+            },
+            {
+              "t": "Opaque",
+              "extension": "tket2.futures",
+              "id": "Future",
+              "args": [
+                {
+                  "tya": "Type",
+                  "ty": {
+                    "t": "Sum",
+                    "s": "General",
+                    "rows": [
+                      [
+                        {
+                          "t": "R",
+                          "i": 1,
+                          "b": "C"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              ],
+              "bound": "A"
+            }
+          ]
+        }
+      },
+      "binary": false
+    },
+    "dispose_context": {
+      "extension": "tket2.wasm",
+      "name": "dispose_context",
+      "description": "dispose_context",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.wasm",
+              "id": "context",
+              "args": [],
+              "bound": "A"
+            }
+          ],
+          "output": []
+        }
+      },
+      "binary": false
+    },
+    "get_context": {
+      "extension": "tket2.wasm",
+      "name": "get_context",
+      "description": "get_context",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "I"
+            }
+          ],
+          "output": [
+            {
+              "t": "Sum",
+              "s": "General",
+              "rows": [
+                [],
+                [
+                  {
+                    "t": "Opaque",
+                    "extension": "tket2.wasm",
+                    "id": "context",
+                    "args": [],
+                    "bound": "A"
+                  }
+                ]
+              ]
+            }
+          ]
+        }
+      },
+      "binary": false
+    },
+    "lookup": {
+      "extension": "tket2.wasm",
+      "name": "lookup",
+      "description": "lookup",
+      "signature": {
+        "params": [
+          {
+            "tp": "String"
+          },
+          {
+            "tp": "List",
+            "param": {
+              "tp": "Type",
+              "b": "A"
+            }
+          },
+          {
+            "tp": "List",
+            "param": {
+              "tp": "Type",
+              "b": "A"
+            }
+          }
+        ],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.wasm",
+              "id": "module",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket2.wasm",
+              "id": "func",
+              "args": [
+                {
+                  "tya": "Sequence",
+                  "elems": [
+                    {
+                      "tya": "Variable",
+                      "idx": 1,
+                      "cached_decl": {
+                        "tp": "List",
+                        "param": {
+                          "tp": "Type",
+                          "b": "C"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "tya": "Sequence",
+                  "elems": [
+                    {
+                      "tya": "Variable",
+                      "idx": 2,
+                      "cached_decl": {
+                        "tp": "List",
+                        "param": {
+                          "tp": "Type",
+                          "b": "C"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "bound": "C"
+            }
+          ]
+        }
+      },
+      "binary": false
+    }
+  }
+}

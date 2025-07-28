@@ -17,7 +17,7 @@ mod ffi {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-/// Error types that can occur when using the tket1-passes library
+/// Error types that can occur when using the tket library
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum PassError {

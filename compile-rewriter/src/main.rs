@@ -5,13 +5,13 @@ use std::time::Instant;
 
 use clap::Parser;
 
-use tket::rewrite::ECCRewriter;
+use tket2::rewrite::ECCRewriter;
 
 /// Program to precompile patterns from files into a PatternMatcher stored as binary file.
 #[derive(Parser, Debug)]
 #[clap(version = "1.0", long_about = None)]
 #[clap(
-    about = "Precompiles ECC sets into a TKET Rewriter. The resulting binary files can be loaded into TKET for circuit optimisation."
+    about = "Precompiles ECC sets into a TKET2 Rewriter. The resulting binary files can be loaded into TKET2 for circuit optimisation."
 )]
 struct CmdLineArgs {
     // TODO: Differentiate between TK1 input and ECC input

@@ -1,0 +1,39 @@
+[package]
+name = "tket2-py"
+version = "0.0.0"
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+publish = false
+
+[lints]
+workspace = true
+
+[lib]
+name = "tket2"
+crate-type = ["cdylib"]
+# This library collides with the tket2 crate, so we don't want to generate docs for it.
+doc = false
+test = false
+bench = false
+
+[dependencies]
+tket2 = { path = "../tket2", version = "0.12.3", features = [
+    "portmatching",
+    "binary-eccs",
+] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tket-json-rs = { workspace = true, features = ["pyo3"] }
+hugr = { workspace = true }
+pyo3 = { workspace = true, features = ["py-clone", "abi3-py310"] }
+num_cpus = { workspace = true }
+derive_more = { workspace = true, features = ["into", "from"] }
+itertools = { workspace = true }
+portmatching = { workspace = true }
+strum = { workspace = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
+cool_asserts = { workspace = true }

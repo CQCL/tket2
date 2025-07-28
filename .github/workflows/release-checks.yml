@@ -1,13 +1,9 @@
-# A check that ensures that `tket-py` works correctly with the latest release of `tket-exts` and `tket-eccs`.
-#
-# If this fails, it is likely that the packages require a release before we can release the `tket` python lib.
-
-name: tket-py Release checks
+name: Release checks
 
 on:
   pull_request:
-    branches:
-      - release-please--branches--main--components--tket-py
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch: {}
 
 env:
@@ -20,8 +16,42 @@ env:
   PYTHON_LOWEST: "3.10"
 
 jobs:
+  # Check if changes were made to the relevant files.
+  # Always returns true if running on the default branch, to ensure all changes are throughly checked.
+  changes:
+    name: Check for changes
+    runs-on: ubuntu-latest
+    # Required permissions
+    permissions:
+      pull-requests: read
+    # Set job outputs to values from filter step
+    # These outputs are always true when running after a merge to main, or if the PR has a `run-ci-checks` label.
+    outputs:
+      rust-release: ${{ steps.source-branch.outputs.rust == 'true' }}
+      python-release: ${{ steps.source-branch.outputs.py == 'true' }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Override label
+      id: source-branch
+      run: |
+        if [ "${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'release-please-') }}" == "true" ]; then
+          echo "This is a python release PR"
+          echo "py=true" >> $GITHUB_OUTPUT
+        elif [ "${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'release-plz-') }}" == "true" ]; then
+          echo "This is a rust release PR"
+          echo "rust=true" >> $GITHUB_OUTPUT
+        elif [ "${{ github.event_name != 'pull_request' }}" == "true" ]; then
+          echo "Manual trigger"
+          echo "py=true" >> $GITHUB_OUTPUT
+          echo "rust=true" >> $GITHUB_OUTPUT
+        else
+          echo "Not a release PR"
+        fi
+
   py-release:
-    name: Check `tket-py` release compatibility
+    name: Check `tket2-py` release
+    needs: changes
+    if: ${{ needs.changes.outputs.python-release == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,8 +67,8 @@ jobs:
         run: |
           uv sync --no-sources --no-install-workspace \
             --python ${{ env.PYTHON_HIGHEST }}
-          uv pip install --no-sources tket-exts
-          uv pip install --no-sources tket-eccs
+          uv pip install --no-sources tket2-exts
+          uv pip install --no-sources tket2-eccs
           uv run --no-sync maturin develop
           echo "\nDone! Installed dependencies:"
           uv pip list

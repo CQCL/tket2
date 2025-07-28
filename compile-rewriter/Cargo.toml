@@ -9,4 +9,4 @@ publish = false
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
-tket = { path = "../tket", features = ["portmatching", "binary-eccs"] }
+tket2 = { path = "../tket2", features = ["portmatching", "binary-eccs"] }

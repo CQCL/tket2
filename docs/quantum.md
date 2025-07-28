@@ -1,6 +1,6 @@
 # Representation of quantum types in HUGR
 
-TKET makes use of the
+TKET2 makes use of the
 [HUGR](https://github.com/CQCL/hugr/blob/main/specification/hugr.md)
 IR to represent programs. Here we describe how quantum operations (and
 the angles associated with some of them) are represented.
@@ -29,7 +29,7 @@ With these operations the programmer/front-end can request dynamic qubit
 allocation, and the compiler can add/remove/move these operations to use
 more or fewer qubits. In some use cases, that may not be desirable, and
 we may instead want to guarantee only a certain number of qubits are
-used by the program. For this purpose TKET places additional
+used by the program. For this purpose TKET2 places additional
 constraints on the HUGR that are in line with TKET1 backwards
 compatibility:
 
