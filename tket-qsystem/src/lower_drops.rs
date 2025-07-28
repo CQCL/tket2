@@ -1,7 +1,5 @@
 /// Contains a pass to lower "drop" ops from the Guppy extension
-use hugr::algorithms::replace_types::{
-    NodeTemplate, ReplaceTypesError, ReplacementOptions,
-};
+use hugr::algorithms::replace_types::{NodeTemplate, ReplaceTypesError, ReplacementOptions};
 use hugr::algorithms::{ComposablePass, ReplaceTypes};
 use hugr::builder::{Container, DFGBuilder};
 use hugr::types::{Signature, Term};

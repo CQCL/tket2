@@ -7,7 +7,7 @@ use hugr::{
         const_fold::{ConstFoldError, ConstantFoldPass},
         force_order,
         replace_types::ReplaceTypesError,
-        ComposablePass, LinearizeArrayPass, MonomorphizePass, RemoveDeadFuncsError,
+        ComposablePass as _, LinearizeArrayPass, MonomorphizePass, RemoveDeadFuncsError,
         RemoveDeadFuncsPass,
     },
     hugr::{hugrmut::HugrMut, HugrError},
