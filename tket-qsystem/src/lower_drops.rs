@@ -1,11 +1,11 @@
 /// Contains a pass to lower "drop" ops from the Guppy extension
 use hugr::algorithms::replace_types::{
-    handlers::copy_discard_array, NodeTemplate, ReplaceTypesError, ReplacementOptions,
+    NodeTemplate, ReplaceTypesError, ReplacementOptions,
 };
 use hugr::algorithms::{ComposablePass, ReplaceTypes};
 use hugr::builder::{Container, DFGBuilder};
 use hugr::types::{Signature, Term};
-use hugr::{hugr::hugrmut::HugrMut, std_extensions::collections::array::array_type_def, Node};
+use hugr::{hugr::hugrmut::HugrMut, Node};
 use tket::extension::guppy::{DROP_OP_NAME, GUPPY_EXTENSION};
 
 /// A pass that lowers "drop" ops from [GUPPY_EXTENSION]
@@ -20,8 +20,6 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for LowerDropsPass {
 
     fn run(&self, hugr: &mut H) -> Result<Self::Result, Self::Error> {
         let mut rt = ReplaceTypes::default();
-        rt.linearizer()
-            .register_callback(array_type_def(), copy_discard_array);
         rt.replace_parametrized_op_with(
             GUPPY_EXTENSION.get_op(DROP_OP_NAME.as_str()).unwrap(),
             |targs| {
