@@ -17,6 +17,8 @@ dev-dependencies = [
     "pip >=24",
 ]
 
+prerelease = "explicit"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
