@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::path::PathBuf;
 
-use tket2::optimiser::badger::log::{LOG_TARGET, METRICS_TARGET, PROGRESS_TARGET};
+use tket::optimiser::badger::log::{LOG_TARGET, METRICS_TARGET, PROGRESS_TARGET};
 
 use tracing::{Metadata, Subscriber};
 use tracing_appender::non_blocking;

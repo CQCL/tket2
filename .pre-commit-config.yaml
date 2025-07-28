@@ -65,7 +65,7 @@ repos:
       - id: cargo-check
         name: cargo check
         description: Check rust code with `cargo check`.
-        entry: uv run -- cargo check --all --all-features --workspace
+        entry: env RUSTFLAGS="-Dwarnings" uv run -- cargo check --all --all-features --workspace
         language: system
         files: \.rs$
         pass_filenames: false
@@ -93,7 +93,7 @@ repos:
       - id: py-test
         name: pytest
         description: Run python tests
-        # Ensure that we are using the local version of `tket2-eccs` and not the one from PyPI
+        # Ensure that we are using the local version of `tket-eccs` and not the one from PyPI
         entry: uv run -- sh -c "maturin develop && pytest --cov=./ --cov-report=html"
         language: system
         files: \.py$

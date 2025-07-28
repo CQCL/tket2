@@ -1,0 +1,52 @@
+[package]
+name = "tket-qsystem"
+version = "0.17.0"
+edition.workspace = true
+rust-version.workspace = true
+
+license.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/tket-qsystem"
+homepage.workspace = true
+repository.workspace = true
+description = "TKET tool for preparing and validating `Hugr`s for compilation targeting Quantinuum H-series  quantum computers"
+keywords = ["Quantum", "Quantinuum"]
+categories = ["compilers"]
+
+[features]
+default = ["cli"]
+cli = ["dep:clap", "dep:hugr-cli", "dep:anyhow"]
+llvm = ["tket/llvm", "dep:anyhow"]
+
+[[bin]]
+name = "tket-qsystem"
+required-features = ["cli"]
+
+[dependencies]
+hugr.workspace = true
+tket = { path = "../tket", version = "0.13.0" }
+lazy_static.workspace = true
+serde = { workspace = true, features = ["derive"] }
+smol_str.workspace = true
+strum = { workspace = true, features = ["derive"] }
+itertools.workspace = true
+clap = { workspace = true, optional = true }
+hugr-cli = { workspace = true, optional = true }
+derive_more = { workspace = true, features = [
+    "error",
+    "display",
+    "from",
+    "into",
+] }
+typetag.workspace = true
+delegate.workspace = true
+indexmap.workspace = true
+anyhow = { workspace = true, optional = true }
+
+[dev-dependencies]
+cool_asserts.workspace = true
+petgraph.workspace = true
+rstest.workspace = true
+
+[lints]
+workspace = true

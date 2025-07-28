@@ -7,10 +7,10 @@
     "separate-pull-requests": true,
     "pull-request-title-pattern": "chore(py): release${component} ${version}",
     "packages": {
-        "tket2-py": {
+        "tket-py": {
             "release-type": "python",
-            "component": "tket2-py",
-            "package-name": "tket2",
+            "component": "tket-py",
+            "package-name": "tket",
             "include-component-in-tag": true,
             "draft": false,
             "prerelease": false,
@@ -19,14 +19,14 @@
                 {
                     "type": "toml",
                     "path": "uv.lock",
-                    "jsonpath": "$.package[?(@.name.value=='tket2')].version"
+                    "jsonpath": "$.package[?(@.name.value=='tket')].version"
                 }
             ]
         },
-        "tket2-eccs": {
+        "tket-eccs": {
             "release-type": "python",
-            "component": "tket2-eccs",
-            "package-name": "tket2_eccs",
+            "component": "tket-eccs",
+            "package-name": "tket_eccs",
             "include-component-in-tag": true,
             "draft": false,
             "prerelease": false,
@@ -35,14 +35,14 @@
                 {
                     "type": "toml",
                     "path": "uv.lock",
-                    "jsonpath": "$.package[?(@.name.value=='tket2_eccs')].version"
+                    "jsonpath": "$.package[?(@.name.value=='tket_eccs')].version"
                 }
             ]
         },
-        "tket2-exts": {
+        "tket-exts": {
             "release-type": "python",
-            "component": "tket2-exts",
-            "package-name": "tket2_exts",
+            "component": "tket-exts",
+            "package-name": "tket_exts",
             "include-component-in-tag": true,
             "draft": false,
             "prerelease": false,
@@ -51,7 +51,7 @@
                 {
                     "type": "toml",
                     "path": "uv.lock",
-                    "jsonpath": "$.package[?(@.name.value=='tket2_exts')].version"
+                    "jsonpath": "$.package[?(@.name.value=='tket_exts')].version"
                 }
             ]
         }

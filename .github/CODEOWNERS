@@ -1,6 +1,6 @@
 # for syntax see https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#codeowners-syntax
 
-# base rule, tket2 team is codeowner for whole repo
+# base rule, tket team is codeowner for whole repo
 * @CQCL/tket2
 
 # Add specific rules below.
