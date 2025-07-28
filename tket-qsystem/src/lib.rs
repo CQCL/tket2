@@ -13,6 +13,7 @@ use hugr::{
     hugr::{hugrmut::HugrMut, HugrError},
     Hugr, HugrView, Node,
 };
+use lower_drops::LowerDropsPass;
 use replace_bools::{ReplaceBoolPass, ReplaceBoolPassError};
 use tket::TketOp;
 
@@ -29,7 +30,7 @@ pub mod cli;
 pub mod extension;
 #[cfg(feature = "llvm")]
 pub mod llvm;
-
+mod lower_drops;
 pub mod replace_bools;
 
 /// Modify a [hugr::Hugr] into a form that is acceptable for ingress into a
@@ -117,7 +118,12 @@ impl QSystemPass {
         if self.lazify {
             self.replace_bools().run(hugr)?;
         }
+
+        // We expect any Hugr will have *either* drop ops, or ValueArrays (without drops),
+        // so only one of these passes will do anything; the order is thus immaterial.
+        self.lower_drops().run(hugr)?;
         self.linearize_arrays().run(hugr)?;
+
         #[cfg(feature = "llvm")]
         {
             // TODO: Remove "llvm" feature gate once `inline_constant_functions` is moved to
@@ -189,6 +195,10 @@ impl QSystemPass {
 
     fn monomorphization(&self) -> MonomorphizePass {
         MonomorphizePass
+    }
+
+    fn lower_drops(&self) -> LowerDropsPass {
+        LowerDropsPass
     }
 
     fn linearize_arrays(&self) -> LinearizeArrayPass {
