@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/CQCL/tket2/compare/tket-eccs-v0.4.0...tket-eccs-v0.5.0) (2025-07-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* Renamed the `tket2.*` HUGR extensions to `tket.*`
+* Libraries renamed from `tket2*` to `tket*`
+
+### Features
+
+* Rename `tket2.*` HUGR extensions to `tket.*` ([#988](https://github.com/CQCL/tket2/issues/988)) ([c5279c5](https://github.com/CQCL/tket2/commit/c5279c55c1287980ff18c0bfdf360f69be5f345f))
+* Rename tket2* libs to tket* ([#987](https://github.com/CQCL/tket2/issues/987)) ([450f06a](https://github.com/CQCL/tket2/commit/450f06ae6b2d7472ad33418299479709e307919c))
+
 ## [0.4.0](https://github.com/CQCL/tket2/compare/tket2-eccs-v0.3.0...tket2-eccs-v0.4.0) (2025-05-16)
 
 
