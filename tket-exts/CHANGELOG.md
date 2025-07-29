@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.0](https://github.com/CQCL/tket2/compare/tket-exts-v0.9.2...tket-exts-v0.10.0) (2025-07-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* Renamed the `tket2.*` HUGR extensions to `tket.*`
+* Libraries renamed from `tket2*` to `tket*`
+
+### Features
+
+* **py:** update hugr-py dependency to 0.13 ([#996](https://github.com/CQCL/tket2/issues/996)) ([1bf4c70](https://github.com/CQCL/tket2/commit/1bf4c70788693d357b3cb2dcdbe2c721951da2a5))
+* Rename `tket2.*` HUGR extensions to `tket.*` ([#988](https://github.com/CQCL/tket2/issues/988)) ([c5279c5](https://github.com/CQCL/tket2/commit/c5279c55c1287980ff18c0bfdf360f69be5f345f))
+* Rename tket2* libs to tket* ([#987](https://github.com/CQCL/tket2/issues/987)) ([450f06a](https://github.com/CQCL/tket2/commit/450f06ae6b2d7472ad33418299479709e307919c))
+
 ## [0.9.2](https://github.com/CQCL/tket2/compare/tket2-exts-v0.9.1...tket2-exts-v0.9.2) (2025-07-08)
 
 
