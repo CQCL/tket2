@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/CQCL/tket2/compare/tket-py-v0.12.0...tket-py-v0.12.1) (2025-07-29)
+
+
+### Bug Fixes
+
+* **py:** update tket-py dependencies on other workspace packages ([#1000](https://github.com/CQCL/tket2/issues/1000)) ([4fab27b](https://github.com/CQCL/tket2/commit/4fab27bdf2eed8a81a25de5146bffe50337f3259))
+
 ## [0.12.0](https://github.com/CQCL/tket2/compare/tket-py-v0.11.1...tket-py-v0.12.0) (2025-07-29)
 
 
