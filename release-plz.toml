@@ -20,6 +20,9 @@ git_release_name = "{{ package }}: v{{ version }}"
 release_always = false
 
 [changelog]
+header = """# Changelog
+
+"""
 sort_commits = "oldest"
 
 commit_parsers = [
@@ -36,9 +39,9 @@ commit_parsers = [
 ]
 
 [[package]]
-name = "tket2"
+name = "tket"
 release = true
 
 [[package]]
-name = "tket2-hseries"
+name = "tket-qsystem"
 release = true

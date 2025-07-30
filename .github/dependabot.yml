@@ -27,9 +27,9 @@ updates:
   - package-ecosystem: "pip"
     directories: # Location of package manifests
       - "/"
-      - "/tket2-py"
-      - "/tket2-eccs"
-      - "/tket2-exts"
+      - "/tket-py"
+      - "/tket-eccs"
+      - "/tket-exts"
     schedule:
       interval: "weekly"
     commit-message:

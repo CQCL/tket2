@@ -1,6 +1,6 @@
 # TKET1-Passes
 
-A bridge between C++ TKET1 and Rust land. The folder `tket-c-api`
+A bridge between C++ legacy TKET and Rust land. The folder `tket-c-api`
 provides a minimal C-interface to a subset of TKET1's functionality. The
 crate in this directory then wraps this interface into a Rust-friendly
 API.
@@ -29,7 +29,7 @@ recent version of cmake and a C++ compiler).
 
 ## Currently supported TKET1 features
 
-This library is currently limited to TKET passes (a small subset of them, in fact).
+This library is currently limited to legacy TKET passes (a small subset of them, in fact).
 Specifically, the following passes are supported:
 
 - **`two_qubit_squash`** - Squash sequences of two-qubit operations using KAK decomposition

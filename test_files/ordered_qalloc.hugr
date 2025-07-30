@@ -75,7 +75,7 @@ HUGRiHJv?@{
                 {
                     "parent": 5,
                     "op": "Extension",
-                    "extension": "tket2.quantum",
+                    "extension": "tket.quantum",
                     "name": "QAlloc",
                     "signature": {
                         "t": "G",
@@ -93,7 +93,7 @@ HUGRiHJv?@{
                 {
                     "parent": 5,
                     "op": "Extension",
-                    "extension": "tket2.quantum",
+                    "extension": "tket.quantum",
                     "name": "QFree",
                     "signature": {
                         "t": "G",
@@ -140,7 +140,7 @@ HUGRiHJv?@{
                 {
                     "parent": 5,
                     "op": "Extension",
-                    "extension": "tket2.quantum",
+                    "extension": "tket.quantum",
                     "name": "QAlloc",
                     "signature": {
                         "t": "G",
@@ -158,7 +158,7 @@ HUGRiHJv?@{
                 {
                     "parent": 5,
                     "op": "Extension",
-                    "extension": "tket2.quantum",
+                    "extension": "tket.quantum",
                     "name": "MeasureFree",
                     "signature": {
                         "t": "G",
