@@ -24,13 +24,6 @@ devenv shell
 All the required dependencies should be available. You can automate loading the
 shell by setting up [direnv](https://devenv.sh/automatic-shell-activation/).
 
-<!-- TODO: Remove once the pre-compiled binaries are available. -->
-Currently you will need to compile the tket C API manually. To do this, run:
-```bash
-just setup-tket-c-api
-```
-This step will be removed in the future, once the pre-compiled binaries are available.
-
 ### Manual setup
 
 To setup the environment manually you will need:
