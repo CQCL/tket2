@@ -2,6 +2,10 @@
 
 ![msrv][]
 
+> [!WARNING]
+> This crate has been renamed to `tket-qsystem`.
+> Please update your `Cargo.toml` accordingly.
+
 A TKET2 tool for preparing and validating `Hugr`s for compilation targeting
 Quantinuum System  quantum computers.
 

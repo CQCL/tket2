@@ -4,6 +4,11 @@
 ![msrv][]
 [![codecov][]](https://codecov.io/gh/CQCL/tket2)
 
+
+> [!WARNING]
+> This crate has been renamed to `tket`.
+> Please update your `Cargo.toml` accordingly.
+
 TKET2 is an open source quantum compiler developed by Quantinuum. Central to
 TKET2's design is its hardware agnosticism which allows researchers and quantum
 software developers to take advantage of its powerful compilation for many

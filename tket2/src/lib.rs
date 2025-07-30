@@ -1,5 +1,9 @@
 //! TKET2: The Hardware Agnostic Quantum Compiler
 //!
+//! <div class="warning">This crate has been renamed to <code>tket</code>.
+//!   Please update your <code>Cargo.toml</code> accordingly.
+//! </div>
+//!
 //! TKET2 is an open source quantum compiler developed by Quantinuum. Central to
 //! TKET2's design is its hardware agnosticism which allows researchers and
 //! quantum software developers to take advantage of its state of the art
@@ -43,6 +47,8 @@
 //!
 //! [quantinuum-hugr]: https://lib.rs/crates/quantinuum-hugr
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
+
+std::compile_error!("The `tket2` crate has been renamed to `tket`. Please update your `Cargo.toml` or downgrade to a previous version of `tket2`.");
 
 pub mod circuit;
 pub mod extension;

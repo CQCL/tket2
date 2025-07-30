@@ -1,5 +1,11 @@
 //! Provides a preparation and validation workflow for Hugrs targeting
 //! Quantinuum H-series quantum computers.
+//!
+//! <div class="warning">This crate has been renamed to <code>tket-qsystem</code>.
+//!   Please update your <code>Cargo.toml</code> accordingly.
+//! </div>
+
+std::compile_error!("The `tket2-hseries` crate has been renamed to `tket-qsystem`. Please update your `Cargo.toml` or downgrade to a previous version of `tket2-hseries`.");
 
 use derive_more::{Display, Error, From};
 use hugr::{
