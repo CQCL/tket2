@@ -7,7 +7,7 @@ use hugr::{
     algorithms::{
         ensure_no_nonlocal_edges,
         non_local::FindNonLocalEdgesError,
-        replace_types::{handlers::copy_discard_array, NodeTemplate, ReplaceTypesError},
+        replace_types::{NodeTemplate, ReplaceTypesError},
         ComposablePass, ReplaceTypes,
     },
     builder::{inout_sig, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer, SubContainer},
@@ -19,9 +19,9 @@ use hugr::{
     ops::{Tag, Value},
     std_extensions::collections::{
         array::{
-            array_type, array_type_def, ArrayClone, ArrayDiscard, ArrayOpBuilder, ArrayOpDef,
-            ArrayRepeat, ArrayScan, ArrayValue, ARRAY_CLONE_OP_ID, ARRAY_DISCARD_OP_ID,
-            ARRAY_REPEAT_OP_ID, ARRAY_SCAN_OP_ID,
+            array_type, ArrayClone, ArrayDiscard, ArrayOpBuilder, ArrayOpDef, ArrayRepeat,
+            ArrayScan, ArrayValue, ARRAY_CLONE_OP_ID, ARRAY_DISCARD_OP_ID, ARRAY_REPEAT_OP_ID,
+            ARRAY_SCAN_OP_ID,
         },
         borrow_array::{self, BArrayOpDef, BArrayUnsafeOpDef, BArrayValue, BORROW_ARRAY_TYPENAME},
     },
@@ -652,10 +652,6 @@ fn lowerer() -> ReplaceTypes {
             Some(array_type(*size, option_type(elem_ty.clone()).into()))
         }),
     );
-
-    // Register the array copy and discard ops.
-    lw.linearizer()
-        .register_callback(array_type_def(), copy_discard_array);
 
     // Replace constants.
     lw.replace_consts_parametrized(borrow_array_typedef, {
