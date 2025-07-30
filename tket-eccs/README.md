@@ -4,7 +4,7 @@
 [![codecov][]](https://codecov.io/gh/CQCL/tket2)
 [![py-version][]](https://pypi.org/project/tket--eccs/)
 
-  [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket?logo=codecov
+  [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket2?logo=codecov
   [py-version]: https://img.shields.io/pypi/pyversions/tket-eccs
   [pypi]: https://img.shields.io/pypi/v/tket-eccs
 
