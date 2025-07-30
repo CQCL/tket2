@@ -32,9 +32,8 @@ runs:
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       run: |
-        cd tket1-passes/tket-c-api
-        PACKAGE_NAME="tket-c-api/$(conan inspect . --format=json | jq -r '.version')"
-        CONAN_OUTPUT=$(conan create . --build=missing --options="$PACKAGE_NAME:shared=True" --format=json)
+        cd tket1-passes
+        CONAN_OUTPUT=$(conan install . --build=missing --options="tket-c-api/*:shared=True" --format=json)
         CONAN_LIB_FOLDER=$(echo "$CONAN_OUTPUT" | jq -r ".graph.nodes.\"1\".package_folder")
         cp -r $CONAN_LIB_FOLDER ${{ inputs.install-path }}
 

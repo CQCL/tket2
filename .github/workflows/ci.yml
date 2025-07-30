@@ -64,6 +64,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      # This step is not required, but speeds up the build by caching the tket-c-api library
+      # The alternative is to install conan and remove the `TKET_C_API_PATH` env var
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
@@ -169,6 +171,8 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
+      # This step is not required, but speeds up the build by caching the tket-c-api library
+      # The alternative is to install conan and remove the `TKET_C_API_PATH` env var
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
@@ -201,6 +205,8 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
+      # This step is not required, but speeds up the build by caching the tket-c-api library
+      # The alternative is to install conan and remove the `TKET_C_API_PATH` env var
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
@@ -235,6 +241,8 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
+      # This step is not required, but speeds up the build by caching the tket-c-api library
+      # The alternative is to install conan and remove the `TKET_C_API_PATH` env var
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
