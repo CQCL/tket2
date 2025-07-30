@@ -136,6 +136,7 @@ fn add_conan_remote_if_missing(conan_remote: &str) {
 
     let stdout_str = String::from_utf8_lossy(&check_exists.stdout);
     if !stdout_str.contains(conan_remote) {
+        println!("Adding conan remote: {}", conan_remote);
         Command::new("conan")
             .args(["remote", "add", "tket-libs", conan_remote, "--index", "0"])
             .output()
