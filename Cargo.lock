@@ -1033,9 +1033,9 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.22.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc1bdd463fd409d55a1fb3a2e3aeded7567fe7852129d8b40bd09c5070661694"
+checksum = "ccc992a69300fb5835dd9fd259620b21b726bc22ade4aea9fcd20fbdd580e653"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1045,9 +1045,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-cli"
-version = "0.22.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2566c6379afde1b8648b4f9e7477c6c6fae2af15d8c662af23ec40c0201ba42"
+checksum = "e095693e2c78868aebdc16919deba50fb3e6c458f2fba37c05efceb3fc926e4e"
 dependencies = [
  "anyhow",
  "clap",
@@ -1063,9 +1063,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.22.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2418f5d99fa346fe47943da854b8a4d5dde8550b4b311a1a9eb76d4fe78d5f23"
+checksum = "8f7cae0bac05d0551d805552db1c6000262f2234897b174e467a394a85a058af"
 dependencies = [
  "base64",
  "cgmath",
@@ -1101,9 +1101,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-llvm"
-version = "0.22.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e53465db105b2567727464d2cda16caf9fceec7539ad0d13fbfacfd901f971d"
+checksum = "a986b3b9cdb4c61f0a0c5980eee0c0e89839edfb1bc361025eb5aab767d110b7"
 dependencies = [
  "anyhow",
  "delegate 0.13.4",
@@ -1121,9 +1121,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-model"
-version = "0.22.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb50c9602d7c8423e89a643b69a24c9247c8d5f6a43547344c1968eec14a682c"
+checksum = "64698533246838bfcd11f5ad5823871e03135e98fe858b8971c7da37df328c8a"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1143,9 +1143,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.22.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d3b96fcb729cea2c49172ecfc649d908dd3574938cce95e3096a3dc9132c73b"
+checksum = "b4561dfe756a0bc7e25c905255d056d7c73bbd6ac88552b4c1d9778b6140cc87"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
@@ -2421,7 +2421,7 @@ dependencies = [
 
 [[package]]
 name = "tket"
-version = "0.12.3"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2495,7 +2495,7 @@ dependencies = [
 
 [[package]]
 name = "tket-qsystem"
-version = "0.16.1"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "clap",

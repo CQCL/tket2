@@ -32,7 +32,7 @@ See [DEVELOPMENT.md][] for instructions on setting up the development environmen
 
 This project is licensed under Apache License, Version 2.0 ([LICENSE][] or http://www.apache.org/licenses/LICENSE-2.0).
 
-  [build_status]: https://github.com/CQCL/tket2/workflows/Continuous%20integration/badge.svg?branch=main
-  [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket?logo=codecov
+  [build_status]: https://github.com/CQCL/tket2/actions/workflows/ci.yml/badge.svg
+  [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket2?logo=codecov
   [LICENSE]: https://github.com/CQCL/tket2/blob/main/LICENCE
   [DEVELOPMENT.md]: https://github.com/CQCL/tket2/blob/main/DEVELOPMENT.md
