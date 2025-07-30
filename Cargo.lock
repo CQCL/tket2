@@ -280,9 +280,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "capnp"
-version = "0.21.3"
+version = "0.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d55799fdec2a55eee8c267430d7464eb9c27ad2e5c8a49b433ff213b56852c7f"
+checksum = "def25bdbbc2758b363d79129c7f277520e3347e8b647c404d4823591f837c4ad"
 dependencies = [
  "embedded-io",
 ]
@@ -790,9 +790,9 @@ checksum = "97af9b5f014e228b33e77d75ee0e6e87960124f0f4b16337b586a6bec91867b1"
 
 [[package]]
 name = "dyn-clone"
-version = "1.0.19"
+version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c7a8fb8a9fbf66c1f703fe16184d10ca0ee9d23be5b4436400408ba54a95005"
+checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "either"
@@ -1034,8 +1034,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.22.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccc992a69300fb5835dd9fd259620b21b726bc22ade4aea9fcd20fbdd580e653"
+source = "git+https://github.com/CQCL/hugr?branch=jenny%2Fdeadcode_issue#1986d0170503ffdf198586b6f2fca1f4c6a58c7f"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1046,8 +1045,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.22.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e095693e2c78868aebdc16919deba50fb3e6c458f2fba37c05efceb3fc926e4e"
+source = "git+https://github.com/CQCL/hugr?branch=jenny%2Fdeadcode_issue#1986d0170503ffdf198586b6f2fca1f4c6a58c7f"
 dependencies = [
  "anyhow",
  "clap",
@@ -1064,8 +1062,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.22.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f7cae0bac05d0551d805552db1c6000262f2234897b174e467a394a85a058af"
+source = "git+https://github.com/CQCL/hugr?branch=jenny%2Fdeadcode_issue#1986d0170503ffdf198586b6f2fca1f4c6a58c7f"
 dependencies = [
  "base64",
  "cgmath",
@@ -1102,8 +1099,7 @@ dependencies = [
 [[package]]
 name = "hugr-llvm"
 version = "0.22.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a986b3b9cdb4c61f0a0c5980eee0c0e89839edfb1bc361025eb5aab767d110b7"
+source = "git+https://github.com/CQCL/hugr?branch=jenny%2Fdeadcode_issue#1986d0170503ffdf198586b6f2fca1f4c6a58c7f"
 dependencies = [
  "anyhow",
  "delegate 0.13.4",
@@ -1122,8 +1118,7 @@ dependencies = [
 [[package]]
 name = "hugr-model"
 version = "0.22.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64698533246838bfcd11f5ad5823871e03135e98fe858b8971c7da37df328c8a"
+source = "git+https://github.com/CQCL/hugr?branch=jenny%2Fdeadcode_issue#1986d0170503ffdf198586b6f2fca1f4c6a58c7f"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1144,8 +1139,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.22.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4561dfe756a0bc7e25c905255d056d7c73bbd6ac88552b4c1d9778b6140cc87"
+source = "git+https://github.com/CQCL/hugr?branch=jenny%2Fdeadcode_issue#1986d0170503ffdf198586b6f2fca1f4c6a58c7f"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
@@ -1366,7 +1360,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
- "windows-targets 0.53.2",
+ "windows-targets 0.53.3",
 ]
 
 [[package]]
@@ -1713,9 +1707,9 @@ dependencies = [
 
 [[package]]
 name = "prettyplease"
-version = "0.2.35"
+version = "0.2.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "061c1221631e079b26479d25bbf2275bfe5917ae8419cd7e34f13bfc2aa7539a"
+checksum = "ff24dfcda44452b9816fff4cd4227e1bb73ff5a2f1bc1105aa92fb8565ce44d2"
 dependencies = [
  "proc-macro2",
  "syn 2.0.104",
@@ -1884,9 +1878,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.5.13"
+version = "0.5.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d04b7d0ee6b4a0207a0a7adb104d23ecb0b47d6beae7152d0fa34b692b29fd6"
+checksum = "5407465600fb0548f1442edf71dd20683c6ed326200ace4b1ef0763521bb3b77"
 dependencies = [
  "bitflags",
 ]
@@ -2251,14 +2245,13 @@ dependencies = [
 
 [[package]]
 name = "strum_macros"
-version = "0.27.1"
+version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c77a8c5abcaf0f9ce05d62342b7d298c346515365c36b673df4ebe3ced01fde8"
+checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
 dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "rustversion",
  "syn 2.0.104",
 ]
 
@@ -2932,7 +2925,7 @@ version = "0.60.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2f500e4d28234f72040990ec9d39e3a6b950f9f22d3dba18416c35882612bcb"
 dependencies = [
- "windows-targets 0.53.2",
+ "windows-targets 0.53.3",
 ]
 
 [[package]]
@@ -2953,10 +2946,11 @@ dependencies = [
 
 [[package]]
 name = "windows-targets"
-version = "0.53.2"
+version = "0.53.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c66f69fcc9ce11da9966ddb31a40968cad001c5bedeb5c2b82ede4253ab48aef"
+checksum = "d5fe6031c4041849d7c496a8ded650796e7b6ecc19df1a431c1a363342e5dc91"
 dependencies = [
+ "windows-link",
  "windows_aarch64_gnullvm 0.53.0",
  "windows_aarch64_msvc 0.53.0",
  "windows_i686_gnu 0.53.0",
