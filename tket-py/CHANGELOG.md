@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.2](https://github.com/CQCL/tket2/compare/tket-py-v0.12.1...tket-py-v0.12.2) (2025-07-30)
+
+
+### Documentation
+
+* Update README badges ([#1004](https://github.com/CQCL/tket2/issues/1004)) ([d609bf5](https://github.com/CQCL/tket2/commit/d609bf5f65af3cfe3ac44a16dfd4ef1bcacd5643))
+
 ## [0.12.1](https://github.com/CQCL/tket2/compare/tket-py-v0.12.0...tket-py-v0.12.1) (2025-07-29)
 
 
