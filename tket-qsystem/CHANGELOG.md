@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.18.0](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.17.0...tket-qsystem-v0.18.0) - 2025-07-30
+
+### New Features
+
+- [**breaking**] Add `array_from_ptr` to `ArrayLowering` trait ([#971](https://github.com/CQCL/tket2/pull/971))
+
 ## [0.17.0](https://github.com/CQCL/tket2/compare/tket2-hseries-v0.16.1...tket-qsystem-v0.17.0) - 2025-07-25
 
 ### New Features
