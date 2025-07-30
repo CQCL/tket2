@@ -9,9 +9,9 @@ API.
 
 Building `tket1-passes` is done using `conan >= 2.0`. This will be installed
 automatically by `uv` if using the build tools `just` or `uv` (recommended; see
-[../DEVELOPMENT.md] for more detailed instructions). If you wish to run
-`cargo build` directly, make sure that `conan` is installed and available in
-your `PATH`.
+[DEVELOPMENT.md](../DEVELOPMENT.md) for more detailed instructions). If you wish
+to run `cargo build` directly, make sure that `conan` is installed and available
+in your `PATH`.
 
 If conan is unable to fetch all dependencies as pre-compiled binaries, you will
 also need standard C++ tooling to compile the dependencies (i.e. a reasonably
