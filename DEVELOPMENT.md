@@ -1,8 +1,8 @@
-# Welcome to the tket2 development guide <!-- omit in toc -->
+# Welcome to the tket development guide <!-- omit in toc -->
 
-This guide is intended to help you get started with developing tket2.
+This guide is intended to help you get started with developing tket.
 
-If you find any errors or omissions in this document, please [open an issue](https://github.com/CQCL-DEV/tket2/issues/new)!
+If you find any errors or omissions in this document, please [open an issue](https://github.com/CQCL/tket2/issues/new)!
 
 ## #️⃣ Setting up the development environment
 
@@ -24,13 +24,6 @@ devenv shell
 All the required dependencies should be available. You can automate loading the
 shell by setting up [direnv](https://devenv.sh/automatic-shell-activation/).
 
-<!-- TODO: Remove once the pre-compiled binaries are available. -->
-Currently you will need to compile the tket C API manually. To do this, run:
-```bash
-just setup-tket-c-api
-```
-This step will be removed in the future, once the pre-compiled binaries are available.
-
 ### Manual setup
 
 To setup the environment manually you will need:
@@ -45,9 +38,9 @@ Once you have these installed, install the required python dependencies and setu
 just setup
 ```
 
-## 🚀 Local development using the tket2 python library
+## 🚀 Local development using the tket python library
 
-If you want to use the `tket2` python library directly from the repository, you can build it with:
+If you want to use the `tket` python library directly from the repository, you can build it with:
 
 ```bash
 just build
@@ -122,9 +115,9 @@ just coverage
 This will generate a coverage file that can be opened with your favourite coverage viewer. In VSCode, you can use
 [`coverage-gutters`](https://marketplace.visualstudio.com/items?itemName=ryanluker.vscode-coverage-gutters).
 
-## 🌐 Contributing to tket2
+## 🌐 Contributing to tket
 
-We welcome contributions to tket2! Please open [an issue](https://github.com/CQCL/tket2/issues/new) or [pull request](https://github.com/CQCL/tket2/compare) if you have any questions or suggestions.
+We welcome contributions to tket! Please open [an issue](https://github.com/CQCL/tket2/issues/new) or [pull request](https://github.com/CQCL/tket2/compare) if you have any questions or suggestions.
 
 PRs should be made against the `main` branch, and should pass all CI checks before being merged. This includes using the [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) format for the PR title.
 
@@ -226,4 +219,19 @@ ready, create a draft PR so that the release team can review it.
 
 The wheel building process and publication to PyPI is handled by the CI.
 Just create a [github release](https://github.com/CQCL/tket2/releases/new) from the **unmerged** branch.
-The release tag should follow the format used in the previous releases, e.g. `tket2-py-v0.1.1`.
+The release tag should follow the format used in the previous releases, e.g. `tket-py-v0.1.1`.
+
+## 🎫 TKET, pytket, and TKET2
+
+For historical reasons, the repository hosting this project is called `tket2`.
+
+`pytket` / `tket` (a.k.a. `tket1`) was the first version of the tket library, written in C++ and Python.
+`TKET2` was the grounds-up rewrite of the compiler, based on the HUGR IR and aimed at
+optimising quantum programs with complex classical control flow, type generics, etc.
+
+For simplicity, the `tket2` libraries were renamed to `tket`. Throughout the
+project we refer to the new codebase as _tket_, while the old codebase is
+referred to as _pytket_, _legacy tket_, or _tket1_ depending on the context.
+
+Some instances of the `tket2` have been left in the codebase to avoid breaking
+the API, but these may be removed in the future.

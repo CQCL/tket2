@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = ["tket2-py", "tket2-eccs", "tket2-exts"]
+members = ["tket-py", "tket-eccs", "tket-exts"]
 
 [tool.uv]
 
@@ -17,17 +17,19 @@ dev-dependencies = [
     "pip >=24",
 ]
 
+prerelease = "explicit"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.maturin]
-# Maturin is not the build system for the workspace (it is only used for `tket2-py`).
-# We mirror the `tket2-py/pyproject.toml` config here so `maturin develop` still works
+# Maturin is not the build system for the workspace (it is only used for `tket-py`).
+# We mirror the `tket-py/pyproject.toml` config here so `maturin develop` still works
 # from the root of the workspace.
-manifest-path = "tket2-py/Cargo.toml"
-python-source = "tket2-py"
-module-name = "tket2._tket2"
+manifest-path = "tket-py/Cargo.toml"
+python-source = "tket-py"
+module-name = "tket._tket"
 # "extension-module" tells pyo3 we want to build an extension module (skips linking against libpython.so)
 features = ["pyo3/extension-module"]
 

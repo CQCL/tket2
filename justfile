@@ -4,14 +4,9 @@ help:
 
 # Prepare the environment for development, installing all the dependencies and
 # setting up the pre-commit hooks.
-setup: setup-tket-c-api
+setup:
     uv sync
-    [[ -n "${TKET2_JUST_INHIBIT_GIT_HOOKS:-}" ]] || uv run pre-commit install -t pre-commit
-
-# Configure the conan cache for tket-c-api.
-setup-tket-c-api:
-    uv run conan remote add -f tket-libs https://quantinuumsw.jfrog.io/artifactory/api/conan/tket1-libs --index 0
-    cd tket1-passes/tket-c-api && uv run conan create . --build=missing
+    [[ -n "${TKET_JUST_INHIBIT_GIT_HOOKS:-}" ]] || uv run pre-commit install -t pre-commit
 
 # Run the pre-commit checks.
 check:
@@ -19,7 +14,7 @@ check:
 
 # Compile the wheels for the python package.
 build:
-    cd tket2-py && uv run maturin build --release
+    cd tket-py && uv run maturin build --release
 
 # Run all the tests.
 test language="[rust|python]" : (_run_lang language \
@@ -53,9 +48,9 @@ miri *TEST_ARGS:
 recompile-eccs:
     scripts/compile-test-eccs.sh
 
-# Generate serialized declarations for the tket2 extensions
+# Generate serialized declarations for the tket extensions
 gen-extensions:
-    cargo run -p tket2-hseries gen-extensions -o tket2-exts/src/tket2_exts/data
+    cargo run -p tket-qsystem gen-extensions -o tket-exts/src/tket_exts/data
 
 # Interactively update snapshot tests (requires `cargo-insta`)
 update-snapshots:
