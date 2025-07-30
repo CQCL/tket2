@@ -3,10 +3,16 @@
 // TODO move to hugr-llvm crate
 // https://github.com/CQCL/tket2/issues/899
 use anyhow::Result;
-use hugr::llvm::extension::collections::array::decompose_array_fat_pointer;
+use hugr::extension::prelude::usize_t;
+use hugr::llvm::emit::EmitFuncContext;
+use hugr::llvm::extension::collections::array::{
+    build_array_fat_pointer, decompose_array_fat_pointer,
+};
 use hugr::llvm::extension::collections::{array, stack_array};
+use hugr::llvm::inkwell::types::{BasicType, BasicTypeEnum};
 use hugr::llvm::inkwell::values::BasicValueEnum;
 use hugr::llvm::{inkwell, CodegenExtension};
+use hugr::{HugrView, Node};
 use inkwell::builder::{Builder, BuilderError};
 use inkwell::context::Context;
 use inkwell::types::{IntType, PointerType, StructType};
@@ -27,6 +33,15 @@ pub trait ArrayLowering {
         builder: &Builder<'c>,
         val: BasicValueEnum<'c>,
     ) -> Result<PointerValue<'c>>;
+
+    /// Turns a pointer to the first array element into an array value in the given lowering.
+    fn array_from_ptr<'c, H: HugrView<Node = Node>>(
+        &self,
+        ctx: &mut EmitFuncContext<'c, '_, H>,
+        ptr: PointerValue<'c>,
+        elem_type: BasicTypeEnum<'c>,
+        length: u32,
+    ) -> Result<BasicValueEnum<'c>>;
 }
 
 /// Array lowering via the stack as implemented in [stack_array].
@@ -61,6 +76,27 @@ impl<ACG: stack_array::ArrayCodegen + Clone> ArrayLowering for StackArrayLowerin
         let (elem_ptr, _) = build_array_alloca(builder, val.into_array_value())?;
         Ok(elem_ptr)
     }
+
+    fn array_from_ptr<'c, H: HugrView<Node = Node>>(
+        &self,
+        ctx: &mut EmitFuncContext<'c, '_, H>,
+        ptr: PointerValue<'c>,
+        elem_type: BasicTypeEnum<'c>,
+        length: u32,
+    ) -> Result<BasicValueEnum<'c>> {
+        let builder = ctx.builder();
+        let ptr = builder
+            .build_bit_cast(
+                ptr,
+                elem_type
+                    .array_type(length)
+                    .ptr_type(AddressSpace::default()),
+                "",
+            )?
+            .into_pointer_value();
+        let array = builder.build_load(ptr, "")?.into_array_value();
+        Ok(array.into())
+    }
 }
 
 /// Array lowering via a heap as implemented in [mod@array].
@@ -91,6 +127,23 @@ impl<ACG: array::ArrayCodegen + Clone> ArrayLowering for HeapArrayLowering<ACG> 
         let (array_ptr, offset) = decompose_array_fat_pointer(builder, val)?;
         let elem_ptr = unsafe { builder.build_in_bounds_gep(array_ptr, &[offset], "")? };
         Ok(elem_ptr)
+    }
+
+    fn array_from_ptr<'c, H: HugrView<Node = Node>>(
+        &self,
+        ctx: &mut EmitFuncContext<'c, '_, H>,
+        ptr: PointerValue<'c>,
+        _elem_type: BasicTypeEnum<'c>,
+        _length: u32,
+    ) -> Result<BasicValueEnum<'c>> {
+        let usize_ty = ctx
+            .typing_session()
+            .llvm_type(&usize_t())
+            .expect("Prelude codegen is registered")
+            .into_int_type();
+        let offset = usize_ty.const_zero();
+        let array = build_array_fat_pointer(ctx, ptr, offset)?;
+        Ok(array.into())
     }
 }
 
@@ -231,7 +284,8 @@ pub fn struct_1d_arr_alloc<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hugr::llvm::inkwell::context::Context;
+    use hugr::llvm::{inkwell::context::Context, test::llvm_ctx};
+    use rstest::rstest;
 
     /// Test that build_array_alloca properly allocates an array.
     #[test]
@@ -376,5 +430,37 @@ mod tests {
 
         // Verify the generated code is valid
         assert!(module.verify().is_ok(), "Module verification failed");
+    }
+
+    /// Tests that [ArrayLowering::array_to_ptr] and [ArrayLowering::array_from_ptr] are inverses.
+    #[rstest]
+    #[case(DEFAULT_HEAP_ARRAY_LOWERING)]
+    #[case(DEFAULT_STACK_ARRAY_LOWERING)]
+    fn test_array_ptr_conversion(#[case] array_lowering: impl ArrayLowering) {
+        let mut llvm_ctx = llvm_ctx(-1);
+        llvm_ctx.add_extensions(|cge| cge.add_default_prelude_extensions());
+
+        let mod_ctx = llvm_ctx.get_emit_module_context();
+        let function_type = mod_ctx.iw_context().void_type().fn_type(&[], false);
+        let function = mod_ctx
+            .module()
+            .add_function("test_function", function_type, None);
+        let mut emit_ctx = EmitFuncContext::new(mod_ctx, function).unwrap();
+
+        let elem_ty = emit_ctx.iw_context().i32_type().into();
+        let size = 2;
+
+        let (array_ptr, _) = build_array(emit_ctx.iw_context(), emit_ctx.builder()).unwrap();
+        let array = array_lowering
+            .array_from_ptr(&mut emit_ctx, array_ptr, elem_ty, size)
+            .unwrap();
+        let new_array_ptr = array_lowering
+            .array_to_ptr(emit_ctx.builder(), array)
+            .unwrap();
+        assert_eq!(array_ptr.get_type(), new_array_ptr.get_type());
+        let new_array = array_lowering
+            .array_from_ptr(&mut emit_ctx, new_array_ptr, elem_ty, size)
+            .unwrap();
+        assert_eq!(array.get_type(), new_array.get_type());
     }
 }
