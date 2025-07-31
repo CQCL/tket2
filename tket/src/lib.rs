@@ -52,6 +52,7 @@ pub mod passes;
 pub mod resource;
 pub mod rewrite;
 pub mod serialize;
+pub mod subcircuit;
 
 #[cfg(feature = "portmatching")]
 pub mod portmatching;
@@ -65,3 +66,4 @@ pub use circuit::{Circuit, CircuitError, CircuitMutError};
 pub use hugr;
 pub use hugr::Hugr;
 pub use ops::{op_matches, symbolic_constant_op, Pauli, TketOp};
+pub use subcircuit::Subcircuit;
