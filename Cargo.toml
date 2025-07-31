@@ -38,19 +38,23 @@ large_enum_variant = "allow"
 [patch.crates-io]
 
 # Uncomment to use unreleased versions of hugr
-#hugr = { git = "https://github.com/CQCL/hugr", "rev" = "f7cedb4f39b67a77b4c6a55ec00b624b54668eaa" }
-#hugr-core = { git = "https://github.com/CQCL/hugr", "rev" = "f7cedb4f39b67a77b4c6a55ec00b624b54668eaa" }
-#hugr-passes = { git = "https://github.com/CQCL/hugr", "rev" = "f7cedb4f39b67a77b4c6a55ec00b624b54668eaa" }
-#hugr-cli = { git = "https://github.com/CQCL/hugr", "rev" = "f7cedb4f39b67a77b4c6a55ec00b624b54668eaa" }
+# hugr = { git = "https://github.com/CQCL/hugr", "rev" = "196d577" }
+# hugr-core = { git = "https://github.com/CQCL/hugr", "rev" = "196d577" }
+# hugr-passes = { git = "https://github.com/CQCL/hugr", "rev" = "196d577" }
+# hugr-cli = { git = "https://github.com/CQCL/hugr", "rev" = "196d577" }
 # portgraph = { git = "https://github.com/CQCL/portgraph", rev = "68b96ac737e0c285d8c543b2d74a7aa80a18202c" }
 
 [workspace.dependencies]
 
 # Make sure to run `just recompile-eccs` if the hugr serialisation format changes.
-hugr = "0.22.1"
-hugr-core = "0.22.1"
-hugr-cli = "0.22.1"
-portgraph = "0.15.1"
+# hugr = "0.22.1"
+# hugr-core = "0.22.1"
+# hugr-cli = "0.22.1"
+# portgraph = "0.15.1"
+hugr = { git = "https://github.com/CQCL/hugr", "rev" = "90abe47a" }
+hugr-core = { git = "https://github.com/CQCL/hugr", "rev" = "90abe47a" }
+hugr-cli = { git = "https://github.com/CQCL/hugr", "rev" = "90abe47a" }
+portgraph = { git = "https://github.com/CQCL/portgraph", rev = "d87379e" }
 pyo3 = ">= 0.23.4, < 0.26"
 itertools = "0.14.0"
 tket-json-rs = "0.7.4"

@@ -280,9 +280,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "capnp"
-version = "0.21.3"
+version = "0.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d55799fdec2a55eee8c267430d7464eb9c27ad2e5c8a49b433ff213b56852c7f"
+checksum = "def25bdbbc2758b363d79129c7f277520e3347e8b647c404d4823591f837c4ad"
 dependencies = [
  "embedded-io",
 ]
@@ -1034,8 +1034,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.22.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccc992a69300fb5835dd9fd259620b21b726bc22ade4aea9fcd20fbdd580e653"
+source = "git+https://github.com/CQCL/hugr?rev=90abe47a#90abe47ac9f22de618babf7f6a6f7f939d6acb45"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1046,8 +1045,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.22.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e095693e2c78868aebdc16919deba50fb3e6c458f2fba37c05efceb3fc926e4e"
+source = "git+https://github.com/CQCL/hugr?rev=90abe47a#90abe47ac9f22de618babf7f6a6f7f939d6acb45"
 dependencies = [
  "anyhow",
  "clap",
@@ -1064,8 +1062,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.22.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f7cae0bac05d0551d805552db1c6000262f2234897b174e467a394a85a058af"
+source = "git+https://github.com/CQCL/hugr?rev=90abe47a#90abe47ac9f22de618babf7f6a6f7f939d6acb45"
 dependencies = [
  "base64",
  "cgmath",
@@ -1102,8 +1099,7 @@ dependencies = [
 [[package]]
 name = "hugr-llvm"
 version = "0.22.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a986b3b9cdb4c61f0a0c5980eee0c0e89839edfb1bc361025eb5aab767d110b7"
+source = "git+https://github.com/CQCL/hugr?rev=90abe47a#90abe47ac9f22de618babf7f6a6f7f939d6acb45"
 dependencies = [
  "anyhow",
  "delegate 0.13.4",
@@ -1122,8 +1118,7 @@ dependencies = [
 [[package]]
 name = "hugr-model"
 version = "0.22.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64698533246838bfcd11f5ad5823871e03135e98fe858b8971c7da37df328c8a"
+source = "git+https://github.com/CQCL/hugr?rev=90abe47a#90abe47ac9f22de618babf7f6a6f7f939d6acb45"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1144,8 +1139,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.22.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4561dfe756a0bc7e25c905255d056d7c73bbd6ac88552b4c1d9778b6140cc87"
+source = "git+https://github.com/CQCL/hugr?rev=90abe47a#90abe47ac9f22de618babf7f6a6f7f939d6acb45"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
@@ -1665,8 +1659,7 @@ dependencies = [
 [[package]]
 name = "portgraph"
 version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61fb905fbfbc9abf3bd37853bbd4b25d31dffd5631994f8df528f85455085657"
+source = "git+https://github.com/CQCL/portgraph?rev=d87379e#d87379e56f351fef798827b34d59ba3c1e204a0c"
 dependencies = [
  "bitvec",
  "delegate 0.13.4",
@@ -1674,6 +1667,7 @@ dependencies = [
  "num-traits",
  "petgraph 0.8.2",
  "serde",
+ "smallvec",
  "thiserror 2.0.12",
 ]
 

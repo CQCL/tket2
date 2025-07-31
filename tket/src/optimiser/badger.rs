@@ -132,7 +132,7 @@ impl<R, S> BadgerOptimiser<R, S> {
 
 impl<R, S> BadgerOptimiser<R, S>
 where
-    R: Rewriter + Send + Clone + Sync + 'static,
+    R: Rewriter<Node> + Send + Clone + Sync + 'static,
     S: RewriteStrategy + Send + Sync + Clone + 'static,
     S::Cost: serde::Serialize + Send + Sync,
 {
