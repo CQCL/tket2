@@ -1,5 +1,5 @@
-//! This module defines the `tket2.gpu` API for calling GPU programs.
-//! It has the same format as the `tket2.wasm` module, with the exception of
+//! This module defines the `tket.gpu` API for calling GPU programs.
+//! It has the same format as the `tket.wasm` module, with the exception of
 //! ConstGpuModule taking an optional `config` parameter.
 
 use std::sync::{Arc, Weak};
@@ -33,42 +33,40 @@ use serde::{Deserialize, Serialize};
 use smol_str::{format_smolstr, SmolStr};
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
-use crate::extension::futures;
-
-use super::futures::future_type;
-
-/// The "tket2.gpu" extension id.
-pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket2.gpu");
-/// The "tket2.gpu" extension version.
+/// The "tket.gpu" extension id.
+pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.gpu");
+/// The "tket.gpu" extension version.
 pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
-    /// The `tket2.gpu` extension.
+    /// The `tket.gpu` extension.
     pub static ref EXTENSION: Arc<Extension> =
         Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
         add_gpu_type_defs(ext, ext_ref).unwrap();
         GpuOpDef::load_all_ops(ext, ext_ref, ).unwrap();
     });
 
-    /// A [Weak] reference to the `tket2.gpu` op.
+    /// A [Weak] reference to the `tket.gpu` op.
     pub static ref EXTENSION_REF: Weak<Extension> = Arc::downgrade(&EXTENSION);
 
-    /// Extension registry including the "tket2.gpu" extension and
+    /// Extension registry including the "tket.gpu" extension and
     /// dependencies.
     pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new([
         EXTENSION.to_owned(),
-        futures::EXTENSION.to_owned(),
         PRELUDE.to_owned()
     ]);
 
-    /// The name of the `tket2.gpu.module` type.
+    /// The name of the `tket.gpu.module` type.
     pub static ref MODULE_TYPE_NAME: SmolStr = SmolStr::new_inline("module");
-    /// The name of the `tket2.gpu.context` type.
+    /// The name of the `tket.gpu.context` type.
     pub static ref CONTEXT_TYPE_NAME: SmolStr = SmolStr::new_inline("context");
-    /// The name of the `tket2.gpu.func` type.
+    /// The name of the `tket.gpu.func` type.
     pub static ref FUNC_TYPE_NAME: SmolStr = SmolStr::new_inline("func");
 
-    /// The [TypeParam] of `tket2.gpu.lookup` specifying the name of the function.
+    /// The name of the `tket.gpu.func` type.
+    pub static ref RESULT_TYPE_NAME: SmolStr = SmolStr::new_inline("result");
+
+    /// The [TypeParam] of `tket.gpu.lookup` specifying the name of the function.
     pub static ref NAME_PARAM: TypeParam = TypeParam::StringType;
     /// The [TypeParam] of various types and ops specifying the input signature of a function.
     pub static ref INPUTS_PARAM: TypeParam =
@@ -102,6 +100,13 @@ fn add_gpu_type_defs(
         TypeDefBound::copyable(),
         extension_ref,
     )?;
+    extension.add_type(
+        RESULT_TYPE_NAME.to_owned(),
+        vec![OUTPUTS_PARAM.to_owned()],
+        "gpu result".into(),
+        TypeDefBound::any(),
+        extension_ref,
+    )?;
     Ok(())
 }
 
@@ -122,25 +127,26 @@ fn add_gpu_type_defs(
 )]
 #[allow(missing_docs, non_camel_case_types)]
 #[non_exhaustive]
-/// Simple enum of ops defined by the `tket2.gpu` extension.
+/// Simple enum of ops defined by the `tket.gpu` extension.
 pub enum GpuOpDef {
     get_context,
     dispose_context,
     lookup,
     call,
+    read_result,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-/// An enum of types defined by the `tket2.gpu` extension.
+/// An enum of types defined by the `tket.gpu` extension.
 ///
 /// We provide `impl From<GpuType>` for [CustomType] and [Type], and `impl
 /// TryFrom<CustomType>` and `impl TryFrom<CustomType>` for [GpuType].
 pub enum GpuType {
-    /// `tket2.gpu.module`
+    /// `tket.gpu.module`
     Module,
-    /// `tket2.gpu.context`
+    /// `tket.gpu.context`
     Context,
-    /// `tket2.gpu.func`
+    /// `tket.gpu.func`
     Func {
         /// The input signature of the function. Note that row variables are
         /// allowed.
@@ -149,10 +155,16 @@ pub enum GpuType {
         /// allowed.
         outputs: TypeRowRV,
     },
+    /// `tket.gpu.result`
+    Result {
+        /// The output signature of the function. Note that row variables are
+        /// allowed.
+        outputs: TypeRowRV,
+    }
 }
 
 impl GpuType {
-    /// Construct a new `tket2.gpu.func` type.
+    /// Construct a new `tket.gpu.func` type.
     pub fn new_func(inputs: impl Into<TypeRowRV>, outputs: impl Into<TypeRowRV>) -> Self {
         Self::Func {
             inputs: inputs.into(),
@@ -180,6 +192,21 @@ impl GpuType {
         )
     }
 
+    fn result_custom_type(
+        outputs: impl Into<TypeRowRV>,
+        extension_ref: &Weak<Extension>,
+    ) -> CustomType {
+        let row_to_arg =
+            |row: TypeRowRV| TypeArg::List(row.into_owned().into_iter().map_into().collect());
+        CustomType::new(
+            RESULT_TYPE_NAME.to_owned(),
+            [row_to_arg(outputs.into())],
+            EXTENSION_ID,
+            TypeBound::Linear,
+            extension_ref,
+        )
+    }
+
     fn custom_type(&self, extension_ref: &Weak<Extension>) -> CustomType {
         match self {
             Self::Module => CustomType::new(
@@ -196,33 +223,21 @@ impl GpuType {
                 TypeBound::Linear,
                 extension_ref,
             ),
-            s @ Self::Func { .. } => s.clone().into_custom_type(extension_ref),
+            Self::Func { inputs, outputs } => Self::func_custom_type(inputs.clone(), outputs.clone(), extension_ref),
+            Self::Result { outputs } => Self::result_custom_type(outputs.clone(), extension_ref)
         }
-    }
-
-    fn into_custom_type(self, extension_ref: &Weak<Extension>) -> CustomType {
-        match self {
-            Self::Module | Self::Context => self.custom_type(extension_ref),
-            Self::Func { inputs, outputs } => {
-                Self::func_custom_type(inputs, outputs, extension_ref)
-            }
-        }
-    }
-
-    fn into_type(self, extension_ref: &Weak<Extension>) -> Type {
-        self.into_custom_type(extension_ref).into()
     }
 }
 
 impl From<GpuType> for CustomType {
     fn from(value: GpuType) -> Self {
-        value.into_custom_type(&EXTENSION_REF)
+        value.custom_type(&EXTENSION_REF)
     }
 }
 
 impl From<GpuType> for Type {
     fn from(value: GpuType) -> Self {
-        value.into_type(&EXTENSION_REF)
+        value.get_type(&EXTENSION_REF)
     }
 }
 
@@ -259,6 +274,13 @@ impl TryFrom<CustomType> for GpuType {
                 let outputs = TypeRowRV::try_from(outputs.clone())?;
 
                 Ok(GpuType::Func { inputs, outputs })
+            }
+            n if *n == *RESULT_TYPE_NAME => {
+                let [outputs] = value.args() else {
+                    Err(SignatureError::InvalidTypeArgs)?
+                };
+                let outputs = TypeRowRV::try_from(outputs.clone())?;
+                Ok(Self::Result { outputs })
             }
             n => Err(SignatureError::NameMismatch(
                 format_smolstr!(
@@ -311,18 +333,32 @@ impl MakeOpDef for GpuOpDef {
                 let context_type: TypeRV = context_type.into();
                 let inputs = TypeRV::new_row_var_use(0, TypeBound::Copyable);
                 let outputs = TypeRV::new_row_var_use(1, TypeBound::Copyable);
-                let func_type = Type::new_extension(GpuType::func_custom_type(
+                let func_type = TypeRV::new_extension(GpuType::func_custom_type(
                     inputs.clone(),
                     outputs.clone(),
                     extension_ref,
                 ));
-                let future_type: TypeRV = future_type(Type::new_tuple(outputs)).into();
+                let result_type =  TypeRV::new_extension(GpuType::result_custom_type(outputs, extension_ref).into());
+
 
                 PolyFuncTypeRV::new(
                     [INPUTS_PARAM.to_owned(), OUTPUTS_PARAM.to_owned()],
                     FuncValueType::new(
-                        vec![context_type.clone(), func_type.into(), inputs],
-                        vec![context_type, future_type],
+                        vec![context_type, func_type, inputs],
+                        vec![result_type],
+                    ),
+                )
+                .into()
+            }
+            Self::read_result => {
+                let context_type: TypeRV = context_type.into();
+                let outputs = TypeRV::new_row_var_use(0, TypeBound::Copyable);
+                let result_type = TypeRV::new_extension(GpuType::result_custom_type(outputs.clone(), extension_ref));
+                PolyFuncTypeRV::new(
+                    [OUTPUTS_PARAM.to_owned()],
+                    FuncValueType::new(
+                        vec![result_type],
+                        vec![context_type, outputs],
                     ),
                 )
                 .into()
@@ -351,7 +387,7 @@ impl HasConcrete for GpuOpDef {
 
     fn instantiate(&self, type_args: &[TypeArg]) -> Result<Self::Concrete, OpLoadError> {
         match self {
-            GpuOpDef::get_context => {
+            Self::get_context => {
                 let [] = type_args else {
                     Err(SignatureError::from(TermTypeError::WrongNumberArgs(
                         type_args.len(),
@@ -360,7 +396,7 @@ impl HasConcrete for GpuOpDef {
                 };
                 Ok(GpuOp::GetContext)
             }
-            GpuOpDef::dispose_context => {
+            Self::dispose_context => {
                 let [] = type_args else {
                     Err(SignatureError::from(TermTypeError::WrongNumberArgs(
                         type_args.len(),
@@ -370,7 +406,7 @@ impl HasConcrete for GpuOpDef {
                 Ok(GpuOp::DisposeContext)
             }
             // <String,in_row,out_row> [] -> []
-            GpuOpDef::lookup => {
+            Self::lookup => {
                 let Some([name_arg, inputs_arg, outputs_arg]): Option<[_; 3]> =
                     type_args.to_vec().try_into().ok()
                 else {
@@ -406,7 +442,7 @@ impl HasConcrete for GpuOpDef {
                     outputs,
                 })
             }
-            GpuOpDef::call => {
+            Self::call => {
                 let Some([inputs_arg, outputs_arg]): Option<[_; 2]> =
                     type_args.to_vec().try_into().ok()
                 else {
@@ -435,6 +471,27 @@ impl HasConcrete for GpuOpDef {
                     outputs: outputs.try_into()?,
                 })
             }
+            Self::read_result => {
+                let Some([outputs_arg]): Option<[_; 1]> =
+                    type_args.to_vec().try_into().ok()
+                else {
+                    Err(SignatureError::from(TermTypeError::WrongNumberArgs(
+                        type_args.len(),
+                        1,
+                    )))?
+                };
+
+                let Ok(outputs) = TypeRowRV::try_from(outputs_arg.clone()) else {
+                    Err(SignatureError::from(TermTypeError::TypeMismatch {
+                        term: Box::new(outputs_arg),
+                        type_: Box::new(OUTPUTS_PARAM.to_owned()),
+                    }))?
+                };
+                Ok(GpuOp::ReadResult {
+                    outputs: outputs.try_into()?,
+                })
+
+            }
         }
     }
 }
@@ -452,13 +509,13 @@ impl TryFrom<&OpType> for GpuOpDef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-/// Concrete instantiation(i.e. with type args applied) of a "tket2.gpu" operation.
+/// Concrete instantiation(i.e. with type args applied) of a "tket.gpu" operation.
 pub enum GpuOp {
-    /// A `tket2.gpu.get_context` op.
+    /// A `tket.gpu.get_context` op.
     GetContext,
-    /// A `tket2.gpu.dispose_context` op.
+    /// A `tket.gpu.dispose_context` op.
     DisposeContext,
-    /// A `tket2.gpu.lookup` op.
+    /// A `tket.gpu.lookup` op.
     Lookup {
         /// The name of the function to be looked up.
         name: String,
@@ -469,7 +526,7 @@ pub enum GpuOp {
         /// Note that row variables are allowed here.
         outputs: TypeRowRV,
     },
-    /// A `tket2.gpu.call` op.
+    /// A `tket.gpu.call` op.
     Call {
         /// The input signature of the function to be called
         /// Note that row variables are not allowed here.
@@ -478,6 +535,12 @@ pub enum GpuOp {
         /// Note that row variables are not allowed here.
         outputs: TypeRow,
     },
+    /// A `tket.gpu.read_result` op.
+    ReadResult {
+        /// The output signature of the function that was called.
+        /// Note that row variables are not allowed here.
+        outputs: TypeRow
+    }
 }
 
 impl GpuOp {
@@ -487,13 +550,12 @@ impl GpuOp {
             Self::DisposeContext => GpuOpDef::dispose_context,
             Self::Lookup { .. } => GpuOpDef::lookup,
             Self::Call { .. } => GpuOpDef::call,
+            Self::ReadResult { .. } => GpuOpDef::read_result,
         }
     }
 
     fn get_context_return_type(extension_ref: &Weak<Extension>) -> SumType {
-        option_type(Type::new_extension(
-            GpuType::Context.into_custom_type(extension_ref),
-        ))
+        option_type(GpuType::Context.get_type(extension_ref))
     }
 }
 
@@ -531,6 +593,10 @@ impl MakeExtensionOp for GpuOp {
                 let outputs = TypeArg::from(outputs.clone());
                 vec![inputs, outputs]
             }
+            GpuOp::ReadResult { outputs } => {
+                let outputs = TypeArg::from(outputs.clone());
+                vec![outputs]
+            }
         }
     }
 }
@@ -547,7 +613,7 @@ impl MakeRegisteredOp for GpuOp {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 /// A Constant identifying a GPU module.
-/// Loading this is the only way to obtain a value of `tket2.gpu.module` type.
+/// Loading this is the only way to obtain a value of `tket.gpu.module` type.
 pub struct ConstGpuModule {
     /// The name of the module.
     pub name: String,
@@ -571,22 +637,22 @@ impl CustomConst for ConstGpuModule {
     }
 }
 
-/// An extension trait for [Dataflow] providing methods to add "tket2.gpu"
+/// An extension trait for [Dataflow] providing methods to add "tket.gpu"
 /// operations and constants.
 pub trait GpuOpBuilder: Dataflow {
-    /// Add a `tket2.gpu.get_context` op.
+    /// Add a `tket.gpu.get_context` op.
     fn add_get_context(&mut self, id: Wire) -> Result<Wire, BuildError> {
         let op = self.add_dataflow_op(GpuOp::GetContext, vec![id])?;
         Ok(op.out_wire(0))
     }
 
-    /// Add a `tket2.gpu.dispose_context` op.
+    /// Add a `tket.gpu.dispose_context` op.
     fn add_dispose_context(&mut self, id: Wire) -> Result<(), BuildError> {
         let _ = self.add_dataflow_op(GpuOp::DisposeContext, vec![id])?;
         Ok(())
     }
 
-    /// Add a `tket2.gpu.lookup` op.
+    /// Add a `tket.gpu.lookup` op.
     fn add_lookup(
         &mut self,
         name: impl Into<String>,
@@ -606,7 +672,7 @@ pub trait GpuOpBuilder: Dataflow {
             .out_wire(0))
     }
 
-    /// Add a `tket2.gpu.call` op.
+    /// Add a `tket.gpu.call` op.
     ///
     /// We infer the signature from the type of the `func` wire.
     fn add_call(
@@ -614,7 +680,7 @@ pub trait GpuOpBuilder: Dataflow {
         context: Wire,
         func: Wire,
         inputs: impl IntoIterator<Item = Wire>,
-    ) -> Result<[Wire; 2], BuildError> {
+    ) -> Result<Wire, BuildError> {
         let func_wire_type = self.get_wire_type(func)?;
         let Some(GpuType::Func {
             inputs: in_types,
@@ -634,7 +700,26 @@ pub trait GpuOpBuilder: Dataflow {
                 },
                 [context, func].into_iter().chain(inputs),
             )?
-            .outputs_arr())
+            .out_wire(0))
+    }
+
+    /// Add a `tket.gpu.read_result` op.
+    fn add_read_result(&mut self, result: Wire) -> Result<(Wire, Vec<Wire>), BuildError> {
+        let Some(GpuType::Result { outputs }) =  self.get_wire_type(result)?.clone().try_into().ok()
+        else {
+            // TODO Add an Error variant to BuildError for: Input wire has wrong type
+            panic!("result wire is not a result type: ")
+        };
+        let outputs = TypeRow::try_from(outputs)?;
+
+        let op = self.add_dataflow_op(
+            GpuOp::ReadResult { outputs },
+            [result],
+        )?;
+        let context = op.out_wire(0);
+        let results = op.outputs().skip(1).collect_vec();
+        Ok((context, results))
+
     }
 
     /// Add a [ConstGpuModule] and load it.
@@ -748,7 +833,7 @@ mod test {
             inputs: inputs.clone(),
             outputs: outputs.clone(),
         };
-        let module_ty = Type::new_extension(GpuType::Module.into_custom_type(&op.extension_ref()));
+        let module_ty = Type::new_extension(GpuType::Module.custom_type(&op.extension_ref()));
         let func_ty = Type::new_extension(GpuType::func_custom_type(
             inputs.clone(),
             outputs.clone(),
@@ -764,10 +849,9 @@ mod test {
     #[case(type_row![], type_row![])]
     #[case(vec![Type::UNIT], TypeRow::try_from(Term::from(vec![TypeArg::from(Type::UNIT),TypeArg::from(usize_t())])).unwrap())]
     fn build_all(#[case] in_types: impl Into<TypeRow>, #[case] out_types: impl Into<TypeRow>) {
-        use futures::FutureOpBuilder as _;
         use hugr::{
             builder::DataflowHugr as _,
-            extension::prelude::{ConstUsize, UnpackTuple, UnwrapBuilder as _},
+            extension::prelude::{ConstUsize, UnwrapBuilder as _},
         };
 
         let (in_types, out_types) = (in_types.into(), out_types.into());
@@ -786,18 +870,11 @@ mod test {
                 .add_lookup("test_func", in_types, out_types.clone(), module)
                 .unwrap();
 
-            let [context, results_future] = builder
+            let result = builder
                 .add_call(context, func, builder.input_wires())
                 .unwrap();
 
-            let results = {
-                let tuple_ty = Type::new_tuple(out_types.clone());
-                let [results_tuple] = builder.add_read(results_future, tuple_ty).unwrap();
-                builder
-                    .add_dataflow_op(UnpackTuple::new(out_types), [results_tuple])
-                    .unwrap()
-                    .outputs()
-            };
+            let (context, results) = builder.add_read_result(result).unwrap();
 
             builder.add_dispose_context(context).unwrap();
 

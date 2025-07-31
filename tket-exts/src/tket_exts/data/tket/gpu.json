@@ -1,9 +1,9 @@
 {
   "version": "0.1.0",
-  "name": "tket2.gpu",
+  "name": "tket.gpu",
   "types": {
     "context": {
-      "extension": "tket2.gpu",
+      "extension": "tket.gpu",
       "name": "context",
       "params": [],
       "description": "gpu context",
@@ -13,7 +13,7 @@
       }
     },
     "func": {
-      "extension": "tket2.gpu",
+      "extension": "tket.gpu",
       "name": "func",
       "params": [
         {
@@ -38,7 +38,7 @@
       }
     },
     "module": {
-      "extension": "tket2.gpu",
+      "extension": "tket.gpu",
       "name": "module",
       "params": [],
       "description": "gpu module",
@@ -46,11 +46,29 @@
         "b": "Explicit",
         "bound": "C"
       }
+    },
+    "result": {
+      "extension": "tket.gpu",
+      "name": "result",
+      "params": [
+        {
+          "tp": "List",
+          "param": {
+            "tp": "Type",
+            "b": "A"
+          }
+        }
+      ],
+      "description": "gpu result",
+      "bound": {
+        "b": "Explicit",
+        "bound": "A"
+      }
     }
   },
   "operations": {
     "call": {
-      "extension": "tket2.gpu",
+      "extension": "tket.gpu",
       "name": "call",
       "description": "call",
       "signature": {
@@ -74,14 +92,14 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.gpu",
+              "extension": "tket.gpu",
               "id": "context",
               "args": [],
               "bound": "A"
             },
             {
               "t": "Opaque",
-              "extension": "tket2.gpu",
+              "extension": "tket.gpu",
               "id": "func",
               "args": [
                 {
@@ -128,31 +146,24 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket2.gpu",
-              "id": "context",
-              "args": [],
-              "bound": "A"
-            },
-            {
-              "t": "Opaque",
-              "extension": "tket2.futures",
-              "id": "Future",
+              "extension": "tket.gpu",
+              "id": "result",
               "args": [
                 {
-                  "tya": "Type",
-                  "ty": {
-                    "t": "Sum",
-                    "s": "General",
-                    "rows": [
-                      [
-                        {
-                          "t": "R",
-                          "i": 1,
+                  "tya": "List",
+                  "elems": [
+                    {
+                      "tya": "Variable",
+                      "idx": 1,
+                      "cached_decl": {
+                        "tp": "List",
+                        "param": {
+                          "tp": "Type",
                           "b": "C"
                         }
-                      ]
-                    ]
-                  }
+                      }
+                    }
+                  ]
                 }
               ],
               "bound": "A"
@@ -163,7 +174,7 @@
       "binary": false
     },
     "dispose_context": {
-      "extension": "tket2.gpu",
+      "extension": "tket.gpu",
       "name": "dispose_context",
       "description": "dispose_context",
       "signature": {
@@ -172,7 +183,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.gpu",
+              "extension": "tket.gpu",
               "id": "context",
               "args": [],
               "bound": "A"
@@ -184,7 +195,7 @@
       "binary": false
     },
     "get_context": {
-      "extension": "tket2.gpu",
+      "extension": "tket.gpu",
       "name": "get_context",
       "description": "get_context",
       "signature": {
@@ -204,7 +215,7 @@
                 [
                   {
                     "t": "Opaque",
-                    "extension": "tket2.gpu",
+                    "extension": "tket.gpu",
                     "id": "context",
                     "args": [],
                     "bound": "A"
@@ -218,7 +229,7 @@
       "binary": false
     },
     "lookup": {
-      "extension": "tket2.gpu",
+      "extension": "tket.gpu",
       "name": "lookup",
       "description": "lookup",
       "signature": {
@@ -245,7 +256,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket2.gpu",
+              "extension": "tket.gpu",
               "id": "module",
               "args": [],
               "bound": "C"
@@ -254,7 +265,7 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket2.gpu",
+              "extension": "tket.gpu",
               "id": "func",
               "args": [
                 {
@@ -291,6 +302,65 @@
                 }
               ],
               "bound": "C"
+            }
+          ]
+        }
+      },
+      "binary": false
+    },
+    "read_result": {
+      "extension": "tket.gpu",
+      "name": "read_result",
+      "description": "read_result",
+      "signature": {
+        "params": [
+          {
+            "tp": "List",
+            "param": {
+              "tp": "Type",
+              "b": "A"
+            }
+          }
+        ],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket.gpu",
+              "id": "result",
+              "args": [
+                {
+                  "tya": "List",
+                  "elems": [
+                    {
+                      "tya": "Variable",
+                      "idx": 0,
+                      "cached_decl": {
+                        "tp": "List",
+                        "param": {
+                          "tp": "Type",
+                          "b": "C"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "bound": "A"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket.gpu",
+              "id": "context",
+              "args": [],
+              "bound": "A"
+            },
+            {
+              "t": "R",
+              "i": 0,
+              "b": "C"
             }
           ]
         }

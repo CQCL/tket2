@@ -78,10 +78,6 @@ use serde::{Deserialize, Serialize};
 use smol_str::{format_smolstr, SmolStr};
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
-use crate::extension::futures;
-
-use super::futures::future_type;
-
 /// The "tket.wasm" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.wasm");
 /// The "tket.wasm" extension version.
@@ -102,7 +98,6 @@ lazy_static! {
     /// dependencies.
     pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new([
         EXTENSION.to_owned(),
-        futures::EXTENSION.to_owned(),
         PRELUDE.to_owned()
     ]);
 
@@ -112,6 +107,9 @@ lazy_static! {
     pub static ref CONTEXT_TYPE_NAME: SmolStr = SmolStr::new_inline("context");
     /// The name of the `tket.wasm.func` type.
     pub static ref FUNC_TYPE_NAME: SmolStr = SmolStr::new_inline("func");
+
+    /// The name of the `tket.wasm.result` type.
+    pub static ref RESULT_TYPE_NAME: SmolStr = SmolStr::new_inline("result");
 
     /// The [TypeParam] of `tket.wasm.lookup` specifying the name of the function.
     pub static ref NAME_PARAM: TypeParam = TypeParam::StringType;
@@ -147,6 +145,13 @@ fn add_wasm_type_defs(
         TypeDefBound::copyable(),
         extension_ref,
     )?;
+    extension.add_type(
+        RESULT_TYPE_NAME.to_owned(),
+        vec![OUTPUTS_PARAM.to_owned()],
+        "wasm result".into(),
+        TypeDefBound::any(),
+        extension_ref,
+    )?;
     Ok(())
 }
 
@@ -173,6 +178,7 @@ pub enum WasmOpDef {
     dispose_context,
     lookup,
     call,
+    read_result,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -194,6 +200,14 @@ pub enum WasmType {
         /// allowed.
         outputs: TypeRowRV,
     },
+    /// `tket.wasm.result`
+    Result {
+        /// The output signature of the function. Note that row variables are
+        /// allowed.
+        outputs: TypeRowRV,
+    },
+
+
 }
 
 impl WasmType {
@@ -225,6 +239,21 @@ impl WasmType {
         )
     }
 
+    fn result_custom_type(
+        outputs: impl Into<TypeRowRV>,
+        extension_ref: &Weak<Extension>,
+    ) -> CustomType {
+        let row_to_arg =
+            |row: TypeRowRV| TypeArg::List(row.into_owned().into_iter().map_into().collect());
+        CustomType::new(
+            RESULT_TYPE_NAME.to_owned(),
+            [row_to_arg(outputs.into())],
+            EXTENSION_ID,
+            TypeBound::Linear,
+            extension_ref,
+        )
+    }
+
     fn custom_type(&self, extension_ref: &Weak<Extension>) -> CustomType {
         match self {
             Self::Module => CustomType::new(
@@ -241,33 +270,21 @@ impl WasmType {
                 TypeBound::Linear,
                 extension_ref,
             ),
-            s @ Self::Func { .. } => s.clone().into_custom_type(extension_ref),
+            Self::Func { inputs, outputs } => Self::func_custom_type(inputs.clone(), outputs.clone(), extension_ref),
+            Self::Result { outputs } => Self::result_custom_type(outputs.clone(), extension_ref)
         }
-    }
-
-    fn into_custom_type(self, extension_ref: &Weak<Extension>) -> CustomType {
-        match self {
-            Self::Module | Self::Context => self.custom_type(extension_ref),
-            Self::Func { inputs, outputs } => {
-                Self::func_custom_type(inputs, outputs, extension_ref)
-            }
-        }
-    }
-
-    fn into_type(self, extension_ref: &Weak<Extension>) -> Type {
-        self.into_custom_type(extension_ref).into()
     }
 }
 
 impl From<WasmType> for CustomType {
     fn from(value: WasmType) -> Self {
-        value.into_custom_type(&EXTENSION_REF)
+        value.custom_type(&EXTENSION_REF)
     }
 }
 
 impl From<WasmType> for Type {
     fn from(value: WasmType) -> Self {
-        value.into_type(&EXTENSION_REF)
+        value.get_type(&EXTENSION_REF)
     }
 }
 
@@ -304,6 +321,14 @@ impl TryFrom<CustomType> for WasmType {
                 let outputs = TypeRowRV::try_from(outputs.clone())?;
 
                 Ok(WasmType::Func { inputs, outputs })
+            }
+            n if *n == *RESULT_TYPE_NAME => {
+                let [outputs] = value.args() else {
+                    Err(SignatureError::InvalidTypeArgs)?
+                };
+                let outputs = TypeRowRV::try_from(outputs.clone())?;
+
+                Ok(WasmType::Result { outputs })
             }
             n => Err(SignatureError::NameMismatch(
                 format_smolstr!(
@@ -361,16 +386,30 @@ impl MakeOpDef for WasmOpDef {
                     outputs.clone(),
                     extension_ref,
                 ));
-                let future_type: TypeRV = future_type(Type::new_tuple(outputs)).into();
+                let result_type =  TypeRV::new_extension(WasmType::result_custom_type(outputs, extension_ref).into());
 
                 PolyFuncTypeRV::new(
                     [INPUTS_PARAM.to_owned(), OUTPUTS_PARAM.to_owned()],
                     FuncValueType::new(
                         vec![context_type.clone(), func_type.into(), inputs],
-                        vec![context_type, future_type],
+                        vec![result_type],
                     ),
                 )
                 .into()
+            }
+            Self::read_result => {
+                let context_type: TypeRV = context_type.into();
+                let outputs = TypeRV::new_row_var_use(0, TypeBound::Copyable);
+                let result_type =  TypeRV::new_extension(WasmType::result_custom_type(outputs.clone(), extension_ref).into());
+                PolyFuncTypeRV::new(
+                    [OUTPUTS_PARAM.to_owned()],
+                    FuncValueType::new(
+                        vec![result_type],
+                        vec![context_type, outputs],
+                    ),
+                )
+                .into()
+
             }
         }
     }
@@ -396,7 +435,7 @@ impl HasConcrete for WasmOpDef {
 
     fn instantiate(&self, type_args: &[TypeArg]) -> Result<Self::Concrete, OpLoadError> {
         match self {
-            WasmOpDef::get_context => {
+            Self::get_context => {
                 let [] = type_args else {
                     Err(SignatureError::from(TermTypeError::WrongNumberArgs(
                         type_args.len(),
@@ -405,7 +444,7 @@ impl HasConcrete for WasmOpDef {
                 };
                 Ok(WasmOp::GetContext)
             }
-            WasmOpDef::dispose_context => {
+            Self::dispose_context => {
                 let [] = type_args else {
                     Err(SignatureError::from(TermTypeError::WrongNumberArgs(
                         type_args.len(),
@@ -415,7 +454,7 @@ impl HasConcrete for WasmOpDef {
                 Ok(WasmOp::DisposeContext)
             }
             // <String,in_row,out_row> [] -> []
-            WasmOpDef::lookup => {
+            Self::lookup => {
                 let Some([name_arg, inputs_arg, outputs_arg]): Option<[_; 3]> =
                     type_args.to_vec().try_into().ok()
                 else {
@@ -451,7 +490,7 @@ impl HasConcrete for WasmOpDef {
                     outputs,
                 })
             }
-            WasmOpDef::call => {
+            Self::call => {
                 let Some([inputs_arg, outputs_arg]): Option<[_; 2]> =
                     type_args.to_vec().try_into().ok()
                 else {
@@ -479,6 +518,27 @@ impl HasConcrete for WasmOpDef {
                     inputs: inputs.try_into()?,
                     outputs: outputs.try_into()?,
                 })
+            }
+            Self::read_result => {
+                let Some([outputs_arg]): Option<[_; 1]> =
+                    type_args.to_vec().try_into().ok()
+                else {
+                    Err(SignatureError::from(TermTypeError::WrongNumberArgs(
+                        type_args.len(),
+                        1,
+                    )))?
+                };
+
+                let Ok(outputs) = TypeRowRV::try_from(outputs_arg.clone()) else {
+                    Err(SignatureError::from(TermTypeError::TypeMismatch {
+                        term: Box::new(outputs_arg),
+                        type_: Box::new(OUTPUTS_PARAM.to_owned()),
+                    }))?
+                };
+                Ok(WasmOp::ReadResult {
+                    outputs: outputs.try_into()?,
+                })
+
             }
         }
     }
@@ -523,6 +583,13 @@ pub enum WasmOp {
         /// Note that row variables are not allowed here.
         outputs: TypeRow,
     },
+    /// A `tket.wasm.call` op.
+    ReadResult {
+        /// The output signature of the function to be called
+        /// Note that row variables are not allowed here.
+        outputs: TypeRow,
+    },
+
 }
 
 impl WasmOp {
@@ -532,13 +599,12 @@ impl WasmOp {
             Self::DisposeContext => WasmOpDef::dispose_context,
             Self::Lookup { .. } => WasmOpDef::lookup,
             Self::Call { .. } => WasmOpDef::call,
+            Self::ReadResult { .. } => WasmOpDef::read_result,
         }
     }
 
     fn get_context_return_type(extension_ref: &Weak<Extension>) -> SumType {
-        option_type(Type::new_extension(
-            WasmType::Context.into_custom_type(extension_ref),
-        ))
+        option_type(WasmType::Context.get_type(extension_ref))
     }
 }
 
@@ -576,6 +642,7 @@ impl MakeExtensionOp for WasmOp {
                 let outputs = TypeArg::from(outputs.clone());
                 vec![inputs, outputs]
             }
+            WasmOp::ReadResult {  outputs } => vec![outputs.clone().into()]
         }
     }
 }
@@ -657,7 +724,7 @@ pub trait WasmOpBuilder: Dataflow {
         context: Wire,
         func: Wire,
         inputs: impl IntoIterator<Item = Wire>,
-    ) -> Result<[Wire; 2], BuildError> {
+    ) -> Result<Wire, BuildError> {
         let func_wire_type = self.get_wire_type(func)?;
         let Some(WasmType::Func {
             inputs: in_types,
@@ -677,7 +744,26 @@ pub trait WasmOpBuilder: Dataflow {
                 },
                 [context, func].into_iter().chain(inputs),
             )?
-            .outputs_arr())
+            .out_wire(0))
+    }
+
+    /// Add a `tket.wasm.read_result` op.
+    fn add_read_result(&mut self, result: Wire) -> Result<(Wire, Vec<Wire>), BuildError> {
+        let result_wire_type = self.get_wire_type(result)?;
+        let Some(WasmType::Result { outputs }) =  self.get_wire_type(result)?.clone().try_into().ok()
+        else {
+            // TODO Add an Error variant to BuildError for: Input wire has wrong type
+            panic!("result wire is not a result type: {result_wire_type}")
+        };
+        let outputs = TypeRow::try_from(outputs)?;
+
+        let op = self.add_dataflow_op(
+            WasmOp::ReadResult { outputs },
+            [result],
+        )?;
+        let context = op.out_wire(0);
+        let results = op.outputs().skip(1).collect_vec();
+        Ok((context, results))
     }
 
     /// Add a [ConstWasmModule] and load it.
@@ -781,7 +867,7 @@ mod test {
             inputs: inputs.clone(),
             outputs: outputs.clone(),
         };
-        let module_ty = Type::new_extension(WasmType::Module.into_custom_type(&op.extension_ref()));
+        let module_ty = WasmType::Module.get_type(&op.extension_ref());
         let func_ty = Type::new_extension(WasmType::func_custom_type(
             inputs.clone(),
             outputs.clone(),
@@ -797,10 +883,9 @@ mod test {
     #[case(type_row![], type_row![])]
     #[case(vec![Type::UNIT], TypeRow::try_from(Term::from(vec![TypeArg::from(Type::UNIT),TypeArg::from(usize_t())])).unwrap())]
     fn build_all(#[case] in_types: impl Into<TypeRow>, #[case] out_types: impl Into<TypeRow>) {
-        use futures::FutureOpBuilder as _;
         use hugr::{
             builder::DataflowHugr as _,
-            extension::prelude::{ConstUsize, UnpackTuple, UnwrapBuilder as _},
+            extension::prelude::{ConstUsize, UnwrapBuilder as _},
         };
 
         let (in_types, out_types) = (in_types.into(), out_types.into());
@@ -819,18 +904,11 @@ mod test {
                 .add_lookup("test_func", in_types, out_types.clone(), module)
                 .unwrap();
 
-            let [context, results_future] = builder
+            let result = builder
                 .add_call(context, func, builder.input_wires())
                 .unwrap();
 
-            let results = {
-                let tuple_ty = Type::new_tuple(out_types.clone());
-                let [results_tuple] = builder.add_read(results_future, tuple_ty).unwrap();
-                builder
-                    .add_dataflow_op(UnpackTuple::new(out_types), [results_tuple])
-                    .unwrap()
-                    .outputs()
-            };
+            let (context, results) = builder.add_read_result(result).unwrap();
 
             builder.add_dispose_context(context).unwrap();
 
