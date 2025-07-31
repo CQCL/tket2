@@ -2,6 +2,8 @@
 
 use std::thread::{self, JoinHandle};
 
+use hugr::Node;
+
 use crate::circuit::CircuitHash;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
@@ -24,7 +26,7 @@ pub struct BadgerWorker<R, S, P: Ord> {
 
 impl<R, S, P> BadgerWorker<R, S, P>
 where
-    R: Rewriter + Send + 'static,
+    R: Rewriter<Node> + Send + 'static,
     S: RewriteStrategy<Cost = P> + Send + 'static,
     P: CircuitCost + Send + Sync + 'static,
 {
