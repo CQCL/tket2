@@ -86,6 +86,15 @@ impl<H: HugrView> ResourceScope<H> {
         Self::with_config(hugr, subgraph, &Default::default())
     }
 
+    /// Create a new ResourceScope for the DFG at the entrypoint.
+    pub fn from_circuit(circuit: Circuit<H>) -> Self
+    where
+        H: HugrView<Node = hugr::Node> + Clone,
+    {
+        let subgraph = circuit.subgraph();
+        Self::new(circuit.into_hugr(), subgraph)
+    }
+
     /// Create a new ResourceScope with a custom resource flow implementation.
     pub fn with_config(
         hugr: H,
@@ -231,17 +240,6 @@ impl<H: HugrView> ResourceScope<H> {
                 .contains(&next_node)
                 .then_some(next_node)
         })
-    }
-}
-
-impl<H: HugrView> ResourceScope<H> {
-    /// Create a new ResourceScope from a reference to a circuit.
-    pub fn from_circuit(circuit: Circuit<H>) -> Self
-    where
-        H: Clone + HugrView<Node = hugr::Node>,
-    {
-        let subgraph = circuit.subgraph();
-        Self::new(circuit.into_hugr(), subgraph)
     }
 }
 
