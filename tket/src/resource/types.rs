@@ -21,7 +21,8 @@ pub struct ResourceId(usize);
 impl ResourceId {
     /// Create a new ResourceId.
     ///
-    /// This method should only be called by ResourceAllocator and tests.
+    /// ResourceIds should typically be obtained from [`ResourceAllocator`].
+    /// Only use this in testing.
     pub(super) fn new(id: usize) -> Self {
         Self(id)
     }
@@ -51,8 +52,8 @@ impl Position {
     ///
     /// This method should only be called by allocators and tests.
     #[allow(unused)]
-    pub(super) fn new_integer(i: i64) -> Self {
-        Self(Rational64::from_integer(i))
+    pub(super) fn new_integer(numer: i64) -> Self {
+        Self(Rational64::from_integer(numer))
     }
 
     /// Get position as f64, rounded to the given precision.
