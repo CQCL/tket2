@@ -39,24 +39,26 @@
 //! Use a [`SiblingSubgraph`] to define a region of a `HUGR`, within which
 //! resources should be tracked. You can then construct a resource-tracked scope
 //! using [`ResourceScope::new`].
+//!
+//! [`SiblingSubgraph`]: hugr::hugr::views::SiblingSubgraph
 
 // Public API exports
 pub use flow::{DefaultResourceFlow, ResourceFlow, UnsupportedOp};
+pub use interval::{Interval, InvalidInterval};
 pub use scope::{ResourceScope, ResourceScopeConfig};
 pub use types::{CopyableValueId, OpValue, Position, ResourceAllocator, ResourceId};
 
 // Internal modules
 mod flow;
+mod interval;
 mod scope;
 mod types;
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::qb_t,
-        hugr::views::SiblingSubgraph,
-        ops::handle::DataflowParentID,
         types::Signature,
         CircuitUnit, Hugr,
     };
@@ -67,13 +69,14 @@ mod tests {
     use crate::{
         extension::rotation::{rotation_type, ConstRotation},
         resource::scope::tests::ResourceScopeReport,
-        TketOp,
+        utils::build_simple_circuit,
+        Circuit, TketOp,
     };
 
     use super::ResourceScope;
 
     // Gate being commuted has a non-linear input
-    fn circ(n_qubits: usize, add_rz: bool, add_const_rz: bool) -> Hugr {
+    pub fn cx_rz_circuit(n_qubits: usize, add_rz: bool, add_const_rz: bool) -> Hugr {
         let build = || {
             let out_qb_row = vec![qb_t(); n_qubits];
             let mut inp_qb_row = out_qb_row.clone();
@@ -123,6 +126,18 @@ mod tests {
         build().unwrap()
     }
 
+    /// A two-qubit circuit with `n_cx` CNOTs.
+    pub fn cx_circuit(n_cx: usize) -> Hugr {
+        build_simple_circuit(2, |circ| {
+            for _ in 0..n_cx {
+                circ.append(TketOp::CX, [0, 1])?;
+            }
+            Ok(())
+        })
+        .unwrap()
+        .into_hugr()
+    }
+
     #[rstest]
     #[case(2, false, false)]
     #[case(2, true, false)]
@@ -137,9 +152,8 @@ mod tests {
         #[case] add_rz: bool,
         #[case] add_const_rz: bool,
     ) {
-        let circ = circ(n_qubits, add_rz, add_const_rz);
-        let subgraph =
-            SiblingSubgraph::try_new_dataflow_subgraph::<_, DataflowParentID>(&circ).unwrap();
+        let circ = cx_rz_circuit(n_qubits, add_rz, add_const_rz);
+        let subgraph = Circuit::from(&circ).subgraph();
         let scope = ResourceScope::new(&circ, subgraph);
         let info = ResourceScopeReport::from(&scope);
 

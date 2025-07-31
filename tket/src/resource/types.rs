@@ -18,8 +18,11 @@ use uuid::Uuid;
 pub struct ResourceId(usize);
 
 impl ResourceId {
-    /// Create a new ResourceId. This method should only be called by ResourceAllocator.
-    fn new(id: usize) -> Self {
+    /// Create a new ResourceId.
+    ///
+    /// ResourceIds should typically be obtained from [`ResourceAllocator`].
+    /// Only use this in testing.
+    pub(super) fn new(id: usize) -> Self {
         Self(id)
     }
 
@@ -60,7 +63,7 @@ impl std::fmt::Debug for Position {
 }
 
 impl Position {
-    fn new_integer(numer: i64) -> Self {
+    pub(super) fn new_integer(numer: i64) -> Self {
         Self(Rational64::from_integer(numer))
     }
 
@@ -76,7 +79,8 @@ impl Position {
     }
 }
 
-/// Value associated with a port, either a resource with position or a copyable value.
+/// Value associated with a port, either a resource with position or a copyable
+/// value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OpValue {
     /// A linear resource with its position along the resource path.
@@ -192,7 +196,8 @@ impl<T> PortMap<T> {
 
 pub(super) type ResourceMap<T> = Vec<T>;
 
-/// Allocator for ResourceIds that ensures they are assigned in increasing order.
+/// Allocator for ResourceIds that ensures they are assigned in increasing
+/// order.
 #[derive(Debug, Clone)]
 pub struct ResourceAllocator {
     next_id: usize,
