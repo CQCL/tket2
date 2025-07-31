@@ -1,5 +1,11 @@
 # Changelog
 
+
+## [0.13.1](https://github.com/CQCL/tket2/compare/tket-v0.13.0...tket-v0.13.1) - 2025-07-30
+
+### Documentation
+
+- Update README badges ([#1004](https://github.com/CQCL/tket2/pull/1004))
 ## [0.13.0](https://github.com/CQCL/tket2/compare/tket2-v0.12.3...tket-v0.13.0) - 2025-07-25
 
 ### New Features

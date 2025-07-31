@@ -7,25 +7,20 @@ API.
 
 ## Building instructions
 
-Building `tket1-passes` is done using `conan >= 2.0`. After installing `conan`,
-(`pip install conan` or use `pipx`), you must set up `conan` to use the
-artifactory containing the tket package:
-
-```
-conan remote add tket-libs https://quantinuumsw.jfrog.io/artifactory/api/conan/tket1-libs --index 0
-```
-
-For the time being, one extra step is required to export `tket-c-api` to the conan cache:
-
-```
-cd tket-c-api && conan create . --build=missing"
-```
-
-That's it! You can now build the library using `cargo build`.
+Building `tket1-passes` is done using `conan >= 2.0`. This will be installed
+automatically by `uv` if using the build tools `just` or `uv` (recommended; see
+[DEVELOPMENT.md](../DEVELOPMENT.md) for more detailed instructions). If you wish
+to run `cargo build` directly, make sure that `conan` is installed and available
+in your `PATH`.
 
 If conan is unable to fetch all dependencies as pre-compiled binaries, you will
 also need standard C++ tooling to compile the dependencies (i.e. a reasonably
 recent version of cmake and a C++ compiler).
+
+You can also eschew using conan altogether by setting the `TKET_C_API_PATH`
+environment variable to point to a pre-compiled version of the `tket-c-api`
+library. Note that this must be a dynamic library (the pre-built binaries on
+conan on the other hand are static libraries).
 
 ## Currently supported TKET1 features
 
