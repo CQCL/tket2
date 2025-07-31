@@ -1,4 +1,4 @@
-from tket2_exts import (
+from tket_exts import (
     opaque_bool,
     debug,
     guppy,

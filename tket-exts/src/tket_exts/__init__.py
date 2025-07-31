@@ -38,7 +38,7 @@ def futures() -> Extension:
 
 @functools.cache
 def gpu() -> Extension:
-    return load_extension("tket2.gpu")
+    return load_extension("tket.gpu")
 
 
 @functools.cache
