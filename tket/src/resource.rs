@@ -45,21 +45,90 @@
 
 // Public API exports
 pub use flow::{DefaultResourceFlow, ResourceFlow, UnsupportedOp};
-pub use scope::{ResourceScope, ResourceScopeConfig};
+pub use scope::ResourceScope;
 pub use types::{CircuitUnit, Position, ResourceAllocator, ResourceId};
+
+use crate::extension::rotation::{ConstRotation, RotationOp};
+
+use hugr::{
+    extension::simple_op::MakeExtensionOp,
+    ops::{constant, OpType},
+    std_extensions::arithmetic::{conversions::ConvertOpDef, float_types::ConstF64},
+    HugrView, IncomingPort, PortIndex,
+};
 
 // Internal modules
 mod flow;
 mod scope;
 mod types;
 
+impl<H: HugrView> ResourceScope<H> {
+    /// The constant value of a circuit unit.
+    pub fn as_const_value(&self, unit: CircuitUnit<H::Node>) -> Option<&constant::Value> {
+        let (mut curr_node, outport) = match unit {
+            CircuitUnit::Resource(..) => None,
+            CircuitUnit::Copyable(wire) => Some((wire.node(), wire.source())),
+        }?;
+
+        if outport.index() > 0 {
+            return None;
+        }
+
+        fn is_const_conversion_op(op: &OpType) -> bool {
+            if matches!(op, OpType::LoadConstant(..)) {
+                true
+            } else if let Some(op) = op.as_extension_op() {
+                if let Ok(op) = ConvertOpDef::from_extension_op(op) {
+                    op == ConvertOpDef::itousize
+                } else if let Ok(op) = RotationOp::from_extension_op(op) {
+                    matches!(
+                        op,
+                        RotationOp::from_halfturns_unchecked | RotationOp::from_halfturns
+                    )
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        }
+
+        let mut op;
+        while {
+            op = self.hugr().get_optype(curr_node);
+            is_const_conversion_op(op)
+        } {
+            (curr_node, _) = self
+                .hugr()
+                .single_linked_output(curr_node, IncomingPort::from(0))
+                .expect("invalid signature for conversion op");
+        }
+
+        if let OpType::Const(const_op) = op {
+            Some(&const_op.value)
+        } else {
+            None
+        }
+    }
+
+    /// The constant f64 value of a circuit unit (if it is a constant f64).
+    pub fn as_const_f64(&self, unit: CircuitUnit<H::Node>) -> Option<f64> {
+        let const_val = self.as_const_value(unit)?;
+        if let Some(const_rot) = const_val.get_custom_value::<ConstRotation>() {
+            Some(const_rot.half_turns())
+        } else if let Some(const_f64) = const_val.get_custom_value::<ConstF64>() {
+            Some(const_f64.value())
+        } else {
+            panic!("unknown constant type: {:?}", const_val);
+        }
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::qb_t,
-        hugr::views::SiblingSubgraph,
-        ops::handle::DataflowParentID,
         types::Signature,
         CircuitUnit, Hugr,
     };
@@ -71,7 +140,7 @@ pub(crate) mod tests {
         extension::rotation::{rotation_type, ConstRotation},
         resource::scope::tests::ResourceScopeReport,
         utils::build_simple_circuit,
-        TketOp,
+        Circuit, TketOp,
     };
 
     use super::ResourceScope;
@@ -89,7 +158,7 @@ pub(crate) mod tests {
     }
 
     // Gate being commuted has a non-linear input
-    fn circ(n_qubits: usize, add_rz: bool, add_const_rz: bool) -> Hugr {
+    pub fn cx_rz_circuit(n_qubits: usize, add_rz: bool, add_const_rz: bool) -> Hugr {
         let build = || {
             let out_qb_row = vec![qb_t(); n_qubits];
             let mut inp_qb_row = out_qb_row.clone();
@@ -154,9 +223,8 @@ pub(crate) mod tests {
         #[case] add_rz: bool,
         #[case] add_const_rz: bool,
     ) {
-        let circ = circ(n_qubits, add_rz, add_const_rz);
-        let subgraph =
-            SiblingSubgraph::try_new_dataflow_subgraph::<_, DataflowParentID>(&circ).unwrap();
+        let circ = cx_rz_circuit(n_qubits, add_rz, add_const_rz);
+        let subgraph = Circuit::from(&circ).subgraph().unwrap();
         let scope = ResourceScope::new(&circ, subgraph);
         let info = ResourceScopeReport::from(&scope);
 
