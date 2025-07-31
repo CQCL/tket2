@@ -5,13 +5,14 @@ use core::panic;
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
 use hugr::extension::prelude::{MakeTuple, TupleOpDef};
 use hugr::extension::simple_op::MakeExtensionOp;
+use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::{OpTrait, OpType};
 use hugr::types::Type;
 use hugr::{HugrView, Node};
 use itertools::Itertools;
 
 use crate::circuit::Command;
-use crate::rewrite::{CircuitRewrite, Subcircuit};
+use crate::rewrite::CircuitRewrite;
 use crate::Circuit;
 
 /// Find tuple pack operations followed by tuple unpack operations
@@ -101,8 +102,8 @@ fn remove_pack_unpack<T: HugrView<Node = Node>>(
 
     let mut nodes = unpack_nodes;
     nodes.push(pack_node);
-    let subcirc = Subcircuit::try_from_nodes(nodes, circ).unwrap();
-    let subcirc_signature = subcirc.signature(circ);
+    let subgraph = SiblingSubgraph::try_from_nodes(nodes, circ.hugr()).expect("is convex");
+    let subcirc_signature = subgraph.signature(circ.hugr());
 
     // The output port order in `Subcircuit::try_from_nodes` is not too well defined.
     // Check that the outputs are in the expected order.
@@ -141,11 +142,11 @@ fn remove_pack_unpack<T: HugrView<Node = Node>>(
         .finish_hugr_with_outputs(outputs)
         .unwrap_or_else(|e| {
             panic!("Failed to create replacement for removing tuple pack/unpack operations. {e}")
-        })
-        .into();
+        });
 
-    subcirc
-        .create_rewrite(circ, replacement)
+    subgraph
+        .create_simple_replacement(circ.hugr(), replacement)
+        .map(CircuitRewrite::from)
         .unwrap_or_else(|e| {
             panic!("Failed to create rewrite for removing tuple pack/unpack operations. {e}")
         })

@@ -66,9 +66,7 @@ pub trait RewriteStrategy {
     /// Returns the cost of a rewrite's matched subcircuit before replacing it.
     #[inline]
     fn pre_rewrite_cost(&self, rw: &CircuitRewrite, circ: &Circuit) -> Self::Cost {
-        circ.nodes_cost(rw.subcircuit().nodes().iter().copied(), |op| {
-            self.op_cost(op)
-        })
+        circ.nodes_cost(rw.subgraph().nodes().iter().copied(), |op| self.op_cost(op))
     }
 
     /// Returns the expected cost of a rewrite's matched subcircuit after replacing it.
@@ -129,14 +127,14 @@ impl RewriteStrategy for GreedyRewriteStrategy {
         let mut circ = circ.clone();
         for rewrite in rewrites {
             if rewrite
-                .subcircuit()
+                .subgraph()
                 .nodes()
                 .iter()
                 .any(|n| changed_nodes.contains(n))
             {
                 continue;
             }
-            changed_nodes.extend(rewrite.subcircuit().nodes().iter().copied());
+            changed_nodes.extend(rewrite.subgraph().nodes().iter().copied());
             cost_delta += rewrite.node_count_delta();
             rewrite
                 .apply(&mut circ)
