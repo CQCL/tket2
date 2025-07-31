@@ -160,7 +160,7 @@ pub enum GpuType {
         /// The output signature of the function. Note that row variables are
         /// allowed.
         outputs: TypeRowRV,
-    }
+    },
 }
 
 impl GpuType {
@@ -223,8 +223,10 @@ impl GpuType {
                 TypeBound::Linear,
                 extension_ref,
             ),
-            Self::Func { inputs, outputs } => Self::func_custom_type(inputs.clone(), outputs.clone(), extension_ref),
-            Self::Result { outputs } => Self::result_custom_type(outputs.clone(), extension_ref)
+            Self::Func { inputs, outputs } => {
+                Self::func_custom_type(inputs.clone(), outputs.clone(), extension_ref)
+            }
+            Self::Result { outputs } => Self::result_custom_type(outputs.clone(), extension_ref),
         }
     }
 }
@@ -338,28 +340,26 @@ impl MakeOpDef for GpuOpDef {
                     outputs.clone(),
                     extension_ref,
                 ));
-                let result_type =  TypeRV::new_extension(GpuType::result_custom_type(outputs, extension_ref).into());
-
+                let result_type = TypeRV::new_extension(
+                    GpuType::result_custom_type(outputs, extension_ref),
+                );
 
                 PolyFuncTypeRV::new(
                     [INPUTS_PARAM.to_owned(), OUTPUTS_PARAM.to_owned()],
-                    FuncValueType::new(
-                        vec![context_type, func_type, inputs],
-                        vec![result_type],
-                    ),
+                    FuncValueType::new(vec![context_type, func_type, inputs], vec![result_type]),
                 )
                 .into()
             }
             Self::read_result => {
                 let context_type: TypeRV = context_type.into();
                 let outputs = TypeRV::new_row_var_use(0, TypeBound::Copyable);
-                let result_type = TypeRV::new_extension(GpuType::result_custom_type(outputs.clone(), extension_ref));
+                let result_type = TypeRV::new_extension(GpuType::result_custom_type(
+                    outputs.clone(),
+                    extension_ref,
+                ));
                 PolyFuncTypeRV::new(
                     [OUTPUTS_PARAM.to_owned()],
-                    FuncValueType::new(
-                        vec![result_type],
-                        vec![context_type, outputs],
-                    ),
+                    FuncValueType::new(vec![result_type], vec![context_type, outputs]),
                 )
                 .into()
             }
@@ -472,9 +472,7 @@ impl HasConcrete for GpuOpDef {
                 })
             }
             Self::read_result => {
-                let Some([outputs_arg]): Option<[_; 1]> =
-                    type_args.to_vec().try_into().ok()
-                else {
+                let Some([outputs_arg]): Option<[_; 1]> = type_args.to_vec().try_into().ok() else {
                     Err(SignatureError::from(TermTypeError::WrongNumberArgs(
                         type_args.len(),
                         1,
@@ -490,7 +488,6 @@ impl HasConcrete for GpuOpDef {
                 Ok(GpuOp::ReadResult {
                     outputs: outputs.try_into()?,
                 })
-
             }
         }
     }
@@ -539,8 +536,8 @@ pub enum GpuOp {
     ReadResult {
         /// The output signature of the function that was called.
         /// Note that row variables are not allowed here.
-        outputs: TypeRow
-    }
+        outputs: TypeRow,
+    },
 }
 
 impl GpuOp {
@@ -705,21 +702,17 @@ pub trait GpuOpBuilder: Dataflow {
 
     /// Add a `tket.gpu.read_result` op.
     fn add_read_result(&mut self, result: Wire) -> Result<(Wire, Vec<Wire>), BuildError> {
-        let Some(GpuType::Result { outputs }) =  self.get_wire_type(result)?.clone().try_into().ok()
+        let Some(GpuType::Result { outputs }) = self.get_wire_type(result)?.clone().try_into().ok()
         else {
             // TODO Add an Error variant to BuildError for: Input wire has wrong type
             panic!("result wire is not a result type: ")
         };
         let outputs = TypeRow::try_from(outputs)?;
 
-        let op = self.add_dataflow_op(
-            GpuOp::ReadResult { outputs },
-            [result],
-        )?;
+        let op = self.add_dataflow_op(GpuOp::ReadResult { outputs }, [result])?;
         let context = op.out_wire(0);
         let results = op.outputs().skip(1).collect_vec();
         Ok((context, results))
-
     }
 
     /// Add a [ConstGpuModule] and load it.

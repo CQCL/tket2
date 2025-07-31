@@ -206,8 +206,6 @@ pub enum WasmType {
         /// allowed.
         outputs: TypeRowRV,
     },
-
-
 }
 
 impl WasmType {
@@ -270,8 +268,10 @@ impl WasmType {
                 TypeBound::Linear,
                 extension_ref,
             ),
-            Self::Func { inputs, outputs } => Self::func_custom_type(inputs.clone(), outputs.clone(), extension_ref),
-            Self::Result { outputs } => Self::result_custom_type(outputs.clone(), extension_ref)
+            Self::Func { inputs, outputs } => {
+                Self::func_custom_type(inputs.clone(), outputs.clone(), extension_ref)
+            }
+            Self::Result { outputs } => Self::result_custom_type(outputs.clone(), extension_ref),
         }
     }
 }
@@ -386,7 +386,9 @@ impl MakeOpDef for WasmOpDef {
                     outputs.clone(),
                     extension_ref,
                 ));
-                let result_type =  TypeRV::new_extension(WasmType::result_custom_type(outputs, extension_ref).into());
+                let result_type = TypeRV::new_extension(
+                    WasmType::result_custom_type(outputs, extension_ref),
+                );
 
                 PolyFuncTypeRV::new(
                     [INPUTS_PARAM.to_owned(), OUTPUTS_PARAM.to_owned()],
@@ -400,16 +402,14 @@ impl MakeOpDef for WasmOpDef {
             Self::read_result => {
                 let context_type: TypeRV = context_type.into();
                 let outputs = TypeRV::new_row_var_use(0, TypeBound::Copyable);
-                let result_type =  TypeRV::new_extension(WasmType::result_custom_type(outputs.clone(), extension_ref).into());
+                let result_type = TypeRV::new_extension(
+                    WasmType::result_custom_type(outputs.clone(), extension_ref),
+                );
                 PolyFuncTypeRV::new(
                     [OUTPUTS_PARAM.to_owned()],
-                    FuncValueType::new(
-                        vec![result_type],
-                        vec![context_type, outputs],
-                    ),
+                    FuncValueType::new(vec![result_type], vec![context_type, outputs]),
                 )
                 .into()
-
             }
         }
     }
@@ -520,9 +520,7 @@ impl HasConcrete for WasmOpDef {
                 })
             }
             Self::read_result => {
-                let Some([outputs_arg]): Option<[_; 1]> =
-                    type_args.to_vec().try_into().ok()
-                else {
+                let Some([outputs_arg]): Option<[_; 1]> = type_args.to_vec().try_into().ok() else {
                     Err(SignatureError::from(TermTypeError::WrongNumberArgs(
                         type_args.len(),
                         1,
@@ -538,7 +536,6 @@ impl HasConcrete for WasmOpDef {
                 Ok(WasmOp::ReadResult {
                     outputs: outputs.try_into()?,
                 })
-
             }
         }
     }
@@ -589,7 +586,6 @@ pub enum WasmOp {
         /// Note that row variables are not allowed here.
         outputs: TypeRow,
     },
-
 }
 
 impl WasmOp {
@@ -642,7 +638,7 @@ impl MakeExtensionOp for WasmOp {
                 let outputs = TypeArg::from(outputs.clone());
                 vec![inputs, outputs]
             }
-            WasmOp::ReadResult {  outputs } => vec![outputs.clone().into()]
+            WasmOp::ReadResult { outputs } => vec![outputs.clone().into()],
         }
     }
 }
@@ -750,17 +746,15 @@ pub trait WasmOpBuilder: Dataflow {
     /// Add a `tket.wasm.read_result` op.
     fn add_read_result(&mut self, result: Wire) -> Result<(Wire, Vec<Wire>), BuildError> {
         let result_wire_type = self.get_wire_type(result)?;
-        let Some(WasmType::Result { outputs }) =  self.get_wire_type(result)?.clone().try_into().ok()
+        let Some(WasmType::Result { outputs }) =
+            self.get_wire_type(result)?.clone().try_into().ok()
         else {
             // TODO Add an Error variant to BuildError for: Input wire has wrong type
             panic!("result wire is not a result type: {result_wire_type}")
         };
         let outputs = TypeRow::try_from(outputs)?;
 
-        let op = self.add_dataflow_op(
-            WasmOp::ReadResult { outputs },
-            [result],
-        )?;
+        let op = self.add_dataflow_op(WasmOp::ReadResult { outputs }, [result])?;
         let context = op.out_wire(0);
         let results = op.outputs().skip(1).collect_vec();
         Ok((context, results))
