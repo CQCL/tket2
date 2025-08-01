@@ -1,3 +1,8 @@
+//! Module for richer circuit representation and operations.
+//! This module provides a higher-order function that modifies circuits
+//! by applying modifiers like control, dagger, and power.
+//! This module also provides a vefiried safe_drop function that deallocates
+//! a qubit from a circuit, which should be at the initial state.
 pub mod control;
 pub mod dagger;
 pub mod modifier_call_graph;
@@ -8,10 +13,13 @@ use std::sync::{Arc, Weak};
 use crate::rich_circuit::{control::ModifierControl, dagger::ModifierDagger, power::ModifierPower};
 use hugr::{
     extension::{
+        prelude::qb_t,
         simple_op::{MakeOpDef, OpLoadError},
         ExtensionId, OpDef, SignatureFunc, Version,
     },
     ops::OpName,
+    type_row,
+    types::Signature,
     Extension,
 };
 use lazy_static::lazy_static;
@@ -118,9 +126,13 @@ impl MakeOpDef for Modifier {
 
     fn description(&self) -> String {
         match self {
-            Modifier::ControlModifier => "Generates a quantum-controlled circuit from a circuit.".into(),
+            Modifier::ControlModifier => {
+                "Generates a quantum-controlled circuit from a circuit.".into()
+            }
             Modifier::DaggerModifier => "Dagger operation on a circuit.".into(),
-            Modifier::PowerModifier => "Generates a circuit that applies a circuit many times.".into(),
+            Modifier::PowerModifier => {
+                "Generates a circuit that applies a circuit many times.".into()
+            }
         }
     }
 
@@ -128,33 +140,84 @@ impl MakeOpDef for Modifier {
     // fn post_opdef(&self, _def: &mut OpDef);
 }
 
-/// An accumulated modifier that combines control, dagger, and power modifiers.
-pub struct CombinedModifier {
-    control: usize,
-    dagger: bool,
-    #[allow(dead_code)]
-    power: usize,
+/// Safe drop function for qubits.
+/// This function deallocates a qubit from a circuit, which needs to be verified to be at the initial state.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Serialize,
+    Deserialize,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumIter,
+    IntoStaticStr,
+    EnumString,
+)]
+pub enum SafeDrop {
+    /// Verified drop operation.
+    VerifiedZero,
+    // FUTURE: automatic uncomputation.
 }
 
-impl From<Vec<Modifier>> for CombinedModifier {
-    fn from(modifiers: Vec<Modifier>) -> Self {
-        let mut control = 0;
-        let mut dagger = false;
-        let mut power = 0;
+/// The extension ID for the verified extension.
+pub const SAFEDROP_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("safe_drop");
+/// The version of the modifier extension.
+pub const SAFEDROP_VERSION: Version = Version::new(0, 1, 0);
 
-        for modifier in modifiers {
-            match modifier {
-                Modifier::ControlModifier => control += 1,
-                Modifier::DaggerModifier => dagger = true,
-                Modifier::PowerModifier => power += 1,
-            }
+lazy_static! {
+    /// The extension definition for TKET2 rotation type and ops.
+    pub static ref SAFEDROP_EXTENSION: Arc<Extension> =  {
+        Extension::new_arc(SAFEDROP_EXTENSION_ID, SAFEDROP_VERSION, |safe_drop, extension_ref| {
+            safe_drop.add_op(
+                VERIFIED_ZERO_OP_ID,
+                "Reset qubit which is guaranteed to be |0>".to_string(),
+                SafeDrop::VerifiedZero.signature(),
+                extension_ref,
+            ).unwrap();
         }
+    )};
+}
 
-        CombinedModifier {
-            control,
-            dagger,
-            power,
-        }
+#[allow(missing_docs)]
+pub const VERIFIED_ZERO_OP_ID: OpName = OpName::new_inline("VerifiedZero");
+
+impl MakeOpDef for SafeDrop {
+    fn opdef_id(&self) -> OpName {
+        VERIFIED_ZERO_OP_ID.clone()
+    }
+
+    fn from_def(op_def: &OpDef) -> Result<Self, OpLoadError>
+    where
+        Self: Sized,
+    {
+        hugr::extension::simple_op::try_from_name(op_def.name(), op_def.extension_id())
+    }
+
+    fn init_signature(&self, _extension_ref: &std::sync::Weak<hugr::Extension>) -> SignatureFunc {
+        Self::signature(self)
+    }
+
+    fn extension_ref(&self) -> Weak<hugr::Extension> {
+        Arc::downgrade(&SAFEDROP_EXTENSION)
+    }
+
+    fn extension(&self) -> ExtensionId {
+        SAFEDROP_EXTENSION_ID.to_owned()
+    }
+
+    fn description(&self) -> String {
+        "Safe drop operation for qubits.".into()
+    }
+}
+
+impl SafeDrop {
+    /// Signature for the safe drop operation.
+    pub fn signature(&self) -> SignatureFunc {
+        Signature::new(vec![qb_t()], type_row![]).into()
     }
 }
 
