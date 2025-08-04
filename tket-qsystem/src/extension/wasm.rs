@@ -580,7 +580,7 @@ pub enum WasmOp {
         /// Note that row variables are not allowed here.
         outputs: TypeRow,
     },
-    /// A `tket.wasm.call` op.
+    /// A `tket.wasm.read_result` op.
     ReadResult {
         /// The output signature of the function to be called
         /// Note that row variables are not allowed here.
