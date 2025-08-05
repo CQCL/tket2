@@ -2,12 +2,12 @@
 #
 # If this fails, it is likely that the packages require a release before we can release the `tket` python lib.
 
-name: tket-py Release checks
+name: 🚚 tket-py release checks
 
 on:
   pull_request:
     branches:
-      - release-please--branches--main--components--tket-py
+      - main
   workflow_dispatch: {}
 
 env:
@@ -23,6 +23,10 @@ jobs:
   py-release:
     name: Check `tket-py` release compatibility
     runs-on: ubuntu-latest
+    # Check if we are running on a release PR.
+    #
+    # release-please always uses this branch name.
+    if: ${{ github.ref == 'refs/heads/release-please--branches--main--components--tket-py' }}
     steps:
       - uses: actions/checkout@v4
       - uses: mozilla-actions/sccache-action@v0.0.9
@@ -32,11 +36,12 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
       - name: Install Python ${{ env.PYTHON_HIGHEST }}
-        run: uv python install ${{ env.PYTHON_HIGHEST }}
+        run: |
+          uv python install ${{ env.PYTHON_HIGHEST }}
+          uv python pin ${{ env.PYTHON_HIGHEST }}
       - name: Setup `tke2-py` with only pypi deps
         run: |
-          uv sync --no-sources --no-install-workspace \
-            --python ${{ env.PYTHON_HIGHEST }}
+          uv sync --no-sources --no-install-workspace
           uv pip install --no-sources tket-exts
           uv pip install --no-sources tket-eccs
           uv run --no-sync maturin develop
