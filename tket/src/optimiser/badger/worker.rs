@@ -2,12 +2,10 @@
 
 use std::thread::{self, JoinHandle};
 
-use hugr::Hugr;
-
-use crate::circuit::cost::CircuitCost;
 use crate::circuit::CircuitHash;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
+use crate::{circuit::cost::CircuitCost, resource::ResourceScope};
 
 use super::hugr_pchannel::{PriorityChannelCommunication, Work};
 
@@ -26,7 +24,7 @@ pub struct BadgerWorker<R, S, P: Ord> {
 
 impl<R, S, P> BadgerWorker<R, S, P>
 where
-    R: Rewriter<Hugr> + Send + 'static,
+    R: Rewriter<ResourceScope> + Send + 'static,
     S: RewriteStrategy<Cost = P> + Send + 'static,
     P: CircuitCost + Send + Sync + 'static,
 {
@@ -64,7 +62,7 @@ where
                 break;
             };
 
-            let rewrites = self.rewriter.get_rewrites(&circ.hugr());
+            let rewrites = self.rewriter.get_rewrites(&circ);
             let max_cost = self.priority_channel.max_cost();
             let new_circs = self
                 .strategy

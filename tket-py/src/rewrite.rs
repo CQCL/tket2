@@ -6,6 +6,7 @@ use itertools::Itertools;
 use pyo3::prelude::*;
 use std::path::PathBuf;
 use tket::{
+    resource::ResourceScope,
     rewrite::{CircuitRewrite, ECCRewriter, Rewriter},
     Circuit,
 };
@@ -82,8 +83,8 @@ pub enum PyRewriter {
     Vec(Vec<PyRewriter>),
 }
 
-impl<H: HugrView<Node = Node>> Rewriter<H> for PyRewriter {
-    fn get_rewrites(&self, circ: &H) -> Vec<CircuitRewrite> {
+impl<H: HugrView<Node = Node>> Rewriter<ResourceScope<H>> for PyRewriter {
+    fn get_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite<H::Node>> {
         match self {
             Self::ECC(ecc) => ecc.0.get_rewrites(circ),
             Self::Vec(rewriters) => rewriters
@@ -144,7 +145,8 @@ impl PyECCRewriter {
         )?))
     }
 
-    /// Returns a list of circuit rewrites that can be applied to the given Tk2Circuit.
+    /// Returns a list of circuit rewrites that can be applied to the given
+    /// Tk2Circuit.
     pub fn get_rewrites(&self, circ: &Tk2Circuit) -> Vec<PyCircuitRewrite> {
         self.0
             .get_rewrites(&circ.circ)
