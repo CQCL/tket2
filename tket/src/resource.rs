@@ -48,7 +48,13 @@
 
 // Public API exports
 pub use flow::{DefaultResourceFlow, ResourceFlow, UnsupportedOp};
-use hugr::{hugr::hugrmut::HugrMut, HugrView};
+use hugr::{
+    extension::simple_op::MakeExtensionOp,
+    hugr::hugrmut::HugrMut,
+    ops::{constant, OpType},
+    std_extensions::arithmetic::{conversions::ConvertOpDef, float_types::ConstF64},
+    HugrView, IncomingPort, PortIndex,
+};
 pub use interval::{Interval, InvalidInterval};
 use itertools::Itertools;
 pub use scope::{ResourceScope, ResourceScopeConfig};
@@ -56,6 +62,7 @@ pub use types::{CircuitUnit, Position, ResourceAllocator, ResourceId};
 
 use crate::{
     circuit::{CircuitHash, HashError},
+    extension::rotation::{ConstRotation, RotationOp},
     rewrite::trace::RewriteTrace,
 };
 
@@ -110,6 +117,66 @@ impl<H: HugrView> ResourceScope<H> {
     /// Returns the node containing the circuit definition.
     pub fn parent(&self) -> H::Node {
         self.as_circuit().parent()
+    }
+
+    /// The constant value of a circuit unit.
+    pub fn as_const_value(&self, unit: CircuitUnit<H::Node>) -> Option<&constant::Value> {
+        let (mut curr_node, outport) = match unit {
+            CircuitUnit::Resource(..) => None,
+            CircuitUnit::Copyable(wire) => Some((wire.node(), wire.source())),
+        }?;
+
+        if outport.index() > 0 {
+            return None;
+        }
+
+        fn is_const_conversion_op(op: &OpType) -> bool {
+            if matches!(op, OpType::LoadConstant(..)) {
+                true
+            } else if let Some(op) = op.as_extension_op() {
+                if let Ok(op) = ConvertOpDef::from_extension_op(op) {
+                    op == ConvertOpDef::itousize
+                } else if let Ok(op) = RotationOp::from_extension_op(op) {
+                    matches!(
+                        op,
+                        RotationOp::from_halfturns_unchecked | RotationOp::from_halfturns
+                    )
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        }
+
+        let mut op;
+        while {
+            op = self.hugr().get_optype(curr_node);
+            is_const_conversion_op(op)
+        } {
+            (curr_node, _) = self
+                .hugr()
+                .single_linked_output(curr_node, IncomingPort::from(0))
+                .expect("invalid signature for conversion op");
+        }
+
+        if let OpType::Const(const_op) = op {
+            Some(&const_op.value)
+        } else {
+            None
+        }
+    }
+
+    /// The constant f64 value of a circuit unit (if it is a constant f64).
+    pub fn as_const_f64(&self, unit: CircuitUnit<H::Node>) -> Option<f64> {
+        let const_val = self.as_const_value(unit)?;
+        if let Some(const_rot) = const_val.get_custom_value::<ConstRotation>() {
+            return Some(const_rot.half_turns());
+        } else if let Some(const_f64) = const_val.get_custom_value::<ConstF64>() {
+            return Some(const_f64.value());
+        } else {
+            panic!("unknown constant type: {:?}", const_val);
+        }
     }
 }
 
