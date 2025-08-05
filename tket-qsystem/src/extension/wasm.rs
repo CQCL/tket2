@@ -658,15 +658,13 @@ impl MakeRegisteredOp for WasmOp {
 /// Loading this is the only way to obtain a value of `tket.wasm.module` type.
 pub struct ConstWasmModule {
     /// The name of the module.
-    pub name: String,
-    /// The hash of the module.
-    pub hash: u64,
+    pub module_filename: String,
 }
 
 #[typetag::serde]
 impl CustomConst for ConstWasmModule {
     fn name(&self) -> ValueName {
-        format!("wasm:{}", self.name).into()
+        format!("wasm:{}", self.module_filename).into()
     }
     fn equal_consts(&self, other: &dyn CustomConst) -> bool {
         downcast_equal_consts(self, other)
@@ -761,10 +759,9 @@ pub trait WasmOpBuilder: Dataflow {
     }
 
     /// Add a [ConstWasmModule] and load it.
-    fn add_const_module(&mut self, name: impl Into<String>, hash: u64) -> Result<Wire, BuildError> {
+    fn add_const_module(&mut self, module_filename: impl Into<String>) -> Result<Wire, BuildError> {
         Ok(self.add_load_value(ConstWasmModule {
-            name: name.into(),
-            hash,
+            module_filename: module_filename.into(),
         }))
     }
 }
@@ -783,12 +780,10 @@ mod test {
     #[test]
     fn const_wasm_module() {
         let m1 = ConstWasmModule {
-            name: "test_mod".to_string(),
-            hash: 1,
+            module_filename: "test_mod".to_string(),
         };
         let m2 = ConstWasmModule {
-            name: "test_mod".to_string(),
-            hash: 1,
+            module_filename: "test_mod".to_string(),
         };
         assert_eq!(m1.name(), "wasm:test_mod");
         assert!(m1.equal_consts(&m2));
@@ -893,7 +888,7 @@ mod test {
                     .build_unwrap_sum(1, WasmOp::get_context_return_type(&EXTENSION_REF), mb_c)
                     .unwrap()
             };
-            let module = builder.add_const_module("test_module", 0).unwrap();
+            let module = builder.add_const_module("test_module").unwrap();
             let func = builder
                 .add_lookup("test_func", in_types, out_types.clone(), module)
                 .unwrap();
