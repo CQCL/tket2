@@ -2,6 +2,7 @@
 
 #[cfg(feature = "portmatching")]
 pub mod ecc_rewriter;
+pub mod matcher;
 pub mod strategy;
 pub mod trace;
 

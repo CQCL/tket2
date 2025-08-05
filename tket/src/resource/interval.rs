@@ -183,7 +183,7 @@ impl<N: HugrNode> Interval<N> {
     /// - [`Ordering::Less`] if `pos` is before the interval,
     /// - [`Ordering::Greater`] if `pos` is after the interval, and
     /// - [`Ordering::Equal`] if `pos` is within the interval.
-    fn position_in_interval(&self, pos: Position) -> Ordering {
+    pub fn position_in_interval(&self, pos: Position) -> Ordering {
         if pos < self.positions[0] {
             Ordering::Less
         } else if pos > self.positions[1] {
