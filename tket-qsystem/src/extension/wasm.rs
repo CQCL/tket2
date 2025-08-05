@@ -386,9 +386,8 @@ impl MakeOpDef for WasmOpDef {
                     outputs.clone(),
                     extension_ref,
                 ));
-                let result_type = TypeRV::new_extension(
-                    WasmType::result_custom_type(outputs, extension_ref),
-                );
+                let result_type =
+                    TypeRV::new_extension(WasmType::result_custom_type(outputs, extension_ref));
 
                 PolyFuncTypeRV::new(
                     [INPUTS_PARAM.to_owned(), OUTPUTS_PARAM.to_owned()],
@@ -402,9 +401,10 @@ impl MakeOpDef for WasmOpDef {
             Self::read_result => {
                 let context_type: TypeRV = context_type.into();
                 let outputs = TypeRV::new_row_var_use(0, TypeBound::Copyable);
-                let result_type = TypeRV::new_extension(
-                    WasmType::result_custom_type(outputs.clone(), extension_ref),
-                );
+                let result_type = TypeRV::new_extension(WasmType::result_custom_type(
+                    outputs.clone(),
+                    extension_ref,
+                ));
                 PolyFuncTypeRV::new(
                     [OUTPUTS_PARAM.to_owned()],
                     FuncValueType::new(vec![result_type], vec![context_type, outputs]),
