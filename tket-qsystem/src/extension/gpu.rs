@@ -340,9 +340,8 @@ impl MakeOpDef for GpuOpDef {
                     outputs.clone(),
                     extension_ref,
                 ));
-                let result_type = TypeRV::new_extension(
-                    GpuType::result_custom_type(outputs, extension_ref),
-                );
+                let result_type =
+                    TypeRV::new_extension(GpuType::result_custom_type(outputs, extension_ref));
 
                 PolyFuncTypeRV::new(
                     [INPUTS_PARAM.to_owned(), OUTPUTS_PARAM.to_owned()],
@@ -612,18 +611,24 @@ impl MakeRegisteredOp for GpuOp {
 /// A Constant identifying a GPU module.
 /// Loading this is the only way to obtain a value of `tket.gpu.module` type.
 pub struct ConstGpuModule {
-    /// The name of the module.
-    pub name: String,
-    /// The hash of the module.
-    pub hash: u64,
-    /// An optional config file to be loaded by the GPU program
-    pub config: Option<String>,
+    /// The name of the GPU module file to be loaded.
+    pub module_filename: String,
+    /// The name of an optional config file to be loaded by the GPU program
+    pub config_filename: Option<String>,
 }
 
 #[typetag::serde]
 impl CustomConst for ConstGpuModule {
     fn name(&self) -> ValueName {
-        format!("gpu:{}", self.name).into()
+        format!(
+            "gpu:{}{}",
+            self.module_filename,
+            self.config_filename
+                .clone()
+                .map(|a| format!(":{}", a))
+                .unwrap_or_default()
+        )
+        .into()
     }
     fn equal_consts(&self, other: &dyn CustomConst) -> bool {
         downcast_equal_consts(self, other)
@@ -719,13 +724,11 @@ pub trait GpuOpBuilder: Dataflow {
     fn add_const_module(
         &mut self,
         name: impl Into<String>,
-        hash: u64,
         config: Option<String>,
     ) -> Result<Wire, BuildError> {
         Ok(self.add_load_value(ConstGpuModule {
-            name: name.into(),
-            hash,
-            config,
+            module_filename: name.into(),
+            config_filename: config,
         }))
     }
 }
@@ -742,20 +745,18 @@ mod test {
     use super::*;
 
     #[rstest]
-    #[case(None)]
-    #[case(Some("Lorem"))]
-    fn const_gpu_module(#[case] config: Option<&str>) {
+    #[case(None, "gpu:test_mod")]
+    #[case(Some("Lorem".to_string()), "gpu:test_mod:Lorem")]
+    fn const_gpu_module(#[case] config_filename: Option<String>, #[case] exp_name: &str) {
         let m1 = ConstGpuModule {
-            name: "test_mod".to_string(),
-            hash: 1,
-            config: None,
+            module_filename: "test_mod".to_string(),
+            config_filename: config_filename.clone(),
         };
         let m2 = ConstGpuModule {
-            name: "test_mod".to_string(),
-            hash: 1,
-            config: None,
+            module_filename: "test_mod".to_string(),
+            config_filename,
         };
-        assert_eq!(m1.name(), "gpu:test_mod");
+        assert_eq!(m1.name(), exp_name);
         assert!(m1.equal_consts(&m2));
     }
 
@@ -858,7 +859,7 @@ mod test {
                     .build_unwrap_sum(1, GpuOp::get_context_return_type(&EXTENSION_REF), mb_c)
                     .unwrap()
             };
-            let module = builder.add_const_module("test_module", 0, None).unwrap();
+            let module = builder.add_const_module("test_module", None).unwrap();
             let func = builder
                 .add_lookup("test_func", in_types, out_types.clone(), module)
                 .unwrap();
