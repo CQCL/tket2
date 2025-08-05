@@ -625,7 +625,7 @@ impl CustomConst for ConstGpuModule {
             self.module_filename,
             self.config_filename
                 .clone()
-                .map(|a| format!(":{}", a))
+                .map(|a| format!(":{a}"))
                 .unwrap_or_default()
         )
         .into()
