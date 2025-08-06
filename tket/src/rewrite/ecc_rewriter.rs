@@ -192,8 +192,8 @@ impl ECCRewriter {
     }
 }
 
-impl Rewriter<Node> for ECCRewriter {
-    fn get_rewrites(&self, circ: &Circuit<impl HugrView<Node = Node>>) -> Vec<CircuitRewrite> {
+impl<H: HugrView<Node = Node>> Rewriter<Circuit<H>> for ECCRewriter {
+    fn get_rewrites(&self, circ: &Circuit<H>) -> Vec<CircuitRewrite<H::Node>> {
         let matches = self.matcher.find_matches(circ);
         matches
             .into_iter()
