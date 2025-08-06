@@ -92,7 +92,28 @@ impl<N: HugrNode> CircuitRewrite<N> {
 }
 
 /// Generate rewrite rules for circuits.
-pub trait Rewriter<N> {
+///
+/// The generic argument `C` (default: [`Circuit`]) is the type of circuit to
+/// find rewrites on. Currently, only arguments of type [`Circuit<H>`] are
+/// supported.
+pub trait Rewriter<C: CircuitLike = Circuit> {
     /// Get the rewrite rules for a circuit.
-    fn get_rewrites(&self, circ: &Circuit<impl HugrView<Node = N>>) -> Vec<CircuitRewrite<N>>;
+    fn get_rewrites(&self, circ: &C) -> Vec<CircuitRewrite<C::Node>>;
 }
+
+// A simple trait to get the node type of a circuit. This will allow us to
+// support circuit-like types (e.g. persistent circuits) in the future.
+mod hidden {
+    use hugr::HugrView;
+
+    use crate::Circuit;
+
+    pub trait CircuitLike {
+        type Node;
+    }
+
+    impl<H: HugrView> CircuitLike for Circuit<H> {
+        type Node = H::Node;
+    }
+}
+use hidden::CircuitLike;
