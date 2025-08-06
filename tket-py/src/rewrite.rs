@@ -1,7 +1,7 @@
 //! PyO3 wrapper for rewriters.
 
 use derive_more::From;
-use hugr::{hugr::views::SiblingSubgraph, HugrView};
+use hugr::{hugr::views::SiblingSubgraph, HugrView, Node};
 use itertools::Itertools;
 use pyo3::prelude::*;
 use std::path::PathBuf;
@@ -79,11 +79,8 @@ pub enum PyRewriter {
     Vec(Vec<PyRewriter>),
 }
 
-impl Rewriter for PyRewriter {
-    fn get_rewrites(
-        &self,
-        circ: &Circuit<impl HugrView<Node = hugr::Node>>,
-    ) -> Vec<CircuitRewrite> {
+impl<H: HugrView<Node = Node>> Rewriter<Circuit<H>> for PyRewriter {
+    fn get_rewrites(&self, circ: &Circuit<H>) -> Vec<CircuitRewrite> {
         match self {
             Self::ECC(ecc) => ecc.0.get_rewrites(circ),
             Self::Vec(rewriters) => rewriters
