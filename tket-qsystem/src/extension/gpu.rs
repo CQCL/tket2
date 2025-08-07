@@ -1,51 +1,6 @@
-//! This module defines the `tket.wasm` Hugr extension used to model calling
-//! into WebAssembly.
-//!
-//! It depends on the `tket.futures` extension for handling async calls into
-//! WebAssembly.
-//!
-//! 'tket.wasm' provides the following types:
-//!  - `tket.wasm.module`: A WebAssembly module.
-//!  - `tket.wasm.context`: A WebAssembly context.
-//!  - `tket.wasm.func`: A WebAssembly function.
-//!
-//!  Each of which can be constructed in rust via [WasmType].
-//!
-//!  `tket.wasm.context` is a linear type that orders runtime effects. It is
-//!  obtained via the `tket.wasm.get_context` operation and destroyed via
-//!  `tket.wasm.dispose_context`.
-//!
-//!  A `tket.wasm.module` is obtained by loading a `ConstWasmModule` constant.
-//!  We assume that all modules are available in all contexts.
-//!
-//!  `tket.wasm.get_context` takes a `prelude.usize`, allowing multiple independent
-//!  contexts to exist simultaneously. `get_context` is fallible, returning
-//!  `None` if the specified context has already been obtained via an earlier
-//!  `get_context` op and not `dispose_context`ed.
-//!
-//!  `tket.wasm.func` is a type representing a handle to a function in a
-//!  `tket.wasm.module`. It carries type args defining its signature, but not
-//!  its name.
-//!
-//!  A `tket.wasm.func` is obtained from a `tket.wasm.lookup` op, which takes
-//!  a compile-time name and signature, and a runtime module. TODO Likely the
-//!  module should be compile time here, but I think we need
-//!  extension-op-static-edges to do this properly.
-//!
-//!  `tket.wasm.func`s are called via the `tket.wasm.call` op. This op takes:
-//!   - a `tket.wasm.context` identifying where the call will execute;
-//!   - a `tket.wasm.func` identifying the function to call;
-//!   - Input arguments as specified by the type of the `tket.wasm.func`.
-//!
-//!   It returns a `tket.futures.future` holding a tuple of results as
-//!   specified by the type of the `tket.wasm.func`.
-//!
-//!   We provide [WasmType] to assist in constructing and interpreting [Type]s.
-//!
-//!   We provide [WasmOp] to assist in constructing and interpreting [ExtensionOp]s.
-//!
-//!   We provide [WasmOpBuilder] to assist in building [hugr::Hugr]s using the
-//!   `tket.wasm` extension.
+//! This module defines the `tket.gpu` API for calling GPU programs.
+//! It has the same format as the `tket.wasm` module, with the exception of
+//! ConstGpuModule taking an optional `config` parameter.
 
 use std::sync::{Arc, Weak};
 
@@ -78,40 +33,40 @@ use serde::{Deserialize, Serialize};
 use smol_str::{format_smolstr, SmolStr};
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
-/// The "tket.wasm" extension id.
-pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.wasm");
-/// The "tket.wasm" extension version.
-pub const EXTENSION_VERSION: Version = Version::new(0, 3, 0);
+/// The "tket.gpu" extension id.
+pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.gpu");
+/// The "tket.gpu" extension version.
+pub const EXTENSION_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
-    /// The `tket.wasm` extension.
+    /// The `tket.gpu` extension.
     pub static ref EXTENSION: Arc<Extension> =
         Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
-        add_wasm_type_defs(ext, ext_ref).unwrap();
-        WasmOpDef::load_all_ops(ext, ext_ref, ).unwrap();
+        add_gpu_type_defs(ext, ext_ref).unwrap();
+        GpuOpDef::load_all_ops(ext, ext_ref, ).unwrap();
     });
 
-    /// A [Weak] reference to the `tket.wasm` op.
+    /// A [Weak] reference to the `tket.gpu` op.
     pub static ref EXTENSION_REF: Weak<Extension> = Arc::downgrade(&EXTENSION);
 
-    /// Extension registry including the "tket.wasm" extension and
+    /// Extension registry including the "tket.gpu" extension and
     /// dependencies.
     pub static ref REGISTRY: ExtensionRegistry = ExtensionRegistry::new([
         EXTENSION.to_owned(),
         PRELUDE.to_owned()
     ]);
 
-    /// The name of the `tket.wasm.module` type.
+    /// The name of the `tket.gpu.module` type.
     pub static ref MODULE_TYPE_NAME: SmolStr = SmolStr::new_inline("module");
-    /// The name of the `tket.wasm.context` type.
+    /// The name of the `tket.gpu.context` type.
     pub static ref CONTEXT_TYPE_NAME: SmolStr = SmolStr::new_inline("context");
-    /// The name of the `tket.wasm.func` type.
+    /// The name of the `tket.gpu.func` type.
     pub static ref FUNC_TYPE_NAME: SmolStr = SmolStr::new_inline("func");
 
-    /// The name of the `tket.wasm.result` type.
+    /// The name of the `tket.gpu.func` type.
     pub static ref RESULT_TYPE_NAME: SmolStr = SmolStr::new_inline("result");
 
-    /// The [TypeParam] of `tket.wasm.lookup` specifying the name of the function.
+    /// The [TypeParam] of `tket.gpu.lookup` specifying the name of the function.
     pub static ref NAME_PARAM: TypeParam = TypeParam::StringType;
     /// The [TypeParam] of various types and ops specifying the input signature of a function.
     pub static ref INPUTS_PARAM: TypeParam =
@@ -120,35 +75,35 @@ lazy_static! {
     pub static ref OUTPUTS_PARAM: TypeParam = TypeParam::ListType(Box::new(TypeBound::Linear.into()));
 }
 
-fn add_wasm_type_defs(
+fn add_gpu_type_defs(
     extension: &mut Extension,
     extension_ref: &Weak<Extension>,
 ) -> Result<(), ExtensionBuildError> {
     extension.add_type(
         MODULE_TYPE_NAME.to_owned(),
         vec![],
-        "wasm module".to_owned(),
+        "gpu module".to_owned(),
         TypeDefBound::copyable(),
         extension_ref,
     )?;
     extension.add_type(
         CONTEXT_TYPE_NAME.to_owned(),
         vec![],
-        "wasm context".into(),
+        "gpu context".into(),
         TypeDefBound::any(),
         extension_ref,
     )?;
     extension.add_type(
         FUNC_TYPE_NAME.to_owned(),
         vec![INPUTS_PARAM.to_owned(), OUTPUTS_PARAM.to_owned()],
-        "wasm func".into(),
+        "gpu func".into(),
         TypeDefBound::copyable(),
         extension_ref,
     )?;
     extension.add_type(
         RESULT_TYPE_NAME.to_owned(),
         vec![OUTPUTS_PARAM.to_owned()],
-        "wasm result".into(),
+        "gpu result".into(),
         TypeDefBound::any(),
         extension_ref,
     )?;
@@ -172,8 +127,8 @@ fn add_wasm_type_defs(
 )]
 #[allow(missing_docs, non_camel_case_types)]
 #[non_exhaustive]
-/// Simple enum of ops defined by the `tket.wasm` extension.
-pub enum WasmOpDef {
+/// Simple enum of ops defined by the `tket.gpu` extension.
+pub enum GpuOpDef {
     get_context,
     dispose_context,
     lookup,
@@ -182,16 +137,16 @@ pub enum WasmOpDef {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-/// An enum of types defined by the `tket.wasm` extension.
+/// An enum of types defined by the `tket.gpu` extension.
 ///
-/// We provide `impl From<WasmType>` for [CustomType] and [Type], and `impl
-/// TryFrom<CustomType>` and `impl TryFrom<CustomType>` for [WasmType].
-pub enum WasmType {
-    /// `tket.wasm.module`
+/// We provide `impl From<GpuType>` for [CustomType] and [Type], and `impl
+/// TryFrom<CustomType>` and `impl TryFrom<CustomType>` for [GpuType].
+pub enum GpuType {
+    /// `tket.gpu.module`
     Module,
-    /// `tket.wasm.context`
+    /// `tket.gpu.context`
     Context,
-    /// `tket.wasm.func`
+    /// `tket.gpu.func`
     Func {
         /// The input signature of the function. Note that row variables are
         /// allowed.
@@ -200,7 +155,7 @@ pub enum WasmType {
         /// allowed.
         outputs: TypeRowRV,
     },
-    /// `tket.wasm.result`
+    /// `tket.gpu.result`
     Result {
         /// The output signature of the function. Note that row variables are
         /// allowed.
@@ -208,8 +163,8 @@ pub enum WasmType {
     },
 }
 
-impl WasmType {
-    /// Construct a new `tket.wasm.func` type.
+impl GpuType {
+    /// Construct a new `tket.gpu.func` type.
     pub fn new_func(inputs: impl Into<TypeRowRV>, outputs: impl Into<TypeRowRV>) -> Self {
         Self::Func {
             inputs: inputs.into(),
@@ -276,19 +231,19 @@ impl WasmType {
     }
 }
 
-impl From<WasmType> for CustomType {
-    fn from(value: WasmType) -> Self {
+impl From<GpuType> for CustomType {
+    fn from(value: GpuType) -> Self {
         value.custom_type(&EXTENSION_REF)
     }
 }
 
-impl From<WasmType> for Type {
-    fn from(value: WasmType) -> Self {
+impl From<GpuType> for Type {
+    fn from(value: GpuType) -> Self {
         value.get_type(&EXTENSION_REF)
     }
 }
 
-impl TryFrom<Type> for WasmType {
+impl TryFrom<Type> for GpuType {
     type Error = ();
 
     fn try_from(value: Type) -> Result<Self, Self::Error> {
@@ -300,7 +255,7 @@ impl TryFrom<Type> for WasmType {
     }
 }
 
-impl TryFrom<CustomType> for WasmType {
+impl TryFrom<CustomType> for GpuType {
     type Error = SignatureError;
     fn try_from(value: CustomType) -> Result<Self, Self::Error> {
         if value.extension() != &EXTENSION_ID {
@@ -311,8 +266,8 @@ impl TryFrom<CustomType> for WasmType {
         }
 
         match value.name() {
-            n if *n == *MODULE_TYPE_NAME => Ok(WasmType::Module),
-            n if *n == *CONTEXT_TYPE_NAME => Ok(WasmType::Context),
+            n if *n == *MODULE_TYPE_NAME => Ok(GpuType::Module),
+            n if *n == *CONTEXT_TYPE_NAME => Ok(GpuType::Context),
             n if *n == *FUNC_TYPE_NAME => {
                 let [inputs, outputs] = value.args() else {
                     Err(SignatureError::InvalidTypeArgs)?
@@ -320,15 +275,14 @@ impl TryFrom<CustomType> for WasmType {
                 let inputs = TypeRowRV::try_from(inputs.clone())?;
                 let outputs = TypeRowRV::try_from(outputs.clone())?;
 
-                Ok(WasmType::Func { inputs, outputs })
+                Ok(GpuType::Func { inputs, outputs })
             }
             n if *n == *RESULT_TYPE_NAME => {
                 let [outputs] = value.args() else {
                     Err(SignatureError::InvalidTypeArgs)?
                 };
                 let outputs = TypeRowRV::try_from(outputs.clone())?;
-
-                Ok(WasmType::Result { outputs })
+                Ok(Self::Result { outputs })
             }
             n => Err(SignatureError::NameMismatch(
                 format_smolstr!(
@@ -343,29 +297,29 @@ impl TryFrom<CustomType> for WasmType {
     }
 }
 
-impl MakeOpDef for WasmOpDef {
+impl MakeOpDef for GpuOpDef {
     fn opdef_id(&self) -> hugr::ops::OpName {
         <&'static str>::from(self).into()
     }
 
     fn init_signature(&self, extension_ref: &Weak<Extension>) -> SignatureFunc {
-        let context_type = WasmType::Context.get_type(extension_ref);
-        let module_type = WasmType::Module.get_type(extension_ref);
+        let context_type = GpuType::Context.get_type(extension_ref);
+        let module_type = GpuType::Module.get_type(extension_ref);
         match self {
             // [usize] -> [Context]
             Self::get_context => Signature::new(
                 usize_t(),
-                Type::from(WasmOp::get_context_return_type(extension_ref)),
+                Type::from(GpuOp::get_context_return_type(extension_ref)),
             )
             .into(),
             // [Context] -> []
             Self::dispose_context => Signature::new(context_type, type_row![]).into(),
-            // <name: String, inputs: TypeRow, outputs: TypeRow> [Module] -> [WasmType::Func { inputs, outputs }]
+            // <name: String, inputs: TypeRow, outputs: TypeRow> [Module] -> [GpuType::Func { inputs, outputs }]
             Self::lookup => {
                 let inputs = TypeRV::new_row_var_use(1, TypeBound::Copyable);
                 let outputs = TypeRV::new_row_var_use(2, TypeBound::Copyable);
 
-                let func_type = WasmType::func_custom_type(inputs, outputs, extension_ref).into();
+                let func_type = GpuType::func_custom_type(inputs, outputs, extension_ref).into();
                 PolyFuncTypeRV::new(
                     [
                         NAME_PARAM.to_owned(),
@@ -376,32 +330,29 @@ impl MakeOpDef for WasmOpDef {
                 )
                 .into()
             }
-            // <inputs: TypeRow, outputs: TypeRow> [Context, WasmType::Func { inputs, outputs }, inputs] -> [Context, future<tuple<outputs>>>]
+            // <inputs: TypeRow, outputs: TypeRow> [Context, GpuType::Func { inputs, outputs }, inputs] -> [Context, future<tuple<outputs>>>]
             Self::call => {
                 let context_type: TypeRV = context_type.into();
                 let inputs = TypeRV::new_row_var_use(0, TypeBound::Copyable);
                 let outputs = TypeRV::new_row_var_use(1, TypeBound::Copyable);
-                let func_type = Type::new_extension(WasmType::func_custom_type(
+                let func_type = TypeRV::new_extension(GpuType::func_custom_type(
                     inputs.clone(),
                     outputs.clone(),
                     extension_ref,
                 ));
                 let result_type =
-                    TypeRV::new_extension(WasmType::result_custom_type(outputs, extension_ref));
+                    TypeRV::new_extension(GpuType::result_custom_type(outputs, extension_ref));
 
                 PolyFuncTypeRV::new(
                     [INPUTS_PARAM.to_owned(), OUTPUTS_PARAM.to_owned()],
-                    FuncValueType::new(
-                        vec![context_type.clone(), func_type.into(), inputs],
-                        vec![result_type],
-                    ),
+                    FuncValueType::new(vec![context_type, func_type, inputs], vec![result_type]),
                 )
                 .into()
             }
             Self::read_result => {
                 let context_type: TypeRV = context_type.into();
                 let outputs = TypeRV::new_row_var_use(0, TypeBound::Copyable);
-                let result_type = TypeRV::new_extension(WasmType::result_custom_type(
+                let result_type = TypeRV::new_extension(GpuType::result_custom_type(
                     outputs.clone(),
                     extension_ref,
                 ));
@@ -430,8 +381,8 @@ impl MakeOpDef for WasmOpDef {
     }
 }
 
-impl HasConcrete for WasmOpDef {
-    type Concrete = WasmOp;
+impl HasConcrete for GpuOpDef {
+    type Concrete = GpuOp;
 
     fn instantiate(&self, type_args: &[TypeArg]) -> Result<Self::Concrete, OpLoadError> {
         match self {
@@ -442,7 +393,7 @@ impl HasConcrete for WasmOpDef {
                         0,
                     )))?
                 };
-                Ok(WasmOp::GetContext)
+                Ok(GpuOp::GetContext)
             }
             Self::dispose_context => {
                 let [] = type_args else {
@@ -451,7 +402,7 @@ impl HasConcrete for WasmOpDef {
                         0,
                     )))?
                 };
-                Ok(WasmOp::DisposeContext)
+                Ok(GpuOp::DisposeContext)
             }
             // <String,in_row,out_row> [] -> []
             Self::lookup => {
@@ -484,7 +435,7 @@ impl HasConcrete for WasmOpDef {
                         type_: Box::new(OUTPUTS_PARAM.to_owned()),
                     }))?
                 };
-                Ok(WasmOp::Lookup {
+                Ok(GpuOp::Lookup {
                     name,
                     inputs,
                     outputs,
@@ -514,7 +465,7 @@ impl HasConcrete for WasmOpDef {
                     }))?
                 };
 
-                Ok(WasmOp::Call {
+                Ok(GpuOp::Call {
                     inputs: inputs.try_into()?,
                     outputs: outputs.try_into()?,
                 })
@@ -533,7 +484,7 @@ impl HasConcrete for WasmOpDef {
                         type_: Box::new(OUTPUTS_PARAM.to_owned()),
                     }))?
                 };
-                Ok(WasmOp::ReadResult {
+                Ok(GpuOp::ReadResult {
                     outputs: outputs.try_into()?,
                 })
             }
@@ -541,7 +492,7 @@ impl HasConcrete for WasmOpDef {
     }
 }
 
-impl TryFrom<&OpType> for WasmOpDef {
+impl TryFrom<&OpType> for GpuOpDef {
     type Error = OpLoadError;
 
     fn try_from(value: &OpType) -> Result<Self, Self::Error> {
@@ -554,13 +505,13 @@ impl TryFrom<&OpType> for WasmOpDef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-/// Concrete instantiation(i.e. with type args applied) of a "tket.wasm" operation.
-pub enum WasmOp {
-    /// A `tket.wasm.get_context` op.
+/// Concrete instantiation(i.e. with type args applied) of a "tket.gpu" operation.
+pub enum GpuOp {
+    /// A `tket.gpu.get_context` op.
     GetContext,
-    /// A `tket.wasm.dispose_context` op.
+    /// A `tket.gpu.dispose_context` op.
     DisposeContext,
-    /// A `tket.wasm.lookup` op.
+    /// A `tket.gpu.lookup` op.
     Lookup {
         /// The name of the function to be looked up.
         name: String,
@@ -571,7 +522,7 @@ pub enum WasmOp {
         /// Note that row variables are allowed here.
         outputs: TypeRowRV,
     },
-    /// A `tket.wasm.call` op.
+    /// A `tket.gpu.call` op.
     Call {
         /// The input signature of the function to be called
         /// Note that row variables are not allowed here.
@@ -580,51 +531,51 @@ pub enum WasmOp {
         /// Note that row variables are not allowed here.
         outputs: TypeRow,
     },
-    /// A `tket.wasm.read_result` op.
+    /// A `tket.gpu.read_result` op.
     ReadResult {
-        /// The output signature of the function to be called
+        /// The output signature of the function that was called.
         /// Note that row variables are not allowed here.
         outputs: TypeRow,
     },
 }
 
-impl WasmOp {
-    fn wasm_op_def(&self) -> WasmOpDef {
+impl GpuOp {
+    fn gpu_op_def(&self) -> GpuOpDef {
         match self {
-            Self::GetContext => WasmOpDef::get_context,
-            Self::DisposeContext => WasmOpDef::dispose_context,
-            Self::Lookup { .. } => WasmOpDef::lookup,
-            Self::Call { .. } => WasmOpDef::call,
-            Self::ReadResult { .. } => WasmOpDef::read_result,
+            Self::GetContext => GpuOpDef::get_context,
+            Self::DisposeContext => GpuOpDef::dispose_context,
+            Self::Lookup { .. } => GpuOpDef::lookup,
+            Self::Call { .. } => GpuOpDef::call,
+            Self::ReadResult { .. } => GpuOpDef::read_result,
         }
     }
 
     fn get_context_return_type(extension_ref: &Weak<Extension>) -> SumType {
-        option_type(WasmType::Context.get_type(extension_ref))
+        option_type(GpuType::Context.get_type(extension_ref))
     }
 }
 
-impl HasDef for WasmOp {
-    type Def = WasmOpDef;
+impl HasDef for GpuOp {
+    type Def = GpuOpDef;
 }
 
-impl MakeExtensionOp for WasmOp {
+impl MakeExtensionOp for GpuOp {
     fn op_id(&self) -> OpName {
-        self.wasm_op_def().opdef_id()
+        self.gpu_op_def().opdef_id()
     }
 
     fn from_extension_op(ext_op: &ExtensionOp) -> Result<Self, OpLoadError>
     where
         Self: Sized,
     {
-        WasmOpDef::from_op(ext_op)?.instantiate(ext_op.args())
+        GpuOpDef::from_op(ext_op)?.instantiate(ext_op.args())
     }
 
     fn type_args(&self) -> Vec<TypeArg> {
         match self {
-            WasmOp::GetContext => vec![],
-            WasmOp::DisposeContext => vec![],
-            WasmOp::Lookup {
+            GpuOp::GetContext => vec![],
+            GpuOp::DisposeContext => vec![],
+            GpuOp::Lookup {
                 name,
                 inputs,
                 outputs,
@@ -633,17 +584,20 @@ impl MakeExtensionOp for WasmOp {
                 let outputs = TypeArg::from(outputs.clone());
                 vec![name.clone().into(), inputs, outputs]
             }
-            WasmOp::Call { inputs, outputs } => {
+            GpuOp::Call { inputs, outputs } => {
                 let inputs = TypeArg::from(inputs.clone());
                 let outputs = TypeArg::from(outputs.clone());
                 vec![inputs, outputs]
             }
-            WasmOp::ReadResult { outputs } => vec![outputs.clone().into()],
+            GpuOp::ReadResult { outputs } => {
+                let outputs = TypeArg::from(outputs.clone());
+                vec![outputs]
+            }
         }
     }
 }
 
-impl MakeRegisteredOp for WasmOp {
+impl MakeRegisteredOp for GpuOp {
     fn extension_id(&self) -> ExtensionId {
         EXTENSION_ID
     }
@@ -654,43 +608,53 @@ impl MakeRegisteredOp for WasmOp {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-/// A Constant identifying a WebAssembly module.
-/// Loading this is the only way to obtain a value of `tket.wasm.module` type.
-pub struct ConstWasmModule {
-    /// The name of the module.
+/// A Constant identifying a GPU module.
+/// Loading this is the only way to obtain a value of `tket.gpu.module` type.
+pub struct ConstGpuModule {
+    /// The name of the GPU module file to be loaded.
     pub module_filename: String,
+    /// The name of an optional config file to be loaded by the GPU program
+    pub config_filename: Option<String>,
 }
 
 #[typetag::serde]
-impl CustomConst for ConstWasmModule {
+impl CustomConst for ConstGpuModule {
     fn name(&self) -> ValueName {
-        format!("wasm:{}", self.module_filename).into()
+        format!(
+            "gpu:{}{}",
+            self.module_filename,
+            self.config_filename
+                .clone()
+                .map(|a| format!(":{a}"))
+                .unwrap_or_default()
+        )
+        .into()
     }
     fn equal_consts(&self, other: &dyn CustomConst) -> bool {
         downcast_equal_consts(self, other)
     }
 
     fn get_type(&self) -> Type {
-        WasmType::Module.get_type(&EXTENSION_REF)
+        GpuType::Module.get_type(&EXTENSION_REF)
     }
 }
 
-/// An extension trait for [Dataflow] providing methods to add "tket.wasm"
+/// An extension trait for [Dataflow] providing methods to add "tket.gpu"
 /// operations and constants.
-pub trait WasmOpBuilder: Dataflow {
-    /// Add a `tket.wasm.get_context` op.
+pub trait GpuOpBuilder: Dataflow {
+    /// Add a `tket.gpu.get_context` op.
     fn add_get_context(&mut self, id: Wire) -> Result<Wire, BuildError> {
-        let op = self.add_dataflow_op(WasmOp::GetContext, vec![id])?;
+        let op = self.add_dataflow_op(GpuOp::GetContext, vec![id])?;
         Ok(op.out_wire(0))
     }
 
-    /// Add a `tket.wasm.dispose_context` op.
+    /// Add a `tket.gpu.dispose_context` op.
     fn add_dispose_context(&mut self, id: Wire) -> Result<(), BuildError> {
-        let _ = self.add_dataflow_op(WasmOp::DisposeContext, vec![id])?;
+        let _ = self.add_dataflow_op(GpuOp::DisposeContext, vec![id])?;
         Ok(())
     }
 
-    /// Add a `tket.wasm.lookup` op.
+    /// Add a `tket.gpu.lookup` op.
     fn add_lookup(
         &mut self,
         name: impl Into<String>,
@@ -700,7 +664,7 @@ pub trait WasmOpBuilder: Dataflow {
     ) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(
-                WasmOp::Lookup {
+                GpuOp::Lookup {
                     name: name.into(),
                     inputs: inputs.into(),
                     outputs: outputs.into(),
@@ -710,7 +674,7 @@ pub trait WasmOpBuilder: Dataflow {
             .out_wire(0))
     }
 
-    /// Add a `tket.wasm.call` op.
+    /// Add a `tket.gpu.call` op.
     ///
     /// We infer the signature from the type of the `func` wire.
     fn add_call(
@@ -720,7 +684,7 @@ pub trait WasmOpBuilder: Dataflow {
         inputs: impl IntoIterator<Item = Wire>,
     ) -> Result<Wire, BuildError> {
         let func_wire_type = self.get_wire_type(func)?;
-        let Some(WasmType::Func {
+        let Some(GpuType::Func {
             inputs: in_types,
             outputs: out_types,
         }) = func_wire_type.clone().try_into().ok()
@@ -732,7 +696,7 @@ pub trait WasmOpBuilder: Dataflow {
 
         Ok(self
             .add_dataflow_op(
-                WasmOp::Call {
+                GpuOp::Call {
                     inputs: in_types,
                     outputs: out_types,
                 },
@@ -741,32 +705,35 @@ pub trait WasmOpBuilder: Dataflow {
             .out_wire(0))
     }
 
-    /// Add a `tket.wasm.read_result` op.
+    /// Add a `tket.gpu.read_result` op.
     fn add_read_result(&mut self, result: Wire) -> Result<(Wire, Vec<Wire>), BuildError> {
-        let result_wire_type = self.get_wire_type(result)?;
-        let Some(WasmType::Result { outputs }) =
-            self.get_wire_type(result)?.clone().try_into().ok()
+        let Some(GpuType::Result { outputs }) = self.get_wire_type(result)?.clone().try_into().ok()
         else {
             // TODO Add an Error variant to BuildError for: Input wire has wrong type
-            panic!("result wire is not a result type: {result_wire_type}")
+            panic!("result wire is not a result type: ")
         };
         let outputs = TypeRow::try_from(outputs)?;
 
-        let op = self.add_dataflow_op(WasmOp::ReadResult { outputs }, [result])?;
+        let op = self.add_dataflow_op(GpuOp::ReadResult { outputs }, [result])?;
         let context = op.out_wire(0);
         let results = op.outputs().skip(1).collect_vec();
         Ok((context, results))
     }
 
-    /// Add a [ConstWasmModule] and load it.
-    fn add_const_module(&mut self, module_filename: impl Into<String>) -> Result<Wire, BuildError> {
-        Ok(self.add_load_value(ConstWasmModule {
-            module_filename: module_filename.into(),
+    /// Add a [ConstGpuModule] and load it.
+    fn add_const_module(
+        &mut self,
+        name: impl Into<String>,
+        config: Option<String>,
+    ) -> Result<Wire, BuildError> {
+        Ok(self.add_load_value(ConstGpuModule {
+            module_filename: name.into(),
+            config_filename: config,
         }))
     }
 }
 
-impl<T: Dataflow> WasmOpBuilder for T {}
+impl<T: Dataflow> GpuOpBuilder for T {}
 
 #[cfg(test)]
 mod test {
@@ -777,54 +744,58 @@ mod test {
 
     use super::*;
 
-    #[test]
-    fn const_wasm_module() {
-        let m1 = ConstWasmModule {
+    #[rstest]
+    #[case(None, "gpu:test_mod")]
+    #[case(Some("Lorem".to_string()), "gpu:test_mod:Lorem")]
+    fn const_gpu_module(#[case] config_filename: Option<String>, #[case] exp_name: &str) {
+        let m1 = ConstGpuModule {
             module_filename: "test_mod".to_string(),
+            config_filename: config_filename.clone(),
         };
-        let m2 = ConstWasmModule {
+        let m2 = ConstGpuModule {
             module_filename: "test_mod".to_string(),
+            config_filename,
         };
-        assert_eq!(m1.name(), "wasm:test_mod");
+        assert_eq!(m1.name(), exp_name);
         assert!(m1.equal_consts(&m2));
     }
 
     #[rstest]
-    #[case(WasmType::Module)]
-    #[case(WasmType::Context)]
-    #[case(WasmType::new_func(type_row![], type_row![]))]
-    #[case(WasmType::new_func(vec![TypeRV::new_row_var_use(0, TypeBound::Linear)], vec![bool_t()]))]
-    fn wasm_type(#[case] wasm_t: WasmType) {
-        let hugr_t: Type = wasm_t.clone().into();
+    #[case(GpuType::Module)]
+    #[case(GpuType::Context)]
+    #[case(GpuType::new_func(type_row![], type_row![]))]
+    #[case(GpuType::new_func(vec![TypeRV::new_row_var_use(0, TypeBound::Linear)], vec![bool_t()]))]
+    fn gpu_type(#[case] gpu_t: GpuType) {
+        let hugr_t: Type = gpu_t.clone().into();
         let roundtripped_t = hugr_t.try_into().unwrap();
-        assert_eq!(wasm_t, roundtripped_t);
+        assert_eq!(gpu_t, roundtripped_t);
     }
 
     #[test]
-    fn wasm_op_def_instantiate() {
+    fn gpu_op_def_instantiate() {
         assert_eq!(
-            WasmOpDef::get_context.instantiate(&[]),
-            Ok(WasmOp::GetContext)
+            GpuOpDef::get_context.instantiate(&[]),
+            Ok(GpuOp::GetContext)
         );
         assert_eq!(
-            WasmOpDef::dispose_context.instantiate(&[]),
-            Ok(WasmOp::DisposeContext)
+            GpuOpDef::dispose_context.instantiate(&[]),
+            Ok(GpuOp::DisposeContext)
         );
         assert_eq!(
-            WasmOpDef::lookup.instantiate(&[
+            GpuOpDef::lookup.instantiate(&[
                 "lookup_name".into(),
                 TypeArg::new_var_use(0, TypeParam::ListType(Box::new(TypeBound::Linear.into()))),
                 vec![].into()
             ]),
-            Ok(WasmOp::Lookup {
+            Ok(GpuOp::Lookup {
                 name: "lookup_name".to_string(),
                 inputs: vec![TypeRV::new_row_var_use(0, TypeBound::Linear)].into(),
                 outputs: TypeRowRV::from(Vec::<TypeRV>::new())
             })
         );
         assert_eq!(
-            WasmOpDef::call.instantiate(&[vec![Type::UNIT.into()].into(), vec![].into()]),
-            Ok(WasmOp::Call {
+            GpuOpDef::call.instantiate(&[vec![Type::UNIT.into()].into(), vec![].into()]),
+            Ok(GpuOp::Call {
                 inputs: vec![Type::UNIT].into(),
                 outputs: vec![].into()
             })
@@ -851,13 +822,13 @@ mod test {
         #[case] outputs: impl Into<TypeRowRV>,
     ) {
         let (inputs, outputs) = (inputs.into(), outputs.into());
-        let op = WasmOp::Lookup {
+        let op = GpuOp::Lookup {
             name: "test".into(),
             inputs: inputs.clone(),
             outputs: outputs.clone(),
         };
-        let module_ty = WasmType::Module.get_type(&op.extension_ref());
-        let func_ty = Type::new_extension(WasmType::func_custom_type(
+        let module_ty = Type::new_extension(GpuType::Module.custom_type(&op.extension_ref()));
+        let func_ty = Type::new_extension(GpuType::func_custom_type(
             inputs.clone(),
             outputs.clone(),
             &op.extension_ref(),
@@ -885,10 +856,10 @@ mod test {
             let [context] = {
                 let mb_c = builder.add_get_context(context_id).unwrap();
                 builder
-                    .build_unwrap_sum(1, WasmOp::get_context_return_type(&EXTENSION_REF), mb_c)
+                    .build_unwrap_sum(1, GpuOp::get_context_return_type(&EXTENSION_REF), mb_c)
                     .unwrap()
             };
-            let module = builder.add_const_module("test_module").unwrap();
+            let module = builder.add_const_module("test_module", None).unwrap();
             let func = builder
                 .add_lookup("test_func", in_types, out_types.clone(), module)
                 .unwrap();
