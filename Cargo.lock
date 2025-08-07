@@ -2484,6 +2484,7 @@ dependencies = [
  "hugr",
  "itertools 0.14.0",
  "num_cpus",
+ "portgraph 0.15.2",
  "portmatching",
  "pyo3",
  "rstest",

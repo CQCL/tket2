@@ -566,7 +566,10 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use crate::{
-        rewrite::matcher::MatchOutcome, serialize::TKETDecode, utils::build_simple_circuit, TketOp,
+        rewrite::matcher::{CircuitMatcher, MatchOutcome},
+        serialize::TKETDecode,
+        utils::build_simple_circuit,
+        TketOp,
     };
 
     use super::*;
