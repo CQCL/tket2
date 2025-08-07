@@ -1,8 +1,8 @@
 [project]
 name = "tket2_eccs"
-version = "0.4.0"
+version = "0.5.0"
 requires-python = ">=3.10"
-description = "Precompiled rewrite sets for the tket 2 compiler"
+description = "[Renamed] Precompiled rewrite sets for the tket 2 compiler"
 license = { file = "LICENCE" }
 readme = "README.md"
 authors = [
@@ -29,8 +29,8 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-homepage = "https://github.com/CQCL/tket2/tree/main/tket2-eccs"
-repository = "https://github.com/CQCL/tket2/tree/main/tket2-eccs"
+homepage = "https://github.com/CQCL/tket2/tree/main/tket-eccs"
+repository = "https://github.com/CQCL/tket2/tree/main/tket-eccs"
 
 [build-system]
 requires = ["hatchling"]

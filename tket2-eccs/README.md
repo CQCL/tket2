@@ -8,6 +8,9 @@
   [py-version]: https://img.shields.io/pypi/pyversions/tket2-eccs
   [pypi]: https://img.shields.io/pypi/v/tket2-eccs
 
+> [!WARNING]
+> This package has been renamed to `tket-eccs`. Please update your dependencies accordingly.
+
 This is an auxiliary Python package containing compiler rewrite sets used for `tket2`'s optimisation passes.
 
 This package is intended to be used as an internal dependency for `tket2`.

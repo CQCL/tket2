@@ -8,6 +8,10 @@
   [py-version]: https://img.shields.io/pypi/pyversions/tket2
   [pypi]: https://img.shields.io/pypi/v/tket2
 
+> [!WARNING]
+> This package has been renamed to `tket`. Please update your dependencies accordingly.
+> The legacy `pytket` compiler will be incorporated into `tket`.
+
 TKET2 is an open source quantum compiler developed by Quantinuum. Central to
 TKET2's design is its hardware agnosticism which allows researchers and quantum
 software developers to take advantage of its powerful compilation for many
