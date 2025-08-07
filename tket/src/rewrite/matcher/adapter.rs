@@ -305,7 +305,7 @@ where
         return all_matches;
     };
 
-    if new_subcircuit.try_extend(new_node, circ).is_err()
+    if new_subcircuit.try_add_node(new_node, circ).is_err()
         || new_subcircuit == current_match.subcircuit
     {
         // non-convex match or already matched
@@ -323,7 +323,7 @@ where
     let match_outcome = match as_tket_or_extension_op(circ.hugr().get_optype(new_node)) {
         TketOrExtensionOp::Tket(tket_op) => {
             if output_args.len() > input_args.len()
-                || !input_args.iter().zip(output_args).all_equal()
+                || !input_args.iter().zip(output_args).all(|(a, b)| a == b)
             {
                 // Currently only support TKET ops where the outputs are a prefix
                 // of the inputs (all pure quantum ops satisfy this)
@@ -444,7 +444,7 @@ mod tests {
     use crate::{
         extension::rotation::rotation_type,
         resource::CircuitUnit,
-        rewrite::matcher::{MatchOutcome, Update},
+        rewrite::matcher::{CircuitMatcher, MatchOutcome, Update},
         serialize::TKETDecode,
         utils::build_simple_circuit,
         TketOp,

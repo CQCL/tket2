@@ -448,7 +448,7 @@ impl CircuitChunks {
     }
 
     /// Supports implementation of rayon::iter::IntoParallelRefMutIterator
-    fn par_iter_mut(
+    pub(crate) fn par_iter_mut(
         &mut self,
     ) -> rayon::iter::Map<
         rayon::slice::IterMut<'_, Chunk>,

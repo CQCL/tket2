@@ -18,10 +18,11 @@ mod worker;
 
 use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
+use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::hugr::HugrError;
 use hugr::{HugrView, Node};
 pub use log::BadgerLogger;
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
@@ -217,7 +218,13 @@ where
         opt: BadgerOptions,
     ) -> ResourceScope {
         let backtracking = BacktrackingOptimiser::with_badger_options(&opt);
-        let circ = ResourceScope::from_circuit(circ.to_owned());
+        let circ = circ.to_owned();
+        if circ.subgraph() == Err(InvalidSubgraph::EmptySubgraph) {
+            // No rewrites possible in an empty circuit
+            panic!("Empty circuit input not supported; no optimisation possible");
+        }
+
+        let circ = ResourceScope::from_circuit(circ);
         let cost = self.cost(&circ);
         let init_state = BadgerState { circ, cost };
         backtracking
@@ -240,7 +247,14 @@ where
     ) -> ResourceScope {
         let start_time = Instant::now();
         let n_threads: usize = opt.n_threads.get();
-        let circ = ResourceScope::from_circuit(circ.to_owned());
+        let circ = circ.to_owned();
+
+        if circ.subgraph() == Err(InvalidSubgraph::EmptySubgraph) {
+            // No rewrites possible in an empty circuit
+            panic!("Empty circuit input not supported; no optimisation possible");
+        }
+
+        let circ = ResourceScope::from_circuit(circ);
 
         // multi-consumer priority channel for queuing circuits to be processed by the
         // workers
@@ -381,7 +395,14 @@ where
         opt: BadgerOptions,
     ) -> Result<ResourceScope, HugrError> {
         let start_time = Instant::now();
-        let circ = ResourceScope::from_circuit(circ.to_owned());
+        let circ = circ.to_owned();
+
+        if circ.subgraph() == Err(InvalidSubgraph::EmptySubgraph) {
+            // No rewrites possible in an empty circuit
+            panic!("Empty circuit input not supported; no optimisation possible");
+        }
+
+        let circ = ResourceScope::from_circuit(circ);
         let circ_cost = self.cost(&circ);
         let max_chunk_cost = circ_cost.clone().div_cost(opt.n_threads);
         logger.log(format!(

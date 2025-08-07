@@ -280,15 +280,12 @@ impl<H: HugrView> ResourceScope<H> {
             .filter_map(|unit| unit.as_resource())
     }
 
-    /// All resource IDs on the ports of `node`, in both directions.
-    pub fn get_all_resources(&self, node: H::Node) -> Vec<ResourceId> {
+    /// All resource IDs on the ports of `node`, in both directions, in the
+    /// order that they appear along the ports of `node`.
+    pub fn get_all_resources(&self, node: H::Node) -> impl Iterator<Item = ResourceId> + '_ {
         let in_resources = self.get_resources(node, Direction::Incoming);
         let out_resources = self.get_resources(node, Direction::Outgoing);
-        let mut all_resources = in_resources.chain(out_resources).collect_vec();
-        all_resources.sort_unstable();
-        all_resources.dedup();
-        all_resources.shrink_to_fit();
-        all_resources
+        in_resources.chain(out_resources).unique()
     }
 
     /// Whether the given node is the first node on the path of the given

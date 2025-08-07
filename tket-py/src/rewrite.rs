@@ -11,7 +11,10 @@ use tket::{
     Circuit,
 };
 
-use crate::circuit::{PyNode, Tk2Circuit};
+use crate::{
+    circuit::{PyNode, Tk2Circuit},
+    matcher::{PyCombineMatchReplaceRewriter, PyMatchReplaceRewriter},
+};
 
 /// The module definition
 pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
@@ -79,6 +82,10 @@ impl PyCircuitRewrite {
 pub enum PyRewriter {
     /// A rewriter based on circuit equivalence classes.
     ECC(PyECCRewriter),
+    /// A rewriter based on a matcher and replacer.
+    MatchReplace(PyMatchReplaceRewriter),
+    /// A rewriter based on a combination of matchers and replacers.
+    CombineMatchReplace(PyCombineMatchReplaceRewriter),
     /// A rewriter based on a list of rewriters.
     Vec(Vec<PyRewriter>),
 }
@@ -87,6 +94,12 @@ impl<H: HugrView<Node = Node>> Rewriter<ResourceScope<H>> for PyRewriter {
     fn get_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite<H::Node>> {
         match self {
             Self::ECC(ecc) => ecc.0.get_rewrites(circ),
+            Self::MatchReplace(rewriter) => {
+                Rewriter::<ResourceScope<H>>::get_rewrites(rewriter, circ)
+            }
+            Self::CombineMatchReplace(rewriter) => {
+                Rewriter::<ResourceScope<H>>::get_rewrites(rewriter, circ)
+            }
             Self::Vec(rewriters) => rewriters
                 .iter()
                 .flat_map(|r| r.get_rewrites(circ))

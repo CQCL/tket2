@@ -37,11 +37,11 @@ pub use adapter::{HugrMatchAdapter, MatchingOptions};
 #[derive(Debug, Clone)]
 pub struct MatchOutcome<PartialMatchInfo, MatchInfo> {
     /// A complete match: add current op to the match and report it to the user.
-    complete: Option<MatchInfo>,
+    pub complete: Option<MatchInfo>,
     /// A partial match: add current op to the match and continue matching.
-    proceed: Option<Update<PartialMatchInfo>>,
+    pub proceed: Option<Update<PartialMatchInfo>>,
     /// Skip the current op and continue matching.
-    skip: Option<Update<PartialMatchInfo>>,
+    pub skip: Option<Update<PartialMatchInfo>>,
 }
 
 /// Whether a value is updated. If it is, the new value is provided.
