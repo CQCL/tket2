@@ -33,6 +33,7 @@ num_cpus = { workspace = true }
 derive_more = { workspace = true, features = ["into", "from"] }
 itertools = { workspace = true }
 portmatching = { workspace = true }
+portgraph = { workspace = true }
 strum = { workspace = true }
 
 [dev-dependencies]

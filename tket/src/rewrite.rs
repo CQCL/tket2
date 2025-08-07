@@ -32,6 +32,7 @@ pub use crate::Subcircuit;
 /// As a temporary solution, it support both old school [`SimpleReplacement`]s
 /// as well as the much more civilised approach using [`ResourceScope`] and
 /// [`Subcircuit`].
+// TODO: get rid of OldCircuitRewrite, Rename NewCircuitRewrite to CircuitRewrite
 #[derive(Debug, Clone, From)]
 pub enum CircuitRewrite<N: HugrNode = hugr::Node> {
     /// A rewrite rule expressed as a subcircuit and replacement circuit.
@@ -314,7 +315,13 @@ where
                     .replace_match(&subcirc, circ, match_info)
                     .into_iter()
                     .filter_map(move |repl| {
-                        CircuitRewrite::try_new(subcirc.clone(), circ, repl).ok()
+                        match CircuitRewrite::try_new(subcirc.clone(), circ, repl) {
+                            Ok(ok) => Some(ok),
+                            Err(err) => {
+                                eprintln!("Error: failed to create rewrite, skipping:\n{}", err);
+                                None
+                            }
+                        }
                     })
             })
             .collect()

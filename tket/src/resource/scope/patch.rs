@@ -6,7 +6,8 @@ use hugr::{
         hugrmut::HugrMut, patch::simple_replace, views::SiblingSubgraph, Patch,
         SimpleReplacementError,
     },
-    Direction, HugrView,
+    ops::OpTrait,
+    Direction, HugrView, PortIndex,
 };
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -49,6 +50,8 @@ impl<H: HugrMut<Node = hugr::Node>> ResourceScope<H> {
         let inputs = subcircuit.input_ports(self);
         let outputs = subcircuit.output_ports(self);
 
+        debug_assert_eq!(inputs.len(), replacement.circuit_signature().input_count());
+
         let units_at_inputs = inputs.iter().map(|inp| {
             debug_assert!(inp
                 .iter()
@@ -73,7 +76,6 @@ impl<H: HugrMut<Node = hugr::Node>> ResourceScope<H> {
             );
             let min_output_pos =
                 self.get_nearest_position(outputs.iter().map(|&(n, _)| n), Direction::Outgoing);
-
             let n_nodes = repl_scope.nodes().len() as i64;
             let ideal_interval_size = Position::new_integer(n_nodes + 2);
             let (start, end) = match (max_input_pos, min_output_pos) {
@@ -82,11 +84,9 @@ impl<H: HugrMut<Node = hugr::Node>> ResourceScope<H> {
                 (Some(start), None) => (start, Position(start.0 + ideal_interval_size.0)),
                 (Some(start), Some(end)) => (start, end),
             };
-
             if start >= end {
                 return Err(CircuitRewriteError::EmptyPositionRange);
             }
-
             repl_scope.rescale_positions(start, end);
         }
 
@@ -101,11 +101,9 @@ impl<H: HugrMut<Node = hugr::Node>> ResourceScope<H> {
 
         for (&repl_node, &new_node) in &node_map {
             let repl_scope = repl_scope.as_ref().expect("non-empty replacement");
-            let repl_node_units = repl_scope
-                .circuit_units
-                .get(&repl_node)
-                .expect("valid node");
-            self.circuit_units.insert(new_node, repl_node_units.clone());
+            if let Some(repl_node_units) = repl_scope.circuit_units.get(&repl_node) {
+                self.circuit_units.insert(new_node, repl_node_units.clone());
+            }
         }
 
         let new_node_set = self
@@ -164,8 +162,17 @@ impl<H: Clone + HugrView<Node = hugr::Node>> ResourceScope<H> {
         circuit: Circuit<H>,
         units: impl IntoIterator<Item = CircuitUnit<H::Node>>,
     ) -> Self {
+        let inputs = circuit
+            .circuit_signature()
+            .input_ports()
+            .map(|p| {
+                circuit
+                    .hugr()
+                    .linked_inputs(circuit.input_node(), p.index())
+                    .collect_vec()
+            })
+            .collect_vec();
         let subgraph = circuit.subgraph();
-        let inputs = subgraph.incoming_ports().to_owned();
 
         let mut this = Self {
             hugr: circuit.into_hugr(),
@@ -191,7 +198,7 @@ impl<H: Clone + HugrView<Node = hugr::Node>> ResourceScope<H> {
         let (curr_start, curr_end) = self
             .nodes()
             .iter()
-            .map(|&n| (self.get_position(n).expect("valid node")))
+            .filter_map(|&n| (self.get_position(n)))
             .minmax()
             .into_option()
             .expect("non empty subgraph");
@@ -199,6 +206,9 @@ impl<H: Clone + HugrView<Node = hugr::Node>> ResourceScope<H> {
         debug_assert!(curr_start < curr_end || (curr_start == curr_end && self.nodes().len() == 1));
 
         for &node in self.subgraph.nodes() {
+            if self.hugr.get_optype(node).dataflow_signature().is_none() {
+                continue;
+            }
             let node_units = node_circuit_units_mut(&mut self.circuit_units, node, &self.hugr);
             node_units.position = node_units
                 .position

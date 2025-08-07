@@ -10,13 +10,13 @@ use derive_more::derive::{Display, Error};
 use hugr::core::HugrNode;
 use hugr::hugr::views::sibling_subgraph::{IncomingPorts, InvalidSubgraph, OutgoingPorts};
 use hugr::hugr::views::SiblingSubgraph;
-use hugr::ops::OpTrait;
+use hugr::ops::{constant, OpTrait};
 use hugr::types::Signature;
 use hugr::{Direction, HugrView, IncomingPort, Port, Wire};
 use itertools::Itertools;
 
 use crate::circuit::Circuit;
-use crate::resource::{ Interval, InvalidInterval, ResourceId, ResourceScope};
+use crate::resource::{Interval, InvalidInterval, ResourceId, ResourceScope};
 use crate::rewrite::{CircuitRewrite, InvalidRewrite};
 
 /// A subgraph within a [`ResourceScope`].
@@ -338,6 +338,22 @@ impl<N: HugrNode> Subcircuit<N> {
         circuit: &ResourceScope<impl HugrView<Node = N>>,
     ) -> Result<CircuitRewrite<N>, InvalidRewrite> {
         CircuitRewrite::try_new(self.clone(), circuit, replacement)
+    }
+
+    /// Get the indices and values of the subcircuit inputs that can be
+    /// statically resolved to constants.
+    pub fn get_const_inputs<'c>(
+        &'c self,
+        circuit: &'c ResourceScope<impl HugrView<Node = N>>,
+    ) -> impl Iterator<Item = (usize, constant::Value)> + 'c {
+        let n_lin_inputs = self.input_resources.len();
+        self.input_copyable_values
+            .iter()
+            .enumerate()
+            .filter_map(move |(i, &wire)| {
+                let val = circuit.as_const_value(crate::resource::CircuitUnit::Copyable(wire))?;
+                Some((n_lin_inputs + i, val.clone()))
+            })
     }
 }
 

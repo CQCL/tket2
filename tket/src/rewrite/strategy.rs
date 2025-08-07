@@ -141,7 +141,7 @@ impl RewriteStrategy for GreedyRewriteStrategy {
             .take_while(|rw| rw.node_count_delta(circ) < 0);
         let mut changed_nodes = HashSet::new();
         let mut cost_delta = 0;
-        let mut circ = circ.clone();
+        let mut curr_circ = circ.clone();
         for rewrite in rewrites {
             let subgraph = rewrite.to_subgraph(&circ);
             if subgraph.nodes().iter().any(|n| changed_nodes.contains(n)) {
@@ -150,10 +150,10 @@ impl RewriteStrategy for GreedyRewriteStrategy {
             changed_nodes.extend(subgraph.nodes().iter().copied());
             cost_delta += rewrite.node_count_delta(&circ);
             rewrite
-                .apply(&mut circ)
+                .apply(&mut curr_circ)
                 .expect("Could not perform rewrite in greedy strategy");
         }
-        iter::once((circ, cost_delta).into())
+        iter::once((curr_circ, cost_delta).into())
     }
 
     fn circuit_cost(&self, circ: &ResourceScope<impl HugrView<Node = Node>>) -> Self::Cost {
@@ -221,15 +221,15 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveGreedyStrategy<T> {
             let mut changed_nodes = HashSet::new();
             let mut cost_delta = Default::default();
             let mut composed_rewrite_count = 0;
+            // TODO(perf): this computes invalidation sets over and over
             for (rewrite, delta) in &rewrites[i..] {
+                let invalidation_set = rewrite.invalidation_set(&circ).collect_vec();
                 if !changed_nodes.is_empty()
-                    && rewrite
-                        .invalidation_set(&curr_circ)
-                        .any(|n| changed_nodes.contains(&n))
+                    && invalidation_set.iter().any(|n| changed_nodes.contains(n))
                 {
                     continue;
                 }
-                changed_nodes.extend(rewrite.invalidation_set(&curr_circ));
+                changed_nodes.extend(invalidation_set);
                 cost_delta += delta.clone();
 
                 composed_rewrite_count += 1;
