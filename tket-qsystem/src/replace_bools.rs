@@ -5,6 +5,7 @@ mod static_array;
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
+        ensure_no_nonlocal_edges,
         non_local::FindNonLocalEdgesError,
         replace_types::{NodeTemplate, ReplaceTypesError},
         ComposablePass, ReplaceTypes,
@@ -71,8 +72,7 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for ReplaceBoolPass {
     type Result = ();
 
     fn run(&self, hugr: &mut H) -> Result<(), Self::Error> {
-        // TODO uncomment once https://github.com/CQCL/hugr/issues/1234 is complete
-        // ensure_no_nonlocal_edges(hugr)?;
+        ensure_no_nonlocal_edges(hugr)?;
         ReplaceStaticArrayBoolPass::default().run(hugr)?;
         let lowerer = lowerer();
         lowerer.run(hugr)?;
