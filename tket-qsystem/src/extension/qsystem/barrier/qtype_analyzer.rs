@@ -1,5 +1,7 @@
 use hugr::extension::prelude::qb_t;
-use hugr::std_extensions::collections::array::{self};
+use hugr::std_extensions::collections::array::{Array, ArrayKind};
+use hugr::std_extensions::collections::borrow_array::BorrowArray;
+use hugr::std_extensions::collections::value_array::ValueArray;
 use hugr::types::{CustomType, SumType, Type, TypeArg};
 use std::collections::HashMap;
 
@@ -14,8 +16,8 @@ pub(crate) fn is_opt_qb(ty: &Type) -> bool {
 }
 
 /// If a custom type is an array, return size and element type.
-pub(crate) fn array_args(ext: &CustomType) -> Option<(u64, &Type)> {
-    array::array_type_def()
+pub(crate) fn array_args<AT: ArrayKind>(ext: &CustomType) -> Option<(u64, &Type)> {
+    AT::type_def()
         .check_custom(ext)
         .ok()
         .and_then(|_| match ext.args() {
@@ -77,7 +79,11 @@ impl QTypeAnalyzer {
             any_qb.then_some(unpacked_row)
 
             // other sums containing qubits are ignored.
-        } else if let Some((size, elem_ty)) = ty.as_extension().and_then(array_args) {
+        } else if let Some((size, elem_ty)) = ty.as_extension().and_then(|ext| {
+            array_args::<Array>(ext)
+                .or_else(|| array_args::<ValueArray>(ext))
+                .or_else(|| array_args::<BorrowArray>(ext))
+        }) {
             // Special case for Option[Qubit] since it is used in guppy qubit arrays.
             // Fragile - would be better with dedicated guppy array type.
             // Not sure how this can be improved without runtime barrier being able to
@@ -111,15 +117,15 @@ impl QTypeAnalyzer {
 }
 
 /// Check if a type is an array with the given element type
-pub(crate) fn is_array_of(typ: &Type, elem_type: &Type) -> Option<u64> {
+pub(crate) fn is_array_of<AT: ArrayKind>(typ: &Type, elem_type: &Type) -> Option<u64> {
     typ.as_extension()
-        .and_then(array_args)
+        .and_then(array_args::<AT>)
         .and_then(|(size, e_ty)| (e_ty == elem_type).then_some(size))
 }
 
 /// Check if a type is specifically an array of qubits
-pub(crate) fn is_qubit_array(typ: &Type) -> Option<u64> {
-    is_array_of(typ, &qb_t())
+pub(crate) fn is_qubit_array<AT: ArrayKind>(typ: &Type) -> Option<u64> {
+    is_array_of::<AT>(typ, &qb_t())
 }
 impl Default for QTypeAnalyzer {
     fn default() -> Self {
@@ -131,6 +137,7 @@ mod test {
     use super::*;
     use hugr::extension::prelude::{bool_t, option_type, usize_t};
     use hugr::std_extensions::collections::array::array_type;
+    use rstest::rstest;
 
     #[test]
     fn test_primitive_types() {
@@ -145,12 +152,15 @@ mod test {
         assert!(!analyzer.is_qubit_container(&bool_t()));
     }
 
-    #[test]
-    fn test_array_types() {
+    #[rstest]
+    #[case::array(Array)]
+    #[case::value(ValueArray)]
+    #[case::borrow(BorrowArray)]
+    fn test_array_types<AK: ArrayKind>(#[case] _kind: AK) {
         let mut analyzer = QTypeAnalyzer::new();
 
         // Array of qubits should be a container with that many qubits
-        let qubit_array = array_type(3, qb_t());
+        let qubit_array = AK::ty(3, qb_t());
         let result = analyzer.unpack_type(&qubit_array);
 
         let types = result.unwrap();
@@ -158,11 +168,11 @@ mod test {
         assert!(types.iter().all(|t| t == &qb_t()));
 
         // Array of non-quantum types should not be a container
-        let bool_array = array_type(5, bool_t());
+        let bool_array = AK::ty(5, bool_t());
         assert!(!analyzer.is_qubit_container(&bool_array));
 
         // Nested arrays of qubits
-        let nested_array = array_type(2, array_type(3, qb_t()));
+        let nested_array = AK::ty(2, array_type(3, qb_t()));
         let result = analyzer.unpack_type(&nested_array);
 
         let types = result.unwrap();
@@ -274,9 +284,9 @@ mod test {
         );
 
         // Test is_qubit_array
-        assert_eq!(is_qubit_array(&array_type(5, qb_t())), Some(5));
-        assert_eq!(is_qubit_array(&qb_t()), None);
-        assert_eq!(is_qubit_array(&array_type(3, bool_t())), None);
+        assert_eq!(is_qubit_array::<Array>(&array_type(5, qb_t())), Some(5));
+        assert_eq!(is_qubit_array::<Array>(&qb_t()), None);
+        assert_eq!(is_qubit_array::<Array>(&array_type(3, bool_t())), None);
     }
 
     #[test]

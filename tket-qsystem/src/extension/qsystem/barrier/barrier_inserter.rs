@@ -69,7 +69,9 @@ impl BarrierInserter {
         target: Target,
     ) -> Option<Result<(), LowerTk2Error>> {
         // Check if this is an array of qubits
-        let size = is_qubit_array(typ)?;
+        let size = is_qubit_array::<hugr::std_extensions::collections::array::Array>(typ)?;
+
+        // TODO if other array type, convert
 
         // Build and insert the barrier
         Some(match build_runtime_barrier_op(size) {
