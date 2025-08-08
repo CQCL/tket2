@@ -557,33 +557,23 @@ impl BarrierOperationFactory {
         if is_opt_qb(typ) {
             return Ok(vec![self.unpack_option(builder, container_wire)?]);
         }
-        if let Some((n, elem_ty)) = typ.as_extension().and_then(array_args::<Array>) {
-            return self.unpack_array::<Array>(
-                builder,
-                container_wire,
-                n,
-                elem_ty,
-                &Self::ARRAY_UNPACK,
-            );
+        macro_rules! handle_array_type {
+            ($array_kind:ty, $unpack_op:expr) => {
+                if let Some((n, elem_ty)) = typ.as_extension().and_then(array_args::<$array_kind>) {
+                    return self.unpack_array::<$array_kind>(
+                        builder,
+                        container_wire,
+                        n,
+                        elem_ty,
+                        &$unpack_op,
+                    );
+                }
+            };
         }
-        if let Some((n, elem_ty)) = typ.as_extension().and_then(array_args::<ValueArray>) {
-            return self.unpack_array::<ValueArray>(
-                builder,
-                container_wire,
-                n,
-                elem_ty,
-                &Self::VARRAY_UNPACK,
-            );
-        }
-        if let Some((n, elem_ty)) = typ.as_extension().and_then(array_args::<BorrowArray>) {
-            return self.unpack_array::<BorrowArray>(
-                builder,
-                container_wire,
-                n,
-                elem_ty,
-                &Self::BARRAY_UNPACK,
-            );
-        }
+
+        handle_array_type!(Array, Self::ARRAY_UNPACK);
+        handle_array_type!(ValueArray, Self::VARRAY_UNPACK);
+        handle_array_type!(BorrowArray, Self::BARRAY_UNPACK);
         if let Some(row) = typ.as_sum().and_then(SumType::as_tuple) {
             let row: hugr::types::TypeRow =
                 row.clone().try_into().expect("unexpected row variable.");
@@ -609,33 +599,23 @@ impl BarrierOperationFactory {
             debug_assert!(unpacked_wires.len() == 1);
             return self.repack_option(builder, unpacked_wires[0]);
         }
-        if let Some((n, elem_ty)) = typ.as_extension().and_then(array_args::<Array>) {
-            return self.repack_array::<Array>(
-                builder,
-                unpacked_wires,
-                n,
-                elem_ty,
-                &Self::ARRAY_REPACK,
-            );
+        macro_rules! handle_array_type {
+            ($array_kind:ty, $repack_op:expr) => {
+                if let Some((n, elem_ty)) = typ.as_extension().and_then(array_args::<$array_kind>) {
+                    return self.repack_array::<$array_kind>(
+                        builder,
+                        unpacked_wires,
+                        n,
+                        elem_ty,
+                        &$repack_op,
+                    );
+                }
+            };
         }
-        if let Some((n, elem_ty)) = typ.as_extension().and_then(array_args::<ValueArray>) {
-            return self.repack_array::<ValueArray>(
-                builder,
-                unpacked_wires,
-                n,
-                elem_ty,
-                &Self::VARRAY_REPACK,
-            );
-        }
-        if let Some((n, elem_ty)) = typ.as_extension().and_then(array_args::<BorrowArray>) {
-            return self.repack_array::<BorrowArray>(
-                builder,
-                unpacked_wires,
-                n,
-                elem_ty,
-                &Self::BARRAY_REPACK,
-            );
-        }
+
+        handle_array_type!(Array, Self::ARRAY_REPACK);
+        handle_array_type!(ValueArray, Self::VARRAY_REPACK);
+        handle_array_type!(BorrowArray, Self::BARRAY_REPACK);
 
         if let Some(row) = typ.as_sum().and_then(SumType::as_tuple) {
             let row: hugr::types::TypeRow =
