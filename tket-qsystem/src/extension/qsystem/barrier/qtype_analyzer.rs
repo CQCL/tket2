@@ -1,5 +1,6 @@
 use hugr::extension::prelude::qb_t;
 use hugr::std_extensions::collections::array::{self};
+use hugr::std_extensions::collections::value_array;
 use hugr::types::{CustomType, SumType, Type, TypeArg};
 use std::collections::HashMap;
 
@@ -16,6 +17,17 @@ pub(crate) fn is_opt_qb(ty: &Type) -> bool {
 /// If a custom type is an array, return size and element type.
 pub(crate) fn array_args(ext: &CustomType) -> Option<(u64, &Type)> {
     array::array_type_def()
+        .check_custom(ext)
+        .ok()
+        .and_then(|_| match ext.args() {
+            [TypeArg::BoundedNat(n), TypeArg::Runtime(elem_ty)] => Some((*n, elem_ty)),
+            _ => None,
+        })
+}
+
+/// Extract the size and element type from a value array type  
+pub fn varray_args(ext: &CustomType) -> Option<(u64, &Type)> {
+    value_array::value_array_type_def()
         .check_custom(ext)
         .ok()
         .and_then(|_| match ext.args() {
@@ -77,7 +89,10 @@ impl QTypeAnalyzer {
             any_qb.then_some(unpacked_row)
 
             // other sums containing qubits are ignored.
-        } else if let Some((size, elem_ty)) = ty.as_extension().and_then(array_args) {
+        } else if let Some((size, elem_ty)) = ty
+            .as_extension()
+            .and_then(|ext| array_args(ext).or_else(|| varray_args(ext)))
+        {
             // Special case for Option[Qubit] since it is used in guppy qubit arrays.
             // Fragile - would be better with dedicated guppy array type.
             // Not sure how this can be improved without runtime barrier being able to
@@ -147,6 +162,7 @@ mod test {
 
     #[test]
     fn test_array_types() {
+        // TODO add value arrays
         let mut analyzer = QTypeAnalyzer::new();
 
         // Array of qubits should be a container with that many qubits

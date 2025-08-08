@@ -9,7 +9,12 @@ use hugr::{
         Extension,
     },
     ops::{DataflowOpTrait, ExtensionOp, OpName},
-    std_extensions::collections::array::{array_type, array_type_parametric, ArrayOpBuilder},
+    std_extensions::collections::{
+        array::{
+            array_type, array_type_parametric, op_builder::GenericArrayOpBuilder, ArrayOpBuilder,
+        },
+        value_array::{value_array_type, value_array_type_parametric, VArrayOpBuilder, ValueArray},
+    },
     types::{
         type_param::TypeParam, FuncValueType, PolyFuncTypeRV, Signature, SumType, Type, TypeArg,
         TypeBound, TypeRV,
@@ -20,7 +25,7 @@ use indexmap::IndexMap;
 
 use crate::extension::qsystem::{barrier::qtype_analyzer::QTypeAnalyzer, QSystemOpBuilder};
 
-use super::qtype_analyzer::{array_args, is_opt_qb};
+use super::qtype_analyzer::{array_args, is_opt_qb, varray_args};
 
 /// Wrapper for ExtensionOp that implements Hash
 #[derive(Clone, PartialEq, Eq)]
@@ -72,6 +77,8 @@ impl BarrierOperationFactory {
     pub(super) const WRAPPED_BARRIER: OpName = OpName::new_static("wrapped_barrier");
     pub(super) const ARRAY_UNPACK: OpName = OpName::new_static("array_unpack");
     pub(super) const ARRAY_REPACK: OpName = OpName::new_static("array_repack");
+    pub(super) const VARRAY_UNPACK: OpName = OpName::new_static("varray_unpack");
+    pub(super) const VARRAY_REPACK: OpName = OpName::new_static("varray_repack");
     pub(super) const TUPLE_UNPACK: OpName = OpName::new_static("tuple_unpack");
     pub(super) const TUPLE_REPACK: OpName = OpName::new_static("tuple_repack");
 
@@ -150,6 +157,38 @@ impl BarrierOperationFactory {
                     Self::ARRAY_UNPACK,
                     Default::default(),
                     array_unpack_sig,
+                    ext_ref,
+                )
+                .unwrap();
+
+                let varray_unpack_sig = PolyFuncTypeRV::new(
+                    vec![
+                        TypeParam::max_nat_type(),
+                        TypeParam::RuntimeType(TypeBound::Linear),
+                        TypeParam::new_list_type(TypeBound::Linear),
+                    ],
+                    FuncValueType::new(
+                        value_array_type_parametric(
+                            TypeArg::new_var_use(0, TypeParam::max_nat_type()),
+                            Type::new_var_use(1, TypeBound::Linear),
+                        )
+                        .unwrap(),
+                        TypeRV::new_row_var_use(2, TypeBound::Linear),
+                    ),
+                );
+                // pack some wires into a value array
+                ext.add_op(
+                    Self::VARRAY_REPACK,
+                    Default::default(),
+                    invert_sig(&varray_unpack_sig),
+                    ext_ref,
+                )
+                .unwrap();
+                // unpack a value array into some wires
+                ext.add_op(
+                    Self::VARRAY_UNPACK,
+                    Default::default(),
+                    varray_unpack_sig,
                     ext_ref,
                 )
                 .unwrap();
@@ -351,6 +390,19 @@ impl BarrierOperationFactory {
         Some(args)
     }
 
+    /// Helper function for value array arguments
+    fn varray_args(&mut self, size: u64, elem_ty: &Type) -> Option<[TypeArg; 3]> {
+        let row = self
+            .type_analyzer
+            .unpack_type(&value_array_type(size, elem_ty.clone()))?;
+        let args = [
+            size.into(),
+            elem_ty.clone().into(),
+            TypeArg::List(row.into_iter().map(Into::into).collect()),
+        ];
+        Some(args)
+    }
+
     /// Repack wires into an array
     pub fn repack_array(
         &mut self,
@@ -386,6 +438,85 @@ impl BarrierOperationFactory {
                     .map(|chunk| slf.repack_container(func_b, elem_ty, chunk.to_vec()))
                     .collect();
                 let array_wire = func_b.add_new_array(elem_ty.clone(), elems?)?;
+
+                Ok(vec![array_wire])
+            },
+        )?;
+
+        Ok(outputs.next().unwrap())
+    }
+
+    /// Unpack a value array into individual wires
+    pub fn unpack_varray(
+        &mut self,
+        builder: &mut impl Dataflow,
+        varray_wire: Wire,
+        size: u64,
+        elem_ty: &Type,
+    ) -> Result<Vec<Wire>, BuildError> {
+        // Calculate arguments for the value array unpacking
+        let args = match self.varray_args(size, elem_ty) {
+            Some(args) => args,
+            None => return Ok(vec![varray_wire]), // Not a qubit-containing value array
+        };
+
+        let outputs = self.apply_cached_operation(
+            builder,
+            &Self::VARRAY_UNPACK,
+            args.clone(),
+            &args[..2],
+            [varray_wire],
+            |slf, func_b| {
+                let w = func_b.input().out_wire(0);
+                let elems =
+                    func_b.add_generic_array_unpack::<ValueArray>(elem_ty.clone(), size, w)?;
+                let unpacked: Vec<_> = elems
+                    .into_iter()
+                    .map(|wire| slf.unpack_container(func_b, elem_ty, wire))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .concat();
+                Ok(unpacked)
+            },
+        )?;
+
+        Ok(outputs.collect())
+    }
+
+    /// Repack wires into a value array
+    pub fn repack_varray(
+        &mut self,
+        builder: &mut impl Dataflow,
+        elem_wires: impl IntoIterator<Item = Wire>,
+        size: u64,
+        elem_ty: &Type,
+    ) -> Result<Wire, BuildError> {
+        let args = match self.varray_args(size, elem_ty) {
+            Some(args) => args,
+            None => {
+                return Ok(elem_wires
+                    .into_iter()
+                    .next()
+                    .expect("Non-qubit container should only have one wire."));
+            }
+        };
+
+        let inner_row_len = self.type_analyzer.num_unpacked_wires(elem_ty);
+
+        let mut outputs = self.apply_cached_operation(
+            builder,
+            &Self::VARRAY_REPACK,
+            args.clone(),
+            &args[..2],
+            elem_wires,
+            |slf, func_b| {
+                let input = func_b.input();
+                let elems: Result<Vec<_>, _> = input
+                    .outputs()
+                    .collect::<Vec<_>>()
+                    .chunks(inner_row_len)
+                    .map(|chunk| slf.repack_container(func_b, elem_ty, chunk.to_vec()))
+                    .collect();
+                let array_wire = func_b.add_new_value_array(elem_ty.clone(), elems?)?;
 
                 Ok(vec![array_wire])
             },
@@ -531,6 +662,9 @@ impl BarrierOperationFactory {
         if let Some((n, elem_ty)) = typ.as_extension().and_then(array_args) {
             return self.unpack_array(builder, container_wire, n, elem_ty);
         }
+        if let Some((n, elem_ty)) = typ.as_extension().and_then(varray_args) {
+            return self.unpack_varray(builder, container_wire, n, elem_ty);
+        }
         if let Some(row) = typ.as_sum().and_then(SumType::as_tuple) {
             let row: hugr::types::TypeRow =
                 row.clone().try_into().expect("unexpected row variable.");
@@ -558,6 +692,9 @@ impl BarrierOperationFactory {
         }
         if let Some((n, elem_ty)) = typ.as_extension().and_then(array_args) {
             return self.repack_array(builder, unpacked_wires, n, elem_ty);
+        }
+        if let Some((n, elem_ty)) = typ.as_extension().and_then(varray_args) {
+            return self.repack_varray(builder, unpacked_wires, n, elem_ty);
         }
 
         if let Some(row) = typ.as_sum().and_then(SumType::as_tuple) {
@@ -663,6 +800,24 @@ mod tests {
     fn test_build_runtime_barrier_op() -> Result<(), BuildError> {
         let array_size = 4;
         let hugr = build_runtime_barrier_op(array_size)?;
+        assert!(hugr.validate().is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn test_value_array_unpack_repack() -> Result<(), BuildError> {
+        let mut factory = BarrierOperationFactory::new();
+        let array_size = 3;
+        let array_type = value_array_type(array_size, qb_t());
+
+        let mut builder = DFGBuilder::new(Signature::new_endo(array_type))?;
+
+        let input = builder.input().out_wire(0);
+        let unpacked = factory.unpack_varray(&mut builder, input, array_size, &qb_t())?;
+        assert_eq!(unpacked.len(), array_size as usize);
+
+        let repacked = factory.repack_varray(&mut builder, unpacked, array_size, &qb_t())?;
+        let hugr = builder.finish_hugr_with_outputs([repacked])?;
         assert!(hugr.validate().is_ok());
         Ok(())
     }
