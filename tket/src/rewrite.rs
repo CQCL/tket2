@@ -3,6 +3,7 @@
 #[cfg(feature = "portmatching")]
 pub mod ecc_rewriter;
 pub mod matcher;
+pub mod replacer;
 pub mod strategy;
 pub mod trace;
 
@@ -20,6 +21,8 @@ use hugr::{
     SimpleReplacement,
 };
 use hugr::{Hugr, HugrView};
+use matcher::{CircuitMatcher, MatchingOptions};
+use replacer::CircuitReplacer;
 
 use crate::circuit::Circuit;
 pub use crate::Subcircuit;
@@ -118,3 +121,46 @@ mod hidden {
     }
 }
 use hidden::CircuitLike;
+
+/// A rewriter made of a [`CircuitMatcher`] and a [`CircuitReplacer`].
+///
+/// The [`CircuitMatcher`] is used to find matches in the circuit, and the
+/// [`CircuitReplacer`] is used to create [`CircuitRewrite`]s for each match.
+#[derive(Clone, Debug)]
+pub struct MatchReplaceRewriter<C, R> {
+    matcher: C,
+    replacer: R,
+}
+
+impl<C, R> MatchReplaceRewriter<C, R> {
+    /// Create a new [`MatchReplaceRewriter`].
+    pub fn new(matcher: C, replacement: R) -> Self {
+        Self {
+            matcher,
+            replacer: replacement,
+        }
+    }
+}
+
+impl<C, R, H: HugrView<Node = hugr::Node>> Rewriter<Circuit<H>> for MatchReplaceRewriter<C, R>
+where
+    C: CircuitMatcher,
+    R: CircuitReplacer<C::MatchInfo>,
+{
+    fn get_rewrites(&self, circ: &Circuit<H>) -> Vec<CircuitRewrite<H::Node>> {
+        let hugr = circ.hugr();
+        let matches = self
+            .matcher
+            .as_hugr_matcher()
+            .get_all_matches(circ, &MatchingOptions::default());
+        matches
+            .into_iter()
+            .flat_map(|(subgraph, match_info)| {
+                self.replacer
+                    .replace_match(&subgraph, hugr, match_info)
+                    .into_iter()
+                    .filter_map(move |repl| CircuitRewrite::try_new(&subgraph, hugr, repl).ok())
+            })
+            .collect()
+    }
+}
