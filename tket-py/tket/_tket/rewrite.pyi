@@ -3,8 +3,12 @@ from tket._tket.circuit import Node, Tk2Circuit
 
 class ECCRewriter:
     @staticmethod
-    def load_precompiled(filename: Path) -> ECCRewriter:
+    def load_precompiled(filename: str | Path) -> ECCRewriter:
         """Load a precompiled rewriter from a file."""
+
+    @staticmethod
+    def compile_eccs(filename: str | Path) -> ECCRewriter:
+        """Compile an ECC rewriter from a JSON file."""
 
     def get_rewrites(self, circ: Tk2Circuit) -> list[CircuitRewrite]:
         """Get rewrites for a circuit."""

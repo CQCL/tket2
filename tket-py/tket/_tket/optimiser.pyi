@@ -1,15 +1,27 @@
-from typing import TypeVar, Literal
+from typing import TypeVar, Literal, TYPE_CHECKING
 from .circuit import Tk2Circuit
 from pytket._tket.circuit import Circuit
+
+if TYPE_CHECKING:
+    from ..rewrite import Rewriter
 
 from pathlib import Path
 
 CircuitClass = TypeVar("CircuitClass", Circuit, Tk2Circuit)
 
 class BadgerOptimiser:
+    def __init__(
+        self, rewriter: "Rewriter", cost_fn: Literal["cx", "rz"] | None = None
+    ):
+        """Create a new Badger optimiser.
+
+        :param rewriter: The rewriter to use.
+        :param rebase: Whether to rebase the circuit before optimising.
+        """
+
     @staticmethod
     def load_precompiled(
-        filename: Path, cost_fn: Literal["cx", "rz"] | None = None
+        filename: str | Path, cost_fn: Literal["cx", "rz"] | None = None
     ) -> BadgerOptimiser:
         """
         Load a precompiled rewriter from a file.
@@ -20,7 +32,7 @@ class BadgerOptimiser:
 
     @staticmethod
     def compile_eccs(
-        filename: Path, cost_fn: Literal["cx", "rz"] | None = None
+        filename: str | Path, cost_fn: Literal["cx", "rz"] | None = None
     ) -> BadgerOptimiser:
         """
         Compile a set of ECCs and create a new rewriter.
