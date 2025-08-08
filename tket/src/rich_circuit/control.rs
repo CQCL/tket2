@@ -1,39 +1,26 @@
-use std::{marker::PhantomData, str::FromStr, sync::Weak};
-
+//! Utilities for Control modifiers
 use hugr::{
     extension::{prelude::qb_t, SignatureFunc},
-    types::{
-        type_param::{TermVar, TypeParam},
-        FuncValueType, PolyFuncTypeRV, TypeBound, TypeRV,
-    },
-    Extension,
+    types::{type_param::TypeParam, FuncValueType, PolyFuncTypeRV, TypeBound, TypeRV},
 };
 
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-pub struct ModifierControl;
+pub struct ModifierControl(usize);
 
 impl ModifierControl {
-    pub fn new() -> Self {
-        ModifierControl
+    /// Create a new ModifierControl with a specific number of controls.
+    pub fn new(num: usize) -> Self {
+        ModifierControl(num)
     }
 }
 impl Default for ModifierControl {
     fn default() -> Self {
-        Self::new()
-    }
-}
-impl FromStr for ModifierControl {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "ModifierControl" {
-            Ok(Self::new())
-        } else {
-            Err(())
-        }
+        Self::new(0)
     }
 }
 impl ModifierControl {
+    /// Signature for the control modifier.
     pub fn signature() -> SignatureFunc {
         PolyFuncTypeRV::new(
             [

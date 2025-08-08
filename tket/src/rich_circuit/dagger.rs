@@ -1,19 +1,17 @@
-/// WIP
-use std::{marker::PhantomData, str::FromStr, sync::Weak};
+//! Utilities for dagger modifiers
+use std::str::FromStr;
 
 use hugr::{
-    extension::{prelude::qb_t, SignatureFunc},
-    types::{
-        type_param::{TermVar, TypeParam},
-        FuncValueType, PolyFuncTypeRV, TypeBound, TypeRV,
-    },
-    Extension,
+    extension::SignatureFunc,
+    types::{type_param::TypeParam, FuncValueType, PolyFuncTypeRV, TypeBound, TypeRV},
 };
 
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct ModifierDagger;
 
 impl ModifierDagger {
+    /// Create a new ModifierDagger.
     pub fn new() -> Self {
         ModifierDagger
     }
@@ -35,6 +33,7 @@ impl FromStr for ModifierDagger {
     }
 }
 impl ModifierDagger {
+    /// Signature for the dagger modifier.
     pub fn signature() -> SignatureFunc {
         PolyFuncTypeRV::new(
             [
