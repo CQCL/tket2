@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.18.1](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.18.0...tket-qsystem-v0.18.1) - 2025-08-08
+
+### Bug Fixes
+
+- *(qsystem)* handle barrier lowering for all array kinds ([#1024](https://github.com/CQCL/tket2/pull/1024))
+
 ## [0.18.0](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.17.0...tket-qsystem-v0.18.0) - 2025-07-30
 
 ### New Features
