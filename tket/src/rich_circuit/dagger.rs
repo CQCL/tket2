@@ -34,6 +34,8 @@ impl FromStr for ModifierDagger {
 }
 impl ModifierDagger {
     /// Signature for the dagger modifier.
+    /// FIXME: this should be chaged to `parameterized` endo-morphism,
+    /// that is, Q x C -> Q where Q is quantum and C is classical.
     pub fn signature() -> SignatureFunc {
         PolyFuncTypeRV::new(
             [
@@ -46,8 +48,8 @@ impl ModifierDagger {
                     vec![TypeRV::new_row_var_use(1, TypeBound::Linear)],
                 )),
                 TypeRV::new_function(FuncValueType::new(
-                    vec![TypeRV::new_row_var_use(1, TypeBound::Linear)],
                     vec![TypeRV::new_row_var_use(0, TypeBound::Linear)],
+                    vec![TypeRV::new_row_var_use(1, TypeBound::Linear)],
                 )),
             ),
         )
