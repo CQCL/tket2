@@ -1,7 +1,8 @@
 """HUGR extension definitions for tket2 circuits.
 
-> [!WARNING]
-> This package has been renamed to `tket-exts`. Please update your dependencies accordingly.
+| ⚠️ WARNING                  |
+|:----------------------------|
+| This package has been renamed to `tket-exts`. Please update your dependencies accordingly |
 
 """
 

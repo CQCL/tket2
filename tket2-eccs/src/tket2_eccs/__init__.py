@@ -1,7 +1,8 @@
 """`tket2-eccs` is a Python package containing compiler rewrite sets used for `tket2`'s optimisation passes.
 
-> [!WARNING]
-> This package has been renamed to `tket-eccs`. Please update your dependencies accordingly.
+| ⚠️ WARNING                  |
+|:----------------------------|
+| This package has been renamed to `tket-eccs`. Please update your dependencies accordingly |
 
 This package is intended to be used as an internal dependency for `tket2`.
 """

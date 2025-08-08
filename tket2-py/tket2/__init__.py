@@ -1,8 +1,8 @@
 """TKET2 is an open source quantum compiler developed by Quantinuum.
 
-> [!WARNING]
-> This package has been renamed to `tket`. Please update your dependencies accordingly.
-> The legacy `pytket` compiler will be incorporated into `tket`.
+| ⚠️ WARNING                  |
+|:----------------------------|
+| This package has been renamed to `tket`. Please update your dependencies accordingly. <br><br> Compiler functionality from the legacy `pytket` package will be incorporated into `tket` |
 
 Central to TKET2's design is its hardware agnosticism which allows researchers
 and quantum software developers to take advantage of its powerful compilation
