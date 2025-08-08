@@ -1,19 +1,17 @@
-/// WIP
-use std::{marker::PhantomData, str::FromStr, sync::Weak};
+//! Utilities for power modifiers
+use std::str::FromStr;
 
 use hugr::{
-    extension::{prelude::qb_t, SignatureFunc},
-    types::{
-        type_param::{TermVar, TypeParam},
-        FuncValueType, PolyFuncTypeRV, TypeBound, TypeRV,
-    },
-    Extension,
+    extension::SignatureFunc,
+    types::{type_param::TypeParam, FuncValueType, PolyFuncTypeRV, TypeBound, TypeRV},
 };
 
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct ModifierPower;
 
 impl ModifierPower {
+    /// Create a new ModifierPower.
     pub fn new() -> Self {
         ModifierPower
     }
@@ -35,6 +33,7 @@ impl FromStr for ModifierPower {
     }
 }
 impl ModifierPower {
+    /// signature for the power modifier.
     pub fn signature() -> SignatureFunc {
         PolyFuncTypeRV::new(
             [
