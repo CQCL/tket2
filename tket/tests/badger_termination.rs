@@ -3,7 +3,7 @@
 
 use rstest::{fixture, rstest};
 use tket::optimiser::badger::BadgerOptions;
-use tket::optimiser::{BadgerOptimiser, DefaultBadgerOptimiser};
+use tket::optimiser::{BadgerOptimiser, ECCBadgerOptimiser};
 use tket::serialize::TKETDecode;
 use tket::Circuit;
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -13,7 +13,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 /// This is the complete set of ECCs for 2-qubit circuits with up to
 /// 4 gates, using the NAM gateset (CX, Rz, H).
 #[fixture]
-fn nam_4_2() -> DefaultBadgerOptimiser {
+fn nam_4_2() -> ECCBadgerOptimiser {
     BadgerOptimiser::default_with_eccs_json_file("../test_files/eccs/nam_4_2.json").unwrap()
 }
 
@@ -54,7 +54,7 @@ fn simple_circ() -> Circuit {
 
 #[rstest]
 //#[ignore = "Takes 200ms"]
-fn badger_termination(simple_circ: Circuit, nam_4_2: DefaultBadgerOptimiser) {
+fn badger_termination(simple_circ: Circuit, nam_4_2: ECCBadgerOptimiser) {
     let opt_circ = nam_4_2.optimise(
         &simple_circ,
         BadgerOptions {
