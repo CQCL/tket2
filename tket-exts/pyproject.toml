@@ -35,3 +35,4 @@ repository = "https://github.com/CQCL/tket2/tree/main/tket-exts"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
