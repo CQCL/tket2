@@ -330,7 +330,7 @@ impl MakeOpDef for GpuOpDef {
                 )
                 .into()
             }
-            // <inputs: TypeRow, outputs: TypeRow> [Context, GpuType::Func { inputs, outputs }, inputs] -> [Context, future<tuple<outputs>>>]
+            // <inputs: TypeRow, outputs: TypeRow> [Context, GpuType::Func { inputs, outputs }, inputs] -> [result<outputs>]
             Self::call => {
                 let context_type: TypeRV = context_type.into();
                 let inputs = TypeRV::new_row_var_use(0, TypeBound::Copyable);
