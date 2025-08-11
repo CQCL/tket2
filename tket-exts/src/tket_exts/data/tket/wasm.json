@@ -228,10 +228,91 @@
       },
       "binary": false
     },
-    "lookup": {
+    "lookup_by_id": {
       "extension": "tket.wasm",
-      "name": "lookup",
-      "description": "lookup",
+      "name": "lookup_by_id",
+      "description": "lookup_by_id",
+      "signature": {
+        "params": [
+          {
+            "tp": "BoundedNat",
+            "bound": null
+          },
+          {
+            "tp": "List",
+            "param": {
+              "tp": "Type",
+              "b": "A"
+            }
+          },
+          {
+            "tp": "List",
+            "param": {
+              "tp": "Type",
+              "b": "A"
+            }
+          }
+        ],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket.wasm",
+              "id": "module",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket.wasm",
+              "id": "func",
+              "args": [
+                {
+                  "tya": "List",
+                  "elems": [
+                    {
+                      "tya": "Variable",
+                      "idx": 1,
+                      "cached_decl": {
+                        "tp": "List",
+                        "param": {
+                          "tp": "Type",
+                          "b": "C"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "tya": "List",
+                  "elems": [
+                    {
+                      "tya": "Variable",
+                      "idx": 2,
+                      "cached_decl": {
+                        "tp": "List",
+                        "param": {
+                          "tp": "Type",
+                          "b": "C"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "bound": "C"
+            }
+          ]
+        }
+      },
+      "binary": false
+    },
+    "lookup_by_name": {
+      "extension": "tket.wasm",
+      "name": "lookup_by_name",
+      "description": "lookup_by_name",
       "signature": {
         "params": [
           {
