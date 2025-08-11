@@ -27,9 +27,10 @@
 //!  `tket.wasm.module`. It carries type args defining its signature, but not
 //!  its name.
 //!
-//!  A `tket.wasm.func` is obtained from a `tket.wasm.lookup` op, which takes
-//!  a compile-time name and signature, and a runtime module. TODO Likely the
-//!  module should be compile time here, but I think we need
+//!  A `tket.wasm.func` is obtained from either a `tket.wasm.lookup_by_id` or
+//!  `tket.wasm.lookup_by_name`op, which takes a compile-time identifier (name or id)
+//!  and signature, and a runtime module.
+//!  TODO Likely the module should be compile time here, but I think we need
 //!  extension-op-static-edges to do this properly.
 //!
 //!  `tket.wasm.func`s are called via the `tket.wasm.call` op. This op takes:
@@ -111,7 +112,9 @@ lazy_static! {
     /// The name of the `tket.wasm.result` type.
     pub static ref RESULT_TYPE_NAME: SmolStr = SmolStr::new_inline("result");
 
-    /// The [TypeParam] of `tket.wasm.lookup` specifying the name of the function.
+    /// The [TypeParam] of `tket.wasm.lookup_by_id` specifying the id of the function.
+    pub static ref ID_PARAM: TypeParam = TypeParam::max_nat_type();
+    /// The [TypeParam] of `tket.wasm.lookup_by_name` specifying the name of the function.
     pub static ref NAME_PARAM: TypeParam = TypeParam::StringType;
     /// The [TypeParam] of various types and ops specifying the input signature of a function.
     pub static ref INPUTS_PARAM: TypeParam =
@@ -176,7 +179,8 @@ fn add_wasm_type_defs(
 pub enum WasmOpDef {
     get_context,
     dispose_context,
-    lookup,
+    lookup_by_id,
+    lookup_by_name,
     call,
     read_result,
 }
@@ -360,8 +364,24 @@ impl MakeOpDef for WasmOpDef {
             .into(),
             // [Context] -> []
             Self::dispose_context => Signature::new(context_type, type_row![]).into(),
+            // <id: usize, inputs: TypeRow, outputs: TypeRow> [Module] -> [WasmType::Func { inputs, outputs }]
+            Self::lookup_by_id => {
+                let inputs = TypeRV::new_row_var_use(1, TypeBound::Copyable);
+                let outputs = TypeRV::new_row_var_use(2, TypeBound::Copyable);
+
+                let func_type = WasmType::func_custom_type(inputs, outputs, extension_ref).into();
+                PolyFuncTypeRV::new(
+                    [
+                        ID_PARAM.to_owned(),
+                        INPUTS_PARAM.to_owned(),
+                        OUTPUTS_PARAM.to_owned(),
+                    ],
+                    Signature::new(vec![module_type], vec![func_type]),
+                )
+                .into()
+            }
             // <name: String, inputs: TypeRow, outputs: TypeRow> [Module] -> [WasmType::Func { inputs, outputs }]
-            Self::lookup => {
+            Self::lookup_by_name => {
                 let inputs = TypeRV::new_row_var_use(1, TypeBound::Copyable);
                 let outputs = TypeRV::new_row_var_use(2, TypeBound::Copyable);
 
@@ -453,8 +473,45 @@ impl HasConcrete for WasmOpDef {
                 };
                 Ok(WasmOp::DisposeContext)
             }
+            // <usize,in_row,out_row> [] -> []
+            Self::lookup_by_id => {
+                let Some([id_arg, inputs_arg, outputs_arg]): Option<[_; 3]> =
+                    type_args.to_vec().try_into().ok()
+                else {
+                    Err(SignatureError::from(TermTypeError::WrongNumberArgs(
+                        type_args.len(),
+                        3,
+                    )))?
+                };
+
+                let Some(id) = id_arg.as_nat() else {
+                    Err(SignatureError::from(TermTypeError::TypeMismatch {
+                        term: Box::new(id_arg),
+                        type_: Box::new(ID_PARAM.to_owned()),
+                    }))?
+                };
+
+                let Ok(inputs) = TypeRowRV::try_from(inputs_arg.clone()) else {
+                    Err(SignatureError::from(TermTypeError::TypeMismatch {
+                        term: Box::new(inputs_arg),
+                        type_: Box::new(INPUTS_PARAM.to_owned()),
+                    }))?
+                };
+
+                let Ok(outputs) = TypeRowRV::try_from(outputs_arg.clone()) else {
+                    Err(SignatureError::from(TermTypeError::TypeMismatch {
+                        term: Box::new(outputs_arg),
+                        type_: Box::new(OUTPUTS_PARAM.to_owned()),
+                    }))?
+                };
+                Ok(WasmOp::LookupById {
+                    id,
+                    inputs,
+                    outputs,
+                })
+            }
             // <String,in_row,out_row> [] -> []
-            Self::lookup => {
+            Self::lookup_by_name => {
                 let Some([name_arg, inputs_arg, outputs_arg]): Option<[_; 3]> =
                     type_args.to_vec().try_into().ok()
                 else {
@@ -484,7 +541,7 @@ impl HasConcrete for WasmOpDef {
                         type_: Box::new(OUTPUTS_PARAM.to_owned()),
                     }))?
                 };
-                Ok(WasmOp::Lookup {
+                Ok(WasmOp::LookupByName {
                     name,
                     inputs,
                     outputs,
@@ -560,8 +617,19 @@ pub enum WasmOp {
     GetContext,
     /// A `tket.wasm.dispose_context` op.
     DisposeContext,
-    /// A `tket.wasm.lookup` op.
-    Lookup {
+    /// A `tket.wasm.lookup_by_id` op.
+    LookupById {
+        /// The name of the function to be looked up.
+        id: u64,
+        /// The input signature of the function to be looked up.
+        /// Note that row variables are allowed here.
+        inputs: TypeRowRV,
+        /// The output signature of the function to be looked up.
+        /// Note that row variables are allowed here.
+        outputs: TypeRowRV,
+    },
+    /// A `tket.wasm.lookup_by_name` op.
+    LookupByName {
         /// The name of the function to be looked up.
         name: String,
         /// The input signature of the function to be looked up.
@@ -593,7 +661,8 @@ impl WasmOp {
         match self {
             Self::GetContext => WasmOpDef::get_context,
             Self::DisposeContext => WasmOpDef::dispose_context,
-            Self::Lookup { .. } => WasmOpDef::lookup,
+            Self::LookupById { .. } => WasmOpDef::lookup_by_id,
+            Self::LookupByName { .. } => WasmOpDef::lookup_by_name,
             Self::Call { .. } => WasmOpDef::call,
             Self::ReadResult { .. } => WasmOpDef::read_result,
         }
@@ -624,7 +693,16 @@ impl MakeExtensionOp for WasmOp {
         match self {
             WasmOp::GetContext => vec![],
             WasmOp::DisposeContext => vec![],
-            WasmOp::Lookup {
+            WasmOp::LookupById {
+                id,
+                inputs,
+                outputs,
+            } => {
+                let inputs = TypeArg::from(inputs.clone());
+                let outputs = TypeArg::from(outputs.clone());
+                vec![TypeArg::BoundedNat(*id), inputs, outputs]
+            }
+            WasmOp::LookupByName {
                 name,
                 inputs,
                 outputs,
@@ -690,8 +768,28 @@ pub trait WasmOpBuilder: Dataflow {
         Ok(())
     }
 
-    /// Add a `tket.wasm.lookup` op.
-    fn add_lookup(
+    /// Add a `tket.wasm.lookup_by_id` op.
+    fn add_lookup_by_id(
+        &mut self,
+        id: impl Into<u64>,
+        inputs: impl Into<TypeRowRV>,
+        outputs: impl Into<TypeRowRV>,
+        module: Wire,
+    ) -> Result<Wire, BuildError> {
+        Ok(self
+            .add_dataflow_op(
+                WasmOp::LookupById {
+                    id: id.into(),
+                    inputs: inputs.into(),
+                    outputs: outputs.into(),
+                },
+                [module],
+            )?
+            .out_wire(0))
+    }
+
+    /// Add a `tket.wasm.lookup_by_name` op.
+    fn add_lookup_by_name(
         &mut self,
         name: impl Into<String>,
         inputs: impl Into<TypeRowRV>,
@@ -700,7 +798,7 @@ pub trait WasmOpBuilder: Dataflow {
     ) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(
-                WasmOp::Lookup {
+                WasmOp::LookupByName {
                     name: name.into(),
                     inputs: inputs.into(),
                     outputs: outputs.into(),
@@ -811,13 +909,25 @@ mod test {
             Ok(WasmOp::DisposeContext)
         );
         assert_eq!(
-            WasmOpDef::lookup.instantiate(&[
+            WasmOpDef::lookup_by_name.instantiate(&[
                 "lookup_name".into(),
                 TypeArg::new_var_use(0, TypeParam::ListType(Box::new(TypeBound::Linear.into()))),
                 vec![].into()
             ]),
-            Ok(WasmOp::Lookup {
+            Ok(WasmOp::LookupByName {
                 name: "lookup_name".to_string(),
+                inputs: vec![TypeRV::new_row_var_use(0, TypeBound::Linear)].into(),
+                outputs: TypeRowRV::from(Vec::<TypeRV>::new())
+            })
+        );
+        assert_eq!(
+            WasmOpDef::lookup_by_id.instantiate(&[
+                TypeArg::BoundedNat(42),
+                TypeArg::new_var_use(0, TypeParam::ListType(Box::new(TypeBound::Linear.into()))),
+                vec![].into()
+            ]),
+            Ok(WasmOp::LookupById {
+                id: 42,
                 inputs: vec![TypeRV::new_row_var_use(0, TypeBound::Linear)].into(),
                 outputs: TypeRowRV::from(Vec::<TypeRV>::new())
             })
@@ -851,7 +961,7 @@ mod test {
         #[case] outputs: impl Into<TypeRowRV>,
     ) {
         let (inputs, outputs) = (inputs.into(), outputs.into());
-        let op = WasmOp::Lookup {
+        let op = WasmOp::LookupByName {
             name: "test".into(),
             inputs: inputs.clone(),
             outputs: outputs.clone(),
@@ -889,12 +999,22 @@ mod test {
                     .unwrap()
             };
             let module = builder.add_const_module("test_module").unwrap();
-            let func = builder
-                .add_lookup("test_func", in_types, out_types.clone(), module)
+            let func0 = builder
+                .add_lookup_by_id(42_u64, in_types.clone(), out_types.clone(), module)
+                .unwrap();
+
+            let func1 = builder
+                .add_lookup_by_name("test_func", in_types, out_types.clone(), module)
                 .unwrap();
 
             let result = builder
-                .add_call(context, func, builder.input_wires())
+                .add_call(context, func0, builder.input_wires())
+                .unwrap();
+
+            let (context, _results) = builder.add_read_result(result).unwrap();
+
+            let result = builder
+                .add_call(context, func1, builder.input_wires())
                 .unwrap();
 
             let (context, results) = builder.add_read_result(result).unwrap();

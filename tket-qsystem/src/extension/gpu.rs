@@ -66,7 +66,9 @@ lazy_static! {
     /// The name of the `tket.gpu.func` type.
     pub static ref RESULT_TYPE_NAME: SmolStr = SmolStr::new_inline("result");
 
-    /// The [TypeParam] of `tket.gpu.lookup` specifying the name of the function.
+    /// The [TypeParam] of `tket.gpu.lookup_by_id` specifying the id of the function.
+    pub static ref ID_PARAM: TypeParam = TypeParam::max_nat_type();
+    /// The [TypeParam] of `tket.gpu.lookup_name` specifying the name of the function.
     pub static ref NAME_PARAM: TypeParam = TypeParam::StringType;
     /// The [TypeParam] of various types and ops specifying the input signature of a function.
     pub static ref INPUTS_PARAM: TypeParam =
@@ -131,7 +133,8 @@ fn add_gpu_type_defs(
 pub enum GpuOpDef {
     get_context,
     dispose_context,
-    lookup,
+    lookup_by_id,
+    lookup_by_name,
     call,
     read_result,
 }
@@ -314,8 +317,24 @@ impl MakeOpDef for GpuOpDef {
             .into(),
             // [Context] -> []
             Self::dispose_context => Signature::new(context_type, type_row![]).into(),
+            // <id: usize, inputs: TypeRow, outputs: TypeRow> [Module] -> [GpuType::Func { inputs, outputs }]
+            Self::lookup_by_id => {
+                let inputs = TypeRV::new_row_var_use(1, TypeBound::Copyable);
+                let outputs = TypeRV::new_row_var_use(2, TypeBound::Copyable);
+
+                let func_type = GpuType::func_custom_type(inputs, outputs, extension_ref).into();
+                PolyFuncTypeRV::new(
+                    [
+                        ID_PARAM.to_owned(),
+                        INPUTS_PARAM.to_owned(),
+                        OUTPUTS_PARAM.to_owned(),
+                    ],
+                    Signature::new(vec![module_type], vec![func_type]),
+                )
+                .into()
+            }
             // <name: String, inputs: TypeRow, outputs: TypeRow> [Module] -> [GpuType::Func { inputs, outputs }]
-            Self::lookup => {
+            Self::lookup_by_name => {
                 let inputs = TypeRV::new_row_var_use(1, TypeBound::Copyable);
                 let outputs = TypeRV::new_row_var_use(2, TypeBound::Copyable);
 
@@ -404,8 +423,45 @@ impl HasConcrete for GpuOpDef {
                 };
                 Ok(GpuOp::DisposeContext)
             }
+            // <usize,in_row,out_row> [] -> []
+            Self::lookup_by_id => {
+                let Some([id_arg, inputs_arg, outputs_arg]): Option<[_; 3]> =
+                    type_args.to_vec().try_into().ok()
+                else {
+                    Err(SignatureError::from(TermTypeError::WrongNumberArgs(
+                        type_args.len(),
+                        3,
+                    )))?
+                };
+
+                let Some(id) = id_arg.as_nat() else {
+                    Err(SignatureError::from(TermTypeError::TypeMismatch {
+                        term: Box::new(id_arg),
+                        type_: Box::new(ID_PARAM.to_owned()),
+                    }))?
+                };
+
+                let Ok(inputs) = TypeRowRV::try_from(inputs_arg.clone()) else {
+                    Err(SignatureError::from(TermTypeError::TypeMismatch {
+                        term: Box::new(inputs_arg),
+                        type_: Box::new(INPUTS_PARAM.to_owned()),
+                    }))?
+                };
+
+                let Ok(outputs) = TypeRowRV::try_from(outputs_arg.clone()) else {
+                    Err(SignatureError::from(TermTypeError::TypeMismatch {
+                        term: Box::new(outputs_arg),
+                        type_: Box::new(OUTPUTS_PARAM.to_owned()),
+                    }))?
+                };
+                Ok(GpuOp::LookupById {
+                    id,
+                    inputs,
+                    outputs,
+                })
+            }
             // <String,in_row,out_row> [] -> []
-            Self::lookup => {
+            Self::lookup_by_name => {
                 let Some([name_arg, inputs_arg, outputs_arg]): Option<[_; 3]> =
                     type_args.to_vec().try_into().ok()
                 else {
@@ -435,7 +491,7 @@ impl HasConcrete for GpuOpDef {
                         type_: Box::new(OUTPUTS_PARAM.to_owned()),
                     }))?
                 };
-                Ok(GpuOp::Lookup {
+                Ok(GpuOp::LookupByName {
                     name,
                     inputs,
                     outputs,
@@ -511,8 +567,19 @@ pub enum GpuOp {
     GetContext,
     /// A `tket.gpu.dispose_context` op.
     DisposeContext,
-    /// A `tket.gpu.lookup` op.
-    Lookup {
+    /// A `tket.gpu.lookup_by_id` op.
+    LookupById {
+        /// The id of the function to be looked up.
+        id: u64,
+        /// The input signature of the function to be looked up.
+        /// Note that row variables are allowed here.
+        inputs: TypeRowRV,
+        /// The output signature of the function to be looked up.
+        /// Note that row variables are allowed here.
+        outputs: TypeRowRV,
+    },
+    /// A `tket.gpu.lookup_by_name` op.
+    LookupByName {
         /// The name of the function to be looked up.
         name: String,
         /// The input signature of the function to be looked up.
@@ -544,7 +611,8 @@ impl GpuOp {
         match self {
             Self::GetContext => GpuOpDef::get_context,
             Self::DisposeContext => GpuOpDef::dispose_context,
-            Self::Lookup { .. } => GpuOpDef::lookup,
+            Self::LookupById { .. } => GpuOpDef::lookup_by_id,
+            Self::LookupByName { .. } => GpuOpDef::lookup_by_name,
             Self::Call { .. } => GpuOpDef::call,
             Self::ReadResult { .. } => GpuOpDef::read_result,
         }
@@ -575,7 +643,16 @@ impl MakeExtensionOp for GpuOp {
         match self {
             GpuOp::GetContext => vec![],
             GpuOp::DisposeContext => vec![],
-            GpuOp::Lookup {
+            GpuOp::LookupById {
+                id,
+                inputs,
+                outputs,
+            } => {
+                let inputs = TypeArg::from(inputs.clone());
+                let outputs = TypeArg::from(outputs.clone());
+                vec![TypeArg::BoundedNat(*id), inputs, outputs]
+            }
+            GpuOp::LookupByName {
                 name,
                 inputs,
                 outputs,
@@ -654,8 +731,28 @@ pub trait GpuOpBuilder: Dataflow {
         Ok(())
     }
 
-    /// Add a `tket.gpu.lookup` op.
-    fn add_lookup(
+    /// Add a `tket.gpu.lookup_by_id` op.
+    fn add_lookup_by_id(
+        &mut self,
+        id: impl Into<u64>,
+        inputs: impl Into<TypeRowRV>,
+        outputs: impl Into<TypeRowRV>,
+        module: Wire,
+    ) -> Result<Wire, BuildError> {
+        Ok(self
+            .add_dataflow_op(
+                GpuOp::LookupById {
+                    id: id.into(),
+                    inputs: inputs.into(),
+                    outputs: outputs.into(),
+                },
+                [module],
+            )?
+            .out_wire(0))
+    }
+
+    /// Add a `tket.gpu.lookup_by_name` op.
+    fn add_lookup_by_name(
         &mut self,
         name: impl Into<String>,
         inputs: impl Into<TypeRowRV>,
@@ -664,7 +761,7 @@ pub trait GpuOpBuilder: Dataflow {
     ) -> Result<Wire, BuildError> {
         Ok(self
             .add_dataflow_op(
-                GpuOp::Lookup {
+                GpuOp::LookupByName {
                     name: name.into(),
                     inputs: inputs.into(),
                     outputs: outputs.into(),
@@ -782,12 +879,24 @@ mod test {
             Ok(GpuOp::DisposeContext)
         );
         assert_eq!(
-            GpuOpDef::lookup.instantiate(&[
+            GpuOpDef::lookup_by_id.instantiate(&[
+                TypeArg::BoundedNat(42),
+                TypeArg::new_var_use(0, TypeParam::ListType(Box::new(TypeBound::Linear.into()))),
+                vec![].into()
+            ]),
+            Ok(GpuOp::LookupById {
+                id: 42,
+                inputs: vec![TypeRV::new_row_var_use(0, TypeBound::Linear)].into(),
+                outputs: TypeRowRV::from(Vec::<TypeRV>::new())
+            })
+        );
+        assert_eq!(
+            GpuOpDef::lookup_by_name.instantiate(&[
                 "lookup_name".into(),
                 TypeArg::new_var_use(0, TypeParam::ListType(Box::new(TypeBound::Linear.into()))),
                 vec![].into()
             ]),
-            Ok(GpuOp::Lookup {
+            Ok(GpuOp::LookupByName {
                 name: "lookup_name".to_string(),
                 inputs: vec![TypeRV::new_row_var_use(0, TypeBound::Linear)].into(),
                 outputs: TypeRowRV::from(Vec::<TypeRV>::new())
@@ -822,7 +931,7 @@ mod test {
         #[case] outputs: impl Into<TypeRowRV>,
     ) {
         let (inputs, outputs) = (inputs.into(), outputs.into());
-        let op = GpuOp::Lookup {
+        let op = GpuOp::LookupByName {
             name: "test".into(),
             inputs: inputs.clone(),
             outputs: outputs.clone(),
@@ -860,12 +969,22 @@ mod test {
                     .unwrap()
             };
             let module = builder.add_const_module("test_module", None).unwrap();
-            let func = builder
-                .add_lookup("test_func", in_types, out_types.clone(), module)
+            let func0 = builder
+                .add_lookup_by_id(42_u64, in_types.clone(), out_types.clone(), module)
+                .unwrap();
+
+            let func1 = builder
+                .add_lookup_by_name("test_func", in_types, out_types.clone(), module)
                 .unwrap();
 
             let result = builder
-                .add_call(context, func, builder.input_wires())
+                .add_call(context, func0, builder.input_wires())
+                .unwrap();
+
+            let (context, _results) = builder.add_read_result(result).unwrap();
+
+            let result = builder
+                .add_call(context, func1, builder.input_wires())
                 .unwrap();
 
             let (context, results) = builder.add_read_result(result).unwrap();
