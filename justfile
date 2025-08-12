@@ -17,28 +17,42 @@ build:
     cd tket-py && uv run maturin build --release
 
 # Run all the tests.
-test language="[rust|python]" : (_run_lang language \
-        "uv run cargo test --all-features" \
-        "uv run maturin develop --uv && uv run pytest"
-    )
+test: test-rust test-python
+# Run all rust tests.
+test-rust *TEST_ARGS:
+    uv run cargo test --all-features {{TEST_ARGS}}
+# Run all python tests.
+test-python *TEST_ARGS:
+    uv run maturin develop --uv
+    uv run pytest {{TEST_ARGS}}
 
 # Auto-fix all clippy warnings.
-fix language="[rust|python]": (_run_lang language \
-        "uv run cargo clippy --all-targets --all-features --workspace --fix --allow-staged --allow-dirty" \
-        "uv run ruff check --fix"
-    )
+fix: fix-rust fix-python
+# Auto-fix all rust clippy warnings.
+fix-rust:
+    uv run cargo clippy --all-targets --all-features --workspace --fix --allow-staged --allow-dirty
+# Auto-fix all python clippy warnings.
+fix-python:
+    uv run ruff check --fix
 
 # Format the code.
-format language="[rust|python]": (_run_lang language \
-        "uv run cargo fmt" \
-        "uv run ruff format"
-    )
+format: format-rust format-python
+# Format the rust code.
+format-rust:
+    uv run cargo fmt
+# Format the python code.
+format-python:
+    uv run ruff format
 
 # Generate a test coverage report.
-coverage language="[rust|python]": (_run_lang language \
-        "uv run cargo llvm-cov --lcov > lcov.info" \
-        "uv run maturin develop && uv run pytest --cov=./ --cov-report=html"
-    )
+coverage: coverage-rust coverage-python
+# Generate a test coverage report for the rust code.
+coverage-rust *TEST_ARGS:
+    uv run cargo llvm-cov --lcov >lcov.info {{TEST_ARGS}}
+# Generate a test coverage report for the python code.
+coverage-python *TEST_ARGS:
+    uv run maturin develop
+    uv run pytest --cov=./ --cov-report=html {{TEST_ARGS}}
 
 # Run Rust unsoundness checks using miri
 miri *TEST_ARGS:
@@ -55,22 +69,3 @@ gen-extensions:
 # Interactively update snapshot tests (requires `cargo-insta`)
 update-snapshots:
     cargo insta review
-
-# Runs a rust and a python command, depending on the `language` variable.
-#
-# If `language` is set to `rust` or `python`, only run the command for that language.
-# Otherwise, run both commands.
-_run_lang language rust_cmd python_cmd:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ "{{ language }}" = "rust" ]; then
-        set -x
-        {{ rust_cmd }}
-    elif [ "{{ language }}" = "python" ]; then
-        set -x
-        {{ python_cmd }}
-    else
-        set -x
-        {{ rust_cmd }}
-        {{ python_cmd }}
-    fi
