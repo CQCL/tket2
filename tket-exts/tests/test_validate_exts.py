@@ -32,5 +32,6 @@ exts = [
 
 @pytest.mark.parametrize("ext", exts)
 def test_validate_extension(ext):
-    ext()
+    e = ext()
+    assert(len(e.types) + len(e.operations) > 0)
     return
