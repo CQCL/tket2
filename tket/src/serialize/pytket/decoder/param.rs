@@ -1,9 +1,4 @@
 //! Definition of a loaded parameter (either floating point or a rotation type) attached to a HUGR wire.
-#![expect(
-    dead_code,
-    reason = "Temporarily unused while we refactor the pytket decoder"
-)]
-
 pub(super) mod parser;
 use std::sync::LazyLock;
 
@@ -53,6 +48,10 @@ impl LoadedParameter {
     }
 
     /// Returns the hugr type for the parameter.
+    #[expect(
+        dead_code,
+        reason = "Temporarily unused while we refactor the pytket decoder"
+    )]
     pub fn wire_type(&self) -> &Type {
         static FLOAT_TYPE: LazyLock<Type> = LazyLock::new(float64_type);
         static ROTATION_TYPE: LazyLock<Type> = LazyLock::new(rotation_type);
