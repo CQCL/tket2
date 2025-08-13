@@ -30,6 +30,6 @@ def f(qs: array[qubit, 4] @ owned) -> array[qubit, 4]:
     return qs
 
 
-program = main.compile().package
-config = EnvelopeConfig(format=EnvelopeFormat.MODULE, zstd=0)
+program = main.compile()
+config = EnvelopeConfig(format=EnvelopeFormat.MODEL_WITH_EXTS, zstd=0)
 Path(argv[0]).with_suffix(".hugr").write_bytes(program.to_bytes(config))

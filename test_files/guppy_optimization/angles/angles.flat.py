@@ -32,6 +32,6 @@ def f(q: qubit @ owned) -> qubit:
     return q
 
 
-program = main.compile().package
-config = EnvelopeConfig(format=EnvelopeFormat.MODULE, zstd=0)
+program = main.compile()
+config = EnvelopeConfig(format=EnvelopeFormat.MODEL_WITH_EXTS, zstd=0)
 Path(argv[0]).with_suffix(".hugr").write_bytes(program.to_bytes(config))

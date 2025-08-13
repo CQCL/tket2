@@ -1,9 +1,9 @@
 graph LR
-    subgraph 0 ["(0) [**Module**]"]
+    subgraph 0 ["(0) Module"]
         direction LR
-        style 0 stroke:#832561,stroke-width:3px
-        subgraph 1 ["(1) FuncDefn: #quot;main#quot;"]
+        subgraph 1 ["(1) [**FuncDefn: #quot;main#quot;**]"]
             direction LR
+            style 1 stroke:#832561,stroke-width:3px
             2["(2) Input"]
             3["(3) Output"]
             subgraph 4 ["(4) CFG"]
@@ -12,11 +12,11 @@ graph LR
                     direction LR
                     6["(6) Input"]
                     7["(7) Output"]
-                    9["(9) Tag"]
-                    9--"0:0<br>Unit"-->7
+                    8["(8) Tag"]
+                    8--"0:0<br>Unit"-->7
                 end
-                8["(8) ExitBlock"]
-                5-."0:0".->8
+                9["(9) ExitBlock"]
+                5-."0:0".->9
             end
         end
     end

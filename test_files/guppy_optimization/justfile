@@ -11,7 +11,7 @@ regenerate-hugrs:
     @# Find all examples in subdirectories and re-run them.
     for example in $(find . -type f -name "*.py"); do
         echo "Re-generating $example"
-        uvx --with 'guppylang==0.20.0' python "$example"
+        uvx --with 'guppylang==0.21.2' python "$example"
     done
 
 # Re-generate the mermaid diagrams from hugr files, for examples directories containing a `.generate_mmd` empty file.

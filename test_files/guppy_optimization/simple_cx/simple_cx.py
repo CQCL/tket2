@@ -14,5 +14,5 @@ def main() -> None:
     measure(q2)
 
 
-program = main.compile().package
+program = main.compile()
 Path(argv[0]).with_suffix(".hugr").write_bytes(program.to_bytes())

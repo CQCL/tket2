@@ -1,9 +1,9 @@
 graph LR
-    subgraph 0 ["(0) [**Module**]"]
+    subgraph 0 ["(0) Module"]
         direction LR
-        style 0 stroke:#832561,stroke-width:3px
-        subgraph 1 ["(1) FuncDefn: #quot;main#quot;"]
+        subgraph 1 ["(1) [**FuncDefn: #quot;main#quot;**]"]
             direction LR
+            style 1 stroke:#832561,stroke-width:3px
             2["(2) Input"]
             3["(3) Output"]
             subgraph 4 ["(4) CFG"]
@@ -12,33 +12,33 @@ graph LR
                     direction LR
                     6["(6) Input"]
                     7["(7) Output"]
-                    9["(9) tket2.quantum.QAlloc"]
-                    10["(10) tket2.quantum.QAlloc"]
-                    11["(11) prelude.MakeTuple"]
-                    12["(12) prelude.UnpackTuple"]
-                    13["(13) tket2.quantum.CX"]
-                    14["(14) prelude.MakeTuple"]
-                    15["(15) tket2.quantum.CX"]
-                    16["(16) prelude.MakeTuple"]
-                    17["(17) tket2.quantum.MeasureFree"]
-                    18["(18) tket2.quantum.MeasureFree"]
-                    19["(19) Tag"]
-                    9--"0:0<br>qubit"-->11
-                    9-."1:0".->10
-                    10--"0:1<br>qubit"-->11
-                    10-."1:1".->17
-                    11--"0:0<br>[qubit, qubit]"-->12
-                    12--"0:0<br>qubit"-->13
-                    12--"1:1<br>qubit"-->13
-                    13--"0:0<br>qubit"-->15
-                    13--"1:1<br>qubit"-->15
-                    15--"0:0<br>qubit"-->17
-                    15--"1:0<br>qubit"-->18
-                    17--"0:1<br>bool"-->18
-                    19--"0:0<br>Unit"-->7
+                    8["(8) tket.quantum.QAlloc"]
+                    9["(9) tket.quantum.QAlloc"]
+                    10["(10) prelude.MakeTuple"]
+                    11["(11) prelude.UnpackTuple"]
+                    12["(12) tket.quantum.CX"]
+                    13["(13) prelude.MakeTuple"]
+                    14["(14) tket.quantum.CX"]
+                    15["(15) prelude.MakeTuple"]
+                    16["(16) tket.quantum.MeasureFree"]
+                    17["(17) tket.quantum.MeasureFree"]
+                    18["(18) Tag"]
+                    8--"0:0<br>qubit"-->10
+                    8-."1:0".->9
+                    9--"0:1<br>qubit"-->10
+                    9-."1:1".->16
+                    10--"0:0<br>[qubit, qubit]"-->11
+                    11--"0:0<br>qubit"-->12
+                    11--"1:1<br>qubit"-->12
+                    12--"0:0<br>qubit"-->14
+                    12--"1:1<br>qubit"-->14
+                    14--"0:0<br>qubit"-->16
+                    14--"1:0<br>qubit"-->17
+                    16-."1:1".->17
+                    18--"0:0<br>Unit"-->7
                 end
-                8["(8) ExitBlock"]
-                5-."0:0".->8
+                19["(19) ExitBlock"]
+                5-."0:0".->19
             end
         end
     end

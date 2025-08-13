@@ -1,0 +1,68 @@
+graph LR
+    subgraph 0 ["(0) Module"]
+        direction LR
+        subgraph 1 ["(1) [**FuncDefn: #quot;main#quot;**]"]
+            direction LR
+            style 1 stroke:#832561,stroke-width:3px
+            2["(2) Input"]
+            3["(3) Output"]
+            subgraph 4 ["(4) CFG"]
+                direction LR
+                subgraph 5 ["(5) DataflowBlock"]
+                    direction LR
+                    6["(6) Input"]
+                    7["(7) Output"]
+                    8["(8) tket.quantum.QAlloc"]
+                    9["(9) tket.quantum.H"]
+                    10["(10) prelude.MakeTuple"]
+                    11["(11) Tag"]
+                    8--"0:0<br>qubit"-->9
+                    9--"0:1<br>qubit"-->7
+                    11--"0:0<br>Unit"-->7
+                end
+                12["(12) ExitBlock"]
+                subgraph 13 ["(13) DataflowBlock"]
+                    direction LR
+                    14["(14) Input"]
+                    15["(15) Output"]
+                    16["(16) tket.quantum.H"]
+                    17["(17) prelude.MakeTuple"]
+                    18["(18) Tag"]
+                    14--"0:0<br>qubit"-->16
+                    16--"0:1<br>qubit"-->15
+                    18--"0:0<br>Unit"-->15
+                end
+                subgraph 19 ["(19) DataflowBlock"]
+                    direction LR
+                    20["(20) Input"]
+                    21["(21) Output"]
+                    22["(22) Tag"]
+                    20--"0:1<br>qubit"-->21
+                    22--"0:0<br>Unit"-->21
+                end
+                subgraph 23 ["(23) DataflowBlock"]
+                    direction LR
+                    24["(24) Input"]
+                    25["(25) Output"]
+                    26["(26) Tag"]
+                    24--"0:1<br>qubit"-->25
+                    26--"0:0<br>Unit"-->25
+                end
+                subgraph 27 ["(27) DataflowBlock"]
+                    direction LR
+                    28["(28) Input"]
+                    29["(29) Output"]
+                    30["(30) tket.quantum.MeasureFree"]
+                    31["(31) Tag"]
+                    28--"0:0<br>qubit"-->30
+                    31--"0:0<br>Unit"-->29
+                end
+                5-."0:0".->13
+                13-."0:0".->19
+                19-."0:0".->23
+                23-."0:0".->27
+                27-."0:0".->12
+            end
+        end
+    end
+
