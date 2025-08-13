@@ -1,10 +1,5 @@
 //! Structures to keep track of pytket [`ElementId`][tket_json_rs::register::ElementId]s and
 //! their correspondence to wires in the hugr being defined.
-#![expect(
-    dead_code,
-    reason = "Temporarily unused while we refactor the pytket decoder"
-)]
-
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -21,10 +16,12 @@ use crate::extension::rotation::rotation_type;
 use crate::serialize::pytket::config::TypeTranslatorSet;
 use crate::serialize::pytket::decoder::param::parser::{parse_pytket_param, PytketParam};
 use crate::serialize::pytket::decoder::{
-    LoadedParameter, TrackedBit, TrackedBitId, TrackedQubit, TrackedQubitId,
+    LoadedParameter, PytketDecoderContext, TrackedBit, TrackedBitId, TrackedQubit, TrackedQubitId,
 };
 use crate::serialize::pytket::extension::RegisterCount;
-use crate::serialize::pytket::{PytketDecodeError, PytketDecodeErrorInner, RegisterHash};
+use crate::serialize::pytket::{
+    PytketDecodeError, PytketDecodeErrorInner, PytketDecoderConfig, RegisterHash,
+};
 use crate::symbolic_constant_op;
 
 /// Tracked data for a wire in [`TrackedWires`].
@@ -59,22 +56,22 @@ impl WireData {
     /// The pytket qubit arguments corresponding to this wire.
     pub fn qubits<'d>(
         &'d self,
-        wire_tracker: &'d WireTracker,
+        decoder: &'d PytketDecoderContext<'d>,
     ) -> impl Iterator<Item = TrackedQubit> + 'd {
         self.qubits
             .iter()
-            .map(move |elem_id| wire_tracker.get_qubit(*elem_id))
+            .map(move |elem_id| decoder.wire_tracker.get_qubit(*elem_id))
             .cloned()
     }
 
     /// The pytket bit arguments corresponding to this wire.
     pub fn bits<'d>(
         &'d self,
-        wire_tracker: &'d WireTracker,
+        decoder: &'d PytketDecoderContext<'d>,
     ) -> impl Iterator<Item = TrackedBit> + 'd {
         self.bits
             .iter()
-            .map(move |elem_id| wire_tracker.get_bit(*elem_id))
+            .map(move |elem_id| decoder.wire_tracker.get_bit(*elem_id))
             .cloned()
     }
 
@@ -193,22 +190,20 @@ impl TrackedWires {
     #[inline]
     pub fn qubits<'d>(
         &'d self,
-        wire_tracker: &'d WireTracker,
+        decoder: &'d PytketDecoderContext<'d>,
     ) -> impl Iterator<Item = TrackedQubit> + 'd {
         self.value_wires
             .iter()
-            .flat_map(move |wd| wd.qubits(wire_tracker))
+            .flat_map(move |wd| wd.qubits(decoder))
     }
 
     /// Returns the tracked bit elements in the set of wires.
     #[inline]
     pub fn bits<'d>(
         &'d self,
-        wire_tracker: &'d WireTracker,
+        decoder: &'d PytketDecoderContext<'d>,
     ) -> impl Iterator<Item = TrackedBit> + 'd {
-        self.value_wires
-            .iter()
-            .flat_map(move |wd| wd.bits(wire_tracker))
+        self.value_wires.iter().flat_map(move |wd| wd.bits(decoder))
     }
 
     /// Return the tracked value wires in this tracked wires.
@@ -527,7 +522,7 @@ impl WireTracker {
     ///   [`WireTracker::load_parameter`] for more details.
     pub(super) fn find_typed_wires<'r>(
         &self,
-        type_translators: &TypeTranslatorSet,
+        config: &PytketDecoderConfig,
         types: &[Type],
         qubit_args: impl IntoIterator<Item = &'r TrackedQubit>,
         bit_args: impl IntoIterator<Item = &'r TrackedBit>,
@@ -548,7 +543,7 @@ impl WireTracker {
             .iter()
             .filter(|ty| !param_types.contains(ty))
             .map(|ty| {
-                let Some(reg_count) = type_translators.type_to_pytket(ty) else {
+                let Some(reg_count) = config.type_to_pytket(ty) else {
                     return Err(PytketDecodeErrorInner::UnexpectedInputType {
                         unknown_type: ty.to_string(),
                         all_types: types.iter().map(ToString::to_string).collect(),

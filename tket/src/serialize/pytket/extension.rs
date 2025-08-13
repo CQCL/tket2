@@ -24,12 +24,13 @@ pub use tk1::Tk1Emitter;
 pub use tket::TketOpEmitter;
 
 pub(crate) use bool::set_bits_op;
-pub(crate) use tk1::OpaqueTk1Op;
+pub(crate) use tk1::{build_opaque_tket_op, OpaqueTk1Op};
 
 use super::encoder::TrackedValues;
 use crate::serialize::pytket::config::TypeTranslatorSet;
+use crate::serialize::pytket::decoder::{DecodeStatus, PytketDecoderContext, TrackedWires};
 use crate::serialize::pytket::encoder::{EncodeStatus, PytketEncoderContext};
-use crate::serialize::pytket::PytketEncodeError;
+use crate::serialize::pytket::{PytketDecodeError, PytketEncodeError};
 use crate::Circuit;
 use hugr::extension::ExtensionId;
 use hugr::ops::constant::OpaqueValue;
@@ -65,6 +66,9 @@ pub trait PytketEmitter<H: HugrView> {
     /// converted. If the operation is not supported by the encoder, it's
     /// important to **not** modify the `encoder` context as that may invalidate
     /// the context for other encoders that may be called afterwards.
+    ///
+    /// If [`PytketEmitter::extensions`] returns a list of extensions,
+    /// `op` will be a custom operation from one of them.
     fn op_to_pytket(
         &self,
         node: H::Node,
@@ -85,6 +89,41 @@ pub trait PytketEmitter<H: HugrView> {
     ) -> Result<Option<TrackedValues>, PytketEncodeError<H::Node>> {
         let _ = (value, encoder);
         Ok(None)
+    }
+}
+
+/// A decoder of pytket operations and types that transforms them into HUGR
+/// primitives.
+///
+/// A [decoder configuration](crate::serialize::pytket::PytketDecoderConfig)
+/// contains a list of such decoders.
+pub trait PytketDecoder {
+    /// A list of pytket's [`tket_json_rs::OpType`] supported by this decoder.
+    ///
+    /// [`PytketDecoder::op_to_hugr`] will only be called for commands
+    /// containing these.
+    fn op_types(&self) -> Vec<tket_json_rs::OpType>;
+
+    /// Given a pytket [`tket_json_rs::circuit_json::Operation`] node in the
+    /// HUGR circuit and its operation type, try to convert it to a pytket
+    /// operation and add it to the pytket encoder.
+    ///
+    /// Returns an [`DecodeStatus`] indicating if the operation was successfully
+    /// converted. If the operation is not supported by the encoder, it's
+    /// important to **not** modify the `encoder` context as that may invalidate
+    /// the context for other encoders that may be called afterwards.
+    ///
+    /// `op` will always have one of the [`tket_json_rs::OpType`]s specified in
+    /// [`PytketDecoder::op_types`].
+    fn op_to_hugr<'h>(
+        &self,
+        op: &tket_json_rs::circuit_json::Operation,
+        wires: &TrackedWires,
+        opgroup: Option<&str>,
+        decoder: &mut PytketDecoderContext<'h>,
+    ) -> Result<DecodeStatus, PytketDecodeError> {
+        let _ = (op, wires, opgroup, decoder);
+        Ok(DecodeStatus::Unsupported)
     }
 }
 
@@ -128,7 +167,9 @@ pub trait PytketTypeTranslator {
     Default,
     derive_more::Display,
     derive_more::Add,
+    derive_more::AddAssign,
     derive_more::Sub,
+    derive_more::SubAssign,
     derive_more::Sum,
 )]
 #[display("{qubits} qubits, {bits} bits, {params} parameters")]
@@ -182,5 +223,10 @@ impl RegisterCount {
     /// Returns the number of qubits, bits, and parameters associated with the wire.
     pub const fn total(&self) -> usize {
         self.qubits + self.bits + self.params
+    }
+
+    /// Returns `true` if the register count is empty.
+    pub const fn is_empty(&self) -> bool {
+        self.qubits == 0 && self.bits == 0 && self.params == 0
     }
 }

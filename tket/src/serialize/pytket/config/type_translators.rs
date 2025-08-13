@@ -1,6 +1,6 @@
 //! Sets of extensions for translating HUGR types into pytket registers.
 //!
-//! Defines sets of [`TypeTranslator`]s used by the encoders and decoders to
+//! Defines sets of [`PytketTypeTranslator`]s used by the encoders and decoders to
 //! translate HUGR types into pytket primitives.
 
 use std::collections::HashMap;

@@ -3,8 +3,10 @@
 use super::PytketEmitter;
 use crate::extension::sympy::SympyOp;
 use crate::extension::TKET_EXTENSION_ID;
+use crate::serialize::pytket::decoder::{DecodeStatus, PytketDecoderContext, TrackedWires};
 use crate::serialize::pytket::encoder::{EncodeStatus, PytketEncoderContext};
-use crate::serialize::pytket::PytketEncodeError;
+use crate::serialize::pytket::extension::PytketDecoder;
+use crate::serialize::pytket::{PytketDecodeError, PytketEncodeError};
 use crate::{Circuit, TketOp};
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
@@ -108,5 +110,69 @@ impl TketOpEmitter {
     ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         encoder.emit_transparent_node(node, circ, |_| vec![sympy_op.expr.clone()])?;
         Ok(EncodeStatus::Success)
+    }
+}
+
+impl PytketDecoder for TketOpEmitter {
+    fn op_types(&self) -> Vec<Tk1OpType> {
+        vec![
+            Tk1OpType::H,
+            Tk1OpType::CX,
+            Tk1OpType::CY,
+            Tk1OpType::CZ,
+            Tk1OpType::CRz,
+            Tk1OpType::T,
+            Tk1OpType::Tdg,
+            Tk1OpType::S,
+            Tk1OpType::Sdg,
+            Tk1OpType::V,
+            Tk1OpType::Vdg,
+            Tk1OpType::X,
+            Tk1OpType::Y,
+            Tk1OpType::Z,
+            Tk1OpType::Rx,
+            Tk1OpType::Rz,
+            Tk1OpType::Ry,
+            Tk1OpType::CCX,
+            Tk1OpType::Reset,
+            Tk1OpType::Measure,
+        ]
+    }
+
+    fn op_to_hugr<'h>(
+        &self,
+        op: &tket_json_rs::circuit_json::Operation,
+        wires: &TrackedWires,
+        _opgroup: Option<&str>,
+        decoder: &mut PytketDecoderContext<'h>,
+    ) -> Result<DecodeStatus, PytketDecodeError> {
+        let op = match op.op_type {
+            Tk1OpType::H => TketOp::H,
+            Tk1OpType::CX => TketOp::CX,
+            Tk1OpType::CY => TketOp::CY,
+            Tk1OpType::CZ => TketOp::CZ,
+            Tk1OpType::CRz => TketOp::CRz,
+            Tk1OpType::T => TketOp::T,
+            Tk1OpType::Tdg => TketOp::Tdg,
+            Tk1OpType::S => TketOp::S,
+            Tk1OpType::Sdg => TketOp::Sdg,
+            Tk1OpType::V => TketOp::V,
+            Tk1OpType::Vdg => TketOp::Vdg,
+            Tk1OpType::X => TketOp::X,
+            Tk1OpType::Y => TketOp::Y,
+            Tk1OpType::Z => TketOp::Z,
+            Tk1OpType::Rx => TketOp::Rx,
+            Tk1OpType::Ry => TketOp::Ry,
+            Tk1OpType::Rz => TketOp::Rz,
+            Tk1OpType::CCX => TketOp::Toffoli,
+            Tk1OpType::Reset => TketOp::Reset,
+            Tk1OpType::Measure => TketOp::Measure,
+            _ => {
+                return Ok(DecodeStatus::Unsupported);
+            }
+        };
+        decoder.add_node_with_bare_wires(op, wires)?;
+
+        Ok(DecodeStatus::Success)
     }
 }

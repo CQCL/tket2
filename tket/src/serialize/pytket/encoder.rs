@@ -82,7 +82,8 @@ impl<H: HugrView> PytketEncoderContext<H> {
         let hugr = circ.hugr();
         let name = Circuit::new(hugr.with_entrypoint(region))
             .name()
-            .map(str::to_string);
+            .map(str::to_string)
+            .filter(|s| !s.is_empty());
 
         // Recover other parameters stored in the metadata
         let phase = match hugr.get_metadata(region, METADATA_PHASE) {
@@ -556,7 +557,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         let mut pytket_op = make_tk1_operation(tket_json_rs::OpType::Barrier, args);
         pytket_op.data = Some(payload);
 
-        let opgroup = Some("tket".to_string());
+        let opgroup = Some("UNSUPPORTED_HUGR".to_string());
         self.emit_command(pytket_op, &op_values.qubits, &op_values.bits, opgroup);
         Ok(())
     }
