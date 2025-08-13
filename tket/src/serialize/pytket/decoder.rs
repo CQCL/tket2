@@ -31,7 +31,7 @@ use crate::extension::rotation::{rotation_type, RotationOp};
 use crate::serialize::pytket::METADATA_INPUT_PARAMETERS;
 use crate::symbolic_constant_op;
 use op::Tk1Op;
-use param::{parse_pytket_param, PytketParam};
+use param::parser::{parse_pytket_param, PytketParam};
 
 /// The state of an in-progress [`FunctionBuilder`] being built from a [`SerialCircuit`].
 ///

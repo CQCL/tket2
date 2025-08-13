@@ -1,0 +1,55 @@
+//! A parser grammar for pytket operation parameters
+//!
+//! The grammar is a subset of sympy expressions,
+//! unrecognised expressions will be boxed opaquely.
+
+/// Operation and variable identifiers
+///
+/// The atomic marker `@` ensures no whitespace is present inside.
+ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" )* }
+/// Alias for `ident`.
+variable = _{ ident }
+
+/// Explicit numeric constants.
+///
+/// The atomic marker `@` ensures no whitespace is present inside.
+num = @{
+    "-"?
+    ~ ("0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*)
+    ~ ("." ~ ASCII_DIGIT*)?
+    ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+}
+
+/// Infix operations (e.g. `2 + 2`),
+///
+/// The rust parser defines the operator precedence between these.
+infix_operator = _{ add | subtract | power | multiply | divide }
+    add       = { "+" }
+    subtract  = { "-" }
+    power     = { "**" }
+    multiply  = { "*" }
+    divide    = { "/" }
+
+/// Function calls like (`max(2,4)`)
+function_call = { ident ~ ( "()" | "(" ~ expr ~ ("," ~ expr)* ~ ","? ~ ")") }
+/// Unary negation, with a special identifier
+unary_minus = { "-" ~ term }
+
+/// Implicit multiplication lets us write expressions like `2x`.
+/// This has higher precedence that `infix_operator`s.
+///
+/// The second match is a subset of `term`, picked to avoid ambiguity.
+/// If we used `term` directly, the expression `5-2` could be interpreted as `5 * (-2)`.
+implicit_multiply = { num ~ ("(" ~ expr ~ ")" | function_call | variable) }
+
+/// Expressions are sequences of terms and infix operators
+expr = { term ~ (infix_operator ~ term)* }
+/// A standalone term, with no infix operators at the root.
+term = _{ "(" ~ expr ~ ")" | implicit_multiply | num | unary_minus | function_call | variable }
+
+/// Main entry point of the parser. Ensures we always parse the whole input.
+parameter = _{ SOI ~ expr ~ EOI }
+
+/// Allowed whitespace characters.
+/// Each `~` separator in the preceding rules can contain any number of these (including zero).
+WHITESPACE = _{ " " | "\t" }
