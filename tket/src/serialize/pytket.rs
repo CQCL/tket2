@@ -279,6 +279,174 @@ impl<N> Tk1ConvertError<N> {
     }
 }
 
+/// Error type for conversion between tket2 ops and pytket operations.
+#[derive(derive_more::Debug, Display, Error)]
+#[non_exhaustive]
+pub enum Tk1DecodeError {
+    /// The pytket circuit uses multi-indexed registers.
+    //
+    // This could be supported in the future, if there is a need for it.
+    #[display("Register {register} in the circuit has multiple indices. Tket2 does not support multi-indexed registers.")]
+    MultiIndexedRegister {
+        /// The register name.
+        register: String,
+    },
+    /// Found an unexpected register name.
+    #[display("Found an unknown qubit register name: {register}.")]
+    UnknownQubitRegister {
+        /// The unknown register name.
+        register: String,
+    },
+    /// Found an unexpected bit register name.
+    #[display("Found an unknown bit register name: {register}.")]
+    UnknownBitRegister {
+        /// The unknown register name.
+        register: String,
+    },
+    /// The given signature to use for the HUGR's input wires is not compatible with the number of qubits and bits in the pytket circuit.
+    ///
+    /// The expected number of qubits and bits may be different depending on the [`PytketTypeTranslator`][extension::PytketTypeTranslator]s used in the decoder config.
+    #[display(
+        "The given input types {input_types} to use for the HUGR's input wires are not compatible with the number of qubits and bits in the pytket circuit. Expected {expected_qubits} qubits and {expected_bits} bits, but found {circ_qubits} qubits and {circ_bits} bits.",
+        input_types = input_types.iter().join(", "),
+    )]
+    InvalidInputSignature {
+        /// The given input types.
+        input_types: Vec<String>,
+        /// The expected number of qubits in the signature.
+        expected_qubits: usize,
+        /// The expected number of bits in the signature.
+        expected_bits: usize,
+        /// The number of qubits in the pytket circuit.
+        circ_qubits: usize,
+        /// The number of bits in the pytket circuit.
+        circ_bits: usize,
+    },
+    /// The signature to use for the HUGR's output wires is not compatible with the number of qubits and bits in the pytket circuit.
+    ///
+    /// We don't do any kind of type conversion, so this depends solely on the last operation to update each register.
+    #[display(
+        "The expected output types {expected_types} are not compatible with the actual output types {actual_types}, obtained from decoding the pytket circuit.",
+        expected_types = expected_types.iter().join(", "),
+        actual_types = actual_types.iter().join(", "),
+    )]
+    InvalidOutputSignature {
+        /// The expected types of the input wires.
+        expected_types: Vec<String>,
+        /// The actual types of the input wires.
+        actual_types: Vec<String>,
+    },
+    /// A pytket operation had some input registers that couldn't be mapped to hugr wires.
+    //
+    // Some of this errors will be avoided in the future once we are able to decompose complex types automatically.
+    #[display(
+        "Could not find a wire with the required qubit arguments [{qubit_args:?}] and bit arguments [{bit_args:?}] for operation {operation}.",
+        qubit_args = qubit_args.iter().join(", "),
+        bit_args = bit_args.iter().join(", "),
+    )]
+    ArgumentCouldNotBeMapped {
+        /// The operation type that was being decoded.
+        operation: String,
+        /// The qubit arguments that couldn't be mapped.
+        qubit_args: Vec<String>,
+        /// The bit arguments that couldn't be mapped.
+        bit_args: Vec<String>,
+    },
+    /// Found an unexpected number of input wires when decoding an operation.
+    #[display(
+        "Expected {expected_values} input value wires{expected_types} and {expected_params} input parameters when decoding a {operation}, but found {actual_values} values{actual_types} and {actual_params} parameters.",
+        expected_types = match expected_types {
+            None => "".to_string(),
+            Some(tys) => format!(" with types [{}]", tys.iter().join(", ")),
+        },
+        actual_types = match actual_types {
+            None => "".to_string(),
+            Some(tys) => format!(" with types [{}]", tys.iter().join(", ")),
+        },
+    )]
+    UnexpectedInputWires {
+        /// The expected amount of input wires.
+        expected_values: usize,
+        /// The expected amount of input parameters.
+        expected_params: usize,
+        /// The actual amount of input wires.
+        actual_values: usize,
+        /// The actual amount of input parameters.
+        actual_params: usize,
+        /// The expected types of the input wires.
+        expected_types: Option<Vec<String>>,
+        /// The actual types of the input wires.
+        actual_types: Option<Vec<String>>,
+        /// The operation type that was being decoded.
+        operation: String,
+    },
+    /// Tried to track the output wires of a node, but the number of tracked elements didn't match the ones in the output wires.
+    #[display(
+        "Tried to track the output wires of a node, but the number of tracked elements didn't match the ones in the output wires. Expected {expected_qubits} qubits and {expected_bits} bits, but found {circ_qubits} qubits and {circ_bits} bits in the node outputs."
+    )]
+    UnexpectedNodeOutput {
+        /// The expected number of qubits.
+        expected_qubits: usize,
+        /// The expected number of bits.
+        expected_bits: usize,
+        /// The number of qubits in HUGR node outputs.
+        circ_qubits: usize,
+        /// The number of bits in HUGR node output.
+        circ_bits: usize,
+    },
+    /// Custom user-defined error raised while encoding an operation.
+    #[display("Error while decoding operation: {msg}")]
+    CustomError {
+        /// The custom error message
+        msg: String,
+    },
+    /// Input parameter was defined multiple times.
+    #[display("Parameter {param} was defined multiple times in the input signature")]
+    DuplicatedParameter {
+        /// The parameter name.
+        param: String,
+    },
+    /// Not enough parameter names given for the input signature.
+    #[display("Tried to initialize a pytket circuit decoder with {num_params_given} given parameter names, but more were required by the input signature.")]
+    MissingParametersInInput {
+        /// The number of parameters given.
+        num_params_given: usize,
+    },
+    /// We don't support complex types containing parameters in the input.
+    //
+    // This restriction may be relaxed in the future.
+    #[display("Complex type {ty} contains {num_params} inside it. We only support input parameters in standalone 'float' or 'rotation'-typed wires.")]
+    UnsupportedParametersInInput {
+        /// The type that contains the parameters.
+        ty: String,
+        /// The number of parameters in the type.
+        num_params: usize,
+    },
+}
+
+impl Tk1DecodeError {
+    /// Create a new error with a custom message.
+    pub fn custom(msg: impl ToString) -> Self {
+        Self::CustomError {
+            msg: msg.to_string(),
+        }
+    }
+
+    /// Create an error for an unknown qubit register.
+    pub fn unknown_qubit_reg(register: &tket_json_rs::register::ElementId) -> Self {
+        Self::UnknownQubitRegister {
+            register: register.to_string(),
+        }
+    }
+
+    /// Create an error for an unknown bit register.
+    pub fn unknown_bit_reg(register: &tket_json_rs::register::ElementId) -> Self {
+        Self::UnknownBitRegister {
+            register: register.to_string(),
+        }
+    }
+}
+
 /// A hashed register, used to identify registers in the [`Tk1Decoder::register_wire`] map,
 /// avoiding string and vector clones on lookup.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
