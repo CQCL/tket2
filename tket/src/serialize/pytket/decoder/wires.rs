@@ -1,5 +1,9 @@
 //! Structures to keep track of pytket [`ElementId`][tket_json_rs::register::ElementId]s and
 //! their correspondence to wires in the hugr being defined.
+#![expect(
+    dead_code,
+    reason = "Temporarily unused while we refactor the pytket decoder"
+)]
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -763,7 +767,6 @@ fn check_register(register: &PytketRegister) -> Result<(), Tk1DecodeError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::serialize::pytket::decoder::Tk1DecodeError;
     use hugr::extension::prelude::{bool_t, qb_t};
     use hugr::types::SumType;
     use hugr::Node;

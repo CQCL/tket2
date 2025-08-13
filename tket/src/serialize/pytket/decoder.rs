@@ -2,12 +2,20 @@
 
 mod op;
 mod param;
+mod tracked_elem;
+mod wires;
 
 #[expect(
     unused_imports,
     reason = "Temporarily unused while we refactor the pytket decoder"
 )]
 pub use param::{LoadedParameter, LoadedParameterType};
+pub use tracked_elem::{TrackedBit, TrackedQubit};
+#[expect(
+    unused_imports,
+    reason = "Temporarily unused while we refactor the pytket decoder"
+)]
+pub use wires::{TrackedWires, WireData, WireTracker};
 
 use std::collections::{HashMap, HashSet};
 
@@ -19,6 +27,7 @@ use hugr::ops::{OpType, Value};
 use hugr::std_extensions::arithmetic::float_types::ConstF64;
 use hugr::types::Signature;
 use hugr::{Hugr, Wire};
+use tracked_elem::{TrackedBitId, TrackedQubitId};
 
 use indexmap::IndexMap;
 use itertools::{EitherOrBoth, Itertools};
