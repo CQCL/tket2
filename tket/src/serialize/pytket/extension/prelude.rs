@@ -1,6 +1,7 @@
 //! Encoder and decoder for tket operations with native pytket counterparts.
 
 use super::PytketEmitter;
+use crate::serialize::pytket::config::TypeTranslatorSet;
 use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext};
 use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
 use crate::serialize::pytket::Tk1ConvertError;
@@ -45,7 +46,11 @@ impl PytketTypeTranslator for PreludeEmitter {
         vec![PRELUDE_ID]
     }
 
-    fn type_to_pytket(&self, typ: &hugr::types::CustomType) -> Option<RegisterCount> {
+    fn type_to_pytket(
+        &self,
+        typ: &hugr::types::CustomType,
+        _set: &TypeTranslatorSet,
+    ) -> Option<RegisterCount> {
         match typ.name().as_str() {
             "usize" => Some(RegisterCount::only_bits(64)),
             "qubit" => Some(RegisterCount::only_qubits(1)),

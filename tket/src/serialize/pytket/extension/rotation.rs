@@ -4,6 +4,7 @@ use super::PytketEmitter;
 use crate::extension::rotation::{
     ConstRotation, RotationOp, ROTATION_EXTENSION_ID, ROTATION_TYPE_ID,
 };
+use crate::serialize::pytket::config::TypeTranslatorSet;
 use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext, TrackedValues};
 use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
 use crate::serialize::pytket::Tk1ConvertError;
@@ -74,7 +75,11 @@ impl PytketTypeTranslator for RotationEmitter {
         vec![ROTATION_EXTENSION_ID]
     }
 
-    fn type_to_pytket(&self, typ: &hugr::types::CustomType) -> Option<RegisterCount> {
+    fn type_to_pytket(
+        &self,
+        typ: &hugr::types::CustomType,
+        _set: &TypeTranslatorSet,
+    ) -> Option<RegisterCount> {
         match typ.name() == &ROTATION_TYPE_ID {
             true => Some(RegisterCount::only_params(1)),
             false => None,

@@ -1,6 +1,7 @@
 //! Encoder and decoder for floating point operations.
 
 use super::PytketEmitter;
+use crate::serialize::pytket::config::TypeTranslatorSet;
 use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext, TrackedValues};
 use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
 use crate::serialize::pytket::Tk1ConvertError;
@@ -98,7 +99,11 @@ impl PytketTypeTranslator for FloatEmitter {
         vec![float_types::EXTENSION_ID]
     }
 
-    fn type_to_pytket(&self, typ: &hugr::types::CustomType) -> Option<RegisterCount> {
+    fn type_to_pytket(
+        &self,
+        typ: &hugr::types::CustomType,
+        _set: &TypeTranslatorSet,
+    ) -> Option<RegisterCount> {
         match typ.name() == &float_types::FLOAT_TYPE_ID {
             true => Some(RegisterCount::only_params(1)),
             false => None,

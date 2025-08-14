@@ -4,7 +4,7 @@ mod encoder_config;
 mod type_translators;
 
 pub use encoder_config::Tk1EncoderConfig;
-use type_translators::TypeTranslatorSet;
+pub use type_translators::TypeTranslatorSet;
 
 use crate::serialize::pytket::extension::{
     BoolEmitter, FloatEmitter, PreludeEmitter, RotationEmitter, Tk1Emitter, Tk2Emitter,
