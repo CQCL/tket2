@@ -93,7 +93,19 @@ impl WireData {
     }
 }
 
-/// Tracked wires to a pytket operation.
+/// Set of wires related to a pytket operation being decoded.
+///
+/// Contains both _parameter_ and _value_ wires.
+///
+/// The _parameter_ wires are wires that contain a single [`LoadedParameter`]
+/// (either a float or a rotation) corresponding to the sympy expressions in the
+/// operation arguments.
+///
+/// The _value_ wires are wires that contain a collection of [`TrackedQubit`]s
+/// and [`TrackedBit`]s.
+///
+/// This set is passed to the implementer of `PytketDecoder` with the wires that
+/// were found to contain the pytket registers used by the operation.
 #[derive(Debug, Clone)]
 pub struct TrackedWires {
     /// Computed list of wires corresponding to the arguments,
@@ -147,9 +159,6 @@ impl TrackedWires {
     }
 
     /// Return an iterator over the wires and their types.
-    ///
-    /// This returns the wires as-is, without any additional conversions.
-    /// If you need to retrieve a specific wire type, use TODO
     #[inline]
     pub fn iter_values(&self) -> impl Iterator<Item = &'_ WireData> + Clone + '_ {
         self.value_wires.iter()
@@ -188,15 +197,6 @@ impl TrackedWires {
         self.value_wires
             .iter()
             .flat_map(move |wd| wd.qubits(wire_tracker))
-    }
-
-    /// Returns the tracked qubit elements in the set of wires as an array.
-    #[inline]
-    pub fn qubits_arr<const N: usize>(
-        &self,
-        wire_tracker: &WireTracker,
-    ) -> Option<[TrackedQubit; N]> {
-        self.qubits(wire_tracker).collect_array()
     }
 
     /// Returns the tracked bit elements in the set of wires.
@@ -340,8 +340,8 @@ impl TrackedWires {
 /// operation, all previous references to it become "outdated".
 #[derive(Debug, Clone, Default)]
 pub struct WireTracker {
-    /// A list of tracked wires, with their type and list of
-    /// tracked pytket elements and arguments.
+    /// A map of wires being tracked, with their type and list of
+    /// tracked pytket registers and parameters.
     wires: IndexMap<Wire, WireData>,
     /// The list of tracked qubit elements.
     ///
@@ -685,12 +685,11 @@ impl WireTracker {
             }
         }
 
-        let parsed = parse_pytket_param(param);
         process(
             hugr,
             &mut self.parameters,
             &mut self.parameter_vars,
-            parsed,
+            parse_pytket_param(param),
             param,
         )
     }
