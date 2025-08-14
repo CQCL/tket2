@@ -5,8 +5,8 @@ mod decoder;
 pub mod encoder;
 pub mod extension;
 
-pub use config::{default_encoder_config, Tk1EncoderConfig};
-pub use encoder::Tk1EncoderContext;
+pub use config::{default_encoder_config, PytketEncoderConfig};
+pub use encoder::PytketEncoderContext;
 pub use extension::PytketEmitter;
 
 use hugr::core::HugrNode;
@@ -72,13 +72,13 @@ pub trait TKETDecode: Sized {
     /// non-std operations or types.
     fn encode_with_config(
         circuit: &Circuit,
-        config: Tk1EncoderConfig<Hugr>,
+        config: PytketEncoderConfig<Hugr>,
     ) -> Result<Self, Self::EncodeError>;
 }
 
 impl TKETDecode for SerialCircuit {
-    type DecodeError = Tk1ConvertError;
-    type EncodeError = Tk1ConvertError;
+    type DecodeError = PytketEncodeError;
+    type EncodeError = PytketEncodeError;
 
     fn decode(self) -> Result<Circuit, Self::DecodeError> {
         let mut decoder = Tk1DecoderContext::try_new(&self)?;
@@ -102,9 +102,9 @@ impl TKETDecode for SerialCircuit {
 
     fn encode_with_config(
         circuit: &Circuit,
-        config: Tk1EncoderConfig<Hugr>,
+        config: PytketEncoderConfig<Hugr>,
     ) -> Result<Self, Self::EncodeError> {
-        let mut encoder = Tk1EncoderContext::new(circuit, circuit.parent(), config)?;
+        let mut encoder = PytketEncoderContext::new(circuit, circuit.parent(), config)?;
         encoder.run_encoder(circuit, circuit.parent())?;
         let (serial, _) = encoder.finish(circuit, circuit.parent())?;
         Ok(serial)
@@ -112,21 +112,21 @@ impl TKETDecode for SerialCircuit {
 }
 
 /// Load a TKET1 circuit from a JSON file.
-pub fn load_tk1_json_file(path: impl AsRef<Path>) -> Result<Circuit, Tk1ConvertError> {
+pub fn load_tk1_json_file(path: impl AsRef<Path>) -> Result<Circuit, PytketEncodeError> {
     let file = fs::File::open(path)?;
     let reader = io::BufReader::new(file);
     load_tk1_json_reader(reader)
 }
 
 /// Load a TKET1 circuit from a JSON reader.
-pub fn load_tk1_json_reader(json: impl io::Read) -> Result<Circuit, Tk1ConvertError> {
+pub fn load_tk1_json_reader(json: impl io::Read) -> Result<Circuit, PytketEncodeError> {
     let ser: SerialCircuit = serde_json::from_reader(json)?;
     let circ: Circuit = ser.decode()?;
     Ok(circ)
 }
 
 /// Load a TKET1 circuit from a JSON string.
-pub fn load_tk1_json_str(json: &str) -> Result<Circuit, Tk1ConvertError> {
+pub fn load_tk1_json_str(json: &str) -> Result<Circuit, PytketEncodeError> {
     let reader = json.as_bytes();
     load_tk1_json_reader(reader)
 }
@@ -139,7 +139,7 @@ pub fn load_tk1_json_str(json: &str) -> Result<Circuit, Tk1ConvertError> {
 ///
 /// Returns an error if the circuit is not flat or if it contains operations not
 /// supported by pytket.
-pub fn save_tk1_json_file(circ: &Circuit, path: impl AsRef<Path>) -> Result<(), Tk1ConvertError> {
+pub fn save_tk1_json_file(circ: &Circuit, path: impl AsRef<Path>) -> Result<(), PytketEncodeError> {
     let file = fs::File::create(path)?;
     let writer = io::BufWriter::new(file);
     save_tk1_json_writer(circ, writer)
@@ -153,7 +153,7 @@ pub fn save_tk1_json_file(circ: &Circuit, path: impl AsRef<Path>) -> Result<(), 
 ///
 /// Returns an error if the circuit is not flat or if it contains operations not
 /// supported by pytket.
-pub fn save_tk1_json_writer(circ: &Circuit, w: impl io::Write) -> Result<(), Tk1ConvertError> {
+pub fn save_tk1_json_writer(circ: &Circuit, w: impl io::Write) -> Result<(), PytketEncodeError> {
     let serial_circ = SerialCircuit::encode(circ)?;
     serde_json::to_writer(w, &serial_circ)?;
     Ok(())
@@ -167,7 +167,7 @@ pub fn save_tk1_json_writer(circ: &Circuit, w: impl io::Write) -> Result<(), Tk1
 ///
 /// Returns an error if the circuit is not flat or if it contains operations not
 /// supported by pytket.
-pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, Tk1ConvertError> {
+pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, PytketEncodeError> {
     let mut buf = io::BufWriter::new(Vec::new());
     save_tk1_json_writer(circ, &mut buf)?;
     let bytes = buf.into_inner().unwrap();
@@ -230,7 +230,7 @@ pub enum OpConvertError<N = hugr::Node> {
 #[derive(derive_more::Debug, Display, Error, From)]
 #[non_exhaustive]
 #[debug(bounds(N: HugrNode))]
-pub enum Tk1ConvertError<N = hugr::Node> {
+pub enum PytketEncodeError<N = hugr::Node> {
     /// Tried to encode a non-dataflow region.
     #[display("Cannot encode non-dataflow region at {region} with type {optype}.")]
     NonDataflowRegion {
@@ -270,7 +270,7 @@ pub enum Tk1ConvertError<N = hugr::Node> {
     },
 }
 
-impl<N> Tk1ConvertError<N> {
+impl<N> PytketEncodeError<N> {
     /// Create a new error with a custom message.
     pub fn custom(msg: impl ToString) -> Self {
         Self::CustomError {

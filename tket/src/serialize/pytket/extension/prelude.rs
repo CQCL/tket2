@@ -1,9 +1,10 @@
 //! Encoder and decoder for tket operations with native pytket counterparts.
 
 use super::PytketEmitter;
-use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext};
+use crate::serialize::pytket::config::TypeTranslatorSet;
+use crate::serialize::pytket::encoder::{EncodeStatus, PytketEncoderContext};
 use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
-use crate::serialize::pytket::Tk1ConvertError;
+use crate::serialize::pytket::PytketEncodeError;
 use crate::Circuit;
 use hugr::extension::prelude::{BarrierDef, TupleOpDef, PRELUDE_ID};
 use hugr::extension::simple_op::MakeExtensionOp;
@@ -27,8 +28,8 @@ impl<H: HugrView> PytketEmitter<H> for PreludeEmitter {
         node: H::Node,
         op: &ExtensionOp,
         circ: &Circuit<H>,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         if let Ok(tuple_op) = TupleOpDef::from_extension_op(op) {
             return self.tuple_op_to_pytket(node, op, &tuple_op, circ, encoder);
         };
@@ -45,7 +46,11 @@ impl PytketTypeTranslator for PreludeEmitter {
         vec![PRELUDE_ID]
     }
 
-    fn type_to_pytket(&self, typ: &hugr::types::CustomType) -> Option<RegisterCount> {
+    fn type_to_pytket(
+        &self,
+        typ: &hugr::types::CustomType,
+        _set: &TypeTranslatorSet,
+    ) -> Option<RegisterCount> {
         match typ.name().as_str() {
             "usize" => Some(RegisterCount::only_bits(64)),
             "qubit" => Some(RegisterCount::only_qubits(1)),
@@ -66,8 +71,8 @@ impl PreludeEmitter {
         op: &ExtensionOp,
         tuple_op: &TupleOpDef,
         circ: &Circuit<H>,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         if !matches!(tuple_op, TupleOpDef::MakeTuple | TupleOpDef::UnpackTuple) {
             // Unknown operation
             return Ok(EncodeStatus::Unsupported);

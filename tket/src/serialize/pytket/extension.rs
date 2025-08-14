@@ -1,7 +1,7 @@
 //! Extension encoder/decoders for the tket <-> `pytket` conversion.
 //!
 //! To add a new extension encoder, implement the [`PytketEmitter`] trait and add
-//! it to the [`Tk1EncoderConfig`](crate::serialize::pytket::Tk1EncoderConfig)
+//! it to the [`PytketEncoderConfig`](crate::serialize::pytket::PytketEncoderConfig)
 //! used for decoding.
 //!
 //! This module contains decoders for some common extensions. The
@@ -14,21 +14,22 @@ mod float;
 mod prelude;
 mod rotation;
 mod tk1;
-mod tk2;
+mod tket;
 
 pub use bool::BoolEmitter;
 pub use float::FloatEmitter;
 pub use prelude::PreludeEmitter;
 pub use rotation::RotationEmitter;
 pub use tk1::Tk1Emitter;
-pub use tk2::Tk2Emitter;
+pub use tket::TketOpEmitter;
 
 pub(crate) use bool::set_bits_op;
 pub(crate) use tk1::OpaqueTk1Op;
 
 use super::encoder::TrackedValues;
-use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext};
-use crate::serialize::pytket::Tk1ConvertError;
+use crate::serialize::pytket::config::TypeTranslatorSet;
+use crate::serialize::pytket::encoder::{EncodeStatus, PytketEncoderContext};
+use crate::serialize::pytket::PytketEncodeError;
 use crate::Circuit;
 use hugr::extension::ExtensionId;
 use hugr::ops::constant::OpaqueValue;
@@ -39,7 +40,7 @@ use hugr::HugrView;
 /// An encoder of HUGR operations and types that transforms them into pytket
 /// primitives.
 ///
-/// An [encoder configuration](crate::serialize::pytket::Tk1EncoderConfig)
+/// An [encoder configuration](crate::serialize::pytket::PytketEncoderConfig)
 /// contains a list of such encoders. When encountering a type, operation, or
 /// constant in the HUGR being encoded, the configuration will call each of
 /// the encoders declaring support for the specific extension sequentially until
@@ -69,8 +70,8 @@ pub trait PytketEmitter<H: HugrView> {
         node: H::Node,
         op: &ExtensionOp,
         circ: &Circuit<H>,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         let _ = (node, op, circ, encoder);
         Ok(EncodeStatus::Unsupported)
     }
@@ -80,8 +81,8 @@ pub trait PytketEmitter<H: HugrView> {
     fn const_to_pytket(
         &self,
         value: &OpaqueValue,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<Option<TrackedValues>, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<Option<TrackedValues>, PytketEncodeError<H::Node>> {
         let _ = (value, encoder);
         Ok(None)
     }
@@ -105,8 +106,11 @@ pub trait PytketTypeTranslator {
     /// If the type cannot be fully translated into a list of the aforementioned
     /// values, return `None`. Operations dealing with such types will be marked
     /// as unsupported and will be serialized as opaque operations.
-    fn type_to_pytket(&self, typ: &CustomType) -> Option<RegisterCount> {
-        let _ = typ;
+    ///
+    /// The `set` argument is a set of known type translators. This can be used
+    /// when translating types that wrap over other types.
+    fn type_to_pytket(&self, typ: &CustomType, set: &TypeTranslatorSet) -> Option<RegisterCount> {
+        let _ = (typ, set);
         None
     }
 }

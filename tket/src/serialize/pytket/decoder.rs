@@ -37,7 +37,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::register;
 
 use super::{
-    OpConvertError, RegisterHash, Tk1ConvertError, METADATA_B_OUTPUT_REGISTERS,
+    OpConvertError, PytketEncodeError, RegisterHash, METADATA_B_OUTPUT_REGISTERS,
     METADATA_B_REGISTERS, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS,
     METADATA_Q_REGISTERS,
 };
@@ -66,7 +66,7 @@ pub(super) struct Tk1DecoderContext {
 
 impl Tk1DecoderContext {
     /// Initialize a new [`Tk1Decoder`], using the metadata from a [`SerialCircuit`].
-    pub fn try_new(serialcirc: &SerialCircuit) -> Result<Self, Tk1ConvertError> {
+    pub fn try_new(serialcirc: &SerialCircuit) -> Result<Self, PytketEncodeError> {
         let num_qubits = serialcirc.qubits.len();
         let num_bits = serialcirc.bits.len();
         let sig =
@@ -124,7 +124,7 @@ impl Tk1DecoderContext {
                 check_register(reg)?;
                 Ok(RegisterHash::from(reg))
             })
-            .collect::<Result<Vec<RegisterHash>, Tk1ConvertError>>()?;
+            .collect::<Result<Vec<RegisterHash>, PytketEncodeError>>()?;
 
         // Map each register element to their starting wire.
         let register_wires: HashMap<RegisterHash, Wire> = ordered_registers
@@ -359,9 +359,9 @@ impl Tk1DecoderContext {
 }
 
 /// Only single-indexed registers are supported.
-fn check_register(register: &register::ElementId) -> Result<(), Tk1ConvertError> {
+fn check_register(register: &register::ElementId) -> Result<(), PytketEncodeError> {
     if register.1.len() != 1 {
-        Err(Tk1ConvertError::MultiIndexedRegister {
+        Err(PytketEncodeError::MultiIndexedRegister {
             register: register.0.clone(),
         })
     } else {

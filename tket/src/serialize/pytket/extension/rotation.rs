@@ -4,9 +4,10 @@ use super::PytketEmitter;
 use crate::extension::rotation::{
     ConstRotation, RotationOp, ROTATION_EXTENSION_ID, ROTATION_TYPE_ID,
 };
-use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext, TrackedValues};
+use crate::serialize::pytket::config::TypeTranslatorSet;
+use crate::serialize::pytket::encoder::{EncodeStatus, PytketEncoderContext, TrackedValues};
 use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
-use crate::serialize::pytket::Tk1ConvertError;
+use crate::serialize::pytket::PytketEncodeError;
 use crate::Circuit;
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
@@ -29,8 +30,8 @@ impl<H: HugrView> PytketEmitter<H> for RotationEmitter {
         node: H::Node,
         op: &ExtensionOp,
         circ: &Circuit<H>,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         let Ok(rot_op) = RotationOp::from_extension_op(op) else {
             return Ok(EncodeStatus::Unsupported);
         };
@@ -58,8 +59,8 @@ impl<H: HugrView> PytketEmitter<H> for RotationEmitter {
     fn const_to_pytket(
         &self,
         value: &OpaqueValue,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<Option<TrackedValues>, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<Option<TrackedValues>, PytketEncodeError<H::Node>> {
         let Some(const_f) = value.value().downcast_ref::<ConstRotation>() else {
             return Ok(None);
         };
@@ -74,7 +75,11 @@ impl PytketTypeTranslator for RotationEmitter {
         vec![ROTATION_EXTENSION_ID]
     }
 
-    fn type_to_pytket(&self, typ: &hugr::types::CustomType) -> Option<RegisterCount> {
+    fn type_to_pytket(
+        &self,
+        typ: &hugr::types::CustomType,
+        _set: &TypeTranslatorSet,
+    ) -> Option<RegisterCount> {
         match typ.name() == &ROTATION_TYPE_ID {
             true => Some(RegisterCount::only_params(1)),
             false => None,

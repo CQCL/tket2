@@ -12,10 +12,10 @@ use hugr::types::{SumType, Type};
 
 use crate::serialize::pytket::encoder::EncodeStatus;
 use crate::serialize::pytket::extension::{set_bits_op, PytketTypeTranslator, RegisterCount};
-use crate::serialize::pytket::{PytketEmitter, Tk1ConvertError};
+use crate::serialize::pytket::{PytketEmitter, PytketEncodeError};
 use crate::Circuit;
 
-use super::super::encoder::{Tk1EncoderContext, TrackedValues};
+use super::super::encoder::{PytketEncoderContext, TrackedValues};
 use super::TypeTranslatorSet;
 use hugr::HugrView;
 use itertools::Itertools;
@@ -27,7 +27,7 @@ use itertools::Itertools;
 /// types, and consts into pytket primitives.
 #[derive(derive_more::Debug)]
 #[debug(bounds(H: HugrView))]
-pub struct Tk1EncoderConfig<H: HugrView> {
+pub struct PytketEncoderConfig<H: HugrView> {
     /// Operation emitters
     #[debug(skip)]
     pub(super) emitters: Vec<Box<dyn PytketEmitter<H>>>,
@@ -41,8 +41,8 @@ pub struct Tk1EncoderConfig<H: HugrView> {
     type_translators: TypeTranslatorSet,
 }
 
-impl<H: HugrView> Tk1EncoderConfig<H> {
-    /// Create a new [`Tk1EncoderConfig`] with no encoders.
+impl<H: HugrView> PytketEncoderConfig<H> {
+    /// Create a new [`PytketEncoderConfig`] with no encoders.
     pub fn new() -> Self {
         Self::default()
     }
@@ -78,7 +78,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
     /// Some encoders may not specify an extension, in which case they will be called
     /// for all operations irrespectively of the list returned here.
     ///
-    /// Use [`Tk1EncoderConfig::add_emitter`] to extend this list.
+    /// Use [`PytketEncoderConfig::add_emitter`] to extend this list.
     pub fn supported_extensions(&self) -> impl Iterator<Item = &ExtensionId> {
         self.extension_emitters.keys()
     }
@@ -92,8 +92,8 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
         node: H::Node,
         op: &ExtensionOp,
         circ: &Circuit<H>,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         let mut result = EncodeStatus::Unsupported;
         let extension = op.def().extension_id();
         for enc in self.emitters_for_extension(extension) {
@@ -113,8 +113,8 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
     pub fn const_to_pytket(
         &self,
         value: &Value,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<Option<TrackedValues>, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<Option<TrackedValues>, PytketEncodeError<H::Node>> {
         let mut values = TrackedValues::default();
         let mut queue = VecDeque::from([value]);
         while let Some(value) = queue.pop_front() {
@@ -197,7 +197,7 @@ impl<H: HugrView> Tk1EncoderConfig<H> {
     }
 }
 
-impl<H: HugrView> Default for Tk1EncoderConfig<H> {
+impl<H: HugrView> Default for PytketEncoderConfig<H> {
     fn default() -> Self {
         Self {
             emitters: Default::default(),
