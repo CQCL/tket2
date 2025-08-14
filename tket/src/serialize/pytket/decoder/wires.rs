@@ -23,7 +23,7 @@ use crate::serialize::pytket::decoder::{
     LoadedParameter, TrackedBit, TrackedBitId, TrackedQubit, TrackedQubitId,
 };
 use crate::serialize::pytket::extension::RegisterCount;
-use crate::serialize::pytket::{PytketDecodeError, RegisterHash};
+use crate::serialize::pytket::{PytketDecodeError, PytketDecodeErrorInner, RegisterHash};
 use crate::symbolic_constant_op;
 
 /// Tracked data for a wire in [`TrackedWires`].
@@ -231,18 +231,11 @@ impl TrackedWires {
     /// Returns the wires in this tracked wires as an array of types.
     ///
     /// Returns an error if the number of wires is not equal to `N`.
-    ///
-    /// # Arguments
-    ///
-    /// * `operation` - The name of the operation being decoded, used for error reporting.
     #[inline]
-    pub fn wires_arr<const N: usize>(
-        &self,
-        operation: &str,
-    ) -> Result<[Wire; N], PytketDecodeError> {
+    pub fn wires_arr<const N: usize>(&self) -> Result<[Wire; N], PytketDecodeError> {
         let expected_values = N.saturating_sub(self.parameter_count());
         let expected_params = N - expected_values;
-        self.check_len(expected_values, expected_params, operation)?;
+        self.check_len(expected_values, expected_params)?;
         Ok(self
             .wires()
             .collect_array()
@@ -267,24 +260,22 @@ impl TrackedWires {
     ///
     /// * `expected_values` - The expected number of value wires.
     /// * `expected_params` - The expected number of parameter wires.
-    /// * `operation` - The name of the operation being decoded, used for error reporting.
     pub fn check_len(
         &self,
         expected_values: usize,
         expected_params: usize,
-        operation: &str,
     ) -> Result<(), PytketDecodeError> {
         if self.value_count() != expected_values || self.parameter_count() != expected_params {
             let types = self.wire_types().map(|ty| ty.to_string()).collect_vec();
-            Err(PytketDecodeError::UnexpectedInputWires {
+            Err(PytketDecodeErrorInner::UnexpectedInputWires {
                 expected_values,
                 expected_params,
                 actual_values: self.value_count(),
                 actual_params: self.parameter_count(),
                 expected_types: None,
                 actual_types: Some(types),
-                operation: operation.to_string(),
-            })
+            }
+            .into())
         } else {
             Ok(())
         }
@@ -297,18 +288,16 @@ impl TrackedWires {
     /// * `expected_values` - The expected types of the value wires.
     /// * `expected_params` - The expected number of parameters. Note that these may be either `float` or `rotation`-typed.
     ///   Use [`LoadedParameter::with_type`] to cast them as needed.
-    /// * `operation` - The name of the operation being decoded, used for error reporting.
     pub fn check_types(
         &self,
         expected_values: &[Type],
         expected_params: usize,
-        operation: &str,
     ) -> Result<(), PytketDecodeError> {
         let vals = expected_values.iter();
         if !itertools::equal(self.value_types(), vals) || self.parameter_count() != expected_params
         {
             let actual = self.value_types().collect_vec();
-            Err(PytketDecodeError::UnexpectedInputWires {
+            Err(PytketDecodeErrorInner::UnexpectedInputWires {
                 expected_values: expected_values.len(),
                 expected_params,
                 actual_values: self.value_count(),
@@ -320,8 +309,8 @@ impl TrackedWires {
                         .collect_vec(),
                 ),
                 actual_types: Some(actual.iter().map(|ty| ty.to_string()).collect_vec()),
-                operation: operation.to_string(),
-            })
+            }
+            .into())
         } else {
             Ok(())
         }
@@ -511,7 +500,6 @@ impl WireTracker {
     ///
     /// * `hugr` - The hugr to add the wires to.
     /// * `args` - The list of pytket element ids to map to wires.
-    /// * `operation` - The name of the operation being decoded, used for error reporting.
     /// * `params` - The list of parameters to load to wires. See [`WireTracker::load_parameter`] for more details.
     ///
     // TODO: We'll need to be able to decompose types when we need only _some_
@@ -523,7 +511,6 @@ impl WireTracker {
         qubit_args: impl IntoIterator<Item = &'r PytketRegister>,
         bit_args: impl IntoIterator<Item = &'r PytketRegister>,
         params: impl IntoIterator<Item = &'r str>,
-        operation: &str,
     ) -> Result<TrackedWires, PytketDecodeError> {
         // We need to return a set of wires that contain all the arguments.
         //
@@ -594,14 +581,14 @@ impl WireTracker {
                 None => {
                     // In the future we may be able to decompose some wire containing `arg_ids[0]` internally.
                     // For now, we just report the error.
-                    return Err(PytketDecodeError::ArgumentCouldNotBeMapped {
-                        operation: operation.to_string(),
+                    return Err(PytketDecodeErrorInner::ArgumentCouldNotBeMapped {
                         qubit_args: qubit_args
                             .iter()
                             .map(|(_, elem)| elem.to_string())
                             .collect(),
                         bit_args: bit_args.iter().map(|(_, elem)| elem.to_string()).collect(),
-                    });
+                    }
+                    .into());
                 }
             }
         }
@@ -736,9 +723,10 @@ impl WireTracker {
     ) -> Result<(), PytketDecodeError> {
         let entry = self.parameters.entry(param);
         if let indexmap::map::Entry::Occupied(_) = &entry {
-            return Err(PytketDecodeError::DuplicatedParameter {
+            return Err(PytketDecodeErrorInner::DuplicatedParameter {
                 param: entry.key().clone(),
-            });
+            }
+            .into());
         }
         entry.insert_entry(Arc::new(LoadedParameter::rotation(wire)));
         Ok(())
@@ -748,9 +736,10 @@ impl WireTracker {
 /// Only single-indexed registers are supported.
 fn check_register(register: &PytketRegister) -> Result<(), PytketDecodeError> {
     if register.1.len() != 1 {
-        Err(PytketDecodeError::MultiIndexedRegister {
+        Err(PytketDecodeErrorInner::MultiIndexedRegister {
             register: register.to_string(),
-        })
+        }
+        .into())
     } else {
         Ok(())
     }
@@ -786,7 +775,10 @@ mod tests {
 
         // Track an invalid register name.
         match tracker.track_qubit(multi_indexed_reg.clone()) {
-            Err(PytketDecodeError::MultiIndexedRegister { register }) => {
+            Err(PytketDecodeError {
+                inner: PytketDecodeErrorInner::MultiIndexedRegister { register },
+                ..
+            }) => {
                 assert_eq!(register, multi_indexed_reg.to_string());
             }
             e => panic!("Expected MultiIndexedRegister error, got {e:?}"),
@@ -794,13 +786,19 @@ mod tests {
 
         // Getting the tracked qubits or bits for an unknown register should fail.
         match tracker.tracked_qubit_for_register(&qubit_reg) {
-            Err(PytketDecodeError::UnknownQubitRegister { register }) => {
+            Err(PytketDecodeError {
+                inner: PytketDecodeErrorInner::UnknownQubitRegister { register },
+                ..
+            }) => {
                 assert_eq!(register, qubit_reg.to_string());
             }
             e => panic!("Expected UnknownQubitRegister error, got {e:?}"),
         }
         match tracker.tracked_bit_for_register(&bit_reg) {
-            Err(PytketDecodeError::UnknownBitRegister { register }) => {
+            Err(PytketDecodeError {
+                inner: PytketDecodeErrorInner::UnknownBitRegister { register },
+                ..
+            }) => {
                 assert_eq!(register, bit_reg.to_string());
             }
             e => panic!("Expected UnknownBitRegister error, got {e:?}"),

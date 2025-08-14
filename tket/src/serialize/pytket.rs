@@ -280,9 +280,81 @@ impl<N> PytketEncodeError<N> {
 }
 
 /// Error type for conversion between tket2 ops and pytket operations.
-#[derive(derive_more::Debug, Display, Error)]
+#[derive(derive_more::Debug, Display, Error, Clone)]
 #[non_exhaustive]
-pub enum PytketDecodeError {
+#[display(
+    "{inner}{context}",
+    context = {
+        match (pytket_op, hugr_op) {
+            (Some(pytket_op), Some(hugr_op)) => format!(". While decoding a pytket {pytket_op} as a hugr {hugr_op}"),
+            (Some(pytket_op), None) => format!(". While decoding a pytket {pytket_op}"),
+            (None, Some(hugr_op)) => format!(". While decoding a hugr {hugr_op}"),
+            (None, None) => String::new(),
+        }
+    },
+)]
+pub struct PytketDecodeError {
+    /// The kind of error.
+    pub inner: PytketDecodeErrorInner,
+    /// The pytket operation that caused the error, if applicable.
+    pub pytket_op: Option<String>,
+    /// The hugr operation that caused the error, if applicable.
+    pub hugr_op: Option<String>,
+}
+
+impl PytketDecodeError {
+    /// Create a new error with a custom message.
+    pub fn custom(msg: impl ToString) -> Self {
+        PytketDecodeErrorInner::CustomError {
+            msg: msg.to_string(),
+        }
+        .into()
+    }
+
+    /// Create an error for an unknown qubit register.
+    pub fn unknown_qubit_reg(register: &tket_json_rs::register::ElementId) -> Self {
+        PytketDecodeErrorInner::UnknownQubitRegister {
+            register: register.to_string(),
+        }
+        .into()
+    }
+
+    /// Create an error for an unknown bit register.
+    pub fn unknown_bit_reg(register: &tket_json_rs::register::ElementId) -> Self {
+        PytketDecodeErrorInner::UnknownBitRegister {
+            register: register.to_string(),
+        }
+        .into()
+    }
+
+    /// Add the pytket operation name to the error.
+    pub fn pytket_op(mut self, op: &tket_json_rs::OpType) -> Self {
+        self.pytket_op = Some(format!("{op:?}"));
+        self
+    }
+
+    /// Add the hugr operation name to the error.
+    pub fn hugr_op(mut self, op: impl ToString) -> Self {
+        self.hugr_op = Some(op.to_string());
+        self
+    }
+}
+
+impl From<PytketDecodeErrorInner> for PytketDecodeError {
+    fn from(inner: PytketDecodeErrorInner) -> Self {
+        Self {
+            inner,
+            pytket_op: None,
+            hugr_op: None,
+        }
+    }
+}
+
+/// Error variants of [`PytketDecodeError`], signalling errors during the
+/// conversion between tket2 ops and pytket operations.
+#[derive(derive_more::Debug, Display, Error, Clone)]
+#[non_exhaustive]
+pub enum PytketDecodeErrorInner {
     /// The pytket circuit uses multi-indexed registers.
     //
     // This could be supported in the future, if there is a need for it.
@@ -340,13 +412,11 @@ pub enum PytketDecodeError {
     //
     // Some of this errors will be avoided in the future once we are able to decompose complex types automatically.
     #[display(
-        "Could not find a wire with the required qubit arguments [{qubit_args:?}] and bit arguments [{bit_args:?}] for operation {operation}.",
+        "Could not find a wire with the required qubit arguments [{qubit_args:?}] and bit arguments [{bit_args:?}].",
         qubit_args = qubit_args.iter().join(", "),
         bit_args = bit_args.iter().join(", "),
     )]
     ArgumentCouldNotBeMapped {
-        /// The operation type that was being decoded.
-        operation: String,
         /// The qubit arguments that couldn't be mapped.
         qubit_args: Vec<String>,
         /// The bit arguments that couldn't be mapped.
@@ -354,7 +424,7 @@ pub enum PytketDecodeError {
     },
     /// Found an unexpected number of input wires when decoding an operation.
     #[display(
-        "Expected {expected_values} input value wires{expected_types} and {expected_params} input parameters when decoding a {operation}, but found {actual_values} values{actual_types} and {actual_params} parameters.",
+        "Expected {expected_values} input value wires{expected_types} and {expected_params} input parameters, but found {actual_values} values{actual_types} and {actual_params} parameters.",
         expected_types = match expected_types {
             None => "".to_string(),
             Some(tys) => format!(" with types [{}]", tys.iter().join(", ")),
@@ -377,8 +447,6 @@ pub enum PytketDecodeError {
         expected_types: Option<Vec<String>>,
         /// The actual types of the input wires.
         actual_types: Option<Vec<String>>,
-        /// The operation type that was being decoded.
-        operation: String,
     },
     /// Tried to track the output wires of a node, but the number of tracked elements didn't match the ones in the output wires.
     #[display(
@@ -422,29 +490,6 @@ pub enum PytketDecodeError {
         /// The number of parameters in the type.
         num_params: usize,
     },
-}
-
-impl PytketDecodeError {
-    /// Create a new error with a custom message.
-    pub fn custom(msg: impl ToString) -> Self {
-        Self::CustomError {
-            msg: msg.to_string(),
-        }
-    }
-
-    /// Create an error for an unknown qubit register.
-    pub fn unknown_qubit_reg(register: &tket_json_rs::register::ElementId) -> Self {
-        Self::UnknownQubitRegister {
-            register: register.to_string(),
-        }
-    }
-
-    /// Create an error for an unknown bit register.
-    pub fn unknown_bit_reg(register: &tket_json_rs::register::ElementId) -> Self {
-        Self::UnknownBitRegister {
-            register: register.to_string(),
-        }
-    }
 }
 
 /// A hashed register, used to identify registers in the [`Tk1Decoder::register_wire`] map,
