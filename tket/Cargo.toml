@@ -57,6 +57,7 @@ derive_more = { workspace = true, features = [
     "into",
     "sum",
     "add",
+    "add_assign",
 ] }
 hugr = { workspace = true }
 hugr-core = { workspace = true }
