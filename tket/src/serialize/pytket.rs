@@ -282,7 +282,7 @@ impl<N> Tk1ConvertError<N> {
 /// Error type for conversion between tket2 ops and pytket operations.
 #[derive(derive_more::Debug, Display, Error)]
 #[non_exhaustive]
-pub enum Tk1DecodeError {
+pub enum PytketDecodeError {
     /// The pytket circuit uses multi-indexed registers.
     //
     // This could be supported in the future, if there is a need for it.
@@ -424,7 +424,7 @@ pub enum Tk1DecodeError {
     },
 }
 
-impl Tk1DecodeError {
+impl PytketDecodeError {
     /// Create a new error with a custom message.
     pub fn custom(msg: impl ToString) -> Self {
         Self::CustomError {

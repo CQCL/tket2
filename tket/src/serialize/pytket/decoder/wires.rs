@@ -23,7 +23,7 @@ use crate::serialize::pytket::decoder::{
     LoadedParameter, TrackedBit, TrackedBitId, TrackedQubit, TrackedQubitId,
 };
 use crate::serialize::pytket::extension::RegisterCount;
-use crate::serialize::pytket::{RegisterHash, Tk1DecodeError};
+use crate::serialize::pytket::{PytketDecodeError, RegisterHash};
 use crate::symbolic_constant_op;
 
 /// Tracked data for a wire in [`TrackedWires`].
@@ -236,7 +236,10 @@ impl TrackedWires {
     ///
     /// * `operation` - The name of the operation being decoded, used for error reporting.
     #[inline]
-    pub fn wires_arr<const N: usize>(&self, operation: &str) -> Result<[Wire; N], Tk1DecodeError> {
+    pub fn wires_arr<const N: usize>(
+        &self,
+        operation: &str,
+    ) -> Result<[Wire; N], PytketDecodeError> {
         let expected_values = N.saturating_sub(self.parameter_count());
         let expected_params = N - expected_values;
         self.check_len(expected_values, expected_params, operation)?;
@@ -270,10 +273,10 @@ impl TrackedWires {
         expected_values: usize,
         expected_params: usize,
         operation: &str,
-    ) -> Result<(), Tk1DecodeError> {
+    ) -> Result<(), PytketDecodeError> {
         if self.value_count() != expected_values || self.parameter_count() != expected_params {
             let types = self.wire_types().map(|ty| ty.to_string()).collect_vec();
-            Err(Tk1DecodeError::UnexpectedInputWires {
+            Err(PytketDecodeError::UnexpectedInputWires {
                 expected_values,
                 expected_params,
                 actual_values: self.value_count(),
@@ -300,12 +303,12 @@ impl TrackedWires {
         expected_values: &[Type],
         expected_params: usize,
         operation: &str,
-    ) -> Result<(), Tk1DecodeError> {
+    ) -> Result<(), PytketDecodeError> {
         let vals = expected_values.iter();
         if !itertools::equal(self.value_types(), vals) || self.parameter_count() != expected_params
         {
             let actual = self.value_types().collect_vec();
-            Err(Tk1DecodeError::UnexpectedInputWires {
+            Err(PytketDecodeError::UnexpectedInputWires {
                 expected_values: expected_values.len(),
                 expected_params,
                 actual_values: self.value_count(),
@@ -433,7 +436,7 @@ impl WireTracker {
     pub(super) fn track_qubit(
         &mut self,
         qubit_reg: Arc<PytketRegister>,
-    ) -> Result<TrackedQubitId, Tk1DecodeError> {
+    ) -> Result<TrackedQubitId, PytketDecodeError> {
         check_register(&qubit_reg)?;
 
         let id = TrackedQubitId(self.qubits.len());
@@ -454,7 +457,7 @@ impl WireTracker {
     pub(super) fn track_bit(
         &mut self,
         bit_reg: Arc<PytketRegister>,
-    ) -> Result<TrackedBitId, Tk1DecodeError> {
+    ) -> Result<TrackedBitId, PytketDecodeError> {
         check_register(&bit_reg)?;
 
         let id = TrackedBitId(self.bits.len());
@@ -475,10 +478,10 @@ impl WireTracker {
     pub fn tracked_qubit_for_register(
         &self,
         register: impl AsRef<PytketRegister>,
-    ) -> Result<&TrackedQubit, Tk1DecodeError> {
+    ) -> Result<&TrackedQubit, PytketDecodeError> {
         let hash = RegisterHash::from(register.as_ref());
         let Some(id) = self.latest_qubit_tracker.get(&hash) else {
-            return Err(Tk1DecodeError::unknown_qubit_reg(register.as_ref()));
+            return Err(PytketDecodeError::unknown_qubit_reg(register.as_ref()));
         };
         Ok(self.get_qubit(*id))
     }
@@ -491,10 +494,10 @@ impl WireTracker {
     pub fn tracked_bit_for_register(
         &self,
         register: impl AsRef<PytketRegister>,
-    ) -> Result<&TrackedBit, Tk1DecodeError> {
+    ) -> Result<&TrackedBit, PytketDecodeError> {
         let hash = RegisterHash::from(register.as_ref());
         let Some(id) = self.latest_bit_tracker.get(&hash) else {
-            return Err(Tk1DecodeError::unknown_bit_reg(register.as_ref()));
+            return Err(PytketDecodeError::unknown_bit_reg(register.as_ref()));
         };
         Ok(self.get_bit(*id))
     }
@@ -521,7 +524,7 @@ impl WireTracker {
         bit_args: impl IntoIterator<Item = &'r PytketRegister>,
         params: impl IntoIterator<Item = &'r str>,
         operation: &str,
-    ) -> Result<TrackedWires, Tk1DecodeError> {
+    ) -> Result<TrackedWires, PytketDecodeError> {
         // We need to return a set of wires that contain all the arguments.
         //
         // We collect this by checking the wires where each element is present,
@@ -531,7 +534,7 @@ impl WireTracker {
             .map(
                 |register| match self.latest_qubit_tracker.get(&RegisterHash::from(register)) {
                     Some(id) => Ok((*id, register)),
-                    None => Err(Tk1DecodeError::unknown_qubit_reg(register)),
+                    None => Err(PytketDecodeError::unknown_qubit_reg(register)),
                 },
             )
             .collect::<Result<_, _>>()?;
@@ -540,7 +543,7 @@ impl WireTracker {
             .map(
                 |register| match self.latest_bit_tracker.get(&RegisterHash::from(register)) {
                     Some(id) => Ok((*id, register)),
-                    None => Err(Tk1DecodeError::unknown_bit_reg(register)),
+                    None => Err(PytketDecodeError::unknown_bit_reg(register)),
                 },
             )
             .collect::<Result<_, _>>()?;
@@ -591,7 +594,7 @@ impl WireTracker {
                 None => {
                     // In the future we may be able to decompose some wire containing `arg_ids[0]` internally.
                     // For now, we just report the error.
-                    return Err(Tk1DecodeError::ArgumentCouldNotBeMapped {
+                    return Err(PytketDecodeError::ArgumentCouldNotBeMapped {
                         operation: operation.to_string(),
                         qubit_args: qubit_args
                             .iter()
@@ -699,7 +702,7 @@ impl WireTracker {
         ty: Arc<Type>,
         qubits: impl IntoIterator<Item = TrackedQubit>,
         bits: impl IntoIterator<Item = TrackedBit>,
-    ) -> Result<(), Tk1DecodeError> {
+    ) -> Result<(), PytketDecodeError> {
         let qubits = qubits
             .into_iter()
             .map(|q| self.track_qubit(q.pytket_register_arc()))
@@ -731,10 +734,10 @@ impl WireTracker {
         &mut self,
         wire: Wire,
         param: String,
-    ) -> Result<(), Tk1DecodeError> {
+    ) -> Result<(), PytketDecodeError> {
         let entry = self.parameters.entry(param);
         if let indexmap::map::Entry::Occupied(_) = &entry {
-            return Err(Tk1DecodeError::DuplicatedParameter {
+            return Err(PytketDecodeError::DuplicatedParameter {
                 param: entry.key().clone(),
             });
         }
@@ -744,9 +747,9 @@ impl WireTracker {
 }
 
 /// Only single-indexed registers are supported.
-fn check_register(register: &PytketRegister) -> Result<(), Tk1DecodeError> {
+fn check_register(register: &PytketRegister) -> Result<(), PytketDecodeError> {
     if register.1.len() != 1 {
-        Err(Tk1DecodeError::MultiIndexedRegister {
+        Err(PytketDecodeError::MultiIndexedRegister {
             register: register.to_string(),
         })
     } else {
@@ -784,7 +787,7 @@ mod tests {
 
         // Track an invalid register name.
         match tracker.track_qubit(multi_indexed_reg.clone()) {
-            Err(Tk1DecodeError::MultiIndexedRegister { register }) => {
+            Err(PytketDecodeError::MultiIndexedRegister { register }) => {
                 assert_eq!(register, multi_indexed_reg.to_string());
             }
             e => panic!("Expected MultiIndexedRegister error, got {e:?}"),
@@ -792,13 +795,13 @@ mod tests {
 
         // Getting the tracked qubits or bits for an unknown register should fail.
         match tracker.tracked_qubit_for_register(&qubit_reg) {
-            Err(Tk1DecodeError::UnknownQubitRegister { register }) => {
+            Err(PytketDecodeError::UnknownQubitRegister { register }) => {
                 assert_eq!(register, qubit_reg.to_string());
             }
             e => panic!("Expected UnknownQubitRegister error, got {e:?}"),
         }
         match tracker.tracked_bit_for_register(&bit_reg) {
-            Err(Tk1DecodeError::UnknownBitRegister { register }) => {
+            Err(PytketDecodeError::UnknownBitRegister { register }) => {
                 assert_eq!(register, bit_reg.to_string());
             }
             e => panic!("Expected UnknownBitRegister error, got {e:?}"),

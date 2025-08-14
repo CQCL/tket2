@@ -82,7 +82,7 @@ create_py_exception!(
 );
 
 create_py_exception!(
-    tket::serialize::pytket::Tk1DecodeError,
+    tket::serialize::pytket::PytketDecodeError,
     PyTK1DecodeError,
     "Error type for the conversion between tket1 and tket operations."
 );
