@@ -2,9 +2,9 @@
 
 use super::PytketEmitter;
 use crate::serialize::pytket::config::TypeTranslatorSet;
-use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext, TrackedValues};
+use crate::serialize::pytket::encoder::{EncodeStatus, PytketEncoderContext, TrackedValues};
 use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
-use crate::serialize::pytket::Tk1ConvertError;
+use crate::serialize::pytket::PytketEncodeError;
 use crate::Circuit;
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
@@ -28,8 +28,8 @@ impl<H: HugrView> PytketEmitter<H> for FloatEmitter {
         node: H::Node,
         op: &ExtensionOp,
         circ: &Circuit<H>,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         let Ok(rot_op) = FloatOps::from_extension_op(op) else {
             return Ok(EncodeStatus::Unsupported);
         };
@@ -62,8 +62,8 @@ impl<H: HugrView> PytketEmitter<H> for FloatEmitter {
     fn const_to_pytket(
         &self,
         value: &OpaqueValue,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<Option<TrackedValues>, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<Option<TrackedValues>, PytketEncodeError<H::Node>> {
         use std::f64::consts::PI;
 
         let Some(const_f) = value.value().downcast_ref::<float_types::ConstF64>() else {

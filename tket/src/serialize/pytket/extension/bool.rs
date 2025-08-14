@@ -4,11 +4,11 @@ use super::PytketEmitter;
 use crate::extension::bool::{BoolOp, ConstBool, BOOL_EXTENSION_ID, BOOL_TYPE_NAME};
 use crate::serialize::pytket::config::TypeTranslatorSet;
 use crate::serialize::pytket::encoder::{
-    make_tk1_classical_expression, make_tk1_classical_operation, EncodeStatus, Tk1EncoderContext,
-    TrackedValues,
+    make_tk1_classical_expression, make_tk1_classical_operation, EncodeStatus,
+    PytketEncoderContext, TrackedValues,
 };
 use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
-use crate::serialize::pytket::Tk1ConvertError;
+use crate::serialize::pytket::PytketEncodeError;
 use crate::Circuit;
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
@@ -33,8 +33,8 @@ impl<H: HugrView> PytketEmitter<H> for BoolEmitter {
         node: H::Node,
         op: &ExtensionOp,
         circ: &Circuit<H>,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         let Ok(rot_op) = BoolOp::from_extension_op(op) else {
             return Ok(EncodeStatus::Unsupported);
         };
@@ -72,8 +72,8 @@ impl<H: HugrView> PytketEmitter<H> for BoolEmitter {
     fn const_to_pytket(
         &self,
         value: &OpaqueValue,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<Option<TrackedValues>, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<Option<TrackedValues>, PytketEncodeError<H::Node>> {
         let Some(const_b) = value.value().downcast_ref::<ConstBool>() else {
             return Ok(None);
         };
