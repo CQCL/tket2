@@ -548,33 +548,23 @@ impl WireTracker {
         let mut value_wires = Vec::new();
         while !qubit_args.is_empty() || !bit_args.is_empty() {
             // Check candidate wires that only contain the elements we need, in the right order.
+            //
+            // We may have leftover arguments at the end, which we'll try to
+            // get from another wire.
             let filter_candidate_wire = |w: Wire| {
-                let mut wire_qubits = self.wires[&w].qubits.iter().peekable();
-                let mut wire_bits = self.wires[&w].bits.iter().peekable();
-                let mut q_args_iter = qubit_args.iter().map(|(id, _)| id);
-                let mut b_args_iter = bit_args.iter().map(|(id, _)| id);
-
-                // Check that each argument appears as either a qubit or a bit
-                // in the wire, in the right order.
-                //
-                // We may have leftover arguments at the end, which we'll try to
-                // get from another wire.
-                while wire_qubits.peek().is_some() && wire_bits.peek().is_some() {
-                    if let Some(qb) = wire_qubits.next() {
-                        match q_args_iter.next() {
-                            Some(arg) if qb == arg => continue,
-                            _ => return false,
-                        };
-                    }
-                    if let Some(bit) = wire_bits.next() {
-                        match b_args_iter.next() {
-                            Some(arg) if bit == arg => continue,
-                            _ => return false,
-                        };
-                    }
-                    return false;
-                }
-                true
+                let wire_data = &self.wires[&w];
+                let same_qubits = itertools::equal(
+                    wire_data.qubits.iter(),
+                    qubit_args
+                        .iter()
+                        .map(|(id, _)| id)
+                        .take(wire_data.num_qubits()),
+                );
+                let same_bits = itertools::equal(
+                    wire_data.bits.iter(),
+                    bit_args.iter().map(|(id, _)| id).take(wire_data.num_bits()),
+                );
+                same_qubits && same_bits
             };
 
             let qubit_candidates = qubit_args
