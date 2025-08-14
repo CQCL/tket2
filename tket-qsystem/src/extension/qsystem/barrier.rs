@@ -1,6 +1,5 @@
 mod barrier_inserter;
 mod barrier_ops;
-mod qtype_analyzer;
 pub use barrier_inserter::BarrierInserter;
 
 #[cfg(test)]
@@ -19,9 +18,7 @@ mod test {
     use itertools::Itertools;
     use rstest::rstest;
 
-    use crate::extension::qsystem::barrier::{
-        barrier_ops::BarrierOperationFactory, qtype_analyzer::QTypeAnalyzer,
-    };
+    use crate::extension::qsystem::barrier::barrier_ops::BarrierOperationFactory;
     fn opt_q_arr(size: u64) -> hugr::types::Type {
         array_type(size, option_type(qb_t()).into())
     }
@@ -94,6 +91,8 @@ mod test {
             if run_barr_func_n.is_none() {
                 // if the runtime barrier function is never called
                 // make sure it is because there are no qubits in the barrier
+
+                use tket::analysis::qtype_analyzer::QTypeAnalyzer;
                 let mut analyzer = QTypeAnalyzer::new();
                 let tuple_type = hugr::types::Type::new_tuple(type_row);
                 assert!(!analyzer.is_qubit_container(&tuple_type));

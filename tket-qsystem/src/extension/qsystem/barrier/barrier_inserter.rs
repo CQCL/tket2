@@ -13,14 +13,13 @@ use hugr::{
     },
     Hugr, HugrView, IncomingPort, Node, OutgoingPort, Wire,
 };
+use tket::analysis::qtype_analyzer::is_qubit_array;
 
 use crate::extension::qsystem::barrier::barrier_ops::{
     build_runtime_barrier_op, BarrierOperationFactory,
 };
 use crate::extension::qsystem::lower::insert_function;
 use crate::extension::qsystem::LowerTk2Error;
-
-use super::qtype_analyzer::is_qubit_array;
 
 type Target = (Node, IncomingPort);
 

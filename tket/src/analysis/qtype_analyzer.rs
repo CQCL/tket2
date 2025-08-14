@@ -1,3 +1,4 @@
+//! Recussively analyse composite types to detect inner types
 use hugr::extension::prelude::qb_t;
 use hugr::std_extensions::collections::array::{Array, ArrayKind};
 use hugr::std_extensions::collections::borrow_array::BorrowArray;
@@ -6,7 +7,7 @@ use hugr::types::{CustomType, SumType, Type, TypeArg};
 use std::collections::HashMap;
 
 /// If a type is an option of qubit.
-pub(crate) fn is_opt_qb(ty: &Type) -> bool {
+pub fn is_opt_qb(ty: &Type) -> bool {
     if let Some(sum) = ty.as_sum() {
         if let Some(inner) = sum.as_unary_option() {
             return inner == &qb_t();
@@ -16,7 +17,7 @@ pub(crate) fn is_opt_qb(ty: &Type) -> bool {
 }
 
 /// If a custom type is an array, return size and element type.
-pub(crate) fn array_args<AT: ArrayKind>(ext: &CustomType) -> Option<(u64, &Type)> {
+pub fn array_args<AT: ArrayKind>(ext: &CustomType) -> Option<(u64, &Type)> {
     AT::type_def()
         .check_custom(ext)
         .ok()
@@ -28,7 +29,7 @@ pub(crate) fn array_args<AT: ArrayKind>(ext: &CustomType) -> Option<(u64, &Type)
 
 /// Analyzes quantum types to determine how they should be unpacked
 /// for barrier insertion.
-pub(crate) struct QTypeAnalyzer {
+pub struct QTypeAnalyzer {
     /// Cache of unpacked types.
     qubit_ports: HashMap<Type, Option<Vec<Type>>>,
 }
@@ -117,14 +118,14 @@ impl QTypeAnalyzer {
 }
 
 /// Check if a type is an array with the given element type
-pub(crate) fn is_array_of<AT: ArrayKind>(typ: &Type, elem_type: &Type) -> Option<u64> {
+pub fn is_array_of<AT: ArrayKind>(typ: &Type, elem_type: &Type) -> Option<u64> {
     typ.as_extension()
         .and_then(array_args::<AT>)
         .and_then(|(size, e_ty)| (e_ty == elem_type).then_some(size))
 }
 
 /// Check if a type is specifically an array of qubits
-pub(crate) fn is_qubit_array<AT: ArrayKind>(typ: &Type) -> Option<u64> {
+pub fn is_qubit_array<AT: ArrayKind>(typ: &Type) -> Option<u64> {
     is_array_of::<AT>(typ, &qb_t())
 }
 impl Default for QTypeAnalyzer {

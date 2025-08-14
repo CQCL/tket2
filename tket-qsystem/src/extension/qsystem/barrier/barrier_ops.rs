@@ -22,9 +22,9 @@ use hugr::{
 };
 use indexmap::IndexMap;
 
-use crate::extension::qsystem::{barrier::qtype_analyzer::QTypeAnalyzer, QSystemOpBuilder};
+use tket::analysis::qtype_analyzer::{array_args, is_opt_qb, QTypeAnalyzer};
 
-use super::qtype_analyzer::{array_args, is_opt_qb};
+use crate::extension::qsystem::QSystemOpBuilder;
 
 /// Wrapper for ExtensionOp that implements Hash
 #[derive(Clone, PartialEq, Eq)]
