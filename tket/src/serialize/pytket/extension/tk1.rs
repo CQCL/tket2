@@ -3,7 +3,7 @@
 use crate::extension::rotation::rotation_type;
 use crate::extension::{TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME};
 use crate::serialize::pytket::encoder::EncodeStatus;
-use crate::serialize::pytket::{Tk1ConvertError, Tk1EncoderContext};
+use crate::serialize::pytket::{PytketEncodeError, PytketEncoderContext};
 use crate::Circuit;
 
 use super::PytketEmitter;
@@ -32,13 +32,13 @@ impl<H: HugrView> PytketEmitter<H> for Tk1Emitter {
         node: H::Node,
         op: &ExtensionOp,
         circ: &Circuit<H>,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         if op.qualified_id() != format!("{TKET1_EXTENSION_ID}.{TKET1_OP_NAME}") {
             return Ok(EncodeStatus::Unsupported);
         }
         let Some(TypeArg::String(arg)) = op.args().first() else {
-            return Err(Tk1ConvertError::custom(
+            return Err(PytketEncodeError::custom(
                 "Opaque TKET1 operation did not have a json-encoded type argument.",
             ));
         };

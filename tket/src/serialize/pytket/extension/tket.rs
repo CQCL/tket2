@@ -3,8 +3,8 @@
 use super::PytketEmitter;
 use crate::extension::sympy::SympyOp;
 use crate::extension::TKET_EXTENSION_ID;
-use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext};
-use crate::serialize::pytket::Tk1ConvertError;
+use crate::serialize::pytket::encoder::{EncodeStatus, PytketEncoderContext};
+use crate::serialize::pytket::PytketEncodeError;
 use crate::{Circuit, TketOp};
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
@@ -14,9 +14,9 @@ use tket_json_rs::optype::OpType as Tk1OpType;
 
 /// Encoder for [TketOp] operations.
 #[derive(Debug, Clone, Default)]
-pub struct Tk2Emitter;
+pub struct TketOpEmitter;
 
-impl<H: HugrView> PytketEmitter<H> for Tk2Emitter {
+impl<H: HugrView> PytketEmitter<H> for TketOpEmitter {
     fn extensions(&self) -> Option<Vec<ExtensionId>> {
         Some(vec![TKET_EXTENSION_ID])
     }
@@ -26,10 +26,10 @@ impl<H: HugrView> PytketEmitter<H> for Tk2Emitter {
         node: H::Node,
         op: &ExtensionOp,
         circ: &Circuit<H>,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         if let Ok(tket_op) = TketOp::from_extension_op(op) {
-            self.encode_tk2_op(node, tket_op, circ, encoder)
+            self.encode_tket_op(node, tket_op, circ, encoder)
         } else if let Ok(sympy_op) = SympyOp::from_extension_op(op) {
             self.encode_sympy_op(node, sympy_op, circ, encoder)
         } else {
@@ -38,15 +38,15 @@ impl<H: HugrView> PytketEmitter<H> for Tk2Emitter {
     }
 }
 
-impl Tk2Emitter {
+impl TketOpEmitter {
     /// Encode a tket operation into a pytket operation.
-    fn encode_tk2_op<H: HugrView>(
+    fn encode_tket_op<H: HugrView>(
         &self,
         node: H::Node,
         tket_op: TketOp,
         circ: &Circuit<H>,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         let serial_op = match tket_op {
             TketOp::H => Tk1OpType::H,
             TketOp::CX => Tk1OpType::CX,
@@ -104,8 +104,8 @@ impl Tk2Emitter {
         node: H::Node,
         sympy_op: SympyOp,
         circ: &Circuit<H>,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         encoder.emit_transparent_node(node, circ, |_| vec![sympy_op.expr.clone()])?;
         Ok(EncodeStatus::Success)
     }

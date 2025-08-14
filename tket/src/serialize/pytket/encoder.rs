@@ -27,17 +27,17 @@ use tket_json_rs::circuit_json::{self, SerialCircuit};
 use unsupported_tracker::UnsupportedTracker;
 
 use super::{
-    OpConvertError, Tk1ConvertError, METADATA_B_OUTPUT_REGISTERS, METADATA_OPGROUP, METADATA_PHASE,
-    METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
+    OpConvertError, PytketEncodeError, METADATA_B_OUTPUT_REGISTERS, METADATA_OPGROUP,
+    METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
 };
 use crate::circuit::Circuit;
-use crate::serialize::pytket::config::Tk1EncoderConfig;
+use crate::serialize::pytket::config::PytketEncoderConfig;
 use crate::serialize::pytket::extension::RegisterCount;
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
 #[derive(derive_more::Debug)]
 #[debug(bounds(H: HugrView))]
-pub struct Tk1EncoderContext<H: HugrView> {
+pub struct PytketEncoderContext<H: HugrView> {
     /// The name of the circuit being encoded.
     name: Option<String>,
     /// Global phase value.
@@ -56,29 +56,29 @@ pub struct Tk1EncoderContext<H: HugrView> {
     /// Configuration for the encoding.
     ///
     /// Contains custom operation/type/const emitters.
-    config: Arc<Tk1EncoderConfig<H>>,
+    config: Arc<PytketEncoderConfig<H>>,
     /// A cache of translated hugr functions, to be encoded as op boxes.
     function_cache: Arc<RwLock<HashMap<H::Node, CachedEncodedFunction>>>,
 }
 
-impl<H: HugrView> Tk1EncoderContext<H> {
-    /// Create a new [`Tk1EncoderContext`] from a [`Circuit`].
+impl<H: HugrView> PytketEncoderContext<H> {
+    /// Create a new [`PytketEncoderContext`] from a [`Circuit`].
     pub(super) fn new(
         circ: &Circuit<H>,
         region: H::Node,
-        config: Tk1EncoderConfig<H>,
-    ) -> Result<Self, Tk1ConvertError<H::Node>> {
+        config: PytketEncoderConfig<H>,
+    ) -> Result<Self, PytketEncodeError<H::Node>> {
         Self::new_arc(circ, region, Arc::new(config))
     }
 
-    /// Create a new [`Tk1EncoderContext`] from a [`Circuit`].
+    /// Create a new [`PytketEncoderContext`] from a [`Circuit`].
     ///
-    /// Expects an already-wrapped config Arc. See [`Tk1EncoderContext::new`].
+    /// Expects an already-wrapped config Arc. See [`PytketEncoderContext::new`].
     fn new_arc(
         circ: &Circuit<H>,
         region: H::Node,
-        config: Arc<Tk1EncoderConfig<H>>,
-    ) -> Result<Self, Tk1ConvertError<H::Node>> {
+        config: Arc<PytketEncoderConfig<H>>,
+    ) -> Result<Self, PytketEncodeError<H::Node>> {
         let hugr = circ.hugr();
         let name = Circuit::new(hugr.with_entrypoint(region))
             .name()
@@ -109,7 +109,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &mut self,
         circ: &Circuit<H>,
         region: H::Node,
-    ) -> Result<(), Tk1ConvertError<H::Node>> {
+    ) -> Result<(), PytketEncodeError<H::Node>> {
         let (region, node_map) = circ.hugr().region_portgraph(region);
         let io_nodes = circ.io_nodes();
 
@@ -134,7 +134,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         mut self,
         circ: &Circuit<H>,
         region: H::Node,
-    ) -> Result<(SerialCircuit, Vec<String>), Tk1ConvertError<H::Node>> {
+    ) -> Result<(SerialCircuit, Vec<String>), PytketEncodeError<H::Node>> {
         // Add any remaining unsupported nodes
         //
         // TODO: Test that unsupported subgraphs that don't affect any qubit/bit registers
@@ -158,7 +158,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     }
 
     /// Returns a reference to this encoder's configuration.
-    pub fn config(&self) -> &Tk1EncoderConfig<H> {
+    pub fn config(&self) -> &PytketEncoderConfig<H> {
         &self.config
     }
 
@@ -173,8 +173,8 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// This function SHOULD NOT be called before determining that the target
     /// operation is supported, as it will mark the wire as explored and
     /// potentially remove it from the tracker. To determine if a wire type is
-    /// supported, use [`Tk1EncoderConfig::type_to_pytket`] on the encoder
-    /// context's [`Tk1EncoderContext::config`].
+    /// supported, use [`PytketEncoderConfig::type_to_pytket`] on the encoder
+    /// context's [`PytketEncoderContext::config`].
     ///
     /// ### Errors
     ///
@@ -184,7 +184,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &mut self,
         wire: Wire<H::Node>,
         circ: &Circuit<H>,
-    ) -> Result<Cow<'_, [TrackedValue]>, Tk1ConvertError<H::Node>> {
+    ) -> Result<Cow<'_, [TrackedValue]>, PytketEncodeError<H::Node>> {
         if self.values.peek_wire_values(wire).is_some() {
             return Ok(self.values.wire_values(wire).unwrap());
         }
@@ -206,7 +206,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// Given a node in the HUGR, returns all the [`TrackedValue`]s associated
     /// with its inputs.
     ///
-    /// These values can be used with the [`Tk1EncoderContext::values`] tracker
+    /// These values can be used with the [`PytketEncoderContext::values`] tracker
     /// to retrieve the corresponding pytket registers and parameter
     /// expressions. See [`ValueTracker::qubit_register`],
     /// [`ValueTracker::bit_register`], and [`ValueTracker::param_expression`].
@@ -214,12 +214,12 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-    ) -> Result<TrackedValues, Tk1ConvertError<H::Node>> {
+    ) -> Result<TrackedValues, PytketEncodeError<H::Node>> {
         self.get_input_values_internal(node, circ, |_| true)
     }
 
     /// Auxiliary function used to collect the input values of a node.
-    /// See [`Tk1EncoderContext::get_input_values`].
+    /// See [`PytketEncoderContext::get_input_values`].
     ///
     /// Given a node in the HUGR, returns all the [`TrackedValue`]s associated
     /// with its inputs. Calls `wire_filter` to decide which incoming wires to include.
@@ -228,7 +228,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         node: H::Node,
         circ: &Circuit<H>,
         wire_filter: impl Fn(Wire<H::Node>) -> bool,
-    ) -> Result<TrackedValues, Tk1ConvertError<H::Node>> {
+    ) -> Result<TrackedValues, PytketEncodeError<H::Node>> {
         let mut qubits: Vec<TrackedQubit> = Vec::new();
         let mut bits: Vec<TrackedBit> = Vec::new();
         let mut params: Vec<TrackedParam> = Vec::new();
@@ -268,34 +268,34 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     /// Helper to emit a new tket1 command corresponding to a single HUGR node.
     ///
     /// This call will fail if the node has parameter outputs. Use
-    /// [`Tk1EncoderContext::emit_node_with_out_params`] instead.
+    /// [`PytketEncoderContext::emit_node_with_out_params`] instead.
     ///
-    /// See [`Tk1EncoderContext::emit_command`] for more general cases.
+    /// See [`PytketEncoderContext::emit_command`] for more general cases.
     ///
     /// ## Arguments
     ///
-    /// - `tk1_optype`: The tket1 operation type to emit.
+    /// - `pytket_optype`: The tket1 operation type to emit.
     /// - `node`: The HUGR node for which to emit the command. Qubits and bits are
     ///   automatically retrieved from the node's inputs/outputs.
     /// - `circ`: The circuit containing the node.
     pub fn emit_node(
         &mut self,
-        tk1_optype: tket_json_rs::OpType,
+        pytket_optype: tket_json_rs::OpType,
         node: H::Node,
         circ: &Circuit<H>,
-    ) -> Result<(), Tk1ConvertError<H::Node>> {
-        self.emit_node_with_out_params(tk1_optype, node, circ, |_| Vec::new())
+    ) -> Result<(), PytketEncodeError<H::Node>> {
+        self.emit_node_with_out_params(pytket_optype, node, circ, |_| Vec::new())
     }
 
     /// Helper to emit a new tket1 command corresponding to a single HUGR node,
-    /// with parameter outputs. Use [`Tk1EncoderContext::emit_node`] for nodes
+    /// with parameter outputs. Use [`PytketEncoderContext::emit_node`] for nodes
     /// that don't require computing parameter outputs.
     ///
-    /// See [`Tk1EncoderContext::emit_command`] for more general cases.
+    /// See [`PytketEncoderContext::emit_command`] for more general cases.
     ///
     /// ## Arguments
     ///
-    /// - `tk1_optype`: The tket1 operation type to emit.
+    /// - `pytket_optype`: The tket1 operation type to emit.
     /// - `node`: The HUGR node for which to emit the command. Qubits and bits are
     ///   automatically retrieved from the node's inputs/outputs.
     /// - `circ`: The circuit containing the node.
@@ -304,23 +304,23 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     ///   does not match the expected number, the encoding will fail.
     pub fn emit_node_with_out_params(
         &mut self,
-        tk1_optype: tket_json_rs::OpType,
+        pytket_optype: tket_json_rs::OpType,
         node: H::Node,
         circ: &Circuit<H>,
         output_params: impl FnOnce(OutputParamArgs<'_>) -> Vec<String>,
-    ) -> Result<(), Tk1ConvertError<H::Node>> {
+    ) -> Result<(), PytketEncodeError<H::Node>> {
         self.emit_node_command(node, circ, output_params, move |inputs| {
-            make_tk1_operation(tk1_optype, inputs)
+            make_tk1_operation(pytket_optype, inputs)
         })
     }
 
     /// Helper to emit a new tket1 command corresponding to a single HUGR node,
     /// using a custom operation generator and computing output parameter
-    /// expressions. Use [`Tk1EncoderContext::emit_node`] or
-    /// [`Tk1EncoderContext::emit_node_with_out_params`] when pytket operation
+    /// expressions. Use [`PytketEncoderContext::emit_node`] or
+    /// [`PytketEncoderContext::emit_node_with_out_params`] when pytket operation
     /// can be defined directly from a [`tket_json_rs::OpType`].
     ///
-    /// See [`Tk1EncoderContext::emit_command`] for a general case emitter.
+    /// See [`PytketEncoderContext::emit_command`] for a general case emitter.
     ///
     /// ## Arguments
     ///
@@ -341,7 +341,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         circ: &Circuit<H>,
         output_params: impl FnOnce(OutputParamArgs<'_>) -> Vec<String>,
         make_operation: impl FnOnce(MakeOperationArgs<'_>) -> tket_json_rs::circuit_json::Operation,
-    ) -> Result<(), Tk1ConvertError<H::Node>> {
+    ) -> Result<(), PytketEncodeError<H::Node>> {
         let TrackedValues {
             mut qubits,
             mut bits,
@@ -412,7 +412,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         node: H::Node,
         circ: &Circuit<H>,
         output_params: impl FnOnce(OutputParamArgs<'_>) -> Vec<String>,
-    ) -> Result<(), Tk1ConvertError<H::Node>> {
+    ) -> Result<(), PytketEncodeError<H::Node>> {
         let input_values = self.get_input_values(node, circ)?;
         let output_counts = self.node_output_values(node, circ)?;
         let total_out_count: RegisterCount = output_counts.iter().map(|(_, c)| *c).sum();
@@ -430,7 +430,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
 
         // Check that we got the expected number of outputs.
         if input_values.qubits.len() != total_out_count.qubits {
-            return Err(Tk1ConvertError::custom(format!(
+            return Err(PytketEncodeError::custom(format!(
                 "Mismatched number of input and output qubits while trying to emit a transparent operation for {}. We have {} inputs but {} outputs.",
                 circ.hugr().get_optype(node),
                 input_values.qubits.len(),
@@ -438,7 +438,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             )));
         }
         if input_values.bits.len() != total_out_count.bits {
-            return Err(Tk1ConvertError::custom(format!(
+            return Err(PytketEncodeError::custom(format!(
                 "Mismatched number of input and output bits while trying to emit a transparent operation for {}. We have {} inputs but {} outputs.",
                 circ.hugr().get_optype(node),
                 input_values.bits.len(),
@@ -446,7 +446,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             )));
         }
         if out_params.len() != total_out_count.params {
-            return Err(Tk1ConvertError::custom(format!(
+            return Err(PytketEncodeError::custom(format!(
                 "Expected {} parameters in the input values for a {}, but got {}.",
                 total_out_count.params,
                 circ.hugr().get_optype(node),
@@ -481,7 +481,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &mut self,
         unsupported_nodes: BTreeSet<H::Node>,
         circ: &Circuit<H>,
-    ) -> Result<(), Tk1ConvertError<H::Node>> {
+    ) -> Result<(), PytketEncodeError<H::Node>> {
         let subcircuit_id = format!("tk{}", unsupported_nodes.iter().min().unwrap());
 
         // TODO: Use a cached topo checker here instead of traversing the full graph each time we create a `SiblingSubgraph`.
@@ -553,11 +553,11 @@ impl<H: HugrView> Tk1EncoderContext<H> {
             num_bits: op_values.bits.len(),
             params: &input_param_exprs,
         };
-        let mut tk1_op = make_tk1_operation(tket_json_rs::OpType::Barrier, args);
-        tk1_op.data = Some(payload);
+        let mut pytket_op = make_tk1_operation(tket_json_rs::OpType::Barrier, args);
+        pytket_op.data = Some(payload);
 
         let opgroup = Some("tket".to_string());
-        self.emit_command(tk1_op, &op_values.qubits, &op_values.bits, opgroup);
+        self.emit_command(pytket_op, &op_values.qubits, &op_values.bits, opgroup);
         Ok(())
     }
 
@@ -568,29 +568,29 @@ impl<H: HugrView> Tk1EncoderContext<H> {
     ///
     /// Ensure that any output wires from the node being processed gets the
     /// appropriate values registered by calling [`ValueTracker::register_wire`]
-    /// on the context's [`Tk1EncoderContext::values`] tracker.
+    /// on the context's [`PytketEncoderContext::values`] tracker.
     ///
-    /// In general you should prefer using [`Tk1EncoderContext::emit_node`] or
-    /// [`Tk1EncoderContext::emit_node_with_out_params`] as they automatically
+    /// In general you should prefer using [`PytketEncoderContext::emit_node`] or
+    /// [`PytketEncoderContext::emit_node_with_out_params`] as they automatically
     /// compute the input qubits and bits from the HUGR node, and ensure that
     /// output wires get their new values registered on the tracker.
     ///
     /// ## Arguments
     ///
-    /// - `tk1_operation`: The tket1 operation to emit. See
+    /// - `pytket_op`: The tket1 operation to emit. See
     ///   [`make_tk1_operation`] for a helper function to create it.
     /// - `qubits`: The qubit registers to use as inputs/outputs of the pytket
     ///   op. Normally obtained from a HUGR node's inputs using
-    ///   [`Tk1EncoderContext::get_input_values`] or allocated via
+    ///   [`PytketEncoderContext::get_input_values`] or allocated via
     ///   [`ValueTracker::new_qubit`].
     /// - `bits`: The bit registers to use as inputs/outputs of the pytket op.
     ///   Normally obtained from a HUGR node's inputs using
-    ///   [`Tk1EncoderContext::get_input_values`] or allocated via
+    ///   [`PytketEncoderContext::get_input_values`] or allocated via
     ///   [`ValueTracker::new_bit`].
     /// - `opgroup`: A tket1 operation group identifier, if any.
     pub fn emit_command(
         &mut self,
-        tk1_operation: circuit_json::Operation,
+        pytket_op: circuit_json::Operation,
         qubits: &[TrackedQubit],
         bits: &[TrackedBit],
         opgroup: Option<String>,
@@ -598,7 +598,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         let qubit_regs = qubits.iter().map(|&qb| self.values.qubit_register(qb));
         let bit_regs = bits.iter().map(|&b| self.values.bit_register(b));
         let command = circuit_json::Command {
-            op: tk1_operation,
+            op: pytket_op,
             args: qubit_regs.chain(bit_regs).cloned().collect(),
             opgroup,
         };
@@ -618,11 +618,11 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         let config = Arc::clone(&self.config);
 
         // Recursively encode the sub-graph.
-        let mut subencoder = Tk1EncoderContext::new_arc(circ, node, config)?;
+        let mut subencoder = PytketEncoderContext::new_arc(circ, node, config)?;
         subencoder.function_cache = self.function_cache.clone();
         subencoder.run_encoder(circ, node)?;
 
@@ -650,7 +650,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         node: H::Node,
         function: H::Node,
         circ: &Circuit<H>,
-    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         let cache = self.function_cache.read().ok();
         if let Some(encoded) = cache.as_ref().and_then(|c| c.get(&function)) {
             let encoded = encoded.clone();
@@ -669,7 +669,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         let config = Arc::clone(&self.config);
 
         // Recursively encode the sub-graph.
-        let mut subencoder = Tk1EncoderContext::new_arc(circ, function, config)?;
+        let mut subencoder = PytketEncoderContext::new_arc(circ, function, config)?;
         subencoder.function_cache = self.function_cache.clone();
         subencoder.run_encoder(circ, function)?;
         let (serial_subcirc, output_params) = subencoder.finish(circ, function)?;
@@ -705,7 +705,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         node: H::Node,
         boxed_circuit: SerialCircuit,
         circ: &Circuit<H>,
-    ) -> Result<(), Tk1ConvertError<H::Node>> {
+    ) -> Result<(), PytketEncodeError<H::Node>> {
         self.emit_node_command(
             node,
             circ,
@@ -739,7 +739,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         let optype = circ.hugr().get_optype(node);
 
         // Try to encode the operation using each of the registered encoders.
@@ -804,7 +804,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         input_params: &[String],
         output_params: impl FnOnce(OutputParamArgs<'_>) -> Vec<String>,
         wire_filter: impl Fn(Wire<H::Node>) -> bool,
-    ) -> Result<TrackedValues, Tk1ConvertError<H::Node>> {
+    ) -> Result<TrackedValues, PytketEncodeError<H::Node>> {
         let output_counts = self.node_output_values(node, circ)?;
         let total_out_count: RegisterCount = output_counts.iter().map(|(_, c)| *c).sum();
 
@@ -816,7 +816,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
 
         // Check that we got the expected number of outputs.
         if out_params.len() != total_out_count.params {
-            return Err(Tk1ConvertError::custom(format!(
+            return Err(PytketEncodeError::custom(format!(
                 "Expected {} parameters in the input values for a {}, but got {}.",
                 total_out_count.params,
                 circ.hugr().get_optype(node),
@@ -864,7 +864,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
         &self,
         node: H::Node,
         circ: &Circuit<H>,
-    ) -> Result<Vec<(Wire<H::Node>, RegisterCount)>, Tk1ConvertError<H::Node>> {
+    ) -> Result<Vec<(Wire<H::Node>, RegisterCount)>, PytketEncodeError<H::Node>> {
         let op = circ.hugr().get_optype(node);
         let signature = op.dataflow_signature();
         let static_output = op.static_output_port();
@@ -876,7 +876,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
                 continue;
             } else if Some(out_port) == static_output {
                 let EdgeKind::Const(ty) = op.static_output().unwrap() else {
-                    return Err(Tk1ConvertError::custom(format!(
+                    return Err(PytketEncodeError::custom(format!(
                         "Cannot emit a static output for a {op}."
                     )));
                 };
@@ -886,7 +886,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
                     .as_ref()
                     .and_then(|s| s.out_port_type(out_port).cloned())
                 else {
-                    return Err(Tk1ConvertError::custom(
+                    return Err(PytketEncodeError::custom(
                         "Cannot emit a transparent node without a dataflow signature.",
                     ));
                 };
@@ -895,7 +895,7 @@ impl<H: HugrView> Tk1EncoderContext<H> {
 
             let wire = hugr::Wire::new(node, out_port);
             let Some(count) = self.config().type_to_pytket(&ty) else {
-                return Err(Tk1ConvertError::custom(format!(
+                return Err(PytketEncodeError::custom(format!(
                     "Found an unsupported type while encoding a {op}."
                 )));
             };
@@ -909,11 +909,11 @@ impl<H: HugrView> Tk1EncoderContext<H> {
 ///
 /// This flag indicates that either
 /// - The operation was successful encoded and is now registered on the
-///   [`Tk1EncoderContext`]
+///   [`PytketEncoderContext`]
 /// - The node cannot be encoded, and the context was left unchanged.
 ///
 /// The latter is a recoverable error, as it promises that the context wasn't
-/// modified. For non-recoverable errors, see [`Tk1ConvertError`].
+/// modified. For non-recoverable errors, see [`PytketEncodeError`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, derive_more::Display)]
 pub enum EncodeStatus {
     /// The node was successfully encoded and registered in the context.
@@ -923,7 +923,7 @@ pub enum EncodeStatus {
 }
 
 /// Input arguments to the output parameter computation methods in the the emit_*
-/// functions of [`Tk1EncoderContext`].
+/// functions of [`PytketEncoderContext`].
 #[derive(Clone, Copy, Debug)]
 pub struct OutputParamArgs<'a> {
     /// The expected number of output parameters.
@@ -933,7 +933,7 @@ pub struct OutputParamArgs<'a> {
 }
 
 /// Input arguments to the output parameter computation method in
-/// [`Tk1EncoderContext::emit_node_command`].
+/// [`PytketEncoderContext::emit_node_command`].
 ///
 /// This can be passed to [`make_tk1_operation`] to create a pytket
 /// [`circuit_json::Operation`].
@@ -963,20 +963,20 @@ enum CachedEncodedFunction {
 }
 
 /// Initialize a tket1 [Operation](circuit_json::Operation) to pass to
-/// [`Tk1EncoderContext::emit_command`].
+/// [`PytketEncoderContext::emit_command`].
 ///
 /// ## Arguments
-/// - `tk1_optype`: The operation type to use.
+/// - `pytket_optype`: The operation type to use.
 /// - `qubit_count`: The number of qubits used by the operation.
 /// - `bit_count`: The number of linear bits used by the operation.
 /// - `params`: Parameters of the operation, expressed as string expressions.
 ///   Normally obtained from [`ValueTracker::param_expression`].
 pub fn make_tk1_operation(
-    tk1_optype: tket_json_rs::OpType,
+    pytket_optype: tket_json_rs::OpType,
     inputs: MakeOperationArgs<'_>,
 ) -> circuit_json::Operation {
     let mut op = circuit_json::Operation::default();
-    op.op_type = tk1_optype;
+    op.op_type = pytket_optype;
     op.n_qb = Some(inputs.num_qubits as u32);
     op.params = match inputs.params.is_empty() {
         false => Some(inputs.params.to_owned()),
@@ -1000,16 +1000,16 @@ pub fn make_tk1_operation(
 /// [`tket_json_rs::OpType::ClExpr`] / [`tket_json_rs::clexpr::op::ClOp`] use
 /// [`make_tk1_classical_expression`].
 ///
-/// This can be passed to [`Tk1EncoderContext::emit_command`].
+/// This can be passed to [`PytketEncoderContext::emit_command`].
 ///
 /// See [`make_tk1_operation`] for a more general case.
 ///
 /// ## Arguments
-/// - `tk1_optype`: The operation type to use.
+/// - `pytket_optype`: The operation type to use.
 /// - `bit_count`: The number of linear bits used by the operation.
 /// - `classical`: The parameters to the classical operation.
 pub fn make_tk1_classical_operation(
-    tk1_optype: tket_json_rs::OpType,
+    pytket_optype: tket_json_rs::OpType,
     bit_count: usize,
     classical: tket_json_rs::circuit_json::Classical,
 ) -> tket_json_rs::circuit_json::Operation {
@@ -1018,7 +1018,7 @@ pub fn make_tk1_classical_operation(
         num_bits: bit_count,
         params: &[],
     };
-    let mut op = make_tk1_operation(tk1_optype, args);
+    let mut op = make_tk1_operation(pytket_optype, args);
     op.classical = Some(Box::new(classical));
     op
 }
@@ -1034,7 +1034,7 @@ pub fn make_tk1_classical_operation(
 /// they refer to their inputs and outputs by their position in the operation's
 /// bit and register list. See the arguments below for more details.
 ///
-/// This can be passed to [`Tk1EncoderContext::emit_command`]. See
+/// This can be passed to [`PytketEncoderContext::emit_command`]. See
 /// [`make_tk1_operation`] for a more general case.
 ///
 /// ## Arguments
