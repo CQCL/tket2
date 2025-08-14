@@ -2,6 +2,7 @@
 
 use super::PytketEmitter;
 use crate::extension::bool::{BoolOp, ConstBool, BOOL_EXTENSION_ID, BOOL_TYPE_NAME};
+use crate::serialize::pytket::config::TypeTranslatorSet;
 use crate::serialize::pytket::encoder::{
     make_tk1_classical_expression, make_tk1_classical_operation, EncodeStatus, Tk1EncoderContext,
     TrackedValues,
@@ -92,7 +93,11 @@ impl PytketTypeTranslator for BoolEmitter {
         vec![BOOL_EXTENSION_ID]
     }
 
-    fn type_to_pytket(&self, typ: &hugr::types::CustomType) -> Option<RegisterCount> {
+    fn type_to_pytket(
+        &self,
+        typ: &hugr::types::CustomType,
+        _set: &TypeTranslatorSet,
+    ) -> Option<RegisterCount> {
         if typ.name() == &*BOOL_TYPE_NAME {
             Some(RegisterCount::only_bits(1))
         } else {

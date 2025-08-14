@@ -27,6 +27,7 @@ pub(crate) use bool::set_bits_op;
 pub(crate) use tk1::OpaqueTk1Op;
 
 use super::encoder::TrackedValues;
+use crate::serialize::pytket::config::TypeTranslatorSet;
 use crate::serialize::pytket::encoder::{EncodeStatus, Tk1EncoderContext};
 use crate::serialize::pytket::Tk1ConvertError;
 use crate::Circuit;
@@ -105,8 +106,11 @@ pub trait PytketTypeTranslator {
     /// If the type cannot be fully translated into a list of the aforementioned
     /// values, return `None`. Operations dealing with such types will be marked
     /// as unsupported and will be serialized as opaque operations.
-    fn type_to_pytket(&self, typ: &CustomType) -> Option<RegisterCount> {
-        let _ = typ;
+    ///
+    /// The `set` argument is a set of known type translators. This can be used
+    /// when translating types that wrap over other types.
+    fn type_to_pytket(&self, typ: &CustomType, set: &TypeTranslatorSet) -> Option<RegisterCount> {
+        let _ = (typ, set);
         None
     }
 }

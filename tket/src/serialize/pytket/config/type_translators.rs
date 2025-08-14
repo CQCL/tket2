@@ -16,7 +16,7 @@ use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
 /// A set of [`PytketTypeTranslator`]s that can be used to translate HUGR types
 /// into pytket registers (qubits, bits, and parameter expressions).
 #[derive(Default, derive_more::Debug)]
-pub(super) struct TypeTranslatorSet {
+pub struct TypeTranslatorSet {
     /// Registered type translators
     #[debug(skip)]
     pub(super) type_translators: Vec<Box<dyn PytketTypeTranslator + Send + Sync>>,
@@ -33,7 +33,7 @@ impl TypeTranslatorSet {
     /// Add a translator to the set.
     ///
     /// This operation invalidates the type translation cache.
-    pub fn add_type_translator(
+    pub(super) fn add_type_translator(
         &mut self,
         translator: impl PytketTypeTranslator + Send + Sync + 'static,
     ) {
@@ -93,7 +93,7 @@ impl TypeTranslatorSet {
             TypeEnum::Extension(custom) => 'outer: {
                 let type_ext = custom.extension();
                 for encoder in self.translators_for_extension(type_ext) {
-                    if let Some(count) = encoder.type_to_pytket(custom) {
+                    if let Some(count) = encoder.type_to_pytket(custom, self) {
                         break 'outer Some(count);
                     }
                 }
@@ -139,7 +139,11 @@ mod tests {
             vec![BOOL_EXTENSION_ID, PRELUDE_ID]
         }
 
-        fn type_to_pytket(&self, typ: &hugr::types::CustomType) -> Option<RegisterCount> {
+        fn type_to_pytket(
+            &self,
+            typ: &hugr::types::CustomType,
+            _set: &TypeTranslatorSet,
+        ) -> Option<RegisterCount> {
             match typ.name().as_str() {
                 "usize" => Some(RegisterCount::only_bits(64)),
                 "qubit" => Some(RegisterCount::only_qubits(1)),
