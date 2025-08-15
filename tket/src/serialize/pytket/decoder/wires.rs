@@ -391,12 +391,6 @@ impl WireTracker {
         &self.bits[id.0]
     }
 
-    /// Returns `true` if the given register is a known bit register.
-    pub(super) fn is_known_bit(&self, register: &PytketRegister) -> bool {
-        self.latest_bit_tracker
-            .contains_key(&RegisterHash::from(register))
-    }
-
     /// Returns the list of known pytket registers, in the order they were registered.
     pub(super) fn known_pytket_qubits(&self) -> impl Iterator<Item = &TrackedQubit> {
         self.latest_qubit_tracker
@@ -501,6 +495,27 @@ impl WireTracker {
         self.bit_wires[&bit.id()].iter().copied()
     }
 
+    /// Given a list of pytket registers, splits them into qubit and bits and
+    /// returns the latest tracked elements for each.
+    pub(super) fn pytket_args_to_tracked_elems(
+        &self,
+        args: &[PytketRegister],
+    ) -> Result<(Vec<TrackedQubit>, Vec<TrackedBit>), PytketDecodeError> {
+        let mut qubit_args = Vec::with_capacity(args.len());
+        let mut bit_args = Vec::new();
+
+        for arg in args {
+            let reg_hash = RegisterHash::from(arg);
+            let is_bit = self.latest_bit_tracker.contains_key(&reg_hash);
+            if is_bit {
+                bit_args.push(self.tracked_bit_for_register(arg)?.clone());
+            } else {
+                qubit_args.push(self.tracked_qubit_for_register(arg)?.clone());
+            }
+        }
+        Ok((qubit_args, bit_args))
+    }
+
     /// Returns a new set of [TrackedWires] for a list of [`TrackedQubit`]s,
     /// [`TrackedBit`]s, and [`LoadedParameter`]s following the required types.
     ///
@@ -519,20 +534,20 @@ impl WireTracker {
     /// * `bit_args` - The list of tracked bits we require in the wire.
     /// * `params` - The list of parameters to load to wires. See
     ///   [`WireTracker::load_parameter`] for more details.
-    pub(super) fn find_typed_wires<'r>(
+    pub(super) fn find_typed_wires(
         &self,
         config: &PytketDecoderConfig,
         types: &[Type],
-        qubit_args: impl IntoIterator<Item = &'r TrackedQubit>,
-        bit_args: impl IntoIterator<Item = &'r TrackedBit>,
+        qubit_args: &[TrackedQubit],
+        bit_args: &[TrackedBit],
         params: &[Arc<LoadedParameter>],
     ) -> Result<TrackedWires, PytketDecodeError> {
         // We need to return a set of wires that contain all the arguments.
         //
         // We collect this by checking the wires where each element is present,
         // and collecting them in order.
-        let mut qubit_args: VecDeque<&TrackedQubit> = qubit_args.into_iter().collect();
-        let mut bit_args: VecDeque<&TrackedBit> = bit_args.into_iter().collect();
+        let mut qubit_args: VecDeque<&TrackedQubit> = qubit_args.iter().collect();
+        let mut bit_args: VecDeque<&TrackedBit> = bit_args.iter().collect();
 
         // Map each requested type to a wire.
         //

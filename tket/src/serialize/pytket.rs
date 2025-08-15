@@ -99,7 +99,7 @@ impl TKETDecode for SerialCircuit {
         let mut hugr = Hugr::new();
 
         let mut decoder =
-            PytketDecoderContext::new(&self, &mut hugr, None, None, None, Vec::new(), config)?;
+            PytketDecoderContext::new(&self, &mut hugr, None, None, Vec::new(), config)?;
         decoder.run_decoder(self.commands)?;
         let main_func = decoder.finish()?;
         hugr.set_entrypoint(main_func.node());

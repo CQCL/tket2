@@ -4,6 +4,10 @@
 //! it to the [`PytketEncoderConfig`](crate::serialize::pytket::PytketEncoderConfig)
 //! used for decoding.
 //!
+//! To add a new extension decoder, implement the [`PytketDecoder`] trait and
+//! add it to the [`PytketDecoderConfig`](crate::serialize::pytket::PytketDecoderConfig)
+//! used for encoding.
+//!
 //! This module contains decoders for some common extensions. The
 //! [`default_encoder_config`](crate::serialize::pytket::default_encoder_config)
 //! creates a configuration with the decoders for the standard library and tket
@@ -110,7 +114,7 @@ pub trait PytketDecoder {
 
     /// Given a pytket [`tket_json_rs::circuit_json::Operation`] node in the
     /// HUGR circuit and its operation type, try to convert it to a pytket
-    /// operation and add it to the pytket encoder.
+    /// operation and add it to the pytket decoder.
     ///
     /// Returns an [`DecodeStatus`] indicating if the operation was successfully
     /// converted. If the operation is not supported by the encoder, it's
