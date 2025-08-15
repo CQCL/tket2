@@ -17,7 +17,7 @@ use hugr::extension::ExtensionId;
 use hugr::ops::{ExtensionOp, OpType};
 use hugr::types::TypeArg;
 use hugr::HugrView;
-use tket_json_rs::optype::OpType as Tk1OpType;
+use tket_json_rs::optype::OpType as PytketOptype;
 
 /// Encoder for [prelude](hugr::extension::prelude) operations.
 #[derive(Debug, Clone, Default)]
@@ -39,7 +39,7 @@ impl<H: HugrView> PytketEmitter<H> for PreludeEmitter {
             return self.tuple_op_to_pytket(node, op, &tuple_op, circ, encoder);
         };
         if let Ok(_barrier) = BarrierDef::from_extension_op(op) {
-            encoder.emit_node(Tk1OpType::Barrier, node, circ)?;
+            encoder.emit_node(PytketOptype::Barrier, node, circ)?;
             return Ok(EncodeStatus::Success);
         };
         Ok(EncodeStatus::Unsupported)
@@ -111,8 +111,8 @@ impl PreludeEmitter {
 }
 
 impl PytketDecoder for PreludeEmitter {
-    fn op_types(&self) -> Vec<Tk1OpType> {
-        vec![Tk1OpType::noop, Tk1OpType::Measure]
+    fn op_types(&self) -> Vec<PytketOptype> {
+        vec![PytketOptype::noop, PytketOptype::Measure]
     }
 
     fn op_to_hugr<'h>(
@@ -130,8 +130,8 @@ impl PytketDecoder for PreludeEmitter {
         // its input registers in the outputs.
 
         let op: OpType = match op.op_type {
-            Tk1OpType::noop => Noop::new(qb_t()).into(),
-            Tk1OpType::Barrier => {
+            PytketOptype::noop => Noop::new(qb_t()).into(),
+            PytketOptype::Barrier => {
                 // We use pytket barriers in the pytket encoder framework to store
                 // HUGRs that cannot be represented in pytket.
                 //
