@@ -20,7 +20,7 @@ use tket_json_rs::optype::OpType as PytketOptype;
 use crate::extension;
 use crate::extension::qsystem::{QSystemOp, RuntimeBarrierDef};
 
-/// Encoder for [TketOp] operations.
+/// Encoder for [futures](crate::extension::futures) operations.
 #[derive(Debug, Clone, Default)]
 pub struct QSystemEmitter;
 

@@ -15,7 +15,7 @@ use tket::Circuit;
 
 use crate::extension::futures::{self, FutureOpDef};
 
-/// Emitter for [futures](hugr::extension::futures) operations and types.
+/// Emitter for [futures](crate::extension::futures) operations and types.
 ///
 /// The `Future<T>` type is treated as a transparent wrapper when translated to
 /// pytket circuits, and operations dealing with futures do not produce pytket

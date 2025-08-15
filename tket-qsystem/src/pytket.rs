@@ -24,7 +24,8 @@ pub fn qsystem_decoder_config() -> PytketDecoderConfig {
     config
 }
 
-/// Default encoder configuration for [`Circuit`][crate::Circuit]s.
+/// Default pytket encoder configuration for [`Circuit`][tket::Circuit]s with
+/// native qsystem operations.
 ///
 /// Contains emitters for std and tket operations.
 pub fn qsystem_encoder_config<H: HugrView>() -> PytketEncoderConfig<H> {
