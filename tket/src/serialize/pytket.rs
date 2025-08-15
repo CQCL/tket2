@@ -43,19 +43,19 @@ pub use crate::passes::pytket::lower_to_pytket;
 /// Prefix used for storing metadata in the hugr nodes.
 pub const METADATA_PREFIX: &str = "TKET1";
 /// The global phase specified as metadata.
-const METADATA_PHASE: &str = "TKET1.phase";
+pub const METADATA_PHASE: &str = "TKET1.phase";
 /// Explicit names for the input qubit registers.
-const METADATA_Q_REGISTERS: &str = "TKET1.qubit_registers";
+pub const METADATA_Q_REGISTERS: &str = "TKET1.qubit_registers";
 /// The reordered qubit registers in the output, if an implicit permutation was applied.
-const METADATA_Q_OUTPUT_REGISTERS: &str = "TKET1.qubit_output_registers";
+pub const METADATA_Q_OUTPUT_REGISTERS: &str = "TKET1.qubit_output_registers";
 /// Explicit names for the input bit registers.
-const METADATA_B_REGISTERS: &str = "TKET1.bit_registers";
+pub const METADATA_B_REGISTERS: &str = "TKET1.bit_registers";
 /// The reordered bit registers in the output, if an implicit permutation was applied.
-const METADATA_B_OUTPUT_REGISTERS: &str = "TKET1.bit_output_registers";
+pub const METADATA_B_OUTPUT_REGISTERS: &str = "TKET1.bit_output_registers";
 /// A tket1 operation "opgroup" field.
-const METADATA_OPGROUP: &str = "TKET1.opgroup";
+pub const METADATA_OPGROUP: &str = "TKET1.opgroup";
 /// Explicit names for the input parameter wires.
-const METADATA_INPUT_PARAMETERS: &str = "TKET1.input_parameters";
+pub const METADATA_INPUT_PARAMETERS: &str = "TKET1.input_parameters";
 
 /// A serialized representation of a [`Circuit`].
 ///

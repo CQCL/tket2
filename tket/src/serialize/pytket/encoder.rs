@@ -910,7 +910,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
             let wire = hugr::Wire::new(node, out_port);
             let Some(count) = self.config().type_to_pytket(&ty) else {
                 return Err(PytketEncodeError::custom(format!(
-                    "Found an unsupported type while encoding a {op}."
+                    "Found an unsupported type {ty} while encoding a {op}."
                 )));
             };
             wire_counts.push((wire, count));
