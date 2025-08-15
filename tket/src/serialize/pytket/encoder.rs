@@ -207,10 +207,23 @@ impl<H: HugrView> PytketEncoderContext<H> {
     /// Given a node in the HUGR, returns all the [`TrackedValue`]s associated
     /// with its inputs.
     ///
-    /// These values can be used with the [`PytketEncoderContext::values`] tracker
-    /// to retrieve the corresponding pytket registers and parameter
+    /// These values can be used with the [`PytketEncoderContext::values`]
+    /// tracker to retrieve the corresponding pytket registers and parameter
     /// expressions. See [`ValueTracker::qubit_register`],
     /// [`ValueTracker::bit_register`], and [`ValueTracker::param_expression`].
+    ///
+    /// Marks the input connections to the node as explored. When all ports
+    /// connected to a wire have been explored, the wire is removed from the
+    /// tracker.
+    ///
+    /// If an input wire is the output of an unsupported node, a subgraph of
+    /// unsupported nodes containing it will be emitted as a pytket barrier.
+    ///
+    /// This function SHOULD NOT be called before determining that the node
+    /// operation is supported, as it will mark the input connections as explored
+    /// and potentially remove them from the tracker. To determine if a node
+    /// operation is supported, use [`PytketEncoderConfig::type_to_pytket`] on
+    /// the encoder context's [`PytketEncoderContext::config`].
     pub fn get_input_values(
         &mut self,
         node: H::Node,

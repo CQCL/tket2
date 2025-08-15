@@ -6,7 +6,7 @@ mod wires;
 
 pub use param::{LoadedParameter, LoadedParameterType};
 pub use tracked_elem::{TrackedBit, TrackedQubit};
-pub use wires::{TrackedWires, WireData, WireTracker};
+pub use wires::TrackedWires;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -31,6 +31,7 @@ use super::{
 };
 use crate::extension::rotation::rotation_type;
 use crate::serialize::pytket::config::PytketDecoderConfig;
+use crate::serialize::pytket::decoder::wires::WireTracker;
 use crate::serialize::pytket::extension::{build_opaque_tket_op, RegisterCount};
 use crate::serialize::pytket::PytketDecodeErrorInner;
 
@@ -42,7 +43,7 @@ pub struct PytketDecoderContext<'h> {
     /// The Hugr being built.
     pub builder: FunctionBuilder<&'h mut Hugr>,
     /// A tracker keeping track of the generated wires and their corresponding types.
-    pub wire_tracker: WireTracker,
+    pub(super) wire_tracker: WireTracker,
     /// Configuration for decoding commands.
     ///
     /// Contains custom operation decoders, that define translation of legacy tket
@@ -359,10 +360,7 @@ impl<'h> PytketDecoderContext<'h> {
         let params: Vec<Arc<LoadedParameter>> = match &op.params {
             Some(params) => params
                 .iter()
-                .map(|v| {
-                    self.wire_tracker
-                        .load_parameter(&mut self.builder, v.as_str())
-                })
+                .map(|v| self.load_parameter(v.as_str()))
                 .collect_vec(),
             None => Vec::new(),
         };
@@ -571,6 +569,16 @@ impl<'h> PytketDecoderContext<'h> {
         }
 
         Ok(())
+    }
+
+    /// Loads the given parameter expression as a [`LoadedParameter`] in the hugr.
+    ///
+    /// - If the parameter is a known algebraic operation, adds the required op and recurses on its inputs.
+    /// - If the parameter is a constant, a constant definition is added to the Hugr.
+    /// - If the parameter is a variable, adds a new `rotation` input to the region.
+    /// - If the parameter is a sympy expressions, adds it as a [`SympyOpDef`][crate::extension::sympy::SympyOpDef] black box.
+    pub fn load_parameter(&mut self, param: &str) -> Arc<LoadedParameter> {
+        self.wire_tracker.load_parameter(&mut self.builder, param)
     }
 }
 

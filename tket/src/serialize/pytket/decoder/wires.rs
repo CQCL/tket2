@@ -25,7 +25,7 @@ use crate::symbolic_constant_op;
 
 /// Tracked data for a wire in [`TrackedWires`].
 #[derive(Debug, Clone, PartialEq)]
-pub struct WireData {
+pub(crate) struct WireData {
     /// The identifier in the hugr.
     wire: Wire,
     /// The type of the wire.
@@ -45,11 +45,6 @@ impl WireData {
     /// The HUGR type for the wire.
     pub fn ty(&self) -> &Type {
         &self.ty
-    }
-
-    /// The HUGR type for the wire.
-    pub fn ty_arc(&self) -> Arc<Type> {
-        self.ty.clone()
     }
 
     /// The pytket qubit arguments corresponding to this wire.
@@ -83,11 +78,6 @@ impl WireData {
     pub fn num_bits(&self) -> usize {
         self.bits.len()
     }
-
-    /// Returns the number of tracked elements in this wire.
-    pub fn num_args(&self) -> usize {
-        self.num_qubits() + self.num_bits()
-    }
 }
 
 /// Set of wires related to a pytket operation being decoded.
@@ -113,20 +103,6 @@ pub struct TrackedWires {
 }
 
 impl TrackedWires {
-    /// Retrieve the wire data at the given index.
-    ///
-    /// Panics if the index is out of bounds. See [`TrackedWires::len`].
-    #[inline]
-    #[must_use]
-    pub fn value_wire(&self, idx: usize) -> &WireData {
-        self.value_wires.get(idx).unwrap_or_else(|| {
-            panic!(
-                "Cannot get wire data at index {idx}, only {} wires are tracked",
-                self.value_wires.len()
-            )
-        })
-    }
-
     /// Return the number of value wires tracked.
     #[inline]
     #[must_use]
@@ -157,7 +133,7 @@ impl TrackedWires {
 
     /// Return an iterator over the wires and their types.
     #[inline]
-    pub fn iter_values(&self) -> impl Iterator<Item = &'_ WireData> + Clone + '_ {
+    pub(super) fn iter_values(&self) -> impl Iterator<Item = &'_ WireData> + Clone + '_ {
         self.value_wires.iter()
     }
 
@@ -323,7 +299,7 @@ impl TrackedWires {
 /// to that pytket register. Once the register is seen in the output of an
 /// operation, all previous references to it become "outdated".
 #[derive(Debug, Clone, Default)]
-pub struct WireTracker {
+pub(crate) struct WireTracker {
     /// A map of wires being tracked, with their type and list of
     /// tracked pytket registers and parameters.
     wires: IndexMap<Wire, WireData>,
@@ -614,7 +590,7 @@ impl WireTracker {
         })
     }
 
-    /// Returns the wire carrying a parameter.
+    /// Loads the given parameter expression as a [`LoadedParameter`] in the hugr.
     ///
     /// - If the parameter is a known algebraic operation, adds the required op and recurses on its inputs.
     /// - If the parameter is a constant, a constant definition is added to the Hugr.
