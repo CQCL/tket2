@@ -23,6 +23,7 @@ tket = { path = "../tket", version = "0.13.2", features = [
     "portmatching",
     "binary-eccs",
 ] }
+tket-qsystem = { path = "../tket-qsystem", version = "0.18.1" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tket-json-rs = { workspace = true, features = ["pyo3"] }

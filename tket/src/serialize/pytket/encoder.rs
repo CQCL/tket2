@@ -66,19 +66,9 @@ impl<H: HugrView> PytketEncoderContext<H> {
     pub(super) fn new(
         circ: &Circuit<H>,
         region: H::Node,
-        config: PytketEncoderConfig<H>,
+        config: impl Into<Arc<PytketEncoderConfig<H>>>,
     ) -> Result<Self, PytketEncodeError<H::Node>> {
-        Self::new_arc(circ, region, Arc::new(config))
-    }
-
-    /// Create a new [`PytketEncoderContext`] from a [`Circuit`].
-    ///
-    /// Expects an already-wrapped config Arc. See [`PytketEncoderContext::new`].
-    fn new_arc(
-        circ: &Circuit<H>,
-        region: H::Node,
-        config: Arc<PytketEncoderConfig<H>>,
-    ) -> Result<Self, PytketEncodeError<H::Node>> {
+        let config: Arc<PytketEncoderConfig<H>> = config.into();
         let hugr = circ.hugr();
         let name = Circuit::new(hugr.with_entrypoint(region))
             .name()
@@ -636,7 +626,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         let config = Arc::clone(&self.config);
 
         // Recursively encode the sub-graph.
-        let mut subencoder = PytketEncoderContext::new_arc(circ, node, config)?;
+        let mut subencoder = PytketEncoderContext::new(circ, node, config)?;
         subencoder.function_cache = self.function_cache.clone();
         subencoder.run_encoder(circ, node)?;
 
@@ -683,7 +673,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         let config = Arc::clone(&self.config);
 
         // Recursively encode the sub-graph.
-        let mut subencoder = PytketEncoderContext::new_arc(circ, function, config)?;
+        let mut subencoder = PytketEncoderContext::new(circ, function, config)?;
         subencoder.function_cache = self.function_cache.clone();
         subencoder.run_encoder(circ, function)?;
         let (serial_subcirc, output_params) = subencoder.finish(circ, function)?;
