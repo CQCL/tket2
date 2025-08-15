@@ -2511,9 +2511,11 @@ dependencies = [
  "petgraph 0.8.2",
  "rstest",
  "serde",
+ "serde_json",
  "smol_str",
  "strum",
  "tket",
+ "tket-json-rs",
  "typetag",
 ]
 
