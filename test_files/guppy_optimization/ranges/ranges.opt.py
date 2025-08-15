@@ -1,0 +1,18 @@
+from pathlib import Path
+from sys import argv
+
+from guppylang import guppy
+from guppylang.std.quantum import measure, qubit
+
+
+@guppy
+def main() -> None:
+    q1, q2, q3, q4 = qubit(), qubit(), qubit(), qubit()
+    measure(q1)
+    measure(q2)
+    measure(q3)
+    measure(q4)
+
+
+program = main.compile()
+Path(argv[0]).with_suffix(".hugr").write_bytes(program.to_bytes())
