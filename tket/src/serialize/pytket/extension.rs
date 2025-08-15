@@ -117,9 +117,9 @@ pub trait PytketDecoder {
     /// operation and add it to the pytket decoder.
     ///
     /// Returns an [`DecodeStatus`] indicating if the operation was successfully
-    /// converted. If the operation is not supported by the encoder, it's
-    /// important to **not** modify the `encoder` context as that may invalidate
-    /// the context for other encoders that may be called afterwards.
+    /// converted. If the operation is not supported by the decoder, it's
+    /// important to **not** modify the `decoder` context as that may invalidate
+    /// the context for other decoders that may be called afterwards.
     ///
     /// `op` will always have one of the [`tket_json_rs::OpType`]s specified in
     /// [`PytketDecoder::op_types`].
