@@ -29,6 +29,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::register::{Bit, ElementId, Qubit};
 
 use crate::circuit::Circuit;
+use crate::serialize::pytket::extension::RegisterCount;
 
 use self::decoder::Tk1DecoderContext;
 pub use crate::passes::pytket::lower_to_pytket;
@@ -358,19 +359,19 @@ pub enum PytketDecodeErrorInner {
     /// The pytket circuit uses multi-indexed registers.
     //
     // This could be supported in the future, if there is a need for it.
-    #[display("Register {register} in the circuit has multiple indices. Tket2 does not support multi-indexed registers.")]
+    #[display("Register {register} in the circuit has multiple indices. Tket2 does not support multi-indexed registers")]
     MultiIndexedRegister {
         /// The register name.
         register: String,
     },
     /// Found an unexpected register name.
-    #[display("Found an unknown qubit register name: {register}.")]
+    #[display("Found an unknown qubit register name: {register}")]
     UnknownQubitRegister {
         /// The unknown register name.
         register: String,
     },
     /// Found an unexpected bit register name.
-    #[display("Found an unknown bit register name: {register}.")]
+    #[display("Found an unknown bit register name: {register}")]
     UnknownBitRegister {
         /// The unknown register name.
         register: String,
@@ -379,7 +380,7 @@ pub enum PytketDecodeErrorInner {
     ///
     /// The expected number of qubits and bits may be different depending on the [`PytketTypeTranslator`][extension::PytketTypeTranslator]s used in the decoder config.
     #[display(
-        "The given input types {input_types} to use for the HUGR's input wires are not compatible with the number of qubits and bits in the pytket circuit. Expected {expected_qubits} qubits and {expected_bits} bits, but found {circ_qubits} qubits and {circ_bits} bits.",
+        "The given input types {input_types} to use for the HUGR's input wires are not compatible with the number of qubits and bits in the pytket circuit. Expected {expected_qubits} qubits and {expected_bits} bits, but found {circ_qubits} qubits and {circ_bits} bits",
         input_types = input_types.iter().join(", "),
     )]
     InvalidInputSignature {
@@ -398,7 +399,7 @@ pub enum PytketDecodeErrorInner {
     ///
     /// We don't do any kind of type conversion, so this depends solely on the last operation to update each register.
     #[display(
-        "The expected output types {expected_types} are not compatible with the actual output types {actual_types}, obtained from decoding the pytket circuit.",
+        "The expected output types {expected_types} are not compatible with the actual output types {actual_types}, obtained from decoding the pytket circuit",
         expected_types = expected_types.iter().join(", "),
         actual_types = actual_types.iter().join(", "),
     )]
@@ -412,7 +413,7 @@ pub enum PytketDecodeErrorInner {
     //
     // Some of this errors will be avoided in the future once we are able to decompose complex types automatically.
     #[display(
-        "Could not find a wire with the required qubit arguments [{qubit_args:?}] and bit arguments [{bit_args:?}].",
+        "Could not find a wire with the required qubit arguments [{qubit_args:?}] and bit arguments [{bit_args:?}]",
         qubit_args = qubit_args.iter().join(", "),
         bit_args = bit_args.iter().join(", "),
     )]
@@ -424,16 +425,16 @@ pub enum PytketDecodeErrorInner {
     },
     /// Found an unexpected number of input wires when decoding an operation.
     #[display(
-        "Expected {expected_values} input value wires{expected_types} and {expected_params} input parameters, but found {actual_values} values{actual_types} and {actual_params} parameters.",
-        expected_types = match expected_types {
-            None => "".to_string(),
-            Some(tys) => format!(" with types [{}]", tys.iter().join(", ")),
-        },
-        actual_types = match actual_types {
-            None => "".to_string(),
-            Some(tys) => format!(" with types [{}]", tys.iter().join(", ")),
-        },
-    )]
+            "Expected {expected_values} input value wires{expected_types} and {expected_params} input parameters, but found {actual_values} values{actual_types} and {actual_params} parameters",
+            expected_types = match expected_types {
+                None => "".to_string(),
+                Some(tys) => format!(" with types [{}]", tys.iter().join(", ")),
+            },
+            actual_types = match actual_types {
+                None => "".to_string(),
+                Some(tys) => format!(" with types [{}]", tys.iter().join(", ")),
+            },
+        )]
     UnexpectedInputWires {
         /// The expected amount of input wires.
         expected_values: usize,
@@ -448,9 +449,20 @@ pub enum PytketDecodeErrorInner {
         /// The actual types of the input wires.
         actual_types: Option<Vec<String>>,
     },
+    /// Found an unexpected input type when decoding an operation.
+    #[display(
+        "Found an unexpected type {unknown_type} in the input wires, in input signature ({all_types})",
+        all_types = all_types.iter().join(", "),
+    )]
+    UnexpectedInputType {
+        /// The unknown type.
+        unknown_type: String,
+        /// All the input types specified for the operation.
+        all_types: Vec<String>,
+    },
     /// Tried to track the output wires of a node, but the number of tracked elements didn't match the ones in the output wires.
     #[display(
-        "Tried to track the output wires of a node, but the number of tracked elements didn't match the ones in the output wires. Expected {expected_qubits} qubits and {expected_bits} bits, but found {circ_qubits} qubits and {circ_bits} bits in the node outputs."
+        "Tried to track the output wires of a node, but the number of tracked elements didn't match the ones in the output wires. Expected {expected_qubits} qubits and {expected_bits} bits, but found {circ_qubits} qubits and {circ_bits} bits in the node outputs"
     )]
     UnexpectedNodeOutput {
         /// The expected number of qubits.
@@ -475,7 +487,7 @@ pub enum PytketDecodeErrorInner {
         param: String,
     },
     /// Not enough parameter names given for the input signature.
-    #[display("Tried to initialize a pytket circuit decoder with {num_params_given} given parameter names, but more were required by the input signature.")]
+    #[display("Tried to initialize a pytket circuit decoder with {num_params_given} given parameter names, but more were required by the input signature")]
     MissingParametersInInput {
         /// The number of parameters given.
         num_params_given: usize,
@@ -483,13 +495,55 @@ pub enum PytketDecodeErrorInner {
     /// We don't support complex types containing parameters in the input.
     //
     // This restriction may be relaxed in the future.
-    #[display("Complex type {ty} contains {num_params} inside it. We only support input parameters in standalone 'float' or 'rotation'-typed wires.")]
+    #[display("Complex type {ty} contains {num_params} inside it. We only support input parameters in standalone 'float' or 'rotation'-typed wires")]
     UnsupportedParametersInInput {
         /// The type that contains the parameters.
         ty: String,
         /// The number of parameters in the type.
         num_params: usize,
     },
+    /// We couldn't find a wire that contains the required type.
+    #[display(
+        "Could not find a wire with type {ty} that contains {expected_arguments}",
+        expected_arguments = match (qubit_args.is_empty(), bit_args.is_empty()) {
+            (true, true) => "no arguments".to_string(),
+            (true, false) => format!("pytket bit arguments [{}]", bit_args.iter().join(", ")),
+            (false, true) => format!("pytket qubit arguments [{}]", qubit_args.iter().join(", ")),
+            (false, false) => format!("pytket qubit and bit arguments [{}] and [{}]", qubit_args.iter().join(", "), bit_args.iter().join(", ")),
+        },
+    )]
+    NoMatchingWire {
+        /// The type that couldn't be found.
+        ty: String,
+        /// The qubit registers expected in the wire.
+        qubit_args: Vec<String>,
+        /// The bit registers expected in the wire.
+        bit_args: Vec<String>,
+    },
+    /// The number of pytket registers expected for an operation is not enough.
+    ///
+    /// This is usually caused by a mismatch between the input signature and the number of registers in the pytket circuit.
+    ///
+    /// The expected number of registers may be different depending on the [`PytketTypeTranslator`][extension::PytketTypeTranslator]s used in the decoder config.
+    #[display(
+        "Expected {expected_count} to map types ({expected_types}), but only got {actual_count}",
+        expected_types = expected_types.iter().join(", "),
+    )]
+    NotEnoughPytketRegisters {
+        /// The types we tried to get wires for.
+        expected_types: Vec<String>,
+        /// The number of registers required by the types.
+        expected_count: RegisterCount,
+        /// The number of registers we actually got.
+        actual_count: RegisterCount,
+    },
+}
+
+impl PytketDecodeErrorInner {
+    /// Wrap the error in a [`PytketDecodeError`].
+    pub fn wrap(self) -> PytketDecodeError {
+        PytketDecodeError::from(self)
+    }
 }
 
 /// A hashed register, used to identify registers in the [`Tk1Decoder::register_wire`] map,

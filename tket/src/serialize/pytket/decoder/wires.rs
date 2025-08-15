@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use hugr::builder::{Dataflow as _, FunctionBuilder};
 use hugr::ops::Value;
-use hugr::std_extensions::arithmetic::float_types::ConstF64;
+use hugr::std_extensions::arithmetic::float_types::{float64_type, ConstF64};
 use hugr::types::Type;
 use hugr::{Hugr, Wire};
 use indexmap::{IndexMap, IndexSet};
@@ -18,6 +18,7 @@ use itertools::Itertools;
 use tket_json_rs::register::ElementId as PytketRegister;
 
 use crate::extension::rotation::rotation_type;
+use crate::serialize::pytket::config::TypeTranslatorSet;
 use crate::serialize::pytket::decoder::param::parser::{parse_pytket_param, PytketParam};
 use crate::serialize::pytket::decoder::{
     LoadedParameter, TrackedBit, TrackedBitId, TrackedQubit, TrackedQubitId,
@@ -421,20 +422,23 @@ impl WireTracker {
     /// If the pytket register was already in the tracker,
     /// marks the previous element as outdated.
     ///
-    /// Returns the hash of the register.
+    /// If the [`RegisterHash`] has already been computed, it can be passed in
+    /// to avoid recomputing it.
     pub(super) fn track_qubit(
         &mut self,
         qubit_reg: Arc<PytketRegister>,
-    ) -> Result<TrackedQubitId, PytketDecodeError> {
+        reg_hash: Option<RegisterHash>,
+    ) -> Result<&TrackedQubit, PytketDecodeError> {
         check_register(&qubit_reg)?;
 
         let id = TrackedQubitId(self.qubits.len());
-        let hash = RegisterHash::from(qubit_reg.as_ref());
-        self.qubits.push(TrackedQubit::new(qubit_reg));
+        let hash = reg_hash.unwrap_or_else(|| RegisterHash::from(qubit_reg.as_ref()));
+        self.qubits
+            .push(TrackedQubit::new_with_hash(id, qubit_reg, hash));
         if let Some(previous_id) = self.latest_qubit_tracker.insert(hash, id) {
             self.qubits[previous_id.0].mark_outdated();
         }
-        Ok(id)
+        Ok(self.get_qubit(id))
     }
 
     /// Track a new pytket bit register.
@@ -442,21 +446,23 @@ impl WireTracker {
     /// If the pytket register was already in the tracker,
     /// marks the previous element as outdated.
     ///
-    /// Returns the hash of the register.
+    /// If the [`RegisterHash`] has already been computed, it can be passed in
+    /// to avoid recomputing it.
     pub(super) fn track_bit(
         &mut self,
         bit_reg: Arc<PytketRegister>,
-    ) -> Result<TrackedBitId, PytketDecodeError> {
+        reg_hash: Option<RegisterHash>,
+    ) -> Result<&TrackedBit, PytketDecodeError> {
         check_register(&bit_reg)?;
 
         let id = TrackedBitId(self.bits.len());
-        let hash = RegisterHash::from(bit_reg.as_ref());
-        self.bits.push(TrackedBit::new(bit_reg));
+        let hash = reg_hash.unwrap_or_else(|| RegisterHash::from(bit_reg.as_ref()));
+        self.bits.push(TrackedBit::new_with_hash(id, bit_reg, hash));
         if let Some(previous_id) = self.latest_bit_tracker.insert(hash, id) {
             self.bits[previous_id.0].mark_outdated();
         }
 
-        Ok(id)
+        Ok(self.get_bit(id))
     }
 
     /// Returns the latest tracked qubit for a pytket register.
@@ -466,11 +472,11 @@ impl WireTracker {
     /// The returned element is guaranteed to be up to date (See [`TrackedQubit::is_outdated`]).
     pub fn tracked_qubit_for_register(
         &self,
-        register: impl AsRef<PytketRegister>,
+        register: &PytketRegister,
     ) -> Result<&TrackedQubit, PytketDecodeError> {
-        let hash = RegisterHash::from(register.as_ref());
+        let hash = RegisterHash::from(register);
         let Some(id) = self.latest_qubit_tracker.get(&hash) else {
-            return Err(PytketDecodeError::unknown_qubit_reg(register.as_ref()));
+            return Err(PytketDecodeError::unknown_qubit_reg(register));
         };
         Ok(self.get_qubit(*id))
     }
@@ -482,126 +488,120 @@ impl WireTracker {
     /// The returned element is guaranteed to be up to date (See [`TrackedBit::is_outdated`]).
     pub fn tracked_bit_for_register(
         &self,
-        register: impl AsRef<PytketRegister>,
+        register: &PytketRegister,
     ) -> Result<&TrackedBit, PytketDecodeError> {
-        let hash = RegisterHash::from(register.as_ref());
+        let hash = RegisterHash::from(register);
         let Some(id) = self.latest_bit_tracker.get(&hash) else {
-            return Err(PytketDecodeError::unknown_bit_reg(register.as_ref()));
+            return Err(PytketDecodeError::unknown_bit_reg(register));
         };
         Ok(self.get_bit(*id))
     }
 
-    /// Returns a new set of [TrackedWires] for a list of
-    /// [`circuit_json::Command`][tket_json_rs::circuit_json::Command] inputs.
+    /// Returns the list of wires that contain the given qubit.
+    fn qubit_wires(&self, qubit: &TrackedQubit) -> impl Iterator<Item = Wire> + '_ {
+        self.qubit_wires[&qubit.id()].iter().copied()
+    }
+
+    /// Returns the list of wires that contain the given bit.
+    fn bit_wires(&self, bit: &TrackedBit) -> impl Iterator<Item = Wire> + '_ {
+        self.bit_wires[&bit.id()].iter().copied()
+    }
+
+    /// Returns a new set of [TrackedWires] for a list of [`TrackedQubit`]s,
+    /// [`TrackedBit`]s, and [`LoadedParameter`]s following the required types.
     ///
-    /// Returns an error if a valid set cannot be found.
+    /// Returns an error if a valid set of wires with the given types cannot be
+    /// found.
+    ///
+    /// The qubit and bit arguments are only consumed as required by the types.
+    /// Some registers may be left unused.
     ///
     /// # Arguments
     ///
-    /// * `hugr` - The hugr to add the wires to.
-    /// * `args` - The list of pytket element ids to map to wires.
-    /// * `params` - The list of parameters to load to wires. See [`WireTracker::load_parameter`] for more details.
-    ///
-    // TODO: We'll need to be able to decompose types when we need only _some_
-    // of the elements they contain (E.g., extract a value from an array),
-    // and do it automatically here.
-    pub(super) fn wire_inputs_for_command<'r>(
-        &mut self,
-        hugr: &mut FunctionBuilder<&mut Hugr>,
-        qubit_args: impl IntoIterator<Item = &'r PytketRegister>,
-        bit_args: impl IntoIterator<Item = &'r PytketRegister>,
-        params: impl IntoIterator<Item = &'r str>,
+    /// * `config` - The configuration for the decoder, used to count the qubits and bits required by each type.
+    /// * `hugr` - The hugr to load the parameters to.
+    /// * `types` - The types of the arguments we require in the wires.
+    /// * `qubit_args` - The list of tracked qubits we require in the wires.
+    /// * `bit_args` - The list of tracked bits we require in the wire.
+    /// * `params` - The list of parameters to load to wires. See
+    ///   [`WireTracker::load_parameter`] for more details.
+    pub(super) fn find_typed_wires<'r>(
+        &self,
+        type_translators: &TypeTranslatorSet,
+        types: &[Type],
+        qubit_args: impl IntoIterator<Item = &'r TrackedQubit>,
+        bit_args: impl IntoIterator<Item = &'r TrackedBit>,
+        params: &[Arc<LoadedParameter>],
     ) -> Result<TrackedWires, PytketDecodeError> {
         // We need to return a set of wires that contain all the arguments.
         //
         // We collect this by checking the wires where each element is present,
         // and collecting them in order.
-        let mut qubit_args: VecDeque<(TrackedQubitId, &PytketRegister)> = qubit_args
-            .into_iter()
-            .map(
-                |register| match self.latest_qubit_tracker.get(&RegisterHash::from(register)) {
-                    Some(id) => Ok((*id, register)),
-                    None => Err(PytketDecodeError::unknown_qubit_reg(register)),
-                },
-            )
-            .collect::<Result<_, _>>()?;
-        let mut bit_args: VecDeque<(TrackedBitId, &PytketRegister)> = bit_args
-            .into_iter()
-            .map(
-                |register| match self.latest_bit_tracker.get(&RegisterHash::from(register)) {
-                    Some(id) => Ok((*id, register)),
-                    None => Err(PytketDecodeError::unknown_bit_reg(register)),
-                },
-            )
-            .collect::<Result<_, _>>()?;
+        let mut qubit_args: VecDeque<&TrackedQubit> = qubit_args.into_iter().collect();
+        let mut bit_args: VecDeque<&TrackedBit> = bit_args.into_iter().collect();
 
-        let mut value_wires = Vec::new();
-        while !qubit_args.is_empty() || !bit_args.is_empty() {
-            // Check candidate wires that only contain the elements we need, in the right order.
-            //
-            // We may have leftover arguments at the end, which we'll try to
-            // get from another wire.
-            let filter_candidate_wire = |w: Wire| {
-                let wire_data = &self.wires[&w];
-                let same_qubits = itertools::equal(
-                    wire_data.qubits.iter(),
-                    qubit_args
-                        .iter()
-                        .map(|(id, _)| id)
-                        .take(wire_data.num_qubits()),
-                );
-                let same_bits = itertools::equal(
-                    wire_data.bits.iter(),
-                    bit_args.iter().map(|(id, _)| id).take(wire_data.num_bits()),
-                );
-                same_qubits && same_bits
-            };
+        // Map each requested type to a wire.
+        //
+        // Ignore parameter inputs.
+        let param_types = [float64_type(), rotation_type()];
+        let value_wires = types
+            .iter()
+            .filter(|ty| !param_types.contains(ty))
+            .map(|ty| {
+                let Some(reg_count) = type_translators.type_to_pytket(ty) else {
+                    return Err(PytketDecodeErrorInner::UnexpectedInputType {
+                        unknown_type: ty.to_string(),
+                        all_types: types.iter().map(ToString::to_string).collect(),
+                    }
+                    .wrap());
+                };
 
-            let qubit_candidates = qubit_args
-                .front()
-                .into_iter()
-                .flat_map(|(id, _)| self.qubit_wires[id].iter());
-            let bit_candidates = bit_args
-                .front()
-                .into_iter()
-                .flat_map(|(id, _)| self.bit_wires[id].iter());
-            let candidate = qubit_candidates
-                .chain(bit_candidates)
-                .find(|&&w| filter_candidate_wire(w));
+                // List candidate wires that contain the qubits and bits we need.
+                let qubit_candidates = qubit_args
+                    .front()
+                    .into_iter()
+                    .flat_map(|qb| self.qubit_wires(qb));
+                let bit_candidates = bit_args
+                    .front()
+                    .into_iter()
+                    .flat_map(|bit| self.bit_wires(bit));
+                let mut candidate = qubit_candidates.chain(bit_candidates);
 
-            // If we found a candidate, add it to the list of wires.
-            match candidate {
-                Some(w) => {
-                    // Consume the extracted args, and add the wire to the list.
-                    let wire_data: WireData = self.wires[w].clone();
-                    qubit_args.drain(..wire_data.num_qubits());
-                    bit_args.drain(..wire_data.num_bits());
-                    value_wires.push(wire_data);
-                }
-                None => {
-                    // In the future we may be able to decompose some wire containing `arg_ids[0]` internally.
-                    // For now, we just report the error.
-                    return Err(PytketDecodeErrorInner::ArgumentCouldNotBeMapped {
+                // Find a wire that contains the correct type..
+                let check_wire = |w: &Wire| {
+                    let wire_data = &self.wires[w];
+                    let qubits = qubit_args.iter().take(reg_count.qubits).map(|q| q.id());
+                    let bits = bit_args.iter().take(reg_count.bits).map(|bit| bit.id());
+                    wire_data.ty() == ty
+                        && itertools::equal(wire_data.qubits.iter().copied(), qubits)
+                        && itertools::equal(wire_data.bits.iter().copied(), bits)
+                };
+                let Some(wire) = candidate.find(check_wire) else {
+                    return Err(PytketDecodeErrorInner::NoMatchingWire {
+                        ty: ty.to_string(),
                         qubit_args: qubit_args
                             .iter()
-                            .map(|(_, elem)| elem.to_string())
+                            .map(|q| q.pytket_register().to_string())
                             .collect(),
-                        bit_args: bit_args.iter().map(|(_, elem)| elem.to_string()).collect(),
+                        bit_args: bit_args
+                            .iter()
+                            .map(|bit| bit.pytket_register().to_string())
+                            .collect(),
                     }
-                    .into());
-                }
-            }
-        }
+                    .wrap());
+                };
 
-        // Load the parameters.
-        let parameter_wires = params
-            .into_iter()
-            .map(|param| self.load_parameter(hugr, param))
-            .collect_vec();
+                // Mark the qubits and bits as used.
+                qubit_args.drain(..reg_count.qubits);
+                bit_args.drain(..reg_count.bits);
+
+                Ok(self.wires[&wire].clone())
+            })
+            .collect::<Result<Vec<WireData>, _>>()?;
 
         Ok(TrackedWires {
             value_wires,
-            parameter_wires,
+            parameter_wires: params.to_vec(),
         })
     }
 
@@ -691,11 +691,17 @@ impl WireTracker {
     ) -> Result<(), PytketDecodeError> {
         let qubits = qubits
             .into_iter()
-            .map(|q| self.track_qubit(q.pytket_register_arc()))
+            .map(|q| {
+                self.track_qubit(q.pytket_register_arc(), None)
+                    .map(TrackedQubit::id)
+            })
             .collect::<Result<_, _>>()?;
         let bits = bits
             .into_iter()
-            .map(|b| self.track_bit(b.pytket_register_arc()))
+            .map(|b| {
+                self.track_bit(b.pytket_register_arc(), None)
+                    .map(TrackedBit::id)
+            })
             .collect::<Result<_, _>>()?;
 
         for &q in &qubits {
@@ -774,7 +780,7 @@ mod tests {
         assert_eq!(tracker.known_pytket_bits().count(), 0);
 
         // Track an invalid register name.
-        match tracker.track_qubit(multi_indexed_reg.clone()) {
+        match tracker.track_qubit(multi_indexed_reg.clone(), None) {
             Err(PytketDecodeError {
                 inner: PytketDecodeErrorInner::MultiIndexedRegister { register },
                 ..
@@ -806,40 +812,45 @@ mod tests {
 
         // Track a new qubit
         let tracked_q_0 = tracker
-            .track_qubit(qubit_reg.clone())
-            .expect("Should track qubit");
+            .track_qubit(qubit_reg.clone(), None)
+            .expect("Should track qubit")
+            .clone();
         assert_eq!(tracker.known_pytket_qubits().count(), 1);
         assert_eq!(tracker.known_pytket_bits().count(), 0);
         let tracked_qubit = tracker
             .tracked_qubit_for_register(&qubit_reg)
-            .expect("Should find tracked qubit");
+            .expect("Should find tracked qubit")
+            .clone();
         assert!(!tracked_qubit.is_outdated());
-        assert_eq!(tracked_qubit, tracker.get_qubit(tracked_q_0));
+        assert_eq!(tracked_qubit, tracked_q_0);
 
         // Track the same qubit again, it should add a new TrackedQubit and mark the previous one as outdated
         let tracked_q_1 = tracker
-            .track_qubit(qubit_reg.clone())
-            .expect("Should track qubit again");
+            .track_qubit(qubit_reg.clone(), None)
+            .expect("Should track qubit again")
+            .clone();
+        let tracked_q_0 = tracker.get_qubit(tracked_q_0.id());
         assert_eq!(tracker.known_pytket_qubits().count(), 1); // still only one unique register
-        assert!(tracker.get_qubit(tracked_q_0).is_outdated());
-        assert!(!tracker.get_qubit(tracked_q_1).is_outdated());
+        assert!(tracked_q_0.is_outdated());
+        assert!(!tracked_q_1.is_outdated());
         let tracked_qubit = tracker
             .tracked_qubit_for_register(&qubit_reg)
             .expect("Should find latest tracked qubit")
             .clone();
-        assert_eq!(&tracked_qubit, tracker.get_qubit(tracked_q_1));
+        assert_eq!(tracked_qubit, tracked_q_1);
 
         // Track a bit
         let bit_id = tracker
-            .track_bit(bit_reg.clone())
-            .expect("Should track bit");
+            .track_bit(bit_reg.clone(), None)
+            .expect("Should track bit")
+            .clone();
         assert_eq!(tracker.known_pytket_bits().count(), 1);
-        assert!(!tracker.get_bit(bit_id).is_outdated());
+        assert!(!bit_id.is_outdated());
         let tracked_bit = tracker
             .tracked_bit_for_register(&bit_reg)
             .expect("Should find tracked bit")
             .clone();
-        assert_eq!(&tracked_bit, tracker.get_bit(bit_id));
+        assert_eq!(tracked_bit, bit_id);
 
         // Associate the bit and qubit with a wire.
         tracker
