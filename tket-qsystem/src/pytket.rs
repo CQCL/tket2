@@ -1,9 +1,9 @@
 //! Encoder/decoder definitions for translating tket-qsystem operations to/from legacy Pytket circuits.
 
-mod future;
+mod futures;
 mod qsystem;
 
-pub use future::FutureEmitter;
+pub use futures::FutureEmitter;
 use hugr::HugrView;
 pub use qsystem::QSystemEmitter;
 use tket::serialize::pytket::{
@@ -36,3 +36,6 @@ pub fn qsystem_encoder_config<H: HugrView>() -> PytketEncoderConfig<H> {
 
     config
 }
+
+#[cfg(test)]
+mod tests;
