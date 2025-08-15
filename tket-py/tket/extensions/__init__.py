@@ -1,12 +1,11 @@
 from tket_exts import (
+    tket,
     opaque_bool,
     debug,
     guppy,
     rotation,
     futures,
     qsystem,
-    qsystem_random,
-    qsystem_utils,
     quantum,
     result,
     wasm,
@@ -14,14 +13,13 @@ from tket_exts import (
 
 
 __all__ = [
+    "tket",
     "debug",
     "opaque_bool",
     "guppy",
     "rotation",
     "futures",
     "qsystem",
-    "qsystem_random",
-    "qsystem_utils",
     "quantum",
     "result",
     "wasm",

@@ -1,73 +1,64 @@
 """HUGR extension definitions for tket circuits."""
 
-import pkgutil
-import functools
-
+from typing_extensions import deprecated
 from hugr.ext import Extension
-
+from tket_exts import tket
 
 # This is updated by our release-please workflow, triggered by this
 # annotation: x-release-please-version
 __version__ = "0.10.1"
 
 
-@functools.cache
+@deprecated("Use tket_exts.tket.bool.extension() instead")
 def opaque_bool() -> Extension:
-    return load_extension("tket.bool")
+    return tket.bool.extension()
 
 
-@functools.cache
+@deprecated("Use tket_exts.tket.debug.extension() instead")
 def debug() -> Extension:
-    return load_extension("tket.debug")
+    return tket.debug.extension()
 
 
-@functools.cache
+@deprecated("Use tket_exts.tket.guppy.extension() instead")
 def guppy() -> Extension:
-    return load_extension("tket.guppy")
+    return tket.guppy.extension()
 
 
-@functools.cache
+@deprecated("Use tket_exts.tket.rotation.extension() instead")
 def rotation() -> Extension:
-    return load_extension("tket.rotation")
+    return tket.rotation.extension()
 
 
-@functools.cache
+@deprecated("Use tket_exts.tket.futures.extension() instead")
 def futures() -> Extension:
-    return load_extension("tket.futures")
+    return tket.futures.extension()
 
 
-@functools.cache
+@deprecated("Use tket_exts.tket.qsystem.extension() instead")
 def qsystem() -> Extension:
-    return load_extension("tket.qsystem")
+    return tket.qsystem.extension()
 
 
-@functools.cache
+@deprecated("Use tket_exts.tket.qsystem.random.extension() instead")
 def qsystem_random() -> Extension:
-    return load_extension("tket.qsystem.random")
+    return tket.qsystem.random.extension()
 
 
-@functools.cache
+@deprecated("Use tket_exts.tket.qsystem.utils.extension() instead")
 def qsystem_utils() -> Extension:
-    return load_extension("tket.qsystem.utils")
+    return tket.qsystem.utils.extension()
 
 
-@functools.cache
+@deprecated("Use tket_exts.tket.quantum.extension() instead")
 def quantum() -> Extension:
-    return load_extension("tket.quantum")
+    return tket.quantum.extension()
 
 
-@functools.cache
+@deprecated("Use tket_exts.tket.result.extension() instead")
 def result() -> Extension:
-    return load_extension("tket.result")
+    return tket.result.extension()
 
 
-@functools.cache
+@deprecated("Use tket_exts.tket.wasm.extension() instead")
 def wasm() -> Extension:
-    return load_extension("tket.wasm")
-
-
-def load_extension(name: str) -> Extension:
-    replacement = name.replace(".", "/")
-    json_str = pkgutil.get_data(__name__, f"data/{replacement}.json")
-    assert json_str is not None, f"Could not load json for extension {name}"
-    return Extension.from_json(json_str.decode())
+    return tket.wasm.extension()
