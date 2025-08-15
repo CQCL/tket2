@@ -13,7 +13,6 @@ use itertools::Itertools;
 use tket_json_rs::register::ElementId as PytketRegister;
 
 use crate::extension::rotation::rotation_type;
-use crate::serialize::pytket::config::TypeTranslatorSet;
 use crate::serialize::pytket::decoder::param::parser::{parse_pytket_param, PytketParam};
 use crate::serialize::pytket::decoder::{
     LoadedParameter, PytketDecoderContext, TrackedBit, TrackedBitId, TrackedQubit, TrackedQubitId,

@@ -16,6 +16,8 @@ mod rotation;
 mod tk1;
 mod tket;
 
+use std::sync::Arc;
+
 pub use bool::BoolEmitter;
 pub use float::FloatEmitter;
 pub use prelude::PreludeEmitter;
@@ -28,7 +30,9 @@ pub(crate) use tk1::{build_opaque_tket_op, OpaqueTk1Op};
 
 use super::encoder::TrackedValues;
 use crate::serialize::pytket::config::TypeTranslatorSet;
-use crate::serialize::pytket::decoder::{DecodeStatus, PytketDecoderContext, TrackedWires};
+use crate::serialize::pytket::decoder::{
+    DecodeStatus, LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
+};
 use crate::serialize::pytket::encoder::{EncodeStatus, PytketEncoderContext};
 use crate::serialize::pytket::{PytketDecodeError, PytketEncodeError};
 use crate::Circuit;
@@ -118,11 +122,13 @@ pub trait PytketDecoder {
     fn op_to_hugr<'h>(
         &self,
         op: &tket_json_rs::circuit_json::Operation,
-        wires: &TrackedWires,
+        qubits: &[TrackedQubit],
+        bits: &[TrackedBit],
+        params: &[Arc<LoadedParameter>],
         opgroup: Option<&str>,
         decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
-        let _ = (op, wires, opgroup, decoder);
+        let _ = (op, qubits, bits, params, opgroup, decoder);
         Ok(DecodeStatus::Unsupported)
     }
 }

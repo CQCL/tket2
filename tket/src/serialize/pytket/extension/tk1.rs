@@ -1,8 +1,12 @@
 //! Encoder for pytket operations that cannot be represented naturally in tket.
 
+use std::sync::Arc;
+
 use crate::extension::rotation::rotation_type;
 use crate::extension::{TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME};
-use crate::serialize::pytket::decoder::{PytketDecoderContext, TrackedWires};
+use crate::serialize::pytket::decoder::{
+    LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
+};
 use crate::serialize::pytket::encoder::EncodeStatus;
 use crate::serialize::pytket::{PytketDecodeError, PytketEncodeError, PytketEncoderContext};
 use crate::Circuit;
@@ -74,31 +78,21 @@ impl<H: HugrView> PytketEmitter<H> for Tk1Emitter {
 /// since it currently has a limited signature definition.
 pub(crate) fn build_opaque_tket_op<'h>(
     op: tket_json_rs::circuit_json::Operation,
-    wires: &TrackedWires,
+    qubits: &[TrackedQubit],
+    bits: &[TrackedBit],
+    params: &[Arc<LoadedParameter>],
     _opgroup: &Option<String>,
     decoder: &mut PytketDecoderContext<'h>,
 ) -> Result<(), PytketDecodeError> {
-    let qb = qb_t();
-    let bool = bool_t();
-    let pytket_op = op.op_type.clone();
-
-    // Assumes that the input registers are qubit-only wires followed by bit-only wires.
-    // Returns an error otherwise.
-    let mut wire_iter = wires.iter_values();
-    let num_qubits = wire_iter.take_while_ref(|wd| wd.ty() == &qb).count();
-    let num_input_bits = wire_iter.take_while(|wd| wd.ty() == &bool).count();
-    let num_params = op.params.as_ref().map_or(0, |p| p.len());
-
-    let tk1op: OpType = OpaqueTk1Op::new_from_op(op, num_qubits, num_input_bits)
+    let tk1op: OpType = OpaqueTk1Op::new_from_op(op, qubits.len(), bits.len())
         .as_extension_op()
         .into();
 
-    // Check that the input wires match the expected types.
+    // Gather the input wires.
+    // The wires all must have raw qubit/bit/parameter types.
     let op_sig = tk1op.dataflow_signature().unwrap();
-    let value_types = &op_sig.input_types()[..num_qubits + num_input_bits];
-    wires
-        .check_types(value_types, num_params)
-        .map_err(|e| e.pytket_op(&pytket_op))?;
+
+    let wires = decoder.find_typed_wires(op_sig.input_types(), qubits, bits, params)?;
 
     // Ensure all parameter inputs have rotation types rather than float.
     let param_wires = wires
@@ -112,19 +106,19 @@ pub(crate) fn build_opaque_tket_op<'h>(
         .map_err(PytketDecodeError::custom)?;
 
     // Associate the output wires to the corresponding register.
-    let qubits = wires.qubits(decoder).collect_vec();
-    let bits = wires.bits(decoder).collect_vec();
     let mut outputs = opaque_op.outputs();
 
     for qubit in qubits {
         let wire = outputs.next().expect("Qubit should hove an output wire");
         decoder
             .wire_tracker
-            .track_wire(wire, qubit.ty(), [qubit], [])?;
+            .track_wire(wire, qubit.ty(), [qubit.clone()], [])?;
     }
     for bit in bits {
         let wire = outputs.next().expect("Bit should have an output wire");
-        decoder.wire_tracker.track_wire(wire, bit.ty(), [], [bit])?;
+        decoder
+            .wire_tracker
+            .track_wire(wire, bit.ty(), [], [bit.clone()])?;
     }
 
     Ok(())

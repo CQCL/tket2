@@ -1,21 +1,22 @@
 //! Encoder and decoder for tket operations with native pytket counterparts.
 
+use std::sync::Arc;
+
 use super::PytketEmitter;
 use crate::serialize::pytket::config::TypeTranslatorSet;
-use crate::serialize::pytket::decoder::{DecodeStatus, PytketDecoderContext, TrackedWires};
+use crate::serialize::pytket::decoder::{
+    DecodeStatus, LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
+};
 use crate::serialize::pytket::encoder::{EncodeStatus, PytketEncoderContext};
 use crate::serialize::pytket::extension::{PytketDecoder, PytketTypeTranslator, RegisterCount};
 use crate::serialize::pytket::{PytketDecodeError, PytketEncodeError};
 use crate::Circuit;
-use hugr::builder::Dataflow;
-use hugr::extension::prelude::{qb_t, BarrierDef, Noop, TupleOpDef, PRELUDE_ID};
+use hugr::extension::prelude::{bool_t, qb_t, BarrierDef, Noop, TupleOpDef, PRELUDE_ID};
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
-use hugr::ops::handle::NodeHandle;
 use hugr::ops::{ExtensionOp, OpType};
 use hugr::types::TypeArg;
 use hugr::HugrView;
-use itertools::Itertools as _;
 use tket_json_rs::optype::OpType as Tk1OpType;
 
 /// Encoder for [prelude](hugr::extension::prelude) operations.
@@ -117,7 +118,9 @@ impl PytketDecoder for PreludeEmitter {
     fn op_to_hugr<'h>(
         &self,
         op: &tket_json_rs::circuit_json::Operation,
-        wires: &TrackedWires,
+        qubits: &[TrackedQubit],
+        bits: &[TrackedBit],
+        params: &[Arc<LoadedParameter>],
         opgroup: Option<&str>,
         decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
@@ -125,8 +128,6 @@ impl PytketDecoder for PreludeEmitter {
         //
         // These should be modified by the match branches if the node does not have all
         // its input registers in the outputs.
-        let qubits = wires.qubits(decoder).collect_vec();
-        let bits = wires.bits(decoder).collect_vec();
 
         let op: OpType = match op.op_type {
             Tk1OpType::noop => Noop::new(qb_t()).into(),
@@ -140,25 +141,12 @@ impl PytketDecoder for PreludeEmitter {
                     return Ok(DecodeStatus::Unsupported);
                 }
 
-                let types = wires.wire_types().cloned().collect_vec();
+                let types = [vec![qb_t(); qubits.len()], vec![bool_t(); bits.len()]].concat();
                 hugr::extension::prelude::Barrier::new(types).into()
             }
             _ => return Ok(DecodeStatus::Unsupported),
         };
-
-        // Convert parameter inputs to rotation types
-        let param_wires = wires
-            .iter_parameters()
-            .map(|p| p.as_rotation(&mut decoder.builder).wire)
-            .collect_vec();
-        let value_wires = wires.value_wires();
-
-        let node = decoder
-            .builder
-            .add_dataflow_op(op, value_wires.chain(param_wires.into_iter()))
-            .map_err(PytketDecodeError::custom)?;
-
-        decoder.register_node_outputs(node.node(), qubits, bits)?;
+        decoder.add_node_with_wires(op, qubits, bits, params)?;
 
         Ok(DecodeStatus::Success)
     }

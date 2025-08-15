@@ -7,8 +7,11 @@
 use hugr::types::Type;
 use itertools::Itertools;
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use crate::serialize::pytket::decoder::{DecodeStatus, PytketDecoderContext, TrackedWires};
+use crate::serialize::pytket::decoder::{
+    DecodeStatus, LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
+};
 use crate::serialize::pytket::extension::{PytketDecoder, PytketTypeTranslator, RegisterCount};
 use crate::serialize::pytket::PytketDecodeError;
 
@@ -68,14 +71,16 @@ impl PytketDecoderConfig {
     pub(in crate::serialize::pytket) fn op_to_hugr<'a>(
         &self,
         op: &tket_json_rs::circuit_json::Operation,
-        args: &TrackedWires,
+        qubits: &[TrackedQubit],
+        bits: &[TrackedBit],
+        params: &[Arc<LoadedParameter>],
         opgroup: &Option<String>,
         decoder: &mut PytketDecoderContext<'a>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
         let mut result = DecodeStatus::Unsupported;
         let opgroup = opgroup.as_deref();
         for enc in self.decoders_for_optype(&op.op_type) {
-            result = enc.op_to_hugr(op, args, opgroup, decoder)?;
+            result = enc.op_to_hugr(op, qubits, bits, params, opgroup, decoder)?;
             if result == DecodeStatus::Success {
                 break;
             }

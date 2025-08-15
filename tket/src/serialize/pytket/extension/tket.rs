@@ -1,9 +1,13 @@
 //! Encoder and decoder for tket operations with native pytket counterparts.
 
+use std::sync::Arc;
+
 use super::PytketEmitter;
 use crate::extension::sympy::SympyOp;
 use crate::extension::TKET_EXTENSION_ID;
-use crate::serialize::pytket::decoder::{DecodeStatus, PytketDecoderContext, TrackedWires};
+use crate::serialize::pytket::decoder::{
+    DecodeStatus, LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
+};
 use crate::serialize::pytket::encoder::{EncodeStatus, PytketEncoderContext};
 use crate::serialize::pytket::extension::PytketDecoder;
 use crate::serialize::pytket::{PytketDecodeError, PytketEncodeError};
@@ -142,7 +146,9 @@ impl PytketDecoder for TketOpEmitter {
     fn op_to_hugr<'h>(
         &self,
         op: &tket_json_rs::circuit_json::Operation,
-        wires: &TrackedWires,
+        qubits: &[TrackedQubit],
+        bits: &[TrackedBit],
+        params: &[Arc<LoadedParameter>],
         _opgroup: Option<&str>,
         decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
@@ -171,7 +177,7 @@ impl PytketDecoder for TketOpEmitter {
                 return Ok(DecodeStatus::Unsupported);
             }
         };
-        decoder.add_node_with_bare_wires(op, wires)?;
+        decoder.add_node_with_wires(op, qubits, bits, params)?;
 
         Ok(DecodeStatus::Success)
     }

@@ -15,7 +15,6 @@ use hugr::builder::{BuildHandle, Container, Dataflow, DataflowSubContainer, Func
 use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::ops::handle::{DataflowOpID, FuncID, NodeHandle};
 use hugr::ops::{OpParent, OpTrait, OpType};
-use hugr::std_extensions::arithmetic::float_types::float64_type;
 use hugr::types::{Signature, Type, TypeRow};
 use hugr::{Hugr, HugrView, Node, OutgoingPort, Wire};
 use tracked_elem::{TrackedBitId, TrackedQubitId};
@@ -220,11 +219,11 @@ impl<'h> PytketDecoderContext<'h> {
         let mut qubits = serialcirc
             .qubits
             .iter()
-            .map(|qb| TrackedQubit::new(Arc::new(qb.id.clone())));
+            .map(|qb| TrackedQubit::new(TrackedQubitId(0), Arc::new(qb.id.clone())));
         let mut bits = serialcirc
             .bits
             .iter()
-            .map(|bit| TrackedBit::new(Arc::new(bit.id.clone())));
+            .map(|bit| TrackedBit::new(TrackedBitId(0), Arc::new(bit.id.clone())));
         let mut signature_reg_count = RegisterCount::default();
         for (wire, ty) in dfg.input_wires().zip(input_types.iter()) {
             let elem_counts = config.type_to_pytket(ty).unwrap_or_default();
@@ -289,13 +288,9 @@ impl<'h> PytketDecoderContext<'h> {
         let qubits = self
             .wire_tracker
             .known_pytket_qubits()
-            .map(|elem| elem.pytket_register_arc())
+            .cloned()
             .collect_vec();
-        let bits = self
-            .wire_tracker
-            .known_pytket_bits()
-            .map(|elem| elem.pytket_register_arc())
-            .collect_vec();
+        let bits = self.wire_tracker.known_pytket_bits().cloned().collect_vec();
         let function_type = self
             .builder
             .hugr()
@@ -303,14 +298,9 @@ impl<'h> PytketDecoderContext<'h> {
             .inner_function_type()
             .unwrap();
         let expected_output_types = function_type.output_types().iter().cloned().collect_vec();
+
         let output_wires = self
-            .wire_tracker
-            .wire_inputs_for_command(
-                &mut self.builder,
-                qubits.iter().map(|r| r.as_ref()),
-                bits.iter().map(|r| r.as_ref()),
-                Vec::new(),
-            )
+            .find_typed_wires(&expected_output_types, qubits.iter(), bits.iter(), &[])
             .map_err(|e| e.hugr_op("Output"))?;
 
         output_wires
@@ -356,7 +346,9 @@ impl<'h> PytketDecoderContext<'h> {
     ) -> Result<(), PytketDecodeError> {
         let config = self.config.clone();
         for com in commands {
-            self.process_command(com, config.as_ref())?;
+            let op_type = com.op.op_type.clone();
+            self.process_command(com, config.as_ref())
+                .map_err(|e| e.pytket_op(&op_type))?;
         }
         Ok(())
     }
@@ -368,30 +360,45 @@ impl<'h> PytketDecoderContext<'h> {
         command: circuit_json::Command,
         config: &PytketDecoderConfig,
     ) -> Result<(), PytketDecodeError> {
-        let op_type = command.op.op_type.clone();
         let circuit_json::Command { op, args, opgroup } = command;
 
+        // Find the latest [`TrackedQubit`] and [`TrackedBit`] for the command registers.
         let num_qubits = args
             .iter()
             .find_position(|arg| self.wire_tracker.is_known_bit(arg))
             .map_or(args.len(), |(i, _)| i);
-        let (qubits, bits) = args.split_at(num_qubits);
+        let (qubit_regs, bit_regs) = args.split_at(num_qubits);
 
-        let input_wires = self
-            .wire_tracker
-            .wire_inputs_for_command(
-                &mut self.builder,
-                qubits,
-                bits,
-                op.params.iter().flat_map(|v| v.iter().map(|p| p.as_str())),
-            )
-            .map_err(|e| e.pytket_op(&op_type))?;
-        match config.op_to_hugr(&op, &input_wires, &opgroup, self)? {
+        let mut qubits = Vec::with_capacity(qubit_regs.len());
+        let mut bits = Vec::with_capacity(bit_regs.len());
+        for reg in qubit_regs {
+            let qubit = self.wire_tracker.tracked_qubit_for_register(reg)?.clone();
+            qubits.push(qubit);
+        }
+        for reg in bit_regs {
+            let bit = self.wire_tracker.tracked_bit_for_register(reg)?.clone();
+            bits.push(bit);
+        }
+
+        // Collect
+        let params: Vec<Arc<LoadedParameter>> = match &op.params {
+            Some(params) => params
+                .iter()
+                .map(|v| {
+                    self.wire_tracker
+                        .load_parameter(&mut self.builder, v.as_str())
+                })
+                .collect_vec(),
+            None => Vec::new(),
+        };
+
+        // Try to decode the command with the configured decoders.
+        match config.op_to_hugr(&op, &qubits, &bits, &params, &opgroup, self)? {
             DecodeStatus::Success => {}
             DecodeStatus::Unsupported => {
                 // The command couldn't be translated into a native HUGR counterpart, so
                 // we generate an opaque `Tk1Op` instead.
-                build_opaque_tket_op(op, &input_wires, &opgroup, self)?;
+                build_opaque_tket_op(op, &qubits, &bits, &params, &opgroup, self)?;
             }
         }
         Ok(())
@@ -400,8 +407,37 @@ impl<'h> PytketDecoderContext<'h> {
 
 /// Public API, used by the [`PytketDecoder`][super::extension::PytketDecoder] implementers.
 impl<'h> PytketDecoderContext<'h> {
-    /// Add a new node to the HUGR with with bare qubit, bit, and parameter
-    /// wires.
+    /// Returns a new set of [TrackedWires] for a list of [`TrackedQubit`]s,
+    /// [`TrackedBit`]s, and [`LoadedParameter`]s following the required types.
+    ///
+    /// Returns an error if a valid set of wires with the given types cannot be
+    /// found.
+    ///
+    /// The qubit and bit arguments are only consumed as required by the types.
+    /// Some registers may be left unused.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The configuration for the decoder, used to count the qubits and bits required by each type.
+    /// * `hugr` - The hugr to load the parameters to.
+    /// * `types` - The types of the arguments we require in the wires.
+    /// * `qubit_args` - The list of tracked qubits we require in the wires.
+    /// * `bit_args` - The list of tracked bits we require in the wire.
+    /// * `params` - The list of parameters to load to wires. See
+    ///   [`WireTracker::load_parameter`] for more details.
+    pub fn find_typed_wires<'r>(
+        &self,
+        types: &[Type],
+        qubit_args: impl IntoIterator<Item = &'r TrackedQubit>,
+        bit_args: impl IntoIterator<Item = &'r TrackedBit>,
+        params: &[Arc<LoadedParameter>],
+    ) -> Result<TrackedWires, PytketDecodeError> {
+        self.wire_tracker
+            .find_typed_wires(&self.config, types, qubit_args, bit_args, params)
+    }
+
+    /// Add a new node to the HUGR using the provided wire set as input and
+    /// output.
     ///
     /// Inserts the new node into the HUGR, connects its input ports and
     /// registers the node's output wires in the wire tracker.
@@ -410,6 +446,9 @@ impl<'h> PytketDecoderContext<'h> {
     /// and outputs. Bit registers, on the other hand, are not reused. We use
     /// the first registers in `wires` for the bit inputs and the remaining
     /// registers for the outputs.
+    ///
+    /// The input wire types must match the operation's input signature,
+    /// no type conversion is performed.
     ///
     /// # Parameters
     ///
@@ -423,45 +462,19 @@ impl<'h> PytketDecoderContext<'h> {
     ///   input ports.
     /// - Returns an error if the node's output ports cannot be assigned to
     ///   arguments from the input wire set.
-    pub fn add_node_with_bare_wires(
+    pub fn add_node_with_wires(
         &mut self,
         op: impl Into<OpType>,
-        wires: &TrackedWires,
+        qubits: &[TrackedQubit],
+        bits: &[TrackedBit],
+        params: &[Arc<LoadedParameter>],
     ) -> Result<BuildHandle<DataflowOpID>, PytketDecodeError> {
         let op: OpType = op.into();
 
         let Some(sig) = op.dataflow_signature() else {
-            return Err(PytketDecodeError::custom(format!(
-                "Cannot decode non-dataflow operation {op}"
-            )));
-        };
-
-        /// Check that the type iterator only contains bare qubit, bit, and parameter types.
-        ///
-        /// Returns `true` if the types are all bare, `false` otherwise.
-        fn check_bare_types<'ty>(tys: impl Iterator<Item = &'ty Type>) -> bool {
-            for ty in tys {
-                if ty != &qb_t()
-                    && ty != &bool_t()
-                    && ty != &rotation_type()
-                    && ty != &float64_type()
-                {
-                    return false;
-                }
-            }
-            true
-        }
-
-        // Check that the operation only uses bare types in its signature.
-        if !check_bare_types(sig.output_types().iter()) {
-            return Err(PytketDecodeError::custom(format!(
-                "Cannot decode operation {op} with complex signature: {sig}"
-            )));
-        };
-        if !check_bare_types(sig.input_types().iter()) {
-            return Err(PytketDecodeError::custom(format!(
-                "Cannot decode operation {op} with complex signature: {sig}"
-            )));
+            return Err(
+                PytketDecodeError::custom("Cannot decode non-dataflow operation").hugr_op(&op),
+            );
         };
 
         // Compute the amount of elements required by the operation,
@@ -481,78 +494,53 @@ impl<'h> PytketDecoderContext<'h> {
         if op_output_count.params > 0 {
             return Err(PytketDecodeError::custom(format!(
                 "Tried to decode a Pytket op into a HUGR {op} with output parameters. Signature: {sig}"
-            )));
+            )).hugr_op(&op));
         }
         let op_reg_count = RegisterCount::new(
             op_input_count.qubits.max(op_output_count.qubits),
             op_input_count.bits + op_output_count.bits,
             op_input_count.params,
         );
-        let wire_reg_count = wires.register_count();
 
         // Check that the input wires have the amount of elements required by the operation.
-        if !check_bare_types(wires.wire_types()) || wire_reg_count != op_reg_count {
+        if op_reg_count.qubits > qubits.len()
+            || op_reg_count.bits > bits.len()
+            || op_reg_count.params > params.len()
+        {
             let expected_types = sig
                 .input_types()
                 .iter()
                 .map(ToString::to_string)
                 .collect_vec();
-            let actual_types = wires.wire_types().map(ToString::to_string).collect_vec();
-            return Err(PytketDecodeErrorInner::UnexpectedInputWires {
-                expected_values: op_reg_count.qubits + op_reg_count.bits,
-                expected_params: op_reg_count.params,
-                actual_values: wire_reg_count.qubits + wire_reg_count.bits,
-                actual_params: wire_reg_count.params,
-                expected_types: Some(expected_types),
-                actual_types: Some(actual_types),
+            return Err(PytketDecodeErrorInner::NotEnoughPytketRegisters {
+                expected_types,
+                expected_count: op_reg_count,
+                actual_count: RegisterCount::new(qubits.len(), bits.len(), params.len()),
             }
             .wrap()
             .hugr_op(&op));
         };
 
-        // Gather the input wires and output wires to the operation.
-        //
-        // Qubit registers get reused for both input and output, bit registers are not.
-        let mut bits = wires.iter_values().filter(|w| w.num_bits() == 1);
+        // Gather the input wires, with the types needed by the operation.
         let input_wires =
-            {
-                let mut input_wires = Vec::with_capacity(sig.input_count());
-                let mut qubits = wires.iter_values().filter(|w| w.num_qubits() == 1);
-                let mut params = wires.iter_parameters();
-                for ty in sig.input_types() {
-                    match ty {
-                        ty if ty == &qb_t() => input_wires.push(qubits.next().unwrap().wire()),
-                        ty if ty == &bool_t() => input_wires.push(bits.next().unwrap().wire()),
-                        // For the parameter inputs, we add float/rotation conversion operations as needed.
-                        ty if ty == &rotation_type() => input_wires
-                            .push(params.next().unwrap().as_rotation(&mut self.builder).wire),
-                        ty if ty == &float64_type() => input_wires
-                            .push(params.next().unwrap().as_float(&mut self.builder).wire),
-                        _ => unreachable!("Unsupported type"),
-                    }
-                }
-                input_wires
-            };
-        let (output_qubits, output_bits) = {
-            let mut output_qubits = Vec::with_capacity(op_output_count.qubits);
-            let mut output_bits = Vec::with_capacity(op_output_count.bits);
-            let mut qubits = wires.qubits(self);
-            for ty in sig.output_types() {
-                match ty {
-                    ty if ty == &qb_t() => output_qubits.push(qubits.next().unwrap()),
-                    ty if ty == &bool_t() => {
-                        output_bits.push(bits.next().unwrap().bits(self).next().unwrap())
-                    }
-                    _ => unreachable!("Pytket ops cannot have parameter outputs"),
-                }
-            }
-            (output_qubits, output_bits)
-        };
+            self.find_typed_wires(sig.input_types(), qubits.iter(), bits.iter(), params)?;
+        debug_assert_eq!(op_input_count, input_wires.register_count());
 
+        // Add the node to the HUGR.
         let node = self
             .builder
-            .add_dataflow_op(op, input_wires)
+            .add_dataflow_op(op, input_wires.wires())
             .map_err(PytketDecodeError::custom)?;
+
+        // Register the output wires.
+        //
+        // Qubit registers get reused for both input and output, bit registers are not.
+        let output_qubits = qubits.iter().take(op_output_count.qubits).cloned();
+        let output_bits = bits
+            .iter()
+            .skip(op_input_count.bits)
+            .take(op_output_count.bits)
+            .cloned();
 
         self.register_node_outputs(node.node(), output_qubits, output_bits)?;
 

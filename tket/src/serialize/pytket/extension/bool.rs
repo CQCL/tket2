@@ -1,9 +1,13 @@
 //! Encoder and decoder for the tket.bool extension
 
+use std::sync::Arc;
+
 use super::PytketEmitter;
 use crate::extension::bool::{BoolOp, ConstBool, BOOL_EXTENSION_ID, BOOL_TYPE_NAME};
 use crate::serialize::pytket::config::TypeTranslatorSet;
-use crate::serialize::pytket::decoder::{DecodeStatus, PytketDecoderContext, TrackedWires};
+use crate::serialize::pytket::decoder::{
+    DecodeStatus, LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
+};
 use crate::serialize::pytket::encoder::{
     make_tk1_classical_expression, make_tk1_classical_operation, EncodeStatus,
     PytketEncoderContext, TrackedValues,
@@ -115,7 +119,9 @@ impl PytketDecoder for BoolEmitter {
     fn op_to_hugr<'h>(
         &self,
         op: &tket_json_rs::circuit_json::Operation,
-        wires: &TrackedWires,
+        qubits: &[TrackedQubit],
+        bits: &[TrackedBit],
+        params: &[Arc<LoadedParameter>],
         _opgroup: Option<&str>,
         decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
@@ -156,7 +162,7 @@ impl PytketDecoder for BoolEmitter {
             ClOp::BitXor => BoolOp::xor,
             _ => return Ok(DecodeStatus::Unsupported),
         };
-        decoder.add_node_with_bare_wires(op, wires)?;
+        decoder.add_node_with_wires(op, qubits, bits, params)?;
 
         Ok(DecodeStatus::Success)
     }
