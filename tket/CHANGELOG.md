@@ -1,6 +1,18 @@
 # Changelog
 
 
+## [0.14.0](https://github.com/CQCL/tket2/compare/tket-v0.13.2...tket-v0.14.0) - 2025-08-15
+
+### New Features
+
+- [**breaking**] Allow PytketTypeTranslators to translate nested types ([#1038](https://github.com/CQCL/tket2/pull/1038))
+- Define a wire tracker for the new pytket decoder ([#1036](https://github.com/CQCL/tket2/pull/1036))
+- [**breaking**] Reworked pytket decoder framework ([#1030](https://github.com/CQCL/tket2/pull/1030))
+
+### Refactor
+
+- [**breaking**] Rename tk2 encoder names to tket ([#1037](https://github.com/CQCL/tket2/pull/1037))
+
 ## [0.13.2](https://github.com/CQCL/tket2/compare/tket-v0.13.1...tket-v0.13.2) - 2025-08-08
 
 ### New Features
