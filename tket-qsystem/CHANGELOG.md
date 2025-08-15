@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.18.2](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.18.1...tket-qsystem-v0.18.2) - 2025-08-15
+
+### New Features
+
+- Add emitters for tket-qsystem ([#1039](https://github.com/CQCL/tket2/pull/1039))
+
 ## [0.18.1](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.18.0...tket-qsystem-v0.18.1) - 2025-08-08
 
 ### Bug Fixes
