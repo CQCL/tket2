@@ -7,6 +7,7 @@ pub mod extension;
 
 pub use config::{
     default_decoder_config, default_encoder_config, PytketDecoderConfig, PytketEncoderConfig,
+    TypeTranslatorSet,
 };
 pub use encoder::PytketEncoderContext;
 pub use extension::PytketEmitter;

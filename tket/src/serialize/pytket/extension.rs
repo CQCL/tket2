@@ -156,10 +156,14 @@ pub trait PytketTypeTranslator {
     /// values, return `None`. Operations dealing with such types will be marked
     /// as unsupported and will be serialized as opaque operations.
     ///
-    /// The `set` argument is a set of known type translators. This can be used
-    /// when translating types that wrap over other types.
-    fn type_to_pytket(&self, typ: &CustomType, set: &TypeTranslatorSet) -> Option<RegisterCount> {
-        let _ = (typ, set);
+    /// The `type_translators` argument is a set of known type translators. This
+    /// can be used when translating types that wrap over other types.
+    fn type_to_pytket(
+        &self,
+        typ: &CustomType,
+        type_translators: &TypeTranslatorSet,
+    ) -> Option<RegisterCount> {
+        let _ = (typ, type_translators);
         None
     }
 }
