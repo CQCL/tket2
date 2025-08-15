@@ -62,6 +62,9 @@ pub struct TrackedBit {
     reg: Arc<PytketRegister>,
     /// The hash of the pytket register for this tracked element, used to
     /// speed up hashing and equality checks.
+    //
+    // TODO: We could put this along with `reg` in a `PytketResource` struct
+    // that gets used around the crate.
     reg_hash: RegisterHash,
 }
 
