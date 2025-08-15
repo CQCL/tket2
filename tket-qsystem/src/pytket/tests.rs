@@ -140,7 +140,7 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
 #[fixture]
 fn circ_qsystem_native_gates() -> Circuit {
     let input_t = vec![qb_t()];
-    let output_t = vec![qb_t(), bool_t(), bool_t()];
+    let output_t = vec![bool_t(), bool_t()];
     let mut h =
         FunctionBuilder::new("qsystem_native_gates", Signature::new(input_t, output_t)).unwrap();
 
@@ -151,15 +151,15 @@ fn circ_qsystem_native_gates() -> Circuit {
         .add_dataflow_op(QSystemOp::LazyMeasure, [qb0])
         .unwrap()
         .outputs_arr();
-    let [qb1, future_bit_1] = h
-        .add_dataflow_op(QSystemOp::LazyMeasureReset, [qb1])
+    let [future_bit_1] = h
+        .add_dataflow_op(QSystemOp::LazyMeasure, [qb1])
         .unwrap()
         .outputs_arr();
 
     let [bit_0] = h.add_read(future_bit_0, bool_t()).unwrap();
     let [bit_1] = h.add_read(future_bit_1, bool_t()).unwrap();
 
-    let hugr = h.finish_hugr_with_outputs([qb1, bit_0, bit_1]).unwrap();
+    let hugr = h.finish_hugr_with_outputs([bit_0, bit_1]).unwrap();
 
     hugr.into()
 }

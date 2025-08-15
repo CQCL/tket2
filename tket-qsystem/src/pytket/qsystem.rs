@@ -60,8 +60,6 @@ impl QSystemEmitter {
             // "Lazy" operations are translated as eager measurements in pytket,
             // as there is no `Future<T>` type there.
             QSystemOp::LazyMeasure => PytketOptype::Measure,
-            QSystemOp::LazyMeasureReset => PytketOptype::Measure,
-            QSystemOp::MeasureReset => PytketOptype::Measure,
             QSystemOp::Rz => PytketOptype::Rz,
             QSystemOp::PhasedX => PytketOptype::PhasedX,
             QSystemOp::ZZPhase => PytketOptype::ZZPhase,
@@ -70,6 +68,10 @@ impl QSystemEmitter {
                 // Mark the qubit inputs as explored and forget about them.
                 encoder.get_input_values(node, circ)?;
                 return Ok(EncodeStatus::Success);
+            }
+            QSystemOp::LazyMeasureReset | QSystemOp::MeasureReset => {
+                // These may require a pytket measurement followed by a reset.
+                return Ok(EncodeStatus::Unsupported);
             }
             QSystemOp::LazyMeasureLeaked => {
                 // No equivalent pytket operation.
