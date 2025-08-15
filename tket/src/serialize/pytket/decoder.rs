@@ -443,6 +443,7 @@ impl<'h> PytketDecoderContext<'h> {
         params: &[Arc<LoadedParameter>],
     ) -> Result<BuildHandle<DataflowOpID>, PytketDecodeError> {
         let op: OpType = op.into();
+        let op_name = op.to_string();
 
         let Some(sig) = op.dataflow_signature() else {
             return Err(
@@ -495,26 +496,31 @@ impl<'h> PytketDecoderContext<'h> {
         };
 
         // Gather the input wires, with the types needed by the operation.
-        let input_wires = self.find_typed_wires(sig.input_types(), qubits, bits, params)?;
+        let input_wires = self
+            .find_typed_wires(sig.input_types(), qubits, bits, params)
+            .map_err(|e| e.hugr_op(&op_name))?;
         debug_assert_eq!(op_input_count, input_wires.register_count());
 
         // Add the node to the HUGR.
         let node = self
             .builder
             .add_dataflow_op(op, input_wires.wires())
-            .map_err(PytketDecodeError::custom)?;
+            .map_err(|e| PytketDecodeError::custom(e).hugr_op(&op_name))?;
 
         // Register the output wires.
-        //
-        // Qubit registers get reused for both input and output, bit registers are not.
+        // Qubit registers get reused for both input and output.
         let output_qubits = qubits.iter().take(op_output_count.qubits).cloned();
-        let output_bits = bits
-            .iter()
-            .skip(op_input_count.bits)
-            .take(op_output_count.bits)
-            .cloned();
+        // Bit registers are not reused. The ones present in the input are dropped.
+        let mut output_bits = bits.iter().cloned();
+        output_bits
+            .by_ref()
+            .take(op_input_count.bits)
+            .for_each(|b| {
+                self.wire_tracker.mark_bit_outdated(b);
+            });
 
-        self.register_node_outputs(node.node(), output_qubits, output_bits)?;
+        self.register_node_outputs(node.node(), output_qubits, output_bits)
+            .map_err(|e| e.hugr_op(&op_name))?;
 
         Ok(node)
     }
@@ -522,8 +528,9 @@ impl<'h> PytketDecoderContext<'h> {
     /// Given a new node in the HUGR, register all of its output wires in the
     /// tracker.
     ///
-    /// Consumes the bits and qubits in order, and returns an error if
-    /// they don't match the element count in the wires exactly.
+    /// Consumes the bits and qubits in order. Any unused bits and qubits are
+    /// marked as outdated, as they are assumed to have been consumed in the
+    /// inputs.
     pub fn register_node_outputs(
         &mut self,
         node: Node,
@@ -567,6 +574,14 @@ impl<'h> PytketDecoderContext<'h> {
             self.wire_tracker
                 .track_wire(wire, Arc::new(ty.clone()), wire_qubits, wire_bits)?;
         }
+
+        // Mark any unused qubits and bits as outdated.
+        qubits.for_each(|q| {
+            self.wire_tracker.mark_qubit_outdated(q);
+        });
+        bits.for_each(|b| {
+            self.wire_tracker.mark_bit_outdated(b);
+        });
 
         Ok(())
     }

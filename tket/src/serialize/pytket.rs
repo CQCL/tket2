@@ -528,6 +528,18 @@ pub enum PytketDecodeErrorInner {
         /// The number of registers we actually got.
         actual_count: RegisterCount,
     },
+    /// A qubit was marked as outdated, but was expected to be fresh.
+    #[display("Discarded qubit {qubit} cannot be used as an input")]
+    OutdatedQubit {
+        /// The qubit that was marked as outdated.
+        qubit: String,
+    },
+    /// A bit was marked as outdated, but was expected to be fresh.
+    #[display("Discarded bit {bit} cannot be used as an input")]
+    OutdatedBit {
+        /// The bit that was marked as outdated.
+        bit: String,
+    },
 }
 
 impl PytketDecodeErrorInner {

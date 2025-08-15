@@ -429,6 +429,24 @@ impl WireTracker {
         Ok(self.get_bit(id))
     }
 
+    /// Mark a qubit as outdated, without adding a new wire containing the fresh value.
+    ///
+    /// This is used when a hugr operation consumes pytket registers as its inputs, but doesn't use them in the outputs.
+    pub fn mark_qubit_outdated(&mut self, mut qubit: TrackedQubit) -> TrackedQubit {
+        self.qubits[qubit.id().0].mark_outdated();
+        qubit.mark_outdated();
+        qubit
+    }
+
+    /// Mark a bit as outdated, without adding a new wire containing the fresh value.
+    ///
+    /// This is used when a hugr operation consumes pytket registers as its inputs, but doesn't use them in the outputs.
+    pub fn mark_bit_outdated(&mut self, mut bit: TrackedBit) -> TrackedBit {
+        self.bits[bit.id().0].mark_outdated();
+        bit.mark_outdated();
+        bit
+    }
+
     /// Returns the latest tracked qubit for a pytket register.
     ///
     /// Returns an error if the register is not known.
@@ -524,6 +542,20 @@ impl WireTracker {
         // and collecting them in order.
         let mut qubit_args: VecDeque<&TrackedQubit> = qubit_args.iter().collect();
         let mut bit_args: VecDeque<&TrackedBit> = bit_args.iter().collect();
+
+        // Check that no qubit or bit has been marked as outdated.
+        if qubit_args.iter().any(|q| q.is_outdated()) {
+            return Err(PytketDecodeErrorInner::OutdatedQubit {
+                qubit: qubit_args.front().unwrap().pytket_register().to_string(),
+            }
+            .wrap());
+        }
+        if bit_args.iter().any(|b| b.is_outdated()) {
+            return Err(PytketDecodeErrorInner::OutdatedBit {
+                bit: bit_args.front().unwrap().pytket_register().to_string(),
+            }
+            .wrap());
+        }
 
         // Map each requested type to a wire.
         //
