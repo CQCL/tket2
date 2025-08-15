@@ -53,10 +53,8 @@ fn validate_serial_circ(circ: &SerialCircuit) {
     for (key, value) in &perm {
         let valid_qubits = circ.qubits.contains(&register::Qubit::from(key.clone()))
             && circ.qubits.contains(&register::Qubit::from(value.clone()));
-        let valid_bits = circ.bits.contains(&register::Bit::from(key.clone()))
-            && circ.bits.contains(&register::Bit::from(value.clone()));
         assert!(
-            valid_qubits || valid_bits,
+            valid_qubits,
             "Circuit has an invalid permutation '{key:?} -> {value:?}'"
         );
     }
