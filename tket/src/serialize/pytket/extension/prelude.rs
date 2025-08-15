@@ -1,18 +1,23 @@
 //! Encoder and decoder for tket operations with native pytket counterparts.
 
+use std::sync::Arc;
+
 use super::PytketEmitter;
 use crate::serialize::pytket::config::TypeTranslatorSet;
+use crate::serialize::pytket::decoder::{
+    DecodeStatus, LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
+};
 use crate::serialize::pytket::encoder::{EncodeStatus, PytketEncoderContext};
-use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
-use crate::serialize::pytket::PytketEncodeError;
+use crate::serialize::pytket::extension::{PytketDecoder, PytketTypeTranslator, RegisterCount};
+use crate::serialize::pytket::{PytketDecodeError, PytketEncodeError};
 use crate::Circuit;
-use hugr::extension::prelude::{BarrierDef, TupleOpDef, PRELUDE_ID};
+use hugr::extension::prelude::{bool_t, qb_t, BarrierDef, Noop, TupleOpDef, PRELUDE_ID};
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
-use hugr::ops::ExtensionOp;
+use hugr::ops::{ExtensionOp, OpType};
 use hugr::types::TypeArg;
 use hugr::HugrView;
-use tket_json_rs::optype::OpType as Tk1OpType;
+use tket_json_rs::optype::OpType as PytketOptype;
 
 /// Encoder for [prelude](hugr::extension::prelude) operations.
 #[derive(Debug, Clone, Default)]
@@ -34,7 +39,7 @@ impl<H: HugrView> PytketEmitter<H> for PreludeEmitter {
             return self.tuple_op_to_pytket(node, op, &tuple_op, circ, encoder);
         };
         if let Ok(_barrier) = BarrierDef::from_extension_op(op) {
-            encoder.emit_node(Tk1OpType::Barrier, node, circ)?;
+            encoder.emit_node(PytketOptype::Barrier, node, circ)?;
             return Ok(EncodeStatus::Success);
         };
         Ok(EncodeStatus::Unsupported)
@@ -102,5 +107,47 @@ impl PreludeEmitter {
         encoder.emit_transparent_node(node, circ, |ps| ps.input_params.to_owned())?;
 
         Ok(EncodeStatus::Success)
+    }
+}
+
+impl PytketDecoder for PreludeEmitter {
+    fn op_types(&self) -> Vec<PytketOptype> {
+        vec![PytketOptype::noop, PytketOptype::Measure]
+    }
+
+    fn op_to_hugr<'h>(
+        &self,
+        op: &tket_json_rs::circuit_json::Operation,
+        qubits: &[TrackedQubit],
+        bits: &[TrackedBit],
+        params: &[Arc<LoadedParameter>],
+        opgroup: Option<&str>,
+        decoder: &mut PytketDecoderContext<'h>,
+    ) -> Result<DecodeStatus, PytketDecodeError> {
+        // Qubits, bits and parameters that will be used to register the node outputs.
+        //
+        // These should be modified by the match branches if the node does not have all
+        // its input registers in the outputs.
+
+        let op: OpType = match op.op_type {
+            PytketOptype::noop => Noop::new(qb_t()).into(),
+            PytketOptype::Barrier => {
+                // We use pytket barriers in the pytket encoder framework to store
+                // HUGRs that cannot be represented in pytket.
+                //
+                // We take care here and detect when that happens.
+                // TODO: For now, we just say the conversion is unsupported instead of extracting the Hugr.
+                if opgroup == Some("UNSUPPORTED_HUGR") {
+                    return Ok(DecodeStatus::Unsupported);
+                }
+
+                let types = [vec![qb_t(); qubits.len()], vec![bool_t(); bits.len()]].concat();
+                hugr::extension::prelude::Barrier::new(types).into()
+            }
+            _ => return Ok(DecodeStatus::Unsupported),
+        };
+        decoder.add_node_with_wires(op, qubits, bits, params)?;
+
+        Ok(DecodeStatus::Success)
     }
 }

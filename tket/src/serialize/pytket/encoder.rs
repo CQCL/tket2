@@ -82,7 +82,8 @@ impl<H: HugrView> PytketEncoderContext<H> {
         let hugr = circ.hugr();
         let name = Circuit::new(hugr.with_entrypoint(region))
             .name()
-            .map(str::to_string);
+            .map(str::to_string)
+            .filter(|s| !s.is_empty());
 
         // Recover other parameters stored in the metadata
         let phase = match hugr.get_metadata(region, METADATA_PHASE) {
@@ -206,10 +207,23 @@ impl<H: HugrView> PytketEncoderContext<H> {
     /// Given a node in the HUGR, returns all the [`TrackedValue`]s associated
     /// with its inputs.
     ///
-    /// These values can be used with the [`PytketEncoderContext::values`] tracker
-    /// to retrieve the corresponding pytket registers and parameter
+    /// These values can be used with the [`PytketEncoderContext::values`]
+    /// tracker to retrieve the corresponding pytket registers and parameter
     /// expressions. See [`ValueTracker::qubit_register`],
     /// [`ValueTracker::bit_register`], and [`ValueTracker::param_expression`].
+    ///
+    /// Marks the input connections to the node as explored. When all ports
+    /// connected to a wire have been explored, the wire is removed from the
+    /// tracker.
+    ///
+    /// If an input wire is the output of an unsupported node, a subgraph of
+    /// unsupported nodes containing it will be emitted as a pytket barrier.
+    ///
+    /// This function SHOULD NOT be called before determining that the node
+    /// operation is supported, as it will mark the input connections as explored
+    /// and potentially remove them from the tracker. To determine if a node
+    /// operation is supported, use [`PytketEncoderConfig::type_to_pytket`] on
+    /// the encoder context's [`PytketEncoderContext::config`].
     pub fn get_input_values(
         &mut self,
         node: H::Node,
@@ -556,7 +570,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         let mut pytket_op = make_tk1_operation(tket_json_rs::OpType::Barrier, args);
         pytket_op.data = Some(payload);
 
-        let opgroup = Some("tket".to_string());
+        let opgroup = Some("UNSUPPORTED_HUGR".to_string());
         self.emit_command(pytket_op, &op_values.qubits, &op_values.bits, opgroup);
         Ok(())
     }
@@ -896,7 +910,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
             let wire = hugr::Wire::new(node, out_port);
             let Some(count) = self.config().type_to_pytket(&ty) else {
                 return Err(PytketEncodeError::custom(format!(
-                    "Found an unsupported type while encoding a {op}."
+                    "Found an unsupported type {ty} while encoding a {op}."
                 )));
             };
             wire_counts.push((wire, count));

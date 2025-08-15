@@ -1,14 +1,19 @@
 //! Encoder and decoder for the tket.bool extension
 
+use std::sync::Arc;
+
 use super::PytketEmitter;
 use crate::extension::bool::{BoolOp, ConstBool, BOOL_EXTENSION_ID, BOOL_TYPE_NAME};
 use crate::serialize::pytket::config::TypeTranslatorSet;
+use crate::serialize::pytket::decoder::{
+    DecodeStatus, LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
+};
 use crate::serialize::pytket::encoder::{
     make_tk1_classical_expression, make_tk1_classical_operation, EncodeStatus,
     PytketEncoderContext, TrackedValues,
 };
-use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
-use crate::serialize::pytket::PytketEncodeError;
+use crate::serialize::pytket::extension::{PytketDecoder, PytketTypeTranslator, RegisterCount};
+use crate::serialize::pytket::{PytketDecodeError, PytketEncodeError};
 use crate::Circuit;
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
@@ -103,6 +108,63 @@ impl PytketTypeTranslator for BoolEmitter {
         } else {
             None
         }
+    }
+}
+
+impl PytketDecoder for BoolEmitter {
+    fn op_types(&self) -> Vec<tket_json_rs::OpType> {
+        vec![tket_json_rs::OpType::ClExpr]
+    }
+
+    fn op_to_hugr<'h>(
+        &self,
+        op: &tket_json_rs::circuit_json::Operation,
+        qubits: &[TrackedQubit],
+        bits: &[TrackedBit],
+        params: &[Arc<LoadedParameter>],
+        _opgroup: Option<&str>,
+        decoder: &mut PytketDecoderContext<'h>,
+    ) -> Result<DecodeStatus, PytketDecodeError> {
+        let Some(clexpr) = &op.classical_expr else {
+            return Ok(DecodeStatus::Unsupported);
+        };
+
+        // We only decode classical expressions if their operands are the input
+        // bits in 0..n order, and the output comes immediately after.
+        //
+        // This can be easily relaxed if needed.
+        for (i, reg) in clexpr.reg_posn.iter().enumerate() {
+            if reg.index != i as u32 || reg.bits.0.len() != 1 {
+                return Ok(DecodeStatus::Unsupported);
+            }
+        }
+        for (i, arg) in clexpr.expr.args.iter().enumerate() {
+            match arg {
+                ClArgument::Terminal(ClTerminal::Variable(ClVariable::Bit { index }))
+                    if *index != i as u32 =>
+                {
+                    return Ok(DecodeStatus::Unsupported);
+                }
+                ClArgument::Terminal(ClTerminal::Variable(ClVariable::Register { index }))
+                    if *index != i as u32 =>
+                {
+                    return Ok(DecodeStatus::Unsupported);
+                }
+                _ => continue,
+            }
+        }
+
+        let op = match clexpr.expr.op {
+            ClOp::BitEq => BoolOp::eq,
+            ClOp::BitNot => BoolOp::not,
+            ClOp::BitAnd => BoolOp::and,
+            ClOp::BitOr => BoolOp::or,
+            ClOp::BitXor => BoolOp::xor,
+            _ => return Ok(DecodeStatus::Unsupported),
+        };
+        decoder.add_node_with_wires(op, qubits, bits, params)?;
+
+        Ok(DecodeStatus::Success)
     }
 }
 

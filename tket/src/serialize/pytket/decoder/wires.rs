@@ -1,10 +1,5 @@
 //! Structures to keep track of pytket [`ElementId`][tket_json_rs::register::ElementId]s and
 //! their correspondence to wires in the hugr being defined.
-#![expect(
-    dead_code,
-    reason = "Temporarily unused while we refactor the pytket decoder"
-)]
-
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -18,18 +13,19 @@ use itertools::Itertools;
 use tket_json_rs::register::ElementId as PytketRegister;
 
 use crate::extension::rotation::rotation_type;
-use crate::serialize::pytket::config::TypeTranslatorSet;
 use crate::serialize::pytket::decoder::param::parser::{parse_pytket_param, PytketParam};
 use crate::serialize::pytket::decoder::{
-    LoadedParameter, TrackedBit, TrackedBitId, TrackedQubit, TrackedQubitId,
+    LoadedParameter, PytketDecoderContext, TrackedBit, TrackedBitId, TrackedQubit, TrackedQubitId,
 };
 use crate::serialize::pytket::extension::RegisterCount;
-use crate::serialize::pytket::{PytketDecodeError, PytketDecodeErrorInner, RegisterHash};
+use crate::serialize::pytket::{
+    PytketDecodeError, PytketDecodeErrorInner, PytketDecoderConfig, RegisterHash,
+};
 use crate::symbolic_constant_op;
 
 /// Tracked data for a wire in [`TrackedWires`].
 #[derive(Debug, Clone, PartialEq)]
-pub struct WireData {
+pub(crate) struct WireData {
     /// The identifier in the hugr.
     wire: Wire,
     /// The type of the wire.
@@ -51,30 +47,25 @@ impl WireData {
         &self.ty
     }
 
-    /// The HUGR type for the wire.
-    pub fn ty_arc(&self) -> Arc<Type> {
-        self.ty.clone()
-    }
-
     /// The pytket qubit arguments corresponding to this wire.
     pub fn qubits<'d>(
         &'d self,
-        wire_tracker: &'d WireTracker,
+        decoder: &'d PytketDecoderContext<'d>,
     ) -> impl Iterator<Item = TrackedQubit> + 'd {
         self.qubits
             .iter()
-            .map(move |elem_id| wire_tracker.get_qubit(*elem_id))
+            .map(move |elem_id| decoder.wire_tracker.get_qubit(*elem_id))
             .cloned()
     }
 
     /// The pytket bit arguments corresponding to this wire.
     pub fn bits<'d>(
         &'d self,
-        wire_tracker: &'d WireTracker,
+        decoder: &'d PytketDecoderContext<'d>,
     ) -> impl Iterator<Item = TrackedBit> + 'd {
         self.bits
             .iter()
-            .map(move |elem_id| wire_tracker.get_bit(*elem_id))
+            .map(move |elem_id| decoder.wire_tracker.get_bit(*elem_id))
             .cloned()
     }
 
@@ -86,11 +77,6 @@ impl WireData {
     /// Returns the number of bits carried by this wire.
     pub fn num_bits(&self) -> usize {
         self.bits.len()
-    }
-
-    /// Returns the number of tracked elements in this wire.
-    pub fn num_args(&self) -> usize {
-        self.num_qubits() + self.num_bits()
     }
 }
 
@@ -117,20 +103,6 @@ pub struct TrackedWires {
 }
 
 impl TrackedWires {
-    /// Retrieve the wire data at the given index.
-    ///
-    /// Panics if the index is out of bounds. See [`TrackedWires::len`].
-    #[inline]
-    #[must_use]
-    pub fn value_wire(&self, idx: usize) -> &WireData {
-        self.value_wires.get(idx).unwrap_or_else(|| {
-            panic!(
-                "Cannot get wire data at index {idx}, only {} wires are tracked",
-                self.value_wires.len()
-            )
-        })
-    }
-
     /// Return the number of value wires tracked.
     #[inline]
     #[must_use]
@@ -161,7 +133,7 @@ impl TrackedWires {
 
     /// Return an iterator over the wires and their types.
     #[inline]
-    pub fn iter_values(&self) -> impl Iterator<Item = &'_ WireData> + Clone + '_ {
+    pub(super) fn iter_values(&self) -> impl Iterator<Item = &'_ WireData> + Clone + '_ {
         self.value_wires.iter()
     }
 
@@ -193,22 +165,20 @@ impl TrackedWires {
     #[inline]
     pub fn qubits<'d>(
         &'d self,
-        wire_tracker: &'d WireTracker,
+        decoder: &'d PytketDecoderContext<'d>,
     ) -> impl Iterator<Item = TrackedQubit> + 'd {
         self.value_wires
             .iter()
-            .flat_map(move |wd| wd.qubits(wire_tracker))
+            .flat_map(move |wd| wd.qubits(decoder))
     }
 
     /// Returns the tracked bit elements in the set of wires.
     #[inline]
     pub fn bits<'d>(
         &'d self,
-        wire_tracker: &'d WireTracker,
+        decoder: &'d PytketDecoderContext<'d>,
     ) -> impl Iterator<Item = TrackedBit> + 'd {
-        self.value_wires
-            .iter()
-            .flat_map(move |wd| wd.bits(wire_tracker))
+        self.value_wires.iter().flat_map(move |wd| wd.bits(decoder))
     }
 
     /// Return the tracked value wires in this tracked wires.
@@ -329,7 +299,7 @@ impl TrackedWires {
 /// to that pytket register. Once the register is seen in the output of an
 /// operation, all previous references to it become "outdated".
 #[derive(Debug, Clone, Default)]
-pub struct WireTracker {
+pub(crate) struct WireTracker {
     /// A map of wires being tracked, with their type and list of
     /// tracked pytket registers and parameters.
     wires: IndexMap<Wire, WireData>,
@@ -397,12 +367,6 @@ impl WireTracker {
         &self.bits[id.0]
     }
 
-    /// Returns `true` if the given register is a known bit register.
-    pub(super) fn is_known_bit(&self, register: &PytketRegister) -> bool {
-        self.latest_bit_tracker
-            .contains_key(&RegisterHash::from(register))
-    }
-
     /// Returns the list of known pytket registers, in the order they were registered.
     pub(super) fn known_pytket_qubits(&self) -> impl Iterator<Item = &TrackedQubit> {
         self.latest_qubit_tracker
@@ -465,6 +429,24 @@ impl WireTracker {
         Ok(self.get_bit(id))
     }
 
+    /// Mark a qubit as outdated, without adding a new wire containing the fresh value.
+    ///
+    /// This is used when a hugr operation consumes pytket registers as its inputs, but doesn't use them in the outputs.
+    pub fn mark_qubit_outdated(&mut self, mut qubit: TrackedQubit) -> TrackedQubit {
+        self.qubits[qubit.id().0].mark_outdated();
+        qubit.mark_outdated();
+        qubit
+    }
+
+    /// Mark a bit as outdated, without adding a new wire containing the fresh value.
+    ///
+    /// This is used when a hugr operation consumes pytket registers as its inputs, but doesn't use them in the outputs.
+    pub fn mark_bit_outdated(&mut self, mut bit: TrackedBit) -> TrackedBit {
+        self.bits[bit.id().0].mark_outdated();
+        bit.mark_outdated();
+        bit
+    }
+
     /// Returns the latest tracked qubit for a pytket register.
     ///
     /// Returns an error if the register is not known.
@@ -507,6 +489,27 @@ impl WireTracker {
         self.bit_wires[&bit.id()].iter().copied()
     }
 
+    /// Given a list of pytket registers, splits them into qubit and bits and
+    /// returns the latest tracked elements for each.
+    pub(super) fn pytket_args_to_tracked_elems(
+        &self,
+        args: &[PytketRegister],
+    ) -> Result<(Vec<TrackedQubit>, Vec<TrackedBit>), PytketDecodeError> {
+        let mut qubit_args = Vec::with_capacity(args.len());
+        let mut bit_args = Vec::new();
+
+        for arg in args {
+            let reg_hash = RegisterHash::from(arg);
+            let is_bit = self.latest_bit_tracker.contains_key(&reg_hash);
+            if is_bit {
+                bit_args.push(self.tracked_bit_for_register(arg)?.clone());
+            } else {
+                qubit_args.push(self.tracked_qubit_for_register(arg)?.clone());
+            }
+        }
+        Ok((qubit_args, bit_args))
+    }
+
     /// Returns a new set of [TrackedWires] for a list of [`TrackedQubit`]s,
     /// [`TrackedBit`]s, and [`LoadedParameter`]s following the required types.
     ///
@@ -525,20 +528,34 @@ impl WireTracker {
     /// * `bit_args` - The list of tracked bits we require in the wire.
     /// * `params` - The list of parameters to load to wires. See
     ///   [`WireTracker::load_parameter`] for more details.
-    pub(super) fn find_typed_wires<'r>(
+    pub(super) fn find_typed_wires(
         &self,
-        type_translators: &TypeTranslatorSet,
+        config: &PytketDecoderConfig,
         types: &[Type],
-        qubit_args: impl IntoIterator<Item = &'r TrackedQubit>,
-        bit_args: impl IntoIterator<Item = &'r TrackedBit>,
+        qubit_args: &[TrackedQubit],
+        bit_args: &[TrackedBit],
         params: &[Arc<LoadedParameter>],
     ) -> Result<TrackedWires, PytketDecodeError> {
         // We need to return a set of wires that contain all the arguments.
         //
         // We collect this by checking the wires where each element is present,
         // and collecting them in order.
-        let mut qubit_args: VecDeque<&TrackedQubit> = qubit_args.into_iter().collect();
-        let mut bit_args: VecDeque<&TrackedBit> = bit_args.into_iter().collect();
+        let mut qubit_args: VecDeque<&TrackedQubit> = qubit_args.iter().collect();
+        let mut bit_args: VecDeque<&TrackedBit> = bit_args.iter().collect();
+
+        // Check that no qubit or bit has been marked as outdated.
+        if qubit_args.iter().any(|q| q.is_outdated()) {
+            return Err(PytketDecodeErrorInner::OutdatedQubit {
+                qubit: qubit_args.front().unwrap().pytket_register().to_string(),
+            }
+            .wrap());
+        }
+        if bit_args.iter().any(|b| b.is_outdated()) {
+            return Err(PytketDecodeErrorInner::OutdatedBit {
+                bit: bit_args.front().unwrap().pytket_register().to_string(),
+            }
+            .wrap());
+        }
 
         // Map each requested type to a wire.
         //
@@ -548,7 +565,7 @@ impl WireTracker {
             .iter()
             .filter(|ty| !param_types.contains(ty))
             .map(|ty| {
-                let Some(reg_count) = type_translators.type_to_pytket(ty) else {
+                let Some(reg_count) = config.type_to_pytket(ty) else {
                     return Err(PytketDecodeErrorInner::UnexpectedInputType {
                         unknown_type: ty.to_string(),
                         all_types: types.iter().map(ToString::to_string).collect(),
@@ -605,7 +622,7 @@ impl WireTracker {
         })
     }
 
-    /// Returns the wire carrying a parameter.
+    /// Loads the given parameter expression as a [`LoadedParameter`] in the hugr.
     ///
     /// - If the parameter is a known algebraic operation, adds the required op and recurses on its inputs.
     /// - If the parameter is a constant, a constant definition is added to the Hugr.

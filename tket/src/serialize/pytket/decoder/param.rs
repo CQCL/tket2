@@ -1,5 +1,6 @@
 //! Definition of a loaded parameter (either floating point or a rotation type) attached to a HUGR wire.
 pub(super) mod parser;
+
 use std::sync::LazyLock;
 
 use hugr::builder::{Dataflow, FunctionBuilder};

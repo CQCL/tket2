@@ -1,9 +1,4 @@
 //! Pytket qubit and bit elements that we track during decoding.
-#![allow(
-    dead_code,
-    reason = "Temporarily unused while we refactor the pytket decoder"
-)]
-
 use std::hash::Hasher;
 use std::sync::{Arc, LazyLock};
 

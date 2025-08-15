@@ -1,16 +1,22 @@
 //! Encoder and decoder for tket operations with native pytket counterparts.
 
+use std::sync::Arc;
+
 use super::PytketEmitter;
 use crate::extension::sympy::SympyOp;
 use crate::extension::TKET_EXTENSION_ID;
+use crate::serialize::pytket::decoder::{
+    DecodeStatus, LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
+};
 use crate::serialize::pytket::encoder::{EncodeStatus, PytketEncoderContext};
-use crate::serialize::pytket::PytketEncodeError;
+use crate::serialize::pytket::extension::PytketDecoder;
+use crate::serialize::pytket::{PytketDecodeError, PytketEncodeError};
 use crate::{Circuit, TketOp};
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
 use hugr::ops::ExtensionOp;
 use hugr::{HugrView, Wire};
-use tket_json_rs::optype::OpType as Tk1OpType;
+use tket_json_rs::optype::OpType as PytketOptype;
 
 /// Encoder for [TketOp] operations.
 #[derive(Debug, Clone, Default)]
@@ -48,30 +54,30 @@ impl TketOpEmitter {
         encoder: &mut PytketEncoderContext<H>,
     ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         let serial_op = match tket_op {
-            TketOp::H => Tk1OpType::H,
-            TketOp::CX => Tk1OpType::CX,
-            TketOp::CY => Tk1OpType::CY,
-            TketOp::CZ => Tk1OpType::CZ,
-            TketOp::CRz => Tk1OpType::CRz,
-            TketOp::T => Tk1OpType::T,
-            TketOp::Tdg => Tk1OpType::Tdg,
-            TketOp::S => Tk1OpType::S,
-            TketOp::Sdg => Tk1OpType::Sdg,
-            TketOp::V => Tk1OpType::V,
-            TketOp::Vdg => Tk1OpType::Vdg,
-            TketOp::X => Tk1OpType::X,
-            TketOp::Y => Tk1OpType::Y,
-            TketOp::Z => Tk1OpType::Z,
-            TketOp::Rx => Tk1OpType::Rx,
-            TketOp::Rz => Tk1OpType::Rz,
-            TketOp::Ry => Tk1OpType::Ry,
-            TketOp::Toffoli => Tk1OpType::CCX,
-            TketOp::Reset => Tk1OpType::Reset,
-            TketOp::Measure => Tk1OpType::Measure,
+            TketOp::H => PytketOptype::H,
+            TketOp::CX => PytketOptype::CX,
+            TketOp::CY => PytketOptype::CY,
+            TketOp::CZ => PytketOptype::CZ,
+            TketOp::CRz => PytketOptype::CRz,
+            TketOp::T => PytketOptype::T,
+            TketOp::Tdg => PytketOptype::Tdg,
+            TketOp::S => PytketOptype::S,
+            TketOp::Sdg => PytketOptype::Sdg,
+            TketOp::V => PytketOptype::V,
+            TketOp::Vdg => PytketOptype::Vdg,
+            TketOp::X => PytketOptype::X,
+            TketOp::Y => PytketOptype::Y,
+            TketOp::Z => PytketOptype::Z,
+            TketOp::Rx => PytketOptype::Rx,
+            TketOp::Rz => PytketOptype::Rz,
+            TketOp::Ry => PytketOptype::Ry,
+            TketOp::Toffoli => PytketOptype::CCX,
+            TketOp::Reset => PytketOptype::Reset,
+            TketOp::Measure => PytketOptype::Measure,
             // We translate `MeasureFree` the same way as a `Measure` operation.
             // Since the node does not have outputs the qubit/bit will simply be ignored,
             // but will appear when collecting the final pytket registers.
-            TketOp::MeasureFree => Tk1OpType::Measure,
+            TketOp::MeasureFree => PytketOptype::Measure,
             // These operations are implicitly supported by the encoding,
             // they do not create a new command but just modify the value trackers.
             TketOp::QAlloc => {
@@ -108,5 +114,71 @@ impl TketOpEmitter {
     ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         encoder.emit_transparent_node(node, circ, |_| vec![sympy_op.expr.clone()])?;
         Ok(EncodeStatus::Success)
+    }
+}
+
+impl PytketDecoder for TketOpEmitter {
+    fn op_types(&self) -> Vec<PytketOptype> {
+        vec![
+            PytketOptype::H,
+            PytketOptype::CX,
+            PytketOptype::CY,
+            PytketOptype::CZ,
+            PytketOptype::CRz,
+            PytketOptype::T,
+            PytketOptype::Tdg,
+            PytketOptype::S,
+            PytketOptype::Sdg,
+            PytketOptype::V,
+            PytketOptype::Vdg,
+            PytketOptype::X,
+            PytketOptype::Y,
+            PytketOptype::Z,
+            PytketOptype::Rx,
+            PytketOptype::Rz,
+            PytketOptype::Ry,
+            PytketOptype::CCX,
+            PytketOptype::Reset,
+            PytketOptype::Measure,
+        ]
+    }
+
+    fn op_to_hugr<'h>(
+        &self,
+        op: &tket_json_rs::circuit_json::Operation,
+        qubits: &[TrackedQubit],
+        bits: &[TrackedBit],
+        params: &[Arc<LoadedParameter>],
+        _opgroup: Option<&str>,
+        decoder: &mut PytketDecoderContext<'h>,
+    ) -> Result<DecodeStatus, PytketDecodeError> {
+        let op = match op.op_type {
+            PytketOptype::H => TketOp::H,
+            PytketOptype::CX => TketOp::CX,
+            PytketOptype::CY => TketOp::CY,
+            PytketOptype::CZ => TketOp::CZ,
+            PytketOptype::CRz => TketOp::CRz,
+            PytketOptype::T => TketOp::T,
+            PytketOptype::Tdg => TketOp::Tdg,
+            PytketOptype::S => TketOp::S,
+            PytketOptype::Sdg => TketOp::Sdg,
+            PytketOptype::V => TketOp::V,
+            PytketOptype::Vdg => TketOp::Vdg,
+            PytketOptype::X => TketOp::X,
+            PytketOptype::Y => TketOp::Y,
+            PytketOptype::Z => TketOp::Z,
+            PytketOptype::Rx => TketOp::Rx,
+            PytketOptype::Ry => TketOp::Ry,
+            PytketOptype::Rz => TketOp::Rz,
+            PytketOptype::CCX => TketOp::Toffoli,
+            PytketOptype::Reset => TketOp::Reset,
+            PytketOptype::Measure => TketOp::Measure,
+            _ => {
+                return Ok(DecodeStatus::Unsupported);
+            }
+        };
+        decoder.add_node_with_wires(op, qubits, bits, params)?;
+
+        Ok(DecodeStatus::Success)
     }
 }

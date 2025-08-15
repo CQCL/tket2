@@ -62,5 +62,5 @@ fn badger_termination(simple_circ: Circuit, nam_4_2: ECCBadgerOptimiser) {
             ..Default::default()
         },
     );
-    assert_eq!(opt_circ.commands().count(), 14);
+    assert_eq!(opt_circ.commands().count(), 11);
 }
