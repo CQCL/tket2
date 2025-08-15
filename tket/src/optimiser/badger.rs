@@ -641,7 +641,7 @@ mod tests {
     /// A circuit that would trigger non-composable rewrites, if we applied them blindly from nam_6_3 matches.
     #[fixture]
     fn non_composable_rw_hugr() -> Circuit {
-        load_tk1_json_str(NON_COMPOSABLE).unwrap()
+        load_tk1_json_str(NON_COMPOSABLE, None).unwrap()
     }
 
     /// A badger optimiser using a reduced set of rewrite rules.
