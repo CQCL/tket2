@@ -81,6 +81,12 @@ create_py_exception!(
     "Error type for the conversion between tket and tket1 operations."
 );
 
+create_py_exception!(
+    tket::serialize::pytket::PytketDecodeError,
+    PyTK1DecodeError,
+    "Error type for the conversion between tket1 and tket operations."
+);
+
 /// Run the validation checks on a circuit.
 #[pyfunction]
 pub fn validate_circuit(c: &Bound<PyAny>) -> PyResult<()> {
