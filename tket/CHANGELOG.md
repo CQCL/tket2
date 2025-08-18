@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.13.2](https://github.com/CQCL/tket2/compare/tket-v0.13.1...tket-v0.13.2) - 2025-08-08
+
+### New Features
+
+- *(tket-py)* Create BadgerOptimiser from arbitrary Rewriters ([#1022](https://github.com/CQCL/tket2/pull/1022))
+
 ## [0.13.1](https://github.com/CQCL/tket2/compare/tket-v0.13.0...tket-v0.13.1) - 2025-07-30
 
 ### Documentation

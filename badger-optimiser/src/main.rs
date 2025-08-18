@@ -13,7 +13,7 @@ use std::process::exit;
 use clap::Parser;
 use tket::optimiser::badger::log::BadgerLogger;
 use tket::optimiser::badger::BadgerOptions;
-use tket::optimiser::{BadgerOptimiser, DefaultBadgerOptimiser};
+use tket::optimiser::{BadgerOptimiser, ECCBadgerOptimiser};
 use tket::serialize::{load_tk1_json_file, save_tk1_json_file};
 
 #[cfg(feature = "peak_alloc")]
@@ -190,7 +190,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn load_optimiser(ecc_path: &Path) -> Result<DefaultBadgerOptimiser, Box<dyn std::error::Error>> {
+fn load_optimiser(ecc_path: &Path) -> Result<ECCBadgerOptimiser, Box<dyn std::error::Error>> {
     Ok(match ecc_path.extension().and_then(OsStr::to_str) {
         Some("json") => BadgerOptimiser::default_with_eccs_json_file(ecc_path)?,
         Some("rwr") => BadgerOptimiser::default_with_rewriter_binary(ecc_path)?,

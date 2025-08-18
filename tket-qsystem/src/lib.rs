@@ -1,6 +1,15 @@
 //! Provides a preparation and validation workflow for Hugrs targeting
 //! Quantinuum H-series quantum computers.
 
+#[cfg(feature = "cli")]
+pub mod cli;
+pub mod extension;
+#[cfg(feature = "llvm")]
+pub mod llvm;
+mod lower_drops;
+pub mod pytket;
+pub mod replace_bools;
+
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
@@ -24,14 +33,6 @@ use extension::{
 
 #[cfg(feature = "llvm")]
 use hugr::llvm::utils::inline_constant_functions;
-
-#[cfg(feature = "cli")]
-pub mod cli;
-pub mod extension;
-#[cfg(feature = "llvm")]
-pub mod llvm;
-mod lower_drops;
-pub mod replace_bools;
 
 /// Modify a [hugr::Hugr] into a form that is acceptable for ingress into a
 /// Q-System. Returns an error if this cannot be done.

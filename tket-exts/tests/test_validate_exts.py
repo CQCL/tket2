@@ -1,15 +1,15 @@
 from tket_exts import (
-    opaque_bool,
     debug,
-    guppy,
-    rotation,
     futures,
     gpu,
+    guppy,
+    opaque_bool,
     qsystem,
     qsystem_random,
     qsystem_utils,
     quantum,
     result,
+    rotation,
     wasm,
 )
 
@@ -17,22 +17,23 @@ import pytest
 
 
 exts = [
-    opaque_bool,
     debug,
-    guppy,
-    rotation,
     futures,
     gpu,
+    guppy,
+    opaque_bool,
     qsystem,
     qsystem_random,
     qsystem_utils,
     quantum,
     result,
+    rotation,
     wasm,
 ]
 
 
 @pytest.mark.parametrize("ext", exts)
 def test_validate_extension(ext):
-    ext()
+    e = ext()
+    assert len(e.types) + len(e.operations) > 0
     return

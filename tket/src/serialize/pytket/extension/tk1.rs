@@ -1,17 +1,24 @@
 //! Encoder for pytket operations that cannot be represented naturally in tket.
 
+use std::sync::Arc;
+
 use crate::extension::rotation::rotation_type;
 use crate::extension::{TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME};
+use crate::serialize::pytket::decoder::{
+    LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
+};
 use crate::serialize::pytket::encoder::EncodeStatus;
-use crate::serialize::pytket::{Tk1ConvertError, Tk1EncoderContext};
+use crate::serialize::pytket::{PytketDecodeError, PytketEncodeError, PytketEncoderContext};
 use crate::Circuit;
 
 use super::PytketEmitter;
+use hugr::builder::Dataflow;
 use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::extension::ExtensionId;
-use hugr::ops::ExtensionOp;
+use hugr::ops::{ExtensionOp, OpTrait, OpType};
 use hugr::types::{Signature, TypeArg};
 use hugr::{HugrView, IncomingPort};
+use itertools::Itertools;
 use tket_json_rs::circuit_json;
 
 /// Encoder for [TKET1_EXTENSION] operations.
@@ -32,17 +39,17 @@ impl<H: HugrView> PytketEmitter<H> for Tk1Emitter {
         node: H::Node,
         op: &ExtensionOp,
         circ: &Circuit<H>,
-        encoder: &mut Tk1EncoderContext<H>,
-    ) -> Result<EncodeStatus, Tk1ConvertError<H::Node>> {
+        encoder: &mut PytketEncoderContext<H>,
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         if op.qualified_id() != format!("{TKET1_EXTENSION_ID}.{TKET1_OP_NAME}") {
             return Ok(EncodeStatus::Unsupported);
         }
         let Some(TypeArg::String(arg)) = op.args().first() else {
-            return Err(Tk1ConvertError::custom(
+            return Err(PytketEncodeError::custom(
                 "Opaque TKET1 operation did not have a json-encoded type argument.",
             ));
         };
-        let op: OpaqueTk1Op = serde_json::from_str(arg)?;
+        let op: OpaqueTk1Op = serde_json::from_str(arg).map_err(PytketEncodeError::custom)?;
 
         // Most operations map directly to a pytket one.
         encoder.emit_node_command(
@@ -56,6 +63,70 @@ impl<H: HugrView> PytketEmitter<H> for Tk1Emitter {
 
         Ok(EncodeStatus::Success)
     }
+}
+
+/// Add an [`OpaqueTk1Op`] to the Hugr, representing a pytket operation that could
+/// be decoded by the configured decoders.
+///
+/// We don't implement [`PytketDecoder`][super::PytketDecoder] for [`Tk1Emitter`] so it doesn't get added
+/// to the [`PytketDecoderConfig`][crate::serialize::pytket::PytketDecoderConfig] by mistake.
+///
+/// This function is used internally by the [`PytketDecoderContext`] as a fallback.
+///
+/// TODO: This only accepts input/outputs composed of bare qubit, bit, and parameter wires.
+/// We should accept arbitrary wires, but the opaque extension op needs to be modified (or replaced with a new one)
+/// since it currently has a limited signature definition.
+pub(crate) fn build_opaque_tket_op<'h>(
+    op: tket_json_rs::circuit_json::Operation,
+    qubits: &[TrackedQubit],
+    bits: &[TrackedBit],
+    params: &[Arc<LoadedParameter>],
+    _opgroup: &Option<String>,
+    decoder: &mut PytketDecoderContext<'h>,
+) -> Result<(), PytketDecodeError> {
+    let tk1op: OpType = OpaqueTk1Op::new_from_op(op, qubits.len(), bits.len())
+        .as_extension_op()
+        .into();
+    let op_name = tk1op.to_string();
+
+    // Gather the input wires.
+    // The wires all must have raw qubit/bit/parameter types.
+    let op_sig = tk1op.dataflow_signature().unwrap();
+
+    let wires = decoder
+        .find_typed_wires(op_sig.input_types(), qubits, bits, params)
+        .map_err(|e| e.hugr_op(&op_name))?;
+
+    // Ensure all parameter inputs have rotation types rather than float.
+    let param_wires = wires
+        .iter_parameters()
+        .map(|p| p.as_rotation(&mut decoder.builder).wire)
+        .collect_vec();
+
+    let opaque_op = decoder
+        .builder
+        .add_dataflow_op(tk1op, wires.value_wires().chain(param_wires))
+        .map_err(|e| PytketDecodeError::custom(e).hugr_op(&op_name))?;
+
+    // Associate the output wires to the corresponding register.
+    let mut outputs = opaque_op.outputs();
+
+    for qubit in qubits {
+        let wire = outputs.next().expect("Qubit should have an output wire");
+        decoder
+            .wire_tracker
+            .track_wire(wire, qubit.ty(), [qubit.clone()], [])
+            .map_err(|e| e.hugr_op(&op_name))?;
+    }
+    for bit in bits {
+        let wire = outputs.next().expect("Bit should have an output wire");
+        decoder
+            .wire_tracker
+            .track_wire(wire, bit.ty(), [], [bit.clone()])
+            .map_err(|e| e.hugr_op(&op_name))?;
+    }
+
+    Ok(())
 }
 
 /// A serialized operation, containing the operation type and all its attributes.
@@ -127,11 +198,6 @@ impl OpaqueTk1Op {
         .concat();
         let params = vec![rotation_type(); self.num_params];
         Signature::new([linear.clone(), params].concat(), linear)
-    }
-
-    /// Returns the ports corresponding to parameters for this operation.
-    pub fn param_ports(&self) -> impl Iterator<Item = IncomingPort> + '_ {
-        self.param_inputs.iter().filter_map(|&i| i)
     }
 
     /// Wraps the op into a [`TKET1_OP_NAME`] opaque operation.

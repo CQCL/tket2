@@ -12,7 +12,7 @@ from .._tket.circuit import (
     BuildError,
     ValidationError,
     HUGRSerializationError,
-    TK1ConvertError,
+    TK1EncodeError,
 )
 
 from .build import CircBuild, Command
@@ -33,5 +33,5 @@ __all__ = [
     "BuildError",
     "ValidationError",
     "HUGRSerializationError",
-    "TK1ConvertError",
+    "TK1EncodeError",
 ]

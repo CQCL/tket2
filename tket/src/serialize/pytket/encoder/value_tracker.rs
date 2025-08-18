@@ -22,12 +22,13 @@ use tket_json_rs::register::ElementId as RegisterUnit;
 use crate::circuit::Circuit;
 use crate::serialize::pytket::extension::RegisterCount;
 use crate::serialize::pytket::{
-    OpConvertError, RegisterHash, Tk1ConvertError, METADATA_B_REGISTERS, METADATA_INPUT_PARAMETERS,
+    OpConvertError, PytketEncodeError, RegisterHash, METADATA_B_REGISTERS,
+    METADATA_INPUT_PARAMETERS,
 };
 
 use super::unit_generator::RegisterUnitGenerator;
 use super::{
-    Tk1EncoderConfig, METADATA_B_OUTPUT_REGISTERS, METADATA_Q_OUTPUT_REGISTERS,
+    PytketEncoderConfig, METADATA_B_OUTPUT_REGISTERS, METADATA_Q_OUTPUT_REGISTERS,
     METADATA_Q_REGISTERS,
 };
 
@@ -203,8 +204,8 @@ impl<N: HugrNode> ValueTracker<N> {
     pub(super) fn new<H: HugrView<Node = N>>(
         circ: &Circuit<H>,
         region: N,
-        config: &Tk1EncoderConfig<H>,
-    ) -> Result<Self, Tk1ConvertError<N>> {
+        config: &PytketEncoderConfig<H>,
+    ) -> Result<Self, PytketEncodeError<N>> {
         let param_variable_names: Vec<String> =
             read_metadata_json_list(circ, region, METADATA_INPUT_PARAMETERS);
         let mut tracker = ValueTracker {
@@ -245,7 +246,7 @@ impl<N: HugrNode> ValueTracker<N> {
         let region_optype = circ.hugr().get_optype(region);
         let signature = region_optype.inner_function_type().ok_or_else(|| {
             let optype = circ.hugr().get_optype(region).to_string();
-            Tk1ConvertError::NonDataflowRegion { region, optype }
+            PytketEncodeError::NonDataflowRegion { region, optype }
         })?;
         let inp_node = circ.hugr().get_io(region).unwrap()[0];
         for (port, typ) in circ

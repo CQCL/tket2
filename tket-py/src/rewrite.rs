@@ -1,10 +1,14 @@
 //! PyO3 wrapper for rewriters.
 
 use derive_more::From;
+use hugr::HugrView;
 use itertools::Itertools;
 use pyo3::prelude::*;
 use std::path::PathBuf;
-use tket::rewrite::{CircuitRewrite, ECCRewriter, Rewriter, Subcircuit};
+use tket::{
+    rewrite::{CircuitRewrite, ECCRewriter, Rewriter, Subcircuit},
+    Circuit,
+};
 
 use crate::circuit::{PyNode, Tk2Circuit};
 
@@ -63,6 +67,33 @@ impl PyCircuitRewrite {
     }
 }
 
+/// An enum of all rewriters exposed to the Python API.
+///
+/// This type is not exposed to Python, but instead corresponds to the Python
+/// type union in `rewrite.py`.
+#[derive(Clone, FromPyObject)]
+pub enum PyRewriter {
+    /// A rewriter based on circuit equivalence classes.
+    ECC(PyECCRewriter),
+    /// A rewriter based on a list of rewriters.
+    Vec(Vec<PyRewriter>),
+}
+
+impl Rewriter for PyRewriter {
+    fn get_rewrites(
+        &self,
+        circ: &Circuit<impl HugrView<Node = hugr::Node>>,
+    ) -> Vec<CircuitRewrite> {
+        match self {
+            Self::ECC(ecc) => ecc.0.get_rewrites(circ),
+            Self::Vec(rewriters) => rewriters
+                .iter()
+                .flat_map(|r| r.get_rewrites(circ))
+                .collect(),
+        }
+    }
+}
+
 /// A subcircuit specification.
 ///
 /// Python equivalent of [`Subcircuit`].
@@ -92,6 +123,7 @@ impl PySubcircuit {
 /// Valid rewrites turn a non-representative circuit into its representative,
 /// or a representative circuit into any of the equivalent non-representative
 #[pyclass(name = "ECCRewriter")]
+#[derive(Clone, From)]
 pub struct PyECCRewriter(ECCRewriter);
 
 #[pymethods]
@@ -102,6 +134,14 @@ impl PyECCRewriter {
         Ok(Self(ECCRewriter::load_binary(path).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string())
         })?))
+    }
+
+    /// Compile an ECC rewriter from a JSON file.
+    #[staticmethod]
+    pub fn compile_eccs(path: &str) -> PyResult<Self> {
+        Ok(Self(ECCRewriter::try_from_eccs_json_file(path).map_err(
+            |e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()),
+        )?))
     }
 
     /// Returns a list of circuit rewrites that can be applied to the given Tk2Circuit.
