@@ -1,5 +1,4 @@
 from tket_exts import (
-    tket,
     opaque_bool,
     bool,
     debug,
@@ -7,6 +6,8 @@ from tket_exts import (
     rotation,
     futures,
     qsystem,
+    qsystem_random,
+    qsystem_utils,
     quantum,
     result,
     wasm,
@@ -15,7 +16,6 @@ from tket_exts import (
 
 # TODO: Remove the deprecated `opaque_bool` export in a breaking change.
 __all__ = [
-    "tket",
     "debug",
     "bool",
     "opaque_bool",
@@ -23,6 +23,8 @@ __all__ = [
     "rotation",
     "futures",
     "qsystem",
+    "qsystem_random",
+    "qsystem_utils",
     "quantum",
     "result",
     "wasm",
