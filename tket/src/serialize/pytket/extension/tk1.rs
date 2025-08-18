@@ -77,7 +77,7 @@ impl<H: HugrView> PytketEmitter<H> for Tk1Emitter {
 /// We should accept arbitrary wires, but the opaque extension op needs to be modified (or replaced with a new one)
 /// since it currently has a limited signature definition.
 pub(crate) fn build_opaque_tket_op<'h>(
-    op: tket_json_rs::circuit_json::Operation,
+    op: &tket_json_rs::circuit_json::Operation,
     qubits: &[TrackedQubit],
     bits: &[TrackedBit],
     params: &[Arc<LoadedParameter>],
@@ -164,11 +164,9 @@ impl OpaqueTk1Op {
     ///
     /// If the operation does not define a signature, one is generated with the
     /// given amounts.
-    pub fn new_from_op(
-        mut op: circuit_json::Operation,
-        num_qubits: usize,
-        num_bits: usize,
-    ) -> Self {
+    pub fn new_from_op(op: &circuit_json::Operation, num_qubits: usize, num_bits: usize) -> Self {
+        let mut op = op.clone();
+
         if op.signature.is_none() {
             op.signature =
                 Some([vec!["Q".into(); num_qubits], vec!["B".into(); num_bits]].concat());

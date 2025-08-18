@@ -333,7 +333,7 @@ impl<'h> PytketDecoderContext<'h> {
     /// Decode a list of pytket commands.
     pub(super) fn run_decoder(
         &mut self,
-        commands: Vec<circuit_json::Command>,
+        commands: &[circuit_json::Command],
     ) -> Result<(), PytketDecodeError> {
         let config = self.config.clone();
         for com in commands {
@@ -348,13 +348,13 @@ impl<'h> PytketDecoderContext<'h> {
     /// decoder.
     pub(super) fn process_command(
         &mut self,
-        command: circuit_json::Command,
+        command: &circuit_json::Command,
         config: &PytketDecoderConfig,
     ) -> Result<(), PytketDecodeError> {
         let circuit_json::Command { op, args, opgroup } = command;
 
         // Find the latest [`TrackedQubit`] and [`TrackedBit`] for the command registers.
-        let (qubits, bits) = self.wire_tracker.pytket_args_to_tracked_elems(&args)?;
+        let (qubits, bits) = self.wire_tracker.pytket_args_to_tracked_elems(args)?;
 
         // Collect the parameters used in the command.
         let params: Vec<Arc<LoadedParameter>> = match &op.params {
@@ -366,12 +366,12 @@ impl<'h> PytketDecoderContext<'h> {
         };
 
         // Try to decode the command with the configured decoders.
-        match config.op_to_hugr(&op, &qubits, &bits, &params, &opgroup, self)? {
+        match config.op_to_hugr(op, &qubits, &bits, &params, opgroup, self)? {
             DecodeStatus::Success => {}
             DecodeStatus::Unsupported => {
                 // The command couldn't be translated into a native HUGR counterpart, so
                 // we generate an opaque `Tk1Op` instead.
-                build_opaque_tket_op(op, &qubits, &bits, &params, &opgroup, self)?;
+                build_opaque_tket_op(op, &qubits, &bits, &params, opgroup, self)?;
             }
         }
         Ok(())
