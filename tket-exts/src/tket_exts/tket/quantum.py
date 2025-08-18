@@ -3,9 +3,9 @@
 import functools
 from typing import List
 
-from hugr.ext import Extension
+from hugr.ext import Extension, OpDef, TypeDef
 from hugr.ops import ExtOp
-from hugr.tys import ExtType
+from hugr.tys import StringArg
 from ._util import TketExtension, load_extension
 
 
@@ -17,38 +17,38 @@ class QuantumExtension(TketExtension):
         """Returns the quantum extension"""
         return load_extension("tket.quantum")
 
-    def TYPES(self) -> List[ExtType]:
+    def TYPES(self) -> List[TypeDef]:
         """Return the types defined by this extension"""
         return []
 
-    def OPS(self) -> List[ExtOp]:
+    def OPS(self) -> List[OpDef]:
         """Return the operations defined by this extension"""
         return [
-            self.CRz,
-            self.CX,
-            self.CY,
-            self.CZ,
-            self.H,
-            self.measure,
-            self.measureFree,
-            self.qAlloc,
-            self.qFree,
-            self.reset,
-            self.Rx,
-            self.Ry,
-            self.Rz,
-            self.S,
-            self.Sdg,
-            self.T,
-            self.Tdg,
-            self.toffoli,
-            self.tryQAlloc,
-            self.V,
-            self.Vdg,
-            self.X,
-            self.Y,
-            self.Z,
-            self.symbolic_angle,
+            self.CRz.op_def(),
+            self.CX.op_def(),
+            self.CY.op_def(),
+            self.CZ.op_def(),
+            self.H.op_def(),
+            self.measure.op_def(),
+            self.measure_free.op_def(),
+            self.qAlloc.op_def(),
+            self.qFree.op_def(),
+            self.reset.op_def(),
+            self.Rx.op_def(),
+            self.Ry.op_def(),
+            self.Rz.op_def(),
+            self.S.op_def(),
+            self.Sdg.op_def(),
+            self.T.op_def(),
+            self.Tdg.op_def(),
+            self.toffoli.op_def(),
+            self.try_QAlloc.op_def(),
+            self.V.op_def(),
+            self.Vdg.op_def(),
+            self.X.op_def(),
+            self.Y.op_def(),
+            self.Z.op_def(),
+            self.symbolic_angle_def,
         ]
 
     @functools.cached_property
@@ -82,7 +82,7 @@ class QuantumExtension(TketExtension):
         return self().get_op("Measure").instantiate()
 
     @functools.cached_property
-    def measureFree(self) -> ExtOp:
+    def measure_free(self) -> ExtOp:
         """Measure a qubit producing an opaque bool (qubit consumed)."""
         return self().get_op("MeasureFree").instantiate()
 
@@ -142,7 +142,7 @@ class QuantumExtension(TketExtension):
         return self().get_op("Toffoli").instantiate()
 
     @functools.cached_property
-    def tryQAlloc(self) -> ExtOp:
+    def try_QAlloc(self) -> ExtOp:
         """Try allocate a qubit, returning None on failure."""
         return self().get_op("TryQAlloc").instantiate()
 
@@ -172,6 +172,18 @@ class QuantumExtension(TketExtension):
         return self().get_op("Z").instantiate()
 
     @functools.cached_property
-    def symbolic_angle(self) -> ExtOp:
-        """Store a sympy expression evaluable to a rotation angle."""
-        return self().get_op("symbolic_angle").instantiate()
+    def symbolic_angle_def(self) -> OpDef:
+        """Store a sympy expression evaluable to a rotation angle.
+
+        This is the generic operation definition. For the instantiated operation, see
+        `symbolic_angle`.
+        """
+        return self().get_op("symbolic_angle")
+
+    def symbolic_angle(self, expr: str) -> ExtOp:
+        """Store a sympy expression evaluable to a rotation angle.
+
+        Args:
+            expr: A sympy expression as a string.
+        """
+        return self.symbolic_angle_def.instantiate([StringArg(expr)])

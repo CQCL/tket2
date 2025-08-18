@@ -3,9 +3,8 @@
 import functools
 from typing import List
 
-from hugr.ext import Extension
+from hugr.ext import Extension, OpDef, TypeDef
 from hugr.ops import ExtOp
-from hugr.tys import ExtType
 from .._util import TketExtension, load_extension
 
 
@@ -17,17 +16,17 @@ class QSystemUtilsExtension(TketExtension):
         """Returns the qsystem utils extension"""
         return load_extension("tket.qsystem.utils")
 
-    def TYPES(self) -> List[ExtType]:
+    def TYPES(self) -> List[TypeDef]:
         """Return the types defined by this extension"""
         return []
 
-    def OPS(self) -> List[ExtOp]:
+    def OPS(self) -> List[OpDef]:
         """Return the operations defined by this extension"""
         return [
-            self.getCurrentShot,
+            self.get_current_shot.op_def(),
         ]
 
     @functools.cached_property
-    def getCurrentShot(self) -> ExtOp:
+    def get_current_shot(self) -> ExtOp:
         """Get current shot number."""
         return self().get_op("GetCurrentShot").instantiate()

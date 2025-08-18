@@ -3,7 +3,7 @@
 import functools
 from typing import List
 
-from hugr.ext import Extension
+from hugr.ext import Extension, OpDef, TypeDef
 from hugr.ops import ExtOp
 from hugr.tys import ExtType
 from ._util import TketExtension, load_extension
@@ -17,17 +17,17 @@ class RotationExtension(TketExtension):
         """Returns the rotation extension"""
         return load_extension("tket.rotation")
 
-    def TYPES(self) -> List[ExtType]:
+    def TYPES(self) -> List[TypeDef]:
         """Return the types defined by this extension"""
-        return [self.rotation]
+        return [self.rotation.type_def]
 
-    def OPS(self) -> List[ExtOp]:
+    def OPS(self) -> List[OpDef]:
         """Return the operations defined by this extension"""
         return [
-            self.from_halfturns,
-            self.from_halfturns_unchecked,
-            self.radd,
-            self.to_halfturns,
+            self.from_halfturns.op_def(),
+            self.from_halfturns_unchecked.op_def(),
+            self.radd.op_def(),
+            self.to_halfturns.op_def(),
         ]
 
     @functools.cached_property

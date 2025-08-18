@@ -3,9 +3,9 @@
 import functools
 from typing import List
 
-from hugr.ext import Extension
+from hugr.ext import Extension, OpDef, TypeDef
 from hugr.ops import ExtOp
-from hugr.tys import ExtType
+from hugr.tys import Type, TypeTypeArg
 from ._util import TketExtension, load_extension
 
 
@@ -17,17 +17,29 @@ class GuppyExtension(TketExtension):
         """Returns the guppy extension"""
         return load_extension("tket.guppy")
 
-    def TYPES(self) -> List[ExtType]:
+    def TYPES(self) -> List[TypeDef]:
         """Return the types defined by this extension"""
         return []
 
-    def OPS(self) -> List[ExtOp]:
+    def OPS(self) -> List[OpDef]:
         """Return the operations defined by this extension"""
         return [
-            self.drop,
+            self.drop_def,
         ]
 
     @functools.cached_property
-    def drop(self) -> ExtOp:
-        """Drop the input wire. Applicable to guppy affine types only."""
-        return self().get_op("drop").instantiate()
+    def drop_def(self) -> OpDef:
+        """Drop the input wire. Applicable to guppy affine types only.
+
+        This is the generic operation definition. For the instantiated operation, see
+        `drop`.
+        """
+        return self().get_op("drop")
+
+    def drop(self, ty: Type) -> ExtOp:
+        """Drop the input wire. Applicable to guppy affine types only.
+
+        Args:
+            ty: The guppy affine type of the value to drop.
+        """
+        return self.drop_def.instantiate([TypeTypeArg(ty)])

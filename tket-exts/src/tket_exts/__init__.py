@@ -1,6 +1,19 @@
 """HUGR extension definitions for tket circuits."""
 
-from tket_exts.tket._util import TketExtension
+from tket_exts.tket.bool import BoolExtension
+from tket_exts.tket.debug import DebugExtension
+from tket_exts.tket.guppy import GuppyExtension
+from tket_exts.tket.rotation import RotationExtension
+from tket_exts.tket.futures import FuturesExtension
+from tket_exts.tket.qsystem import (
+    QSystemExtension,
+    QSystemRandomExtension,
+    QSystemUtilsExtension,
+)
+from tket_exts.tket.quantum import QuantumExtension
+from tket_exts.tket.result import ResultExtension
+from tket_exts.tket.wasm import WasmExtension
+
 from typing_extensions import deprecated
 from hugr.ext import Extension
 from tket_exts import tket
@@ -23,17 +36,17 @@ __all__ = [
     "wasm",
 ]
 
-bool: TketExtension = tket.bool.BoolExtension()
-debug: TketExtension = tket.debug.DebugExtension()
-guppy: TketExtension = tket.guppy.GuppyExtension()
-rotation: TketExtension = tket.rotation.RotationExtension()
-futures: TketExtension = tket.futures.FuturesExtension()
-qsystem: TketExtension = tket.qsystem.QSystemExtension()
-qsystem_random: TketExtension = tket.qsystem.QSystemRandomExtension()
-qsystem_utils: TketExtension = tket.qsystem.QSystemUtilsExtension()
-quantum: TketExtension = tket.quantum.QuantumExtension()
-result: TketExtension = tket.result.ResultExtension()
-wasm: TketExtension = tket.wasm.WasmExtension()
+bool: BoolExtension = tket.bool.BoolExtension()
+debug: DebugExtension = tket.debug.DebugExtension()
+guppy: GuppyExtension = tket.guppy.GuppyExtension()
+rotation: RotationExtension = tket.rotation.RotationExtension()
+futures: FuturesExtension = tket.futures.FuturesExtension()
+qsystem: QSystemExtension = tket.qsystem.QSystemExtension()
+qsystem_random: QSystemRandomExtension = tket.qsystem.QSystemRandomExtension()
+qsystem_utils: QSystemUtilsExtension = tket.qsystem.QSystemUtilsExtension()
+quantum: QuantumExtension = tket.quantum.QuantumExtension()
+result: ResultExtension = tket.result.ResultExtension()
+wasm: WasmExtension = tket.wasm.WasmExtension()
 
 
 @deprecated("Use tket_exts.bool() instead")

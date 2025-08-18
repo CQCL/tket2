@@ -3,9 +3,9 @@
 import functools
 from typing import List
 
-from hugr.ext import Extension
+from hugr.ext import Extension, OpDef, TypeDef
 from hugr.ops import ExtOp
-from hugr.tys import ExtType
+from hugr.tys import ExtType, Type, TypeTypeArg, ListArg, StringArg
 from ._util import TketExtension, load_extension
 
 
@@ -17,17 +17,17 @@ class WasmExtension(TketExtension):
         """Returns the wasm extension"""
         return load_extension("tket.wasm")
 
-    def TYPES(self) -> List[ExtType]:
+    def TYPES(self) -> List[TypeDef]:
         """Return the types defined by this extension"""
-        return [self.context, self.func, self.module]
+        return [self.context.type_def, self.func_def, self.module.type_def]
 
-    def OPS(self) -> List[ExtOp]:
+    def OPS(self) -> List[OpDef]:
         """Return the operations defined by this extension"""
         return [
-            self.call,
-            self.dispose_context,
-            self.get_context,
-            self.lookup,
+            self.call_def,
+            self.dispose_context.op_def(),
+            self.get_context.op_def(),
+            self.lookup_def,
         ]
 
     @functools.cached_property
@@ -36,9 +36,30 @@ class WasmExtension(TketExtension):
         return self().get_type("context").instantiate([])
 
     @functools.cached_property
-    def func(self) -> ExtType:
-        """WASM function type signature."""
-        return self().get_type("func").instantiate([])
+    def func_def(self) -> TypeDef:
+        """WASM function type signature (generic definition).
+
+        This is the generic type definition. For the instantiated type, see `func`.
+        """
+        return self().get_type("func")
+
+    def func(self, inputs: List[Type], outputs: List[Type]) -> ExtType:
+        """WASM function type signature (instantiated).
+
+        Args:
+            inputs: List of input types.
+            outputs: List of output types.
+        """
+        return (
+            self()
+            .get_type("func")
+            .instantiate(
+                [
+                    ListArg([TypeTypeArg(t) for t in inputs]),
+                    ListArg([TypeTypeArg(t) for t in outputs]),
+                ]
+            )
+        )
 
     @functools.cached_property
     def module(self) -> ExtType:
@@ -46,9 +67,27 @@ class WasmExtension(TketExtension):
         return self().get_type("module").instantiate([])
 
     @functools.cached_property
-    def call(self) -> ExtOp:
-        """Call a function in a context, returning a Future of the result."""
-        return self().get_op("call").instantiate()
+    def call_def(self) -> OpDef:
+        """Call a function in a context, returning a Future of the result.
+
+        This is the generic operation definition. For the instantiated operation, see
+        `call`.
+        """
+        return self().get_op("call")
+
+    def call(self, inputs: List[Type], outputs: List[Type]) -> ExtOp:
+        """Call a function in a context, returning a Future of the result.
+
+        Args:
+            inputs: Function input types.
+            outputs: Function output types.
+        """
+        return self.call_def.instantiate(
+            [
+                ListArg([TypeTypeArg(t) for t in inputs]),
+                ListArg([TypeTypeArg(t) for t in outputs]),
+            ]
+        )
 
     @functools.cached_property
     def dispose_context(self) -> ExtOp:
@@ -61,6 +100,26 @@ class WasmExtension(TketExtension):
         return self().get_op("get_context").instantiate()
 
     @functools.cached_property
-    def lookup(self) -> ExtOp:
-        """Lookup a function in a module by name and signature."""
-        return self().get_op("lookup").instantiate()
+    def lookup_def(self) -> OpDef:
+        """Lookup a function in a module by name and signature.
+
+        This is the generic operation definition. For the instantiated operation, see
+        `lookup`.
+        """
+        return self().get_op("lookup")
+
+    def lookup(self, name: str, inputs: List[Type], outputs: List[Type]) -> ExtOp:
+        """Lookup a function in a module by name and signature.
+
+        Args:
+            name: Function name to look up.
+            inputs: Function input types.
+            outputs: Function output types.
+        """
+        return self.lookup_def.instantiate(
+            [
+                StringArg(name),
+                ListArg([TypeTypeArg(t) for t in inputs]),
+                ListArg([TypeTypeArg(t) for t in outputs]),
+            ]
+        )

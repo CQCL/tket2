@@ -3,7 +3,7 @@
 import functools
 from typing import List
 
-from hugr.ext import Extension
+from hugr.ext import Extension, OpDef, TypeDef
 from hugr.ops import ExtOp
 from hugr.tys import ExtType
 from ._util import TketExtension, load_extension
@@ -21,20 +21,20 @@ class BoolExtension(TketExtension):
         """Return the bool extension"""
         return load_extension("tket.bool")
 
-    def TYPES(self) -> List[ExtType]:
+    def TYPES(self) -> List[TypeDef]:
         """Return the types defined by this extension"""
-        return [self.bool_t]
+        return [self.bool_t.type_def]
 
-    def OPS(self) -> List[ExtOp]:
+    def OPS(self) -> List[OpDef]:
         """Return the operations defined by this extension"""
         return [
-            self.and_op,
-            self.eq,
-            self.make_opaque,
-            self.not_op,
-            self.or_op,
-            self.read,
-            self.xor,
+            self.and_op.op_def(),
+            self.eq.op_def(),
+            self.make_opaque.op_def(),
+            self.not_op.op_def(),
+            self.or_op.op_def(),
+            self.read.op_def(),
+            self.xor.op_def(),
         ]
 
     @functools.cached_property

@@ -3,9 +3,7 @@
 import pkgutil
 from typing import List, Protocol
 
-from hugr.ext import Extension
-from hugr.ops import ExtOp
-from hugr.tys import ExtType
+from hugr.ext import Extension, OpDef, TypeDef
 
 
 def load_extension(name: str) -> Extension:
@@ -18,6 +16,6 @@ def load_extension(name: str) -> Extension:
 
 
 class TketExtension(Protocol):
-    def TYPES(self) -> List[ExtType]: ...
-    def OPS(self) -> List[ExtOp]: ...
+    def TYPES(self) -> List[TypeDef]: ...
+    def OPS(self) -> List[OpDef]: ...
     def __call__(self) -> Extension: ...
