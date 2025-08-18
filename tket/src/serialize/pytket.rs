@@ -69,10 +69,10 @@ pub trait TKETDecode: Sized {
     /// Convert the serialized circuit to a circuit.
     ///
     /// Uses a default set of extension decoders to translate operations.
-    fn decode(self) -> Result<Circuit, Self::DecodeError>;
+    fn decode(&self) -> Result<Circuit, Self::DecodeError>;
     /// Convert the serialized circuit to a circuit.
     fn decode_with_config(
-        self,
+        &self,
         config: impl Into<Arc<PytketDecoderConfig>>,
     ) -> Result<Circuit, Self::DecodeError>;
     /// Convert a circuit to a serialized pytket circuit.
@@ -95,20 +95,20 @@ impl TKETDecode for SerialCircuit {
     type DecodeError = PytketDecodeError;
     type EncodeError = PytketEncodeError;
 
-    fn decode(self) -> Result<Circuit, Self::DecodeError> {
+    fn decode(&self) -> Result<Circuit, Self::DecodeError> {
         let config = default_decoder_config();
         Self::decode_with_config(self, config)
     }
 
     fn decode_with_config(
-        self,
+        &self,
         config: impl Into<Arc<PytketDecoderConfig>>,
     ) -> Result<Circuit, Self::DecodeError> {
         let mut hugr = Hugr::new();
 
         let mut decoder =
-            PytketDecoderContext::new(&self, &mut hugr, None, None, Vec::new(), config)?;
-        decoder.run_decoder(self.commands)?;
+            PytketDecoderContext::new(self, &mut hugr, None, None, Vec::new(), config)?;
+        decoder.run_decoder(&self.commands)?;
         let main_func = decoder.finish()?;
         hugr.set_entrypoint(main_func.node());
         Ok(hugr.into())

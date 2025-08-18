@@ -168,10 +168,7 @@ fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num
     let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), num_commands);
 
-    let circ: Circuit = ser
-        .clone()
-        .decode_with_config(qsystem_decoder_config())
-        .unwrap();
+    let circ: Circuit = ser.decode_with_config(qsystem_decoder_config()).unwrap();
 
     assert_eq!(circ.qubit_count(), num_qubits);
 
@@ -189,10 +186,7 @@ fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num
 fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
     let ser: SerialCircuit =
         SerialCircuit::encode_with_config(&circ, qsystem_encoder_config()).unwrap();
-    let deser: Circuit = ser
-        .clone()
-        .decode_with_config(qsystem_decoder_config())
-        .unwrap();
+    let deser: Circuit = ser.decode_with_config(qsystem_decoder_config()).unwrap();
 
     let deser_sig = deser.circuit_signature();
     assert_eq!(

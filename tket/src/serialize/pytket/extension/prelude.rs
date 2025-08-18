@@ -124,11 +124,6 @@ impl PytketDecoder for PreludeEmitter {
         opgroup: Option<&str>,
         decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
-        // Qubits, bits and parameters that will be used to register the node outputs.
-        //
-        // These should be modified by the match branches if the node does not have all
-        // its input registers in the outputs.
-
         let op: OpType = match op.op_type {
             PytketOptype::noop => Noop::new(qb_t()).into(),
             PytketOptype::Barrier => {
