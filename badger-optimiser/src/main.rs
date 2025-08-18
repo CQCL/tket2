@@ -143,7 +143,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let badger_logger = BadgerLogger::new(circ_candidates_csv);
 
-    let mut circ = load_tk1_json_file(input_path)?;
+    let mut circ = load_tk1_json_file(
+        input_path,
+        Some(tket_qsystem::pytket::qsystem_decoder_config()),
+    )?;
     if opts.rewrite_tracing {
         circ.enable_rewrite_tracing();
     }
@@ -181,7 +184,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     println!("Saving result");
-    save_tk1_json_file(&opt_circ, output_path)?;
+    save_tk1_json_file(
+        &opt_circ,
+        output_path,
+        Some(tket_qsystem::pytket::qsystem_encoder_config()),
+    )?;
 
     #[cfg(feature = "peak_alloc")]
     println!("Peak memory usage: {} GB", PEAK_ALLOC.peak_usage_as_gb());
