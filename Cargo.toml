@@ -73,7 +73,7 @@ pest = "2.8.1"
 pest_derive = "2.8.1"
 petgraph = { version = ">= 0.8.1, < 0.9", default-features = false }
 priority-queue = "2.5.0"
-rayon = "1.5"
+rayon = "1.11"
 rmp-serde = "1.1.2"
 rstest = "0.24.0"
 serde = "1.0"
