@@ -23,56 +23,56 @@ class BoolExtension(TketExtension):
 
     def TYPES(self) -> List[ExtType]:
         """Return the types defined by this extension"""
-        return [self.bool_t()]
+        return [self.bool_t]
 
     def OPS(self) -> List[ExtOp]:
         """Return the operations defined by this extension"""
         return [
-            self.and_op(),
-            self.eq(),
-            self.make_opaque(),
-            self.not_op(),
-            self.or_op(),
-            self.read(),
-            self.xor(),
+            self.and_op,
+            self.eq,
+            self.make_opaque,
+            self.not_op,
+            self.or_op,
+            self.read,
+            self.xor,
         ]
 
-    @functools.cache
+    @functools.cached_property
     def bool_t(self) -> ExtType:
         """An opaque boolean type"""
         return self().get_type("bool").instantiate([])
 
-    @functools.cache
+    @functools.cached_property
     def and_op(self) -> ExtOp:
         """Logical AND between two tket.bools"""
         return self().get_op("and").instantiate()
 
-    @functools.cache
+    @functools.cached_property
     def eq(self) -> ExtOp:
         """Equality between two tket.bools"""
         return self().get_op("eq").instantiate()
 
-    @functools.cache
+    @functools.cached_property
     def make_opaque(self) -> ExtOp:
         """Convert a Hugr `bool_t` (a unit sum) into an tket.bool."""
         return self().get_op("make_opaque").instantiate()
 
-    @functools.cache
+    @functools.cached_property
     def not_op(self) -> ExtOp:
         """Negation of a tket.bool"""
         return self().get_op("not").instantiate()
 
-    @functools.cache
+    @functools.cached_property
     def or_op(self) -> ExtOp:
         """Logical OR between two tket.bools"""
         return self().get_op("or").instantiate()
 
-    @functools.cache
+    @functools.cached_property
     def read(self) -> ExtOp:
         """Convert a tket.bool into a Hugr bool_t (a unit sum)"""
         return self().get_op("read").instantiate()
 
-    @functools.cache
+    @functools.cached_property
     def xor(self) -> ExtOp:
         """Logical XOR between two tket.bools"""
         return self().get_op("xor").instantiate()
