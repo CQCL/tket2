@@ -23,4 +23,11 @@ class GuppyExtension(TketExtension):
 
     def OPS(self) -> List[ExtOp]:
         """Return the operations defined by this extension"""
-        return []
+        return [
+            self.drop,
+        ]
+
+    @functools.cached_property
+    def drop(self) -> ExtOp:
+        """Drop the input wire. Applicable to guppy affine types only."""
+        return self().get_op("drop").instantiate()

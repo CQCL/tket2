@@ -25,11 +25,10 @@ def test_validate_extension(ext: TketExtension):
     e = ext()
     assert len(e.types) + len(e.operations) > 0
 
-    # TODO: Some defs are still missing. Uncomment before merging.
-    # ops = ext.OPS()
-    # assert len(ops) == len(e.operations)
+    ops = ext.OPS()
+    assert len(ops) == len(e.operations)
 
-    # types = ext.TYPES()
-    # assert len(types) == len(e.types)
+    types = ext.TYPES()
+    assert len(types) == len(e.types)
 
     return

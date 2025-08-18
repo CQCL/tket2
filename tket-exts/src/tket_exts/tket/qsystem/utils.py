@@ -23,4 +23,11 @@ class QSystemUtilsExtension(TketExtension):
 
     def OPS(self) -> List[ExtOp]:
         """Return the operations defined by this extension"""
-        return []
+        return [
+            self.getCurrentShot,
+        ]
+
+    @functools.cached_property
+    def getCurrentShot(self) -> ExtOp:
+        """Get current shot number."""
+        return self().get_op("GetCurrentShot").instantiate()

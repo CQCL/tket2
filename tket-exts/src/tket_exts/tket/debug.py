@@ -23,4 +23,11 @@ class DebugExtension(TketExtension):
 
     def OPS(self) -> List[ExtOp]:
         """Return the operations defined by this extension"""
-        return []
+        return [
+            self.stateResult,
+        ]
+
+    @functools.cached_property
+    def stateResult(self) -> ExtOp:
+        """Report the state of given qubits in the given order."""
+        return self().get_op("StateResult").instantiate()
