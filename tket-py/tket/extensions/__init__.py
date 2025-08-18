@@ -1,6 +1,7 @@
 from tket_exts import (
     tket,
     opaque_bool,
+    bool,
     debug,
     guppy,
     rotation,
@@ -12,9 +13,11 @@ from tket_exts import (
 )
 
 
+# TODO: Remove the deprecated `opaque_bool` export in a breaking change.
 __all__ = [
     "tket",
     "debug",
+    "bool",
     "opaque_bool",
     "guppy",
     "rotation",

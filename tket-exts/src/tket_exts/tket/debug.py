@@ -1,12 +1,26 @@
 """Debug extension operations."""
 
 import functools
+from typing import List
 
 from hugr.ext import Extension
-from ._util import load_extension
+from hugr.ops import ExtOp
+from hugr.tys import ExtType
+from ._util import TketExtension, load_extension
 
 
-@functools.cache
-def extension() -> Extension:
-    """Extension for debugging operations"""
-    return load_extension("tket.debug")
+class DebugExtension(TketExtension):
+    """Extension for debugging operations."""
+
+    @functools.cache
+    def __call__(self) -> Extension:
+        """Return the debug extension"""
+        return load_extension("tket.debug")
+
+    def TYPES(self) -> List[ExtType]:
+        """Return the types defined by this extension"""
+        return []
+
+    def OPS(self) -> List[ExtOp]:
+        """Return the operations defined by this extension"""
+        return []

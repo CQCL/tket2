@@ -1,5 +1,6 @@
 """HUGR extension definitions for tket circuits."""
 
+from tket_exts.tket._util import TketExtension
 from typing_extensions import deprecated
 from hugr.ext import Extension
 from tket_exts import tket
@@ -8,57 +9,33 @@ from tket_exts import tket
 # annotation: x-release-please-version
 __version__ = "0.10.1"
 
+__all__ = [
+    "bool",
+    "debug",
+    "guppy",
+    "rotation",
+    "futures",
+    "qsystem",
+    "qsystem_random",
+    "qsystem_utils",
+    "quantum",
+    "result",
+    "wasm",
+]
 
-@deprecated("Use tket_exts.tket.bool.extension() instead")
+bool: TketExtension = tket.bool.BoolExtension()
+debug: TketExtension = tket.debug.DebugExtension()
+guppy: TketExtension = tket.guppy.GuppyExtension()
+rotation: TketExtension = tket.rotation.RotationExtension()
+futures: TketExtension = tket.futures.FuturesExtension()
+qsystem: TketExtension = tket.qsystem.QSystemExtension()
+qsystem_random: TketExtension = tket.qsystem.QSystemRandomExtension()
+qsystem_utils: TketExtension = tket.qsystem.QSystemUtilsExtension()
+quantum: TketExtension = tket.quantum.QuantumExtension()
+result: TketExtension = tket.result.ResultExtension()
+wasm: TketExtension = tket.wasm.WasmExtension()
+
+
+@deprecated("Use tket_exts.bool() instead")
 def opaque_bool() -> Extension:
-    return tket.bool.extension()
-
-
-@deprecated("Use tket_exts.tket.debug.extension() instead")
-def debug() -> Extension:
-    return tket.debug.extension()
-
-
-@deprecated("Use tket_exts.tket.guppy.extension() instead")
-def guppy() -> Extension:
-    return tket.guppy.extension()
-
-
-@deprecated("Use tket_exts.tket.rotation.extension() instead")
-def rotation() -> Extension:
-    return tket.rotation.extension()
-
-
-@deprecated("Use tket_exts.tket.futures.extension() instead")
-def futures() -> Extension:
-    return tket.futures.extension()
-
-
-@deprecated("Use tket_exts.tket.qsystem.extension() instead")
-def qsystem() -> Extension:
-    return tket.qsystem.extension()
-
-
-@deprecated("Use tket_exts.tket.qsystem.random.extension() instead")
-def qsystem_random() -> Extension:
-    return tket.qsystem.random.extension()
-
-
-@deprecated("Use tket_exts.tket.qsystem.utils.extension() instead")
-def qsystem_utils() -> Extension:
-    return tket.qsystem.utils.extension()
-
-
-@deprecated("Use tket_exts.tket.quantum.extension() instead")
-def quantum() -> Extension:
-    return tket.quantum.extension()
-
-
-@deprecated("Use tket_exts.tket.result.extension() instead")
-def result() -> Extension:
-    return tket.result.extension()
-
-
-@deprecated("Use tket_exts.tket.wasm.extension() instead")
-def wasm() -> Extension:
-    return tket.wasm.extension()
+    return bool()
