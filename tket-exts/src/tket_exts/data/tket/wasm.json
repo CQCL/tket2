@@ -46,6 +46,24 @@
         "b": "Explicit",
         "bound": "C"
       }
+    },
+    "result": {
+      "extension": "tket.wasm",
+      "name": "result",
+      "params": [
+        {
+          "tp": "List",
+          "param": {
+            "tp": "Type",
+            "b": "A"
+          }
+        }
+      ],
+      "description": "wasm result",
+      "bound": {
+        "b": "Explicit",
+        "bound": "A"
+      }
     }
   },
   "operations": {
@@ -129,30 +147,23 @@
             {
               "t": "Opaque",
               "extension": "tket.wasm",
-              "id": "context",
-              "args": [],
-              "bound": "A"
-            },
-            {
-              "t": "Opaque",
-              "extension": "tket.futures",
-              "id": "Future",
+              "id": "result",
               "args": [
                 {
-                  "tya": "Type",
-                  "ty": {
-                    "t": "Sum",
-                    "s": "General",
-                    "rows": [
-                      [
-                        {
-                          "t": "R",
-                          "i": 1,
+                  "tya": "List",
+                  "elems": [
+                    {
+                      "tya": "Variable",
+                      "idx": 1,
+                      "cached_decl": {
+                        "tp": "List",
+                        "param": {
+                          "tp": "Type",
                           "b": "C"
                         }
-                      ]
-                    ]
-                  }
+                      }
+                    }
+                  ]
                 }
               ],
               "bound": "A"
@@ -217,10 +228,91 @@
       },
       "binary": false
     },
-    "lookup": {
+    "lookup_by_id": {
       "extension": "tket.wasm",
-      "name": "lookup",
-      "description": "lookup",
+      "name": "lookup_by_id",
+      "description": "lookup_by_id",
+      "signature": {
+        "params": [
+          {
+            "tp": "BoundedNat",
+            "bound": null
+          },
+          {
+            "tp": "List",
+            "param": {
+              "tp": "Type",
+              "b": "A"
+            }
+          },
+          {
+            "tp": "List",
+            "param": {
+              "tp": "Type",
+              "b": "A"
+            }
+          }
+        ],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket.wasm",
+              "id": "module",
+              "args": [],
+              "bound": "C"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket.wasm",
+              "id": "func",
+              "args": [
+                {
+                  "tya": "List",
+                  "elems": [
+                    {
+                      "tya": "Variable",
+                      "idx": 1,
+                      "cached_decl": {
+                        "tp": "List",
+                        "param": {
+                          "tp": "Type",
+                          "b": "C"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "tya": "List",
+                  "elems": [
+                    {
+                      "tya": "Variable",
+                      "idx": 2,
+                      "cached_decl": {
+                        "tp": "List",
+                        "param": {
+                          "tp": "Type",
+                          "b": "C"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "bound": "C"
+            }
+          ]
+        }
+      },
+      "binary": false
+    },
+    "lookup_by_name": {
+      "extension": "tket.wasm",
+      "name": "lookup_by_name",
+      "description": "lookup_by_name",
       "signature": {
         "params": [
           {
@@ -291,6 +383,65 @@
                 }
               ],
               "bound": "C"
+            }
+          ]
+        }
+      },
+      "binary": false
+    },
+    "read_result": {
+      "extension": "tket.wasm",
+      "name": "read_result",
+      "description": "read_result",
+      "signature": {
+        "params": [
+          {
+            "tp": "List",
+            "param": {
+              "tp": "Type",
+              "b": "A"
+            }
+          }
+        ],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket.wasm",
+              "id": "result",
+              "args": [
+                {
+                  "tya": "List",
+                  "elems": [
+                    {
+                      "tya": "Variable",
+                      "idx": 0,
+                      "cached_decl": {
+                        "tp": "List",
+                        "param": {
+                          "tp": "Type",
+                          "b": "C"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "bound": "A"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket.wasm",
+              "id": "context",
+              "args": [],
+              "bound": "A"
+            },
+            {
+              "t": "R",
+              "i": 0,
+              "b": "C"
             }
           ]
         }
