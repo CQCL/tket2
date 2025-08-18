@@ -3,7 +3,7 @@
 This directory contains guppy program definitions that we should be able to optimize to a similar level as passing
 the equivalent flat program to `pytket`.
 
-Each example here contains:
+Each example is in its own directory, containing:
 - A `.py` file that defines the guppy program
 - If possible, a `.flat.py` file that defines the same program using `comptime` or manual loop peeling.
 - A `.opt.py` file that defines the optimized version of the program, which we
