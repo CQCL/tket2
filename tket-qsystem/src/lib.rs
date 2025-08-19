@@ -9,6 +9,7 @@ pub mod llvm;
 mod lower_drops;
 pub mod pytket;
 pub mod replace_bools;
+pub mod replace_borrow_arrays;
 
 use derive_more::{Display, Error, From};
 use hugr::{
@@ -24,6 +25,7 @@ use hugr::{
 };
 use lower_drops::LowerDropsPass;
 use replace_bools::{ReplaceBoolPass, ReplaceBoolPassError};
+use replace_borrow_arrays::{ReplaceBorrowArrayPass, ReplaceBorrowArrayPassError};
 use tket::TketOp;
 
 use extension::{
@@ -33,17 +35,6 @@ use extension::{
 
 #[cfg(feature = "llvm")]
 use hugr::llvm::utils::inline_constant_functions;
-
-use crate::replace_borrow_arrays::{ReplaceBorrowArrayPass, ReplaceBorrowArrayPassError};
-
-#[cfg(feature = "cli")]
-pub mod cli;
-pub mod extension;
-#[cfg(feature = "llvm")]
-pub mod llvm;
-mod lower_drops;
-pub mod replace_bools;
-pub mod replace_borrow_arrays;
 
 /// Modify a [hugr::Hugr] into a form that is acceptable for ingress into a
 /// Q-System. Returns an error if this cannot be done.
@@ -139,7 +130,7 @@ impl QSystemPass {
         }
         // We expect any Hugr will have *either* drop ops, or ValueArrays (without drops),
         // so only one of these passes will do anything; the order is thus immaterial.
-        // Drop should come after borrow array replacement so that we don't require a 
+        // Drop should come after borrow array replacement so that we don't require a
         // copy/discard handler for borrow arrays + avoid lowering the discard function.
         self.lower_drops().run(hugr)?;
         self.linearize_arrays().run(hugr)?;
