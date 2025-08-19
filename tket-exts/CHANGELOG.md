@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/CQCL/tket2/compare/tket-exts-v0.10.0...tket-exts-v0.10.1) (2025-08-19)
+
+
+### Documentation
+
+* Update README badges ([#1004](https://github.com/CQCL/tket2/issues/1004)) ([d609bf5](https://github.com/CQCL/tket2/commit/d609bf5f65af3cfe3ac44a16dfd4ef1bcacd5643))
+
 ## [0.10.0](https://github.com/CQCL/tket2/compare/tket-exts-v0.9.2...tket-exts-v0.10.0) (2025-07-29)
 
 

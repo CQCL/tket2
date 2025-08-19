@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/CQCL/tket2/compare/tket-eccs-v0.5.0...tket-eccs-v0.5.1) (2025-08-18)
+
+
+### Documentation
+
+* Update README badges ([#1004](https://github.com/CQCL/tket2/issues/1004)) ([d609bf5](https://github.com/CQCL/tket2/commit/d609bf5f65af3cfe3ac44a16dfd4ef1bcacd5643))
+
 ## [0.5.0](https://github.com/CQCL/tket2/compare/tket-eccs-v0.4.0...tket-eccs-v0.5.0) (2025-07-29)
 
 

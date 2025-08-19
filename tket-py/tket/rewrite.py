@@ -8,7 +8,10 @@ __all__ = [
     "ECCRewriter",
     "CircuitRewrite",
     "Subcircuit",
+    "Rewriter",
 ]
+
+Rewriter = ECCRewriter | list["Rewriter"]
 
 
 def default_ecc_rewriter() -> ECCRewriter:

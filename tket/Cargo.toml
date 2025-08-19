@@ -1,6 +1,6 @@
 [package]
 name = "tket"
-version = "0.13.1"
+version = "0.14.0"
 edition = { workspace = true }
 rust-version = { workspace = true }
 
@@ -57,6 +57,7 @@ derive_more = { workspace = true, features = [
     "into",
     "sum",
     "add",
+    "add_assign",
 ] }
 hugr = { workspace = true }
 hugr-core = { workspace = true }

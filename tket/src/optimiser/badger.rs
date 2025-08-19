@@ -512,17 +512,39 @@ mod badger_default {
 
     use super::*;
 
+    /// The default optimisation strategy for the Badger optimiser.
+    pub type DefaultBadgerStrategy = ExhaustiveGreedyStrategy<StrategyCost>;
     pub type StrategyCost = LexicographicCostFunction<fn(&OpType) -> usize, 2>;
 
     /// The default Badger optimiser using ECC sets.
-    pub type DefaultBadgerOptimiser =
-        BadgerOptimiser<ECCRewriter, ExhaustiveGreedyStrategy<StrategyCost>>;
+    #[deprecated(note = "Type alias was renamed to `ECCBadgerOptimiser`")]
+    pub type DefaultBadgerOptimiser = ECCBadgerOptimiser;
+    /// The Badger optimiser using ECC sets.
+    pub type ECCBadgerOptimiser = BadgerOptimiser<ECCRewriter, DefaultBadgerStrategy>;
 
-    impl DefaultBadgerOptimiser {
+    impl Default for DefaultBadgerStrategy {
+        fn default() -> Self {
+            Self::cx_count()
+        }
+    }
+
+    impl DefaultBadgerStrategy {
+        /// A strategy minimising CX gate count.
+        pub fn cx_count() -> Self {
+            LexicographicCostFunction::default_cx_strategy()
+        }
+
+        /// A strategy minimising Rz gate count.
+        pub fn rz_count() -> Self {
+            LexicographicCostFunction::rz_count().into_greedy_strategy()
+        }
+    }
+
+    impl ECCBadgerOptimiser {
         /// A sane default optimiser using the given ECC sets.
         pub fn default_with_eccs_json_file(eccs_path: impl AsRef<Path>) -> io::Result<Self> {
             let rewriter = ECCRewriter::try_from_eccs_json_file(eccs_path)?;
-            let strategy = LexicographicCostFunction::default_cx_strategy();
+            let strategy = DefaultBadgerStrategy::default();
             Ok(BadgerOptimiser::new(rewriter, strategy))
         }
 
@@ -532,7 +554,7 @@ mod badger_default {
             rewriter_path: impl AsRef<Path>,
         ) -> Result<Self, RewriterSerialisationError> {
             let rewriter = ECCRewriter::load_binary(rewriter_path)?;
-            let strategy = LexicographicCostFunction::default_cx_strategy();
+            let strategy = DefaultBadgerStrategy::default();
             Ok(BadgerOptimiser::new(rewriter, strategy))
         }
 
@@ -555,7 +577,10 @@ mod badger_default {
     }
 }
 #[cfg(feature = "portmatching")]
+#[allow(deprecated)]
 pub use badger_default::DefaultBadgerOptimiser;
+#[cfg(feature = "portmatching")]
+pub use badger_default::{DefaultBadgerStrategy, ECCBadgerOptimiser};
 
 use self::hugr_pchannel::Work;
 
@@ -574,7 +599,7 @@ mod tests {
     use crate::{extension::rotation::rotation_type, optimiser::badger::BadgerOptions};
     use crate::{Circuit, TketOp};
 
-    use super::{BadgerOptimiser, DefaultBadgerOptimiser};
+    use super::{BadgerOptimiser, ECCBadgerOptimiser};
 
     #[fixture]
     fn rz_rz() -> Circuit {
@@ -616,18 +641,18 @@ mod tests {
     /// A circuit that would trigger non-composable rewrites, if we applied them blindly from nam_6_3 matches.
     #[fixture]
     fn non_composable_rw_hugr() -> Circuit {
-        load_tk1_json_str(NON_COMPOSABLE).unwrap()
+        load_tk1_json_str(NON_COMPOSABLE, None).unwrap()
     }
 
     /// A badger optimiser using a reduced set of rewrite rules.
     #[fixture]
-    fn badger_opt_json() -> DefaultBadgerOptimiser {
+    fn badger_opt_json() -> ECCBadgerOptimiser {
         BadgerOptimiser::default_with_eccs_json_file("../test_files/eccs/small_eccs.json").unwrap()
     }
 
     /// A badger optimiser using a reduced set of rewrite rules.
     #[fixture]
-    fn badger_opt_compiled() -> DefaultBadgerOptimiser {
+    fn badger_opt_compiled() -> ECCBadgerOptimiser {
         BadgerOptimiser::default_with_rewriter_binary("../test_files/eccs/small_eccs.rwr").unwrap()
     }
 
@@ -636,14 +661,14 @@ mod tests {
     /// NOTE: This takes a few seconds to load.
     /// Use [`badger_opt`] if possible.
     #[fixture]
-    fn badger_opt_full() -> DefaultBadgerOptimiser {
+    fn badger_opt_full() -> ECCBadgerOptimiser {
         BadgerOptimiser::default_with_rewriter_binary("../test_files/eccs/nam_6_3.rwr").unwrap()
     }
 
     #[rstest]
     #[case::compiled(badger_opt_compiled())]
     #[case::json(badger_opt_json())]
-    fn rz_rz_cancellation(rz_rz: Circuit, #[case] badger_opt: DefaultBadgerOptimiser) {
+    fn rz_rz_cancellation(rz_rz: Circuit, #[case] badger_opt: ECCBadgerOptimiser) {
         use hugr::ops::OpType;
 
         use crate::{extension::rotation::RotationOp, op_matches};
@@ -670,7 +695,7 @@ mod tests {
     #[rstest]
     #[case::compiled(badger_opt_compiled())]
     #[case::json(badger_opt_json())]
-    fn rz_rz_cancellation_parallel(rz_rz: Circuit, #[case] badger_opt: DefaultBadgerOptimiser) {
+    fn rz_rz_cancellation_parallel(rz_rz: Circuit, #[case] badger_opt: ECCBadgerOptimiser) {
         let opt_rz = badger_opt.optimise(
             &rz_rz,
             BadgerOptions {
@@ -686,10 +711,7 @@ mod tests {
     #[rstest]
     #[case::compiled(badger_opt_compiled())]
     #[case::json(badger_opt_json())]
-    fn rz_rz_cancellation_split_parallel(
-        rz_rz: Circuit,
-        #[case] badger_opt: DefaultBadgerOptimiser,
-    ) {
+    fn rz_rz_cancellation_split_parallel(rz_rz: Circuit, #[case] badger_opt: ECCBadgerOptimiser) {
         let opt_rz = badger_opt.optimise(
             &rz_rz,
             BadgerOptions {
@@ -708,7 +730,7 @@ mod tests {
     #[ignore = "Loading the ECC set is really slow (~5 seconds)"]
     fn non_composable_rewrites(
         non_composable_rw_hugr: Circuit,
-        badger_opt_full: DefaultBadgerOptimiser,
+        badger_opt_full: ECCBadgerOptimiser,
     ) {
         let opt = badger_opt_full.optimise(
             &non_composable_rw_hugr,

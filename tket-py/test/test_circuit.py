@@ -54,3 +54,25 @@ def test_conversion():
 
     assert tk1_back == tk1
     assert type(tk1_back) is Circuit
+
+
+def test_conversion_qsystem():
+    tk1 = Circuit(2).ZZPhase(0.75, 0, 1).PhasedX(0.25, 0.33, 1)
+    tk1_dot = render_circuit_dot(tk1)
+
+    tk2 = Tk2Circuit(tk1)
+    tk2_dot = render_circuit_dot(tk2)
+
+    assert type(tk2) is Tk2Circuit
+    assert tk1_dot == tk2_dot
+
+    # Check that we didn't use the opaque tk1 op fallback.
+    # TODO: There's no way to traverse the circuit nodes??
+    assert "TKET1.tk1op" not in tk1_dot
+    assert "tket.qsystem.PhasedX" in tk1_dot
+    assert "tket.qsystem.ZZPhase" in tk1_dot
+
+    tk1_back = tk2.to_tket1()
+
+    assert tk1_back == tk1
+    assert type(tk1_back) is Circuit

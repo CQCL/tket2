@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::io::BufReader;
 
-use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
+use hugr::builder::{Dataflow, DataflowHugr, FunctionBuilder};
 use hugr::extension::prelude::{bool_t, qb_t};
 
 use hugr::hugr::hugrmut::HugrMut;
@@ -189,7 +189,7 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
 fn circ_preset_qubits() -> Circuit {
     let input_t = vec![qb_t()];
     let output_t = vec![qb_t(), qb_t()];
-    let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
+    let mut h = FunctionBuilder::new("preset_qubits", Signature::new(input_t, output_t)).unwrap();
 
     let [qb0] = h.input_wires_arr();
     let [qb1] = h.add_dataflow_op(TketOp::QAlloc, []).unwrap().outputs_arr();
@@ -222,7 +222,7 @@ fn circ_preset_qubits() -> Circuit {
 fn circ_parameterized() -> Circuit {
     let input_t = vec![qb_t(), rotation_type(), rotation_type(), rotation_type()];
     let output_t = vec![qb_t()];
-    let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
+    let mut h = FunctionBuilder::new("parameterized", Signature::new(input_t, output_t)).unwrap();
 
     let [q, r0, r1, r2] = h.input_wires_arr();
 
@@ -256,7 +256,7 @@ fn circ_parameterized() -> Circuit {
 fn circ_measure_ancilla() -> Circuit {
     let input_t = vec![qb_t()];
     let output_t = vec![bool_t(), bool_t()];
-    let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
+    let mut h = FunctionBuilder::new("meas_ancilla", Signature::new(input_t, output_t)).unwrap();
 
     let [qb] = h.input_wires_arr();
     let [anc] = h.add_dataflow_op(TketOp::QAlloc, []).unwrap().outputs_arr();
@@ -288,7 +288,8 @@ fn circ_measure_ancilla() -> Circuit {
 fn circ_add_angles_symbolic() -> (Circuit, String) {
     let input_t = vec![qb_t(), rotation_type(), rotation_type()];
     let output_t = vec![qb_t()];
-    let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
+    let mut h =
+        FunctionBuilder::new("add_angles_symbolic", Signature::new(input_t, output_t)).unwrap();
 
     let [qb, f1, f2] = h.input_wires_arr();
     let [f12] = h
@@ -307,7 +308,11 @@ fn circ_add_angles_symbolic() -> (Circuit, String) {
 #[fixture]
 fn circ_add_angles_constants() -> (Circuit, String) {
     let qb_row = vec![qb_t()];
-    let mut h = DFGBuilder::new(Signature::new(qb_row.clone(), qb_row)).unwrap();
+    let mut h = FunctionBuilder::new(
+        "add_angles_constants",
+        Signature::new(qb_row.clone(), qb_row),
+    )
+    .unwrap();
 
     let qb = h.input_wires().next().unwrap();
 
@@ -331,7 +336,11 @@ fn circ_add_angles_constants() -> (Circuit, String) {
 fn circ_complex_angle_computation() -> (Circuit, String) {
     let input_t = vec![qb_t(), rotation_type(), rotation_type()];
     let output_t = vec![qb_t()];
-    let mut h = DFGBuilder::new(Signature::new(input_t, output_t)).unwrap();
+    let mut h = FunctionBuilder::new(
+        "complex_angle_computation",
+        Signature::new(input_t, output_t),
+    )
+    .unwrap();
 
     let [qb, r0, r1] = h.input_wires_arr();
 
@@ -380,7 +389,7 @@ fn circ_complex_angle_computation() -> (Circuit, String) {
 
 #[rstest]
 #[case::simple(SIMPLE_JSON, 2, 2)]
-#[case::simple(MULTI_REGISTER, 2, 3)]
+#[case::multi_register(MULTI_REGISTER, 2, 3)]
 #[case::unknown_op(UNKNOWN_OP, 2, 3)]
 #[case::parametrized(PARAMETERIZED, 4, 2)]
 #[case::barrier(BARRIER, 3, 3)]
@@ -388,7 +397,7 @@ fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num
     let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), num_commands);
 
-    let circ: Circuit = ser.clone().decode().unwrap();
+    let circ: Circuit = ser.decode().unwrap();
 
     assert_eq!(circ.qubit_count(), num_qubits);
 
@@ -403,7 +412,7 @@ fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num
 fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
     let reader = BufReader::new(std::fs::File::open(circ).unwrap());
     let ser: circuit_json::SerialCircuit = serde_json::from_reader(reader).unwrap();
-    let circ: Circuit = ser.clone().decode().unwrap();
+    let circ: Circuit = ser.decode().unwrap();
     let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
     validate_serial_circ(&reser);
     compare_serial_circs(&ser, &reser);
@@ -418,7 +427,7 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
 #[case::preset_parameterized(circ_parameterized(), Signature::new(vec![qb_t(), rotation_type(), rotation_type(), rotation_type()], vec![qb_t()]))]
 fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
     let ser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
-    let deser: Circuit = ser.clone().decode().unwrap();
+    let deser: Circuit = ser.decode().unwrap();
 
     let deser_sig = deser.circuit_signature();
     assert_eq!(
@@ -454,7 +463,7 @@ fn test_add_angle_serialise(#[case] circ_add_angles: (Circuit, String)) {
     assert_eq!(ser.commands[0].op.op_type, optype::OpType::Rx);
     assert_eq!(ser.commands[0].op.params, Some(vec![expected]));
 
-    let deser: Circuit = ser.clone().decode().unwrap();
+    let deser: Circuit = ser.decode().unwrap();
     let reser = SerialCircuit::encode(&deser).unwrap();
     validate_serial_circ(&reser);
     compare_serial_circs(&ser, &reser);

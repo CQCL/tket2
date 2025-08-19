@@ -1,6 +1,15 @@
 //! Provides a preparation and validation workflow for Hugrs targeting
 //! Quantinuum H-series quantum computers.
 
+#[cfg(feature = "cli")]
+pub mod cli;
+pub mod extension;
+#[cfg(feature = "llvm")]
+pub mod llvm;
+mod lower_drops;
+pub mod pytket;
+pub mod replace_bools;
+
 use derive_more::{Display, Error, From};
 use hugr::{
     algorithms::{
