@@ -4,6 +4,7 @@ import pkgutil
 from typing import List, Protocol
 
 from hugr.ext import Extension, OpDef, TypeDef
+from semver import Version
 
 
 def load_extension(name: str) -> Extension:
@@ -16,6 +17,13 @@ def load_extension(name: str) -> Extension:
 
 
 class TketExtension(Protocol):
+    """A protocol for tket extensions."""
+
     def TYPES(self) -> List[TypeDef]: ...
     def OPS(self) -> List[OpDef]: ...
     def __call__(self) -> Extension: ...
+
+    @property
+    def version(self) -> Version:
+        """The version of the extension"""
+        return self().version

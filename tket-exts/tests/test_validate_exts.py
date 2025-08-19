@@ -197,6 +197,7 @@ def test_exported_extension(
     (ext, instantiated_types, instantiated_ops) = ext_vals()
 
     e = ext()
+    assert e.version == ext.version
 
     types = ext.TYPES()
     assert len(types) == len(e.types)
