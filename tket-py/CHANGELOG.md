@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.12.2](https://github.com/CQCL/tket2/compare/tket-py-v0.12.1...tket-py-v0.12.2) (2025-08-19)
+
+
+### Features
+
+* Define a wire tracker for the new pytket decoder ([#1036](https://github.com/CQCL/tket2/issues/1036)) ([2466ee2](https://github.com/CQCL/tket2/commit/2466ee26ab75b4e62136bd151d55f25ce8d1adbd))
+* Support qsystem native operations when loading pytket circuits ([[#1041](https://github.com/CQCL/tket2/issues/1041)](https://github.com/CQCL/tket2/issues/1041)) ([88c5c79](https://github.com/CQCL/tket2/commit/88c5c7920fe954d59d8dc8460939ba0f29f306d4))
+* **tket-py:** Create BadgerOptimiser from arbitrary Rewriters ([#1022](https://github.com/CQCL/tket2/issues/1022)) ([a975c1d](https://github.com/CQCL/tket2/commit/a975c1db0ca1f586cd0e64bbd6054f8aa6ed62b9)), closes [#1021](https://github.com/CQCL/tket2/issues/1021)
+
+
+### Documentation
+
+* Update README badges ([#1004](https://github.com/CQCL/tket2/issues/1004)) ([d609bf5](https://github.com/CQCL/tket2/commit/d609bf5f65af3cfe3ac44a16dfd4ef1bcacd5643))
+
 ## [0.12.1](https://github.com/CQCL/tket2/compare/tket-py-v0.12.0...tket-py-v0.12.1) (2025-07-29)
 
 
