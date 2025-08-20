@@ -397,7 +397,7 @@ fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num
     let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), num_commands);
 
-    let circ: Circuit = ser.clone().decode().unwrap();
+    let circ: Circuit = ser.decode().unwrap();
 
     assert_eq!(circ.qubit_count(), num_qubits);
 
@@ -412,7 +412,7 @@ fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num
 fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
     let reader = BufReader::new(std::fs::File::open(circ).unwrap());
     let ser: circuit_json::SerialCircuit = serde_json::from_reader(reader).unwrap();
-    let circ: Circuit = ser.clone().decode().unwrap();
+    let circ: Circuit = ser.decode().unwrap();
     let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
     validate_serial_circ(&reser);
     compare_serial_circs(&ser, &reser);
@@ -427,7 +427,7 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
 #[case::preset_parameterized(circ_parameterized(), Signature::new(vec![qb_t(), rotation_type(), rotation_type(), rotation_type()], vec![qb_t()]))]
 fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
     let ser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
-    let deser: Circuit = ser.clone().decode().unwrap();
+    let deser: Circuit = ser.decode().unwrap();
 
     let deser_sig = deser.circuit_signature();
     assert_eq!(
@@ -463,7 +463,7 @@ fn test_add_angle_serialise(#[case] circ_add_angles: (Circuit, String)) {
     assert_eq!(ser.commands[0].op.op_type, optype::OpType::Rx);
     assert_eq!(ser.commands[0].op.params, Some(vec![expected]));
 
-    let deser: Circuit = ser.clone().decode().unwrap();
+    let deser: Circuit = ser.decode().unwrap();
     let reser = SerialCircuit::encode(&deser).unwrap();
     validate_serial_circ(&reser);
     compare_serial_circs(&ser, &reser);

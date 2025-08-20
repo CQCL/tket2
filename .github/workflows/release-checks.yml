@@ -1,6 +1,7 @@
 # A check that ensures that `tket-py` works correctly with the latest release of `tket-exts` and `tket-eccs`.
 #
-# If this fails, it is likely that the packages require a release before we can release the `tket` python lib.
+# If this fails, it is likely that we either didn't update the dependency version in tket's pyproject,
+# or the latest `tket-exts`/`tket-eccs` packages haven't been published to pypi.
 
 name: 🚚 tket-py release checks
 
@@ -26,9 +27,9 @@ jobs:
     # Check if we are running on a release PR.
     #
     # release-please always uses this branch name.
-    if: ${{ github.ref == 'refs/heads/release-please--branches--main--components--tket-py' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.head_ref == 'release-please--branches--main--components--tket-py' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
@@ -39,7 +40,7 @@ jobs:
         run: |
           uv python install ${{ env.PYTHON_HIGHEST }}
           uv python pin ${{ env.PYTHON_HIGHEST }}
-      - name: Setup `tke2-py` with only pypi deps
+      - name: Setup `tket-py` with only pypi deps
         run: |
           uv sync --no-sources --no-install-workspace
           uv pip install --no-sources tket-exts
@@ -47,7 +48,9 @@ jobs:
           uv run --no-sync maturin develop
           echo "\nDone! Installed dependencies:"
           uv pip list
+      - name: Type check with mypy
+        run: uv run --no-sync mypy tket-py
       - name: Lint with ruff
-        run: uv run --no-sync ruff check
+        run: uv run --no-sync ruff check tket-py
       - name: Run python tests
         run: uv run --no-sync pytest

@@ -25,6 +25,7 @@ mod tests;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
+use std::sync::Arc;
 use std::{fs, io};
 
 use hugr::ops::OpType;
@@ -68,9 +69,12 @@ pub trait TKETDecode: Sized {
     /// Convert the serialized circuit to a circuit.
     ///
     /// Uses a default set of extension decoders to translate operations.
-    fn decode(self) -> Result<Circuit, Self::DecodeError>;
+    fn decode(&self) -> Result<Circuit, Self::DecodeError>;
     /// Convert the serialized circuit to a circuit.
-    fn decode_with_config(self, config: PytketDecoderConfig) -> Result<Circuit, Self::DecodeError>;
+    fn decode_with_config(
+        &self,
+        config: impl Into<Arc<PytketDecoderConfig>>,
+    ) -> Result<Circuit, Self::DecodeError>;
     /// Convert a circuit to a serialized pytket circuit.
     ///
     /// Uses a default set of emitters to translate operations.
@@ -83,7 +87,7 @@ pub trait TKETDecode: Sized {
     /// non-std operations or types.
     fn encode_with_config(
         circuit: &Circuit,
-        config: PytketEncoderConfig<Hugr>,
+        config: impl Into<Arc<PytketEncoderConfig<Hugr>>>,
     ) -> Result<Self, Self::EncodeError>;
 }
 
@@ -91,17 +95,20 @@ impl TKETDecode for SerialCircuit {
     type DecodeError = PytketDecodeError;
     type EncodeError = PytketEncodeError;
 
-    fn decode(self) -> Result<Circuit, Self::DecodeError> {
+    fn decode(&self) -> Result<Circuit, Self::DecodeError> {
         let config = default_decoder_config();
         Self::decode_with_config(self, config)
     }
 
-    fn decode_with_config(self, config: PytketDecoderConfig) -> Result<Circuit, Self::DecodeError> {
+    fn decode_with_config(
+        &self,
+        config: impl Into<Arc<PytketDecoderConfig>>,
+    ) -> Result<Circuit, Self::DecodeError> {
         let mut hugr = Hugr::new();
 
         let mut decoder =
-            PytketDecoderContext::new(&self, &mut hugr, None, None, Vec::new(), config)?;
-        decoder.run_decoder(self.commands)?;
+            PytketDecoderContext::new(self, &mut hugr, None, None, Vec::new(), config)?;
+        decoder.run_decoder(&self.commands)?;
         let main_func = decoder.finish()?;
         hugr.set_entrypoint(main_func.node());
         Ok(hugr.into())
@@ -114,7 +121,7 @@ impl TKETDecode for SerialCircuit {
 
     fn encode_with_config(
         circuit: &Circuit,
-        config: PytketEncoderConfig<Hugr>,
+        config: impl Into<Arc<PytketEncoderConfig<Hugr>>>,
     ) -> Result<Self, Self::EncodeError> {
         let mut encoder = PytketEncoderContext::new(circuit, circuit.parent(), config)?;
         encoder.run_encoder(circuit, circuit.parent())?;
@@ -124,49 +131,83 @@ impl TKETDecode for SerialCircuit {
 }
 
 /// Load a TKET1 circuit from a JSON file.
-pub fn load_tk1_json_file(path: impl AsRef<Path>) -> Result<Circuit, PytketDecodeError> {
+///
+/// If a decoder config is provided, it will be used to decode the circuit.
+/// Otherwise, it defaults to [`default_decoder_config`].
+pub fn load_tk1_json_file(
+    path: impl AsRef<Path>,
+    config: Option<PytketDecoderConfig>,
+) -> Result<Circuit, PytketDecodeError> {
     let file = fs::File::open(path).map_err(PytketDecodeError::custom)?;
     let reader = io::BufReader::new(file);
-    load_tk1_json_reader(reader)
+    load_tk1_json_reader(reader, config)
 }
 
 /// Load a TKET1 circuit from a JSON reader.
-pub fn load_tk1_json_reader(json: impl io::Read) -> Result<Circuit, PytketDecodeError> {
+///
+/// If a decoder config is provided, it will be used to decode the circuit.
+/// Otherwise, it defaults to [`default_decoder_config`].
+pub fn load_tk1_json_reader(
+    json: impl io::Read,
+    config: Option<PytketDecoderConfig>,
+) -> Result<Circuit, PytketDecodeError> {
+    let config = config.unwrap_or_else(default_decoder_config);
     let ser: SerialCircuit = serde_json::from_reader(json).map_err(PytketDecodeError::custom)?;
-    let circ: Circuit = ser.decode()?;
+    let circ: Circuit = ser.decode_with_config(config)?;
     Ok(circ)
 }
 
 /// Load a TKET1 circuit from a JSON string.
-pub fn load_tk1_json_str(json: &str) -> Result<Circuit, PytketDecodeError> {
+///
+/// If a decoder config is provided, it will be used to decode the circuit.
+/// Otherwise, it defaults to [`default_decoder_config`].
+pub fn load_tk1_json_str(
+    json: &str,
+    config: Option<PytketDecoderConfig>,
+) -> Result<Circuit, PytketDecodeError> {
     let reader = json.as_bytes();
-    load_tk1_json_reader(reader)
+    load_tk1_json_reader(reader, config)
 }
 
 /// Save a circuit to file in TK1 JSON format.
 ///
 /// You may need to normalize the circuit using [`lower_to_pytket`] before saving.
 ///
+/// If an encoder config is provided, it will be used to encode the circuit.
+/// Otherwise, it defaults to [`default_encoder_config`].
+///
 /// # Errors
 ///
 /// Returns an error if the circuit is not flat or if it contains operations not
 /// supported by pytket.
-pub fn save_tk1_json_file(circ: &Circuit, path: impl AsRef<Path>) -> Result<(), PytketEncodeError> {
+pub fn save_tk1_json_file(
+    circ: &Circuit,
+    path: impl AsRef<Path>,
+    config: Option<PytketEncoderConfig<Hugr>>,
+) -> Result<(), PytketEncodeError> {
     let file = fs::File::create(path).map_err(PytketEncodeError::custom)?;
     let writer = io::BufWriter::new(file);
-    save_tk1_json_writer(circ, writer)
+    save_tk1_json_writer(circ, writer, config)
 }
 
 /// Save a circuit in TK1 JSON format to a writer.
 ///
 /// You may need to normalize the circuit using [`lower_to_pytket`] before saving.
 ///
+/// If an encoder config is provided, it will be used to encode the circuit.
+/// Otherwise, it defaults to [`default_encoder_config`].
+///
 /// # Errors
 ///
 /// Returns an error if the circuit is not flat or if it contains operations not
 /// supported by pytket.
-pub fn save_tk1_json_writer(circ: &Circuit, w: impl io::Write) -> Result<(), PytketEncodeError> {
-    let serial_circ = SerialCircuit::encode(circ)?;
+pub fn save_tk1_json_writer(
+    circ: &Circuit,
+    w: impl io::Write,
+    config: Option<PytketEncoderConfig<Hugr>>,
+) -> Result<(), PytketEncodeError> {
+    let config = config.unwrap_or_else(default_encoder_config);
+    let serial_circ = SerialCircuit::encode_with_config(circ, config)?;
     serde_json::to_writer(w, &serial_circ).map_err(PytketEncodeError::custom)?;
     Ok(())
 }
@@ -175,13 +216,19 @@ pub fn save_tk1_json_writer(circ: &Circuit, w: impl io::Write) -> Result<(), Pyt
 ///
 /// You may need to normalize the circuit using [`lower_to_pytket`] before saving.
 ///
+/// If an encoder config is provided, it will be used to encode the circuit.
+/// Otherwise, it defaults to [`default_encoder_config`].
+///
 /// # Errors
 ///
 /// Returns an error if the circuit is not flat or if it contains operations not
 /// supported by pytket.
-pub fn save_tk1_json_str(circ: &Circuit) -> Result<String, PytketEncodeError> {
+pub fn save_tk1_json_str(
+    circ: &Circuit,
+    config: Option<PytketEncoderConfig<Hugr>>,
+) -> Result<String, PytketEncodeError> {
     let mut buf = io::BufWriter::new(Vec::new());
-    save_tk1_json_writer(circ, &mut buf)?;
+    save_tk1_json_writer(circ, &mut buf, config)?;
     let bytes = buf.into_inner().unwrap();
     String::from_utf8(bytes).map_err(PytketEncodeError::custom)
 }
