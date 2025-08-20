@@ -70,6 +70,14 @@ impl<N: HugrNode> Interval<N> {
         self.nodes[0]
     }
 
+    pub(crate) fn start_pos(&self) -> Position {
+        self.positions[0]
+    }
+
+    pub(crate) fn end_pos(&self) -> Position {
+        self.positions[1]
+    }
+
     /// Get the end node of the interval.
     pub fn end_node(&self) -> N {
         self.nodes[1]

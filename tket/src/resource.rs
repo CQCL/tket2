@@ -53,6 +53,7 @@ pub use scope::{ResourceScope, ResourceScopeConfig};
 pub use types::{CircuitUnit, Position, ResourceAllocator, ResourceId};
 
 // Internal modules
+mod convex_checker;
 mod flow;
 mod interval;
 mod scope;

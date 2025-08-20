@@ -231,9 +231,14 @@ impl<N: HugrNode> Subcircuit<N> {
     /// Convert the subcircuit to a [`SiblingSubgraph`].
     pub fn try_to_subgraph(
         &self,
-        _circuit: &ResourceScope<impl HugrView<Node = N>>,
+        circuit: &ResourceScope<impl HugrView<Node = N>>,
     ) -> Result<SiblingSubgraph<N>, InvalidSubgraph<N>> {
-        todo!()
+        if !circuit.is_convex(self.clone()) {
+            return Err(InvalidSubgraph::NotConvex);
+        }
+
+        // TODO(performance): this checks convexity again and is very inefficient
+        SiblingSubgraph::try_from_nodes(self.nodes(circuit).collect_vec(), circuit.hugr())
     }
 
     /// Create a rewrite rule to replace the subcircuit with a new circuit.
