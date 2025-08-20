@@ -267,6 +267,11 @@ impl<H: HugrView> ResourceScope<H> {
             self.nodes().contains(&next_node).then_some(next_node)
         })
     }
+
+    /// Check if the given node is in the subgraph.
+    pub fn contains_node(&self, node: H::Node) -> bool {
+        self.subgraph.nodes().contains(&node)
+    }
 }
 
 impl<H: Clone + HugrView<Node = hugr::Node>> ResourceScope<H> {
