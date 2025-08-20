@@ -14,7 +14,8 @@ pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
 use hugr::extension::prelude::{NoopDef, TupleOpDef};
 use hugr::extension::simple_op::MakeOpDef;
-use hugr::hugr::views::ExtractionResult;
+use hugr::hugr::views::{ExtractionResult, SiblingSubgraph};
+use hugr::ops::handle::DataflowParentID;
 use itertools::Either::{Left, Right};
 
 use derive_more::{Display, Error, From};
@@ -353,6 +354,14 @@ impl<T: HugrView<Node = Node>> Circuit<T> {
         F: Fn(&OpType) -> C,
     {
         self.commands().map(|cmd| op_cost(cmd.optype())).sum()
+    }
+
+    /// The subgraph containing the entire circuit.
+    pub fn subgraph(&self) -> SiblingSubgraph
+    where
+        T: Clone,
+    {
+        SiblingSubgraph::try_new_dataflow_subgraph::<_, DataflowParentID>(self.hugr()).unwrap()
     }
 }
 
