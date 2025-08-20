@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.13"
+# dependencies = [
+#     "guppylang >=0.21.3",
+# ]
+# ///
+
 """Some angle logic that reduces to the identity.
 
 This may be harder to optimize, as it requires const-folding angles through loop

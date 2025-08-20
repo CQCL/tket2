@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.13"
+# dependencies = [
+#     "guppylang >=0.21.3",
+# ]
+# ///
+
 from pathlib import Path
 from sys import argv
 
