@@ -165,12 +165,14 @@ def ext_wasm() -> Tuple[TketExtension, List[ExtType], List[ExtOp]]:
     ext = tket_exts.wasm
     return (
         ext,
-        [ext.context, ext.func([], []), ext.module],
+        [ext.context, ext.func([], []), ext.module, ext.result([])],
         [
             ext.call([], []),
             ext.dispose_context,
             ext.get_context,
-            ext.lookup("test", [], []),
+            ext.lookup_by_id(42, [], []),
+            ext.lookup_by_name("test", [], []),
+            ext.read_result([]),
         ],
     )
 

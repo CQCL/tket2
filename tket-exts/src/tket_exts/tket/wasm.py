@@ -5,7 +5,7 @@ from typing import List
 
 from hugr.ext import Extension, OpDef, TypeDef
 from hugr.ops import ExtOp
-from hugr.tys import ExtType, Type, TypeTypeArg, ListArg, StringArg
+from hugr.tys import ExtType, Type, TypeTypeArg, BoundedNatArg, ListArg, StringArg
 from ._util import TketExtension, load_extension
 
 
@@ -19,7 +19,12 @@ class WasmExtension(TketExtension):
 
     def TYPES(self) -> List[TypeDef]:
         """Return the types defined by this extension"""
-        return [self.context.type_def, self.func_def, self.module.type_def]
+        return [
+            self.context.type_def,
+            self.func_def,
+            self.module.type_def,
+            self.result_def,
+        ]
 
     def OPS(self) -> List[OpDef]:
         """Return the operations defined by this extension"""
@@ -27,7 +32,9 @@ class WasmExtension(TketExtension):
             self.call_def,
             self.dispose_context.op_def(),
             self.get_context.op_def(),
-            self.lookup_def,
+            self.lookup_by_id_def,
+            self.lookup_by_name_def,
+            self.read_result_def,
         ]
 
     @functools.cached_property
@@ -62,13 +69,21 @@ class WasmExtension(TketExtension):
         )
 
     @functools.cached_property
+    def result_def(self) -> TypeDef:
+        """WASM module."""
+        return self().get_type("result")
+
+    def result(self, outputs: List[Type]) -> ExtType:
+        return self.result_def.instantiate([ListArg([TypeTypeArg(t) for t in outputs])])
+
+    @functools.cached_property
     def module(self) -> ExtType:
         """WASM module."""
         return self().get_type("module").instantiate([])
 
     @functools.cached_property
     def call_def(self) -> OpDef:
-        """Call a function in a context, returning a Future of the result.
+        """Call a function in a context, returning a `Result`.
 
         This is the generic operation definition. For the instantiated operation, see
         `call`.
@@ -76,7 +91,7 @@ class WasmExtension(TketExtension):
         return self().get_op("call")
 
     def call(self, inputs: List[Type], outputs: List[Type]) -> ExtOp:
-        """Call a function in a context, returning a Future of the result.
+        """Call a function in a context, returning a `Result`.
 
         Args:
             inputs: Function input types.
@@ -100,15 +115,42 @@ class WasmExtension(TketExtension):
         return self().get_op("get_context").instantiate()
 
     @functools.cached_property
-    def lookup_def(self) -> OpDef:
-        """Lookup a function in a module by name and signature.
+    def lookup_by_id_def(self) -> OpDef:
+        """Lookup a function in a module by id.
 
         This is the generic operation definition. For the instantiated operation, see
-        `lookup`.
+        `lookup_by_id`.
         """
-        return self().get_op("lookup")
+        return self().get_op("lookup_by_id")
 
-    def lookup(self, name: str, inputs: List[Type], outputs: List[Type]) -> ExtOp:
+    def lookup_by_id(self, id: int, inputs: List[Type], outputs: List[Type]) -> ExtOp:
+        """Lookup a function in a module by name and signature.
+
+        Args:
+            id: Function id to look up.
+            inputs: Function input types.
+            outputs: Function output types.
+        """
+        return self.lookup_by_id_def.instantiate(
+            [
+                BoundedNatArg(id),
+                ListArg([TypeTypeArg(t) for t in inputs]),
+                ListArg([TypeTypeArg(t) for t in outputs]),
+            ]
+        )
+
+    @functools.cached_property
+    def lookup_by_name_def(self) -> OpDef:
+        """Lookup a function in a module by name.
+
+        This is the generic operation definition. For the instantiated operation, see
+        `lookup_by_name`.
+        """
+        return self().get_op("lookup_by_name")
+
+    def lookup_by_name(
+        self, name: str, inputs: List[Type], outputs: List[Type]
+    ) -> ExtOp:
         """Lookup a function in a module by name and signature.
 
         Args:
@@ -116,10 +158,29 @@ class WasmExtension(TketExtension):
             inputs: Function input types.
             outputs: Function output types.
         """
-        return self.lookup_def.instantiate(
+        return self.lookup_by_name_def.instantiate(
             [
                 StringArg(name),
                 ListArg([TypeTypeArg(t) for t in inputs]),
                 ListArg([TypeTypeArg(t) for t in outputs]),
             ]
+        )
+
+    @functools.cached_property
+    def read_result_def(self) -> OpDef:
+        """Read the result of a function call.
+
+        This is the generic operation definition. For the instantiated operation, see
+        `read_result`.
+        """
+        return self().get_op("read_result")
+
+    def read_result(self, outputs: List[Type]) -> ExtOp:
+        """Read the result of a function call.
+
+        Args:
+            outputs: The output types of the call
+        """
+        return self.read_result_def.instantiate(
+            [ListArg([TypeTypeArg(t) for t in outputs])]
         )
