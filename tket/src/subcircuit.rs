@@ -179,23 +179,23 @@ impl<N: HugrNode> Subcircuit<N> {
     }
 
     /// Nodes in the subcircuit.
-    pub fn nodes(&self, circuit: &ResourceScope<impl HugrView<Node = N>>) -> Vec<N> {
-        let mut nodes = self
+    pub fn nodes<'a>(
+        &'a self,
+        circuit: &'a ResourceScope<impl HugrView<Node = N>>,
+    ) -> impl Iterator<Item = N> + 'a {
+        let paths = self
             .intervals
             .iter()
-            .flat_map(|interval| circuit.nodes_in_interval(*interval))
-            .collect_vec();
+            .map(|interval| circuit.nodes_in_interval(*interval));
 
-        nodes.sort_unstable();
-        nodes.dedup();
-        nodes.shrink_to_fit();
-
-        nodes
+        paths
+            .kmerge_by(|&a, &b| (circuit.get_position(a), a) < (circuit.get_position(b), b))
+            .dedup()
     }
 
     /// Number of nodes in the subcircuit.
     pub fn node_count(&self, circuit: &ResourceScope<impl HugrView<Node = N>>) -> usize {
-        self.nodes(circuit).len()
+        self.nodes(circuit).count()
     }
 
     /// Whether the subcircuit is empty.
@@ -285,9 +285,9 @@ fn update_intervals<N: HugrNode>(
         let (interval, num_nodes) = intervals
             .entry(res)
             .or_insert_with(|| (Interval::singleton(res, node, circuit), 0));
-        let Some(pos) = circuit.get_position(node, res) else {
-            panic!("node {node:?} is not on resource path {res:?}");
-        };
+        let pos = circuit
+            .get_position(node)
+            .expect("node is not on resource path");
         interval.include_node(node, pos);
         *num_nodes += 1;
     }
@@ -441,7 +441,7 @@ mod tests {
         if should_succeed {
             assert!(result.is_ok(), "Expected success for case: {description}");
             let subcircuit = result.unwrap();
-            assert_eq!(subcircuit.nodes(&scope), nodes);
+            assert_eq!(subcircuit.nodes(&scope).collect_vec(), nodes);
         } else {
             assert!(result.is_err(), "Expected failure for case: {description}");
         }
@@ -475,7 +475,7 @@ mod tests {
         if should_succeed {
             assert!(result.is_ok());
             let subcircuit = result.unwrap();
-            assert_eq!(subcircuit.nodes(&scope), selected_nodes);
+            assert_eq!(subcircuit.nodes(&scope).collect_vec(), selected_nodes);
             assert_eq!(
                 subcircuit.input_resources.len(),
                 expected_input_resources,
