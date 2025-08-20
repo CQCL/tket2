@@ -50,7 +50,7 @@ impl CopyableValueId {
 /// Positions are rational numbers that order operations along resource paths.
 /// Initially assigned as contiguous integers, they may become non-integer
 /// when operations are inserted or removed.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Position(Rational64);
 
 impl std::fmt::Debug for Position {
@@ -60,10 +60,6 @@ impl std::fmt::Debug for Position {
 }
 
 impl Position {
-    fn new_integer(numer: i64) -> Self {
-        Self(Rational64::from_integer(numer))
-    }
-
     /// Get position as f64, rounded to the given precision.
     pub fn to_f64(&self, precision: usize) -> f64 {
         let big = self.0 * Rational64::from_integer(10).pow(precision as i32);
@@ -79,8 +75,8 @@ impl Position {
 /// Value associated with a port, either a resource with position or a copyable value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OpValue {
-    /// A linear resource with its position along the resource path.
-    Resource(ResourceId, Position),
+    /// A linear resource.
+    Resource(ResourceId),
     /// A copyable value.
     Copyable(CopyableValueId),
 }
@@ -88,26 +84,26 @@ pub enum OpValue {
 impl OpValue {
     /// Returns true if this is a resource value.
     pub fn is_resource(&self) -> bool {
-        matches!(self, OpValue::Resource(_, _))
+        matches!(self, OpValue::Resource(..))
     }
 
     /// Returns true if this is a copyable value.
     pub fn is_copyable(&self) -> bool {
-        matches!(self, OpValue::Copyable(_))
+        matches!(self, OpValue::Copyable(..))
     }
 
     /// Extract the ResourceId and Position if this is a resource.
-    pub fn as_resource(&self) -> Option<(ResourceId, Position)> {
+    pub fn as_resource(&self) -> Option<ResourceId> {
         match self {
-            OpValue::Resource(id, pos) => Some((*id, *pos)),
-            OpValue::Copyable(_) => None,
+            OpValue::Resource(id) => Some(*id),
+            OpValue::Copyable(..) => None,
         }
     }
 
     /// Extract the CopyableValueId if this is a copyable value.
     pub fn as_copyable(&self) -> Option<CopyableValueId> {
         match self {
-            OpValue::Resource(_, _) => None,
+            OpValue::Resource(..) => None,
             OpValue::Copyable(id) => Some(*id),
         }
     }
@@ -190,17 +186,11 @@ impl<T> PortMap<T> {
     }
 }
 
-pub(super) type ResourceMap<T> = Vec<T>;
-
-/// Allocator for ResourceIds that ensures they are assigned in increasing order.
+/// Allocator for ResourceIds that ensures they are assigned in increasing
+/// order.
 #[derive(Debug, Clone)]
 pub struct ResourceAllocator {
     next_id: usize,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct PositionAllocator {
-    next_pos: i64,
 }
 
 impl ResourceAllocator {
@@ -220,13 +210,5 @@ impl ResourceAllocator {
 impl Default for ResourceAllocator {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl PositionAllocator {
-    pub fn allocate(&mut self) -> Position {
-        let pos = Position::new_integer(self.next_pos);
-        self.next_pos += 1;
-        pos
     }
 }

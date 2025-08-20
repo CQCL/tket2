@@ -14,7 +14,8 @@ pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
 use hugr::extension::prelude::{NoopDef, TupleOpDef};
 use hugr::extension::simple_op::MakeOpDef;
-use hugr::hugr::views::ExtractionResult;
+use hugr::hugr::views::{ExtractionResult, SiblingSubgraph};
+use hugr::ops::handle::DataflowParentID;
 use itertools::Either::{Left, Right};
 
 use derive_more::{Display, Error, From};
@@ -342,6 +343,14 @@ impl<T: HugrView<Node = Node>> Circuit<T> {
         // TODO: Can we just ignore this now?
         //extract_dfg::rewrite_into_dfg(&mut circ)?;
         Ok(circ)
+    }
+
+    /// The subgraph containing the entire circuit.
+    pub fn subgraph(&self) -> SiblingSubgraph
+    where
+        T: Clone,
+    {
+        SiblingSubgraph::try_new_dataflow_subgraph::<_, DataflowParentID>(self.hugr()).unwrap()
     }
 
     /// Compute the cost of the circuit based on a per-operation cost function.

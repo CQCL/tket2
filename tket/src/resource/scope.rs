@@ -4,11 +4,15 @@
 //! tracking within a specific region of a HUGR, computing resource paths and
 //! providing efficient lookup of port values.
 
+use std::{cmp, iter, mem};
+
 use crate::resource::flow::{DefaultResourceFlow, ResourceFlow};
 use crate::resource::types::{CopyableValueId, OpValue, PortMap};
 use crate::utils::type_is_linear;
+use crate::Circuit;
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::OpTrait;
+use hugr::types::Signature;
 use hugr::{Direction, HugrView, IncomingPort, Port, PortIndex};
 use hugr_core::hugr::internal::PortgraphNodeMap;
 use indexmap::IndexMap;
@@ -16,8 +20,7 @@ use itertools::Itertools;
 use portgraph::algorithms::{toposort, TopoSort};
 use portgraph::view::{FilteredGraph, NodeFilter, NodeFiltered};
 
-use super::types::{PositionAllocator, ResourceMap};
-use super::ResourceAllocator;
+use super::{Position, ResourceAllocator, ResourceId};
 
 /// ResourceScope tracks resources within a HUGR subgraph.
 ///
@@ -31,7 +34,24 @@ pub struct ResourceScope<H: HugrView> {
     /// The subgraph within which resources are tracked.
     subgraph: SiblingSubgraph<H::Node>,
     /// Mapping from nodes and ports to their OpValues.
-    op_values: IndexMap<H::Node, PortMap<OpValue>>,
+    op_values: IndexMap<H::Node, NodeOpValues>,
+}
+
+#[derive(Debug, Clone)]
+struct NodeOpValues {
+    /// Mapping from ports to their OpValues.
+    port_map: PortMap<OpValue>,
+    /// The position of the node.
+    position: Position,
+}
+
+impl NodeOpValues {
+    fn with_default(default: OpValue, signature: &Signature) -> Self {
+        Self {
+            port_map: PortMap::with_default(default, signature),
+            position: Position::default(),
+        }
+    }
 }
 
 /// Configuration for a ResourceScope.
@@ -80,23 +100,144 @@ impl<H: HugrView> ResourceScope<H> {
     }
 
     /// Get the opvalue for a given port.
-    pub fn get_opvalue(&self, node: H::Node, port: impl Into<Port>) -> &OpValue {
-        let port_map = self.op_values.get(&node).expect("node not in scope");
-        port_map.get(port)
+    pub fn get_opvalue(&self, node: H::Node, port: impl Into<Port>) -> Option<OpValue> {
+        let port_map = self.port_map(node)?;
+        Some(*port_map.get(port))
     }
 
     /// Get all opvalues for either the incoming or outgoing ports of a node.
-    pub fn get_opvalue_slice(&self, node: H::Node, direction: Direction) -> &[OpValue] {
-        let port_map = self.op_values.get(&node).expect("node not in scope");
-        port_map.get_slice(direction)
+    pub fn get_opvalue_slice(&self, node: H::Node, direction: Direction) -> Option<&[OpValue]> {
+        let port_map = self.port_map(node)?;
+        Some(port_map.get_slice(direction))
+    }
+
+    /// Get the port of node on the given resource path.
+    ///
+    /// The returned port will have the direction `dir`.
+    pub fn get_port(&self, node: H::Node, resource_id: ResourceId, dir: Direction) -> Option<Port> {
+        let opvals = self.get_opvalue_slice(node, dir)?;
+        let offset = opvals.iter().position(|opval| match opval {
+            &OpValue::Resource(res) => res == resource_id,
+            _ => false,
+        })?;
+        Some(Port::new(dir, offset))
+    }
+
+    /// Get the position of the given node.
+    pub fn get_position(&self, node: H::Node) -> Option<Position> {
+        self.op_values
+            .get(&node)
+            .map(|node_op_values| node_op_values.position)
+    }
+
+    /// All resource IDs on the ports of `node` in the given direction.
+    pub fn get_resources(
+        &self,
+        node: H::Node,
+        dir: Direction,
+    ) -> impl Iterator<Item = ResourceId> + '_ {
+        let opvals = self.get_opvalue_slice(node, dir);
+        opvals
+            .into_iter()
+            .flatten()
+            .filter_map(|opval| match opval {
+                &OpValue::Resource(res) => Some(res),
+                _ => None,
+            })
+    }
+
+    /// All resource IDs on the ports of `node`, in both directions.
+    pub fn get_all_resources(&self, node: H::Node) -> Vec<ResourceId> {
+        let in_resources = self.get_resources(node, Direction::Incoming);
+        let out_resources = self.get_resources(node, Direction::Outgoing);
+        let mut all_resources = in_resources.chain(out_resources).collect_vec();
+        all_resources.sort_unstable();
+        all_resources.dedup();
+        all_resources.shrink_to_fit();
+        all_resources
+    }
+
+    /// All copyable values on the ports of `node` in the given direction.
+    pub fn get_copyable_values(
+        &self,
+        node: H::Node,
+        dir: Direction,
+    ) -> impl Iterator<Item = CopyableValueId> + '_ {
+        let opvals = self.get_opvalue_slice(node, dir);
+        opvals
+            .into_iter()
+            .flatten()
+            .filter_map(|opval| match opval {
+                &OpValue::Copyable(id) => Some(id),
+                _ => None,
+            })
+    }
+
+    /// Iterate over the nodes on the resource path starting from the given
+    /// node in the given direction.
+    pub fn resource_path_iter(
+        &self,
+        resource_id: ResourceId,
+        start_node: H::Node,
+        direction: Direction,
+    ) -> impl Iterator<Item = H::Node> + '_ {
+        let mut curr_node = start_node;
+
+        iter::from_fn(move || {
+            let port = self.get_port(curr_node, resource_id, direction)?;
+            let (next_node, _) = self
+                .hugr()
+                .single_linked_port(curr_node, port)
+                .expect("linear resource");
+
+            Some(mem::replace(&mut curr_node, next_node))
+        })
+    }
+}
+
+impl<H: HugrView> ResourceScope<H> {
+    /// Create a new ResourceScope from a reference to a circuit.
+    pub fn from_circuit(circuit: Circuit<H>) -> Self
+    where
+        H: Clone + HugrView<Node = hugr::Node>,
+    {
+        let subgraph = circuit.subgraph();
+        Self::new(circuit.into_hugr(), subgraph)
+    }
+}
+
+impl<'h, H: HugrView> ResourceScope<&'h H> {
+    /// Create a new ResourceScope from a reference to a circuit.
+    pub fn from_circuit_ref(circuit: &'h Circuit<H>) -> Self
+    where
+        H: Clone + HugrView<Node = hugr::Node>,
+    {
+        let subgraph = circuit.subgraph();
+        Self::new(circuit.hugr(), subgraph)
+    }
+}
+
+impl<H: HugrView<Node = hugr::Node> + Clone> From<Circuit<H>> for ResourceScope<H> {
+    fn from(value: Circuit<H>) -> Self {
+        Self::from_circuit(value)
+    }
+}
+
+impl<'h, H: HugrView<Node = hugr::Node> + Clone> From<&'h Circuit<H>> for ResourceScope<&'h H> {
+    fn from(value: &'h Circuit<H>) -> Self {
+        Self::from_circuit_ref(value)
     }
 }
 
 // Private methods to construct the op_values map.
 impl<H: HugrView> ResourceScope<H> {
+    fn port_map(&self, node: H::Node) -> Option<&PortMap<OpValue>> {
+        Some(&self.op_values.get(&node)?.port_map)
+    }
+
     /// Compute op values for all nodes in the subgraph.
     fn compute_op_values(&mut self, flows: &[Box<dyn ResourceFlow>]) {
-        let mut allocator = Allocator::default();
+        let mut allocator = OpValueAllocator::default();
 
         // Sentinel value for uninitialized ports
         let sentinel = OpValue::Copyable(CopyableValueId::new());
@@ -128,7 +269,7 @@ impl<H: HugrView> ResourceScope<H> {
     fn assign_op_values<I: IntoIterator<Item = (H::Node, IncomingPort)>>(
         &mut self,
         port_groups: impl IntoIterator<Item = I>,
-        allocator: &mut Allocator,
+        allocator: &mut OpValueAllocator,
         sentinel: OpValue,
     ) {
         for all_uses_of_value in port_groups {
@@ -140,15 +281,15 @@ impl<H: HugrView> ResourceScope<H> {
             // We allocate one opvalue for all uses of this input
             let op_value = allocator.allocate_op_value(fst_node, fst_port, &self.hugr);
             for (node, port) in all_uses_of_input {
-                let port_map = self.op_values.entry(node).or_insert_with(|| {
+                let node_op_values = self.op_values.entry(node).or_insert_with(|| {
                     let signature = self
                         .hugr
                         .get_optype(node)
                         .dataflow_signature()
                         .expect("dataflow op");
-                    PortMap::with_default(sentinel, &signature)
+                    NodeOpValues::with_default(sentinel, &signature)
                 });
-                port_map.set(port, op_value);
+                node_op_values.port_map.set(port, op_value);
             }
         }
     }
@@ -172,7 +313,7 @@ impl<H: HugrView> ResourceScope<H> {
     fn assign_missing_op_values(
         &mut self,
         node: H::Node,
-        allocator: &mut Allocator,
+        allocator: &mut OpValueAllocator,
         sentinel: OpValue,
     ) {
         let signature = self
@@ -180,14 +321,14 @@ impl<H: HugrView> ResourceScope<H> {
             .get_optype(node)
             .dataflow_signature()
             .expect("dataflow op");
-        let port_map = self
+        let node_op_values = self
             .op_values
             .entry(node)
-            .or_insert_with(|| PortMap::with_default(sentinel, &signature));
+            .or_insert_with(|| NodeOpValues::with_default(sentinel, &signature));
         for p in signature.input_ports() {
-            if port_map.get(p) == &sentinel {
+            if node_op_values.port_map.get(p) == &sentinel {
                 let op_value = allocator.allocate_op_value(node, p, &self.hugr);
-                port_map.set(p, op_value);
+                node_op_values.port_map.set(p, op_value);
             }
         }
     }
@@ -197,15 +338,15 @@ impl<H: HugrView> ResourceScope<H> {
         &mut self,
         node: H::Node,
         flows: &[Box<dyn ResourceFlow>],
-        allocator: &mut Allocator,
+        allocator: &mut OpValueAllocator,
     ) {
-        let port_map = self.op_values.get_mut(&node).expect("known node");
+        let port_map = &mut self.op_values.get_mut(&node).expect("known node").port_map;
 
         let inp_resources = port_map
             .get_slice(Direction::Incoming)
             .iter()
             .map(|&op_val| match op_val {
-                OpValue::Resource(res, _) => Some(res),
+                OpValue::Resource(res) => Some(res),
                 OpValue::Copyable(_) => None,
             })
             .collect_vec();
@@ -246,9 +387,10 @@ impl<H: HugrView> ResourceScope<H> {
             .get_optype(node)
             .dataflow_signature()
             .expect("dataflow op");
+        let pos = self.get_position(node).expect("known node");
 
         for p in signature.output_ports() {
-            let op_value = *self.get_opvalue(node, p);
+            let op_value = self.get_opvalue(node, p).expect("known node");
 
             for (in_node, in_port) in self.hugr.linked_inputs(node, p) {
                 if !self.subgraph.nodes().contains(&in_node) {
@@ -258,38 +400,26 @@ impl<H: HugrView> ResourceScope<H> {
                 let Some(signature) = op.dataflow_signature() else {
                     continue;
                 };
-                let next_port_map = self
+                let next_node_op_values = self
                     .op_values
                     .entry(in_node)
-                    .or_insert_with(|| PortMap::with_default(sentinel, &signature));
-                let next_op_value = match op_value {
-                    OpValue::Resource(id, pos) => OpValue::Resource(id, pos.increment()),
-                    copyable @ OpValue::Copyable(_) => copyable,
-                };
-                next_port_map.set(in_port, next_op_value);
+                    .or_insert_with(|| NodeOpValues::with_default(sentinel, &signature));
+                let next_op_value = op_value;
+                next_node_op_values.port_map.set(in_port, next_op_value);
+                next_node_op_values.position =
+                    cmp::max(next_node_op_values.position, pos.increment());
             }
         }
     }
 }
 
 #[derive(Debug, Clone, Default)]
-struct Allocator {
-    /// Allocator for new resource IDs.
-    resource: ResourceAllocator,
-    /// For each resource ID, the allocator for new positions on the resource
-    /// path.
-    position: ResourceMap<PositionAllocator>,
-}
+struct OpValueAllocator(ResourceAllocator);
 
-impl Allocator {
+impl OpValueAllocator {
     fn allocate_resource(&mut self) -> OpValue {
-        let resource_id = self.resource.allocate();
-        if resource_id.as_usize() >= self.position.len() {
-            self.position
-                .resize(resource_id.as_usize() + 1, PositionAllocator::default());
-        }
-        let position = self.position[resource_id.as_usize()].allocate();
-        OpValue::Resource(resource_id, position)
+        let resource_id = self.0.allocate();
+        OpValue::Resource(resource_id)
     }
 
     fn allocate_copyable(&mut self) -> OpValue {
@@ -353,7 +483,11 @@ pub(crate) mod tests {
     use hugr::HugrView;
 
     use super::{OpValue, ResourceScope};
-    use crate::resource::{Position, ResourceId};
+    use crate::{
+        resource::{Position, ResourceId},
+        utils::build_simple_circuit,
+        TketOp,
+    };
 
     pub type PathEl<N> = (Position, N, Port);
 
@@ -370,10 +504,11 @@ pub(crate) mod tests {
             let mut resource_paths: BTreeMap<ResourceId, Vec<PathEl<H::Node>>> = BTreeMap::new();
             let mut copyable_values = HashSet::new();
 
-            for (&node, port_map) in &scope.op_values {
-                for (port, &op_value) in port_map.iter() {
+            for (&node, op_values) in &scope.op_values {
+                let pos = op_values.position;
+                for (port, &op_value) in op_values.port_map.iter() {
                     match op_value {
-                        OpValue::Resource(res, pos) => resource_paths
+                        OpValue::Resource(res) => resource_paths
                             .entry(res)
                             .or_default()
                             .push((pos, node, port)),
@@ -420,6 +555,42 @@ pub(crate) mod tests {
                 writeln!(f)?;
             }
             Ok(())
+        }
+    }
+
+    #[test]
+    fn test_position_monotonic() {
+        const N_HADAMARDS: [usize; 3] = [4, 10, 1];
+        // A circuit with 3 qubits and a certain number of H on each qubit
+        let circ = build_simple_circuit(3, |circ| {
+            for (qb, n_hadamards) in N_HADAMARDS.iter().enumerate() {
+                for _ in 0..*n_hadamards {
+                    circ.append(TketOp::H, [qb])?;
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+
+        let scope = ResourceScope::from(&circ);
+        let first_hadamards = circ
+            .hugr()
+            .all_linked_inputs(circ.input_node())
+            .map(|(n, _)| n);
+
+        for h in first_hadamards {
+            let res = scope
+                .get_all_resources(h)
+                .into_iter()
+                .exactly_one()
+                .unwrap();
+            let nodes_on_path = scope.resource_path_iter(res, h, Direction::Outgoing);
+            let pos_on_path = nodes_on_path.map(|n| scope.get_position(n).unwrap());
+
+            assert!(
+                pos_on_path.collect_vec().windows(2).all(|w| w[0] <= w[1]),
+                "position is not monotonically increasing on path {res:?}"
+            );
         }
     }
 }
