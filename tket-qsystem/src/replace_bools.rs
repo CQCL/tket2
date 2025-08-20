@@ -7,26 +7,32 @@ use hugr::{
     algorithms::{
         ensure_no_nonlocal_edges,
         non_local::FindNonLocalEdgesError,
-        replace_types::{NodeTemplate, ReplaceTypesError},
+        replace_types::{NodeTemplate, ReplaceTypesError, ReplacementOptions},
         ComposablePass, ReplaceTypes,
     },
     builder::{
-        inout_sig, BuildHandle, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer,
-        SubContainer,
+        inout_sig, BuildHandle, Container, DFGBuilder, Dataflow, DataflowHugr,
+        DataflowSubContainer, SubContainer,
     },
     extension::{
         prelude::{bool_t, qb_t},
         simple_op::MakeRegisteredOp,
     },
     hugr::hugrmut::HugrMut,
-    ops::{handle::ConditionalID, Tag, Value},
-    std_extensions::logic::LogicOp,
+    ops::{handle::ConditionalID, ExtensionOp, Tag, Value},
+    std_extensions::{
+        collections::array::{self, array_type, ARRAY_CLONE_OP_ID, ARRAY_DISCARD_OP_ID},
+        logic::LogicOp,
+    },
     types::{SumType, Type},
-    Hugr, Node, Wire,
+    Hugr, HugrView, Node, Wire,
 };
 use static_array::{ReplaceStaticArrayBoolPass, ReplaceStaticArrayBoolPassError};
 use tket::{
-    extension::bool::{bool_type, BoolOp, ConstBool},
+    extension::{
+        bool::{bool_type, BoolOp, ConstBool},
+        guppy::{DROP_OP_NAME, GUPPY_EXTENSION},
+    },
     TketOp,
 };
 
@@ -213,6 +219,21 @@ fn measure_reset_dest() -> NodeTemplate {
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
+fn array_clone_dest(size: u64, elem_ty: Type) -> NodeTemplate {
+    let array_ty = array_type(size, elem_ty.clone());
+    let mut dfb = DFGBuilder::new(inout_sig(
+        vec![array_ty.clone()],
+        vec![array_ty.clone(), array_ty],
+    ))
+    .unwrap();
+    // TODO: Find less hacky solution.
+    let mut h = std::mem::take(dfb.hugr_mut());
+    let [inp, outp] = h.get_io(h.entrypoint()).unwrap();
+    h.connect(inp, 0, outp, 0);
+    h.connect(inp, 0, outp, 1);
+    NodeTemplate::CompoundOp(Box::new(h))
+}
+
 /// The configuration used for replacing tket.bool extension types and ops.
 fn lowerer() -> ReplaceTypes {
     let mut lw = ReplaceTypes::default();
@@ -277,6 +298,49 @@ fn lowerer() -> ReplaceTypes {
     lw.replace_op(&qsystem_measure, measure_dest());
     lw.replace_op(&qsystem_measure_reset, measure_reset_dest());
 
+    // Replace array ops with copyable bounds with DFGs that the linearizer can act on
+    // now that the elements are no longer copyable.
+    lw.replace_parametrized_op_with(
+        array::EXTENSION.get_op(ARRAY_CLONE_OP_ID.as_str()).unwrap(),
+        move |args| {
+            let [size, elem_ty] = args else {
+                unreachable!()
+            };
+            let size = size.as_nat().unwrap();
+            let elem_ty = elem_ty.as_runtime().unwrap();
+            if !elem_ty.copyable() {
+                Some(array_clone_dest(size, elem_ty))
+            } else {
+                None
+            }
+        },
+        ReplacementOptions::default().with_linearization(true),
+    );
+
+    lw.replace_parametrized_op(
+        array::EXTENSION
+            .get_op(ARRAY_DISCARD_OP_ID.as_str())
+            .unwrap(),
+        move |args| {
+            let [size, elem_ty] = args else {
+                unreachable!()
+            };
+            let size = size.as_nat().unwrap();
+            let elem_ty = elem_ty.as_runtime().unwrap();
+            let drop_op_def = GUPPY_EXTENSION.get_op(DROP_OP_NAME.as_str()).unwrap();
+            let drop_op = ExtensionOp::new(
+                drop_op_def.clone(),
+                vec![array_type(size, elem_ty.clone()).into()],
+            )
+            .unwrap();
+            if !elem_ty.copyable() {
+                Some(NodeTemplate::SingleOp(drop_op.into()))
+            } else {
+                None
+            }
+        },
+    );
+
     lw
 }
 
@@ -286,6 +350,8 @@ mod test {
 
     use super::*;
     use hugr::ops::OpType;
+    use hugr::std_extensions::collections::array::ArrayOpBuilder;
+    use hugr::type_row;
     use hugr::{
         builder::{inout_sig, DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::qb_t,
@@ -436,5 +502,50 @@ mod test {
 
         let sig = h.signature(h.entrypoint()).unwrap();
         assert_eq!(sig.output(), &TypeRow::from(vec![qb_t(), bool_dest()]));
+    }
+
+    #[test]
+    fn test_array_clone_bool() {
+        let elem_ty = bool_type();
+        let size = 4;
+        let arr_ty = array_type(size, elem_ty.clone());
+        let mut dfb = DFGBuilder::new(inout_sig(
+            vec![arr_ty.clone()],
+            vec![arr_ty.clone(), arr_ty.clone()],
+        ))
+        .unwrap();
+        let [arr_in] = dfb.input_wires_arr();
+        let (arr1, arr2) = dfb.add_array_clone(elem_ty, size, arr_in).unwrap();
+        let mut h = dfb.finish_hugr_with_outputs([arr1, arr2]).unwrap();
+
+        h.validate().unwrap();
+        let pass = ReplaceBoolPass;
+        pass.run(&mut h).unwrap();
+        h.validate().unwrap();
+
+        let sig = h.signature(h.entrypoint()).unwrap();
+        let bool_dest_ty = bool_dest();
+        let arr_dest_ty = array_type(size, bool_dest_ty);
+        assert_eq!(sig.input(), &TypeRow::from(vec![arr_dest_ty.clone()]));
+        assert_eq!(
+            sig.output(),
+            &TypeRow::from(vec![arr_dest_ty.clone(), arr_dest_ty])
+        );
+    }
+
+    #[test]
+    fn test_array_discard_bool() {
+        let elem_ty = bool_type();
+        let size = 4;
+        let arr_ty = array_type(size, elem_ty.clone());
+        let mut dfb = DFGBuilder::new(inout_sig(vec![arr_ty.clone()], type_row![])).unwrap();
+        let [arr_in] = dfb.input_wires_arr();
+        dfb.add_array_discard(elem_ty, size, arr_in).unwrap();
+        let mut h = dfb.finish_hugr_with_outputs([]).unwrap();
+
+        h.validate().unwrap();
+        let pass = ReplaceBoolPass;
+        pass.run(&mut h).unwrap();
+        h.validate().unwrap();
     }
 }
