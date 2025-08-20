@@ -9,13 +9,12 @@ from pathlib import Path
 from sys import argv
 
 from guppylang import guppy
-from guppylang.std.quantum import measure, qubit
+from guppylang.std.builtins import result
 
 
 @guppy
 def main() -> None:
-    q = qubit()
-    measure(q)
+    result("b", 0)
 
 
 program = main.compile()

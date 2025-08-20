@@ -10,7 +10,7 @@ from sys import argv
 
 from guppylang import guppy
 from guppylang.std.angles import angle
-from guppylang.std.builtins import owned
+from guppylang.std.builtins import owned, result
 from guppylang.std.quantum import rz, h, measure, qubit
 
 
@@ -18,7 +18,9 @@ from guppylang.std.quantum import rz, h, measure, qubit
 def main() -> None:
     q = qubit()
     q = f(q)
-    measure(q)
+    b = measure(q)
+
+    result("b", b)
 
 
 @guppy.comptime
