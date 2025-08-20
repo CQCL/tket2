@@ -5,9 +5,8 @@ the equivalent flat program to `pytket`.
 
 Each example is in its own directory, containing:
 - A `.py` [uv script](https://docs.astral.sh/uv/guides/scripts/) that defines the guppy program for a pinned version of guppylang.
-- If possible, a `.flat.py` script that defines the same program using `comptime` or manual loop peeling.
-- A `.opt.py` script that defines the optimized version of the program, which we
-  expect to obtain after optimizing the previous versions.
+- A `.flat.py` script that defines the same program using `comptime` or manual loop peeling, if applicable.
+- A `.opt.py` script that defines a hand-optimized version of the program, indicative of the greatest optimization we believe can be achieved by the compiler.
 
 - The `.hugr` files generated for each of the previous scripts.
 
@@ -16,6 +15,5 @@ the `.mmd` mermaid files generated for each of the previous programs. Go to
 <http://mermaid.live> to view them.
 We do not generate these for large programs, as they get too large to view.
 
-Run `just regenerate` in this directory to regenerate the `.hugr` files.
-The guppylang version used is defined in the `justfile`.
-The mermaid diagrams will only be generated if the `hugr` CLI is installed.
+Run `just regenerate` in this directory to regenerate the `.hugr` files and mermaid diagrams.
+The guppylang version used is defined by each script.
