@@ -2,10 +2,11 @@
 
 use std::thread::{self, JoinHandle};
 
+use crate::circuit::cost::CircuitCost;
 use crate::circuit::CircuitHash;
+use crate::resource::ResourceScope;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
-use crate::{circuit::cost::CircuitCost, Circuit};
 
 use super::pqueue_worker::{StatePQueueChannels, Work};
 
@@ -15,7 +16,7 @@ pub struct BadgerWorker<R, S, P: Ord> {
     #[allow(unused)]
     id: usize,
     /// The channel to send and receive work from.
-    priority_channel: StatePQueueChannels<Circuit, P>,
+    priority_channel: StatePQueueChannels<ResourceScope, P>,
     /// The rewriter to use.
     rewriter: R,
     /// The rewrite strategy to use.
@@ -24,7 +25,7 @@ pub struct BadgerWorker<R, S, P: Ord> {
 
 impl<R, S, P> BadgerWorker<R, S, P>
 where
-    R: Rewriter + Send + 'static,
+    R: Rewriter<ResourceScope> + Send + 'static,
     S: RewriteStrategy<Cost = P> + Send + 'static,
     P: CircuitCost + Send + Sync + 'static,
 {
@@ -32,7 +33,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         id: usize,
-        priority_channel: StatePQueueChannels<Circuit, P>,
+        priority_channel: StatePQueueChannels<ResourceScope, P>,
         rewriter: R,
         strategy: S,
     ) -> JoinHandle<()> {

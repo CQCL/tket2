@@ -8,16 +8,16 @@ use std::collections::BTreeMap;
 
 use derive_more::derive::{Display, Error};
 use hugr::core::HugrNode;
-use hugr::hugr::views::sibling_subgraph::{
-    IncomingPorts, InvalidReplacement, InvalidSubgraph, OutgoingPorts,
-};
+use hugr::hugr::views::sibling_subgraph::{IncomingPorts, InvalidSubgraph, OutgoingPorts};
 use hugr::hugr::views::SiblingSubgraph;
+use hugr::ops::OpTrait;
+use hugr::types::Signature;
 use hugr::{Direction, HugrView, IncomingPort, Port, Wire};
 use itertools::Itertools;
 
 use crate::circuit::Circuit;
-use crate::resource::{Interval, InvalidInterval, ResourceId, ResourceScope};
-use crate::rewrite::CircuitRewrite;
+use crate::resource::{ Interval, InvalidInterval, ResourceId, ResourceScope};
+use crate::rewrite::{CircuitRewrite, InvalidRewrite};
 
 /// A subgraph within a [`ResourceScope`].
 ///
@@ -267,11 +267,37 @@ impl<N: HugrNode> Subcircuit<N> {
             .collect_vec()
     }
 
-    /// Convert the subcircuit to a [`SiblingSubgraph`].
-    pub fn try_to_subgraph(
+    /// Get the dataflow signature of the subcircuit.
+    pub fn dataflow_signature(
         &self,
         circuit: &ResourceScope<impl HugrView<Node = N>>,
-    ) -> Result<SiblingSubgraph<N>, InvalidSubgraph<N>> {
+    ) -> Signature {
+        let port_type = |n: N, p: Port| {
+            let op = circuit.hugr().get_optype(n);
+            let signature = op.dataflow_signature().expect("dataflow op");
+            signature.port_type(p).expect("valid dfg port").clone()
+        };
+
+        let input_types = self.input_ports(circuit).into_iter().map(|all_uses| {
+            let (n, p) = all_uses.into_iter().next().expect("all inputs are used");
+            port_type(n, p.into())
+        });
+        let output_types = self
+            .output_ports(circuit)
+            .into_iter()
+            .map(|(n, p)| port_type(n, p.into()));
+
+        Signature::new(input_types.collect_vec(), output_types.collect_vec())
+    }
+
+    /// Whether the subcircuit is a valid [`SiblingSubgraph`].
+    ///
+    /// Calling this method will succeed if and only if the subcircuit can be
+    /// converted to a [`SiblingSubgraph`] using [`Self::try_to_subgraph`].
+    pub fn validate_subgraph(
+        &self,
+        circuit: &ResourceScope<impl HugrView<Node = N>>,
+    ) -> Result<(), InvalidSubgraph<N>> {
         if !circuit.is_convex(self) {
             return Err(InvalidSubgraph::NotConvex);
         }
@@ -279,6 +305,19 @@ impl<N: HugrNode> Subcircuit<N> {
         if self.is_empty() {
             return Err(InvalidSubgraph::EmptySubgraph);
         }
+
+        Ok(())
+    }
+
+    /// Convert the subcircuit to a [`SiblingSubgraph`].
+    ///
+    /// You may use [`Self::validate_subgraph`] to check whether converting the
+    /// subcircuit to a [`SiblingSubgraph`] will succeed.
+    pub fn try_to_subgraph(
+        &self,
+        circuit: &ResourceScope<impl HugrView<Node = N>>,
+    ) -> Result<SiblingSubgraph<N>, InvalidSubgraph<N>> {
+        self.validate_subgraph(circuit)?;
 
         Ok(SiblingSubgraph::new_unchecked(
             self.input_ports(circuit),
@@ -295,14 +334,10 @@ impl<N: HugrNode> Subcircuit<N> {
     /// * `replacement` - The new circuit to replace the subcircuit with.
     pub fn create_rewrite(
         &self,
-        replacement: Circuit<impl HugrView<Node = hugr::Node>>,
+        replacement: Circuit,
         circuit: &ResourceScope<impl HugrView<Node = N>>,
-    ) -> Result<CircuitRewrite<N>, InvalidReplacement> {
-        let hugr = circuit.hugr();
-        let subgraph = self
-            .try_to_subgraph(circuit)
-            .map_err(|_| InvalidReplacement::NonConvexSubgraph)?;
-        CircuitRewrite::try_new(&subgraph, hugr, replacement)
+    ) -> Result<CircuitRewrite<N>, InvalidRewrite> {
+        CircuitRewrite::try_new(self.clone(), circuit, replacement)
     }
 }
 

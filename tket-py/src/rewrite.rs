@@ -1,11 +1,12 @@
 //! PyO3 wrapper for rewriters.
 
 use derive_more::From;
-use hugr::{hugr::views::SiblingSubgraph, HugrView, Node};
+use hugr::{hugr::views::SiblingSubgraph, HugrView, Node, SimpleReplacement};
 use itertools::Itertools;
 use pyo3::prelude::*;
 use std::path::PathBuf;
 use tket::{
+    resource::ResourceScope,
     rewrite::{CircuitRewrite, ECCRewriter, Rewriter},
     Circuit,
 };
@@ -32,7 +33,7 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
 #[repr(transparent)]
 pub struct PyCircuitRewrite {
     /// Rust representation of the circuit chunks.
-    pub rewrite: CircuitRewrite,
+    pub rewrite: SimpleReplacement,
 }
 
 #[pymethods]
@@ -42,12 +43,14 @@ impl PyCircuitRewrite {
     /// The difference between the new number of nodes minus the old. A positive
     /// number is an increase in node count, a negative number is a decrease.
     pub fn node_count_delta(&self) -> isize {
-        self.rewrite.node_count_delta()
+        let old_count = self.rewrite.subgraph().node_count() as isize;
+        let new_count = Circuit::new(self.rewrite.replacement()).num_operations() as isize;
+        new_count - old_count
     }
 
     /// The replacement subcircuit.
     pub fn replacement(&self) -> Tk2Circuit {
-        self.rewrite.replacement().to_owned().into()
+        Circuit::new(self.rewrite.replacement().to_owned()).into()
     }
 
     #[new]
@@ -56,13 +59,14 @@ impl PyCircuitRewrite {
         source_circ: PyRef<Tk2Circuit>,
         replacement: Tk2Circuit,
     ) -> PyResult<Self> {
+        let repl = SimpleReplacement::try_new(
+            source_position.0,
+            source_circ.circ.hugr(),
+            replacement.circ.into_hugr(),
+        )
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         Ok(Self {
-            rewrite: CircuitRewrite::try_new(
-                &source_position.0,
-                source_circ.circ.hugr(),
-                replacement.circ,
-            )
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
+            rewrite: repl.into(),
         })
     }
 }
@@ -79,8 +83,20 @@ pub enum PyRewriter {
     Vec(Vec<PyRewriter>),
 }
 
-impl<H: HugrView<Node = Node>> Rewriter<Circuit<H>> for PyRewriter {
-    fn get_rewrites(&self, circ: &Circuit<H>) -> Vec<CircuitRewrite> {
+// impl<H: HugrView<Node = Node>> Rewriter<H> for PyRewriter {
+//     fn get_rewrites(&self, circ: &H) -> Vec<CircuitRewrite> {
+//         match self {
+//             Self::ECC(ecc) => ecc.0.get_rewrites(circ),
+//             Self::Vec(rewriters) => rewriters
+//                 .iter()
+//                 .flat_map(|r| r.get_rewrites(circ))
+//                 .collect(),
+//         }
+//     }
+// }
+
+impl<H: HugrView<Node = Node>> Rewriter<ResourceScope<H>> for PyRewriter {
+    fn get_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite<<H>::Node>> {
         match self {
             Self::ECC(ecc) => ecc.0.get_rewrites(circ),
             Self::Vec(rewriters) => rewriters
@@ -146,7 +162,10 @@ impl PyECCRewriter {
         self.0
             .get_rewrites(&circ.circ)
             .into_iter()
-            .map_into()
+            .map(|r| match r {
+                CircuitRewrite::New { .. } => unimplemented!(),
+                CircuitRewrite::Old(rewrite) => SimpleReplacement::from(rewrite).into(),
+            })
             .collect()
     }
 }

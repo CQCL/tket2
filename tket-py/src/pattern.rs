@@ -6,9 +6,10 @@ use crate::circuit::Tk2Circuit;
 use crate::rewrite::PyCircuitRewrite;
 use crate::utils::{create_py_exception, ConvertPyErr};
 
-use hugr::{HugrView, Node};
+use hugr::{HugrView, Node, SimpleReplacement};
 use pyo3::prelude::*;
 use tket::portmatching::{CircuitPattern, PatternMatch, PatternMatcher};
+use tket::rewrite::CircuitRewrite;
 use tket::Circuit;
 
 /// The module definition
@@ -123,6 +124,9 @@ impl RuleMatcher {
     ) -> PyResult<PyCircuitRewrite> {
         let r = self.rights.get(pmatch.pattern_id().0).unwrap().clone();
         let rw = pmatch.to_rewrite(target, r).convert_pyerrs()?;
-        Ok(rw.into())
+        match rw {
+            CircuitRewrite::New { .. } => unimplemented!(),
+            CircuitRewrite::Old(rew) => Ok(SimpleReplacement::from(rew).into()),
+        }
     }
 }

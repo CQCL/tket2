@@ -27,6 +27,7 @@ use std::{
 };
 
 use crate::extension::REGISTRY;
+use crate::resource::ResourceScope;
 use crate::{
     circuit::{remove_empty_wire, Circuit},
     optimiser::badger::{load_eccs_json_file, EqCircClass},
@@ -192,6 +193,15 @@ impl ECCRewriter {
     }
 }
 
+impl<H: HugrView<Node = Node>> Rewriter<ResourceScope<H>> for ECCRewriter {
+    fn get_rewrites(
+        &self,
+        circ: &ResourceScope<H>,
+    ) -> Vec<CircuitRewrite<<ResourceScope<H> as super::hidden::CircuitLike>::Node>> {
+        self.get_rewrites(&circ.as_circuit())
+    }
+}
+
 impl<H: HugrView<Node = Node>> Rewriter<Circuit<H>> for ECCRewriter {
     fn get_rewrites(&self, circ: &Circuit<H>) -> Vec<CircuitRewrite<H::Node>> {
         let matches = self.matcher.find_matches(circ);
@@ -208,6 +218,12 @@ impl<H: HugrView<Node = Node>> Rewriter<Circuit<H>> for ECCRewriter {
                 })
             })
             .collect()
+    }
+}
+
+impl<H: HugrView<Node = Node>> Rewriter<H> for ECCRewriter {
+    fn get_rewrites(&self, circ: &H) -> Vec<CircuitRewrite<H::Node>> {
+        self.get_rewrites(&Circuit::new(circ))
     }
 }
 
