@@ -11,6 +11,8 @@ use pest::pratt_parser::PrattParser;
 use pest::Parser;
 use pest_derive::Parser;
 
+use crate::extension::rotation::RotationOp;
+
 /// The parsed AST for a pytket operation parameter.
 ///
 /// The leafs of the AST are either a constant value, a variable name, or an
@@ -84,14 +86,13 @@ fn parse_infix_ops(pairs: Pairs<'_, Rule>) -> PytketParam<'_> {
         .map_primary(|primary| parse_term(primary))
         .map_infix(|lhs, op, rhs| {
             let op = match op.as_rule() {
-                Rule::add => FloatOps::fadd,
-                Rule::subtract => FloatOps::fsub,
-                Rule::multiply => FloatOps::fmul,
-                Rule::divide => FloatOps::fdiv,
-                Rule::power => FloatOps::fpow,
+                Rule::add => RotationOp::radd.into(),
+                Rule::subtract => FloatOps::fsub.into(),
+                Rule::multiply => FloatOps::fmul.into(),
+                Rule::divide => FloatOps::fdiv.into(),
+                Rule::power => FloatOps::fpow.into(),
                 rule => unreachable!("Expr::parse expected infix operation, found {:?}", rule),
-            }
-            .into();
+            };
             PytketParam::Operation {
                 op,
                 args: vec![lhs, rhs],
@@ -173,7 +174,7 @@ mod test {
     #[case::parens("(42)", PytketParam::Constant(42.))]
     #[case::var("f64", PytketParam::InputVariable{name: "f64"})]
     #[case::add("42 + f64", PytketParam::Operation {
-        op: FloatOps::fadd.into(),
+        op: RotationOp::radd.into(),
         args: vec![PytketParam::Constant(42.), PytketParam::InputVariable{name: "f64"}]
     })]
     #[case::sub("42 - 2", PytketParam::Operation {
@@ -207,7 +208,7 @@ mod test {
         args: vec![PytketParam::Constant(42.), PytketParam::Sympy("unknown_op(37)")]
     })]
     #[case::precedence("5-2/3x+4**6", PytketParam::Operation {
-        op: FloatOps::fadd.into(),
+        op: RotationOp::radd.into(),
         args: vec![
             PytketParam::Operation {
                 op: FloatOps::fsub.into(),
@@ -229,7 +230,7 @@ mod test {
         ]
     })]
     #[case::associativity("1-2-3+4", PytketParam::Operation {
-        op: FloatOps::fadd.into(),
+        op: RotationOp::radd.into(),
         args: vec![
             PytketParam::Operation { op: FloatOps::fsub.into(), args: vec![
                 PytketParam::Operation { op: FloatOps::fsub.into(), args: vec![

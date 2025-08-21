@@ -65,7 +65,7 @@ impl<H: HugrView> PytketEmitter<H> for Tk1Emitter {
     }
 }
 
-/// Add an [`OpaqueTk1Op`] to the Hugr, representing a pytket operation that could
+/// Add an [`OpaqueTk1Op`] to the Hugr, representing a pytket operation that could not
 /// be decoded by the configured decoders.
 ///
 /// We don't implement [`PytketDecoder`][super::PytketDecoder] for [`Tk1Emitter`] so it doesn't get added

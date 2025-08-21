@@ -74,13 +74,13 @@ impl<H: HugrView> PytketEmitter<H> for FloatEmitter {
         // Special cases for pi rotations
         let approx_eq = |a: f64, b: f64| (a - b).abs() < 1e-10;
         const VALS: [(f64, &str); 7] = [
-            (PI, "pi"),
-            (PI / 2., "pi/2"),
-            (-PI / 2., "-pi/2"),
-            (PI / 4., "pi/4"),
-            (3. * PI / 4., "3pi/4"),
-            (-PI / 4., "-pi/4"),
-            (-3. * PI / 4., "-3pi/4"),
+            (PI, "1"),
+            (PI / 2., "1/2"),
+            (-PI / 2., "-1/2"),
+            (PI / 4., "1/4"),
+            (3. * PI / 4., "3/4"),
+            (-PI / 4., "-1/4"),
+            (-3. * PI / 4., "-3/4"),
         ];
         for (val, name) in VALS.iter() {
             if approx_eq(float, *val) {
@@ -89,7 +89,7 @@ impl<H: HugrView> PytketEmitter<H> for FloatEmitter {
             }
         }
 
-        let param = encoder.values.new_param(float.to_string());
+        let param = encoder.values.new_param(format!("({float}) / (pi)"));
         Ok(Some(TrackedValues::new_params([param])))
     }
 }
@@ -118,8 +118,6 @@ impl FloatEmitter {
             FloatOps::fadd => format!("({}) + ({})", inputs[0], inputs[1]),
             FloatOps::fsub => format!("({}) - ({})", inputs[0], inputs[1]),
             FloatOps::fneg => format!("-({})", inputs[0]),
-            FloatOps::fmul => format!("({}) * ({})", inputs[0], inputs[1]),
-            FloatOps::fdiv => format!("({}) / ({})", inputs[0], inputs[1]),
             FloatOps::fpow => format!("({}) ** ({})", inputs[0], inputs[1]),
             FloatOps::ffloor => format!("floor({})", inputs[0]),
             FloatOps::fceil => format!("ceil({})", inputs[0]),
@@ -127,6 +125,24 @@ impl FloatEmitter {
             FloatOps::fmax => format!("max({}, {})", inputs[0], inputs[1]),
             FloatOps::fmin => format!("min({}, {})", inputs[0], inputs[1]),
             FloatOps::fabs => format!("abs({})", inputs[0]),
+            FloatOps::fdiv => {
+                if inputs[0] == "1" {
+                    format!("({}) / ({})", inputs[0], inputs[1])
+                } else if inputs[1] == "1" {
+                    inputs[0].clone()
+                } else {
+                    format!("({}) / ({})", inputs[0], inputs[1])
+                }
+            }
+            FloatOps::fmul => {
+                if inputs[0] == "1" {
+                    inputs[1].clone()
+                } else if inputs[1] == "1" {
+                    inputs[0].clone()
+                } else {
+                    format!("({}) * ({})", inputs[0], inputs[1])
+                }
+            }
             _ => return None,
         };
         Some(s)

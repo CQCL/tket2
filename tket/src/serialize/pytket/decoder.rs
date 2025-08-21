@@ -501,10 +501,22 @@ impl<'h> PytketDecoderContext<'h> {
             .map_err(|e| e.hugr_op(&op_name))?;
         debug_assert_eq!(op_input_count, input_wires.register_count());
 
+        // Convert the parameter wires to the required types.
+        // TODO: This should be done by `find_typed_wires`, but it requires changing the API to take `&mut self`.
+        let mut param_wires = Vec::with_capacity(params.len());
+        let mut params = input_wires.iter_parameters();
+        for ty in sig.input_types() {
+            let Some(expected_type) = LoadedParameterType::from_type(ty) else {
+                continue;
+            };
+            let param = *params.next().unwrap();
+            param_wires.push(param.with_type(expected_type, &mut self.builder).wire);
+        }
+
         // Add the node to the HUGR.
         let node = self
             .builder
-            .add_dataflow_op(op, input_wires.wires())
+            .add_dataflow_op(op, input_wires.value_wires().chain(param_wires.into_iter()))
             .map_err(|e| PytketDecodeError::custom(e).hugr_op(&op_name))?;
 
         // Register the output wires.

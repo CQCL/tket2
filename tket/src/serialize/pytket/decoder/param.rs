@@ -4,7 +4,9 @@ pub(super) mod parser;
 use std::sync::LazyLock;
 
 use hugr::builder::{Dataflow, FunctionBuilder};
-use hugr::std_extensions::arithmetic::float_types::float64_type;
+use hugr::ops::Value;
+use hugr::std_extensions::arithmetic::float_ops::FloatOps;
+use hugr::std_extensions::arithmetic::float_types::{float64_type, ConstF64};
 use hugr::types::Type;
 use hugr::{Hugr, Wire};
 
@@ -17,6 +19,27 @@ pub enum LoadedParameterType {
     Float,
     /// A rotation parameter.
     Rotation,
+}
+
+impl LoadedParameterType {
+    /// Returns the type of the parameter.
+    pub fn from_type(typ: &Type) -> Option<Self> {
+        if typ == &float64_type() {
+            Some(LoadedParameterType::Float)
+        } else if typ == &rotation_type() {
+            Some(LoadedParameterType::Rotation)
+        } else {
+            None
+        }
+    }
+
+    /// Returns the type of the parameter.
+    pub fn to_type(&self) -> Type {
+        match self {
+            LoadedParameterType::Float => float64_type(),
+            LoadedParameterType::Rotation => rotation_type(),
+        }
+    }
 }
 
 /// A loaded parameter in the Hugr.
@@ -71,18 +94,28 @@ impl LoadedParameter {
     ) -> LoadedParameter {
         match (self.typ, typ) {
             (LoadedParameterType::Float, LoadedParameterType::Rotation) => {
+                let pi = hugr.add_load_const(Value::from(ConstF64::new(std::f64::consts::PI)));
+                let float_halfturns = hugr
+                    .add_dataflow_op(FloatOps::fdiv, [self.wire, pi])
+                    .expect("Error converting float to rotation")
+                    .out_wire(0);
                 let wire = hugr
-                    .add_dataflow_op(RotationOp::from_halfturns_unchecked, [self.wire])
+                    .add_dataflow_op(RotationOp::from_halfturns_unchecked, [float_halfturns])
                     .unwrap()
                     .out_wire(0);
                 LoadedParameter::rotation(wire)
             }
             (LoadedParameterType::Rotation, LoadedParameterType::Float) => {
-                let wire = hugr
+                let float_halfturns = hugr
                     .add_dataflow_op(RotationOp::to_halfturns, [self.wire])
                     .unwrap()
                     .out_wire(0);
-                LoadedParameter::float(wire)
+                let pi = hugr.add_load_const(Value::from(ConstF64::new(std::f64::consts::PI)));
+                let float = hugr
+                    .add_dataflow_op(FloatOps::fmul, [float_halfturns, pi])
+                    .expect("Error converting rotation to float")
+                    .out_wire(0);
+                LoadedParameter::float(float)
             }
             _ => {
                 debug_assert_eq!(self.typ, typ, "cannot convert {} to {}", self.typ, typ);

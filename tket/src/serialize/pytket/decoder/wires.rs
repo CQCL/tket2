@@ -4,18 +4,19 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use hugr::builder::{Dataflow as _, FunctionBuilder};
-use hugr::ops::Value;
-use hugr::std_extensions::arithmetic::float_types::{float64_type, ConstF64};
+use hugr::ops::{OpTrait, Value};
+use hugr::std_extensions::arithmetic::float_types::float64_type;
 use hugr::types::Type;
 use hugr::{Hugr, Wire};
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use tket_json_rs::register::ElementId as PytketRegister;
 
-use crate::extension::rotation::rotation_type;
+use crate::extension::rotation::{rotation_type, ConstRotation};
 use crate::serialize::pytket::decoder::param::parser::{parse_pytket_param, PytketParam};
 use crate::serialize::pytket::decoder::{
-    LoadedParameter, PytketDecoderContext, TrackedBit, TrackedBitId, TrackedQubit, TrackedQubitId,
+    LoadedParameter, LoadedParameterType, PytketDecoderContext, TrackedBit, TrackedBitId,
+    TrackedQubit, TrackedQubitId,
 };
 use crate::serialize::pytket::extension::RegisterCount;
 use crate::serialize::pytket::{
@@ -642,9 +643,9 @@ impl WireTracker {
         ) -> Arc<LoadedParameter> {
             match parsed {
                 PytketParam::Constant(half_turns) => {
-                    let value: Value = ConstF64::new(half_turns).into();
+                    let value: Value = ConstRotation::new(half_turns).unwrap().into();
                     let wire = hugr.add_load_const(value);
-                    Arc::new(LoadedParameter::float(wire))
+                    Arc::new(LoadedParameter::rotation(wire))
                 }
                 PytketParam::Sympy(expr) => {
                     // store string in custom op.
@@ -653,13 +654,13 @@ impl WireTracker {
                     Arc::new(LoadedParameter::rotation(wire))
                 }
                 PytketParam::InputVariable { name } => {
-                    // Special case for the name "pi", inserts a `ConstRotation::PI` instead.
+                    // Special case for the name "pi", inserts a `ConstRotation(1.0)` instead.
                     if name == "pi" {
-                        let value: Value = ConstF64::new(std::f64::consts::PI).into();
+                        let value: Value = ConstRotation::new(std::f64::consts::PI).unwrap().into();
                         let wire = hugr.add_load_const(value);
-                        return Arc::new(LoadedParameter::float(wire));
+                        return Arc::new(LoadedParameter::rotation(wire));
                     }
-                    // Look it up in the input parameters to the circuit, and add a new wire if needed.
+                    // Look it up in the input parameters to the circuit, and add a new float input if needed.
                     input_params
                         .entry(name.to_string())
                         .or_insert_with(|| {
@@ -670,21 +671,32 @@ impl WireTracker {
                         .clone()
                 }
                 PytketParam::Operation { op, args } => {
+                    let sig = op
+                        .dataflow_signature()
+                        .expect("Decoded a parameter operation with no signature");
                     // We assume all operations take float inputs.
                     let input_wires = args
                         .into_iter()
-                        .map(|arg| {
-                            process(hugr, input_params, param_vars, arg, param)
-                                .as_float(hugr)
-                                .wire
+                        .zip(sig.input_types())
+                        .map(|(arg, ty)| {
+                            let param = process(hugr, input_params, param_vars, arg, param);
+                            let expected_type = LoadedParameterType::from_type(ty)
+                                .expect("Invalid decoded op signature");
+                            param.with_type(expected_type, hugr).wire
                         })
                         .collect_vec();
+                    let out_param_type =
+                        LoadedParameterType::from_type(sig.output_types().first().unwrap())
+                            .unwrap();
                     // If any of the following asserts panics, it means we added invalid ops to the sympy parser.
                     let res = hugr.add_dataflow_op(op, input_wires).unwrap_or_else(|e| {
                         panic!("Error while decoding pytket operation parameter \"{param}\". {e}",)
                     });
                     assert_eq!(res.num_value_outputs(), 1, "An operation decoded from the pytket op parameter \"{param}\" had {} outputs", res.num_value_outputs());
-                    Arc::new(LoadedParameter::float(res.out_wire(0)))
+                    Arc::new(LoadedParameter {
+                        typ: out_param_type,
+                        wire: res.out_wire(0),
+                    })
                 }
             }
         }

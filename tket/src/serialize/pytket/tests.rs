@@ -59,6 +59,18 @@ const UNKNOWN_OP: &str = r#"{
         "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]], [["q", [2]], ["q", [2]]]]
     }"#;
 
+const SMALL_PARAMETERIZED: &str = r#"{
+        "phase": "0.0",
+        "bits": [],
+        "qubits": [["q", [0]]],
+        "commands": [
+            {"args":[["q",[0]]],"op":{"params":["(pi) / (2)"],"type":"Rz"}}
+        ],
+        "created_qubits": [],
+        "discarded_qubits": [],
+        "implicit_permutation": [[["q", [0]], ["q", [0]]]]
+    }"#;
+
 const PARAMETERIZED: &str = r#"{
         "phase": "0.0",
         "bits": [],
@@ -178,7 +190,7 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
         let count_b = b_command_count.get(a).copied().unwrap_or_default();
         assert_eq!(
             count_a, count_b,
-            "command {a:?} appears {count_a} times in rhs and {count_b} times in lhs"
+            "command {a:?} appears {count_a} times in rhs and {count_b} times in lhs.\ncounts for a: {a_command_count:#?}\ncounts for b: {b_command_count:#?}"
         );
     }
     assert_eq!(a_command_count.len(), b_command_count.len());
@@ -391,6 +403,7 @@ fn circ_complex_angle_computation() -> (Circuit, String) {
 #[case::simple(SIMPLE_JSON, 2, 2)]
 #[case::multi_register(MULTI_REGISTER, 2, 3)]
 #[case::unknown_op(UNKNOWN_OP, 2, 3)]
+#[case::small_parametrized(SMALL_PARAMETERIZED, 1, 1)]
 #[case::parametrized(PARAMETERIZED, 4, 2)]
 #[case::barrier(BARRIER, 3, 3)]
 fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num_qubits: usize) {

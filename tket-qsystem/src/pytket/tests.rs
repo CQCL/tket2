@@ -128,7 +128,7 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
         let count_b = b_command_count.get(a).copied().unwrap_or_default();
         assert_eq!(
             count_a, count_b,
-            "command {a:?} appears {count_a} times in rhs and {count_b} times in lhs"
+            "command {a:?} appears {count_a} times in rhs and {count_b} times in lhs.\ncounts for a: {a_command_count:#?}\ncounts for b: {b_command_count:#?}"
         );
     }
     assert_eq!(a_command_count.len(), b_command_count.len());
