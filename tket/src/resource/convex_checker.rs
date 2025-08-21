@@ -13,7 +13,7 @@ impl<H: HugrView> ResourceScope<H> {
     ///
     /// A subcircuit is convex if there is no path from a circuit output to a
     /// circuit input.
-    pub fn is_convex(&self, subcircuit: Subcircuit<H::Node>) -> bool {
+    pub fn is_convex(&self, subcircuit: &Subcircuit<H::Node>) -> bool {
         let Some(max_start_pos) = subcircuit
             .intervals_iter()
             .map(|interval| interval.start_pos())
@@ -114,6 +114,6 @@ mod tests {
 
         let subcirc = Subcircuit::try_from_nodes(selected_nodes, &circ).unwrap();
 
-        assert_eq!(circ.is_convex(subcirc), is_convex);
+        assert_eq!(circ.is_convex(&subcirc), is_convex);
     }
 }

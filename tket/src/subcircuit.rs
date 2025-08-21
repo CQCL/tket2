@@ -8,9 +8,11 @@ use std::collections::BTreeMap;
 
 use derive_more::derive::{Display, Error};
 use hugr::core::HugrNode;
-use hugr::hugr::views::sibling_subgraph::{InvalidReplacement, InvalidSubgraph};
+use hugr::hugr::views::sibling_subgraph::{
+    IncomingPorts, InvalidReplacement, InvalidSubgraph, OutgoingPorts,
+};
 use hugr::hugr::views::SiblingSubgraph;
-use hugr::{Direction, HugrView, Wire};
+use hugr::{Direction, HugrView, IncomingPort, Port, Wire};
 use itertools::Itertools;
 
 use crate::circuit::Circuit;
@@ -228,17 +230,62 @@ impl<N: HugrNode> Subcircuit<N> {
         self.intervals.len()
     }
 
+    /// Get the input ports of the subcircuit.
+    ///
+    /// The linear ports will come first, followed by all copyable values used
+    /// in the subcircuit. Within each group, the ports are ordered in the order
+    /// in which they were added to the subcircuit.
+    pub fn input_ports(
+        &self,
+        circuit: &ResourceScope<impl HugrView<Node = N>>,
+    ) -> IncomingPorts<N> {
+        let resource_ports = self
+            .boundary_resource_ports(circuit, Direction::Incoming)
+            .map(|(node, port)| {
+                let port = port.as_incoming().expect("boundary_resource_ports dir");
+                vec![(node, port)]
+            });
+        resource_ports
+            .chain(self.boundary_copyable_input_ports(circuit))
+            .collect_vec()
+    }
+
+    /// Get the output ports of the subcircuit.
+    ///
+    /// This will only contain linear ports (copyable outputs are not supported
+    /// at the moment). The ports are ordered in the order in which they were
+    /// added to the subcircuit.
+    pub fn output_ports(
+        &self,
+        circuit: &ResourceScope<impl HugrView<Node = N>>,
+    ) -> OutgoingPorts<N> {
+        self.boundary_resource_ports(circuit, Direction::Outgoing)
+            .map(|(node, port)| {
+                let port = port.as_outgoing().expect("boundary_resource_ports dir");
+                (node, port)
+            })
+            .collect_vec()
+    }
+
     /// Convert the subcircuit to a [`SiblingSubgraph`].
     pub fn try_to_subgraph(
         &self,
         circuit: &ResourceScope<impl HugrView<Node = N>>,
     ) -> Result<SiblingSubgraph<N>, InvalidSubgraph<N>> {
-        if !circuit.is_convex(self.clone()) {
+        if !circuit.is_convex(self) {
             return Err(InvalidSubgraph::NotConvex);
         }
 
-        // TODO(performance): this checks convexity again and is very inefficient
-        SiblingSubgraph::try_from_nodes(self.nodes(circuit).collect_vec(), circuit.hugr())
+        if self.is_empty() {
+            return Err(InvalidSubgraph::EmptySubgraph);
+        }
+
+        Ok(SiblingSubgraph::new_unchecked(
+            self.input_ports(circuit),
+            self.output_ports(circuit),
+            vec![],
+            self.nodes(circuit).collect_vec(),
+        ))
     }
 
     /// Create a rewrite rule to replace the subcircuit with a new circuit.
@@ -375,7 +422,47 @@ impl<N: HugrNode> Subcircuit<N> {
             Direction::Incoming => interval.start_node(),
             Direction::Outgoing => interval.end_node(),
         };
-        circuit.get_port(node, resource_id, dir).is_some()
+        circuit.get_resource_port(node, resource_id, dir).is_some()
+    }
+
+    /// Get the linear input or output ports of the subcircuit.
+    fn boundary_resource_ports<'a>(
+        &'a self,
+        circuit: &'a ResourceScope<impl HugrView<Node = N>>,
+        dir: Direction,
+    ) -> impl Iterator<Item = (N, Port)> + 'a {
+        let boundary_resources = match dir {
+            Direction::Incoming => &self.input_resources,
+            Direction::Outgoing => &self.output_resources,
+        };
+        boundary_resources.iter().map(move |&res| {
+            let interval = self.get_interval(res).expect("resource is in subcircuit");
+            let node = match dir {
+                Direction::Incoming => interval.start_node(),
+                Direction::Outgoing => interval.end_node(),
+            };
+            let port = circuit
+                .get_resource_port(node, res, dir)
+                .expect("subcircuit input has incoming port");
+            (node, port)
+        })
+    }
+
+    /// Get the copyable input ports of the subcircuit.
+    fn boundary_copyable_input_ports<'a>(
+        &'a self,
+        circuit: &'a ResourceScope<impl HugrView<Node = N>>,
+    ) -> impl Iterator<Item = Vec<(N, IncomingPort)>> + 'a {
+        self.input_copyable_values.iter().map(move |&val| {
+            self.nodes(circuit)
+                .flat_map(move |node| {
+                    circuit
+                        .get_ports(node, val, Direction::Incoming)
+                        .map(|p| p.as_incoming().expect("port dir matches get_port arg"))
+                        .map(move |port| (node, port))
+                })
+                .collect_vec()
+        })
     }
 
     fn update_input(
@@ -411,6 +498,7 @@ impl<N: HugrNode> Subcircuit<N> {
 mod tests {
     use super::*;
     use crate::{
+        extension::rotation::rotation_type,
         resource::{
             tests::{cx_circuit, cx_rz_circuit},
             ResourceAllocator,
@@ -418,7 +506,7 @@ mod tests {
         utils::build_simple_circuit,
         TketOp,
     };
-    use hugr::{CircuitUnit, Hugr, Node};
+    use hugr::{extension::prelude::qb_t, types::Signature, CircuitUnit, Hugr, Node, OutgoingPort};
     use rstest::{fixture, rstest};
 
     #[rstest]
@@ -615,5 +703,101 @@ mod tests {
         assert_eq!(subcircuit.input_resources, [resources[0]]);
         assert_eq!(subcircuit.output_resources, [resources[0]]);
         assert_eq!(subcircuit.input_copyable_values, vec![]);
+    }
+
+    #[test]
+    fn test_to_subgraph() {
+        let circ = cx_rz_circuit(2, true, false);
+        let subgraph = Circuit::from(&circ).subgraph();
+        let circ = ResourceScope::new(circ, subgraph);
+
+        let mut subcircuit = Subcircuit::new_empty();
+
+        let node = |i: usize| Node::from(portgraph::NodeIndex::new(i));
+
+        // Add first a H gate
+        subcircuit.try_extend(node(7), &circ).unwrap();
+        assert_eq!(
+            subcircuit.input_ports(&circ),
+            vec![vec![(node(7), IncomingPort::from(0))]]
+        );
+        assert_eq!(
+            subcircuit.output_ports(&circ),
+            vec![(node(7), OutgoingPort::from(0))]
+        );
+
+        // Now add a two-qubit CX gate
+        subcircuit.try_extend(node(9), &circ).unwrap();
+        assert_eq!(
+            subcircuit.input_ports(&circ),
+            vec![
+                vec![(node(7), IncomingPort::from(0))],
+                vec![(node(9), IncomingPort::from(1))]
+            ]
+        );
+        assert_eq!(
+            subcircuit.output_ports(&circ),
+            vec![
+                (node(9), OutgoingPort::from(0)),
+                (node(9), OutgoingPort::from(1))
+            ]
+        );
+
+        // Now add two contiguous rotation
+        subcircuit.try_extend(node(10), &circ).unwrap();
+        subcircuit.try_extend(node(11), &circ).unwrap();
+        assert_eq!(
+            subcircuit.input_ports(&circ),
+            vec![
+                vec![(node(7), IncomingPort::from(0))],
+                vec![(node(9), IncomingPort::from(1))],
+                vec![
+                    (node(10), IncomingPort::from(1)),
+                    (node(11), IncomingPort::from(1))
+                ],
+            ]
+        );
+        assert_eq!(
+            subcircuit.output_ports(&circ),
+            vec![
+                (node(10), OutgoingPort::from(0)),
+                (node(11), OutgoingPort::from(0)),
+            ]
+        );
+
+        let subgraph = subcircuit.try_to_subgraph(&circ).unwrap();
+        assert!(subgraph.validate(circ.hugr(), Default::default()).is_ok());
+        let mut nodes = subgraph.nodes().to_owned();
+        nodes.sort_unstable();
+        assert_eq!(nodes, vec![node(7), node(9), node(10), node(11)]);
+        assert_eq!(
+            subgraph.signature(circ.hugr()),
+            Signature::new(vec![qb_t(), qb_t(), rotation_type()], vec![qb_t(), qb_t()],)
+        );
+    }
+
+    #[test]
+    fn test_to_subgraph_invalid() {
+        let circ = cx_rz_circuit(2, true, false);
+        let subgraph = Circuit::from(&circ).subgraph();
+        let circ = ResourceScope::new(circ, subgraph);
+
+        let mut subcircuit = Subcircuit::new_empty();
+
+        assert_eq!(
+            subcircuit.try_to_subgraph(&circ),
+            Err(InvalidSubgraph::EmptySubgraph)
+        );
+
+        let node = |i: usize| Node::from(portgraph::NodeIndex::new(i));
+
+        // Add a H gate and a Rz gate, but omitting the CX gate in-between
+        subcircuit.try_extend(node(7), &circ).unwrap();
+        subcircuit.try_extend(node(11), &circ).unwrap();
+
+        assert_eq!(
+            subcircuit.try_to_subgraph(&circ),
+            Err(InvalidSubgraph::NotConvex)
+        );
     }
 }

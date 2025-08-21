@@ -4,6 +4,7 @@
 //! copyable values throughout a HUGR circuit, including resource identifiers,
 //! positions, and the mapping structures that associate them with operations.
 
+use derive_more::derive::From;
 use hugr::{
     core::HugrNode, types::Signature, Direction, IncomingPort, OutgoingPort, Port, PortIndex, Wire,
 };
@@ -77,12 +78,12 @@ impl Position {
 ///
 /// Equivalence with [`hugr::CircuitUnit`] is not guaranteed in the future: we
 /// may expand expressivity, e.g. identifying copyable units by their ASTs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
 pub enum CircuitUnit<N: HugrNode> {
     /// A linear resource.
-    Resource(ResourceId),
+    Resource(#[from] ResourceId),
     /// A copyable value.
-    Copyable(Wire<N>),
+    Copyable(#[from] Wire<N>),
 }
 
 impl<N: HugrNode> From<CircuitUnit<N>> for hugr::CircuitUnit<N> {
