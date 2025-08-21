@@ -171,15 +171,35 @@ impl<H: HugrView> ResourceScope<H> {
         Some(port_map.get_slice(direction))
     }
 
-    /// Get the port of node on the given resource path.
+    /// Get the ports of node with the given opvalue in the given direction.
     ///
     /// The returned port will have the direction `dir`.
-    pub fn get_port(&self, node: H::Node, resource_id: ResourceId, dir: Direction) -> Option<Port> {
-        let units = self.get_circuit_units_slice(node, dir)?;
-        let offset = units
-            .iter()
-            .position(|unit| unit.as_resource() == Some(resource_id))?;
-        Some(Port::new(dir, offset))
+    pub fn get_ports(
+        &self,
+        node: H::Node,
+        unit: impl Into<CircuitUnit<H::Node>>,
+        dir: Direction,
+    ) -> impl Iterator<Item = Port> + '_ {
+        let exp_unit = unit.into();
+        let units = self.get_circuit_units_slice(node, dir);
+        let offsets = units
+            .into_iter()
+            .flatten()
+            .positions(move |unit| unit == &exp_unit);
+        offsets.map(move |offset| Port::new(dir, offset))
+    }
+
+    /// Get the port of node with the given resource in the given direction.
+    pub fn get_resource_port(
+        &self,
+        node: H::Node,
+        resource_id: ResourceId,
+        dir: Direction,
+    ) -> Option<Port> {
+        self.get_ports(node, resource_id, dir)
+            .at_most_one()
+            .ok()
+            .expect("linear resource")
     }
 
     /// Get the position of the given node.
@@ -221,10 +241,10 @@ impl<H: HugrView> ResourceScope<H> {
     /// Whether the given node is the first node on the path of the given
     /// resource.
     pub fn is_resource_start(&self, node: H::Node, resource_id: ResourceId) -> bool {
-        self.get_port(node, resource_id, Direction::Outgoing)
+        self.get_resource_port(node, resource_id, Direction::Outgoing)
             .is_some()
             && self
-                .get_port(node, resource_id, Direction::Incoming)
+                .get_resource_port(node, resource_id, Direction::Incoming)
                 .is_none()
     }
 
@@ -259,7 +279,7 @@ impl<H: HugrView> ResourceScope<H> {
         direction: Direction,
     ) -> impl Iterator<Item = H::Node> + '_ {
         iter::successors(Some(start_node), move |&curr_node| {
-            let port = self.get_port(curr_node, resource_id, direction)?;
+            let port = self.get_resource_port(curr_node, resource_id, direction)?;
             let (next_node, _) = self
                 .hugr()
                 .single_linked_port(curr_node, port)
@@ -270,7 +290,9 @@ impl<H: HugrView> ResourceScope<H> {
 
     /// Check if the given node is in the subgraph.
     pub fn contains_node(&self, node: H::Node) -> bool {
-        self.subgraph.nodes().contains(&node)
+        self.subgraph
+            .as_ref()
+            .map_or(false, |subgraph| subgraph.nodes().contains(&node))
     }
 }
 
