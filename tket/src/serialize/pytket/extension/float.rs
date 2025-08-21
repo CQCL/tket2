@@ -126,9 +126,7 @@ impl FloatEmitter {
             FloatOps::fmin => format!("min({}, {})", inputs[0], inputs[1]),
             FloatOps::fabs => format!("abs({})", inputs[0]),
             FloatOps::fdiv => {
-                if inputs[0] == "1" {
-                    format!("({}) / ({})", inputs[0], inputs[1])
-                } else if inputs[1] == "1" {
+                if inputs[1] == "1" {
                     inputs[0].clone()
                 } else {
                     format!("({}) / ({})", inputs[0], inputs[1])
