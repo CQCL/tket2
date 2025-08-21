@@ -32,6 +32,7 @@ use crate::circuit::CircuitHash;
 use crate::optimiser::badger::worker::BadgerWorker;
 use crate::optimiser::{pqueue_worker, BacktrackingOptimiser, Optimiser, State, StatePQWorker};
 use crate::passes::CircuitChunks;
+use crate::resource::ResourceScope;
 use crate::rewrite::strategy::{RewriteResult, RewriteStrategy};
 use crate::rewrite::Rewriter;
 use crate::Circuit;
@@ -118,7 +119,7 @@ impl<R, S> BadgerOptimiser<R, S> {
         Self { rewriter, strategy }
     }
 
-    fn cost(&self, circ: &Circuit<impl HugrView<Node = Node>>) -> S::Cost
+    fn cost(&self, circ: &ResourceScope<impl HugrView<Node = Node>>) -> S::Cost
     where
         S: RewriteStrategy,
     {
@@ -130,12 +131,13 @@ impl<R, S> BadgerOptimiser<R, S> {
 #[derive(Clone, Debug)]
 struct BadgerState<C> {
     /// The current circuit
-    circ: Circuit,
+    circ: ResourceScope,
     /// The circuit cost
     cost: C,
 }
 
-impl<R: Rewriter, S: RewriteStrategy> State<&BadgerOptimiser<R, S>> for BadgerState<S::Cost>
+impl<R: Rewriter<ResourceScope>, S: RewriteStrategy> State<&BadgerOptimiser<R, S>>
+    for BadgerState<S::Cost>
 where
     S::Cost: serde::Serialize,
 {
@@ -164,7 +166,7 @@ where
 
 impl<R, S> BadgerOptimiser<R, S>
 where
-    R: Rewriter + Send + Clone + Sync + 'static,
+    R: Rewriter<ResourceScope> + Send + Clone + Sync + 'static,
     S: RewriteStrategy + Send + Sync + Clone + 'static,
     S::Cost: serde::Serialize + Send + Sync,
 {
@@ -188,7 +190,7 @@ where
         log_config: BadgerLogger,
         options: BadgerOptions,
     ) -> Circuit {
-        match options.n_threads.get() {
+        let h = match options.n_threads.get() {
             1 => self.badger(circ, log_config, options),
             _ => {
                 if options.split_circuit {
@@ -199,6 +201,8 @@ where
                 }
             }
         }
+        .into_hugr();
+        Circuit::new(h)
     }
 
     /// Run the Badger optimiser on a circuit, using a single thread.
@@ -208,12 +212,11 @@ where
         circ: &Circuit<impl HugrView<Node = Node>>,
         logger: BadgerLogger,
         opt: BadgerOptions,
-    ) -> Circuit {
+    ) -> ResourceScope {
         let backtracking = BacktrackingOptimiser::with_badger_options(&opt);
-        let init_state = BadgerState {
-            circ: circ.to_owned(),
-            cost: self.cost(circ),
-        };
+        let circ = ResourceScope::from_circuit(circ.to_owned());
+        let cost = self.cost(&circ);
+        let init_state = BadgerState { circ, cost };
         backtracking
             .optimise_with_options(init_state, self, logger.into())
             .expect("optimisation failed")
@@ -231,10 +234,10 @@ where
         circ: &Circuit<impl HugrView<Node = Node>>,
         mut logger: BadgerLogger,
         opt: BadgerOptions,
-    ) -> Circuit {
+    ) -> ResourceScope {
         let start_time = Instant::now();
         let n_threads: usize = opt.n_threads.get();
-        let circ = circ.to_owned();
+        let circ = ResourceScope::from_circuit(circ.to_owned());
 
         // multi-consumer priority channel for queuing circuits to be processed by the
         // workers
@@ -372,17 +375,18 @@ where
         circ: &Circuit<impl HugrView<Node = Node>>,
         mut logger: BadgerLogger,
         opt: BadgerOptions,
-    ) -> Result<Circuit, HugrError> {
+    ) -> Result<ResourceScope, HugrError> {
         let start_time = Instant::now();
-        let circ = circ.to_owned();
+        let circ = ResourceScope::from_circuit(circ.to_owned());
         let circ_cost = self.cost(&circ);
         let max_chunk_cost = circ_cost.clone().div_cost(opt.n_threads);
         logger.log(format!(
             "Splitting circuit with cost {:?} into chunks of at most {max_chunk_cost:?}.",
             circ_cost.clone()
         ));
-        let mut chunks =
-            CircuitChunks::split_with_cost(&circ, max_chunk_cost, |op| self.strategy.op_cost(op));
+        let mut chunks = CircuitChunks::split_with_cost(&circ.as_circuit(), max_chunk_cost, |op| {
+            self.strategy.op_cost(op)
+        });
 
         let num_rewrites = circ.rewrite_trace().map(|rs| rs.count());
         logger.log_best(circ_cost.clone(), num_rewrites);
@@ -421,7 +425,7 @@ where
             chunks[i] = res;
         }
 
-        let best_circ = chunks.reassemble()?;
+        let best_circ = ResourceScope::from_circuit(chunks.reassemble()?);
         let best_circ_cost = self.cost(&best_circ);
         if best_circ_cost.clone() < circ_cost {
             let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.count());

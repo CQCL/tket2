@@ -8,18 +8,17 @@ use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::{OpTrait, OpType};
 use hugr::types::Type;
-use hugr::{HugrView, Node};
+use hugr::{HugrView, Node, SimpleReplacement};
 use itertools::Itertools;
 
 use crate::circuit::Command;
-use crate::rewrite::CircuitRewrite;
 use crate::Circuit;
 
 /// Find tuple pack operations followed by tuple unpack operations
 /// and generate rewrites to remove them.
 pub fn find_tuple_unpack_rewrites(
     circ: &Circuit<impl HugrView<Node = Node>>,
-) -> impl Iterator<Item = CircuitRewrite> + '_ {
+) -> impl Iterator<Item = SimpleReplacement> + '_ {
     circ.commands().filter_map(|cmd| make_rewrite(circ, cmd))
 }
 
@@ -40,7 +39,7 @@ fn is_unpack_tuple(optype: &OpType) -> bool {
 fn make_rewrite<T: HugrView<Node = Node>>(
     circ: &Circuit<T>,
     cmd: Command<T>,
-) -> Option<CircuitRewrite> {
+) -> Option<SimpleReplacement> {
     let cmd_optype = cmd.optype();
     let tuple_node = cmd.node();
     if !is_make_tuple(cmd_optype) {
@@ -97,7 +96,7 @@ fn remove_pack_unpack<T: HugrView<Node = Node>>(
     pack_node: Node,
     unpack_nodes: Vec<Node>,
     num_other_outputs: usize,
-) -> CircuitRewrite {
+) -> SimpleReplacement {
     let num_unpack_outputs = tuple_types.len() * unpack_nodes.len();
 
     let mut nodes = unpack_nodes;
@@ -146,7 +145,6 @@ fn remove_pack_unpack<T: HugrView<Node = Node>>(
 
     subgraph
         .create_simple_replacement(circ.hugr(), replacement)
-        .map(CircuitRewrite::from)
         .unwrap_or_else(|e| {
             panic!("Failed to create rewrite for removing tuple pack/unpack operations. {e}")
         })
@@ -157,6 +155,7 @@ mod test {
     use super::*;
     use hugr::extension::prelude::{bool_t, qb_t, UnpackTuple};
 
+    use hugr::hugr::Patch;
     use hugr::types::Signature;
     use rstest::{fixture, rstest};
 
@@ -244,7 +243,7 @@ mod test {
                 break;
             };
             num_rewrites += 1;
-            rewrite.apply(&mut circ)?;
+            rewrite.apply(circ.hugr_mut())?;
         }
         assert_eq!(num_rewrites, expected_rewrites);
 
