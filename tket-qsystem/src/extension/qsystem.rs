@@ -410,13 +410,9 @@ pub trait QSystemOpBuilder: Dataflow + UnwrapBuilder + ArrayOpBuilder {
 
     /// Build a CZ gate in terms of QSystem primitives.
     fn build_cz(&mut self, a: Wire, b: Wire) -> Result<[Wire; 2], BuildError> {
-        let pi = pi_mul_f64(self, 1.0);
         let pi_2 = pi_mul_f64(self, 0.5);
-        let pi_minus_2 = pi_mul_f64(self, -0.5);
 
-        let a = self.add_phased_x(a, pi, pi_2)?;
         let [a, b] = self.build_zz_max(a, b)?;
-        let a = self.add_phased_x(a, pi, pi_minus_2)?;
         let b = self.add_rz(b, pi_2)?;
         let a = self.add_rz(a, pi_2)?;
 
