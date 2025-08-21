@@ -654,7 +654,7 @@ impl WireTracker {
                     Arc::new(LoadedParameter::rotation(wire))
                 }
                 PytketParam::InputVariable { name } => {
-                    // Special case for the name "pi", inserts a `ConstRotation(1.0)` instead.
+                    // Special case for the name "pi", inserts a `ConstRotation(PI)` instead.
                     if name == "pi" {
                         let value: Value = ConstRotation::new(std::f64::consts::PI).unwrap().into();
                         let wire = hugr.add_load_const(value);
