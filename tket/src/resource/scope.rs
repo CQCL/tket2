@@ -120,16 +120,35 @@ impl<H: HugrView> ResourceScope<H> {
         Some(port_map.get_slice(direction))
     }
 
-    /// Get the port of node on the given resource path.
+    /// Get the ports of node with the given opvalue in the given direction.
     ///
     /// The returned port will have the direction `dir`.
-    pub fn get_port(&self, node: H::Node, resource_id: ResourceId, dir: Direction) -> Option<Port> {
-        let opvals = self.get_opvalue_slice(node, dir)?;
-        let offset = opvals.iter().position(|opval| match opval {
-            &OpValue::Resource(res) => res == resource_id,
-            _ => false,
-        })?;
-        Some(Port::new(dir, offset))
+    pub fn get_ports(
+        &self,
+        node: H::Node,
+        opvalue: impl Into<OpValue>,
+        dir: Direction,
+    ) -> impl Iterator<Item = Port> + '_ {
+        let opvalue = opvalue.into();
+        let opvals = self.get_opvalue_slice(node, dir);
+        let offsets = opvals
+            .into_iter()
+            .flatten()
+            .positions(move |opval| opval == &opvalue);
+        offsets.map(move |offset| Port::new(dir, offset))
+    }
+
+    /// Get the port of node with the given resource in the given direction.
+    pub fn get_resource_port(
+        &self,
+        node: H::Node,
+        resource_id: ResourceId,
+        dir: Direction,
+    ) -> Option<Port> {
+        self.get_ports(node, resource_id, dir)
+            .at_most_one()
+            .ok()
+            .expect("linear resource")
     }
 
     /// Get the position of the given node.
@@ -193,7 +212,7 @@ impl<H: HugrView> ResourceScope<H> {
         let mut curr_node = start_node;
 
         iter::from_fn(move || {
-            let port = self.get_port(curr_node, resource_id, direction)?;
+            let port = self.get_resource_port(curr_node, resource_id, direction)?;
             let (next_node, _) = self
                 .hugr()
                 .single_linked_port(curr_node, port)

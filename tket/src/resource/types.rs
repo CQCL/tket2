@@ -4,6 +4,7 @@
 //! copyable values throughout a HUGR circuit, including resource identifiers,
 //! positions, and the mapping structures that associate them with operations.
 
+use derive_more::derive::From;
 use hugr::{types::Signature, Direction, IncomingPort, OutgoingPort, Port, PortIndex};
 use itertools::Itertools;
 use num_rational::Rational64;
@@ -81,12 +82,12 @@ impl Position {
 
 /// Value associated with a port, either a resource with position or a copyable
 /// value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
 pub enum OpValue {
     /// A linear resource.
-    Resource(ResourceId),
+    Resource(#[from] ResourceId),
     /// A copyable value.
-    Copyable(CopyableValueId),
+    Copyable(#[from] CopyableValueId),
 }
 
 impl OpValue {
