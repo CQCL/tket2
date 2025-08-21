@@ -1,6 +1,7 @@
 from tket_exts import (
     debug,
     futures,
+    gpu,
     guppy,
     opaque_bool,
     qsystem,
@@ -18,6 +19,7 @@ import pytest
 exts = [
     debug,
     futures,
+    gpu,
     guppy,
     opaque_bool,
     qsystem,
