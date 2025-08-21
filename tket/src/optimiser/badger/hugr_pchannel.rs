@@ -8,13 +8,13 @@ use crossbeam_channel::{select, Receiver, RecvError, SendError, Sender};
 use fxhash::FxHashSet;
 
 use crate::circuit::cost::CircuitCost;
-use crate::Circuit;
+use crate::resource::ResourceScope;
 
 use super::hugr_pqueue::{Entry, HugrPQ};
 
 /// A unit of work for a worker, consisting of a circuit to process, along its
 /// hash and cost.
-pub type Work<P> = Entry<Circuit, P, u64>;
+pub type Work<P> = Entry<ResourceScope, P, u64>;
 
 /// A priority channel for circuits.
 ///
@@ -50,7 +50,7 @@ pub struct HugrPriorityChannel<C, P: Ord> {
 /// Logging information from the priority channel.
 #[derive(Debug, Clone)]
 pub enum PriorityChannelLog<P> {
-    NewBestCircuit(Circuit, P),
+    NewBestCircuit(ResourceScope, P),
     CircuitCount {
         processed_count: usize,
         seen_count: usize,
@@ -106,7 +106,7 @@ impl<P: CircuitCost> PriorityChannelCommunication<P> {
 
 impl<C, P> HugrPriorityChannel<C, P>
 where
-    C: Fn(&Circuit) -> P + Send + Sync + 'static,
+    C: Fn(&ResourceScope) -> P + Send + Sync + 'static,
     P: CircuitCost + Send + Sync + 'static,
 {
     /// Initialize the queueing system.

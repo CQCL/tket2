@@ -211,6 +211,12 @@ impl<H: HugrView<Node = Node>> Rewriter<Circuit<H>> for ECCRewriter {
     }
 }
 
+impl<H: HugrView<Node = Node>> Rewriter<H> for ECCRewriter {
+    fn get_rewrites(&self, circ: &H) -> Vec<CircuitRewrite<H::Node>> {
+        self.get_rewrites(&Circuit::new(circ))
+    }
+}
+
 /// Errors that can occur when (de)serialising an [`ECCRewriter`].
 #[derive(Debug, Display, Error, From)]
 #[non_exhaustive]

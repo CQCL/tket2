@@ -9,6 +9,7 @@ use hugr::builder::{CircuitBuilder, DFGBuilder, Dataflow, DataflowHugr};
 use hugr::envelope::{EnvelopeConfig, EnvelopeFormat, ZstdConfig};
 use hugr::extension::prelude::qb_t;
 use hugr::extension::{ExtensionRegistry, EMPTY_REG};
+use hugr::hugr::Patch;
 use hugr::ops::handle::NodeHandle;
 use hugr::ops::{ExtensionOp, OpType};
 use hugr::package::Package;
@@ -88,7 +89,9 @@ impl Tk2Circuit {
 
     /// Apply a rewrite on the circuit.
     pub fn apply_rewrite(&mut self, rw: PyCircuitRewrite) {
-        rw.rewrite.apply(&mut self.circ).expect("Apply error.");
+        rw.rewrite
+            .apply(self.circ.hugr_mut())
+            .expect("Apply error.");
     }
 
     /// Encode the circuit as a HUGR envelope.

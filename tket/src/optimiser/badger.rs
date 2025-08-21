@@ -22,7 +22,7 @@ use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 use fxhash::FxHashSet;
 use hugr::hugr::HugrError;
-use hugr::{HugrView, Node};
+use hugr::{Hugr, HugrView, Node};
 pub use log::BadgerLogger;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
@@ -36,6 +36,7 @@ use crate::optimiser::badger::hugr_pchannel::{HugrPriorityChannel, PriorityChann
 use crate::optimiser::badger::hugr_pqueue::{Entry, HugrPQ};
 use crate::optimiser::badger::worker::BadgerWorker;
 use crate::passes::CircuitChunks;
+use crate::resource::ResourceScope;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
 use crate::Circuit;
@@ -122,7 +123,7 @@ impl<R, S> BadgerOptimiser<R, S> {
         Self { rewriter, strategy }
     }
 
-    fn cost(&self, circ: &Circuit<impl HugrView<Node = Node>>) -> S::Cost
+    fn cost(&self, circ: &ResourceScope<impl HugrView<Node = Node>>) -> S::Cost
     where
         S: RewriteStrategy,
     {
@@ -132,7 +133,7 @@ impl<R, S> BadgerOptimiser<R, S> {
 
 impl<R, S> BadgerOptimiser<R, S>
 where
-    R: Rewriter + Send + Clone + Sync + 'static,
+    R: Rewriter<Hugr> + Send + Clone + Sync + 'static,
     S: RewriteStrategy + Send + Sync + Clone + 'static,
     S::Cost: serde::Serialize + Send + Sync,
 {
@@ -156,7 +157,7 @@ where
         log_config: BadgerLogger,
         options: BadgerOptions,
     ) -> Circuit {
-        match options.n_threads.get() {
+        let h = match options.n_threads.get() {
             1 => self.badger(circ, log_config, options),
             _ => {
                 if options.split_circuit {
@@ -167,6 +168,8 @@ where
                 }
             }
         }
+        .into_hugr();
+        Circuit::new(h)
     }
 
     /// Run the Badger optimiser on a circuit, using a single thread.
@@ -176,11 +179,11 @@ where
         circ: &Circuit<impl HugrView<Node = Node>>,
         mut logger: BadgerLogger,
         opt: BadgerOptions,
-    ) -> Circuit {
+    ) -> ResourceScope {
         let start_time = Instant::now();
         let mut last_best_time = Instant::now();
 
-        let circ = circ.to_owned();
+        let circ = ResourceScope::from_circuit(circ.to_owned());
         let mut best_circ = circ.clone();
         let mut best_circ_cost = self.cost(&circ);
         let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.count());
@@ -194,7 +197,7 @@ where
         // The priority queue of circuits to be processed (this should not get big)
         let cost_fn = {
             let strategy = self.strategy.clone();
-            move |circ: &'_ Circuit| strategy.circuit_cost(circ)
+            move |circ: &'_ ResourceScope| strategy.circuit_cost(circ)
         };
         let cost = (cost_fn)(&circ);
 
@@ -213,7 +216,7 @@ where
             }
             circ_cnt += 1;
 
-            let rewrites = self.rewriter.get_rewrites(&circ);
+            let rewrites = self.rewriter.get_rewrites(circ.hugr());
             logger.register_branching_factor(rewrites.len());
 
             // Get combinations of rewrites that can be applied to the circuit,
@@ -285,15 +288,15 @@ where
         circ: &Circuit<impl HugrView<Node = Node>>,
         mut logger: BadgerLogger,
         opt: BadgerOptions,
-    ) -> Circuit {
+    ) -> ResourceScope {
         let start_time = Instant::now();
         let n_threads: usize = opt.n_threads.get();
-        let circ = circ.to_owned();
+        let circ = ResourceScope::from_circuit(circ.to_owned());
 
         // multi-consumer priority channel for queuing circuits to be processed by the workers
         let cost_fn = {
             let strategy = self.strategy.clone();
-            move |circ: &'_ Circuit| strategy.circuit_cost(circ)
+            move |circ: &'_ ResourceScope| strategy.circuit_cost(circ)
         };
         let (pq, rx_log) = HugrPriorityChannel::init(cost_fn.clone(), opt.queue_size);
 
@@ -429,17 +432,18 @@ where
         circ: &Circuit<impl HugrView<Node = Node>>,
         mut logger: BadgerLogger,
         opt: BadgerOptions,
-    ) -> Result<Circuit, HugrError> {
+    ) -> Result<ResourceScope, HugrError> {
         let start_time = Instant::now();
-        let circ = circ.to_owned();
+        let circ = ResourceScope::from_circuit(circ.to_owned());
         let circ_cost = self.cost(&circ);
         let max_chunk_cost = circ_cost.clone().div_cost(opt.n_threads);
         logger.log(format!(
             "Splitting circuit with cost {:?} into chunks of at most {max_chunk_cost:?}.",
             circ_cost.clone()
         ));
-        let mut chunks =
-            CircuitChunks::split_with_cost(&circ, max_chunk_cost, |op| self.strategy.op_cost(op));
+        let mut chunks = CircuitChunks::split_with_cost(&circ.as_circuit(), max_chunk_cost, |op| {
+            self.strategy.op_cost(op)
+        });
 
         let num_rewrites = circ.rewrite_trace().map(|rs| rs.count());
         logger.log_best(circ_cost.clone(), num_rewrites);
@@ -478,7 +482,7 @@ where
             chunks[i] = res;
         }
 
-        let best_circ = chunks.reassemble()?;
+        let best_circ = ResourceScope::from_circuit(chunks.reassemble()?);
         let best_circ_cost = self.cost(&best_circ);
         if best_circ_cost.clone() < circ_cost {
             let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.count());

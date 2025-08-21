@@ -11,7 +11,8 @@ use crate::resource::types::{CircuitUnit, PortMap};
 use crate::utils::type_is_linear;
 use crate::Circuit;
 use hugr::core::HugrNode;
-use hugr::hugr::views::SiblingSubgraph;
+use hugr::hugr::views::sibling_subgraph::{IncomingPorts, OutgoingPorts};
+use hugr::hugr::views::{ExtractionResult, SiblingSubgraph};
 use hugr::ops::OpTrait;
 use hugr::types::Signature;
 use hugr::{Direction, HugrView, IncomingPort, Port, PortIndex, Wire};
@@ -29,7 +30,7 @@ use super::{Position, ResourceAllocator, ResourceId};
 /// allowing efficient lookup of [`CircuitUnit`]s for any port of any operation
 /// within the scope.
 #[derive(Debug, Clone)]
-pub struct ResourceScope<H: HugrView> {
+pub struct ResourceScope<H: HugrView = hugr::Hugr> {
     /// The HUGR containing the operations.
     hugr: H,
     /// The subgraph within which resources are tracked.
@@ -51,6 +52,17 @@ impl<N: HugrNode> NodeCircuitUnits<N> {
         Self {
             port_map: PortMap::with_default(default, signature),
             position: Position::default(),
+        }
+    }
+
+    fn map_nodes<N2: HugrNode>(&self, mut node_map: impl FnMut(N) -> N2) -> NodeCircuitUnits<N2> {
+        let mapped_port_map = self
+            .port_map
+            .clone()
+            .map(|unit| unit.map_node(&mut node_map));
+        NodeCircuitUnits {
+            port_map: mapped_port_map,
+            position: self.position,
         }
     }
 }
@@ -115,9 +127,55 @@ impl<H: HugrView> ResourceScope<H> {
         self.subgraph.nodes()
     }
 
+    /// Ensures the ResourceScope contains an owned HUGR.
+    pub fn to_owned(&self) -> ResourceScope {
+        let (hugr, map) = self.hugr.extract_hugr(self.hugr.module_root());
+        let map_node = |node: H::Node| map.extracted_node(node);
+        let new_circuit_units = self
+            .circuit_units
+            .iter()
+            .map(|(node, units)| (map.extracted_node(*node), units.map_nodes(map_node)))
+            .collect();
+        let new_inputs = map_inputs(self.subgraph.incoming_ports(), map_node);
+        let new_outputs = map_outputs(self.subgraph.outgoing_ports(), map_node);
+        let new_function_calls = map_inputs(self.subgraph.function_calls(), map_node);
+        let new_nodes = self
+            .subgraph
+            .nodes()
+            .iter()
+            .map(|&n| map_node(n))
+            .collect_vec();
+        let subgraph =
+            SiblingSubgraph::new_unchecked(new_inputs, new_outputs, new_function_calls, new_nodes);
+
+        ResourceScope {
+            hugr,
+            subgraph,
+            circuit_units: new_circuit_units,
+        }
+    }
+
     /// Get the underlying HUGR.
     pub fn hugr(&self) -> &H {
         &self.hugr
+    }
+
+    /// Consume the ResourceScope and return the underlying HUGR.
+    pub fn into_hugr(self) -> H {
+        self.hugr
+    }
+
+    pub(crate) fn hugr_mut(&mut self) -> &mut H {
+        &mut self.hugr
+    }
+
+    /// Wrap the underlying HUGR in a Circuit as reference.
+    pub fn as_circuit(&self) -> Circuit<&H> {
+        Circuit::new(self.hugr())
+    }
+
+    pub(crate) fn as_circuit_mut(&mut self) -> Circuit<&mut H> {
+        Circuit::new(self.hugr_mut())
     }
 
     /// Get the underlying subgraph.
@@ -265,6 +323,30 @@ impl<H: HugrView> ResourceScope<H> {
     pub fn contains_node(&self, node: H::Node) -> bool {
         self.subgraph.nodes().contains(&node)
     }
+}
+
+fn map_inputs<N1: Copy, N2: Copy>(
+    incoming_ports: &IncomingPorts<N1>,
+    mut node_map: impl FnMut(N1) -> N2,
+) -> IncomingPorts<N2> {
+    incoming_ports
+        .iter()
+        .map(|uses| {
+            uses.iter()
+                .map(|&(node, port)| (node_map(node), port))
+                .collect_vec()
+        })
+        .collect_vec()
+}
+
+fn map_outputs<N1: Copy, N2: Copy>(
+    outgoing_ports: &OutgoingPorts<N1>,
+    mut node_map: impl FnMut(N1) -> N2,
+) -> OutgoingPorts<N2> {
+    outgoing_ports
+        .iter()
+        .map(|&(node, port)| (node_map(node), port))
+        .collect_vec()
 }
 
 impl<'h, H: HugrView> ResourceScope<&'h H> {

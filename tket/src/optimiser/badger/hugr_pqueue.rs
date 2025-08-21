@@ -3,7 +3,7 @@ use fxhash::FxHashMap;
 use priority_queue::DoublePriorityQueue;
 
 use crate::circuit::CircuitHash;
-use crate::Circuit;
+use crate::resource::ResourceScope;
 
 /// A min-priority queue for Hugrs.
 ///
@@ -12,7 +12,7 @@ use crate::Circuit;
 #[derive(Debug, Clone, Default)]
 pub struct HugrPQ<P: Ord, C> {
     queue: DoublePriorityQueue<u64, P>,
-    hash_lookup: FxHashMap<u64, Circuit>,
+    hash_lookup: FxHashMap<u64, ResourceScope>,
     cost_fn: C,
     max_size: usize,
 }
@@ -36,7 +36,7 @@ impl<P: Ord, C> HugrPQ<P, C> {
 
     /// Reference to the minimal circuit in the queue.
     #[allow(unused)]
-    pub fn peek(&self) -> Option<Entry<&Circuit, &P, u64>> {
+    pub fn peek(&self) -> Option<Entry<&ResourceScope, &P, u64>> {
         let (hash, cost) = self.queue.peek_min()?;
         let circ = self.hash_lookup.get(hash)?;
         Some(Entry {
@@ -50,9 +50,9 @@ impl<P: Ord, C> HugrPQ<P, C> {
     ///
     /// If the queue is full, the element with the highest cost will be dropped.
     #[allow(unused)]
-    pub fn push(&mut self, circ: Circuit)
+    pub fn push(&mut self, circ: ResourceScope)
     where
-        C: Fn(&Circuit) -> P,
+        C: Fn(&ResourceScope) -> P,
     {
         let hash = circ.circuit_hash(circ.parent()).unwrap();
         let cost = (self.cost_fn)(&circ);
@@ -67,9 +67,9 @@ impl<P: Ord, C> HugrPQ<P, C> {
     /// This does not check that the hash is valid.
     ///
     /// If the queue is full, the most last will be dropped.
-    pub fn push_unchecked(&mut self, circ: Circuit, hash: u64, cost: P)
+    pub fn push_unchecked(&mut self, circ: ResourceScope, hash: u64, cost: P)
     where
-        C: Fn(&Circuit) -> P,
+        C: Fn(&ResourceScope) -> P,
     {
         if !self.check_accepted(&cost) {
             return;
@@ -82,14 +82,14 @@ impl<P: Ord, C> HugrPQ<P, C> {
     }
 
     /// Pop the minimal circuit from the queue.
-    pub fn pop(&mut self) -> Option<Entry<Circuit, P, u64>> {
+    pub fn pop(&mut self) -> Option<Entry<ResourceScope, P, u64>> {
         let (hash, cost) = self.queue.pop_min()?;
         let circ = self.hash_lookup.remove(&hash)?;
         Some(Entry { circ, cost, hash })
     }
 
     /// Pop the maximal circuit from the queue.
-    pub fn pop_max(&mut self) -> Option<Entry<Circuit, P, u64>> {
+    pub fn pop_max(&mut self) -> Option<Entry<ResourceScope, P, u64>> {
         let (hash, cost) = self.queue.pop_max()?;
         let circ = self.hash_lookup.remove(&hash)?;
         Some(Entry { circ, cost, hash })
