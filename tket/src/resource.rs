@@ -49,6 +49,7 @@ pub use scope::{ResourceScope, ResourceScopeConfig};
 pub use types::{CopyableValueId, OpValue, Position, ResourceAllocator, ResourceId};
 
 // Internal modules
+mod convex_checker;
 mod flow;
 mod interval;
 mod scope;

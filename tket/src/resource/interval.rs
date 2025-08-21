@@ -6,7 +6,7 @@ use derive_more::derive::{Display, Error};
 use hugr::{core::HugrNode, Direction, HugrView};
 use itertools::Itertools;
 
-use super::{OpValue, Position, ResourceId, ResourceScope};
+use super::{Position, ResourceId, ResourceScope};
 
 /// A non-empty interval on a resource path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -26,12 +26,9 @@ impl<N: HugrNode> Interval<N> {
         node: N,
         scope: &ResourceScope<impl HugrView<Node = N>>,
     ) -> Self {
-        let port = scope
-            .get_port(node, resource_id, Direction::Outgoing)
-            .expect("node not on resource path");
-        let OpValue::Resource(_, pos) = scope.get_opvalue(node, port) else {
-            panic!("node is not on resource path");
-        };
+        let pos = scope
+            .get_position(node)
+            .expect("node is not on resource path");
 
         Self {
             resource_id,
@@ -47,19 +44,14 @@ impl<N: HugrNode> Interval<N> {
         end_node: N,
         scope: &ResourceScope<impl HugrView<Node = N>>,
     ) -> Self {
-        let start_port = scope
-            .get_port(start_node, resource_id, Direction::Outgoing)
+        let start_pos = scope
+            .get_position(start_node)
             .expect("start node not on resource path");
-        let end_port = scope
-            .get_port(end_node, resource_id, Direction::Outgoing)
+        let end_pos = scope
+            .get_position(end_node)
             .expect("end node not on resource path");
 
-        let OpValue::Resource(_, start_pos) = scope.get_opvalue(start_node, start_port) else {
-            panic!("start_port is a resource port");
-        };
-        let OpValue::Resource(_, end_pos) = scope.get_opvalue(end_node, end_port) else {
-            panic!("end_port is a resource port");
-        };
+        assert!(start_pos <= end_pos);
 
         Self {
             resource_id,
@@ -76,6 +68,14 @@ impl<N: HugrNode> Interval<N> {
     /// Get the start node of the interval.
     pub fn start_node(&self) -> N {
         self.nodes[0]
+    }
+
+    pub(crate) fn start_pos(&self) -> Position {
+        self.positions[0]
+    }
+
+    pub(crate) fn end_pos(&self) -> Position {
+        self.positions[1]
     }
 
     /// Get the end node of the interval.
@@ -97,7 +97,7 @@ impl<N: HugrNode> Interval<N> {
         node: N,
         scope: &ResourceScope<impl HugrView<Node = N>>,
     ) -> Result<Option<Direction>, InvalidInterval<N>> {
-        let Some(pos) = scope.get_position(node, self.resource_id) else {
+        let Some(pos) = scope.get_position(node) else {
             return Err(InvalidInterval::NotOnResourcePath(node));
         };
 

@@ -1035,8 +1035,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.22.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba34deb9a48603fb1f63a48e00d833f2b51dc7d76efc4d21d1d67bf656fc3284"
+source = "git+https://github.com/CQCL/hugr?rev=37f8846a#37f8846a2bafbfefde90fbcd328a51c192f3a4b3"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1047,8 +1046,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.22.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1d7e9197f6d90f0184ddf5ec60f9099d39dda837c7a94689fa2dfa4b6d807ad"
+source = "git+https://github.com/CQCL/hugr?rev=37f8846a#37f8846a2bafbfefde90fbcd328a51c192f3a4b3"
 dependencies = [
  "anyhow",
  "clap",
@@ -1065,8 +1063,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.22.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20ff3055f61b54110f0db07044298852af252ecf5cf4d0febd024eebd56d4430"
+source = "git+https://github.com/CQCL/hugr?rev=37f8846a#37f8846a2bafbfefde90fbcd328a51c192f3a4b3"
 dependencies = [
  "base64",
  "cgmath",
@@ -1103,8 +1100,7 @@ dependencies = [
 [[package]]
 name = "hugr-llvm"
 version = "0.22.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aedba5a805260a4b2ca73f14af4467d0fece84f4ac56e04b74fbda6d879f628d"
+source = "git+https://github.com/CQCL/hugr?rev=37f8846a#37f8846a2bafbfefde90fbcd328a51c192f3a4b3"
 dependencies = [
  "anyhow",
  "delegate 0.13.4",
@@ -1123,8 +1119,7 @@ dependencies = [
 [[package]]
 name = "hugr-model"
 version = "0.22.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58f26ab2c3c9ecacd56da27b59f492bf1f24b51ab93e4992fc8ccd6715c3d76d"
+source = "git+https://github.com/CQCL/hugr?rev=37f8846a#37f8846a2bafbfefde90fbcd328a51c192f3a4b3"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1145,8 +1140,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.22.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c8d98acf7df7d21e97bea5cad2e1012dbbe9b29c96c376fa0d59b2defc6f0e4"
+source = "git+https://github.com/CQCL/hugr?rev=37f8846a#37f8846a2bafbfefde90fbcd328a51c192f3a4b3"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",

@@ -516,7 +516,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "reason: subcircuit to subgraph conversion is not implemented"]
     fn test_greedy_strategy() {
         let mut circ = n_cx(10);
         let cx_gates = circ.commands().map(|cmd| cmd.node()).collect_vec();
@@ -546,7 +545,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "reason: subcircuit to subgraph conversion is not implemented"]
     fn test_exhaustive_default_strategy() {
         let mut circ = n_cx(10);
         let cx_gates = circ.commands().map(|cmd| cmd.node()).collect_vec();
@@ -584,7 +582,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "reason: subcircuit to subgraph conversion is not implemented"]
     fn test_exhaustive_gamma_strategy() {
         let circ = n_cx(10);
         let cx_gates = circ.commands().map(|cmd| cmd.node()).collect_vec();
