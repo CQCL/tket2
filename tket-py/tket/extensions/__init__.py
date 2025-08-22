@@ -1,6 +1,5 @@
 from tket_exts import (
     opaque_bool,
-    bool,
     debug,
     guppy,
     rotation,
@@ -12,6 +11,12 @@ from tket_exts import (
     result,
     wasm,
 )
+
+# TODO: Remove once tket no longer supports tket-exts 0.10.*
+try:
+    from tket_exts import bool
+except ImportError:
+    bool = opaque_bool  # type: ignore[assignment]
 
 
 # TODO: Remove the deprecated `opaque_bool` export in a breaking change.
