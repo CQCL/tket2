@@ -411,8 +411,6 @@ fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num
     assert_eq!(ser.commands.len(), num_commands);
 
     let circ: Circuit = ser.decode().unwrap();
-    println!("{}", circ.mermaid_string());
-
     assert_eq!(circ.qubit_count(), num_qubits);
 
     let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
