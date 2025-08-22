@@ -426,8 +426,7 @@ impl<'h> PytketDecoderContext<'h> {
     /// The caller must take care of converting the parameter wires to the
     /// required types and units expected by the operation. An error will be
     /// returned if the parameter does not match the expected wire type, but the
-    /// [`ParameterUnit`] (radians or half-turns) cannot be checked
-    /// automatically.
+    /// unit (radians or half-turns) cannot be checked automatically.
     ///
     /// # Arguments
     ///

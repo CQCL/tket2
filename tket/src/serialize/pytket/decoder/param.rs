@@ -103,8 +103,9 @@ impl LoadedParameter {
     ///
     /// Adds the necessary operations to the Hugr and returns a new wire.
     ///
-    /// See [`LoadedParameter::as_float`] and [`LoadedParameter::as_rotation`]
-    /// for more convenient methods.
+    /// See [`LoadedParameter::as_rotation`],
+    /// [`LoadedParameter::as_float_radians`] and
+    /// [`LoadedParameter::as_float_half_turns`] for more convenient methods.
     #[inline]
     pub fn with_type<H: AsRef<Hugr> + AsMut<Hugr>>(
         &self,
