@@ -381,7 +381,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         let args = MakeOperationArgs {
             num_qubits: qubits.len(),
             num_bits: bits.len(),
-            params: &params,
+            params: Cow::Borrowed(&params),
         };
         let op = make_operation(args);
 
@@ -555,7 +555,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         let args = MakeOperationArgs {
             num_qubits: op_values.qubits.len(),
             num_bits: op_values.bits.len(),
-            params: &input_param_exprs,
+            params: Cow::Borrowed(&input_param_exprs),
         };
         let mut pytket_op = make_tk1_operation(tket_json_rs::OpType::Barrier, args);
         pytket_op.data = Some(payload);
@@ -941,14 +941,14 @@ pub struct OutputParamArgs<'a> {
 ///
 /// This can be passed to [`make_tk1_operation`] to create a pytket
 /// [`circuit_json::Operation`].
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct MakeOperationArgs<'a> {
     /// Number of input qubits.
     pub num_qubits: usize,
     /// Number of input bits.
     pub num_bits: usize,
     /// List of input parameter expressions.
-    pub params: &'a [String],
+    pub params: Cow<'a, [String]>,
 }
 
 /// Cached value for a function encoding.
@@ -983,7 +983,7 @@ pub fn make_tk1_operation(
     op.op_type = pytket_optype;
     op.n_qb = Some(inputs.num_qubits as u32);
     op.params = match inputs.params.is_empty() {
-        false => Some(inputs.params.to_owned()),
+        false => Some(inputs.params.into_owned()),
         true => None,
     };
     op.signature = Some(
@@ -1020,7 +1020,7 @@ pub fn make_tk1_classical_operation(
     let args = MakeOperationArgs {
         num_qubits: 0,
         num_bits: bit_count,
-        params: &[],
+        params: Cow::Borrowed(&[]),
     };
     let mut op = make_tk1_operation(pytket_optype, args);
     op.classical = Some(Box::new(classical));
@@ -1067,7 +1067,7 @@ pub fn make_tk1_classical_expression(
     let args = MakeOperationArgs {
         num_qubits: 0,
         num_bits: bit_count,
-        params: &[],
+        params: Cow::Borrowed(&[]),
     };
     let mut op = make_tk1_operation(tket_json_rs::OpType::ClExpr, args);
     op.classical_expr = Some(clexpr);
