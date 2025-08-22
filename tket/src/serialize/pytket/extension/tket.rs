@@ -16,6 +16,7 @@ use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
 use hugr::ops::ExtensionOp;
 use hugr::{HugrView, Wire};
+use itertools::Itertools as _;
 use tket_json_rs::optype::OpType as PytketOptype;
 
 /// Encoder for [TketOp] operations.
@@ -177,7 +178,14 @@ impl PytketDecoder for TketOpEmitter {
                 return Ok(DecodeStatus::Unsupported);
             }
         };
-        decoder.add_node_with_wires(op, qubits, bits, params)?;
+
+        // We expect all parameters to be rotations in half-turns.
+        let params = params
+            .iter()
+            .map(|p| Arc::new(p.as_rotation(&mut decoder.builder)))
+            .collect_vec();
+
+        decoder.add_node_with_wires(op, qubits, bits, &params)?;
 
         Ok(DecodeStatus::Success)
     }

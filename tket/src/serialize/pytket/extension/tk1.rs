@@ -65,7 +65,7 @@ impl<H: HugrView> PytketEmitter<H> for Tk1Emitter {
     }
 }
 
-/// Add an [`OpaqueTk1Op`] to the Hugr, representing a pytket operation that could
+/// Add an [`OpaqueTk1Op`] to the Hugr, representing a pytket operation that could not
 /// be decoded by the configured decoders.
 ///
 /// We don't implement [`PytketDecoder`][super::PytketDecoder] for [`Tk1Emitter`] so it doesn't get added
@@ -100,7 +100,7 @@ pub(crate) fn build_opaque_tket_op<'h>(
     // Ensure all parameter inputs have rotation types rather than float.
     let param_wires = wires
         .iter_parameters()
-        .map(|p| p.as_rotation(&mut decoder.builder).wire)
+        .map(|p| p.as_rotation(&mut decoder.builder).wire())
         .collect_vec();
 
     let opaque_op = decoder

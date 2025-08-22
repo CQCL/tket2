@@ -217,7 +217,7 @@ impl PyPauliIter {
 //
 // TODO: These can no longer be constructed from Python. Since `hugr-rs 0.14`
 // we need an extension and `OpDef` to defines these.
-// If fixing this, make sure to fix `PyHugrType` too.
+// When fixing this, make sure to fix `PyHugrType` too.
 #[pyclass]
 #[pyo3(name = "CustomOp")]
 #[repr(transparent)]
