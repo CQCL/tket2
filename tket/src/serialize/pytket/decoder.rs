@@ -4,7 +4,7 @@ mod param;
 mod tracked_elem;
 mod wires;
 
-pub use param::{LoadedParameter, LoadedParameterType};
+pub use param::{LoadedParameter, ParameterType};
 pub use tracked_elem::{TrackedBit, TrackedQubit};
 pub use wires::TrackedWires;
 
@@ -420,8 +420,14 @@ impl<'h> PytketDecoderContext<'h> {
     /// the first registers in `wires` for the bit inputs and the remaining
     /// registers for the outputs.
     ///
-    /// The input wire types must match the operation's input signature,
-    /// no type conversion is performed.
+    /// The input wire types must match the operation's input signature, no type
+    /// conversion is performed.
+    ///
+    /// The caller must take care of converting the parameter wires to the
+    /// required types and units expected by the operation. An error will be
+    /// returned if the parameter does not match the expected wire type, but the
+    /// [`ParameterUnit`] (radians or half-turns) cannot be checked
+    /// automatically.
     ///
     /// # Arguments
     ///
@@ -435,6 +441,8 @@ impl<'h> PytketDecoderContext<'h> {
     ///   input ports.
     /// - Returns an error if the node's output ports cannot be assigned to
     ///   arguments from the input wire set.
+    /// - Returns an error if the parameter wires do not match the expected
+    ///   types.
     pub fn add_node_with_wires(
         &mut self,
         op: impl Into<OpType>,
@@ -501,22 +509,10 @@ impl<'h> PytketDecoderContext<'h> {
             .map_err(|e| e.hugr_op(&op_name))?;
         debug_assert_eq!(op_input_count, input_wires.register_count());
 
-        // Convert the parameter wires to the required types.
-        // TODO: This should be done by `find_typed_wires`, but it requires changing the API to take `&mut self`.
-        let mut param_wires = Vec::with_capacity(params.len());
-        let mut params = input_wires.iter_parameters();
-        for ty in sig.input_types() {
-            let Some(expected_type) = LoadedParameterType::from_type(ty) else {
-                continue;
-            };
-            let param = *params.next().unwrap();
-            param_wires.push(param.with_type(expected_type, &mut self.builder).wire);
-        }
-
         // Add the node to the HUGR.
         let node = self
             .builder
-            .add_dataflow_op(op, input_wires.value_wires().chain(param_wires.into_iter()))
+            .add_dataflow_op(op, input_wires.wires())
             .map_err(|e| PytketDecodeError::custom(e).hugr_op(&op_name))?;
 
         // Register the output wires.
@@ -605,7 +601,19 @@ impl<'h> PytketDecoderContext<'h> {
     /// - If the parameter is a variable, adds a new `rotation` input to the region.
     /// - If the parameter is a sympy expressions, adds it as a [`SympyOpDef`][crate::extension::sympy::SympyOpDef] black box.
     pub fn load_parameter(&mut self, param: &str) -> Arc<LoadedParameter> {
-        self.wire_tracker.load_parameter(&mut self.builder, param)
+        Arc::new(
+            self.wire_tracker
+                .load_parameter(&mut self.builder, param, None),
+        )
+    }
+
+    /// Loads the given parameter expression as a [`LoadedParameter`] in the hugr, and converts it to the requested type and unit.
+    ///
+    /// See [`PytketDecoderContext::load_parameter`] for more details.
+    pub fn load_parameter_with_type(&mut self, param: &str, typ: ParameterType) -> LoadedParameter {
+        self.wire_tracker
+            .load_parameter(&mut self.builder, param, Some(typ))
+            .with_type(typ, &mut self.builder)
     }
 }
 

@@ -74,13 +74,13 @@ impl<H: HugrView> PytketEmitter<H> for FloatEmitter {
         // Special cases for pi rotations
         let approx_eq = |a: f64, b: f64| (a - b).abs() < 1e-10;
         const VALS: [(f64, &str); 7] = [
-            (PI, "1"),
-            (PI / 2., "1/2"),
-            (-PI / 2., "-1/2"),
-            (PI / 4., "1/4"),
-            (3. * PI / 4., "3/4"),
-            (-PI / 4., "-1/4"),
-            (-3. * PI / 4., "-3/4"),
+            (PI, "pi"),
+            (PI / 2., "pi/2"),
+            (-PI / 2., "-pi/2"),
+            (PI / 4., "pi/4"),
+            (3. * PI / 4., "3pi/4"),
+            (-PI / 4., "-pi/4"),
+            (-3. * PI / 4., "-3pi/4"),
         ];
         for (val, name) in VALS.iter() {
             if approx_eq(float, *val) {
@@ -89,7 +89,7 @@ impl<H: HugrView> PytketEmitter<H> for FloatEmitter {
             }
         }
 
-        let param = encoder.values.new_param(format!("({float}) / (pi)"));
+        let param = encoder.values.new_param(float.to_string());
         Ok(Some(TrackedValues::new_params([param])))
     }
 }
