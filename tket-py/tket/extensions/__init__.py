@@ -14,7 +14,7 @@ from tket_exts import (
 
 # TODO: Remove once tket no longer supports tket-exts 0.10.*
 try:
-    from tket_exts import bool
+    from tket_exts import bool  # type: ignore[attr-defined]
 except ImportError:
     bool = opaque_bool  # type: ignore[assignment]
 
