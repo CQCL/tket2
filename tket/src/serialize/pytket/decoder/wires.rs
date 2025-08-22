@@ -639,15 +639,17 @@ impl WireTracker {
     ///
     /// * `hugr` - The hugr to load the parameters to.
     /// * `param` - The parameter expression to load.
-    /// * `type_hint` - Try to load the parameter with the given type, if
-    ///   possible. The returned parameter is **not** guaranteed to have the
-    ///   requested type.
+    /// * `output_type` - Ensure the loaded parameter has the given type.
     pub fn load_parameter(
         &mut self,
         hugr: &mut FunctionBuilder<&mut Hugr>,
         param: &str,
-        type_hint: Option<ParameterType>,
+        output_type: Option<ParameterType>,
     ) -> LoadedParameter {
+        /// Recursive parameter loading.
+        ///
+        /// `type_hint` is a hint for the type of the parameter we want to load.
+        /// The actual returned type may be different.
         fn process(
             hugr: &mut FunctionBuilder<&mut Hugr>,
             input_params: &mut IndexMap<String, LoadedParameter>,
@@ -719,14 +721,19 @@ impl WireTracker {
             }
         }
 
-        process(
+        let loaded = process(
             hugr,
             &mut self.parameters,
             &mut self.parameter_vars,
             parse_pytket_param(param),
             param,
-            type_hint,
-        )
+            output_type,
+        );
+
+        match output_type {
+            Some(typ) => loaded.with_type(typ, hugr),
+            None => loaded,
+        }
     }
 
     /// Track a new wire, updating any tracked elements that are present in it.

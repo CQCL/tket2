@@ -612,7 +612,6 @@ impl<'h> PytketDecoderContext<'h> {
     pub fn load_parameter_with_type(&mut self, param: &str, typ: ParameterType) -> LoadedParameter {
         self.wire_tracker
             .load_parameter(&mut self.builder, param, Some(typ))
-            .with_type(typ, &mut self.builder)
     }
 }
 
