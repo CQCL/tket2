@@ -84,9 +84,8 @@ impl QSystemEmitter {
             }
         };
 
-        // We have to convert the parameters expressions (in half-turns) to radians.
-
-        // Most operations map directly to a pytket one.
+        // pytket parameters are always in half-turns.
+        // Since the `tket.qsystem` op inputs are in radians, we have to convert them here.
         encoder.emit_node_command(
             node,
             circ,
