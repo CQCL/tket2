@@ -76,6 +76,8 @@ pest = { workspace = true }
 pest_derive = { workspace = true }
 zstd = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
+num-rational = { workspace = true }
+uuid = { workspace = true }
 
 
 [dev-dependencies]
@@ -86,6 +88,7 @@ cool_asserts = { workspace = true }
 # Defined here so it can be overridden by the codspeed CI job
 # using `cargo add`.
 criterion = { version = "0.7.0", features = ["html_reports"] }
+insta = "1.43.1"
 
 [[bench]]
 name = "bench_main"
