@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.4](https://github.com/CQCL/tket2/compare/tket-py-v0.12.3...tket-py-v0.12.4) (2025-08-25)
+
+
+### Bug Fixes
+
+* Pytket barrier operations not being decoded ([#1069](https://github.com/CQCL/tket2/issues/1069)) ([4b90ffd](https://github.com/CQCL/tket2/commit/4b90ffdc7de6ec696d5db5e946b417bf8ff71878))
+
 ## [0.12.3](https://github.com/CQCL/tket2/compare/tket-py-v0.12.2...tket-py-v0.12.3) (2025-08-22)
 
 
