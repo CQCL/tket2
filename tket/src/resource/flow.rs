@@ -5,23 +5,21 @@
 
 use crate::resource::types::ResourceId;
 use derive_more::derive::{Display, Error};
-use hugr::ops::{OpTrait, OpType};
+use hugr::ops::OpTrait;
 use hugr::types::Type;
+use hugr::HugrView;
 use itertools::{EitherOrBoth, Itertools};
 
 /// Error type for unsupported operations in ResourceFlow implementations.
 #[derive(Debug, Display, Clone, PartialEq, Error)]
-#[display("Unsupported operation '{op_type:?}'")]
-pub struct UnsupportedOp {
-    /// The operation type that is unsupported.
-    pub op_type: OpType,
-}
+#[display("Unsupported operation")]
+pub struct UnsupportedOp;
 
 /// Trait for specifying how resources flow through operations.
 ///
 /// This trait allows different implementations to define how linear resources
 /// are mapped from inputs to outputs through various operation types.
-pub trait ResourceFlow {
+pub trait ResourceFlow<H: HugrView> {
     /// Map resource IDs from operation inputs to outputs.
     ///
     /// Takes an operation type and the resource IDs of the operation's inputs.
@@ -41,9 +39,29 @@ pub trait ResourceFlow {
     /// cannot be handled by this implementation.
     fn map_resources(
         &self,
-        op: &OpType,
+        node: H::Node,
+        hugr: &H,
         inputs: &[Option<ResourceId>],
     ) -> Result<Vec<Option<ResourceId>>, UnsupportedOp>;
+
+    /// Convert this ResourceFlow into a boxed trait object.
+    fn into_boxed<'a>(self) -> Box<dyn 'a + ResourceFlow<H>>
+    where
+        Self: 'a + Sized,
+    {
+        Box::new(self)
+    }
+}
+
+impl<H: HugrView> ResourceFlow<H> for Box<dyn '_ + ResourceFlow<H>> {
+    fn map_resources(
+        &self,
+        node: H::Node,
+        hugr: &H,
+        inputs: &[Option<ResourceId>],
+    ) -> Result<Vec<Option<ResourceId>>, UnsupportedOp> {
+        self.as_ref().map_resources(node, hugr, inputs)
+    }
 }
 
 /// Default implementation of ResourceFlow.
@@ -98,12 +116,14 @@ impl DefaultResourceFlow {
     }
 }
 
-impl ResourceFlow for DefaultResourceFlow {
+impl<H: HugrView> ResourceFlow<H> for DefaultResourceFlow {
     fn map_resources(
         &self,
-        op: &OpType,
+        node: H::Node,
+        hugr: &H,
         inputs: &[Option<ResourceId>],
     ) -> Result<Vec<Option<ResourceId>>, UnsupportedOp> {
+        let op = hugr.get_optype(node);
         let signature = op.dataflow_signature().expect("dataflow op");
         let input_types = signature.input_types();
         let output_types = signature.output_types();

@@ -55,14 +55,25 @@ impl NodeOpValues {
 }
 
 /// Configuration for a ResourceScope.
-pub struct ResourceScopeConfig {
-    flows: Vec<Box<dyn ResourceFlow>>,
+pub struct ResourceScopeConfig<'a, H: HugrView> {
+    flows: Vec<Box<dyn 'a + ResourceFlow<H>>>,
 }
 
-impl Default for ResourceScopeConfig {
+impl<H: HugrView> Default for ResourceScopeConfig<'_, H> {
     fn default() -> Self {
         Self {
             flows: vec![Box::new(DefaultResourceFlow::new())],
+        }
+    }
+}
+
+impl<'a, H: HugrView, RF: ResourceFlow<H> + 'a> FromIterator<RF> for ResourceScopeConfig<'a, H> {
+    fn from_iter<T: IntoIterator<Item = RF>>(iter: T) -> Self {
+        Self {
+            flows: iter
+                .into_iter()
+                .map(|rf| Box::new(rf) as Box<dyn ResourceFlow<H>>)
+                .collect(),
         }
     }
 }
@@ -78,7 +89,7 @@ impl<H: HugrView> ResourceScope<H> {
     pub fn with_config(
         hugr: H,
         subgraph: SiblingSubgraph<H::Node>,
-        config: &ResourceScopeConfig,
+        config: &ResourceScopeConfig<H>,
     ) -> Self {
         let mut scope = Self {
             hugr,
@@ -87,6 +98,11 @@ impl<H: HugrView> ResourceScope<H> {
         };
         scope.compute_op_values(&config.flows);
         scope
+    }
+
+    /// Get the nodes within the scope.
+    pub fn nodes(&self) -> &[H::Node] {
+        self.subgraph.nodes()
     }
 
     /// Get the underlying HUGR.
@@ -155,6 +171,24 @@ impl<H: HugrView> ResourceScope<H> {
         all_resources.dedup();
         all_resources.shrink_to_fit();
         all_resources
+    }
+
+    /// Whether the given node is the first node on the path of the given resource.
+    pub fn is_resource_start(&self, node: H::Node, resource_id: ResourceId) -> bool {
+        self.get_port(node, resource_id, Direction::Outgoing)
+            .is_some()
+            && self
+                .get_port(node, resource_id, Direction::Incoming)
+                .is_none()
+    }
+
+    /// Iterate over all resources in the scope.
+    pub fn resources_iter(&self) -> impl Iterator<Item = ResourceId> + '_ {
+        self.nodes()
+            .iter()
+            .map(|&n| self.get_all_resources(n))
+            .kmerge()
+            .dedup()
     }
 
     /// All copyable values on the ports of `node` in the given direction.
@@ -236,7 +270,7 @@ impl<H: HugrView> ResourceScope<H> {
     }
 
     /// Compute op values for all nodes in the subgraph.
-    fn compute_op_values(&mut self, flows: &[Box<dyn ResourceFlow>]) {
+    fn compute_op_values(&mut self, flows: &[Box<dyn '_ + ResourceFlow<H>>]) {
         let mut allocator = OpValueAllocator::default();
 
         // Sentinel value for uninitialized ports
@@ -337,7 +371,7 @@ impl<H: HugrView> ResourceScope<H> {
     fn propagate_to_outputs(
         &mut self,
         node: H::Node,
-        flows: &[Box<dyn ResourceFlow>],
+        flows: &[Box<dyn '_ + ResourceFlow<H>>],
         allocator: &mut OpValueAllocator,
     ) {
         let port_map = &mut self.op_values.get_mut(&node).expect("known node").port_map;
@@ -353,10 +387,7 @@ impl<H: HugrView> ResourceScope<H> {
 
         let out_resources = flows
             .iter()
-            .find_map(|f| {
-                f.map_resources(self.hugr.get_optype(node), &inp_resources)
-                    .ok()
-            })
+            .find_map(|f| f.map_resources(node, &self.hugr, &inp_resources).ok())
             .expect("no flow found");
 
         let signature = self
