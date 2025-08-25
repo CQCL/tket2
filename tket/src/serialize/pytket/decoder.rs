@@ -337,7 +337,7 @@ impl<'h> PytketDecoderContext<'h> {
     ) -> Result<(), PytketDecodeError> {
         let config = self.config.clone();
         for com in commands {
-            let op_type = com.op.op_type.clone();
+            let op_type = com.op.op_type;
             self.process_command(com, config.as_ref())
                 .map_err(|e| e.pytket_op(&op_type))?;
         }
