@@ -6,8 +6,10 @@ use hugr::builder::{Dataflow, DataflowHugr, FunctionBuilder};
 use hugr::extension::prelude::{bool_t, qb_t};
 
 use hugr::types::Signature;
+use hugr::HugrView;
 use itertools::Itertools;
 use rstest::{fixture, rstest};
+use tket::extension::TKET1_EXTENSION_ID;
 use tket::TketOp;
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::register;
@@ -162,15 +164,44 @@ fn circ_qsystem_native_gates() -> Circuit {
     hugr.into()
 }
 
+/// Check that all circuit ops have been translated to a native gate.
+///
+/// Panics if there are tk1 ops in the circuit.
+fn check_no_tk1_ops(circ: &Circuit) {
+    for node in circ.hugr().entry_descendants() {
+        let Some(op) = circ.hugr().get_optype(node).as_extension_op() else {
+            continue;
+        };
+        if op.extension_id() == &TKET1_EXTENSION_ID {
+            let payload = match op.args().first() {
+                Some(t) => t.to_string(),
+                None => "no payload".to_string(),
+            };
+            panic!(
+                "{} found in circuit with payload '{payload}'",
+                op.qualified_id()
+            );
+        }
+    }
+}
+
 #[rstest]
-#[case::native_gates(NATIVE_GATES_JSON, 3, 2)]
-fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num_qubits: usize) {
+#[case::native_gates(NATIVE_GATES_JSON, 3, 2, false)]
+fn json_roundtrip(
+    #[case] circ_s: &str,
+    #[case] num_commands: usize,
+    #[case] num_qubits: usize,
+    #[case] has_tk1_ops: bool,
+) {
     let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), num_commands);
 
     let circ: Circuit = ser.decode_with_config(qsystem_decoder_config()).unwrap();
-
     assert_eq!(circ.qubit_count(), num_qubits);
+
+    if !has_tk1_ops {
+        check_no_tk1_ops(&circ);
+    }
 
     let reser: SerialCircuit =
         SerialCircuit::encode_with_config(&circ, qsystem_encoder_config()).unwrap();

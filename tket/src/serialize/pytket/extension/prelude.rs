@@ -112,7 +112,7 @@ impl PreludeEmitter {
 
 impl PytketDecoder for PreludeEmitter {
     fn op_types(&self) -> Vec<PytketOptype> {
-        vec![PytketOptype::noop, PytketOptype::Measure]
+        vec![PytketOptype::noop, PytketOptype::Barrier]
     }
 
     fn op_to_hugr<'h>(
