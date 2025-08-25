@@ -1,6 +1,13 @@
 # Changelog
 
 
+## [0.21.0](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.20.0...tket-qsystem-v0.21.0) - 2025-08-25
+
+### Bug Fixes
+
+- [**breaking**] Fix rotation -> float param type conversion ([#1061](https://github.com/CQCL/tket2/pull/1061))
+- Pytket barrier operations not being decoded ([#1069](https://github.com/CQCL/tket2/pull/1069))
+
 ## [0.20.0](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.19.0...tket-qsystem-v0.20.0) - 2025-08-21
 
 ### New Features
