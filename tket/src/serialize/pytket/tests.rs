@@ -22,6 +22,7 @@ use super::{
 use crate::circuit::Circuit;
 use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp};
 use crate::extension::sympy::SympyOpDef;
+use crate::extension::TKET1_EXTENSION_ID;
 use crate::TketOp;
 
 const SIMPLE_JSON: &str = r#"{
@@ -399,19 +400,49 @@ fn circ_complex_angle_computation() -> (Circuit, String) {
     (circ, "((f0) ** (f1)) + ((cos(pi)) + (0.2))".to_string())
 }
 
+/// Check that all circuit ops have been translated to a native gate.
+///
+/// Panics if there are tk1 ops in the circuit.
+fn check_no_tk1_ops(circ: &Circuit) {
+    for node in circ.hugr().entry_descendants() {
+        let Some(op) = circ.hugr().get_optype(node).as_extension_op() else {
+            continue;
+        };
+        if op.extension_id() == &TKET1_EXTENSION_ID {
+            let payload = match op.args().first() {
+                Some(t) => t.to_string(),
+                None => "no payload".to_string(),
+            };
+            panic!(
+                "{} found in circuit with payload '{payload}'",
+                op.qualified_id()
+            );
+        }
+    }
+}
+
 #[rstest]
-#[case::simple(SIMPLE_JSON, 2, 2)]
-#[case::multi_register(MULTI_REGISTER, 2, 3)]
-#[case::unknown_op(UNKNOWN_OP, 2, 3)]
-#[case::small_parametrized(SMALL_PARAMETERIZED, 1, 1)]
-#[case::parametrized(PARAMETERIZED, 4, 2)]
-#[case::barrier(BARRIER, 3, 3)]
-fn json_roundtrip(#[case] circ_s: &str, #[case] num_commands: usize, #[case] num_qubits: usize) {
+#[case::simple(SIMPLE_JSON, 2, 2, false)]
+#[case::multi_register(MULTI_REGISTER, 2, 3, false)]
+#[case::unknown_op(UNKNOWN_OP, 2, 3, true)]
+#[case::small_parametrized(SMALL_PARAMETERIZED, 1, 1, false)]
+#[case::parametrized(PARAMETERIZED, 4, 2, true)] // TK1 op is not supported
+#[case::barrier(BARRIER, 3, 3, false)]
+fn json_roundtrip(
+    #[case] circ_s: &str,
+    #[case] num_commands: usize,
+    #[case] num_qubits: usize,
+    #[case] has_tk1_ops: bool,
+) {
     let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), num_commands);
 
     let circ: Circuit = ser.decode().unwrap();
     assert_eq!(circ.qubit_count(), num_qubits);
+
+    if !has_tk1_ops {
+        check_no_tk1_ops(&circ);
+    }
 
     let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
     validate_serial_circ(&reser);
@@ -425,6 +456,9 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
     let reader = BufReader::new(std::fs::File::open(circ).unwrap());
     let ser: circuit_json::SerialCircuit = serde_json::from_reader(reader).unwrap();
     let circ: Circuit = ser.decode().unwrap();
+
+    check_no_tk1_ops(&circ);
+
     let reser: SerialCircuit = SerialCircuit::encode(&circ).unwrap();
     validate_serial_circ(&reser);
     compare_serial_circs(&ser, &reser);
