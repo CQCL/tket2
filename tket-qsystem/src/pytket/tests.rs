@@ -108,7 +108,7 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
     impl From<&tket_json_rs::circuit_json::Command> for CommandInfo {
         fn from(command: &tket_json_rs::circuit_json::Command) -> Self {
             let mut info = CommandInfo {
-                op_type: command.op.op_type.clone(),
+                op_type: command.op.op_type,
                 params: command.op.params.clone().unwrap_or_default(),
                 n_args: command.args.len(),
             };
