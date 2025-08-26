@@ -15,7 +15,7 @@ def test_simple_optimiser():
 
 
 def test_compose_rewriter():
-    """test composing rewriters"""
+    """test composing rewriters."""
     c = Circuit(3).CX(0, 1).CX(0, 1).H(0).H(0).CX(0, 2)
     cx_rewriter = ECCRewriter.compile_eccs("test_files/cx_cx_eccs.json")
     h_rewriter = ECCRewriter.compile_eccs("test_files/h_h_eccs.json")
