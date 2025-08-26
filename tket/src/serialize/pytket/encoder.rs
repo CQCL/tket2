@@ -27,8 +27,7 @@ use tket_json_rs::circuit_json::{self, SerialCircuit};
 use unsupported_tracker::UnsupportedTracker;
 
 use super::{
-    OpConvertError, PytketEncodeError, METADATA_B_OUTPUT_REGISTERS, METADATA_OPGROUP,
-    METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
+    OpConvertError, PytketEncodeError, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_REGISTERS,
 };
 use crate::circuit::Circuit;
 use crate::serialize::pytket::config::PytketEncoderConfig;
