@@ -19,24 +19,36 @@ pub struct UnsupportedOp;
 ///
 /// This trait allows different implementations to define how linear resources
 /// are mapped from inputs to outputs through various operation types.
+///
+/// This trait is dyn-compatible.
 pub trait ResourceFlow<H: HugrView> {
     /// Map resource IDs from operation inputs to outputs.
     ///
-    /// Takes an operation type and the resource IDs of the operation's inputs.
-    /// The i-th entry is Some(resource_id) if the i-th port is a linear type,
-    /// None otherwise. Returns the resource IDs of the operation's outputs
-    /// in port order. Output resource IDs should be one of the input resource
-    /// IDs for resource-preserving operations, or None for new resources or
-    /// non-linear types.
+    /// Given a `node`, the `hugr` in which it is defined and `inputs`, a list
+    /// of the linear inputs to `node` given as resources, return the list
+    /// of resources for the linear outputs of `node`.
+    ///
+    /// More specifically, `inputs` is a vector of the same length as the number
+    /// of inputs in the signature of `node` and such that
+    ///  - `inputs[i]` is Some(resource_id) if the i-th input port is a linear
+    ///    type, and
+    ///  - `inputs[i]` is `None` otherwise, i.e. if the i-th input port is a
+    ///    copyable type.
+    ///
+    /// The returned vector `outputs` must satisfy
+    ///  - if `outputs[i]` is `Some(resource_id)`, then the i-th output port is
+    ///    a linear type and `resource_id` is an ID passed in `inputs`,
+    ///  - if the i-th output port is a copyable type, then `outputs[i]` is
+    ///    `None`.
+    ///
+    /// If the i-th output port is linear and `outputs[i]` is set to None, then
+    /// a fresh resource ID will be created and assigned to that port.
     ///
     /// # Arguments
-    /// * `op` - The operation type
+    /// * `node` - The operation node
+    /// * `hugr` - The `hugr` in which `node` is defined
     /// * `inputs` - Resource IDs for each input port (None for non-linear
     ///   types)
-    ///
-    /// # Returns
-    /// Resource IDs for each output port, or UnsupportedOp if the operation
-    /// cannot be handled by this implementation.
     fn map_resources(
         &self,
         node: H::Node,
@@ -67,11 +79,18 @@ impl<H: HugrView> ResourceFlow<H> for Box<dyn '_ + ResourceFlow<H>> {
 /// Default implementation of ResourceFlow.
 ///
 /// This implementation considers that an operation is resource-preserving if
-/// whenever the i-th input or output is linear, then the i-th input type
-/// matches the i-th output. The i-th input is then mapped to the i-th output.
+/// for all port indices i, either
+///  - the i-th input and i-th output are both linear and are of the same type,
+///    or
+///  - the i-th input and i-th output are both copyable, or one is copyable and
+///    the other does not exist.
 ///
-/// Otherwise, all input resources are discarded and all outputs will be given
-/// fresh resource IDs.
+/// For resource-preserving operations, linear inputs are then mapped to the
+/// corresponding output. (All outputs with no corresponding input, must be
+/// copyable.)
+///
+/// If on the other hand an operation is not resource preserving, all input
+/// resources are discarded and all outputs will be given fresh resource IDs.
 #[derive(Debug, Clone, Default)]
 pub struct DefaultResourceFlow;
 
@@ -79,11 +98,6 @@ impl DefaultResourceFlow {
     /// Create a new DefaultResourceFlow instance.
     pub fn new() -> Self {
         Self
-    }
-
-    /// Check if a type is linear (non-copyable).
-    fn is_linear_type(ty: &Type) -> bool {
-        !ty.copyable()
     }
 
     /// Determine if an operation is resource-preserving based on input/output
@@ -96,7 +110,7 @@ impl DefaultResourceFlow {
             let (input_ty, output_ty) = match io_ty {
                 EitherOrBoth::Both(input_ty, output_ty) => (input_ty, output_ty),
                 EitherOrBoth::Left(ty) | EitherOrBoth::Right(ty) => {
-                    if Self::is_linear_type(ty) {
+                    if !ty.copyable() {
                         // linear type on one side, nothing on the other
                         return false;
                     }
@@ -104,7 +118,7 @@ impl DefaultResourceFlow {
                 }
             };
 
-            if Self::is_linear_type(input_ty) || Self::is_linear_type(output_ty) {
+            if !input_ty.copyable() || !output_ty.copyable() {
                 // If input/output is linear, both must be the same type
                 if input_ty != output_ty {
                     return false;
@@ -137,7 +151,7 @@ impl<H: HugrView> ResourceFlow<H> for DefaultResourceFlow {
         if Self::is_resource_preserving(input_types, output_types) {
             Ok(retain_linear_types(inputs.to_vec(), output_types))
         } else {
-            // Resource-producing/consuming: all linear outputs are new resources (None)
+            // Not resource-preserving: all linear outputs are new resources (None)
             Ok(vec![None; output_types.len()])
         }
     }
@@ -147,6 +161,7 @@ fn retain_linear_types(
     mut resources: Vec<Option<ResourceId>>,
     types: &[Type],
 ) -> Vec<Option<ResourceId>> {
+    resources.resize(types.len(), None);
     for (ty, resource) in types.iter().zip(resources.iter_mut()) {
         if ty.copyable() {
             *resource = None;

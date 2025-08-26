@@ -131,8 +131,10 @@ impl<N: HugrNode> Interval<N> {
 
     /// Include the given node in the interval.
     ///
-    /// Does not check if the node is contiguous with the interval.
-    pub(crate) fn include_node(&mut self, node: N, pos: Position) {
+    /// Does not check if the node is contiguous with the interval. Use
+    /// [`Interval::try_extend`] instead for a safe way to extend an interval.
+    #[allow(dead_code)]
+    pub(crate) fn add_node_unchecked(&mut self, node: N, pos: Position) {
         if pos < self.positions[0] {
             self.positions[0] = pos;
             self.nodes[0] = node;
@@ -144,6 +146,12 @@ impl<N: HugrNode> Interval<N> {
     }
 
     /// Whether `pos` is smaller, larger or within the interval.
+    ///
+    /// [Ordering] is used to express the relative position of `pos` with
+    /// respect to the interval:
+    /// - [`Ordering::Less`] if `pos` is smaller than the interval,
+    /// - [`Ordering::Greater`] if `pos` is larger than the interval, and
+    /// - [`Ordering::Equal`] if `pos` is within the interval.
     fn position_in_interval(&self, pos: Position) -> Ordering {
         if pos < self.positions[0] {
             Ordering::Less

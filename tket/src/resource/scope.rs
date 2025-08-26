@@ -1,10 +1,10 @@
-//! Main ResourceScope implementation for tracking resources in HUGR subgraphs.
+//! Tracking resources in HUGR subgraphs using [ResourceScope].
 //!
 //! This module provides the ResourceScope struct which manages resource
 //! tracking within a specific region of a HUGR, computing resource paths and
 //! providing efficient lookup of port values.
 
-use std::{cmp, iter, mem};
+use std::{cmp, iter};
 
 use crate::resource::flow::{DefaultResourceFlow, ResourceFlow};
 use crate::resource::types::{CopyableValueId, OpValue, PortMap};
@@ -173,7 +173,8 @@ impl<H: HugrView> ResourceScope<H> {
         all_resources
     }
 
-    /// Whether the given node is the first node on the path of the given resource.
+    /// Whether the given node is the first node on the path of the given
+    /// resource.
     pub fn is_resource_start(&self, node: H::Node, resource_id: ResourceId) -> bool {
         self.get_port(node, resource_id, Direction::Outgoing)
             .is_some()
@@ -215,16 +216,14 @@ impl<H: HugrView> ResourceScope<H> {
         start_node: H::Node,
         direction: Direction,
     ) -> impl Iterator<Item = H::Node> + '_ {
-        let mut curr_node = start_node;
-
-        iter::from_fn(move || {
+        iter::successors(Some(start_node), move |&curr_node| {
             let port = self.get_port(curr_node, resource_id, direction)?;
             let (next_node, _) = self
                 .hugr()
                 .single_linked_port(curr_node, port)
                 .expect("linear resource");
 
-            Some(mem::replace(&mut curr_node, next_node))
+            Some(next_node)
         })
     }
 }

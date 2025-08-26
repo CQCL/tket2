@@ -18,8 +18,10 @@ use uuid::Uuid;
 pub struct ResourceId(usize);
 
 impl ResourceId {
-    /// Create a new ResourceId. This method should only be called by ResourceAllocator.
-    fn new(id: usize) -> Self {
+    /// Create a new ResourceId.
+    ///
+    /// This method should only be called by ResourceAllocator and tests.
+    pub(super) fn new(id: usize) -> Self {
         Self(id)
     }
 
@@ -60,6 +62,14 @@ impl std::fmt::Debug for Position {
 }
 
 impl Position {
+    /// Create a new integer Position.
+    ///
+    /// This method should only be called by allocators and tests.
+    #[allow(unused)]
+    pub(super) fn new_integer(i: i64) -> Self {
+        Self(Rational64::from_integer(i))
+    }
+
     /// Get position as f64, rounded to the given precision.
     pub fn to_f64(&self, precision: usize) -> f64 {
         let big = self.0 * Rational64::from_integer(10).pow(precision as i32);
@@ -72,7 +82,8 @@ impl Position {
     }
 }
 
-/// Value associated with a port, either a resource with position or a copyable value.
+/// Value associated with a port, either a resource with position or a copyable
+/// value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OpValue {
     /// A linear resource.

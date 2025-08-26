@@ -27,9 +27,13 @@
 //!
 //! - **Linear resources**: Non-copyable values that form resource paths through
 //!   the circuit. Each resource has a unique [`ResourceId`] and operations on
-//!   the same resource are ordered by a [`Position`].
+//!   the same resource are ordered by a [`Position`]. The [`ResourceFlow`]
+//!   trait determines how resources are passed through, discarded or created by
+//!   an op at its linear ports.
 //! - **Copyable values**: Regular values that can be copied and discarded
-//!   freely. Each is identified by a unique [`CopyableValueId`].
+//!   freely. Each is identified uniquely by a [`Wire`], i.e. the outgoing port
+//!   defining the value. These are not tracked across ops and do not form
+//!   resources.
 //!
 //! # Resource Scope
 //!
@@ -42,11 +46,13 @@
 
 // Public API exports
 pub use flow::{DefaultResourceFlow, ResourceFlow, UnsupportedOp};
+pub use interval::Interval;
 pub use scope::{ResourceScope, ResourceScopeConfig};
-pub use types::{CopyableValueId, OpValue, Position, ResourceAllocator, ResourceId};
+pub use types::{CopyableValueId, Position, ResourceAllocator, ResourceId};
 
 // Internal modules
 mod flow;
+mod interval;
 mod scope;
 mod types;
 
@@ -67,10 +73,23 @@ mod tests {
     use crate::{
         extension::rotation::{rotation_type, ConstRotation},
         resource::scope::tests::ResourceScopeReport,
+        utils::build_simple_circuit,
         TketOp,
     };
 
     use super::ResourceScope;
+
+    /// A two-qubit circuit with `n_cx` CNOTs.
+    pub fn cx_circuit(n_cx: usize) -> Hugr {
+        build_simple_circuit(2, |circ| {
+            for _ in 0..n_cx {
+                circ.append(TketOp::CX, [0, 1])?;
+            }
+            Ok(())
+        })
+        .unwrap()
+        .into_hugr()
+    }
 
     // Gate being commuted has a non-linear input
     fn circ(n_qubits: usize, add_rz: bool, add_const_rz: bool) -> Hugr {
