@@ -2489,7 +2489,6 @@ dependencies = [
  "tket-json-rs",
  "tracing",
  "typetag",
- "uuid",
  "zstd",
 ]
 

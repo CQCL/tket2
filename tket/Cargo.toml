@@ -77,7 +77,6 @@ pest_derive = { workspace = true }
 zstd = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 num-rational = { workspace = true }
-uuid = { workspace = true }
 
 
 [dev-dependencies]

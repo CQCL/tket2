@@ -2,18 +2,19 @@
 //!
 //! This module provides the ResourceScope struct which manages resource
 //! tracking within a specific region of a HUGR, computing resource paths and
-//! providing efficient lookup of port values.
+//! providing efficient lookup of circuit units associated with ports.
 
 use std::{cmp, iter};
 
 use crate::resource::flow::{DefaultResourceFlow, ResourceFlow};
-use crate::resource::types::{CopyableValueId, OpValue, PortMap};
+use crate::resource::types::{CircuitUnit, PortMap};
 use crate::utils::type_is_linear;
 use crate::Circuit;
+use hugr::core::HugrNode;
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::OpTrait;
 use hugr::types::Signature;
-use hugr::{Direction, HugrView, IncomingPort, Port, PortIndex};
+use hugr::{Direction, HugrView, IncomingPort, Port, PortIndex, Wire};
 use hugr_core::hugr::internal::PortgraphNodeMap;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -25,28 +26,28 @@ use super::{Position, ResourceAllocator, ResourceId};
 /// ResourceScope tracks resources within a HUGR subgraph.
 ///
 /// This struct computes and caches resource paths through a given subgraph,
-/// allowing efficient lookup of OpValues for any port of any operation within
-/// the scope.
+/// allowing efficient lookup of [`CircuitUnit`]s for any port of any operation
+/// within the scope.
 #[derive(Debug, Clone)]
 pub struct ResourceScope<H: HugrView> {
     /// The HUGR containing the operations.
     hugr: H,
     /// The subgraph within which resources are tracked.
     subgraph: SiblingSubgraph<H::Node>,
-    /// Mapping from nodes and ports to their OpValues.
-    op_values: IndexMap<H::Node, NodeOpValues>,
+    /// Mapping from nodes and ports to their [`CircuitUnit`]s.
+    circuit_units: IndexMap<H::Node, NodeCircuitUnits<H::Node>>,
 }
 
 #[derive(Debug, Clone)]
-struct NodeOpValues {
-    /// Mapping from ports to their OpValues.
-    port_map: PortMap<OpValue>,
+struct NodeCircuitUnits<N: HugrNode> {
+    /// Mapping from ports to their [`CircuitUnit`]s.
+    port_map: PortMap<CircuitUnit<N>>,
     /// The position of the node.
     position: Position,
 }
 
-impl NodeOpValues {
-    fn with_default(default: OpValue, signature: &Signature) -> Self {
+impl<N: HugrNode> NodeCircuitUnits<N> {
+    fn with_default(default: CircuitUnit<N>, signature: &Signature) -> Self {
         Self {
             port_map: PortMap::with_default(default, signature),
             position: Position::default(),
@@ -94,9 +95,9 @@ impl<H: HugrView> ResourceScope<H> {
         let mut scope = Self {
             hugr,
             subgraph,
-            op_values: IndexMap::new(),
+            circuit_units: IndexMap::new(),
         };
-        scope.compute_op_values(&config.flows);
+        scope.compute_circuit_units(&config.flows);
         scope
     }
 
@@ -115,14 +116,23 @@ impl<H: HugrView> ResourceScope<H> {
         &self.subgraph
     }
 
-    /// Get the opvalue for a given port.
-    pub fn get_opvalue(&self, node: H::Node, port: impl Into<Port>) -> Option<OpValue> {
+    /// Get the [`CircuitUnit`] for a given port.
+    pub fn get_circuit_unit(
+        &self,
+        node: H::Node,
+        port: impl Into<Port>,
+    ) -> Option<CircuitUnit<H::Node>> {
         let port_map = self.port_map(node)?;
         Some(*port_map.get(port))
     }
 
-    /// Get all opvalues for either the incoming or outgoing ports of a node.
-    pub fn get_opvalue_slice(&self, node: H::Node, direction: Direction) -> Option<&[OpValue]> {
+    /// Get all [`CircuitUnit`]s for either the incoming or outgoing ports of a
+    /// node.
+    pub fn get_circuit_units_slice(
+        &self,
+        node: H::Node,
+        direction: Direction,
+    ) -> Option<&[CircuitUnit<H::Node>]> {
         let port_map = self.port_map(node)?;
         Some(port_map.get_slice(direction))
     }
@@ -131,9 +141,9 @@ impl<H: HugrView> ResourceScope<H> {
     ///
     /// The returned port will have the direction `dir`.
     pub fn get_port(&self, node: H::Node, resource_id: ResourceId, dir: Direction) -> Option<Port> {
-        let opvals = self.get_opvalue_slice(node, dir)?;
-        let offset = opvals.iter().position(|opval| match opval {
-            &OpValue::Resource(res) => res == resource_id,
+        let units = self.get_circuit_units_slice(node, dir)?;
+        let offset = units.iter().position(|unit| match unit {
+            &CircuitUnit::Resource(res) => res == resource_id,
             _ => false,
         })?;
         Some(Port::new(dir, offset))
@@ -141,9 +151,9 @@ impl<H: HugrView> ResourceScope<H> {
 
     /// Get the position of the given node.
     pub fn get_position(&self, node: H::Node) -> Option<Position> {
-        self.op_values
+        self.circuit_units
             .get(&node)
-            .map(|node_op_values| node_op_values.position)
+            .map(|node_circuit_units| node_circuit_units.position)
     }
 
     /// All resource IDs on the ports of `node` in the given direction.
@@ -152,14 +162,11 @@ impl<H: HugrView> ResourceScope<H> {
         node: H::Node,
         dir: Direction,
     ) -> impl Iterator<Item = ResourceId> + '_ {
-        let opvals = self.get_opvalue_slice(node, dir);
-        opvals
-            .into_iter()
-            .flatten()
-            .filter_map(|opval| match opval {
-                &OpValue::Resource(res) => Some(res),
-                _ => None,
-            })
+        let units = self.get_circuit_units_slice(node, dir);
+        units.into_iter().flatten().filter_map(|unit| match unit {
+            &CircuitUnit::Resource(res) => Some(res),
+            _ => None,
+        })
     }
 
     /// All resource IDs on the ports of `node`, in both directions.
@@ -192,20 +199,17 @@ impl<H: HugrView> ResourceScope<H> {
             .dedup()
     }
 
-    /// All copyable values on the ports of `node` in the given direction.
-    pub fn get_copyable_values(
+    /// All copyable wires on the ports of `node` in the given direction.
+    pub fn get_copyable_wires(
         &self,
         node: H::Node,
         dir: Direction,
-    ) -> impl Iterator<Item = CopyableValueId> + '_ {
-        let opvals = self.get_opvalue_slice(node, dir);
-        opvals
-            .into_iter()
-            .flatten()
-            .filter_map(|opval| match opval {
-                &OpValue::Copyable(id) => Some(id),
-                _ => None,
-            })
+    ) -> impl Iterator<Item = Wire<H::Node>> + '_ {
+        let units = self.get_circuit_units_slice(node, dir);
+        units.into_iter().flatten().filter_map(|unit| match unit {
+            &CircuitUnit::Copyable(wire) => Some(wire),
+            _ => None,
+        })
     }
 
     /// Iterate over the nodes on the resource path starting from the given
@@ -222,8 +226,10 @@ impl<H: HugrView> ResourceScope<H> {
                 .hugr()
                 .single_linked_port(curr_node, port)
                 .expect("linear resource");
-
-            Some(next_node)
+            self.subgraph
+                .nodes()
+                .contains(&next_node)
+                .then_some(next_node)
         })
     }
 }
@@ -262,69 +268,71 @@ impl<'h, H: HugrView<Node = hugr::Node> + Clone> From<&'h Circuit<H>> for Resour
     }
 }
 
-// Private methods to construct the op_values map.
+// Private methods to construct the circuit_units map.
 impl<H: HugrView> ResourceScope<H> {
-    fn port_map(&self, node: H::Node) -> Option<&PortMap<OpValue>> {
-        Some(&self.op_values.get(&node)?.port_map)
+    fn port_map(&self, node: H::Node) -> Option<&PortMap<CircuitUnit<H::Node>>> {
+        Some(&self.circuit_units.get(&node)?.port_map)
     }
 
-    /// Compute op values for all nodes in the subgraph.
-    fn compute_op_values(&mut self, flows: &[Box<dyn '_ + ResourceFlow<H>>]) {
-        let mut allocator = OpValueAllocator::default();
+    /// Compute circuit units for all nodes in the subgraph.
+    fn compute_circuit_units(&mut self, flows: &[Box<dyn '_ + ResourceFlow<H>>]) {
+        let mut allocator = CircuitUnitAllocator::default();
 
-        // Sentinel value for uninitialized ports
-        let sentinel = OpValue::Copyable(CopyableValueId::new());
+        // First, assign circuit units to the inputs to the subgraph.
+        let all_inputs = self
+            .subgraph
+            .incoming_ports()
+            .iter()
+            .flatten()
+            .copied()
+            .collect_vec();
+        self.assign_circuit_units(all_inputs, &mut allocator);
 
-        // First, assign op values to the inputs to the subgraph.
-        self.assign_op_values(
-            self.subgraph.incoming_ports().to_owned(),
-            &mut allocator,
-            sentinel,
-        );
-
-        // Proceed to propagating the op values through the subgraph, in topological
+        // Proceed to propagating the circuit units through the subgraph, in topological
         // order.
         for node in toposort_subgraph(&self.hugr, &self.subgraph, self.find_sources()) {
             if self.hugr.get_optype(node).dataflow_signature().is_none() {
                 // ignore non-dataflow ops
                 continue;
             }
-            self.assign_missing_op_values(node, &mut allocator, sentinel);
+            self.assign_missing_circuit_units(node, &mut allocator);
             self.propagate_to_outputs(node, flows, &mut allocator);
-            self.propagate_to_next_inputs(node, sentinel);
+            self.propagate_to_next_inputs(node);
         }
     }
 
-    /// Assign op values to the given port groups.
-    ///
-    /// The ports are partitioned into sets of ports connected to a same value.
-    /// The port sets can be non-singleton only if the value is copyable.
-    fn assign_op_values<I: IntoIterator<Item = (H::Node, IncomingPort)>>(
+    /// Assign circuit units to the given ports in order.
+    fn assign_circuit_units(
         &mut self,
-        port_groups: impl IntoIterator<Item = I>,
-        allocator: &mut OpValueAllocator,
-        sentinel: OpValue,
+        incoming_ports: impl IntoIterator<Item = (H::Node, IncomingPort)>,
+        allocator: &mut CircuitUnitAllocator,
     ) {
-        for all_uses_of_value in port_groups {
-            let mut all_uses_of_input = all_uses_of_value.into_iter().peekable();
-            let Some(&(fst_node, fst_port)) = all_uses_of_input.peek() else {
-                // this input is not used in the subgraph, we can skip it
-                continue;
-            };
-            // We allocate one opvalue for all uses of this input
-            let op_value = allocator.allocate_op_value(fst_node, fst_port, &self.hugr);
-            for (node, port) in all_uses_of_input {
-                let node_op_values = self.op_values.entry(node).or_insert_with(|| {
-                    let signature = self
-                        .hugr
-                        .get_optype(node)
-                        .dataflow_signature()
-                        .expect("dataflow op");
-                    NodeOpValues::with_default(sentinel, &signature)
-                });
-                node_op_values.port_map.set(port, op_value);
-            }
+        for (node, port) in incoming_ports {
+            let unit = allocator.allocate_circuit_unit(node, port, &self.hugr);
+            let node_units = node_circuit_units_mut(&mut self.circuit_units, node, &self.hugr);
+            node_units.port_map.set(port, unit);
         }
+    }
+
+    /// Ensure all input ports of `node` have assigned circuit units.
+    fn assign_missing_circuit_units(
+        &mut self,
+        node: H::Node,
+        allocator: &mut CircuitUnitAllocator,
+    ) {
+        let signature = self
+            .hugr
+            .get_optype(node)
+            .dataflow_signature()
+            .expect("dataflow op");
+
+        let mut incoming_ports = signature.input_ports().collect_vec();
+        if let Some(node_units) = self.circuit_units.get(&node) {
+            // Only assign circuit units to input ports without assigned units
+            incoming_ports.retain(|&p| node_units.port_map.get(p).is_sentinel());
+        }
+
+        self.assign_circuit_units(incoming_ports.into_iter().map(|p| (node, p)), allocator);
     }
 
     /// Find source nodes (nodes with no predecessors in the subgraph).
@@ -342,45 +350,22 @@ impl<H: HugrView> ResourceScope<H> {
             .filter(move |&n| !has_pred_in_subgraph(n))
     }
 
-    /// Ensure all input ports have assigned op values.
-    fn assign_missing_op_values(
-        &mut self,
-        node: H::Node,
-        allocator: &mut OpValueAllocator,
-        sentinel: OpValue,
-    ) {
-        let signature = self
-            .hugr
-            .get_optype(node)
-            .dataflow_signature()
-            .expect("dataflow op");
-        let node_op_values = self
-            .op_values
-            .entry(node)
-            .or_insert_with(|| NodeOpValues::with_default(sentinel, &signature));
-        for p in signature.input_ports() {
-            if node_op_values.port_map.get(p) == &sentinel {
-                let op_value = allocator.allocate_op_value(node, p, &self.hugr);
-                node_op_values.port_map.set(p, op_value);
-            }
-        }
-    }
-
-    /// Propagate op values at input ports to output ports.
+    /// Propagate circuit units at input ports to output ports.
     fn propagate_to_outputs(
         &mut self,
         node: H::Node,
         flows: &[Box<dyn '_ + ResourceFlow<H>>],
-        allocator: &mut OpValueAllocator,
+        allocator: &mut CircuitUnitAllocator,
     ) {
-        let port_map = &mut self.op_values.get_mut(&node).expect("known node").port_map;
+        let port_map =
+            &mut node_circuit_units_mut(&mut self.circuit_units, node, &self.hugr).port_map;
 
         let inp_resources = port_map
             .get_slice(Direction::Incoming)
             .iter()
             .map(|&op_val| match op_val {
-                OpValue::Resource(res) => Some(res),
-                OpValue::Copyable(_) => None,
+                CircuitUnit::Resource(res) => Some(res),
+                CircuitUnit::Copyable(_) => None,
             })
             .collect_vec();
 
@@ -394,9 +379,9 @@ impl<H: HugrView> ResourceScope<H> {
             .get_optype(node)
             .dataflow_signature()
             .expect("dataflow op");
-        // Set out resources to output, create new opvalues where required
+        // Set out resources to output, create new circuit units where required
         for p in signature.output_ports() {
-            let op_value = match out_resources.get(p.index()).copied().flatten() {
+            let unit = match out_resources.get(p.index()).copied().flatten() {
                 Some(resource_id) => {
                     let index = inp_resources
                         .iter()
@@ -404,14 +389,15 @@ impl<H: HugrView> ResourceScope<H> {
                         .expect("invalid resource ID returned by flow");
                     *port_map.get(IncomingPort::from(index))
                 }
-                None => allocator.allocate_op_value(node, p, &self.hugr),
+                None => allocator.allocate_circuit_unit(node, p, &self.hugr),
             };
-            port_map.set(p, op_value);
+            port_map.set(p, unit);
         }
     }
 
-    /// Propagate op values at output ports across wires to connected inputs.
-    fn propagate_to_next_inputs(&mut self, node: H::Node, sentinel: OpValue) {
+    /// Propagate circuit units at output ports across wires to connected
+    /// inputs.
+    fn propagate_to_next_inputs(&mut self, node: H::Node) {
         let signature = self
             .hugr
             .get_optype(node)
@@ -420,59 +406,60 @@ impl<H: HugrView> ResourceScope<H> {
         let pos = self.get_position(node).expect("known node");
 
         for p in signature.output_ports() {
-            let op_value = self.get_opvalue(node, p).expect("known node");
+            let unit = self.get_circuit_unit(node, p).expect("known node");
 
             for (in_node, in_port) in self.hugr.linked_inputs(node, p) {
                 if !self.subgraph.nodes().contains(&in_node) {
                     continue;
                 }
-                let op = self.hugr.get_optype(in_node);
-                let Some(signature) = op.dataflow_signature() else {
-                    continue;
-                };
-                let next_node_op_values = self
-                    .op_values
-                    .entry(in_node)
-                    .or_insert_with(|| NodeOpValues::with_default(sentinel, &signature));
-                let next_op_value = op_value;
-                next_node_op_values.port_map.set(in_port, next_op_value);
-                next_node_op_values.position =
-                    cmp::max(next_node_op_values.position, pos.increment());
+                let next_node_units =
+                    node_circuit_units_mut(&mut self.circuit_units, in_node, &self.hugr);
+                next_node_units.port_map.set(in_port, unit);
+                next_node_units.position = cmp::max(next_node_units.position, pos.increment());
             }
         }
     }
 }
 
+/// Get the circuit units for the given node, creating them if they don't exist.
+fn node_circuit_units_mut<H: HugrView>(
+    all_circuit_units: &mut IndexMap<H::Node, NodeCircuitUnits<H::Node>>,
+    node: H::Node,
+    hugr: H,
+) -> &mut NodeCircuitUnits<H::Node> {
+    all_circuit_units.entry(node).or_insert_with(|| {
+        let signature = hugr
+            .get_optype(node)
+            .dataflow_signature()
+            .expect("dataflow op");
+        NodeCircuitUnits::with_default(CircuitUnit::sentinel(), &signature)
+    })
+}
+
 #[derive(Debug, Clone, Default)]
-struct OpValueAllocator(ResourceAllocator);
+struct CircuitUnitAllocator(ResourceAllocator);
 
-impl OpValueAllocator {
-    fn allocate_resource(&mut self) -> OpValue {
+impl CircuitUnitAllocator {
+    fn allocate_resource<N: HugrNode>(&mut self) -> CircuitUnit<N> {
         let resource_id = self.0.allocate();
-        OpValue::Resource(resource_id)
+        CircuitUnit::Resource(resource_id)
     }
 
-    fn allocate_copyable(&mut self) -> OpValue {
-        OpValue::Copyable(CopyableValueId::new())
-    }
-
-    fn allocate_op_value<H: HugrView>(
+    fn allocate_circuit_unit<H: HugrView>(
         &mut self,
         node: H::Node,
         port: impl Into<Port>,
         hugr: &H,
-    ) -> OpValue {
+    ) -> CircuitUnit<H::Node> {
         let op = hugr.get_optype(node);
         let signature = op.dataflow_signature().expect("dataflow op");
         let port = port.into();
-        let ty = match port.direction() {
-            Direction::Incoming => &signature.input()[port.index()],
-            Direction::Outgoing => &signature.output()[port.index()],
-        };
+        let ty = signature.port_type(port).expect("valid dataflow port");
         if type_is_linear(ty) {
             self.allocate_resource()
         } else {
-            self.allocate_copyable()
+            let w = Wire::from_connected_port(node, port, hugr);
+            CircuitUnit::Copyable(w)
         }
     }
 }
@@ -512,7 +499,7 @@ pub(crate) mod tests {
 
     use hugr::HugrView;
 
-    use super::{OpValue, ResourceScope};
+    use super::{CircuitUnit, ResourceScope};
     use crate::{
         resource::{Position, ResourceId},
         utils::build_simple_circuit,
@@ -532,18 +519,18 @@ pub(crate) mod tests {
     impl<'a, H: HugrView> From<&'a ResourceScope<H>> for ResourceScopeReport<&'a H> {
         fn from(scope: &'a ResourceScope<H>) -> Self {
             let mut resource_paths: BTreeMap<ResourceId, Vec<PathEl<H::Node>>> = BTreeMap::new();
-            let mut copyable_values = HashSet::new();
+            let mut copyable_wires = HashSet::new();
 
-            for (&node, op_values) in &scope.op_values {
-                let pos = op_values.position;
-                for (port, &op_value) in op_values.port_map.iter() {
-                    match op_value {
-                        OpValue::Resource(res) => resource_paths
+            for (&node, units) in &scope.circuit_units {
+                let pos = units.position;
+                for (port, &unit) in units.port_map.iter() {
+                    match unit {
+                        CircuitUnit::Resource(res) => resource_paths
                             .entry(res)
                             .or_default()
                             .push((pos, node, port)),
-                        OpValue::Copyable(id) => {
-                            copyable_values.insert(id);
+                        CircuitUnit::Copyable(id) => {
+                            copyable_wires.insert(id);
                         }
                     }
                 }
@@ -556,14 +543,14 @@ pub(crate) mod tests {
             Self {
                 hugr: &scope.hugr,
                 resource_paths,
-                n_copyable: copyable_values.len(),
+                n_copyable: copyable_wires.len(),
             }
         }
     }
 
     impl<H: HugrView> std::fmt::Display for ResourceScopeReport<H> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            writeln!(f, "Found {} copyable values", self.n_copyable)?;
+            writeln!(f, "Found {} copyable wires", self.n_copyable)?;
             writeln!(f, "Found {} resource paths:", self.resource_paths.len())?;
             for (res, path) in &self.resource_paths {
                 writeln!(f, "  - {res:?}:")?;

@@ -31,8 +31,8 @@
 //!   trait determines how resources are passed through, discarded or created by
 //!   an op at its linear ports.
 //! - **Copyable values**: Regular values that can be copied and discarded
-//!   freely. Each is identified uniquely by a [`Wire`], i.e. the outgoing port
-//!   defining the value. These are not tracked across ops and do not form
+//!   freely. Each is identified uniquely by a [`hugr::Wire`], i.e. the outgoing
+//!   port defining the value. These are not tracked across ops and do not form
 //!   resources.
 //!
 //! # Resource Scope
@@ -43,12 +43,14 @@
 //! Use a [`SiblingSubgraph`] to define a region of a `HUGR`, within which
 //! resources should be tracked. You can then construct a resource-tracked scope
 //! using [`ResourceScope::new`].
+//!
+//! [`SiblingSubgraph`]: hugr::hugr::views::SiblingSubgraph
 
 // Public API exports
 pub use flow::{DefaultResourceFlow, ResourceFlow, UnsupportedOp};
 pub use interval::Interval;
 pub use scope::{ResourceScope, ResourceScopeConfig};
-pub use types::{CopyableValueId, Position, ResourceAllocator, ResourceId};
+pub use types::{Position, ResourceAllocator, ResourceId};
 
 // Internal modules
 mod flow;

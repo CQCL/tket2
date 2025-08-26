@@ -4,10 +4,11 @@
 //! copyable values throughout a HUGR circuit, including resource identifiers,
 //! positions, and the mapping structures that associate them with operations.
 
-use hugr::{types::Signature, Direction, IncomingPort, OutgoingPort, Port, PortIndex};
+use hugr::{
+    core::HugrNode, types::Signature, Direction, IncomingPort, OutgoingPort, Port, PortIndex, Wire,
+};
 use itertools::Itertools;
 use num_rational::Rational64;
-use uuid::Uuid;
 
 /// Unique identifier for a linear resource.
 ///
@@ -28,22 +29,6 @@ impl ResourceId {
     /// Get the underlying usize value of this ResourceId.
     pub fn as_usize(self) -> usize {
         self.0
-    }
-}
-
-/// Unique identifier for a copyable value.
-///
-/// CopyableValueIds are generated using UUIDs and are unique to the wire
-/// attached to a port. They cannot be constructed manually outside of the
-/// resource module.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct CopyableValueId(Uuid);
-
-impl CopyableValueId {
-    /// Create a new CopyableValueId with a random UUID.
-    /// This method is package-private.
-    pub(crate) fn new() -> Self {
-        Self(Uuid::new_v4())
     }
 }
 
@@ -82,41 +67,77 @@ impl Position {
     }
 }
 
-/// Value associated with a port, either a resource with position or a copyable
-/// value.
+/// A value associated with a dataflow port, identified either by a resource ID
+/// (for linear values) or by its wire (for copyable values).
+///
+/// This can currently be converted to and from [`hugr::CircuitUnit`], but
+/// linear wires are assigned to resources with typed resource IDs instead of
+/// integers.
+///
+/// Equivalence with [`hugr::CircuitUnit`] is not guaranteed in the future: we
+/// may expand expressivity, e.g. identifying copyable units by their ASTs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum OpValue {
+pub enum CircuitUnit<N: HugrNode> {
     /// A linear resource.
     Resource(ResourceId),
     /// A copyable value.
-    Copyable(CopyableValueId),
+    Copyable(Wire<N>),
 }
 
-impl OpValue {
+impl<N: HugrNode> From<CircuitUnit<N>> for hugr::CircuitUnit<N> {
+    fn from(value: CircuitUnit<N>) -> Self {
+        match value {
+            CircuitUnit::Resource(resource_id) => Self::Linear(resource_id.as_usize()),
+            CircuitUnit::Copyable(wire) => Self::Wire(wire),
+        }
+    }
+}
+
+impl<N: HugrNode> From<hugr::CircuitUnit<N>> for CircuitUnit<N> {
+    fn from(value: hugr::CircuitUnit<N>) -> Self {
+        match value {
+            hugr::CircuitUnit::Wire(wire) => CircuitUnit::Copyable(wire),
+            hugr::CircuitUnit::Linear(resource_id) => {
+                CircuitUnit::Resource(ResourceId::new(resource_id))
+            }
+        }
+    }
+}
+
+impl<N: HugrNode> CircuitUnit<N> {
     /// Returns true if this is a resource value.
     pub fn is_resource(&self) -> bool {
-        matches!(self, OpValue::Resource(..))
+        matches!(self, CircuitUnit::Resource(..))
     }
 
     /// Returns true if this is a copyable value.
     pub fn is_copyable(&self) -> bool {
-        matches!(self, OpValue::Copyable(..))
+        matches!(self, CircuitUnit::Copyable(..))
     }
 
     /// Extract the ResourceId and Position if this is a resource.
     pub fn as_resource(&self) -> Option<ResourceId> {
         match self {
-            OpValue::Resource(id) => Some(*id),
-            OpValue::Copyable(..) => None,
+            CircuitUnit::Resource(id) => Some(*id),
+            CircuitUnit::Copyable(..) => None,
         }
     }
 
-    /// Extract the CopyableValueId if this is a copyable value.
-    pub fn as_copyable(&self) -> Option<CopyableValueId> {
+    /// Extract the wire if this is a copyable value.
+    pub fn as_copyable_wire(&self) -> Option<Wire<N>> {
         match self {
-            OpValue::Resource(..) => None,
-            OpValue::Copyable(id) => Some(*id),
+            CircuitUnit::Resource(..) => None,
+            CircuitUnit::Copyable(wire) => Some(*wire),
         }
+    }
+
+    /// Sentinel value used for uninitialized ports.
+    pub(super) fn sentinel() -> Self {
+        CircuitUnit::Resource(ResourceId::new(usize::MAX))
+    }
+
+    pub(super) fn is_sentinel(&self) -> bool {
+        self == &Self::sentinel()
     }
 }
 
