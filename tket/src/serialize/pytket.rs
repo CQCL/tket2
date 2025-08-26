@@ -368,7 +368,7 @@ impl PytketDecodeError {
 
     /// Add the pytket operation name to the error.
     pub fn pytket_op(mut self, op: &tket_json_rs::OpType) -> Self {
-        self.pytket_op = Some(format!("{op:?}"));
+        self.pytket_op = Some(format!("{op}"));
         self
     }
 

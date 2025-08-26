@@ -67,7 +67,7 @@ def test_conversion_qsystem():
     assert tk1_dot == tk2_dot
 
     # Check that we didn't use the opaque tk1 op fallback.
-    # TODO: There's no way to traverse the circuit nodes??
+    # TODO: There's no way to traverse the circuit nodes?
     assert "TKET1.tk1op" not in tk1_dot
     assert "tket.qsystem.PhasedX" in tk1_dot
     assert "tket.qsystem.ZZPhase" in tk1_dot
