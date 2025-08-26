@@ -49,17 +49,14 @@ pub const METADATA_PHASE: &str = "TKET1.phase";
 pub const METADATA_Q_REGISTERS: &str = "TKET1.qubit_registers";
 /// The reordered qubit registers in the output, if an implicit permutation was applied.
 #[deprecated(
-    note = "Output registers now always match the input register order.",
+    note = "Qubit permutations are now represented explicitly in DFG output ordering.",
     since = "0.14.1"
 )]
 pub const METADATA_Q_OUTPUT_REGISTERS: &str = "TKET1.qubit_output_registers";
 /// Explicit names for the input bit registers.
 pub const METADATA_B_REGISTERS: &str = "TKET1.bit_registers";
 /// The reordered bit registers in the output, if an implicit permutation was applied.
-#[deprecated(
-    note = "Output registers now always match the input register order.",
-    since = "0.14.1"
-)]
+#[deprecated(note = "Pytket does not allow bit permutations.", since = "0.14.1")]
 pub const METADATA_B_OUTPUT_REGISTERS: &str = "TKET1.bit_output_registers";
 /// A tket1 operation "opgroup" field.
 pub const METADATA_OPGROUP: &str = "TKET1.opgroup";

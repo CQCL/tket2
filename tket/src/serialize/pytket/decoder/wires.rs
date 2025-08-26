@@ -315,11 +315,11 @@ pub(crate) struct WireTracker {
     bits: Vec<TrackedBit>,
     /// A map from pytket register hashes to the latest up-to-date [`TrackedQubit`] referencing it.
     ///
-    /// The map keys are kept in the order we expect to see them at the circuits output.
+    /// The map keys are kept in the order they were defined in the circuit.
     latest_qubit_tracker: IndexMap<RegisterHash, TrackedQubitId>,
     /// A map from pytket register hashes to the latest up-to-date [`TrackedBit`] referencing it.
     ///
-    /// The map keys are kept in the order we expect to see them at the circuits output.
+    /// The map keys are kept in the order they were defined in the circuit.
     latest_bit_tracker: IndexMap<RegisterHash, TrackedBitId>,
     /// For each tracked qubit, the list of wires that contain it.
     qubit_wires: IndexMap<TrackedQubitId, Vec<Wire>>,
@@ -338,10 +338,10 @@ pub(crate) struct WireTracker {
     /// This originates from pytket's `implicit_permutation` field.
     ///
     /// For a circuit with three qubit registers [q0, q1, q2] and an implicit
-    /// permutation {q0 -> q1, q1 -> q2, q2 -> q0}, `output_to_input` will be {1
-    /// -> 0, 2 -> 1, 0 -> 2} and the output order will be [2, 0, 1]. That is,
-    /// at position 0 of the output we'll see the register originally named q2,
-    /// at position 1 the register originally named q0, and so on.
+    /// permutation {q0 -> q1, q1 -> q2, q2 -> q0}, `output_qubit_permutation`
+    /// will be {1 -> 0, 2 -> 1, 0 -> 2} and the output order will be [2, 0, 1].
+    /// That is, at position 0 of the output we'll see the register originally
+    /// named q2, at position 1 the register originally named q0, and so on.
     ///
     /// Registers outside the range of the array are not affected, and will
     /// appear in the same order as they were added to `latest_qubit_tracker`.
