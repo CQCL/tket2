@@ -27,10 +27,7 @@ use crate::serialize::pytket::{
 };
 
 use super::unit_generator::RegisterUnitGenerator;
-use super::{
-    PytketEncoderConfig, METADATA_B_OUTPUT_REGISTERS, METADATA_Q_OUTPUT_REGISTERS,
-    METADATA_Q_REGISTERS,
-};
+use super::{PytketEncoderConfig, METADATA_Q_REGISTERS};
 
 /// A structure for tracking qubits used in the circuit being encoded.
 ///
@@ -53,20 +50,6 @@ pub struct ValueTracker<N> {
     /// and a counter of unexplored neighbours used to prune the map
     /// once the wire is fully explored.
     wires: BTreeMap<Wire<N>, TrackedWire>,
-
-    /// A fixed order for the output qubits. This is typically used by tket1 to
-    /// define implicit qubit permutations at the end of the circuit.
-    ///
-    /// When a circuit gets decoded from pytket, we store the order in a
-    /// [`METADATA_Q_OUTPUT_REGISTERS`] metadata entry.
-    output_qubits: Vec<RegisterUnit>,
-    /// A fixed order for the output qubits. This is typically used by tket1 to
-    /// define implicit qubit permutations at the end of the circuit.
-    ///
-    /// When a circuit gets decoded from pytket, we store the order in a
-    /// [`METADATA_B_OUTPUT_REGISTERS`] metadata entry.
-    #[allow(unused)]
-    output_bits: Vec<RegisterUnit>,
 
     /// Qubits in `qubits` that are not currently registered to any wire.
     ///
@@ -179,7 +162,7 @@ struct TrackedWire {
 /// permutation of the output registers.
 #[derive(Debug, Clone)]
 pub struct ValueTrackerResult {
-    /// The final list of qubit registers.
+    /// The final list of qubit registers at the input.
     pub qubits: Vec<RegisterUnit>,
     /// The final list of bit registers.
     pub bits: Vec<RegisterUnit>,
@@ -213,22 +196,12 @@ impl<N: HugrNode> ValueTracker<N> {
             bits: read_metadata_json_list(circ, region, METADATA_B_REGISTERS),
             params: Vec::with_capacity(param_variable_names.len()),
             wires: BTreeMap::new(),
-            output_qubits: read_metadata_json_list(circ, region, METADATA_Q_OUTPUT_REGISTERS),
-            output_bits: read_metadata_json_list(circ, region, METADATA_B_OUTPUT_REGISTERS),
             unused_qubits: BTreeSet::new(),
             unused_bits: BTreeSet::new(),
             qubit_reg_generator: RegisterUnitGenerator::default(),
             bit_reg_generator: RegisterUnitGenerator::default(),
         };
 
-        if !tracker.output_qubits.is_empty() {
-            let inputs: HashSet<_> = tracker.qubits.iter().cloned().collect();
-            for q in &tracker.output_qubits {
-                if !inputs.contains(q) {
-                    tracker.qubits.push(q.clone());
-                }
-            }
-        }
         tracker.unused_qubits = (0..tracker.qubits.len()).map(TrackedQubit).collect();
         tracker.unused_bits = (0..tracker.bits.len()).map(TrackedBit).collect();
         tracker.qubit_reg_generator = RegisterUnitGenerator::new("q", tracker.qubits.iter());
@@ -467,22 +440,11 @@ impl<N: HugrNode> ValueTracker<N> {
             }
         }
 
-        // Ensure that all original outputs are present in the pytket circuit.
-        if qubit_outputs.len() < self.output_qubits.len() {
-            let qbs = self
-                .unused_qubits
-                .iter()
-                .take(self.output_qubits.len() - qubit_outputs.len())
-                .map(|&qb| self.qubit_register(qb).clone());
-            qubit_outputs.extend(qbs);
-        }
-
         // Compute the final register permutations.
-        let (qubit_outputs, qubit_permutation) =
-            compute_final_permutation(qubit_outputs, &self.qubits, &self.output_qubits);
+        let qubit_permutation = compute_final_permutation(qubit_outputs, &self.qubits);
 
         Ok(ValueTrackerResult {
-            qubits: qubit_outputs,
+            qubits: self.qubits,
             bits: bit_outputs,
             params: param_outputs,
             qubit_permutation,
@@ -582,34 +544,19 @@ fn read_metadata_json_list<T: serde::de::DeserializeOwned, H: HugrView>(
 /// - `all_inputs`: The ordered list of registers declared in the circuit.
 /// - `actual_outputs`: The final order of output registers, computed from the
 ///   wires at the output node of the circuit.
-/// - `declared_outputs`: The list of output registers declared at the start of
-///   the circuit, potentially in a different order than `declared_inputs`.
 ///
-/// Returns:
-/// - The final list of output registers, including any extra registers
-///   discarded mid-circuit.
-/// - The final permutation of the output registers.
+/// Returns the final permutation of the output registers.
 pub(super) fn compute_final_permutation(
     mut actual_outputs: Vec<RegisterUnit>,
     all_inputs: &[RegisterUnit],
-    declared_outputs: &[RegisterUnit],
-) -> (Vec<RegisterUnit>, Vec<circuit_json::ImplicitPermutation>) {
-    let mut declared_outputs: Vec<&RegisterUnit> = declared_outputs.iter().collect();
-    let mut declared_outputs_hashes: HashSet<RegisterHash> = declared_outputs
-        .iter()
-        .map(|&reg| RegisterHash::from(reg))
-        .collect();
+) -> Vec<circuit_json::ImplicitPermutation> {
+    let declared_outputs: Vec<&RegisterUnit> = all_inputs.iter().collect();
     let mut actual_outputs_hashes: HashSet<RegisterHash> =
         actual_outputs.iter().map(RegisterHash::from).collect();
     let mut input_hashes: HashMap<RegisterHash, usize> = HashMap::default();
     for (i, inp) in all_inputs.iter().enumerate() {
         let hash = inp.into();
         input_hashes.insert(hash, i);
-        // Fix the declared output order of registers.
-        if !declared_outputs_hashes.contains(&hash) {
-            declared_outputs.push(inp);
-            declared_outputs_hashes.insert(hash);
-        }
     }
     // Extend `actual_outputs` with extra registers seen in the circuit.
     for reg in all_inputs {
@@ -637,5 +584,5 @@ pub(super) fn compute_final_permutation(
         })
         .collect_vec();
 
-    (actual_outputs, permutation)
+    permutation
 }

@@ -1,6 +1,6 @@
 //! Structures to keep track of pytket [`ElementId`][tket_json_rs::register::ElementId]s and
 //! their correspondence to wires in the hugr being defined.
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 
 use hugr::builder::{Dataflow as _, FunctionBuilder};
@@ -10,6 +10,7 @@ use hugr::types::Type;
 use hugr::{Hugr, Wire};
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
+use tket_json_rs::circuit_json::ImplicitPermutation;
 use tket_json_rs::register::ElementId as PytketRegister;
 
 use crate::extension::rotation::{rotation_type, ConstRotation};
@@ -314,11 +315,11 @@ pub(crate) struct WireTracker {
     bits: Vec<TrackedBit>,
     /// A map from pytket register hashes to the latest up-to-date [`TrackedQubit`] referencing it.
     ///
-    /// The map keys are kept in the order they were defined in the circuit.
+    /// The map keys are kept in the order we expect to see them at the circuits output.
     latest_qubit_tracker: IndexMap<RegisterHash, TrackedQubitId>,
     /// A map from pytket register hashes to the latest up-to-date [`TrackedBit`] referencing it.
     ///
-    /// The map keys are kept in the order they were defined in the circuit.
+    /// The map keys are kept in the order we expect to see them at the circuits output.
     latest_bit_tracker: IndexMap<RegisterHash, TrackedBitId>,
     /// For each tracked qubit, the list of wires that contain it.
     qubit_wires: IndexMap<TrackedQubitId, Vec<Wire>>,
@@ -331,6 +332,20 @@ pub(crate) struct WireTracker {
     ///
     /// Ordered according to their order in the function input.
     parameter_vars: IndexSet<String>,
+    /// A permutation of qubit registers in `latest_qubit_tracker` that we
+    /// expect to see at the output.
+    ///
+    /// This originates from pytket's `implicit_permutation` field.
+    ///
+    /// For a circuit with three qubit registers [q0, q1, q2] and an implicit
+    /// permutation {q0 -> q1, q1 -> q2, q2 -> q0}, `output_to_input` will be {1
+    /// -> 0, 2 -> 1, 0 -> 2} and the output order will be [2, 0, 1]. That is,
+    /// at position 0 of the output we'll see the register originally named q2,
+    /// at position 1 the register originally named q0, and so on.
+    ///
+    /// Registers outside the range of the array are not affected, and will
+    /// appear in the same order as they were added to `latest_qubit_tracker`.
+    output_qubit_permutation: Vec<usize>,
 }
 
 impl WireTracker {
@@ -346,16 +361,40 @@ impl WireTracker {
             bit_wires: IndexMap::with_capacity(bit_count),
             parameters: IndexMap::new(),
             parameter_vars: IndexSet::new(),
+            output_qubit_permutation: Vec::with_capacity(qubit_count),
         }
     }
 
     /// Closes the WireTracker.
     ///
-    /// Returns:
-    /// - A list of qubit and bit elements, in the order they were added.
-    /// - A list of input parameter added to the hugr, in the order they were added.
+    /// Returns a list of input parameter added to the hugr, in the order they
+    /// were added.
+    ///
+    /// For the ordered qubit and bit elements, see
+    /// [`WireTracker::known_pytket_qubits`] and
+    /// [`WireTracker::known_pytket_bits`].
     pub(super) fn finish(self) -> IndexSet<String> {
         self.parameter_vars
+    }
+
+    /// Set the output qubit permutation.
+    ///
+    /// This is used to reorder the qubit registers at the output, according to
+    /// pytket's implicit permutation.
+    pub(super) fn compute_output_permutation(&mut self, permutation: &Vec<ImplicitPermutation>) {
+        let mut reordered: BTreeMap<usize, usize> = BTreeMap::new();
+
+        let position = |id: &tket_json_rs::register::Qubit| {
+            let hash = RegisterHash::from(id);
+            self.latest_qubit_tracker.get_index_of(&hash).unwrap()
+        };
+
+        for ImplicitPermutation(input, output) in permutation {
+            let input_pos = position(input);
+            let output_pos = position(output);
+            reordered.insert(output_pos, input_pos);
+        }
+        self.output_qubit_permutation = reordered.values().copied().collect();
     }
 
     /// Returns a reference to the tracked qubit at the given index.
@@ -368,11 +407,17 @@ impl WireTracker {
         &self.bits[id.0]
     }
 
-    /// Returns the list of known pytket registers, in the order they were registered.
+    /// Returns the list of known pytket registers, in the order we expect to
+    /// see them at the output.
+    ///
+    /// This is the ordered they were registered, permuted according to
+    /// [`WireTracker::output_qubit_permutation`].
     pub(super) fn known_pytket_qubits(&self) -> impl Iterator<Item = &TrackedQubit> {
-        self.latest_qubit_tracker
-            .iter()
-            .map(|(_, &elem_id)| self.get_qubit(elem_id))
+        (0..self.latest_qubit_tracker.len()).map(|i| {
+            let i = self.output_qubit_permutation.get(i).copied().unwrap_or(i);
+            let (_, &elem_id) = self.latest_qubit_tracker.get_index(i).unwrap();
+            self.get_qubit(elem_id)
+        })
     }
 
     /// Returns the list of known pytket bit registers, in the order they were registered.
