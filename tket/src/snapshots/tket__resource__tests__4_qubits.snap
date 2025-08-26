@@ -2,7 +2,7 @@
 source: tket/src/resource.rs
 expression: info
 ---
-Found 0 copyable values
+Found 0 copyable wires
 Found 4 resource paths:
   - ResourceId(0):
     * H(Node(7)) [IncomingPort(0) -> OutgoingPort(0)]
