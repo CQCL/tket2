@@ -1,7 +1,10 @@
 //! Utilities for Control modifiers
 use hugr::{
     extension::{prelude::qb_t, SignatureFunc},
-    types::{type_param::TypeParam, FuncValueType, PolyFuncTypeRV, TypeBound, TypeRV},
+    std_extensions::collections::array::array_type_parametric,
+    types::{
+        type_param::TypeParam, FuncValueType, PolyFuncTypeRV, Term, TypeArg, TypeBound, TypeRV,
+    },
 };
 
 #[allow(missing_docs)]
@@ -24,17 +27,30 @@ impl ModifierControl {
     pub fn signature() -> SignatureFunc {
         PolyFuncTypeRV::new(
             [
+                TypeParam::max_nat_type(),
                 TypeParam::new_list_type(TypeBound::Linear),
                 TypeParam::new_list_type(TypeBound::Linear),
             ],
             FuncValueType::new(
                 TypeRV::new_function(FuncValueType::new(
-                    vec![TypeRV::new_row_var_use(0, TypeBound::Linear)],
                     vec![TypeRV::new_row_var_use(1, TypeBound::Linear)],
+                    vec![TypeRV::new_row_var_use(2, TypeBound::Linear)],
                 )),
                 TypeRV::new_function(FuncValueType::new(
-                    vec![qb_t().into(), TypeRV::new_row_var_use(0, TypeBound::Linear)],
-                    vec![qb_t().into(), TypeRV::new_row_var_use(1, TypeBound::Linear)],
+                    vec![
+                        array_type_parametric(
+                            TypeArg::new_var_use(0, TypeParam::max_nat_type()),
+                            qb_t(),
+                        ).unwrap().into(),
+                        TypeRV::new_row_var_use(1, TypeBound::Linear),
+                    ],
+                    vec![
+                        array_type_parametric(
+                            TypeArg::new_var_use(0, TypeParam::max_nat_type()),
+                            qb_t(),
+                        ).unwrap().into(),
+                        TypeRV::new_row_var_use(2, TypeBound::Linear),
+                    ],
                 )),
             ),
         )

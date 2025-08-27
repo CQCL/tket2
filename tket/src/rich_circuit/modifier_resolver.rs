@@ -1,14 +1,18 @@
 //! Try to delete modifier by applying the modifier to each component.
 //!
-
-pub mod tket2_modify;
+pub mod global_phase_modify;
+pub mod tket_op_modify;
 use derive_more::Error;
 use hugr::{
     builder::{BuildError, ConditionalBuilder, Container, Dataflow, FunctionBuilder, HugrBuilder},
     core::HugrNode,
     extension::{prelude::qb_t, simple_op::MakeExtensionOp},
     hugr::{hugrmut::HugrMut, patch::replace::ReplaceError},
-    ops::{Conditional, Const, DataflowOpTrait, DataflowParent, LoadFunction, OpType},
+    ops::{
+        CallIndirect, Conditional, Const, DataflowOpTrait, DataflowParent, ExtensionOp,
+        LoadFunction, OpType,
+    },
+    std_extensions::collections::array::{array_type, ArrayOpBuilder},
     types::{FuncTypeBase, PolyFuncType},
     Hugr, HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex, Wire,
 };
@@ -17,47 +21,68 @@ use itertools::{Either, Itertools};
 use petgraph::visit::{Topo, Walker};
 use std::{cmp::min, collections::HashMap, iter, mem};
 
-use crate::{rich_circuit::Modifier, Tk2Op};
+use crate::{
+    rich_circuit::{modifier_resolver::global_phase_modify::delete_phase, GlobalPhase, Modifier},
+    TketOp,
+};
 
 /// An accumulated modifier that combines control, dagger, and power modifiers.
 pub struct CombinedModifier {
     control: usize,
+    accum_ctrl: Vec<usize>,
     dagger: bool,
     #[allow(dead_code)]
-    power: usize,
+    power: bool,
 }
 
 impl Default for CombinedModifier {
     fn default() -> Self {
         CombinedModifier {
             control: 0,
+            accum_ctrl: vec![],
             dagger: false,
-            power: 1,
+            power: false,
         }
     }
 }
 
-impl From<Vec<Modifier>> for CombinedModifier {
-    fn from(modifiers: Vec<Modifier>) -> Self {
-        let mut control = 0;
-        let mut dagger = false;
-        let mut power = 0;
-
-        for modifier in modifiers {
-            match modifier {
-                Modifier::ControlModifier => control += 1,
-                Modifier::DaggerModifier => dagger = true,
-                Modifier::PowerModifier => power += 1,
+impl CombinedModifier {
+    /// Add a modifier
+    pub fn push(&mut self, ext_op: &ExtensionOp) {
+        match Modifier::from_extension_op(ext_op) {
+            Ok(Modifier::ControlModifier) => {
+                let ctrl = ext_op.args()[0].as_nat().unwrap() as usize;
+                self.control += ctrl;
+                self.accum_ctrl.push(ctrl);
             }
-        }
-
-        CombinedModifier {
-            control,
-            dagger,
-            power,
+            Ok(Modifier::DaggerModifier) => self.dagger = !self.dagger,
+            Ok(Modifier::PowerModifier) => self.power = !self.power,
+            Err(_) => {}
         }
     }
 }
+
+// impl From<Vec<Modifier>> for CombinedModifier {
+//     fn from(modifiers: Vec<Modifier>) -> Self {
+//         let mut control = 0;
+//         let mut dagger = false;
+//         let mut power = 0;
+
+//         for modifier in modifiers {
+//             match modifier {
+//                 Modifier::ControlModifier => control += 1,
+//                 Modifier::DaggerModifier => dagger = true,
+//                 Modifier::PowerModifier => power += 1,
+//             }
+//         }
+
+//         CombinedModifier {
+//             control,
+//             dagger,
+//             power,
+//         }
+//     }
+// }
 
 /// A wire of both direction.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -78,6 +103,7 @@ impl<N> DirWire<N> {
         DirWire(node, port)
     }
 
+    #[allow(dead_code)]
     pub fn reverse(self) -> Self {
         let index = self.1.index();
         let port = match self.1.as_directed() {
@@ -231,7 +257,7 @@ impl<N: HugrNode> PortVector<N> {
 pub struct ModifierResolver<N = Node> {
     node: Option<N>,
     modifiers: CombinedModifier,
-    corresp_map: HashMap<DirWire<N>, DirWire>,
+    corresp_map: HashMap<DirWire<N>, Vec<DirWire>>,
     controls: Vec<Wire>,
     // TODO:
     // Should keep track of the collection of modifiers that are applied to the same function.
@@ -247,6 +273,18 @@ impl<N> ModifierResolver<N> {
             corresp_map: HashMap::new(),
             controls: Vec::new(),
         }
+    }
+
+    fn with_ancilla<T>(
+        &mut self,
+        wire: &mut Wire<Node>,
+        ancilla: &mut Vec<Wire<Node>>,
+        f: impl FnOnce(&mut Self, &mut Vec<Wire<Node>>) -> T,
+    ) -> T {
+        ancilla.push(*wire);
+        let r = f(self, ancilla);
+        *wire = ancilla.pop().unwrap();
+        r
     }
 }
 
@@ -311,8 +349,22 @@ impl<N: HugrNode> ModifierResolver<N> {
     fn controls(&mut self) -> &mut Vec<Wire> {
         &mut self.controls
     }
-    fn corresp_map(&mut self) -> &mut HashMap<DirWire<N>, DirWire> {
+    fn corresp_map(&mut self) -> &mut HashMap<DirWire<N>, Vec<DirWire>> {
         &mut self.corresp_map
+    }
+
+    fn pop_control(&mut self) -> Option<Wire<Node>> {
+        if let Some(c) = self.controls().pop() {
+            self.modifiers.control -= 1;
+            Some(c)
+        } else {
+            None
+        }
+    }
+
+    fn push_control(&mut self, c: Wire<Node>) {
+        self.controls().push(c);
+        self.modifiers.control += 1;
     }
 
     /// normal insert method.
@@ -321,18 +373,17 @@ impl<N: HugrNode> ModifierResolver<N> {
         old: DirWire<N>,
         new: DirWire, // new: impl Into<Either<IncomingPort, OutgoingPort>>,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        // TODO: don't clone
-        println!("Insert {} -> {}", old, new);
         self.corresp_map()
-            .insert(old.clone(), new.clone())
+            .insert(old.clone(), vec![new.clone()])
             .map_or(Ok(()), |former| {
                 Err(ModifierResolverErrors::Unreachable(format!(
-                    "Wire already registered for node {}. Former {}, Latter {}.",
-                    old, former, new
+                    "Wire already registered for node {}. Former [{},...], Latter {}.",
+                    old, former[0], new
                 )))
             })
     }
-    fn map_get(&self, key: &DirWire<N>) -> Result<&DirWire, ModifierResolverErrors<N>> {
+
+    fn map_get(&self, key: &DirWire<N>) -> Result<&Vec<DirWire>, ModifierResolverErrors<N>> {
         self.corresp_map
             .get(key)
             .ok_or(ModifierResolverErrors::Unreachable(format!(
@@ -355,7 +406,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         }
     }
 
-    fn add_edge(
+    fn add_edge_from_pv(
         &mut self,
         h: &impl HugrMut<Node = N>,
         n: N,
@@ -383,41 +434,6 @@ impl<N: HugrNode> ModifierResolver<N> {
         node
     }
 
-    /// This function adds a node to the builder, swapping the given wires
-    /// if `self.modifiers.dagger` is true.
-    /// The rev_if_dag is supposed to be a partial bijection between ports.
-    /// This function also adds control qubits as the input wires.
-    fn add_node_reversible(
-        &mut self,
-        new_fn: &mut impl Dataflow,
-        op: impl Into<OpType>,
-        h: &impl HugrMut<Node = N>,
-        old_n: N,
-        rev_if_dag: Vec<(Port, Port)>,
-    ) -> Result<Node, ModifierResolverErrors<N>> {
-        let node = self.add_node_control(new_fn, op);
-        for port in h.all_node_ports(old_n) {
-            let dir_wire = DirWire::new(old_n, port);
-            let new_port = if self.modifiers.dagger {
-                rev_if_dag
-                    .iter()
-                    .find_map(|(from, to)| {
-                        if *from == port {
-                            Some(to.clone())
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or_else(|| port)
-            } else {
-                port
-            }
-            .shift(self.modifiers.control);
-            self.map_insert(dir_wire, DirWire(node, new_port))?;
-        }
-        Ok(node)
-    }
-
     /// This function adds a node to the builder, that does not affected by the modifiers.
     fn add_node_no_modification(
         &mut self,
@@ -441,15 +457,19 @@ impl<N: HugrNode> ModifierResolver<N> {
         new_dfg: &mut impl Dataflow,
         parent: N,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        for p in self.corresp_map().iter() {
-            println!("  Wire mapping: {} -> {}", p.0, p.1);
+        for (a, bs) in self.corresp_map().iter() {
+            for b in bs {
+                println!("  Wire mapping: {} -> {}", a, b);
+            }
         }
         for out_node in h.children(parent) {
             for out_port in h.node_outputs(out_node) {
                 for (in_node, in_port) in h.linked_inputs(out_node, out_port) {
-                    let a = self.map_get(&(in_node, in_port).into())?;
-                    let b = self.map_get(&(out_node, out_port).into())?;
-                    connect(new_dfg, a, b)?;
+                    for a in self.map_get(&(in_node, in_port).into())? {
+                        for b in self.map_get(&(out_node, out_port).into())? {
+                            connect(new_dfg, a, b)?;
+                        }
+                    }
                 }
             }
         }
@@ -492,13 +512,13 @@ impl<N: HugrNode> ModifierResolver<N> {
         // The final target of modifiers to apply.
         let mut targ = self.node();
         // Collection of modifiers to apply.
-        let mut modifiers: Vec<Modifier> = Vec::new();
+        let mut modifiers = CombinedModifier::default();
         let mut modifier_and_targ: Vec<N> = Vec::new();
         loop {
             modifier_and_targ.push(targ);
             let optype = h.get_optype(targ);
             match Modifier::from_optype(optype) {
-                Some(modifier) => modifiers.push(modifier),
+                Some(_) => modifiers.push(optype.as_extension_op().unwrap()),
                 // Found the target
                 None => break,
             }
@@ -512,7 +532,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         println!("Evaluating {}, Current target: {}", self.node(), targ);
 
         // Calculate the accumulated modifier.
-        self.modifiers = modifiers.into();
+        self.modifiers = modifiers;
 
         let optype = h.get_optype(targ).clone();
         // The function to apply the modifier to.
@@ -557,7 +577,7 @@ impl<N: HugrNode> ModifierResolver<N> {
 
         // generate modified function
         let mut modified_sig = load.func_sig.clone();
-        self.modify_signature(&mut modified_sig);
+        self.modify_signature(&mut modified_sig, false);
         println!(
             "Modifying function {} with signature {:?}",
             func, modified_sig
@@ -590,7 +610,7 @@ impl<N: HugrNode> ModifierResolver<N> {
     }
 
     /// Takes a signature and modifies it according to the combined modifier.
-    pub fn modify_signature(&mut self, signature: &mut PolyFuncType) {
+    pub fn modify_signature(&self, signature: &mut PolyFuncType, flatten: bool) {
         if !self.modifiers.dagger && self.modifiers.control == 0 {
             return;
         }
@@ -599,9 +619,17 @@ impl<N: HugrNode> ModifierResolver<N> {
         // Even if dagger is applied, we do not change the signature.
         // if self.modifiers.dagger { }
 
-        let n = self.modifiers.control;
-        input.to_mut().splice(0..0, iter::repeat(qb_t()).take(n));
-        output.to_mut().splice(0..0, iter::repeat(qb_t()).take(n));
+        if flatten {
+            let n = self.modifiers.control;
+            input.to_mut().splice(0..0, iter::repeat(qb_t()).take(n));
+            output.to_mut().splice(0..0, iter::repeat(qb_t()).take(n));
+        } else {
+            for ctrls in &self.modifiers.accum_ctrl {
+                let n = ctrls.clone() as u64;
+                input.to_mut().insert(0, array_type(n, qb_t()));
+                output.to_mut().insert(0, array_type(n, qb_t()));
+            }
+        }
     }
 
     /// Generates a new function modified by the combined modifier.
@@ -631,10 +659,12 @@ impl<N: HugrNode> ModifierResolver<N> {
         );
         // Add the edges
         self.connect_all(h, &mut new_fn, func)?;
+
         println!(
             "modified (before check):\n{}",
             new_fn.hugr_mut().mermaid_string()
         );
+
         let new_fn = new_fn
             .finish_hugr()
             .map_err(|e| ModifierResolverErrors::BuildError(e.into()))?;
@@ -644,15 +674,18 @@ impl<N: HugrNode> ModifierResolver<N> {
 
     /// Modifies the dataflow graph elements of the function.
     /// We use the topological order of the circuit.
-    /// TODO
-    /// I need to reverse the order of the circuits when dagger is applied.
     pub fn modify_dfg_elements(
         &mut self,
         h: &impl HugrMut<Node = N>,
         n: N,
         new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        let mut controls: Vec<_> = new_dfg.input_wires().take(self.modifiers.control).collect();
+        let mut controls = vec![];
+        for size in &self.modifiers.accum_ctrl {
+            let ctrl_arr = new_dfg.input_wires().next().unwrap();
+            controls.extend(new_dfg.add_array_unpack(qb_t(), *size as u64, ctrl_arr)?);
+        }
+
         let _ = mem::swap(self.controls(), &mut controls);
         let (region_graph, node_map) = h.region_portgraph(n);
         let mut topo: Vec<_> = Topo::new(&region_graph).iter(&region_graph).collect();
@@ -707,7 +740,12 @@ impl<N: HugrNode> ModifierResolver<N> {
 
         mem::swap(self.controls(), &mut controls);
         let out_node = new_dfg.io()[1];
-        for (index, wire) in controls.iter().enumerate() {
+
+        let mut offset = 0;
+        for (index, size) in self.modifiers.accum_ctrl.iter().enumerate() {
+            let wire =
+                new_dfg.add_new_array(qb_t(), controls[offset..offset + size].iter().cloned())?;
+            offset += size;
             new_dfg
                 .hugr_mut()
                 .connect(wire.node(), wire.source(), out_node, index);
@@ -730,7 +768,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             OpType::Input(_) => {
                 for (old, new) in iter::zip(
                     h.node_outputs(n).map(|p| Wire::new(n, p)),
-                    new_fn.input_wires().skip(self.modifiers.control),
+                    new_fn.input_wires().skip(self.modifiers.accum_ctrl.len()),
                 ) {
                     println!("Input Node: old: {}, new: {}", old, new);
                     self.map_insert(old.into(), new.into())?;
@@ -744,7 +782,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                         (n, old_port).into(),
                         (
                             new_out_node,
-                            IncomingPort::from(self.modifiers.control + num),
+                            IncomingPort::from(self.modifiers.accum_ctrl.len() + num),
                         )
                             .into(),
                     )?
@@ -753,7 +791,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             OpType::ExtensionOp(_) => {
                 self.modify_extension_op(h, n, optype, new_fn)?;
             }
-            OpType::DFG(_) | OpType::TailLoop(_) | OpType::Conditional(_) => {
+            OpType::DFG(_) | OpType::TailLoop(_) => {
                 // let (region_graph, node_map) = h.region_portgraph(n);
                 // let topo = Topo::new(&region_graph);
                 todo!()
@@ -853,16 +891,23 @@ impl<N: HugrNode> ModifierResolver<N> {
             ));
         }
 
-        // If Tk2Op, return the modified operation.
+        // If TketOp, return the modified operation.
         println!("I'm modifying Node: {:?}", n);
-        if let Some(op) = Tk2Op::from_optype(optype) {
-            let pv = self.modify_tket2_op(n, op, new_fn, &mut vec![])?;
-            self.add_edge(h, n, pv)
+        if let Some(op) = TketOp::from_optype(optype) {
+            let pv = self.modify_tket_op(n, op, new_fn, &mut vec![])?;
+            self.add_edge_from_pv(h, n, pv)
+        } else if GlobalPhase::from_optype(optype).is_some() {
+            let inputs = self.modify_global_phase(n, new_fn, &mut vec![])?;
+            self.corresp_map().insert(
+                (n, IncomingPort::from(0)).into(),
+                inputs.into_iter().map(Into::into).collect(),
+            );
+            Ok(())
         } else {
             // Some other Hugr extension operation.
             // Here, we do not know what is the modified version.
             // We try to place the previous operation.
-            return self.modify_dataflow_op(h, n, optype, new_fn);
+            self.modify_dataflow_op(h, n, optype, new_fn)
         }
     }
 }
@@ -874,7 +919,9 @@ pub fn resolve_modifier_with_entrypoints(
 ) -> Result<(), ModifierResolverErrors<Node>> {
     use ModifierResolverErrors::*;
 
-    for entry_point in entry_points {
+    let entry_points = entry_points.collect::<Vec<_>>();
+
+    for entry_point in entry_points.clone() {
         let descendants = h.descendants(entry_point).collect::<Vec<_>>();
         let mut resolver = ModifierResolver::new();
         for node in descendants {
@@ -892,39 +939,59 @@ pub fn resolve_modifier_with_entrypoints(
             }
         }
     }
+
+    delete_phase(h, entry_points.into_iter())?;
+
     Ok(())
 }
 
-impl CombinedModifier {}
-
 #[cfg(test)]
 mod test {
+    use std::{fs::File, io::Write, path::Path};
+
     use hugr::{
+        algorithms::{dead_code, ComposablePass},
         builder::{Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder},
         envelope::{EnvelopeConfig, EnvelopeFormat},
-        extension::{prelude::{bool_t, qb_t}, ExtensionRegistry},
-        ops::{CallIndirect, ExtensionOp},
+        extension::{prelude::qb_t, ExtensionRegistry},
+        ops::{handle::NodeHandle, CallIndirect, ExtensionOp},
+        std_extensions::collections::array::{array_type, ArrayOpBuilder},
         types::{Signature, Term},
     };
 
-    use crate::{extension::{bool::BOOL_EXTENSION, rotation::{rotation_type, ROTATION_EXTENSION}, TKET2_EXTENSION}, rich_circuit::*};
-    use crate::{extension::rotation::ConstRotation, rich_circuit::modifier_resolver::*};
+    use crate::{
+        extension::{
+            bool::BOOL_EXTENSION,
+            rotation::{rotation_type, ROTATION_EXTENSION},
+            TKET_EXTENSION,
+        },
+        rich_circuit::*,
+    };
+    use crate::{
+        extension::{debug::StateResult, rotation::ConstRotation},
+        rich_circuit::modifier_resolver::*,
+    };
 
     #[test]
     fn test_control_simple() {
         let mut module = ModuleBuilder::new();
         let foo_sig = Signature::new(vec![qb_t(), qb_t()], vec![qb_t(), qb_t()]);
         let main_sig = Signature::new(vec![qb_t(), qb_t(), qb_t()], vec![qb_t(), qb_t(), qb_t()]);
+        let call_sig = Signature::new(
+            vec![array_type(1, qb_t()), qb_t(), qb_t()],
+            vec![array_type(1, qb_t()), qb_t(), qb_t()],
+        );
 
         let control_op = MODIFIER_EXTENSION
             .instantiate_extension_op(
                 &CONTROL_OP_ID,
                 [
+                    Term::BoundedNat(1),
                     Term::new_list([qb_t().into(), qb_t().into()]),
                     Term::new_list([qb_t().into(), qb_t().into()]),
                 ],
             )
-            .unwrap();
+            .unwrap_or_else(|e| panic!("Failed to instantiate control op: {}", e));
 
         // fn foo {
         //     -- • -- Y ---
@@ -935,15 +1002,15 @@ mod test {
             let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
             let [in1, in2] = func.input_wires_arr();
             let [w1, w2] = func
-                .add_dataflow_op(Tk2Op::CX, vec![in1, in2])
+                .add_dataflow_op(TketOp::CX, vec![in1, in2])
                 .unwrap()
                 .outputs_arr();
             let o1 = func
-                .add_dataflow_op(Tk2Op::Y, vec![w1])
+                .add_dataflow_op(TketOp::Y, vec![w1])
                 .unwrap()
                 .out_wire(0);
             let o2 = func
-                .add_dataflow_op(Tk2Op::Z, vec![w2])
+                .add_dataflow_op(TketOp::Z, vec![w2])
                 .unwrap()
                 .out_wire(0);
             func.finish_with_outputs(vec![o1, o2]).unwrap()
@@ -953,6 +1020,7 @@ mod test {
             let mut func = module.define_function("main", main_sig.clone()).unwrap();
             let [in1, in2, in3] = func.input_wires_arr();
             let loaded = func.load_func(foo.handle(), &[]).unwrap();
+            let in1 = func.add_new_array(qb_t(), vec![in1]).unwrap();
             let controlled = func
                 .add_dataflow_op(control_op, vec![loaded])
                 .unwrap()
@@ -960,12 +1028,13 @@ mod test {
             let [out1, out2, out3] = func
                 .add_dataflow_op(
                     CallIndirect {
-                        signature: main_sig,
+                        signature: call_sig,
                     },
                     vec![controlled, in1, in2, in3],
                 )
                 .unwrap()
                 .outputs_arr();
+            let out1 = func.add_array_unpack(qb_t(), 1, out1).unwrap()[0];
             func.finish_with_outputs(vec![out1, out2, out3]).unwrap()
         };
 
@@ -982,12 +1051,16 @@ mod test {
         let mut module = ModuleBuilder::new();
         let foo_sig = Signature::new(vec![qb_t(), qb_t()], vec![qb_t(), qb_t()]);
         let main_sig = Signature::new(vec![qb_t(), qb_t(), qb_t()], vec![qb_t(), qb_t(), qb_t()]);
-        let call_sig = Signature::new(vec![qb_t(), qb_t(), qb_t()], vec![qb_t(), qb_t(), qb_t()]);
+        let call_sig = Signature::new(
+            vec![array_type(1, qb_t()), qb_t(), qb_t()],
+            vec![array_type(1, qb_t()), qb_t(), qb_t()],
+        );
 
         let control_op = MODIFIER_EXTENSION
             .instantiate_extension_op(
                 &CONTROL_OP_ID,
                 [
+                    Term::BoundedNat(1),
                     Term::new_list([qb_t().into(), qb_t().into()]),
                     Term::new_list([qb_t().into(), qb_t().into()]),
                 ],
@@ -1004,20 +1077,20 @@ mod test {
         let foo = {
             let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
             let [mut i1, mut i2] = func.input_wires_arr();
-            [i1, i2] = func
-                .add_dataflow_op(Tk2Op::CX, vec![i1, i2])
-                .unwrap()
-                .outputs_arr();
-            i1 = func
-                .add_dataflow_op(Tk2Op::S, vec![i1])
-                .unwrap()
-                .out_wire(0);
+            // [i1, i2] = func
+            //     .add_dataflow_op(TketOp::CX, vec![i1, i2])
+            //     .unwrap()
+            //     .outputs_arr();
+            // i1 = func
+            //     .add_dataflow_op(TketOp::S, vec![i1])
+            //     .unwrap()
+            //     .out_wire(0);
             let theta = {
                 let angle = ConstRotation::new(0.5).unwrap();
                 func.add_load_value(angle)
             };
             i2 = func
-                .add_dataflow_op(Tk2Op::Ry, vec![i2, theta])
+                .add_dataflow_op(TketOp::Rz, vec![i2, theta])
                 .unwrap()
                 .out_wire(0);
             func.finish_with_outputs(vec![i1, i2]).unwrap()
@@ -1031,18 +1104,22 @@ mod test {
                 .unwrap()
                 .out_wire(0);
             // let theta = func.add_load_value(ConstRotation::new(0.75).unwrap());
-            let mut inputs = vec![controlled];
-            inputs.extend(func.input_wires());
+            let mut fn_inputs = vec![controlled];
+            let mut inputs = func.input_wires().collect::<Vec<_>>();
+            inputs[0] = func.add_new_array(qb_t(), vec![inputs[0]]).unwrap();
+            fn_inputs.extend(inputs);
             // inputs.push(theta);
-            let outs = func
+            let mut outs = func
                 .add_dataflow_op(
                     CallIndirect {
                         signature: call_sig,
                     },
-                    inputs,
+                    fn_inputs,
                 )
                 .unwrap()
-                .outputs();
+                .outputs()
+                .collect::<Vec<_>>();
+            outs[0] = func.add_array_unpack(qb_t(), 1, outs[0]).unwrap()[0];
             func.finish_with_outputs(outs).unwrap()
         };
 
@@ -1052,6 +1129,18 @@ mod test {
         let entrypoint = h.entrypoint().clone();
         resolve_modifier_with_entrypoints(&mut h, vec![entrypoint].into_iter()).unwrap();
         println!("After modification\n{}", h.mermaid_string());
+        let env_format = EnvelopeFormat::PackageJson;
+        let env_conf: EnvelopeConfig = EnvelopeConfig::new(env_format);
+        let iter: Vec<Arc<Extension>> = vec![
+            ROTATION_EXTENSION.to_owned(),
+            TKET_EXTENSION.to_owned(),
+            BOOL_EXTENSION.to_owned(),
+        ];
+        let regist: ExtensionRegistry = ExtensionRegistry::new(iter);
+        println!(
+            "hugr\n{}",
+            h.store_str_with_exts(env_conf, &regist).unwrap()
+        );
     }
 
     #[test]
@@ -1081,10 +1170,10 @@ mod test {
             let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
             let [in1, in2] = func.input_wires_arr();
             let rxgate = func
-                .add_dataflow_op(Tk2Op::Rz, vec![in1, in2])
+                .add_dataflow_op(TketOp::Rz, vec![in1, in2])
                 .unwrap()
                 .out_wire(0);
-            let sgate = func.add_dataflow_op(Tk2Op::S, vec![rxgate]).unwrap();
+            let sgate = func.add_dataflow_op(TketOp::S, vec![rxgate]).unwrap();
             func.finish_with_outputs(sgate.outputs()).unwrap()
         };
 
@@ -1125,18 +1214,25 @@ mod test {
             vec![qb_t(), qb_t(), qb_t()],
         );
         let call_sig = Signature::new(
-            vec![qb_t(), qb_t(), qb_t(), qb_t(), rotation_type()],
-            vec![qb_t(), qb_t(), qb_t(), qb_t()],
+            vec![
+                array_type(1, qb_t()),
+                qb_t(),
+                qb_t(),
+                qb_t(),
+                rotation_type(),
+            ],
+            vec![array_type(1, qb_t()), qb_t(), qb_t(), qb_t()],
         );
         let main_sig = Signature::new(
-            vec![qb_t(), qb_t(), qb_t(), qb_t()],
-            vec![qb_t(), qb_t(), qb_t(), qb_t()],
+            vec![array_type(1, qb_t()), qb_t(), qb_t(), qb_t()],
+            vec![array_type(1, qb_t()), qb_t(), qb_t(), qb_t()],
         );
 
         let control_op = MODIFIER_EXTENSION
             .instantiate_extension_op(
                 &CONTROL_OP_ID,
                 [
+                    Term::BoundedNat(1),
                     Term::new_list([
                         qb_t().into(),
                         qb_t().into(),
@@ -1152,13 +1248,18 @@ mod test {
                 &DAGGER_OP_ID,
                 [
                     Term::new_list([
-                        qb_t().into(),
+                        array_type(1, qb_t()).into(),
                         qb_t().into(),
                         qb_t().into(),
                         qb_t().into(),
                         rotation_type().into(),
                     ]),
-                    Term::new_list([qb_t().into(), qb_t().into(), qb_t().into(), qb_t().into()]),
+                    Term::new_list([
+                        array_type(1, qb_t()).into(),
+                        qb_t().into(),
+                        qb_t().into(),
+                        qb_t().into(),
+                    ]),
                 ],
             )
             .unwrap();
@@ -1179,27 +1280,27 @@ mod test {
             let [mut in1, mut in2, mut in3, in4] = func.input_wires_arr();
             let theta = func.add_load_value(ConstRotation::new(0.46).unwrap());
             in1 = func
-                .add_dataflow_op(Tk2Op::Ry, vec![in1, theta])
+                .add_dataflow_op(TketOp::Ry, vec![in1, theta])
                 .unwrap()
                 .out_wire(0);
             in1 = func
-                .add_dataflow_op(Tk2Op::V, vec![in1])
+                .add_dataflow_op(TketOp::V, vec![in1])
                 .unwrap()
                 .out_wire(0);
             in2 = func
-                .add_dataflow_op(Tk2Op::H, vec![in2])
+                .add_dataflow_op(TketOp::H, vec![in2])
                 .unwrap()
                 .out_wire(0);
             in2 = func
-                .add_dataflow_op(Tk2Op::S, vec![in2])
+                .add_dataflow_op(TketOp::S, vec![in2])
                 .unwrap()
                 .out_wire(0);
             in3 = func
-                .add_dataflow_op(Tk2Op::Z, vec![in3])
+                .add_dataflow_op(TketOp::Z, vec![in3])
                 .unwrap()
                 .out_wire(0);
             in3 = func
-                .add_dataflow_op(Tk2Op::Rx, vec![in3, in4])
+                .add_dataflow_op(TketOp::Rx, vec![in3, in4])
                 .unwrap()
                 .out_wire(0);
             func.finish_with_outputs(vec![in1, in2, in3]).unwrap()
@@ -1242,24 +1343,37 @@ mod test {
 
     #[test]
     fn test_cccx() {
+        // TODO: Fix this test
+        // TODO: Fix this test
+        // TODO: Fix this test
+        // TODO: Fix this test
+        // TODO: Fix this test
+        // TODO: Fix this test
+        // TODO: Fix this test
         let mut module = ModuleBuilder::new();
-        let t_num = 4;
+        let t_num = 3;
         let c_num = 1;
         let targs = iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>();
-        let foo_sig = Signature::new_endo(targs);
+        let foo_sig = Signature::new_endo(targs.clone());
         let qubits = iter::repeat(qb_t()).take(c_num + t_num).collect::<Vec<_>>();
-        let call_sig = Signature::new_endo(qubits);
-        let main_sig = call_sig.clone();
+        let mut call_arg_ty = vec![array_type(c_num as u64, qb_t())];
+        call_arg_ty.extend(iter::repeat(qb_t()).take(t_num));
+        let call_sig = Signature::new_endo(call_arg_ty);
+        let main_sig = Signature::new_endo(qubits);
 
-        fn control_op(num: usize) -> ExtensionOp {
-            let term_list: Vec<Term> = iter::repeat(qb_t().into()).take(num).collect();
+        let control_op: ExtensionOp = {
+            let term_list: Vec<Term> = targs.into_iter().map_into().collect();
             MODIFIER_EXTENSION
                 .instantiate_extension_op(
                     &CONTROL_OP_ID,
-                    [Term::new_list(term_list.clone()), Term::new_list(term_list)],
+                    [
+                        Term::BoundedNat(c_num as u64),
+                        Term::new_list(term_list.clone()),
+                        Term::new_list(term_list),
+                    ],
                 )
                 .unwrap()
-        }
+        };
 
         // fn foo {
         //     ----•--------
@@ -1274,33 +1388,42 @@ mod test {
             let (i1, i2, i3) = inputs.iter_mut().take(3).collect_tuple().unwrap();
             // let theta = func.add_load_value(ConstRotation::new(0.46).unwrap());
             [*i1, *i2, *i3] = func
-                .add_dataflow_op(Tk2Op::Toffoli, vec![*i1, *i2, *i3])
+                .add_dataflow_op(TketOp::Toffoli, vec![*i1, *i2, *i3])
                 .unwrap()
                 .outputs_arr();
+            // [*i1] = func.add_dataflow_op(TketOp::V, input_wires)
             func.finish_with_outputs(inputs).unwrap()
         };
 
         let _main = {
             let mut func = module.define_function("main", main_sig).unwrap();
             let mut call = func.load_func(foo.handle(), &[]).unwrap();
-            for i in 0..c_num {
-                call = func
-                    .add_dataflow_op(control_op(t_num + i), vec![call])
-                    .unwrap()
-                    .out_wire(0);
-            }
-            let mut inputs = vec![call];
-            inputs.extend(func.input_wires());
-            let outs = func
+            call = func
+                .add_dataflow_op(control_op, vec![call])
+                .unwrap()
+                .out_wire(0);
+            let mut inputs: Vec<_> = func.input_wires().collect();
+            let targets = inputs.split_off(c_num);
+            let control_arr = func.add_new_array(qb_t(), inputs).unwrap();
+            let mut fn_inputs = vec![call, control_arr];
+            fn_inputs.extend(targets);
+
+            let mut outs = func
                 .add_dataflow_op(
                     CallIndirect {
                         signature: call_sig,
                     },
-                    inputs,
+                    fn_inputs,
                 )
                 .unwrap()
                 .outputs();
-            func.finish_with_outputs(outs).unwrap()
+            let control_arr = outs.next().unwrap();
+            let mut controls = func
+                .add_array_unpack(qb_t(), c_num as u64, control_arr)
+                .unwrap();
+            controls.extend(outs);
+
+            func.finish_with_outputs(controls).unwrap()
         };
 
         let mut h = module.finish_hugr().unwrap();
@@ -1309,107 +1432,178 @@ mod test {
         let entrypoint = h.entrypoint().clone();
         resolve_modifier_with_entrypoints(&mut h, vec![entrypoint].into_iter()).unwrap();
         println!("After modification\n{}", h.mermaid_string());
+        {
+            let f = File::create(Path::new("test_cccx.mermaid")).unwrap();
+            let mut writer = std::io::BufWriter::new(f);
+            write!(writer, "{}", h.mermaid_string()).unwrap();
+        }
     }
 
     #[test]
     fn test_multi_control_ancilla() {
         let mut module = ModuleBuilder::new();
-        let t_num = 4;
-        let c_num = 2;
-        let targs = iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>();
-        let foo_sig = Signature::new_endo(targs);
-        let qubits = iter::repeat(qb_t()).take(c_num + t_num).collect::<Vec<_>>();
-        let call_sig = Signature::new_endo(qubits);
-        let main_sig = call_sig.clone();
+        let t_num = 1;
+        let c_num = 5;
+        let num = (t_num + c_num).try_into().unwrap();
 
-        fn control_op(num: usize) -> ExtensionOp {
-            let term_list: Vec<Term> = iter::repeat(qb_t().into()).take(num).collect();
+        let targs = iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>();
+        let foo_sig = Signature::new_endo(targs.clone());
+        // let qubits = iter::repeat(qb_t()).take(c_num + t_num).collect::<Vec<_>>();
+        let mut call_arg_ty = vec![array_type(c_num as u64, qb_t())];
+        call_arg_ty.extend(iter::repeat(qb_t()).take(t_num));
+        let call_sig = Signature::new_endo(call_arg_ty);
+        let main_sig = Signature::new(type_row![], array_type(num, qb_t()));
+
+        let control_op: ExtensionOp = {
+            let term_list: Vec<Term> = targs.into_iter().map_into().collect();
             MODIFIER_EXTENSION
                 .instantiate_extension_op(
                     &CONTROL_OP_ID,
-                    [Term::new_list(term_list.clone()), Term::new_list(term_list)],
+                    [
+                        Term::BoundedNat(c_num as u64),
+                        Term::new_list(term_list.clone()),
+                        Term::new_list(term_list),
+                    ],
                 )
                 .unwrap()
-        }
+        };
 
-        // fn foo {
-        //     ----•----
-        //         |
-        //     ----•----
-        //         |
-        //     ----X----
-        // }
         let foo = {
             let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
             let mut inputs: Vec<Wire> = func.input_wires().collect();
-            let (i1, i2, i3) = inputs.iter_mut().take(3).collect_tuple().unwrap();
-            // let theta = func.add_load_value(ConstRotation::new(0.46).unwrap());
-            [*i1, *i2, *i3] = func
-                .add_dataflow_op(Tk2Op::Toffoli, vec![*i1, *i2, *i3])
-                .unwrap()
-                .outputs_arr();
-            // [*i1, *i2] = func
-            //     .add_dataflow_op(Tk2Op::CZ, vec![*i1, *i2])
+            // let (i1, i2, i3) = inputs.iter_mut().take(t_num).collect_tuple().unwrap();
+            let (i1,) = inputs.iter_mut().take(t_num).collect_tuple().unwrap();
+            // let theta = func.add_load_value(ConstRotation::new(1.0).unwrap());
+            // [*i1, *i2, *i3] = func
+            //     .add_dataflow_op(TketOp::Toffoli, vec![*i1, *i2, *i3])
             //     .unwrap()
             //     .outputs_arr();
-            // in1 = func
-            //     .add_dataflow_op(Tk2Op::V, vec![in1])
-            //     .unwrap()
-            //     .out_wire(0);
-            // in2 = func
-            //     .add_dataflow_op(Tk2Op::H, vec![in2])
-            //     .unwrap()
-            //     .out_wire(0);
-            // in2 = func
-            //     .add_dataflow_op(Tk2Op::S, vec![in2])
-            //     .unwrap()
-            //     .out_wire(0);
-            // in3 = func
-            //     .add_dataflow_op(Tk2Op::Z, vec![in3])
-            //     .unwrap()
-            //     .out_wire(0);
-            // in3 = func
-            //     .add_dataflow_op(Tk2Op::Rx, vec![in3, in4])
-            //     .unwrap()
-            //     .out_wire(0);
+            [*i1] = func
+                .add_dataflow_op(TketOp::X, vec![*i1])
+                .unwrap()
+                .outputs_arr();
             func.finish_with_outputs(inputs).unwrap()
         };
 
         let _main = {
             let mut func = module.define_function("main", main_sig).unwrap();
             let mut call = func.load_func(foo.handle(), &[]).unwrap();
-            for i in 0..c_num {
-                call = func
-                    .add_dataflow_op(control_op(t_num + i), vec![call])
-                    .unwrap()
-                    .out_wire(0);
+            call = func
+                .add_dataflow_op(control_op, vec![call])
+                .unwrap()
+                .out_wire(0);
+
+            let mut controls = Vec::new();
+            for _ in 0..c_num {
+                controls.push({
+                    let mut q = func
+                        .add_dataflow_op(TketOp::QAlloc, vec![])
+                        .unwrap()
+                        .out_wire(0);
+                    q = func
+                        .add_dataflow_op(TketOp::H, vec![q])
+                        .unwrap()
+                        .out_wire(0);
+                    q = func
+                        .add_dataflow_op(TketOp::X, vec![q])
+                        .unwrap()
+                        .out_wire(0);
+                    q
+                });
             }
-            let mut inputs = vec![call];
-            inputs.extend(func.input_wires());
-            let outs = func
+
+            let mut targets = Vec::new();
+            for _ in 0..t_num {
+                targets.push({
+                    let mut q = func
+                        .add_dataflow_op(TketOp::QAlloc, vec![])
+                        .unwrap()
+                        .out_wire(0);
+                    let theta = func.add_load_value(ConstRotation::new(0.29).unwrap());
+                    q = func
+                        .add_dataflow_op(TketOp::Ry, vec![q, theta])
+                        .unwrap()
+                        .out_wire(0);
+                    q
+                })
+            }
+            for i in 0..c_num {
+                [controls[i], targets[t_num - 1]] = func
+                    .add_dataflow_op(TketOp::CX, vec![controls[i], targets[t_num - 1]])
+                    .unwrap()
+                    .outputs_arr();
+            }
+
+            let mut init_state = controls;
+            init_state.extend(targets);
+            let init_state_arr = func.add_new_array(qb_t(), init_state).unwrap();
+            let state_result = StateResult::new("input_state".to_string(), num);
+            let init_state_arr = func
+                .add_dataflow_op(state_result, vec![init_state_arr])
+                .unwrap()
+                .out_wire(0);
+            let mut controls = func.add_array_unpack(qb_t(), num, init_state_arr).unwrap();
+            let mut fn_inputs = controls.split_off(c_num);
+            let control_arr = func.add_new_array(qb_t(), controls).unwrap();
+            fn_inputs.insert(0, control_arr);
+            fn_inputs.insert(0, call);
+
+            let mut fn_outs = func
                 .add_dataflow_op(
                     CallIndirect {
                         signature: call_sig,
                     },
-                    inputs,
+                    fn_inputs,
                 )
                 .unwrap()
                 .outputs();
-            func.finish_with_outputs(outs).unwrap()
+
+            let control_arr = fn_outs.next().unwrap();
+            let mut outputs = func
+                .add_array_unpack(qb_t(), c_num as u64, control_arr)
+                .unwrap();
+            outputs.extend(fn_outs);
+            let out_array = func.add_new_array(qb_t(), outputs).unwrap();
+            let state_result = StateResult::new("output_state".to_string(), num);
+            let out_array = func
+                .add_dataflow_op(state_result, vec![out_array])
+                .unwrap()
+                .outputs();
+
+            func.finish_with_outputs(out_array).unwrap()
         };
 
         let mut h = module.finish_hugr().unwrap();
         h.validate().unwrap();
         println!("Before modification:\n{}", h.mermaid_string());
 
-
         let entrypoint = h.entrypoint().clone();
         resolve_modifier_with_entrypoints(&mut h, vec![entrypoint].into_iter()).unwrap();
+        dead_code::DeadCodeElimPass::default()
+            .with_entry_points(vec![_main.node()])
+            .run(&mut h)
+            .unwrap();
+        h.validate().unwrap();
         println!("After modification\n{}", h.mermaid_string());
+        {
+            let f = File::create(Path::new("test_multi_control_ancilla.mermaid")).unwrap();
+            let mut writer = std::io::BufWriter::new(f);
+            write!(writer, "{}", h.mermaid_string()).unwrap();
+        }
         let env_format = EnvelopeFormat::PackageJson;
         let env_conf: EnvelopeConfig = EnvelopeConfig::new(env_format);
-        let iter: Vec<Arc<Extension>> = vec![ROTATION_EXTENSION.to_owned(), TKET2_EXTENSION.to_owned(), BOOL_EXTENSION.to_owned()];
+        let iter: Vec<Arc<Extension>> = vec![
+            ROTATION_EXTENSION.to_owned(),
+            TKET_EXTENSION.to_owned(),
+            BOOL_EXTENSION.to_owned(),
+        ];
         let regist: ExtensionRegistry = ExtensionRegistry::new(iter);
-        println!("hugr\n{}", h.store_str_with_exts(env_conf, &regist).unwrap());
+        let f = File::create(Path::new("test_multi_control_ancilla.json")).unwrap();
+        let writer = std::io::BufWriter::new(f);
+        h.store_with_exts(writer, env_conf, &regist).unwrap();
+        // println!(
+        //     "hugr\n{}",
+        //     h.store_str_with_exts(env_conf, &regist).unwrap()
+        // );
     }
 }
