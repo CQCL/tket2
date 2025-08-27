@@ -118,8 +118,6 @@ impl FloatEmitter {
             FloatOps::fadd => format!("({}) + ({})", inputs[0], inputs[1]),
             FloatOps::fsub => format!("({}) - ({})", inputs[0], inputs[1]),
             FloatOps::fneg => format!("-({})", inputs[0]),
-            FloatOps::fmul => format!("({}) * ({})", inputs[0], inputs[1]),
-            FloatOps::fdiv => format!("({}) / ({})", inputs[0], inputs[1]),
             FloatOps::fpow => format!("({}) ** ({})", inputs[0], inputs[1]),
             FloatOps::ffloor => format!("floor({})", inputs[0]),
             FloatOps::fceil => format!("ceil({})", inputs[0]),
@@ -127,6 +125,22 @@ impl FloatEmitter {
             FloatOps::fmax => format!("max({}, {})", inputs[0], inputs[1]),
             FloatOps::fmin => format!("min({}, {})", inputs[0], inputs[1]),
             FloatOps::fabs => format!("abs({})", inputs[0]),
+            FloatOps::fdiv => {
+                if inputs[1] == "1" {
+                    inputs[0].clone()
+                } else {
+                    format!("({}) / ({})", inputs[0], inputs[1])
+                }
+            }
+            FloatOps::fmul => {
+                if inputs[0] == "1" {
+                    inputs[1].clone()
+                } else if inputs[1] == "1" {
+                    inputs[0].clone()
+                } else {
+                    format!("({}) * ({})", inputs[0], inputs[1])
+                }
+            }
             _ => return None,
         };
         Some(s)

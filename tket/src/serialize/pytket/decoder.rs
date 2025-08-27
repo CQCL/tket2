@@ -4,11 +4,10 @@ mod param;
 mod tracked_elem;
 mod wires;
 
-pub use param::{LoadedParameter, LoadedParameterType};
+pub use param::{LoadedParameter, ParameterType};
 pub use tracked_elem::{TrackedBit, TrackedQubit};
 pub use wires::TrackedWires;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use hugr::builder::{BuildHandle, Container, Dataflow, DataflowSubContainer, FunctionBuilder};
@@ -23,11 +22,10 @@ use itertools::Itertools;
 use serde_json::json;
 use tket_json_rs::circuit_json;
 use tket_json_rs::circuit_json::SerialCircuit;
-use tket_json_rs::register;
 
 use super::{
-    PytketDecodeError, METADATA_B_OUTPUT_REGISTERS, METADATA_B_REGISTERS,
-    METADATA_INPUT_PARAMETERS, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
+    PytketDecodeError, METADATA_B_REGISTERS, METADATA_INPUT_PARAMETERS, METADATA_PHASE,
+    METADATA_Q_REGISTERS,
 };
 use crate::extension::rotation::rotation_type;
 use crate::serialize::pytket::config::PytketDecoderConfig;
@@ -142,37 +140,6 @@ impl<'h> PytketDecoderContext<'h> {
         dfg.set_metadata(METADATA_PHASE, json!(serialcirc.phase));
         dfg.set_metadata(METADATA_Q_REGISTERS, json!(serialcirc.qubits));
         dfg.set_metadata(METADATA_B_REGISTERS, json!(serialcirc.bits));
-
-        // Compute the output register reordering, and store it in the metadata.
-        //
-        // The `implicit_permutation` field is a dictionary mapping input
-        // registers to output registers on the same path.
-        //
-        // Here we store an ordered list showing the order in which the input
-        // registers appear in the output.
-        //
-        // For a circuit with three qubit registers 0, 1, 2 and an implicit
-        // permutation {0 -> 1, 1 -> 2, 2 -> 0}, `output_to_input` will be
-        // {1 -> 0, 2 -> 1, 0 -> 2} and the output order will be [2, 0, 1].
-        // That is, at position 0 of the output we'll see the register originally
-        // named 2, at position 1 the register originally named 0, and so on.
-        let mut output_qubits = Vec::with_capacity(serialcirc.qubits.len());
-        let mut output_bits = Vec::with_capacity(serialcirc.bits.len());
-        let output_to_input: HashMap<register::ElementId, register::ElementId> = serialcirc
-            .implicit_permutation
-            .iter()
-            .map(|p| (p.1.clone().id, p.0.clone().id))
-            .collect();
-        for qubit in &serialcirc.qubits {
-            // For each output position, find the input register that should be there.
-            output_qubits.push(output_to_input.get(&qubit.id).unwrap_or(&qubit.id).clone());
-        }
-        for bit in &serialcirc.bits {
-            // For each output position, find the input register that should be there.
-            output_bits.push(output_to_input.get(&bit.id).unwrap_or(&bit.id).clone());
-        }
-        dfg.set_metadata(METADATA_Q_OUTPUT_REGISTERS, json!(output_qubits));
-        dfg.set_metadata(METADATA_B_OUTPUT_REGISTERS, json!(output_bits));
     }
 
     /// Initialize the wire tracker with the input wires.
@@ -264,6 +231,8 @@ impl<'h> PytketDecoderContext<'h> {
             .wrap());
         }
 
+        wire_tracker.compute_output_permutation(&serialcirc.implicit_permutation);
+
         Ok(wire_tracker)
     }
 
@@ -337,7 +306,7 @@ impl<'h> PytketDecoderContext<'h> {
     ) -> Result<(), PytketDecodeError> {
         let config = self.config.clone();
         for com in commands {
-            let op_type = com.op.op_type.clone();
+            let op_type = com.op.op_type;
             self.process_command(com, config.as_ref())
                 .map_err(|e| e.pytket_op(&op_type))?;
         }
@@ -420,8 +389,13 @@ impl<'h> PytketDecoderContext<'h> {
     /// the first registers in `wires` for the bit inputs and the remaining
     /// registers for the outputs.
     ///
-    /// The input wire types must match the operation's input signature,
-    /// no type conversion is performed.
+    /// The input wire types must match the operation's input signature, no type
+    /// conversion is performed.
+    ///
+    /// The caller must take care of converting the parameter wires to the
+    /// required types and units expected by the operation. An error will be
+    /// returned if the parameter does not match the expected wire type, but the
+    /// unit (radians or half-turns) cannot be checked automatically.
     ///
     /// # Arguments
     ///
@@ -435,6 +409,8 @@ impl<'h> PytketDecoderContext<'h> {
     ///   input ports.
     /// - Returns an error if the node's output ports cannot be assigned to
     ///   arguments from the input wire set.
+    /// - Returns an error if the parameter wires do not match the expected
+    ///   types.
     pub fn add_node_with_wires(
         &mut self,
         op: impl Into<OpType>,
@@ -593,7 +569,18 @@ impl<'h> PytketDecoderContext<'h> {
     /// - If the parameter is a variable, adds a new `rotation` input to the region.
     /// - If the parameter is a sympy expressions, adds it as a [`SympyOpDef`][crate::extension::sympy::SympyOpDef] black box.
     pub fn load_parameter(&mut self, param: &str) -> Arc<LoadedParameter> {
-        self.wire_tracker.load_parameter(&mut self.builder, param)
+        Arc::new(
+            self.wire_tracker
+                .load_parameter(&mut self.builder, param, None),
+        )
+    }
+
+    /// Loads the given parameter expression as a [`LoadedParameter`] in the hugr, and converts it to the requested type and unit.
+    ///
+    /// See [`PytketDecoderContext::load_parameter`] for more details.
+    pub fn load_parameter_with_type(&mut self, param: &str, typ: ParameterType) -> LoadedParameter {
+        self.wire_tracker
+            .load_parameter(&mut self.builder, param, Some(typ))
     }
 }
 

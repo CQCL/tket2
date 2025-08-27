@@ -176,10 +176,17 @@ impl Drop for Tket1Circuit {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::LazyLock;
+    use std::sync::Mutex;
+
     use super::*;
     use rstest::*;
 
     const CIRC_STR: &str = include_str!("../../test_files/2cx.json");
+
+    // Mutex to ensure tests don't run in parallel, due to TKET1 bug, see
+    // https://github.com/CQCL/tket/issues/2009
+    static TEST_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     #[fixture]
     fn circuit() -> SerialCircuit {
@@ -188,6 +195,7 @@ mod tests {
 
     #[rstest]
     fn test_circuit_creation(circuit: SerialCircuit) {
+        let _lock = TEST_MUTEX.lock().unwrap();
         let circuit_ptr = Tket1Circuit::from_serial_circuit(&circuit).unwrap();
         let serial_circuit = circuit_ptr.to_serial_circuit().unwrap();
         assert_eq!(circuit, serial_circuit);
@@ -195,6 +203,7 @@ mod tests {
 
     #[rstest]
     fn test_two_qubit_squash(circuit: SerialCircuit) {
+        let _lock = TEST_MUTEX.lock().unwrap();
         assert_eq!(circuit.commands.len(), 2);
         let mut circuit_ptr = Tket1Circuit::from_serial_circuit(&circuit).unwrap();
         circuit_ptr.two_qubit_squash(OpType::CX, 1., true).unwrap();
@@ -204,6 +213,7 @@ mod tests {
 
     #[rstest]
     fn test_clifford_simp(circuit: SerialCircuit) {
+        let _lock = TEST_MUTEX.lock().unwrap();
         assert_eq!(circuit.commands.len(), 2);
         let mut circuit_ptr = Tket1Circuit::from_serial_circuit(&circuit).unwrap();
         circuit_ptr.clifford_simp(OpType::CX, true).unwrap();

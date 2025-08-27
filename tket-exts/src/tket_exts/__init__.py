@@ -1,78 +1,54 @@
 """HUGR extension definitions for tket circuits."""
 
-import pkgutil
-import functools
+from tket_exts.tket.bool import BoolExtension
+from tket_exts.tket.debug import DebugExtension
+from tket_exts.tket.guppy import GuppyExtension
+from tket_exts.tket.rotation import RotationExtension
+from tket_exts.tket.futures import FuturesExtension
+from tket_exts.tket.qsystem import (
+    QSystemExtension,
+    QSystemRandomExtension,
+    QSystemUtilsExtension,
+)
+from tket_exts.tket.quantum import QuantumExtension
+from tket_exts.tket.result import ResultExtension
+from tket_exts.tket.wasm import WasmExtension
 
+from typing_extensions import deprecated
 from hugr.ext import Extension
-
+from tket_exts import tket
 
 # This is updated by our release-please workflow, triggered by this
 # annotation: x-release-please-version
 __version__ = "0.10.1"
 
+__all__ = [
+    "bool",
+    "debug",
+    "guppy",
+    "rotation",
+    "futures",
+    "qsystem",
+    "qsystem_random",
+    "qsystem_utils",
+    "quantum",
+    "result",
+    "wasm",
+]
 
-@functools.cache
+bool: BoolExtension = tket.bool.BoolExtension()
+debug: DebugExtension = tket.debug.DebugExtension()
+guppy: GuppyExtension = tket.guppy.GuppyExtension()
+rotation: RotationExtension = tket.rotation.RotationExtension()
+futures: FuturesExtension = tket.futures.FuturesExtension()
+qsystem: QSystemExtension = tket.qsystem.QSystemExtension()
+qsystem_random: QSystemRandomExtension = tket.qsystem.QSystemRandomExtension()
+qsystem_utils: QSystemUtilsExtension = tket.qsystem.QSystemUtilsExtension()
+quantum: QuantumExtension = tket.quantum.QuantumExtension()
+result: ResultExtension = tket.result.ResultExtension()
+wasm: WasmExtension = tket.wasm.WasmExtension()
+
+
+@deprecated("Use tket_exts.bool() instead")
 def opaque_bool() -> Extension:
-    return load_extension("tket.bool")
-
-
-@functools.cache
-def debug() -> Extension:
-    return load_extension("tket.debug")
-
-
-@functools.cache
-def guppy() -> Extension:
-    return load_extension("tket.guppy")
-
-
-@functools.cache
-def rotation() -> Extension:
-    return load_extension("tket.rotation")
-
-
-@functools.cache
-def futures() -> Extension:
-    return load_extension("tket.futures")
-
-
-@functools.cache
-def gpu() -> Extension:
-    return load_extension("tket.gpu")
-
-
-@functools.cache
-def qsystem() -> Extension:
-    return load_extension("tket.qsystem")
-
-
-@functools.cache
-def qsystem_random() -> Extension:
-    return load_extension("tket.qsystem.random")
-
-
-@functools.cache
-def qsystem_utils() -> Extension:
-    return load_extension("tket.qsystem.utils")
-
-
-@functools.cache
-def quantum() -> Extension:
-    return load_extension("tket.quantum")
-
-
-@functools.cache
-def result() -> Extension:
-    return load_extension("tket.result")
-
-
-@functools.cache
-def wasm() -> Extension:
-    return load_extension("tket.wasm")
-
-
-def load_extension(name: str) -> Extension:
-    replacement = name.replace(".", "/")
-    json_str = pkgutil.get_data(__name__, f"data/{replacement}.json")
-    assert json_str is not None, f"Could not load json for extension {name}"
-    return Extension.from_json(json_str.decode())
+    return bool()
