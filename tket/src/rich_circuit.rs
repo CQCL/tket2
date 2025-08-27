@@ -1,23 +1,37 @@
 //! Module for richer circuit representation and operations.
-//! This module provides a higher-order function that modifies circuits
-//! by applying modifiers like control, dagger, and power.
-//! This module also provides a vefiried safe_drop function that deallocates
-//! a qubit from a circuit, which should be at the initial state.
+//! This module provides three extensions: modifiers, global phase, and safe drop.
+//!
+//! ## Modifiers
+//! Modifiers are functions that takes circuits and return modified circuits
+//! by applying modifiers: control, dagger, or power.
+//!
+//! ## Global Phase
+//! Global phase is an operation that represents the global phase of a circuit.
+//! It is implemented as a side-effect that takes a rotation angle as an input.
+//!
+//! ## Safe Drop
+//! A vefiried safe_drop function that deallocates
+//! a qubit from a circuit, which must be at the initial state |0>.
 pub mod control;
 pub mod dagger;
-pub mod modifier_call_graph;
 pub mod modifier_resolver;
 pub mod power;
-use std::sync::{Arc, Weak};
+use std::{
+    str::FromStr,
+    sync::{Arc, Weak},
+};
 
-use crate::rich_circuit::{control::ModifierControl, dagger::ModifierDagger, power::ModifierPower};
+use crate::{
+    extension::rotation::rotation_type,
+    rich_circuit::{control::ModifierControl, dagger::ModifierDagger, power::ModifierPower},
+};
 use hugr::{
     extension::{
         prelude::qb_t,
-        simple_op::{MakeOpDef, OpLoadError},
+        simple_op::{MakeOpDef, MakeRegisteredOp, OpLoadError},
         ExtensionId, OpDef, SignatureFunc, Version,
     },
-    ops::OpName,
+    ops::{ExtensionOp, OpName},
     type_row,
     types::Signature,
     Extension,
@@ -57,7 +71,7 @@ pub const MODIFIER_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("modif
 pub const MODIFIER_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
-    /// The extension definition for TKET2 rotation type and ops.
+    /// The extension definition for modifier operations.
     pub static ref MODIFIER_EXTENSION: Arc<Extension> =  {
             Extension::new_arc(MODIFIER_EXTENSION_ID, MODIFIER_VERSION, |modifier, extension_ref| {
                 modifier.add_op(
@@ -136,8 +150,100 @@ impl MakeOpDef for Modifier {
         }
     }
 
-    // [TODO]: do we need this?
+    // [TODO]: Do we need this?
     // fn post_opdef(&self, _def: &mut OpDef);
+}
+
+#[allow(missing_docs)]
+pub const GLOBAL_PHASE_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("global_phase_ext");
+#[allow(missing_docs)]
+pub const GLOBAL_PHASE_VERSION: Version = Version::new(0, 1, 0);
+
+lazy_static! {
+    /// The extension definition for
+    pub static ref GLOBAL_PHASE_EXTENSION: Arc<Extension> =  {
+            Extension::new_arc(GLOBAL_PHASE_EXTENSION_ID, GLOBAL_PHASE_VERSION, |op, extension_ref| {
+                op.add_op(
+                    GLOBAL_PHASE_OP_ID.clone(),
+                    "Global phase of a circuit".to_string(),
+                    GlobalPhase::signature(),
+                    extension_ref,
+                ).unwrap();
+            }
+    )};
+}
+
+#[allow(missing_docs)]
+pub static GLOBAL_PHASE_OP_ID: OpName = OpName::new_inline("global_phase");
+
+/// Global phase of a circuit.
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct GlobalPhase;
+
+impl GlobalPhase {
+    /// Wraps the operation in an [`ExtensionOp`]
+    pub fn into_extension_op(self) -> ExtensionOp {
+        <Self as MakeRegisteredOp>::to_extension_op(self)
+            .expect("Failed to convert to extension op.")
+    }
+
+    fn signature() -> Signature {
+        Signature::new(vec![rotation_type()], type_row![])
+    }
+}
+
+impl FromStr for GlobalPhase {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == Self.opdef_id() {
+            Ok(Self)
+        } else {
+            Err(())
+        }
+    }
+}
+
+impl MakeOpDef for GlobalPhase {
+    fn opdef_id(&self) -> OpName {
+        GLOBAL_PHASE_OP_ID.clone()
+    }
+
+    fn from_def(op_def: &OpDef) -> Result<Self, OpLoadError>
+    where
+        Self: Sized,
+    {
+        hugr::extension::simple_op::try_from_name(op_def.name(), op_def.extension_id())
+    }
+
+    fn init_signature(&self, _extension_ref: &Weak<Extension>) -> SignatureFunc {
+        SignatureFunc::from(GlobalPhase::signature())
+    }
+
+    fn extension_ref(&self) -> Weak<Extension> {
+        Arc::downgrade(&GLOBAL_PHASE_EXTENSION)
+    }
+
+    fn extension(&self) -> ExtensionId {
+        GLOBAL_PHASE_EXTENSION_ID.to_owned()
+    }
+
+    fn description(&self) -> String {
+        "Global phase of a circuit.".into()
+    }
+
+    // TODO: Do we need this?
+    // fn post_opdef(&self, def: &mut OpDef) {
+}
+
+impl MakeRegisteredOp for GlobalPhase {
+    fn extension_id(&self) -> ExtensionId {
+        GLOBAL_PHASE_EXTENSION_ID.to_owned()
+    }
+
+    fn extension_ref(&self) -> Weak<hugr::Extension> {
+        Arc::<hugr::Extension>::downgrade(&GLOBAL_PHASE_EXTENSION)
+    }
 }
 
 /// Safe drop function for qubits.
@@ -231,6 +337,7 @@ mod test {
         types::{Signature, Term},
         HugrView,
     };
+    use serde::Serialize;
 
     use crate::rich_circuit::{CONTROL_OP_ID, MODIFIER_EXTENSION};
 
@@ -274,5 +381,15 @@ mod test {
 
         let h = module.finish_hugr().unwrap();
         println!("{}", h.mermaid_string());
+    }
+
+    #[test]
+    fn test_gen_json_modifier() {
+        let ext = &MODIFIER_EXTENSION;
+        // open file "modifier.json"
+        let writer = std::fs::File::create("modifier.json").unwrap();
+        ext.to_owned()
+            .serialize(&mut serde_json::Serializer::pretty(writer))
+            .unwrap();
     }
 }
