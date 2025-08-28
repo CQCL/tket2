@@ -4,6 +4,9 @@
 //! copyable values throughout a HUGR circuit, including resource identifiers,
 //! positions, and the mapping structures that associate them with operations.
 
+use std::ops::RangeInclusive;
+
+use cgmath::Zero;
 use derive_more::derive::From;
 use hugr::{
     core::HugrNode, types::Signature, Direction, IncomingPort, OutgoingPort, Port, PortIndex, Wire,
@@ -40,7 +43,7 @@ impl ResourceId {
 /// Initially assigned as contiguous integers, they may become non-integer
 /// when operations are inserted or removed.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Position(Rational64);
+pub struct Position(pub(crate) Rational64);
 
 impl std::fmt::Debug for Position {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -66,6 +69,27 @@ impl Position {
     /// Increment the position by 1.
     pub fn increment(&self) -> Self {
         Self(self.0 + 1)
+    }
+
+    /// Rescale the position such that any number in the old range (including
+    /// ends) is within the new range (excluding ends).
+    pub(crate) fn rescale(
+        &self,
+        old_range: RangeInclusive<Position>,
+        new_range: RangeInclusive<Position>,
+    ) -> Self {
+        let Self(pos) = self;
+        let old_range_size = Rational64::from_integer(2) + old_range.end().0 - old_range.start().0;
+        let new_range_size = new_range.end().0 - new_range.start().0;
+
+        if old_range_size == Rational64::zero() {
+            return *new_range.start();
+        }
+
+        let new_pos = new_range.start().0
+            + (Rational64::from_integer(1) + pos - old_range.start().0) / old_range_size
+                * new_range_size;
+        Self(new_pos)
     }
 }
 

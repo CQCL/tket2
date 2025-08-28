@@ -12,13 +12,13 @@
 //!      threshold function.
 //!
 //! The exhaustive strategies are parametrised by a strategy cost function:
-//!    - [`LexicographicCostFunction`] allows rewrites that do
-//!      not increase some coarse cost function (e.g. CX count), whilst
-//!      ordering them according to a lexicographic ordering of finer cost
-//!      functions (e.g. total gate count). See
-//!      [`LexicographicCostFunction::default_cx_strategy`]) for a default implementation.
-//!    - [`GammaStrategyCost`] ignores rewrites that increase the cost
-//!      function beyond a percentage given by a f64 parameter gamma.
+//!    - [`LexicographicCostFunction`] allows rewrites that do not increase some
+//!      coarse cost function (e.g. CX count), whilst ordering them according to
+//!      a lexicographic ordering of finer cost functions (e.g. total gate
+//!      count). See [`LexicographicCostFunction::default_cx_strategy`]) for a
+//!      default implementation.
+//!    - [`GammaStrategyCost`] ignores rewrites that increase the cost function
+//!      beyond a percentage given by a f64 parameter gamma.
 
 use std::iter;
 use std::{collections::HashSet, fmt::Debug};
@@ -73,7 +73,8 @@ pub trait RewriteStrategy {
             })
     }
 
-    /// Returns the expected cost of a rewrite's matched subcircuit after replacing it.
+    /// Returns the expected cost of a rewrite's matched subcircuit after
+    /// replacing it.
     fn post_rewrite_cost(&self, rw: &CircuitRewrite) -> Self::Cost {
         Circuit::new(rw.replacement()).circuit_cost(|op| self.op_cost(op))
     }
@@ -142,15 +143,11 @@ impl RewriteStrategy for GreedyRewriteStrategy {
         let mut cost_delta = 0;
         let mut circ = circ.clone();
         for rewrite in rewrites {
-            if rewrite
-                .to_subgraph(&circ)
-                .nodes()
-                .iter()
-                .any(|n| changed_nodes.contains(n))
-            {
+            let subgraph = rewrite.to_subgraph(&circ);
+            if subgraph.nodes().iter().any(|n| changed_nodes.contains(n)) {
                 continue;
             }
-            changed_nodes.extend(rewrite.to_subgraph(&circ).nodes().iter().copied());
+            changed_nodes.extend(subgraph.nodes().iter().copied());
             cost_delta += rewrite.node_count_delta(&circ);
             rewrite
                 .apply(&mut circ)
@@ -308,7 +305,8 @@ pub trait StrategyCost {
     /// The cost of a single operation.
     type OpCost: CircuitCost;
 
-    /// Returns true if the rewrite is allowed, based on the cost of the pattern and target.
+    /// Returns true if the rewrite is allowed, based on the cost of the pattern
+    /// and target.
     #[inline]
     fn under_threshold(&self, pattern_cost: &Self::OpCost, target_cost: &Self::OpCost) -> bool {
         target_cost.sub_cost(pattern_cost).as_isize() <= 0
@@ -478,7 +476,8 @@ impl GammaStrategyCost<fn(&OpType) -> usize> {
         GammaStrategyCost::with_cost(|op| is_cx(op) as usize)
     }
 
-    /// Exhaustive rewrite strategy with CX count cost function and provided gamma.
+    /// Exhaustive rewrite strategy with CX count cost function and provided
+    /// gamma.
     #[inline]
     pub fn exhaustive_cx_with_gamma(gamma: f64) -> ExhaustiveThresholdStrategy<Self> {
         GammaStrategyCost::new(gamma, |op| is_cx(op) as usize)

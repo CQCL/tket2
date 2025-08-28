@@ -4,6 +4,9 @@
 //! tracking within a specific region of a HUGR, computing resource paths and
 //! providing efficient lookup of circuit units associated with ports.
 
+mod patch;
+pub use patch::CircuitRewriteError;
+
 use std::{cmp, iter};
 
 use crate::resource::flow::{DefaultResourceFlow, ResourceFlow};
@@ -165,17 +168,15 @@ impl<H: HugrView> ResourceScope<H> {
         self.hugr
     }
 
-    pub(crate) fn hugr_mut(&mut self) -> &mut H {
-        &mut self.hugr
-    }
-
     /// Wrap the underlying HUGR in a Circuit as reference.
     pub fn as_circuit(&self) -> Circuit<&H> {
         Circuit::new(self.hugr())
     }
 
-    pub(crate) fn as_circuit_mut(&mut self) -> Circuit<&mut H> {
-        Circuit::new(self.hugr_mut())
+    /// Careful: this will not update the circuit units, so do not modify
+    /// the HUGR using this.
+    pub(super) fn as_circuit_mut(&mut self) -> Circuit<&mut H> {
+        Circuit::new(&mut self.hugr)
     }
 
     /// Get the underlying subgraph.
@@ -390,53 +391,37 @@ impl<H: HugrView> ResourceScope<H> {
             .flatten()
             .copied()
             .collect_vec();
-        self.assign_circuit_units(all_inputs, &mut allocator);
+        self.assign_missing_circuit_units(all_inputs, &mut allocator);
 
         // Proceed to propagating the circuit units through the subgraph, in topological
         // order.
         for node in toposort_subgraph(&self.hugr, &self.subgraph, self.find_sources()) {
-            if self.hugr.get_optype(node).dataflow_signature().is_none() {
+            let Some(sig) = self.hugr.get_optype(node).dataflow_signature() else {
                 // ignore non-dataflow ops
                 continue;
-            }
-            self.assign_missing_circuit_units(node, &mut allocator);
+            };
+
+            let incoming_ports = sig.input_ports().map(|p| (node, p));
+            self.assign_missing_circuit_units(incoming_ports, &mut allocator);
             self.propagate_to_outputs(node, flows, &mut allocator);
             self.propagate_to_next_inputs(node);
         }
     }
 
-    /// Assign circuit units to the given ports in order.
-    fn assign_circuit_units(
+    /// Assign circuit units to the given ports in order, if they don't already
+    /// have a circuit unit.
+    fn assign_missing_circuit_units(
         &mut self,
         incoming_ports: impl IntoIterator<Item = (H::Node, IncomingPort)>,
         allocator: &mut CircuitUnitAllocator,
     ) {
         for (node, port) in incoming_ports {
-            let unit = allocator.allocate_circuit_unit(node, port, &self.hugr);
             let node_units = node_circuit_units_mut(&mut self.circuit_units, node, &self.hugr);
-            node_units.port_map.set(port, unit);
+            if node_units.port_map.get(port).is_sentinel() {
+                let unit = allocator.allocate_circuit_unit(node, port, &self.hugr);
+                node_units.port_map.set(port, unit);
+            }
         }
-    }
-
-    /// Ensure all input ports of `node` have assigned circuit units.
-    fn assign_missing_circuit_units(
-        &mut self,
-        node: H::Node,
-        allocator: &mut CircuitUnitAllocator,
-    ) {
-        let signature = self
-            .hugr
-            .get_optype(node)
-            .dataflow_signature()
-            .expect("dataflow op");
-
-        let mut incoming_ports = signature.input_ports().collect_vec();
-        if let Some(node_units) = self.circuit_units.get(&node) {
-            // Only assign circuit units to input ports without assigned units
-            incoming_ports.retain(|&p| node_units.port_map.get(p).is_sentinel());
-        }
-
-        self.assign_circuit_units(incoming_ports.into_iter().map(|p| (node, p)), allocator);
     }
 
     /// Find source nodes (nodes with no predecessors in the subgraph).
