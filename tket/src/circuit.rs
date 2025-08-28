@@ -345,14 +345,6 @@ impl<T: HugrView<Node = Node>> Circuit<T> {
         Ok(circ)
     }
 
-    /// The subgraph containing the entire circuit.
-    pub fn subgraph(&self) -> SiblingSubgraph
-    where
-        T: Clone,
-    {
-        SiblingSubgraph::try_new_dataflow_subgraph::<_, DataflowParentID>(self.hugr()).unwrap()
-    }
-
     /// Compute the cost of the circuit based on a per-operation cost function.
     #[inline]
     pub fn circuit_cost<F, C>(&self, op_cost: F) -> C
@@ -362,6 +354,14 @@ impl<T: HugrView<Node = Node>> Circuit<T> {
         F: Fn(&OpType) -> C,
     {
         self.commands().map(|cmd| op_cost(cmd.optype())).sum()
+    }
+
+    /// The subgraph containing the entire circuit.
+    pub fn subgraph(&self) -> SiblingSubgraph
+    where
+        T: Clone,
+    {
+        SiblingSubgraph::try_new_dataflow_subgraph::<_, DataflowParentID>(self.hugr()).unwrap()
     }
 }
 

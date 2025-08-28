@@ -48,7 +48,7 @@
 
 // Public API exports
 pub use flow::{DefaultResourceFlow, ResourceFlow, UnsupportedOp};
-pub use interval::Interval;
+pub use interval::{Interval, InvalidInterval};
 pub use scope::{ResourceScope, ResourceScopeConfig};
 pub use types::{CircuitUnit, Position, ResourceAllocator, ResourceId};
 
@@ -59,12 +59,10 @@ mod scope;
 mod types;
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::qb_t,
-        hugr::views::SiblingSubgraph,
-        ops::handle::DataflowParentID,
         types::Signature,
         CircuitUnit, Hugr,
     };
@@ -76,7 +74,7 @@ mod tests {
         extension::rotation::{rotation_type, ConstRotation},
         resource::scope::tests::ResourceScopeReport,
         utils::build_simple_circuit,
-        TketOp,
+        Circuit, TketOp,
     };
 
     use super::ResourceScope;
@@ -94,7 +92,7 @@ mod tests {
     }
 
     // Gate being commuted has a non-linear input
-    fn circ(n_qubits: usize, add_rz: bool, add_const_rz: bool) -> Hugr {
+    pub fn cx_rz_circuit(n_qubits: usize, add_rz: bool, add_const_rz: bool) -> Hugr {
         let build = || {
             let out_qb_row = vec![qb_t(); n_qubits];
             let mut inp_qb_row = out_qb_row.clone();
@@ -158,9 +156,8 @@ mod tests {
         #[case] add_rz: bool,
         #[case] add_const_rz: bool,
     ) {
-        let circ = circ(n_qubits, add_rz, add_const_rz);
-        let subgraph =
-            SiblingSubgraph::try_new_dataflow_subgraph::<_, DataflowParentID>(&circ).unwrap();
+        let circ = cx_rz_circuit(n_qubits, add_rz, add_const_rz);
+        let subgraph = Circuit::from(&circ).subgraph();
         let scope = ResourceScope::new(&circ, subgraph);
         let info = ResourceScopeReport::from(&scope);
 
