@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.5](https://github.com/CQCL/tket2/compare/tket-py-v0.12.4...tket-py-v0.12.5) (2025-08-26)
+
+
+### Features
+
+* Capture pytket's output permutation explicitly in the hugr connectivity ([#1075](https://github.com/CQCL/tket2/issues/1075)) ([5fc9614](https://github.com/CQCL/tket2/commit/5fc96147b4aa830ca347834c7b3cf4a35ce91764))
+
 ## [0.12.4](https://github.com/CQCL/tket2/compare/tket-py-v0.12.3...tket-py-v0.12.4) (2025-08-25)
 
 

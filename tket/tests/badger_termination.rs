@@ -12,6 +12,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 ///
 /// This is the complete set of ECCs for 2-qubit circuits with up to
 /// 4 gates, using the NAM gateset (CX, Rz, H).
+///
 #[fixture]
 fn nam_4_2() -> ECCBadgerOptimiser {
     BadgerOptimiser::default_with_eccs_json_file("../test_files/eccs/nam_4_2.json").unwrap()

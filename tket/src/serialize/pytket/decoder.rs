@@ -8,7 +8,6 @@ pub use param::{LoadedParameter, ParameterType};
 pub use tracked_elem::{TrackedBit, TrackedQubit};
 pub use wires::TrackedWires;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use hugr::builder::{BuildHandle, Container, Dataflow, DataflowSubContainer, FunctionBuilder};
@@ -23,11 +22,10 @@ use itertools::Itertools;
 use serde_json::json;
 use tket_json_rs::circuit_json;
 use tket_json_rs::circuit_json::SerialCircuit;
-use tket_json_rs::register;
 
 use super::{
-    PytketDecodeError, METADATA_B_OUTPUT_REGISTERS, METADATA_B_REGISTERS,
-    METADATA_INPUT_PARAMETERS, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
+    PytketDecodeError, METADATA_B_REGISTERS, METADATA_INPUT_PARAMETERS, METADATA_PHASE,
+    METADATA_Q_REGISTERS,
 };
 use crate::extension::rotation::rotation_type;
 use crate::serialize::pytket::config::PytketDecoderConfig;
@@ -142,37 +140,6 @@ impl<'h> PytketDecoderContext<'h> {
         dfg.set_metadata(METADATA_PHASE, json!(serialcirc.phase));
         dfg.set_metadata(METADATA_Q_REGISTERS, json!(serialcirc.qubits));
         dfg.set_metadata(METADATA_B_REGISTERS, json!(serialcirc.bits));
-
-        // Compute the output register reordering, and store it in the metadata.
-        //
-        // The `implicit_permutation` field is a dictionary mapping input
-        // registers to output registers on the same path.
-        //
-        // Here we store an ordered list showing the order in which the input
-        // registers appear in the output.
-        //
-        // For a circuit with three qubit registers 0, 1, 2 and an implicit
-        // permutation {0 -> 1, 1 -> 2, 2 -> 0}, `output_to_input` will be
-        // {1 -> 0, 2 -> 1, 0 -> 2} and the output order will be [2, 0, 1].
-        // That is, at position 0 of the output we'll see the register originally
-        // named 2, at position 1 the register originally named 0, and so on.
-        let mut output_qubits = Vec::with_capacity(serialcirc.qubits.len());
-        let mut output_bits = Vec::with_capacity(serialcirc.bits.len());
-        let output_to_input: HashMap<register::ElementId, register::ElementId> = serialcirc
-            .implicit_permutation
-            .iter()
-            .map(|p| (p.1.clone().id, p.0.clone().id))
-            .collect();
-        for qubit in &serialcirc.qubits {
-            // For each output position, find the input register that should be there.
-            output_qubits.push(output_to_input.get(&qubit.id).unwrap_or(&qubit.id).clone());
-        }
-        for bit in &serialcirc.bits {
-            // For each output position, find the input register that should be there.
-            output_bits.push(output_to_input.get(&bit.id).unwrap_or(&bit.id).clone());
-        }
-        dfg.set_metadata(METADATA_Q_OUTPUT_REGISTERS, json!(output_qubits));
-        dfg.set_metadata(METADATA_B_OUTPUT_REGISTERS, json!(output_bits));
     }
 
     /// Initialize the wire tracker with the input wires.
@@ -263,6 +230,8 @@ impl<'h> PytketDecoderContext<'h> {
             }
             .wrap());
         }
+
+        wire_tracker.compute_output_permutation(&serialcirc.implicit_permutation);
 
         Ok(wire_tracker)
     }

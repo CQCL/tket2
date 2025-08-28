@@ -16,9 +16,7 @@ use tket_json_rs::circuit_json::{self, SerialCircuit};
 use tket_json_rs::optype;
 use tket_json_rs::register;
 
-use super::{
-    TKETDecode, METADATA_INPUT_PARAMETERS, METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
-};
+use super::{TKETDecode, METADATA_INPUT_PARAMETERS, METADATA_Q_REGISTERS};
 use crate::circuit::Circuit;
 use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp};
 use crate::extension::sympy::SympyOpDef;
@@ -99,6 +97,18 @@ const BARRIER: &str = r#"{
         "created_qubits": [],
         "discarded_qubits": [],
         "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]], [["q", [2]], ["q", [2]]]]
+    }"#;
+
+const IMPLICIT_PERMUTATION: &str = r#"{
+        "phase": "0.0",
+        "bits": [["c", [0]], ["c", [1]]],
+        "qubits": [["q", [0]], ["q", [1]], ["q", [2]]],
+        "commands": [
+            {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}
+        ],
+        "created_qubits": [],
+        "discarded_qubits": [],
+        "implicit_permutation": [[["q", [0]], ["q", [1]]], [["q", [1]], ["q", [2]]], [["q", [2]], ["q", [0]]]]
     }"#;
 
 /// Check some properties of the serial circuit.
@@ -219,12 +229,6 @@ fn circ_preset_qubits() -> Circuit {
         hugr.entrypoint(),
         METADATA_Q_REGISTERS,
         serde_json::json!([["q", [2]], ["q", [10]], ["q", [8]]]),
-    );
-    // A preset register for the first qubit output
-    hugr.set_metadata(
-        hugr.entrypoint(),
-        METADATA_Q_OUTPUT_REGISTERS,
-        serde_json::json!([["q", [10]]]),
     );
 
     hugr.into()
@@ -428,6 +432,7 @@ fn check_no_tk1_ops(circ: &Circuit) {
 #[case::small_parametrized(SMALL_PARAMETERIZED, 1, 1, false)]
 #[case::parametrized(PARAMETERIZED, 4, 2, true)] // TK1 op is not supported
 #[case::barrier(BARRIER, 3, 3, false)]
+#[case::implicit_permutation(IMPLICIT_PERMUTATION, 1, 3, false)]
 fn json_roundtrip(
     #[case] circ_s: &str,
     #[case] num_commands: usize,

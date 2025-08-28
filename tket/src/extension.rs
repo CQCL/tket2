@@ -37,6 +37,10 @@ pub const TKET1_EXTENSION_ID: ExtensionId = IdentList::new_unchecked("TKET1");
 pub const TKET1_OP_NAME: SmolStr = SmolStr::new_inline("tk1op");
 
 /// The ID of an opaque TKET1 operation metadata.
+#[deprecated(
+    note = "TKET.tk1op payload is stored as a op parameter, not a metadata field.",
+    since = "0.14.1"
+)]
 pub const TKET1_PAYLOAD_NAME: SmolStr = SmolStr::new_inline("TKET1-json-payload");
 
 /// Current version of the legacy TKET 1 extension
@@ -44,8 +48,11 @@ pub const TKET1_EXTENSION_VERSION: Version = Version::new(0, 2, 0);
 
 lazy_static! {
 /// A custom type for the encoded TKET1 operation
-pub static ref TKET1_OP_PAYLOAD : CustomType =
-    TKET1_EXTENSION.get_type(&TKET1_PAYLOAD_NAME).unwrap().instantiate([]).unwrap();
+
+pub static ref TKET1_OP_PAYLOAD : CustomType = {
+    #[allow(deprecated)]
+    TKET1_EXTENSION.get_type(&TKET1_PAYLOAD_NAME).unwrap().instantiate([]).unwrap()
+};
 
 /// The TKET1 extension, containing the opaque TKET1 operations.
 pub static ref TKET1_EXTENSION: Arc<Extension>  = {
