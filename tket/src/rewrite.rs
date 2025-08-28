@@ -16,19 +16,15 @@ use hugr::core::HugrNode;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::patch::simple_replace;
 use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
-use hugr::hugr::Patch;
 use hugr::types::Signature;
-use hugr::{
-    hugr::{views::SiblingSubgraph, SimpleReplacementError},
-    SimpleReplacement,
-};
+use hugr::{hugr::views::SiblingSubgraph, SimpleReplacement};
 use hugr::{Hugr, HugrView};
 use itertools::Either;
 use matcher::{CircuitMatcher, MatchingOptions};
 use replacer::CircuitReplacer;
 
 use crate::circuit::Circuit;
-use crate::resource::ResourceScope;
+use crate::resource::{CircuitRewriteError, ResourceScope};
 pub use crate::Subcircuit;
 
 /// A rewrite rule for circuits.
@@ -48,10 +44,31 @@ pub enum CircuitRewrite<N: HugrNode = hugr::Node> {
 }
 
 /// A rewrite rule for circuits.
+///
+/// The following invariants hold:
+///  - the subcircuit is not empty
+///  - the subcircuit is convex
 #[derive(Debug, Clone)]
 pub struct NewCircuitRewrite<N: HugrNode = hugr::Node> {
-    subcircuit: Subcircuit<N>,
-    replacement: Circuit,
+    pub(crate) subcircuit: Subcircuit<N>,
+    pub(crate) replacement: Circuit,
+}
+
+impl<N: HugrNode> NewCircuitRewrite<N> {
+    /// Construct a [`SimpleReplacement`] that executes the rewrite as a HUGR
+    /// operation.
+    pub fn to_simple_replacement(
+        &self,
+        circuit: &ResourceScope<impl HugrView<Node = N>>,
+    ) -> SimpleReplacement<N> {
+        let subgraph = self
+            .subcircuit
+            .try_to_subgraph(circuit)
+            .expect("subcircuit is valid subgraph");
+        subgraph
+            .create_simple_replacement(circuit.hugr(), self.replacement.clone().into_hugr())
+            .expect("rewrite is valid simple replacement")
+    }
 }
 
 /// A rewrite rule for circuits, wrapping a HUGR [`SimpleReplacement`].
@@ -59,7 +76,7 @@ pub struct NewCircuitRewrite<N: HugrNode = hugr::Node> {
 /// You should migrate to using [`NewCircuitRewrite`] instead. It is much
 /// faster.
 #[derive(Debug, Clone, From, Into)]
-pub struct OldCircuitRewrite<N = hugr::Node>(SimpleReplacement<N>);
+pub struct OldCircuitRewrite<N = hugr::Node>(pub(crate) SimpleReplacement<N>);
 
 impl<N: HugrNode> CircuitRewrite<N> {
     /// Create a new rewrite that can be applied to `hugr`.
@@ -68,9 +85,9 @@ impl<N: HugrNode> CircuitRewrite<N> {
         circuit: &ResourceScope<impl HugrView<Node = N>>,
         replacement: Circuit,
     ) -> Result<Self, InvalidRewrite> {
-        subcircuit
-            .validate_subgraph(circuit)
-            .map_err(|err| InvalidRewrite::try_from(err).unwrap_or_else(|err| panic!("{err}")))?;
+        subcircuit.validate_subgraph(circuit).map_err(|err| {
+            InvalidRewrite::try_from(err).unwrap_or_else(|err| panic!("unknown error: {err}"))
+        })?;
 
         let subcircuit_sig = subcircuit.dataflow_signature(circuit);
         let replacement_sig = replacement.circuit_signature();
@@ -154,15 +171,17 @@ impl<N: HugrNode> CircuitRewrite<N> {
             Self::Old(rewrite) => Either::Right(rewrite.0.subgraph().nodes().iter().copied()),
         }
     }
+}
 
+impl CircuitRewrite {
     /// Apply the rewrite rule to a circuit.
     #[inline]
     pub fn apply(
         self,
-        circ: &mut ResourceScope<impl HugrMut<Node = N>>,
-    ) -> Result<simple_replace::Outcome<N>, SimpleReplacementError> {
-        circ.as_circuit_mut().add_rewrite_trace(&self);
-        self.to_simple_replacement(circ).apply(circ.hugr_mut())
+        circ: &mut ResourceScope<impl HugrMut<Node = hugr::Node>>,
+    ) -> Result<simple_replace::Outcome, CircuitRewriteError> {
+        circ.add_rewrite_trace(&self);
+        circ.apply_rewrite(self)
     }
 
     /// Apply the rewrite rule to a circuit, without registering it in the
@@ -170,9 +189,9 @@ impl<N: HugrNode> CircuitRewrite<N> {
     #[inline]
     pub fn apply_notrace(
         self,
-        circ: &mut ResourceScope<impl HugrMut<Node = N>>,
-    ) -> Result<simple_replace::Outcome<N>, SimpleReplacementError> {
-        self.to_simple_replacement(circ).apply(circ.hugr_mut())
+        circ: &mut ResourceScope<impl HugrMut<Node = hugr::Node>>,
+    ) -> Result<simple_replace::Outcome, CircuitRewriteError> {
+        circ.apply_rewrite(self)
     }
 }
 

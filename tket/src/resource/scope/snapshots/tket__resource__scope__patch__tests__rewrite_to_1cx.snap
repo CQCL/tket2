@@ -1,0 +1,85 @@
+---
+source: tket/src/resource/scope/patch.rs
+expression: circuit_units
+---
+[
+    (
+        Node(
+            4,
+        ),
+        NodeCircuitUnits {
+            port_map: PortMap {
+                vec: [
+                    Resource(
+                        ResourceId(
+                            0,
+                        ),
+                    ),
+                    Resource(
+                        ResourceId(
+                            0,
+                        ),
+                    ),
+                ],
+                num_inputs: 1,
+            },
+            position: Position(0),
+        },
+    ),
+    (
+        Node(
+            7,
+        ),
+        NodeCircuitUnits {
+            port_map: PortMap {
+                vec: [
+                    Resource(
+                        ResourceId(
+                            1,
+                        ),
+                    ),
+                    Resource(
+                        ResourceId(
+                            1,
+                        ),
+                    ),
+                ],
+                num_inputs: 1,
+            },
+            position: Position(3),
+        },
+    ),
+    (
+        Node(
+            11,
+        ),
+        NodeCircuitUnits {
+            port_map: PortMap {
+                vec: [
+                    Resource(
+                        ResourceId(
+                            0,
+                        ),
+                    ),
+                    Resource(
+                        ResourceId(
+                            1,
+                        ),
+                    ),
+                    Resource(
+                        ResourceId(
+                            0,
+                        ),
+                    ),
+                    Resource(
+                        ResourceId(
+                            1,
+                        ),
+                    ),
+                ],
+                num_inputs: 2,
+            },
+            position: Position(3/2),
+        },
+    ),
+]

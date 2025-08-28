@@ -4,8 +4,10 @@
 //! tracking within a specific region of a HUGR, computing resource paths and
 //! providing efficient lookup of circuit units associated with ports.
 
-use std::collections::BTreeSet;
-use std::{cmp, iter};
+mod patch;
+pub use patch::CircuitRewriteError;
+
+use std::{cmp, collections::BTreeSet, iter};
 
 use crate::resource::flow::{DefaultResourceFlow, ResourceFlow};
 use crate::resource::types::{CircuitUnit, PortMap};
@@ -185,17 +187,15 @@ impl<H: HugrView> ResourceScope<H> {
         self.hugr
     }
 
-    pub(crate) fn hugr_mut(&mut self) -> &mut H {
-        &mut self.hugr
-    }
-
     /// Wrap the underlying HUGR in a Circuit as reference.
     pub fn as_circuit(&self) -> Circuit<&H> {
         Circuit::new(self.hugr())
     }
 
-    pub(crate) fn as_circuit_mut(&mut self) -> Circuit<&mut H> {
-        Circuit::new(self.hugr_mut())
+    /// Careful: this will not update the circuit units, so do not modify
+    /// the HUGR using this.
+    pub(super) fn as_circuit_mut(&mut self) -> Circuit<&mut H> {
+        Circuit::new(&mut self.hugr)
     }
 
     /// Get the underlying subgraph, or `None` if the circuit is empty.
