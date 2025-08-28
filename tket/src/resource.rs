@@ -50,7 +50,7 @@
 pub use flow::{DefaultResourceFlow, ResourceFlow, UnsupportedOp};
 pub use interval::Interval;
 pub use scope::{ResourceScope, ResourceScopeConfig};
-pub use types::{Position, ResourceAllocator, ResourceId};
+pub use types::{CircuitUnit, Position, ResourceAllocator, ResourceId};
 
 // Internal modules
 mod flow;
