@@ -116,7 +116,7 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
             // Special case for qsystem ops, where ZZMax does not exist.
             if command.op.op_type == tket_json_rs::OpType::ZZMax {
                 info.op_type = tket_json_rs::OpType::ZZPhase;
-                info.params = vec!["(pi) / (2)".to_string()];
+                info.params = vec!["0.5".to_string()];
             }
 
             info

@@ -668,7 +668,7 @@ impl WireTracker {
         })
     }
 
-    /// Loads the given parameter expression as a [`LoadedParameter`] in the
+    /// Loads the given parameter half-turns expression as a [`LoadedParameter`] in the
     /// hugr.
     ///
     /// - If the parameter is a known algebraic operation, adds the required op
@@ -684,12 +684,14 @@ impl WireTracker {
     ///
     /// * `hugr` - The hugr to load the parameters to.
     /// * `param` - The parameter expression to load.
-    /// * `output_type` - Ensure the loaded parameter has the given type.
-    pub fn load_parameter(
+    /// * `type_hint` - A hint for the type of the parameter we want to load.
+    ///   This lets us decide between using [`ConstRotation`] and [`ConstF64`]
+    ///   for constants. The actual returned type may be different.
+    pub fn load_half_turns_parameter(
         &mut self,
         hugr: &mut FunctionBuilder<&mut Hugr>,
         param: &str,
-        output_type: Option<ParameterType>,
+        type_hint: Option<ParameterType>,
     ) -> LoadedParameter {
         /// Recursive parameter loading.
         ///
@@ -705,7 +707,7 @@ impl WireTracker {
         ) -> LoadedParameter {
             match parsed {
                 PytketParam::Constant(half_turns) => match type_hint {
-                    Some(ParameterType::FloatHalfTurns) => {
+                    Some(ParameterType::FloatHalfTurns) | Some(ParameterType::FloatRadians) => {
                         let value: Value = ConstF64::new(half_turns).into();
                         let wire = hugr.add_load_const(value);
                         LoadedParameter::float_half_turns(wire)
@@ -723,9 +725,10 @@ impl WireTracker {
                     LoadedParameter::rotation(wire)
                 }
                 PytketParam::InputVariable { name } => {
-                    // Special case for the name "pi": inserts a `ConstRotation(PI)` instead.
+                    // Special case for the name "pi": inserts a constant definition instead.
                     match (name, type_hint) {
-                        ("pi", Some(ParameterType::FloatHalfTurns)) => {
+                        ("pi", Some(ParameterType::FloatHalfTurns))
+                        | ("pi", Some(ParameterType::FloatRadians)) => {
                             let value: Value = ConstF64::new(std::f64::consts::PI).into();
                             let wire = hugr.add_load_const(value);
                             LoadedParameter::float_half_turns(wire)
@@ -766,19 +769,14 @@ impl WireTracker {
             }
         }
 
-        let loaded = process(
+        process(
             hugr,
             &mut self.parameters,
             &mut self.parameter_vars,
             parse_pytket_param(param),
             param,
-            output_type,
-        );
-
-        match output_type {
-            Some(typ) => loaded.with_type(typ, hugr),
-            None => loaded,
-        }
+            type_hint,
+        )
     }
 
     /// Track a new wire, updating any tracked elements that are present in it.

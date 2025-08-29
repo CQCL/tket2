@@ -329,7 +329,7 @@ impl<'h> PytketDecoderContext<'h> {
         let params: Vec<Arc<LoadedParameter>> = match &op.params {
             Some(params) => params
                 .iter()
-                .map(|v| self.load_parameter(v.as_str()))
+                .map(|v| Arc::new(self.load_half_turns(v.as_str())))
                 .collect_vec(),
             None => Vec::new(),
         };
@@ -562,25 +562,50 @@ impl<'h> PytketDecoderContext<'h> {
         Ok(())
     }
 
-    /// Loads the given parameter expression as a [`LoadedParameter`] in the hugr.
+    /// Loads a half-turns expression as a [`LoadedParameter`] in the hugr.
     ///
     /// - If the parameter is a known algebraic operation, adds the required op and recurses on its inputs.
     /// - If the parameter is a constant, a constant definition is added to the Hugr.
     /// - If the parameter is a variable, adds a new `rotation` input to the region.
     /// - If the parameter is a sympy expressions, adds it as a [`SympyOpDef`][crate::extension::sympy::SympyOpDef] black box.
+    pub fn load_half_turns(&mut self, param: &str) -> LoadedParameter {
+        self.wire_tracker
+            .load_half_turns_parameter(&mut self.builder, param, None)
+    }
+
+    /// Loads a half-turns expression as a [`LoadedParameter`] in the hugr, and
+    /// converts it to the required parameter type.
+    ///
+    /// See [`PytketDecoderContext::load_half_turns`] for more details.
+    pub fn load_half_turns_with_type(
+        &mut self,
+        param: &str,
+        typ: ParameterType,
+    ) -> LoadedParameter {
+        self.wire_tracker
+            .load_half_turns_parameter(&mut self.builder, param, Some(typ))
+            .with_type(typ, &mut self.builder)
+    }
+
+    /// Loads a half-turns expression as a [`LoadedParameter`] in the hugr.
+    ///
+    /// - If the parameter is a known algebraic operation, adds the required op and recurses on its inputs.
+    /// - If the parameter is a constant, a constant definition is added to the Hugr.
+    /// - If the parameter is a variable, adds a new `rotation` input to the region.
+    /// - If the parameter is a sympy expressions, adds it as a [`SympyOpDef`][crate::extension::sympy::SympyOpDef] black box.
+    #[deprecated(since = "0.14.1", note = "Renamed to `load_half_turns`")]
     pub fn load_parameter(&mut self, param: &str) -> Arc<LoadedParameter> {
-        Arc::new(
-            self.wire_tracker
-                .load_parameter(&mut self.builder, param, None),
-        )
+        Arc::new(self.load_half_turns(param))
     }
 
     /// Loads the given parameter expression as a [`LoadedParameter`] in the hugr, and converts it to the requested type and unit.
     ///
+    /// The expression is interpreted as a number of half-turns.
+    ///
     /// See [`PytketDecoderContext::load_parameter`] for more details.
+    #[deprecated(since = "0.14.1", note = "Renamed to `load_half_turns`")]
     pub fn load_parameter_with_type(&mut self, param: &str, typ: ParameterType) -> LoadedParameter {
-        self.wire_tracker
-            .load_parameter(&mut self.builder, param, Some(typ))
+        self.load_half_turns_with_type(param, typ)
     }
 }
 
