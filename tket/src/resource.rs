@@ -57,7 +57,7 @@ use hugr::{
 };
 pub use interval::{Interval, InvalidInterval};
 use itertools::Itertools;
-pub use scope::{ResourceScope, ResourceScopeConfig};
+pub use scope::{CircuitRewriteError, ResourceScope, ResourceScopeConfig};
 pub use types::{CircuitUnit, Position, ResourceAllocator, ResourceId};
 
 use crate::{
@@ -85,7 +85,8 @@ impl<H: HugrMut> ResourceScope<H> {
 
     /// Register a rewrite applied to the circuit.
     ///
-    /// Returns `true` if the rewrite was successfully registered, or `false` if it was ignored.
+    /// Returns `true` if the rewrite was successfully registered, or `false` if
+    /// it was ignored.
     #[inline]
     pub fn add_rewrite_trace(&mut self, rewrite: impl Into<RewriteTrace>) -> bool {
         self.as_circuit_mut().add_rewrite_trace(rewrite)

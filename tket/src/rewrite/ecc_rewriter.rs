@@ -27,6 +27,7 @@ use std::{
 };
 
 use crate::extension::REGISTRY;
+use crate::resource::ResourceScope;
 use crate::{
     circuit::{remove_empty_wire, Circuit},
     optimiser::badger::{load_eccs_json_file, EqCircClass},
@@ -68,9 +69,9 @@ pub struct ECCRewriter {
 impl ECCRewriter {
     /// Create a new rewriter from equivalent circuit classes in JSON file.
     ///
-    /// This uses the Quartz JSON file format to store equivalent circuit classes.
-    /// Generate such a file using the `gen_ecc_set.sh` script at the root of
-    /// the Quartz repository.
+    /// This uses the Quartz JSON file format to store equivalent circuit
+    /// classes. Generate such a file using the `gen_ecc_set.sh` script at
+    /// the root of the Quartz repository.
     ///
     /// Quartz: <https://github.com/quantum-compiler/quartz/>.
     pub fn try_from_eccs_json_file(path: impl AsRef<Path>) -> io::Result<Self> {
@@ -183,12 +184,19 @@ impl ECCRewriter {
         Self::load_binary_io(&mut file)
     }
 
-    /// When the ECC gets loaded, all custom operations are an instance of `OpaqueOp`.
-    /// We need to resolve them into `ExtensionOp`s by validating the definitions.
+    /// When the ECC gets loaded, all custom operations are an instance of
+    /// `OpaqueOp`. We need to resolve them into `ExtensionOp`s by
+    /// validating the definitions.
     fn resolve_extension_ops(&mut self) -> Result<(), ExtensionResolutionError> {
         self.targets
             .iter_mut()
             .try_for_each(|hugr| hugr.resolve_extension_defs(&REGISTRY))
+    }
+}
+
+impl<H: HugrView<Node = Node>> Rewriter<ResourceScope<H>> for ECCRewriter {
+    fn get_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite<H::Node>> {
+        self.get_rewrites(&circ.as_circuit())
     }
 }
 

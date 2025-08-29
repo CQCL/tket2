@@ -1,15 +1,15 @@
 //! Badger circuit optimiser.
 //!
 //! This module implements the Badger circuit optimiser. It relies on a rewriter
-//! and a RewriteStrategy instance to repeatedly rewrite a circuit and optimising
-//! it according to some cost metric (typically gate count).
+//! and a RewriteStrategy instance to repeatedly rewrite a circuit and
+//! optimising it according to some cost metric (typically gate count).
 //!
-//! The optimiser is implemented as a priority queue of circuits to be processed.
-//! On top of the queue are the circuits with the lowest cost. They are popped
-//! from the queue and replaced by the new circuits obtained from the rewriter
-//! and the rewrite strategy. A hash of every circuit computed is stored to
-//! detect and ignore duplicates. The priority queue is truncated whenever
-//! it gets too large.
+//! The optimiser is implemented as a priority queue of circuits to be
+//! processed. On top of the queue are the circuits with the lowest cost. They
+//! are popped from the queue and replaced by the new circuits obtained from the
+//! rewriter and the rewrite strategy. A hash of every circuit computed is
+//! stored to detect and ignore duplicates. The priority queue is truncated
+//! whenever it gets too large.
 
 mod eq_circ_class;
 mod hugr_pchannel;
@@ -22,7 +22,7 @@ use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 use fxhash::FxHashSet;
 use hugr::hugr::HugrError;
-use hugr::{Hugr, HugrView, Node};
+use hugr::{HugrView, Node};
 pub use log::BadgerLogger;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
@@ -53,7 +53,8 @@ pub struct BadgerOptions {
     ///
     /// Defaults to `None`, which means no timeout.
     pub progress_timeout: Option<u64>,
-    /// The maximum number of circuits to process before stopping the optimisation.
+    /// The maximum number of circuits to process before stopping the
+    /// optimisation.
     ///
     /// For data parallel multi-threading, (split_circuit=true), applies on a
     /// per-thread basis, otherwise applies globally.
@@ -64,13 +65,14 @@ pub struct BadgerOptions {
     ///
     /// Defaults to `1`.
     pub n_threads: NonZeroUsize,
-    /// Whether to split the circuit into chunks and process each in a separate thread.
+    /// Whether to split the circuit into chunks and process each in a separate
+    /// thread.
     ///
-    /// If this option is set to `true`, the optimiser will split the circuit into `n_threads`
-    /// chunks.
+    /// If this option is set to `true`, the optimiser will split the circuit
+    /// into `n_threads` chunks.
     ///
-    /// If this option is set to `false`, the optimiser will run parallel searches on the whole
-    /// circuit.
+    /// If this option is set to `false`, the optimiser will run parallel
+    /// searches on the whole circuit.
     ///
     /// Defaults to `false`.
     pub split_circuit: bool,
@@ -103,10 +105,11 @@ impl Default for BadgerOptions {
 ///
 /// Optimisation is done by maintaining a priority queue of circuits and
 /// always processing the circuit with the lowest cost first. Rewrites are
-/// computed for that circuit and all new circuit obtained are added to the queue.
+/// computed for that circuit and all new circuit obtained are added to the
+/// queue.
 ///
-/// There are a single-threaded and two multi-threaded versions of the optimiser,
-/// controlled by setting the [`BadgerOptions::n_threads`] and
+/// There are a single-threaded and two multi-threaded versions of the
+/// optimiser, controlled by setting the [`BadgerOptions::n_threads`] and
 /// [`BadgerOptions::split_circuit`] fields.
 ///
 /// [Quartz]: https://arxiv.org/abs/2204.09033
@@ -133,7 +136,7 @@ impl<R, S> BadgerOptimiser<R, S> {
 
 impl<R, S> BadgerOptimiser<R, S>
 where
-    R: Rewriter<Hugr> + Send + Clone + Sync + 'static,
+    R: Rewriter<ResourceScope> + Send + Clone + Sync + 'static,
     S: RewriteStrategy + Send + Sync + Clone + 'static,
     S::Cost: serde::Serialize + Send + Sync,
 {
@@ -216,7 +219,7 @@ where
             }
             circ_cnt += 1;
 
-            let rewrites = self.rewriter.get_rewrites(circ.hugr());
+            let rewrites = self.rewriter.get_rewrites(&circ);
             logger.register_branching_factor(rewrites.len());
 
             // Get combinations of rewrites that can be applied to the circuit,
@@ -293,7 +296,8 @@ where
         let n_threads: usize = opt.n_threads.get();
         let circ = ResourceScope::from_circuit(circ.to_owned());
 
-        // multi-consumer priority channel for queuing circuits to be processed by the workers
+        // multi-consumer priority channel for queuing circuits to be processed by the
+        // workers
         let cost_fn = {
             let strategy = self.strategy.clone();
             move |circ: &'_ ResourceScope| strategy.circuit_cost(circ)
@@ -423,7 +427,8 @@ where
         best_circ
     }
 
-    /// Run the Badger optimiser on a circuit, with data parallel multithreading.
+    /// Run the Badger optimiser on a circuit, with data parallel
+    /// multithreading.
     ///
     /// Split the circuit into chunks and process each in a separate thread.
     #[tracing::instrument(target = "badger::metrics", skip(self, circ, logger))]
@@ -569,7 +574,8 @@ mod badger_default {
             Ok(BadgerOptimiser::new(rewriter, strategy))
         }
 
-        /// An optimiser minimising Rz gate count using a precompiled binary rewriter.
+        /// An optimiser minimising Rz gate count using a precompiled binary
+        /// rewriter.
         #[cfg(feature = "binary-eccs")]
         pub fn rz_opt_with_rewriter_binary(
             rewriter_path: impl AsRef<Path>,
@@ -642,7 +648,8 @@ mod tests {
     /// ```
     const NON_COMPOSABLE: &str = r#"{"phase":"0.0","commands":[{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[4]],["q",[1]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[1]],["q",[2]]]},{"op":{"type":"U3","params":["0.5","0","0.5"],"signature":["Q"]},"args":[["q",[1]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[3]],["q",[4]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[4]],["q",[0]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[0]],["q",[2]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[0]],["q",[2]]]},{"op":{"type":"CX","n_qb":2,"signature":["Q","Q"]},"args":[["q",[3]],["q",[1]]]}],"qubits":[["q",[0]],["q",[1]],["q",[2]],["q",[3]],["q",[4]]],"bits":[],"implicit_permutation":[[["q",[0]],["q",[0]]],[["q",[1]],["q",[1]]],[["q",[2]],["q",[2]]],[["q",[3]],["q",[3]]],[["q",[4]],["q",[4]]]]}"#;
 
-    /// A circuit that would trigger non-composable rewrites, if we applied them blindly from nam_6_3 matches.
+    /// A circuit that would trigger non-composable rewrites, if we applied them
+    /// blindly from nam_6_3 matches.
     #[fixture]
     fn non_composable_rw_hugr() -> Circuit {
         load_tk1_json_str(NON_COMPOSABLE, None).unwrap()
