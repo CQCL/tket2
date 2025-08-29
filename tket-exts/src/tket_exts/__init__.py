@@ -2,6 +2,7 @@
 
 from tket_exts.tket.bool import BoolExtension
 from tket_exts.tket.debug import DebugExtension
+from tket_exts.tket.gpu import GpuExtension
 from tket_exts.tket.guppy import GuppyExtension
 from tket_exts.tket.rotation import RotationExtension
 from tket_exts.tket.futures import FuturesExtension
@@ -25,6 +26,7 @@ __version__ = "0.10.1"
 __all__ = [
     "bool",
     "debug",
+    "gpu",
     "guppy",
     "rotation",
     "futures",
@@ -38,6 +40,7 @@ __all__ = [
 
 bool: BoolExtension = tket.bool.BoolExtension()
 debug: DebugExtension = tket.debug.DebugExtension()
+gpu: GpuExtension = tket.gpu.GpuExtension()
 guppy: GuppyExtension = tket.guppy.GuppyExtension()
 rotation: RotationExtension = tket.rotation.RotationExtension()
 futures: FuturesExtension = tket.futures.FuturesExtension()
