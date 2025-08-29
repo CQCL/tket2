@@ -574,7 +574,7 @@ impl<'h> PytketDecoderContext<'h> {
     }
 
     /// Loads a half-turns expression as a [`LoadedParameter`] in the hugr, and
-    /// converts them to the required parameter type.
+    /// converts it to the required parameter type.
     ///
     /// See [`PytketDecoderContext::load_half_turns`] for more details.
     pub fn load_half_turns_with_type(

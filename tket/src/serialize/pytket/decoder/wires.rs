@@ -725,7 +725,7 @@ impl WireTracker {
                     LoadedParameter::rotation(wire)
                 }
                 PytketParam::InputVariable { name } => {
-                    // Special case for the name "pi": inserts a `ConstRotation(PI)` instead.
+                    // Special case for the name "pi": inserts a constant definition instead.
                     match (name, type_hint) {
                         ("pi", Some(ParameterType::FloatHalfTurns))
                         | ("pi", Some(ParameterType::FloatRadians)) => {

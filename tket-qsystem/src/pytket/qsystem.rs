@@ -142,7 +142,7 @@ impl PytketDecoder for QSystemEmitter {
             PytketOptype::ZZMax => {
                 // This is a ZZPhase with a 1/2 angle.
                 let param =
-                    Arc::new(decoder.load_half_turns_with_type("1/2", ParameterType::FloatRadians));
+                    Arc::new(decoder.load_half_turns_with_type("0.5", ParameterType::FloatRadians));
                 decoder.add_node_with_wires(QSystemOp::ZZPhase, qubits, bits, &[param])?;
                 return Ok(DecodeStatus::Success);
             }
