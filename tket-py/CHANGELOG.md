@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.6](https://github.com/CQCL/tket2/compare/tket-py-v0.12.5...tket-py-v0.12.6) (2025-08-29)
+
+
+### Bug Fixes
+
+* Incorrect ZZMax decoding  from pytket ([#1083](https://github.com/CQCL/tket2/issues/1083)) ([4752663](https://github.com/CQCL/tket2/commit/47526636f3d09aa372bce8768bbd802cc51bbe6f))
+
 ## [0.12.5](https://github.com/CQCL/tket2/compare/tket-py-v0.12.4...tket-py-v0.12.5) (2025-08-26)
 
 
