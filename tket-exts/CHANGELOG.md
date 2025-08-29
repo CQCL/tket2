@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.0](https://github.com/CQCL/tket2/compare/tket-exts-v0.10.1...tket-exts-v0.11.0) (2025-08-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* This is a breaking change to the WASM extension and its serialised representation
+
+### Features
+
+* Explicit exports for tket_exts ops and types ([#1046](https://github.com/CQCL/tket2/issues/1046)) ([a32873e](https://github.com/CQCL/tket2/commit/a32873e3543b7d77f3bed08016485ab292f5204a))
+* Update WASM extension ([#1047](https://github.com/CQCL/tket2/issues/1047)) ([5f9560d](https://github.com/CQCL/tket2/commit/5f9560de30b797f718b2071f0615f3f3d55205e1))
+
 ## [0.10.1](https://github.com/CQCL/tket2/compare/tket-exts-v0.10.0...tket-exts-v0.10.1) (2025-08-19)
 
 
