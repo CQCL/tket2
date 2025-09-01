@@ -33,23 +33,31 @@ impl ModifierControl {
             ],
             FuncValueType::new(
                 TypeRV::new_function(FuncValueType::new(
+                    vec![
+                        TypeRV::new_row_var_use(1, TypeBound::Linear),
+                        TypeRV::new_row_var_use(2, TypeBound::Copyable),
+                    ],
                     vec![TypeRV::new_row_var_use(1, TypeBound::Linear)],
-                    vec![TypeRV::new_row_var_use(2, TypeBound::Linear)],
                 )),
                 TypeRV::new_function(FuncValueType::new(
                     vec![
                         array_type_parametric(
                             TypeArg::new_var_use(0, TypeParam::max_nat_type()),
                             qb_t(),
-                        ).unwrap().into(),
+                        )
+                        .unwrap()
+                        .into(),
                         TypeRV::new_row_var_use(1, TypeBound::Linear),
+                        TypeRV::new_row_var_use(2, TypeBound::Copyable),
                     ],
                     vec![
                         array_type_parametric(
                             TypeArg::new_var_use(0, TypeParam::max_nat_type()),
                             qb_t(),
-                        ).unwrap().into(),
-                        TypeRV::new_row_var_use(2, TypeBound::Linear),
+                        )
+                        .unwrap()
+                        .into(),
+                        TypeRV::new_row_var_use(1, TypeBound::Linear),
                     ],
                 )),
             ),
