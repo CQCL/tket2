@@ -45,6 +45,15 @@ repository = "https://github.com/CQCL/tket2/tree/main/tket-py"
 requires = ["maturin~=1.7"]
 build-backend = "maturin"
 
+[dependency-groups]
+docs = [
+    "furo>=2024.8.6",
+    "myst-nb>=1.1.2",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-basic-ng>=1.0.0b2",
+    "maturin >=1.7.0,<2",
+]
+
 [tool.maturin]
 # Make sure to copy any changes to the root `pyproject.toml` config too.
 module-name = "tket._tket"

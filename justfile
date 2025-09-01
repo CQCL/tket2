@@ -69,3 +69,14 @@ gen-extensions:
 # Interactively update snapshot tests (requires `cargo-insta`)
 update-snapshots:
     cargo insta review
+
+build-pydocs:
+    uv run maturin develop
+    cd tket-py/docs && uv run --group docs sphinx-build -b html . build
+
+serve-docs: build-pydocs
+    npm exec serve tket-py/docs/build
+
+clean-docs:
+    rm -rf tket-py/docs/build
+    rm -rf tket-py/docs/generated
