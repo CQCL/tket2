@@ -42,12 +42,18 @@ impl ModifierPower {
             ],
             FuncValueType::new(
                 TypeRV::new_function(FuncValueType::new(
+                    vec![
+                        TypeRV::new_row_var_use(0, TypeBound::Linear),
+                        TypeRV::new_row_var_use(1, TypeBound::Copyable),
+                    ],
                     vec![TypeRV::new_row_var_use(0, TypeBound::Linear)],
-                    vec![TypeRV::new_row_var_use(1, TypeBound::Linear)],
                 )),
                 TypeRV::new_function(FuncValueType::new(
-                    vec![TypeRV::new_row_var_use(0, TypeBound::Linear)],
-                    vec![TypeRV::new_row_var_use(1, TypeBound::Linear)],
+                    vec![
+                        TypeRV::new_row_var_use(0, TypeBound::Linear),
+                        TypeRV::new_row_var_use(1, TypeBound::Copyable),
+                    ],
+                    TypeRV::new_row_var_use(0, TypeBound::Linear),
                 )),
             ),
         )

@@ -128,12 +128,14 @@ mod tests {
     use std::{fs::File, iter, path::Path, sync::Arc};
 
     use hugr::algorithms::{dead_code, ComposablePass};
+    use hugr::builder::Container;
+    use hugr::std_extensions::collections::array::ArrayOpBuilder;
     use hugr::{
         builder::{DataflowSubContainer, HugrBuilder, ModuleBuilder},
         envelope::{EnvelopeConfig, EnvelopeFormat},
-        extension::{prelude::qb_t, simple_op::MakeRegisteredOp, ExtensionRegistry},
-        ops::{handle::NodeHandle, CallIndirect, ExtensionOp},
-        std_extensions::collections::array::{array_type, new_array_op, ArrayOpDef},
+        extension::{prelude::qb_t, ExtensionRegistry},
+        ops::{handle::NodeHandle, CallIndirect},
+        std_extensions::collections::array::array_type,
         types::{Signature, Term},
         Extension, HugrView,
     };
@@ -161,29 +163,27 @@ mod tests {
         let num = (t_num + c_num).try_into().unwrap();
         let targs = iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>();
         let foo_sig = Signature::new_endo(targs);
-        let qubits = iter::repeat(qb_t()).take(c_num + t_num).collect::<Vec<_>>();
-        let call_sig = Signature::new_endo(qubits.clone());
+        let call_sig = Signature::new_endo(array_type(num, qb_t()));
         let main_sig = Signature::new(vec![], array_type(num, qb_t()));
 
-        fn control_op(num: usize) -> ExtensionOp {
-            let term_list: Vec<Term> = iter::repeat(qb_t().into()).take(num).collect();
-            MODIFIER_EXTENSION
-                .instantiate_extension_op(
-                    &CONTROL_OP_ID,
-                    [Term::new_list(term_list.clone()), Term::new_list(term_list)],
-                )
-                .unwrap()
-        }
+        let term_list: Vec<Term> = iter::repeat(qb_t().into()).take(t_num).collect();
+        let control_op = MODIFIER_EXTENSION
+            .instantiate_extension_op(
+                &CONTROL_OP_ID,
+                [
+                    Term::BoundedNat(c_num as u64),
+                    Term::new_list(term_list.clone()),
+                    Term::new_list([]),
+                ],
+            )
+            .unwrap();
 
-        fn dagger_op(num: usize) -> ExtensionOp {
-            let term_list: Vec<Term> = iter::repeat(qb_t().into()).take(num).collect();
-            MODIFIER_EXTENSION
-                .instantiate_extension_op(
-                    &DAGGER_OP_ID,
-                    [Term::new_list(term_list.clone()), Term::new_list(term_list)],
-                )
-                .unwrap()
-        }
+        let dagger_op = MODIFIER_EXTENSION
+            .instantiate_extension_op(
+                &DAGGER_OP_ID,
+                [Term::new_list(term_list), Term::new_list([])],
+            )
+            .unwrap();
 
         let foo = {
             let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
@@ -197,14 +197,12 @@ mod tests {
         let _main = {
             let mut func = module.define_function("main", main_sig).unwrap();
             let mut call = func.load_func(foo.handle(), &[]).unwrap();
-            for i in 0..c_num {
-                call = func
-                    .add_dataflow_op(control_op(t_num + i), vec![call])
-                    .unwrap()
-                    .out_wire(0);
-            }
             call = func
-                .add_dataflow_op(dagger_op(t_num + c_num), vec![call])
+                .add_dataflow_op(dagger_op, vec![call])
+                .unwrap()
+                .out_wire(0);
+            call = func
+                .add_dataflow_op(control_op, vec![call])
                 .unwrap()
                 .out_wire(0);
 
@@ -231,39 +229,33 @@ mod tests {
                 });
             }
 
-            let new_array = new_array_op(qb_t(), num);
-            let unpack = ArrayOpDef::unpack
-                .to_concrete(qb_t(), num)
-                .to_extension_op()
-                .unwrap();
-
-            let mut outs = func
-                .add_dataflow_op(new_array.clone(), qs)
-                .unwrap()
-                .outputs();
+            let mut outs = func.add_new_array(qb_t(), qs).unwrap();
             let state_result = StateResult::new("input_state".to_string(), num);
-            outs = func.add_dataflow_op(state_result, outs).unwrap().outputs();
-            outs = func.add_dataflow_op(unpack, outs).unwrap().outputs();
+            outs = func
+                .add_dataflow_op(state_result, vec![outs])
+                .unwrap()
+                .out_wire(0);
 
-            let mut foo_inputs = vec![call];
-            foo_inputs.extend(outs);
-            let mut outs = func
+            outs = func
                 .add_dataflow_op(
                     CallIndirect {
                         signature: call_sig,
                     },
-                    foo_inputs,
+                    vec![call, outs],
                 )
                 .unwrap()
-                .outputs();
+                .out_wire(0);
 
-            outs = func.add_dataflow_op(new_array, outs).unwrap().outputs();
             let state_result = StateResult::new("output_state".to_string(), num);
-            outs = func.add_dataflow_op(state_result, outs).unwrap().outputs();
+            outs = func
+                .add_dataflow_op(state_result, vec![outs])
+                .unwrap()
+                .out_wire(0);
 
-            func.finish_with_outputs(outs).unwrap()
+            func.finish_with_outputs(vec![outs]).unwrap()
         };
 
+        println!("Before modification:\n{}", module.hugr().mermaid_string());
         let mut h = module.finish_hugr().unwrap();
         h.validate().unwrap();
         println!("Before modification:\n{}", h.mermaid_string());
