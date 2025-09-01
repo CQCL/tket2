@@ -77,6 +77,6 @@ build-pydocs:
 serve-docs: build-pydocs
     npm exec serve tket-py/docs/build
 
-clean-docs:
+cleanup:
     rm -rf tket-py/docs/build
     rm -rf tket-py/docs/generated
