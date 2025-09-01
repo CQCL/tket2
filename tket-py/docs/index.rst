@@ -12,6 +12,9 @@ tket-py documentation
    :template: autosummary/module.rst
    :recursive:
 
-   tket
-   src
+   tket.circuit
+   tket.ops
+   tket.optimiser
+   tket.pattern
+   tket.rewrite
 
