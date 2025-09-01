@@ -6,10 +6,11 @@ use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
 use hugr::ops::ExtensionOp;
 use hugr::HugrView;
+use itertools::Itertools as _;
 use tket::serialize::pytket::decoder::{
-    DecodeStatus, LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
+    DecodeStatus, LoadedParameter, ParameterType, PytketDecoderContext, TrackedBit, TrackedQubit,
 };
-use tket::serialize::pytket::encoder::EncodeStatus;
+use tket::serialize::pytket::encoder::{make_tk1_operation, EncodeStatus};
 use tket::serialize::pytket::extension::PytketDecoder;
 use tket::serialize::pytket::{
     PytketDecodeError, PytketEmitter, PytketEncodeError, PytketEncoderContext,
@@ -83,8 +84,22 @@ impl QSystemEmitter {
             }
         };
 
-        // Most operations map directly to a pytket one.
-        encoder.emit_node(serial_op, node, circ)?;
+        // pytket parameters are always in half-turns.
+        // Since the `tket.qsystem` op inputs are in radians, we have to convert them here.
+        encoder.emit_node_command(
+            node,
+            circ,
+            |_| Vec::new(),
+            move |mut inputs| {
+                for param in inputs.params.to_mut() {
+                    *param = match param.strip_suffix(") * (pi)") {
+                        Some(s) if s.starts_with("(") => s[1..].to_string(),
+                        _ => format!("{param} / (pi)"),
+                    };
+                }
+                make_tk1_operation(serial_op, inputs)
+            },
+        )?;
 
         Ok(EncodeStatus::Success)
     }
@@ -126,7 +141,8 @@ impl PytketDecoder for QSystemEmitter {
             PytketOptype::ZZPhase => QSystemOp::ZZPhase,
             PytketOptype::ZZMax => {
                 // This is a ZZPhase with a 1/2 angle.
-                let param = decoder.load_parameter("pi/2");
+                let param =
+                    Arc::new(decoder.load_half_turns_with_type("0.5", ParameterType::FloatRadians));
                 decoder.add_node_with_wires(QSystemOp::ZZPhase, qubits, bits, &[param])?;
                 return Ok(DecodeStatus::Success);
             }
@@ -134,7 +150,14 @@ impl PytketDecoder for QSystemEmitter {
                 return Ok(DecodeStatus::Unsupported);
             }
         };
-        decoder.add_node_with_wires(op, qubits, bits, params)?;
+
+        // We expect all parameters to be floats in radians.
+        let params = params
+            .iter()
+            .map(|p| Arc::new(p.as_float_radians(&mut decoder.builder)))
+            .collect_vec();
+
+        decoder.add_node_with_wires(op, qubits, bits, &params)?;
 
         Ok(DecodeStatus::Success)
     }

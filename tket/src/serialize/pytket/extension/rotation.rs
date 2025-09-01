@@ -61,9 +61,29 @@ impl<H: HugrView> PytketEmitter<H> for RotationEmitter {
         value: &OpaqueValue,
         encoder: &mut PytketEncoderContext<H>,
     ) -> Result<Option<TrackedValues>, PytketEncodeError<H::Node>> {
+        use std::f64::consts::PI;
+
         let Some(const_f) = value.value().downcast_ref::<ConstRotation>() else {
             return Ok(None);
         };
+
+        // Special cases to print 'pi' multiples nicely
+        let approx_eq = |a: f64, b: f64| (a - b).abs() < 1e-10;
+        const VALS: [(f64, &str); 7] = [
+            (PI, "pi"),
+            (PI / 2., "pi/2"),
+            (-PI / 2., "-pi/2"),
+            (PI / 4., "pi/4"),
+            (3. * PI / 4., "3pi/4"),
+            (-PI / 4., "-pi/4"),
+            (-3. * PI / 4., "-3pi/4"),
+        ];
+        for (val, name) in VALS.iter() {
+            if approx_eq(const_f.half_turns(), *val) {
+                let param = encoder.values.new_param(name.to_string());
+                return Ok(Some(TrackedValues::new_params([param])));
+            }
+        }
 
         let param = encoder.values.new_param(const_f.half_turns());
         Ok(Some(TrackedValues::new_params([param])))

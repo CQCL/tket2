@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.12.6](https://github.com/CQCL/tket2/compare/tket-py-v0.12.5...tket-py-v0.12.6) (2025-08-29)
+
+
+### Bug Fixes
+
+* Incorrect ZZMax decoding  from pytket ([#1083](https://github.com/CQCL/tket2/issues/1083)) ([4752663](https://github.com/CQCL/tket2/commit/47526636f3d09aa372bce8768bbd802cc51bbe6f))
+
+## [0.12.5](https://github.com/CQCL/tket2/compare/tket-py-v0.12.4...tket-py-v0.12.5) (2025-08-26)
+
+
+### Features
+
+* Capture pytket's output permutation explicitly in the hugr connectivity ([#1075](https://github.com/CQCL/tket2/issues/1075)) ([5fc9614](https://github.com/CQCL/tket2/commit/5fc96147b4aa830ca347834c7b3cf4a35ce91764))
+
+## [0.12.4](https://github.com/CQCL/tket2/compare/tket-py-v0.12.3...tket-py-v0.12.4) (2025-08-25)
+
+
+### Bug Fixes
+
+* Pytket barrier operations not being decoded ([#1069](https://github.com/CQCL/tket2/issues/1069)) ([4b90ffd](https://github.com/CQCL/tket2/commit/4b90ffdc7de6ec696d5db5e946b417bf8ff71878))
+
+## [0.12.3](https://github.com/CQCL/tket2/compare/tket-py-v0.12.2...tket-py-v0.12.3) (2025-08-22)
+
+
+### Features
+
+* Explicit exports for tket_exts ops and types ([#1046](https://github.com/CQCL/tket2/issues/1046)) ([a32873e](https://github.com/CQCL/tket2/commit/a32873e3543b7d77f3bed08016485ab292f5204a))
+
+
+### Bug Fixes
+
+* Fix erroneous parameters being decoded from pytket for qsystem gates ([#1061](https://github.com/CQCL/tket2/issues/1061)) ([cd42644](https://github.com/CQCL/tket2/commit/cd42644ccd50a60795e527efdfbe0727344db373))
+
 ## [0.12.2](https://github.com/CQCL/tket2/compare/tket-py-v0.12.1...tket-py-v0.12.2) (2025-08-19)
 
 

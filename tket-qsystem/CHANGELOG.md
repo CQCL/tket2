@@ -1,6 +1,19 @@
 # Changelog
 
 
+## [0.20.1](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.20.0...tket-qsystem-v0.20.1) - 2025-08-28
+
+### Bug Fixes
+
+- *(qystem)* fix angle bug in CZ decomposition ([#1080](https://github.com/CQCL/tket2/pull/1080))
+
+## [0.20.0](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.19.0...tket-qsystem-v0.20.0) - 2025-08-21
+
+### New Features
+
+- [**breaking**] Update WASM extension ([#1047](https://github.com/CQCL/tket2/pull/1047))
+- *(qsystem)* native gateset decomposition improvements ([#1059](https://github.com/CQCL/tket2/pull/1059))
+
 ## [0.19.0](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.18.1...tket-qsystem-v0.19.0) - 2025-08-18
 
 ### New Features

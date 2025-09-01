@@ -112,7 +112,7 @@ impl PreludeEmitter {
 
 impl PytketDecoder for PreludeEmitter {
     fn op_types(&self) -> Vec<PytketOptype> {
-        vec![PytketOptype::noop, PytketOptype::Measure]
+        vec![PytketOptype::noop, PytketOptype::Barrier]
     }
 
     fn op_to_hugr<'h>(
@@ -141,7 +141,10 @@ impl PytketDecoder for PreludeEmitter {
             }
             _ => return Ok(DecodeStatus::Unsupported),
         };
-        decoder.add_node_with_wires(op, qubits, bits, params)?;
+        if !params.is_empty() {
+            return Ok(DecodeStatus::Unsupported);
+        }
+        decoder.add_node_with_wires(op, qubits, bits, &[])?;
 
         Ok(DecodeStatus::Success)
     }

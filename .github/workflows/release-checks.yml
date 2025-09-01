@@ -53,4 +53,4 @@ jobs:
       - name: Lint with ruff
         run: uv run --no-sync ruff check tket-py
       - name: Run python tests
-        run: uv run --no-sync pytest
+        run: uv run --no-sync pytest tket-py

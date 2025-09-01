@@ -162,7 +162,12 @@ impl PytketDecoder for BoolEmitter {
             ClOp::BitXor => BoolOp::xor,
             _ => return Ok(DecodeStatus::Unsupported),
         };
-        decoder.add_node_with_wires(op, qubits, bits, params)?;
+
+        if !params.is_empty() {
+            return Ok(DecodeStatus::Unsupported);
+        }
+
+        decoder.add_node_with_wires(op, qubits, bits, &[])?;
 
         Ok(DecodeStatus::Success)
     }

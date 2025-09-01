@@ -1,6 +1,6 @@
 //! Structures to keep track of pytket [`ElementId`][tket_json_rs::register::ElementId]s and
 //! their correspondence to wires in the hugr being defined.
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 
 use hugr::builder::{Dataflow as _, FunctionBuilder};
@@ -10,12 +10,14 @@ use hugr::types::Type;
 use hugr::{Hugr, Wire};
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
+use tket_json_rs::circuit_json::ImplicitPermutation;
 use tket_json_rs::register::ElementId as PytketRegister;
 
-use crate::extension::rotation::rotation_type;
+use crate::extension::rotation::{rotation_type, ConstRotation};
 use crate::serialize::pytket::decoder::param::parser::{parse_pytket_param, PytketParam};
 use crate::serialize::pytket::decoder::{
-    LoadedParameter, PytketDecoderContext, TrackedBit, TrackedBitId, TrackedQubit, TrackedQubitId,
+    LoadedParameter, ParameterType, PytketDecoderContext, TrackedBit, TrackedBitId, TrackedQubit,
+    TrackedQubitId,
 };
 use crate::serialize::pytket::extension::RegisterCount;
 use crate::serialize::pytket::{
@@ -190,7 +192,7 @@ impl TrackedWires {
     /// Return the tracked parameter wires in this tracked wires.
     #[inline]
     pub fn parameter_wires(&self) -> impl Iterator<Item = Wire> + Clone + '_ {
-        self.parameter_wires.iter().map(|p| p.wire)
+        self.parameter_wires.iter().map(|p| p.wire())
     }
 
     /// Returns the wires in this tracked wires.
@@ -325,11 +327,25 @@ pub(crate) struct WireTracker {
     bit_wires: IndexMap<TrackedBitId, Vec<Wire>>,
     /// An ordered set of parameters found in operation arguments, and added as
     /// new region inputs.
-    parameters: IndexMap<String, Arc<LoadedParameter>>,
+    parameters: IndexMap<String, LoadedParameter>,
     /// A list of input variables added to the hugr.
     ///
     /// Ordered according to their order in the function input.
     parameter_vars: IndexSet<String>,
+    /// A permutation of qubit registers in `latest_qubit_tracker` that we
+    /// expect to see at the output.
+    ///
+    /// This originates from pytket's `implicit_permutation` field.
+    ///
+    /// For a circuit with three qubit registers [q0, q1, q2] and an implicit
+    /// permutation {q0 -> q1, q1 -> q2, q2 -> q0}, `output_qubit_permutation`
+    /// will be {1 -> 0, 2 -> 1, 0 -> 2} and the output order will be [2, 0, 1].
+    /// That is, at position 0 of the output we'll see the register originally
+    /// named q2, at position 1 the register originally named q0, and so on.
+    ///
+    /// Registers outside the range of the array are not affected, and will
+    /// appear in the same order as they were added to `latest_qubit_tracker`.
+    output_qubit_permutation: Vec<usize>,
 }
 
 impl WireTracker {
@@ -345,16 +361,40 @@ impl WireTracker {
             bit_wires: IndexMap::with_capacity(bit_count),
             parameters: IndexMap::new(),
             parameter_vars: IndexSet::new(),
+            output_qubit_permutation: Vec::with_capacity(qubit_count),
         }
     }
 
     /// Closes the WireTracker.
     ///
-    /// Returns:
-    /// - A list of qubit and bit elements, in the order they were added.
-    /// - A list of input parameter added to the hugr, in the order they were added.
+    /// Returns a list of input parameter added to the hugr, in the order they
+    /// were added.
+    ///
+    /// For the ordered qubit and bit elements, see
+    /// [`WireTracker::known_pytket_qubits`] and
+    /// [`WireTracker::known_pytket_bits`].
     pub(super) fn finish(self) -> IndexSet<String> {
         self.parameter_vars
+    }
+
+    /// Set the output qubit permutation.
+    ///
+    /// This is used to reorder the qubit registers at the output, according to
+    /// pytket's implicit permutation.
+    pub(super) fn compute_output_permutation(&mut self, permutation: &Vec<ImplicitPermutation>) {
+        let mut reordered: BTreeMap<usize, usize> = BTreeMap::new();
+
+        let position = |id: &tket_json_rs::register::Qubit| {
+            let hash = RegisterHash::from(id);
+            self.latest_qubit_tracker.get_index_of(&hash).unwrap()
+        };
+
+        for ImplicitPermutation(input, output) in permutation {
+            let input_pos = position(input);
+            let output_pos = position(output);
+            reordered.insert(output_pos, input_pos);
+        }
+        self.output_qubit_permutation = reordered.values().copied().collect();
     }
 
     /// Returns a reference to the tracked qubit at the given index.
@@ -367,11 +407,17 @@ impl WireTracker {
         &self.bits[id.0]
     }
 
-    /// Returns the list of known pytket registers, in the order they were registered.
+    /// Returns the list of known pytket registers, in the order we expect to
+    /// see them at the output.
+    ///
+    /// This is the ordered they were registered, permuted according to
+    /// [`WireTracker::output_qubit_permutation`].
     pub(super) fn known_pytket_qubits(&self) -> impl Iterator<Item = &TrackedQubit> {
-        self.latest_qubit_tracker
-            .iter()
-            .map(|(_, &elem_id)| self.get_qubit(elem_id))
+        (0..self.latest_qubit_tracker.len()).map(|i| {
+            let i = self.output_qubit_permutation.get(i).copied().unwrap_or(i);
+            let (_, &elem_id) = self.latest_qubit_tracker.get_index(i).unwrap();
+            self.get_qubit(elem_id)
+        })
     }
 
     /// Returns the list of known pytket bit registers, in the order they were registered.
@@ -622,61 +668,95 @@ impl WireTracker {
         })
     }
 
-    /// Loads the given parameter expression as a [`LoadedParameter`] in the hugr.
+    /// Loads the given parameter half-turns expression as a [`LoadedParameter`] in the
+    /// hugr.
     ///
-    /// - If the parameter is a known algebraic operation, adds the required op and recurses on its inputs.
-    /// - If the parameter is a constant, a constant definition is added to the Hugr.
-    /// - If the parameter is a variable, adds a new `rotation` input to the region.
-    /// - If the parameter is a sympy expressions, adds it as a [`SympyOpDef`][crate::extension::sympy::SympyOpDef] black box.
-    pub fn load_parameter(
+    /// - If the parameter is a known algebraic operation, adds the required op
+    ///   and recurses on its inputs.
+    /// - If the parameter is a constant, a constant definition is added to the
+    ///   Hugr.
+    /// - If the parameter is a variable, adds a new `rotation` input to the
+    ///   region.
+    /// - If the parameter is a sympy expressions, adds it as a
+    ///   [`SympyOpDef`][crate::extension::sympy::SympyOpDef] black box.
+    ///
+    /// # Arguments
+    ///
+    /// * `hugr` - The hugr to load the parameters to.
+    /// * `param` - The parameter expression to load.
+    /// * `type_hint` - A hint for the type of the parameter we want to load.
+    ///   This lets us decide between using [`ConstRotation`] and [`ConstF64`]
+    ///   for constants. The actual returned type may be different.
+    pub fn load_half_turns_parameter(
         &mut self,
         hugr: &mut FunctionBuilder<&mut Hugr>,
         param: &str,
-    ) -> Arc<LoadedParameter> {
+        type_hint: Option<ParameterType>,
+    ) -> LoadedParameter {
+        /// Recursive parameter loading.
+        ///
+        /// `type_hint` is a hint for the type of the parameter we want to load.
+        /// The actual returned type may be different.
         fn process(
             hugr: &mut FunctionBuilder<&mut Hugr>,
-            input_params: &mut IndexMap<String, Arc<LoadedParameter>>,
+            input_params: &mut IndexMap<String, LoadedParameter>,
             param_vars: &mut IndexSet<String>,
             parsed: PytketParam,
             param: &str,
-        ) -> Arc<LoadedParameter> {
+            type_hint: Option<ParameterType>,
+        ) -> LoadedParameter {
             match parsed {
-                PytketParam::Constant(half_turns) => {
-                    let value: Value = ConstF64::new(half_turns).into();
-                    let wire = hugr.add_load_const(value);
-                    Arc::new(LoadedParameter::float(wire))
-                }
+                PytketParam::Constant(half_turns) => match type_hint {
+                    Some(ParameterType::FloatHalfTurns) | Some(ParameterType::FloatRadians) => {
+                        let value: Value = ConstF64::new(half_turns).into();
+                        let wire = hugr.add_load_const(value);
+                        LoadedParameter::float_half_turns(wire)
+                    }
+                    _ => {
+                        let value: Value = ConstRotation::new(half_turns).unwrap().into();
+                        let wire = hugr.add_load_const(value);
+                        LoadedParameter::rotation(wire)
+                    }
+                },
                 PytketParam::Sympy(expr) => {
                     // store string in custom op.
                     let symb_op = symbolic_constant_op(expr.to_string());
                     let wire = hugr.add_dataflow_op(symb_op, []).unwrap().out_wire(0);
-                    Arc::new(LoadedParameter::rotation(wire))
+                    LoadedParameter::rotation(wire)
                 }
                 PytketParam::InputVariable { name } => {
-                    // Special case for the name "pi", inserts a `ConstRotation::PI` instead.
-                    if name == "pi" {
-                        let value: Value = ConstF64::new(std::f64::consts::PI).into();
-                        let wire = hugr.add_load_const(value);
-                        return Arc::new(LoadedParameter::float(wire));
+                    // Special case for the name "pi": inserts a constant definition instead.
+                    match (name, type_hint) {
+                        ("pi", Some(ParameterType::FloatHalfTurns))
+                        | ("pi", Some(ParameterType::FloatRadians)) => {
+                            let value: Value = ConstF64::new(std::f64::consts::PI).into();
+                            let wire = hugr.add_load_const(value);
+                            LoadedParameter::float_half_turns(wire)
+                        }
+                        ("pi", _) => {
+                            let value: Value =
+                                ConstRotation::new(std::f64::consts::PI).unwrap().into();
+                            let wire = hugr.add_load_const(value);
+                            LoadedParameter::rotation(wire)
+                        }
+                        _ => {
+                            // Look it up in the input parameters to the circuit, and add a new float input if needed.
+                            *input_params.entry(name.to_string()).or_insert_with(|| {
+                                param_vars.insert(name.to_string());
+                                let wire = hugr.add_input(rotation_type());
+                                LoadedParameter::rotation(wire)
+                            })
+                        }
                     }
-                    // Look it up in the input parameters to the circuit, and add a new wire if needed.
-                    input_params
-                        .entry(name.to_string())
-                        .or_insert_with(|| {
-                            param_vars.insert(name.to_string());
-                            let wire = hugr.add_input(rotation_type());
-                            Arc::new(LoadedParameter::rotation(wire))
-                        })
-                        .clone()
                 }
-                PytketParam::Operation { op, args } => {
+                PytketParam::Operation { op, args, param_ty } => {
                     // We assume all operations take float inputs.
                     let input_wires = args
                         .into_iter()
                         .map(|arg| {
-                            process(hugr, input_params, param_vars, arg, param)
-                                .as_float(hugr)
-                                .wire
+                            let param =
+                                process(hugr, input_params, param_vars, arg, param, Some(param_ty));
+                            param.with_type(param_ty, hugr).wire()
                         })
                         .collect_vec();
                     // If any of the following asserts panics, it means we added invalid ops to the sympy parser.
@@ -684,7 +764,7 @@ impl WireTracker {
                         panic!("Error while decoding pytket operation parameter \"{param}\". {e}",)
                     });
                     assert_eq!(res.num_value_outputs(), 1, "An operation decoded from the pytket op parameter \"{param}\" had {} outputs", res.num_value_outputs());
-                    Arc::new(LoadedParameter::float(res.out_wire(0)))
+                    LoadedParameter::new(param_ty, res.out_wire(0))
                 }
             }
         }
@@ -695,6 +775,7 @@ impl WireTracker {
             &mut self.parameter_vars,
             parse_pytket_param(param),
             param,
+            type_hint,
         )
     }
 
@@ -751,7 +832,7 @@ impl WireTracker {
             }
             .into());
         }
-        entry.insert_entry(Arc::new(LoadedParameter::rotation(wire)));
+        entry.insert_entry(LoadedParameter::rotation(wire));
         Ok(())
     }
 }
