@@ -3,7 +3,7 @@ help:
     @just --list --justfile {{justfile()}}
 
 # Re-generate all hugr files and their mermaid diagrams.
-regenerate: regenerate-hugrs regenerate-mermaid
+regenerate: regenerate-hugrs
 
 # Re-generate all hugr files.
 regenerate-hugrs:
@@ -14,10 +14,10 @@ regenerate-hugrs:
         uv run --no-project "$example"
     done
 
-# Re-generate the mermaid diagrams from hugr files, for examples directories containing a `.generate_mmd` empty file.
-regenerate-mermaid:
+# Generate the mermaid diagrams from hugr files, for examples directories containing a `.generate_mmd` empty file.
+mermaid:
     #!/usr/bin/env sh
-    echo "Re-generating hugr diagrams"
+    echo "Generating hugr diagrams"
     cargo install hugr-cli
     # Find directories containing a `.generate_mmd` file
     for dir in $(find . -type f -name ".generate_mmd" -exec dirname {} \;); do

@@ -10,10 +10,10 @@ Each example is in its own directory, containing:
 
 - The `.hugr` files generated for each of the previous scripts.
 
-If the the directory contains a `.generate_mmd` empty file, it will also contain
-the `.mmd` mermaid files generated for each of the previous programs. Go to
-<http://mermaid.live> to view them.
-We do not generate these for large programs, as they get too large to view.
-
-Run `just regenerate` in this directory to regenerate the `.hugr` files and mermaid diagrams.
+Run `just regenerate` in this directory to regenerate the `.hugr` files.
 The guppylang version used is defined by each script.
+
+If a directory contains a `.generate_mmd` empty file, running
+`just mermaid` will generate `.mmd` mermaid files for each of the previous
+programs. Go to <http://mermaid.live> to view them. We do not generate these for
+large programs, as they get too large to view.
