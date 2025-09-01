@@ -305,7 +305,7 @@ where
         return all_matches;
     };
 
-    if new_subcircuit.try_extend(new_node, circ).is_err()
+    if new_subcircuit.try_add_node(new_node, circ).is_err()
         || new_subcircuit == current_match.subcircuit
     {
         // non-convex match or already matched

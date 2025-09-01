@@ -112,7 +112,7 @@ impl PyCircuitUnit {
             args.push(format!("constant={constant}"));
         }
 
-        format!("PyCircuitUnit({})", args.join(", "))
+        format!("CircuitUnit({})", args.join(", "))
     }
 }
 

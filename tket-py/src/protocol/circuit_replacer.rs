@@ -138,6 +138,10 @@ fn replace_inputs_with_const(
     circuit: &mut Circuit,
     mut const_inputs: Vec<(usize, constant::Value)>,
 ) -> Vec<(usize, constant::Value)> {
+    if const_inputs.is_empty() {
+        return vec![];
+    }
+
     // 1. create a DFG Hugr that produces all the desired constants.
     let (const_loads, outputs) = {
         let out_sig = const_inputs

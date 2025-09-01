@@ -7,6 +7,8 @@ pub mod replacer;
 pub mod strategy;
 pub mod trace;
 
+use std::mem;
+
 use derive_more::derive::{Display, Error};
 #[cfg(feature = "portmatching")]
 pub use ecc_rewriter::ECCRewriter;
@@ -19,7 +21,7 @@ use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::types::Signature;
 use hugr::{hugr::views::SiblingSubgraph, SimpleReplacement};
 use hugr::{Hugr, HugrView};
-use itertools::Either;
+use itertools::{Either, Itertools};
 use matcher::{CircuitMatcher, MatchingOptions};
 use replacer::CircuitReplacer;
 
@@ -326,4 +328,91 @@ where
             })
             .collect()
     }
+}
+
+/// A rewriter that combines multiple [`CircuitMatcher`]s before passing the
+/// combined match to a [`CircuitReplacer`].
+///
+/// The [`CircuitMatcher`]s are used to find matches in the circuit. All
+/// cartesian products of the matches that are convex are then passed to the
+/// [`CircuitReplacer`] to create [`CircuitRewrite`]s.
+#[derive(Clone, Debug)]
+pub struct CombineMatchReplaceRewriter<C, R> {
+    matchers: Vec<C>,
+    replacer: R,
+}
+
+impl<C, R> CombineMatchReplaceRewriter<C, R> {
+    /// Create a new [`MatchReplaceRewriter`].
+    pub fn new(matchers: Vec<C>, replacement: R) -> Self {
+        Self {
+            matchers,
+            replacer: replacement,
+        }
+    }
+}
+
+impl<C, R, H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>>
+    for CombineMatchReplaceRewriter<C, R>
+where
+    C: CircuitMatcher,
+    C::MatchInfo: Clone,
+    R: CircuitReplacer<Vec<C::MatchInfo>>,
+{
+    fn get_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite<H::Node>> {
+        let all_matches = self
+            .matchers
+            .iter()
+            .map(|m| {
+                m.as_hugr_matcher()
+                    .get_all_matches(circ, &MatchingOptions::default())
+            })
+            .collect_vec();
+        convex_cartesian_product(all_matches, circ)
+            .into_iter()
+            .flat_map(|(subcirc, match_info)| {
+                self.replacer
+                    .replace_match(&subcirc, circ, match_info)
+                    .into_iter()
+                    .filter_map(move |repl| {
+                        match CircuitRewrite::try_new(subcirc.clone(), circ, repl) {
+                            Ok(ok) => Some(ok),
+                            Err(err) => {
+                                eprintln!("Error: failed to create rewrite, skipping:\n{}", err);
+                                None
+                            }
+                        }
+                    })
+            })
+            .collect()
+    }
+}
+
+fn convex_cartesian_product<N: HugrNode, M: Clone>(
+    all_matches: Vec<Vec<(Subcircuit<N>, M)>>,
+    circ: &ResourceScope<impl HugrView<Node = N>>,
+) -> Vec<(Subcircuit<N>, Vec<M>)> {
+    let mut combined_matches = vec![(Subcircuit::new_empty(), vec![])];
+
+    let mut new_combined_matches = Vec::new();
+    for matches in all_matches {
+        for (subcirc, match_info) in combined_matches {
+            // combine with each match in matches
+            for (subcirc2, match_info2) in matches.clone() {
+                let mut new_subcirc = subcirc.clone();
+                let mut new_match_info = match_info.clone();
+                new_subcirc.try_extend(subcirc2);
+
+                // Check that the combined subcircuit is convex
+                if new_subcirc.validate_subgraph(circ).is_ok() {
+                    new_match_info.push(match_info2);
+                    new_combined_matches.push((new_subcirc, new_match_info));
+                }
+            }
+        }
+
+        combined_matches = mem::take(&mut new_combined_matches);
+    }
+
+    combined_matches
 }

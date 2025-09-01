@@ -10,6 +10,7 @@ from .circuit import Tk2Circuit
 # Import the actual implementation from the Rust extension
 from ._tket.matcher import (
     MatchReplaceRewriter,
+    CombineMatchReplaceRewriter,
     RotationMatcher,
     ReplaceWithIdentity,
     CircuitUnit,
@@ -41,6 +42,7 @@ __all__ = [
     "MatchContext",
     "MatchOutcome",
     "MatchReplaceRewriter",
+    "CombineMatchReplaceRewriter",
     "RotationMatcher",
     "ReplaceWithIdentity",
     "CircuitUnit",

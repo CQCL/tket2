@@ -28,6 +28,34 @@ class MatchReplaceRewriter:
         """Get all possible rewrites for a circuit."""
         ...
 
+class CombineMatchReplaceRewriter:
+    """
+    A rewriter that combines multiple `CircuitMatcher`s before passing the
+    combined match to a `CircuitReplacer`.
+
+    The [`CircuitMatcher`]s are used to find matches in the circuit. All
+    cartesian products of the matches that are convex are then passed to the
+    [`CircuitReplacer`] to create [`CircuitRewrite`]s.
+    """
+
+    def __init__(
+        self,
+        matchers: List[CircuitMatcher],
+        replacement: CircuitReplacer,
+    ) -> None:
+        """
+        Create a new combine rewriter.
+
+        Args:
+            matchers: A list of objects implementing CircuitMatcher protocol
+            replacement: An object implementing CircuitReplacer protocol
+        """
+        ...
+
+    def get_rewrites(self, circuit: Tk2Circuit) -> List[CircuitRewrite]:
+        """Get all possible rewrites for a circuit."""
+        ...
+
 def hadamard_cnot_rewriter() -> MatchReplaceRewriter:
     """Create a rewriter for Hadamard-CNOT pattern optimization."""
     ...

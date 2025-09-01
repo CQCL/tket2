@@ -21,6 +21,7 @@
 //!      beyond a percentage given by a f64 parameter gamma.
 
 use std::iter;
+use std::sync::Arc;
 use std::{collections::HashSet, fmt::Debug};
 
 use derive_more::From;
@@ -234,10 +235,9 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveGreedyStrategy<T> {
 
                 composed_rewrite_count += 1;
 
-                rewrite
-                    .clone()
-                    .apply_notrace(&mut curr_circ)
-                    .expect("Could not perform rewrite in exhaustive greedy strategy");
+                if let Err(err) = rewrite.clone().apply_notrace(&mut curr_circ) {
+                    eprintln!("Warning: unsuccessful rewrite: {}", err);
+                }
             }
 
             curr_circ.add_rewrite_trace(RewriteTrace::new(composed_rewrite_count));
@@ -352,6 +352,21 @@ where
     }
 }
 
+impl<const N: usize> StrategyCost
+    for LexicographicCostFunction<Arc<dyn Fn(&OpType) -> usize + Send + Sync>, N>
+{
+    type OpCost = LexicographicCost<usize, N>;
+
+    #[inline]
+    fn op_cost(&self, op: &OpType) -> Self::OpCost {
+        let mut costs = [0; N];
+        for (cost_fn, cost_mut) in self.cost_fns.iter().zip(&mut costs) {
+            *cost_mut = cost_fn(op);
+        }
+        costs.into()
+    }
+}
+
 impl LexicographicCostFunction<fn(&OpType) -> usize, 2> {
     /// Non-increasing rewrite strategy based on CX count.
     ///
@@ -388,7 +403,9 @@ impl LexicographicCostFunction<fn(&OpType) -> usize, 2> {
             ],
         }
     }
+}
 
+impl<F, const N: usize> LexicographicCostFunction<F, N> {
     /// Consume the cost function and create a greedy rewrite strategy out of
     /// it.
     pub fn into_greedy_strategy(self) -> ExhaustiveGreedyStrategy<Self> {
@@ -399,6 +416,30 @@ impl LexicographicCostFunction<fn(&OpType) -> usize, 2> {
     /// of it.
     pub fn into_threshold_strategy(self) -> ExhaustiveThresholdStrategy<Self> {
         ExhaustiveThresholdStrategy { strat_cost: self }
+    }
+}
+
+impl<'a> LexicographicCostFunction<Arc<dyn Fn(&OpType) -> usize + Send + Sync>, 2> {
+    /// Create a lexicographic cost function from a single integer-valued cost
+    /// function.
+    ///
+    /// Ties in the cost function are broken by the total number of quantum
+    /// gates.
+    pub fn from_cost_fn(cost_fn: Arc<dyn Fn(&OpType) -> usize + Send + Sync>) -> Self {
+        Self {
+            cost_fns: [cost_fn, Arc::new(|op| is_quantum(op) as usize)],
+        }
+    }
+}
+
+impl<const N: usize> From<LexicographicCostFunction<fn(&OpType) -> usize, N>>
+    for LexicographicCostFunction<Arc<dyn Fn(&OpType) -> usize + Send + Sync>, N>
+{
+    fn from(cost_fn: LexicographicCostFunction<fn(&OpType) -> usize, N>) -> Self {
+        let cost_fns = cost_fn
+            .cost_fns
+            .map(|cf| Arc::new(cf) as Arc<dyn Fn(&OpType) -> usize + Send + Sync>);
+        Self { cost_fns }
     }
 }
 

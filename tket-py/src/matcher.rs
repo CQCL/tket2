@@ -19,7 +19,7 @@ use tket::{
     rewrite::{
         matcher::{CircuitMatcher, MatchContext, MatchOutcome, Update},
         replacer::{CircuitReplacer, ReplaceWithIdentity},
-        CircuitRewrite, MatchReplaceRewriter, Rewriter,
+        CircuitRewrite, CombineMatchReplaceRewriter, MatchReplaceRewriter, Rewriter,
     },
     Circuit, Subcircuit, TketOp,
 };
@@ -200,7 +200,10 @@ impl<'py> IntoPyObject<'py> for PyMatchContext {
 }
 
 mod dummy_matchers {
+    use pyo3::exceptions::PyNotImplementedError;
     use tket::resource::CircuitUnit;
+
+    use crate::ops::PyExtensionOp;
 
     use super::*;
 
@@ -230,6 +233,17 @@ mod dummy_matchers {
             } else {
                 Ok(MatchOutcome::default().skip(Update::Unchanged).into())
             }
+        }
+
+        #[pyo3(name = "match_extension_op")]
+        fn py_match_extension_op(
+            &self,
+            _op: PyExtensionOp,
+            _inputs: Vec<PyCircuitUnit>,
+            _outputs: Vec<PyCircuitUnit>,
+            _context: PyObject,
+        ) -> PyResult<PyMatchOutcome> {
+            Err(PyNotImplementedError::new_err("match_extension_op"))
         }
     }
 
@@ -314,14 +328,6 @@ pub enum PyCircuitReplacerEnum {
     Python(PyImplCircuitReplacer),
 }
 
-/// Python wrapper for MatchReplaceRewriter.
-#[derive(Clone)]
-#[pyclass(name = "MatchReplaceRewriter")]
-pub struct PyMatchReplaceRewriter {
-    matcher: PyCircuitMatcherEnum,
-    replacement: PyCircuitReplacerEnum,
-}
-
 impl PyCircuitMatcherEnum {
     /// Try to cast to a matcher with MatchInfo = ()
     fn as_unit_matcher<H: HugrView>(
@@ -345,33 +351,32 @@ impl PyCircuitMatcherEnum {
     }
 }
 
-impl CircuitReplacer<()> for PyCircuitReplacerEnum {
-    fn replace_match<H: HugrView>(
-        &self,
-        subcircuit: &Subcircuit<H::Node>,
-        circuit: &ResourceScope<H>,
-        match_info: (),
-    ) -> Vec<Circuit> {
-        match self {
-            PyCircuitReplacerEnum::Rotation(m) => m.replace_match(subcircuit, circuit, match_info),
-            PyCircuitReplacerEnum::Python(m) => m.replace_match(subcircuit, circuit, match_info),
+macro_rules! impl_circuit_replacer_for_enum {
+    ($match_info_type:ty) => {
+        impl CircuitReplacer<$match_info_type> for PyCircuitReplacerEnum {
+            fn replace_match<H: HugrView>(
+                &self,
+                subcircuit: &Subcircuit<H::Node>,
+                circuit: &ResourceScope<H>,
+                match_info: $match_info_type,
+            ) -> Vec<Circuit> {
+                match self {
+                    PyCircuitReplacerEnum::Rotation(m) => {
+                        m.replace_match(subcircuit, circuit, match_info)
+                    }
+                    PyCircuitReplacerEnum::Python(m) => {
+                        m.replace_match(subcircuit, circuit, match_info)
+                    }
+                }
+            }
         }
-    }
+    };
 }
 
-impl CircuitReplacer<PyObject> for PyCircuitReplacerEnum {
-    fn replace_match<H: HugrView>(
-        &self,
-        subcircuit: &Subcircuit<H::Node>,
-        circuit: &ResourceScope<H>,
-        match_info: PyObject,
-    ) -> Vec<Circuit> {
-        match self {
-            PyCircuitReplacerEnum::Rotation(m) => m.replace_match(subcircuit, circuit, match_info),
-            PyCircuitReplacerEnum::Python(m) => m.replace_match(subcircuit, circuit, match_info),
-        }
-    }
-}
+impl_circuit_replacer_for_enum!(());
+impl_circuit_replacer_for_enum!(Vec<()>);
+impl_circuit_replacer_for_enum!(PyObject);
+impl_circuit_replacer_for_enum!(Vec<PyObject>);
 
 impl PyCircuitReplacerEnum {
     /// Try to cast to a replacement with MatchInfo = ()
@@ -379,10 +384,30 @@ impl PyCircuitReplacerEnum {
         Some(RefTraitImpl(self))
     }
 
+    /// Try to cast to a replacement with MatchInfo = Vec<()>
+    fn as_vec_unit_replacement<H: HugrView>(&self) -> Option<impl CircuitReplacer<Vec<()>> + '_> {
+        Some(RefTraitImpl(self))
+    }
+
     /// Try to cast to a replacement with MatchInfo = PyObject
     fn as_pyobject_replacement<H: HugrView>(&self) -> Option<impl CircuitReplacer<PyObject> + '_> {
         Some(RefTraitImpl(self))
     }
+
+    /// Try to cast to a replacement with MatchInfo = Vec<PyObject>
+    fn as_vec_pyobject_replacement<H: HugrView>(
+        &self,
+    ) -> Option<impl CircuitReplacer<Vec<PyObject>> + '_> {
+        Some(RefTraitImpl(self))
+    }
+}
+
+/// Python wrapper for MatchReplaceRewriter.
+#[derive(Clone)]
+#[pyclass(name = "MatchReplaceRewriter")]
+pub struct PyMatchReplaceRewriter {
+    matcher: PyCircuitMatcherEnum,
+    replacement: PyCircuitReplacerEnum,
 }
 
 impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyMatchReplaceRewriter {
@@ -429,14 +454,89 @@ impl PyMatchReplaceRewriter {
     }
 }
 
-fn try_as_dict<'py>(ob: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
-    ob.extract::<Bound<'py, PyDict>>().or_else(|e| {
-        if ob.hasattr("__dict__")? {
-            ob.getattr("__dict__")?.extract()
-        } else {
-            Err(e)
+/// Python wrapper for CombineMatchReplaceRewriter.
+#[derive(Clone)]
+#[pyclass(name = "CombineMatchReplaceRewriter")]
+pub struct PyCombineMatchReplaceRewriter {
+    matchers: Vec<PyCircuitMatcherEnum>,
+    replacement: PyCircuitReplacerEnum,
+}
+
+impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyCombineMatchReplaceRewriter {
+    fn get_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite> {
+        // Use the actual rewriter based on the variants
+        if let Some(unit_matchers) = self
+            .matchers
+            .iter()
+            .map(|m| m.as_unit_matcher::<H>())
+            .collect::<Option<Vec<_>>>()
+        {
+            if let Some(unit_replacement) = self.replacement.as_vec_unit_replacement::<H>() {
+                let rewriter = CombineMatchReplaceRewriter::new(unit_matchers, unit_replacement);
+                return rewriter.get_rewrites(circ);
+            }
         }
-    })
+        if let Some(pyobject_matcher) = self
+            .matchers
+            .iter()
+            .map(|m| m.as_pyobject_matcher::<H>())
+            .collect::<Option<Vec<_>>>()
+        {
+            if let Some(pyobject_replacement) = self.replacement.as_vec_pyobject_replacement::<H>()
+            {
+                let rewriter =
+                    CombineMatchReplaceRewriter::new(pyobject_matcher, pyobject_replacement);
+                return rewriter.get_rewrites(circ);
+            }
+        }
+        panic!("Incompatible matcher and replacement");
+    }
+}
+
+#[pymethods]
+impl PyCombineMatchReplaceRewriter {
+    /// Create a new rewriter from matcher and replacement implementations.
+    #[new]
+    fn new(
+        matchers: Vec<PyCircuitMatcherEnum>,
+        replacement: PyCircuitReplacerEnum,
+    ) -> PyResult<Self> {
+        Ok(Self {
+            matchers,
+            replacement,
+        })
+    }
+
+    /// Get all possible rewrites for a circuit.
+    fn get_rewrites(&self, circuit: &Tk2Circuit) -> Vec<PyCircuitRewrite> {
+        let circuit = ResourceScope::from_circuit(Circuit::new(circuit.circ.hugr()));
+        <Self as Rewriter<_>>::get_rewrites(&self, &circuit)
+            .into_iter()
+            .map(|rw| rw.to_simple_replacement(&circuit).into())
+            .collect()
+    }
+
+    fn __repr__(&self) -> String {
+        "CombineMatchReplaceRewriter(...)".to_string()
+    }
+}
+
+fn try_as_dict<'py>(ob: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
+    ob.extract::<Bound<'py, PyDict>>()
+        .or_else(|e| {
+            if ob.hasattr("__dict__")? {
+                ob.getattr("__dict__")?.extract()
+            } else {
+                Err(e)
+            }
+        })
+        .or_else(|e| {
+            if let Ok(None) = ob.extract::<Option<usize>>() {
+                Ok(PyDict::new(ob.py()))
+            } else {
+                Err(e)
+            }
+        })
 }
 
 /// Module definition for the matcher functionality.
@@ -448,6 +548,7 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
 
     // Add the main rewriter class and supporting types
     m.add_class::<PyMatchReplaceRewriter>()?;
+    m.add_class::<PyCombineMatchReplaceRewriter>()?;
 
     // Dummy matcher and replacement classes
     m.add_class::<RotationMatcher>()?;

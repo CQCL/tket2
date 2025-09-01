@@ -9,10 +9,11 @@ from typing import Protocol, List, Any
 from typing_extensions import runtime_checkable
 
 from .circuit import Tk2Circuit
-from ._tket.ops import TketOp
+from ._tket.ops import TketOp, CustomOp
 from .matcher import MatchOutcome, MatchContext, CircuitUnit
 
 
+# TODO: cannot be runtime checkable because omitting the optional method is not supported
 @runtime_checkable
 class CircuitMatcher(Protocol):
     """Protocol for circuit pattern matchers.
@@ -54,6 +55,53 @@ class CircuitMatcher(Protocol):
               the current match will be abandonned without reporting a match.
         """
         ...
+
+    def match_extension_op(
+        self,
+        op: CustomOp,
+        inputs: List[CircuitUnit],
+        outputs: List[CircuitUnit],
+        context: MatchContext,
+    ) -> MatchOutcome:
+        """
+        Match an unknown extension operation and return the match outcome.
+
+        By default, this method causes any unknown extension operations to be
+        skipped.
+
+        Unlike TketOps, for which the outputs always appear in the same order as
+        the inputs (i.e. ouputs = inputs[:num_outputs]), on arbitrary extension
+        ops the order of the outputs may differ. Both input and output arguments
+        are thus passed to this method.
+
+        Args:
+            op: The extension operation to match
+            inputs: Input arguments to the operation, as CircuitUnit instances
+            outputs: Ouput arguments to the operation, as CircuitUnit instances
+            context: Context of the current partial match containing:
+                - match_info: Current partial match information
+                - op_node: Node index of the current operation
+                - subcircuit: The partial circuit matched so far
+
+        Return:
+            A dict object with any subset of the following keys:
+            - "complete": If this is set, the pattern was fully matched and
+              the match will be reported to the user (or optimiser), along with
+              the value stored in the dict.
+            - proceed: Either a boolean or an arbitrary (non-boolean) value. If
+              this is set to anything other than `False`, the pattern was
+              partially matched and the matching should continue.
+              If the dict value is `True`, the match_data is left unchanged.
+              Otherwise, the match_data is updated to the value in the dict.
+            - skip: Either a boolean or an arbitrary (non-boolean) value.
+              If set to anything other than `False`, the current operation
+              should be skipped and matching should continue without it. If the
+              dict value is `True`, the match_data is left unchanged. Otherwise,
+              the match_data is updated to the value in the dict.
+            - stop: If this is set to any value, or if no other key is set,
+              the current match will be abandonned without reporting a match.
+        """
+        return {"skip": True}
 
 
 @runtime_checkable

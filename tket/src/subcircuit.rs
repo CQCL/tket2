@@ -4,7 +4,7 @@
 //! [`ResourceScope`] to express subgraphs in terms of intervals on resource
 //! paths.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use derive_more::derive::{Display, Error};
 use hugr::core::HugrNode;
@@ -146,7 +146,7 @@ impl<N: HugrNode> Subcircuit<N> {
     /// An error will be returned if the subcircuit cannot be extended to
     /// include the node. Currently, this also fails if the node has
     /// copyable values at its outputs.
-    pub fn try_extend(
+    pub fn try_add_node(
         &mut self,
         node: N,
         circuit: &ResourceScope<impl HugrView<Node = N>>,
@@ -173,6 +173,31 @@ impl<N: HugrNode> Subcircuit<N> {
         was_changed |= self.extend_copyable_inputs(node, circuit);
 
         Ok(was_changed)
+    }
+
+    /// Extend the subcircuit by including the intervals of `other`.
+    ///
+    /// The two subcircuits may not have any resources in common. If they do,
+    /// false is returned and `self` is left unchanged. Otherwise return `true`.
+    pub fn try_extend(&mut self, other: Self) -> bool {
+        let curr: BTreeSet<_> = self.resources().collect();
+        if other.resources().any(|resource| curr.contains(&resource)) {
+            return false;
+        }
+
+        self.intervals.extend(other.intervals.iter().copied());
+        self.input_resources
+            .extend(other.input_resources.iter().copied());
+        self.output_resources
+            .extend(other.output_resources.iter().copied());
+        let new_input_copyable_values = other
+            .input_copyable_values
+            .into_iter()
+            .filter(|w| !self.input_copyable_values.contains(w))
+            .collect_vec();
+        self.input_copyable_values.extend(new_input_copyable_values);
+
+        true
     }
 
     /// Iterate over the resources in the subcircuit.
@@ -656,52 +681,52 @@ mod tests {
         };
 
         // Add first a H gate
-        assert_eq!(subcircuit.try_extend(node(7), &circ), Ok(true));
+        assert_eq!(subcircuit.try_add_node(node(7), &circ), Ok(true));
         assert_eq!(subcircuit.resources().collect_vec(), [resources[0]]);
         assert_eq!(subcircuit.input_resources, [resources[0]]);
         assert_eq!(subcircuit.output_resources, [resources[0]]);
-        assert_eq!(subcircuit.try_extend(node(7), &circ), Ok(false));
+        assert_eq!(subcircuit.try_add_node(node(7), &circ), Ok(false));
 
         // Now add a two-qubit CX gate
-        assert_eq!(subcircuit.try_extend(node(9), &circ), Ok(true));
+        assert_eq!(subcircuit.try_add_node(node(9), &circ), Ok(true));
         assert_eq!(subcircuit.resources().collect_vec(), resources);
         assert_eq!(subcircuit.input_resources, resources);
         assert_eq!(subcircuit.output_resources, resources);
         assert_eq!(subcircuit.input_copyable_values, vec![]);
-        assert_eq!(subcircuit.try_extend(node(9), &circ), Ok(false));
+        assert_eq!(subcircuit.try_add_node(node(9), &circ), Ok(false));
 
         // Cannot add this non-contiguous rotation
         let subcircuit_clone = subcircuit.clone();
         assert_eq!(
-            subcircuit.try_extend(node(16), &circ),
+            subcircuit.try_add_node(node(16), &circ),
             Err(InvalidSubcircuit::NotContiguous(node(16)))
         );
         assert_eq!(subcircuit, subcircuit_clone);
 
         // Now add a contiguous rotation
-        assert_eq!(subcircuit.try_extend(node(10), &circ), Ok(true));
+        assert_eq!(subcircuit.try_add_node(node(10), &circ), Ok(true));
         assert_eq!(subcircuit.resources().collect_vec(), resources);
         assert_eq!(subcircuit.input_resources, resources);
         assert_eq!(subcircuit.output_resources, resources);
         assert_eq!(subcircuit.input_copyable_values.len(), 1);
-        assert_eq!(subcircuit.try_extend(node(10), &circ), Ok(false));
+        assert_eq!(subcircuit.try_add_node(node(10), &circ), Ok(false));
 
         // One more rotation, same angle
-        assert_eq!(subcircuit.try_extend(node(11), &circ), Ok(true));
+        assert_eq!(subcircuit.try_add_node(node(11), &circ), Ok(true));
         assert_eq!(subcircuit.resources().collect_vec(), resources);
         assert_eq!(subcircuit.input_resources, resources);
         assert_eq!(subcircuit.output_resources, resources);
         assert_eq!(subcircuit.input_copyable_values.len(), 1);
-        assert_eq!(subcircuit.try_extend(node(11), &circ), Ok(false));
+        assert_eq!(subcircuit.try_add_node(node(11), &circ), Ok(false));
 
         // Last rotation, different angle
         // now the previously non-contiguous rotation is contiguous
-        assert_eq!(subcircuit.try_extend(node(16), &circ), Ok(true));
+        assert_eq!(subcircuit.try_add_node(node(16), &circ), Ok(true));
         assert_eq!(subcircuit.resources().collect_vec(), resources);
         assert_eq!(subcircuit.input_resources, resources);
         assert_eq!(subcircuit.output_resources, resources);
         assert_eq!(subcircuit.input_copyable_values.len(), 2);
-        assert_eq!(subcircuit.try_extend(node(16), &circ), Ok(false));
+        assert_eq!(subcircuit.try_add_node(node(16), &circ), Ok(false));
 
         assert_eq!(subcircuit.node_count(&circ), 5);
     }
@@ -735,21 +760,21 @@ mod tests {
         };
 
         // Add a two-qubit CX gates, as usual => two inputs, two outputs
-        assert_eq!(subcircuit.try_extend(node(5), &ancilla_circ), Ok(true));
+        assert_eq!(subcircuit.try_add_node(node(5), &ancilla_circ), Ok(true));
         assert_eq!(subcircuit.resources().collect_vec(), resources);
         assert_eq!(subcircuit.input_resources, resources);
         assert_eq!(subcircuit.output_resources, resources);
         assert_eq!(subcircuit.input_copyable_values, vec![]);
 
         // Add the qalloc; now the second qubit is no more an input
-        assert_eq!(subcircuit.try_extend(node(4), &ancilla_circ), Ok(true));
+        assert_eq!(subcircuit.try_add_node(node(4), &ancilla_circ), Ok(true));
         assert_eq!(subcircuit.resources().collect_vec(), resources);
         assert_eq!(subcircuit.input_resources, [resources[0]]);
         assert_eq!(subcircuit.output_resources, resources);
         assert_eq!(subcircuit.input_copyable_values, vec![]);
 
         // Add the qfree; the second qubit is no longer an output either
-        assert_eq!(subcircuit.try_extend(node(6), &ancilla_circ), Ok(true));
+        assert_eq!(subcircuit.try_add_node(node(6), &ancilla_circ), Ok(true));
         assert_eq!(subcircuit.resources().collect_vec(), resources);
         assert_eq!(subcircuit.input_resources, [resources[0]]);
         assert_eq!(subcircuit.output_resources, [resources[0]]);
@@ -767,7 +792,7 @@ mod tests {
         let node = |i: usize| Node::from(portgraph::NodeIndex::new(i));
 
         // Add first a H gate
-        subcircuit.try_extend(node(7), &circ).unwrap();
+        subcircuit.try_add_node(node(7), &circ).unwrap();
         assert_eq!(
             subcircuit.input_ports(&circ),
             vec![vec![(node(7), IncomingPort::from(0))]]
@@ -778,7 +803,7 @@ mod tests {
         );
 
         // Now add a two-qubit CX gate
-        subcircuit.try_extend(node(9), &circ).unwrap();
+        subcircuit.try_add_node(node(9), &circ).unwrap();
         assert_eq!(
             subcircuit.input_ports(&circ),
             vec![
@@ -795,8 +820,8 @@ mod tests {
         );
 
         // Now add two contiguous rotation
-        subcircuit.try_extend(node(10), &circ).unwrap();
-        subcircuit.try_extend(node(11), &circ).unwrap();
+        subcircuit.try_add_node(node(10), &circ).unwrap();
+        subcircuit.try_add_node(node(11), &circ).unwrap();
         assert_eq!(
             subcircuit.input_ports(&circ),
             vec![
@@ -843,8 +868,8 @@ mod tests {
         let node = |i: usize| Node::from(portgraph::NodeIndex::new(i));
 
         // Add a H gate and a Rz gate, but omitting the CX gate in-between
-        subcircuit.try_extend(node(7), &circ).unwrap();
-        subcircuit.try_extend(node(11), &circ).unwrap();
+        subcircuit.try_add_node(node(7), &circ).unwrap();
+        subcircuit.try_add_node(node(11), &circ).unwrap();
 
         assert_eq!(
             subcircuit.try_to_subgraph(&circ),

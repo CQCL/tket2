@@ -62,6 +62,10 @@ impl<H: HugrMut<Node = hugr::Node>> ResourceScope<H> {
             let &(node, port) = inp.first().expect("just checked");
             self.get_circuit_unit(node, port).expect("just checked")
         });
+        let units_at_outputs = outputs.iter().map(|&(node, port)| {
+            self.get_circuit_unit(node, port)
+                .expect("output must exist")
+        });
 
         let mut repl_scope = None;
         if replacement.num_operations() > 0 {
@@ -69,6 +73,23 @@ impl<H: HugrMut<Node = hugr::Node>> ResourceScope<H> {
                 replacement,
                 units_at_inputs,
             ));
+
+            let effective_units_at_outputs =
+                repl_scope
+                    .subgraph()
+                    .outgoing_ports()
+                    .iter()
+                    .map(|&(node, port)| {
+                        repl_scope
+                            .get_circuit_unit(node, port)
+                            .expect("output must exist")
+                    });
+            if effective_units_at_outputs
+                .zip(units_at_outputs)
+                .any(|(u1, u2)| u1 != u2)
+            {
+                return Err(CircuitRewriteError::ResourcePreservationViolated);
+            }
 
             let max_input_pos = self.get_nearest_position(
                 inputs.iter().flatten().map(|&(n, _)| n),
@@ -226,6 +247,9 @@ pub enum CircuitRewriteError {
     /// subcircuit non-convex or disconnected?
     #[display("replacement could not be inserted in topological order. Is the subcircuit non-convex or disconnected?")]
     EmptyPositionRange,
+    /// The rewrite changes the resource paths non-locally.
+    #[display("rewrite changes the resource paths non-locally")]
+    ResourcePreservationViolated,
 }
 
 #[cfg(test)]

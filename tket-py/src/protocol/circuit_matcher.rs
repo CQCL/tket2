@@ -5,13 +5,13 @@ use hugr::HugrView;
 // use itertools::Itertools;
 use pyo3::prelude::*;
 use tket::{
-    rewrite::matcher::{CircuitMatcher, MatchContext, MatchOutcome},
+    rewrite::matcher::{CircuitMatcher, MatchContext, MatchOutcome, Update},
     TketOp,
 };
 
 use crate::{
     matcher::{PyCircuitUnit, PyMatchContext, PyMatchOutcome},
-    ops::PyTketOp,
+    ops::{PyExtensionOp, PyTketOp},
 };
 
 /// Python protocol for [`CircuitMatcher`] trait.
@@ -19,10 +19,24 @@ pub trait CircuitMatcherPyProtocol {
     /// Wrapper for the CircuitMatcher protocol's `match_tket_op` method
     fn py_match_tket_op(
         &self,
-        op: TketOp,
+        op: PyTketOp,
         op_args: Vec<PyCircuitUnit>,
         context: PyMatchContext,
     ) -> PyResult<PyMatchOutcome>;
+
+    /// Wrapper for the CircuitMatcher protocol's `match_extension_op` method
+    ///
+    /// By default, this method causes any unknown extension operations to be
+    /// skipped.
+    fn py_match_extension_op(
+        &self,
+        _op: PyExtensionOp,
+        _inputs: Vec<PyCircuitUnit>,
+        _outputs: Vec<PyCircuitUnit>,
+        _context: PyMatchContext,
+    ) -> PyResult<PyMatchOutcome> {
+        Ok(MatchOutcome::default().skip(Update::Unchanged).into())
+    }
 }
 
 /// Implement CircuitMatcher for a type that implements PyCircuitMatcher.
@@ -51,7 +65,12 @@ macro_rules! impl_circuit_matcher {
                     Python::with_gil(|py| PyMatchContext::from_match_context(match_context, py))
                         .map_err(|e| panic!("A python error occurred:\n{}", e))
                         .unwrap();
-                match <$M as CircuitMatcherPyProtocol>::py_match_tket_op(self, op, args, context) {
+                match <$M as CircuitMatcherPyProtocol>::py_match_tket_op(
+                    self,
+                    op.into(),
+                    args,
+                    context,
+                ) {
                     Ok(outcome) => outcome.into(),
                     Err(err) => panic!("A python error occurred:\n{}", err),
                 }
@@ -73,7 +92,7 @@ impl CircuitMatcherPyProtocol for PyImplCircuitMatcher {
     /// time).
     fn py_match_tket_op(
         &self,
-        op: TketOp,
+        op: PyTketOp,
         args: Vec<PyCircuitUnit>,
         context: PyMatchContext,
     ) -> PyResult<PyMatchOutcome> {
@@ -84,6 +103,24 @@ impl CircuitMatcherPyProtocol for PyImplCircuitMatcher {
                 .call_method("match_tket_op", (py_op, args, context), None)?
                 .extract()
         })
+    }
+
+    fn py_match_extension_op(
+        &self,
+        op: PyExtensionOp,
+        inputs: Vec<PyCircuitUnit>,
+        outputs: Vec<PyCircuitUnit>,
+        context: PyMatchContext,
+    ) -> PyResult<PyMatchOutcome> {
+        match Python::with_gil(|py| {
+            self.py_obj
+                .bind(py)
+                .call_method("match_extension_op", (op, inputs, outputs, context), None)
+                .and_then(|v| v.extract())
+        }) {
+            Ok(py_match_outcome) => Ok(py_match_outcome),
+            Err(_) => Ok(MatchOutcome::default().skip(Update::Unchanged).into()),
+        }
     }
 }
 
