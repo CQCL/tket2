@@ -16,8 +16,10 @@ author = "Quantinuum compiler team"
 
 extensions = ["sphinx.ext.autosummary", "sphinx.ext.viewcode", "sphinx_copybutton"]
 
+autosummary_ignore_module_all = False  # Respect __all__ if specified
+autosummary_generate = True
+
 templates_path = ["_templates"]
-exclude_patterns = []
 
 
 # -- Options for HTML output -------------------------------------------------
