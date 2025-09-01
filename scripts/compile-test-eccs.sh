@@ -21,13 +21,15 @@ for ecc in $ECCS_DIR/*.json; do
 done
 
 # Additional hard-coded step:
-# The python package contains a copy of the nam_6_3 ecc,
+# The python package contains a copy of the nam_6_3 and cliffordt_5_3 eccs,
 # which must be manually copied.
 PY_ECCS_DIR="$DIR/../tket-eccs/src/tket_eccs/data"
-nam_6_3="$ECCS_DIR/nam_6_3.rwr"
-PY_NAM_6_3="$PY_ECCS_DIR/nam_6_3.rwr"
-
-echo "Copying $nam_6_3 to $PY_NAM_6_3"
-cp -f "$nam_6_3" "$PY_NAM_6_3"
+for file in "nam_6_3.rwr" "clifford_t_6_3.rwr"; do
+    source_file="$ECCS_DIR/$file"
+    dest_file="$PY_ECCS_DIR/$file"
+    
+    echo "Copying $source_file to $dest_file"
+    cp -f "$source_file" "$dest_file"
+done
 
 echo "Done!"
