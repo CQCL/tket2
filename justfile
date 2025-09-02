@@ -72,7 +72,6 @@ update-snapshots:
 
 # Build the sphinx API documentation
 build-pydocs:
-    uv run maturin develop
     cd tket-py/docs && uv run --group docs sphinx-build -b html . build
 
 # Serve the docs html pages locally
