@@ -75,7 +75,7 @@ build-pydocs:
     uv run maturin develop
     cd tket-py/docs && uv run --group docs sphinx-build -b html . build
 
-# Serve the docs html locally
+# Serve the docs html pages locally
 serve-docs: build-pydocs
     npm exec serve tket-py/docs/build
 
@@ -83,3 +83,4 @@ serve-docs: build-pydocs
 cleanup:
     rm -rf tket-py/docs/build
     rm -rf tket-py/docs/generated
+    rm -rf tket-py/docs/jupyter_execute
