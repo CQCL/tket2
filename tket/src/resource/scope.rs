@@ -16,6 +16,7 @@ use hugr::ops::OpTrait;
 use hugr::types::Signature;
 use hugr::{Direction, HugrView, IncomingPort, Port, PortIndex, Wire};
 use hugr_core::hugr::internal::PortgraphNodeMap;
+use indexmap::map::Entry;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use portgraph::algorithms::{toposort, TopoSort};
@@ -29,7 +30,7 @@ use super::{Position, ResourceAllocator, ResourceId};
 /// allowing efficient lookup of [`CircuitUnit`]s for any port of any operation
 /// within the scope.
 #[derive(Debug, Clone)]
-pub struct ResourceScope<H: HugrView> {
+pub struct ResourceScope<H: HugrView = hugr::Hugr> {
     /// The HUGR containing the operations.
     hugr: H,
     /// The subgraph within which resources are tracked.
@@ -63,7 +64,7 @@ pub struct ResourceScopeConfig<'a, H: HugrView> {
 impl<H: HugrView> Default for ResourceScopeConfig<'_, H> {
     fn default() -> Self {
         Self {
-            flows: vec![Box::new(DefaultResourceFlow::new())],
+            flows: vec![Box::new(DefaultResourceFlow)],
         }
     }
 }
@@ -142,10 +143,9 @@ impl<H: HugrView> ResourceScope<H> {
     /// The returned port will have the direction `dir`.
     pub fn get_port(&self, node: H::Node, resource_id: ResourceId, dir: Direction) -> Option<Port> {
         let units = self.get_circuit_units_slice(node, dir)?;
-        let offset = units.iter().position(|unit| match unit {
-            &CircuitUnit::Resource(res) => res == resource_id,
-            _ => false,
-        })?;
+        let offset = units
+            .iter()
+            .position(|unit| unit.as_resource() == Some(resource_id))?;
         Some(Port::new(dir, offset))
     }
 
@@ -163,10 +163,10 @@ impl<H: HugrView> ResourceScope<H> {
         dir: Direction,
     ) -> impl Iterator<Item = ResourceId> + '_ {
         let units = self.get_circuit_units_slice(node, dir);
-        units.into_iter().flatten().filter_map(|unit| match unit {
-            &CircuitUnit::Resource(res) => Some(res),
-            _ => None,
-        })
+        units
+            .into_iter()
+            .flatten()
+            .filter_map(|unit| unit.as_resource())
     }
 
     /// All resource IDs on the ports of `node`, in both directions.
@@ -291,17 +291,14 @@ impl<H: HugrView> ResourceScope<H> {
         // Proceed to propagating the circuit units through the subgraph, in topological
         // order.
         for node in toposort_subgraph(&self.hugr, &self.subgraph, self.find_sources()) {
-            if self.hugr.get_optype(node).dataflow_signature().is_none() {
-                // ignore non-dataflow ops
-                continue;
-            }
             self.assign_missing_circuit_units(node, &mut allocator);
             self.propagate_to_outputs(node, flows, &mut allocator);
             self.propagate_to_next_inputs(node);
         }
     }
 
-    /// Assign circuit units to the given ports in order.
+    /// Assign circuit units to the given ports in order, ignoring non-dataflow
+    /// ports.
     fn assign_circuit_units(
         &mut self,
         incoming_ports: impl IntoIterator<Item = (H::Node, IncomingPort)>,
@@ -309,22 +306,24 @@ impl<H: HugrView> ResourceScope<H> {
     ) {
         for (node, port) in incoming_ports {
             let unit = allocator.allocate_circuit_unit(node, port, &self.hugr);
-            let node_units = node_circuit_units_mut(&mut self.circuit_units, node, &self.hugr);
+            let Some(node_units) =
+                node_circuit_units_mut(&mut self.circuit_units, node, &self.hugr)
+            else {
+                continue;
+            };
             node_units.port_map.set(port, unit);
         }
     }
 
-    /// Ensure all input ports of `node` have assigned circuit units.
+    /// Ensure all input dataflow ports of `node` have assigned circuit units.
     fn assign_missing_circuit_units(
         &mut self,
         node: H::Node,
         allocator: &mut CircuitUnitAllocator,
     ) {
-        let signature = self
-            .hugr
-            .get_optype(node)
-            .dataflow_signature()
-            .expect("dataflow op");
+        let Some(signature) = self.hugr.get_optype(node).dataflow_signature() else {
+            return;
+        };
 
         let mut incoming_ports = signature.input_ports().collect_vec();
         if let Some(node_units) = self.circuit_units.get(&node) {
@@ -357,16 +356,16 @@ impl<H: HugrView> ResourceScope<H> {
         flows: &[Box<dyn '_ + ResourceFlow<H>>],
         allocator: &mut CircuitUnitAllocator,
     ) {
-        let port_map =
-            &mut node_circuit_units_mut(&mut self.circuit_units, node, &self.hugr).port_map;
+        let Some(port_map) = node_circuit_units_mut(&mut self.circuit_units, node, &self.hugr)
+            .map(|units| &mut units.port_map)
+        else {
+            return;
+        };
 
         let inp_resources = port_map
             .get_slice(Direction::Incoming)
             .iter()
-            .map(|&op_val| match op_val {
-                CircuitUnit::Resource(res) => Some(res),
-                CircuitUnit::Copyable(_) => None,
-            })
+            .map(CircuitUnit::as_resource)
             .collect_vec();
 
         let out_resources = flows
@@ -378,7 +377,8 @@ impl<H: HugrView> ResourceScope<H> {
             .hugr
             .get_optype(node)
             .dataflow_signature()
-            .expect("dataflow op");
+            .expect("op has dataflow inputs");
+
         // Set out resources to output, create new circuit units where required
         for p in signature.output_ports() {
             let unit = match out_resources.get(p.index()).copied().flatten() {
@@ -398,22 +398,25 @@ impl<H: HugrView> ResourceScope<H> {
     /// Propagate circuit units at output ports across wires to connected
     /// inputs.
     fn propagate_to_next_inputs(&mut self, node: H::Node) {
-        let signature = self
-            .hugr
-            .get_optype(node)
-            .dataflow_signature()
-            .expect("dataflow op");
-        let pos = self.get_position(node).expect("known node");
+        let Some(signature) = self.hugr.get_optype(node).dataflow_signature() else {
+            return;
+        };
+        let pos = self.get_position(node).expect("dataflow node has position");
 
         for p in signature.output_ports() {
-            let unit = self.get_circuit_unit(node, p).expect("known node");
+            let unit = self
+                .get_circuit_unit(node, p)
+                .expect("dataflow node has circuit unit");
 
             for (in_node, in_port) in self.hugr.linked_inputs(node, p) {
                 if !self.subgraph.nodes().contains(&in_node) {
                     continue;
                 }
-                let next_node_units =
-                    node_circuit_units_mut(&mut self.circuit_units, in_node, &self.hugr);
+                let Some(next_node_units) =
+                    node_circuit_units_mut(&mut self.circuit_units, in_node, &self.hugr)
+                else {
+                    continue;
+                };
                 next_node_units.port_map.set(in_port, unit);
                 next_node_units.position = cmp::max(next_node_units.position, pos.increment());
             }
@@ -426,14 +429,19 @@ fn node_circuit_units_mut<H: HugrView>(
     all_circuit_units: &mut IndexMap<H::Node, NodeCircuitUnits<H::Node>>,
     node: H::Node,
     hugr: H,
-) -> &mut NodeCircuitUnits<H::Node> {
-    all_circuit_units.entry(node).or_insert_with(|| {
-        let signature = hugr
-            .get_optype(node)
-            .dataflow_signature()
-            .expect("dataflow op");
-        NodeCircuitUnits::with_default(CircuitUnit::sentinel(), &signature)
-    })
+) -> Option<&mut NodeCircuitUnits<H::Node>> {
+    match all_circuit_units.entry(node) {
+        Entry::Occupied(occupied_entry) => Some(occupied_entry.into_mut()),
+        Entry::Vacant(vacant_entry) => {
+            let signature = hugr.get_optype(node).dataflow_signature()?;
+            vacant_entry
+                .insert(NodeCircuitUnits::with_default(
+                    CircuitUnit::sentinel(),
+                    &signature,
+                ))
+                .into()
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]

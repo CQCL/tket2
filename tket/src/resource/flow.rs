@@ -5,15 +5,15 @@
 
 use crate::resource::types::ResourceId;
 use derive_more::derive::{Display, Error};
-use hugr::ops::OpTrait;
+use hugr::ops::{OpTrait, OpType};
 use hugr::types::Type;
 use hugr::HugrView;
 use itertools::{EitherOrBoth, Itertools};
 
 /// Error type for unsupported operations in ResourceFlow implementations.
 #[derive(Debug, Display, Clone, PartialEq, Error)]
-#[display("Unsupported operation")]
-pub struct UnsupportedOp;
+#[display("Unsupported operation: {_0}")]
+pub struct UnsupportedOp(#[error(not(source))] OpType);
 
 /// Trait for specifying how resources flow through operations.
 ///
@@ -81,9 +81,8 @@ impl<H: HugrView> ResourceFlow<H> for Box<dyn '_ + ResourceFlow<H>> {
 /// This implementation considers that an operation is resource-preserving if
 /// for all port indices i, either
 ///  - the i-th input and i-th output are both linear and are of the same type,
-///    or
-///  - the i-th input and i-th output are both copyable, or one is copyable and
-///    the other does not exist.
+///  - or the i-th input and i-th output are both copyable, or one is copyable
+///    and the other does not exist.
 ///
 /// For resource-preserving operations, linear inputs are then mapped to the
 /// corresponding output. (All outputs with no corresponding input, must be
@@ -95,11 +94,6 @@ impl<H: HugrView> ResourceFlow<H> for Box<dyn '_ + ResourceFlow<H>> {
 pub struct DefaultResourceFlow;
 
 impl DefaultResourceFlow {
-    /// Create a new DefaultResourceFlow instance.
-    pub fn new() -> Self {
-        Self
-    }
-
     /// Determine if an operation is resource-preserving based on input/output
     /// types.
     fn is_resource_preserving(input_types: &[Type], output_types: &[Type]) -> bool {

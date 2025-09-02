@@ -84,26 +84,6 @@ pub enum CircuitUnit<N: HugrNode> {
     Copyable(Wire<N>),
 }
 
-impl<N: HugrNode> From<CircuitUnit<N>> for hugr::CircuitUnit<N> {
-    fn from(value: CircuitUnit<N>) -> Self {
-        match value {
-            CircuitUnit::Resource(resource_id) => Self::Linear(resource_id.as_usize()),
-            CircuitUnit::Copyable(wire) => Self::Wire(wire),
-        }
-    }
-}
-
-impl<N: HugrNode> From<hugr::CircuitUnit<N>> for CircuitUnit<N> {
-    fn from(value: hugr::CircuitUnit<N>) -> Self {
-        match value {
-            hugr::CircuitUnit::Wire(wire) => CircuitUnit::Copyable(wire),
-            hugr::CircuitUnit::Linear(resource_id) => {
-                CircuitUnit::Resource(ResourceId::new(resource_id))
-            }
-        }
-    }
-}
-
 impl<N: HugrNode> CircuitUnit<N> {
     /// Returns true if this is a resource value.
     pub fn is_resource(&self) -> bool {

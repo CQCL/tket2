@@ -6,14 +6,10 @@
 //!
 //! # Overview
 //!
-//! HUGR has a notion of "Value": the data that corresponds to a wire within a
-//! dataflow graph. It further has a notion of "linear value" a.k.a non-copyable
-//! value: a value that cannot be copied or discarded (implicitly).
-//!
 //! As far as HUGR is concerned, a linear value (or any value, for that matter)
-//! is born at an op's output and dies at the next op's input. TKET introduces
-//! the notion of "Resource" to extend the lifetime of a linear value over
-//! multiple ops.
+//! is created at an op's output and destroyed at the next op's input. TKET
+//! introduces the notion of "Resource" to extend the lifetime of a linear value
+//! over multiple ops.
 //!
 //! If a linear value appears both in an op's input and output, we say that it
 //! is "resource-preserving". Using [`ResourceFlow`], we can track resources

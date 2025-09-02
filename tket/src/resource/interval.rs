@@ -38,26 +38,49 @@ impl<N: HugrNode> Interval<N> {
     }
 
     /// Create an interval for a range of nodes.
+    ///
+    /// This will panic if
+    ///  - either node is not on the resource path `resource_id`
+    ///  - or the start node is after the end node on the resource path.
+    ///
+    /// Use [`Interval::try_new`] instead for creating an interval with error
+    /// handling.
     pub fn new(
         resource_id: ResourceId,
         start_node: N,
         end_node: N,
         scope: &ResourceScope<impl HugrView<Node = N>>,
     ) -> Self {
+        Self::try_new(resource_id, start_node, end_node, scope).unwrap()
+    }
+
+    /// Create an interval for a range of nodes.
+    pub fn try_new(
+        resource_id: ResourceId,
+        start_node: N,
+        end_node: N,
+        scope: &ResourceScope<impl HugrView<Node = N>>,
+    ) -> Result<Self, InvalidInterval<N>> {
         let start_pos = scope
             .get_position(start_node)
-            .expect("start node not on resource path");
+            .ok_or(InvalidInterval::NotOnResourcePath(start_node))?;
         let end_pos = scope
             .get_position(end_node)
-            .expect("end node not on resource path");
+            .ok_or(InvalidInterval::NotOnResourcePath(end_node))?;
 
-        assert!(start_pos <= end_pos);
+        if start_pos > end_pos {
+            return Err(InvalidInterval::StartAfterEnd(
+                start_node,
+                end_node,
+                resource_id,
+            ));
+        }
 
-        Self {
+        Ok(Self {
             resource_id,
             positions: [start_pos, end_pos],
             nodes: [start_node, end_node],
-        }
+        })
     }
 
     /// Get the resource ID of the interval.
@@ -149,8 +172,8 @@ impl<N: HugrNode> Interval<N> {
     ///
     /// [Ordering] is used to express the relative position of `pos` with
     /// respect to the interval:
-    /// - [`Ordering::Less`] if `pos` is smaller than the interval,
-    /// - [`Ordering::Greater`] if `pos` is larger than the interval, and
+    /// - [`Ordering::Less`] if `pos` is before the interval,
+    /// - [`Ordering::Greater`] if `pos` is after the interval, and
     /// - [`Ordering::Equal`] if `pos` is within the interval.
     fn position_in_interval(&self, pos: Position) -> Ordering {
         if pos < self.positions[0] {
@@ -172,6 +195,9 @@ pub enum InvalidInterval<N> {
     /// The node is not on the interval's resource path.
     #[display("node {_0:?} is not on the interval's resource path")]
     NotOnResourcePath(N),
+    /// The start node is after the end node.
+    #[display("start node {_0:?} is after end node {_1:?} on resource path {_2:?}")]
+    StartAfterEnd(N, N, ResourceId),
 }
 
 impl<H: HugrView> ResourceScope<H> {
@@ -198,7 +224,7 @@ mod tests {
     };
 
     use itertools::Itertools;
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
 
     #[test]
     fn test_nodes_in_interval() {
@@ -238,65 +264,77 @@ mod tests {
         }
     }
 
+    #[fixture]
+    fn cx_circuit_scope() -> ResourceScope {
+        let circ = cx_circuit(5);
+        ResourceScope::from_circuit(Circuit::from(circ))
+    }
+
     #[rstest]
-    #[case::extend_left_success(
+    #[case::extend_left(
         1,
-        Ok(Some(Direction::Incoming)),
+        Some(Direction::Incoming),
         1..=3,
     )]
-    #[case::extend_right_success(
+    #[case::extend_right(
         4,
-        Ok(Some(Direction::Outgoing)),
+        Some(Direction::Outgoing),
         2..=4,
     )]
     #[case::node_already_in_interval_start(
         2,
-        Ok(None),
+        None,
         2..=3,
     )]
     #[case::node_already_in_interval_end(
         3,
-        Ok(None),
+        None,
         2..=3,
     )]
-    #[case::extend_to_non_contiguous_node(
-        0,
-        Err(InvalidInterval::NotContiguous(0)),
-        2..=3,
-    )]
-    fn test_try_extend(
+    fn test_try_extend_success(
+        cx_circuit_scope: ResourceScope,
         #[case] node_to_extend: usize,
-        #[case] expected_result: Result<Option<Direction>, InvalidInterval<usize>>,
+        #[case] expected_direction: Option<Direction>,
         #[case] expected_range: RangeInclusive<usize>,
     ) {
-        let circ = cx_circuit(5);
-        let subgraph = Circuit::from(&circ).subgraph();
-        let cx_nodes = subgraph.nodes().to_owned();
-        let scope = super::ResourceScope::new(&circ, subgraph);
-
-        let resource_id = ResourceId::new(0);
+        let cx_nodes = cx_circuit_scope.nodes();
 
         // Create an interval from nodes 2 to 3 (middle of circuit)
-        let mut interval = Interval::new(resource_id, cx_nodes[2], cx_nodes[3], &scope);
+        let mut interval = Interval::new(
+            ResourceId::new(0),
+            cx_nodes[2],
+            cx_nodes[3],
+            &cx_circuit_scope,
+        );
 
         // Apply the test case
-        let result = interval.try_extend(cx_nodes[node_to_extend], &scope);
+        let result = interval
+            .try_extend(cx_nodes[node_to_extend], &cx_circuit_scope)
+            .unwrap();
 
-        // Check the result
-        match expected_result {
-            Ok(expected_direction) => {
-                assert_eq!(result.unwrap(), expected_direction);
-            }
-            Err(InvalidInterval::NotContiguous(node)) => {
-                assert_eq!(
-                    result.unwrap_err(),
-                    InvalidInterval::NotContiguous(cx_nodes[node])
-                );
-            }
-            Err(_) => unimplemented!(),
-        }
-
+        assert_eq!(result, expected_direction);
         assert_eq!(interval.start_node(), cx_nodes[*expected_range.start()]);
         assert_eq!(interval.end_node(), cx_nodes[*expected_range.end()]);
+    }
+
+    #[rstest]
+    fn test_try_extend_error(cx_circuit_scope: ResourceScope) {
+        let cx_nodes = cx_circuit_scope.nodes();
+
+        // Create an interval from nodes 2 to 3 (middle of circuit)
+        let mut interval = Interval::new(
+            ResourceId::new(0),
+            cx_nodes[2],
+            cx_nodes[3],
+            &cx_circuit_scope,
+        );
+
+        let result = interval
+            .try_extend(cx_nodes[0], &cx_circuit_scope)
+            .unwrap_err();
+
+        assert_eq!(result, InvalidInterval::NotContiguous(cx_nodes[0]));
+        assert_eq!(interval.start_node(), cx_nodes[2]);
+        assert_eq!(interval.end_node(), cx_nodes[3]);
     }
 }
