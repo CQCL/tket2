@@ -6,6 +6,31 @@ from tket._tket.types import HugrType
 class TketOp(Enum):
     """A rust-backed Tket built-in operation."""
 
+    H = "H"
+    CX = "CX"
+    CY = "CY"
+    CZ = "CZ"
+    CRz = "CRz"
+    T = "T"
+    Tdg = "Tdg"
+    S = "S"
+    Sdg = "Sdg"
+    X = "X"
+    Y = "Y"
+    Z = "Z"
+    Rx = "Rx"
+    Ry = "Ry"
+    Rz = "Rz"
+    Toffoli = "Toffoli"
+    Measure = "Measure"
+    MeasureFree = "MeasureFree"
+    QAlloc = "QAlloc"
+    TryQAlloc = "TryQAlloc"
+    QFree = "QFree"
+    Reset = "Reset"
+    V = "V"
+    Vdg = "Vdg"
+
     def __init__(self, op: str) -> None:
         """Create a new TketOp from a string name."""
 
@@ -32,6 +57,11 @@ class TketOp(Enum):
 class Pauli(Enum):
     """Simple enum representation of Pauli matrices."""
 
+    I = "I"  # noqa: E741
+    X = "X"
+    Y = "Y"
+    Z = "Z"
+
     def __init__(self, pauli: str) -> None:
         """Create a new Pauli from a string name."""
 
@@ -42,22 +72,6 @@ class Pauli(Enum):
     @staticmethod
     def values() -> Iterable[Pauli]:
         """Iterate over all Pauli matrix variants."""
-
-    @staticmethod
-    def I() -> Pauli:  # noqa: E743
-        """Identity Pauli matrix."""
-
-    @staticmethod
-    def X() -> Pauli:
-        """Pauli-X matrix."""
-
-    @staticmethod
-    def Y() -> Pauli:
-        """Pauli-Y matrix."""
-
-    @staticmethod
-    def Z() -> Pauli:
-        """Pauli-Z matrix."""
 
     def __str__(self) -> str:
         """Get the string name of the Pauli."""
