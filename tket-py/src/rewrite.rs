@@ -94,8 +94,8 @@ impl<H: HugrView<Node = Node>> Rewriter<ResourceScope<H>> for PyRewriter {
     fn get_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite<H::Node>> {
         match self {
             Self::ECC(ecc) => ecc.0.get_rewrites(circ),
-            Self::MatchReplace(rewriter) => rewriter.get_rewrites(circ),
-            Self::CombineMatchReplace(rewriter) => rewriter.get_rewrites(circ),
+            Self::MatchReplace(rewriter) => Rewriter<ResourceScope<H>>::get_rewrites(rewriter, circ),
+            Self::CombineMatchReplace(rewriter) => Rewriter<ResourceScope<H>>::get_rewrites(rewriter, circ),
             Self::Vec(rewriters) => rewriters
                 .iter()
                 .flat_map(|r| r.get_rewrites(circ))
