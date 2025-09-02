@@ -34,7 +34,7 @@ html_theme = "furo"
 html_static_path = ["_static"]
 
 
-exclude_patterns = ["jupyter_execute/"]
+exclude_patterns = ["jupyter_execute/**"]
 
 suppress_warnings = [
     "misc.highlighting_failure",
