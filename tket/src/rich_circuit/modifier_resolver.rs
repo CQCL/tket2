@@ -5,8 +5,8 @@ pub mod tket_op_modify;
 use derive_more::Error;
 use hugr::{
     builder::{
-        BuildError, ConditionalBuilder, Container, Dataflow, FunctionBuilder, HugrBuilder,
-        SubContainer, TailLoopBuilder,
+        BuildError, ConditionalBuilder, Container, DFGBuilder, Dataflow, FunctionBuilder,
+        HugrBuilder, SubContainer, TailLoopBuilder,
     },
     core::HugrNode,
     extension::{prelude::qb_t, simple_op::MakeExtensionOp},
@@ -16,16 +16,20 @@ use hugr::{
         LoadFunction, OpType, TailLoop, DFG,
     },
     std_extensions::collections::array::{array_type, ArrayOpBuilder},
-    types::{FuncTypeBase, PolyFuncType, Signature, TypeRow},
+    types::{FuncTypeBase, PolyFuncType, Signature, Type, TypeRow},
     Hugr, HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex, Wire,
 };
 use hugr_core::hugr::internal::PortgraphNodeMap;
-use itertools::{Either, Itertools};
+use itertools::{Either, EitherOrBoth, Itertools};
 use petgraph::visit::{Topo, Walker};
 use std::{cmp::min, collections::HashMap, iter, mem};
 
 use crate::{
-    rich_circuit::{modifier_resolver::global_phase_modify::delete_phase, GlobalPhase, Modifier},
+    rich_circuit::{
+        dagger::{is_quantum_type, ModifierDagger},
+        modifier_resolver::global_phase_modify::delete_phase,
+        GlobalPhase, Modifier,
+    },
     TketOp,
 };
 
@@ -84,7 +88,6 @@ impl<N> DirWire<N> {
         DirWire(node, port)
     }
 
-    #[allow(dead_code)]
     pub fn reverse(self) -> Self {
         let index = self.1.index();
         let port = match self.1.as_directed() {
@@ -243,6 +246,7 @@ pub struct ModifierResolver<N = Node> {
     // TODO:
     // Should keep track of the collection of modifiers that are applied to the same function.
     // This will prevent the duplicated generation of Controlled-functions.
+    // Some HashMap should be held here so that we remember such information.
 }
 
 impl<N> ModifierResolver<N> {
@@ -445,7 +449,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 println!("  Wire mapping: {} -> {}", a, b);
             }
         }
-        // println!(" hugr: \n{}", new_dfg.hugr().mermaid_string());
+        println!(" hugr: \n{}", new_dfg.hugr().mermaid_string());
         for out_node in h.children(parent) {
             for out_port in h.node_outputs(out_node) {
                 for (in_node, in_port) in h.linked_inputs(out_node, out_port) {
@@ -457,6 +461,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 }
             }
         }
+        // FIXME: StateOrder is not preserved here.
         Ok(())
     }
 }
@@ -686,8 +691,8 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(())
     }
 
-    // TODO: We take arbitral topological order of the circuit so that we can plug the control qubits
-    // and pass around them in that order. However, this is not ideal, as it may produce an inefficient order.
+    // We take arbitral topological order of the circuit so that we can plug the control qubits
+    // and pass around them in that order. This might not be ideal, as it may produce an inefficient order.
     fn modify_op(
         &mut self,
         h: &impl HugrMut<Node = N>,
@@ -695,44 +700,53 @@ impl<N: HugrNode> ModifierResolver<N> {
         new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
         let optype = h.get_optype(n);
-        println!("Modifying Op: {}, OpType: {:?}", n, optype);
         match optype {
             // Skip input/output nodes: it should be handled by its parent as it sets control qubits.
             OpType::Input(_) | OpType::Output(_) => {}
-            OpType::ExtensionOp(_) => {
-                self.modify_extension_op(h, n, optype, new_dfg)?;
-            }
+
+            // DFGs
             OpType::DFG(dfg) => self.modify_dfg(h, n, dfg.clone(), new_dfg)?,
             OpType::TailLoop(tail_loop) => self.modify_tail_loop(h, n, tail_loop, new_dfg)?,
             OpType::Conditional(conditional) => {
                 self.modify_conditional(h, n, conditional, new_dfg)?
             }
+
+            // Function calls
             OpType::Call(_) => todo!(),
             OpType::CallIndirect(_) => todo!(),
             OpType::LoadFunction(_) => todo!(),
 
-            OpType::Case(_) => todo!(),
+            // Operations
+            OpType::ExtensionOp(_) => {
+                self.modify_extension_op(h, n, optype, new_dfg)?;
+            }
             OpType::Const(constant) => {
                 self.modify_constant(n, constant.clone(), new_dfg)?;
             }
-            OpType::LoadConstant(_) | OpType::OpaqueOp(_) => {
+            OpType::LoadConstant(_) | OpType::OpaqueOp(_) | OpType::Tag(_) => {
                 self.modify_dataflow_op(h, n, optype, new_dfg)?
             }
-            OpType::Tag(_) => self.modify_dataflow_op(h, n, optype, new_dfg)?,
-            // Not supported
+
+            // Unreachable
             OpType::FuncDefn(_) | OpType::FuncDecl(_) | OpType::Module(_) => {
                 return Err(ModifierResolverErrors::Unreachable(format!(
                     "Invalid node found inside modified function (OpType = {})",
                     optype.clone()
                 )))
             }
-            OpType::AliasDecl(_) | OpType::AliasDefn(_) | OpType::ExitBlock(_) | OpType::CFG(_) => {
-                return Err(ModifierError::ModifierNotApplicable(n, optype.clone()).into());
-            }
-            OpType::DataflowBlock(_) => {
+            OpType::Case(_) => {
                 return Err(ModifierResolverErrors::Unreachable(
-                    "DataflowBlock cannot be modified.".to_string(),
+                    "Case cannot be directly modified.".to_string(),
                 ))
+            }
+
+            // Not applicable
+            OpType::AliasDecl(_)
+            | OpType::AliasDefn(_)
+            | OpType::ExitBlock(_)
+            | OpType::CFG(_)
+            | OpType::DataflowBlock(_) => {
+                return Err(ModifierError::ModifierNotApplicable(n, optype.clone()).into());
             }
             _ => {
                 return Err(ModifierResolverErrors::Unreachable(
@@ -741,6 +755,11 @@ impl<N: HugrNode> ModifierResolver<N> {
             }
         }
         Ok(())
+    }
+
+    fn need_swap(&self, t: EitherOrBoth<&Type>) -> bool {
+        self.modifiers.dagger
+            && matches!(t.both(), Some((t1, t2)) if is_quantum_type(t1) && is_quantum_type(t2))
     }
 
     fn modify_in_out_node(
@@ -754,27 +773,38 @@ impl<N: HugrNode> ModifierResolver<N> {
         let optype = h.get_optype(n);
         match optype {
             OpType::FuncDefn(_) | OpType::DFG(_) => {
+                let FuncTypeBase { input, output } = match optype {
+                    OpType::FuncDefn(fndefn) => fndefn.signature().body(),
+                    OpType::DFG(dfg) => &dfg.signature(),
+                    _ => unreachable!(),
+                };
                 let offset = if matches!(optype, OpType::FuncDefn(_)) {
                     self.modifiers.accum_ctrl.len()
                 } else {
                     self.modifiers.control
                 };
-                for port in h.node_outputs(old_in) {
-                    self.map_insert(
-                        (old_in, port).into(),
-                        DirWire::from((new_in, port)).shift(offset),
-                    )?;
-                    println!(
-                        "Inserted input mapping: {} -> {}",
-                        DirWire::from((old_in, port)),
-                        DirWire::from((new_in, port)).shift(offset)
-                    );
-                }
-                for port in h.node_inputs(old_out) {
-                    self.map_insert(
-                        (old_out, port).into(),
-                        DirWire::from((new_out, port)).shift(offset),
-                    )?
+
+                for (i, ref in_out_ty) in input.iter().zip_longest(output.iter()).enumerate() {
+                    // If dagger and the i-th input/output are quantum types, swap them.
+                    if self.need_swap(in_out_ty.as_deref()) {
+                        let old_in_wire = (old_in, OutgoingPort::from(i)).into();
+                        let old_out_wire = (old_out, IncomingPort::from(i)).into();
+                        let new_in_wire = (new_out, IncomingPort::from(i).shift(offset)).into();
+                        let new_out_wire = (new_in, OutgoingPort::from(i).shift(offset)).into();
+                        self.map_insert(old_in_wire, new_in_wire)?;
+                        self.map_insert(old_out_wire, new_out_wire)?;
+                        continue;
+                    }
+                    if in_out_ty.has_left() {
+                        let old_in_wire = (old_in, OutgoingPort::from(i)).into();
+                        let new_in_wire = (new_in, OutgoingPort::from(i).shift(offset)).into();
+                        self.map_insert(old_in_wire, new_in_wire)?;
+                    }
+                    if in_out_ty.has_right() {
+                        let old_out_wire = (old_out, IncomingPort::from(i)).into();
+                        let new_out_wire = (new_out, IncomingPort::from(i).shift(offset)).into();
+                        self.map_insert(old_out_wire, new_out_wire)?;
+                    }
                 }
             }
             OpType::TailLoop(tail_loop) => {
@@ -813,45 +843,6 @@ impl<N: HugrNode> ModifierResolver<N> {
                     "Cannot modify the IO of the node with OpType: {}",
                     optype
                 )));
-            }
-        }
-
-        // FIXME: very hacky way to swap the IO wires if dagger is applied.
-        if self.modifiers.dagger {
-            let [in_node, out_node] = h.get_io(n).unwrap();
-            let opty = h.get_optype(n);
-            let FuncTypeBase { input, output } = match opty {
-                OpType::DFG(dfg) => dfg.signature().into_owned(),
-                OpType::Case(case) => case.inner_signature().into_owned(),
-                OpType::FuncDefn(fndefn) => fndefn.signature().body().clone(),
-                OpType::TailLoop(tail_loop) => tail_loop.signature().into_owned(),
-                _ => {
-                    return Err(ModifierResolverErrors::Unreachable(format!(
-                        "Cannot modify the IO of the node with OpType: {}",
-                        opty
-                    )));
-                }
-            };
-            // TODO: replace `== qb_t()` to appropriate type check.
-            for i in 0..min(input.len(), output.len()) {
-                if input[i] == qb_t() && output[i] == qb_t() {
-                    let old_in = (in_node, OutgoingPort::from(i)).into();
-                    let old_out = (out_node, IncomingPort::from(i)).into();
-                    let in_val = self.corresp_map().remove(&old_in);
-                    let out_val = self.corresp_map().remove(&old_out);
-                    match (in_val, out_val) {
-                        (Some(in_val), Some(out_val)) => {
-                            self.corresp_map().insert(old_in, out_val);
-                            self.corresp_map().insert(old_out, in_val);
-                        }
-                        _ => {
-                            return Err(ModifierResolverErrors::Unreachable(format!(
-                                "Failed to find {}-th IO wires for swap",
-                                i
-                            )));
-                        }
-                    }
-                }
             }
         }
 
@@ -900,7 +891,10 @@ impl<N: HugrNode> ModifierResolver<N> {
                     .take(self.modifiers.control)
                     .collect()
             }
-            OpType::Case(_) => todo!(),
+            OpType::Case(_) => return Err(ModifierResolverErrors::Unreachable(
+                "Control qubits of Case node have to be initialized directly while modifying Conditional."
+                    .to_string(),
+            )),
             optype => {
                 return Err(ModifierResolverErrors::Unreachable(format!(
                     "Cannot set control qubit of the node with OpType: {}",
@@ -979,8 +973,8 @@ impl<N: HugrNode> ModifierResolver<N> {
         optype: &OpType,
         new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        self.add_node_no_modification(new_dfg, optype.clone(), h, n)
-            .map(|_| ())
+        self.add_node_no_modification(new_dfg, optype.clone(), h, n)?;
+        Ok(())
     }
 
     fn modify_extension_op(
@@ -997,7 +991,6 @@ impl<N: HugrNode> ModifierResolver<N> {
         }
 
         // If TketOp, return the modified operation.
-        println!("I'm modifying Node: {:?}", n);
         if let Some(op) = TketOp::from_optype(optype) {
             let pv = self.modify_tket_op(n, op, new_dfg, &mut vec![])?;
             self.add_edge_from_pv(h, n, pv)
@@ -1011,7 +1004,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         } else {
             // Some other Hugr extension operation.
             // Here, we do not know what is the modified version.
-            // We try to place the previous operation.
+            // We try to place the original operation.
             self.modify_dataflow_op(h, n, optype, new_dfg)
         }
     }
@@ -1025,14 +1018,13 @@ impl<N: HugrNode> ModifierResolver<N> {
     ) -> Result<(), ModifierResolverErrors<N>> {
         // Build a new DFG with modified body.
         self.modify_signature(&mut dfg.signature, true);
-        // FIXME: This uses a hack: dfg_builder does not check the types or number of input_wires, so when no input_wires are given,
-        // it just creates a DFG without connecting any inputs.
-        let mut new_dfg = new_parent_dfg.dfg_builder(dfg.signature, vec![])?;
-        self.modify_dfg_body(h, n, &mut new_dfg)?;
-        let new_dfg = new_dfg
-            .finish_sub_container()
-            .map_err(ModifierResolverErrors::BuildError)?;
-        let new_dfg_node = new_dfg.node();
+        let signature = dfg.signature.clone();
+        let mut builder = DFGBuilder::new(signature.clone()).unwrap();
+        self.modify_dfg_body(h, n, &mut builder)?;
+        let new_dfg_hugr = builder
+            .finish_hugr()
+            .map_err(|e| ModifierResolverErrors::ValidationError(e.to_string()))?;
+        let new_dfg_node = new_parent_dfg.add_hugr(new_dfg_hugr).inserted_entrypoint;
 
         // connect the controls and register the IOs
         for (i, c) in self.controls().iter_mut().enumerate() {
@@ -1041,12 +1033,34 @@ impl<N: HugrNode> ModifierResolver<N> {
                 .connect(c.node(), c.source(), new_dfg_node, i);
             *c = Wire::new(new_dfg_node, i);
         }
-        for port in h.all_node_ports(n) {
-            self.map_insert(
-                DirWire(n, port),
-                DirWire(new_dfg_node, port).shift(self.modifiers.control),
-            )?;
+        let offset = self.modifiers.control;
+        for (i, in_out_type) in signature
+            .input
+            .iter()
+            .zip_longest(signature.output.iter())
+            .enumerate()
+        {
+            if self.need_swap(in_out_type.as_deref()) {
+                let old_in_wire = (n, IncomingPort::from(i)).into();
+                let old_out_wire = (n, OutgoingPort::from(i)).into();
+                let new_in_wire = (new_dfg_node, OutgoingPort::from(i + offset)).into();
+                let new_out_wire = (new_dfg_node, IncomingPort::from(i + offset)).into();
+                self.map_insert(old_in_wire, new_in_wire)?;
+                self.map_insert(old_out_wire, new_out_wire)?;
+                continue;
+            }
+            if in_out_type.has_left() {
+                let old_in_wire = (n, IncomingPort::from(i)).into();
+                let new_in_wire = (new_dfg_node, IncomingPort::from(i + offset)).into();
+                self.map_insert(old_in_wire, new_in_wire)?;
+            }
+            if in_out_type.has_right() {
+                let old_out_wire = (n, OutgoingPort::from(i)).into();
+                let new_out_wire = (new_dfg_node, OutgoingPort::from(i + offset)).into();
+                self.map_insert(old_out_wire, new_out_wire)?;
+            }
         }
+        // TODO: StateOrder
 
         Ok(())
     }
@@ -1060,6 +1074,18 @@ impl<N: HugrNode> ModifierResolver<N> {
     ) -> Result<(), ModifierResolverErrors<N>> {
         let just_input_num = tail_loop.just_inputs.len();
         let just_output_num = tail_loop.just_outputs.len();
+
+        // TailLoop cannot be daggered as long as it is not the one generated from Power modifier.
+        // Every TailLoop that is generated from Power cannot have `just_outputs`.
+        if self.modifiers.dagger && !tail_loop.just_outputs.is_empty() {
+            let optype = h.get_optype(n);
+            return Err(ModifierError::ModifierNotApplicable(n, optype.clone()).into());
+        }
+        // TODO: Handle the case when TailLoop is generated from Power modifier.
+        // Currently, it is not implemented.
+        if self.modifiers.dagger {
+            todo!("Dagger for TailLoop is not supported yet.");
+        }
 
         // Build a new TailLoop with modified body.
         let mut builder = TailLoopBuilder::new(
@@ -1127,14 +1153,14 @@ impl<N: HugrNode> ModifierResolver<N> {
         let controls = self.controls().clone();
 
         for (i, case_node) in h.children(n).enumerate() {
-            let tag_type_num = conditional.sum_rows[i].len();
+            let tag_wire_num = conditional.sum_rows[i].len();
             let mut case_builder = builder.case_builder(i).unwrap();
 
             // Set the controls and corresp_map
             let mut corresp_map = HashMap::new();
             let controls = case_builder
                 .input_wires()
-                .skip(tag_type_num)
+                .skip(tag_wire_num)
                 .take(offset)
                 .collect();
             mem::swap(self.corresp_map(), &mut corresp_map);
@@ -1143,24 +1169,44 @@ impl<N: HugrNode> ModifierResolver<N> {
             // Modify the IOs
             let [old_in, old_out] = h.get_io(case_node).unwrap();
             let [new_in, new_out] = case_builder.io();
-            // Modify the input/output nodes beforehand.
-            for port in h.node_outputs(old_in) {
-                let new_port = if port.index() < tag_type_num {
-                    port
-                } else {
-                    port.shift(offset)
-                };
-                self.map_insert((old_in, port).into(), DirWire::from((new_in, new_port)))?;
-            }
-            for port in h.node_inputs(old_out) {
-                self.map_insert(
-                    (old_out, port).into(),
-                    DirWire::from((new_out, port.shift(offset))),
-                )?
-            }
 
-            // FIXME: This implementation does not support dagger
-            // Need to do the same stuff as in modify_in_out_node.
+            // Modify the input/output nodes beforehand.
+            for i in 0..tag_wire_num {
+                let old_port = OutgoingPort::from(i);
+                let new_port = OutgoingPort::from(i);
+                self.map_insert((old_in, old_port).into(), (new_in, new_port).into())?
+            }
+            for (i, in_out_type) in conditional
+                .other_inputs
+                .iter()
+                .zip_longest(conditional.outputs.iter())
+                .enumerate()
+            {
+                if self.need_swap(in_out_type.as_deref()) {
+                    let old_in_wire = (old_in, OutgoingPort::from(i + tag_wire_num)).into();
+                    let old_out_wire = (old_out, IncomingPort::from(i)).into();
+                    let new_in_wire = (new_out, IncomingPort::from(i + offset)).into();
+                    let new_out_wire =
+                        (new_in, OutgoingPort::from(i + offset + tag_wire_num)).into();
+                    self.map_insert(old_in_wire, new_in_wire)?;
+                    self.map_insert(old_out_wire, new_out_wire)?;
+                    continue;
+                }
+                if in_out_type.has_left() {
+                    let old_in_wire = (old_in, OutgoingPort::from(i + tag_wire_num)).into();
+                    let new_in_wire = (
+                        new_in,
+                        OutgoingPort::from(i).shift(i + offset + tag_wire_num),
+                    )
+                        .into();
+                    self.map_insert(old_in_wire, new_in_wire)?;
+                }
+                if in_out_type.has_right() {
+                    let old_out_wire = (old_out, IncomingPort::from(i)).into();
+                    let new_out_wire = (new_out, IncomingPort::from(i + offset)).into();
+                    self.map_insert(old_out_wire, new_out_wire)?;
+                }
+            }
 
             // Modify the children.
             self.modify_dfg_children(h, case_node, &mut case_builder)?;
@@ -1189,18 +1235,47 @@ impl<N: HugrNode> ModifierResolver<N> {
                 .connect(ctrl.node(), ctrl.source(), new_conditional, i + 1);
             self.controls().push(Wire::new(new_conditional, i));
         }
-        for port in h.node_inputs(n) {
-            let new_port = if port.index() == 0 {
-                port
-            } else {
-                port.shift(offset)
-            };
-            self.map_insert((n, port).into(), (new_conditional, new_port).into())?;
+        self.map_insert(
+            (n, IncomingPort::from(0)).into(),
+            (new_conditional, IncomingPort::from(0)).into(),
+        )?;
+        for (i, in_out_type) in conditional
+            .other_inputs
+            .iter()
+            .zip_longest(conditional.outputs.iter())
+            .enumerate()
+        {
+            if self.need_swap(in_out_type.as_deref()) {
+                let old_in_wire = (n, OutgoingPort::from(i)).into();
+                let old_out_wire = (n, IncomingPort::from(i + 1)).into();
+                let new_in_wire = (new_conditional, IncomingPort::from(i + offset + 1)).into();
+                let new_out_wire = (new_conditional, OutgoingPort::from(i + offset)).into();
+                self.map_insert(old_in_wire, new_in_wire)?;
+                self.map_insert(old_out_wire, new_out_wire)?;
+                continue;
+            }
+            if in_out_type.has_left() {
+                let old_in_wire = (n, OutgoingPort::from(i)).into();
+                let new_in_wire = (new_conditional, OutgoingPort::from(i + offset)).into();
+                self.map_insert(old_in_wire, new_in_wire)?;
+            }
+            if in_out_type.has_right() {
+                let old_out_wire = (n, IncomingPort::from(i + 1)).into();
+                let new_out_wire = (new_conditional, IncomingPort::from(i + offset + 1)).into();
+                self.map_insert(old_out_wire, new_out_wire)?;
+            }
         }
-        for port in h.node_outputs(n) {
-            let new_port = port.shift(offset);
-            self.map_insert((n, port).into(), (new_conditional, new_port).into())?
-        }
+        // StateOrder
+        // for i in conditional.other_inputs.len() + 1..h.num_inputs(n) {
+        //     let old_port = OutgoingPort::from(i);
+        //     let new_port = OutgoingPort::from(i + offset);
+        //     self.map_insert((n, old_port).into(), (new_conditional, new_port).into())?
+        // }
+        // for i in conditional.outputs.len()..h.num_outputs(n) {
+        //     let old_port = IncomingPort::from(i);
+        //     let new_port = IncomingPort::from(i + offset);
+        //     self.map_insert((n, old_port).into(), (new_conditional, new_port).into())?
+        // }
 
         Ok(())
     }
@@ -1234,6 +1309,7 @@ pub fn resolve_modifier_with_entrypoints(
         }
     }
 
+    // Global phase is no more needed after resolving modifiers.
     delete_phase(h, entry_points.into_iter())?;
 
     Ok(())
@@ -1252,9 +1328,10 @@ mod test {
             handle::{FuncID, NodeHandle},
             CallIndirect, ExtensionOp,
         },
-        std_extensions::collections::array::{array_type, ArrayOpBuilder},
+        std_extensions::collections::array::{self, array_type, ArrayOpBuilder},
         types::{Signature, Term, Type},
     };
+    use rayon::vec;
 
     use crate::{
         extension::{
@@ -1273,6 +1350,10 @@ mod test {
         let foo_sig = Signature::new_endo(iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>());
         let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
         let mut inputs: Vec<_> = func.input_wires().collect();
+        inputs[0] = func
+            .add_dataflow_op(TketOp::X, vec![inputs[0]])
+            .unwrap()
+            .out_wire(0);
         let targ1 = &mut inputs[0];
         *targ1 = {
             let dfg = func.dfg_builder_endo(vec![(qb_t(), *targ1)]).unwrap();
@@ -1326,6 +1407,11 @@ mod test {
             let angle = ConstRotation::new(0.5).unwrap();
             func.add_load_value(angle)
         };
+        let mut inputs = func.input_wires().collect::<Vec<_>>();
+        inputs[0] = func
+            .add_dataflow_op(TketOp::X, vec![inputs[0]])
+            .unwrap()
+            .out_wire(0);
         let sum_bool = func
             .make_sum(
                 1,
@@ -1336,13 +1422,13 @@ mod test {
         let mut cond_builder = func
             .conditional_builder(
                 ([type_row![], vec![rotation_type().into()].into()], sum_bool),
-                iter::repeat(qb_t()).take(t_num).zip(func.input_wires()),
+                iter::repeat(qb_t()).take(t_num).zip(inputs),
                 iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>().into(),
             )
             .unwrap();
         let _case1 = {
-            let mut case = cond_builder.case_builder(0).unwrap();
-            let mut inputs = case.input_wires();
+            let case = cond_builder.case_builder(0).unwrap();
+            let inputs = case.input_wires();
             let outputs = [].into_iter().chain(inputs);
             case.finish_with_outputs(outputs).unwrap()
         };
@@ -1364,14 +1450,17 @@ mod test {
     }
 
     #[rstest::rstest]
-    #[case::dfg(1, 2, foo_dfg, "dfg")]
-    #[case::tail_loop(1, 1, foo_tail_loop, "tail_loop")]
-    #[case::conditional(1, 1, foo_conditional, "conditional")]
+    #[case::dfg(1, 2, foo_dfg, "dfg", false)]
+    #[case::dfg_dagger(1, 2, foo_dfg, "dfg", true)]
+    #[case::tail_loop(1, 1, foo_tail_loop, "tail_loop", false)]
+    #[case::conditional(1, 1, foo_conditional, "conditional", false)]
+    #[case::conditional_dagger(1, 1, foo_conditional, "conditional", true)]
     fn test_modifier_resolver_optypes(
         #[case] t_num: usize,
         #[case] c_num: u64,
         #[case] foo: fn(&mut ModuleBuilder<Hugr>, usize) -> FuncID<true>,
         #[case] name: &str,
+        #[case] dagger: bool,
     ) {
         let mut module = ModuleBuilder::new();
         let call_sig = Signature::new_endo(
@@ -1387,6 +1476,21 @@ mod test {
                 .chain(iter::repeat(qb_t()).take(t_num))
                 .collect::<Vec<_>>(),
         );
+
+        let dagger_op: ExtensionOp = {
+            MODIFIER_EXTENSION
+                .instantiate_extension_op(
+                    &DAGGER_OP_ID,
+                    [
+                        iter::repeat(qb_t().into())
+                            .take(t_num)
+                            .collect::<Vec<_>>()
+                            .into(),
+                        vec![].into(),
+                    ],
+                )
+                .unwrap()
+        };
 
         let control_op: ExtensionOp = {
             MODIFIER_EXTENSION
@@ -1409,6 +1513,12 @@ mod test {
         let _main = {
             let mut func = module.define_function("main", main_sig).unwrap();
             let mut call = func.load_func(&foo, &[]).unwrap();
+            if dagger {
+                call = func
+                    .add_dataflow_op(dagger_op, vec![call])
+                    .unwrap()
+                    .out_wire(0);
+            }
             call = func
                 .add_dataflow_op(control_op, vec![call])
                 .unwrap()

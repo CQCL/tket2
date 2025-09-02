@@ -34,11 +34,12 @@ impl FromStr for ModifierPower {
 }
 impl ModifierPower {
     /// signature for the power modifier.
+    /// The second parameter has to be Copyable, because we need to duplicate it to make `TailLoop.just_inputs`.
     pub fn signature() -> SignatureFunc {
         PolyFuncTypeRV::new(
             [
                 TypeParam::new_list_type(TypeBound::Linear),
-                TypeParam::new_list_type(TypeBound::Linear),
+                TypeParam::new_list_type(TypeBound::Copyable),
             ],
             FuncValueType::new(
                 TypeRV::new_function(FuncValueType::new(
