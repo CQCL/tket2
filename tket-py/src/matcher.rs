@@ -3,6 +3,7 @@
 use derive_more::derive::{From, Into};
 use hugr::{
     builder::{DFGBuilder, HugrBuilder},
+    hugr::views::sibling_subgraph::InvalidSubgraph,
     types::Signature,
     HugrView,
 };
@@ -442,7 +443,12 @@ impl PyMatchReplaceRewriter {
 
     /// Get all possible rewrites for a circuit.
     fn get_rewrites(&self, circuit: &Tk2Circuit) -> Vec<PyCircuitRewrite> {
-        let circuit = ResourceScope::from_circuit(Circuit::new(circuit.circ.hugr()));
+        let circuit = Circuit::new(circuit.circ.hugr());
+        if circuit.try_to_subgraph() == Err(InvalidSubgraph::EmptySubgraph) {
+            // No matches possible in an empty circuit
+            return vec![];
+        }
+        let circuit = ResourceScope::from_circuit(circuit);
         <Self as Rewriter<_>>::get_rewrites(&self, &circuit)
             .into_iter()
             .map(|rw| rw.to_simple_replacement(&circuit).into())
@@ -509,7 +515,12 @@ impl PyCombineMatchReplaceRewriter {
 
     /// Get all possible rewrites for a circuit.
     fn get_rewrites(&self, circuit: &Tk2Circuit) -> Vec<PyCircuitRewrite> {
-        let circuit = ResourceScope::from_circuit(Circuit::new(circuit.circ.hugr()));
+        let circuit = Circuit::new(circuit.circ.hugr());
+        if circuit.try_to_subgraph() == Err(InvalidSubgraph::EmptySubgraph) {
+            // No matches possible in an empty circuit
+            return vec![];
+        }
+        let circuit = ResourceScope::from_circuit(circuit);
         <Self as Rewriter<_>>::get_rewrites(&self, &circuit)
             .into_iter()
             .map(|rw| rw.to_simple_replacement(&circuit).into())

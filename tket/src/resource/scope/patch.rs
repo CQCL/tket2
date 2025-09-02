@@ -193,7 +193,9 @@ impl<H: Clone + HugrView<Node = hugr::Node>> ResourceScope<H> {
                     .collect_vec()
             })
             .collect_vec();
-        let subgraph = circuit.subgraph();
+        let subgraph = circuit
+            .try_to_subgraph()
+            .unwrap_or_else(|e| panic!("Invalid subgraph: {e}"));
 
         let mut this = Self {
             hugr: circuit.into_hugr(),

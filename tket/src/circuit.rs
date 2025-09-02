@@ -14,6 +14,7 @@ pub use command::{Command, CommandIterator};
 pub use hash::{CircuitHash, HashError};
 use hugr::extension::prelude::{NoopDef, TupleOpDef};
 use hugr::extension::simple_op::MakeOpDef;
+use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::hugr::views::{ExtractionResult, SiblingSubgraph};
 use hugr::ops::handle::DataflowParentID;
 use itertools::Either::{Left, Right};
@@ -357,11 +358,13 @@ impl<T: HugrView<Node = Node>> Circuit<T> {
     }
 
     /// The subgraph containing the entire circuit.
-    pub fn subgraph(&self) -> SiblingSubgraph
+    ///
+    /// Will return `None` if the circuit is empty.
+    pub fn try_to_subgraph(&self) -> Result<SiblingSubgraph, InvalidSubgraph>
     where
         T: Clone,
     {
-        SiblingSubgraph::try_new_dataflow_subgraph::<_, DataflowParentID>(self.hugr()).unwrap()
+        SiblingSubgraph::try_new_dataflow_subgraph::<_, DataflowParentID>(self.hugr())
     }
 }
 

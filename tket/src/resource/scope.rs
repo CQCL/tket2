@@ -106,7 +106,9 @@ impl<H: HugrView> ResourceScope<H> {
     where
         H: HugrView<Node = hugr::Node> + Clone,
     {
-        let subgraph = circuit.subgraph();
+        let subgraph = circuit
+            .try_to_subgraph()
+            .unwrap_or_else(|e| panic!("Invalid subgraph: {e}"));
         Self::new(circuit.into_hugr(), subgraph)
     }
 
@@ -356,7 +358,9 @@ impl<'h, H: HugrView> ResourceScope<&'h H> {
     where
         H: Clone + HugrView<Node = hugr::Node>,
     {
-        let subgraph = circuit.subgraph();
+        let subgraph = circuit
+            .try_to_subgraph()
+            .unwrap_or_else(|e| panic!("Invalid subgraph: {e}"));
         Self::new(circuit.hugr(), subgraph)
     }
 }

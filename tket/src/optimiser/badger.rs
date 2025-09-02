@@ -21,6 +21,7 @@ mod worker;
 use crossbeam_channel::select;
 pub use eq_circ_class::{load_eccs_json_file, EqCircClass};
 use fxhash::FxHashSet;
+use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::hugr::HugrError;
 use hugr::{HugrView, Node};
 pub use log::BadgerLogger;
@@ -185,8 +186,14 @@ where
     ) -> ResourceScope {
         let start_time = Instant::now();
         let mut last_best_time = Instant::now();
+        let circ = circ.to_owned();
 
-        let circ = ResourceScope::from_circuit(circ.to_owned());
+        if circ.try_to_subgraph() == Err(InvalidSubgraph::EmptySubgraph) {
+            // No rewrites possible in an empty circuit
+            panic!("Empty circuit input not supported; no optimisation possible");
+        }
+
+        let circ = ResourceScope::from_circuit(circ);
         let mut best_circ = circ.clone();
         let mut best_circ_cost = self.cost(&circ);
         let num_rewrites = best_circ.rewrite_trace().map(|rs| rs.count());
@@ -294,7 +301,14 @@ where
     ) -> ResourceScope {
         let start_time = Instant::now();
         let n_threads: usize = opt.n_threads.get();
-        let circ = ResourceScope::from_circuit(circ.to_owned());
+        let circ = circ.to_owned();
+
+        if circ.try_to_subgraph() == Err(InvalidSubgraph::EmptySubgraph) {
+            // No rewrites possible in an empty circuit
+            panic!("Empty circuit input not supported; no optimisation possible");
+        }
+
+        let circ = ResourceScope::from_circuit(circ);
 
         // multi-consumer priority channel for queuing circuits to be processed by the
         // workers
@@ -439,7 +453,14 @@ where
         opt: BadgerOptions,
     ) -> Result<ResourceScope, HugrError> {
         let start_time = Instant::now();
-        let circ = ResourceScope::from_circuit(circ.to_owned());
+        let circ = circ.to_owned();
+
+        if circ.try_to_subgraph() == Err(InvalidSubgraph::EmptySubgraph) {
+            // No rewrites possible in an empty circuit
+            panic!("Empty circuit input not supported; no optimisation possible");
+        }
+
+        let circ = ResourceScope::from_circuit(circ);
         let circ_cost = self.cost(&circ);
         let max_chunk_cost = circ_cost.clone().div_cost(opt.n_threads);
         logger.log(format!(

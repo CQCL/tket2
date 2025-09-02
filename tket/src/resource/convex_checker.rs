@@ -107,7 +107,7 @@ mod tests {
     #[case(vec![3, 6, 7], false)]
     fn test_is_convex(#[case] selected_nodes: Vec<usize>, #[case] is_convex: bool) {
         let circ = cx_ladder(5);
-        let subgraph = circ.subgraph();
+        let subgraph = circ.try_to_subgraph().unwrap();
         let cx_nodes = subgraph.nodes();
         let circ = ResourceScope::from(circ);
         let selected_nodes = selected_nodes.into_iter().map(|i| cx_nodes[i]);

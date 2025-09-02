@@ -211,7 +211,7 @@ mod tests {
     #[test]
     fn test_nodes_in_interval() {
         let circ = cx_circuit(5);
-        let subgraph = Circuit::from(&circ).subgraph();
+        let subgraph = Circuit::from(&circ).try_to_subgraph().unwrap();
         let cx_nodes = subgraph.nodes().to_owned();
         let scope = super::ResourceScope::new(&circ, subgraph);
 
@@ -278,7 +278,7 @@ mod tests {
         #[case] expected_range: RangeInclusive<usize>,
     ) {
         let circ = cx_circuit(5);
-        let subgraph = Circuit::from(&circ).subgraph();
+        let subgraph = Circuit::from(&circ).try_to_subgraph().unwrap();
         let cx_nodes = subgraph.nodes().to_owned();
         let scope = super::ResourceScope::new(&circ, subgraph);
 

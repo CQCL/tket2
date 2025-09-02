@@ -286,7 +286,7 @@ pub(crate) mod tests {
         #[case] add_const_rz: bool,
     ) {
         let circ = cx_rz_circuit(n_qubits, add_rz, add_const_rz);
-        let subgraph = Circuit::from(&circ).subgraph();
+        let subgraph = Circuit::from(&circ).try_to_subgraph().unwrap();
         let scope = ResourceScope::new(&circ, subgraph);
         let info = ResourceScopeReport::from(&scope);
 
