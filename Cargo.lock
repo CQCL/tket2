@@ -1056,7 +1056,6 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.22.2"
-source = "git+https://github.com/CQCL/hugr?rev=b6e052c#b6e052c0deece9fbf54ef3dfb5251bd6d018bd1e"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1067,7 +1066,6 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.22.2"
-source = "git+https://github.com/CQCL/hugr?rev=b6e052c#b6e052c0deece9fbf54ef3dfb5251bd6d018bd1e"
 dependencies = [
  "anyhow",
  "clap",
@@ -1084,7 +1082,6 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.22.2"
-source = "git+https://github.com/CQCL/hugr?rev=b6e052c#b6e052c0deece9fbf54ef3dfb5251bd6d018bd1e"
 dependencies = [
  "base64",
  "cgmath",
@@ -1121,7 +1118,6 @@ dependencies = [
 [[package]]
 name = "hugr-llvm"
 version = "0.22.2"
-source = "git+https://github.com/CQCL/hugr?rev=b6e052c#b6e052c0deece9fbf54ef3dfb5251bd6d018bd1e"
 dependencies = [
  "anyhow",
  "delegate 0.13.4",
@@ -1140,7 +1136,6 @@ dependencies = [
 [[package]]
 name = "hugr-model"
 version = "0.22.2"
-source = "git+https://github.com/CQCL/hugr?rev=b6e052c#b6e052c0deece9fbf54ef3dfb5251bd6d018bd1e"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1161,7 +1156,6 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.22.2"
-source = "git+https://github.com/CQCL/hugr?rev=b6e052c#b6e052c0deece9fbf54ef3dfb5251bd6d018bd1e"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
@@ -1453,12 +1447,11 @@ dependencies = [
 
 [[package]]
 name = "nu-ansi-term"
-version = "0.46.0"
+version = "0.50.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77a8165726e8236064dbb45459242600304b42a5ea24ee2948e18e023bf7ba84"
+checksum = "d4a28e057d01f97e61255210fcff094d74ed0466038633e95017f5beb68e4399"
 dependencies = [
- "overload",
- "winapi",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1544,12 +1537,6 @@ dependencies = [
  "rand",
  "serde",
 ]
-
-[[package]]
-name = "overload"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
 name = "parking_lot_core"
@@ -1995,9 +1982,9 @@ checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
 
 [[package]]
 name = "relrc"
-version = "0.4.6"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65b9e2100a2ee7d9efb575064b2f9a552d7f9f60289d7b95b9c22175101c7c4a"
+checksum = "f7c9d6253f1c4c3606b530b88ba15cd6803d4104ccd4d34173397ce49fe0b867"
 dependencies = [
  "derive-where",
  "derive_more 0.99.20",
@@ -2005,6 +1992,7 @@ dependencies = [
  "itertools 0.13.0",
  "petgraph 0.8.2",
  "serde",
+ "slotmap_fork_lmondada",
  "thiserror 1.0.69",
 ]
 
@@ -2255,6 +2243,16 @@ name = "slab"
 version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a2ae44ef20feb57a68b23d846850f861394c2e02dc425a50098ae8c90267589"
+
+[[package]]
+name = "slotmap_fork_lmondada"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "936d3c60e7b845c8978d64485cffa451156294a772ebfafc0ea5fbd7a3c58669"
+dependencies = [
+ "serde",
+ "version_check",
+]
 
 [[package]]
 name = "smallvec"
@@ -2657,9 +2655,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.19"
+version = "0.3.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8189decb5ac0fa7bc8b96b7cb9b2701d60d48805aca84a238004d665fcc4008"
+checksum = "2054a14f5307d601f88daf0553e1cbf472acc4f2c51afab632431cdcd72124d5"
 dependencies = [
  "nu-ansi-term",
  "sharded-slab",
@@ -2865,22 +2863,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "winapi"
-version = "0.3.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c839a674fcd7a98952e593242ea400abe93992746761e38641405d28b00f419"
-dependencies = [
- "winapi-i686-pc-windows-gnu",
- "winapi-x86_64-pc-windows-gnu",
-]
-
-[[package]]
-name = "winapi-i686-pc-windows-gnu"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
-
-[[package]]
 name = "winapi-util"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2888,12 +2870,6 @@ checksum = "0978bf7171b3d90bac376700cb56d606feb40f251a475a5d6634613564460b22"
 dependencies = [
  "windows-sys 0.60.2",
 ]
-
-[[package]]
-name = "winapi-x86_64-pc-windows-gnu"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "windows-core"
@@ -2967,6 +2943,15 @@ dependencies = [
  "windows_x86_64_gnu 0.42.2",
  "windows_x86_64_gnullvm 0.42.2",
  "windows_x86_64_msvc 0.42.2",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
+dependencies = [
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
