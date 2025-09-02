@@ -35,7 +35,7 @@ impl ModifierControl {
                 TypeRV::new_function(FuncValueType::new(
                     vec![
                         TypeRV::new_row_var_use(1, TypeBound::Linear),
-                        TypeRV::new_row_var_use(2, TypeBound::Copyable),
+                        TypeRV::new_row_var_use(2, TypeBound::Linear),
                     ],
                     vec![TypeRV::new_row_var_use(1, TypeBound::Linear)],
                 )),
@@ -48,7 +48,7 @@ impl ModifierControl {
                         .unwrap()
                         .into(),
                         TypeRV::new_row_var_use(1, TypeBound::Linear),
-                        TypeRV::new_row_var_use(2, TypeBound::Copyable),
+                        TypeRV::new_row_var_use(2, TypeBound::Linear),
                     ],
                     vec![
                         array_type_parametric(

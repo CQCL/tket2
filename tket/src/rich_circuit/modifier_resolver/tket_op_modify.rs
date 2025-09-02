@@ -1038,7 +1038,7 @@ mod test {
     fn test_multi_control_ancilla() {
         let mut module = ModuleBuilder::new();
         let t_num = 1;
-        let c_num = 5;
+        let c_num = 7;
         let num = (t_num + c_num).try_into().unwrap();
 
         let targs = iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>();
