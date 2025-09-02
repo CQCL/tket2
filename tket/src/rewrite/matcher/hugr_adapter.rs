@@ -1,17 +1,18 @@
+//! An adaptor for [`CircuitMatcher`]s that matches patterns in Hugrs.
 use std::{
     cmp::Reverse,
     collections::{BTreeSet, VecDeque},
     hash::{Hash, Hasher},
 };
 
-use hugr::{extension::prelude::qb_t, types::Type, Direction, HugrView, Node, NodeIndex, Port};
-use itertools::{Either, Itertools};
+use hugr::{Direction, HugrView, Node, NodeIndex, Port};
+use itertools::Itertools;
 use portgraph::UnmanagedDenseMap;
 
 use super::{
     as_tket_or_extension_op, CircuitMatcher, MatchContext, MatchOutcomeEnum, TketOrExtensionOp,
 };
-use crate::{resource::ResourceScope, Subcircuit};
+use crate::{resource::ResourceScope, rewrite::matcher::all_linear_ports, Subcircuit};
 
 /// An adaptor for [`CircuitMatcher`]s that matches patterns in concrete
 /// circuits.
@@ -25,7 +26,8 @@ impl<'m, M: ?Sized> HugrMatchAdapter<'m, M> {
         Self { matcher }
     }
 }
-#[derive(Debug, Clone)]
+
+#[derive(Debug, Clone, Default)]
 struct MatchState<PartialMatchInfo> {
     /// The (currently incomplete) match.
     subcircuit: Subcircuit,
@@ -160,6 +162,19 @@ impl<'m, M: CircuitMatcher + ?Sized> HugrMatchAdapter<'m, M> {
         circ: &ResourceScope<H>,
         options: &MatchingOptions<M::PartialMatchInfo, M::MatchInfo>,
     ) -> Vec<(Subcircuit, M::MatchInfo)> {
+        circ.nodes()
+            .iter()
+            .flat_map(|&n| self.get_matches(circ, n, options))
+            .collect()
+    }
+
+    /// Get all matching subcircuits within the Circuit rooted at a given node.
+    pub fn get_matches<H: HugrView<Node = Node>>(
+        &self,
+        circ: &ResourceScope<H>,
+        root_node: Node,
+        options: &MatchingOptions<M::PartialMatchInfo, M::MatchInfo>,
+    ) -> Vec<(Subcircuit, M::MatchInfo)> {
         let mut queue = VecDeque::new();
         let mut all_matches = Vec::new();
 
@@ -175,17 +190,11 @@ impl<'m, M: CircuitMatcher + ?Sized> HugrMatchAdapter<'m, M> {
             .map(|_| BTreeSet::<u64>::new());
 
         // 1. Initialise queue
-        for cmd in circ.as_circuit().commands() {
-            let empty_match = MatchState {
-                subcircuit: Subcircuit::new_empty(),
-                active_ports: VecDeque::new(),
-                match_info: M::PartialMatchInfo::default(),
-            };
-
-            let mut new_matches = enqueue_extended_matches(
+        {
+            let mut matches = enqueue_extended_matches(
                 &circ,
-                empty_match,
-                cmd.node(),
+                MatchState::default(),
+                root_node,
                 self.matcher,
                 &mut queue,
                 None,
@@ -194,7 +203,7 @@ impl<'m, M: CircuitMatcher + ?Sized> HugrMatchAdapter<'m, M> {
             if let Some(deduplicate_complete_matches) =
                 options.deduplicate_complete_matches.as_ref()
             {
-                new_matches.retain(|(subcirc, info)| {
+                matches.retain(|(subcirc, info)| {
                     let hash = fx_hash_subcirc_info(subcirc, info, deduplicate_complete_matches);
                     let complete_matches = complete_matches.as_mut().expect("enabled");
                     complete_matches.insert(hash)
@@ -202,7 +211,7 @@ impl<'m, M: CircuitMatcher + ?Sized> HugrMatchAdapter<'m, M> {
             }
 
             all_matches.extend(
-                new_matches
+                matches
                     .into_iter()
                     .filter(|(subcirc, _)| subcirc.validate_subgraph(&circ).is_ok()),
             );
@@ -349,7 +358,7 @@ where
             MatchOutcomeEnum::Proceed(match_info) => {
                 let mut active_ports = current_match.active_ports.clone();
                 active_ports.extend(
-                    ports_of_type(circ.hugr(), new_node, qb_t(), None)
+                    all_linear_ports(circ.hugr(), new_node)
                         .filter(|p| Some(p) != traversed_port.as_ref())
                         .map(|p| (new_node, p)),
                 );
@@ -374,22 +383,6 @@ where
     }
 
     all_matches
-}
-
-fn ports_of_type<H: HugrView>(
-    host: &H,
-    node: H::Node,
-    typ: Type,
-    dir: impl Into<Option<Direction>>,
-) -> impl Iterator<Item = Port> + '_ {
-    let ports = match dir.into() {
-        Some(dir) => Either::Left(host.value_types(node, dir)),
-        None => Either::Right(
-            host.value_types(node, Direction::Incoming)
-                .chain(host.value_types(node, Direction::Outgoing)),
-        ),
-    };
-    ports.filter_map(move |(port, t)| (t == typ).then_some(port))
 }
 
 /// Remove non-maximal subgraphs (i.e. subgraphs fully contained within another
@@ -438,53 +431,21 @@ fn remove_non_maximal_matches<MatchInfo, H: HugrView<Node = Node>>(
 
 #[cfg(test)]
 mod tests {
-    use hugr::types::Signature;
+    use hugr::{extension::prelude::qb_t, types::Signature};
     use rstest::{fixture, rstest};
 
     use crate::{
         extension::rotation::rotation_type,
-        resource::CircuitUnit,
-        rewrite::matcher::{CircuitMatcher, MatchOutcome, Update},
+        rewrite::matcher::{
+            tests::{TestHadamardMatcher, TestRzMatcher},
+            CircuitMatcher,
+        },
         serialize::TKETDecode,
         utils::build_simple_circuit,
         TketOp,
     };
 
     use super::*;
-
-    /// A matcher finding all sequences of two or more Hadamard gates.
-    struct TestHadamardMatcher;
-    type NumHadamards = usize;
-
-    impl CircuitMatcher for TestHadamardMatcher {
-        type PartialMatchInfo = NumHadamards;
-        type MatchInfo = NumHadamards;
-
-        fn match_tket_op<H: HugrView>(
-            &self,
-            op: TketOp,
-            _args: &[CircuitUnit<H::Node>],
-            match_context: MatchContext<Self::PartialMatchInfo, H>,
-        ) -> MatchOutcome<Self::PartialMatchInfo, Self::MatchInfo> {
-            // We can always skip this op
-            let mut outcomes = MatchOutcome::default().skip(Update::Unchanged);
-            match op {
-                TketOp::H => {
-                    // we have a hadamard, so we can match this op and proceed
-                    let num_hadamards = match_context.match_info + 1;
-                    outcomes = outcomes.proceed(num_hadamards);
-                    if num_hadamards >= 2 {
-                        // We have enough hadamards to report the current match
-                        outcomes.complete(num_hadamards)
-                    } else {
-                        // Proceed (without reporting a match)
-                        outcomes
-                    }
-                }
-                _ => outcomes,
-            }
-        }
-    }
 
     #[fixture]
     fn three_hadamards() -> ResourceScope {
@@ -547,27 +508,6 @@ mod tests {
             .expect("1 match");
 
         assert_eq!(match_.0.node_count(&three_hadamards), 3);
-    }
-
-    /// A matcher finding Rz gates with constant angle `0.123`.
-    struct TestRzMatcher;
-
-    impl CircuitMatcher for TestRzMatcher {
-        type PartialMatchInfo = ();
-        type MatchInfo = ();
-
-        fn match_tket_op<H: HugrView>(
-            &self,
-            op: TketOp,
-            args: &[CircuitUnit<H::Node>],
-            match_context: MatchContext<Self::PartialMatchInfo, H>,
-        ) -> MatchOutcome<Self::PartialMatchInfo, Self::MatchInfo> {
-            if op == TketOp::Rz && match_context.circuit.as_const_f64(args[1]) == Some(0.123) {
-                MatchOutcome::default().complete(())
-            } else {
-                MatchOutcome::stop()
-            }
-        }
     }
 
     #[test]

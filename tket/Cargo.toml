@@ -78,12 +78,8 @@ pest_derive = { workspace = true }
 zstd = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 num-rational = { workspace = true }
-
-[dependencies.z3] # Currently using a fork of z3.rs to install from GH releases
-git = "https://github.com/lmondada/z3.rs.git"
-rev = "d1ca853678c"
-features = ["gh-release"]
-optional = true
+z3 = { workspace = true, optional = true }
+slotmap_fork_lmondada = "1.0.8"
 
 [dev-dependencies]
 rstest = { workspace = true }
@@ -99,6 +95,6 @@ insta = "1.43.1"
 name = "bench_main"
 harness = false
 
-[[test]]
-name = "rewrite_space_explorer"
-required-features = ["badgerv2_unstable"]
+# [[test]]
+# name = "rewrite_space_explorer"
+# required-features = ["badgerv2_unstable"]

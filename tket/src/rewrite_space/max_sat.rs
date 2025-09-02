@@ -16,7 +16,6 @@ pub(super) struct MaxSATSolver {
     implications: Vec<(Symbol, Symbol)>,
     mutex: Vec<(Symbol, Symbol)>,
     weights: BTreeMap<Symbol, isize>,
-    ctx: z3::Context,
 }
 
 impl Debug for MaxSATSolver {
@@ -83,20 +82,20 @@ impl MaxSATSolver {
         self.weights.insert(symb.into(), weight);
     }
 
-    fn z3_implications(&self) -> impl Iterator<Item = Z3Bool> {
+    fn z3_implications(&self) -> impl Iterator<Item = Z3Bool> + '_ {
         self.implications
             .iter()
             .map(|(a, b)| Z3Bool::implies(&self.z3_symbol(a), &self.z3_symbol(b)))
     }
 
-    fn z3_mutexes(&self) -> impl Iterator<Item = Z3Bool> {
+    fn z3_mutexes(&self) -> impl Iterator<Item = Z3Bool> + '_ {
         self.mutex
             .iter()
             .map(|(a, b)| !(self.z3_symbol(a) & self.z3_symbol(b)))
     }
 
     pub(super) fn z3_symbol(&self, symb: &str) -> Z3Bool {
-        Z3Bool::new_const(&self.ctx, symb)
+        Z3Bool::new_const(symb)
     }
 
     pub(super) fn all_symbols(&self) -> impl Iterator<Item = &Symbol> {
@@ -109,7 +108,7 @@ impl MaxSATSolver {
 
     fn to_z3(&self) -> z3::Optimize {
         // Create an optimizer
-        let opt = z3::Optimize::new(&self.ctx);
+        let opt = z3::Optimize::new();
 
         // Add the hard constraints
         for a_implies_b in self.z3_implications() {
@@ -133,13 +132,10 @@ impl MaxSATSolver {
 
 impl Default for MaxSATSolver {
     fn default() -> Self {
-        let cfg = z3::Config::new();
-        let ctx = z3::Context::new(&cfg);
         Self {
             implications: vec![],
             mutex: vec![],
             weights: BTreeMap::new(),
-            ctx,
         }
     }
 }

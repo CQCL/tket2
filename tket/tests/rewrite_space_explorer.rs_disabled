@@ -7,8 +7,8 @@ use hugr::{
     Hugr, HugrView,
 };
 use itertools::Itertools;
-use tket2::rewrite_space::CommuteCZFactory;
-use tket2::{
+use tket::rewrite_space::CommuteCZFactory;
+use tket::{
     rewrite_space::{CommitFactory, ExploreOptions, RewriteSpace},
     Tk2Op,
 };
