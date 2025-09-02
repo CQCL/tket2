@@ -2517,7 +2517,6 @@ dependencies = [
 [package.dev-dependencies]
 docs = [
     { name = "furo" },
-    { name = "maturin" },
     { name = "myst-nb" },
     { name = "sphinx-basic-ng" },
     { name = "sphinx-copybutton" },
@@ -2534,7 +2533,6 @@ requires-dist = [
 [package.metadata.requires-dev]
 docs = [
     { name = "furo", specifier = ">=2024.8.6" },
-    { name = "maturin", specifier = ">=1.7.0,<2" },
     { name = "myst-nb", specifier = ">=1.1.2" },
     { name = "sphinx-basic-ng", specifier = ">=1.0.0b2" },
     { name = "sphinx-copybutton", specifier = ">=0.5.2" },
