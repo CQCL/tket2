@@ -36,5 +36,9 @@ html_static_path = ["_static"]
 
 exclude_patterns = ["jupyter_execute/"]
 
+suppress_warnings = [
+    "misc.highlighting_failure",
+]
+
 
 nb_execution_mode = "off"
