@@ -226,7 +226,6 @@ fn array_clone_dest(size: u64, elem_ty: Type) -> NodeTemplate {
         vec![array_ty.clone(), array_ty],
     ))
     .unwrap();
-    // TODO: Find less hacky solution.
     let mut h = std::mem::take(dfb.hugr_mut());
     let [inp, outp] = h.get_io(h.entrypoint()).unwrap();
     h.connect(inp, 0, outp, 0);
@@ -308,11 +307,7 @@ fn lowerer() -> ReplaceTypes {
             };
             let size = size.as_nat().unwrap();
             let elem_ty = elem_ty.as_runtime().unwrap();
-            if !elem_ty.copyable() {
-                Some(array_clone_dest(size, elem_ty))
-            } else {
-                None
-            }
+            (!elem_ty.copyable()).then(|| array_clone_dest(size, elem_ty))
         },
         ReplacementOptions::default().with_linearization(true),
     );
@@ -327,17 +322,16 @@ fn lowerer() -> ReplaceTypes {
             };
             let size = size.as_nat().unwrap();
             let elem_ty = elem_ty.as_runtime().unwrap();
+            if elem_ty.copyable() {
+                return None;
+            }
             let drop_op_def = GUPPY_EXTENSION.get_op(DROP_OP_NAME.as_str()).unwrap();
             let drop_op = ExtensionOp::new(
                 drop_op_def.clone(),
                 vec![array_type(size, elem_ty.clone()).into()],
             )
             .unwrap();
-            if !elem_ty.copyable() {
-                Some(NodeTemplate::SingleOp(drop_op.into()))
-            } else {
-                None
-            }
+            Some(NodeTemplate::SingleOp(drop_op.into()))
         },
     );
 

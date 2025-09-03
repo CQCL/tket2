@@ -157,7 +157,7 @@ fn unit_map_func_value(elem_ty: Type) -> Value {
         .unwrap();
         let [in_elem] = dfb.input_wires_arr();
         let [] = dfb
-            .build_expect_sum(0, option_type(elem_ty.clone()).into(), in_elem, |_| {
+            .build_expect_sum(0, option_type(elem_ty.clone()), in_elem, |_| {
                 String::from("Array not empty")
             })
             .unwrap();
@@ -510,7 +510,7 @@ fn option_unwrap_func_value(elem_ty: Type) -> Value {
         .unwrap();
         let [in_elem] = dfb.input_wires_arr();
         let [out_elem] = dfb
-            .build_expect_sum(1, option_type(elem_ty.clone()).into(), in_elem, |_| {
+            .build_expect_sum(1, option_type(elem_ty.clone()), in_elem, |_| {
                 String::from("Element borrowed")
             })
             .unwrap();
