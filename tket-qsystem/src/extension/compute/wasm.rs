@@ -58,8 +58,7 @@ use hugr::{
             try_from_name, HasConcrete, HasDef, MakeExtensionOp, MakeOpDef, MakeRegisteredOp,
             OpLoadError,
         },
-        ExtensionBuildError, ExtensionId, ExtensionRegistry, SignatureError, SignatureFunc,
-        TypeDefBound, Version, PRELUDE,
+        ExtensionId, ExtensionRegistry, SignatureError, SignatureFunc, Version, PRELUDE,
     },
     ops::{
         constant::{downcast_equal_consts, CustomConst, ValueName},
@@ -67,9 +66,8 @@ use hugr::{
     },
     type_row,
     types::{
-        type_param::TermTypeError,
-        CustomType, FuncValueType, PolyFuncTypeRV, Signature, SumType, Type, TypeArg, TypeBound,
-        TypeEnum, TypeRV, TypeRow, TypeRowRV,
+        type_param::TermTypeError, CustomType, FuncValueType, PolyFuncTypeRV, Signature, SumType,
+        Type, TypeArg, TypeBound, TypeEnum, TypeRV, TypeRow, TypeRowRV,
     },
     Extension, Wire,
 };
@@ -80,8 +78,8 @@ use smol_str::format_smolstr;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
 use super::common::{
-    ComputeOp, ComputeType, CONTEXT_TYPE_NAME, FUNC_TYPE_NAME, ID_PARAM, INPUTS_PARAM,
-    MODULE_TYPE_NAME, NAME_PARAM, OUTPUTS_PARAM, RESULT_TYPE_NAME,
+    add_compute_type_defs, ComputeOp, ComputeType, CONTEXT_TYPE_NAME, FUNC_TYPE_NAME, ID_PARAM,
+    INPUTS_PARAM, MODULE_TYPE_NAME, NAME_PARAM, OUTPUTS_PARAM, RESULT_TYPE_NAME,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -102,7 +100,7 @@ lazy_static! {
     /// The `tket.wasm` extension.
     pub static ref EXTENSION: Arc<Extension> =
         Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
-        add_wasm_type_defs(ext, ext_ref).unwrap();
+        add_compute_type_defs(ext, ext_ref).unwrap();
         WasmOpDef::load_all_ops(ext, ext_ref, ).unwrap();
     });
 

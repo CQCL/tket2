@@ -1,7 +1,11 @@
-use hugr::types::{type_param::TypeParam, TypeBound, TypeRow, TypeRowRV};
+use hugr::{
+    extension::{Extension, ExtensionBuildError, TypeDefBound},
+    types::{type_param::TypeParam, TypeBound, TypeRow, TypeRowRV},
+};
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
 use std::marker::PhantomData;
+use std::sync::Weak;
 
 lazy_static! {
     /// The name of the `tket.wasm.module` type.
@@ -23,6 +27,41 @@ lazy_static! {
         TypeParam::ListType(Box::new(TypeBound::Linear.into()));
     /// The [TypeParam] of various types and ops specifying the output signature of a function.
     pub static ref OUTPUTS_PARAM: TypeParam = TypeParam::ListType(Box::new(TypeBound::Linear.into()));
+}
+
+pub(crate) fn add_compute_type_defs(
+    extension: &mut Extension,
+    extension_ref: &Weak<Extension>,
+) -> Result<(), ExtensionBuildError> {
+    extension.add_type(
+        MODULE_TYPE_NAME.to_owned(),
+        vec![],
+        format!("{} module", extension.name),
+        TypeDefBound::copyable(),
+        extension_ref,
+    )?;
+    extension.add_type(
+        CONTEXT_TYPE_NAME.to_owned(),
+        vec![],
+        format!("{} context", extension.name),
+        TypeDefBound::any(),
+        extension_ref,
+    )?;
+    extension.add_type(
+        FUNC_TYPE_NAME.to_owned(),
+        vec![INPUTS_PARAM.to_owned(), OUTPUTS_PARAM.to_owned()],
+        format!("{} func", extension.name),
+        TypeDefBound::copyable(),
+        extension_ref,
+    )?;
+    extension.add_type(
+        RESULT_TYPE_NAME.to_owned(),
+        vec![OUTPUTS_PARAM.to_owned()],
+        format!("{} result", extension.name),
+        TypeDefBound::any(),
+        extension_ref,
+    )?;
+    Ok(())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
