@@ -11,6 +11,7 @@ use crate::resource::types::{CircuitUnit, PortMap};
 use crate::utils::type_is_linear;
 use crate::Circuit;
 use hugr::core::HugrNode;
+use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::OpTrait;
 use hugr::types::Signature;
@@ -33,8 +34,9 @@ use super::{Position, ResourceAllocator, ResourceId};
 pub struct ResourceScope<H: HugrView = hugr::Hugr> {
     /// The HUGR containing the operations.
     hugr: H,
-    /// The subgraph within which resources are tracked.
-    subgraph: SiblingSubgraph<H::Node>,
+    /// The subgraph within which resources are tracked, or `None` if the
+    /// circuit is empty.
+    subgraph: Option<SiblingSubgraph<H::Node>>,
     /// Mapping from nodes and ports to their [`CircuitUnit`]s.
     circuit_units: IndexMap<H::Node, NodeCircuitUnits<H::Node>>,
 }
@@ -95,16 +97,34 @@ impl<H: HugrView> ResourceScope<H> {
     ) -> Self {
         let mut scope = Self {
             hugr,
-            subgraph,
+            subgraph: Some(subgraph),
             circuit_units: IndexMap::new(),
         };
         scope.compute_circuit_units(&config.flows);
         scope
     }
 
+    /// Create a new ResourceScope from a HUGR that is an empty DFG.
+    ///
+    /// Panics if the HUGR is not an empty DFG.
+    pub fn new_empty(hugr: H) -> Self {
+        assert_eq!(
+            hugr.children(hugr.entrypoint()).count(),
+            2,
+            "HUGR is not empty"
+        );
+        Self {
+            hugr,
+            subgraph: None,
+            circuit_units: IndexMap::new(),
+        }
+    }
+
     /// Get the nodes within the scope.
     pub fn nodes(&self) -> &[H::Node] {
-        self.subgraph.nodes()
+        self.subgraph
+            .as_ref()
+            .map_or(&[], |subgraph| subgraph.nodes())
     }
 
     /// Get the underlying HUGR.
@@ -112,9 +132,9 @@ impl<H: HugrView> ResourceScope<H> {
         &self.hugr
     }
 
-    /// Get the underlying subgraph.
-    pub fn subgraph(&self) -> &SiblingSubgraph<H::Node> {
-        &self.subgraph
+    /// Get the underlying subgraph, or `None` if the circuit is empty.
+    pub fn subgraph(&self) -> Option<&SiblingSubgraph<H::Node>> {
+        self.subgraph.as_ref()
     }
 
     /// Get the [`CircuitUnit`] for a given port.
@@ -154,6 +174,11 @@ impl<H: HugrView> ResourceScope<H> {
         self.circuit_units
             .get(&node)
             .map(|node_circuit_units| node_circuit_units.position)
+    }
+
+    /// Whether the scope is an empty DFG.
+    pub fn is_empty(&self) -> bool {
+        self.subgraph.is_none()
     }
 
     /// All resource IDs on the ports of `node` in the given direction.
@@ -226,33 +251,62 @@ impl<H: HugrView> ResourceScope<H> {
                 .hugr()
                 .single_linked_port(curr_node, port)
                 .expect("linear resource");
-            self.subgraph
-                .nodes()
-                .contains(&next_node)
-                .then_some(next_node)
+            self.nodes().contains(&next_node).then_some(next_node)
         })
     }
 }
 
-impl<H: HugrView> ResourceScope<H> {
+impl<H: Clone + HugrView<Node = hugr::Node>> ResourceScope<H> {
     /// Create a new ResourceScope from a reference to a circuit.
-    pub fn from_circuit(circuit: Circuit<H>) -> Self
-    where
-        H: Clone + HugrView<Node = hugr::Node>,
-    {
-        let subgraph = circuit.subgraph();
-        Self::new(circuit.into_hugr(), subgraph)
+    ///
+    /// This will panic if the subgraph given by the sibling DFG graph of the
+    /// circuit is invalid, e.g. if there are any non-local edges or static
+    /// edges at the boundary.
+    ///
+    /// Use [`ResourceScope::try_from_circuit`] instead for a version that
+    /// returns an error.
+    pub fn from_circuit(circuit: Circuit<H>) -> Self {
+        Self::try_from_circuit(circuit).unwrap_or_else(|e| panic!("Invalid circuit: {e}"))
+    }
+
+    /// Create a new ResourceScope from a circuit.
+    ///
+    /// This will return an error if the subgraph given by the sibling DFG graph
+    /// of the circuit is invalid, e.g. if there are any non-local edges or
+    /// static edges at the boundary.
+    pub fn try_from_circuit(circuit: Circuit<H>) -> Result<Self, InvalidSubgraph> {
+        match circuit.subgraph() {
+            Ok(subgraph) => Ok(Self::new(circuit.into_hugr(), subgraph)),
+            Err(InvalidSubgraph::EmptySubgraph) => Ok(Self::new_empty(circuit.into_hugr())),
+            Err(err) => Err(err),
+        }
     }
 }
 
-impl<'h, H: HugrView> ResourceScope<&'h H> {
+impl<'h, H: Clone + HugrView<Node = hugr::Node>> ResourceScope<&'h H> {
     /// Create a new ResourceScope from a reference to a circuit.
-    pub fn from_circuit_ref(circuit: &'h Circuit<H>) -> Self
-    where
-        H: Clone + HugrView<Node = hugr::Node>,
-    {
-        let subgraph = circuit.subgraph();
-        Self::new(circuit.hugr(), subgraph)
+    ///
+    /// This will panic if the subgraph given by the sibling DFG graph of the
+    /// circuit is invalid, e.g. if there are any non-local edges or static
+    /// edges at the boundary.
+    ///
+    /// Use [`ResourceScope::try_from_circuit_ref`] instead for a version that
+    /// returns an error.
+    pub fn from_circuit_ref(circuit: &'h Circuit<H>) -> Self {
+        Self::try_from_circuit_ref(circuit).unwrap_or_else(|e| panic!("Invalid circuit: {e}"))
+    }
+
+    /// Create a new ResourceScope from a reference to a circuit.
+    ///
+    /// This will return an error if the subgraph given by the sibling DFG graph
+    /// of the circuit is invalid, e.g. if there are any non-local edges or
+    /// static edges at the boundary.
+    pub fn try_from_circuit_ref(circuit: &'h Circuit<H>) -> Result<Self, InvalidSubgraph> {
+        match circuit.subgraph() {
+            Ok(subgraph) => Ok(Self::new(circuit.hugr(), subgraph)),
+            Err(InvalidSubgraph::EmptySubgraph) => Ok(Self::new_empty(circuit.hugr())),
+            Err(err) => Err(err),
+        }
     }
 }
 
@@ -276,11 +330,15 @@ impl<H: HugrView> ResourceScope<H> {
 
     /// Compute circuit units for all nodes in the subgraph.
     fn compute_circuit_units(&mut self, flows: &[Box<dyn '_ + ResourceFlow<H>>]) {
+        let Some(subgraph) = self.subgraph.as_ref() else {
+            // Nothing to compute on an empty circuit
+            return;
+        };
+
         let mut allocator = CircuitUnitAllocator::default();
 
         // First, assign circuit units to the inputs to the subgraph.
-        let all_inputs = self
-            .subgraph
+        let all_inputs = subgraph
             .incoming_ports()
             .iter()
             .flatten()
@@ -288,9 +346,11 @@ impl<H: HugrView> ResourceScope<H> {
             .collect_vec();
         self.assign_circuit_units(all_inputs, &mut allocator);
 
+        let subgraph = self.subgraph.as_ref().unwrap(); // re-borrow
+
         // Proceed to propagating the circuit units through the subgraph, in topological
         // order.
-        for node in toposort_subgraph(&self.hugr, &self.subgraph, self.find_sources()) {
+        for node in toposort_subgraph(&self.hugr, subgraph, self.find_sources()) {
             self.assign_missing_circuit_units(node, &mut allocator);
             self.propagate_to_outputs(node, flows, &mut allocator);
             self.propagate_to_next_inputs(node);
@@ -339,11 +399,10 @@ impl<H: HugrView> ResourceScope<H> {
         let has_pred_in_subgraph = |node: H::Node| {
             self.hugr
                 .all_linked_outputs(node)
-                .any(|(n, _)| self.subgraph.nodes().contains(&n))
+                .any(|(n, _)| self.nodes().contains(&n))
         };
 
-        self.subgraph
-            .nodes()
+        self.nodes()
             .iter()
             .copied()
             .filter(move |&n| !has_pred_in_subgraph(n))
@@ -409,7 +468,7 @@ impl<H: HugrView> ResourceScope<H> {
                 .expect("dataflow node has circuit unit");
 
             for (in_node, in_port) in self.hugr.linked_inputs(node, p) {
-                if !self.subgraph.nodes().contains(&in_node) {
+                if !self.nodes().contains(&in_node) {
                     continue;
                 }
                 let Some(next_node_units) =
@@ -617,5 +676,13 @@ pub(crate) mod tests {
                 "position is not monotonically increasing on path {res:?}"
             );
         }
+    }
+
+    #[test]
+    fn test_empty_scope() {
+        let circ = build_simple_circuit(3, |_| Ok(())).unwrap();
+
+        let scope = ResourceScope::from(&circ);
+        assert!(scope.is_empty());
     }
 }
