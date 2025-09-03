@@ -563,7 +563,7 @@ mod test {
 
     use hugr::{
         algorithms::{dead_code, ComposablePass},
-        builder::{Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder},
+        builder::{Container, Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder},
         envelope::{EnvelopeConfig, EnvelopeFormat},
         extension::{prelude::qb_t, ExtensionRegistry},
         ops::{handle::NodeHandle, CallIndirect, ExtensionOp},

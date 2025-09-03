@@ -3,7 +3,7 @@ use hugr::{
     extension::{prelude::qb_t, SignatureFunc},
     std_extensions::collections::array::array_type_parametric,
     types::{
-        type_param::TypeParam, FuncValueType, PolyFuncTypeRV, Term, TypeArg, TypeBound, TypeRV,
+        type_param::TypeParam, FuncValueType, PolyFuncTypeRV, TypeArg, TypeBound, TypeRV,
     },
 };
 
