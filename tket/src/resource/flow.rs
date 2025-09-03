@@ -81,8 +81,8 @@ impl<H: HugrView> ResourceFlow<H> for Box<dyn '_ + ResourceFlow<H>> {
 /// This implementation considers that an operation is resource-preserving if
 /// for all port indices i, either
 ///  - the i-th input and i-th output are both linear and are of the same type,
-///  - or the i-th input and i-th output are both copyable, or one is copyable
-///    and the other does not exist.
+///  - or the i-th input and i-th output are both copyable,
+///  - or one of the i-th input/output is copyable and the other does not exist.
 ///
 /// For resource-preserving operations, linear inputs are then mapped to the
 /// corresponding output. (All outputs with no corresponding input, must be

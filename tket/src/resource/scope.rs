@@ -60,6 +60,13 @@ impl<N: HugrNode> NodeCircuitUnits<N> {
 
 /// Configuration for a ResourceScope.
 pub struct ResourceScopeConfig<'a, H: HugrView> {
+    /// The objects implementing the [`ResourceFlow`] trait, used to determine
+    /// how resources are preserved ("flow") through operations.
+    ///
+    /// For each operation `op` in the circuit, the resource flows will be tried
+    /// in order until the first one that succeeds on `op`. If none succeed,
+    /// the [ResourceScope] construction will panic, so it is recommended to
+    /// add [`DefaultResourceFlow`] to the end of flows (never fails).
     flows: Vec<Box<dyn 'a + ResourceFlow<H>>>,
 }
 
@@ -90,6 +97,11 @@ impl<H: HugrView> ResourceScope<H> {
     }
 
     /// Create a new ResourceScope with a custom resource flow implementation.
+    ///
+    /// The resource flows passed in `config` will be tried in order for every
+    /// `op` until the first one that succeeds on `op`. If none succeed,
+    /// this will panic, so it is recommended to add [`DefaultResourceFlow`] to
+    /// the end of flows (never fails).
     pub fn with_config(
         hugr: H,
         subgraph: SiblingSubgraph<H::Node>,
@@ -215,7 +227,7 @@ impl<H: HugrView> ResourceScope<H> {
                 .is_none()
     }
 
-    /// Iterate over all resources in the scope.
+    /// Iterate over all distinct resources in the scope.
     pub fn resources_iter(&self) -> impl Iterator<Item = ResourceId> + '_ {
         self.nodes()
             .iter()
@@ -484,6 +496,8 @@ impl<H: HugrView> ResourceScope<H> {
 }
 
 /// Get the circuit units for the given node, creating them if they don't exist.
+///
+/// Return `None` if the node is not a dataflow op.
 fn node_circuit_units_mut<H: HugrView>(
     all_circuit_units: &mut IndexMap<H::Node, NodeCircuitUnits<H::Node>>,
     node: H::Node,
@@ -493,12 +507,10 @@ fn node_circuit_units_mut<H: HugrView>(
         Entry::Occupied(occupied_entry) => Some(occupied_entry.into_mut()),
         Entry::Vacant(vacant_entry) => {
             let signature = hugr.get_optype(node).dataflow_signature()?;
-            vacant_entry
-                .insert(NodeCircuitUnits::with_default(
-                    CircuitUnit::sentinel(),
-                    &signature,
-                ))
-                .into()
+            Some(vacant_entry.insert(NodeCircuitUnits::with_default(
+                CircuitUnit::sentinel(),
+                &signature,
+            )))
         }
     }
 }

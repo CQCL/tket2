@@ -69,13 +69,6 @@ impl Position {
 
 /// A value associated with a dataflow port, identified either by a resource ID
 /// (for linear values) or by its wire (for copyable values).
-///
-/// This can currently be converted to and from [`hugr::CircuitUnit`], but
-/// linear wires are assigned to resources with typed resource IDs instead of
-/// integers.
-///
-/// Equivalence with [`hugr::CircuitUnit`] is not guaranteed in the future: we
-/// may expand expressivity, e.g. identifying copyable units by their ASTs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CircuitUnit<N: HugrNode> {
     /// A linear resource.
@@ -200,7 +193,7 @@ impl<T> PortMap<T> {
 
 /// Allocator for ResourceIds that ensures they are assigned in increasing
 /// order.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ResourceAllocator {
     next_id: usize,
 }
@@ -208,7 +201,7 @@ pub struct ResourceAllocator {
 impl ResourceAllocator {
     /// Create a new ResourceAllocator starting from ID 0.
     pub fn new() -> Self {
-        Self { next_id: 0 }
+        Self::default()
     }
 
     /// Allocate the next available ResourceId.
@@ -216,11 +209,5 @@ impl ResourceAllocator {
         let id = ResourceId::new(self.next_id);
         self.next_id += 1;
         id
-    }
-}
-
-impl Default for ResourceAllocator {
-    fn default() -> Self {
-        Self::new()
     }
 }

@@ -11,11 +11,12 @@
 //! introduces the notion of "Resource" to extend the lifetime of a linear value
 //! over multiple ops.
 //!
-//! If a linear value appears both in an op's input and output, we say that it
-//! is "resource-preserving". Using [`ResourceFlow`], we can track resources
-//! as they "flow" through multiple operations. The chains of
-//! resource-preserving ops acting on a same resource form a so-called resource
-//! path.
+//! Every linear value is associated with a resource. If a linear value passed
+//! as input to an op is also returned by the op as an output, then both input
+//! and output values are associated with the same resource. We say that the op
+//! "preserves" the resource. Using [`ResourceFlow`], we can track resources as
+//! they "flow" through multiple operations. The chains of resource-preserving
+//! ops acting on a same resource form a so-called resource path.
 //!
 //! # Resources and Copyable Values
 //!
