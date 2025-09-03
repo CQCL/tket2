@@ -148,6 +148,27 @@ fn return_dest(size: u64, elem_ty: Type) -> NodeTemplate {
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
+fn unit_map_func_value(elem_ty: Type) -> Value {
+    let func_hugr = {
+        let mut dfb = DFGBuilder::new(inout_sig(
+            vec![option_type(elem_ty.clone()).into()],
+            vec![Type::UNIT],
+        ))
+        .unwrap();
+        let [in_elem] = dfb.input_wires_arr();
+        let [] = dfb
+            .build_expect_sum(0, option_type(elem_ty.clone()).into(), in_elem, |_| {
+                String::from("Array not empty")
+            })
+            .unwrap();
+        let ret = dfb.add_load_value(Value::unary_unit_sum());
+        dfb.finish_hugr_with_outputs([ret]).unwrap()
+    };
+    Value::Function {
+        hugr: Box::new(func_hugr),
+    }
+}
+
 fn discard_all_borrowed_dest(size: u64, elem_ty: Type) -> NodeTemplate {
     let opt_elem_ty = option_type(elem_ty.clone());
     let mut dfb = DFGBuilder::new(inout_sig(
@@ -157,18 +178,15 @@ fn discard_all_borrowed_dest(size: u64, elem_ty: Type) -> NodeTemplate {
     .unwrap();
 
     let [arr] = dfb.input_wires_arr();
-    // This implicitly discards the array.
-    let result = dfb
-        .add_array_unpack(opt_elem_ty.clone().into(), size, arr)
-        .unwrap();
-    for wire in result {
-        // Ensure value is none.
-        let [] = dfb
-            .build_expect_sum(0, opt_elem_ty.clone(), wire, |_| {
-                String::from("Index not empty")
-            })
-            .unwrap();
-    }
+
+    // Check all elements are none and then discard array with now droppable elements.
+    let scan_op = ArrayScan::new(opt_elem_ty.clone().into(), Type::UNIT, vec![], size);
+    let unit_map_func = dfb.add_load_value(unit_map_func_value(elem_ty.clone()));
+    let unit_arr = dfb
+        .add_dataflow_op(scan_op, [arr, unit_map_func])
+        .unwrap()
+        .out_wire(0);
+    dfb.add_array_discard(Type::UNIT, size, unit_arr).unwrap();
 
     let h = dfb.finish_hugr_with_outputs([]).unwrap();
     NodeTemplate::CompoundOp(Box::new(h))
@@ -461,6 +479,48 @@ fn unpack_dest(size: u64, elem_ty: Type) -> NodeTemplate {
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
+fn option_wrap_func_value(elem_ty: Type) -> Value {
+    let func_hugr = {
+        let mut dfb = DFGBuilder::new(inout_sig(
+            vec![elem_ty.clone()],
+            vec![option_type(elem_ty.clone()).into()],
+        ))
+        .unwrap();
+        let [in_elem] = dfb.input_wires_arr();
+        let out_elem = dfb
+            .add_dataflow_op(
+                Tag::new(1, vec![TypeRow::new(), elem_ty.clone().into()]),
+                [in_elem],
+            )
+            .unwrap()
+            .out_wire(0);
+        dfb.finish_hugr_with_outputs([out_elem]).unwrap()
+    };
+    Value::Function {
+        hugr: Box::new(func_hugr),
+    }
+}
+
+fn option_unwrap_func_value(elem_ty: Type) -> Value {
+    let func_hugr = {
+        let mut dfb = DFGBuilder::new(inout_sig(
+            vec![option_type(elem_ty.clone()).into()],
+            vec![elem_ty.clone()],
+        ))
+        .unwrap();
+        let [in_elem] = dfb.input_wires_arr();
+        let [out_elem] = dfb
+            .build_expect_sum(1, option_type(elem_ty.clone()).into(), in_elem, |_| {
+                String::from("Element borrowed")
+            })
+            .unwrap();
+        dfb.finish_hugr_with_outputs([out_elem]).unwrap()
+    };
+    Value::Function {
+        hugr: Box::new(func_hugr),
+    }
+}
+
 fn repeat_dest(size: u64, elem_ty: Type) -> NodeTemplate {
     let opt_elem_ty = option_type(elem_ty.clone());
     let arr_type = array_type(size, opt_elem_ty.clone().into());
@@ -475,22 +535,17 @@ fn repeat_dest(size: u64, elem_ty: Type) -> NodeTemplate {
 
     let [f] = dfb.input_wires_arr();
 
-    let repeat_op = ArrayRepeat::new(elem_ty.clone(), size);
-
     // Call array_repeat to get array of elements without options.
+    let repeat_op = ArrayRepeat::new(elem_ty.clone(), size);
     let arr = dfb.add_dataflow_op(repeat_op, [f]).unwrap().out_wire(0);
 
-    // Unpack the array to get the elements as wires
-    let elems = dfb.add_array_unpack(elem_ty.clone(), size, arr).unwrap();
-
-    // Wrap each element in option
-    let opt_elems = elems
-        .into_iter()
-        .map(|wire| option_wrap(&mut dfb, wire, elem_ty.clone()))
-        .collect::<Vec<_>>();
-
-    // Create the new array of option<elem_ty>
-    let opt_arr = dfb.add_new_array(opt_elem_ty.into(), opt_elems).unwrap();
+    // Call scan with a function to wrap all elements in options.
+    let scan_op = ArrayScan::new(elem_ty.clone(), opt_elem_ty.clone().into(), vec![], size);
+    let option_wrap_func = dfb.add_load_value(option_wrap_func_value(elem_ty.clone()));
+    let opt_arr = dfb
+        .add_dataflow_op(scan_op, [arr, option_wrap_func])
+        .unwrap()
+        .out_wire(0);
 
     let h = dfb.finish_hugr_with_outputs([opt_arr]).unwrap();
     NodeTemplate::CompoundOp(Box::new(h))
@@ -533,19 +588,12 @@ fn scan_dest(size: u64, src_ty: Type, tgt_ty: Type, acc_tys: Vec<Type>) -> NodeT
     let mut inputs: Vec<Wire> = dfb.input_wires().collect();
 
     // Unwrap all the options in the input array.
-    let elems = dfb
-        .add_array_unpack(opt_src_ty.clone().into(), size, inputs[0])
-        .unwrap();
-    let mut unwrapped_elems = Vec::with_capacity(size as usize);
-    for elem in elems {
-        let [unwrapped] = dfb
-            .build_expect_sum(1, opt_src_ty.clone(), elem, |_| {
-                String::from("Element borrowed")
-            })
-            .unwrap();
-        unwrapped_elems.push(unwrapped);
-    }
-    let arr_unwrapped = dfb.add_new_array(src_ty.clone(), unwrapped_elems).unwrap();
+    let scan_op = ArrayScan::new(opt_src_ty.clone().into(), src_ty.clone(), vec![], size);
+    let option_unwrap_func = dfb.add_load_value(option_unwrap_func_value(src_ty.clone()));
+    let arr_unwrapped = dfb
+        .add_dataflow_op(scan_op, [inputs[0], option_unwrap_func])
+        .unwrap()
+        .out_wire(0);
 
     // Add the scan operation on the unwrapped array.
     let scan_op = ArrayScan::new(src_ty.clone(), tgt_ty.clone(), acc_tys.clone(), size);
@@ -557,14 +605,12 @@ fn scan_dest(size: u64, src_ty: Type, tgt_ty: Type, acc_tys: Vec<Type>) -> NodeT
         .collect();
 
     // Wrap each element in the output array in option again.
-    let out_elems = dfb
-        .add_array_unpack(tgt_ty.clone(), size, outputs[0])
-        .unwrap();
-    let opt_elems = out_elems
-        .into_iter()
-        .map(|wire| option_wrap(&mut dfb, wire, tgt_ty.clone()))
-        .collect::<Vec<_>>();
-    let opt_arr = dfb.add_new_array(opt_tgt_ty.into(), opt_elems).unwrap();
+    let scan_op = ArrayScan::new(tgt_ty.clone(), opt_tgt_ty.clone().into(), vec![], size);
+    let option_wrap_func = dfb.add_load_value(option_wrap_func_value(tgt_ty.clone()));
+    let opt_arr = dfb
+        .add_dataflow_op(scan_op, [outputs[0], option_wrap_func])
+        .unwrap()
+        .out_wire(0);
     outputs[0] = opt_arr;
 
     let h = dfb.finish_hugr_with_outputs(outputs).unwrap();

@@ -122,6 +122,9 @@ impl QSystemPass {
         }
 
         self.lower_tk2().run(hugr)?;
+        // Only has an effect if there are borrow arrays - should be run before
+        // lazification and drop lowering as no copy discard handler currently exists
+        // for BorrowArrays.
         if self.lower_borrow_arrays {
             self.replace_borrow_arrays().run(hugr)?;
         }
