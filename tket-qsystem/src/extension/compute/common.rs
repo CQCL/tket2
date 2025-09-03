@@ -1,7 +1,8 @@
 use hugr::{
-    extension::{Extension, ExtensionBuildError, TypeDefBound},
-    types::{type_param::TypeParam, TypeBound, TypeRow, TypeRowRV},
+    extension::{Extension, ExtensionBuildError, ExtensionId, TypeDefBound},
+    types::{type_param::TypeParam, CustomType, Type, TypeArg, TypeBound, TypeRow, TypeRowRV},
 };
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
 use std::marker::PhantomData;
@@ -90,6 +91,87 @@ pub enum ComputeType<T> {
         outputs: TypeRowRV,
     },
     _Unreachable(std::convert::Infallible, PhantomData<T>),
+}
+
+impl<T> ComputeType<T> {
+    /// Construct a new `tket.wasm.func` type.
+    pub fn new_func(inputs: impl Into<TypeRowRV>, outputs: impl Into<TypeRowRV>) -> Self {
+        Self::Func {
+            inputs: inputs.into(),
+            outputs: outputs.into(),
+        }
+    }
+
+    pub(crate) fn get_type(
+        &self,
+        extension_id: ExtensionId,
+        extension_ref: &Weak<Extension>,
+    ) -> Type {
+        self.custom_type(extension_id, extension_ref).into()
+    }
+
+    pub(crate) fn func_custom_type(
+        inputs: impl Into<TypeRowRV>,
+        outputs: impl Into<TypeRowRV>,
+        extension_id: ExtensionId,
+        extension_ref: &Weak<Extension>,
+    ) -> CustomType {
+        let row_to_arg =
+            |row: TypeRowRV| TypeArg::List(row.into_owned().into_iter().map_into().collect());
+        CustomType::new(
+            FUNC_TYPE_NAME.to_owned(),
+            [row_to_arg(inputs.into()), row_to_arg(outputs.into())],
+            extension_id,
+            TypeBound::Copyable,
+            extension_ref,
+        )
+    }
+
+    pub(crate) fn result_custom_type(
+        outputs: impl Into<TypeRowRV>,
+        extension_id: ExtensionId,
+        extension_ref: &Weak<Extension>,
+    ) -> CustomType {
+        let row_to_arg =
+            |row: TypeRowRV| TypeArg::List(row.into_owned().into_iter().map_into().collect());
+        CustomType::new(
+            RESULT_TYPE_NAME.to_owned(),
+            [row_to_arg(outputs.into())],
+            extension_id,
+            TypeBound::Linear,
+            extension_ref,
+        )
+    }
+
+    pub(crate) fn custom_type(
+        &self,
+        extension_id: ExtensionId,
+        extension_ref: &Weak<Extension>,
+    ) -> CustomType {
+        match self {
+            Self::Module => CustomType::new(
+                MODULE_TYPE_NAME.to_owned(),
+                [],
+                extension_id,
+                TypeBound::Copyable,
+                extension_ref,
+            ),
+            Self::Context => CustomType::new(
+                CONTEXT_TYPE_NAME.to_owned(),
+                [],
+                extension_id,
+                TypeBound::Linear,
+                extension_ref,
+            ),
+            Self::Func { inputs, outputs } => {
+                Self::func_custom_type(inputs.clone(), outputs.clone(), extension_id, extension_ref)
+            }
+            Self::Result { outputs } => {
+                Self::result_custom_type(outputs.clone(), extension_id, extension_ref)
+            }
+            Self::_Unreachable(x, _) => match *x {},
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

@@ -142,84 +142,15 @@ pub enum WasmOpDef {
     read_result,
 }
 
-impl WasmType {
-    /// Construct a new `tket.wasm.func` type.
-    pub fn new_func(inputs: impl Into<TypeRowRV>, outputs: impl Into<TypeRowRV>) -> Self {
-        Self::Func {
-            inputs: inputs.into(),
-            outputs: outputs.into(),
-        }
-    }
-
-    fn get_type(&self, extension_ref: &Weak<Extension>) -> Type {
-        self.custom_type(extension_ref).into()
-    }
-
-    fn func_custom_type(
-        inputs: impl Into<TypeRowRV>,
-        outputs: impl Into<TypeRowRV>,
-        extension_ref: &Weak<Extension>,
-    ) -> CustomType {
-        let row_to_arg =
-            |row: TypeRowRV| TypeArg::List(row.into_owned().into_iter().map_into().collect());
-        CustomType::new(
-            FUNC_TYPE_NAME.to_owned(),
-            [row_to_arg(inputs.into()), row_to_arg(outputs.into())],
-            EXTENSION_ID,
-            TypeBound::Copyable,
-            extension_ref,
-        )
-    }
-
-    fn result_custom_type(
-        outputs: impl Into<TypeRowRV>,
-        extension_ref: &Weak<Extension>,
-    ) -> CustomType {
-        let row_to_arg =
-            |row: TypeRowRV| TypeArg::List(row.into_owned().into_iter().map_into().collect());
-        CustomType::new(
-            RESULT_TYPE_NAME.to_owned(),
-            [row_to_arg(outputs.into())],
-            EXTENSION_ID,
-            TypeBound::Linear,
-            extension_ref,
-        )
-    }
-
-    fn custom_type(&self, extension_ref: &Weak<Extension>) -> CustomType {
-        match self {
-            Self::Module => CustomType::new(
-                MODULE_TYPE_NAME.to_owned(),
-                [],
-                EXTENSION_ID,
-                TypeBound::Copyable,
-                extension_ref,
-            ),
-            Self::Context => CustomType::new(
-                CONTEXT_TYPE_NAME.to_owned(),
-                [],
-                EXTENSION_ID,
-                TypeBound::Linear,
-                extension_ref,
-            ),
-            Self::Func { inputs, outputs } => {
-                Self::func_custom_type(inputs.clone(), outputs.clone(), extension_ref)
-            }
-            Self::Result { outputs } => Self::result_custom_type(outputs.clone(), extension_ref),
-            Self::_Unreachable(x, _) => match *x {},
-        }
-    }
-}
-
 impl From<WasmType> for CustomType {
     fn from(value: WasmType) -> Self {
-        value.custom_type(&EXTENSION_REF)
+        value.custom_type(EXTENSION_ID, &EXTENSION_REF)
     }
 }
 
 impl From<WasmType> for Type {
     fn from(value: WasmType) -> Self {
-        value.get_type(&EXTENSION_REF)
+        value.get_type(EXTENSION_ID, &EXTENSION_REF)
     }
 }
 
@@ -284,13 +215,16 @@ impl MakeOpDef for WasmOpDef {
     }
 
     fn init_signature(&self, extension_ref: &Weak<Extension>) -> SignatureFunc {
-        let context_type = WasmType::Context.get_type(extension_ref);
-        let module_type = WasmType::Module.get_type(extension_ref);
+        let context_type = WasmType::Context.get_type(self.extension(), extension_ref);
+        let module_type = WasmType::Module.get_type(self.extension(), extension_ref);
         match self {
             // [usize] -> [Context]
             Self::get_context => Signature::new(
                 usize_t(),
-                Type::from(WasmOp::get_context_return_type(extension_ref)),
+                Type::from(WasmOp::get_context_return_type(
+                    self.extension(),
+                    extension_ref,
+                )),
             )
             .into(),
             // [Context] -> []
@@ -300,7 +234,9 @@ impl MakeOpDef for WasmOpDef {
                 let inputs = TypeRV::new_row_var_use(1, TypeBound::Copyable);
                 let outputs = TypeRV::new_row_var_use(2, TypeBound::Copyable);
 
-                let func_type = WasmType::func_custom_type(inputs, outputs, extension_ref).into();
+                let func_type =
+                    WasmType::func_custom_type(inputs, outputs, self.extension(), extension_ref)
+                        .into();
                 PolyFuncTypeRV::new(
                     [
                         ID_PARAM.to_owned(),
@@ -316,7 +252,9 @@ impl MakeOpDef for WasmOpDef {
                 let inputs = TypeRV::new_row_var_use(1, TypeBound::Copyable);
                 let outputs = TypeRV::new_row_var_use(2, TypeBound::Copyable);
 
-                let func_type = WasmType::func_custom_type(inputs, outputs, extension_ref).into();
+                let func_type =
+                    WasmType::func_custom_type(inputs, outputs, self.extension(), extension_ref)
+                        .into();
                 PolyFuncTypeRV::new(
                     [
                         NAME_PARAM.to_owned(),
@@ -335,10 +273,14 @@ impl MakeOpDef for WasmOpDef {
                 let func_type = Type::new_extension(WasmType::func_custom_type(
                     inputs.clone(),
                     outputs.clone(),
+                    self.extension(),
                     extension_ref,
                 ));
-                let result_type =
-                    TypeRV::new_extension(WasmType::result_custom_type(outputs, extension_ref));
+                let result_type = TypeRV::new_extension(WasmType::result_custom_type(
+                    outputs,
+                    self.extension(),
+                    extension_ref,
+                ));
 
                 PolyFuncTypeRV::new(
                     [INPUTS_PARAM.to_owned(), OUTPUTS_PARAM.to_owned()],
@@ -354,6 +296,7 @@ impl MakeOpDef for WasmOpDef {
                 let outputs = TypeRV::new_row_var_use(0, TypeBound::Copyable);
                 let result_type = TypeRV::new_extension(WasmType::result_custom_type(
                     outputs.clone(),
+                    self.extension(),
                     extension_ref,
                 ));
                 PolyFuncTypeRV::new(
@@ -554,8 +497,11 @@ impl WasmOp {
         }
     }
 
-    fn get_context_return_type(extension_ref: &Weak<Extension>) -> SumType {
-        option_type(WasmType::Context.get_type(extension_ref))
+    fn get_context_return_type(
+        extension_id: ExtensionId,
+        extension_ref: &Weak<Extension>,
+    ) -> SumType {
+        option_type(WasmType::Context.get_type(extension_id, extension_ref))
     }
 }
 
@@ -636,7 +582,7 @@ impl CustomConst for ConstWasmModule {
     }
 
     fn get_type(&self) -> Type {
-        WasmType::Module.get_type(&EXTENSION_REF)
+        WasmType::Module.get_type(EXTENSION_ID, &EXTENSION_REF)
     }
 }
 
@@ -756,7 +702,10 @@ impl<T: Dataflow> WasmOpBuilder for T {}
 #[cfg(test)]
 mod test {
     use hugr::{
-        builder::DFGBuilder, extension::prelude::bool_t, ops::DataflowOpTrait as _, types::Term,
+        builder::DFGBuilder,
+        extension::prelude::bool_t,
+        ops::DataflowOpTrait as _,
+        types::{type_param::TypeParam, Term},
     };
     use rstest::rstest;
 
@@ -853,10 +802,11 @@ mod test {
             inputs: inputs.clone(),
             outputs: outputs.clone(),
         };
-        let module_ty = WasmType::Module.get_type(&op.extension_ref());
+        let module_ty = WasmType::Module.get_type(op.extension_id(), &op.extension_ref());
         let func_ty = Type::new_extension(WasmType::func_custom_type(
             inputs.clone(),
             outputs.clone(),
+            op.extension_id(),
             &op.extension_ref(),
         ));
         assert_eq!(
@@ -882,7 +832,11 @@ mod test {
             let [context] = {
                 let mb_c = builder.add_get_context(context_id).unwrap();
                 builder
-                    .build_unwrap_sum(1, WasmOp::get_context_return_type(&EXTENSION_REF), mb_c)
+                    .build_unwrap_sum(
+                        1,
+                        WasmOp::get_context_return_type(EXTENSION_ID, &EXTENSION_REF),
+                        mb_c,
+                    )
                     .unwrap()
             };
             let module = builder.add_const_module("test_module").unwrap();
