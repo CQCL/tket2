@@ -190,109 +190,10 @@ impl CustomConst for ConstWasmModule {
     }
 }
 
-/// An extension trait for [Dataflow] providing methods to add "tket.wasm"
-/// operations and constants.
-pub trait WasmOpBuilder: Dataflow {
-    /// Add a `tket.wasm.get_context` op.
-    fn add_get_context(&mut self, id: Wire) -> Result<Wire, BuildError> {
-        let op = self.add_dataflow_op(WasmOp::GetContext, vec![id])?;
-        Ok(op.out_wire(0))
-    }
+compute_builder!(WasmExtension, WasmOpBuilder);
 
-    /// Add a `tket.wasm.dispose_context` op.
-    fn add_dispose_context(&mut self, id: Wire) -> Result<(), BuildError> {
-        let _ = self.add_dataflow_op(WasmOp::DisposeContext, vec![id])?;
-        Ok(())
-    }
-
-    /// Add a `tket.wasm.lookup_by_id` op.
-    fn add_lookup_by_id(
-        &mut self,
-        id: impl Into<u64>,
-        inputs: impl Into<TypeRowRV>,
-        outputs: impl Into<TypeRowRV>,
-        module: Wire,
-    ) -> Result<Wire, BuildError> {
-        Ok(self
-            .add_dataflow_op(
-                WasmOp::LookupById {
-                    id: id.into(),
-                    inputs: inputs.into(),
-                    outputs: outputs.into(),
-                },
-                [module],
-            )?
-            .out_wire(0))
-    }
-
-    /// Add a `tket.wasm.lookup_by_name` op.
-    fn add_lookup_by_name(
-        &mut self,
-        name: impl Into<String>,
-        inputs: impl Into<TypeRowRV>,
-        outputs: impl Into<TypeRowRV>,
-        module: Wire,
-    ) -> Result<Wire, BuildError> {
-        Ok(self
-            .add_dataflow_op(
-                WasmOp::LookupByName {
-                    name: name.into(),
-                    inputs: inputs.into(),
-                    outputs: outputs.into(),
-                },
-                [module],
-            )?
-            .out_wire(0))
-    }
-
-    /// Add a `tket.wasm.call` op.
-    ///
-    /// We infer the signature from the type of the `func` wire.
-    fn add_call(
-        &mut self,
-        context: Wire,
-        func: Wire,
-        inputs: impl IntoIterator<Item = Wire>,
-    ) -> Result<Wire, BuildError> {
-        let func_wire_type = self.get_wire_type(func)?;
-        let Some(WasmType::Func {
-            inputs: in_types,
-            outputs: out_types,
-        }) = func_wire_type.clone().try_into().ok()
-        else {
-            // TODO Add an Error variant to BuildError for: Input wire has wrong type
-            panic!("func wire is not a func type: {func_wire_type}")
-        };
-        let (in_types, out_types) = (TypeRow::try_from(in_types)?, TypeRow::try_from(out_types)?);
-
-        Ok(self
-            .add_dataflow_op(
-                WasmOp::Call {
-                    inputs: in_types,
-                    outputs: out_types,
-                },
-                [context, func].into_iter().chain(inputs),
-            )?
-            .out_wire(0))
-    }
-
-    /// Add a `tket.wasm.read_result` op.
-    fn add_read_result(&mut self, result: Wire) -> Result<(Wire, Vec<Wire>), BuildError> {
-        let result_wire_type = self.get_wire_type(result)?;
-        let Some(WasmType::Result { outputs }) =
-            self.get_wire_type(result)?.clone().try_into().ok()
-        else {
-            // TODO Add an Error variant to BuildError for: Input wire has wrong type
-            panic!("result wire is not a result type: {result_wire_type}")
-        };
-        let outputs = TypeRow::try_from(outputs)?;
-
-        let op = self.add_dataflow_op(WasmOp::ReadResult { outputs }, [result])?;
-        let context = op.out_wire(0);
-        let results = op.outputs().skip(1).collect_vec();
-        Ok((context, results))
-    }
-
+/// Trait for adding a const wasm module to a hugr.
+pub trait ConstWasmBuilder: WasmOpBuilder {
     /// Add a [ConstWasmModule] and load it.
     fn add_const_module(&mut self, module_filename: impl Into<String>) -> Result<Wire, BuildError> {
         Ok(self.add_load_value(ConstWasmModule {
@@ -301,7 +202,7 @@ pub trait WasmOpBuilder: Dataflow {
     }
 }
 
-impl<T: Dataflow> WasmOpBuilder for T {}
+impl<T: Dataflow> ConstWasmBuilder for T {}
 
 #[cfg(test)]
 mod test {
@@ -341,15 +242,15 @@ mod test {
     #[test]
     fn wasm_op_def_instantiate() {
         assert_eq!(
-            WasmOpDef::get_context.instantiate(&[]),
+            ComputeOpDef::get_context.instantiate(&[]),
             Ok(WasmOp::GetContext)
         );
         assert_eq!(
-            WasmOpDef::dispose_context.instantiate(&[]),
+            ComputeOpDef::dispose_context.instantiate(&[]),
             Ok(WasmOp::DisposeContext)
         );
         assert_eq!(
-            WasmOpDef::lookup_by_name.instantiate(&[
+            ComputeOpDef::lookup_by_name.instantiate(&[
                 "lookup_name".into(),
                 TypeArg::new_var_use(0, TypeParam::ListType(Box::new(TypeBound::Linear.into()))),
                 vec![].into()
@@ -361,7 +262,7 @@ mod test {
             })
         );
         assert_eq!(
-            WasmOpDef::lookup_by_id.instantiate(&[
+            ComputeOpDef::lookup_by_id.instantiate(&[
                 TypeArg::BoundedNat(42),
                 TypeArg::new_var_use(0, TypeParam::ListType(Box::new(TypeBound::Linear.into()))),
                 vec![].into()
@@ -373,7 +274,7 @@ mod test {
             })
         );
         assert_eq!(
-            WasmOpDef::call.instantiate(&[vec![Type::UNIT.into()].into(), vec![].into()]),
+            ComputeOpDef::call.instantiate(&[vec![Type::UNIT.into()].into(), vec![].into()]),
             Ok(WasmOp::Call {
                 inputs: vec![Type::UNIT].into(),
                 outputs: vec![].into()

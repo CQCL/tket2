@@ -633,4 +633,116 @@ macro_rules! compute_opdef {
     };
 }
 
+macro_rules! compute_builder {
+    ($ext:ty, $builder_name:ident) => {
+        /// An extension trait for [Dataflow] providing methods to add "tket.wasm"
+        /// operations and constants.
+        pub trait $builder_name: Dataflow {
+            /// Add a `tket.wasm.get_context` op.
+            fn add_get_context(&mut self, id: Wire) -> Result<Wire, BuildError> {
+                let op = self.add_dataflow_op(ComputeOp::<$ext>::GetContext, vec![id])?;
+                Ok(op.out_wire(0))
+            }
+
+            /// Add a `tket.wasm.dispose_context` op.
+            fn add_dispose_context(&mut self, id: Wire) -> Result<(), BuildError> {
+                let _ = self.add_dataflow_op(ComputeOp::<$ext>::DisposeContext, vec![id])?;
+                Ok(())
+            }
+
+            /// Add a `tket.wasm.lookup_by_id` op.
+            fn add_lookup_by_id(
+                &mut self,
+                id: impl Into<u64>,
+                inputs: impl Into<TypeRowRV>,
+                outputs: impl Into<TypeRowRV>,
+                module: Wire,
+            ) -> Result<Wire, BuildError> {
+                Ok(self
+                    .add_dataflow_op(
+                        ComputeOp::<$ext>::LookupById {
+                            id: id.into(),
+                            inputs: inputs.into(),
+                            outputs: outputs.into(),
+                        },
+                        [module],
+                    )?
+                    .out_wire(0))
+            }
+
+            /// Add a `tket.wasm.lookup_by_name` op.
+            fn add_lookup_by_name(
+                &mut self,
+                name: impl Into<String>,
+                inputs: impl Into<TypeRowRV>,
+                outputs: impl Into<TypeRowRV>,
+                module: Wire,
+            ) -> Result<Wire, BuildError> {
+                Ok(self
+                    .add_dataflow_op(
+                        ComputeOp::<$ext>::LookupByName {
+                            name: name.into(),
+                            inputs: inputs.into(),
+                            outputs: outputs.into(),
+                        },
+                        [module],
+                    )?
+                    .out_wire(0))
+            }
+
+            /// Add a `tket.wasm.call` op.
+            ///
+            /// We infer the signature from the type of the `func` wire.
+            fn add_call(
+                &mut self,
+                context: Wire,
+                func: Wire,
+                inputs: impl IntoIterator<Item = Wire>,
+            ) -> Result<Wire, BuildError> {
+                let func_wire_type = self.get_wire_type(func)?;
+                let Some(ComputeType::<$ext>::Func {
+                    inputs: in_types,
+                    outputs: out_types,
+                }) = func_wire_type.clone().try_into().ok()
+                else {
+                    // TODO Add an Error variant to BuildError for: Input wire has wrong type
+                    panic!("func wire is not a func type: {func_wire_type}")
+                };
+                let (in_types, out_types) =
+                    (TypeRow::try_from(in_types)?, TypeRow::try_from(out_types)?);
+
+                Ok(self
+                    .add_dataflow_op(
+                        ComputeOp::<$ext>::Call {
+                            inputs: in_types,
+                            outputs: out_types,
+                        },
+                        [context, func].into_iter().chain(inputs),
+                    )?
+                    .out_wire(0))
+            }
+
+            /// Add a `tket.wasm.read_result` op.
+            fn add_read_result(&mut self, result: Wire) -> Result<(Wire, Vec<Wire>), BuildError> {
+                let result_wire_type = self.get_wire_type(result)?;
+                let Some(ComputeType::<$ext>::Result { outputs }) =
+                    self.get_wire_type(result)?.clone().try_into().ok()
+                else {
+                    // TODO Add an Error variant to BuildError for: Input wire has wrong type
+                    panic!("result wire is not a result type: {result_wire_type}")
+                };
+                let outputs = TypeRow::try_from(outputs)?;
+
+                let op =
+                    self.add_dataflow_op(ComputeOp::<$ext>::ReadResult { outputs }, [result])?;
+                let context = op.out_wire(0);
+                let results = op.outputs().skip(1).collect_vec();
+                Ok((context, results))
+            }
+        }
+
+        impl<T: Dataflow> $builder_name for T {}
+    };
+}
+
 pub mod wasm;
