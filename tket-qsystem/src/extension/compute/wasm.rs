@@ -67,7 +67,7 @@ use hugr::{
     },
     type_row,
     types::{
-        type_param::{TermTypeError, TypeParam},
+        type_param::TermTypeError,
         CustomType, FuncValueType, PolyFuncTypeRV, Signature, SumType, Type, TypeArg, TypeBound,
         TypeEnum, TypeRV, TypeRow, TypeRowRV,
     },
@@ -76,10 +76,13 @@ use hugr::{
 use itertools::Itertools as _;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use smol_str::{format_smolstr, SmolStr};
+use smol_str::format_smolstr;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
-use super::common::{ComputeOp, ComputeType};
+use super::common::{
+    ComputeOp, ComputeType, CONTEXT_TYPE_NAME, FUNC_TYPE_NAME, ID_PARAM, INPUTS_PARAM,
+    MODULE_TYPE_NAME, NAME_PARAM, OUTPUTS_PARAM, RESULT_TYPE_NAME,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// The type used to parameterise Compute operations for the wasm extension.
@@ -112,61 +115,6 @@ lazy_static! {
         EXTENSION.to_owned(),
         PRELUDE.to_owned()
     ]);
-
-    /// The name of the `tket.wasm.module` type.
-    pub static ref MODULE_TYPE_NAME: SmolStr = SmolStr::new_inline("module");
-    /// The name of the `tket.wasm.context` type.
-    pub static ref CONTEXT_TYPE_NAME: SmolStr = SmolStr::new_inline("context");
-    /// The name of the `tket.wasm.func` type.
-    pub static ref FUNC_TYPE_NAME: SmolStr = SmolStr::new_inline("func");
-
-    /// The name of the `tket.wasm.result` type.
-    pub static ref RESULT_TYPE_NAME: SmolStr = SmolStr::new_inline("result");
-
-    /// The [TypeParam] of `tket.wasm.lookup_by_id` specifying the id of the function.
-    pub static ref ID_PARAM: TypeParam = TypeParam::max_nat_type();
-    /// The [TypeParam] of `tket.wasm.lookup_by_name` specifying the name of the function.
-    pub static ref NAME_PARAM: TypeParam = TypeParam::StringType;
-    /// The [TypeParam] of various types and ops specifying the input signature of a function.
-    pub static ref INPUTS_PARAM: TypeParam =
-        TypeParam::ListType(Box::new(TypeBound::Linear.into()));
-    /// The [TypeParam] of various types and ops specifying the output signature of a function.
-    pub static ref OUTPUTS_PARAM: TypeParam = TypeParam::ListType(Box::new(TypeBound::Linear.into()));
-}
-
-fn add_wasm_type_defs(
-    extension: &mut Extension,
-    extension_ref: &Weak<Extension>,
-) -> Result<(), ExtensionBuildError> {
-    extension.add_type(
-        MODULE_TYPE_NAME.to_owned(),
-        vec![],
-        "wasm module".to_owned(),
-        TypeDefBound::copyable(),
-        extension_ref,
-    )?;
-    extension.add_type(
-        CONTEXT_TYPE_NAME.to_owned(),
-        vec![],
-        "wasm context".into(),
-        TypeDefBound::any(),
-        extension_ref,
-    )?;
-    extension.add_type(
-        FUNC_TYPE_NAME.to_owned(),
-        vec![INPUTS_PARAM.to_owned(), OUTPUTS_PARAM.to_owned()],
-        "wasm func".into(),
-        TypeDefBound::copyable(),
-        extension_ref,
-    )?;
-    extension.add_type(
-        RESULT_TYPE_NAME.to_owned(),
-        vec![OUTPUTS_PARAM.to_owned()],
-        "wasm result".into(),
-        TypeDefBound::any(),
-        extension_ref,
-    )?;
-    Ok(())
 }
 
 #[derive(
