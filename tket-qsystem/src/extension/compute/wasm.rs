@@ -79,6 +79,17 @@ use serde::{Deserialize, Serialize};
 use smol_str::{format_smolstr, SmolStr};
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
+use super::common::{ComputeOp, ComputeType};
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// The type used to parameterise Compute operations for the wasm extension.
+pub struct WasmExtension;
+
+/// Concrete instantiation(i.e. with type args applied) of a "tket.wasm" operation.
+pub type WasmOp = ComputeOp<WasmExtension>;
+/// Concrete types defined by the `tket.wasm` extension.
+pub type WasmType = ComputeType<WasmExtension>;
+
 /// The "tket.wasm" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.wasm");
 /// The "tket.wasm" extension version.
@@ -185,33 +196,6 @@ pub enum WasmOpDef {
     read_result,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-/// An enum of types defined by the `tket.wasm` extension.
-///
-/// We provide `impl From<WasmType>` for [CustomType] and [Type], and `impl
-/// TryFrom<CustomType>` and `impl TryFrom<CustomType>` for [WasmType].
-pub enum WasmType {
-    /// `tket.wasm.module`
-    Module,
-    /// `tket.wasm.context`
-    Context,
-    /// `tket.wasm.func`
-    Func {
-        /// The input signature of the function. Note that row variables are
-        /// allowed.
-        inputs: TypeRowRV,
-        /// The output signature of the function. Note that row variables are
-        /// allowed.
-        outputs: TypeRowRV,
-    },
-    /// `tket.wasm.result`
-    Result {
-        /// The output signature of the function. Note that row variables are
-        /// allowed.
-        outputs: TypeRowRV,
-    },
-}
-
 impl WasmType {
     /// Construct a new `tket.wasm.func` type.
     pub fn new_func(inputs: impl Into<TypeRowRV>, outputs: impl Into<TypeRowRV>) -> Self {
@@ -276,6 +260,7 @@ impl WasmType {
                 Self::func_custom_type(inputs.clone(), outputs.clone(), extension_ref)
             }
             Self::Result { outputs } => Self::result_custom_type(outputs.clone(), extension_ref),
+            Self::_Unreachable(x, _) => match *x {},
         }
     }
 }
@@ -610,52 +595,6 @@ impl TryFrom<&OpType> for WasmOpDef {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-/// Concrete instantiation(i.e. with type args applied) of a "tket.wasm" operation.
-pub enum WasmOp {
-    /// A `tket.wasm.get_context` op.
-    GetContext,
-    /// A `tket.wasm.dispose_context` op.
-    DisposeContext,
-    /// A `tket.wasm.lookup_by_id` op.
-    LookupById {
-        /// The name of the function to be looked up.
-        id: u64,
-        /// The input signature of the function to be looked up.
-        /// Note that row variables are allowed here.
-        inputs: TypeRowRV,
-        /// The output signature of the function to be looked up.
-        /// Note that row variables are allowed here.
-        outputs: TypeRowRV,
-    },
-    /// A `tket.wasm.lookup_by_name` op.
-    LookupByName {
-        /// The name of the function to be looked up.
-        name: String,
-        /// The input signature of the function to be looked up.
-        /// Note that row variables are allowed here.
-        inputs: TypeRowRV,
-        /// The output signature of the function to be looked up.
-        /// Note that row variables are allowed here.
-        outputs: TypeRowRV,
-    },
-    /// A `tket.wasm.call` op.
-    Call {
-        /// The input signature of the function to be called
-        /// Note that row variables are not allowed here.
-        inputs: TypeRow,
-        /// The output signature of the function to be called
-        /// Note that row variables are not allowed here.
-        outputs: TypeRow,
-    },
-    /// A `tket.wasm.read_result` op.
-    ReadResult {
-        /// The output signature of the function to be called
-        /// Note that row variables are not allowed here.
-        outputs: TypeRow,
-    },
-}
-
 impl WasmOp {
     fn wasm_op_def(&self) -> WasmOpDef {
         match self {
@@ -665,6 +604,7 @@ impl WasmOp {
             Self::LookupByName { .. } => WasmOpDef::lookup_by_name,
             Self::Call { .. } => WasmOpDef::call,
             Self::ReadResult { .. } => WasmOpDef::read_result,
+            Self::_Unreachable(x, _) => match *x {},
         }
     }
 
@@ -717,6 +657,7 @@ impl MakeExtensionOp for WasmOp {
                 vec![inputs, outputs]
             }
             WasmOp::ReadResult { outputs } => vec![outputs.clone().into()],
+            WasmOp::_Unreachable(x, _) => match *x {},
         }
     }
 }
