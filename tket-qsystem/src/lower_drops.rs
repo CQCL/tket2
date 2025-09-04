@@ -24,6 +24,8 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for LowerDropsPass {
         let mut rt = ReplaceTypes::default();
 
         // future(bool) is not in the default linearizer handler so we add it here.
+        // TODO: Create ReplaceTypes with future(bool) linearized by default to avoid
+        // code duplication with ReplaceBools pass.
         let dup_op = FutureOp {
             op: FutureOpDef::Dup,
             typ: bool_t(),

@@ -296,13 +296,10 @@ fn get_dest(size: u64, elem_ty: Type) -> NodeTemplate {
 fn set_dest(size: u64, elem_ty: Type) -> NodeTemplate {
     let opt_elem_ty = option_type(elem_ty.clone());
     let arr_type = array_type(size, opt_elem_ty.clone().into());
+    let out_tys = vec![elem_ty.clone(), arr_type.clone()];
     let mut dfb = DFGBuilder::new(inout_sig(
         vec![arr_type.clone(), usize_t(), elem_ty.clone()],
-        vec![either_type(
-            vec![elem_ty.clone(), arr_type.clone()],
-            vec![elem_ty.clone(), arr_type.clone()],
-        )
-        .into()],
+        vec![either_type(out_tys.clone(), out_tys.clone()).into()],
     ))
     .unwrap();
 
@@ -325,12 +322,7 @@ fn set_dest(size: u64, elem_ty: Type) -> NodeTemplate {
                 result,
             ),
             [],
-            vec![either_type(
-                vec![elem_ty.clone(), arr_type.clone()],
-                vec![elem_ty.clone(), arr_type.clone()],
-            )
-            .into()]
-            .into(),
+            vec![either_type(out_tys.clone(), out_tys.clone()).into()].into(),
         )
         .unwrap();
 
@@ -344,13 +336,7 @@ fn set_dest(size: u64, elem_ty: Type) -> NodeTemplate {
         .unwrap();
     let either = case0
         .add_dataflow_op(
-            Tag::new(
-                0,
-                vec![
-                    vec![elem_ty.clone(), arr_type.clone()].into(),
-                    vec![elem_ty.clone(), arr_type.clone()].into(),
-                ],
-            ),
+            Tag::new(0, vec![out_tys.clone().into(), out_tys.clone().into()]),
             [prev_elem, arr],
         )
         .unwrap()
@@ -367,13 +353,7 @@ fn set_dest(size: u64, elem_ty: Type) -> NodeTemplate {
         .unwrap();
     let either = case1
         .add_dataflow_op(
-            Tag::new(
-                1,
-                vec![
-                    vec![elem_ty.clone(), arr_type.clone()].into(),
-                    vec![elem_ty.clone(), arr_type.clone()].into(),
-                ],
-            ),
+            Tag::new(1, vec![out_tys.clone().into(), out_tys.clone().into()]),
             [new_elem, arr],
         )
         .unwrap()
@@ -482,7 +462,7 @@ fn unpack_dest(size: u64, elem_ty: Type) -> NodeTemplate {
 fn option_wrap_func_value(elem_ty: Type) -> Value {
     let func_hugr = {
         let mut dfb = DFGBuilder::new(inout_sig(
-            vec![elem_ty.clone()],
+            elem_ty.clone(),
             vec![option_type(elem_ty.clone()).into()],
         ))
         .unwrap();
