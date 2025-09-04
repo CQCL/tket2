@@ -75,10 +75,9 @@ use itertools::Itertools as _;
 use lazy_static::lazy_static;
 use smol_str::format_smolstr;
 
-use super::{
-    add_compute_type_defs, ComputeOp, ComputeType, CONTEXT_TYPE_NAME, FUNC_TYPE_NAME, ID_PARAM,
-    INPUTS_PARAM, MODULE_TYPE_NAME, NAME_PARAM, OUTPUTS_PARAM, RESULT_TYPE_NAME,
-};
+use super::{add_compute_type_defs, ComputeOp, ComputeType};
+
+pub use super::{CONTEXT_TYPE_NAME, FUNC_TYPE_NAME, ID_PARAM, INPUTS_PARAM, MODULE_TYPE_NAME, NAME_PARAM, OUTPUTS_PARAM, RESULT_TYPE_NAME};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// The type used to parameterise Compute operations for the wasm extension.
