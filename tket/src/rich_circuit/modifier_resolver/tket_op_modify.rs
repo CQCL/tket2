@@ -22,7 +22,7 @@ impl<N: HugrNode> ModifierResolver<N> {
     ) -> Result<PortVector, ModifierResolverErrors<N>> {
         use TketOp::*;
 
-        let control = self.modifiers.control;
+        let control = self.control_num();
         let dagger = self.modifiers.dagger;
 
         if control != 0 || dagger {
@@ -435,7 +435,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 // CnX(cs,c)
                 self.modifiers.control = control - 1;
                 let mut c = mem::replace(self.controls(), cs)[0];
-                assert_eq!(self.controls().len(), self.modifiers.control);
+                assert_eq!(self.controls().len(), self.control_num());
                 let pv_x2 = self.with_ancilla(&mut targ, ancilla, |this, ancilla| {
                     this.modify_tket_op(n, op, new_fn, ancilla)
                 })?;
@@ -446,7 +446,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 }
 
                 // CnV(cs,t)
-                // self.modifiers.control = control + gate_control - 1;
+                // self.control_num() = control + gate_control - 1;
                 for i in 0..gate_control {
                     self.push_control(pv_x2.outgoing[i].clone().try_into().unwrap());
                 }
@@ -461,7 +461,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 outgoing.push(pv_cnrx.outgoing[0].clone());
 
                 self.push_control(c);
-                assert_eq!(control, self.modifiers.control);
+                assert_eq!(control, self.control_num());
                 self.modifiers.dagger = dagger;
 
                 // TODO: This does not handle invisible wires
@@ -487,7 +487,7 @@ impl<N: HugrNode> ModifierResolver<N> {
 impl CombinedModifier {
     /// If the modified operation can be represented as a TketOp,
     /// returns the modified operation, otherwise returns `None`.
-    pub fn modified(&self, op: TketOp) -> Option<TketOp> {
+    fn modified(&self, op: TketOp) -> Option<TketOp> {
         match op {
             X if self.control == 0 => Some(X),
             X if self.control == 1 => Some(CX),

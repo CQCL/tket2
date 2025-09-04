@@ -1,15 +1,21 @@
 //! Modifier for dataflow blocks.
-use std::{collections::HashMap, iter, mem};
+use std::{
+    collections::{HashMap, VecDeque},
+    iter, mem,
+};
 
 use hugr::{
-    builder::{ConditionalBuilder, Container, DFGBuilder, Dataflow, FunctionBuilder, HugrBuilder, SubContainer, TailLoopBuilder},
+    builder::{
+        ConditionalBuilder, Container, DFGBuilder, Dataflow, FunctionBuilder, HugrBuilder,
+        SubContainer, TailLoopBuilder,
+    },
     core::HugrNode,
     extension::prelude::qb_t,
     hugr::hugrmut::HugrMut,
     ops::{Conditional, DataflowOpTrait, OpType, TailLoop, DFG},
     std_extensions::collections::array::ArrayOpBuilder,
-    types::{FuncTypeBase, PolyFuncType, TypeRow},
-    Hugr, HugrView, IncomingPort, OutgoingPort, PortIndex, Wire,
+    types::{FuncTypeBase, TypeRow},
+    HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire,
 };
 use hugr_core::hugr::internal::PortgraphNodeMap;
 use itertools::Itertools;
@@ -20,9 +26,9 @@ use super::{DirWire, ModifierError, ModifierResolver, ModifierResolverErrors, Po
 impl<N: HugrNode> ModifierResolver<N> {
     /// Modifies the body of a dataflow graph.
     /// We use the topological order of the circuit.
-    pub fn modify_dfg_body(
+    pub(super) fn modify_dfg_body(
         &mut self,
-        h: &impl HugrMut<Node = N>,
+        h: &mut impl HugrMut<Node = N>,
         n: N,
         new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
@@ -46,21 +52,29 @@ impl<N: HugrNode> ModifierResolver<N> {
 
     fn modify_dfg_children(
         &mut self,
-        h: &impl HugrMut<Node = N>,
+        h: &mut impl HugrMut<Node = N>,
         n: N,
         new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        // Visit the nodes in topological order.
-        let (region_graph, node_map) = h.region_portgraph(n);
-        let mut topo: Vec<_> = Topo::new(&region_graph).iter(&region_graph).collect();
-        // Reverse the topological order if dagger is applied.
-        if self.modifiers.dagger {
-            topo.reverse();
+        let mut worklist = VecDeque::new();
+        // This block is needed to appease the borrow checker.
+        {
+            let (region_graph, node_map) = h.region_portgraph(n);
+            let mut topo: Vec<_> = Topo::new(&region_graph).iter(&region_graph).collect();
+            // Reverse the topological order if dagger is applied.
+            if self.modifiers.dagger {
+                topo.reverse();
+            }
+            for old_n_id in topo {
+                worklist.push_back(node_map.from_portgraph(old_n_id));
+            }
         }
-        for old_n_id in topo {
-            let old_n = node_map.from_portgraph(old_n_id);
+        mem::swap(self.worklist(), &mut worklist);
+        while let Some(old_n) = self.worklist().pop_front() {
             self.modify_op(h, old_n, new_dfg)?;
         }
+        let _ = mem::replace(self.worklist(), worklist);
+
         Ok(())
     }
 
@@ -83,7 +97,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 let offset = if matches!(optype, OpType::FuncDefn(_)) {
                     self.modifiers.accum_ctrl.len()
                 } else {
-                    self.modifiers.control
+                    self.control_num()
                 };
 
                 for (i, ref in_out_ty) in input.iter().zip_longest(output.iter()).enumerate() {
@@ -111,7 +125,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             }
             OpType::TailLoop(tail_loop) => {
                 let just_input_num = tail_loop.just_inputs.len();
-                let offset = self.modifiers.control;
+                let offset = self.control_num();
                 for port in h.node_outputs(old_in) {
                     let new_port = if port.index() < just_input_num {
                         port
@@ -159,38 +173,15 @@ impl<N: HugrNode> ModifierResolver<N> {
     ) -> Result<Vec<Wire>, ModifierResolverErrors<N>> {
         let controls = match h.get_optype(n) {
             OpType::FuncDefn(_fndefn) => {
-                // if controls needs to be unpacked from arraies
-                let mut controls = Vec::new();
-                let mut inputs = new_dfg.input_wires();
-                for (i, size) in self.modifiers.accum_ctrl.iter().enumerate() {
-                    if *size == 0 {
-                        // if size is 0, connect directly to the output.
-                        let zero_array = inputs.next().unwrap();
-                        let out_node = new_dfg.io()[1];
-                        new_dfg.hugr_mut().connect(
-                            zero_array.node(),
-                            zero_array.source(),
-                            out_node,
-                            i,
-                        );
-                    } else {
-                        let ctrl_arr = inputs.next().unwrap();
-                        controls.extend(new_dfg.add_array_unpack(
-                            qb_t(),
-                            *size as u64,
-                            ctrl_arr,
-                        )?);
-                    }
-                }
-                controls
+                self.unpack_controls(new_dfg, new_dfg.input_wires())?
             }
-            OpType::DFG(_) => new_dfg.input_wires().take(self.modifiers.control).collect(),
+            OpType::DFG(_) => new_dfg.input_wires().take(self.control_num()).collect(),
             OpType::TailLoop(tail_loop) => {
                 let just_input_num = tail_loop.just_inputs.len();
                 new_dfg
                     .input_wires()
                     .skip(just_input_num)
-                    .take(self.modifiers.control)
+                    .take(self.control_num())
                     .collect()
             }
             OpType::Case(_) => return Err(ModifierResolverErrors::Unreachable(
@@ -207,6 +198,21 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(controls)
     }
 
+    /// Unpacks the given control qubits from arrays according to the combined modifier.
+    pub(super) fn unpack_controls(
+        &self,
+        new_dfg: &mut impl Dataflow,
+        controls_arr: impl IntoIterator<Item = Wire>,
+    ) -> Result<Vec<Wire>, ModifierResolverErrors<N>> {
+        let mut controls = Vec::new();
+        let mut controls_arr = controls_arr.into_iter();
+        for size in self.modifiers().accum_ctrl.iter() {
+            let ctrl_arr = controls_arr.next().unwrap();
+            controls.extend(new_dfg.add_array_unpack(qb_t(), *size as u64, ctrl_arr)?);
+        }
+        Ok(controls)
+    }
+
     fn wire_control_to_output(
         &mut self,
         h: &impl HugrMut<Node = N>,
@@ -214,23 +220,26 @@ impl<N: HugrNode> ModifierResolver<N> {
         new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
         let out_node = new_dfg.io()[1];
-        let modifiers = &self.modifiers;
+        // let modifiers = self.modifiers();
         let controls = self.controls_ref();
 
         match h.get_optype(n) {
             OpType::FuncDefn(_) => {
-                let mut offset = 0;
-                for (index, size) in modifiers.accum_ctrl.iter().enumerate() {
-                    if *size == 0 {
-                        continue;
-                    }
-                    let wire = new_dfg
-                        .add_new_array(qb_t(), controls[offset..offset + size].iter().cloned())?;
-                    offset += size;
+                let new_wires = self.pack_controls(new_dfg)?;
+                for (index, wire) in new_wires.into_iter().enumerate() {
                     new_dfg
                         .hugr_mut()
                         .connect(wire.node(), wire.source(), out_node, index);
                 }
+                // let mut offset = 0;
+                // for (index, size) in modifiers.accum_ctrl.iter().enumerate() {
+                //     let wire = new_dfg
+                //         .add_new_array(qb_t(), controls[offset..offset + size].iter().cloned())?;
+                //     offset += size;
+                //     new_dfg
+                //         .hugr_mut()
+                //         .connect(wire.node(), wire.source(), out_node, index);
+                // }
             }
             OpType::DFG(_) | OpType::Case(_) => {
                 for (i, ctrl) in controls.iter().enumerate() {
@@ -256,64 +265,101 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(())
     }
 
+    /// Packs the control qubits `self.controls()` into arrays according to the combined modifier.
+    pub(super) fn pack_controls(
+        &self,
+        new_dfg: &mut impl Dataflow,
+    ) -> Result<Vec<Wire>, ModifierResolverErrors<N>> {
+        let controls = self.controls_ref();
+        let mut v = Vec::new();
+        let mut offset = 0;
+        for size in self.modifiers().accum_ctrl.iter() {
+            let wire =
+                new_dfg.add_new_array(qb_t(), controls[offset..offset + size].iter().cloned())?;
+            offset += size;
+            v.push(wire);
+        }
+        Ok(v)
+    }
+
     /// Generates a new function modified by the combined modifier.
     pub fn modify_fn(
         &mut self,
-        h: &impl HugrMut<Node = N>,
+        h: &mut impl HugrMut<Node = N>,
         func: N,
-        signature: PolyFuncType,
-    ) -> Result<Hugr, ModifierResolverErrors<N>> {
+    ) -> Result<N, ModifierResolverErrors<N>> {
         // Old function definition
         let OpType::FuncDefn(old_fn_defn) = h.get_optype(func) else {
-            return Err(ModifierResolverErrors::Unreachable(
-                "Cannot modify a non-function node.".to_string(),
-            ));
+            return Err(ModifierResolverErrors::Unreachable(format!(
+                "Cannot modify a non-function node. {}",
+                h.get_optype(func)
+            )));
         };
-        let old_fn_name = old_fn_defn.func_name();
+        let mut poly_signature = old_fn_defn.signature().clone();
+        self.modify_signature(poly_signature.body_mut(), false);
 
-        // New modified function definition
-        let mut new_fn =
-            FunctionBuilder::new(format!("__modified__{}", old_fn_name), signature).unwrap();
+        let mut new_fn = FunctionBuilder::new(
+            format!("__modified__{}", old_fn_defn.func_name()),
+            poly_signature,
+        )
+        .unwrap();
 
         self.modify_dfg_body(h, func, &mut new_fn)?;
-
         println!(
             "modified (before check):\n{}",
             new_fn.hugr_mut().mermaid_string()
         );
 
-        let new_fn = new_fn
-            .finish_hugr()
-            .map_err(|e| ModifierResolverErrors::BuildError(e.into()))?;
+        // Connect the global wires
+        // TODO: Is this OK? Don't we need to wait until the end of all modifications?
+        let call_map = self.call_map();
+        println!("call_map: {call_map:?}");
+        let insertion_result = h.insert_from_view(h.module_root(), new_fn.hugr());
+        let new_call_map = update_call_map(call_map, &insertion_result.node_map);
+        for (old_in, (new_n, new_port)) in new_call_map.into_iter() {
+            h.connect(old_in, 0, new_n, new_port);
+        }
 
-        Ok(new_fn)
+        Ok(insertion_result.inserted_entrypoint)
+    }
+
+    fn insert_sub_dfg(
+        &mut self,
+        parent_dfg: &mut impl Dataflow,
+        builder: impl HugrBuilder,
+    ) -> Result<Node, ModifierResolverErrors<N>> {
+        let insertion_result = parent_dfg.add_hugr_view(builder.hugr());
+
+        let call_map = self.call_map();
+        let insertion_correspondence = insertion_result.node_map;
+        let new_call_map = update_call_map(call_map, &insertion_correspondence);
+        *self.call_map() = new_call_map;
+
+        Ok(insertion_result.inserted_entrypoint)
     }
 
     pub(super) fn modify_dfg(
         &mut self,
-        h: &impl HugrMut<Node = N>,
+        h: &mut impl HugrMut<Node = N>,
         n: N,
         dfg: &DFG,
-        new_parent_dfg: &mut impl Dataflow,
+        parent_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
         let mut signature = dfg.signature.clone();
         // Build a new DFG with modified body.
         self.modify_signature(&mut signature, true);
         let mut builder = DFGBuilder::new(signature.clone()).unwrap();
         self.modify_dfg_body(h, n, &mut builder)?;
-        let new_dfg_hugr = builder
-            .finish_hugr()
-            .map_err(|e| ModifierResolverErrors::ValidationError(e.to_string()))?;
-        let new_dfg_node = new_parent_dfg.add_hugr(new_dfg_hugr).inserted_entrypoint;
+        let new_dfg = self.insert_sub_dfg(parent_dfg, builder)?;
 
         // connect the controls and register the IOs
         for (i, c) in self.controls().iter_mut().enumerate() {
-            new_parent_dfg
+            parent_dfg
                 .hugr_mut()
-                .connect(c.node(), c.source(), new_dfg_node, i);
-            *c = Wire::new(new_dfg_node, i);
+                .connect(c.node(), c.source(), new_dfg, i);
+            *c = Wire::new(new_dfg, i);
         }
-        let offset = self.modifiers.control;
+        let offset = self.control_num();
         for (i, in_out_type) in signature
             .input
             .iter()
@@ -323,7 +369,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             let swap = self.need_swap(in_out_type.as_deref());
             if in_out_type.has_left() {
                 let old_in = (n, IncomingPort::from(i)).into();
-                let mut new_in = DirWire::from((new_dfg_node, IncomingPort::from(i + offset)));
+                let mut new_in = DirWire::from((new_dfg, IncomingPort::from(i + offset)));
                 if swap {
                     new_in = new_in.reverse();
                 }
@@ -331,7 +377,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             }
             if in_out_type.has_right() {
                 let old_out = (n, OutgoingPort::from(i)).into();
-                let mut new_out = DirWire::from((new_dfg_node, OutgoingPort::from(i + offset)));
+                let mut new_out = DirWire::from((new_dfg, OutgoingPort::from(i + offset)));
                 if swap {
                     new_out = new_out.reverse();
                 }
@@ -345,7 +391,7 @@ impl<N: HugrNode> ModifierResolver<N> {
 
     pub(super) fn modify_tail_loop(
         &mut self,
-        h: &impl HugrMut<Node = N>,
+        h: &mut impl HugrMut<Node = N>,
         n: N,
         tail_loop: &TailLoop,
         new_dfg: &mut impl Dataflow,
@@ -370,17 +416,14 @@ impl<N: HugrNode> ModifierResolver<N> {
             tail_loop.just_inputs.clone(),
             tail_loop
                 .rest
-                .extend(iter::repeat(&qb_t()).take(self.modifiers.control)),
+                .extend(iter::repeat(&qb_t()).take(self.control_num())),
             tail_loop.just_outputs.clone(),
         )?;
         self.modify_dfg_body(h, n, &mut builder)?;
-        let tail_loop_hugr = builder
-            .finish_hugr()
-            .map_err(|e| ModifierResolverErrors::ValidationError(e.to_string()))?;
-        let new_tail_loop = new_dfg.add_hugr(tail_loop_hugr).inserted_entrypoint;
+        let new_tail_loop = self.insert_sub_dfg(new_dfg, builder)?;
 
         // connect the controls and register IOs
-        let offset = self.modifiers.control;
+        let offset = self.control_num();
         for (i, ctrl) in self.controls().iter_mut().enumerate() {
             new_dfg.hugr_mut().connect(
                 ctrl.node(),
@@ -412,12 +455,12 @@ impl<N: HugrNode> ModifierResolver<N> {
 
     pub(super) fn modify_conditional(
         &mut self,
-        h: &impl HugrMut<Node = N>,
+        h: &mut impl HugrMut<Node = N>,
         n: N,
         conditional: &Conditional,
         new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        let offset = self.modifiers.control;
+        let offset = self.control_num();
 
         // Build a new Conditional with modified body.
         let control_types: TypeRow = iter::repeat(qb_t()).take(offset).collect::<Vec<_>>().into();
@@ -430,7 +473,8 @@ impl<N: HugrNode> ModifierResolver<N> {
         // remember the current control qubits
         let controls = self.controls().clone();
 
-        for (i, case_node) in h.children(n).enumerate() {
+        let iter: Vec<_> = h.children(n).enumerate().collect();
+        for (i, case_node) in iter {
             let tag_wire_num = conditional.sum_rows[i].len();
             let mut case_builder = builder.case_builder(i).unwrap();
 
@@ -496,14 +540,11 @@ impl<N: HugrNode> ModifierResolver<N> {
 
             let _ = case_builder
                 .finish_sub_container()
-                .map_err(|e| ModifierResolverErrors::ValidationError(e.to_string()))?;
+                .map_err(|e| ModifierResolverErrors::BuildError(e.into()))?;
         }
 
         // insert the conditional
-        let new_conditional_hugr = builder
-            .finish_hugr()
-            .map_err(|e| ModifierResolverErrors::ValidationError(e.to_string()))?;
-        let new_conditional = new_dfg.add_hugr(new_conditional_hugr).inserted_entrypoint;
+        let new_conditional = self.insert_sub_dfg(new_dfg, builder)?;
 
         // connect the controls and register the IOs
         *self.controls() = Vec::new();
@@ -559,6 +600,18 @@ impl<N: HugrNode> ModifierResolver<N> {
     }
 }
 
+fn update_call_map<A, B, C, D>(f: &HashMap<A, (B, C)>, g: &HashMap<B, D>) -> HashMap<A, (D, C)>
+where
+    A: Clone + Eq + std::hash::Hash,
+    B: Clone + Eq + std::hash::Hash,
+    C: Clone,
+    D: Clone,
+{
+    f.iter()
+        .filter_map(|(a, (b, c))| g.get(b).map(|d| (a.clone(), (d.clone(), c.clone()))))
+        .collect()
+}
+
 #[cfg(test)]
 mod test {
     use std::{fs::File, io::Write, path::Path};
@@ -573,7 +626,8 @@ mod test {
             CallIndirect, ExtensionOp,
         },
         std_extensions::collections::array::{array_type, ArrayOpBuilder},
-        types::{Signature, Term}, Hugr,
+        types::{Signature, Term},
+        Hugr,
     };
 
     use crate::{
@@ -692,13 +746,60 @@ mod test {
         func.finish_with_outputs(outputs).unwrap().handle().clone()
     }
 
+    fn foo_call(module: &mut ModuleBuilder<Hugr>, t_num: usize) -> FuncID<true> {
+        let callee = {
+            let callee_sig = Signature::new_endo(vec![qb_t()]);
+            let mut callee_builder = module.define_function("dummy", callee_sig).unwrap();
+            let mut inputs: Vec<Wire> = callee_builder.input_wires().collect();
+            inputs[0] = callee_builder
+                .add_dataflow_op(TketOp::X, vec![inputs[0]])
+                .unwrap()
+                .out_wire(0);
+            callee_builder.finish_with_outputs(inputs).unwrap()
+        };
+
+        let foo_sig = Signature::new_endo(iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>());
+        let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+        let mut inputs: Vec<_> = func.input_wires().collect();
+        inputs[0] = func
+            .call(callee.handle(), &[], vec![inputs[0]])
+            .unwrap()
+            .out_wire(0);
+        inputs[0] = func
+            .add_dataflow_op(TketOp::X, vec![inputs[0]])
+            .unwrap()
+            .out_wire(0);
+        func.finish_with_outputs(inputs).unwrap().handle().clone()
+    }
+
+    fn foo_load_fn(module: &mut ModuleBuilder<Hugr>, t_num: usize) -> FuncID<true> {
+        let callee = {
+            let callee_sig = Signature::new_endo(vec![qb_t()]);
+            let mut callee_builder = module.define_function("dummy", callee_sig).unwrap();
+            let mut inputs: Vec<Wire> = callee_builder.input_wires().collect();
+            inputs[0] = callee_builder
+                .add_dataflow_op(TketOp::X, vec![inputs[0]])
+                .unwrap()
+                .out_wire(0);
+            callee_builder.finish_with_outputs(inputs).unwrap()
+        };
+
+        let foo_sig = Signature::new_endo(iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>());
+        let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+        let mut inputs: Vec<_> = func.input_wires().collect();
+        let handle = func.load_func(callee.handle(), &[]).unwrap();
+        func.finish_with_outputs(inputs).unwrap().handle().clone()
+    }
+
     #[rstest::rstest]
     #[case::dfg(1, 2, foo_dfg, "dfg", false)]
     #[case::dfg_dagger(1, 2, foo_dfg, "dfg", true)]
     #[case::tail_loop(1, 1, foo_tail_loop, "tail_loop", false)]
     #[case::conditional(1, 1, foo_conditional, "conditional", false)]
     #[case::conditional_dagger(1, 1, foo_conditional, "conditional", true)]
-    fn test_modifier_resolver_optypes(
+    #[case::call(1, 1, foo_call, "call", false)]
+    #[case::load_fn(1, 1, foo_load_fn, "load_fn", false)]
+    fn test_modifier_resolver_dfg(
         #[case] t_num: usize,
         #[case] c_num: u64,
         #[case] foo: fn(&mut ModuleBuilder<Hugr>, usize) -> FuncID<true>,
@@ -808,10 +909,10 @@ mod test {
 
         let entrypoint = h.entrypoint().clone();
         resolve_modifier_with_entrypoints(&mut h, vec![entrypoint].into_iter()).unwrap();
-        dead_code::DeadCodeElimPass::default()
-            .with_entry_points(vec![_main.node()])
-            .run(&mut h)
-            .unwrap();
+        // dead_code::DeadCodeElimPass::default()
+        //     .with_entry_points(vec![_main.node()])
+        //     .run(&mut h)
+        //     .unwrap();
         println!("After modification\n{}", h.mermaid_string());
         h.validate().unwrap();
         {
