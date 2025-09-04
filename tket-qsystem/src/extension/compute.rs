@@ -1,3 +1,6 @@
+//! This module lays out a framework for interacting with classical compute
+//! devices in a program - see the [compute/wasm.rs] or [compute/gpu.rs] for
+//! details.
 use hugr::{
     extension::{Extension, ExtensionBuildError, ExtensionId, TypeDefBound},
     types::{type_param::TypeParam, CustomType, Type, TypeArg, TypeBound, TypeRow, TypeRowRV},
@@ -69,7 +72,7 @@ pub(crate) fn add_compute_type_defs(
 /// An enum of types defined by compute extensions.
 ///
 /// Instances will provide `impl From<ComputeType<T>>` for [CustomType] and [Type], and `impl
-/// TryFrom<CustomType>` and `impl TryFrom<CustomType>` for [ComputeType<T>].
+/// TryFrom<CustomType>` and `impl TryFrom<CustomType>` for [`ComputeType<T>`].
 pub enum ComputeType<T> {
     /// `module`
     Module,
@@ -90,6 +93,7 @@ pub enum ComputeType<T> {
         /// allowed.
         outputs: TypeRowRV,
     },
+    #[allow(missing_docs)]
     _Unreachable(std::convert::Infallible, PhantomData<T>),
 }
 
@@ -218,6 +222,7 @@ pub enum ComputeOp<T> {
         /// Note that row variables are not allowed here.
         outputs: TypeRow,
     },
+    #[allow(missing_docs)]
     _Unreachable(std::convert::Infallible, PhantomData<T>),
 }
 
@@ -749,4 +754,5 @@ macro_rules! compute_builder {
     };
 }
 
+pub mod gpu;
 pub mod wasm;
