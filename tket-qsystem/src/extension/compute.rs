@@ -1,6 +1,6 @@
-/// This module lays out a framework for interacting with classical compute
-/// devices in a program - see the [compute/wasm.rs] or [compute/gpu.rs] for
-/// details.
+//! This module lays out a framework for interacting with classical compute
+//! devices in a program - see the [compute/wasm.rs] or [compute/gpu.rs] for
+//! details.
 use hugr::{
     extension::{Extension, ExtensionBuildError, ExtensionId, TypeDefBound},
     types::{type_param::TypeParam, CustomType, Type, TypeArg, TypeBound, TypeRow, TypeRowRV},
@@ -93,6 +93,7 @@ pub enum ComputeType<T> {
         /// allowed.
         outputs: TypeRowRV,
     },
+    #[allow(missing_docs)]
     _Unreachable(std::convert::Infallible, PhantomData<T>),
 }
 
@@ -221,6 +222,7 @@ pub enum ComputeOp<T> {
         /// Note that row variables are not allowed here.
         outputs: TypeRow,
     },
+    #[allow(missing_docs)]
     _Unreachable(std::convert::Infallible, PhantomData<T>),
 }
 
