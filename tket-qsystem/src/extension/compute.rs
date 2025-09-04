@@ -1,3 +1,7 @@
+/// This module lays out a framework for interacting with classical compute
+/// devices in a program - see the [compute/wasm.rs] or [compute/gpu.rs] for
+/// details.
+
 use hugr::{
     extension::{Extension, ExtensionBuildError, ExtensionId, TypeDefBound},
     types::{type_param::TypeParam, CustomType, Type, TypeArg, TypeBound, TypeRow, TypeRowRV},
