@@ -18,6 +18,7 @@ use hugr::core::HugrNode;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::patch::simple_replace;
 use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
+use hugr::persistent::{PatchNode, PersistentHugr};
 use hugr::types::Signature;
 use hugr::{hugr::views::SiblingSubgraph, SimpleReplacement};
 use hugr::{Hugr, HugrView};
@@ -27,6 +28,7 @@ use replacer::CircuitReplacer;
 
 use crate::circuit::Circuit;
 use crate::resource::{CircuitRewriteError, ResourceScope};
+use crate::rewrite_space::RewriteSpace;
 pub use crate::Subcircuit;
 
 /// A rewrite rule for circuits.
@@ -217,9 +219,9 @@ pub trait Rewriter<C: CircuitLike = Circuit> {
 // A simple trait to get the node type of a circuit. This will allow us to
 // support circuit-like types (e.g. persistent circuits) in the future.
 mod hidden {
-    use hugr::{core::HugrNode, HugrView};
+    use hugr::{core::HugrNode, persistent::PatchNode, HugrView};
 
-    use crate::{resource::ResourceScope, Circuit};
+    use crate::{resource::ResourceScope, rewrite_space::RewriteSpace, Circuit};
 
     pub trait CircuitLike {
         type Node: HugrNode;
@@ -235,6 +237,10 @@ mod hidden {
 
     impl<H: HugrView> CircuitLike for ResourceScope<H> {
         type Node = H::Node;
+    }
+
+    impl<Cost> CircuitLike for RewriteSpace<Cost> {
+        type Node = PatchNode;
     }
 }
 use hidden::CircuitLike;
@@ -309,6 +315,36 @@ where
         let matches = self
             .matcher
             .as_hugr_matcher()
+            .get_all_matches(circ, &MatchingOptions::default());
+        matches
+            .into_iter()
+            .flat_map(|(subcirc, match_info)| {
+                self.replacer
+                    .replace_match(&subcirc, circ, match_info)
+                    .into_iter()
+                    .filter_map(move |repl| {
+                        match CircuitRewrite::try_new(subcirc.clone(), circ, repl) {
+                            Ok(ok) => Some(ok),
+                            Err(err) => {
+                                eprintln!("Error: failed to create rewrite, skipping:\n{}", err);
+                                None
+                            }
+                        }
+                    })
+            })
+            .collect()
+    }
+}
+
+impl<C, R, Cost> Rewriter<RewriteSpace<Cost>> for MatchReplaceRewriter<C, R>
+where
+    C: CircuitMatcher,
+    R: CircuitReplacer<C::MatchInfo>,
+{
+    fn get_rewrites(&self, circ: &RewriteSpace<Cost>) -> Vec<CircuitRewrite<PatchNode>> {
+        let matches = self
+            .matcher
+            .as_rewrite_space_matcher()
             .get_all_matches(circ, &MatchingOptions::default());
         matches
             .into_iter()
