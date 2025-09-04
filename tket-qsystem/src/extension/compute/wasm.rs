@@ -1,13 +1,11 @@
 //! This module defines the `tket.wasm` Hugr extension used to model calling
 //! into WebAssembly.
 //!
-//! It depends on the `tket.futures` extension for handling async calls into
-//! WebAssembly.
-//!
 //! 'tket.wasm' provides the following types:
 //!  - `tket.wasm.module`: A WebAssembly module.
 //!  - `tket.wasm.context`: A WebAssembly context.
 //!  - `tket.wasm.func`: A WebAssembly function.
+//!  - `tket.wasm.result`: A WebAssembly result.
 //!
 //!  Each of which can be constructed in rust via [WasmType].
 //!
@@ -38,8 +36,9 @@
 //!   - a `tket.wasm.func` identifying the function to call;
 //!   - Input arguments as specified by the type of the `tket.wasm.func`.
 //!
-//!   It returns a `tket.futures.future` holding a tuple of results as
-//!   specified by the type of the `tket.wasm.func`.
+//!   It returns a `tket.wasm.result`, which must then be read by using
+//!   `tket.wasm.read_result`, which yields a `tket.wasm.context` tupled with
+//!   the output values of the `tket.wasm.func`.
 //!
 //!   We provide [WasmType] to assist in constructing and interpreting [Type]s.
 //!
