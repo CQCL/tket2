@@ -92,7 +92,7 @@ pub type WasmType = ComputeType<WasmExtension>;
 /// The "tket.wasm" extension id.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.wasm");
 /// The "tket.wasm" extension version.
-pub const EXTENSION_VERSION: Version = Version::new(0, 4, 0);
+pub const EXTENSION_VERSION: Version = Version::new(0, 4, 1);
 
 lazy_static! {
     /// The `tket.wasm` extension.

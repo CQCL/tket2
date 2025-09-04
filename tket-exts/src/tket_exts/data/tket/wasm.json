@@ -6,7 +6,7 @@
       "extension": "tket.wasm",
       "name": "context",
       "params": [],
-      "description": "wasm context",
+      "description": "tket.wasm context",
       "bound": {
         "b": "Explicit",
         "bound": "A"
@@ -31,7 +31,7 @@
           }
         }
       ],
-      "description": "wasm func",
+      "description": "tket.wasm func",
       "bound": {
         "b": "Explicit",
         "bound": "C"
@@ -41,7 +41,7 @@
       "extension": "tket.wasm",
       "name": "module",
       "params": [],
-      "description": "wasm module",
+      "description": "tket.wasm module",
       "bound": {
         "b": "Explicit",
         "bound": "C"
@@ -59,7 +59,7 @@
           }
         }
       ],
-      "description": "wasm result",
+      "description": "tket.wasm result",
       "bound": {
         "b": "Explicit",
         "bound": "A"
