@@ -28,7 +28,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         new_fn: &mut impl Dataflow,
         ancilla: &mut Vec<Wire<Node>>,
     ) -> Result<Vec<(Node, IncomingPort)>, ModifierResolverErrors<N>> {
-        match (self.modifiers.dagger, self.modifiers.control) {
+        match (self.modifiers.dagger, self.control_num()) {
             (false, 0) => {
                 let node = new_fn.add_child_node(GlobalPhase);
                 let in_port = IncomingPort::from(0);

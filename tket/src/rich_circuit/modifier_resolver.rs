@@ -10,13 +10,16 @@ use hugr::{
     core::HugrNode,
     extension::{prelude::qb_t, simple_op::MakeExtensionOp},
     hugr::{hugrmut::HugrMut, patch::replace::ReplaceError},
-    ops::{Const, ExtensionOp, LoadFunction, OpType},
+    ops::{Const, ExtensionOp, OpType},
     std_extensions::collections::array::array_type,
     types::{FuncTypeBase, Signature, Type},
     HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex, Wire,
 };
 use itertools::{Either, EitherOrBoth, Itertools};
-use std::{collections::HashMap, iter, mem};
+use std::{
+    collections::{HashMap, VecDeque},
+    iter, mem,
+};
 
 use super::{
     dagger::is_quantum_type, modifier_resolver::global_phase_modify::delete_phase, GlobalPhase,
@@ -231,24 +234,28 @@ impl<N: HugrNode> PortVector<N> {
 
 /// A container for modifier resolving.
 pub struct ModifierResolver<N = Node> {
-    node: Option<N>,
     modifiers: CombinedModifier,
     corresp_map: HashMap<DirWire<N>, Vec<DirWire>>,
     controls: Vec<Wire>,
+    worklist: VecDeque<N>,
+    call_map: HashMap<N, (Node, IncomingPort)>,
     // TODO:
     // Should keep track of the collection of modifiers that are applied to the same function.
     // This will prevent the duplicated generation of Controlled-functions.
     // Some HashMap should be held here so that we remember such information.
+    _modified_functions: HashMap<N, (CombinedModifier, Node)>,
 }
 
 impl<N> ModifierResolver<N> {
     /// Create a new modifier resolver.
     pub fn new() -> Self {
         ModifierResolver {
-            node: None,
             modifiers: CombinedModifier::default(),
-            corresp_map: HashMap::new(),
-            controls: Vec::new(),
+            corresp_map: HashMap::default(),
+            controls: Vec::default(),
+            worklist: VecDeque::default(),
+            call_map: HashMap::default(),
+            _modified_functions: HashMap::default(),
         }
     }
 
@@ -299,8 +306,6 @@ pub enum ModifierResolverErrors<N = Node> {
     BuildError(BuildError),
     /// Unreachable error variant.
     Unreachable(String),
-    /// Validation error.
-    ValidationError(String),
 }
 impl<N> From<ModifierError<N>> for ModifierResolverErrors<N> {
     fn from(err: ModifierError<N>) -> Self {
@@ -319,9 +324,14 @@ impl<N> From<BuildError> for ModifierResolverErrors<N> {
 }
 
 impl<N: HugrNode> ModifierResolver<N> {
-    fn node(&self) -> N {
-        self.node
-            .expect("ModifierResolver is not initialized with a node")
+    fn modifiers_mut(&mut self) -> &mut CombinedModifier {
+        &mut self.modifiers
+    }
+    fn modifiers(&self) -> &CombinedModifier {
+        &self.modifiers
+    }
+    fn control_num(&self) -> usize {
+        self.modifiers.control
     }
     fn controls(&mut self) -> &mut Vec<Wire> {
         &mut self.controls
@@ -329,8 +339,14 @@ impl<N: HugrNode> ModifierResolver<N> {
     fn controls_ref(&self) -> &Vec<Wire> {
         &self.controls
     }
+    fn worklist(&mut self) -> &mut VecDeque<N> {
+        &mut self.worklist
+    }
     fn corresp_map(&mut self) -> &mut HashMap<DirWire<N>, Vec<DirWire>> {
         &mut self.corresp_map
+    }
+    fn call_map(&mut self) -> &mut HashMap<N, (Node, IncomingPort)> {
+        &mut self.call_map
     }
 
     fn pop_control(&mut self) -> Option<Wire<Node>> {
@@ -441,7 +457,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 println!("  Wire mapping: {} -> {}", a, b);
             }
         }
-        println!(" hugr: \n{}", new_dfg.hugr().mermaid_string());
+        println!(" before connect_all:\n{}", new_dfg.hugr().mermaid_string());
         for out_node in h.children(parent) {
             for out_port in h.node_outputs(out_node) {
                 for (in_node, in_port) in h.linked_inputs(out_node, out_port) {
@@ -459,20 +475,25 @@ impl<N: HugrNode> ModifierResolver<N> {
 }
 
 impl<N: HugrNode> ModifierResolver<N> {
-    fn verify(&self, h: &impl HugrView<Node = N>) -> Result<(), ModifierError<N>> {
+    // FIXME: Shouldn't we check that there is a caller of the modified function?
+    // We don't want to modify a function that is loaded and modified but never called.
+    // When more than one modifier is chained, after the last modifier is resolved,
+    // we delete the last modifier node, but the previous modifiers are not deleted.
+    // If the second last modifier was only called by the last modifier, that will not be called anymore.
+    fn verify(&self, h: &impl HugrView<Node = N>, n: N) -> Result<(), ModifierError<N>> {
         // Check if the node is a modifier, modifying an operation.
-        let optype = h.get_optype(self.node());
+        let optype = h.get_optype(n);
         if Modifier::from_optype(optype).is_none() {
-            return Err(ModifierError::NotModifier(self.node(), optype.clone()));
+            return Err(ModifierError::NotModifier(n, optype.clone()));
         }
         // Check if this is the first modifier in a chain.
-        if let Some((caller, _)) = h.linked_inputs(self.node(), 0).exactly_one().ok() {
+        if let Some((caller, _)) = h.linked_inputs(n, 0).exactly_one().ok() {
             let optype = h.get_optype(caller);
             if Modifier::from_optype(optype).is_some() {
                 return Err(ModifierError::NotInitialModifier(caller, optype.clone()));
             }
         } else {
-            return Err(ModifierError::NoCaller(self.node()));
+            return Err(ModifierError::NoCaller(n));
         }
         Ok(())
     }
@@ -480,94 +501,25 @@ impl<N: HugrNode> ModifierResolver<N> {
     fn try_rewrite(
         &mut self,
         h: &mut impl HugrMut<Node = N>,
+        n: N,
     ) -> Result<(), ModifierResolverErrors<N>> {
         // Verify that the rewrite can be applied.
-        self.verify(h)?;
+        self.verify(h, n)?;
 
         // the ports that takes inputs from the modified function.
         let modified_fn_loader: Vec<(_, Vec<_>)> = h
-            .node_outputs(self.node())
-            .map(|p| (p, h.linked_inputs(self.node(), p).collect()))
+            .node_outputs(n)
+            .map(|p| (p, h.linked_inputs(n, p).collect()))
             .collect();
 
-        // The final target of modifiers to apply.
-        let mut targ = self.node();
-        // Collection of modifiers to apply.
+        // Modify the chain of modifiers.
+        // Make sure that the modifiers are initially empty.
         let mut modifiers = CombinedModifier::default();
-        let mut modifier_and_targ: Vec<N> = Vec::new();
-        loop {
-            modifier_and_targ.push(targ);
-            let optype = h.get_optype(targ);
-            match Modifier::from_optype(optype) {
-                Some(_) => modifiers.push(optype.as_extension_op().unwrap()),
-                // Found the target
-                None => break,
-            }
-            targ = h
-                .all_linked_outputs(targ)
-                .exactly_one()
-                .ok()
-                .map(|(n, _)| n)
-                .ok_or(ModifierError::NoTarget(self.node()))?;
-        }
-        println!("Evaluating {}, Current target: {}", self.node(), targ);
+        mem::swap(self.modifiers_mut(), &mut modifiers);
+        let new_load = self.apply_modifier_chain_to_loaded_fn(h, n)?;
+        mem::swap(self.modifiers_mut(), &mut modifiers);
 
-        // Calculate the accumulated modifier.
-        self.modifiers = modifiers;
-
-        let optype = h.get_optype(targ).clone();
-        // The function to apply the modifier to.
-        let (func, load) = match optype {
-            OpType::Input(_) => return Err(ModifierError::NoTarget(self.node()).into()),
-            // If the target is a function, we need to create a new dataflow block of it.
-            OpType::LoadFunction(load) => {
-                let (fn_node, _) = h.all_linked_outputs(targ).exactly_one().map_err(|_| {
-                    ModifierResolverErrors::Unreachable(
-                        "Loading multiple or no function.".to_string(),
-                    )
-                })?;
-                let fn_optype = h.get_optype(fn_node);
-                let OpType::FuncDefn(_) = fn_optype else {
-                    return Err({
-                        println!("error happened here!");
-                        ModifierError::ModifierNotApplicable(self.node(), fn_optype.clone()).into()
-                    });
-                };
-                // TODO: We want some machinery to prevent generating a lot of controlled-U
-                // for the same function U.
-                (fn_node, load)
-            }
-            _ => {
-                // TODO: Handle modifiers provided from other nodes.
-                // For example, conditionals?
-                println!("error happened here 2!");
-                return Err(
-                    ModifierError::ModifierNotApplicable(self.node(), optype.clone()).into(),
-                );
-            }
-        };
-
-        // generate modified function
-        let mut modified_sig = load.func_sig.clone();
-        self.modify_signature(modified_sig.body_mut(), false);
-        println!(
-            "Modifying function {} with signature {:?}",
-            func, modified_sig
-        );
-        let modified_fn = self.modify_fn(h, func, modified_sig.clone())?;
-        let modified_fn = h
-            .insert_hugr(h.module_root(), modified_fn)
-            .inserted_entrypoint;
-
-        // insert the new LoadFunction node to load the modified function
-        let load = LoadFunction::try_new(modified_sig, load.type_args).map_err(BuildError::from)?;
-        let new_load = h.add_node_after(self.node(), load);
-        h.connect(modified_fn, 0, new_load, 0);
-
-        // delete the modifiers, and change the function to be loaded
-        for mod_or_targ in modifier_and_targ {
-            h.remove_node(mod_or_targ);
-        }
+        // Connect the modified function to the inputs
         for (out_port, inputs) in modified_fn_loader {
             // Connect the inputs to the modified function.
             for (recv, recv_port) in inputs {
@@ -583,7 +535,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         let FuncTypeBase { input, output } = signature;
 
         if flatten {
-            let n = self.modifiers.control;
+            let n = self.control_num();
             input.to_mut().splice(0..0, iter::repeat(qb_t()).take(n));
             output.to_mut().splice(0..0, iter::repeat(qb_t()).take(n));
         } else {
@@ -599,11 +551,11 @@ impl<N: HugrNode> ModifierResolver<N> {
     // and pass around them in that order. This might not be ideal, as it may produce an inefficient order.
     fn modify_op(
         &mut self,
-        h: &impl HugrMut<Node = N>,
+        h: &mut impl HugrMut<Node = N>,
         n: N,
         new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        let optype = h.get_optype(n);
+        let optype = &h.get_optype(n).clone();
         match optype {
             // Skip input/output nodes: it should be handled by its parent as it sets control qubits.
             OpType::Input(_) | OpType::Output(_) => {}
@@ -616,7 +568,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             }
 
             // Function calls
-            OpType::Call(call) => self.modify_call(h, n, call, new_dfg)?,
+            OpType::Call(_) => self.modify_call(h, n, optype, new_dfg)?,
             OpType::CallIndirect(indir_call) => {
                 self.modify_indirect_call(h, n, indir_call, new_dfg)?
             }
@@ -700,7 +652,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         optype: &OpType,
         new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        if self.controls().len() != self.modifiers.control {
+        if self.controls().len() != self.control_num() {
             return Err(ModifierResolverErrors::Unreachable(
                 "Control qubits are not set correctly.".to_string(),
             ));
@@ -727,6 +679,11 @@ impl<N: HugrNode> ModifierResolver<N> {
 }
 
 /// Resolve modifiers in a circuit by applying them to each entry point.
+//
+// Shouldn't we use a worklist of nodes?
+// As we may want to change the order of resolving modifiers
+// but might want to rollback if the second last one is called in a different path,
+// this may be needed.
 pub fn resolve_modifier_with_entrypoints(
     h: &mut impl HugrMut<Node = Node>,
     entry_points: impl Iterator<Item = Node>,
@@ -739,9 +696,8 @@ pub fn resolve_modifier_with_entrypoints(
         let descendants = h.descendants(entry_point).collect::<Vec<_>>();
         let mut resolver = ModifierResolver::new();
         for node in descendants {
-            resolver.node = Some(node);
             // Verify the resolver can be applied.
-            match resolver.try_rewrite(h) {
+            match resolver.try_rewrite(h, node) {
                 Ok(_) => (),
                 // If not resolvable, just skip.
                 Err(ModifierError(e)) => {
