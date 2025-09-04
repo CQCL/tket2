@@ -9,6 +9,7 @@ pub mod llvm;
 mod lower_drops;
 pub mod pytket;
 pub mod replace_bools;
+pub mod replace_borrow_arrays;
 
 use derive_more::{Display, Error, From};
 use hugr::{
@@ -24,6 +25,7 @@ use hugr::{
 };
 use lower_drops::LowerDropsPass;
 use replace_bools::{ReplaceBoolPass, ReplaceBoolPassError};
+use replace_borrow_arrays::{ReplaceBorrowArrayPass, ReplaceBorrowArrayPassError};
 use tket::TketOp;
 
 use extension::{
@@ -44,6 +46,7 @@ pub struct QSystemPass {
     monomorphize: bool,
     force_order: bool,
     lazify: bool,
+    lower_borrow_arrays: bool,
 }
 
 impl Default for QSystemPass {
@@ -53,6 +56,7 @@ impl Default for QSystemPass {
             monomorphize: true,
             force_order: true,
             lazify: true,
+            lower_borrow_arrays: true,
         }
     }
 }
@@ -63,6 +67,8 @@ impl Default for QSystemPass {
 pub enum QSystemPassError<N = Node> {
     /// An error from the component [ReplaceBoolPass].
     ReplaceBoolError(ReplaceBoolPassError<N>),
+    /// An error from the component [ReplaceBorrowArrayPass].
+    ReplaceBorrowArrayError(ReplaceBorrowArrayPassError<N>),
     /// An error from the component [force_order()] pass.
     ForceOrderError(HugrError),
     /// An error from the component [LowerTketToQSystemPass] pass.
@@ -116,12 +122,19 @@ impl QSystemPass {
         }
 
         self.lower_tk2().run(hugr)?;
+        // Only has an effect if there are borrow arrays - should be run before
+        // lazification and drop lowering as no copy discard handler currently exists
+        // for BorrowArrays.
+        if self.lower_borrow_arrays {
+            self.replace_borrow_arrays().run(hugr)?;
+        }
         if self.lazify {
             self.replace_bools().run(hugr)?;
         }
-
         // We expect any Hugr will have *either* drop ops, or ValueArrays (without drops),
         // so only one of these passes will do anything; the order is thus immaterial.
+        // Drop should come after borrow array replacement so that we don't require a
+        // copy/discard handler for borrow arrays + avoid lowering the discard function.
         self.lower_drops().run(hugr)?;
         self.linearize_arrays().run(hugr)?;
 
@@ -188,6 +201,10 @@ impl QSystemPass {
 
     fn replace_bools(&self) -> ReplaceBoolPass {
         ReplaceBoolPass
+    }
+
+    fn replace_borrow_arrays(&self) -> ReplaceBorrowArrayPass {
+        ReplaceBorrowArrayPass
     }
 
     fn constant_fold(&self) -> ConstantFoldPass {
