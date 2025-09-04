@@ -72,7 +72,7 @@ pub(crate) fn add_compute_type_defs(
 /// An enum of types defined by compute extensions.
 ///
 /// Instances will provide `impl From<ComputeType<T>>` for [CustomType] and [Type], and `impl
-/// TryFrom<CustomType>` and `impl TryFrom<CustomType>` for [ComputeType<T>].
+/// TryFrom<CustomType>` and `impl TryFrom<CustomType>` for [`ComputeType<T>`].
 pub enum ComputeType<T> {
     /// `module`
     Module,
