@@ -87,6 +87,7 @@ typetag = "0.2.20"
 cool_asserts = "2.0.3"
 zstd = "0.13.3"
 anyhow = "1.0.99"
+num-rational = "0.4"
 
 [profile.release.package.tket-py]
 # Some configurations to reduce the size of tket wheels
