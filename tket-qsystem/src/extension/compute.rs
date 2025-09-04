@@ -749,4 +749,5 @@ macro_rules! compute_builder {
     };
 }
 
+pub mod gpu;
 pub mod wasm;
