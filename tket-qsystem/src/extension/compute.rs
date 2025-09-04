@@ -9,19 +9,19 @@ use std::marker::PhantomData;
 use std::sync::Weak;
 
 lazy_static! {
-    /// The name of the `tket.wasm.module` type.
+    /// The name of the `module` type.
     pub static ref MODULE_TYPE_NAME: SmolStr = SmolStr::new_inline("module");
-    /// The name of the `tket.wasm.context` type.
+    /// The name of the `context` type.
     pub static ref CONTEXT_TYPE_NAME: SmolStr = SmolStr::new_inline("context");
-    /// The name of the `tket.wasm.func` type.
+    /// The name of the `func` type.
     pub static ref FUNC_TYPE_NAME: SmolStr = SmolStr::new_inline("func");
 
-    /// The name of the `tket.wasm.result` type.
+    /// The name of the `result` type.
     pub static ref RESULT_TYPE_NAME: SmolStr = SmolStr::new_inline("result");
 
-    /// The [TypeParam] of `tket.wasm.lookup_by_id` specifying the id of the function.
+    /// The [TypeParam] of `lookup_by_id` specifying the id of the function.
     pub static ref ID_PARAM: TypeParam = TypeParam::max_nat_type();
-    /// The [TypeParam] of `tket.wasm.lookup_by_name` specifying the name of the function.
+    /// The [TypeParam] of `lookup_by_name` specifying the name of the function.
     pub static ref NAME_PARAM: TypeParam = TypeParam::StringType;
     /// The [TypeParam] of various types and ops specifying the input signature of a function.
     pub static ref INPUTS_PARAM: TypeParam =
@@ -94,7 +94,7 @@ pub enum ComputeType<T> {
 }
 
 impl<T> ComputeType<T> {
-    /// Construct a new `tket.wasm.func` type.
+    /// Construct a new `func` type.
     pub fn new_func(inputs: impl Into<TypeRowRV>, outputs: impl Into<TypeRowRV>) -> Self {
         Self::Func {
             inputs: inputs.into(),
@@ -243,7 +243,7 @@ macro_rules! compute_opdef {
         )]
         #[allow(missing_docs, non_camel_case_types)]
         #[non_exhaustive]
-        /// Simple enum of ops defined by the `tket.wasm` extension.
+        /// Simple enum of ops defined by the this extension.
         pub enum $opdef {
             get_context,
             dispose_context,
@@ -283,13 +283,15 @@ macro_rules! compute_opdef {
             }
 
             fn init_signature(&self, extension_ref: &Weak<Extension>) -> SignatureFunc {
-                let context_type = WasmType::Context.get_type(self.extension(), extension_ref);
-                let module_type = WasmType::Module.get_type(self.extension(), extension_ref);
+                let context_type =
+                    ComputeType::<$ext>::Context.get_type(self.extension(), extension_ref);
+                let module_type =
+                    ComputeType::<$ext>::Module.get_type(self.extension(), extension_ref);
                 match self {
                     // [usize] -> [Context]
                     Self::get_context => Signature::new(
                         usize_t(),
-                        Type::from(WasmOp::get_context_return_type(
+                        Type::from(ComputeOp::<$ext>::get_context_return_type(
                             self.extension(),
                             extension_ref,
                         )),
@@ -297,12 +299,12 @@ macro_rules! compute_opdef {
                     .into(),
                     // [Context] -> []
                     Self::dispose_context => Signature::new(context_type, type_row![]).into(),
-                    // <id: usize, inputs: TypeRow, outputs: TypeRow> [Module] -> [WasmType::Func { inputs, outputs }]
+                    // <id: usize, inputs: TypeRow, outputs: TypeRow> [Module] -> [ComputeType::Func { inputs, outputs }]
                     Self::lookup_by_id => {
                         let inputs = TypeRV::new_row_var_use(1, TypeBound::Copyable);
                         let outputs = TypeRV::new_row_var_use(2, TypeBound::Copyable);
 
-                        let func_type = WasmType::func_custom_type(
+                        let func_type = ComputeType::<$ext>::func_custom_type(
                             inputs,
                             outputs,
                             self.extension(),
@@ -319,12 +321,12 @@ macro_rules! compute_opdef {
                         )
                         .into()
                     }
-                    // <name: String, inputs: TypeRow, outputs: TypeRow> [Module] -> [WasmType::Func { inputs, outputs }]
+                    // <name: String, inputs: TypeRow, outputs: TypeRow> [Module] -> [ComputeType::Func { inputs, outputs }]
                     Self::lookup_by_name => {
                         let inputs = TypeRV::new_row_var_use(1, TypeBound::Copyable);
                         let outputs = TypeRV::new_row_var_use(2, TypeBound::Copyable);
 
-                        let func_type = WasmType::func_custom_type(
+                        let func_type = ComputeType::<$ext>::func_custom_type(
                             inputs,
                             outputs,
                             self.extension(),
@@ -341,22 +343,23 @@ macro_rules! compute_opdef {
                         )
                         .into()
                     }
-                    // <inputs: TypeRow, outputs: TypeRow> [Context, WasmType::Func { inputs, outputs }, inputs] -> [Context, future<tuple<outputs>>>]
+                    // <inputs: TypeRow, outputs: TypeRow> [Context, ComputeType::Func { inputs, outputs }, inputs] -> [Context, future<tuple<outputs>>>]
                     Self::call => {
                         let context_type: TypeRV = context_type.into();
                         let inputs = TypeRV::new_row_var_use(0, TypeBound::Copyable);
                         let outputs = TypeRV::new_row_var_use(1, TypeBound::Copyable);
-                        let func_type = Type::new_extension(WasmType::func_custom_type(
+                        let func_type = Type::new_extension(ComputeType::<$ext>::func_custom_type(
                             inputs.clone(),
                             outputs.clone(),
                             self.extension(),
                             extension_ref,
                         ));
-                        let result_type = TypeRV::new_extension(WasmType::result_custom_type(
-                            outputs,
-                            self.extension(),
-                            extension_ref,
-                        ));
+                        let result_type =
+                            TypeRV::new_extension(ComputeType::<$ext>::result_custom_type(
+                                outputs,
+                                self.extension(),
+                                extension_ref,
+                            ));
 
                         PolyFuncTypeRV::new(
                             [INPUTS_PARAM.to_owned(), OUTPUTS_PARAM.to_owned()],
@@ -370,11 +373,12 @@ macro_rules! compute_opdef {
                     Self::read_result => {
                         let context_type: TypeRV = context_type.into();
                         let outputs = TypeRV::new_row_var_use(0, TypeBound::Copyable);
-                        let result_type = TypeRV::new_extension(WasmType::result_custom_type(
-                            outputs.clone(),
-                            self.extension(),
-                            extension_ref,
-                        ));
+                        let result_type =
+                            TypeRV::new_extension(ComputeType::<$ext>::result_custom_type(
+                                outputs.clone(),
+                                self.extension(),
+                                extension_ref,
+                            ));
                         PolyFuncTypeRV::new(
                             [OUTPUTS_PARAM.to_owned()],
                             FuncValueType::new(vec![result_type], vec![context_type, outputs]),
@@ -412,7 +416,7 @@ macro_rules! compute_opdef {
                                 0,
                             )))?
                         };
-                        Ok(WasmOp::GetContext)
+                        Ok(Self::Concrete::GetContext)
                     }
                     Self::dispose_context => {
                         let [] = type_args else {
@@ -421,7 +425,7 @@ macro_rules! compute_opdef {
                                 0,
                             )))?
                         };
-                        Ok(WasmOp::DisposeContext)
+                        Ok(Self::Concrete::DisposeContext)
                     }
                     // <usize,in_row,out_row> [] -> []
                     Self::lookup_by_id => {
@@ -454,7 +458,7 @@ macro_rules! compute_opdef {
                                 type_: Box::new(OUTPUTS_PARAM.to_owned()),
                             }))?
                         };
-                        Ok(WasmOp::LookupById {
+                        Ok(Self::Concrete::LookupById {
                             id,
                             inputs,
                             outputs,
@@ -491,7 +495,7 @@ macro_rules! compute_opdef {
                                 type_: Box::new(OUTPUTS_PARAM.to_owned()),
                             }))?
                         };
-                        Ok(WasmOp::LookupByName {
+                        Ok(Self::Concrete::LookupByName {
                             name,
                             inputs,
                             outputs,
@@ -521,7 +525,7 @@ macro_rules! compute_opdef {
                             }))?
                         };
 
-                        Ok(WasmOp::Call {
+                        Ok(Self::Concrete::Call {
                             inputs: inputs.try_into()?,
                             outputs: outputs.try_into()?,
                         })
@@ -542,7 +546,7 @@ macro_rules! compute_opdef {
                                 type_: Box::new(OUTPUTS_PARAM.to_owned()),
                             }))?
                         };
-                        Ok(WasmOp::ReadResult {
+                        Ok(Self::Concrete::ReadResult {
                             outputs: outputs.try_into()?,
                         })
                     }
@@ -578,7 +582,7 @@ macro_rules! compute_opdef {
                 extension_id: ExtensionId,
                 extension_ref: &Weak<Extension>,
             ) -> SumType {
-                option_type(WasmType::Context.get_type(extension_id, extension_ref))
+                option_type(ComputeType::<$ext>::Context.get_type(extension_id, extension_ref))
             }
         }
 
@@ -600,9 +604,9 @@ macro_rules! compute_opdef {
 
             fn type_args(&self) -> Vec<TypeArg> {
                 match self {
-                    WasmOp::GetContext => vec![],
-                    WasmOp::DisposeContext => vec![],
-                    WasmOp::LookupById {
+                    Self::GetContext => vec![],
+                    Self::DisposeContext => vec![],
+                    Self::LookupById {
                         id,
                         inputs,
                         outputs,
@@ -611,7 +615,7 @@ macro_rules! compute_opdef {
                         let outputs = TypeArg::from(outputs.clone());
                         vec![TypeArg::BoundedNat(*id), inputs, outputs]
                     }
-                    WasmOp::LookupByName {
+                    Self::LookupByName {
                         name,
                         inputs,
                         outputs,
@@ -620,13 +624,13 @@ macro_rules! compute_opdef {
                         let outputs = TypeArg::from(outputs.clone());
                         vec![name.clone().into(), inputs, outputs]
                     }
-                    WasmOp::Call { inputs, outputs } => {
+                    Self::Call { inputs, outputs } => {
                         let inputs = TypeArg::from(inputs.clone());
                         let outputs = TypeArg::from(outputs.clone());
                         vec![inputs, outputs]
                     }
-                    WasmOp::ReadResult { outputs } => vec![outputs.clone().into()],
-                    WasmOp::_Unreachable(x, _) => match *x {},
+                    Self::ReadResult { outputs } => vec![outputs.clone().into()],
+                    Self::_Unreachable(x, _) => match *x {},
                 }
             }
         }
@@ -635,22 +639,22 @@ macro_rules! compute_opdef {
 
 macro_rules! compute_builder {
     ($ext:ty, $builder_name:ident) => {
-        /// An extension trait for [Dataflow] providing methods to add "tket.wasm"
+        /// An extension trait for [Dataflow] providing methods to add extension
         /// operations and constants.
         pub trait $builder_name: Dataflow {
-            /// Add a `tket.wasm.get_context` op.
+            /// Add a `get_context` op.
             fn add_get_context(&mut self, id: Wire) -> Result<Wire, BuildError> {
                 let op = self.add_dataflow_op(ComputeOp::<$ext>::GetContext, vec![id])?;
                 Ok(op.out_wire(0))
             }
 
-            /// Add a `tket.wasm.dispose_context` op.
+            /// Add a `dispose_context` op.
             fn add_dispose_context(&mut self, id: Wire) -> Result<(), BuildError> {
                 let _ = self.add_dataflow_op(ComputeOp::<$ext>::DisposeContext, vec![id])?;
                 Ok(())
             }
 
-            /// Add a `tket.wasm.lookup_by_id` op.
+            /// Add a `lookup_by_id` op.
             fn add_lookup_by_id(
                 &mut self,
                 id: impl Into<u64>,
@@ -670,7 +674,7 @@ macro_rules! compute_builder {
                     .out_wire(0))
             }
 
-            /// Add a `tket.wasm.lookup_by_name` op.
+            /// Add a `lookup_by_name` op.
             fn add_lookup_by_name(
                 &mut self,
                 name: impl Into<String>,
@@ -690,7 +694,7 @@ macro_rules! compute_builder {
                     .out_wire(0))
             }
 
-            /// Add a `tket.wasm.call` op.
+            /// Add a `call` op.
             ///
             /// We infer the signature from the type of the `func` wire.
             fn add_call(
@@ -722,7 +726,7 @@ macro_rules! compute_builder {
                     .out_wire(0))
             }
 
-            /// Add a `tket.wasm.read_result` op.
+            /// Add a `read_result` op.
             fn add_read_result(&mut self, result: Wire) -> Result<(Wire, Vec<Wire>), BuildError> {
                 let result_wire_type = self.get_wire_type(result)?;
                 let Some(ComputeType::<$ext>::Result { outputs }) =
