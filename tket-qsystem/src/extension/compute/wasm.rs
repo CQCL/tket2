@@ -101,7 +101,7 @@ lazy_static! {
     pub static ref EXTENSION: Arc<Extension> =
         Extension::new_arc(EXTENSION_ID, EXTENSION_VERSION, |ext, ext_ref| {
         add_compute_type_defs(ext, ext_ref).unwrap();
-        ComputeOpDef::load_all_ops(ext, ext_ref, ).unwrap();
+        WasmOpDef::load_all_ops(ext, ext_ref, ).unwrap();
     });
 
     /// A [Weak] reference to the `tket.wasm` op.
@@ -158,7 +158,7 @@ impl TryFrom<CustomType> for WasmType {
     }
 }
 
-compute_opdef!(EXTENSION_ID, WasmExtension);
+compute_opdef!(EXTENSION_ID, WasmExtension, WasmOpDef);
 
 impl MakeRegisteredOp for WasmOp {
     fn extension_id(&self) -> ExtensionId {
@@ -244,15 +244,15 @@ mod test {
     #[test]
     fn wasm_op_def_instantiate() {
         assert_eq!(
-            ComputeOpDef::get_context.instantiate(&[]),
+            WasmOpDef::get_context.instantiate(&[]),
             Ok(WasmOp::GetContext)
         );
         assert_eq!(
-            ComputeOpDef::dispose_context.instantiate(&[]),
+            WasmOpDef::dispose_context.instantiate(&[]),
             Ok(WasmOp::DisposeContext)
         );
         assert_eq!(
-            ComputeOpDef::lookup_by_name.instantiate(&[
+            WasmOpDef::lookup_by_name.instantiate(&[
                 "lookup_name".into(),
                 TypeArg::new_var_use(0, TypeParam::ListType(Box::new(TypeBound::Linear.into()))),
                 vec![].into()
@@ -264,7 +264,7 @@ mod test {
             })
         );
         assert_eq!(
-            ComputeOpDef::lookup_by_id.instantiate(&[
+            WasmOpDef::lookup_by_id.instantiate(&[
                 TypeArg::BoundedNat(42),
                 TypeArg::new_var_use(0, TypeParam::ListType(Box::new(TypeBound::Linear.into()))),
                 vec![].into()
@@ -276,7 +276,7 @@ mod test {
             })
         );
         assert_eq!(
-            ComputeOpDef::call.instantiate(&[vec![Type::UNIT.into()].into(), vec![].into()]),
+            WasmOpDef::call.instantiate(&[vec![Type::UNIT.into()].into(), vec![].into()]),
             Ok(WasmOp::Call {
                 inputs: vec![Type::UNIT].into(),
                 outputs: vec![].into()

@@ -222,7 +222,7 @@ pub enum ComputeOp<T> {
 }
 
 macro_rules! compute_opdef {
-    ($ext_id:expr, $ext:ty) => {
+    ($ext_id:expr, $ext:ty, $opdef:ident) => {
         use serde::{Deserialize, Serialize};
         use strum::{EnumIter, EnumString, IntoStaticStr};
 
@@ -244,7 +244,7 @@ macro_rules! compute_opdef {
         #[allow(missing_docs, non_camel_case_types)]
         #[non_exhaustive]
         /// Simple enum of ops defined by the `tket.wasm` extension.
-        pub enum ComputeOpDef {
+        pub enum $opdef {
             get_context,
             dispose_context,
             lookup_by_id,
@@ -277,7 +277,7 @@ macro_rules! compute_opdef {
             }
         }
 
-        impl MakeOpDef for ComputeOpDef {
+        impl MakeOpDef for $opdef {
             fn opdef_id(&self) -> hugr::ops::OpName {
                 <&'static str>::from(self).into()
             }
@@ -400,7 +400,7 @@ macro_rules! compute_opdef {
             }
         }
 
-        impl HasConcrete for ComputeOpDef {
+        impl HasConcrete for $opdef {
             type Concrete = ComputeOp<$ext>;
 
             fn instantiate(&self, type_args: &[TypeArg]) -> Result<Self::Concrete, OpLoadError> {
@@ -549,7 +549,7 @@ macro_rules! compute_opdef {
                 }
             }
         }
-        impl TryFrom<&OpType> for ComputeOpDef {
+        impl TryFrom<&OpType> for $opdef {
             type Error = OpLoadError;
 
             fn try_from(value: &OpType) -> Result<Self, Self::Error> {
@@ -562,14 +562,14 @@ macro_rules! compute_opdef {
         }
 
         impl ComputeOp<$ext> {
-            fn compute_op_def(&self) -> ComputeOpDef {
+            fn compute_op_def(&self) -> $opdef {
                 match self {
-                    Self::GetContext => ComputeOpDef::get_context,
-                    Self::DisposeContext => ComputeOpDef::dispose_context,
-                    Self::LookupById { .. } => ComputeOpDef::lookup_by_id,
-                    Self::LookupByName { .. } => ComputeOpDef::lookup_by_name,
-                    Self::Call { .. } => ComputeOpDef::call,
-                    Self::ReadResult { .. } => ComputeOpDef::read_result,
+                    Self::GetContext => <$opdef>::get_context,
+                    Self::DisposeContext => <$opdef>::dispose_context,
+                    Self::LookupById { .. } => <$opdef>::lookup_by_id,
+                    Self::LookupByName { .. } => <$opdef>::lookup_by_name,
+                    Self::Call { .. } => <$opdef>::call,
+                    Self::ReadResult { .. } => <$opdef>::read_result,
                     Self::_Unreachable(x, _) => match *x {},
                 }
             }
@@ -583,7 +583,7 @@ macro_rules! compute_opdef {
         }
 
         impl HasDef for ComputeOp<$ext> {
-            type Def = ComputeOpDef;
+            type Def = $opdef;
         }
 
         impl MakeExtensionOp for ComputeOp<$ext> {
@@ -595,7 +595,7 @@ macro_rules! compute_opdef {
             where
                 Self: Sized,
             {
-                ComputeOpDef::from_op(ext_op)?.instantiate(ext_op.args())
+                <$opdef>::from_op(ext_op)?.instantiate(ext_op.args())
             }
 
             fn type_args(&self) -> Vec<TypeArg> {
