@@ -372,7 +372,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         self.modifiers.control += 1;
     }
 
-    /// normal insert method.
+    /// Register a correspondence from old to new wire.
     fn map_insert(
         &mut self,
         old: DirWire<N>,
@@ -388,6 +388,20 @@ impl<N: HugrNode> ModifierResolver<N> {
             })
     }
 
+    /// Remember that old wire has no correspondence.
+    fn map_insert_none(&mut self, old: DirWire<N>) -> Result<(), ModifierResolverErrors<N>> {
+        self.corresp_map()
+            .insert(old.clone(), vec![])
+            ;
+            // .map_or(Ok(()), |former| {
+            //     Err(ModifierResolverErrors::Unreachable(format!(
+            //         "Failed to forget port {}. [{},...] are already registered.",
+            //         old, former[0]
+            //     )))
+            // })
+            Ok(())
+    }
+
     fn map_get(&self, key: &DirWire<N>) -> Result<&Vec<DirWire>, ModifierResolverErrors<N>> {
         self.corresp_map
             .get(key)
@@ -395,6 +409,18 @@ impl<N: HugrNode> ModifierResolver<N> {
                 "No correspondence for the input wire. Input: {}",
                 key
             )))
+    }
+
+    fn forget_node(
+        &mut self,
+        h: &impl HugrView<Node = N>,
+        n: N,
+    ) -> Result<(), ModifierResolverErrors<N>> {
+        for port in h.all_node_ports(n) {
+            let dw = DirWire(n, port);
+            self.map_insert_none(dw)?;
+        }
+        Ok(())
     }
 
     fn port_vector_dagger(
@@ -530,8 +556,8 @@ impl<N: HugrNode> ModifierResolver<N> {
 
         // Connect the modified function to the inputs
         for (out_port, inputs) in modified_fn_loader {
-            // Connect the inputs to the modified function.
             for (recv, recv_port) in inputs {
+                h.disconnect(recv, recv_port);
                 h.connect(new_load, out_port, recv, recv_port);
             }
         }

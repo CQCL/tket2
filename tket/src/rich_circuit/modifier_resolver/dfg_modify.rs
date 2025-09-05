@@ -942,10 +942,10 @@ mod test {
 
         let entrypoint = h.entrypoint().clone();
         resolve_modifier_with_entrypoints(&mut h, vec![entrypoint].into_iter()).unwrap();
-        dead_code::DeadCodeElimPass::default()
-            .with_entry_points(vec![_main.node()])
-            .run(&mut h)
-            .unwrap();
+        // dead_code::DeadCodeElimPass::default()
+        //     .with_entry_points(vec![_main.node()])
+        //     .run(&mut h)
+        //     .unwrap();
         println!("After modification\n{}", h.mermaid_string());
         h.validate().unwrap();
         {

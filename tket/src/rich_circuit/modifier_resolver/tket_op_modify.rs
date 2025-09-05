@@ -91,7 +91,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                             } else if i == qubits + control {
                                 Some((halfturn, IncomingPort::from(0)).into())
                             } else {
-                                // FIXME: Just forget all the other ports
+                                // FIXME: forget state order
                                 None
                             }
                         })
@@ -349,7 +349,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                     mem::swap(&mut incoming, &mut outgoing)
                 }
                 incoming.push((halfturns, IncomingPort::from(0)).into());
-                // FIXME: Ignoring invisible wires
+                // FIXME: Ignoring StateOrder
                 Ok(PortVector { incoming, outgoing })
             }
             Rz | Y | Z => {

@@ -111,7 +111,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         for mod_or_targ in modifiers_and_targ {
             // This should be disconnection rather than removal.
             // h.disconnect(n, port);
-            h.remove_node(mod_or_targ);
+            // h.remove_node(mod_or_targ);
         }
         Ok(new_load)
     }
@@ -224,20 +224,20 @@ impl<N: HugrNode> ModifierResolver<N> {
         }
         *self.controls() = self.unpack_controls(new_dfg, controls)?;
         for port in h.all_node_ports(n) {
-            self.map_insert(
-                DirWire(n, port),
-                DirWire(new_call_node, port.shift(offset)),
-            )?;
+            let old_wire = DirWire(n, port);
+            if port == IncomingPort::from(0).into() {
+                self.map_insert_none(old_wire)?;
+                continue;
+            }
+            self.map_insert(old_wire, DirWire(new_call_node, port.shift(offset)))?;
         }
-        new_dfg
-            .hugr_mut()
-            .connect(new_load, 0, new_call_node, 0);
+        new_dfg.hugr_mut().connect(new_load, 0, new_call_node, 0);
 
-        // FIXME: Removing all the nodes in the chain so that we don't have to worry about mapping the edges.
+        // FIXME: Forgetting all the nodes in the chain so that we don't have to worry about mapping the edges.
         // Otherwise, there would be edges in the original graph that have no corresponding edges in the new graph.
-        // However, this could remove nodes that are referenced by other nodes that are not in the chain.
+        // However, this could remove wires referenced by other nodes that are not in the chain.
         for node in trace {
-            h.remove_node(node);
+            self.forget_node(h, node)?
         }
 
         *self.modifiers_mut() = modifiers;
@@ -247,18 +247,12 @@ impl<N: HugrNode> ModifierResolver<N> {
 
     pub(super) fn modify_load_function(
         &mut self,
-        h: &impl HugrMut<Node = N>,
-        n: N,
-        load: &LoadFunction,
-        new_dfg: &mut impl Dataflow,
+        _h: &impl HugrMut<Node = N>,
+        _n: N,
+        _load: &LoadFunction,
+        _new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        // WIP
-
-        let new_load =
-            self.add_node_no_modification(new_dfg, OpType::LoadFunction(load.clone()), h, n)?;
-        let original_callee = h.linked_outputs(n, 0).next().unwrap().0;
-        self.call_map()
-            .insert(original_callee, (new_load, IncomingPort::from(0)));
+        // Indirect calles needs to be handled by its caller.
         Ok(())
     }
 }
