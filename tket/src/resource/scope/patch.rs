@@ -123,7 +123,8 @@ impl<H: HugrMut<Node = hugr::Node>> ResourceScope<H> {
         for (&repl_node, &new_node) in &node_map {
             let repl_scope = repl_scope.as_ref().expect("non-empty replacement");
             if let Some(repl_node_units) = repl_scope.circuit_units.get(&repl_node) {
-                self.circuit_units.insert(new_node, repl_node_units.clone());
+                let new_units = repl_node_units.map_nodes(|repl_n| node_map[&repl_n]);
+                self.circuit_units.insert(new_node, new_units);
             }
         }
 
