@@ -62,7 +62,7 @@ pub use scope::{CircuitRewriteError, ResourceScope, ResourceScopeConfig};
 pub use types::{CircuitUnit, Position, ResourceAllocator, ResourceId};
 
 use crate::{
-    circuit::{CircuitHash, HashError},
+    circuit::{CircuitHash, HashError, NodesIter},
     extension::rotation::{ConstRotation, RotationOp},
     rewrite::trace::RewriteTrace,
 };
@@ -190,6 +190,12 @@ impl<H: HugrView<Node = hugr::Node>> CircuitHash for ResourceScope<H> {
 
 impl<H: HugrView> NodeType for ResourceScope<H> {
     type Node = H::Node;
+}
+
+impl<H: HugrView> NodesIter for ResourceScope<H> {
+    fn nodes(&self) -> impl Iterator<Item = Self::Node> {
+        self.nodes().iter().copied()
+    }
 }
 
 #[cfg(test)]

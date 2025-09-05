@@ -39,7 +39,7 @@ use crate::optimiser::badger::worker::BadgerWorker;
 use crate::passes::CircuitChunks;
 use crate::resource::ResourceScope;
 use crate::rewrite::strategy::RewriteStrategy;
-use crate::rewrite::Rewriter;
+use crate::rewrite::{CircuitRewrite, Rewriter};
 use crate::Circuit;
 
 /// Configuration options for the Badger optimiser.
@@ -121,6 +121,26 @@ pub struct BadgerOptimiser<R, S> {
     strategy: S,
 }
 
+/// A trait for rewriters that can be used with the Badger optimiser.
+pub trait BadgerRewriter:
+    for<'c> Rewriter<ResourceScope, Rewrite<'c> = CircuitRewrite> + Send + Clone + Sync + 'static
+{
+}
+
+/// A trait for rewrite strategies that can be used with the Badger optimiser.
+pub trait BadgerRewriteStrategy: RewriteStrategy + Send + Sync + Clone + 'static {}
+
+impl<S> BadgerRewriteStrategy for S where S: RewriteStrategy + Send + Sync + Clone + 'static {}
+
+impl<R> BadgerRewriter for R where
+    R: for<'c> Rewriter<ResourceScope, Rewrite<'c> = CircuitRewrite>
+        + Send
+        + Clone
+        + Sync
+        + 'static
+{
+}
+
 impl<R, S> BadgerOptimiser<R, S> {
     /// Create a new Badger optimiser.
     pub fn new(rewriter: R, strategy: S) -> Self {
@@ -137,8 +157,8 @@ impl<R, S> BadgerOptimiser<R, S> {
 
 impl<R, S> BadgerOptimiser<R, S>
 where
-    R: Rewriter<ResourceScope> + Send + Clone + Sync + 'static,
-    S: RewriteStrategy + Send + Sync + Clone + 'static,
+    R: BadgerRewriter,
+    S: BadgerRewriteStrategy,
     S::Cost: serde::Serialize + Send + Sync,
 {
     /// Run the Badger optimiser on a circuit.
@@ -226,7 +246,7 @@ where
             }
             circ_cnt += 1;
 
-            let rewrites = self.rewriter.get_rewrites(&circ);
+            let rewrites = self.rewriter.get_all_rewrites(&circ);
             logger.register_branching_factor(rewrites.len());
 
             // Get combinations of rewrites that can be applied to the circuit,

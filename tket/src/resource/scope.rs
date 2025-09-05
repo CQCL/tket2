@@ -325,6 +325,17 @@ impl<H: HugrView> ResourceScope<H> {
     }
 }
 
+impl<'h, H: Clone + HugrView> ResourceScope<&'h H> {
+    /// Clone the &H ref to obtained a ResourceScope owning the inner Hugr.
+    pub fn cloned(&self) -> ResourceScope<H> {
+        ResourceScope {
+            hugr: self.hugr.clone(),
+            subgraph: self.subgraph.clone(),
+            circuit_units: self.circuit_units.clone(),
+        }
+    }
+}
+
 fn map_inputs<N1: Copy, N2: Copy>(
     incoming_ports: &IncomingPorts<N1>,
     mut node_map: impl FnMut(N1) -> N2,

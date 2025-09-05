@@ -162,10 +162,37 @@ impl<'m, M: CircuitMatcher + ?Sized> HugrMatchAdapter<'m, M> {
         circ: &ResourceScope<H>,
         options: &MatchingOptions<M::PartialMatchInfo, M::MatchInfo>,
     ) -> Vec<(Subcircuit, M::MatchInfo)> {
-        circ.nodes()
+        // hashes of complete matches, only used if deduplication is enabled
+        let mut dedup_complete_matches = options
+            .deduplicate_complete_matches
+            .as_ref()
+            .map(|_| BTreeSet::<u64>::new());
+
+        // hashes of visited states, only used if deduplication is enabled
+        let mut dedup_partial_matches = options
+            .deduplicate_partial_matches
+            .as_ref()
+            .map(|_| BTreeSet::<u64>::new());
+
+        let mut all_matches = circ
+            .nodes()
             .iter()
-            .flat_map(|&n| self.get_matches(circ, n, options))
-            .collect()
+            .flat_map(|&n| {
+                self.get_matches_with_dedup_maps(
+                    circ,
+                    n,
+                    options,
+                    &mut dedup_complete_matches,
+                    &mut dedup_partial_matches,
+                )
+            })
+            .collect();
+
+        if options.only_maximal_matches {
+            remove_non_maximal_matches(&mut all_matches, circ);
+        }
+
+        all_matches
     }
 
     /// Get all matching subcircuits within the Circuit rooted at a given node.
@@ -175,19 +202,43 @@ impl<'m, M: CircuitMatcher + ?Sized> HugrMatchAdapter<'m, M> {
         root_node: Node,
         options: &MatchingOptions<M::PartialMatchInfo, M::MatchInfo>,
     ) -> Vec<(Subcircuit, M::MatchInfo)> {
-        let mut queue = VecDeque::new();
-        let mut all_matches = Vec::new();
-
-        // hashes of visited states, only used if deduplication is enabled
-        let mut visited_states = options
-            .deduplicate_partial_matches
-            .as_ref()
-            .map(|_| BTreeSet::<u64>::new());
         // hashes of complete matches, only used if deduplication is enabled
-        let mut complete_matches = options
+        let mut dedup_complete_matches = options
             .deduplicate_complete_matches
             .as_ref()
             .map(|_| BTreeSet::<u64>::new());
+
+        // hashes of visited states, only used if deduplication is enabled
+        let mut dedup_partial_matches = options
+            .deduplicate_partial_matches
+            .as_ref()
+            .map(|_| BTreeSet::<u64>::new());
+
+        let mut all_matches = self.get_matches_with_dedup_maps(
+            circ,
+            root_node,
+            options,
+            &mut dedup_complete_matches,
+            &mut dedup_partial_matches,
+        );
+
+        if options.only_maximal_matches {
+            remove_non_maximal_matches(&mut all_matches, circ);
+        }
+
+        all_matches
+    }
+
+    fn get_matches_with_dedup_maps<H: HugrView<Node = Node>>(
+        &self,
+        circ: &ResourceScope<H>,
+        root_node: Node,
+        options: &MatchingOptions<M::PartialMatchInfo, M::MatchInfo>,
+        dedup_complete_matches: &mut Option<BTreeSet<u64>>,
+        dedup_partial_matches: &mut Option<BTreeSet<u64>>,
+    ) -> Vec<(Subcircuit, M::MatchInfo)> {
+        let mut queue = VecDeque::new();
+        let mut all_matches = Vec::new();
 
         // 1. Initialise queue
         {
@@ -205,7 +256,7 @@ impl<'m, M: CircuitMatcher + ?Sized> HugrMatchAdapter<'m, M> {
             {
                 matches.retain(|(subcirc, info)| {
                     let hash = fx_hash_subcirc_info(subcirc, info, deduplicate_complete_matches);
-                    let complete_matches = complete_matches.as_mut().expect("enabled");
+                    let complete_matches = dedup_complete_matches.as_mut().expect("enabled");
                     complete_matches.insert(hash)
                 });
             }
@@ -221,7 +272,7 @@ impl<'m, M: CircuitMatcher + ?Sized> HugrMatchAdapter<'m, M> {
         while let Some(mut current_match) = queue.pop_front() {
             if let Some(partial_match_hash) = options.deduplicate_partial_matches.as_ref() {
                 let hash = current_match.fx_hash(partial_match_hash);
-                let visited_states = visited_states.as_mut().expect("enabled");
+                let visited_states = dedup_partial_matches.as_mut().expect("enabled");
                 if !visited_states.insert(hash) {
                     continue;
                 }
@@ -250,7 +301,7 @@ impl<'m, M: CircuitMatcher + ?Sized> HugrMatchAdapter<'m, M> {
             {
                 new_matches.retain(|(subcirc, info)| {
                     let hash = fx_hash_subcirc_info(subcirc, info, deduplicate_complete_matches);
-                    let complete_matches = complete_matches.as_mut().expect("enabled");
+                    let complete_matches = dedup_complete_matches.as_mut().expect("enabled");
                     complete_matches.insert(hash)
                 });
             }
@@ -260,10 +311,6 @@ impl<'m, M: CircuitMatcher + ?Sized> HugrMatchAdapter<'m, M> {
                     .into_iter()
                     .filter(|(subcirc, _)| subcirc.validate_subgraph(&circ).is_ok()),
             );
-        }
-
-        if options.only_maximal_matches {
-            remove_non_maximal_matches(&mut all_matches, circ);
         }
 
         all_matches

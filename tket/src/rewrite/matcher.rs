@@ -21,6 +21,7 @@ pub use hugr_adapter::{HugrMatchAdapter, MatchingOptions};
 
 mod im_adapter;
 pub use im_adapter::ImMatchAdapter;
+pub(crate) use im_adapter::ImMatchResult;
 
 /// The result of extending a match to a new Tket operation.
 ///

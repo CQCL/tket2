@@ -6,6 +6,7 @@ use derive_more::derive::Error;
 use derive_more::derive::From;
 use derive_more::derive::Into;
 use hugr::persistent as hugr_im;
+use hugr_core::hugr::internal::NodeType;
 use itertools::Itertools;
 use slotmap_fork_lmondada as slotmap;
 
@@ -14,6 +15,7 @@ use std::cell::RefCell;
 use std::collections::BTreeSet;
 
 use crate::circuit::cost::CostDelta;
+use crate::circuit::NodesIter;
 use crate::resource::ResourceScope;
 use crate::rewrite::CircuitRewrite;
 use max_sat::MaxSATSolver;
@@ -22,7 +24,7 @@ use max_sat::MaxSATSolver;
 mod max_sat;
 
 /// A rewrite in a [`RewriteSpace`].
-#[derive(Debug, Clone, Into)]
+#[derive(Debug, Clone, From, Into)]
 pub struct CommittedRewrite<'a>(hugr_im::Commit<'a>);
 
 /// A space of possible rewrites.
@@ -79,7 +81,10 @@ impl<C> RewriteSpace<C> {
     }
 
     /// Add a rewrite to the [`RewriteSpace`].
-    pub fn try_add(
+    ///
+    /// The set of parents is inferred from the set of deleted parent nodes of
+    /// the rewrite.
+    pub fn try_add_rewrite(
         &self,
         rewrite: CircuitRewrite<hugr_im::PatchNode>,
         cost: C,
@@ -178,6 +183,23 @@ impl<C: CostDelta> RewriteSpace<C> {
             .filter(|&cm| model[&fmt_commit_id(cm)]);
 
         self.state_space.try_create(selected_commit_ids).ok()
+    }
+}
+
+impl<C> NodeType for RewriteSpace<C> {
+    type Node = hugr_im::PatchNode;
+}
+
+impl<C> NodesIter for RewriteSpace<C> {
+    fn nodes(&self) -> impl Iterator<Item = Self::Node> {
+        self.state_space
+            .all_commits()
+            .into_iter()
+            .flat_map(|(id, cm)| {
+                cm.inserted_nodes()
+                    .map(|n| hugr_im::PatchNode(id, n))
+                    .collect_vec()
+            })
     }
 }
 

@@ -91,18 +91,43 @@ pub enum PyRewriter {
 }
 
 impl<H: HugrView<Node = Node>> Rewriter<ResourceScope<H>> for PyRewriter {
-    fn get_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite<H::Node>> {
+    type Rewrite<'c>
+        = CircuitRewrite
+    where
+        H: 'c;
+
+    fn get_rewrites(
+        &self,
+        circ: &ResourceScope<H>,
+        root_node: H::Node,
+    ) -> Vec<CircuitRewrite<H::Node>> {
         match self {
-            Self::ECC(ecc) => ecc.0.get_rewrites(circ),
+            Self::ECC(ecc) => ecc.0.get_rewrites(circ, root_node),
             Self::MatchReplace(rewriter) => {
-                Rewriter::<ResourceScope<H>>::get_rewrites(rewriter, circ)
+                Rewriter::<ResourceScope<H>>::get_rewrites(rewriter, circ, root_node)
             }
             Self::CombineMatchReplace(rewriter) => {
-                Rewriter::<ResourceScope<H>>::get_rewrites(rewriter, circ)
+                Rewriter::<ResourceScope<H>>::get_rewrites(rewriter, circ, root_node)
             }
             Self::Vec(rewriters) => rewriters
                 .iter()
-                .flat_map(|r| r.get_rewrites(circ))
+                .flat_map(|r| r.get_rewrites(circ, root_node))
+                .collect(),
+        }
+    }
+
+    fn get_all_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite<H::Node>> {
+        match self {
+            Self::ECC(ecc) => ecc.0.get_all_rewrites(circ),
+            Self::MatchReplace(rewriter) => {
+                Rewriter::<ResourceScope<H>>::get_all_rewrites(rewriter, circ)
+            }
+            Self::CombineMatchReplace(rewriter) => {
+                Rewriter::<ResourceScope<H>>::get_all_rewrites(rewriter, circ)
+            }
+            Self::Vec(rewriters) => rewriters
+                .iter()
+                .flat_map(|r| r.get_all_rewrites(circ))
                 .collect(),
         }
     }
@@ -162,7 +187,7 @@ impl PyECCRewriter {
     /// Tk2Circuit.
     pub fn get_rewrites(&self, circ: &Tk2Circuit) -> Vec<PyCircuitRewrite> {
         self.0
-            .get_rewrites(&circ.circ)
+            .get_all_rewrites(&circ.circ)
             .into_iter()
             .map(|r| match r {
                 CircuitRewrite::New { .. } => unimplemented!(),

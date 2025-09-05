@@ -384,6 +384,24 @@ impl<T: HugrView> NodeType for Circuit<T> {
     type Node = T::Node;
 }
 
+/// A trait for iterating over the nodes of a circuit.
+pub trait NodesIter: NodeType {
+    /// Returns an iterator over the nodes of the circuit.
+    fn nodes(&self) -> impl Iterator<Item = Self::Node>;
+}
+
+impl<T: HugrView> NodesIter for T {
+    fn nodes(&self) -> impl Iterator<Item = Self::Node> {
+        self.nodes()
+    }
+}
+
+impl<T: HugrView> NodesIter for Circuit<T> {
+    fn nodes(&self) -> impl Iterator<Item = Self::Node> {
+        self.hugr().nodes()
+    }
+}
+
 /// Checks if the passed hugr is a valid circuit,
 /// and return [`CircuitError`] if not.
 fn check_hugr<H: HugrView>(hugr: &H) -> Result<(), CircuitError<H::Node>> {

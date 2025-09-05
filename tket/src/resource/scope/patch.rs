@@ -20,6 +20,31 @@ use crate::{
     Circuit,
 };
 
+impl<H: HugrMut<Node = hugr::Node>> Patch<ResourceScope<H>> for CircuitRewrite {
+    type Outcome = simple_replace::Outcome;
+
+    const UNCHANGED_ON_FAILURE: bool = true;
+
+    fn apply(self, h: &mut ResourceScope<H>) -> Result<Self::Outcome, Self::Error> {
+        match self {
+            CircuitRewrite::New(rewrite) => rewrite.apply(h),
+            CircuitRewrite::Old(OldCircuitRewrite(repl)) => {
+                repl.apply(&mut h.hugr).map_err(Into::into)
+            }
+        }
+    }
+}
+
+impl<H: HugrMut<Node = hugr::Node>> Patch<ResourceScope<H>> for NewCircuitRewrite {
+    type Outcome = simple_replace::Outcome;
+
+    const UNCHANGED_ON_FAILURE: bool = true;
+
+    fn apply(self, h: &mut ResourceScope<H>) -> Result<Self::Outcome, Self::Error> {
+        h.apply_rewrite_new(self)
+    }
+}
+
 impl<H: HugrMut<Node = hugr::Node>> ResourceScope<H> {
     /// Apply a rewrite to the circuit.
     ///
@@ -29,12 +54,7 @@ impl<H: HugrMut<Node = hugr::Node>> ResourceScope<H> {
         &mut self,
         rewrite: CircuitRewrite<H::Node>,
     ) -> Result<simple_replace::Outcome<H::Node>, CircuitRewriteError> {
-        match rewrite {
-            CircuitRewrite::New(rewrite) => self.apply_rewrite_new(rewrite),
-            CircuitRewrite::Old(OldCircuitRewrite(repl)) => {
-                repl.apply(&mut self.hugr).map_err(Into::into)
-            }
-        }
+        <CircuitRewrite as Patch<_>>::apply(rewrite, self)
     }
 
     fn apply_rewrite_new(

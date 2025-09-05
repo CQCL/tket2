@@ -412,18 +412,40 @@ pub struct PyMatchReplaceRewriter {
 }
 
 impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyMatchReplaceRewriter {
-    fn get_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite> {
+    type Rewrite<'c>
+        = CircuitRewrite
+    where
+        H: 'c;
+
+    fn get_rewrites(&self, circ: &ResourceScope<H>, root_node: hugr::Node) -> Vec<CircuitRewrite> {
         // Use the actual rewriter based on the variants
         if let Some(unit_matcher) = self.matcher.as_unit_matcher::<H>() {
             if let Some(unit_replacement) = self.replacement.as_unit_replacement::<H>() {
                 let rewriter = MatchReplaceRewriter::new(unit_matcher, unit_replacement);
-                return rewriter.get_rewrites(circ);
+                return rewriter.get_rewrites(circ, root_node);
             }
         }
         if let Some(pyobject_matcher) = self.matcher.as_pyobject_matcher::<H>() {
             if let Some(pyobject_replacement) = self.replacement.as_pyobject_replacement::<H>() {
                 let rewriter = MatchReplaceRewriter::new(pyobject_matcher, pyobject_replacement);
-                return rewriter.get_rewrites(circ);
+                return rewriter.get_rewrites(circ, root_node);
+            }
+        }
+        panic!("Incompatible matcher and replacement");
+    }
+
+    fn get_all_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite> {
+        // Use the actual rewriter based on the variants
+        if let Some(unit_matcher) = self.matcher.as_unit_matcher::<H>() {
+            if let Some(unit_replacement) = self.replacement.as_unit_replacement::<H>() {
+                let rewriter = MatchReplaceRewriter::new(unit_matcher, unit_replacement);
+                return rewriter.get_all_rewrites(circ);
+            }
+        }
+        if let Some(pyobject_matcher) = self.matcher.as_pyobject_matcher::<H>() {
+            if let Some(pyobject_replacement) = self.replacement.as_pyobject_replacement::<H>() {
+                let rewriter = MatchReplaceRewriter::new(pyobject_matcher, pyobject_replacement);
+                return rewriter.get_all_rewrites(circ);
             }
         }
         panic!("Incompatible matcher and replacement");
@@ -449,7 +471,7 @@ impl PyMatchReplaceRewriter {
             return vec![];
         }
         let circuit = ResourceScope::from_circuit(circuit);
-        <Self as Rewriter<_>>::get_rewrites(&self, &circuit)
+        <Self as Rewriter<_>>::get_all_rewrites(&self, &circuit)
             .into_iter()
             .map(|rw| rw.to_simple_replacement(&circuit).into())
             .collect()
@@ -469,7 +491,12 @@ pub struct PyCombineMatchReplaceRewriter {
 }
 
 impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyCombineMatchReplaceRewriter {
-    fn get_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite> {
+    type Rewrite<'c>
+        = CircuitRewrite
+    where
+        H: 'c;
+
+    fn get_rewrites(&self, circ: &ResourceScope<H>, root_node: hugr::Node) -> Vec<CircuitRewrite> {
         // Use the actual rewriter based on the variants
         if let Some(unit_matchers) = self
             .matchers
@@ -479,7 +506,7 @@ impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyCombineMat
         {
             if let Some(unit_replacement) = self.replacement.as_vec_unit_replacement::<H>() {
                 let rewriter = CombineMatchReplaceRewriter::new(unit_matchers, unit_replacement);
-                return rewriter.get_rewrites(circ);
+                return rewriter.get_rewrites(circ, root_node);
             }
         }
         if let Some(pyobject_matcher) = self
@@ -492,7 +519,36 @@ impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyCombineMat
             {
                 let rewriter =
                     CombineMatchReplaceRewriter::new(pyobject_matcher, pyobject_replacement);
-                return rewriter.get_rewrites(circ);
+                return rewriter.get_rewrites(circ, root_node);
+            }
+        }
+        panic!("Incompatible matcher and replacement");
+    }
+
+    fn get_all_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite> {
+        // Use the actual rewriter based on the variants
+        if let Some(unit_matchers) = self
+            .matchers
+            .iter()
+            .map(|m| m.as_unit_matcher::<H>())
+            .collect::<Option<Vec<_>>>()
+        {
+            if let Some(unit_replacement) = self.replacement.as_vec_unit_replacement::<H>() {
+                let rewriter = CombineMatchReplaceRewriter::new(unit_matchers, unit_replacement);
+                return rewriter.get_all_rewrites(circ);
+            }
+        }
+        if let Some(pyobject_matcher) = self
+            .matchers
+            .iter()
+            .map(|m| m.as_pyobject_matcher::<H>())
+            .collect::<Option<Vec<_>>>()
+        {
+            if let Some(pyobject_replacement) = self.replacement.as_vec_pyobject_replacement::<H>()
+            {
+                let rewriter =
+                    CombineMatchReplaceRewriter::new(pyobject_matcher, pyobject_replacement);
+                return rewriter.get_all_rewrites(circ);
             }
         }
         panic!("Incompatible matcher and replacement");
@@ -521,7 +577,7 @@ impl PyCombineMatchReplaceRewriter {
             return vec![];
         }
         let circuit = ResourceScope::from_circuit(circuit);
-        <Self as Rewriter<_>>::get_rewrites(&self, &circuit)
+        <Self as Rewriter<_>>::get_all_rewrites(&self, &circuit)
             .into_iter()
             .map(|rw| rw.to_simple_replacement(&circuit).into())
             .collect()

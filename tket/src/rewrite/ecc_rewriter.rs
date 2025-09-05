@@ -14,6 +14,7 @@
 
 use derive_more::{Display, Error, From, Into};
 use hugr::extension::resolution::ExtensionResolutionError;
+use hugr::hugr::views::sibling_subgraph::TopoConvexChecker;
 use hugr::{Hugr, HugrView, Node, PortIndex};
 use itertools::Itertools;
 use portmatching::PatternID;
@@ -191,14 +192,50 @@ impl ECCRewriter {
 }
 
 impl<H: HugrView<Node = Node>> Rewriter<ResourceScope<H>> for ECCRewriter {
-    fn get_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite<H::Node>> {
-        self.get_rewrites(&circ.as_circuit())
+    type Rewrite<'c>
+        = CircuitRewrite
+    where
+        H: 'c;
+
+    fn get_rewrites(
+        &self,
+        circ: &ResourceScope<H>,
+        root_node: Node,
+    ) -> Vec<CircuitRewrite<H::Node>> {
+        self.get_rewrites(circ.hugr(), root_node)
+    }
+
+    fn get_all_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite<H::Node>> {
+        self.get_all_rewrites(circ.hugr())
     }
 }
 
 impl<H: HugrView<Node = Node>> Rewriter<Circuit<H>> for ECCRewriter {
-    fn get_rewrites(&self, circ: &Circuit<H>) -> Vec<CircuitRewrite<H::Node>> {
-        let matches = self.matcher.find_matches(circ);
+    type Rewrite<'c>
+        = CircuitRewrite
+    where
+        H: 'c;
+
+    fn get_rewrites(&self, circ: &Circuit<H>, root_node: Node) -> Vec<CircuitRewrite<H::Node>> {
+        self.get_rewrites(circ.hugr(), root_node)
+    }
+
+    fn get_all_rewrites(&self, circ: &Circuit<H>) -> Vec<CircuitRewrite<H::Node>> {
+        self.get_all_rewrites(circ.hugr())
+    }
+}
+
+impl<H: HugrView<Node = Node>> Rewriter<H> for ECCRewriter {
+    type Rewrite<'c>
+        = CircuitRewrite
+    where
+        H: 'c;
+
+    fn get_rewrites(&self, h: &H, root_node: Node) -> Vec<CircuitRewrite> {
+        let circ = Circuit::new(h);
+        let circ_ref = &circ;
+        let checker = TopoConvexChecker::new(&h, circ.parent());
+        let matches = self.matcher.find_rooted_matches(&circ, root_node, &checker);
         matches
             .into_iter()
             .flat_map(|m| {
@@ -208,16 +245,29 @@ impl<H: HugrView<Node = Node>> Rewriter<Circuit<H>> for ECCRewriter {
                     for &empty_qb in self.empty_wires[pattern_id.0].iter().rev() {
                         remove_empty_wire(&mut repl, empty_qb).unwrap();
                     }
-                    m.to_rewrite(circ, repl).expect("invalid replacement")
+                    m.to_rewrite(circ_ref, repl).expect("invalid replacement")
                 })
             })
             .collect()
     }
-}
 
-impl<H: HugrView<Node = Node>> Rewriter<H> for ECCRewriter {
-    fn get_rewrites(&self, circ: &H) -> Vec<CircuitRewrite<H::Node>> {
-        self.get_rewrites(&Circuit::new(circ))
+    fn get_all_rewrites(&self, h: &H) -> Vec<CircuitRewrite> {
+        let circ = Circuit::new(h);
+        let circ_ref = &circ;
+        let matches = self.matcher.find_matches(&circ);
+        matches
+            .into_iter()
+            .flat_map(|m| {
+                let pattern_id = m.pattern_id();
+                self.get_targets(pattern_id).map(move |repl| {
+                    let mut repl = repl.to_owned();
+                    for &empty_qb in self.empty_wires[pattern_id.0].iter().rev() {
+                        remove_empty_wire(&mut repl, empty_qb).unwrap();
+                    }
+                    m.to_rewrite(circ_ref, repl).expect("invalid replacement")
+                })
+            })
+            .collect()
     }
 }
 
@@ -420,7 +470,7 @@ mod tests {
         let rewriter = ECCRewriter::try_from_eccs_json_file(test_file).unwrap();
 
         let cx_cx = cx_cx();
-        assert_eq!(rewriter.get_rewrites(&cx_cx).len(), 1);
+        assert_eq!(rewriter.get_all_rewrites(&cx_cx).len(), 1);
     }
 
     #[test]
