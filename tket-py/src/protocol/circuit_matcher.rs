@@ -57,26 +57,32 @@ macro_rules! impl_circuit_matcher {
                 args: &[CircuitUnit<H::Node>],
                 match_context: MatchContext<Self::PartialMatchInfo, H>,
             ) -> MatchOutcome<Self::PartialMatchInfo, Self::MatchInfo> {
-                let args = args
-                    .iter()
-                    .map(|arg| PyCircuitUnit::with_context(arg.clone(), &match_context))
-                    .collect_vec();
-                let context =
-                    Python::with_gil(|py| PyMatchContext::from_match_context(match_context, py))
-                        .map_err(|e| panic!("A python error occurred:\n{}", e))
-                        .unwrap();
-                match <$M as CircuitMatcherPyProtocol>::py_match_tket_op(
-                    self,
-                    op.into(),
-                    args,
-                    context,
-                ) {
-                    Ok(outcome) => outcome.into(),
-                    Err(err) => panic!("A python error occurred:\n{}", err),
+                match try_match_tket_op(self, op, args, match_context) {
+                    Ok(outcome) => outcome,
+                    Err(err) => {
+                        eprintln!("Warning: could not match op {op:?}: {err}");
+                        MatchOutcome::default().skip(Update::Unchanged)
+                    }
                 }
             }
         }
     };
+}
+
+fn try_match_tket_op<H: HugrView>(
+    matcher: &impl CircuitMatcherPyProtocol,
+    op: TketOp,
+    args: &[CircuitUnit<H::Node>],
+    match_context: MatchContext<Option<PyObject>, H>,
+) -> Result<MatchOutcome<Option<PyObject>, PyObject>, PyErr> {
+    let args = args
+        .iter()
+        .map(|arg| PyCircuitUnit::with_context(arg.clone(), &match_context))
+        .collect_vec();
+    let context = Python::with_gil(|py| PyMatchContext::try_from_match_context(match_context, py))?;
+    matcher
+        .py_match_tket_op(op.into(), args, context)
+        .map(Into::into)
 }
 
 /// Rust wrapper for Python objects implementing the CircuitMatcher protocol.

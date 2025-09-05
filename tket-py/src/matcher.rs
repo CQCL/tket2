@@ -8,7 +8,7 @@ use hugr::{
     HugrView,
 };
 use pyo3::{
-    exceptions::PyKeyError,
+    exceptions::{PyKeyError, PyValueError},
     prelude::*,
     types::{PyBool, PyDict, PyNone},
     IntoPyObjectExt,
@@ -132,7 +132,7 @@ pub struct PyMatchContext {
 
 impl PyMatchContext {
     /// Create a `PyMatchContext` from a `MatchContext`.
-    pub fn from_match_context<H: HugrView>(
+    pub fn try_from_match_context<H: HugrView>(
         context: MatchContext<'_, Option<PyObject>, H>,
         py: Python<'_>,
     ) -> PyResult<Self> {
@@ -147,10 +147,10 @@ impl PyMatchContext {
             hugr
         } else {
             context
-            .subcircuit
-            .try_to_subgraph(&context.circuit)
-            .expect("tell Luca if this fails, he knows why :/ (basically, your match is not convex in a contrived way)")
-            .extract_subgraph(context.circuit.hugr(), "circ")
+                .subcircuit
+                .try_to_subgraph(&context.circuit)
+                .map_err(|e| PyValueError::new_err(format!("Invalid subgraph: {e}")))?
+                .extract_subgraph(context.circuit.hugr(), "circ")
         };
         Ok(Self {
             match_info,
