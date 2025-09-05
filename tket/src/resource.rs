@@ -55,6 +55,7 @@ use hugr::{
     std_extensions::arithmetic::{conversions::ConvertOpDef, float_types::ConstF64},
     HugrView, IncomingPort, PortIndex,
 };
+use hugr_core::hugr::internal::NodeType;
 pub use interval::{Interval, InvalidInterval};
 use itertools::Itertools;
 pub use scope::{CircuitRewriteError, ResourceScope, ResourceScopeConfig};
@@ -185,6 +186,10 @@ impl<H: HugrView<Node = hugr::Node>> CircuitHash for ResourceScope<H> {
     fn circuit_hash(&self, parent: hugr::Node) -> Result<u64, HashError> {
         self.as_circuit().circuit_hash(parent)
     }
+}
+
+impl<H: HugrView> NodeType for ResourceScope<H> {
+    type Node = H::Node;
 }
 
 #[cfg(test)]

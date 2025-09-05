@@ -22,6 +22,7 @@ use hugr::persistent::{PatchNode, PersistentHugr};
 use hugr::types::Signature;
 use hugr::{hugr::views::SiblingSubgraph, SimpleReplacement};
 use hugr::{Hugr, HugrView};
+use hugr_core::hugr::internal::NodeType;
 use itertools::{Either, Itertools};
 use matcher::{CircuitMatcher, MatchingOptions};
 use replacer::CircuitReplacer;
@@ -211,39 +212,10 @@ impl<N: HugrNode> From<SimpleReplacement<N>> for CircuitRewrite<N> {
 /// The generic argument `C` (default: [`Circuit`]) is the type of circuit to
 /// find rewrites on. Currently, only arguments of type [`Circuit<H>`] are
 /// supported.
-pub trait Rewriter<C: CircuitLike = Circuit> {
+pub trait Rewriter<C: NodeType = Circuit> {
     /// Get the rewrite rules for a circuit.
     fn get_rewrites(&self, circ: &C) -> Vec<CircuitRewrite<C::Node>>;
 }
-
-// A simple trait to get the node type of a circuit. This will allow us to
-// support circuit-like types (e.g. persistent circuits) in the future.
-mod hidden {
-    use hugr::{core::HugrNode, persistent::PatchNode, HugrView};
-
-    use crate::{resource::ResourceScope, rewrite_space::RewriteSpace, Circuit};
-
-    pub trait CircuitLike {
-        type Node: HugrNode;
-    }
-
-    impl<H: HugrView> CircuitLike for H {
-        type Node = H::Node;
-    }
-
-    impl<H: HugrView> CircuitLike for Circuit<H> {
-        type Node = H::Node;
-    }
-
-    impl<H: HugrView> CircuitLike for ResourceScope<H> {
-        type Node = H::Node;
-    }
-
-    impl<Cost> CircuitLike for RewriteSpace<Cost> {
-        type Node = PatchNode;
-    }
-}
-use hidden::CircuitLike;
 
 /// An error that can occur when constructing a rewrite rule.
 #[derive(Debug, Clone, PartialEq, Display, Error)]
