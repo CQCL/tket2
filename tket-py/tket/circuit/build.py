@@ -42,7 +42,8 @@ class CircBuild(TrackedDfg):
         Args:
             other_extensions: Other extensions to include in the package.
             function_name: The name of the function containing the circuit in
-                the package's module. Defaults to "main".
+            the package's module. Defaults to "main".
+
         Returns:
             The finished package.
         """
