@@ -27,7 +27,7 @@ impl<N: HugrNode> ModifierResolver<N> {
 
         if control != 0 || dagger {
             if !op.is_quantum() {
-                return Err(ModifierError::ModifierNotApplicable(n, op.into()).into());
+                return Err(ModifierResolverErrors::UnResolvable(n, op.into()).into());
             }
         }
         match op {

@@ -288,6 +288,8 @@ impl<N: HugrNode> ModifierResolver<N> {
         h: &mut impl HugrMut<Node = N>,
         func: N,
     ) -> Result<N, ModifierResolverErrors<N>> {
+        let old_call_map = mem::replace(self.call_map(), HashMap::new());
+
         // Old function definition
         let OpType::FuncDefn(old_fn_defn) = h.get_optype(func) else {
             return Err(ModifierResolverErrors::Unreachable(format!(
@@ -311,11 +313,10 @@ impl<N: HugrNode> ModifierResolver<N> {
         );
 
         // Connect the global wires
-        // TODO: Is this OK? Don't we need to wait until the end of all modifications?
-        let call_map = self.call_map();
+        let call_map = mem::replace(self.call_map(), old_call_map);
         println!("call_map: {call_map:?}");
         let insertion_result = h.insert_from_view(h.module_root(), new_fn.hugr());
-        let new_call_map = update_call_map(call_map, &insertion_result.node_map);
+        let new_call_map = update_call_map(&call_map, &insertion_result.node_map);
         for (old_in, (new_n, new_port)) in new_call_map.into_iter() {
             h.connect(old_in, 0, new_n, new_port);
         }
@@ -330,9 +331,8 @@ impl<N: HugrNode> ModifierResolver<N> {
     ) -> Result<Node, ModifierResolverErrors<N>> {
         let insertion_result = parent_dfg.add_hugr_view(builder.hugr());
 
-        let call_map = self.call_map();
         let insertion_correspondence = insertion_result.node_map;
-        let new_call_map = update_call_map(call_map, &insertion_correspondence);
+        let new_call_map = update_call_map(self.call_map(), &insertion_correspondence);
         *self.call_map() = new_call_map;
 
         Ok(insertion_result.inserted_entrypoint)
@@ -403,7 +403,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         // Every TailLoop that is generated from Power cannot have `just_outputs`.
         if self.modifiers.dagger && !tail_loop.just_outputs.is_empty() {
             let optype = h.get_optype(n);
-            return Err(ModifierError::ModifierNotApplicable(n, optype.clone()).into());
+            return Err(ModifierResolverErrors::UnResolvable(n, optype.clone()).into());
         }
         // TODO: Handle the case when TailLoop is generated from Power modifier.
         // Currently, it is not implemented.
@@ -772,6 +772,38 @@ mod test {
         func.finish_with_outputs(inputs).unwrap().handle().clone()
     }
 
+    fn foo_indir_call(module: &mut ModuleBuilder<Hugr>, t_num: usize) -> FuncID<true> {
+        let callee_sig = Signature::new_endo(vec![qb_t()]);
+        let callee = {
+            let mut callee_builder = module.define_function("dummy", callee_sig.clone()).unwrap();
+            let mut inputs: Vec<Wire> = callee_builder.input_wires().collect();
+            inputs[0] = callee_builder
+                .add_dataflow_op(TketOp::X, vec![inputs[0]])
+                .unwrap()
+                .out_wire(0);
+            callee_builder.finish_with_outputs(inputs).unwrap()
+        };
+
+        let foo_sig = Signature::new_endo(iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>());
+        let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+        let mut inputs: Vec<_> = func.input_wires().collect();
+        let handle = func.load_func(callee.handle(), &[]).unwrap();
+        inputs[0] = func
+            .add_dataflow_op(
+                CallIndirect {
+                    signature: callee_sig,
+                },
+                vec![handle, inputs[0]],
+            )
+            .unwrap()
+            .out_wire(0);
+        inputs[0] = func
+            .add_dataflow_op(TketOp::X, vec![inputs[0]])
+            .unwrap()
+            .out_wire(0);
+        func.finish_with_outputs(inputs).unwrap().handle().clone()
+    }
+
     fn foo_load_fn(module: &mut ModuleBuilder<Hugr>, t_num: usize) -> FuncID<true> {
         let callee = {
             let callee_sig = Signature::new_endo(vec![qb_t()]);
@@ -798,6 +830,7 @@ mod test {
     #[case::conditional(1, 1, foo_conditional, "conditional", false)]
     #[case::conditional_dagger(1, 1, foo_conditional, "conditional", true)]
     #[case::call(1, 1, foo_call, "call", false)]
+    #[case::indir_call(1, 1, foo_indir_call, "indir_call", false)]
     #[case::load_fn(1, 1, foo_load_fn, "load_fn", false)]
     fn test_modifier_resolver_dfg(
         #[case] t_num: usize,
@@ -909,10 +942,10 @@ mod test {
 
         let entrypoint = h.entrypoint().clone();
         resolve_modifier_with_entrypoints(&mut h, vec![entrypoint].into_iter()).unwrap();
-        // dead_code::DeadCodeElimPass::default()
-        //     .with_entry_points(vec![_main.node()])
-        //     .run(&mut h)
-        //     .unwrap();
+        dead_code::DeadCodeElimPass::default()
+            .with_entry_points(vec![_main.node()])
+            .run(&mut h)
+            .unwrap();
         println!("After modification\n{}", h.mermaid_string());
         h.validate().unwrap();
         {

@@ -28,6 +28,7 @@ use super::{
 use crate::TketOp;
 
 /// An accumulated modifier that combines control, dagger, and power modifiers.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CombinedModifier {
     control: usize,
     accum_ctrl: Vec<usize>,
@@ -278,9 +279,6 @@ pub enum ModifierError<N = Node> {
     /// The node is not a modifier
     #[display("Node to modify {_0} expected to be a modifier but actually {_1}")]
     NotModifier(N, OpType),
-    /// The node cannot be modified.
-    #[display("Modification by {_0:?} is not defined for the node {_1}")]
-    Unimplemented(Modifier, OpType),
     /// No caller of this modified function exists.
     #[display("No caller of the modified function exists for node {_0}")]
     NoCaller(N),
@@ -290,9 +288,21 @@ pub enum ModifierError<N = Node> {
     /// Not the first modifier in a chain.
     #[display("Node {_0} is not the first modifier in a chain. It is called by {_0}")]
     NotInitialModifier(N, OpType),
-    /// Modifier applied to a node that cannot be modified.
-    #[display("Modifier {_0} cannot be applied to the node {_1}")]
+    /// The modifier cannot be applied to the node.
+    #[display("Modifier cannot be applied to the node {_0} of type {_1}")]
     ModifierNotApplicable(N, OpType),
+}
+
+impl<N> ModifierError<N> {
+    fn node(self) -> N {
+        match self {
+            ModifierError::NotModifier(n, _)
+            | ModifierError::NoCaller(n)
+            | ModifierError::NoTarget(n)
+            | ModifierError::NotInitialModifier(n, _)
+            | ModifierError::ModifierNotApplicable(n, _) => n,
+        }
+    }
 }
 
 /// Possible errors that can occur during the modifier resolution process.
@@ -300,21 +310,20 @@ pub enum ModifierError<N = Node> {
 pub enum ModifierResolverErrors<N = Node> {
     /// Cannot modify the node.
     ModifierError(ModifierError<N>),
-    /// Error during the replacement process.
-    ReplaceError(ReplaceError),
     /// Error during the DFG build process.
     BuildError(BuildError),
     /// Unreachable error variant.
     Unreachable(String),
+    /// Modifier applied to a node that cannot be modified.
+    #[display("Modifier {_0} applied to the node {_1} cannot be modified")]
+    UnResolvable(N, OpType),
+    /// The node cannot be modified.
+    #[display("Modification by {_0:?} is not defined for the node {_1}")]
+    Unimplemented(Modifier, OpType),
 }
 impl<N> From<ModifierError<N>> for ModifierResolverErrors<N> {
     fn from(err: ModifierError<N>) -> Self {
         ModifierResolverErrors::ModifierError(err)
-    }
-}
-impl<N> From<ReplaceError> for ModifierResolverErrors<N> {
-    fn from(err: ReplaceError) -> Self {
-        ModifierResolverErrors::ReplaceError(err)
     }
 }
 impl<N> From<BuildError> for ModifierResolverErrors<N> {
@@ -599,13 +608,13 @@ impl<N: HugrNode> ModifierResolver<N> {
             }
             // Q. `ExitBlock | DataflowBlock` perhaps should be here?
 
-            // Not applicable
+            // Not resolvable
             OpType::AliasDecl(_)
             | OpType::AliasDefn(_)
             | OpType::ExitBlock(_)
             | OpType::CFG(_)
             | OpType::DataflowBlock(_) => {
-                return Err(ModifierError::ModifierNotApplicable(n, optype.clone()).into());
+                return Err(ModifierResolverErrors::UnResolvable(n, optype.clone()).into());
             }
             _ => {
                 // Q. Maybe we should just ignore unknown operations?
@@ -669,6 +678,9 @@ impl<N: HugrNode> ModifierResolver<N> {
                 inputs.into_iter().map(Into::into).collect(),
             );
             Ok(())
+        } else if Modifier::from_optype(optype).is_some() {
+            // TODO: check if this is ok.
+            self.modify_dataflow_op(h, n, optype, new_dfg)
         } else {
             // Some other Hugr extension operation.
             // Here, we do not know what is the modified version.
