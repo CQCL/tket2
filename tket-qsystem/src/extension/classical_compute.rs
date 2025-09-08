@@ -119,7 +119,7 @@ impl<T> ComputeType<T> {
     ) -> CustomType {
         CustomType::new(
             FUNC_TYPE_NAME.to_owned(),
-            [row_to_arg(inputs.into()), row_to_arg(outputs.into())],
+            [row_to_arg(inputs), row_to_arg(outputs)],
             extension_id,
             TypeBound::Copyable,
             extension_ref,
@@ -133,7 +133,7 @@ impl<T> ComputeType<T> {
     ) -> CustomType {
         CustomType::new(
             RESULT_TYPE_NAME.to_owned(),
-            [row_to_arg(outputs.into())],
+            [row_to_arg(outputs)],
             extension_id,
             TypeBound::Linear,
             extension_ref,

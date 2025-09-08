@@ -117,8 +117,8 @@ pub trait UtilsOpBuilder: Dataflow + UnwrapBuilder {
     }
 }
 
-pub(crate) fn row_to_arg(row: TypeRowRV) -> TypeArg {
-    TypeArg::List(row.into_owned().into_iter().map_into().collect())
+pub(crate) fn row_to_arg(row: impl Into<TypeRowRV>) -> TypeArg {
+    TypeArg::List(row.into().into_owned().into_iter().map_into().collect())
 }
 
 impl<D: Dataflow> UtilsOpBuilder for D {}
