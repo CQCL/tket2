@@ -33,6 +33,22 @@ def ext_debug() -> Tuple[TketExtension, List[ExtType], List[ExtOp]]:
     )
 
 
+def ext_gpu() -> Tuple[TketExtension, List[ExtType], List[ExtOp]]:
+    ext = tket_exts.gpu
+    return (
+        ext,
+        [ext.context, ext.func([], []), ext.module, ext.result([])],
+        [
+            ext.call([], []),
+            ext.dispose_context,
+            ext.get_context,
+            ext.lookup_by_id(42, [], []),
+            ext.lookup_by_name("test", [], []),
+            ext.read_result([]),
+        ],
+    )
+
+
 def ext_guppy() -> Tuple[TketExtension, List[ExtType], List[ExtOp]]:
     ext = tket_exts.guppy
     bool_t = tket_exts.bool.bool_t
@@ -182,6 +198,7 @@ def ext_wasm() -> Tuple[TketExtension, List[ExtType], List[ExtOp]]:
     [
         ext_bool,
         ext_debug,
+        ext_gpu,
         ext_guppy,
         ext_futures,
         ext_qsystem,

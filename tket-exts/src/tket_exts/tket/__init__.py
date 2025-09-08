@@ -5,6 +5,7 @@ from . import bool, debug, guppy, futures, qsystem, quantum, result, rotation, w
 __all__ = [
     "bool",
     "debug",
+    "gpu",
     "guppy",
     "futures",
     "qsystem",
