@@ -1,5 +1,6 @@
 //! This module defines the Hugr extensions used by tket-qsystem.
-mod classical_compute;
+pub mod classical_compute;
+pub use classical_compute::gpu;
 pub use classical_compute::wasm;
 pub mod futures;
 pub mod qsystem;
