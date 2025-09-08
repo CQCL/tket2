@@ -253,6 +253,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         _new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
         // Indirect calles needs to be handled by its caller.
+        // TODO: Might want to load function
         Ok(())
     }
 }
