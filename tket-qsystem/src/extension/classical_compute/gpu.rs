@@ -146,10 +146,11 @@ impl TryFrom<CustomType> for GpuType {
             }
             n => Err(SignatureError::NameMismatch(
                 format_smolstr!(
-                    "{}, {} or {}",
+                    "{}, {}, {} or {}",
                     MODULE_TYPE_NAME.as_str(),
                     CONTEXT_TYPE_NAME.as_str(),
-                    FUNC_TYPE_NAME.as_str()
+                    FUNC_TYPE_NAME.as_str(),
+                    RESULT_TYPE_NAME.as_str()
                 ),
                 n.to_owned(),
             )),
