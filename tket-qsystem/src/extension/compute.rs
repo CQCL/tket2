@@ -1,12 +1,13 @@
 use hugr::{
     extension::{Extension, ExtensionBuildError, ExtensionId, TypeDefBound},
-    types::{type_param::TypeParam, CustomType, Type, TypeArg, TypeBound, TypeRow, TypeRowRV},
+    types::{type_param::TypeParam, CustomType, Type, TypeBound, TypeRow, TypeRowRV},
 };
-use itertools::Itertools;
 use lazy_static::lazy_static;
 use smol_str::SmolStr;
 use std::marker::PhantomData;
 use std::sync::Weak;
+
+use super::utils::row_to_arg;
 
 lazy_static! {
     /// The name of the `module` type.
@@ -37,28 +38,28 @@ pub(crate) fn add_compute_type_defs(
     extension.add_type(
         MODULE_TYPE_NAME.to_owned(),
         vec![],
-        format!("{} module", extension.name),
+        format!("{} module", extension.name()),
         TypeDefBound::copyable(),
         extension_ref,
     )?;
     extension.add_type(
         CONTEXT_TYPE_NAME.to_owned(),
         vec![],
-        format!("{} context", extension.name),
+        format!("{} context", extension.name()),
         TypeDefBound::any(),
         extension_ref,
     )?;
     extension.add_type(
         FUNC_TYPE_NAME.to_owned(),
         vec![INPUTS_PARAM.to_owned(), OUTPUTS_PARAM.to_owned()],
-        format!("{} func", extension.name),
+        format!("{} func", extension.name()),
         TypeDefBound::copyable(),
         extension_ref,
     )?;
     extension.add_type(
         RESULT_TYPE_NAME.to_owned(),
         vec![OUTPUTS_PARAM.to_owned()],
-        format!("{} result", extension.name),
+        format!("{} result", extension.name()),
         TypeDefBound::any(),
         extension_ref,
     )?;
@@ -116,8 +117,6 @@ impl<T> ComputeType<T> {
         extension_id: ExtensionId,
         extension_ref: &Weak<Extension>,
     ) -> CustomType {
-        let row_to_arg =
-            |row: TypeRowRV| TypeArg::List(row.into_owned().into_iter().map_into().collect());
         CustomType::new(
             FUNC_TYPE_NAME.to_owned(),
             [row_to_arg(inputs.into()), row_to_arg(outputs.into())],
@@ -132,8 +131,6 @@ impl<T> ComputeType<T> {
         extension_id: ExtensionId,
         extension_ref: &Weak<Extension>,
     ) -> CustomType {
-        let row_to_arg =
-            |row: TypeRowRV| TypeArg::List(row.into_owned().into_iter().map_into().collect());
         CustomType::new(
             RESULT_TYPE_NAME.to_owned(),
             [row_to_arg(outputs.into())],
