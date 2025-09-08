@@ -131,6 +131,7 @@ jobs:
         with:
           token: ${{ secrets.CODSPEED_TOKEN }}
           run: "cargo codspeed run"
+          mode: "instrumentation"
 
   # Run tests on Rust stable
   tests-rs-stable-no-features:
