@@ -15,12 +15,4 @@
    tket.rewrite
 ```
 
-```{toctree}
-:maxdepth: 1
-:caption: Example notebooks
-
-examples/1-Getting-Started.ipynb
-examples/2-Rewriting-Circuits.ipynb
-```
-
 
