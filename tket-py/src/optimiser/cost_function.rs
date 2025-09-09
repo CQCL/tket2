@@ -21,10 +21,6 @@ pub enum BadgerCostFunction {
     Custom(Arc<dyn Fn(&OpType) -> usize + Send + Sync>),
 }
 
-// type BoxedBadgerStrategy =
-//     ExhaustiveGreedyStrategy<LexicographicCostFunction<Box<dyn Fn(&OpType) ->
-// usize>, 2>>;
-
 pub(super) type PyBadgerStrategy = ExhaustiveGreedyStrategy<
     LexicographicCostFunction<Arc<dyn Fn(&OpType) -> usize + Send + Sync>, 2>,
 >;

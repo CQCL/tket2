@@ -103,6 +103,7 @@ impl MaxSATSolver {
             .iter()
             .chain(self.mutex.iter())
             .flat_map(|(a, b)| [a, b])
+            .chain(self.weights.keys())
             .unique()
     }
 

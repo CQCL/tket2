@@ -159,6 +159,7 @@ impl<C> RewriteSpace<C> {
         cost_fn: impl Fn(&C) -> D,
     ) -> Option<hugr_im::PersistentHugr> {
         let mut opt = MaxSATSolver::new();
+        let base_commit_id = self.state_space.base_commit()?.id();
         for (commit_id, commit) in self.state_space.all_commits() {
             // Add child => parent implications
             opt.extend_implications(
@@ -184,12 +185,17 @@ impl<C> RewriteSpace<C> {
             }
 
             // Add cost for each commit
-            let weight = self
+            let mut weight = self
                 .metadata
                 .borrow()
                 .get(commit_id)
                 .map(|m| -cost_fn(&m.cost).as_isize())
-                .unwrap_or(0);
+                .unwrap_or_default();
+
+            // Ensure that the base commit is always selected
+            if commit_id == base_commit_id && weight == 0 {
+                weight = 1;
+            }
             opt.set_weight(fmt_commit_id(commit_id), weight);
         }
 
@@ -200,7 +206,7 @@ impl<C> RewriteSpace<C> {
             .all_commits()
             .into_iter()
             .map(|(cm, _)| cm)
-            .filter(|&cm| model[&fmt_commit_id(cm)]);
+            .filter(|&cm| model.get(&fmt_commit_id(cm)).copied().unwrap_or_default());
 
         self.state_space.try_create(selected_commit_ids).ok()
     }
