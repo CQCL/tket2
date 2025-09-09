@@ -4,7 +4,7 @@
 //! [`ResourceScope`] to express subgraphs in terms of intervals on resource
 //! paths.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use derive_more::derive::{Display, Error};
 use hugr::core::HugrNode;
@@ -13,6 +13,7 @@ use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::{constant, OpTrait};
 use hugr::types::Signature;
 use hugr::{Direction, HugrView, IncomingPort, Port, Wire};
+use indexmap::IndexMap;
 use itertools::Itertools;
 
 use crate::circuit::Circuit;
@@ -88,7 +89,7 @@ impl<N: HugrNode> Subcircuit<N> {
     ) -> Result<Self, InvalidSubcircuit<N>> {
         // For each resource, track the largest interval that contains all nodes,
         // as well as the number of nodes in the interval.
-        let mut intervals: BTreeMap<ResourceId, (Interval<N>, usize)> = BTreeMap::new();
+        let mut intervals: IndexMap<ResourceId, (Interval<N>, usize)> = IndexMap::new();
         let mut input_copyable_values = Vec::new();
 
         for node in nodes {
@@ -406,7 +407,7 @@ fn update_copyable_inputs<N: HugrNode>(
 
 /// Extend the intervals such that the given node is included.
 fn extend_intervals<N: HugrNode>(
-    intervals: &mut BTreeMap<ResourceId, (Interval<N>, usize)>,
+    intervals: &mut IndexMap<ResourceId, (Interval<N>, usize)>,
     node: N,
     circuit: &ResourceScope<impl HugrView<Node = N>>,
 ) {
