@@ -154,7 +154,7 @@ where
         let phugr = PersistentHugr::from_commit(commit.clone());
 
         // TODO: expand inserted_nodes to some radius
-        let rewrites = inserted_nodes.into_iter().flat_map(|n| {
+        let rewrites = inserted_nodes.flat_map(|n| {
             context
                 .optimiser
                 .rewriter

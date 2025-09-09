@@ -57,26 +57,36 @@ impl<'a, PartialMatchInfo> MatchState<'a, PartialMatchInfo> {
         scope: &ResourceScope<impl HugrView<Node = PatchNode>>,
     ) -> bool {
         let mut subcircuit = self.subcircuit.clone();
-        let mut pinned_node_port = None;
+        let mut new_pinned_ports = Vec::new();
         for (node, port) in walker.wire_pinned_ports(&wire, None) {
-            pinned_node_port = Some((node, port));
-            if subcircuit.try_add_node(node, scope).is_err() {
-                return false;
+            match subcircuit.try_add_node(node, scope) {
+                Err(..) => {
+                    return false;
+                }
+                Ok(true) => {
+                    new_pinned_ports.push((node, port));
+                }
+                Ok(false) => { /* nothing to do, port already in match */ }
             }
         }
-
-        let Some(pinned_node_port) = pinned_node_port else {
-            // nothing to do
-            return true;
-        };
 
         self.subcircuit = subcircuit;
         self.walker = walker;
 
         if !self.walker.is_complete(&wire, None) {
-            self.active_ports.push_back(pinned_node_port);
+            if let Some(&pinned_node_port) = new_pinned_ports.first() {
+                // Revisit this wire again, to further expand the wire
+                self.active_ports.push_back(pinned_node_port);
+            }
+            return true;
         } else {
-            self.matched_wires.push(wire);
+            for (node, port) in new_pinned_ports {
+                for other_port in all_linear_ports(self.walker.as_hugr_view(), node) {
+                    if other_port != port {
+                        self.active_ports.push_back((node, other_port));
+                    }
+                }
+            }
         }
 
         true
