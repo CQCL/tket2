@@ -18,9 +18,11 @@ use super::Subcircuit;
 
 mod hugr_adapter;
 pub use hugr_adapter::{HugrMatchAdapter, MatchingOptions};
-
+#[cfg(feature = "badgerv2_unstable")]
 mod im_adapter;
+#[cfg(feature = "badgerv2_unstable")]
 pub use im_adapter::ImMatchAdapter;
+#[cfg(feature = "badgerv2_unstable")]
 pub(crate) use im_adapter::ImMatchResult;
 
 /// The result of extending a match to a new Tket operation.
@@ -237,6 +239,7 @@ pub trait CircuitMatcher {
     /// patterns in [`RewriteSpace`]s.
     ///
     /// [`RewriteSpace`]: crate::rewrite_space::RewriteSpace
+    #[cfg(feature = "badgerv2_unstable")]
     fn as_rewrite_space_matcher(&self) -> ImMatchAdapter<'_, Self> {
         ImMatchAdapter { matcher: self }
     }

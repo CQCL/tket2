@@ -50,19 +50,18 @@
 pub use flow::{DefaultResourceFlow, ResourceFlow, UnsupportedOp};
 use hugr::{
     extension::simple_op::MakeExtensionOp,
-    hugr::hugrmut::HugrMut,
+    hugr::{hugrmut::HugrMut, views::NodesIter},
     ops::{constant, OpType},
     std_extensions::arithmetic::{conversions::ConvertOpDef, float_types::ConstF64},
     HugrView, IncomingPort, PortIndex,
 };
-use hugr_core::hugr::internal::NodeType;
 pub use interval::{Interval, InvalidInterval};
 use itertools::Itertools;
 pub use scope::{CircuitRewriteError, ResourceScope, ResourceScopeConfig};
 pub use types::{CircuitUnit, Position, ResourceAllocator, ResourceId};
 
 use crate::{
-    circuit::{CircuitHash, HashError, NodesIter},
+    circuit::{CircuitHash, HashError},
     extension::rotation::{ConstRotation, RotationOp},
     rewrite::trace::RewriteTrace,
 };
@@ -188,11 +187,9 @@ impl<H: HugrView<Node = hugr::Node>> CircuitHash for ResourceScope<H> {
     }
 }
 
-impl<H: HugrView> NodeType for ResourceScope<H> {
-    type Node = H::Node;
-}
-
 impl<H: HugrView> NodesIter for ResourceScope<H> {
+    type Node = H::Node;
+
     fn nodes(&self) -> impl Iterator<Item = Self::Node> {
         self.nodes().iter().copied()
     }

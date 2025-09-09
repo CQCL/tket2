@@ -697,11 +697,7 @@ pub(crate) mod tests {
             .map(|(n, _)| n);
 
         for h in first_hadamards {
-            let res = scope
-                .get_all_resources(h)
-                .into_iter()
-                .exactly_one()
-                .unwrap();
+            let res = scope.get_all_resources(h).exactly_one().ok().unwrap();
             let nodes_on_path = scope.resource_path_iter(res, h, Direction::Outgoing);
             let pos_on_path = nodes_on_path.map(|n| scope.get_position(n).unwrap());
 

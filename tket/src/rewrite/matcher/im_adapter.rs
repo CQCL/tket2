@@ -109,7 +109,7 @@ pub struct ImMatchResult<MatchInfo> {
 impl<'m, M: CircuitMatcher + ?Sized> ImMatchAdapter<'m, M> {
     /// Get all matching subcircuits within the [`RewriteSpace`].
     pub fn get_all_matches<C>(&self, space: &RewriteSpace<C>) -> Vec<ImMatchResult<M::MatchInfo>> {
-        <RewriteSpace<C> as crate::circuit::NodesIter>::nodes(space)
+        <RewriteSpace<C> as hugr::hugr::views::NodesIter>::nodes(space)
             .flat_map(|n| self.get_matches(space, n))
             .collect()
     }

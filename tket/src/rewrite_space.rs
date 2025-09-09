@@ -5,8 +5,8 @@ use derive_more::derive::Display;
 use derive_more::derive::Error;
 use derive_more::derive::From;
 use derive_more::derive::Into;
+use hugr::hugr::views::NodesIter;
 use hugr::persistent as hugr_im;
-use hugr_core::hugr::internal::NodeType;
 use itertools::Itertools;
 use slotmap_fork_lmondada as slotmap;
 
@@ -15,7 +15,6 @@ use std::cell::RefCell;
 use std::collections::BTreeSet;
 
 use crate::circuit::cost::CostDelta;
-use crate::circuit::NodesIter;
 use crate::resource::ResourceScope;
 use crate::rewrite::CircuitRewrite;
 use max_sat::MaxSATSolver;
@@ -80,6 +79,18 @@ impl<C> RewriteSpace<C> {
         }
     }
 
+    /// Set the base hugr of the rewrite space.
+    ///
+    /// This will only succeed if the rewrite space is currently empty
+    /// (otherwise a base hugr already exists).
+    pub fn try_set_base(&self, hugr: hugr::Hugr, cost: C) -> Option<CommittedRewrite<'_>> {
+        let cm = self.state_space.try_set_base(hugr)?;
+        self.metadata
+            .borrow_mut()
+            .insert(cm.id(), CommitMetadata::with_current_time(cost));
+        Some(cm.into())
+    }
+
     /// Add a rewrite to the [`RewriteSpace`].
     ///
     /// The set of parents is inferred from the set of deleted parent nodes of
@@ -114,14 +125,11 @@ impl<C> RewriteSpace<C> {
     }
 
     /// Get the cost of a rewrite.
-    pub fn get_cost(&self, commit_id: hugr_im::CommitId) -> Option<Ref<'_, C>> {
-        if self.metadata.borrow().contains_key(commit_id) {
-            Some(Ref::map(self.metadata.borrow(), |m| {
-                &m.get(commit_id).unwrap().cost
-            }))
-        } else {
-            None
-        }
+    pub fn get_cost(&self, commit: &CommittedRewrite) -> Ref<'_, C> {
+        let commit_id = commit.0.id();
+        debug_assert!(self.metadata.borrow().contains_key(commit_id));
+
+        Ref::map(self.metadata.borrow(), |m| &m.get(commit_id).unwrap().cost)
     }
 
     /// Get the timestamp of a rewrite.
@@ -135,9 +143,21 @@ impl<C> RewriteSpace<C> {
     }
 }
 
-impl<C: CostDelta> RewriteSpace<C> {
+impl<C> RewriteSpace<C> {
     /// Find the best sequence of rewrites to apply to the base Hugr.
-    pub fn extract_best(&self) -> Option<hugr_im::PersistentHugr> {
+    pub fn extract_best(&self) -> Option<hugr_im::PersistentHugr>
+    where
+        C: CostDelta,
+    {
+        self.extract_best_with_cost(|c| c.clone())
+    }
+
+    /// Find the best sequence of rewrites to apply to the base Hugr that
+    /// minimises the given cost function.
+    pub fn extract_best_with_cost<D: CostDelta>(
+        &self,
+        cost_fn: impl Fn(&C) -> D,
+    ) -> Option<hugr_im::PersistentHugr> {
         let mut opt = MaxSATSolver::new();
         for (commit_id, commit) in self.state_space.all_commits() {
             // Add child => parent implications
@@ -168,7 +188,7 @@ impl<C: CostDelta> RewriteSpace<C> {
                 .metadata
                 .borrow()
                 .get(commit_id)
-                .map(|m| -m.cost.as_isize())
+                .map(|m| -cost_fn(&m.cost).as_isize())
                 .unwrap_or(0);
             opt.set_weight(fmt_commit_id(commit_id), weight);
         }
@@ -186,11 +206,9 @@ impl<C: CostDelta> RewriteSpace<C> {
     }
 }
 
-impl<C> NodeType for RewriteSpace<C> {
-    type Node = hugr_im::PatchNode;
-}
-
 impl<C> NodesIter for RewriteSpace<C> {
+    type Node = hugr_im::PatchNode;
+
     fn nodes(&self) -> impl Iterator<Item = Self::Node> {
         self.state_space
             .all_commits()

@@ -17,7 +17,7 @@ use hugr::extension::simple_op::MakeOpDef;
 use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::hugr::views::{ExtractionResult, SiblingSubgraph};
 use hugr::ops::handle::DataflowParentID;
-use hugr_core::hugr::internal::NodeType;
+use hugr_core::hugr::views::NodesIter;
 use itertools::Either::{Left, Right};
 
 use derive_more::{Display, Error, From};
@@ -380,23 +380,9 @@ impl<T: HugrView> From<T> for Circuit<T> {
     }
 }
 
-impl<T: HugrView> NodeType for Circuit<T> {
-    type Node = T::Node;
-}
-
-/// A trait for iterating over the nodes of a circuit.
-pub trait NodesIter: NodeType {
-    /// Returns an iterator over the nodes of the circuit.
-    fn nodes(&self) -> impl Iterator<Item = Self::Node>;
-}
-
-impl<T: HugrView> NodesIter for T {
-    fn nodes(&self) -> impl Iterator<Item = Self::Node> {
-        self.nodes()
-    }
-}
-
 impl<T: HugrView> NodesIter for Circuit<T> {
+    type Node = T::Node;
+
     fn nodes(&self) -> impl Iterator<Item = Self::Node> {
         self.hugr().nodes()
     }
