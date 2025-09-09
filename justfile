@@ -79,9 +79,10 @@ serve-docs: build-pydocs
     npm exec serve tket-py/docs/build
 
 # Clean up all generated files
-clean:
-    uv clean
-    cargo clean
+clean-docs:
     rm -rf tket-py/docs/build
     rm -rf tket-py/docs/generated
-    rm -rf tket-py/docs/jupyter_execute
+
+clean-env:
+    uv clean
+    cargo clean
