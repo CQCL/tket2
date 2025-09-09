@@ -17,6 +17,7 @@ use hugr::extension::simple_op::MakeOpDef;
 use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::hugr::views::{ExtractionResult, SiblingSubgraph};
 use hugr::ops::handle::DataflowParentID;
+use hugr_core::hugr::views::NodesIter;
 use itertools::Either::{Left, Right};
 
 use derive_more::{Display, Error, From};
@@ -374,6 +375,14 @@ impl<T: HugrView<Node = Node>> Circuit<T> {
 impl<T: HugrView> From<T> for Circuit<T> {
     fn from(hugr: T) -> Self {
         Self::new(hugr)
+    }
+}
+
+impl<T: HugrView> NodesIter for Circuit<T> {
+    type Node = T::Node;
+
+    fn nodes(&self) -> impl Iterator<Item = Self::Node> {
+        self.hugr().nodes()
     }
 }
 

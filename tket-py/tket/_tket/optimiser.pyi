@@ -62,3 +62,29 @@ class BadgerOptimiser:
         :param queue_size: Maximum number of circuits to keep in the queue of candidates.
         :param log_progress: Log progress to a CSV file.
         """
+
+class SeadogOptimiser:
+    def __init__(self, rewriter: "Rewriter", cost_fn: BadgerCostFunction = None):
+        """Create a new Badger optimiser.
+
+        :param rewriter: The rewriter to use.
+        :param cost_fn: The cost function to use.
+        """
+
+    def optimise(
+        self,
+        circ: CircuitClass,
+        timeout: int | None = None,
+        progress_timeout: int | None = None,
+        queue_size: int | None = None,
+    ) -> CircuitClass:
+        """Optimise a circuit.
+
+        :param circ: The circuit to optimise.
+        :param timeout: Maximum time to spend on the optimisation.
+        :param progress_timeout: Maximum time to wait between new best results.
+        :param n_threads: Number of threads to use.
+        :param split_circ: Split the circuit into subcircuits and optimise them separately.
+        :param queue_size: Maximum number of circuits to keep in the queue of candidates.
+        :param log_progress: Log progress to a CSV file.
+        """

@@ -4,6 +4,8 @@ use std::hash::{Hash, Hasher};
 
 use derive_more::{Display, Error};
 use fxhash::{FxHashMap, FxHasher64};
+use hugr::core::HugrNode;
+use hugr::hugr::views::NodesIter;
 use hugr::ops::OpType;
 use hugr::{HugrView, Node};
 use hugr_core::hugr::internal::PortgraphNodeMap;
@@ -12,7 +14,7 @@ use petgraph::visit::{self as pg, Walker};
 use super::Circuit;
 
 /// Circuit hashing utilities.
-pub trait CircuitHash {
+pub trait CircuitHash: NodesIter {
     /// Compute the hash of a dataflow container node.
     ///
     /// We compute a hash for each node from its operation and the hash of
@@ -23,20 +25,20 @@ pub trait CircuitHash {
     ///
     /// Adapted from Quartz (Apache 2.0)
     /// <https://github.com/quantum-compiler/quartz/blob/2e13eb7ffb3c5c5fe96cf5b4246f4fd7512e111e/src/quartz/tasograph/tasograph.cpp#L410>
-    fn circuit_hash(&self, node: Node) -> Result<u64, HashError>;
+    fn circuit_hash(&self, node: Self::Node) -> Result<u64, HashError>;
 }
 
-impl<T: HugrView<Node = Node>> CircuitHash for Circuit<T> {
-    fn circuit_hash(&self, node: Node) -> Result<u64, HashError> {
+impl<T: HugrView> CircuitHash for Circuit<T> {
+    fn circuit_hash(&self, node: T::Node) -> Result<u64, HashError> {
         self.hugr().circuit_hash(node)
     }
 }
 
 impl<T> CircuitHash for T
 where
-    T: HugrView<Node = Node>,
+    T: HugrView,
 {
-    fn circuit_hash(&self, node: Node) -> Result<u64, HashError> {
+    fn circuit_hash(&self, node: T::Node) -> Result<u64, HashError> {
         let Some([_, output_node]) = self.get_io(node) else {
             return Err(HashError::NotADfg);
         };
@@ -62,16 +64,25 @@ where
 /// Auxiliary data for circuit hashing.
 ///
 /// Contains previously computed hashes.
-#[derive(Clone, Default, Debug)]
-struct HashState {
+#[derive(Clone, Debug)]
+
+struct HashState<N = Node> {
     /// Computed node hashes.
-    pub hashes: FxHashMap<Node, u64>,
+    pub hashes: FxHashMap<N, u64>,
 }
 
-impl HashState {
+impl<N> Default for HashState<N> {
+    fn default() -> Self {
+        Self {
+            hashes: FxHashMap::default(),
+        }
+    }
+}
+
+impl<N: HugrNode> HashState<N> {
     /// Return the hash for a node.
     #[inline]
-    fn node_hash(&self, node: Node) -> Option<u64> {
+    fn node_hash(&self, node: N) -> Option<u64> {
         self.hashes.get(&node).copied()
     }
 
@@ -79,7 +90,7 @@ impl HashState {
     ///
     /// Returns the previous hash, if it was set.
     #[inline]
-    fn set_hash(&mut self, node: Node, hash: u64) -> Option<u64> {
+    fn set_hash(&mut self, node: N, hash: u64) -> Option<u64> {
         self.hashes.insert(node, hash)
     }
 }
@@ -113,10 +124,10 @@ fn hashable_op(op: &OpType) -> impl Hash {
 /// # Panics
 /// - If the command is a container node, or if it is a parametric CustomOp.
 /// - If the hash of any of its predecessors has not been set.
-fn hash_node(
-    circ: &impl HugrView<Node = Node>,
-    node: Node,
-    state: &mut HashState,
+fn hash_node<T: HugrView>(
+    circ: &T,
+    node: T::Node,
+    state: &mut HashState<T::Node>,
 ) -> Result<u64, HashError> {
     let op = circ.get_optype(node);
     let mut hasher = FxHasher64::default();

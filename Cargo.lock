@@ -1080,18 +1080,19 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.23.0"
-source = "git+https://github.com/CQCL/hugr?rev=d9e4c1e#d9e4c1e640345068a662cf6b1fc04ae3de5a937b"
+source = "git+https://github.com/CQCL/hugr?rev=bd9f343#bd9f34381f532be4082e1dedee1847972b883206"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
  "hugr-model",
  "hugr-passes",
+ "hugr-persistent",
 ]
 
 [[package]]
 name = "hugr-cli"
 version = "0.23.0"
-source = "git+https://github.com/CQCL/hugr?rev=d9e4c1e#d9e4c1e640345068a662cf6b1fc04ae3de5a937b"
+source = "git+https://github.com/CQCL/hugr?rev=bd9f343#bd9f34381f532be4082e1dedee1847972b883206"
 dependencies = [
  "anyhow",
  "clap",
@@ -1108,7 +1109,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.23.0"
-source = "git+https://github.com/CQCL/hugr?rev=d9e4c1e#d9e4c1e640345068a662cf6b1fc04ae3de5a937b"
+source = "git+https://github.com/CQCL/hugr?rev=bd9f343#bd9f34381f532be4082e1dedee1847972b883206"
 dependencies = [
  "base64",
  "cgmath",
@@ -1144,7 +1145,7 @@ dependencies = [
 [[package]]
 name = "hugr-llvm"
 version = "0.23.0"
-source = "git+https://github.com/CQCL/hugr?rev=d9e4c1e#d9e4c1e640345068a662cf6b1fc04ae3de5a937b"
+source = "git+https://github.com/CQCL/hugr?rev=bd9f343#bd9f34381f532be4082e1dedee1847972b883206"
 dependencies = [
  "anyhow",
  "cc",
@@ -1163,7 +1164,7 @@ dependencies = [
 [[package]]
 name = "hugr-model"
 version = "0.23.0"
-source = "git+https://github.com/CQCL/hugr?rev=d9e4c1e#d9e4c1e640345068a662cf6b1fc04ae3de5a937b"
+source = "git+https://github.com/CQCL/hugr?rev=bd9f343#bd9f34381f532be4082e1dedee1847972b883206"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1184,7 +1185,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.23.0"
-source = "git+https://github.com/CQCL/hugr?rev=d9e4c1e#d9e4c1e640345068a662cf6b1fc04ae3de5a937b"
+source = "git+https://github.com/CQCL/hugr?rev=bd9f343#bd9f34381f532be4082e1dedee1847972b883206"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
@@ -1195,6 +1196,24 @@ dependencies = [
  "portgraph 0.15.2",
  "strum",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "hugr-persistent"
+version = "0.3.0"
+source = "git+https://github.com/CQCL/hugr?rev=bd9f343#bd9f34381f532be4082e1dedee1847972b883206"
+dependencies = [
+ "delegate 0.13.4",
+ "derive_more 1.0.0",
+ "hugr-core",
+ "itertools 0.14.0",
+ "petgraph 0.8.3",
+ "portgraph 0.15.2",
+ "relrc",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "wyhash",
 ]
 
 [[package]]
@@ -1484,12 +1503,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "num"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35bd024e8b2ff75562e5f34e7f4905839deb4b22955ef5e73d2fea1b9813cb23"
+dependencies = [
+ "num-bigint",
+ "num-complex",
+ "num-integer",
+ "num-iter",
+ "num-rational",
+ "num-traits",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
 dependencies = [
  "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-complex"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
+dependencies = [
  "num-traits",
 ]
 
@@ -1505,6 +1547,17 @@ version = "0.1.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7969661fd2958a5cb096e56c8e1ad0444ac2bbcd0061bd28660485a44879858f"
 dependencies = [
+ "num-traits",
+]
+
+[[package]]
+name = "num-iter"
+version = "0.1.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1429034a0490724d0075ebb2bc9e875d6503c3cf69e235a8941aa757d83ef5bf"
+dependencies = [
+ "autocfg",
+ "num-integer",
  "num-traits",
 ]
 
@@ -1820,9 +1873,9 @@ dependencies = [
 
 [[package]]
 name = "pyo3"
-version = "0.26.0"
+version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ba0117f4212101ee6544044dae45abe1083d30ce7b29c4b5cbdfa2354e07383"
+checksum = "8970a78afe0628a3e3430376fc5fd76b6b45c4d43360ffd6cdd40bdde72b682a"
 dependencies = [
  "anyhow",
  "indoc",
@@ -1838,18 +1891,19 @@ dependencies = [
 
 [[package]]
 name = "pyo3-build-config"
-version = "0.26.0"
+version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fc6ddaf24947d12a9aa31ac65431fb1b851b8f4365426e182901eabfb87df5f"
+checksum = "458eb0c55e7ece017adeba38f2248ff3ac615e53660d7c71a238d7d2a01c7598"
 dependencies = [
+ "once_cell",
  "target-lexicon",
 ]
 
 [[package]]
 name = "pyo3-ffi"
-version = "0.26.0"
+version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "025474d3928738efb38ac36d4744a74a400c901c7596199e20e45d98eb194105"
+checksum = "7114fe5457c61b276ab77c5055f206295b812608083644a5c5b2640c3102565c"
 dependencies = [
  "libc",
  "pyo3-build-config",
@@ -1857,9 +1911,9 @@ dependencies = [
 
 [[package]]
 name = "pyo3-macros"
-version = "0.26.0"
+version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e64eb489f22fe1c95911b77c44cc41e7c19f3082fc81cce90f657cdc42ffded"
+checksum = "a8725c0a622b374d6cb051d11a0983786448f7785336139c3c94f5aa6bef7e50"
 dependencies = [
  "proc-macro2",
  "pyo3-macros-backend",
@@ -1869,9 +1923,9 @@ dependencies = [
 
 [[package]]
 name = "pyo3-macros-backend"
-version = "0.26.0"
+version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "100246c0ecf400b475341b8455a9213344569af29a3c841d29270e53102e0fcf"
+checksum = "4109984c22491085343c05b0dbc54ddc405c3cf7b4374fc533f5c3313a572ccc"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -1882,9 +1936,9 @@ dependencies = [
 
 [[package]]
 name = "pythonize"
-version = "0.26.0"
+version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11e06e4cff9be2bbf2bddf28a486ae619172ea57e79787f856572878c62dcfe2"
+checksum = "597907139a488b22573158793aa7539df36ae863eba300c75f3a0d65fc475e27"
 dependencies = [
  "pyo3",
  "serde",
@@ -1917,7 +1971,7 @@ version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
 dependencies = [
- "rand_core",
+ "rand_core 0.6.4",
  "serde",
 ]
 
@@ -1929,6 +1983,12 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "rand_core"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38"
 
 [[package]]
 name = "rayon"
@@ -2024,7 +2084,7 @@ dependencies = [
  "derive_more 0.99.20",
  "fxhash",
  "itertools 0.13.0",
- "petgraph 0.6.5",
+ "petgraph 0.8.3",
  "serde",
  "slotmap_fork_lmondada",
  "thiserror 1.0.69",
@@ -2598,11 +2658,13 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "slotmap_fork_lmondada",
  "smol_str",
  "strum",
  "tket-json-rs",
  "tracing",
  "typetag",
+ "z3",
  "zstd",
 ]
 
@@ -3333,12 +3395,42 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 
 [[package]]
+name = "wyhash"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca4d373340c479fd1e779f7a763acee85da3e423b1a9a9acccf97babcc92edbb"
+dependencies = [
+ "rand_core 0.9.3",
+]
+
+[[package]]
 name = "wyz"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05f360fc0b24296329c78fda852a1e9ae82de9cf7b27dae4b7f62f118f77b9ed"
 dependencies = [
  "tap",
+]
+
+[[package]]
+name = "z3"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39c595f59bb8d2e0314a5ed34d0c14c262e7af153472cc23eb3d0fd69da3ea6d"
+dependencies = [
+ "log",
+ "num",
+ "z3-sys",
+]
+
+[[package]]
+name = "z3-sys"
+version = "0.9.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6cd1b38ffd95fae0fcc40026fb1a822074e2a923ad4e011e90df878cbed721e0"
+dependencies = [
+ "bindgen",
+ "pkg-config",
 ]
 
 [[package]]

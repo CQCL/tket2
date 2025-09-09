@@ -15,7 +15,8 @@ pub trait CircuitCost: Add<Output = Self> + Sum<Self> + Debug + Default + Clone 
     /// The cost delta between two costs.
     type CostDelta: CostDelta;
 
-    /// Return the cost as a `usize`. This may discard some of the cost information.
+    /// Return the cost as a `usize`. This may discard some of the cost
+    /// information.
     fn as_usize(&self) -> usize;
 
     /// Return the cost delta between two costs.
@@ -32,7 +33,8 @@ pub trait CircuitCost: Add<Output = Self> + Sum<Self> + Debug + Default + Clone 
 pub trait CostDelta:
     AddAssign + Add<Output = Self> + Sum<Self> + Debug + Default + Clone + Ord
 {
-    /// Return the delta as a `isize`. This may discard some of the cost delta information.
+    /// Return the delta as a `isize`. This may discard some of the cost delta
+    /// information.
     fn as_isize(&self) -> isize;
 }
 
@@ -67,6 +69,16 @@ impl<const N: usize, T: Default + Copy> Default for LexicographicCost<T, N> {
 
 // Serialise as string so that it is easy to write to CSV
 impl<const N: usize> serde::Serialize for LexicographicCost<usize, N> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&format!("{self:?}"))
+    }
+}
+
+// Serialise as string so that it is easy to write to CSV
+impl<const N: usize> serde::Serialize for LexicographicCost<isize, N> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -251,7 +263,7 @@ mod tests {
 
     #[test]
     fn serde_serialize() {
-        let a = LexicographicCost([10, 2]);
+        let a: LexicographicCost<usize, 2> = LexicographicCost([10, 2]);
         let s = serde_json::to_string(&a).unwrap();
         assert_eq!(s, "\"[10, 2]\"");
     }
