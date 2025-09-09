@@ -6,7 +6,7 @@ use derive_more::derive::From;
 use hugr::{
     extension::simple_op::MakeExtensionOp,
     ops::{ExtensionOp, OpType},
-    HugrView,
+    Direction, HugrView, Port,
 };
 
 use crate::{
@@ -16,8 +16,14 @@ use crate::{
 
 use super::Subcircuit;
 
-mod adapter;
-pub use adapter::{HugrMatchAdapter, MatchingOptions};
+mod hugr_adapter;
+pub use hugr_adapter::{HugrMatchAdapter, MatchingOptions};
+#[cfg(feature = "badgerv2_unstable")]
+mod im_adapter;
+#[cfg(feature = "badgerv2_unstable")]
+pub use im_adapter::ImMatchAdapter;
+#[cfg(feature = "badgerv2_unstable")]
+pub(crate) use im_adapter::ImMatchResult;
 
 /// The result of extending a match to a new Tket operation.
 ///
@@ -228,6 +234,15 @@ pub trait CircuitMatcher {
     fn as_hugr_matcher(&self) -> HugrMatchAdapter<'_, Self> {
         HugrMatchAdapter { matcher: self }
     }
+
+    /// Convert the matcher to a [`ImMatchAdapter`], specialised in matching
+    /// patterns in [`RewriteSpace`]s.
+    ///
+    /// [`RewriteSpace`]: crate::rewrite_space::RewriteSpace
+    #[cfg(feature = "badgerv2_unstable")]
+    fn as_rewrite_space_matcher(&self) -> ImMatchAdapter<'_, Self> {
+        ImMatchAdapter { matcher: self }
+    }
 }
 
 enum TketOrExtensionOp {
@@ -247,8 +262,78 @@ fn as_tket_or_extension_op(op: &OpType) -> TketOrExtensionOp {
     }
 }
 
+/// Iterator over all ports of a node of linear type.
+pub(crate) fn all_linear_ports<H: HugrView>(
+    host: &H,
+    node: H::Node,
+) -> impl Iterator<Item = Port> + '_ {
+    host.value_types(node, Direction::Incoming)
+        .chain(host.value_types(node, Direction::Outgoing))
+        .filter_map(|(port, typ)| (!typ.copyable()).then_some(port))
+}
+
 enum MatchOutcomeEnum<PartialMatchInfo, MatchInfo> {
     Complete(MatchInfo),
     Proceed(PartialMatchInfo),
     Skip(PartialMatchInfo),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A matcher finding all sequences of two or more Hadamard gates.
+    pub(crate) struct TestHadamardMatcher;
+    type NumHadamards = usize;
+
+    impl CircuitMatcher for TestHadamardMatcher {
+        type PartialMatchInfo = NumHadamards;
+        type MatchInfo = NumHadamards;
+
+        fn match_tket_op<H: HugrView>(
+            &self,
+            op: TketOp,
+            _args: &[CircuitUnit<H::Node>],
+            match_context: MatchContext<Self::PartialMatchInfo, H>,
+        ) -> MatchOutcome<Self::PartialMatchInfo, Self::MatchInfo> {
+            // We can always skip this op
+            let mut outcomes = MatchOutcome::default().skip(Update::Unchanged);
+            match op {
+                TketOp::H => {
+                    // we have a hadamard, so we can match this op and proceed
+                    let num_hadamards = match_context.match_info + 1;
+                    outcomes = outcomes.proceed(num_hadamards);
+                    if num_hadamards >= 2 {
+                        // We have enough hadamards to report the current match
+                        outcomes.complete(num_hadamards)
+                    } else {
+                        // Proceed (without reporting a match)
+                        outcomes
+                    }
+                }
+                _ => outcomes,
+            }
+        }
+    }
+
+    /// A matcher finding Rz gates with constant angle `0.123`.
+    pub(crate) struct TestRzMatcher;
+
+    impl CircuitMatcher for TestRzMatcher {
+        type PartialMatchInfo = ();
+        type MatchInfo = ();
+
+        fn match_tket_op<H: HugrView>(
+            &self,
+            op: TketOp,
+            args: &[CircuitUnit<H::Node>],
+            match_context: MatchContext<Self::PartialMatchInfo, H>,
+        ) -> MatchOutcome<Self::PartialMatchInfo, Self::MatchInfo> {
+            if op == TketOp::Rz && match_context.circuit.as_const_f64(args[1]) == Some(0.123) {
+                MatchOutcome::default().complete(())
+            } else {
+                MatchOutcome::stop()
+            }
+        }
+    }
 }

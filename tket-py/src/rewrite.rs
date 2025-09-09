@@ -1,6 +1,7 @@
 //! PyO3 wrapper for rewriters.
 
 use derive_more::From;
+use hugr::persistent::{Commit, PatchNode, Walker};
 use hugr::{hugr::views::SiblingSubgraph, HugrView, Node, SimpleReplacement};
 use itertools::Itertools;
 use pyo3::prelude::*;
@@ -8,6 +9,7 @@ use std::path::PathBuf;
 use tket::{
     resource::ResourceScope,
     rewrite::{CircuitRewrite, ECCRewriter, Rewriter},
+    rewrite_space::RewriteSpace,
     Circuit,
 };
 
@@ -91,18 +93,112 @@ pub enum PyRewriter {
 }
 
 impl<H: HugrView<Node = Node>> Rewriter<ResourceScope<H>> for PyRewriter {
-    fn get_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite<H::Node>> {
+    type Rewrite = CircuitRewrite;
+
+    fn get_rewrites(
+        &self,
+        circ: &ResourceScope<H>,
+        root_node: H::Node,
+    ) -> Vec<CircuitRewrite<H::Node>> {
         match self {
-            Self::ECC(ecc) => ecc.0.get_rewrites(circ),
+            Self::ECC(ecc) => ecc.0.get_rewrites(circ, root_node),
             Self::MatchReplace(rewriter) => {
-                Rewriter::<ResourceScope<H>>::get_rewrites(rewriter, circ)
+                Rewriter::<ResourceScope<H>>::get_rewrites(rewriter, circ, root_node)
             }
             Self::CombineMatchReplace(rewriter) => {
-                Rewriter::<ResourceScope<H>>::get_rewrites(rewriter, circ)
+                Rewriter::<ResourceScope<H>>::get_rewrites(rewriter, circ, root_node)
             }
             Self::Vec(rewriters) => rewriters
                 .iter()
-                .flat_map(|r| r.get_rewrites(circ))
+                .flat_map(|r| r.get_rewrites(circ, root_node))
+                .collect(),
+        }
+    }
+
+    fn get_all_rewrites(&self, circ: &ResourceScope<H>) -> Vec<CircuitRewrite<H::Node>> {
+        match self {
+            Self::ECC(ecc) => ecc.0.get_all_rewrites(circ),
+            Self::MatchReplace(rewriter) => {
+                Rewriter::<ResourceScope<H>>::get_all_rewrites(rewriter, circ)
+            }
+            Self::CombineMatchReplace(rewriter) => {
+                Rewriter::<ResourceScope<H>>::get_all_rewrites(rewriter, circ)
+            }
+            Self::Vec(rewriters) => rewriters
+                .iter()
+                .flat_map(|r| r.get_all_rewrites(circ))
+                .collect(),
+        }
+    }
+}
+
+impl<'c, C> Rewriter<&'c RewriteSpace<C>> for PyRewriter {
+    type Rewrite = Commit<'c>;
+
+    fn get_rewrites(&self, circ: &&'c RewriteSpace<C>, root_node: PatchNode) -> Vec<Commit<'c>> {
+        match self {
+            Self::ECC(..) => unimplemented!("no support for ECC rewriters in seadog yet"),
+            Self::MatchReplace(rewriter) => {
+                Rewriter::<&'c RewriteSpace<C>>::get_rewrites(rewriter, circ, root_node)
+            }
+            Self::CombineMatchReplace(..) => {
+                unimplemented!("no support for combine match replace rewriters in seadog yet")
+            }
+            Self::Vec(rewriters) => rewriters
+                .iter()
+                .flat_map(|r| r.get_rewrites(circ, root_node))
+                .collect(),
+        }
+    }
+
+    fn get_all_rewrites(&self, circ: &&'c RewriteSpace<C>) -> Vec<Commit<'c>> {
+        match self {
+            Self::ECC(..) => unimplemented!("no support for ECC rewriters in seadog yet"),
+            Self::MatchReplace(rewriter) => {
+                Rewriter::<&'c RewriteSpace<C>>::get_all_rewrites(rewriter, circ)
+            }
+            Self::CombineMatchReplace(..) => {
+                unimplemented!("no support for combine match replace rewriters in seadog yet")
+            }
+            Self::Vec(rewriters) => rewriters
+                .iter()
+                .flat_map(|r| r.get_all_rewrites(circ))
+                .collect(),
+        }
+    }
+}
+
+impl<'c> Rewriter<Walker<'c>> for PyRewriter {
+    type Rewrite = Commit<'c>;
+
+    fn get_rewrites(&self, circ: &Walker<'c>, root_node: PatchNode) -> Vec<Commit<'c>> {
+        match self {
+            Self::ECC(..) => unimplemented!("no support for ECC rewriters in seadog yet"),
+            Self::MatchReplace(rewriter) => {
+                Rewriter::<Walker<'c>>::get_rewrites(rewriter, circ, root_node)
+            }
+            Self::CombineMatchReplace(..) => {
+                unimplemented!("no support for combine match replace rewriters in seadog yet")
+            }
+            Self::Vec(rewriters) => rewriters
+                .iter()
+                .flat_map(|r| r.get_rewrites(circ, root_node))
+                .collect(),
+        }
+    }
+
+    fn get_all_rewrites(&self, circ: &Walker<'c>) -> Vec<Commit<'c>> {
+        match self {
+            Self::ECC(..) => unimplemented!("no support for ECC rewriters in seadog yet"),
+            Self::MatchReplace(rewriter) => {
+                Rewriter::<Walker<'c>>::get_all_rewrites(rewriter, circ)
+            }
+            Self::CombineMatchReplace(..) => {
+                unimplemented!("no support for combine match replace rewriters in seadog yet")
+            }
+            Self::Vec(rewriters) => rewriters
+                .iter()
+                .flat_map(|r| r.get_all_rewrites(circ))
                 .collect(),
         }
     }
@@ -162,7 +258,7 @@ impl PyECCRewriter {
     /// Tk2Circuit.
     pub fn get_rewrites(&self, circ: &Tk2Circuit) -> Vec<PyCircuitRewrite> {
         self.0
-            .get_rewrites(&circ.circ)
+            .get_all_rewrites(&circ.circ)
             .into_iter()
             .map(|r| match r {
                 CircuitRewrite::New { .. } => unimplemented!(),

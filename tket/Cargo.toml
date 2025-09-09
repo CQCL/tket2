@@ -24,6 +24,7 @@ path = "src/lib.rs"
 [features]
 # Enables search and replace optimisation passes using the `portmatching` crate.
 portmatching = ["dep:portmatching", "dep:rmp-serde"]
+badgerv2_unstable = ["hugr/persistent_unstable", "chrono/serde", "dep:z3"]
 
 # Stores a trace of the applied rewrites
 rewrite-tracing = []
@@ -77,7 +78,8 @@ pest_derive = { workspace = true }
 zstd = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 num-rational = { workspace = true }
-
+z3 = { workspace = true, optional = true }
+slotmap_fork_lmondada = "1.0.8"
 
 [dev-dependencies]
 rstest = { workspace = true }

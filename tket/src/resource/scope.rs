@@ -18,7 +18,7 @@ use hugr::hugr::views::sibling_subgraph::{IncomingPorts, InvalidSubgraph, Outgoi
 use hugr::hugr::views::{ExtractionResult, SiblingSubgraph};
 use hugr::ops::OpTrait;
 use hugr::types::Signature;
-use hugr::{Direction, HugrView, IncomingPort, Port, PortIndex, Wire};
+use hugr::{Direction, HugrView, IncomingPort, OutgoingPort, Port, PortIndex, Wire};
 use hugr_core::hugr::internal::PortgraphNodeMap;
 use indexmap::map::Entry;
 use indexmap::IndexMap;
@@ -61,10 +61,17 @@ impl<N: HugrNode> NodeCircuitUnits<N> {
     }
 
     fn map_nodes<N2: HugrNode>(&self, mut node_map: impl FnMut(N) -> N2) -> NodeCircuitUnits<N2> {
+        self.map_node_ports(|node, port| (node_map(node), port))
+    }
+
+    fn map_node_ports<N2: HugrNode>(
+        &self,
+        mut node_map: impl FnMut(N, OutgoingPort) -> (N2, OutgoingPort),
+    ) -> NodeCircuitUnits<N2> {
         let mapped_port_map = self
             .port_map
             .clone()
-            .map(|unit| unit.map_node(&mut node_map));
+            .map(|unit| unit.map_node_port(&mut node_map));
         NodeCircuitUnits {
             port_map: mapped_port_map,
             position: self.position,
@@ -196,6 +203,15 @@ impl<H: HugrView> ResourceScope<H> {
     /// the HUGR using this.
     pub(super) fn as_circuit_mut(&mut self) -> Circuit<&mut H> {
         Circuit::new(&mut self.hugr)
+    }
+
+    /// Get a ResourceScope with a reference to the underlying HUGR.
+    pub fn as_ref(&self) -> ResourceScope<&H> {
+        ResourceScope {
+            hugr: &self.hugr,
+            subgraph: self.subgraph.clone(),
+            circuit_units: self.circuit_units.clone(),
+        }
     }
 
     /// Get the underlying subgraph, or `None` if the circuit is empty.
@@ -472,19 +488,28 @@ impl<H: HugrView> ResourceScope<H> {
     }
 
     /// Assign circuit units to the given ports in order, ignoring non-dataflow
-    /// ports.
+    /// ports and ports that already have assigned units.
     fn assign_circuit_units(
         &mut self,
         incoming_ports: impl IntoIterator<Item = (H::Node, IncomingPort)>,
         allocator: &mut CircuitUnitAllocator,
     ) {
         for (node, port) in incoming_ports {
-            let unit = allocator.allocate_circuit_unit(node, port, &self.hugr);
             let Some(node_units) =
                 node_circuit_units_mut(&mut self.circuit_units, node, &self.hugr)
             else {
                 continue;
             };
+            if !node_units.port_map.get(port).is_sentinel() {
+                // Already assigned
+                continue;
+            }
+            // Allocate a resource ID whether it is used or not, so that empty qubits
+            // get IDs.
+            let unit = allocator.allocate_circuit_unit(node, port, &self.hugr);
+            if self.subgraph.is_none() || !self.subgraph.as_ref().unwrap().nodes().contains(&node) {
+                continue;
+            }
             node_units.port_map.set(port, unit);
         }
     }
@@ -780,11 +805,7 @@ pub(crate) mod tests {
             .map(|(n, _)| n);
 
         for h in first_hadamards {
-            let res = scope
-                .get_all_resources(h)
-                .into_iter()
-                .exactly_one()
-                .unwrap();
+            let res = scope.get_all_resources(h).exactly_one().ok().unwrap();
             let nodes_on_path = scope.resource_path_iter(res, h, Direction::Outgoing);
             let pos_on_path = nodes_on_path.map(|n| scope.get_position(n).unwrap());
 

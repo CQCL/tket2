@@ -294,7 +294,7 @@ impl PatternMatcher {
     }
 
     /// Find all convex pattern matches in a circuit rooted at a given node.
-    fn find_rooted_matches<H: HugrView<Node = Node>>(
+    pub fn find_rooted_matches<H: HugrView<Node = Node>>(
         &self,
         circ: &Circuit<H>,
         root: Node,

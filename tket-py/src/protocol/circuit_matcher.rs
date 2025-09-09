@@ -1,9 +1,9 @@
 //! Circuit matcher protocol implementation.
 
 use derive_more::derive::Into;
-use hugr::HugrView;
+use hugr::{hugr::views::sibling_subgraph::InvalidSubgraph, HugrView};
 // use itertools::Itertools;
-use pyo3::prelude::*;
+use pyo3::{exceptions::PyValueError, prelude::*};
 use tket::{
     rewrite::matcher::{CircuitMatcher, MatchContext, MatchOutcome, Update},
     TketOp,
@@ -79,7 +79,20 @@ fn try_match_tket_op<H: HugrView>(
         .iter()
         .map(|arg| PyCircuitUnit::with_context(arg.clone(), &match_context))
         .collect_vec();
-    let context = Python::with_gil(|py| PyMatchContext::try_from_match_context(match_context, py))?;
+    let context_res =
+        Python::with_gil(|py| PyMatchContext::try_from_match_context(match_context, py));
+    let context = match context_res {
+        Ok(context) => context,
+        Err(InvalidSubgraph::NotConvex) => {
+            // Our match is non-convex, discard
+            return Ok(MatchOutcome::default().skip(Update::<Option<PyObject>>::Unchanged));
+        }
+        Err(err) => {
+            return Err(PyValueError::new_err(format!(
+                "could not create match context: {err}"
+            )))
+        }
+    };
     matcher
         .py_match_tket_op(op.into(), args, context)
         .map(Into::into)

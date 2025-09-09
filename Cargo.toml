@@ -48,9 +48,9 @@ large_enum_variant = "allow"
 [workspace.dependencies]
 
 # Make sure to run `just recompile-eccs` if the hugr serialisation format changes.
-hugr = { git = "https://github.com/CQCL/hugr", rev = "d9e4c1e" }
-hugr-core = { git = "https://github.com/CQCL/hugr", rev = "d9e4c1e" }
-hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "d9e4c1e" }
+hugr = { git = "https://github.com/CQCL/hugr", rev = "bd9f343" }
+hugr-core = { git = "https://github.com/CQCL/hugr", rev = "bd9f343" }
+hugr-cli = { git = "https://github.com/CQCL/hugr", rev = "bd9f343" }
 portgraph = "0.15.2"
 pyo3 = ">= 0.23.4, < 0.27"
 pyo3-build-config = ">= 0.23.4, < 0.27"
@@ -91,6 +91,7 @@ cool_asserts = "2.0.3"
 zstd = "0.13.3"
 anyhow = "1.0.100"
 num-rational = "0.4"
+z3 = "0.16"
 
 [profile.release.package.tket-py]
 # Some configurations to reduce the size of tket wheels

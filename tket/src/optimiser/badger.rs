@@ -35,7 +35,7 @@ use crate::optimiser::{pqueue_worker, BacktrackingOptimiser, Optimiser, State, S
 use crate::passes::CircuitChunks;
 use crate::resource::ResourceScope;
 use crate::rewrite::strategy::{RewriteResult, RewriteStrategy};
-use crate::rewrite::Rewriter;
+use crate::rewrite::{CircuitRewrite, Rewriter};
 use crate::Circuit;
 
 /// Configuration options for the Badger optimiser.
@@ -117,6 +117,22 @@ pub struct BadgerOptimiser<R, S> {
     strategy: S,
 }
 
+/// A trait for rewriters that can be used with the Badger optimiser.
+pub trait BadgerRewriter:
+    Rewriter<ResourceScope, Rewrite = CircuitRewrite> + Send + Clone + Sync + 'static
+{
+}
+
+/// A trait for rewrite strategies that can be used with the Badger optimiser.
+pub trait BadgerRewriteStrategy: RewriteStrategy + Send + Sync + Clone + 'static {}
+
+impl<S> BadgerRewriteStrategy for S where S: RewriteStrategy + Send + Sync + Clone + 'static {}
+
+impl<R> BadgerRewriter for R where
+    R: for<'c> Rewriter<ResourceScope, Rewrite = CircuitRewrite> + Send + Clone + Sync + 'static
+{
+}
+
 impl<R, S> BadgerOptimiser<R, S> {
     /// Create a new Badger optimiser.
     pub fn new(rewriter: R, strategy: S) -> Self {
@@ -140,7 +156,7 @@ struct BadgerState<C> {
     cost: C,
 }
 
-impl<R: Rewriter<ResourceScope>, S: RewriteStrategy> State<&BadgerOptimiser<R, S>>
+impl<R: BadgerRewriter, S: BadgerRewriteStrategy> State<&BadgerOptimiser<R, S>>
     for BadgerState<S::Cost>
 where
     S::Cost: serde::Serialize,
@@ -156,7 +172,7 @@ where
     }
 
     fn next_states(&self, &mut context: &mut &BadgerOptimiser<R, S>) -> Vec<Self> {
-        let rewrites = context.rewriter.get_rewrites(&self.circ);
+        let rewrites = context.rewriter.get_all_rewrites(&self.circ);
         context
             .strategy
             .apply_rewrites(rewrites, &self.circ)
@@ -170,8 +186,8 @@ where
 
 impl<R, S> BadgerOptimiser<R, S>
 where
-    R: Rewriter<ResourceScope> + Send + Clone + Sync + 'static,
-    S: RewriteStrategy + Send + Sync + Clone + 'static,
+    R: BadgerRewriter,
+    S: BadgerRewriteStrategy,
     S::Cost: serde::Serialize + Send + Sync,
 {
     /// Run the Badger optimiser on a circuit.
@@ -488,6 +504,9 @@ mod badger_default {
     pub type DefaultBadgerStrategy = ExhaustiveGreedyStrategy<StrategyCost>;
     pub type StrategyCost = LexicographicCostFunction<fn(&OpType) -> usize, 2>;
 
+    /// The default Badger optimiser using ECC sets.
+    #[deprecated(note = "Type alias was renamed to `ECCBadgerOptimiser`")]
+    pub type DefaultBadgerOptimiser = ECCBadgerOptimiser;
     /// The Badger optimiser using ECC sets.
     pub type ECCBadgerOptimiser = BadgerOptimiser<ECCRewriter, DefaultBadgerStrategy>;
 
@@ -546,6 +565,9 @@ mod badger_default {
         }
     }
 }
+#[cfg(feature = "portmatching")]
+#[allow(deprecated)]
+pub use badger_default::DefaultBadgerOptimiser;
 #[cfg(feature = "portmatching")]
 pub use badger_default::{DefaultBadgerStrategy, ECCBadgerOptimiser};
 

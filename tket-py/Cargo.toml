@@ -22,6 +22,7 @@ bench = false
 tket = { path = "../tket", version = "0.15.0", features = [
     "portmatching",
     "binary-eccs",
+    "badgerv2_unstable",
 ] }
 tket-qsystem = { path = "../tket-qsystem", version = "0.21.0" }
 serde = { workspace = true, features = ["derive"] }

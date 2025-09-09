@@ -47,7 +47,7 @@
 pub use flow::{DefaultResourceFlow, ResourceFlow, UnsupportedOp};
 use hugr::{
     extension::simple_op::MakeExtensionOp,
-    hugr::hugrmut::HugrMut,
+    hugr::{hugrmut::HugrMut, views::NodesIter},
     ops::{constant, OpType},
     std_extensions::arithmetic::{conversions::ConvertOpDef, float_types::ConstF64},
     HugrView, IncomingPort, PortIndex,
@@ -181,6 +181,14 @@ impl<H: HugrView> ResourceScope<H> {
 impl<H: HugrView<Node = hugr::Node>> CircuitHash for ResourceScope<H> {
     fn circuit_hash(&self, parent: hugr::Node) -> Result<u64, HashError> {
         self.as_circuit().circuit_hash(parent)
+    }
+}
+
+impl<H: HugrView> NodesIter for ResourceScope<H> {
+    type Node = H::Node;
+
+    fn nodes(&self) -> impl Iterator<Item = Self::Node> {
+        self.nodes().iter().copied()
     }
 }
 
