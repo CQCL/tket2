@@ -119,7 +119,7 @@ pub struct BadgerOptimiser<R, S> {
 
 /// A trait for rewriters that can be used with the Badger optimiser.
 pub trait BadgerRewriter:
-    for<'c> Rewriter<ResourceScope, Rewrite<'c> = CircuitRewrite> + Send + Clone + Sync + 'static
+    Rewriter<ResourceScope, Rewrite = CircuitRewrite> + Send + Clone + Sync + 'static
 {
 }
 
@@ -129,11 +129,7 @@ pub trait BadgerRewriteStrategy: RewriteStrategy + Send + Sync + Clone + 'static
 impl<S> BadgerRewriteStrategy for S where S: RewriteStrategy + Send + Sync + Clone + 'static {}
 
 impl<R> BadgerRewriter for R where
-    R: for<'c> Rewriter<ResourceScope, Rewrite<'c> = CircuitRewrite>
-        + Send
-        + Clone
-        + Sync
-        + 'static
+    R: for<'c> Rewriter<ResourceScope, Rewrite = CircuitRewrite> + Send + Clone + Sync + 'static
 {
 }
 

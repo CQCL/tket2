@@ -4,7 +4,7 @@ use derive_more::derive::{From, Into};
 use hugr::{
     builder::{DFGBuilder, HugrBuilder},
     hugr::views::sibling_subgraph::InvalidSubgraph,
-    persistent::{Commit, PatchNode},
+    persistent::{Commit, PatchNode, Walker},
     types::Signature,
     HugrView,
 };
@@ -412,10 +412,7 @@ pub struct PyMatchReplaceRewriter {
 }
 
 impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyMatchReplaceRewriter {
-    type Rewrite<'c>
-        = CircuitRewrite
-    where
-        H: 'c;
+    type Rewrite = CircuitRewrite;
 
     fn get_rewrites(&self, circ: &ResourceScope<H>, root_node: hugr::Node) -> Vec<CircuitRewrite> {
         // Use the actual rewriter based on the variants
@@ -452,13 +449,10 @@ impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyMatchRepla
     }
 }
 
-impl<C> Rewriter<RewriteSpace<C>> for PyMatchReplaceRewriter {
-    type Rewrite<'c>
-        = Commit<'c>
-    where
-        C: 'c;
+impl<'c, C> Rewriter<&'c RewriteSpace<C>> for PyMatchReplaceRewriter {
+    type Rewrite = Commit<'c>;
 
-    fn get_rewrites<'c>(&self, circ: &'c RewriteSpace<C>, root_node: PatchNode) -> Vec<Commit<'c>> {
+    fn get_rewrites(&self, circ: &&'c RewriteSpace<C>, root_node: PatchNode) -> Vec<Commit<'c>> {
         // Use the actual rewriter based on the variants
         if let Some(unit_matcher) = self.matcher.as_unit_matcher() {
             if let Some(unit_replacement) = self.replacement.as_unit_replacement() {
@@ -475,7 +469,45 @@ impl<C> Rewriter<RewriteSpace<C>> for PyMatchReplaceRewriter {
         panic!("Incompatible matcher and replacement");
     }
 
-    fn get_all_rewrites<'c>(&self, circ: &'c RewriteSpace<C>) -> Vec<Commit<'c>> {
+    fn get_all_rewrites(&self, circ: &&'c RewriteSpace<C>) -> Vec<Commit<'c>> {
+        // Use the actual rewriter based on the variants
+        if let Some(unit_matcher) = self.matcher.as_unit_matcher() {
+            if let Some(unit_replacement) = self.replacement.as_unit_replacement() {
+                let rewriter = MatchReplaceRewriter::new(unit_matcher, unit_replacement);
+                return rewriter.get_all_rewrites(circ);
+            }
+        }
+        if let Some(pyobject_matcher) = self.matcher.as_pyobject_matcher() {
+            if let Some(pyobject_replacement) = self.replacement.as_pyobject_replacement() {
+                let rewriter = MatchReplaceRewriter::new(pyobject_matcher, pyobject_replacement);
+                return rewriter.get_all_rewrites(circ);
+            }
+        }
+        panic!("Incompatible matcher and replacement");
+    }
+}
+
+impl<'c> Rewriter<Walker<'c>> for PyMatchReplaceRewriter {
+    type Rewrite = Commit<'c>;
+
+    fn get_rewrites(&self, circ: &Walker<'c>, root_node: PatchNode) -> Vec<Commit<'c>> {
+        // Use the actual rewriter based on the variants
+        if let Some(unit_matcher) = self.matcher.as_unit_matcher() {
+            if let Some(unit_replacement) = self.replacement.as_unit_replacement() {
+                let rewriter = MatchReplaceRewriter::new(unit_matcher, unit_replacement);
+                return rewriter.get_rewrites(circ, root_node);
+            }
+        }
+        if let Some(pyobject_matcher) = self.matcher.as_pyobject_matcher() {
+            if let Some(pyobject_replacement) = self.replacement.as_pyobject_replacement() {
+                let rewriter = MatchReplaceRewriter::new(pyobject_matcher, pyobject_replacement);
+                return rewriter.get_rewrites(circ, root_node);
+            }
+        }
+        panic!("Incompatible matcher and replacement");
+    }
+
+    fn get_all_rewrites(&self, circ: &Walker<'c>) -> Vec<Commit<'c>> {
         // Use the actual rewriter based on the variants
         if let Some(unit_matcher) = self.matcher.as_unit_matcher() {
             if let Some(unit_replacement) = self.replacement.as_unit_replacement() {
@@ -532,10 +564,7 @@ pub struct PyCombineMatchReplaceRewriter {
 }
 
 impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyCombineMatchReplaceRewriter {
-    type Rewrite<'c>
-        = CircuitRewrite
-    where
-        H: 'c;
+    type Rewrite = CircuitRewrite;
 
     fn get_rewrites(&self, circ: &ResourceScope<H>, root_node: hugr::Node) -> Vec<CircuitRewrite> {
         // Use the actual rewriter based on the variants

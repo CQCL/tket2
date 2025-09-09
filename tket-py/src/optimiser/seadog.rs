@@ -73,6 +73,7 @@ impl PySeadogOptimiser {
             progress_timeout,
             max_circuit_count,
             queue_size: queue_size.unwrap_or(100),
+            pattern_radius: 2,
         };
         update_circ(circ, |circ, _| self.optimise(circ, options))
     }

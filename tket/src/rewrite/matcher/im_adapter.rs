@@ -120,27 +120,25 @@ impl<'m, M: CircuitMatcher + ?Sized> ImMatchAdapter<'m, M> {
     /// Get all matching subcircuits within the [`RewriteSpace`].
     pub fn get_all_matches<C>(&self, space: &RewriteSpace<C>) -> Vec<ImMatchResult<M::MatchInfo>> {
         <RewriteSpace<C> as hugr::hugr::views::NodesIter>::nodes(space)
-            .flat_map(|n| self.get_matches(space, n))
+            .flat_map(|n| {
+                let walker = Walker::from_pinned_node(n, space.state_space());
+                self.get_matches(walker, n)
+            })
             .collect()
     }
 
     /// Get all matching subcircuits within the [`RewriteSpace`] with one of
     /// the given `root_nodes` as their root.
-    pub fn get_matches<C>(
+    pub fn get_matches(
         &self,
-        space: &RewriteSpace<C>,
+        walker: Walker,
         root_node: PatchNode,
-    ) -> Vec<ImMatchResult<M::MatchInfo>>
-// where
-    //     M::PartialMatchInfo: std::fmt::Debug,
-    //     M::MatchInfo: std::fmt::Debug,
-    {
+    ) -> Vec<ImMatchResult<M::MatchInfo>> {
         let mut queue = VecDeque::new();
         let mut all_matches = Vec::new();
 
         // 1. Initialise queue
         {
-            let walker = Walker::from_pinned_node(root_node, space.state_space());
             let scope = to_resource_scope(walker.as_hugr_view().clone());
             let Some(outcome) = match_node(
                 root_node,

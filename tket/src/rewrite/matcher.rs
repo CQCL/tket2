@@ -263,7 +263,10 @@ fn as_tket_or_extension_op(op: &OpType) -> TketOrExtensionOp {
 }
 
 /// Iterator over all ports of a node of linear type.
-fn all_linear_ports<H: HugrView>(host: &H, node: H::Node) -> impl Iterator<Item = Port> + '_ {
+pub(crate) fn all_linear_ports<H: HugrView>(
+    host: &H,
+    node: H::Node,
+) -> impl Iterator<Item = Port> + '_ {
     host.value_types(node, Direction::Incoming)
         .chain(host.value_types(node, Direction::Outgoing))
         .filter_map(|(port, typ)| (!typ.copyable()).then_some(port))

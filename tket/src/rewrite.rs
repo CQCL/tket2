@@ -270,15 +270,13 @@ impl<N: HugrNode> From<SimpleReplacement<N>> for CircuitRewrite<N> {
 /// circuit to find rewrites on.
 pub trait Rewriter<C: NodesIter = Circuit> {
     /// The type of rewrite rule to return.
-    type Rewrite<'c>
-    where
-        C: 'c;
+    type Rewrite;
 
     /// Get the rewrite rules for a circuit with the given root node.
-    fn get_rewrites<'c>(&self, circ: &'c C, root_node: C::Node) -> Vec<Self::Rewrite<'c>>;
+    fn get_rewrites(&self, circ: &C, root_node: C::Node) -> Vec<Self::Rewrite>;
 
     /// Get the rewrite rules for a circuit with all root nodes.
-    fn get_all_rewrites<'c>(&self, circ: &'c C) -> Vec<Self::Rewrite<'c>> {
+    fn get_all_rewrites(&self, circ: &C) -> Vec<Self::Rewrite> {
         circ.nodes()
             .flat_map(|n| self.get_rewrites(circ, n))
             .collect()
@@ -351,10 +349,7 @@ where
     C: CircuitMatcher,
     R: CircuitReplacer<C::MatchInfo>,
 {
-    type Rewrite<'c>
-        = CircuitRewrite
-    where
-        ResourceScope<H>: 'c;
+    type Rewrite = CircuitRewrite;
 
     fn get_rewrites(&self, circ: &ResourceScope<H>, root_node: H::Node) -> Vec<CircuitRewrite> {
         let matches = self.matcher.as_hugr_matcher().get_matches(
@@ -409,65 +404,101 @@ where
 #[cfg(feature = "badgerv2_unstable")]
 mod badgerv2_unstable {
     use super::*;
-    use crate::rewrite::matcher::ImMatchResult;
-    use crate::rewrite_space::RewriteSpace;
-    use hugr::persistent::{Commit, PatchNode};
+    use crate::{rewrite::matcher::ImMatchResult, rewrite_space::RewriteSpace};
+    use hugr::persistent::{Commit, CommitStateSpace, PatchNode, Walker};
 
-    impl<C, R, Cost> Rewriter<RewriteSpace<Cost>> for MatchReplaceRewriter<C, R>
+    impl<'w, C, R> Rewriter<Walker<'w>> for MatchReplaceRewriter<C, R>
     where
         C: CircuitMatcher,
         R: CircuitReplacer<C::MatchInfo>,
     {
-        type Rewrite<'c>
-            = Commit<'c>
-        where
-            RewriteSpace<Cost>: 'c;
+        type Rewrite = Commit<'w>;
 
-        fn get_rewrites<'c>(
-            &self,
-            rewrite_space: &'c RewriteSpace<Cost>,
-            root_node: PatchNode,
-        ) -> Vec<Commit<'c>> {
+        fn get_rewrites(&self, walker: &Walker<'w>, root_node: PatchNode) -> Vec<Commit<'w>> {
             let matches = self
                 .matcher
                 .as_rewrite_space_matcher()
-                .get_matches(rewrite_space, root_node);
-            matches
-                .into_iter()
-                .flat_map(
-                    |ImMatchResult {
-                         subcircuit,
-                         subgraph,
-                         match_info,
-                         hugr,
-                     }| {
-                        self.replacer
-                            .replace_match(&subcircuit, &hugr, match_info)
-                            .into_iter()
-                            .filter_map(move |repl| {
-                                let rw = match CircuitRewrite::try_new(
-                                    subcircuit.clone(),
-                                    &hugr,
-                                    repl,
-                                ) {
-                                    Ok(ok) => Some(ok),
-                                    Err(err) => {
-                                        eprintln!(
-                                            "Error: failed to create rewrite, skipping:\n{}",
-                                            err
-                                        );
-                                        None
-                                    }
-                                }?;
-                                let parents = subgraph
-                                    .selected_commits()
-                                    .map(|id| hugr.hugr().get_commit(id).clone());
-                                let repl = rw.to_simple_replacement(&hugr);
-                                Commit::try_new(repl, parents, rewrite_space.state_space()).ok()
-                            })
-                    },
-                )
+                .get_matches(walker.clone(), root_node);
+            self.im_matches_to_commits(matches, walker.as_hugr_view().state_space())
+                // SAFETY: the commit is valid for the lifetime of the walker
+                .map(|commit| unsafe { commit.upgrade_lifetime() })
                 .collect()
+        }
+    }
+
+    impl<'c, C, R, Cost> Rewriter<&'c RewriteSpace<Cost>> for MatchReplaceRewriter<C, R>
+    where
+        C: CircuitMatcher,
+        R: CircuitReplacer<C::MatchInfo>,
+    {
+        type Rewrite = Commit<'c>;
+
+        fn get_rewrites(
+            &self,
+            space: &&'c RewriteSpace<Cost>,
+            root_node: PatchNode,
+        ) -> Vec<Commit<'c>> {
+            let walker = Walker::from_pinned_node(root_node, space.state_space());
+            self.get_rewrites(&walker, root_node)
+                .into_iter()
+                // SAFETY: the commit is valid for the lifetime of the rewrite space
+                .map(|commit| unsafe { commit.upgrade_lifetime() })
+                .collect()
+        }
+
+        fn get_all_rewrites(&self, space: &&'c RewriteSpace<Cost>) -> Vec<Self::Rewrite> {
+            let matches = self
+                .matcher
+                .as_rewrite_space_matcher()
+                .get_all_matches(space);
+            self.im_matches_to_commits(matches, space.state_space())
+                .into_iter()
+                // SAFETY: the commit is valid for the lifetime of the rewrite space
+                .map(|commit| unsafe { commit.upgrade_lifetime() })
+                .collect()
+        }
+    }
+
+    impl<C, R> MatchReplaceRewriter<C, R>
+    where
+        C: CircuitMatcher,
+        R: CircuitReplacer<C::MatchInfo>,
+    {
+        fn im_matches_to_commits<'c>(
+            &'c self,
+            matches: Vec<ImMatchResult<C::MatchInfo>>,
+            state_space: &'c CommitStateSpace,
+        ) -> impl Iterator<Item = Commit<'c>> + 'c {
+            matches.into_iter().flat_map(
+                move |ImMatchResult {
+                          subcircuit,
+                          subgraph,
+                          match_info,
+                          hugr,
+                      }| {
+                    self.replacer
+                        .replace_match(&subcircuit, &hugr, match_info)
+                        .into_iter()
+                        .filter_map(move |repl| {
+                            let rw = match CircuitRewrite::try_new(subcircuit.clone(), &hugr, repl)
+                            {
+                                Ok(ok) => Some(ok),
+                                Err(err) => {
+                                    eprintln!(
+                                        "Error: failed to create rewrite, skipping:\n{}",
+                                        err
+                                    );
+                                    None
+                                }
+                            }?;
+                            let parents = subgraph
+                                .selected_commits()
+                                .map(|id| hugr.hugr().get_commit(id).clone());
+                            let repl = rw.to_simple_replacement(&hugr);
+                            Commit::try_new(repl, parents, state_space).ok()
+                        })
+                },
+            )
         }
     }
 }
@@ -501,10 +532,7 @@ where
     C::MatchInfo: Clone,
     R: CircuitReplacer<Vec<C::MatchInfo>>,
 {
-    type Rewrite<'c>
-        = CircuitRewrite
-    where
-        ResourceScope<H>: 'c;
+    type Rewrite = CircuitRewrite;
 
     fn get_rewrites(&self, circ: &ResourceScope<H>, root_node: hugr::Node) -> Vec<CircuitRewrite> {
         let mut is_first = true;

@@ -192,10 +192,7 @@ impl ECCRewriter {
 }
 
 impl<H: HugrView<Node = Node>> Rewriter<ResourceScope<H>> for ECCRewriter {
-    type Rewrite<'c>
-        = CircuitRewrite
-    where
-        H: 'c;
+    type Rewrite = CircuitRewrite;
 
     fn get_rewrites(
         &self,
@@ -211,10 +208,7 @@ impl<H: HugrView<Node = Node>> Rewriter<ResourceScope<H>> for ECCRewriter {
 }
 
 impl<H: HugrView<Node = Node>> Rewriter<Circuit<H>> for ECCRewriter {
-    type Rewrite<'c>
-        = CircuitRewrite
-    where
-        H: 'c;
+    type Rewrite = CircuitRewrite;
 
     fn get_rewrites(&self, circ: &Circuit<H>, root_node: Node) -> Vec<CircuitRewrite<H::Node>> {
         self.get_rewrites(circ.hugr(), root_node)
@@ -226,10 +220,7 @@ impl<H: HugrView<Node = Node>> Rewriter<Circuit<H>> for ECCRewriter {
 }
 
 impl<H: HugrView<Node = Node>> Rewriter<H> for ECCRewriter {
-    type Rewrite<'c>
-        = CircuitRewrite
-    where
-        H: 'c;
+    type Rewrite = CircuitRewrite;
 
     fn get_rewrites(&self, h: &H, root_node: Node) -> Vec<CircuitRewrite> {
         let circ = Circuit::new(h);

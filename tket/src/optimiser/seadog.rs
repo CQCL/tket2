@@ -12,7 +12,7 @@
 //! whenever it gets too large.
 
 use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
-use hugr::persistent::{Commit, PersistentHugr};
+use hugr::persistent::{Commit, PersistentHugr, Walker};
 use hugr::{HugrView, Node};
 
 use crate::circuit::cost::CircuitCost;
@@ -51,6 +51,9 @@ pub struct SeadogOptions {
     ///
     /// Defaults to `20`.
     pub queue_size: usize,
+
+    /// The radius of the pattern to search for new rewrites.
+    pub pattern_radius: usize,
 }
 
 impl Default for SeadogOptions {
@@ -60,6 +63,7 @@ impl Default for SeadogOptions {
             progress_timeout: Default::default(),
             queue_size: 20,
             max_circuit_count: None,
+            pattern_radius: 2,
         }
     }
 }
@@ -72,8 +76,8 @@ pub struct SeadogOptimiser<R, S> {
 }
 
 /// A trait for rewriters that can be used with the Badger optimiser.
-pub trait SeadogRewriter<C: 'static + CircuitCost>:
-    for<'c> Rewriter<RewriteSpace<Cost<C>>, Rewrite<'c> = Commit<'c>> + Send + Clone + Sync + 'static
+pub trait SeadogRewriter<'w>:
+    Rewriter<Walker<'w>, Rewrite = Commit<'w>> + Send + Clone + Sync
 {
 }
 
@@ -82,12 +86,8 @@ pub trait SeadogRewriteStrategy: RewriteStrategy + Send + Sync + Clone + 'static
 
 impl<S> SeadogRewriteStrategy for S where S: RewriteStrategy + Send + Sync + Clone + 'static {}
 
-impl<R, C: CircuitCost + 'static> SeadogRewriter<C> for R where
-    R: for<'c> Rewriter<RewriteSpace<Cost<C>>, Rewrite<'c> = Commit<'c>>
-        + Send
-        + Clone
-        + Sync
-        + 'static
+impl<'w, R> SeadogRewriter<'w> for R where
+    R: Rewriter<Walker<'w>, Rewrite = Commit<'w>> + Send + Clone + Sync
 {
 }
 
@@ -97,13 +97,10 @@ impl<R, S> SeadogOptimiser<R, S> {
         Self { rewriter, strategy }
     }
 
-    fn cost<C: CircuitCost + 'static>(
-        &self,
-        circ: &ResourceScope<impl HugrView<Node = Node>>,
-    ) -> S::Cost
+    fn cost<'w>(&self, circ: &ResourceScope<impl HugrView<Node = Node>>) -> S::Cost
     where
-        R: SeadogRewriter<C>,
-        S: SeadogRewriteStrategy<Cost = C>,
+        R: Rewriter<Walker<'w>, Rewrite = Commit<'w>>,
+        S: SeadogRewriteStrategy,
     {
         self.strategy.circuit_cost(circ)
     }
@@ -127,13 +124,14 @@ struct SeadogState<'c> {
 struct SeadogContext<'o, R, S: SeadogRewriteStrategy> {
     rewrite_space: &'o RewriteSpace<Cost<S::Cost>>,
     optimiser: &'o SeadogOptimiser<R, S>,
+    pattern_radius: usize,
 }
 
 impl<'o, R, S> State<SeadogContext<'o, R, S>> for SeadogState<'o>
 where
     S::Cost: serde::Serialize + 'static,
     <S::Cost as CircuitCost>::CostDelta: serde::Serialize + 'static,
-    R: SeadogRewriter<S::Cost>,
+    R: SeadogRewriter<'o>,
     S: SeadogRewriteStrategy,
 {
     type Cost = Cost<S::Cost>;
@@ -151,17 +149,17 @@ where
     fn next_states(&self, context: &mut SeadogContext<'o, R, S>) -> Vec<Self> {
         let commit: Commit = self.commit.clone().into();
         let inserted_nodes = commit.inserted_nodes().map(|n| commit.to_patch_node(n));
+        let new_root_nodes = context
+            .rewrite_space
+            .nodes_within_radius(inserted_nodes, context.pattern_radius);
         let phugr = PersistentHugr::from_commit(commit.clone());
 
-        // TODO: expand inserted_nodes to some radius
-        let rewrites = inserted_nodes.flat_map(|n| {
-            context
-                .optimiser
-                .rewriter
-                .get_rewrites(&context.rewrite_space, n)
-        });
+        let rewrites = new_root_nodes
+            .into_iter()
+            .flat_map(|(n, walker)| context.optimiser.rewriter.get_rewrites(&walker, n))
+            .collect::<Vec<_>>();
 
-        let mut commited_rewrites = Vec::with_capacity(rewrites.size_hint().0);
+        let mut commited_rewrites = Vec::with_capacity(rewrites.len());
         for rw in rewrites {
             let old_cost = self.cost(context).unwrap();
             let new_nodes_cost: S::Cost = rw
@@ -206,7 +204,7 @@ where
 
 impl<R, S> SeadogOptimiser<R, S>
 where
-    R: SeadogRewriter<S::Cost>,
+    R: for<'w> SeadogRewriter<'w>,
     S: SeadogRewriteStrategy,
     S::Cost: serde::Serialize + Send + Sync,
     <S::Cost as CircuitCost>::CostDelta: serde::Serialize + 'static,
@@ -262,6 +260,7 @@ where
                 SeadogContext {
                     rewrite_space: &rewrite_space,
                     optimiser: self,
+                    pattern_radius: opt.pattern_radius,
                 },
             )
             .expect("optimisation failed");

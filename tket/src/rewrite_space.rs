@@ -13,9 +13,11 @@ use slotmap_fork_lmondada as slotmap;
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::collections::BTreeSet;
+use std::collections::VecDeque;
 
 use crate::circuit::cost::CostDelta;
 use crate::resource::ResourceScope;
+use crate::rewrite::matcher::all_linear_ports;
 use crate::rewrite::CircuitRewrite;
 use max_sat::MaxSATSolver;
 
@@ -210,9 +212,69 @@ impl<C> RewriteSpace<C> {
 
         self.state_space.try_create(selected_commit_ids).ok()
     }
+
+    /// Return all nodes within `pattern_radius` of `node` in the rewrite space.
+    ///
+    /// For each returned node, a walker that pins the path between the starting
+    /// node and the returned node is also returned.
+    pub fn nodes_within_radius(
+        &self,
+        nodes: impl IntoIterator<Item = hugr_im::PatchNode>,
+        pattern_radius: usize,
+    ) -> Vec<(hugr_im::PatchNode, hugr_im::Walker<'_>)> {
+        let mut new_walker_queue = VecDeque::from_iter(nodes.into_iter().map(|n| {
+            let walker = hugr_im::Walker::from_pinned_node(n, &self.state_space);
+            (n, walker, 0)
+        }));
+        let mut all_new_walkers = vec![];
+        let mut seen = BTreeSet::new();
+
+        while let Some((node, walker, depth)) = new_walker_queue.pop_front() {
+            if !seen.insert(node) {
+                continue;
+            }
+
+            all_new_walkers.push((node, walker.clone()));
+            if depth >= pattern_radius {
+                continue;
+            }
+
+            for port in all_linear_ports(walker.as_hugr_view(), node) {
+                let wire = walker.get_wire(node, port);
+                let already_pinned: BTreeSet<_> = walker.wire_pinned_ports(&wire, None).collect();
+                for new_walker in walker.expand(&wire, None) {
+                    let new_wire = new_walker.get_wire(node, port);
+                    let Some((new_node, _)) = new_walker
+                        .wire_pinned_ports(&new_wire, None)
+                        .find(|np| !already_pinned.contains(np))
+                    else {
+                        continue;
+                    };
+                    new_walker_queue.push_back((new_node, new_walker, depth + 1));
+                }
+            }
+        }
+
+        all_new_walkers
+    }
 }
 
 impl<C> NodesIter for RewriteSpace<C> {
+    type Node = hugr_im::PatchNode;
+
+    fn nodes(&self) -> impl Iterator<Item = Self::Node> {
+        self.state_space
+            .all_commits()
+            .into_iter()
+            .flat_map(|(id, cm)| {
+                cm.inserted_nodes()
+                    .map(|n| hugr_im::PatchNode(id, n))
+                    .collect_vec()
+            })
+    }
+}
+
+impl<'c, C> NodesIter for &'c RewriteSpace<C> {
     type Node = hugr_im::PatchNode;
 
     fn nodes(&self) -> impl Iterator<Item = Self::Node> {
