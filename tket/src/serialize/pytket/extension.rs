@@ -14,6 +14,7 @@
 //! extension.
 
 mod bool;
+mod core;
 mod float;
 mod prelude;
 mod rotation;
@@ -21,6 +22,7 @@ mod tk1;
 mod tket;
 
 pub use bool::BoolEmitter;
+pub use core::CoreDecoder;
 pub use float::FloatEmitter;
 pub use prelude::PreludeEmitter;
 pub use rotation::RotationEmitter;

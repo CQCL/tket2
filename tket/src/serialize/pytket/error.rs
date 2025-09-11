@@ -340,7 +340,7 @@ pub enum PytketDecodeErrorInner {
     ///
     /// The expected number of registers may be different depending on the [`PytketTypeTranslator`][super::extension::PytketTypeTranslator]s used in the decoder config.
     #[display(
-        "Expected {expected_count} to map types ({expected_types}), but only got {actual_count}",
+        "Expected {expected_count} in input wires of the operation with types [{expected_types}], but only got {actual_count}",
         expected_types = expected_types.iter().join(", "),
     )]
     NotEnoughPytketRegisters {

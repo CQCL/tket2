@@ -449,20 +449,17 @@ impl<'h> PytketDecoderContext<'h> {
     ///   arguments from the input wire set.
     /// - Returns an error if the parameter wires do not match the expected
     ///   types.
-    pub fn add_node_with_wires(
+    pub fn wire_up_node(
         &mut self,
-        op: impl Into<OpType>,
+        node: Node,
         qubits: &[TrackedQubit],
         bits: &[TrackedBit],
         params: &[LoadedParameter],
-    ) -> Result<BuildHandle<DataflowOpID>, PytketDecodeError> {
-        let op: OpType = op.into();
-        let op_name = op.to_string();
-
-        let Some(sig) = op.dataflow_signature() else {
-            return Err(
-                PytketDecodeError::custom("Cannot decode non-dataflow operation").hugr_op(&op),
-            );
+    ) -> Result<(), PytketDecodeError> {
+        let Some(sig) = self.builder.hugr().signature(node) else {
+            return Err(PytketDecodeError::custom(
+                "Cannot wire up non-dataflow operation",
+            ));
         };
 
         // Compute the amount of elements required by the operation,
@@ -481,8 +478,8 @@ impl<'h> PytketDecoderContext<'h> {
             .sum();
         if op_output_count.params > 0 {
             return Err(PytketDecodeError::custom(format!(
-                "Tried to decode a Pytket op into a HUGR {op} with output parameters. Signature: {sig}"
-            )).hugr_op(&op));
+                "Tried to wire up a node with output parameters. Signature: {sig}"
+            )));
         }
         let op_reg_count = RegisterCount::new(
             op_input_count.qubits.max(op_output_count.qubits),
@@ -505,21 +502,18 @@ impl<'h> PytketDecoderContext<'h> {
                 expected_count: op_reg_count,
                 actual_count: RegisterCount::new(qubits.len(), bits.len(), params.len()),
             }
-            .wrap()
-            .hugr_op(&op));
+            .wrap());
         };
 
         // Gather the input wires, with the types needed by the operation.
-        let input_wires = self
-            .find_typed_wires(sig.input_types(), qubits, bits, params)
-            .map_err(|e| e.hugr_op(&op_name))?;
+        let input_wires = self.find_typed_wires(sig.input_types(), qubits, bits, params)?;
         debug_assert_eq!(op_input_count, input_wires.register_count());
 
-        // Add the node to the HUGR.
-        let node = self
-            .builder
-            .add_dataflow_op(op, input_wires.wires())
-            .map_err(|e| PytketDecodeError::custom(e).hugr_op(&op_name))?;
+        for (input_idx, wire) in input_wires.wires().enumerate() {
+            self.builder
+                .hugr_mut()
+                .connect(wire.node(), wire.source(), node, input_idx);
+        }
 
         // Register the output wires.
         // Qubit registers get reused for both input and output.
@@ -533,10 +527,65 @@ impl<'h> PytketDecoderContext<'h> {
                 self.wire_tracker.mark_bit_outdated(b);
             });
 
-        self.register_node_outputs(node.node(), output_qubits, output_bits)
+        self.register_node_outputs(node.node(), output_qubits, output_bits)?;
+
+        Ok(())
+    }
+
+    /// Add a new node to the HUGR using the provided wire set as input and
+    /// output.
+    ///
+    /// Inserts the new node into the HUGR, connects its input ports and
+    /// registers the node's output wires in the wire tracker.
+    ///
+    /// The qubits registers in `wires` are reused between the operation inputs
+    /// and outputs. Bit registers, on the other hand, are not reused. We use
+    /// the first registers in `wires` for the bit inputs and the remaining
+    /// registers for the outputs.
+    ///
+    /// The input wire types must match the operation's input signature, no type
+    /// conversion is performed.
+    ///
+    /// The caller must take care of converting the parameter wires to the
+    /// required types and units expected by the operation. An error will be
+    /// returned if the parameter does not match the expected wire type, but the
+    /// unit (radians or half-turns) cannot be checked automatically.
+    ///
+    /// # Arguments
+    ///
+    /// - `op`: The operation to add.
+    /// - `wires`: The wire set to use as input and outputs.
+    ///
+    /// # Errors
+    ///
+    /// - Returns an error if the optype signature contains any complex type.
+    /// - Returns an error if the input wire set cannot be mapped to the node's
+    ///   input ports.
+    /// - Returns an error if the node's output ports cannot be assigned to
+    ///   arguments from the input wire set.
+    /// - Returns an error if the parameter wires do not match the expected
+    ///   types.
+    pub fn add_node_with_wires(
+        &mut self,
+        op: impl Into<OpType>,
+        qubits: &[TrackedQubit],
+        bits: &[TrackedBit],
+        params: &[LoadedParameter],
+    ) -> Result<BuildHandle<DataflowOpID>, PytketDecodeError> {
+        let op: OpType = op.into();
+        let op_name = op.to_string();
+        let num_outputs = op
+            .dataflow_signature()
+            .map(|s| s.output_count())
+            .unwrap_or_default();
+
+        // Add the node to the HUGR.
+        let node = self.builder.add_child_node(op);
+
+        self.wire_up_node(node.node(), qubits, bits, params)
             .map_err(|e| e.hugr_op(&op_name))?;
 
-        Ok(node)
+        Ok((node, num_outputs).into())
     }
 
     /// Given a new node in the HUGR, register all of its output wires in the
