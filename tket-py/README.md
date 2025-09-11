@@ -32,6 +32,8 @@ See the [Getting Started][getting-started] guide and the other [examples].
   [getting-started]: https://github.com/CQCL/tket2/blob/main/tket-py/docs/examples/1-Getting-Started.ipynb
   [examples]: https://github.com/CQCL/tket2/blob/main/tket-py/docs/examples/
 
+API documentation for `tket-py` can be found at https://cqcl.github.io/tket2/.
+
 ## Development
 
 This package uses [pyo3](https://pyo3.rs/latest/) and
