@@ -4,7 +4,8 @@ use std::collections::{HashMap, HashSet};
 use std::io::BufReader;
 
 use hugr::builder::{
-    Container, Dataflow, DataflowHugr, FunctionBuilder, HugrBuilder, ModuleBuilder,
+    Container, Dataflow, DataflowHugr, DataflowSubContainer, FunctionBuilder, HugrBuilder,
+    ModuleBuilder,
 };
 use hugr::extension::prelude::{bool_t, qb_t};
 
@@ -21,6 +22,7 @@ use tket_json_rs::register;
 
 use super::{TKETDecode, METADATA_INPUT_PARAMETERS, METADATA_Q_REGISTERS};
 use crate::circuit::Circuit;
+use crate::extension::bool::BoolOp;
 use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp};
 use crate::extension::sympy::SympyOpDef;
 use crate::extension::TKET1_EXTENSION_ID;
@@ -408,6 +410,46 @@ fn circ_complex_angle_computation() -> (Circuit, String) {
     (circ, "((f0) ** (f1)) + ((cos(pi)) + (0.2))".to_string())
 }
 
+/// A nested circuit with a nested DFG block.
+#[fixture]
+fn circ_nested_dfgs() -> Circuit {
+    let input_t = vec![qb_t()];
+    let output_t = vec![bool_t()];
+    let mut h =
+        FunctionBuilder::new("nested_dfgs", Signature::new(input_t, output_t.clone())).unwrap();
+
+    let [qb] = h.input_wires_arr();
+    let rot = h.add_load_value(ConstRotation::new(0.5).unwrap());
+
+    let dfg = {
+        let mut dfg = h
+            .dfg_builder(
+                Signature::new(vec![qb_t(), rotation_type()], output_t),
+                [qb, rot],
+            )
+            .unwrap();
+        let [qb, rot] = dfg.input_wires_arr();
+
+        let [qb] = dfg
+            .add_dataflow_op(TketOp::Rx, [qb, rot])
+            .unwrap()
+            .outputs_arr();
+        let [bool] = dfg
+            .add_dataflow_op(TketOp::MeasureFree, [qb])
+            .unwrap()
+            .outputs_arr();
+        let [bool] = dfg
+            .add_dataflow_op(BoolOp::read, [bool])
+            .unwrap()
+            .outputs_arr();
+
+        dfg.finish_with_outputs([bool]).unwrap()
+    };
+    let [bool] = dfg.outputs_arr();
+
+    h.finish_hugr_with_outputs([bool]).unwrap().into()
+}
+
 /// Check that all circuit ops have been translated to a native gate.
 ///
 /// Panics if there are tk1 ops in the circuit.
@@ -480,6 +522,7 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
 #[case::meas_ancilla(circ_measure_ancilla())]
 #[case::preset_qubits(circ_preset_qubits())]
 #[case::preset_parameterized(circ_parameterized())]
+#[case::nested_dfgs(circ_nested_dfgs())]
 fn circuit_roundtrip(#[case] circ: Circuit) {
     let circ_signature = circ.circuit_signature().into_owned();
 
