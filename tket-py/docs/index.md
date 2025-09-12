@@ -14,5 +14,3 @@
    tket.pattern
    tket.rewrite
 ```
-
-
