@@ -10,7 +10,7 @@ use crate::{resource::ResourceScope, rewrite::CircuitRewrite, Circuit, Subcircui
 use fxhash::FxHasher64;
 use hugr::{
     hugr::views::SiblingSubgraph,
-    persistent::{CommitId, CommitStateSpace, PersistentHugr, Walker},
+    persistent::{CommitId, PersistentHugr, Walker},
     HugrView,
 };
 use itertools::Itertools;
@@ -31,12 +31,6 @@ impl ResourceScopeCache {
         self.cache
             .insert(h, to_resource_scope(walker.as_hugr_view()));
         self.cache.get(&h).unwrap()
-    }
-
-    /// Get the ResourceScope for a walker, if it is in the cache.
-    pub fn get(&self, walker: &Walker) -> Option<&ResourceScope<PersistentHugr>> {
-        let h = hash_from_walker(walker);
-        self.cache.get(&h)
     }
 
     pub fn update(

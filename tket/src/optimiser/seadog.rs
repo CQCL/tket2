@@ -152,7 +152,6 @@ where
         let new_root_nodes = context
             .rewrite_space
             .nodes_within_radius(inserted_nodes, context.pattern_radius);
-        let phugr = PersistentHugr::from_commit(commit.clone());
 
         let rewrites = new_root_nodes
             .into_iter()
@@ -168,7 +167,10 @@ where
                 .sum();
             let delta = new_nodes_cost.sub_cost(
                 &rw.deleted_parent_nodes()
-                    .map(|n| context.optimiser.strategy.op_cost(phugr.get_optype(n)))
+                    .map(|n| {
+                        let parent = rw.parents().find(|p| p.id() == n.owner()).unwrap();
+                        context.optimiser.strategy.op_cost(parent.get_optype(n.1))
+                    })
                     .sum(),
             );
 
