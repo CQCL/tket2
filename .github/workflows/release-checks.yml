@@ -22,7 +22,7 @@ env:
 
 jobs:
   py-release:
-    name: Check `tket-py` compatibility with ${matrix.resolution.name} dependencies
+    name: Check `tket-py`compatibility with ${{ matrix.resolution }} dependencies
     runs-on: ubuntu-latest
     # Check if we are running on a release PR.
     #
@@ -31,8 +31,8 @@ jobs:
     strategy:
       matrix:
         resolution:
-          - {name: "latest", param: ""}
-          - {name: "lowest", param: "--resolution lowest-direct" }
+          - "highest"
+          - "lowest-direct"
     steps:
       - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
@@ -47,9 +47,9 @@ jobs:
           uv python pin ${{ env.PYTHON_HIGHEST }}
       - name: Setup `tket-py` with only pypi deps
         run: |
-          uv sync --no-sources --no-install-workspace ${{ matrix.resolution.param }}
-          uv pip install ${{ matrix.resolution.param }} --no-sources tket-exts
-          uv pip install ${{ matrix.resolution.param }} --no-sources tket-eccs
+          uv sync --no-sources --no-install-workspace --resolution ${{ matrix.resolution }}
+          uv pip install --resolution ${{ matrix.resolution }} --no-sources tket-exts
+          uv pip install --resolution ${{ matrix.resolution }} --no-sources tket-eccs
           uv run --no-sync maturin develop
           echo "\nDone! Installed dependencies:"
           uv pip list
