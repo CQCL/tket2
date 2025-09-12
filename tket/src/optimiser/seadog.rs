@@ -11,6 +11,9 @@
 //! stored to detect and ignore duplicates. The priority queue is truncated
 //! whenever it gets too large.
 
+use std::fs;
+use std::path::PathBuf;
+
 use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::persistent::{Commit, PersistentHugr, Walker};
 use hugr::{HugrView, Node};
@@ -25,7 +28,7 @@ use crate::rewrite_space::{CommittedRewrite, RewriteSpace};
 use crate::Circuit;
 
 /// Configuration options for the Badger optimiser.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct SeadogOptions {
     /// The maximum time (in seconds) to run the optimiser.
     ///
@@ -112,10 +115,11 @@ impl<R, S> SeadogOptimiser<R, S> {
 }
 
 /// The cost of a rewrite in seadog.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct Cost<C: CircuitCost> {
     n_rewrites_since_salient: usize,
-    rewrite_cost: C::CostDelta,
+    /// The cost of the rewrite.
+    pub rewrite_cost: C::CostDelta,
     total_cost: C,
 }
 

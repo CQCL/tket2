@@ -23,6 +23,8 @@ use max_sat::MaxSATSolver;
 
 // mod factory;
 mod max_sat;
+mod serial;
+pub use serial::SerialRewriteSpace;
 
 /// A rewrite in a [`RewriteSpace`].
 #[derive(Debug, Clone, From, Into)]
@@ -37,8 +39,9 @@ pub struct RewriteSpace<C> {
     metadata: RefCell<slotmap::SecondaryMap<hugr_im::CommitId, CommitMetadata<C>>>,
 }
 
+/// Metadata for a commit in a [`RewriteSpace`].
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
-struct CommitMetadata<C> {
+pub struct CommitMetadata<C> {
     cost: C,
     timestamp: DateTime<Utc>,
 }
