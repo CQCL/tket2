@@ -22,12 +22,17 @@ env:
 
 jobs:
   py-release:
-    name: Check `tket-py` release compatibility
+    name: Check `tket-py` compatibility with ${matrix.resolution.name} dependencies
     runs-on: ubuntu-latest
     # Check if we are running on a release PR.
     #
     # release-please always uses this branch name.
     if: ${{ github.event_name == 'workflow_dispatch' || github.head_ref == 'release-please--branches--main--components--tket-py' }}
+    strategy:
+      matrix:
+        resolution:
+          - {name: "latest", param: ""}
+          - {name: "lowest", param: "--resolution lowest-direct" }
     steps:
       - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
@@ -42,9 +47,9 @@ jobs:
           uv python pin ${{ env.PYTHON_HIGHEST }}
       - name: Setup `tket-py` with only pypi deps
         run: |
-          uv sync --no-sources --no-install-workspace
-          uv pip install --no-sources tket-exts
-          uv pip install --no-sources tket-eccs
+          uv sync --no-sources --no-install-workspace ${{ matrix.resolution.param }}
+          uv pip install ${{ matrix.resolution.param }} --no-sources tket-exts
+          uv pip install ${{ matrix.resolution.param }} --no-sources tket-eccs
           uv run --no-sync maturin develop
           echo "\nDone! Installed dependencies:"
           uv pip list
