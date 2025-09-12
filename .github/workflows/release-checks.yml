@@ -3,7 +3,7 @@
 # If this fails, it is likely that we either didn't update the dependency version in tket's pyproject,
 # or the latest `tket-exts`/`tket-eccs` packages haven't been published to pypi.
 
-name: 🚚 tket-py release checks
+name: 🚚 Release Checks
 
 on:
   pull_request:
@@ -22,12 +22,18 @@ env:
 
 jobs:
   py-release:
-    name: Check `tket-py` release compatibility
+    name: Check `tket-py`compatibility with ${{ matrix.resolution }} dependencies
     runs-on: ubuntu-latest
     # Check if we are running on a release PR.
     #
     # release-please always uses this branch name.
     if: ${{ github.event_name == 'workflow_dispatch' || github.head_ref == 'release-please--branches--main--components--tket-py' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        resolution:
+          - "highest"
+          - "lowest-direct"
     steps:
       - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
@@ -41,7 +47,10 @@ jobs:
           uv python install ${{ env.PYTHON_HIGHEST }}
           uv python pin ${{ env.PYTHON_HIGHEST }}
       - name: Setup `tket-py` with only pypi deps
+        env:
+          UV_RESOLUTION: ${{ matrix.resolution }}
         run: |
+          uv lock --no-sources -U
           uv sync --no-sources --no-install-workspace
           uv pip install --no-sources tket-exts
           uv pip install --no-sources tket-eccs
