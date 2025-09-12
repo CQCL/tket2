@@ -3,7 +3,7 @@
 # If this fails, it is likely that we either didn't update the dependency version in tket's pyproject,
 # or the latest `tket-exts`/`tket-eccs` packages haven't been published to pypi.
 
-name: 🚚 tket-py release checks
+name: 🚚 Release Checks
 
 on:
   pull_request:
@@ -47,10 +47,13 @@ jobs:
           uv python install ${{ env.PYTHON_HIGHEST }}
           uv python pin ${{ env.PYTHON_HIGHEST }}
       - name: Setup `tket-py` with only pypi deps
+        env:
+          UV_RESOLUTION: ${{ matrix.resolution }}
         run: |
-          uv sync --no-sources --no-install-workspace --resolution ${{ matrix.resolution }}
-          uv pip install --resolution ${{ matrix.resolution }} --no-sources tket-exts
-          uv pip install --resolution ${{ matrix.resolution }} --no-sources tket-eccs
+          uv lock --no-sources -U
+          uv sync --no-sources --no-install-workspace
+          uv pip install --no-sources tket-exts
+          uv pip install --no-sources tket-eccs
           uv run --no-sync maturin develop
           echo "\nDone! Installed dependencies:"
           uv pip list

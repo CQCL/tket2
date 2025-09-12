@@ -15,6 +15,8 @@ dev-dependencies = [
     "conan >= 2.0.0,<3",
     # Required to run `maturin develop`
     "pip >=25",
+    # Pyyaml 0.6.0 makes setuptools fail. This ensures we're using a newer version.
+    "pyyaml >=6.0.2",
 ]
 
 prerelease = "explicit"
