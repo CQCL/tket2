@@ -3,14 +3,12 @@
 use core::panic;
 
 use hugr::builder::{DFGBuilder, Dataflow, DataflowHugr};
-use hugr::extension::prelude::{MakeTuple, TupleOpDef};
-use hugr::extension::simple_op::MakeExtensionOp;
+use hugr::extension::prelude::{MakeTuple, UnpackTuple};
 use hugr::ops::{OpTrait, OpType};
 use hugr::types::Type;
 use hugr::{HugrView, Node};
 use itertools::Itertools;
 
-use crate::circuit::Command;
 use crate::rewrite::{CircuitRewrite, Subcircuit};
 use crate::Circuit;
 
@@ -19,57 +17,50 @@ use crate::Circuit;
 pub fn find_tuple_unpack_rewrites(
     circ: &Circuit<impl HugrView<Node = Node>>,
 ) -> impl Iterator<Item = CircuitRewrite> + '_ {
-    circ.commands().filter_map(|cmd| make_rewrite(circ, cmd))
+    circ.hugr()
+        .entry_descendants()
+        .filter_map(|node| make_rewrite(circ, node))
 }
 
-/// Returns true if the given optype is a MakeTuple operation.
-///
-/// Boilerplate required due to https://github.com/CQCL/hugr/issues/1496
-fn is_make_tuple(optype: &OpType) -> bool {
-    optype.to_string() == format!("prelude.{}", TupleOpDef::MakeTuple.op_id())
+/// Casts the optype to a MakeTuple operation, if possible.
+fn as_make_tuple(optype: &OpType) -> Option<MakeTuple> {
+    let ext_op = optype.as_extension_op()?;
+    ext_op.cast::<MakeTuple>()
 }
 
-/// Returns true if the given optype is an UnpackTuple operation.
-///
-/// Boilerplate required due to https://github.com/CQCL/hugr/issues/1496
-fn is_unpack_tuple(optype: &OpType) -> bool {
-    optype.to_string() == format!("prelude.{}", TupleOpDef::UnpackTuple.op_id())
+/// Casts the optype to an UnpackTuple operation, if possible.
+fn as_unpack_tuple(optype: &OpType) -> Option<UnpackTuple> {
+    let ext_op = optype.as_extension_op()?;
+    ext_op.cast::<UnpackTuple>()
 }
 
-fn make_rewrite<T: HugrView<Node = Node>>(
-    circ: &Circuit<T>,
-    cmd: Command<T>,
-) -> Option<CircuitRewrite> {
-    let cmd_optype = cmd.optype();
-    let tuple_node = cmd.node();
-    if !is_make_tuple(cmd_optype) {
-        return None;
+fn make_rewrite<T: HugrView<Node = Node>>(circ: &Circuit<T>, node: Node) -> Option<CircuitRewrite> {
+    let optype = circ.hugr().get_optype(node);
+
+    if let Some(unpack) = as_unpack_tuple(optype) {
+        // Special case for unpack tuples with empty tuple types,
+        // we can just remove the unpack operation even if the predecessor is not a make tuple.
+        return remove_empty_unpack(circ, node, unpack);
     }
-    let tuple_types = cmd_optype
-        .dataflow_signature()
-        .unwrap()
-        .input_types()
-        .to_vec();
+    let _ = as_make_tuple(optype)?;
 
-    // Make tuple should have a single output
-    let Ok((_, wire)) = cmd.output_wires().exactly_one() else {
-        panic!("MakeTuple at node {tuple_node} should have a single output wire.");
-    };
+    let tuple_types = optype.dataflow_signature().unwrap().input_types().to_vec();
 
     // See if it is followed by a tuple unpack
     let links = circ
         .hugr()
-        .linked_inputs(tuple_node, wire.source())
+        .linked_inputs(node, 0)
         .map(|(neigh, _)| neigh)
         .collect_vec();
 
     if links.is_empty() {
-        return None;
+        // Remove the make tuple operation
+        return Some(remove_pack_unpack(circ, &tuple_types, node, vec![], 0));
     }
 
     let unpack_nodes = links
         .iter()
-        .filter(|&&neigh| is_unpack_tuple(circ.hugr().get_optype(neigh)))
+        .filter(|&&neigh| as_unpack_tuple(circ.hugr().get_optype(neigh)).is_some())
         .copied()
         .collect_vec();
 
@@ -82,10 +73,51 @@ fn make_rewrite<T: HugrView<Node = Node>>(
     Some(remove_pack_unpack(
         circ,
         &tuple_types,
-        tuple_node,
+        node,
         unpack_nodes,
         num_other_outputs,
     ))
+}
+
+/// Special case for unpack tuples with empty tuple types,
+/// we can just remove the unpack operation even if the predecessor is not a make tuple.
+fn remove_empty_unpack(
+    circ: &Circuit<impl HugrView<Node = Node>>,
+    node: Node,
+    unpack: UnpackTuple,
+) -> Option<CircuitRewrite> {
+    // We only process empty tuple unpacks here.
+    if !unpack.0.is_empty() {
+        return None;
+    }
+    let (predecessor, _) = circ.hugr().single_linked_output(node, 0)?;
+    let predecessor_optype = circ.hugr().get_optype(predecessor);
+    if as_make_tuple(predecessor_optype).is_some() {
+        // If the predecessor is a make tuple, we'd have had generated a removal rewrite from there already.
+        return None;
+    };
+
+    // If the predecessor is a tag operation with only this node as successor,
+    // we can remove both the tag and the unpack operation. Otherwise, remove
+    // only the unpack operation.
+    let nodes = if predecessor_optype.is_tag()
+        && circ.hugr().single_linked_input(predecessor, 0).is_some()
+    {
+        vec![node, predecessor]
+    } else {
+        vec![node]
+    };
+    let subgraph = Subcircuit::try_from_nodes(nodes, circ).unwrap();
+    let replacement = DFGBuilder::new(subgraph.signature(circ)).unwrap();
+    let replacement = replacement.finish_hugr_with_outputs([]).unwrap();
+
+    Some(
+        subgraph
+            .create_rewrite(circ, replacement.into())
+            .unwrap_or_else(|e| {
+                panic!("Failed to create rewrite for removing tuple pack/unpack operations. {e}")
+            }),
+    )
 }
 
 /// Returns a rewrite to remove a tuple pack operation that's followed by unpack operations,
@@ -154,8 +186,11 @@ fn remove_pack_unpack<T: HugrView<Node = Node>>(
 #[cfg(test)]
 mod test {
     use super::*;
+    use hugr::builder::FunctionBuilder;
     use hugr::extension::prelude::{bool_t, qb_t, UnpackTuple};
 
+    use hugr::ops::Tag;
+    use hugr::type_row;
     use hugr::types::Signature;
     use rstest::{fixture, rstest};
 
@@ -164,7 +199,11 @@ mod test {
     /// These can be removed entirely.
     #[fixture]
     fn simple_pack_unpack() -> Circuit {
-        let mut h = DFGBuilder::new(Signature::new_endo(vec![qb_t(), bool_t()])).unwrap();
+        let mut h = FunctionBuilder::new(
+            "simple_pack_unpack",
+            Signature::new_endo(vec![qb_t(), bool_t()]),
+        )
+        .unwrap();
         let mut inps = h.input_wires();
         let qb1 = inps.next().unwrap();
         let b2 = inps.next().unwrap();
@@ -182,10 +221,13 @@ mod test {
     /// These can be removed entirely.
     #[fixture]
     fn multi_unpack() -> Circuit {
-        let mut h = DFGBuilder::new(Signature::new(
-            vec![bool_t(), bool_t()],
-            vec![bool_t(), bool_t(), bool_t(), bool_t()],
-        ))
+        let mut h = FunctionBuilder::new(
+            "multi_unpack",
+            Signature::new(
+                vec![bool_t(), bool_t()],
+                vec![bool_t(), bool_t(), bool_t(), bool_t()],
+            ),
+        )
         .unwrap();
         let mut inps = h.input_wires();
         let b1 = inps.next().unwrap();
@@ -207,14 +249,17 @@ mod test {
     /// The unpack operation can be removed, but the pack operation cannot.
     #[fixture]
     fn partial_unpack() -> Circuit {
-        let mut h = DFGBuilder::new(Signature::new(
-            vec![bool_t(), bool_t()],
-            vec![
-                bool_t(),
-                bool_t(),
-                Type::new_tuple(vec![bool_t(), bool_t()]),
-            ],
-        ))
+        let mut h = FunctionBuilder::new(
+            "partial_unpack",
+            Signature::new(
+                vec![bool_t(), bool_t()],
+                vec![
+                    bool_t(),
+                    bool_t(),
+                    Type::new_tuple(vec![bool_t(), bool_t()]),
+                ],
+            ),
+        )
         .unwrap();
         let mut inps = h.input_wires();
         let b1 = inps.next().unwrap();
@@ -228,10 +273,51 @@ mod test {
         h.finish_hugr_with_outputs([b1, b2, tuple]).unwrap().into()
     }
 
+    /// A tag operation followed by an unpack of an empty tuple.
+    ///
+    /// Both should be removed.
+    #[fixture]
+    fn empty_tag_unpack() -> Circuit {
+        let mut h =
+            FunctionBuilder::new("empty_tag_unpack", Signature::new(vec![], vec![])).unwrap();
+
+        let tuple = h
+            .add_dataflow_op(Tag::new(0, vec![type_row![]]), [])
+            .unwrap()
+            .out_wire(0);
+        let op = UnpackTuple::new(vec![].into());
+        h.add_dataflow_op(op, [tuple]).unwrap();
+
+        h.finish_hugr_with_outputs([]).unwrap().into()
+    }
+
+    /// A tag operation followed by an unpack of an empty tuple, but also connected to the output node.
+    ///
+    /// Only the unpack operation should be removed.
+    #[fixture]
+    fn empty_unpack() -> Circuit {
+        let mut h = FunctionBuilder::new(
+            "empty_unpack",
+            Signature::new(vec![], vec![Type::new_tuple(type_row![])]),
+        )
+        .unwrap();
+
+        let tuple = h
+            .add_dataflow_op(Tag::new(0, vec![type_row![]]), [])
+            .unwrap()
+            .out_wire(0);
+        let op = UnpackTuple::new(vec![].into());
+        h.add_dataflow_op(op, [tuple]).unwrap();
+
+        h.finish_hugr_with_outputs([tuple]).unwrap().into()
+    }
+
     #[rstest]
     #[case::simple(simple_pack_unpack(), 1, 0)]
     #[case::multi(multi_unpack(), 1, 0)]
     #[case::partial(partial_unpack(), 1, 1)]
+    #[case::empty_tag_unpack(empty_tag_unpack(), 1, 0)]
+    #[case::empty_unpack(empty_unpack(), 1, 1)]
     fn test_pack_unpack(
         #[case] mut circ: Circuit,
         #[case] expected_rewrites: usize,
