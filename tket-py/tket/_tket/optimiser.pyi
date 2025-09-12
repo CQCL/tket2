@@ -77,6 +77,7 @@ class SeadogOptimiser:
         timeout: int | None = None,
         progress_timeout: int | None = None,
         queue_size: int | None = None,
+        save_rewrite_space: Path | None = None,
     ) -> CircuitClass:
         """Optimise a circuit.
 

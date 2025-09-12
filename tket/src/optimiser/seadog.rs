@@ -61,6 +61,9 @@ pub struct SeadogOptions {
     /// The number of best rewrites to keep track of for the final SAT
     /// extraction.
     pub track_n_best: usize,
+
+    /// The path to save the explored rewrite space to after optimisation.
+    pub save_rewrite_space: Option<PathBuf>,
 }
 
 impl Default for SeadogOptions {
@@ -72,6 +75,7 @@ impl Default for SeadogOptions {
             max_circuit_count: None,
             pattern_radius: 2,
             track_n_best: 1000,
+            save_rewrite_space: None,
         }
     }
 }
@@ -279,6 +283,19 @@ where
                 },
             )
             .expect("optimisation failed");
+
+        if let Some(path) = opt.save_rewrite_space {
+            let serial_space = rewrite_space.serialize(
+                opt_state
+                    .n_best_states
+                    .as_ref()
+                    .expect("track_n_best option set")
+                    .iter()
+                    .map(|c| PersistentHugr::from_commit(c.commit.clone().into())),
+            );
+            let f = fs::File::create(path).unwrap();
+            serde_json::to_writer(f, &serial_space).unwrap();
+        }
 
         let res = rewrite_space
             .extract_best_with_cost(|c| c.rewrite_cost.clone())

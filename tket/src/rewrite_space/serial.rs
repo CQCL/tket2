@@ -19,7 +19,10 @@ pub struct SerialRewriteSpace<C> {
 
 impl<C: Clone + serde::Serialize> RewriteSpace<C> {
     /// Serialize the rewrite space into a serializable format.
-    pub fn serialize(&self, hugrs: Vec<PersistentHugr>) -> SerialRewriteSpace<C> {
+    pub fn serialize(
+        &self,
+        hugrs: impl IntoIterator<Item = PersistentHugr>,
+    ) -> SerialRewriteSpace<C> {
         let mut ser_state_space = SerialCommitStateSpace::new(&self.state_space);
         for hugr in hugrs {
             ser_state_space.add_hugr(hugr);

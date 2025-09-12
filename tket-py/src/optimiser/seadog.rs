@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use derive_more::derive::From;
 use pyo3::prelude::*;
 use tket::optimiser::seadog::{SeadogOptimiser, SeadogOptions};
@@ -59,7 +61,7 @@ impl PySeadogOptimiser {
     ///   queue. Defaults to `20`.
     #[pyo3(name = "optimise")]
     #[allow(clippy::too_many_arguments)]
-    #[pyo3(signature = (circ, timeout=None, progress_timeout=None, max_circuit_count=None, queue_size=None))]
+    #[pyo3(signature = (circ, timeout=None, progress_timeout=None, max_circuit_count=None, queue_size=None, save_rewrite_space=None))]
     pub fn py_optimise<'py>(
         &self,
         circ: &Bound<'py, PyAny>,
@@ -67,13 +69,15 @@ impl PySeadogOptimiser {
         progress_timeout: Option<u64>,
         max_circuit_count: Option<usize>,
         queue_size: Option<usize>,
+        save_rewrite_space: Option<PathBuf>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let options = SeadogOptions {
             timeout,
             progress_timeout,
             max_circuit_count,
             queue_size: queue_size.unwrap_or(100),
-            pattern_radius: 2,
+            save_rewrite_space,
+            ..SeadogOptions::default()
         };
         update_circ(circ, |circ, _| self.optimise(circ, options))
     }
