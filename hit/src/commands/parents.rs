@@ -4,8 +4,8 @@ use anyhow::Result;
 
 use super::CommandExecutor;
 use crate::config::Config;
-use crate::display::display_commits;
-use crate::storage::RewriteSpaceData;
+use crate::display::{display_commits, CommitHexId};
+use crate::storage::LoadedRewriteSpace;
 
 #[derive(Debug)]
 pub struct ParentsCommand {
@@ -16,23 +16,22 @@ impl CommandExecutor for ParentsCommand {
     fn execute(&self) -> Result<()> {
         // Load the rewrite space data
         let config = Config::load_or_default()?;
-        let data = RewriteSpaceData::load_from_config(&config)?;
+        let data = LoadedRewriteSpace::load_from_config(&config)?;
 
         // Get the commit ID from the prefix
-        let commit_id = data.get_commit_id(&self.commit_id)?;
+        let commit = data.get_commit_from_hex(&self.commit_id)?;
 
         // Get parents of the commit
-        let parents: Vec<_> = data.space.state_space.parents(commit_id).collect();
+        let parents: Vec<_> = commit.parents().collect();
 
         if parents.is_empty() {
-            println!("Commit {} has no parents.", commit_id);
+            println!("Commit {} has no parents.", CommitHexId(commit.id()));
             return Ok(());
         }
 
         display_commits(
-            &data.space,
-            &parents,
-            &format!("Parents of commit {}:", commit_id),
+            parents.iter().copied(),
+            &format!("Parents of commit {}:", CommitHexId(commit.id())),
         );
         println!();
         println!("Total parents: {}", parents.len());

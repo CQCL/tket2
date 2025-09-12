@@ -5,7 +5,8 @@ use hugr::HugrView;
 
 use super::CommandExecutor;
 use crate::config::Config;
-use crate::storage::RewriteSpaceData;
+use crate::display::CommitHexId;
+use crate::storage::LoadedRewriteSpace;
 
 #[derive(Debug)]
 pub struct ExtractBestCommand;
@@ -14,18 +15,20 @@ impl CommandExecutor for ExtractBestCommand {
     fn execute(&self) -> Result<()> {
         // Load the rewrite space data
         let mut config = Config::load_or_default()?;
-        let data = RewriteSpaceData::load_from_config(&config)?;
+        let data = LoadedRewriteSpace::load_from_config(&config)?;
 
         // Extract the best rewrite sequence
         let best_hugr = data
             .space
-            .extract_best()
+            .extract_best_with_cost(|c| c.rewrite_cost.clone())
             .ok_or_else(|| anyhow!("Failed to find optimal rewrite sequence"))?;
 
         // Get the commits that were selected for the best solution
         let selected_commits: Vec<_> = best_hugr.all_commit_ids().collect();
-        let commit_strings: Vec<String> =
-            selected_commits.iter().map(|c| format!("{}", c)).collect();
+        let commit_strings: Vec<String> = selected_commits
+            .iter()
+            .map(|&c| format!("{}", CommitHexId(c)))
+            .collect();
 
         println!(
             "Found optimal rewrite sequence with {} commits: {}",

@@ -6,7 +6,7 @@ use hugr::HugrView;
 use super::CommandExecutor;
 use crate::config::Config;
 use crate::display::display_commits;
-use crate::storage::RewriteSpaceData;
+use crate::storage::LoadedRewriteSpace;
 
 #[derive(Debug)]
 pub struct LogCommand {
@@ -17,15 +17,19 @@ impl CommandExecutor for LogCommand {
     fn execute(&self) -> Result<()> {
         // Load the rewrite space data
         let config = Config::load_or_default()?;
-        let data = RewriteSpaceData::load_from_config(&config)?;
+        let data = LoadedRewriteSpace::load_from_config(&config)?;
 
         let (mut commits_to_show, title) = if self.all {
             // Show all commits in the space
-            let all_commit_ids: Vec<_> = data.space.all_commit_ids().collect();
-            (all_commit_ids, "All commits in the space:")
+            let all_commits: Vec<_> = data.get_all_commits().collect();
+            (all_commits, "All commits in the space:")
         } else {
             // Show only selected commits and their ancestors (original behavior)
-            let selected_commit_ids = data.current_hugr(&config)?.all_commit_ids().collect();
+            let hugr = data.current_hugr(&config)?;
+            let selected_commit_ids = hugr
+                .all_commit_ids()
+                .map(|id| data.get_commit(id).clone())
+                .collect();
             (selected_commit_ids, "Selected commits and their ancestors:")
         };
 
@@ -40,11 +44,11 @@ impl CommandExecutor for LogCommand {
 
         // Sort commits chronologically by timestamp
         commits_to_show
-            .sort_by_key(|&commit_id| data.space.get_timestamp(commit_id).unwrap_or_default());
+            .sort_by_key(|commit| data.space.get_timestamp(commit.id()).unwrap_or_default());
 
         commits_to_show.reverse();
 
-        display_commits(&data.space, &commits_to_show, &title);
+        display_commits(&commits_to_show, &title);
 
         println!();
         if self.all {

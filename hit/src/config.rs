@@ -1,17 +1,18 @@
 //! Configuration management for hit CLI.
 
 use anyhow::{Context, Result};
-use hugr::persistent::CommitId;
+use hugr::persistent::Commit;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::Path;
+use std::{fs, path::PathBuf};
 
-use crate::constants::{CONFIG_FILE, HITFILES_DIR};
+use crate::constants::CONFIG_FILE;
+use crate::display::CommitHexId;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Config {
     /// Currently loaded rewrite space file
-    pub current_file: Option<String>,
+    pub current_file: Option<PathBuf>,
     /// Currently selected commits
     pub selected_commits: Vec<String>,
 }
@@ -19,7 +20,7 @@ pub struct Config {
 impl Config {
     /// Load config from file or return default if file doesn't exist
     pub fn load_or_default() -> Result<Self> {
-        let config_path = Path::new(HITFILES_DIR).join(CONFIG_FILE);
+        let config_path = Path::new(CONFIG_FILE);
 
         if !config_path.exists() {
             return Ok(Self::default());
@@ -36,10 +37,7 @@ impl Config {
 
     /// Save config to file
     pub fn save(&self) -> Result<()> {
-        // Ensure hitfiles directory exists
-        fs::create_dir_all(HITFILES_DIR)?;
-
-        let config_path = Path::new(HITFILES_DIR).join(CONFIG_FILE);
+        let config_path = Path::new(CONFIG_FILE);
         let content = toml::to_string_pretty(self).context("Failed to serialize config")?;
 
         fs::write(&config_path, content)
@@ -48,10 +46,10 @@ impl Config {
         Ok(())
     }
 
-    pub(crate) fn set_selected_commits(&mut self, selected_commit_ids: &[CommitId]) -> Result<()> {
-        self.selected_commits = selected_commit_ids
+    pub(crate) fn set_selected_commits(&mut self, selected_commit: &[Commit]) -> Result<()> {
+        self.selected_commits = selected_commit
             .iter()
-            .map(|c| format!("{}", c))
+            .map(|c| format!("{}", CommitHexId(c.id())))
             .collect();
         self.save()
     }

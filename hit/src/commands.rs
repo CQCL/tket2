@@ -9,7 +9,6 @@ pub mod extract_best;
 pub mod load;
 pub mod log;
 pub mod parents;
-pub mod run;
 pub mod show;
 
 pub use checkout::CheckoutCommand;
@@ -18,7 +17,6 @@ pub use extract_best::ExtractBestCommand;
 pub use load::LoadCommand;
 pub use log::LogCommand;
 pub use parents::ParentsCommand;
-pub use run::RunCommand;
 pub use show::ShowCommand;
 
 /// Trait for command execution
@@ -32,7 +30,6 @@ pub trait CommandExecutor {
 #[enum_dispatch(CommandExecutor)]
 #[derive(Debug)]
 pub enum Command {
-    Run(RunCommand),
     Load(LoadCommand),
     Checkout(CheckoutCommand),
     Log(LogCommand),

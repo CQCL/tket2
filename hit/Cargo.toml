@@ -15,10 +15,12 @@ chrono = { version = "0.4", features = ["serde"] }
 toml = "0.8"
 anyhow = "1.0"
 enum_dispatch = "0.3"
-tket2 = { path = "../tket2", features = ["portmatching", "badgerv2_unstable"] }
+tket = { path = "../tket", features = ["portmatching", "badgerv2_unstable"] }
 hugr.workspace = true
 hugr-core.workspace = true
 itertools.workspace = true
+derive_more.workspace = true
+fxhash.workspace = true
 
 [lints]
 workspace = true

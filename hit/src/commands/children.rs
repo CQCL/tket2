@@ -5,8 +5,8 @@ use itertools::Itertools;
 
 use super::CommandExecutor;
 use crate::config::Config;
-use crate::display::display_commits;
-use crate::storage::RewriteSpaceData;
+use crate::display::{display_commits, CommitHexId};
+use crate::storage::LoadedRewriteSpace;
 
 #[derive(Debug)]
 pub struct ChildrenCommand {
@@ -17,23 +17,22 @@ impl CommandExecutor for ChildrenCommand {
     fn execute(&self) -> Result<()> {
         // Load the rewrite space data
         let config = Config::load_or_default()?;
-        let data = RewriteSpaceData::load_from_config(&config)?;
+        let data = LoadedRewriteSpace::load_from_config(&config)?;
 
         // Get the commit ID from the prefix
-        let commit_id = data.get_commit_id(&self.commit_id)?;
+        let commit = data.get_commit_from_hex(&self.commit_id)?;
 
         // Get children of the commit
-        let children = data.space.state_space.children(commit_id).collect_vec();
+        let children = commit.children(data.space.state_space()).collect_vec();
 
         if children.is_empty() {
-            println!("Commit {} has no children.", commit_id);
+            println!("Commit {} has no children.", CommitHexId(commit.id()));
             return Ok(());
         }
 
         display_commits(
-            &data.space,
             &children,
-            &format!("Children of commit {}:", commit_id),
+            &format!("Children of commit {}:", CommitHexId(commit.id())),
         );
         println!();
         println!("Total children: {}", children.len());

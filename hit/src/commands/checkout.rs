@@ -5,7 +5,7 @@ use anyhow::Result;
 use super::CommandExecutor;
 use crate::config::Config;
 use crate::display::display_commits;
-use crate::storage::RewriteSpaceData;
+use crate::storage::LoadedRewriteSpace;
 
 #[derive(Debug)]
 pub struct CheckoutCommand {
@@ -17,19 +17,16 @@ impl CommandExecutor for CheckoutCommand {
         let mut config = Config::load_or_default()?;
 
         // Load the rewrite space data
-        let data = RewriteSpaceData::load_from_config(&config)?;
+        let data = LoadedRewriteSpace::load_from_config(&config)?;
 
         // Use the centralized method to set selected commits
-        let selected_commit_ids = data.try_select_commits(&self.commits)?;
+        let selected_commit = data.try_select_commits(&self.commits)?;
 
         // Update config with the selected commits
-        config.set_selected_commits(&selected_commit_ids)?;
+        config.set_selected_commits(&selected_commit)?;
 
-        println!(
-            "Successfully selected {} commits:",
-            selected_commit_ids.len()
-        );
-        display_commits(&data.space, &selected_commit_ids, "");
+        println!("Successfully selected {} commits:", selected_commit.len());
+        display_commits(&selected_commit, "");
 
         Ok(())
     }

@@ -4,19 +4,16 @@ mod commands;
 mod config;
 mod constants;
 mod display;
-mod factory;
 mod storage;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use std::fs;
 use std::path::PathBuf;
 
 use commands::{
     CheckoutCommand, ChildrenCommand, Command, CommandExecutor, ExtractBestCommand, LoadCommand,
-    LogCommand, ParentsCommand, RunCommand, ShowCommand,
+    LogCommand, ParentsCommand, ShowCommand,
 };
-use constants::HITFILES_DIR;
 
 #[derive(Parser)]
 #[command(name = "hit")]
@@ -28,21 +25,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum CliCommands {
-    /// Load a HUGR envelope file and run explorer
-    Run {
-        /// Input HUGR envelope file
-        input_file: PathBuf,
-        /// Explorer type
-        #[arg(short, long, default_value = "CommuteCZ")]
-        factory: String,
-        /// Maximum number of rewrites to perform on input
-        #[arg(long)]
-        max_rewrites: Option<usize>,
-    },
     /// Load a rewrite space from timestamp file
     Load {
-        /// Timestamp to load (latest if not specified)
-        timestamp: Option<String>,
+        /// File to load
+        filepath: PathBuf,
     },
     /// Select commits for extraction
     Checkout {
@@ -74,16 +60,7 @@ enum CliCommands {
 impl From<CliCommands> for Command {
     fn from(cmd: CliCommands) -> Self {
         match cmd {
-            CliCommands::Run {
-                input_file: input_json,
-                factory,
-                max_rewrites,
-            } => Command::Run(RunCommand {
-                input_file: input_json,
-                factory,
-                max_rewrites,
-            }),
-            CliCommands::Load { timestamp } => Command::Load(LoadCommand { timestamp }),
+            CliCommands::Load { filepath } => Command::Load(LoadCommand { filepath }),
             CliCommands::Checkout { commits } => Command::Checkout(CheckoutCommand { commits }),
             CliCommands::Log { all } => Command::Log(LogCommand { all }),
             CliCommands::Show => Command::Show(ShowCommand),
@@ -96,9 +73,6 @@ impl From<CliCommands> for Command {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-
-    // Ensure hitfiles directory exists
-    fs::create_dir_all(HITFILES_DIR)?;
 
     // Convert CLI command to our command enum and execute
     let action: Command = cli.command.into();
