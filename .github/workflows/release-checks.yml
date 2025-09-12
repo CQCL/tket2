@@ -29,6 +29,7 @@ jobs:
     # release-please always uses this branch name.
     if: ${{ github.event_name == 'workflow_dispatch' || github.head_ref == 'release-please--branches--main--components--tket-py' }}
     strategy:
+      fail-fast: false
       matrix:
         resolution:
           - "highest"
