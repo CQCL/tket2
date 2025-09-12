@@ -1,6 +1,19 @@
 # Changelog
 
 
+## [0.15.0](https://github.com/CQCL/tket2/compare/tket-v0.14.0...tket-v0.15.0) - 2025-09-12
+
+### Bug Fixes
+
+- [**breaking**] Fix rotation -> float param type conversion ([#1061](https://github.com/CQCL/tket2/pull/1061))
+- Pytket barrier operations not being decoded ([#1069](https://github.com/CQCL/tket2/pull/1069))
+- Always load parameter expressions as half turns in the decoder ([#1083](https://github.com/CQCL/tket2/pull/1083))
+
+### New Features
+
+- Capture pytket's output permutation explicitly in the hugr connectivity ([#1075](https://github.com/CQCL/tket2/pull/1075))
+- Add ResourceScope ([#1052](https://github.com/CQCL/tket2/pull/1052))
+
 ## [0.14.0](https://github.com/CQCL/tket2/compare/tket-v0.13.2...tket-v0.14.0) - 2025-08-18
 
 ### New Features
