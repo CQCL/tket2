@@ -48,29 +48,32 @@ pub enum CircuitRewrite<N: HugrNode = hugr::Node> {
     Old(#[from] OldCircuitRewrite<N>),
 }
 
-impl PatchVerification for CircuitRewrite {
+impl<N: HugrNode> PatchVerification for CircuitRewrite<N> {
     type Error = CircuitRewriteError;
 
-    type Node = hugr::Node;
+    type Node = N;
 
     fn verify(&self, h: &impl HugrView<Node = Self::Node>) -> Result<(), Self::Error> {
         match self {
             CircuitRewrite::New(rewrite) => rewrite.verify(h),
-            CircuitRewrite::Old(OldCircuitRewrite(repl)) => repl.verify(h).map_err(Into::into),
+            CircuitRewrite::Old(OldCircuitRewrite(repl)) => repl
+                .verify(h)
+                .map_err(CircuitRewriteError::new_simple_replacement_error),
         }
     }
 }
 
-impl PatchVerification for NewCircuitRewrite {
+impl<N: HugrNode> PatchVerification for NewCircuitRewrite<N> {
     type Error = CircuitRewriteError;
 
-    type Node = hugr::Node;
+    type Node = N;
 
-    fn verify(&self, h: &impl HugrView<Node = Self::Node>) -> Result<(), Self::Error> {
-        let circ = ResourceScope::from_circuit(Circuit::new(h));
-        self.to_simple_replacement(&circ)
-            .verify(circ.hugr())
-            .map_err(Into::into)
+    fn verify(&self, _h: &impl HugrView<Node = Self::Node>) -> Result<(), Self::Error> {
+        unimplemented!()
+        // let circ = ResourceScope::from_circuit(Circuit::new(h));
+        // self.to_simple_replacement(&circ)
+        //     .verify(circ.hugr())
+        //     .map_err(Into::into)
     }
 }
 
@@ -187,6 +190,27 @@ impl<N: HugrNode> CircuitRewrite<N> {
             .expect("rewrite is valid simple replacement")
     }
 
+    /// Convert the rewrite to the new format if it is in the old format.
+    pub fn ensure_new(
+        &mut self,
+        circuit: &ResourceScope<impl HugrView<Node = N>>,
+    ) -> Result<(), InvalidRewrite> {
+        let repl = match self {
+            CircuitRewrite::New(..) => return Ok(()),
+            CircuitRewrite::Old(OldCircuitRewrite(old_circuit_rewrite)) => old_circuit_rewrite,
+        };
+
+        let subcircuit =
+            Subcircuit::try_from_nodes(repl.subgraph().nodes().iter().copied(), circuit)
+                .map_err(|_| InvalidRewrite::NonConvexSubgraph)?;
+        *self = CircuitRewrite::try_new(
+            subcircuit,
+            circuit,
+            Circuit::new(repl.replacement().clone()),
+        )?;
+        Ok(())
+    }
+
     /// Returns a set of nodes referenced by the rewrite. Modifying any these
     /// nodes will invalidate it.
     ///
@@ -247,9 +271,9 @@ impl<H: HugrMut<Node = hugr::Node>> Patch<Circuit<H>> for CircuitRewrite {
             CircuitRewrite::New(..) => {
                 unimplemented!("use ResourceScope with new rewrite type")
             }
-            CircuitRewrite::Old(OldCircuitRewrite(repl)) => {
-                repl.apply(h.hugr_mut()).map_err(Into::into)
-            }
+            CircuitRewrite::Old(OldCircuitRewrite(repl)) => repl
+                .apply(h.hugr_mut())
+                .map_err(CircuitRewriteError::new_simple_replacement_error),
         }
     }
 }

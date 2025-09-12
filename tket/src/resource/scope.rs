@@ -18,7 +18,7 @@ use hugr::hugr::views::sibling_subgraph::{IncomingPorts, OutgoingPorts};
 use hugr::hugr::views::{ExtractionResult, SiblingSubgraph};
 use hugr::ops::OpTrait;
 use hugr::types::Signature;
-use hugr::{Direction, HugrView, IncomingPort, Port, PortIndex, Wire};
+use hugr::{Direction, HugrView, IncomingPort, OutgoingPort, Port, PortIndex, Wire};
 use hugr_core::hugr::internal::PortgraphNodeMap;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -59,10 +59,17 @@ impl<N: HugrNode> NodeCircuitUnits<N> {
     }
 
     fn map_nodes<N2: HugrNode>(&self, mut node_map: impl FnMut(N) -> N2) -> NodeCircuitUnits<N2> {
+        self.map_node_ports(|node, port| (node_map(node), port))
+    }
+
+    fn map_node_ports<N2: HugrNode>(
+        &self,
+        mut node_map: impl FnMut(N, OutgoingPort) -> (N2, OutgoingPort),
+    ) -> NodeCircuitUnits<N2> {
         let mapped_port_map = self
             .port_map
             .clone()
-            .map(|unit| unit.map_node(&mut node_map));
+            .map(|unit| unit.map_node_port(&mut node_map));
         NodeCircuitUnits {
             port_map: mapped_port_map,
             position: self.position,
@@ -179,6 +186,15 @@ impl<H: HugrView> ResourceScope<H> {
     /// the HUGR using this.
     pub(super) fn as_circuit_mut(&mut self) -> Circuit<&mut H> {
         Circuit::new(&mut self.hugr)
+    }
+
+    /// Get a ResourceScope with a reference to the underlying HUGR.
+    pub fn as_ref(&self) -> ResourceScope<&H> {
+        ResourceScope {
+            hugr: &self.hugr,
+            subgraph: self.subgraph.clone(),
+            circuit_units: self.circuit_units.clone(),
+        }
     }
 
     /// Get the underlying subgraph.

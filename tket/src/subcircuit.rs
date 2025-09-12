@@ -335,6 +335,34 @@ impl<N: HugrNode> Subcircuit<N> {
         Ok(())
     }
 
+    /// Whether the subcircuit is a valid subcircuit.
+    pub fn validate_subcircuit(&self, circuit: &ResourceScope<impl HugrView<Node = N>>) {
+        for interval in self.intervals_iter() {
+            let node = interval.start_node();
+            assert_eq!(
+                circuit.get_position(node),
+                Some(interval.start_pos()),
+                "start node has position {:?}, expected {:?}",
+                circuit.get_position(node),
+                interval.start_pos()
+            );
+            assert!(
+                circuit
+                    .nodes_in_interval(interval)
+                    .is_sorted_by_key(|n| circuit.get_position(n).unwrap()),
+                "nodes in interval are not sorted by position"
+            );
+            let end_node = interval.end_node();
+            assert_eq!(
+                circuit.get_position(end_node),
+                Some(interval.end_pos()),
+                "end node has position {:?}, expected {:?}",
+                circuit.get_position(end_node),
+                interval.end_pos()
+            );
+        }
+    }
+
     /// Convert the subcircuit to a [`SiblingSubgraph`].
     ///
     /// You may use [`Self::validate_subgraph`] to check whether converting the

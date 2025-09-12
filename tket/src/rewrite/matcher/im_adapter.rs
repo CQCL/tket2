@@ -4,7 +4,6 @@
 use std::collections::VecDeque;
 
 use hugr::{
-    hugr::views::SiblingSubgraph,
     persistent::{PatchNode, PersistentHugr, PersistentWire, PinnedSubgraph, Walker},
     Direction, HugrView, Port,
 };
@@ -20,6 +19,9 @@ use crate::{
 };
 
 use super::{CircuitMatcher, MatchOutcomeEnum};
+
+mod resource_scope_cache;
+use resource_scope_cache::ResourceScopeCache;
 
 /// An adaptor for [`CircuitMatcher`]s that matches patterns in
 /// [`RewriteSpace`]s.
@@ -93,22 +95,6 @@ impl<'a, PartialMatchInfo> MatchState<'a, PartialMatchInfo> {
     }
 }
 
-fn to_resource_scope<H: HugrView>(hugr: H) -> ResourceScope<H> {
-    let mut all_nodes = HugrView::children(&hugr, hugr.entrypoint());
-    let [input, output] = (&mut all_nodes).take(2).collect_array().unwrap();
-    let nodes = all_nodes.collect_vec();
-    let incoming_ports = hugr
-        .out_value_types(input)
-        .map(|(p, _)| hugr.linked_inputs(input, p).collect_vec())
-        .collect_vec();
-    let outgoing_ports = hugr
-        .in_value_types(output)
-        .map(|(p, _)| hugr.single_linked_output(output, p).unwrap())
-        .collect_vec();
-    let subgraph = SiblingSubgraph::new_unchecked(incoming_ports, outgoing_ports, vec![], nodes);
-    ResourceScope::new(hugr, subgraph)
-}
-
 pub struct ImMatchResult<MatchInfo> {
     pub subcircuit: Subcircuit<PatchNode>,
     pub subgraph: PinnedSubgraph,
@@ -137,9 +123,11 @@ impl<'m, M: CircuitMatcher + ?Sized> ImMatchAdapter<'m, M> {
         let mut queue = VecDeque::new();
         let mut all_matches = Vec::new();
 
+        let mut cache = ResourceScopeCache::new();
+        let scope = cache.init(&walker);
+
         // 1. Initialise queue
         {
-            let scope = to_resource_scope(walker.as_hugr_view().clone());
             let Some(outcome) = match_node(
                 root_node,
                 &scope,
@@ -195,7 +183,7 @@ impl<'m, M: CircuitMatcher + ?Sized> ImMatchAdapter<'m, M> {
                 };
 
                 // Check if the new node should be matched
-                let scope = to_resource_scope(new_walker.as_hugr_view());
+                let scope = cache.update(&new_walker, &current_match.walker);
                 let Some(outcome) = match_node(
                     new_node,
                     &scope,
@@ -233,7 +221,7 @@ impl<'m, M: CircuitMatcher + ?Sized> ImMatchAdapter<'m, M> {
                             all_matches.push(ImMatchResult {
                                 subcircuit: new_match.subcircuit,
                                 subgraph,
-                                hugr: scope.cloned(),
+                                hugr: scope.clone(),
                                 match_info: complete,
                             });
                         }
@@ -309,7 +297,12 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use crate::{
-        rewrite::{matcher::tests::TestHadamardMatcher, CircuitRewrite},
+        rewrite::{
+            matcher::{
+                im_adapter::resource_scope_cache::to_resource_scope, tests::TestHadamardMatcher,
+            },
+            CircuitRewrite,
+        },
         utils::build_simple_circuit,
         TketOp,
     };
@@ -355,8 +348,12 @@ mod tests {
         )
         .unwrap();
 
-        let rw1 = rewrite_space.try_add_rewrite(rw1, 1, &circuit).unwrap();
-        let rw2 = rewrite_space.try_add_rewrite(rw2, 1, &circuit).unwrap();
+        let rw1 = rewrite_space
+            .try_add_rewrite(rw1, 1, &circuit.as_ref())
+            .unwrap();
+        let rw2 = rewrite_space
+            .try_add_rewrite(rw2, 1, &circuit.as_ref())
+            .unwrap();
 
         (
             rewrite_space.clone(),

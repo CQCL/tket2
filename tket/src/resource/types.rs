@@ -131,11 +131,26 @@ impl<N: HugrNode> From<hugr::CircuitUnit<N>> for CircuitUnit<N> {
 }
 
 impl<N: HugrNode> CircuitUnit<N> {
+    /// Map the node IDs in copyable values.
     pub(super) fn map_node<N2: HugrNode>(self, map_fn: impl FnOnce(N) -> N2) -> CircuitUnit<N2> {
         match self {
             CircuitUnit::Resource(resource_id) => CircuitUnit::Resource(resource_id),
             CircuitUnit::Copyable(wire) => {
                 CircuitUnit::Copyable(Wire::new(map_fn(wire.node()), wire.source()))
+            }
+        }
+    }
+
+    /// Map the node IDs and ports in copyable values.
+    pub(super) fn map_node_port<N2: HugrNode>(
+        self,
+        map_fn: impl FnOnce(N, OutgoingPort) -> (N2, OutgoingPort),
+    ) -> CircuitUnit<N2> {
+        match self {
+            CircuitUnit::Resource(resource_id) => CircuitUnit::Resource(resource_id),
+            CircuitUnit::Copyable(wire) => {
+                let (node, port) = map_fn(wire.node(), wire.source());
+                CircuitUnit::Copyable(Wire::new(node, port))
             }
         }
     }
