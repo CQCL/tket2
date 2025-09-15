@@ -32,6 +32,7 @@ impl CommandExecutor for ChildrenCommand {
 
         display_commits(
             &children,
+            &data.space,
             &format!("Children of commit {}:", CommitHexId(commit.id())),
         );
         println!();

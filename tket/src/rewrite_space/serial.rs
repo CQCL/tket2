@@ -4,7 +4,7 @@ use hugr::persistent::serial::SerialCommitStateSpace;
 use hugr::persistent::{CommitId, PersistentHugr};
 use slotmap_fork_lmondada as slotmap;
 
-use crate::rewrite_space::{CommitMetadata, RewriteSpace};
+use crate::rewrite_space::{RewriteMetadata, RewriteSpace};
 use crate::serialize::HugrWithExts;
 
 /// A serialisable [`RewriteSpace`], along with the HUGRs within it to be
@@ -14,7 +14,7 @@ pub struct SerialRewriteSpace<C> {
     /// The state space of all possible rewrites.
     pub state_space: SerialCommitStateSpace<HugrWithExts>,
     /// The metadata for each commit in the state space.
-    pub metadata: slotmap::SecondaryMap<CommitId, CommitMetadata<C>>,
+    pub metadata: slotmap::SecondaryMap<CommitId, RewriteMetadata<C>>,
 }
 
 impl<C: Clone + serde::Serialize> RewriteSpace<C> {

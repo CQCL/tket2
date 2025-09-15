@@ -31,6 +31,7 @@ impl CommandExecutor for ParentsCommand {
 
         display_commits(
             parents.iter().copied(),
+            &data.space,
             &format!("Parents of commit {}:", CommitHexId(commit.id())),
         );
         println!();

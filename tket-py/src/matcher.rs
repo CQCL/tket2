@@ -21,7 +21,7 @@ use tket::{
     rewrite::{
         matcher::{CircuitMatcher, MatchContext, MatchOutcome, Update},
         replacer::{CircuitReplacer, ReplaceWithIdentity},
-        CircuitRewrite, CombineMatchReplaceRewriter, MatchReplaceRewriter, Rewriter,
+        CircuitRewrite, CombineMatchReplaceRewriter, MatchReplaceRewriter, RewriteName, Rewriter,
     },
     rewrite_space::RewriteSpace,
     Circuit, Subcircuit, TketOp,
@@ -408,6 +408,7 @@ impl PyCircuitReplacerEnum {
 pub struct PyMatchReplaceRewriter {
     matcher: PyCircuitMatcherEnum,
     replacement: PyCircuitReplacerEnum,
+    name: Option<String>,
 }
 
 impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyMatchReplaceRewriter {
@@ -417,13 +418,18 @@ impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyMatchRepla
         // Use the actual rewriter based on the variants
         if let Some(unit_matcher) = self.matcher.as_unit_matcher() {
             if let Some(unit_replacement) = self.replacement.as_unit_replacement() {
-                let rewriter = MatchReplaceRewriter::new(unit_matcher, unit_replacement);
+                let rewriter =
+                    MatchReplaceRewriter::new(unit_matcher, unit_replacement, self.name.clone());
                 return rewriter.get_rewrites(circ, root_node);
             }
         }
         if let Some(pyobject_matcher) = self.matcher.as_pyobject_matcher() {
             if let Some(pyobject_replacement) = self.replacement.as_pyobject_replacement() {
-                let rewriter = MatchReplaceRewriter::new(pyobject_matcher, pyobject_replacement);
+                let rewriter = MatchReplaceRewriter::new(
+                    pyobject_matcher,
+                    pyobject_replacement,
+                    self.name.clone(),
+                );
                 return rewriter.get_rewrites(circ, root_node);
             }
         }
@@ -434,13 +440,18 @@ impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyMatchRepla
         // Use the actual rewriter based on the variants
         if let Some(unit_matcher) = self.matcher.as_unit_matcher() {
             if let Some(unit_replacement) = self.replacement.as_unit_replacement() {
-                let rewriter = MatchReplaceRewriter::new(unit_matcher, unit_replacement);
+                let rewriter =
+                    MatchReplaceRewriter::new(unit_matcher, unit_replacement, self.name.clone());
                 return rewriter.get_all_rewrites(circ);
             }
         }
         if let Some(pyobject_matcher) = self.matcher.as_pyobject_matcher() {
             if let Some(pyobject_replacement) = self.replacement.as_pyobject_replacement() {
-                let rewriter = MatchReplaceRewriter::new(pyobject_matcher, pyobject_replacement);
+                let rewriter = MatchReplaceRewriter::new(
+                    pyobject_matcher,
+                    pyobject_replacement,
+                    self.name.clone(),
+                );
                 return rewriter.get_all_rewrites(circ);
             }
         }
@@ -449,36 +460,50 @@ impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyMatchRepla
 }
 
 impl<'c, C> Rewriter<&'c RewriteSpace<C>> for PyMatchReplaceRewriter {
-    type Rewrite = Commit<'c>;
+    type Rewrite = (Commit<'c>, RewriteName);
 
-    fn get_rewrites(&self, circ: &&'c RewriteSpace<C>, root_node: PatchNode) -> Vec<Commit<'c>> {
+    fn get_rewrites(
+        &self,
+        circ: &&'c RewriteSpace<C>,
+        root_node: PatchNode,
+    ) -> Vec<(Commit<'c>, RewriteName)> {
         // Use the actual rewriter based on the variants
         if let Some(unit_matcher) = self.matcher.as_unit_matcher() {
             if let Some(unit_replacement) = self.replacement.as_unit_replacement() {
-                let rewriter = MatchReplaceRewriter::new(unit_matcher, unit_replacement);
+                let rewriter =
+                    MatchReplaceRewriter::new(unit_matcher, unit_replacement, self.name.clone());
                 return rewriter.get_rewrites(circ, root_node);
             }
         }
         if let Some(pyobject_matcher) = self.matcher.as_pyobject_matcher() {
             if let Some(pyobject_replacement) = self.replacement.as_pyobject_replacement() {
-                let rewriter = MatchReplaceRewriter::new(pyobject_matcher, pyobject_replacement);
+                let rewriter = MatchReplaceRewriter::new(
+                    pyobject_matcher,
+                    pyobject_replacement,
+                    self.name.clone(),
+                );
                 return rewriter.get_rewrites(circ, root_node);
             }
         }
         panic!("Incompatible matcher and replacement");
     }
 
-    fn get_all_rewrites(&self, circ: &&'c RewriteSpace<C>) -> Vec<Commit<'c>> {
+    fn get_all_rewrites(&self, circ: &&'c RewriteSpace<C>) -> Vec<(Commit<'c>, RewriteName)> {
         // Use the actual rewriter based on the variants
         if let Some(unit_matcher) = self.matcher.as_unit_matcher() {
             if let Some(unit_replacement) = self.replacement.as_unit_replacement() {
-                let rewriter = MatchReplaceRewriter::new(unit_matcher, unit_replacement);
+                let rewriter =
+                    MatchReplaceRewriter::new(unit_matcher, unit_replacement, self.name.clone());
                 return rewriter.get_all_rewrites(circ);
             }
         }
         if let Some(pyobject_matcher) = self.matcher.as_pyobject_matcher() {
             if let Some(pyobject_replacement) = self.replacement.as_pyobject_replacement() {
-                let rewriter = MatchReplaceRewriter::new(pyobject_matcher, pyobject_replacement);
+                let rewriter = MatchReplaceRewriter::new(
+                    pyobject_matcher,
+                    pyobject_replacement,
+                    self.name.clone(),
+                );
                 return rewriter.get_all_rewrites(circ);
             }
         }
@@ -487,36 +512,50 @@ impl<'c, C> Rewriter<&'c RewriteSpace<C>> for PyMatchReplaceRewriter {
 }
 
 impl<'c> Rewriter<Walker<'c>> for PyMatchReplaceRewriter {
-    type Rewrite = Commit<'c>;
+    type Rewrite = (Commit<'c>, RewriteName);
 
-    fn get_rewrites(&self, circ: &Walker<'c>, root_node: PatchNode) -> Vec<Commit<'c>> {
+    fn get_rewrites(
+        &self,
+        circ: &Walker<'c>,
+        root_node: PatchNode,
+    ) -> Vec<(Commit<'c>, RewriteName)> {
         // Use the actual rewriter based on the variants
         if let Some(unit_matcher) = self.matcher.as_unit_matcher() {
             if let Some(unit_replacement) = self.replacement.as_unit_replacement() {
-                let rewriter = MatchReplaceRewriter::new(unit_matcher, unit_replacement);
+                let rewriter =
+                    MatchReplaceRewriter::new(unit_matcher, unit_replacement, self.name.clone());
                 return rewriter.get_rewrites(circ, root_node);
             }
         }
         if let Some(pyobject_matcher) = self.matcher.as_pyobject_matcher() {
             if let Some(pyobject_replacement) = self.replacement.as_pyobject_replacement() {
-                let rewriter = MatchReplaceRewriter::new(pyobject_matcher, pyobject_replacement);
+                let rewriter = MatchReplaceRewriter::new(
+                    pyobject_matcher,
+                    pyobject_replacement,
+                    self.name.clone(),
+                );
                 return rewriter.get_rewrites(circ, root_node);
             }
         }
         panic!("Incompatible matcher and replacement");
     }
 
-    fn get_all_rewrites(&self, circ: &Walker<'c>) -> Vec<Commit<'c>> {
+    fn get_all_rewrites(&self, circ: &Walker<'c>) -> Vec<(Commit<'c>, RewriteName)> {
         // Use the actual rewriter based on the variants
         if let Some(unit_matcher) = self.matcher.as_unit_matcher() {
             if let Some(unit_replacement) = self.replacement.as_unit_replacement() {
-                let rewriter = MatchReplaceRewriter::new(unit_matcher, unit_replacement);
+                let rewriter =
+                    MatchReplaceRewriter::new(unit_matcher, unit_replacement, self.name.clone());
                 return rewriter.get_all_rewrites(circ);
             }
         }
         if let Some(pyobject_matcher) = self.matcher.as_pyobject_matcher() {
             if let Some(pyobject_replacement) = self.replacement.as_pyobject_replacement() {
-                let rewriter = MatchReplaceRewriter::new(pyobject_matcher, pyobject_replacement);
+                let rewriter = MatchReplaceRewriter::new(
+                    pyobject_matcher,
+                    pyobject_replacement,
+                    self.name.clone(),
+                );
                 return rewriter.get_all_rewrites(circ);
             }
         }
@@ -528,10 +567,16 @@ impl<'c> Rewriter<Walker<'c>> for PyMatchReplaceRewriter {
 impl PyMatchReplaceRewriter {
     /// Create a new rewriter from matcher and replacement implementations.
     #[new]
-    fn new(matcher: PyCircuitMatcherEnum, replacement: PyCircuitReplacerEnum) -> PyResult<Self> {
+    #[pyo3(signature=(matcher, replacement, name=None))]
+    fn new(
+        matcher: PyCircuitMatcherEnum,
+        replacement: PyCircuitReplacerEnum,
+        name: Option<String>,
+    ) -> PyResult<Self> {
         Ok(Self {
             matcher,
             replacement,
+            name,
         })
     }
 

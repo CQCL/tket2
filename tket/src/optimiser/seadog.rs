@@ -23,8 +23,8 @@ use crate::circuit::CircuitHash;
 use crate::optimiser::{BacktrackingOptimiser, Optimiser, OptimiserOptions, State};
 use crate::resource::ResourceScope;
 use crate::rewrite::strategy::RewriteStrategy;
-use crate::rewrite::Rewriter;
-use crate::rewrite_space::{CommittedRewrite, RewriteSpace};
+use crate::rewrite::{RewriteName, Rewriter};
+use crate::rewrite_space::{CommittedRewrite, RewriteMetadata, RewriteSpace};
 use crate::Circuit;
 
 /// Configuration options for the Badger optimiser.
@@ -89,7 +89,7 @@ pub struct SeadogOptimiser<R, S> {
 
 /// A trait for rewriters that can be used with the Badger optimiser.
 pub trait SeadogRewriter<'w>:
-    Rewriter<Walker<'w>, Rewrite = Commit<'w>> + Send + Clone + Sync
+    Rewriter<Walker<'w>, Rewrite = (Commit<'w>, RewriteName)> + Send + Clone + Sync
 {
 }
 
@@ -99,7 +99,7 @@ pub trait SeadogRewriteStrategy: RewriteStrategy + Send + Sync + Clone + 'static
 impl<S> SeadogRewriteStrategy for S where S: RewriteStrategy + Send + Sync + Clone + 'static {}
 
 impl<'w, R> SeadogRewriter<'w> for R where
-    R: Rewriter<Walker<'w>, Rewrite = Commit<'w>> + Send + Clone + Sync
+    R: Rewriter<Walker<'w>, Rewrite = (Commit<'w>, RewriteName)> + Send + Clone + Sync
 {
 }
 
@@ -111,7 +111,7 @@ impl<R, S> SeadogOptimiser<R, S> {
 
     fn cost<'w>(&self, circ: &ResourceScope<impl HugrView<Node = Node>>) -> S::Cost
     where
-        R: Rewriter<Walker<'w>, Rewrite = Commit<'w>>,
+        R: SeadogRewriter<'w>,
         S: SeadogRewriteStrategy,
     {
         self.strategy.circuit_cost(circ)
@@ -172,7 +172,7 @@ where
             .collect::<Vec<_>>();
 
         let mut commited_rewrites = Vec::with_capacity(rewrites.len());
-        for rw in rewrites {
+        for (rw, rw_name) in rewrites {
             let old_cost = self.cost(context).unwrap();
             let new_nodes_cost: S::Cost = rw
                 .inserted_nodes()
@@ -195,12 +195,16 @@ where
                 old_cost.n_rewrites_since_salient + 1
             };
 
+            let cost = Cost {
+                n_rewrites_since_salient: new_n_rewrites_since_salient,
+                rewrite_cost: delta,
+                total_cost: new_total_cost,
+            };
             let commit = context.rewrite_space.add_from_commit(
                 rw,
-                Cost {
-                    n_rewrites_since_salient: new_n_rewrites_since_salient,
-                    rewrite_cost: delta,
-                    total_cost: new_total_cost,
+                RewriteMetadata {
+                    name: rw_name,
+                    ..RewriteMetadata::with_current_time(cost)
                 },
             );
             commited_rewrites.push(SeadogState { commit });

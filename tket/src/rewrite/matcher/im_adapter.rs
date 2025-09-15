@@ -352,10 +352,10 @@ mod tests {
         .unwrap();
 
         let rw1 = rewrite_space
-            .try_add_rewrite(rw1, 1, &circuit.as_ref())
+            .try_add_rewrite(rw1, 1.into(), &circuit.as_ref())
             .unwrap();
         let rw2 = rewrite_space
-            .try_add_rewrite(rw2, 1, &circuit.as_ref())
+            .try_add_rewrite(rw2, 1.into(), &circuit.as_ref())
             .unwrap();
 
         (

@@ -48,7 +48,7 @@ impl CommandExecutor for LogCommand {
 
         commits_to_show.reverse();
 
-        display_commits(&commits_to_show, &title);
+        display_commits(&commits_to_show, &data.space, &title);
 
         println!();
         if self.all {

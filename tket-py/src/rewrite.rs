@@ -6,6 +6,7 @@ use hugr::{hugr::views::SiblingSubgraph, HugrView, Node, SimpleReplacement};
 use itertools::Itertools;
 use pyo3::prelude::*;
 use std::path::PathBuf;
+use tket::rewrite::RewriteName;
 use tket::{
     resource::ResourceScope,
     rewrite::{CircuitRewrite, ECCRewriter, Rewriter},
@@ -133,9 +134,13 @@ impl<H: HugrView<Node = Node>> Rewriter<ResourceScope<H>> for PyRewriter {
 }
 
 impl<'c, C> Rewriter<&'c RewriteSpace<C>> for PyRewriter {
-    type Rewrite = Commit<'c>;
+    type Rewrite = (Commit<'c>, RewriteName);
 
-    fn get_rewrites(&self, circ: &&'c RewriteSpace<C>, root_node: PatchNode) -> Vec<Commit<'c>> {
+    fn get_rewrites(
+        &self,
+        circ: &&'c RewriteSpace<C>,
+        root_node: PatchNode,
+    ) -> Vec<(Commit<'c>, RewriteName)> {
         match self {
             Self::ECC(..) => unimplemented!("no support for ECC rewriters in seadog yet"),
             Self::MatchReplace(rewriter) => {
@@ -151,7 +156,7 @@ impl<'c, C> Rewriter<&'c RewriteSpace<C>> for PyRewriter {
         }
     }
 
-    fn get_all_rewrites(&self, circ: &&'c RewriteSpace<C>) -> Vec<Commit<'c>> {
+    fn get_all_rewrites(&self, circ: &&'c RewriteSpace<C>) -> Vec<(Commit<'c>, RewriteName)> {
         match self {
             Self::ECC(..) => unimplemented!("no support for ECC rewriters in seadog yet"),
             Self::MatchReplace(rewriter) => {
@@ -169,9 +174,13 @@ impl<'c, C> Rewriter<&'c RewriteSpace<C>> for PyRewriter {
 }
 
 impl<'c> Rewriter<Walker<'c>> for PyRewriter {
-    type Rewrite = Commit<'c>;
+    type Rewrite = (Commit<'c>, RewriteName);
 
-    fn get_rewrites(&self, circ: &Walker<'c>, root_node: PatchNode) -> Vec<Commit<'c>> {
+    fn get_rewrites(
+        &self,
+        circ: &Walker<'c>,
+        root_node: PatchNode,
+    ) -> Vec<(Commit<'c>, RewriteName)> {
         match self {
             Self::ECC(..) => unimplemented!("no support for ECC rewriters in seadog yet"),
             Self::MatchReplace(rewriter) => {
@@ -187,7 +196,7 @@ impl<'c> Rewriter<Walker<'c>> for PyRewriter {
         }
     }
 
-    fn get_all_rewrites(&self, circ: &Walker<'c>) -> Vec<Commit<'c>> {
+    fn get_all_rewrites(&self, circ: &Walker<'c>) -> Vec<(Commit<'c>, RewriteName)> {
         match self {
             Self::ECC(..) => unimplemented!("no support for ECC rewriters in seadog yet"),
             Self::MatchReplace(rewriter) => {

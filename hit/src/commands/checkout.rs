@@ -26,7 +26,7 @@ impl CommandExecutor for CheckoutCommand {
         config.set_selected_commits(&selected_commit)?;
 
         println!("Successfully selected {} commits:", selected_commit.len());
-        display_commits(&selected_commit, "");
+        display_commits(&selected_commit, &data.space, "");
 
         Ok(())
     }

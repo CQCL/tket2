@@ -5,6 +5,7 @@ use std::hash::{Hash, Hasher};
 use derive_more::derive::{From, Into};
 use fxhash::FxHasher64;
 use hugr::persistent::{Commit, CommitId};
+use tket::rewrite_space::RewriteSpace;
 
 /// A commit ID formatted as a hexadecimal string.
 #[derive(Debug, Clone, From, Into)]
@@ -19,9 +20,8 @@ impl std::fmt::Display for CommitHexId {
 }
 
 /// Display information about a single commit
-pub fn display_commit(commit: &Commit) -> String {
-    // let name = space.get_name(commit.id()).unwrap_or("unnamed");
-    let name = "unnamed";
+fn display_commit<C>(commit: &Commit, space: &RewriteSpace<C>) -> String {
+    let name = space.get_name(commit.id()).unwrap_or("unnamed".to_string());
     match commit.replacement() {
         Some(replacement) => {
             let added_nodes = commit.inserted_nodes().count();
@@ -39,13 +39,17 @@ pub fn display_commit(commit: &Commit) -> String {
 }
 
 /// Display a list of commits with a title
-pub fn display_commits<'a: 'b, 'b>(commits: impl IntoIterator<Item = &'b Commit<'a>>, title: &str) {
+pub fn display_commits<'a: 'b, 'b, C>(
+    commits: impl IntoIterator<Item = &'b Commit<'a>>,
+    space: &RewriteSpace<C>,
+    title: &str,
+) {
     if title.len() > 0 {
         println!("{}", title);
         println!("{}", "=".repeat(title.len()));
     }
 
     for commit in commits {
-        println!("{}", display_commit(commit));
+        println!("{}", display_commit(commit, space));
     }
 }

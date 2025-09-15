@@ -346,14 +346,17 @@ impl<N: HugrNode> TryFrom<InvalidSubgraph<N>> for InvalidRewrite {
 pub struct MatchReplaceRewriter<C, R> {
     matcher: C,
     replacer: R,
+    /// Name of the rewriter
+    name: Option<String>,
 }
 
 impl<C, R> MatchReplaceRewriter<C, R> {
     /// Create a new [`MatchReplaceRewriter`].
-    pub fn new(matcher: C, replacement: R) -> Self {
+    pub fn new(matcher: C, replacement: R, name: Option<String>) -> Self {
         Self {
             matcher,
             replacer: replacement,
+            name,
         }
     }
 }
@@ -431,14 +434,21 @@ mod badgerv2_unstable {
     use crate::{rewrite::matcher::ImMatchResult, rewrite_space::RewriteSpace};
     use hugr::persistent::{Commit, CommitStateSpace, PatchNode, Walker};
 
+    /// The string type for names describing rewrites.
+    pub type RewriteName = Option<String>;
+
     impl<'w, C, R> Rewriter<Walker<'w>> for MatchReplaceRewriter<C, R>
     where
         C: CircuitMatcher,
         R: CircuitReplacer<C::MatchInfo>,
     {
-        type Rewrite = Commit<'w>;
+        type Rewrite = (Commit<'w>, RewriteName);
 
-        fn get_rewrites(&self, walker: &Walker<'w>, root_node: PatchNode) -> Vec<Commit<'w>> {
+        fn get_rewrites(
+            &self,
+            walker: &Walker<'w>,
+            root_node: PatchNode,
+        ) -> Vec<(Commit<'w>, RewriteName)> {
             let matches = self
                 .matcher
                 .as_rewrite_space_matcher()
@@ -446,6 +456,7 @@ mod badgerv2_unstable {
             self.im_matches_to_commits(matches, walker.as_hugr_view().state_space())
                 // SAFETY: the commit is valid for the lifetime of the walker
                 .map(|commit| unsafe { commit.upgrade_lifetime() })
+                .map(|cm| (cm, self.name.clone()))
                 .collect()
         }
     }
@@ -455,18 +466,18 @@ mod badgerv2_unstable {
         C: CircuitMatcher,
         R: CircuitReplacer<C::MatchInfo>,
     {
-        type Rewrite = Commit<'c>;
+        type Rewrite = (Commit<'c>, RewriteName);
 
         fn get_rewrites(
             &self,
             space: &&'c RewriteSpace<Cost>,
             root_node: PatchNode,
-        ) -> Vec<Commit<'c>> {
+        ) -> Vec<(Commit<'c>, RewriteName)> {
             let walker = Walker::from_pinned_node(root_node, space.state_space());
             self.get_rewrites(&walker, root_node)
                 .into_iter()
                 // SAFETY: the commit is valid for the lifetime of the rewrite space
-                .map(|commit| unsafe { commit.upgrade_lifetime() })
+                .map(|(commit, name)| (unsafe { commit.upgrade_lifetime() }, name))
                 .collect()
         }
 
@@ -479,6 +490,7 @@ mod badgerv2_unstable {
                 .into_iter()
                 // SAFETY: the commit is valid for the lifetime of the rewrite space
                 .map(|commit| unsafe { commit.upgrade_lifetime() })
+                .map(|cm| (cm, self.name.clone()))
                 .collect()
         }
     }
@@ -526,6 +538,8 @@ mod badgerv2_unstable {
         }
     }
 }
+#[cfg(feature = "badgerv2_unstable")]
+pub use badgerv2_unstable::RewriteName;
 
 /// A rewriter that combines multiple [`CircuitMatcher`]s before passing the
 /// combined match to a [`CircuitReplacer`].

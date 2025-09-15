@@ -121,7 +121,7 @@ fn h_cx_h() -> Circuit {
 }
 
 fn main() {
-    let rewriter = MatchReplaceRewriter::new(TwoHMatcher, HadamardCancellation);
+    let rewriter = MatchReplaceRewriter::new(TwoHMatcher, HadamardCancellation, None);
 
     let optimiser =
         BadgerOptimiser::new(rewriter, LexicographicCostFunction::default_cx_strategy());
