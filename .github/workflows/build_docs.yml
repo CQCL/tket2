@@ -55,7 +55,7 @@ jobs:
             just build-pydocs
 
         - name: Upload artifact.
-          uses: actions/upload-pages-artifact@v3
+          uses: actions/upload-pages-artifact@v4
           with:
             path: ./tket-py/docs/build
 
