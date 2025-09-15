@@ -516,9 +516,6 @@ mod badger_default {
     pub type DefaultBadgerStrategy = ExhaustiveGreedyStrategy<StrategyCost>;
     pub type StrategyCost = LexicographicCostFunction<fn(&OpType) -> usize, 2>;
 
-    /// The default Badger optimiser using ECC sets.
-    #[deprecated(note = "Type alias was renamed to `ECCBadgerOptimiser`")]
-    pub type DefaultBadgerOptimiser = ECCBadgerOptimiser;
     /// The Badger optimiser using ECC sets.
     pub type ECCBadgerOptimiser = BadgerOptimiser<ECCRewriter, DefaultBadgerStrategy>;
 
@@ -576,9 +573,6 @@ mod badger_default {
         }
     }
 }
-#[cfg(feature = "portmatching")]
-#[allow(deprecated)]
-pub use badger_default::DefaultBadgerOptimiser;
 #[cfg(feature = "portmatching")]
 pub use badger_default::{DefaultBadgerStrategy, ECCBadgerOptimiser};
 
