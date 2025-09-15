@@ -1,7 +1,5 @@
 //! Encoder and decoder for tket operations with native pytket counterparts.
 
-use std::sync::Arc;
-
 use super::PytketEmitter;
 use crate::serialize::pytket::config::TypeTranslatorSet;
 use crate::serialize::pytket::decoder::{
@@ -120,7 +118,7 @@ impl PytketDecoder for PreludeEmitter {
         op: &tket_json_rs::circuit_json::Operation,
         qubits: &[TrackedQubit],
         bits: &[TrackedBit],
-        params: &[Arc<LoadedParameter>],
+        params: &[LoadedParameter],
         opgroup: Option<&str>,
         decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {

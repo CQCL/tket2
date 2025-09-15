@@ -326,10 +326,10 @@ impl<'h> PytketDecoderContext<'h> {
         let (qubits, bits) = self.wire_tracker.pytket_args_to_tracked_elems(args)?;
 
         // Collect the parameters used in the command.
-        let params: Vec<Arc<LoadedParameter>> = match &op.params {
+        let params: Vec<LoadedParameter> = match &op.params {
             Some(params) => params
                 .iter()
-                .map(|v| Arc::new(self.load_half_turns(v.as_str())))
+                .map(|v| self.load_half_turns(v.as_str()))
                 .collect_vec(),
             None => Vec::new(),
         };
@@ -372,7 +372,7 @@ impl<'h> PytketDecoderContext<'h> {
         types: &[Type],
         qubit_args: &[TrackedQubit],
         bit_args: &[TrackedBit],
-        params: &[Arc<LoadedParameter>],
+        params: &[LoadedParameter],
     ) -> Result<TrackedWires, PytketDecodeError> {
         self.wire_tracker
             .find_typed_wires(&self.config, types, qubit_args, bit_args, params)
@@ -416,7 +416,7 @@ impl<'h> PytketDecoderContext<'h> {
         op: impl Into<OpType>,
         qubits: &[TrackedQubit],
         bits: &[TrackedBit],
-        params: &[Arc<LoadedParameter>],
+        params: &[LoadedParameter],
     ) -> Result<BuildHandle<DataflowOpID>, PytketDecodeError> {
         let op: OpType = op.into();
         let op_name = op.to_string();

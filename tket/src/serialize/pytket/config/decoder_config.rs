@@ -7,7 +7,6 @@
 use hugr::types::Type;
 use itertools::Itertools;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use crate::serialize::pytket::decoder::{
     DecodeStatus, LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
@@ -73,7 +72,7 @@ impl PytketDecoderConfig {
         op: &tket_json_rs::circuit_json::Operation,
         qubits: &[TrackedQubit],
         bits: &[TrackedBit],
-        params: &[Arc<LoadedParameter>],
+        params: &[LoadedParameter],
         opgroup: &Option<String>,
         decoder: &mut PytketDecoderContext<'a>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
