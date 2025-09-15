@@ -143,7 +143,7 @@ where
         queue_capacity: usize,
     ) -> Self {
         // The priority queue, local to this thread.
-        let pq = StatePQueue::new(queue_capacity);
+        let pq = StatePQueue::new(queue_capacity, None);
         // The minimum cost we've seen.
         let min_cost = None;
         // The number of states we've seen (for logging).

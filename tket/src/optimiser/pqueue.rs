@@ -19,6 +19,8 @@ pub(super) struct StatePQueue<S, P: Ord> {
     hash_lookup: FxHashMap<u64, S>,
     seen_hashes: FxHashSet<u64>,
     max_size: usize,
+    /// The all-time best states discovered.
+    all_time_best: Option<DoublePriorityQueue<u64, P>>,
 }
 
 /// An entry in the priority queue.
@@ -31,14 +33,15 @@ pub(super) struct Entry<S, P, H> {
     pub hash: H,
 }
 
-impl<S, P: Ord> StatePQueue<S, P> {
+impl<S: Clone, P: Clone + Ord> StatePQueue<S, P> {
     /// Create a new HugrPQ with a cost function and some initial capacity.
-    pub fn new(max_size: usize) -> Self {
+    pub fn new(max_size: usize, n_best: Option<usize>) -> Self {
         Self {
             queue: DoublePriorityQueue::with_capacity(max_size),
             hash_lookup: Default::default(),
             seen_hashes: Default::default(),
             max_size,
+            all_time_best: n_best.map(|n| DoublePriorityQueue::with_capacity(n)),
         }
     }
 
@@ -77,7 +80,10 @@ impl<S, P: Ord> StatePQueue<S, P> {
         if self.len() >= self.max_size {
             self.pop_max();
         }
-        self.queue.push(hash, cost);
+        self.queue.push(hash, cost.clone());
+
+        self.push_all_time_best(hash, cost);
+
         let (_, cost_ref) = self.queue.get(&hash).expect("just inserted");
         let state_ref = self.hash_lookup.entry(hash).or_insert(state);
 
@@ -88,18 +94,64 @@ impl<S, P: Ord> StatePQueue<S, P> {
         })
     }
 
+    #[inline]
+    fn push_all_time_best(&mut self, hash: u64, cost: P) {
+        let Some(all_time_best) = self.all_time_best.as_ref() else {
+            return;
+        };
+        if all_time_best.len() == all_time_best.capacity() {
+            if Some(&cost) < all_time_best.peek_max().map(|(_, cost)| cost) {
+                self.pop_max_all_time_best();
+            } else {
+                return;
+            }
+        }
+        self.all_time_best.as_mut().unwrap().push(hash, cost);
+    }
+
     /// Pop the minimal state from the queue.
     pub fn pop(&mut self) -> Option<Entry<S, P, u64>> {
         let (hash, cost) = self.queue.pop_min()?;
-        let state = self.hash_lookup.remove(&hash)?;
+        let state = if self
+            .all_time_best
+            .as_ref()
+            .map(|atb| !atb.contains(&hash))
+            .unwrap_or_default()
+        {
+            self.hash_lookup.remove(&hash)?
+        } else {
+            self.hash_lookup.get(&hash)?.clone()
+        };
         Some(Entry { state, cost, hash })
     }
 
     /// Pop the maximal state from the queue.
-    pub fn pop_max(&mut self) -> Option<Entry<S, P, u64>> {
+    fn pop_max(&mut self) -> Option<Entry<S, P, u64>>
+    where
+        S: Clone,
+    {
         let (hash, cost) = self.queue.pop_max()?;
-        let state = self.hash_lookup.remove(&hash)?;
+        let state = if self
+            .all_time_best
+            .as_ref()
+            .map(|atb| !atb.contains(&hash))
+            .unwrap_or_default()
+        {
+            self.hash_lookup.remove(&hash)?
+        } else {
+            self.hash_lookup.get(&hash)?.clone()
+        };
         Some(Entry { state, cost, hash })
+    }
+
+    fn pop_max_all_time_best(&mut self) -> bool {
+        let Some((hash, _)) = self.all_time_best.as_mut().and_then(|atb| atb.pop_max()) else {
+            return false;
+        };
+        if !self.queue.contains(&hash) {
+            self.hash_lookup.remove(&hash);
+        }
+        true
     }
 
     /// Discard the largest elements of the queue.
@@ -142,10 +194,148 @@ impl<S, P: Ord> StatePQueue<S, P> {
         self.queue.len() >= self.max_size
     }
 
+    /// Consume the priority queue into a vector with the all-time best states.
+    pub fn into_all_time_best(mut self) -> Option<Vec<S>> {
+        let Some(all_time_best) = self.all_time_best else {
+            return None;
+        };
+        Some(
+            all_time_best
+                .into_sorted_iter()
+                .map(|(hash, _)| self.hash_lookup.remove(&hash).unwrap())
+                .collect(),
+        )
+    }
+
     delegate! {
         to self.queue {
             pub fn len(&self) -> usize;
             pub fn is_empty(&self) -> bool;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use itertools::Itertools;
+
+    use super::*;
+
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    struct DummyState(usize);
+
+    impl DummyState {
+        fn hash(&self) -> u64 {
+            self.0 as u64
+        }
+        fn cost(&self) -> usize {
+            self.0
+        }
+    }
+
+    impl State<()> for DummyState {
+        type Cost = usize;
+
+        fn hash(&self, (): &()) -> Option<u64> {
+            Some(DummyState::hash(self))
+        }
+
+        fn cost(&self, (): &()) -> Option<Self::Cost> {
+            Some(DummyState::cost(self))
+        }
+
+        fn next_states(&self, (): &mut ()) -> Vec<Self> {
+            unimplemented!()
+        }
+    }
+
+    impl StatePQueue<DummyState, usize> {
+        fn get_enqueued(&self) -> Vec<DummyState> {
+            let mut enqueued = self
+                .queue
+                .iter()
+                .map(|(hash, _)| *self.hash_lookup.get(hash).unwrap())
+                .collect_vec();
+            enqueued.sort_unstable();
+            enqueued
+        }
+
+        fn get_all_time_best(&self) -> Vec<DummyState> {
+            let mut all_time_best = self
+                .all_time_best
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|(hash, _)| *self.hash_lookup.get(hash).unwrap())
+                .collect_vec();
+            all_time_best.sort_unstable();
+            all_time_best
+        }
+    }
+
+    #[test]
+    fn test_queue_truncation() {
+        let max_size = 5;
+        let n_best = 3;
+        let mut pq = StatePQueue::new(max_size, Some(n_best));
+
+        // Insert 10 states with decreasing cost
+        for i in (0..10).rev() {
+            pq.push(DummyState(i), &());
+        }
+
+        // Only max_size states should be in the queue
+        assert_eq!(pq.len(), max_size);
+
+        // The states with the lowest costs should be present (0..5)
+        assert_eq!(
+            pq.get_enqueued(),
+            (0..max_size).map(DummyState).collect_vec()
+        );
+
+        // The states with the lowest costs should be in all_time_best (0..3)
+        assert_eq!(
+            pq.get_all_time_best(),
+            (0..n_best).map(DummyState).collect_vec()
+        );
+
+        // Remove 4, 3, 2
+        for i in [4, 3, 2] {
+            assert_eq!(pq.pop_max().map(|e| e.state), Some(DummyState(i)));
+        }
+
+        // The states with the lowest costs should be present: [0, 1]
+        assert_eq!(pq.get_enqueued(), (0..2).map(DummyState).collect_vec());
+        // but all time best should be unchanged
+        assert_eq!(
+            pq.get_all_time_best(),
+            (0..n_best).map(DummyState).collect_vec()
+        );
+
+        // Remove min (0)
+        assert_eq!(pq.pop().map(|e| e.state), Some(DummyState(0)));
+
+        // Should be present: [1]
+        assert_eq!(pq.get_enqueued(), [DummyState(1)]);
+        // but all time best should be unchanged
+        assert_eq!(
+            pq.get_all_time_best(),
+            (0..n_best).map(DummyState).collect_vec()
+        );
+
+        // Finally, remove all all_time_best
+        for _ in 0..n_best {
+            assert!(pq.pop_max_all_time_best());
+        }
+
+        // Should be present: [1]
+        assert_eq!(pq.get_enqueued(), [DummyState(1)]);
+        assert_eq!(pq.hash_lookup.len(), 1);
+        // Should be empty
+        assert!(pq.all_time_best.as_ref().unwrap().is_empty());
+
+        // Finally, remove the last state
+        assert!(pq.pop().is_some());
+        assert!(pq.hash_lookup.is_empty());
     }
 }
