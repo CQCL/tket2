@@ -590,6 +590,7 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use crate::serialize::load_tk1_json_str;
+    use crate::serialize::pytket::DecodeOptions;
     use crate::{extension::rotation::rotation_type, optimiser::badger::BadgerOptions};
     use crate::{Circuit, TketOp};
 
@@ -635,7 +636,7 @@ mod tests {
     /// A circuit that would trigger non-composable rewrites, if we applied them blindly from nam_6_3 matches.
     #[fixture]
     fn non_composable_rw_hugr() -> Circuit {
-        load_tk1_json_str(NON_COMPOSABLE, None).unwrap()
+        load_tk1_json_str(NON_COMPOSABLE, DecodeOptions::new()).unwrap()
     }
 
     /// A badger optimiser using a reduced set of rewrite rules.

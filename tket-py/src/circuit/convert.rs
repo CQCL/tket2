@@ -20,6 +20,7 @@ use hugr::{Hugr, HugrView, Wire};
 use serde::Serialize;
 use tket::circuit::CircuitHash;
 use tket::passes::CircuitChunks;
+use tket::serialize::pytket::{DecodeOptions, EncodeOptions};
 use tket::serialize::TKETDecode;
 use tket::{Circuit, TketOp};
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -43,9 +44,9 @@ impl CircuitType {
     /// Converts a circuit into the format indicated by the flag.
     pub fn convert(self, py: Python, circ: Circuit) -> PyResult<Bound<PyAny>> {
         match self {
-            CircuitType::Tket1 => SerialCircuit::encode_with_config(
+            CircuitType::Tket1 => SerialCircuit::encode(
                 &circ,
-                tket_qsystem::pytket::qsystem_encoder_config(),
+                EncodeOptions::new().with_config(tket_qsystem::pytket::qsystem_encoder_config()),
             )
             .convert_pyerrs()?
             .to_tket1(py),
@@ -68,7 +69,10 @@ where
         // tket1 circuit
         Err(_) => (
             SerialCircuit::from_tket1(circ)?
-                .decode_with_config(tket_qsystem::pytket::qsystem_decoder_config())
+                .decode(
+                    DecodeOptions::new()
+                        .with_config(tket_qsystem::pytket::qsystem_decoder_config()),
+                )
                 .convert_pyerrs()?,
             CircuitType::Tket1,
         ),
