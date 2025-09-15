@@ -8,7 +8,6 @@
 - [**breaking**] Fix rotation -> float param type conversion ([#1061](https://github.com/CQCL/tket2/pull/1061))
 - Pytket barrier operations not being decoded ([#1069](https://github.com/CQCL/tket2/pull/1069))
 - Always load parameter expressions as half turns in the decoder ([#1083](https://github.com/CQCL/tket2/pull/1083))
-- Move attribute to come after all the cases. ([#1112](https://github.com/CQCL/tket2/pull/1112))
 
 ### New Features
 
