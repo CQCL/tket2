@@ -1060,6 +1060,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tket",
+ "tket-json-rs",
  "toml",
 ]
 

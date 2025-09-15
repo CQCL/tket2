@@ -15,6 +15,8 @@ use commands::{
     LogCommand, ParentsCommand, ShowCommand,
 };
 
+use crate::commands::show::ShowFormat;
+
 #[derive(Parser)]
 #[command(name = "hit")]
 #[command(about = "A CLI tool for constructing and exploring RewriteSpaces using commit factories")]
@@ -42,7 +44,10 @@ enum CliCommands {
         all: bool,
     },
     /// Show the current HUGR as a mermaid diagram
-    Show,
+    Show {
+        #[arg(short, long, default_value_t, value_enum)]
+        format: ShowFormat,
+    },
     /// Extract the best rewrite sequence and select those commits
     ExtractBest,
     /// Show parent commits of a commit
@@ -63,7 +68,7 @@ impl From<CliCommands> for Command {
             CliCommands::Load { filepath } => Command::Load(LoadCommand { filepath }),
             CliCommands::Checkout { commits } => Command::Checkout(CheckoutCommand { commits }),
             CliCommands::Log { all } => Command::Log(LogCommand { all }),
-            CliCommands::Show => Command::Show(ShowCommand),
+            CliCommands::Show { format } => Command::Show(ShowCommand { format }),
             CliCommands::ExtractBest => Command::ExtractBest(ExtractBestCommand),
             CliCommands::Parents { commit_id } => Command::Parents(ParentsCommand { commit_id }),
             CliCommands::Children { commit_id } => Command::Children(ChildrenCommand { commit_id }),

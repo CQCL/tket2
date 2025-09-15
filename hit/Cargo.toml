@@ -16,6 +16,7 @@ toml = "0.8"
 anyhow = "1.0"
 enum_dispatch = "0.3"
 tket = { path = "../tket", features = ["portmatching", "badgerv2_unstable"] }
+tket-json-rs = { workspace = true }
 hugr.workspace = true
 hugr-core.workspace = true
 itertools.workspace = true
