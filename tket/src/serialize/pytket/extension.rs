@@ -20,8 +20,6 @@ mod rotation;
 mod tk1;
 mod tket;
 
-use std::sync::Arc;
-
 pub use bool::BoolEmitter;
 pub use float::FloatEmitter;
 pub use prelude::PreludeEmitter;
@@ -123,14 +121,12 @@ pub trait PytketDecoder {
     ///
     /// `op` will always have one of the [`tket_json_rs::OpType`]s specified in
     /// [`PytketDecoder::op_types`].
-    //
-    // TODO: There's no need for `params` to be inside `Arc`s here. They are `Copy`.
     fn op_to_hugr<'h>(
         &self,
         op: &tket_json_rs::circuit_json::Operation,
         qubits: &[TrackedQubit],
         bits: &[TrackedBit],
-        params: &[Arc<LoadedParameter>],
+        params: &[LoadedParameter],
         opgroup: Option<&str>,
         decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {

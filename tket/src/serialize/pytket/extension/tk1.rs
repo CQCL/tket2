@@ -1,7 +1,5 @@
 //! Encoder for pytket operations that cannot be represented naturally in tket.
 
-use std::sync::Arc;
-
 use crate::extension::rotation::rotation_type;
 use crate::extension::{TKET1_EXTENSION, TKET1_EXTENSION_ID, TKET1_OP_NAME};
 use crate::serialize::pytket::decoder::{
@@ -80,7 +78,7 @@ pub(crate) fn build_opaque_tket_op<'h>(
     op: &tket_json_rs::circuit_json::Operation,
     qubits: &[TrackedQubit],
     bits: &[TrackedBit],
-    params: &[Arc<LoadedParameter>],
+    params: &[LoadedParameter],
     _opgroup: &Option<String>,
     decoder: &mut PytketDecoderContext<'h>,
 ) -> Result<(), PytketDecodeError> {

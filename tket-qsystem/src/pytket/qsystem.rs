@@ -1,7 +1,5 @@
 //! Encoder/decoder for [qsystem::EXTENSION][use crate::extension::qsystem::EXTENSION] operations.
 
-use std::sync::Arc;
-
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::extension::ExtensionId;
 use hugr::ops::ExtensionOp;
@@ -132,7 +130,7 @@ impl PytketDecoder for QSystemEmitter {
         op: &tket_json_rs::circuit_json::Operation,
         qubits: &[TrackedQubit],
         bits: &[TrackedBit],
-        params: &[Arc<LoadedParameter>],
+        params: &[LoadedParameter],
         _opgroup: Option<&str>,
         decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
@@ -141,8 +139,7 @@ impl PytketDecoder for QSystemEmitter {
             PytketOptype::ZZPhase => QSystemOp::ZZPhase,
             PytketOptype::ZZMax => {
                 // This is a ZZPhase with a 1/2 angle.
-                let param =
-                    Arc::new(decoder.load_half_turns_with_type("0.5", ParameterType::FloatRadians));
+                let param = decoder.load_half_turns_with_type("0.5", ParameterType::FloatRadians);
                 decoder.add_node_with_wires(QSystemOp::ZZPhase, qubits, bits, &[param])?;
                 return Ok(DecodeStatus::Success);
             }
@@ -154,7 +151,7 @@ impl PytketDecoder for QSystemEmitter {
         // We expect all parameters to be floats in radians.
         let params = params
             .iter()
-            .map(|p| Arc::new(p.as_float_radians(&mut decoder.builder)))
+            .map(|p| p.as_float_radians(&mut decoder.builder))
             .collect_vec();
 
         decoder.add_node_with_wires(op, qubits, bits, &params)?;

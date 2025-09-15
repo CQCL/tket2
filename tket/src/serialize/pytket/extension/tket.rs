@@ -1,7 +1,5 @@
 //! Encoder and decoder for tket operations with native pytket counterparts.
 
-use std::sync::Arc;
-
 use super::PytketEmitter;
 use crate::extension::sympy::SympyOp;
 use crate::extension::TKET_EXTENSION_ID;
@@ -149,7 +147,7 @@ impl PytketDecoder for TketOpEmitter {
         op: &tket_json_rs::circuit_json::Operation,
         qubits: &[TrackedQubit],
         bits: &[TrackedBit],
-        params: &[Arc<LoadedParameter>],
+        params: &[LoadedParameter],
         _opgroup: Option<&str>,
         decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
@@ -182,7 +180,7 @@ impl PytketDecoder for TketOpEmitter {
         // We expect all parameters to be rotations in half-turns.
         let params = params
             .iter()
-            .map(|p| Arc::new(p.as_rotation(&mut decoder.builder)))
+            .map(|p| p.as_rotation(&mut decoder.builder))
             .collect_vec();
 
         decoder.add_node_with_wires(op, qubits, bits, &params)?;
