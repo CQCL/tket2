@@ -2,12 +2,12 @@
 
 use std::collections::HashMap;
 
-use derive_more::derive::{Display, Error, From};
+use derive_more::derive::{Display, Error};
 use hugr::{
     core::HugrNode,
     hugr::{patch::simple_replace, views::SiblingSubgraph, Patch},
     ops::OpTrait,
-    Direction, HugrView, OutgoingPort, PortIndex, SimpleReplacement,
+    Direction, HugrView, OutgoingPort, Port, PortIndex, SimpleReplacement,
 };
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -105,10 +105,55 @@ where
 
 #[cfg(feature = "badgerv2_unstable")]
 mod badgerv2_unstable {
+    use crate::rewrite::OldCircuitRewrite;
+
     use super::*;
-    use hugr::persistent::{CommitId, PatchNode, PersistentHugr};
+    use hugr::persistent::{Commit, CommitId, PatchNode, PersistentHugr};
 
     impl ResourceScope<PersistentHugr> {
+        /// Add a commit to the current PersistentHugr.
+        pub fn apply_commit(&mut self, commit: Commit) -> Result<CommitId, CircuitRewriteError> {
+            let simple_replacement =
+                commit
+                    .replacement()
+                    .ok_or(CircuitRewriteError::CannotApplyCommit(
+                        "found base commit".to_string(),
+                    ))?;
+
+            let rewrite = create_rewrite_from_replacement(simple_replacement.clone(), self)?;
+
+            let (repl_scope, input_remap) = rewrite.get_replacement_scope(self)?;
+
+            let commit_id = self
+                .hugr
+                .try_add_commit(commit.clone())
+                .map_err(|err| CircuitRewriteError::CannotApplyCommit(format!("{err}")))?;
+
+            debug_assert_eq!(commit_id, commit.id());
+
+            let node_map = commit
+                .inserted_nodes()
+                .map(|n| {
+                    let patch_node = commit.to_patch_node(n);
+                    (n, patch_node)
+                })
+                .collect();
+            let removed_nodes = commit.deleted_parent_nodes().map(|n| (n, ())).collect();
+
+            self.update_circuit_units(
+                repl_scope
+                    .as_ref()
+                    .map(|repl_scope| &repl_scope.circuit_units),
+                &node_map,
+                &removed_nodes,
+                &input_remap,
+            );
+
+            self.update_subgraph(node_map.values().copied(), &removed_nodes);
+
+            Ok(commit_id)
+        }
+
         /// Apply a rewrite to the circuit.
         ///
         /// This should ideally live within [`hugr_core::hugr::Patch`], but
@@ -162,6 +207,20 @@ mod badgerv2_unstable {
 
             Ok(commit_id)
         }
+    }
+
+    fn create_rewrite_from_replacement(
+        repl: SimpleReplacement<PatchNode>,
+        scope: &ResourceScope<PersistentHugr>,
+    ) -> Result<NewCircuitRewrite<PatchNode>, CircuitRewriteError> {
+        let mut rewrite: CircuitRewrite<_> = OldCircuitRewrite(repl).into();
+        rewrite
+            .ensure_new(scope)
+            .map_err(CircuitRewriteError::new_simple_replacement_error)?;
+        let CircuitRewrite::New(rw) = rewrite else {
+            panic!("just converted to new rewrite kind");
+        };
+        Ok(rw)
     }
 }
 
@@ -226,15 +285,15 @@ impl<H: HugrView> ResourceScope<H> {
             SiblingSubgraph::new_unchecked(incoming_ports, outgoing_ports, vec![], new_node_set);
     }
 
-    fn get_nearest_position(
+    fn get_nearest_position<P: Into<Port>>(
         &self,
-        nodes: impl IntoIterator<Item = H::Node>,
+        ports: impl IntoIterator<Item = (H::Node, P)>,
         dir: Direction,
     ) -> Option<Position> {
-        let all_pos = nodes
+        let all_pos = ports
             .into_iter()
-            .flat_map(|n| self.hugr().neighbours(n, dir))
-            .filter_map(|n| self.get_position(n));
+            .flat_map(|(n, p)| self.hugr().linked_ports(n, p))
+            .filter_map(|(n, _)| self.get_position(n));
         match dir {
             Direction::Incoming => all_pos.max(),
             Direction::Outgoing => all_pos.min(),
@@ -380,12 +439,10 @@ impl<N: HugrNode> NewCircuitRewrite<N> {
                 return Err(CircuitRewriteError::ResourcePreservationViolated);
             }
 
-            let max_input_pos = circuit.get_nearest_position(
-                inputs.iter().flatten().map(|&(n, _)| n),
-                Direction::Incoming,
-            );
+            let max_input_pos =
+                circuit.get_nearest_position(inputs.iter().flatten().copied(), Direction::Incoming);
             let min_output_pos =
-                circuit.get_nearest_position(outputs.iter().map(|&(n, _)| n), Direction::Outgoing);
+                circuit.get_nearest_position(outputs.iter().copied(), Direction::Outgoing);
             let n_nodes = repl_scope.nodes().len() as i64;
             let ideal_interval_size = Position::new_integer(n_nodes + 2);
             let (start, end) = match (max_input_pos, min_output_pos) {
@@ -405,7 +462,7 @@ impl<N: HugrNode> NewCircuitRewrite<N> {
 }
 
 /// Errors that can occur when applying a rewrite to a resource scope.
-#[derive(Debug, Display, Error, From)]
+#[derive(Debug, Display, Error)]
 pub enum CircuitRewriteError {
     /// An error occurred while applying the rewrite.
     SimpleReplacementError(#[error(not(source))] String),
@@ -416,6 +473,9 @@ pub enum CircuitRewriteError {
     /// The rewrite changes the resource paths non-locally.
     #[display("rewrite changes the resource paths non-locally")]
     ResourcePreservationViolated,
+    /// The commit could not be applied
+    #[display("Commit cannot be applied: {_0}")]
+    CannotApplyCommit(#[error(not(source))] String),
 }
 
 impl CircuitRewriteError {

@@ -444,6 +444,12 @@ impl<H: HugrView> ResourceScope<H> {
         allocator: &mut CircuitUnitAllocator,
     ) {
         for (node, port) in incoming_ports {
+            if !self.subgraph.nodes().contains(&node) {
+                // Allocate a (unused) resource ID anyways, so that empty qubits
+                // get IDs.
+                allocator.allocate_circuit_unit(node, port, &self.hugr);
+                continue;
+            }
             let node_units = node_circuit_units_mut(&mut self.circuit_units, node, &self.hugr);
             if node_units.port_map.get(port).is_sentinel() {
                 let unit = allocator.allocate_circuit_unit(node, port, &self.hugr);

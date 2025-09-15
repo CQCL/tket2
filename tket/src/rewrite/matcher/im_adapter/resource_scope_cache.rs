@@ -6,7 +6,7 @@ use std::{
     iter,
 };
 
-use crate::{resource::ResourceScope, rewrite::CircuitRewrite, Circuit, Subcircuit};
+use crate::resource::{CircuitRewriteError, ResourceScope};
 use fxhash::FxHasher64;
 use hugr::{
     hugr::views::SiblingSubgraph,
@@ -37,10 +37,10 @@ impl ResourceScopeCache {
         &mut self,
         walker: &Walker,
         prev_walker: &Walker,
-    ) -> &ResourceScope<PersistentHugr> {
+    ) -> Result<&ResourceScope<PersistentHugr>, CircuitRewriteError> {
         let h = hash_from_walker(walker);
         if self.cache.contains_key(&h) {
-            return self.cache.get(&h).unwrap();
+            return Ok(self.cache.get(&h).unwrap());
         }
 
         let prev_h = hash_from_walker(prev_walker);
@@ -56,23 +56,11 @@ impl ResourceScopeCache {
         let mut new_scope = prev_scope.clone();
         for id in commits_in_topo_order(missing_commits, new_scope.hugr(), walker.as_hugr_view()) {
             let commit = walker.as_hugr_view().get_commit(id);
-            let repl = commit
-                .replacement()
-                .expect("cannot be base commit (must exist)");
-            let subcircuit =
-                Subcircuit::try_from_nodes(repl.subgraph().nodes().iter().copied(), &new_scope)
-                    .unwrap();
-            let rw = CircuitRewrite::try_new(
-                subcircuit,
-                &new_scope,
-                Circuit::new(repl.replacement().clone()),
-            )
-            .unwrap();
-            new_scope.apply_rewrite_persistent(rw).unwrap();
+            new_scope.apply_commit(commit.clone())?;
         }
 
         self.cache.insert(h, new_scope);
-        self.cache.get(&h).unwrap()
+        Ok(self.cache.get(&h).unwrap())
     }
 }
 

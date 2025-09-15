@@ -183,7 +183,10 @@ impl<'m, M: CircuitMatcher + ?Sized> ImMatchAdapter<'m, M> {
                 };
 
                 // Check if the new node should be matched
-                let scope = cache.update(&new_walker, &current_match.walker);
+                let Ok(scope) = cache.update(&new_walker, &current_match.walker) else {
+                    eprintln!("Could not construct PersistentHugr from walker, skipping potentially valid commit combinations");
+                    continue;
+                };
                 let Some(outcome) = match_node(
                     new_node,
                     &scope,
