@@ -15,8 +15,10 @@ type CommitCost = tket::optimiser::seadog::Cost<LexicographicCost<usize, 2>>;
 
 #[derive(Debug, Clone)]
 pub struct LoadedRewriteSpace {
+    #[allow(unused)]
     pub filepath: PathBuf,
     pub space: RewriteSpace<CommitCost>,
+    #[allow(unused)]
     hugrs: Vec<PersistentHugr>,
     // Lifetime: we know the commits are valid as long as the rewrite space is
     // (when returning them to the user, we must adjust lifetime to self)
