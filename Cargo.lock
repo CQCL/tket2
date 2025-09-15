@@ -2477,7 +2477,7 @@ dependencies = [
 
 [[package]]
 name = "tket"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2554,7 +2554,7 @@ dependencies = [
 
 [[package]]
 name = "tket-qsystem"
-version = "0.20.1"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "clap",
