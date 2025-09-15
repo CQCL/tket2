@@ -17,7 +17,7 @@ use hugr::{HugrView, Node};
 
 use crate::circuit::cost::CircuitCost;
 use crate::circuit::CircuitHash;
-use crate::optimiser::{BacktrackingOptimiser, Optimiser, State};
+use crate::optimiser::{BacktrackingOptimiser, Optimiser, OptimiserOptions, State};
 use crate::resource::ResourceScope;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
@@ -54,6 +54,10 @@ pub struct SeadogOptions {
 
     /// The radius of the pattern to search for new rewrites.
     pub pattern_radius: usize,
+
+    /// The number of best rewrites to keep track of for the final SAT
+    /// extraction.
+    pub track_n_best: usize,
 }
 
 impl Default for SeadogOptions {
@@ -64,6 +68,7 @@ impl Default for SeadogOptions {
             queue_size: 20,
             max_circuit_count: None,
             pattern_radius: 2,
+            track_n_best: 1000,
         }
     }
 }
@@ -257,12 +262,16 @@ where
         };
 
         let _opt_state = backtracking
-            .optimise(
+            .optimise_with_options(
                 init_state,
                 SeadogContext {
                     rewrite_space: &rewrite_space,
                     optimiser: self,
                     pattern_radius: opt.pattern_radius,
+                },
+                OptimiserOptions {
+                    track_n_best: Some(opt.track_n_best),
+                    ..Default::default()
                 },
             )
             .expect("optimisation failed");
