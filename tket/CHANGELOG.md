@@ -1,6 +1,22 @@
 # Changelog
 
 
+## [0.15.0](https://github.com/CQCL/tket2/compare/tket-v0.14.0...tket-v0.15.0) - 2025-09-15
+
+### Bug Fixes
+
+- [**breaking**] Fix rotation -> float param type conversion ([#1061](https://github.com/CQCL/tket2/pull/1061))
+- Pytket barrier operations not being decoded ([#1069](https://github.com/CQCL/tket2/pull/1069))
+- Always load parameter expressions as half turns in the decoder ([#1083](https://github.com/CQCL/tket2/pull/1083))
+- Move attribute to come after all the cases. ([#1112](https://github.com/CQCL/tket2/pull/1112))
+
+### New Features
+
+- Capture pytket's output permutation explicitly in the hugr connectivity ([#1075](https://github.com/CQCL/tket2/pull/1075))
+- Add ResourceScope ([#1052](https://github.com/CQCL/tket2/pull/1052))
+- [**breaking**] Remove unnecessary Arc from PytketDecoder method ([#1114](https://github.com/CQCL/tket2/pull/1114))
+- [**breaking**] Remove deprecated definitions ([#1113](https://github.com/CQCL/tket2/pull/1113))
+
 ## [0.14.0](https://github.com/CQCL/tket2/compare/tket-v0.13.2...tket-v0.14.0) - 2025-08-18
 
 ### New Features

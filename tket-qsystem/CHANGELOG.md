@@ -1,6 +1,26 @@
 # Changelog
 
 
+## [0.21.0](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.20.1...tket-qsystem-v0.21.0) - 2025-09-15
+
+### Bug Fixes
+
+- [**breaking**] Fix rotation -> float param type conversion ([#1061](https://github.com/CQCL/tket2/pull/1061))
+- Pytket barrier operations not being decoded ([#1069](https://github.com/CQCL/tket2/pull/1069))
+- *(qystem)* fix angle bug in CZ decomposition ([#1080](https://github.com/CQCL/tket2/pull/1080))
+- Always load parameter expressions as half turns in the decoder ([#1083](https://github.com/CQCL/tket2/pull/1083))
+
+### New Features
+
+- Add a `borrow_array` type replacement pass ([#975](https://github.com/CQCL/tket2/pull/975))
+- Add gpu module ([#1090](https://github.com/CQCL/tket2/pull/1090))
+- [**breaking**] Remove unnecessary Arc from PytketDecoder method ([#1114](https://github.com/CQCL/tket2/pull/1114))
+- [**breaking**] Remove deprecated definitions ([#1113](https://github.com/CQCL/tket2/pull/1113))
+
+### Refactor
+
+- [**breaking**] Factor out wasm extension code into compute module ([#1089](https://github.com/CQCL/tket2/pull/1089))
+
 ## [0.20.1](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.20.0...tket-qsystem-v0.20.1) - 2025-08-28
 
 ### Bug Fixes
