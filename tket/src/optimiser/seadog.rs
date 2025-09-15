@@ -261,7 +261,7 @@ where
             commit: init_commit,
         };
 
-        let _opt_state = backtracking
+        let opt_state = backtracking
             .optimise_with_options(
                 init_state,
                 SeadogContext {
@@ -276,8 +276,12 @@ where
             )
             .expect("optimisation failed");
 
-        rewrite_space
+        let res = rewrite_space
             .extract_best_with_cost(|c| c.rewrite_cost.clone())
-            .unwrap()
+            .unwrap();
+
+        drop(opt_state); // make sure the rewrite space is in scope, until
+                         // the SAT solver has completed
+        res
     }
 }

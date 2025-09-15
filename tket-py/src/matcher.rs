@@ -9,7 +9,7 @@ use hugr::{
     HugrView,
 };
 use pyo3::{
-    exceptions::{PyKeyError, PyValueError},
+    exceptions::PyKeyError,
     prelude::*,
     types::{PyBool, PyDict, PyNone},
     IntoPyObjectExt,
@@ -137,7 +137,7 @@ impl PyMatchContext {
     pub fn try_from_match_context<H: HugrView>(
         context: MatchContext<'_, Option<PyObject>, H>,
         py: Python<'_>,
-    ) -> PyResult<Self> {
+    ) -> Result<Self, InvalidSubgraph<H::Node>> {
         let match_info = context
             .match_info
             .unwrap_or_else(|| PyNone::get(py).to_owned().unbind().into_any());
@@ -150,8 +150,7 @@ impl PyMatchContext {
         } else {
             context
                 .subcircuit
-                .try_to_subgraph(&context.circuit)
-                .map_err(|e| PyValueError::new_err(format!("Invalid subgraph: {e}")))?
+                .try_to_subgraph(&context.circuit)?
                 .extract_subgraph(context.circuit.hugr(), "circ")
         };
         Ok(Self {
