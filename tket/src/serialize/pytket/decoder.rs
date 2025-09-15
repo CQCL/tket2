@@ -586,27 +586,6 @@ impl<'h> PytketDecoderContext<'h> {
             .load_half_turns_parameter(&mut self.builder, param, Some(typ))
             .with_type(typ, &mut self.builder)
     }
-
-    /// Loads a half-turns expression as a [`LoadedParameter`] in the hugr.
-    ///
-    /// - If the parameter is a known algebraic operation, adds the required op and recurses on its inputs.
-    /// - If the parameter is a constant, a constant definition is added to the Hugr.
-    /// - If the parameter is a variable, adds a new `rotation` input to the region.
-    /// - If the parameter is a sympy expressions, adds it as a [`SympyOpDef`][crate::extension::sympy::SympyOpDef] black box.
-    #[deprecated(since = "0.14.1", note = "Renamed to `load_half_turns`")]
-    pub fn load_parameter(&mut self, param: &str) -> Arc<LoadedParameter> {
-        Arc::new(self.load_half_turns(param))
-    }
-
-    /// Loads the given parameter expression as a [`LoadedParameter`] in the hugr, and converts it to the requested type and unit.
-    ///
-    /// The expression is interpreted as a number of half-turns.
-    ///
-    /// See [`PytketDecoderContext::load_parameter`] for more details.
-    #[deprecated(since = "0.14.1", note = "Renamed to `load_half_turns`")]
-    pub fn load_parameter_with_type(&mut self, param: &str, typ: ParameterType) -> LoadedParameter {
-        self.load_half_turns_with_type(param, typ)
-    }
 }
 
 /// Result of trying to decode pytket operation into a HUGR definition.

@@ -5,8 +5,5 @@
 pub mod badger;
 
 #[cfg(feature = "portmatching")]
-#[allow(deprecated)]
-pub use badger::DefaultBadgerOptimiser;
-#[cfg(feature = "portmatching")]
 pub use badger::ECCBadgerOptimiser;
 pub use badger::{BadgerLogger, BadgerOptimiser};

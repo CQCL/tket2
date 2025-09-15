@@ -46,15 +46,15 @@ pub trait ArrayLowering {
 
 /// Array lowering via the stack as implemented in [stack_array].
 #[derive(Clone)]
-#[allow(deprecated)]
+#[allow(deprecated, reason = "Waiting for switch to new array lowering")]
 pub struct StackArrayLowering<ACG: stack_array::ArrayCodegen>(ACG);
 
 /// The default stack array lowering strategy using [stack_array::DefaultArrayCodegen].
-#[allow(deprecated)]
+#[expect(deprecated)]
 pub const DEFAULT_STACK_ARRAY_LOWERING: StackArrayLowering<stack_array::DefaultArrayCodegen> =
     StackArrayLowering(stack_array::DefaultArrayCodegen);
 
-#[allow(deprecated)]
+#[expect(deprecated)]
 impl<ACG: stack_array::ArrayCodegen> StackArrayLowering<ACG> {
     /// Creates a new [StackArrayLowering].
     pub const fn new(array_codegen: ACG) -> Self {
@@ -62,7 +62,7 @@ impl<ACG: stack_array::ArrayCodegen> StackArrayLowering<ACG> {
     }
 }
 
-#[allow(deprecated)]
+#[expect(deprecated)]
 impl<ACG: stack_array::ArrayCodegen + Clone> ArrayLowering for StackArrayLowering<ACG> {
     fn codegen_extension(&self) -> impl CodegenExtension {
         stack_array::ArrayCodegenExtension::new(self.0.clone())
