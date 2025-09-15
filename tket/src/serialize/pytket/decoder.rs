@@ -366,7 +366,7 @@ impl<'h> PytketDecoderContext<'h> {
     /// * `qubit_args` - The list of tracked qubits we require in the wires.
     /// * `bit_args` - The list of tracked bits we require in the wire.
     /// * `params` - The list of parameters to load to wires. See
-    ///   [`PytketDecoderContext::load_parameter`] for more details.
+    ///   [`PytketDecoderContext::load_half_turns`] for more details.
     pub fn find_typed_wires(
         &self,
         types: &[Type],
