@@ -17,8 +17,8 @@ use itertools::Itertools;
 use pyo3::exceptions::{PyAttributeError, PyValueError};
 use pyo3::types::{PyAnyMethods, PyModule, PyString, PyTypeMethods};
 use pyo3::{
-    pyclass, pymethods, Bound, FromPyObject, IntoPyObject, PyAny, PyErr, PyObject, PyRef, PyRefMut,
-    PyResult, PyTypeInfo, Python,
+    pyclass, pymethods, Bound, FromPyObject, IntoPyObject, PyAny, PyErr, PyRef, PyRefMut, PyResult,
+    PyTypeInfo, Python,
 };
 
 use derive_more::From;
