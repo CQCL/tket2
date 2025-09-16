@@ -76,9 +76,10 @@ lazy_static! {
         set
     };
 }
-/// The [IGNORED_EXTENSION_OPS] definition depends on the buggy behaviour of [`NamedOp::name`], which returns bare names instead of scoped names on some cases.
-/// Once this test starts failing it should be time to drop the `format!("prelude.{}", ...)`.
-/// https://github.com/CQCL/hugr/issues/1496
+/// The [IGNORED_EXTENSION_OPS] definition depends on the buggy behaviour of
+/// [`NamedOp::name`], which returns bare names instead of scoped names on some
+/// cases. Once this test starts failing it should be time to drop the
+/// `format!("prelude.{}", ...)`. https://github.com/CQCL/hugr/issues/1496
 #[test]
 fn issue_1496_remains() {
     assert_eq!("Noop", NoopDef.opdef_id())
@@ -134,8 +135,8 @@ impl<T: HugrView> Circuit<T> {
     /// If the circuit is a function definition, returns the name of the
     /// function.
     ///
-    /// If the name is empty or the circuit is not a function definition, returns
-    /// `None`.
+    /// If the name is empty or the circuit is not a function definition,
+    /// returns `None`.
     #[inline]
     pub fn name(&self) -> Option<&str> {
         let op = self.hugr.get_optype(self.parent());
@@ -269,12 +270,14 @@ impl<T: HugrView> Circuit<T> {
             .sum()
     }
 
-    /// Return the graphviz representation of the underlying graph and hierarchy side by side.
+    /// Return the graphviz representation of the underlying graph and hierarchy
+    /// side by side.
     ///
-    /// For a simpler representation, use the [`Circuit::mermaid_string`] format instead.
+    /// For a simpler representation, use the [`Circuit::mermaid_string`] format
+    /// instead.
     pub fn dot_string(&self) -> String {
-        // TODO: This will print the whole HUGR without identifying the circuit container.
-        // Should we add some extra formatting for that?
+        // TODO: This will print the whole HUGR without identifying the circuit
+        // container. Should we add some extra formatting for that?
         self.hugr.dot_string()
     }
 
@@ -333,12 +336,14 @@ impl<T: HugrView<Node = Node>> Circuit<T> {
         })
     }
 
-    /// Extracts the circuit into a new owned HUGR containing the circuit at the root.
-    /// Replaces the circuit container operation with an [`OpType::DFG`].
+    /// Extracts the circuit into a new owned HUGR containing the circuit at the
+    /// root. Replaces the circuit container operation with an
+    /// [`OpType::DFG`].
     ///
-    /// Regions that are not descendants of the parent node are not included in the new HUGR.
-    /// This may invalidate calls to functions defined elsewhere. Make sure to inline any
-    /// external functions before calling this method.
+    /// Regions that are not descendants of the parent node are not included in
+    /// the new HUGR. This may invalidate calls to functions defined
+    /// elsewhere. Make sure to inline any external functions before calling
+    /// this method.
     pub fn extract_dfg(&self) -> Result<Circuit<Hugr>, CircuitMutError> {
         let circ = self.to_owned();
         // TODO: Can we just ignore this now?
