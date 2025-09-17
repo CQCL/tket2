@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.15.1](https://github.com/CQCL/tket2/compare/tket-v0.15.0...tket-v0.15.1) - 2025-09-17
+
+### Bug Fixes
+
+- *(pytket-encoder)* Correctly encode I/O nodes in nested containers ([#1117](https://github.com/CQCL/tket2/pull/1117))
+
 ## [0.15.0](https://github.com/CQCL/tket2/compare/tket-v0.14.0...tket-v0.15.0) - 2025-09-15
 
 ### Bug Fixes
