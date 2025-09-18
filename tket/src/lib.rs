@@ -51,6 +51,7 @@ pub mod optimiser;
 pub mod passes;
 pub mod resource;
 pub mod rewrite;
+pub mod rich_circuit;
 pub mod serialize;
 
 #[cfg(feature = "portmatching")]

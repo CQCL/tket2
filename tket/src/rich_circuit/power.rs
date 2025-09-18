@@ -2,7 +2,9 @@
 use std::str::FromStr;
 
 use hugr::{
-    extension::SignatureFunc, std_extensions::arithmetic::int_types::int_type, types::{type_param::TypeParam, FuncValueType, PolyFuncTypeRV, TypeBound, TypeRV}
+    extension::SignatureFunc,
+    std_extensions::arithmetic::int_types::int_type,
+    types::{type_param::TypeParam, FuncValueType, PolyFuncTypeRV, TypeBound, TypeRV},
 };
 
 #[allow(missing_docs)]

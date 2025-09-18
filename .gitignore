@@ -32,3 +32,5 @@ lcov.info
 tket-py/docs/build
 tket-py/docs/generated
 jupyter_execute/
+
+.history

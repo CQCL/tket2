@@ -30,6 +30,7 @@ use tket::TketOp;
 
 use extension::{
     futures::FutureOpDef,
+    modifier::ModifierResolverPass,
     qsystem::{LowerTk2Error, LowerTketToQSystemPass, QSystemOp},
 };
 
@@ -46,6 +47,7 @@ pub struct QSystemPass {
     monomorphize: bool,
     force_order: bool,
     lazify: bool,
+    modifier: bool,
     lower_borrow_arrays: bool,
 }
 
@@ -56,6 +58,7 @@ impl Default for QSystemPass {
             monomorphize: true,
             force_order: true,
             lazify: true,
+            modifier: true,
             lower_borrow_arrays: true,
         }
     }
@@ -111,6 +114,11 @@ impl QSystemPass {
         } else {
             hugr.entrypoint()
         };
+
+        // experimental modifier support
+        if self.modifier {
+            self.resolve_modifier().run(hugr)?
+        }
 
         // passes that run on whole module
         hugr.set_entrypoint(hugr.module_root());
@@ -223,6 +231,10 @@ impl QSystemPass {
         LinearizeArrayPass::default()
     }
 
+    fn resolve_modifier(&self) -> ModifierResolverPass {
+        ModifierResolverPass
+    }
+
     /// Returns a new `QSystemPass` with constant folding enabled according to
     /// `constant_fold`.
     ///
@@ -282,7 +294,10 @@ mod test {
     use itertools::Itertools as _;
     use petgraph::visit::{Topo, Walker as _};
     use rstest::rstest;
-    use tket::extension::bool::bool_type;
+    use tket::extension::{
+        bool::bool_type,
+        rotation::{ConstRotation, RotationOp},
+    };
 
     use crate::{
         extension::{futures::FutureOpDef, qsystem::QSystemOp},
@@ -314,7 +329,11 @@ mod test {
             let call_node = builder.call(func.handle(), &[], []).unwrap().node();
 
             // this LoadConstant should be pushed below the quantum ops where possible
-            let angle = builder.add_load_value(ConstF64::new(0.0));
+            let rot = builder.add_load_value(ConstRotation::new(0.0).unwrap()); // k.hirata
+            let angle = builder
+                .add_dataflow_op(RotationOp::to_halfturns, vec![rot])
+                .unwrap()
+                .out_wire(0);
             let f_node = angle.node();
 
             // with no dependencies, this Reset should be lifted to the start
@@ -352,6 +371,7 @@ mod test {
             hugr.set_entrypoint(main_node);
         }
         QSystemPass::default().run(&mut hugr).unwrap();
+        println!("Hugr (after qsystempass): \n{}", hugr.mermaid_string());
 
         let topo_sorted = Topo::new(&hugr.as_petgraph())
             .iter(&hugr.as_petgraph())

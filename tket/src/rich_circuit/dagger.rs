@@ -5,7 +5,8 @@ use hugr::{
     extension::{prelude::qb_t, SignatureFunc},
     std_extensions::collections::array::array_type_def,
     types::{
-        type_param::TypeParam, FuncValueType, PolyFuncTypeRV, SumType, Term, Type, TypeBound, TypeEnum, TypeRV
+        type_param::TypeParam, FuncValueType, PolyFuncTypeRV, SumType, Term, Type, TypeBound,
+        TypeEnum, TypeRV,
     },
 };
 
