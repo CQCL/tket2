@@ -3,10 +3,13 @@
 use std::collections::{HashMap, HashSet};
 use std::io::BufReader;
 
-use hugr::builder::{Dataflow, DataflowHugr, FunctionBuilder};
+use hugr::builder::{
+    Container, Dataflow, DataflowHugr, FunctionBuilder, HugrBuilder, ModuleBuilder,
+};
 use hugr::extension::prelude::{bool_t, qb_t};
 
 use hugr::hugr::hugrmut::HugrMut;
+use hugr::ops::OpParent;
 use hugr::std_extensions::arithmetic::float_ops::FloatOps;
 use hugr::types::Signature;
 use hugr::HugrView;
@@ -21,7 +24,7 @@ use crate::circuit::Circuit;
 use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp};
 use crate::extension::sympy::SympyOpDef;
 use crate::extension::TKET1_EXTENSION_ID;
-use crate::serialize::pytket::{DecodeOptions, EncodeOptions};
+use crate::serialize::pytket::{DecodeInsertionTarget, DecodeOptions, EncodeOptions};
 use crate::TketOp;
 
 const SIMPLE_JSON: &str = r#"{
@@ -522,4 +525,58 @@ fn test_add_angle_serialise(#[case] circ_add_angles: (Circuit, String)) {
     let reser = SerialCircuit::encode(&deser, EncodeOptions::new()).unwrap();
     validate_serial_circ(&reser);
     compare_serial_circs(&ser, &reser);
+}
+
+/// Test the different options for inplace decoding.
+#[rstest]
+fn test_inplace_decoding() {
+    let serial: circuit_json::SerialCircuit = serde_json::from_str(SIMPLE_JSON).unwrap();
+
+    let mut builder = ModuleBuilder::new();
+
+    let func1 = serial
+        .decode_inplace(
+            builder.hugr_mut(),
+            DecodeInsertionTarget::Function,
+            DecodeOptions::new(),
+        )
+        .unwrap();
+    let circ_signature = builder
+        .hugr()
+        .get_optype(func1)
+        .inner_function_type()
+        .unwrap()
+        .into_owned();
+
+    let dfg = {
+        let mut fn_build = builder
+            .define_function("func2", circ_signature.clone())
+            .unwrap();
+        let fn2_node = fn_build.container_node();
+        let [inp, out] = fn_build.io();
+
+        let dfg = serial
+            .decode_inplace(
+                fn_build.hugr_mut(),
+                DecodeInsertionTarget::Region { parent: fn2_node },
+                DecodeOptions::new(),
+            )
+            .unwrap();
+
+        // Wire up the inserted dfg
+        for inp_idx in 0..circ_signature.input_count() {
+            fn_build.hugr_mut().connect(inp, inp_idx, dfg, inp_idx);
+        }
+        for out_idx in 0..circ_signature.output_count() {
+            fn_build.hugr_mut().connect(dfg, out_idx, out, out_idx);
+        }
+
+        dfg
+    };
+
+    // Finish up and validate the final HUGR
+    let hugr = builder.finish_hugr().unwrap();
+
+    assert!(hugr.get_optype(func1).is_func_defn());
+    assert!(hugr.get_optype(dfg).is_dfg());
 }
