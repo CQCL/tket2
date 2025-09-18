@@ -14,6 +14,7 @@ use clap::Parser;
 use tket::optimiser::badger::log::BadgerLogger;
 use tket::optimiser::badger::BadgerOptions;
 use tket::optimiser::{BadgerOptimiser, ECCBadgerOptimiser};
+use tket::serialize::pytket::{DecodeOptions, EncodeOptions};
 use tket::serialize::{load_tk1_json_file, save_tk1_json_file};
 
 #[cfg(feature = "peak_alloc")]
@@ -145,7 +146,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut circ = load_tk1_json_file(
         input_path,
-        Some(tket_qsystem::pytket::qsystem_decoder_config()),
+        DecodeOptions::new().with_config(tket_qsystem::pytket::qsystem_decoder_config()),
     )?;
     if opts.rewrite_tracing {
         circ.enable_rewrite_tracing();
@@ -187,7 +188,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     save_tk1_json_file(
         &opt_circ,
         output_path,
-        Some(tket_qsystem::pytket::qsystem_encoder_config()),
+        EncodeOptions::new().with_config(tket_qsystem::pytket::qsystem_encoder_config()),
     )?;
 
     #[cfg(feature = "peak_alloc")]

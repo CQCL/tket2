@@ -4,6 +4,7 @@
 use rstest::{fixture, rstest};
 use tket::optimiser::badger::BadgerOptions;
 use tket::optimiser::{BadgerOptimiser, ECCBadgerOptimiser};
+use tket::serialize::pytket::DecodeOptions;
 use tket::serialize::TKETDecode;
 use tket::Circuit;
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -50,7 +51,7 @@ fn simple_circ() -> Circuit {
         "qubits": [["q", [0]], ["q", [1]], ["q", [2]]]
     }"#;
     let ser: SerialCircuit = serde_json::from_str(json).unwrap();
-    ser.decode().unwrap()
+    ser.decode(DecodeOptions::new()).unwrap()
 }
 
 #[rstest]

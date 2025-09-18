@@ -666,6 +666,7 @@ mod tests {
     use super::*;
     use crate::extension::rotation::ConstRotation;
     use crate::serialize::load_tk1_json_str;
+    use crate::serialize::pytket::DecodeOptions;
     use crate::utils::build_simple_circuit;
     use crate::TketOp;
 
@@ -684,7 +685,7 @@ mod tests {
             ],
             "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
         }"#,
-            None,
+            DecodeOptions::new(),
         )
         .unwrap()
     }
