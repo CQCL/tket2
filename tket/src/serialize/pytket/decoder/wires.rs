@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 
-use hugr::builder::{Dataflow as _, FunctionBuilder};
+use hugr::builder::{DFGBuilder, Dataflow as _};
 use hugr::ops::Value;
 use hugr::std_extensions::arithmetic::float_types::{float64_type, ConstF64};
 use hugr::types::Type;
@@ -689,7 +689,7 @@ impl WireTracker {
     ///   for constants. The actual returned type may be different.
     pub fn load_half_turns_parameter(
         &mut self,
-        hugr: &mut FunctionBuilder<&mut Hugr>,
+        hugr: &mut DFGBuilder<&mut Hugr>,
         param: &str,
         type_hint: Option<ParameterType>,
     ) -> LoadedParameter {
@@ -698,7 +698,7 @@ impl WireTracker {
         /// `type_hint` is a hint for the type of the parameter we want to load.
         /// The actual returned type may be different.
         fn process(
-            hugr: &mut FunctionBuilder<&mut Hugr>,
+            hugr: &mut DFGBuilder<&mut Hugr>,
             input_params: &mut IndexMap<String, LoadedParameter>,
             param_vars: &mut IndexSet<String>,
             parsed: PytketParam,
@@ -743,7 +743,7 @@ impl WireTracker {
                             // Look it up in the input parameters to the circuit, and add a new float input if needed.
                             *input_params.entry(name.to_string()).or_insert_with(|| {
                                 param_vars.insert(name.to_string());
-                                let wire = hugr.add_input(rotation_type());
+                                let wire = hugr.add_input(rotation_type()).unwrap();
                                 LoadedParameter::rotation(wire)
                             })
                         }
