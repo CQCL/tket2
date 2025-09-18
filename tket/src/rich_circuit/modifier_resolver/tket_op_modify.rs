@@ -4,10 +4,7 @@ use hugr::{
     std_extensions::arithmetic::{float_ops::FloatOps, float_types::ConstF64},
 };
 
-use crate::{
-    extension::rotation::{ConstRotation, RotationOp},
-    rich_circuit::modifier_resolver::*,
-};
+use crate::{extension::rotation::RotationOp, rich_circuit::modifier_resolver::*};
 use TketOp::*;
 
 impl<N: HugrNode> ModifierResolver<N> {
@@ -123,7 +120,11 @@ impl<N: HugrNode> ModifierResolver<N> {
                     );
                     (pv_ry, pv_x)
                 };
-                let angle = new_fn.add_load_value(ConstRotation::new(0.5).unwrap());
+                let angle = new_fn.add_load_value(ConstF64::new(0.5));
+                let angle = new_fn
+                    .add_dataflow_op(RotationOp::from_halfturns_unchecked, vec![angle])
+                    .unwrap()
+                    .out_wire(0);
                 let rot_in = pv_ry.incoming.remove(1);
                 connect(new_fn, &rot_in, &angle.into())?;
                 connect(new_fn, &pv_ry.outgoing[0], &pv_x.incoming[0])?;
@@ -166,8 +167,16 @@ impl<N: HugrNode> ModifierResolver<N> {
                 let Some((gate, angle)) = self.modifiers.rot_angle(op) else {
                     unreachable!()
                 };
-                let rot = new_fn.add_load_value(ConstRotation::new(angle).unwrap());
-                let rot_2 = new_fn.add_load_value(ConstRotation::new(angle * 2.0).unwrap());
+                let rot = new_fn.add_load_value(ConstF64::new(angle));
+                let rot = new_fn
+                    .add_dataflow_op(RotationOp::from_halfturns_unchecked, vec![rot])
+                    .unwrap()
+                    .out_wire(0);
+                let rot_2 = new_fn.add_load_value(ConstF64::new(angle * 2.0));
+                let rot_2 = new_fn
+                    .add_dataflow_op(RotationOp::from_halfturns_unchecked, vec![rot_2])
+                    .unwrap()
+                    .out_wire(0);
 
                 // CU(cs,t,2θ);
                 let mut pv_u = self.modify_tket_op(n, gate, new_fn, ancilla)?;
@@ -387,7 +396,11 @@ impl<N: HugrNode> ModifierResolver<N> {
             CZ => {
                 // reduce CZ to CRz(pi)
                 let mut pv = self.modify_tket_op(n, CRz, new_fn, ancilla)?;
-                let halfturn = new_fn.add_load_value(ConstRotation::new(1.0).unwrap());
+                let halfturn = new_fn.add_load_value(ConstF64::new(1.0));
+                let halfturn = new_fn
+                    .add_dataflow_op(RotationOp::from_halfturns_unchecked, vec![halfturn])
+                    .unwrap()
+                    .out_wire(0);
                 let dw = pv.incoming.remove(2);
                 connect(new_fn, &dw, &halfturn.into())?;
                 Ok(pv)
