@@ -49,7 +49,7 @@ impl ModifierPower {
                         ],
                         vec![TypeRV::new_row_var_use(0, TypeBound::Linear)],
                     )),
-                    int_type(64).into(),
+                    int_type(6).into(),
                 ],
                 TypeRV::new_function(FuncValueType::new(
                     vec![

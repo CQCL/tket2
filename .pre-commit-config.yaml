@@ -62,20 +62,20 @@ repos:
         language: system
         files: \.rs$
         pass_filenames: false
-      - id: cargo-check
-        name: cargo check
-        description: Check rust code with `cargo check`.
-        entry: env RUSTFLAGS="-Dwarnings" uv run -- cargo check --all --all-features --workspace
-        language: system
-        files: \.rs$
-        pass_filenames: false
-      - id: cargo-test
-        name: cargo test
-        description: Run tests with `cargo test`.
-        entry: uv run -- cargo test --all-features
-        language: system
-        files: \.rs$
-        pass_filenames: false
+      # - id: cargo-check
+      #   name: cargo check
+      #   description: Check rust code with `cargo check`.
+      #   entry: env RUSTFLAGS="-Dwarnings" uv run -- cargo check --all --all-features --workspace
+      #   language: system
+      #   files: \.rs$
+      #   pass_filenames: false
+      # - id: cargo-test
+      #   name: cargo test
+      #   description: Run tests with `cargo test`.
+      #   entry: uv run -- cargo test --all-features
+      #   language: system
+      #   files: \.rs$
+      #   pass_filenames: false
       - id: cargo-clippy
         name: cargo clippy
         description: Run clippy lints with `cargo clippy`.

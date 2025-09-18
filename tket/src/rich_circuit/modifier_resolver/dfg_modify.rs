@@ -6,13 +6,13 @@ use std::{
 
 use hugr::{
     builder::{
-        ConditionalBuilder, Container, DFGBuilder, Dataflow, FunctionBuilder, HugrBuilder,
-        SubContainer, TailLoopBuilder,
+        ConditionalBuilder, Container, DFGBuilder, Dataflow, FunctionBuilder, SubContainer,
+        TailLoopBuilder,
     },
     core::HugrNode,
     extension::prelude::qb_t,
     hugr::hugrmut::HugrMut,
-    ops::{Conditional, DataflowOpTrait, OpType, TailLoop, DFG},
+    ops::{Conditional, DataflowBlock, DataflowOpTrait, OpType, TailLoop, DFG},
     std_extensions::collections::array::ArrayOpBuilder,
     types::{FuncTypeBase, TypeRow},
     HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire,
@@ -21,7 +21,7 @@ use hugr_core::hugr::internal::PortgraphNodeMap;
 use itertools::Itertools;
 use petgraph::visit::{Topo, Walker};
 
-use super::{DirWire, ModifierError, ModifierResolver, ModifierResolverErrors, PortExt};
+use super::{DirWire, ModifierResolver, ModifierResolverErrors, PortExt};
 
 impl<N: HugrNode> ModifierResolver<N> {
     /// Modifies the body of a dataflow graph.
@@ -148,6 +148,47 @@ impl<N: HugrNode> ModifierResolver<N> {
                     self.map_insert((old_out, port).into(), DirWire::from((new_out, new_port)))?
                 }
             }
+            OpType::DataflowBlock(dfb) => {
+                let DataflowBlock {
+                    inputs: ref input,
+                    other_outputs: ref output,
+                    ref sum_rows,
+                } = dfb;
+                let offset = if matches!(optype, OpType::FuncDefn(_)) {
+                    self.modifiers.accum_ctrl.len()
+                } else {
+                    self.control_num()
+                };
+
+                // The wire for sum_rows always corresponds directly.
+                self.map_insert(
+                    (old_out, IncomingPort::from(0)).into(),
+                    (new_out, IncomingPort::from(0)).into(),
+                )?;
+                for (i, ref in_out_ty) in input.iter().zip_longest(output.iter()).enumerate() {
+                    // If dagger and the i-th input/output are quantum types, swap them.
+                    if self.need_swap(in_out_ty.as_deref()) {
+                        let old_in_wire = (old_in, OutgoingPort::from(i)).into();
+                        let old_out_wire = (old_out, IncomingPort::from(i + 1)).into();
+                        let new_in_wire = (new_out, IncomingPort::from(i + 1).shift(offset)).into();
+                        let new_out_wire = (new_in, OutgoingPort::from(i).shift(offset)).into();
+                        self.map_insert(old_in_wire, new_in_wire)?;
+                        self.map_insert(old_out_wire, new_out_wire)?;
+                        continue;
+                    }
+                    if in_out_ty.has_left() {
+                        let old_in_wire = (old_in, OutgoingPort::from(i)).into();
+                        let new_in_wire = (new_in, OutgoingPort::from(i).shift(offset)).into();
+                        self.map_insert(old_in_wire, new_in_wire)?;
+                    }
+                    if in_out_ty.has_right() {
+                        let old_out_wire = (old_out, IncomingPort::from(i + 1)).into();
+                        let new_out_wire =
+                            (new_out, IncomingPort::from(i + 1).shift(offset)).into();
+                        self.map_insert(old_out_wire, new_out_wire)?;
+                    }
+                }
+            }
             OpType::Case(_) => {
                 return Err(ModifierResolverErrors::Unreachable(
                     "IO of Case node has to be modified directly while modifying Conditional."
@@ -175,7 +216,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             OpType::FuncDefn(_fndefn) => {
                 self.unpack_controls(new_dfg, new_dfg.input_wires())?
             }
-            OpType::DFG(_) => new_dfg.input_wires().take(self.control_num()).collect(),
+            OpType::DFG(_) | OpType::DataflowBlock(_) => new_dfg.input_wires().take(self.control_num()).collect(),
             OpType::TailLoop(tail_loop) => {
                 let just_input_num = tail_loop.just_inputs.len();
                 new_dfg
@@ -248,7 +289,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                         .connect(ctrl.node(), ctrl.source(), out_node, i);
                 }
             }
-            OpType::TailLoop(_) => {
+            OpType::TailLoop(_) | OpType::DataflowBlock(_) => {
                 for (i, ctrl) in controls.iter().enumerate() {
                     new_dfg
                         .hugr_mut()
@@ -324,10 +365,10 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(insertion_result.inserted_entrypoint)
     }
 
-    fn insert_sub_dfg(
+    pub(super) fn insert_sub_dfg(
         &mut self,
-        parent_dfg: &mut impl Dataflow,
-        builder: impl HugrBuilder,
+        parent_dfg: &mut impl Container,
+        builder: impl Container,
     ) -> Result<Node, ModifierResolverErrors<N>> {
         let insertion_result = parent_dfg.add_hugr_view(builder.hugr());
 
@@ -343,7 +384,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         h: &mut impl HugrMut<Node = N>,
         n: N,
         dfg: &DFG,
-        parent_dfg: &mut impl Dataflow,
+        parent_dfg: &mut impl Container,
     ) -> Result<(), ModifierResolverErrors<N>> {
         let mut signature = dfg.signature.clone();
         // Build a new DFG with modified body.
@@ -394,7 +435,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         h: &mut impl HugrMut<Node = N>,
         n: N,
         tail_loop: &TailLoop,
-        new_dfg: &mut impl Dataflow,
+        new_dfg: &mut impl Container,
     ) -> Result<(), ModifierResolverErrors<N>> {
         let just_input_num = tail_loop.just_inputs.len();
         let just_output_num = tail_loop.just_outputs.len();
@@ -458,7 +499,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         h: &mut impl HugrMut<Node = N>,
         n: N,
         conditional: &Conditional,
-        new_dfg: &mut impl Dataflow,
+        new_dfg: &mut impl Container,
     ) -> Result<(), ModifierResolverErrors<N>> {
         let offset = self.control_num();
 
@@ -538,6 +579,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             self.connect_all(h, &mut case_builder, case_node)?;
             mem::swap(self.corresp_map(), &mut corresp_map);
 
+            // This actually does nothing as far as I know.
             let _ = case_builder
                 .finish_sub_container()
                 .map_err(|e| ModifierResolverErrors::BuildError(e.into()))?;
@@ -617,14 +659,10 @@ mod test {
     use std::{fs::File, io::Write, path::Path};
 
     use hugr::{
-        algorithms::{dead_code, ComposablePass},
         builder::{Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder, SubContainer},
         envelope::{EnvelopeConfig, EnvelopeFormat},
         extension::{prelude::qb_t, ExtensionRegistry},
-        ops::{
-            handle::{FuncID, NodeHandle},
-            CallIndirect, ExtensionOp,
-        },
+        ops::{handle::FuncID, CallIndirect, ExtensionOp},
         std_extensions::collections::array::{array_type, ArrayOpBuilder},
         types::{Signature, Term},
         Hugr,
@@ -636,11 +674,8 @@ mod test {
             rotation::{ConstRotation, ROTATION_EXTENSION},
             TKET_EXTENSION,
         },
-        rich_circuit::*,
-    };
-    use crate::{
-        // extension::{debug::StateResult, rotation::ConstRotation},
         rich_circuit::modifier_resolver::*,
+        rich_circuit::*,
     };
 
     fn foo_dfg(module: &mut ModuleBuilder<Hugr>, t_num: usize) -> FuncID<true> {
@@ -823,15 +858,46 @@ mod test {
         func.finish_with_outputs(inputs).unwrap().handle().clone()
     }
 
+    fn foo_cfg(module: &mut ModuleBuilder<Hugr>, t_num: usize) -> FuncID<true> {
+        let foo_sig = Signature::new_endo(iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>());
+        let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+        let mut inputs: Vec<_> = func.input_wires().collect();
+        inputs[0] = func
+            .add_dataflow_op(TketOp::X, vec![inputs[0]])
+            .unwrap()
+            .out_wire(0);
+
+        let cfg = {
+            let mut cfg = func
+                .cfg_builder(vec![(qb_t(), inputs[0])], qb_t().into())
+                .unwrap();
+            let bb = {
+                let mut bb = cfg.entry_builder(vec![type_row![]], qb_t().into()).unwrap();
+                let mut inputs: Vec<_> = bb.input_wires().collect();
+                // x gate
+                let tag = bb.make_sum(0, [type_row![]], []).unwrap();
+                bb.finish_with_outputs(tag, inputs).unwrap()
+            };
+            let exit = cfg.exit_block();
+            cfg.branch(&bb, 0, &exit).unwrap();
+            cfg.finish_sub_container().unwrap()
+        };
+        inputs[0] = cfg.outputs().next().unwrap();
+
+        func.finish_with_outputs(inputs).unwrap().handle().clone()
+    }
+
     #[rstest::rstest]
     #[case::dfg(1, 2, foo_dfg, "dfg", false)]
     #[case::dfg_dagger(1, 2, foo_dfg, "dfg", true)]
     #[case::tail_loop(1, 1, foo_tail_loop, "tail_loop", false)]
     #[case::conditional(1, 1, foo_conditional, "conditional", false)]
-    #[case::conditional_dagger(1, 1, foo_conditional, "conditional", true)]
+    #[case::conditional_dagger(1, 1, foo_conditional, "conditional_dagger", true)]
     #[case::call(1, 1, foo_call, "call", false)]
     #[case::indir_call(1, 1, foo_indir_call, "indir_call", false)]
     #[case::load_fn(1, 1, foo_load_fn, "load_fn", false)]
+    #[case::cfg(1, 1, foo_cfg, "cfg", false)]
+    #[case::cfg_dagger(1, 1, foo_cfg, "cfg_dagger", true)]
     fn test_modifier_resolver_dfg(
         #[case] t_num: usize,
         #[case] c_num: u64,

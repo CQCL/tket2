@@ -6,12 +6,14 @@ pub mod global_phase_modify;
 pub mod tket_op_modify;
 use derive_more::Error;
 use hugr::{
-    builder::{BuildError, Dataflow},
+    algorithms::ComposablePass,
+    builder::{BuildError, CFGBuilder, Container, Dataflow, HugrBuilder, SubContainer},
     core::HugrNode,
     extension::{prelude::qb_t, simple_op::MakeExtensionOp},
     hugr::{hugrmut::HugrMut, patch::replace::ReplaceError},
-    ops::{Const, ExtensionOp, OpType},
+    ops::{Const, ExtensionOp, OpType, CFG},
     std_extensions::collections::array::array_type,
+    type_row,
     types::{FuncTypeBase, Signature, Type},
     HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex, Wire,
 };
@@ -127,7 +129,7 @@ impl<N: HugrNode> TryFrom<DirWire<N>> for (N, IncomingPort) {
 }
 
 fn connect<N>(
-    new_dfg: &mut impl Dataflow,
+    new_dfg: &mut impl Container,
     w1: &DirWire<Node>,
     w2: &DirWire<Node>,
 ) -> Result<(), ModifierResolverErrors<N>> {
@@ -390,16 +392,14 @@ impl<N: HugrNode> ModifierResolver<N> {
 
     /// Remember that old wire has no correspondence.
     fn map_insert_none(&mut self, old: DirWire<N>) -> Result<(), ModifierResolverErrors<N>> {
-        self.corresp_map()
-            .insert(old.clone(), vec![])
-            ;
-            // .map_or(Ok(()), |former| {
-            //     Err(ModifierResolverErrors::Unreachable(format!(
-            //         "Failed to forget port {}. [{},...] are already registered.",
-            //         old, former[0]
-            //     )))
-            // })
-            Ok(())
+        self.corresp_map().insert(old.clone(), vec![]);
+        // .map_or(Ok(()), |former| {
+        //     Err(ModifierResolverErrors::Unreachable(format!(
+        //         "Failed to forget port {}. [{},...] are already registered.",
+        //         old, former[0]
+        //     )))
+        // })
+        Ok(())
     }
 
     fn map_get(&self, key: &DirWire<N>) -> Result<&Vec<DirWire>, ModifierResolverErrors<N>> {
@@ -454,7 +454,7 @@ impl<N: HugrNode> ModifierResolver<N> {
     }
 
     /// Add a node to the builder, plugging the control qubits to the first n-inputs and outputs.
-    fn add_node_control(&mut self, new_dfg: &mut impl Dataflow, op: impl Into<OpType>) -> Node {
+    fn add_node_control(&mut self, new_dfg: &mut impl Container, op: impl Into<OpType>) -> Node {
         let node = new_dfg.add_child_node(op);
         for (i, ctrl) in self.controls().iter_mut().enumerate() {
             new_dfg
@@ -468,7 +468,7 @@ impl<N: HugrNode> ModifierResolver<N> {
     /// This function adds a node to the builder, that does not affected by the modifiers.
     fn add_node_no_modification(
         &mut self,
-        new_dfg: &mut impl Dataflow,
+        new_dfg: &mut impl Container,
         op: impl Into<OpType>,
         h: &impl HugrMut<Node = N>,
         old_n: N,
@@ -484,7 +484,7 @@ impl<N: HugrNode> ModifierResolver<N> {
     pub fn connect_all(
         &mut self,
         h: &impl HugrView<Node = N>,
-        new_dfg: &mut impl Dataflow,
+        new_dfg: &mut impl Container,
         parent: N,
     ) -> Result<(), ModifierResolverErrors<N>> {
         for (a, bs) in self.corresp_map().iter() {
@@ -595,6 +595,9 @@ impl<N: HugrNode> ModifierResolver<N> {
             // Skip input/output nodes: it should be handled by its parent as it sets control qubits.
             OpType::Input(_) | OpType::Output(_) => {}
 
+            // CFG
+            OpType::CFG(cfg) => self.modify_cfg(h, n, cfg, new_dfg)?,
+
             // DFGs
             OpType::DFG(dfg) => self.modify_dfg(h, n, dfg, new_dfg)?,
             OpType::TailLoop(tail_loop) => self.modify_tail_loop(h, n, tail_loop, new_dfg)?,
@@ -638,7 +641,6 @@ impl<N: HugrNode> ModifierResolver<N> {
             OpType::AliasDecl(_)
             | OpType::AliasDefn(_)
             | OpType::ExitBlock(_)
-            | OpType::CFG(_)
             | OpType::DataflowBlock(_) => {
                 return Err(ModifierResolverErrors::UnResolvable(n, optype.clone()).into());
             }
@@ -661,7 +663,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         &mut self,
         n: N,
         constant: &Const,
-        new_dfg: &mut impl Dataflow,
+        new_dfg: &mut impl Container,
     ) -> Result<(), ModifierResolverErrors<N>> {
         let output = new_dfg.add_child_node(constant.clone());
         self.map_insert(Wire::new(n, 0).into(), Wire::new(output, 0).into())
@@ -674,7 +676,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         h: &impl HugrMut<Node = N>,
         n: N,
         optype: &OpType,
-        new_dfg: &mut impl Dataflow,
+        new_dfg: &mut impl Container,
     ) -> Result<(), ModifierResolverErrors<N>> {
         self.add_node_no_modification(new_dfg, optype.clone(), h, n)?;
         Ok(())
@@ -714,6 +716,70 @@ impl<N: HugrNode> ModifierResolver<N> {
             self.modify_dataflow_op(h, n, optype, new_dfg)
         }
     }
+
+    /// Temporary implementation of CFG modification.
+    /// This function expects that the CFG contains only one block.
+    /// If not, it returns an error.
+    fn modify_cfg(
+        &mut self,
+        h: &mut impl HugrMut<Node = N>,
+        n: N,
+        cfg: &CFG,
+        new_dfg: &mut impl Container,
+    ) -> Result<(), ModifierResolverErrors<N>> {
+        // Check if the CFG contains only one block.
+        let children: Vec<N> = h
+            .children(n)
+            .filter(|child| h.get_optype(*child).is_dataflow_block())
+            .collect();
+        if children.len() != 1 {
+            return Err(ModifierResolverErrors::UnResolvable(n, cfg.clone().into()));
+        }
+        let old_bb = children[0];
+
+        let mut signature = cfg.signature.clone();
+        self.modify_signature(&mut signature, true);
+        let mut new_cfg = CFGBuilder::new(signature.clone())?;
+        let mut new_bb = new_cfg.entry_builder([type_row![]], signature.output.clone())?;
+        self.modify_dfg_body(h, old_bb, &mut new_bb)?;
+        let bb_id = new_bb.finish_sub_container()?;
+        new_cfg.branch(&bb_id, 0, &new_cfg.exit_block())?;
+
+        let new = self.insert_sub_dfg(new_dfg, new_cfg)?;
+
+        // connect the controls and register the IOs
+        for (i, c) in self.controls().iter_mut().enumerate() {
+            new_dfg.hugr_mut().connect(c.node(), c.source(), new, i);
+            *c = Wire::new(new, i);
+        }
+        let offset = self.control_num();
+        for (i, in_out_type) in signature
+            .input
+            .iter()
+            .zip_longest(signature.output.iter())
+            .enumerate()
+        {
+            let swap = self.need_swap(in_out_type.as_deref());
+            if in_out_type.has_left() {
+                let old_in = (n, IncomingPort::from(i)).into();
+                let mut new_in = DirWire::from((new, IncomingPort::from(i + offset)));
+                if swap {
+                    new_in = new_in.reverse();
+                }
+                self.map_insert(old_in, new_in)?;
+            }
+            if in_out_type.has_right() {
+                let old_out = (n, OutgoingPort::from(i)).into();
+                let mut new_out = DirWire::from((new, OutgoingPort::from(i + offset)));
+                if swap {
+                    new_out = new_out.reverse();
+                }
+                self.map_insert(old_out, new_out)?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Resolve modifiers in a circuit by applying them to each entry point.
@@ -724,11 +790,11 @@ impl<N: HugrNode> ModifierResolver<N> {
 // this may be needed.
 pub fn resolve_modifier_with_entrypoints(
     h: &mut impl HugrMut<Node = Node>,
-    entry_points: impl Iterator<Item = Node>,
+    entry_points: impl IntoIterator<Item = Node>,
 ) -> Result<(), ModifierResolverErrors<Node>> {
     use ModifierResolverErrors::*;
 
-    let entry_points = entry_points.collect::<Vec<_>>();
+    let entry_points: Vec<_> = entry_points.into_iter().collect();
 
     for entry_point in entry_points.clone() {
         let descendants = h.descendants(entry_point).collect::<Vec<_>>();
@@ -749,7 +815,20 @@ pub fn resolve_modifier_with_entrypoints(
     }
 
     // Global phase is no more needed after resolving modifiers.
-    delete_phase(h, entry_points.into_iter())?;
+    delete_phase(h, entry_points.clone().into_iter())?;
+
+    // FIXME: ad hoc cleanup of remaining modifer nodes.
+    for entry_point in entry_points.clone() {
+        let descendants = h.descendants(entry_point).collect::<Vec<_>>();
+        for node in descendants {
+            let optype = h.get_optype(node);
+            if Modifier::from_optype(optype).is_some() {
+                h.remove_node(node);
+            }
+        }
+    }
+
+    print!("Resulting circuit:\n{}", h.mermaid_string());
 
     Ok(())
 }

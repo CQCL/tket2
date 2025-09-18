@@ -1,17 +1,14 @@
 //! Modify nodes related to function calls.
 
-use std::mem;
-
 use hugr::{
     builder::{BuildError, Dataflow},
     core::HugrNode,
     extension::simple_op::MakeExtensionOp,
-    hugr::{hugrmut::HugrMut, views::PortIterator},
-    ops::{Call, CallIndirect, DataflowOpTrait, LoadFunction, OpTrait, OpType},
+    hugr::hugrmut::HugrMut,
+    ops::{Call, CallIndirect, LoadFunction, OpType},
     types::EdgeKind,
     IncomingPort, Wire,
 };
-use itertools::Itertools;
 
 use crate::rich_circuit::{
     modifier_resolver::{DirWire, PortExt},
