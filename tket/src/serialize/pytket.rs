@@ -120,7 +120,7 @@ impl TKETDecode for SerialCircuit {
     fn decode_inplace(
         &self,
         hugr: &mut Hugr,
-        _target: DecodeInsertionTarget,
+        target: DecodeInsertionTarget,
         options: DecodeOptions,
     ) -> Result<Node, Self::DecodeError> {
         let config = options
@@ -130,6 +130,7 @@ impl TKETDecode for SerialCircuit {
         let mut decoder = PytketDecoderContext::new(
             self,
             hugr,
+            target,
             options.fn_name,
             options.signature,
             options.input_params,
