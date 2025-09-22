@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.22.0](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.21.0...tket-qsystem-v0.22.0) - 2025-09-22
+
+### New Features
+
+- [**breaking**] SerialCircuit::decode_inplace and explicit option structs ([#1120](https://github.com/CQCL/tket2/pull/1120))
+
 ## [0.21.0](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.20.1...tket-qsystem-v0.21.0) - 2025-09-15
 
 ### Bug Fixes

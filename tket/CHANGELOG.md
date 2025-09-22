@@ -1,6 +1,16 @@
 # Changelog
 
 
+## [0.16.0](https://github.com/CQCL/tket2/compare/tket-v0.15.0...tket-v0.16.0) - 2025-09-22
+
+### Bug Fixes
+
+- *(pytket-encoder)* Correctly encode I/O nodes in nested containers ([#1117](https://github.com/CQCL/tket2/pull/1117))
+
+### New Features
+
+- [**breaking**] SerialCircuit::decode_inplace and explicit option structs ([#1120](https://github.com/CQCL/tket2/pull/1120))
+
 ## [0.15.0](https://github.com/CQCL/tket2/compare/tket-v0.14.0...tket-v0.15.0) - 2025-09-15
 
 ### Bug Fixes
