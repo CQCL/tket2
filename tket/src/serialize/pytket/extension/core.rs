@@ -42,10 +42,8 @@ impl PytketDecoder for CoreDecoder {
                 };
 
                 // We have no way to distinguish between input and output bits in the circuit box, so we assume all bits are outputs here.
-                //
-                // TODO: Pass the registers both as inputs and outputs once this is implemented
-                // <https://github.com/CQCL/tket2/issues/1124>
                 let circ_inputs: Vec<Type> = itertools::repeat_n(qb_t(), qubits.len())
+                    .chain(itertools::repeat_n(bool_t(), bits.len()))
                     .chain(itertools::repeat_n(rotation_type(), params.len()))
                     .collect_vec();
                 let circ_outputs: Vec<Type> = itertools::repeat_n(qb_t(), qubits.len())
@@ -68,7 +66,7 @@ impl PytketDecoder for CoreDecoder {
 
                 // Create a DFG node in the parent Hugr that will contain the decoded circuit.
                 decoder
-                    .wire_up_node(internal, qubits, bits, params)
+                    .wire_up_node(internal, qubits, qubits, bits, bits, params)
                     .map_err(|e| e.hugr_op("DFG"))?;
 
                 Ok(DecodeStatus::Success)
