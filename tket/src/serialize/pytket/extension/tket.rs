@@ -6,7 +6,7 @@ use crate::extension::TKET_EXTENSION_ID;
 use crate::serialize::pytket::decoder::{
     DecodeStatus, LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
 };
-use crate::serialize::pytket::encoder::{EncodeStatus, PytketEncoderContext};
+use crate::serialize::pytket::encoder::{EmitCommandOptions, EncodeStatus, PytketEncoderContext};
 use crate::serialize::pytket::extension::PytketDecoder;
 use crate::serialize::pytket::{PytketDecodeError, PytketEncodeError};
 use crate::{Circuit, TketOp};
@@ -98,7 +98,7 @@ impl TketOpEmitter {
         };
 
         // Most operations map directly to a pytket one.
-        encoder.emit_node(serial_op, node, circ)?;
+        encoder.emit_node(serial_op, node, circ, EmitCommandOptions::new())?;
 
         Ok(EncodeStatus::Success)
     }
@@ -151,6 +151,7 @@ impl PytketDecoder for TketOpEmitter {
         _opgroup: Option<&str>,
         decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
+        let mut num_input_bits = 0;
         let op = match op.op_type {
             PytketOptype::H => TketOp::H,
             PytketOptype::CX => TketOp::CX,
@@ -171,7 +172,10 @@ impl PytketDecoder for TketOpEmitter {
             PytketOptype::Rz => TketOp::Rz,
             PytketOptype::CCX => TketOp::Toffoli,
             PytketOptype::Reset => TketOp::Reset,
-            PytketOptype::Measure => TketOp::Measure,
+            PytketOptype::Measure => {
+                num_input_bits = 0;
+                TketOp::Measure
+            }
             _ => {
                 return Ok(DecodeStatus::Unsupported);
             }
@@ -183,7 +187,9 @@ impl PytketDecoder for TketOpEmitter {
             .map(|p| p.as_rotation(&mut decoder.builder))
             .collect_vec();
 
-        decoder.add_node_with_wires(op, qubits, bits, &params)?;
+        let input_bits = &bits[..num_input_bits];
+        let output_bits = &bits[num_input_bits..];
+        decoder.add_node_with_wires(op, qubits, qubits, input_bits, output_bits, &params)?;
 
         Ok(DecodeStatus::Success)
     }
