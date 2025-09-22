@@ -106,10 +106,10 @@ impl<N: HugrNode> ModifierResolver<N> {
 }
 
 /// Delete all global phase operations in the subgraph reachable from the given entry points.
-pub fn delete_phase(
-    h: &mut impl HugrMut<Node = Node>,
-    entry_points: impl Iterator<Item = Node>,
-) -> Result<(), ModifierResolverErrors<Node>> {
+pub fn delete_phase<N: HugrNode>(
+    h: &mut impl HugrMut<Node = N>,
+    entry_points: impl IntoIterator<Item = N>,
+) -> Result<(), ModifierResolverErrors<N>> {
     for entry_point in entry_points {
         let descendants = h.descendants(entry_point).collect::<Vec<_>>();
         for node in descendants {

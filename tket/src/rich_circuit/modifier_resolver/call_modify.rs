@@ -1,14 +1,18 @@
 //! Modify nodes related to function calls.
 
+use std::mem;
+
+use chrono::offset;
 use hugr::{
     builder::{BuildError, Dataflow},
     core::HugrNode,
     extension::simple_op::MakeExtensionOp,
     hugr::hugrmut::HugrMut,
-    ops::{Call, CallIndirect, LoadFunction, OpType},
+    ops::{Call, CallIndirect, DataflowOpTrait, LoadFunction, OpType},
     types::EdgeKind,
-    IncomingPort, Wire,
+    IncomingPort, OutgoingPort, Wire,
 };
+use itertools::Itertools;
 
 use crate::rich_circuit::{
     modifier_resolver::{DirWire, PortExt},
@@ -30,18 +34,18 @@ impl<N: HugrNode> ModifierResolver<N> {
                 "Not a Call".to_string(),
             ));
         };
+        let offset = self.modifiers().accum_ctrl.len();
 
         let mut poly_sig = call.func_sig.clone();
         let type_args = call.type_args.clone();
         self.modify_signature(poly_sig.body_mut(), false);
         let new_call = Call::try_new(poly_sig, type_args).map_err(BuildError::from)?;
+        let signature = (*new_call.signature()).clone();
         let new_call_fn_port = new_call.called_function_port();
         let new_call_node = new_dfg.add_child_node(new_call);
         let callee = h
             .single_linked_output(n, call.called_function_port())
             .unwrap();
-
-        // TODO: Dagger not supported yet.
 
         // wire the callee
         let new_callee = self.modify_fn(h, callee.0)?;
@@ -57,18 +61,26 @@ impl<N: HugrNode> ModifierResolver<N> {
         }
         let controls = self.unpack_controls(new_dfg, controls)?;
         *self.controls() = controls;
-        // wire the arguments
-        let offset = self.modifiers().accum_ctrl.len();
-        for port in h.node_inputs(n) {
-            let kind = optype.port_kind(port);
-            if !matches!(kind, Some(EdgeKind::Value(..) | EdgeKind::StateOrder)) {
-                continue;
+        // wire the inputs/outputs
+        for (i, in_out_type) in signature
+            .input
+            .iter()
+            .zip_longest(signature.output.iter())
+            .enumerate()
+        {
+            let old_in_wire = (n, IncomingPort::from(i)).into();
+            let old_out_wire = (n, OutgoingPort::from(i)).into();
+            let mut new_in_wire = (new_call_node, IncomingPort::from(i + offset)).into();
+            let mut new_out_wire = (new_call_node, OutgoingPort::from(i + offset)).into();
+            if self.need_swap(in_out_type.as_deref()) {
+                mem::swap(&mut new_in_wire, &mut new_out_wire);
             }
-            self.map_insert((n, port).into(), (new_call_node, port.shift(offset)).into())?;
-        }
-        // wire the outputs
-        for port in h.node_outputs(n) {
-            self.map_insert((n, port).into(), (new_call_node, port.shift(offset)).into())?;
+            if in_out_type.has_left() {
+                self.map_insert(old_in_wire, new_in_wire)?;
+            }
+            if in_out_type.has_right() {
+                self.map_insert(old_out_wire, new_out_wire)?;
+            }
         }
 
         Ok(())
@@ -76,6 +88,7 @@ impl<N: HugrNode> ModifierResolver<N> {
 
     /// Apply the collected chain of modifiers to the function loaded by the `LoadFunction` node.
     /// Returns the new node that loads the modified function.
+    /// This applies changes to the original graph `h`.
     pub(super) fn apply_modifier_chain_to_loaded_fn(
         &mut self,
         h: &mut impl HugrMut<Node = N>,
@@ -106,7 +119,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         // Delete the modifiers, and change the function to be loaded
         // FIXME: This could delete the node that is referenced by other nodes that is not in the chain.
         for mod_or_targ in modifiers_and_targ {
-            // This should be disconnection rather than removal.
+            // This should disconnect. Should not remove.
             // h.disconnect(n, port);
             // h.remove_node(mod_or_targ);
         }
@@ -180,17 +193,20 @@ impl<N: HugrNode> ModifierResolver<N> {
         indir_call: &CallIndirect,
         new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        let modifiers = self.modifiers().clone();
-
         // Wrapper to convert ModifierError to UnResolvable with the indir_call node.
         // This is because, even if we find an error in the process immediately,
         // we cannot stop processing here.
         let wrap_err = |e: ModifierError<N>| {
-            ModifierResolverErrors::UnResolvable(e.node(), indir_call.clone().into())
+            ModifierResolverErrors::UnResolvable(
+                e.node(),
+                "Cannot modify indirect call.".to_string(),
+                indir_call.clone().into(),
+            )
         };
 
         // Trace the chain of modifiers starting from the one before the indirect call.
         let chain_tail = h.single_linked_output(n, 0).unwrap();
+        let modifiers = self.modifiers().clone();
         let trace = self
             .trace_modifiers_chain(h, chain_tail.0)
             .map_err(wrap_err)?;
@@ -206,11 +222,14 @@ impl<N: HugrNode> ModifierResolver<N> {
         let new_load = new_dfg.add_child_node(load);
         self.call_map()
             .insert(modified_fn, (new_load, IncomingPort::from(0)));
+        *self.modifiers_mut() = modifiers; // TODO: Where should I restore modifiers?
 
         // Make new IndirectCall
         let mut new_call = indir_call.clone();
         self.modify_signature(&mut new_call.signature, false);
         let new_call_node = new_dfg.add_child_node(new_call);
+
+        // Wire the new IndirectCall
         let mut controls = self.pack_controls(new_dfg)?;
         let offset = self.modifiers().accum_ctrl.len();
         for (i, ctrl) in controls.iter_mut().enumerate() {
@@ -233,11 +252,14 @@ impl<N: HugrNode> ModifierResolver<N> {
         // FIXME: Forgetting all the nodes in the chain so that we don't have to worry about mapping the edges.
         // Otherwise, there would be edges in the original graph that have no corresponding edges in the new graph.
         // However, this could remove wires referenced by other nodes that are not in the chain.
+        println!(
+            "Forgetting nodes: {:?} in hugr\n{}",
+            trace,
+            h.mermaid_string()
+        );
         for node in trace {
             self.forget_node(h, node)?
         }
-
-        *self.modifiers_mut() = modifiers;
 
         Ok(())
     }

@@ -1,20 +1,20 @@
 //! Try to delete modifier by applying the modifier to each component.
 //!
+pub mod array_modify;
 pub mod call_modify;
 pub mod dfg_modify;
 pub mod global_phase_modify;
 pub mod tket_op_modify;
 use derive_more::Error;
 use hugr::{
-    algorithms::ComposablePass,
-    builder::{BuildError, CFGBuilder, Container, Dataflow, HugrBuilder, SubContainer},
+    builder::{BuildError, CFGBuilder, Container, Dataflow, SubContainer},
     core::HugrNode,
     extension::{prelude::qb_t, simple_op::MakeExtensionOp},
-    hugr::{hugrmut::HugrMut, patch::replace::ReplaceError},
+    hugr::hugrmut::HugrMut,
     ops::{Const, ExtensionOp, OpType, CFG},
-    std_extensions::collections::array::array_type,
+    std_extensions::collections::array::{array_type, ArrayOp},
     type_row,
-    types::{FuncTypeBase, Signature, Type},
+    types::{EdgeKind, FuncTypeBase, Signature, Type},
     HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex, Wire,
 };
 use itertools::{Either, EitherOrBoth, Itertools};
@@ -318,7 +318,7 @@ pub enum ModifierResolverErrors<N = Node> {
     Unreachable(String),
     /// Modifier applied to a node that cannot be modified.
     #[display("Modifier {_0} applied to the node {_1} cannot be modified")]
-    UnResolvable(N, OpType),
+    UnResolvable(N, String, OpType),
     /// The node cannot be modified.
     #[display("Modification by {_0:?} is not defined for the node {_1}")]
     Unimplemented(Modifier, OpType),
@@ -334,6 +334,7 @@ impl<N> From<BuildError> for ModifierResolverErrors<N> {
     }
 }
 
+// Utility functions for ModifierResolver
 impl<N: HugrNode> ModifierResolver<N> {
     fn modifiers_mut(&mut self) -> &mut CombinedModifier {
         &mut self.modifiers
@@ -406,7 +407,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         self.corresp_map
             .get(key)
             .ok_or(ModifierResolverErrors::Unreachable(format!(
-                "No correspondence for the input wire. Input: {}",
+                "No correspondence for the wire: {}",
                 key
             )))
     }
@@ -492,9 +493,13 @@ impl<N: HugrNode> ModifierResolver<N> {
                 println!("  Wire mapping: {} -> {}", a, b);
             }
         }
-        println!(" before connect_all:\n{}", new_dfg.hugr().mermaid_string());
+        println!("before connect_all:\n{}", new_dfg.hugr().mermaid_string());
         for out_node in h.children(parent) {
             for out_port in h.node_outputs(out_node) {
+                // TODO: ad hoc solution: ignore all StateOrder connections.
+                if let Some(EdgeKind::StateOrder) = h.get_optype(out_node).port_kind(out_port) {
+                    continue;
+                }
                 for (in_node, in_port) in h.linked_inputs(out_node, out_port) {
                     for a in self.map_get(&(in_node, in_port).into())? {
                         for b in self.map_get(&(out_node, out_port).into())? {
@@ -642,7 +647,12 @@ impl<N: HugrNode> ModifierResolver<N> {
             | OpType::AliasDefn(_)
             | OpType::ExitBlock(_)
             | OpType::DataflowBlock(_) => {
-                return Err(ModifierResolverErrors::UnResolvable(n, optype.clone()).into());
+                return Err(ModifierResolverErrors::UnResolvable(
+                    n,
+                    "Unmodifiable node found".to_string(),
+                    optype.clone(),
+                )
+                .into());
             }
             _ => {
                 // Q. Maybe we should just ignore unknown operations?
@@ -708,7 +718,10 @@ impl<N: HugrNode> ModifierResolver<N> {
             Ok(())
         } else if Modifier::from_optype(optype).is_some() {
             // TODO: check if this is ok.
-            self.modify_dataflow_op(h, n, optype, new_dfg)
+            self.forget_node(h, n)
+        } else if let Some(op) = ArrayOp::from_optype(optype) {
+            // TODO: need to handle the case of dagger
+            self.modify_array_op(h, n, op, new_dfg)
         } else {
             // Some other Hugr extension operation.
             // Here, we do not know what is the modified version.
@@ -733,7 +746,11 @@ impl<N: HugrNode> ModifierResolver<N> {
             .filter(|child| h.get_optype(*child).is_dataflow_block())
             .collect();
         if children.len() != 1 {
-            return Err(ModifierResolverErrors::UnResolvable(n, cfg.clone().into()));
+            return Err(ModifierResolverErrors::UnResolvable(
+                n,
+                "CFG with more than one node found.".to_string(),
+                cfg.clone().into(),
+            ));
         }
         let old_bb = children[0];
 
@@ -794,41 +811,59 @@ pub fn resolve_modifier_with_entrypoints(
 ) -> Result<(), ModifierResolverErrors<Node>> {
     use ModifierResolverErrors::*;
 
+    println!("before modification:\n{}", h.mermaid_string());
+
     let entry_points: Vec<_> = entry_points.into_iter().collect();
 
-    for entry_point in entry_points.clone() {
-        let descendants = h.descendants(entry_point).collect::<Vec<_>>();
-        let mut resolver = ModifierResolver::new();
-        for node in descendants {
-            // Verify the resolver can be applied.
-            match resolver.try_rewrite(h, node) {
-                Ok(_) => (),
-                // If not resolvable, just skip.
-                Err(ModifierError(e)) => {
-                    println!("Not modifiable {}: Reason: {}", node, e);
-                    continue;
-                }
-                // Others will be the actual error.
-                e => return e,
+    let mut resolver = ModifierResolver::new();
+    let mut worklist = entry_points.into_iter().collect::<VecDeque<_>>();
+    let mut visited = vec![];
+    while let Some(node) = worklist.pop_front() {
+        if !h.contains_node(node) || visited.contains(&node) {
+            continue;
+        }
+        worklist.extend(h.children(node).filter(|n| !visited.contains(n)));
+        worklist.extend(h.all_neighbours(node).filter(|n| !visited.contains(n)));
+        visited.push(node);
+        match resolver.try_rewrite(h, node) {
+            Ok(_) => (),
+            // If not resolvable, just skip.
+            Err(ModifierError(e)) => {
+                println!("Not modifiable {}: Reason: {}", node, e);
+                continue;
             }
+            // Others will be the actual error.
+            e => return e,
         }
     }
 
     // Global phase is no more needed after resolving modifiers.
-    delete_phase(h, entry_points.clone().into_iter())?;
+    // delete_phase(h, entry_points.clone().into_iter())?;
+    delete_phase(h, vec![h.module_root()])?;
 
-    // FIXME: ad hoc cleanup of remaining modifer nodes.
+    println!("After modifier resolution:\n{}", h.mermaid_string());
+    // TODO: ad hoc cleanup of remaining modifer nodes.
+    let entry_points = vec![h.module_root()];
     for entry_point in entry_points.clone() {
         let descendants = h.descendants(entry_point).collect::<Vec<_>>();
         for node in descendants {
+            if !h.contains_node(node) {
+                continue;
+            }
             let optype = h.get_optype(node);
             if Modifier::from_optype(optype).is_some() {
-                h.remove_node(node);
+                let mut l = vec![node];
+                while let Some(n) = l.pop() {
+                    l.extend(h.output_neighbours(n));
+                    h.remove_node(n);
+                }
             }
         }
     }
 
     print!("Resulting circuit:\n{}", h.mermaid_string());
+    h.validate()
+        .map_err(|e| ModifierResolverErrors::BuildError(e.into()))?;
 
     Ok(())
 }

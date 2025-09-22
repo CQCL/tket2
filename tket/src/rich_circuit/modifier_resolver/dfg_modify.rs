@@ -312,6 +312,21 @@ impl<N: HugrNode> ModifierResolver<N> {
         new_dfg: &mut impl Dataflow,
     ) -> Result<Vec<Wire>, ModifierResolverErrors<N>> {
         let controls = self.controls_ref();
+        println!("Packing controls: controls = {:?}", controls);
+        println!(
+            "                  accum_ctrl = {:?}",
+            self.modifiers().accum_ctrl
+        );
+        println!("                  control_num = {}", self.control_num());
+        println!(
+            "                  new_dfg = {}",
+            new_dfg.hugr().mermaid_string()
+        );
+        println!("                  wire map =");
+        let map = &self.corresp_map;
+        for (old, new) in map.iter() {
+            println!("                    {} -> {:?}", old, new);
+        }
         let mut v = Vec::new();
         let mut offset = 0;
         for size in self.modifiers().accum_ctrl.iter() {
@@ -444,7 +459,12 @@ impl<N: HugrNode> ModifierResolver<N> {
         // Every TailLoop that is generated from Power cannot have `just_outputs`.
         if self.modifiers.dagger && !tail_loop.just_outputs.is_empty() {
             let optype = h.get_optype(n);
-            return Err(ModifierResolverErrors::UnResolvable(n, optype.clone()).into());
+            return Err(ModifierResolverErrors::UnResolvable(
+                n,
+                "tail loop with outputs cannot be daggered.".to_string(),
+                optype.clone(),
+            )
+            .into());
         }
         // TODO: Handle the case when TailLoop is generated from Power modifier.
         // Currently, it is not implemented.
@@ -556,17 +576,14 @@ impl<N: HugrNode> ModifierResolver<N> {
                     continue;
                 }
                 if in_out_type.has_left() {
-                    let old_in_wire = (old_in, OutgoingPort::from(i + tag_wire_num)).into();
-                    let new_in_wire = (
-                        new_in,
-                        OutgoingPort::from(i).shift(i + offset + tag_wire_num),
-                    )
-                        .into();
+                    let old_in_wire = (old_in, OutgoingPort::from(i).shift(tag_wire_num)).into();
+                    let new_in_wire =
+                        (new_in, OutgoingPort::from(i).shift(offset + tag_wire_num)).into();
                     self.map_insert(old_in_wire, new_in_wire)?;
                 }
                 if in_out_type.has_right() {
                     let old_out_wire = (old_out, IncomingPort::from(i)).into();
-                    let new_out_wire = (new_out, IncomingPort::from(i + offset)).into();
+                    let new_out_wire = (new_out, IncomingPort::from(i).shift(offset)).into();
                     self.map_insert(old_out_wire, new_out_wire)?;
                 }
             }
@@ -606,23 +623,17 @@ impl<N: HugrNode> ModifierResolver<N> {
             .zip_longest(conditional.outputs.iter())
             .enumerate()
         {
+            let old_in_wire = (n, IncomingPort::from(i + 1)).into();
+            let old_out_wire = (n, OutgoingPort::from(i)).into();
+            let mut new_in_wire = (new_conditional, IncomingPort::from(i + offset + 1)).into();
+            let mut new_out_wire = (new_conditional, OutgoingPort::from(i + offset)).into();
             if self.need_swap(in_out_type.as_deref()) {
-                let old_in_wire = (n, OutgoingPort::from(i)).into();
-                let old_out_wire = (n, IncomingPort::from(i + 1)).into();
-                let new_in_wire = (new_conditional, IncomingPort::from(i + offset + 1)).into();
-                let new_out_wire = (new_conditional, OutgoingPort::from(i + offset)).into();
-                self.map_insert(old_in_wire, new_in_wire)?;
-                self.map_insert(old_out_wire, new_out_wire)?;
-                continue;
+                mem::swap(&mut new_in_wire, &mut new_out_wire);
             }
             if in_out_type.has_left() {
-                let old_in_wire = (n, OutgoingPort::from(i)).into();
-                let new_in_wire = (new_conditional, OutgoingPort::from(i + offset)).into();
                 self.map_insert(old_in_wire, new_in_wire)?;
             }
             if in_out_type.has_right() {
-                let old_out_wire = (n, IncomingPort::from(i + 1)).into();
-                let new_out_wire = (new_conditional, IncomingPort::from(i + offset + 1)).into();
                 self.map_insert(old_out_wire, new_out_wire)?;
             }
         }
@@ -887,17 +898,66 @@ mod test {
         func.finish_with_outputs(inputs).unwrap().handle().clone()
     }
 
+    fn foo_nested_modifier(module: &mut ModuleBuilder<Hugr>, t_num: usize) -> FuncID<true> {
+        let bar_sig = Signature::new_endo(vec![qb_t()]);
+        let bar = {
+            let mut bar_builder = module.define_function("bar", bar_sig).unwrap();
+            let mut inputs: Vec<Wire> = bar_builder.input_wires().collect();
+            inputs[0] = bar_builder
+                .add_dataflow_op(TketOp::X, vec![inputs[0]])
+                .unwrap()
+                .out_wire(0);
+            bar_builder.finish_with_outputs(inputs).unwrap()
+        };
+
+        let controlled_sig = Signature::new_endo(vec![array_type(1, qb_t()), qb_t()]);
+        let foo_sig = Signature::new_endo(iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>());
+        let foo = {
+            let mut foo_builder = module.define_function("foo", foo_sig).unwrap();
+            let mut inputs: Vec<Wire> = foo_builder.input_wires().collect();
+            let load = foo_builder.load_func(bar.handle(), &[]).unwrap();
+
+            let control_op: ExtensionOp = {
+                MODIFIER_EXTENSION
+                    .instantiate_extension_op(
+                        &CONTROL_OP_ID,
+                        [Term::BoundedNat(1), [qb_t().into()].into(), [].into()],
+                    )
+                    .unwrap()
+            };
+            let controlled = foo_builder
+                .add_dataflow_op(control_op, vec![load])
+                .unwrap()
+                .out_wire(0);
+            let mut ctrl = foo_builder.add_new_array(qb_t(), [inputs[0]]).unwrap();
+            [ctrl, inputs[1]] = foo_builder
+                .add_dataflow_op(
+                    CallIndirect {
+                        signature: controlled_sig,
+                    },
+                    [controlled, ctrl, inputs[1]],
+                )
+                .unwrap()
+                .outputs_arr();
+            inputs[0] = foo_builder.add_array_unpack(qb_t(), 1, ctrl).unwrap()[0];
+            foo_builder.finish_with_outputs(inputs).unwrap()
+        };
+        foo.handle().clone()
+    }
+
     #[rstest::rstest]
     #[case::dfg(1, 2, foo_dfg, "dfg", false)]
-    #[case::dfg_dagger(1, 2, foo_dfg, "dfg", true)]
+    #[case::dfg_dagger(1, 2, foo_dfg, "dfg_dagger", true)]
     #[case::tail_loop(1, 1, foo_tail_loop, "tail_loop", false)]
     #[case::conditional(1, 1, foo_conditional, "conditional", false)]
     #[case::conditional_dagger(1, 1, foo_conditional, "conditional_dagger", true)]
     #[case::call(1, 1, foo_call, "call", false)]
+    #[case::call_dagger(1, 1, foo_call, "call_dagger", true)]
     #[case::indir_call(1, 1, foo_indir_call, "indir_call", false)]
     #[case::load_fn(1, 1, foo_load_fn, "load_fn", false)]
     #[case::cfg(1, 1, foo_cfg, "cfg", false)]
     #[case::cfg_dagger(1, 1, foo_cfg, "cfg_dagger", true)]
+    #[case::nested_modifier(2, 2, foo_nested_modifier, "nested_modifier", false)]
     fn test_modifier_resolver_dfg(
         #[case] t_num: usize,
         #[case] c_num: u64,

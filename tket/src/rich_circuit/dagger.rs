@@ -110,14 +110,7 @@ pub fn is_quantum_type_term(term: &Term) -> bool {
         Term::List(_) | Term::ListConcat(_) | Term::Tuple(_) | Term::TupleConcat(_) => false,
         Term::ConstType(_) => false,
         _ => false,
-        // Term::Variable(term_var) => todo!(),
-        // Term::StringType => todo!(),
-        // Term::BytesType => todo!(),
-        // Term::FloatType => todo!(),
-        // Term::BoundedNat(_) => todo!(),
-        // Term::String(_) => todo!(),
-        // Term::Bytes(items) => todo!(),
-        // Term::Float(ordered_float) => todo!(),
+        // TODO: A lot of other cases are just ignored here.
     }
 }
 

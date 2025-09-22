@@ -4,7 +4,10 @@ use hugr::{
     std_extensions::arithmetic::{float_ops::FloatOps, float_types::ConstF64},
 };
 
-use crate::{extension::rotation::RotationOp, rich_circuit::modifier_resolver::*};
+use crate::{
+    extension::rotation::{ConstRotation, RotationOp},
+    rich_circuit::modifier_resolver::*,
+};
 use TketOp::*;
 
 impl<N: HugrNode> ModifierResolver<N> {
@@ -24,7 +27,12 @@ impl<N: HugrNode> ModifierResolver<N> {
 
         if control != 0 || dagger {
             if !op.is_quantum() {
-                return Err(ModifierResolverErrors::UnResolvable(n, op.into()).into());
+                return Err(ModifierResolverErrors::UnResolvable(
+                    n,
+                    "None quantum operation cannot be modified".to_string(),
+                    op.into(),
+                )
+                .into());
             }
         }
         match op {
@@ -120,11 +128,11 @@ impl<N: HugrNode> ModifierResolver<N> {
                     );
                     (pv_ry, pv_x)
                 };
-                let angle = new_fn.add_load_value(ConstF64::new(0.5));
-                let angle = new_fn
-                    .add_dataflow_op(RotationOp::from_halfturns_unchecked, vec![angle])
-                    .unwrap()
-                    .out_wire(0);
+                let angle = new_fn.add_load_value(ConstRotation::new(0.5).unwrap());
+                // let angle = new_fn
+                //     .add_dataflow_op(RotationOp::from_halfturns_unchecked, vec![angle])
+                //     .unwrap()
+                //     .out_wire(0);
                 let rot_in = pv_ry.incoming.remove(1);
                 connect(new_fn, &rot_in, &angle.into())?;
                 connect(new_fn, &pv_ry.outgoing[0], &pv_x.incoming[0])?;
@@ -144,8 +152,8 @@ impl<N: HugrNode> ModifierResolver<N> {
             }
             Ry | CY => {
                 let (gate, targ) = match op {
-                    Ry => (Rz, 0),
-                    CY => (CZ, 1),
+                    Ry => (Rx, 0),
+                    CY => (CX, 1),
                     _ => unreachable!(),
                 };
                 let s = new_fn.add_child_node(S);
@@ -167,16 +175,8 @@ impl<N: HugrNode> ModifierResolver<N> {
                 let Some((gate, angle)) = self.modifiers.rot_angle(op) else {
                     unreachable!()
                 };
-                let rot = new_fn.add_load_value(ConstF64::new(angle));
-                let rot = new_fn
-                    .add_dataflow_op(RotationOp::from_halfturns_unchecked, vec![rot])
-                    .unwrap()
-                    .out_wire(0);
-                let rot_2 = new_fn.add_load_value(ConstF64::new(angle * 2.0));
-                let rot_2 = new_fn
-                    .add_dataflow_op(RotationOp::from_halfturns_unchecked, vec![rot_2])
-                    .unwrap()
-                    .out_wire(0);
+                let rot = new_fn.add_load_value(ConstRotation::new(angle).unwrap());
+                let rot_2 = new_fn.add_load_value(ConstRotation::new(angle * 2.0).unwrap());
 
                 // CU(cs,t,2θ);
                 let mut pv_u = self.modify_tket_op(n, gate, new_fn, ancilla)?;
@@ -396,11 +396,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             CZ => {
                 // reduce CZ to CRz(pi)
                 let mut pv = self.modify_tket_op(n, CRz, new_fn, ancilla)?;
-                let halfturn = new_fn.add_load_value(ConstF64::new(1.0));
-                let halfturn = new_fn
-                    .add_dataflow_op(RotationOp::from_halfturns_unchecked, vec![halfturn])
-                    .unwrap()
-                    .out_wire(0);
+                let halfturn = new_fn.add_load_value(ConstRotation::new(1.0).unwrap());
                 let dw = pv.incoming.remove(2);
                 connect(new_fn, &dw, &halfturn.into())?;
                 Ok(pv)
@@ -517,6 +513,7 @@ impl CombinedModifier {
             H if self.control == 0 => Some(H),
             Rz if self.control == 0 => Some(Rz),
             Rz if self.control == 1 => Some(CRz),
+            CRz if self.control == 0 => Some(CRz),
             Rx if self.control == 0 => Some(Rx),
             Ry if self.control == 0 => Some(Ry),
             T if self.control == 0 => match self.dagger {
@@ -555,10 +552,10 @@ impl CombinedModifier {
     // op = exp(θ) * U(2θ)
     fn rot_angle(&self, op: TketOp) -> Option<(TketOp, f64)> {
         let (op, mut angle) = match op {
-            S => (Ry, 0.25),
-            T => (Ry, 0.125),
-            Tdg => (Ry, -0.125),
-            Sdg => (Ry, -0.25),
+            S => (Rz, 0.25),
+            T => (Rz, 0.125),
+            Tdg => (Rz, -0.125),
+            Sdg => (Rz, -0.25),
             V => (Rx, 0.25),
             Vdg => (Rx, -0.25),
             _ => return None,
@@ -959,7 +956,7 @@ mod test {
     #[test]
     fn test_cccx() {
         let mut module = ModuleBuilder::new();
-        let t_num = 3;
+        let t_num = 4;
         let c_num = 1;
         let targs = iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>();
         let foo_sig = Signature::new_endo(targs.clone());
