@@ -35,17 +35,19 @@ use crate::serialize::pytket::PytketDecodeErrorInner;
 
 /// State of the tket circuit being decoded.
 ///
-/// The state of an in-progress [`FunctionBuilder`] being built from a [`SerialCircuit`].
+/// The state of an in-progress [`FunctionBuilder`] being built from a
+/// [`SerialCircuit`].
 #[derive(Debug)]
 pub struct PytketDecoderContext<'h> {
     /// The Hugr being built.
     pub builder: FunctionBuilder<&'h mut Hugr>,
-    /// A tracker keeping track of the generated wires and their corresponding types.
+    /// A tracker keeping track of the generated wires and their corresponding
+    /// types.
     pub(super) wire_tracker: WireTracker,
     /// Configuration for decoding commands.
     ///
-    /// Contains custom operation decoders, that define translation of legacy tket
-    /// commands into HUGR operations.
+    /// Contains custom operation decoders, that define translation of legacy
+    /// tket commands into HUGR operations.
     config: Arc<PytketDecoderConfig>,
 }
 
@@ -216,7 +218,7 @@ impl<'h> PytketDecoderContext<'h> {
 
         // Insert any remaining parameters as new inputs
         for param in input_params {
-            let wire = dfg.add_input(rotation_type());
+            let wire = dfg.add_input(rotation_type()).expect("parent is DFG");
             wire_tracker.register_input_parameter(wire, param)?;
         }
 
@@ -322,7 +324,8 @@ impl<'h> PytketDecoderContext<'h> {
     ) -> Result<(), PytketDecodeError> {
         let circuit_json::Command { op, args, opgroup } = command;
 
-        // Find the latest [`TrackedQubit`] and [`TrackedBit`] for the command registers.
+        // Find the latest [`TrackedQubit`] and [`TrackedBit`] for the command
+        // registers.
         let (qubits, bits) = self.wire_tracker.pytket_args_to_tracked_elems(args)?;
 
         // Collect the parameters used in the command.
@@ -347,7 +350,8 @@ impl<'h> PytketDecoderContext<'h> {
     }
 }
 
-/// Public API, used by the [`PytketDecoder`][super::extension::PytketDecoder] implementers.
+/// Public API, used by the [`PytketDecoder`][super::extension::PytketDecoder]
+/// implementers.
 impl<'h> PytketDecoderContext<'h> {
     /// Returns a new set of [TrackedWires] for a list of [`TrackedQubit`]s,
     /// [`TrackedBit`]s, and [`LoadedParameter`]s following the required types.
@@ -360,7 +364,8 @@ impl<'h> PytketDecoderContext<'h> {
     ///
     /// # Arguments
     ///
-    /// * `config` - The configuration for the decoder, used to count the qubits and bits required by each type.
+    /// * `config` - The configuration for the decoder, used to count the qubits
+    ///   and bits required by each type.
     /// * `hugr` - The hugr to load the parameters to.
     /// * `types` - The types of the arguments we require in the wires.
     /// * `qubit_args` - The list of tracked qubits we require in the wires.
@@ -452,7 +457,8 @@ impl<'h> PytketDecoderContext<'h> {
             op_input_count.params,
         );
 
-        // Check that the input wires have the amount of elements required by the operation.
+        // Check that the input wires have the amount of elements required by the
+        // operation.
         if op_reg_count.qubits > qubits.len()
             || op_reg_count.bits > bits.len()
             || op_reg_count.params > params.len()
@@ -562,12 +568,17 @@ impl<'h> PytketDecoderContext<'h> {
         Ok(())
     }
 
-    /// Loads the given parameter expression as a [`LoadedParameter`] in the hugr.
+    /// Loads the given parameter expression as a [`LoadedParameter`] in the
+    /// hugr.
     ///
-    /// - If the parameter is a known algebraic operation, adds the required op and recurses on its inputs.
-    /// - If the parameter is a constant, a constant definition is added to the Hugr.
-    /// - If the parameter is a variable, adds a new `rotation` input to the region.
-    /// - If the parameter is a sympy expressions, adds it as a [`SympyOpDef`][crate::extension::sympy::SympyOpDef] black box.
+    /// - If the parameter is a known algebraic operation, adds the required op
+    ///   and recurses on its inputs.
+    /// - If the parameter is a constant, a constant definition is added to the
+    ///   Hugr.
+    /// - If the parameter is a variable, adds a new `rotation` input to the
+    ///   region.
+    /// - If the parameter is a sympy expressions, adds it as a
+    ///   [`SympyOpDef`][crate::extension::sympy::SympyOpDef] black box.
     pub fn load_parameter(&mut self, param: &str) -> Arc<LoadedParameter> {
         Arc::new(
             self.wire_tracker
@@ -575,7 +586,8 @@ impl<'h> PytketDecoderContext<'h> {
         )
     }
 
-    /// Loads the given parameter expression as a [`LoadedParameter`] in the hugr, and converts it to the requested type and unit.
+    /// Loads the given parameter expression as a [`LoadedParameter`] in the
+    /// hugr, and converts it to the requested type and unit.
     ///
     /// See [`PytketDecoderContext::load_parameter`] for more details.
     pub fn load_parameter_with_type(&mut self, param: &str, typ: ParameterType) -> LoadedParameter {
@@ -603,7 +615,9 @@ pub enum DecodeStatus {
     Unsupported,
 }
 
-/// Helper to continue exhausting the iterators in [`PytketDecoderContext::register_node_outputs`] until we have the total number of elements to report.
+/// Helper to continue exhausting the iterators in
+/// [`PytketDecoderContext::register_node_outputs`] until we have the total
+/// number of elements to report.
 fn make_unexpected_node_out_error<'ty>(
     config: &PytketDecoderConfig,
     port_types: impl IntoIterator<Item = (OutgoingPort, &'ty Type)>,

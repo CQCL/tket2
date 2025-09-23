@@ -48,9 +48,9 @@ large_enum_variant = "allow"
 [workspace.dependencies]
 
 # Make sure to run `just recompile-eccs` if the hugr serialisation format changes.
-hugr.path = "../hugr/hugr"
-hugr-core.path = "../hugr/hugr-core"
-hugr-cli.path = "../hugr/hugr-cli"
+hugr = { git = "https://github.com/CQCL/hugr", "rev" = "a3df91c" }
+hugr-core = { git = "https://github.com/CQCL/hugr", "rev" = "a3df91c" }
+hugr-cli = { git = "https://github.com/CQCL/hugr", "rev" = "a3df91c" }
 portgraph = "0.15.2"
 pyo3 = ">= 0.23.4, < 0.26"
 itertools = "0.14.0"

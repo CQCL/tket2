@@ -346,7 +346,7 @@ impl<H: Clone + HugrView<Node = hugr::Node>> ResourceScope<H> {
         let (curr_start, curr_end) = self
             .nodes()
             .iter()
-            .filter_map(|&n| (self.get_position(n)))
+            .filter_map(|&n| self.get_position(n))
             .minmax()
             .into_option()
             .expect("non empty subgraph");
