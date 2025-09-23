@@ -1,4 +1,5 @@
-//! Recussively analyse composite types to detect inner types
+//! Recursively analyse composite types to detect inner types.
+
 use hugr::extension::prelude::qb_t;
 use hugr::std_extensions::collections::array::{Array, ArrayKind};
 use hugr::std_extensions::collections::borrow_array::BorrowArray;
@@ -6,11 +7,11 @@ use hugr::std_extensions::collections::value_array::ValueArray;
 use hugr::types::{CustomType, SumType, Type, TypeArg};
 use std::collections::HashMap;
 
-/// If a type is an option of qubit.
-pub fn is_opt_qb(ty: &Type) -> bool {
+/// If a type is an option of the given element type.
+pub fn is_opt_of(ty: &Type, elem_type: &Type) -> bool {
     if let Some(sum) = ty.as_sum() {
         if let Some(inner) = sum.as_unary_option() {
-            return inner == &qb_t();
+            return inner == elem_type;
         }
     }
     false
@@ -27,70 +28,93 @@ pub fn array_args<AT: ArrayKind>(ext: &CustomType) -> Option<(u64, &Type)> {
         })
 }
 
-/// Analyzes quantum types to determine how they should be unpacked
-/// for barrier insertion.
-pub struct QTypeAnalyzer {
+/// Analyzes types to determine how they should be unpacked
+/// such that the `element_type` is extracted out into individual wires.
+/// Can recursively handle array and tuple composite types, elements inside
+/// other composite types (e.g. from unknown extensions) are ignored.
+///
+/// Arrays of `Option[element_type]` are treated as special cases
+/// and unpacked as if they were arrays of `element_type`, assuming the array is "full"
+/// (i.e. no `None` values). If this assumption is not true there will be a runtime error.
+pub struct TypeUnpacker {
+    /// The target element type to analyze for.
+    element_type: Type,
     /// Cache of unpacked types.
-    qubit_ports: HashMap<Type, Option<Vec<Type>>>,
+    cache: HashMap<Type, Option<Vec<Type>>>,
 }
 
-impl QTypeAnalyzer {
-    /// Create a new instance of the [QTypeAnalyzer].
-    pub fn new() -> Self {
+impl TypeUnpacker {
+    /// Create a new instance of the [TypeAnalyzer] for the given element type.
+    pub fn new(element_type: Type) -> Self {
         Self {
-            qubit_ports: HashMap::new(),
+            element_type,
+            cache: HashMap::new(),
         }
     }
 
+    /// Create a new instance of the [TypeAnalyzer] specifically for qubits.
+    pub fn for_qubits() -> Self {
+        Self::new(qb_t())
+    }
+
     /// Compute the row produced when a type is unpacked.
+    ///
+    /// The row contains one entry per element type extracted,
+    /// other row elements are the other elements that were not unpacked.
+    ///
+    /// For example a tuple of (array[bool; 2], array[qubit; 2]) when analyzing for qubits
+    /// would produce the row [array[bool; 2], qubit, qubit].
+    ///
     /// Uses memoization to avoid recomputing the same type.
-    /// `None` if the type does not contain qubits.
+    /// `None` if the type does not contain the element type.
     pub fn unpack_type(&mut self, ty: &Type) -> Option<Vec<Type>> {
-        match self.qubit_ports.get(ty) {
+        let unpacked = match self.cache.get(ty) {
             Some(unpacked) => unpacked.clone(),
             None => {
                 let unpacked = self._new_unpack_type(ty);
-                self.qubit_ports.insert(ty.clone(), unpacked.clone());
+                self.cache.insert(ty.clone(), unpacked.clone());
                 unpacked
             }
-        }
+        };
+
+        unpacked
     }
 
     /// Compute the row produced when a type is unpacked for the first time.
     fn _new_unpack_type(&mut self, ty: &Type) -> Option<Vec<Type>> {
-        if ty == &qb_t() {
-            return Some(vec![qb_t()]);
+        if ty == &self.element_type {
+            return Some(vec![self.element_type.clone()]);
         }
 
         if let Some(row) = ty.as_sum().and_then(SumType::as_tuple) {
-            let mut any_qb = false;
+            let mut any_element = false;
             let unpacked_row = row
                 .iter()
                 .flat_map(|t| {
                     let t = &t.clone().try_into_type().expect("unexpected row variable.");
                     match self.unpack_type(t) {
                         Some(inner) => {
-                            any_qb = true;
+                            any_element = true;
                             inner
                         }
                         None => vec![t.clone()],
                     }
                 })
                 .collect::<Vec<_>>();
-            any_qb.then_some(unpacked_row)
+            any_element.then_some(unpacked_row)
 
-            // other sums containing qubits are ignored.
+            // other sums containing the element type are ignored.
         } else if let Some((size, elem_ty)) = ty.as_extension().and_then(|ext| {
             array_args::<Array>(ext)
                 .or_else(|| array_args::<ValueArray>(ext))
                 .or_else(|| array_args::<BorrowArray>(ext))
         }) {
-            // Special case for Option[Qubit] since it is used in guppy qubit arrays.
-            // Fragile - would be better with dedicated guppy array type.
-            // Not sure how this can be improved without runtime barrier being able to
-            // take a compile time unknown number of qubits.
-            if is_opt_qb(elem_ty) {
-                Some(vec![qb_t(); size as usize])
+            // Special case for Option[ElementType] since it is used in arrays.
+            // Fragile - would be better with dedicated array type.
+            // Not sure how this can be improved without runtime operations being able to
+            // take a compile time unknown number of elements.
+            if is_opt_of(elem_ty, &self.element_type) {
+                Some(vec![self.element_type.clone(); size as usize])
             } else {
                 self.unpack_type(elem_ty).map(|inner| {
                     let total_size = size as usize * inner.len();
@@ -111,28 +135,35 @@ impl QTypeAnalyzer {
         self.unpack_type(ty).as_ref().map_or(1, Vec::len)
     }
 
+    /// Report if a type contains the element type.
+    pub fn is_element_container(&mut self, ty: &Type) -> bool {
+        self.unpack_type(ty).is_some()
+    }
+
     /// Report if a type contains qubits.
     pub fn is_qubit_container(&mut self, ty: &Type) -> bool {
-        self.unpack_type(ty).is_some()
+        self.is_element_container(ty)
+    }
+
+    /// Get the element type this analyzer is configured for.
+    pub fn element_type(&self) -> &Type {
+        &self.element_type
     }
 }
 
 /// Check if a type is an array with the given element type
-pub fn is_array_of<AT: ArrayKind>(typ: &Type, elem_type: &Type) -> Option<u64> {
-    typ.as_extension()
+pub fn is_array_of<AT: ArrayKind>(ty: &Type, elem_type: &Type) -> Option<u64> {
+    ty.as_extension()
         .and_then(array_args::<AT>)
         .and_then(|(size, e_ty)| (e_ty == elem_type).then_some(size))
 }
 
-/// Check if a type is specifically an array of qubits
-pub fn is_qubit_array<AT: ArrayKind>(typ: &Type) -> Option<u64> {
-    is_array_of::<AT>(typ, &qb_t())
-}
-impl Default for QTypeAnalyzer {
+impl Default for TypeUnpacker {
     fn default() -> Self {
-        Self::new()
+        Self::for_qubits()
     }
 }
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -142,7 +173,7 @@ mod test {
 
     #[test]
     fn test_primitive_types() {
-        let mut analyzer = QTypeAnalyzer::new();
+        let mut analyzer = TypeUnpacker::for_qubits();
 
         let qubit_result = analyzer.unpack_type(&qb_t());
         let types = qubit_result.unwrap();
@@ -158,7 +189,7 @@ mod test {
     #[case::value(ValueArray)]
     #[case::borrow(BorrowArray)]
     fn test_array_types<AK: ArrayKind>(#[case] _kind: AK) {
-        let mut analyzer = QTypeAnalyzer::new();
+        let mut analyzer = TypeUnpacker::for_qubits();
 
         // Array of qubits should be a container with that many qubits
         let qubit_array = AK::ty(3, qb_t());
@@ -183,7 +214,7 @@ mod test {
 
     #[test]
     fn test_option_types() {
-        let mut analyzer = QTypeAnalyzer::new();
+        let mut analyzer = TypeUnpacker::for_qubits();
 
         // Option<qubit> by itself should NOT be a container
         let opt_qubit = option_type(qb_t()).into();
@@ -204,7 +235,7 @@ mod test {
 
     #[test]
     fn test_tuple_types() {
-        let mut analyzer = QTypeAnalyzer::new();
+        let mut analyzer = TypeUnpacker::for_qubits();
 
         // Tuple with no qubits
         let no_qubit_tuple = Type::new_tuple(vec![bool_t(), usize_t()]);
@@ -242,7 +273,7 @@ mod test {
 
     #[test]
     fn test_complex_types() {
-        let mut analyzer = QTypeAnalyzer::new();
+        let mut analyzer = TypeUnpacker::for_qubits();
 
         // Array of tuples containing qubits
         let complex_type = array_type(2, Type::new_tuple(vec![bool_t(), qb_t()]));
@@ -276,7 +307,7 @@ mod test {
 
     #[test]
     fn test_helper_functions() {
-        let mut analyzer = QTypeAnalyzer::new();
+        let mut analyzer = TypeUnpacker::for_qubits();
         // Test unpacked_wires
         assert_eq!(analyzer.num_unpacked_wires(&bool_t()), 1);
         assert_eq!(
@@ -284,15 +315,21 @@ mod test {
             3
         );
 
-        // Test is_qubit_array
-        assert_eq!(is_qubit_array::<Array>(&array_type(5, qb_t())), Some(5));
-        assert_eq!(is_qubit_array::<Array>(&qb_t()), None);
-        assert_eq!(is_qubit_array::<Array>(&array_type(3, bool_t())), None);
+        // Test is_array_of
+        assert_eq!(
+            is_array_of::<Array>(&array_type(5, qb_t()), &qb_t()),
+            Some(5)
+        );
+        assert_eq!(is_array_of::<Array>(&qb_t(), &qb_t()), None);
+        assert_eq!(
+            is_array_of::<Array>(&array_type(3, bool_t()), &qb_t()),
+            None
+        );
     }
 
     #[test]
     fn test_caching() {
-        let mut analyzer = QTypeAnalyzer::new();
+        let mut analyzer = TypeUnpacker::for_qubits();
 
         // Create a complex type that will take some processing
         let complex_type = Type::new_tuple(vec![
@@ -312,5 +349,55 @@ mod test {
         let types = result1.unwrap();
         assert_eq!(types.len(), 13); // 10 from array + 3 from tuple
         assert!(types.iter().all(|t| t == &qb_t()));
+    }
+
+    #[test]
+    fn test_non_qb_element() {
+        // Test with bool type as the element type
+        let mut bool_analyzer = TypeUnpacker::new(bool_t());
+
+        // Bool itself should be detected
+        let bool_result = bool_analyzer.unpack_type(&bool_t());
+        let types = bool_result.unwrap();
+        assert_eq!(types.len(), 1);
+        assert_eq!(types[0], bool_t());
+
+        // Array of bools should be detected
+        let bool_array = array_type(3, bool_t());
+        let result = bool_analyzer.unpack_type(&bool_array);
+        let types = result.unwrap();
+        assert_eq!(types.len(), 3);
+        assert!(types.iter().all(|t| t == &bool_t()));
+
+        // Tuple containing bools
+        let bool_tuple = Type::new_tuple(vec![qb_t(), bool_t(), usize_t()]);
+        let result = bool_analyzer.unpack_type(&bool_tuple);
+        let types = result.unwrap();
+        assert_eq!(types.len(), 3);
+        assert_eq!(types[1], bool_t());
+
+        // Non-bool types should not be containers for this analyzer
+        assert!(!bool_analyzer.is_element_container(&qb_t()));
+        assert!(!bool_analyzer.is_element_container(&usize_t()));
+
+        // Test with usize type as the element type
+        let mut usize_analyzer = TypeUnpacker::new(usize_t());
+
+        // usize itself should be detected
+        let usize_result = usize_analyzer.unpack_type(&usize_t());
+        let types = usize_result.unwrap();
+        assert_eq!(types.len(), 1);
+        assert_eq!(types[0], usize_t());
+
+        // Array of usize should be detected
+        let usize_array = array_type(2, usize_t());
+        let result = usize_analyzer.unpack_type(&usize_array);
+        let types = result.unwrap();
+        assert_eq!(types.len(), 2);
+        assert!(types.iter().all(|t| t == &usize_t()));
+
+        // Check element_type accessor
+        assert_eq!(bool_analyzer.element_type(), &bool_t());
+        assert_eq!(usize_analyzer.element_type(), &usize_t());
     }
 }

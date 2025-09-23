@@ -92,8 +92,8 @@ mod test {
                 // if the runtime barrier function is never called
                 // make sure it is because there are no qubits in the barrier
 
-                use tket::analysis::qtype_analyzer::QTypeAnalyzer;
-                let mut analyzer = QTypeAnalyzer::new();
+                use tket::analysis::type_unpack::TypeUnpacker;
+                let mut analyzer = TypeUnpacker::for_qubits();
                 let tuple_type = hugr::types::Type::new_tuple(type_row);
                 assert!(!analyzer.is_qubit_container(&tuple_type));
                 assert_eq!(num_qb, 0);

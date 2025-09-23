@@ -2,6 +2,7 @@ use hugr::algorithms::replace_types::NodeTemplate;
 use hugr::builder::{Container, DataflowHugr};
 use hugr::extension::prelude::qb_t;
 use hugr::ops::OpTrait;
+use hugr::std_extensions::collections::array::ArrayKind;
 use hugr::types::{Signature, Type};
 use hugr::{
     algorithms::replace_types::ReplaceTypes,
@@ -13,7 +14,7 @@ use hugr::{
     },
     Hugr, HugrView, IncomingPort, Node, OutgoingPort, Wire,
 };
-use tket::analysis::qtype_analyzer::is_qubit_array;
+use tket::analysis::type_unpack::is_array_of;
 
 use crate::extension::qsystem::barrier::barrier_ops::{
     build_runtime_barrier_op, BarrierOperationFactory,
@@ -22,6 +23,11 @@ use crate::extension::qsystem::lower::insert_function;
 use crate::extension::qsystem::LowerTk2Error;
 
 type Target = (Node, IncomingPort);
+
+/// Check if a type is specifically an array of qubits
+pub fn is_qubit_array<AT: ArrayKind>(ty: &Type) -> Option<u64> {
+    is_array_of::<AT>(ty, &qb_t())
+}
 
 /// Responsible for inserting runtime barriers into the HUGR
 pub struct BarrierInserter {
@@ -48,13 +54,13 @@ impl BarrierInserter {
             .type_row
             .iter()
             .enumerate()
-            .filter(|(_, typ)| self.op_factory.type_analyzer().is_qubit_container(typ))
-            .map(|(i, typ)| {
+            .filter(|(_, ty)| self.op_factory.type_analyzer().is_qubit_container(ty))
+            .map(|(i, ty)| {
                 let port = OutgoingPort::from(i);
                 let target = hugr
                     .single_linked_input(node, port)
                     .expect("linearity violation.");
-                (typ.clone(), target)
+                (ty.clone(), target)
             })
             .collect()
     }
@@ -64,11 +70,11 @@ impl BarrierInserter {
         &mut self,
         hugr: &mut impl HugrMut<Node = Node>,
         parent: Node,
-        typ: &Type,
+        ty: &Type,
         target: Target,
     ) -> Option<Result<(), LowerTk2Error>> {
         // Check if this is an array of qubits
-        let size = is_qubit_array::<hugr::std_extensions::collections::array::Array>(typ)?;
+        let size = is_qubit_array::<hugr::std_extensions::collections::array::Array>(ty)?;
 
         // TODO if other array type, convert
 
@@ -157,8 +163,8 @@ impl BarrierInserter {
             .expect("Barrier can't be root.");
 
         // Handle the special case of a single array of qubits
-        if let [(typ, target)] = filtered_qbs.as_slice() {
-            if let Some(result) = self.try_array_barrier_shortcut(hugr, parent, typ, *target) {
+        if let [(ty, target)] = filtered_qbs.as_slice() {
+            if let Some(result) = self.try_array_barrier_shortcut(hugr, parent, ty, *target) {
                 return result;
             }
         }

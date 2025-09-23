@@ -22,10 +22,14 @@ use hugr::{
 };
 use indexmap::IndexMap;
 
-use tket::analysis::qtype_analyzer::{array_args, is_opt_qb, QTypeAnalyzer};
+use tket::analysis::type_unpack::{array_args, is_opt_of, TypeUnpacker};
 
 use crate::extension::qsystem::QSystemOpBuilder;
 
+/// If a type is an option of qubit. (Deprecated: use is_opt_of instead)
+pub fn is_opt_qb(ty: &Type) -> bool {
+    is_opt_of(ty, &qb_t())
+}
 /// Wrapper for ExtensionOp that implements Hash
 #[derive(Clone, PartialEq, Eq)]
 pub(super) struct OpHashWrapper(ExtensionOp);
@@ -63,7 +67,7 @@ pub struct BarrierOperationFactory {
     /// Function definitions for each instance of the operations.
     pub(super) funcs: IndexMap<OpHashWrapper, Hugr>,
     /// Type analyzer for determining qubit types
-    type_analyzer: QTypeAnalyzer,
+    type_analyzer: TypeUnpacker,
 }
 
 fn generic_array_unpack_sig<AK: ArrayKind>() -> PolyFuncTypeRV {
@@ -125,12 +129,12 @@ impl BarrierOperationFactory {
         Self {
             extension: Self::build_extension(),
             funcs: IndexMap::new(),
-            type_analyzer: QTypeAnalyzer::new(),
+            type_analyzer: TypeUnpacker::for_qubits(),
         }
     }
 
     /// Gets a reference to the internal type analyzer
-    pub fn type_analyzer(&mut self) -> &mut QTypeAnalyzer {
+    pub fn type_analyzer(&mut self) -> &mut TypeUnpacker {
         &mut self.type_analyzer
     }
 
