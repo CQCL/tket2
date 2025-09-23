@@ -1,7 +1,5 @@
 //! Encoder and decoder for the tket.bool extension
 
-use std::sync::Arc;
-
 use super::PytketEmitter;
 use crate::extension::bool::{BoolOp, ConstBool, BOOL_EXTENSION_ID, BOOL_TYPE_NAME};
 use crate::serialize::pytket::config::TypeTranslatorSet;
@@ -121,7 +119,7 @@ impl PytketDecoder for BoolEmitter {
         op: &tket_json_rs::circuit_json::Operation,
         qubits: &[TrackedQubit],
         bits: &[TrackedBit],
-        params: &[Arc<LoadedParameter>],
+        params: &[LoadedParameter],
         _opgroup: Option<&str>,
         decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {

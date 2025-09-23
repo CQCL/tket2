@@ -29,8 +29,10 @@ pip install tket
 
 See the [Getting Started][getting-started] guide and the other [examples].
 
-  [getting-started]: https://github.com/CQCL/tket2/blob/main/tket-py/docs/examples/1-Getting-Started.ipynb
-  [examples]: https://github.com/CQCL/tket2/blob/main/tket-py/docs/examples/
+  [getting-started]: https://github.com/CQCL/tket2/blob/main/tket-py/examples/1-Getting-Started.ipynb
+  [examples]: https://github.com/CQCL/tket2/tree/main/tket-py/examples
+
+The API documentation for `tket-py` can be found at https://cqcl.github.io/tket2/.
 
 ## Development
 

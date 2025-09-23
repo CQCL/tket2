@@ -141,7 +141,6 @@ mod tests {
         build().unwrap()
     }
 
-    #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
     #[rstest]
     #[case(2, false, false)]
     #[case(2, true, false)]
@@ -151,6 +150,7 @@ mod tests {
     #[case(4, true, false)]
     #[case(4, false, true)]
     #[case(4, true, true)]
+    #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
     fn test_resource_scope_creation(
         #[case] n_qubits: usize,
         #[case] add_rz: bool,

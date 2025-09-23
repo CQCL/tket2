@@ -101,7 +101,7 @@ pub struct TrackedWires {
     /// along with their types.
     value_wires: Vec<WireData>,
     /// List of wires corresponding to the parameters.
-    parameter_wires: Vec<Arc<LoadedParameter>>,
+    parameter_wires: Vec<LoadedParameter>,
 }
 
 impl TrackedWires {
@@ -142,7 +142,7 @@ impl TrackedWires {
     /// Return an iterator over the parameters.
     #[inline]
     pub fn iter_parameters(&self) -> impl Iterator<Item = &'_ LoadedParameter> + Clone + '_ {
-        self.parameter_wires.iter().map(|p| p.as_ref())
+        self.parameter_wires.iter()
     }
 
     /// Returns the types of the value wires.
@@ -580,7 +580,7 @@ impl WireTracker {
         types: &[Type],
         qubit_args: &[TrackedQubit],
         bit_args: &[TrackedBit],
-        params: &[Arc<LoadedParameter>],
+        params: &[LoadedParameter],
     ) -> Result<TrackedWires, PytketDecodeError> {
         // We need to return a set of wires that contain all the arguments.
         //

@@ -10,9 +10,6 @@ mod pqueue_worker;
 use std::fmt::Debug;
 
 #[cfg(feature = "portmatching")]
-#[allow(deprecated)]
-pub use badger::DefaultBadgerOptimiser;
-#[cfg(feature = "portmatching")]
 pub use badger::ECCBadgerOptimiser;
 pub use badger::{BadgerLogger, BadgerOptimiser};
 use pqueue::StatePQueue;

@@ -15,13 +15,28 @@ permissions:
   id-token: write
 
 jobs:
+    # Check if changes were made to the relevant files.
+    # Always returns true if running on the default branch, to ensure all changes are thoroughly checked.
+    changes:
+      name: Check for changes
+      runs-on: ubuntu-latest
+      permissions:
+        pull-requests: read
+      outputs:
+        python: ${{ steps.filter.outputs.python || github.event_name != 'pull_request' }}
+      steps:
+        - uses: actions/checkout@v5
+        - uses: ./.github/actions/check-changes
+          id: filter
     test:
       name: Test sphinx docs build
+      needs: [changes]
+      if: ${{ needs.changes.outputs.python == 'true' }}
       runs-on: ubuntu-latest
       env:
           UV_FROZEN: 1
       steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v5
           with:
             submodules: true
 
@@ -30,7 +45,7 @@ jobs:
             just-version: '1.40.0'
 
         - name: Install uv
-          uses: astral-sh/setup-uv@v5
+          uses: astral-sh/setup-uv@v6
           with:
               enable-cache: true
               version: "0.6.6"
@@ -40,18 +55,19 @@ jobs:
             just build-pydocs
 
         - name: Upload artifact.
-          uses: actions/upload-pages-artifact@v3
+          uses: actions/upload-pages-artifact@v4
           with:
             path: ./tket-py/docs/build
 
-            
+
     publish:
       name: Publish docs.
       environment:
           name: github-pages
           url: ${{ steps.deployment.outputs.page_url }}
       runs-on: ubuntu-latest
-      needs: test
+      needs: [test, changes]
+      if: ${{ needs.changes.outputs.python == 'true' && github.event_name == 'push' }}
       steps:
         - name: Setup Pages
           uses: actions/configure-pages@v5
