@@ -12,20 +12,20 @@ use hugr::{
     extension::{prelude::qb_t, simple_op::MakeExtensionOp},
     hugr::hugrmut::HugrMut,
     ops::{Const, ExtensionOp, OpType, CFG},
-    std_extensions::collections::array::{array_type, ArrayOp},
+    std_extensions::collections::array::array_type,
     type_row,
     types::{EdgeKind, FuncTypeBase, Signature, Type},
     HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex, Wire,
 };
-use itertools::{Either, EitherOrBoth, Itertools};
+use itertools::{Either, Itertools};
 use std::{
     collections::{HashMap, VecDeque},
     iter, mem,
 };
 
 use super::{
-    dagger::is_quantum_type, modifier_resolver::global_phase_modify::delete_phase, GlobalPhase,
-    Modifier,
+    dagger::contain_quantum_type, modifier_resolver::global_phase_modify::delete_phase,
+    GlobalPhase, Modifier,
 };
 use crate::TketOp;
 
@@ -67,7 +67,7 @@ impl CombinedModifier {
 }
 
 /// A wire of both direction.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct DirWire<N = Node>(N, Port);
 
 impl<N: HugrNode> std::fmt::Display for DirWire<N> {
@@ -503,7 +503,11 @@ impl<N: HugrNode> ModifierResolver<N> {
                 for (in_node, in_port) in h.linked_inputs(out_node, out_port) {
                     for a in self.map_get(&(in_node, in_port).into())? {
                         for b in self.map_get(&(out_node, out_port).into())? {
-                            connect(new_dfg, a, b)?;
+                            connect(new_dfg, a, b).map_err(|e| {
+                                let (subgraph, result) = h.extract_hugr(parent);
+                                println!("{}", subgraph.mermaid_string());
+                                e
+                            })?
                         }
                     }
                 }
@@ -664,9 +668,140 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(())
     }
 
-    fn need_swap(&self, t: EitherOrBoth<&Type>) -> bool {
-        self.modifiers.dagger
-            && matches!(t.both(), Some((t1, t2)) if is_quantum_type(t1) && is_quantum_type(t2))
+    /// This function registers the correspondence of the ports of the old node to the new node.
+    /// If the dagger is not applied, the ports are mapped directly.
+    /// If the dagger is applied, the quantum input/output ports are swapped.
+    /// Inputs:
+    /// * `n`: the old node
+    /// * `node`: the new node
+    /// * `inputs`/`outputs`: the types of the input/output ports of the old node
+    /// * `input_offset`/`output_offset`: the offset of the ports of the old and new node
+    ///   - e.g., for IndirectCall, the first input port is the loaded function, which we want to ignore here.
+    ///     So the `input_offset` is 1.
+    /// * `new_offset`: the offset of the ports of the new node, especially the number of control qubits.
+    ///
+    /// The order of the resulting ports is determined as follows:
+    /// - Every ports are devided into quantum ports and non-quantum ports.
+    /// - Until the first quantum port is reached, the non-quantum ports are wired in order.
+    /// - When a quantum port is reached for both inputs and outputs,
+    ///   if the dagger is applied, the quantum input is wired to the output,
+    ///   and the quantum output is wired to the input until they reaches the next non-quantum port.
+    /// - This is repeated until all ports are wired.
+    ///
+    /// For example, if the input types are `[qubit, int, qubit, qubit, int]` and
+    /// the output types are `[qubit, array[qubit, _]]`,
+    /// and the dagger is applied, the wiring is as follows:
+    /// - input: [out0:qubit, in1:int, out1:array[qubit, _], in4:int]
+    /// - output: [in0:qubit, in2:qubit, in3:qubit]
+    ///
+    /// FIXME: This reverses everything that can contain qubits, which might not be intended.
+    /// TODO: Handle state order edges.
+    fn wire_node_inout<'a>(
+        &mut self,
+        n: N,
+        node: Node,
+        inputs: impl Iterator<Item = &'a Type>,
+        outputs: impl Iterator<Item = &'a Type>,
+        input_offset: usize,
+        output_offset: usize,
+        new_offset: usize,
+    ) -> Result<(), ModifierResolverErrors<N>> {
+        self.wire_inout(
+            n,
+            n,
+            node,
+            node,
+            inputs,
+            outputs,
+            input_offset,
+            output_offset,
+            new_offset,
+        )
+    }
+
+    fn wire_inout<'a>(
+        &mut self,
+        old_in: N,
+        old_out: N,
+        new_in: Node,
+        new_out: Node,
+        mut inputs: impl Iterator<Item = &'a Type>,
+        mut outputs: impl Iterator<Item = &'a Type>,
+        input_offset: usize,
+        output_offset: usize,
+        new_offset: usize,
+    ) -> Result<(), ModifierResolverErrors<N>> {
+        let mut old_in_wire = (old_in, IncomingPort::from(input_offset)).into();
+        let mut old_out_wire = (old_out, OutgoingPort::from(output_offset)).into();
+        let mut new_in_wire = (new_in, IncomingPort::from(input_offset + new_offset)).into();
+        let mut new_out_wire = (new_out, OutgoingPort::from(output_offset + new_offset)).into();
+        let mut in_ty = inputs.next();
+        let mut out_ty = outputs.next();
+
+        loop {
+            // Wire inputs until the first quantum type
+            while let Some(ty) = in_ty {
+                if contain_quantum_type(ty) {
+                    break;
+                }
+                self.map_insert(old_in_wire, new_in_wire)?;
+                old_in_wire = old_in_wire.shift(1);
+                new_in_wire = new_in_wire.shift(1);
+                in_ty = inputs.next();
+            }
+
+            // Wire outputs until the first quantum type
+            while let Some(ty) = out_ty {
+                if contain_quantum_type(ty) {
+                    break;
+                }
+                self.map_insert(old_out_wire, new_out_wire)?;
+                old_out_wire = old_out_wire.shift(1);
+                new_out_wire = new_out_wire.shift(1);
+                out_ty = outputs.next();
+            }
+
+            // If both are quantum types
+            while let Some(ty) = in_ty {
+                if !contain_quantum_type(ty) {
+                    break;
+                }
+                let new_in = if !self.modifiers.dagger {
+                    let new_in = new_in_wire;
+                    new_in_wire = new_in_wire.shift(1);
+                    new_in
+                } else {
+                    let new_in = new_out_wire;
+                    new_out_wire = new_out_wire.shift(1);
+                    new_in
+                };
+                self.map_insert(old_in_wire, new_in)?;
+                old_in_wire = old_in_wire.shift(1);
+                in_ty = inputs.next();
+            }
+            while let Some(ty) = out_ty {
+                if !contain_quantum_type(ty) {
+                    break;
+                }
+                let new_out = if !self.modifiers.dagger {
+                    let new_out = new_out_wire;
+                    new_out_wire = new_out_wire.shift(1);
+                    new_out
+                } else {
+                    let new_out = new_in_wire;
+                    new_in_wire = new_in_wire.shift(1);
+                    new_out
+                };
+                self.map_insert(old_out_wire, new_out)?;
+                old_out_wire = old_out_wire.shift(1);
+                out_ty = outputs.next();
+            }
+
+            if in_ty.is_none() && out_ty.is_none() {
+                break;
+            }
+        }
+        Ok(())
     }
 
     fn modify_constant(
@@ -705,7 +840,6 @@ impl<N: HugrNode> ModifierResolver<N> {
             ));
         }
 
-        // If TketOp, return the modified operation.
         if let Some(op) = TketOp::from_optype(optype) {
             let pv = self.modify_tket_op(n, op, new_dfg, &mut vec![])?;
             self.add_edge_from_pv(h, n, pv)
@@ -719,9 +853,10 @@ impl<N: HugrNode> ModifierResolver<N> {
         } else if Modifier::from_optype(optype).is_some() {
             // TODO: check if this is ok.
             self.forget_node(h, n)
-        } else if let Some(op) = ArrayOp::from_optype(optype) {
-            // TODO: need to handle the case of dagger
-            self.modify_array_op(h, n, op, new_dfg)
+        } else if self.modify_array_op(h, n, optype, new_dfg)? {
+            Ok(())
+        } else if self.try_array_convert(h, n, optype, new_dfg)? {
+            Ok(())
         } else {
             // Some other Hugr extension operation.
             // Here, we do not know what is the modified version.
@@ -770,30 +905,15 @@ impl<N: HugrNode> ModifierResolver<N> {
             *c = Wire::new(new, i);
         }
         let offset = self.control_num();
-        for (i, in_out_type) in signature
-            .input
-            .iter()
-            .zip_longest(signature.output.iter())
-            .enumerate()
-        {
-            let swap = self.need_swap(in_out_type.as_deref());
-            if in_out_type.has_left() {
-                let old_in = (n, IncomingPort::from(i)).into();
-                let mut new_in = DirWire::from((new, IncomingPort::from(i + offset)));
-                if swap {
-                    new_in = new_in.reverse();
-                }
-                self.map_insert(old_in, new_in)?;
-            }
-            if in_out_type.has_right() {
-                let old_out = (n, OutgoingPort::from(i)).into();
-                let mut new_out = DirWire::from((new, OutgoingPort::from(i + offset)));
-                if swap {
-                    new_out = new_out.reverse();
-                }
-                self.map_insert(old_out, new_out)?;
-            }
-        }
+        self.wire_node_inout(
+            n,
+            new,
+            signature.input.iter(),
+            signature.output.iter(),
+            0,
+            0,
+            offset,
+        )?;
 
         Ok(())
     }
@@ -862,8 +982,38 @@ pub fn resolve_modifier_with_entrypoints(
     }
 
     print!("Resulting circuit:\n{}", h.mermaid_string());
+
+    {
+        use hugr::{
+            envelope::{EnvelopeConfig, EnvelopeFormat},
+            extension::ExtensionRegistry,
+        };
+        use std::{fs::File, path::Path};
+
+        use crate::{
+            extension::{bool::BOOL_EXTENSION, rotation::ROTATION_EXTENSION, TKET_EXTENSION},
+            rich_circuit::*,
+        };
+
+        let env_format = EnvelopeFormat::PackageJson;
+        let env_conf: EnvelopeConfig = EnvelopeConfig::new(env_format);
+        let iter: Vec<Arc<Extension>> = vec![
+            ROTATION_EXTENSION.to_owned(),
+            TKET_EXTENSION.to_owned(),
+            BOOL_EXTENSION.to_owned(),
+        ];
+        let regist: ExtensionRegistry = ExtensionRegistry::new(iter);
+        let f = File::create(Path::new("HUGR.json")).unwrap();
+        let writer = std::io::BufWriter::new(f);
+        h.extract_hugr(h.module_root())
+            .0
+            .store_with_exts(writer, env_conf, &regist)
+            .unwrap();
+    }
+
     h.validate()
         .map_err(|e| ModifierResolverErrors::BuildError(e.into()))?;
+    print!("Validated!");
 
     Ok(())
 }

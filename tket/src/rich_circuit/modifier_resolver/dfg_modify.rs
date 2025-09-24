@@ -18,7 +18,6 @@ use hugr::{
     HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire,
 };
 use hugr_core::hugr::internal::PortgraphNodeMap;
-use itertools::Itertools;
 use petgraph::visit::{Topo, Walker};
 
 use super::{DirWire, ModifierResolver, ModifierResolverErrors, PortExt};
@@ -100,28 +99,20 @@ impl<N: HugrNode> ModifierResolver<N> {
                     self.control_num()
                 };
 
-                for (i, ref in_out_ty) in input.iter().zip_longest(output.iter()).enumerate() {
-                    // If dagger and the i-th input/output are quantum types, swap them.
-                    if self.need_swap(in_out_ty.as_deref()) {
-                        let old_in_wire = (old_in, OutgoingPort::from(i)).into();
-                        let old_out_wire = (old_out, IncomingPort::from(i)).into();
-                        let new_in_wire = (new_out, IncomingPort::from(i).shift(offset)).into();
-                        let new_out_wire = (new_in, OutgoingPort::from(i).shift(offset)).into();
-                        self.map_insert(old_in_wire, new_in_wire)?;
-                        self.map_insert(old_out_wire, new_out_wire)?;
-                        continue;
-                    }
-                    if in_out_ty.has_left() {
-                        let old_in_wire = (old_in, OutgoingPort::from(i)).into();
-                        let new_in_wire = (new_in, OutgoingPort::from(i).shift(offset)).into();
-                        self.map_insert(old_in_wire, new_in_wire)?;
-                    }
-                    if in_out_ty.has_right() {
-                        let old_out_wire = (old_out, IncomingPort::from(i)).into();
-                        let new_out_wire = (new_out, IncomingPort::from(i).shift(offset)).into();
-                        self.map_insert(old_out_wire, new_out_wire)?;
-                    }
-                }
+                // Wire the inputs and outputs
+                // Note that the local variable `old_in` is the input node of the old DFG,
+                // which we wire output wires from, so the name does not match the argument of `wire_inout`.
+                self.wire_inout(
+                    old_out,
+                    old_in,
+                    new_out,
+                    new_in,
+                    output.iter(),
+                    input.iter(),
+                    0,
+                    0,
+                    offset,
+                )?;
             }
             OpType::TailLoop(tail_loop) => {
                 let just_input_num = tail_loop.just_inputs.len();
@@ -152,42 +143,28 @@ impl<N: HugrNode> ModifierResolver<N> {
                 let DataflowBlock {
                     inputs: ref input,
                     other_outputs: ref output,
-                    ref sum_rows,
+                    sum_rows: _sum_rows,
                 } = dfb;
-                let offset = if matches!(optype, OpType::FuncDefn(_)) {
-                    self.modifiers.accum_ctrl.len()
-                } else {
-                    self.control_num()
-                };
+                let offset = self.control_num();
 
                 // The wire for sum_rows always corresponds directly.
+                // This should not contain qubits, but it can be quantum type (e.g., unit type).
+                // Therefore, this wire is handled separately.
                 self.map_insert(
                     (old_out, IncomingPort::from(0)).into(),
                     (new_out, IncomingPort::from(0)).into(),
                 )?;
-                for (i, ref in_out_ty) in input.iter().zip_longest(output.iter()).enumerate() {
-                    // If dagger and the i-th input/output are quantum types, swap them.
-                    if self.need_swap(in_out_ty.as_deref()) {
-                        let old_in_wire = (old_in, OutgoingPort::from(i)).into();
-                        let old_out_wire = (old_out, IncomingPort::from(i + 1)).into();
-                        let new_in_wire = (new_out, IncomingPort::from(i + 1).shift(offset)).into();
-                        let new_out_wire = (new_in, OutgoingPort::from(i).shift(offset)).into();
-                        self.map_insert(old_in_wire, new_in_wire)?;
-                        self.map_insert(old_out_wire, new_out_wire)?;
-                        continue;
-                    }
-                    if in_out_ty.has_left() {
-                        let old_in_wire = (old_in, OutgoingPort::from(i)).into();
-                        let new_in_wire = (new_in, OutgoingPort::from(i).shift(offset)).into();
-                        self.map_insert(old_in_wire, new_in_wire)?;
-                    }
-                    if in_out_ty.has_right() {
-                        let old_out_wire = (old_out, IncomingPort::from(i + 1)).into();
-                        let new_out_wire =
-                            (new_out, IncomingPort::from(i + 1).shift(offset)).into();
-                        self.map_insert(old_out_wire, new_out_wire)?;
-                    }
-                }
+                self.wire_inout(
+                    old_out,
+                    old_in,
+                    new_out,
+                    new_in,
+                    output.iter(),
+                    input.iter(),
+                    1,
+                    0,
+                    offset,
+                )?;
             }
             OpType::Case(_) => {
                 return Err(ModifierResolverErrors::Unreachable(
@@ -272,15 +249,6 @@ impl<N: HugrNode> ModifierResolver<N> {
                         .hugr_mut()
                         .connect(wire.node(), wire.source(), out_node, index);
                 }
-                // let mut offset = 0;
-                // for (index, size) in modifiers.accum_ctrl.iter().enumerate() {
-                //     let wire = new_dfg
-                //         .add_new_array(qb_t(), controls[offset..offset + size].iter().cloned())?;
-                //     offset += size;
-                //     new_dfg
-                //         .hugr_mut()
-                //         .connect(wire.node(), wire.source(), out_node, index);
-                // }
             }
             OpType::DFG(_) | OpType::Case(_) => {
                 for (i, ctrl) in controls.iter().enumerate() {
@@ -312,17 +280,6 @@ impl<N: HugrNode> ModifierResolver<N> {
         new_dfg: &mut impl Dataflow,
     ) -> Result<Vec<Wire>, ModifierResolverErrors<N>> {
         let controls = self.controls_ref();
-        println!("Packing controls: controls = {:?}", controls);
-        println!(
-            "                  accum_ctrl = {:?}",
-            self.modifiers().accum_ctrl
-        );
-        println!("                  control_num = {}", self.control_num());
-        println!(
-            "                  new_dfg = {}",
-            new_dfg.hugr().mermaid_string()
-        );
-        println!("                  wire map =");
         let map = &self.corresp_map;
         for (old, new) in map.iter() {
             println!("                    {} -> {:?}", old, new);
@@ -416,31 +373,15 @@ impl<N: HugrNode> ModifierResolver<N> {
             *c = Wire::new(new_dfg, i);
         }
         let offset = self.control_num();
-        for (i, in_out_type) in signature
-            .input
-            .iter()
-            .zip_longest(signature.output.iter())
-            .enumerate()
-        {
-            let swap = self.need_swap(in_out_type.as_deref());
-            if in_out_type.has_left() {
-                let old_in = (n, IncomingPort::from(i)).into();
-                let mut new_in = DirWire::from((new_dfg, IncomingPort::from(i + offset)));
-                if swap {
-                    new_in = new_in.reverse();
-                }
-                self.map_insert(old_in, new_in)?;
-            }
-            if in_out_type.has_right() {
-                let old_out = (n, OutgoingPort::from(i)).into();
-                let mut new_out = DirWire::from((new_dfg, OutgoingPort::from(i + offset)));
-                if swap {
-                    new_out = new_out.reverse();
-                }
-                self.map_insert(old_out, new_out)?;
-            }
-        }
-        // TODO: StateOrder
+        self.wire_node_inout(
+            n,
+            new_dfg,
+            signature.input.iter(),
+            signature.output.iter(),
+            0,
+            0,
+            offset,
+        )?;
 
         Ok(())
     }
@@ -559,34 +500,17 @@ impl<N: HugrNode> ModifierResolver<N> {
                 let new_port = OutgoingPort::from(i);
                 self.map_insert((old_in, old_port).into(), (new_in, new_port).into())?
             }
-            for (i, in_out_type) in conditional
-                .other_inputs
-                .iter()
-                .zip_longest(conditional.outputs.iter())
-                .enumerate()
-            {
-                if self.need_swap(in_out_type.as_deref()) {
-                    let old_in_wire = (old_in, OutgoingPort::from(i + tag_wire_num)).into();
-                    let old_out_wire = (old_out, IncomingPort::from(i)).into();
-                    let new_in_wire = (new_out, IncomingPort::from(i + offset)).into();
-                    let new_out_wire =
-                        (new_in, OutgoingPort::from(i + offset + tag_wire_num)).into();
-                    self.map_insert(old_in_wire, new_in_wire)?;
-                    self.map_insert(old_out_wire, new_out_wire)?;
-                    continue;
-                }
-                if in_out_type.has_left() {
-                    let old_in_wire = (old_in, OutgoingPort::from(i).shift(tag_wire_num)).into();
-                    let new_in_wire =
-                        (new_in, OutgoingPort::from(i).shift(offset + tag_wire_num)).into();
-                    self.map_insert(old_in_wire, new_in_wire)?;
-                }
-                if in_out_type.has_right() {
-                    let old_out_wire = (old_out, IncomingPort::from(i)).into();
-                    let new_out_wire = (new_out, IncomingPort::from(i).shift(offset)).into();
-                    self.map_insert(old_out_wire, new_out_wire)?;
-                }
-            }
+            self.wire_inout(
+                old_out,
+                old_in,
+                new_out,
+                new_in,
+                conditional.outputs.iter(),
+                conditional.other_inputs.iter(),
+                0,
+                tag_wire_num,
+                offset,
+            )?;
 
             // Modify the children.
             self.modify_dfg_children(h, case_node, &mut case_builder)?;
@@ -617,37 +541,15 @@ impl<N: HugrNode> ModifierResolver<N> {
             (n, IncomingPort::from(0)).into(),
             (new_conditional, IncomingPort::from(0)).into(),
         )?;
-        for (i, in_out_type) in conditional
-            .other_inputs
-            .iter()
-            .zip_longest(conditional.outputs.iter())
-            .enumerate()
-        {
-            let old_in_wire = (n, IncomingPort::from(i + 1)).into();
-            let old_out_wire = (n, OutgoingPort::from(i)).into();
-            let mut new_in_wire = (new_conditional, IncomingPort::from(i + offset + 1)).into();
-            let mut new_out_wire = (new_conditional, OutgoingPort::from(i + offset)).into();
-            if self.need_swap(in_out_type.as_deref()) {
-                mem::swap(&mut new_in_wire, &mut new_out_wire);
-            }
-            if in_out_type.has_left() {
-                self.map_insert(old_in_wire, new_in_wire)?;
-            }
-            if in_out_type.has_right() {
-                self.map_insert(old_out_wire, new_out_wire)?;
-            }
-        }
-        // StateOrder
-        // for i in conditional.other_inputs.len() + 1..h.num_inputs(n) {
-        //     let old_port = OutgoingPort::from(i);
-        //     let new_port = OutgoingPort::from(i + offset);
-        //     self.map_insert((n, old_port).into(), (new_conditional, new_port).into())?
-        // }
-        // for i in conditional.outputs.len()..h.num_outputs(n) {
-        //     let old_port = IncomingPort::from(i);
-        //     let new_port = IncomingPort::from(i + offset);
-        //     self.map_insert((n, old_port).into(), (new_conditional, new_port).into())?
-        // }
+        self.wire_node_inout(
+            n,
+            new_conditional,
+            conditional.other_inputs.iter(),
+            conditional.outputs.iter(),
+            1,
+            0,
+            offset,
+        )?;
 
         Ok(())
     }
@@ -954,6 +856,7 @@ mod test {
     #[case::call(1, 1, foo_call, "call", false)]
     #[case::call_dagger(1, 1, foo_call, "call_dagger", true)]
     #[case::indir_call(1, 1, foo_indir_call, "indir_call", false)]
+    #[case::indir_call_dagger(1, 1, foo_indir_call, "indir_call", true)]
     #[case::load_fn(1, 1, foo_load_fn, "load_fn", false)]
     #[case::cfg(1, 1, foo_cfg, "cfg", false)]
     #[case::cfg_dagger(1, 1, foo_cfg, "cfg_dagger", true)]

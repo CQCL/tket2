@@ -62,26 +62,15 @@ impl<N: HugrNode> ModifierResolver<N> {
         let controls = self.unpack_controls(new_dfg, controls)?;
         *self.controls() = controls;
         // wire the inputs/outputs
-        for (i, in_out_type) in signature
-            .input
-            .iter()
-            .zip_longest(signature.output.iter())
-            .enumerate()
-        {
-            let old_in_wire = (n, IncomingPort::from(i)).into();
-            let old_out_wire = (n, OutgoingPort::from(i)).into();
-            let mut new_in_wire = (new_call_node, IncomingPort::from(i + offset)).into();
-            let mut new_out_wire = (new_call_node, OutgoingPort::from(i + offset)).into();
-            if self.need_swap(in_out_type.as_deref()) {
-                mem::swap(&mut new_in_wire, &mut new_out_wire);
-            }
-            if in_out_type.has_left() {
-                self.map_insert(old_in_wire, new_in_wire)?;
-            }
-            if in_out_type.has_right() {
-                self.map_insert(old_out_wire, new_out_wire)?;
-            }
-        }
+        self.wire_node_inout(
+            n,
+            new_call_node,
+            signature.input.iter(),
+            signature.output.iter(),
+            0,
+            0,
+            offset,
+        )?;
 
         Ok(())
     }
@@ -239,24 +228,23 @@ impl<N: HugrNode> ModifierResolver<N> {
             *ctrl = Wire::new(new_call_node, i);
         }
         *self.controls() = self.unpack_controls(new_dfg, controls)?;
-        for port in h.all_node_ports(n) {
-            let old_wire = DirWire(n, port);
-            if port == IncomingPort::from(0).into() {
-                self.map_insert_none(old_wire)?;
-                continue;
-            }
-            self.map_insert(old_wire, DirWire(new_call_node, port.shift(offset)))?;
-        }
+
+        let signature = indir_call.signature();
+        self.wire_node_inout(
+            n,
+            new_call_node,
+            signature.input.iter().skip(1),
+            signature.output.iter(),
+            1,
+            0,
+            offset,
+        )?;
         new_dfg.hugr_mut().connect(new_load, 0, new_call_node, 0);
+        self.map_insert_none((n, IncomingPort::from(0)).into())?;
 
         // FIXME: Forgetting all the nodes in the chain so that we don't have to worry about mapping the edges.
         // Otherwise, there would be edges in the original graph that have no corresponding edges in the new graph.
         // However, this could remove wires referenced by other nodes that are not in the chain.
-        println!(
-            "Forgetting nodes: {:?} in hugr\n{}",
-            trace,
-            h.mermaid_string()
-        );
         for node in trace {
             self.forget_node(h, node)?
         }
