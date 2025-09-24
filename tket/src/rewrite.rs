@@ -342,21 +342,59 @@ impl<N: HugrNode> TryFrom<InvalidSubgraph<N>> for InvalidRewrite {
 ///
 /// The [`CircuitMatcher`] is used to find matches in the circuit, and the
 /// [`CircuitReplacer`] is used to create [`CircuitRewrite`]s for each match.
-#[derive(Clone, Debug)]
-pub struct MatchReplaceRewriter<C, R> {
+pub struct MatchReplaceRewriter<C: CircuitMatcher, R> {
     matcher: C,
     replacer: R,
     /// Name of the rewriter
     name: Option<String>,
+    /// Hash function for partial match info. If set, this is used to deduplicate
+    /// partial matches.
+    hash_partial_match_info: Option<Box<dyn Fn(&C::PartialMatchInfo, &mut fxhash::FxHasher)>>,
+    /// Hash function for match info. If set, this is used to deduplicate
+    /// complete matches
+    hash_match_info: Option<Box<dyn Fn(&C::MatchInfo, &mut fxhash::FxHasher)>>,
 }
 
-impl<C, R> MatchReplaceRewriter<C, R> {
+impl<C: CircuitMatcher, R> MatchReplaceRewriter<C, R> {
     /// Create a new [`MatchReplaceRewriter`].
     pub fn new(matcher: C, replacement: R, name: Option<String>) -> Self {
         Self {
             matcher,
             replacer: replacement,
             name,
+            hash_partial_match_info: None,
+            hash_match_info: None,
+        }
+    }
+
+    /// Set the hash function for partial match info.
+    pub fn with_hash_partial_match_info(
+        self,
+        f: impl Fn(&C::PartialMatchInfo, &mut fxhash::FxHasher) + 'static,
+    ) -> Self {
+        let mut new = self;
+        new.hash_partial_match_info = Some(Box::new(f));
+        new
+    }
+
+    /// Set the hash function for complete match info.
+    pub fn with_hash_match_info(
+        self,
+        f: impl Fn(&C::MatchInfo, &mut fxhash::FxHasher) + 'static,
+    ) -> Self {
+        let mut new = self;
+        new.hash_match_info = Some(Box::new(f));
+        new
+    }
+
+    fn matching_options(&self) -> MatchingOptions<'_, C::PartialMatchInfo, C::MatchInfo> {
+        MatchingOptions {
+            deduplicate_partial_matches: self
+                .hash_partial_match_info
+                .as_ref()
+                .map(boxed_dyn_fn_ref),
+            deduplicate_complete_matches: self.hash_match_info.as_ref().map(boxed_dyn_fn_ref),
+            ..Default::default()
         }
     }
 }
@@ -379,11 +417,10 @@ where
     type Rewrite = CircuitRewrite;
 
     fn get_rewrites(&self, circ: &ResourceScope<H>, root_node: H::Node) -> Vec<CircuitRewrite> {
-        let matches = self.matcher.as_hugr_matcher().get_matches(
-            circ,
-            root_node,
-            &MatchingOptions::default(),
-        );
+        let matches =
+            self.matcher
+                .as_hugr_matcher()
+                .get_matches(circ, root_node, &self.matching_options());
         matches
             .into_iter()
             .flat_map(|(subcirc, match_info)| {
@@ -407,7 +444,7 @@ where
         let matches = self
             .matcher
             .as_hugr_matcher()
-            .get_all_matches(circ, &MatchingOptions::default());
+            .get_all_matches(circ, &self.matching_options());
         matches
             .into_iter()
             .flat_map(|(subcirc, match_info)| {
@@ -426,6 +463,12 @@ where
             })
             .collect()
     }
+}
+
+fn boxed_dyn_fn_ref<T>(
+    f: &Box<dyn Fn(&T, &mut fxhash::FxHasher)>,
+) -> Box<dyn Fn(&T, &mut fxhash::FxHasher) + '_> {
+    Box::new(f.as_ref())
 }
 
 #[cfg(feature = "badgerv2_unstable")]
@@ -449,10 +492,11 @@ mod badgerv2_unstable {
             walker: &Walker<'w>,
             root_node: PatchNode,
         ) -> Vec<(Commit<'w>, RewriteName)> {
-            let matches = self
-                .matcher
-                .as_rewrite_space_matcher()
-                .get_matches(walker.clone(), root_node);
+            let matches = self.matcher.as_rewrite_space_matcher().get_matches(
+                walker.clone(),
+                root_node,
+                &self.matching_options(),
+            );
             self.im_matches_to_commits(matches, walker.as_hugr_view().state_space())
                 // SAFETY: the commit is valid for the lifetime of the walker
                 .map(|commit| unsafe { commit.upgrade_lifetime() })
@@ -485,7 +529,7 @@ mod badgerv2_unstable {
             let matches = self
                 .matcher
                 .as_rewrite_space_matcher()
-                .get_all_matches(space);
+                .get_all_matches(space, &self.matching_options());
             self.im_matches_to_commits(matches, space.state_space())
                 .into_iter()
                 // SAFETY: the commit is valid for the lifetime of the rewrite space

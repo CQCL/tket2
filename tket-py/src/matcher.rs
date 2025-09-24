@@ -1,5 +1,7 @@
 //! Python interface for CircuitMatcher and CircuitReplacer traits.
 
+use std::hash::Hasher;
+
 use derive_more::derive::{From, Into};
 use hugr::{
     builder::{DFGBuilder, HugrBuilder},
@@ -10,6 +12,7 @@ use hugr::{
 };
 use pyo3::{
     exceptions::PyKeyError,
+    ffi::c_str,
     prelude::*,
     types::{PyBool, PyDict, PyNone},
     IntoPyObjectExt,
@@ -411,6 +414,18 @@ pub struct PyMatchReplaceRewriter {
     name: Option<String>,
 }
 
+fn python_hash(obj: &PyObject, hasher: &mut impl Hasher) {
+    let hash: i64 = Python::with_gil(|py| {
+        py.eval(c_str!("hash"), None, None)
+            .unwrap()
+            .call1((obj,))
+            .unwrap()
+            .extract()
+            .unwrap()
+    });
+    hasher.write_i64(hash);
+}
+
 impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyMatchReplaceRewriter {
     type Rewrite = CircuitRewrite;
 
@@ -429,7 +444,14 @@ impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyMatchRepla
                     pyobject_matcher,
                     pyobject_replacement,
                     self.name.clone(),
-                );
+                )
+                .with_hash_match_info(python_hash)
+                .with_hash_partial_match_info(|obj, hasher| {
+                    let obj = obj
+                        .clone()
+                        .unwrap_or_else(|| Python::with_gil(|py| py.None()));
+                    python_hash(&obj, hasher)
+                });
                 return rewriter.get_rewrites(circ, root_node);
             }
         }
@@ -451,7 +473,14 @@ impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyMatchRepla
                     pyobject_matcher,
                     pyobject_replacement,
                     self.name.clone(),
-                );
+                )
+                .with_hash_match_info(python_hash)
+                .with_hash_partial_match_info(|obj, hasher| {
+                    let obj = obj
+                        .clone()
+                        .unwrap_or_else(|| Python::with_gil(|py| py.None()));
+                    python_hash(&obj, hasher)
+                });
                 return rewriter.get_all_rewrites(circ);
             }
         }
@@ -481,7 +510,14 @@ impl<'c, C> Rewriter<&'c RewriteSpace<C>> for PyMatchReplaceRewriter {
                     pyobject_matcher,
                     pyobject_replacement,
                     self.name.clone(),
-                );
+                )
+                .with_hash_match_info(python_hash)
+                .with_hash_partial_match_info(|obj, hasher| {
+                    let obj = obj
+                        .clone()
+                        .unwrap_or_else(|| Python::with_gil(|py| py.None()));
+                    python_hash(&obj, hasher)
+                });
                 return rewriter.get_rewrites(circ, root_node);
             }
         }
@@ -503,7 +539,14 @@ impl<'c, C> Rewriter<&'c RewriteSpace<C>> for PyMatchReplaceRewriter {
                     pyobject_matcher,
                     pyobject_replacement,
                     self.name.clone(),
-                );
+                )
+                .with_hash_match_info(python_hash)
+                .with_hash_partial_match_info(|obj, hasher| {
+                    let obj = obj
+                        .clone()
+                        .unwrap_or_else(|| Python::with_gil(|py| py.None()));
+                    python_hash(&obj, hasher)
+                });
                 return rewriter.get_all_rewrites(circ);
             }
         }
@@ -533,7 +576,14 @@ impl<'c> Rewriter<Walker<'c>> for PyMatchReplaceRewriter {
                     pyobject_matcher,
                     pyobject_replacement,
                     self.name.clone(),
-                );
+                )
+                .with_hash_match_info(python_hash)
+                .with_hash_partial_match_info(|obj, hasher| {
+                    let obj = obj
+                        .clone()
+                        .unwrap_or_else(|| Python::with_gil(|py| py.None()));
+                    python_hash(&obj, hasher)
+                });
                 return rewriter.get_rewrites(circ, root_node);
             }
         }
@@ -555,7 +605,14 @@ impl<'c> Rewriter<Walker<'c>> for PyMatchReplaceRewriter {
                     pyobject_matcher,
                     pyobject_replacement,
                     self.name.clone(),
-                );
+                )
+                .with_hash_match_info(python_hash)
+                .with_hash_partial_match_info(|obj, hasher| {
+                    let obj = obj
+                        .clone()
+                        .unwrap_or_else(|| Python::with_gil(|py| py.None()));
+                    python_hash(&obj, hasher)
+                });
                 return rewriter.get_all_rewrites(circ);
             }
         }

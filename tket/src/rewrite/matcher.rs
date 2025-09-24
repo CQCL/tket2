@@ -17,7 +17,7 @@ use crate::{
 use super::Subcircuit;
 
 mod hugr_adapter;
-pub use hugr_adapter::{HugrMatchAdapter, MatchingOptions};
+pub use hugr_adapter::HugrMatchAdapter;
 #[cfg(feature = "badgerv2_unstable")]
 mod im_adapter;
 #[cfg(feature = "badgerv2_unstable")]
@@ -276,6 +276,104 @@ enum MatchOutcomeEnum<PartialMatchInfo, MatchInfo> {
     Complete(MatchInfo),
     Proceed(PartialMatchInfo),
     Skip(PartialMatchInfo),
+}
+
+/// A function that hashes a value into an [`fxhash::FxHasher`].
+type HashFn<'a, T> = Box<dyn Fn(&T, &mut fxhash::FxHasher) + 'a>;
+
+/// Options for matching circuits with [`HugrMatchAdapter`].
+#[non_exhaustive]
+pub struct MatchingOptions<'a, PartialMatchInfo, MatchInfo> {
+    /// A hash function to deduplicate partial matches during matching.
+    ///
+    /// When this option is set, the matcher will keep track of all seen partial
+    /// matches and will abort the matching process early if a match has been
+    /// seen before.
+    ///
+    /// The provided function will be called for every partial match and should
+    /// hash the match into the provided hasher.
+    ///
+    /// ## Performance considerations
+    ///
+    /// A naively implemented `CircuitMatcher` running without deduplication
+    /// may perform many redundant operations and run slowly. On the other hand,
+    /// deduplication of partial matches comes at a significant performance
+    /// cost.
+    ///
+    /// The recommended approach is to design matchers that run well without
+    /// deduplication by ensuring that matches are unique by construction rather
+    /// than relying on hashing. An example of a deduplication strategy within
+    /// the matcher would be to never match nodes with an index smaller than the
+    /// first matched node.
+    pub deduplicate_partial_matches: Option<HashFn<'a, PartialMatchInfo>>,
+
+    /// A hash function to deduplicate complete matches.
+    ///
+    /// When this option is set, the matcher will ensure that every returned
+    /// match is unique. The provided function will be called for every
+    /// complete match and should hash the match into the provided hasher.
+    pub deduplicate_complete_matches: Option<HashFn<'a, MatchInfo>>,
+
+    /// If set, will discard all non-maximal matches.
+    ///
+    /// This may be an expensive operation: it may take time up to quadratic in
+    /// the total number of matches (and linear in the size of the largest
+    /// match).
+    pub only_maximal_matches: bool,
+}
+
+impl<PartialMatchInfo, MatchInfo> Default for MatchingOptions<'_, PartialMatchInfo, MatchInfo> {
+    fn default() -> Self {
+        Self {
+            deduplicate_partial_matches: None,
+            deduplicate_complete_matches: None,
+            only_maximal_matches: false,
+        }
+    }
+}
+
+impl<PartialMatchInfo: std::hash::Hash, MatchInfo: std::hash::Hash>
+    MatchingOptions<'_, PartialMatchInfo, MatchInfo>
+{
+    /// Create a new [`MatchingOptions`] with deduplication enabled.
+    ///
+    /// This will use the `Hash` implementation of `PartialMatchInfo` to
+    /// deduplicate partial matches.
+    ///
+    /// ## Performance considerations
+    ///
+    /// A naively implemented `CircuitMatcher` running without deduplication
+    /// may perform many redundant operations and run slowly. On the other hand,
+    /// deduplication of partial matches comes at a significant performance
+    /// cost.
+    ///
+    /// The recommended approach is to design matchers that run well without
+    /// deduplication by ensuring that matches are unique by construction rather
+    /// than relying on hashing. An example of a deduplication strategy within
+    /// the matcher would be to never match nodes with an index smaller than the
+    /// first matched node.
+    pub fn with_deduplication() -> Self {
+        Self {
+            deduplicate_partial_matches: Some(Box::new(|info, hasher| info.hash(hasher))),
+            deduplicate_complete_matches: Some(Box::new(|info, hasher| info.hash(hasher))),
+            only_maximal_matches: false,
+        }
+    }
+
+    /// Only return maximal matches during matches.
+    ///
+    /// In other words, never return matches that are fully contained within
+    /// another match.
+    ///
+    /// This may be an expensive operation: it may take time up to quadratic in
+    /// the total number of matches (and linear in the size of the largest
+    /// match).
+    pub fn only_maximal_matches(self) -> Self {
+        Self {
+            only_maximal_matches: true,
+            ..self
+        }
+    }
 }
 
 #[cfg(test)]
