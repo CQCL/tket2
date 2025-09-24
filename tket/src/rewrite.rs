@@ -465,6 +465,37 @@ where
     }
 }
 
+impl<C: NodesIter, T: Rewriter<C>> Rewriter<C> for Box<T> {
+    type Rewrite = T::Rewrite;
+
+    fn get_rewrites(&self, circ: &C, root_node: <C as NodesIter>::Node) -> Vec<Self::Rewrite> {
+        self.as_ref().get_rewrites(circ, root_node)
+    }
+
+    fn get_all_rewrites(&self, circ: &C) -> Vec<Self::Rewrite> {
+        self.as_ref().get_all_rewrites(circ)
+    }
+}
+
+impl<C: NodesIter, T: Rewriter<C>> Rewriter<C> for Vec<T>
+where
+    C::Node: HugrNode,
+{
+    type Rewrite = T::Rewrite;
+
+    fn get_rewrites(&self, circ: &C, root_node: <C as NodesIter>::Node) -> Vec<Self::Rewrite> {
+        self.iter()
+            .flat_map(|rewriter| rewriter.get_rewrites(circ, root_node))
+            .collect()
+    }
+
+    fn get_all_rewrites(&self, circ: &C) -> Vec<Self::Rewrite> {
+        self.iter()
+            .flat_map(|rewriter| rewriter.get_all_rewrites(circ))
+            .collect()
+    }
+}
+
 fn boxed_dyn_fn_ref<T>(
     f: &Box<dyn Fn(&T, &mut fxhash::FxHasher)>,
 ) -> Box<dyn Fn(&T, &mut fxhash::FxHasher) + '_> {
