@@ -18,7 +18,7 @@ def setup_jupyter_rendering():
     def _repr_tk2circ(
         circ: Tk2Circuit, include=None, exclude=None, **kwargs
     ) -> dict[str, bytes | str]:
-        h = Hugr.load_json(circ.to_hugr_json())
+        h = Hugr.from_bytes(circ.to_bytes(EnvelopeConfig.TEXT))
         return _repr_hugr(h, include, exclude, **kwargs)
 
     setattr(Hugr, "_repr_mimebundle_", _repr_hugr)
@@ -27,14 +27,15 @@ def setup_jupyter_rendering():
 
 # TODO: Should this be part of the guppy API? Or tket?
 # Takes a RawFunctionDef and converts it to a Tk2Circuit
+# BUG: this defaults num_operations to 0 which breaks Rules
 def guppy_to_circuit(func_def: Any) -> Tk2Circuit:
     """Convert a Guppy function definition to a `Tk2Circuit`."""
-    module = func_def.id.module
-    assert module is not None, "Function definition must belong to a module"
 
-    pkg = module.compile()
+    pkg = func_def.compile_function()
 
-    json = pkg.package.to_str(EnvelopeConfig.TEXT)
-    circ = Tk2Circuit.from_str(json, func_def.name)
+    f_name = pkg.modules[0].entrypoint_op().f_name
+
+    json = pkg.to_str(EnvelopeConfig.TEXT)
+    circ = Tk2Circuit.from_str(json, f_name)
 
     return lower_to_pytket(circ)
