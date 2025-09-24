@@ -88,18 +88,15 @@ pub struct SeadogOptimiser<R, S> {
 }
 
 /// A trait for rewriters that can be used with the Badger optimiser.
-pub trait SeadogRewriter<'w>:
-    Rewriter<Walker<'w>, Rewrite = (Commit<'w>, RewriteName)> + Send + Clone + Sync
-{
-}
+pub trait SeadogRewriter<'w>: Rewriter<Walker<'w>, Rewrite = (Commit<'w>, RewriteName)> {}
 
 /// A trait for rewrite strategies that can be used with the Badger optimiser.
-pub trait SeadogRewriteStrategy: RewriteStrategy + Send + Sync + Clone + 'static {}
+pub trait SeadogRewriteStrategy: RewriteStrategy + 'static {}
 
-impl<S> SeadogRewriteStrategy for S where S: RewriteStrategy + Send + Sync + Clone + 'static {}
+impl<S> SeadogRewriteStrategy for S where S: RewriteStrategy + 'static {}
 
 impl<'w, R> SeadogRewriter<'w> for R where
-    R: Rewriter<Walker<'w>, Rewrite = (Commit<'w>, RewriteName)> + Send + Clone + Sync
+    R: Rewriter<Walker<'w>, Rewrite = (Commit<'w>, RewriteName)> + ?Sized
 {
 }
 
@@ -225,7 +222,7 @@ impl<R, S> SeadogOptimiser<R, S>
 where
     R: for<'w> SeadogRewriter<'w>,
     S: SeadogRewriteStrategy,
-    S::Cost: serde::Serialize + Send + Sync,
+    S::Cost: serde::Serialize,
     <S::Cost as CircuitCost>::CostDelta: serde::Serialize + 'static,
 {
     /// Run the Badger optimiser on a circuit.

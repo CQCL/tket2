@@ -8,6 +8,7 @@ pub mod strategy;
 pub mod trace;
 
 use std::mem;
+use std::sync::Arc;
 
 use derive_more::derive::{Display, Error};
 #[cfg(feature = "portmatching")]
@@ -342,6 +343,7 @@ impl<N: HugrNode> TryFrom<InvalidSubgraph<N>> for InvalidRewrite {
 ///
 /// The [`CircuitMatcher`] is used to find matches in the circuit, and the
 /// [`CircuitReplacer`] is used to create [`CircuitRewrite`]s for each match.
+#[derive(Clone)]
 pub struct MatchReplaceRewriter<C: CircuitMatcher, R> {
     matcher: C,
     replacer: R,
@@ -349,10 +351,11 @@ pub struct MatchReplaceRewriter<C: CircuitMatcher, R> {
     name: Option<String>,
     /// Hash function for partial match info. If set, this is used to deduplicate
     /// partial matches.
-    hash_partial_match_info: Option<Box<dyn Fn(&C::PartialMatchInfo, &mut fxhash::FxHasher)>>,
+    hash_partial_match_info:
+        Option<Arc<dyn Fn(&C::PartialMatchInfo, &mut fxhash::FxHasher) + Send + Sync>>,
     /// Hash function for match info. If set, this is used to deduplicate
     /// complete matches
-    hash_match_info: Option<Box<dyn Fn(&C::MatchInfo, &mut fxhash::FxHasher)>>,
+    hash_match_info: Option<Arc<dyn Fn(&C::MatchInfo, &mut fxhash::FxHasher) + Send + Sync>>,
 }
 
 impl<C: CircuitMatcher, R> MatchReplaceRewriter<C, R> {
@@ -370,20 +373,20 @@ impl<C: CircuitMatcher, R> MatchReplaceRewriter<C, R> {
     /// Set the hash function for partial match info.
     pub fn with_hash_partial_match_info(
         self,
-        f: impl Fn(&C::PartialMatchInfo, &mut fxhash::FxHasher) + 'static,
+        f: impl Fn(&C::PartialMatchInfo, &mut fxhash::FxHasher) + Send + Sync + 'static,
     ) -> Self {
         let mut new = self;
-        new.hash_partial_match_info = Some(Box::new(f));
+        new.hash_partial_match_info = Some(Arc::new(f));
         new
     }
 
     /// Set the hash function for complete match info.
     pub fn with_hash_match_info(
         self,
-        f: impl Fn(&C::MatchInfo, &mut fxhash::FxHasher) + 'static,
+        f: impl Fn(&C::MatchInfo, &mut fxhash::FxHasher) + Send + Sync + 'static,
     ) -> Self {
         let mut new = self;
-        new.hash_match_info = Some(Box::new(f));
+        new.hash_match_info = Some(Arc::new(f));
         new
     }
 
@@ -465,17 +468,28 @@ where
     }
 }
 
-impl<C: NodesIter, T: Rewriter<C>> Rewriter<C> for Box<T> {
-    type Rewrite = T::Rewrite;
+macro_rules! impl_rewriter_as_ref {
+    ($wrapper:ident) => {
+        impl<C: NodesIter, T: Rewriter<C> + ?Sized> Rewriter<C> for $wrapper<T> {
+            type Rewrite = T::Rewrite;
 
-    fn get_rewrites(&self, circ: &C, root_node: <C as NodesIter>::Node) -> Vec<Self::Rewrite> {
-        self.as_ref().get_rewrites(circ, root_node)
-    }
+            fn get_rewrites(
+                &self,
+                circ: &C,
+                root_node: <C as NodesIter>::Node,
+            ) -> Vec<Self::Rewrite> {
+                self.as_ref().get_rewrites(circ, root_node)
+            }
 
-    fn get_all_rewrites(&self, circ: &C) -> Vec<Self::Rewrite> {
-        self.as_ref().get_all_rewrites(circ)
-    }
+            fn get_all_rewrites(&self, circ: &C) -> Vec<Self::Rewrite> {
+                self.as_ref().get_all_rewrites(circ)
+            }
+        }
+    };
 }
+
+impl_rewriter_as_ref!(Box);
+impl_rewriter_as_ref!(Arc);
 
 impl<C: NodesIter, T: Rewriter<C>> Rewriter<C> for Vec<T>
 where
@@ -497,7 +511,7 @@ where
 }
 
 fn boxed_dyn_fn_ref<T>(
-    f: &Box<dyn Fn(&T, &mut fxhash::FxHasher)>,
+    f: &Arc<dyn Fn(&T, &mut fxhash::FxHasher) + Send + Sync>,
 ) -> Box<dyn Fn(&T, &mut fxhash::FxHasher) + '_> {
     Box::new(f.as_ref())
 }
