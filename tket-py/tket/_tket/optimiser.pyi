@@ -47,6 +47,7 @@ class BadgerOptimiser:
         circ: CircuitClass,
         timeout: int | None = None,
         progress_timeout: int | None = None,
+        max_circuit_count: int | None = None,
         n_threads: int | None = None,
         split_circ: bool = False,
         queue_size: int | None = None,
@@ -76,6 +77,7 @@ class SeadogOptimiser:
         circ: CircuitClass,
         timeout: int | None = None,
         progress_timeout: int | None = None,
+        max_circuit_count: int | None = None,
         queue_size: int | None = None,
         save_rewrite_space: Path | None = None,
     ) -> CircuitClass:

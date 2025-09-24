@@ -73,7 +73,7 @@ impl Default for SeadogOptions {
             progress_timeout: Default::default(),
             queue_size: 20,
             max_circuit_count: None,
-            pattern_radius: 2,
+            pattern_radius: 4,
             track_n_best: 1000,
             save_rewrite_space: None,
         }
