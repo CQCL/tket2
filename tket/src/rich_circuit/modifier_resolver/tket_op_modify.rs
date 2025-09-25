@@ -170,11 +170,12 @@ impl<N: HugrNode> ModifierResolver<N> {
             }
             T | Tdg | S | Sdg | V | Vdg => {
                 // op(t) = Phase(θ) * U(t, 2θ)
-                self.modifiers.dagger = false;
-
                 let Some((gate, angle)) = self.modifiers.rot_angle(op) else {
                     unreachable!()
                 };
+
+                self.modifiers.dagger = false;
+
                 let rot = new_fn.add_load_value(ConstRotation::new(angle).unwrap());
                 let rot_2 = new_fn.add_load_value(ConstRotation::new(angle * 2.0).unwrap());
 
@@ -622,20 +623,20 @@ mod test {
         // }
         let foo = {
             let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
-            let [in1, in2] = func.input_wires_arr();
-            let [w1, w2] = func
+            let [mut in1, mut in2] = func.input_wires_arr();
+            [in1, in2] = func
                 .add_dataflow_op(TketOp::CX, vec![in1, in2])
                 .unwrap()
                 .outputs_arr();
-            let o1 = func
-                .add_dataflow_op(TketOp::Y, vec![w1])
+            in1 = func
+                .add_dataflow_op(TketOp::Y, vec![in1])
                 .unwrap()
                 .out_wire(0);
-            let o2 = func
-                .add_dataflow_op(TketOp::Z, vec![w2])
+            in2 = func
+                .add_dataflow_op(TketOp::Z, vec![in2])
                 .unwrap()
                 .out_wire(0);
-            func.finish_with_outputs(vec![o1, o2]).unwrap()
+            func.finish_with_outputs(vec![in1, in2]).unwrap()
         };
 
         let _main = {
