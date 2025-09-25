@@ -216,7 +216,9 @@ impl<'h> PytketDecoderContext<'h> {
 
         // Insert any remaining parameters as new inputs
         for param in input_params {
-            let wire = dfg.add_input(rotation_type());
+            let wire = dfg
+                .add_input(rotation_type())
+                .expect("dfg has valid parent op type");
             wire_tracker.register_input_parameter(wire, param)?;
         }
 

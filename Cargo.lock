@@ -1056,9 +1056,8 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.22.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "deb9c2b19e769863a1e059045595136ac5f6f37e98bc605447a0b728e72fff11"
+version = "0.22.4"
+source = "git+https://github.com/CQCL/hugr?rev=91bff6e#91bff6e7a93915696fc67e77870d32b8c877f61d"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1068,9 +1067,8 @@ dependencies = [
 
 [[package]]
 name = "hugr-cli"
-version = "0.22.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f7318c8514063e835ef4720babb141dc53c96dd47f204ae584de67afb3fb1f2"
+version = "0.22.4"
+source = "git+https://github.com/CQCL/hugr?rev=91bff6e#91bff6e7a93915696fc67e77870d32b8c877f61d"
 dependencies = [
  "anyhow",
  "clap",
@@ -1086,9 +1084,8 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.22.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99f1b84868164b0ab995814f8b3f07dbc4a142c3726d6aceae0e95fce047525e"
+version = "0.22.4"
+source = "git+https://github.com/CQCL/hugr?rev=91bff6e#91bff6e7a93915696fc67e77870d32b8c877f61d"
 dependencies = [
  "base64",
  "cgmath",
@@ -1096,18 +1093,17 @@ dependencies = [
  "derive_more 1.0.0",
  "downcast-rs",
  "enum_dispatch",
- "fxhash",
  "html-escape",
  "hugr-model",
  "indexmap 2.11.4",
  "itertools 0.14.0",
- "lazy_static",
  "ordered-float",
- "paste",
+ "pastey",
  "petgraph 0.8.2",
  "portgraph 0.15.2",
  "regex",
  "relrc",
+ "rustc-hash 2.1.1",
  "semver",
  "serde",
  "serde_json",
@@ -1124,9 +1120,8 @@ dependencies = [
 
 [[package]]
 name = "hugr-llvm"
-version = "0.22.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5228ef837b3bc4cf004798d8aa5aa18131f04c9224c31cbbbf29b8572639066c"
+version = "0.22.4"
+source = "git+https://github.com/CQCL/hugr?rev=91bff6e#91bff6e7a93915696fc67e77870d32b8c877f61d"
 dependencies = [
  "anyhow",
  "delegate 0.13.4",
@@ -1135,7 +1130,6 @@ dependencies = [
  "inkwell",
  "insta",
  "itertools 0.14.0",
- "lazy_static",
  "petgraph 0.8.2",
  "portgraph 0.15.2",
  "rstest 0.24.0",
@@ -1144,21 +1138,20 @@ dependencies = [
 
 [[package]]
 name = "hugr-model"
-version = "0.22.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b426a1907de2375f7afbf92aa79dc41bad805486c40201414707ae72e03dbb80"
+version = "0.22.4"
+source = "git+https://github.com/CQCL/hugr?rev=91bff6e#91bff6e7a93915696fc67e77870d32b8c877f61d"
 dependencies = [
  "base64",
  "bumpalo",
  "capnp",
  "derive_more 1.0.0",
- "fxhash",
  "indexmap 2.11.4",
  "itertools 0.14.0",
  "ordered-float",
  "pest",
  "pest_derive",
  "pretty",
+ "rustc-hash 2.1.1",
  "semver",
  "smol_str",
  "thiserror 2.0.16",
@@ -1166,16 +1159,14 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.22.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4ca4e34988b934e3a3e59c4756605df3eaa8bc62d9d89b33b19d8875170a2f9"
+version = "0.22.4"
+source = "git+https://github.com/CQCL/hugr?rev=91bff6e#91bff6e7a93915696fc67e77870d32b8c877f61d"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
  "hugr-core",
  "itertools 0.14.0",
- "lazy_static",
- "paste",
+ "pastey",
  "petgraph 0.8.2",
  "portgraph 0.15.2",
  "strum",
@@ -1570,6 +1561,12 @@ name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
+name = "pastey"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
 
 [[package]]
 name = "peak_alloc"
