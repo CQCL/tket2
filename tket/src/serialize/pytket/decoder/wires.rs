@@ -743,7 +743,9 @@ impl WireTracker {
                             // Look it up in the input parameters to the circuit, and add a new float input if needed.
                             *input_params.entry(name.to_string()).or_insert_with(|| {
                                 param_vars.insert(name.to_string());
-                                let wire = hugr.add_input(rotation_type());
+                                let wire = hugr
+                                    .add_input(rotation_type())
+                                    .expect("valid parent op type");
                                 LoadedParameter::rotation(wire)
                             })
                         }
