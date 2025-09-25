@@ -18,7 +18,7 @@ def setup_jupyter_rendering():
     def _repr_tk2circ(
         circ: Tk2Circuit, include=None, exclude=None, **kwargs
     ) -> dict[str, bytes | str]:
-        h = Hugr.from_bytes(circ.to_bytes(EnvelopeConfig.TEXT))
+        h = Hugr.from_bytes(circ.to_bytes(EnvelopeConfig))
         return _repr_hugr(h, include, exclude, **kwargs)
 
     setattr(Hugr, "_repr_mimebundle_", _repr_hugr)
