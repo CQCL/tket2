@@ -7,7 +7,7 @@ use std::path::Path;
 
 use hugr::algorithms::const_fold::ConstFoldError;
 use hugr::algorithms::inline_dfgs::InlineDFGsPass;
-use hugr::algorithms::merge_bbs::merge_basic_blocks;
+use hugr::algorithms::normalize_cfgs::merge_basic_blocks;
 use hugr::algorithms::untuple::{UntupleError, UntupleRecursive};
 use hugr::algorithms::ComposablePass;
 use hugr::algorithms::UntuplePass;
@@ -75,7 +75,7 @@ fn optimise_guppy(#[case] mut hugr: Hugr) {
         .collect_vec();
     for cfg in cfgs {
         let mut rerooted = hugr.with_entrypoint_mut(cfg);
-        merge_basic_blocks(&mut rerooted);
+        merge_basic_blocks(&mut rerooted).unwrap();
     }
 
     let untuple = UntuplePass::new(UntupleRecursive::Recursive);

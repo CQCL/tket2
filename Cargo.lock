@@ -1056,9 +1056,9 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.22.4"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b0f6da51aacb075c0ca32175d5e94d1faac26a65e724a709e9dda140f5cf6d8"
+checksum = "09b966403015131e55c0e9519c8aac00f80882b42f0eeaec88ffaab2c3bc721c"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1068,9 +1068,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-cli"
-version = "0.22.4"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bf6f6ac3e286f2243a473a67fb9bc088adc1dfebc64259a0d7fe7c9aa08a485"
+checksum = "69845d87d71d93613401a6d3c2bd21f83b7eb53584a8cea599da5f192930aef6"
 dependencies = [
  "anyhow",
  "clap",
@@ -1086,9 +1086,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.22.4"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a02adddac00b90be154a77568c578607d264df37b0d294a82d770a429fb0ec19"
+checksum = "4e206687e64f71db2cc8de3edd55a749e868af4744a6d98ffcbeb2ffb815c8ab"
 dependencies = [
  "base64",
  "cgmath",
@@ -1096,18 +1096,17 @@ dependencies = [
  "derive_more 1.0.0",
  "downcast-rs",
  "enum_dispatch",
- "fxhash",
  "html-escape",
  "hugr-model",
  "indexmap 2.11.4",
  "itertools 0.14.0",
- "lazy_static",
  "ordered-float",
- "paste",
+ "pastey",
  "petgraph 0.8.2",
  "portgraph 0.15.2",
  "regex",
  "relrc",
+ "rustc-hash 2.1.1",
  "semver",
  "serde",
  "serde_json",
@@ -1124,18 +1123,18 @@ dependencies = [
 
 [[package]]
 name = "hugr-llvm"
-version = "0.22.4"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "942dd96ad1d017c039fd4c1625e318373bb5bb28a8fec246992c872cbbb82252"
+checksum = "711c131b2e3d0e585e4482cea8f98d12a82bff045d8d8d721a1732d7874f8467"
 dependencies = [
  "anyhow",
+ "cc",
  "delegate 0.13.4",
  "derive_more 1.0.0",
  "hugr-core",
  "inkwell",
  "insta",
  "itertools 0.14.0",
- "lazy_static",
  "petgraph 0.8.2",
  "portgraph 0.15.2",
  "rstest 0.24.0",
@@ -1144,21 +1143,21 @@ dependencies = [
 
 [[package]]
 name = "hugr-model"
-version = "0.22.4"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "833f5b5163876e24de1e80df1074cdf22a98142ee4774700059397769ad1be0b"
+checksum = "7e3e6a3d81dc7352f11b11f4b50a9174137444887c8937dc67b34cec957ca140"
 dependencies = [
  "base64",
  "bumpalo",
  "capnp",
  "derive_more 1.0.0",
- "fxhash",
  "indexmap 2.11.4",
  "itertools 0.14.0",
  "ordered-float",
  "pest",
  "pest_derive",
  "pretty",
+ "rustc-hash 2.1.1",
  "semver",
  "smol_str",
  "thiserror 2.0.17",
@@ -1166,16 +1165,15 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.22.4"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6cd0bb069bc068ac4f705c23767477feb29b108d33ae1846c14823eaf2f1851b"
+checksum = "e08e4c1bd8c5c69afc0fbb848cc732993f1a080008f78bd7cc0b1b5ba700f143"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
  "hugr-core",
  "itertools 0.14.0",
- "lazy_static",
- "paste",
+ "pastey",
  "petgraph 0.8.2",
  "portgraph 0.15.2",
  "strum",
@@ -1572,6 +1570,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
+name = "pastey"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
+
+[[package]]
 name = "peak_alloc"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1750,9 +1754,9 @@ checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 
 [[package]]
 name = "pretty"
-version = "0.12.4"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac98773b7109bc75f475ab5a134c9b64b87e59d776d31098d8f346922396a477"
+checksum = "0d22152487193190344590e4f30e219cf3fe140d9e7a3fdb683d82aa2c5f4156"
 dependencies = [
  "arrayvec",
  "typed-arena",
@@ -1960,9 +1964,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.11.2"
+version = "1.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23d7fd106d8c02486a8d64e778353d1cffe08ce79ac2e82f540c86d0facf6912"
+checksum = "8b5288124840bee7b386bc413c487869b360b2b4ec421ea56425128692f2a82c"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -1972,9 +1976,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.10"
+version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b9458fa0bfeeac22b5ca447c63aaf45f28439a709ccd244698632f9aa6394d6"
+checksum = "833eb9ce86d40ef33cb1306d8accf7bc8ec2bfea4355cbdebb3df68b40925cad"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -2764,9 +2768,9 @@ checksum = "f63a545481291138910575129486daeaf8ac54aee4387fe7906919f7830c7d9d"
 
 [[package]]
 name = "unicode-width"
-version = "0.1.14"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
+checksum = "4a1a07cc7db3810833284e8d372ccdc6da29741639ecc70c9ec107df0fa6154c"
 
 [[package]]
 name = "unicode-xid"
