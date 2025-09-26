@@ -4,7 +4,7 @@ use std::mem;
 
 use chrono::offset;
 use hugr::{
-    builder::{BuildError, Dataflow},
+    builder::{BuildError, Dataflow, FunctionBuilder},
     core::HugrNode,
     extension::simple_op::MakeExtensionOp,
     hugr::hugrmut::HugrMut,
@@ -35,6 +35,18 @@ impl<N: HugrNode> ModifierResolver<N> {
             ));
         };
         let offset = self.modifiers().accum_ctrl.len();
+        let callee = h
+            .single_linked_output(n, call.called_function_port())
+            .unwrap();
+
+        // wire the callee
+        let Some(new_callee) = self.modify_fn_if_needed(h, callee.0, &call.signature())? else {
+            // If the function need not be modified, just copy the Call node as is.
+            let new = self.add_node_no_modification(new_dfg, call.clone(), h, n)?;
+            self.call_map()
+                .insert(callee.0, (new, call.called_function_port()));
+            return Ok(());
+        };
 
         let mut poly_sig = call.func_sig.clone();
         let type_args = call.type_args.clone();
@@ -43,12 +55,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         let signature = (*new_call.signature()).clone();
         let new_call_fn_port = new_call.called_function_port();
         let new_call_node = new_dfg.add_child_node(new_call);
-        let callee = h
-            .single_linked_output(n, call.called_function_port())
-            .unwrap();
 
-        // wire the callee
-        let new_callee = self.modify_fn(h, callee.0)?;
         self.call_map()
             .insert(new_callee, (new_call_node, new_call_fn_port));
         // wire the controls
@@ -202,7 +209,12 @@ impl<N: HugrNode> ModifierResolver<N> {
         let targ = trace.last().cloned().unwrap();
         let (func, load) =
             Self::get_loaded_function(h, n, targ, h.get_optype(targ)).map_err(wrap_err)?;
-        let modified_fn = self.modify_fn(h, func)?;
+
+        // Modify the function
+        let modified_fn = match self.modify_fn_if_needed(h, func, &load.signature())? {
+            Some(node) => node,
+            None => self.wrap_fn_with_controls(h, func, &load.type_args)?,
+        };
 
         // Make new LoadFunction
         let mut modified_sig = load.func_sig.clone();

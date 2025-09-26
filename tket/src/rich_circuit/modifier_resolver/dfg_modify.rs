@@ -12,13 +12,15 @@ use hugr::{
     core::HugrNode,
     extension::prelude::qb_t,
     hugr::hugrmut::HugrMut,
-    ops::{Conditional, DataflowBlock, DataflowOpTrait, OpType, TailLoop, DFG},
+    ops::{Call, Conditional, DataflowBlock, DataflowOpTrait, OpType, TailLoop, DFG},
     std_extensions::collections::array::ArrayOpBuilder,
-    types::{FuncTypeBase, TypeRow},
+    types::{FuncTypeBase, Signature, TypeArg, TypeRow},
     HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire,
 };
 use hugr_core::hugr::internal::PortgraphNodeMap;
 use petgraph::visit::{Topo, Walker};
+
+use crate::rich_circuit::modifier_resolver::ModifierFlags;
 
 use super::{DirWire, ModifierResolver, ModifierResolverErrors, PortExt};
 
@@ -295,6 +297,39 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(v)
     }
 
+    /// Modifies a function if modifier flags are satisfied or it has any quantum input/output.
+    //
+    //
+    //
+    //
+    //
+    //
+    // TODO: should change the logic.
+    // It's better to change the behavior depending on the modifier.
+    // e.g. if only power, do nothing
+    //      if only control, just wrap with controls (IO do not need to match)
+    //      if only dagger, just check signature
+    //
+    //
+    //
+    pub fn modify_fn_if_needed(
+        &mut self,
+        h: &mut impl HugrMut<Node = N>,
+        func: N,
+        signature: &Signature,
+    ) -> Result<Option<N>, ModifierResolverErrors<N>> {
+        let satisfies = ModifierFlags::from_metadata(h, func)
+            .is_some_and(|flags| flags.satisfies(&self.modifiers));
+        if !satisfies {
+            let in_out_match = signature.input == signature.output;
+            if in_out_match {
+                // If the flag is not set and the signature does not show an evident problem, skip the modification.
+                return Ok(None);
+            }
+        }
+        Ok(Some(self.modify_fn(h, func)?))
+    }
+
     /// Generates a new function modified by the combined modifier.
     pub fn modify_fn(
         &mut self,
@@ -334,7 +369,71 @@ impl<N: HugrNode> ModifierResolver<N> {
             h.connect(old_in, 0, new_n, new_port);
         }
 
-        Ok(insertion_result.inserted_entrypoint)
+        // set unitarity metadata
+        let new_function_node = insertion_result.inserted_entrypoint;
+        ModifierFlags::from_combined(self.modifiers())
+            .or(&ModifierFlags::from_metadata(h, func))
+            .set_metadata(h, new_function_node);
+
+        Ok(new_function_node)
+    }
+
+    // TODO: need to handle power
+    pub(super) fn wrap_fn_with_controls(
+        &mut self,
+        h: &mut impl HugrMut<Node = N>,
+        func: N,
+        type_args: &Vec<TypeArg>,
+    ) -> Result<N, ModifierResolverErrors<N>> {
+        if self.control_num() == 0 {
+            return Ok(func);
+        }
+        let optype = h.get_optype(func);
+        let Some(fn_defn) = optype.as_func_defn() else {
+            return Err(ModifierResolverErrors::Unreachable(format!(
+                "Cannot modify a non-function node. {}",
+                optype
+            )));
+        };
+
+        let mut poly_sig = fn_defn.signature().clone();
+        self.modify_signature(poly_sig.body_mut(), false);
+        let instantiate = poly_sig
+            .instantiate(&type_args)
+            .map_err(|e| ModifierResolverErrors::BuildError(e.into()))?;
+
+        let offset = self.modifiers.accum_ctrl.len();
+
+        // make a wrapper function with a single Call node
+        let mut builder =
+            FunctionBuilder::new(format!("__modified__{}", fn_defn.func_name()), instantiate)?;
+        let [in_node, out_node] = builder.io();
+        let call = Call::try_new(poly_sig, type_args.clone())
+            .map_err(|e| ModifierResolverErrors::BuildError(e.into()))?;
+        let call_port = call.called_function_port();
+        let call_node = builder.add_child_node(call);
+
+        // connect wires
+        for i in 0..offset {
+            builder.hugr_mut().connect(in_node, i, out_node, i);
+        }
+        for i in 0..builder.hugr().num_inputs(call_node) {
+            builder
+                .hugr_mut()
+                .connect(in_node, i + offset, call_node, i);
+        }
+        for i in 0..builder.hugr().num_outputs(call_node) {
+            builder
+                .hugr_mut()
+                .connect(call_node, i, out_node, i + offset);
+        }
+
+        let insertion_result = h.insert_from_view(h.module_root(), builder.hugr());
+        let call_node = insertion_result.node_map[&call_node];
+        h.connect(func, 0, call_node, call_port);
+        let dummy_fn_node = insertion_result.inserted_entrypoint;
+
+        return Ok(dummy_fn_node);
     }
 
     pub(super) fn insert_sub_dfg(
@@ -591,9 +690,19 @@ mod test {
         rich_circuit::*,
     };
 
+    trait SetUnitary {
+        fn set_unitary(&mut self);
+    }
+    impl<T: Container> SetUnitary for T {
+        fn set_unitary(&mut self) {
+            self.set_metadata("unitary", 7);
+        }
+    }
+
     fn foo_dfg(module: &mut ModuleBuilder<Hugr>, t_num: usize) -> FuncID<true> {
         let foo_sig = Signature::new_endo(iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>());
         let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+        func.set_unitary();
         let mut inputs: Vec<_> = func.input_wires().collect();
         inputs[0] = func
             .add_dataflow_op(TketOp::X, vec![inputs[0]])
@@ -612,6 +721,7 @@ mod test {
     fn foo_tail_loop(module: &mut ModuleBuilder<Hugr>, t_num: usize) -> FuncID<true> {
         let foo_sig = Signature::new_endo(iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>());
         let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+        func.set_unitary();
         let theta = {
             let angle = ConstRotation::new(0.5).unwrap();
             func.add_load_value(angle)
@@ -648,6 +758,7 @@ mod test {
     fn foo_conditional(module: &mut ModuleBuilder<Hugr>, t_num: usize) -> FuncID<true> {
         let foo_sig = Signature::new_endo(iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>());
         let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+        func.set_unitary();
         let theta = {
             let angle = ConstRotation::new(0.5).unwrap();
             func.add_load_value(angle)
@@ -698,6 +809,7 @@ mod test {
         let callee = {
             let callee_sig = Signature::new_endo(vec![qb_t()]);
             let mut callee_builder = module.define_function("dummy", callee_sig).unwrap();
+            callee_builder.set_unitary();
             let mut inputs: Vec<Wire> = callee_builder.input_wires().collect();
             inputs[0] = callee_builder
                 .add_dataflow_op(TketOp::X, vec![inputs[0]])
@@ -708,6 +820,7 @@ mod test {
 
         let foo_sig = Signature::new_endo(iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>());
         let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+        func.set_unitary();
         let mut inputs: Vec<_> = func.input_wires().collect();
         inputs[0] = func
             .call(callee.handle(), &[], vec![inputs[0]])
@@ -724,6 +837,7 @@ mod test {
         let callee_sig = Signature::new_endo(vec![qb_t()]);
         let callee = {
             let mut callee_builder = module.define_function("dummy", callee_sig.clone()).unwrap();
+            callee_builder.set_unitary();
             let mut inputs: Vec<Wire> = callee_builder.input_wires().collect();
             inputs[0] = callee_builder
                 .add_dataflow_op(TketOp::X, vec![inputs[0]])
@@ -734,6 +848,7 @@ mod test {
 
         let foo_sig = Signature::new_endo(iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>());
         let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+        func.set_unitary();
         let mut inputs: Vec<_> = func.input_wires().collect();
         let handle = func.load_func(callee.handle(), &[]).unwrap();
         inputs[0] = func
@@ -756,6 +871,7 @@ mod test {
         let callee = {
             let callee_sig = Signature::new_endo(vec![qb_t()]);
             let mut callee_builder = module.define_function("dummy", callee_sig).unwrap();
+            callee_builder.set_unitary();
             let mut inputs: Vec<Wire> = callee_builder.input_wires().collect();
             inputs[0] = callee_builder
                 .add_dataflow_op(TketOp::X, vec![inputs[0]])
@@ -766,6 +882,7 @@ mod test {
 
         let foo_sig = Signature::new_endo(iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>());
         let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+        func.set_unitary();
         let mut inputs: Vec<_> = func.input_wires().collect();
         let handle = func.load_func(callee.handle(), &[]).unwrap();
         func.finish_with_outputs(inputs).unwrap().handle().clone()
@@ -774,6 +891,7 @@ mod test {
     fn foo_cfg(module: &mut ModuleBuilder<Hugr>, t_num: usize) -> FuncID<true> {
         let foo_sig = Signature::new_endo(iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>());
         let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+        func.set_unitary();
         let mut inputs: Vec<_> = func.input_wires().collect();
         inputs[0] = func
             .add_dataflow_op(TketOp::X, vec![inputs[0]])
@@ -804,6 +922,7 @@ mod test {
         let bar_sig = Signature::new_endo(vec![qb_t()]);
         let bar = {
             let mut bar_builder = module.define_function("bar", bar_sig).unwrap();
+            bar_builder.set_unitary();
             let mut inputs: Vec<Wire> = bar_builder.input_wires().collect();
             inputs[0] = bar_builder
                 .add_dataflow_op(TketOp::X, vec![inputs[0]])
@@ -816,6 +935,7 @@ mod test {
         let foo_sig = Signature::new_endo(iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>());
         let foo = {
             let mut foo_builder = module.define_function("foo", foo_sig).unwrap();
+            foo_builder.set_unitary();
             let mut inputs: Vec<Wire> = foo_builder.input_wires().collect();
             let load = foo_builder.load_func(bar.handle(), &[]).unwrap();
 

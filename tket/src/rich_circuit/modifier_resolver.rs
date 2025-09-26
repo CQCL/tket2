@@ -66,6 +66,67 @@ impl CombinedModifier {
     }
 }
 
+/// Flags for each modifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct ModifierFlags {
+    control: bool,
+    dagger: bool,
+    power: bool,
+}
+
+impl ModifierFlags {
+    fn from_metadata<N: HugrNode>(h: &impl HugrView<Node = N>, n: N) -> Option<Self> {
+        h.get_metadata(n, "unitary")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|num| {
+                Some(ModifierFlags {
+                    dagger: (num & 1) != 0,
+                    control: (num & 2) != 0,
+                    power: (num & 4) != 0,
+                })
+            })
+    }
+
+    fn set_metadata<N: HugrNode>(&self, h: &mut impl HugrMut<Node = N>, n: N) {
+        let mut num = 0;
+        if self.dagger {
+            num |= 1;
+        }
+        if self.control {
+            num |= 2;
+        }
+        if self.power {
+            num |= 4;
+        }
+        *h.get_metadata_mut(n, "unitary") = serde_json::Value::from(num);
+    }
+
+    fn satisfies(&self, combined: &CombinedModifier) -> bool {
+        (!combined.control > 0 || self.control)
+            && (!combined.dagger || self.dagger)
+            && (!combined.power || self.power)
+    }
+
+    fn from_combined(combined: &CombinedModifier) -> Self {
+        ModifierFlags {
+            control: combined.control > 0,
+            dagger: combined.dagger,
+            power: combined.power,
+        }
+    }
+
+    fn or(self, other: &Option<Self>) -> Self {
+        match other {
+            None => self,
+            Some(other) => ModifierFlags {
+                control: self.control || other.control,
+                dagger: self.dagger || other.dagger,
+                power: self.power || other.power,
+            },
+        }
+    }
+}
+
 /// A wire of both direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct DirWire<N = Node>(N, Port);
@@ -493,7 +554,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 println!("  Wire mapping: {} -> {}", a, b);
             }
         }
-        println!("before connect_all:\n{}", new_dfg.hugr().mermaid_string());
+        // println!("before connect_all:\n{}", new_dfg.hugr().mermaid_string());
         for out_node in h.children(parent) {
             for out_port in h.node_outputs(out_node) {
                 // TODO: ad hoc solution: ignore all StateOrder connections.
@@ -505,7 +566,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                         for b in self.map_get(&(out_node, out_port).into())? {
                             connect(new_dfg, a, b).map_err(|e| {
                                 let (subgraph, result) = h.extract_hugr(parent);
-                                println!("{}", subgraph.mermaid_string());
+                                // println!("{}", subgraph.mermaid_string());
                                 e
                             })?
                         }
@@ -632,7 +693,6 @@ impl<N: HugrNode> ModifierResolver<N> {
                 self.modify_dataflow_op(h, n, optype, new_dfg)?
             }
 
-            // Unreachable
             OpType::FuncDefn(_) | OpType::FuncDecl(_) | OpType::Module(_) => {
                 return Err(ModifierResolverErrors::Unreachable(format!(
                     "Invalid node found inside modified function (OpType = {})",

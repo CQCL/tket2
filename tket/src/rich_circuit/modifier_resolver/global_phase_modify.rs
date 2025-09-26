@@ -153,6 +153,15 @@ mod tests {
         },
     };
 
+    trait SetUnitary {
+        fn set_unitary(&mut self);
+    }
+    impl<T: Container> SetUnitary for T {
+        fn set_unitary(&mut self) {
+            self.set_metadata("unitary", 7);
+        }
+    }
+
     use super::*;
 
     #[test]
@@ -187,6 +196,7 @@ mod tests {
 
         let foo = {
             let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+            func.set_unitary();
             let inputs: Vec<Wire> = func.input_wires().collect();
             // let (i1,) = inputs.iter_mut().take(t_num).collect_tuple().unwrap();
             let theta = func.add_load_value(ConstRotation::new(0.5).unwrap());

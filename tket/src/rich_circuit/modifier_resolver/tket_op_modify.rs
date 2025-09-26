@@ -595,6 +595,15 @@ mod test {
         rich_circuit::modifier_resolver::*,
     };
 
+    trait SetUnitary {
+        fn set_unitary(&mut self);
+    }
+    impl<T: Container> SetUnitary for T {
+        fn set_unitary(&mut self) {
+            self.set_metadata("unitary", 7);
+        }
+    }
+
     #[test]
     fn test_control_simple() {
         let mut module = ModuleBuilder::new();
@@ -623,6 +632,7 @@ mod test {
         // }
         let foo = {
             let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+            func.set_unitary();
             let [mut in1, mut in2] = func.input_wires_arr();
             [in1, in2] = func
                 .add_dataflow_op(TketOp::CX, vec![in1, in2])
@@ -700,6 +710,7 @@ mod test {
         // }
         let foo = {
             let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+            func.set_unitary();
             let [mut i1, mut i2] = func.input_wires_arr();
             // [i1, i2] = func
             //     .add_dataflow_op(TketOp::CX, vec![i1, i2])
@@ -792,6 +803,7 @@ mod test {
         // }
         let foo = {
             let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+            func.set_unitary();
             let [in1, in2] = func.input_wires_arr();
             let rxgate = func
                 .add_dataflow_op(TketOp::Rz, vec![in1, in2])
@@ -890,6 +902,7 @@ mod test {
         // }
         let foo = {
             let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+            func.set_unitary();
             let [mut in1, mut in2, mut in3, in4] = func.input_wires_arr();
             let theta = func.add_load_value(ConstRotation::new(0.46).unwrap());
             in1 = func
@@ -990,6 +1003,7 @@ mod test {
         // }
         let foo = {
             let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+            func.set_unitary();
             let mut inputs: Vec<Wire> = func.input_wires().collect();
             let (i1, i2, i3) = inputs.iter_mut().take(3).collect_tuple().unwrap();
             // let theta = func.add_load_value(ConstRotation::new(0.46).unwrap());
@@ -1076,6 +1090,7 @@ mod test {
 
         let foo = {
             let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+            func.set_unitary();
             let mut inputs: Vec<Wire> = func.input_wires().collect();
             // let (i1, i2, i3) = inputs.iter_mut().take(t_num).collect_tuple().unwrap();
             let (i1,) = inputs.iter_mut().take(t_num).collect_tuple().unwrap();
