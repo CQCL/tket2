@@ -95,9 +95,10 @@ impl BarrierInserter {
 
         // Unpack the container row directly into wires
         let inputs = dfg_b.input_wires();
-        let unpacked_wires = self
-            .op_factory
-            .unpack_row(&mut dfg_b, &container_row, inputs)?;
+        let unpacked_wires =
+            self.op_factory
+                .container_factory
+                .unpack_row(&mut dfg_b, &container_row, inputs)?;
 
         // Tag the qubit wires
         let tagged_wires: Vec<(bool, Wire)> = unpacked_wires
@@ -136,9 +137,11 @@ impl BarrierInserter {
         });
 
         // Repack the wires directly into the container row
-        let repacked_container_wires =
-            self.op_factory
-                .repack_row(&mut dfg_b, &container_row, repack_wires)?;
+        let repacked_container_wires = self.op_factory.container_factory.repack_row(
+            &mut dfg_b,
+            &container_row,
+            repack_wires,
+        )?;
 
         let h = dfg_b.finish_hugr_with_outputs(repacked_container_wires)?;
         Ok(h)
@@ -186,7 +189,7 @@ impl BarrierInserter {
         lowerer: &mut ReplaceTypes,
     ) {
         // Use the map of cached functions to register replacements
-        for (op, func_def) in self.op_factory.funcs {
+        for (op, func_def) in self.op_factory.funcs() {
             let func_node = insert_function(hugr, func_def.clone());
             lowerer.replace_op(op.extension_op(), NodeTemplate::Call(func_node, vec![]));
         }
@@ -271,7 +274,7 @@ mod tests {
         inserter.insert_runtime_barrier(&mut hugr, barrier_node.node(), barrier)?;
 
         // The array shortcut should have been used
-        assert!(inserter.op_factory.funcs.is_empty());
+        assert!(inserter.op_factory.funcs().is_empty());
         Ok(())
     }
 
@@ -328,7 +331,7 @@ mod tests {
 
         // Check that we've registered operations in the factory
         assert_eq!(
-            inserter.op_factory.funcs.len(),
+            inserter.op_factory.funcs().len(),
             3, // runtime barrier + array unpack + array repack
         );
 

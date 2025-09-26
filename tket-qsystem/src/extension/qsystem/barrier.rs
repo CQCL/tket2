@@ -4,6 +4,7 @@ pub use barrier_inserter::BarrierInserter;
 
 #[cfg(test)]
 mod test {
+    use crate::extension::qsystem::barrier::barrier_ops::BarrierOperationFactory;
     use crate::extension::qsystem::{self, lower_tk2_op};
     use hugr::builder::{Dataflow, DataflowHugr};
     use hugr::extension::prelude::Barrier;
@@ -18,7 +19,7 @@ mod test {
     use itertools::Itertools;
     use rstest::rstest;
 
-    use crate::extension::qsystem::barrier::barrier_ops::BarrierOperationFactory;
+    use crate::extension::qsystem::container::ContainerOperationFactory;
     fn opt_q_arr(size: u64) -> hugr::types::Type {
         array_type(size, option_type(qb_t()).into())
     }
@@ -88,7 +89,7 @@ mod test {
                 })
                 .exactly_one()
                 .ok();
-            if run_barr_func_n.is_none() {
+            let Some(run_barr_func_n) = run_barr_func_n else {
                 // if the runtime barrier function is never called
                 // make sure it is because there are no qubits in the barrier
 
@@ -98,10 +99,23 @@ mod test {
                 assert!(!analyzer.is_qubit_container(&tuple_type));
                 assert_eq!(num_qb, 0);
                 return;
-            }
-            h.single_linked_input(run_barr_func_n.unwrap(), 0)
-                .unwrap()
-                .0
+            };
+
+            let num_run_bar_ops = h
+                .children(run_barr_func_n)
+                .filter(|&n| {
+                    h.get_optype(n).as_extension_op().is_some_and(|op| {
+                        op.def()
+                            .name()
+                            .contains(qsystem::RUNTIME_BARRIER_NAME.as_str())
+                    })
+                })
+                .count();
+            assert_eq!(
+                num_run_bar_ops, 1,
+                "Should be a runtime barrier op in the function"
+            );
+            h.single_linked_input(run_barr_func_n, 0).unwrap().0
         };
 
         assert_eq!(h.all_linked_inputs(run_bar_n).count(), num_qb);
@@ -109,13 +123,18 @@ mod test {
         // Check all temporary ops are removed
         for n in h.nodes() {
             if let Some(op) = h.get_optype(n).as_extension_op() {
-                assert_ne!(
-                    op.extension_id(),
+                for factory_ext in [
+                    &ContainerOperationFactory::TEMP_EXT_NAME,
                     &BarrierOperationFactory::TEMP_EXT_NAME,
-                    "temporary op: {} {}",
-                    op.unqualified_id(),
-                    op.args().iter().map(|a| a.to_string()).join(","),
-                );
+                ] {
+                    assert_ne!(
+                        op.extension_id(),
+                        factory_ext,
+                        "temporary op: {} {}",
+                        op.unqualified_id(),
+                        op.args().iter().map(|a| a.to_string()).join(","),
+                    );
+                }
             }
         }
     }
