@@ -1063,7 +1063,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?rev=df530f51df9cf7d0a4d2e952d4e5fbdd93463149#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
+source = "git+https://github.com/CQCL/hugr?branch=ba-test#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1074,7 +1074,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?rev=df530f51df9cf7d0a4d2e952d4e5fbdd93463149#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
+source = "git+https://github.com/CQCL/hugr?branch=ba-test#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
 dependencies = [
  "anyhow",
  "clap",
@@ -1091,7 +1091,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?rev=df530f51df9cf7d0a4d2e952d4e5fbdd93463149#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
+source = "git+https://github.com/CQCL/hugr?branch=ba-test#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
 dependencies = [
  "base64",
  "cgmath",
@@ -1127,7 +1127,7 @@ dependencies = [
 [[package]]
 name = "hugr-llvm"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?rev=df530f51df9cf7d0a4d2e952d4e5fbdd93463149#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
+source = "git+https://github.com/CQCL/hugr?branch=ba-test#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
 dependencies = [
  "anyhow",
  "cc",
@@ -1146,7 +1146,7 @@ dependencies = [
 [[package]]
 name = "hugr-model"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?rev=df530f51df9cf7d0a4d2e952d4e5fbdd93463149#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
+source = "git+https://github.com/CQCL/hugr?branch=ba-test#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1167,7 +1167,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?rev=df530f51df9cf7d0a4d2e952d4e5fbdd93463149#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
+source = "git+https://github.com/CQCL/hugr?branch=ba-test#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
