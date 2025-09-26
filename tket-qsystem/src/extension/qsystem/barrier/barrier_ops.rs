@@ -21,7 +21,8 @@ use hugr::{
 use tket::analysis::type_unpack::TypeUnpacker;
 
 use crate::extension::qsystem::{
-    container::{ContainerOperationFactory, OpHashWrapper},
+    cached_extensions::{ExtensionCache, OpHashWrapper},
+    container::ContainerOperationFactory,
     QSystemOpBuilder,
 };
 
@@ -62,7 +63,6 @@ impl BarrierOperationFactory {
     pub fn funcs(&self) -> &indexmap::IndexMap<OpHashWrapper, Hugr> {
         self.container_factory.funcs()
     }
-
     fn build_extension() -> Arc<Extension> {
         Extension::new_arc(
             Self::TEMP_EXT_NAME,
@@ -107,7 +107,21 @@ impl BarrierOperationFactory {
         Ok(builder.add_dataflow_op(op, inputs)?.outputs())
     }
 
-    /// Cache a function definition for a given operation
+    /// Cache a function definition for a given operation using external cache
+    pub fn cache_function_with_external_cache<F>(
+        &mut self,
+        cache: &mut ExtensionCache,
+        op: &ExtensionOp,
+        mangle_args: &[TypeArg],
+        func_builder: F,
+    ) -> Result<(), BuildError>
+    where
+        F: FnOnce(&mut Self, &mut FunctionBuilder<Hugr>) -> Result<Vec<Wire>, BuildError>,
+    {
+        cache.cache_function(op, mangle_args, |func_b| func_builder(self, func_b))
+    }
+
+    /// Cache a function definition for a given operation (original method - still uses container cache as fallback)
     pub fn cache_function<F>(
         &mut self,
         op: &ExtensionOp,
@@ -117,7 +131,6 @@ impl BarrierOperationFactory {
     where
         F: FnOnce(&mut Self, &mut FunctionBuilder<Hugr>) -> Result<Vec<Wire>, BuildError>,
     {
-        use crate::extension::qsystem::container::OpHashWrapper;
         use std::ops::Deref;
 
         let key = OpHashWrapper::from(op.clone());
@@ -136,7 +149,31 @@ impl BarrierOperationFactory {
         Ok(())
     }
 
-    /// Build a runtime barrier across the given qubit wires
+    /// Build a runtime barrier across the given qubit wires using external cache
+    pub fn build_runtime_barrier_with_cache(
+        &mut self,
+        cache: &mut ExtensionCache,
+        builder: &mut impl Dataflow,
+        qubit_wires: Vec<Wire>,
+    ) -> Result<hugr::builder::handle::Outputs, BuildError> {
+        let size = qubit_wires.len();
+        let qb_row = vec![qb_t(); size];
+        let args = [TypeArg::List(
+            qb_row.clone().into_iter().map(Into::into).collect(),
+        )];
+
+        cache.apply_cached_operation(
+            builder,
+            &self.extension,
+            &Self::WRAPPED_BARRIER,
+            args,
+            &[TypeArg::BoundedNat(size as u64)],
+            qubit_wires,
+            |func_b| func_b.build_wrapped_barrier(func_b.input_wires()),
+        )
+    }
+
+    /// Build a runtime barrier across the given qubit wires (original method)
     pub fn build_runtime_barrier(
         &mut self,
         builder: &mut impl Dataflow,

@@ -27,29 +27,7 @@ use std::{ops::Deref, sync::Arc};
 
 use tket::analysis::type_unpack::{array_args, TypeUnpacker};
 
-/// Wrapper for ExtensionOp that implements Hash
-#[derive(Clone, PartialEq, Eq)]
-pub(super) struct OpHashWrapper(ExtensionOp);
-
-impl From<ExtensionOp> for OpHashWrapper {
-    fn from(op: ExtensionOp) -> Self {
-        Self(op)
-    }
-}
-
-impl OpHashWrapper {
-    pub(super) fn extension_op(&self) -> &ExtensionOp {
-        &self.0
-    }
-}
-
-impl std::hash::Hash for OpHashWrapper {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.extension_id().hash(state);
-        self.0.unqualified_id().hash(state);
-        self.0.args().hash(state);
-    }
-}
+use super::cached_extensions::OpHashWrapper;
 
 /// Invert the signature of a function type.
 fn invert_sig(sig: &PolyFuncTypeRV) -> PolyFuncTypeRV {

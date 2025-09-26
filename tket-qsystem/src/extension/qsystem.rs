@@ -39,6 +39,7 @@ use tket::extension::bool::{bool_type, BoolOp};
 use super::futures::future_type;
 
 mod barrier;
+mod cached_extensions;
 mod container;
 mod lower;
 use lower::pi_mul_f64;
