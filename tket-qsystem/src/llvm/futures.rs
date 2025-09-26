@@ -45,8 +45,7 @@ impl CodegenExtension for FuturesCodegenExtension {
                             Ok(future_type(session.iw_context()))
                         }
                         _ => Err(anyhow!(
-                            "FuturesCodegenExtension: Unsupported type: {}",
-                            hugr_type
+                            "FuturesCodegenExtension: Unsupported type: {hugr_type}"
                         )),
                     }
                 },
@@ -180,9 +179,7 @@ impl<'c, H: HugrView<Node = Node>> FuturesEmitter<'c, '_, '_, H> {
                 args.outputs.finish(self.builder(), [result])
             }
             _ => Err(anyhow!(
-                "Unsupported future operation: {:?} with type: {}",
-                op,
-                typ
+                "Unsupported future operation: {op:?} with type: {typ}"
             )),
         }
     }
