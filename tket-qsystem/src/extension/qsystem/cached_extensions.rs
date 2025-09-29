@@ -7,13 +7,12 @@
 use hugr::{
     algorithms::mangle_name,
     builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder},
-    extension::Extension,
-    ops::{DataflowOpTrait, ExtensionOp, OpName},
+    ops::{DataflowOpTrait, ExtensionOp},
     types::TypeArg,
     Hugr, Wire,
 };
 use indexmap::IndexMap;
-use std::{ops::Deref, sync::Arc};
+use std::ops::Deref;
 
 /// Wrapper for ExtensionOp that implements Hash
 #[derive(Clone, PartialEq, Eq)]
@@ -56,23 +55,11 @@ impl ExtensionCache {
         }
     }
 
-    /// Get access to the cached functions
-    pub fn funcs(&self) -> &IndexMap<OpHashWrapper, Hugr> {
-        &self.funcs
-    }
-
-    /// Get mutable access to the cached functions
-    pub fn funcs_mut(&mut self) -> &mut IndexMap<OpHashWrapper, Hugr> {
-        &mut self.funcs
-    }
-
     /// Apply a cached operation, creating and caching the function definition if needed
     pub fn apply_cached_operation<I, F>(
         &mut self,
         builder: &mut impl Dataflow,
-        extension: &Arc<Extension>,
-        op_name: &OpName,
-        args: impl Clone + Into<Vec<TypeArg>>,
+        op: ExtensionOp,
         mangle_args: &[TypeArg],
         inputs: I,
         func_builder: F,
@@ -81,9 +68,6 @@ impl ExtensionCache {
         I: IntoIterator<Item = Wire>,
         F: FnOnce(&mut FunctionBuilder<Hugr>) -> Result<Vec<Wire>, BuildError>,
     {
-        let op =
-            ExtensionOp::new(extension.get_op(op_name).unwrap().clone(), args.clone()).unwrap();
-
         self.cache_function(&op, mangle_args, func_builder)?;
         Ok(builder.add_dataflow_op(op, inputs)?.outputs())
     }
@@ -112,10 +96,23 @@ impl ExtensionCache {
         }
         Ok(())
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&OpHashWrapper, &Hugr)> {
+        self.funcs.iter()
+    }
 }
 
 impl Default for ExtensionCache {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl IntoIterator for ExtensionCache {
+    type Item = (OpHashWrapper, Hugr);
+    type IntoIter = indexmap::map::IntoIter<OpHashWrapper, Hugr>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.funcs.into_iter()
     }
 }

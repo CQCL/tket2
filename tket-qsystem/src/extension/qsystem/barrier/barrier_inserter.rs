@@ -14,11 +14,12 @@ use hugr::{
     },
     Hugr, HugrView, IncomingPort, Node, OutgoingPort, Wire,
 };
-use tket::analysis::type_unpack::is_array_of;
+use tket::analysis::type_unpack::{is_array_of, TypeUnpacker};
 
+use crate::extension::qsystem::cached_extensions::OpHashWrapper;
+use crate::extension::qsystem::container::ContainerOperationFactory;
 use crate::extension::qsystem::{
     barrier::barrier_ops::{build_runtime_barrier_op, BarrierOperationFactory},
-    cached_extensions::ExtensionCache,
     lower::insert_function,
     LowerTk2Error,
 };
@@ -34,8 +35,8 @@ pub fn is_qubit_array<AT: ArrayKind>(ty: &Type) -> Option<u64> {
 pub struct BarrierInserter {
     /// Factory for creating barrier operations
     op_factory: BarrierOperationFactory,
-    /// Centralized cache for both container and barrier temporary extensions
-    cache: ExtensionCache,
+    /// Container operation factory for generic unpacking/repacking
+    pub(super) container_factory: ContainerOperationFactory,
 }
 
 impl BarrierInserter {
@@ -43,7 +44,7 @@ impl BarrierInserter {
     pub fn new() -> Self {
         Self {
             op_factory: BarrierOperationFactory::new(),
-            cache: ExtensionCache::new(),
+            container_factory: ContainerOperationFactory::new(TypeUnpacker::for_qubits()),
         }
     }
 
@@ -58,7 +59,11 @@ impl BarrierInserter {
             .type_row
             .iter()
             .enumerate()
-            .filter(|(_, ty)| self.op_factory.type_analyzer().is_qubit_container(ty))
+            .filter(|(_, ty)| {
+                self.container_unpacker
+                    .type_analyzer()
+                    .is_qubit_container(ty)
+            })
             .map(|(i, ty)| {
                 let port = OutgoingPort::from(i);
                 let target = hugr
@@ -100,8 +105,7 @@ impl BarrierInserter {
         // Unpack the container row directly into wires
         let inputs = dfg_b.input_wires();
         let unpacked_wires =
-            self.op_factory
-                .container_factory
+            self.container_unpacker
                 .unpack_row(&mut dfg_b, &container_row, inputs)?;
 
         // Tag the qubit wires
@@ -125,11 +129,9 @@ impl BarrierInserter {
             .collect();
 
         // Call the runtime barrier on all the qubit wires using centralized cache
-        let mut barrier_outputs = self.op_factory.build_runtime_barrier_with_cache(
-            &mut self.cache,
-            &mut dfg_b,
-            qubit_wires,
-        )?;
+        let mut barrier_outputs = self
+            .op_factory
+            .build_runtime_barrier(&mut dfg_b, qubit_wires)?;
 
         // Replace the qubit wires with the runtime barrier outputs
         let repack_wires = tagged_wires.into_iter().map(|(is_qb, w)| {
@@ -143,11 +145,9 @@ impl BarrierInserter {
         });
 
         // Repack the wires directly into the container row
-        let repacked_container_wires = self.op_factory.container_factory.repack_row(
-            &mut dfg_b,
-            &container_row,
-            repack_wires,
-        )?;
+        let repacked_container_wires =
+            self.container_unpacker
+                .repack_row(&mut dfg_b, &container_row, repack_wires)?;
 
         let h = dfg_b.finish_hugr_with_outputs(repacked_container_wires)?;
         Ok(h)
@@ -190,31 +190,20 @@ impl BarrierInserter {
 
     /// Register function replacements for all temporary operations
     pub fn register_operation_replacements(
-        mut self,
+        self,
         hugr: &mut impl HugrMut<Node = Node>,
         lowerer: &mut ReplaceTypes,
     ) {
-        // First, merge the container factory's cache into the centralized cache
-        self.merge_container_cache_to_central();
-
         // Use the centralized cache for all operation replacements
-        for (op, func_def) in self.cache.funcs() {
+        for (op, func_def) in self.funcs() {
             let func_node = insert_function(hugr, func_def.clone());
             lowerer.replace_op(op.extension_op(), NodeTemplate::Call(func_node, vec![]));
         }
     }
-
-    /// Merge container factory's cached operations into the centralized cache
-    pub fn merge_container_cache_to_central(&mut self) {
-        // Copy all cached functions from container factory to centralized cache
-        for (op_key, func_def) in self.op_factory.container_factory.funcs() {
-            // Insert into centralized cache if not already present
-            if !self.cache.funcs().contains_key(op_key) {
-                self.cache
-                    .funcs_mut()
-                    .insert(op_key.clone(), func_def.clone());
-            }
-        }
+    fn funcs(&self) -> impl Iterator<Item = (&OpHashWrapper, &Hugr)> {
+        self.op_factory
+            .funcs()
+            .chain(self.container_factory.funcs())
     }
 }
 
@@ -296,7 +285,7 @@ mod tests {
         inserter.insert_runtime_barrier(&mut hugr, barrier_node.node(), barrier)?;
 
         // The array shortcut should have been used
-        assert!(inserter.op_factory.funcs().is_empty());
+        assert_eq!(inserter.op_factory.funcs().count(), 0);
         Ok(())
     }
 
@@ -351,11 +340,8 @@ mod tests {
         // Check that the HUGR is valid
         assert!(hugr.validate().is_ok(), "Generated HUGR should be valid");
 
-        // Check that we've registered operations in the centralized cache
-        // After building the packing hugr, merge the caches to get the full count
-        inserter.merge_container_cache_to_central();
         assert_eq!(
-            inserter.cache.funcs().len(),
+            inserter.funcs().count(),
             3, // runtime barrier + array unpack + array repack
         );
 
