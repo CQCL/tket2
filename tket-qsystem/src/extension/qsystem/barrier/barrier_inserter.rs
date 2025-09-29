@@ -16,7 +16,6 @@ use hugr::{
 };
 use tket::analysis::type_unpack::{is_array_of, TypeUnpacker};
 
-use crate::extension::qsystem::cached_extensions::OpHashWrapper;
 use crate::extension::qsystem::container::ContainerOperationFactory;
 use crate::extension::qsystem::{
     barrier::barrier_ops::{build_runtime_barrier_op, BarrierOperationFactory},
@@ -195,15 +194,14 @@ impl BarrierInserter {
         lowerer: &mut ReplaceTypes,
     ) {
         // Use the centralized cache for all operation replacements
-        for (op, func_def) in self.funcs() {
-            let func_node = insert_function(hugr, func_def.clone());
-            lowerer.replace_op(op.extension_op(), NodeTemplate::Call(func_node, vec![]));
+        for (op, func_def) in self
+            .op_factory
+            .into_function_map()
+            .chain(self.container_factory.into_function_map())
+        {
+            let func_node = insert_function(hugr, func_def);
+            lowerer.replace_op(&op, NodeTemplate::Call(func_node, vec![]));
         }
-    }
-    fn funcs(&self) -> impl Iterator<Item = (&OpHashWrapper, &Hugr)> {
-        self.op_factory
-            .funcs()
-            .chain(self.container_factory.funcs())
     }
 }
 
@@ -285,7 +283,7 @@ mod tests {
         inserter.insert_runtime_barrier(&mut hugr, barrier_node.node(), barrier)?;
 
         // The array shortcut should have been used
-        assert_eq!(inserter.op_factory.funcs().count(), 0);
+        assert_eq!(inserter.op_factory.extension_cache().len(), 0);
         Ok(())
     }
 
@@ -341,7 +339,8 @@ mod tests {
         assert!(hugr.validate().is_ok(), "Generated HUGR should be valid");
 
         assert_eq!(
-            inserter.funcs().count(),
+            inserter.op_factory.extension_cache().len()
+                + inserter.container_factory.extension_cache().len(),
             3, // runtime barrier + array unpack + array repack
         );
 

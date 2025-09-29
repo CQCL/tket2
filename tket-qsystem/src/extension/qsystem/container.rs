@@ -27,8 +27,6 @@ use tket::analysis::type_unpack::{array_args, TypeUnpacker};
 
 use crate::extension::qsystem::cached_extensions::ExtensionCache;
 
-use super::cached_extensions::OpHashWrapper;
-
 /// Invert the signature of a function type.
 fn invert_sig(sig: &PolyFuncTypeRV) -> PolyFuncTypeRV {
     let body = FuncValueType::new(sig.body().output().clone(), sig.body().input().clone());
@@ -205,7 +203,7 @@ impl ContainerOperationFactory {
 
     /// Insert an option unwrap operation for a given element type.
     pub fn unpack_option(
-        &mut self,
+        &self,
         builder: &mut impl Dataflow,
         opt_wire: Wire,
         elem_ty: &Type,
@@ -214,24 +212,24 @@ impl ContainerOperationFactory {
         let op = self
             .get_op(&Self::UNPACK_OPT, args.clone())
             .expect("known op");
-        let mut outputs =
-            self.func_cache
-                .apply_cached_operation(builder, op, &[], [opt_wire], |func_b| {
-                    let [in_wire] = func_b.input_wires_arr();
-                    let [out_wire] = func_b.build_expect_sum(
-                        1,
-                        option_type(elem_ty.clone()),
-                        in_wire,
-                        |_| format!("Value of type Option<{elem_ty:?}> is None so cannot unpack."),
-                    )?;
-                    Ok(vec![out_wire])
+        self.func_cache.cache_function(&op, &[], |func_b| {
+            let [in_wire] = func_b.input_wires_arr();
+            let [out_wire] =
+                func_b.build_expect_sum(1, option_type(elem_ty.clone()), in_wire, |_| {
+                    format!("Value of type Option<{elem_ty:?}> is None so cannot unpack.")
                 })?;
-        Ok(outputs.next().unwrap())
+            Ok(vec![out_wire])
+        })?;
+        Ok(builder
+            .add_dataflow_op(op, [opt_wire])?
+            .outputs()
+            .next()
+            .expect("one output"))
     }
 
     /// Insert an option construction operation for a given element type.
     pub fn repack_option(
-        &mut self,
+        &self,
         builder: &mut impl Dataflow,
         wire: Wire,
         elem_ty: &Type,
@@ -240,23 +238,25 @@ impl ContainerOperationFactory {
         let op = self
             .get_op(&Self::REPACK_OPT, args.clone())
             .expect("known op");
-        let mut outputs =
-            self.func_cache
-                .apply_cached_operation(builder, op, &[], [wire], |func_b| {
-                    let [in_wire] = func_b.input_wires_arr();
-                    let out_wire = func_b.make_sum(
-                        1,
-                        vec![hugr::type_row![], vec![elem_ty.clone()].into()],
-                        [in_wire],
-                    )?;
-                    Ok(vec![out_wire])
-                })?;
-        Ok(outputs.next().unwrap())
+        self.func_cache.cache_function(&op, &[], |func_b| {
+            let [in_wire] = func_b.input_wires_arr();
+            let out_wire = func_b.make_sum(
+                1,
+                vec![hugr::type_row![], vec![elem_ty.clone()].into()],
+                [in_wire],
+            )?;
+            Ok(vec![out_wire])
+        })?;
+        Ok(builder
+            .add_dataflow_op(op, [wire])?
+            .outputs()
+            .next()
+            .expect("one output"))
     }
 
     /// Generic array unpacking using the ArrayKind trait
     fn unpack_array<AK: ArrayKind>(
-        &mut self,
+        &self,
         builder: &mut impl Dataflow,
         array_wire: Wire,
         size: u64,
@@ -270,32 +270,26 @@ impl ContainerOperationFactory {
 
         let op = self.get_op(op_name, args.clone()).expect("known op");
 
-        let slf = self as *mut Self;
-        let outputs = self.func_cache.apply_cached_operation(
-            builder,
-            op,
-            &args[..2],
-            [array_wire],
-            |func_b| {
-                let w = func_b.input().out_wire(0);
-                let elems = func_b.add_generic_array_unpack::<AK>(elem_ty.clone(), size, w)?;
+        self.func_cache.cache_function(&op, &args[..2], |func_b| {
+            let w = func_b.input().out_wire(0);
+            let elems = func_b.add_generic_array_unpack::<AK>(elem_ty.clone(), size, w)?;
 
-                // SAFETY: We guarantee no aliasing by only using this pointer in this closure.
-                let slf = unsafe { &mut *slf };
-                let result: Vec<_> = elems
-                    .into_iter()
-                    .map(|wire| slf.unpack_container(func_b, elem_ty, wire))
-                    .collect::<Result<Vec<_>, _>>()?
-                    .concat();
-                Ok(result)
-            },
-        )?;
+            let result: Vec<_> = elems
+                .into_iter()
+                .map(|wire| self.unpack_container(func_b, elem_ty, wire))
+                .collect::<Result<Vec<_>, _>>()?
+                .concat();
+            Ok(result)
+        })?;
 
-        Ok(outputs.collect())
+        Ok(builder
+            .add_dataflow_op(op, [array_wire])?
+            .outputs()
+            .collect())
     }
 
     /// Helper function for array arguments
-    fn array_args<AK: ArrayKind>(&mut self, size: u64, elem_ty: &Type) -> Option<[TypeArg; 3]> {
+    fn array_args<AK: ArrayKind>(&self, size: u64, elem_ty: &Type) -> Option<[TypeArg; 3]> {
         let row = self
             .type_analyzer
             .unpack_type(&AK::ty(size, elem_ty.clone()))?;
@@ -309,7 +303,7 @@ impl ContainerOperationFactory {
 
     /// Generic array repacking using the ArrayKind trait
     fn repack_array<AK: ArrayKind>(
-        &mut self,
+        &self,
         builder: &mut impl Dataflow,
         elem_wires: impl IntoIterator<Item = Wire>,
         size: u64,
@@ -328,34 +322,29 @@ impl ContainerOperationFactory {
 
         let inner_row_len = self.type_analyzer.num_unpacked_wires(elem_ty);
         let op = self.get_op(op_name, args.clone()).expect("known op");
-        let slf = self as *mut Self;
 
-        let mut outputs = self.func_cache.apply_cached_operation(
-            builder,
-            op,
-            &args[..2],
-            elem_wires,
-            |func_b| {
-                let input = func_b.input();
-                // SAFETY: We guarantee no aliasing by only using this pointer in this closure.
-                let slf = unsafe { &mut *slf };
-                let elems: Result<Vec<_>, _> = input
-                    .outputs()
-                    .collect::<Vec<_>>()
-                    .chunks(inner_row_len)
-                    .map(|chunk| slf.repack_container(func_b, elem_ty, chunk.to_vec()))
-                    .collect();
+        self.func_cache.cache_function(&op, &args[..2], |func_b| {
+            let input = func_b.input();
+            // SAFETY: We guarantee no aliasing by only using this pointer in this closure.
+            let elems: Result<Vec<_>, _> = input
+                .outputs()
+                .collect::<Vec<_>>()
+                .chunks(inner_row_len)
+                .map(|chunk| self.repack_container(func_b, elem_ty, chunk.to_vec()))
+                .collect();
 
-                let array_wire = func_b.add_new_generic_array::<AK>(elem_ty.clone(), elems?)?;
-                Ok(vec![array_wire])
-            },
-        )?;
-
-        Ok(outputs.next().unwrap())
+            let array_wire = func_b.add_new_generic_array::<AK>(elem_ty.clone(), elems?)?;
+            Ok(vec![array_wire])
+        })?;
+        Ok(builder
+            .add_dataflow_op(op, elem_wires)?
+            .outputs()
+            .next()
+            .expect("one output"))
     }
 
     /// Generate tuple arguments
-    fn tuple_args(&mut self, tuple_row: &[Type]) -> Option<[TypeArg; 2]> {
+    fn tuple_args(&self, tuple_row: &[Type]) -> Option<[TypeArg; 2]> {
         let unpacked_row = self
             .type_analyzer
             .unpack_type(&Type::new_tuple(tuple_row.to_vec()))?;
@@ -370,7 +359,7 @@ impl ContainerOperationFactory {
 
     /// Unpack a row of types into a flat list of wires containing all elements matching the analyzer
     pub fn unpack_row(
-        &mut self,
+        &self,
         builder: &mut impl Dataflow,
         types: &[Type],
         wires: impl IntoIterator<Item = Wire>,
@@ -388,7 +377,7 @@ impl ContainerOperationFactory {
 
     /// Repack a flat list of wires into a row of structured types
     pub fn repack_row(
-        &mut self,
+        &self,
         builder: &mut impl Dataflow,
         types: &[Type],
         wires: impl IntoIterator<Item = Wire>,
@@ -406,7 +395,7 @@ impl ContainerOperationFactory {
 
     /// Unpack a tuple into individual wires
     pub fn unpack_tuple(
-        &mut self,
+        &self,
         builder: &mut impl Dataflow,
         tuple_wire: Wire,
         tuple_row: &[Type],
@@ -419,32 +408,27 @@ impl ContainerOperationFactory {
         let op = self
             .get_op(&Self::TUPLE_UNPACK, args.clone())
             .expect("known op");
-        let slf = self as *mut Self;
 
-        let outputs = self.func_cache.apply_cached_operation(
-            builder,
-            op,
-            &args[..1],
-            [tuple_wire],
-            |func_b| {
-                let w = func_b.input().out_wire(0);
-                let unpacked_tuple_wires = func_b
-                    .add_dataflow_op(UnpackTuple::new(tuple_row.clone().into()), [w])?
-                    .outputs()
-                    .collect::<Vec<_>>();
-                let slf = unsafe { &mut *slf };
+        self.func_cache.cache_function(&op, &args[..1], |func_b| {
+            let w = func_b.input().out_wire(0);
+            let unpacked_tuple_wires = func_b
+                .add_dataflow_op(UnpackTuple::new(tuple_row.clone().into()), [w])?
+                .outputs()
+                .collect::<Vec<_>>();
 
-                let unpacked = slf.unpack_row(func_b, &tuple_row, unpacked_tuple_wires)?;
-                Ok(unpacked)
-            },
-        )?;
+            let unpacked = self.unpack_row(func_b, &tuple_row, unpacked_tuple_wires)?;
+            Ok(unpacked)
+        })?;
 
-        Ok(outputs.collect())
+        Ok(builder
+            .add_dataflow_op(op, [tuple_wire])?
+            .outputs()
+            .collect())
     }
 
     /// Repack wires into a tuple
     pub fn repack_tuple(
-        &mut self,
+        &self,
         builder: &mut impl Dataflow,
         elem_wires: impl IntoIterator<Item = Wire>,
         tuple_row: &[Type],
@@ -463,30 +447,26 @@ impl ContainerOperationFactory {
         let op = self
             .get_op(&Self::TUPLE_REPACK, args.clone())
             .expect("known op");
-        let slf = self as *mut Self;
 
-        let mut outputs = self.func_cache.apply_cached_operation(
-            builder,
-            op,
-            &args[..1],
-            elem_wires,
-            |func_b| {
-                let in_wires = func_b.input().outputs().collect::<Vec<_>>();
-                let slf = unsafe { &mut *slf };
+        self.func_cache.cache_function(&op, &args[..1], |func_b| {
+            let in_wires = func_b.input().outputs().collect::<Vec<_>>();
 
-                let repacked_elem_wires = slf.repack_row(func_b, &tuple_row, in_wires)?;
-                let tuple_wire = func_b.make_tuple(repacked_elem_wires)?;
+            let repacked_elem_wires = self.repack_row(func_b, &tuple_row, in_wires)?;
+            let tuple_wire = func_b.make_tuple(repacked_elem_wires)?;
 
-                Ok(vec![tuple_wire])
-            },
-        )?;
+            Ok(vec![tuple_wire])
+        })?;
 
-        Ok(outputs.next().unwrap())
+        Ok(builder
+            .add_dataflow_op(op, elem_wires)?
+            .outputs()
+            .next()
+            .expect("one output"))
     }
 
     /// Unpack a container type to extract wires matching the analyzer criteria.
     pub fn unpack_container(
-        &mut self,
+        &self,
         builder: &mut impl Dataflow,
         typ: &Type,
         container_wire: Wire,
@@ -537,7 +517,7 @@ impl ContainerOperationFactory {
 
     /// Repack a container type from its unpacked wires.
     pub fn repack_container(
-        &mut self,
+        &self,
         builder: &mut impl Dataflow,
         typ: &Type,
         unpacked_wires: Vec<Wire>,
@@ -588,9 +568,14 @@ impl ContainerOperationFactory {
         Ok(unpacked_wires[0])
     }
 
-    /// TODO Gets access to the underlying function cache for operation replacement
-    pub fn funcs(&self) -> impl Iterator<Item = (&OpHashWrapper, &Hugr)> {
-        self.func_cache.iter()
+    pub fn extension_cache(&self) -> &ExtensionCache {
+        &self.func_cache
+    }
+    pub fn extension_cache_mut(&mut self) -> &mut ExtensionCache {
+        &mut self.func_cache
+    }
+    pub fn into_function_map(self) -> impl Iterator<Item = (ExtensionOp, Hugr)> {
+        self.func_cache.into_iter()
     }
 }
 
@@ -611,13 +596,13 @@ mod tests {
     fn test_container_factory_creation() {
         let analyzer = TypeUnpacker::for_qubits();
         let factory = ContainerOperationFactory::new(analyzer);
-        assert_eq!(factory.funcs().count(), 0);
+        assert_eq!(factory.func_cache.len(), 0);
     }
 
     #[test]
     fn test_option_unwrap_wrap() -> Result<(), BuildError> {
         let analyzer = TypeUnpacker::for_qubits();
-        let mut factory = ContainerOperationFactory::new(analyzer);
+        let factory = ContainerOperationFactory::new(analyzer);
         let option_qb_type = Type::from(option_type(qb_t()));
         let mut builder = DFGBuilder::new(Signature::new_endo(vec![option_qb_type]))?;
 
@@ -652,7 +637,7 @@ mod tests {
         #[case] repack_op: OpName,
     ) -> Result<(), BuildError> {
         let analyzer = TypeUnpacker::for_qubits();
-        let mut factory = ContainerOperationFactory::new(analyzer);
+        let factory = ContainerOperationFactory::new(analyzer);
         let array_size = 2;
 
         // Create the specific array type
@@ -679,7 +664,7 @@ mod tests {
     #[test]
     fn test_tuple_unpack_repack() -> Result<(), BuildError> {
         let analyzer = TypeUnpacker::for_qubits();
-        let mut factory = ContainerOperationFactory::new(analyzer);
+        let factory = ContainerOperationFactory::new(analyzer);
         let tuple_row = vec![qb_t(), bool_t()];
         let tuple_type = Type::new_tuple(tuple_row.clone());
 
@@ -698,7 +683,7 @@ mod tests {
     #[test]
     fn test_unpack_repack_row() -> Result<(), BuildError> {
         let analyzer = TypeUnpacker::for_qubits();
-        let mut factory = ContainerOperationFactory::new(analyzer);
+        let factory = ContainerOperationFactory::new(analyzer);
         let types = vec![qb_t(), bool_t(), array_type(2, qb_t())];
         let mut builder = DFGBuilder::new(hugr::types::Signature::new_endo(types.clone()))?;
 

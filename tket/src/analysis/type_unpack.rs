@@ -4,7 +4,8 @@ use hugr::extension::prelude::qb_t;
 use hugr::std_extensions::collections::array::{Array, ArrayKind};
 use hugr::std_extensions::collections::borrow_array::BorrowArray;
 use hugr::std_extensions::collections::value_array::ValueArray;
-use hugr::types::{CustomType, SumType, Type, TypeArg};
+use hugr::types::{CustomType, SumType, Type, TypeArg, TypeRowRV};
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 /// If a type is an option of the given element type.
@@ -40,7 +41,7 @@ pub struct TypeUnpacker {
     /// The target element type to analyze for.
     element_type: Type,
     /// Cache of unpacked types.
-    cache: HashMap<Type, Option<Vec<Type>>>,
+    cache: RefCell<HashMap<Type, Option<Vec<Type>>>>,
 }
 
 impl TypeUnpacker {
@@ -48,7 +49,7 @@ impl TypeUnpacker {
     pub fn new(element_type: Type) -> Self {
         Self {
             element_type,
-            cache: HashMap::new(),
+            cache: RefCell::new(HashMap::new()),
         }
     }
 
@@ -67,41 +68,23 @@ impl TypeUnpacker {
     ///
     /// Uses memoization to avoid recomputing the same type.
     /// `None` if the type does not contain the element type.
-    pub fn unpack_type(&mut self, ty: &Type) -> Option<Vec<Type>> {
-        let unpacked = match self.cache.get(ty) {
-            Some(unpacked) => unpacked.clone(),
-            None => {
-                let unpacked = self._new_unpack_type(ty);
-                self.cache.insert(ty.clone(), unpacked.clone());
-                unpacked
-            }
-        };
+    pub fn unpack_type(&self, ty: &Type) -> Option<Vec<Type>> {
+        if self.cache.borrow().contains_key(ty) {
+            return self.cache.borrow().get(ty).cloned().expect("checked above");
+        }
 
+        let unpacked = self._new_unpack_type(ty);
+        self.cache.borrow_mut().insert(ty.clone(), unpacked.clone());
         unpacked
     }
 
-    /// Compute the row produced when a type is unpacked for the first time.
-    fn _new_unpack_type(&mut self, ty: &Type) -> Option<Vec<Type>> {
+    fn _new_unpack_type(&self, ty: &Type) -> Option<Vec<Type>> {
         if ty == &self.element_type {
             return Some(vec![self.element_type.clone()]);
         }
 
         if let Some(row) = ty.as_sum().and_then(SumType::as_tuple) {
-            let mut any_element = false;
-            let unpacked_row = row
-                .iter()
-                .flat_map(|t| {
-                    let t = &t.clone().try_into_type().expect("unexpected row variable.");
-                    match self.unpack_type(t) {
-                        Some(inner) => {
-                            any_element = true;
-                            inner
-                        }
-                        None => vec![t.clone()],
-                    }
-                })
-                .collect::<Vec<_>>();
-            any_element.then_some(unpacked_row)
+            self.tuple_row(row)
 
             // other sums containing the element type are ignored.
         } else if let Some((size, elem_ty)) = ty.as_extension().and_then(|ext| {
@@ -111,6 +94,7 @@ impl TypeUnpacker {
         }) {
             // Special case for Option[ElementType] since it is used in arrays.
             // Fragile - would be better with dedicated array type.
+            // TODO remove and only support borrow arrays
             // Not sure how this can be improved without runtime operations being able to
             // take a compile time unknown number of elements.
             if is_opt_of(elem_ty, &self.element_type) {
@@ -130,18 +114,36 @@ impl TypeUnpacker {
         }
     }
 
+    fn tuple_row(&self, row: &TypeRowRV) -> Option<Vec<Type>> {
+        let mut any_element = false;
+        let unpacked_row = row
+            .iter()
+            .flat_map(|t| {
+                let t = &t.clone().try_into_type().expect("unexpected row variable.");
+                match self.unpack_type(t) {
+                    Some(inner) => {
+                        any_element = true;
+                        inner
+                    }
+                    None => vec![t.clone()],
+                }
+            })
+            .collect::<Vec<_>>();
+        any_element.then_some(unpacked_row)
+    }
+
     /// Count the number of wires in a row in an unpacked type.
-    pub fn num_unpacked_wires(&mut self, ty: &Type) -> usize {
+    pub fn num_unpacked_wires(&self, ty: &Type) -> usize {
         self.unpack_type(ty).as_ref().map_or(1, Vec::len)
     }
 
     /// Report if a type contains the element type.
-    pub fn is_element_container(&mut self, ty: &Type) -> bool {
+    pub fn is_element_container(&self, ty: &Type) -> bool {
         self.unpack_type(ty).is_some()
     }
 
     /// Report if a type contains qubits.
-    pub fn is_qubit_container(&mut self, ty: &Type) -> bool {
+    pub fn is_qubit_container(&self, ty: &Type) -> bool {
         self.is_element_container(ty)
     }
 
@@ -173,7 +175,7 @@ mod test {
 
     #[test]
     fn test_primitive_types() {
-        let mut analyzer = TypeUnpacker::for_qubits();
+        let analyzer = TypeUnpacker::for_qubits();
 
         let qubit_result = analyzer.unpack_type(&qb_t());
         let types = qubit_result.unwrap();
@@ -189,7 +191,7 @@ mod test {
     #[case::value(ValueArray)]
     #[case::borrow(BorrowArray)]
     fn test_array_types<AK: ArrayKind>(#[case] _kind: AK) {
-        let mut analyzer = TypeUnpacker::for_qubits();
+        let analyzer = TypeUnpacker::for_qubits();
 
         // Array of qubits should be a container with that many qubits
         let qubit_array = AK::ty(3, qb_t());
@@ -214,7 +216,7 @@ mod test {
 
     #[test]
     fn test_option_types() {
-        let mut analyzer = TypeUnpacker::for_qubits();
+        let analyzer = TypeUnpacker::for_qubits();
 
         // Option<qubit> by itself should NOT be a container
         let opt_qubit = option_type(qb_t()).into();
@@ -235,7 +237,7 @@ mod test {
 
     #[test]
     fn test_tuple_types() {
-        let mut analyzer = TypeUnpacker::for_qubits();
+        let analyzer = TypeUnpacker::for_qubits();
 
         // Tuple with no qubits
         let no_qubit_tuple = Type::new_tuple(vec![bool_t(), usize_t()]);
@@ -273,7 +275,7 @@ mod test {
 
     #[test]
     fn test_complex_types() {
-        let mut analyzer = TypeUnpacker::for_qubits();
+        let analyzer = TypeUnpacker::for_qubits();
 
         // Array of tuples containing qubits
         let complex_type = array_type(2, Type::new_tuple(vec![bool_t(), qb_t()]));
@@ -307,7 +309,7 @@ mod test {
 
     #[test]
     fn test_helper_functions() {
-        let mut analyzer = TypeUnpacker::for_qubits();
+        let analyzer = TypeUnpacker::for_qubits();
         // Test unpacked_wires
         assert_eq!(analyzer.num_unpacked_wires(&bool_t()), 1);
         assert_eq!(
@@ -329,7 +331,7 @@ mod test {
 
     #[test]
     fn test_caching() {
-        let mut analyzer = TypeUnpacker::for_qubits();
+        let analyzer = TypeUnpacker::for_qubits();
 
         // Create a complex type that will take some processing
         let complex_type = Type::new_tuple(vec![
@@ -354,7 +356,7 @@ mod test {
     #[test]
     fn test_non_qb_element() {
         // Test with bool type as the element type
-        let mut bool_analyzer = TypeUnpacker::new(bool_t());
+        let bool_analyzer = TypeUnpacker::new(bool_t());
 
         // Bool itself should be detected
         let bool_result = bool_analyzer.unpack_type(&bool_t());
@@ -381,7 +383,7 @@ mod test {
         assert!(!bool_analyzer.is_element_container(&usize_t()));
 
         // Test with usize type as the element type
-        let mut usize_analyzer = TypeUnpacker::new(usize_t());
+        let usize_analyzer = TypeUnpacker::new(usize_t());
 
         // usize itself should be detected
         let usize_result = usize_analyzer.unpack_type(&usize_t());
