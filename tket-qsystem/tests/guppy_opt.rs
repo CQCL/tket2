@@ -14,7 +14,6 @@ use hugr::algorithms::UntuplePass;
 use hugr::algorithms::{RemoveDeadFuncsError, RemoveDeadFuncsPass};
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::patch::inline_dfg::InlineDFGError;
-use hugr::hugr::views::RootCheckable;
 use hugr::{Hugr, HugrView};
 use itertools::Itertools;
 use rstest::{fixture, rstest};
@@ -66,26 +65,25 @@ fn guppy_simple_cx() -> Hugr {
 #[case::simple_cx(guppy_simple_cx())]
 #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
 fn optimise_guppy(#[case] mut hugr: Hugr) {
-    // Merge basic blocks with deterministic branching.
+    // Merge basic blocks with trivially deterministic branching.
     //
     // This should be a composable pass in hugr-passes.
+    // See <https://github.com/CQCL/hugr/issues/2556>
     let cfgs = hugr
         .entry_descendants()
         .filter(|&n| hugr.get_optype(n).is_cfg())
         .collect_vec();
     for cfg in cfgs {
         let mut rerooted = hugr.with_entrypoint_mut(cfg);
-        let cfg = (&mut rerooted).try_into_checked().unwrap();
-        merge_basic_blocks(cfg);
+        merge_basic_blocks(&mut rerooted);
     }
 
     let untuple = UntuplePass::new(UntupleRecursive::Recursive);
     // TODO: Constant folding fails on some test cases (it leaves qubit ports disconnected).
-    //let const_fold = ConstantFoldPass::default();
-    //let dce = DeadCodeElimPass::<Hugr>::default();
+    // See <https://github.com/CQCL/hugr/issues/2557>
     let dead_funcs = RemoveDeadFuncsPass::default();
     let inline = InlineDFGsPass;
-    // TODO: We are missing an InlineCFGs pass here.
+    // TODO: We are missing a pass to inline straight-line CFGs here.
 
     /// Helper error accumulator
     #[derive(derive_more::Error, Debug, derive_more::Display, derive_more::From)]
@@ -99,8 +97,6 @@ fn optimise_guppy(#[case] mut hugr: Hugr) {
 
     untuple
         .map_err(OptErrors::Untuple)
-        //.then::<_, OptErrors>(const_fold)
-        //.then::<_, OptErrors>(dce)
         .then::<_, OptErrors>(dead_funcs)
         .then::<_, OptErrors>(inline)
         .run(&mut hugr)
@@ -111,10 +107,7 @@ fn optimise_guppy(#[case] mut hugr: Hugr) {
     // Most example circuits optimize to identity functions, so it may be possible to check for that.
 
     // Lower to QSystem. This may blow up the HUGR size.
-    QSystemPass::default()
-        //.with_constant_fold(true)
-        .run(&mut hugr)
-        .unwrap();
+    QSystemPass::default().run(&mut hugr).unwrap();
 
     hugr.validate().unwrap_or_else(|e| panic!("{e}"));
 }
