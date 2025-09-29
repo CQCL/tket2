@@ -102,7 +102,7 @@ impl ModifierFlags {
     }
 
     fn satisfies(&self, combined: &CombinedModifier) -> bool {
-        (!combined.control > 0 || self.control)
+        (combined.control == 0 || self.control)
             && (!combined.dagger || self.dagger)
             && (!combined.power || self.power)
     }
@@ -557,15 +557,17 @@ impl<N: HugrNode> ModifierResolver<N> {
         // println!("before connect_all:\n{}", new_dfg.hugr().mermaid_string());
         for out_node in h.children(parent) {
             for out_port in h.node_outputs(out_node) {
-                // TODO: ad hoc solution: ignore all StateOrder connections.
                 if let Some(EdgeKind::StateOrder) = h.get_optype(out_node).port_kind(out_port) {
-                    continue;
+                    // If the dagger is applied, we ignore the state order
+                    if self.modifiers.dagger {
+                        continue;
+                    }
                 }
                 for (in_node, in_port) in h.linked_inputs(out_node, out_port) {
                     for a in self.map_get(&(in_node, in_port).into())? {
                         for b in self.map_get(&(out_node, out_port).into())? {
                             connect(new_dfg, a, b).map_err(|e| {
-                                let (subgraph, result) = h.extract_hugr(parent);
+                                // let (subgraph, result) = h.extract_hugr(parent);
                                 // println!("{}", subgraph.mermaid_string());
                                 e
                             })?
@@ -728,7 +730,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(())
     }
 
-    /// This function registers the correspondence of the ports of the old node to the new node.
+    /// This function registers the correspondence of the data-flow ports of the old node to the new node.
     /// If the dagger is not applied, the ports are mapped directly.
     /// If the dagger is applied, the quantum input/output ports are swapped.
     /// Inputs:
@@ -754,7 +756,7 @@ impl<N: HugrNode> ModifierResolver<N> {
     /// - input: [out0:qubit, in1:int, out1:array[qubit, _], in4:int]
     /// - output: [in0:qubit, in2:qubit, in3:qubit]
     ///
-    /// FIXME: This reverses everything that can contain qubits, which might not be intended.
+    /// FIXME: This reverses everything that can contain qubits, which might not be intended in general.
     /// TODO: Handle state order edges.
     fn wire_node_inout<'a>(
         &mut self,
@@ -821,7 +823,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 out_ty = outputs.next();
             }
 
-            // If both are quantum types
+            // If both are quantum types, wire them in the opposite direction until the next non-quantum type
             while let Some(ty) = in_ty {
                 if !contain_quantum_type(ty) {
                     break;
@@ -857,9 +859,32 @@ impl<N: HugrNode> ModifierResolver<N> {
                 out_ty = outputs.next();
             }
 
+            // Break if ended
             if in_ty.is_none() && out_ty.is_none() {
                 break;
             }
+        }
+
+        Ok(())
+    }
+
+    fn wire_others(
+        &mut self,
+        n: N,
+        n_optype: &OpType,
+        node: Node,
+        node_optype: &OpType,
+    ) -> Result<(), ModifierResolverErrors<N>> {
+        if let (Some(old), Some(new)) =
+            (n_optype.other_input_port(), node_optype.other_input_port())
+        {
+            self.map_insert((n, old).into(), (node, new).into())?;
+        }
+        if let (Some(old), Some(new)) = (
+            n_optype.other_output_port(),
+            node_optype.other_output_port(),
+        ) {
+            self.map_insert((n, old).into(), (node, new).into())?;
         }
         Ok(())
     }
@@ -974,7 +999,14 @@ impl<N: HugrNode> ModifierResolver<N> {
             0,
             offset,
         )?;
-
+        // self.wire_others(n, cfg.into(), new, new_dfg.hugr().get_optype(new))?;
+        /// TODO
+        /// TODO
+        /// StateOrder
+        /// TODO
+        /// TODO
+        /// TODO
+        /// TODO
         Ok(())
     }
 }
