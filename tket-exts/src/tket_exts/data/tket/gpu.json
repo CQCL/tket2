@@ -1,19 +1,19 @@
 {
-  "version": "0.4.1",
-  "name": "tket.wasm",
+  "version": "0.1.1",
+  "name": "tket.gpu",
   "types": {
     "context": {
-      "extension": "tket.wasm",
+      "extension": "tket.gpu",
       "name": "context",
       "params": [],
-      "description": "tket.wasm context",
+      "description": "tket.gpu context",
       "bound": {
         "b": "Explicit",
         "bound": "A"
       }
     },
     "func": {
-      "extension": "tket.wasm",
+      "extension": "tket.gpu",
       "name": "func",
       "params": [
         {
@@ -31,24 +31,24 @@
           }
         }
       ],
-      "description": "tket.wasm func",
+      "description": "tket.gpu func",
       "bound": {
         "b": "Explicit",
         "bound": "C"
       }
     },
     "module": {
-      "extension": "tket.wasm",
+      "extension": "tket.gpu",
       "name": "module",
       "params": [],
-      "description": "tket.wasm module",
+      "description": "tket.gpu module",
       "bound": {
         "b": "Explicit",
         "bound": "C"
       }
     },
     "result": {
-      "extension": "tket.wasm",
+      "extension": "tket.gpu",
       "name": "result",
       "params": [
         {
@@ -59,7 +59,7 @@
           }
         }
       ],
-      "description": "tket.wasm result",
+      "description": "tket.gpu result",
       "bound": {
         "b": "Explicit",
         "bound": "A"
@@ -68,7 +68,7 @@
   },
   "operations": {
     "call": {
-      "extension": "tket.wasm",
+      "extension": "tket.gpu",
       "name": "call",
       "description": "call",
       "signature": {
@@ -92,14 +92,14 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket.wasm",
+              "extension": "tket.gpu",
               "id": "context",
               "args": [],
               "bound": "A"
             },
             {
               "t": "Opaque",
-              "extension": "tket.wasm",
+              "extension": "tket.gpu",
               "id": "func",
               "args": [
                 {
@@ -146,7 +146,7 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket.wasm",
+              "extension": "tket.gpu",
               "id": "result",
               "args": [
                 {
@@ -174,7 +174,7 @@
       "binary": false
     },
     "dispose_context": {
-      "extension": "tket.wasm",
+      "extension": "tket.gpu",
       "name": "dispose_context",
       "description": "dispose_context",
       "signature": {
@@ -183,7 +183,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket.wasm",
+              "extension": "tket.gpu",
               "id": "context",
               "args": [],
               "bound": "A"
@@ -195,7 +195,7 @@
       "binary": false
     },
     "get_context": {
-      "extension": "tket.wasm",
+      "extension": "tket.gpu",
       "name": "get_context",
       "description": "get_context",
       "signature": {
@@ -215,7 +215,7 @@
                 [
                   {
                     "t": "Opaque",
-                    "extension": "tket.wasm",
+                    "extension": "tket.gpu",
                     "id": "context",
                     "args": [],
                     "bound": "A"
@@ -229,7 +229,7 @@
       "binary": false
     },
     "lookup_by_id": {
-      "extension": "tket.wasm",
+      "extension": "tket.gpu",
       "name": "lookup_by_id",
       "description": "lookup_by_id",
       "signature": {
@@ -257,7 +257,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket.wasm",
+              "extension": "tket.gpu",
               "id": "module",
               "args": [],
               "bound": "C"
@@ -266,7 +266,7 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket.wasm",
+              "extension": "tket.gpu",
               "id": "func",
               "args": [
                 {
@@ -310,7 +310,7 @@
       "binary": false
     },
     "lookup_by_name": {
-      "extension": "tket.wasm",
+      "extension": "tket.gpu",
       "name": "lookup_by_name",
       "description": "lookup_by_name",
       "signature": {
@@ -337,7 +337,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket.wasm",
+              "extension": "tket.gpu",
               "id": "module",
               "args": [],
               "bound": "C"
@@ -346,7 +346,7 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket.wasm",
+              "extension": "tket.gpu",
               "id": "func",
               "args": [
                 {
@@ -390,7 +390,7 @@
       "binary": false
     },
     "read_result": {
-      "extension": "tket.wasm",
+      "extension": "tket.gpu",
       "name": "read_result",
       "description": "read_result",
       "signature": {
@@ -407,7 +407,7 @@
           "input": [
             {
               "t": "Opaque",
-              "extension": "tket.wasm",
+              "extension": "tket.gpu",
               "id": "result",
               "args": [
                 {
@@ -433,7 +433,7 @@
           "output": [
             {
               "t": "Opaque",
-              "extension": "tket.wasm",
+              "extension": "tket.gpu",
               "id": "context",
               "args": [],
               "bound": "A"

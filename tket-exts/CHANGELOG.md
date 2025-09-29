@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.11.0](https://github.com/CQCL/tket2/compare/tket-exts-v0.10.1...tket-exts-v0.11.0) (2025-09-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* Move `add_const_module` from `WasmOpBuilder` into new trait, `ConstWasmBuilder`. Update descriptions of wasm ops json.
+* This is a breaking change to the WASM extension and its serialised representation
+
+### Features
+
+* Add gpu module ([#1090](https://github.com/CQCL/tket2/issues/1090)) ([6f035f6](https://github.com/CQCL/tket2/commit/6f035f6ce1e281310fd6903bffb3a98099ee4ae0))
+* Explicit exports for tket_exts ops and types ([#1046](https://github.com/CQCL/tket2/issues/1046)) ([a32873e](https://github.com/CQCL/tket2/commit/a32873e3543b7d77f3bed08016485ab292f5204a))
+* Update WASM extension ([#1047](https://github.com/CQCL/tket2/issues/1047)) ([5f9560d](https://github.com/CQCL/tket2/commit/5f9560de30b797f718b2071f0615f3f3d55205e1))
+
+
+### Code Refactoring
+
+* Factor out wasm extension code into compute module ([#1089](https://github.com/CQCL/tket2/issues/1089)) ([9ea1b1e](https://github.com/CQCL/tket2/commit/9ea1b1ecab84a72fbf545c4f8871f5b70f0e9776))
+
 ## [0.10.1](https://github.com/CQCL/tket2/compare/tket-exts-v0.10.0...tket-exts-v0.10.1) (2025-08-19)
 
 
