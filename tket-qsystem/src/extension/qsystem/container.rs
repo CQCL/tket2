@@ -4,13 +4,12 @@
 //! into their constituent elements and repack them back into their original structure.
 
 use hugr::{
-    algorithms::mangle_name,
-    builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder},
+    builder::{BuildError, Dataflow},
     extension::{
         prelude::{option_type, UnpackTuple, UnwrapBuilder},
         Extension,
     },
-    ops::{DataflowOpTrait, ExtensionOp, OpName},
+    ops::{ExtensionOp, OpName},
     std_extensions::collections::{
         array::{op_builder::GenericArrayOpBuilder, Array, ArrayKind},
         borrow_array::BorrowArray,
@@ -22,10 +21,11 @@ use hugr::{
     },
     Hugr, Wire,
 };
-use indexmap::IndexMap;
-use std::{ops::Deref, sync::Arc};
+use std::sync::Arc;
 
 use tket::analysis::type_unpack::{array_args, TypeUnpacker};
+
+use crate::extension::qsystem::cached_extensions::ExtensionCache;
 
 use super::cached_extensions::OpHashWrapper;
 
@@ -82,7 +82,7 @@ pub struct ContainerOperationFactory {
     /// Temporary extension used for placeholder operations.
     extension: Arc<Extension>,
     /// Function definitions for each instance of the operations.
-    pub(super) funcs: IndexMap<OpHashWrapper, Hugr>,
+    pub(super) func_cache: ExtensionCache,
     /// Type analyzer for determining which types to unpack
     type_analyzer: TypeUnpacker,
 }
@@ -108,7 +108,7 @@ impl ContainerOperationFactory {
     pub fn new(type_analyzer: TypeUnpacker) -> Self {
         Self {
             extension: Self::build_extension(),
-            funcs: IndexMap::new(),
+            func_cache: ExtensionCache::new(),
             type_analyzer,
         }
     }
@@ -203,50 +203,6 @@ impl ContainerOperationFactory {
         ExtensionOp::new(self.extension.get_op(name)?.clone(), args).ok()
     }
 
-    /// Cache a function definition for a given operation.
-    pub fn cache_function<F>(
-        &mut self,
-        op: &ExtensionOp,
-        mangle_args: &[TypeArg],
-        func_builder: F,
-    ) -> Result<(), BuildError>
-    where
-        F: FnOnce(&mut Self, &mut FunctionBuilder<Hugr>) -> Result<Vec<Wire>, BuildError>,
-    {
-        let key = op.clone().into();
-        // clippy's suggested fix does not make the borrow checker happy
-        #[allow(clippy::map_entry)]
-        if !self.funcs.contains_key(&key) {
-            let name = mangle_name(op.def().name(), mangle_args);
-            let sig = op.signature().deref().clone();
-            let mut func_b = FunctionBuilder::new(name, sig)?;
-            let outs = func_builder(self, &mut func_b)?;
-            let func_def = func_b.finish_hugr_with_outputs(outs)?;
-            self.funcs.insert(key, func_def);
-        }
-
-        Ok(())
-    }
-
-    /// Apply a cached operation with the given name and arguments
-    pub fn apply_cached_operation<I, F>(
-        &mut self,
-        builder: &mut impl Dataflow,
-        op_name: &OpName,
-        args: impl Into<Vec<TypeArg>>,
-        mangle_args: &[TypeArg],
-        inputs: I,
-        func_builder: F,
-    ) -> Result<hugr::builder::handle::Outputs, BuildError>
-    where
-        I: IntoIterator<Item = Wire>,
-        F: FnOnce(&mut Self, &mut FunctionBuilder<Hugr>) -> Result<Vec<Wire>, BuildError>,
-    {
-        let op = self.get_op(op_name, args).unwrap();
-        self.cache_function(&op, mangle_args, func_builder)?;
-        Ok(builder.add_dataflow_op(op, inputs)?.outputs())
-    }
-
     /// Insert an option unwrap operation for a given element type.
     pub fn unpack_option(
         &mut self,
@@ -255,21 +211,21 @@ impl ContainerOperationFactory {
         elem_ty: &Type,
     ) -> Result<Wire, BuildError> {
         let args = [elem_ty.clone().into()];
-        let mut outputs = self.apply_cached_operation(
-            builder,
-            &Self::UNPACK_OPT,
-            args.clone(),
-            &args,
-            [opt_wire],
-            |_, func_b| {
-                let [in_wire] = func_b.input_wires_arr();
-                let [out_wire] =
-                    func_b.build_expect_sum(1, option_type(elem_ty.clone()), in_wire, |_| {
-                        format!("Value of type Option<{elem_ty:?}> is None so cannot unpack.")
-                    })?;
-                Ok(vec![out_wire])
-            },
-        )?;
+        let op = self
+            .get_op(&Self::UNPACK_OPT, args.clone())
+            .expect("known op");
+        let mut outputs =
+            self.func_cache
+                .apply_cached_operation(builder, op, &[], [opt_wire], |func_b| {
+                    let [in_wire] = func_b.input_wires_arr();
+                    let [out_wire] = func_b.build_expect_sum(
+                        1,
+                        option_type(elem_ty.clone()),
+                        in_wire,
+                        |_| format!("Value of type Option<{elem_ty:?}> is None so cannot unpack."),
+                    )?;
+                    Ok(vec![out_wire])
+                })?;
         Ok(outputs.next().unwrap())
     }
 
@@ -281,22 +237,20 @@ impl ContainerOperationFactory {
         elem_ty: &Type,
     ) -> Result<Wire, BuildError> {
         let args = [elem_ty.clone().into()];
-        let mut outputs = self.apply_cached_operation(
-            builder,
-            &Self::REPACK_OPT,
-            args.clone(),
-            &args,
-            [wire],
-            |_, func_b| {
-                let [in_wire] = func_b.input_wires_arr();
-                let out_wire = func_b.make_sum(
-                    1,
-                    vec![hugr::type_row![], vec![elem_ty.clone()].into()],
-                    [in_wire],
-                )?;
-                Ok(vec![out_wire])
-            },
-        )?;
+        let op = self
+            .get_op(&Self::REPACK_OPT, args.clone())
+            .expect("known op");
+        let mut outputs =
+            self.func_cache
+                .apply_cached_operation(builder, op, &[], [wire], |func_b| {
+                    let [in_wire] = func_b.input_wires_arr();
+                    let out_wire = func_b.make_sum(
+                        1,
+                        vec![hugr::type_row![], vec![elem_ty.clone()].into()],
+                        [in_wire],
+                    )?;
+                    Ok(vec![out_wire])
+                })?;
         Ok(outputs.next().unwrap())
     }
 
@@ -314,16 +268,20 @@ impl ContainerOperationFactory {
             None => return Ok(vec![array_wire]), // Not a type we should unpack
         };
 
-        let outputs = self.apply_cached_operation(
+        let op = self.get_op(op_name, args.clone()).expect("known op");
+
+        let slf = self as *mut Self;
+        let outputs = self.func_cache.apply_cached_operation(
             builder,
-            op_name,
-            args.clone(),
+            op,
             &args[..2],
             [array_wire],
-            |slf, func_b| {
+            |func_b| {
                 let w = func_b.input().out_wire(0);
                 let elems = func_b.add_generic_array_unpack::<AK>(elem_ty.clone(), size, w)?;
 
+                // SAFETY: We guarantee no aliasing by only using this pointer in this closure.
+                let slf = unsafe { &mut *slf };
                 let result: Vec<_> = elems
                     .into_iter()
                     .map(|wire| slf.unpack_container(func_b, elem_ty, wire))
@@ -369,15 +327,18 @@ impl ContainerOperationFactory {
         };
 
         let inner_row_len = self.type_analyzer.num_unpacked_wires(elem_ty);
+        let op = self.get_op(op_name, args.clone()).expect("known op");
+        let slf = self as *mut Self;
 
-        let mut outputs = self.apply_cached_operation(
+        let mut outputs = self.func_cache.apply_cached_operation(
             builder,
-            op_name,
-            args.clone(),
+            op,
             &args[..2],
             elem_wires,
-            |slf, func_b| {
+            |func_b| {
                 let input = func_b.input();
+                // SAFETY: We guarantee no aliasing by only using this pointer in this closure.
+                let slf = unsafe { &mut *slf };
                 let elems: Result<Vec<_>, _> = input
                     .outputs()
                     .collect::<Vec<_>>()
@@ -455,19 +416,23 @@ impl ContainerOperationFactory {
             Some(args) => args,
             None => return Ok(vec![tuple_wire]), // Not a tuple we should unpack
         };
+        let op = self
+            .get_op(&Self::TUPLE_UNPACK, args.clone())
+            .expect("known op");
+        let slf = self as *mut Self;
 
-        let outputs = self.apply_cached_operation(
+        let outputs = self.func_cache.apply_cached_operation(
             builder,
-            &Self::TUPLE_UNPACK,
-            args.clone(),
+            op,
             &args[..1],
             [tuple_wire],
-            |slf, func_b| {
+            |func_b| {
                 let w = func_b.input().out_wire(0);
                 let unpacked_tuple_wires = func_b
                     .add_dataflow_op(UnpackTuple::new(tuple_row.clone().into()), [w])?
                     .outputs()
                     .collect::<Vec<_>>();
+                let slf = unsafe { &mut *slf };
 
                 let unpacked = slf.unpack_row(func_b, &tuple_row, unpacked_tuple_wires)?;
                 Ok(unpacked)
@@ -495,14 +460,19 @@ impl ContainerOperationFactory {
             }
         };
 
-        let mut outputs = self.apply_cached_operation(
+        let op = self
+            .get_op(&Self::TUPLE_REPACK, args.clone())
+            .expect("known op");
+        let slf = self as *mut Self;
+
+        let mut outputs = self.func_cache.apply_cached_operation(
             builder,
-            &Self::TUPLE_REPACK,
-            args.clone(),
+            op,
             &args[..1],
             elem_wires,
-            |slf, func_b| {
+            |func_b| {
                 let in_wires = func_b.input().outputs().collect::<Vec<_>>();
+                let slf = unsafe { &mut *slf };
 
                 let repacked_elem_wires = slf.repack_row(func_b, &tuple_row, in_wires)?;
                 let tuple_wire = func_b.make_tuple(repacked_elem_wires)?;
@@ -618,9 +588,9 @@ impl ContainerOperationFactory {
         Ok(unpacked_wires[0])
     }
 
-    /// Returns a reference to the cached functions of this [`ContainerOperationFactory`].
-    pub fn funcs(&self) -> &IndexMap<OpHashWrapper, Hugr> {
-        &self.funcs
+    /// TODO Gets access to the underlying function cache for operation replacement
+    pub fn funcs(&self) -> impl Iterator<Item = (&OpHashWrapper, &Hugr)> {
+        self.func_cache.iter()
     }
 }
 
@@ -628,7 +598,7 @@ impl ContainerOperationFactory {
 mod tests {
     use super::*;
     use hugr::{
-        builder::DFGBuilder,
+        builder::{DFGBuilder, DataflowHugr as _},
         extension::prelude::{bool_t, option_type, qb_t},
         std_extensions::collections::array::array_type,
         types::Signature,
@@ -641,7 +611,7 @@ mod tests {
     fn test_container_factory_creation() {
         let analyzer = TypeUnpacker::for_qubits();
         let factory = ContainerOperationFactory::new(analyzer);
-        assert_eq!(factory.funcs.len(), 0);
+        assert_eq!(factory.funcs().count(), 0);
     }
 
     #[test]

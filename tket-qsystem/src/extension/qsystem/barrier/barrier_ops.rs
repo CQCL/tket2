@@ -49,7 +49,7 @@ impl BarrierOperationFactory {
         }
     }
 
-    /// Gets access to the underlying function cache for operation replacement
+    /// TODO Gets access to the underlying function cache for operation replacement
     pub fn funcs(&self) -> impl Iterator<Item = (&OpHashWrapper, &Hugr)> {
         self.cache.iter()
     }

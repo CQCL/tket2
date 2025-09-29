@@ -66,14 +66,14 @@ impl ExtensionCache {
     ) -> Result<hugr::builder::handle::Outputs, BuildError>
     where
         I: IntoIterator<Item = Wire>,
-        F: FnOnce(&mut FunctionBuilder<Hugr>) -> Result<Vec<Wire>, BuildError>,
+        F: FnOnce( &mut FunctionBuilder<Hugr>) -> Result<Vec<Wire>, BuildError>,
     {
         self.cache_function(&op, mangle_args, func_builder)?;
         Ok(builder.add_dataflow_op(op, inputs)?.outputs())
     }
 
     /// Cache a function definition for a given operation
-    pub fn cache_function<F>(
+    fn cache_function<F>(
         &mut self,
         op: &ExtensionOp,
         mangle_args: &[TypeArg],
