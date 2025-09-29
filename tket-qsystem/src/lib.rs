@@ -125,9 +125,9 @@ impl QSystemPass {
         // Only has an effect if there are borrow arrays - should be run before
         // lazification and drop lowering as no copy discard handler currently exists
         // for BorrowArrays.
-        if self.lower_borrow_arrays {
-            self.replace_borrow_arrays().run(hugr)?;
-        }
+        // if self.lower_borrow_arrays {
+        //    self.replace_borrow_arrays().run(hugr)?;
+        //}
         if self.lazify {
             self.replace_bools().run(hugr)?;
         }
