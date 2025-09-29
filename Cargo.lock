@@ -61,9 +61,9 @@ dependencies = [
 
 [[package]]
 name = "anstyle"
-version = "1.0.11"
+version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "862ed96ca487e809f1c8e5a8447f6ee2cf102f846893800b20cebdf541fc6bbd"
+checksum = "c900954614442c827787a2ffcd8c0602eb53ff7b95a8fbfcdaf5e406197bf3be"
 
 [[package]]
 name = "anstyle-parse"
@@ -1063,7 +1063,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=ba-test#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
+source = "git+https://github.com/CQCL/hugr?branch=feat%2Fbarray-llvm#fdaab556a28dc419f6572822b0c956b794739fb4"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1074,7 +1074,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=ba-test#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
+source = "git+https://github.com/CQCL/hugr?branch=feat%2Fbarray-llvm#fdaab556a28dc419f6572822b0c956b794739fb4"
 dependencies = [
  "anyhow",
  "clap",
@@ -1083,7 +1083,7 @@ dependencies = [
  "derive_more 1.0.0",
  "hugr",
  "serde_json",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tracing",
  "tracing-subscriber",
 ]
@@ -1091,7 +1091,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=ba-test#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
+source = "git+https://github.com/CQCL/hugr?branch=feat%2Fbarray-llvm#fdaab556a28dc419f6572822b0c956b794739fb4"
 dependencies = [
  "base64",
  "cgmath",
@@ -1118,7 +1118,7 @@ dependencies = [
  "smol_str",
  "static_assertions",
  "strum",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tracing",
  "typetag",
  "zstd",
@@ -1127,7 +1127,7 @@ dependencies = [
 [[package]]
 name = "hugr-llvm"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=ba-test#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
+source = "git+https://github.com/CQCL/hugr?branch=feat%2Fbarray-llvm#fdaab556a28dc419f6572822b0c956b794739fb4"
 dependencies = [
  "anyhow",
  "cc",
@@ -1146,7 +1146,7 @@ dependencies = [
 [[package]]
 name = "hugr-model"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=ba-test#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
+source = "git+https://github.com/CQCL/hugr?branch=feat%2Fbarray-llvm#fdaab556a28dc419f6572822b0c956b794739fb4"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1161,13 +1161,13 @@ dependencies = [
  "rustc-hash 2.1.1",
  "semver",
  "smol_str",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
 name = "hugr-passes"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=ba-test#df530f51df9cf7d0a4d2e952d4e5fbdd93463149"
+source = "git+https://github.com/CQCL/hugr?branch=feat%2Fbarray-llvm#fdaab556a28dc419f6572822b0c956b794739fb4"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
@@ -1177,7 +1177,7 @@ dependencies = [
  "petgraph 0.8.2",
  "portgraph 0.15.2",
  "strum",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -1588,7 +1588,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21e0a3a33733faeaf8651dfee72dd0f388f0c8e5ad496a3478fa5a922f49cfa8"
 dependencies = [
  "memchr",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "ucd-trie",
 ]
 
@@ -1726,7 +1726,7 @@ dependencies = [
  "petgraph 0.8.2",
  "serde",
  "smallvec",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -1775,12 +1775,13 @@ dependencies = [
 
 [[package]]
 name = "priority-queue"
-version = "2.6.0"
+version = "2.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e7f4ffd8645efad783fc2844ac842367aa2e912d484950192564d57dc039a3a"
+checksum = "93980406f12d9f8140ed5abe7155acb10bb1e69ea55c88960b9c2f117445ef96"
 dependencies = [
  "equivalent",
  "indexmap 2.11.4",
+ "serde",
 ]
 
 [[package]]
@@ -1874,9 +1875,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.40"
+version = "1.0.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1885c039570dc00dcb4ff087a89e185fd56bae234ddc7f056a945bf36467248d"
+checksum = "ce25767e7b499d1b604768e7cde645d14cc8584231ea6b295e9c9eb22c02e1d1"
 dependencies = [
  "proc-macro2",
 ]
@@ -1943,18 +1944,18 @@ dependencies = [
 
 [[package]]
 name = "ref-cast"
-version = "1.0.24"
+version = "1.0.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a0ae411dbe946a674d89546582cea4ba2bb8defac896622d6496f14c23ba5cf"
+checksum = "f354300ae66f76f1c85c5f84693f0ce81d747e2c3f21a45fef496d89c960bf7d"
 dependencies = [
  "ref-cast-impl",
 ]
 
 [[package]]
 name = "ref-cast-impl"
-version = "1.0.24"
+version = "1.0.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1165225c21bff1f3bbce98f5a1f889949bc902d3575308cc7b0de30b4f6d27c7"
+checksum = "b7186006dcb21920990093f30e3dea63b7d6e977bf1256be20c3563a5db070da"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2189,9 +2190,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.227"
+version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80ece43fc6fbed4eb5392ab50c07334d3e577cbf40997ee896fe7af40bba4245"
+checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
 dependencies = [
  "serde_core",
  "serde_derive",
@@ -2199,18 +2200,18 @@ dependencies = [
 
 [[package]]
 name = "serde_core"
-version = "1.0.227"
+version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a576275b607a2c86ea29e410193df32bc680303c82f31e275bbfcafe8b33be5"
+checksum = "41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.227"
+version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51e694923b8824cf0e9b382adf0f60d4e05f348f357b38833a3fa5ed7c2ede04"
+checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2410,11 +2411,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.16"
+version = "2.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3467d614147380f2e4e374161426ff399c91084acd2363eaf549172b3d5e60c0"
+checksum = "f63587ca0f12b72a0600bcba1d40081f830876000bb46dd2337a3051618f4fc8"
 dependencies = [
- "thiserror-impl 2.0.16",
+ "thiserror-impl 2.0.17",
 ]
 
 [[package]]
@@ -2430,9 +2431,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.16"
+version = "2.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c5e1be1c48b9172ee610da68fd9cd2770e7a4056cb3fc98710ee6906f0c7960"
+checksum = "3ff15c8ecd7de3849db632e14d18d2571fa09dfc5ed93479bc4485c7a517c913"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2622,7 +2623,7 @@ dependencies = [
  "rstest 0.26.1",
  "serde",
  "serde_json",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tket-json-rs",
 ]
 
@@ -2745,9 +2746,9 @@ checksum = "1dccffe3ce07af9386bfd29e80c0ab1a8205a2fc34e4bcd40364df902cfa8f3f"
 
 [[package]]
 name = "typetag"
-version = "0.2.20"
+version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73f22b40dd7bfe8c14230cf9702081366421890435b2d625fa92b4acc4c3de6f"
+checksum = "be2212c8a9b9bcfca32024de14998494cf9a5dfa59ea1b829de98bac374b86bf"
 dependencies = [
  "erased-serde",
  "inventory",
@@ -2758,9 +2759,9 @@ dependencies = [
 
 [[package]]
 name = "typetag-impl"
-version = "0.2.20"
+version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35f5380909ffc31b4de4f4bdf96b877175a016aa2ca98cee39fcfd8c4d53d952"
+checksum = "27a7a9b72ba121f6f1f6c3632b85604cac41aedb5ddc70accbebb6cac83de846"
 dependencies = [
  "proc-macro2",
  "quote",
