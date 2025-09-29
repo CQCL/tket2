@@ -1056,8 +1056,9 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.22.3"
-source = "git+https://github.com/CQCL/hugr?rev=2bab2a1b#2bab2a1b1b5ff879c2611381b32c90489e959c84"
+version = "0.22.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b0f6da51aacb075c0ca32175d5e94d1faac26a65e724a709e9dda140f5cf6d8"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1067,8 +1068,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-cli"
-version = "0.22.3"
-source = "git+https://github.com/CQCL/hugr?rev=2bab2a1b#2bab2a1b1b5ff879c2611381b32c90489e959c84"
+version = "0.22.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bf6f6ac3e286f2243a473a67fb9bc088adc1dfebc64259a0d7fe7c9aa08a485"
 dependencies = [
  "anyhow",
  "clap",
@@ -1084,8 +1086,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.22.3"
-source = "git+https://github.com/CQCL/hugr?rev=2bab2a1b#2bab2a1b1b5ff879c2611381b32c90489e959c84"
+version = "0.22.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a02adddac00b90be154a77568c578607d264df37b0d294a82d770a429fb0ec19"
 dependencies = [
  "base64",
  "cgmath",
@@ -1121,8 +1124,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-llvm"
-version = "0.22.3"
-source = "git+https://github.com/CQCL/hugr?rev=2bab2a1b#2bab2a1b1b5ff879c2611381b32c90489e959c84"
+version = "0.22.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "942dd96ad1d017c039fd4c1625e318373bb5bb28a8fec246992c872cbbb82252"
 dependencies = [
  "anyhow",
  "delegate 0.13.4",
@@ -1140,8 +1144,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-model"
-version = "0.22.3"
-source = "git+https://github.com/CQCL/hugr?rev=2bab2a1b#2bab2a1b1b5ff879c2611381b32c90489e959c84"
+version = "0.22.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "833f5b5163876e24de1e80df1074cdf22a98142ee4774700059397769ad1be0b"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1161,8 +1166,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.22.3"
-source = "git+https://github.com/CQCL/hugr?rev=2bab2a1b#2bab2a1b1b5ff879c2611381b32c90489e959c84"
+version = "0.22.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6cd0bb069bc068ac4f705c23767477feb29b108d33ae1846c14823eaf2f1851b"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
