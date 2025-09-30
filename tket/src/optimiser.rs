@@ -17,6 +17,44 @@ use pqueue_worker::StatePQWorker;
 
 pub use backtracking::BacktrackingOptimiser;
 
+/// Options for the optimisation routine.
+///
+/// Use `OptimiserOptions::default()` to get the default options, then set the
+/// options you want to activate. Currently available options are:
+/// - `badger_logger`: an object to log optimisation progressed used for the
+///   Badger optimiser.
+/// - `track_n_best`: Instead of returning only the state minimising the cost
+///   function, return the `n` best candidates.
+///
+/// See [Optimiser::optimise_with_options] for more details.
+#[derive(Default)]
+#[non_exhaustive]
+pub struct OptimiserOptions<'w> {
+    /// A logger to log optimisation progressed used for the Badger optimiser.
+    pub badger_logger: BadgerLogger<'w>,
+    /// The number of best states to track.
+    pub track_n_best: Option<usize>,
+}
+
+impl<'w> From<BadgerLogger<'w>> for OptimiserOptions<'w> {
+    fn from(badger_logger: BadgerLogger<'w>) -> Self {
+        Self {
+            badger_logger,
+            ..Default::default()
+        }
+    }
+}
+
+/// The result of an optimisation routine.
+pub struct OptimiserResult<S> {
+    /// The best state found.
+    pub best_state: S,
+    /// The `n` best states found.
+    ///
+    /// Not `None` iff the `track_n_best` option is set.
+    pub n_best_states: Option<Vec<S>>,
+}
+
 /// An optimiser exploring a discrete search space, in search for the lowest
 /// cost state.
 ///
@@ -28,17 +66,18 @@ pub trait Optimiser: Sized {
     where
         S: State<C>,
     {
-        self.optimise_with_log(start_state, start_context, Default::default())
+        self.optimise_with_options(start_state, start_context, Default::default())
+            .map(|r| r.best_state)
     }
 
     /// Start optimisation from the given state, using the given context and
     /// logger.
-    fn optimise_with_log<C, S>(
+    fn optimise_with_options<C, S>(
         &self,
         start_state: S,
         start_context: C,
-        log: BadgerLogger,
-    ) -> Option<S>
+        options: OptimiserOptions,
+    ) -> Option<OptimiserResult<S>>
     where
         S: State<C>;
 }

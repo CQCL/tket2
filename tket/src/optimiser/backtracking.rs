@@ -5,7 +5,10 @@
 
 use std::time::Instant;
 
-use super::{badger::BadgerOptions, pqueue::Entry, BadgerLogger, Optimiser, State, StatePQueue};
+use crate::optimiser::{
+    badger::BadgerOptions, pqueue::Entry, Optimiser, OptimiserOptions, OptimiserResult, State,
+    StatePQueue,
+};
 
 /// A single-threaded backtracking optimiser.
 ///
@@ -57,24 +60,25 @@ impl BacktrackingOptimiser {
 }
 
 impl Optimiser for BacktrackingOptimiser {
-    fn optimise_with_log<C, S>(
+    fn optimise_with_options<C, S>(
         &self,
         start_state: S,
         mut context: C,
-        mut logger: BadgerLogger,
-    ) -> Option<S>
+        options: OptimiserOptions,
+    ) -> Option<OptimiserResult<S>>
     where
         S: State<C>,
     {
         let start_time = Instant::now();
         let mut last_best_time = Instant::now();
+        let mut logger = options.badger_logger;
 
         let mut best_state = start_state.clone();
         let mut best_cost = best_state.cost(&context)?;
         logger.log_best(&best_cost, None);
 
         // Priority queue of states to be processed
-        let mut pq = StatePQueue::new(self.queue_size);
+        let mut pq = StatePQueue::new(self.queue_size, options.track_n_best);
         pq.push(start_state, &context)?;
 
         let mut visited_count = 0;
@@ -128,6 +132,9 @@ impl Optimiser for BacktrackingOptimiser {
             start_time.elapsed(),
         );
 
-        Some(best_state)
+        Some(OptimiserResult {
+            best_state,
+            n_best_states: pq.into_all_time_best(),
+        })
     }
 }

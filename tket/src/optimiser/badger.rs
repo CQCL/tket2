@@ -215,8 +215,9 @@ where
             cost: self.cost(circ),
         };
         backtracking
-            .optimise_with_log(init_state, self, logger)
+            .optimise_with_options(init_state, self, logger.into())
             .expect("optimisation failed")
+            .best_state
             .circ
     }
 
