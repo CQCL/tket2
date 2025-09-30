@@ -16,7 +16,7 @@ use hugr::builder::{
 };
 use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::ops::handle::{DataflowOpID, NodeHandle};
-use hugr::ops::{OpParent, OpTrait, OpType, DFG};
+use hugr::ops::{OpParent, OpTrait, OpType, Value, DFG};
 use hugr::types::{Signature, Type, TypeRow};
 use hugr::{Hugr, HugrView, Node, OutgoingPort, Wire};
 use tracked_elem::{TrackedBitId, TrackedQubitId};
@@ -35,6 +35,7 @@ use crate::serialize::pytket::config::PytketDecoderConfig;
 use crate::serialize::pytket::decoder::wires::WireTracker;
 use crate::serialize::pytket::extension::{build_opaque_tket_op, RegisterCount};
 use crate::serialize::pytket::{DecodeInsertionTarget, PytketDecodeErrorInner};
+use crate::TketOp;
 
 /// State of the tket circuit being decoded.
 ///
@@ -160,6 +161,11 @@ impl<'h> PytketDecoderContext<'h> {
 
     /// Initialize the wire tracker with the input wires.
     ///
+    /// Checks that the signature matches the expected number of qubits, bits,
+    /// and parameters. See
+    /// [`DecodeOptions::signature`][super::DecodeOptions::signature] for more
+    /// details.
+    ///
     /// Utility method for [`PytketDecoderContext::new`].
     ///
     /// # Panics
@@ -188,7 +194,6 @@ impl<'h> PytketDecoderContext<'h> {
             .iter()
             .map(|bit| TrackedBit::new(TrackedBitId(0), Arc::new(bit.id.clone())));
         let mut added_inputs_count = RegisterCount::default();
-        // TODO: Check that we have enough bits and qubits to match the signature.
         for (wire, ty) in dfg.input_wires().zip(input_types.iter()) {
             let elem_counts = config.type_to_pytket(ty).unwrap_or_default();
 
@@ -199,7 +204,9 @@ impl<'h> PytketDecoderContext<'h> {
 
             let wire_qubits = qubits.by_ref().take(elem_counts.qubits).collect_vec();
             let wire_bits = bits.by_ref().take(elem_counts.bits).collect_vec();
-            if wire_qubits.len() != elem_counts.qubits || wire_bits.len() != elem_counts.bits {
+            // Error out if the signature inputs has more qubits than the ones defined in the circuit.
+            // We ignore additional bits, and leave them disconnected.
+            if wire_qubits.len() != elem_counts.qubits {
                 let expected_count: RegisterCount = input_types
                     .iter()
                     .map(|t| config.type_to_pytket(t).unwrap_or_default())
@@ -223,35 +230,36 @@ impl<'h> PytketDecoderContext<'h> {
                     }
                     .wrap());
                 }
-                let Some(param) = input_params.next() else {
-                    return Err(PytketDecodeErrorInner::MissingParametersInInput {
-                        num_params_given: added_inputs_count.params,
-                    }
-                    .wrap());
+                let loaded = if ty == &rotation_type() {
+                    LoadedParameter::rotation(wire)
+                } else {
+                    LoadedParameter::float_half_turns(wire)
                 };
-                wire_tracker.register_input_parameter(wire, param)?;
+                match input_params.next() {
+                    Some(param) => wire_tracker.register_input_parameter(loaded, param)?,
+                    None => wire_tracker.register_unused_parameter_input(loaded),
+                };
             }
 
             added_inputs_count += elem_counts;
         }
 
-        // Insert any remaining parameters as new inputs
+        // Insert any remaining named parameters as new inputs
         for param in input_params {
             let wire = dfg
                 .add_input(rotation_type())
                 .expect("Must be building a FuncDefn or a DFG");
-            wire_tracker.register_input_parameter(wire, param)?;
+            wire_tracker.register_input_parameter(LoadedParameter::rotation(wire), param)?;
         }
 
-        if qubits.next().is_some() || bits.next().is_some() {
-            return Err(PytketDecodeErrorInner::InvalidInputSignature {
-                input_types: input_types.iter().map(|t| t.to_string()).collect(),
-                expected_qubits: num_qubits,
-                expected_bits: num_bits,
-                circ_qubits: serialcirc.qubits.len(),
-                circ_bits: serialcirc.bits.len(),
-            }
-            .wrap());
+        // Any additional qubits or bits required by the circuit get initialized to |0> / false.
+        for q in qubits {
+            let q_wire = dfg.add_dataflow_op(TketOp::QAlloc, []).unwrap().out_wire(0);
+            wire_tracker.track_wire(q_wire, q.ty(), [q], [])?;
+        }
+        for b in bits {
+            let b_wire = dfg.add_load_value(Value::false_val());
+            wire_tracker.track_wire(b_wire, b.ty(), [], [b])?;
         }
 
         wire_tracker.compute_output_permutation(&serialcirc.implicit_permutation);

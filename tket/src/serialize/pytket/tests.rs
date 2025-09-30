@@ -477,26 +477,28 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
 ///
 /// Note: this is not a pure roundtrip as the encoder may add internal qubits/bits to the circuit.
 #[rstest]
-#[case::meas_ancilla(circ_measure_ancilla(), Signature::new_endo(vec![qb_t(), qb_t(), bool_t(), bool_t()]))]
-#[case::preset_qubits(circ_preset_qubits(), Signature::new_endo(vec![qb_t(), qb_t(), qb_t()]))]
-#[case::preset_parameterized(circ_parameterized(), Signature::new(vec![qb_t(), rotation_type(), rotation_type(), rotation_type()], vec![qb_t()]))]
-fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
+#[case::meas_ancilla(circ_measure_ancilla())]
+#[case::preset_qubits(circ_preset_qubits())]
+#[case::preset_parameterized(circ_parameterized())]
+fn circuit_roundtrip(#[case] circ: Circuit) {
+    let circ_signature = circ.circuit_signature().into_owned();
+
     let ser: SerialCircuit =
         SerialCircuit::encode(&circ, EncodeOptions::new()).unwrap_or_else(|e| panic!("{e}"));
     let deser: Circuit = ser
-        .decode(DecodeOptions::new())
+        .decode(DecodeOptions::new().with_signature(circ_signature.clone()))
         .unwrap_or_else(|e| panic!("{e}"));
 
     let deser_sig = deser.circuit_signature();
     assert_eq!(
-        &decoded_sig.input, &deser_sig.input,
+        &circ_signature.input, &deser_sig.input,
         "Input signature mismatch\n  Expected: {}\n  Actual:   {}",
-        &decoded_sig, &deser_sig
+        &circ_signature, &deser_sig
     );
     assert_eq!(
-        &decoded_sig.output, &deser_sig.output,
+        &circ_signature.output, &deser_sig.output,
         "Output signature mismatch\n  Expected: {}\n  Actual:   {}",
-        &decoded_sig, &deser_sig
+        &circ_signature, &deser_sig
     );
 
     let reser = SerialCircuit::encode(&deser, EncodeOptions::new()).unwrap();
