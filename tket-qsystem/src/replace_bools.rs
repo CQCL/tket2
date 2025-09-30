@@ -21,7 +21,10 @@ use hugr::{
     hugr::hugrmut::HugrMut,
     ops::{handle::ConditionalID, ExtensionOp, Tag, Value},
     std_extensions::{
-        collections::array::{self, array_type, ARRAY_CLONE_OP_ID, ARRAY_DISCARD_OP_ID},
+        collections::{
+            array::{self, array_type, ARRAY_CLONE_OP_ID, ARRAY_DISCARD_OP_ID},
+            borrow_array::{self, borrow_array_type},
+        },
         logic::LogicOp,
     },
     types::{SumType, Type},
@@ -219,8 +222,7 @@ fn measure_reset_dest() -> NodeTemplate {
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
-fn array_clone_dest(size: u64, elem_ty: Type) -> NodeTemplate {
-    let array_ty = array_type(size, elem_ty.clone());
+fn array_clone_dest(array_ty: Type) -> NodeTemplate {
     let mut dfb = DFGBuilder::new(inout_sig(
         vec![array_ty.clone()],
         vec![array_ty.clone(), array_ty],
@@ -297,8 +299,8 @@ fn lowerer() -> ReplaceTypes {
     lw.replace_op(&qsystem_measure, measure_dest());
     lw.replace_op(&qsystem_measure_reset, measure_reset_dest());
 
-    // Replace array ops with copyable bounds with DFGs that the linearizer can act on
-    // now that the elements are no longer copyable.
+    // Replace array and borrow ops with copyable bounds with DFGs that the linearizer
+    // can act on now that the elements are no longer copyable.
     lw.replace_parametrized_op_with(
         array::EXTENSION.get_op(ARRAY_CLONE_OP_ID.as_str()).unwrap(),
         move |args| {
@@ -307,10 +309,33 @@ fn lowerer() -> ReplaceTypes {
             };
             let size = size.as_nat().unwrap();
             let elem_ty = elem_ty.as_runtime().unwrap();
-            (!elem_ty.copyable()).then(|| array_clone_dest(size, elem_ty))
+            (!elem_ty.copyable()).then(|| {
+                let array_ty = array_type(size, elem_ty.clone());
+                array_clone_dest(array_ty)
+            })
         },
         ReplacementOptions::default().with_linearization(true),
     );
+
+    lw.replace_parametrized_op_with(
+        borrow_array::EXTENSION
+            .get_op(ARRAY_CLONE_OP_ID.as_str())
+            .unwrap(),
+        move |args| {
+            let [size, elem_ty] = args else {
+                unreachable!()
+            };
+            let size = size.as_nat().unwrap();
+            let elem_ty = elem_ty.as_runtime().unwrap();
+            (!elem_ty.copyable()).then(|| {
+                let array_ty = borrow_array_type(size, elem_ty.clone());
+                array_clone_dest(array_ty)
+            })
+        },
+        ReplacementOptions::default().with_linearization(true),
+    );
+
+    let drop_op_def = GUPPY_EXTENSION.get_op(DROP_OP_NAME.as_str()).unwrap();
 
     lw.replace_parametrized_op(
         array::EXTENSION
@@ -325,10 +350,31 @@ fn lowerer() -> ReplaceTypes {
             if elem_ty.copyable() {
                 return None;
             }
-            let drop_op_def = GUPPY_EXTENSION.get_op(DROP_OP_NAME.as_str()).unwrap();
             let drop_op = ExtensionOp::new(
                 drop_op_def.clone(),
                 vec![array_type(size, elem_ty.clone()).into()],
+            )
+            .unwrap();
+            Some(NodeTemplate::SingleOp(drop_op.into()))
+        },
+    );
+
+    lw.replace_parametrized_op(
+        borrow_array::EXTENSION
+            .get_op(ARRAY_DISCARD_OP_ID.as_str())
+            .unwrap(),
+        move |args| {
+            let [size, elem_ty] = args else {
+                unreachable!()
+            };
+            let size = size.as_nat().unwrap();
+            let elem_ty = elem_ty.as_runtime().unwrap();
+            if elem_ty.copyable() {
+                return None;
+            }
+            let drop_op = ExtensionOp::new(
+                drop_op_def.clone(),
+                vec![borrow_array_type(size, elem_ty.clone()).into()],
             )
             .unwrap();
             Some(NodeTemplate::SingleOp(drop_op.into()))
