@@ -10,6 +10,7 @@ use hugr::builder::{
 use hugr::extension::prelude::{bool_t, qb_t};
 
 use hugr::hugr::hugrmut::HugrMut;
+use hugr::ops::handle::FuncID;
 use hugr::ops::OpParent;
 use hugr::std_extensions::arithmetic::float_ops::FloatOps;
 use hugr::types::Signature;
@@ -274,6 +275,21 @@ fn circ_parameterized() -> Circuit {
     hugr.into()
 }
 
+/// A circuit with a recursive function call.
+#[fixture]
+fn circ_recursive() -> Circuit {
+    let input_t = vec![qb_t()];
+    let output_t = vec![qb_t()];
+    let mut h = FunctionBuilder::new("recursive", Signature::new(input_t, output_t)).unwrap();
+    let func: FuncID<true> = h.container_node().into();
+
+    let [q] = h.input_wires_arr();
+    let [q] = h.call(&func, &[], [q]).unwrap().outputs_arr();
+    let hugr = h.finish_hugr_with_outputs([q]).unwrap();
+
+    hugr.into()
+}
+
 /// A simple circuit with ancillae
 #[fixture]
 fn circ_measure_ancilla() -> Circuit {
@@ -523,6 +539,7 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
 #[case::preset_qubits(circ_preset_qubits())]
 #[case::preset_parameterized(circ_parameterized())]
 #[case::nested_dfgs(circ_nested_dfgs())]
+#[case::recursive(circ_recursive())]
 fn circuit_roundtrip(#[case] circ: Circuit) {
     let circ_signature = circ.circuit_signature().into_owned();
 
