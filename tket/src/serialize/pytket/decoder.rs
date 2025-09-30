@@ -160,7 +160,12 @@ impl<'h> PytketDecoderContext<'h> {
 
     /// Initialize the wire tracker with the input wires.
     ///
-    /// Utility method for [`PytketDecoderContext::new_arc`].
+    /// Utility method for [`PytketDecoderContext::new`].
+    ///
+    /// # Panics
+    ///
+    /// If the dfg builder does not support adding input wires.
+    /// (That is, we're not building a FuncDefn or a DFG).
     fn init_wire_tracker(
         serialcirc: &SerialCircuit,
         dfg: &mut DFGBuilder<&mut Hugr>,
@@ -232,7 +237,9 @@ impl<'h> PytketDecoderContext<'h> {
 
         // Insert any remaining parameters as new inputs
         for param in input_params {
-            let wire = dfg.add_input(rotation_type()).unwrap();
+            let wire = dfg
+                .add_input(rotation_type())
+                .expect("Must be building a FuncDefn or a DFG");
             wire_tracker.register_input_parameter(wire, param)?;
         }
 

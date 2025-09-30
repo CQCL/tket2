@@ -668,8 +668,8 @@ impl WireTracker {
         })
     }
 
-    /// Loads the given parameter half-turns expression as a [`LoadedParameter`] in the
-    /// hugr.
+    /// Loads the given parameter half-turns expression as a [`LoadedParameter`]
+    /// in the hugr.
     ///
     /// - If the parameter is a known algebraic operation, adds the required op
     ///   and recurses on its inputs.
@@ -687,6 +687,11 @@ impl WireTracker {
     /// * `type_hint` - A hint for the type of the parameter we want to load.
     ///   This lets us decide between using [`ConstRotation`] and [`ConstF64`]
     ///   for constants. The actual returned type may be different.
+    ///
+    /// # Panics
+    ///
+    /// If the hugr builder does not support adding input wires.
+    /// (That is, we're not building a FuncDefn or a DFG).
     pub fn load_half_turns_parameter(
         &mut self,
         hugr: &mut DFGBuilder<&mut Hugr>,
@@ -743,7 +748,9 @@ impl WireTracker {
                             // Look it up in the input parameters to the circuit, and add a new float input if needed.
                             *input_params.entry(name.to_string()).or_insert_with(|| {
                                 param_vars.insert(name.to_string());
-                                let wire = hugr.add_input(rotation_type()).unwrap();
+                                let wire = hugr
+                                    .add_input(rotation_type())
+                                    .expect("Must be building a FuncDefn or a DFG");
                                 LoadedParameter::rotation(wire)
                             })
                         }
