@@ -104,13 +104,13 @@ impl Optimiser for BacktrackingOptimiser {
             }
 
             if let Some(timeout) = self.timeout {
-                if start_time.elapsed().as_secs() > timeout {
+                if start_time.elapsed().as_secs_f64() > (timeout as f64) {
                     timeout_flag = true;
                     break;
                 }
             }
             if let Some(p_timeout) = self.progress_timeout {
-                if last_best_time.elapsed().as_secs() > p_timeout {
+                if last_best_time.elapsed().as_secs_f64() > (p_timeout as f64) {
                     timeout_flag = true;
                     break;
                 }
