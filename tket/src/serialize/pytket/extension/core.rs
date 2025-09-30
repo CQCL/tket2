@@ -1,7 +1,9 @@
 //! Decoder for native HUGR structures generated from pytket operations.
 //!
-//! These do not have a corresponding encoder since they are not represented as
-//! `ExtensionOp`s nor `ExtensionType`s in the HUGR.
+//! These core structures are handled natively by the pytket encoder, so we
+//! don't need to implement a
+//! [`PytketEmitter`][crate::serialize::pytket::extension::PytketEmitter] for
+//! them.
 
 use crate::extension::rotation::rotation_type;
 use crate::serialize::pytket::decoder::{
@@ -35,12 +37,8 @@ impl PytketDecoder for CoreDecoder {
         _opgroup: Option<&str>,
         decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
-        match op.op_type {
-            PytketOptype::CircBox => {
-                let Some(OpBox::CircBox { id: _id, circuit }) = &op.op_box else {
-                    return Ok(DecodeStatus::Unsupported);
-                };
-
+        match (op.op_type, &op.op_box) {
+            (PytketOptype::CircBox, Some(OpBox::CircBox { id: _id, circuit })) => {
                 // We have no way to distinguish between input and output bits in the circuit box, so we assume all bits are outputs here.
                 //
                 // TODO: Pass the registers both as inputs and outputs once this is implemented
@@ -54,17 +52,14 @@ impl PytketDecoder for CoreDecoder {
                 let circ_signature = Signature::new(circ_inputs, circ_outputs);
 
                 // Decode the boxed circuit into a new Hugr
-                let config = decoder.config().clone();
-                let insertion_target = decoder.builder.container_node();
-                let internal = circuit.decode_inplace(
-                    decoder.builder.hugr_mut(),
-                    DecodeInsertionTarget::Region {
-                        parent: insertion_target,
-                    },
-                    DecodeOptions::new()
-                        .with_config(config)
-                        .with_signature(circ_signature),
-                )?;
+                let options = DecodeOptions::new()
+                    .with_config(decoder.config().clone())
+                    .with_signature(circ_signature);
+                let target = DecodeInsertionTarget::Region {
+                    parent: decoder.builder.container_node(),
+                };
+                let internal =
+                    circuit.decode_inplace(decoder.builder.hugr_mut(), target, options)?;
 
                 // Create a DFG node in the parent Hugr that will contain the decoded circuit.
                 decoder

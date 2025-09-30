@@ -416,11 +416,8 @@ impl<'h> PytketDecoderContext<'h> {
             .find_typed_wires(&self.config, types, qubit_args, bit_args, params)
     }
 
-    /// Add a new node to the HUGR using the provided wire set as input and
-    /// output.
-    ///
-    /// Inserts the new node into the HUGR, connects its input ports and
-    /// registers the node's output wires in the wire tracker.
+    /// Connects the input ports of a node using a list of input qubits, bits,
+    /// and parameters. Registers the node's output wires in the wire tracker.
     ///
     /// The qubits registers in `wires` are reused between the operation inputs
     /// and outputs. Bit registers, on the other hand, are not reused. We use
@@ -435,14 +432,18 @@ impl<'h> PytketDecoderContext<'h> {
     /// returned if the parameter does not match the expected wire type, but the
     /// unit (radians or half-turns) cannot be checked automatically.
     ///
+    /// Use [`PytketDecoderContext::add_node_with_wires`] to insert a new node
+    /// before wiring it up.
+    ///
     /// # Arguments
     ///
-    /// - `op`: The operation to add.
-    /// - `wires`: The wire set to use as input and outputs.
+    /// - `node`: The node to wire up.
+    /// - `qubits`: The list of tracked qubits to use as input.
+    /// - `bits`: The list of tracked bits to use as input.
+    /// - `params`: The list of parameters to use as input.
     ///
     /// # Errors
     ///
-    /// - Returns an error if the optype signature contains any complex type.
     /// - Returns an error if the input wire set cannot be mapped to the node's
     ///   input ports.
     /// - Returns an error if the node's output ports cannot be assigned to
@@ -532,29 +533,21 @@ impl<'h> PytketDecoderContext<'h> {
         Ok(())
     }
 
-    /// Add a new node to the HUGR using the provided wire set as input and
-    /// output.
+    /// Add a new node to the HUGR and wire it up using the provided wire set as
+    /// input and output.
     ///
     /// Inserts the new node into the HUGR, connects its input ports and
     /// registers the node's output wires in the wire tracker.
     ///
-    /// The qubits registers in `wires` are reused between the operation inputs
-    /// and outputs. Bit registers, on the other hand, are not reused. We use
-    /// the first registers in `wires` for the bit inputs and the remaining
-    /// registers for the outputs.
-    ///
-    /// The input wire types must match the operation's input signature, no type
-    /// conversion is performed.
-    ///
-    /// The caller must take care of converting the parameter wires to the
-    /// required types and units expected by the operation. An error will be
-    /// returned if the parameter does not match the expected wire type, but the
-    /// unit (radians or half-turns) cannot be checked automatically.
+    /// See [`PytketDecoderContext::wire_up_node`] for more details on the
+    /// wiring process.
     ///
     /// # Arguments
     ///
     /// - `op`: The operation to add.
-    /// - `wires`: The wire set to use as input and outputs.
+    /// - `qubits`: The list of tracked qubits to use as input.
+    /// - `bits`: The list of tracked bits to use as input.
+    /// - `params`: The list of parameters to use as input.
     ///
     /// # Errors
     ///
