@@ -61,9 +61,9 @@ dependencies = [
 
 [[package]]
 name = "anstyle"
-version = "1.0.12"
+version = "1.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c900954614442c827787a2ffcd8c0602eb53ff7b95a8fbfcdaf5e406197bf3be"
+checksum = "5192cca8006f1fd4f7237516f40fa183bb07f8fbdfedaa0036de5ea9b0b45e78"
 
 [[package]]
 name = "anstyle-parse"
@@ -1063,7 +1063,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=feat%2Fbarray-llvm#fdaab556a28dc419f6572822b0c956b794739fb4"
+source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#a5ed171beeef18a47d838af809d8ba8bfc4eeede"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1074,7 +1074,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=feat%2Fbarray-llvm#fdaab556a28dc419f6572822b0c956b794739fb4"
+source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#a5ed171beeef18a47d838af809d8ba8bfc4eeede"
 dependencies = [
  "anyhow",
  "clap",
@@ -1091,7 +1091,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=feat%2Fbarray-llvm#fdaab556a28dc419f6572822b0c956b794739fb4"
+source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#a5ed171beeef18a47d838af809d8ba8bfc4eeede"
 dependencies = [
  "base64",
  "cgmath",
@@ -1127,7 +1127,7 @@ dependencies = [
 [[package]]
 name = "hugr-llvm"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=feat%2Fbarray-llvm#fdaab556a28dc419f6572822b0c956b794739fb4"
+source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#a5ed171beeef18a47d838af809d8ba8bfc4eeede"
 dependencies = [
  "anyhow",
  "cc",
@@ -1146,7 +1146,7 @@ dependencies = [
 [[package]]
 name = "hugr-model"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=feat%2Fbarray-llvm#fdaab556a28dc419f6572822b0c956b794739fb4"
+source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#a5ed171beeef18a47d838af809d8ba8bfc4eeede"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1167,7 +1167,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=feat%2Fbarray-llvm#fdaab556a28dc419f6572822b0c956b794739fb4"
+source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#a5ed171beeef18a47d838af809d8ba8bfc4eeede"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",

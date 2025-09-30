@@ -38,11 +38,11 @@ large_enum_variant = "allow"
 [patch.crates-io]
 
 # Uncomment to use unreleased versions of hugr
-hugr = { git = "https://github.com/CQCL/hugr", "branch" = "feat/barray-llvm" }
-hugr-core = { git = "https://github.com/CQCL/hugr", "branch" = "feat/barray-llvm" }
-hugr-cli = { git = "https://github.com/CQCL/hugr", "branch" = "feat/barray-llvm" }
-hugr-passes = { git = "https://github.com/CQCL/hugr", "branch" = "feat/barray-llvm" }
-hugr-llvm = { git = "https://github.com/CQCL/hugr", "branch" = "feat/barray-llvm" }
+hugr = { git = "https://github.com/CQCL/hugr", "branch" = "ts/ba-copy-discard" }
+hugr-core = { git = "https://github.com/CQCL/hugr", "branch" = "ts/ba-copy-discard" }
+hugr-cli = { git = "https://github.com/CQCL/hugr", "branch" = "ts/ba-copy-discard" }
+hugr-passes = { git = "https://github.com/CQCL/hugr", "branch" = "ts/ba-copy-discard" }
+hugr-llvm = { git = "https://github.com/CQCL/hugr", "branch" = "ts/ba-copy-discard" }
 
 [workspace.dependencies]
 
