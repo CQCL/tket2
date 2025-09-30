@@ -1063,7 +1063,7 @@ dependencies = [
 [[package]]
 name = "hugr"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#a5ed171beeef18a47d838af809d8ba8bfc4eeede"
+source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#02a2aa0f56b14b57660029882bb0221fc6ce3cca"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1074,7 +1074,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#a5ed171beeef18a47d838af809d8ba8bfc4eeede"
+source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#02a2aa0f56b14b57660029882bb0221fc6ce3cca"
 dependencies = [
  "anyhow",
  "clap",
@@ -1091,7 +1091,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#a5ed171beeef18a47d838af809d8ba8bfc4eeede"
+source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#02a2aa0f56b14b57660029882bb0221fc6ce3cca"
 dependencies = [
  "base64",
  "cgmath",
@@ -1127,7 +1127,7 @@ dependencies = [
 [[package]]
 name = "hugr-llvm"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#a5ed171beeef18a47d838af809d8ba8bfc4eeede"
+source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#02a2aa0f56b14b57660029882bb0221fc6ce3cca"
 dependencies = [
  "anyhow",
  "cc",
@@ -1146,7 +1146,7 @@ dependencies = [
 [[package]]
 name = "hugr-model"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#a5ed171beeef18a47d838af809d8ba8bfc4eeede"
+source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#02a2aa0f56b14b57660029882bb0221fc6ce3cca"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1167,7 +1167,7 @@ dependencies = [
 [[package]]
 name = "hugr-passes"
 version = "0.22.4"
-source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#a5ed171beeef18a47d838af809d8ba8bfc4eeede"
+source = "git+https://github.com/CQCL/hugr?branch=ts%2Fba-copy-discard#02a2aa0f56b14b57660029882bb0221fc6ce3cca"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
