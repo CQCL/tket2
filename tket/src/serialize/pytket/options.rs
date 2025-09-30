@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use hugr::types::Signature;
-use hugr::Hugr;
+use hugr::{Hugr, Node};
 
 use crate::serialize::pytket::{PytketDecoderConfig, PytketEncoderConfig};
 
@@ -77,12 +77,11 @@ pub enum DecodeInsertionTarget {
     /// Insert the decoded circuit as a new function in the HUGR.
     #[default]
     Function,
-    // TODO: To be added in a follow-up PR.
-    // Insert the decoded circuit as a dataflow region in the HUGR under the given parent.
-    //Region {
-    //    /// The parent node that will contain the circuit's decoded DFG.
-    //    parent: Node,
-    //},
+    /// Insert the decoded circuit as a dataflow region in the HUGR under the given parent.
+    Region {
+        /// The parent node that will contain the circuit's decoded DFG.
+        parent: Node,
+    },
 }
 
 /// Options used when encoding a HUGR into a pytket

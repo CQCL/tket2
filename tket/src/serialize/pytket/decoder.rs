@@ -4,16 +4,19 @@ mod param;
 mod tracked_elem;
 mod wires;
 
+use hugr::hugr::hugrmut::HugrMut;
 pub use param::{LoadedParameter, ParameterType};
 pub use tracked_elem::{TrackedBit, TrackedQubit};
 pub use wires::TrackedWires;
 
 use std::sync::Arc;
 
-use hugr::builder::{BuildHandle, Container, Dataflow, DataflowSubContainer, FunctionBuilder};
+use hugr::builder::{
+    BuildHandle, Container, DFGBuilder, Dataflow, DataflowSubContainer, FunctionBuilder,
+};
 use hugr::extension::prelude::{bool_t, qb_t};
-use hugr::ops::handle::{DataflowOpID, FuncID, NodeHandle};
-use hugr::ops::{OpParent, OpTrait, OpType};
+use hugr::ops::handle::{DataflowOpID, NodeHandle};
+use hugr::ops::{OpParent, OpTrait, OpType, DFG};
 use hugr::types::{Signature, Type, TypeRow};
 use hugr::{Hugr, HugrView, Node, OutgoingPort, Wire};
 use tracked_elem::{TrackedBitId, TrackedQubitId};
@@ -31,7 +34,7 @@ use crate::extension::rotation::rotation_type;
 use crate::serialize::pytket::config::PytketDecoderConfig;
 use crate::serialize::pytket::decoder::wires::WireTracker;
 use crate::serialize::pytket::extension::{build_opaque_tket_op, RegisterCount};
-use crate::serialize::pytket::PytketDecodeErrorInner;
+use crate::serialize::pytket::{DecodeInsertionTarget, PytketDecodeErrorInner};
 
 /// State of the tket circuit being decoded.
 ///
@@ -39,7 +42,7 @@ use crate::serialize::pytket::PytketDecodeErrorInner;
 #[derive(Debug)]
 pub struct PytketDecoderContext<'h> {
     /// The Hugr being built.
-    pub builder: FunctionBuilder<&'h mut Hugr>,
+    pub builder: DFGBuilder<&'h mut Hugr>,
     /// A tracker keeping track of the generated wires and their corresponding types.
     pub(super) wire_tracker: WireTracker,
     /// Configuration for decoding commands.
@@ -89,15 +92,16 @@ impl<'h> PytketDecoderContext<'h> {
     pub(super) fn new(
         serialcirc: &SerialCircuit,
         hugr: &'h mut Hugr,
+        target: DecodeInsertionTarget,
         fn_name: Option<String>,
         signature: Option<Signature>,
         input_params: impl IntoIterator<Item = String>,
         config: impl Into<Arc<PytketDecoderConfig>>,
     ) -> Result<Self, PytketDecodeError> {
         let config: Arc<PytketDecoderConfig> = config.into();
-        let num_qubits = serialcirc.qubits.len();
-        let num_bits = serialcirc.bits.len();
         let signature = signature.unwrap_or_else(|| {
+            let num_qubits = serialcirc.qubits.len();
+            let num_bits = serialcirc.bits.len();
             let types: TypeRow = [vec![qb_t(); num_qubits], vec![bool_t(); num_bits]]
                 .concat()
                 .into();
@@ -106,8 +110,20 @@ impl<'h> PytketDecoderContext<'h> {
         let name = fn_name
             .or_else(|| serialcirc.name.clone())
             .unwrap_or_default();
-        let mut dfg: FunctionBuilder<&mut Hugr> =
-            FunctionBuilder::with_hugr(hugr, name, signature.clone()).unwrap();
+        let mut dfg: DFGBuilder<&mut Hugr> = match target {
+            DecodeInsertionTarget::Function => {
+                FunctionBuilder::with_hugr(hugr, name, signature.clone())
+                    .unwrap()
+                    .into_dfg_builder()
+            }
+            DecodeInsertionTarget::Region { parent } => {
+                let op = DFG {
+                    signature: signature.clone(),
+                };
+                let dfg = hugr.add_node_with_parent(parent, op);
+                DFGBuilder::create_with_io(hugr, dfg, signature.clone()).unwrap()
+            }
+        };
 
         Self::init_metadata(&mut dfg, serialcirc);
         let wire_tracker = Self::init_wire_tracker(
@@ -134,7 +150,7 @@ impl<'h> PytketDecoderContext<'h> {
 
     /// Store the serialised circuit information as HUGR metadata,
     /// so it can be reused later when re-encoding the circuit.
-    fn init_metadata(dfg: &mut FunctionBuilder<&mut Hugr>, serialcirc: &SerialCircuit) {
+    fn init_metadata(dfg: &mut DFGBuilder<&mut Hugr>, serialcirc: &SerialCircuit) {
         // Metadata. The circuit requires "name", and we store other things that
         // should pass through the serialization roundtrip.
         dfg.set_metadata(METADATA_PHASE, json!(serialcirc.phase));
@@ -144,10 +160,15 @@ impl<'h> PytketDecoderContext<'h> {
 
     /// Initialize the wire tracker with the input wires.
     ///
-    /// Utility method for [`PytketDecoderContext::new_arc`].
+    /// Utility method for [`PytketDecoderContext::new`].
+    ///
+    /// # Panics
+    ///
+    /// If the dfg builder does not support adding input wires.
+    /// (That is, we're not building a FuncDefn or a DFG).
     fn init_wire_tracker(
         serialcirc: &SerialCircuit,
-        dfg: &mut FunctionBuilder<&mut Hugr>,
+        dfg: &mut DFGBuilder<&mut Hugr>,
         input_types: &TypeRow,
         input_params: impl IntoIterator<Item = String>,
         config: &PytketDecoderConfig,
@@ -216,7 +237,9 @@ impl<'h> PytketDecoderContext<'h> {
 
         // Insert any remaining parameters as new inputs
         for param in input_params {
-            let wire = dfg.add_input(rotation_type());
+            let wire = dfg
+                .add_input(rotation_type())
+                .expect("Must be building a FuncDefn or a DFG");
             wire_tracker.register_input_parameter(wire, param)?;
         }
 
@@ -243,7 +266,7 @@ impl<'h> PytketDecoderContext<'h> {
     ///
     /// The original Hugr entrypoint is _not_ modified, it must be set by the
     /// caller if required.
-    pub(super) fn finish(mut self) -> Result<BuildHandle<FuncID<true>>, PytketDecodeError> {
+    pub(super) fn finish(mut self) -> Result<Node, PytketDecodeError> {
         // Order the final wires according to the serial circuit register order.
         let qubits = self
             .wire_tracker
@@ -294,9 +317,11 @@ impl<'h> PytketDecoderContext<'h> {
             );
         }
 
-        self.builder
+        Ok(self
+            .builder
             .finish_with_outputs(output_wires)
-            .map_err(PytketDecodeError::custom)
+            .map_err(PytketDecodeError::custom)?
+            .node())
     }
 
     /// Decode a list of pytket commands.
@@ -344,6 +369,11 @@ impl<'h> PytketDecoderContext<'h> {
             }
         }
         Ok(())
+    }
+
+    /// Returns the configuration used by the decoder.
+    pub fn config(&self) -> &Arc<PytketDecoderConfig> {
+        &self.config
     }
 }
 

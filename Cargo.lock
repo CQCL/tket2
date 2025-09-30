@@ -1056,9 +1056,9 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.22.3"
+version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "deb9c2b19e769863a1e059045595136ac5f6f37e98bc605447a0b728e72fff11"
+checksum = "9b0f6da51aacb075c0ca32175d5e94d1faac26a65e724a709e9dda140f5cf6d8"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1068,9 +1068,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-cli"
-version = "0.22.3"
+version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f7318c8514063e835ef4720babb141dc53c96dd47f204ae584de67afb3fb1f2"
+checksum = "3bf6f6ac3e286f2243a473a67fb9bc088adc1dfebc64259a0d7fe7c9aa08a485"
 dependencies = [
  "anyhow",
  "clap",
@@ -1086,9 +1086,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.22.3"
+version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99f1b84868164b0ab995814f8b3f07dbc4a142c3726d6aceae0e95fce047525e"
+checksum = "a02adddac00b90be154a77568c578607d264df37b0d294a82d770a429fb0ec19"
 dependencies = [
  "base64",
  "cgmath",
@@ -1124,9 +1124,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-llvm"
-version = "0.22.3"
+version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5228ef837b3bc4cf004798d8aa5aa18131f04c9224c31cbbbf29b8572639066c"
+checksum = "942dd96ad1d017c039fd4c1625e318373bb5bb28a8fec246992c872cbbb82252"
 dependencies = [
  "anyhow",
  "delegate 0.13.4",
@@ -1144,9 +1144,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-model"
-version = "0.22.3"
+version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b426a1907de2375f7afbf92aa79dc41bad805486c40201414707ae72e03dbb80"
+checksum = "833f5b5163876e24de1e80df1074cdf22a98142ee4774700059397769ad1be0b"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1166,9 +1166,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.22.3"
+version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4ca4e34988b934e3a3e59c4756605df3eaa8bc62d9d89b33b19d8875170a2f9"
+checksum = "6cd0bb069bc068ac4f705c23767477feb29b108d33ae1846c14823eaf2f1851b"
 dependencies = [
  "ascent",
  "derive_more 1.0.0",
@@ -1771,12 +1771,13 @@ dependencies = [
 
 [[package]]
 name = "priority-queue"
-version = "2.6.0"
+version = "2.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e7f4ffd8645efad783fc2844ac842367aa2e912d484950192564d57dc039a3a"
+checksum = "93980406f12d9f8140ed5abe7155acb10bb1e69ea55c88960b9c2f117445ef96"
 dependencies = [
  "equivalent",
  "indexmap 2.11.4",
+ "serde",
 ]
 
 [[package]]

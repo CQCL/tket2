@@ -3,7 +3,7 @@ pub(super) mod parser;
 
 use std::sync::LazyLock;
 
-use hugr::builder::{Dataflow, FunctionBuilder};
+use hugr::builder::{DFGBuilder, Dataflow};
 use hugr::ops::Value;
 use hugr::std_extensions::arithmetic::float_ops::FloatOps;
 use hugr::std_extensions::arithmetic::float_types::{float64_type, ConstF64};
@@ -110,7 +110,7 @@ impl LoadedParameter {
     pub fn with_type<H: AsRef<Hugr> + AsMut<Hugr>>(
         &self,
         typ: ParameterType,
-        hugr: &mut FunctionBuilder<H>,
+        hugr: &mut DFGBuilder<H>,
     ) -> LoadedParameter {
         match typ {
             ParameterType::FloatRadians => self.as_float_radians(hugr),
@@ -124,7 +124,7 @@ impl LoadedParameter {
     /// Adds the necessary operations to the Hugr and returns a new wire.
     pub fn as_float_radians<H: AsRef<Hugr> + AsMut<Hugr>>(
         &self,
-        hugr: &mut FunctionBuilder<H>,
+        hugr: &mut DFGBuilder<H>,
     ) -> LoadedParameter {
         match self.typ {
             ParameterType::FloatRadians => *self,
@@ -145,7 +145,7 @@ impl LoadedParameter {
     /// Adds the necessary operations to the Hugr and returns a new wire.
     pub fn as_float_half_turns<H: AsRef<Hugr> + AsMut<Hugr>>(
         &self,
-        hugr: &mut FunctionBuilder<H>,
+        hugr: &mut DFGBuilder<H>,
     ) -> LoadedParameter {
         match self.typ {
             ParameterType::FloatHalfTurns => *self,
@@ -172,7 +172,7 @@ impl LoadedParameter {
     /// Adds the necessary operations to the Hugr and returns a new wire.
     pub fn as_rotation<H: AsRef<Hugr> + AsMut<Hugr>>(
         &self,
-        hugr: &mut FunctionBuilder<H>,
+        hugr: &mut DFGBuilder<H>,
     ) -> LoadedParameter {
         match self.typ {
             ParameterType::Rotation => *self,
