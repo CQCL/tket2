@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use derive_more::derive::{Display, Error};
 use hugr::core::HugrNode;
 use hugr::extension::simple_op::MakeExtensionOp;
+use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::ops::{constant, OpTrait, OpType};
 use hugr::std_extensions::arithmetic::conversions::ConvertOpDef;
 use hugr::types::Signature;
@@ -246,10 +247,13 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
     ///
     /// In those cases, the analysis pass proceeds ignoring the node, which may
     /// result in missing borrow intervals.
-    pub fn run(&self, circuit: &Circuit<H>) -> Vec<BorrowInterval<H::Node>> {
+    pub fn run(
+        &self,
+        circuit: &Circuit<H>,
+    ) -> Result<Vec<BorrowInterval<H::Node>>, InvalidSubgraph> {
         let circuit = ResourceScope::with_config(
             circuit.hugr(),
-            circuit.subgraph(),
+            circuit.subgraph()?,
             &self.resource_scope_config(),
         );
 
@@ -271,7 +275,7 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
             }
         }
 
-        intervals
+        Ok(intervals)
     }
 
     /// Check if a node is a borrow node.
@@ -353,7 +357,7 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
     fn resource_scope_config(&self) -> ResourceScopeConfig<'_, &H> {
         [
             HandleBorrowReturn::new(&self.is_borrow_node, &self.is_return_node).into_boxed(),
-            DefaultResourceFlow::new().into_boxed(),
+            DefaultResourceFlow.into_boxed(),
         ]
         .into_iter()
         .collect()
@@ -441,7 +445,7 @@ impl<'a, 'h, H: HugrView> ResourceFlow<&'h H> for HandleBorrowReturn<'a, H> {
             let borrowed_resource = inputs[0].expect("linear input");
             Ok(vec![Some(borrowed_resource)])
         } else {
-            Err(UnsupportedOp)
+            Err(UnsupportedOp(hugr.get_optype(node).clone()))
         }
     }
 }
@@ -552,7 +556,7 @@ mod tests {
         let circuit = Circuit::load_str("TODO", None).unwrap();
         let scope = ResourceScope::with_config(
             circuit.hugr(),
-            circuit.subgraph(),
+            circuit.subgraph().unwrap(),
             &inline_borrow_analysis.resource_scope_config(),
         );
 
@@ -579,7 +583,7 @@ mod tests {
         let mut hugr = Hugr::load(reader, Some(&REGISTRY)).unwrap();
         hugr.set_entrypoint(Node::from(NodeIndex::new(1176)));
         let circuit = Circuit::new(hugr);
-        let res = inline_borrow_analysis.run(&circuit);
+        let res = inline_borrow_analysis.run(&circuit).unwrap();
 
         assert_eq!(res.len(), 17);
     }

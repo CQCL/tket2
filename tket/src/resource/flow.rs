@@ -13,7 +13,7 @@ use itertools::{EitherOrBoth, Itertools};
 /// Error type for unsupported operations in ResourceFlow implementations.
 #[derive(Debug, Display, Clone, PartialEq, Error)]
 #[display("Unsupported operation: {_0}")]
-pub struct UnsupportedOp(#[error(not(source))] OpType);
+pub struct UnsupportedOp(#[error(not(source))] pub OpType);
 
 /// Trait for specifying how resources flow through operations.
 ///
