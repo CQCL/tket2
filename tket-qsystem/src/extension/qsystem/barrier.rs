@@ -97,7 +97,7 @@ mod test {
 
                 let analyzer = TypeUnpacker::for_qubits();
                 let tuple_type = hugr::types::Type::new_tuple(type_row);
-                assert!(!analyzer.is_qubit_container(&tuple_type));
+                assert!(!analyzer.contains_element_type(&tuple_type));
                 assert_eq!(num_qb, 0);
                 return;
             };

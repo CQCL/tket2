@@ -138,13 +138,8 @@ impl TypeUnpacker {
     }
 
     /// Report if a type contains the element type.
-    pub fn is_element_container(&self, ty: &Type) -> bool {
+    pub fn contains_element_type(&self, ty: &Type) -> bool {
         self.unpack_type(ty).is_some()
-    }
-
-    /// Report if a type contains qubits.
-    pub fn is_qubit_container(&self, ty: &Type) -> bool {
-        self.is_element_container(ty)
     }
 
     /// Get the element type this analyzer is configured for.
@@ -183,7 +178,7 @@ mod test {
         assert_eq!(types[0], qb_t());
 
         // Non-quantum types should not be containers
-        assert!(!analyzer.is_qubit_container(&bool_t()));
+        assert!(!analyzer.contains_element_type(&bool_t()));
     }
 
     #[rstest]
@@ -203,7 +198,7 @@ mod test {
 
         // Array of non-quantum types should not be a container
         let bool_array = AK::ty(5, bool_t());
-        assert!(!analyzer.is_qubit_container(&bool_array));
+        assert!(!analyzer.contains_element_type(&bool_array));
 
         // Nested arrays of qubits
         let nested_array = AK::ty(2, array_type(3, qb_t()));
@@ -220,7 +215,7 @@ mod test {
 
         // Option<qubit> by itself should NOT be a container
         let opt_qubit = option_type(qb_t()).into();
-        assert!(!analyzer.is_qubit_container(&opt_qubit));
+        assert!(!analyzer.contains_element_type(&opt_qubit));
 
         // Array of Option<qubit> should be a special case (a container with that many qubits)
         let opt_qubit_array = array_type(4, option_type(qb_t()).into());
@@ -232,7 +227,7 @@ mod test {
 
         // Option of non-quantum types should not be a container
         let opt_bool = option_type(bool_t()).into();
-        assert!(!analyzer.is_qubit_container(&opt_bool));
+        assert!(!analyzer.contains_element_type(&opt_bool));
     }
 
     #[test]
@@ -241,7 +236,7 @@ mod test {
 
         // Tuple with no qubits
         let no_qubit_tuple = Type::new_tuple(vec![bool_t(), usize_t()]);
-        assert!(!analyzer.is_qubit_container(&no_qubit_tuple));
+        assert!(!analyzer.contains_element_type(&no_qubit_tuple));
 
         // Tuple with qubits
         let qubit_tuple = Type::new_tuple(vec![bool_t(), qb_t(), usize_t()]);
@@ -379,8 +374,8 @@ mod test {
         assert_eq!(types[1], bool_t());
 
         // Non-bool types should not be containers for this analyzer
-        assert!(!bool_analyzer.is_element_container(&qb_t()));
-        assert!(!bool_analyzer.is_element_container(&usize_t()));
+        assert!(!bool_analyzer.contains_element_type(&qb_t()));
+        assert!(!bool_analyzer.contains_element_type(&usize_t()));
 
         // Test with usize type as the element type
         let usize_analyzer = TypeUnpacker::new(usize_t());

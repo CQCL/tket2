@@ -59,7 +59,7 @@ impl BarrierInserter {
             .filter(|(_, ty)| {
                 self.container_unpacker
                     .type_analyzer()
-                    .is_qubit_container(ty)
+                    .contains_element_type(ty)
             })
             .map(|(i, ty)| {
                 let port = OutgoingPort::from(i);

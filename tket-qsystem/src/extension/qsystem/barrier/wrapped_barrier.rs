@@ -65,7 +65,7 @@ impl WrappedBarrierBuilder {
         self.func_map
     }
 
-    /// Build a runtime barrier across the given qubit wires using external cache
+    /// Build a runtime barrier across the given qubit wires
     pub fn build_runtime_barrier(
         &mut self,
         builder: &mut impl Dataflow,
