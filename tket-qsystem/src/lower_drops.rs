@@ -68,15 +68,16 @@ mod test {
     use std::sync::Arc;
 
     use hugr::builder::{inout_sig, Dataflow, DataflowHugr};
+    use hugr::extension::prelude::usize_t;
     use hugr::ops::ExtensionOp;
-    use hugr::{extension::prelude::usize_t, std_extensions::collections::array::array_type};
+    use hugr::std_extensions::collections::borrow_array::borrow_array_type;
     use hugr::{Hugr, HugrView};
 
     use super::*;
 
     #[test]
     fn test_lower_drop() {
-        let arr_type = array_type(2, usize_t());
+        let arr_type = borrow_array_type(2, usize_t());
         let drop_op = GUPPY_EXTENSION.get_op(DROP_OP_NAME.as_str()).unwrap();
         let drop_node = ExtensionOp::new(drop_op.clone(), [arr_type.clone().into()]).unwrap();
         let mut b = DFGBuilder::new(inout_sig(arr_type, vec![])).unwrap();

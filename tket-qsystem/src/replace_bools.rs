@@ -391,6 +391,7 @@ mod test {
     use super::*;
     use hugr::ops::OpType;
     use hugr::std_extensions::collections::array::ArrayOpBuilder;
+    use hugr::std_extensions::collections::borrow_array::BArrayOpBuilder;
     use hugr::type_row;
     use hugr::{
         builder::{inout_sig, DFGBuilder, Dataflow, DataflowHugr},
@@ -548,14 +549,14 @@ mod test {
     fn test_array_clone_bool() {
         let elem_ty = bool_type();
         let size = 4;
-        let arr_ty = array_type(size, elem_ty.clone());
+        let arr_ty = borrow_array_type(size, elem_ty.clone());
         let mut dfb = DFGBuilder::new(inout_sig(
             vec![arr_ty.clone()],
             vec![arr_ty.clone(), arr_ty.clone()],
         ))
         .unwrap();
         let [arr_in] = dfb.input_wires_arr();
-        let (arr1, arr2) = dfb.add_array_clone(elem_ty, size, arr_in).unwrap();
+        let (arr1, arr2) = dfb.add_borrow_array_clone(elem_ty, size, arr_in).unwrap();
         let mut h = dfb.finish_hugr_with_outputs([arr1, arr2]).unwrap();
 
         h.validate().unwrap();
@@ -565,7 +566,7 @@ mod test {
 
         let sig = h.signature(h.entrypoint()).unwrap();
         let bool_dest_ty = bool_dest();
-        let arr_dest_ty = array_type(size, bool_dest_ty);
+        let arr_dest_ty = borrow_array_type(size, bool_dest_ty);
         assert_eq!(sig.input(), &TypeRow::from(vec![arr_dest_ty.clone()]));
         assert_eq!(
             sig.output(),
@@ -577,10 +578,10 @@ mod test {
     fn test_array_discard_bool() {
         let elem_ty = bool_type();
         let size = 4;
-        let arr_ty = array_type(size, elem_ty.clone());
+        let arr_ty = borrow_array_type(size, elem_ty.clone());
         let mut dfb = DFGBuilder::new(inout_sig(vec![arr_ty.clone()], type_row![])).unwrap();
         let [arr_in] = dfb.input_wires_arr();
-        dfb.add_array_discard(elem_ty, size, arr_in).unwrap();
+        dfb.add_borrow_array_discard(elem_ty, size, arr_in).unwrap();
         let mut h = dfb.finish_hugr_with_outputs([]).unwrap();
 
         h.validate().unwrap();
