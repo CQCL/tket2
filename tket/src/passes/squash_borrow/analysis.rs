@@ -1,6 +1,5 @@
 //! An analysis pass that identifies borrowed resources and their lifetimes.
 
-use std::borrow::Borrow;
 use std::collections::BTreeMap;
 
 use derive_more::derive::{Display, Error};
@@ -9,7 +8,6 @@ use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::ops::{constant, OpTrait, OpType};
 use hugr::std_extensions::arithmetic::conversions::ConvertOpDef;
-use hugr::types::Signature;
 use hugr::{types::Type, HugrView};
 use hugr::{Direction, IncomingPort, OutgoingPort, Port, PortIndex, Wire};
 
@@ -114,11 +112,7 @@ impl BorrowInfo {
             borrowed_port: OutgoingPort::from(0).into(),
             borrow_from_port_outgoing: OutgoingPort::from(1),
         };
-
-        let (borrow_from, borrow_index, borrowed) = parse_signature(&sig, ports)?;
-
-        Self::try_from_ports(circuit, borrow_node, borrow_from, borrow_index, borrowed)
-            .map_err(|_| BorrowAnalysisError::NonConstIndex)
+        Self::try_from_ports(circuit, borrow_node, ports)
     }
 
     fn try_from_return_node<N: HugrNode>(
@@ -139,10 +133,8 @@ impl BorrowInfo {
             borrowed_port: IncomingPort::from(2).into(),
             borrow_from_port_outgoing: OutgoingPort::from(0),
         };
-        let (borrow_from, borrow_index, borrowed) = parse_signature(&sig, ports)?;
 
-        Self::try_from_ports(circuit, return_node, borrow_from, borrow_index, borrowed)
-            .map_err(|_| BorrowAnalysisError::NonConstIndex)
+        Self::try_from_ports(circuit, return_node, ports)
     }
 
     /// Prefer using [Self::try_from_borrow_node] or
@@ -158,10 +150,38 @@ impl BorrowInfo {
     fn try_from_ports<N: HugrNode>(
         circuit: &ResourceScope<impl HugrView<Node = N>>,
         node: N,
-        borrow_from: Port,
-        borrow_index: Port,
-        borrowed: Port,
-    ) -> Result<Self, Wire<N>> {
+        ports: BorrowReturnPorts,
+    ) -> Result<Self, BorrowAnalysisError<N>> {
+        {
+            let sig = circuit.hugr().signature(node).unwrap();
+
+            let borrow_from_ty = sig.port_type(ports.borrow_from_port).unwrap();
+            let borrow_index_ty = sig.port_type(ports.borrow_index_port).unwrap();
+            let borrowed_ty = sig.port_type(ports.borrowed_port).unwrap();
+
+            if !borrow_index_ty.copyable() {
+                return Err(BorrowAnalysisError::NonCopyableBorrowIndex);
+            }
+
+            if borrow_from_ty.copyable() || borrowed_ty.copyable() {
+                let (borrow_from_ty, borrowed_ty) = (borrow_from_ty.clone(), borrowed_ty.clone());
+                return Err(BorrowAnalysisError::NonLinearBorrowedResource {
+                    borrow_from_ty,
+                    borrowed_ty,
+                });
+            }
+
+            if sig.port_type(ports.borrow_from_port_outgoing) != Some(&borrow_from_ty) {
+                return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
+            }
+        }
+
+        let (borrow_from, borrow_index, borrowed) = (
+            ports.borrow_from_port,
+            ports.borrow_index_port,
+            ports.borrowed_port,
+        );
+
         let borrow_from_resource = circuit
             .get_circuit_unit(node, borrow_from)
             .and_then(|v| v.as_resource())
@@ -178,7 +198,7 @@ impl BorrowInfo {
             .expect("valid port");
         let borrow_index_const = circuit
             .as_const(borrow_index_id)
-            .ok_or(borrow_index_id)?
+            .ok_or(BorrowAnalysisError::NonConstIndex)? // flag the wire here, or return in Self
             .clone();
         let borrow_index_ty = circuit
             .hugr()
@@ -444,37 +464,6 @@ struct BorrowReturnPorts {
     borrow_index_port: IncomingPort,
     borrowed_port: Port,
     borrow_from_port_outgoing: OutgoingPort,
-}
-
-fn parse_signature<N: HugrNode>(
-    sig: &Signature,
-    ports: BorrowReturnPorts,
-) -> Result<(Port, Port, Port), BorrowAnalysisError<N>> {
-    let borrow_from_ty = sig.port_type(ports.borrow_from_port).unwrap();
-    let borrow_index_ty = sig.port_type(ports.borrow_index_port).unwrap();
-    let borrowed_ty = sig.port_type(ports.borrowed_port).unwrap();
-
-    if !borrow_index_ty.copyable() {
-        return Err(BorrowAnalysisError::NonCopyableBorrowIndex);
-    }
-
-    if borrow_from_ty.copyable() || borrowed_ty.copyable() {
-        let (borrow_from_ty, borrowed_ty) = (borrow_from_ty.clone(), borrowed_ty.clone());
-        return Err(BorrowAnalysisError::NonLinearBorrowedResource {
-            borrow_from_ty,
-            borrowed_ty,
-        });
-    }
-
-    if sig.port_type(ports.borrow_from_port_outgoing) != Some(&borrow_from_ty) {
-        return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
-    }
-
-    Ok((
-        ports.borrow_from_port.into(),
-        ports.borrow_index_port.into(),
-        ports.borrowed_port,
-    ))
 }
 
 #[cfg(test)]
