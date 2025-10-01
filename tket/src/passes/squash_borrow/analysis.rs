@@ -45,11 +45,18 @@ pub enum BorrowAnalysisError {
     #[display("non-linear borrow of element {borrowed_ty} from array {borrow_from_ty}")]
     #[allow(missing_docs)]
     NonLinearBorrowedResource {
-        borrowed_ty: Type, borrow_from_ty: Type
+        borrowed_ty: Type,
+        borrow_from_ty: Type,
     },
-    /// Could not track resource, maybe non-const?
-    #[display("could not track resource, maybe non-const?")]
-    CouldNotTrackResource,
+    /// Index was not a const....TODO need to handle gracefully
+    NonConstIndex,
+}
+
+#[derive(Debug, Display, Error)]
+enum TrackingError {
+    MissingBorrow,
+    MissingReturn,
+    MismatchedInfo(#[error(not(source))] String),
 }
 
 /// Lifespan of a borrowed resource, represented as an interval on the resource
@@ -107,7 +114,8 @@ impl<N: HugrNode> BorrowInfo<N> {
 
         Ok(Self {
             borrow_node: Some(borrow_node),
-            ..Self::try_from_ports(circuit, borrow_node, borrow_from, borrow_index, borrowed)?
+            ..Self::try_from_ports(circuit, borrow_node, borrow_from, borrow_index, borrowed)
+                .map_err(|_| BorrowAnalysisError::NonConstIndex)?
         })
     }
 
@@ -123,7 +131,8 @@ impl<N: HugrNode> BorrowInfo<N> {
 
         Ok(Self {
             return_node: Some(return_node),
-            ..Self::try_from_ports(circuit, return_node, borrow_from, borrow_index, borrowed)?
+            ..Self::try_from_ports(circuit, return_node, borrow_from, borrow_index, borrowed)
+                .map_err(|_| BorrowAnalysisError::NonConstIndex)?
         })
     }
 
@@ -137,7 +146,7 @@ impl<N: HugrNode> BorrowInfo<N> {
         borrow_from: Port,
         borrow_index: Port,
         borrowed: Port,
-    ) -> Result<Self, BorrowAnalysisError> {
+    ) -> Result<Self, Wire<N>> {
         let borrow_from_resource = circuit
             .get_circuit_unit(node, borrow_from)
             .and_then(|v| v.as_resource())
@@ -154,7 +163,7 @@ impl<N: HugrNode> BorrowInfo<N> {
             .expect("valid port");
         let borrow_index_const = circuit
             .as_const(borrow_index_id)
-            .ok_or(BorrowAnalysisError::CouldNotTrackResource)?
+            .ok_or(borrow_index_id)?
             .clone();
         let borrow_index_ty = circuit
             .hugr()
@@ -186,43 +195,50 @@ impl<N: HugrNode> BorrowInfo<N> {
     }
 
     fn try_merge(
-        interval_start: Self,
-        interval_end: Self,
-    ) -> Result<BorrowInterval<N>, BorrowAnalysisError> {
+        mut interval_start: Self,
+        mut interval_end: Self,
+    ) -> Result<BorrowInterval<N>, TrackingError> {
         let borrow_node = interval_start
             .borrow_node
-            .ok_or(BorrowAnalysisError::CouldNotTrackResource)?;
+            .ok_or(TrackingError::MissingBorrow)?;
         let return_node = interval_end
             .return_node
-            .ok_or(BorrowAnalysisError::CouldNotTrackResource)?;
-
-        let interval_start = Self {
-            borrow_node: None,
-            return_node: None,
-            ..interval_start
-        };
-
-        let interval_end = Self {
-            borrow_node: None,
-            return_node: None,
-            ..interval_end
-        };
+            .ok_or(TrackingError::MissingReturn)?;
+        interval_start.return_node = interval_end.return_node;
+        interval_end.borrow_node = interval_start.borrow_node;
 
         if interval_start != interval_end {
-            return Err(BorrowAnalysisError::CouldNotTrackResource);
+            let Self {
+                borrow_from_ty,
+                borrow_from_resource,
+                borrowed_ty,
+                borrowed_resource,
+                borrow_index_ty,
+                borrow_index_const,
+                borrow_node: _,
+                return_node: _,
+            } = interval_start;
+            fn compare<T: std::fmt::Debug + PartialEq>(a: T, b: T, name: &str) -> Option<String> {
+                (a != b).then_some(format!("{}: {:?} != {:?}", name, a, b))
+            }
+            let msg = [
+                compare(borrow_from_ty, interval_end.borrow_from_ty, "array_ty"),
+                compare(borrow_from_resource, interval_end.borrow_from_resource, "b"),
+                compare(borrowed_ty, interval_end.borrowed_ty, "elem_ty"),
+                compare(borrowed_resource, interval_end.borrowed_resource, "b_res"),
+                compare(borrow_index_ty, interval_end.borrow_index_ty, "b_index_ty"),
+                compare(borrow_index_const, interval_end.borrow_index_const, "b_idx"),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join("\n");
+            return Err(TrackingError::MismatchedInfo(msg));
         }
-
-        let Self {
-            borrowed_resource,
-            borrow_from_resource,
-            borrow_index_const: borrow_index,
-            ..
-        } = interval_start;
-
         Ok(BorrowInterval {
-            borrowed_resource,
-            borrow_from_resource,
-            borrow_index,
+            borrowed_resource: interval_start.borrowed_resource,
+            borrow_from_resource: interval_start.borrow_from_resource,
+            borrow_index: interval_start.borrow_index_const,
             borrow_node,
             return_node,
         })
