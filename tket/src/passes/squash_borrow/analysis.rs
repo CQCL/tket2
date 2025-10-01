@@ -147,8 +147,7 @@ impl<N: HugrNode> BorrowInfo<N> {
             .expect("valid port");
         let borrow_from_ty = circuit
             .hugr()
-            .get_optype(node)
-            .dataflow_signature()
+            .signature(node)
             .and_then(|sig| sig.port_type(borrow_from).cloned())
             .expect("valid port");
 
@@ -162,8 +161,7 @@ impl<N: HugrNode> BorrowInfo<N> {
             .clone();
         let borrow_index_ty = circuit
             .hugr()
-            .get_optype(node)
-            .dataflow_signature()
+            .signature(node)
             .and_then(|sig| sig.port_type(borrow_index).cloned())
             .expect("valid port");
 
