@@ -17,7 +17,7 @@ use hugr::{
     Hugr, Wire,
 };
 
-use crate::extension::qsystem::{cached_extensions::ExtensionCache, QSystemOpBuilder};
+use crate::extension::qsystem::{op_function_map::OpFunctionMap, QSystemOpBuilder};
 
 /// Temporary extension name for barrier-specific operations.
 pub(super) const TEMP_BARRIER_EXT_NAME: hugr::hugr::IdentList =
@@ -52,14 +52,14 @@ pub static TEMP_BARRIER_EXT: LazyLock<Arc<Extension>> = LazyLock::new(|| {
 /// This factory focuses on barrier-specific functionality like runtime barrier insertion,
 /// while delegating generic container unpacking/repacking to the ContainerOperationFactory.
 pub struct BarrierOperationFactory {
-    cache: ExtensionCache,
+    pub(super) func_map: OpFunctionMap,
 }
 
 impl BarrierOperationFactory {
     /// Create a new instance of the BarrierOperationFactory.
     pub fn new() -> Self {
         Self {
-            cache: ExtensionCache::new(),
+            func_map: OpFunctionMap::new(),
         }
     }
 
@@ -83,20 +83,14 @@ impl BarrierOperationFactory {
         )
         .unwrap();
         let mangle_args: &[TypeArg] = &[TypeArg::BoundedNat(size as u64)];
-        self.cache.cache_function(&op, mangle_args, |func_b| {
+        self.func_map.insert_with(&op, mangle_args, |func_b| {
             func_b.build_wrapped_barrier(func_b.input_wires())
         })?;
         Ok(builder.add_dataflow_op(op, qubit_wires)?.outputs())
     }
 
-    pub fn extension_cache(&self) -> &ExtensionCache {
-        &self.cache
-    }
-    pub fn extension_cache_mut(&mut self) -> &mut ExtensionCache {
-        &mut self.cache
-    }
     pub fn into_function_map(self) -> impl Iterator<Item = (ExtensionOp, Hugr)> {
-        self.cache.into_iter()
+        self.func_map.into_iter()
     }
 }
 
@@ -122,7 +116,7 @@ mod tests {
     #[test]
     fn test_barrier_op_factory_creation() {
         let factory = BarrierOperationFactory::new();
-        assert_eq!(factory.cache.len(), 0);
+        assert_eq!(factory.func_map.len(), 0);
     }
 
     #[test]

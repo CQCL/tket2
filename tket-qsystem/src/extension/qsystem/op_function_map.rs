@@ -1,9 +1,5 @@
-//! Centralized temporary extension and cached function management.
-//!
-//! This module provides a unified framework for creating temporary extensions and caching
-//! function definitions across different operation factories. This eliminates duplication
-//! of the temporary extension + cached function mapping logic.
-
+//! Mapping from extension operation instances to function definitions
+//! that can be used to replace them.
 use hugr::{
     algorithms::mangle_name,
     builder::{BuildError, DataflowHugr, FunctionBuilder},
@@ -32,25 +28,25 @@ impl std::hash::Hash for OpHashWrapper {
     }
 }
 
-/// Centralized cache for temporary extensions and their function definitions.
-///
-/// This provides a single point for managing temporary extensions and their cached
-/// function implementations across different operation factories.
-pub struct ExtensionCache {
-    /// Cached function definitions for each operation instance
-    funcs: RefCell<IndexMap<OpHashWrapper, Hugr>>,
+/// Map from extension operation instances to a function definition
+/// that can be used to replace it.
+pub struct OpFunctionMap {
+    // RefCell for interior mutability, allowing
+    // recursive function building.
+    map: RefCell<IndexMap<OpHashWrapper, Hugr>>,
 }
 
-impl ExtensionCache {
-    /// Create a new empty cache
+impl OpFunctionMap {
+    /// Create a new empty map
     pub fn new() -> Self {
         Self {
-            funcs: RefCell::new(IndexMap::new()),
+            map: RefCell::new(IndexMap::new()),
         }
     }
 
-    /// Cache a function definition for a given operation
-    pub fn cache_function<O, F>(
+    /// Insert a function definition for the given operation instance,
+    /// if it is not already present.
+    pub fn insert_with<O, F>(
         &self,
         op: &ExtensionOp,
         mangle_args: &[TypeArg],
@@ -61,7 +57,7 @@ impl ExtensionCache {
         F: FnOnce(&mut FunctionBuilder<Hugr>) -> Result<O, BuildError>,
     {
         let key = OpHashWrapper::from(op.clone());
-        if self.funcs.borrow().contains_key(&key) {
+        if self.map.borrow().contains_key(&key) {
             return Ok(());
         }
         let name = mangle_name(op.def().name(), mangle_args);
@@ -69,31 +65,27 @@ impl ExtensionCache {
         let mut func_b = FunctionBuilder::new(name, sig)?;
         let outputs = func_builder(&mut func_b)?;
         let hugr = func_b.finish_hugr_with_outputs(outputs)?;
-        self.funcs.borrow_mut().insert(key, hugr);
+        self.map.borrow_mut().insert(key, hugr);
         Ok(())
     }
 
-    pub fn contains(&self, op: &ExtensionOp) -> bool {
-        let key = OpHashWrapper::from(op.clone());
-        self.funcs.borrow().contains_key(&key)
-    }
-
-    pub fn replace(&mut self, op: ExtensionOp, hugr: Hugr) -> Option<Hugr> {
-        let key = OpHashWrapper::from(op);
-        self.funcs.borrow_mut().insert(key, hugr)
-    }
-
-    pub fn len(&self) -> usize {
-        self.funcs.borrow().len()
-    }
-
     pub fn into_iter(self) -> impl Iterator<Item = (ExtensionOp, Hugr)> {
-        self.funcs.into_inner().into_iter().map(|(k, v)| (k.0, v))
+        self.map.into_inner().into_iter().map(|(k, v)| (k.0, v))
     }
 }
 
-impl Default for ExtensionCache {
+impl Default for OpFunctionMap {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    impl super::OpFunctionMap {
+        /// Return the number of stored functions
+        pub fn len(&self) -> usize {
+            self.map.borrow().len()
+        }
     }
 }

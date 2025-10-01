@@ -283,7 +283,7 @@ mod tests {
         inserter.insert_runtime_barrier(&mut hugr, barrier_node.node(), barrier)?;
 
         // The array shortcut should have been used
-        assert_eq!(inserter.op_factory.extension_cache().len(), 0);
+        assert_eq!(inserter.op_factory.func_map.len(), 0);
         Ok(())
     }
 
@@ -339,8 +339,7 @@ mod tests {
         assert!(hugr.validate().is_ok(), "Generated HUGR should be valid");
 
         assert_eq!(
-            inserter.op_factory.extension_cache().len()
-                + inserter.container_factory.extension_cache().len(),
+            inserter.op_factory.func_map.len() + inserter.container_factory.func_map.len(),
             3, // runtime barrier + array unpack + array repack
         );
 

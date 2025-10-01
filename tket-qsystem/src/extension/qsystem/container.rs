@@ -25,7 +25,7 @@ use std::sync::{Arc, LazyLock};
 
 use tket::analysis::type_unpack::{array_args, TypeUnpacker};
 
-use crate::extension::qsystem::cached_extensions::ExtensionCache;
+use crate::extension::qsystem::op_function_map::OpFunctionMap;
 
 /// Invert the signature of a function type.
 fn invert_sig(sig: &PolyFuncTypeRV) -> PolyFuncTypeRV {
@@ -156,7 +156,7 @@ pub static TEMP_UNPACK_EXT: LazyLock<Arc<Extension>> = LazyLock::new(|| {
 /// regenerating the same function definitions multiple times.
 pub struct ContainerOperationFactory {
     /// Function definitions for each instance of the operations.
-    pub(super) func_cache: ExtensionCache,
+    pub(super) func_map: OpFunctionMap,
     /// Type analyzer for determining which types to unpack
     type_analyzer: TypeUnpacker,
 }
@@ -165,7 +165,7 @@ impl ContainerOperationFactory {
     /// Create a new instance with a custom type analyzer.
     pub fn new(type_analyzer: TypeUnpacker) -> Self {
         Self {
-            func_cache: ExtensionCache::new(),
+            func_map: OpFunctionMap::new(),
             type_analyzer,
         }
     }
@@ -189,7 +189,7 @@ impl ContainerOperationFactory {
     ) -> Result<Wire, BuildError> {
         let args = [elem_ty.clone().into()];
         let op = self.get_op(&UNPACK_OPT, args.clone()).expect("known op");
-        self.func_cache.cache_function(&op, &[], |func_b| {
+        self.func_map.insert_with(&op, &[], |func_b| {
             let [in_wire] = func_b.input_wires_arr();
             let [out_wire] =
                 func_b.build_expect_sum(1, option_type(elem_ty.clone()), in_wire, |_| {
@@ -213,7 +213,7 @@ impl ContainerOperationFactory {
     ) -> Result<Wire, BuildError> {
         let args = [elem_ty.clone().into()];
         let op = self.get_op(&REPACK_OPT, args.clone()).expect("known op");
-        self.func_cache.cache_function(&op, &[], |func_b| {
+        self.func_map.insert_with(&op, &[], |func_b| {
             let [in_wire] = func_b.input_wires_arr();
             let out_wire = func_b.make_sum(
                 1,
@@ -245,7 +245,7 @@ impl ContainerOperationFactory {
 
         let op = self.get_op(op_name, args.clone()).expect("known op");
 
-        self.func_cache.cache_function(&op, &args[..2], |func_b| {
+        self.func_map.insert_with(&op, &args[..2], |func_b| {
             let w = func_b.input().out_wire(0);
             let elems = func_b.add_generic_array_unpack::<AK>(elem_ty.clone(), size, w)?;
 
@@ -298,7 +298,7 @@ impl ContainerOperationFactory {
         let inner_row_len = self.type_analyzer.num_unpacked_wires(elem_ty);
         let op = self.get_op(op_name, args.clone()).expect("known op");
 
-        self.func_cache.cache_function(&op, &args[..2], |func_b| {
+        self.func_map.insert_with(&op, &args[..2], |func_b| {
             let input = func_b.input();
             // SAFETY: We guarantee no aliasing by only using this pointer in this closure.
             let elems: Result<Vec<_>, _> = input
@@ -382,7 +382,7 @@ impl ContainerOperationFactory {
         };
         let op = self.get_op(&TUPLE_UNPACK, args.clone()).expect("known op");
 
-        self.func_cache.cache_function(&op, &args[..1], |func_b| {
+        self.func_map.insert_with(&op, &args[..1], |func_b| {
             let w = func_b.input().out_wire(0);
             let unpacked_tuple_wires = func_b
                 .add_dataflow_op(UnpackTuple::new(tuple_row.clone().into()), [w])?
@@ -419,7 +419,7 @@ impl ContainerOperationFactory {
 
         let op = self.get_op(&TUPLE_REPACK, args.clone()).expect("known op");
 
-        self.func_cache.cache_function(&op, &args[..1], |func_b| {
+        self.func_map.insert_with(&op, &args[..1], |func_b| {
             let in_wires = func_b.input().outputs().collect::<Vec<_>>();
 
             let repacked_elem_wires = self.repack_row(func_b, &tuple_row, in_wires)?;
@@ -537,14 +537,8 @@ impl ContainerOperationFactory {
         Ok(unpacked_wires[0])
     }
 
-    pub fn extension_cache(&self) -> &ExtensionCache {
-        &self.func_cache
-    }
-    pub fn extension_cache_mut(&mut self) -> &mut ExtensionCache {
-        &mut self.func_cache
-    }
     pub fn into_function_map(self) -> impl Iterator<Item = (ExtensionOp, Hugr)> {
-        self.func_cache.into_iter()
+        self.func_map.into_iter()
     }
 }
 
@@ -565,7 +559,7 @@ mod tests {
     fn test_container_factory_creation() {
         let analyzer = TypeUnpacker::for_qubits();
         let factory = ContainerOperationFactory::new(analyzer);
-        assert_eq!(factory.func_cache.len(), 0);
+        assert_eq!(factory.func_map.len(), 0);
     }
 
     #[test]
