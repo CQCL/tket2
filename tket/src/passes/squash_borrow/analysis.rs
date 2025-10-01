@@ -1,5 +1,6 @@
 //! An analysis pass that identifies borrowed resources and their lifetimes.
 
+use std::borrow::Borrow;
 use std::collections::BTreeMap;
 
 use derive_more::derive::{Display, Error};
@@ -107,15 +108,14 @@ impl BorrowInfo {
         if sig.input_count() != 2 || sig.output_count() != 2 {
             return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
         }
-        let (borrow_from, borrow_index, borrowed) = {
-            let borrow_from_port = IncomingPort::from(0);
-            let borrow_index_port = IncomingPort::from(1);
-            let borrowed_port = OutgoingPort::from(0);
+        let ports = BorrowReturnPorts {
+            borrow_from_port: IncomingPort::from(0),
+            borrow_index_port: IncomingPort::from(1),
+            borrowed_port: OutgoingPort::from(0).into(),
+            borrow_from_port_outgoing: OutgoingPort::from(1),
+        };
 
-            let borrow_from_port_outgoing = OutgoingPort::from(1);
-
-            parse_signature(&sig, borrow_from_port, borrow_index_port, borrowed_port, borrow_from_port_outgoing)
-        }?;
+        let (borrow_from, borrow_index, borrowed) = parse_signature(&sig, ports)?;
 
         Self::try_from_ports(circuit, borrow_node, borrow_from, borrow_index, borrowed)
             .map_err(|_| BorrowAnalysisError::NonConstIndex)
@@ -133,15 +133,13 @@ impl BorrowInfo {
         if sig.input_count() != 3 || sig.output_count() != 1 {
             return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
         }
-        let (borrow_from, borrow_index, borrowed) = {
-            let borrow_from_port = IncomingPort::from(0);
-            let borrow_index_port = IncomingPort::from(1);
-            let borrowed_port = IncomingPort::from(2);
-
-            let borrow_from_port_outgoing = OutgoingPort::from(0);
-
-            parse_signature(&sig, borrow_from_port, borrow_index_port, borrowed_port, borrow_from_port_outgoing)
-        }?;
+        let ports = BorrowReturnPorts {
+            borrow_from_port: IncomingPort::from(0),
+            borrow_index_port: IncomingPort::from(1),
+            borrowed_port: IncomingPort::from(2).into(),
+            borrow_from_port_outgoing: OutgoingPort::from(0),
+        };
+        let (borrow_from, borrow_index, borrowed) = parse_signature(&sig, ports)?;
 
         Self::try_from_ports(circuit, return_node, borrow_from, borrow_index, borrowed)
             .map_err(|_| BorrowAnalysisError::NonConstIndex)
@@ -441,19 +439,20 @@ impl<'a, 'h, H: HugrView> ResourceFlow<&'h H> for HandleBorrowReturn<'a, H> {
     }
 }
 
-fn parse_signature<N: HugrNode>(
-    sig: &Signature,
+struct BorrowReturnPorts {
     borrow_from_port: IncomingPort,
     borrow_index_port: IncomingPort,
-    borrowed_port: impl Into<Port>,
+    borrowed_port: Port,
     borrow_from_port_outgoing: OutgoingPort,
+}
+
+fn parse_signature<N: HugrNode>(
+    sig: &Signature,
+    ports: BorrowReturnPorts,
 ) -> Result<(Port, Port, Port), BorrowAnalysisError<N>> {
-
-    let borrowed_port = borrowed_port.into();
-
-    let borrow_from_ty = sig.port_type(borrow_from_port).unwrap();
-    let borrow_index_ty = sig.port_type(borrow_index_port).unwrap();
-    let borrowed_ty = sig.port_type(borrowed_port).unwrap();
+    let borrow_from_ty = sig.port_type(ports.borrow_from_port).unwrap();
+    let borrow_index_ty = sig.port_type(ports.borrow_index_port).unwrap();
+    let borrowed_ty = sig.port_type(ports.borrowed_port).unwrap();
 
     if !borrow_index_ty.copyable() {
         return Err(BorrowAnalysisError::NonCopyableBorrowIndex);
@@ -467,14 +466,14 @@ fn parse_signature<N: HugrNode>(
         });
     }
 
-    if sig.port_type(borrow_from_port_outgoing) != Some(&borrow_from_ty) {
+    if sig.port_type(ports.borrow_from_port_outgoing) != Some(&borrow_from_ty) {
         return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
     }
 
     Ok((
-        borrow_from_port.into(),
-        borrow_index_port.into(),
-        borrowed_port
+        ports.borrow_from_port.into(),
+        ports.borrow_index_port.into(),
+        ports.borrowed_port,
     ))
 }
 
