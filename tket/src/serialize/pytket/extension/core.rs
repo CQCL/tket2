@@ -51,7 +51,7 @@ impl PytketDecoder for CoreDecoder {
                     .collect_vec();
                 let circ_signature = Signature::new(circ_inputs, circ_outputs);
 
-                // Decode the boxed circuit into a new Hugr
+                // Decode the boxed circuit into a DFG node in the Hugr.
                 let options = DecodeOptions::new()
                     .with_config(decoder.config().clone())
                     .with_signature(circ_signature);
@@ -61,7 +61,6 @@ impl PytketDecoder for CoreDecoder {
                 let internal =
                     circuit.decode_inplace(decoder.builder.hugr_mut(), target, options)?;
 
-                // Create a DFG node in the parent Hugr that will contain the decoded circuit.
                 decoder
                     .wire_up_node(internal, qubits, bits, params)
                     .map_err(|e| e.hugr_op("DFG"))?;

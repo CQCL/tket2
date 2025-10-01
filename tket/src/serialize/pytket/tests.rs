@@ -410,7 +410,7 @@ fn circ_complex_angle_computation() -> (Circuit, String) {
     (circ, "((f0) ** (f1)) + ((cos(pi)) + (0.2))".to_string())
 }
 
-/// A nested circuit with a nested DFG block.
+/// A circuit with a nested DFG block.
 #[fixture]
 fn circ_nested_dfgs() -> Circuit {
     let input_t = vec![qb_t()];
@@ -421,31 +421,31 @@ fn circ_nested_dfgs() -> Circuit {
     let [qb] = h.input_wires_arr();
     let rot = h.add_load_value(ConstRotation::new(0.5).unwrap());
 
-    let dfg = {
-        let mut dfg = h
+    let inner_dfg = {
+        let mut inner_dfg = h
             .dfg_builder(
                 Signature::new(vec![qb_t(), rotation_type()], output_t),
                 [qb, rot],
             )
             .unwrap();
-        let [qb, rot] = dfg.input_wires_arr();
+        let [qb, rot] = inner_dfg.input_wires_arr();
 
-        let [qb] = dfg
+        let [qb] = inner_dfg
             .add_dataflow_op(TketOp::Rx, [qb, rot])
             .unwrap()
             .outputs_arr();
-        let [bool] = dfg
+        let [bool] = inner_dfg
             .add_dataflow_op(TketOp::MeasureFree, [qb])
             .unwrap()
             .outputs_arr();
-        let [bool] = dfg
+        let [bool] = inner_dfg
             .add_dataflow_op(BoolOp::read, [bool])
             .unwrap()
             .outputs_arr();
 
-        dfg.finish_with_outputs([bool]).unwrap()
+        inner_dfg.finish_with_outputs([bool]).unwrap()
     };
-    let [bool] = dfg.outputs_arr();
+    let [bool] = inner_dfg.outputs_arr();
 
     h.finish_hugr_with_outputs([bool]).unwrap().into()
 }

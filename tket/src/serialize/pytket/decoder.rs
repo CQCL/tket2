@@ -405,6 +405,13 @@ impl<'h> PytketDecoderContext<'h> {
     /// * `bit_args` - The list of tracked bits we require in the wire.
     /// * `params` - The list of parameters to load to wires. See
     ///   [`PytketDecoderContext::load_half_turns`] for more details.
+    ///
+    /// # Errors
+    ///
+    /// - [`PytketDecodeErrorInner::OutdatedQubit`] if a qubit in `qubit_args` was marked as outdated.
+    /// - [`PytketDecodeErrorInner::OutdatedBit`] if a bit in `bit_args` was marked as outdated.
+    /// - [`PytketDecodeErrorInner::UnexpectedInputType`] if a type in `types` cannot be mapped to a [`RegisterCount`]
+    /// - [`PytketDecodeErrorInner::NoMatchingWire`] if there is no wire with the requested type for the given qubit/bit arguments.
     pub fn find_typed_wires(
         &self,
         types: &[Type],
@@ -417,7 +424,8 @@ impl<'h> PytketDecoderContext<'h> {
     }
 
     /// Connects the input ports of a node using a list of input qubits, bits,
-    /// and parameters. Registers the node's output wires in the wire tracker.
+    /// and pytket parameters. Registers the node's output wires in the wire
+    /// tracker.
     ///
     /// The qubits registers in `wires` are reused between the operation inputs
     /// and outputs. Bit registers, on the other hand, are not reused. We use
@@ -432,8 +440,8 @@ impl<'h> PytketDecoderContext<'h> {
     /// returned if the parameter does not match the expected wire type, but the
     /// unit (radians or half-turns) cannot be checked automatically.
     ///
-    /// Use [`PytketDecoderContext::add_node_with_wires`] to insert a new node
-    /// before wiring it up.
+    /// Use [`Self::add_node_with_wires`] to insert a new node before wiring it
+    /// up.
     ///
     /// # Arguments
     ///
@@ -444,12 +452,11 @@ impl<'h> PytketDecoderContext<'h> {
     ///
     /// # Errors
     ///
-    /// - Returns an error if the input wire set cannot be mapped to the node's
-    ///   input ports.
-    /// - Returns an error if the node's output ports cannot be assigned to
-    ///   arguments from the input wire set.
-    /// - Returns an error if the parameter wires do not match the expected
-    ///   types.
+    /// - [`PytketDecodeErrorInner::NotEnoughPytketRegisters`] if the register
+    ///   count required to encode the node does not match the ones provided.
+    /// - [`PytketDecodeErrorInner::OutdatedQubit`] if a qubit in `qubits` was marked as outdated.
+    /// - [`PytketDecodeErrorInner::OutdatedBit`] if a bit in `bits` was marked as outdated.
+    /// - [`PytketDecodeErrorInner::UnexpectedInputType`] if a type in the node's signature cannot be mapped to a [`RegisterCount`]
     pub fn wire_up_node(
         &mut self,
         node: Node,
@@ -551,13 +558,7 @@ impl<'h> PytketDecoderContext<'h> {
     ///
     /// # Errors
     ///
-    /// - Returns an error if the optype signature contains any complex type.
-    /// - Returns an error if the input wire set cannot be mapped to the node's
-    ///   input ports.
-    /// - Returns an error if the node's output ports cannot be assigned to
-    ///   arguments from the input wire set.
-    /// - Returns an error if the parameter wires do not match the expected
-    ///   types.
+    /// See [`PytketDecoderContext::wire_up_node`] for error details.
     pub fn add_node_with_wires(
         &mut self,
         op: impl Into<OpType>,
