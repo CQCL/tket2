@@ -122,7 +122,7 @@ fn hash_node(
     let mut hasher = FxHasher64::default();
 
     // Hash the node children
-    if circ.children(node).count() > 0 {
+    if circ.children(node).next().is_some() {
         circ.circuit_hash(node)?.hash(&mut hasher);
     }
 
