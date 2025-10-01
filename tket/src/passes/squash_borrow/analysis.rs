@@ -530,6 +530,16 @@ mod tests {
     use super::*;
 
     #[fixture]
+    fn borrow_circuit() -> Circuit {
+        let reader = BufReader::new(
+            include_bytes!("../../../../test_files/squashing_inline.hugr").as_slice(),
+        );
+        let mut hugr = Hugr::load(reader, Some(&REGISTRY)).unwrap();
+        hugr.set_entrypoint(Node::from(NodeIndex::new(1176)));
+        Circuit::new(hugr)
+    }
+
+    #[fixture]
     fn inline_borrow_analysis() -> BorrowAnalysis<Hugr> {
         BorrowAnalysis {
             is_borrow_node: Box::new(|node, hugr: &Hugr| {
@@ -552,38 +562,30 @@ mod tests {
     /// Make sure that the resources flow correctly through borrow and return
     /// nodes.
     #[rstest]
-    fn test_borrow_flow(inline_borrow_analysis: BorrowAnalysis) {
-        let circuit = Circuit::load_str("TODO", None).unwrap();
+    fn test_borrow_flow(inline_borrow_analysis: BorrowAnalysis, borrow_circuit: Circuit) {
         let scope = ResourceScope::with_config(
-            circuit.hugr(),
-            circuit.subgraph().unwrap(),
+            borrow_circuit.hugr(),
+            borrow_circuit.subgraph().unwrap(),
             &inline_borrow_analysis.resource_scope_config(),
         );
 
-        for resource_start in circuit.hugr().node_outputs(circuit.input_node()) {
+        for resource_start in borrow_circuit.hugr().node_outputs(borrow_circuit.input_node()) {
             let resource_id = scope
-                .get_circuit_unit(circuit.input_node(), resource_start)
-                .and_then(|v| v.as_resource())
-                .unwrap();
+                .get_circuit_unit(borrow_circuit.input_node(), resource_start)
+                .and_then(|v| v.as_resource());
             println!("resource_id: {:?}", resource_id);
             println!(
                 "resource_path: {:?}",
                 scope
-                    .resource_path_iter(resource_id, circuit.input_node(), Direction::Outgoing)
+                    .resource_path_iter(resource_id.unwrap(), borrow_circuit.input_node(), Direction::Outgoing)
                     .collect::<Vec<_>>()
             );
         }
     }
 
     #[rstest]
-    fn test_borrow_analysis(inline_borrow_analysis: BorrowAnalysis) {
-        let reader = BufReader::new(
-            include_bytes!("../../../../test_files/squashing_inline.hugr").as_slice(),
-        );
-        let mut hugr = Hugr::load(reader, Some(&REGISTRY)).unwrap();
-        hugr.set_entrypoint(Node::from(NodeIndex::new(1176)));
-        let circuit = Circuit::new(hugr);
-        let res = inline_borrow_analysis.run(&circuit).unwrap();
+    fn test_borrow_analysis(inline_borrow_analysis: BorrowAnalysis, borrow_circuit: Circuit) {
+        let res = inline_borrow_analysis.run(&borrow_circuit).unwrap();
 
         assert_eq!(res.len(), 17);
     }
