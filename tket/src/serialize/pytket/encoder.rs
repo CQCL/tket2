@@ -4,6 +4,7 @@ mod unit_generator;
 mod unsupported_tracker;
 mod value_tracker;
 
+use hugr::core::HugrNode;
 use hugr::envelope::EnvelopeConfig;
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::package::Package;
@@ -176,6 +177,15 @@ impl<H: HugrView> PytketEncoderContext<H> {
         circ: &Circuit<H>,
         region: H::Node,
     ) -> Result<(), PytketEncodeError<H::Node>> {
+        // When encoding a function, mark it as being encoded to detect recursive calls.
+        if circ.hugr().get_parent(region) == Some(circ.hugr().module_root()) {
+            let Ok(mut cache) = self.function_cache.write() else {
+                // If the cache is poisoned, some thread has panicked while holding the lock.
+                return Err(PytketEncodeError::custom("Detected encoder worker panic."));
+            };
+            cache.insert(region, CachedEncodedFunction::InEncodingStack);
+        }
+
         let (region, node_map) = circ.hugr().region_portgraph(region);
         // TODO: Use weighted topological sort to try and explore unsupported
         // ops first (that is, ops with no available emitter in `self.config`),
@@ -289,6 +299,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         circ: &Circuit<H>,
     ) -> Result<TrackedValues, PytketEncodeError<H::Node>> {
         self.get_input_values_internal(node, circ, |_| true)
+            .try_into_tracked_values()
     }
 
     /// Auxiliary function used to collect the input values of a node.
@@ -301,10 +312,9 @@ impl<H: HugrView> PytketEncoderContext<H> {
         node: H::Node,
         circ: &Circuit<H>,
         wire_filter: impl Fn(Wire<H::Node>) -> bool,
-    ) -> Result<TrackedValues, PytketEncodeError<H::Node>> {
-        let mut qubits: Vec<TrackedQubit> = Vec::new();
-        let mut bits: Vec<TrackedBit> = Vec::new();
-        let mut params: Vec<TrackedParam> = Vec::new();
+    ) -> NodeInputValues<H::Node> {
+        let mut tracked_values = TrackedValues::default();
+        let mut unknown_values = Vec::new();
 
         let optype = circ.hugr().get_optype(node);
         let other_input_port = optype.other_input_port();
@@ -323,19 +333,20 @@ impl<H: HugrView> PytketEncoderContext<H> {
                 continue;
             }
 
-            for value in self.get_wire_values(wire, circ)?.iter() {
-                match value {
-                    TrackedValue::Qubit(qb) => qubits.push(*qb),
-                    TrackedValue::Bit(b) => bits.push(*b),
-                    TrackedValue::Param(p) => params.push(*p),
-                }
+            match self.get_wire_values(wire, circ) {
+                Ok(values) => tracked_values.extend(values.iter().copied()),
+                Err(PytketEncodeError::OpConversionError(OpConvertError::WireHasNoValues {
+                    wire,
+                })) => unknown_values.push(wire),
+                Err(e) => panic!(
+                    "get_wire_values should only return WireHasNoValues errors, but got: {e}"
+                ),
             }
         }
-        Ok(TrackedValues {
-            qubits,
-            bits,
-            params,
-        })
+        NodeInputValues {
+            tracked_values,
+            unknown_values,
+        }
     }
 
     /// Helper to emit a new tket1 command corresponding to a single HUGR node.
@@ -557,14 +568,24 @@ impl<H: HugrView> PytketEncoderContext<H> {
 
         // Collects the input values for the subgraph.
         //
-        // The [`UnsupportedTracker`] ensures that at this point all input wires must come from
+        // The [`UnsupportedTracker`] ensures that at this point all local input wires must come from
         // already-encoded nodes, and not from other unsupported nodes not in `unsupported_nodes`.
+        //
+        // Non-local incoming edges (e.g. function references) must be marked so they can be recovered when
+        // decoding the circuit.
+        //
+        // TODO: We must encode additional metadata for external function calls.
+        // For now we just ignore them.
         let mut op_values = TrackedValues::default();
+        let mut external_edges = Vec::new();
         for node in &input_nodes {
-            let node_vals = self.get_input_values_internal(*node, circ, |w| {
-                unsupported_nodes.contains(&w.node())
-            })?;
-            op_values.append(node_vals);
+            let NodeInputValues {
+                tracked_values,
+                unknown_values,
+            } = self
+                .get_input_values_internal(*node, circ, |w| !unsupported_nodes.contains(&w.node()));
+            op_values.append(tracked_values);
+            external_edges.extend(unknown_values);
         }
         let input_param_exprs: Vec<String> = std::mem::take(&mut op_values.params)
             .into_iter()
@@ -706,7 +727,9 @@ impl<H: HugrView> PytketEncoderContext<H> {
                     self.emit_circ_box(node, serial_circuit, circ)?;
                     return Ok(EncodeStatus::Success);
                 }
-                CachedEncodedFunction::Unsupported => return Ok(EncodeStatus::Unsupported),
+                CachedEncodedFunction::Unsupported | CachedEncodedFunction::InEncodingStack => {
+                    return Ok(EncodeStatus::Unsupported);
+                }
             };
         }
         drop(cache);
@@ -813,7 +836,9 @@ impl<H: HugrView> PytketEncoderContext<H> {
                     .hugr()
                     .single_linked_output(node, call.called_function_port())
                     .expect("Function call must be linked to a function");
-                return self.emit_function_call(node, fn_node, circ);
+                if self.emit_function_call(node, fn_node, circ)? == EncodeStatus::Success {
+                    return Ok(EncodeStatus::Success);
+                }
             }
             OpType::Input(_) | OpType::Output(_) => {
                 // I/O nodes are handled by the container's encoder.
@@ -1017,6 +1042,37 @@ pub struct MakeOperationArgs<'a> {
     pub params: Cow<'a, [String]>,
 }
 
+/// Tracked values in a node's inputs, and any remaining input wire with missing
+/// value information.
+///
+/// In most cases, finding an unsupported wire should be an error (see
+/// [`NodeInputValues::try_into_tracked_values`]).
+///
+/// Auxiliary struct returned by
+/// [`PytketEncoderContext::get_input_values_internal`]
+struct NodeInputValues<N> {
+    /// Tracked values originating in the local region.
+    pub tracked_values: TrackedValues,
+    /// Untracked inputs, with unknown values.
+    pub unknown_values: Vec<Wire<N>>,
+}
+
+impl<N: HugrNode> NodeInputValues<N> {
+    /// Return the tracked values in the node's inputs.
+    ///
+    /// # Errors
+    /// - [`OpConvertError::WireHasNoValues`] if there were any unknown wires.
+    pub fn try_into_tracked_values(self) -> Result<TrackedValues, PytketEncodeError<N>> {
+        match self.unknown_values.is_empty() {
+            true => Ok(self.tracked_values),
+            false => Err(OpConvertError::WireHasNoValues {
+                wire: self.unknown_values[0],
+            }
+            .into()),
+        }
+    }
+}
+
 /// Cached value for a function encoding.
 ///
 /// If the function contains output parameters, it is unsupported
@@ -1030,6 +1086,10 @@ enum CachedEncodedFunction {
     },
     /// Unsupported function
     Unsupported,
+    /// A marker for functions currently being encoded.
+    ///
+    /// Used to detect recursive calls, and prevent infinite recursion.
+    InEncodingStack,
 }
 
 /// Initialize a tket1 [Operation](circuit_json::Operation) to pass to
