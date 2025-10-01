@@ -27,8 +27,11 @@ pub struct BorrowAnalysis<H: HugrView = hugr::Hugr> {
 }
 
 /// The errors that can occur when running the borrow analysis pass.
+/// ALAN trying to make this be a list only of reasons why we couldn't (safely) do the analysis at all
 #[derive(Debug, Display, Error)]
-pub enum BorrowAnalysisError {
+pub enum BorrowAnalysisError<N: HugrNode> {
+    /// The analysis could not run on an invalid subgraph
+    InvalidSubgraph(#[error(source)] InvalidSubgraph),
     /// Borrow op is not a dataflow op.
     #[display("expected dataflow op: {op}")]
     NodeNotDataflow {
@@ -48,27 +51,21 @@ pub enum BorrowAnalysisError {
         borrowed_ty: Type,
         borrow_from_ty: Type,
     },
-    /// Index was not a const....TODO need to handle gracefully
+    /// Index was not a const....ALAN need to handle gracefully inside rather than fail analysis
     NonConstIndex,
-}
-
-#[derive(Debug, Display, Error)]
-enum TrackingError {
-    MissingBorrow,
-    MissingReturn,
-    MismatchedInfo(#[error(not(source))] String),
+    /// A node returns to an index that was not borrowed
+    ReturnWithoutBorrow(#[error(not(source))] N),
+    /// Two borrows of the same index without a return
+    #[display("Nodes {_0} and {_1} both borrow the same element without an intervening return")]
+    RepeatedBorrow(N, N),
 }
 
 /// Lifespan of a borrowed resource, represented as an interval on the resource
 /// that is borrowed from.
 #[derive(Clone, Debug)]
 pub struct BorrowInterval<N> {
-    /// The resource ID that this interval borrows.
-    pub borrowed_resource: ResourceId,
-    /// The resource ID that this interval borrows from.
-    pub borrow_from_resource: ResourceId,
-    /// The statically known index used to borrow the resource.
-    pub borrow_index: constant::Value,
+    /// Describes what we are borrowing how and from what
+    pub info: BorrowInfo,
     /// The node that borrowed the resource.
     ///
     /// This will always be the first node on the resource path of the borrowed
@@ -87,7 +84,7 @@ pub struct BorrowInterval<N> {
 
 /// Incomplete information about a borrow interval, used during the analysis.
 #[derive(Clone, Debug, PartialEq)]
-struct BorrowInfo<N> {
+pub struct BorrowInfo {
     borrow_from_ty: Type,
     borrow_from_resource: ResourceId,
 
@@ -96,16 +93,13 @@ struct BorrowInfo<N> {
 
     borrow_index_ty: Type,
     borrow_index_const: constant::Value,
-
-    borrow_node: Option<N>,
-    return_node: Option<N>,
 }
 
-impl<N: HugrNode> BorrowInfo<N> {
-    fn try_from_borrow_node(
+impl BorrowInfo {
+    fn try_from_borrow_node<N: HugrNode>(
         borrow_node: N,
         circuit: &ResourceScope<impl HugrView<Node = N>>,
-    ) -> Result<Self, BorrowAnalysisError> {
+    ) -> Result<Self, BorrowAnalysisError<N>> {
         let op = circuit.hugr().get_optype(borrow_node);
         let sig = op
             .dataflow_signature()
@@ -113,16 +107,15 @@ impl<N: HugrNode> BorrowInfo<N> {
         let (borrow_from, borrow_index, borrowed) = parse_borrow_signature(&sig)?;
 
         Ok(Self {
-            borrow_node: Some(borrow_node),
             ..Self::try_from_ports(circuit, borrow_node, borrow_from, borrow_index, borrowed)
                 .map_err(|_| BorrowAnalysisError::NonConstIndex)?
         })
     }
 
-    fn try_from_return_node(
+    fn try_from_return_node<N: HugrNode>(
         return_node: N,
         circuit: &ResourceScope<impl HugrView<Node = N>>,
-    ) -> Result<Self, BorrowAnalysisError> {
+    ) -> Result<Self, BorrowAnalysisError<N>> {
         let op = circuit.hugr().get_optype(return_node);
         let sig = op
             .dataflow_signature()
@@ -130,7 +123,6 @@ impl<N: HugrNode> BorrowInfo<N> {
         let (borrow_from, borrow_index, borrowed) = parse_return_signature(&sig)?;
 
         Ok(Self {
-            return_node: Some(return_node),
             ..Self::try_from_ports(circuit, return_node, borrow_from, borrow_index, borrowed)
                 .map_err(|_| BorrowAnalysisError::NonConstIndex)?
         })
@@ -139,8 +131,14 @@ impl<N: HugrNode> BorrowInfo<N> {
     /// Prefer using [Self::try_from_borrow_node] or
     /// [Self::try_from_return_node].
     ///
-    /// This will panic if the ports are not valid.
-    fn try_from_ports(
+    /// # Errors
+    ///
+    /// If the index is not a constant, return the Wire.
+    ///
+    /// # Panics
+    ///
+    /// If the ports are not valid
+    fn try_from_ports<N: HugrNode>(
         circuit: &ResourceScope<impl HugrView<Node = N>>,
         node: N,
         borrow_from: Port,
@@ -189,59 +187,38 @@ impl<N: HugrNode> BorrowInfo<N> {
             borrowed_resource,
             borrow_index_ty,
             borrow_index_const,
-            borrow_node: None,
-            return_node: None,
         })
     }
 
-    fn try_merge(
-        mut interval_start: Self,
-        mut interval_end: Self,
-    ) -> Result<BorrowInterval<N>, TrackingError> {
-        let borrow_node = interval_start
-            .borrow_node
-            .ok_or(TrackingError::MissingBorrow)?;
-        let return_node = interval_end
-            .return_node
-            .ok_or(TrackingError::MissingReturn)?;
-        interval_start.return_node = interval_end.return_node;
-        interval_end.borrow_node = interval_start.borrow_node;
-
-        if interval_start != interval_end {
-            let Self {
-                borrow_from_ty,
-                borrow_from_resource,
-                borrowed_ty,
-                borrowed_resource,
-                borrow_index_ty,
-                borrow_index_const,
-                borrow_node: _,
-                return_node: _,
-            } = interval_start;
-            fn compare<T: std::fmt::Debug + PartialEq>(a: T, b: T, name: &str) -> Option<String> {
-                (a != b).then_some(format!("{}: {:?} != {:?}", name, a, b))
-            }
-            let msg = [
-                compare(borrow_from_ty, interval_end.borrow_from_ty, "array_ty"),
-                compare(borrow_from_resource, interval_end.borrow_from_resource, "b"),
-                compare(borrowed_ty, interval_end.borrowed_ty, "elem_ty"),
-                compare(borrowed_resource, interval_end.borrowed_resource, "b_res"),
-                compare(borrow_index_ty, interval_end.borrow_index_ty, "b_index_ty"),
-                compare(borrow_index_const, interval_end.borrow_index_const, "b_idx"),
-            ]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>()
-            .join("\n");
-            return Err(TrackingError::MismatchedInfo(msg));
+    fn check_eq(&self, other: &Self) -> Result<(), String> {
+        if self == other {
+            return Ok(());
         }
-        Ok(BorrowInterval {
-            borrowed_resource: interval_start.borrowed_resource,
-            borrow_from_resource: interval_start.borrow_from_resource,
-            borrow_index: interval_start.borrow_index_const,
-            borrow_node,
-            return_node,
-        })
+
+        let Self {
+            borrow_from_ty,
+            borrow_from_resource,
+            borrowed_ty,
+            borrowed_resource,
+            borrow_index_ty,
+            borrow_index_const,
+        } = self;
+        fn compare<T: std::fmt::Debug + PartialEq>(a: T, b: T, name: &str) -> Option<String> {
+            (a != b).then_some(format!("{}: {:?} != {:?}", name, a, b))
+        }
+        let msg = [
+            compare(borrow_from_ty, &other.borrow_from_ty, "array_ty"),
+            compare(borrow_from_resource, &other.borrow_from_resource, "b"),
+            compare(borrowed_ty, &other.borrowed_ty, "elem_ty"),
+            compare(borrowed_resource, &other.borrowed_resource, "b_res"),
+            compare(borrow_index_ty, &other.borrow_index_ty, "b_index_ty"),
+            compare(borrow_index_const, &other.borrow_index_const, "b_idx"),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join("\n");
+        Err(msg)
     }
 }
 
@@ -261,18 +238,21 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
     pub fn run(
         &self,
         circuit: &Circuit<H>,
-    ) -> Result<Vec<BorrowInterval<H::Node>>, InvalidSubgraph> {
+    ) -> Result<Vec<BorrowInterval<H::Node>>, BorrowAnalysisError<H::Node>> {
         let circuit = ResourceScope::with_config(
             circuit.hugr(),
-            circuit.subgraph()?,
+            circuit
+                .subgraph()
+                .map_err(BorrowAnalysisError::InvalidSubgraph)?,
             &self.resource_scope_config(),
         );
 
-        Ok(circuit
+        let v = circuit
             .get_resource_starts()
             .filter(|(n, _)| !self.is_borrow_node(*n, circuit.hugr()))
             .flat_map(|(node, resource_id)| self.get_borrow_intervals(&circuit, resource_id, node))
-            .collect())
+            .collect::<Vec<_>>();
+        Ok(v.into_iter().flatten().collect())
     }
 
     /// Check if a node is a borrow node.
@@ -304,51 +284,44 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
         circuit: &ResourceScope<&H>,
         resource_id: ResourceId,
         inp_node: H::Node,
-    ) -> Vec<BorrowInterval<H::Node>> {
+    ) -> Result<Vec<BorrowInterval<H::Node>>, BorrowAnalysisError<H::Node>> {
         let mut interval_starts = BTreeMap::new();
         let mut complete_intervals = Vec::new();
 
         for node in circuit.resource_path_iter(resource_id, inp_node, Direction::Outgoing) {
             match node {
                 borrow_node if self.is_borrow_node(node, circuit.hugr()) => {
-                    let Ok(interval_start) = BorrowInfo::try_from_borrow_node(borrow_node, circuit)
-                    else {
-                        // Could not parse this borrow, just ignore it.
-                        continue;
-                    };
+                    let info = BorrowInfo::try_from_borrow_node(borrow_node, circuit).unwrap();
 
-                    let already_inserted =
-                        interval_starts.insert(interval_start.borrowed_resource, interval_start);
-
-                    debug_assert!(already_inserted.is_none());
+                    // ALAN should we look at the index not the borrowed-resource here?
+                    if let Some(prev_start) =
+                        interval_starts.insert(info.borrowed_resource, (info, borrow_node))
+                    {
+                        return Err(BorrowAnalysisError::RepeatedBorrow(prev_start.1, node));
+                    }
                 }
                 return_node if self.is_return_node(node, circuit.hugr()) => {
-                    let Ok(interval_end) = BorrowInfo::try_from_return_node(return_node, circuit)
-                    else {
-                        // Could not parse this return, just ignore it.
-                        continue;
-                    };
+                    let info = BorrowInfo::try_from_return_node(return_node, circuit).unwrap();
 
-                    let Some(interval_start) =
-                        interval_starts.remove(&interval_end.borrowed_resource)
+                    // ALAN should we look at the index not the borrowed-resource here?
+                    let Some(interval_start) = interval_starts.remove(&info.borrowed_resource)
                     else {
-                        // could not find the interval start, ignore
-                        continue;
+                        return Err(BorrowAnalysisError::ReturnWithoutBorrow(node));
                     };
+                    // Perhaps we should return the error here, but let's see how it's triggered
+                    interval_start.0.check_eq(&info).unwrap();
 
-                    let Ok(complete_interval) = BorrowInfo::try_merge(interval_start, interval_end)
-                    else {
-                        // the pair of borrow and return does not match up, ignore
-                        continue;
-                    };
-
-                    complete_intervals.push(complete_interval);
+                    complete_intervals.push(BorrowInterval {
+                        borrow_node: interval_start.1,
+                        return_node,
+                        info,
+                    })
                 }
                 _ => {}
             }
         }
 
-        complete_intervals
+        Ok(complete_intervals)
     }
 
     fn resource_scope_config(&self) -> ResourceScopeConfig<'_, &H> {
@@ -447,7 +420,9 @@ impl<'a, 'h, H: HugrView> ResourceFlow<&'h H> for HandleBorrowReturn<'a, H> {
     }
 }
 
-fn parse_borrow_signature(sig: &Signature) -> Result<(Port, Port, Port), BorrowAnalysisError> {
+fn parse_borrow_signature<N: HugrNode>(
+    sig: &Signature,
+) -> Result<(Port, Port, Port), BorrowAnalysisError<N>> {
     let borrow_from_port = IncomingPort::from(0);
     let borrow_index_port = IncomingPort::from(1);
     let borrowed_port = OutgoingPort::from(0);
@@ -484,7 +459,9 @@ fn parse_borrow_signature(sig: &Signature) -> Result<(Port, Port, Port), BorrowA
     ))
 }
 
-fn parse_return_signature(sig: &Signature) -> Result<(Port, Port, Port), BorrowAnalysisError> {
+fn parse_return_signature<N: HugrNode>(
+    sig: &Signature,
+) -> Result<(Port, Port, Port), BorrowAnalysisError<N>> {
     let borrow_from_port = IncomingPort::from(0);
     let borrow_index_port = IncomingPort::from(1);
     let borrowed_port = IncomingPort::from(2);
