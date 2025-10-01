@@ -104,7 +104,18 @@ impl BorrowInfo {
         let sig = op
             .dataflow_signature()
             .ok_or_else(|| BorrowAnalysisError::NodeNotDataflow { op: op.clone() })?;
-        let (borrow_from, borrow_index, borrowed) = parse_borrow_signature(&sig)?;
+        if sig.input_count() != 2 || sig.output_count() != 2 {
+            return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
+        }
+        let (borrow_from, borrow_index, borrowed) = {
+            let borrow_from_port = IncomingPort::from(0);
+            let borrow_index_port = IncomingPort::from(1);
+            let borrowed_port = OutgoingPort::from(0);
+
+            let borrow_from_port_outgoing = OutgoingPort::from(1);
+
+            parse_signature(&sig, borrow_from_port, borrow_index_port, borrowed_port, borrow_from_port_outgoing)
+        }?;
 
         Self::try_from_ports(circuit, borrow_node, borrow_from, borrow_index, borrowed)
             .map_err(|_| BorrowAnalysisError::NonConstIndex)
@@ -118,7 +129,19 @@ impl BorrowInfo {
         let sig = op
             .dataflow_signature()
             .ok_or_else(|| BorrowAnalysisError::NodeNotDataflow { op: op.clone() })?;
-        let (borrow_from, borrow_index, borrowed) = parse_return_signature(&sig)?;
+
+        if sig.input_count() != 3 || sig.output_count() != 1 {
+            return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
+        }
+        let (borrow_from, borrow_index, borrowed) = {
+            let borrow_from_port = IncomingPort::from(0);
+            let borrow_index_port = IncomingPort::from(1);
+            let borrowed_port = IncomingPort::from(2);
+
+            let borrow_from_port_outgoing = OutgoingPort::from(0);
+
+            parse_signature(&sig, borrow_from_port, borrow_index_port, borrowed_port, borrow_from_port_outgoing)
+        }?;
 
         Self::try_from_ports(circuit, return_node, borrow_from, borrow_index, borrowed)
             .map_err(|_| BorrowAnalysisError::NonConstIndex)
@@ -418,57 +441,15 @@ impl<'a, 'h, H: HugrView> ResourceFlow<&'h H> for HandleBorrowReturn<'a, H> {
     }
 }
 
-fn parse_borrow_signature<N: HugrNode>(
+fn parse_signature<N: HugrNode>(
     sig: &Signature,
+    borrow_from_port: IncomingPort,
+    borrow_index_port: IncomingPort,
+    borrowed_port: impl Into<Port>,
+    borrow_from_port_outgoing: OutgoingPort,
 ) -> Result<(Port, Port, Port), BorrowAnalysisError<N>> {
-    if sig.input_count() != 2 || sig.output_count() != 2 {
-        return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
-    }
-    let borrow_from_port = IncomingPort::from(0);
-    let borrow_index_port = IncomingPort::from(1);
-    let borrowed_port = OutgoingPort::from(0);
 
-    let borrow_from_port_outgoing = OutgoingPort::from(1);
-
-    let borrow_from_ty = sig.port_type(borrow_from_port).unwrap();
-    let borrow_index_ty = sig.port_type(borrow_index_port).unwrap();
-    let borrowed_ty = sig.port_type(borrowed_port).unwrap();
-
-    if !borrow_index_ty.copyable() {
-        return Err(BorrowAnalysisError::NonCopyableBorrowIndex);
-    }
-
-    if borrow_from_ty.copyable() || borrowed_ty.copyable() {
-        let (borrow_from_ty, borrowed_ty) = (borrow_from_ty.clone(), borrowed_ty.clone());
-        return Err(BorrowAnalysisError::NonLinearBorrowedResource {
-            borrow_from_ty,
-            borrowed_ty,
-        });
-    }
-
-    if sig.port_type(borrow_from_port_outgoing) != Some(borrow_from_ty) {
-        return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
-    }
-
-    Ok((
-        borrow_from_port.into(),
-        borrow_index_port.into(),
-        borrowed_port.into(),
-    ))
-}
-
-fn parse_return_signature<N: HugrNode>(
-    sig: &Signature,
-) -> Result<(Port, Port, Port), BorrowAnalysisError<N>> {
-    if sig.input_count() != 3 || sig.output_count() != 1 {
-        return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
-    }
-
-    let borrow_from_port = IncomingPort::from(0);
-    let borrow_index_port = IncomingPort::from(1);
-    let borrowed_port = IncomingPort::from(2);
-
-    let borrow_from_port_outgoing = OutgoingPort::from(0);
+    let borrowed_port = borrowed_port.into();
 
     let borrow_from_ty = sig.port_type(borrow_from_port).unwrap();
     let borrow_index_ty = sig.port_type(borrow_index_port).unwrap();
@@ -493,7 +474,7 @@ fn parse_return_signature<N: HugrNode>(
     Ok((
         borrow_from_port.into(),
         borrow_index_port.into(),
-        borrowed_port.into(),
+        borrowed_port
     ))
 }
 
