@@ -368,7 +368,7 @@ impl ContainerOperationFactory {
         let unpacked: Result<Vec<_>, _> = types
             .iter()
             .zip(wires)
-            .map(|(typ, wire)| self.unpack_container(builder, typ, wire))
+            .map(|(ty, wire)| self.unpack_container(builder, ty, wire))
             .collect();
 
         // Flatten the nested vector of wires
@@ -385,10 +385,10 @@ impl ContainerOperationFactory {
         let mut wires = wires.into_iter();
         types
             .iter()
-            .map(|typ| {
-                let wire_count = self.type_analyzer.num_unpacked_wires(typ);
+            .map(|ty| {
+                let wire_count = self.type_analyzer.num_unpacked_wires(ty);
                 let type_wires = wires.by_ref().take(wire_count).collect();
-                self.repack_container(builder, typ, type_wires)
+                self.repack_container(builder, ty, type_wires)
             })
             .collect()
     }
@@ -468,19 +468,19 @@ impl ContainerOperationFactory {
     pub fn unpack_container(
         &self,
         builder: &mut impl Dataflow,
-        typ: &Type,
+        ty: &Type,
         container_wire: Wire,
     ) -> Result<Vec<Wire>, BuildError> {
         use tket::analysis::type_unpack::is_opt_of;
 
         let elem_ty = self.type_analyzer.element_type();
         // If the type is a qubit, return it directly
-        if typ == elem_ty {
+        if ty == elem_ty {
             return Ok(vec![container_wire]);
         }
 
         // Check for option of qubit
-        if is_opt_of(typ, &hugr::extension::prelude::qb_t()) {
+        if is_opt_of(ty, &hugr::extension::prelude::qb_t()) {
             return Ok(vec![self.unpack_option(
                 builder,
                 container_wire,
@@ -490,7 +490,7 @@ impl ContainerOperationFactory {
 
         macro_rules! handle_array_type {
             ($array_kind:ty, $unpack_op:expr) => {
-                if let Some((n, elem_ty)) = typ.as_extension().and_then(array_args::<$array_kind>) {
+                if let Some((n, elem_ty)) = ty.as_extension().and_then(array_args::<$array_kind>) {
                     return self.unpack_array::<$array_kind>(
                         builder,
                         container_wire,
@@ -506,7 +506,7 @@ impl ContainerOperationFactory {
         handle_array_type!(ValueArray, Self::VARRAY_UNPACK);
         handle_array_type!(BorrowArray, Self::BARRAY_UNPACK);
 
-        if let Some(row) = typ.as_sum().and_then(SumType::as_tuple) {
+        if let Some(row) = ty.as_sum().and_then(SumType::as_tuple) {
             let row: hugr::types::TypeRow =
                 row.clone().try_into().expect("unexpected row variable.");
             return self.unpack_tuple(builder, container_wire, &row);
@@ -520,27 +520,27 @@ impl ContainerOperationFactory {
     pub fn repack_container(
         &self,
         builder: &mut impl Dataflow,
-        typ: &Type,
+        ty: &Type,
         unpacked_wires: Vec<Wire>,
     ) -> Result<Wire, BuildError> {
         use tket::analysis::type_unpack::is_opt_of;
 
         let elem_ty = self.type_analyzer.element_type();
         // If the type is a qubit, return the wire directly
-        if typ == elem_ty {
+        if ty == elem_ty {
             debug_assert!(unpacked_wires.len() == 1);
             return Ok(unpacked_wires[0]);
         }
 
         // Check for option of qubit
-        if is_opt_of(typ, elem_ty) {
+        if is_opt_of(ty, elem_ty) {
             debug_assert!(unpacked_wires.len() == 1);
             return self.repack_option(builder, unpacked_wires[0], elem_ty);
         }
 
         macro_rules! handle_array_type {
             ($array_kind:ty, $repack_op:expr) => {
-                if let Some((n, elem_ty)) = typ.as_extension().and_then(array_args::<$array_kind>) {
+                if let Some((n, elem_ty)) = ty.as_extension().and_then(array_args::<$array_kind>) {
                     return self.repack_array::<$array_kind>(
                         builder,
                         unpacked_wires,
@@ -556,7 +556,7 @@ impl ContainerOperationFactory {
         handle_array_type!(ValueArray, Self::VARRAY_REPACK);
         handle_array_type!(BorrowArray, Self::BARRAY_REPACK);
 
-        if let Some(row) = typ.as_sum().and_then(SumType::as_tuple) {
+        if let Some(row) = ty.as_sum().and_then(SumType::as_tuple) {
             let row: hugr::types::TypeRow =
                 row.clone().try_into().expect("unexpected row variable.");
             return self.repack_tuple(builder, unpacked_wires, &row);
