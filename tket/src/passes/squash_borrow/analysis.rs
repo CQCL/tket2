@@ -257,25 +257,11 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
             &self.resource_scope_config(),
         );
 
-        let mut intervals = Vec::new();
-
-        for &node in circuit.nodes() {
-            for resource_id in circuit.get_resources(node, Direction::Outgoing) {
-                if !circuit.is_resource_start(node, resource_id) {
-                    continue;
-                }
-                if self.is_borrow_node(node, circuit.hugr()) {
-                    // this is the start of a borrowed resource, we already
-                    // find this interval when processing the resource that is
-                    // borrowed from
-                    continue;
-                }
-
-                intervals.extend(self.get_borrow_intervals(&circuit, resource_id, node));
-            }
-        }
-
-        Ok(intervals)
+        Ok(circuit
+            .get_resource_starts()
+            .filter(|(n, _)| !self.is_borrow_node(*n, circuit.hugr()))
+            .flat_map(|(node, resource_id)| self.get_borrow_intervals(&circuit, resource_id, node))
+            .collect())
     }
 
     /// Check if a node is a borrow node.
@@ -569,7 +555,10 @@ mod tests {
             &inline_borrow_analysis.resource_scope_config(),
         );
 
-        for resource_start in borrow_circuit.hugr().node_outputs(borrow_circuit.input_node()) {
+        for resource_start in borrow_circuit
+            .hugr()
+            .node_outputs(borrow_circuit.input_node())
+        {
             let resource_id = scope
                 .get_circuit_unit(borrow_circuit.input_node(), resource_start)
                 .and_then(|v| v.as_resource());
@@ -577,7 +566,11 @@ mod tests {
             println!(
                 "resource_path: {:?}",
                 scope
-                    .resource_path_iter(resource_id.unwrap(), borrow_circuit.input_node(), Direction::Outgoing)
+                    .resource_path_iter(
+                        resource_id.unwrap(),
+                        borrow_circuit.input_node(),
+                        Direction::Outgoing
+                    )
                     .collect::<Vec<_>>()
             );
         }
