@@ -37,6 +37,7 @@ pub fn array_args<AT: ArrayKind>(ext: &CustomType) -> Option<(u64, &Type)> {
 /// Arrays of `Option[element_type]` are treated as special cases
 /// and unpacked as if they were arrays of `element_type`, assuming the array is "full"
 /// (i.e. no `None` values). If this assumption is not true there will be a runtime error.
+#[derive(Clone)]
 pub struct TypeUnpacker {
     /// The target element type to analyze for.
     element_type: Type,
@@ -74,6 +75,7 @@ impl TypeUnpacker {
         }
 
         let unpacked = self._new_unpack_type(ty);
+        // SAFETY: types form trees so no cycles, cache will not be corrupted
         self.cache.borrow_mut().insert(ty.clone(), unpacked.clone());
         unpacked
     }

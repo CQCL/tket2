@@ -31,10 +31,13 @@ impl std::hash::Hash for OpHashWrapper {
 
 /// Map from extension operation instances to a function definition
 /// that can be used to replace it.
+#[derive(Clone)]
 pub struct OpFunctionMap {
     // RefCell for interior mutability, allowing
     // recursive function building.
-    map: RefCell<IndexMap<OpHashWrapper, Hugr>>,
+    // Value is option so that None can be used as a
+    // placeholder while building a function.
+    map: RefCell<IndexMap<OpHashWrapper, Option<Hugr>>>,
 }
 
 impl OpFunctionMap {
@@ -64,9 +67,15 @@ impl OpFunctionMap {
         let name = mangle_name(op.def().name(), mangle_args);
         let sig = op.signature().deref().clone();
         let mut func_b = FunctionBuilder::new(name, sig)?;
+        // insert None as a placeholder to avoid cyclic recursion in func_builder call
+        self.map.borrow_mut().insert(key.clone(), None);
+
         let outputs = func_builder(&mut func_b)?;
         let hugr = func_b.finish_hugr_with_outputs(outputs)?;
-        self.map.borrow_mut().insert(key, hugr);
+
+        // replace placeholder
+        let out = self.map.borrow_mut().insert(key, Some(hugr));
+        debug_assert_eq!(out, Some(None));
         Ok(())
     }
 
@@ -82,7 +91,10 @@ impl OpFunctionMap {
 
     /// Consume the map and return an iterator over (operation, function) pairs
     pub fn into_function_iter(self) -> impl Iterator<Item = (ExtensionOp, Hugr)> {
-        self.map.into_inner().into_iter().map(|(k, v)| (k.0, v))
+        self.map
+            .into_inner()
+            .into_iter()
+            .map(|(k, v)| (k.0, v.expect("All placeholders should have been replaced")))
     }
 
     /// Register function replacements for all temporary operations.

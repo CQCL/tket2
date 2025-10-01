@@ -48,7 +48,7 @@ static TEMP_BARRIER_EXT: LazyLock<Arc<Extension>> = LazyLock::new(|| {
 /// Wraps a runtime barrier operation (which takes and returns an array of qubits)
 /// in a function that takes and returns a row of bare qubits, unpacking and repacking
 /// the array as needed.
-pub struct WrappedBarrierBuilder {
+pub(super) struct WrappedBarrierBuilder {
     func_map: OpFunctionMap,
 }
 

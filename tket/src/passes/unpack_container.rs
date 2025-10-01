@@ -155,6 +155,7 @@ static TEMP_UNPACK_EXT: LazyLock<Arc<Extension>> = LazyLock::new(|| {
 /// This factory provides a generic framework for unpacking and repacking container types
 /// such as arrays, tuples, and option types. It uses lazy operation caching to avoid
 /// regenerating the same function definitions multiple times.
+#[derive(Clone)]
 pub struct UnpackContainerBuilder {
     /// Function definitions for each instance of the operations.
     func_map: OpFunctionMap,

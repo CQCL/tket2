@@ -24,7 +24,7 @@ use tket::passes::unpack_container::UnpackContainerBuilder;
 type Target = (Node, IncomingPort);
 
 /// Check if a type is specifically an array of qubits
-pub fn is_qubit_array<AT: ArrayKind>(ty: &Type) -> Option<u64> {
+fn is_qubit_array<AT: ArrayKind>(ty: &Type) -> Option<u64> {
     is_array_of::<AT>(ty, &qb_t())
 }
 
