@@ -1,8 +1,4 @@
-//! Barrier-specific operations that use generic container unpacking/repacking.
-//!
-//! This module provides barrier-specific functionality that leverages the generic
-//! container operations for unpacking and repacking container types, but focuses
-//! specifically on qubit extraction and runtime barrier insertion.
+//! Factory for building wrapped runtime barrier operations.
 
 use std::sync::{Arc, LazyLock};
 
@@ -17,7 +13,8 @@ use hugr::{
     Hugr, Wire,
 };
 
-use crate::extension::qsystem::{op_function_map::OpFunctionMap, QSystemOpBuilder};
+use crate::extension::qsystem::QSystemOpBuilder;
+use tket::passes::unpack_container::op_function_map::OpFunctionMap;
 
 /// Temporary extension name for barrier-specific operations.
 pub(super) const TEMP_BARRIER_EXT_NAME: hugr::hugr::IdentList =
@@ -27,7 +24,7 @@ pub(super) const TEMP_BARRIER_EXT_NAME: hugr::hugr::IdentList =
 pub(super) const WRAPPED_BARRIER_NAME: hugr::ops::OpName =
     hugr::ops::OpName::new_static("wrapped_barrier");
 
-pub static TEMP_BARRIER_EXT: LazyLock<Arc<Extension>> = LazyLock::new(|| {
+static TEMP_BARRIER_EXT: LazyLock<Arc<Extension>> = LazyLock::new(|| {
     Extension::new_arc(
         TEMP_BARRIER_EXT_NAME,
         hugr::extension::Version::new(0, 0, 0),
@@ -47,20 +44,25 @@ pub static TEMP_BARRIER_EXT: LazyLock<Arc<Extension>> = LazyLock::new(|| {
     )
 });
 
-/// Factory for creating barrier-specific operations that use generic container operations.
-///
-/// This factory focuses on barrier-specific functionality like runtime barrier insertion,
-/// while delegating generic container unpacking/repacking to the ContainerOperationFactory.
-pub struct BarrierOperationFactory {
-    pub(super) func_map: OpFunctionMap,
+/// Factory for building wrapped runtime barrier operations.
+/// Wraps a runtime barrier operation (which takes and returns an array of qubits)
+/// in a function that takes and returns a row of bare qubits, unpacking and repacking
+/// the array as needed.
+pub struct WrappedBarrierBuilder {
+    func_map: OpFunctionMap,
 }
 
-impl BarrierOperationFactory {
-    /// Create a new instance of the BarrierOperationFactory.
+impl WrappedBarrierBuilder {
+    /// Create a new instance of the WrappedBarrierFactory.
     pub fn new() -> Self {
         Self {
             func_map: OpFunctionMap::new(),
         }
+    }
+
+    /// Consume and return the internal operation-to-function mapping.
+    pub fn into_function_map(self) -> OpFunctionMap {
+        self.func_map
     }
 
     /// Build a runtime barrier across the given qubit wires using external cache
@@ -88,20 +90,16 @@ impl BarrierOperationFactory {
         })?;
         Ok(builder.add_dataflow_op(op, qubit_wires)?.outputs())
     }
-
-    pub fn into_function_map(self) -> impl Iterator<Item = (ExtensionOp, Hugr)> {
-        self.func_map.into_iter()
-    }
 }
 
-impl Default for BarrierOperationFactory {
+impl Default for WrappedBarrierBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
 
 /// Build a runtime barrier operation for an array of qubits
-pub fn build_runtime_barrier_op(array_size: u64) -> Result<Hugr, BuildError> {
+pub(super) fn build_runtime_barrier_op(array_size: u64) -> Result<Hugr, BuildError> {
     let mut barr_builder = DFGBuilder::new(Signature::new_endo(array_type(array_size, qb_t())))?;
     let array_wire = barr_builder.input().out_wire(0);
     let out = barr_builder.add_runtime_barrier(array_wire, array_size)?;
@@ -115,13 +113,13 @@ mod tests {
 
     #[test]
     fn test_barrier_op_factory_creation() {
-        let factory = BarrierOperationFactory::new();
+        let factory = WrappedBarrierBuilder::new();
         assert_eq!(factory.func_map.len(), 0);
     }
 
     #[test]
     fn test_runtime_barrier() -> Result<(), BuildError> {
-        let mut factory = BarrierOperationFactory::new();
+        let mut factory = WrappedBarrierBuilder::new();
         let mut builder = DFGBuilder::new(Signature::new_endo(vec![qb_t(), qb_t(), qb_t()]))?;
 
         let inputs = builder.input().outputs().collect::<Vec<_>>();

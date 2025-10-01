@@ -1,4 +1,3 @@
-use hugr::algorithms::replace_types::NodeTemplate;
 use hugr::builder::{Container, DataflowHugr};
 use hugr::extension::prelude::qb_t;
 use hugr::ops::OpTrait;
@@ -14,14 +13,13 @@ use hugr::{
     },
     Hugr, HugrView, IncomingPort, Node, OutgoingPort, Wire,
 };
-use tket::analysis::type_unpack::{is_array_of, TypeUnpacker};
+use tket::passes::unpack_container::type_unpack::{is_array_of, TypeUnpacker};
 
-use crate::extension::qsystem::container::ContainerOperationFactory;
 use crate::extension::qsystem::{
-    barrier::barrier_ops::{build_runtime_barrier_op, BarrierOperationFactory},
-    lower::insert_function,
+    barrier::wrapped_barrier::{build_runtime_barrier_op, WrappedBarrierBuilder},
     LowerTk2Error,
 };
+use tket::passes::unpack_container::UnpackContainerBuilder;
 
 type Target = (Node, IncomingPort);
 
@@ -33,17 +31,17 @@ pub fn is_qubit_array<AT: ArrayKind>(ty: &Type) -> Option<u64> {
 /// Responsible for inserting runtime barriers into the HUGR
 pub struct BarrierInserter {
     /// Factory for creating barrier operations
-    op_factory: BarrierOperationFactory,
+    barrier_builder: WrappedBarrierBuilder,
     /// Container operation factory for generic unpacking/repacking
-    pub(super) container_factory: ContainerOperationFactory,
+    container_unpacker: UnpackContainerBuilder,
 }
 
 impl BarrierInserter {
     /// Create a new BarrierInserter instance
     pub fn new() -> Self {
         Self {
-            op_factory: BarrierOperationFactory::new(),
-            container_factory: ContainerOperationFactory::new(TypeUnpacker::for_qubits()),
+            barrier_builder: WrappedBarrierBuilder::new(),
+            container_unpacker: UnpackContainerBuilder::new(TypeUnpacker::for_qubits()),
         }
     }
 
@@ -129,7 +127,7 @@ impl BarrierInserter {
 
         // Call the runtime barrier on all the qubit wires using centralized cache
         let mut barrier_outputs = self
-            .op_factory
+            .barrier_builder
             .build_runtime_barrier(&mut dfg_b, qubit_wires)?;
 
         // Replace the qubit wires with the runtime barrier outputs
@@ -193,15 +191,12 @@ impl BarrierInserter {
         hugr: &mut impl HugrMut<Node = Node>,
         lowerer: &mut ReplaceTypes,
     ) {
-        // Use the centralized cache for all operation replacements
-        for (op, func_def) in self
-            .op_factory
+        self.barrier_builder
             .into_function_map()
-            .chain(self.container_factory.into_function_map())
-        {
-            let func_node = insert_function(hugr, func_def);
-            lowerer.replace_op(&op, NodeTemplate::Call(func_node, vec![]));
-        }
+            .register_operation_replacements(hugr, lowerer);
+        self.container_unpacker
+            .into_function_map()
+            .register_operation_replacements(hugr, lowerer);
     }
 }
 
@@ -283,7 +278,7 @@ mod tests {
         inserter.insert_runtime_barrier(&mut hugr, barrier_node.node(), barrier)?;
 
         // The array shortcut should have been used
-        assert_eq!(inserter.op_factory.func_map.len(), 0);
+        assert!(inserter.barrier_builder.into_function_map().is_empty());
         Ok(())
     }
 
@@ -338,8 +333,12 @@ mod tests {
         // Check that the HUGR is valid
         assert!(hugr.validate().is_ok(), "Generated HUGR should be valid");
 
+        let BarrierInserter {
+            barrier_builder: op_factory,
+            container_unpacker: container_factory,
+        } = inserter;
         assert_eq!(
-            inserter.op_factory.func_map.len() + inserter.container_factory.func_map.len(),
+            op_factory.into_function_map().len() + container_factory.into_function_map().len(),
             3, // runtime barrier + array unpack + array repack
         );
 

@@ -1,5 +1,5 @@
 mod barrier_inserter;
-mod barrier_ops;
+mod wrapped_barrier;
 pub use barrier_inserter::BarrierInserter;
 
 #[cfg(test)]
@@ -84,7 +84,7 @@ mod test {
                 .filter(|&r_barr_n| {
                     h.get_optype(r_barr_n).as_func_defn().is_some_and(|op| {
                         op.func_name()
-                            .contains(barrier_ops::WRAPPED_BARRIER_NAME.as_str())
+                            .contains(wrapped_barrier::WRAPPED_BARRIER_NAME.as_str())
                     })
                 })
                 .exactly_one()
@@ -93,7 +93,8 @@ mod test {
                 // if the runtime barrier function is never called
                 // make sure it is because there are no qubits in the barrier
 
-                use tket::analysis::type_unpack::TypeUnpacker;
+                use tket::passes::unpack_container::type_unpack::TypeUnpacker;
+
                 let analyzer = TypeUnpacker::for_qubits();
                 let tuple_type = hugr::types::Type::new_tuple(type_row);
                 assert!(!analyzer.is_qubit_container(&tuple_type));
@@ -124,8 +125,8 @@ mod test {
         for n in h.nodes() {
             if let Some(op) = h.get_optype(n).as_extension_op() {
                 for factory_ext in [
-                    &qsystem::container::TEMP_UNPACK_EXT_NAME,
-                    &barrier_ops::TEMP_BARRIER_EXT_NAME,
+                    &tket::passes::unpack_container::TEMP_UNPACK_EXT_NAME,
+                    &wrapped_barrier::TEMP_BARRIER_EXT_NAME,
                 ] {
                     assert_ne!(
                         op.extension_id(),

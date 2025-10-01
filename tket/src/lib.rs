@@ -45,7 +45,6 @@
 //! [quantinuum-hugr]: https://lib.rs/crates/quantinuum-hugr
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 
-pub mod analysis;
 pub mod circuit;
 pub mod extension;
 pub(crate) mod ops;

@@ -39,8 +39,6 @@ use tket::extension::bool::{bool_type, BoolOp};
 use super::futures::future_type;
 
 mod barrier;
-mod op_function_map;
-mod container;
 mod lower;
 use lower::pi_mul_f64;
 pub use lower::{check_lowered, lower_tk2_op, LowerTk2Error, LowerTketToQSystemPass};

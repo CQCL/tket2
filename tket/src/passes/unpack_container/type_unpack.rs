@@ -45,7 +45,7 @@ pub struct TypeUnpacker {
 }
 
 impl TypeUnpacker {
-    /// Create a new instance of the [TypeAnalyzer] for the given element type.
+    /// Create a new instance of the [TypeUnpacker] for the given element type.
     pub fn new(element_type: Type) -> Self {
         Self {
             element_type,
@@ -53,7 +53,7 @@ impl TypeUnpacker {
         }
     }
 
-    /// Create a new instance of the [TypeAnalyzer] specifically for qubits.
+    /// Create a new instance of the [TypeUnpacker] specifically for qubits.
     pub fn for_qubits() -> Self {
         Self::new(qb_t())
     }

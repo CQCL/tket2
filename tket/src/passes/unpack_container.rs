@@ -1,7 +1,10 @@
-//! Generic container unpacking and repacking operations for HUGR types.
-//!
-//! This module provides functionality to unpack container types (arrays, tuples)
-//! into their constituent elements and repack them back into their original structure.
+//! Utilities for inserting element extraction and reconstruction functions for
+//! container types like array and tuple.
+
+pub mod op_function_map;
+pub use op_function_map::OpFunctionMap;
+pub mod type_unpack;
+pub use type_unpack::TypeUnpacker;
 
 use hugr::{
     builder::{BuildError, Dataflow},
@@ -19,13 +22,11 @@ use hugr::{
         type_param::TypeParam, FuncValueType, PolyFuncTypeRV, SumType, Type, TypeArg, TypeBound,
         TypeRV,
     },
-    Hugr, Wire,
+    Wire,
 };
 use std::sync::{Arc, LazyLock};
 
-use tket::analysis::type_unpack::{array_args, TypeUnpacker};
-
-use crate::extension::qsystem::op_function_map::OpFunctionMap;
+use type_unpack::{array_args, is_opt_of};
 
 /// Invert the signature of a function type.
 fn invert_sig(sig: &PolyFuncTypeRV) -> PolyFuncTypeRV {
@@ -72,22 +73,22 @@ fn add_array_ops<AK: ArrayKind>(
 }
 
 /// Temporary extension name for barrier-specific operations.
-pub(super) const TEMP_UNPACK_EXT_NAME: hugr::hugr::IdentList =
+pub const TEMP_UNPACK_EXT_NAME: hugr::hugr::IdentList =
     hugr::hugr::IdentList::new_static_unchecked("__tket.barrier.temp");
 
 // Temporary operation names.
-pub(super) const UNPACK_OPT: OpName = OpName::new_static("option_unwrap");
-pub(super) const REPACK_OPT: OpName = OpName::new_static("option_tag");
-pub(super) const ARRAY_UNPACK: OpName = OpName::new_static("array_unpack");
-pub(super) const ARRAY_REPACK: OpName = OpName::new_static("array_repack");
-pub(super) const VARRAY_UNPACK: OpName = OpName::new_static("varray_unpack");
-pub(super) const VARRAY_REPACK: OpName = OpName::new_static("varray_repack");
-pub(super) const BARRAY_UNPACK: OpName = OpName::new_static("barray_unpack");
-pub(super) const BARRAY_REPACK: OpName = OpName::new_static("barray_repack");
-pub(super) const TUPLE_UNPACK: OpName = OpName::new_static("tuple_unpack");
-pub(super) const TUPLE_REPACK: OpName = OpName::new_static("tuple_repack");
+const UNPACK_OPT: OpName = OpName::new_static("option_unwrap");
+const REPACK_OPT: OpName = OpName::new_static("option_tag");
+const ARRAY_UNPACK: OpName = OpName::new_static("array_unpack");
+const ARRAY_REPACK: OpName = OpName::new_static("array_repack");
+const VARRAY_UNPACK: OpName = OpName::new_static("varray_unpack");
+const VARRAY_REPACK: OpName = OpName::new_static("varray_repack");
+const BARRAY_UNPACK: OpName = OpName::new_static("barray_unpack");
+const BARRAY_REPACK: OpName = OpName::new_static("barray_repack");
+const TUPLE_UNPACK: OpName = OpName::new_static("tuple_unpack");
+const TUPLE_REPACK: OpName = OpName::new_static("tuple_repack");
 
-pub static TEMP_UNPACK_EXT: LazyLock<Arc<Extension>> = LazyLock::new(|| {
+static TEMP_UNPACK_EXT: LazyLock<Arc<Extension>> = LazyLock::new(|| {
     Extension::new_arc(
         TEMP_UNPACK_EXT_NAME,
         hugr::extension::Version::new(0, 0, 0),
@@ -154,20 +155,25 @@ pub static TEMP_UNPACK_EXT: LazyLock<Arc<Extension>> = LazyLock::new(|| {
 /// This factory provides a generic framework for unpacking and repacking container types
 /// such as arrays, tuples, and option types. It uses lazy operation caching to avoid
 /// regenerating the same function definitions multiple times.
-pub struct ContainerOperationFactory {
+pub struct UnpackContainerBuilder {
     /// Function definitions for each instance of the operations.
-    pub(super) func_map: OpFunctionMap,
+    func_map: OpFunctionMap,
     /// Type analyzer for determining which types to unpack
     type_analyzer: TypeUnpacker,
 }
 
-impl ContainerOperationFactory {
+impl UnpackContainerBuilder {
     /// Create a new instance with a custom type analyzer.
     pub fn new(type_analyzer: TypeUnpacker) -> Self {
         Self {
             func_map: OpFunctionMap::new(),
             type_analyzer,
         }
+    }
+
+    /// Consume and return the internal operation-to-function mapping.
+    pub fn into_function_map(self) -> OpFunctionMap {
+        self.func_map
     }
 
     /// Gets a reference to the internal type analyzer
@@ -442,8 +448,6 @@ impl ContainerOperationFactory {
         ty: &Type,
         container_wire: Wire,
     ) -> Result<Vec<Wire>, BuildError> {
-        use tket::analysis::type_unpack::is_opt_of;
-
         let elem_ty = self.type_analyzer.element_type();
         // If the type is a qubit, return it directly
         if ty == elem_ty {
@@ -494,8 +498,6 @@ impl ContainerOperationFactory {
         ty: &Type,
         unpacked_wires: Vec<Wire>,
     ) -> Result<Wire, BuildError> {
-        use tket::analysis::type_unpack::is_opt_of;
-
         let elem_ty = self.type_analyzer.element_type();
         // If the type is a qubit, return the wire directly
         if ty == elem_ty {
@@ -536,10 +538,6 @@ impl ContainerOperationFactory {
         debug_assert!(unpacked_wires.len() == 1);
         Ok(unpacked_wires[0])
     }
-
-    pub fn into_function_map(self) -> impl Iterator<Item = (ExtensionOp, Hugr)> {
-        self.func_map.into_iter()
-    }
 }
 
 #[cfg(test)]
@@ -553,19 +551,18 @@ mod tests {
         HugrView,
     };
     use rstest::rstest;
-    use tket::analysis::type_unpack::TypeUnpacker;
 
     #[test]
     fn test_container_factory_creation() {
         let analyzer = TypeUnpacker::for_qubits();
-        let factory = ContainerOperationFactory::new(analyzer);
+        let factory = UnpackContainerBuilder::new(analyzer);
         assert_eq!(factory.func_map.len(), 0);
     }
 
     #[test]
     fn test_option_unwrap_wrap() -> Result<(), BuildError> {
         let analyzer = TypeUnpacker::for_qubits();
-        let factory = ContainerOperationFactory::new(analyzer);
+        let factory = UnpackContainerBuilder::new(analyzer);
         let option_qb_type = Type::from(option_type(qb_t()));
         let mut builder = DFGBuilder::new(Signature::new_endo(vec![option_qb_type]))?;
 
@@ -588,7 +585,7 @@ mod tests {
         #[case] repack_op: OpName,
     ) -> Result<(), BuildError> {
         let analyzer = TypeUnpacker::for_qubits();
-        let factory = ContainerOperationFactory::new(analyzer);
+        let factory = UnpackContainerBuilder::new(analyzer);
         let array_size = 2;
 
         // Create the specific array type
@@ -615,7 +612,7 @@ mod tests {
     #[test]
     fn test_tuple_unpack_repack() -> Result<(), BuildError> {
         let analyzer = TypeUnpacker::for_qubits();
-        let factory = ContainerOperationFactory::new(analyzer);
+        let factory = UnpackContainerBuilder::new(analyzer);
         let tuple_row = vec![qb_t(), bool_t()];
         let tuple_type = Type::new_tuple(tuple_row.clone());
 
@@ -634,7 +631,7 @@ mod tests {
     #[test]
     fn test_unpack_repack_row() -> Result<(), BuildError> {
         let analyzer = TypeUnpacker::for_qubits();
-        let factory = ContainerOperationFactory::new(analyzer);
+        let factory = UnpackContainerBuilder::new(analyzer);
         let types = vec![qb_t(), bool_t(), array_type(2, qb_t())];
         let mut builder = DFGBuilder::new(hugr::types::Signature::new_endo(types.clone()))?;
 
@@ -651,7 +648,7 @@ mod tests {
     fn test_unpack_repack_row_non_qubit() -> Result<(), BuildError> {
         // Use a TypeUnpacker that targets bools, not qubits
         let analyzer = TypeUnpacker::new(bool_t());
-        let factory = ContainerOperationFactory::new(analyzer);
+        let factory = UnpackContainerBuilder::new(analyzer);
         let types = vec![bool_t(), usize_t(), Array::ty(2, bool_t())];
         let mut builder = DFGBuilder::new(hugr::types::Signature::new_endo(types.clone()))?;
 

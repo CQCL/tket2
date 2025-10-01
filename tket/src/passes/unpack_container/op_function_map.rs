@@ -1,11 +1,12 @@
 //! Mapping from extension operation instances to function definitions
 //! that can be used to replace them.
 use hugr::{
-    algorithms::mangle_name,
+    algorithms::{mangle_name, replace_types::NodeTemplate, ReplaceTypes},
     builder::{BuildError, DataflowHugr, FunctionBuilder},
+    hugr::hugrmut::HugrMut,
     ops::{DataflowOpTrait, ExtensionOp},
     types::TypeArg,
-    Hugr, Wire,
+    Hugr, Node, Wire,
 };
 use indexmap::IndexMap;
 use std::{cell::RefCell, ops::Deref};
@@ -69,23 +70,43 @@ impl OpFunctionMap {
         Ok(())
     }
 
-    pub fn into_iter(self) -> impl Iterator<Item = (ExtensionOp, Hugr)> {
+    /// Return the number of stored functions
+    pub fn len(&self) -> usize {
+        self.map.borrow().len()
+    }
+
+    /// Return true if the map is empty
+    pub fn is_empty(&self) -> bool {
+        self.map.borrow().is_empty()
+    }
+
+    /// Consume the map and return an iterator over (operation, function) pairs
+    pub fn into_function_iter(self) -> impl Iterator<Item = (ExtensionOp, Hugr)> {
         self.map.into_inner().into_iter().map(|(k, v)| (k.0, v))
+    }
+
+    /// Register function replacements for all temporary operations.
+    /// Inserts function definitions in the given Hugr and
+    /// adds replacements to the given [`ReplaceTypes`] lowerer,
+    /// Which can be used to replace extension operations with calls to the
+    /// corresponding function definitions.
+    pub fn register_operation_replacements(
+        self,
+        hugr: &mut impl HugrMut<Node = Node>,
+        lowerer: &mut ReplaceTypes,
+    ) {
+        // Use the centralized cache for all operation replacements
+        for (op, func_def) in self.into_function_iter() {
+            let func_node = hugr
+                .insert_hugr(hugr.module_root(), func_def)
+                .inserted_entrypoint;
+            lowerer.replace_op(&op, NodeTemplate::Call(func_node, vec![]));
+        }
     }
 }
 
 impl Default for OpFunctionMap {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    impl super::OpFunctionMap {
-        /// Return the number of stored functions
-        pub fn len(&self) -> usize {
-            self.map.borrow().len()
-        }
     }
 }
