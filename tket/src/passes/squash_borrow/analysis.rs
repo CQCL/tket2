@@ -29,9 +29,6 @@ pub struct BorrowAnalysis<H: HugrView = hugr::Hugr> {
 /// The errors that can occur when running the borrow analysis pass.
 #[derive(Debug, Display, Error)]
 pub enum BorrowAnalysisError {
-    /// Attempting to borrow a non-linear type.
-    #[display("borrow types are not linear")]
-    NonLinearBorrowTy,
     /// Borrow op is not a dataflow op.
     #[display("expected dataflow op: {op}")]
     NodeNotDataflow {
@@ -44,15 +41,15 @@ pub enum BorrowAnalysisError {
     /// Borrow index is not copyable.
     #[display("non-copyable borrow index")]
     NonCopyableBorrowIndex,
-    /// Borrowed resource is not linear.
-    #[display("non-linear borrowed resource")]
-    NonLinearBorrowedResource,
+    /// Borrowed resource (array or element) is not linear.
+    #[display("non-linear borrow of element {borrowed_ty} from array {borrow_from_ty}")]
+    #[allow(missing_docs)]
+    NonLinearBorrowedResource {
+        borrowed_ty: Type, borrow_from_ty: Type
+    },
     /// Could not track resource, maybe non-const?
     #[display("could not track resource, maybe non-const?")]
     CouldNotTrackResource,
-    /// The borrowing index is not a constant.
-    #[display("borrowing index is not a constant")]
-    NonConstIndex,
 }
 
 /// Lifespan of a borrowed resource, represented as an interval on the resource
@@ -450,7 +447,11 @@ fn parse_borrow_signature(sig: &Signature) -> Result<(Port, Port, Port), BorrowA
     }
 
     if borrow_from_ty.copyable() || borrowed_ty.copyable() {
-        return Err(BorrowAnalysisError::NonLinearBorrowTy);
+        let (borrow_from_ty, borrowed_ty) = (borrow_from_ty.clone(), borrowed_ty.clone());
+        return Err(BorrowAnalysisError::NonLinearBorrowedResource {
+            borrow_from_ty,
+            borrowed_ty,
+        });
     }
 
     if sig.port_type(borrow_from_port_outgoing) != Some(borrow_from_ty)
@@ -481,7 +482,11 @@ fn parse_return_signature(sig: &Signature) -> Result<(Port, Port, Port), BorrowA
     }
 
     if borrow_from_ty.copyable() || borrowed_ty.copyable() {
-        return Err(BorrowAnalysisError::NonLinearBorrowTy);
+        let (borrow_from_ty, borrowed_ty) = (borrow_from_ty.clone(), borrowed_ty.clone());
+        return Err(BorrowAnalysisError::NonLinearBorrowedResource {
+            borrow_from_ty,
+            borrowed_ty,
+        });
     }
 
     if sig.port_type(OutgoingPort::from(0)) != Some(&borrow_from_ty)
