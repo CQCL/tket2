@@ -1,15 +1,16 @@
 //! Structures to keep track of pytket [`ElementId`][tket_json_rs::register::ElementId]s and
 //! their correspondence to wires in the hugr being defined.
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 
-use hugr::builder::{Dataflow as _, FunctionBuilder};
+use hugr::builder::{DFGBuilder, Dataflow as _};
 use hugr::ops::Value;
 use hugr::std_extensions::arithmetic::float_types::{float64_type, ConstF64};
 use hugr::types::Type;
 use hugr::{Hugr, Wire};
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
+use tket_json_rs::circuit_json::ImplicitPermutation;
 use tket_json_rs::register::ElementId as PytketRegister;
 
 use crate::extension::rotation::{rotation_type, ConstRotation};
@@ -100,7 +101,7 @@ pub struct TrackedWires {
     /// along with their types.
     value_wires: Vec<WireData>,
     /// List of wires corresponding to the parameters.
-    parameter_wires: Vec<Arc<LoadedParameter>>,
+    parameter_wires: Vec<LoadedParameter>,
 }
 
 impl TrackedWires {
@@ -141,7 +142,7 @@ impl TrackedWires {
     /// Return an iterator over the parameters.
     #[inline]
     pub fn iter_parameters(&self) -> impl Iterator<Item = &'_ LoadedParameter> + Clone + '_ {
-        self.parameter_wires.iter().map(|p| p.as_ref())
+        self.parameter_wires.iter()
     }
 
     /// Returns the types of the value wires.
@@ -327,10 +328,28 @@ pub(crate) struct WireTracker {
     /// An ordered set of parameters found in operation arguments, and added as
     /// new region inputs.
     parameters: IndexMap<String, LoadedParameter>,
+    /// Parameter inputs to the region with no associated variable.
+    ///
+    /// These will be reused as needed if new parameter names are found in the command arguments.
+    unused_parameter_inputs: VecDeque<LoadedParameter>,
     /// A list of input variables added to the hugr.
     ///
     /// Ordered according to their order in the function input.
     parameter_vars: IndexSet<String>,
+    /// A permutation of qubit registers in `latest_qubit_tracker` that we
+    /// expect to see at the output.
+    ///
+    /// This originates from pytket's `implicit_permutation` field.
+    ///
+    /// For a circuit with three qubit registers [q0, q1, q2] and an implicit
+    /// permutation {q0 -> q1, q1 -> q2, q2 -> q0}, `output_qubit_permutation`
+    /// will be {1 -> 0, 2 -> 1, 0 -> 2} and the output order will be [2, 0, 1].
+    /// That is, at position 0 of the output we'll see the register originally
+    /// named q2, at position 1 the register originally named q0, and so on.
+    ///
+    /// Registers outside the range of the array are not affected, and will
+    /// appear in the same order as they were added to `latest_qubit_tracker`.
+    output_qubit_permutation: Vec<usize>,
 }
 
 impl WireTracker {
@@ -345,17 +364,42 @@ impl WireTracker {
             qubit_wires: IndexMap::with_capacity(qubit_count),
             bit_wires: IndexMap::with_capacity(bit_count),
             parameters: IndexMap::new(),
+            unused_parameter_inputs: VecDeque::new(),
             parameter_vars: IndexSet::new(),
+            output_qubit_permutation: Vec::with_capacity(qubit_count),
         }
     }
 
     /// Closes the WireTracker.
     ///
-    /// Returns:
-    /// - A list of qubit and bit elements, in the order they were added.
-    /// - A list of input parameter added to the hugr, in the order they were added.
+    /// Returns a list of input parameter added to the hugr, in the order they
+    /// were added.
+    ///
+    /// For the ordered qubit and bit elements, see
+    /// [`WireTracker::known_pytket_qubits`] and
+    /// [`WireTracker::known_pytket_bits`].
     pub(super) fn finish(self) -> IndexSet<String> {
         self.parameter_vars
+    }
+
+    /// Set the output qubit permutation.
+    ///
+    /// This is used to reorder the qubit registers at the output, according to
+    /// pytket's implicit permutation.
+    pub(super) fn compute_output_permutation(&mut self, permutation: &Vec<ImplicitPermutation>) {
+        let mut reordered: BTreeMap<usize, usize> = BTreeMap::new();
+
+        let position = |id: &tket_json_rs::register::Qubit| {
+            let hash = RegisterHash::from(id);
+            self.latest_qubit_tracker.get_index_of(&hash).unwrap()
+        };
+
+        for ImplicitPermutation(input, output) in permutation {
+            let input_pos = position(input);
+            let output_pos = position(output);
+            reordered.insert(output_pos, input_pos);
+        }
+        self.output_qubit_permutation = reordered.values().copied().collect();
     }
 
     /// Returns a reference to the tracked qubit at the given index.
@@ -368,11 +412,17 @@ impl WireTracker {
         &self.bits[id.0]
     }
 
-    /// Returns the list of known pytket registers, in the order they were registered.
+    /// Returns the list of known pytket registers, in the order we expect to
+    /// see them at the output.
+    ///
+    /// This is the ordered they were registered, permuted according to
+    /// [`WireTracker::output_qubit_permutation`].
     pub(super) fn known_pytket_qubits(&self) -> impl Iterator<Item = &TrackedQubit> {
-        self.latest_qubit_tracker
-            .iter()
-            .map(|(_, &elem_id)| self.get_qubit(elem_id))
+        (0..self.latest_qubit_tracker.len()).map(|i| {
+            let i = self.output_qubit_permutation.get(i).copied().unwrap_or(i);
+            let (_, &elem_id) = self.latest_qubit_tracker.get_index(i).unwrap();
+            self.get_qubit(elem_id)
+        })
     }
 
     /// Returns the list of known pytket bit registers, in the order they were registered.
@@ -535,7 +585,7 @@ impl WireTracker {
         types: &[Type],
         qubit_args: &[TrackedQubit],
         bit_args: &[TrackedBit],
-        params: &[Arc<LoadedParameter>],
+        params: &[LoadedParameter],
     ) -> Result<TrackedWires, PytketDecodeError> {
         // We need to return a set of wires that contain all the arguments.
         //
@@ -623,8 +673,8 @@ impl WireTracker {
         })
     }
 
-    /// Loads the given parameter expression as a [`LoadedParameter`] in the
-    /// hugr.
+    /// Loads the given parameter half-turns expression as a [`LoadedParameter`]
+    /// in the hugr.
     ///
     /// - If the parameter is a known algebraic operation, adds the required op
     ///   and recurses on its inputs.
@@ -639,28 +689,36 @@ impl WireTracker {
     ///
     /// * `hugr` - The hugr to load the parameters to.
     /// * `param` - The parameter expression to load.
-    /// * `output_type` - Ensure the loaded parameter has the given type.
-    pub fn load_parameter(
+    /// * `type_hint` - A hint for the type of the parameter we want to load.
+    ///   This lets us decide between using [`ConstRotation`] and [`ConstF64`]
+    ///   for constants. The actual returned type may be different.
+    ///
+    /// # Panics
+    ///
+    /// If the hugr builder does not support adding input wires.
+    /// (That is, we're not building a FuncDefn or a DFG).
+    pub fn load_half_turns_parameter(
         &mut self,
-        hugr: &mut FunctionBuilder<&mut Hugr>,
+        hugr: &mut DFGBuilder<&mut Hugr>,
         param: &str,
-        output_type: Option<ParameterType>,
+        type_hint: Option<ParameterType>,
     ) -> LoadedParameter {
         /// Recursive parameter loading.
         ///
         /// `type_hint` is a hint for the type of the parameter we want to load.
         /// The actual returned type may be different.
         fn process(
-            hugr: &mut FunctionBuilder<&mut Hugr>,
+            hugr: &mut DFGBuilder<&mut Hugr>,
             input_params: &mut IndexMap<String, LoadedParameter>,
             param_vars: &mut IndexSet<String>,
+            unused_param_inputs: &mut VecDeque<LoadedParameter>,
             parsed: PytketParam,
             param: &str,
             type_hint: Option<ParameterType>,
         ) -> LoadedParameter {
             match parsed {
                 PytketParam::Constant(half_turns) => match type_hint {
-                    Some(ParameterType::FloatHalfTurns) => {
+                    Some(ParameterType::FloatHalfTurns) | Some(ParameterType::FloatRadians) => {
                         let value: Value = ConstF64::new(half_turns).into();
                         let wire = hugr.add_load_const(value);
                         LoadedParameter::float_half_turns(wire)
@@ -678,9 +736,10 @@ impl WireTracker {
                     LoadedParameter::rotation(wire)
                 }
                 PytketParam::InputVariable { name } => {
-                    // Special case for the name "pi": inserts a `ConstRotation(PI)` instead.
+                    // Special case for the name "pi": inserts a constant definition instead.
                     match (name, type_hint) {
-                        ("pi", Some(ParameterType::FloatHalfTurns)) => {
+                        ("pi", Some(ParameterType::FloatHalfTurns))
+                        | ("pi", Some(ParameterType::FloatRadians)) => {
                             let value: Value = ConstF64::new(std::f64::consts::PI).into();
                             let wire = hugr.add_load_const(value);
                             LoadedParameter::float_half_turns(wire)
@@ -695,8 +754,15 @@ impl WireTracker {
                             // Look it up in the input parameters to the circuit, and add a new float input if needed.
                             *input_params.entry(name.to_string()).or_insert_with(|| {
                                 param_vars.insert(name.to_string());
-                                let wire = hugr.add_input(rotation_type());
-                                LoadedParameter::rotation(wire)
+                                match unused_param_inputs.pop_front() {
+                                    Some(loaded) => loaded,
+                                    None => {
+                                        let wire = hugr
+                                            .add_input(rotation_type())
+                                            .expect("Must be building a FuncDefn or a DFG");
+                                        LoadedParameter::rotation(wire)
+                                    }
+                                }
                             })
                         }
                     }
@@ -706,8 +772,15 @@ impl WireTracker {
                     let input_wires = args
                         .into_iter()
                         .map(|arg| {
-                            let param =
-                                process(hugr, input_params, param_vars, arg, param, Some(param_ty));
+                            let param = process(
+                                hugr,
+                                input_params,
+                                param_vars,
+                                unused_param_inputs,
+                                arg,
+                                param,
+                                Some(param_ty),
+                            );
                             param.with_type(param_ty, hugr).wire()
                         })
                         .collect_vec();
@@ -721,19 +794,15 @@ impl WireTracker {
             }
         }
 
-        let loaded = process(
+        process(
             hugr,
             &mut self.parameters,
             &mut self.parameter_vars,
+            &mut self.unused_parameter_inputs,
             parse_pytket_param(param),
             param,
-            output_type,
-        );
-
-        match output_type {
-            Some(typ) => loaded.with_type(typ, hugr),
-            None => loaded,
-        }
+            type_hint,
+        )
     }
 
     /// Track a new wire, updating any tracked elements that are present in it.
@@ -777,20 +846,27 @@ impl WireTracker {
         Ok(())
     }
 
-    pub(crate) fn register_input_parameter(
+    /// Associate an input wire to the region with a parameter.
+    pub(super) fn register_input_parameter(
         &mut self,
-        wire: Wire,
+        loaded: LoadedParameter,
         param: String,
     ) -> Result<(), PytketDecodeError> {
-        let entry = self.parameters.entry(param);
+        let entry = self.parameters.entry(param.clone());
         if let indexmap::map::Entry::Occupied(_) = &entry {
             return Err(PytketDecodeErrorInner::DuplicatedParameter {
                 param: entry.key().clone(),
             }
             .into());
         }
-        entry.insert_entry(LoadedParameter::rotation(wire));
+        self.parameter_vars.insert(param);
+        entry.insert_entry(loaded);
         Ok(())
+    }
+
+    /// Track a parameter input to the region for which we don't have a variable name yet.
+    pub(super) fn register_unused_parameter_input(&mut self, loaded: LoadedParameter) {
+        self.unused_parameter_inputs.push_back(loaded);
     }
 }
 

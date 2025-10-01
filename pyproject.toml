@@ -6,15 +6,17 @@ members = ["tket-py", "tket-eccs", "tket-exts"]
 dev-dependencies = [
     "maturin >=1.7.0,<2",
     "pytest >=8.3.2,<9",
-    "pytest-cov >=5.0.0,<6",
+    "pytest-cov ~=7.0",
     "ruff >=0.6.2,<0.7",
-    "mypy >=1.11.1,<2",
+    "mypy >=1.17.1,<2",
     "hypothesis >=6.111.1,<7",
-    "graphviz >=0.20,<0.21",
-    "pre-commit >=3.8.0,<4",
+    "graphviz ~=0.20.0",
+    "pre-commit ~=4.3",
     "conan >= 2.0.0,<3",
     # Required to run `maturin develop`
-    "pip >=24",
+    "pip >=25",
+    # Pyyaml 0.6.0 makes setuptools fail. This ensures we're using a newer version.
+    "pyyaml >=6.0.2",
 ]
 
 prerelease = "explicit"

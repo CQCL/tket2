@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.12.7](https://github.com/CQCL/tket2/compare/tket-py-v0.12.6...tket-py-v0.12.7) (2025-09-12)
+
+
+### Bug Fixes
+
+* Add gpu extension to extensions reexposed by tket-py ([#1102](https://github.com/CQCL/tket2/issues/1102)) ([f826fc5](https://github.com/CQCL/tket2/commit/f826fc5ab81927d85aaea42a7c4e8fc9e88e55d8))
+* Add mypy ignore annotation ([#1103](https://github.com/CQCL/tket2/issues/1103)) ([9f16212](https://github.com/CQCL/tket2/commit/9f162127996856506db3ea20f7ff9a1c038fe0f2))
+
+
+### Documentation
+
+* add Python API docs ([#1087](https://github.com/CQCL/tket2/issues/1087)) ([e94b168](https://github.com/CQCL/tket2/commit/e94b16878328c6a63c276cd52f36e2c565fe0417))
+
+## [0.12.6](https://github.com/CQCL/tket2/compare/tket-py-v0.12.5...tket-py-v0.12.6) (2025-08-29)
+
+
+### Bug Fixes
+
+* Incorrect ZZMax decoding  from pytket ([#1083](https://github.com/CQCL/tket2/issues/1083)) ([4752663](https://github.com/CQCL/tket2/commit/47526636f3d09aa372bce8768bbd802cc51bbe6f))
+
+## [0.12.5](https://github.com/CQCL/tket2/compare/tket-py-v0.12.4...tket-py-v0.12.5) (2025-08-26)
+
+
+### Features
+
+* Capture pytket's output permutation explicitly in the hugr connectivity ([#1075](https://github.com/CQCL/tket2/issues/1075)) ([5fc9614](https://github.com/CQCL/tket2/commit/5fc96147b4aa830ca347834c7b3cf4a35ce91764))
+
 ## [0.12.4](https://github.com/CQCL/tket2/compare/tket-py-v0.12.3...tket-py-v0.12.4) (2025-08-25)
 
 

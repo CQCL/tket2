@@ -27,8 +27,7 @@ use tket_json_rs::circuit_json::{self, SerialCircuit};
 use unsupported_tracker::UnsupportedTracker;
 
 use super::{
-    OpConvertError, PytketEncodeError, METADATA_B_OUTPUT_REGISTERS, METADATA_OPGROUP,
-    METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
+    OpConvertError, PytketEncodeError, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_REGISTERS,
 };
 use crate::circuit::Circuit;
 use crate::serialize::pytket::config::PytketEncoderConfig;
@@ -102,18 +101,12 @@ impl<H: HugrView> PytketEncoderContext<H> {
         region: H::Node,
     ) -> Result<(), PytketEncodeError<H::Node>> {
         let (region, node_map) = circ.hugr().region_portgraph(region);
-        let io_nodes = circ.io_nodes();
-
         // TODO: Use weighted topological sort to try and explore unsupported
         // ops first (that is, ops with no available emitter in `self.config`),
         // to ensure we group them as much as possible.
         let mut topo = petgraph::visit::Topo::new(&region);
         while let Some(pg_node) = topo.next(&region) {
             let node = node_map.from_portgraph(pg_node);
-            if io_nodes.contains(&node) {
-                // I/O nodes are handled by `new` and `finish`.
-                continue;
-            }
             self.try_encode_node(node, circ)?;
         }
         Ok(())
@@ -776,6 +769,10 @@ impl<H: HugrView> PytketEncoderContext<H> {
                     .single_linked_output(node, call.called_function_port())
                     .expect("Function call must be linked to a function");
                 return self.emit_function_call(node, fn_node, circ);
+            }
+            OpType::Input(_) | OpType::Output(_) => {
+                // I/O nodes are handled by the container's encoder.
+                return Ok(EncodeStatus::Success);
             }
             _ => {}
         }

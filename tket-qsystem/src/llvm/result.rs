@@ -285,7 +285,6 @@ impl<'c, H: HugrView<Node = Node>, AL: ArrayLowering + Clone> ResultEmitter<'c, 
 }
 
 #[cfg(test)]
-#[allow(deprecated)] // TODO remove after switching to new array lowering
 mod test {
     use crate::extension::result::ResultOp;
     use crate::llvm::array_utils::DEFAULT_HEAP_ARRAY_LOWERING;

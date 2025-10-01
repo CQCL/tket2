@@ -16,6 +16,7 @@ use tket_json_rs::register;
 
 use tket::circuit::Circuit;
 use tket::serialize::pytket::TKETDecode;
+use tket::serialize::pytket::{DecodeOptions, EncodeOptions};
 
 use crate::extension::futures::FutureOpBuilder;
 use crate::extension::qsystem::QSystemOp;
@@ -116,7 +117,7 @@ fn compare_serial_circs(a: &SerialCircuit, b: &SerialCircuit) {
             // Special case for qsystem ops, where ZZMax does not exist.
             if command.op.op_type == tket_json_rs::OpType::ZZMax {
                 info.op_type = tket_json_rs::OpType::ZZPhase;
-                info.params = vec!["(pi) / (2)".to_string()];
+                info.params = vec!["0.5".to_string()];
             }
 
             info
@@ -196,15 +197,20 @@ fn json_roundtrip(
     let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), num_commands);
 
-    let circ: Circuit = ser.decode_with_config(qsystem_decoder_config()).unwrap();
+    let circ: Circuit = ser
+        .decode(DecodeOptions::new().with_config(qsystem_decoder_config()))
+        .unwrap();
     assert_eq!(circ.qubit_count(), num_qubits);
 
     if !has_tk1_ops {
         check_no_tk1_ops(&circ);
     }
 
-    let reser: SerialCircuit =
-        SerialCircuit::encode_with_config(&circ, qsystem_encoder_config()).unwrap();
+    let reser: SerialCircuit = SerialCircuit::encode(
+        &circ,
+        EncodeOptions::new().with_config(qsystem_encoder_config()),
+    )
+    .unwrap();
     validate_serial_circ(&reser);
     compare_serial_circs(&ser, &reser);
 }
@@ -215,9 +221,16 @@ fn json_roundtrip(
 #[rstest]
 #[case::native_gates(circ_qsystem_native_gates(), Signature::new_endo(vec![qb_t(), qb_t(), bool_t(), bool_t()]))]
 fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
-    let ser: SerialCircuit =
-        SerialCircuit::encode_with_config(&circ, qsystem_encoder_config()).unwrap();
-    let deser: Circuit = ser.decode_with_config(qsystem_decoder_config()).unwrap();
+    use tket::serialize::pytket::EncodeOptions;
+
+    let ser: SerialCircuit = SerialCircuit::encode(
+        &circ,
+        EncodeOptions::new().with_config(qsystem_encoder_config()),
+    )
+    .unwrap();
+    let deser: Circuit = ser
+        .decode(DecodeOptions::new().with_config(qsystem_decoder_config()))
+        .unwrap();
 
     let deser_sig = deser.circuit_signature();
     assert_eq!(
@@ -231,7 +244,11 @@ fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
         &decoded_sig, &deser_sig
     );
 
-    let reser = SerialCircuit::encode_with_config(&deser, qsystem_encoder_config()).unwrap();
+    let reser = SerialCircuit::encode(
+        &deser,
+        EncodeOptions::new().with_config(qsystem_encoder_config()),
+    )
+    .unwrap();
     validate_serial_circ(&reser);
     compare_serial_circs(&ser, &reser);
 }

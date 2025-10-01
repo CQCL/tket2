@@ -4,6 +4,7 @@
 use rstest::{fixture, rstest};
 use tket::optimiser::badger::BadgerOptions;
 use tket::optimiser::{BadgerOptimiser, ECCBadgerOptimiser};
+use tket::serialize::pytket::DecodeOptions;
 use tket::serialize::TKETDecode;
 use tket::Circuit;
 use tket_json_rs::circuit_json::SerialCircuit;
@@ -12,6 +13,7 @@ use tket_json_rs::circuit_json::SerialCircuit;
 ///
 /// This is the complete set of ECCs for 2-qubit circuits with up to
 /// 4 gates, using the NAM gateset (CX, Rz, H).
+///
 #[fixture]
 fn nam_4_2() -> ECCBadgerOptimiser {
     BadgerOptimiser::default_with_eccs_json_file("../test_files/eccs/nam_4_2.json").unwrap()
@@ -49,7 +51,7 @@ fn simple_circ() -> Circuit {
         "qubits": [["q", [0]], ["q", [1]], ["q", [2]]]
     }"#;
     let ser: SerialCircuit = serde_json::from_str(json).unwrap();
-    ser.decode().unwrap()
+    ser.decode(DecodeOptions::new()).unwrap()
 }
 
 #[rstest]

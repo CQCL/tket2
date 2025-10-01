@@ -1,6 +1,6 @@
 [project]
 name = "tket"
-version = "0.12.4"
+version = "0.12.7"
 requires-python = ">=3.10"
 description = "Quantinuum's TKET Quantum Compiler"
 license = { file = "LICENCE" }
@@ -30,7 +30,7 @@ dependencies = [
     'hugr ~= 0.13.0',
     "pytket>=1.34,<3",
     'tket_eccs ~= 0.5.1',
-    'tket_exts ~= 0.10.1',
+    'tket_exts >= 0.10.1, <0.13',
 ]
 
 [tool.uv.sources]
@@ -44,6 +44,14 @@ repository = "https://github.com/CQCL/tket2/tree/main/tket-py"
 [build-system]
 requires = ["maturin~=1.7"]
 build-backend = "maturin"
+
+[dependency-groups]
+docs = [
+    "furo>=2024.8.6",
+    "myst-nb>=1.1.2",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-basic-ng>=1.0.0b2",
+]
 
 [tool.maturin]
 # Make sure to copy any changes to the root `pyproject.toml` config too.

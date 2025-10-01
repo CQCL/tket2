@@ -112,7 +112,6 @@ impl<AL: ArrayLowering> DebugCodegenExtension<AL> {
 }
 
 #[cfg(test)]
-#[allow(deprecated)] // TODO remove after switching to new array lowering
 mod test {
     use tket::extension::debug::StateResult;
 

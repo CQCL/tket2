@@ -2,9 +2,13 @@
 use hugr::algorithms::replace_types::{NodeTemplate, ReplaceTypesError, ReplacementOptions};
 use hugr::algorithms::{ComposablePass, ReplaceTypes};
 use hugr::builder::{Container, DFGBuilder};
+use hugr::extension::prelude::bool_t;
+use hugr::extension::simple_op::MakeRegisteredOp;
 use hugr::types::{Signature, Term};
 use hugr::{hugr::hugrmut::HugrMut, Node};
 use tket::extension::guppy::{DROP_OP_NAME, GUPPY_EXTENSION};
+
+use crate::extension::futures::{future_type, FutureOp, FutureOpDef};
 
 /// A pass that lowers "drop" ops from [GUPPY_EXTENSION]
 #[derive(Default, Debug, Clone)]
@@ -18,6 +22,30 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for LowerDropsPass {
 
     fn run(&self, hugr: &mut H) -> Result<Self::Result, Self::Error> {
         let mut rt = ReplaceTypes::default();
+
+        // future(bool) is not in the default linearizer handler so we add it here.
+        // TODO: Create ReplaceTypes with future(bool) linearized by default to avoid
+        // code duplication with ReplaceBools pass.
+        let dup_op = FutureOp {
+            op: FutureOpDef::Dup,
+            typ: bool_t(),
+        }
+        .to_extension_op()
+        .unwrap();
+        let free_op = FutureOp {
+            op: FutureOpDef::Free,
+            typ: bool_t(),
+        }
+        .to_extension_op()
+        .unwrap();
+        rt.linearizer()
+            .register_simple(
+                future_type(bool_t()).as_extension().unwrap().clone(),
+                NodeTemplate::SingleOp(dup_op.into()),
+                NodeTemplate::SingleOp(free_op.into()),
+            )
+            .unwrap();
+
         rt.replace_parametrized_op_with(
             GUPPY_EXTENSION.get_op(DROP_OP_NAME.as_str()).unwrap(),
             |targs| {

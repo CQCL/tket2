@@ -4,17 +4,19 @@ mod param;
 mod tracked_elem;
 mod wires;
 
+use hugr::hugr::hugrmut::HugrMut;
 pub use param::{LoadedParameter, ParameterType};
 pub use tracked_elem::{TrackedBit, TrackedQubit};
 pub use wires::TrackedWires;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use hugr::builder::{BuildHandle, Container, Dataflow, DataflowSubContainer, FunctionBuilder};
+use hugr::builder::{
+    BuildHandle, Container, DFGBuilder, Dataflow, DataflowSubContainer, FunctionBuilder,
+};
 use hugr::extension::prelude::{bool_t, qb_t};
-use hugr::ops::handle::{DataflowOpID, FuncID, NodeHandle};
-use hugr::ops::{OpParent, OpTrait, OpType};
+use hugr::ops::handle::{DataflowOpID, NodeHandle};
+use hugr::ops::{OpParent, OpTrait, OpType, Value, DFG};
 use hugr::types::{Signature, Type, TypeRow};
 use hugr::{Hugr, HugrView, Node, OutgoingPort, Wire};
 use tracked_elem::{TrackedBitId, TrackedQubitId};
@@ -23,17 +25,17 @@ use itertools::Itertools;
 use serde_json::json;
 use tket_json_rs::circuit_json;
 use tket_json_rs::circuit_json::SerialCircuit;
-use tket_json_rs::register;
 
 use super::{
-    PytketDecodeError, METADATA_B_OUTPUT_REGISTERS, METADATA_B_REGISTERS,
-    METADATA_INPUT_PARAMETERS, METADATA_PHASE, METADATA_Q_OUTPUT_REGISTERS, METADATA_Q_REGISTERS,
+    PytketDecodeError, METADATA_B_REGISTERS, METADATA_INPUT_PARAMETERS, METADATA_PHASE,
+    METADATA_Q_REGISTERS,
 };
 use crate::extension::rotation::rotation_type;
 use crate::serialize::pytket::config::PytketDecoderConfig;
 use crate::serialize::pytket::decoder::wires::WireTracker;
 use crate::serialize::pytket::extension::{build_opaque_tket_op, RegisterCount};
-use crate::serialize::pytket::PytketDecodeErrorInner;
+use crate::serialize::pytket::{DecodeInsertionTarget, PytketDecodeErrorInner};
+use crate::TketOp;
 
 /// State of the tket circuit being decoded.
 ///
@@ -41,7 +43,7 @@ use crate::serialize::pytket::PytketDecodeErrorInner;
 #[derive(Debug)]
 pub struct PytketDecoderContext<'h> {
     /// The Hugr being built.
-    pub builder: FunctionBuilder<&'h mut Hugr>,
+    pub builder: DFGBuilder<&'h mut Hugr>,
     /// A tracker keeping track of the generated wires and their corresponding types.
     pub(super) wire_tracker: WireTracker,
     /// Configuration for decoding commands.
@@ -91,15 +93,16 @@ impl<'h> PytketDecoderContext<'h> {
     pub(super) fn new(
         serialcirc: &SerialCircuit,
         hugr: &'h mut Hugr,
+        target: DecodeInsertionTarget,
         fn_name: Option<String>,
         signature: Option<Signature>,
         input_params: impl IntoIterator<Item = String>,
         config: impl Into<Arc<PytketDecoderConfig>>,
     ) -> Result<Self, PytketDecodeError> {
         let config: Arc<PytketDecoderConfig> = config.into();
-        let num_qubits = serialcirc.qubits.len();
-        let num_bits = serialcirc.bits.len();
         let signature = signature.unwrap_or_else(|| {
+            let num_qubits = serialcirc.qubits.len();
+            let num_bits = serialcirc.bits.len();
             let types: TypeRow = [vec![qb_t(); num_qubits], vec![bool_t(); num_bits]]
                 .concat()
                 .into();
@@ -108,8 +111,20 @@ impl<'h> PytketDecoderContext<'h> {
         let name = fn_name
             .or_else(|| serialcirc.name.clone())
             .unwrap_or_default();
-        let mut dfg: FunctionBuilder<&mut Hugr> =
-            FunctionBuilder::with_hugr(hugr, name, signature.clone()).unwrap();
+        let mut dfg: DFGBuilder<&mut Hugr> = match target {
+            DecodeInsertionTarget::Function => {
+                FunctionBuilder::with_hugr(hugr, name, signature.clone())
+                    .unwrap()
+                    .into_dfg_builder()
+            }
+            DecodeInsertionTarget::Region { parent } => {
+                let op = DFG {
+                    signature: signature.clone(),
+                };
+                let dfg = hugr.add_node_with_parent(parent, op);
+                DFGBuilder::create_with_io(hugr, dfg, signature.clone()).unwrap()
+            }
+        };
 
         Self::init_metadata(&mut dfg, serialcirc);
         let wire_tracker = Self::init_wire_tracker(
@@ -136,51 +151,30 @@ impl<'h> PytketDecoderContext<'h> {
 
     /// Store the serialised circuit information as HUGR metadata,
     /// so it can be reused later when re-encoding the circuit.
-    fn init_metadata(dfg: &mut FunctionBuilder<&mut Hugr>, serialcirc: &SerialCircuit) {
+    fn init_metadata(dfg: &mut DFGBuilder<&mut Hugr>, serialcirc: &SerialCircuit) {
         // Metadata. The circuit requires "name", and we store other things that
         // should pass through the serialization roundtrip.
         dfg.set_metadata(METADATA_PHASE, json!(serialcirc.phase));
         dfg.set_metadata(METADATA_Q_REGISTERS, json!(serialcirc.qubits));
         dfg.set_metadata(METADATA_B_REGISTERS, json!(serialcirc.bits));
-
-        // Compute the output register reordering, and store it in the metadata.
-        //
-        // The `implicit_permutation` field is a dictionary mapping input
-        // registers to output registers on the same path.
-        //
-        // Here we store an ordered list showing the order in which the input
-        // registers appear in the output.
-        //
-        // For a circuit with three qubit registers 0, 1, 2 and an implicit
-        // permutation {0 -> 1, 1 -> 2, 2 -> 0}, `output_to_input` will be
-        // {1 -> 0, 2 -> 1, 0 -> 2} and the output order will be [2, 0, 1].
-        // That is, at position 0 of the output we'll see the register originally
-        // named 2, at position 1 the register originally named 0, and so on.
-        let mut output_qubits = Vec::with_capacity(serialcirc.qubits.len());
-        let mut output_bits = Vec::with_capacity(serialcirc.bits.len());
-        let output_to_input: HashMap<register::ElementId, register::ElementId> = serialcirc
-            .implicit_permutation
-            .iter()
-            .map(|p| (p.1.clone().id, p.0.clone().id))
-            .collect();
-        for qubit in &serialcirc.qubits {
-            // For each output position, find the input register that should be there.
-            output_qubits.push(output_to_input.get(&qubit.id).unwrap_or(&qubit.id).clone());
-        }
-        for bit in &serialcirc.bits {
-            // For each output position, find the input register that should be there.
-            output_bits.push(output_to_input.get(&bit.id).unwrap_or(&bit.id).clone());
-        }
-        dfg.set_metadata(METADATA_Q_OUTPUT_REGISTERS, json!(output_qubits));
-        dfg.set_metadata(METADATA_B_OUTPUT_REGISTERS, json!(output_bits));
     }
 
     /// Initialize the wire tracker with the input wires.
     ///
-    /// Utility method for [`PytketDecoderContext::new_arc`].
+    /// Checks that the signature matches the expected number of qubits, bits,
+    /// and parameters. See
+    /// [`DecodeOptions::signature`][super::DecodeOptions::signature] for more
+    /// details.
+    ///
+    /// Utility method for [`PytketDecoderContext::new`].
+    ///
+    /// # Panics
+    ///
+    /// If the dfg builder does not support adding input wires.
+    /// (That is, we're not building a FuncDefn or a DFG).
     fn init_wire_tracker(
         serialcirc: &SerialCircuit,
-        dfg: &mut FunctionBuilder<&mut Hugr>,
+        dfg: &mut DFGBuilder<&mut Hugr>,
         input_types: &TypeRow,
         input_params: impl IntoIterator<Item = String>,
         config: &PytketDecoderConfig,
@@ -200,7 +194,6 @@ impl<'h> PytketDecoderContext<'h> {
             .iter()
             .map(|bit| TrackedBit::new(TrackedBitId(0), Arc::new(bit.id.clone())));
         let mut added_inputs_count = RegisterCount::default();
-        // TODO: Check that we have enough bits and qubits to match the signature.
         for (wire, ty) in dfg.input_wires().zip(input_types.iter()) {
             let elem_counts = config.type_to_pytket(ty).unwrap_or_default();
 
@@ -211,7 +204,9 @@ impl<'h> PytketDecoderContext<'h> {
 
             let wire_qubits = qubits.by_ref().take(elem_counts.qubits).collect_vec();
             let wire_bits = bits.by_ref().take(elem_counts.bits).collect_vec();
-            if wire_qubits.len() != elem_counts.qubits || wire_bits.len() != elem_counts.bits {
+            // Error out if the signature inputs has more qubits than the ones defined in the circuit.
+            // We ignore additional bits, and leave them disconnected.
+            if wire_qubits.len() != elem_counts.qubits {
                 let expected_count: RegisterCount = input_types
                     .iter()
                     .map(|t| config.type_to_pytket(t).unwrap_or_default())
@@ -235,34 +230,39 @@ impl<'h> PytketDecoderContext<'h> {
                     }
                     .wrap());
                 }
-                let Some(param) = input_params.next() else {
-                    return Err(PytketDecodeErrorInner::MissingParametersInInput {
-                        num_params_given: added_inputs_count.params,
-                    }
-                    .wrap());
+                let loaded = if ty == &rotation_type() {
+                    LoadedParameter::rotation(wire)
+                } else {
+                    LoadedParameter::float_half_turns(wire)
                 };
-                wire_tracker.register_input_parameter(wire, param)?;
+                match input_params.next() {
+                    Some(param) => wire_tracker.register_input_parameter(loaded, param)?,
+                    None => wire_tracker.register_unused_parameter_input(loaded),
+                };
             }
 
             added_inputs_count += elem_counts;
         }
 
-        // Insert any remaining parameters as new inputs
+        // Insert any remaining named parameters as new inputs
         for param in input_params {
-            let wire = dfg.add_input(rotation_type());
-            wire_tracker.register_input_parameter(wire, param)?;
+            let wire = dfg
+                .add_input(rotation_type())
+                .expect("Must be building a FuncDefn or a DFG");
+            wire_tracker.register_input_parameter(LoadedParameter::rotation(wire), param)?;
         }
 
-        if qubits.next().is_some() || bits.next().is_some() {
-            return Err(PytketDecodeErrorInner::InvalidInputSignature {
-                input_types: input_types.iter().map(|t| t.to_string()).collect(),
-                expected_qubits: num_qubits,
-                expected_bits: num_bits,
-                circ_qubits: serialcirc.qubits.len(),
-                circ_bits: serialcirc.bits.len(),
-            }
-            .wrap());
+        // Any additional qubits or bits required by the circuit get initialized to |0> / false.
+        for q in qubits {
+            let q_wire = dfg.add_dataflow_op(TketOp::QAlloc, []).unwrap().out_wire(0);
+            wire_tracker.track_wire(q_wire, q.ty(), [q], [])?;
         }
+        for b in bits {
+            let b_wire = dfg.add_load_value(Value::false_val());
+            wire_tracker.track_wire(b_wire, b.ty(), [], [b])?;
+        }
+
+        wire_tracker.compute_output_permutation(&serialcirc.implicit_permutation);
 
         Ok(wire_tracker)
     }
@@ -274,7 +274,7 @@ impl<'h> PytketDecoderContext<'h> {
     ///
     /// The original Hugr entrypoint is _not_ modified, it must be set by the
     /// caller if required.
-    pub(super) fn finish(mut self) -> Result<BuildHandle<FuncID<true>>, PytketDecodeError> {
+    pub(super) fn finish(mut self) -> Result<Node, PytketDecodeError> {
         // Order the final wires according to the serial circuit register order.
         let qubits = self
             .wire_tracker
@@ -325,9 +325,11 @@ impl<'h> PytketDecoderContext<'h> {
             );
         }
 
-        self.builder
+        Ok(self
+            .builder
             .finish_with_outputs(output_wires)
-            .map_err(PytketDecodeError::custom)
+            .map_err(PytketDecodeError::custom)?
+            .node())
     }
 
     /// Decode a list of pytket commands.
@@ -357,10 +359,10 @@ impl<'h> PytketDecoderContext<'h> {
         let (qubits, bits) = self.wire_tracker.pytket_args_to_tracked_elems(args)?;
 
         // Collect the parameters used in the command.
-        let params: Vec<Arc<LoadedParameter>> = match &op.params {
+        let params: Vec<LoadedParameter> = match &op.params {
             Some(params) => params
                 .iter()
-                .map(|v| self.load_parameter(v.as_str()))
+                .map(|v| self.load_half_turns(v.as_str()))
                 .collect_vec(),
             None => Vec::new(),
         };
@@ -375,6 +377,11 @@ impl<'h> PytketDecoderContext<'h> {
             }
         }
         Ok(())
+    }
+
+    /// Returns the configuration used by the decoder.
+    pub fn config(&self) -> &Arc<PytketDecoderConfig> {
+        &self.config
     }
 }
 
@@ -397,13 +404,13 @@ impl<'h> PytketDecoderContext<'h> {
     /// * `qubit_args` - The list of tracked qubits we require in the wires.
     /// * `bit_args` - The list of tracked bits we require in the wire.
     /// * `params` - The list of parameters to load to wires. See
-    ///   [`PytketDecoderContext::load_parameter`] for more details.
+    ///   [`PytketDecoderContext::load_half_turns`] for more details.
     pub fn find_typed_wires(
         &self,
         types: &[Type],
         qubit_args: &[TrackedQubit],
         bit_args: &[TrackedBit],
-        params: &[Arc<LoadedParameter>],
+        params: &[LoadedParameter],
     ) -> Result<TrackedWires, PytketDecodeError> {
         self.wire_tracker
             .find_typed_wires(&self.config, types, qubit_args, bit_args, params)
@@ -447,7 +454,7 @@ impl<'h> PytketDecoderContext<'h> {
         op: impl Into<OpType>,
         qubits: &[TrackedQubit],
         bits: &[TrackedBit],
-        params: &[Arc<LoadedParameter>],
+        params: &[LoadedParameter],
     ) -> Result<BuildHandle<DataflowOpID>, PytketDecodeError> {
         let op: OpType = op.into();
         let op_name = op.to_string();
@@ -593,25 +600,29 @@ impl<'h> PytketDecoderContext<'h> {
         Ok(())
     }
 
-    /// Loads the given parameter expression as a [`LoadedParameter`] in the hugr.
+    /// Loads a half-turns expression as a [`LoadedParameter`] in the hugr.
     ///
     /// - If the parameter is a known algebraic operation, adds the required op and recurses on its inputs.
     /// - If the parameter is a constant, a constant definition is added to the Hugr.
     /// - If the parameter is a variable, adds a new `rotation` input to the region.
     /// - If the parameter is a sympy expressions, adds it as a [`SympyOpDef`][crate::extension::sympy::SympyOpDef] black box.
-    pub fn load_parameter(&mut self, param: &str) -> Arc<LoadedParameter> {
-        Arc::new(
-            self.wire_tracker
-                .load_parameter(&mut self.builder, param, None),
-        )
+    pub fn load_half_turns(&mut self, param: &str) -> LoadedParameter {
+        self.wire_tracker
+            .load_half_turns_parameter(&mut self.builder, param, None)
     }
 
-    /// Loads the given parameter expression as a [`LoadedParameter`] in the hugr, and converts it to the requested type and unit.
+    /// Loads a half-turns expression as a [`LoadedParameter`] in the hugr, and
+    /// converts it to the required parameter type.
     ///
-    /// See [`PytketDecoderContext::load_parameter`] for more details.
-    pub fn load_parameter_with_type(&mut self, param: &str, typ: ParameterType) -> LoadedParameter {
+    /// See [`PytketDecoderContext::load_half_turns`] for more details.
+    pub fn load_half_turns_with_type(
+        &mut self,
+        param: &str,
+        typ: ParameterType,
+    ) -> LoadedParameter {
         self.wire_tracker
-            .load_parameter(&mut self.builder, param, Some(typ))
+            .load_half_turns_parameter(&mut self.builder, param, Some(typ))
+            .with_type(typ, &mut self.builder)
     }
 }
 

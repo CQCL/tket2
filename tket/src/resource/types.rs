@@ -69,39 +69,12 @@ impl Position {
 
 /// A value associated with a dataflow port, identified either by a resource ID
 /// (for linear values) or by its wire (for copyable values).
-///
-/// This can currently be converted to and from [`hugr::CircuitUnit`], but
-/// linear wires are assigned to resources with typed resource IDs instead of
-/// integers.
-///
-/// Equivalence with [`hugr::CircuitUnit`] is not guaranteed in the future: we
-/// may expand expressivity, e.g. identifying copyable units by their ASTs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CircuitUnit<N: HugrNode> {
     /// A linear resource.
     Resource(ResourceId),
     /// A copyable value.
     Copyable(Wire<N>),
-}
-
-impl<N: HugrNode> From<CircuitUnit<N>> for hugr::CircuitUnit<N> {
-    fn from(value: CircuitUnit<N>) -> Self {
-        match value {
-            CircuitUnit::Resource(resource_id) => Self::Linear(resource_id.as_usize()),
-            CircuitUnit::Copyable(wire) => Self::Wire(wire),
-        }
-    }
-}
-
-impl<N: HugrNode> From<hugr::CircuitUnit<N>> for CircuitUnit<N> {
-    fn from(value: hugr::CircuitUnit<N>) -> Self {
-        match value {
-            hugr::CircuitUnit::Wire(wire) => CircuitUnit::Copyable(wire),
-            hugr::CircuitUnit::Linear(resource_id) => {
-                CircuitUnit::Resource(ResourceId::new(resource_id))
-            }
-        }
-    }
 }
 
 impl<N: HugrNode> CircuitUnit<N> {
@@ -220,7 +193,7 @@ impl<T> PortMap<T> {
 
 /// Allocator for ResourceIds that ensures they are assigned in increasing
 /// order.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ResourceAllocator {
     next_id: usize,
 }
@@ -228,7 +201,7 @@ pub struct ResourceAllocator {
 impl ResourceAllocator {
     /// Create a new ResourceAllocator starting from ID 0.
     pub fn new() -> Self {
-        Self { next_id: 0 }
+        Self::default()
     }
 
     /// Allocate the next available ResourceId.
@@ -236,11 +209,5 @@ impl ResourceAllocator {
         let id = ResourceId::new(self.next_id);
         self.next_id += 1;
         id
-    }
-}
-
-impl Default for ResourceAllocator {
-    fn default() -> Self {
-        Self::new()
     }
 }

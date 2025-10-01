@@ -6,20 +6,17 @@
 //!
 //! # Overview
 //!
-//! HUGR has a notion of "Value": the data that corresponds to a wire within a
-//! dataflow graph. It further has a notion of "linear value" a.k.a non-copyable
-//! value: a value that cannot be copied or discarded (implicitly).
-//!
 //! As far as HUGR is concerned, a linear value (or any value, for that matter)
-//! is born at an op's output and dies at the next op's input. TKET introduces
-//! the notion of "Resource" to extend the lifetime of a linear value over
-//! multiple ops.
+//! is created at an op's output and destroyed at the next op's input. TKET
+//! introduces the notion of "Resource" to extend the lifetime of a linear value
+//! over multiple ops.
 //!
-//! If a linear value appears both in an op's input and output, we say that it
-//! is "resource-preserving". Using [`ResourceFlow`], we can track resources
-//! as they "flow" through multiple operations. The chains of
-//! resource-preserving ops acting on a same resource form a so-called resource
-//! path.
+//! Every linear value is associated with a resource. If a linear value passed
+//! as input to an op is also returned by the op as an output, then both input
+//! and output values are associated with the same resource. We say that the op
+//! "preserves" the resource. Using [`ResourceFlow`], we can track resources as
+//! they "flow" through multiple operations. The chains of resource-preserving
+//! ops acting on a same resource form a so-called resource path.
 //!
 //! # Resources and Copyable Values
 //!
@@ -153,6 +150,7 @@ mod tests {
     #[case(4, true, false)]
     #[case(4, false, true)]
     #[case(4, true, true)]
+    #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
     fn test_resource_scope_creation(
         #[case] n_qubits: usize,
         #[case] add_rz: bool,

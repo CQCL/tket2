@@ -14,6 +14,7 @@ pub use command::{Command, CommandIterator};
 pub use hash::CircuitHash;
 use hugr::extension::prelude::{NoopDef, TupleOpDef};
 use hugr::extension::simple_op::MakeOpDef;
+use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::hugr::views::{ExtractionResult, SiblingSubgraph};
 use hugr::ops::handle::DataflowParentID;
 use itertools::Either::{Left, Right};
@@ -345,12 +346,12 @@ impl<T: HugrView<Node = Node>> Circuit<T> {
         Ok(circ)
     }
 
-    /// The subgraph containing the entire circuit.
-    pub fn subgraph(&self) -> SiblingSubgraph
+    /// Construct the subgraph containing the entire circuit.
+    pub fn subgraph(&self) -> Result<SiblingSubgraph, InvalidSubgraph>
     where
         T: Clone,
     {
-        SiblingSubgraph::try_new_dataflow_subgraph::<_, DataflowParentID>(self.hugr()).unwrap()
+        SiblingSubgraph::try_new_dataflow_subgraph::<_, DataflowParentID>(self.hugr())
     }
 
     /// Compute the cost of the circuit based on a per-operation cost function.
@@ -665,6 +666,7 @@ mod tests {
     use super::*;
     use crate::extension::rotation::ConstRotation;
     use crate::serialize::load_tk1_json_str;
+    use crate::serialize::pytket::DecodeOptions;
     use crate::utils::build_simple_circuit;
     use crate::TketOp;
 
@@ -683,7 +685,7 @@ mod tests {
             ],
             "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
         }"#,
-            None,
+            DecodeOptions::new(),
         )
         .unwrap()
     }
