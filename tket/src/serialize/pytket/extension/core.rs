@@ -39,7 +39,9 @@ impl PytketDecoder for CoreDecoder {
     ) -> Result<DecodeStatus, PytketDecodeError> {
         match (op.op_type, &op.op_box) {
             (PytketOptype::CircBox, Some(OpBox::CircBox { id: _id, circuit })) => {
-                // We have no way to distinguish between input and output bits in the circuit box, so we assume all bits are outputs here.
+                // We have no way to distinguish between input and output bits
+                // in the circuit box, so we assume all bits are both inputs and
+                // outputs here.
                 let circ_inputs: Vec<Type> = itertools::repeat_n(qb_t(), qubits.len())
                     .chain(itertools::repeat_n(bool_t(), bits.len()))
                     .chain(itertools::repeat_n(rotation_type(), params.len()))

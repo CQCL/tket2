@@ -459,8 +459,10 @@ impl<'h> PytketDecoderContext<'h> {
     ///
     /// # Errors
     ///
-    /// - [`PytketDecodeErrorInner::NotEnoughPytketRegisters`] if the register
-    ///   count required to encode the node does not match the ones provided.
+    /// - [`PytketDecodeErrorInner::NotEnoughInputRegisters`] if the register
+    ///   count required to encode the node inputs does not match the ones provided.
+    /// - [`PytketDecodeErrorInner::NotEnoughOutputRegisters`] if the register
+    ///   count required to encode the node outputs does not match the ones provided.
     /// - [`PytketDecodeErrorInner::OutdatedQubit`] if a qubit in `qubits` was marked as outdated.
     /// - [`PytketDecodeErrorInner::OutdatedBit`] if a bit in `bits` was marked as outdated.
     /// - [`PytketDecodeErrorInner::UnexpectedInputType`] if a type in the node's signature cannot be mapped to a [`RegisterCount`]
