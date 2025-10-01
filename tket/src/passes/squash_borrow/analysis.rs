@@ -421,6 +421,9 @@ impl<'a, 'h, H: HugrView> ResourceFlow<&'h H> for HandleBorrowReturn<'a, H> {
 fn parse_borrow_signature<N: HugrNode>(
     sig: &Signature,
 ) -> Result<(Port, Port, Port), BorrowAnalysisError<N>> {
+    if sig.input_count() != 2 || sig.output_count() != 2 {
+        return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
+    }
     let borrow_from_port = IncomingPort::from(0);
     let borrow_index_port = IncomingPort::from(1);
     let borrowed_port = OutgoingPort::from(0);
@@ -443,10 +446,7 @@ fn parse_borrow_signature<N: HugrNode>(
         });
     }
 
-    if sig.port_type(borrow_from_port_outgoing) != Some(borrow_from_ty)
-        || sig.input_count() != 2
-        || sig.output_count() != 2
-    {
+    if sig.port_type(borrow_from_port_outgoing) != Some(borrow_from_ty) {
         return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
     }
 
@@ -460,9 +460,15 @@ fn parse_borrow_signature<N: HugrNode>(
 fn parse_return_signature<N: HugrNode>(
     sig: &Signature,
 ) -> Result<(Port, Port, Port), BorrowAnalysisError<N>> {
+    if sig.input_count() != 3 || sig.output_count() != 1 {
+        return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
+    }
+
     let borrow_from_port = IncomingPort::from(0);
     let borrow_index_port = IncomingPort::from(1);
     let borrowed_port = IncomingPort::from(2);
+
+    let borrow_from_port_outgoing = OutgoingPort::from(0);
 
     let borrow_from_ty = sig.port_type(borrow_from_port).unwrap();
     let borrow_index_ty = sig.port_type(borrow_index_port).unwrap();
@@ -480,10 +486,7 @@ fn parse_return_signature<N: HugrNode>(
         });
     }
 
-    if sig.port_type(OutgoingPort::from(0)) != Some(&borrow_from_ty)
-        || sig.input_count() != 3
-        || sig.output_count() != 1
-    {
+    if sig.port_type(borrow_from_port_outgoing) != Some(&borrow_from_ty) {
         return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
     }
 
