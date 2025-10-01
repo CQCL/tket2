@@ -26,7 +26,6 @@ pub struct BorrowAnalysis<H: HugrView = hugr::Hugr> {
 }
 
 /// The errors that can occur when running the borrow analysis pass.
-/// ALAN trying to make this be a list only of reasons why we couldn't (safely) do the analysis at all
 #[derive(Debug, Display, Error)]
 pub enum BorrowAnalysisError<N: HugrNode> {
     /// The analysis could not run on an invalid subgraph
