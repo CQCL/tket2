@@ -473,8 +473,9 @@ impl ContainerOperationFactory {
     ) -> Result<Vec<Wire>, BuildError> {
         use tket::analysis::type_unpack::is_opt_of;
 
+        let elem_ty = self.type_analyzer.element_type();
         // If the type is a qubit, return it directly
-        if typ == &hugr::extension::prelude::qb_t() {
+        if typ == elem_ty {
             return Ok(vec![container_wire]);
         }
 
@@ -483,7 +484,7 @@ impl ContainerOperationFactory {
             return Ok(vec![self.unpack_option(
                 builder,
                 container_wire,
-                &hugr::extension::prelude::qb_t(),
+                elem_ty,
             )?]);
         }
 
@@ -524,20 +525,17 @@ impl ContainerOperationFactory {
     ) -> Result<Wire, BuildError> {
         use tket::analysis::type_unpack::is_opt_of;
 
+        let elem_ty = self.type_analyzer.element_type();
         // If the type is a qubit, return the wire directly
-        if typ == &hugr::extension::prelude::qb_t() {
+        if typ == elem_ty {
             debug_assert!(unpacked_wires.len() == 1);
             return Ok(unpacked_wires[0]);
         }
 
         // Check for option of qubit
-        if is_opt_of(typ, &hugr::extension::prelude::qb_t()) {
+        if is_opt_of(typ, elem_ty) {
             debug_assert!(unpacked_wires.len() == 1);
-            return self.repack_option(
-                builder,
-                unpacked_wires[0],
-                &hugr::extension::prelude::qb_t(),
-            );
+            return self.repack_option(builder, unpacked_wires[0], elem_ty);
         }
 
         macro_rules! handle_array_type {
@@ -584,7 +582,7 @@ mod tests {
     use super::*;
     use hugr::{
         builder::{DFGBuilder, DataflowHugr as _},
-        extension::prelude::{bool_t, option_type, qb_t},
+        extension::prelude::{bool_t, option_type, qb_t, usize_t},
         std_extensions::collections::array::array_type,
         types::Signature,
         HugrView,
@@ -690,6 +688,31 @@ mod tests {
         let inputs = builder.input().outputs().collect::<Vec<_>>();
         let unpacked = factory.unpack_row(&mut builder, &types, inputs)?;
         let repacked = factory.repack_row(&mut builder, &types, unpacked)?;
+
+        let hugr = builder.finish_hugr_with_outputs(repacked)?;
+        assert!(hugr.validate().is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn test_unpack_repack_row_non_qubit() -> Result<(), BuildError> {
+        // Use a TypeUnpacker that targets bools, not qubits
+        let analyzer = TypeUnpacker::new(bool_t());
+        let factory = ContainerOperationFactory::new(analyzer);
+        let types = vec![bool_t(), usize_t(), Array::ty(2, bool_t())];
+        let mut builder = DFGBuilder::new(hugr::types::Signature::new_endo(types.clone()))?;
+
+        let inputs = builder.input().outputs().collect::<Vec<_>>();
+        let unpacked = factory.unpack_row(&mut builder, &types, inputs)?;
+        // Should unpack all bools and array of bools (array size 2)
+        assert_eq!(unpacked.len(), 4, "Bool row should be fully unpacked");
+
+        let repacked = factory.repack_row(&mut builder, &types, unpacked)?;
+        assert_eq!(
+            repacked.len(),
+            3,
+            "Repacked row should match original length"
+        );
 
         let hugr = builder.finish_hugr_with_outputs(repacked)?;
         assert!(hugr.validate().is_ok());
