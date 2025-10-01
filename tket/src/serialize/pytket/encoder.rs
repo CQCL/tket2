@@ -60,6 +60,82 @@ pub struct PytketEncoderContext<H: HugrView> {
     function_cache: Arc<RwLock<HashMap<H::Node, CachedEncodedFunction>>>,
 }
 
+/// Options used when emitting a pytket command from HUGR operations.
+///
+/// Mostly related to qubit/bit/parameter reuse.
+#[derive(Default)]
+#[allow(clippy::type_complexity)]
+pub struct EmitCommandOptions<'a> {
+    /// A function returning a list of input qubits to reuse in the output.
+    /// Any additional required qubits IDs will be freshly generated.
+    ///
+    /// If not provided, input qubits will be reused in the order they appear in the input.
+    reuse_qubits_fn: Option<Box<dyn FnOnce(&[TrackedQubit]) -> Vec<TrackedQubit> + 'a>>,
+    /// A function returning a list of input bits to reuse in the output.
+    /// Any additional required bits IDs will be freshly generated.
+    ///
+    /// If not provided, only fresh bit IDs will be used.
+    reuse_bits_fn: Option<Box<dyn FnOnce(&[TrackedBit]) -> Vec<TrackedBit> + 'a>>,
+    /// A function that computes the command's output parameters, given the
+    /// input expressions.
+    ///
+    /// If the number of parameters does not match the expected number, the
+    /// encoding result in an error.
+    ///
+    /// If not provided, no output parameters will be computed.
+    output_params_fn: Option<Box<dyn FnOnce(OutputParamArgs<'_>) -> Vec<String> + 'a>>,
+}
+
+impl<'a> EmitCommandOptions<'a> {
+    /// Create a new [`EmitCommandOptions`] with the default values.
+    pub fn new() -> Self {
+        Self {
+            reuse_qubits_fn: None,
+            reuse_bits_fn: None,
+            output_params_fn: None,
+        }
+    }
+
+    /// Set a function returning a list of input qubits to reuse in the output.
+    ///
+    /// Overrides the default behaviour of reusing input qubits in the order they appear in the input.
+    pub fn reuse_qubits(
+        mut self,
+        reuse_qubits: impl FnOnce(&[TrackedQubit]) -> Vec<TrackedQubit> + 'a,
+    ) -> Self {
+        self.reuse_qubits_fn = Some(Box::new(reuse_qubits));
+        self
+    }
+
+    /// Set a function returning a list of input bits to reuse in the output.
+    ///
+    /// Overrides the default behaviour of only using fresh bit IDs.
+    pub fn reuse_bits(
+        mut self,
+        reuse_bits: impl FnOnce(&[TrackedBit]) -> Vec<TrackedBit> + 'a,
+    ) -> Self {
+        self.reuse_bits_fn = Some(Box::new(reuse_bits));
+        self
+    }
+
+    /// Reuse all input bits in the output, in the order they appear in the input.
+    pub fn reuse_all_bits(self) -> Self {
+        self.reuse_bits(|inp_bits| inp_bits.to_owned())
+    }
+
+    /// Set a function that computes the command's output parameters, given the
+    /// input expressions.
+    ///
+    /// Overrides the default behaviour of not computing output parameters.
+    pub fn output_params(
+        mut self,
+        output_params: impl FnOnce(OutputParamArgs<'_>) -> Vec<String> + 'a,
+    ) -> Self {
+        self.output_params_fn = Some(Box::new(output_params));
+        self
+    }
+}
+
 impl<H: HugrView> PytketEncoderContext<H> {
     /// Create a new [`PytketEncoderContext`] from a [`Circuit`].
     pub(super) fn new(
@@ -264,57 +340,35 @@ impl<H: HugrView> PytketEncoderContext<H> {
 
     /// Helper to emit a new tket1 command corresponding to a single HUGR node.
     ///
-    /// This call will fail if the node has parameter outputs. Use
-    /// [`PytketEncoderContext::emit_node_with_out_params`] instead.
+    /// See [`EmitCommandOptions`] for controlling the output qubit, bits, and
+    /// parameter expressions.
     ///
-    /// See [`PytketEncoderContext::emit_command`] for more general cases.
+    /// See [`PytketEncoderContext::emit_command`] for more general cases where
+    /// commands are not associated to a specific node.
     ///
     /// ## Arguments
     ///
     /// - `pytket_optype`: The tket1 operation type to emit.
-    /// - `node`: The HUGR node for which to emit the command. Qubits and bits are
-    ///   automatically retrieved from the node's inputs/outputs.
+    /// - `node`: The HUGR node for which to emit the command. Qubits and bits
+    ///   are automatically retrieved from the node's inputs/outputs.
     /// - `circ`: The circuit containing the node.
+    /// - `options`: Options for controlling the output qubit, bits, and
+    ///   parameter expressions.
     pub fn emit_node(
         &mut self,
         pytket_optype: tket_json_rs::OpType,
         node: H::Node,
         circ: &Circuit<H>,
+        options: EmitCommandOptions,
     ) -> Result<(), PytketEncodeError<H::Node>> {
-        self.emit_node_with_out_params(pytket_optype, node, circ, |_| Vec::new())
-    }
-
-    /// Helper to emit a new tket1 command corresponding to a single HUGR node,
-    /// with parameter outputs. Use [`PytketEncoderContext::emit_node`] for nodes
-    /// that don't require computing parameter outputs.
-    ///
-    /// See [`PytketEncoderContext::emit_command`] for more general cases.
-    ///
-    /// ## Arguments
-    ///
-    /// - `pytket_optype`: The tket1 operation type to emit.
-    /// - `node`: The HUGR node for which to emit the command. Qubits and bits are
-    ///   automatically retrieved from the node's inputs/outputs.
-    /// - `circ`: The circuit containing the node.
-    /// - `output_params`: A function that computes the output parameter
-    ///   expressions from the list of input parameters. If the number of parameters
-    ///   does not match the expected number, the encoding will fail.
-    pub fn emit_node_with_out_params(
-        &mut self,
-        pytket_optype: tket_json_rs::OpType,
-        node: H::Node,
-        circ: &Circuit<H>,
-        output_params: impl FnOnce(OutputParamArgs<'_>) -> Vec<String>,
-    ) -> Result<(), PytketEncodeError<H::Node>> {
-        self.emit_node_command(node, circ, output_params, move |inputs| {
+        self.emit_node_command(node, circ, options, move |inputs| {
             make_tk1_operation(pytket_optype, inputs)
         })
     }
 
     /// Helper to emit a new tket1 command corresponding to a single HUGR node,
     /// using a custom operation generator and computing output parameter
-    /// expressions. Use [`PytketEncoderContext::emit_node`] or
-    /// [`PytketEncoderContext::emit_node_with_out_params`] when pytket operation
+    /// expressions. Use [`PytketEncoderContext::emit_node`] when pytket operation
     /// can be defined directly from a [`tket_json_rs::OpType`].
     ///
     /// See [`PytketEncoderContext::emit_command`] for a general case emitter.
@@ -325,6 +379,8 @@ impl<H: HugrView> PytketEncoderContext<H> {
     ///   are automatically retrieved from the node's inputs/outputs. Input
     ///   arguments are listed in order, followed by output-only args.
     /// - `circ`: The circuit containing the node.
+    /// - `reuse_bits`: A function returning a lits of input bits to reuse in the output.
+    ///   Any additional required bits IDs will be freshly generated.
     /// - `output_params`: A function that computes the output parameter
     ///   expressions from the list of input parameters. If the number of
     ///   parameters does not match the expected number, the encoding will fail.
@@ -336,7 +392,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-        output_params: impl FnOnce(OutputParamArgs<'_>) -> Vec<String>,
+        options: EmitCommandOptions,
         make_operation: impl FnOnce(MakeOperationArgs<'_>) -> tket_json_rs::circuit_json::Operation,
     ) -> Result<(), PytketEncodeError<H::Node>> {
         let TrackedValues {
@@ -352,15 +408,8 @@ impl<H: HugrView> PytketEncoderContext<H> {
         // Update the values in the node's outputs.
         //
         // We preserve the order of linear values in the input.
-        let mut qubit_iterator = qubits.iter().copied();
-        let new_outputs = self.register_node_outputs(
-            node,
-            circ,
-            &mut qubit_iterator,
-            &params,
-            output_params,
-            |_| true,
-        )?;
+        let new_outputs =
+            self.register_node_outputs(node, circ, &qubits, &bits, &params, options, |_| true)?;
         qubits.extend(new_outputs.qubits);
         bits.extend(new_outputs.bits);
 
@@ -527,18 +576,18 @@ impl<H: HugrView> PytketEncoderContext<H> {
         //
         // Output parameters are mapped to a fresh variable, that can be tracked
         // back to the encoded subcircuit's function name.
-        let mut input_qubits = op_values.qubits.clone().into_iter();
         for &node in &output_nodes {
             let new_outputs = self.register_node_outputs(
                 node,
                 circ,
-                &mut input_qubits,
-                &[],
-                |p| {
+                &op_values.qubits,
+                &op_values.bits,
+                &input_param_exprs,
+                EmitCommandOptions::new().output_params(|p| {
                     (0..p.expected_count)
                         .map(|i| format!("{subcircuit_id}_out{i}"))
                         .collect_vec()
-                },
+                }),
                 |_| true,
             )?;
             op_values.append(new_outputs);
@@ -567,15 +616,15 @@ impl<H: HugrView> PytketEncoderContext<H> {
     /// appropriate values registered by calling [`ValueTracker::register_wire`]
     /// on the context's [`PytketEncoderContext::values`] tracker.
     ///
-    /// In general you should prefer using [`PytketEncoderContext::emit_node`] or
-    /// [`PytketEncoderContext::emit_node_with_out_params`] as they automatically
-    /// compute the input qubits and bits from the HUGR node, and ensure that
-    /// output wires get their new values registered on the tracker.
+    /// In general you should prefer using [`PytketEncoderContext::emit_node`]
+    /// as it automatically computes the input qubits and bits from the HUGR
+    /// node, and ensure that output wires get their new values registered on
+    /// the tracker.
     ///
     /// ## Arguments
     ///
-    /// - `pytket_op`: The tket1 operation to emit. See
-    ///   [`make_tk1_operation`] for a helper function to create it.
+    /// - `pytket_op`: The tket1 operation to emit. See [`make_tk1_operation`]
+    ///   for a helper function to create it.
     /// - `qubits`: The qubit registers to use as inputs/outputs of the pytket
     ///   op. Normally obtained from a HUGR node's inputs using
     ///   [`PytketEncoderContext::get_input_values`] or allocated via
@@ -706,11 +755,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         self.emit_node_command(
             node,
             circ,
-            |args| {
-                // This should normally be detected when creating the serial circuit.
-                debug_assert!(args.expected_count == 0);
-                Vec::new()
-            },
+            EmitCommandOptions::new().reuse_all_bits(),
             |args| {
                 let mut pytket_op = make_tk1_operation(tket_json_rs::OpType::CircBox, args);
                 pytket_op.op_box = Some(tket_json_rs::opbox::OpBox::CircBox {
@@ -789,31 +834,44 @@ impl<H: HugrView> PytketEncoderContext<H> {
     ///
     /// - `node`: The node to register the outputs for.
     /// - `circ`: The circuit containing the node.
-    /// - `qubit`: An iterator of existing qubit ids to re-use for the output.
-    ///   Once all qubits have been used, new qubit ids will be generated.
+    /// - `input_qubits`: The qubit inputs to the operation.
+    /// - `input_bits`: The bit inputs to the operation.
     /// - `input_params`: The list of input parameter expressions.
-    /// - `output_params`: A function that computes the output parameter
-    ///   expressions from the list of input parameters. If the number of parameters
-    ///   does not match the expected number, the encoding will fail.
+    /// - `options`: Options for controlling the output qubit, bits, and
+    ///   parameter expressions.
     /// - `wire_filter`: A function that takes a wire and returns true if the wire
     ///   at the output of the `node` should be registered.
+    #[allow(clippy::too_many_arguments)]
     fn register_node_outputs(
         &mut self,
         node: H::Node,
         circ: &Circuit<H>,
-        qubits: &mut impl Iterator<Item = TrackedQubit>,
+        input_qubits: &[TrackedQubit],
+        input_bits: &[TrackedBit],
         input_params: &[String],
-        output_params: impl FnOnce(OutputParamArgs<'_>) -> Vec<String>,
+        options: EmitCommandOptions,
         wire_filter: impl Fn(Wire<H::Node>) -> bool,
     ) -> Result<TrackedValues, PytketEncodeError<H::Node>> {
         let output_counts = self.node_output_values(node, circ)?;
         let total_out_count: RegisterCount = output_counts.iter().map(|(_, c)| *c).sum();
 
+        let output_qubits = match options.reuse_qubits_fn {
+            Some(f) => f(input_qubits),
+            None => input_qubits.to_vec(),
+        };
+        let output_bits = match options.reuse_bits_fn {
+            Some(f) => f(input_bits),
+            None => input_bits.to_vec(),
+        };
+
         // Compute all the output parameters at once
-        let out_params = output_params(OutputParamArgs {
-            expected_count: total_out_count.params,
-            input_params,
-        });
+        let out_params = match options.output_params_fn {
+            Some(f) => f(OutputParamArgs {
+                expected_count: total_out_count.params,
+                input_params,
+            }),
+            None => Vec::new(),
+        };
 
         // Check that we got the expected number of outputs.
         if out_params.len() != total_out_count.params {
@@ -828,6 +886,8 @@ impl<H: HugrView> PytketEncoderContext<H> {
         // Update the values in the node's outputs.
         //
         // We preserve the order of linear values in the input
+        let mut qubits = output_qubits.iter().copied();
+        let mut bits = output_bits.iter().copied();
         let mut params = out_params.into_iter();
         let mut new_outputs = TrackedValues::default();
         for (wire, count) in output_counts {
@@ -836,6 +896,8 @@ impl<H: HugrView> PytketEncoderContext<H> {
             }
 
             let mut out_wire_values = Vec::with_capacity(count.total());
+
+            // Qubits
             out_wire_values.extend(qubits.by_ref().take(count.qubits).map(TrackedValue::Qubit));
             for _ in out_wire_values.len()..count.qubits {
                 // If we already assigned all input qubit ids, get a fresh one.
@@ -843,11 +905,18 @@ impl<H: HugrView> PytketEncoderContext<H> {
                 new_outputs.qubits.push(qb);
                 out_wire_values.push(TrackedValue::Qubit(qb));
             }
-            for _ in 0..count.bits {
+
+            // Bits
+            let non_bit_count = out_wire_values.len();
+            out_wire_values.extend(bits.by_ref().take(count.bits).map(TrackedValue::Bit));
+            let reused_bit_count = out_wire_values.len() - non_bit_count;
+            for _ in reused_bit_count..count.bits {
                 let b = self.values.new_bit();
                 new_outputs.bits.push(b);
                 out_wire_values.push(TrackedValue::Bit(b));
             }
+
+            // Parameters
             for expr in params.by_ref().take(count.params) {
                 let p = self.values.new_param(expr);
                 new_outputs.params.push(p);
